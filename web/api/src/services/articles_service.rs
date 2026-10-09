@@ -607,4 +607,117 @@ mod tests {
             0
         );
     }
+
+    #[tokio::test]
+    async fn search_articles_validates_input_bounds() {
+        let index = article_search::ArticleSearchIndex::new(Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql).into_connection(),
+        ));
+        let db =
+            Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());
+
+        let long = "א".repeat(300);
+        assert!(
+            search_articles(&db, &index, &long, None, None)
+                .await
+                .is_err()
+        );
+        assert!(
+            search_articles(&db, &index, "alpha", Some(0), None)
+                .await
+                .is_err()
+        );
+        assert!(
+            search_articles(&db, &index, "alpha", Some(51), None)
+                .await
+                .is_err()
+        );
+        assert!(
+            search_articles(&db, &index, "alpha", None, Some(-1))
+                .await
+                .is_err()
+        );
+        assert!(
+            search_articles(&db, &index, "alpha", None, Some(1001))
+                .await
+                .is_err()
+        );
+    }
+
+    #[tokio::test]
+    async fn search_articles_ranks_and_hydrates_index_hits() {
+        use article_search::lsa::{LsaModel, serialize_model, serialize_terms, serialize_vector};
+
+        let model = LsaModel {
+            dims: 1,
+            vocab: vec!["alpha".into()],
+            index: std::collections::HashMap::from([("alpha".into(), 0_u32)]),
+            idf: vec![1.0],
+            basis: vec![1.0],
+        };
+        // Index connection: state + docs for `load`, then an empty probe for
+        // the per-search staleness check.
+        let index = article_search::ArticleSearchIndex::new(Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![mock_row([
+                        (
+                            "schema_version",
+                            article_search::store::SCHEMA_VERSION.into(),
+                        ),
+                        ("model_epoch", 4_i32.into()),
+                        ("model", serialize_model(&model).into()),
+                    ])],
+                    vec![mock_row([
+                        ("article_id", 42_i32.into()),
+                        ("plain_len", 10_i32.into()),
+                        ("vector", serialize_vector(&[1.0]).into()),
+                        ("terms", serialize_terms(&[(0, 2)]).into()),
+                    ])],
+                    vec![], // probe → same epoch, keep the snapshot
+                    vec![], // second search's probe
+                ])
+                .into_connection(),
+        ));
+        index.load().await.expect("load");
+
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![mock_row([
+                        ("id", 42_i32.into()),
+                        ("perek_id", 3_i16.into()),
+                        ("author_id", 4_i16.into()),
+                        ("author_name", "רש\"י".into()),
+                        ("name", "מאמר".into()),
+                        ("abstract", Value::String(None)),
+                        ("content", "<p>alpha בפסקה</p>".into()),
+                        ("sefer_name", "בראשית".into()),
+                        ("additional_letter", Value::String(None)),
+                        ("perek_in_context", 7_i32.into()),
+                    ])],
+                ])
+                .into_connection(),
+        );
+
+        let results = search_articles(&db, &index, "alpha", None, None)
+            .await
+            .expect("search");
+        assert_eq!(results.total, 1);
+        assert_eq!(results.hits.len(), 1);
+        let hit = &results.hits[0];
+        assert_eq!(hit.article_id, 42);
+        assert_eq!(hit.name, "מאמר");
+        assert_eq!(hit.author_name.as_deref(), Some("רש\"י"));
+        assert_eq!(hit.source.as_deref(), Some("בראשית ז'"));
+        assert!(hit.semantic_score > 0.9);
+        assert!(!hit.excerpt.is_empty());
+
+        // An empty phrase never reaches hydration.
+        let results = search_articles(&db, &index, "", None, None)
+            .await
+            .expect("empty phrase");
+        assert_eq!(results.total, 0);
+        assert!(results.hits.is_empty());
+    }
 }

@@ -633,41 +633,784 @@ pub async fn run_worker(index: ArticleSearchIndex) {
     loop {
         tokio::time::sleep(Duration::from_secs(TICK_SECS)).await;
         tick = tick.wrapping_add(1);
-        if tick.is_multiple_of(SWEEP_EVERY_TICKS) {
-            match reconcile(index.conn()).await {
-                Ok(dirty) if dirty > 0 => {
-                    debug!(dirty, "article search reconcile enqueued drifted rows")
+        worker_tick(&index, tick).await;
+    }
+}
+
+/// One worker iteration: periodic hash sweep, queue drain, then either a
+/// retrain (drift crossed the threshold) or a snapshot fold-in reload.
+async fn worker_tick(index: &ArticleSearchIndex, tick: u32) {
+    if tick.is_multiple_of(SWEEP_EVERY_TICKS) {
+        match reconcile(index.conn()).await {
+            Ok(dirty) if dirty > 0 => {
+                debug!(dirty, "article search reconcile enqueued drifted rows")
+            }
+            Ok(_) => {}
+            Err(err) => warn!(error = %err, "article search reconcile failed"),
+        }
+    }
+    let dirty = match drain_queue(index, index.conn()).await {
+        Ok(n) => n,
+        Err(err) => {
+            warn!(error = %err, "article search queue drain failed");
+            return;
+        }
+    };
+    let docs = index.doc_count().await;
+    let should_retrain = dirty >= RETRAIN_MIN_DIRTY
+        || (docs > 0 && dirty as f32 / docs.max(1) as f32 >= RETRAIN_RATIO);
+    if should_retrain {
+        match retrain(index.conn()).await {
+            Ok(Some(n)) => {
+                info!(docs = n, "article search model retrained");
+                if let Err(err) = index.load().await {
+                    warn!(error = %err, "article search reload failed");
                 }
-                Ok(_) => {}
-                Err(err) => warn!(error = %err, "article search reconcile failed"),
+            }
+            Ok(None) => {}
+            Err(err) => warn!(error = %err, "article search retrain failed"),
+        }
+    } else if dirty > 0 {
+        // Fold-in path: reload so freshly synced rows are searchable.
+        if let Err(err) = index.load().await {
+            warn!(error = %err, "article search reload failed");
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use lsa::{serialize_model, serialize_terms, serialize_vector};
+    use sea_orm::{DatabaseBackend, DbErr, MockDatabase, MockExecResult, Value};
+    use std::collections::BTreeMap;
+
+    fn mock_row(
+        values: impl IntoIterator<Item = (&'static str, Value)>,
+    ) -> BTreeMap<String, Value> {
+        values
+            .into_iter()
+            .map(|(key, value)| (key.to_string(), value))
+            .collect()
+    }
+
+    /// A 1-dimension model over three terms; every term maps to the same latent
+    /// direction so any indexed document scores cosine ~1 against any query.
+    fn toy_model() -> LsaModel {
+        LsaModel {
+            dims: 1,
+            vocab: vec!["alpha".into(), "beta".into(), "gamma".into()],
+            index: HashMap::from([
+                ("alpha".into(), 0_u32),
+                ("beta".into(), 1_u32),
+                ("gamma".into(), 2_u32),
+            ]),
+            idf: vec![2.0, 1.5, 1.0],
+            basis: vec![1.0, 1.0, 1.0],
+        }
+    }
+
+    /// `(article_id, [(term_id, tf)], plain_len)`
+    type FixtureDoc = (i32, Vec<(u32, u32)>, u32);
+
+    /// Builds a snapshot around `model` from `(article_id, terms, plain_len)` docs.
+    fn make_snapshot(model: LsaModel, docs: Vec<FixtureDoc>) -> Snapshot {
+        let mut doc_ids = Vec::new();
+        let mut vectors = Vec::new();
+        let mut doc_lens = Vec::new();
+        let mut postings: HashMap<u32, Vec<(u32, u32)>> = HashMap::new();
+        for (slot, (article_id, terms, len)) in docs.into_iter().enumerate() {
+            doc_ids.push(article_id);
+            doc_lens.push(len.max(1));
+            let sparse: SparseVector = terms.iter().map(|&(tid, tf)| (tid, tf as f32)).collect();
+            vectors.push(model.embed(&sparse));
+            for &(tid, tf) in &terms {
+                postings.entry(tid).or_default().push((slot as u32, tf));
             }
         }
-        let dirty = match drain_queue(&index, index.conn()).await {
-            Ok(n) => n,
-            Err(err) => {
-                warn!(error = %err, "article search queue drain failed");
-                continue;
-            }
+        for posts in postings.values_mut() {
+            posts.sort_by_key(|(slot, _)| *slot);
+        }
+        let avg =
+            doc_lens.iter().map(|&l| l as f64).sum::<f64>() as f32 / doc_lens.len().max(1) as f32;
+        Snapshot {
+            epoch: 1,
+            model,
+            doc_ids,
+            vectors,
+            postings,
+            doc_lens,
+            avg_len: avg.max(1.0),
+        }
+    }
+
+    fn mock_conn() -> MockDatabase {
+        MockDatabase::new(DatabaseBackend::MySql)
+    }
+
+    fn index_on(conn: sea_orm::DatabaseConnection) -> ArticleSearchIndex {
+        ArticleSearchIndex::new(Database::from_connection(conn))
+    }
+
+    #[test]
+    fn expand_query_matches_exact_prefix_and_fuzzy_terms() {
+        let snapshot = make_snapshot(toy_model(), Vec::new());
+
+        // Exact vocabulary hit → full weight, nothing else expanded.
+        let expanded = snapshot.expand_query(&["alpha".into()]);
+        assert_eq!(expanded, vec![(0, 1.0)]);
+
+        // Unknown token that prefixes a vocab term → PREFIX_WEIGHT.
+        let expanded = snapshot.expand_query(&["alp".into()]);
+        assert_eq!(expanded, vec![(0, PREFIX_WEIGHT)]);
+
+        // Edit-distance-1 token that prefixes nothing → FUZZY_WEIGHT.
+        let expanded = snapshot.expand_query(&["gama".into()]);
+        assert_eq!(expanded, vec![(2, FUZZY_WEIGHT)]);
+
+        // Short tokens cannot fuzzy-match and empty tokens are skipped.
+        assert!(snapshot.expand_query(&["ab".into()]).is_empty());
+        assert_eq!(
+            snapshot.expand_query(&[String::new(), "beta".into()]),
+            vec![(1, 1.0)]
+        );
+    }
+
+    #[test]
+    fn expand_query_caps_prefixes_and_query_length() {
+        // More prefix candidates than PREFIX_CAP → the loop stops at the cap.
+        let vocab: Vec<String> = (0..30).map(|i| format!("term{i:02}")).collect();
+        let model = LsaModel {
+            dims: 0,
+            index: vocab
+                .iter()
+                .enumerate()
+                .map(|(i, t)| (t.clone(), i as u32))
+                .collect(),
+            vocab,
+            idf: vec![1.0; 30],
+            basis: Vec::new(),
         };
-        let docs = index.doc_count().await;
-        let should_retrain = dirty >= RETRAIN_MIN_DIRTY
-            || (docs > 0 && dirty as f32 / docs.max(1) as f32 >= RETRAIN_RATIO);
-        if should_retrain {
-            match retrain(index.conn()).await {
-                Ok(Some(n)) => {
-                    info!(docs = n, "article search model retrained");
-                    if let Err(err) = index.load().await {
-                        warn!(error = %err, "article search reload failed");
-                    }
-                }
-                Ok(None) => {}
-                Err(err) => warn!(error = %err, "article search retrain failed"),
-            }
-        } else if dirty > 0 {
-            // Fold-in path: reload so freshly synced rows are searchable.
-            if let Err(err) = index.load().await {
-                warn!(error = %err, "article search reload failed");
-            }
+        let snapshot = make_snapshot(model, Vec::new());
+        let expanded = snapshot.expand_query(&["term".into()]);
+        assert_eq!(expanded.len(), PREFIX_CAP);
+        assert!(expanded.iter().all(|&(_, w)| w == PREFIX_WEIGHT));
+
+        // Tokens beyond MAX_QUERY_TOKENS never reach the accumulator.
+        let snapshot = make_snapshot(toy_model(), Vec::new());
+        let tokens: Vec<String> = (0..20).map(|_| "alpha".into()).collect();
+        let expanded = snapshot.expand_query(&tokens);
+        assert_eq!(expanded, vec![(0, MAX_QUERY_TOKENS as f32)]);
+    }
+
+    #[test]
+    fn query_sparse_applies_idf_and_normalizes() {
+        let snapshot = make_snapshot(toy_model(), Vec::new());
+
+        // idf[0]=2.0, idf[1]=1.5 → raw (2.0, 1.5), norm 2.5 → (0.8, 0.6).
+        let sparse = snapshot.query_sparse(&[(0, 1.0), (1, 1.0)]);
+        assert_eq!(sparse.len(), 2);
+        assert!((sparse[0].1 - 0.8).abs() < 1e-6);
+        assert!((sparse[1].1 - 0.6).abs() < 1e-6);
+
+        // Unknown term ids fall back to idf 1.0.
+        let sparse = snapshot.query_sparse(&[(99, 1.0)]);
+        assert_eq!(sparse, vec![(99, 1.0)]);
+
+        // A zero-magnitude vector stays zero instead of dividing by zero.
+        let sparse = snapshot.query_sparse(&[(0, 0.0)]);
+        assert_eq!(sparse, vec![(0, 0.0)]);
+    }
+
+    #[test]
+    fn snapshot_search_scores_semantic_and_lexical_components() {
+        let snapshot = make_snapshot(
+            toy_model(),
+            vec![
+                (7, vec![(0, 4), (1, 1)], 20),
+                (9, vec![(1, 3)], 15),
+                (11, vec![(2, 2)], 10),
+            ],
+        );
+
+        // Empty and unexpandable phrases short-circuit.
+        assert!(snapshot.search("").is_empty());
+        assert!(snapshot.search("!!!").is_empty());
+        assert!(snapshot.search("unrelated").is_empty());
+
+        // All docs share the latent direction; the doc actually containing
+        // "alpha" additionally earns the lexical component and ranks first.
+        let hits = snapshot.search("alpha");
+        assert_eq!(hits.len(), 3);
+        assert_eq!(hits[0].article_id, 7);
+        assert!(hits[0].semantic > 0.9);
+        assert!(hits[0].lexical > hits[1].lexical);
+
+        // Equal scores fall back to article-id order.
+        assert_eq!(hits[1].article_id, 9);
+        assert_eq!(hits[2].article_id, 11);
+    }
+
+    #[test]
+    fn snapshot_search_lexical_only_filters_below_min_score() {
+        let mut model = toy_model();
+        model.dims = 0;
+        model.basis = Vec::new();
+        let snapshot = make_snapshot(
+            model,
+            vec![(1, vec![(0, 4), (1, 4)], 10), (2, vec![(0, 1)], 10)],
+        );
+
+        // dims=0 → no semantic component; a single weak term stays under
+        // MIN_SCORE while the two-term doc survives.
+        let hits = snapshot.search("alpha beta");
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].article_id, 1);
+        assert_eq!(hits[0].semantic, 0.0);
+    }
+
+    #[tokio::test]
+    async fn load_without_state_leaves_the_index_empty() {
+        let conn = mock_conn()
+            .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                vec![],
+            ])
+            .into_connection();
+        let index = index_on(conn);
+        index.load().await.expect("load without state");
+        assert_eq!(index.doc_count().await, 0);
+    }
+
+    #[tokio::test]
+    async fn load_rejects_mismatched_schema_and_undecodable_blobs() {
+        // Wrong schema version → wait for a retrain, keep the empty snapshot.
+        let conn = mock_conn()
+            .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                vec![mock_row([
+                    ("schema_version", 999_i32.into()),
+                    ("model_epoch", 1_i32.into()),
+                    ("model", vec![1_u8].into()),
+                ])],
+            ])
+            .into_connection();
+        let index = index_on(conn);
+        index.load().await.expect("schema mismatch is not fatal");
+        assert_eq!(index.doc_count().await, 0);
+
+        // A blob that fails to decode also just waits for the next retrain.
+        let conn = mock_conn()
+            .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                vec![mock_row([
+                    ("schema_version", store::SCHEMA_VERSION.into()),
+                    ("model_epoch", 1_i32.into()),
+                    ("model", vec![9_u8, 9, 9].into()),
+                ])],
+            ])
+            .into_connection();
+        let index = index_on(conn);
+        index.load().await.expect("corrupt blob is not fatal");
+        assert_eq!(index.doc_count().await, 0);
+    }
+
+    #[tokio::test]
+    async fn load_swaps_in_docs_and_skips_bad_rows() {
+        let model = toy_model();
+        let conn = mock_conn()
+            .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                vec![mock_row([
+                    ("schema_version", store::SCHEMA_VERSION.into()),
+                    ("model_epoch", 3_i32.into()),
+                    ("model", serialize_model(&model).into()),
+                ])],
+                vec![
+                    // Wrong blob length → not deserializable.
+                    mock_row([
+                        ("article_id", 20_i32.into()),
+                        ("plain_len", 10_i32.into()),
+                        ("vector", vec![1_u8, 2, 3].into()),
+                        ("terms", vec![].into()),
+                    ]),
+                    // Decodes but the dimension does not match the model.
+                    mock_row([
+                        ("article_id", 21_i32.into()),
+                        ("plain_len", 10_i32.into()),
+                        ("vector", serialize_vector(&[1.0, 2.0]).into()),
+                        ("terms", vec![].into()),
+                    ]),
+                    mock_row([
+                        ("article_id", 22_i32.into()),
+                        ("plain_len", 10_i32.into()),
+                        ("vector", serialize_vector(&[1.0]).into()),
+                        ("terms", serialize_terms(&[(0, 4)]).into()),
+                    ]),
+                ],
+            ])
+            .into_connection();
+        let index = index_on(conn);
+        index.load().await.expect("load");
+
+        assert_eq!(index.doc_count().await, 1);
+        let page = index.search("alpha", 10, 0).await.expect("search");
+        assert_eq!(page.total, 1);
+        assert_eq!(page.hits[0].article_id, 22);
+    }
+
+    #[tokio::test]
+    async fn refresh_if_stale_reloads_only_when_the_epoch_moves() {
+        // No state row → nothing to reload.
+        let conn = mock_conn()
+            .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                vec![],
+            ])
+            .into_connection();
+        let index = index_on(conn);
+        index.refresh_if_stale().await.expect("probe without state");
+        assert_eq!(index.doc_count().await, 0);
+
+        // Same epoch → the probe returns without touching docs.
+        let conn = mock_conn()
+            .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                vec![mock_row([
+                    ("model_epoch", 1_i32.into()),
+                    ("doc_count", 5_i32.into()),
+                ])],
+            ])
+            .into_connection();
+        let index = index_on(conn);
+        *index.inner.write().await = make_snapshot(toy_model(), Vec::new());
+        index
+            .refresh_if_stale()
+            .await
+            .expect("same epoch skips reload");
+
+        // Moved epoch → full reload (state + docs queries follow the probe).
+        let model = toy_model();
+        let conn = mock_conn()
+            .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                vec![mock_row([
+                    ("model_epoch", 9_i32.into()),
+                    ("doc_count", 1_i32.into()),
+                ])],
+                vec![mock_row([
+                    ("schema_version", store::SCHEMA_VERSION.into()),
+                    ("model_epoch", 9_i32.into()),
+                    ("model", serialize_model(&model).into()),
+                ])],
+                vec![mock_row([
+                    ("article_id", 30_i32.into()),
+                    ("plain_len", 10_i32.into()),
+                    ("vector", serialize_vector(&[1.0]).into()),
+                    ("terms", serialize_terms(&[(0, 1)]).into()),
+                ])],
+            ])
+            .into_connection();
+        let index = index_on(conn);
+        index
+            .refresh_if_stale()
+            .await
+            .expect("reload on epoch bump");
+        assert_eq!(index.doc_count().await, 1);
+    }
+
+    #[tokio::test]
+    async fn index_search_paginates_and_survives_probe_failures() {
+        let conn = mock_conn()
+            .append_query_errors([DbErr::Custom("probe down".to_string())])
+            .into_connection();
+        let index = index_on(conn);
+        *index.inner.write().await = make_snapshot(
+            toy_model(),
+            vec![(7, vec![(0, 4)], 20), (9, vec![(1, 3)], 15)],
+        );
+
+        // The failed refresh probe degrades to the warm snapshot.
+        let page = index.search("alpha", 10, 0).await.expect("warm search");
+        assert_eq!(page.total, 2);
+
+        let page = index.search("alpha", 1, 1).await.expect("paginated");
+        assert_eq!(page.hits.len(), 1);
+        assert_eq!(page.hits[0].article_id, 9);
+        assert_eq!(page.total, 2);
+    }
+
+    #[tokio::test]
+    async fn expanded_terms_reports_exact_and_expanded_vocabulary() {
+        let conn = mock_conn().into_connection();
+        let index = index_on(conn);
+        *index.inner.write().await = make_snapshot(toy_model(), Vec::new());
+
+        let terms = index.expanded_terms("alpha alp gama").await;
+        assert!(terms.contains(&"alpha".to_string()));
+        assert!(terms.contains(&"gamma".to_string())); // reached via fuzzy expansion
+        assert!(index.expanded_terms("zzz").await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn sync_article_skips_untrained_models_and_writes_trained_ones() {
+        let conn = mock_conn().into_connection();
+        let article = store::ArticleSource {
+            id: 5,
+            name: "alpha alpha".into(),
+            article_abstract: Some("beta".into()),
+            content: Some("<p>alpha gamma gamma</p>".into()),
+        };
+
+        // dims=0 → nothing is written until a retrain produces a basis.
+        let untrained = Snapshot::empty();
+        assert!(
+            !sync_article(&conn, &untrained, &article)
+                .await
+                .expect("untrained sync")
+        );
+
+        let conn = mock_conn()
+            .append_exec_results([MockExecResult {
+                last_insert_id: 0,
+                rows_affected: 1,
+            }])
+            .into_connection();
+        let trained = make_snapshot(toy_model(), Vec::new());
+        assert!(
+            sync_article(&conn, &trained, &article)
+                .await
+                .expect("trained sync")
+        );
+    }
+
+    #[tokio::test]
+    async fn drain_queue_processes_fetches_deletions_and_failures() {
+        let model = toy_model();
+        // pending [] → nothing to do.
+        let conn = mock_conn()
+            .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                vec![],
+            ])
+            .into_connection();
+        let index = index_on(mock_conn().into_connection());
+        *index.inner.write().await = make_snapshot(model.clone(), Vec::new());
+        assert_eq!(drain_queue(&index, &conn).await.expect("empty drain"), 0);
+
+        // pending [7] → fetch row → sync (upsert exec) → dequeue exec.
+        let conn = mock_conn()
+            .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                vec![mock_row([("article_id", 7_i32.into())])],
+                vec![mock_row([
+                    ("id", 7_i32.into()),
+                    ("name", "alpha".into()),
+                    ("abstract", Value::String(None)),
+                    ("content", "beta".into()),
+                ])],
+            ])
+            .append_exec_results(vec![
+                MockExecResult {
+                    last_insert_id: 0,
+                    rows_affected: 1,
+                };
+                2
+            ])
+            .into_connection();
+        assert_eq!(drain_queue(&index, &conn).await.expect("synced drain"), 1);
+
+        // pending [8] → article gone → index row deleted, queue row removed.
+        let conn = mock_conn()
+            .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                vec![mock_row([("article_id", 8_i32.into())])],
+                vec![],
+            ])
+            .append_exec_results(vec![
+                MockExecResult {
+                    last_insert_id: 0,
+                    rows_affected: 1,
+                };
+                2
+            ])
+            .into_connection();
+        assert_eq!(drain_queue(&index, &conn).await.expect("delete drain"), 1);
+
+        // pending [9] → fetch blows up → attempt is marked, drift stays 0.
+        let conn = mock_conn()
+            .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                vec![mock_row([("article_id", 9_i32.into())])],
+            ])
+            .append_query_errors([DbErr::Custom("fetch lost".to_string())])
+            .append_exec_results([MockExecResult {
+                last_insert_id: 0,
+                rows_affected: 1,
+            }])
+            .into_connection();
+        assert_eq!(drain_queue(&index, &conn).await.expect("error drain"), 0);
+
+        // pending [10] → fetch ok but the upsert fails → attempt marked.
+        // Results and errors share the mock's exec queue in append order, so
+        // the error lands on the upsert and the Ok on mark_attempt.
+        let conn = mock_conn()
+            .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                vec![mock_row([("article_id", 10_i32.into())])],
+                vec![mock_row([
+                    ("id", 10_i32.into()),
+                    ("name", "alpha".into()),
+                    ("abstract", Value::String(None)),
+                    ("content", Value::String(None)),
+                ])],
+            ])
+            .append_exec_errors([DbErr::Custom("upsert blew up".to_string())])
+            .append_exec_results([MockExecResult {
+                last_insert_id: 0,
+                rows_affected: 1,
+            }])
+            .into_connection();
+        assert_eq!(drain_queue(&index, &conn).await.expect("sync error"), 0);
+    }
+
+    #[tokio::test]
+    async fn reconcile_enqueues_drift_and_purges_orphans() {
+        let conn = mock_conn()
+            .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                // indexed_hashes
+                vec![mock_row([
+                    ("article_id", 1_i32.into()),
+                    ("content_hash", vec![1_u8; 16].into()),
+                ])],
+                // sweep_hashes — article 2 drifted
+                vec![
+                    mock_row([
+                        ("id", 1_i32.into()),
+                        ("content_hash", vec![1_u8; 16].into()),
+                    ]),
+                    mock_row([
+                        ("id", 2_i32.into()),
+                        ("content_hash", vec![2_u8; 16].into()),
+                    ]),
+                ],
+                // stale-epoch docs
+                vec![mock_row([("article_id", 3_i32.into())])],
+                // orphaned docs
+                vec![mock_row([("article_id", 4_i32.into())])],
+            ])
+            .append_exec_results(vec![
+                MockExecResult {
+                    last_insert_id: 0,
+                    rows_affected: 1,
+                };
+                3
+            ])
+            .into_connection();
+
+        let dirty = reconcile(&conn).await.expect("reconcile");
+        assert_eq!(dirty, 3);
+    }
+
+    #[tokio::test]
+    async fn retrain_bails_without_the_lock_and_rebuilds_with_it() {
+        // Another instance holds the advisory lock → no retrain happens.
+        let conn = mock_conn()
+            .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                vec![mock_row([("acquired", 0_i64.into())])],
+            ])
+            .into_connection();
+        assert_eq!(retrain(&conn).await.expect("contended retrain"), None);
+
+        // Lock held → corpus read, per-doc upserts, state save, epoch stamp,
+        // lock release — two articles in, two docs out.
+        let conn = mock_conn()
+            .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                vec![mock_row([("acquired", 1_i64.into())])],
+                vec![
+                    mock_row([
+                        ("id", 1_i32.into()),
+                        ("name", "alpha beta".into()),
+                        ("abstract", "alpha".into()),
+                        ("content", "<p>alpha gamma</p>".into()),
+                    ]),
+                    mock_row([
+                        ("id", 2_i32.into()),
+                        ("name", "beta".into()),
+                        ("abstract", Value::String(None)),
+                        ("content", "gamma".into()),
+                    ]),
+                ],
+            ])
+            .append_exec_results(vec![
+                MockExecResult {
+                    last_insert_id: 0,
+                    rows_affected: 1,
+                };
+                5
+            ])
+            .into_connection();
+        assert_eq!(retrain(&conn).await.expect("retrain"), Some(2));
+    }
+
+    #[tokio::test]
+    async fn run_worker_exits_when_schema_setup_fails() {
+        let conn = mock_conn()
+            .append_exec_errors([DbErr::Custom("no database".to_string())])
+            .into_connection();
+        let index = index_on(conn);
+        // Never reaches the tick loop — returns immediately.
+        run_worker(index).await;
+    }
+
+    #[tokio::test]
+    async fn run_worker_boots_and_parks_in_the_tick_sleep() {
+        // ensure_schema (3 execs) → load (state+docs) → probe (docs>0, so no
+        // initial retrain) → reload (state+docs) → sleep(TICK_SECS). Mock ops
+        // complete synchronously, so a few yields park the task in the sleep.
+        let conn = mock_conn()
+            .append_exec_results(vec![
+                MockExecResult {
+                    last_insert_id: 0,
+                    rows_affected: 1,
+                };
+                3
+            ])
+            .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                vec![], // initial load: no state row
+                vec![mock_row([
+                    ("model_epoch", 1_i32.into()),
+                    ("doc_count", 5_i32.into()),
+                ])], // probe: trained already → no retrain
+                vec![], // reload: no state row
+            ])
+            .into_connection();
+        let index = index_on(conn);
+        let handle = tokio::spawn(run_worker(index));
+        for _ in 0..8 {
+            tokio::task::yield_now().await;
         }
+        assert!(!handle.is_finished());
+        handle.abort();
+        let _ = handle.await;
+    }
+
+    #[tokio::test]
+    async fn run_worker_retrains_on_first_boot() {
+        // ensure_schema ok, load finds no state, probe reports 0 docs →
+        // initial retrain (lock contended → Ok(None)), reload, then sleep.
+        let conn = mock_conn()
+            .append_exec_results(vec![
+                MockExecResult {
+                    last_insert_id: 0,
+                    rows_affected: 1,
+                };
+                3
+            ])
+            .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                vec![], // initial load: no state
+                vec![mock_row([
+                    ("model_epoch", 0_i32.into()),
+                    ("doc_count", 0_i32.into()),
+                ])], // probe: empty → retrain
+                vec![mock_row([("acquired", 0_i64.into())])], // lock held → skip
+                vec![], // reload: still no state
+            ])
+            .into_connection();
+        let index = index_on(conn);
+        let handle = tokio::spawn(run_worker(index));
+        for _ in 0..8 {
+            tokio::task::yield_now().await;
+        }
+        assert!(!handle.is_finished());
+        handle.abort();
+        let _ = handle.await;
+    }
+
+    #[tokio::test]
+    async fn worker_tick_sweeps_drains_and_folds_in() {
+        // Ordinary tick with an empty queue → nothing happens.
+        let conn = mock_conn()
+            .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                vec![],
+            ])
+            .into_connection();
+        let index = index_on(conn);
+        worker_tick(&index, 1).await;
+
+        // Sweep tick → reconcile queries, then the drain.
+        let conn = mock_conn()
+            .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                vec![], // indexed hashes
+                vec![], // sweep hashes
+                vec![], // stale docs
+                vec![], // orphans
+                vec![], // pending
+            ])
+            .into_connection();
+        let index = index_on(conn);
+        worker_tick(&index, SWEEP_EVERY_TICKS).await;
+
+        // Drain failure logs and returns without touching reload logic.
+        let conn = mock_conn()
+            .append_query_errors([DbErr::Custom("queue gone".to_string())])
+            .into_connection();
+        let index = index_on(conn);
+        worker_tick(&index, 2).await;
+
+        // dirty=1 on a small index → drift ratio ≥ RETRAIN_RATIO → retrain.
+        let model = toy_model();
+        let conn = mock_conn()
+            .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                vec![mock_row([("article_id", 7_i32.into())])], // pending
+                vec![mock_row([
+                    ("id", 7_i32.into()),
+                    ("name", "alpha".into()),
+                    ("abstract", Value::String(None)),
+                    ("content", "beta".into()),
+                ])], // fetch
+                vec![mock_row([("acquired", 1_i64.into())])],   // retrain lock
+                vec![mock_row([
+                    ("id", 7_i32.into()),
+                    ("name", "alpha".into()),
+                    ("abstract", Value::String(None)),
+                    ("content", "beta".into()),
+                ])], // corpus
+                vec![mock_row([
+                    ("schema_version", store::SCHEMA_VERSION.into()),
+                    ("model_epoch", 9_i32.into()),
+                    ("model", serialize_model(&model).into()),
+                ])], // reload state
+                vec![],                                         // reload docs
+            ])
+            .append_exec_results(vec![
+                MockExecResult {
+                    last_insert_id: 0,
+                    rows_affected: 1,
+                };
+                6
+            ])
+            .into_connection();
+        let index = index_on(conn);
+        *index.inner.write().await = make_snapshot(toy_model(), vec![(1, vec![(0, 1)], 10)]);
+        worker_tick(&index, 3).await;
+
+        // dirty=1 on a large index → under the ratio → fold-in reload only.
+        let conn = mock_conn()
+            .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                vec![mock_row([("article_id", 8_i32.into())])], // pending
+                vec![mock_row([
+                    ("id", 8_i32.into()),
+                    ("name", "alpha".into()),
+                    ("abstract", Value::String(None)),
+                    ("content", "beta".into()),
+                ])], // fetch
+                vec![mock_row([
+                    ("schema_version", store::SCHEMA_VERSION.into()),
+                    ("model_epoch", 2_i32.into()),
+                    ("model", serialize_model(&toy_model()).into()),
+                ])], // fold-in load state
+                vec![],                                         // fold-in docs
+            ])
+            .append_exec_results(vec![
+                MockExecResult {
+                    last_insert_id: 0,
+                    rows_affected: 1,
+                };
+                2
+            ])
+            .into_connection();
+        let index = index_on(conn);
+        let big: Vec<FixtureDoc> = (100..200).map(|id| (id, vec![(0, 1)], 10)).collect();
+        *index.inner.write().await = make_snapshot(toy_model(), big);
+        worker_tick(&index, 4).await;
     }
 }

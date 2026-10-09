@@ -413,3 +413,208 @@ pub async fn fetch_hit_rows<C: ConnectionTrait>(
         })
         .collect()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sea_orm::{DatabaseBackend, MockDatabase, MockExecResult};
+    use std::collections::BTreeMap;
+
+    fn mock_row(
+        values: impl IntoIterator<Item = (&'static str, Value)>,
+    ) -> BTreeMap<String, Value> {
+        values
+            .into_iter()
+            .map(|(key, value)| (key.to_string(), value))
+            .collect()
+    }
+
+    fn conn_with_queries(
+        results: Vec<Vec<BTreeMap<String, Value>>>,
+    ) -> sea_orm::DatabaseConnection {
+        MockDatabase::new(DatabaseBackend::MySql)
+            .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>(
+                results,
+            )
+            .into_connection()
+    }
+
+    fn conn_with_execs(affected: usize) -> sea_orm::DatabaseConnection {
+        MockDatabase::new(DatabaseBackend::MySql)
+            .append_exec_results(vec![
+                MockExecResult {
+                    last_insert_id: 0,
+                    rows_affected: 1,
+                };
+                affected
+            ])
+            .into_connection()
+    }
+
+    #[tokio::test]
+    async fn ensure_schema_creates_all_three_tables() {
+        let conn = conn_with_execs(3);
+        ensure_schema(&conn)
+            .await
+            .expect("schema should be ensured");
+    }
+
+    #[tokio::test]
+    async fn enqueue_dequeue_and_mark_attempt_run_their_statements() {
+        let conn = conn_with_execs(3);
+        enqueue(&conn, 7).await.expect("enqueue");
+        dequeue(&conn, 7).await.expect("dequeue");
+        mark_attempt(&conn, 7, &"x".repeat(300))
+            .await
+            .expect("mark_attempt clips long errors");
+    }
+
+    #[tokio::test]
+    async fn pending_returns_queued_ids_in_order() {
+        let conn = conn_with_queries(vec![vec![
+            mock_row([("article_id", 3_i32.into())]),
+            mock_row([("article_id", 9_i32.into())]),
+        ]]);
+        let ids = pending(&conn, 10).await.expect("pending rows");
+        assert_eq!(ids, vec![3, 9]);
+    }
+
+    #[tokio::test]
+    async fn pending_skips_unreadable_rows() {
+        let conn = conn_with_queries(vec![vec![
+            mock_row([("article_id", 5_i32.into())]),
+            mock_row([("other", 6_i32.into())]),
+        ]]);
+        let ids = pending(&conn, 10).await.expect("pending rows");
+        assert_eq!(ids, vec![5]);
+    }
+
+    #[tokio::test]
+    async fn fetch_article_maps_a_row_and_none_when_absent() {
+        let conn = conn_with_queries(vec![vec![mock_row([
+            ("id", 4_i32.into()),
+            ("name", "שם".into()),
+            ("abstract", Value::String(None)),
+            ("content", "גוף".into()),
+        ])]]);
+        let article = fetch_article(&conn, 4).await.expect("fetch").expect("row");
+        assert_eq!(article.id, 4);
+        assert_eq!(article.name, "שם");
+        assert_eq!(article.article_abstract, None);
+        assert_eq!(article.content.as_deref(), Some("גוף"));
+
+        let conn = conn_with_queries(vec![vec![]]);
+        assert!(fetch_article(&conn, 4).await.expect("fetch").is_none());
+    }
+
+    #[tokio::test]
+    async fn sweep_and_indexed_hashes_parse_binary_hashes() {
+        let hash: Vec<u8> = (0..16).collect();
+        let conn = conn_with_queries(vec![vec![mock_row([
+            ("id", 2_i32.into()),
+            ("content_hash", hash.clone().into()),
+        ])]]);
+        let rows = sweep_hashes(&conn).await.expect("sweep");
+        assert_eq!(rows, vec![(2, <[u8; 16]>::try_from(hash.clone()).unwrap())]);
+
+        // Short blobs degrade to the zero hash instead of failing the sweep.
+        let conn = conn_with_queries(vec![vec![mock_row([
+            ("article_id", 8_i32.into()),
+            ("content_hash", vec![1_u8, 2].into()),
+        ])]]);
+        let rows = indexed_hashes(&conn).await.expect("indexed");
+        assert_eq!(rows, vec![(8, [0_u8; 16])]);
+    }
+
+    #[tokio::test]
+    async fn load_state_and_state_probe_map_the_singleton_row() {
+        let conn = conn_with_queries(vec![vec![mock_row([
+            ("schema_version", SCHEMA_VERSION.into()),
+            ("model_epoch", 7_i32.into()),
+            ("model", vec![9_u8, 8].into()),
+        ])]]);
+        let state = load_state(&conn).await.expect("state").expect("row");
+        assert_eq!(state.model_epoch, 7);
+        assert_eq!(state.blob, vec![9_u8, 8]);
+
+        let conn = conn_with_queries(vec![vec![]]);
+        assert!(load_state(&conn).await.expect("state").is_none());
+
+        let conn = conn_with_queries(vec![vec![mock_row([
+            ("model_epoch", 3_i32.into()),
+            ("doc_count", 42_i32.into()),
+        ])]]);
+        assert_eq!(state_probe(&conn).await.expect("probe"), Some((3, 42)));
+
+        let conn = conn_with_queries(vec![vec![]]);
+        assert_eq!(state_probe(&conn).await.expect("probe"), None);
+    }
+
+    #[tokio::test]
+    async fn load_docs_maps_stored_rows() {
+        let conn = conn_with_queries(vec![vec![mock_row([
+            ("article_id", 6_i32.into()),
+            ("plain_len", 120_i32.into()),
+            ("vector", vec![0_u8, 0, 0, 0].into()),
+            ("terms", vec![1_u8].into()),
+        ])]]);
+        let docs = load_docs(&conn).await.expect("docs");
+        assert_eq!(docs.len(), 1);
+        assert_eq!(docs[0].article_id, 6);
+        assert_eq!(docs[0].plain_len, 120);
+        assert_eq!(docs[0].vector, vec![0_u8, 0, 0, 0]);
+    }
+
+    #[tokio::test]
+    async fn save_upsert_and_delete_execute_writes() {
+        let conn = conn_with_execs(3);
+        save_state(&conn, 4, 2, vec![1_u8])
+            .await
+            .expect("save_state");
+        upsert_doc(&conn, 5, 2, 11, vec![1_u8], vec![2_u8])
+            .await
+            .expect("upsert_doc");
+        delete_doc(&conn, 5).await.expect("delete_doc");
+    }
+
+    #[tokio::test]
+    async fn try_lock_and_release_cover_the_advisory_lock() {
+        let conn = conn_with_queries(vec![vec![mock_row([("acquired", 1_i64.into())])]]);
+        assert!(try_lock(&conn).await.expect("lock"));
+
+        let conn = conn_with_queries(vec![vec![mock_row([("acquired", 0_i64.into())])]]);
+        assert!(!try_lock(&conn).await.expect("lock miss"));
+
+        // A NULL/absent lock result means "not held", not an error.
+        let conn = conn_with_queries(vec![vec![]]);
+        assert!(!try_lock(&conn).await.expect("empty lock result"));
+
+        let conn = conn_with_execs(1);
+        release_lock(&conn).await.expect("release");
+    }
+
+    #[tokio::test]
+    async fn fetch_hit_rows_short_circuits_on_empty_and_maps_rows() {
+        let conn = conn_with_queries(vec![]);
+        assert!(fetch_hit_rows(&conn, &[]).await.expect("empty").is_empty());
+
+        let conn = conn_with_queries(vec![vec![mock_row([
+            ("id", 12_i32.into()),
+            ("perek_id", 3_i16.into()),
+            ("author_id", 4_i16.into()),
+            ("author_name", "רש\"י".into()),
+            ("name", "מאמר".into()),
+            ("abstract", Value::String(None)),
+            ("content", Value::String(None)),
+            ("sefer_name", "בראשית".into()),
+            ("additional_letter", Value::String(None)),
+            ("perek_in_context", Value::Int(None)),
+        ])]]);
+        let rows = fetch_hit_rows(&conn, &[12, 13]).await.expect("rows");
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].id, 12);
+        assert_eq!(rows[0].perek_id, 3);
+        assert_eq!(rows[0].author_name.as_deref(), Some("רש\"י"));
+        assert_eq!(rows[0].sefer_name.as_deref(), Some("בראשית"));
+    }
+}
