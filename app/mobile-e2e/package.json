@@ -8,7 +8,8 @@
   "scripts": {
     "build:app": "dotnet run --project ../devops -- CompileMobileE2E --configuration Debug",
     "test": "node run.mjs",
-    "test:unit": "node --test simulator.test.mjs appium-readiness.test.mjs",
+    "test:unit": "node --test simulator.test.mjs appium-readiness.test.mjs native-logs.test.mjs android-readiness.test.mjs android-snapshot-check.test.mjs",
+    "android:ready": "node android-ready.mjs",
     "ios:wda": "node prepare-wda.mjs",
     "ios:boot": "node boot-ios.mjs"
   },

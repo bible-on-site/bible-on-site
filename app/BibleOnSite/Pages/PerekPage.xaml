@@ -12,17 +12,63 @@
              x:Name="PerekPageRoot"
              x:DataType="viewmodels:PerekViewModel"
              Title="{Binding Source}"
-             FlowDirection="RightToLeft">
+             BackgroundColor="{AppThemeBinding Light=#F2F7FE, Dark=#20304A}"
+             FlowDirection="RightToLeft"
+             Shell.NavBarIsVisible="False">
 
-    <Shell.TitleView>
-        <Grid>
-            <Label x:Name="NormalNavigationTitle"
+    <ContentPage.Resources>
+        <ResourceDictionary>
+            <Color x:Key="SelectedPasukBackground">#E3F2FD</Color>
+            <Color x:Key="SelectedPasukBackgroundDark">#9FB4E0</Color>
+            <converters:IntEqualityConverter x:Key="IntEqualityConverter"/>
+            <converters:PerushCheckedConverter x:Key="PerushCheckedConverter"/>
+            <converters:InvertedBoolConverter x:Key="InvertedBoolConverter"/>
+            <converters:PasukDisplayItemsConverter x:Key="PasukDisplayItemsConverter"/>
+            <x:Double x:Key="BottomBarTotalHeight">90</x:Double>
+        </ResourceDictionary>
+    </ContentPage.Resources>
+
+    <Grid x:Name="MainGrid" RowDefinitions="Auto,*">
+        <Grid x:Name="ReaderToolbar" Grid.Row="0" MinimumHeightRequest="56"
+              BackgroundColor="{AppThemeBinding Light=#F2F7FE, Dark=#20304A}">
+            <Grid x:Name="NormalNavigationBar" ColumnDefinitions="48,*,48" HeightRequest="56">
+                <Button x:Name="ReaderNavigationButton" Grid.Column="0" Text="☰" FontSize="24" WidthRequest="48" Padding="0"
+                        BackgroundColor="Transparent" TextColor="{AppThemeBinding Light=Black, Dark=White}"
+                        AutomationId="ReaderNavigationButton" SemanticProperties.Description="פתיחת תפריט הניווט"
+                        Clicked="OnReaderMenuClicked"/>
+                <Button Grid.Column="1" x:Name="NormalNavigationTitle"
                    AutomationId="PerekSource"
                    Text="{Binding Source}"
                    FontSize="20"
-                   TextColor="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource SecondaryDarkText}}"
+                   Padding="12,0"
+                   HeightRequest="40"
+                   CornerRadius="14"
+                   BorderWidth="0"
+                   IsVisible="False"
+                   BackgroundColor="{AppThemeBinding Light=#E4EFFD, Dark=#2C4569}"
+                   TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark=#AACBFF}"
                    VerticalOptions="Center"
-                   HorizontalOptions="Start"/>
+                   HorizontalOptions="Fill"
+                   Margin="4,0"
+                   SemanticProperties.Hint="הקישו לפתיחת החיפוש"
+                   Clicked="OnPerekSourceClicked"/>
+                <Border x:Name="SearchIntroduction" Grid.Column="1" HorizontalOptions="Fill" VerticalOptions="Center"
+                        HeightRequest="40" Margin="4,0" Padding="12,0" StrokeThickness="0" StrokeShape="RoundRectangle 14"
+                        BackgroundColor="{AppThemeBinding Light=#E4EFFD, Dark=#2C4569}">
+                    <Border.GestureRecognizers>
+                        <TapGestureRecognizer Tapped="OnPerekSourceClicked"/>
+                    </Border.GestureRecognizers>
+                    <Label x:Name="SearchIntroductionText" Text="חיפוש בתנ&quot;ך..." FontSize="20" VerticalOptions="Center"
+                           HorizontalTextAlignment="Center" TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark=#AACBFF}"/>
+                </Border>
+                <Button x:Name="ReaderMenuButton" Grid.Column="2" AutomationId="ReaderMenuButton"
+                        Text="{x:Static fonts:FluentUI.more_vertical_24_regular}" FontFamily="FluentIcons" FontSize="20"
+                        WidthRequest="48" HeightRequest="44" Padding="0" BackgroundColor="Transparent"
+                        TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark=#AACBFF}"
+                        VerticalOptions="Center" SemanticProperties.Description="אפשרויות הקריאה"
+                        Clicked="OnReaderMenuButtonClicked"/>
+            </Grid>
+            <ContentView x:Name="SearchTitleHost" IsVisible="False" Margin="0" VerticalOptions="Center"/>
             <Grid
                   x:Name="SelectionBar"
                   AutomationId="SelectionBar"
@@ -105,23 +151,16 @@
                         TextColor="White"
                         Clicked="OnSelectionCopyClicked"/>
             </Grid>
+            <BoxView HeightRequest="1" VerticalOptions="End" InputTransparent="True" ZIndex="10"
+                     Color="{AppThemeBinding Light=#DBE8F8, Dark=#47658E}"/>
         </Grid>
-    </Shell.TitleView>
 
-    <ContentPage.Resources>
-        <ResourceDictionary>
-            <Color x:Key="SelectedPasukBackground">#E3F2FD</Color>
-            <Color x:Key="SelectedPasukBackgroundDark">#9FB4E0</Color>
-            <converters:IntEqualityConverter x:Key="IntEqualityConverter"/>
-            <converters:PerushCheckedConverter x:Key="PerushCheckedConverter"/>
-            <x:Double x:Key="BottomBarTotalHeight">90</x:Double>
-        </ResourceDictionary>
-    </ContentPage.Resources>
-
-    <Grid x:Name="MainGrid">
+        <controls:FloatingSearchBar x:Name="ChapterSearch" Grid.Row="1" ZIndex="300"
+                                    IsVisible="False" VerticalOptions="Fill" Margin="0"
+                                    ResultSelected="OnSearchResultSelected"/>
 
 <!-- iOS bottom bar debug (beta-only collapsible dropdown) -->
-<Grid x:Name="BottomBarDebugOverlay"
+<Grid x:Name="BottomBarDebugOverlay" Grid.Row="1"
       IsVisible="False"
       ZIndex="999"
       VerticalOptions="Start"
@@ -177,7 +216,7 @@
         <!-- Exit Full Screen Button (floating, hidden by default) -->
         <!-- Gesture recognizers are set up in code-behind: native Android touch for
              pixel-perfect drag tracking, MAUI gesture recognizers for other platforms. -->
-        <Border x:Name="ExitFullScreenButton"
+        <Border x:Name="ExitFullScreenButton" Grid.Row="1"
                 WidthRequest="48"
                 HeightRequest="48"
                 StrokeShape="RoundRectangle 24"
@@ -204,7 +243,7 @@
         </Border>
 
         <!-- Main Content Area - fills entire viewport -->
-        <Grid x:Name="ContentArea"
+        <Grid x:Name="ContentArea" Grid.Row="1" BackgroundColor="{AppThemeBinding Light=White, Dark={StaticResource OffBlack}}"
               ZIndex="0"
               RowDefinitions="Auto,Auto,*">
 
@@ -244,36 +283,60 @@
                     <DataTemplate x:DataType="models:Perek">
                         <!-- Full perek page: header + CollectionView of pasukim -->
                         <Grid RowDefinitions="Auto,*">
-                            <!-- Perek Header (Row 0) -->
-                            <Label Grid.Row="0"
-                                   AutomationId="PerekHeader"
-                                   Text="{Binding Header}"
-                                   FontSize="22"
-                                   FontAttributes="Bold"
-                                   HorizontalTextAlignment="Center"
-                                   Padding="16,12"
-                                   TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryLight}}">
-                                <Label.GestureRecognizers>
-                                    <PointerGestureRecognizer PointerPressed="OnHeaderPointerPressed" PointerReleased="OnHeaderPointerReleased" PointerMoved="OnHeaderPointerMoved"/>
-                                </Label.GestureRecognizers>
-                                <Label.Behaviors>
-                                    <behaviors:LongPressBehavior LongPressDuration="600" LongPressed="OnHeaderLongPressed"/>
-                                </Label.Behaviors>
-                            </Label>
+                            <!-- Perek Header (Row 0) with קריינות play button -->
+                            <Grid Grid.Row="0">
+                                <Label AutomationId="PerekHeader"
+                                       Text="{Binding Header}"
+                                       FontSize="22"
+                                       FontAttributes="Bold"
+                                       HorizontalTextAlignment="Center"
+                                       Padding="16,12"
+                                       TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryLight}}">
+                                    <Label.GestureRecognizers>
+                                        <PointerGestureRecognizer PointerPressed="OnHeaderPointerPressed" PointerReleased="OnHeaderPointerReleased" PointerMoved="OnHeaderPointerMoved"/>
+                                    </Label.GestureRecognizers>
+                                    <Label.Behaviors>
+                                        <behaviors:LongPressBehavior LongPressDuration="600" LongPressed="OnHeaderLongPressed"/>
+                                    </Label.Behaviors>
+                                </Label>
+                                <!-- קריינות: plays the whole perek; shown only when the
+                                     menu checkbox is checked for this perek -->
+                                <Button x:Name="HeaderPlayButton"
+                                        AutomationId="HeaderPlayButton"
+                                        Text="{x:Static fonts:FluentUI.play_24_regular}"
+                                        FontFamily="FluentIcons"
+                                        FontSize="20"
+                                        WidthRequest="40"
+                                        HeightRequest="40"
+                                        Padding="0"
+                                        BackgroundColor="Transparent"
+                                        TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryLight}}"
+                                        HorizontalOptions="Start"
+                                        VerticalOptions="Center"
+                                        Margin="8,0"
+                                        IsVisible="{Binding BindingContext.ShowHeaderPlayButton, Source={x:Reference PerekPageRoot}}"
+                                        Clicked="OnHeaderPlayClicked"/>
+                            </Grid>
 
                             <!-- Perek Text - Pasukim List (Row 1) with perushim inline -->
                             <CollectionView Grid.Row="1"
                                             x:Name="PasukimCollection"
                                             AutomationId="PasukimCollection"
-                                            ItemsSource="{Binding Pasukim}"
+                                            IsVisible="{Binding BindingContext.IsTikkunKorimEnabled, Source={x:Reference PerekPageRoot}, Converter={StaticResource InvertedBoolConverter}}"
                                             SelectionMode="None"
                                             Scrolled="OnPasukimScrolled"
                                             Margin="8,0,8,0">
+                                <CollectionView.ItemsSource>
+                                    <MultiBinding Converter="{StaticResource PasukDisplayItemsConverter}">
+                                        <Binding Path="Pasukim"/>
+                                        <Binding Path="BindingContext.IsShnayimMikraEnabled" Source="{x:Reference PerekPageRoot}"/>
+                                    </MultiBinding>
+                                </CollectionView.ItemsSource>
                                 <CollectionView.Footer>
                                     <ContentView HeightRequest="{DynamicResource BottomBarTotalHeight}" BackgroundColor="Transparent"/>
                                 </CollectionView.Footer>
                                 <CollectionView.ItemTemplate>
-                                    <DataTemplate x:DataType="models:Pasuk">
+                                    <DataTemplate x:DataType="models:PasukDisplayItem">
                                         <Border Padding="12,8"
                                                 Margin="0,4"
                                                 StrokeShape="RoundRectangle 8"
@@ -287,7 +350,7 @@
                                                 </OnPlatform>
                                             </Border.FlowDirection>
                                             <Border.Triggers>
-                                                <DataTrigger TargetType="Border" Binding="{Binding IsSelected}" Value="True">
+                                                <DataTrigger TargetType="Border" Binding="{Binding Pasuk.IsSelected}" Value="True">
                                                     <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource SelectedPasukBackground}, Dark={StaticResource SelectedPasukBackgroundDark}}"/>
                                                 </DataTrigger>
                                             </Border.Triggers>
@@ -311,6 +374,7 @@
                                                   FlowDirection="RightToLeft">
                                                 <Label Grid.Column="0"
                                                        Text="{Binding PasukNumHeb}"
+                                                       AutomationId="PasukNumber"
                                                        FontSize="{DynamicResource PasukNumFontSize}"
                                                        FontAttributes="Bold"
                                                        VerticalTextAlignment="Start"
@@ -319,18 +383,21 @@
                                                        TextColor="{StaticResource Primary}"/>
                                                 <VerticalStackLayout Grid.Column="1" Spacing="2">
                                                     <Label AutomationId="PasukText"
-                                                           FormattedText="{Binding FormattedText}"
+                                                           FormattedText="{Binding Pasuk.FormattedText}"
                                                            FontSize="{DynamicResource PasukFontSize}"
                                                            FlowDirection="RightToLeft"
                                                            LineBreakMode="WordWrap"
                                                            LineHeight="1.4"/>
-                                                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding PerushNotes}"
+                                                    <!-- Perushim render once per pair in שניים מקרא mode -->
+                                                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding Pasuk.PerushNotes}"
+                                                                         IsVisible="{Binding IsFirstCopy}"
                                                                          Spacing="2"
                                                                          Margin="0,4,0,0">
                                                         <BindableLayout.ItemTemplate>
                                                             <DataTemplate x:DataType="models:PerushNoteDisplay">
                                                                 <VerticalStackLayout Spacing="2">
                                                                     <Label Text="{Binding PerushName}"
+                                                                           AutomationId="InlinePerushName"
                                                                            FontSize="{DynamicResource PerushNameFontSize}"
                                                                            FontAttributes="Bold"
                                                                            TextColor="{StaticResource Primary}"/>
@@ -365,6 +432,35 @@
                                     </VerticalStackLayout>
                                 </CollectionView.EmptyView>
                             </CollectionView>
+
+                            <!-- תיקון קוראים: the whole perek as one continuous flow.
+                                 Tapping anywhere toggles niqqud+taamim for the entire perek. -->
+                            <ScrollView Grid.Row="1"
+                                        AutomationId="TikkunScrollView"
+                                        IsVisible="{Binding BindingContext.IsTikkunKorimEnabled, Source={x:Reference PerekPageRoot}}"
+                                        Margin="8,0,8,0">
+                                <VerticalStackLayout>
+                                    <!-- MAUI TapGestureRecognizer fails inside CarouselView
+                                         templates on Android; LongPressBehavior.NativeTapped
+                                         detects the tap natively (same as pasuk rows). The
+                                         behavior must sit on the flow view itself — native
+                                         Touch fires only on the actual touch target. -->
+                                    <controls:TikkunFlowView AutomationId="TikkunText"
+                                                             Pasukim="{Binding Pasukim}"
+                                                             RepeatEachPasuk="{Binding BindingContext.IsShnayimMikraEnabled, Source={x:Reference PerekPageRoot}}"
+                                                             HideMarks="{Binding BindingContext.TikkunMarksHidden, Source={x:Reference PerekPageRoot}}"
+                                                             TextFontSize="{DynamicResource PasukFontSize}">
+                                        <controls:TikkunFlowView.GestureRecognizers>
+                                            <TapGestureRecognizer Tapped="OnTikkunTextTapped"/>
+                                        </controls:TikkunFlowView.GestureRecognizers>
+                                        <controls:TikkunFlowView.Behaviors>
+                                            <behaviors:LongPressBehavior NativeTapped="OnTikkunNativeTapped"/>
+                                        </controls:TikkunFlowView.Behaviors>
+                                    </controls:TikkunFlowView>
+                                    <ContentView HeightRequest="{DynamicResource BottomBarTotalHeight}"
+                                                 BackgroundColor="Transparent"/>
+                                </VerticalStackLayout>
+                            </ScrollView>
                         </Grid>
                     </DataTemplate>
                 </CarouselView.ItemTemplate>
@@ -426,7 +522,7 @@
         </Grid>
 
         <!-- Perushim Panel (slides up from bottom, above content but behind bottom bar) -->
-        <Border x:Name="PerushimPanel"
+        <Border x:Name="PerushimPanel" Grid.Row="1"
                 BackgroundColor="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}"
                 StrokeShape="RoundRectangle 16,16,0,0"
                 Stroke="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray600}}"
@@ -519,8 +615,101 @@
             </Grid>
         </Border>
 
+        <!-- Reader options menu - dropdown anchored under the ⋮ button -->
+        <Grid x:Name="ReaderMenuOverlay"
+              AutomationId="ReaderMenuOverlay"
+              Grid.Row="1"
+              IsVisible="False"
+              ZIndex="160"
+              BackgroundColor="Transparent">
+            <Grid.GestureRecognizers>
+                <TapGestureRecognizer Tapped="OnReaderMenuDismissed"/>
+            </Grid.GestureRecognizers>
+            <Border HorizontalOptions="End"
+                    VerticalOptions="Start"
+                    Margin="8,4"
+                    Padding="6,4"
+                    MinimumWidthRequest="190"
+                    StrokeShape="RoundRectangle 12"
+                    Stroke="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray600}}"
+                    StrokeThickness="1"
+                    BackgroundColor="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}">
+                <Border.Shadow>
+                    <Shadow Brush="Black"
+                            Offset="0,3"
+                            Radius="8"
+                            Opacity="0.25"/>
+                </Border.Shadow>
+                <VerticalStackLayout Spacing="0">
+                    <!-- קריינות - checkbox toggle; only offered when the current perek
+                         has a downloaded recitation -->
+                    <VerticalStackLayout Spacing="0"
+                                         IsVisible="{Binding HasCurrentPerekRecitation}">
+                        <Grid Padding="10,6">
+                            <Grid.GestureRecognizers>
+                                <TapGestureRecognizer Tapped="OnQriynotTapped"/>
+                            </Grid.GestureRecognizers>
+                            <Grid ColumnDefinitions="Auto,*,Auto">
+                                <CheckBox AutomationId="QriynotCheckBox"
+                                          IsChecked="{Binding IsQriynotEnabled}"
+                                          InputTransparent="True"
+                                          VerticalOptions="Center"/>
+                                <Label Grid.Column="1"
+                                       Text="קריינות"
+                                       FontSize="16"
+                                       VerticalOptions="Center"
+                                       Margin="10,0,0,0"/>
+                                <Label Grid.Column="2"
+                                       Text="{x:Static fonts:FluentUI.headphones_24_regular}"
+                                       FontFamily="FluentIcons"
+                                       FontSize="18"
+                                       TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"
+                                       VerticalOptions="Center"/>
+                            </Grid>
+                        </Grid>
+                        <BoxView HeightRequest="1"
+                                 BackgroundColor="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray600}}"/>
+                    </VerticalStackLayout>
+                    <!-- שניים מקרא - checkbox toggle -->
+                    <Grid Padding="10,6">
+                        <Grid.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OnShnayimMikraTapped"/>
+                        </Grid.GestureRecognizers>
+                        <Grid ColumnDefinitions="Auto,*">
+                            <CheckBox AutomationId="ShnayimMikraCheckBox"
+                                      IsChecked="{Binding IsShnayimMikraEnabled}"
+                                      InputTransparent="True"
+                                      VerticalOptions="Center"/>
+                            <Label Grid.Column="1"
+                                   Text="שניים מקרא"
+                                   FontSize="16"
+                                   VerticalOptions="Center"
+                                   Margin="10,0,0,0"/>
+                        </Grid>
+                    </Grid>
+                    <!-- תיקון קוראים - checkbox toggle -->
+                    <Grid Padding="10,6">
+                        <Grid.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OnTikkunKorimTapped"/>
+                        </Grid.GestureRecognizers>
+                        <Grid ColumnDefinitions="Auto,*">
+                            <CheckBox AutomationId="TikkunKorimCheckBox"
+                                      IsChecked="{Binding IsTikkunKorimEnabled}"
+                                      InputTransparent="True"
+                                      VerticalOptions="Center"/>
+                            <Label Grid.Column="1"
+                                   Text="תיקון קוראים"
+                                   FontSize="16"
+                                   VerticalOptions="Center"
+                                   Margin="10,0,0,0"/>
+                        </Grid>
+                    </Grid>
+                </VerticalStackLayout>
+            </Border>
+        </Grid>
+
         <!-- Bottom Navigation Bar with Circular Menu - OVERLAY floating at bottom -->
-        <Grid x:Name="BottomBar"
+        <Grid x:Name="BottomBar" Grid.Row="1"
               HeightRequest="90"
               VerticalOptions="End"
               ZIndex="100"
@@ -622,7 +811,7 @@
         </Grid>
 
         <!-- Satellite buttons overlay - uses AbsoluteLayout for precise positioning -->
-        <AbsoluteLayout x:Name="FloatingMenuContainer"
+        <AbsoluteLayout x:Name="FloatingMenuContainer" Grid.Row="1"
                         ZIndex="150"
                         InputTransparent="True"
                         CascadeInputTransparent="False"
@@ -728,7 +917,7 @@
         </AbsoluteLayout>
 
         <!-- Perek Picker Popup Overlay -->
-        <Grid x:Name="FocusedPasukOverlay" IsVisible="False" ZIndex="150"
+        <Grid x:Name="FocusedPasukOverlay" Grid.Row="1" IsVisible="False" ZIndex="150"
               AutomationId="FocusedPasukOverlay" BackgroundColor="{AppThemeBinding Light=White, Dark=#1C1C1E}">
             <ScrollView>
                 <VerticalStackLayout Padding="20,16" Spacing="16">
@@ -751,12 +940,12 @@
                 </VerticalStackLayout>
             </ScrollView>
         </Grid>
-        <WebView x:Name="RecitationDecoderView" WidthRequest="1" HeightRequest="1" Opacity="0" InputTransparent="True"/>
-        <toolkit:MediaElement x:Name="RecitationPlayer" WidthRequest="1" HeightRequest="1" Opacity="0"
+        <WebView x:Name="RecitationDecoderView" Grid.Row="1" WidthRequest="1" HeightRequest="1" Opacity="0" InputTransparent="True"/>
+        <toolkit:MediaElement x:Name="RecitationPlayer" Grid.Row="1" WidthRequest="1" HeightRequest="1" Opacity="0"
                               InputTransparent="True" ShouldAutoPlay="False" ShouldShowPlaybackControls="False"
                               MediaOpened="OnRecitationMediaOpened" MediaEnded="OnRecitationMediaEnded"
                               MediaFailed="OnRecitationMediaFailed" StateChanged="OnRecitationStateChanged"/>
-        <controls:PerekPickerPopup x:Name="PerekPickerPopup"
+        <controls:PerekPickerPopup x:Name="PerekPickerPopup" Grid.Row="1"
                                    ZIndex="200"
                                    PerekSelected="OnPerekPickerSelected"/>
     </Grid>

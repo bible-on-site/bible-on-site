@@ -155,6 +155,15 @@ def validate_lambda_safe_comments(filepath):
                     f"{filepath}:{line_number}: Lambda-unsafe SQL line comment "
                     "contains a semicolon or apostrophe"
                 )
+            if stripped.startswith("--") and re.search(
+                r"\bCREATE\s+(?:TABLE|(?:OR\s+REPLACE\s+)?VIEW)\b",
+                stripped,
+                re.IGNORECASE,
+            ):
+                raise ValueError(
+                    f"{filepath}:{line_number}: Lambda-unsafe SQL line comment "
+                    "contains table/view creation keywords"
+                )
 
 
 def main():

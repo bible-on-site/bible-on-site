@@ -221,7 +221,7 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       RoleName: bible-on-site-admin-task-role
-      Description: Task role for admin container — allows S3 access for rabbis bucket
+      Description: Task role for admin container — allows S3 access and bulletin previews
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -243,6 +243,13 @@ Resources:
                 Resource:
                   - arn:aws:s3:::bible-on-site-assets
                   - arn:aws:s3:::bible-on-site-assets/*
+        - PolicyName: AdminBulletinPreview
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:bible-on-site-bulletin"
       Tags:
         - Key: Project
           Value: bible-on-site

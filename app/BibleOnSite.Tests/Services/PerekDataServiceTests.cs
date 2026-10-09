@@ -19,6 +19,24 @@ public class PerekDataServiceTests
     ];
 
     [Fact]
+    public async Task ConcurrentLoads_ReturnTheSameCompleteChapterCatalog()
+    {
+        await using var storage = new TestStorage();
+        var db = await storage.CreateDatabaseAsync(DbName, Schema);
+        await db.ExecuteAsync("INSERT INTO tanah_sefer VALUES (1,'בראשית','Genesis',1,929)");
+        await db.ExecuteAsync("WITH RECURSIVE chapters(id) AS (SELECT 1 UNION ALL SELECT id+1 FROM chapters WHERE id<929) " +
+            "INSERT INTO tanah_perek SELECT id,id,'פרק' FROM chapters");
+        var service = new PerekDataService(new LocalDatabaseService(storage.FileSystem.Object));
+        var catalogs = await Task.WhenAll(Enumerable.Range(0, 32).Select(async _ =>
+        {
+            await service.LoadAsync();
+            service.Perakim.Should().HaveCount(929);
+            return service.Perakim;
+        }));
+        catalogs.Should().OnlyContain(catalog => ReferenceEquals(catalog, catalogs[0]));
+    }
+
+    [Fact]
     public async Task Load_MapsSplitBooks_UsesLatestCycle_AndCachesResults()
     {
         await using var storage = new TestStorage();

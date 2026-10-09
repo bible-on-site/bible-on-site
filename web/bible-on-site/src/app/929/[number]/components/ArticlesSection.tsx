@@ -52,66 +52,48 @@ export function ArticlesSection({
 				) : loading ? (
 					<p className={styles.emptyMessage}>מתחבר למאמרים...</p>
 				) : (
-					safeArticles.map((article) =>
-						onArticleClick ? (
-							<button
-								key={article.id}
-								type="button"
-								id={`article-${article.id}`}
-								className={styles.carouselItem}
-								onClick={() => onArticleClick(article)}
-							>
-								<div className={styles.authorImage}>
-									<Image
-										src={article.authorImageUrl}
-										alt={article.authorName}
-										width={80}
-										height={80}
-										className={styles.authorImg}
-									/>
-								</div>
-								<span className={styles.authorName}>{article.authorName}</span>
-								{article.abstract && (
-									<div
-										className={styles.articleAbstract}
-										// nosemgrep -- DOMPurify-sanitized abstract
-										// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify
-										dangerouslySetInnerHTML={{
-											__html: DOMPurify.sanitize(article.abstract),
-										}}
-									/>
-								)}
-							</button>
-						) : (
-							<Link
-								key={article.id}
-								href={`/929/${article.perekId}/${article.id}`}
-								id={`article-${article.id}`}
-								className={styles.carouselItem}
-							>
-								<div className={styles.authorImage}>
-									<Image
-										src={article.authorImageUrl}
-										alt={article.authorName}
-										width={80}
-										height={80}
-										className={styles.authorImg}
-									/>
-								</div>
-								<span className={styles.authorName}>{article.authorName}</span>
-								{article.abstract && (
-									<div
-										className={styles.articleAbstract}
-										// nosemgrep -- DOMPurify-sanitized abstract
-										// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify
-										dangerouslySetInnerHTML={{
-											__html: DOMPurify.sanitize(article.abstract),
-										}}
-									/>
-								)}
-							</Link>
-						),
-					)
+					safeArticles.map((article) => (
+						<Link
+							key={article.id}
+							href={`/929/${article.perekId}/${article.id}`}
+							id={`article-${article.id}`}
+							className={styles.carouselItem}
+							onClick={
+								onArticleClick
+									? (e) => {
+											// Modifier/new-tab clicks keep the
+											// anchor's default navigation.
+											if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) {
+												return;
+											}
+											e.preventDefault();
+											onArticleClick(article);
+										}
+									: undefined
+							}
+						>
+							<div className={styles.authorImage}>
+								<Image
+									src={article.authorImageUrl}
+									alt={article.authorName}
+									width={80}
+									height={80}
+									className={styles.authorImg}
+								/>
+							</div>
+							<span className={styles.authorName}>{article.authorName}</span>
+							{article.abstract && (
+								<div
+									className={styles.articleAbstract}
+									// nosemgrep -- DOMPurify-sanitized abstract
+									// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify
+									dangerouslySetInnerHTML={{
+										__html: DOMPurify.sanitize(article.abstract),
+									}}
+								/>
+							)}
+						</Link>
+					))
 				)}
 			</Carousel>
 		</section>

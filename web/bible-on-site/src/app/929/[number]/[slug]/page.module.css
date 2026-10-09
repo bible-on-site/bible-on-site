@@ -204,27 +204,14 @@ button.backLink {
     height: 64px;
   }
 
-  .expandedPerush {
-    padding: 16px;
-    margin: 16px 8px;
-  }
-
-  .perushTitle {
-    font-size: 1.3rem;
-  }
-
-  .parshanName {
-    font-size: 1.1rem;
-  }
-
-  .noteContent {
-    font-size: 1rem;
-  }
 }
 
-/* Perush styles */
+/* Perush styles — now the first block on the route, so it carries the same
+   top-nav clearance as the expanded article for the at-rest and
+   ScrollToSlug-scrolled positions. */
 .expandedPerush {
-  margin: 24px 16px;
+  margin: calc(72px + 24px) 16px 24px;
+  scroll-margin-top: calc(72px + 24px);
   padding: 24px;
   background: transparent;
   border-radius: 12px;
@@ -291,6 +278,28 @@ button.backLink {
 
 .noteContent p {
   margin: 0.5rem 0;
+}
+
+/* Must follow the base perush rules above; a media block placed earlier in
+   the file would lose the cascade to the base declarations. */
+@media (max-width: 640px) {
+  .expandedPerush {
+    margin: calc(72px + 16px) 8px 16px;
+    scroll-margin-top: calc(72px + 16px);
+    padding: 16px;
+  }
+
+  .perushTitle {
+    font-size: 1.3rem;
+  }
+
+  .parshanName {
+    font-size: 1.1rem;
+  }
+
+  .noteContent {
+    font-size: 1rem;
+  }
 }
 
 @media (prefers-color-scheme: dark) {

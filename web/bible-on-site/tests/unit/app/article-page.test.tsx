@@ -114,7 +114,7 @@ jest.mock("../../../src/app/929/[number]/components/Stuma", () => ({
 	Stuma: () => <span data-testid="stuma" />,
 }));
 
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import ArticlePage, {
 	generateMetadata,
 	generateStaticParams,
@@ -236,9 +236,13 @@ describe("[slug] page", () => {
 			expect(result).toEqual({
 				title: 'מאמר לדוגמא | הרב ישראל | תנ"ך על הפרק',
 				description: "תקציר המאמר",
+				alternates: {
+					canonical: "/929/5/42",
+				},
 				openGraph: {
 					title: 'מאמר לדוגמא | הרב ישראל | תנ"ך על הפרק',
 					description: "תקציר המאמר",
+					url: "/929/5/42",
 					siteName: 'תנ"ך על הפרק',
 					locale: "he_IL",
 					type: "article",
@@ -344,6 +348,64 @@ describe("[slug] page", () => {
 			expect(result.title).toContain('רש"י');
 			expect(result.title).toContain('תנ"ך על הפרק');
 			expect(result.openGraph?.siteName).toBe('תנ"ך על הפרק');
+			expect(result.alternates?.canonical).toBe(
+				`/929/5/${encodeURIComponent('רש"י')}`,
+			);
+			expect(result.openGraph?.url).toBe(
+				`/929/5/${encodeURIComponent('רש"י')}`,
+			);
+			// No perush detail mocked → templated fallback description
+			expect(result.description).toContain("פירוש");
+		});
+
+		it("derives perush description from note content", async () => {
+			const perek = {
+				perekId: 5,
+				perekHeb: "ה",
+				header: "בראשית ה",
+				date: [],
+				star_rise: [],
+				helek: "תורה",
+				sefer: "בראשית",
+				source: "בראשית ה",
+				pesukim: [],
+			} as unknown as PerekObj & Perek;
+			mockGetPerushimByPerekId.mockResolvedValue([
+				{ id: 1, name: 'רש"י', parshanName: 'רש"י', noteCount: 10 },
+			]);
+			mockGetPerekByPerekId.mockReturnValue(perek);
+			mockGetSeferByName.mockReturnValue({
+				name: "בראשית",
+				helek: "תורה",
+				pesukimCount: 1,
+				perekFrom: 5,
+				perekTo: 5,
+				tanachUsName: "Genesis",
+				perakim: [perek],
+			});
+			mockGetPerushDetail.mockResolvedValue({
+				id: 1,
+				name: 'רש"י',
+				parshanName: 'רש"י',
+				notes: [
+					{
+						pasuk: 1,
+						noteIdx: 0,
+						noteContent: "<p>בבקשה ורצון&quot;.</p>",
+					},
+				],
+			});
+
+			const result = await generateMetadata({
+				params: Promise.resolve({ number: "5", slug: 'רש"י' }),
+			});
+
+			expect(result.description).toContain("בבקשה ורצון");
+			expect(result.description).not.toContain("<");
+			expect(result.openGraph?.type).toBe("article");
+			expect(
+				(result.openGraph as { authors?: string[] } | null)?.authors,
+			).toEqual(['רש"י']);
 		});
 
 		it("returns not-found metadata when perush name not found", async () => {
@@ -543,6 +605,49 @@ describe("[slug] page", () => {
 			expect(screen.getByText("חזרה לפרק →")).toBeTruthy();
 		});
 
+		it("renders the expanded perush above the sefer composite with an h1", async () => {
+			const perek = {
+				perekId: 5,
+				perekHeb: "ה",
+				header: "בראשית ה",
+				date: [],
+				star_rise: [],
+				helek: "תורה",
+				sefer: "בראשית",
+				source: "בראשית ה",
+				pesukim: [],
+			} as unknown as PerekObj & Perek;
+			mockGetPerekByPerekId.mockReturnValue(perek);
+			mockGetPerushimByPerekId.mockResolvedValue([
+				{ id: 1, name: 'רש"י', parshanName: 'רש"י', noteCount: 10 },
+			]);
+			mockGetPerushDetail.mockResolvedValue({
+				id: 1,
+				name: 'רש"י',
+				parshanName: 'רש"י',
+				notes: [{ pasuk: 1, noteIdx: 0, noteContent: "<p>פירוש</p>" }],
+			});
+
+			const jsx = await ArticlePage({
+				params: Promise.resolve({ number: "5", slug: 'רש"י' }),
+			});
+			const { container } = render(jsx);
+
+			const perushView = container.querySelector("#perush-view");
+			const seferComposite = screen.getByTestId("sefer-composite");
+			expect(perushView).toBeTruthy();
+			expect(
+				perushView &&
+					seferComposite.compareDocumentPosition(perushView) &
+						Node.DOCUMENT_POSITION_PRECEDING,
+			).toBeTruthy();
+			const h1 = within(perushView as HTMLElement).getByRole("heading", {
+				level: 1,
+			});
+			expect(h1.textContent).toContain('רש"י');
+			expect(h1.textContent).toContain("בראשית ה");
+		});
+
 		it("marks perush notes with pasuk data for client-side deep-link highlighting", async () => {
 			const perush = {
 				id: 1,
@@ -599,9 +704,13 @@ describe("[slug] page", () => {
 					slug: "%D7%93%D7%A2%D7%AA%20%D7%96%D7%A7%D7%A0%D7%99%D7%9D",
 				}),
 			});
-			render(jsx);
+			const { container } = render(jsx);
 
-			expect(screen.getAllByText("דעת זקנים").length).toBeGreaterThanOrEqual(1);
+			expect(
+				container
+					.querySelector("#perush-view h1")
+					?.textContent?.includes("דעת זקנים"),
+			).toBeTruthy();
 		});
 
 		it("calls notFound when perush name not in perushim list", async () => {
