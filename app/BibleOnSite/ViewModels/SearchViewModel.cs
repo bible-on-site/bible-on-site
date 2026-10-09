@@ -15,7 +15,9 @@ public partial class SearchViewModel : ObservableObject
 {
     private readonly Services.PerekDataService _perekDataService;
     private readonly SearchIndexService? _searchIndex;
+    private readonly ArticleService? _articleService;
     private readonly bool _useDefaultIndex;
+    private readonly bool _useDefaultArticleService;
     private CancellationTokenSource? _searchCancellation;
     private int _searchVersion;
     private IReadOnlyDictionary<int, Perush> _perushim = new Dictionary<int, Perush>();
@@ -50,16 +52,25 @@ public partial class SearchViewModel : ObservableObject
     private ObservableCollection<SearchResult> _searchResults = new();
 #pragma warning restore MVVMTK0045
 
-    public SearchViewModel() : this(PerekDataService.Instance, null) { _useDefaultIndex = true; }
+    public SearchViewModel() : this(PerekDataService.Instance, null)
+    {
+        _useDefaultIndex = true;
+        _useDefaultArticleService = true;
+    }
 
     public SearchViewModel(PerekDataService perekDataService) : this(perekDataService, null) { }
 
     public SearchViewModel(PerekDataService perekDataService, SearchIndexService? searchIndex)
+        : this(perekDataService, searchIndex, null) { }
+
+    public SearchViewModel(PerekDataService perekDataService, SearchIndexService? searchIndex, ArticleService? articleService)
     {
         _perekDataService = perekDataService;
         _searchIndex = searchIndex;
-        // Initialize all filters as enabled
-        _enabledFilters = new HashSet<SearchFilter>(Enum.GetValues<SearchFilter>());
+        _articleService = articleService;
+        // Local kinds are enabled by default. Remote kinds (Articles) stay
+        // opt-in: a network round-trip must never gate an otherwise-local search.
+        _enabledFilters = new HashSet<SearchFilter>(Enum.GetValues<SearchFilter>().Where(filter => !filter.RequiresNetwork()));
 
         // Initialize all sefarim (1-35) as enabled
         _enabledSefarim = new HashSet<int>(Enumerable.Range(1, 35));
@@ -242,7 +253,15 @@ public partial class SearchViewModel : ObservableObject
         {
             IsLoading = true;
             var results = new List<SearchResult>(GetAuthorResults());
-            if (filters.Any(filter => filter != SearchFilter.Author))
+            // Remote article hits run beside the local pipeline: the request is
+            // already in flight while the local indexes load, and a slow or
+            // unreachable API can never hold back local results. The task only
+            // carries the outcome back so the local result list stays single-writer.
+            var articleMerge = filters.Contains(SearchFilter.Articles)
+                ? MergeArticleResultsAsync(phrase, limit, version, token)
+                : null;
+            // Article search is remote — it must not force the local perek DB load.
+            if (filters.Any(filter => filter != SearchFilter.Author && filter != SearchFilter.Articles))
                 await _perekDataService.LoadAsync().WaitAsync(token);
             if (filters.Contains(SearchFilter.Perek))
                 results.AddRange(GetPerekResults(phrase, books));
@@ -277,6 +296,21 @@ public partial class SearchViewModel : ObservableObject
                 if (version == _searchVersion && filters.Contains(SearchFilter.Perush) && !searchIndex.CommentaryAvailable)
                     AvailabilityMessage = "לחיפוש בפירושים, הורידו את הפירושים בהגדרות";
             }
+            if (articleMerge != null)
+            {
+                var articleOutcome = await articleMerge;
+                if (version == _searchVersion && articleOutcome != null)
+                {
+                    if (articleOutcome.UnavailableMessage != null)
+                    {
+                        AvailabilityMessage = articleOutcome.UnavailableMessage;
+                    }
+                    else if (articleOutcome.Hits != null)
+                    {
+                        results.AddRange(articleOutcome.Hits);
+                    }
+                }
+            }
             token.ThrowIfCancellationRequested();
             if (version == _searchVersion)
                 PublishResults(results, limit);
@@ -290,6 +324,62 @@ public partial class SearchViewModel : ObservableObject
         finally
         {
             if (version == _searchVersion) IsLoading = false;
+        }
+    }
+
+    /// <summary>Result of a remote article-content request: either merged hits or an availability note.</summary>
+    private sealed class ArticleSearchOutcome
+    {
+        public List<SearchResult>? Hits { get; init; }
+        public string? UnavailableMessage { get; init; }
+    }
+
+    /// <summary>
+    /// Fetches remote article-content hits for an in-flight search. This is the
+    /// only kind that cannot be served locally, so failures degrade to an
+    /// availability note instead of an error — and never throw. Hits are
+    /// returned rather than published so the result list stays single-writer.
+    /// </summary>
+    private async Task<ArticleSearchOutcome?> MergeArticleResultsAsync(string phrase, int limit, int version, CancellationToken token)
+    {
+        try
+        {
+            var articleService = _useDefaultArticleService ? ArticleService.Instance : _articleService;
+            if (articleService == null)
+            {
+                return null;
+            }
+            var page = await articleService.SearchArticlesAsync(phrase, limit, cancellationToken: token);
+            if (version != _searchVersion)
+            {
+                return null;
+            }
+            if (page == null)
+            {
+                return new ArticleSearchOutcome { UnavailableMessage = "חיפוש תוכן מאמרים זמין רק עם חיבור רשת" };
+            }
+            var hits = new List<SearchResult>(page.Hits.Count);
+            foreach (var hit in page.Hits)
+            {
+                hits.Add(new ArticleSearchResult(hit.ArticleId, hit.PerekId, hit.AuthorName, hit.Source, hit.Excerpt, phrase)
+                {
+                    Title = hit.Name,
+                    SubtitleHtml = SearchText.Snippet(hit.Excerpt, phrase),
+                    Score = (int)Math.Round(hit.Score * 100),
+                });
+            }
+            return new ArticleSearchOutcome { Hits = hits };
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+            // A newer query or a closed panel cancelled this request; the latest
+            // search version owns the result list now.
+            return null;
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Article search failed: {ex.Message}");
+            return new ArticleSearchOutcome { UnavailableMessage = "חיפוש תוכן מאמרים דורש חיבור רשת תקין" };
         }
     }
 
