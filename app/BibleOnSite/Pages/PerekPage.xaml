@@ -817,7 +817,8 @@
                         CascadeInputTransparent="False"
                         BackgroundColor="Transparent">
 
-            <!-- 4 satellite buttons - fan out from center -->
+            <!-- 4 satellite buttons + toggle — positions are computed in code-behind
+                 by FanMenuGeometry (elliptical arc, compact in every orientation) -->
 
             <!-- Previous perek (bottom-left satellite). Disabled at perek 1 via Command.CanExecute. -->
             <Button x:Name="PrevPerekButton"
@@ -833,9 +834,7 @@
                     Command="{Binding LoadPreviousCommand}"
                     Clicked="OnMenuItemClicked"
                     Opacity="0"
-                    InputTransparent="True"
-                    AbsoluteLayout.LayoutBounds="0.26,0.91,48,48"
-                    AbsoluteLayout.LayoutFlags="PositionProportional"/>
+                    InputTransparent="True"/>
 
             <!-- Today's perek (top-left satellite) -->
             <!-- Icon: calendar_date_24_regular (calendar with date) via x:Static for 5-digit Unicode -->
@@ -852,9 +851,7 @@
                     Command="{Binding LoadTodayCommand}"
                     Clicked="OnMenuItemClicked"
                     Opacity="0"
-                    InputTransparent="True"
-                    AbsoluteLayout.LayoutBounds="0.42,0.87,48,48"
-                    AbsoluteLayout.LayoutFlags="PositionProportional"/>
+                    InputTransparent="True"/>
 
             <!-- Perek Picker (top-right satellite) -->
             <Button x:Name="PerekPickerButton"
@@ -869,9 +866,7 @@
                     TextColor="White"
                     Clicked="OnPerekPickerClicked"
                     Opacity="0"
-                    InputTransparent="True"
-                    AbsoluteLayout.LayoutBounds="0.58,0.87,48,48"
-                    AbsoluteLayout.LayoutFlags="PositionProportional"/>
+                    InputTransparent="True"/>
 
             <!-- Next perek (bottom-right satellite). Disabled at perek 929 via Command.CanExecute. -->
             <Button x:Name="NextPerekButton"
@@ -888,9 +883,7 @@
                     Command="{Binding LoadNextCommand}"
                     Clicked="OnMenuItemClicked"
                     Opacity="0"
-                    InputTransparent="True"
-                    AbsoluteLayout.LayoutBounds="0.74,0.91,48,48"
-                    AbsoluteLayout.LayoutFlags="PositionProportional"/>
+                    InputTransparent="True"/>
 
             <!-- Center Circular FAB - placed last to be on top, sits in notch -->
             <Button x:Name="CircularMenuButton"
@@ -904,9 +897,7 @@
                     TextColor="White"
                     Pressed="OnCircularMenuPressed"
                     Released="OnCircularMenuReleased"
-                    Clicked="OnCircularMenuClicked"
-                    AbsoluteLayout.LayoutBounds="0.5,0.95,56,56"
-                    AbsoluteLayout.LayoutFlags="PositionProportional">
+                    Clicked="OnCircularMenuClicked">
                 <Button.Shadow>
                     <Shadow Brush="Black"
                             Offset="0,3"
