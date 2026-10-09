@@ -486,7 +486,7 @@ public class PreferencesViewModelTests : IDisposable
             var viewModel = new PreferencesViewModel(_service, perushim);
 
             await viewModel.DownloadPerushimCommand.ExecuteAsync(null);
-            await Task.Delay(50);
+            await Task.Delay(50, TestContext.Current.CancellationToken);
 
             fakePad.FetchCalls.Should().Be(1);
             viewModel.IsPerushimDownloading.Should().BeFalse();

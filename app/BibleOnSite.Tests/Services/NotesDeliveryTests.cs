@@ -202,7 +202,7 @@ public class NotesDeliveryTests
     public async Task Diagnostics_WhenLocalDatabaseIsCorrupt_ReportsZeroTimestamp()
     {
         await using var storage = new TestStorage();
-        await File.WriteAllTextAsync(Path.Combine(storage.Root, DbName), "not a sqlite database");
+        await File.WriteAllTextAsync(Path.Combine(storage.Root, DbName), "not a sqlite database", TestContext.Current.CancellationToken);
         var service = Create(storage);
         var report = await service.GetDiagnosticsAsync();
         report.Should().Contain("Local DB build_timestamp: 0");
@@ -239,8 +239,8 @@ public class NotesDeliveryTests
     public async Task UnsupportedDesktopDelivery_ReportsUnavailableWithoutThrowing()
     {
         var service = PadDeliveryService.Instance;
-        (await service.TryGetAssetPathAsync("perushim_notes")).Should().BeNull();
-        (await service.FetchAsync("perushim_notes")).Should().BeFalse();
+        (await service.TryGetAssetPathAsync("perushim_notes", TestContext.Current.CancellationToken)).Should().BeNull();
+        (await service.FetchAsync("perushim_notes", cancellationToken: TestContext.Current.CancellationToken)).Should().BeFalse();
         (await service.GetDeliveryDiagnosticsAsync("perushim_notes")).Should().Contain("Platform: no on-demand delivery support");
         var analytics = new AnalyticsService();
         analytics.SetScreen("test");

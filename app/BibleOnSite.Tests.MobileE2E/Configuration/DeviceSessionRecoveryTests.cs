@@ -1,6 +1,5 @@
 using OpenQA.Selenium;
 using Xunit;
-using Xunit.Abstractions;
 
 namespace BibleOnSite.Tests.MobileE2E.Configuration;
 
@@ -114,6 +113,8 @@ public sealed class DeviceSessionRecoveryTests
     private sealed class ListOutput(List<string> lines) : ITestOutputHelper
     {
         public string Output => string.Join("\n", lines);
+        public void Write(string message) => lines.Add(message);
+        public void Write(string format, params object[] args) => lines.Add(string.Format(format, args));
         public void WriteLine(string message) => lines.Add(message);
         public void WriteLine(string format, params object[] args) => lines.Add(string.Format(format, args));
     }

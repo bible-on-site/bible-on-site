@@ -246,7 +246,7 @@ public class PerushimAttributionTests
         var pad = NotesDeliveryTests.Pad();
         if (bundled)
         {
-            storage.PackageFiles[NotesDb] = await File.ReadAllBytesAsync(Path.Combine(delivered.Root, NotesDb));
+            storage.PackageFiles[NotesDb] = await File.ReadAllBytesAsync(Path.Combine(delivered.Root, NotesDb), TestContext.Current.CancellationToken);
         }
         else
         {
