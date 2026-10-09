@@ -16,11 +16,11 @@ const LETTER_OR_DIGIT = /[\p{L}\p{N}]/u;
 
 function escapeHtml(text: string): string {
 	return text
-		.replaceAll("&", "&amp;")
-		.replaceAll("<", "&lt;")
-		.replaceAll(">", "&gt;")
-		.replaceAll('"', "&quot;")
-		.replaceAll("'", "&#39;");
+		.replace(/&/g, "&amp;")
+		.replace(/</g, "&lt;")
+		.replace(/>/g, "&gt;")
+		.replace(/"/g, "&quot;")
+		.replace(/'/g, "&#39;");
 }
 
 function isInWordChar(char: string): boolean {
@@ -86,6 +86,7 @@ export function searchSnippet(text: string, query: string): string {
 	for (const match of matches) {
 		if (match.start < start || match.end > end) continue;
 		result += escapeHtml(plain.slice(cursor, match.start));
+		// nosemgrep -- interpolated value is HTML-escaped plain text; <mark> is the only markup emitted
 		result += `<mark>${escapeHtml(plain.slice(match.start, match.end))}</mark>`;
 		cursor = match.end;
 	}

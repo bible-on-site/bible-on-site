@@ -89,8 +89,16 @@ export function htmlToPlainText(html: string): string {
 	if (!html.includes("<")) {
 		return decodeEntities(html);
 	}
-	const withoutScripts = html.replace(SCRIPT_STYLE, " ");
-	const spaced = withoutScripts.replace(BLOCK_TAGS, " ");
-	const stripped = spaced.replace(ALL_TAGS, "");
-	return decodeEntities(stripped).trim();
+	// Iterate to a fixed point: a single pass can re-form tags from nested
+	// fragments (e.g. "<scr<script>ipt>" first reduces to "<script>").
+	let text = html;
+	let previous = "";
+	while (text !== previous) {
+		previous = text;
+		text = text
+			.replace(SCRIPT_STYLE, " ")
+			.replace(BLOCK_TAGS, " ")
+			.replace(ALL_TAGS, "");
+	}
+	return decodeEntities(text).trim();
 }

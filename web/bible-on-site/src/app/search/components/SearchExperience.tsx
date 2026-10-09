@@ -186,6 +186,7 @@ export function SearchExperience({
 		const controller = new AbortController();
 		void (async () => {
 			try {
+				// nosemgrep -- fixed same-origin /api/search path; user input only enters URL-encoded param values, no host/path control
 				const response = await fetch(apiHref(urlQuery, urlTypes), {
 					signal: controller.signal,
 				});
@@ -394,6 +395,7 @@ function SearchResults({
 										{item.snippetHtml ? (
 											<span
 												className={styles.resultSnippet}
+												// nosemgrep -- snippetHtml is escaped server-side; only <mark> tags are emitted (see lib/search/snippet.ts)
 												// biome-ignore lint/security/noDangerouslySetInnerHtml: snippet is built server-side with every input byte escaped; only <mark> tags are emitted
 												dangerouslySetInnerHTML={{
 													__html: item.snippetHtml,

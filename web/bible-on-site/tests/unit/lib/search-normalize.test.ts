@@ -61,6 +61,16 @@ describe("htmlToPlainText", () => {
 		).toBe("טקסט  עוד");
 	});
 
+	it("strips tags nested inside other tag fragments until stable", () => {
+		// Single-pass removal would leave a re-formed "<script>" behind.
+		expect(htmlToPlainText("<scr<script>ipt>alert(1)</script>")).not.toContain(
+			"<script",
+		);
+		expect(
+			htmlToPlainText("א<<b>b>ב"),
+		).not.toContain("<");
+	});
+
 	it("decodes named and numeric entities", () => {
 		expect(htmlToPlainText("א&nbsp;ב")).toBe("א ב");
 		expect(htmlToPlainText("&lt;b&gt;")).toBe("<b>");
