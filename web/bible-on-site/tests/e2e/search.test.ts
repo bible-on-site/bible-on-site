@@ -68,7 +68,9 @@ test.describe("Site search", () => {
 		// Returning restores query, results and list position.
 		await page.goBack();
 		await page.waitForURL(/q=/);
-		await expect(inputValue(page)).toBe("שמע ישראל");
+		await expect(
+			page.getByRole("searchbox", { name: "מונח חיפוש" }),
+		).toHaveValue("שמע ישראל");
 		await expect(
 			page.locator('a[data-result-link][href="/929/159#pasuk-4"]'),
 		).toBeVisible();
@@ -143,8 +145,3 @@ test.describe("/api/search", () => {
 	});
 });
 
-function inputValue(page: import("@playwright/test").Page) {
-	return page
-		.getByRole("searchbox", { name: "מונח חיפוש" })
-		.evaluate((node: HTMLInputElement) => node.value);
-}
