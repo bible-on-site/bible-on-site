@@ -1,4 +1,5 @@
 import hashlib
+from http.client import IncompleteRead
 from contextlib import closing
 import io
 import json
@@ -7,9 +8,10 @@ import sqlite3
 import tempfile
 import unittest
 from unittest.mock import patch
+from urllib.error import HTTPError, URLError
 import zipfile
 
-from prepare_recitation_assets import book_archive, prepare_assets, recording
+from prepare_recitation_assets import DOWNLOAD_ATTEMPTS, book_archive, prepare_assets, recording
 
 
 class RecitationAssetsTests(unittest.TestCase):
@@ -53,6 +55,74 @@ class RecitationAssetsTests(unittest.TestCase):
             track = {**self.track, "audioUrl": "https://example.com/recordings/1_record.mp3"}
             self.assertEqual(recording(track, self.cache).read_bytes(), self.audio)
             transport.assert_called_once_with("https://example.com/recordings/1_record.mp3")
+
+    def test_cold_cache_connection_reset_then_exact_download(self):
+        response = io.BytesIO(self.audio)
+        response.status = 200
+        track = {**self.track, "audioUrl": "https://example.com/recordings/1_record.mp3"}
+        with patch("prepare_recitation_assets.open_https", side_effect=[ConnectionResetError(104, "reset"), response]) as transport, \
+                patch("prepare_recitation_assets.time.sleep"):
+            self.assertEqual(recording(track, self.cache).read_bytes(), self.audio)
+            self.assertEqual(transport.call_count, 2)
+        self.assertEqual(sorted(p.name for p in self.cache.iterdir()), [self.sha + ".mp3"])
+
+    def test_partial_response_is_discarded_before_retry_and_hash_check(self):
+        class InterruptedResponse(io.BytesIO):
+            status = 200
+            def read(self, size=-1):
+                if self.tell():
+                    raise IncompleteRead(b"", len(self.audio))
+                return super().read(3)
+
+        partial = InterruptedResponse(self.audio)
+        partial.audio = self.audio
+        complete = io.BytesIO(self.audio)
+        complete.status = 200
+        track = {**self.track, "audioUrl": "https://example.com/recordings/1_record.mp3"}
+        with patch("prepare_recitation_assets.open_https", side_effect=[partial, complete]), \
+                patch("prepare_recitation_assets.time.sleep"):
+            self.assertEqual(recording(track, self.cache).read_bytes(), self.audio)
+        self.assertFalse((self.cache / (self.sha + ".download")).exists())
+
+    def test_transient_http_failure_retries_but_permanent_failure_does_not(self):
+        track = {**self.track, "audioUrl": "https://example.com/recordings/1_record.mp3"}
+        complete = io.BytesIO(self.audio)
+        complete.status = 200
+        with patch("prepare_recitation_assets.open_https", side_effect=[HTTPError(track['audioUrl'], 503, 'unavailable', {}, None), complete]) as transport, \
+                patch("prepare_recitation_assets.time.sleep"):
+            self.assertEqual(recording(track, self.cache).read_bytes(), self.audio)
+            self.assertEqual(transport.call_count, 2)
+        (self.cache / (self.sha + ".mp3")).unlink()
+        for code in (403, 404):
+            with self.subTest(code=code), patch("prepare_recitation_assets.open_https", side_effect=HTTPError(track['audioUrl'], code, 'permanent', {}, None)) as transport, \
+                    patch("prepare_recitation_assets.time.sleep") as sleep:
+                with self.assertRaises(HTTPError):
+                    recording(track, self.cache)
+                self.assertEqual(transport.call_count, 1)
+                sleep.assert_not_called()
+        self.assertEqual(list(self.cache.iterdir()), [])
+
+    def test_exhausted_network_retries_leave_no_partial_or_valid_cache(self):
+        track = {**self.track, "audioUrl": "https://example.com/recordings/1_record.mp3"}
+        with patch("prepare_recitation_assets.open_https", side_effect=URLError(TimeoutError("network timeout"))) as transport, \
+                patch("prepare_recitation_assets.time.sleep") as sleep:
+            with self.assertRaises(URLError):
+                recording(track, self.cache)
+            self.assertEqual(transport.call_count, DOWNLOAD_ATTEMPTS)
+            self.assertEqual(sleep.call_count, DOWNLOAD_ATTEMPTS - 1)
+        self.assertEqual(list(self.cache.iterdir()), [])
+
+    def test_successful_http_response_with_wrong_bytes_is_never_retried_or_cached(self):
+        response = io.BytesIO(b"different MP3 bytes")
+        response.status = 200
+        track = {**self.track, "audioUrl": "https://example.com/recordings/1_record.mp3"}
+        with patch("prepare_recitation_assets.open_https", return_value=response) as transport, \
+                patch("prepare_recitation_assets.time.sleep") as sleep:
+            with self.assertRaisesRegex(ValueError, "checksum"):
+                recording(track, self.cache)
+            self.assertEqual(transport.call_count, 1)
+            sleep.assert_not_called()
+        self.assertEqual(list(self.cache.iterdir()), [])
 
     def test_build_rejects_non_https_and_non_chapter_urls(self):
         for url in ["file:///recordings/1_record.mp3", "http://example.com/recordings/1_record.mp3",
