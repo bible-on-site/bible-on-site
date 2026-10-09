@@ -197,6 +197,28 @@ public class PerekLoadingTests
     }
 
     [Fact]
+    public async Task LoadPerushimAsync_WhenSyntheticPerushimEnabled_UsesSyntheticDataAndSkipsServices()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize();
+        var vm = fixture.Model;
+        await vm.LoadByPerekIdAsync(1);
+        Environment.SetEnvironmentVariable("BIBLE_E2E_PERUSHIM", "1");
+        try
+        {
+            await vm.LoadPerushimAsync(1);
+
+            vm.Perushim.Select(p => p.Id).Should().OnlyContain(id => id < 0);
+            vm.PerushimCatalogAvailable.Should().BeTrue();
+            vm.PerushimNotesAvailable.Should().BeTrue();
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("BIBLE_E2E_PERUSHIM", null);
+        }
+    }
+
+    [Fact]
     public async Task StalePerushimLoad_ForAPerekAlreadyLeft_DoesNotOverwriteCurrentPerek()
     {
         await using var fixture = new Fixture();
