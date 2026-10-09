@@ -111,7 +111,8 @@ def source_hashes():
     names = (*benchmark.BASELINE_FILES, "benchmark.py", "whisper_experiment.py", "validated_worker.py",
              "held_controls.py", "test_validated_worker.py", "benchmarks/golden-2026-10-07.json.gz",
              "benchmarks/held-2026-10-07.json.gz", "benchmarks/resume-sample-2026-10-07.json",
-             "cross_cache_shadow.py", "shadow_benchmark.py", "shadow_worker.py", "test_cross_cache_shadow.py")
+             "cross_cache_shadow.py", "shadow_benchmark.py", "shadow_worker.py", "test_cross_cache_shadow.py",
+             "checkpoint_handoff.py", "test_checkpoint_handoff.py")
     paths = {name: here / name for name in names}
     paths.update({module.__name__: Path(module.__file__) for module in
                  (transformers.cache_utils, transformers.models.whisper.modeling_whisper, transformers.pipelines.base)})
