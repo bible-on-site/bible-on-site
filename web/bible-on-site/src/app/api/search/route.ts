@@ -25,10 +25,17 @@ export async function GET(request: Request) {
 			{ status: phrase.length === 0 ? 400 : 414 },
 		);
 	}
-	const limitRaw = Number.parseInt(url.searchParams.get("limit") ?? "", 10);
-	const limit = Number.isInteger(limitRaw) ? limitRaw : undefined;
-	if (limit !== undefined && (limit < 1 || limit > SEARCH_LIMIT_MAX)) {
-		return NextResponse.json({ error: "invalid_limit" }, { status: 400 });
+	const limitParam = url.searchParams.get("limit");
+	let limit: number | undefined;
+	if (limitParam !== null) {
+		// Digits only — parseInt/Number would silently accept "5oops",
+		// "0x10", or "5.0", and non-numeric values must not fall back to
+		// the default as if the param were absent.
+		const parsed = /^[0-9]+$/.test(limitParam) ? Number(limitParam) : Number.NaN;
+		if (!Number.isInteger(parsed) || parsed < 1 || parsed > SEARCH_LIMIT_MAX) {
+			return NextResponse.json({ error: "invalid_limit" }, { status: 400 });
+		}
+		limit = parsed;
 	}
 	const types = parseSearchTypes(url.searchParams.get("type"));
 	if (url.searchParams.get("type") !== null && types.length === 0) {

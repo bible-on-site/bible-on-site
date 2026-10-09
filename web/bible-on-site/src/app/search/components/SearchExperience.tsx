@@ -89,6 +89,14 @@ export function SearchExperience({
 	const [status, setStatus] = useState<Status>(
 		initialResults ? "success" : initialError ? "error" : "idle",
 	);
+	/**
+	 * Bump to force the URL→results effect to refetch the *unchanged*
+	 * settled state — the retry path for a failed fetch, since settle()
+	 * no-ops when the canonical URL is already current. Each tick is
+	 * consumed once by the effect below.
+	 */
+	const [retryTick, setRetryTick] = useState(0);
+	const consumedRetryTick = useRef(0);
 
 	/**
 	 * Key of the state the current `results` correspond to — the SSR payload
@@ -183,9 +191,12 @@ export function SearchExperience({
 	}, [input, settle]);
 
 	// URL → results: resolve the current state from the client cache or a
-	// cancellable fetch. Runs once per settled/committed entry.
+	// cancellable fetch. Runs once per settled/committed entry — plus once
+	// per explicit retry of a failed query.
 	useEffect(() => {
-		if (urlKey === resolvedFor.current) return;
+		const isRetry = retryTick !== consumedRetryTick.current;
+		consumedRetryTick.current = retryTick;
+		if (urlKey === resolvedFor.current && !isRetry) return;
 		if (!urlQuery) {
 			resolvedFor.current = urlKey;
 			setResults(null);
@@ -233,11 +244,18 @@ export function SearchExperience({
 			}
 		})();
 		return () => controller.abort();
-	}, [urlKey, urlQuery, urlTypes]);
+	}, [urlKey, urlQuery, urlTypes, retryTick]);
 
 	const onSubmit = (event: FormEvent) => {
 		event.preventDefault();
 		clearTimeout(settleTimer.current);
+		// Resubmitting the failed query: the URL already holds it, so
+		// settle() below no-ops — bump the retry trigger instead so the
+		// URL→results effect refetches. Failed keys are never cached and
+		// resolvedFor was not advanced, so the fetch actually reruns.
+		if (status === "error" && paramsKey(input, urlTypes) === urlKey) {
+			setRetryTick((tick) => tick + 1);
+		}
 		settle(input, urlTypes);
 	};
 
@@ -245,6 +263,10 @@ export function SearchExperience({
 		const next = checked
 			? [...new Set([...urlTypes, type])]
 			: urlTypes.filter((value) => value !== type);
+		// Zero selected types has no URL encoding (`type=` parses back as
+		// all types); the last checkbox is disabled in the UI and the
+		// empty commit is refused here as well.
+		if (next.length === 0) return;
 		clearTimeout(settleTimer.current);
 		settle(input, next);
 	};
@@ -337,20 +359,32 @@ export function SearchExperience({
 					</div>
 					<fieldset className={styles.filters}>
 						<legend className={styles.filtersLegend}>מה לחפש</legend>
-						{SEARCH_RESULT_TYPES.map((type) => (
-							<label key={type} className={styles.filterChip}>
-								<input
-									type="checkbox"
-									name="type"
-									value={type}
-									checked={urlTypes.includes(type)}
-									onChange={(event) =>
-										onTypeToggle(type, event.target.checked)
-									}
-								/>
-								<span>{SEARCH_TYPE_LABELS[type]}</span>
-							</label>
-						))}
+						{SEARCH_RESULT_TYPES.map((type) => {
+							// The URL has no encoding for "zero types" (type= parses
+							// as all types), so the last checked filter stays
+							// disabled rather than snapping every filter back on.
+							const lastSelected =
+								urlTypes.length === 1 && urlTypes[0] === type;
+							return (
+								<label
+									key={type}
+									className={styles.filterChip}
+									title={lastSelected ? "נדרש לבחור לפחות סוג אחד" : undefined}
+								>
+									<input
+										type="checkbox"
+										name="type"
+										value={type}
+										checked={urlTypes.includes(type)}
+										disabled={lastSelected}
+										onChange={(event) =>
+											onTypeToggle(type, event.target.checked)
+										}
+									/>
+									<span>{SEARCH_TYPE_LABELS[type]}</span>
+								</label>
+							);
+						})}
 					</fieldset>
 				</form>
 			</search>

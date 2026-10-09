@@ -58,9 +58,32 @@ so a hosted engine's cost and ops surface buy nothing a few index scans
 don't deliver. MySQL FULLTEXT would require a schema change on a shared,
 DB-owned table and its default 4-char minimum word length hurts short
 Hebrew terms; it also still can't do niqqud-insensitive matching without a
-normalized shadow column. The ported normalizer + bounded `LIKE` candidate
-selection covers the requirement now and leaves the seam described below
-for the shared semantic backend.
+normalized shadow column. The ported normalizer + bounded `REGEXP_LIKE`
+candidate selection covers the requirement now and leaves the seam
+described below for the shared semantic backend.
+
+### Normalization-aware candidate selection
+
+SQL still sees the stored, unnormalized text, so the candidate patterns
+are built to mirror the JS pipeline instead of a raw `LIKE '%term%'`:
+each term's letters may be separated by runs of characters that
+normalization erases — combining marks (niqqud/taamim), quote-like
+characters (geresh/gershayim, typographic quotes), HTML tags, and
+entities — so `שליטא` reaches a stored `שליט"א`, `בְּרֵאשִׁית` reaches
+`בראשית`, and `שלי<b>טא` reaches `שליטא`. Anything the regex admits but
+normalization would split (e.g. a block tag inside a word) is a harmless
+extra candidate the JS scorer filters out.
+
+Candidates are ranked before the row cap: `ORDER BY` a word-bounded
+phrase `REGEXP_LIKE` flag per field (name first for authors/articles),
+which is exactly the candidate class the JS scorer rates highest
+(whole-word phrase containment or whole-text equality). When a frequent
+term overflows the cap, the rows shed are substring-only candidates —
+the strongest matches can no longer be truncated arbitrarily.
+Articles score name, abstract, and content independently (name keeps
+its ×2 weight) and the snippet is taken from the best-scoring field, so
+an abstract-only match is no longer discarded when unrelated content is
+present.
 
 ## Architecture
 
@@ -76,12 +99,12 @@ GET /api/search?q=&type=&limit=
    └─ searchSite() → providers:
         perakim/pesukim — in-memory corpus built once per process from the
                           bundled tanah_view JSON (globalThis cache)
-        perushim        — MySQL LIKE candidate pull (AND-ed terms,
-                          LIMIT 250, MAX_EXECUTION_TIME 3000) then
-                          normalize+score in JS
-        authors         — MySQL LIKE on name/details
-        articles        — MySQL LIKE on name/abstract/content (lexical;
-                          see #2039 seam below)
+        perushim        — MySQL REGEXP_LIKE candidate pull (AND-ed terms,
+                          word-match ranked, LIMIT 1000,
+                          MAX_EXECUTION_TIME 3000) then normalize+score in JS
+        authors         — MySQL REGEXP_LIKE on name/details, same ranking
+        articles        — MySQL REGEXP_LIKE on name/abstract/content
+                          (lexical; see #2039 seam below)
 ```
 
 Providers degrade independently: a MySQL failure removes only its result
@@ -98,7 +121,12 @@ keystrokes never spam history, and no RSC round-trip is needed. Because
 component owns its URL state explicitly: `settle()` pushes history and
 updates React state atomically, and a `popstate` listener adopts
 external Back/Forward navigations. Filter toggles, submit, and Escape
-settle immediately. Back/Forward therefore walks meaningful states;
+settle immediately. Because `type` has no encoding for "zero types" (a
+present-but-empty `type=` parses as all types), the last checked filter
+checkbox renders disabled with an explanatory tooltip instead of
+snapping every filter back on; resubmitting a failed query bumps an
+explicit retry trigger so the same-URL fetch actually reruns.
+Back/Forward therefore walks meaningful states;
 results are restored from a small client cache (~30 entries) or
 refetched, and the browser's own scroll restoration preserves list
 position. Result links are plain `<Link>`s — ordinary crawlable anchors —
@@ -133,9 +161,10 @@ swap is isolated to one file; no caller or DTO changes needed.
 - A polite `aria-live` status region announces מחפש… / נמצאו N תוצאות /
   לא נמצאו תוצאות / שגיאה בחיפוש; provider degradations are announced in a
   separate status line.
-- Keyboard: `ArrowDown` from the input focuses the first result link;
-  `ArrowUp`/`ArrowDown` cycle focus across results (wrapping); `ArrowUp`
-  on the first result and `Escape` return to the input; `Escape` in the
+- Keyboard: `ArrowDown` from the input focuses the first result link and
+  then steps forward through results, wrapping from the last result back
+  to the first; `ArrowUp` steps back and, on the first result, returns
+  focus to the input (as does `Escape` on any result); `Escape` in the
   input clears the query.
 - Result groups are `<section>`s with labelled `<h2>`s and count badges —
   a predictable fixed order (פרקים, פסוקים, פירושים, רבנים, מאמרים) rather
@@ -193,7 +222,7 @@ Chosen policy:
   (same `globalThis` cache pattern as `sefarim.ts`); perakim/pesukim
   results are deterministic until the bundled text changes (deploys only).
 - DB providers run live queries; `MAX_EXECUTION_TIME(3000)` bounds the
-  worst case and `LIMIT 250` bounds transferred candidates.
+  worst case and `LIMIT 1000` bounds transferred ranked candidates.
 - Queries are not persisted anywhere. Privacy note: query terms appear in
   URLs by design (shareable search URLs are a requirement), so they may
   appear in ordinary access logs — documented and accepted.

@@ -195,6 +195,27 @@ describe("SearchExperience", () => {
 		expect(screen.getByRole("status")).toHaveTextContent("שגיאה בחיפוש");
 	});
 
+	it("retries the same query when resubmitted after a failure", async () => {
+		mockFetch
+			.mockResolvedValueOnce({ ok: false, status: 500 })
+			.mockResolvedValue({ ok: true, json: async () => RESULTS });
+		renderSearch();
+		const input = screen.getByRole("searchbox", { name: "מונח חיפוש" });
+		fireEvent.change(input, { target: { value: "את" } });
+		await settle();
+		await act(async () => {});
+		expect(screen.getByRole("status")).toHaveTextContent("שגיאה בחיפוש");
+		expect(mockFetch).toHaveBeenCalledTimes(1);
+		// The URL already holds the failed query, so settle() alone cannot
+		// trigger a refetch — resubmitting must bump the retry trigger.
+		fireEvent.submit(input.closest("form") as HTMLFormElement);
+		await act(async () => {});
+		expect(mockFetch).toHaveBeenCalledTimes(2);
+		expect(
+			await screen.findByRole("link", { name: /בראשית א/ }),
+		).toBeInTheDocument();
+	});
+
 	it("moves focus through results with arrow keys and back to the input", async () => {
 		renderSearch({ initialQuery: "את", initialResults: RESULTS });
 		const input = screen.getByRole("searchbox", { name: "מונח חיפוש" });
@@ -255,6 +276,25 @@ describe("SearchExperience", () => {
 		});
 		expect(screen.getByRole("checkbox", { name: "פרקים" })).toBeChecked();
 		expect(screen.getByRole("checkbox", { name: "פסוקים" })).not.toBeChecked();
+	});
+
+	it("disables the last remaining filter instead of selecting all", async () => {
+		renderSearch({ initialQuery: "את", initialResults: RESULTS });
+		await act(async () => {
+			popTo("/search?q=%D7%90%D7%AA&type=perek");
+		});
+		const perekBox = screen.getByRole("checkbox", { name: "פרקים" });
+		expect(perekBox).toBeChecked();
+		expect(perekBox).toBeDisabled();
+		// Clicking the disabled chip cannot produce an unrepresentable
+		// "zero types" URL that would parse back as all types.
+		fireEvent.click(perekBox);
+		await act(async () => {});
+		expect(perekBox).toBeChecked();
+		expect(
+			screen.getByRole("checkbox", { name: "פסוקים" }),
+		).not.toBeChecked();
+		expect(window.location.search).toContain("type=perek");
 	});
 
 	it("ignores ArrowDown when there are no result links", () => {

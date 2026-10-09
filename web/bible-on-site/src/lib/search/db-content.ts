@@ -2,13 +2,19 @@
  * MySQL-backed search providers for content that lives in the database:
  * perush notes, authors, and articles.
  *
- * Notes are searched with bounded `LIKE '%term%'` candidate selection
- * (AND-ed across terms, capped rows, MAX_EXECUTION_TIME) and then
- * normalized/scored in JS with the same algorithm used for pesukim —
- * MySQL LIKE has no awareness of niqqud or fuzzy matches. The note table
- * has no usable full-text index today; the bounded LIKE keeps worst-case
- * cost predictable until a derived index (see the article-search follow-up)
- * covers commentary too.
+ * Candidates are selected with bounded `REGEXP_LIKE` patterns — AND-ed
+ * across terms, ranked, capped, MAX_EXECUTION_TIME — then normalized
+ * and scored in JS with the same algorithm used for pesukim. Each
+ * term's letters may be separated in stored text by anything the JS
+ * pipeline erases (niqqud/taamim combining marks, quote chars such as
+ * gershayim, HTML tags, entities), so `שליטא` still reaches a stored
+ * `שליט"א`, which `LIKE '%שליטא%'` could never select. Candidates are
+ * ordered by a word-bounded phrase pattern before the row cap, so when
+ * a frequent term overflows it, the truncated rows are the weakest
+ * substring-only candidates rather than arbitrary early rows. The note
+ * table has no usable full-text index today; the bounded ranked REGEXP
+ * keeps worst-case cost predictable until a derived index (see the
+ * article-search follow-up) covers commentary too.
  */
 
 import { toLetters } from "gematry";
@@ -21,9 +27,10 @@ import type { Scored } from "./corpus";
 
 /**
  * Candidate rows pulled from MySQL before JS re-scoring. Bounded so a
- * query for a very common term can't transfer the whole table.
+ * query for a very common term can't transfer the whole table; the
+ * ranked ORDER BY keeps the strongest candidates inside the bound.
  */
-const CANDIDATE_LIMIT = 250;
+const CANDIDATE_LIMIT = 1000;
 
 /**
  * Bound a single statement's wall-clock time so a rare-term full scan
@@ -32,13 +39,83 @@ const CANDIDATE_LIMIT = 250;
  */
 const QUERY_TIME_BUDGET_MS = 3000;
 
-function likeClauses(terms: string[]): {
+/**
+ * Regex fragment matching raw-storage characters the JS pipeline
+ * (`htmlToPlainText` + `normalizeSearchText`) erases without leaving a
+ * word boundary: combining marks (niqqud/taamim), quote-like characters
+ * (geresh, gershayim, typographic quotes), HTML tags, and entities.
+ */
+const IGNORABLE_RUN = String.raw`(?:\p{M}|["'׳״‘’“”]|<[^>]+>|&[a-zA-Z#0-9]+;)`;
+
+/**
+ * Regex fragment matching what separates two words in raw storage: any
+ * non-letter/non-digit run (spaces and punctuation collapse to word
+ * boundaries when normalized) plus tags and entities, whose delimiters
+ * are non-letters but which contain literal letters.
+ */
+const WORD_BOUNDARY = String.raw`(?:[^\p{L}\p{N}]|<[^>]+>|&[a-zA-Z#0-9]+;)`;
+
+/**
+ * Candidate-selection pattern for one normalized term: its letters in
+ * order, allowing ignorable runs between them. Exported for unit tests.
+ */
+export function termRegexp(term: string): string {
+	return [...term].join(`${IGNORABLE_RUN}*`);
+}
+
+/**
+ * Word-level pattern for the whole normalized phrase: the terms as
+ * consecutive words, bounded by word breaks (or string edges) on both
+ * ends. Rows matching it are the candidates the JS scorer rates
+ * highest — whole-word phrase containment or whole-text equality — so
+ * it also serves as the DB-side rank applied before the row cap.
+ * Exported for unit tests.
+ */
+export function phraseRegexp(terms: string[]): string {
+	const body = terms.map(termRegexp).join(`${WORD_BOUNDARY}+`);
+	return `(?:^|${WORD_BOUNDARY})${body}(?:${WORD_BOUNDARY}|$)`;
+}
+
+/**
+ * Per-term candidate predicate: every term must match at least one of
+ * the columns (AND across terms, OR across columns).
+ */
+function matchClauses(
+	columns: string[],
+	terms: string[],
+): {
 	where: string;
 	params: string[];
 } {
 	return {
-		where: terms.map(() => "note_content LIKE ?").join(" AND "),
-		params: terms.map((term) => `%${term}%`),
+		where: terms
+			.map(
+				() =>
+					`(${columns.map((col) => `REGEXP_LIKE(${col}, ?, 'i')`).join(" OR ")})`,
+			)
+			.join(" AND "),
+		params: terms.flatMap((term) => columns.map(() => termRegexp(term))),
+	};
+}
+
+/**
+ * Candidate ranking applied before the row cap: word-bounded phrase
+ * matches first, field-by-field in descending weight order, so an
+ * overflowing candidate pool sheds substring-only rows first.
+ */
+function rankClauses(
+	columns: string[],
+	terms: string[],
+): {
+	orderBy: string;
+	params: string[];
+} {
+	const phrase = phraseRegexp(terms);
+	return {
+		orderBy: columns
+			.map((col) => `REGEXP_LIKE(${col}, ?, 'i') DESC`)
+			.join(", "),
+		params: columns.map(() => phrase),
 	};
 }
 
@@ -62,7 +139,8 @@ export async function searchPerushNotes(
 ): Promise<Scored<NoteHit>[]> {
 	const terms = searchTokens(phrase);
 	if (terms.length === 0) return [];
-	const { where, params } = likeClauses(terms);
+	const { where, params } = matchClauses(["n.note_content"], terms);
+	const rank = rankClauses(["n.note_content"], terms);
 	const rows = await query<{
 		perush_id: number;
 		perush_name: string;
@@ -75,8 +153,9 @@ export async function searchPerushNotes(
 		 FROM note n
 		 JOIN perush p ON n.perush_id = p.id
 		 WHERE ${where}
+		 ORDER BY ${rank.orderBy}, n.perek_id, n.pasuk
 		 LIMIT ${CANDIDATE_LIMIT}`,
-		params,
+		[...params, ...rank.params],
 	);
 
 	const best = new Map<string, Scored<NoteHit>>();
@@ -130,13 +209,16 @@ export async function searchAuthors(
 ): Promise<Scored<AuthorHit>[]> {
 	const terms = searchTokens(phrase);
 	if (terms.length === 0) return [];
+	const { where, params } = matchClauses(["name", "details"], terms);
+	const rank = rankClauses(["name", "details"], terms);
 	const rows = await query<{ id: number; name: string; details: string }>(
 		`SELECT /*+ MAX_EXECUTION_TIME(${QUERY_TIME_BUDGET_MS}) */
 			id, name, details
 		 FROM tanah_author
-		 WHERE ${terms.map(() => "(name LIKE ? OR details LIKE ?)").join(" AND ")}
+		 WHERE ${where}
+		 ORDER BY ${rank.orderBy}, id
 		 LIMIT ${CANDIDATE_LIMIT}`,
-		terms.flatMap((term) => [`%${term}%`, `%${term}%`]),
+		[...params, ...rank.params],
 	);
 	return rows
 		.map((row) => ({
@@ -179,6 +261,11 @@ export async function searchArticles(
 ): Promise<Scored<ArticleHit>[]> {
 	const terms = searchTokens(phrase);
 	if (terms.length === 0) return [];
+	const { where, params } = matchClauses(
+		["a.name", "a.abstract", "a.content"],
+		terms,
+	);
+	const rank = rankClauses(["a.name", "a.abstract", "a.content"], terms);
 	const rows = await query<{
 		id: number;
 		perek_id: number;
@@ -191,24 +278,37 @@ export async function searchArticles(
 			a.id, a.perek_id, a.name, au.name AS author_name, a.content, a.abstract
 		 FROM tanah_article a
 		 JOIN tanah_author au ON a.author_id = au.id
-		 WHERE ${terms.map(() => "(a.name LIKE ? OR a.abstract LIKE ? OR a.content LIKE ?)").join(" AND ")}
+		 WHERE ${where}
+		 ORDER BY ${rank.orderBy}, a.id
 		 LIMIT ${CANDIDATE_LIMIT}`,
-		terms.flatMap((term) => [`%${term}%`, `%${term}%`, `%${term}%`]),
+		[...params, ...rank.params],
 	);
 	return rows
 		.map((row) => {
-			const plain = htmlToPlainText(row.content ?? row.abstract ?? "");
+			// Name, abstract, and content are each scored on their own: the
+			// SQL candidate may have matched only the abstract, so falling
+			// back to content alone would score a real match as zero.
+			const contentPlain = htmlToPlainText(row.content ?? "");
+			const abstractPlain = htmlToPlainText(row.abstract ?? "");
+			const contentScore = searchScore(contentPlain, phrase);
+			const abstractScore = searchScore(abstractPlain, phrase);
 			return {
 				entry: {
 					id: row.id,
 					perekId: row.perek_id,
 					name: row.name,
 					authorName: row.author_name,
-					plain,
+					// Snippet text comes from the best-matching body field, so
+					// an abstract-only hit surfaces its abstract.
+					plain:
+						abstractScore > contentScore
+							? abstractPlain
+							: contentPlain || abstractPlain,
 				},
 				score: Math.max(
 					searchScore(row.name, phrase) * 2,
-					searchScore(plain, phrase),
+					contentScore,
+					abstractScore,
 				),
 			};
 		})

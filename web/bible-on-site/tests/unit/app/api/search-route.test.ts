@@ -61,6 +61,15 @@ describe("GET /api/search", () => {
 		expect((await requestFor("?q=א&limit=51")).status).toBe(400);
 	});
 
+	it("rejects a malformed limit instead of coercing or defaulting", async () => {
+		// parseInt("5oops") would return 5; "abc" would silently default.
+		for (const bad of ["5oops", "abc", "5.5", "0x10", "", "-3"]) {
+			const res = await requestFor(`?q=א&limit=${encodeURIComponent(bad)}`);
+			expect(res.status).toBe(400);
+			expect((await res.json()).error).toBe("invalid_limit");
+		}
+	});
+
 	it("rejects a type param with no valid values", async () => {
 		expect((await requestFor("?q=א&type=bogus")).status).toBe(400);
 	});
