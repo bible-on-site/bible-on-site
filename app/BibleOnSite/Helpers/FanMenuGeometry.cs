@@ -156,11 +156,14 @@ public static class FanMenuGeometry
         var dxInner = Math.Min((ItemSize + ItemGap) / 2, dxOuter);
 
         // 4. An action inside the toggle's horizontal band must either rise
-        //    above the toggle or step past it horizontally.
+        //    above the toggle or step past it horizontally. The Max never
+        //    narrows dxInner: an offset that already clears the band (not
+        //    reachable today, where dxInner <= (ItemSize+ItemGap)/2 always
+        //    fits inside it) keeps its wider spread.
         var toggleClearance = (ToggleSize + ItemSize) / 2 + ToggleGap;
-        if (dxInner < toggleClearance && EllipseY(rx, ry, dxInner) < toggleClearance)
+        if (EllipseY(rx, ry, dxInner) < toggleClearance)
         {
-            dxInner = Math.Min(toggleClearance, dxOuter);
+            dxInner = Math.Max(dxInner, Math.Min(toggleClearance, dxOuter));
         }
 
         // 5. Positions on the ellipse.
@@ -303,10 +306,12 @@ public static class FanMenuGeometry
         for (var round = 0; round < FixedResolveRounds; round++)
         {
             var resolved = ClampToCanvas(rect, width, height);
-            foreach (var obstacle in obstacles.Where(o => resolved.IntersectsWith(o)))
-            {
-                resolved = EscapeBlocker(resolved, obstacle, ObstacleGap);
-            }
+            // Escapes apply in order, each evaluated against the latest rect:
+            // getting clear of one blocker can also clear (or reach) the next.
+            resolved = obstacles.Aggregate(resolved,
+                (r, obstacle) => r.IntersectsWith(obstacle)
+                    ? EscapeBlocker(r, obstacle, ObstacleGap)
+                    : r);
             if (resolved.IntersectsWith(toggle))
             {
                 resolved = EscapeBlocker(resolved, toggle, ToggleGap);

@@ -224,6 +224,8 @@ public class FanMenuGeometryTests
     [
         [200.0, 300.0],  // too narrow for four actions on one row — must stack
         [360.0, 120.0],  // too short to lift actions above the toggle — must sidestep
+        [300.0, 120.0],  // short: the clamped lift still clears the low bar buttons
+        [240.0, 144.0],  // short+narrow: clamped lift clears the toggle too
     ];
 
     [Theory]
@@ -270,6 +272,63 @@ public class FanMenuGeometryTests
             item.Right.Should().BeLessThanOrEqualTo(140);
             item.Bottom.Should().BeLessThanOrEqualTo(150);
         }
+    }
+
+    /// <summary>
+    /// A canvas so short that no arrangement can lift every action clear of the
+    /// fixed controls: the per-action resolver runs all its rounds without
+    /// converging and keeps the last best-effort position. The layout still
+    /// guarantees what remains achievable — every action stays inside the
+    /// canvas, off the toggle, and pairwise distinct.
+    /// </summary>
+    [Fact]
+    public void UnresolvableCanvas_SettlesForDistinctInCanvasTargets()
+    {
+        var layout = FanMenuGeometry.Compute(288, 116);
+
+        layout.Items.Should().HaveCount(4);
+        foreach (var item in layout.Items)
+        {
+            item.Left.Should().BeGreaterThanOrEqualTo(0);
+            item.Top.Should().BeGreaterThanOrEqualTo(0);
+            item.Right.Should().BeLessThanOrEqualTo(288);
+            item.Bottom.Should().BeLessThanOrEqualTo(116);
+            item.IntersectsWith(layout.Toggle).Should().BeFalse(
+                "actions must never cover the toggle, even when obstacles cannot all be cleared");
+        }
+        for (var i = 0; i < layout.Items.Count; i++)
+        {
+            for (var j = i + 1; j < layout.Items.Count; j++)
+            {
+                layout.Items[i].IntersectsWith(layout.Items[j]).Should().BeFalse(
+                    $"action {i} and {j} must stay distinct even on an unresolvable canvas");
+            }
+        }
+    }
+
+    [Fact]
+    public void ZeroItemCount_ReturnsNoActions()
+    {
+        var layout = FanMenuGeometry.Compute(360, 744, 0);
+
+        layout.Items.Should().BeEmpty();
+        layout.Toggle.Width.Should().Be(ToggleSize);
+        layout.Obstacles.Should().HaveCount(
+            FanMenuGeometry.BarButtonHorizontalFractions.Count,
+            "the toggle and the bar obstacles are still reported for hit-testing");
+    }
+
+    [Theory]
+    [InlineData(0, 744)]
+    [InlineData(-40, 744)]
+    [InlineData(360, 0)]
+    [InlineData(360, -12)]
+    public void NonPositiveCanvasDimension_ReturnsNoActions(double width, double height)
+    {
+        var layout = FanMenuGeometry.Compute(width, height);
+
+        layout.Items.Should().BeEmpty(
+            "a canvas without a positive arrange area cannot host the fan");
     }
 
     [Theory]
