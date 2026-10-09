@@ -7,6 +7,7 @@ using BibleOnSite.ViewModels;
 
 namespace BibleOnSite.Tests.ViewModels;
 
+[Collection("Process environment")]
 public class PerekLoadingTests
 {
     private sealed class Fixture : IAsyncDisposable
@@ -203,6 +204,7 @@ public class PerekLoadingTests
         await fixture.Initialize();
         var vm = fixture.Model;
         await vm.LoadByPerekIdAsync(1);
+        var previous = Environment.GetEnvironmentVariable("BIBLE_E2E_PERUSHIM");
         Environment.SetEnvironmentVariable("BIBLE_E2E_PERUSHIM", "1");
         try
         {
@@ -214,7 +216,7 @@ public class PerekLoadingTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("BIBLE_E2E_PERUSHIM", null);
+            Environment.SetEnvironmentVariable("BIBLE_E2E_PERUSHIM", previous);
         }
     }
 
