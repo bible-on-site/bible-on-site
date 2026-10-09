@@ -50,6 +50,12 @@ export const NavBar = () => {
 				<span className={styles.menuIcon} />
 			</button>
 
+			{/* Search entry point — always visible beside the hamburger so search
+			    stays discoverable on every page without opening the menu. */}
+			<Link href="/search" aria-label="חיפוש" className={styles.searchBtn}>
+				<Image src="/icons/search.svg" alt="" width={26} height={26} />
+			</Link>
+
 			<div
 				className={styles.overlay}
 				aria-hidden="true"
@@ -78,6 +84,12 @@ export const NavBar = () => {
 					</Link>
 				</header>
 				<ul className={styles.menuList}>
+					<li className={styles.menuItem}>
+						<Image src="/icons/search.svg" alt="" width={16} height={16} />
+						<Link href="/search">
+							<span>חיפוש</span>
+						</Link>
+					</li>
 					<li className={`${styles.menuItem} ${styles.ribbonBuilding}`}>
 						<Image src="/icons/book.svg" alt="" width={16} height={16} />
 						<Link href="/929">
