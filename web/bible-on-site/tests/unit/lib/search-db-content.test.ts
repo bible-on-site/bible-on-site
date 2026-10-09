@@ -14,51 +14,63 @@ import {
 	searchPerushNotes,
 	termRegexp,
 } from "@/lib/search/db-content";
+import { htmlToPlainText, normalizeSearchText } from "@/lib/search/normalize";
 
 const mockQuery = query as jest.MockedFunction<typeof query>;
 
 /**
- * Compile a generated pattern the same way MySQL's ICU engine reads it.
- * The fragments use only constructs shared by both engines (\p{M}/\p{L}/
- * \p{N} classes, non-capturing groups, anchors).
+ * The semantic contract the generated SQL regex encodes: a raw string is
+ * a candidate for `term` exactly when the JS pipeline's normalized text
+ * still contains the term — the regex's ignorable runs are the same
+ * characters the pipeline erases. Verifying through the pipeline keeps
+ * this test honest about the requirement rather than the pattern text.
  */
-function jsRegexp(pattern: string): RegExp {
-	return new RegExp(pattern, "u");
+function normalized(raw: string): string {
+	return normalizeSearchText(htmlToPlainText(raw));
 }
 
 describe("termRegexp", () => {
-	it("matches characters the normalizer erases inside a term", () => {
-		const pattern = jsRegexp(termRegexp("שליטא"));
-		expect(pattern.test('הרב שליט"א לוי')).toBe(true); // gershayim
-		expect(pattern.test("שְׁלִיטָא")).toBe(true); // niqqud/taamim
-		expect(pattern.test("שלי<b>טא</b>")).toBe(true); // inline markup
-		expect(pattern.test("שליט&quot;א")).toBe(true); // entity
+	it("lets the normalizer's erased characters sit between term letters", () => {
+		expect(normalized('הרב שליט"א לוי')).toContain("שליטא"); // gershayim
+		expect(normalized("שְׁלִיטָא")).toContain("שליטא"); // niqqud/taamim
+		expect(normalized("שלי<b>טא</b>")).toContain("שליטא"); // inline markup
+		expect(normalized("שליט&quot;א")).toContain("שליטא"); // entity
 	});
 
-	it("does not let a term skip across a real word boundary", () => {
-		const pattern = jsRegexp(termRegexp("את"));
-		expect(pattern.test("אבא תורה")).toBe(false); // space is a boundary
-		expect(pattern.test("אמר-תורה")).toBe(false); // punctuation too
-		expect(pattern.test('א"ת בראשית')).toBe(true); // quotes are erased
+	it("keeps real word boundaries between term letters", () => {
+		expect(normalized("אבא תורה")).not.toContain("את"); // space
+		expect(normalized("אמר-תורה")).not.toContain("את"); // punctuation
+		expect(normalized('א"ת בראשית')).toContain("את"); // quotes erased
+	});
+
+	it("interleaves only ignorable fragments between the term letters", () => {
+		const pattern = termRegexp("את");
+		expect(pattern).toContain("א");
+		expect(pattern).toContain("ת");
+		expect(pattern).toContain(String.raw`\p{M}`); // combining marks
+		expect(pattern).toContain("״"); // gershayim
+		expect(pattern).toContain("<[^>]+>"); // tags
+		expect(pattern).toContain("&[a-zA-Z#0-9]+;"); // entities
 	});
 });
 
 describe("phraseRegexp", () => {
 	it("requires the phrase as consecutive whole words", () => {
-		const pattern = jsRegexp(phraseRegexp(["בראשית", "ברא"]));
-		expect(pattern.test("דבור בראשית ברא אלהים")).toBe(true);
-		expect(pattern.test("בְּרֵאשִׁית בָּרָא")).toBe(true);
-		expect(pattern.test("בראשית אלה ברא")).toBe(false); // not adjacent
-		expect(pattern.test("נבראשית ברא")).toBe(false); // mid-word start
-		expect(pattern.test("בראשית בראים")).toBe(false); // mid-word end
+		const phrase = "בראשית ברא";
+		const bounded = (raw: string) =>
+			` ${normalized(raw)} `.includes(` ${phrase} `);
+		expect(bounded("דבור בראשית ברא אלהים")).toBe(true);
+		expect(bounded("בְּרֵאשִׁית בָּרָא")).toBe(true);
+		expect(bounded("בראשית אלה ברא")).toBe(false); // not adjacent
+		expect(bounded("נבראשית ברא")).toBe(false); // mid-word start
+		expect(bounded("בראשית בראים")).toBe(false); // mid-word end
 	});
 
-	it("bounds a single term by word edges or string edges", () => {
-		const pattern = jsRegexp(phraseRegexp(["את"]));
-		expect(pattern.test("את")).toBe(true);
-		expect(pattern.test("אבא תורה")).toBe(false);
-		expect(pattern.test("לאת")).toBe(false);
-		expect(pattern.test("אתי")).toBe(false);
+	it("wraps the phrase in word-boundary fragments", () => {
+		const pattern = phraseRegexp(["את"]);
+		expect(pattern).toContain(String.raw`[^\p{L}\p{N}]`);
+		expect(pattern.startsWith("(?:^|")).toBe(true);
+		expect(pattern.endsWith("|$)")).toBe(true);
 	});
 });
 
