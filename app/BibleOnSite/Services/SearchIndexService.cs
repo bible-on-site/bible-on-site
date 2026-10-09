@@ -44,6 +44,8 @@ public sealed class SearchIndexService : IAsyncDisposable
     // Production launches never set it and keep the lazy path.
     internal const string E2eEnvironmentVariable = "BIBLE_E2E";
 
+    [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage(
+        Justification = "E2E-only startup hook; the mobile suite launches with BIBLE_E2E.")]
     public static void WarmupForE2e()
     {
         if (Environment.GetEnvironmentVariable(E2eEnvironmentVariable) != "1")
@@ -53,6 +55,8 @@ public sealed class SearchIndexService : IAsyncDisposable
         _ = WarmupIndexesAsync();
     }
 
+    [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage(
+        Justification = "E2E-only startup hook; the mobile suite launches with BIBLE_E2E.")]
     private static async Task WarmupIndexesAsync()
     {
         try
@@ -68,6 +72,8 @@ public sealed class SearchIndexService : IAsyncDisposable
 
     // Shares the search path's dedup so a warmup build is also the build a
     // concurrent search awaits, and DisposeAsync can drain it.
+    [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage(
+        Justification = "E2E-only startup hook; the mobile suite launches with BIBLE_E2E.")]
     private Task WarmTableAsync(string table)
     {
         lock (_buildSync)
