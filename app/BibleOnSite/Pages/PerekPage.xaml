@@ -330,6 +330,7 @@
                                     <MultiBinding Converter="{StaticResource PasukDisplayItemsConverter}">
                                         <Binding Path="Pasukim"/>
                                         <Binding Path="BindingContext.IsShnayimMikraEnabled" Source="{x:Reference PerekPageRoot}"/>
+                                        <Binding Path="BindingContext.FontFactor" Source="{x:Reference PerekPageRoot}"/>
                                     </MultiBinding>
                                 </CollectionView.ItemsSource>
                                 <CollectionView.Footer>
@@ -375,16 +376,16 @@
                                                 <Label Grid.Column="0"
                                                        Text="{Binding PasukNumHeb}"
                                                        AutomationId="PasukNumber"
-                                                       FontSize="{DynamicResource PasukNumFontSize}"
+                                                       FontSize="{Binding MarkerFontSize}"
                                                        FontAttributes="Bold"
                                                        VerticalTextAlignment="Start"
                                                        HorizontalTextAlignment="Center"
                                                        Margin="0,1.5,0,0"
                                                        TextColor="{StaticResource Primary}"/>
                                                 <VerticalStackLayout Grid.Column="1" Spacing="2">
-                                                    <Label AutomationId="PasukText"
+                                                    <controls:PasukTextLabel AutomationId="PasukText"
                                                            FormattedText="{Binding Pasuk.FormattedText}"
-                                                           FontSize="{DynamicResource PasukFontSize}"
+                                                           FontSize="{Binding FontSize}"
                                                            FlowDirection="RightToLeft"
                                                            LineBreakMode="WordWrap"
                                                            LineHeight="1.4"/>
