@@ -12,8 +12,8 @@ namespace BibleOnSite.Tests.MobileE2E;
 [Collection("Mobile device")]
 [Trait("Category", "MobileE2E")]
 [Trait("Platform", "iOS")]
-public sealed class IosReaderTests(ITestOutputHelper output, MobileDeviceSessionFactory sessions)
-    : MobileDeviceTest(output, sessions)
+public sealed class IosReaderTests(ITestOutputHelper output, MobileDeviceSession session)
+    : MobileDeviceTest(output, session)
 {
     [Fact]
     public void RightEdgeSwipeOpensAndScrimTapClosesTheFlyout() => Scenario(() =>

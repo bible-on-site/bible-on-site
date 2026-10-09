@@ -90,11 +90,20 @@ public abstract class MobilePlatformAdapter
         return sequence;
     }
 
-    public AppiumOptions CreateOptions(MobileTestConfiguration configuration) =>
-        CreateOptions(configuration, null);
+    /// <summary>
+    /// Bundle/package id the suite drives.
+    /// </summary>
+    public abstract string AppId { get; }
 
-    public AppiumOptions CreateOptions(MobileTestConfiguration configuration,
-        IReadOnlyDictionary<string, string>? appEnvironment)
+    /// <summary>
+    /// Restore a known app state between scenarios on the shared session:
+    /// restart the process with the scenario's launch environment and put the
+    /// device back in portrait. Data such as the built search index survives,
+    /// which is what lets the suite share one session at all.
+    /// </summary>
+    public abstract void RestartApp(AppiumDriver driver, IReadOnlyDictionary<string, string>? environment);
+
+    public AppiumOptions CreateOptions(MobileTestConfiguration configuration)
     {
         var android = configuration.Platform == MobilePlatform.Android;
         var options = new AppiumOptions
@@ -153,20 +162,22 @@ public abstract class MobilePlatformAdapter
             // already poll explicit element state instead of relying on WDA's
             // implicit synchronization.
             options.AddAdditionalAppiumOption("waitForIdleTimeout", 0);
-            if (appEnvironment is { Count: > 0 })
-            {
-                // XCUITest processArguments.env reaches the app as process
-                // environment variables — e.g. BIBLE_E2E_PERUSHIM turns on the
-                // synthetic commentary data used by the HtmlView stability test.
-                options.AddAdditionalAppiumOption("processArguments",
-                    new Dictionary<string, object>
-                    {
-                        ["env"] = new Dictionary<string, string>(appEnvironment)
-                    });
-            }
+            // The suite marker reaches the app through processArguments on the
+            // session's own launch; per-scenario restarts pass it through
+            // launchApp because XCUITest does not merge the two.
+            options.AddAdditionalAppiumOption("processArguments",
+                new Dictionary<string, object>
+                {
+                    ["env"] = new Dictionary<string, string>(IosE2eEnvironment)
+                });
         }
         return options;
     }
+
+    // Marks every suite launch so the app can run CI-only startup work such as
+    // warming the search index while other scenarios execute.
+    internal static readonly IReadOnlyDictionary<string, string> IosE2eEnvironment =
+        new Dictionary<string, string> { ["BIBLE_E2E"] = "1" };
 
     public static MobilePlatformAdapter For(MobilePlatform platform) => platform switch
     {
@@ -180,6 +191,16 @@ public sealed record LayoutExpectations(double MinimumButtonExtent = 44, double 
 
 public sealed class AndroidPlatformAdapter : MobilePlatformAdapter
 {
+    public override string AppId => "com.tanah.daily929";
+
+    public override void RestartApp(AppiumDriver driver,
+        IReadOnlyDictionary<string, string>? environment)
+    {
+        driver.TerminateApp(AppId);
+        driver.ActivateApp(AppId);
+        driver.Orientation = ScreenOrientation.Portrait;
+    }
+
     public override bool IsChecked(AppiumElement element) => element.GetAttribute("checked") == "true";
     // MAUI maps AutomationId to Android resource-id, preserving screen-reader text.
     public override By AutomationId(string id) => By.Id($"com.tanah.daily929:id/{id}");
@@ -191,6 +212,30 @@ public sealed class AndroidPlatformAdapter : MobilePlatformAdapter
 
 public sealed class IosPlatformAdapter : MobilePlatformAdapter
 {
+    public override string AppId => "com.tanah.daily929";
+
+    public override void RestartApp(AppiumDriver driver,
+        IReadOnlyDictionary<string, string>? environment)
+    {
+        driver.TerminateApp(AppId);
+        // mobile: launchApp replaces processArguments on the session's launch,
+        // so the suite marker and the scenario's variables ride together.
+        var env = new Dictionary<string, string>(IosE2eEnvironment);
+        if (environment != null)
+        {
+            foreach (var (key, value) in environment)
+            {
+                env[key] = value;
+            }
+        }
+        driver.ExecuteScript("mobile: launchApp", new Dictionary<string, object>
+        {
+            ["bundleId"] = AppId,
+            ["environment"] = env
+        });
+        driver.Orientation = ScreenOrientation.Portrait;
+    }
+
     public override void DismissSearchSheet(AppiumDriver driver) => Tap(driver, driver.FindElement(AutomationId("SearchSheetDismissButton")));
     public override bool IsChecked(AppiumElement element) => element.GetAttribute("value") == "1";
     public override void GoBackFromFocusedVerse(AppiumDriver driver) => Tap(driver, driver.FindElement(AutomationId("SelectionBackButton")));

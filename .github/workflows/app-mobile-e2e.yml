@@ -106,6 +106,13 @@ jobs:
         if: matrix.platform == 'iOS'
         run: sudo xcode-select --switch /Applications/Xcode_27.app/Contents/Developer
 
+      # CoreSimulator boot takes ~5 minutes and touches nothing the workload
+      # install, app build or WDA prep below need — kick it now and only wait
+      # for readiness right before the pilot.
+      - name: Start iPhone simulator boot
+        if: matrix.platform == 'iOS'
+        run: npm run ios:boot:start --prefix app/mobile-e2e
+
       - name: Install MAUI workload
         # 10.0.401.1 selects the iOS 27 SDK, which requires Xcode 27; see #1871.
         run: dotnet workload install ${{ matrix.workload }} --version 10.0.401.1
@@ -266,9 +273,9 @@ jobs:
         if: matrix.platform == 'iOS'
         run: npm run ios:wda --prefix app/mobile-e2e
 
-      - name: Boot iPhone simulator
+      - name: Wait for iPhone simulator readiness
         if: matrix.platform == 'iOS'
-        run: npm run ios:boot --prefix app/mobile-e2e
+        run: npm run ios:boot:ready --prefix app/mobile-e2e
 
       - name: Run shared pilot on iOS
         if: matrix.platform == 'iOS'
