@@ -34,9 +34,13 @@ partial class Build
                 " --report-xunit-junit --report-xunit-junit-filename test-results.xml\"" +
                 $" --output \"{outputDirectory / "coverage.cobertura.xml"}\" --format cobertura" +
                 " --include \"[BibleOnSite.Tests]*\"" +
-                " --exclude \"[xunit.*]*,[FluentAssertions]*,[Moq]*,[coverlet.*]*,[Microsoft.*]*\"" +
-                " --exclude-by-attribute \"Obsolete,GeneratedCodeAttribute,CompilerGeneratedAttribute,ExcludeFromCodeCoverageAttribute\"" +
-                " --exclude-by-file \"**/obj/**,**/bin/**,**/.nuget/**\"" +
+                // coverlet.console treats each option value literally (no comma
+                // splitting), so filters repeat the flag per pattern.
+                " --exclude \"[xunit.*]*\" --exclude \"[FluentAssertions]*\"" +
+                " --exclude \"[Moq]*\" --exclude \"[coverlet.*]*\" --exclude \"[Microsoft.*]*\"" +
+                " --exclude-by-attribute Obsolete --exclude-by-attribute GeneratedCodeAttribute" +
+                " --exclude-by-attribute CompilerGeneratedAttribute --exclude-by-attribute ExcludeFromCodeCoverageAttribute" +
+                " --exclude-by-file \"**/obj/**\" --exclude-by-file \"**/bin/**\" --exclude-by-file \"**/.nuget/**\"" +
                 " --include-test-assembly --skipautoprops",
                 RootDirectory)
             .AssertZeroExitCode();
