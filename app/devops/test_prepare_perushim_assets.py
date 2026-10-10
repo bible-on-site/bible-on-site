@@ -27,11 +27,15 @@ class PreparePerushimAssetsTests(unittest.TestCase):
                 db.execute("INSERT INTO _metadata VALUES ('build_timestamp', '200')")
         with closing(sqlite3.connect(self.source / NOTES)) as db:
             with db:
-                db.execute("CREATE TABLE note (perush_id INTEGER)")
-                db.execute("INSERT INTO note VALUES (13)")
+                db.execute("CREATE TABLE note_blob (perek_id INTEGER PRIMARY KEY, data BLOB NOT NULL)")
+                db.execute("INSERT INTO note_blob VALUES (1, X'504e4231')")
+                db.execute("CREATE TABLE perek_perush (perek_id INTEGER, perush_id INTEGER,"
+                           " PRIMARY KEY (perek_id, perush_id))")
+                db.execute("INSERT INTO perek_perush VALUES (1, 13)")
                 db.execute("CREATE TABLE _metadata (key TEXT PRIMARY KEY, value TEXT)")
                 db.executemany("INSERT INTO _metadata VALUES (?, ?)",
-                               [("build_timestamp", "200"), ("perush_catalog", json.dumps(self.mapping))])
+                               [("build_timestamp", "200"), ("schema_version", "2"),
+                                ("perush_catalog", json.dumps(self.mapping))])
 
     def metadata(self, key, value):
         with closing(sqlite3.connect(self.source / NOTES)) as db:
@@ -81,8 +85,23 @@ class PreparePerushimAssetsTests(unittest.TestCase):
     def test_notes_cannot_reference_unknown_ids(self):
         with closing(sqlite3.connect(self.source / NOTES)) as db:
             with db:
-                db.execute("INSERT INTO note VALUES (999)")
+                db.execute("INSERT INTO perek_perush VALUES (2, 999)")
+                db.execute("INSERT INTO note_blob VALUES (2, X'504e4231')")
         with self.assertRaisesRegex(ValueError, "IDs absent from the catalog"):
+            validate_pair(self.source)
+
+    def test_wrong_schema_version_is_rejected(self):
+        for version in [None, "1", "3"]:
+            with self.subTest(version=version):
+                self.metadata("schema_version", version)
+                with self.assertRaisesRegex(ValueError, "schema v2"):
+                    validate_pair(self.source)
+
+    def test_blob_must_cover_every_perek(self):
+        with closing(sqlite3.connect(self.source / NOTES)) as db:
+            with db:
+                db.execute("INSERT INTO perek_perush VALUES (2, 13)")
+        with self.assertRaisesRegex(ValueError, "every perek"):
             validate_pair(self.source)
 
     def test_missing_pair_is_rejected(self):

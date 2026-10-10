@@ -10,6 +10,7 @@ namespace BibleOnSite.Services;
 public sealed class SearchIndexService : IAsyncDisposable
 {
     private const int ImportBatchSize = 4096;
+    private const int BlobImportBatchSize = 16;
     private readonly PerekDataService _perakim;
     private readonly PerushimNotesService? _notes;
     private readonly SQLiteAsyncConnection _index;
@@ -224,22 +225,41 @@ public sealed class SearchIndexService : IAsyncDisposable
             await _index.ExecuteAsync($"CREATE VIRTUAL TABLE {table} USING fts5(Text, content='{table}_documents', content_rowid='rowid')");
             if (commentary)
             {
-                long lastId = 0;
                 var imported = 0;
+                var lastLogged = 0;
+                var lastPerekId = 0;
                 while (true)
                 {
                     // Keyset pagination bounds memory even for the full commentary asset pack.
-                    var batch = await source.QueryAsync<IndexRow>("SELECT rowid AS RowId, perek_id AS PerekId, " +
-                        $"pasuk AS PasukNum, perush_id AS PerushId, note_content AS Body FROM note WHERE rowid > ? ORDER BY rowid LIMIT {ImportBatchSize}", lastId);
-                    if (batch.Count == 0)
+                    var blobs = await source.QueryAsync<BlobRow>("SELECT perek_id AS PerekId, data AS Data " +
+                        $"FROM note_blob WHERE perek_id > ? ORDER BY perek_id LIMIT {BlobImportBatchSize}", lastPerekId);
+                    if (blobs.Count == 0)
                     {
                         break;
                     }
-                    await InsertAsync(table, batch);
-                    lastId = batch[^1].RowId;
-                    imported += batch.Count;
-                    if (imported % (ImportBatchSize * 8) == 0)
+                    lastPerekId = blobs[^1].PerekId;
+                    var batch = new List<IndexRow>();
+                    foreach (var blob in blobs)
                     {
+                        foreach (var note in PerushNoteBlob.Decode(blob.Data))
+                        {
+                            batch.Add(new IndexRow
+                            {
+                                PerekId = blob.PerekId,
+                                PasukNum = note.Pasuk,
+                                PerushId = note.PerushId,
+                                Body = note.Content
+                            });
+                        }
+                    }
+                    foreach (var chunk in batch.Chunk(ImportBatchSize))
+                    {
+                        await InsertAsync(table, chunk);
+                    }
+                    imported += batch.Count;
+                    if (imported - lastLogged >= ImportBatchSize * 8)
+                    {
+                        lastLogged = imported;
                         Console.WriteLine($"Search index '{table}': {imported} documents in {timer.Elapsed.TotalSeconds:F1}s.");
                     }
                 }
@@ -353,6 +373,12 @@ public sealed class SearchIndexService : IAsyncDisposable
         public int PasukNum { get; set; }
         public int PerushId { get; set; }
         public string Body { get; set; } = string.Empty;
+    }
+
+    private sealed class BlobRow
+    {
+        public int PerekId { get; set; }
+        public byte[] Data { get; set; } = [];
     }
 
     private sealed class VocabularyRow

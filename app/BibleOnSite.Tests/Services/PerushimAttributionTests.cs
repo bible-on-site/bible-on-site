@@ -181,7 +181,7 @@ public class PerushimAttributionTests
     {
         await using var storage = new TestStorage();
         await BundleCatalogAsync(storage);
-        await storage.CreateDatabaseAsync(NotesDb, "CREATE TABLE note (perush_id INTEGER)");
+        await storage.CreateDatabaseAsync(NotesDb, NotesDbV2.Statements());
         var service = new PerushimNotesService(NotesDeliveryTests.Pad().Object, storage.FileSystem.Object);
 
         await service.InitializeAsync();
@@ -271,16 +271,13 @@ public class PerushimAttributionTests
 
     private static async Task CreateNotesAsync(TestStorage storage, string timestamp, Dictionary<int, string>? mapping = null)
     {
-        var db = await storage.CreateDatabaseAsync(NotesDb,
-            "CREATE TABLE _metadata (key TEXT PRIMARY KEY, value TEXT)",
-            "CREATE TABLE note (perush_id INTEGER,perek_id INTEGER,pasuk INTEGER,note_idx INTEGER,note_content TEXT)");
+        var db = await storage.CreateDatabaseAsync(NotesDb, NotesDbV2.Statements((13, 4, 3, 0, ModernNote)));
         await db.ExecuteAsync("INSERT INTO _metadata VALUES ('build_timestamp',?)", timestamp);
         if (mapping != null)
         {
             await db.ExecuteAsync("INSERT INTO _metadata VALUES ('perush_catalog',?)",
                 JsonSerializer.Serialize(mapping, AppJsonContext.Default.PerushCatalog));
         }
-        await db.ExecuteAsync("INSERT INTO note VALUES (13,4,3,0,?)", ModernNote);
         await db.CloseAsync();
     }
 }

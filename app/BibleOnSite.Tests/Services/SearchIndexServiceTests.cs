@@ -17,8 +17,7 @@ public class SearchIndexServiceTests
         await using var storage = new TestStorage();
         var perakim = await SeedAsync(storage);
         await storage.CreateDatabaseAsync(NotesDb,
-            "CREATE TABLE note (perush_id INTEGER,perek_id INTEGER,pasuk INTEGER,note_idx INTEGER,note_content TEXT)",
-            "INSERT INTO note VALUES (7,1,1,0,'בראשית'),(8,1,1,0,'בראשית'),(9,1,1,0,'בראשית')");
+            NotesDbV2.Statements((7, 1, 1, 0, "בראשית"), (8, 1, 1, 0, "בראשית"), (9, 1, 1, 0, "בראשית")));
         var delivery = new Mock<IPadDeliveryService>();
         delivery.Setup(service => service.TryGetAssetPathAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync((string?)null);
         var notes = PerushimNotesService.CreateForTesting(delivery.Object, storage.Root);
@@ -48,9 +47,8 @@ public class SearchIndexServiceTests
         await using var storage = new TestStorage();
         var perakim = await SeedAsync(storage);
         await storage.CreateDatabaseAsync(NotesDb,
-            "CREATE TABLE note (perush_id INTEGER,perek_id INTEGER,pasuk INTEGER,note_idx INTEGER,note_content TEXT)",
-            "WITH RECURSIVE entries(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM entries WHERE n < 32769) " +
-            "INSERT INTO note SELECT 7,1,1,n,CASE WHEN n = 32769 THEN 'אחרון' ELSE 'רגיל' END FROM entries");
+            NotesDbV2.Statements([.. Enumerable.Range(1, 32769)
+                .Select(n => ((int)7, (int)1, (int)1, (int)n, n == 32769 ? "אחרון" : "רגיל"))]));
         var delivery = new Mock<IPadDeliveryService>();
         delivery.Setup(service => service.TryGetAssetPathAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((string?)null);
@@ -121,8 +119,7 @@ public class SearchIndexServiceTests
         await using var storage = new TestStorage();
         var perakim = await SeedAsync(storage);
         await storage.CreateDatabaseAsync(NotesDb,
-            "CREATE TABLE note (perush_id INTEGER,perek_id INTEGER,pasuk INTEGER,note_idx INTEGER,note_content TEXT)",
-            "INSERT INTO note VALUES (7,1,1,0,'בראשית ברא אלהים')");
+            NotesDbV2.Statements((7, 1, 1, 0, "בראשית ברא אלהים")));
         var inspection = await storage.CreateDatabaseAsync("search.sqlite");
         await inspection.RunInTransactionAsync(connection =>
         {
@@ -167,8 +164,7 @@ public class SearchIndexServiceTests
         await using var storage = new TestStorage();
         var perakim = await SeedAsync(storage);
         var notesDb = await storage.CreateDatabaseAsync(NotesDb,
-            "CREATE TABLE note (perush_id INTEGER,perek_id INTEGER,pasuk INTEGER,note_idx INTEGER,note_content TEXT)",
-            "INSERT INTO note VALUES (7,1,1,0,'<b>בריאת</b> הָעוֹלָם'),(8,3,1,0,'בריאת העולם')");
+            NotesDbV2.Statements((7, 1, 1, 0, "<b>בריאת</b> הָעוֹלָם"), (8, 3, 1, 0, "בריאת העולם")));
         var delivery = new Mock<IPadDeliveryService>();
         delivery.Setup(service => service.TryGetAssetPathAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync((string?)null);
         var notes = PerushimNotesService.CreateForTesting(delivery.Object, storage.Root);
@@ -180,7 +176,8 @@ public class SearchIndexServiceTests
         hits[0].PasukNum.Should().Be(1);
         hits[0].PerekId.Should().Be(1);
         hits[0].Text.Should().NotContain("<b>");
-        (await notesDb.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM note")).Should().Be(2, "search must not alter source content");
+        var sourceBlobs = await notesDb.QueryAsync<SourceBlobRow>("SELECT perek_id AS PerekId, data AS Data FROM note_blob");
+        sourceBlobs.Sum(row => PerushNoteBlob.Decode(row.Data).Count).Should().Be(2, "search must not alter source content");
         var vm = new SearchViewModel(perakim, index) { SearchPhrase = "בריאת העולם" };
         vm.SetPerushim([new Perush { Id = 7, Name = "רש\"י" }]);
         await vm.SearchAsync();
@@ -311,8 +308,7 @@ public class SearchIndexServiceTests
         await using var storage = new TestStorage();
         var perakim = await SeedAsync(storage);
         await storage.CreateDatabaseAsync(NotesDb,
-            "CREATE TABLE note (perush_id INTEGER,perek_id INTEGER,pasuk INTEGER,note_idx INTEGER,note_content TEXT)",
-            "INSERT INTO note VALUES (7,1,1,0,'אמר משה'),(8,1,1,0,'אמר הרב משה')");
+            NotesDbV2.Statements((7, 1, 1, 0, "אמר משה"), (8, 1, 1, 0, "אמר הרב משה")));
         var delivery = new Mock<IPadDeliveryService>();
         delivery.Setup(service => service.TryGetAssetPathAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync((string?)null);
         var notes = PerushimNotesService.CreateForTesting(delivery.Object, storage.Root);
@@ -324,5 +320,11 @@ public class SearchIndexServiceTests
         await vm.SearchAsync();
         vm.SearchResults.Should().ContainSingle().Which.Should().BeOfType<PerushSearchResult>()
             .Which.PerushId.Should().Be("8");
+    }
+
+    private sealed class SourceBlobRow
+    {
+        public int PerekId { get; set; }
+        public byte[] Data { get; set; } = [];
     }
 }

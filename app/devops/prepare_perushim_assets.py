@@ -27,6 +27,8 @@ def validate_pair(source: Path) -> int:
         catalog_metadata = dict(catalog.execute("SELECT key, value FROM _metadata"))
     with closing(sqlite3.connect((source / NOTES).resolve().as_uri() + "?mode=ro", uri=True)) as notes:
         notes_metadata = dict(notes.execute("SELECT key, value FROM _metadata"))
+        if notes_metadata.get("schema_version") != "2":
+            raise ValueError("Notes are not schema v2; regenerate the paired Perushim SQLite artifact")
         snapshot = notes_metadata.get("perush_catalog")
         if snapshot is None:
             raise ValueError("Notes lack perush_catalog; regenerate the paired Perushim SQLite artifact")
@@ -36,9 +38,12 @@ def validate_pair(source: Path) -> int:
         catalog_timestamp = int(catalog_metadata.get("build_timestamp", "0"))
         if notes_timestamp <= 0 or notes_timestamp != catalog_timestamp:
             raise ValueError("Catalog and notes must come from the same generation")
-        unknown_ids = {str(row[0]) for row in notes.execute("SELECT DISTINCT perush_id FROM note")} - mapping.keys()
+        unknown_ids = {str(row[0]) for row in notes.execute("SELECT DISTINCT perush_id FROM perek_perush")} - mapping.keys()
         if unknown_ids:
             raise ValueError(f"Notes contain IDs absent from the catalog: {sorted(unknown_ids)}")
+        if notes.execute("SELECT COUNT(*) FROM note_blob").fetchone()[0] != \
+                notes.execute("SELECT COUNT(DISTINCT perek_id) FROM perek_perush").fetchone()[0]:
+            raise ValueError("note_blob must carry every perek present in perek_perush")
     return len(mapping)
 
 

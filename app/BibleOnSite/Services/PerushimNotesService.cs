@@ -65,6 +65,26 @@ public class PerushimNotesService
         return new PerushimNotesService(padService, dataDirectory);
     }
 
+    /// <summary>
+    /// Test-only cleanup: releases the pooled SQLite handle so temp files can be
+    /// removed on Windows, where open handles block directory deletion.
+    /// </summary>
+    internal async Task CloseConnectionForTestingAsync()
+    {
+        await _operationLock.WaitAsync();
+        try
+        {
+            if (_connection != null)
+            {
+                await _connection.CloseAsync();
+                _connection = null;
+                _initialized = false;
+                _notesMissing = true;
+            }
+        }
+        finally { _operationLock.Release(); }
+    }
+
     private PerushimNotesService(IPadDeliveryService padService, string dataDirectory) : this(padService)
     {
         _dataDirectoryOverride = dataDirectory;
@@ -298,6 +318,20 @@ public class PerushimNotesService
         {
             return false;
         }
+
+        // Schema v2 stores notes as compressed per-perek blobs; a legacy or
+        // future layout cannot be queried and must be replaced by download.
+        var schemaVersion = await ReadSchemaVersionAsync();
+        if (schemaVersion != PerushNoteBlob.SchemaVersion)
+        {
+            _notesValidationStatus = schemaVersion == null
+                ? "Legacy notes schema (no schema_version); a v2 pack is required"
+                : $"Unsupported notes schema version {schemaVersion} (requires {PerushNoteBlob.SchemaVersion})";
+            await RejectNotesAsync();
+            Console.Error.WriteLine("Perushim notes have an unsupported schema; download a matching pack.");
+            return false;
+        }
+
         if (_catalog == null)
         {
             _notesValidationStatus = "Catalog validation skipped for raw-note tests";
@@ -354,11 +388,33 @@ public class PerushimNotesService
             Console.Error.WriteLine($"Could not verify perushim attribution: {ex.Message}");
         }
 
-        await _connection.CloseAsync();
-        _connection = null;
-        _notesMissing = true;
+        await RejectNotesAsync();
         Console.Error.WriteLine("Perushim notes do not match the installed catalog; download a matching pack.");
         return false;
+    }
+
+    private async Task RejectNotesAsync()
+    {
+        if (_connection != null)
+        {
+            await _connection.CloseAsync();
+            _connection = null;
+        }
+        _notesMissing = true;
+    }
+
+    private async Task<string?> ReadSchemaVersionAsync()
+    {
+        try
+        {
+            return await _connection!.ExecuteScalarAsync<string>(
+                "SELECT value FROM _metadata WHERE key = 'schema_version'");
+        }
+        catch (SQLiteException)
+        {
+            // DB may not have _metadata at all (legacy or corrupt file).
+            return null;
+        }
     }
 
     /// <summary>
@@ -475,7 +531,7 @@ public class PerushimNotesService
             return new List<int>();
 
         var rows = await _connection.QueryAsync<IdRow>(
-            "SELECT DISTINCT perush_id AS Id FROM note WHERE perek_id = ? ORDER BY perush_id",
+            "SELECT perush_id AS Id FROM perek_perush WHERE perek_id = ? ORDER BY perush_id",
             perekId);
 
         return rows.Select(r => r.Id).ToList();
@@ -490,12 +546,17 @@ public class PerushimNotesService
         if (_connection == null)
             return new List<PerekPerushNote>();
 
-        var rows = await _connection.QueryAsync<NoteRow>(
-            "SELECT perush_id, perek_id, pasuk, note_idx, note_content FROM note " +
-            "WHERE perek_id = ? ORDER BY pasuk ASC, perush_id ASC, note_idx ASC",
+        var rows = await _connection.QueryAsync<BlobRow>(
+            "SELECT data AS Data FROM note_blob WHERE perek_id = ?",
             perekId);
+        if (rows.Count == 0)
+            return new List<PerekPerushNote>();
 
-        return rows
+        // A whole perek's notes decompress in one pass — keep that off the UI thread.
+        var blob = rows[0].Data;
+        var decoded = await Task.Run(() => PerushNoteBlob.Decode(blob));
+
+        return decoded
             .Select(r =>
             {
                 var name = perushById.GetValueOrDefault(r.PerushId)?.Name ?? $"Perush {r.PerushId}";
@@ -503,10 +564,10 @@ public class PerushimNotesService
                 {
                     PerushId = r.PerushId,
                     PerushName = name,
-                    PerekId = r.PerekId,
+                    PerekId = perekId,
                     Pasuk = r.Pasuk,
                     NoteIdx = r.NoteIdx,
-                    NoteContent = r.NoteContent ?? string.Empty
+                    NoteContent = r.Content
                 };
             })
             .ToList();
@@ -524,21 +585,9 @@ public class PerushimNotesService
         public int Id { get; set; }
     }
 
-    private class NoteRow
+    private class BlobRow
     {
-        [Column("perush_id")]
-        public int PerushId { get; set; }
-
-        [Column("perek_id")]
-        public int PerekId { get; set; }
-
-        [Column("pasuk")]
-        public int Pasuk { get; set; }
-
-        [Column("note_idx")]
-        public int NoteIdx { get; set; }
-
-        [Column("note_content")]
-        public string? NoteContent { get; set; }
+        [Column("data")]
+        public byte[] Data { get; set; } = [];
     }
 }
