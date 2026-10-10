@@ -72,7 +72,6 @@ public partial class PerekPage : ContentPage, IQueryAttributable
         InitializeComponent();
 #if IOS
         ConfigureReaderSafeArea();
-        InitializeBottomBarDebugControls();
 #endif
         Console.WriteLine("[Startup] PerekPage binding context");
         _viewModel = new PerekViewModel();
@@ -92,7 +91,6 @@ public partial class PerekPage : ContentPage, IQueryAttributable
         InitializeComponent();
 #if IOS
         ConfigureReaderSafeArea();
-        InitializeBottomBarDebugControls();
 #endif
         _viewModel = viewModel;
         BindingContext = _viewModel;
@@ -744,69 +742,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable
         ReaderSafeArea.Configure(MainGrid);
     }
 
-    private void InitializeBottomBarDebugControls()
-    {
-        // XAML sets the default selection while constructing the page. Hook up
-        // changes only after all controls touched by the handler exist.
-        foreach (var choice in new[] { DebugFix0, DebugFix3, DebugFix4, DebugFix11, DebugFix15, DebugFix16, DebugFix17 })
-        {
-            choice.CheckedChanged += OnDebugFixChanged;
-        }
-    }
-
     private void OnPageSizeChanged(object? sender, EventArgs e) => ApplyBottomBarSafeArea();
-    private int _currentDebugFix = 4; // Default: TranslationY (confirmed best by tester)
-    private double _bottomInset;
-    private bool _debugDropdownOpen;
-
-    private static bool IsTestFlightBuild()
-    {
-        var receiptUrl = Foundation.NSBundle.MainBundle.AppStoreReceiptUrl;
-        return receiptUrl?.Path?.Contains("sandboxReceipt", StringComparison.OrdinalIgnoreCase) == true;
-    }
-
-    private void OnDebugToggleTapped(object? sender, TappedEventArgs e)
-    {
-        _debugDropdownOpen = !_debugDropdownOpen;
-        DebugDropdownPanel.IsVisible = _debugDropdownOpen;
-        DebugToggleIcon.Text = _debugDropdownOpen ? "✕" : "🔧";
-    }
-
-    private void OnDebugFixChanged(object? sender, CheckedChangedEventArgs e)
-    {
-        if (!e.Value || sender is not RadioButton rb)
-        {
-            return;
-        }
-
-        ResetBottomBarFixes();
-        _currentDebugFix = rb switch
-        {
-            _ when rb == DebugFix0 => 0,
-            _ when rb == DebugFix3 => 3,
-            _ when rb == DebugFix4 => 4,
-            _ when rb == DebugFix11 => 11,
-            _ when rb == DebugFix15 => 15,
-            _ when rb == DebugFix16 => 16,
-            _ when rb == DebugFix17 => 17,
-            _ => _currentDebugFix
-        };
-        ApplyBottomBarSafeArea();
-    }
-
-    private void ResetBottomBarFixes()
-    {
-        MainGrid.Margin = new Thickness(0);
-        this.Padding = new Thickness(0);
-        BottomBar.Margin = new Thickness(0);
-        BottomBar.TranslationY = 0;
-        BottomBar.Padding = new Thickness(0);
-        BottomBar.HeightRequest = 90;
-        FloatingMenuContainer.Padding = new Thickness(0);
-        FloatingMenuContainer.Margin = new Thickness(0);
-        FloatingMenuContainer.TranslationY = 0;
-        Resources["BottomBarTotalHeight"] = 90.0;
-    }
 
     private void ApplyBottomBarSafeArea()
     {
@@ -820,104 +756,22 @@ public partial class PerekPage : ContentPage, IQueryAttributable
             bottom = window.SafeAreaInsets.Bottom;
         }
 
-        _bottomInset = bottom;
-
-        if (IsTestFlightBuild())
-        {
-            BottomBarDebugOverlay.IsVisible = true;
-            DebugFixInfo.Text = $"inset={bottom:F1}pt fix={_currentDebugFix}";
-        }
-
-        if (bottom <= 0)
-        {
-            LayoutCircularMenu();
-            return;
-        }
-
+        // Shift the bars down over the home-indicator inset and pull the page
+        // up underneath so no gap shows (tester-confirmed combination).
+        // With no inset (iPad, landscape) the same assignments restore the
+        // layout defaults, so an inset disappearing never leaves stale values.
         var totalHeight = 90 + bottom;
-
-        switch (_currentDebugFix)
-        {
-            case 0: // No fix — baseline
-                break;
-
-            case 3: // BottomBar negative bottom margin
-            {
-                BottomBar.Margin = new Thickness(0, 0, 0, -bottom);
-                BottomBar.Padding = new Thickness(0, 0, 0, bottom);
-                BottomBar.HeightRequest = totalHeight;
-                FloatingMenuContainer.Margin = new Thickness(0, 0, 0, -bottom);
-                FloatingMenuContainer.Padding = new Thickness(0, 0, 0, bottom);
-                Resources["BottomBarTotalHeight"] = totalHeight;
-                break;
-            }
-
-            case 4: // TranslationY on BottomBar — visually shift down (BEST)
-            {
-                BottomBar.TranslationY = bottom;
-                BottomBar.Padding = new Thickness(0, 0, 0, bottom);
-                BottomBar.HeightRequest = totalHeight;
-                FloatingMenuContainer.TranslationY = bottom;
-                FloatingMenuContainer.Padding = new Thickness(0, 0, 0, bottom);
-                Resources["BottomBarTotalHeight"] = totalHeight;
-                break;
-            }
-
-            case 11: // ContentPage bottom padding = -bottom
-            {
-                this.Padding = new Thickness(0, 0, 0, -bottom);
-                BottomBar.Padding = new Thickness(0, 0, 0, bottom);
-                BottomBar.HeightRequest = totalHeight;
-                FloatingMenuContainer.Padding = new Thickness(0, 0, 0, bottom);
-                Resources["BottomBarTotalHeight"] = totalHeight;
-                break;
-            }
-
-            case 15: // TranslationY + bar negative margin combo
-            {
-                BottomBar.TranslationY = bottom;
-                BottomBar.Margin = new Thickness(0, 0, 0, -bottom);
-                BottomBar.Padding = new Thickness(0, 0, 0, bottom);
-                BottomBar.HeightRequest = totalHeight;
-                FloatingMenuContainer.TranslationY = bottom;
-                FloatingMenuContainer.Margin = new Thickness(0, 0, 0, -bottom);
-                FloatingMenuContainer.Padding = new Thickness(0, 0, 0, bottom);
-                Resources["BottomBarTotalHeight"] = totalHeight;
-                break;
-            }
-
-            case 16: // TranslationY + page padding combo
-            {
-                BottomBar.TranslationY = bottom;
-                BottomBar.Padding = new Thickness(0, 0, 0, bottom);
-                BottomBar.HeightRequest = totalHeight;
-                FloatingMenuContainer.TranslationY = bottom;
-                FloatingMenuContainer.Padding = new Thickness(0, 0, 0, bottom);
-                this.Padding = new Thickness(0, 0, 0, -bottom);
-                Resources["BottomBarTotalHeight"] = totalHeight;
-                break;
-            }
-
-            case 17: // TranslationY (half) + bar negative margin (half)
-            {
-                var half = bottom / 2;
-                BottomBar.TranslationY = half;
-                BottomBar.Margin = new Thickness(0, 0, 0, -half);
-                BottomBar.Padding = new Thickness(0, 0, 0, bottom);
-                BottomBar.HeightRequest = totalHeight;
-                FloatingMenuContainer.TranslationY = half;
-                FloatingMenuContainer.Margin = new Thickness(0, 0, 0, -half);
-                FloatingMenuContainer.Padding = new Thickness(0, 0, 0, bottom);
-                Resources["BottomBarTotalHeight"] = totalHeight;
-                break;
-            }
-        }
+        BottomBar.TranslationY = bottom;
+        BottomBar.Padding = new Thickness(0, 0, 0, bottom);
+        BottomBar.HeightRequest = totalHeight;
+        FloatingMenuContainer.TranslationY = bottom;
+        FloatingMenuContainer.Padding = new Thickness(0, 0, 0, bottom);
+        this.Padding = new Thickness(0, 0, 0, -bottom);
+        Resources["BottomBarTotalHeight"] = totalHeight;
 
         // Padding changes the arrange area without firing SizeChanged.
         LayoutCircularMenu();
     }
-#else
-    private void OnDebugToggleTapped(object? sender, TappedEventArgs e) { }
 #endif
 
     /// <summary>
