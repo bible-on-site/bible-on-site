@@ -147,6 +147,19 @@ WDA request including `POST /session`, so it stays at the driver default of 240
 seconds — a cold app launch can exceed 90 seconds before the first test runs.
 CI uploads a separate artifact for each platform even on test failures.
 
+## Coverage evidence and impacted-test selection
+
+Each scenario writes a `coverage-evidence/*.json` record into the artifacts
+directory — the automation ids it queried through `Platform.AutomationId` and
+the sessions attributed to it. CI collects these into a per-platform coverage
+tree (`app-mobile-e2e-coverage.master.<platform>` on master pushes) and the
+`devops/github/ci/e2e-impact` selector maps the accumulated diff onto the
+affected tests. Selection currently runs in shadow mode — the manifest is
+reported while every test still runs — until evidence supports enforcement;
+see [docs/tests/app/e2e-impact.md](../../docs/tests/app/e2e-impact.md).
+`MOBILE_E2E_SELECTION=<manifest>` narrows `dotnet test` through a
+FullyQualifiedName filter for enforce mode and local experiments.
+
 ## Dependency security
 
 The `shell-quote` override replaces the non-bundled copy pinned by Appium support

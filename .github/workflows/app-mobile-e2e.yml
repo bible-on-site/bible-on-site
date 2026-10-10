@@ -2,10 +2,33 @@ name: App Mobile E2E
 
 on:
   workflow_call:
+    inputs:
+      e2e_selection_mode:
+        # workflow_call inputs cannot be `choice`; only the exact value
+        # "enforce" narrows the run — anything else stays the shadow report.
+        description: "shadow reports the affected subset; enforce runs only it (#2085)"
+        type: string
+        default: shadow
+      force_full_suite:
+        description: "Skip coverage selection and run every applicable test"
+        type: boolean
+        default: false
   workflow_dispatch:
+    inputs:
+      e2e_selection_mode:
+        description: "shadow reports the affected subset; enforce runs only it (#2085)"
+        type: choice
+        options: [shadow, enforce]
+        default: shadow
+      force_full_suite:
+        description: "Skip coverage selection and run every applicable test"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
+  # Reads the master coverage-tree baseline artifacts through the REST API.
+  actions: read
 
 jobs:
   appium:
@@ -76,6 +99,42 @@ jobs:
           path: ~/.npm
           key: ${{ runner.os }}-npm-mobile-e2e-${{ hashFiles('devops/package-lock.json', 'app/mobile-e2e/package-lock.json') }}
           restore-keys: ${{ runner.os }}-npm-mobile-e2e-
+
+      # The coverage tree baseline is published only by successful master push
+      # runs. Missing or unreadable baselines are not an error here — the
+      # selector falls back to the full applicable suite (#2085).
+      - name: Download coverage-tree baseline
+        id: baseline
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node devops/github/ci/e2e-impact/e2e-impact.ts baseline-download \
+            --name "app-mobile-e2e-coverage.master.${{ matrix.artifact }}" \
+            --out "$MOBILE_E2E_ARTIFACTS/baseline"
+
+      # Shadow mode computes the deterministic subset for evidence while the
+      # suite still runs everything. A missing, stale or incompatible baseline,
+      # an undeterminable diff or a discovery problem resolves to selectAll —
+      # never to a silently empty run.
+      - name: Select affected tests
+        id: selection
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          BASELINE_ARGS=()
+          if [ "${{ steps.baseline.outputs.available }}" == "true" ]; then
+            BASELINE_ARGS=(--baseline "${{ steps.baseline.outputs.baseline-file }}")
+          fi
+          FORCE_ARGS=()
+          if [ "${{ inputs.force_full_suite }}" == "true" ]; then
+            FORCE_ARGS=(--force-full)
+          fi
+          node devops/github/ci/e2e-impact/e2e-impact.ts select \
+            --suite app/mobile-e2e \
+            --platform "${{ matrix.artifact }}" \
+            --tested-sha "${{ github.sha }}" \
+            --out "$MOBILE_E2E_ARTIFACTS/selection-manifest.json" \
+            --compare "${BASELINE_ARGS[@]}" "${FORCE_ARGS[@]}"
 
       - name: Install build and Appium dependencies
         run: |
@@ -226,6 +285,8 @@ jobs:
         uses: reactivecircus/android-emulator-runner@v2.38.0
         env:
           MOBILE_UDID: emulator-5554
+          # Empty in shadow mode: the manifest is reported, not enforced.
+          MOBILE_E2E_SELECTION: ${{ inputs.e2e_selection_mode == 'enforce' && steps.selection.outputs.manifest || '' }}
         with:
           api-level: ${{ env.ANDROID_API_LEVEL }}
           arch: ${{ env.ANDROID_ABI }}
@@ -272,9 +333,46 @@ jobs:
 
       - name: Run shared pilot on iOS
         if: matrix.platform == 'iOS'
+        id: pilot-ios
         # Leave time to upload diagnostics when the expanded device suite expires.
         timeout-minutes: 45
+        env:
+          # Empty in shadow mode: the manifest is reported, not enforced.
+          MOBILE_E2E_SELECTION: ${{ inputs.e2e_selection_mode == 'enforce' && steps.selection.outputs.manifest || '' }}
         run: npm test --prefix app/mobile-e2e
+
+      # Evidence is collected even after a failed run — passed tests keep their
+      # coverage — but the tree is marked incomplete so a partial run can never
+      # shrink the trusted baseline.
+      - name: Collect per-test coverage evidence
+        if: always()
+        id: collect
+        env:
+          # Each matrix leg defines exactly one of the two pilot step ids.
+          PILOT_OUTCOME: ${{ steps.pilot.outcome || steps['pilot-ios'].outcome }}
+        run: |
+          INCOMPLETE_ARGS=()
+          if [ "$PILOT_OUTCOME" != "success" ]; then
+            INCOMPLETE_ARGS=(--incomplete)
+          fi
+          node devops/github/ci/e2e-impact/e2e-impact.ts collect-appium \
+            --suite app/mobile-e2e \
+            --platform "${{ matrix.artifact }}" \
+            --artifacts "$MOBILE_E2E_ARTIFACTS" \
+            --snapshot-sha "${{ github.sha }}" \
+            --out "$MOBILE_E2E_ARTIFACTS/coverage-tree.json" "${INCOMPLETE_ARGS[@]}"
+
+      # The authoritative baseline is published only from a completed,
+      # successful default-branch run; PR and merge-queue evidence stays
+      # provisional inside the run's appium artifact.
+      - name: Publish coverage-tree baseline
+        if: always() && github.event_name == 'push' && github.ref == 'refs/heads/master' && (steps.pilot.outcome == 'success' || steps['pilot-ios'].outcome == 'success') && steps.collect.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          name: app-mobile-e2e-coverage.master.${{ matrix.artifact }}
+          path: app/.artifacts/mobile-e2e/${{ matrix.artifact }}/coverage-tree.json
+          retention-days: 90
+          overwrite: true
 
       - name: Upload platform results and diagnostics
         if: always()
