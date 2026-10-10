@@ -1,3 +1,5 @@
+using System.IO;
+using System.Text.Json;
 using Nuke.Common;
 using Nuke.Common.Tools.DotNet;
 using static Nuke.Common.Tools.DotNet.DotNetTasks;
@@ -68,13 +70,51 @@ partial class Build
                 .SetProjectFile(MobileE2ETestProject)
                 .SetConfiguration("Debug")
                 .SetProperty("RestoreLockedMode", "true")
-                .SetFilter($"Category=MobileE2E&(Platform=Shared|Platform={(MobileIsAndroid ? "Android" : "iOS")})")
-                // Per test: up to 5 min Appium session setup (IOSDriver budget) plus scenario and diagnostics.
-                .SetBlameHangTimeout("10m")
+                .SetFilter(MobileE2ESelectionFilter())
+                // Per test: up to 5 min Appium session setup (IOSDriver budget), plus the
+                // first commentary search's one-time FTS import of the whole notes pack —
+                // ~7m on a loaded macOS runner, and every fresh session reinstalls the app
+                // so no prior build progress survives — plus scenario and diagnostics.
+                // A test that exceeds its own waits fails normally well before this guard;
+                // it exists only for a genuinely dead test host.
+                .SetBlameHangTimeout("18m")
                 .SetBlameHangDumpType("mini")
                 .SetResultsDirectory(Path.Join(artifacts, "results"))
                 .SetLoggers("console;verbosity=normal", "trx;LogFileName=mobile-e2e.trx", "junit;LogFilePath=" + Path.Join(artifacts, "results", "mobile-e2e.xml")));
         });
+
+    // When MOBILE_E2E_SELECTION points at an e2e-impact manifest (#2085), the
+    // selected FullyQualifiedName list narrows the run; the category/platform
+    // predicate stays as an independent guard. A manifest without a filter —
+    // selectAll, fallbacks — keeps the full applicable suite. An unreadable or
+    // empty manifest fails the run rather than silently skipping tests.
+    string MobileE2ESelectionFilter()
+    {
+        var baseFilter = $"Category=MobileE2E&(Platform=Shared|Platform={(MobileIsAndroid ? "Android" : "iOS")})";
+        var selectionPath = Environment.GetEnvironmentVariable("MOBILE_E2E_SELECTION");
+        if (string.IsNullOrEmpty(selectionPath))
+        {
+            return baseFilter;
+        }
+        using var manifest = JsonDocument.Parse(File.ReadAllText(selectionPath));
+        var root = manifest.RootElement;
+        var selectAll = root.TryGetProperty("selectAll", out var flag) && flag.GetBoolean();
+        var vstest = root.TryGetProperty("filter", out var filter)
+            && filter.TryGetProperty("vstest", out var value)
+            && value.ValueKind == JsonValueKind.String
+            ? value.GetString()
+            : null;
+        if (selectAll)
+        {
+            return baseFilter;
+        }
+        if (string.IsNullOrWhiteSpace(vstest))
+        {
+            throw new InvalidOperationException(
+                $"Selection manifest {selectionPath} is not selectAll but carries no filter; refusing to run zero tests.");
+        }
+        return $"{baseFilter}&({vstest})";
+    }
 
     Target TestMobileE2EUnit => _ => _
         .Description("Validate mobile E2E configuration without a device or MAUI workload")
