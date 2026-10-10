@@ -182,7 +182,7 @@ public class AppFixture : IAsyncLifetime
         throw new InvalidOperationException("API server did not respond within 600 seconds");
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         SetProcessDPIAware();
         _automation = new UIA3Automation();
@@ -342,7 +342,7 @@ public class AppFixture : IAsyncLifetime
             lastException);
     }
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         try
         {

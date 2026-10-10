@@ -93,7 +93,7 @@ public class NavigationBoundaryTests
             var pageHandler = new Mock<IViewHandler>();
             pageHandler.SetupGet(h => h.MauiContext).Returns(context.Object);
             page.Handler = pageHandler.Object;
-            await ShellAppNavigator.Instance.DisplayAlertAsync("title", "message", "cancel").WaitAsync(TimeSpan.FromSeconds(2));
+            await ShellAppNavigator.Instance.DisplayAlertAsync("title", "message", "cancel").WaitAsync(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
             sender.Should().BeSameAs(page);
             request.Should().NotBeNull();
             request!.Title.Should().Be("title");

@@ -35,16 +35,16 @@ public class ArticlesNavigationTests
         if (menuButton != null)
         {
             _fixture.Click(menuButton);
-            await Task.Delay(500);
+            await Task.Delay(500, TestContext.Current.CancellationToken);
         }
         else
         {
             // Try keyboard shortcut or swipe from left
             _fixture.AssertForeground();
             Keyboard.Press(FlaUI.Core.WindowsAPI.VirtualKeyShort.ALT);
-            await Task.Delay(100);
+            await Task.Delay(100, TestContext.Current.CancellationToken);
             Keyboard.Release(FlaUI.Core.WindowsAPI.VirtualKeyShort.ALT);
-            await Task.Delay(500);
+            await Task.Delay(500, TestContext.Current.CancellationToken);
         }
 
         // Click on "רבנים" (Authors) in the flyout menu
@@ -55,7 +55,7 @@ public class ArticlesNavigationTests
         if (authorsMenuItem != null)
         {
             _fixture.Click(authorsMenuItem);
-            await Task.Delay(1000);
+            await Task.Delay(1000, TestContext.Current.CancellationToken);
         }
     }
 
@@ -77,7 +77,7 @@ public class ArticlesNavigationTests
             if (items.Length > 0)
             {
                 _fixture.Click(items[0]);
-                await Task.Delay(2000);
+                await Task.Delay(2000, TestContext.Current.CancellationToken);
             }
         }
     }
@@ -108,7 +108,7 @@ public class ArticlesNavigationTests
 
         // Assert - Should be on ArticlesPage now
         // Look for elements that indicate we're on the articles page
-        await Task.Delay(1000);
+        await Task.Delay(1000, TestContext.Current.CancellationToken);
 
         // The articles page should show either articles or a loading/empty state
         var pageContent = _fixture.MainWindow.FindFirstDescendant(
@@ -123,7 +123,7 @@ public class ArticlesNavigationTests
     {
         // Arrange - Navigate to ArticlesPage first
         await NavigateToArticlesPageAsync();
-        await Task.Delay(1000);
+        await Task.Delay(1000, TestContext.Current.CancellationToken);
 
         // Act - Click the first article in the list
         var articlesCollection = await _fixture.WaitForElementAsync(
@@ -136,7 +136,7 @@ public class ArticlesNavigationTests
             if (items.Length > 0)
             {
                 _fixture.Click(items[0]);
-                await Task.Delay(2000);
+                await Task.Delay(2000, TestContext.Current.CancellationToken);
 
                 // Assert - Article detail page should show content (not the "no content" label)
                 // Look for elements that indicate we're on the article detail page with content
