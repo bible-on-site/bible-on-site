@@ -21,6 +21,8 @@ internal static class DeviceSessionDeath
         "econnrefused",
         "connection refused",
         "to webdriveragent",
+        "device offline",
+        "no devices/emulators",
     ];
 
     public static bool Matches(Exception exception) =>

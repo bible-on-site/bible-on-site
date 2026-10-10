@@ -53,19 +53,23 @@ public abstract class MobileDeviceTest : IAsyncLifetime
             // other startup failure — and a second death — fails below.
             Output.WriteLine($"{Configuration.Platform}: the session died during startup " +
                 $"({exception.Message}); creating it once more.");
+            if (DeviceTransportRecovery.TryReconnect(exception))
+            {
+                Output.WriteLine($"{Configuration.Platform}: adb transport recovered before the retry.");
+            }
         }
-        catch
+        catch (Exception exception)
         {
-            SaveDiagnostics($"SessionStartup-{Guid.NewGuid():N}", "failed");
+            SaveDiagnostics($"SessionStartup-{Guid.NewGuid():N}", "failed", exception);
             throw;
         }
         try
         {
             Connect();
         }
-        catch
+        catch (Exception exception)
         {
-            SaveDiagnostics($"SessionStartup-{Guid.NewGuid():N}", "failed");
+            SaveDiagnostics($"SessionStartup-{Guid.NewGuid():N}", "failed", exception);
             throw;
         }
         return default;
@@ -109,6 +113,10 @@ public abstract class MobileDeviceTest : IAsyncLifetime
         {
             Output.WriteLine($"{Configuration.Platform}: the device dropped the session mid-scenario " +
                 $"({exception.Message}); rebuilding it once.");
+            if (DeviceTransportRecovery.TryReconnect(exception))
+            {
+                Output.WriteLine($"{Configuration.Platform}: adb transport recovered before the rebuild.");
+            }
         }
         Connect();
         Run(run, name);
@@ -159,14 +167,18 @@ public abstract class MobileDeviceTest : IAsyncLifetime
     // session management.
     protected virtual AppiumOptions CreateOptions() => Platform.CreateOptions(Configuration);
 
-    protected void SaveDiagnostics(string name, string outcome)
+    protected void SaveDiagnostics(string name, string outcome, Exception? error = null)
     {
         var prefix = Path.Join(Configuration.ArtifactDirectory, $"{name}-{outcome}");
         Directory.CreateDirectory(Configuration.ArtifactDirectory);
         if (Driver == null)
         {
-            // A session-creation failure leaves no device state to capture.
-            File.WriteAllText(prefix + "-diagnostics-error.txt", "The session was never created.");
+            // A session-creation failure leaves no device state to capture; keep
+            // the startup exception and the adb device listing for forensics.
+            var details = error is null
+                ? "The session was never created."
+                : $"The session was never created.\n{error}{DeviceTransportRecovery.DeviceListing()}";
+            File.WriteAllText(prefix + "-diagnostics-error.txt", details);
         }
         else
         {
