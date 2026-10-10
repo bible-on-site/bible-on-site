@@ -24,11 +24,11 @@ public class SearchIndexServiceTests
         var notes = PerushimNotesService.CreateForTesting(delivery.Object, storage.Root);
         await using var index = new SearchIndexService(perakim, notes, Path.Combine(storage.Root, "search.sqlite"));
         var ordering = new SearchOrdering(SearchSort.Generation, new Dictionary<int, int> { [7] = 1800, [8] = 1040 });
-        var hits = await index.SearchAsync("בראשית", new HashSet<SearchFilter> { SearchFilter.Perush }, new HashSet<int> { 1 }, 1, default, null, ordering);
+        var hits = await index.SearchAsync("בראשית", new HashSet<SearchFilter> { SearchFilter.Perush }, new HashSet<int> { 1 }, 1, TestContext.Current.CancellationToken, null, ordering);
         hits.Should().ContainSingle().Which.PerushId.Should().Be(8);
-        hits = await index.SearchAsync("בראשית", new HashSet<SearchFilter> { SearchFilter.Perush }, new HashSet<int> { 1 }, 10, default, null, ordering);
+        hits = await index.SearchAsync("בראשית", new HashSet<SearchFilter> { SearchFilter.Perush }, new HashSet<int> { 1 }, 10, TestContext.Current.CancellationToken, null, ordering);
         hits.Select(hit => hit.PerushId).Should().Equal(8, 7, 9);
-        (await index.SearchAsync("ברא", new HashSet<SearchFilter> { SearchFilter.Pasuk }, new HashSet<int> { 1, 2 }, 1, default, null, ordering))
+        (await index.SearchAsync("ברא", new HashSet<SearchFilter> { SearchFilter.Pasuk }, new HashSet<int> { 1, 2 }, 1, TestContext.Current.CancellationToken, null, ordering))
             .Should().ContainSingle().Which.PerekId.Should().Be(1);
     }
 
@@ -58,7 +58,7 @@ public class SearchIndexServiceTests
         await using var index = new SearchIndexService(perakim, notes, Path.Combine(storage.Root, "search.sqlite"));
 
         var hits = await index.SearchAsync("אחרון", new HashSet<SearchFilter> { SearchFilter.Perush },
-            new HashSet<int> { 1 }, 10, default);
+            new HashSet<int> { 1 }, 10, TestContext.Current.CancellationToken);
 
         hits.Should().ContainSingle().Which.Text.Should().Be("אחרון");
     }
@@ -71,13 +71,13 @@ public class SearchIndexServiceTests
         await using var index = new SearchIndexService(perakim, null, Path.Combine(storage.Root, "search.sqlite"));
         var filters = new HashSet<SearchFilter> { SearchFilter.Pasuk };
         var books = new HashSet<int> { 1, 2 };
-        var hits = await index.SearchAsync("ברא אלהים", filters, books, 10, default);
+        var hits = await index.SearchAsync("ברא אלהים", filters, books, 10, TestContext.Current.CancellationToken);
         hits.Should().HaveCount(3);
         hits.Should().Contain(hit => hit.PerekId == 1 && hit.Text.Contains("בָּרָ֣א"));
-        (await index.SearchAsync("ברא אלהים", filters, new HashSet<int> { 2 }, 1, default)).Should().ContainSingle().Which.PerekId.Should().Be(3);
-        (await index.SearchAsync("ברא ירח", filters, books, 10, default)).Should().BeEmpty();
-        (await index.SearchAsync("ברא", filters, new HashSet<int>(), 10, default)).Should().BeEmpty();
-        (await index.SearchAsync("\" OR * -", filters, books, 10, default)).Should().BeEmpty();
+        (await index.SearchAsync("ברא אלהים", filters, new HashSet<int> { 2 }, 1, TestContext.Current.CancellationToken)).Should().ContainSingle().Which.PerekId.Should().Be(3);
+        (await index.SearchAsync("ברא ירח", filters, books, 10, TestContext.Current.CancellationToken)).Should().BeEmpty();
+        (await index.SearchAsync("ברא", filters, new HashSet<int>(), 10, TestContext.Current.CancellationToken)).Should().BeEmpty();
+        (await index.SearchAsync("\" OR * -", filters, books, 10, TestContext.Current.CancellationToken)).Should().BeEmpty();
     }
 
     [Theory]
@@ -105,13 +105,13 @@ public class SearchIndexServiceTests
             SQLitePCL.raw.sqlite3_db_config(connection.Handle, SQLitePCL.raw.SQLITE_DBCONFIG_DEFENSIVE, 1, out _)
                 .Should().Be(SQLitePCL.raw.SQLITE_OK));
         await using var index = new SearchIndexService(perakim, null, path);
-        var hits = await index.SearchAsync("בראשית", new HashSet<SearchFilter> { SearchFilter.Pasuk }, new HashSet<int> { 1 }, 10, default);
+        var hits = await index.SearchAsync("בראשית", new HashSet<SearchFilter> { SearchFilter.Pasuk }, new HashSet<int> { 1 }, 10, TestContext.Current.CancellationToken);
         hits.Should().ContainSingle().Which.Text.Should().Contain("בְּרֵאשִׁ֖ית");
         (await legacy.ExecuteScalarAsync<string>("SELECT Text FROM verses_documents WHERE PerekId = 1"))
             .Should().Contain("בְּרֵאשִׁ֖ית");
         (await legacy.ExecuteScalarAsync<string>("SELECT fingerprint FROM search_metadata WHERE name = 'verses'"))
             .Should().StartWith("v3:");
-        (await index.SearchAsync("ישן", new HashSet<SearchFilter> { SearchFilter.Pasuk }, new HashSet<int> { 1 }, 10, default))
+        (await index.SearchAsync("ישן", new HashSet<SearchFilter> { SearchFilter.Pasuk }, new HashSet<int> { 1 }, 10, TestContext.Current.CancellationToken))
             .Should().BeEmpty("a migrated cache cannot retain stale search results");
     }
 
@@ -135,7 +135,7 @@ public class SearchIndexServiceTests
         var notes = PerushimNotesService.CreateForTesting(delivery.Object, storage.Root);
         await using var index = new SearchIndexService(perakim, notes, Path.Combine(storage.Root, "search.sqlite"));
         var hits = await index.SearchAsync("בראשית ברא אלהים",
-            new HashSet<SearchFilter> { SearchFilter.Pasuk, SearchFilter.Perush }, new HashSet<int> { 1 }, 10, default);
+            new HashSet<SearchFilter> { SearchFilter.Pasuk, SearchFilter.Perush }, new HashSet<int> { 1 }, 10, TestContext.Current.CancellationToken);
         hits.Should().HaveCount(2);
         hits.Should().Contain(hit => hit.Type == SearchFilter.Pasuk && hit.PerekId == 1);
         hits.Should().Contain(hit => hit.Type == SearchFilter.Perush && hit.PerushId == 7);
@@ -151,13 +151,13 @@ public class SearchIndexServiceTests
         var books = new HashSet<int> { 1 };
         await using (var index = new SearchIndexService(perakim, null, path))
         {
-            var hits = await index.SearchAsync("בראשיט", filters, books, 10, default);
+            var hits = await index.SearchAsync("בראשיט", filters, books, 10, TestContext.Current.CancellationToken);
             hits.Should().ContainSingle().Which.PerekId.Should().Be(1);
         }
         await using var reopened = new SearchIndexService(perakim, null, path);
-        (await reopened.SearchAsync("בראשית", filters, books, 10, default)).Should().ContainSingle();
+        (await reopened.SearchAsync("בראשית", filters, books, 10, TestContext.Current.CancellationToken)).Should().ContainSingle();
         var unchanged = new FileInfo(path).LastWriteTimeUtc;
-        await reopened.SearchAsync("אלהים", filters, books, 10, default);
+        await reopened.SearchAsync("אלהים", filters, books, 10, TestContext.Current.CancellationToken);
         new FileInfo(path).LastWriteTimeUtc.Should().Be(unchanged);
     }
 
@@ -173,7 +173,7 @@ public class SearchIndexServiceTests
         delivery.Setup(service => service.TryGetAssetPathAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync((string?)null);
         var notes = PerushimNotesService.CreateForTesting(delivery.Object, storage.Root);
         await using var index = new SearchIndexService(perakim, notes, Path.Combine(storage.Root, "search.sqlite"));
-        var hits = await index.SearchAsync("בריאת העולם", new HashSet<SearchFilter> { SearchFilter.Perush }, new HashSet<int> { 1 }, 10, default);
+        var hits = await index.SearchAsync("בריאת העולם", new HashSet<SearchFilter> { SearchFilter.Perush }, new HashSet<int> { 1 }, 10, TestContext.Current.CancellationToken);
         index.CommentaryAvailable.Should().BeTrue();
         hits.Should().ContainSingle();
         hits[0].PerushId.Should().Be(7);
@@ -183,7 +183,7 @@ public class SearchIndexServiceTests
         (await notesDb.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM note")).Should().Be(2, "search must not alter source content");
         var vm = new SearchViewModel(perakim, index) { SearchPhrase = "בריאת העולם" };
         vm.SetPerushim([new Perush { Id = 7, Name = "רש\"י" }]);
-        await vm.SearchAsync();
+        await vm.SearchAsync(TestContext.Current.CancellationToken);
         vm.SearchResults.OfType<PerushSearchResult>().Should().Contain(result => result.Title == "רש\"י - בראשית א א");
     }
 
@@ -195,13 +195,13 @@ public class SearchIndexServiceTests
         await using var index = new SearchIndexService(perakim, null, Path.Combine(storage.Root, "search.sqlite"));
         var vm = new SearchViewModel(perakim, index) { SearchPhrase = "בראשית", ResultsLimit = 2 };
         vm.SetAuthors([new Author { Id = 1, Name = "הרב בראשית", Details = "<i>תיאור</i>" }]);
-        await vm.SearchAsync();
+        await vm.SearchAsync(TestContext.Current.CancellationToken);
         vm.SearchResults.Should().HaveCount(2);
         vm.SearchResults.First().Should().BeOfType<AuthorSearchResult>();
         vm.AvailabilityMessage.Should().Contain("בהגדרות");
         vm.SearchResults.Should().OnlyContain(result => !string.IsNullOrEmpty(result.Title));
         vm.SearchPhrase = "   ";
-        await vm.SearchAsync();
+        await vm.SearchAsync(TestContext.Current.CancellationToken);
         vm.SearchResults.Should().BeEmpty();
         vm.IsLoading.Should().BeFalse();
         vm.AvailabilityMessage.Should().BeEmpty();
@@ -215,9 +215,9 @@ public class SearchIndexServiceTests
         await using var index = new SearchIndexService(perakim, null, Path.Combine(storage.Root, "search.sqlite"));
         var vm = new SearchViewModel(perakim, index) { SearchPhrase = "בראשית" };
         vm.SetFilterEnabled(SearchFilter.Perush, false);
-        var previous = vm.SearchAsync();
+        var previous = vm.SearchAsync(TestContext.Current.CancellationToken);
         vm.SearchPhrase = "שמות 1";
-        await vm.SearchAsync();
+        await vm.SearchAsync(TestContext.Current.CancellationToken);
         await previous;
         vm.SearchResults.Should().ContainSingle().Which.Title.Should().Be("שמות א");
         vm.IsLoading.Should().BeFalse();
@@ -271,7 +271,7 @@ public class SearchIndexServiceTests
         await using var storage = new TestStorage();
         var perakim = await SeedAsync(storage);
         await using var index = new SearchIndexService(perakim, null, Path.Combine(storage.Root, "search.sqlite"));
-        var hits = await index.SearchAsync("ברא", new HashSet<SearchFilter> { SearchFilter.Pasuk }, new HashSet<int> { 1 }, 1, default);
+        var hits = await index.SearchAsync("ברא", new HashSet<SearchFilter> { SearchFilter.Pasuk }, new HashSet<int> { 1 }, 1, TestContext.Current.CancellationToken);
         hits.Should().ContainSingle();
         SearchText.Tokens(hits[0].Text).Should().Contain("ברא");
     }
@@ -290,12 +290,12 @@ public class SearchIndexServiceTests
         await using var index = new SearchIndexService(perakim, notes, Path.Combine(storage.Root, "search.sqlite"));
         var books = new HashSet<int> { 1 };
         var verses = new HashSet<SearchFilter> { SearchFilter.Pasuk };
-        await index.SearchAsync("בראשית", verses, books, 10, default);
-        var commentary = index.SearchAsync("בראשית", new HashSet<SearchFilter> { SearchFilter.Perush }, books, 10, default);
+        await index.SearchAsync("בראשית", verses, books, 10, TestContext.Current.CancellationToken);
+        var commentary = index.SearchAsync("בראשית", new HashSet<SearchFilter> { SearchFilter.Perush }, books, 10, TestContext.Current.CancellationToken);
         try
         {
-            await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
-            (await index.SearchAsync("בראשית", verses, books, 10, default).WaitAsync(TimeSpan.FromSeconds(5)))
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+            (await index.SearchAsync("בראשית", verses, books, 10, TestContext.Current.CancellationToken).WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken))
                 .Should().ContainSingle().Which.PerekId.Should().Be(1);
         }
         finally
@@ -321,7 +321,7 @@ public class SearchIndexServiceTests
         vm.SetFilterEnabled(SearchFilter.Author, false);
         vm.SetFilterEnabled(SearchFilter.Pasuk, false);
         vm.SetFilterEnabled(SearchFilter.Perek, false);
-        await vm.SearchAsync();
+        await vm.SearchAsync(TestContext.Current.CancellationToken);
         vm.SearchResults.Should().ContainSingle().Which.Should().BeOfType<PerushSearchResult>()
             .Which.PerushId.Should().Be("8");
     }

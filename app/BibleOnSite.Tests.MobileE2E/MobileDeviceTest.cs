@@ -4,7 +4,6 @@ using BibleOnSite.Tests.MobileE2E.Platforms;
 using OpenQA.Selenium;
 using OpenQA.Selenium.Appium;
 using Xunit;
-using Xunit.Abstractions;
 
 namespace BibleOnSite.Tests.MobileE2E;
 
@@ -39,13 +38,15 @@ public abstract class MobileDeviceTest : IAsyncLifetime
     protected MobilePlatformAdapter Platform { get; private set; } = null!;
     protected PerekPage Page { get; private set; } = null!;
 
-    public virtual Task InitializeAsync()
+    public virtual ValueTask InitializeAsync()
     {
+        Assert.SkipWhen(E2eSelection.IsExcluded(TestContext.Current),
+            "not selected by the e2e-impact manifest");
         Platform = MobilePlatformAdapter.For(Configuration.Platform);
         try
         {
             Connect();
-            return Task.CompletedTask;
+            return ValueTask.CompletedTask;
         }
         catch (WebDriverException exception) when (DeviceSessionDeath.Matches(exception))
         {
@@ -69,10 +70,10 @@ public abstract class MobileDeviceTest : IAsyncLifetime
             SaveDiagnostics($"SessionStartup-{Guid.NewGuid():N}", "failed");
             throw;
         }
-        return Task.CompletedTask;
+        return default;
     }
 
-    public virtual Task DisposeAsync()
+    public virtual ValueTask DisposeAsync()
     {
         try
         {
@@ -96,7 +97,7 @@ public abstract class MobileDeviceTest : IAsyncLifetime
                 // still run the failed session's shutdown against the device.
                 : $"{Configuration.Platform}: session cleanup failed; device reuse blocked: {exception.Message}");
         }
-        return Task.CompletedTask;
+        return default;
     }
 
     protected void Scenario(Action run, [System.Runtime.CompilerServices.CallerMemberName] string name = "")
