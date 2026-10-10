@@ -73,6 +73,39 @@
   transition: right 0.25s ease-in-out;
 }
 
+.searchBtn {
+  position: absolute;
+  top: 1.25rem;
+  right: 3.75rem;
+  width: 2rem;
+  height: 2rem;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  transition: opacity 0.15s linear;
+}
+
+.searchBtn img {
+  filter: invert(1);
+}
+
+.open .searchBtn {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.searchBtn:hover {
+  opacity: 0.7;
+}
+
+.searchBtn:focus-visible {
+  outline: 2px solid white;
+  outline-offset: 0.375rem;
+  border-radius: 0.25rem;
+}
+
 .menuBtn:hover {
   opacity: 0.7;
 }

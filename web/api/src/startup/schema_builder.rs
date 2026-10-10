@@ -14,6 +14,7 @@ use crate::resolvers::sefarim_resolver;
 use crate::resolvers::starter_resolver;
 use crate::resolvers::tanahpedia_family_resolver;
 use crate::resolvers::tanahpedia_revisions_resolver;
+use crate::services::article_search::ArticleSearchIndex;
 
 #[derive(MergedObject, Default)]
 pub struct QueryRoot(
@@ -32,13 +33,17 @@ pub struct MutationRoot(
     tanahpedia_revisions_resolver::TanahpediaRevisionsMutation,
 );
 
-pub fn build_schema(database: &Database) -> Schema<QueryRoot, MutationRoot, EmptySubscription> {
+pub fn build_schema(
+    database: &Database,
+    index: &ArticleSearchIndex,
+) -> Schema<QueryRoot, MutationRoot, EmptySubscription> {
     Schema::build(
         QueryRoot::default(),
         MutationRoot::default(),
         EmptySubscription,
     )
     .data(database.to_owned())
+    .data(index.to_owned())
     .finish()
 }
 
@@ -72,7 +77,7 @@ pub async fn graphql_playground() -> Result<HttpResponse> {
 mod tests {
     use super::*;
     use async_graphql::Request;
-    use sea_orm::{DatabaseBackend, MockDatabase, MockExecResult, Value};
+    use sea_orm::{DatabaseBackend, DbErr, MockDatabase, MockExecResult, Value};
     use std::collections::BTreeMap;
 
     fn article_model(id: i32, perek_id: i16, author_id: i16) -> entities::article::Model {
@@ -156,7 +161,7 @@ mod tests {
                 )
                 .into_connection(),
         );
-        let schema = build_schema(&db);
+        let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
 
         let by_id = schema
             .execute(Request::new(
@@ -180,6 +185,71 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn schema_executes_article_search_on_empty_index() {
+        // No persisted state row → the snapshot stays empty and the query
+        // resolves to an empty page rather than erroring.
+        let db =
+            Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());
+        let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
+
+        let response = schema
+            .execute(Request::new(
+                "{ searchArticles(phrase: \"בראשית\") { total hits { articleId name score excerpt } } }",
+            ))
+            .await;
+        assert!(response.errors.is_empty(), "{:?}", response.errors);
+        let json = response.data.into_json().unwrap();
+        assert_eq!(json["searchArticles"]["total"], 0);
+        assert_eq!(json["searchArticles"]["hits"].as_array().unwrap().len(), 0);
+    }
+
+    #[tokio::test]
+    async fn schema_article_search_serves_warm_snapshot_when_probe_fails() {
+        // A failing state probe must not fail the query — the warm (here
+        // empty) snapshot is served instead.
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_errors([DbErr::Custom("probe down".to_string())])
+                .into_connection(),
+        );
+        let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
+
+        let response = schema
+            .execute(Request::new(
+                "{ searchArticles(phrase: \"בראשית\") { total } }",
+            ))
+            .await;
+        assert!(response.errors.is_empty(), "{:?}", response.errors);
+        assert_eq!(
+            response.data.into_json().unwrap()["searchArticles"]["total"],
+            0
+        );
+    }
+
+    #[tokio::test]
+    async fn schema_article_search_rejects_invalid_arguments() {
+        let db =
+            Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());
+        let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
+
+        for query in [
+            "{ searchArticles(phrase: \"x\", limit: 0) { total } }",
+            "{ searchArticles(phrase: \"x\", limit: 51) { total } }",
+            "{ searchArticles(phrase: \"x\", offset: -1) { total } }",
+            "{ searchArticles(phrase: \"x\", offset: 1001) { total } }",
+        ] {
+            let response = schema.execute(Request::new(query)).await;
+            assert!(!response.errors.is_empty(), "{query} should fail");
+        }
+        let long_phrase = format!(
+            "{{ searchArticles(phrase: \"{}\") {{ total }} }}",
+            "א".repeat(257)
+        );
+        let response = schema.execute(Request::new(long_phrase)).await;
+        assert!(!response.errors.is_empty());
+    }
+
+    #[tokio::test]
     async fn schema_executes_perek_resolver_queries() {
         let db = Database::from_connection(
             MockDatabase::new(DatabaseBackend::MySql)
@@ -191,7 +261,7 @@ mod tests {
                 ])
                 .into_connection(),
         );
-        let schema = build_schema(&db);
+        let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
 
         let one = schema
             .execute(Request::new(
@@ -240,7 +310,7 @@ mod tests {
                 ])
                 .into_connection(),
         );
-        let schema = build_schema(&db);
+        let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
 
         let response = schema
             .execute(Request::new(
@@ -275,7 +345,7 @@ mod tests {
                 >([vec![revision_model("rev-1", Some("entry-1"))]])
                 .into_connection(),
         );
-        let schema = build_schema(&db);
+        let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
 
         let response = schema
             .execute(Request::new(
@@ -297,7 +367,7 @@ mod tests {
     async fn schema_executes_all_tanahpedia_family_resolvers() {
         let db =
             Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());
-        let schema = build_schema(&db);
+        let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
 
         let response = schema
             .execute(
@@ -333,7 +403,7 @@ mod tests {
     async fn schema_rejects_revision_mutations_without_api_auth() {
         let db =
             Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());
-        let schema = build_schema(&db);
+        let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
 
         let submit = schema
             .execute(
@@ -358,7 +428,7 @@ mod tests {
     async fn schema_rejects_family_mutations_without_api_auth() {
         let db =
             Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());
-        let schema = build_schema(&db);
+        let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
         let operations = [
             r#"mutation { putTanahpediaEntryEntityLink(input: { id: "ee", entryUniqueName: "entry", entityId: "e" }) { id } }"#,
             r#"mutation { deleteTanahpediaEntryEntityLink(id: "ee") { id } }"#,
@@ -412,7 +482,7 @@ mod tests {
                 }])
                 .into_connection(),
         );
-        let response = build_schema(&db)
+        let response = build_schema(&db, &ArticleSearchIndex::new(db.clone()))
             .execute(
                 Request::new(
                     r#"mutation { putTanahpediaEntryEntityLink(input: { id: "entry-entity-1", entryUniqueName: "שמשון", entityId: "entity-1" }) { id entryId entityId } }"#,
@@ -450,7 +520,7 @@ mod tests {
                 ])
                 .into_connection(),
         );
-        let schema = build_schema(&db);
+        let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
         let response = schema
             .execute(
                 Request::new(
@@ -536,7 +606,7 @@ mod tests {
                 ])
                 .into_connection(),
         );
-        let schema = build_schema(&db);
+        let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
         let auth = || {
             crate::common::auth::ApiAuth::with_revision_api_key(
                 Some("family-test-key".to_string()),
@@ -633,7 +703,7 @@ mod tests {
                 .append_exec_results([exec_result.clone(), exec_result.clone(), exec_result])
                 .into_connection(),
         );
-        let schema = build_schema(&db);
+        let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
         let auth = || {
             crate::common::auth::ApiAuth::with_revision_api_key(
                 Some("family-test-key".to_string()),

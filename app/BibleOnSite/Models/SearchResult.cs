@@ -82,6 +82,32 @@ public class PasukSearchResult : SearchResult
 }
 
 /// <summary>
+/// Search result for a remote semantic article-content match.
+/// Title carries the article name; SubtitleHtml the API's safe excerpt;
+/// Source the formatted perek label (e.g. "בראשית א").
+/// </summary>
+public class ArticleSearchResult : SearchResult
+{
+    public int ArticleId { get; }
+    public int PerekId { get; }
+    public string AuthorName { get; }
+    public string Source { get; }
+    public string Excerpt { get; }
+
+    public override SearchFilter ResultType => SearchFilter.Articles;
+
+    public ArticleSearchResult(int articleId, int perekId, string authorName, string source, string excerpt, string searchPhrase)
+    {
+        ArticleId = articleId;
+        PerekId = perekId;
+        AuthorName = authorName;
+        Source = source;
+        Excerpt = excerpt;
+        SearchPhrase = searchPhrase;
+    }
+}
+
+/// <summary>
 /// Search result for a perush/commentary match.
 /// </summary>
 public class PerushSearchResult : SearchResult

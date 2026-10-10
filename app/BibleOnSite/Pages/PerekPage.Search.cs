@@ -241,6 +241,10 @@ public partial class PerekPage
             {
                 await Shell.Current.GoToAsync($"ArticlesPage?authorId={author.Author.Id}&authorName={Uri.EscapeDataString(author.Author.Name)}");
             }
+            else if (result is ArticleSearchResult article)
+            {
+                await Shell.Current.GoToAsync($"articleDetail?articleId={article.ArticleId}&perekId={article.PerekId}");
+            }
             else if (GetSearchPerekId(result) > 0)
             {
                 await Shell.Current.GoToAsync(AppRoutes.SearchReader, false, new ShellNavigationQueryParameters

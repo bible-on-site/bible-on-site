@@ -2,7 +2,7 @@
 
 ## Overview
 
-The App module (`app/`) uses Coverlet for .NET coverage instrumentation. Coverage is collected during unit and integration test runs using the `XPlat Code Coverage` data collector, then converted to LCOV format using ReportGenerator.
+The App module (`app/`) uses Coverlet for .NET coverage instrumentation. Coverage is collected during unit and integration test runs by the `coverlet.console` dotnet tool, which instruments the test assembly on disk before spawning the xunit.v3 Microsoft Testing Platform runner, then converted to LCOV format using ReportGenerator.
 
 The test project defines `MAUI`, just as the app does, so chapter loading,
 carousel preloading, commentary selection, search, navigation commands, and
@@ -32,13 +32,13 @@ Each coverage target runs tests and generates LCOV internally:
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │                      Coverlet Instrumentation                       │
-│              (coverlet.collector NuGet package)                     │
+│            (coverlet.console dotnet tool, out-of-proc)              │
 └─────────────────────────────────────────────────────────────────────┘
                               │
                               ▼
               ┌───────────────────────────────────────┐
-              │   dotnet test --collect:"XPlat       │
-              │       Code Coverage"                  │
+              │   dotnet tool run coverlet <dll>      │
+              │   --target dotnet (xunit.v3 MTP app)  │
               └───────────────────────────────────────┘
                               │
                               ▼
@@ -88,43 +88,38 @@ CoverageAll         → Runs Unit + Integration, then triggers Merge
 
 ## Configuration
 
-### RunSettings File ([coverlet.runsettings](../../../../app/coverlet.runsettings))
+### Coverlet Arguments ([Build.Coverage.cs](../../../../app/devops/Build.Coverage.cs))
 
-Coverage collection is configured via a runsettings file:
+The test projects run on the native Microsoft Testing Platform, so there is no VSTest data collector or runsettings file. `RunTestsWithCoverage` passes the same rules as coverlet.console command-line options:
 
-```xml
-<RunSettings>
-  <DataCollectionRunSettings>
-    <DataCollectors>
-      <DataCollector friendlyName="XPlat Code Coverage">
-        <Configuration>
-          <Format>cobertura</Format>
-          <ExcludeByFile>**/obj/**,**/bin/**,**/.nuget/**</ExcludeByFile>
-          <Include>[BibleOnSite.Tests]*</Include>
-          <Exclude>[xunit.*]*,[FluentAssertions]*,[Moq]*,[coverlet.*]*,[Microsoft.*]*</Exclude>
-          <ExcludeByAttribute>Obsolete,GeneratedCodeAttribute,CompilerGeneratedAttribute,ExcludeFromCodeCoverageAttribute</ExcludeByAttribute>
-          <IncludeTestAssembly>true</IncludeTestAssembly>
-          <SkipAutoProps>true</SkipAutoProps>
-        </Configuration>
-      </DataCollector>
-    </DataCollectors>
-  </DataCollectionRunSettings>
-</RunSettings>
+```text
+coverlet <test-bin-dir> --target dotnet
+  --targetargs "<test-dll> <trait-filter> --results-directory <dir>
+                --report-xunit-junit --report-xunit-junit-filename test-results.xml"
+  --output <dir>/coverage.cobertura.xml --format cobertura
+  --include "[BibleOnSite.Tests]*"
+  --exclude "[xunit.*]*,[FluentAssertions]*,[Moq]*,[coverlet.*]*,[Microsoft.*]*"
+  --exclude-by-attribute "Obsolete,GeneratedCodeAttribute,CompilerGeneratedAttribute,ExcludeFromCodeCoverageAttribute"
+  --exclude-by-file "**/obj/**,**/bin/**,**/.nuget/**"
+  --include-test-assembly --skipautoprops
 ```
 
 Key configuration:
 - **Include**: Coverage is collected on `BibleOnSite.Tests` assembly (which includes linked source files from BibleOnSite)
-- **IncludeTestAssembly**: Set to `true` because source files are linked into the test project
+- **IncludeTestAssembly**: Set to `true` because source files are linked into the test project. This works with coverlet.console because it instruments the assembly before spawning the runner; the in-process `coverlet.MTP` extension cannot instrument an assembly that is itself the test controller (coverlet#1911)
 - **Exclude**: Skip test frameworks and third-party libraries
 - **ExcludeByFile**: Skip build artifacts and NuGet cache
 - **ExcludeByAttribute**: Skip generated code and explicitly excluded code
 - **SkipAutoProps**: Don't count auto-properties in coverage
+
+The trait filter selects the suite (`--filter-not-trait Category=Integration` for unit, `--filter-trait Category=Integration` for integration), and xUnit's built-in `--report-xunit-junit` writes the JUnit report consumed by CI.
 
 ### dotnet Tools ([.config/dotnet-tools.json](../../../../app/.config/dotnet-tools.json))
 
 The following tools are used for coverage:
 
 - `nuke.globaltool` - Build automation
+- `coverlet.console` - Coverage instrumentation and Cobertura collection
 - `dotnet-reportgenerator-globaltool` - Coverage report generation and merging
 
 ## Running Coverage Locally

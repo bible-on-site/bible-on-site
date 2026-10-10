@@ -5,6 +5,7 @@ using BibleOnSite.Helpers;
 using BibleOnSite.Models;
 using BibleOnSite.Services;
 using BibleOnSite.ViewModels;
+using Microsoft.Maui.Layouts;
 #if IOS
 using Microsoft.Maui.Controls.PlatformConfiguration.iOSSpecific;
 #endif
@@ -80,6 +81,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable
         ForwardSelectedArticleIdChanged();
         SetupFontSizeResources();
         SetupCarouselNavigation();
+        SetupCircularMenuLayout();
         SetupExitButtonDragHandler();
         SubscribeAppLinks();
         Console.WriteLine("[Startup] PerekPage constructed");
@@ -97,6 +99,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable
         ForwardSelectedArticleIdChanged();
         SetupFontSizeResources();
         SetupCarouselNavigation();
+        SetupCircularMenuLayout();
         SetupExitButtonDragHandler();
         SubscribeAppLinks();
     }
@@ -827,6 +830,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable
 
         if (bottom <= 0)
         {
+            LayoutCircularMenu();
             return;
         }
 
@@ -908,6 +912,9 @@ public partial class PerekPage : ContentPage, IQueryAttributable
                 break;
             }
         }
+
+        // Padding changes the arrange area without firing SizeChanged.
+        LayoutCircularMenu();
     }
 #else
     private void OnDebugToggleTapped(object? sender, TappedEventArgs e) { }
@@ -1260,6 +1267,46 @@ public partial class PerekPage : ContentPage, IQueryAttributable
     }
 
     #region Circular Menu Methods
+
+    /// <summary>
+    /// Recomputes the floating menu's button positions whenever the container's
+    /// arrange area changes: device rotation, window resize, and (on iOS) the
+    /// safe-area padding applied by ApplyBottomBarSafeArea.
+    /// </summary>
+    private void SetupCircularMenuLayout()
+    {
+        FloatingMenuContainer.SizeChanged += (_, _) => LayoutCircularMenu();
+    }
+
+    /// <summary>
+    /// Positions the toggle and the four satellite buttons on the elliptical
+    /// fan computed by <see cref="FanMenuGeometry"/>. The container's padding is
+    /// the system safe-area inset, so positions are computed in the remaining
+    /// usable canvas and stay inside the safe area automatically.
+    /// </summary>
+    private void LayoutCircularMenu()
+    {
+        var width = FloatingMenuContainer.Width - FloatingMenuContainer.Padding.HorizontalThickness;
+        var height = FloatingMenuContainer.Height - FloatingMenuContainer.Padding.VerticalThickness;
+        if (width <= 0 || height <= 0)
+        {
+            return;
+        }
+
+        var satellites = new[] { PrevPerekButton, TodayButton, PerekPickerButton, NextPerekButton };
+        var layout = FanMenuGeometry.Compute(width, height, satellites.Length);
+        ApplyMenuBounds(CircularMenuButton, layout.Toggle);
+        for (var i = 0; i < satellites.Length && i < layout.Items.Count; i++)
+        {
+            ApplyMenuBounds(satellites[i], layout.Items[i]);
+        }
+    }
+
+    private static void ApplyMenuBounds(View view, Rect bounds)
+    {
+        AbsoluteLayout.SetLayoutFlags(view, AbsoluteLayoutFlags.None);
+        AbsoluteLayout.SetLayoutBounds(view, bounds);
+    }
 
     private void OnCircularMenuPressed(object? sender, EventArgs e) =>
         Console.WriteLine($"[CircularMenu] Pressed: open={_isMenuOpen}");

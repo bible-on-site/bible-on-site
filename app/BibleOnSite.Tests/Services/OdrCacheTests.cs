@@ -17,15 +17,15 @@ public class OdrCacheTests
         await using var storage = new TestStorage();
         var app = App("5.0.100", "100");
         var previous = PadDeliveryService.OdrCacheDirectory(storage.FileSystem.Object, app.Object, Pack);
-        await File.WriteAllTextAsync(Path.Combine(previous, Notes), "old notes");
+        await File.WriteAllTextAsync(Path.Join(previous, Notes), "old notes", TestContext.Current.CancellationToken);
         app.SetupGet(a => a.VersionString).Returns(version);
         app.SetupGet(a => a.BuildString).Returns(build);
 
         var current = PadDeliveryService.OdrCacheDirectory(storage.FileSystem.Object, app.Object, Pack);
 
         Directory.Exists(current).Should().BeTrue();
-        File.Exists(Path.Combine(current, Notes)).Should().BeFalse();
-        File.Exists(Path.Combine(previous, Notes)).Should().BeTrue();
+        File.Exists(Path.Join(current, Notes)).Should().BeFalse();
+        File.Exists(Path.Join(previous, Notes)).Should().BeTrue();
     }
 
     [Fact]
@@ -34,25 +34,25 @@ public class OdrCacheTests
         await using var storage = new TestStorage();
         var app = App("5.0.104", "104");
         var first = PadDeliveryService.OdrCacheDirectory(storage.FileSystem.Object, app.Object, Pack);
-        await File.WriteAllTextAsync(Path.Combine(first, Notes), "current notes");
+        await File.WriteAllTextAsync(Path.Join(first, Notes), "current notes", TestContext.Current.CancellationToken);
 
         var second = PadDeliveryService.OdrCacheDirectory(storage.FileSystem.Object, app.Object, Pack);
 
-        (await File.ReadAllTextAsync(Path.Combine(second, Notes))).Should().Be("current notes");
+        (await File.ReadAllTextAsync(Path.Join(second, Notes), TestContext.Current.CancellationToken)).Should().Be("current notes");
     }
 
     [Fact]
     public async Task CurrentApp_DoesNotTrustLegacyUnversionedOdrCache()
     {
         await using var storage = new TestStorage();
-        var legacy = Path.Combine(storage.Root, "odr_assets", Pack);
+        var legacy = Path.Join(storage.Root, "odr_assets", Pack);
         Directory.CreateDirectory(legacy);
-        await File.WriteAllTextAsync(Path.Combine(legacy, Notes), "legacy notes");
+        await File.WriteAllTextAsync(Path.Join(legacy, Notes), "legacy notes", TestContext.Current.CancellationToken);
         var app = App("5.0.104", "104");
 
         var current = PadDeliveryService.OdrCacheDirectory(storage.FileSystem.Object, app.Object, Pack);
 
-        File.Exists(Path.Combine(current, Notes)).Should().BeFalse();
+        File.Exists(Path.Join(current, Notes)).Should().BeFalse();
     }
 
     private static Mock<IAppInfo> App(string version, string build)
