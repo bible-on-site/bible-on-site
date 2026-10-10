@@ -22,6 +22,11 @@ const changed = (files: string[], ...keys: ModuleKey[]) =>
 	keys.map((key) => detectChanges(files)[key]);
 
 describe("detectChanges", () => {
+	test("playback derivatives release both website and native book packages", () => {
+		assert.deepEqual(changed(["web/bible-on-site/src/data/recitation/opus-playback.json"], "website", "app"), [
+			{ module_changed: true, ci_changed: false }, { module_changed: true, ci_changed: false },
+		]);
+	});
 	test("benchmark comparison changes check the website without releasing a module", () => {
 		const changes = detectChanges(["devops/github/ci/bencher-comparison.mjs"]);
 		assert.deepEqual(changes.website, { module_changed: false, ci_changed: true });

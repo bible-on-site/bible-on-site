@@ -26,7 +26,7 @@ public sealed class RecitationService
     public IReadOnlyCollection<RecitationTrack> Tracks => _tracks.Values;
     public IReadOnlyList<RecitationBookPack> Books => _books;
     private string DirectoryPath => Path.Combine(_files.AppDataDirectory, "extensions", "recitation");
-    private string AudioPath(RecitationTrack track) => Path.Combine(DirectoryPath, track.AudioSha256 + ".mp3");
+    private string AudioPath(RecitationTrack track) => Path.Combine(DirectoryPath, track.PlaybackFileName);
 
     public RecitationService(IFileSystem files, IPadDeliveryService delivery)
     {
@@ -92,11 +92,11 @@ public sealed class RecitationService
             long completed = 0;
             foreach (var book in books)
             {
-                var tracks = book.PerekIds.Select(id => _tracks[id]).DistinctBy(t => t.AudioSha256).ToList();
+                var tracks = book.PerekIds.Select(id => _tracks[id]).DistinctBy(t => t.PlaybackFileName).ToList();
                 var missing = new List<RecitationTrack>();
                 foreach (var track in tracks)
                 {
-                    if (!await MatchesHashAsync(AudioPath(track), track.AudioSha256, cancellationToken))
+                    if (!await MatchesHashAsync(AudioPath(track), track.PlaybackSha256, cancellationToken))
                     {
                         missing.Add(track);
                     }
@@ -108,6 +108,17 @@ public sealed class RecitationService
                     var downloadProgress = new InlineProgress(value => progress?.Report(
                         (prior + Math.Clamp(value, 0, 1) * book.SizeBytes * 0.9) / total));
                     await InstallBookAsync(book, tracks, missing, downloadProgress, cancellationToken);
+                }
+                foreach (var track in tracks)
+                {
+                    var oldName = track.AudioSha256 + ".mp3";
+                    if (track.Playback != null && !_tracks.Values.Any(t => t.PlaybackFileName == oldName))
+                    {
+                        // Only obsolete app downloads, after verified replacement.
+                        // The archival/pipeline recordings are outside this directory.
+                        try { File.Delete(Path.Combine(DirectoryPath, oldName)); }
+                        catch (IOException) { /* A player can still be releasing the old download. */ }
+                    }
                 }
                 completed += book.SizeBytes;
                 progress?.Report((double)completed / total);
@@ -146,7 +157,7 @@ public sealed class RecitationService
                 throw new InvalidDataException("Recording book package does not match this app release.");
             }
             using var zip = ZipFile.OpenRead(path);
-            var expected = tracks.Select(t => t.AudioSha256 + ".mp3").ToHashSet();
+            var expected = tracks.Select(t => t.PlaybackFileName).ToHashSet();
             if (zip.Entries.Count != expected.Count || !zip.Entries.Select(e => e.FullName).ToHashSet().SetEquals(expected))
             {
                 throw new InvalidDataException("Unexpected or missing recordings in book package.");
@@ -158,9 +169,9 @@ public sealed class RecitationService
                 var temporary = destination + ".download";
                 try
                 {
-                    await using var source = zip.GetEntry(track.AudioSha256 + ".mp3")!.Open();
+                    await using var source = zip.GetEntry(track.PlaybackFileName)!.Open();
                     await using (var file = File.Create(temporary)) await source.CopyToAsync(file, cancellationToken);
-                    if (!await MatchesHashAsync(temporary, track.AudioSha256, cancellationToken))
+                    if (!await MatchesHashAsync(temporary, track.PlaybackSha256, cancellationToken))
                     {
                         throw new InvalidDataException("Recording checksum mismatch.");
                     }
@@ -224,7 +235,7 @@ public sealed class RecitationService
                 }
             }
             var mp3 = AudioPath(track);
-            if (!await MatchesHashAsync(mp3, track.AudioSha256, cancellationToken))
+            if (!await MatchesHashAsync(mp3, track.PlaybackSha256, cancellationToken))
             {
                 throw new InvalidDataException("Download this book's recordings again in preferences.");
             }

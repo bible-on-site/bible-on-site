@@ -20,10 +20,13 @@ globalThis.recitation = (() => {
         status = { state: "loading" };
         const binary = atob(base64);
         const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
-        const decoder = new globalThis.recitationMpeg.MPEGDecoder();
-        decoder.ready.then(() => {
+        const opus = bytes[0] === 79 && bytes[1] === 103 && bytes[2] === 103 && bytes[3] === 83;
+        const decoder = opus ? new globalThis.recitationMpeg.OggOpusDecoder() : new globalThis.recitationMpeg.MPEGDecoder();
+        decoder.ready.then(async () => {
             if (current !== generation) return;
-            const decoded = decoder.decode(bytes);
+            // decodeFile flushes the final Ogg page and applies pre-skip/end trimming.
+            const decoded = opus ? await decoder.decodeFile(bytes) : decoder.decode(bytes);
+            if (current !== generation) return;
             if (decoded.errors.length || !decoded.samplesDecoded) throw new Error("Invalid decoded recording");
             buffer = decoded;
             status = { state: "ready", sampleRate: buffer.sampleRate, frames: buffer.samplesDecoded };

@@ -85,6 +85,9 @@ export function SearchExperience({
 	const urlKey = paramsKey(urlQuery, urlTypes);
 
 	const [input, setInput] = useState(initialQuery);
+	// Prevent keystrokes from being lost before React attaches onChange.
+	const [hydrated, setHydrated] = useState(false);
+	useEffect(() => setHydrated(true), []);
 	const [results, setResults] = useState<SearchResponse | null>(initialResults);
 	const [status, setStatus] = useState<Status>(
 		initialResults ? "success" : initialError ? "error" : "idle",
@@ -345,6 +348,7 @@ export function SearchExperience({
 							ref={inputRef}
 							type="search"
 							name="q"
+							disabled={!hydrated}
 							value={input}
 							onChange={(event) => setInput(event.target.value)}
 							onKeyDown={onInputKeyDown}
@@ -401,10 +405,7 @@ export function SearchExperience({
 
 			<div ref={resultsRef}>
 				{results && totalCount > 0 ? (
-					<SearchResults
-						response={results}
-						onResultKeyDown={onResultKeyDown}
-					/>
+					<SearchResults response={results} onResultKeyDown={onResultKeyDown} />
 				) : results && urlQuery && status !== "loading" ? (
 					<p className={styles.emptyState}>
 						לא נמצאו תוצאות עבור &quot;{urlQuery}&quot;

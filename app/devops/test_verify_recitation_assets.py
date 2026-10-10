@@ -1,4 +1,5 @@
 import hashlib
+from io import BytesIO
 import json
 from pathlib import Path
 import plistlib
@@ -10,12 +11,29 @@ from verify_recitation_assets import verify
 
 
 class ReleaseArtifactTests(unittest.TestCase):
+    @staticmethod
+    def book(opus=False, corrupt=False):
+        content = b"OggS verified playback" if opus else b"original MP3"
+        sha = hashlib.sha256(content).hexdigest()
+        track = {"perekId": 1, "audioSha256": sha}
+        if opus:
+            track["audioSha256"] = "a" * 64
+            track["playback"] = {"format": "ogg-opus", "bitrate": 24000, "sha256": sha,
+                                 "sizeBytes": len(content), "sourceSha256": "a" * 64}
+        payload = BytesIO()
+        with zipfile.ZipFile(payload, "w") as archive:
+            archive.writestr(sha + (".ogg" if opus else ".mp3"), b"corrupt" if corrupt else content)
+        audio = payload.getvalue()
+        catalog = {"package": {"tracks": [track]}, "books": [{"seferId": 1,
+                   "perekIds": [1], "sha256": hashlib.sha256(audio).hexdigest()}]}
+        return audio, catalog
+
     def test_windows_requires_root_catalog_and_exact_packaged_archives(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            audio = b"book archive"
+            audio, metadata = self.book()
             catalog = root / "catalog.json"
-            catalog.write_text(json.dumps({"books": [{"seferId": 1, "sha256": hashlib.sha256(audio).hexdigest()}]}))
+            catalog.write_text(json.dumps(metadata))
             for content in [audio, b"corrupt"]:
                 package = root / "app.msix"
                 with zipfile.ZipFile(package, "w") as archive:
@@ -30,8 +48,7 @@ class ReleaseArtifactTests(unittest.TestCase):
     def test_aab_requires_every_matching_module_and_excludes_base_audio(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            audio = b"book archive"
-            catalog = {"books": [{"seferId": 1, "sha256": hashlib.sha256(audio).hexdigest()}]}
+            audio, catalog = self.book(opus=True)
             path = root / "catalog.json"
             path.write_text(json.dumps(catalog))
             for problem in [None, "missing", "corrupt", "base"]:
@@ -46,6 +63,14 @@ class ReleaseArtifactTests(unittest.TestCase):
                 if problem is None: verify(package, path, "Android")
                 else:
                     with self.assertRaises(ValueError): verify(package, path, "Android")
+
+    def test_matching_outer_hash_cannot_hide_corrupt_audio_or_wrong_source(self):
+        from verify_recitation_assets import verify_book_audio
+        audio, catalog = self.book(opus=True, corrupt=True)
+        with self.assertRaises(ValueError): verify_book_audio(audio, catalog, catalog["books"][0])
+        audio, catalog = self.book(opus=True)
+        catalog["package"]["tracks"][0]["playback"]["sourceSha256"] = "b" * 64
+        with self.assertRaises(ValueError): verify_book_audio(audio, catalog, catalog["books"][0])
 
     def test_ipa_requires_tag_and_referenced_compiled_asset_pack(self):
         with tempfile.TemporaryDirectory() as temporary:

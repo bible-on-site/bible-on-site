@@ -2,6 +2,7 @@
 
 import argparse
 import hashlib
+from io import BytesIO
 import json
 from pathlib import Path
 import plistlib
@@ -32,6 +33,7 @@ def verify_android(archive, catalog, names):
             raise ValueError(f"Missing or mismatched PAD book module: {pack}")
         if f"{pack}/manifest/AndroidManifest.xml" not in names:
             raise ValueError(f"Missing PAD manifest: {pack}")
+        verify_book_audio(archive.read(name), catalog, book)
     if any(n.startswith("base/") and Path(n).name.startswith("recitation_") and n.endswith(".zip") for n in names):
         raise ValueError("On-demand recordings were included in the Android base installation")
 
@@ -67,6 +69,33 @@ def verify_windows(archive, catalog, names):
         entries = [name for name in names if Path(name).name == filename]
         if len(entries) != 1 or hashlib.sha256(archive.read(entries[0])).hexdigest() != book["sha256"]:
             raise ValueError(f"Missing or mismatched Windows book archive: {filename}")
+        verify_book_audio(archive.read(entries[0]), catalog, book)
+
+
+def verify_book_audio(payload, catalog, book):
+    """The signed pack must contain the selected audio, not merely a matching ZIP."""
+    tracks = [track for track in catalog["package"]["tracks"] if track["perekId"] in book["perekIds"]]
+    if {track["perekId"] for track in tracks} != set(book["perekIds"]):
+        raise ValueError("Book references missing catalog recordings")
+    expected = {}
+    for track in tracks:
+        playback = track.get("playback")
+        if playback:
+            if (playback["format"] != "ogg-opus" or playback["bitrate"] != 24000
+                    or playback["sourceSha256"] != track["audioSha256"]):
+                raise ValueError("Playback lost its original source identity")
+            sha, extension = playback["sha256"], ".ogg"
+        else:
+            sha, extension = track["audioSha256"], ".mp3"
+        expected[sha + extension] = (sha, playback)
+    with zipfile.ZipFile(BytesIO(payload)) as audio:
+        if len(audio.namelist()) != len(expected) or set(audio.namelist()) != set(expected):
+            raise ValueError("Unexpected or missing audio in signed book pack")
+        for filename, (sha, playback) in expected.items():
+            content = audio.read(filename)
+            if (hashlib.sha256(content).hexdigest() != sha
+                    or (playback and (len(content) != playback["sizeBytes"] or not content.startswith(b"OggS")))):
+                raise ValueError("Signed book audio checksum or format mismatch")
 
 
 if __name__ == "__main__":

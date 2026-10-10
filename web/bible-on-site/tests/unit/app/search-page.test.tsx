@@ -2,6 +2,7 @@
  * @jest-environment jsdom
  */
 import { render, screen } from "@testing-library/react";
+import { renderToString } from "react-dom/server";
 
 jest.mock("@/lib/search/service", () => ({
 	...jest.requireActual("@/lib/search/service"),
@@ -54,6 +55,12 @@ describe("metadata", () => {
 });
 
 describe("SearchPage", () => {
+	it("enables typing only after hydration attaches its input handler", async () => {
+		const page = await SearchPage({ searchParams: paramsFor({}) });
+		expect(renderToString(page)).toMatch(/<input[^>]*disabled=""/);
+		render(page);
+		expect(screen.getByRole("searchbox", { name: "מונח חיפוש" })).toBeEnabled();
+	});
 	beforeEach(() => {
 		jest.clearAllMocks();
 		mockSearch.mockResolvedValue(RESULTS);
@@ -82,9 +89,7 @@ describe("SearchPage", () => {
 	it("shows the empty state when nothing matches", async () => {
 		mockSearch.mockResolvedValue({ ...RESULTS, results: [], counts: {} });
 		render(await SearchPage({ searchParams: paramsFor({ q: "זזז" }) }));
-		expect(
-			screen.getByText('לא נמצאו תוצאות עבור "זזז"'),
-		).toBeInTheDocument();
+		expect(screen.getByText('לא נמצאו תוצאות עבור "זזז"')).toBeInTheDocument();
 	});
 
 	it("shows the prompt state without a query and does not search", async () => {
@@ -126,10 +131,6 @@ describe("SearchPage", () => {
 		await SearchPage({
 			searchParams: paramsFor({ q: "את", type: "perek,bogus" }),
 		});
-		expect(mockSearch).toHaveBeenCalledWith(
-			"את",
-			["perek"],
-			expect.anything(),
-		);
+		expect(mockSearch).toHaveBeenCalledWith("את", ["perek"], expect.anything());
 	});
 });
