@@ -8,7 +8,7 @@
 use std::path::PathBuf;
 use std::time::Instant;
 
-use actix_web::{web, App, HttpServer};
+use actix_web::{App, HttpServer, web};
 use tracing::info;
 
 mod config;
@@ -28,9 +28,8 @@ async fn main() -> anyhow::Result<()> {
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
 
-    let models_dir = PathBuf::from(
-        std::env::var("MODELS_DIR").unwrap_or_else(|_| "models".to_string()),
-    );
+    let models_dir =
+        PathBuf::from(std::env::var("MODELS_DIR").unwrap_or_else(|_| "models".to_string()));
 
     info!("Loading embedding model...");
     let embedder = Embedder::load(&models_dir.join("embedder"))?;
@@ -52,14 +51,16 @@ async fn main() -> anyhow::Result<()> {
     chunks.extend(articles);
 
     // Optional perek range filter for fast dev iterations (e.g. PEREK_RANGE=51-90 for Shemot)
-    if let Ok(range) = std::env::var("PEREK_RANGE") {
-        if let Some((lo, hi)) = range.split_once('-') {
-            if let (Ok(lo), Ok(hi)) = (lo.parse::<i32>(), hi.parse::<i32>()) {
-                let before = chunks.len();
-                chunks.retain(|c| c.perek_id >= lo && c.perek_id <= hi);
-                info!("PEREK_RANGE={range}: filtered {before} → {} chunks", chunks.len());
-            }
-        }
+    if let Ok(range) = std::env::var("PEREK_RANGE")
+        && let Some((lo, hi)) = range.split_once('-')
+        && let (Ok(lo), Ok(hi)) = (lo.parse::<i32>(), hi.parse::<i32>())
+    {
+        let before = chunks.len();
+        chunks.retain(|c| c.perek_id >= lo && c.perek_id <= hi);
+        info!(
+            "PEREK_RANGE={range}: filtered {before} → {} chunks",
+            chunks.len()
+        );
     }
     info!("Total {} chunks", chunks.len());
 

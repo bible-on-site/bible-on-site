@@ -181,3 +181,55 @@ struct ArticleRow {
     abstract_field: Option<String>,
     author: String,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn strip_html_removes_tags() {
+        assert_eq!(strip_html("<p>שלום <b>עולם</b></p>"), "שלום עולם");
+        assert_eq!(strip_html("plain"), "plain");
+        assert_eq!(strip_html("<div><br/></div>"), "");
+    }
+
+    #[test]
+    fn strip_html_decodes_entities() {
+        assert_eq!(strip_html("a&nbsp;b"), "a b");
+        assert_eq!(
+            strip_html("&lt;x&gt; &amp; &quot;q&quot; &#39;y&#39;"),
+            "<x> & \"q\" 'y'"
+        );
+    }
+
+    #[test]
+    fn chunk_text_empty_and_whitespace() {
+        assert!(chunk_text("", 100).is_empty());
+        assert!(chunk_text("   \n\n  ", 100).is_empty());
+    }
+
+    #[test]
+    fn chunk_text_short_text_single_chunk() {
+        assert_eq!(chunk_text("short text", 100), vec!["short text"]);
+    }
+
+    #[test]
+    fn chunk_text_merges_paragraphs_up_to_limit() {
+        let out = chunk_text("para one\n\npara two", 100);
+        assert_eq!(out, vec!["para one\n\npara two"]);
+    }
+
+    #[test]
+    fn chunk_text_splits_when_over_limit() {
+        let out = chunk_text("aaa\n\nbbb\n\nccc", 8);
+        // "aaa" + "bbb" merge to 7 chars ("aaa\n\nbbb" = 8 > limit→ wait: 3+3+2=8 not > 8)
+        assert_eq!(out, vec!["aaa\n\nbbb", "ccc"]);
+    }
+
+    #[test]
+    fn chunk_text_keeps_an_oversize_paragraph_whole() {
+        // Paragraph splitting never breaks a single paragraph mid-text.
+        let text = "x".repeat(25);
+        assert_eq!(chunk_text(&text, 10), vec![text]);
+    }
+}

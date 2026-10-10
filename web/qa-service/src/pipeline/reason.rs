@@ -23,16 +23,21 @@ pub fn reason(
     scored_chunks
         .iter()
         .enumerate()
-        .filter_map(|(i, (chunk, retrieval_score))| {
-            match qa_model.extract(question, &chunk.text) {
+        .filter_map(
+            |(i, (chunk, retrieval_score))| match qa_model.extract(question, &chunk.text) {
                 Ok(Some(span)) => {
-                    tracing::info!(i, confidence = span.confidence, span_len = span.text.len(), "REASON: extracted span");
+                    tracing::info!(
+                        i,
+                        confidence = span.confidence,
+                        span_len = span.text.len(),
+                        "REASON: extracted span"
+                    );
                     Some(ReasonedAnswer {
                         chunk: chunk.clone(),
                         span,
                         retrieval_score: *retrieval_score,
                     })
-                },
+                }
                 Ok(None) => {
                     tracing::debug!(i, "REASON: no answer from QA model");
                     None
@@ -41,7 +46,7 @@ pub fn reason(
                     tracing::warn!(i, error = %e, "REASON: QA model error");
                     None
                 }
-            }
-        })
+            },
+        )
         .collect()
 }

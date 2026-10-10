@@ -59,8 +59,10 @@ pub async fn ask(
     }
 
     if retrieved.is_empty() {
-        return actix_web::HttpResponse::Ok()
-            .json(surface::AskResponse { answers: vec![], no_answer: true });
+        return actix_web::HttpResponse::Ok().json(surface::AskResponse {
+            answers: vec![],
+            no_answer: true,
+        });
     }
 
     // 3. REASON: extractive QA on each retrieved chunk
@@ -77,7 +79,11 @@ pub async fn ask(
 
     // 5. SURFACE: format response
     let response = surface::surface(&validated);
-    info!(answers = response.answers.len(), no_answer = response.no_answer, "ASK response");
+    info!(
+        answers = response.answers.len(),
+        no_answer = response.no_answer,
+        "ASK response"
+    );
 
     actix_web::HttpResponse::Ok().json(response)
 }

@@ -57,3 +57,79 @@ pub fn validate(mut answers: Vec<ReasonedAnswer>, top_k: usize) -> Vec<Validated
     deduped.truncate(top_k);
     deduped
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::qa_model::QaSpan;
+    use crate::pipeline::ingest::Chunk;
+
+    fn chunk(text: &str) -> Chunk {
+        Chunk {
+            source_type: "perush".into(),
+            perek_id: 1,
+            text: text.into(),
+            author: "a".into(),
+            perush_id: None,
+            perush_name: None,
+            pasuk: None,
+            note_idx: None,
+            article_id: None,
+            article_name: None,
+        }
+    }
+
+    fn answer(text: &str, confidence: f64, retrieval: f64) -> ReasonedAnswer {
+        ReasonedAnswer {
+            chunk: chunk(text),
+            span: QaSpan {
+                text: text.into(),
+                confidence,
+            },
+            retrieval_score: retrieval,
+        }
+    }
+
+    #[test]
+    fn drops_low_confidence_spans() {
+        let v = validate(vec![answer("some text", 0.005, 1.0)], 10);
+        assert!(v.is_empty());
+    }
+
+    #[test]
+    fn drops_too_short_and_too_long_spans() {
+        let short = answer("x", 0.9, 1.0);
+        let long = answer(&"y".repeat(2001), 0.9, 1.0);
+        assert!(validate(vec![short, long], 10).is_empty());
+    }
+
+    #[test]
+    fn ranks_by_geometric_mean_of_confidence_and_retrieval() {
+        // conf 0.81 * retr 1.0 → 0.9 beats conf 1.0 * retr 0.64 → 0.8
+        let weaker = answer("weak", 1.0, 0.64);
+        let stronger = answer("strong", 0.81, 1.0);
+        let v = validate(vec![weaker, stronger], 10);
+        assert_eq!(v[0].answer.span.text, "strong");
+        assert!((v[0].combined_score - 0.9).abs() < 1e-9);
+    }
+
+    #[test]
+    fn dedupes_substring_overlapping_spans_keeping_higher_score() {
+        let big = answer("the complete answer text", 0.9, 1.0);
+        let small = answer("complete answer", 0.8, 1.0);
+        let other = answer("unrelated span", 0.5, 1.0);
+        let v = validate(vec![big, small, other], 10);
+        assert_eq!(v.len(), 2);
+        assert_eq!(v[0].answer.span.text, "the complete answer text");
+        assert_eq!(v[1].answer.span.text, "unrelated span");
+    }
+
+    #[test]
+    fn truncates_to_top_k_after_dedup() {
+        let answers: Vec<ReasonedAnswer> = (0..5)
+            .map(|i| answer(&format!("answer {i}"), 1.0 - i as f64 * 0.1, 1.0))
+            .collect();
+        let v = validate(answers, 2);
+        assert_eq!(v.len(), 2);
+    }
+}
