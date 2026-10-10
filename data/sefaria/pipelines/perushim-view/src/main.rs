@@ -22,6 +22,14 @@ struct Cli {
     /// Output to dependent modules (app/ for SQLite, web/ for JSON, data/mysql for MySQL)
     #[arg(long)]
     output_to_dependant_modules: bool,
+
+    /// Input v1 notes SQLite (convert-notes only)
+    #[arg(long)]
+    input: Option<std::path::PathBuf>,
+
+    /// Output v2 notes SQLite (convert-notes only)
+    #[arg(long)]
+    output: Option<std::path::PathBuf>,
 }
 
 #[derive(Clone, ValueEnum)]
@@ -34,6 +42,8 @@ enum OutputFormat {
     Sqlite,
     /// Generate MongoDB Compass stages for debugging
     CompassStages,
+    /// Convert a v1 notes SQLite to the v2 blob schema (no MongoDB needed)
+    ConvertNotes,
 }
 
 #[tokio::main]
@@ -43,6 +53,17 @@ async fn main() -> Result<()> {
     // Handle compass-stages format separately (no MongoDB connection needed)
     if matches!(cli.format, Some(OutputFormat::CompassStages)) {
         return commands::compass_stages::generate();
+    }
+
+    // convert-notes reads an existing notes DB — no MongoDB needed either
+    if matches!(cli.format, Some(OutputFormat::ConvertNotes)) {
+        let input = cli
+            .input
+            .context("--input <v1.sqlite> is required for convert-notes")?;
+        let output = cli
+            .output
+            .context("--output <v2.sqlite> is required for convert-notes")?;
+        return commands::convert_notes::generate(&input, &output);
     }
 
     let format = cli
@@ -75,7 +96,9 @@ async fn main() -> Result<()> {
                 cli.output_to_dependant_modules,
             )?;
         }
-        OutputFormat::CompassStages => unreachable!("Handled above"),
+        OutputFormat::CompassStages | OutputFormat::ConvertNotes => {
+            unreachable!("Handled above")
+        }
     }
 
     Ok(())

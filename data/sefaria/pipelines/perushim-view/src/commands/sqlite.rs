@@ -14,6 +14,7 @@ use std::fs;
 use std::io::Write;
 use std::path::Path;
 
+use crate::commands::note_blob;
 use crate::data::extract::{Extracted, Note, Parshan, Perush};
 
 pub fn generate(
@@ -206,6 +207,10 @@ fn create_notes_db(
     let tx = conn.transaction()?;
 
     insert_metadata(&tx, dump_name, build_timestamp, generated_at)?;
+    tx.execute(
+        "INSERT INTO _metadata (key,value) VALUES ('schema_version',?1)",
+        [note_blob::SCHEMA_VERSION],
+    )?;
     // These IDs are assigned during extraction and may move between generations.
     // Carry their names with the independently delivered notes pack so clients can
     // verify the entire mapping before joining it to a bundled catalog.
@@ -218,34 +223,42 @@ fn create_notes_db(
         "INSERT INTO _metadata (key,value) VALUES ('perush_catalog',?1)",
         [serde_json::to_string(&mapping)?],
     )?;
-    insert_notes(&tx, &extracted.notes)?;
+    insert_note_blobs(&tx, &extracted.notes)?;
+    insert_perek_perush(&tx, &extracted.notes)?;
 
     tx.commit()?;
-
-    // Create indexes after bulk insert
-    conn.execute_batch(
-        r#"
-        CREATE INDEX idx_note_perush ON note(perush_id);
-        CREATE INDEX idx_note_perek ON note(perek_id);
-        CREATE INDEX idx_note_perek_pasuk ON note(perek_id, pasuk);
-        "#,
-    )?;
+    conn.execute_batch("VACUUM")?;
 
     Ok(())
 }
 
-fn insert_notes(tx: &rusqlite::Transaction, notes: &[Note]) -> Result<()> {
-    let mut stmt = tx.prepare(
-        "INSERT OR IGNORE INTO note (perush_id, perek_id, pasuk, note_idx, note_content) VALUES (?1, ?2, ?3, ?4, ?5)",
-    )?;
+/// Packs every note of a perek into one compressed blob and inserts it into
+/// `note_blob`. Notes are ordered by (pasuk, perush_id, note_idx) inside the
+/// blob — the read order every consumer expects.
+fn insert_note_blobs(tx: &rusqlite::Transaction, notes: &[Note]) -> Result<()> {
+    let mut by_perek: std::collections::BTreeMap<i64, Vec<&Note>> =
+        std::collections::BTreeMap::new();
     for n in notes {
-        stmt.execute(rusqlite::params![
-            n.perush_id,
-            n.perek_id,
-            n.pasuk,
-            n.note_idx,
-            n.note_content
-        ])?;
+        by_perek.entry(n.perek_id).or_default().push(n);
+    }
+
+    let mut stmt = tx.prepare("INSERT INTO note_blob (perek_id, data) VALUES (?1, ?2)")?;
+    for (perek_id, mut perek_notes) in by_perek {
+        perek_notes.sort_by_key(|n| (n.pasuk, n.perush_id, n.note_idx));
+        let blob = note_blob::encode_perek_blob(&perek_notes)?;
+        stmt.execute(rusqlite::params![perek_id, blob])?;
+    }
+    Ok(())
+}
+
+/// One row per (perek, perush) — the picker's "which perushim exist here" table.
+fn insert_perek_perush(tx: &rusqlite::Transaction, notes: &[Note]) -> Result<()> {
+    let pairs: std::collections::BTreeSet<(i64, i64)> =
+        notes.iter().map(|n| (n.perek_id, n.perush_id)).collect();
+
+    let mut stmt = tx.prepare("INSERT INTO perek_perush (perek_id, perush_id) VALUES (?1, ?2)")?;
+    for (perek_id, perush_id) in pairs {
+        stmt.execute(rusqlite::params![perek_id, perush_id])?;
     }
     Ok(())
 }
@@ -475,6 +488,21 @@ mod tests {
         fs::remove_dir_all(&dir).ok();
     }
 
+    /// Decodes every `note_blob` row into (perek_id, notes) — the v2 read path.
+    fn read_all_blobs(conn: &Connection) -> Vec<(i64, Vec<note_blob::DecodedNote>)> {
+        conn.prepare("SELECT perek_id, data FROM note_blob ORDER BY perek_id")
+            .unwrap()
+            .query_map([], |r| {
+                Ok((
+                    r.get::<_, i64>(0)?,
+                    note_blob::decode_perek_blob(&r.get::<_, Vec<u8>>(1)?).unwrap(),
+                ))
+            })
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap()
+    }
+
     #[test]
     fn create_notes_db_roundtrip() {
         let dir = std::env::temp_dir().join("perushim_test_notes");
@@ -493,34 +521,47 @@ mod tests {
 
         let conn = Connection::open(&path).unwrap();
 
-        // Check note count
-        let note_count: i64 = conn
-            .query_row("SELECT COUNT(*) FROM note", [], |r| r.get(0))
-            .unwrap();
-        assert_eq!(note_count, 3);
-
-        // Check notes for perek 1, pasuk 1
-        let pasuk1_count: i64 = conn
+        // v2 schema: no row-oriented note table
+        let legacy_table: i64 = conn
             .query_row(
-                "SELECT COUNT(*) FROM note WHERE perek_id = 1 AND pasuk = 1",
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='note'",
                 [],
                 |r| r.get(0),
             )
             .unwrap();
+        assert_eq!(legacy_table, 0, "v2 must not create the note table");
+
+        let version: String = conn
+            .query_row(
+                "SELECT value FROM _metadata WHERE key = 'schema_version'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(version, note_blob::SCHEMA_VERSION);
+
+        // Check notes survive the blob roundtrip, ordered by (pasuk, perush_id, note_idx)
+        let blobs = read_all_blobs(&conn);
+        assert_eq!(blobs.len(), 1, "only perek 1 has notes");
+        let (perek_id, notes) = &blobs[0];
+        assert_eq!(*perek_id, 1);
+        assert_eq!(notes.len(), 3);
+        let pasuk1: Vec<_> = notes.iter().filter(|n| n.pasuk == 1).collect();
         assert_eq!(
-            pasuk1_count, 2,
+            pasuk1.len(),
+            2,
             "pasuk 1 should have notes from both Rashi and Ibn Ezra"
         );
 
-        // Check indexes exist
-        let idx_count: i64 = conn
-            .query_row(
-                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name LIKE 'idx_note%'",
-                [],
-                |r| r.get(0),
-            )
+        // perek_perush holds one row per (perek, perush) pair
+        let pairs: Vec<(i64, i64)> = conn
+            .prepare("SELECT perek_id, perush_id FROM perek_perush ORDER BY perush_id")
+            .unwrap()
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))
+            .unwrap()
+            .collect::<Result<_, _>>()
             .unwrap();
-        assert_eq!(idx_count, 3, "should have 3 note indexes");
+        assert_eq!(pairs, vec![(1, 1), (1, 2)]);
 
         // Check metadata build_timestamp
         let ts: String = conn
@@ -667,9 +708,10 @@ mod tests {
         create_notes_db(&path, &extracted, "dump-v2", 2000, "new").unwrap();
 
         let conn = Connection::open(&path).unwrap();
-        let note_count: i64 = conn
-            .query_row("SELECT COUNT(*) FROM note", [], |r| r.get(0))
-            .unwrap();
+        let note_count: usize = read_all_blobs(&conn)
+            .iter()
+            .map(|(_, notes)| notes.len())
+            .sum();
         assert_eq!(
             note_count, 4,
             "re-export should contain all notes from second run"

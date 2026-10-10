@@ -349,6 +349,52 @@ public sealed class PerushimNotesServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task InitializeAsync_WithLegacyV1Database_RejectsIt_AndDownloadRecovers()
+    {
+        var dataDir = Path.Join(_tempRoot, nameof(InitializeAsync_WithLegacyV1Database_RejectsIt_AndDownloadRecovers));
+        var padDir = Path.Join(_tempRoot, "pad-legacy-replacement");
+        Directory.CreateDirectory(dataDir);
+        Directory.CreateDirectory(padDir);
+
+        // A v1 row-based pack left over from an older app version.
+        var legacy = new SQLiteAsyncConnection(Path.Join(dataDir, NotesDbFileName));
+        await legacy.ExecuteAsync("CREATE TABLE _metadata (key TEXT, value TEXT)");
+        await legacy.ExecuteAsync("INSERT INTO _metadata VALUES ('build_timestamp','1500000000')");
+        await legacy.ExecuteAsync("CREATE TABLE note (perush_id INTEGER, perek_id INTEGER, pasuk INTEGER, note_idx INTEGER, note_content TEXT)");
+        await legacy.ExecuteAsync("INSERT INTO note VALUES (9,4,1,0,'stale note')");
+        await legacy.CloseAsync();
+
+        await CreateNotesDatabaseAsync(padDir, (9, 4, 1, 0, "fresh note"));
+
+        // GetDiagnosticsAsync touches MAUI platform services, so inject mocks.
+        var fileSystem = new Mock<IFileSystem>();
+        fileSystem.SetupGet(f => f.AppDataDirectory).Returns(dataDir);
+        fileSystem.Setup(f => f.OpenAppPackageFileAsync(It.IsAny<string>()))
+            .ReturnsAsync((string name) => throw new FileNotFoundException(name));
+        var device = new Mock<IDeviceInfo>();
+        device.SetupGet(d => d.Platform).Returns(DevicePlatform.Android);
+        device.SetupGet(d => d.VersionString).Returns("15");
+        var app = new Mock<IAppInfo>();
+        app.SetupGet(a => a.VersionString).Returns("1.2.3");
+        app.SetupGet(a => a.BuildString).Returns("123");
+        var service = new PerushimNotesService(
+            new FakePadDeliveryService { FetchResult = true, AssetPathAfterFetch = padDir },
+            fileSystem.Object,
+            device.Object,
+            app.Object);
+
+        await service.InitializeAsync();
+        service.IsAvailable.Should().BeFalse();
+        (await service.GetDiagnosticsAsync()).Should().Contain("Legacy notes schema");
+
+        (await service.TryDownloadNotesAsync()).Should().BeTrue();
+
+        service.IsAvailable.Should().BeTrue();
+        var notes = await service.LoadNotesForPerekAsync(4, new Dictionary<int, Perush>());
+        notes.Should().ContainSingle().Which.NoteContent.Should().Be("fresh note");
+    }
+
+    [Fact]
     public async Task TryDownloadNotesAsync_WhenDeliveryUnavailable_ReturnsFalse()
     {
         var dataDir = Path.Join(_tempRoot, nameof(TryDownloadNotesAsync_WhenDeliveryUnavailable_ReturnsFalse));
@@ -378,22 +424,13 @@ public sealed class PerushimNotesServiceTests : IDisposable
         var dbPath = Path.Join(dataDirectory, NotesDbFileName);
         var conn = new SQLiteAsyncConnection(dbPath, SQLiteOpenFlags.ReadWrite | SQLiteOpenFlags.Create);
 
-        await conn.ExecuteAsync("CREATE TABLE IF NOT EXISTS _metadata (key TEXT, value TEXT)");
-        await conn.ExecuteAsync("DELETE FROM _metadata");
-        await conn.ExecuteAsync(
-            "INSERT INTO _metadata (key, value) VALUES ('build_timestamp', ?)",
-            buildTimestamp.ToString());
-
-        await conn.ExecuteAsync(
-            "CREATE TABLE IF NOT EXISTS note (perush_id INTEGER, perek_id INTEGER, pasuk INTEGER, note_idx INTEGER, note_content TEXT)");
-        await conn.ExecuteAsync("DELETE FROM note");
-
-        foreach (var (perushId, perekId, pasuk, noteIdx, content) in rows)
+        foreach (var statement in BibleOnSite.Tests.Support.NotesDbV2.Statements(rows))
         {
-            await conn.ExecuteAsync(
-                "INSERT INTO note (perush_id, perek_id, pasuk, note_idx, note_content) VALUES (?, ?, ?, ?, ?)",
-                perushId, perekId, pasuk, noteIdx, content);
+            await conn.ExecuteAsync(statement);
         }
+        await conn.ExecuteAsync(
+            "INSERT OR REPLACE INTO _metadata (key, value) VALUES ('build_timestamp', ?)",
+            buildTimestamp.ToString());
 
         await conn.CloseAsync();
     }

@@ -34,8 +34,7 @@ public class NotesDeliveryTests
     public async Task BundledDatabase_IsCopiedAndQueried_DuringInitializeOrDownload(bool download)
     {
         await using var storage = new TestStorage();
-        await storage.BundleDatabaseAsync(DbName, "CREATE TABLE note (perush_id INTEGER,perek_id INTEGER,pasuk INTEGER,note_idx INTEGER,note_content TEXT)",
-            "INSERT INTO note VALUES (1,1,1,0,'bundled note')");
+        await storage.BundleDatabaseAsync(DbName, NotesDbV2.Statements((1, 1, 1, 0, "bundled note")));
         var service = Create(storage);
         if (download)
         {
@@ -55,8 +54,8 @@ public class NotesDeliveryTests
     public async Task Diagnostics_ReportsLocalAndDeliveryState_AndIncludesMetadata()
     {
         await using var storage = new TestStorage();
-        await storage.CreateDatabaseAsync(DbName, "CREATE TABLE _metadata (key TEXT, value TEXT)",
-            "INSERT INTO _metadata VALUES ('build_timestamp','1234')");
+        await storage.CreateDatabaseAsync(DbName,
+            [.. NotesDbV2.Statements(), "INSERT INTO _metadata VALUES ('build_timestamp','1234')"]);
         var pad = Pad();
         pad.Setup(p => p.TryGetAssetPathAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync(storage.Root);
         var report = await Create(storage, pad).GetDiagnosticsAsync();
@@ -87,7 +86,7 @@ public class NotesDeliveryTests
         await using var storage = new TestStorage();
         if (localDatabaseExists)
         {
-            await storage.CreateDatabaseAsync(DbName, "CREATE TABLE note (perush_id INTEGER)");
+            await storage.CreateDatabaseAsync(DbName, NotesDbV2.Statements());
         }
         var pad = Pad();
         pad.Setup(p => p.TryGetAssetPathAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
@@ -107,7 +106,7 @@ public class NotesDeliveryTests
     public async Task Diagnostics_RecognizesBundledNotes_AndLegacyMissingMetadata()
     {
         await using var storage = new TestStorage();
-        await storage.BundleDatabaseAsync(DbName, "CREATE TABLE note (perush_id INTEGER)");
+        await storage.BundleDatabaseAsync(DbName, NotesDbV2.Statements());
         var report = await Create(storage).GetDiagnosticsAsync();
         report.Should().Contain("App package has notes file: True").And.Contain("Local DB build_timestamp: 0");
     }
@@ -118,8 +117,8 @@ public class NotesDeliveryTests
     {
         await using var local = new TestStorage();
         await using var remote = new TestStorage();
-        await local.CreateDatabaseAsync(DbName, "CREATE TABLE _metadata (key TEXT, value TEXT)",
-            "INSERT INTO _metadata VALUES ('build_timestamp','100')", "CREATE TABLE note (perush_id INTEGER)");
+        await local.CreateDatabaseAsync(DbName,
+            [.. NotesDbV2.Statements(), "INSERT INTO _metadata VALUES ('build_timestamp','100')"]);
         var remoteDb = await remote.CreateDatabaseAsync(DbName, "CREATE TABLE _metadata (key TEXT, value TEXT)");
         if (timestamp != null)
         {
@@ -137,7 +136,7 @@ public class NotesDeliveryTests
     public async Task Upgrade_WhenDeliveryThrows_KeepsLocalDatabaseAvailable()
     {
         await using var storage = new TestStorage();
-        await storage.CreateDatabaseAsync(DbName, "CREATE TABLE note (perush_id INTEGER)");
+        await storage.CreateDatabaseAsync(DbName, NotesDbV2.Statements());
         var pad = Pad();
         pad.Setup(p => p.TryGetAssetPathAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ThrowsAsync(new IOException("store down"));
         var service = Create(storage, pad);
@@ -150,8 +149,7 @@ public class NotesDeliveryTests
     {
         await using var local = new TestStorage();
         await using var remote = new TestStorage();
-        await local.CreateDatabaseAsync(DbName, "CREATE TABLE note (perush_id INTEGER,perek_id INTEGER,pasuk INTEGER,note_idx INTEGER,note_content TEXT)",
-            "INSERT INTO note VALUES (1,1,1,0,'local note')");
+        await local.CreateDatabaseAsync(DbName, NotesDbV2.Statements((1, 1, 1, 0, "local note")));
         var pad = Pad();
         pad.Setup(p => p.TryGetAssetPathAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync(remote.Root);
         var service = Create(local, pad);
@@ -166,7 +164,7 @@ public class NotesDeliveryTests
         await using var storage = new TestStorage();
         await using var remote = new TestStorage();
         Directory.CreateDirectory(Path.Combine(remote.Root, "assets"));
-        var db = await remote.CreateDatabaseAsync(Path.Combine("assets", DbName), "CREATE TABLE note (perush_id INTEGER)");
+        var db = await remote.CreateDatabaseAsync(Path.Combine("assets", DbName), NotesDbV2.Statements());
         await db.CloseAsync();
         var pad = Pad();
         pad.Setup(p => p.TryGetAssetPathAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync(remote.Root);
@@ -174,6 +172,7 @@ public class NotesDeliveryTests
         await service.InitializeAsync();
         service.IsAvailable.Should().BeTrue();
         File.Exists(Path.Combine(storage.Root, DbName)).Should().BeTrue();
+        await service.CloseConnectionForTestingAsync();
     }
 
     [Fact]
@@ -181,14 +180,12 @@ public class NotesDeliveryTests
     {
         await using var local = new TestStorage();
         await using var remote = new TestStorage();
-        var localDb = await local.CreateDatabaseAsync(DbName, "CREATE TABLE _metadata (key TEXT, value TEXT)",
-            "INSERT INTO _metadata VALUES ('build_timestamp','100')");
+        var localDb = await local.CreateDatabaseAsync(DbName,
+            [.. NotesDbV2.Statements(), "INSERT INTO _metadata VALUES ('build_timestamp','100')"]);
         await localDb.CloseAsync();
         Directory.CreateDirectory(Path.Combine(remote.Root, "assets"));
         var remoteDb = await remote.CreateDatabaseAsync(Path.Combine("assets", DbName),
-            "CREATE TABLE _metadata (key TEXT, value TEXT)", "INSERT INTO _metadata VALUES ('build_timestamp','200')",
-            "CREATE TABLE note (perush_id INTEGER,perek_id INTEGER,pasuk INTEGER,note_idx INTEGER,note_content TEXT)",
-            "INSERT INTO note VALUES (1,1,1,0,'upgraded')");
+            [.. NotesDbV2.Statements((1, 1, 1, 0, "upgraded")), "INSERT INTO _metadata VALUES ('build_timestamp','200')"]);
         await remoteDb.CloseAsync();
         var pad = Pad();
         pad.Setup(p => p.TryGetAssetPathAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync(remote.Root);
@@ -212,10 +209,9 @@ public class NotesDeliveryTests
     public async Task Initialize_WhenPadCopyFails_FallsBackToBundledPackage()
     {
         await using var storage = new TestStorage();
-        await storage.BundleDatabaseAsync(DbName, "CREATE TABLE note (perush_id INTEGER,perek_id INTEGER,pasuk INTEGER,note_idx INTEGER,note_content TEXT)",
-            "INSERT INTO note VALUES (1,1,1,0,'bundled note')");
+        await storage.BundleDatabaseAsync(DbName, NotesDbV2.Statements((1, 1, 1, 0, "bundled note")));
         await using var remote = new TestStorage();
-        var remoteDb = await remote.CreateDatabaseAsync(DbName, "CREATE TABLE note (perush_id INTEGER)");
+        var remoteDb = await remote.CreateDatabaseAsync(DbName, NotesDbV2.Statements());
         await remoteDb.CloseAsync();
         await using var exclusive = new FileStream(Path.Combine(remote.Root, DbName), FileMode.Open, FileAccess.ReadWrite, FileShare.None);
         var pad = Pad();
