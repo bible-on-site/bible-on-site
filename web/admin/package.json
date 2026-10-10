@@ -39,13 +39,13 @@
 		}
 	},
 	"dependencies": {
-		"@aws-sdk/client-lambda": "3.1148.0",
-		"@aws-sdk/client-s3": "3.1148.0",
-		"@aws-sdk/s3-request-presigner": "3.1148.0",
+		"@aws-sdk/client-lambda": "3.1149.0",
+		"@aws-sdk/client-s3": "3.1149.0",
+		"@aws-sdk/s3-request-presigner": "3.1149.0",
 		"@tanstack/react-query": "5.104.1",
-		"@tanstack/react-router": "1.170.41",
+		"@tanstack/react-router": "1.170.42",
 		"@tanstack/react-router-devtools": "1.167.2",
-		"@tanstack/react-start": "1.168.60",
+		"@tanstack/react-start": "1.168.61",
 		"@tiptap/extension-bullet-list": "3.31.4",
 		"@tiptap/extension-document": "3.31.4",
 		"@tiptap/extension-image": "3.31.4",
@@ -67,7 +67,7 @@
 		"react": "19.3.0",
 		"react-dom": "19.3.0",
 		"tiptap-footnotes": "3.0.1",
-		"uuid": "14.0.2"
+		"uuid": "14.0.3"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.5.15",
@@ -79,7 +79,7 @@
 		"@testing-library/user-event": "14.6.7",
 		"@types/istanbul-lib-instrument": "1.7.8",
 		"@types/istanbul-lib-source-maps": "4.0.4",
-		"@types/node": "26.6.4",
+		"@types/node": "26.6.5",
 		"@types/react": "19.3.0",
 		"@types/react-dom": "19.3.0",
 		"@vitejs/plugin-react": "6.1.2",
