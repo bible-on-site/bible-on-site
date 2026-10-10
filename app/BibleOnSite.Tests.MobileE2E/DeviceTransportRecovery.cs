@@ -22,24 +22,19 @@ internal static class DeviceTransportRecovery
         }
         var udid = Environment.GetEnvironmentVariable("MOBILE_UDID");
         if (!string.Equals(Environment.GetEnvironmentVariable("MOBILE_PLATFORM"), "Android", StringComparison.OrdinalIgnoreCase)
-            || string.IsNullOrEmpty(udid))
+            || udid is null || !IsValidSerial(udid))
         {
             return false;
         }
-        var adb = ResolveAdb();
-        if (adb == null)
-        {
-            return false;
-        }
-        if (Probe(adb, udid) == "device")
+        if (Probe(udid) == "device")
         {
             // The transport is healthy, so the failure came from the app or the
             // session payload — retrying cannot help it.
             return false;
         }
-        Run(adb, ["reconnect"], ProbeTimeoutMs);
-        Run(adb, ["-s", udid, "wait-for-device"], WaitForDeviceTimeoutMs);
-        return Probe(adb, udid) == "device";
+        Run(["reconnect"], ProbeTimeoutMs);
+        Run(["-s", udid, "wait-for-device"], WaitForDeviceTimeoutMs);
+        return Probe(udid) == "device";
     }
 
     // Captured into session-startup diagnostics so a transport loss is visible
@@ -50,42 +45,22 @@ internal static class DeviceTransportRecovery
         {
             return string.Empty;
         }
-        var adb = ResolveAdb();
-        if (adb == null)
-        {
-            return string.Empty;
-        }
-        var output = Run(adb, ["devices", "-l"], ProbeTimeoutMs);
+        var output = Run(["devices", "-l"], ProbeTimeoutMs);
         return output is null ? string.Empty : $"\nadb devices -l:\n{output}";
     }
 
-    private static string? Probe(string adb, string udid) =>
-        Run(adb, ["-s", udid, "get-state"], ProbeTimeoutMs)?.Trim();
+    // adb serials are dotted/dashed device ids only (emulator-5554, host:port).
+    // Rejecting anything else keeps the env-derived value out of argv injection.
+    private static bool IsValidSerial(string? serial) =>
+        serial is { Length: > 0 and <= 64 } &&
+        serial.All(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '-' or '_' or ':');
 
-    private static string? ResolveAdb()
-    {
-        foreach (var root in new[]
-        {
-            Environment.GetEnvironmentVariable("ANDROID_SDK_ROOT"),
-            Environment.GetEnvironmentVariable("ANDROID_HOME"),
-        })
-        {
-            if (string.IsNullOrEmpty(root))
-            {
-                continue;
-            }
-            var candidate = Path.Join(root, "platform-tools", "adb");
-            if (File.Exists(candidate) || File.Exists(candidate + ".exe"))
-            {
-                return candidate;
-            }
-        }
-        return "adb";
-    }
+    private static string? Probe(string udid) =>
+        Run(["-s", udid, "get-state"], ProbeTimeoutMs)?.Trim();
 
-    private static string? Run(string command, string[] arguments, int timeoutMs)
+    private static string? Run(string[] arguments, int timeoutMs)
     {
-        var start = new ProcessStartInfo(command)
+        var start = new ProcessStartInfo("adb")
         {
             RedirectStandardOutput = true,
             RedirectStandardError = true,
