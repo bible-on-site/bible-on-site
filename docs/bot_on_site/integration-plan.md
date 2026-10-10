@@ -16,6 +16,27 @@ Extractive QA over articles and perushim, no pre-information, full Ingest–Retr
 
 ---
 
+## Implementation Order (Local-First, Horizontal First)
+
+- **Local-first:** Implement and validate the full pipeline (Ingest → Retrieve → Reason → Validate → Surface) to run **locally** with minimal external deps (e.g. MySQL already populated with perushim; optional SQLite/on-disk chunk store instead of MongoDB Atlas initially). Add cloud/vector DB and ECS later.
+- **Horizontal / edge-to-edge first:** UI and API design prioritise a simple, full-width, edge-to-edge experience (e.g. QA widget spanning the content area, minimal chrome). Add richer layout, filters, and secondary features after the horizontal slice works.
+- **Feature-rich after:** Once the end-to-end slice works (one perush, one source, local), add: more perushim, vector search, BEREL/ONNX, auth, rate limiting, LEARN logging, deployment.
+
+---
+
+## First Perushim: Malbim + Or HaChaim
+
+- **Malbim** (מלבי"ם) and **Or HaChaim** (אור החיים, by חיים בן עטר) are the first perushim integrated. Both have a structural QA style (questions followed by answers), making them natural fits for extractive QA. Both are already in **MySQL** (`parshan` / `perush` / `note`).
+- Malbim: ~25,700 notes across two perushim (מלבי"ם + מלבי"ם באור המילות). Or HaChaim: ~5,900 notes (אור החיים + ראשון לציון).
+- Ingest reads notes from MySQL (join `note` ↔ `perush` ↔ `parshan`, filter by parshan name IN ("מלבי"ם", "חיים בן עטר")), chunks them, and feeds Retrieve/Reason.
+
+## Articles (RAG)
+
+- **Articles** from MySQL (`tanah_article` / `tanah_author`) are ingested and chunked; filter by author name (e.g. **הרב איתן שנדורפי** — most of his articles are QA-fitting). Chunks are stripped of HTML and split by paragraph/size. Same Retrieve (keyword + perekId) and Surface pipeline as perushim.
+- **RAG:** Retrieve ranks by keyword match (question terms in chunk text) and optional `perekId`; top-K chunks are returned as answers with citations (source type, name, author, perekId). No vector DB in Phase 0; optional embeddings + MongoDB later.
+
+---
+
 ## Design Framework
 
 Following the **Ingest → Retrieve → Reason → Validate → Surface → Learn** loop (LLM/system-design framework: end-to-end from ingestion to output validation, with explicit validation and learning).
@@ -258,7 +279,11 @@ Same pattern as existing API/website: multi-stage Rust Dockerfile (ONNX Runtime 
 
 ## 10. MVP Scope (2-Week Plan)
 
-Week 1: Scaffold qa-service, INGEST, RETRIEVE, REASON, VALIDATE, auth, local test. Week 2: SURFACE, LEARN, website widget, deploy to ECS, E2E and baseline quality. Post-MVP: QA pair gen pipeline, BEREL fine-tune, ParshanBERT tech debt, mobile attestation, analytics, caching.
+**Phase 0 (current slice):** Local-first, Malbim + Or HaChaim + articles, horizontal UI.
+
+- **Week 1 (slice):** Scaffold `web/qa-service` (Rust). INGEST: read Malbim + Or HaChaim from MySQL → chunks (in-memory). Articles (e.g. שנדורפי) also ingested. RETRIEVE: keyword match + optional `perekId` filter (no vector search yet). REASON: stub. VALIDATE/SURFACE: ranked answers with source (type=perush|article, name, author, perekId). No auth, no MongoDB, no ONNX yet; local test only. Frontend: minimal QA widget, edge-to-edge on perek page.
+- **Week 2 (baseline):** Add health/ready, optional MongoDB Atlas + embeddings for Retrieve; BEREL/ONNX for Reason; auth (API key); website proxy; deploy to ECS; E2E and baseline quality.
+- **Post-MVP:** QA pair gen pipeline, BEREL fine-tune, ParshanBERT tech debt, mobile attestation, analytics, caching.
 
 ---
 

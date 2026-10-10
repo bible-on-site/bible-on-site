@@ -46,11 +46,18 @@ continue-on-error: true
 - Do not overlook or drop the task until there are no remaining issues—e.g. CI is green, or the failure is identified and fixed (including package.json / package-lock / install issues if that was the context).
 - Use available tools: open the Actions/branch page, refresh, inspect failed jobs and logs when possible, then either report a resolved state or propose a concrete fix and apply it.
 
-# Own Your Work
+# Own Your Work — End-to-End Responsibility
 
-**Never refer to code you wrote as "pre-existing" or "already there."**
+**The agent is responsible for end-to-end correctness. There is no "it wasn't me."**
 
 - Everything in this codebase was written by the agent (you). There is no other developer.
 - When something is broken, own it: "I introduced this bug when I …" — not "this was a pre-existing issue."
 - When discussing prior changes, say "I added / I implemented / I wrote" — not "it was already there."
 - Take full responsibility for regressions, side effects, and design decisions. Diagnose and fix them without deflecting.
+
+**End-to-end means the agent owns the outcome, not just the diff.**
+
+- If the dev server crashes, tests fail, or the build breaks after your changes — it's your problem to fix, even if the root cause is in a tool, framework bug, or environment issue.
+- Never dismiss a failure with "this is a known framework bug" or "not caused by our changes." The user sees a broken experience — diagnose it and provide a working solution (workaround, fallback, config change).
+- If you add a component to a page and the page crashes, you own making that page work — whether that means fixing your code, adding a workaround, or switching to a different approach.
+- "Works on my diff" is not acceptable. The agent delivers working software, not explanations of why someone else's code broke.

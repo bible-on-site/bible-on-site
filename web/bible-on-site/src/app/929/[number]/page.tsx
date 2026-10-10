@@ -13,6 +13,7 @@ import { getPerekImagesByChapter } from "../../../lib/seo/perek-images-data";
 import { fetchAllEntityRefs } from "../../../lib/tanahpedia/perek-entity-refs";
 import { JsonLd } from "../../components/JsonLd";
 import { ArticlesSection } from "./components/ArticlesSection";
+import { QaWidget } from "./components/QaWidget";
 import Breadcrumb from "./components/Breadcrumb";
 import { PerekHeading } from "./components/PerekHeading";
 import { PerekIntro } from "./components/PerekIntro";
@@ -150,6 +151,10 @@ export default async function Perek({
 				{/* Articles section - fetched directly from database for lower latency */}
 				<ArticlesSection articles={articles} />
 			</div>
+
+			{/* QaWidget must be outside perekContainer (z-index:6 stacking context)
+			    so its fixed-position elements can layer above the navbar (z-index:10000). */}
+			<QaWidget perekId={perekId} seferPerekIds={perekIds} />
 		</>
 	);
 }

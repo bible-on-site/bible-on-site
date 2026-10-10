@@ -1,0 +1,2 @@
+optimum[onnxruntime]>=1.17
+transformers>=4.40

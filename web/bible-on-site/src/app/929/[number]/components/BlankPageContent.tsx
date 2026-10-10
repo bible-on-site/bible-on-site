@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { toLetters } from "gematry";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Article, ArticleSummary } from "@/lib/articles";
 import type { PerushDetail, PerushSummary } from "@/lib/perushim";
 import { getArticleForBook, getPerushNotesForPage } from "../actions";
@@ -18,6 +19,14 @@ interface BlankPageContentProps {
 	hebrewDateStr: string;
 	/** Article ID or perush name selected by the current book route. */
 	initialSlug?: string;
+	/** Dynamically expand a perush (by name) or article (by numeric id string) — set by QA navigation */
+	expandSlug?: string;
+	/** Change token to re-trigger expansion even with the same slug */
+	expandToken?: number;
+	/** Target note pasuk for scrolling after perush expansion */
+	expandNotePasuk?: number;
+	/** Target note index for scrolling after perush expansion */
+	expandNoteIdx?: number;
 	onNavigate?: (slug?: string) => void;
 }
 
@@ -35,6 +44,10 @@ export function BlankPageContent({
 	perekId = 0,
 	hebrewDateStr,
 	initialSlug,
+	expandSlug,
+	expandToken,
+	expandNotePasuk,
+	expandNoteIdx,
 	onNavigate,
 }: BlankPageContentProps) {
 	const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
@@ -93,11 +106,42 @@ export function BlankPageContent({
 		};
 	}, [slug, articles, perushim, perekId]);
 
-	const navigate = (nextSlug?: string) => {
-		if (onNavigate) onNavigate(nextSlug);
-		else if (perekId) writeSeferContentHistory(perekId, nextSlug);
-		setSlug(nextSlug);
-	};
+	const navigate = useCallback(
+		(nextSlug?: string) => {
+			if (onNavigate) onNavigate(nextSlug);
+			else if (perekId) writeSeferContentHistory(perekId, nextSlug);
+			setSlug(nextSlug);
+		},
+		[onNavigate, perekId],
+	);
+
+	// Dynamically expand a perush or article when QA navigation sets expandSlug
+	const lastExpandToken = useRef<number>(0);
+	const pendingScrollNote = useRef<string | null>(null);
+
+	useEffect(() => {
+		if (!expandSlug || expandToken == null || expandToken === lastExpandToken.current) return;
+		lastExpandToken.current = expandToken;
+
+		// Compute the scroll target id before triggering expansion
+		pendingScrollNote.current =
+			expandNotePasuk != null && expandNoteIdx != null
+				? `book-note-${toLetters(expandNotePasuk)}-${expandNoteIdx + 1}`
+				: null;
+
+		navigate(expandSlug);
+	}, [expandSlug, expandToken, expandNotePasuk, expandNoteIdx, navigate]);
+
+	// After a perush expands, scroll to the target note if one is pending
+	useEffect(() => {
+		if (!selectedPerush || !pendingScrollNote.current) return;
+		const noteId = pendingScrollNote.current;
+		pendingScrollNote.current = null;
+		requestAnimationFrame(() => {
+			const el = document.getElementById(noteId);
+			el?.scrollIntoView({ behavior: "smooth", block: "center" });
+		});
+	}, [selectedPerush]);
 
 	const hasFullView = selectedPerush || selectedArticle;
 
