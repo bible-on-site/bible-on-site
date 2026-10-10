@@ -120,8 +120,12 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         Page.WaitForHidden("SearchSheet");
         SearchFor("בראשית ברא אלהים", "בראשית א א");
         // A fresh installation builds the local index for the entire commentary
-        // package. Subsequent result and history assertions use normal deadlines.
-        var commentary = Page.WaitFor("SearchResultTitle", element => element.Text.Contains(" - בראשית א א", StringComparison.Ordinal), TimeSpan.FromMinutes(6));
+        // package, and an interrupted import is discarded rather than resumed —
+        // a scenario boundary can throw away a nearly complete build, so the
+        // deadline must cover a full fresh import (~370s observed on a loaded
+        // macOS runner) plus result rendering and poll lag.
+        // Subsequent result and history assertions use normal deadlines.
+        var commentary = Page.WaitFor("SearchResultTitle", element => element.Text.Contains(" - בראשית א א", StringComparison.Ordinal), TimeSpan.FromMinutes(8));
         var title = commentary.Text;
         var commentaryName = title.Split(" - ", StringSplitOptions.None)[0];
         var position = commentary.Location;
