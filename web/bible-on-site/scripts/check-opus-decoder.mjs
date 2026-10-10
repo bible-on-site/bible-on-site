@@ -22,7 +22,7 @@ const html = readFileSync(
 	resolve(root, "app/BibleOnSite/Resources/Raw/recitation-audio.html"),
 	"utf8",
 );
-runInThisContext(html.match(/<script>([\s\S]*?)<\/script>/)[1]);
+runInThisContext(html.match(/<script>([\s\S]*?)<\/script>/i)[1]);
 const reference = gunzipSync(
 	readFileSync(resolve(root, "data/recitation/fixtures/seek-opus.pcm.gz")),
 );
