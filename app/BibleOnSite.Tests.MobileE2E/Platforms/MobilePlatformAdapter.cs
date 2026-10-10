@@ -124,6 +124,11 @@ public abstract class MobilePlatformAdapter
             // the bundled commentary database's disk work on a cold emulator.
             options.AddAdditionalAppiumOption("adbExecTimeout", 60000);
             options.AddAdditionalAppiumOption("disableWindowAnimation", true);
+            // App launches cannot carry process environment like iOS
+            // processArguments can, so the E2E marker rides as an intent extra;
+            // MainActivity persists it so every later extras-less activateApp
+            // relaunch in this install keeps production analytics dark (#2120).
+            options.AddAdditionalAppiumOption("optionalIntentArguments", "--ez BIBLE_E2E true");
         }
         else
         {
@@ -153,17 +158,20 @@ public abstract class MobilePlatformAdapter
             // already poll explicit element state instead of relying on WDA's
             // implicit synchronization.
             options.AddAdditionalAppiumOption("waitForIdleTimeout", 0);
-            if (appEnvironment is { Count: > 0 })
-            {
-                // XCUITest processArguments.env reaches the app as process
-                // environment variables — e.g. BIBLE_E2E_PERUSHIM turns on the
-                // synthetic commentary data used by the HtmlView stability test.
-                options.AddAdditionalAppiumOption("processArguments",
-                    new Dictionary<string, object>
-                    {
-                        ["env"] = new Dictionary<string, string>(appEnvironment)
-                    });
-            }
+            // XCUITest processArguments.env reaches the app as process
+            // environment variables. Every session is marked BIBLE_E2E so test
+            // traffic cannot reach production analytics (#2120); per-test
+            // variables — e.g. BIBLE_E2E_PERUSHIM for the HtmlView stability
+            // test — layer on top.
+            var env = appEnvironment is null
+                ? new Dictionary<string, string>()
+                : new Dictionary<string, string>(appEnvironment);
+            env["BIBLE_E2E"] = "1";
+            options.AddAdditionalAppiumOption("processArguments",
+                new Dictionary<string, object>
+                {
+                    ["env"] = env
+                });
         }
         return options;
     }

@@ -8,6 +8,9 @@ using BibleOnSite.Handlers;
 #if IOS
 using Plugin.Firebase.Core.Platforms.iOS;
 #endif
+#if ANDROID
+using Plugin.Firebase.Analytics;
+#endif
 
 // Force rebuild for font resource loading
 namespace BibleOnSite;
@@ -99,6 +102,13 @@ public static class MauiProgram
 #if IOS
 			events.AddiOS(iOS => iOS.WillFinishLaunching((_, __) =>
 			{
+				// Nothing initializes Firebase on iOS except this call, so
+				// skipping init keeps an E2E install's automatic events (first
+				// open, session start, screen views) out of production GA (#2120).
+				if (E2eLaunch.IsMarked)
+				{
+					return false;
+				}
 				try
 				{
 					CrossFirebase.Initialize();
@@ -110,6 +120,28 @@ public static class MauiProgram
 					Console.Error.WriteLine($"[Firebase] Initialization failed (analytics disabled): {ex.Message}");
 				}
 				return false;
+			}));
+#endif
+#if ANDROID
+			// AndroidManifest sets firebase_analytics_collection_enabled=false so
+			// the auto-initialized SDK cannot emit startup events before managed
+			// code runs. Real launches opt back in here; an E2E-marked install
+			// keeps collection off for its whole lifetime (#2120).
+			events.AddAndroid(android => android.OnCreate((_, _) =>
+			{
+				if (E2eLaunch.IsMarked)
+				{
+					return;
+				}
+				try
+				{
+					CrossFirebaseAnalytics.Current.IsAnalyticsCollectionEnabled = true;
+				}
+				catch (Exception ex)
+				{
+					System.Diagnostics.Debug.WriteLine($"[Firebase] Analytics enable failed (analytics disabled): {ex.Message}");
+					Console.Error.WriteLine($"[Firebase] Analytics enable failed (analytics disabled): {ex.Message}");
+				}
 			}));
 #endif
 		});
