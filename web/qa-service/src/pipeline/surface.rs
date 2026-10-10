@@ -42,7 +42,9 @@ pub struct AskResponse {
 }
 
 fn source_from_chunk(c: &Chunk) -> AnswerSource {
-    let name = c.article_name.clone()
+    let name = c
+        .article_name
+        .clone()
         .or(c.perush_name.clone())
         .unwrap_or_default();
     AnswerSource {
@@ -75,12 +77,108 @@ pub fn surface(validated: &[ValidatedAnswer]) -> AskResponse {
     AskResponse { answers, no_answer }
 }
 
-/// Fallback: format a chunk directly as an answer (used when QA model is unavailable).
-pub fn chunk_to_answer(c: &Chunk, confidence: f64) -> Answer {
-    Answer {
-        text: c.text.clone(),
-        confidence,
-        source: source_from_chunk(c),
-        context: c.text.clone(),
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::qa_model::QaSpan;
+    use crate::pipeline::reason::ReasonedAnswer;
+
+    fn perush_chunk() -> Chunk {
+        Chunk {
+            source_type: "perush".into(),
+            perek_id: 5,
+            text: "context body".into(),
+            author: "רש\"י".into(),
+            perush_id: Some(23),
+            perush_name: Some("rashi".into()),
+            pasuk: Some(3),
+            note_idx: Some(1),
+            article_id: None,
+            article_name: None,
+        }
+    }
+
+    fn article_chunk() -> Chunk {
+        Chunk {
+            source_type: "article".into(),
+            perek_id: 9,
+            text: "article body".into(),
+            author: "הרב כהן".into(),
+            perush_id: None,
+            perush_name: None,
+            pasuk: None,
+            note_idx: None,
+            article_id: Some(77),
+            article_name: Some("מאמר לדוגמא".into()),
+        }
+    }
+
+    fn validated_of(chunk: Chunk, span_text: &str, score: f64) -> ValidatedAnswer {
+        ValidatedAnswer {
+            answer: ReasonedAnswer {
+                chunk,
+                span: QaSpan {
+                    text: span_text.into(),
+                    confidence: 0.9,
+                },
+                retrieval_score: 0.8,
+            },
+            combined_score: score,
+        }
+    }
+
+    #[test]
+    fn empty_input_marks_no_answer() {
+        let res = surface(&[]);
+        assert!(res.no_answer);
+        assert!(res.answers.is_empty());
+    }
+
+    #[test]
+    fn maps_span_text_confidence_and_context() {
+        let res = surface(&[validated_of(perush_chunk(), "the span", 0.7)]);
+        assert!(!res.no_answer);
+        assert_eq!(res.answers.len(), 1);
+        let a = &res.answers[0];
+        assert_eq!(a.text, "the span");
+        assert_eq!(a.confidence, 0.7);
+        assert_eq!(a.context, "context body");
+    }
+
+    #[test]
+    fn perush_source_carries_pasuk_and_note_idx() {
+        let res = surface(&[validated_of(perush_chunk(), "s", 0.5)]);
+        let src = &res.answers[0].source;
+        assert_eq!(src.source_type, "perush");
+        assert_eq!(src.name, "rashi");
+        assert_eq!(src.author, "רש\"י");
+        assert_eq!(src.pasuk, Some(3));
+        assert_eq!(src.note_idx, Some(1));
+        assert_eq!(src.perush_slug.as_deref(), Some("rashi"));
+        assert_eq!(src.article_id, None);
+    }
+
+    #[test]
+    fn article_source_prefers_article_name() {
+        let res = surface(&[validated_of(article_chunk(), "s", 0.5)]);
+        let src = &res.answers[0].source;
+        assert_eq!(src.source_type, "article");
+        assert_eq!(src.name, "מאמר לדוגמא");
+        assert_eq!(src.article_id, Some(77));
+        assert_eq!(src.perush_slug, None);
+        assert_eq!(src.pasuk, None);
+    }
+
+    #[test]
+    fn serializes_camel_case_field_names() {
+        let res = surface(&[validated_of(perush_chunk(), "s", 0.5)]);
+        let json = serde_json::to_value(&res).unwrap();
+        let src = &json["answers"][0]["source"];
+        assert!(src.get("perekId").is_some());
+        assert!(src.get("perushSlug").is_some());
+        assert!(src.get("noteIdx").is_some());
+        assert_eq!(json["noAnswer"], false);
+        // Optional fields are skipped when absent, not null.
+        assert!(src.get("articleId").is_none());
     }
 }
