@@ -12,8 +12,13 @@ if (!device) {
 }
 if (!device) throw new Error(`No available iPhone simulator runtime compatible with iOS SDK ${sdk}.`);
 console.log(`Booting ${device.name}, iOS ${device.version}, ${device.udid}`);
-if (device.state !== "Booted") run("simctl", "boot", device.udid);
-process.stdout.write(run("simctl", "bootstatus", device.udid, "-b"));
+// bootstatus -b boots when needed and waits for the boot to finish; on an
+// already-booted device it can still stall for minutes confirming the state.
+if (device.state === "Booted") {
+  console.log("Device already booted, skipping boot wait.");
+} else {
+  process.stdout.write(run("simctl", "bootstatus", device.udid, "-b"));
+}
 // Warm the locked driver's native CoreSimulator bridge before starting a test
 // session. Its first lookup can build the bridge and hide the original error
 // behind an "unknown UDID" message; a preflight keeps that failure actionable.
