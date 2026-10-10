@@ -1,5 +1,4 @@
-"""
-Download and export ONNX models for the QA service.
+"""Download and export ONNX models for the QA service.
 
 Models:
   - Embedder: intfloat/multilingual-e5-small  (384-dim sentence embeddings, multilingual incl. Hebrew)
