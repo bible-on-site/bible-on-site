@@ -251,6 +251,8 @@ public sealed class SearchIndexService : IAsyncDisposable
         await _index.ExecuteScalarAsync<string>("PRAGMA journal_mode=WAL");
         await _index.ExecuteAsync("PRAGMA synchronous=NORMAL");
         await _index.ExecuteAsync("CREATE TABLE IF NOT EXISTS search_metadata (name TEXT PRIMARY KEY, fingerprint TEXT)");
+        await _index.ExecuteAsync("CREATE TABLE IF NOT EXISTS search_build_progress " +
+            "(name TEXT PRIMARY KEY, fingerprint TEXT, last_id INTEGER)");
     }
 
     private async Task EnsureIndexAsync(string table)
@@ -293,21 +295,46 @@ public sealed class SearchIndexService : IAsyncDisposable
         if (stored != fingerprint)
         {
             var timer = Stopwatch.StartNew();
-            await _index.ExecuteAsync("DELETE FROM search_metadata WHERE name = ?", table);
-            await _index.ExecuteAsync($"DROP TABLE IF EXISTS {table}_vocab");
-            await _index.ExecuteAsync($"DROP TABLE IF EXISTS {table}");
-            await _index.ExecuteAsync($"DROP TABLE IF EXISTS {table}_content");
-            await _index.ExecuteAsync($"DROP TABLE IF EXISTS {table}_documents");
-            // Keep one original text copy. An external-content FTS table stores
-            // only tokens and positions instead of duplicating every note.
-            // _content is a reserved FTS shadow-table name. Apple's defensive
-            // SQLite mode rejects writes to it even with external content.
-            await _index.ExecuteAsync($"CREATE TABLE {table}_documents (rowid INTEGER PRIMARY KEY, Text TEXT, " +
-                "PerekId INTEGER, PasukNum INTEGER, PerushId INTEGER, SeferId INTEGER)");
-            await _index.ExecuteAsync($"CREATE VIRTUAL TABLE {table} USING fts5(Text, content='{table}_documents', content_rowid='rowid')");
+            long lastId = 0;
+            // A process killed mid-import leaves its committed prefix behind.
+            // The progress row resumes the import instead of restarting the
+            // multi-minute notes build after every e2e app relaunch. The
+            // verses import is seconds fast and single-query, so it rebuilds.
+            var resumed = commentary
+                ? await _index.QueryAsync<BuildProgressRow>(
+                    "SELECT last_id AS LastId FROM search_build_progress WHERE name = ? AND fingerprint = ?",
+                    table, fingerprint)
+                : [];
+            if (resumed.Count > 0)
+            {
+                lastId = resumed[0].LastId;
+                Console.WriteLine($"Search index '{table}': resuming import after document {lastId}.");
+            }
+            else
+            {
+                // Schema changes, progress row and metadata delete commit
+                // atomically: a stored progress row always means the imported
+                // prefix up to last_id exists.
+                await _index.RunInTransactionAsync(connection =>
+                {
+                    connection.Execute("DELETE FROM search_metadata WHERE name = ?", table);
+                    connection.Execute("DELETE FROM search_build_progress WHERE name = ?", table);
+                    connection.Execute($"DROP TABLE IF EXISTS {table}_vocab");
+                    connection.Execute($"DROP TABLE IF EXISTS {table}");
+                    connection.Execute($"DROP TABLE IF EXISTS {table}_content");
+                    connection.Execute($"DROP TABLE IF EXISTS {table}_documents");
+                    // Keep one original text copy. An external-content FTS table stores
+                    // only tokens and positions instead of duplicating every note.
+                    // _content is a reserved FTS shadow-table name. Apple's defensive
+                    // SQLite mode rejects writes to it even with external content.
+                    connection.Execute($"CREATE TABLE {table}_documents (rowid INTEGER PRIMARY KEY, Text TEXT, " +
+                        "PerekId INTEGER, PasukNum INTEGER, PerushId INTEGER, SeferId INTEGER)");
+                    connection.Execute($"CREATE VIRTUAL TABLE {table} USING fts5(Text, content='{table}_documents', content_rowid='rowid')");
+                    connection.Execute("INSERT INTO search_build_progress VALUES (?, ?, 0)", table, fingerprint);
+                });
+            }
             if (commentary)
             {
-                long lastId = 0;
                 var imported = 0;
                 while (true)
                 {
@@ -318,8 +345,8 @@ public sealed class SearchIndexService : IAsyncDisposable
                     {
                         break;
                     }
-                    await InsertAsync(table, batch);
                     lastId = batch[^1].RowId;
+                    await InsertAsync(table, batch, lastId);
                     imported += batch.Count;
                     if (imported % (ImportBatchSize * 8) == 0)
                     {
@@ -338,16 +365,23 @@ public sealed class SearchIndexService : IAsyncDisposable
                     await InsertAsync(table, batch);
                 }
             }
-            await _index.ExecuteAsync($"CREATE VIRTUAL TABLE {table}_vocab USING fts5vocab({table}, 'row')");
+            // A resume can find the vocab table already created by the killed
+            // process; 'optimize' stays idempotent across either entry path.
+            await _index.ExecuteAsync($"CREATE VIRTUAL TABLE IF NOT EXISTS {table}_vocab USING fts5vocab({table}, 'row')");
             await _index.ExecuteAsync($"INSERT INTO {table}({table}) VALUES ('optimize')");
-            // Publish only a complete import; an interrupted build is rebuilt on next launch.
-            await _index.ExecuteAsync("INSERT OR REPLACE INTO search_metadata VALUES (?, ?)", table, fingerprint);
+            // Publish only a complete import; an interrupted build resumes on next launch.
+            await _index.RunInTransactionAsync(connection =>
+            {
+                connection.Execute("INSERT OR REPLACE INTO search_metadata VALUES (?, ?)", table, fingerprint);
+                connection.Execute("DELETE FROM search_build_progress WHERE name = ?", table);
+            });
             Console.WriteLine($"Search index '{table}' complete in {timer.Elapsed.TotalSeconds:F1}s.");
         }
         _ready[table] = fingerprint;
     }
 
-    private Task InsertAsync(string table, IEnumerable<IndexRow> rows) => _index.RunInTransactionAsync(connection =>
+    private Task InsertAsync(string table, IEnumerable<IndexRow> rows, long? resumeMark = null) =>
+        _index.RunInTransactionAsync(connection =>
     {
         foreach (var row in rows)
         {
@@ -370,6 +404,10 @@ public sealed class SearchIndexService : IAsyncDisposable
             tokens.RowId = entry.RowId;
             tokens.Text = SearchText.Normalize(body);
             connection.Insert(tokens);
+        }
+        if (resumeMark is { } mark)
+        {
+            connection.Execute("UPDATE search_build_progress SET last_id = ? WHERE name = ?", mark, table);
         }
     });
 
@@ -428,6 +466,11 @@ public sealed class SearchIndexService : IAsyncDisposable
 
     [Table("notes")]
     private sealed class CommentaryTokenEntry : TokenIndexEntry;
+
+    private sealed class BuildProgressRow
+    {
+        public long LastId { get; set; }
+    }
 
     private sealed class IndexRow
     {

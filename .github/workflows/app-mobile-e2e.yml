@@ -39,7 +39,7 @@ jobs:
       AVD_PROFILE: pixel_7
       # Bump when the clean-snapshot recipe changes (boot options, readiness
       # flow, runner-action version) so stale snapshots cannot be restored.
-      AVD_SNAPSHOT_RECIPE: r1
+      AVD_SNAPSHOT_RECIPE: r2
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -206,7 +206,7 @@ jobs:
           avd-name: ${{ env.AVD_NAME }}
           force-avd-creation: false
           disable-animations: true
-          emulator-options: -no-window -gpu swiftshader -noaudio -no-boot-anim -no-metrics
+          emulator-options: -no-window -gpu swiftshader -noaudio -no-boot-anim -no-metrics -memory 4096
           script: npm run android:ready --prefix app/mobile-e2e
 
       # `emu kill` is graceful but asynchronous; the snapshot payload must reach
@@ -241,7 +241,7 @@ jobs:
           avd-name: ${{ env.AVD_NAME }}
           force-avd-creation: false
           disable-animations: true
-          emulator-options: -no-window -gpu swiftshader -noaudio -no-boot-anim -no-snapshot-save -no-metrics
+          emulator-options: -no-window -gpu swiftshader -noaudio -no-boot-anim -no-snapshot-save -no-metrics -memory 4096
           script: npm test --prefix app/mobile-e2e
 
       # The SDK save waits for a genuinely booted device (any stage's readiness
