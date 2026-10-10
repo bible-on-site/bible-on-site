@@ -5,15 +5,29 @@ from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import json
 from pathlib import Path
-from urllib.request import Request, urlopen
+import ssl
+from urllib.parse import urlsplit
+from urllib.request import Request, HTTPSHandler, HTTPDefaultErrorHandler, HTTPErrorProcessor, OpenerDirector
 from playback import MANIFEST, load_playback
+
+
+def public_https(request):
+    url = urlsplit(request.full_url)
+    if url.scheme != "https" or not url.hostname or url.username or url.password or url.query or url.fragment:
+        raise ValueError("Verification requires public HTTPS assets")
+    # No file, HTTP, custom protocol or redirect handler is installed.
+    opener = OpenerDirector()
+    opener.add_handler(HTTPSHandler(context=ssl.create_default_context()))
+    opener.add_handler(HTTPDefaultErrorHandler())
+    opener.add_handler(HTTPErrorProcessor())
+    return opener.open(request, timeout=120)
 
 
 def verify(perek_id, asset, base):
     load_playback(perek_id, asset["sourceSha256"])
     url = f'{base}/{asset["key"]}'
     origin = "https://xn--febl3a.co.il"
-    with urlopen(Request(url, headers={"Origin": origin}), timeout=120) as response:
+    with public_https(Request(url, headers={"Origin": origin})) as response:
         audio = response.read()
         if (response.status != 200 or response.headers.get_content_type() != "audio/ogg"
                 or response.headers.get("Access-Control-Allow-Origin") not in ("*", origin)
@@ -22,7 +36,7 @@ def verify(perek_id, asset, base):
             raise ValueError(f"{perek_id}: public Opus payload mismatch")
     start = len(audio) // 2
     end = min(start + 1023, len(audio) - 1)
-    with urlopen(Request(url, headers={"Range": f"bytes={start}-{end}"}), timeout=120) as response:
+    with public_https(Request(url, headers={"Range": f"bytes={start}-{end}"})) as response:
         if (response.status != 206 or response.headers.get_content_type() != "audio/ogg"
                 or response.headers.get("Content-Range") != f"bytes {start}-{end}/{len(audio)}"
                 or response.read() != audio[start:end + 1]):
