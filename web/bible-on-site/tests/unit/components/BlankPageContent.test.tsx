@@ -686,4 +686,92 @@ describe("BlankPageContent", () => {
 			expect(mockGetArticleForBook).toHaveBeenCalledTimes(1);
 		});
 	});
+
+	describe("expand props", () => {
+		const scrollIntoView = jest.fn();
+		beforeEach(() => {
+			scrollIntoView.mockClear();
+			Element.prototype.scrollIntoView = scrollIntoView;
+			mockGetPerushNotesForPage.mockResolvedValue([
+				{ pasuk: 3, noteIdx: 1, noteContent: "<p>note</p>" },
+			]);
+		});
+
+		it("expands the expandSlug perush and scrolls to the target note", async () => {
+			const onNavigate = jest.fn();
+			render(
+				<BlankPageContent
+					perekId={1}
+					perushim={mockPerushim}
+					hebrewDateStr="date"
+					expandSlug={'רש"י'}
+					expandToken={1}
+					expandNotePasuk={3}
+					expandNoteIdx={1}
+					onNavigate={onNavigate}
+				/>,
+			);
+
+			await screen.findByText("→ חזרה לפרשנים");
+			expect(onNavigate).toHaveBeenCalledWith('רש"י');
+			expect(mockGetPerushNotesForPage).toHaveBeenCalledWith(1, 1);
+
+			await waitFor(() => expect(scrollIntoView).toHaveBeenCalled());
+			const target = document.getElementById("book-note-ג-2");
+			expect(target).not.toBeNull();
+		});
+
+		it("re-expands when the token changes with the same slug", async () => {
+			const onNavigate = jest.fn();
+			const props = {
+				perekId: 1,
+				perushim: mockPerushim,
+				hebrewDateStr: "date",
+				expandSlug: 'רש"י' as string,
+				onNavigate,
+			};
+			const { rerender } = render(
+				<BlankPageContent {...props} expandToken={1} />,
+			);
+			await screen.findByText("→ חזרה לפרשנים");
+			expect(onNavigate).toHaveBeenCalledTimes(1);
+
+			rerender(<BlankPageContent {...props} expandToken={2} />);
+			await waitFor(() => expect(onNavigate).toHaveBeenCalledTimes(2));
+			expect(onNavigate).toHaveBeenLastCalledWith('רש"י');
+		});
+
+		it("does not re-expand on the same token", async () => {
+			const props = {
+				perekId: 1,
+				perushim: mockPerushim,
+				hebrewDateStr: "date",
+				expandSlug: 'רש"י' as string,
+				expandToken: 7,
+			};
+			const { rerender } = render(<BlankPageContent {...props} />);
+			await screen.findByText("→ חזרה לפרשנים");
+			expect(mockGetPerushNotesForPage).toHaveBeenCalledTimes(1);
+
+			rerender(<BlankPageContent {...props} />);
+			await act(async () => Promise.resolve());
+			expect(mockGetPerushNotesForPage).toHaveBeenCalledTimes(1);
+		});
+
+		it("expands an article by numeric slug", async () => {
+			mockGetArticleForBook.mockResolvedValue(mockArticles[0]);
+			render(
+				<BlankPageContent
+					perekId={1}
+					articles={mockArticles}
+					hebrewDateStr="date"
+					expandSlug="1"
+					expandToken={1}
+				/>,
+			);
+
+			await screen.findByText("חזרה למאמרים →");
+			expect(mockGetArticleForBook).toHaveBeenCalledWith(1);
+		});
+	});
 });
