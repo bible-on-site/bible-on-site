@@ -134,6 +134,10 @@ public sealed class MobileDeviceSession : IMobileDeviceSession, IAsyncLifetime
         }
     }
 
-    private void Create() => Driver = _sessions.Create(() =>
-        Adapter.CreateDriver(Configuration.Server, Adapter.CreateOptions(Configuration)));
+    private void Create()
+    {
+        Driver = _sessions.Create(() =>
+            Adapter.CreateDriver(Configuration.Server, Adapter.CreateOptions(Configuration)));
+        Adapter.OnSessionRecreated();
+    }
 }
