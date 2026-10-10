@@ -163,7 +163,7 @@ public class NotesDeliveryTests
     {
         await using var storage = new TestStorage();
         await using var remote = new TestStorage();
-        Directory.CreateDirectory(Path.Combine(remote.Root, "assets"));
+        Directory.CreateDirectory(Path.Join(remote.Root, "assets"));
         var db = await remote.CreateDatabaseAsync(Path.Join("assets", DbName), NotesDbV2.Statements());
         await db.CloseAsync();
         var pad = Pad();
@@ -171,7 +171,7 @@ public class NotesDeliveryTests
         var service = Create(storage, pad);
         await service.InitializeAsync();
         service.IsAvailable.Should().BeTrue();
-        File.Exists(Path.Combine(storage.Root, DbName)).Should().BeTrue();
+        File.Exists(Path.Join(storage.Root, DbName)).Should().BeTrue();
         await service.CloseConnectionForTestingAsync();
     }
 
@@ -183,8 +183,8 @@ public class NotesDeliveryTests
         var localDb = await local.CreateDatabaseAsync(DbName,
             [.. NotesDbV2.Statements(), "INSERT INTO _metadata VALUES ('build_timestamp','100')"]);
         await localDb.CloseAsync();
-        Directory.CreateDirectory(Path.Combine(remote.Root, "assets"));
-        var remoteDb = await remote.CreateDatabaseAsync(Path.Combine("assets", DbName),
+        Directory.CreateDirectory(Path.Join(remote.Root, "assets"));
+        var remoteDb = await remote.CreateDatabaseAsync(Path.Join("assets", DbName),
             [.. NotesDbV2.Statements((1, 1, 1, 0, "upgraded")), "INSERT INTO _metadata VALUES ('build_timestamp','200')"]);
         await remoteDb.CloseAsync();
         var pad = Pad();
@@ -199,7 +199,7 @@ public class NotesDeliveryTests
     public async Task Diagnostics_WhenLocalDatabaseIsCorrupt_ReportsZeroTimestamp()
     {
         await using var storage = new TestStorage();
-        await File.WriteAllTextAsync(Path.Combine(storage.Root, DbName), "not a sqlite database");
+        await File.WriteAllTextAsync(Path.Join(storage.Root, DbName), "not a sqlite database", TestContext.Current.CancellationToken);
         var service = Create(storage);
         var report = await service.GetDiagnosticsAsync();
         report.Should().Contain("Local DB build_timestamp: 0");
@@ -213,7 +213,7 @@ public class NotesDeliveryTests
         await using var remote = new TestStorage();
         var remoteDb = await remote.CreateDatabaseAsync(DbName, NotesDbV2.Statements());
         await remoteDb.CloseAsync();
-        await using var exclusive = new FileStream(Path.Combine(remote.Root, DbName), FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+        await using var exclusive = new FileStream(Path.Join(remote.Root, DbName), FileMode.Open, FileAccess.ReadWrite, FileShare.None);
         var pad = Pad();
         pad.Setup(p => p.TryGetAssetPathAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync(remote.Root);
         var service = Create(storage, pad);
@@ -235,8 +235,8 @@ public class NotesDeliveryTests
     public async Task UnsupportedDesktopDelivery_ReportsUnavailableWithoutThrowing()
     {
         var service = PadDeliveryService.Instance;
-        (await service.TryGetAssetPathAsync("perushim_notes")).Should().BeNull();
-        (await service.FetchAsync("perushim_notes")).Should().BeFalse();
+        (await service.TryGetAssetPathAsync("perushim_notes", TestContext.Current.CancellationToken)).Should().BeNull();
+        (await service.FetchAsync("perushim_notes", cancellationToken: TestContext.Current.CancellationToken)).Should().BeFalse();
         (await service.GetDeliveryDiagnosticsAsync("perushim_notes")).Should().Contain("Platform: no on-demand delivery support");
         var analytics = new AnalyticsService();
         analytics.SetScreen("test");

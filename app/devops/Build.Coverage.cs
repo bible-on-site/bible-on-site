@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Nuke.Common;
 using Nuke.Common.IO;
+using Nuke.Common.Tooling;
 using Nuke.Common.Tools.DotNet;
 using static Nuke.Common.Tools.DotNet.DotNetTasks;
 
@@ -11,30 +12,47 @@ partial class Build
     AbsolutePath UnitCoverageDirectory => CoverageDirectory / "unit";
     AbsolutePath IntegrationCoverageDirectory => CoverageDirectory / "integration";
     AbsolutePath MergedCoverageDirectory => CoverageDirectory / "merged";
-    AbsolutePath RunSettingsFile => RootDirectory / "coverlet.runsettings";
     AbsolutePath TestResultsDirectory => TestProject.Parent / "TestResults";
 
     /// <summary>
     /// Runs tests with coverage and converts the result to LCOV format.
     /// </summary>
-    void RunTestsWithCoverage(AbsolutePath outputDirectory, string filter, string description)
+    void RunTestsWithCoverage(AbsolutePath outputDirectory, string traitFilter, string description)
     {
         outputDirectory.CreateOrCleanDirectory();
         TestResultsDirectory.CreateOrCleanDirectory();
 
-        DotNetTest(s => s
-            .SetProjectFile(TestProject)
-            .SetConfiguration(Configuration)
-            .SetFilter(filter)
-            .EnableNoRestore()
-            .EnableNoBuild()
-            .SetResultsDirectory(outputDirectory)
-            .SetSettingsFile(RunSettingsFile)
-            .SetDataCollector("XPlat Code Coverage")
-            .AddLoggers($"junit;LogFileName={TestResultsDirectory / "test-results.xml"}"));
+        // coverlet.MTP cannot instrument the test assembly (it is the MTP controller
+        // process, coverlet#1911), so coverage runs through coverlet.console which
+        // instruments on disk before spawning the test app.
+        var testBinaryDirectory = TestProject.Parent / "bin" / Configuration / "net10.0";
+        var resultsRelative = Path.GetRelativePath(RootDirectory, outputDirectory);
+        ProcessTasks.StartProcess(DotNetPath,
+                $"tool run coverlet \"{testBinaryDirectory}\" --target dotnet" +
+                $" --targetargs \"\\\"{testBinaryDirectory / "BibleOnSite.Tests.dll"}\\\" {traitFilter}" +
+                $" --results-directory {resultsRelative}" +
+                " --report-xunit-junit --report-xunit-junit-filename test-results.xml\"" +
+                $" --output \"{outputDirectory / "coverage.cobertura.xml"}\" --format cobertura" +
+                " --include \"[BibleOnSite.Tests]*\"" +
+                // coverlet.console treats each option value literally (no comma
+                // splitting), so filters repeat the flag per pattern.
+                " --exclude \"[xunit.*]*\" --exclude \"[FluentAssertions]*\"" +
+                " --exclude \"[Moq]*\" --exclude \"[coverlet.*]*\" --exclude \"[Microsoft.*]*\"" +
+                " --exclude-by-attribute Obsolete --exclude-by-attribute GeneratedCodeAttribute" +
+                " --exclude-by-attribute CompilerGeneratedAttribute --exclude-by-attribute ExcludeFromCodeCoverageAttribute" +
+                " --exclude-by-file \"**/obj/**\" --exclude-by-file \"**/bin/**\" --exclude-by-file \"**/.nuget/**\"" +
+                " --include-test-assembly --skipautoprops",
+                RootDirectory)
+            .AssertZeroExitCode();
+
+        var junitFile = outputDirectory / "test-results.xml";
+        if (junitFile.FileExists())
+        {
+            junitFile.Copy(TestResultsDirectory / "test-results.xml", ExistsPolicy.FileOverwrite);
+        }
 
         // Find the Cobertura XML and convert to LCOV
-        var coverageFiles = outputDirectory.GlobFiles("**/coverage.cobertura.xml");
+        var coverageFiles = outputDirectory.GlobFiles("coverage.cobertura*.xml");
         if (coverageFiles.Count == 0)
         {
             Serilog.Log.Warning($"No {description} coverage file was generated");
@@ -62,12 +80,12 @@ partial class Build
     Target CoverageUnit => _ => _
         .Description("Run unit tests with coverage (outputs LCOV)")
         .DependsOn(CompileTests)
-        .Executes(() => RunTestsWithCoverage(UnitCoverageDirectory, "Category!=Integration", "Unit"));
+        .Executes(() => RunTestsWithCoverage(UnitCoverageDirectory, "--filter-not-trait Category=Integration", "Unit"));
 
     Target CoverageIntegration => _ => _
         .Description("Run integration tests with coverage (outputs LCOV, requires API server)")
         .DependsOn(CompileTests)
-        .Executes(() => RunTestsWithCoverage(IntegrationCoverageDirectory, "Category=Integration", "Integration"));
+        .Executes(() => RunTestsWithCoverage(IntegrationCoverageDirectory, "--filter-trait Category=Integration", "Integration"));
 
     Target CoverageMerge => _ => _
         .Description("Merge unit and integration LCOV reports")

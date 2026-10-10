@@ -72,6 +72,19 @@ public class ArticlesViewModelTests
         viewModel.DisplayTitle.Should().Be("מאמרים של הרב משה לוי");
     }
 
+    [Fact]
+    public void DisplayTitle_WhenPerekTitleChanges_ShouldRaisePropertyChanged()
+    {
+        var viewModel = new ArticlesViewModel(123, "בראשית א");
+        var changed = new List<string?>();
+        viewModel.PropertyChanged += (_, args) => changed.Add(args.PropertyName);
+
+        viewModel.PerekTitle = "שמות ב";
+
+        changed.Should().Contain(nameof(viewModel.DisplayTitle));
+        viewModel.DisplayTitle.Should().Be("מאמרים על שמות ב");
+    }
+
     #endregion
 
     #region Articles Collection Tests

@@ -20,7 +20,7 @@ public class StarterServiceIntegrationTests
         var service = CreateTestableStarterService();
 
         // Act
-        await service.LoadAsync();
+        await service.LoadAsync(TestContext.Current.CancellationToken);
 
         // Assert
         service.IsLoaded.Should().BeTrue();
@@ -34,7 +34,7 @@ public class StarterServiceIntegrationTests
         var service = CreateTestableStarterService();
 
         // Act
-        await service.LoadAsync();
+        await service.LoadAsync(TestContext.Current.CancellationToken);
 
         // Assert
         service.PerekArticlesCounters.Should().HaveCount(929, "There should be 929 perek counters");
@@ -45,7 +45,7 @@ public class StarterServiceIntegrationTests
     {
         // Arrange
         var service = CreateTestableStarterService();
-        await service.LoadAsync();
+        await service.LoadAsync(TestContext.Current.CancellationToken);
 
         // Act
         // Most APIs will have at least author with ID 1
@@ -63,7 +63,7 @@ public class StarterServiceIntegrationTests
         var service = CreateTestableStarterService();
 
         // Act
-        await service.LoadAsync();
+        await service.LoadAsync(TestContext.Current.CancellationToken);
 
         // Assert
         // Test data: author 1 has 1 article, author 2 has 2 articles
@@ -81,11 +81,11 @@ public class StarterServiceIntegrationTests
     {
         // Arrange
         var service = CreateTestableStarterService();
-        await service.LoadAsync();
+        await service.LoadAsync(TestContext.Current.CancellationToken);
         var initialAuthorsCount = service.Authors.Count;
 
         // Act
-        await service.LoadAsync(); // Second call
+        await service.LoadAsync(TestContext.Current.CancellationToken); // Second call
 
         // Assert
         service.Authors.Count.Should().Be(initialAuthorsCount, "Should not reload data");
