@@ -167,7 +167,10 @@ public abstract class MobileDeviceTest : IAsyncLifetime
     // session management.
     protected virtual AppiumOptions CreateOptions() => Platform.CreateOptions(Configuration);
 
-    protected void SaveDiagnostics(string name, string outcome, Exception? error = null)
+    protected void SaveDiagnostics(string name, string outcome) =>
+        SaveDiagnostics(name, outcome, null);
+
+    private void SaveDiagnostics(string name, string outcome, Exception? error)
     {
         var prefix = Path.Join(Configuration.ArtifactDirectory, $"{name}-{outcome}");
         Directory.CreateDirectory(Configuration.ArtifactDirectory);

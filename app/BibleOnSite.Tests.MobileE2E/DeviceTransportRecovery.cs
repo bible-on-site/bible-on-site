@@ -37,8 +37,8 @@ internal static class DeviceTransportRecovery
             // session payload — retrying cannot help it.
             return false;
         }
-        Run(adb, "reconnect", ProbeTimeoutMs);
-        Run(adb, $"-s {udid} wait-for-device", WaitForDeviceTimeoutMs);
+        Run(adb, ["reconnect"], ProbeTimeoutMs);
+        Run(adb, ["-s", udid, "wait-for-device"], WaitForDeviceTimeoutMs);
         return Probe(adb, udid) == "device";
     }
 
@@ -55,12 +55,12 @@ internal static class DeviceTransportRecovery
         {
             return string.Empty;
         }
-        var output = Run(adb, "devices -l", ProbeTimeoutMs);
+        var output = Run(adb, ["devices", "-l"], ProbeTimeoutMs);
         return output is null ? string.Empty : $"\nadb devices -l:\n{output}";
     }
 
     private static string? Probe(string adb, string udid) =>
-        Run(adb, $"-s {udid} get-state", ProbeTimeoutMs)?.Trim();
+        Run(adb, ["-s", udid, "get-state"], ProbeTimeoutMs)?.Trim();
 
     private static string? ResolveAdb()
     {
@@ -83,14 +83,18 @@ internal static class DeviceTransportRecovery
         return "adb";
     }
 
-    private static string? Run(string command, string arguments, int timeoutMs)
+    private static string? Run(string command, string[] arguments, int timeoutMs)
     {
-        var start = new ProcessStartInfo(command, arguments)
+        var start = new ProcessStartInfo(command)
         {
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
         };
+        foreach (var argument in arguments)
+        {
+            start.ArgumentList.Add(argument);
+        }
         try
         {
             using var process = Process.Start(start);
@@ -99,7 +103,8 @@ internal static class DeviceTransportRecovery
                 return null;
             }
             var output = process.StandardOutput.ReadToEndAsync();
-            var error = process.StandardError.ReadToEndAsync();
+            // Drain stderr so a chatty process cannot stall on a full pipe.
+            _ = process.StandardError.ReadToEndAsync();
             if (!process.WaitForExit(timeoutMs))
             {
                 process.Kill(entireProcessTree: true);
