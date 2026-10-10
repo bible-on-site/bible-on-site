@@ -7,6 +7,7 @@ using BibleOnSite.Controls;
 using BibleOnSite.Handlers;
 #if IOS
 using Plugin.Firebase.Core.Platforms.iOS;
+using Plugin.Firebase.Analytics;
 #endif
 
 // Force rebuild for font resource loading
@@ -103,6 +104,14 @@ public static class MauiProgram
 				{
 					CrossFirebase.Initialize();
 					IsFirebaseInitialized = true;
+					// Info.plist keeps collection off so nothing can emit before
+					// this point; e2e-marked processes keep it off so automatic
+					// and custom suite events never reach the production
+					// property, and the explicit value also overrides a flag a
+					// previous non-suite install persisted on this device.
+					var analyticsCollectionEnabled = !SearchIndexService.IsE2eMarkedProcess();
+					CrossFirebaseAnalytics.Current.IsAnalyticsCollectionEnabled = analyticsCollectionEnabled;
+					Console.WriteLine($"[Analytics] collection enabled={analyticsCollectionEnabled}");
 				}
 				catch (Exception ex)
 				{

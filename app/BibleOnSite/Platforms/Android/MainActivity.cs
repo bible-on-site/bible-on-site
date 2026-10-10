@@ -31,6 +31,14 @@ public class MainActivity : MauiAppCompatActivity
             Services.SearchIndexService.MarkE2eLaunchFromIntent();
         }
         base.OnCreate(savedInstanceState);
+        // The manifest keeps collection off because FirebaseInitProvider runs
+        // before managed code; enable it only outside the e2e suite, and set it
+        // explicitly both ways so a flag persisted by an earlier non-suite
+        // install on this device cannot leak test traffic either.
+        var analyticsCollectionEnabled = !Services.SearchIndexService.IsE2eMarkedProcess();
+        Plugin.Firebase.Analytics.CrossFirebaseAnalytics.Current.IsAnalyticsCollectionEnabled =
+            analyticsCollectionEnabled;
+        Console.WriteLine($"[Analytics] collection enabled={analyticsCollectionEnabled}");
         HandleAppLinkIntent(Intent);
         // Firebase initialized from google-services.json (Plugin.Firebase / Xamarin.Firebase.Analytics process it at build).
         // For explicit init use Plugin.Firebase.Core CrossFirebase.Initialize(activity, settings) when needed.
