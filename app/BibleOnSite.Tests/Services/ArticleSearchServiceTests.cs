@@ -238,4 +238,121 @@ public class ArticleSearchServiceTests
             SubtitleHtml = "s"
         }.ResultType.Should().Be(SearchFilter.Articles);
     }
+
+    [Fact]
+    public async Task SearchArticles_ConvenienceOverloads_DelegateToFullOverload()
+    {
+        using var http = new GraphQLTransport(SearchResponse);
+        var service = new ArticleService(http.Client);
+
+        var byToken = await service.SearchArticlesAsync("בראשית", 10, CancellationToken.None);
+        var byTimeout = await service.SearchArticlesAsync("בראשית", 10, TimeSpan.FromSeconds(30));
+
+        byToken!.Total.Should().Be(2);
+        byTimeout!.Total.Should().Be(2);
+        http.Requests.Should().HaveCount(2);
+        http.Requests.Should().OnlyContain(request => request.Contains("\"limit\":10"));
+    }
+
+    [Fact]
+    public async Task SearchArticles_TimeoutOverload_AppliesTimeoutToRequest()
+    {
+        using var http = new GraphQLTransport(SearchResponse);
+        http.Respond = async token =>
+        {
+            await Task.Delay(TimeSpan.FromSeconds(5), token);
+            return GraphQLTransport.JsonResponse(SearchResponse);
+        };
+        var service = new ArticleService(http.Client);
+
+        // A dropped timeout argument would fall back to the default budget and
+        // return the canned page instead of timing out.
+        await FluentActions.Awaiting(() => service.SearchArticlesAsync("בראשית", 10, TimeSpan.FromMilliseconds(50)))
+            .Should().ThrowAsync<TimeoutException>();
+    }
+
+    [Fact]
+    public async Task SearchArticles_NullData_ReturnsNull()
+    {
+        using var http = new GraphQLTransport("{\"data\":{\"searchArticles\":null}}");
+        var service = new ArticleService(http.Client);
+
+        var page = await service.SearchArticlesAsync("בראשית", 20);
+
+        page.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task SearchArticles_NullHitsAndNullFields_MapToEmptyDefaults()
+    {
+        using var http = new GraphQLTransport("""
+            {"data":{"searchArticles":{"total":1,"hits":[
+            {"articleId":9,"name":null,"authorName":null,"authorId":2,"perekId":1,"source":null,"excerpt":null,"score":0.7}]}}}
+            """);
+        var service = new ArticleService(http.Client);
+
+        var page = await service.SearchArticlesAsync("בראשית", 20);
+
+        page!.Hits.Should().ContainSingle().Which.Name.Should().BeEmpty();
+        page.Hits[0].AuthorName.Should().BeEmpty();
+        page.Hits[0].Source.Should().BeEmpty();
+        page.Hits[0].Excerpt.Should().BeEmpty();
+
+        // A null hits list coalesces to an empty page rather than throwing.
+        http.Respond = _ => Task.FromResult(
+            GraphQLTransport.JsonResponse("{\"data\":{\"searchArticles\":{\"total\":0,\"hits\":null}}}"));
+        var empty = await service.SearchArticlesAsync("בראשית", 20);
+        empty!.Total.Should().Be(0);
+        empty.Hits.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task SearchViewModel_NullArticlePage_SetsAvailabilityMessage()
+    {
+        using var http = new GraphQLTransport("{\"data\":{\"searchArticles\":null}}");
+        var service = new ArticleService(http.Client);
+        await using var storage = new TestStorage();
+        var vm = new SearchViewModel(
+            new PerekDataService(new LocalDatabaseService(storage.FileSystem.Object)),
+            null,
+            service)
+        { SearchPhrase = "בראשית" };
+        foreach (var filter in new[] { SearchFilter.Author, SearchFilter.Pasuk, SearchFilter.Perush, SearchFilter.Perek })
+        {
+            vm.SetFilterEnabled(filter, false);
+        }
+        vm.SetFilterEnabled(SearchFilter.Articles, true);
+
+        await vm.SearchAsync();
+
+        vm.AvailabilityMessage.Should().Contain("חיבור רשת");
+        vm.ErrorMessage.Should().BeEmpty();
+        vm.IsLoading.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task SearchViewModel_NullArticleService_CompletesWithLocalResultsOnly()
+    {
+        // No ArticleService injected and no default fallback → the remote leg
+        // returns null and the local pipeline still publishes normally.
+        await using var storage = new TestStorage();
+        var vm = new SearchViewModel(
+            new PerekDataService(new LocalDatabaseService(storage.FileSystem.Object)),
+            null,
+            articleService: null)
+        { SearchPhrase = "בראשית" };
+        vm.SetAuthors([new Author { Id = 1, Name = "בראשית בוטנר", Details = "" }]);
+        foreach (var filter in new[] { SearchFilter.Pasuk, SearchFilter.Perush, SearchFilter.Perek })
+        {
+            vm.SetFilterEnabled(filter, false);
+        }
+        vm.SetFilterEnabled(SearchFilter.Articles, true);
+
+        await vm.SearchAsync();
+
+        vm.SearchResults.Should().ContainSingle().Which.Should().BeOfType<AuthorSearchResult>();
+        vm.AvailabilityMessage.Should().BeEmpty();
+        vm.ErrorMessage.Should().BeEmpty();
+        vm.IsLoading.Should().BeFalse();
+    }
 }
