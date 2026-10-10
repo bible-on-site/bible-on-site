@@ -28,7 +28,7 @@ public class ApiServerFixture : IAsyncLifetime
     public static int StartupTimeoutSeconds => 600;
     public const int HealthCheckIntervalMs = 500;
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         // IMPORTANT: Ensure database is populated BEFORE starting the API server.
         // xUnit does not guarantee ICollectionFixture initialization order, so we
@@ -46,7 +46,7 @@ public class ApiServerFixture : IAsyncLifetime
         Console.WriteLine("API server is ready.");
     }
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         if (_apiProcess != null && !_apiProcess.HasExited)
         {

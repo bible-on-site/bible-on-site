@@ -1,6 +1,5 @@
 using OpenQA.Selenium;
 using Xunit;
-using Xunit.Abstractions;
 
 namespace BibleOnSite.Tests.MobileE2E;
 

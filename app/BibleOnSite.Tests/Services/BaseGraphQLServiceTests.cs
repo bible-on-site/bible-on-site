@@ -19,7 +19,7 @@ public class BaseGraphQLServiceTests
     public async Task Query_SerializesOperationAndVariables_AndReturnsTypedData()
     {
         using var http = new GraphQLTransport("{\"data\":{\"value\":42}}");
-        var result = await new QueryService(http.Client).Query();
+        var result = await new QueryService(http.Client).Query(TestContext.Current.CancellationToken);
         result!.Value.Should().Be(42);
         http.Requests.Single().Should().Contain("\"operationName\":\"Value\"").And.Contain("\"id\":7");
     }
@@ -58,6 +58,6 @@ public class BaseGraphQLServiceTests
     public async Task Query_HandlesNullDataAndEmptyErrors()
     {
         using var http = new GraphQLTransport("{\"data\":null,\"errors\":[]}");
-        (await new QueryService(http.Client).Query()).Should().BeNull();
+        (await new QueryService(http.Client).Query(TestContext.Current.CancellationToken)).Should().BeNull();
     }
 }
