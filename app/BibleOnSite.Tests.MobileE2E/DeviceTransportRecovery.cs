@@ -1,22 +1,45 @@
+using System.ComponentModel;
 using System.Diagnostics;
 using OpenQA.Selenium;
 
 namespace BibleOnSite.Tests.MobileE2E;
 
+// The mirror image of DeviceSessionDeath: "device offline" and
+// "no devices/emulators" mean the client lost the adb transport while the
+// Appium session's server-side state is indeterminate — it may still be
+// tearing down. Nothing here claims the session is dead, so cleanup failures
+// carrying these signatures must stay latched (see MobileDeviceSessionFactory)
+// until a retried teardown confirms Appium released the session.
+internal static class DeviceTransportLoss
+{
+    private static readonly string[] Signatures =
+    [
+        "device offline",
+        "no devices/emulators",
+    ];
+
+    public static bool Matches(Exception exception) =>
+        exception is WebDriverException &&
+        Signatures.Any(signature => exception.ToString().Contains(signature, StringComparison.OrdinalIgnoreCase));
+}
+
 // A session-startup failure can come from the device transport rather than the
 // app under test: "adb: device offline" is a stale adb transport, not a dead
-// emulator. Probing `adb -s <udid> get-state` distinguishes the two cases —
-// only a transport that fails to report "device" is reconnected and retried.
-// A genuinely dead emulator still fails after reconnect, so recovery can never
+// emulator. Recovery only runs for those transport signatures, probes
+// `adb -s <udid>` first, and reconnects when the transport is gone — then
+// requires the same readiness signal waitForAndroidDevice gates on (booted
+// system, responsive package manager) before the one session retry is spent.
+// A genuinely dead emulator still fails readiness, so recovery can never
 // mask an app regression.
 internal static class DeviceTransportRecovery
 {
     private const int ProbeTimeoutMs = 15_000;
     private const int WaitForDeviceTimeoutMs = 45_000;
+    private const int ReadinessRounds = 2;
 
-    internal static bool TryReconnect(Exception startupFailure)
+    internal static bool TryReconnect(Exception failure)
     {
-        if (startupFailure is not WebDriverException)
+        if (!DeviceTransportLoss.Matches(failure))
         {
             return false;
         }
@@ -26,15 +49,25 @@ internal static class DeviceTransportRecovery
         {
             return false;
         }
-        if (Probe(udid) == "device")
+        if (IsResponsive(udid))
         {
             // The transport is healthy, so the failure came from the app or the
             // session payload — retrying cannot help it.
             return false;
         }
         Run(["reconnect"], ProbeTimeoutMs);
-        Run(["-s", udid, "wait-for-device"], WaitForDeviceTimeoutMs);
-        return Probe(udid) == "device";
+        // wait-for-device returns the moment the transport is back, but Android
+        // can still be recovering; readiness is re-probed so a half-awake
+        // device does not burn the single retry on an early session attempt.
+        for (var round = 0; round < ReadinessRounds; round++)
+        {
+            Run(["-s", udid, "wait-for-device"], WaitForDeviceTimeoutMs);
+            if (IsResponsive(udid))
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     // Captured into session-startup diagnostics so a transport loss is visible
@@ -55,8 +88,20 @@ internal static class DeviceTransportRecovery
         serial is { Length: > 0 and <= 64 } &&
         serial.All(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '-' or '_' or ':');
 
+    // Mirrors waitForAndroidDevice's ready signal (android-readiness.mjs): the
+    // transport answers, the system booted, and the package manager serves
+    // queries. A bare "device" state can precede both after a reconnect and
+    // burn the only retry while Android is still recovering.
+    private static bool IsResponsive(string udid) =>
+        Probe(udid) == "device"
+        && Shell(udid, "getprop", "sys.boot_completed") == "1"
+        && Shell(udid, "pm", "path", "android")?.StartsWith("package:", StringComparison.Ordinal) == true;
+
     private static string? Probe(string udid) =>
         Run(["-s", udid, "get-state"], ProbeTimeoutMs)?.Trim();
+
+    private static string? Shell(string udid, params string[] command) =>
+        Run(["-s", udid, "shell", ..command], ProbeTimeoutMs)?.Trim();
 
     private static string? Run(string[] arguments, int timeoutMs)
     {
@@ -87,7 +132,9 @@ internal static class DeviceTransportRecovery
             }
             return process.ExitCode == 0 ? output.Result : null;
         }
-        catch (Exception)
+        catch (Exception exception) when (exception is Win32Exception
+            or InvalidOperationException or ObjectDisposedException
+            or IOException or NotSupportedException or AggregateException)
         {
             return null;
         }

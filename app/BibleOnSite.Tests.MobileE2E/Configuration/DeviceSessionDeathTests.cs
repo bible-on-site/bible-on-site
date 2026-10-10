@@ -16,12 +16,17 @@ public sealed class DeviceSessionDeathTests
     [InlineData("invalid session id")]
     [InlineData("A session is either terminated or not started")]
     [InlineData("Original error: connect ECONNREFUSED 127.0.0.1:8200")]
-    // adb reports a dropped emulator transport while a session is being built.
+    public void MatchesDeadSessionTransportErrors(string message) =>
+        Assert.True(DeviceSessionDeath.Matches(new UnknownErrorException(message)));
+
+    [Theory]
+    // adb transport loss leaves the server-side session indeterminate — not
+    // confirmed dead — so cleanup failures with these signatures still latch.
     [InlineData("Error executing adbExec. Original error: 'Command 'adb -P 5037 -s emulator-5554 " +
         "shell dumpsys package io.appium.uiautomator2.server' exited with code 1'; Command output: adb: device offline")]
     [InlineData("adb: error: no devices/emulators found")]
-    public void MatchesDeadSessionTransportErrors(string message) =>
-        Assert.True(DeviceSessionDeath.Matches(new UnknownErrorException(message)));
+    public void RejectsAmbiguousTransportLoss(string message) =>
+        Assert.False(DeviceSessionDeath.Matches(new UnknownErrorException(message)));
 
     [Fact]
     public void RejectsFailuresUnrelatedToTheTransport()
