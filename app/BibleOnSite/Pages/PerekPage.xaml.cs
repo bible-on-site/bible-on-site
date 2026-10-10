@@ -756,14 +756,10 @@ public partial class PerekPage : ContentPage, IQueryAttributable
             bottom = window.SafeAreaInsets.Bottom;
         }
 
-        if (bottom <= 0)
-        {
-            LayoutCircularMenu();
-            return;
-        }
-
         // Shift the bars down over the home-indicator inset and pull the page
         // up underneath so no gap shows (tester-confirmed combination).
+        // With no inset (iPad, landscape) the same assignments restore the
+        // layout defaults, so an inset disappearing never leaves stale values.
         var totalHeight = 90 + bottom;
         BottomBar.TranslationY = bottom;
         BottomBar.Padding = new Thickness(0, 0, 0, bottom);
