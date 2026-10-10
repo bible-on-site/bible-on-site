@@ -21,6 +21,7 @@
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import type { SourceFingerprint } from "./fingerprint.ts";
 import { globMatcher } from "./glob.ts";
 import { isPartialClassOf } from "./xunit-discovery.ts";
 import {
@@ -49,6 +50,15 @@ export interface SelectionInput {
 	forceFull?: boolean;
 	/** Reads file contents at the tested revision (partial-class detection). */
 	readFile?: (repoRelativePath: string) => string | null;
+	/**
+	 * Tested-revision structural fingerprints keyed by repo-relative path,
+	 * `null` where the file could not be fingerprinted. A modified file whose
+	 * baseline and tested fingerprints match resolves as `unchanged-structural`
+	 * and selects nothing — formatting and comment-only edits stop
+	 * invalidating coverage. Any missing entry fails safe: the file is
+	 * treated as changed.
+	 */
+	currentFingerprints?: ReadonlyMap<string, SourceFingerprint | null>;
 }
 
 export interface FileResolution {
@@ -77,6 +87,11 @@ export interface SelectionManifest {
 	newTests: string[];
 	/** Baseline entries no longer discovered on this platform/revision. */
 	staleTreeTests: string[];
+	/**
+	 * Modified files proven trivia-identical to their baseline fingerprint —
+	 * they contributed no test selections.
+	 */
+	unchangedStructural: string[];
 	/**
 	 * Changed test files whose declared tests are not candidates on this
 	 * platform (other platform or another test category) — diagnostics only.
@@ -219,6 +234,21 @@ export function selectTests(input: SelectionInput): SelectionManifest {
 		}
 		if (noImpact(path)) return finish("ignored", "no-impact-rule");
 		if (runAll(path)) return finish("all", "global-trigger");
+		// Structural equivalence: a modified file whose baseline and tested
+		// fingerprints are identical could only have changed in trivia. Broad
+		// patterns (above) stay absolute — bootstrap/config edits always run.
+		if (status === "modified") {
+			const baselineFp = tree?.sourceFingerprints?.[path];
+			const currentFp = input.currentFingerprints?.get(path);
+			if (
+				baselineFp !== undefined &&
+				currentFp != null &&
+				baselineFp.version === currentFp.version &&
+				baselineFp.semantic === currentFp.semantic
+			) {
+				return finish("none", "unchanged-structural");
+			}
+		}
 		if (tree) {
 			const fileTests = mappedByFile.get(path);
 			if (fileTests !== undefined && fileTests.length > 0) {
@@ -281,6 +311,11 @@ export function selectTests(input: SelectionInput): SelectionManifest {
 	}
 	const selectAllMode = fallbacks.length > 0;
 	const sortedReasons = (id: string) => [...(reasons.get(id) ?? new Set<string>())].sort();
+	const fingerprintInputs = input.currentFingerprints
+		? [...input.currentFingerprints.entries()]
+				.map(([path, fp]) => [path, fp?.semantic ?? null])
+				.sort(([a], [b]) => a.localeCompare(b))
+		: null;
 	const manifest: SelectionManifest = {
 		schemaVersion: SCHEMA_VERSION,
 		suite: rules.suite,
@@ -289,7 +324,12 @@ export function selectTests(input: SelectionInput): SelectionManifest {
 		selectAll: selectAllMode,
 		snapshotSha: tree?.snapshotSha ?? null,
 		testedSha: input.testedSha,
-		fingerprint: fingerprint([rules, tree ?? input.baseline, changedFiles]),
+		fingerprint: fingerprint([
+			rules,
+			tree ?? input.baseline,
+			changedFiles,
+			fingerprintInputs,
+		]),
 		forced: input.forceFull === true,
 		fallbacks: fallbacks.sort(),
 		changedFiles: resolutions.sort((a, b) => a.path.localeCompare(b.path)),
@@ -302,6 +342,10 @@ export function selectTests(input: SelectionInput): SelectionManifest {
 			.sort((a, b) => a.id.localeCompare(b.id)),
 		newTests: newTests.sort(),
 		staleTreeTests,
+		unchangedStructural: resolutions
+			.filter((resolution) => resolution.reason === "unchanged-structural")
+			.map((resolution) => resolution.path)
+			.sort(),
 		nonApplicableTestChanges: nonApplicableTestChanges.sort(),
 		filter: {
 			vstest: selectAllMode

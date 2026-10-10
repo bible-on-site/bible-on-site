@@ -15,6 +15,7 @@
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, relative } from "node:path";
+import { fingerprintSource, type SourceFingerprint } from "./fingerprint.ts";
 import { globMatcher } from "./glob.ts";
 import { stripExtension } from "./select.ts";
 import {
@@ -160,6 +161,14 @@ export function collectTree(options: CollectOptions): CoverageTree {
 
 	const idIndex = scanAutomationIds(sources);
 	const sourceUnits = computeSourceUnits(sources);
+	// Structural fingerprints persist the snapshot's trivia-insensitive digest
+	// per file so future selections can prove a diff was comment/format-only.
+	// Unfingerprintable files are simply absent — always read as changed.
+	const sourceFingerprints: Record<string, SourceFingerprint> = {};
+	for (const { path, content } of sources) {
+		const fp = fingerprintSource(path, content);
+		if (fp !== null) sourceFingerprints[path] = fp;
+	}
 	const discovered = discoverSuiteTests(
 		repoRoot,
 		rules.tests.root,
@@ -203,6 +212,7 @@ export function collectTree(options: CollectOptions): CoverageTree {
 		complete: options.complete,
 		sourceUnits,
 		sourceFiles,
+		sourceFingerprints,
 		tests: Object.fromEntries(
 			Object.entries(tests).sort(([a], [b]) => a.localeCompare(b)),
 		),

@@ -21,6 +21,7 @@ import { execFileSync } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { collectTree, writeTree } from "./collect-appium.ts";
+import { fingerprintSource, type SourceFingerprint } from "./fingerprint.ts";
 import { compareRevisions, downloadArtifact, findArtifact } from "./github.ts";
 import { loadBaselineTree, loadRules, type ChangedFile } from "./model.ts";
 import { applicableTests, repoFileReader, selectTests, type Baseline } from "./select.ts";
@@ -210,6 +211,26 @@ async function select(flags: Map<string, string>): Promise<void> {
 		changedFiles = diff.changedFiles;
 	}
 
+	// Structural fingerprints of modified files at the tested revision —
+	// compared against baseline-persisted fingerprints to prove trivia-only
+	// edits. Unreadable/unparseable files map to `null` (treated as changed).
+	const currentFingerprints = new Map<string, SourceFingerprint | null>();
+	if (changedFiles !== null) {
+		for (const change of changedFiles) {
+			if (change.status !== "modified") continue;
+			let fp: SourceFingerprint | null = null;
+			try {
+				fp = fingerprintSource(
+					change.path,
+					readFileSync(join(REPO_ROOT, change.path), "utf8"),
+				);
+			} catch (error) {
+				if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+			}
+			currentFingerprints.set(change.path, fp);
+		}
+	}
+
 	const manifest = selectTests({
 		rules,
 		baseline,
@@ -219,6 +240,7 @@ async function select(flags: Map<string, string>): Promise<void> {
 		testedSha,
 		forceFull: flags.has("force-full") || process.env.FORCE_FULL_SUITE === "true",
 		readFile: repoFileReader(REPO_ROOT),
+		currentFingerprints,
 	});
 
 	mkdirSync(dirname(out), { recursive: true });
@@ -253,6 +275,7 @@ async function select(flags: Map<string, string>): Promise<void> {
 			`- selected: **${wouldRun.length}** / ${candidates.length} tests${manifest.selectAll ? " (full suite)" : ""}`,
 			`- fallbacks: ${manifest.fallbacks.join(", ") || "none"}`,
 			`- changed files: ${manifest.changedFiles.length}`,
+			`- structurally unchanged (trivia-only): ${manifest.unchangedStructural.length}`,
 			``,
 			...(rows.length > 0
 				? ["| selected test | reasons |", "| --- | --- |", ...rows]

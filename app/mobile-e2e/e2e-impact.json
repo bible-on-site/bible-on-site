@@ -2,7 +2,7 @@
 	"schemaVersion": 1,
 	"suite": "app-mobile-e2e",
 	"collector": "appium-automation-id",
-	"collectorVersion": "1.0.0",
+	"collectorVersion": "1.1.0",
 	"platforms": {
 		"android": "Android",
 		"ios": "iOS"

@@ -7,6 +7,7 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
+import type { SourceFingerprint } from "./fingerprint.ts";
 
 export const SCHEMA_VERSION = 1;
 
@@ -55,6 +56,13 @@ export interface CoverageTree {
 	sourceUnits: Record<string, string[]>;
 	/** Every app source file scanned at the snapshot. */
 	sourceFiles: string[];
+	/**
+	 * Trivia-insensitive structural fingerprints of `sourceFiles` at the
+	 * snapshot (see `fingerprint.ts`). Files that could not be fingerprinted
+	 * are absent and therefore always read as changed — never the reverse.
+	 * Optional so older baselines stay compatible.
+	 */
+	sourceFingerprints?: Record<string, SourceFingerprint>;
 	tests: Record<string, CoverageTreeTest>;
 	/** Evidence records that no discovered test claimed (diagnostics). */
 	unmatchedEvidence?: string[];

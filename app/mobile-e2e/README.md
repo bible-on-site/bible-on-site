@@ -154,7 +154,9 @@ directory — the automation ids it queried through `Platform.AutomationId` and
 the sessions attributed to it. CI collects these into a per-platform coverage
 tree (`app-mobile-e2e-coverage.master.<platform>` on master pushes) and the
 `devops/github/ci/e2e-impact` selector maps the accumulated diff onto the
-affected tests. Selection currently runs in shadow mode — the manifest is
+affected tests; per-file structural fingerprints persisted in the tree let
+comment/formatting-only edits resolve as `unchanged-structural` instead of
+invalidating coverage. Selection currently runs in shadow mode — the manifest is
 reported while every test still runs — until evidence supports enforcement;
 see [docs/tests/app/e2e-impact.md](../../docs/tests/app/e2e-impact.md).
 `MOBILE_E2E_SELECTION=<manifest>` narrows `dotnet test` through a

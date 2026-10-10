@@ -52,6 +52,8 @@ it (`AutomationId="X"` in XAML, `AutomationId = "X"` / `$"Prefix{n}"` /
 - `snapshotSha` — the commit whose code produced the evidence;
 - `platform`, `suite`, `collectorVersion`, `collectedAtUtc`, `complete`;
 - `sourceUnits`/`sourceFiles` — the scanned source surface;
+- `sourceFingerprints` — a trivia-insensitive structural digest per scanned
+  file plus its extracted declaration signatures (see below);
 - per test: declared file, reached files, automation ids, unmapped ids
   (evidence gaps), sessions and last outcome.
 
@@ -60,6 +62,36 @@ outside `AutomationId` (raw XPath, native gestures) are unattributed, and a
 scenario dying before `Finish` leaves no record. The selector treats every
 gap conservatively, so missing evidence widens selection rather than
 silently skipping tests.
+
+## Structural fingerprints
+
+`fingerprint.ts` computes a per-file `SourceFingerprint`: a `semantic` sha256
+over a normalized token stream — comments, whitespace, line endings and
+quoting style removed, literal bytes and preprocessor directives kept — plus
+a sorted list of extracted declaration signatures (`namespace`, types,
+member signatures for C-family sources; `x:Class`/`x:Name`/`AutomationId`
+identity attributes for XAML/XML). The collector persists one fingerprint
+per scanned source file in `sourceFingerprints`.
+
+At selection time `select` fingerprints every modified file again and
+compares digests:
+
+- **Identical** → the diff touched only trivia (comments, formatting, line
+  shifts). The file resolves `unchanged-structural` and selects nothing —
+  formatting stops invalidating coverage, which is the whole point.
+- **Different, missing either side, wrong fingerprint version or
+  unparseable** → the file is treated as changed and falls through to the
+  normal rules. Unparseable inputs (unterminated literals, binary content,
+  unknown extensions, ambiguous regex contexts in scripts) return `null` —
+  an input the lexer cannot prove it parsed can never narrow a selection.
+
+Equivalence applies only to plain `modified` entries: test files always run
+their declared tests, `runAllOnChange` stays absolute (bootstrap/config
+edits are safety rails, not coverage), and renames evaluate both paths
+because the path itself is part of the evidence identity. A diff where every
+file resolves to nothing still trips the `empty-selection-guard` into a
+full run — the fingerprint narrows which files contribute, never the
+suite-level safety net.
 
 ## Selection semantics
 
@@ -71,9 +103,12 @@ API failure are blocking problems), then resolves each changed file:
    tests (a changed or new test always runs); any other file is shared
    harness and selects everything;
 2. `noImpact` selects nothing; `runAllOnChange` selects everything;
-3. a file recorded in the tree selects the tests covering it; its logical
+3. a modified file whose tested-revision fingerprint is identical to the
+   baseline-persisted one is trivia-only and selects nothing
+   (`unchanged-structural`);
+4. a file recorded in the tree selects the tests covering it; its logical
    unit does the same;
-4. any other in-scope change selects everything; out-of-scope selects
+5. any other in-scope change selects everything; out-of-scope selects
    nothing.
 
 Additionally: tests absent from the baseline are treated as new and always
@@ -112,8 +147,9 @@ demonstrate the selection contract; enforcement is a one-input switch.
 - Evidence-gated switch to `enforce` for the Appium suite.
 - Website/admin/API suites: per-test application-process collectors (the
   website already records Istanbul coverage per Playwright test).
-- AST-aware change detection: parse source revisions, map coverage locations
-  to declarations and persist structural fingerprints so formatting and line
-  shifts stop invalidating entries — LCOV evidence alone cannot see syntax.
+- Finer-grained structural mapping: the persisted declaration signatures
+  currently serve provenance and file-level equivalence; mapping individual
+  coverage entries to declarations would let a member-level edit select only
+  the tests that reach that member.
 - Snapshot refresh/invalidation policies and cross-suite shared-dependency
   edges (e.g. API schema → app tests).

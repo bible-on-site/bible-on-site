@@ -29,6 +29,7 @@ import {
 } from "./collect-appium.ts";
 import { discoverSuiteTests, parseTestSource } from "./xunit-discovery.ts";
 import { extractZip } from "./github.ts";
+import { fingerprintSource } from "./fingerprint.ts";
 
 // ── Fixtures ────────────────────────────────────────────────────────────
 
@@ -741,5 +742,270 @@ describe("model helpers", () => {
 		const file = join(mkdtempSync(join(tmpdir(), "e2e-impact-rules-")), "bad.json");
 		writeFileSync(file, JSON.stringify({ schemaVersion: 1, suite: "x" }));
 		assert.throws(() => loadRules(file), /missing fields/);
+	});
+});
+
+// ── structural fingerprints ─────────────────────────────────────────────
+
+describe("fingerprintSource csharp", () => {
+	const BASE = `namespace App;
+public class PerekPage
+{
+    // navigates to a perek
+    private readonly string title = "pasuk";
+    public int Count { get; set; } = 7;
+    public string GetTitle(int index)
+    {
+        var label = $"{title}:{index}";
+        return label; // done
+    }
+}
+`;
+	test("trivia-only edits keep the semantic hash", () => {
+		const base = fingerprintSource("PerekPage.cs", BASE);
+		assert.ok(base !== null);
+		const reformatted = fingerprintSource(
+			"PerekPage.cs",
+			BASE.replace("    // navigates to a perek\n", "")
+				.replace("public int Count { get; set; } = 7;", "public int Count {\n\t\tget;\n\t\tset;\n\t} = 7;")
+				.replace("return label; // done", "return   label;   /* done */"),
+		);
+		assert.ok(reformatted !== null);
+		assert.equal(reformatted.semantic, base.semantic);
+	});
+
+	test("line endings and comments do not change the hash", () => {
+		const base = fingerprintSource("PerekPage.cs", BASE);
+		const crlf = fingerprintSource("PerekPage.cs", `${BASE.replace(/\n/g, "\r\n")}// trailing note\n`);
+		assert.ok(crlf !== null && base !== null);
+		assert.equal(crlf.semantic, base.semantic);
+	});
+
+	test("code edits change the hash", () => {
+		const base = fingerprintSource("PerekPage.cs", BASE);
+		assert.ok(base !== null);
+		for (const edited of [
+			BASE.replace("= 7;", "= 8;"),
+			BASE.replace("GetTitle", "GetCaption"),
+			BASE.replace('"pasuk"', '"other"'),
+			BASE.replace('var label = $"{title}:{index}"', 'var label = $"{title}-{index}"'),
+			BASE.replace("namespace App;", "#nullable enable\nnamespace App;"),
+		]) {
+			const fp = fingerprintSource("PerekPage.cs", edited);
+			assert.ok(fp !== null);
+			assert.notEqual(fp.semantic, base.semantic, edited.slice(0, 60));
+		}
+	});
+
+	test("verbatim, interpolated and raw strings hash by content", () => {
+		const withVerbatim = fingerprintSource("A.cs", 'var s = @"a  b";');
+		const sameVerbatim = fingerprintSource("A.cs", 'var   s   =   @"a  b";   // note');
+		assert.ok(withVerbatim !== null && sameVerbatim !== null);
+		assert.equal(withVerbatim.semantic, sameVerbatim.semantic);
+		const raw = fingerprintSource("A.cs", 'var s = """\nline "q" content\n""";');
+		assert.ok(raw !== null);
+		assert.equal(fingerprintSource("A.cs", 'var s = "never closed;'), null);
+		assert.equal(fingerprintSource("A.cs", "/* never closed"), null);
+	});
+
+	test("extracts type and member declarations", () => {
+		const fp = fingerprintSource("PerekPage.cs", BASE);
+		assert.ok(fp !== null);
+		assert.ok(fp.declarations.includes("ns:App"));
+		assert.ok(fp.declarations.includes("type:class:PerekPage"));
+		assert.ok(
+			fp.declarations.some((d) => d.startsWith("member:") && d.includes("GetTitle")),
+		);
+		assert.ok(
+			fp.declarations.some((d) => d.startsWith("member:") && d.includes("Count")),
+		);
+	});
+
+	test("uncomputable inputs return null", () => {
+		assert.equal(fingerprintSource("image.png", "fake-bytes"), null);
+		assert.equal(fingerprintSource("data.yaml", "a: 1"), null);
+		assert.equal(fingerprintSource("A.cs", "has \u0000 byte"), null);
+	});
+});
+
+describe("fingerprintSource xml", () => {
+	const XAML = `<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="App.PerekPage">
+    <!-- search row -->
+    <Entry AutomationId="PerekSearchInput"
+           Placeholder="search" />
+</ContentPage>
+`;
+	test("reformatting, comments and quote style keep the hash", () => {
+		const base = fingerprintSource("PerekPage.xaml", XAML);
+		assert.ok(base !== null);
+		const edited = fingerprintSource(
+			"PerekPage.xaml",
+			XAML
+				.replace("<!-- search row -->", "")
+				.replace('Placeholder="search"', "Placeholder='search'")
+				.replace("<Entry AutomationId", "<Entry\n            AutomationId"),
+		);
+		assert.ok(edited !== null);
+		assert.equal(edited.semantic, base.semantic);
+	});
+
+	test("value and structure edits change the hash", () => {
+		const base = fingerprintSource("PerekPage.xaml", XAML);
+		assert.ok(base !== null);
+		for (const edited of [
+			XAML.replace("PerekSearchInput", "OtherId"),
+			XAML.replace("<Entry", '<Entry AutomationId2="x"'),
+		]) {
+			const fp = fingerprintSource("PerekPage.xaml", edited);
+			assert.ok(fp !== null);
+			assert.notEqual(fp.semantic, base.semantic);
+		}
+		assert.equal(fingerprintSource("PerekPage.xaml", "<a><!-- never closed"), null);
+	});
+
+	test("identity attributes become declarations", () => {
+		const fp = fingerprintSource("PerekPage.xaml", XAML);
+		assert.ok(fp !== null);
+		assert.ok(fp.declarations.includes("attr:x:Class:App.PerekPage"));
+		assert.ok(fp.declarations.includes("attr:AutomationId:PerekSearchInput"));
+	});
+});
+
+describe("fingerprintSource script and json", () => {
+	test("comments and formatting are ignored", () => {
+		const base = fingerprintSource("a.ts", "export const x = 1; // note\n");
+		const edited = fingerprintSource("a.ts", "export const x=1;/*b*/\n");
+		assert.ok(base !== null && edited !== null);
+		assert.equal(base.semantic, edited.semantic);
+	});
+
+	test("ambiguous regex contexts bail to null", () => {
+		assert.equal(fingerprintSource("a.ts", "const r = /a+b/g;"), null);
+	});
+
+	test("json reformats do not change the hash", () => {
+		const base = fingerprintSource("x.json", '{"a": [1, 2],"b": "s"}');
+		const edited = fingerprintSource("x.json", '{ "a" : [ 1,2 ], "b" :"s" }');
+		assert.ok(base !== null && edited !== null);
+		assert.equal(base.semantic, edited.semantic);
+	});
+});
+
+describe("selectTests structural equivalence", () => {
+	const BASE_CS = `namespace App;
+public class FloatingSearchBar
+{
+    // the search box
+    public string Query { get; set; }
+}
+`;
+	const COVERED = "app/BibleOnSite/Controls/FloatingSearchBar.xaml.cs";
+	const treeWithFp = () => {
+		const tree = makeTree({
+			sourceFingerprints: {
+				[COVERED]: fingerprintSource(COVERED, BASE_CS) ?? undefined,
+			} as CoverageTree["sourceFingerprints"],
+		});
+		tree.tests["Suite.Pilot.Search"].files = [COVERED];
+		return tree;
+	};
+	const fpMap = (content: string | null) =>
+		new Map([
+			[COVERED, content === null ? null : fingerprintSource(COVERED, content)],
+		]);
+
+	test("a trivia-only covered change selects nothing by itself", () => {
+		const reformatted = BASE_CS
+			.replace("    // the search box\n", "        // moved comment\n")
+			.replace("public string Query", "\tpublic   string   Query");
+		const manifest = select({
+			baseline: { kind: "ok", tree: treeWithFp() },
+			changedFiles: [{ path: COVERED, status: "modified" }],
+			currentFingerprints: fpMap(reformatted),
+		});
+		assert.equal(manifest.selectAll, false);
+		assert.equal(
+			manifest.changedFiles.find((f) => f.path === COVERED)?.reason,
+			"unchanged-structural",
+		);
+		assert.deepEqual(manifest.unchangedStructural, [COVERED]);
+		// Only the always-run smoke test remains selected.
+		assert.deepEqual(selectedIds(manifest), ["Suite.Pilot.Startup"]);
+	});
+
+	test("a real edit still selects the covering tests", () => {
+		const edited = BASE_CS.replace("public string Query", "public string QueryText");
+		const manifest = select({
+			baseline: { kind: "ok", tree: treeWithFp() },
+			changedFiles: [{ path: COVERED, status: "modified" }],
+			currentFingerprints: fpMap(edited),
+		});
+		assert.equal(
+			manifest.changedFiles.find((f) => f.path === COVERED)?.reason,
+			"covered-file",
+		);
+		assert.ok(selectedIds(manifest).includes("Suite.Pilot.Search"));
+	});
+
+	test("missing or uncomputable evidence keeps the change covered", () => {
+		// Unfingerprintable current file → treated as changed.
+		const uncomputable = select({
+			baseline: { kind: "ok", tree: treeWithFp() },
+			changedFiles: [{ path: COVERED, status: "modified" }],
+			currentFingerprints: fpMap(null),
+		});
+		assert.ok(selectedIds(uncomputable).includes("Suite.Pilot.Search"));
+		// Baseline collected before fingerprints existed → treated as changed.
+		const oldBaseline = makeTree();
+		oldBaseline.tests["Suite.Pilot.Search"].files = [COVERED];
+		const noBaselineFp = select({
+			baseline: { kind: "ok", tree: oldBaseline },
+			changedFiles: [{ path: COVERED, status: "modified" }],
+			currentFingerprints: fpMap(BASE_CS),
+		});
+		assert.ok(selectedIds(noBaselineFp).includes("Suite.Pilot.Search"));
+	});
+
+	test("structural equivalence never overrides broad-run patterns", () => {
+		const shell = "app/BibleOnSite/AppShell.xaml";
+		const tree = makeTree({
+			sourceFingerprints: {
+				[shell]: fingerprintSource(shell, "<Shell></Shell>") ?? undefined,
+			} as CoverageTree["sourceFingerprints"],
+		});
+		const manifest = select({
+			baseline: { kind: "ok", tree },
+			changedFiles: [{ path: shell, status: "modified" }],
+			currentFingerprints: new Map([
+				[shell, fingerprintSource(shell, "<Shell>\n</Shell>")],
+			]),
+		});
+		assert.equal(manifest.selectAll, true);
+		assert.ok(manifest.fallbacks.some((f) => f.startsWith("global-trigger")));
+	});
+
+	test("unmapped in-scope trivia edits resolve as structurally unchanged", () => {
+		const file = "app/BibleOnSite/ViewModels/SearchViewModel.cs";
+		const content = "public class SearchViewModel { public int X; }";
+		const tree = makeTree({
+			sourceFingerprints: {
+				[file]: fingerprintSource(file, content) ?? undefined,
+			} as CoverageTree["sourceFingerprints"],
+		});
+		const manifest = select({
+			baseline: { kind: "ok", tree },
+			changedFiles: [{ path: file, status: "modified" }],
+			currentFingerprints: new Map([
+				[file, fingerprintSource(file, `// note\n${content}`)],
+			]),
+		});
+		assert.equal(
+			manifest.changedFiles.find((f) => f.path === file)?.reason,
+			"unchanged-structural",
+		);
+		assert.equal(manifest.selectAll, false);
 	});
 });
