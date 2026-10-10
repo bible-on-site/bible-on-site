@@ -5,12 +5,20 @@ from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import json
 from pathlib import Path
-import subprocess
+import shutil
+import subprocess  # nosec B404: CPU FFmpeg only; argument arrays, never a shell.
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[2]
 MANIFEST = ROOT / "web/bible-on-site/src/data/recitation/opus-playback.json"
 PROFILE = "ogg-opus-24k-v1"
+
+
+def executable(name):
+    path = shutil.which(name)
+    if path is None:
+        raise FileNotFoundError(f"Required playback tool: {name}")
+    return str(Path(path).resolve())
 
 
 def digest(path):
@@ -20,11 +28,12 @@ def digest(path):
 
 def pcm_frames(path, channels):
     # Count decoded samples rather than container duration (which includes pre-skip).
-    command = ["ffmpeg", "-v", "error", "-threads", "1", "-i", str(path),
+    command = [executable("ffmpeg"), "-v", "error", "-threads", "1", "-i", str(path.resolve()),
                "-map", "0:a:0", "-ar", "48000", "-f", "s16le", "-"]
     # A malformed source may report many recoverable packets; never block its
     # decoder on an undrained stderr pipe while counting stdout.
-    with tempfile.TemporaryFile() as errors, subprocess.Popen(
+    # Fixed executable/flags and a local file path; no command interpreter.
+    with tempfile.TemporaryFile() as errors, subprocess.Popen(  # nosec B603 # nosemgrep
             command, stdout=subprocess.PIPE, stderr=errors) as process:
         size = 0
         while block := process.stdout.read(1024 * 1024):
@@ -47,13 +56,15 @@ def convert(source, output, encoder):
                 and metadata["sourceSha256"] == source_sha and audio.exists()
                 and digest(audio) == metadata["sha256"]):
             return metadata
-    probe = json.loads(subprocess.check_output([
-        "ffprobe", "-v", "error", "-select_streams", "a:0", "-show_entries",
+    # Reviewed shell-free invocation; source was opened locally for its hash.
+    probe = json.loads(subprocess.check_output([  # nosec B603 # nosemgrep # NOSONAR
+        executable("ffprobe"), "-v", "error", "-select_streams", "a:0", "-show_entries",
         "stream=channels", "-of", "json", str(source)]))
     channels = probe["streams"][0]["channels"]
     temporary = output / (source_sha + ".download.ogg")
     try:
-        subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-y", "-threads", "1",
+        # Fixed codec settings and local paths; no command interpreter.
+        subprocess.run([executable("ffmpeg"), "-nostdin", "-v", "error", "-y", "-threads", "1",  # nosec B603 # nosemgrep
                         "-i", str(source), "-map", "0:a:0", "-map_metadata", "-1", "-vn",
                         "-c:a", "libopus", "-b:a", "24000", "-vbr", "on",
                         "-application", "audio", "-compression_level", "10",
@@ -78,7 +89,7 @@ def convert(source, output, encoder):
 
 def build(recordings, output, manifest=MANIFEST):
     output.mkdir(parents=True, exist_ok=True)
-    encoder = subprocess.check_output(["ffmpeg", "-version"], text=True).splitlines()[0]
+    encoder = subprocess.check_output([executable("ffmpeg"), "-version"], text=True).splitlines()[0]  # nosec B603 # nosemgrep
     sources = sorted(recordings.glob("*_record.mp3"), key=lambda p: int(p.stem.split("_")[0]))
     if not sources:
         raise ValueError("No original recordings")
