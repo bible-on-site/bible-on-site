@@ -10,13 +10,10 @@ from recite import export_database
 
 
 def completed_manifest_logged(text, perek):
-    """
-    recite.py flushes this line after saving the complete chapter manifest.
-
-    Never open a worker-owned checkpoint or manifest while Windows may replace
-    it. Stop the bound worker after this stdout signal; then recover and verify
-    its checkpoint from saved manifests before another inference starts.
-    """
+    """Match recite.py's flushed signal after the chapter manifest is saved."""
+    # Never open a worker-owned checkpoint or manifest while Windows may replace
+    # it. Stop the bound worker after this stdout signal; then recover and verify
+    # its checkpoint from saved manifests before another inference starts.
     pattern = rf"^{perek}: ([1-9][0-9]*)/([1-9][0-9]*) word identities; (ready|needs_review); [0-9.]+s$"
     return any(match[1] == match[2] for match in re.finditer(pattern, text, re.MULTILINE))
 
