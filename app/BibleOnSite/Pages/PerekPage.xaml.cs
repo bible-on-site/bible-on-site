@@ -1351,7 +1351,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable
         }
 
         // Change FAB icon to X
-        CircularMenuButton.Text = "✕";
+        CircularMenuButton.Text = Fonts.FluentUI.dismiss_24_regular;
         CircularMenuButton.BackgroundColor = Colors.Red;
 
         // Animate FAB rotation and fade in all buttons (disabled = 0.4, enabled = 1)
@@ -1378,7 +1378,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable
         var buttons = new[] { PrevPerekButton, TodayButton, PerekPickerButton, NextPerekButton };
 
         // Change back to hamburger
-        CircularMenuButton.Text = "☰";
+        CircularMenuButton.Text = Fonts.FluentUI.navigation_24_regular;
         CircularMenuButton.BackgroundColor = (Color)Microsoft.Maui.Controls.Application.Current!.Resources["Primary"];
 
         // Animate FAB rotation and fade out all buttons
@@ -2151,7 +2151,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable
                 b.Opacity = 0;
                 b.InputTransparent = true;
             }
-            CircularMenuButton.Text = "☰";
+            CircularMenuButton.Text = Fonts.FluentUI.navigation_24_regular;
             CircularMenuButton.BackgroundColor = (Color)Microsoft.Maui.Controls.Application.Current!.Resources["Primary"];
             CircularMenuButton.Rotation = 0;
         }

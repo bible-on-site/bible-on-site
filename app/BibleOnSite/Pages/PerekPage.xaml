@@ -32,7 +32,8 @@
         <Grid x:Name="ReaderToolbar" Grid.Row="0" MinimumHeightRequest="56"
               BackgroundColor="{AppThemeBinding Light=#F2F7FE, Dark=#20304A}">
             <Grid x:Name="NormalNavigationBar" ColumnDefinitions="48,*,48" HeightRequest="56">
-                <Button x:Name="ReaderNavigationButton" Grid.Column="0" Text="☰" FontSize="24" WidthRequest="48" Padding="0"
+                <Button x:Name="ReaderNavigationButton" Grid.Column="0" Text="{x:Static fonts:FluentUI.navigation_24_regular}"
+                        FontFamily="FluentIcons" FontSize="24" WidthRequest="48" Padding="0"
                         BackgroundColor="Transparent" TextColor="{AppThemeBinding Light=Black, Dark=White}"
                         AutomationId="ReaderNavigationButton" SemanticProperties.Description="פתיחת תפריט הניווט"
                         Clicked="OnReaderMenuClicked"/>
@@ -889,7 +890,8 @@
             <!-- Center Circular FAB - placed last to be on top, sits in notch -->
             <Button x:Name="CircularMenuButton"
                     AutomationId="CircularMenuButton"
-                    Text="☰"
+                    Text="{x:Static fonts:FluentUI.navigation_24_regular}"
+                    FontFamily="FluentIcons"
                     FontSize="22"
                     WidthRequest="56"
                     HeightRequest="56"
