@@ -75,8 +75,8 @@ partial class Build
                 // first commentary search's one-time FTS import of the whole notes pack —
                 // ~7m on a loaded macOS runner, and every fresh session reinstalls the app
                 // so no prior build progress survives — plus scenario and diagnostics.
-                // A test that exceeds its own waits fails normally well before this guard;
-                // it exists only for a genuinely dead test host.
+                // A test that exceeds its own waits fails normally well before this guard.
+                // The guard exists only for a genuinely dead test host.
                 .SetBlameHangTimeout("18m")
                 .SetBlameHangDumpType("mini")
                 .SetResultsDirectory(Path.Join(artifacts, "results"))
