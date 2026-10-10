@@ -16,7 +16,7 @@
   "devDependencies": {
     "appium": "3.8.0",
     "appium-uiautomator2-driver": "8.7.0",
-    "appium-xcuitest-driver": "12.16.0"
+    "appium-xcuitest-driver": "12.17.0"
   },
   "allowScripts": {
     "appium@3.8.0": true
