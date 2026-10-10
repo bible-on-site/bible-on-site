@@ -26,7 +26,7 @@ public class MainActivity : MauiAppCompatActivity
         // marker must be read before base.OnCreate reaches App.CreateWindow so
         // the search-index warmup sees it on this launch, and MarkE2eLaunch's
         // file covers the relaunched processes whose extras adb drops.
-        if (Intent?.GetBooleanExtra(Services.SearchIndexService.E2eEnvironmentVariable, false) == true)
+        if (Intent?.GetBooleanExtra(Services.SearchIndexService.E2eEnvironmentVariable, false) ?? false)
         {
             Services.SearchIndexService.MarkE2eLaunchFromIntent();
         }
