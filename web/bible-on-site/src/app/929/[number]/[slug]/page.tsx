@@ -39,6 +39,7 @@ import { PerushimSection } from "../components/PerushimSection";
 import SeferComposite from "../components/SeferComposite";
 import styles from "./page.module.css";
 import { ScrollToSlug } from "./ScrollToArticle";
+import { ScrollToArticleMatch } from "./ScrollToArticleMatch";
 import { ScrollToPerushPasukNote } from "./ScrollToPerushPasuk";
 
 /**
@@ -258,6 +259,9 @@ export default async function ArticlePage({
 					})}
 				/>
 				<ScrollToSlug targetId="article-view" />
+				<Suspense fallback={null}>
+					<ScrollToArticleMatch />
+				</Suspense>
 				<section id="article-view" className={styles.expandedArticle}>
 					<header className={styles.articleHeader}>
 						<Link
@@ -363,6 +367,7 @@ export default async function ArticlePage({
 								id={noteAnchorId}
 								className={styles.note}
 								data-perush-pasuk={note.pasuk}
+								data-perush-note={note.noteIdx}
 							>
 								<span className={styles.notePasuk}>
 									פסוק {toLetters(note.pasuk)}:

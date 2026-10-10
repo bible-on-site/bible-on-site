@@ -116,7 +116,7 @@ describe("searchSite", () => {
 		expect(response.results).toHaveLength(0);
 	});
 
-	it("maps perush hits to canonical deep links", async () => {
+	it("maps perush hits to deep links naming the note and phrase", async () => {
 		mockNotes.mockResolvedValue([
 			{
 				score: 90,
@@ -125,6 +125,7 @@ describe("searchSite", () => {
 					perushName: "רש\"י",
 					perekId: 1,
 					pasukNum: 1,
+					noteIdx: 2,
 					noteContent: "טקסט",
 					plain: "טקסט בראשית",
 				},
@@ -133,8 +134,9 @@ describe("searchSite", () => {
 		const response = await searchSite("בראשית", ["perush"]);
 		const perush = response.results[0];
 		expect(perush.type).toBe("perush");
+		// note + q land on the hit's exact fragment and in-content match (#2078).
 		expect(perush.href).toBe(
-			`/929/1/${encodeURIComponent('רש"י')}?pasuk=1`,
+			`/929/1/${encodeURIComponent('רש"י')}?pasuk=1&note=2&q=${encodeURIComponent("בראשית")}`,
 		);
 		expect(perush.title).toBe('רש"י בראשית א א');
 	});
@@ -171,7 +173,10 @@ describe("searchSite", () => {
 			},
 		]);
 		const response = await searchSite("בראשית", ["article"]);
-		expect(response.results[0].href).toBe("/929/1/42");
+		// `q` carries the phrase for the in-content match scroll (#2078).
+		expect(response.results[0].href).toBe(
+			`/929/1/42?q=${encodeURIComponent("בראשית")}`,
+		);
 		expect(response.results[0].title).toBe("מאמר על בראשית - הרב לוי");
 	});
 

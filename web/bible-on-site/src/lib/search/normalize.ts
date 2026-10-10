@@ -49,6 +49,43 @@ export function searchTokens(text: string): string[] {
 	return normalized.length === 0 ? [] : normalized.split(" ");
 }
 
+/**
+ * Like {@link normalizeSearchText} but also maps every output character to the
+ * raw string index that produced it — the normalized string is `map.length`
+ * characters long. Used to project a normalized match span back onto rendered
+ * text (DOM text nodes) for highlighting and scrolling (#2078). Decomposition
+ * runs per code point so surrogate pairs keep their raw position.
+ */
+export function normalizeWithMap(text: string): {
+	normalized: string;
+	map: number[];
+} {
+	let normalized = "";
+	const map: number[] = [];
+	for (let i = 0; i < text.length; i++) {
+		const unitLength = (text.codePointAt(i) ?? 0) > 0xffff ? 2 : 1;
+		for (const char of text.slice(i, i + unitLength).normalize("NFD")) {
+			if (MARKS.test(char) || QUOTES.has(char)) {
+				continue;
+			}
+			if (LETTER_OR_DIGIT.test(char)) {
+				normalized += char.toLowerCase();
+				map.push(i);
+			} else if (normalized.length > 0 && !normalized.endsWith(" ")) {
+				normalized += " ";
+				map.push(i);
+			}
+		}
+		i += unitLength - 1;
+	}
+	// normalizeSearchText trims: a trailing emitted space never reaches output.
+	while (normalized.endsWith(" ")) {
+		normalized = normalized.slice(0, -1);
+		map.pop();
+	}
+	return { normalized, map };
+}
+
 const HTML_ENTITIES: Record<string, string> = {
 	amp: "&",
 	lt: "<",

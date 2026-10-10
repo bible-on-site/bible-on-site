@@ -533,6 +533,7 @@ public partial class PerekViewModel : ObservableObject
         .GroupBy(n => (n.PerushId, n.PerushName))
         .OrderBy(g => Perushim.FindIndex(p => p.Id == g.Key.PerushId))
         .Select(g => new PerushNoteDisplay { PerushName = g.Key.PerushName,
+            PerushId = g.Key.PerushId,
             NoteContents = g.OrderBy(n => n.NoteIdx).Select(n => n.NoteContent).ToList() }).ToList();
 
     /// <summary>Toggles commentary in the inline reader.</summary>
@@ -590,6 +591,7 @@ public partial class PerekViewModel : ObservableObject
                 .Select(g => new PerushNoteDisplay
                 {
                     PerushName = g.Key.PerushName,
+                    PerushId = g.Key.PerushId,
                     NoteContents = g.OrderBy(n => n.NoteIdx).Select(n => n.NoteContent).ToList()
                 })
                 .ToList();

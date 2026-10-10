@@ -136,6 +136,7 @@ describe("searchPerushNotes", () => {
 				perush_name: "רש\"י",
 				perek_id: 1,
 				pasuk: 1,
+				note_idx: 0,
 				note_content: "מלים על בראשית ועוד בראשית",
 			},
 			{
@@ -143,12 +144,31 @@ describe("searchPerushNotes", () => {
 				perush_name: "רש\"י",
 				perek_id: 1,
 				pasuk: 1,
+				note_idx: 1,
 				note_content: "טקסט נוסף בראשית",
 			},
 		]);
 		const hits = await searchPerushNotes("בראשית", 10);
 		expect(hits).toHaveLength(1);
 		expect(hits[0].score).toBeGreaterThan(0);
+		// The surviving hit keeps its own note_idx for the deep link (#2078).
+		expect(hits[0].entry.noteIdx).toBe(0);
+	});
+
+	it("carries note_idx from the row into the hit", async () => {
+		mockQuery.mockResolvedValue([
+			{
+				perush_id: 23,
+				perush_name: "רש\"י",
+				perek_id: 1,
+				pasuk: 1,
+				note_idx: 3,
+				note_content: "מלים על בראשית",
+			},
+		]);
+		const hits = await searchPerushNotes("בראשית", 10);
+		expect(hits).toHaveLength(1);
+		expect(hits[0].entry.noteIdx).toBe(3);
 	});
 
 	it("returns empty for a blank phrase without querying", async () => {
@@ -163,6 +183,7 @@ describe("searchPerushNotes", () => {
 			perushName: "רש\"י",
 			perekId: 1,
 			pasukNum: 1,
+			noteIdx: 0,
 			noteContent: "",
 			plain: "",
 		});

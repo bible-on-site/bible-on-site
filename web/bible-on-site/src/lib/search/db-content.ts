@@ -124,6 +124,12 @@ export interface NoteHit {
 	perushName: string;
 	perekId: number;
 	pasukNum: number;
+	/**
+	 * The note row's index within the pasuk — carried into the result link so
+	 * the perush page can target this exact fragment, not the pasuk's first
+	 * note (#2078).
+	 */
+	noteIdx: number;
 	noteContent: string;
 	plain: string;
 }
@@ -146,10 +152,11 @@ export async function searchPerushNotes(
 		perush_name: string;
 		perek_id: number;
 		pasuk: number;
+		note_idx: number;
 		note_content: string;
 	}>(
 		`SELECT /*+ MAX_EXECUTION_TIME(${QUERY_TIME_BUDGET_MS}) */
-			n.perush_id, p.name AS perush_name, n.perek_id, n.pasuk, n.note_content
+			n.perush_id, p.name AS perush_name, n.perek_id, n.pasuk, n.note_idx, n.note_content
 		 FROM note n
 		 JOIN perush p ON n.perush_id = p.id
 		 WHERE ${where}
@@ -171,6 +178,7 @@ export async function searchPerushNotes(
 				perushName: row.perush_name,
 				perekId: row.perek_id,
 				pasukNum: row.pasuk,
+				noteIdx: row.note_idx,
 				noteContent: row.note_content,
 				plain,
 			},
