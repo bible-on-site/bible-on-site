@@ -65,3 +65,12 @@ qualification and held-control evidence were checked again before resuming the
 same collection checkpoint. The original worker and fallback source remain
 unchanged. Complete fresh results and qualification are preserved in
 `benchmarks/shadow-sanity-2026-10-09.json.gz`.
+
+The measured qualification belongs to the frozen source at
+`recitation-shadow-qualified-2026-10-09` (`cf92da05`). The active collection and
+its restart evidence continue to use that checkout. Delivery subsequently
+removed an unused benchmark import and adjusted a handoff docstring. The
+cache, inference and acceptance implementations are
+unchanged, but source hashes intentionally remain strict: the newer checkout
+must obtain its own qualification before it can start with those saved results.
+Do not rewrite the old proof's hashes to admit different source.

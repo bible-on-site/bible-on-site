@@ -8,7 +8,6 @@ from unittest.mock import patch
 
 import benchmark
 import cross_cache_shadow as shadow
-import validated_worker
 from recite import write_json
 
 

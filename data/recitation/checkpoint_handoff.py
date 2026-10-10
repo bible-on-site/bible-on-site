@@ -10,7 +10,8 @@ from recite import export_database
 
 
 def completed_manifest_logged(text, perek):
-    """recite.py flushes this line after saving the complete chapter manifest.
+    """
+    recite.py flushes this line after saving the complete chapter manifest.
 
     Never open a worker-owned checkpoint or manifest while Windows may replace
     it. Stop the bound worker after this stdout signal; then recover and verify
