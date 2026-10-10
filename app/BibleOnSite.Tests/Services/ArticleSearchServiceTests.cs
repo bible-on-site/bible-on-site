@@ -19,7 +19,7 @@ public class ArticleSearchServiceTests
         using var http = new GraphQLTransport(SearchResponse);
         var service = new ArticleService(http.Client);
 
-        var page = await service.SearchArticlesAsync("בראשית", 20);
+        var page = await service.SearchArticlesAsync("בראשית", 20, cancellationToken: TestContext.Current.CancellationToken);
 
         page.Should().NotBeNull();
         page!.Total.Should().Be(2);
@@ -102,7 +102,7 @@ public class ArticleSearchServiceTests
         // The remote kind is opt-in: enable it explicitly for this search.
         vm.SetFilterEnabled(SearchFilter.Articles, true);
 
-        await vm.SearchAsync();
+        await vm.SearchAsync(TestContext.Current.CancellationToken);
 
         var articles = vm.SearchResults.OfType<ArticleSearchResult>().ToList();
         articles.Should().HaveCount(2);
@@ -134,7 +134,7 @@ public class ArticleSearchServiceTests
         }
         vm.SetFilterEnabled(SearchFilter.Articles, true);
 
-        await vm.SearchAsync();
+        await vm.SearchAsync(TestContext.Current.CancellationToken);
 
         vm.SearchResults.Should().ContainSingle().Which.Should().BeOfType<AuthorSearchResult>();
         vm.AvailabilityMessage.Should().Contain("חיבור רשת");
@@ -159,7 +159,7 @@ public class ArticleSearchServiceTests
             vm.SetFilterEnabled(filter, false);
         }
 
-        await vm.SearchAsync();
+        await vm.SearchAsync(TestContext.Current.CancellationToken);
 
         http.Requests.Should().BeEmpty();
         vm.SearchResults.Should().ContainSingle().Which.Should().BeOfType<AuthorSearchResult>();
@@ -183,7 +183,7 @@ public class ArticleSearchServiceTests
             vm.SetFilterEnabled(filter, false);
         }
 
-        await vm.SearchAsync();
+        await vm.SearchAsync(TestContext.Current.CancellationToken);
 
         http.Requests.Should().BeEmpty();
         vm.SearchResults.Should().NotContain(r => r is ArticleSearchResult);
@@ -215,11 +215,11 @@ public class ArticleSearchServiceTests
         }
         vm.SetFilterEnabled(SearchFilter.Articles, true);
 
-        var pending = vm.SearchAsync();
+        var pending = vm.SearchAsync(TestContext.Current.CancellationToken);
         // Newer phrase cancels the in-flight search — the stale response must
         // never overwrite the next query's results.
         vm.SearchPhrase = "שמות";
-        var latest = vm.SearchAsync();
+        var latest = vm.SearchAsync(TestContext.Current.CancellationToken);
         gate.SetResult(GraphQLTransport.JsonResponse(SearchResponse));
         await Task.WhenAll(pending, latest);
 

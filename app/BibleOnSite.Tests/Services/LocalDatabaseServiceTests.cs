@@ -38,11 +38,11 @@ public class LocalDatabaseServiceTests
         return File.Exists(dbPath);
     }
 
-    [SkippableFact]
+    [Fact]
     public void DbName_ShouldMatchExpectedFilename()
     {
         // Skip in CI - database file is not tracked in git
-        Skip.IfNot(DatabaseFileExists(), "Database file not present (expected in CI)");
+        Assert.SkipUnless(DatabaseFileExists(), "Database file not present (expected in CI)");
 
         // This test ensures the database filename constant is correct.
         // If you change the database file, update both:
@@ -64,11 +64,11 @@ public class LocalDatabaseServiceTests
             "If you renamed the database file, update LocalDatabaseService.DbName to match.");
     }
 
-    [SkippableFact]
+    [Fact]
     public void DatabaseResourceFile_ShouldNotBeEmpty()
     {
         // Skip in CI - database file is not tracked in git
-        Skip.IfNot(DatabaseFileExists(), "Database file not present (expected in CI)");
+        Assert.SkipUnless(DatabaseFileExists(), "Database file not present (expected in CI)");
 
         var resourcePath = Path.Combine(
             GetProjectRoot()!,
@@ -93,11 +93,11 @@ public class LocalDatabaseServiceTests
         "sefaria-dump-5784-sivan-4.perushim_catalog.sqlite",
     };
 
-    [SkippableFact]
+    [Fact]
     public void SqliteFiles_ShouldMatchExpectedSet()
     {
         // Skip in CI - database files may not be tracked in git
-        Skip.IfNot(DatabaseFileExists(), "Database file not present (expected in CI)");
+        Assert.SkipUnless(DatabaseFileExists(), "Database file not present (expected in CI)");
 
         // This test catches the case where someone adds/removes a database file
         // but forgets to update the expected set

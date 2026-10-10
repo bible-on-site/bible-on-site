@@ -17,17 +17,17 @@ public class ChapterSearchTests
         await db.ExecuteAsync("WITH RECURSIVE ids(n) AS (SELECT 1 UNION ALL SELECT n+1 FROM ids WHERE n<150) INSERT INTO tanah_perek SELECT n,n,NULL FROM ids");
         var vm = new SearchViewModel(new PerekDataService(new LocalDatabaseService(storage.FileSystem.Object))) { SearchPhrase = "בראשית" };
         vm.SetFilterEnabled(SearchFilter.Author, false);
-        await vm.SearchAsync();
+        await vm.SearchAsync(TestContext.Current.CancellationToken);
         var chapters = vm.SearchResults.Cast<PerekSearchResult>().ToList();
         chapters.Should().HaveCount(vm.ResultsLimit);
         chapters.First().Perek.PerekId.Should().Be(1);
         chapters.Last().Perek.PerekId.Should().Be(vm.ResultsLimit);
         vm.SetSeferFilterEnabled(1, false);
-        await vm.SearchAsync();
+        await vm.SearchAsync(TestContext.Current.CancellationToken);
         vm.SearchResults.Should().BeEmpty();
         vm.SetSeferFilterEnabled(1, true);
         vm.SearchPhrase = "בראשית ב";
-        await vm.SearchAsync();
+        await vm.SearchAsync(TestContext.Current.CancellationToken);
         vm.SearchResults.Cast<PerekSearchResult>().First().Perek.PerekId.Should().Be(2);
         vm.IsLoading.Should().BeFalse();
     }
