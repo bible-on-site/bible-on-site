@@ -141,6 +141,11 @@ public abstract class MobilePlatformAdapter
             // the bundled commentary database's disk work on a cold emulator.
             options.AddAdditionalAppiumOption("adbExecTimeout", 60000);
             options.AddAdditionalAppiumOption("disableWindowAnimation", true);
+            // Intents cannot carry process environment like iOS launchApp can,
+            // so the suite marker rides as an extra on the session's launch
+            // intent; MainActivity persists it for the install's later
+            // restarts whose adb activateApp calls drop extras.
+            options.AddAdditionalAppiumOption("optionalIntentArguments", "--ez BIBLE_E2E true");
         }
         else
         {
