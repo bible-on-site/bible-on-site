@@ -159,11 +159,16 @@ class RecitationAssetsTests(unittest.TestCase):
                 INSERT INTO tanah_pasuk_segment_value VALUES (1,'אור'),(2,'אור');""")
             connection.commit()
         (self.recordings / "2_record.mp3").write_bytes(self.audio)
+        opus = b"OggS compressed playback"
+        opus_sha = hashlib.sha256(opus).hexdigest()
+        (self.recordings / (opus_sha + ".ogg")).write_bytes(opus)
+        playback = {"sha256": opus_sha, "sizeBytes": len(opus), "key": f"recordings/opus-24k/{opus_sha}.ogg"}
         source_bytes = database.read_bytes()
         catalogs = []
         for platform in ["Android", "iOS", "Windows"]:
             app = self.root / platform
-            result = prepare_assets(app, platform, self.cache, self.recordings, intermediate, database, native)
+            with patch("prepare_recitation_assets.load_playback", return_value=playback):
+                result = prepare_assets(app, platform, self.cache, self.recordings, intermediate, database, native)
             catalogs.append(result)
             self.assertEqual(result["books"][0]["perekIds"], [1, 2])
             self.assertEqual(result["package"]["tracks"][0]["words"][0]["startMs"], 123)
@@ -171,7 +176,14 @@ class RecitationAssetsTests(unittest.TestCase):
             if platform == "iOS":
                 contents = json.loads((app / "Platforms/iOS/Assets/Recitation.xcassets/recitation_1.dataset/Contents.json").read_text())
                 self.assertEqual(contents["properties"]["on-demand-resource-tags"], ["recitation_1"])
-        self.assertEqual(catalogs[0], catalogs[1])
+        android = catalogs[0]["package"]["tracks"][0]
+        self.assertEqual(android["audioSha256"], self.sha)
+        self.assertEqual(android["playback"]["sha256"], opus_sha)
+        self.assertEqual(android["playback"]["sourceSha256"], self.sha)
+        with zipfile.ZipFile(self.root / "Android/Platforms/Android/AssetPacks/recitation_1/recitation_1.zip") as packed:
+            self.assertEqual(packed.namelist(), [opus_sha + ".ogg"])
+            self.assertEqual(packed.read(opus_sha + ".ogg"), opus)
+        self.assertNotIn("playback", catalogs[1]["package"]["tracks"][0])
         self.assertEqual(catalogs[1], catalogs[2])
         self.assertEqual(database.read_bytes(), source_bytes)
 
