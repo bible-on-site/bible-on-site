@@ -64,6 +64,42 @@ public class SearchIndexServiceTests
     }
 
     [Fact]
+    public async Task CommentaryImport_ResumesTheCommittedPrefixAfterProcessLoss()
+    {
+        await using var storage = new TestStorage();
+        var perakim = await SeedAsync(storage);
+        await storage.CreateDatabaseAsync(NotesDb,
+            "CREATE TABLE note (perush_id INTEGER,perek_id INTEGER,pasuk INTEGER,note_idx INTEGER,note_content TEXT)",
+            "INSERT INTO note VALUES (7,1,1,0,'ראשונה'),(8,1,1,0,'שניה'),(9,1,1,0,'שלישית')");
+        // A process killed mid-import leaves this exact committed state: the
+        // first batch's documents plus the progress row, all under one WAL.
+        var partial = await storage.CreateDatabaseAsync("search.sqlite",
+            "CREATE TABLE search_metadata (name TEXT PRIMARY KEY, fingerprint TEXT)",
+            "CREATE TABLE search_build_progress (name TEXT PRIMARY KEY, fingerprint TEXT, last_id INTEGER)",
+            "CREATE TABLE notes_documents (rowid INTEGER PRIMARY KEY, Text TEXT, " +
+                "PerekId INTEGER, PasukNum INTEGER, PerushId INTEGER, SeferId INTEGER)",
+            "CREATE VIRTUAL TABLE notes USING fts5(Text, content='notes_documents', content_rowid='rowid')",
+            "INSERT INTO notes_documents VALUES (1,'סמל שרד',1,1,7,1)",
+            "INSERT INTO notes(rowid, Text) VALUES (1,'סמל שרד')");
+        var source = new FileInfo(Path.Combine(storage.Root, NotesDb));
+        await partial.ExecuteAsync("INSERT INTO search_build_progress VALUES ('notes', ?, 1)",
+            $"v3:{source.Length}:{source.LastWriteTimeUtc.Ticks}");
+        var delivery = new Mock<IPadDeliveryService>();
+        delivery.Setup(service => service.TryGetAssetPathAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync((string?)null);
+        var notes = PerushimNotesService.CreateForTesting(delivery.Object, storage.Root);
+        await using var index = new SearchIndexService(perakim, notes, Path.Combine(storage.Root, "search.sqlite"));
+        var filters = new HashSet<SearchFilter> { SearchFilter.Perush };
+        var books = new HashSet<int> { 1 };
+        // The resumed import fills the tail without re-importing the prefix.
+        (await index.SearchAsync("שניה", filters, books, 10, default)).Should().ContainSingle()
+            .Which.PerushId.Should().Be(8);
+        (await index.SearchAsync("סמל", filters, books, 10, default)).Should().ContainSingle(
+            "a rebuilt index would have dropped the sentinel left by the killed process");
+        (await partial.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM notes_documents")).Should().Be(3);
+        (await partial.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM search_build_progress")).Should().Be(0);
+    }
+
+    [Fact]
     public async Task HebrewSearch_IgnoresVowels_RequiresEveryWord_AndFiltersBeforeLimiting()
     {
         await using var storage = new TestStorage();
