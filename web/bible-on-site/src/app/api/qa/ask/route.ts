@@ -28,15 +28,18 @@ export async function POST(request: Request): Promise<NextResponse> {
 			payload.perekIds = body.perekIds;
 		}
 
-		const res = await fetch(`${QA_SERVICE_URL}/ask`, {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify(payload),
-			signal: controller.signal,
-		});
-		clearTimeout(timeout);
-		const data = await res.json();
-		return NextResponse.json(data, { status: res.status });
+		try {
+			const res = await fetch(`${QA_SERVICE_URL}/ask`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify(payload),
+				signal: controller.signal,
+			});
+			const data = await res.json();
+			return NextResponse.json(data, { status: res.status });
+		} finally {
+			clearTimeout(timeout);
+		}
 	} catch {
 		return NextResponse.json(
 			{ answers: [], noAnswer: true },
