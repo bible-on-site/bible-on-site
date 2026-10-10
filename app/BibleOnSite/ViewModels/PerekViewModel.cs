@@ -342,7 +342,6 @@ public partial class PerekViewModel : ObservableObject
 
         PerushimCatalogAvailable = _catalogService.IsAvailable;
         PerushimNotesAvailable = _notesService.IsAvailable;
-        Console.WriteLine($"[Diag] LoadPerushimAsync perek={perekId} notesAvail={PerushimNotesAvailable} catalogAvail={PerushimCatalogAvailable}");
         OnPropertyChanged(nameof(PerushimEmptyMessage));
         OnPropertyChanged(nameof(ShowDownloadPerushimButton));
 
@@ -382,11 +381,9 @@ public partial class PerekViewModel : ObservableObject
 
         if (IsStalePerushimLoad(perekId))
         {
-            Console.WriteLine($"[Diag] LoadPerushimAsync stale perek={perekId} current={Perek?.PerekId}");
             return;
         }
 
-        Console.WriteLine($"[Diag] LoadPerushimAsync perek={perekId} perushIds={perushIds.Count} notes={notes.Count} cache={cached != null}");
         if (perushIds.Count == 0)
         {
             _perushNotesCache = new List<PerekPerushNote>();
@@ -567,7 +564,6 @@ public partial class PerekViewModel : ObservableObject
             return;
 
         var checkedSet = new HashSet<int>(CheckedPerushim);
-        Console.WriteLine($"[Diag] FillFilteredPerushContents checked={checkedSet.Count} cacheNotes={_perushNotesCache.Count} perek={Perek?.PerekId}");
         if (checkedSet.Count == 0)
         {
             foreach (var pasuk in pasukim)

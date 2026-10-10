@@ -270,10 +270,8 @@ public partial class PerekPage
             PerushSearchResult commentary => commentary.PasukNum,
             _ => 0
         };
-        Console.WriteLine($"[Diag] ApplySearchReaderLocation: type={result?.GetType().Name ?? "null"} pasuk={pasukNum}");
         if (result is PerushSearchResult note && int.TryParse(note.PerushId, out var perushId) && !_viewModel.IsPerushChecked(perushId))
         {
-            Console.WriteLine($"[Diag] toggling perushId={perushId}");
             _viewModel.ToggleCheckedPerush(perushId);
         }
         if (_viewModel.Perek?.Pasukim.FirstOrDefault(pasuk => pasuk.PasukNum == pasukNum) is not { } pasuk)
