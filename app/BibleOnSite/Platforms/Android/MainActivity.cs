@@ -5,6 +5,7 @@ using Android.OS;
 using Android.Views;
 using BibleOnSite.Behaviors;
 using BibleOnSite.Helpers;
+using BibleOnSite.Services;
 namespace BibleOnSite;
 
 [Activity(Theme = "@style/Maui.SplashTheme", MainLauncher = true, LaunchMode = LaunchMode.SingleTop, Exported = true, ConfigurationChanges = ConfigChanges.ScreenSize | ConfigChanges.Orientation | ConfigChanges.UiMode | ConfigChanges.ScreenLayout | ConfigChanges.SmallestScreenSize | ConfigChanges.Density)]
@@ -21,6 +22,14 @@ public class MainActivity : MauiAppCompatActivity
 {
     protected override void OnCreate(Bundle? savedInstanceState)
     {
+        // The mobile E2E suite launches every session with a BIBLE_E2E intent
+        // extra. Persist it before managed startup (base.OnCreate creates the
+        // MAUI app and fires the lifecycle events that consult E2eLaunch) so
+        // analytics stays dark for this install's extras-less relaunches (#2120).
+        if (Intent?.GetBooleanExtra(E2eLaunch.Variable, false) == true)
+        {
+            E2eLaunch.Mark();
+        }
         base.OnCreate(savedInstanceState);
         HandleAppLinkIntent(Intent);
         // Firebase initialized from google-services.json (Plugin.Firebase / Xamarin.Firebase.Analytics process it at build).
