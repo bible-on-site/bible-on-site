@@ -49,7 +49,7 @@ public sealed class SearchIndexService : IAsyncDisposable
     // adb activateApp relaunches drop extras, so the first marked launch
     // persists a marker file for every later process in the same install —
     // the file dies with the install, which is the suite's lifetime anyway.
-    private static string E2eMarkerPath => Path.Combine(FileSystem.AppDataDirectory, "e2e.launch");
+    private static string E2eMarkerPath => Path.Join(FileSystem.AppDataDirectory, "e2e.launch");
 
     [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage(
         Justification = "E2E-only startup hook; the mobile suite launches with BIBLE_E2E.")]
@@ -59,7 +59,11 @@ public sealed class SearchIndexService : IAsyncDisposable
         {
             return;
         }
-        _ = WarmupIndexesAsync();
+        // Fire-and-forget: a faulted build logs here instead of throwing into
+        // startup; a concurrent search still awaits the shared build task.
+        _ = WarmupIndexesAsync().ContinueWith(
+            task => Console.WriteLine($"E2E search-index warmup failed: {task.Exception}"),
+            TaskContinuationOptions.OnlyOnFaulted);
     }
 
     // MainActivity calls this when the launch intent carries the e2e extra.
@@ -72,7 +76,7 @@ public sealed class SearchIndexService : IAsyncDisposable
         {
             File.WriteAllText(E2eMarkerPath, "1");
         }
-        catch (Exception exception)
+        catch (IOException exception)
         {
             Console.WriteLine($"E2E launch marker persist failed: {exception.Message}");
         }
@@ -93,15 +97,8 @@ public sealed class SearchIndexService : IAsyncDisposable
         Justification = "E2E-only startup hook; the mobile suite launches with BIBLE_E2E.")]
     private static async Task WarmupIndexesAsync()
     {
-        try
-        {
-            var service = Instance;
-            await Task.WhenAll(service.WarmTableAsync("verses"), service.WarmTableAsync("notes"));
-        }
-        catch (Exception exception)
-        {
-            Console.WriteLine($"E2E search-index warmup failed: {exception}");
-        }
+        var service = Instance;
+        await Task.WhenAll(service.WarmTableAsync("verses"), service.WarmTableAsync("notes"));
     }
 
     // Shares the search path's dedup so a warmup build is also the build a

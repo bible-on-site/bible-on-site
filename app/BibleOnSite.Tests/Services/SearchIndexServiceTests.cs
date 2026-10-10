@@ -81,13 +81,13 @@ public class SearchIndexServiceTests
             "CREATE VIRTUAL TABLE notes USING fts5(Text, content='notes_documents', content_rowid='rowid')",
             "INSERT INTO notes_documents VALUES (1,'סמל שרד',1,1,7,1)",
             "INSERT INTO notes(rowid, Text) VALUES (1,'סמל שרד')");
-        var source = new FileInfo(Path.Combine(storage.Root, NotesDb));
+        var source = new FileInfo(Path.Join(storage.Root, NotesDb));
         await partial.ExecuteAsync("INSERT INTO search_build_progress VALUES ('notes', ?, 1)",
             $"v3:{source.Length}:{source.LastWriteTimeUtc.Ticks}");
         var delivery = new Mock<IPadDeliveryService>();
         delivery.Setup(service => service.TryGetAssetPathAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync((string?)null);
         var notes = PerushimNotesService.CreateForTesting(delivery.Object, storage.Root);
-        await using var index = new SearchIndexService(perakim, notes, Path.Combine(storage.Root, "search.sqlite"));
+        await using var index = new SearchIndexService(perakim, notes, Path.Join(storage.Root, "search.sqlite"));
         var filters = new HashSet<SearchFilter> { SearchFilter.Perush };
         var books = new HashSet<int> { 1 };
         // The resumed import fills the tail without re-importing the prefix.
