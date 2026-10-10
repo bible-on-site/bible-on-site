@@ -32,6 +32,10 @@ public class RecitationServiceTests
         public void SaveCatalog() => storage.PackageFiles[RecitationExtensionCatalog.FileName] =
             JsonSerializer.SerializeToUtf8Bytes(Catalog, RecitationJsonContext.Default.RecitationExtensionCatalog);
 
+        // Convenience-overload downloads carry no test cancellation token.
+        public Task DownloadAsync(RecitationService service, int[] perekIds, IProgress<double>? progress) =>
+            service.DownloadAsync(perekIds, progress);
+
         public void Bundle(bool store = true)
         {
             var books = new List<RecitationBookPack>();
@@ -165,7 +169,7 @@ public class RecitationServiceTests
         service.RequestPlaybackStop();
         await service.InitializeAsync(); service.Tracks.Should().BeEquivalentTo(extension.Package.Tracks);
         var progress = new List<double>();
-        await service.DownloadAsync([1], new ImmediateProgress(progress.Add), TestContext.Current.CancellationToken);
+        await extension.DownloadAsync(service, [1], new ImmediateProgress(progress.Add));
         service.HasAudio(1).Should().BeTrue(); service.HasAudio(2).Should().BeTrue();
         var path = await service.PrepareAudioAsync(1, Canonical());
         await File.WriteAllBytesAsync(path, "damaged"u8.ToArray(), TestContext.Current.CancellationToken);
