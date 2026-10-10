@@ -33,9 +33,11 @@ branching or skipping an entire shared scenario. Shared classes use
 tests plus the current platform, leaving platform-only behavior easy to add.
 Use `[Collection("Mobile device")]` on every mobile test class to serialize
 scenarios that own the same device. Inject `MobileDeviceSessionFactory` and create
-drivers through `sessions.Create(...)`. If session startup fails, subsequent
-scenarios fail without requesting another session on a device whose preparation
-may still be running; the original failure remains in the test report.
+drivers through `sessions.Create(...)`. If session startup or cleanup fails in a
+way that could leave Appium working on the device, subsequent scenarios fail
+without requesting another session on it; the original failure remains in the
+test report. Failures matching `DeviceSessionDeath` mean the session is already
+gone server-side, so they do not block the collection.
 
 iOS waits for XCTest's `hittable` attribute before actions and sends one W3C touch
 at the element's viewport center, with a 100 ms pause between down and up. This
@@ -48,13 +50,62 @@ iOS lookup can take longer than 45 seconds and return the earlier loading tree
 even though the reader has appeared. This startup gate requires a visible,
 nonempty perek source and captures failure diagnostics. Subsequent scenario
 lookups and navigation retain their 45-second deadlines.
-iOS keeps XCTest idle checks enabled with a one-second `waitForIdleTimeout`, so
-repeated internal idle waits during startup do not exhaust the page object's
-readiness polling. See the [Appium idle-wait capability](https://appium.github.io/appium-xcuitest-driver/latest/reference/capabilities/).
+iOS disables XCTest idle checks (`waitForIdleTimeout` 0): every proxied WDA
+command otherwise waits for the app main thread to stay quiet for the whole
+threshold, which a reader that keeps re-rendering commentary cells (or a
+navigation animation on a shared-CPU runner) never satisfies — queries stalled
+for tens of seconds and once hit the 240s proxy timeout mid-scroll. Page objects
+poll explicit element state instead of relying on implicit synchronization. See
+the [Appium idle-wait capability](https://appium.github.io/appium-xcuitest-driver/latest/reference/capabilities/).
+A session the device already dropped mid-startup or mid-scenario is recreated
+once; ambiguous startup or cleanup failures still block the device, since stale
+session work could race a replacement.
 
 The pilot matrix deliberately covers Android and iOS. Existing Windows FlaUI
 tests and Android gesture regressions remain separate. Additional device/OS
 entries can reuse the same suite; each must own its emulator and artifacts.
+
+## Android emulator caching
+
+The Android job caches two layers so a truncated Google download cannot abort a
+run before testing (as in run 37814563700):
+
+1. **SDK packages** (`android-sdk-<os-tag>-<arch>-<components>`): `$ANDROID_HOME`'s
+   `emulator`, `platform-tools`, `platforms;android-36`, `build-tools;37.0.0`
+   and the `google_apis` x86_64 system image — about 2.3 GB. The key embeds each
+   package's stable-channel revision and archive checksum resolved from
+   Google's SDK manifests by `devops/github/ci/android-sdk-manifest.mjs`, so a
+   Google-side update produces a fresh key instead of reviving a frozen copy.
+   `package.xml` files ride inside the cached directories, letting sdkmanager
+   recognize the restored packages. A one-level `android-sdk-<os-tag>-<arch>-`
+   restore-key intentionally permits an older emulator revision: sdkmanager
+   updates it in place while the large system image stays cached.
+2. **Clean AVD snapshot** (`android-avd-<os-tag>-<arch>-api36-google_apis-x86_64-pixel_7-swiftshader-<emulator-rev>-<build>-<sha>-<recipe>-<readiness-hash>`):
+   `~/.android/avd` after a cold boot that ran only the device readiness check —
+   never the app install, an Appium session, commentary packaging, or test
+   output. There are no restore-keys: a snapshot under different coordinates is
+   worse than a cold boot. On a miss the workflow runs the documented two-stage
+   pattern — a snapshot-creating invocation whose `script` is `android:ready`,
+   then the pilot, which boots the saved `default_boot` quick-boot state with
+   `-no-snapshot-save`.
+
+Only `push` and `workflow_dispatch` runs save caches, so the default branch
+publishes and pull requests restore (forks get no write scope), matching
+GitHub's cache isolation rules. Saving is gated on validation: the SDK cache
+requires a genuinely booted device (the shared `device-readiness.jsonl`
+marker), and the AVD cache requires the persisted `snapshots/default_boot`
+payload. Cache keys are immutable: a corrupt entry detected on restore is
+deleted locally and rebuilt cold, then heals after natural eviction or a recipe
+bump. `android-sdk-install.mjs` removes corrupt package directories before
+bounded sdkmanager retries and forces a clean reinstall when `emulator
+-version` fails despite installed metadata; `android-snapshot-check.mjs`
+validates restored AVD structure and confirms the emulator process exited
+before any snapshot save. When manifest resolution fails, both keys degrade to
+`unresolved`, which always misses and never saves — the run falls back to the
+original download path. Maintenance: bump `AVD_SNAPSHOT_RECIPE` when boot
+options, device profile, readiness flow or the runner-action version change;
+bump nothing else by hand — emulator and system-image updates rotate keys on
+their own.
 
 ## Running locally
 
@@ -69,6 +120,14 @@ the selected Xcode SDK, boots it, and prints the identifier and `MOBILE_OS_VERSI
 Set both for local iOS runs; CI exports them automatically.
 `MOBILE_APP_PATH` can select another compatible build. Each local
 run owns an Appium server on `127.0.0.1:4723`; keep that port free.
+
+Set `MOBILE_KEEP_APP=1` to keep the installed app and its data for manual review
+after a local run. The runner installs the current build while preserving that
+data; normal runs still reset the app. The floating search scenarios cover a
+misspelled chapter reference, unpointed verse text, and inline commentary jumps.
+Android system Back and the iOS edge-back gesture restore the original query,
+filters, results, and list position. Verse results remain usable while the first
+commentary index continues preparing.
 
 `npm run test:unit` checks simulator selection and the locked driver module's
 ESM loading without a device.

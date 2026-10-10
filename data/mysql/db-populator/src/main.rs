@@ -267,6 +267,13 @@ async fn main() -> Result<()> {
         let dynamic_structure_path = base_path.join(&cli.dynamic_structure_script);
         execute_script(&mut conn, &dynamic_structure_path, "dynamic-structure").await?;
 
+        execute_script(
+            &mut conn,
+            &base_path.join("../tanah_daily_bulletin_upgrade.sql"),
+            "daily-bulletin-upgrade",
+        )
+        .await?;
+
         let perek_images_path = base_path.join("../tanah_perek_images_structure.sql");
         execute_script(&mut conn, &perek_images_path, "perek-images-structure").await?;
 
@@ -1059,6 +1066,22 @@ SELECT 1";
                 "test-perek-images-structure",
             )
             .await?;
+
+            // Simulate the pre-bulletin dynamic schema and upgrade it repeatedly.
+            raw_sql("ALTER TABLE tanah_article DROP COLUMN distributable")
+                .execute(&mut conn).await?;
+            let bulletin_upgrade = base_path.join("../tanah_daily_bulletin_upgrade.sql");
+            execute_script(&mut conn, &bulletin_upgrade, "test-bulletin-upgrade").await?;
+            raw_sql("INSERT INTO tanah_article (id, perek_id, author_id, name, priority, content, distributable) VALUES (42, 1, 1, 'Retained article', 1, 'Retained content', TRUE);
+                INSERT INTO tanah_daily_bulletin (bulletin_date, perek_id, input_json, subject, source, email_html, pdf_data, filename)
+                    VALUES ('2026-10-08', 1, '{}', 'Retained subject', 'Retained source', 'Retained HTML', 'Retained PDF', 'retained.pdf');
+                INSERT INTO tanah_daily_bulletin_delivery (bulletin_date, channel, status, provider_message_id)
+                    VALUES ('2026-10-08', 'email', 'sent', 'campaign-42');")
+                .execute(&mut conn).await?;
+            execute_script(&mut conn, &bulletin_upgrade, "test-bulletin-upgrade-repeat").await?;
+            assert_eq!(query_scalar::<MySql, i64>("SELECT COUNT(*) FROM tanah_article WHERE id = 42 AND distributable = TRUE AND content = 'Retained content'").fetch_one(&mut conn).await?, 1);
+            assert_eq!(query_scalar::<MySql, String>("SELECT email_html FROM tanah_daily_bulletin WHERE bulletin_date = '2026-10-08'").fetch_one(&mut conn).await?, "Retained HTML");
+            assert_eq!(query_scalar::<MySql, String>("SELECT provider_message_id FROM tanah_daily_bulletin_delivery WHERE bulletin_date = '2026-10-08' AND status = 'sent'").fetch_one(&mut conn).await?, "campaign-42");
             execute_script(
                 &mut conn,
                 &base_path.join(&cli.perushim_structure_script),

@@ -1,139 +1,50 @@
-# Daily Bulletin Service
+# Daily bulletin revival
 
-## Overview
+## Implemented
 
-The Daily Bulletin is a scheduled service that generates and distributes daily Tanah study content to subscribers via email and messaging platforms (Telegram and WhatsApp).
+The admin `/bulletins` page prepares a bulletin for a selected civil date in Jerusalem. It resolves the chapter from the database 929 calendar, chooses one approved article, and includes chapter dedications from the database. Friday and Saturday previews use Thursday's study chapter. Dates outside the persisted calendar are rejected rather than silently choosing another chapter.
 
-## Architecture
+Articles have a `distributable` flag, editable as **מאושר לפרסום בעלון היומי** in the article editor. Existing and new articles default to unapproved. Preparing a date with no approved article produces a scripture-only bulletin.
 
-### Simplfied Flow Diagram
-```
-┌─────────────────┐
-│ Content Sources │
-│ - Pesukim       │
-│ - Commentary    │
-│ - Rabbi Article │
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│   Smoove API    │
-│ (Email Service) │
-└────────┬────────┘
-         │
-    ┌────┴────┐
-    │         │
-    ▼         ▼
-┌───────┐ ┌───────────┐
-│ Email │ │ PDF Gen   │
-│ Send  │ │ & Download│
-└───────┘ └─────┬─────┘
-                │
-         ┌──────┴──────┐
-         │             │
-         ▼             ▼
-   ┌──────────┐  ┌──────────┐
-   │ Telegram │  │ WhatsApp │
-   │   Bot    │  │   Bot    │
-   └────┬─────┘  └────┬─────┘
-        │             │
-        ▼             ▼
-   ┌──────────┐  ┌──────────┐
-   │ Channel/ │  │  Group   │
-   │  Group   │  │          │
-   └──────────┘  └──────────┘
-```
+The Rust `web/bulletin` service renders email HTML and PDF from the same article snapshot. Article HTML is sanitized and relative links are resolved against the public website. Scripture retains cantillation and biblical maqaf. The PDF contains the Hebrew date, dedications, chapter, and selected article. Existing on-demand book and chapter downloads continue using their original endpoint and request format.
 
-### Detailed Sequence Diagram
-![daily-bulletin-flow-diagram](./daily-bulletin.svg)
+Preparation stores the input snapshot, email HTML, PDF bytes, subject, source, and filename in `tanah_daily_bulletin`, with one record per date. Repeated or concurrent preparation returns the first saved result. Later article edits do not change a prepared bulletin. All three channel records are created in the same transaction in `tanah_daily_bulletin_delivery`. This stage prepares previews only and has no sending action or scheduled trigger.
 
+## Database deployment
 
-### Legacy: TypeScript Cron Job
+`data/mysql/tanah_daily_bulletin_upgrade.sql` is an additive, repeatable migration in the normal data deployment manifest. It retains article eligibility, prepared bulletins, and delivery records. It intentionally builds table DDL with `CONCAT`: the existing database deployment Lambda rewrites literal `CREATE TABLE` statements into destructive rebuilds, even with `IF NOT EXISTS`.
 
-The service was originally implemented as a TypeScript application scheduled via cron jobs on a bare-metal server.
+The preprocessor also rewrites table/view creation keywords inside SQL comments. The migration avoids those phrases in its comments, and the deployment validator rejects them. Validate both preprocessing and execution against disposable MySQL before changing this migration.
 
-### Target State: AWS Lambda + EventBridge
+The fresh local/CI population path also applies the upgrade after creating the dynamic schema. Never rebuild production dynamic tables to apply this change.
 
-The service is being migrated to AWS infrastructure:
+## Preview runtime
 
-- **Compute**: AWS Lambda function
-- **Scheduling**: Amazon EventBridge Scheduler (formerly CloudWatch Events)
-- **Trigger**: EventBridge rule with cron expression for morning runs
+- Production admin invokes `bible-on-site-bulletin` in `il-central-1` using its ECS task role. `AdminBulletinPreview` in `ecs-services.yaml` grants permission for that function only. `BULLETIN_LAMBDA_NAME` and `AWS_REGION` can override the defaults.
+- Existing manually provisioned deployments use `adminTaskRole`; apply the same `AdminBulletinPreview` policy to the role referenced by the live admin task definition. The CloudFormation template names its managed role `bible-on-site-admin-task-role`.
+- Development admin spawns the bulletin binary. Build it with `cargo build` in `web/bulletin`, or set `BULLETIN_BINARY_PATH` to an existing binary.
+- The Lambda route is `POST /api/preview-daily`, using an API Gateway v2 envelope for direct invocation. The CLI equivalent is `bulletin --daily-preview`, with the same JSON input on stdin and JSON artifacts on stdout.
 
-## Execution Schedule
+Input fields: `date`, `hebrewDate`, `perekId`, nullable `article` containing `id`, `title`, `author`, and `html`, plus `dedications` as a string array. Output fields: `subject`, `source`, `emailHtml`, `pdfBase64`, and `filename`.
 
-The service runs **multiple times during the morning hours** to ensure reliability:
+The authenticated admin creates and reads previews. The renderer does not connect to subscriber services or send messages.
 
-- If a previous run was successful, subsequent runs are skipped (idempotent behavior)
-- Success state is tracked to prevent duplicate distributions
-- This pattern ensures delivery even if early runs fail due to external service issues
+## Legacy behavior to restore
 
-## Content Generation
+The old `tanah-back/src/cpanel/distribution` implementation sent HTML campaigns through Smoove, generated PDFs locally with `html-pdf`, posted documents through a Telegram bot, and called a separate WhatsApp server on localhost port 5000.
 
-### Static Content Sources
+It ran at 11:00, 12:00, 13:00, and 14:00 Sunday through Thursday in the server's timezone. It skipped Israeli work-prohibited holidays and sent upcoming holiday chapters in advance, including the second day of Rosh Hashanah.
 
-1. **Tanah Pesukim**: The pesukim of the daily Perek are retrieved from static Tanah data
-2. **Commentary**: Commentary for the Perek is included alongside the pesukim
-3. **Rabbi Article**: A random article from a rabbi is selected to accompany the daily content
+Its state table stored a date, Smoove campaign ID, Telegram success flag, and WhatsApp success flag. It relied on local PDF files, saved state only after the channel sequence, and did not lock concurrent runs. Those limitations must be resolved when restoring delivery.
 
-### Holiday Logic
+## Remaining delivery work
 
-The service implements special handling for Jewish holidays:
+- Restore Smoove list management and sending, verify the intended list, and preserve unsubscribe behavior.
+- Restore Telegram document posting and verify bot access to the channel.
+- Recover or replace the separate WhatsApp service and verify group delivery.
+- Implement channel claims using the stored lease fields, provider IDs, retry tracking, and an explicit uncertain state for ambiguous provider outcomes.
+- Add EventBridge scheduling in `Asia/Jerusalem`, holiday advance sends, and calendar regression tests.
+- Add failure monitoring and admin controls for reviewing/rebuilding unsent bulletins and retrying failed delivery.
+- Restore public email signup and channel/group join links.
 
-- **Pre-Holiday Distribution**: Before holidays begin, the service sends the dailies for those holiday days in advance
-- **Reason**: During holidays (Shabbat, Yom Tov), it is forbidden to perform work, including running automated services and sending electronic communications
-- **Implementation**: The service calculates upcoming holidays and batches the relevant dailies for pre-distribution
-
-## Integration Points
-
-### Smoove API
-
-[Smoove](https://www.smoove.io/) is the email marketing platform used for:
-
-1. **Email Template Rendering**: The bulletin content is injected into a pre-designed email template
-2. **Email Distribution**: Smoove handles sending to the subscriber list
-3. **PDF Generation**: Smoove generates a PDF version of the bulletin for messaging platforms
-
-### Telegram Bot
-
-- Receives the downloaded PDF from the service
-- Distributes to subscribed Telegram channels and groups
-- Enables reach to users who prefer Telegram over email
-
-### WhatsApp Bot
-
-- Receives the downloaded PDF from the service
-- Distributes to WhatsApp groups
-- Enables reach to users who prefer WhatsApp over email
-
-## Idempotency
-
-The service implements idempotency to handle multiple scheduled runs:
-
-1. On each run, check if today's bulletin was already successfully distributed
-2. If successful distribution is recorded, exit early
-3. If not, proceed with content generation and distribution
-4. Record success state upon completion
-
-## Error Handling
-
-- Multiple morning runs provide retry capability for transient failures
-- External service failures (Smoove, Telegram, WhatsApp) are logged
-- Partial failures (e.g., email sent but PDF distribution failed) are tracked for manual intervention
-
-## Related: On-Demand PDF Bulletin (`web/bulletin`)
-
-The `web/bulletin` module is a **separate** Rust-based service that generates PDF bulletins on demand for the website's download feature. It is deployed as an AWS Lambda (`bible-on-site-bulletin`) and invoked directly by the website via the AWS SDK. See [Website Architecture](../website/website.md#pdf-generation-bulletin-integration) for details.
-
-| Aspect | Daily Bulletin (this doc) | On-Demand Bulletin (`web/bulletin`) |
-|--------|--------------------------|-------------------------------------|
-| Trigger | Scheduled (EventBridge cron) | User-initiated (website download) |
-| Distribution | Email, Telegram, WhatsApp | Direct PDF download |
-| Runtime | Lambda + EventBridge | Lambda (invoked by website ECS task) |
-
-## Future Enhancements
-
-- [ ] Migrate from cron-based scheduling to AWS EventBridge Scheduler
-- [ ] Implement AWS Lambda function with appropriate IAM roles
-- [ ] Add CloudWatch metrics and alarms for monitoring
-- [ ] Consider SQS for decoupling distribution to different platforms
+The older sequence diagram is a target sketch, not deployed behavior. In particular its Smoove PDF-generation step does not match the legacy code or the current Rust renderer.

@@ -1,4 +1,4 @@
-FROM node:26.10.0-alpine AS base
+FROM node:26.11.1-alpine AS base
 
 # Version-only releases must not invalidate the dependency layer.
 FROM base AS manifests
@@ -85,10 +85,10 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-# Load canonical server data before a replacement is eligible for traffic.
+# Warm the actual route bundles before a replacement is eligible for traffic.
 # Keep these settings aligned with the ECS container health check.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --start-interval=30s --retries=5 \
-    CMD ["curl", "-sf", "--max-time", "5", "http://localhost:3000/api/health/ready"]
+    CMD ["sh", "-c", "for route in api/health/ready api/recitation api/recitation/2; do curl -sf --max-time 3 \"http://localhost:3000/$route\" > /dev/null || exit 1; done"]
 
 # server.js is created by next build from the standalone output
 # https://nextjs.org/docs/pages/api-reference/config/next-config-js/output

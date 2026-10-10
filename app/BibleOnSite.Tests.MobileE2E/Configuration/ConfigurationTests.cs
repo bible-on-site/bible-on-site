@@ -44,7 +44,9 @@ public sealed class ConfigurationTests
             Assert.Equal("/test/WebDriverAgentRunner-Runner.app", options["appium:prebuiltWDAPath"]);
             Assert.Equal(1, options["appium:wdaStartupRetries"]);
             Assert.Equal(240000, options["appium:wdaConnectionTimeout"]);
-            Assert.Equal(1.0, options["appium:waitForIdleTimeout"]);
+            // Idle checks are disabled (0): a churning reader never reaches
+            // XCTest's idle threshold, so every proxied WDA command stalled.
+            Assert.Equal(0, options["appium:waitForIdleTimeout"]);
             Assert.Equal(true, options["appium:skipLogCapture"]);
         }
         else

@@ -22,6 +22,7 @@ public class PerekDataService
     private Dictionary<int, Perek>? _perakim;
     private Dictionary<int, Sefer>? _sefarim;
     private bool _isLoaded;
+    private readonly SemaphoreSlim _loadLock = new(1, 1);
 
     private readonly LocalDatabaseService _databaseService;
 
@@ -39,6 +40,8 @@ public class PerekDataService
     /// </summary>
     public IReadOnlyDictionary<int, Perek>? Perakim => _perakim;
 
+    internal Task<SQLiteAsyncConnection> GetSearchConnectionAsync() => _databaseService.GetDatabaseAsync();
+
     /// <summary>
     /// Loads all sefarim and perakim from the database.
     /// </summary>
@@ -47,15 +50,20 @@ public class PerekDataService
         if (_isLoaded)
             return;
 
-        var db = await _databaseService.GetDatabaseAsync();
-
-        // Load sefarim first
-        await LoadSefarimAsync(db);
-
-        // Load perakim
-        await LoadPerakimAsync(db);
-
-        _isLoaded = true;
+        await _loadLock.WaitAsync();
+        try
+        {
+            if (_isLoaded)
+                return;
+            var db = await _databaseService.GetDatabaseAsync();
+            // A replaced query and the background index can arrive together.
+            // Publish one complete catalog instead of replacing its dictionaries
+            // while another caller is already reading chapter search results.
+            await LoadSefarimAsync(db);
+            await LoadPerakimAsync(db);
+            _isLoaded = true;
+        }
+        finally { _loadLock.Release(); }
     }
 
     private async Task LoadSefarimAsync(SQLiteAsyncConnection db)
