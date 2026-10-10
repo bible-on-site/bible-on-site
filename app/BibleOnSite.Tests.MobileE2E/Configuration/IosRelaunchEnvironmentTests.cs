@@ -39,4 +39,14 @@ public sealed class IosRelaunchEnvironmentTests
         adapter.OnSessionRecreated();
         Assert.False(adapter.RequiresLaunchForEnvironment(null));
     }
+
+    [Fact]
+    public void XctDaemonLaunchTimeoutRetriesTheRelaunch()
+    {
+        var timeout = new OpenQA.Selenium.WebDriverException(
+            "Error Domain=XCTDaemonErrorDomain Code=5 \"Timed out attempting to launch app.\"");
+        var persistent = new OpenQA.Selenium.WebDriverException("no such session");
+        Assert.True(IosPlatformAdapter.IsTransientLaunchError(timeout));
+        Assert.False(IosPlatformAdapter.IsTransientLaunchError(persistent));
+    }
 }

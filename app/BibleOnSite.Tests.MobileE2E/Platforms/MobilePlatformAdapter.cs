@@ -264,7 +264,7 @@ public sealed class IosPlatformAdapter : MobilePlatformAdapter
                     env[key] = value;
                 }
             }
-            driver.ExecuteScript("mobile: launchApp", new Dictionary<string, object>
+            Relaunch(driver, "mobile: launchApp", new Dictionary<string, object>
             {
                 ["bundleId"] = AppId,
                 ["environment"] = env
@@ -274,13 +274,33 @@ public sealed class IosPlatformAdapter : MobilePlatformAdapter
         {
             // /wda/apps/activate relaunches through the stored environment,
             // which is safe only because it still equals the suite baseline.
-            driver.ExecuteScript("mobile: activateApp", new Dictionary<string, object>
+            Relaunch(driver, "mobile: activateApp", new Dictionary<string, object>
             {
                 ["bundleId"] = AppId
             });
         }
         driver.Orientation = ScreenOrientation.Portrait;
     }
+
+    // XCTDaemon budgets each launch (~30s observed); on a loaded simulator
+    // SpringBoard can still be releasing the terminated instance when the
+    // request lands. The error only surfaces after that wait, so one immediate
+    // retry usually lands cleanly — and a persistent launch failure still
+    // propagates on the second attempt rather than being hidden.
+    private static void Relaunch(AppiumDriver driver, string script, Dictionary<string, object> args)
+    {
+        try
+        {
+            driver.ExecuteScript(script, args);
+        }
+        catch (WebDriverException exception) when (IsTransientLaunchError(exception))
+        {
+            driver.ExecuteScript(script, args);
+        }
+    }
+
+    internal static bool IsTransientLaunchError(WebDriverException exception)
+        => exception.Message.Contains("Timed out attempting to launch");
 
     public override void DismissSearchSheet(AppiumDriver driver) => Tap(driver, driver.FindElement(AutomationId("SearchSheetDismissButton")));
     public override bool IsChecked(AppiumElement element) => element.GetAttribute("value") == "1";
