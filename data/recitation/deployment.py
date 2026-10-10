@@ -10,6 +10,7 @@ from urllib.parse import urlsplit
 
 from alignment import load_chapters
 from publish import DATABASE, extract
+from playback import load_playback
 
 
 
@@ -32,7 +33,7 @@ def http_response(url, headers=None, timeout=20):
         client.close()
 
 
-def verify(origin, version, database=DATABASE, check_audio=False):
+def verify(origin, version, database=DATABASE, check_audio=False, check_playback=False):
     records = [extract(pid, chapter) for pid, chapter in load_chapters(database).items()
                if "recitation" in chapter]
     approved = [r for r in records if r["alignmentStatus"] == "ready"]
@@ -40,7 +41,7 @@ def verify(origin, version, database=DATABASE, check_audio=False):
     if not approved:
         raise ValueError("No approved recitation available for deployment verification")
     # Check every approved chapter plus a chapter that must remain chapter-only.
-    for expected in approved + ([unapproved] if unapproved else []):
+    for expected in records if check_playback else approved + ([unapproved] if unapproved else []):
         pid = expected["perekId"]
         url = f"{origin.rstrip('/')}/api/recitation/{pid}?deployment={version}"
         with http_response(url, {"Cache-Control": "no-cache"}) as response:
@@ -48,12 +49,28 @@ def verify(origin, version, database=DATABASE, check_audio=False):
                 raise ValueError(f"{pid}: expected website {version} is not serving yet")
             actual = json.load(response)
         audio_url = actual.pop("audioUrl", None)
+        playback = actual.pop("playback", None)
         reference = {k: v for k, v in expected.items() if k != "audioUrl"}
         if actual != reference:
             raise ValueError(f"{pid}: deployed metadata or canonical word intervals differ at "
                              f"{difference_path(reference, actual)}")
         if not valid_audio_url(audio_url, pid):
             raise ValueError(f"{pid}: invalid recording URL")
+        if playback is not None or check_playback:
+            asset = load_playback(pid, expected["audioSha256"])
+            reference_playback = {"format": "ogg-opus", "bitrate": 24000, "audioSha256": asset["sha256"]}
+            if (not isinstance(playback, dict)
+                    or {k: v for k, v in playback.items() if k != "audioUrl"} != reference_playback
+                    or not valid_playback_url(playback.get("audioUrl"), asset["key"])):
+                raise ValueError(f"{pid}: deployed playback differs from its source-bound inventory")
+            if check_audio:
+                with http_response(playback["audioUrl"], {"Origin": origin}, timeout=60) as response:
+                    content = response.read()
+                    if (response.headers.get("Access-Control-Allow-Origin") not in ("*", origin)
+                            or response.headers.get_content_type() != "audio/ogg"
+                            or len(content) != asset["sizeBytes"] or not content.startswith(b"OggS")
+                            or hashlib.sha256(content).hexdigest() != asset["sha256"]):
+                        raise ValueError(f"{pid}: deployed Opus bytes, MIME or CORS differ")
         if check_audio and expected["alignmentStatus"] == "ready":
             # This follows the browser's full CORS download, not native MP3 seeking.
             with http_response(audio_url, {"Origin": origin}, timeout=30) as response:
@@ -96,6 +113,15 @@ def valid_audio_url(url, perek_id):
             parts.path.endswith(f"/recordings/{perek_id}_record.mp3"))
 
 
+def valid_playback_url(url, key):
+    if not isinstance(url, str):
+        return False
+    parts = urlsplit(url)
+    return (parts.scheme in ("http", "https") and bool(parts.hostname)
+            and not (parts.username or parts.password or parts.query or parts.fragment)
+            and parts.path.endswith("/" + key))
+
+
 def difference_path(expected, actual, path="manifest"):
     """Identify the first changed field without dumping the entire timing map."""
     if isinstance(expected, dict) and isinstance(actual, dict):
@@ -119,6 +145,8 @@ def main():
     parser.add_argument("--version", required=True)
     parser.add_argument("--database", type=Path, default=DATABASE)
     parser.add_argument("--check-audio", action="store_true")
+    parser.add_argument("--check-playback", action="store_true",
+                        help="Require every chapter to select its verified Opus copy")
     parser.add_argument("--attempts", type=int, default=1)
     parser.add_argument("--interval", type=float, default=20)
     args = parser.parse_args()
@@ -129,7 +157,7 @@ def main():
         parser.error("Attempts must be positive and interval nonnegative")
     for attempt in range(args.attempts):
         try:
-            verify(args.origin.rstrip('/'), args.version, args.database, args.check_audio)
+            verify(args.origin.rstrip('/'), args.version, args.database, args.check_audio, args.check_playback)
             return
         except (ValueError, OSError, HTTPException) as error:
             if attempt + 1 == args.attempts:
