@@ -86,7 +86,9 @@ partial class Build
     // rather than silently skipping every test.
     string MobileE2ESelectionFilter()
     {
-        var baseFilter = $"Category=MobileE2E&(Platform=Shared|Platform={(MobileIsAndroid ? "Android" : "iOS")})";
+        // Every predicate stays parenthesized — the filter-query grammar treats
+        // a bare `A=B|C=D` group as one malformed predicate and runs zero tests.
+        var baseFilter = $"(Category=MobileE2E)&((Platform=Shared)|(Platform={(MobileIsAndroid ? "Android" : "iOS")}))";
         var selectionPath = Environment.GetEnvironmentVariable("MOBILE_E2E_SELECTION");
         if (string.IsNullOrEmpty(selectionPath))
         {
