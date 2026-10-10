@@ -21,6 +21,15 @@ public class MainActivity : MauiAppCompatActivity
 {
     protected override void OnCreate(Bundle? savedInstanceState)
     {
+        // The mobile e2e suite launches with a BIBLE_E2E intent extra — Android
+        // intents cannot carry process environment like iOS launches can. The
+        // marker must be read before base.OnCreate reaches App.CreateWindow so
+        // the search-index warmup sees it on this launch, and MarkE2eLaunch's
+        // file covers the relaunched processes whose extras adb drops.
+        if (Intent?.GetBooleanExtra(Services.SearchIndexService.E2eEnvironmentVariable, false) == true)
+        {
+            Services.SearchIndexService.MarkE2eLaunchFromIntent();
+        }
         base.OnCreate(savedInstanceState);
         HandleAppLinkIntent(Intent);
         // Firebase initialized from google-services.json (Plugin.Firebase / Xamarin.Firebase.Analytics process it at build).

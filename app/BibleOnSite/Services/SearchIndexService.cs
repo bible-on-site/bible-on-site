@@ -44,15 +44,49 @@ public sealed class SearchIndexService : IAsyncDisposable
     // Production launches never set it and keep the lazy path.
     internal const string E2eEnvironmentVariable = "BIBLE_E2E";
 
+    // Android app launches cannot carry process environment, so the suite
+    // delivers the marker as an intent extra on the session's launch intent.
+    // adb activateApp relaunches drop extras, so the first marked launch
+    // persists a marker file for every later process in the same install;
+    // the file dies with the install, which is the suite's lifetime anyway.
+    private static string E2eMarkerPath => Path.Combine(FileSystem.AppDataDirectory, "e2e.launch");
+
     [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage(
         Justification = "E2E-only startup hook; the mobile suite launches with BIBLE_E2E.")]
     public static void WarmupForE2e()
     {
-        if (Environment.GetEnvironmentVariable(E2eEnvironmentVariable) != "1")
+        if (!IsE2eMarkedProcess())
         {
             return;
         }
         _ = WarmupIndexesAsync();
+    }
+
+    // MainActivity calls this when the launch intent carries the e2e extra.
+    [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage(
+        Justification = "E2E-only startup hook; the mobile suite launches with BIBLE_E2E.")]
+    internal static void MarkE2eLaunchFromIntent()
+    {
+        Environment.SetEnvironmentVariable(E2eEnvironmentVariable, "1");
+        try
+        {
+            File.WriteAllText(E2eMarkerPath, "1");
+        }
+        catch (Exception exception)
+        {
+            Console.WriteLine($"E2E launch marker persist failed: {exception.Message}");
+        }
+    }
+
+    [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage(
+        Justification = "E2E-only startup hook; the mobile suite launches with BIBLE_E2E.")]
+    private static bool IsE2eMarkedProcess()
+    {
+        if (Environment.GetEnvironmentVariable(E2eEnvironmentVariable) == "1")
+        {
+            return true;
+        }
+        return File.Exists(E2eMarkerPath);
     }
 
     [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage(
