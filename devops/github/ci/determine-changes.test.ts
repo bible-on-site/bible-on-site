@@ -49,15 +49,21 @@ describe("detectChanges", () => {
 		});
 	}
 
-	test("approved timings release the website without releasing the app", () => {
+	test("approved timings release both website and native book extensions without a version-file diff", () => {
 		assert.deepEqual(
 			changed(["data/recitation/recitation.sqlite"], "website", "app", "data"),
 			[
 				{ module_changed: true, ci_changed: false },
-				{ module_changed: false, ci_changed: false },
+				{ module_changed: true, ci_changed: false },
 				{ module_changed: true, ci_changed: false },
 			],
 		);
+	});
+
+	test("alignment tooling changes do not release native book extensions", () => {
+		assert.deepEqual(changed(["data/recitation/recite.py"], "app"), [
+			{ module_changed: false, ci_changed: false },
+		]);
 	});
 
 	test("a packaged decoder change releases the app", () => {

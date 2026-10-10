@@ -54,8 +54,9 @@ const mockGetAuthorById = getAuthorById as jest.MockedFunction<
 const mockGetAuthorByName = getAuthorByName as jest.MockedFunction<
 	typeof getAuthorByName
 >;
-const mockGetArticlesByAuthorId =
-	getArticlesByAuthorId as jest.MockedFunction<typeof getArticlesByAuthorId>;
+const mockGetArticlesByAuthorId = getArticlesByAuthorId as jest.MockedFunction<
+	typeof getArticlesByAuthorId
+>;
 
 describe("[authorParam] page", () => {
 	beforeEach(() => {
@@ -100,7 +101,7 @@ describe("[authorParam] page", () => {
 			});
 
 			expect(result).toEqual({
-				title: "הרב לדוגמא | תנ\"ך באתר",
+				title: 'הרב לדוגמא | תנ"ך באתר',
 				description: "תיאור ארוך מאוד",
 			});
 			expect(mockGetAuthorById).toHaveBeenCalledWith(1);
@@ -121,7 +122,7 @@ describe("[authorParam] page", () => {
 			});
 
 			expect(result).toEqual({
-				title: "הרב לדוגמא | תנ\"ך באתר",
+				title: 'הרב לדוגמא | תנ"ך באתר',
 				description: "מאמרים מאת הרב לדוגמא",
 			});
 			expect(mockGetAuthorByName).toHaveBeenCalledWith("הרב לדוגמא");
@@ -135,7 +136,7 @@ describe("[authorParam] page", () => {
 			});
 
 			expect(result).toEqual({
-				title: "הרב לא נמצא | תנ\"ך באתר",
+				title: 'הרב לא נמצא | תנ"ך באתר',
 			});
 		});
 
@@ -203,6 +204,58 @@ describe("[authorParam] page", () => {
 			expect(screen.getByText("הרב ללא תמונה")).toBeTruthy();
 			expect(screen.getByText("👤")).toBeTruthy();
 			expect(screen.getByText("אין מאמרים עדיין")).toBeTruthy();
+		});
+
+		it("renders valid chapter articles when other records reference invalid chapters", async () => {
+			mockGetAuthorById.mockResolvedValue({
+				id: 1,
+				name: "הרב לדוגמא",
+				details: "",
+				imageUrl: "",
+			});
+			mockGetArticlesByAuthorId.mockResolvedValue(
+				[1, 929, 0, -1, 930, 5000, 1.5].map((perekId, index) => ({
+					id: index + 1,
+					name: `Article for chapter ${perekId}`,
+					perekId,
+					abstract: null,
+				})),
+			);
+
+			render(
+				await AuthorPage({ params: Promise.resolve({ authorParam: "1" }) }),
+			);
+
+			expect(screen.getByText("מאמרים (2)")).toBeTruthy();
+			expect(screen.getByText("Article for chapter 1")).toBeTruthy();
+			expect(screen.getByText("Article for chapter 929")).toBeTruthy();
+			for (const perekId of [0, -1, 930, 5000, 1.5]) {
+				expect(screen.queryByText(`Article for chapter ${perekId}`)).toBeNull();
+			}
+		});
+
+		it("renders the empty state when every article has an invalid chapter reference", async () => {
+			mockGetAuthorById.mockResolvedValue({
+				id: 1,
+				name: "הרב לדוגמא",
+				details: "",
+				imageUrl: "",
+			});
+			mockGetArticlesByAuthorId.mockResolvedValue([
+				{
+					id: 10,
+					name: "Invalid chapter article",
+					perekId: 5000,
+					abstract: null,
+				},
+			]);
+
+			render(
+				await AuthorPage({ params: Promise.resolve({ authorParam: "1" }) }),
+			);
+
+			expect(screen.getByText("אין מאמרים עדיין")).toBeTruthy();
+			expect(screen.queryByText("Invalid chapter article")).toBeNull();
 		});
 
 		it("calls notFound when author is missing", async () => {

@@ -42,10 +42,10 @@ export const MODULES = {
 	api: { directory: "web/api", ciPaths: RELEASE_CI_PATHS },
 	app: {
 		directory: "app",
+		// The signed catalog and book extensions are generated from approved timings.
+		extraModulePaths: ["data/recitation/recitation.sqlite"],
 		ciPaths: [...RELEASE_CI_PATHS, ".github/workflows/app-mobile-e2e.yml"],
-		// Shared decoder changes need native checks. Only changes to the packaged
-		// app itself need an app version, package and release. Website timing
-		// batches also change their package version files.
+		// Shared decoder changes need native checks without changing packaged assets.
 		extraCiPattern:
 			/^web\/bible-on-site\/(package(-lock)?\.json|src\/lib\/recitation-audio\.ts)$/,
 	},
