@@ -1819,8 +1819,10 @@ jobs:
         run: node --import tsx --test deploy/ecr-deploy/resume-image.test.mts
       - name: Start RustFS
         run: docker compose -f devops/docker-compose.yml up -d --wait --wait-timeout 180 rustfs
-      - name: Verify MP3 byte-range seeking
-        run: node data/recitation/check_storage.mjs
+      - name: Verify MP3 and Opus byte-range seeking
+        run: |
+          node data/recitation/check_storage.mjs
+          node data/recitation/check_storage.mjs data/recitation/fixtures/seek.ogg
 
   data_ci:
     name: Data CI

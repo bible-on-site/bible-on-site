@@ -44,9 +44,9 @@ public class RecitationServiceTests
                 using var output = new MemoryStream();
                 using (var zip = new ZipArchive(output, ZipArchiveMode.Create, true))
                 {
-                    foreach (var track in group.DistinctBy(t => t.AudioSha256))
+                    foreach (var track in group.DistinctBy(t => t.PlaybackFileName))
                     {
-                        using var entry = zip.CreateEntry(track.AudioSha256 + ".mp3").Open();
+                        using var entry = zip.CreateEntry(track.PlaybackFileName).Open();
                         entry.Write(Audio.GetValueOrDefault($"/recordings/{track.PerekId}_record.mp3", "audio"u8.ToArray()));
                     }
                 }
@@ -75,6 +75,51 @@ public class RecitationServiceTests
             }
             Catalog = new(1, Package, books); SaveCatalog();
         }
+    }
+
+    [Fact]
+    public async Task OpusBookUsesDerivedHashAndFilename_WithoutChangingMp3IdentityOrTimings()
+    {
+        await using var storage = new TestStorage(); var extension = new Extension(storage);
+        var source = "original alignment MP3"u8.ToArray();
+        var opus = "OggS derived playback"u8.ToArray();
+        var track = Track(1, source) with { Playback = new("ogg-opus", Hash(opus), opus.Length, 24000, Hash(source)) };
+        extension.Package = new(1, [track]);
+        extension.Audio["/recordings/1_record.mp3"] = opus;
+        extension.Bundle(); var service = extension.Service;
+        await service.DownloadAsync([1]);
+        var path = await service.PrepareAudioAsync(1, Canonical());
+        Path.GetFileName(path).Should().Be(Hash(opus) + ".ogg");
+        (await File.ReadAllBytesAsync(path)).Should().Equal(opus);
+        service.GetTrack(1)!.AudioSha256.Should().Be(Hash(source));
+        service.GetTrack(1)!.Words.Should().Equal(track.Words);
+        await File.WriteAllBytesAsync(path, source);
+        var corrupted = () => service.PrepareAudioAsync(1, Canonical());
+        await corrupted.Should().ThrowAsync<InvalidDataException>();
+    }
+
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Mp3UpgradeDeletesOnlyReplacedDownloads_AndKeepsThemOnFailure(bool stillRequired)
+    {
+        await using var storage = new TestStorage(); var extension = new Extension(storage);
+        var source = "original MP3"u8.ToArray(); var opus = "OggS playback"u8.ToArray();
+        extension.Package = new(1, [Track(1, source)]);
+        extension.Audio["/recordings/1_record.mp3"] = source;
+        extension.Bundle(); var service = extension.Service;
+        await service.DownloadAsync([1]);
+        var original = await service.PrepareAudioAsync(1, Canonical());
+        var upgraded = Track(1, source) with { Playback = new("ogg-opus", Hash(opus), opus.Length, 24000, Hash(source)) };
+        extension.Package = new(1, stillRequired ? [upgraded, Track(2, source)] : [upgraded]);
+        extension.Audio["/recordings/1_record.mp3"] = "corrupt"u8.ToArray();
+        extension.Bundle(); await service.UpdateAsync();
+        await service.Invoking(s => s.DownloadAsync([1])).Should().ThrowAsync<InvalidDataException>();
+        File.Exists(original).Should().BeTrue();
+        extension.Audio["/recordings/1_record.mp3"] = opus;
+        extension.Bundle(); await service.UpdateAsync();
+        await service.DownloadAsync([1]);
+        File.Exists(original).Should().Be(stillRequired);
+        (await File.ReadAllBytesAsync(await service.PrepareAudioAsync(1, Canonical()))).Should().Equal(opus);
     }
 
     [Fact]

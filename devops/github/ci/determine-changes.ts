@@ -42,6 +42,7 @@ export const MODULES = {
 	api: { directory: "web/api", ciPaths: RELEASE_CI_PATHS },
 	app: {
 		directory: "app",
+		extraModulePaths: ["web/bible-on-site/src/data/recitation/opus-playback.json"],
 		ciPaths: [...RELEASE_CI_PATHS, ".github/workflows/app-mobile-e2e.yml"],
 		// Shared decoder changes need native checks. Only changes to the packaged
 		// app itself need an app version, package and release. Website timing

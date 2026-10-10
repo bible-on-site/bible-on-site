@@ -3,7 +3,7 @@ using BibleOnSite.Models;
 
 namespace BibleOnSite.Services;
 
-/// <summary>Use the same pinned MPEG decoder as the website; native playback receives exact PCM ranges.</summary>
+/// <summary>Use the website's pinned MPEG/Opus decoders; native playback receives exact PCM ranges.</summary>
 public sealed class MpegRecitationAudioDecoder : IRecitationAudioDecoder
 {
     private readonly WebView view;

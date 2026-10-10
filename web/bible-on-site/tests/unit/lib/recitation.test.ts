@@ -35,6 +35,27 @@ test("validated timings preserve segment identity and derive verse ranges", () =
 	expect(verseRange(manifest.words, 2)).toBeNull();
 });
 
+test("derived playback leaves original MP3 identity and approved times intact", () => {
+	const playback = {
+		format: "ogg-opus",
+		bitrate: 24000,
+		audioSha256: "c".repeat(64),
+		audioUrl: `https://example.com/recordings/opus-24k/${"c".repeat(64)}.ogg`,
+	};
+	const result = parseRecitation({ ...manifest, playback }, 1, pesukim);
+	expect(result.audioSha256).toBe(manifest.audioSha256);
+	expect(result.words).toEqual(manifest.words);
+	for (const invalid of [
+		{ ...playback, bitrate: 12000 },
+		{ ...playback, audioSha256: "a" },
+		{ ...playback, audioUrl: "https://example.com/other.ogg" },
+		{ ...playback, format: "unknown" },
+	])
+		expect(() =>
+			parseRecitation({ ...manifest, playback: invalid }, 1, pesukim),
+		).toThrow("derived");
+});
+
 test.each([
 	{ ...manifest, perekId: 2 },
 	{ ...manifest, audioUrl: "javascript:alert(1)" },
