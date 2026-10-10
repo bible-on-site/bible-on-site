@@ -182,7 +182,8 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
     // reader appeared go back to the retained search page and tap once more.
     private (string Title, System.Drawing.Point Position) OpenCommentaryResult(string rowSuffix, string searchPhrase)
     {
-        for (var attempt = 0; ; attempt++)
+        // One cold-index attempt plus a single retry on the warm index.
+        for (var attempt = 0; attempt < 2; attempt++)
         {
             // A fresh installation builds the local index for the entire
             // commentary package; the retry lands on the already-warm index.
@@ -205,6 +206,7 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
                 Page.WaitFor("PerekSearchInput", element => element.Text == searchPhrase);
             }
         }
+        throw new InvalidOperationException("The commentary tap retry loop exited without returning a result.");
     }
 
     private (AppiumElement Element, System.Drawing.Rectangle Frame) WaitForSettledRow(string suffix, TimeSpan timeout)
