@@ -33,14 +33,12 @@ def pcm_frames(path, channels):
     # A malformed source may report many recoverable packets; never block its
     # decoder on an undrained stderr pipe while counting stdout.
     # Fixed executable/flags and a local file path; no command interpreter.
-    with tempfile.TemporaryFile() as errors, subprocess.Popen(  # nosec B603 # nosemgrep
-            command, stdout=subprocess.PIPE, stderr=errors) as process:
-        size = 0
-        while block := process.stdout.read(1024 * 1024):
-            size += len(block)
-        if process.wait() != 0:
+    with tempfile.TemporaryFile() as errors, tempfile.TemporaryFile() as decoded:
+        process = subprocess.run(command, stdout=decoded, stderr=errors)  # nosec B603 # nosemgrep
+        if process.returncode != 0:
             errors.seek(0)
             raise ValueError(errors.read().decode())
+        size = decoded.seek(0, 2)
     if size % (channels * 2):
         raise ValueError("Incomplete PCM frame")
     return size // (channels * 2)
