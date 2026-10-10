@@ -105,7 +105,10 @@ export default async function AuthorPage({
 		notFound();
 	}
 
-	const articles = await getCachedAuthorArticles(author.id);
+	const articles = (await getCachedAuthorArticles(author.id)).filter(
+		({ perekId }) =>
+			Number.isInteger(perekId) && perekId >= 1 && perekId <= 929,
+	);
 	const rows = articles.map((article) => {
 		const perek = getPerekByPerekId(article.perekId);
 		return { ...article, sefer: perek.sefer, source: perek.source };
