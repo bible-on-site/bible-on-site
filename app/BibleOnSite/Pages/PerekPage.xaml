@@ -120,60 +120,6 @@
 
     <Grid x:Name="MainGrid">
 
-<!-- iOS bottom bar debug (beta-only collapsible dropdown) -->
-<Grid x:Name="BottomBarDebugOverlay"
-      IsVisible="False"
-      ZIndex="999"
-      VerticalOptions="Start"
-      HorizontalOptions="Start"
-      Margin="8,4,0,0">
-    <!-- Toggle button (small, unobtrusive) -->
-    <Border x:Name="DebugToggleButton"
-            WidthRequest="28" HeightRequest="28"
-            StrokeShape="RoundRectangle 14"
-            BackgroundColor="{AppThemeBinding Light=#DDD, Dark=#444}"
-            HorizontalOptions="Start" VerticalOptions="Start"
-            ZIndex="1000">
-        <Border.GestureRecognizers>
-            <TapGestureRecognizer Tapped="OnDebugToggleTapped"/>
-        </Border.GestureRecognizers>
-        <Label x:Name="DebugToggleIcon" Text="🔧" FontSize="14"
-               HorizontalOptions="Center" VerticalOptions="Center"/>
-    </Border>
-    <!-- Dropdown panel (hidden by default) -->
-    <Border x:Name="DebugDropdownPanel"
-            IsVisible="False"
-            VerticalOptions="Start"
-            HorizontalOptions="Start"
-            Margin="0,32,0,0"
-            Padding="8"
-            BackgroundColor="{AppThemeBinding Light=#F5F5F5, Dark=#2A2A2A}"
-            StrokeShape="RoundRectangle 8"
-            Stroke="{AppThemeBinding Light=#CCC, Dark=#555}"
-            StrokeThickness="1">
-        <VerticalStackLayout Spacing="1">
-            <Label Text="Bottom Bar Fix" FontSize="11" FontAttributes="Bold"
-                   TextColor="{AppThemeBinding Light=Black, Dark=White}" FlowDirection="LeftToRight"/>
-            <RadioButton x:Name="DebugFix0" Content="0: No fix (baseline)" FontSize="10" FlowDirection="LeftToRight"
-                         GroupName="BottomBarDebug"/>
-            <RadioButton x:Name="DebugFix3" Content="3: Bar margin=-N" FontSize="10" FlowDirection="LeftToRight"
-                         GroupName="BottomBarDebug"/>
-            <RadioButton x:Name="DebugFix4" Content="4: TranslationY +N (default)" FontSize="10" FlowDirection="LeftToRight"
-                         GroupName="BottomBarDebug" IsChecked="True"/>
-            <RadioButton x:Name="DebugFix11" Content="11: Page padding=-N" FontSize="10" FlowDirection="LeftToRight"
-                         GroupName="BottomBarDebug"/>
-            <RadioButton x:Name="DebugFix15" Content="15: TranslationY + bar margin=-N" FontSize="10" FlowDirection="LeftToRight"
-                         GroupName="BottomBarDebug"/>
-            <RadioButton x:Name="DebugFix16" Content="16: TranslationY + page padding=-N" FontSize="10" FlowDirection="LeftToRight"
-                         GroupName="BottomBarDebug"/>
-            <RadioButton x:Name="DebugFix17" Content="17: TranslationY (half) + margin" FontSize="10" FlowDirection="LeftToRight"
-                         GroupName="BottomBarDebug"/>
-            <Label x:Name="DebugFixInfo" Text="" FontSize="10" FlowDirection="LeftToRight"
-                   TextColor="{AppThemeBinding Light=Gray, Dark=#AAA}"/>
-        </VerticalStackLayout>
-    </Border>
-</Grid>
-
         <!-- Exit Full Screen Button (floating, hidden by default) -->
         <!-- Gesture recognizers are set up in code-behind: native Android touch for
              pixel-perfect drag tracking, MAUI gesture recognizers for other platforms. -->
