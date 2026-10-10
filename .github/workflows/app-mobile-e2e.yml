@@ -69,6 +69,17 @@ jobs:
         with:
           node-version-file: devops/package.json
 
+      - name: Select compatible Xcode
+        if: matrix.platform == 'iOS'
+        run: sudo xcode-select --switch /Applications/Xcode_27.app/Contents/Developer
+
+      # simctl boot is asynchronous: the device boots on the host while the
+      # dependency installs and the app build run, and ios:boot:wait gates the
+      # test step on the finished boot instead of idling through it here.
+      - name: Start iPhone simulator boot
+        if: matrix.platform == 'iOS'
+        run: npm run ios:boot:start --prefix app/mobile-e2e
+
       - name: Restore npm cache
         id: npm-cache
         uses: actions/cache/restore@v6
@@ -101,10 +112,6 @@ jobs:
         with:
           distribution: microsoft
           java-version: "21"
-
-      - name: Select compatible Xcode
-        if: matrix.platform == 'iOS'
-        run: sudo xcode-select --switch /Applications/Xcode_27.app/Contents/Developer
 
       - name: Install MAUI workload
         # 10.0.401.1 selects the iOS 27 SDK, which requires Xcode 27; see #1871.
@@ -266,9 +273,9 @@ jobs:
         if: matrix.platform == 'iOS'
         run: npm run ios:wda --prefix app/mobile-e2e
 
-      - name: Boot iPhone simulator
+      - name: Wait for iPhone simulator
         if: matrix.platform == 'iOS'
-        run: npm run ios:boot --prefix app/mobile-e2e
+        run: npm run ios:boot:wait --prefix app/mobile-e2e
 
       - name: Run shared pilot on iOS
         if: matrix.platform == 'iOS'
