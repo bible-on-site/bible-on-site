@@ -120,6 +120,11 @@ public partial class RecitationPreferencesViewModel : ObservableObject
         IsDownloading = true; Progress = 0;
         using var cancellation = new CancellationTokenSource();
         _download = cancellation;
+        // Queued progress callbacks are only rejected once _download and
+        // IsDownloading are cleared, so the outcome is applied afterwards:
+        // a stale report that runs during the catch→finally window must not
+        // overwrite the completed or cancelled status.
+        string outcome;
         try
         {
             Status = "מעדכן את חבילת ההקראה...";
@@ -135,11 +140,13 @@ public partial class RecitationPreferencesViewModel : ObservableObject
                 Progress = p; Status = $"מוריד הקלטות... {p:P0}";
             }), cancellation.Token);
             Enabled = true;
-            Status = "ההקלטות מותקנות וזמינות גם ללא אינטרנט.";
+            outcome = "ההקלטות מותקנות וזמינות גם ללא אינטרנט.";
         }
-        catch (OperationCanceledException) { Status = "ההורדה הופסקה. הקלטות שהושלמו נשמרו להמשך."; }
-        catch (Exception) { Status = "לא ניתן להשלים את ההורדה. נסו שוב; הקלטות שהושלמו נשמרו."; }
-        finally { _download = null; IsDownloading = false; Refresh(); }
+        catch (OperationCanceledException) { outcome = "ההורדה הופסקה. הקלטות שהושלמו נשמרו להמשך."; }
+        catch (Exception) { outcome = "לא ניתן להשלים את ההורדה. נסו שוב; הקלטות שהושלמו נשמרו."; }
+        finally { _download = null; IsDownloading = false; }
+        Status = outcome;
+        Refresh();
     }
 
 }
