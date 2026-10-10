@@ -130,6 +130,25 @@ public class TikkunFlowViewTests
     }
 
     [Fact]
+    public void draw_boxes_each_word_to_its_measured_width_not_the_column()
+    {
+        WithInlineDispatcher(() =>
+        {
+            var view = new TikkunFlowView { Pasukim = [PasukOf(1, "אאאא בב")] };
+            var canvas = MeasuringCanvas();
+
+            view.Drawable!.Draw(canvas.Object, new RectF(0, 0, 360, 600));
+
+            // The four-letter word measures 4 × 18 × 0.5 = 36 — the draw box must
+            // be that width (plus slack), never the runaway "rest of line" width
+            // that let Android's StaticLayout re-wrap and pile words together.
+            canvas.Verify(c => c.DrawString("אאאא", It.IsAny<float>(), It.IsAny<float>(),
+                It.Is<float>(w => w < 60), It.IsAny<float>(), It.IsAny<HorizontalAlignment>(),
+                It.IsAny<VerticalAlignment>(), It.IsAny<TextFlow>()));
+        });
+    }
+
+    [Fact]
     public void draw_narrower_than_the_padding_collapses_height()
     {
         WithInlineDispatcher(() =>

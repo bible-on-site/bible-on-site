@@ -41,9 +41,9 @@ public sealed class MobileDeviceSession : IMobileDeviceSession, IAsyncLifetime
         Adapter = MobilePlatformAdapter.For(configuration.Platform);
     }
 
-    public Task InitializeAsync() => Task.CompletedTask;
+    public ValueTask InitializeAsync() => default;
 
-    public Task DisposeAsync()
+    public ValueTask DisposeAsync()
     {
         try
         {
@@ -65,7 +65,7 @@ public sealed class MobileDeviceSession : IMobileDeviceSession, IAsyncLifetime
                 ? $"{Configuration.Platform}: session cleanup failed; the device had already dropped it: {exception.Message}"
                 : $"{Configuration.Platform}: session cleanup failed; device reuse blocked: {exception.Message}");
         }
-        return Task.CompletedTask;
+        return default;
     }
 
     // Ensures the app runs with the scenario's environment. The first call

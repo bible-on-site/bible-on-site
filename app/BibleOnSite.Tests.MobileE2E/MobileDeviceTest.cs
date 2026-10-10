@@ -4,7 +4,6 @@ using BibleOnSite.Tests.MobileE2E.Platforms;
 using OpenQA.Selenium;
 using OpenQA.Selenium.Appium;
 using Xunit;
-using Xunit.Abstractions;
 
 namespace BibleOnSite.Tests.MobileE2E;
 
@@ -43,12 +42,12 @@ public abstract class MobileDeviceTest : IAsyncLifetime
     // on the scenario's app restart instead of holding per-test session caps.
     protected virtual IReadOnlyDictionary<string, string>? LaunchEnvironment => null;
 
-    public virtual Task InitializeAsync()
+    public virtual ValueTask InitializeAsync()
     {
         try
         {
             Connect();
-            return Task.CompletedTask;
+            return ValueTask.CompletedTask;
         }
         catch (WebDriverException exception) when (DeviceSessionDeath.Matches(exception))
         {
@@ -72,12 +71,12 @@ public abstract class MobileDeviceTest : IAsyncLifetime
             SaveDiagnostics($"SessionStartup-{Guid.NewGuid():N}", "failed");
             throw;
         }
-        return Task.CompletedTask;
+        return default;
     }
 
     // The collection fixture owns the driver's lifetime, so a finished test
     // has nothing to release. The next scenario's acquire restarts the app.
-    public virtual Task DisposeAsync() => Task.CompletedTask;
+    public virtual ValueTask DisposeAsync() => default;
 
     protected void Scenario(Action run, [System.Runtime.CompilerServices.CallerMemberName] string name = "")
     {

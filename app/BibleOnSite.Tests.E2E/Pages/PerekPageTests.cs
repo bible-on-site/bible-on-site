@@ -36,7 +36,7 @@ public class PerekPageTests
                 break;
             }
 
-            await Task.Delay(200);
+            await Task.Delay(200, TestContext.Current.CancellationToken);
         }
 
         _fixture.FindByAutomationId("PerekLoadingLabel")
@@ -73,7 +73,7 @@ public class PerekPageTests
     public async Task NextButton_NavigatesToNextPerek()
     {
         // Arrange
-        await Task.Delay(1000);
+        await Task.Delay(1000, TestContext.Current.CancellationToken);
         var initialTitle = _fixture.MainWindow.Title;
 
         // Act - Click next button
@@ -83,7 +83,7 @@ public class PerekPageTests
         nextButton.Should().NotBeNull();
         nextButton!.AsButton().Invoke();
 
-        await Task.Delay(1000);
+        await Task.Delay(1000, TestContext.Current.CancellationToken);
 
         // Assert - Title should change (indicates different perek loaded)
         var newTitle = _fixture.MainWindow.Title;
@@ -94,7 +94,7 @@ public class PerekPageTests
     public async Task PreviousButton_NavigatesToPreviousPerek()
     {
         // Arrange
-        await Task.Delay(1000);
+        await Task.Delay(1000, TestContext.Current.CancellationToken);
 
         // Act - Click prev button
         var prevButton = await _fixture.WaitForElementAsync(
@@ -103,7 +103,7 @@ public class PerekPageTests
         prevButton.Should().NotBeNull();
         prevButton!.AsButton().Invoke();
 
-        await Task.Delay(1000);
+        await Task.Delay(1000, TestContext.Current.CancellationToken);
 
         // Assert - Navigation occurred without crash
         _fixture.MainWindow.Should().NotBeNull("App should not crash on previous navigation");

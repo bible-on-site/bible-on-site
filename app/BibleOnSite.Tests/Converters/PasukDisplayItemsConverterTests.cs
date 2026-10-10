@@ -1,5 +1,6 @@
 using System.Globalization;
 using BibleOnSite.Converters;
+using BibleOnSite.Helpers;
 using BibleOnSite.Models;
 using FluentAssertions;
 
@@ -63,6 +64,26 @@ public class PasukDisplayItemsConverterTests
             .Should().BeAssignableTo<IReadOnlyList<PasukDisplayItem>>().Subject;
 
         items.Should().HaveCount(1);
+    }
+
+    [Fact]
+    public void the_font_factor_input_scales_the_carried_sizes()
+    {
+        var items = Convert(new List<Pasuk> { PasukOf(1) }, true, 1.5)
+            .Should().BeAssignableTo<IReadOnlyList<PasukDisplayItem>>().Subject;
+
+        // Repeated and original copies alike render at the configured size.
+        items.Should().OnlyContain(i =>
+            Math.Abs(i.FontSize - 27) < 0.001 && Math.Abs(i.MarkerFontSize - 24) < 0.001);
+    }
+
+    [Fact]
+    public void a_missing_font_factor_uses_the_base_sizes()
+    {
+        var items = Convert(new List<Pasuk> { PasukOf(1) })
+            .Should().BeAssignableTo<IReadOnlyList<PasukDisplayItem>>().Subject;
+
+        items[0].FontSize.Should().Be(PasukDisplayItems.PasukFontSizeBase);
     }
 
     [Fact]
