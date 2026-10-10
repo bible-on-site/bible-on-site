@@ -45,7 +45,6 @@ async function main() {
 		execSync("cargo build --release", {
 			cwd: qaServiceDir,
 			stdio: "inherit",
-			shell: true,
 		});
 	} catch {
 		console.warn("  qa-service build failed — QA widget will be unavailable");
@@ -57,7 +56,6 @@ async function main() {
 		cwd: qaServiceDir,
 		stdio: "ignore",
 		detached: true,
-		shell: true,
 		env: {
 			...process.env,
 			QA_BIND: `${QA_HOST}:${QA_PORT}`,
