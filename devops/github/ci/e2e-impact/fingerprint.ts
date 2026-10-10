@@ -337,7 +337,7 @@ function extractDeclarations(tokens: string[]): string[] {
 		runStart = end + 1;
 		if (run.length === 0) return;
 		if (contexts.length > 0 && contexts[contexts.length - 1] !== "type") return;
-		if (!run.some((token) => isIdentChar(token[0]))) return;
+		if (!run.some((part) => isIdentChar(part[0]))) return;
 		const first = run[0];
 		const joined = run.join(" ");
 		if (first === "namespace") {
@@ -345,9 +345,9 @@ function extractDeclarations(tokens: string[]): string[] {
 			return;
 		}
 		if (SKIP_RUN_PREFIXES.has(first)) return;
-		const kwIndex = run.findIndex((token) => TYPE_KEYWORDS.has(token));
+		const kwIndex = run.findIndex((part) => TYPE_KEYWORDS.has(part));
 		if (kwIndex !== -1) {
-			const name = run.slice(kwIndex + 1).find((token) => isIdentChar(token[0]));
+			const name = run.slice(kwIndex + 1).find((part) => isIdentChar(part[0]));
 			declarations.add(`type:${run[kwIndex]}:${name ?? "?"}`);
 			return;
 		}
@@ -356,30 +356,30 @@ function extractDeclarations(tokens: string[]): string[] {
 	};
 
 	for (let index = 0; index < tokens.length; index++) {
-		const token = tokens[index];
-		if (token === "(") parenDepth++;
-		else if (token === ")") parenDepth--;
-		else if (token === "[") bracketDepth++;
-		else if (token === "]") bracketDepth--;
-		else if (token === "{" && parenDepth === 0 && bracketDepth === 0) {
+		const part = tokens[index];
+		if (part === "(") parenDepth++;
+		else if (part === ")") parenDepth--;
+		else if (part === "[") bracketDepth++;
+		else if (part === "]") bracketDepth--;
+		else if (part === "{" && parenDepth === 0 && bracketDepth === 0) {
 			const run = tokens.slice(runStart, index);
 			const isType = run.some((t) => TYPE_KEYWORDS.has(t));
 			classifyRun(index);
 			contexts.push(isType ? "type" : "body");
 			runStart = index + 1;
-		} else if (token === "}" && parenDepth === 0 && bracketDepth === 0) {
+		} else if (part === "}" && parenDepth === 0 && bracketDepth === 0) {
 			classifyRun(index);
 			contexts.pop();
 			runStart = index + 1;
 		} else if (
-			(token === ";" || token === "=" || token === ",") &&
+			(part === ";" || part === "=" || part === ",") &&
 			parenDepth === 0 &&
 			bracketDepth === 0 &&
 			contexts.every((ctx) => ctx === "type")
 		) {
 			classifyRun(index);
 		} else if (
-			(token === ";" || token === "=" || token === ",") &&
+			(part === ";" || part === "=" || part === ",") &&
 			parenDepth === 0 &&
 			bracketDepth === 0
 		) {
