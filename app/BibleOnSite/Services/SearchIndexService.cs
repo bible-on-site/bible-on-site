@@ -47,7 +47,7 @@ public sealed class SearchIndexService : IAsyncDisposable
     // Android app launches cannot carry process environment, so the suite
     // delivers the marker as an intent extra on the session's launch intent.
     // adb activateApp relaunches drop extras, so the first marked launch
-    // persists a marker file for every later process in the same install;
+    // persists a marker file for every later process in the same install —
     // the file dies with the install, which is the suite's lifetime anyway.
     private static string E2eMarkerPath => Path.Combine(FileSystem.AppDataDirectory, "e2e.launch");
 

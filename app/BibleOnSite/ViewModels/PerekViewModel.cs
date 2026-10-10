@@ -561,7 +561,9 @@ public partial class PerekViewModel : ObservableObject
     private void FillFilteredPerushContents()
     {
         if (Perek?.Pasukim is not { } pasukim)
+        {
             return;
+        }
 
         var checkedSet = new HashSet<int>(CheckedPerushim);
         if (checkedSet.Count == 0)
