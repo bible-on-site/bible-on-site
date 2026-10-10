@@ -251,6 +251,24 @@ public class ArticleSearchServiceTests
         byToken!.Total.Should().Be(2);
         byTimeout!.Total.Should().Be(2);
         http.Requests.Should().HaveCount(2);
+        http.Requests.Should().OnlyContain(request => request.Contains("\"limit\":10"));
+    }
+
+    [Fact]
+    public async Task SearchArticles_TimeoutOverload_AppliesTimeoutToRequest()
+    {
+        using var http = new GraphQLTransport(SearchResponse);
+        http.Respond = async token =>
+        {
+            await Task.Delay(TimeSpan.FromSeconds(5), token);
+            return GraphQLTransport.JsonResponse(SearchResponse);
+        };
+        var service = new ArticleService(http.Client);
+
+        // A dropped timeout argument would fall back to the default budget and
+        // return the canned page instead of timing out.
+        await FluentActions.Awaiting(() => service.SearchArticlesAsync("בראשית", 10, TimeSpan.FromMilliseconds(50)))
+            .Should().ThrowAsync<TimeoutException>();
     }
 
     [Fact]
