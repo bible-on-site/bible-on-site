@@ -57,20 +57,7 @@ def verify(origin, version, database=DATABASE, check_audio=False, check_playback
         if not valid_audio_url(audio_url, pid):
             raise ValueError(f"{pid}: invalid recording URL")
         if playback is not None or check_playback:
-            asset = load_playback(pid, expected["audioSha256"])
-            reference_playback = {"format": "ogg-opus", "bitrate": 24000, "audioSha256": asset["sha256"]}
-            if (not isinstance(playback, dict)
-                    or {k: v for k, v in playback.items() if k != "audioUrl"} != reference_playback
-                    or not valid_playback_url(playback.get("audioUrl"), asset["key"])):
-                raise ValueError(f"{pid}: deployed playback differs from its source-bound inventory")
-            if check_audio:
-                with http_response(playback["audioUrl"], {"Origin": origin}, timeout=60) as response:
-                    content = response.read()
-                    if (response.headers.get("Access-Control-Allow-Origin") not in ("*", origin)
-                            or response.headers.get_content_type() != "audio/ogg"
-                            or len(content) != asset["sizeBytes"] or not content.startswith(b"OggS")
-                            or hashlib.sha256(content).hexdigest() != asset["sha256"]):
-                        raise ValueError(f"{pid}: deployed Opus bytes, MIME or CORS differ")
+            verify_playback(pid, expected["audioSha256"], playback, origin, check_audio)
         if check_audio and expected["alignmentStatus"] == "ready":
             # This follows the browser's full CORS download, not native MP3 seeking.
             with http_response(audio_url, {"Origin": origin}, timeout=30) as response:
@@ -102,6 +89,23 @@ def verify(origin, version, database=DATABASE, check_audio=False, check_playback
                          difference_path(expected_tracks, actual_tracks))
     print(f"Website {version}: {len(approved)} approved chapters have exact deployed word timings; "
           f"app extension has {len(records)} recordings")
+
+
+def verify_playback(pid, source_sha, playback, origin, check_audio):
+    asset = load_playback(pid, source_sha)
+    reference = {"format": "ogg-opus", "bitrate": 24000, "audioSha256": asset["sha256"]}
+    if (not isinstance(playback, dict)
+            or {k: v for k, v in playback.items() if k != "audioUrl"} != reference
+            or not valid_playback_url(playback.get("audioUrl"), asset["key"])):
+        raise ValueError(f"{pid}: deployed playback differs from its source-bound inventory")
+    if check_audio:
+        with http_response(playback["audioUrl"], {"Origin": origin}, timeout=60) as response:
+            content = response.read()
+            if (response.headers.get("Access-Control-Allow-Origin") not in ("*", origin)
+                    or response.headers.get_content_type() != "audio/ogg"
+                    or len(content) != asset["sizeBytes"] or not content.startswith(b"OggS")
+                    or hashlib.sha256(content).hexdigest() != asset["sha256"]):
+                raise ValueError(f"{pid}: deployed Opus bytes, MIME or CORS differ")
 
 
 def valid_audio_url(url, perek_id):
