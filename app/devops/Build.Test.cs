@@ -71,8 +71,13 @@ partial class Build
                 .SetConfiguration("Debug")
                 .SetProperty("RestoreLockedMode", "true")
                 .SetFilter(MobileE2ESelectionFilter())
-                // Per test: up to 5 min Appium session setup (IOSDriver budget) plus scenario and diagnostics.
-                .SetBlameHangTimeout("10m")
+                // Per test: up to 5 min Appium session setup (IOSDriver budget), plus the
+                // first commentary search's one-time FTS import of the whole notes pack —
+                // ~7m on a loaded macOS runner, and every fresh session reinstalls the app
+                // so no prior build progress survives — plus scenario and diagnostics.
+                // A test that exceeds its own waits fails normally well before this guard;
+                // it exists only for a genuinely dead test host.
+                .SetBlameHangTimeout("18m")
                 .SetBlameHangDumpType("mini")
                 .SetResultsDirectory(Path.Join(artifacts, "results"))
                 .SetLoggers("console;verbosity=normal", "trx;LogFileName=mobile-e2e.trx", "junit;LogFilePath=" + Path.Join(artifacts, "results", "mobile-e2e.xml")));
