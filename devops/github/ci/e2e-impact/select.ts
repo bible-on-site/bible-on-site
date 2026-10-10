@@ -22,6 +22,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { globMatcher } from "./glob.ts";
+import { isPartialClassOf } from "./xunit-discovery.ts";
 import {
 	fingerprint,
 	SCHEMA_VERSION,
@@ -118,12 +119,7 @@ export function fileToUnit(
 		// Deleted file: the snapshot's units may still claim the parent.
 		return tree.sourceUnits[parent] ? parent : stem;
 	}
-	const partialClass = new RegExp(`\\bpartial\\s+class\\s+${escapeRegExp(base.slice(0, dot))}\\b`);
-	return partialClass.test(content) ? parent : stem;
-}
-
-function escapeRegExp(value: string): string {
-	return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+	return isPartialClassOf(content, base.slice(0, dot)) ? parent : stem;
 }
 
 /** `dir/Foo.xaml.cs` → `dir/Foo`; `dir/Foo.xaml` → `dir/Foo`; `dir/Foo.cs` → `dir/Foo`. */
@@ -199,7 +195,7 @@ export function selectTests(input: SelectionInput): SelectionManifest {
 	}
 
 	const resolveOne = (rawPath: string, status: string): FileResolution => {
-		const path = rawPath.replaceAll("\\", "/");
+		const path = rawPath.replace(/\\/g, "/");
 		const finish = (
 			resolution: FileResolution["resolution"],
 			reason: string,

@@ -124,7 +124,7 @@ export function listFiles(dir: string, glob: string): string[] {
 			const path = join(current, entry.name);
 			if (entry.isDirectory()) {
 				if (!SKIP_DIRS.has(entry.name)) walk(path);
-			} else if (matchesGlob(relative(dir, path).replaceAll("\\", "/"), glob)) {
+			} else if (matchesGlob(relative(dir, path).replace(/\\/g, "/"), glob)) {
 				results.push(path);
 			}
 		}
@@ -147,7 +147,7 @@ export function discoverSuiteTests(
 	const discovered: DiscoveredTest[] = [];
 	for (const file of listFiles(root, testsGlob)) {
 		const parsed = parseTestSource(readFileSync(file, "utf8"));
-		const repoFile = relative(repoRoot, file).replaceAll("\\", "/");
+		const repoFile = relative(repoRoot, file).replace(/\\/g, "/");
 		for (const test of parsed.tests) {
 			if (test.traits.get("Category") !== category) continue;
 			discovered.push({
@@ -159,4 +159,27 @@ export function discoverSuiteTests(
 		}
 	}
 	return discovered.sort((a, b) => a.id.localeCompare(b.id));
+}
+
+const isIdentChar = (char: string | undefined): boolean =>
+	char !== undefined &&
+	((char >= "a" && char <= "z") ||
+		(char >= "A" && char <= "Z") ||
+		(char >= "0" && char <= "9") ||
+		char === "_");
+
+/**
+ * Whether `content` declares `partial class <className>` — a direct scan
+ * rather than a regex, so source content stays off the regex engine.
+ */
+export function isPartialClassOf(content: string, className: string): boolean {
+	const marker = `partial class ${className}`;
+	let index = content.indexOf(marker);
+	while (index !== -1) {
+		const before = index === 0 ? undefined : content[index - 1];
+		const after = content[index + marker.length];
+		if (!isIdentChar(before) && !isIdentChar(after)) return true;
+		index = content.indexOf(marker, index + 1);
+	}
+	return false;
 }

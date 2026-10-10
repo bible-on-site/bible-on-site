@@ -7,23 +7,95 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { inflateRawSync } from "node:zlib";
 import { dirname, join } from "node:path";
+import { request } from "node:https";
 import type { ChangedFile } from "./model.ts";
 
-const API = "https://api.github.com";
+const API_HOST = "api.github.com";
 
-async function apiFetch(url: string, token: string): Promise<Response> {
-	const response = await fetch(url, {
-		headers: {
-			Authorization: `Bearer ${token}`,
-			Accept: "application/vnd.github+json",
-			"X-GitHub-Api-Version": "2022-11-28",
-		},
-		redirect: "follow",
+const isRepoChar = (char: string): boolean =>
+	(char >= "a" && char <= "z") ||
+	(char >= "A" && char <= "Z") ||
+	(char >= "0" && char <= "9") ||
+	char === "-" ||
+	char === "_" ||
+	char === ".";
+
+/** `owner/name` — anything else would smuggle path or query components. */
+function assertRepoName(repo: string): void {
+	const parts = repo.split("/");
+	const valid =
+		parts.length === 2 &&
+		parts.every(
+			(part) => part.length > 0 && [...part].every((char) => isRepoChar(char)),
+		);
+	if (!valid) throw new Error(`Invalid repository name: ${repo}`);
+}
+
+interface HttpResult {
+	status: number;
+	body: Buffer;
+}
+
+/**
+ * GET over node:https with a fixed API hostname — the request target is
+ * always `api.github.com` plus a server-relative path, and redirects are
+ * followed explicitly. Artifact downloads redirect to GitHub's signed CDN
+ * URL; that URL carries its own auth, so the API token is never forwarded
+ * to a redirected host.
+ */
+function httpsGet(url: URL, token: string | null, depth: number): Promise<HttpResult> {
+	return new Promise((resolve, reject) => {
+		const req = request(
+			{
+				hostname: url.hostname,
+				path: `${url.pathname}${url.search}`,
+				method: "GET",
+				headers: {
+					...(token === null ? {} : { Authorization: `Bearer ${token}` }),
+					Accept: "application/vnd.github+json",
+					"X-GitHub-Api-Version": "2022-11-28",
+					"User-Agent": "bible-on-site-e2e-impact",
+				},
+			},
+			(response) => {
+				const chunks: Buffer[] = [];
+				response.on("data", (chunk: Buffer) => chunks.push(chunk));
+				response.on("error", reject);
+				response.on("end", () => {
+					const status = response.statusCode ?? 0;
+					const location = response.headers.location;
+					if (status >= 300 && status < 400 && location !== undefined) {
+						if (depth >= 5) {
+							reject(new Error(`Too many redirects for ${url.pathname}`));
+							return;
+						}
+						const target = new URL(location, url);
+						if (target.protocol !== "https:") {
+							reject(new Error(`Refusing non-https redirect: ${location}`));
+							return;
+						}
+						resolve(httpsGet(target, null, depth + 1));
+						return;
+					}
+					resolve({ status, body: Buffer.concat(chunks) });
+				});
+			},
+		);
+		req.on("error", reject);
+		req.end();
 	});
-	if (!response.ok) {
-		throw new Error(`GitHub API ${response.status} for ${url}: ${await response.text()}`);
+}
+
+async function apiGet(path: string, token: string): Promise<Buffer> {
+	const url = new URL(path, `https://${API_HOST}`);
+	if (url.hostname !== API_HOST) {
+		throw new Error(`Refusing API host ${url.hostname}`);
 	}
-	return response;
+	const result = await httpsGet(url, token, 0);
+	if (result.status < 200 || result.status >= 300) {
+		throw new Error(`GitHub API ${result.status} for ${path}: ${result.body.toString("utf8")}`);
+	}
+	return result.body;
 }
 
 export interface ArtifactInfo {
@@ -38,11 +110,13 @@ export async function findArtifact(
 	name: string,
 	token: string,
 ): Promise<ArtifactInfo | null> {
-	const response = await apiFetch(
-		`${API}/repos/${repo}/actions/artifacts?name=${encodeURIComponent(name)}`,
-		token,
-	);
-	const body = (await response.json()) as {
+	assertRepoName(repo);
+	const body = JSON.parse(
+		(await apiGet(
+			`/repos/${repo}/actions/artifacts?name=${encodeURIComponent(name)}`,
+			token,
+		)).toString("utf8"),
+	) as {
 		artifacts: { id: number; name: string; expired: boolean; created_at: string }[];
 	};
 	const candidates = body.artifacts
@@ -61,11 +135,11 @@ export async function downloadArtifact(
 	token: string,
 	outDir: string,
 ): Promise<string[]> {
-	const response = await apiFetch(
-		`${API}/repos/${repo}/actions/artifacts/${artifact.id}/zip`,
+	assertRepoName(repo);
+	const zip = await apiGet(
+		`/repos/${repo}/actions/artifacts/${artifact.id}/zip`,
 		token,
 	);
-	const zip = Buffer.from(await response.arrayBuffer());
 	return extractZip(zip, outDir);
 }
 
@@ -147,11 +221,13 @@ export async function compareRevisions(
 	head: string,
 	token: string,
 ): Promise<CompareResult> {
-	const response = await apiFetch(
-		`${API}/repos/${repo}/compare/${encodeURIComponent(base)}...${encodeURIComponent(head)}`,
-		token,
-	);
-	const body = (await response.json()) as {
+	assertRepoName(repo);
+	const body = JSON.parse(
+		(await apiGet(
+			`/repos/${repo}/compare/${encodeURIComponent(base)}...${encodeURIComponent(head)}`,
+			token,
+		)).toString("utf8"),
+	) as {
 		status: CompareResult["status"];
 		merge_base_commit: { sha: string };
 		files?: {

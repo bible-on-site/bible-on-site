@@ -17,7 +17,11 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { basename, dirname, join, relative } from "node:path";
 import { globMatcher } from "./glob.ts";
 import { stripExtension } from "./select.ts";
-import { listFiles, discoverSuiteTests } from "./xunit-discovery.ts";
+import {
+	listFiles,
+	discoverSuiteTests,
+	isPartialClassOf,
+} from "./xunit-discovery.ts";
 import { SCHEMA_VERSION, type CoverageTree, type SuiteRules } from "./model.ts";
 
 export interface EvidenceRecord {
@@ -34,15 +38,34 @@ interface IdPattern {
 	/** `literal` for exact ids, `wildcard` for `Prefix{...}` interpolations. */
 	kind: "literal" | "wildcard";
 	pattern: string;
-	regex: RegExp;
+	/** Matches a recorded automation id against the declaration pattern. */
+	matches: (id: string) => boolean;
 	file: string;
 }
 
 const XAML_ID = /\bAutomationId="([^"]+)"/g;
 const CSHARP_ID = /\bAutomationId\s*=\s*(\$?)"([^"]+)"/g;
 const SET_ID = /SetAutomationId\s*\(\s*[^,]+,\s*"([^"]+)"\s*\)/g;
-const PARTIAL_CLASS = (name: string) =>
-	new RegExp(`\\bpartial\\s+class\\s+${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`);
+
+/** Literal `*` matcher: ordered non-empty anchors, no regex engine involved. */
+export function wildcardMatch(pattern: string): (value: string) => boolean {
+	const parts = pattern.split("*");
+	if (parts.length === 1) return (value) => value === pattern;
+	return (value) => {
+		if (!value.startsWith(parts[0])) return false;
+		let position = parts[0].length;
+		for (const part of parts.slice(1, -1)) {
+			const index = value.indexOf(part, position);
+			if (index === -1) return false;
+			position = index + part.length;
+		}
+		const last = parts[parts.length - 1];
+		return (
+			last === "" ||
+			(value.endsWith(last) && value.length - last.length >= position)
+		);
+	};
+}
 
 /** Scans app sources for automation-id declarations. */
 export function scanAutomationIds(
@@ -53,11 +76,7 @@ export function scanAutomationIds(
 		const add = (kind: IdPattern["kind"], raw: string) => {
 			if (raw.startsWith("{")) return; // bound value — not a stable id
 			const pattern = kind === "wildcard" ? raw.replace(/\{[^}]*\}/g, "*") : raw;
-			const regex =
-				kind === "wildcard"
-					? new RegExp(`^${pattern.split("*").map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join(".*")}$`)
-					: new RegExp(`^${pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`);
-			patterns.push({ kind, pattern, regex, file: path });
+			patterns.push({ kind, pattern, matches: wildcardMatch(pattern), file: path });
 		};
 		for (const match of content.matchAll(XAML_ID)) add("literal", match[1]);
 		for (const match of content.matchAll(CSHARP_ID)) {
@@ -86,7 +105,7 @@ export function computeSourceUnits(
 		if (dot > 0 && !path.endsWith(".xaml.cs")) {
 			const dir = stem.includes("/") ? `${stem.slice(0, stem.lastIndexOf("/"))}/` : "";
 			const parent = `${dir}${base.slice(0, dot)}`;
-			if (stems.has(parent) && PARTIAL_CLASS(base.slice(0, dot)).test(content)) {
+			if (stems.has(parent) && isPartialClassOf(content, base.slice(0, dot))) {
 				unit = parent;
 			}
 		}
@@ -130,9 +149,9 @@ export function collectTree(options: CollectOptions): CoverageTree {
 	const sourceMatches = globMatcher(rules.sources.globs);
 	const sourceFiles = listFiles(sourceRoot, "**/*")
 		.filter((file) =>
-			sourceMatches(relative(sourceRoot, file).replaceAll("\\", "/")),
+			sourceMatches(relative(sourceRoot, file).replace(/\\/g, "/")),
 		)
-		.map((file) => relative(repoRoot, file).replaceAll("\\", "/"))
+		.map((file) => relative(repoRoot, file).replace(/\\/g, "/"))
 		.sort();
 	const sources = sourceFiles.map((file) => ({
 		path: file,
@@ -150,7 +169,7 @@ export function collectTree(options: CollectOptions): CoverageTree {
 	const fileByTest = new Map(discovered.map((test) => [test.id, test.file]));
 
 	const matchId = (id: string) =>
-		idIndex.filter((entry) => entry.regex.test(id)).map((entry) => entry.file);
+		idIndex.filter((entry) => entry.matches(id)).map((entry) => entry.file);
 
 	const tests: CoverageTree["tests"] = {};
 	const unmatchedEvidence: string[] = [];

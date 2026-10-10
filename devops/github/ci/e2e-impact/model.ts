@@ -135,6 +135,19 @@ export function loadRules(path: string): SuiteRules {
 	return raw;
 }
 
+/** `^[0-9a-f]{40}$` without the regex engine — snapshot ids are plain data. */
+function isHexSha(value: string): boolean {
+	if (value.length !== 40) return false;
+	for (const char of value) {
+		const hex =
+			(char >= "0" && char <= "9") ||
+			(char >= "a" && char <= "f") ||
+			(char >= "A" && char <= "F");
+		if (!hex) return false;
+	}
+	return true;
+}
+
 export function validateTree(
 	tree: CoverageTree,
 	rules: SuiteRules,
@@ -143,7 +156,7 @@ export function validateTree(
 	if (tree.schemaVersion !== SCHEMA_VERSION) return `schemaVersion ${tree.schemaVersion}`;
 	if (tree.suite !== rules.suite) return `suite ${tree.suite}`;
 	if (tree.platform !== platform) return `platform ${tree.platform}`;
-	if (!/^[0-9a-f]{40}$/i.test(tree.snapshotSha)) return `snapshotSha ${tree.snapshotSha}`;
+	if (!isHexSha(tree.snapshotSha)) return `snapshotSha ${tree.snapshotSha}`;
 	if (typeof tree.tests !== "object" || tree.tests === null) return "missing tests";
 	return null;
 }

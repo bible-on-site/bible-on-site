@@ -594,10 +594,11 @@ describe("scanAutomationIds", () => {
 		assert.ok(literals.includes("Fixed"));
 		assert.ok(literals.includes("SetId"));
 		assert.deepEqual(wildcards, ["SearchBook*"]);
-		assert.ok(patterns.find((p) => p.pattern === "SearchBook*")?.regex.test("SearchBook7"));
+		const wildcard = patterns.find((p) => p.pattern === "SearchBook*")?.matches;
+		assert.ok(wildcard?.("SearchBook7"));
 		// Prefix globs over-match by design — extra attribution is conservative.
-		assert.ok(patterns.find((p) => p.pattern === "SearchBook*")?.regex.test("SearchBooksX"));
-		assert.ok(!patterns.find((p) => p.pattern === "SearchBook*")?.regex.test("SearchBoo"));
+		assert.ok(wildcard?.("SearchBooksX"));
+		assert.ok(!wildcard?.("SearchBoo"));
 	});
 });
 
