@@ -26,10 +26,12 @@ internal static class PerushNoteBlob
     internal static List<Note> Decode(byte[] blob)
     {
         using var stream = new ZLibStream(new MemoryStream(blob, writable: false), CompressionMode.Decompress);
-        var reader = new BinaryReader(stream, Encoding.UTF8);
+        using var reader = new BinaryReader(stream, Encoding.UTF8);
         var magic = reader.ReadBytes(4);
         if (magic.Length != 4 || !magic.AsSpan().SequenceEqual(Magic))
+        {
             throw new InvalidDataException("Perushim note blob has a bad magic.");
+        }
 
         var count = reader.ReadUInt32();
         var notes = new List<Note>((int)Math.Min(count, 1 << 20));
@@ -40,10 +42,14 @@ internal static class PerushNoteBlob
             var noteIdx = reader.ReadUInt32();
             var len = reader.ReadUInt32();
             if (len > MaxContentBytes)
+            {
                 throw new InvalidDataException("Perushim note blob record is implausibly large.");
+            }
             var content = reader.ReadBytes((int)len);
             if (content.Length != len)
+            {
                 throw new EndOfStreamException("Perushim note blob is truncated.");
+            }
             notes.Add(new Note((int)perushId, (int)pasuk, (int)noteIdx, Encoding.UTF8.GetString(content)));
         }
         return notes;
@@ -53,19 +59,20 @@ internal static class PerushNoteBlob
     internal static byte[] Encode(IReadOnlyCollection<Note> notes)
     {
         using var raw = new MemoryStream();
-        var writer = new BinaryWriter(raw, Encoding.UTF8);
-        writer.Write(Magic);
-        writer.Write(notes.Count);
-        foreach (var note in notes)
+        using (var writer = new BinaryWriter(raw, Encoding.UTF8, leaveOpen: true))
         {
-            var content = Encoding.UTF8.GetBytes(note.Content);
-            writer.Write(note.PerushId);
-            writer.Write(note.Pasuk);
-            writer.Write(note.NoteIdx);
-            writer.Write(content.Length);
-            writer.Write(content);
+            writer.Write(Magic);
+            writer.Write(notes.Count);
+            foreach (var note in notes)
+            {
+                var content = Encoding.UTF8.GetBytes(note.Content);
+                writer.Write(note.PerushId);
+                writer.Write(note.Pasuk);
+                writer.Write(note.NoteIdx);
+                writer.Write(content.Length);
+                writer.Write(content);
+            }
         }
-        writer.Flush();
 
         raw.Position = 0;
         using var output = new MemoryStream();

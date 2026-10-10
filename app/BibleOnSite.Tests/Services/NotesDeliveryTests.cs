@@ -164,7 +164,7 @@ public class NotesDeliveryTests
         await using var storage = new TestStorage();
         await using var remote = new TestStorage();
         Directory.CreateDirectory(Path.Combine(remote.Root, "assets"));
-        var db = await remote.CreateDatabaseAsync(Path.Combine("assets", DbName), NotesDbV2.Statements());
+        var db = await remote.CreateDatabaseAsync(Path.Join("assets", DbName), NotesDbV2.Statements());
         await db.CloseAsync();
         var pad = Pad();
         pad.Setup(p => p.TryGetAssetPathAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync(remote.Root);

@@ -48,7 +48,7 @@ public class SearchIndexServiceTests
         var perakim = await SeedAsync(storage);
         await storage.CreateDatabaseAsync(NotesDb,
             NotesDbV2.Statements([.. Enumerable.Range(1, 32769)
-                .Select(n => ((int)7, (int)1, (int)1, (int)n, n == 32769 ? "אחרון" : "רגיל"))]));
+                .Select(n => (7, 1, 1, n, n == 32769 ? "אחרון" : "רגיל"))]));
         var delivery = new Mock<IPadDeliveryService>();
         delivery.Setup(service => service.TryGetAssetPathAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((string?)null);

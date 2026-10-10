@@ -550,7 +550,9 @@ public class PerushimNotesService
             "SELECT data AS Data FROM note_blob WHERE perek_id = ?",
             perekId);
         if (rows.Count == 0)
+        {
             return new List<PerekPerushNote>();
+        }
 
         // A whole perek's notes decompress in one pass — keep that off the UI thread.
         var blob = rows[0].Data;
