@@ -59,15 +59,7 @@ def verify(origin, version, database=DATABASE, check_audio=False, check_playback
         if playback is not None or check_playback:
             verify_playback(pid, expected["audioSha256"], playback, origin, check_audio)
         if check_audio and expected["alignmentStatus"] == "ready":
-            # This follows the browser's full CORS download, not native MP3 seeking.
-            with http_response(audio_url, {"Origin": origin}, timeout=30) as response:
-                if response.headers.get("Access-Control-Allow-Origin") not in ("*", origin):
-                    raise ValueError(f"{pid}: MP3 download CORS does not permit this website")
-                if response.headers.get_content_type() != "audio/mpeg":
-                    raise ValueError(f"{pid}: recording is not served as audio/mpeg")
-                digest = hashlib.file_digest(response, "sha256").hexdigest()
-                if digest != expected["audioSha256"]:
-                    raise ValueError(f"{pid}: deployed recording hash differs from approved audio")
+            verify_original_audio(pid, audio_url, expected["audioSha256"], origin)
     with http_response(f"{origin.rstrip('/')}/api/recitation?deployment={version}", {"Cache-Control": "no-cache"}) as response:
         if response.headers.get("X-Website-Version") != version:
             raise ValueError("App recitation extension is not serving the deployed website version")
@@ -106,6 +98,18 @@ def verify_playback(pid, source_sha, playback, origin, check_audio):
                     or len(content) != asset["sizeBytes"] or not content.startswith(b"OggS")
                     or hashlib.sha256(content).hexdigest() != asset["sha256"]):
                 raise ValueError(f"{pid}: deployed Opus bytes, MIME or CORS differ")
+
+
+def verify_original_audio(pid, audio_url, source_sha, origin):
+    # Verify the retained original recording independently of the playback copy.
+    with http_response(audio_url, {"Origin": origin}, timeout=30) as response:
+        if response.headers.get("Access-Control-Allow-Origin") not in ("*", origin):
+            raise ValueError(f"{pid}: MP3 download CORS does not permit this website")
+        if response.headers.get_content_type() != "audio/mpeg":
+            raise ValueError(f"{pid}: recording is not served as audio/mpeg")
+        digest = hashlib.file_digest(response, "sha256").hexdigest()
+        if digest != source_sha:
+            raise ValueError(f"{pid}: deployed recording hash differs from approved audio")
 
 
 def valid_audio_url(url, perek_id):
