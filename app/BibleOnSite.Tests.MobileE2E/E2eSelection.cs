@@ -8,7 +8,7 @@ namespace BibleOnSite.Tests.MobileE2E;
 // take wildcards but never OR — so the manifest's selected list narrows the
 // run inside the test process instead: an unselected test skips in
 // InitializeAsync before it touches the device session. An unset
-// MOBILE_E2E_SELECTION or a selectAll manifest leaves every test runnable;
+// MOBILE_E2E_SELECTION or a selectAll manifest leaves every test runnable, and
 // the nuke target refuses a manifest that selects nothing, so reaching a
 // device test with an empty selection means the manifest lied — skip it too
 // rather than silently running a zero-coverage suite.
