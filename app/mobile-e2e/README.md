@@ -3,7 +3,11 @@
 The shared C# suite in `../BibleOnSite.Tests.MobileE2E` runs on Android and iOS.
 CI creates one independent runner per matrix entry (`app-mobile-e2e.yml`), with
 `fail-fast: false`, and requires both results through the main CI gate. Tests
-on an individual device run sequentially and start with a freshly reset app.
+on an individual device run sequentially on one shared Appium session; each
+scenario restarts the app process (and restores portrait orientation) for a
+fresh in-memory state while the install — and the built search index — survive.
+Session startup installs and resets the app once per run rather than once per
+test, which removes most of the suite's former session-creation overhead.
 Android uses a full app reset. iOS reinstalls the app without erasing the booted
 simulator, and Appium operates the simulator headlessly.
 Before iOS tests, Appium downloads the official simulator WebDriverAgent matching
@@ -32,12 +36,16 @@ branching or skipping an entire shared scenario. Shared classes use
 `[Trait("Category", "MobileE2E")]`; the Nuke target automatically selects shared
 tests plus the current platform, leaving platform-only behavior easy to add.
 Use `[Collection("Mobile device")]` on every mobile test class to serialize
-scenarios that own the same device. Inject `MobileDeviceSessionFactory` and create
-drivers through `sessions.Create(...)`. If session startup or cleanup fails in a
-way that could leave Appium working on the device, subsequent scenarios fail
-without requesting another session on it; the original failure remains in the
-test report. Failures matching `DeviceSessionDeath` mean the session is already
-gone server-side, so they do not block the collection.
+scenarios that own the same device. The `MobileDeviceSession` collection fixture
+owns the single driver: `MobileDeviceTest` acquires it per test, which restarts
+the app with the scenario's `LaunchEnvironment`. A scenario needing extra launch
+variables (e.g. `BIBLE_E2E_PERUSHIM`) overrides that property instead of session
+capabilities — XCUITest's `launchApp` replaces `processArguments`, so the adapter
+merges the suite's `BIBLE_E2E` marker into every restart. If session startup or
+cleanup fails in a way that could leave Appium working on the device, subsequent
+scenarios fail without requesting another session on it; the original failure
+remains in the test report. Failures matching `DeviceSessionDeath` mean the
+session is already gone server-side, so they do not block the collection.
 
 iOS waits for XCTest's `hittable` attribute before actions and sends one W3C touch
 at the element's viewport center, with a 100 ms pause between down and up. This
@@ -45,7 +53,7 @@ exercises the real touch target of rounded floating controls while avoiding
 XCTest's automatic hit-point selection. Native device logs record menu press,
 release, click and completed animations to diagnose touch delivery. Android uses
 native element clicks. UI assertions and readiness deadlines remain shared.
-After session creation, allow two minutes for the first reader snapshot: a cold
+After each app start, allow two minutes for the first reader snapshot: a cold
 iOS lookup can take longer than 45 seconds and return the earlier loading tree
 even though the reader has appeared. This startup gate requires a visible,
 nonempty perek source and captures failure diagnostics. Subsequent scenario
@@ -60,6 +68,12 @@ the [Appium idle-wait capability](https://appium.github.io/appium-xcuitest-drive
 A session the device already dropped mid-startup or mid-scenario is recreated
 once; ambiguous startup or cleanup failures still block the device, since stale
 session work could race a replacement.
+
+iOS launches carry `BIBLE_E2E=1`, which makes the app start the local FTS search
+index (verses and commentary) during startup instead of letting the first
+perush search pay the multi-minute import inside its own scenario window. The
+marker is read once at launch, so it only exists in suite-driven processes; a
+rebuilt index persists in the install across the suite's app restarts.
 
 The pilot matrix deliberately covers Android and iOS. Existing Windows FlaUI
 tests and Android gesture regressions remain separate. Additional device/OS
@@ -117,7 +131,11 @@ APK and completes the iOS arm64 simulator `.app` build.
 Set `MOBILE_UDID` to a running device's identifier, then run `npm test` here.
 On macOS, `npm run ios:boot` selects an available iPhone runtime no newer than
 the selected Xcode SDK, boots it, and prints the identifier and `MOBILE_OS_VERSION`.
-Set both for local iOS runs; CI exports them automatically.
+Set both for local iOS runs; CI exports them automatically. CI instead runs
+`ios:boot:start` (select + asynchronous boot) right after Xcode selection so the
+~5-minute CoreSimulator startup overlaps the workload install and app build,
+then `ios:boot:ready` (bootstatus wait + Appium CoreSimulator bridge warm)
+immediately before the pilot.
 `MOBILE_APP_PATH` can select another compatible build. Each local
 run owns an Appium server on `127.0.0.1:4723`; keep that port free.
 

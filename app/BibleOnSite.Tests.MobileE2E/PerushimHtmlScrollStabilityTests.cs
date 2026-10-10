@@ -15,12 +15,14 @@ namespace BibleOnSite.Tests.MobileE2E;
 [Collection("Mobile device")]
 [Trait("Category", "MobileE2E")]
 [Trait("Platform", "iOS")]
-public sealed class PerushimHtmlScrollStabilityTests(ITestOutputHelper output, MobileDeviceSessionFactory sessions)
-    : MobileDeviceTest(output, sessions)
+public sealed class PerushimHtmlScrollStabilityTests(ITestOutputHelper output, MobileDeviceSession session)
+    : MobileDeviceTest(output, session)
 {
-    protected override AppiumOptions CreateOptions() =>
-        Platform.CreateOptions(Configuration,
-            new Dictionary<string, string> { ["BIBLE_E2E_PERUSHIM"] = "1" });
+    // The shared session relaunches the app with this environment so the
+    // synthetic commentary only applies to this scenario — sessions created
+    // for other tests no longer carry the flag in their capabilities.
+    protected override IReadOnlyDictionary<string, string> LaunchEnvironment =>
+        new Dictionary<string, string> { ["BIBLE_E2E_PERUSHIM"] = "1" };
 
     [Fact]
     public void PerushimCellsSurviveScrollStorm() => Scenario(() =>

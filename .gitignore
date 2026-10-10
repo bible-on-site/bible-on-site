@@ -30,6 +30,7 @@ app/BibleOnSite/Resources/Raw/*
 !app/BibleOnSite/Resources/Raw/recitation-audio.html
 **/.raw/
 **/.outputs/
+.artifacts/
 app/.artifacts/
 app/BibleOnSite/Platforms/Android/AssetPacks/recitation_*/
 app/BibleOnSite/Platforms/iOS/Assets/Recitation.xcassets/

@@ -1,4 +1,5 @@
 using OpenQA.Selenium;
+using OpenQA.Selenium.Appium;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -8,8 +9,8 @@ namespace BibleOnSite.Tests.MobileE2E;
 [Collection("Mobile device")]
 [Trait("Category", "MobileE2E")]
 [Trait("Platform", "Shared")]
-public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessionFactory sessions)
-    : MobileDeviceTest(output, sessions)
+public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSession session)
+    : MobileDeviceTest(output, session)
 {
     [Fact]
     public void StartupDisplaysPackagedPesukimAndUsableBottomNavigation() => Scenario(() =>
@@ -119,15 +120,8 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         Page.Tap("SearchSheetApplyButton");
         Page.WaitForHidden("SearchSheet");
         SearchFor("בראשית ברא אלהים", "בראשית א א");
-        // A fresh installation builds the local index for the entire commentary
-        // package. Subsequent result and history assertions use normal deadlines.
-        var commentary = Page.WaitFor("SearchResultTitle", element => element.Text.Contains(" - בראשית א א", StringComparison.Ordinal), TimeSpan.FromMinutes(6));
-        var title = commentary.Text;
+        var (title, position) = OpenCommentaryResult(" - בראשית א א", "בראשית ברא אלהים");
         var commentaryName = title.Split(" - ", StringSplitOptions.None)[0];
-        var position = commentary.Location;
-        Platform.Tap(driver, commentary);
-        AssertRegularReader();
-        Page.WaitFor("InlinePerushName", element => element.Text == commentaryName);
         SaveDiagnostics("FloatingSearchCommentaryReader", "passed");
         // Menu navigation must keep this reader above the retained search page.
         var readerSource = Page.Source;
@@ -179,6 +173,62 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         input.Clear();
         input.SendKeys(text);
         Page.WaitFor("SearchResultTitle", element => element.Text == expectedTitle);
+    }
+
+    // Commentary matches arrive on the slowest results wave, and a later
+    // publish can still move rows between resolving the element and the
+    // coordinate tap dispatching — a stray touch lands on a sibling row and
+    // opens no perush. Settle the row's frame, tap, and if no commentary
+    // reader appeared go back to the retained search page and tap once more.
+    private (string Title, System.Drawing.Point Position) OpenCommentaryResult(string rowSuffix, string searchPhrase)
+    {
+        // One cold-index attempt plus a single retry on the warm index.
+        for (var attempt = 0; attempt < 2; attempt++)
+        {
+            // A fresh installation builds the local index for the entire
+            // commentary package; the retry lands on the already-warm index.
+            var timeout = attempt == 0 ? TimeSpan.FromMinutes(6) : TimeSpan.FromSeconds(45);
+            var (commentary, _) = WaitForSettledRow(rowSuffix, timeout);
+            var title = commentary.Text;
+            var position = commentary.Location;
+            Platform.Tap(Driver!, commentary);
+            AssertRegularReader();
+            var commentaryName = title.Split(" - ", StringSplitOptions.None)[0];
+            try
+            {
+                var perushTimeout = attempt == 0 ? TimeSpan.FromSeconds(15) : TimeSpan.FromSeconds(45);
+                Page.WaitFor("InlinePerushName", element => element.Text == commentaryName, perushTimeout);
+                return (title, position);
+            }
+            catch (WebDriverTimeoutException) when (attempt == 0)
+            {
+                Platform.GoBack(Driver!);
+                Page.WaitFor("PerekSearchInput", element => element.Text == searchPhrase);
+            }
+        }
+        throw new InvalidOperationException("The commentary tap retry loop exited without returning a result.");
+    }
+
+    private (AppiumElement Element, System.Drawing.Rectangle Frame) WaitForSettledRow(string suffix, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        var frame = System.Drawing.Rectangle.Empty;
+        while (DateTime.UtcNow < deadline)
+        {
+            var row = Driver!.FindElements(Platform.AutomationId("SearchResultTitle"))
+                .FirstOrDefault(element => element.Displayed && element.Text.Contains(suffix, StringComparison.Ordinal));
+            if (row != null)
+            {
+                var current = new System.Drawing.Rectangle(row.Location, row.Size);
+                if (current == frame)
+                {
+                    return (row, current);
+                }
+                frame = current;
+            }
+            Thread.Sleep(250);
+        }
+        throw new WebDriverTimeoutException($"No settled SearchResultTitle row containing '{suffix}' within {timeout.TotalSeconds} seconds.");
     }
 
     private void AssertBookGroupColumns()

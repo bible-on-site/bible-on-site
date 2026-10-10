@@ -38,6 +38,89 @@ public sealed class SearchIndexService : IAsyncDisposable
 
     public bool CommentaryAvailable { get; private set; }
 
+    // The mobile-e2e harness launches the app with this marker so the index
+    // builds while earlier scenarios still run, instead of the first perush
+    // search paying the multi-minute commentary import inside its own window.
+    // Production launches never set it and keep the lazy path.
+    internal const string E2eEnvironmentVariable = "BIBLE_E2E";
+
+    // Android app launches cannot carry process environment, so the suite
+    // delivers the marker as an intent extra on the session's launch intent.
+    // adb activateApp relaunches drop extras, so the first marked launch
+    // persists a marker file for every later process in the same install;
+    // the file dies with the install, which is the suite's lifetime anyway.
+    private static string E2eMarkerPath => Path.Combine(FileSystem.AppDataDirectory, "e2e.launch");
+
+    [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage(
+        Justification = "E2E-only startup hook; the mobile suite launches with BIBLE_E2E.")]
+    public static void WarmupForE2e()
+    {
+        if (!IsE2eMarkedProcess())
+        {
+            return;
+        }
+        _ = WarmupIndexesAsync();
+    }
+
+    // MainActivity calls this when the launch intent carries the e2e extra.
+    [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage(
+        Justification = "E2E-only startup hook; the mobile suite launches with BIBLE_E2E.")]
+    internal static void MarkE2eLaunchFromIntent()
+    {
+        Environment.SetEnvironmentVariable(E2eEnvironmentVariable, "1");
+        try
+        {
+            File.WriteAllText(E2eMarkerPath, "1");
+        }
+        catch (Exception exception)
+        {
+            Console.WriteLine($"E2E launch marker persist failed: {exception.Message}");
+        }
+    }
+
+    [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage(
+        Justification = "E2E-only startup hook; the mobile suite launches with BIBLE_E2E.")]
+    private static bool IsE2eMarkedProcess()
+    {
+        if (Environment.GetEnvironmentVariable(E2eEnvironmentVariable) == "1")
+        {
+            return true;
+        }
+        return File.Exists(E2eMarkerPath);
+    }
+
+    [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage(
+        Justification = "E2E-only startup hook; the mobile suite launches with BIBLE_E2E.")]
+    private static async Task WarmupIndexesAsync()
+    {
+        try
+        {
+            var service = Instance;
+            await Task.WhenAll(service.WarmTableAsync("verses"), service.WarmTableAsync("notes"));
+        }
+        catch (Exception exception)
+        {
+            Console.WriteLine($"E2E search-index warmup failed: {exception}");
+        }
+    }
+
+    // Shares the search path's dedup so a warmup build is also the build a
+    // concurrent search awaits, and DisposeAsync can drain it.
+    [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage(
+        Justification = "E2E-only startup hook; the mobile suite launches with BIBLE_E2E.")]
+    private Task WarmTableAsync(string table)
+    {
+        lock (_buildSync)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            if (!_buildTasks.TryGetValue(table, out var build) || build.IsCompleted)
+            {
+                _buildTasks[table] = build = EnsureIndexAsync(table);
+            }
+            return build;
+        }
+    }
+
     public Task<List<SearchHit>> SearchAsync(string query, IReadOnlySet<SearchFilter> filters,
         IReadOnlySet<int> books, int limit, CancellationToken cancellationToken) =>
         SearchAsync(query, filters, books, limit, cancellationToken, null);
