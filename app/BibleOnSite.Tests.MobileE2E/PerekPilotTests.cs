@@ -130,7 +130,8 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         var position = commentary.Location;
         Platform.Tap(driver, commentary);
         AssertRegularReader();
-        Page.WaitFor("InlinePerushName", element => element.Text == commentaryName);
+        // The first commentary render also opens the freshly imported notes DB on a warm runner (#2161 class).
+        Page.WaitFor("InlinePerushName", element => element.Text == commentaryName, TimeSpan.FromMinutes(2));
         SaveDiagnostics("FloatingSearchCommentaryReader", "passed");
         // Menu navigation must keep this reader above the retained search page.
         var readerSource = Page.Source;
