@@ -2034,6 +2034,9 @@ public partial class PerekPage : ContentPage, IQueryAttributable
         ExitFullScreenButton.TranslationX = 0;
         ExitFullScreenButton.TranslationY = 0;
         ExitFullScreenButton.IsVisible = true;
+#if ANDROID
+        UpdateReaderBack();
+#endif
     }
 
     /// <summary>
@@ -2051,6 +2054,9 @@ public partial class PerekPage : ContentPage, IQueryAttributable
         // Show bottom bar
         BottomBar.IsVisible = true;
         FloatingMenuContainer.IsVisible = true;
+#if ANDROID
+        UpdateReaderBack();
+#endif
     }
 
     #endregion

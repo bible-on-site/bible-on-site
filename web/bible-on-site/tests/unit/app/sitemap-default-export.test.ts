@@ -59,7 +59,7 @@ describe("sitemap default export", () => {
 		const result = await sitemapFn();
 
 		const urls = result.map((e) => e.url);
-		// root + sections + 929 index + 929 perakim + 1 article + 0 perushim + authors index + 2 authors + 1 pedia
+		// root + sections + 929 index + 929 perakim + 1 article + 0 perushim + authors index + 2 authors + 1 pedia + 1 מסורה landing
 		const expectedLength =
 			1 +
 			SITEMAP_SECTIONS.length +
@@ -69,6 +69,7 @@ describe("sitemap default export", () => {
 			1 +
 			2 +
 			PEDIA_STATIC_COUNT +
+			1 +
 			1;
 		expect(result).toHaveLength(expectedLength);
 
@@ -136,7 +137,7 @@ describe("sitemap default export", () => {
 		expect(urls).toContain(
 			`https://example.com/929/1/${encodeURIComponent('רש"י')}`,
 		);
-		// root + sections + 929 index + 929 perakim + 0 articles + 1 perush + authors index + 0 authors
+		// root + sections + 929 index + 929 perakim + 0 articles + 1 perush + authors index + 0 authors + 1 מסורה landing
 		const expectedLength =
 			1 +
 			SITEMAP_SECTIONS.length +
@@ -146,7 +147,8 @@ describe("sitemap default export", () => {
 			1 +
 			1 +
 			PEDIA_STATIC_COUNT +
-			0;
+			0 +
+			1;
 		expect(result).toHaveLength(expectedLength);
 	});
 
@@ -168,7 +170,7 @@ describe("sitemap default export", () => {
 		expect(urls).toContain(
 			`https://example.com/pedia/${encodeURIComponent("שמשון")}`,
 		);
-		// root + sections + 929 index + 929 perakim + 0 articles + 0 perushim + authors index + 0 authors + 2 pedias
+		// root + sections + 929 index + 929 perakim + 0 articles + 0 perushim + authors index + 0 authors + 2 pedias + 1 מסורה landing
 		const expectedLength =
 			1 +
 			SITEMAP_SECTIONS.length +
@@ -179,7 +181,8 @@ describe("sitemap default export", () => {
 			1 +
 			PEDIA_STATIC_COUNT +
 			0 +
-			2;
+			2 +
+			1;
 		expect(result).toHaveLength(expectedLength);
 	});
 });

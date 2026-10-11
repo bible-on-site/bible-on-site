@@ -12,9 +12,9 @@
 
 -- Representative test data for tanah_author
 INSERT INTO tanah_author (NAME, DETAILS)
-VALUES (N'הרב לדוגמא שליט"א', 'תיאור לדוגמא'),
-    (N'הרב לדוגמא ז"ל', 'תיאור לדוגמא'),
-    (N'הרב לדוגמא הי"ד', 'תיאור לדוגמא'),
+VALUES ('הרב לדוגמא שליט"א', 'תיאור לדוגמא'),
+    ('הרב לדוגמא ז"ל', 'תיאור לדוגמא'),
+    ('הרב לדוגמא הי"ד', 'תיאור לדוגמא'),
     (
         'רב עם תיאור ארוך ז"ל',
         'תיאור מאוד מאוד מאוד מאוד מאוד מאוד מאוד מאוד מאוד מאוד מאוד מאוד מאוד מאוד מאוד מאוד מאוד ארוך'
@@ -98,17 +98,19 @@ VALUES (
 <p>זהו מאמר לדוגמא עם תמונה מ-S3:</p>
 <img src="https://bible-on-site-assets-test.s3.amazonaws.com/rabbis/test-rabbi.jpg" alt="תמונת רב לדוגמא" />
 <p>התמונה לעיל היא לצורכי בדיקה בלבד.</p>',
-        TRUE
+        -- Bulletin approval is not website visibility. This author's only
+        -- valid article must still appear on the website and in public search.
+        FALSE
     ),
-    -- Non-distributable row: the article search index must never surface it.
+    -- Invalid chapter row: public article routes and search must exclude it.
     -- perek_id 5000 is outside the 929 range so article counters stay unchanged.
     (
         5000,
         4,
-        '<h1>מאמר נסתר - אינו להפצה</h1>',
-        'מאמר נסתר - אינו להפצה',
+        N'<h1>מאמר נסתר - אינו להפצה</h1>',
+        N'מאמר נסתר - אינו להפצה',
         1,
-        '<p>מאמר זה אינו מיועד להפצה ומכיל את הביטוי הייחודי רזאדשבתא הנסתרת.</p>',
+        N'<p>מאמר זה אינו מיועד להפצה ומכיל את הביטוי הייחודי רזאדשבתא הנסתרת.</p>',
         FALSE
     );
 
