@@ -236,7 +236,8 @@ describe("main", () => {
 			} else {
 				commit(work, "web/bible-on-site/src/page.tsx");
 			}
-			git(directory, "clone", "--quiet", "--bare", work, origin);
+			// Use the Git transport so background maintenance cannot race a loose-object copy.
+			git(directory, "clone", "--quiet", "--no-local", "--bare", work, origin);
 			// A force push leaves the replaced commit unreachable from any ref.
 			git(origin, "branch", "--quiet", "-D", "replaced");
 			// GitHub serves fetches of commits by SHA.
