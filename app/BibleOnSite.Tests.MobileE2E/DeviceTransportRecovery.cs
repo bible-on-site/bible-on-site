@@ -131,7 +131,7 @@ internal static class DeviceTransportRecovery
         {
             // The static Process.Start(startInfo) shape is Semgrep's
             // command-injection sink; starting an instance is equivalent.
-            using var process = new Process { StartInfo = start };
+            using var process = new Process { StartInfo = start }; // nosemgrep — closed enum argv, literal filename, no shell
             process.Start();
             var output = process.StandardOutput.ReadToEndAsync();
             // Drain stderr so a chatty process cannot stall on a full pipe.
