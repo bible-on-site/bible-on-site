@@ -30,7 +30,7 @@ public class ArticlesNavigationTests
         // Try clicking on the edge of the window to open flyout, or find the menu button
         // MAUI Shell uses a hamburger icon that may have different automation properties
         var menuButton = _fixture.MainWindow.FindFirstDescendant(
-            _fixture.CF.ByAutomationId("FlyoutButton").Or(_fixture.CF.ByName("☰")));
+            _fixture.CF.ByAutomationId("FlyoutButton").Or(_fixture.CF.ByName("")));
 
         if (menuButton != null)
         {

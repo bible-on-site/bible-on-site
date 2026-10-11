@@ -12,8 +12,8 @@
     "android:ready": "node android-ready.mjs",
     "ios:wda": "node prepare-wda.mjs",
     "ios:boot": "node boot-ios.mjs",
-    "ios:boot:start": "node boot-ios.mjs --early",
-    "ios:boot:ready": "node boot-ios.mjs --ready"
+    "ios:boot:start": "node boot-ios.mjs start",
+    "ios:boot:wait": "node boot-ios.mjs wait"
   },
   "devDependencies": {
     "appium": "3.8.0",
