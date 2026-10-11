@@ -9,8 +9,16 @@ namespace BibleOnSite.Controls;
 /// group/sefer/unit column sources, selection chaining, and pre-selection
 /// (same split pattern as PerekPage's partial files).
 /// </summary>
+// Codacy: S2333 false positive — partial is required by the XAML code
+// generator and by the xaml.cs partial part.
+#pragma warning disable S2333
 public partial class MasoraUnitPickerPopup
+#pragma warning restore S2333
 {
+    private SeferGroupItem? _selectedGroup;
+    private SeferItem? _selectedSefer;
+    private MasoraUnit? _selectedUnit;
+
     private void LoadSeferGroups()
     {
         var groups = new List<SeferGroupItem>

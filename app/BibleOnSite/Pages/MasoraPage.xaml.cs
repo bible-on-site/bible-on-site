@@ -12,7 +12,11 @@ using Microsoft.Maui.Layouts;
 /// stable unit ids; rows are canonical pesukim clipped to each unit's
 /// inclusive ranges — never a copied scripture corpus.
 /// </summary>
+// Codacy: S2333 false positive — partial is required by the XAML code
+// generator and by the PerushimPanel partial part.
+#pragma warning disable S2333
 public partial class MasoraPage : ContentPage, IQueryAttributable
+#pragma warning restore S2333
 {
     private readonly MasoraViewModel _viewModel;
     private bool _isLoading;

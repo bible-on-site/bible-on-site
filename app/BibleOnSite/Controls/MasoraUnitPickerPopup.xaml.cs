@@ -1,6 +1,4 @@
-using BibleOnSite.Data;
 using BibleOnSite.Models;
-using BibleOnSite.Services;
 
 namespace BibleOnSite.Controls;
 
@@ -11,16 +9,20 @@ namespace BibleOnSite.Controls;
 /// Column 2: Sefer within the group (only sefarim that have masora units)
 /// Column 3: Unit within the sefer (its scripture-reference heading)
 /// </summary>
+// Codacy: S2333 false positive — partial is required by the XAML code
+// generator and by the Columns partial part.
+#pragma warning disable S2333
 public partial class MasoraUnitPickerPopup : ContentView
+#pragma warning restore S2333
 {
-    private SeferGroupItem? _selectedGroup;
-    private SeferItem? _selectedSefer;
-    private MasoraUnit? _selectedUnit;
-
     /// <summary>
-    /// Event raised when a unit is selected and confirmed.
+    /// Event raised when a unit is selected and confirmed. Codacy's S3264
+    /// per-file analysis cannot see the subscribers in MasoraPage's code-behind
+    /// (same false-positive pattern as Perek.cs's PropertyChanged pragma).
     /// </summary>
+#pragma warning disable S3264 // Events should be invoked
     public event EventHandler<int>? UnitSelected;
+#pragma warning restore S3264
 
     public MasoraUnitPickerPopup()
     {

@@ -9,7 +9,11 @@ namespace BibleOnSite.ViewModels;
 /// loading and the checked-perush inline filter. Split from the main file for
 /// readability (same pattern as PerekPage's partial files).
 /// </summary>
+// Codacy: S2333 false positive — partial is required by the MVVM source
+// generators and the main partial part.
+#pragma warning disable S2333
 public partial class MasoraViewModel
+#pragma warning restore S2333
 {
 #if MAUI
     /// <summary>Loaded notes for the current unit, keyed on read — never re-created.</summary>

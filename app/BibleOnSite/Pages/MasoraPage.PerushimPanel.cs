@@ -7,7 +7,11 @@ namespace BibleOnSite.Pages;
 /// commentary panel, its pan-to-dismiss/expand gesture, and the checkbox
 /// toggle pipeline (same split pattern as PerekPage's partial files).
 /// </summary>
+// Codacy: S2333 false positive — partial is required by the XAML code
+// generator and by the xaml.cs partial part.
+#pragma warning disable S2333
 public partial class MasoraPage
+#pragma warning restore S2333
 {
     private bool _isPerushimOpen;
     private bool _isPerushimExpanded;
@@ -221,6 +225,7 @@ public partial class MasoraPage
                 break;
 
             default:
+                // No pan state to update for unexpected gesture statuses.
                 break;
         }
     }

@@ -13,7 +13,11 @@ namespace BibleOnSite.ViewModels;
 /// rows are canonical pesukim clipped to the unit's inclusive ranges —
 /// scripture is resolved from the existing corpus, never copied.
 /// </summary>
+// Codacy: S2333 false positive — partial is required by the MVVM source
+// generators ([ObservableProperty]/[RelayCommand]) and the Perushim part.
+#pragma warning disable S2333
 public partial class MasoraViewModel : ObservableObject
+#pragma warning restore S2333
 {
     private readonly MasoraDataService _masoraDataService;
     private readonly PerekDataService _perekDataService;
