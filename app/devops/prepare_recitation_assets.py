@@ -100,7 +100,7 @@ def recording(track, cache, recordings=None):
 
 
 def playback_recording(track, cache, recordings=None):
-    """Android playback comes from immutable derived S3 assets, never runtime HTTP."""
+    """Store playback comes from immutable derived S3 assets, never runtime HTTP."""
     metadata = load_playback(track["perekId"], track["audioSha256"])
     destination = cache / (metadata["sha256"] + ".ogg")
     if not destination.exists() or digest(destination) != metadata["sha256"]:
@@ -170,7 +170,7 @@ def prepare_assets(app, platform, cache, recordings=None, intermediate=None, dat
                    for pid in range(first, last + 1)}
     if not tracks or any(t["perekId"] not in mapping for t in tracks):
         raise ValueError("Recitation inventory does not match the native books")
-    if platform == "Android":
+    if platform in ("Android", "iOS"):
         for track in tracks:
             select_playback(track, load_playback(track["perekId"], track["audioSha256"]))
     # Duplicate audio identities share a cache file; never race its temporary
@@ -178,8 +178,8 @@ def prepare_assets(app, platform, cache, recordings=None, intermediate=None, dat
     recordings_by_name = {audio_filename(track): track for track in tracks}
     with ThreadPoolExecutor(max_workers=4) as pool:
         try:
-            # iOS Ogg support is deferred; its ODR packs keep original MP3 playback.
-            fetch = playback_recording if platform == "Android" else recording
+            # Windows desktop packages keep original MP3 playback for now.
+            fetch = playback_recording if platform in ("Android", "iOS") else recording
             list(pool.map(lambda track: fetch(track, cache, recordings), recordings_by_name.values()))
         except BaseException:
             pool.shutdown(wait=True, cancel_futures=True)

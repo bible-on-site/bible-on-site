@@ -183,8 +183,12 @@ class RecitationAssetsTests(unittest.TestCase):
         with zipfile.ZipFile(self.root / "Android/Platforms/Android/AssetPacks/recitation_1/recitation_1.zip") as packed:
             self.assertEqual(packed.namelist(), [opus_sha + ".ogg"])
             self.assertEqual(packed.read(opus_sha + ".ogg"), opus)
-        self.assertNotIn("playback", catalogs[1]["package"]["tracks"][0])
-        self.assertEqual(catalogs[1], catalogs[2])
+        # Apple ODR datasets carry the identical Opus bytes as the Android modules.
+        self.assertEqual(catalogs[0], catalogs[1])
+        with zipfile.ZipFile(self.root / "iOS/Platforms/iOS/Assets/Recitation.xcassets/recitation_1.dataset/recitation_1.zip") as packed:
+            self.assertEqual(packed.namelist(), [opus_sha + ".ogg"])
+            self.assertEqual(packed.read(opus_sha + ".ogg"), opus)
+        self.assertNotIn("playback", catalogs[2]["package"]["tracks"][0])
         self.assertEqual(database.read_bytes(), source_bytes)
 
 
