@@ -194,11 +194,16 @@ public partial class AppShell : Shell
 	private void OnNavigated(object? sender, ShellNavigatedEventArgs e)
 	{
 		var analytics = Application.Current?.Handler?.MauiContext?.Services.GetService<IAnalyticsService>();
-		if (analytics == null) return;
+		if (analytics == null)
+		{
+			return;
+		}
 		// Populate analytics with route (legacy-style: clear screen names for GA)
 		var loc = e.Current?.Location?.ToString();
 		if (!string.IsNullOrEmpty(loc))
+		{
 			analytics.SetScreen(loc.TrimStart('/'), "Shell");
+		}
 	}
 
 	private async void OnAlHaperekTapped(object? sender, TappedEventArgs e)

@@ -187,9 +187,8 @@ for (const [label, change] of [
 	});
 for (const status of [401, 403, 404, 500])
 	test(`HTTP ${status} never becomes permission to upload`, async () => {
-		await assert.rejects(
-			lookup(response(), status),
-			new RegExp(`HTTP ${status}`),
+		await assert.rejects(lookup(response(), status), (err) =>
+			String(err instanceof Error ? err.message : err).includes(`HTTP ${status}`),
 		);
 	});
 

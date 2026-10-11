@@ -62,13 +62,17 @@ public class HtmlViewHandler : ViewHandler<HtmlView, RichTextBlock>
     private void UpdateContent()
     {
         if (PlatformView == null || VirtualView == null)
+        {
             return;
+        }
 
         PlatformView.Blocks.Clear();
 
         var html = VirtualView.HtmlContent;
         if (string.IsNullOrEmpty(html))
+        {
             return;
+        }
 
         try
         {

@@ -33,7 +33,9 @@ public class LocalDatabaseService
     public async Task<SQLiteAsyncConnection> GetDatabaseAsync()
     {
         if (_isInitialized && _database != null)
+        {
             return _database;
+        }
 
         await InitializeAsync();
         return _database!;
@@ -48,7 +50,10 @@ public class LocalDatabaseService
         try
         {
             if (_isInitialized)
+            {
                 return;
+            }
+
             await PackagedDatabase.RefreshAsync(_fileSystem, DbName);
             var dbPath = Path.Combine(_fileSystem.AppDataDirectory, DbName);
             _database = new SQLiteAsyncConnection(dbPath, SQLiteOpenFlags.ReadOnly);

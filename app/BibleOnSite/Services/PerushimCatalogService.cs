@@ -38,9 +38,15 @@ public class PerushimCatalogService
     public async Task<SQLiteAsyncConnection?> GetConnectionAsync()
     {
         if (_catalogMissing)
+        {
             return null;
+        }
+
         if (_isInitialized && _connection != null)
+        {
             return _connection;
+        }
+
         await InitializeAsync();
         return _connection;
     }
@@ -55,7 +61,10 @@ public class PerushimCatalogService
         try
         {
             if (_isInitialized)
+            {
                 return;
+            }
+
             var dbPath = Path.Combine(_fileSystem.AppDataDirectory, CatalogDbName);
             try
             {
@@ -81,7 +90,9 @@ public class PerushimCatalogService
     {
         var conn = await GetConnectionAsync();
         if (conn == null)
+        {
             return new List<Perush>();
+        }
 
         var rows = await conn.QueryAsync<PerushRow>(
             "SELECT id, name, priority FROM perush ORDER BY priority ASC");
@@ -97,11 +108,15 @@ public class PerushimCatalogService
     {
         var conn = await GetConnectionAsync();
         if (conn == null)
+        {
             return new Dictionary<int, Perush>();
+        }
 
         var idList = string.Join(",", ids.Distinct());
         if (string.IsNullOrEmpty(idList))
+        {
             return new Dictionary<int, Perush>();
+        }
 
         var rows = await conn.QueryAsync<PerushRow>(
             $"SELECT id, name, priority FROM perush WHERE id IN ({idList})");
