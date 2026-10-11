@@ -72,10 +72,12 @@ namespace AltCover.Recorder
 		// instrumenter emits these calls only under --callContext.
 		public static void Push(int pointId)
 		{
+			// No-op: kept for surface parity with AltCover's generated recorder.
 		}
 
 		public static void Pop()
 		{
+			// No-op: kept for surface parity with AltCover's generated recorder.
 		}
 
 		/// <summary>

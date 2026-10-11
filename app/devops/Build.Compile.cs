@@ -83,12 +83,13 @@ partial class Build
                     .SetProperty("WindowsAppSDKSelfContained", "true");
                 if (WindowsE2ECoverage)
                 {
-                    // #1232: weave app-process coverage into the FlaUI build.
-                    // Restore runs inside this build so the conditional
-                    // altcover tool package is resolved with the flag set;
-                    // TargetFrameworks (plural) narrows restore to this TFM —
-                    // -f alone would still restore maccatalyst and fail on
-                    // machines without the Mac Catalyst workload.
+                    // E2E coverage instrumentation is woven into the FlaUI
+                    // build here (#1232). The conditional altcover tool package
+                    // needs an in-build restore so the flag is set when
+                    // packages resolve; the plural target-frameworks property
+                    // narrows that restore to the Windows target only, where
+                    // the single-framework switch would still demand the
+                    // Mac Catalyst workload on machines without it.
                     settings = settings
                         .SetProperty("TargetFrameworks", "net10.0-windows10.0.19041.0")
                         .SetProperty("E2ECoverage", "true");
@@ -228,7 +229,7 @@ partial class Build
     /// </summary>
     void PublishE2ECoverageBuildArtifacts()
     {
-        // IntermediateOutputPath is empty in single-TFM global-property
+        // The intermediate output path is empty in single-TFM global-property
         // builds, so the template may land at the project root or under obj;
         // glob the project directory for either layout.
         var templates = SourceDirectory.GlobFiles("**/e2e-coverage/template.opencover.xml");

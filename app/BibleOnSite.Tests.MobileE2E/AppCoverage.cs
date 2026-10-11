@@ -47,7 +47,7 @@ internal static class AppCoverage
         {
             return;
         }
-        var error = TrySend(configuration, "coverage/reset", output);
+        var error = TrySend(configuration, "coverage/reset");
         if (error != null)
         {
             output.WriteLine($"{configuration.Platform}: coverage reset failed: {error}");
@@ -99,7 +99,7 @@ internal static class AppCoverage
             .GetAwaiter().GetResult();
     }
 
-    private static string? TrySend(MobileTestConfiguration configuration, string route, ITestOutputHelper output)
+    private static string? TrySend(MobileTestConfiguration configuration, string route)
     {
         try
         {

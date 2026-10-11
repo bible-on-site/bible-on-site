@@ -48,9 +48,10 @@ partial class Build : NukeBuild
         (flag.Equals("1", StringComparison.OrdinalIgnoreCase) ||
          flag.Equals("true", StringComparison.OrdinalIgnoreCase));
 
-    // The harness drops per-test coverage dumps under <artifacts>/app-coverage;
-    // build coverage artifacts (OpenCover template, manifest, merged reports)
-    // live in <artifacts>/coverage-app so diagnostics stay per-platform.
+    // The harness drops per-test coverage dumps into the artifacts
+    // app-coverage directory; build coverage artifacts (OpenCover template,
+    // manifest, merged reports) live in artifacts/coverage-app so
+    // diagnostics stay per-platform.
     AbsolutePath MobileE2EArtifactsDirectory => AbsolutePath.Create(
         Environment.GetEnvironmentVariable("MOBILE_E2E_ARTIFACTS")
         ?? (RootDirectory / ".artifacts" / "mobile-e2e" / (MobileIsAndroid ? "android" : "ios")).ToString());
