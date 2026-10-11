@@ -189,8 +189,10 @@ swap is isolated to one file; no caller or DTO changes needed.
   (`margin-block`, `padding-inline`) where direction matters. The
   `<mark>` highlights inherit color and use underline+weight so they read
   in dark mode too.
-- Entry point: a persistent search button beside the hamburger on every
-  page plus a "חיפוש" item at the top of the main menu.
+- Entry point: a persistent icon-only search button (`aria-label="חיפוש"`)
+  pinned to the physical left edge of the top navigation bar — opposite the
+  hamburger — on every page. The main menu leads with על הפרק and holds no
+  search row.
 
 ## SEO policy (researched and deliberate)
 
