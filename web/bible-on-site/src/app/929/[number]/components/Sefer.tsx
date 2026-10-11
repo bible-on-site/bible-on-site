@@ -62,6 +62,10 @@ import RecitationPlayer, {
 import { Stuma } from "./Stuma";
 import styles from "./sefer.module.css";
 import {
+	scrollToPerushPasuk,
+	useSeferOpenPerush,
+} from "./sefer-pasuk-navigation";
+import {
 	type BookPage,
 	bookPageRoute,
 	buildHistoryMapper,
@@ -104,6 +108,33 @@ type FlipBookProps = {
 	/** Remember the flipbook's mouse interaction mode. */
 	mouseModeStorageKey?: string;
 };
+
+/**
+ * Pasuk number in a book content page. While a perush is open on the facing
+ * blank page and annotates this pasuk, activating the number jumps to that
+ * pasuk's commentary group; otherwise it keeps its recitation behaviour.
+ */
+function SeferPasukNumber({
+	perekId,
+	pasuk,
+}: {
+	perekId: number;
+	pasuk: number;
+}) {
+	const openPerush = useSeferOpenPerush(perekId);
+	return (
+		<RecitationPasukControl
+			pasuk={pasuk}
+			onNavigate={
+				openPerush?.pesukim.has(pasuk)
+					? () => scrollToPerushPasuk(perekId, pasuk)
+					: undefined
+			}
+		>
+			<span className={styles.pasukNum}>{toLetters(pasuk)}</span>
+		</RecitationPasukControl>
+	);
+}
 
 /** Dynamic FlipBook with ref forwarded (library uses forwardRef) */
 const FlipBook = dynamic<
@@ -280,7 +311,10 @@ const Sefer = (props: {
 					pesukim={perek.pesukim}
 					hasRecording={Boolean(perek.recitation)}
 				>
-					<section className={styles.pageContentPage}>
+					<section
+						className={styles.pageContentPage}
+						data-sefer-perek={pagePerekId}
+					>
 						<div className={styles.pageHeaderRight}>
 							<div className={styles.pageHeaderRow}>
 								<span className={styles.pageHeaderSefer}>{perekObj.sefer}</span>
@@ -325,11 +359,10 @@ const Sefer = (props: {
 								{perek.pesukim.map((pasuk, pasukIdx) => {
 									const pasukKey = pasukIdx + 1;
 									const pasukNumElement = (
-										<RecitationPasukControl pasuk={pasukIdx + 1}>
-											<span className={styles.pasukNum}>
-												{toLetters(pasukIdx + 1)}
-											</span>
-										</RecitationPasukControl>
+										<SeferPasukNumber
+											perekId={pagePerekId ?? 0}
+											pasuk={pasukKey}
+										/>
 									);
 									const perekLookup =
 										entityRefLookupsByPerekIdx[perekIdx] ??
@@ -364,7 +397,7 @@ const Sefer = (props: {
 										),
 									);
 									return (
-										<RecitationVerse key={pasukKey}>
+										<RecitationVerse key={pasukKey} pasuk={pasukKey}>
 											{pasukNumElement}
 											<span> </span>
 											{pasukElement}

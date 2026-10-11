@@ -151,6 +151,31 @@ async function openPlayer() {
 	return view;
 }
 
+test("pasuk control navigates to the open perush instead of playing", async () => {
+	const navigate = jest.fn();
+	render(
+		<RecitationPlayer hasRecording perekId={1} pesukim={pesukim}>
+			<RecitationHeader title="בריאת העולם" />
+			<RecitationPasukControl pasuk={1} onNavigate={navigate}>
+				א
+			</RecitationPasukControl>
+		</RecitationPlayer>,
+	);
+	fireEvent.click(
+		screen.getByRole("button", { name: "מעבר לפירוש על פסוק א" }),
+	);
+	expect(navigate).toHaveBeenCalledTimes(1);
+	expect(clipPlay).not.toHaveBeenCalled();
+	// Navigation still wins while listening mode is on.
+	fireEvent.click(screen.getByRole("button", { name: "מצב הקראה" }));
+	await screen.findByRole("button", { name: "השמעת כל הפרק" });
+	fireEvent.click(
+		screen.getByRole("button", { name: "מעבר לפירוש על פסוק א" }),
+	);
+	expect(navigate).toHaveBeenCalledTimes(2);
+	expect(clipPlay).not.toHaveBeenCalled();
+});
+
 test("plays chapter, verse and word from the same precise decoded audio", async () => {
 	await openPlayer();
 	fireEvent.click(screen.getByRole("button", { name: "השמעת כל הפרק" }));
