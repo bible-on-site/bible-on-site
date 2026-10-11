@@ -136,7 +136,13 @@ partial class Build
                 var properties = new Dictionary<string, object>
                 {
                     ["TargetFrameworks"] = MobileIsAndroid ? "net10.0-android" : "net10.0-ios",
-                    ["RuntimeIdentifier"] = MobileIsAndroid ? "android-x64" : "iossimulator-arm64"
+                    ["RuntimeIdentifier"] = MobileIsAndroid ? "android-x64" : "iossimulator-arm64",
+                    // #2120: e2e app builds never emit analytics. Debug already
+                    // defaults DisableAnalytics on, but the explicit property
+                    // keeps the protection build-flag driven rather than
+                    // configuration-derived, so a future non-Debug e2e build
+                    // stays dark too.
+                    ["DisableAnalytics"] = "true"
                 };
                 if (MobileIsAndroid)
                 {

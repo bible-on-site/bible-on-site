@@ -5,7 +5,7 @@ using BibleOnSite.Services;
 using BibleOnSite.ViewModels;
 using BibleOnSite.Controls;
 using BibleOnSite.Handlers;
-#if IOS
+#if IOS && !DISABLE_ANALYTICS
 using Plugin.Firebase.Core.Platforms.iOS;
 using Plugin.Firebase.Analytics;
 #endif
@@ -93,11 +93,14 @@ public static class MauiProgram
 		// Without this, CrossFirebaseAnalytics.Current silently fails on iOS.
 		// Note: Plugin.Firebase 4.0.0 does NOT support MacCatalyst — only iOS and Android.
 		//
+		// #2120: DISABLE_ANALYTICS builds (Debug/e2e) skip Firebase entirely —
+		// with no init call the SDK never configures, so no automatic or manual
+		// event can be emitted, queued or flushed on iOS.
 		// If initialization raises a managed exception, leave analytics disabled.
 		// Native crashes require a device crash report and cannot be caught here.
 		builder.ConfigureLifecycleEvents(events =>
 		{
-#if IOS
+#if IOS && !DISABLE_ANALYTICS
 			events.AddiOS(iOS => iOS.WillFinishLaunching((_, __) =>
 			{
 				try

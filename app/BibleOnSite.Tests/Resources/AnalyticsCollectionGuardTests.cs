@@ -25,6 +25,42 @@ public class AnalyticsCollectionGuardTests
     }
 
     [Fact]
+    public void AndroidManifest_DeactivatesCollectionForDisableAnalyticsBuilds()
+    {
+        // The permanent deactivation flag is the build-flag layer of #2120:
+        // Debug/e2e builds resolve the injected placeholder to true, which the
+        // SDK cannot re-enable at runtime — nothing emits, persists or flushes.
+        var manifest = XDocument.Load(Path.Join(AppRoot, "Platforms", "Android", "AndroidManifest.xml"));
+        XNamespace android = "http://schemas.android.com/apk/res/android";
+        var entry = manifest.Descendants("meta-data")
+            .SingleOrDefault(e => e.Attribute(android + "name")?.Value == "firebase_analytics_collection_deactivated");
+        Assert.NotNull(entry);
+        Assert.Equal("${firebaseAnalyticsCollectionDeactivated}", entry!.Attribute(android + "value")?.Value);
+
+        // The placeholder only works if the project actually injects it for
+        // DisableAnalytics builds; pin the wiring so a csproj edit cannot
+        // silently drop the protection.
+        var csproj = File.ReadAllText(Path.Join(AppRoot, "BibleOnSite.csproj"));
+        Assert.Contains("firebaseAnalyticsCollectionDeactivated=$(FirebaseAnalyticsCollectionDeactivated)", csproj);
+        Assert.Contains("$(AndroidManifestPlaceholders);firebaseAnalyticsCollectionDeactivated", csproj);
+        Assert.Contains("'$(DisableAnalytics)' == '' AND '$(Configuration)' == 'Debug'", csproj);
+        Assert.Contains("DISABLE_ANALYTICS", csproj);
+    }
+
+    [Fact]
+    public void AndroidManifest_DisablesAutomaticScreenReporting()
+    {
+        // #2119: automatic screen tracking only ever saw the host MainActivity;
+        // screens are reported manually with logical names.
+        var manifest = XDocument.Load(Path.Join(AppRoot, "Platforms", "Android", "AndroidManifest.xml"));
+        XNamespace android = "http://schemas.android.com/apk/res/android";
+        var entry = manifest.Descendants("meta-data")
+            .SingleOrDefault(e => e.Attribute(android + "name")?.Value == "google_analytics_automatic_screen_reporting_enabled");
+        Assert.NotNull(entry);
+        Assert.Equal("false", entry!.Attribute(android + "value")?.Value);
+    }
+
+    [Fact]
     public void IosInfoPlist_DisablesAnalyticsCollectionByDefault()
     {
         var plist = XDocument.Load(Path.Join(AppRoot, "Platforms", "iOS", "Info.plist"));
@@ -33,6 +69,33 @@ public class AnalyticsCollectionGuardTests
             e.Name == "key" && e.Value == "FIREBASE_ANALYTICS_COLLECTION_ENABLED");
         Assert.True(index >= 0, "FIREBASE_ANALYTICS_COLLECTION_ENABLED key missing from Info.plist");
         Assert.Equal("false", elements[index + 1].Name.LocalName);
+    }
+
+    [Fact]
+    public void IosInfoPlist_DisablesAutomaticScreenReporting()
+    {
+        // #2119: automatic tracking swizzles UIViewControllers and reports MAUI
+        // renderer classes. The SDK renamed the flag, so both spellings stay
+        // pinned — manual screen_view events still log with either disabled.
+        var plist = XDocument.Load(Path.Join(AppRoot, "Platforms", "iOS", "Info.plist"));
+        var elements = plist.Root!.Element("dict")!.Elements().ToList();
+        foreach (var key in new[] { "FirebaseAutomaticScreenReportingEnabled", "FirebaseScreenReportingEnabled" })
+        {
+            var index = elements.FindIndex(e => e.Name == "key" && e.Value == key);
+            Assert.True(index >= 0, $"{key} missing from Info.plist");
+            Assert.Equal("false", elements[index + 1].Name.LocalName);
+        }
+    }
+
+    [Fact]
+    public void MobileE2eCompile_PropagatesDisableAnalytics()
+    {
+        // #2120 asks for an explicit, reliably propagated test-build
+        // configuration: the e2e compile target must pass the flag itself and
+        // not rely on the Debug-configuration default alone.
+        var buildScript = File.ReadAllText(
+            Path.Combine(AppRoot, "..", "devops", "Build.Compile.cs"));
+        Assert.Contains("[\"DisableAnalytics\"] = \"true\"", buildScript);
     }
 
     private static string FindAppRoot()

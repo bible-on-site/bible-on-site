@@ -13,9 +13,12 @@ public sealed class AnalyticsService : IAnalyticsService
 {
 	// The e2e marker also gates managed events here: collection is disabled at
 	// the SDK layer for marked launches, but this keeps custom events no-ops
-	// even if a persisted flag ever let the SDK stay enabled.
+	// even if a persisted flag ever let the SDK stay enabled. DISABLE_ANALYTICS
+	// builds (Debug/e2e — see DisableAnalytics in the csproj) never emit at all.
 	private static bool IsAvailable =>
-#if ANDROID
+#if DISABLE_ANALYTICS
+		false;
+#elif ANDROID
 		!SearchIndexService.IsE2eMarkedProcess();
 #elif IOS
 		MauiProgram.IsFirebaseInitialized && !SearchIndexService.IsE2eMarkedProcess();
