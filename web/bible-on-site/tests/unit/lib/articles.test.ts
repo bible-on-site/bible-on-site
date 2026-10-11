@@ -404,12 +404,28 @@ describe("articles service", () => {
 			expect(mockQuery).not.toHaveBeenCalled();
 		});
 
-		it("queries every overlapping perek via IN", async () => {
+		it("queries unverified articles by primary perek and verified ones by covering-source overlap", async () => {
 			mockQuery.mockResolvedValue([]);
 			await getArticleSummariesForRanges(crossPerekRanges);
 			const [sql, params] = mockQuery.mock.calls[0];
+			expect(sql).toContain("a.coverage_verified = FALSE");
 			expect(sql).toContain("a.perek_id IN (?, ?)");
-			expect(params).toEqual([1, 2]);
+			expect(sql).toContain("a.coverage_verified = TRUE");
+			expect(sql).toContain("EXISTS");
+			expect(sql).toContain(
+				"FROM tanah_article_covering_source cs",
+			);
+			expect(sql).toContain(
+				"(cs.perek_id = ? AND cs.pasuk >= ? AND cs.pasuk <= ?)",
+			);
+			// בראשית א has 31 pesukim: the range clips to pasuk 30-31 there.
+			expect(params).toEqual([1, 2, 1, 30, 31, 2, 1, 4]);
+		});
+
+		it("does not gate on the bulletin-only distributable flag", async () => {
+			mockQuery.mockResolvedValue([]);
+			await getArticleSummariesForRanges(crossPerekRanges);
+			expect(mockQuery.mock.calls[0][0]).not.toContain("distributable");
 		});
 
 		it("maps rows to summaries", async () => {
@@ -430,12 +446,23 @@ describe("articles service", () => {
 			]);
 		});
 
-		it("returns empty array on failure", async () => {
-			mockQuery.mockRejectedValue(new Error("DB error"));
-			const result = await getArticleSummariesForRanges(crossPerekRanges);
-			expect(result).toEqual([]);
+		it("rejects database failures instead of caching an empty list", async () => {
+			const mockError = new Error("DB error");
+			mockQuery.mockRejectedValue(mockError);
+			await expect(
+				getArticleSummariesForRanges(crossPerekRanges),
+			).rejects.toBe(mockError);
+			expect(console.warn).toHaveBeenCalledWith(
+				"Failed to fetch article summaries for ranges:",
+				"DB error",
+			);
+		});
+
+		it("propagates non-Error rejections without caching them", async () => {
 			mockQuery.mockRejectedValue("raw error");
-			expect(await getArticleSummariesForRanges(crossPerekRanges)).toEqual([]);
+			await expect(
+				getArticleSummariesForRanges(crossPerekRanges),
+			).rejects.toBe("raw error");
 		});
 	});
 });

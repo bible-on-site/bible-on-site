@@ -1,7 +1,11 @@
 import { query } from "../api-client";
 import { getAuthorImageUrl } from "../authors/service";
 import type { ScriptureRange } from "../reading/contract";
-import { slicePerekIds, slicesForRanges } from "../reading/queries";
+import {
+	coveringSourceSliceCondition,
+	slicePerekIds,
+	slicesForRanges,
+} from "../reading/queries";
 import type { Article, ArticleSummary } from "./types";
 
 interface ArticleWithAuthorRow {
@@ -106,18 +110,34 @@ export async function getArticleSummariesByPerekId(
 }
 
 /**
- * Fetch article summaries whose perek association overlaps the given
- * canonical ranges — the shared unit->article path for reading
- * divisions. Articles carry a perek-level association, so every perek a
- * range touches contributes its articles; results are deduplicated when
- * several slices land on the same perek.
+ * Fetch article summaries whose scripture coverage overlaps the given
+ * canonical ranges — the shared unit->article path for the reading
+ * divisions (מסורה units, פרשה ranges, ordered multi-range Haftarah
+ * lookups).
+ *
+ * Coverage semantics (tanah_article_covering_source, #2189):
+ * - `coverage_verified = TRUE`: the covering rows are the article's
+ *   verified coverage — the article matches when any row lands inside a
+ *   slice (pasuk granularity). EXISTS yields one row per article no
+ *   matter how many covering rows match, so multi-match articles are
+ *   deduplicated.
+ * - `coverage_verified = FALSE` (every article whose coverage was never
+ *   mapped): coverage is unknown, so the article falls back to its
+ *   primary perek association — honest perek-level matching that does
+ *   not claim pasuk precision.
+ *
+ * All public articles are eligible: `distributable` gates only the daily
+ * bulletin email, never the site. Like the per-perek path, database
+ * failures reject rather than caching an empty article list.
  */
 export async function getArticleSummariesForRanges(
 	ranges: ScriptureRange[],
 ): Promise<ArticleSummary[]> {
-	const perekIds = slicePerekIds(slicesForRanges(ranges));
-	if (perekIds.length === 0) return [];
+	const slices = slicesForRanges(ranges);
+	if (slices.length === 0) return [];
+	const perekIds = slicePerekIds(slices);
 	const placeholders = perekIds.map(() => "?").join(", ");
+	const covering = coveringSourceSliceCondition(slices);
 	try {
 		const rows = await query<ArticleSummaryRow>(
 			`SELECT
@@ -125,9 +145,15 @@ export async function getArticleSummariesForRanges(
 				au.name AS author_name
 			 FROM tanah_article a
 			 JOIN tanah_author au ON a.author_id = au.id
-			 WHERE a.perek_id IN (${placeholders}) AND a.distributable = TRUE
+			 WHERE (a.coverage_verified = FALSE
+					AND a.perek_id BETWEEN 1 AND 929
+					AND a.perek_id IN (${placeholders}))
+				OR (a.coverage_verified = TRUE
+					AND EXISTS (
+						SELECT 1 FROM tanah_article_covering_source cs
+						WHERE cs.article_id = a.id AND (${covering.sql})))
 			 ORDER BY a.priority ASC`,
-			perekIds,
+			[...perekIds, ...covering.params],
 		);
 
 		return rows.map((row) => ({
@@ -145,7 +171,8 @@ export async function getArticleSummariesForRanges(
 			"Failed to fetch article summaries for ranges:",
 			error instanceof Error ? error.message : error,
 		);
-		return [];
+		// Reject so a failed build/request cannot cache an empty article list.
+		throw error;
 	}
 }
 

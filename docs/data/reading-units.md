@@ -89,9 +89,13 @@ helpers:
 - `noteSliceCondition` — pasuk-bounded `WHERE` clauses:
   `(n.perek_id = ? AND n.pasuk >= ? AND n.pasuk <= ?)`. Boundary pesukim
   are included whole (pasuk granularity).
-- `slicePerekIds` — distinct perek ids for article queries
-  (`IN (...)`), which naturally deduplicates articles reached through
-  several ranges.
+- `coveringSourceSliceCondition` — the same pasuk-bounded clauses on the
+  `cs` alias, matching `tanah_article_covering_source` rows for the
+  verified-coverage article lookup.
+- `slicePerekIds` — distinct perek ids for the legacy article fallback:
+  articles whose verse coverage was never mapped
+  (`coverage_verified = FALSE`) still match ranges through their primary
+  perek association (`IN (...)`), without claiming pasuk precision.
 
 Original perush/article source anchors are preserved — no synthetic
 perek ids and no duplicated content per division.

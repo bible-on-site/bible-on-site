@@ -3,6 +3,7 @@
  */
 import {
 	canonicalPasukCount,
+	coveringSourceSliceCondition,
 	noteSliceCondition,
 	slicePerekIds,
 	slicePerekOrder,
@@ -47,6 +48,20 @@ describe("noteSliceCondition", () => {
 		expect(sql).toBe(
 			"(n.perek_id = ? AND n.pasuk >= ? AND n.pasuk <= ?) OR " +
 				"(n.perek_id = ? AND n.pasuk >= ? AND n.pasuk <= ?)",
+		);
+		expect(params).toEqual([1, 30, 31, 2, 1, 4]);
+	});
+});
+
+describe("coveringSourceSliceCondition", () => {
+	it("emits the same pasuk bounds on the covering-source alias", () => {
+		const { sql, params } = coveringSourceSliceCondition([
+			{ perekId: 1, startPasuk: 30, endPasuk: 31, rangeIndex: 0 },
+			{ perekId: 2, startPasuk: 1, endPasuk: 4, rangeIndex: 0 },
+		]);
+		expect(sql).toBe(
+			"(cs.perek_id = ? AND cs.pasuk >= ? AND cs.pasuk <= ?) OR " +
+				"(cs.perek_id = ? AND cs.pasuk >= ? AND cs.pasuk <= ?)",
 		);
 		expect(params).toEqual([1, 30, 31, 2, 1, 4]);
 	});

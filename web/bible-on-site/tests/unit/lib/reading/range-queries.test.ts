@@ -194,7 +194,21 @@ describe("getArticleSummariesForRanges", () => {
 		await getArticleSummariesForRanges(MULTI_RANGE);
 		const [sql, params] = mockQuery.mock.calls[0];
 		expect(sql).toContain("a.perek_id IN (?, ?)");
-		expect(params).toEqual([100, 1]);
+		// Primary-perek fallback ids first, then the covering-source slice
+		// bounds in declared range order (perek 100 before perek 1, and the
+		// repeated concluding pasuk kept).
+		expect(params).toEqual([100, 1, 100, 10, 12, 1, 1, 3, 100, 12, 12]);
+	});
+
+	it("matches verified articles by pasuk-granular covering-source rows", async () => {
+		mockQuery.mockResolvedValue([]);
+		await getArticleSummariesForRanges(CROSS_PEREK);
+		const sql = mockQuery.mock.calls[0][0];
+		expect(sql).toContain("FROM tanah_article_covering_source cs");
+		expect(sql).toContain("cs.article_id = a.id");
+		expect(sql).toContain(
+			"(cs.perek_id = ? AND cs.pasuk >= ? AND cs.pasuk <= ?)",
+		);
 	});
 
 	it("maps rows to article summaries", async () => {
@@ -224,8 +238,11 @@ describe("getArticleSummariesForRanges", () => {
 		]);
 	});
 
-	it("returns empty array on query failure", async () => {
-		mockQuery.mockRejectedValue(new Error("DB error"));
-		expect(await getArticleSummariesForRanges(CROSS_PEREK)).toEqual([]);
+	it("rejects query failures like the per-perek path", async () => {
+		const error = new Error("DB error");
+		mockQuery.mockRejectedValue(error);
+		await expect(getArticleSummariesForRanges(CROSS_PEREK)).rejects.toBe(
+			error,
+		);
 	});
 });

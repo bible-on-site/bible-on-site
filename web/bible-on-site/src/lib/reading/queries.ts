@@ -16,22 +16,47 @@ export function slicesForRanges(ranges: ScriptureRange[]): PerekSlice[] {
 }
 
 /**
+ * SQL WHERE fragment matching verse-addressed rows inside the given
+ * slices: every slice becomes an inclusive
+ * `(perek_id = ? AND pasuk >= ? AND pasuk <= ?)` clause on the given
+ * column alias, so boundary pesukim shared by two units appear in both.
+ * Intra-pasuk segment bounds map onto their containing pasuk.
+ */
+function pasukSliceCondition(
+	slices: PerekSlice[],
+	alias: string,
+): { sql: string; params: number[] } {
+	const params: number[] = [];
+	const clauses = slices.map((slice) => {
+		params.push(slice.perekId, slice.startPasuk, slice.endPasuk);
+		return `(${alias}.perek_id = ? AND ${alias}.pasuk >= ? AND ${alias}.pasuk <= ?)`;
+	});
+	return { sql: clauses.join(" OR "), params };
+}
+
+/**
  * SQL WHERE fragment matching note rows inside the given slices.
- * Verse-addressed commentary is pasuk-granular: every slice becomes a
- * `(perek_id = ? AND pasuk >= ? AND pasuk <= ?)` clause, so boundary
- * pesukim shared by two units appear in both. Intra-pasuk segment
- * bounds map onto their containing pasuk.
+ * Verse-addressed commentary is pasuk-granular: boundary pesukim shared
+ * by two units appear in both.
  */
 export function noteSliceCondition(slices: PerekSlice[]): {
 	sql: string;
 	params: number[];
 } {
-	const params: number[] = [];
-	const clauses = slices.map((slice) => {
-		params.push(slice.perekId, slice.startPasuk, slice.endPasuk);
-		return "(n.perek_id = ? AND n.pasuk >= ? AND n.pasuk <= ?)";
-	});
-	return { sql: clauses.join(" OR "), params };
+	return pasukSliceCondition(slices, "n");
+}
+
+/**
+ * SQL WHERE fragment matching tanah_article_covering_source rows inside
+ * the given slices — the verified verse-level article coverage overlap
+ * condition. Pasuk-granular like the commentary path: a covering row on
+ * any pasuk inside the bounds selects the article.
+ */
+export function coveringSourceSliceCondition(slices: PerekSlice[]): {
+	sql: string;
+	params: number[];
+} {
+	return pasukSliceCondition(slices, "cs");
 }
 
 /**
