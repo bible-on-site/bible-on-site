@@ -107,22 +107,26 @@ internal static class DeviceTransportRecovery
 
     private static string? Run(Adb command, int timeoutMs)
     {
-        var start = new ProcessStartInfo("adb")
+        var arguments = command switch
         {
-            Arguments = command switch
-            {
-                Adb.Reconnect => "reconnect",
-                Adb.WaitForDevice => "wait-for-device",
-                Adb.GetState => "get-state",
-                Adb.BootCompleted => "shell getprop sys.boot_completed",
-                Adb.PackageManager => "shell pm path android",
-                Adb.Devices => "devices -l",
-                _ => throw new ArgumentOutOfRangeException(nameof(command)),
-            },
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
+            Adb.Reconnect => new[] { "reconnect" },
+            Adb.WaitForDevice => new[] { "wait-for-device" },
+            Adb.GetState => new[] { "get-state" },
+            Adb.BootCompleted => new[] { "shell", "getprop", "sys.boot_completed" },
+            Adb.PackageManager => new[] { "shell", "pm", "path", "android" },
+            Adb.Devices => new[] { "devices", "-l" },
+            _ => throw new ArgumentOutOfRangeException(nameof(command)),
         };
+        // ArgumentList bypasses the shell argument string entirely — argv is
+        // handed to exec as-is, so nothing on this line is shell-parseable.
+        var start = new ProcessStartInfo("adb");
+        foreach (var argument in arguments)
+        {
+            start.ArgumentList.Add(argument);
+        }
+        start.RedirectStandardOutput = true;
+        start.RedirectStandardError = true;
+        start.UseShellExecute = false;
         try
         {
             using var process = Process.Start(start);
