@@ -278,6 +278,9 @@
                                         <Binding Path="Pasukim"/>
                                         <Binding Path="BindingContext.IsShnayimMikraEnabled" Source="{x:Reference PerekPageRoot}"/>
                                         <Binding Path="BindingContext.FontFactor" Source="{x:Reference PerekPageRoot}"/>
+                                        <!-- Re-evaluates the items when הסתר שם השם changes so every
+                                             realized/recycled row re-reads Pasuk.FormattedText. -->
+                                        <Binding Path="BindingContext.DivineNameMaskingRevision" Source="{x:Reference PerekPageRoot}"/>
                                     </MultiBinding>
                                 </CollectionView.ItemsSource>
                                 <CollectionView.Footer>
@@ -397,6 +400,7 @@
                                                              Pasukim="{Binding Pasukim}"
                                                              RepeatEachPasuk="{Binding BindingContext.IsShnayimMikraEnabled, Source={x:Reference PerekPageRoot}}"
                                                              HideMarks="{Binding BindingContext.TikkunMarksHidden, Source={x:Reference PerekPageRoot}}"
+                                                             MaskingRevision="{Binding BindingContext.DivineNameMaskingRevision, Source={x:Reference PerekPageRoot}}"
                                                              TextFontSize="{DynamicResource PasukFontSize}">
                                         <controls:TikkunFlowView.GestureRecognizers>
                                             <TapGestureRecognizer Tapped="OnTikkunTextTapped"/>
@@ -647,6 +651,24 @@
                                       VerticalOptions="Center"/>
                             <Label Grid.Column="1"
                                    Text="תיקון קוראים"
+                                   FontSize="16"
+                                   VerticalOptions="Center"
+                                   Margin="10,0,0,0"/>
+                        </Grid>
+                    </Grid>
+                    <!-- הסתר שם השם - checkbox toggle; replacement options live
+                         under Preferences → הסתרת שם השם -->
+                    <Grid Padding="10,6">
+                        <Grid.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OnDivineNameMaskingTapped"/>
+                        </Grid.GestureRecognizers>
+                        <Grid ColumnDefinitions="Auto,*">
+                            <CheckBox AutomationId="DivineNameMaskingCheckBox"
+                                      IsChecked="{Binding DivineNameMaskingEnabled}"
+                                      InputTransparent="True"
+                                      VerticalOptions="Center"/>
+                            <Label Grid.Column="1"
+                                   Text="הסתר שם השם"
                                    FontSize="16"
                                    VerticalOptions="Center"
                                    Margin="10,0,0,0"/>

@@ -1,3 +1,4 @@
+using BibleOnSite.Helpers;
 using BibleOnSite.Services;
 using BibleOnSite.ViewModels;
 
@@ -41,5 +42,68 @@ public partial class PreferencesPage : ContentPage
                 _viewModel.PerekToLoad = PerekToLoad.LastLearnt;
             }
         }
+    }
+
+    /// <summary>
+    /// RadioButton group handlers for הסתר שם השם. Only CheckedChanged with
+    /// e.Value == true applies a selection (a deselected sibling fires the same
+    /// event with false and must not overwrite the choice).
+    /// </summary>
+    private void OnMaskElohimRadioChanged(object? sender, CheckedChangedEventArgs e)
+    {
+        if (!e.Value || sender is not RadioButton rb)
+        {
+            return;
+        }
+
+        _viewModel.DivineNameMaskElohim = rb.AutomationId switch
+        {
+            "MaskElohimAsIs" => DivineNameMaskOption.AsIs,
+            "MaskElohimElokim" => DivineNameMaskOption.Elokim,
+            "MaskElohimCustomRadio" => DivineNameMaskOption.Custom,
+            _ => DivineNameMaskOption.Hyphen,
+        };
+    }
+
+    private void OnMaskYhwhRadioChanged(object? sender, CheckedChangedEventArgs e)
+    {
+        if (!e.Value || sender is not RadioButton rb)
+        {
+            return;
+        }
+
+        _viewModel.DivineNameMaskYhwh = rb.AutomationId switch
+        {
+            "MaskYhwhDalet" => DivineNameMaskOption.Dalet,
+            "MaskYhwhCustomRadio" => DivineNameMaskOption.Custom,
+            _ => DivineNameMaskOption.Heh,
+        };
+    }
+
+    private void OnMaskElRadioChanged(object? sender, CheckedChangedEventArgs e)
+    {
+        if (!e.Value || sender is not RadioButton rb)
+        {
+            return;
+        }
+
+        _viewModel.DivineNameMaskEl = rb.AutomationId == "MaskElHyphen"
+            ? DivineNameMaskOption.Hyphen
+            : DivineNameMaskOption.AsIs;
+    }
+
+    private void OnMaskShaddaiRadioChanged(object? sender, CheckedChangedEventArgs e)
+    {
+        if (!e.Value || sender is not RadioButton rb)
+        {
+            return;
+        }
+
+        _viewModel.DivineNameMaskShaddai = rb.AutomationId switch
+        {
+            "MaskShaddaiHyphen" => DivineNameMaskOption.Hyphen,
+            "MaskShaddaiCustomRadio" => DivineNameMaskOption.Custom,
+            _ => DivineNameMaskOption.AsIs,
+        };
     }
 }

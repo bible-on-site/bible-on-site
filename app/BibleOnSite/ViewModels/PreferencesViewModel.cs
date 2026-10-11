@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using BibleOnSite.Helpers;
 using BibleOnSite.Services;
 
 namespace BibleOnSite.ViewModels;
@@ -131,6 +132,219 @@ public partial class PreferencesViewModel : ObservableObject
         }
     }
 
+    #region הסתר שם השם
+
+    /// <summary>Master toggle for divine-name display masking.</summary>
+    public bool DivineNameMaskingEnabled
+    {
+        get => _preferencesService.DivineNameMaskingEnabled;
+        set
+        {
+            if (_preferencesService.DivineNameMaskingEnabled == value)
+            {
+                return;
+            }
+
+            _preferencesService.DivineNameMaskingEnabled = value;
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>Selected אלהים display option.</summary>
+    public DivineNameMaskOption DivineNameMaskElohim
+    {
+        get => _preferencesService.DivineNameMaskElohim;
+        set => SetMaskOption(() => _preferencesService.DivineNameMaskElohim = value,
+            NotifyMaskElohim);
+    }
+
+    /// <summary>Custom replacement text for אלהים (used when "אחר" is selected).</summary>
+    public string DivineNameMaskElohimCustom
+    {
+        get => _preferencesService.DivineNameMaskElohimCustom;
+        set
+        {
+            if (_preferencesService.DivineNameMaskElohimCustom == value)
+            {
+                return;
+            }
+
+            _preferencesService.DivineNameMaskElohimCustom = value;
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>Radio wrappers: the CheckedChanged handler is the real mechanism;
+    /// setters exist only so the two-way IsChecked binding has a valid target
+    /// (a false write-back on deselect is intentionally a no-op).</summary>
+    public bool IsMaskElohimAsIs
+    {
+        get => DivineNameMaskElohim == DivineNameMaskOption.AsIs;
+        set { if (value) { DivineNameMaskElohim = DivineNameMaskOption.AsIs; } }
+    }
+
+    public bool IsMaskElohimElokim
+    {
+        get => DivineNameMaskElohim == DivineNameMaskOption.Elokim;
+        set { if (value) { DivineNameMaskElohim = DivineNameMaskOption.Elokim; } }
+    }
+
+    public bool IsMaskElohimHyphen
+    {
+        get => DivineNameMaskElohim == DivineNameMaskOption.Hyphen;
+        set { if (value) { DivineNameMaskElohim = DivineNameMaskOption.Hyphen; } }
+    }
+
+    public bool IsMaskElohimCustom
+    {
+        get => DivineNameMaskElohim == DivineNameMaskOption.Custom;
+        set { if (value) { DivineNameMaskElohim = DivineNameMaskOption.Custom; } }
+    }
+
+    /// <summary>Selected יהוה display option (ה' / ד' / אחר — אין "כמות שהוא").</summary>
+    public DivineNameMaskOption DivineNameMaskYhwh
+    {
+        get => _preferencesService.DivineNameMaskYhwh;
+        set => SetMaskOption(() => _preferencesService.DivineNameMaskYhwh = value,
+            NotifyMaskYhwh);
+    }
+
+    /// <summary>Custom replacement text for יהוה (used when "אחר" is selected).</summary>
+    public string DivineNameMaskYhwhCustom
+    {
+        get => _preferencesService.DivineNameMaskYhwhCustom;
+        set
+        {
+            if (_preferencesService.DivineNameMaskYhwhCustom == value)
+            {
+                return;
+            }
+
+            _preferencesService.DivineNameMaskYhwhCustom = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public bool IsMaskYhwhHeh
+    {
+        get => DivineNameMaskYhwh == DivineNameMaskOption.Heh;
+        set { if (value) { DivineNameMaskYhwh = DivineNameMaskOption.Heh; } }
+    }
+
+    public bool IsMaskYhwhDalet
+    {
+        get => DivineNameMaskYhwh == DivineNameMaskOption.Dalet;
+        set { if (value) { DivineNameMaskYhwh = DivineNameMaskOption.Dalet; } }
+    }
+
+    public bool IsMaskYhwhCustom
+    {
+        get => DivineNameMaskYhwh == DivineNameMaskOption.Custom;
+        set { if (value) { DivineNameMaskYhwh = DivineNameMaskOption.Custom; } }
+    }
+
+    /// <summary>Selected אל display option (כמות שהוא / א-ל).</summary>
+    public DivineNameMaskOption DivineNameMaskEl
+    {
+        get => _preferencesService.DivineNameMaskEl;
+        set => SetMaskOption(() => _preferencesService.DivineNameMaskEl = value,
+            NotifyMaskEl);
+    }
+
+    public bool IsMaskElAsIs
+    {
+        get => DivineNameMaskEl == DivineNameMaskOption.AsIs;
+        set { if (value) { DivineNameMaskEl = DivineNameMaskOption.AsIs; } }
+    }
+
+    public bool IsMaskElHyphen
+    {
+        get => DivineNameMaskEl == DivineNameMaskOption.Hyphen;
+        set { if (value) { DivineNameMaskEl = DivineNameMaskOption.Hyphen; } }
+    }
+
+    /// <summary>Selected שדי display option (כמות שהוא / שד-י / אחר).</summary>
+    public DivineNameMaskOption DivineNameMaskShaddai
+    {
+        get => _preferencesService.DivineNameMaskShaddai;
+        set => SetMaskOption(() => _preferencesService.DivineNameMaskShaddai = value,
+            NotifyMaskShaddai);
+    }
+
+    /// <summary>Custom replacement text for שדי (used when "אחר" is selected).</summary>
+    public string DivineNameMaskShaddaiCustom
+    {
+        get => _preferencesService.DivineNameMaskShaddaiCustom;
+        set
+        {
+            if (_preferencesService.DivineNameMaskShaddaiCustom == value)
+            {
+                return;
+            }
+
+            _preferencesService.DivineNameMaskShaddaiCustom = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public bool IsMaskShaddaiAsIs
+    {
+        get => DivineNameMaskShaddai == DivineNameMaskOption.AsIs;
+        set { if (value) { DivineNameMaskShaddai = DivineNameMaskOption.AsIs; } }
+    }
+
+    public bool IsMaskShaddaiHyphen
+    {
+        get => DivineNameMaskShaddai == DivineNameMaskOption.Hyphen;
+        set { if (value) { DivineNameMaskShaddai = DivineNameMaskOption.Hyphen; } }
+    }
+
+    public bool IsMaskShaddaiCustom
+    {
+        get => DivineNameMaskShaddai == DivineNameMaskOption.Custom;
+        set { if (value) { DivineNameMaskShaddai = DivineNameMaskOption.Custom; } }
+    }
+
+    private void SetMaskOption(Action apply, Action notify)
+    {
+        apply();
+        notify();
+    }
+
+    private void NotifyMaskElohim()
+    {
+        OnPropertyChanged(nameof(DivineNameMaskElohim));
+        OnPropertyChanged(nameof(IsMaskElohimAsIs));
+        OnPropertyChanged(nameof(IsMaskElohimElokim));
+        OnPropertyChanged(nameof(IsMaskElohimHyphen));
+        OnPropertyChanged(nameof(IsMaskElohimCustom));
+    }
+
+    private void NotifyMaskYhwh()
+    {
+        OnPropertyChanged(nameof(DivineNameMaskYhwh));
+        OnPropertyChanged(nameof(IsMaskYhwhHeh));
+        OnPropertyChanged(nameof(IsMaskYhwhDalet));
+        OnPropertyChanged(nameof(IsMaskYhwhCustom));
+    }
+
+    private void NotifyMaskEl()
+    {
+        OnPropertyChanged(nameof(DivineNameMaskEl));
+        OnPropertyChanged(nameof(IsMaskElAsIs));
+        OnPropertyChanged(nameof(IsMaskElHyphen));
+    }
+
+    private void NotifyMaskShaddai()
+    {
+        OnPropertyChanged(nameof(DivineNameMaskShaddai));
+        OnPropertyChanged(nameof(IsMaskShaddaiAsIs));
+        OnPropertyChanged(nameof(IsMaskShaddaiHyphen));
+        OnPropertyChanged(nameof(IsMaskShaddaiCustom));
+    }
+
+    #endregion
+
     /// <summary>Always show the perushim section — with different content based on install state.</summary>
     public bool ShowPerushimSection => true;
 
@@ -184,6 +398,7 @@ public partial class PreferencesViewModel : ObservableObject
         OnPropertyChanged(nameof(ShowPerushimDownload));
         OnPropertyChanged(nameof(ShowPerushimDownloadButton));
         OnPropertyChanged(nameof(PerushimNotesStatusText));
+        NotifyDivineNameMaskingChanged();
     }
 
     /// <summary>
@@ -278,5 +493,18 @@ public partial class PreferencesViewModel : ObservableObject
         OnPropertyChanged(nameof(PerekToLoad));
         OnPropertyChanged(nameof(IsPerekToLoadTodays));
         OnPropertyChanged(nameof(IsPerekToLoadLastLearnt));
+        NotifyDivineNameMaskingChanged();
+    }
+
+    private void NotifyDivineNameMaskingChanged()
+    {
+        OnPropertyChanged(nameof(DivineNameMaskingEnabled));
+        OnPropertyChanged(nameof(DivineNameMaskElohimCustom));
+        OnPropertyChanged(nameof(DivineNameMaskYhwhCustom));
+        OnPropertyChanged(nameof(DivineNameMaskShaddaiCustom));
+        NotifyMaskElohim();
+        NotifyMaskYhwh();
+        NotifyMaskEl();
+        NotifyMaskShaddai();
     }
 }
