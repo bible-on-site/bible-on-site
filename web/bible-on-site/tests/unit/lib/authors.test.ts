@@ -208,6 +208,17 @@ describe("authors service", () => {
 			expect(result).toEqual([]);
 		});
 
+		it("only surfaces distributable articles", async () => {
+			mockQuery.mockResolvedValue([]);
+
+			await getArticlesByAuthorId(5);
+
+			expect(mockQuery).toHaveBeenCalledWith(
+				expect.stringContaining("distributable = TRUE"),
+				[5],
+			);
+		});
+
 		it("returns empty array and logs warning on error", async () => {
 			const consoleWarn = jest
 				.spyOn(console, "warn")
@@ -247,6 +258,16 @@ describe("authors service", () => {
 			);
 
 			expect(result).toEqual([1, 2, 3]);
+		});
+
+		it("only counts authors with distributable articles", async () => {
+			mockQuery.mockResolvedValue([]);
+
+			await getAllAuthorIds();
+
+			expect(mockQuery).toHaveBeenCalledWith(
+				expect.stringContaining("art.distributable = TRUE"),
+			);
 		});
 
 		it("returns empty array when no authors", async () => {
@@ -318,6 +339,16 @@ describe("authors service", () => {
 			expect(result).toEqual(expect.objectContaining({ id: 1 }));
 		});
 
+		it("only matches authors with distributable articles", async () => {
+			mockQuery.mockResolvedValue([]);
+
+			await getAuthorByName("מחבר");
+
+			expect(mockQuery).toHaveBeenCalledWith(
+				expect.stringContaining("art.distributable = TRUE"),
+			);
+		});
+
 		it("returns null when no name matches", async () => {
 			const mockRows = [{ id: 1, name: 'הרב לדוגמא שליט"א', details: "" }];
 			mockQuery.mockResolvedValue(mockRows);
@@ -363,6 +394,16 @@ describe("authors service", () => {
 			const result = await getAllAuthorSlugs();
 
 			expect(result).toEqual(["הרב לדוגמא שליטא", "הרב לדוגמא זל"]);
+		});
+
+		it("only slugs authors with distributable articles", async () => {
+			mockQuery.mockResolvedValue([]);
+
+			await getAllAuthorSlugs();
+
+			expect(mockQuery).toHaveBeenCalledWith(
+				expect.stringContaining("art.distributable = TRUE"),
+			);
 		});
 
 		it("returns empty array when no authors", async () => {
