@@ -353,6 +353,21 @@ public class DivineNameMaskingTests
         }
 
         [Fact]
+        public void formatted_text_masks_each_word_of_a_multi_word_qri_segment()
+        {
+            // Bracketed qri text arrives as one segment holding several words —
+            // MaskText handles each word; single-word MaskValue would skip it.
+            var pasuk = PasukOf(
+                new PasukSegment { Type = SegmentType.Ktiv, Value = "יְהוָ֔ה", PairedOffset = 1 },
+                new PasukSegment { Type = SegmentType.Qri, Value = "יְהוָה אֱלֹהִים", PairedOffset = -1 });
+
+            using (DivineNameMasking.Scope(Enabled()))
+            {
+                Flatten(pasuk.FormattedText).Should().Be("ה' (קְרִי: ה' א-להים)");
+            }
+        }
+
+        [Fact]
         public void reciting_highlight_span_uses_the_masked_text()
         {
             var pasuk = PasukOf(
