@@ -94,7 +94,7 @@ public class AnalyticsCollectionGuardTests
         // configuration: the e2e compile target must pass the flag itself and
         // not rely on the Debug-configuration default alone.
         var buildScript = File.ReadAllText(
-            Path.Combine(AppRoot, "..", "devops", "Build.Compile.cs"));
+            Path.Join(AppRoot, "..", "devops", "Build.Compile.cs"));
         Assert.Contains("[\"DisableAnalytics\"] = \"true\"", buildScript);
     }
 
@@ -103,14 +103,14 @@ public class AnalyticsCollectionGuardTests
         var dir = AppContext.BaseDirectory;
         while (dir != null)
         {
-            var candidate = Path.Combine(dir, "BibleOnSite");
-            if (Directory.Exists(candidate) && File.Exists(Path.Combine(candidate, "BibleOnSite.csproj")))
+            var candidate = Path.Join(dir, "BibleOnSite");
+            if (Directory.Exists(candidate) && File.Exists(Path.Join(candidate, "BibleOnSite.csproj")))
             {
                 return candidate;
             }
 
-            var siblingCandidate = Path.Combine(Path.GetDirectoryName(dir)!, "BibleOnSite");
-            if (Directory.Exists(siblingCandidate) && File.Exists(Path.Combine(siblingCandidate, "BibleOnSite.csproj")))
+            var siblingCandidate = Path.Join(Path.GetDirectoryName(dir)!, "BibleOnSite");
+            if (Directory.Exists(siblingCandidate) && File.Exists(Path.Join(siblingCandidate, "BibleOnSite.csproj")))
             {
                 return siblingCandidate;
             }
