@@ -64,7 +64,8 @@ public class PerekScheduleService
     private Dictionary<int, List<ScheduleEntry>>? _entriesByCycle;
     /// <summary>(Cycle number, start date) pairs ordered by cycle number.</summary>
     private List<(int Number, int StartDate)>? _confirmedStarts;
-    private bool _isLoaded;
+    /// <summary>Volatile for the double-checked lock in <see cref="LoadAsync"/>.</summary>
+    private volatile bool _isLoaded;
 
     private PerekScheduleService() : this(LocalDatabaseService.Instance) { }
 

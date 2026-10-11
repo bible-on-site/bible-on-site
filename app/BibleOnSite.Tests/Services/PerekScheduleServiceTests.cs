@@ -103,9 +103,8 @@ public class PerekScheduleServiceTests
 
         // Cycle 9 skips several days between perek 895 and 896; the skipped
         // days are review days of perek 895, not unscheduled days.
-        foreach (var skipped in new[] { 58070230, 58070301, 58070302 })
+        foreach (var day in new[] { 58070230, 58070301, 58070302 }.Select(service.ResolveDay))
         {
-            var day = service.ResolveDay(skipped);
             day.Status.Should().Be(PerekScheduleService.DayStatus.Review);
             day.PerekId.Should().Be(895);
             day.Cycle.Should().Be(9);
