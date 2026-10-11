@@ -112,7 +112,7 @@ public static class TikkunKorimTextBuilder
                     // the note label pieces glue to the value (no space before ")").
                     AppendText(words, "(קְרִי: ", QriNoteColor, NoteFontScale, bold: false,
                         hideMarks, joinPrevious);
-                    AppendText(words, segment.Value, reciting ? RecitingColor : QriNoteColor,
+                    AppendText(words, DivineNameMasking.MaskValue(segment.Value), reciting ? RecitingColor : QriNoteColor,
                         1f, bold: false, hideMarks, glueToPrevious: false);
                     AppendText(words, ")", QriNoteColor, NoteFontScale, bold: false,
                         hideMarks, glueToPrevious: true);
@@ -120,7 +120,8 @@ public static class TikkunKorimTextBuilder
 
                 case SegmentType.Ktiv:
                 case SegmentType.Qri: // same-as-ktiv qri — plain text
-                    AppendText(words, segment.Value, reciting ? RecitingColor : null,
+                    // הסתר שם השם applies at display time only — segments stay canonical.
+                    AppendText(words, DivineNameMasking.MaskValue(segment.Value), reciting ? RecitingColor : null,
                         1f, bold: false, hideMarks, joinPrevious);
                     break;
 
