@@ -1,0 +1,245 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:viewmodels="clr-namespace:BibleOnSite.ViewModels"
+             xmlns:fonts="clr-namespace:Fonts"
+             x:Class="BibleOnSite.Pages.LearningCalendarPage"
+             x:DataType="viewmodels:LearningCalendarViewModel"
+             Title="לוח לימוד יומי"
+             FlowDirection="RightToLeft">
+
+    <!-- Regular page presentation: the page stays on the navigation stack, so
+         device/system Back returns to the previous page (e.g. from the reader). -->
+    <Shell.BackButtonBehavior>
+        <BackButtonBehavior IsVisible="False"/>
+    </Shell.BackButtonBehavior>
+
+    <!-- Shared top bar: hamburger that opens the flyout, like every other page. -->
+    <Shell.TitleView>
+        <Grid ColumnDefinitions="Auto,Auto" ColumnSpacing="4">
+            <Button Text="{x:Static fonts:FluentUI.line_horizontal_3_20_regular}"
+                    FontFamily="FluentIcons"
+                    FontSize="20"
+                    WidthRequest="40"
+                    HeightRequest="40"
+                    Padding="0"
+                    BackgroundColor="Transparent"
+                    TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"
+                    SemanticProperties.Description="תפריט"
+                    AutomationId="CalendarMenuButton"
+                    VerticalOptions="Center"
+                    HorizontalOptions="Start"
+                    Clicked="OnMenuButtonClicked"/>
+            <Label Grid.Column="1"
+                   Text="לוח לימוד יומי"
+                   FontSize="20"
+                   VerticalOptions="Center"
+                   HorizontalOptions="Start"
+                   TextColor="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource SecondaryDarkText}}"/>
+        </Grid>
+    </Shell.TitleView>
+
+    <ContentPage.Resources>
+        <Style x:Key="CalendarNavButton" TargetType="Button">
+            <Setter Property="FontFamily" Value="FluentIcons"/>
+            <Setter Property="FontSize" Value="18"/>
+            <Setter Property="WidthRequest" Value="40"/>
+            <Setter Property="HeightRequest" Value="40"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray200}}"/>
+        </Style>
+        <Style x:Key="CalendarPicker" TargetType="Picker">
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray200}}"/>
+            <Setter Property="HeightRequest" Value="44"/>
+        </Style>
+    </ContentPage.Resources>
+
+    <Grid RowDefinitions="Auto,Auto,Auto,Auto,*,Auto" Padding="8">
+
+        <!-- Month navigation: previous/today/next + month and year pickers -->
+        <Grid Grid.Row="0" ColumnDefinitions="Auto,Auto,Auto,*,*" ColumnSpacing="4">
+            <Button Grid.Column="0"
+                    Text="{x:Static fonts:FluentUI.chevron_right_24_regular}"
+                    Style="{StaticResource CalendarNavButton}"
+                    SemanticProperties.Description="חודש קודם"
+                    AutomationId="CalendarPrevMonth"
+                    Command="{Binding PrevMonthCommand}"/>
+            <Button Grid.Column="1"
+                    Text="היום"
+                    FontSize="14"
+                    FontFamily=""
+                    HeightRequest="40"
+                    Padding="10,0"
+                    SemanticProperties.Description="חזרה לחודש הנוכחי"
+                    AutomationId="CalendarToday"
+                    Command="{Binding TodayCommand}"/>
+            <Button Grid.Column="2"
+                    Text="{x:Static fonts:FluentUI.chevron_left_24_regular}"
+                    Style="{StaticResource CalendarNavButton}"
+                    SemanticProperties.Description="חודש הבא"
+                    AutomationId="CalendarNextMonth"
+                    Command="{Binding NextMonthCommand}"/>
+            <Picker Grid.Column="3"
+                    ItemsSource="{Binding MonthOptions}"
+                    SelectedItem="{Binding SelectedMonth}"
+                    ItemDisplayBinding="{Binding Label}"
+                    Title="חודש"
+                    Style="{StaticResource CalendarPicker}"
+                    AutomationId="CalendarMonthPicker"/>
+            <Picker Grid.Column="4"
+                    ItemsSource="{Binding YearOptions}"
+                    SelectedItem="{Binding SelectedYear}"
+                    ItemDisplayBinding="{Binding Label}"
+                    Title="שנה"
+                    Style="{StaticResource CalendarPicker}"
+                    AutomationId="CalendarYearPicker"/>
+        </Grid>
+
+        <!-- Month title -->
+        <Label Grid.Row="1"
+               Text="{Binding MonthLabel}"
+               FontSize="22"
+               FontAttributes="Bold"
+               HorizontalTextAlignment="Center"
+               Margin="0,4"
+               TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
+
+        <!-- Cycle picker + range -->
+        <Grid Grid.Row="2" ColumnDefinitions="Auto,*" ColumnSpacing="8">
+            <Picker Grid.Column="0"
+                    ItemsSource="{Binding CycleOptions}"
+                    SelectedItem="{Binding SelectedCycle}"
+                    ItemDisplayBinding="{Binding Label}"
+                    Title="מחזור"
+                    Style="{StaticResource CalendarPicker}"
+                    AutomationId="CalendarCyclePicker"/>
+            <Label Grid.Column="1"
+                   Text="{Binding CycleLabel}"
+                   FontSize="12"
+                   VerticalOptions="Center"
+                   LineBreakMode="WordWrap"
+                   TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+        </Grid>
+
+        <!-- Weekday headers (RTL: first column is Sunday) -->
+        <Grid Grid.Row="3" ColumnDefinitions="*,*,*,*,*,*,*" Margin="0,4,0,0">
+            <Label Grid.Column="0" Text="א" FontAttributes="Bold" HorizontalTextAlignment="Center" SemanticProperties.Description="ראשון" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+            <Label Grid.Column="1" Text="ב" FontAttributes="Bold" HorizontalTextAlignment="Center" SemanticProperties.Description="שני" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+            <Label Grid.Column="2" Text="ג" FontAttributes="Bold" HorizontalTextAlignment="Center" SemanticProperties.Description="שלישי" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+            <Label Grid.Column="3" Text="ד" FontAttributes="Bold" HorizontalTextAlignment="Center" SemanticProperties.Description="רביעי" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+            <Label Grid.Column="4" Text="ה" FontAttributes="Bold" HorizontalTextAlignment="Center" SemanticProperties.Description="חמישי" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+            <Label Grid.Column="5" Text="ו" FontAttributes="Bold" HorizontalTextAlignment="Center" SemanticProperties.Description="שישי" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+            <Label Grid.Column="6" Text="ש" FontAttributes="Bold" HorizontalTextAlignment="Center" SemanticProperties.Description="שבת" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+        </Grid>
+
+        <!-- Month grid -->
+        <CollectionView Grid.Row="4"
+                        ItemsSource="{Binding Cells}"
+                        ItemsLayout="VerticalGrid, 7"
+                        SelectionMode="None"
+                        AutomationId="CalendarGrid">
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="viewmodels:CalendarCellViewModel">
+                    <Border Margin="1"
+                            Padding="2"
+                            HeightRequest="58"
+                            StrokeShape="RoundRectangle 6"
+                            Stroke="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}"
+                            StrokeThickness="1"
+                            BackgroundColor="{AppThemeBinding Light=#F8FAFC, Dark=#1A1F2E}">
+                        <Border.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OnCellTapped"
+                                                  CommandParameter="{Binding .}"/>
+                        </Border.GestureRecognizers>
+                        <Border.Triggers>
+                            <DataTrigger TargetType="Border"
+                                         Binding="{Binding IsToday}"
+                                         Value="True">
+                                <Setter Property="Stroke" Value="{StaticResource Primary}"/>
+                                <Setter Property="StrokeThickness" Value="2"/>
+                            </DataTrigger>
+                            <DataTrigger TargetType="Border"
+                                         Binding="{Binding IsReview}"
+                                         Value="True">
+                                <Setter Property="StrokeDashArray" Value="3,3"/>
+                                <Setter Property="BackgroundColor" Value="Transparent"/>
+                            </DataTrigger>
+                            <DataTrigger TargetType="Border"
+                                         Binding="{Binding IsNone}"
+                                         Value="True">
+                                <Setter Property="Stroke" Value="Transparent"/>
+                                <Setter Property="BackgroundColor" Value="Transparent"/>
+                            </DataTrigger>
+                            <DataTrigger TargetType="Border"
+                                         Binding="{Binding IsBlank}"
+                                         Value="True">
+                                <Setter Property="Stroke" Value="Transparent"/>
+                                <Setter Property="BackgroundColor" Value="Transparent"/>
+                            </DataTrigger>
+                        </Border.Triggers>
+                        <Grid SemanticProperties.Description="{Binding AccessibilityText}">
+                            <VerticalStackLayout IsVisible="{Binding IsBlank, Converter={StaticResource InvertedBoolConverter}}"
+                                                 VerticalOptions="Center"
+                                                 Spacing="0">
+                                <Label Text="{Binding DayText}"
+                                       FontSize="15"
+                                       FontAttributes="Bold"
+                                       HorizontalTextAlignment="Center"
+                                       TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
+                                <Label Text="{Binding PerekSource}"
+                                       FontSize="10"
+                                       LineBreakMode="TailTruncation"
+                                       MaxLines="2"
+                                       HorizontalTextAlignment="Center"
+                                       TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark=#AACBFF}"/>
+                                <Label Text="חזרה"
+                                       FontSize="9"
+                                       FontAttributes="Bold"
+                                       HorizontalTextAlignment="Center"
+                                       IsVisible="{Binding IsReview}"
+                                       TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
+                            </VerticalStackLayout>
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+
+        <!-- Legend -->
+        <HorizontalStackLayout Grid.Row="5"
+                               HorizontalOptions="Center"
+                               Spacing="14"
+                               Margin="0,6,0,0">
+            <HorizontalStackLayout Spacing="4">
+                <BoxView WidthRequest="12" HeightRequest="12" CornerRadius="3" Color="#F8FAFC"/>
+                <Label Text="יום לימוד" FontSize="11" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+            </HorizontalStackLayout>
+            <HorizontalStackLayout Spacing="4">
+                <Border WidthRequest="12" HeightRequest="12" StrokeShape="RoundRectangle 3" StrokeDashArray="2,2" Stroke="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}" BackgroundColor="Transparent"/>
+                <Label Text="יום חזרה" FontSize="11" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+            </HorizontalStackLayout>
+            <HorizontalStackLayout Spacing="4">
+                <Border WidthRequest="12" HeightRequest="12" StrokeShape="RoundRectangle 3" Stroke="Transparent" BackgroundColor="Transparent"/>
+                <Label Text="לא משובץ" FontSize="11" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+            </HorizontalStackLayout>
+        </HorizontalStackLayout>
+
+        <!-- Loading / error overlay -->
+        <Grid Grid.RowSpan="6"
+              IsVisible="{Binding IsLoading}">
+            <ActivityIndicator IsRunning="True"
+                               VerticalOptions="Center"
+                               HorizontalOptions="Center"
+                               Color="{StaticResource Primary}"/>
+        </Grid>
+        <Label Grid.RowSpan="6"
+               Text="{Binding ErrorMessage}"
+               IsVisible="{Binding ErrorMessage, Converter={StaticResource StringNotEmptyConverter}}"
+               TextColor="Red"
+               FontSize="14"
+               HorizontalTextAlignment="Center"
+               VerticalOptions="Center"
+               Padding="20"/>
+    </Grid>
+</ContentPage>
