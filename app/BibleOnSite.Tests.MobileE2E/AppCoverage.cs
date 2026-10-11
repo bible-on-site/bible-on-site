@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Text.Json;
 using BibleOnSite.Tests.MobileE2E.Configuration;
@@ -139,7 +140,21 @@ internal static class AppCoverage
             start.RedirectStandardError = true;
             start.UseShellExecute = false;
             using var process = new Process { StartInfo = start }; // nosemgrep — closed literal argv, no shell
-            process.Start();
+            try
+            {
+                process.Start();
+            }
+            catch (Exception exception) when (exception is Win32Exception
+                or InvalidOperationException or ObjectDisposedException
+                or IOException or NotSupportedException)
+            {
+                // A missing adb (PATH-less unit-test or broken SDK) must surface
+                // as a collect failure, not crash the scenario — Collect writes
+                // the .coverage-error.txt diagnostic for any of these.
+                throw new InvalidOperationException(
+                    $"adb forward could not start while bridging the coverage endpoint: {exception.Message}",
+                    exception);
+            }
             var error = process.StandardError.ReadToEndAsync();
             if (!process.WaitForExit(15_000))
             {
