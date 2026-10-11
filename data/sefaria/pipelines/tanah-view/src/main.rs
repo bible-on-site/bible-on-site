@@ -62,8 +62,8 @@ async fn main() -> Result<()> {
         Some(path) => load_from_json(path)?,
         None => {
             let mut sefarim = fetch_from_mongodb(&cli.dump_name).await?;
-            let default_recitation_db = Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../../../recitation/recitation.sqlite");
+            let default_recitation_db =
+                Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../recitation/recitation.sqlite");
             tanah_view::recitation::merge(
                 &mut sefarim,
                 cli.recitation_db
@@ -210,12 +210,7 @@ mod tests {
 
     #[test]
     fn cli_accepts_from_json_corpus_path() {
-        let cli = cli_from(&[
-            "--format",
-            "sqlite",
-            "--from-json",
-            "dump.tanah_view.json",
-        ]);
+        let cli = cli_from(&["--format", "sqlite", "--from-json", "dump.tanah_view.json"]);
 
         assert!(cli.from_json.is_some());
         assert_eq!(
