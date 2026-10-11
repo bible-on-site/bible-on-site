@@ -126,6 +126,7 @@ jest.mock("@/data/sefer-colors", () => ({
 
 jest.mock("@/data/sefer-dto", () => ({
 	getSeferByName: jest.fn().mockReturnValue({
+		name: "בראשית",
 		perakim: [
 			{
 				header: "בראשית א",
@@ -226,6 +227,8 @@ describe("Sefer component", () => {
 		mockRestorePage.mockReset();
 		mockJumpToPage.mockReset();
 		mockGetCurrentPageIndex.mockReset().mockReturnValue(3);
+		document.title = "";
+		delete document.documentElement.dataset.seferView;
 	});
 
 	it("opens content on the requested chapter and clears it after a page flip", async () => {
@@ -268,6 +271,58 @@ describe("Sefer component", () => {
 		} finally {
 			error.mockRestore();
 		}
+	});
+
+	it("locks outer document scrolling only while the reader is shown (issue #2178)", () => {
+		const props = { perekObj: minimalPerek, articles: [], perushim: [] };
+		const { rerender, unmount } = render(<Sefer {...props} />);
+		expect(document.documentElement).toHaveAttribute("data-sefer-view");
+		// The perek overlay keeps the reader mounted after the book closes; a
+		// hidden reader must hand scrolling back to the flat page.
+		rerender(<Sefer {...props} isVisible={false} />);
+		expect(document.documentElement).not.toHaveAttribute("data-sefer-view");
+		rerender(<Sefer {...props} isVisible={true} />);
+		expect(document.documentElement).toHaveAttribute("data-sefer-view");
+		unmount();
+		expect(document.documentElement).not.toHaveAttribute("data-sefer-view");
+	});
+
+	it("synchronizes the document title with the committed book page", async () => {
+		render(<Sefer perekObj={minimalPerek} articles={[]} perushim={[]} perekIds={[1]} />);
+		const handlers = capturedFlipBookProps.handlers as { onPageFlipped: () => void };
+		mockGetCurrentPageIndex.mockReturnValue(0);
+		await act(async () => handlers.onPageFlipped());
+		expect(document.title).toBe('ספר בראשית | תנ"ך על הפרק');
+		mockGetCurrentPageIndex.mockReturnValue(3);
+		await act(async () => handlers.onPageFlipped());
+		expect(document.title).toBe('בראשית א | תנ"ך על הפרק');
+	});
+
+	it("restores the flat page title while hidden and re-applies the book title on show", async () => {
+		const props = { perekObj: minimalPerek, articles: [], perushim: [], perekIds: [1] };
+		const { rerender } = render(<Sefer {...props} />);
+		const handlers = capturedFlipBookProps.handlers as { onPageFlipped: () => void };
+		await act(async () => handlers.onPageFlipped());
+		expect(document.title).toBe('בראשית א | תנ"ך על הפרק');
+		rerender(<Sefer {...props} isVisible={false} />);
+		expect(document.title).toBe('mechon-mamre | תנ"ך על הפרק');
+		rerender(<Sefer {...props} isVisible={true} />);
+		expect(document.title).toBe('בראשית א | תנ"ך על הפרק');
+	});
+
+	it("restores the flat page title on unmount without clobbering a newer title", async () => {
+		const { unmount } = render(<Sefer perekObj={minimalPerek} articles={[]} perushim={[]} perekIds={[1]} />);
+		const handlers = capturedFlipBookProps.handlers as { onPageFlipped: () => void };
+		await act(async () => handlers.onPageFlipped());
+		expect(document.title).toBe('בראשית א | תנ"ך על הפרק');
+		unmount();
+		expect(document.title).toBe('mechon-mamre | תנ"ך על הפרק');
+
+		const { unmount: unmountStale } = render(<Sefer perekObj={minimalPerek} articles={[]} perushim={[]} perekIds={[1]} />);
+		await act(async () => (capturedFlipBookProps.handlers as { onPageFlipped: () => void }).onPageFlipped());
+		document.title = "other page title";
+		unmountStale();
+		expect(document.title).toBe("other page title");
 	});
 
 	it("renders FlipBook and toolbar", () => {

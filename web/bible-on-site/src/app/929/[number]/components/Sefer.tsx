@@ -62,6 +62,13 @@ import RecitationPlayer, {
 import { Stuma } from "./Stuma";
 import styles from "./sefer.module.css";
 import {
+	buildSeferDocumentTitleResolver,
+	buildSeferPerekTitles,
+	perekDocumentTitle,
+	releaseSeferDocumentTitle,
+	setSeferDocumentTitle,
+} from "./sefer-document-title";
+import {
 	type BookPage,
 	bookPageRoute,
 	buildHistoryMapper,
@@ -122,6 +129,10 @@ const Sefer = (props: {
 	imagesByPerek?: Record<number, PerekIllustration[]>;
 	initialSlug?: string;
 	initialBookPage?: BookPage | null;
+	/** Whether the reader is shown. A host may keep it mounted but hidden (the
+	 * perek overlay during close animation); while hidden the flat page title
+	 * is restored. Defaults to true for hosts that always show the reader. */
+	isVisible?: boolean;
 }) => {
 	const {
 		perekObj,
@@ -132,6 +143,7 @@ const Sefer = (props: {
 		imagesByPerek,
 		initialSlug,
 		initialBookPage,
+		isVisible = true,
 	} = props;
 	const sefer = props.sefer;
 	const flipBookRef = useRef<FlipBookHandle>(null);
@@ -173,6 +185,55 @@ const Sefer = (props: {
 		[perekIds, hePageSemantics, perekObj.sefer],
 	);
 
+	// Document-title sync (issue #2176): the library's onPageFlipped marks when
+	// the active page/spread is committed (initial render, flips, TOC and
+	// programmatic jumps, Back/Forward restores) — the resolver supplies what
+	// the tab should say, agreeing with the history mapping for the same page.
+	const seferPerekTitles = useMemo(() => buildSeferPerekTitles(sefer), [sefer]);
+	const backCoverPageIndex = CONTENT_OFFSET + perakim.length * 2;
+	const documentTitleResolver = useMemo(
+		() =>
+			buildSeferDocumentTitleResolver(
+				perekObj.sefer,
+				seferPerekTitles,
+				backCoverPageIndex,
+			),
+		[perekObj.sefer, seferPerekTitles, backCoverPageIndex],
+	);
+	const [bookPageTitle, setBookPageTitle] = useState<string | null>(null);
+	const [inBookContentTitle, setInBookContentTitle] = useState<string | null>(
+		null,
+	);
+
+	// Single writer: while an article or perush is shown inside the book, its
+	// title wins over the committed page's title, matching the standalone page.
+	// While the reader is kept mounted but hidden, hand the title back to the
+	// flat perek page; on unmount, release() restores it only if the reader
+	// still owns it, so a stale book cannot clobber another page's title.
+	const flatPageTitle = perekDocumentTitle(perekObj.source);
+	useEffect(() => {
+		if (!isVisible) {
+			releaseSeferDocumentTitle(flatPageTitle);
+			return;
+		}
+		const title = inBookContentTitle ?? bookPageTitle;
+		if (title != null) setSeferDocumentTitle(title);
+	}, [inBookContentTitle, bookPageTitle, isVisible, flatPageTitle]);
+	useEffect(
+		() => () => releaseSeferDocumentTitle(flatPageTitle),
+		[flatPageTitle],
+	);
+
+	const { onPageFlipped: onContentPageFlipped } = contentNavigation;
+	const handlePageFlipped = useCallback(() => {
+		onContentPageFlipped();
+		// Fired once the new page is committed, just before the history write;
+		// the settled index comes from the book so rapid turns cannot go stale.
+		const pageIndex = flipBookRef.current?.getCurrentPageIndex();
+		if (pageIndex == null) return;
+		setBookPageTitle(documentTitleResolver(pageIndex));
+	}, [onContentPageFlipped, documentTitleResolver]);
+
 	const initialTurnedLeaves = useMemo(
 		() =>
 			initialBookPage === "front"
@@ -204,6 +265,22 @@ const Sefer = (props: {
 		}
 		// Fresh data references for the same route must not undo a user's flip.
 	}, [requestedPage]);
+
+	// While the reader is shown, mark the document so the scroll lock in
+	// sefer.css confines scrolling to the book's inner panes (issue #2178).
+	// The perek overlay keeps this component mounted after the book closes,
+	// so the attribute must track visibility — not mere mount — to release
+	// the page's scrolling when the reader is hidden or unmounted.
+	useEffect(() => {
+		if (!isVisible) {
+			delete document.documentElement.dataset.seferView;
+			return;
+		}
+		document.documentElement.dataset.seferView = "";
+		return () => {
+			delete document.documentElement.dataset.seferView;
+		};
+	}, [isVisible]);
 
 	const frontCover = (
 		<section
@@ -402,6 +479,8 @@ const Sefer = (props: {
 							? undefined
 							: (slug) => contentNavigation.navigate(pagePerekId, slug)
 					}
+					perekTitleParts={seferPerekTitles[perekIdx]}
+					onContentTitle={setInBookContentTitle}
 				/>
 			</React.Fragment>,
 		];
@@ -445,7 +524,7 @@ const Sefer = (props: {
 					<FlipBook
 						handlers={{
 							onPageFlipping: stopRecitation,
-							onPageFlipped: contentNavigation.onPageFlipped,
+							onPageFlipped: handlePageFlipped,
 						}}
 						ref={flipBookRef}
 						className="he-book"
