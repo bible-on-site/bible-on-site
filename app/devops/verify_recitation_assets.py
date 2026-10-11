@@ -66,8 +66,7 @@ def verify_apple(archive, catalog, names):
 
 
 def verify_datasets(datasets, catalog):
-    """The compiled Assets.car hides each signed audio archive; check the exact
-    .dataset payloads that actool embedded, before they were transformed."""
+    """Hash the exact .dataset archives that actool compiled into each signed ODR payload."""
     for book in catalog["books"]:
         pack = f'recitation_{book["seferId"]}'
         dataset = datasets / f"{pack}.dataset" / f"{pack}.zip"

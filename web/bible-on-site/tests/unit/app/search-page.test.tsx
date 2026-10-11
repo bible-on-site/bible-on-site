@@ -1,7 +1,8 @@
 /**
  * @jest-environment jsdom
  */
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
+import { hydrateRoot } from "react-dom/client";
 import { renderToString } from "react-dom/server";
 
 jest.mock("@/lib/search/service", () => ({
@@ -16,8 +17,7 @@ jest.mock("next/image", () => ({
 	),
 }));
 
-import { metadata } from "@/app/search/page";
-import SearchPage from "@/app/search/page";
+import SearchPage, { metadata } from "@/app/search/page";
 import { searchSite } from "@/lib/search/service";
 import type { SearchResponse } from "@/lib/search/types";
 
@@ -55,11 +55,23 @@ describe("metadata", () => {
 });
 
 describe("SearchPage", () => {
-	it("enables typing only after hydration attaches its input handler", async () => {
+	it("keeps the SSR input enabled so the native GET form works without JavaScript", async () => {
 		const page = await SearchPage({ searchParams: paramsFor({}) });
-		expect(renderToString(page)).toMatch(/<input[^>]*disabled=""/);
+		expect(renderToString(page)).not.toMatch(/<input[^>]*disabled/);
 		render(page);
 		expect(screen.getByRole("searchbox", { name: "מונח חיפוש" })).toBeEnabled();
+	});
+
+	it("adopts text typed before hydration instead of dropping it", async () => {
+		const page = await SearchPage({ searchParams: paramsFor({}) });
+		const container = document.createElement("div");
+		container.innerHTML = renderToString(page);
+		const input = container.querySelector("input[name=q]") as HTMLInputElement;
+		input.value = "בראשית";
+		await act(async () => {
+			hydrateRoot(container, page);
+		});
+		expect(input.value).toBe("בראשית");
 	});
 	beforeEach(() => {
 		jest.clearAllMocks();
