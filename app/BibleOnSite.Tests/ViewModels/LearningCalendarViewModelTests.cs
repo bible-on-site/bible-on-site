@@ -169,7 +169,8 @@ public class LearningCalendarViewModelTests
 
         await vm.InitializeAsync();
 
-        gate.SetResult(new MemoryStream(storage.PackageFiles[DbName]));
+        using var packageStream = new MemoryStream(storage.PackageFiles[DbName]);
+        gate.SetResult(packageStream);
         await first;
         vm.ErrorMessage.Should().BeEmpty();
         vm.Cells.Should().NotBeEmpty();
