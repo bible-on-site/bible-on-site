@@ -52,7 +52,7 @@ embeddings. See [Limitations](#limitations).
 
 ```
 tanah_article (authoritative)
-      │  name / abstract / content (HTML) / distributable gate
+      │  name / abstract / content (HTML) / canonical chapter gate
       ▼
  text.rs: strip_html → normalize → tokenize → term_frequencies
       │  weighted counts (name ×w, abstract ×w, content ×1)
@@ -97,13 +97,16 @@ diagnostics and tuning.
 
 All three derived tables are created idempotently at API boot
 (`store::ensure_schema`).
+Index schema version 2 rebuilds snapshots created under the former bulletin
+approval restriction. Startup ignores older schema probes and rebuilds from
+the public article corpus.
 
 | Event | Path |
 |-------|------|
 | article **created/updated/deleted** | the admin transaction enqueues the id into `article_search_queue` in the *same* transaction (`web/admin/src/server/articles.ts`) — a queue failure aborts the write |
-| worker tick (every 15 s) | drains ≤256 queue ids; fetches the article (`distributable = TRUE` only) and upserts `article_search_doc` under the current model; `None` result (deleted or made non-distributable) purges the doc row |
+| worker tick (every 15 s) | drains ≤256 queue ids; fetches the article (canonical chapter 1-929 only) and upserts `article_search_doc` under the current model; `None` result (deleted or moved outside the canonical chapter range) purges the doc row |
 | sync failure | `attempts` + `last_error` are recorded; rows past `MAX_ATTEMPTS = 20` are skipped by the regular drain — a poison row can never wedge the worker — and retried only after the reconcile sweep re-enqueues them |
-| reconcile sweep (every ~10 min) | diffs server-side `MD5` content hashes between `tanah_article` and `article_search_doc`, re-enqueues drifted/missing ids, re-folds stale-epoch docs, and deletes docs whose source vanished or became non-distributable |
+| reconcile sweep (every ~10 min) | diffs server-side `MD5` content hashes between `tanah_article` and `article_search_doc`, re-enqueues drifted/missing ids, re-folds stale-epoch docs, and deletes docs whose source vanished or left the canonical chapter range |
 | drift ≥ 32 docs or ≥ 8 % of corpus | full **retrain** under `GET_LOCK('article_search_retrain', 0)` so concurrent API instances never train in parallel; docs are persisted first, then `model_epoch` bumps, so readers never load a half-written snapshot |
 
 The enqueue write is idempotent (`ON DUPLICATE KEY UPDATE` resets the attempt
@@ -113,10 +116,10 @@ write path.
 ### Deletion / visibility
 
 - `DELETE` → enqueue id → worker fetch returns `None` → doc purged + dequeued.
-- `distributable` flipped FALSE → same path (fetch treats it as absent);
-  reconcile's orphan sweep also covers `a.distributable = FALSE`.
-- `distributable` flipped TRUE → reconcile sweep detects the missing hash.
-- `fetch_hit_rows` re-checks `a.distributable = TRUE` at query time, so a row
+- chapter changed to an invalid reference → same path (fetch treats it as absent);
+  reconcile's orphan sweep also covers `a.perek_id NOT BETWEEN 1 AND 929`.
+- chapter corrected into the canonical range → reconcile sweep detects the missing hash.
+- `fetch_hit_rows` re-checks `a.perek_id BETWEEN 1 AND 929` at query time, so a row
   can never leak through a race between write and index sync.
 
 ### Rebuild / backfill
@@ -154,7 +157,7 @@ query SearchArticles($phrase: String!, $limit: Int, $offset: Int) {
 
 ## Performance envelope
 
-Corpus is small (~hundreds of distributable articles), so the design favors
+Corpus is small (~thousands of public articles), so the design favors
 simplicity:
 
 | Concern | Approach / measured order |
