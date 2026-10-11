@@ -62,6 +62,7 @@ fn create_db(path: &Path, sefarim: &[Sefer], dump_name: &str) -> Result<()> {
     insert_metadata(&tx, dump_name)?;
     insert_helek_data(&tx, sefarim)?;
     insert_sefarim(&tx, sefarim)?;
+    crate::reading_units::insert_masora_reading_units(&tx, sefarim)?;
 
     // Commit transaction
     tx.commit()?;
@@ -75,6 +76,9 @@ fn create_db(path: &Path, sefarim: &[Sefer], dump_name: &str) -> Result<()> {
         CREATE INDEX idx_segment_perek ON tanah_pasuk_segment(perek_id);
         CREATE INDEX idx_segment_pasuk ON tanah_pasuk_segment(pasuk_id);
         CREATE INDEX idx_segment_type ON tanah_pasuk_segment(segment_type);
+        CREATE INDEX idx_reading_unit_sefer ON tanah_reading_unit(sefer_id);
+        CREATE INDEX idx_reading_unit_range_unit ON tanah_reading_unit_range(division_id, unit_id);
+        CREATE INDEX idx_reading_unit_range_start ON tanah_reading_unit_range(start_perek_id);
         "#,
     )?;
 
@@ -308,7 +312,11 @@ mod tests {
                         ktiv_offset: Some(-1),
                         qri_offset: None,
                     },
+                    // A mid-pasuk break: valid inside any perek, so the
+                    // fixture also works for a sefer's final pasuk (a
+                    // break after a sefer's last pasuk is invalid).
                     segment("stuma", None),
+                    segment("qri", Some("tail")),
                 ],
             }],
         }
@@ -429,7 +437,7 @@ mod tests {
                 row.get(0)
             })
             .unwrap();
-        assert_eq!(segment_count, 6);
+        assert_eq!(segment_count, 8);
 
         let value_count: i64 = conn
             .query_row(
@@ -438,7 +446,7 @@ mod tests {
                 |row| row.get(0),
             )
             .unwrap();
-        assert_eq!(value_count, 4);
+        assert_eq!(value_count, 6);
 
         let offsets: Vec<i64> = conn
             .prepare("SELECT qri_ktiv_offset FROM tanah_pasuk_segment_qri_ktiv_offset ORDER BY id")
@@ -457,6 +465,50 @@ mod tests {
             )
             .unwrap();
         assert_eq!(recording_count, 2);
+
+        // The shared reading-unit contract tables are exported too:
+        // each fixture perek holds one mid-pasuk stuma, so every perek
+        // produces one break-closed unit plus the sefer-end unit.
+        let division_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM tanah_reading_division WHERE id = 'masora'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(division_count, 1);
+
+        let reading_unit_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM tanah_reading_unit", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(reading_unit_count, 4);
+
+        let stuma_units: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM tanah_reading_unit WHERE closing_break = 'stuma'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(stuma_units, 2);
+
+        let sefer_end_units: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM tanah_reading_unit WHERE closing_break IS NULL",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(sefer_end_units, 2);
+
+        let reading_range_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM tanah_reading_unit_range", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(reading_range_count, 4);
 
         fs::remove_dir_all(&dir).ok();
     }
