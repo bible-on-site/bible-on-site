@@ -9,11 +9,19 @@ jest.mock("../../../src/lib/api-client", () => ({
 
 // Mock the authors service to avoid S3 availability checks
 jest.mock("../../../src/lib/authors/service", () => ({
-	getAuthorImageUrl: jest.fn((authorId: number) => `https://test-bucket.s3.test-region.amazonaws.com/authors/high-res/${authorId}.jpg`),
+	getAuthorImageUrl: jest.fn(
+		(authorId: number) =>
+			`https://test-bucket.s3.test-region.amazonaws.com/authors/high-res/${authorId}.jpg`,
+	),
 }));
 
 import { query } from "../../../src/lib/api-client";
-import { getAllArticlePerekIdPairs, getArticleById, getArticlesByPerekId, getArticleSummariesByPerekId } from "../../../src/lib/articles";
+import {
+	getAllArticlePerekIdPairs,
+	getArticleById,
+	getArticleSummariesByPerekId,
+	getArticlesByPerekId,
+} from "../../../src/lib/articles";
 
 const mockQuery = query as jest.MockedFunction<typeof query>;
 
@@ -59,7 +67,9 @@ describe("articles service", () => {
 
 			expect(mockQuery).toHaveBeenCalledTimes(1);
 			expect(mockQuery).toHaveBeenCalledWith(
-				expect.stringContaining("a.id, a.perek_id, a.author_id, a.abstract, a.content, a.name, a.priority"),
+				expect.stringContaining(
+					"a.id, a.perek_id, a.author_id, a.abstract, a.content, a.name, a.priority",
+				),
 				[42],
 			);
 
@@ -73,7 +83,8 @@ describe("articles service", () => {
 					name: "Test Article",
 					priority: 1,
 					authorName: "הרב ישראל",
-					authorImageUrl: "https://test-bucket.s3.test-region.amazonaws.com/authors/high-res/10.jpg",
+					authorImageUrl:
+						"https://test-bucket.s3.test-region.amazonaws.com/authors/high-res/10.jpg",
 				},
 				{
 					id: 2,
@@ -84,7 +95,8 @@ describe("articles service", () => {
 					name: "Another Article",
 					priority: 2,
 					authorName: "הרב יעקב",
-					authorImageUrl: "https://test-bucket.s3.test-region.amazonaws.com/authors/high-res/20.jpg",
+					authorImageUrl:
+						"https://test-bucket.s3.test-region.amazonaws.com/authors/high-res/20.jpg",
 				},
 			]);
 		});
@@ -131,7 +143,7 @@ describe("articles service", () => {
 			expect(sqlCall).toContain("FROM tanah_article a");
 			expect(sqlCall).toContain("JOIN tanah_author au ON a.author_id = au.id");
 			expect(sqlCall).toContain("WHERE a.perek_id = ?");
-			expect(sqlCall).toContain("a.distributable = TRUE");
+			expect(sqlCall).toContain("a.perek_id BETWEEN 1 AND 929");
 			expect(sqlCall).toContain("ORDER BY a.priority ASC");
 			expect(sqlCall).toContain("au.name AS author_name");
 		});
@@ -164,18 +176,21 @@ describe("articles service", () => {
 					name: "Test Article",
 					priority: 1,
 					authorName: "הרב ישראל",
-					authorImageUrl: "https://test-bucket.s3.test-region.amazonaws.com/authors/high-res/10.jpg",
+					authorImageUrl:
+						"https://test-bucket.s3.test-region.amazonaws.com/authors/high-res/10.jpg",
 				},
 			]);
 			expect(result[0]).not.toHaveProperty("content");
 		});
 
-		it("only surfaces distributable articles", async () => {
+		it("only surfaces articles in the 929 chapter range", async () => {
 			mockQuery.mockResolvedValue([]);
 
 			await getArticleSummariesByPerekId(1);
 
-			expect(mockQuery.mock.calls[0][0]).toContain("a.distributable = TRUE");
+			expect(mockQuery.mock.calls[0][0]).toContain(
+				"a.perek_id BETWEEN 1 AND 929",
+			);
 		});
 
 		it("does not select content column in SQL", async () => {
@@ -269,7 +284,7 @@ describe("articles service", () => {
 
 			const sqlCall = mockQuery.mock.calls[0][0];
 			expect(sqlCall).toContain("SELECT id, perek_id FROM tanah_article");
-			expect(sqlCall).toContain("distributable = TRUE");
+			expect(sqlCall).toContain("perek_id BETWEEN 1 AND 929");
 			expect(sqlCall).toContain("ORDER BY perek_id ASC, id ASC");
 		});
 	});
@@ -300,7 +315,8 @@ describe("articles service", () => {
 				name: "Test Article",
 				priority: 1,
 				authorName: "הרב ישראל",
-				authorImageUrl: "https://test-bucket.s3.test-region.amazonaws.com/authors/high-res/10.jpg",
+				authorImageUrl:
+					"https://test-bucket.s3.test-region.amazonaws.com/authors/high-res/10.jpg",
 			});
 		});
 
@@ -345,7 +361,7 @@ describe("articles service", () => {
 			expect(sqlCall).toContain("FROM tanah_article a");
 			expect(sqlCall).toContain("JOIN tanah_author au ON a.author_id = au.id");
 			expect(sqlCall).toContain("WHERE a.id = ?");
-			expect(sqlCall).toContain("a.distributable = TRUE");
+			expect(sqlCall).toContain("a.perek_id BETWEEN 1 AND 929");
 			expect(mockQuery).toHaveBeenCalledWith(expect.any(String), [42]);
 		});
 	});

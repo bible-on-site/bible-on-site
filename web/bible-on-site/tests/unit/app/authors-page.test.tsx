@@ -18,9 +18,10 @@ jest.mock("next/link", () => ({
 	default: ({
 		children,
 		href,
-	}: { children: React.ReactNode; href: string }) => (
-		<a href={href}>{children}</a>
-	),
+	}: {
+		children: React.ReactNode;
+		href: string;
+	}) => <a href={href}>{children}</a>,
 }));
 
 jest.mock("../../../src/lib/api-client", () => ({
@@ -33,8 +34,8 @@ jest.mock("../../../src/lib/authors", () => ({
 }));
 
 import { render, screen } from "@testing-library/react";
-import { query } from "../../../src/lib/api-client";
 import AuthorsPage from "../../../src/app/929/authors/page";
+import { query } from "../../../src/lib/api-client";
 
 const mockQuery = query as jest.MockedFunction<typeof query>;
 
@@ -58,13 +59,13 @@ describe("929/authors/page", () => {
 		expect(screen.getByText("תיאור קצר")).toBeTruthy();
 	});
 
-	it("only lists authors with distributable articles", async () => {
+	it("only lists authors with valid chapter articles", async () => {
 		mockQuery.mockResolvedValue([]);
 
 		await AuthorsPage();
 
 		expect(mockQuery).toHaveBeenCalledWith(
-			expect.stringContaining("art.distributable = TRUE"),
+			expect.stringContaining("art.perek_id BETWEEN 1 AND 929"),
 		);
 	});
 
@@ -79,9 +80,7 @@ describe("929/authors/page", () => {
 
 	it("renders empty state when query throws an error", async () => {
 		mockQuery.mockRejectedValue(new Error("DB connection failed"));
-		const consoleSpy = jest
-			.spyOn(console, "warn")
-			.mockImplementation(() => {});
+		const consoleSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
 
 		const jsx = await AuthorsPage();
 		render(jsx);
@@ -96,9 +95,7 @@ describe("929/authors/page", () => {
 
 	it("renders empty state when query throws a non-Error", async () => {
 		mockQuery.mockRejectedValue("string error");
-		const consoleSpy = jest
-			.spyOn(console, "warn")
-			.mockImplementation(() => {});
+		const consoleSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
 
 		const jsx = await AuthorsPage();
 		render(jsx);
@@ -120,15 +117,11 @@ describe("929/authors/page", () => {
 		const jsx = await AuthorsPage();
 		render(jsx);
 
-		expect(
-			screen.getByText(`${"א".repeat(80)}...`),
-		).toBeTruthy();
+		expect(screen.getByText(`${"א".repeat(80)}...`)).toBeTruthy();
 	});
 
 	it("renders author image when imageUrl is set", async () => {
-		mockQuery.mockResolvedValue([
-			{ id: 1, name: "הרב ישראל", details: "" },
-		]);
+		mockQuery.mockResolvedValue([{ id: 1, name: "הרב ישראל", details: "" }]);
 
 		const jsx = await AuthorsPage();
 		render(jsx);
@@ -138,14 +131,10 @@ describe("929/authors/page", () => {
 
 	it("renders placeholder when imageUrl is empty", async () => {
 		// Override getAuthorImageUrl to return empty string for this test
-		const { getAuthorImageUrl } = jest.requireMock(
-			"../../../src/lib/authors",
-		);
+		const { getAuthorImageUrl } = jest.requireMock("../../../src/lib/authors");
 		(getAuthorImageUrl as jest.Mock).mockReturnValueOnce("");
 
-		mockQuery.mockResolvedValue([
-			{ id: 1, name: "הרב ישראל", details: "" },
-		]);
+		mockQuery.mockResolvedValue([{ id: 1, name: "הרב ישראל", details: "" }]);
 
 		const jsx = await AuthorsPage();
 		render(jsx);

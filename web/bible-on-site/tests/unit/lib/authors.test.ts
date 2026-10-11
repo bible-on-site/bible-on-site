@@ -208,13 +208,13 @@ describe("authors service", () => {
 			expect(result).toEqual([]);
 		});
 
-		it("only surfaces distributable articles", async () => {
+		it("only surfaces articles in the 929 chapter range", async () => {
 			mockQuery.mockResolvedValue([]);
 
 			await getArticlesByAuthorId(5);
 
 			expect(mockQuery).toHaveBeenCalledWith(
-				expect.stringContaining("distributable = TRUE"),
+				expect.stringContaining("perek_id BETWEEN 1 AND 929"),
 				[5],
 			);
 		});
@@ -260,13 +260,13 @@ describe("authors service", () => {
 			expect(result).toEqual([1, 2, 3]);
 		});
 
-		it("only counts authors with distributable articles", async () => {
+		it("only counts authors with valid chapter articles", async () => {
 			mockQuery.mockResolvedValue([]);
 
 			await getAllAuthorIds();
 
 			expect(mockQuery).toHaveBeenCalledWith(
-				expect.stringContaining("art.distributable = TRUE"),
+				expect.stringContaining("art.perek_id BETWEEN 1 AND 929"),
 			);
 		});
 
@@ -339,13 +339,13 @@ describe("authors service", () => {
 			expect(result).toEqual(expect.objectContaining({ id: 1 }));
 		});
 
-		it("only matches authors with distributable articles", async () => {
+		it("only matches authors with valid chapter articles", async () => {
 			mockQuery.mockResolvedValue([]);
 
 			await getAuthorByName("מחבר");
 
 			expect(mockQuery).toHaveBeenCalledWith(
-				expect.stringContaining("art.distributable = TRUE"),
+				expect.stringContaining("art.perek_id BETWEEN 1 AND 929"),
 			);
 		});
 
@@ -396,13 +396,13 @@ describe("authors service", () => {
 			expect(result).toEqual(["הרב לדוגמא שליטא", "הרב לדוגמא זל"]);
 		});
 
-		it("only slugs authors with distributable articles", async () => {
+		it("only slugs authors with valid chapter articles", async () => {
 			mockQuery.mockResolvedValue([]);
 
 			await getAllAuthorSlugs();
 
 			expect(mockQuery).toHaveBeenCalledWith(
-				expect.stringContaining("art.distributable = TRUE"),
+				expect.stringContaining("art.perek_id BETWEEN 1 AND 929"),
 			);
 		});
 

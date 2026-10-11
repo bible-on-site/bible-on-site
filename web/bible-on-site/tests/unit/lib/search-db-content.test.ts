@@ -84,14 +84,14 @@ describe("searchPerushNotes", () => {
 		mockQuery.mockResolvedValue([
 			{
 				perush_id: 23,
-				perush_name: "רש\"י",
+				perush_name: 'רש"י',
 				perek_id: 1,
 				pasuk: 1,
 				note_content: "<p>בראשית - לשון בראייה</p>",
 			},
 			{
 				perush_id: 23,
-				perush_name: "רש\"י",
+				perush_name: 'רש"י',
 				perek_id: 1,
 				pasuk: 2,
 				note_content: "<p>טקסט אחר לגמרי</p>",
@@ -134,14 +134,14 @@ describe("searchPerushNotes", () => {
 		mockQuery.mockResolvedValue([
 			{
 				perush_id: 23,
-				perush_name: "רש\"י",
+				perush_name: 'רש"י',
 				perek_id: 1,
 				pasuk: 1,
 				note_content: "מלים על בראשית ועוד בראשית",
 			},
 			{
 				perush_id: 23,
-				perush_name: "רש\"י",
+				perush_name: 'רש"י',
 				perek_id: 1,
 				pasuk: 1,
 				note_content: "טקסט נוסף בראשית",
@@ -161,7 +161,7 @@ describe("searchPerushNotes", () => {
 	it("builds a canonical perush reference", () => {
 		const ref = perushHitReference({
 			perushId: 23,
-			perushName: "רש\"י",
+			perushName: 'רש"י',
 			perekId: 1,
 			pasukNum: 1,
 			noteContent: "",
@@ -228,13 +228,13 @@ describe("searchArticles", () => {
 		jest.clearAllMocks();
 	});
 
-	it("never surfaces non-distributable articles", async () => {
+	it("excludes articles outside the 929 chapter range", async () => {
 		mockQuery.mockResolvedValue([]);
 
 		await searchArticles("בראשית", 10);
 
 		expect(mockQuery).toHaveBeenCalledWith(
-			expect.stringContaining("a.distributable = TRUE"),
+			expect.stringContaining("a.perek_id BETWEEN 1 AND 929"),
 			expect.anything(),
 		);
 	});
