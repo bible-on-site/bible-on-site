@@ -219,20 +219,20 @@ describe("UnitText", () => {
 describe("MasoraUnitLayout", () => {
 	it("wires adjacent-unit hrefs for valid units", async () => {
 		const jsx = await MasoraUnitLayout({
-			children: <div>unit body</div>,
+			children: <div data-testid="unit-body" />,
 			params: Promise.resolve({ unit: "5" }),
 		});
 		render(jsx);
-		expect(screen.getByText("unit body")).toBeInTheDocument();
+		expect(screen.getByTestId("unit-body")).toBeInTheDocument();
 	});
 
 	it("handles out-of-range units without nav hrefs", async () => {
 		const jsx = await MasoraUnitLayout({
-			children: <div>unit body</div>,
+			children: <div data-testid="unit-body" />,
 			params: Promise.resolve({ unit: "0" }),
 		});
 		render(jsx);
-		expect(screen.getByText("unit body")).toBeInTheDocument();
+		expect(screen.getByTestId("unit-body")).toBeInTheDocument();
 	});
 });
 
