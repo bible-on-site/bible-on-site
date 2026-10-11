@@ -101,7 +101,8 @@ function getConfirmedCycles(): ConfirmedCycle[] {
 	}
 	confirmedCycles = cycles.map((startNumber, index) => {
 		const start = parseNumericalDateToHebcalDate(startNumber);
-		const entries = perCycle[index] ?? [];
+		// perCycle is built with exactly cycles.length slots.
+		const entries = perCycle[index];
 		// Keep entries in chronological order; the source arrays are in perek
 		// order which is the schedule's assignment order.
 		entries.sort((a, b) => a.date.deltaDays(b.date));
@@ -325,7 +326,8 @@ export function prevMonth({ year, month }: MonthRef): MonthRef {
 	}
 	return index > 0
 		? { year, month: order[index - 1] }
-		: { year: year - 1, month: getMonthOrder(year - 1).at(-1) ?? 12 };
+		// Every Hebrew year ends with Elul (uniform month 12).
+		: { year: year - 1, month: 12 };
 }
 
 /**

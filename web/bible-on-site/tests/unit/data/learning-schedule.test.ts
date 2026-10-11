@@ -1,3 +1,4 @@
+import { toLetters } from "gematry";
 import {
 	buildMonth,
 	compareMonths,
@@ -6,6 +7,7 @@ import {
 	getConfirmedCycleCount,
 	getCycle,
 	getCycleForDate,
+	getCycleLabel,
 	getCycleStartMonth,
 	getMonthLabel,
 	getMonthName,
@@ -241,6 +243,23 @@ describe("getCycleForDate", () => {
 		const cycle = getCycleForDate(cycle11.start.add(10));
 		expect(cycle).toMatchObject({ number: 11, projected: true });
 	});
+
+	it("walks past whole projected cycles to find a later one", () => {
+		const cycle13 = getCycle(13);
+		const cycle = getCycleForDate(cycle13.start.add(10));
+		expect(cycle).toMatchObject({ number: 13, projected: true });
+	});
+
+	it("returns null in a projected inter-cycle gap", () => {
+		const cycle11 = getCycle(11);
+		// The day after cycle 11 ends is inside the 3-day gap before cycle 12.
+		expect(getCycleForDate(cycle11.end.add(1))).toBeNull();
+		expect(getCycleForDate(cycle11.end.add(3))).toBeNull();
+		expect(getCycleForDate(cycle11.end.add(4))).toMatchObject({
+			number: 12,
+			projected: true,
+		});
+	});
 });
 
 describe("getMonthOrder", () => {
@@ -289,6 +308,7 @@ describe("nextMonth / prevMonth", () => {
 
 	it("throws for a month that does not exist in the year", () => {
 		expect(() => nextMonth({ year: 5785, month: 13 })).toThrow();
+		expect(() => prevMonth({ year: 5785, month: 14 })).toThrow();
 	});
 });
 
@@ -357,6 +377,11 @@ describe("labels", () => {
 		expect(getYearLabel(5786)).toBe("ה'תשפ\"ו");
 	});
 
+	it("omits the ה' prefix for years below 5000", () => {
+		expect(getYearLabel(4888)).toBe(toLetters(4888, { addQuotes: true }));
+		expect(getYearLabel(4888)).not.toContain("ה'");
+	});
+
 	it("returns distinct names for Adar I and Adar II", () => {
 		const adar1 = getMonthName(5784, 13);
 		const adar2 = getMonthName(5784, 14);
@@ -374,6 +399,12 @@ describe("labels", () => {
 			year: 5785,
 			month: 12,
 		});
+	});
+
+	it("marks projected cycles in the cycle label", () => {
+		expect(getCycleLabel(getCycle(4))).toContain("מחזור 4:");
+		expect(getCycleLabel(getCycle(4))).not.toContain("משוער");
+		expect(getCycleLabel(getCycle(11))).toContain("מחזור 11 (משוער):");
 	});
 });
 

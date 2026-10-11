@@ -154,10 +154,8 @@ export function LearningCalendar({
 	}, [navigateMonth, todayDateNumber]);
 
 	const openPerek = useCallback(
-		(day: CalendarDay) => {
-			if (day.perekId !== undefined) {
-				router.push(`/929/${day.perekId}`);
-			}
+		(perekId: number) => {
+			router.push(`/929/${perekId}`);
 		},
 		[router],
 	);
@@ -331,7 +329,8 @@ function CalendarCell({
 }: {
 	day: CalendarDay;
 	isToday: boolean;
-	onOpen: (day: CalendarDay) => void;
+	/** Called only for tappable cells, so the perek id is always present. */
+	onOpen: (perekId: number) => void;
 	ariaLabel: string;
 }) {
 	const classNames = [
@@ -359,15 +358,16 @@ function CalendarCell({
 		);
 	}
 
+	const perekId = day.perekId;
 	return (
 		<button
 			type="button"
 			className={classNames}
 			aria-label={ariaLabel}
-			onClick={() => onOpen(day)}
+			onClick={() => onOpen(perekId)}
 		>
 			{dayNumber}
-			<span className={styles.perekRef}>{getPerekSource(day.perekId)}</span>
+			<span className={styles.perekRef}>{getPerekSource(perekId)}</span>
 			{day.status === "review" && (
 				<span className={styles.reviewBadge}>חזרה</span>
 			)}

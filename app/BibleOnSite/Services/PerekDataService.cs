@@ -168,20 +168,14 @@ public class PerekDataService
     }
 
     /// <summary>
-    /// Highest cycle stored in tanah_perek_date; 1 when the table is
-    /// missing or empty (preserves the pre-schedule latest-cycle join).
+    /// Highest cycle stored in tanah_perek_date; 1 when the table is empty
+    /// (preserves the pre-schedule latest-cycle join). A database without the
+    /// table at all fails the perakim query below just as it always has.
     /// </summary>
     private static async Task<int> GetLatestStoredCycleAsync(SQLiteAsyncConnection db)
     {
-        try
-        {
-            var latest = await db.ExecuteScalarAsync<int?>("SELECT MAX(cycle) FROM tanah_perek_date");
-            return latest is > 0 ? latest.Value : 1;
-        }
-        catch (SQLiteException)
-        {
-            return 1;
-        }
+        var latest = await db.ExecuteScalarAsync<int?>("SELECT MAX(cycle) FROM tanah_perek_date");
+        return latest is > 0 ? latest.Value : 1;
     }
 
     /// <summary>
@@ -217,15 +211,9 @@ public class PerekDataService
             return 1;
         }
 
-        var scheduleService = _scheduleService;
-        if (scheduleService.IsLoaded)
-        {
-            return scheduleService.GetTodaysPerekId();
-        }
-
-        // Schedule not loaded yet (early startup race): keep the legacy
-        // perakim-based estimate rather than blocking on async work.
-        return HebrewDateHelper.GetTodaysPerekIdByHebrew(_perakim);
+        // LoadAsync always runs the schedule load before filling _perakim,
+        // so a populated catalog implies a loaded schedule.
+        return _scheduleService.GetTodaysPerekId();
     }
 
     /// <summary>

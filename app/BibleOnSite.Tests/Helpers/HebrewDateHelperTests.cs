@@ -519,6 +519,105 @@ public class HebrewDateHelperTests
 
     #endregion
 
+    #region Polar-location tzeit Tests
+
+    [Fact]
+    public void GetTzeitTimeOfDay_PolarLocationWithoutDusk_ReturnsFallback()
+    {
+        // At 85°N near an equinox the sun never reaches zenith 96°, so the
+        // hour-angle domain check must return the fixed fallback.
+        var tzeit = HebrewDateHelper.GetTzeitTimeOfDay(new DateTime(2026, 3, 20), 85.0, 0.0);
+
+        tzeit.Should().Be(new TimeSpan(19, 30, 0));
+    }
+
+    [Fact]
+    public void GetTzeitTimeOfDay_OtherLocation_ReturnsLocalDusk()
+    {
+        // New York (40.7°N, 74°W) on the same winter day: dusk exists (no
+        // fallback) but at that longitude the UTC instant maps to just after
+        // midnight on the Israel clock used for display.
+        var tzeit = HebrewDateHelper.GetTzeitTimeOfDay(new DateTime(2026, 2, 9), 40.7, -74.0);
+
+        tzeit.Should().NotBe(new TimeSpan(19, 30, 0));
+        tzeit.Should().BeLessThan(TimeSpan.FromHours(3));
+    }
+
+    #endregion
+
+    #region GetMonthOrder Tests
+
+    [Fact]
+    public void GetMonthOrder_NonLeapYear_ReturnsTwelveMonths()
+    {
+        HebrewDateHelper.GetMonthOrder(5785).Should()
+            .Equal(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12);
+    }
+
+    [Fact]
+    public void GetMonthOrder_LeapYear_InsertsAdarIAndIIAfterShevat()
+    {
+        HebrewDateHelper.GetMonthOrder(5784).Should()
+            .Equal(1, 2, 3, 4, 5, 13, 14, 7, 8, 9, 10, 11, 12);
+    }
+
+    #endregion
+
+    #region NextMonth / PrevMonth Tests
+
+    [Fact]
+    public void NextMonth_WithinYear_ReturnsFollowingMonth()
+    {
+        HebrewDateHelper.NextMonth(5785, 3).Should().Be((5785, 4));
+    }
+
+    [Fact]
+    public void NextMonth_LeapYear_ShevatToAdarI()
+    {
+        HebrewDateHelper.NextMonth(5784, 5).Should().Be((5784, 13));
+        HebrewDateHelper.NextMonth(5784, 14).Should().Be((5784, 7));
+    }
+
+    [Fact]
+    public void NextMonth_Elul_CrossesToNextYearTishrei()
+    {
+        HebrewDateHelper.NextMonth(5784, 12).Should().Be((5785, 1));
+    }
+
+    [Fact]
+    public void NextMonth_InvalidMonthForYear_Throws()
+    {
+        var act = () => HebrewDateHelper.NextMonth(5785, 13);
+        act.Should().Throw<ArgumentException>().WithMessage("*13*5785*");
+    }
+
+    [Fact]
+    public void PrevMonth_WithinYear_ReturnsPreviousMonth()
+    {
+        HebrewDateHelper.PrevMonth(5785, 4).Should().Be((5785, 3));
+    }
+
+    [Fact]
+    public void PrevMonth_LeapYear_AdarIToShevat()
+    {
+        HebrewDateHelper.PrevMonth(5784, 13).Should().Be((5784, 5));
+    }
+
+    [Fact]
+    public void PrevMonth_Tishrei_CrossesToPreviousYearElul()
+    {
+        HebrewDateHelper.PrevMonth(5785, 1).Should().Be((5784, 12));
+    }
+
+    [Fact]
+    public void PrevMonth_InvalidMonthForYear_Throws()
+    {
+        var act = () => HebrewDateHelper.PrevMonth(5785, 14);
+        act.Should().Throw<ArgumentException>().WithMessage("*14*5785*");
+    }
+
+    #endregion
+
     #region Helper Methods
 
     /// <summary>

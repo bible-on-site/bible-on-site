@@ -283,4 +283,186 @@ public class PerekScheduleServiceTests
         var act = () => service.ResolveDay(57750301);
         act.Should().Throw<InvalidOperationException>();
     }
+
+    [Fact]
+    public async Task LoadAsync_SecondCall_ReturnsWithoutReloading()
+    {
+        var (service, storage) = await CreateServiceAsync(CycleOne);
+        await using var _ = storage;
+
+        await service.LoadAsync();
+        // A loaded service short-circuits before touching the database again.
+        var act = () => service.LoadAsync();
+        await act.Should().NotThrowAsync();
+        service.ConfirmedCycleCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task LoadAsync_ConcurrentCalls_LoadOnceAndAgree()
+    {
+        var (service, storage) = await CreateServiceAsync(CycleOne);
+        await using var _ = storage;
+
+        // Racing callers exercise the double-checked lock: all pass the first
+        // unloaded check, then losers see _isLoaded inside the semaphore.
+        await Task.WhenAll(Enumerable.Range(0, 8).Select(_ => service.LoadAsync()));
+
+        service.IsLoaded.Should().BeTrue();
+        service.ConfirmedCycleCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task LoadAsync_MissingScheduleTable_LoadsAsEmpty()
+    {
+        // A database without tanah_perek_date at all (old/test installs)
+        // loads as an empty schedule instead of failing.
+        await using var storage = new TestStorage();
+        await storage.CreateDatabaseAsync(DbName, "CREATE TABLE dummy (id INTEGER)");
+        var service = new PerekScheduleService(new LocalDatabaseService(storage.FileSystem.Object));
+
+        await service.LoadAsync();
+
+        service.IsLoaded.Should().BeTrue();
+        service.ConfirmedCycleCount.Should().Be(0);
+        service.LastConfirmedCycleNumber.Should().Be(0);
+        service.GetCycleForDate(57750329).Should().BeNull();
+        service.GetCycleForDateOrUpcoming(57750329).Should()
+            .BeEquivalentTo(new PerekScheduleService.StudyCycle(1, 0, 0, true));
+        var act = () => service.GetCycle(1);
+        act.Should().Throw<InvalidOperationException>().WithMessage("*confirmed*");
+    }
+
+    [Fact]
+    public async Task LoadAsync_SkipsMalformedRows()
+    {
+        var (service, storage) = await CreateServiceAsync(
+            "INSERT INTO tanah_perek_date VALUES (1,1,'57750329','57750329','17:16')",
+            // Null date, wrong length, non-numeric, and a numeric value that is
+            // not a real Hebrew date are all skipped, leaving one valid cycle.
+            "INSERT INTO tanah_perek_date VALUES (2,1,NULL,NULL,NULL)",
+            "INSERT INTO tanah_perek_date VALUES (3,1,'2024-01-01','x','17:16')",
+            "INSERT INTO tanah_perek_date VALUES (4,1,'ABCDEFGH','x','17:16')",
+            "INSERT INTO tanah_perek_date VALUES (5,1,'99999999','x','17:16')");
+        await using var _ = storage;
+
+        await service.LoadAsync();
+
+        service.ConfirmedCycleCount.Should().Be(1);
+        service.ResolveDay(57750329).PerekId.Should().Be(1);
+        service.ResolveDay(57750330).Status.Should().Be(PerekScheduleService.DayStatus.Review);
+    }
+
+    [Fact]
+    public async Task LoadAsync_CycleWithoutPerekOne_StartsAtFirstStoredEntry()
+    {
+        var (service, storage) = await CreateServiceAsync(
+            "INSERT INTO tanah_perek_date VALUES (5,1,'57750329','57750329','17:16')",
+            "INSERT INTO tanah_perek_date VALUES (9,1,'57750330','57750330','17:16')");
+        await using var _ = storage;
+        await service.LoadAsync();
+
+        // No perek 1 row: the cycle starts on its earliest perek-id entry.
+        service.GetCycle(1).StartDate.Should().Be(57750329);
+    }
+
+    [Fact]
+    public async Task GetCycle_InvalidNumber_Throws()
+    {
+        var (service, storage) = await CreateServiceAsync(CycleOne);
+        await using var _ = storage;
+        await service.LoadAsync();
+
+        var act = () => service.GetCycle(0);
+        act.Should().Throw<ArgumentOutOfRangeException>();
+    }
+
+    [Fact]
+    public async Task GetCycle_BeforeFirstConfirmed_ProjectsBackward()
+    {
+        var (service, storage) = await CreateServiceAsync(
+            "INSERT INTO tanah_perek_date VALUES (1,2,'57781103','57781103','20:24')");
+        await using var _ = storage;
+        await service.LoadAsync();
+
+        // Cycle 1 precedes the earliest confirmed anchor: project backward on
+        // the same 1302-day cadence.
+        var cycle1 = service.GetCycle(1);
+        cycle1.Projected.Should().BeTrue();
+        HebrewDateHelper.DaysBetween(cycle1.StartDate, 57781103)
+            .Should().Be(PerekScheduleService.CycleSpanDays);
+    }
+
+    [Fact]
+    public async Task GetCycleForDateOrUpcoming_ScheduledDate_ReturnsOwningCycle()
+    {
+        var (service, storage) = await CreateServiceAsync(CycleOne);
+        await using var _ = storage;
+        await service.LoadAsync();
+
+        service.GetCycleForDateOrUpcoming(57750330).Number.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task GetCycleForDateOrUpcoming_GapAfterLastConfirmed_WalksProjectedCycles()
+    {
+        var (service, storage) = await CreateServiceAsync(CycleOne);
+        await using var _ = storage;
+        await service.LoadAsync();
+
+        // The 3-day gap after cycle 1 resolves to projected cycle 2...
+        var cycle1End = HebrewDateHelper.AddDays(57750329, PerekScheduleService.CycleDays - 1);
+        var gap = HebrewDateHelper.AddDays(cycle1End, 1);
+        service.GetCycleForDate(gap).Should().BeNull();
+        service.GetCycleForDateOrUpcoming(gap).Should().BeEquivalentTo(new
+        {
+            Number = 2,
+            Projected = true
+        });
+
+        // ...and a date inside a projected gap further ahead iterates the walk
+        // until it finds the following projected cycle.
+        var cycle3 = service.GetCycle(3);
+        var gap2 = HebrewDateHelper.AddDays(cycle3.StartDate, -2);
+        service.GetCycleForDateOrUpcoming(gap2).Number.Should().Be(3);
+    }
+
+    [Fact]
+    public async Task ResolveDay_EndOfProjectedCycle_AssignsFinalPerakim()
+    {
+        var (service, storage) = await CreateServiceAsync(CycleOne);
+        await using var _ = storage;
+        await service.LoadAsync();
+
+        var cycle2 = service.GetCycle(2);
+        // The last study week of a projected cycle ends on day 1298 (a
+        // Thursday) with perek 929; no day can run past the cycle's perakim.
+        var last = service.ResolveDay(HebrewDateHelper.AddDays(cycle2.StartDate, PerekScheduleService.CycleDays - 1));
+        last.Status.Should().Be(PerekScheduleService.DayStatus.Study);
+        last.PerekId.Should().Be(PerekScheduleService.PerakimPerCycle);
+        last.Cycle.Should().Be(2);
+        last.Projected.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task GetDisplayedCycle_UnscheduledMonth_ReturnsNull()
+    {
+        var (service, storage) = await CreateServiceAsync(CycleOne);
+        await using var _ = storage;
+        await service.LoadAsync();
+
+        // Cheshvan 5775 ends before cycle 1 starts on 29 Kislev.
+        var cells = service.BuildMonth(5775, 2);
+        cells.Should().OnlyContain(c => c.Day == null || c.Day.Cycle == null);
+        service.GetDisplayedCycle(cells).Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetTodaysPerekId_BeforeLoad_ReturnsDefault()
+    {
+        var (service, storage) = await CreateServiceAsync(CycleOne);
+        await using var _ = storage;
+
+        service.LastConfirmedCycleNumber.Should().Be(0);
+        service.GetTodaysPerekId().Should().Be(1);
+    }
 }

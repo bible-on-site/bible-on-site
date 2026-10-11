@@ -84,7 +84,8 @@ public class PerekScheduleService
     public int ConfirmedCycleCount => _confirmedStarts?.Count ?? 0;
 
     /// <summary>Highest cycle number backed by stored schedule data.</summary>
-    public int LastConfirmedCycleNumber => _confirmedStarts?[^1].Number ?? 0;
+    public int LastConfirmedCycleNumber =>
+        _confirmedStarts is { Count: > 0 } starts ? starts[^1].Number : 0;
 
     /// <summary>Loads every tanah_perek_date row once; later calls are no-ops.</summary>
     public async Task LoadAsync()
@@ -342,15 +343,17 @@ public class PerekScheduleService
         {
             // In-cycle day without its own chapter: review the previous scheduled one.
             // Entries are sorted chronologically, so the last earlier one wins.
+            // A confirmed cycle starts on its first entry's date and exact-match
+            // days returned above, so an earlier entry always exists here.
             var dayGregorian = HebrewDateHelper.ToGregorianDate(dateNum);
             var previous = _entriesByCycle[cycle.Number]
-                .LastOrDefault(e => e.Gregorian < dayGregorian);
+                .Last(e => e.Gregorian < dayGregorian);
             return new CalendarDay(
                 dateNum,
                 day,
                 dayOfWeek,
-                previous is null ? DayStatus.None : DayStatus.Review,
-                previous?.PerekId,
+                DayStatus.Review,
+                previous.PerekId,
                 cycle.Number,
                 false);
         }
@@ -359,13 +362,11 @@ public class PerekScheduleService
         var week = projectedOffset / 7;
         var dayIndex = projectedOffset % 7;
         var isStudyDay = dayIndex < StudyDaysPerWeek;
+        // projectedOffset < CycleDays (1299) bounds perekIndex to 928: week 185
+        // only has offsets 1295-1298 inside the cycle, all study days.
         var perekIndex = isStudyDay
             ? week * StudyDaysPerWeek + dayIndex
             : week * StudyDaysPerWeek + (StudyDaysPerWeek - 1);
-        if (perekIndex >= PerakimPerCycle)
-        {
-            return new CalendarDay(dateNum, day, dayOfWeek, DayStatus.None, null, cycle.Number, true);
-        }
         return new CalendarDay(
             dateNum,
             day,
@@ -426,14 +427,14 @@ public class PerekScheduleService
 
     /// <summary>
     /// The cycle owning the visible month for display: the cycle of the first
-    /// scheduled day, else of the last scheduled day (inter-cycle gap months).
+    /// scheduled day, or null when the whole month is unscheduled (before the
+    /// program or inside an inter-cycle gap).
     /// </summary>
     public StudyCycle? GetDisplayedCycle(IReadOnlyList<MonthCell> cells)
     {
         var anchor = cells
             .Select(cell => cell.Day)
-            .FirstOrDefault(day => day?.Cycle is not null)
-            ?? cells.Select(cell => cell.Day).LastOrDefault(day => day?.Cycle is not null);
+            .FirstOrDefault(day => day?.Cycle is not null);
         return anchor?.Cycle is int number ? GetCycle(number) : null;
     }
 

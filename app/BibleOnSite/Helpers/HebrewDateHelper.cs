@@ -67,8 +67,17 @@ public static class HebrewDateHelper
     /// </summary>
     internal static TimeSpan GetTzeitTimeOfDay(DateTime jerusalemDate)
     {
+        return GetTzeitTimeOfDay(jerusalemDate, JerusalemLatitude, JerusalemLongitude);
+    }
+
+    /// <summary>
+    /// Civil dusk (zenith 96°) for an arbitrary location, exposed for tests:
+    /// locations far enough poleward can have no dusk on a given date.
+    /// </summary>
+    internal static TimeSpan GetTzeitTimeOfDay(DateTime date, double latitude, double longitude)
+    {
         // NOAA solar position approximations for an 18:00 local guess.
-        var gamma = 2 * Math.PI / 365 * (jerusalemDate.DayOfYear - 1 + (18 - 12) / 24.0);
+        var gamma = 2 * Math.PI / 365 * (date.DayOfYear - 1 + (18 - 12) / 24.0);
         var eqTimeMinutes = 229.18 * (0.000075 + 0.001868 * Math.Cos(gamma)
             - 0.032077 * Math.Sin(gamma)
             - 0.014615 * Math.Cos(2 * gamma)
@@ -80,8 +89,8 @@ public static class HebrewDateHelper
             - 0.002697 * Math.Cos(3 * gamma)
             + 0.00148 * Math.Sin(3 * gamma);
         var cosHourAngle = Math.Cos(DegreesToRadians(96)) /
-            (Math.Cos(DegreesToRadians(JerusalemLatitude)) * Math.Cos(declination))
-            - Math.Tan(DegreesToRadians(JerusalemLatitude)) * Math.Tan(declination);
+            (Math.Cos(DegreesToRadians(latitude)) * Math.Cos(declination))
+            - Math.Tan(DegreesToRadians(latitude)) * Math.Tan(declination);
 
         if (cosHourAngle is > 1 or < -1)
         {
@@ -90,8 +99,8 @@ public static class HebrewDateHelper
         }
 
         var hourAngle = RadiansToDegrees(Math.Acos(cosHourAngle));
-        var utcMinutes = 720 - 4 * (JerusalemLongitude - hourAngle) - eqTimeMinutes;
-        var duskUtc = DateTime.SpecifyKind(jerusalemDate.Date, DateTimeKind.Utc)
+        var utcMinutes = 720 - 4 * (longitude - hourAngle) - eqTimeMinutes;
+        var duskUtc = DateTime.SpecifyKind(date.Date, DateTimeKind.Utc)
             .AddMinutes(utcMinutes);
         var israelTz = TimeZoneInfo.FindSystemTimeZoneById(GetIsraelTimeZoneId());
         var duskLocal = TimeZoneInfo.ConvertTimeFromUtc(duskUtc, israelTz);
@@ -310,15 +319,9 @@ public static class HebrewDateHelper
     internal static string GetIsraelTimeZoneId()
     {
         // Windows uses "Israel Standard Time", Unix uses "Asia/Jerusalem"
-        try
-        {
-            TimeZoneInfo.FindSystemTimeZoneById("Asia/Jerusalem");
-            return "Asia/Jerusalem";
-        }
-        catch
-        {
-            return "Israel Standard Time";
-        }
+        return TimeZoneInfo.TryFindSystemTimeZoneById("Asia/Jerusalem", out _)
+            ? "Asia/Jerusalem"
+            : "Israel Standard Time";
     }
 
     #region Hebrew month helpers (לוח לימוד יומי)
