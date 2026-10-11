@@ -73,15 +73,12 @@ jobs:
         if: matrix.platform == 'iOS'
         run: sudo xcode-select --switch /Applications/Xcode_27.app/Contents/Developer
 
-      # simctl boot is asynchronous, and so is this step: the whole prepare —
-      # select, boot kick, readiness monitor, Appium bridge preflight, env
-      # export — overlaps every install and the app build, while the `wait`
-      # step before the tests is the gate that surfaces it.
-      - name: Prepare iPhone simulator
-        id: simulator
+      # simctl boot is asynchronous: the device boots on the host while the
+      # dependency installs run. This step needs no node_modules — it only
+      # selects a device and kicks simctl.
+      - name: Start iPhone simulator boot
         if: matrix.platform == 'iOS'
-        background: true
-        run: npm run ios:boot --prefix app/mobile-e2e
+        run: npm run ios:boot:start --prefix app/mobile-e2e
 
       - name: Restore npm cache
         id: npm-cache
@@ -95,6 +92,17 @@ jobs:
         run: |
           npm ci --prefix devops --no-audit
           npm ci --prefix app/mobile-e2e --no-audit
+
+      # The boot kicked above is still in flight; the wait also warms Appium's
+      # CoreSimulator bridge and exports MOBILE_UDID/MOBILE_OS_VERSION. Running
+      # it as a background step overlaps all of that with the MAUI workload
+      # install and the app build; `wait` below is the gate that surfaces the
+      # finished boot and the exported variables to the test step.
+      - name: Finish iPhone simulator setup
+        id: simulator
+        if: matrix.platform == 'iOS'
+        background: true
+        run: npm run ios:boot:wait --prefix app/mobile-e2e
 
       - name: Save npm cache
         if: ${{ github.ref == 'refs/heads/master' && steps.npm-cache.outputs.cache-hit != 'true' }}
