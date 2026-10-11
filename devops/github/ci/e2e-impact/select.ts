@@ -10,10 +10,13 @@
  *      any other file is shared harness and selects everything.
  *   2. `noImpact` globs select nothing.
  *   3. `runAllOnChange` globs select every applicable test.
- *   4. A file recorded in the baseline tree selects the tests covering it.
- *   5. Its logical unit (partial-class/code-behind grouping) does the same.
- *   6. Any other in-scope change conservatively selects every applicable test.
- *   7. Everything else is out of this suite's scope and selects nothing.
+ *   4. A file in the baseline's shared exec coverage — or sharing a
+ *      logical unit with it — selects every applicable test (shared hits
+ *      can widen but never narrow to a per-test claim).
+ *   5. A file recorded in the baseline tree selects the tests covering it.
+ *   6. Its logical unit (partial-class/code-behind grouping) does the same.
+ *   7. Any other in-scope change conservatively selects every applicable test.
+ *   8. Everything else is out of this suite's scope and selects nothing.
  *
  * Missing, corrupt, incompatible or non-ancestor baselines, unavailable or
  * truncated diffs, discovery failures and empty selections all fall back to
@@ -170,7 +173,7 @@ export function selectTests(input: SelectionInput): SelectionManifest {
 	} else if (input.baseline.kind !== "ok") {
 		selectAll(`${input.baseline.kind}-baseline:${input.baseline.reason}`);
 	} else {
-		const incompatible = validateTree(tree, rules, platform);
+		const incompatible = validateTree(input.baseline.tree, rules, platform);
 		if (incompatible !== null) selectAll(`incompatible-baseline:${incompatible}`);
 	}
 	const changedFiles =
@@ -197,6 +200,8 @@ export function selectTests(input: SelectionInput): SelectionManifest {
 
 	const mappedByFile = new Map<string, string[]>();
 	const mappedByUnit = new Map<string, string[]>();
+	const sharedFiles = new Set(tree?.sharedFiles ?? []);
+	const sharedUnits = new Set<string>();
 	if (tree) {
 		for (const [id, entry] of Object.entries(tree.tests)) {
 			for (const file of entry.files) {
@@ -206,6 +211,11 @@ export function selectTests(input: SelectionInput): SelectionManifest {
 				const unit = fileToUnit(file, tree, readFile);
 				mappedByUnit.set(unit, [...(mappedByUnit.get(unit) ?? []), id]);
 			}
+		}
+		// Shared exec coverage widens at unit granularity too: a code-behind
+		// hit cannot be attributed, so a paired XAML change stays widened.
+		for (const file of sharedFiles) {
+			sharedUnits.add(fileToUnit(file, tree, readFile));
 		}
 	}
 
@@ -250,11 +260,29 @@ export function selectTests(input: SelectionInput): SelectionManifest {
 			}
 		}
 		if (tree) {
+			// Unattributable exec coverage can never narrow to a per-test
+			// claim — a shared hit (or one in the file's logical unit)
+			// selects every applicable test.
+			if (sharedFiles.has(path)) {
+				return finish("all", "shared-coverage");
+			}
 			const fileTests = mappedByFile.get(path);
-			if (fileTests !== undefined && fileTests.length > 0) {
+			// Fast path for trees without shared coverage (automation-id
+			// only): a covered file narrows without a unit lookup.
+			if (
+				sharedUnits.size === 0 &&
+				fileTests !== undefined &&
+				fileTests.length > 0
+			) {
 				return finish("tests", "covered-file", [...fileTests].sort());
 			}
 			const unit = fileToUnit(path, tree, readFile);
+			if (sharedUnits.has(unit)) {
+				return finish("all", "shared-coverage");
+			}
+			if (fileTests !== undefined && fileTests.length > 0) {
+				return finish("tests", "covered-file", [...fileTests].sort());
+			}
 			const unitTests = mappedByUnit.get(unit);
 			if (unitTests !== undefined && unitTests.length > 0) {
 				return finish("tests", "covered-unit", [...unitTests].sort());
@@ -313,7 +341,10 @@ export function selectTests(input: SelectionInput): SelectionManifest {
 	const sortedReasons = (id: string) => [...(reasons.get(id) ?? new Set<string>())].sort();
 	const fingerprintInputs = input.currentFingerprints
 		? [...input.currentFingerprints.entries()]
-				.map(([path, fp]) => [path, fp?.semantic ?? null])
+				.map(([path, fp]): [string, string | null] => [
+					path,
+					fp?.semantic ?? null,
+				])
 				.sort(([a], [b]) => a.localeCompare(b))
 		: null;
 	const manifest: SelectionManifest = {
