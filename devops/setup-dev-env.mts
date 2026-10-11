@@ -928,7 +928,7 @@ function assertPythonVersion() {
 	})
 		.output.toString()
 		.replace("Python", "")
-		.replaceAll(",", "")
+		.replace(/,/g, "")
 		.trim();
 	if (!supportedPythonVersions.includes(actualPythonVersion)) {
 		throw new Error(
@@ -944,7 +944,7 @@ function assertNodeJSVersion() {
 	const supportedNodeVersions = ["v26.10.0"];
 	const actualNodeVersion = spawnSync("node", ["--version"], { shell: isWin })
 		.output.toString()
-		.replaceAll(",", "")
+		.replace(/,/g, "")
 		.trim();
 	if (!supportedNodeVersions.includes(actualNodeVersion)) {
 		throw new Error(

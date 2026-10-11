@@ -196,11 +196,9 @@ test.describe("Sefer commentary navigation", () => {
 			});
 			await expect(back).toBeVisible({ timeout: 60_000 });
 			await expect(page).toHaveURL(
-				new RegExp(
-					kind === "article"
-						? "/929/1/1\\?book"
-						: "%D7%A8%D7%A9%22%D7%99\\?book",
-				),
+				kind === "article"
+					? /\/929\/1\/1\?book/
+					: /%D7%A8%D7%A9%22%D7%99\?book/,
 			);
 			await page.reload();
 			await expect(back).toBeVisible({ timeout: 60_000 });
