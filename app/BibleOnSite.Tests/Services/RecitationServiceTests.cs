@@ -227,22 +227,24 @@ public class RecitationServiceTests
         await db.ExecuteAsync("INSERT INTO tanah_perek VALUES (1,1,NULL),(2,1,NULL)");
         var extension = new Extension(storage) { Package = new(1, [Track(1, "audio"u8.ToArray()), Track(2, "second"u8.ToArray())]) };
         extension.Audio["/recordings/2_record.mp3"] = "second"u8.ToArray(); extension.Bundle(); var service = extension.Service;
-        var model = new RecitationPreferencesViewModel(service, PreferencesService.CreateForTesting(new InMemoryPreferencesStorage()),
+        var model = new RecitationPacksViewModel(service,
             new PerekDataService(new LocalDatabaseService(storage.FileSystem.Object)));
-        await model.LoadAsync(); await model.DownloadSelectedAsync(); model.Status.Should().Contain("בחרו");
-        model.SelectAllCommand.Execute(null); var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        await model.LoadAsync();
+        await model.DownloadBookAsync(null); model.Status.Should().Contain("התקינו");
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         extension.Delivery.Setup(d => d.FetchAsync("recitation_2", It.IsAny<IProgress<double>>(), It.IsAny<CancellationToken>()))
             .Returns(async (string _, IProgress<double>? _, CancellationToken ct) =>
             {
                 entered.SetResult(); await Task.Delay(Timeout.Infinite, ct); return false;
             });
-        var downloading = model.DownloadSelectedAsync(); await entered.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
-        model.IsDownloading.Should().BeTrue(); await model.DownloadSelectedAsync();
+        var downloading = model.DownloadAllAsync(); await entered.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+        model.IsDownloading.Should().BeTrue(); await model.DownloadAllAsync();
         model.CancelDownloadCommand.Execute(null); await downloading;
         model.IsIdle.Should().BeTrue(); model.Status.Should().Contain("הופסקה");
         service.HasAudio(1).Should().BeTrue(); service.HasAudio(2).Should().BeFalse();
-        extension.Bundle(); await model.DownloadSelectedAsync();
-        service.HasAudio(2).Should().BeTrue(); model.Enabled.Should().BeTrue(); model.Books[0].Status.Should().Contain("1 מתוך 1");
+        extension.Bundle(); await model.DownloadAllAsync();
+        service.HasAudio(2).Should().BeTrue(); model.InstallState.Should().Be(RecitationInstallState.Installed);
+        model.Books[0].Status.Should().Contain("1 מתוך 1");
         Directory.EnumerateFiles(storage.Root, "*.download", SearchOption.AllDirectories).Should().BeEmpty();
     }
 
@@ -256,31 +258,28 @@ public class RecitationServiceTests
         await db.ExecuteAsync("INSERT INTO tanah_sefer VALUES (1,'בראשית','Genesis',1,1),(2,'שמות','Exodus',2,2)");
         await db.ExecuteAsync("INSERT INTO tanah_perek VALUES (1,1,NULL),(2,1,NULL)");
         var extension = new Extension(storage) { Package = new(1, [Track(1, "audio"u8.ToArray(), alignmentStatus)]) };
-        var model = new RecitationPreferencesViewModel(extension.Service,
-            PreferencesService.CreateForTesting(new InMemoryPreferencesStorage()),
+        var model = new RecitationPacksViewModel(extension.Service,
             new PerekDataService(new LocalDatabaseService(storage.FileSystem.Object)));
         await model.LoadAsync(); model.Status.Should().Contain("לא ניתן לטעון");
         extension.Bundle(store: false);
         await model.LoadAsync(); await model.LoadAsync(); model.Books.Should().HaveCount(2);
-        model.Books[0].CanSelect.Should().BeTrue("recordings need not be downloaded to select their book");
+        model.Books[0].CanDownload.Should().BeTrue("an offered book always exposes its download action");
         model.Books[0].Status.Should().Contain("0 מתוך 1");
-        model.Books[1].CanSelect.Should().BeFalse();
+        model.Books[1].CanDownload.Should().BeFalse();
         model.Books[1].Status.Should().Be("אין הקלטות זמינות");
-        // A stale selection must not trigger a request for an unavailable extension.
-        model.Books[1].IsSelected = true;
-        await model.DownloadSelectedAsync();
-        model.Status.Should().Contain("בחרו"); model.Books[1].IsSelected.Should().BeFalse();
+        // A book with no catalogued recordings must not trigger a store request.
+        await model.DownloadBookAsync(model.Books[1]);
+        model.Status.Should().Contain("אין הקלטות זמינות");
         extension.Requests.Should().BeEmpty();
-        model.SelectAllCommand.Execute(null);
-        model.Books[0].IsSelected.Should().BeTrue(); model.Books[1].IsSelected.Should().BeFalse();
         var filename = extension.Catalog!.Books[0].FileName;
         var bytes = storage.PackageFiles[filename]; storage.PackageFiles.Remove(filename);
-        await model.DownloadSelectedAsync(); model.Status.Should().Contain("לא ניתן להשלים");
-        model.IsIdle.Should().BeTrue(); model.Enabled.Should().BeFalse();
+        await model.DownloadBookAsync(model.Books[0]); model.Status.Should().Contain("לא ניתן להשלים");
+        model.IsIdle.Should().BeTrue(); model.InstallState.Should().Be(RecitationInstallState.NotInstalled);
         storage.PackageFiles[filename] = bytes;
-        await model.DownloadSelectedAsync(); model.Enabled.Should().BeTrue();
+        await model.DownloadBookAsync(model.Books[0]);
+        model.InstallState.Should().Be(RecitationInstallState.Installed);
         model.Books[0].Status.Should().Contain("1 מתוך 1").And.Contain("MB");
-        model.Enabled = false; model.Enabled.Should().BeFalse();
+        model.Books[0].ShowRemove.Should().BeTrue();
     }
 
     [Fact]
@@ -296,11 +295,10 @@ public class RecitationServiceTests
         var service = extension.Service;
         var navigator = new Mock<IAppNavigator>();
         navigator.Setup(n => n.DisplayChoiceAsync(It.IsAny<string>(), It.IsAny<string>(), "הסרה", "ביטול")).ReturnsAsync(false);
-        var model = new RecitationPreferencesViewModel(service,
-            PreferencesService.CreateForTesting(new InMemoryPreferencesStorage()),
+        var model = new RecitationPacksViewModel(service,
             new PerekDataService(new LocalDatabaseService(storage.FileSystem.Object)), navigator.Object);
         await model.LoadAsync();
-        model.SelectAllCommand.Execute(null); await model.DownloadSelectedAsync();
+        await model.DownloadAllAsync();
         service.HasAudio(1).Should().BeTrue(); service.HasAudio(2).Should().BeTrue();
         model.SummaryText.Should().Be("מותקנת - 2 מתוך 2 הקלטות מותקנות");
 
@@ -323,11 +321,10 @@ public class RecitationServiceTests
         service.InstallState.Should().Be(RecitationInstallState.NotInstalled);
         model.SummaryText.Should().Be("לא מותקנת");
         model.CanRemove.Should().BeFalse();
-        model.Enabled.Should().BeFalse("with no audio left, playback cannot stay enabled");
         model.Status.Should().Contain("הוסרו");
 
-        // Reinstall right after removal: the selected books download again.
-        await model.DownloadSelectedAsync();
+        // Reinstall right after removal: download-all installs every book again.
+        await model.DownloadAllAsync();
         service.HasAudio(1).Should().BeTrue(); service.HasAudio(2).Should().BeTrue();
         model.SummaryText.Should().Be("מותקנת - 2 מתוך 2 הקלטות מותקנות");
     }
@@ -339,25 +336,24 @@ public class RecitationServiceTests
         var extension = new Extension(storage) { Package = new(1, [Track(1, "audio"u8.ToArray())]) };
         extension.Bundle();
         var navigator = new Mock<IAppNavigator>();
-        var model = new RecitationPreferencesViewModel(extension.Service,
-            PreferencesService.CreateForTesting(new InMemoryPreferencesStorage()),
+        var model = new RecitationPacksViewModel(extension.Service,
             new PerekDataService(new LocalDatabaseService(storage.FileSystem.Object)), navigator.Object);
         await model.RemoveAllAsync();
         navigator.Verify(n => n.DisplayChoiceAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
     }
 
     [Fact]
-    public async Task MissingCatalogKeepsBookChoices_AndCannotEnableRecitation()
+    public async Task MissingCatalogKeepsBookChoices_AndReportsNotInstalled()
     {
         await using var storage = new TestStorage(); var extension = new Extension(storage);
-        var model = new RecitationPreferencesViewModel(extension.Service,
-            PreferencesService.CreateForTesting(new InMemoryPreferencesStorage()),
+        var model = new RecitationPacksViewModel(extension.Service,
             new PerekDataService(new LocalDatabaseService(storage.FileSystem.Object)));
-        model.Books.Add(new RecitationBookChoice { Name = "בראשית", PerekIds = [1], IsSelected = true });
-        model.Enabled = true; model.Enabled.Should().BeFalse();
-        await model.DownloadSelectedAsync(); model.Status.Should().Contain("לא ניתן להשלים");
-        model.Books.Should().ContainSingle(); model.Books[0].IsSelected.Should().BeTrue();
-        model.Books[0].CanSelect.Should().BeTrue("an unavailable catalog must allow retrying the installation");
+        model.Books.Add(new RecitationBookChoice { Name = "בראשית", PerekIds = [1] });
+        model.InstallState.Should().Be(RecitationInstallState.NotInstalled);
+        model.SummaryText.Should().Be("לא מותקנת");
+        await model.DownloadAllAsync(); model.Status.Should().Contain("לא ניתן להשלים");
+        model.Books.Should().ContainSingle();
+        model.Books[0].CanDownload.Should().BeTrue("an unavailable catalog must allow retrying the installation");
         model.Books[0].Status.Should().Be("זמינות תיבדק בעת ההורדה");
         model.CancelDownloadCommand.Execute(null); model.IsIdle.Should().BeTrue();
     }
@@ -368,10 +364,9 @@ public class RecitationServiceTests
         await using var storage = new TestStorage();
         var extension = new Extension(storage) { Package = new(1, [Track(1, "audio"u8.ToArray())]) };
         extension.Bundle(); var service = extension.Service; await service.InitializeAsync();
-        var model = new RecitationPreferencesViewModel(service,
-            PreferencesService.CreateForTesting(new InMemoryPreferencesStorage()),
+        var model = new RecitationPacksViewModel(service,
             new PerekDataService(new LocalDatabaseService(storage.FileSystem.Object)));
-        model.Books.Add(new RecitationBookChoice { Name = "בראשית", PerekIds = [1], IsSelected = true });
+        model.Books.Add(new RecitationBookChoice { Name = "בראשית", PerekIds = [1] });
         var observed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         model.PropertyChanged += (_, e) =>
         {
@@ -391,7 +386,7 @@ public class RecitationServiceTests
         var directory = Path.Join(storage.Root, "store", "recitation_1");
         extension.Delivery.Setup(d => d.TryGetAssetPathAsync("recitation_1", It.IsAny<CancellationToken>()))
             .Returns(() => Task.FromResult(release.Task.IsCompleted ? directory : null));
-        var downloading = model.DownloadSelectedAsync();
+        var downloading = model.DownloadAllAsync();
         await observed.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
         model.IsDownloading.Should().BeTrue(); model.Progress.Should().BeApproximately(0.45, 1e-10);
         release.SetResult(); await downloading;
@@ -409,7 +404,7 @@ public class RecitationServiceTests
         var service = server.Service;
         var saved = new InMemoryPreferencesStorage();
         var preferences = PreferencesService.CreateForTesting(saved);
-        var model = new RecitationPreferencesViewModel(service, preferences, new PerekDataService(new LocalDatabaseService(storage.FileSystem.Object)));
+        var model = new RecitationPreferencesViewModel(service, preferences);
         model.Speed.Should().Be(1); model.Volume.Should().Be(1);
         model.OriginalPauses.Should().BeTrue(); model.CustomPauses.Should().BeFalse();
         model.PauseSeconds = 0; model.OriginalPauses.Should().BeTrue("a hidden slider must not change the default");
@@ -423,7 +418,8 @@ public class RecitationServiceTests
         restored.RecitationSpeed.Should().Be(1.5); restored.RecitationVolume.Should().Be(0.35);
         restored.RecitationVersePauseMs.Should().Be(1500);
         model.OriginalPauses = true; preferences.RecitationVersePauseMs.Should().Be(-1);
-        model.Enabled.Should().BeFalse();
+        service.InstallState.Should().Be(RecitationInstallState.NotInstalled,
+            "playback controls stay visible regardless of install state — the reader's player owns start/stop");
     }
 
     [Fact]
@@ -642,10 +638,9 @@ public class RecitationServiceTests
         }
     }
 
-    private static RecitationPreferencesViewModel Preferences(TestStorage storage, RecitationService service,
+    private static RecitationPacksViewModel Preferences(TestStorage storage, RecitationService service,
         Mock<IAppNavigator>? navigator = null) =>
         new(service,
-            PreferencesService.CreateForTesting(new InMemoryPreferencesStorage()),
             new PerekDataService(new LocalDatabaseService(storage.FileSystem.Object)),
             (navigator ?? new Mock<IAppNavigator>()).Object);
 
@@ -760,7 +755,7 @@ public class RecitationServiceTests
     }
 
     [Fact]
-    public async Task PreferencesRemoveBook_RemovingTheLastInstalledBook_DisablesPlayback()
+    public async Task PreferencesRemoveBook_RemovingTheLastInstalledBook_EmptiesTheInstall()
     {
         await using var storage = new TestStorage();
         var extension = new Extension(storage) { Package = new(1, [Track(1, "audio"u8.ToArray())]) };
@@ -770,14 +765,11 @@ public class RecitationServiceTests
         var navigator = new Mock<IAppNavigator>();
         navigator.Setup(n => n.DisplayChoiceAsync(It.IsAny<string>(), It.IsAny<string>(), "הסרה", "ביטול")).ReturnsAsync(true);
         var model = Preferences(storage, service, navigator);
-        model.Enabled = true;
-        model.Enabled.Should().BeTrue();
 
         await model.RemoveBookAsync(new RecitationBookChoice { Name = "בראשית", PerekIds = [1] });
 
         service.HasAudio(1).Should().BeFalse();
         service.InstallState.Should().Be(RecitationInstallState.NotInstalled);
-        model.Enabled.Should().BeFalse("with no audio left, playback cannot stay enabled");
         model.Status.Should().Contain("הוסרו");
     }
 
@@ -794,7 +786,6 @@ public class RecitationServiceTests
         var navigator = new Mock<IAppNavigator>();
         var model = Preferences(storage, service, navigator);
         await model.LoadAsync();
-        model.SelectAllCommand.Execute(null);
 
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -808,7 +799,7 @@ public class RecitationServiceTests
             });
         extension.Delivery.Setup(d => d.TryGetAssetPathAsync("recitation_1", It.IsAny<CancellationToken>()))
             .Returns(() => Task.FromResult(release.Task.IsCompleted ? directory : null));
-        var downloading = model.DownloadSelectedAsync();
+        var downloading = model.DownloadAllAsync();
         await entered.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
 
         await model.RemoveBookAsync(model.Books[0]);

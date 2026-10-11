@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:viewmodels="clr-namespace:BibleOnSite.ViewModels"
+             xmlns:fonts="clr-namespace:Fonts"
+             x:Class="BibleOnSite.Pages.SoundPreferencesPage"
+             x:DataType="viewmodels:SoundPreferencesViewModel"
+             Title="שמע"
+             FlowDirection="RightToLeft"
+             BackgroundColor="{AppThemeBinding Light={StaticResource Gray50}, Dark={StaticResource SurfaceDark}}">
+
+    <ScrollView x:Name="SoundScroll" Padding="16,12">
+        <VerticalStackLayout Spacing="16">
+
+            <!-- ═══ קריינות ═══ -->
+            <Border x:Name="RecitationChannelCard"
+                    Padding="16"
+                    StrokeShape="RoundRectangle 12"
+                    Stroke="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray700}}"
+                    StrokeThickness="1"
+                    BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Gray900}}">
+                <VerticalStackLayout Spacing="8">
+                    <Grid ColumnDefinitions="Auto,*,Auto">
+                        <Label Text="{x:Static fonts:FluentUI.headphones_24_regular}"
+                               FontFamily="FluentIcons"
+                               FontSize="22"
+                               TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray350}}"
+                               VerticalOptions="Center"
+                               Margin="0,0,10,0"/>
+                        <Label Grid.Column="1"
+                               Text="קריינות"
+                               FontSize="16"
+                               TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"
+                               VerticalOptions="Center"/>
+                        <Label Grid.Column="2"
+                               Text="{Binding RecitationVolume, StringFormat='{0:P0}'}"
+                               FontSize="15"
+                               TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray350}}"
+                               VerticalOptions="Center"/>
+                    </Grid>
+                    <Slider Minimum="0"
+                            Maximum="1"
+                            Value="{Binding RecitationVolume}"
+                            AutomationId="RecitationVolumeSlider"
+                            SemanticProperties.Description="עוצמת קריינות"
+                            MinimumTrackColor="{StaticResource Primary}"
+                            MaximumTrackColor="{AppThemeBinding Light={StaticResource Gray250}, Dark={StaticResource Gray600}}"/>
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- ═══ שיעורים מוקלטים ═══ -->
+            <Border x:Name="LessonsChannelCard"
+                    Padding="16"
+                    StrokeShape="RoundRectangle 12"
+                    Stroke="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray700}}"
+                    StrokeThickness="1"
+                    BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Gray900}}">
+                <VerticalStackLayout Spacing="8">
+                    <Grid ColumnDefinitions="Auto,*,Auto">
+                        <Label Text="{x:Static fonts:FluentUI.desktop_speaker_24_regular}"
+                               FontFamily="FluentIcons"
+                               FontSize="22"
+                               TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray350}}"
+                               VerticalOptions="Center"
+                               Margin="0,0,10,0"/>
+                        <Label Grid.Column="1"
+                               Text="שיעורים מוקלטים"
+                               FontSize="16"
+                               TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"
+                               VerticalOptions="Center"/>
+                        <Label Grid.Column="2"
+                               Text="{Binding LessonsVolume, StringFormat='{0:P0}'}"
+                               FontSize="15"
+                               TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray350}}"
+                               VerticalOptions="Center"/>
+                    </Grid>
+                    <Slider Minimum="0"
+                            Maximum="1"
+                            Value="{Binding LessonsVolume}"
+                            AutomationId="LessonsVolumeSlider"
+                            SemanticProperties.Description="עוצמת שיעורים מוקלטים"
+                            MinimumTrackColor="{StaticResource Primary}"
+                            MaximumTrackColor="{AppThemeBinding Light={StaticResource Gray250}, Dark={StaticResource Gray600}}"/>
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- ═══ אפקטים ═══ -->
+            <Border x:Name="EffectsChannelCard"
+                    Padding="16"
+                    StrokeShape="RoundRectangle 12"
+                    Stroke="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray700}}"
+                    StrokeThickness="1"
+                    BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Gray900}}">
+                <VerticalStackLayout Spacing="8">
+                    <Grid ColumnDefinitions="Auto,*,Auto">
+                        <Label Text="{x:Static fonts:FluentUI.speaker_bluetooth_24_regular}"
+                               FontFamily="FluentIcons"
+                               FontSize="22"
+                               TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray350}}"
+                               VerticalOptions="Center"
+                               Margin="0,0,10,0"/>
+                        <Label Grid.Column="1"
+                               Text="אפקטים"
+                               FontSize="16"
+                               TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"
+                               VerticalOptions="Center"/>
+                        <Label Grid.Column="2"
+                               Text="{Binding EffectsVolume, StringFormat='{0:P0}'}"
+                               FontSize="15"
+                               TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray350}}"
+                               VerticalOptions="Center"/>
+                    </Grid>
+                    <Slider Minimum="0"
+                            Maximum="1"
+                            Value="{Binding EffectsVolume}"
+                            AutomationId="EffectsVolumeSlider"
+                            SemanticProperties.Description="עוצמת אפקטים"
+                            MinimumTrackColor="{StaticResource Primary}"
+                            MaximumTrackColor="{AppThemeBinding Light={StaticResource Gray250}, Dark={StaticResource Gray600}}"/>
+                </VerticalStackLayout>
+            </Border>
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

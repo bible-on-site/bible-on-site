@@ -6,7 +6,6 @@ using BibleOnSite.Models;
 using BibleOnSite.Services;
 using BibleOnSite.Tests.Support;
 using BibleOnSite.ViewModels;
-using Microsoft.Maui.ApplicationModel.DataTransfer;
 using Microsoft.Maui.Devices;
 
 namespace BibleOnSite.Tests.Services;
@@ -173,7 +172,7 @@ public class ExtensionPackLifecycleTests
         store.FetchLog.Should().Equal("recitation_1");
 
         // Commentary only: the notes fetch does not touch recitation books.
-        (await notes.TryDownloadNotesAsync()).Should().BeTrue();
+        (await notes.TryDownloadNotesAsync(cancellationToken: TestContext.Current.CancellationToken)).Should().BeTrue();
         notes.IsAvailable.Should().BeTrue();
         recitation.HasAudio(3).Should().BeFalse();
         store.FetchLog.Should().Equal("recitation_1", NotesPack);
@@ -190,7 +189,7 @@ public class ExtensionPackLifecycleTests
         store.Wire();
         var notes = Notes(storage, store.Delivery.Object);
         var recitation = new RecitationService(storage.FileSystem.Object, store.Delivery.Object);
-        (await notes.TryDownloadNotesAsync()).Should().BeTrue();
+        (await notes.TryDownloadNotesAsync(cancellationToken: TestContext.Current.CancellationToken)).Should().BeTrue();
         await recitation.DownloadAsync([1]);
 
         // A restart with no store connectivity keeps every installed pack usable.
@@ -339,7 +338,7 @@ public class ExtensionPackLifecycleTests
         store.FetchLog.Should().BeEmpty("init must not resurrect a deliberately removed pack");
 
         // An explicit install lifts the tombstone — reuse the delivered OS pack.
-        (await restarted.TryDownloadNotesAsync()).Should().BeTrue();
+        (await restarted.TryDownloadNotesAsync(cancellationToken: TestContext.Current.CancellationToken)).Should().BeTrue();
         restarted.IsAvailable.Should().BeTrue();
         restarted.IsRemovedByUser.Should().BeFalse();
         store.FetchLog.Should().BeEmpty("reinstall copies from the still-delivered OS pack");
@@ -366,7 +365,7 @@ public class ExtensionPackLifecycleTests
         store.Evict(NotesPack);
         store.Offline = true;
         var restarted = Notes(storage, store.Delivery.Object);
-        (await restarted.TryDownloadNotesAsync()).Should().BeFalse();
+        (await restarted.TryDownloadNotesAsync(cancellationToken: TestContext.Current.CancellationToken)).Should().BeFalse();
         restarted.IsRemovedByUser.Should().BeTrue("a failed reinstall keeps the deliberate removal");
 
         var afterFailed = Notes(storage, store.Delivery.Object);
@@ -407,7 +406,7 @@ public class ExtensionPackLifecycleTests
         store.Wire();
         var notes = Notes(storage, store.Delivery.Object);
         var recitation = new RecitationService(storage.FileSystem.Object, store.Delivery.Object);
-        (await notes.TryDownloadNotesAsync()).Should().BeTrue();
+        (await notes.TryDownloadNotesAsync(cancellationToken: TestContext.Current.CancellationToken)).Should().BeTrue();
         await recitation.DownloadAsync([1]);
         var notesDb = Path.Join(storage.Root, NotesDbName);
         var audioDir = Path.Join(storage.Root, "extensions", "recitation");
@@ -469,12 +468,21 @@ public class ExtensionPackLifecycleTests
         updated.HasAudio(3).Should().BeTrue();
     }
 
+    /// <summary>The settings overview — category summaries and navigation only.</summary>
     private static PreferencesViewModel Settings(TestStorage storage,
         PerushimNotesService notes, RecitationService recitation, Mock<IAppNavigator> navigator)
     {
         return new PreferencesViewModel(
             PreferencesService.CreateForTesting(new InMemoryPreferencesStorage()),
-            notes, storage.FileSystem.Object, new Mock<IShare>().Object, navigator.Object, recitation);
+            notes, recitation, navigator.Object);
+    }
+
+    /// <summary>The חבילות הרחבה page — where install/remove lifecycle actions live.</summary>
+    private static ExtensionPacksViewModel Packs(TestStorage storage,
+        PerushimNotesService notes, RecitationService recitation, Mock<IAppNavigator> navigator)
+    {
+        return new ExtensionPacksViewModel(notes, recitation,
+            new PerekDataService(new LocalDatabaseService(storage.FileSystem.Object)), navigator.Object);
     }
 
     [Fact]
@@ -530,14 +538,14 @@ public class ExtensionPackLifecycleTests
         var notes = Notes(storage, store.Delivery.Object);
         var navigator = new Mock<IAppNavigator>();
         navigator.Setup(n => n.DisplayChoiceAsync(It.IsAny<string>(), It.IsAny<string>(), "הסרה", "ביטול")).ReturnsAsync(false);
-        var settings = Settings(storage, notes,
+        var packs = Packs(storage, notes,
             new RecitationService(storage.FileSystem.Object, store.Delivery.Object), navigator);
         await notes.InitializeAsync();
-        settings.IsPerushimInstalled.Should().BeTrue();
+        packs.IsPerushimInstalled.Should().BeTrue();
 
-        await settings.RemovePerushimCommand.ExecuteAsync(null);
+        await packs.RemovePerushimCommand.ExecuteAsync(null);
 
-        settings.IsPerushimInstalled.Should().BeTrue("a declined confirmation never removes");
+        packs.IsPerushimInstalled.Should().BeTrue("a declined confirmation never removes");
         notes.IsRemovedByUser.Should().BeFalse();
         File.Exists(Path.Join(storage.Root, NotesDbName)).Should().BeTrue();
         await storage.CloseDatabaseFileAsync(NotesDbName); // release the live notes handle for disposal
@@ -554,24 +562,24 @@ public class ExtensionPackLifecycleTests
         var notes = Notes(storage, store.Delivery.Object);
         var navigator = new Mock<IAppNavigator>();
         navigator.Setup(n => n.DisplayChoiceAsync(It.IsAny<string>(), It.IsAny<string>(), "הסרה", "ביטול")).ReturnsAsync(true);
-        var settings = Settings(storage, notes,
+        var packs = Packs(storage, notes,
             new RecitationService(storage.FileSystem.Object, store.Delivery.Object), navigator);
         await notes.InitializeAsync();
-        settings.IsPerushimInstalled.Should().BeTrue();
-        settings.ShowPerushimRemove.Should().BeTrue();
-        settings.ShowPerushimDownloadButton.Should().BeFalse();
+        packs.IsPerushimInstalled.Should().BeTrue();
+        packs.ShowPerushimRemove.Should().BeTrue();
+        packs.ShowPerushimDownloadButton.Should().BeFalse();
 
-        await settings.RemovePerushimCommand.ExecuteAsync(null);
+        await packs.RemovePerushimCommand.ExecuteAsync(null);
 
-        settings.IsPerushimInstalled.Should().BeFalse();
-        settings.ShowPerushimRemove.Should().BeFalse();
-        settings.ShowPerushimDownloadButton.Should().BeTrue("the install action replaces the removed pack");
-        settings.PerushimNotesStatusText.Should().Contain("לא הותקנה");
+        packs.IsPerushimInstalled.Should().BeFalse();
+        packs.ShowPerushimRemove.Should().BeFalse();
+        packs.ShowPerushimDownloadButton.Should().BeTrue("the install action replaces the removed pack");
+        packs.PerushimNotesStatusText.Should().Contain("לא הותקנה");
         notes.IsRemovedByUser.Should().BeTrue();
 
         // Reinstall from the settings action lifts the tombstone.
-        await settings.DownloadPerushimCommand.ExecuteAsync(null);
-        settings.IsPerushimInstalled.Should().BeTrue();
+        await packs.DownloadPerushimCommand.ExecuteAsync(null);
+        packs.IsPerushimInstalled.Should().BeTrue();
         notes.IsRemovedByUser.Should().BeFalse();
         store.FetchLog.Should().BeEmpty("both install and reinstall copy the delivered OS pack");
         await storage.CloseDatabaseFileAsync(NotesDbName); // release the live notes handle for disposal
@@ -584,10 +592,10 @@ public class ExtensionPackLifecycleTests
         var store = new Store(storage.Root);
         store.Wire();
         var navigator = new Mock<IAppNavigator>();
-        var settings = Settings(storage, Notes(storage, store.Delivery.Object),
+        var packs = Packs(storage, Notes(storage, store.Delivery.Object),
             new RecitationService(storage.FileSystem.Object, store.Delivery.Object), navigator);
 
-        await settings.RemovePerushimCommand.ExecuteAsync(null);
+        await packs.RemovePerushimCommand.ExecuteAsync(null);
 
         navigator.Verify(n => n.DisplayChoiceAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
     }
@@ -641,19 +649,19 @@ public class ExtensionPackLifecycleTests
         var notes = Notes(storage, store.Delivery.Object);
         var navigator = new Mock<IAppNavigator>();
         navigator.Setup(n => n.DisplayChoiceAsync(It.IsAny<string>(), It.IsAny<string>(), "הסרה", "ביטול")).ReturnsAsync(true);
-        var settings = Settings(storage, notes,
+        var packs = Packs(storage, notes,
             new RecitationService(storage.FileSystem.Object, store.Delivery.Object), navigator);
         await notes.InitializeAsync();
-        settings.IsPerushimInstalled.Should().BeTrue();
+        packs.IsPerushimInstalled.Should().BeTrue();
 
         // A directory at the tombstone path makes its write fail on every platform.
         Directory.CreateDirectory(Path.Join(storage.Root, NotesDbName + ".removed"));
 
-        await settings.RemovePerushimCommand.ExecuteAsync(null);
+        await packs.RemovePerushimCommand.ExecuteAsync(null);
 
         navigator.Verify(n => n.DisplayAlertAsync("שגיאה",
             It.Is<string>(m => m.Contains("לא ניתן להסיר")), "אישור"), Times.Once);
-        settings.IsPerushimInstalled.Should().BeTrue("a failed removal keeps the pack installed");
+        packs.IsPerushimInstalled.Should().BeTrue("a failed removal keeps the pack installed");
         notes.IsRemovedByUser.Should().BeFalse("no tombstone was written, so init restores nothing anew");
         await storage.CloseDatabaseFileAsync(NotesDbName); // release the live notes handle for disposal
     }

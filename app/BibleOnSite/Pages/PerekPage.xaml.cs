@@ -1005,7 +1005,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable
         SelectionCountBadge.IsVisible = ordinarySelection;
         SelectionShareButton.IsVisible = ordinarySelection;
         SelectionCopyButton.IsVisible = ordinarySelection;
-        SelectionRecitationButton.IsVisible = RecitationEnabled;
+        SelectionRecitationButton.IsVisible = RecitationAvailable;
         var perek = _viewModel.Perek;
         var track = perek == null ? null : RecitationService.Instance.GetTrack(perek.PerekId);
         SelectionRecitationButton.IsEnabled = !_recitationBusy && perek != null && RecitationService.Instance.HasAudio(perek.PerekId) &&
@@ -1598,7 +1598,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable
     {
         try
         {
-            await Shell.Current.GoToAsync("PreferencesPage");
+            await Shell.Current.GoToAsync(AppRoutes.ExtensionPacks);
         }
         catch (Exception ex)
         {

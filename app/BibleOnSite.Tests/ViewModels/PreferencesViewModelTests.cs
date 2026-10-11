@@ -149,45 +149,48 @@ public class PreferencesViewModelTests : IDisposable
 
     #endregion
 
-    #region IncreaseFontSizeCommand Tests
+    #region Font-size commands (DisplayPreferencesViewModel)
 
     [Fact]
     public void IncreaseFontSizeCommand_IncreasesFontFactor()
     {
         // Arrange
-        _viewModel.FontFactor = 1.0;
+        var display = new DisplayPreferencesViewModel(_service);
+        display.FontFactor = 1.0;
 
         // Act
-        _viewModel.IncreaseFontSizeCommand.Execute(null);
+        display.IncreaseFontSizeCommand.Execute(null);
 
         // Assert
-        _viewModel.FontFactor.Should().BeApproximately(1.1, 0.01);
+        display.FontFactor.Should().BeApproximately(1.1, 0.01);
     }
 
     [Fact]
     public void IncreaseFontSizeCommand_DoesNotExceedMaximum()
     {
         // Arrange
-        _viewModel.FontFactor = 1.95;
+        var display = new DisplayPreferencesViewModel(_service);
+        display.FontFactor = 1.95;
 
         // Act
-        _viewModel.IncreaseFontSizeCommand.Execute(null);
+        display.IncreaseFontSizeCommand.Execute(null);
 
         // Assert
-        _viewModel.FontFactor.Should().Be(2.0, "Font factor should cap at 2.0");
+        display.FontFactor.Should().Be(2.0, "Font factor should cap at 2.0");
     }
 
     [Fact]
     public void IncreaseFontSizeCommand_AtMaximum_StaysAtMaximum()
     {
         // Arrange
-        _viewModel.FontFactor = 2.0;
+        var display = new DisplayPreferencesViewModel(_service);
+        display.FontFactor = 2.0;
 
         // Act
-        _viewModel.IncreaseFontSizeCommand.Execute(null);
+        display.IncreaseFontSizeCommand.Execute(null);
 
         // Assert
-        _viewModel.FontFactor.Should().Be(2.0);
+        display.FontFactor.Should().Be(2.0);
     }
 
     #endregion
@@ -198,39 +201,42 @@ public class PreferencesViewModelTests : IDisposable
     public void DecreaseFontSizeCommand_DecreasesFontFactor()
     {
         // Arrange
-        _viewModel.FontFactor = 1.0;
+        var display = new DisplayPreferencesViewModel(_service);
+        display.FontFactor = 1.0;
 
         // Act
-        _viewModel.DecreaseFontSizeCommand.Execute(null);
+        display.DecreaseFontSizeCommand.Execute(null);
 
         // Assert
-        _viewModel.FontFactor.Should().BeApproximately(0.9, 0.01);
+        display.FontFactor.Should().BeApproximately(0.9, 0.01);
     }
 
     [Fact]
     public void DecreaseFontSizeCommand_DoesNotGoBelowMinimum()
     {
         // Arrange
-        _viewModel.FontFactor = 0.55;
+        var display = new DisplayPreferencesViewModel(_service);
+        display.FontFactor = 0.55;
 
         // Act
-        _viewModel.DecreaseFontSizeCommand.Execute(null);
+        display.DecreaseFontSizeCommand.Execute(null);
 
         // Assert
-        _viewModel.FontFactor.Should().Be(0.5, "Font factor should not go below 0.5");
+        display.FontFactor.Should().Be(0.5, "Font factor should not go below 0.5");
     }
 
     [Fact]
     public void DecreaseFontSizeCommand_AtMinimum_StaysAtMinimum()
     {
         // Arrange
-        _viewModel.FontFactor = 0.5;
+        var display = new DisplayPreferencesViewModel(_service);
+        display.FontFactor = 0.5;
 
         // Act
-        _viewModel.DecreaseFontSizeCommand.Execute(null);
+        display.DecreaseFontSizeCommand.Execute(null);
 
         // Assert
-        _viewModel.FontFactor.Should().Be(0.5);
+        display.FontFactor.Should().Be(0.5);
     }
 
     #endregion
@@ -241,39 +247,92 @@ public class PreferencesViewModelTests : IDisposable
     public void ResetFontSizeCommand_ResetsFontFactorToDefault()
     {
         // Arrange
-        _viewModel.FontFactor = 1.5;
+        var display = new DisplayPreferencesViewModel(_service);
+        display.FontFactor = 1.5;
 
         // Act
-        _viewModel.ResetFontSizeCommand.Execute(null);
+        display.ResetFontSizeCommand.Execute(null);
 
         // Assert
-        _viewModel.FontFactor.Should().Be(1.0);
+        display.FontFactor.Should().Be(1.0);
     }
 
     [Fact]
     public void ResetFontSizeCommand_FromMinimum_ResetsFontFactorToDefault()
     {
         // Arrange
-        _viewModel.FontFactor = 0.5;
+        var display = new DisplayPreferencesViewModel(_service);
+        display.FontFactor = 0.5;
 
         // Act
-        _viewModel.ResetFontSizeCommand.Execute(null);
+        display.ResetFontSizeCommand.Execute(null);
 
         // Assert
-        _viewModel.FontFactor.Should().Be(1.0);
+        display.FontFactor.Should().Be(1.0);
     }
 
     [Fact]
     public void ResetFontSizeCommand_FromMaximum_ResetsFontFactorToDefault()
     {
         // Arrange
-        _viewModel.FontFactor = 2.0;
+        var display = new DisplayPreferencesViewModel(_service);
+        display.FontFactor = 2.0;
 
         // Act
-        _viewModel.ResetFontSizeCommand.Execute(null);
+        display.ResetFontSizeCommand.Execute(null);
 
         // Assert
-        _viewModel.FontFactor.Should().Be(1.0);
+        display.FontFactor.Should().Be(1.0);
+    }
+
+    #endregion
+
+    #region Category navigation (settings overview)
+
+    [Fact]
+    public async Task CategoryCommands_NavigateToEachDetailPage()
+    {
+        var navigator = new Mock<IAppNavigator>();
+        var viewModel = new PreferencesViewModel(_service,
+            PerushimNotesService.CreateForTesting(new FakePadDeliveryService(), Path.Join(Path.GetTempPath(), Path.GetRandomFileName())),
+            new RecitationService(new Mock<IFileSystem>().Object, new Mock<IPadDeliveryService>().Object), navigator.Object);
+
+        await viewModel.OpenDisplayCommand.ExecuteAsync(null);
+        await viewModel.OpenPerekCommand.ExecuteAsync(null);
+        await viewModel.OpenExtensionPacksCommand.ExecuteAsync(null);
+        await viewModel.OpenRecitationCommand.ExecuteAsync(null);
+        await viewModel.OpenSoundCommand.ExecuteAsync(null);
+        await viewModel.OpenSupportCommand.ExecuteAsync(null);
+
+        navigator.Verify(n => n.GoToAsync("DisplayPreferencesPage"), Times.Once);
+        navigator.Verify(n => n.GoToAsync("PerekPreferencesPage"), Times.Once);
+        navigator.Verify(n => n.GoToAsync("ExtensionPacksPage"), Times.Once);
+        navigator.Verify(n => n.GoToAsync("RecitationPreferencesPage"), Times.Once);
+        navigator.Verify(n => n.GoToAsync("SoundPreferencesPage"), Times.Once);
+        navigator.Verify(n => n.GoToAsync("SupportPreferencesPage"), Times.Once);
+    }
+
+    [Fact]
+    public async Task SoundChannels_RecitationVolumeSharesTheRecitationPreference()
+    {
+        var navigator = new Mock<IAppNavigator>();
+        var sound = new SoundPreferencesViewModel(_service);
+        var recitation = new RecitationPreferencesViewModel(
+            new RecitationService(new Mock<IFileSystem>().Object, new Mock<IPadDeliveryService>().Object),
+            _service, navigator.Object);
+
+        sound.RecitationVolume = 0.35;
+
+        _service.RecitationVolume.Should().Be(0.35, "the שמע slider and the קריינות shortcut edit one setting");
+        recitation.Volume.Should().Be(0.35);
+
+        recitation.Volume = 0.7;
+        sound.RecitationVolume.Should().Be(0.7);
+
+        await recitation.OpenSoundCommand.ExecuteAsync(null);
+        navigator.Verify(n => n.GoToAsync("SoundPreferencesPage?focus=recitation"), Times.Once);
+        await recitation.OpenExtensionPacksCommand.ExecuteAsync(null);
+        navigator.Verify(n => n.GoToAsync("ExtensionPacksPage"), Times.Once);
     }
 
     #endregion
@@ -303,14 +362,16 @@ public class PreferencesViewModelTests : IDisposable
     #endregion
 
     /// <summary>
-    /// Preferences + perushim-related paths using <see cref="PerushimNotesService.CreateForTesting"/> and a fake PAD service.
+    /// Extension-pack install/remove paths on <see cref="ExtensionPacksViewModel"/> using
+    /// <see cref="PerushimNotesService.CreateForTesting"/> and a fake PAD service.
     /// </summary>
     public sealed class PreferencesViewModelPerushimTests : IDisposable
     {
         private readonly string _tempDir;
         private readonly InMemoryPreferencesStorage _storage;
         private readonly PreferencesService _service;
-        private readonly PreferencesViewModel _viewModel;
+        private readonly ExtensionPacksViewModel _viewModel;
+        private readonly Mock<IAppNavigator> _navigator;
 
         public PreferencesViewModelPerushimTests()
         {
@@ -320,7 +381,11 @@ public class PreferencesViewModelTests : IDisposable
             var perushim = PerushimNotesService.CreateForTesting(fakePad, _tempDir);
             _storage = new InMemoryPreferencesStorage();
             _service = PreferencesService.CreateForTesting(_storage);
-            _viewModel = new PreferencesViewModel(_service, perushim);
+            _navigator = new Mock<IAppNavigator>();
+            var fileSystem = new Mock<IFileSystem>();
+            _viewModel = new ExtensionPacksViewModel(perushim,
+                new RecitationService(fileSystem.Object, new Mock<IPadDeliveryService>().Object),
+                new PerekDataService(new LocalDatabaseService(fileSystem.Object)), _navigator.Object);
         }
 
         public void Dispose()
@@ -352,7 +417,7 @@ public class PreferencesViewModelTests : IDisposable
         {
             _service.PerekToLoad = PerekToLoad.Todays;
 
-            _viewModel.IsPerekToLoadTodays.Should().BeTrue();
+            new PerekPreferencesViewModel(_service).IsPerekToLoadTodays.Should().BeTrue();
         }
 
         [Fact]
@@ -360,10 +425,10 @@ public class PreferencesViewModelTests : IDisposable
         {
             _service.PerekToLoad = PerekToLoad.LastLearnt;
 
-            _viewModel.IsPerekToLoadTodays = true;
+            var viewModel = new PerekPreferencesViewModel(_service) { IsPerekToLoadTodays = true };
 
             _service.PerekToLoad.Should().Be(PerekToLoad.Todays);
-            _viewModel.PerekToLoad.Should().Be(PerekToLoad.Todays);
+            viewModel.PerekToLoad.Should().Be(PerekToLoad.Todays);
         }
 
         [Fact]
@@ -371,7 +436,7 @@ public class PreferencesViewModelTests : IDisposable
         {
             _service.PerekToLoad = PerekToLoad.Todays;
 
-            _viewModel.IsPerekToLoadTodays = false;
+            new PerekPreferencesViewModel(_service).IsPerekToLoadTodays = false;
 
             _service.PerekToLoad.Should().Be(PerekToLoad.Todays);
         }
@@ -381,7 +446,7 @@ public class PreferencesViewModelTests : IDisposable
         {
             _service.PerekToLoad = PerekToLoad.LastLearnt;
 
-            _viewModel.IsPerekToLoadLastLearnt.Should().BeTrue();
+            new PerekPreferencesViewModel(_service).IsPerekToLoadLastLearnt.Should().BeTrue();
         }
 
         [Fact]
@@ -389,10 +454,10 @@ public class PreferencesViewModelTests : IDisposable
         {
             _service.PerekToLoad = PerekToLoad.Todays;
 
-            _viewModel.IsPerekToLoadLastLearnt = true;
+            var viewModel = new PerekPreferencesViewModel(_service) { IsPerekToLoadLastLearnt = true };
 
             _service.PerekToLoad.Should().Be(PerekToLoad.LastLearnt);
-            _viewModel.PerekToLoad.Should().Be(PerekToLoad.LastLearnt);
+            viewModel.PerekToLoad.Should().Be(PerekToLoad.LastLearnt);
         }
 
         [Fact]
@@ -400,15 +465,23 @@ public class PreferencesViewModelTests : IDisposable
         {
             _service.PerekToLoad = PerekToLoad.LastLearnt;
 
-            _viewModel.IsPerekToLoadLastLearnt = false;
+            new PerekPreferencesViewModel(_service).IsPerekToLoadLastLearnt = false;
 
             _service.PerekToLoad.Should().Be(PerekToLoad.LastLearnt);
         }
 
         [Fact]
-        public void ShowPerushimSection_AlwaysReturnsTrue()
+        public void PerekPreferenceCommands_SelectEachStartupChoice()
         {
-            _viewModel.ShowPerushimSection.Should().BeTrue();
+            var viewModel = new PerekPreferencesViewModel(_service);
+
+            viewModel.SelectLastLearntPerekCommand.Execute(null);
+            _service.PerekToLoad.Should().Be(PerekToLoad.LastLearnt);
+            viewModel.IsPerekToLoadLastLearnt.Should().BeTrue();
+
+            viewModel.SelectTodaysPerekCommand.Execute(null);
+            _service.PerekToLoad.Should().Be(PerekToLoad.Todays);
+            viewModel.IsPerekToLoadTodays.Should().BeTrue();
         }
 
         [Fact]
@@ -459,7 +532,10 @@ public class PreferencesViewModelTests : IDisposable
 
             var perushim = PerushimNotesService.CreateForTesting(new FakePadDeliveryService(), dataDir);
             await perushim.InitializeAsync();
-            var viewModel = new PreferencesViewModel(_service, perushim);
+            var fileSystem = new Mock<IFileSystem>();
+            var viewModel = new ExtensionPacksViewModel(perushim,
+                new RecitationService(fileSystem.Object, new Mock<IPadDeliveryService>().Object),
+                new PerekDataService(new LocalDatabaseService(fileSystem.Object)), _navigator.Object);
 
             viewModel.ShowPerushimDownload.Should().BeFalse();
             viewModel.ShowPerushimDownloadButton.Should().BeFalse();
@@ -474,11 +550,12 @@ public class PreferencesViewModelTests : IDisposable
         [Fact]
         public void PerekToLoad_WhenSameValue_DoesNotFirePropertyChanged()
         {
-            _viewModel.PerekToLoad = PerekToLoad.Todays;
+            var viewModel = new PerekPreferencesViewModel(_service);
+            viewModel.PerekToLoad = PerekToLoad.Todays;
             var eventCount = 0;
-            _viewModel.PropertyChanged += (_, _) => eventCount++;
+            viewModel.PropertyChanged += (_, _) => eventCount++;
 
-            _viewModel.PerekToLoad = PerekToLoad.Todays;
+            viewModel.PerekToLoad = PerekToLoad.Todays;
 
             eventCount.Should().Be(0);
         }
@@ -486,11 +563,12 @@ public class PreferencesViewModelTests : IDisposable
         [Fact]
         public void LastLearntPerek_WhenSameValue_DoesNotFirePropertyChanged()
         {
-            _viewModel.LastLearntPerek = 7;
+            var viewModel = new PreferencesViewModel(_service);
+            viewModel.LastLearntPerek = 7;
             var eventCount = 0;
-            _viewModel.PropertyChanged += (_, _) => eventCount++;
+            viewModel.PropertyChanged += (_, _) => eventCount++;
 
-            _viewModel.LastLearntPerek = 7;
+            viewModel.LastLearntPerek = 7;
 
             eventCount.Should().Be(0);
         }
@@ -510,7 +588,10 @@ public class PreferencesViewModelTests : IDisposable
         {
             var fakePad = new FakePadDeliveryService { ProgressReports = [1.5] };
             var perushim = PerushimNotesService.CreateForTesting(fakePad, _tempDir);
-            var viewModel = new PreferencesViewModel(_service, perushim);
+            var fileSystem = new Mock<IFileSystem>();
+            var viewModel = new ExtensionPacksViewModel(perushim,
+                new RecitationService(fileSystem.Object, new Mock<IPadDeliveryService>().Object),
+                new PerekDataService(new LocalDatabaseService(fileSystem.Object)), _navigator.Object);
 
             await viewModel.DownloadPerushimCommand.ExecuteAsync(null);
             // Progress<T>.Report dispatches asynchronously; wait until the report applies.
