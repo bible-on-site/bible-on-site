@@ -191,7 +191,9 @@ public partial class PerekPage
             }
         }
         catch (OperationCanceledException) { /* Release, movement, or navigation cancels the pending long press. */ }
-        finally { if (_headerPress == request)
+        finally
+        {
+            if (_headerPress == request)
             {
                 _headerPress = null;
             }
@@ -200,14 +202,14 @@ public partial class PerekPage
     private void OnHeaderPointerReleased(object? sender, PointerEventArgs e) => _headerPress?.Cancel();
     private void OnHeaderPointerMoved(object? sender, PointerEventArgs e) => _headerPress?.Cancel();
 
-    private async Task HandlePasukTapAsync(Pasuk pasuk, object? view)
+    private async Task HandlePasukTapAsync(Pasuk pasuk)
     {
         if (_viewModel.SelectedPasukNums.Count > 0)
         {
             StopRecitation();
             _doubleTap.Reset();
             _viewModel.ToggleSelectedPasuk(pasuk.PasukNum);
-            UpdatePasukSelection(view, pasuk.PasukNum);
+            UpdatePasukSelection();
             return;
         }
         var doubled = _doubleTap.Tap(_viewModel.PerekId, pasuk.PasukNum, Environment.TickCount64);
@@ -333,10 +335,15 @@ public partial class PerekPage
                 formatted.Spans.Add(new Span { Text = "(קְרִי: ", TextColor = Color.FromArgb("#637598") });
             }
 
-            var span = new Span { Text = segment.Type switch
+            var span = new Span
             {
-                SegmentType.Ptuha => " {פ} ", SegmentType.Stuma => " {ס} ", _ => segment.Value
-            }};
+                Text = segment.Type switch
+                {
+                    SegmentType.Ptuha => " {פ} ",
+                    SegmentType.Stuma => " {ס} ",
+                    _ => segment.Value
+                }
+            };
             var word = track!.Words.FirstOrDefault(w => w.Pasuk == pasuk.PasukNum && w.Segment == i + 1);
             if (word != null)
             {

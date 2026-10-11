@@ -33,9 +33,13 @@ public partial class PreferencesPage : ContentPage
         if (e.Value && sender is RadioButton rb)
         {
             if (rb == PerekTodaysRadio)
+            {
                 _viewModel.PerekToLoad = PerekToLoad.Todays;
+            }
             else if (rb == PerekLastRadio)
+            {
                 _viewModel.PerekToLoad = PerekToLoad.LastLearnt;
+            }
         }
     }
 }

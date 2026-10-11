@@ -116,7 +116,9 @@ public class ArticleService : BaseGraphQLService
 
             var dto = response.Data?.ArticleById;
             if (dto == null)
+            {
                 return null;
+            }
 
             // Use StarterService authors if available (may be empty offline — that's ok)
             var author = StarterService.Instance.Authors.FirstOrDefault(a => a.Id == dto.AuthorId);

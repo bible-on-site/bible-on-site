@@ -40,6 +40,15 @@ repos:
     rev: v2.15.1
     hooks:
       - id: hadolint
+  # Codacy parity for its recurring Python findings: F = pyflakes (unused
+  # imports), D2 = docstring structure (D205/D212/D213 layout findings). The
+  # select is explicit so the gate doesn't drift with ruff version defaults;
+  # broader docstring coverage (D1xx undocumented-*) stays out of scope.
+  - repo: "https://github.com/astral-sh/ruff-pre-commit"
+    rev: v0.15.12
+    hooks:
+      - id: ruff-check
+        args: [--select, "F,D2"]
   - repo: local
     hooks:
       - id: check-app-version
@@ -86,6 +95,19 @@ repos:
         language: system
         files: ^web/(api|bulletin)/
         pass_filenames: false
+      # Local gate for recurring Codacy findings with no analyzer equivalent
+      # in the repo toolchains: non-unicode SQL string literals, non-literal
+      # RegExp(), String.prototype.replaceAll, and env::args[_os] without a
+      # nosemgrep justification. C# Codacy patterns are covered at build time
+      # by SonarAnalyzer.CSharp (app/Directory.Build.props + .editorconfig).
+      - id: codacy-gate
+        name: codacy-gate (Codacy parity patterns)
+        # language: system like the node hooks below — the gate script is
+        # stdlib-only, and pre-commit.ci rejects dep-less language: node.
+        entry: node devops/codacy-gate.mjs
+        language: system
+        files: \.(rs|[cm]?[jt]sx?)$
+        pass_filenames: true
       - id: flip-book-local-restore
         name: restore local html-flip-book-react
         entry: node devops/flip-book-dep.mjs post

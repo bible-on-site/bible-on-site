@@ -57,7 +57,11 @@ public partial class PreferencesViewModel : ObservableObject
         get => _preferencesService.FontFactor;
         set
         {
-            if (Math.Abs(_preferencesService.FontFactor - value) < 0.001) return;
+            if (Math.Abs(_preferencesService.FontFactor - value) < 0.001)
+            {
+                return;
+            }
+
             _preferencesService.FontFactor = value;
             OnPropertyChanged();
         }
@@ -71,7 +75,11 @@ public partial class PreferencesViewModel : ObservableObject
         get => _preferencesService.LastLearntPerek;
         set
         {
-            if (_preferencesService.LastLearntPerek == value) return;
+            if (_preferencesService.LastLearntPerek == value)
+            {
+                return;
+            }
+
             _preferencesService.LastLearntPerek = value;
             OnPropertyChanged();
         }
@@ -85,7 +93,11 @@ public partial class PreferencesViewModel : ObservableObject
         get => _preferencesService.PerekToLoad;
         set
         {
-            if (_preferencesService.PerekToLoad == value) return;
+            if (_preferencesService.PerekToLoad == value)
+            {
+                return;
+            }
+
             _preferencesService.PerekToLoad = value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(IsPerekToLoadTodays));
@@ -97,14 +109,26 @@ public partial class PreferencesViewModel : ObservableObject
     public bool IsPerekToLoadTodays
     {
         get => PerekToLoad == PerekToLoad.Todays;
-        set { if (value) PerekToLoad = PerekToLoad.Todays; }
+        set
+        {
+            if (value)
+            {
+                PerekToLoad = PerekToLoad.Todays;
+            }
+        }
     }
 
     /// <summary>True when startup perek is Last learnt.</summary>
     public bool IsPerekToLoadLastLearnt
     {
         get => PerekToLoad == PerekToLoad.LastLearnt;
-        set { if (value) PerekToLoad = PerekToLoad.LastLearnt; }
+        set
+        {
+            if (value)
+            {
+                PerekToLoad = PerekToLoad.LastLearnt;
+            }
+        }
     }
 
     /// <summary>Always show the perushim section — with different content based on install state.</summary>
@@ -169,7 +193,9 @@ public partial class PreferencesViewModel : ObservableObject
     public async Task DownloadPerushimAsync()
     {
         if (IsPerushimDownloading)
+        {
             return;
+        }
 
         IsPerushimDownloading = true;
         PerushimDownloadProgress = 0;
