@@ -3,12 +3,14 @@ import { fileURLToPath } from "node:url";
 
 /** Count actual anchor markup, excluding link data serialized in RSC scripts. */
 export function links(html, pattern) {
-	const rendered = html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "");
+	// Consume script blocks as tokens so their serialized anchors are never read.
+	const tokens =
+		/<script\b[^>]*>[\s\S]*?<\/script\s*>|<a\b[^>]*\bhref="([^"]+)"/gi;
 	return [
 		...new Set(
-			[...rendered.matchAll(/<a\b[^>]*\bhref="([^"]+)"/gi)]
+			[...html.matchAll(tokens)]
 				.map((match) => match[1])
-				.filter((href) => pattern.test(href)),
+				.filter((href) => href !== undefined && pattern.test(href)),
 		),
 	];
 }

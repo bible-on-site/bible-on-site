@@ -65,3 +65,13 @@ test("serialized RSC link data does not count as rendered content", () => {
 		[],
 	);
 });
+test("script tokens accept case and whitespace in closing tags", () => {
+	assert.deepEqual(
+		links(
+			"<SCRIPT>const data = '<a href=\"/929/1/4\">';</SCRIPT >" +
+				'<a href="/929/1/5">Rendered</a>',
+			/^\/929\/1\/\d+$/,
+		),
+		["/929/1/5"],
+	);
+});
