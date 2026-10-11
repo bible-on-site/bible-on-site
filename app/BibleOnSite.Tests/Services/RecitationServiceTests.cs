@@ -145,8 +145,34 @@ public class RecitationServiceTests
             It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    [Fact]
+    public async Task AndroidKeepsNativeOggPlayback_WithoutDecoder()
+    {
+        await using var storage = new TestStorage(); var extension = new Extension(storage);
+        var source = "original alignment MP3"u8.ToArray();
+        var opus = "OggS derived playback"u8.ToArray();
+        var track = Track(1, source) with { Playback = new("ogg-opus", Hash(opus), opus.Length, 24000, Hash(source)) };
+        extension.Package = new(1, [track]);
+        extension.Audio["/recordings/1_record.mp3"] = opus;
+        extension.Bundle();
+        // ExoPlayer demuxes Ogg natively, so no WAV chapter is produced for it.
+        var service = new RecitationService(storage.FileSystem.Object, extension.Delivery.Object, () => true);
+        await service.DownloadAsync([1]);
+        var audio = await service.PrepareAudioAsync(1, Canonical());
+        audio.Should().EndWith(".ogg");
+        (await File.ReadAllBytesAsync(audio, TestContext.Current.CancellationToken)).Should().Equal(opus);
+        Directory.EnumerateFiles(storage.Root, "*.wav", SearchOption.AllDirectories).Should().BeEmpty();
+    }
+
+    private static byte[] Corrupt(byte[] wav, int offset)
+    {
+        var copy = wav.ToArray();
+        copy[offset] = 0;
+        return copy;
+    }
+
     [Theory]
-    [InlineData("garbage")] [InlineData("truncated")]
+    [InlineData("garbage")] [InlineData("magic")] [InlineData("wave")] [InlineData("truncated")]
     public async Task OpusChapterCacheDamageDecodesAgain(string damage)
     {
         await using var storage = new TestStorage(); var extension = new Extension(storage);
@@ -162,7 +188,13 @@ public class RecitationServiceTests
         decoder.Setup(d => d.CreateChapterAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(decodedWav);
         var chapter = await service.PrepareAudioAsync(1, Canonical(), null, null, TestContext.Current.CancellationToken, null, decoder.Object);
-        var damaged = damage == "truncated" ? decodedWav[..^5] : "damaged"u8.ToArray();
+        var damaged = damage switch
+        {
+            "truncated" => decodedWav[..^5],
+            "magic" => Corrupt(decodedWav, 0),
+            "wave" => Corrupt(decodedWav, 8),
+            _ => "damaged"u8.ToArray(),
+        };
         await File.WriteAllBytesAsync(chapter, damaged, TestContext.Current.CancellationToken);
         var rebuilt = await service.PrepareAudioAsync(1, Canonical(), null, null, TestContext.Current.CancellationToken, null, decoder.Object);
         rebuilt.Should().Be(chapter);

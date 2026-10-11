@@ -17,6 +17,7 @@ public sealed class RecitationService
     private readonly SemaphoreSlim _downloadGate = new(1, 1);
     private Dictionary<int, RecitationTrack> _tracks = new();
     private List<RecitationBookPack> _books = [];
+    private readonly Func<bool> _playsOggNatively;
     private bool _initialized;
 #pragma warning disable S3264 // Subscribed by platform XAML controls excluded from test compilation.
     public event EventHandler? Changed;
@@ -29,10 +30,12 @@ public sealed class RecitationService
     private string DirectoryPath => Path.Combine(_files.AppDataDirectory, "extensions", "recitation");
     private string AudioPath(RecitationTrack track) => Path.Combine(DirectoryPath, track.PlaybackFileName);
 
-    public RecitationService(IFileSystem files, IPadDeliveryService delivery)
+    public RecitationService(IFileSystem files, IPadDeliveryService delivery, Func<bool>? playsOggNatively = null)
     {
         _files = files;
         _delivery = delivery;
+        // Tests inject the Android arm; runtime delegates to the platform check.
+        _playsOggNatively = playsOggNatively ?? OperatingSystem.IsAndroid;
     }
 
     public async Task InitializeAsync()
@@ -117,8 +120,7 @@ public sealed class RecitationService
                     {
                         // Only obsolete app downloads, after verified replacement.
                         // The archival/pipeline recordings are outside this directory.
-                        try { File.Delete(Path.Combine(DirectoryPath, oldName)); }
-                        catch (IOException) { /* A player can still be releasing the old download. */ }
+                        try { File.Delete(Path.Combine(DirectoryPath, oldName)); } catch (IOException) { /* A player can still be releasing the old download. */ }
                     }
                 }
                 completed += book.SizeBytes;
@@ -256,7 +258,7 @@ public sealed class RecitationService
             cancellationToken.ThrowIfCancellationRequested();
             if (intervals == null)
             {
-                if (track.Playback == null || OperatingSystem.IsAndroid())
+                if (track.Playback == null || _playsOggNatively())
                 {
                     // MediaElement demuxes MP3 everywhere and Ogg through ExoPlayer.
                     return audio;
@@ -317,19 +319,12 @@ public sealed class RecitationService
             Span<byte> header = stackalloc byte[12];
             using (var file = File.OpenRead(path))
             {
-                if (file.Read(header) != header.Length)
-                {
-                    return false;
-                }
+                file.ReadExactly(header);
             }
             return header[..4].SequenceEqual("RIFF"u8) && header[8..].SequenceEqual("WAVE"u8) &&
                 BinaryPrimitives.ReadUInt32LittleEndian(header[4..8]) + 8L == length;
         }
-        catch (IOException)
-        {
-            return false;
-        }
-        catch (UnauthorizedAccessException)
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
         {
             return false;
         }

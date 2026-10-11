@@ -39,3 +39,11 @@ test("the same immutable object keys work with local RustFS", () => {
 		`http://localhost:4566/bible-on-site-assets-test/recordings/opus-24k/${"b".repeat(64)}.ogg`,
 	);
 });
+
+test("an unset S3 bucket still resolves through the default archive name", () => {
+	process.env.S3_ENDPOINT = "http://localhost:4566/";
+	delete process.env.S3_BUCKET;
+	expect(opusPlayback(338, "a".repeat(64))?.audioUrl).toBe(
+		`http://localhost:4566/bible-on-site-assets/recordings/opus-24k/${"b".repeat(64)}.ogg`,
+	);
+});

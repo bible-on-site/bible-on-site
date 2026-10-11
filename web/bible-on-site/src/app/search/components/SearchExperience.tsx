@@ -280,9 +280,9 @@ export function SearchExperience({
 	// also drops `q` from unhydrated form submissions.
 	useEffect(() => {
 		const typed = inputRef.current?.value;
-		if (typed !== undefined) {
-			setInput((current) => (typed === current ? current : typed));
-		}
+		/* istanbul ignore next -- the input mounts in the same commit, so this effect always finds its ref */
+		if (typed === undefined) return;
+		setInput((current) => (typed === current ? current : typed));
 	}, []);
 
 	const resultLinks = () =>
