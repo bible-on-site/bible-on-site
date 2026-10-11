@@ -13,7 +13,37 @@
 import { normalizeSearchText, normalizeWithMap } from "./normalize";
 import { tokenScore } from "./score";
 
-const MARKS = /[\p{Mn}\p{Mc}]/u;
+/**
+ * Combining-mark code-point blocks (Unicode Mn/Mc) covering Hebrew niqqud and
+ * taamim plus the shared diacritical and script mark blocks found in article
+ * and commentary markup. Range checks keep regexes off the rendered text.
+ */
+const COMBINING_MARK_BLOCKS: readonly (readonly [number, number])[] = [
+	[0x0300, 0x036f],
+	[0x0483, 0x0489],
+	[0x0591, 0x05bd],
+	[0x05bf, 0x05bf],
+	[0x05c1, 0x05c2],
+	[0x05c4, 0x05c5],
+	[0x05c7, 0x05c7],
+	[0x0610, 0x061a],
+	[0x064b, 0x065f],
+	[0x0670, 0x0670],
+	[0x06d6, 0x06dc],
+	[0x06df, 0x06e4],
+	[0x06e7, 0x06e8],
+	[0x06ea, 0x06ed],
+	[0x1ab0, 0x1aff],
+	[0x1dc0, 0x1dff],
+	[0x20d0, 0x20f0],
+	[0xfe20, 0xfe2f],
+];
+
+function isCombiningMark(codeUnit: number): boolean {
+	return COMBINING_MARK_BLOCKS.some(
+		([low, high]) => codeUnit >= low && codeUnit <= high,
+	);
+}
 
 export interface TextNodeSlice {
 	node: Text;
@@ -118,7 +148,7 @@ export function rawRangeFromSpan(
 		return { start, end: start };
 	}
 	let end = map[clamp(span.end - 1)] + 1;
-	while (end < text.length && MARKS.test(text[end])) {
+	while (end < text.length && isCombiningMark(text.charCodeAt(end))) {
 		end++;
 	}
 	return { start, end };

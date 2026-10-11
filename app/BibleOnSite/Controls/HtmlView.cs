@@ -107,7 +107,7 @@ public class HtmlView : View
         typeof(int),
         typeof(HtmlView),
         -1,
-        propertyChanged: OnSearchMatchChanged);
+        propertyChanged: (bindable, _, _) => ((HtmlView)bindable).OnSearchMatchChanged());
 
     /// <summary>
     /// Bindable property for the normalized-text length of a search match.
@@ -118,7 +118,15 @@ public class HtmlView : View
         typeof(int),
         typeof(HtmlView),
         0,
-        propertyChanged: OnSearchMatchChanged);
+        propertyChanged: (bindable, _, _) => ((HtmlView)bindable).OnSearchMatchChanged());
+
+    public HtmlView()
+    {
+        // HasSearchMatch flips with the match properties; the notification also
+        // anchors the event in shared code — the rendering subscribers attach
+        // inside each platform handler.
+        SearchMatchChanged += (_, _) => OnPropertyChanged(nameof(HasSearchMatch));
+    }
 
     /// <summary>
     /// Gets or sets the HTML content to display.
@@ -258,9 +266,6 @@ public class HtmlView : View
 
     private static void OnStyleChanged(BindableObject bindable, object oldValue, object newValue)
         => ((HtmlView)bindable).OnStyleChanged();
-
-    private static void OnSearchMatchChanged(BindableObject bindable, object oldValue, object newValue)
-        => ((HtmlView)bindable).OnSearchMatchChanged();
 
     /// <summary>
     /// Raised when the HTML content changes.

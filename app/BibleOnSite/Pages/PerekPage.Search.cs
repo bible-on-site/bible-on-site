@@ -454,7 +454,9 @@ public partial class PerekPage
         }
         return false;
 #else
-        return null; // No native position check on this platform.
+        _ = list; // No native position check on this platform.
+        _ = item;
+        return null;
 #endif
     }
 
@@ -490,6 +492,8 @@ public partial class PerekPage
         var bottom = top + collection.Bounds.Height - collection.AdjustedContentInset.Top;
         return point.Y >= top && point.Y <= bottom;
 #else
+        _ = list; // No measurement without the platform views.
+        _ = htmlView;
         return null;
 #endif
     }
@@ -542,6 +546,8 @@ public partial class PerekPage
         return true;
 #else
         // No per-line measurement on this platform: the pasuk-row scroll is the landing.
+        _ = list;
+        _ = htmlView;
         return true;
 #endif
     }

@@ -220,7 +220,8 @@ public static class SearchMatch
     {
         var map = new List<int>(raw.Length);
         var lastEmittedSpace = true; // same "empty builder" state as Normalize
-        for (var i = 0; i < raw.Length; i++)
+        var i = 0;
+        while (i < raw.Length)
         {
             // Decompose per code point, not per UTF-16 unit — a lone surrogate
             // half is not valid input to Normalize().
@@ -242,7 +243,7 @@ public static class SearchMatch
                     lastEmittedSpace = true;
                 }
             }
-            i += unitLength - 1;
+            i += unitLength;
         }
         // Normalize() trims: a trailing emitted space never reaches the output.
         // Track the emit state — inspecting the raw char misfires on units
