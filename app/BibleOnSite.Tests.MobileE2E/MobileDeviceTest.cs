@@ -157,16 +157,27 @@ public abstract class MobileDeviceTest : IAsyncLifetime
             body();
             CoverageEvidence.RecordSession(Driver?.SessionId);
             CoverageEvidence.Finish("passed");
-            AppCoverage.Collect(Configuration, name, "passed", Output);
+            CollectAppCoverage(name, "passed");
             SaveDiagnostics(name, "passed");
         }
         catch
         {
             CoverageEvidence.RecordSession(Driver?.SessionId);
             CoverageEvidence.Finish("failed");
-            AppCoverage.Collect(Configuration, name, "failed", Output);
+            CollectAppCoverage(name, "failed");
             SaveDiagnostics(name, "failed");
             throw;
+        }
+    }
+
+    // No live session means no app process is answering the coverage endpoint;
+    // unit-test fakes never create a driver, so this also keeps the collection
+    // — including its Android-only adb bridge — out of host-side unit tests.
+    private void CollectAppCoverage(string name, string outcome)
+    {
+        if (Driver != null)
+        {
+            AppCoverage.Collect(Configuration, name, outcome, Output);
         }
     }
 
