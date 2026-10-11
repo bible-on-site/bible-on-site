@@ -469,7 +469,7 @@ public class ExtensionPackLifecycleTests
         updated.HasAudio(3).Should().BeTrue();
     }
 
-    private static PreferencesViewModel Settings(TestStorage storage, Store store,
+    private static PreferencesViewModel Settings(TestStorage storage,
         PerushimNotesService notes, RecitationService recitation, Mock<IAppNavigator> navigator)
     {
         return new PreferencesViewModel(
@@ -487,7 +487,7 @@ public class ExtensionPackLifecycleTests
             (2, [(3, "other book"u8.ToArray())]));
         store.Wire();
         var recitation = new RecitationService(storage.FileSystem.Object, store.Delivery.Object);
-        var settings = Settings(storage, store, Notes(storage, store.Delivery.Object), recitation, new Mock<IAppNavigator>());
+        var settings = Settings(storage, Notes(storage, store.Delivery.Object), recitation, new Mock<IAppNavigator>());
         var changes = new List<string?>();
         settings.PropertyChanged += (_, e) => changes.Add(e.PropertyName);
 
@@ -511,7 +511,7 @@ public class ExtensionPackLifecycleTests
         var store = new Store(storage.Root);
         store.Wire();
         var navigator = new Mock<IAppNavigator>();
-        var settings = Settings(storage, store, Notes(storage, store.Delivery.Object),
+        var settings = Settings(storage, Notes(storage, store.Delivery.Object),
             new RecitationService(storage.FileSystem.Object, store.Delivery.Object), navigator);
 
         await settings.OpenRecitationCommand.ExecuteAsync(null);
@@ -530,7 +530,7 @@ public class ExtensionPackLifecycleTests
         var notes = Notes(storage, store.Delivery.Object);
         var navigator = new Mock<IAppNavigator>();
         navigator.Setup(n => n.DisplayChoiceAsync(It.IsAny<string>(), It.IsAny<string>(), "הסרה", "ביטול")).ReturnsAsync(false);
-        var settings = Settings(storage, store, notes,
+        var settings = Settings(storage, notes,
             new RecitationService(storage.FileSystem.Object, store.Delivery.Object), navigator);
         await notes.InitializeAsync();
         settings.IsPerushimInstalled.Should().BeTrue();
@@ -554,7 +554,7 @@ public class ExtensionPackLifecycleTests
         var notes = Notes(storage, store.Delivery.Object);
         var navigator = new Mock<IAppNavigator>();
         navigator.Setup(n => n.DisplayChoiceAsync(It.IsAny<string>(), It.IsAny<string>(), "הסרה", "ביטול")).ReturnsAsync(true);
-        var settings = Settings(storage, store, notes,
+        var settings = Settings(storage, notes,
             new RecitationService(storage.FileSystem.Object, store.Delivery.Object), navigator);
         await notes.InitializeAsync();
         settings.IsPerushimInstalled.Should().BeTrue();
@@ -584,7 +584,7 @@ public class ExtensionPackLifecycleTests
         var store = new Store(storage.Root);
         store.Wire();
         var navigator = new Mock<IAppNavigator>();
-        var settings = Settings(storage, store, Notes(storage, store.Delivery.Object),
+        var settings = Settings(storage, Notes(storage, store.Delivery.Object),
             new RecitationService(storage.FileSystem.Object, store.Delivery.Object), navigator);
 
         await settings.RemovePerushimCommand.ExecuteAsync(null);
