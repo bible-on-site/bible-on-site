@@ -103,7 +103,9 @@
 		<MauiFont Include="Resources\Fonts\*" />
 
 		<!-- Raw Assets (also remove the "Resources\Raw" prefix) -->
-		<MauiAsset Include="Resources\Raw\**" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
+		<MauiAsset Include="Resources\Raw\**" Exclude="Resources\Raw\e2e_sample.mp4" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
+		<!-- E2E-only MediaElement source for the fullscreen-Back regression page (#2117). -->
+		<MauiAsset Include="Resources\Raw\e2e_sample.mp4" LogicalName="e2e_sample.mp4" Condition="'$(Configuration)' == 'Debug'" />
 	</ItemGroup>
 
 	<!-- Firebase: google-services.json for Android (same Firebase project as legacy app: tanah-al-haperek) -->

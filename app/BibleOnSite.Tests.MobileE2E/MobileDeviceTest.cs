@@ -151,8 +151,13 @@ public abstract class MobileDeviceTest : IAsyncLifetime
         }
         Driver = _sessions.Create(() => Platform.CreateDriver(Configuration.Server, CreateOptions()));
         Page = new(Driver, Platform);
-        Page.WaitForStartup();
+        AwaitStartup();
     }
+
+    // Scenarios launched onto a surface other than the reader (e.g. the
+    // BIBLE_E2E_VIDEO page) override this instead of reimplementing session
+    // management: the default waits on the reader's PerekSource.
+    protected virtual void AwaitStartup() => Page.WaitForStartup();
 
     // Scenarios that need extra launch environment (e.g. BIBLE_E2E_PERUSHIM
     // synthetic commentary data) override this instead of reimplementing

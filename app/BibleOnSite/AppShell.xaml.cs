@@ -29,6 +29,9 @@ public partial class AppShell : Shell
 		Routing.RegisterRoute("TosPage", typeof(TosPage));
 		Routing.RegisterRoute("PreferencesPage", typeof(PreferencesPage));
 		Routing.RegisterRoute(AppRoutes.SearchReader, typeof(PerekPage));
+#if DEBUG
+		Routing.RegisterRoute("e2eVideo", typeof(E2eVideoPage));
+#endif
 
 		Navigated += OnNavigated;
 	}
@@ -45,6 +48,12 @@ public partial class AppShell : Shell
 		var reader = new PerekPage();
 		ReaderContent.ContentTemplate = null;
 		ReaderContent.Content = reader;
+#if DEBUG
+		if (E2eVideoPage.Enabled)
+		{
+			Dispatcher.DispatchAsync(() => GoToAsync("e2eVideo"));
+		}
+#endif
 	}
 
 #if IOS || MACCATALYST

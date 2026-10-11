@@ -22,6 +22,17 @@ public class MainActivity : MauiAppCompatActivity
     protected override void OnCreate(Bundle? savedInstanceState)
     {
         base.OnCreate(savedInstanceState);
+#if DEBUG
+        // Android app launches cannot carry process environment, so the e2e
+        // suite passes flags as launch-intent extras; normalize into env vars
+        // so app code reads the same path as the iOS processArguments route.
+        var e2eVideoFlag = Intent?.GetStringExtra("BIBLE_E2E_VIDEO");
+        if (!string.IsNullOrEmpty(e2eVideoFlag))
+        {
+            System.Environment.SetEnvironmentVariable("BIBLE_E2E_VIDEO", e2eVideoFlag);
+        }
+#endif
+        OnBackPressedDispatcher.AddCallback(this, new VideoFullscreenBackCallback(this));
         HandleAppLinkIntent(Intent);
         // Firebase initialized from google-services.json (Plugin.Firebase / Xamarin.Firebase.Analytics process it at build).
         // For explicit init use Plugin.Firebase.Core CrossFirebase.Initialize(activity, settings) when needed.
