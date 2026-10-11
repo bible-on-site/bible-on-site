@@ -1,5 +1,5 @@
-"""
-Validate deployed SQL files with the production Lambda's parser, in manifest order.
+"""Validate deployed SQL files with the production Lambda's parser, in manifest order.
+
 Use --parse-only for the database-free compatibility check used in Data CI.
 Without --parse-only, execute the statements against a disposable local MySQL
 database (the parser injects DROP TABLE/VIEW statements).
