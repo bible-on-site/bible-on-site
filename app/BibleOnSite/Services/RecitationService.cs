@@ -195,13 +195,17 @@ public sealed class RecitationService
 
                 // Cleanup is best-effort: only IO failures are swallowed.
                 try { File.Delete(file); }
-                catch (IOException ex) { LogSweepFailure(ex); }
-                catch (UnauthorizedAccessException ex) { LogSweepFailure(ex); }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    LogSweepFailure(ex);
+                }
             }
         }
         // The sweep must never fail a catalog update.
-        catch (IOException ex) { LogSweepFailure(ex); }
-        catch (UnauthorizedAccessException ex) { LogSweepFailure(ex); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            LogSweepFailure(ex);
+        }
         finally { _downloadGate.Release(); }
     }
 

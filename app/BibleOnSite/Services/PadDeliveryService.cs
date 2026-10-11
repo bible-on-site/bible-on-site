@@ -58,12 +58,16 @@ public sealed partial class PadDeliveryService : IPadDeliveryService
 
                 try { Directory.Delete(stale, true); }
                 // Cleanup is best-effort: only IO failures are swallowed.
-                catch (IOException ex) { LogOdrSweepFailure(ex); }
-                catch (UnauthorizedAccessException ex) { LogOdrSweepFailure(ex); }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    LogOdrSweepFailure(ex);
+                }
             }
         }
-        catch (IOException ex) { LogOdrSweepFailure(ex); }
-        catch (UnauthorizedAccessException ex) { LogOdrSweepFailure(ex); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            LogOdrSweepFailure(ex);
+        }
     }
 
     private static void LogOdrSweepFailure(Exception ex) =>

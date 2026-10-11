@@ -203,14 +203,10 @@ public class PerushimNotesService
 
         // A deliberate removal is never undone by initialization, a metadata
         // refresh, or a still-delivered store pack. Only an explicit install
-        // (TryDownloadNotesAsync) lifts the tombstone.
+        // (TryDownloadNotesAsync) lifts the tombstone. This branch runs only
+        // while !_initialized, and _connection is never set before _initialized.
         if (File.Exists(RemovedMarkerPath))
         {
-            if (_connection != null)
-            {
-                await _connection.CloseAsync();
-                _connection = null;
-            }
             File.Delete(dbPath);
             _notesMissing = true;
             _notesValidationStatus = "Removed by user";
