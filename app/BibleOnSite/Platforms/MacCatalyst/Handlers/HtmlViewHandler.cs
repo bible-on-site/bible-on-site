@@ -55,9 +55,10 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
     /// <summary>Routes link interaction through HtmlView.LinkTapped.</summary>
     private sealed class HtmlLinkDelegate(Func<HtmlView?> viewProvider) : UITextViewDelegate
     {
-        public override bool ShouldInteractWithUrl(UITextView textView, NSUrl URL, NSRange _, UITextItemInteraction interaction)
+#pragma warning disable S1172 // The UIKit delegate signature fixes parameters the decision does not need.
+        public override bool ShouldInteractWithUrl(UITextView textView, NSUrl URL, NSRange characterRange, UITextItemInteraction interaction)
+#pragma warning restore S1172
         {
-            _ = textView; // The delegate decides only from the URL and interaction kind.
             var url = URL.AbsoluteString ?? URL.Description;
             if (interaction == UITextItemInteraction.InvokeDefaultAction &&
                 viewProvider()?.DispatchLinkTapped(url).Handled == true)
