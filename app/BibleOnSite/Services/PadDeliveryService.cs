@@ -30,8 +30,8 @@ public sealed partial class PadDeliveryService : IPadDeliveryService
     {
         // Extracted ODR data belongs to this app build, just like the store resource.
         var generation = $"{appInfo.VersionString}-{appInfo.BuildString}";
-        var root = Path.Combine(fileSystem.CacheDirectory, "odr_assets");
-        var dir = Path.Combine(root, generation, packName);
+        var root = Path.Join(fileSystem.CacheDirectory, "odr_assets");
+        var dir = Path.Join(root, generation, packName);
         Directory.CreateDirectory(dir);
         // Extractions from previous app versions are obsolete — each holds a
         // full pack payload (hundreds of MB) and must not accumulate.
@@ -303,7 +303,7 @@ partial class PadDeliveryService
     {
         ct.ThrowIfCancellationRequested();
         var cacheDir = OdrCacheDir(packName);
-        if (File.Exists(Path.Combine(cacheDir, PayloadFileName(packName))))
+        if (File.Exists(Path.Join(cacheDir, PayloadFileName(packName))))
             return cacheDir;
 
         try
@@ -414,7 +414,7 @@ partial class PadDeliveryService
         }
 
         System.Diagnostics.Debug.WriteLine($"ODR: NSDataAsset loaded, length={asset.Data.Length}");
-        var destPath = Path.Combine(cacheDir, fileName);
+        var destPath = Path.Join(cacheDir, fileName);
         try
         {
             using var stream = asset.Data.AsStream();
@@ -440,7 +440,7 @@ partial class PadDeliveryService
         var lines = new List<string> { "--- ODR (iOS) delivery diagnostics ---" };
 
         var cacheDir = OdrCacheDir(packName);
-        var cachedFile = Path.Combine(cacheDir, PayloadFileName(packName));
+        var cachedFile = Path.Join(cacheDir, PayloadFileName(packName));
         lines.Add($"Cache dir: {cacheDir}");
         lines.Add($"Cached file exists: {File.Exists(cachedFile)}");
         if (File.Exists(cachedFile))
@@ -461,7 +461,7 @@ partial class PadDeliveryService
         {
             var mainBundle = NSBundle.MainBundle;
             lines.Add($"Main bundle path: {mainBundle.BundlePath}");
-            var assetsCar = Path.Combine(mainBundle.BundlePath, "Assets.car");
+            var assetsCar = Path.Join(mainBundle.BundlePath, "Assets.car");
             lines.Add($"Main Assets.car exists: {File.Exists(assetsCar)}");
             if (File.Exists(assetsCar))
                 lines.Add($"Main Assets.car size: {new FileInfo(assetsCar).Length} bytes");
@@ -509,7 +509,7 @@ partial class PadDeliveryService
                     lines.Add($"Request bundle path (after fetch): {fetchReq.Bundle?.BundlePath ?? "(null)"}");
 
                     // Check if ODR asset pack was downloaded
-                    var odrDir = Path.Combine(fetchReq.Bundle?.BundlePath ?? "", "OnDemandResources");
+                    var odrDir = Path.Join(fetchReq.Bundle?.BundlePath ?? "", "OnDemandResources");
                     lines.Add($"ODR dir in bundle exists: {Directory.Exists(odrDir)}");
 
                     ProbeNSDataAsset(lines, "ODR(fetched,request.Bundle)", packName, fetchReq.Bundle);

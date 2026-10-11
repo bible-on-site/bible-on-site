@@ -122,7 +122,7 @@ public class PerushimNotesService
         {
             diagnosticErrors.Add($"Initialization error: {ex.GetType().Name}: {ex.Message}");
         }
-        var dbPath = Path.Combine(DataDirectory, NotesDbName);
+        var dbPath = Path.Join(DataDirectory, NotesDbName);
         string? padPath = null;
         try { padPath = await _padService.TryGetAssetPathAsync(PerushimNotesPackName); }
         catch (Exception ex)
@@ -145,15 +145,15 @@ public class PerushimNotesService
             $"JSON reflection enabled by default: {JsonSerializer.IsReflectionEnabledByDefault}",
             $"Local DB path: {dbPath}",
             $"Local DB exists: {File.Exists(dbPath)}",
-            $"Delivered search index exists: {File.Exists(Path.Combine(DataDirectory, SearchIndexDbName))}",
+            $"Delivered search index exists: {File.Exists(Path.Join(DataDirectory, SearchIndexDbName))}",
             $"PAD/ODR path: {(padPath ?? "(null)")}",
             $"App package has notes file: {appPackageHasFile}",
         };
         lines.AddRange(diagnosticErrors);
         if (padPath != null)
         {
-            var atRoot = File.Exists(Path.Combine(padPath, NotesDbName));
-            var atAssets = File.Exists(Path.Combine(padPath, "assets", NotesDbName));
+            var atRoot = File.Exists(Path.Join(padPath, NotesDbName));
+            var atAssets = File.Exists(Path.Join(padPath, "assets", NotesDbName));
             lines.Add($"  PAD file at root: {atRoot}");
             lines.Add($"  PAD file in assets/: {atAssets}");
         }
@@ -215,7 +215,7 @@ public class PerushimNotesService
             return;
 
         SweepStaleTempFiles();
-        var dbPath = Path.Combine(DataDirectory, NotesDbName);
+        var dbPath = Path.Join(DataDirectory, NotesDbName);
 
         if (!File.Exists(dbPath))
         {
@@ -261,7 +261,7 @@ public class PerushimNotesService
 
     private async Task<bool> TryDownloadNotesCoreAsync(IProgress<double>? progress)
     {
-        var dbPath = Path.Combine(DataDirectory, NotesDbName);
+        var dbPath = Path.Join(DataDirectory, NotesDbName);
         if (File.Exists(dbPath))
         {
             await InitializeCoreAsync();
@@ -328,7 +328,7 @@ public class PerushimNotesService
         if (valid)
         {
             // A pack that passed is a different generation than any rejected one.
-            TryDelete(Path.Combine(DataDirectory, NotesDbName + ".rejected"));
+            TryDelete(Path.Join(DataDirectory, NotesDbName + ".rejected"));
         }
         return valid;
     }
@@ -390,8 +390,8 @@ public class PerushimNotesService
             }
             else
             {
-                var notesTimestamp = await GetBuildTimestampAsync(Path.Combine(DataDirectory, NotesDbName));
-                var catalogTimestamp = await GetBuildTimestampAsync(Path.Combine(_fileSystem.AppDataDirectory,
+                var notesTimestamp = await GetBuildTimestampAsync(Path.Join(DataDirectory, NotesDbName));
+                var catalogTimestamp = await GetBuildTimestampAsync(Path.Join(_fileSystem.AppDataDirectory,
                     "sefaria-dump-5784-sivan-4.perushim_catalog.sqlite"));
                 compatible = notesTimestamp > 0 && notesTimestamp == catalogTimestamp;
                 _notesValidationStatus = compatible
@@ -436,14 +436,14 @@ public class PerushimNotesService
         // Never leave an unusable generation on the device: the ~285 MB legacy
         // DB, its paired search index, journal sidecars, and interrupted
         // replacement leftovers are all app-owned and must go.
-        var dbPath = Path.Combine(DataDirectory, NotesDbName);
+        var dbPath = Path.Join(DataDirectory, NotesDbName);
         // Remember the rejected generation so a same-generation pack is not
         // re-copied on every launch only to fail validation again.
         var rejectedTimestamp = await GetBuildTimestampAsync(dbPath);
         TryDelete(dbPath);
         TryDelete(dbPath + "-wal");
         TryDelete(dbPath + "-shm");
-        var indexPath = Path.Combine(DataDirectory, SearchIndexDbName);
+        var indexPath = Path.Join(DataDirectory, SearchIndexDbName);
         TryDelete(indexPath);
         TryDelete(indexPath + "-wal");
         TryDelete(indexPath + "-shm");
@@ -471,7 +471,7 @@ public class PerushimNotesService
     {
         try
         {
-            var marker = Path.Combine(DataDirectory, NotesDbName + ".rejected");
+            var marker = Path.Join(DataDirectory, NotesDbName + ".rejected");
             if (!File.Exists(marker))
             {
                 return false;
@@ -505,7 +505,7 @@ public class PerushimNotesService
                 }
             }
             // Staged app-package copy that never became the local DB.
-            TryDelete(Path.Combine(DataDirectory, NotesDbName + ".pkgcheck"));
+            TryDelete(Path.Join(DataDirectory, NotesDbName + ".pkgcheck"));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -535,7 +535,7 @@ public class PerushimNotesService
     internal async Task<string?> GetDeliveredIndexPathAsync()
     {
         await InitializeAsync();
-        var path = Path.Combine(DataDirectory, SearchIndexDbName);
+        var path = Path.Join(DataDirectory, SearchIndexDbName);
         return File.Exists(path) ? path : null;
     }
 
@@ -588,9 +588,9 @@ public class PerushimNotesService
             var padPath = await _padService.TryGetAssetPathAsync(PerushimNotesPackName);
             if (padPath == null) return;
 
-            var padDbPath = Path.Combine(padPath, NotesDbName);
+            var padDbPath = Path.Join(padPath, NotesDbName);
             if (!File.Exists(padDbPath))
-                padDbPath = Path.Combine(padPath, "assets", NotesDbName);
+                padDbPath = Path.Join(padPath, "assets", NotesDbName);
             if (!File.Exists(padDbPath)) return;
 
             var localSchema = await ReadSchemaVersionAsync(localDbPath);
@@ -650,9 +650,9 @@ public class PerushimNotesService
     private async Task<bool> TryCopyFromPadAsync(string padAssetsPath, string dbPath, bool respectRejectionMarker = true)
     {
         // PAD may expose pack root or an "assets" subfolder depending on SDK/version
-        var srcPath = Path.Combine(padAssetsPath, NotesDbName);
+        var srcPath = Path.Join(padAssetsPath, NotesDbName);
         if (!File.Exists(srcPath))
-            srcPath = Path.Combine(padAssetsPath, "assets", NotesDbName);
+            srcPath = Path.Join(padAssetsPath, "assets", NotesDbName);
         if (!File.Exists(srcPath))
             return false;
         // An incompatible pack file would only be rejected and deleted after
@@ -689,15 +689,15 @@ public class PerushimNotesService
     /// </summary>
     private async Task TryCopyPadIndexAsync(string padAssetsPath)
     {
-        var srcPath = Path.Combine(padAssetsPath, SearchIndexDbName);
+        var srcPath = Path.Join(padAssetsPath, SearchIndexDbName);
         if (!File.Exists(srcPath))
-            srcPath = Path.Combine(padAssetsPath, "assets", SearchIndexDbName);
+            srcPath = Path.Join(padAssetsPath, "assets", SearchIndexDbName);
         if (!File.Exists(srcPath))
             return;
         try
         {
             await using var source = File.OpenRead(srcPath);
-            await AtomicFile.CopyAsync(source, Path.Combine(DataDirectory, SearchIndexDbName));
+            await AtomicFile.CopyAsync(source, Path.Join(DataDirectory, SearchIndexDbName));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -745,7 +745,7 @@ public class PerushimNotesService
         try
         {
             await using var source = await _fileSystem.OpenAppPackageFileAsync(SearchIndexDbName);
-            await AtomicFile.CopyAsync(source, Path.Combine(DataDirectory, SearchIndexDbName));
+            await AtomicFile.CopyAsync(source, Path.Join(DataDirectory, SearchIndexDbName));
         }
         catch (FileNotFoundException)
         {

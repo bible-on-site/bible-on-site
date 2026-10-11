@@ -27,7 +27,7 @@ public sealed class SearchIndexService : IAsyncDisposable
     private readonly object _buildSync = new();
 
     private static readonly Lazy<SearchIndexService> _instance = new(() => new(PerekDataService.Instance,
-        PerushimNotesService.Instance, Path.Combine(FileSystem.Current.CacheDirectory, "hebrew-search.sqlite")));
+        PerushimNotesService.Instance, Path.Join(FileSystem.Current.CacheDirectory, "hebrew-search.sqlite")));
     public static SearchIndexService Instance => _instance.Value;
 
     public SearchIndexService(PerekDataService perakim, PerushimNotesService? notes, string indexPath)
@@ -190,13 +190,10 @@ public sealed class SearchIndexService : IAsyncDisposable
             var directory = Path.GetDirectoryName(_indexPath) ?? ".";
             // The superseded v1 cache lives next to the working index — the same
             // directory on device, and nothing to do in test directories.
-            var legacy = Path.Combine(directory, "hebrew-search-v1.sqlite");
-            foreach (var path in new[] { legacy, legacy + "-wal", legacy + "-shm" })
+            var legacy = Path.Join(directory, "hebrew-search-v1.sqlite");
+            foreach (var path in new[] { legacy, legacy + "-wal", legacy + "-shm" }.Where(File.Exists))
             {
-                if (File.Exists(path))
-                {
-                    File.Delete(path);
-                }
+                File.Delete(path);
             }
             foreach (var file in Directory.GetFiles(directory, Path.GetFileName(_indexPath) + ".*.tmp"))
             {
