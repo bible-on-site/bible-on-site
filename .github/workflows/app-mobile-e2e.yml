@@ -73,12 +73,15 @@ jobs:
         if: matrix.platform == 'iOS'
         run: sudo xcode-select --switch /Applications/Xcode_27.app/Contents/Developer
 
-      # simctl boot is asynchronous: the device boots on the host while the
-      # dependency installs and the app build run, and ios:boot:wait gates the
-      # test step on the finished boot instead of idling through it here.
-      - name: Start iPhone simulator boot
+      # simctl boot is asynchronous, and so is this step: the whole prepare —
+      # select, boot kick, readiness monitor, Appium bridge preflight, env
+      # export — overlaps every install and the app build, while the `wait`
+      # step before the tests is the gate that surfaces it.
+      - name: Prepare iPhone simulator
+        id: simulator
         if: matrix.platform == 'iOS'
-        run: npm run ios:boot:start --prefix app/mobile-e2e
+        background: true
+        run: npm run ios:boot --prefix app/mobile-e2e
 
       - name: Restore npm cache
         id: npm-cache
@@ -274,8 +277,7 @@ jobs:
         run: npm run ios:wda --prefix app/mobile-e2e
 
       - name: Wait for iPhone simulator
-        if: matrix.platform == 'iOS'
-        run: npm run ios:boot:wait --prefix app/mobile-e2e
+        wait: simulator
 
       - name: Run shared pilot on iOS
         if: matrix.platform == 'iOS'
