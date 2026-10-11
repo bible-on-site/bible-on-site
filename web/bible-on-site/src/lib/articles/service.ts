@@ -1,5 +1,7 @@
 import { query } from "../api-client";
 import { getAuthorImageUrl } from "../authors/service";
+import type { ScriptureRange } from "../reading/contract";
+import { slicePerekIds, slicesForRanges } from "../reading/queries";
 import type { Article, ArticleSummary } from "./types";
 
 interface ArticleWithAuthorRow {
@@ -100,6 +102,50 @@ export async function getArticleSummariesByPerekId(
 		);
 		// Reject so a failed build/request cannot cache an empty article list.
 		throw error;
+	}
+}
+
+/**
+ * Fetch article summaries whose perek association overlaps the given
+ * canonical ranges — the shared unit->article path for reading
+ * divisions. Articles carry a perek-level association, so every perek a
+ * range touches contributes its articles; results are deduplicated when
+ * several slices land on the same perek.
+ */
+export async function getArticleSummariesForRanges(
+	ranges: ScriptureRange[],
+): Promise<ArticleSummary[]> {
+	const perekIds = slicePerekIds(slicesForRanges(ranges));
+	if (perekIds.length === 0) return [];
+	const placeholders = perekIds.map(() => "?").join(", ");
+	try {
+		const rows = await query<ArticleSummaryRow>(
+			`SELECT
+				a.id, a.perek_id, a.author_id, a.abstract, a.name, a.priority,
+				au.name AS author_name
+			 FROM tanah_article a
+			 JOIN tanah_author au ON a.author_id = au.id
+			 WHERE a.perek_id IN (${placeholders}) AND a.distributable = TRUE
+			 ORDER BY a.priority ASC`,
+			perekIds,
+		);
+
+		return rows.map((row) => ({
+			id: row.id,
+			perekId: row.perek_id,
+			authorId: row.author_id,
+			abstract: row.abstract,
+			name: row.name,
+			priority: row.priority,
+			authorName: row.author_name,
+			authorImageUrl: getAuthorImageUrl(row.author_id),
+		}));
+	} catch (error) {
+		console.warn(
+			"Failed to fetch article summaries for ranges:",
+			error instanceof Error ? error.message : error,
+		);
+		return [];
 	}
 }
 
