@@ -18,6 +18,11 @@ interface ModuleRule {
 	ciPaths: string[];
 	/** Files that require the module's checks without changing the module. */
 	extraCiPattern?: RegExp;
+	/**
+	 * Files inside `directory` that need the module's checks but are not part
+	 * of the released package, so they must not package, release, or bump.
+	 */
+	ciOnlyPattern?: RegExp;
 }
 
 const SHARED_CI_PATHS = [
@@ -42,12 +47,20 @@ export const MODULES = {
 	api: { directory: "web/api", ciPaths: RELEASE_CI_PATHS },
 	app: {
 		directory: "app",
-		ciPaths: [...RELEASE_CI_PATHS, ".github/workflows/app-mobile-e2e.yml"],
+		// The e2e-impact selector and collector drive the Appium suite (#2085).
+		ciPaths: [
+			...RELEASE_CI_PATHS,
+			".github/workflows/app-mobile-e2e.yml",
+			"devops/github/ci/e2e-impact",
+		],
 		// Shared decoder changes need native checks. Only changes to the packaged
 		// app itself need an app version, package and release. Website timing
 		// batches also change their package version files.
 		extraCiPattern:
 			/^web\/bible-on-site\/(package(-lock)?\.json|src\/lib\/recitation-audio\.ts)$/,
+		// Test projects exercise the app but never change its package, so a
+		// test-only change must not ship a store release or bump the version.
+		ciOnlyPattern: /^app\/(BibleOnSite\.Tests[^/]*|mobile-e2e)\//,
 	},
 	admin: {
 		directory: "web/admin",
@@ -89,13 +102,15 @@ export function detectChanges(changedFiles: string[]): ModuleChanges {
 			{
 				module_changed: changedFiles.some(
 					(file) =>
-						isAt(file, rule.directory) ||
+						(isAt(file, rule.directory) &&
+							!(rule.ciOnlyPattern?.test(file) ?? false)) ||
 						(rule.extraModulePaths ?? []).includes(file),
 				),
 				ci_changed: changedFiles.some(
 					(file) =>
 						rule.ciPaths.some((path) => isAt(file, path)) ||
-						(rule.extraCiPattern?.test(file) ?? false),
+						(rule.extraCiPattern?.test(file) ?? false) ||
+						(rule.ciOnlyPattern?.test(file) ?? false),
 				),
 			},
 		]),

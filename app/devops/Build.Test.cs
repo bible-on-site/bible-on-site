@@ -1,3 +1,5 @@
+using System.IO;
+using System.Text.Json;
 using Nuke.Common;
 using Nuke.Common.Tooling;
 using Nuke.Common.Tools.DotNet;
@@ -62,15 +64,50 @@ partial class Build
             var artifacts = Environment.GetEnvironmentVariable("MOBILE_E2E_ARTIFACTS")
                 ?? throw new ArgumentException("Set MOBILE_E2E_ARTIFACTS (npm test prepares it).");
             var resultsDirectory = Path.Join(artifacts, "results");
-            var platform = MobileIsAndroid ? "Android" : "iOS";
             DotNetTestApp($"--project \"{MobileE2ETestProject}\" --configuration Debug -p:RestoreLockedMode=true" +
                           $" --results-directory \"{resultsDirectory}\"",
-                $"--filter-query \"/[(Category=MobileE2E)&((Platform=Shared)|(Platform={platform}))]\"" +
-                // Per test: up to 5 min Appium session setup (IOSDriver budget) plus scenario and diagnostics.
-                " --hangdump --hangdump-timeout 10m --hangdump-type Mini" +
+                $"--filter-query \"/[{MobileE2ESelectionFilter()}]\"" +
+                // Per test: up to 5 min Appium session setup (IOSDriver budget), plus the
+                // first commentary search's one-time FTS import of the whole notes pack —
+                // ~7m on a loaded macOS runner, and every fresh session reinstalls the app
+                // so no prior build progress survives — plus scenario and diagnostics.
+                // A test that exceeds its own waits fails normally well before this guard.
+                // The guard exists only for a genuinely dead test host.
+                " --hangdump --hangdump-timeout 18m --hangdump-type Mini" +
                 " --report-xunit-trx --report-xunit-trx-filename mobile-e2e.trx" +
                 " --report-xunit-junit --report-xunit-junit-filename mobile-e2e.xml");
         });
+
+    // When MOBILE_E2E_SELECTION points at an e2e-impact manifest (#2085) the
+    // manifest's selected list narrows the run inside the test process —
+    // xunit's query language cannot OR arbitrary method names — so the query
+    // keeps only the category/platform guard. The manifest is still validated
+    // here so an unreadable or empty selection fails before the suite starts
+    // rather than silently skipping every test.
+    string MobileE2ESelectionFilter()
+    {
+        // Every predicate stays parenthesized — the filter-query grammar treats
+        // a bare `A=B|C=D` group as one malformed predicate and runs zero tests.
+        var baseFilter = $"(Category=MobileE2E)&((Platform=Shared)|(Platform={(MobileIsAndroid ? "Android" : "iOS")}))";
+        var selectionPath = Environment.GetEnvironmentVariable("MOBILE_E2E_SELECTION");
+        if (string.IsNullOrEmpty(selectionPath))
+        {
+            return baseFilter;
+        }
+        using var manifest = JsonDocument.Parse(File.ReadAllText(selectionPath));
+        var root = manifest.RootElement;
+        var selectAll = root.TryGetProperty("selectAll", out var flag) && flag.GetBoolean();
+        var selectedCount = root.TryGetProperty("selected", out var selected)
+            && selected.ValueKind == JsonValueKind.Array
+            ? selected.GetArrayLength()
+            : 0;
+        if (!selectAll && selectedCount == 0)
+        {
+            throw new InvalidOperationException(
+                $"Selection manifest {selectionPath} is not selectAll but selects no tests; refusing to run zero tests.");
+        }
+        return baseFilter;
+    }
 
     Target TestMobileE2EUnit => _ => _
         .Description("Validate mobile E2E configuration without a device or MAUI workload")

@@ -113,6 +113,97 @@ public sealed class DeviceSessionRecoveryTests
     }
 
     [Fact]
+    public async Task TransportLossDuringStartupRetriesOnceAfterRecovery()
+    {
+        var previous = MobileDeviceTest.TransportRecovery;
+        MobileDeviceTest.TransportRecovery = _ => true;
+        try
+        {
+            _test.ConnectFailures.Enqueue(new UnknownErrorException("adb: device offline"));
+
+            await _test.Start();
+
+            Assert.Equal(2, _test.Rebuilds);
+            Assert.Contains(_log, line => line.Contains("adb transport recovered"));
+        }
+        finally
+        {
+            MobileDeviceTest.TransportRecovery = previous;
+        }
+    }
+
+    [Fact]
+    public async Task TransportLossDuringStartupWithoutRecoveryIsNotRetried()
+    {
+        var previous = MobileDeviceTest.TransportRecovery;
+        MobileDeviceTest.TransportRecovery = _ => false;
+        var failure = new UnknownErrorException("adb: device offline");
+        _test.ConnectFailures.Enqueue(failure);
+        try
+        {
+            var thrown = await Assert.ThrowsAsync<UnknownErrorException>(() => _test.Start().AsTask());
+
+            Assert.Same(failure, thrown);
+            Assert.Equal(1, _test.Rebuilds);
+        }
+        finally
+        {
+            MobileDeviceTest.TransportRecovery = previous;
+        }
+    }
+
+    [Fact]
+    public void TransportLossMidScenarioRebuildsAfterRecovery()
+    {
+        var previous = MobileDeviceTest.TransportRecovery;
+        MobileDeviceTest.TransportRecovery = _ => true;
+        var calls = 0;
+        try
+        {
+            _test.Execute(() =>
+            {
+                calls++;
+                if (calls == 1)
+                {
+                    throw new UnknownErrorException("adb: device offline");
+                }
+            });
+
+            Assert.Equal(2, calls);
+            Assert.Equal(1, _test.Rebuilds);
+        }
+        finally
+        {
+            MobileDeviceTest.TransportRecovery = previous;
+        }
+    }
+
+    [Fact]
+    public void TransportLossMidScenarioWithoutRecoveryFailsHonestly()
+    {
+        var previous = MobileDeviceTest.TransportRecovery;
+        MobileDeviceTest.TransportRecovery = _ => false;
+        var calls = 0;
+        var failure = new UnknownErrorException("adb: device offline");
+        try
+        {
+            var thrown = Assert.Throws<UnknownErrorException>(() => _test.Execute(() =>
+            {
+                calls++;
+                throw failure;
+            }));
+
+            Assert.Same(failure, thrown);
+            Assert.Equal(1, calls);
+            Assert.Equal(0, _test.Rebuilds);
+        }
+        finally
+        {
+            MobileDeviceTest.TransportRecovery = previous;
+        }
+    }
+
+    [Fact]
     public void LaunchEnvironmentReachesTheSession()
     {
         var session = new FakeSession(_artifacts);

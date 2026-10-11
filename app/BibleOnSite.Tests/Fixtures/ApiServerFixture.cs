@@ -26,7 +26,7 @@ public class ApiServerFixture : IAsyncLifetime
     public static string ApiUrl { get; } = $"http://127.0.0.1:{FindAvailablePort()}";
     // A new worktree may need its first Rust build before the API can listen.
     public static int StartupTimeoutSeconds => 600;
-    public const int HealthCheckIntervalMs = 500;
+    private const int HealthCheckIntervalMs = 500;
 
     public async ValueTask InitializeAsync()
     {

@@ -97,8 +97,8 @@ for (const [status, bump, skip, releaseState, exit = 0] of [
 		assert.equal(result.status, exit, result.stderr);
 		if (exit) return;
 		const values = readFileSync(output, "utf8");
-		assert.match(values, new RegExp(`NEEDS_BUMP=${bump}`));
-		assert.match(values, new RegExp(`SKIP_RELEASE=${skip}`));
+		assert.ok(values.includes(`NEEDS_BUMP=${bump}`), `expected NEEDS_BUMP=${bump}`);
+		assert.ok(values.includes(`SKIP_RELEASE=${skip}`), `expected SKIP_RELEASE=${skip}`);
 		if (releaseState === "published-original") {
 			const payload = JSON.parse(
 				values

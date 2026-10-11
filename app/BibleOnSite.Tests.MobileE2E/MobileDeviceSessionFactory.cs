@@ -6,6 +6,11 @@ namespace BibleOnSite.Tests.MobileE2E;
 // device — unless the failure matches DeviceSessionDeath, which only reports
 // a session Appium already dropped server-side. Nothing is left to race then,
 // so the next scenario may create a replacement session.
+// Startup keeps a second exemption for DeviceTransportLoss: adb dropping is
+// diagnosed and healed by DeviceTransportRecovery, and each new scenario gets
+// its own honest failure plus a fresh recovery attempt instead of a memoized
+// latch error. Cleanup has no such exemption — a lost transport leaves the
+// server-side teardown unconfirmed, and nothing may race it, so it latches.
 public sealed class MobileDeviceSessionFactory
 {
     private Exception? _sessionFailure;
@@ -25,7 +30,7 @@ public sealed class MobileDeviceSessionFactory
         }
         catch (Exception exception)
         {
-            if (!DeviceSessionDeath.Matches(exception))
+            if (!DeviceSessionDeath.Matches(exception) && !DeviceTransportLoss.Matches(exception))
             {
                 _sessionFailure = exception;
             }

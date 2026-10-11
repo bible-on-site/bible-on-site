@@ -90,7 +90,9 @@ public partial class ArticleDetailPage : ContentPage, IAnalyticsScreenName
         CleanupMediaElements();
 
         if (string.IsNullOrEmpty(html))
+        {
             return;
+        }
 
         if (!HtmlMediaExtractor.ContainsMedia(html))
         {
@@ -113,6 +115,10 @@ public partial class ArticleDetailPage : ContentPage, IAnalyticsScreenName
 
                 case SegmentKind.Media when segment.Type == MediaType.Audio:
                     ArticleContentContainer.Children.Add(CreateAudioPlayer(segment.MediaUrl!));
+                    break;
+
+                default:
+                    // Media kinds beyond audio/video have no inline renderer.
                     break;
             }
         }

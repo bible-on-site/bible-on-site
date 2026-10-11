@@ -10,7 +10,8 @@ import styles from "./search.module.css";
 
 export const metadata: Metadata = {
 	title: 'חיפוש | תנ"ך על הפרק',
-	description: 'חיפוש בפרקים, פסוקים, פירושים, רבנים ומאמרים של תנ"ך על הפרק',
+	description:
+		'חיפוש בפרקים, פסוקים, פירושים, רבנים, מאמרים וערכי תנכפדיה של תנ"ך על הפרק',
 	// Internal search results are an unbounded duplicate space: indexable
 	// query URLs would create crawl traps and low-quality landing pages.
 	// noindex keeps them out of Search while follow still lets crawlers

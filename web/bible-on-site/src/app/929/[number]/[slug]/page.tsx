@@ -1,4 +1,5 @@
 import { toLetters } from "gematry";
+import DOMPurify from "isomorphic-dompurify";
 import { unstable_cache } from "next/cache";
 import Image from "next/image";
 import Link from "next/link";
@@ -37,6 +38,7 @@ import { PerekHeading } from "../components/PerekHeading";
 import { PerekText } from "../components/PerekText";
 import { PerushimSection } from "../components/PerushimSection";
 import SeferComposite from "../components/SeferComposite";
+import { ShareButton } from "../components/ShareButton";
 import styles from "./page.module.css";
 import { ScrollToSlug } from "./ScrollToArticle";
 import { ScrollToPerushPasukNote } from "./ScrollToPerushPasuk";
@@ -348,6 +350,10 @@ export default async function ArticlePage({
 						{perushDetail.name} על {perekObj.source}
 					</h1>
 					<h2 className={styles.parshanName}>{perushDetail.parshanName}</h2>
+					<ShareButton
+						canonicalPath={perushPath(perekId, perushDetail.name)}
+						title={`${perushDetail.name} - ${perushDetail.parshanName}`}
+					/>
 				</header>
 
 				<div className={styles.perushContent}>
@@ -369,8 +375,10 @@ export default async function ArticlePage({
 								</span>
 								<div
 									className={styles.noteContent}
-									// biome-ignore lint/security/noDangerouslySetInnerHtml: Content is from trusted database
-									dangerouslySetInnerHTML={{ __html: note.noteContent }}
+									// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify
+									dangerouslySetInnerHTML={{
+										__html: DOMPurify.sanitize(note.noteContent),
+									}}
 								/>
 							</div>
 						);
