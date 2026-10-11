@@ -12,14 +12,14 @@ Result types mirror the app's `SearchFilter` (`Author`, `Pasuk`, `Perush`,
 `Perek`) plus articles and Tanahpedia entries. The shared contract lives
 in `src/lib/search/types.ts`:
 
-| Type        | Hebrew label | Corpus                          | Result link                              |
-| ----------- | ------------ | ------------------------------- | ---------------------------------------- |
-| `perek`     | פרקים        | Bundled sefarim JSON (in-memory) | `/929/{perekId}`                          |
-| `pasuk`     | פסוקים       | Bundled sefarim JSON (in-memory) | `/929/{perekId}#pasuk-{n}`                |
-| `perush`    | פירושים      | MySQL `note` + `perush`          | `/929/{perekId}/{perushName}?pasuk={n}`   |
-| `author`    | רבנים        | MySQL `tanah_author`             | `/929/authors/{slug}`                     |
-| `article`   | מאמרים       | MySQL `tanah_article`            | `/929/{perekId}/{articleId}`              |
-| `tanahpedia`| תנכפדיה      | MySQL `tanahpedia_entry` + synonyms | `/pedia/{uniqueName}`                  |
+| Type        | Hebrew label | Corpus                              | Result link                                                |
+| ----------- | ------------ | ----------------------------------- | ---------------------------------------------------------- |
+| `perek`     | פרקים        | Bundled sefarim JSON (in-memory)     | `/929/{perekId}`                                           |
+| `pasuk`     | פסוקים       | Bundled sefarim JSON (in-memory)     | `/929/{perekId}#pasuk-{n}`                                 |
+| `perush`    | פירושים      | MySQL `note` + `perush`              | `/929/{perekId}/{perushName}?pasuk={n}&note={idx}&q={phrase}` |
+| `author`    | רבנים        | MySQL `tanah_author`                 | `/929/authors/{slug}`                                       |
+| `article`   | מאמרים       | MySQL `tanah_article`                | `/929/{perekId}/{articleId}?q={phrase}`                    |
+| `tanahpedia`| תנכפדיה      | MySQL `tanahpedia_entry` + synonyms  | `/pedia/{uniqueName}`                                      |
 
 Every result is `{ type, title, snippetHtml, href, score }`. `snippetHtml`
 is built server-side with all source bytes HTML-escaped and only `<mark>`
@@ -147,6 +147,28 @@ refetched, and the browser's own scroll restoration preserves list
 position. Result links are plain `<Link>`s — ordinary crawlable anchors —
 so opening them in a new tab works normally. The form is a real
 `GET /search` form, so a no-JS submit lands on the SSR'd results page.
+
+### Deep-linking into content (#2078)
+
+Result links carry enough destination context to land on the exact match, not
+just the page:
+
+- `pasuk` results keep `#pasuk-{n}` — `ScrollToPasuk` scrolls and highlights
+  the verse.
+- `perush` results add `note={noteIdx}` (the note row's fragment index) and
+  `q` (the normalized phrase). `ScrollToPerushPasukNote` selects the specific
+  `[data-perush-pasuk][data-perush-note]` element — not the pasuk's first
+  note — and `dom-match.ts` re-locates the phrase inside the rendered note
+  with the index's normalization, wrapping the occurrence in
+  `<mark class="searchMatch">` before centering it.
+- `article` results add `q`. `ScrollToArticleMatch` re-locates and marks the
+  match inside `article-view`'s body; with no `q` the `article-view` anchor
+  scroll remains the landing.
+
+`q` is deliberately not a stable character offset: indexed/normalized offsets
+never equal DOM offsets (niqqud, entities, markup), so `dom-match.ts` maps
+normalized positions back onto DOM text nodes. A stale/absent target degrades
+to the anchor-level scroll — never to a wrong position.
 
 ### Fetch discipline
 
