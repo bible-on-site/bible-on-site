@@ -175,6 +175,7 @@ jest.mock("@/app/929/[number]/components/Stuma", () => ({
 
 import type { ComponentProps } from "react";
 import SeferContents from "@/app/929/[number]/components/Sefer";
+import { setSeferOpenPerush } from "@/app/929/[number]/components/sefer-pasuk-navigation";
 import type { QriSegment } from "@/data/db/tanah-view-types";
 import type { PerekObj } from "@/data/perek-dto";
 import { getSeferByName } from "@/data/sefer-dto";
@@ -609,6 +610,76 @@ describe("Sefer component", () => {
 		expect(screen.getByRole("img", { name: "איור שני" })).toBeInTheDocument();
 		expect(container.querySelectorAll("picture source")).toHaveLength(1);
 		expect(screen.getByText(/מאייר/)).toBeInTheDocument();
+	});
+
+	it("marks perek pages and pesukim for pasuk navigation", () => {
+		const { container } = render(
+			<Sefer perekObj={minimalPerek} articles={[]} perushim={[]} perekIds={[1]} />,
+		);
+		expect(
+			container.querySelector('[data-sefer-perek="1"] [data-sefer-pasuk="1"]'),
+		).not.toBeNull();
+	});
+
+	it("navigates a pasuk number click to the open perush group", async () => {
+		render(
+			<Sefer perekObj={minimalPerek} articles={[]} perushim={[]} perekIds={[1]} />,
+		);
+		// Without an open perush the pasuk number keeps recitation behaviour only.
+		expect(
+			screen.queryByRole("button", { name: "מעבר לפירוש על פסוק א" }),
+		).toBeNull();
+		// The blank page mounts the panel while a perush is open.
+		document.body.insertAdjacentHTML(
+			"beforeend",
+			`<div data-sefer-perush-perek="1" data-sefer-perush='רש"י'>
+				<div data-perush-pasuk="1"><p>note</p></div>
+			</div>
+			<div data-sefer-perush-perek="2">
+				<div data-perush-pasuk="1"><p>other perek note</p></div>
+			</div>`,
+		);
+		const scrollIntoView = jest.fn();
+		Element.prototype.scrollIntoView = scrollIntoView;
+		try {
+			act(() =>
+				setSeferOpenPerush(1, { name: 'רש"י', pesukim: new Set([1]) }),
+			);
+			const group = document.querySelector(
+				'[data-sefer-perush-perek="1"] [data-perush-pasuk="1"]',
+			) as Element;
+			fireEvent.click(
+				screen.getByRole("button", { name: "מעבר לפירוש על פסוק א" }),
+			);
+			expect(scrollIntoView.mock.contexts[0]).toBe(group);
+			expect(group).toHaveAttribute("data-pasuk-highlight", "");
+			expect(group).toHaveAttribute("aria-current", "location");
+			// Identical pasuk number in another perek's perush is not a target.
+			expect(
+				document.querySelector(
+					'[data-sefer-perush-perek="2"] [data-perush-pasuk="1"]',
+				),
+			).not.toHaveAttribute("data-pasuk-highlight");
+			// A perush that does not annotate this pasuk leaves it without
+			// commentary navigation (recitation behaviour is kept).
+			act(() =>
+				setSeferOpenPerush(1, { name: "אבן עזרא", pesukim: new Set([2]) }),
+			);
+			expect(
+				screen.queryByRole("button", { name: "מעבר לפירוש על פסוק א" }),
+			).toBeNull();
+			// Closing the perush restores the non-navigating pasuk number.
+			act(() => setSeferOpenPerush(1, null));
+			await act(async () => {});
+			expect(
+				screen.queryByRole("button", { name: "מעבר לפירוש על פסוק א" }),
+			).toBeNull();
+		} finally {
+			act(() => setSeferOpenPerush(1, null));
+			for (const el of document.querySelectorAll("[data-sefer-perush-perek]")) {
+				el.remove();
+			}
+		}
 	});
 
 	it("renders maqaf-ending segments without trailing space", () => {

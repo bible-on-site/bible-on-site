@@ -14,6 +14,7 @@ import {
 	perushDocumentTitle,
 	type SeferPerekTitle,
 } from "./sefer-document-title";
+import { setSeferOpenPerush } from "./sefer-pasuk-navigation";
 import { writeSeferContentHistory } from "./useSeferContentNavigation";
 
 interface BlankPageContentProps {
@@ -124,6 +125,23 @@ export function BlankPageContent({
 		// out distant leaves), release the title back to the page-level one.
 		return () => onContentTitle(null);
 	}, [selectedArticle, selectedPerush, onContentTitle, perekTitleParts]);
+
+	// Publish the open perush (with the pesukim it annotates) so pasuk numbers
+	// in the facing perek text page become navigation targets; cleared on
+	// close and on unmount.
+	useEffect(() => {
+		if (!perekId) return;
+		setSeferOpenPerush(
+			perekId,
+			selectedPerush
+				? {
+						name: selectedPerush.name,
+						pesukim: new Set(selectedPerush.notes.map((note) => note.pasuk)),
+					}
+				: null,
+		);
+		return () => setSeferOpenPerush(perekId, null);
+	}, [perekId, selectedPerush]);
 
 	const navigate = (nextSlug?: string) => {
 		if (onNavigate) onNavigate(nextSlug);
