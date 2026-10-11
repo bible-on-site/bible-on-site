@@ -203,7 +203,7 @@ public sealed class SearchIndexService : IAsyncDisposable
                 File.Delete(file);
             }
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             Console.Error.WriteLine($"Failed to sweep obsolete search-index files: {ex.Message}");
         }
@@ -356,7 +356,7 @@ public sealed class SearchIndexService : IAsyncDisposable
                 File.Delete(path);
             }
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             Console.Error.WriteLine($"Failed to delete unadoptable staged search index: {ex.Message}");
         }

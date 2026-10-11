@@ -37,15 +37,13 @@ public sealed partial class PadDeliveryService : IPadDeliveryService
         // full pack payload (hundreds of MB) and must not accumulate.
         try
         {
-            foreach (var stale in Directory.GetDirectories(root))
+            foreach (var stale in Directory.GetDirectories(root)
+                .Where(path => Path.GetFileName(path) != generation))
             {
-                if (Path.GetFileName(stale) != generation)
-                {
-                    Directory.Delete(stale, recursive: true);
-                }
+                Directory.Delete(stale, recursive: true);
             }
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             System.Diagnostics.Debug.WriteLine($"Failed to remove stale ODR generations: {ex.Message}");
         }

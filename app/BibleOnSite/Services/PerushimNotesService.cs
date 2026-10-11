@@ -455,7 +455,7 @@ public class PerushimNotesService
         {
             await File.WriteAllTextAsync(dbPath + ".rejected", rejectedTimestamp.ToString());
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             Console.Error.WriteLine($"Failed to record rejected notes generation: {ex.Message}");
         }
@@ -480,7 +480,7 @@ public class PerushimNotesService
             var candidate = await GetBuildTimestampAsync(dbPath);
             return candidate > 0 && candidate.ToString() == rejected;
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             Console.Error.WriteLine($"Failed to check rejected notes generation: {ex.Message}");
             return false;
@@ -507,7 +507,7 @@ public class PerushimNotesService
             // Staged app-package copy that never became the local DB.
             TryDelete(Path.Combine(DataDirectory, NotesDbName + ".pkgcheck"));
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             Console.Error.WriteLine($"Failed to sweep stale perushim temp files: {ex.Message}");
         }
@@ -522,7 +522,7 @@ public class PerushimNotesService
                 File.Delete(path);
             }
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             Console.Error.WriteLine($"Failed to delete obsolete perushim file '{path}': {ex.Message}");
         }
@@ -699,7 +699,7 @@ public class PerushimNotesService
             await using var source = File.OpenRead(srcPath);
             await AtomicFile.CopyAsync(source, Path.Combine(DataDirectory, SearchIndexDbName));
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             Console.Error.WriteLine($"Failed to copy delivered search index from PAD: {ex.Message}");
         }
@@ -751,7 +751,7 @@ public class PerushimNotesService
         {
             // Bundled package may not carry the index — the app builds it on-device.
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException)
         {
             System.Diagnostics.Debug.WriteLine($"Delivered search index copy from app package failed: {ex.Message}");
         }
