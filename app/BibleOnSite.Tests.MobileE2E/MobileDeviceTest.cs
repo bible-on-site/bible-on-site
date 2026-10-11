@@ -40,6 +40,8 @@ public abstract class MobileDeviceTest : IAsyncLifetime
 
     public virtual ValueTask InitializeAsync()
     {
+        Assert.SkipWhen(E2eSelection.IsExcluded(TestContext.Current),
+            "not selected by the e2e-impact manifest");
         Platform = MobilePlatformAdapter.For(Configuration.Platform);
         try
         {
@@ -116,13 +118,22 @@ public abstract class MobileDeviceTest : IAsyncLifetime
 
     private void Run(Action body, string name)
     {
+        // The caller-member name is the [Fact]/[Theory] method; combining it
+        // with the declaring type reproduces the xUnit FullyQualifiedName the
+        // coverage tree uses as test identity (#2085).
+        CoverageEvidence.Begin($"{GetType().FullName}.{name}", Configuration.Platform,
+            Configuration.ArtifactDirectory, name);
         try
         {
             body();
+            CoverageEvidence.RecordSession(Driver?.SessionId);
+            CoverageEvidence.Finish("passed");
             SaveDiagnostics(name, "passed");
         }
         catch
         {
+            CoverageEvidence.RecordSession(Driver?.SessionId);
+            CoverageEvidence.Finish("failed");
             SaveDiagnostics(name, "failed");
             throw;
         }

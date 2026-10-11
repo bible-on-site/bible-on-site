@@ -1678,6 +1678,10 @@ jobs:
     name: App Mobile E2E
     needs: [setup_env, determine_changes]
     if: ${{ always() && !cancelled() && !failure() && (needs.determine_changes.outputs.app_module_changed == 'true' || needs.determine_changes.outputs.app_ci_changed == 'true') }}
+    permissions:
+      contents: read
+      # Reads the master coverage-tree baseline artifacts through the REST API (#2085).
+      actions: read
     uses: ./.github/workflows/app-mobile-e2e.yml
 
   app_ios_ci:
@@ -2499,7 +2503,7 @@ jobs:
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         run: |
           npm run test:version
-          node --test github/ci/codecov-report-state.test.mjs github/ci/bencher-comparison.test.mjs
+          node --test github/ci/codecov-report-state.test.mjs github/ci/bencher-comparison.test.mjs github/ci/e2e-impact/e2e-impact.test.ts
 
       - name: Merge Test Coverage (Website + API)
         run: npm run coverage:merge
