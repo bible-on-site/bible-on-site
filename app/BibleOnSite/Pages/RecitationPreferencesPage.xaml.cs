@@ -6,7 +6,9 @@ namespace BibleOnSite.Pages;
 /// Second-level קריינות settings: playback configuration plus per-book and
 /// whole-pack install/remove controls with honest on-disk installation state.
 /// </summary>
+#pragma warning disable S2333 // MAUI XAML supplies the other partial declaration.
 public partial class RecitationPreferencesPage : ContentPage
+#pragma warning restore S2333
 {
     private readonly RecitationPreferencesViewModel _viewModel;
 
