@@ -84,7 +84,7 @@ public sealed class SearchIndexService : IAsyncDisposable
 
     [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage(
         Justification = "E2E-only startup hook; the mobile suite launches with BIBLE_E2E.")]
-    private static bool IsE2eMarkedProcess()
+    internal static bool IsE2eMarkedProcess()
     {
         if (Environment.GetEnvironmentVariable(E2eEnvironmentVariable) == "1")
         {

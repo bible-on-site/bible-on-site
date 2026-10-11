@@ -12,13 +12,17 @@ namespace BibleOnSite.Pages;
 /// </summary>
 [QueryProperty(nameof(ArticleId), "articleId")]
 [QueryProperty(nameof(PerekId), "perekId")]
-public partial class ArticleDetailPage : ContentPage
+public partial class ArticleDetailPage : ContentPage, IAnalyticsScreenName
 {
     private readonly ArticleDetailViewModel _viewModel;
     private readonly List<MediaElement> _mediaElements = [];
 
     public int ArticleId { get; set; }
     public int PerekId { get; set; }
+
+    /// <summary>Logical screen identity with article context (#2119).</summary>
+    public string? AnalyticsScreenName =>
+        ArticleId > 0 ? $"Article/{ArticleId}" : nameof(ArticleDetailPage);
 
     public ArticleDetailPage()
     {

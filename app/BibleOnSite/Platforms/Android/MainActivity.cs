@@ -31,6 +31,21 @@ public class MainActivity : MauiAppCompatActivity
             Services.SearchIndexService.MarkE2eLaunchFromIntent();
         }
         base.OnCreate(savedInstanceState);
+#if DISABLE_ANALYTICS
+        // Test builds bake firebase_analytics_collection_deactivated into the
+        // merged manifest — the SDK ignores runtime opt-in and nothing can
+        // emit, so the launch log records the build-level gate instead (#2120).
+        Console.WriteLine("[Analytics] collection deactivated at build time (DISABLE_ANALYTICS)");
+#else
+        // The manifest keeps collection off because FirebaseInitProvider runs
+        // before managed code; enable it only outside the e2e suite, and set it
+        // explicitly both ways so a flag persisted by an earlier non-suite
+        // install on this device cannot leak test traffic either.
+        var analyticsCollectionEnabled = !Services.SearchIndexService.IsE2eMarkedProcess();
+        Plugin.Firebase.Analytics.CrossFirebaseAnalytics.Current.IsAnalyticsCollectionEnabled =
+            analyticsCollectionEnabled;
+        Console.WriteLine($"[Analytics] collection enabled={analyticsCollectionEnabled}");
+#endif
         HandleAppLinkIntent(Intent);
         // Firebase initialized from google-services.json (Plugin.Firebase / Xamarin.Firebase.Analytics process it at build).
         // For explicit init use Plugin.Firebase.Core CrossFirebase.Initialize(activity, settings) when needed.
@@ -39,6 +54,18 @@ public class MainActivity : MauiAppCompatActivity
     protected override void OnNewIntent(Intent? intent)
     {
         base.OnNewIntent(intent);
+#if !DISABLE_ANALYTICS
+        // singleTop relaunches deliver a marked suite intent here without
+        // OnCreate running — honor it so a reused activity stops emitting
+        // instead of leaking suite events under the previous launch's
+        // enabled collection (#2120).
+        if (intent?.GetBooleanExtra(Services.SearchIndexService.E2eEnvironmentVariable, false) ?? false)
+        {
+            Services.SearchIndexService.MarkE2eLaunchFromIntent();
+            Plugin.Firebase.Analytics.CrossFirebaseAnalytics.Current.IsAnalyticsCollectionEnabled = false;
+            Console.WriteLine("[Analytics] collection enabled=false (e2e relaunch)");
+        }
+#endif
         HandleAppLinkIntent(intent);
     }
 
