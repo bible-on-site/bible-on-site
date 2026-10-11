@@ -1,6 +1,9 @@
 import { expect, test } from "../util/playwright/test-fixture";
 
+// Hebrew roots arrive percent-encoded in the URL; the navigation wait below
+// decodes the pathname before comparing it to each item's semantic href.
 const MENU_ITEMS = [
+	["מסורה על הפרק", "/מסורה"],
 	["לוח לימוד יומי", "/לוח"],
 	["הרבנים", "/929/authors"],
 	["תנכפדיה", "/pedia"],

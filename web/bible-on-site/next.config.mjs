@@ -147,6 +147,18 @@ const nextConfig = {
 					source: "/929/rabbis/:authorParam*",
 					destination: "/929/authors/:authorParam*",
 				},
+				// /מסורה — the Masoretic reading division's public Hebrew root
+				// lives in an ASCII route dir (non-ASCII route directories are
+				// unreliable across dev/build). Like the book rewrites above,
+				// both raw and percent-encoded sources are needed because Next
+				// matches rewrite sources before decoding the path.
+				{ source: "/מסורה", destination: "/masora" },
+				{ source: `/${encodeURIComponent("מסורה")}`, destination: "/masora" },
+				{ source: "/מסורה/:path*", destination: "/masora/:path*" },
+				{
+					source: `/${encodeURIComponent("מסורה")}/:path*`,
+					destination: "/masora/:path*",
+				},
 			],
 			fallback: [],
 		};

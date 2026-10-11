@@ -11,6 +11,9 @@ engines:
 # Exclude MySQL/SQLite schema files: SQL analyzer uses T-SQL dialect and flags
 # valid MySQL backticks and SQLite PRAGMA/AUTOINCREMENT as syntax errors
 exclude_paths:
+  # These are exercised against MySQL by the API and website database tests.
+  - "data/mysql/tanah_dynamic_structure.sql"
+  - "data/mysql/tanah_test_data.sql"
   - "data/mysql/tanah_daily_bulletin_upgrade.sql"
   - "data/mysql/tanahpedia_alter_entry_revision_history.sql"
   - "data/mysql/tanahpedia_alter_saying_date.sql"
