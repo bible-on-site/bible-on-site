@@ -469,7 +469,7 @@ DROP TABLE IF EXISTS `tanahpedia_animal_kind`;
 CREATE TABLE `tanahpedia_animal_kind` (
     `id` char(36) NOT NULL,
     `animal_id` char(36) NOT NULL,
-    `kind` enum('BEHEMA', 'CHAYA', 'OF', 'SHERETZ') NOT NULL COMMENT N'בהמה/חיה/עוף/שרץ',
+    `kind` enum('BEHEMA', 'CHAYA', 'OF', 'SHERETZ') NOT NULL COMMENT 'בהמה/חיה/עוף/שרץ',
     `alt_group_id` char(36) DEFAULT NULL,
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_animal_kind` (`animal_id`),
@@ -479,7 +479,7 @@ DROP TABLE IF EXISTS `tanahpedia_animal_purity`;
 CREATE TABLE `tanahpedia_animal_purity` (
     `id` char(36) NOT NULL,
     `animal_id` char(36) NOT NULL,
-    `purity` enum('TAHOR', 'TAMEH') NOT NULL COMMENT N'טהור/טמא',
+    `purity` enum('TAHOR', 'TAMEH') NOT NULL COMMENT 'טהור/טמא',
     `alt_group_id` char(36) DEFAULT NULL,
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_animal_purity` (`animal_id`),

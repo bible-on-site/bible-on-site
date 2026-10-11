@@ -106,7 +106,7 @@ repos:
         # stdlib-only, and pre-commit.ci rejects dep-less language: node.
         entry: node devops/codacy-gate.mjs
         language: system
-        files: \.(sql|rs|[cm]?[jt]sx?)$
+        files: \.(rs|[cm]?[jt]sx?)$
         pass_filenames: true
       - id: flip-book-local-restore
         name: restore local html-flip-book-react

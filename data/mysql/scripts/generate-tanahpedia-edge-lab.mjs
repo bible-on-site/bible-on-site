@@ -758,10 +758,7 @@ for (const lab of labs) {
 function q(v) {
 	if (v === null || v === undefined) return "NULL";
 	if (typeof v === "number") return String(v);
-	const escaped = String(v).replace(/'/g, "''");
-	// Non-ASCII content needs the N'...' national-charset introducer so the
-	// generated SQL stays clean of Codacy's unicode-literal finding.
-	return /[^\x00-\x7F]/.test(escaped) ? `N'${escaped}'` : `'${escaped}'`;
+	return `'${String(v).replace(/'/g, "''")}'`;
 }
 
 const allEntityIds = entities.map((e) => e.id);

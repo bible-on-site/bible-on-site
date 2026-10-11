@@ -93,7 +93,7 @@ while the module CI jobs remain the authoritative remote gate. The post-commit
 | `flip-book-npm-dep` | `web/bible-on-site` | `npm run flip-book:check` → `flip-book:npm` + stage | Keeps `html-flip-book-react` on the npm version in commits ([devops/flip-book-dep.mjs](../../devops/flip-book-dep.mjs)) |
 | `web-unit-tests` | `web/bible-on-site` | `npm run test:unit` | Website unit tests (Jest) |
 | `web-rust-checks` | `web/api`, `web/bulletin` | `cargo make lint` (+ `fmt-check` for bulletin) | Rust lint/format via [devops/precommit-rust.mjs](../../devops/precommit-rust.mjs) |
-| `codacy-gate` | `*.sql`, `*.rs`, JS/TS files | `node devops/codacy-gate.mjs` | Codacy parity checks with no analyzer equivalent ([devops/codacy-gate.mjs](../../devops/codacy-gate.mjs)) |
+| `codacy-gate` | `*.rs`, JS/TS files | `node devops/codacy-gate.mjs` | Codacy parity checks with no analyzer equivalent ([devops/codacy-gate.mjs](../../devops/codacy-gate.mjs)) |
 | `flip-book-local-restore` | post-commit | `npm run flip-book:local` | Restores local flip-book dep when the guard switched it |
 
 ## Codacy Parity
@@ -111,7 +111,6 @@ the repo's toolchains can enforce it:
 | Switch without `default` (S131) | Same |
 | Public `const` fields (S3869 family) | Same (generated `FluentUI.cs` constants are excluded — regenerating that file would undo any manual conversion) |
 | Commented-out code (S125) | Same |
-| Unicode text in a non-unicode SQL literal | `codacy-gate` pre-commit hook — every non-ASCII `'...'` literal must be `N'...'` (or a `_charset'...'` introducer) |
 | `new RegExp(nonLiteral)` / ReDoS vector | `codacy-gate` — the constructor's first argument must be a literal |
 | `String.prototype.replaceAll` | `codacy-gate` — use `.replace(/pattern/g, ...)` (not transpiled for older browsers) |
 | `env::args`/`args_os` on security decisions | `codacy-gate` — call sites need an adjacent `nosemgrep` justification (same convention Semgrep honors on Codacy) |
@@ -120,7 +119,11 @@ the repo's toolchains can enforce it:
 **Gaps that remain Codacy-only:** Codacy's SQL dialect checks parse MySQL/SQLite
 files as T-SQL and report syntax errors on valid dialect syntax — the affected
 files stay in `.codacy.yml` `exclude_paths`, and the local gate intentionally
-does not replicate dialect parsing. XSS-style sinks (`dangerouslySetInnerHTML`)
+does not replicate dialect parsing. Its "unicode characters in a non-unicode
+string" finding is the same T-SQL idiom: MySQL literals take the column charset
+(utf8mb4), and the `N'...'` introducer the finding demands is a syntax error
+(1064) in `COMMENT` clauses — the affected files are excluded in `.codacy.yml`
+as well rather than gated locally. XSS-style sinks (`dangerouslySetInnerHTML`)
 and HTML-injection findings also have no local equivalent and remain review-time
 checks. The loop-increment/stop-condition findings map to Sonar rules whose
 severity is configured in `.editorconfig`; anything Codacy flags outside that

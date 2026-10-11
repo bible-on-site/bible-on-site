@@ -19,7 +19,7 @@ DELETE FROM tanahpedia_entity
 WHERE id = 'e4000000-0000-4000-8000-000000000001';
 
 INSERT INTO tanahpedia_entity (id, entity_type, name, created_at, updated_at) VALUES
-	('e4000000-0000-4000-8000-000000000001', 'PLACE', N'ארץ ישראל', NOW(), NOW());
+	('e4000000-0000-4000-8000-000000000001', 'PLACE', 'ארץ ישראל', NOW(), NOW());
 
 INSERT INTO tanahpedia_place (id, entity_id) VALUES
 	('pl400000-0000-4000-8000-000000000001', 'e4000000-0000-4000-8000-000000000001');

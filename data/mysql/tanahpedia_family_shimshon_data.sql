@@ -4,7 +4,7 @@ SET @shimshon_pid := (
 		SELECT p.id
 		FROM tanahpedia_person p
 			INNER JOIN tanahpedia_entity e ON e.id = p.entity_id
-		WHERE e.name = N'שמשון'
+		WHERE e.name = 'שמשון'
 		LIMIT 1
 	);
 -- Tear down prior demo rows (same IDs as below)

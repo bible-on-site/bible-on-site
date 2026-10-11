@@ -8,9 +8,6 @@
  * first surfacing as post-push Codacy annotations.
  *
  * Covered Codacy patterns (message -> check):
- *   - "Use of unicode characters in a non unicode string" (*.sql):
- *     a single-quoted literal containing non-ASCII must be written N'...'
- *     (or a _charset'...' introducer).
  *   - "args/args_os should not be used for security operations" (*.rs):
  *     any std::env::args/args_os call site must carry an adjacent `nosemgrep`
  *     justification comment (same convention Semgrep honors on Codacy).
@@ -21,12 +18,19 @@
  *     (JS/TS): String.prototype.replaceAll is not transpiled; use a global
  *     regex replace.
  *
+ * Not gated: Codacy's "Use of unicode characters in a non unicode string"
+ * (*.sql) is a SQL Server idiom — in MySQL a quoted literal already takes the
+ * column charset (utf8mb4), and the N'...' national-charset introducer the
+ * finding demands is a syntax error in COMMENT clauses (error 1064). The
+ * pattern is an inherent false positive for this dialect.
+ *
  * The pre-commit hook feeds the staged files as argv; each check only inspects
  * the extensions it understands. Exit code 1 if any finding is reported.
  *
  * Comments and string/regex contents are masked before matching so a pattern
- * can never fire inside a comment or literal (except the SQL-string check,
- * which intentionally inspects literal contents).
+ * can never fire inside a comment or literal. Template-literal ${...}
+ * expressions are code, so they stay unmasked (nested literals inside them
+ * are masked recursively).
  */
 import { readFileSync } from "node:fs";
 
@@ -60,15 +64,89 @@ function lineMapper(src) {
 /**
  * Blank out comments and literal contents, preserving positions so offsets in
  * the masked text still map back to the original. `strings` lists the quote
- * characters that open literals; `'\\'` escapes are honored. Template literals
- * are masked in full (interpolated ${...} code included — brace counting is
- * not used here).
+ * characters that open literals; `'\\'` escapes are honored. Inside template
+ * literals only the raw text is masked — `${...}` expressions stay visible to
+ * the checks because they hold executable code (their own strings, comments
+ * and nested templates are masked recursively).
  */
 function maskNonCode(src, { lineComment, blockComment, strings }) {
 	const out = src.split("");
 	const blank = (i) => {
 		if (out[i] !== "\n" && out[i] !== "\r") out[i] = " ";
 	};
+
+	// Masks a '...'/"..." literal starting at i; returns the index past close.
+	const scanQuoted = (i, quote) => {
+		blank(i++);
+		while (i < src.length) {
+			if (src[i] === "\\") {
+				blank(i++);
+				if (i < src.length) blank(i++);
+				continue;
+			}
+			if (src[i] === quote) {
+				blank(i++);
+				return i;
+			}
+			blank(i++);
+		}
+		return i;
+	};
+
+	const scanTemplate = (i) => {
+		blank(i++); // opening backtick
+		while (i < src.length) {
+			if (src[i] === "\\") {
+				blank(i++);
+				if (i < src.length) blank(i++);
+				continue;
+			}
+			if (src[i] === "`") {
+				blank(i++);
+				return i;
+			}
+			if (src[i] === "$" && src[i + 1] === "{") {
+				i += 2; // ${ stays unmasked — it is executable code
+				let depth = 1;
+				while (i < src.length && depth > 0) {
+					const two = src.slice(i, i + 2);
+					if (lineComment && two === lineComment) {
+						while (i < src.length && src[i] !== "\n") blank(i++);
+						continue;
+					}
+					if (blockComment && two === blockComment[0]) {
+						blank(i++);
+						blank(i++);
+						while (i < src.length && src.slice(i, i + 2) !== blockComment[1]) blank(i++);
+						blank(i++);
+						blank(i++);
+						continue;
+					}
+					if (src[i] === "'" || src[i] === '"') {
+						i = scanQuoted(i, src[i]);
+						continue;
+					}
+					if (src[i] === "`") {
+						i = scanTemplate(i);
+						continue;
+					}
+					if (src[i] === "{") depth++;
+					else if (src[i] === "}") {
+						depth--;
+						if (depth === 0) {
+							i++;
+							break;
+						}
+					}
+					i++;
+				}
+				continue;
+			}
+			blank(i++);
+		}
+		return i;
+	};
+
 	let i = 0;
 	while (i < src.length) {
 		const two = src.slice(i, i + 2);
@@ -85,80 +163,12 @@ function maskNonCode(src, { lineComment, blockComment, strings }) {
 			continue;
 		}
 		if (strings.includes(src[i])) {
-			const quote = src[i];
-			blank(i++);
-			while (i < src.length) {
-				if (src[i] === "\\") {
-					blank(i++);
-					if (i < src.length) blank(i++);
-					continue;
-				}
-				if (src[i] === quote) {
-					blank(i++);
-					break;
-				}
-				blank(i++);
-			}
+			i = src[i] === "`" ? scanTemplate(i) : scanQuoted(i, src[i]);
 			continue;
 		}
 		i++;
 	}
 	return out.join("");
-}
-
-/** Non-ASCII inside a '...' literal must carry an N'...'/_charset'...' prefix. */
-function checkSqlUnicode(file, src) {
-	// Mask comments only — the check inspects literal contents.
-	const masked = maskNonCode(src, {
-		lineComment: "--",
-		blockComment: ["/*", "*/"],
-		strings: [],
-	});
-	const toLine = lineMapper(src);
-	// Manually scan literals so '' and backslash escapes are exact.
-	let i = 0;
-	while (i < masked.length) {
-		if (masked[i] !== "'") {
-			i++;
-			continue;
-		}
-		const start = i;
-		i++;
-		let content = "";
-		let closed = false;
-		while (i < masked.length) {
-			if (masked[i] === "\\") {
-				content += masked[i] + (masked[i + 1] ?? "");
-				i += 2;
-				continue;
-			}
-			if (masked[i] === "'") {
-				if (masked[i + 1] === "'") {
-					content += "''";
-					i += 2;
-					continue;
-				}
-				i++;
-				closed = true;
-				break;
-			}
-			content += masked[i++];
-		}
-		if (!closed) break;
-		if (!/[^\x00-\x7F]/.test(content)) continue;
-		// What precedes the quote decides if the literal is unicode-capable.
-		const prefix = /[_A-Za-z0-9]*$/.exec(masked.slice(0, start))[0];
-		const unicodeAware = /^[Nn]$/.test(prefix) || /^_[A-Za-z]/.test(prefix);
-		if (!unicodeAware) {
-			report(
-				file,
-				toLine,
-				start,
-				"sql-unicode-literal",
-				"non-ASCII text in a non-unicode string literal — write it as N'...' (Codacy: \"Use of unicode characters in a non unicode string\")",
-			);
-		}
-	}
 }
 
 /** std::env::args[_os] must carry an adjacent nosemgrep justification. */
@@ -238,7 +248,6 @@ function checkNonLiteralRegExp(file, src, masked) {
 	}
 }
 
-const SQL_RE = /\.sql$/;
 const RUST_RE = /\.rs$/;
 const JS_RE = /\.(?:m?[jt]sx?|c[jt]s)$/;
 
@@ -249,7 +258,6 @@ for (const file of files) {
 	} catch {
 		continue; // staged file removed between hook launch and read
 	}
-	if (SQL_RE.test(file)) checkSqlUnicode(file, src);
 	if (RUST_RE.test(file)) checkRustArgs(file, src);
 	if (JS_RE.test(file)) {
 		const masked = maskedJs(src);

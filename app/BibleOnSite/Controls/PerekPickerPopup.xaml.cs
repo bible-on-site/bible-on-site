@@ -19,7 +19,7 @@ public partial class PerekPickerPopup : ContentView
     /// <summary>
     /// Event raised when a perek is selected and confirmed.
     /// </summary>
-    public event EventHandler<int>? PerekSelected;
+    public event Action<int>? PerekSelected;
 
     /// <summary>
     /// Event raised when the popup is dismissed.
@@ -371,7 +371,7 @@ public partial class PerekPickerPopup : ContentView
     {
         if (_selectedPerek != null)
         {
-            PerekSelected?.Invoke(this, _selectedPerek.PerekId);
+            PerekSelected?.Invoke(_selectedPerek.PerekId);
             Hide();
         }
     }

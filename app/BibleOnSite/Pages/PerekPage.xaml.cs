@@ -911,6 +911,10 @@ public partial class PerekPage : ContentPage, IQueryAttributable
                 Resources["BottomBarTotalHeight"] = totalHeight;
                 break;
             }
+
+            default:
+                // Unknown fix numbers leave the baseline layout untouched.
+                break;
         }
 
         // Padding changes the arrange area without firing SizeChanged.
@@ -2065,6 +2069,10 @@ public partial class PerekPage : ContentPage, IQueryAttributable
             case GestureStatus.Running:
                 ExitFullScreenButton.TranslationX = _exitButtonPanStartX + e.TotalX;
                 ExitFullScreenButton.TranslationY = _exitButtonPanStartY + e.TotalY;
+                break;
+
+            default:
+                // Completed/canceled gestures keep the button where the pan left it.
                 break;
         }
     }
