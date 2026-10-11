@@ -81,7 +81,7 @@ public class PerushimNotesService
     /// silently re-copy the DB — this marker makes the removal persist until an
     /// explicit install clears it.
     /// </summary>
-    private string RemovedMarkerPath => Path.Combine(DataDirectory, RemovedMarkerName);
+    private string RemovedMarkerPath => Path.Join(DataDirectory, RemovedMarkerName);
 
     /// <summary>True after the user deliberately removed the notes pack (until reinstalled).</summary>
     public bool IsRemovedByUser => File.Exists(RemovedMarkerPath);
@@ -275,7 +275,7 @@ public class PerushimNotesService
                 await _connection.CloseAsync();
                 _connection = null;
             }
-            File.Delete(Path.Combine(DataDirectory, NotesDbName));
+            File.Delete(Path.Join(DataDirectory, NotesDbName));
             _notesMissing = true;
             _notesValidationStatus = "Removed by user";
             _initialized = true;
