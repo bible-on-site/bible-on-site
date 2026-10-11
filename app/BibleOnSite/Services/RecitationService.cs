@@ -30,7 +30,12 @@ public sealed class RecitationService
     private string DirectoryPath => Path.Combine(_files.AppDataDirectory, "extensions", "recitation");
     private string AudioPath(RecitationTrack track) => Path.Combine(DirectoryPath, track.PlaybackFileName);
 
-    public RecitationService(IFileSystem files, IPadDeliveryService delivery, Func<bool>? playsOggNatively = null)
+    public RecitationService(IFileSystem files, IPadDeliveryService delivery)
+        : this(files, delivery, null)
+    {
+    }
+
+    public RecitationService(IFileSystem files, IPadDeliveryService delivery, Func<bool>? playsOggNatively)
     {
         _files = files;
         _delivery = delivery;
