@@ -181,7 +181,10 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
             ? bar : bar.FindElement(By.XPath(".//*[@class='android.widget.EditText' or @class='android.widget.AutoCompleteTextView' or @type='XCUIElementTypeSearchField' or @type='XCUIElementTypeTextField']"));
         input.Clear();
         input.SendKeys(text);
-        Page.WaitFor("SearchResultTitle", element => element.Text == expectedTitle);
+        // The first query of a session builds the search index on-device —
+        // on a loaded simulator/emulator under coverage instrumentation it can
+        // far outlast the default wait; subsequent searches reuse the warm index.
+        Page.WaitFor("SearchResultTitle", element => element.Text == expectedTitle, TimeSpan.FromMinutes(3));
     }
 
     private void AssertBookGroupColumns()
