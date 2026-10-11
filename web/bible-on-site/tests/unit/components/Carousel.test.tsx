@@ -442,6 +442,46 @@ describe("Carousel", () => {
 			undo();
 		});
 
+		it("skips realignment when the stored position already matches", () => {
+			sessionStorage.setItem(KEY, JSON.stringify({ itemIndex: 0, itemGap: 0 }));
+			const undo = installTrackLayout();
+			const scroller = renderStored(5);
+			expect(scroller.scrollLeft).toBe(0);
+			expect(storedPosition()).toEqual({ itemIndex: 0, itemGap: 0 });
+			undo();
+		});
+
+		it("starts fresh when the stored value is unreadable or malformed", () => {
+			const undo = installTrackLayout();
+			for (const bad of [
+				"{",
+				'"x"',
+				"{}",
+				'{"itemIndex":"x","itemGap":0}',
+				'{"itemIndex":1}',
+			]) {
+				sessionStorage.setItem(KEY, bad);
+				const scroller = renderStored(5);
+				expect(scroller.scrollLeft).toBe(0);
+			}
+			undo();
+		});
+
+		it("survives a stored position while the scroller reports no items", () => {
+			sessionStorage.setItem(KEY, JSON.stringify({ itemIndex: 2, itemGap: 0 }));
+			const undo = installTrackLayout();
+			const scroller = renderStored(0);
+			// Degenerate layout: overflow reported with zero items to clamp into.
+			Object.defineProperty(scroller, "scrollWidth", {
+				configurable: true,
+				value: 5 * CARD_WIDTH,
+			});
+			fireEvent.scroll(scroller);
+			expect(scroller.scrollLeft).toBe(0);
+			expect(storedPosition()).toEqual({ itemIndex: 0, itemGap: 0 });
+			undo();
+		});
+
 		it("leaves storage and position alone without a key", () => {
 			const undo = installTrackLayout();
 			const scroller = renderStored(5, null);
