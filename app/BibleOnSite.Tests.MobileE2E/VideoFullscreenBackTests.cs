@@ -53,7 +53,18 @@ public sealed class VideoFullscreenBackTests(ITestOutputHelper output, MobileDev
         Page.WaitFor("PerekSource", element => !string.IsNullOrWhiteSpace(element.Text));
     });
 
-    private bool VideoVisible() => Driver!.FindElements(Video).Any(element => element.Displayed);
+    private bool VideoVisible()
+    {
+        try
+        {
+            return Driver!.FindElements(Video).Any(element => element.Displayed);
+        }
+        catch (StaleElementReferenceException)
+        {
+            // The node is mid-reparent (entering or leaving fullscreen).
+            return false;
+        }
+    }
 
     private void WaitUntil(Func<bool> condition, string what)
     {
