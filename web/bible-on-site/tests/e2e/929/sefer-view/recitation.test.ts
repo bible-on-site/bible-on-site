@@ -160,6 +160,21 @@ test.describe("Recitation in the book reader", () => {
 		await expect(first).toHaveCSS("background-color", "rgb(233, 239, 248)");
 		await expect(second).toHaveAttribute("aria-current", "true");
 		await expect(first).not.toHaveAttribute("aria-current", "true");
+		// A pasuk preview bookmarks where continuous playback resumes. Preview
+		// the final pasuk so the continuous tail stays inside the test window —
+		// the fixture recording is a full two minutes.
+		const lastPasuk = manifest.words.at(-1).pasuk;
+		const starts = (
+			manifest.words as { pasuk: number; startMs: number | null }[]
+		)
+			.filter((w) => w.pasuk === lastPasuk)
+			.map((w) => w.startMs)
+			.filter((s): s is number => s !== null);
+		const lastPasukStart = starts.length ? Math.min(...starts) : 0;
+		await reader
+			.getByRole("button", { name: /^השמעת פסוק / })
+			.last()
+			.click();
 		// During a pasuk preview the toggle is a chapter-Play button; it starts
 		// continuous playback at the preview's bookmark before it can pause.
 		await reader.getByRole("button", { name: "השמעת כל הפרק" }).click();
@@ -184,9 +199,11 @@ test.describe("Recitation in the book reader", () => {
 			}
 		}
 		await reader.getByRole("button", { name: "המשך ההקראה" }).click();
+		// Continuous playback resumed at the last pasuk's bookmark, so only the
+		// clip's tail still plays before the controls settle back to idle.
 		await expect(
 			reader.getByRole("button", { name: "השמעת כל הפרק" }),
-		).toBeVisible({ timeout: 30_000 });
+		).toBeVisible({ timeout: manifest.durationMs - lastPasukStart + 15_000 });
 		await expect(text.locator('[data-recitation-active="true"]')).toHaveCount(
 			0,
 			{ timeout: 12_000 },
