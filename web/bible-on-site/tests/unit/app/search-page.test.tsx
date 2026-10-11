@@ -65,7 +65,10 @@ describe("SearchPage", () => {
 	it("adopts text typed before hydration instead of dropping it", async () => {
 		const page = await SearchPage({ searchParams: paramsFor({}) });
 		const container = document.createElement("div");
-		container.innerHTML = renderToString(page);
+		container.append(
+			...new DOMParser().parseFromString(renderToString(page), "text/html")
+				.body.childNodes,
+		);
 		const input = container.querySelector("input[name=q]") as HTMLInputElement;
 		input.value = "בראשית";
 		await act(async () => {
