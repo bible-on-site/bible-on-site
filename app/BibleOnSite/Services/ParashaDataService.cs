@@ -41,7 +41,9 @@ public class ParashaDataService
     public async Task LoadAsync()
     {
         if (_isLoaded)
+        {
             return;
+        }
 
         await _loadLock.WaitAsync();
         try
