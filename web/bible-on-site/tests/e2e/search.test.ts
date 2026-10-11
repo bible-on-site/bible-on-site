@@ -7,19 +7,42 @@ import { expect, test } from "../util/playwright/test-fixture";
  */
 
 test.describe("Site search", () => {
-	test("is discoverable from the nav button and the main menu", async ({
+	test("is discoverable from a dedicated button beside the logo", async ({
 		page,
 	}) => {
 		await page.goto("/");
 
-		// Persistent search entry point next to the hamburger.
-		const searchEntry = page.getByRole("link", { name: "חיפוש" }).first();
+		// Persistent search entry point beside the logo in the top nav,
+		// well separated from the hamburger trigger (#2102).
+		const topNav = page.locator("nav.top-nav");
+		const searchEntry = topNav.getByRole("link", { name: "חיפוש" });
 		await expect(searchEntry).toBeVisible();
 		await searchEntry.click();
 		await page.waitForURL("**/search");
 		await expect(
 			page.getByRole("searchbox", { name: "מונח חיפוש" }),
 		).toBeVisible();
+	});
+
+	test("main menu leads with על הפרק and holds no search row", async ({
+		page,
+	}) => {
+		await page.goto("/");
+
+		await page.getByRole("button", { name: "תפריט ראשי" }).click();
+		const menu = page.locator("#main-menu");
+
+		// Search lives on its own header button; the first regular menu
+		// item is the reader (#2102).
+		const firstItem = menu.locator("ul li").first();
+		await expect(firstItem.getByRole("link")).toHaveText(/על הפרק/);
+		await expect(firstItem.getByRole("link")).toHaveAttribute(
+			"href",
+			"/929",
+		);
+		await expect(
+			menu.getByRole("link", { name: "חיפוש" }),
+		).toHaveCount(0);
 	});
 
 	test("renders SSR results for a shared query URL", async ({ page }) => {
