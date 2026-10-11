@@ -107,7 +107,12 @@ test("Escape closes the modal and cross-tab preferences update its controls", ()
 			READER_SETTINGS_STORAGE_KEY,
 			JSON.stringify({ fontStep: 0, lineStep: 2, wordStep: 1 }),
 		);
-		window.dispatchEvent(new Event("storage"));
+		// Unrelated keys must not refresh the panel; the owned key does.
+		window.dispatchEvent(new StorageEvent("storage", { key: "otherPref" }));
+		expect(screen.getByRole("slider", { name: "גודל גופן" })).toHaveValue("2");
+		window.dispatchEvent(
+			new StorageEvent("storage", { key: READER_SETTINGS_STORAGE_KEY }),
+		);
 	});
 	expect(screen.getByRole("slider", { name: "גודל גופן" })).toHaveValue("0");
 	fireEvent(

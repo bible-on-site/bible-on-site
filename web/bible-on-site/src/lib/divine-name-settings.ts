@@ -103,10 +103,15 @@ export function subscribeDivineNameMasking(onChange: () => void): () => void {
 		snapshot = getDivineNameMaskingSettings();
 		onChange();
 	};
+	// Cross-tab storage events fire for every key — only ours is relevant, so
+	// unrelated preference writes in another tab don't refresh every segment.
+	const onStorage = (event: StorageEvent) => {
+		if (event.key === DIVINE_NAME_MASKING_KEY) handler();
+	};
 	window.addEventListener(DIVINE_NAME_MASKING_EVENT, handler);
-	window.addEventListener("storage", handler);
+	window.addEventListener("storage", onStorage);
 	return () => {
 		window.removeEventListener(DIVINE_NAME_MASKING_EVENT, handler);
-		window.removeEventListener("storage", handler);
+		window.removeEventListener("storage", onStorage);
 	};
 }

@@ -33,6 +33,14 @@ describe("DivineNameText", () => {
 		render(<DivineNameText value="בְּרֵאשִׁ֖ית" />);
 		expect(screen.getByText("בְּרֵאשִׁ֖ית")).toBeTruthy();
 	});
+	it("masks each word of a multi-word segment value", () => {
+		// Bracketed multi-word qri arrives as a single segment value.
+		saveDivineNameMaskingSettings(
+			normalizeDivineNameMasking({ enabled: true }),
+		);
+		render(<DivineNameText value="יְהוָה אֱלֹהִים" />);
+		expect(screen.getByText("ה' א-להים")).toBeTruthy();
+	});
 	it("re-renders when preferences change and restores canonical text when off", () => {
 		render(<DivineNameText value="אֱלֹהִ֑ים" />);
 		act(() =>
@@ -53,8 +61,21 @@ describe("DivineNameText", () => {
 				DIVINE_NAME_MASKING_KEY,
 				JSON.stringify({ enabled: true, el: "hyphen" }),
 			);
-			window.dispatchEvent(new Event("storage"));
+			window.dispatchEvent(
+				new StorageEvent("storage", { key: DIVINE_NAME_MASKING_KEY }),
+			);
 		});
 		expect(screen.getByText("א-ל")).toBeTruthy();
+	});
+	it("ignores storage events for unrelated keys", () => {
+		render(<DivineNameText value="אֵ֑ל" />);
+		act(() => {
+			localStorage.setItem(
+				DIVINE_NAME_MASKING_KEY,
+				JSON.stringify({ enabled: true, el: "hyphen" }),
+			);
+			window.dispatchEvent(new StorageEvent("storage", { key: "otherPref" }));
+		});
+		expect(screen.getByText("אֵ֑ל")).toBeTruthy();
 	});
 });
