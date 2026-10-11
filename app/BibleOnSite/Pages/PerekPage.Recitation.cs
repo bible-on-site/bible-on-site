@@ -488,8 +488,7 @@ public partial class PerekPage
             _playingContinuous = continuous;
             _recitationTimeline = track?.AlignmentStatus == "ready"
                 ? new RecitationTimeline(track, ranges ?? (start.HasValue && end.HasValue ? [(start.Value, end.Value)] : null), pauseMs) : null;
-            // Continuous playback starts where the last tapped word or pasuk left off;
-            // the timeline maps that recording timestamp into this clip's position.
+            // The timeline maps the tapped-word resume point into this clip's position.
             _pendingSeekMs = continuous && _resumePosition is { } point && point.PerekId == perek.PerekId
                 ? _recitationTimeline?.PositionOf(point.StartMs)
                 : null;
