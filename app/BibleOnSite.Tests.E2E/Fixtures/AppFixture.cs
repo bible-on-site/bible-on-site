@@ -419,7 +419,7 @@ public class AppFixture : IAsyncLifetime
         try
         {
             var artifacts = Environment.GetEnvironmentVariable("E2E_ARTIFACTS")
-                ?? Path.GetFullPath(Path.Combine(AppPath, "..", "..", "..", "..", "..", "..", ".artifacts", "e2e"));
+                ?? Path.GetFullPath(Path.Join(AppPath, "..", "..", "..", "..", "..", "..", ".artifacts", "e2e"));
             var directory = Path.Join(artifacts, "app-coverage");
             Directory.CreateDirectory(directory);
             path = Path.Join(directory, $"windows-{DateTime.UtcNow:yyyyMMddHHmmss}.json");
@@ -437,7 +437,9 @@ public class AppFixture : IAsyncLifetime
             };
             File.WriteAllText(path, JsonSerializer.Serialize(record, new JsonSerializerOptions { WriteIndented = true }));
         }
-        catch (Exception exception)
+        catch (Exception exception) when (exception is HttpRequestException
+            or TaskCanceledException or JsonException or IOException
+            or UnauthorizedAccessException or InvalidOperationException)
         {
             if (path != null)
             {

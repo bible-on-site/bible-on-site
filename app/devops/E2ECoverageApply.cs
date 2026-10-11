@@ -40,27 +40,23 @@ internal static class E2ECoverageApply
         var methodTokens = new Dictionary<(XElement, int), XElement>();
         foreach (var module in modules)
         {
-            foreach (var point in module.Descendants("SequencePoint"))
+            foreach (var (point, id) in module.Descendants("SequencePoint")
+                .Select(p => (Point: p, Id: ParseId(p.Attribute("uspid")?.Value)))
+                .Where(candidate => candidate.Id.HasValue))
             {
-                if (int.TryParse(point.Attribute("uspid")?.Value, out var id))
-                {
-                    sequencePoints[(module, id)] = point;
-                }
+                sequencePoints[(module, id.GetValueOrDefault())] = point;
             }
-            foreach (var point in module.Descendants("BranchPoint"))
+            foreach (var (point, id) in module.Descendants("BranchPoint")
+                .Select(p => (Point: p, Id: ParseId(p.Attribute("uspid")?.Value)))
+                .Where(candidate => candidate.Id.HasValue))
             {
-                if (int.TryParse(point.Attribute("uspid")?.Value, out var id))
-                {
-                    branchPoints[(module, id)] = point;
-                }
+                branchPoints[(module, id.GetValueOrDefault())] = point;
             }
-            foreach (var method in module.Descendants("Method"))
+            foreach (var (method, id) in module.Descendants("Method")
+                .Select(m => (Method: m, Id: ParseId(m.Element("MetadataToken")?.Value)))
+                .Where(candidate => candidate.Id.HasValue))
             {
-                var token = method.Element("MetadataToken")?.Value;
-                if (int.TryParse(token, out var id))
-                {
-                    methodTokens[(module, id)] = method;
-                }
+                methodTokens[(module, id.GetValueOrDefault())] = method;
             }
         }
 
@@ -135,6 +131,9 @@ internal static class E2ECoverageApply
         stats = new Stats(incompatible, unknown, seqVisited, brVisited);
         return applied;
     }
+
+    private static int? ParseId(string? value) =>
+        int.TryParse(value, out var id) ? id : null;
 
     /// <summary>Recomputes visited counters in the module summaries after applying dumps.</summary>
     internal static void UpdateModuleSummaries(List<XElement> modules)

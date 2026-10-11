@@ -62,19 +62,26 @@ namespace AltCover.Recorder
 				return;
 			}
 			Console.Error.WriteLine($"E2E coverage endpoint listening on 127.0.0.1:{Port}");
-			while (true)
+			try
 			{
-				TcpClient client;
-				try
+				while (true)
 				{
-					client = listener.AcceptTcpClient();
+					TcpClient client;
+					try
+					{
+						client = listener.AcceptTcpClient();
+					}
+					catch (Exception exception) when (exception is SocketException
+						or InvalidOperationException or ObjectDisposedException)
+					{
+						return;
+					}
+					ThreadPool.QueueUserWorkItem(_ => Serve(client));
 				}
-				catch (Exception exception) when (exception is SocketException
-					or InvalidOperationException or ObjectDisposedException)
-				{
-					return;
-				}
-				ThreadPool.QueueUserWorkItem(_ => Serve(client));
+			}
+			finally
+			{
+				listener.Stop();
 			}
 		}
 

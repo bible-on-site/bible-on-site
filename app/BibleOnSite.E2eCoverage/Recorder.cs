@@ -38,7 +38,7 @@ namespace AltCover.Recorder
 		private static readonly Dictionary<string, Dictionary<int, long>> Hits = new();
 		private static readonly long StartedTicks = DateTime.UtcNow.Ticks;
 		private static readonly string ReportFileValue =
-			Path.Combine(Directory.GetCurrentDirectory(), "e2e-coverage.json");
+			Path.GetFullPath("e2e-coverage.json");
 
 		static Instance()
 		{

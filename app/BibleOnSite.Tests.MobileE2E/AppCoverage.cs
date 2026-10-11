@@ -85,7 +85,9 @@ internal static class AppCoverage
             File.WriteAllText(path, JsonSerializer.Serialize(record, new JsonSerializerOptions { WriteIndented = true }));
             output.WriteLine($"{configuration.Platform}: coverage dump collected to {path}");
         }
-        catch (Exception exception)
+        catch (Exception exception) when (exception is HttpRequestException
+            or TaskCanceledException or JsonException or IOException
+            or UnauthorizedAccessException or InvalidOperationException)
         {
             File.WriteAllText(path + ".coverage-error.txt", exception.ToString());
             output.WriteLine($"{configuration.Platform}: coverage dump failed: {exception.Message}");
@@ -106,7 +108,8 @@ internal static class AppCoverage
             Send(configuration, route);
             return null;
         }
-        catch (Exception exception)
+        catch (Exception exception) when (exception is HttpRequestException
+            or TaskCanceledException or InvalidOperationException)
         {
             return exception.Message;
         }
