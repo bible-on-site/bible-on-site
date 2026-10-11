@@ -43,7 +43,11 @@ public partial class PerekPage
 
     private void AttachReaderKeyboardBack()
     {
-        if (Window?.Handler?.PlatformView is not Microsoft.UI.Xaml.Window window || window.Content is not UIElement owner || ReferenceEquals(owner, _keyboardBackOwner)) return;
+        if (Window?.Handler?.PlatformView is not Microsoft.UI.Xaml.Window window || window.Content is not UIElement owner || ReferenceEquals(owner, _keyboardBackOwner))
+        {
+            return;
+        }
+
         DetachReaderKeyboardBack();
         _keyboardBackOwner = owner;
         _keyboardBack = new KeyboardAccelerator { Key = VirtualKey.Left, Modifiers = VirtualKeyModifiers.Menu };
@@ -72,9 +76,17 @@ public partial class PerekPage
 
     private async void OnReaderKeyboardBackInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
-        if (Shell.Current.CurrentPage != this) return;
+        if (Shell.Current.CurrentPage != this)
+        {
+            return;
+        }
+
         args.Handled = TryHandleReaderBack();
-        if (args.Handled || Navigation.NavigationStack.Count <= 1) return;
+        if (args.Handled || Navigation.NavigationStack.Count <= 1)
+        {
+            return;
+        }
+
         args.Handled = true;
         try
         {

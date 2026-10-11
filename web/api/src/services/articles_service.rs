@@ -206,7 +206,8 @@ pub async fn search_articles(
                 }
             };
             let source = row.sefer_name.as_ref().map(|sefer_name| {
-                let perek_heb = number_to_hebrew(row.perek_in_context.unwrap_or(1));
+                let perek_heb =
+                    number_to_hebrew(row.perek_in_context.unwrap_or(1)).replace(['\'', '"'], "");
                 match &row.additional_letter {
                     Some(letter) => format!("{} {} {}", sefer_name, letter, perek_heb),
                     None => format!("{} {}", sefer_name, perek_heb),
@@ -709,7 +710,7 @@ mod tests {
         assert_eq!(hit.article_id, 42);
         assert_eq!(hit.name, "מאמר");
         assert_eq!(hit.author_name.as_deref(), Some("רש\"י"));
-        assert_eq!(hit.source.as_deref(), Some("בראשית ז'"));
+        assert_eq!(hit.source.as_deref(), Some("בראשית ז"));
         assert!(hit.semantic_score > 0.9);
         assert!(!hit.excerpt.is_empty());
 

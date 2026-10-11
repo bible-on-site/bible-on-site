@@ -12,12 +12,19 @@ namespace BibleOnSite.Tests.MobileE2E;
 // than recreating the driver. The device transport occasionally kills a
 // healthy session mid-run (adb "device offline", instrumentation exiting 255
 // with the logcat stream, a crashed WebDriverAgent); the session rebuilds it
-// once after confirmed cleanup. Uncertain cleanup blocks reuse.
+// once after confirmed cleanup, or after a lost adb transport that
+// DeviceTransportRecovery re-proves healthy and ready. Recovery never gates
+// the confirmed-death retry; it only heals adb when the death rode a dropped
+// transport. Uncertain cleanup stays latched in the session's factory.
 // Assertion failures are not WebDriverExceptions
 // and never match the classifier, so a retry cannot mask a real regression — a
 // second failure propagates normally.
 public abstract class MobileDeviceTest : IAsyncLifetime
 {
+    // Unit tests substitute a fake so recovery paths run without a real adb.
+    // Production always probes the device through DeviceTransportRecovery.
+    internal static Func<Exception, bool> TransportRecovery { get; set; } = DeviceTransportRecovery.TryReconnect;
+
     private readonly IMobileDeviceSession _session;
 
     protected MobileDeviceTest(ITestOutputHelper output, MobileDeviceSession session)
@@ -44,6 +51,8 @@ public abstract class MobileDeviceTest : IAsyncLifetime
 
     public virtual ValueTask InitializeAsync()
     {
+        Assert.SkipWhen(E2eSelection.IsExcluded(TestContext.Current),
+            "not selected by the e2e-impact manifest");
         try
         {
             Connect();
@@ -56,19 +65,36 @@ public abstract class MobileDeviceTest : IAsyncLifetime
             // startup failure — and a second death — fails below.
             Output.WriteLine($"{Configuration.Platform}: the session died during startup " +
                 $"({exception.Message}); acquiring it once more.");
+            if (TransportRecovery(exception))
+            {
+                Output.WriteLine($"{Configuration.Platform}: adb transport recovered before the retry.");
+            }
         }
-        catch
+        catch (WebDriverException exception) when (DeviceTransportLoss.Matches(exception))
         {
-            SaveDiagnostics($"SessionStartup-{Guid.NewGuid():N}", "failed");
+            // A lost adb transport is ambiguous — the failed creation may still
+            // be settling server-side — so the retry runs only after adb
+            // confirms a booted device with a responsive package manager, and
+            // the session still re-attempts teardown before creating anything.
+            if (!TransportRecovery(exception))
+            {
+                SaveDiagnostics($"SessionStartup-{Guid.NewGuid():N}", "failed", exception);
+                throw;
+            }
+            Output.WriteLine($"{Configuration.Platform}: adb transport recovered; acquiring the session once more.");
+        }
+        catch (Exception exception)
+        {
+            SaveDiagnostics($"SessionStartup-{Guid.NewGuid():N}", "failed", exception);
             throw;
         }
         try
         {
             Connect();
         }
-        catch
+        catch (Exception exception)
         {
-            SaveDiagnostics($"SessionStartup-{Guid.NewGuid():N}", "failed");
+            SaveDiagnostics($"SessionStartup-{Guid.NewGuid():N}", "failed", exception);
             throw;
         }
         return default;
@@ -89,6 +115,21 @@ public abstract class MobileDeviceTest : IAsyncLifetime
         {
             Output.WriteLine($"{Configuration.Platform}: the device dropped the session mid-scenario " +
                 $"({exception.Message}); rebuilding it once.");
+            if (TransportRecovery(exception))
+            {
+                Output.WriteLine($"{Configuration.Platform}: adb transport recovered before the rebuild.");
+            }
+        }
+        catch (WebDriverException exception) when (DeviceTransportLoss.Matches(exception))
+        {
+            // The scenario died with the transport; rebuilding blind on a still-
+            // lost device is not honest, so the rebuild waits for recovery —
+            // and the session re-attempts the teardown before creating anyway.
+            if (!TransportRecovery(exception))
+            {
+                throw;
+            }
+            Output.WriteLine($"{Configuration.Platform}: adb transport recovered; rebuilding the session once.");
         }
         Connect();
         Run(run, name);
@@ -96,13 +137,22 @@ public abstract class MobileDeviceTest : IAsyncLifetime
 
     private void Run(Action body, string name)
     {
+        // The caller-member name is the [Fact]/[Theory] method; combining it
+        // with the declaring type reproduces the xUnit FullyQualifiedName the
+        // coverage tree uses as test identity (#2085).
+        CoverageEvidence.Begin($"{GetType().FullName}.{name}", Configuration.Platform,
+            Configuration.ArtifactDirectory, name);
         try
         {
             body();
+            CoverageEvidence.RecordSession(Driver?.SessionId);
+            CoverageEvidence.Finish("passed");
             SaveDiagnostics(name, "passed");
         }
         catch
         {
+            CoverageEvidence.RecordSession(Driver?.SessionId);
+            CoverageEvidence.Finish("failed");
             SaveDiagnostics(name, "failed");
             throw;
         }
@@ -119,14 +169,21 @@ public abstract class MobileDeviceTest : IAsyncLifetime
     // without a device.
     protected void AcquireSession() => _session.Acquire(LaunchEnvironment);
 
-    protected void SaveDiagnostics(string name, string outcome)
+    protected void SaveDiagnostics(string name, string outcome) =>
+        SaveDiagnostics(name, outcome, null);
+
+    private void SaveDiagnostics(string name, string outcome, Exception? error)
     {
         var prefix = Path.Join(Configuration.ArtifactDirectory, $"{name}-{outcome}");
         Directory.CreateDirectory(Configuration.ArtifactDirectory);
         if (Driver == null)
         {
-            // A session-creation failure leaves no device state to capture.
-            File.WriteAllText(prefix + "-diagnostics-error.txt", "The session was never created.");
+            // A session-creation failure leaves no device state to capture; keep
+            // the startup exception and the adb device listing for forensics.
+            var details = error is null
+                ? "The session was never created."
+                : $"The session was never created.\n{error}{DeviceTransportRecovery.DeviceListing()}";
+            File.WriteAllText(prefix + "-diagnostics-error.txt", details);
         }
         else
         {

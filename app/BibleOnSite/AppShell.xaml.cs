@@ -1,4 +1,5 @@
 using BibleOnSite.Config;
+using BibleOnSite.Helpers;
 using BibleOnSite.Pages;
 using BibleOnSite.Services;
 
@@ -163,10 +164,40 @@ public partial class AppShell : Shell
 	}
 #endif
 
+	/// <summary>
+	/// Shared Back ordering for every Shell surface:
+	/// 1. A fullscreen media surface is released first (#2117) — a transient
+	///    surface always owns Back before page navigation or app exit.
+	/// 2. The page/navigation pipeline then decides (reader overlays, section
+	///    stack pops, cancelled navigation).
+	/// 3. When nothing consumed the press and it would leave the app, the
+	///    single-Back exit confirmation runs first (#2118).
+	/// On Android, MainActivity's always-enabled AppBackPressedCallback
+	/// guarantees this method receives every press — MAUI's own callback is
+	/// disabled whenever CanConsumeBackNavigation reports no in-app history.
+	/// </summary>
+	protected override bool OnBackButtonPressed()
+	{
+		if (MediaFullscreen.TryExit())
+		{
+			return true;
+		}
+
+		return BackExitPlan.Evaluate(base.OnBackButtonPressed(), FlyoutIsPresented) switch
+		{
+			BackExitAction.Consume => true,
+			BackExitAction.ConfirmExit => ExitConfirmation.Shared.Request(),
+			_ => false,
+		};
+	}
+
 	private void OnNavigated(object? sender, ShellNavigatedEventArgs e)
 	{
 		var analytics = Application.Current?.Handler?.MauiContext?.Services.GetService<IAnalyticsService>();
-		if (analytics == null) return;
+		if (analytics == null)
+		{
+			return;
+		}
 		// Logical screen names for GA (#2119): the route URI embeds Shell
 		// container segments and query strings, and Firebase's automatic
 		// tracking only saw MainActivity/renderer classes before it was

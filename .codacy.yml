@@ -11,6 +11,9 @@ engines:
 # Exclude MySQL/SQLite schema files: SQL analyzer uses T-SQL dialect and flags
 # valid MySQL backticks and SQLite PRAGMA/AUTOINCREMENT as syntax errors
 exclude_paths:
+  # These are exercised against MySQL by the API and website database tests.
+  - "data/mysql/tanah_dynamic_structure.sql"
+  - "data/mysql/tanah_test_data.sql"
   - "data/mysql/tanah_daily_bulletin_upgrade.sql"
   - "data/mysql/tanahpedia_alter_entry_revision_history.sql"
   - "data/mysql/tanahpedia_alter_saying_date.sql"
@@ -23,6 +26,18 @@ exclude_paths:
   - "data/mysql/perushim_data.sql"
   - "data/mysql/tanah_perek_images_structure.sql"
   - "data/mysql/tanah_truncate.sql"
+  # Same class of T-SQL-dialect false positive: "Use of unicode characters in
+  # a non unicode string" demands N'...', but MySQL literals already take the
+  # column charset and N'...' is a syntax error (1064) in COMMENT clauses.
+  - "data/mysql/tanah_sefarim_and_perakim_data.sql"
+  - "data/mysql/tanah_test_data.sql"
+  - "data/mysql/tanahpedia_entry_synonym_data.sql"
+  - "data/mysql/tanahpedia_family_edge_lab_data.sql"
+  - "data/mysql/tanahpedia_family_jacob_data.sql"
+  - "data/mysql/tanahpedia_family_shimshon_data.sql"
+  - "data/mysql/tanahpedia_legacy_migration.sql"
+  - "data/mysql/tanahpedia_place_eretz_yisrael_data.sql"
+  - "data/mysql/tanahpedia_structure.sql"
   - "data/sqlite/perushim_catalog_structure.sql"
   - "data/sqlite/perushim_notes_structure.sql"
   # CloudFormation Lambda scripts are infra reference code, not application code.

@@ -20,7 +20,9 @@ public static class HebrewDateHelper
     public static int GetTodaysPerekIdByHebrew(Dictionary<int, Models.Perek> perakim)
     {
         if (perakim == null || perakim.Count == 0)
+        {
             return 1;
+        }
 
         // Get current time in Jerusalem (Israel Standard Time / Israel Daylight Time)
         var now = TimeZoneInfo.ConvertTimeBySystemTimeZoneId(
@@ -179,7 +181,9 @@ public static class HebrewDateHelper
     {
         var calendar = new System.Globalization.HebrewCalendar();
         if (!calendar.IsLeapYear(year))
+        {
             return calendarMonth;
+        }
 
         return calendarMonth switch
         {
@@ -198,7 +202,9 @@ public static class HebrewDateHelper
     {
         var calendar = new System.Globalization.HebrewCalendar();
         if (!calendar.IsLeapYear(year))
+        {
             return legacyMonth;
+        }
 
         return legacyMonth switch
         {

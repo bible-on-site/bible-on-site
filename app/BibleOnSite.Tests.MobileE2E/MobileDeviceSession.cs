@@ -47,17 +47,7 @@ public sealed class MobileDeviceSession : IMobileDeviceSession, IAsyncLifetime
     {
         try
         {
-            _sessions.Cleanup(() =>
-            {
-                try
-                {
-                    Driver?.Quit();
-                }
-                finally
-                {
-                    Driver?.Dispose();
-                }
-            });
+            _sessions.Cleanup(CloseDriver);
         }
         catch (WebDriverException exception)
         {
@@ -96,24 +86,20 @@ public sealed class MobileDeviceSession : IMobileDeviceSession, IAsyncLifetime
             Rebuild();
             Adapter.RestartApp(Driver!, environment);
         }
+        catch (WebDriverException exception) when (DeviceTransportLoss.Matches(exception)
+            && MobileDeviceTest.TransportRecovery(exception))
+        {
+            // The restart rode a dropped adb transport — healed by the filter —
+            // so the live session is retried once rather than rebuilt.
+            Adapter.RestartApp(Driver!, environment);
+        }
     }
 
     private void Rebuild()
     {
         try
         {
-            _sessions.Cleanup(() =>
-            {
-                try
-                {
-                    Driver?.Quit();
-                }
-                finally
-                {
-                    Driver?.Dispose();
-                    Driver = null;
-                }
-            });
+            _sessions.Cleanup(CloseDriver);
         }
         catch (WebDriverException exception) when (DeviceSessionDeath.Matches(exception))
         {
@@ -130,7 +116,41 @@ public sealed class MobileDeviceSession : IMobileDeviceSession, IAsyncLifetime
         }
         catch (WebDriverException exception) when (DeviceSessionDeath.Matches(exception))
         {
+            // Confirmed deaths need no gate; recovery only heals adb when the
+            // death rode a dropped transport.
+            MobileDeviceTest.TransportRecovery(exception);
             Create();
+        }
+        catch (WebDriverException exception) when (DeviceTransportLoss.Matches(exception)
+            && MobileDeviceTest.TransportRecovery(exception))
+        {
+            Create();
+        }
+    }
+
+    // Quit can race a dropped adb transport: "device offline" then means the
+    // server-side teardown is unconfirmed, not done. On a healed transport the
+    // Quit is re-attempted so a released session is proven before reuse; if the
+    // retry also fails the factory latches the device rather than risk a
+    // zombie teardown colliding with the next session.
+    private void CloseDriver()
+    {
+        try
+        {
+            try
+            {
+                Driver?.Quit();
+            }
+            catch (WebDriverException exception) when (DeviceTransportLoss.Matches(exception)
+                && MobileDeviceTest.TransportRecovery(exception))
+            {
+                Driver?.Quit();
+            }
+        }
+        finally
+        {
+            Driver?.Dispose();
+            Driver = null;
         }
     }
 

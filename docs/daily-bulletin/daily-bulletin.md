@@ -6,6 +6,8 @@ The admin `/bulletins` page prepares a bulletin for a selected civil date in Jer
 
 Articles have a `distributable` flag, editable as **מאושר לפרסום בעלון היומי** in the article editor. Existing and new articles default to unapproved. Preparing a date with no approved article produces a scripture-only bulletin.
 
+This flag controls inclusion in the daily bulletin only. It must not filter public website articles, author listings, sitemaps, or public search. Public articles belong to canonical chapters 1-929; invalid chapter references are excluded independently of bulletin approval.
+
 The Rust `web/bulletin` service renders email HTML and PDF from the same article snapshot. Article HTML is sanitized and relative links are resolved against the public website. Scripture retains cantillation and biblical maqaf. The PDF contains the Hebrew date, dedications, chapter, and selected article. Existing on-demand book and chapter downloads continue using their original endpoint and request format.
 
 Preparation stores the input snapshot, email HTML, PDF bytes, subject, source, and filename in `tanah_daily_bulletin`, with one record per date. Repeated or concurrent preparation returns the first saved result. Later article edits do not change a prepared bulletin. All three channel records are created in the same transaction in `tanah_daily_bulletin_delivery`. This stage prepares previews only and has no sending action or scheduled trigger.

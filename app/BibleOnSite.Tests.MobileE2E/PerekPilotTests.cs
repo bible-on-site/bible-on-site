@@ -185,8 +185,12 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         for (var attempt = 0; attempt < 2; attempt++)
         {
             // A fresh installation builds the local index for the entire
-            // commentary package; the retry lands on the already-warm index.
-            var timeout = attempt == 0 ? TimeSpan.FromMinutes(6) : TimeSpan.FromSeconds(45);
+            // commentary package, and an interrupted import is discarded rather
+            // than resumed — a scenario boundary can throw away a nearly
+            // complete build, so the deadline must cover a full fresh import
+            // (~370s observed on a loaded macOS runner) plus result rendering
+            // and poll lag. The retry lands on the already-warm index.
+            var timeout = attempt == 0 ? TimeSpan.FromMinutes(8) : TimeSpan.FromSeconds(45);
             var (commentary, _) = WaitForSettledRow(rowSuffix, timeout);
             var title = commentary.Text;
             var position = commentary.Location;
