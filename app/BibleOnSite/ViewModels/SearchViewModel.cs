@@ -99,7 +99,9 @@ public partial class SearchViewModel : ObservableObject
         get
         {
             if (string.IsNullOrWhiteSpace(SearchPhrase))
+            {
                 return SearchPhraseAll;
+            }
 
             var normalized = SearchText.Normalize(SearchPhrase);
             return normalized.StartsWith("הרב ", StringComparison.Ordinal) ? normalized[4..] : normalized;
@@ -122,9 +124,13 @@ public partial class SearchViewModel : ObservableObject
     public void SetFilterEnabled(SearchFilter filter, bool enabled)
     {
         if (enabled)
+        {
             _enabledFilters.Add(filter);
+        }
         else
+        {
             _enabledFilters.Remove(filter);
+        }
 
         OnPropertyChanged(nameof(IsFilterEnabled));
     }
@@ -143,9 +149,13 @@ public partial class SearchViewModel : ObservableObject
     public void SetSeferFilterEnabled(int seferId, bool enabled)
     {
         if (enabled)
+        {
             _enabledSefarim.Add(seferId);
+        }
         else
+        {
             _enabledSefarim.Remove(seferId);
+        }
 
         OnPropertyChanged(nameof(IsSeferFilterEnabled));
     }
@@ -159,7 +169,9 @@ public partial class SearchViewModel : ObservableObject
         for (int seferId = from; seferId <= to; seferId++)
         {
             if (!_enabledSefarim.Contains(seferId))
+            {
                 return false;
+            }
         }
         return true;
     }
@@ -174,9 +186,13 @@ public partial class SearchViewModel : ObservableObject
         for (int seferId = from; seferId <= to; seferId++)
         {
             if (enabled)
+            {
                 _enabledSefarim.Add(seferId);
+            }
             else
+            {
                 _enabledSefarim.Remove(seferId);
+            }
         }
 
         OnPropertyChanged(nameof(IsSeferGroupFilterEnabled));
@@ -202,10 +218,14 @@ public partial class SearchViewModel : ObservableObject
     public List<AuthorSearchResult> GetAuthorResults()
     {
         if (!IsFilterEnabled(SearchFilter.Author))
+        {
             return new List<AuthorSearchResult>();
+        }
 
         if (OptimizedSearchPhrase == SearchPhraseAll)
+        {
             return _authors.Select(a => new AuthorSearchResult(a, OptimizedSearchPhrase)).ToList();
+        }
 
         var searchTerm = OptimizedSearchPhrase;
 
@@ -230,7 +250,7 @@ public partial class SearchViewModel : ObservableObject
     /// <summary>
     /// Executes the search and populates SearchResults.
     /// </summary>
-    public async Task SearchAsync(CancellationToken cancellationToken = default)
+    public async Task SearchAsync(CancellationToken cancellationToken)
     {
         CancelSearch();
         var version = _searchVersion;
@@ -262,18 +282,30 @@ public partial class SearchViewModel : ObservableObject
                 : null;
             // Article search is remote — it must not force the local perek DB load.
             if (filters.Any(filter => filter != SearchFilter.Author && filter != SearchFilter.Articles))
+            {
                 await _perekDataService.LoadAsync().WaitAsync(token);
+            }
+
             if (filters.Contains(SearchFilter.Perek))
+            {
                 results.AddRange(GetPerekResults(phrase, books));
+            }
+
             token.ThrowIfCancellationRequested();
             if (version == _searchVersion)
+            {
                 PublishResults(results, limit);
+            }
+
             var searchIndex = _searchIndex;
             if (_useDefaultIndex && (filters.Contains(SearchFilter.Pasuk) || filters.Contains(SearchFilter.Perush)))
+            {
                 searchIndex = SearchIndexService.Instance;
+            }
+
             if (searchIndex != null && (filters.Contains(SearchFilter.Pasuk) || filters.Contains(SearchFilter.Perush)))
             {
-                var progress = new Progress<string>(message => { if (version == _searchVersion) LoadingMessage = message; });
+                var progress = new Progress<string>(message => { if (version == _searchVersion) { LoadingMessage = message; } });
                 foreach (var type in new[] { SearchFilter.Pasuk, SearchFilter.Perush }.Where(filters.Contains))
                 {
                     var hits = await searchIndex.SearchAsync(phrase, new HashSet<SearchFilter> { type }, books, limit, token, progress, ordering);
@@ -291,10 +323,14 @@ public partial class SearchViewModel : ObservableObject
                     }
                     token.ThrowIfCancellationRequested();
                     if (version == _searchVersion)
+                    {
                         PublishResults(results, limit);
+                    }
                 }
                 if (version == _searchVersion && filters.Contains(SearchFilter.Perush) && !searchIndex.CommentaryAvailable)
+                {
                     AvailabilityMessage = "לחיפוש בפירושים, הורידו את הפירושים בהגדרות";
+                }
             }
             if (articleMerge != null)
             {
@@ -313,17 +349,26 @@ public partial class SearchViewModel : ObservableObject
             }
             token.ThrowIfCancellationRequested();
             if (version == _searchVersion)
+            {
                 PublishResults(results, limit);
+            }
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { }
         catch
         {
-            if (version == _searchVersion) ErrorMessage = "שגיאה בחיפוש. נסו שוב";
+            if (version == _searchVersion)
+            {
+                ErrorMessage = "שגיאה בחיפוש. נסו שוב";
+            }
+
             throw;
         }
         finally
         {
-            if (version == _searchVersion) IsLoading = false;
+            if (version == _searchVersion)
+            {
+                IsLoading = false;
+            }
         }
     }
 
@@ -388,15 +433,34 @@ public partial class SearchViewModel : ObservableObject
         var visible = (Sorting == SearchSort.Generation
             ? results.OrderBy(result => result.GenerationOrder).ThenBy(result => result.SourceOrder).ThenByDescending(result => result.Score)
             : results.OrderByDescending(result => result.Score)).Take(limit).ToArray();
-        for (var position = 0; position < visible.Length; position++)
-        {
-            var existing = SearchResults.IndexOf(visible[position]);
-            if (existing < 0) SearchResults.Insert(position, visible[position]);
-            else if (existing != position) SearchResults.Move(existing, position);
-        }
-        while (SearchResults.Count > visible.Length) SearchResults.RemoveAt(SearchResults.Count - 1);
+        ReconcileVisibleResults(SearchResults, visible);
         // Preserve native result rows while slower commentary matches are added.
         OnPropertyChanged(nameof(SearchResults));
+    }
+
+    /// <summary>
+    /// Reconciles the bound results collection with the latest visible slice:
+    /// inserts newcomers at their position, moves reordered items, and trims
+    /// leftovers beyond the limit — without replacing the collection instance.
+    /// </summary>
+    internal static void ReconcileVisibleResults(ObservableCollection<SearchResult> target, IReadOnlyList<SearchResult> visible)
+    {
+        for (var position = 0; position < visible.Count; position++)
+        {
+            var existing = target.IndexOf(visible[position]);
+            if (existing < 0)
+            {
+                target.Insert(position, visible[position]);
+            }
+            else if (existing != position)
+            {
+                target.Move(existing, position);
+            }
+        }
+        while (target.Count > visible.Count)
+        {
+            target.RemoveAt(target.Count - 1);
+        }
     }
 
     private IEnumerable<PerekSearchResult> GetPerekResults(string phrase, IReadOnlySet<int> books)
