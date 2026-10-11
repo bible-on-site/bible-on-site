@@ -109,39 +109,20 @@ internal static class DeviceTransportRecovery
     {
         var start = new ProcessStartInfo("adb")
         {
+            Arguments = command switch
+            {
+                Adb.Reconnect => "reconnect",
+                Adb.WaitForDevice => "wait-for-device",
+                Adb.GetState => "get-state",
+                Adb.BootCompleted => "shell getprop sys.boot_completed",
+                Adb.PackageManager => "shell pm path android",
+                Adb.Devices => "devices -l",
+                _ => throw new ArgumentOutOfRangeException(nameof(command)),
+            },
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
         };
-        switch (command)
-        {
-            case Adb.Reconnect:
-                start.ArgumentList.Add("reconnect");
-                break;
-            case Adb.WaitForDevice:
-                start.ArgumentList.Add("wait-for-device");
-                break;
-            case Adb.GetState:
-                start.ArgumentList.Add("get-state");
-                break;
-            case Adb.BootCompleted:
-                start.ArgumentList.Add("shell");
-                start.ArgumentList.Add("getprop");
-                start.ArgumentList.Add("sys.boot_completed");
-                break;
-            case Adb.PackageManager:
-                start.ArgumentList.Add("shell");
-                start.ArgumentList.Add("pm");
-                start.ArgumentList.Add("path");
-                start.ArgumentList.Add("android");
-                break;
-            case Adb.Devices:
-                start.ArgumentList.Add("devices");
-                start.ArgumentList.Add("-l");
-                break;
-            default:
-                throw new ArgumentOutOfRangeException(nameof(command));
-        }
         try
         {
             using var process = Process.Start(start);
