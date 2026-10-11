@@ -34,6 +34,29 @@ public class TanahpediaServiceTests
     }
 
     [Fact]
+    public async Task GetRecentEntriesAsync_maps_entries()
+    {
+        var transport = new GraphQLTransport("""
+            {
+              "data": {
+                "tanahpediaRecentEntries": [
+                  { "id": "e3", "uniqueName": "דוד-המלך", "title": "דוד המלך", "updatedAt": "2026-07-03T10:00:00" }
+                ]
+              }
+            }
+            """);
+        var service = CreateService(transport);
+
+        var entries = await service.GetRecentEntriesAsync(5, TestContext.Current.CancellationToken);
+
+        entries.Should().HaveCount(1);
+        entries[0].Title.Should().Be("דוד המלך");
+        entries[0].UniqueName.Should().Be("דוד-המלך");
+        transport.Requests[0].Should().Contain("tanahpediaRecentEntries");
+        transport.Requests[0].Should().Contain("\"limit\":5");
+    }
+
+    [Fact]
     public async Task GetEntryDetailAsync_maps_entities_and_occurrences()
     {
         var transport = new GraphQLTransport("""

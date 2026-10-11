@@ -52,7 +52,7 @@ public class TanahpediaService : BaseGraphQLService, ITanahpediaService
     /// <inheritdoc />
     public async Task<List<TanahpediaEntry>> GetRecentEntriesAsync(int limit, CancellationToken cancellationToken = default)
     {
-        var data = await QueryAsync<EntriesResponse>(@"
+        var data = await QueryAsync<RecentEntriesResponse>(@"
             query TanahpediaRecentEntries($limit: Int) {
                 tanahpediaRecentEntries(limit: $limit) {
                     id
@@ -273,6 +273,12 @@ public class TanahpediaService : BaseGraphQLService, ITanahpediaService
     private class EntriesResponse
     {
         [Newtonsoft.Json.JsonProperty("tanahpediaEntries")]
+        public List<EntryDto>? TanahpediaEntries { get; set; }
+    }
+
+    private class RecentEntriesResponse
+    {
+        [Newtonsoft.Json.JsonProperty("tanahpediaRecentEntries")]
         public List<EntryDto>? TanahpediaEntries { get; set; }
     }
 
