@@ -52,6 +52,9 @@ jobs:
     env:
       MOBILE_PLATFORM: ${{ matrix.platform }}
       MOBILE_E2E_ARTIFACTS: ${{ github.workspace }}/app/.artifacts/mobile-e2e/${{ matrix.artifact }}
+      # Instruments the app build and makes the harness pull real app-process
+      # coverage dumps after every scenario (#1232).
+      MOBILE_E2E_COVERAGE: "1"
       # Android emulator coordinates shared by the sdkmanager install, the
       # cache keys and the runner action, so any bump invalidates the caches.
       ANDROID_API_LEVEL: "36"
@@ -177,6 +180,7 @@ jobs:
         run: dotnet workload install ${{ matrix.workload }} --version 10.0.401.1
 
       - name: Build complete simulator app
+        id: build-app
         # Explicit bash enables pipefail, preserving npm failures through tee.
         shell: bash
         run: |
@@ -348,6 +352,26 @@ jobs:
           MOBILE_E2E_SELECTION: ${{ inputs.e2e_selection_mode == 'enforce' && steps.selection.outputs.manifest || '' }}
         run: npm test --prefix app/mobile-e2e
 
+      # Real app-process coverage (#1232): the harness pulled a live hit dump
+      # from the instrumented app at the end of every scenario. This applies
+      # them onto the build's OpenCover template and emits lcov.info. The step
+      # also runs after a failed pilot so partial coverage stays diagnosable;
+      # a missing template or a run with zero dumps fails loudly here.
+      - name: Apply app-process coverage dumps
+        if: always() && steps.build-app.outcome != 'skipped'
+        id: coverage-apply
+        working-directory: app
+        run: dotnet run --project devops -- CoverageMobileE2E
+
+      - name: Upload app coverage report
+        if: always() && steps.coverage-apply.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          name: app-e2e-coverage.${{ github.run_id }}.${{ matrix.artifact }}
+          path: app/.artifacts/mobile-e2e/${{ matrix.artifact }}/coverage-app/
+          retention-days: 90
+          if-no-files-found: error
+
       # Evidence is collected even after a failed run — passed tests keep their
       # coverage — but the tree is marked incomplete so a partial run can never
       # shrink the trusted baseline.
@@ -380,6 +404,19 @@ jobs:
         with:
           name: app-mobile-e2e-coverage.master.${{ matrix.artifact }}
           path: app/.artifacts/mobile-e2e/${{ matrix.artifact }}/coverage-tree.json
+          retention-days: 90
+          overwrite: true
+
+      # Executable coverage baseline (#1232): published under the same trust
+      # rules as the coverage tree — only a completed, successful
+      # default-branch run refreshes it, so a partial or selected run can
+      # never overwrite a complete baseline.
+      - name: Publish app coverage baseline
+        if: always() && github.event_name == 'push' && github.ref == 'refs/heads/master' && (steps.pilot.outcome == 'success' || steps['pilot-ios'].outcome == 'success') && steps.coverage-apply.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          name: app-e2e-coverage.master.${{ matrix.artifact }}
+          path: app/.artifacts/mobile-e2e/${{ matrix.artifact }}/coverage-app/
           retention-days: 90
           overwrite: true
 

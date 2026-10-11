@@ -157,12 +157,14 @@ public abstract class MobileDeviceTest : IAsyncLifetime
             body();
             CoverageEvidence.RecordSession(Driver?.SessionId);
             CoverageEvidence.Finish("passed");
+            AppCoverage.Collect(Configuration, name, "passed", Output);
             SaveDiagnostics(name, "passed");
         }
         catch
         {
             CoverageEvidence.RecordSession(Driver?.SessionId);
             CoverageEvidence.Finish("failed");
+            AppCoverage.Collect(Configuration, name, "failed", Output);
             SaveDiagnostics(name, "failed");
             throw;
         }
@@ -207,6 +209,12 @@ public abstract class MobileDeviceTest : IAsyncLifetime
         Driver = _sessions.Create(() => Platform.CreateDriver(Configuration.Server, CreateOptions()));
         Page = new(Driver, Platform);
         Page.WaitForStartup();
+        // Launch code (App.xaml.cs, MauiProgram, startup navigation) only ever
+        // runs before the first reset; attribute it to a startup dump so the
+        // merged report still counts it (#1232). Later connects overwrite it —
+        // the content is identical app-init hits either way.
+        AppCoverage.Collect(Configuration, "_startup", "passed", Output);
+        AppCoverage.Reset(Configuration, Output);
     }
 
     // Scenarios that need extra launch environment (e.g. BIBLE_E2E_PERUSHIM

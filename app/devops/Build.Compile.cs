@@ -1,4 +1,5 @@
 using Nuke.Common;
+using Nuke.Common.IO;
 using Nuke.Common.Tools.DotNet;
 using static Nuke.Common.Tools.DotNet.DotNetTasks;
 
@@ -69,13 +70,34 @@ partial class Build
         .DependsOn(RestoreWindows)
         .Executes(() =>
         {
-            DotNetBuild(s => s
-                .SetProjectFile(MainProject)
-                .SetConfiguration(Configuration)
-                .SetFramework("net10.0-windows10.0.19041.0")
-                .SetProperty("WindowsPackageType", "None")
-                .SetProperty("WindowsAppSDKSelfContained", "true")
-                .EnableNoRestore());
+            if (WindowsE2ECoverage)
+            {
+                BuildE2ECoverageRecorder(Configuration);
+            }
+            DotNetBuild(s =>
+            {
+                var settings = s
+                    .SetProjectFile(MainProject)
+                    .SetConfiguration(Configuration)
+                    .SetProperty("WindowsPackageType", "None")
+                    .SetProperty("WindowsAppSDKSelfContained", "true");
+                if (WindowsE2ECoverage)
+                {
+                    // #1232: weave app-process coverage into the FlaUI build.
+                    // Restore runs inside this build so the conditional
+                    // altcover tool package is resolved with the flag set;
+                    // TargetFrameworks (plural) narrows restore to this TFM —
+                    // -f alone would still restore maccatalyst and fail on
+                    // machines without the Mac Catalyst workload.
+                    settings = settings
+                        .SetProperty("TargetFrameworks", "net10.0-windows10.0.19041.0")
+                        .SetProperty("E2ECoverage", "true");
+                    return settings;
+                }
+                return settings
+                    .SetFramework("net10.0-windows10.0.19041.0")
+                    .EnableNoRestore();
+            });
             DotNetBuild(s => s
                 .SetProjectFile(TestProject)
                 .SetConfiguration(Configuration)
@@ -155,10 +177,21 @@ partial class Build
                     // also execute in framework assemblies during the import.
                     properties["MtouchInterpreter"] = "all%2C-BibleOnSite%2C-HtmlAgilityPack%2C-SQLite-net%2C-System.Private.CoreLib%2C-System.Runtime%2C-System.Collections%2C-System.Linq%2C-System.Net.Primitives";
                 }
+                // #1232: weave app-process coverage into the test build only.
+                if (MobileE2ECoverage)
+                {
+                    BuildE2ECoverageRecorder("Debug");
+                    properties["E2ECoverage"] = "true";
+                }
                 DotNetBuild(s => s
                     .SetProjectFile(MainProject)
                     .SetConfiguration("Debug")
                     .SetProperties(properties));
+
+                if (MobileE2ECoverage)
+                {
+                    PublishE2ECoverageBuildArtifacts();
+                }
             }
             finally
             {
@@ -172,4 +205,63 @@ partial class Build
                 }
             }
         });
+
+    /// <summary>
+    /// Builds the AltCover.Recorder.g substitute the instrumented app
+    /// references by path (#1232). Kept out of the app's restore graph so the
+    /// app build's global TargetFrameworks cannot retarget it.
+    /// </summary>
+    void BuildE2ECoverageRecorder(string configuration)
+    {
+        var recorderProject = RootDirectory / "BibleOnSite.E2eCoverage" / "BibleOnSite.E2eCoverage.csproj";
+        DotNetBuild(s => s
+            .SetProjectFile(recorderProject)
+            .SetConfiguration(configuration));
+    }
+
+    /// <summary>
+    /// Copies the AltCover OpenCover template produced by the instrumented
+    /// build into the E2E artifacts directory and records build provenance
+    /// (#1232). The template is required to map per-test hit dumps back to
+    /// source lines; its module hash only matches the assembly built in this
+    /// exact pass, so it always travels with the build.
+    /// </summary>
+    void PublishE2ECoverageBuildArtifacts()
+    {
+        // IntermediateOutputPath is empty in single-TFM global-property
+        // builds, so the template may land at the project root or under obj;
+        // glob the project directory for either layout.
+        var templates = SourceDirectory.GlobFiles("**/e2e-coverage/template.opencover.xml");
+        if (templates.Count == 0)
+        {
+            throw new InvalidOperationException(
+                "E2E coverage instrumentation did not produce a template; " +
+                "the app was not built with -p:E2ECoverage=true.");
+        }
+        var coverageApp = MobileE2EArtifactsDirectory / "coverage-app";
+        coverageApp.CreateOrCleanDirectory();
+        templates.OrderByDescending(t => File.GetLastWriteTimeUtc(t)).First()
+            .Copy(coverageApp / "template.opencover.xml", ExistsPolicy.FileOverwrite);
+
+        var manifest = new Dictionary<string, object?>
+        {
+            ["kind"] = "app-e2e-coverage-build/1",
+            ["sourceSha"] = Nuke.Common.Tools.Git.GitTasks.GitCurrentCommit(),
+            ["platform"] = MobilePlatform,
+            ["configuration"] = "Debug",
+            ["collector"] = $"altcover-instrumented-app",
+            ["collectorVersion"] = GetAppProperty("AltCoverVersion"),
+            ["builtUtc"] = DateTime.UtcNow.ToString("o")
+        };
+        File.WriteAllText(coverageApp / "coverage-manifest.json",
+            System.Text.Json.JsonSerializer.Serialize(manifest, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+        Serilog.Log.Information($"E2E coverage build artifacts published to {coverageApp}");
+    }
+
+    /// <summary>Reads a property value from the app project file.</summary>
+    string GetAppProperty(string name)
+    {
+        var doc = System.Xml.Linq.XDocument.Load(MainProject);
+        return doc.Descendants().FirstOrDefault(e => e.Name.LocalName == name)?.Value ?? "";
+    }
 }
