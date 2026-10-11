@@ -39,26 +39,22 @@
                    IsVisible="{Binding ShowPerekSource, Source={x:Reference ThisCard}}"
                    Margin="0,0,0,4"/>
 
-            <!-- Author Info (RTL: rabbi name then image). The * column caps the name width so a
-                 long name wraps/truncates instead of pushing the avatar outside the card. -->
-            <Grid Grid.Row="2"
-                  ColumnDefinitions="*,Auto"
-                  ColumnSpacing="6"
-                  VerticalOptions="End">
-                <Label Grid.Column="0"
-                       Text="{Binding Article.Author.Name, Source={x:Reference ThisCard}}"
+            <!-- Author Info (RTL: rabbi name on a full-width row, avatar centered on its own
+                 row below so short names never sit next to a truncated "..."). -->
+            <VerticalStackLayout Grid.Row="2"
+                                 VerticalOptions="End"
+                                 Spacing="4">
+                <Label Text="{Binding Article.Author.Name, Source={x:Reference ThisCard}}"
                        FontSize="11"
-                       VerticalOptions="Center"
                        LineBreakMode="TailTruncation"
                        MaxLines="2"
                        TextColor="{StaticResource Primary}"/>
-                <Border Grid.Column="1"
-                        WidthRequest="26"
+                <Border WidthRequest="26"
                         HeightRequest="26"
                         StrokeShape="RoundRectangle 13"
                         Stroke="{StaticResource Primary}"
                         StrokeThickness="1"
-                        VerticalOptions="Center"
+                        HorizontalOptions="Center"
                         BackgroundColor="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray600}}">
                     <Grid>
                         <!-- Placeholder glyph shown when the portrait fails to load -->
@@ -76,7 +72,7 @@
                                VerticalOptions="Center"/>
                     </Grid>
                 </Border>
-            </Grid>
+            </VerticalStackLayout>
 
             <!-- Read indicator pinned to the card bottom (RTL: left side) -->
             <HorizontalStackLayout Grid.Row="3"
