@@ -150,7 +150,7 @@ public class RecitationServiceTests
         service.HasAudio(1).Should().BeFalse();
         File.Exists(originalPath).Should().BeFalse(
             "the rotated catalog orphaned the old audioSha256, so UpdateAsync swept it");
-        Directory.EnumerateFiles(Path.Combine(storage.Root, "extensions", "recitation")).Should().BeEmpty(
+        Directory.EnumerateFiles(Path.Join(storage.Root, "extensions", "recitation")).Should().BeEmpty(
             "a rejected pack lands nothing: no new audio, no orphaned MP3, no fragments");
         Directory.EnumerateFiles(storage.Root, "*.download", SearchOption.AllDirectories).Should().BeEmpty();
     }
