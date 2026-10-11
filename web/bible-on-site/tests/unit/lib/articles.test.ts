@@ -109,25 +109,21 @@ describe("articles service", () => {
 			expect(result).toEqual([]);
 		});
 
-		it("returns empty array and logs warning when query fails", async () => {
+		it("rejects and logs database failures without caching empty content", async () => {
 			const mockError = new Error("Database connection failed");
 			mockQuery.mockRejectedValue(mockError);
 
-			const result = await getArticlesByPerekId(1);
-
-			expect(result).toEqual([]);
+			await expect(getArticlesByPerekId(1)).rejects.toBe(mockError);
 			expect(console.warn).toHaveBeenCalledWith(
 				"Failed to fetch articles for perek 1:",
 				"Database connection failed",
 			);
 		});
 
-		it("handles non-Error rejection gracefully", async () => {
+		it("propagates non-Error rejections without caching them", async () => {
 			mockQuery.mockRejectedValue("string error");
 
-			const result = await getArticlesByPerekId(1);
-
-			expect(result).toEqual([]);
+			await expect(getArticlesByPerekId(1)).rejects.toBe("string error");
 			expect(console.warn).toHaveBeenCalledWith(
 				"Failed to fetch articles for perek 1:",
 				"string error",
@@ -251,24 +247,22 @@ describe("articles service", () => {
 			expect(result).toEqual([]);
 		});
 
-		it("returns empty array and logs warning on error", async () => {
+		it("rejects database failures without publishing missing URLs", async () => {
 			mockQuery.mockRejectedValue(new Error("Database connection failed"));
 
-			const result = await getAllArticlePerekIdPairs();
-
-			expect(result).toEqual([]);
+			await expect(getAllArticlePerekIdPairs()).rejects.toThrow(
+				"Database connection failed",
+			);
 			expect(console.warn).toHaveBeenCalledWith(
 				"Failed to fetch article-perek pairs:",
 				"Database connection failed",
 			);
 		});
 
-		it("handles non-Error rejection gracefully", async () => {
+		it("propagates non-Error rejections without caching them", async () => {
 			mockQuery.mockRejectedValue("string error");
 
-			const result = await getAllArticlePerekIdPairs();
-
-			expect(result).toEqual([]);
+			await expect(getAllArticlePerekIdPairs()).rejects.toBe("string error");
 			expect(console.warn).toHaveBeenCalledWith(
 				"Failed to fetch article-perek pairs:",
 				"string error",
@@ -329,21 +323,17 @@ describe("articles service", () => {
 		it("returns null and logs warning on error", async () => {
 			mockQuery.mockRejectedValue(new Error("DB error"));
 
-			const result = await getArticleById(1);
-
-			expect(result).toBeNull();
+			await expect(getArticleById(1)).rejects.toThrow("DB error");
 			expect(console.warn).toHaveBeenCalledWith(
 				"Failed to fetch article 1:",
 				"DB error",
 			);
 		});
 
-		it("handles non-Error rejection gracefully", async () => {
+		it("propagates non-Error rejections without caching them", async () => {
 			mockQuery.mockRejectedValue("string error");
 
-			const result = await getArticleById(1);
-
-			expect(result).toBeNull();
+			await expect(getArticleById(1)).rejects.toBe("string error");
 			expect(console.warn).toHaveBeenCalledWith(
 				"Failed to fetch article 1:",
 				"string error",

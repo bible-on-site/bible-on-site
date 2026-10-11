@@ -97,6 +97,9 @@ diagnostics and tuning.
 
 All three derived tables are created idempotently at API boot
 (`store::ensure_schema`).
+Index schema version 2 rebuilds snapshots created under the former bulletin
+approval restriction. Startup ignores older schema probes and rebuilds from
+the public article corpus.
 
 | Event | Path |
 |-------|------|

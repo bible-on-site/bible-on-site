@@ -138,21 +138,17 @@ describe("authors service", () => {
 				.mockImplementation(() => {});
 			mockQuery.mockRejectedValue(new Error("DB error"));
 
-			const result = await getAuthorById(1);
-
-			expect(result).toBeNull();
+			await expect(getAuthorById(1)).rejects.toThrow("DB error");
 			expect(consoleWarn).toHaveBeenCalledWith(
 				"Failed to fetch author 1:",
 				"DB error",
 			);
 		});
 
-		it("handles non-Error rejection gracefully", async () => {
+		it("propagates non-Error rejections without caching them", async () => {
 			mockQuery.mockRejectedValue("string error");
 
-			const result = await getAuthorById(1);
-
-			expect(result).toBeNull();
+			await expect(getAuthorById(1)).rejects.toBe("string error");
 			expect(console.warn).toHaveBeenCalledWith(
 				"Failed to fetch author 1:",
 				"string error",
@@ -225,21 +221,17 @@ describe("authors service", () => {
 				.mockImplementation(() => {});
 			mockQuery.mockRejectedValue(new Error("DB error"));
 
-			const result = await getArticlesByAuthorId(5);
-
-			expect(result).toEqual([]);
+			await expect(getArticlesByAuthorId(5)).rejects.toThrow("DB error");
 			expect(consoleWarn).toHaveBeenCalledWith(
 				"Failed to fetch articles for author 5:",
 				"DB error",
 			);
 		});
 
-		it("handles non-Error rejection gracefully", async () => {
+		it("propagates non-Error rejections without caching them", async () => {
 			mockQuery.mockRejectedValue("string error");
 
-			const result = await getArticlesByAuthorId(5);
-
-			expect(result).toEqual([]);
+			await expect(getArticlesByAuthorId(5)).rejects.toBe("string error");
 			expect(console.warn).toHaveBeenCalledWith(
 				"Failed to fetch articles for author 5:",
 				"string error",
@@ -284,21 +276,17 @@ describe("authors service", () => {
 				.mockImplementation(() => {});
 			mockQuery.mockRejectedValue(new Error("DB error"));
 
-			const result = await getAllAuthorIds();
-
-			expect(result).toEqual([]);
+			await expect(getAllAuthorIds()).rejects.toThrow("DB error");
 			expect(consoleWarn).toHaveBeenCalledWith(
 				"Failed to fetch author IDs:",
 				"DB error",
 			);
 		});
 
-		it("handles non-Error rejection gracefully", async () => {
+		it("propagates non-Error rejections without caching them", async () => {
 			mockQuery.mockRejectedValue("string error");
 
-			const result = await getAllAuthorIds();
-
-			expect(result).toEqual([]);
+			await expect(getAllAuthorIds()).rejects.toBe("string error");
 			expect(console.warn).toHaveBeenCalledWith(
 				"Failed to fetch author IDs:",
 				"string error",
@@ -358,24 +346,20 @@ describe("authors service", () => {
 			expect(result).toBeNull();
 		});
 
-		it("returns null on error", async () => {
+		it("rejects database failures without caching a false 404", async () => {
 			mockQuery.mockRejectedValue(new Error("DB error"));
 
-			const result = await getAuthorByName("הרב לדוגמא");
-
-			expect(result).toBeNull();
+			await expect(getAuthorByName("הרב לדוגמא")).rejects.toThrow("DB error");
 			expect(console.warn).toHaveBeenCalledWith(
 				expect.stringContaining("Failed to fetch author by name"),
 				"DB error",
 			);
 		});
 
-		it("handles non-Error rejection gracefully", async () => {
+		it("propagates non-Error rejections without caching them", async () => {
 			mockQuery.mockRejectedValue("string error");
 
-			const result = await getAuthorByName("test");
-
-			expect(result).toBeNull();
+			await expect(getAuthorByName("test")).rejects.toBe("string error");
 			expect(console.warn).toHaveBeenCalledWith(
 				expect.stringContaining("Failed to fetch author by name"),
 				"string error",
@@ -414,24 +398,20 @@ describe("authors service", () => {
 			expect(result).toEqual([]);
 		});
 
-		it("returns empty array on error", async () => {
+		it("rejects database failures without caching empty content", async () => {
 			mockQuery.mockRejectedValue(new Error("DB error"));
 
-			const result = await getAllAuthorSlugs();
-
-			expect(result).toEqual([]);
+			await expect(getAllAuthorSlugs()).rejects.toThrow("DB error");
 			expect(console.warn).toHaveBeenCalledWith(
 				"Failed to fetch author slugs:",
 				"DB error",
 			);
 		});
 
-		it("handles non-Error rejection gracefully", async () => {
+		it("propagates non-Error rejections without caching them", async () => {
 			mockQuery.mockRejectedValue("string error");
 
-			const result = await getAllAuthorSlugs();
-
-			expect(result).toEqual([]);
+			await expect(getAllAuthorSlugs()).rejects.toBe("string error");
 			expect(console.warn).toHaveBeenCalledWith(
 				"Failed to fetch author slugs:",
 				"string error",

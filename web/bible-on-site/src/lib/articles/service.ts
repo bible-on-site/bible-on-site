@@ -26,7 +26,7 @@ interface ArticleSummaryRow {
 /**
  * Fetch articles for a specific perek with author information.
  * JOINs with tanah_author to get author name.
- * Returns empty array if database is unavailable or no articles found.
+ * Returns an empty array when no articles are found; rejects database failures.
  */
 export async function getArticlesByPerekId(
 	perekId: number,
@@ -55,13 +55,11 @@ export async function getArticlesByPerekId(
 			authorImageUrl: getAuthorImageUrl(row.author_id),
 		}));
 	} catch (error) {
-		// During SSG build, database may not be available
-		// Return empty array gracefully
 		console.warn(
 			`Failed to fetch articles for perek ${perekId}:`,
 			error instanceof Error ? error.message : error,
 		);
-		return [];
+		throw error;
 	}
 }
 
@@ -113,7 +111,7 @@ export interface ArticlePerekPair {
 /**
  * Fetch all article ID and perek ID pairs.
  * Used for sitemap generation to enumerate all article URLs.
- * Returns empty array if database is unavailable.
+ * Rejects database failures so static generation cannot publish missing URLs.
  */
 export async function getAllArticlePerekIdPairs(): Promise<ArticlePerekPair[]> {
 	try {
@@ -129,7 +127,7 @@ export async function getAllArticlePerekIdPairs(): Promise<ArticlePerekPair[]> {
 			"Failed to fetch article-perek pairs:",
 			error instanceof Error ? error.message : error,
 		);
-		return [];
+		throw error;
 	}
 }
 
@@ -160,13 +158,13 @@ export async function getAllArticleIdsByPerek(): Promise<
 			"Failed to fetch all article IDs by perek:",
 			error instanceof Error ? error.message : error,
 		);
-		return new Map();
+		throw error;
 	}
 }
 
 /**
  * Fetch a single article by ID with author information.
- * Returns null if not found or database unavailable.
+ * Returns null if not found; rejects database failures to avoid caching false 404s.
  */
 export async function getArticleById(
 	articleId: number,
@@ -203,6 +201,6 @@ export async function getArticleById(
 			`Failed to fetch article ${articleId}:`,
 			error instanceof Error ? error.message : error,
 		);
-		return null;
+		throw error;
 	}
 }

@@ -22,7 +22,8 @@ The permanent correction keeps public content independent of bulletin approval a
 
 - A valid fixture article and its author's only valid article are now unapproved for the bulletin. Browser assertions require that article in chapter, author listing, author detail, article detail, and website search. The same contract runs against the production build; API search has an equivalent regression.
 - Readiness checks the live public article/author corpus on every probe and returns 503 for missing content or database failure.
-- Cached author and chapter-summary loaders reject database failures instead of persisting empty success results.
+- Author, article, chapter-summary, and static URL enumeration loaders reject database failures instead of persisting empty success results or false 404s.
+- API search schema version 2 rebuilds persisted snapshots that used the bulletin approval restriction during startup.
 - Packaging compares actual rendered author and representative chapter article counts against the production database, then opens author and article details. This catches successful builds that contain empty or partial cached content.
 - Deployment runs the rendered-content check after verifying the released version. Validator tests explicitly simulate HTTP 200 and healthy readiness alongside missing or partial content.
 - The schema and daily bulletin documentation state that approval applies only to the bulletin.

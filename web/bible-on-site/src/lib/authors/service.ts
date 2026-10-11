@@ -101,7 +101,7 @@ export async function getAuthorById(id: number): Promise<AuthorDetails | null> {
 			`Failed to fetch author ${id}:`,
 			error instanceof Error ? error.message : error,
 		);
-		return null;
+		throw error;
 	}
 }
 
@@ -131,7 +131,7 @@ export async function getArticlesByAuthorId(
 			`Failed to fetch articles for author ${authorId}:`,
 			error instanceof Error ? error.message : error,
 		);
-		return [];
+		throw error;
 	}
 }
 
@@ -151,7 +151,7 @@ export async function getAllAuthorIds(): Promise<number[]> {
 			"Failed to fetch author IDs:",
 			error instanceof Error ? error.message : error,
 		);
-		return [];
+		throw error;
 	}
 }
 
@@ -186,7 +186,7 @@ export async function getAuthorByName(
 			`Failed to fetch author by name "${rawName}":`,
 			error instanceof Error ? error.message : error,
 		);
-		return null;
+		throw error;
 	}
 }
 
@@ -207,6 +207,6 @@ export async function getAllAuthorSlugs(): Promise<string[]> {
 			"Failed to fetch author slugs:",
 			error instanceof Error ? error.message : error,
 		);
-		return [];
+		throw error;
 	}
 }

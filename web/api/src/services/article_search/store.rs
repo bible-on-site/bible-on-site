@@ -15,8 +15,9 @@
 use sea_orm::{ConnectionTrait, DbBackend, DbErr, Statement, Value};
 
 /// Schema version persisted in `article_search_state`; bump when the model
-/// format or normalization changes so stale indexes rebuild automatically.
-pub const SCHEMA_VERSION: i32 = 1;
+/// format, normalization, or public eligibility changes so stale indexes rebuild.
+/// Version 2 includes articles independently of daily bulletin approval.
+pub const SCHEMA_VERSION: i32 = 2;
 
 /// Queue rows failing this many times are skipped by the regular drain and are
 /// retried only after a reconcile sweep resets their attempts — protects the
@@ -249,11 +250,12 @@ pub async fn save_state<C: ConnectionTrait>(
 }
 
 /// The current model epoch/doc-count without the blob — a cheap change probe.
+/// An older schema returns no state so startup rebuilds it before serving hits.
 pub async fn state_probe<C: ConnectionTrait>(conn: &C) -> Result<Option<(i32, i32)>, DbErr> {
     let row = conn
-        .query_one_raw(Statement::from_string(
-            DbBackend::MySql,
-            "SELECT model_epoch, doc_count FROM article_search_state WHERE id = 1",
+        .query_one_raw(mysql(
+            "SELECT model_epoch, doc_count FROM article_search_state WHERE id = 1 AND schema_version = ?",
+            vec![SCHEMA_VERSION.into()],
         ))
         .await?;
     row.map(|row| {
