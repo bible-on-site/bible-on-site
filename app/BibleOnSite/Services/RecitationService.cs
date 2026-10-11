@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -267,7 +268,7 @@ public sealed class RecitationService
                     throw new InvalidOperationException("A precise audio decoder is required.");
                 }
 
-                if (!File.Exists(chapter))
+                if (!IsCompleteWav(chapter))
                 {
                     var decoded = await decoder.CreateChapterAsync(audio, cancellationToken);
                     var temporary = chapter + ".download";
@@ -299,6 +300,39 @@ public sealed class RecitationService
             return clip;
         }
         finally { _gate.Release(); }
+    }
+
+    // A damaged cached chapter must be decoded again from its verified source:
+    // the RIFF header declares the complete payload length.
+    private static bool IsCompleteWav(string path)
+    {
+        try
+        {
+            var length = new FileInfo(path).Length;
+            if (length < 44)
+            {
+                return false;
+            }
+
+            Span<byte> header = stackalloc byte[12];
+            using (var file = File.OpenRead(path))
+            {
+                if (file.Read(header) != header.Length)
+                {
+                    return false;
+                }
+            }
+            return header[..4].SequenceEqual("RIFF"u8) && header[8..].SequenceEqual("WAVE"u8) &&
+                BinaryPrimitives.ReadUInt32LittleEndian(header[4..8]) + 8L == length;
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
     }
 
     private static async Task<bool> MatchesHashAsync(string path, string expected, CancellationToken cancellationToken)

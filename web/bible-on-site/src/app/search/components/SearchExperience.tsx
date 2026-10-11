@@ -85,9 +85,6 @@ export function SearchExperience({
 	const urlKey = paramsKey(urlQuery, urlTypes);
 
 	const [input, setInput] = useState(initialQuery);
-	// Prevent keystrokes from being lost before React attaches onChange.
-	const [hydrated, setHydrated] = useState(false);
-	useEffect(() => setHydrated(true), []);
 	const [results, setResults] = useState<SearchResponse | null>(initialResults);
 	const [status, setStatus] = useState<Status>(
 		initialResults ? "success" : initialError ? "error" : "idle",
@@ -277,6 +274,17 @@ export function SearchExperience({
 	const inputRef = useRef<HTMLInputElement>(null);
 	const resultsRef = useRef<HTMLDivElement>(null);
 
+	// The SSR input stays enabled so the native GET form works without
+	// JavaScript. Text typed before hydration lives only in the DOM, so
+	// adopt it here rather than disabling the field — a disabled input
+	// also drops `q` from unhydrated form submissions.
+	useEffect(() => {
+		const typed = inputRef.current?.value;
+		if (typed !== undefined) {
+			setInput((current) => (typed === current ? current : typed));
+		}
+	}, []);
+
 	const resultLinks = () =>
 		Array.from(
 			/* istanbul ignore next -- the container div is always mounted before key handlers can run */
@@ -348,7 +356,6 @@ export function SearchExperience({
 							ref={inputRef}
 							type="search"
 							name="q"
-							disabled={!hydrated}
 							value={input}
 							onChange={(event) => setInput(event.target.value)}
 							onKeyDown={onInputKeyDown}
