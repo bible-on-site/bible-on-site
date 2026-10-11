@@ -303,8 +303,7 @@ public class SearchMatchTests
     [Fact]
     public void ResolveArticleTarget_skips_empty_segments()
     {
-        // Media splits leave empty text segments between content segments;
-        // the walk must skip them and still resolve the match's segment.
+        // Media splits leave empty text segments between content segments for the walk to skip.
         var segments = new List<string> { "", "<p>מאמר על בראשית</p>" };
 
         var target = SearchMatch.ResolveArticleTarget(segments, "על בראשית", "בראשית");
