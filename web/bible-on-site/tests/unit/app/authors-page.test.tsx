@@ -58,6 +58,16 @@ describe("929/authors/page", () => {
 		expect(screen.getByText("תיאור קצר")).toBeTruthy();
 	});
 
+	it("only lists authors with distributable articles", async () => {
+		mockQuery.mockResolvedValue([]);
+
+		await AuthorsPage();
+
+		expect(mockQuery).toHaveBeenCalledWith(
+			expect.stringContaining("art.distributable = TRUE"),
+		);
+	});
+
 	it("renders empty state when no authors exist", async () => {
 		mockQuery.mockResolvedValue([]);
 

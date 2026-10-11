@@ -20,24 +20,21 @@ jest.mock("next/link", () => ({
 	),
 }));
 
-jest.mock("../../../src/app/929/[number]/actions", () => ({
-	getPerushNotesForPage: jest.fn(),
-}));
-
-import { act, fireEvent, render, screen } from "@testing-library/react";
-import { getPerushNotesForPage } from "../../../src/app/929/[number]/actions";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { PerushimSection } from "../../../src/app/929/[number]/components/PerushimSection";
 import type { PerushSummary } from "../../../src/lib/perushim";
 
-const mockGetPerushNotesForPage = getPerushNotesForPage as jest.MockedFunction<
-	typeof getPerushNotesForPage
->;
+const samplePerushim: PerushSummary[] = [
+	{ id: 1, name: 'רש"י', parshanName: 'רש"י', noteCount: 55 },
+	{
+		id: 14,
+		name: "ביאור שטיינזלץ",
+		parshanName: "עדין שטיינזלץ",
+		noteCount: 31,
+	},
+];
 
 describe("PerushimSection", () => {
-	beforeEach(() => {
-		jest.clearAllMocks();
-	});
-
 	it("renders section header and empty message when no perushim", () => {
 		render(<PerushimSection perekId={1} perushim={[]} />);
 		expect(screen.getByText("פרשנים על הפרק")).toBeTruthy();
@@ -47,31 +44,18 @@ describe("PerushimSection", () => {
 	it("shows an empty carousel when the database supplies null commentaries", () => {
 		render(<PerushimSection perekId={1} perushim={null} />);
 		expect(screen.getByText("אין פרשנות לפרק זה")).toBeVisible();
-		expect(mockGetPerushNotesForPage).not.toHaveBeenCalled();
 	});
 
 	it("renders carousel links when perushim provided (SEO mode)", () => {
-		const perushim: PerushSummary[] = [
-			{ id: 1, name: 'רש"י', parshanName: 'רש"י', noteCount: 55 },
-			{
-				id: 14,
-				name: "ביאור שטיינזלץ",
-				parshanName: "עדין שטיינזלץ",
-				noteCount: 31,
-			},
-		];
-		render(<PerushimSection perekId={1} perushim={perushim} />);
+		render(<PerushimSection perekId={1} perushim={samplePerushim} />);
 		expect(screen.getByRole("link", { name: /רש"י/ })).toBeTruthy();
 		expect(screen.getByRole("link", { name: /ביאור שטיינזלץ/ })).toBeTruthy();
 		expect(screen.getByText("55 פסוקים")).toBeTruthy();
 	});
 
 	it("renders decorative SVG icons instead of emoji", () => {
-		const perushim: PerushSummary[] = [
-			{ id: 1, name: 'רש"י', parshanName: 'רש"י', noteCount: 55 },
-		];
 		const { container } = render(
-			<PerushimSection perekId={1} perushim={perushim} />,
+			<PerushimSection perekId={1} perushim={[samplePerushim[0]]} />,
 		);
 		expect(container.textContent).not.toMatch(/\p{Extended_Pictographic}/u);
 		for (const src of ["/icons/open-book.svg", "/icons/note.svg"]) {
@@ -81,10 +65,7 @@ describe("PerushimSection", () => {
 	});
 
 	it("renders links with correct href for SEO", () => {
-		const perushim: PerushSummary[] = [
-			{ id: 1, name: 'רש"י', parshanName: 'רש"י', noteCount: 55 },
-		];
-		render(<PerushimSection perekId={5} perushim={perushim} />);
+		render(<PerushimSection perekId={5} perushim={[samplePerushim[0]]} />);
 		const link = screen.getByRole("link", { name: /רש"י/ });
 		expect(link).toHaveAttribute(
 			"href",
@@ -92,42 +73,30 @@ describe("PerushimSection", () => {
 		);
 	});
 
-	it("clicking a perush link calls getPerushNotesForPage and pushes history", async () => {
-		mockGetPerushNotesForPage.mockResolvedValue([]);
+	// Regression coverage for #2115: carousel selection must navigate to the
+	// dedicated perush page (top-of-page presentation) like article cards —
+	// never expand a second full view below the scripture.
+	it("lets a plain click navigate instead of expanding an inline view", () => {
 		const pushStateSpy = jest.spyOn(history, "pushState");
-		const perushim: PerushSummary[] = [
-			{
-				id: 14,
-				name: "ביאור שטיינזלץ",
-				parshanName: "עדין שטיינזלץ",
-				noteCount: 31,
-			},
-		];
-		render(<PerushimSection perekId={1} perushim={perushim} />);
-		const link = screen.getByRole("link", { name: /ביאור שטיינזלץ/ });
+		render(<PerushimSection perekId={1} perushim={[samplePerushim[0]]} />);
+		const link = screen.getByRole("link", { name: /רש"י/ });
 
-		await act(async () => {
-			fireEvent.click(link);
-		});
+		// fireEvent.click returns false when the click's default is prevented.
+		expect(fireEvent.click(link)).toBe(true);
+		expect(pushStateSpy).not.toHaveBeenCalled();
 
-		expect(mockGetPerushNotesForPage).toHaveBeenCalledWith(14, 1);
-		expect(pushStateSpy).toHaveBeenCalledWith(
-			{ perushId: 14 },
-			"",
-			expect.stringContaining("/929/1/"),
-		);
+		// The carousel stays; no in-place full view appears below the text.
+		expect(screen.queryByText(/חזרה לפרשנים/)).toBeNull();
+		expect(screen.getByText("פרשנים על הפרק")).toBeTruthy();
 		pushStateSpy.mockRestore();
 	});
 
 	it("delegates to onPerushClick when provided (keeps crawlable links)", () => {
 		const onPerushClick = jest.fn();
-		const perushim: PerushSummary[] = [
-			{ id: 1, name: 'רש"י', parshanName: 'רש"י', noteCount: 55 },
-		];
 		render(
 			<PerushimSection
 				perekId={1}
-				perushim={perushim}
+				perushim={[samplePerushim[0]]}
 				onPerushClick={onPerushClick}
 			/>,
 		);
@@ -135,58 +104,37 @@ describe("PerushimSection", () => {
 		expect(link.getAttribute("href")).toBe(
 			`/929/1/${encodeURIComponent('רש"י')}`,
 		);
-		fireEvent.click(link);
-		expect(onPerushClick).toHaveBeenCalledWith(perushim[0]);
-		expect(mockGetPerushNotesForPage).not.toHaveBeenCalled();
+		// The delegated handler suppresses default navigation for in-place view.
+		expect(fireEvent.click(link)).toBe(false);
+		expect(onPerushClick).toHaveBeenCalledWith(samplePerushim[0]);
 	});
 
-	it("lets modifier-clicks follow the href instead of opening in place", async () => {
-		const perushim: PerushSummary[] = [
-			{ id: 1, name: 'רש"י', parshanName: 'רש"י', noteCount: 55 },
-		];
-		render(<PerushimSection perekId={1} perushim={perushim} />);
+	it("lets modifier-clicks follow the href instead of opening in place", () => {
+		const onPerushClick = jest.fn();
+		render(
+			<PerushimSection
+				perekId={1}
+				perushim={[samplePerushim[0]]}
+				onPerushClick={onPerushClick}
+			/>,
+		);
 		const link = screen.getByRole("link", { name: /רש"י/ });
 
 		fireEvent.click(link, { ctrlKey: true });
-		await act(async () => {});
 
-		expect(mockGetPerushNotesForPage).not.toHaveBeenCalled();
+		expect(onPerushClick).not.toHaveBeenCalled();
 	});
 
-	it("handles error in internal handlePerushClick", async () => {
-		mockGetPerushNotesForPage.mockRejectedValue(new Error("fail"));
-		const perushim: PerushSummary[] = [
-			{ id: 1, name: 'רש"י', parshanName: 'רש"י', noteCount: 55 },
-		];
-		render(<PerushimSection perekId={1} perushim={perushim} />);
-
-		await act(async () => {
-			fireEvent.click(screen.getByRole("link", { name: /רש"י/ }));
-		});
-
-		expect(screen.getByText("פרשנים על הפרק")).toBeTruthy();
-	});
-
-	it("pushes history back to perek on handleBack", async () => {
-		mockGetPerushNotesForPage.mockResolvedValue([
-			{ pasuk: 1, noteIdx: 0, noteContent: "<p>test</p>" },
-		]);
-		const pushStateSpy = jest.spyOn(history, "pushState");
-		const perushim: PerushSummary[] = [
-			{ id: 1, name: 'רש"י', parshanName: 'רש"י', noteCount: 55 },
-		];
-		render(<PerushimSection perekId={5} perushim={perushim} />);
-
-		await act(async () => {
-			fireEvent.click(screen.getByRole("link", { name: /רש"י/ }));
-		});
-
-		pushStateSpy.mockClear();
-
-		const backButton = screen.getByText(/חזרה לפרשנים/);
-		fireEvent.click(backButton);
-
-		expect(pushStateSpy).toHaveBeenCalledWith(null, "", "/929/5");
-		pushStateSpy.mockRestore();
+	it("shows the loading state instead of carousel items", () => {
+		render(
+			<PerushimSection
+				perekId={1}
+				perushim={samplePerushim}
+				onPerushClick={jest.fn()}
+				loading
+			/>,
+		);
+		expect(screen.getByText("מתחבר לפירוש...")).toBeTruthy();
+		expect(screen.queryByRole("link")).toBeNull();
 	});
 });

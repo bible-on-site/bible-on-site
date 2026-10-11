@@ -14,7 +14,7 @@ const mockSearch = searchSite as jest.MockedFunction<typeof searchSite>;
 
 const EMPTY: SearchResponse = {
 	query: "בראשית",
-	types: ["perek", "pasuk", "perush", "author", "article"],
+	types: ["perek", "pasuk", "perush", "author", "article", "tanahpedia"],
 	results: [],
 	counts: {},
 	availability: [],
@@ -79,7 +79,7 @@ describe("GET /api/search", () => {
 		expect(res.status).toBe(200);
 		expect(mockSearch).toHaveBeenCalledWith(
 			"את",
-			["perek", "pasuk", "perush", "author", "article"],
+			["perek", "pasuk", "perush", "author", "article", "tanahpedia"],
 			{ limit: undefined },
 		);
 	});

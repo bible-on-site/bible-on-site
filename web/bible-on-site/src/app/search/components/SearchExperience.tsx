@@ -352,7 +352,7 @@ export function SearchExperience({
 							value={input}
 							onChange={(event) => setInput(event.target.value)}
 							onKeyDown={onInputKeyDown}
-							placeholder="חפשו פרק, פסוק, פירוש, רב או מאמר..."
+							placeholder="חפשו פרק, פסוק, פירוש, רב, מאמר או ערך..."
 							aria-label="מונח חיפוש"
 							autoComplete="off"
 							className={styles.searchInput}
@@ -412,7 +412,7 @@ export function SearchExperience({
 					</p>
 				) : !urlQuery ? (
 					<p className={styles.emptyState}>
-						הקלידו מונח חיפוש כדי למצוא פרקים, פסוקים, פירושים, רבנים ומאמרים.
+						הקלידו מונח חיפוש כדי למצוא פרקים, פסוקים, פירושים, רבנים, מאמרים וערכי תנכפדיה.
 					</p>
 				) : null}
 			</div>

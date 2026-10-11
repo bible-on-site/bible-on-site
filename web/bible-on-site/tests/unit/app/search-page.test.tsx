@@ -25,7 +25,7 @@ const mockSearch = searchSite as jest.MockedFunction<typeof searchSite>;
 
 const RESULTS: SearchResponse = {
 	query: "בראשית",
-	types: ["perek", "pasuk", "perush", "author", "article"],
+	types: ["perek", "pasuk", "perush", "author", "article", "tanahpedia"],
 	results: [
 		{
 			type: "perek",

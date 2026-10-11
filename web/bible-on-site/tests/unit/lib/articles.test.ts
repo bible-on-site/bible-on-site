@@ -131,6 +131,7 @@ describe("articles service", () => {
 			expect(sqlCall).toContain("FROM tanah_article a");
 			expect(sqlCall).toContain("JOIN tanah_author au ON a.author_id = au.id");
 			expect(sqlCall).toContain("WHERE a.perek_id = ?");
+			expect(sqlCall).toContain("a.distributable = TRUE");
 			expect(sqlCall).toContain("ORDER BY a.priority ASC");
 			expect(sqlCall).toContain("au.name AS author_name");
 		});
@@ -167,6 +168,14 @@ describe("articles service", () => {
 				},
 			]);
 			expect(result[0]).not.toHaveProperty("content");
+		});
+
+		it("only surfaces distributable articles", async () => {
+			mockQuery.mockResolvedValue([]);
+
+			await getArticleSummariesByPerekId(1);
+
+			expect(mockQuery.mock.calls[0][0]).toContain("a.distributable = TRUE");
 		});
 
 		it("does not select content column in SQL", async () => {
@@ -260,6 +269,7 @@ describe("articles service", () => {
 
 			const sqlCall = mockQuery.mock.calls[0][0];
 			expect(sqlCall).toContain("SELECT id, perek_id FROM tanah_article");
+			expect(sqlCall).toContain("distributable = TRUE");
 			expect(sqlCall).toContain("ORDER BY perek_id ASC, id ASC");
 		});
 	});
@@ -335,6 +345,7 @@ describe("articles service", () => {
 			expect(sqlCall).toContain("FROM tanah_article a");
 			expect(sqlCall).toContain("JOIN tanah_author au ON a.author_id = au.id");
 			expect(sqlCall).toContain("WHERE a.id = ?");
+			expect(sqlCall).toContain("a.distributable = TRUE");
 			expect(mockQuery).toHaveBeenCalledWith(expect.any(String), [42]);
 		});
 	});
