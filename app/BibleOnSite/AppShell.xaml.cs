@@ -173,7 +173,9 @@ public partial class AppShell : Shell
 		// disabled in the manifests — the page's logical name replaces both.
 		var name = AnalyticsScreens.ScreenNameFor(CurrentPage);
 		if (name is not null)
+		{
 			analytics.SetScreen(name, name);
+		}
 	}
 
 	private async void OnAlHaperekTapped(object? sender, TappedEventArgs e)

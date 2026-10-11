@@ -50,8 +50,8 @@ public class AnalyticsCollectionGuardTests
     [Fact]
     public void AndroidManifest_DisablesAutomaticScreenReporting()
     {
-        // #2119: automatic screen tracking only ever saw the host MainActivity;
-        // screens are reported manually with logical names.
+        // #2119: automatic screen tracking only ever saw the host activity,
+        // so screens are reported manually with logical names instead.
         var manifest = XDocument.Load(Path.Join(AppRoot, "Platforms", "Android", "AndroidManifest.xml"));
         XNamespace android = "http://schemas.android.com/apk/res/android";
         var entry = manifest.Descendants("meta-data")
