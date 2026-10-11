@@ -20,9 +20,9 @@ namespace BibleOnSite.Tests.MobileE2E;
 // second failure propagates normally.
 public abstract class MobileDeviceTest : IAsyncLifetime
 {
-    // Unit tests substitute a fake so recovery paths run without a real adb;
-    // production always probes the device through DeviceTransportRecovery.
-    internal static Func<Exception, bool> TransportRecovery = DeviceTransportRecovery.TryReconnect;
+    // Unit tests substitute a fake so recovery paths run without a real adb.
+    // Production always probes the device through DeviceTransportRecovery.
+    internal static Func<Exception, bool> TransportRecovery { get; set; } = DeviceTransportRecovery.TryReconnect;
 
     private readonly MobileDeviceSessionFactory _sessions;
 

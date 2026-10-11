@@ -26,7 +26,7 @@ internal static class DeviceTransportLoss
 // A session-startup failure can come from the device transport rather than the
 // app under test: "adb: device offline" is a stale adb transport, not a dead
 // emulator. Recovery only runs for those transport signatures, probes
-// `adb -s <udid>` first, and reconnects when the transport is gone — then
+// `adb` first, and reconnects when the transport is gone — then
 // requires the same readiness signal waitForAndroidDevice gates on (booted
 // system, responsive package manager) before the one session retry is spent.
 // A genuinely dead emulator still fails readiness, so recovery can never
@@ -37,32 +37,46 @@ internal static class DeviceTransportRecovery
     private const int WaitForDeviceTimeoutMs = 45_000;
     private const int ReadinessRounds = 2;
 
+    // The recovery speaks a closed set of adb verbs: every argv entry is a
+    // compile-time literal, so no env-derived value can reach the spawned
+    // command line at all. A serial selector is unnecessary — the mobile E2E
+    // job contracts a single emulator, and a stray second device makes adb
+    // fail loudly instead of being targeted silently.
+    private enum Adb
+    {
+        Reconnect,
+        WaitForDevice,
+        GetState,
+        BootCompleted,
+        PackageManager,
+        Devices,
+    }
+
     internal static bool TryReconnect(Exception failure)
     {
         if (!DeviceTransportLoss.Matches(failure))
         {
             return false;
         }
-        var udid = Environment.GetEnvironmentVariable("MOBILE_UDID");
         if (!string.Equals(Environment.GetEnvironmentVariable("MOBILE_PLATFORM"), "Android", StringComparison.OrdinalIgnoreCase)
-            || udid is null || !IsValidSerial(udid))
+            || Environment.GetEnvironmentVariable("MOBILE_UDID") is null)
         {
             return false;
         }
-        if (IsResponsive(udid))
+        if (IsResponsive())
         {
             // The transport is healthy, so the failure came from the app or the
             // session payload — retrying cannot help it.
             return false;
         }
-        Run(["reconnect"], ProbeTimeoutMs);
+        Run(Adb.Reconnect, ProbeTimeoutMs);
         // wait-for-device returns the moment the transport is back, but Android
         // can still be recovering; readiness is re-probed so a half-awake
         // device does not burn the single retry on an early session attempt.
         for (var round = 0; round < ReadinessRounds; round++)
         {
-            Run(["-s", udid, "wait-for-device"], WaitForDeviceTimeoutMs);
-            if (IsResponsive(udid))
+            Run(Adb.WaitForDevice, WaitForDeviceTimeoutMs);
+            if (IsResponsive())
             {
                 return true;
             }
@@ -78,32 +92,20 @@ internal static class DeviceTransportRecovery
         {
             return string.Empty;
         }
-        var output = Run(["devices", "-l"], ProbeTimeoutMs);
+        var output = Run(Adb.Devices, ProbeTimeoutMs);
         return output is null ? string.Empty : $"\nadb devices -l:\n{output}";
     }
-
-    // adb serials are dotted/dashed device ids only (emulator-5554, host:port).
-    // Rejecting anything else keeps the env-derived value out of argv injection.
-    private static bool IsValidSerial(string? serial) =>
-        serial is { Length: > 0 and <= 64 } &&
-        serial.All(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '-' or '_' or ':');
 
     // Mirrors waitForAndroidDevice's ready signal (android-readiness.mjs): the
     // transport answers, the system booted, and the package manager serves
     // queries. A bare "device" state can precede both after a reconnect and
     // burn the only retry while Android is still recovering.
-    private static bool IsResponsive(string udid) =>
-        Probe(udid) == "device"
-        && Shell(udid, "getprop", "sys.boot_completed") == "1"
-        && Shell(udid, "pm", "path", "android")?.StartsWith("package:", StringComparison.Ordinal) == true;
+    private static bool IsResponsive() =>
+        Run(Adb.GetState, ProbeTimeoutMs)?.Trim() == "device"
+        && Run(Adb.BootCompleted, ProbeTimeoutMs)?.Trim() == "1"
+        && Run(Adb.PackageManager, ProbeTimeoutMs)?.Trim().StartsWith("package:", StringComparison.Ordinal) == true;
 
-    private static string? Probe(string udid) =>
-        Run(["-s", udid, "get-state"], ProbeTimeoutMs)?.Trim();
-
-    private static string? Shell(string udid, params string[] command) =>
-        Run(["-s", udid, "shell", ..command], ProbeTimeoutMs)?.Trim();
-
-    private static string? Run(string[] arguments, int timeoutMs)
+    private static string? Run(Adb command, int timeoutMs)
     {
         var start = new ProcessStartInfo("adb")
         {
@@ -111,9 +113,34 @@ internal static class DeviceTransportRecovery
             RedirectStandardError = true,
             UseShellExecute = false,
         };
-        foreach (var argument in arguments)
+        switch (command)
         {
-            start.ArgumentList.Add(argument);
+            case Adb.Reconnect:
+                start.ArgumentList.Add("reconnect");
+                break;
+            case Adb.WaitForDevice:
+                start.ArgumentList.Add("wait-for-device");
+                break;
+            case Adb.GetState:
+                start.ArgumentList.Add("get-state");
+                break;
+            case Adb.BootCompleted:
+                start.ArgumentList.Add("shell");
+                start.ArgumentList.Add("getprop");
+                start.ArgumentList.Add("sys.boot_completed");
+                break;
+            case Adb.PackageManager:
+                start.ArgumentList.Add("shell");
+                start.ArgumentList.Add("pm");
+                start.ArgumentList.Add("path");
+                start.ArgumentList.Add("android");
+                break;
+            case Adb.Devices:
+                start.ArgumentList.Add("devices");
+                start.ArgumentList.Add("-l");
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(command));
         }
         try
         {
