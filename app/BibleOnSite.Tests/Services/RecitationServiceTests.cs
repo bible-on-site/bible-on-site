@@ -32,6 +32,10 @@ public class RecitationServiceTests
         public void SaveCatalog() => storage.PackageFiles[RecitationExtensionCatalog.FileName] =
             JsonSerializer.SerializeToUtf8Bytes(Catalog, RecitationJsonContext.Default.RecitationExtensionCatalog);
 
+        // Convenience-overload downloads carry no test cancellation token.
+        public Task DownloadAsync(RecitationService service, int[] perekIds, IProgress<double>? progress) =>
+            service.DownloadAsync(perekIds, progress);
+
         public void Bundle(bool store = true)
         {
             var books = new List<RecitationBookPack>();
@@ -89,7 +93,7 @@ public class RecitationServiceTests
         service.HasAudio(1).Should().BeTrue(); service.HasAudio(2).Should().BeTrue(); service.HasAudio(3).Should().BeFalse();
         await service.DownloadAsync([1, 2]); extension.Requests.Should().Equal("recitation_1");
         var restored = extension.Service; await restored.InitializeAsync();
-        (await File.ReadAllBytesAsync(await restored.PrepareAudioAsync(1, Canonical()))).Should().Equal(audio);
+        (await File.ReadAllBytesAsync(await restored.PrepareAudioAsync(1, Canonical()), TestContext.Current.CancellationToken)).Should().Equal(audio);
         await restored.DownloadAsync([3]); extension.Requests.Should().Equal("recitation_1", "recitation_2");
         extension.Delivery.Verify(d => d.FetchAsync("perushim_notes", It.IsAny<IProgress<double>>(), It.IsAny<CancellationToken>()), Times.Never);
     }
@@ -101,7 +105,7 @@ public class RecitationServiceTests
         var extension = new Extension(storage) { Package = new(1, [Track(1, "audio"u8.ToArray())]) };
         extension.Bundle(store: false); var service = extension.Service;
         await service.DownloadAsync([1]);
-        (await File.ReadAllBytesAsync(await service.PrepareAudioAsync(1, Canonical()))).Should().Equal("audio"u8.ToArray());
+        (await File.ReadAllBytesAsync(await service.PrepareAudioAsync(1, Canonical()), TestContext.Current.CancellationToken)).Should().Equal("audio"u8.ToArray());
         Directory.EnumerateFiles(storage.Root, "*.download", SearchOption.AllDirectories).Should().BeEmpty();
     }
 
@@ -120,12 +124,12 @@ public class RecitationServiceTests
         var path = Path.Combine(storage.Root, "store", pack.PackName, pack.FileName);
         if (fault == "archive")
         {
-            await File.AppendAllTextAsync(path, "damage");
+            await File.AppendAllTextAsync(path, "damage", TestContext.Current.CancellationToken);
         }
         if (fault == "archiveHash")
         {
-            var bytes = await File.ReadAllBytesAsync(path); bytes[0] ^= 1;
-            await File.WriteAllBytesAsync(path, bytes);
+            var bytes = await File.ReadAllBytesAsync(path, TestContext.Current.CancellationToken); bytes[0] ^= 1;
+            await File.WriteAllBytesAsync(path, bytes, TestContext.Current.CancellationToken);
         }
         if (fault is "inventory" or "wrongInventory")
         {
@@ -137,13 +141,13 @@ public class RecitationServiceTests
                 }
                 archive.CreateEntry("../escape.mp3");
             }
-            var bytes = await File.ReadAllBytesAsync(path);
+            var bytes = await File.ReadAllBytesAsync(path, TestContext.Current.CancellationToken);
             extension.Catalog = extension.Catalog with { Books = [pack with { Sha256 = Hash(bytes), SizeBytes = bytes.Length }] };
             extension.SaveCatalog();
         }
-        await service.UpdateAsync();
+        await service.UpdateAsync(TestContext.Current.CancellationToken);
         await service.Invoking(s => s.DownloadAsync([1])).Should().ThrowAsync<InvalidDataException>();
-        service.HasAudio(1).Should().BeFalse(); (await File.ReadAllBytesAsync(originalPath)).Should().Equal("audio"u8.ToArray());
+        service.HasAudio(1).Should().BeFalse(); (await File.ReadAllBytesAsync(originalPath, TestContext.Current.CancellationToken)).Should().Equal("audio"u8.ToArray());
         Directory.EnumerateFiles(storage.Root, "*.download", SearchOption.AllDirectories).Should().BeEmpty();
     }
 
@@ -165,13 +169,13 @@ public class RecitationServiceTests
         service.RequestPlaybackStop();
         await service.InitializeAsync(); service.Tracks.Should().BeEquivalentTo(extension.Package.Tracks);
         var progress = new List<double>();
-        await service.DownloadAsync([1], new ImmediateProgress(progress.Add));
+        await extension.DownloadAsync(service, [1], new ImmediateProgress(progress.Add));
         service.HasAudio(1).Should().BeTrue(); service.HasAudio(2).Should().BeTrue();
         var path = await service.PrepareAudioAsync(1, Canonical());
-        await File.WriteAllBytesAsync(path, "damaged"u8.ToArray());
+        await File.WriteAllBytesAsync(path, "damaged"u8.ToArray(), TestContext.Current.CancellationToken);
         await service.Invoking(s => s.PrepareAudioAsync(1, Canonical())).Should().ThrowAsync<InvalidDataException>();
         await service.DownloadAsync([2]);
-        (await File.ReadAllBytesAsync(path)).Should().Equal(audio);
+        (await File.ReadAllBytesAsync(path, TestContext.Current.CancellationToken)).Should().Equal(audio);
         Directory.EnumerateFiles(Path.Join(storage.Root, "extensions", "recitation"), "*.mp3").Should().ContainSingle();
         extension.Delivery.Verify(d => d.FetchAsync(It.IsAny<string>(), It.IsAny<IProgress<double>>(), It.IsAny<CancellationToken>()), Times.Never);
         progress.Should().Equal(1); changes.Should().Be(3);
@@ -201,7 +205,7 @@ public class RecitationServiceTests
     {
         await using var storage = new TestStorage();
         var extension = new Extension(storage) { Package = new(1, [Track(1, "audio"u8.ToArray())]) };
-        extension.Bundle(); var service = extension.Service; await service.UpdateAsync();
+        extension.Bundle(); var service = extension.Service; await service.UpdateAsync(TestContext.Current.CancellationToken);
         storage.PackageFiles[RecitationExtensionCatalog.FileName] = "null"u8.ToArray();
         await service.Invoking(s => s.UpdateAsync()).Should().ThrowAsync<InvalidDataException>();
         service.GetTrack(1)!.AlignmentStatus.Should().Be("ready");
@@ -228,7 +232,7 @@ public class RecitationServiceTests
             {
                 entered.SetResult(); await Task.Delay(Timeout.Infinite, ct); return false;
             });
-        var downloading = model.DownloadSelectedAsync(); await entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        var downloading = model.DownloadSelectedAsync(); await entered.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
         model.IsDownloading.Should().BeTrue(); await model.DownloadSelectedAsync();
         model.CancelDownloadCommand.Execute(null); await downloading;
         model.IsIdle.Should().BeTrue(); model.Status.Should().Contain("הופסקה");
@@ -321,12 +325,12 @@ public class RecitationServiceTests
         extension.Delivery.Setup(d => d.TryGetAssetPathAsync("recitation_1", It.IsAny<CancellationToken>()))
             .Returns(() => Task.FromResult(release.Task.IsCompleted ? directory : null));
         var downloading = model.DownloadSelectedAsync();
-        await observed.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        await observed.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
         model.IsDownloading.Should().BeTrue(); model.Progress.Should().BeApproximately(0.45, 1e-10);
         release.SetResult(); await downloading;
         var completed = model.Status;
         deliveredProgress!.Report(0.25);
-        await Task.Delay(50);
+        await Task.Delay(50, TestContext.Current.CancellationToken);
         model.CancelDownloadCommand.Execute(null);
         model.Status.Should().Be(completed); model.IsIdle.Should().BeTrue();
     }
@@ -363,12 +367,12 @@ public class RecitationServiceTests
         var audio = "approved audio"u8.ToArray();
         server.Package = new(1, [Track(1, audio)]); server.Audio["/recordings/1_record.mp3"] = audio;
         var service = server.Service;
-        server.Bundle(); await service.UpdateAsync(); await service.DownloadAsync([1]);
+        server.Bundle(); await service.UpdateAsync(TestContext.Current.CancellationToken); await service.DownloadAsync([1]);
         var decoder = new Mock<IRecitationAudioDecoder>();
         decoder.Setup(d => d.CreateClipAsync(It.IsAny<string>(), It.IsAny<IReadOnlyList<(double Start, double End)>>(), It.IsAny<CancellationToken>(), 2000)).ReturnsAsync("WAV"u8.ToArray());
         var ranges = new List<(double Start, double End)> { (100, 1800) };
         var clip = await service.PrepareAudioAsync(1, Canonical(), null, null, CancellationToken.None, ranges, decoder.Object, 2000);
-        (await File.ReadAllBytesAsync(clip)).Should().Equal("WAV"u8.ToArray());
+        (await File.ReadAllBytesAsync(clip, TestContext.Current.CancellationToken)).Should().Equal("WAV"u8.ToArray());
         decoder.Verify(d => d.CreateClipAsync(It.IsAny<string>(), It.Is<IReadOnlyList<(double Start, double End)>>(r => r.SequenceEqual(ranges)), It.IsAny<CancellationToken>(), 2000), Times.Once);
         await service.Invoking(s => s.PrepareAudioAsync(1, Canonical(), null, null, CancellationToken.None, ranges, decoder.Object, double.NaN)).Should().ThrowAsync<InvalidDataException>();
     }
@@ -381,12 +385,12 @@ public class RecitationServiceTests
         var audio = "approved audio"u8.ToArray();
         server.Package = new(1, [Track(1, audio)]); server.Audio["/recordings/1_record.mp3"] = audio;
         var service = server.Service;
-        server.Bundle(); await service.UpdateAsync(); await service.DownloadAsync([1]);
+        server.Bundle(); await service.UpdateAsync(TestContext.Current.CancellationToken); await service.DownloadAsync([1]);
         var decoder = new Mock<IRecitationAudioDecoder>();
         decoder.Setup(d => d.CreateClipAsync(It.IsAny<string>(), It.IsAny<IReadOnlyList<(double Start, double End)>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync("PCM WAV"u8.ToArray());
         var word = await service.PrepareAudioAsync(1, Canonical(), 100, 800, decoder: decoder.Object);
-        (await File.ReadAllBytesAsync(word)).Should().Equal("PCM WAV"u8.ToArray());
+        (await File.ReadAllBytesAsync(word, TestContext.Current.CancellationToken)).Should().Equal("PCM WAV"u8.ToArray());
         (double Start, double End)[] approved = [(100, 800)];
         decoder.Verify(d => d.CreateClipAsync(It.IsAny<string>(), It.Is<IReadOnlyList<(double Start, double End)>>(r => r.SequenceEqual(approved)), It.IsAny<CancellationToken>()), Times.Once);
         await service.Invoking(s => s.PrepareAudioAsync(1, Canonical(), 0, 800, decoder: decoder.Object)).Should().ThrowAsync<InvalidDataException>();
@@ -405,7 +409,7 @@ public class RecitationServiceTests
         var audio = "approved audio"u8.ToArray();
         server.Package = new(1, [Track(1, audio, status)]); server.Audio["/recordings/1_record.mp3"] = audio;
         var service = server.Service;
-        server.Bundle(); await service.UpdateAsync(); await service.DownloadAsync([1]);
+        server.Bundle(); await service.UpdateAsync(TestContext.Current.CancellationToken); await service.DownloadAsync([1]);
         File.Exists(await service.PrepareAudioAsync(1, Canonical())).Should().BeTrue();
         await service.Invoking(s => s.PrepareAudioAsync(1, Canonical(), 100, 800)).Should().ThrowAsync<InvalidDataException>();
     }
@@ -418,7 +422,7 @@ public class RecitationServiceTests
         var audio = "original MP3"u8.ToArray();
         server.Package = new(1, [Track(1, audio)]); server.Audio["/recordings/1_record.mp3"] = audio;
         var service = server.Service;
-        server.Bundle(); await service.UpdateAsync();
+        server.Bundle(); await service.UpdateAsync(TestContext.Current.CancellationToken);
         await service.Invoking(s => s.DownloadAsync([929])).Should().ThrowAsync<InvalidOperationException>();
         await service.Invoking(s => s.PrepareAudioAsync(929, Canonical())).Should().ThrowAsync<InvalidOperationException>();
         await service.Invoking(s => s.PrepareAudioAsync(1, Canonical())).Should().ThrowAsync<InvalidDataException>();

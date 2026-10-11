@@ -37,6 +37,17 @@ describe("detectChanges", () => {
 		assert.equal(changes.website.ci_changed, false);
 	});
 
+	test("e2e-impact selector changes require app checks without a release", () => {
+		for (const file of [
+			"devops/github/ci/e2e-impact/select.ts",
+			"devops/github/ci/e2e-impact/e2e-impact.test.ts",
+		]) {
+			const changes = detectChanges([file]);
+			assert.deepEqual(changes.app, { module_changed: false, ci_changed: true }, file);
+			assert.equal(changes.website.ci_changed, false, file);
+		}
+	});
+
 	for (const path of [
 		"web/bible-on-site/package.json",
 		"web/bible-on-site/package-lock.json",

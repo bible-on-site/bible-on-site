@@ -1,5 +1,5 @@
 import { execFile, execFileSync, spawn } from "node:child_process";
-import { appendFileSync, closeSync, copyFileSync, existsSync, mkdirSync, openSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { appendFileSync, closeSync, copyFileSync, existsSync, mkdirSync, openSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -17,6 +17,9 @@ if (!["android", "ios"].includes(platform)) throw new Error("Set MOBILE_PLATFORM
 if (!process.env.MOBILE_UDID) throw new Error("Set MOBILE_UDID to the emulator/simulator identifier.");
 const artifacts = process.env.MOBILE_E2E_ARTIFACTS ?? resolve(directory, "../.artifacts/mobile-e2e", platform);
 mkdirSync(artifacts, { recursive: true });
+// Coverage evidence is per-run state: a stale record from an earlier run must
+// never attribute its automation ids to tests of this run (#2085).
+rmSync(resolve(artifacts, "coverage-evidence"), { recursive: true, force: true });
 const appPath = process.env.MOBILE_APP_PATH ?? resolve(directory,
   platform === "android"
     ? "../BibleOnSite/bin/Debug/net10.0-android/android-x64/com.tanah.daily929-Signed.apk"

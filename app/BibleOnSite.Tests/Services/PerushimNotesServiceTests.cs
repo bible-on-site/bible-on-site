@@ -336,7 +336,7 @@ public sealed class PerushimNotesServiceTests : IDisposable
         Directory.CreateDirectory(dataDir);
         Directory.CreateDirectory(padDir);
         await CreateNotesDatabaseAsync(dataDir, buildTimestamp: 200, (9, 4, 1, 0, "local note"));
-        await File.WriteAllTextAsync(Path.Join(padDir, NotesDbFileName), "not sqlite");
+        await File.WriteAllTextAsync(Path.Join(padDir, NotesDbFileName), "not sqlite", TestContext.Current.CancellationToken);
         var service = PerushimNotesService.CreateForTesting(
             new FakePadDeliveryService { AssetPath = padDir },
             dataDir);

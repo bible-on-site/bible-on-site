@@ -196,7 +196,153 @@ public class ArticleService : BaseGraphQLService
         }
     }
 
+    /// <summary>
+    /// Semantically searches article content on the server. Requires network
+    /// access — failures propagate so callers can degrade gracefully.
+    /// </summary>
+    /// <param name="phrase">Raw user phrase; normalized server-side.</param>
+    /// <param name="limit">Maximum hits (server clamps to 1-50).</param>
+    public Task<ArticleSearchPage?> SearchArticlesAsync(string phrase, int limit) =>
+        SearchArticlesAsync(phrase, limit, 0, null, CancellationToken.None);
+
+    /// <param name="phrase">Raw user phrase; normalized server-side.</param>
+    /// <param name="limit">Maximum hits (server clamps to 1-50).</param>
+    /// <param name="cancellationToken">Caller cancellation.</param>
+    public Task<ArticleSearchPage?> SearchArticlesAsync(string phrase, int limit, CancellationToken cancellationToken) =>
+        SearchArticlesAsync(phrase, limit, 0, null, cancellationToken);
+
+    /// <param name="phrase">Raw user phrase; normalized server-side.</param>
+    /// <param name="limit">Maximum hits (server clamps to 1-50).</param>
+    /// <param name="timeout">Total request budget.</param>
+    public Task<ArticleSearchPage?> SearchArticlesAsync(string phrase, int limit, TimeSpan timeout) =>
+        SearchArticlesAsync(phrase, limit, 0, timeout, CancellationToken.None);
+
+    /// <param name="phrase">Raw user phrase; normalized server-side.</param>
+    /// <param name="limit">Maximum hits (server clamps to 1-50).</param>
+    /// <param name="offset">Pagination offset (server clamps to 0-1000).</param>
+    /// <param name="timeout">Total request budget.</param>
+    /// <param name="cancellationToken">Caller cancellation.</param>
+    public async Task<ArticleSearchPage?> SearchArticlesAsync(
+        string phrase,
+        int limit,
+        int offset,
+        TimeSpan? timeout,
+        CancellationToken cancellationToken)
+    {
+        var query = new GraphQLRequest
+        {
+            Query = @"
+                query SearchArticles($phrase: String!, $limit: Int, $offset: Int) {
+                    searchArticles(phrase: $phrase, limit: $limit, offset: $offset) {
+                        total
+                        hits {
+                            articleId
+                            name
+                            authorName
+                            authorId
+                            perekId
+                            source
+                            excerpt
+                            score
+                        }
+                    }
+                }",
+            Variables = new { phrase, limit, offset }
+        };
+
+        using var timeoutSource = new CancellationTokenSource(timeout ?? DefaultSearchTimeout);
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutSource.Token);
+        try
+        {
+            var response = await Client.SendQueryAsync<SearchArticlesResponse>(query, linked.Token);
+
+            if (response.Errors != null && response.Errors.Length > 0)
+            {
+                Console.Error.WriteLine($"GraphQL errors searching articles: {string.Join(", ", response.Errors.Select(e => e.Message))}");
+                throw new GraphQLException(string.Join(", ", response.Errors.Select(e => e.Message)));
+            }
+
+            var data = response.Data?.SearchArticles;
+            if (data == null)
+            {
+                return null;
+            }
+
+            return new ArticleSearchPage
+            {
+                Total = data.Total,
+                Hits = (data.Hits ?? new List<ArticleSearchHitDto>()).Select(dto => new ArticleSearchHit
+                {
+                    ArticleId = dto.ArticleId,
+                    PerekId = dto.PerekId,
+                    AuthorId = dto.AuthorId,
+                    AuthorName = dto.AuthorName ?? string.Empty,
+                    Name = dto.Name ?? string.Empty,
+                    Source = dto.Source ?? string.Empty,
+                    Excerpt = dto.Excerpt ?? string.Empty,
+                    Score = dto.Score
+                }).ToList()
+            };
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            // Timeout source fired — translate to a TimeoutException so callers
+            // can distinguish "no network answer" from user cancellation.
+            throw new TimeoutException("Article search timed out");
+        }
+        catch (Exception ex) when (ex is not GraphQLException and not OperationCanceledException)
+        {
+            Console.Error.WriteLine($"Error searching articles: {ex.Message}");
+            throw;
+        }
+    }
+
+    private static readonly TimeSpan DefaultSearchTimeout = TimeSpan.FromSeconds(8);
+
+    /// <summary>One remote article-search hit.</summary>
+    public class ArticleSearchHit
+    {
+        public int ArticleId { get; set; }
+        public int PerekId { get; set; }
+        public int AuthorId { get; set; }
+        public string AuthorName { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public string Source { get; set; } = string.Empty;
+        public string Excerpt { get; set; } = string.Empty;
+        public float Score { get; set; }
+    }
+
+    /// <summary>Paginated remote search result.</summary>
+    public class ArticleSearchPage
+    {
+        public int Total { get; set; }
+        public List<ArticleSearchHit> Hits { get; set; } = new();
+    }
+
     #region DTOs for GraphQL responses
+
+    private class SearchArticlesResponse
+    {
+        public SearchArticlesData? SearchArticles { get; set; }
+    }
+
+    private class SearchArticlesData
+    {
+        public int Total { get; set; }
+        public List<ArticleSearchHitDto>? Hits { get; set; }
+    }
+
+    private class ArticleSearchHitDto
+    {
+        public int ArticleId { get; set; }
+        public string? Name { get; set; }
+        public string? AuthorName { get; set; }
+        public int AuthorId { get; set; }
+        public int PerekId { get; set; }
+        public string? Source { get; set; }
+        public string? Excerpt { get; set; }
+        public float Score { get; set; }
+    }
 
     private class ArticlesByPerekIdResponse
     {
