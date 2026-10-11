@@ -43,6 +43,11 @@ export const MODULES = {
 			"app/BibleOnSite/Resources/Raw/recitation-audio.html",
 		],
 		ciPaths: [...RELEASE_CI_PATHS, "devops/github/ci/bencher-comparison.mjs"],
+		// Test trees, colocated specs, and the jest/playwright harnesses exercise
+		// the site but never change the deployed bundle, so a test-only change
+		// must not package, release, or bump the website version (#2132).
+		ciOnlyPattern:
+			/^web\/bible-on-site\/(tests\/|.*\.test\.[^/]+$|jest\.config\.|playwright\.[^/]*\.config\.|\.test\.env$)/,
 	},
 	api: { directory: "web/api", ciPaths: RELEASE_CI_PATHS },
 	app: {
