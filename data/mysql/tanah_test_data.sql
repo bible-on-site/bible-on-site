@@ -98,9 +98,11 @@ VALUES (
 <p>זהו מאמר לדוגמא עם תמונה מ-S3:</p>
 <img src="https://bible-on-site-assets-test.s3.amazonaws.com/rabbis/test-rabbi.jpg" alt="תמונת רב לדוגמא" />
 <p>התמונה לעיל היא לצורכי בדיקה בלבד.</p>',
-        TRUE
+        -- Bulletin approval is not website visibility. This author's only
+        -- valid article must still appear on the website and in public search.
+        FALSE
     ),
-    -- Non-distributable row: the article search index must never surface it.
+    -- Invalid chapter row: public article routes and search must exclude it.
     -- perek_id 5000 is outside the 929 range so article counters stay unchanged.
     (
         5000,

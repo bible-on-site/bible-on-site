@@ -1707,16 +1707,21 @@ jobs:
 
   app_mobile_e2e:
     name: App Mobile E2E
+    # Wait for perushim_data so the app under test packages the same catalog/notes
+    # pair package_app ships — the run artifact when the pipeline regenerated it,
+    # the master baseline otherwise — never a stale committed fixture.
     # determine_baseline_availability: a missing app-coverage.master forces a
     # full recovery run, and the rebuilt baseline must include the E2E layer
     # (#1232), not just unit+integration.
-    needs: [setup_env, determine_changes, determine_baseline_availability]
+    needs: [setup_env, determine_changes, perushim_data, determine_baseline_availability]
     if: ${{ always() && !cancelled() && !failure() && (needs.determine_changes.outputs.app_module_changed == 'true' || needs.determine_changes.outputs.app_ci_changed == 'true' || needs.determine_baseline_availability.outputs.is_app_master_coverage_available == 'false') }}
     permissions:
       contents: read
       # Reads the master coverage-tree baseline artifacts through the REST API (#2085).
       actions: read
     uses: ./.github/workflows/app-mobile-e2e.yml
+    with:
+      perushim_notes_sqlite_artifact: ${{ needs.perushim_data.result != 'skipped' && format('perushim-sqlite-v2.{0}', github.run_id) || 'perushim-sqlite-v2.master' }}
 
   app_ios_ci:
     name: App iOS native audio CI

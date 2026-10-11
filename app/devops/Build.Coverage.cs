@@ -100,8 +100,15 @@ partial class Build
             var mergedLcov = MergedCoverageDirectory / "lcov.info";
 
             var lcovFiles = new List<AbsolutePath>();
-            if (unitLcov.FileExists()) lcovFiles.Add(unitLcov);
-            if (integrationLcov.FileExists()) lcovFiles.Add(integrationLcov);
+            if (unitLcov.FileExists())
+            {
+                lcovFiles.Add(unitLcov);
+            }
+
+            if (integrationLcov.FileExists())
+            {
+                lcovFiles.Add(integrationLcov);
+            }
 
             if (lcovFiles.Count == 0)
             {

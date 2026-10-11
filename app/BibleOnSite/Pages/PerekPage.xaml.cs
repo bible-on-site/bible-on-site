@@ -815,7 +815,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable
             // If in selection mode, tap toggles selection
             if (_viewModel.Perek?.Pasukim.FirstOrDefault(p => p.PasukNum == pasukNum) is { } pasuk)
             {
-                await HandlePasukTapAsync(pasuk, sender);
+                await HandlePasukTapAsync(pasuk);
             }
         }
 #endif
@@ -844,7 +844,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable
         if (sender is LongPressBehavior behavior &&
             ResolvePasuk(behavior.AssociatedView?.BindingContext) is { } pasuk)
         {
-            await HandlePasukTapAsync(pasuk, behavior.AssociatedView);
+            await HandlePasukTapAsync(pasuk);
         }
     }
 
@@ -871,7 +871,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable
             ResetRecitationContext();
             var wasEmpty = _viewModel.SelectedPasukNums.Count == 0;
             _viewModel.ToggleSelectedPasuk(pasukNum);
-            UpdatePasukSelection(sender, pasukNum);
+            UpdatePasukSelection();
             // Vibrate when entering selection mode
             if (wasEmpty && _viewModel.SelectedPasukNums.Count > 0)
             {
@@ -985,7 +985,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable
     /// Updates the selection bar after selection change.
     /// The visual state is handled by DataTrigger in XAML.
     /// </summary>
-    private void UpdatePasukSelection(object? sender, int pasukNum)
+    private void UpdatePasukSelection()
     {
         UpdateSelectionBar();
     }
@@ -1366,7 +1366,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable
     /// <summary>
     /// Handles perek selection from the picker popup.
     /// </summary>
-    private async void OnPerekPickerSelected(object? sender, int perekId)
+    private async void OnPerekPickerSelected(int perekId)
     {
         if (perekId >= 1 && perekId <= 929 && perekId != _viewModel.PerekId)
         {
@@ -1782,6 +1782,10 @@ public partial class PerekPage : ContentPage, IQueryAttributable
                     }
                 }
                 break;
+
+            default:
+                // Other gesture statuses need no panel handling.
+                break;
         }
     }
 
@@ -1864,24 +1868,24 @@ public partial class PerekPage : ContentPage, IQueryAttributable
                 break;
 
             case Android.Views.MotionEventActions.Move:
-            {
-                var dx = motion.RawX - _exitButtonTouchStartRawX;
-                var dy = motion.RawY - _exitButtonTouchStartRawY;
-
-                if (!_exitButtonIsDragging &&
-                    (Math.Abs(dx) > _exitButtonTouchSlop || Math.Abs(dy) > _exitButtonTouchSlop))
                 {
-                    _exitButtonIsDragging = true;
-                }
+                    var dx = motion.RawX - _exitButtonTouchStartRawX;
+                    var dy = motion.RawY - _exitButtonTouchStartRawY;
 
-                if (_exitButtonIsDragging)
-                {
-                    ExitFullScreenButton.TranslationX = _exitButtonDragStartTx + dx / _exitButtonDensity;
-                    ExitFullScreenButton.TranslationY = _exitButtonDragStartTy + dy / _exitButtonDensity;
+                    if (!_exitButtonIsDragging &&
+                        (Math.Abs(dx) > _exitButtonTouchSlop || Math.Abs(dy) > _exitButtonTouchSlop))
+                    {
+                        _exitButtonIsDragging = true;
+                    }
+
+                    if (_exitButtonIsDragging)
+                    {
+                        ExitFullScreenButton.TranslationX = _exitButtonDragStartTx + dx / _exitButtonDensity;
+                        ExitFullScreenButton.TranslationY = _exitButtonDragStartTy + dy / _exitButtonDensity;
+                    }
+                    e.Handled = true;
+                    break;
                 }
-                e.Handled = true;
-                break;
-            }
 
             case Android.Views.MotionEventActions.Up:
                 if (!_exitButtonIsDragging)
@@ -1893,6 +1897,10 @@ public partial class PerekPage : ContentPage, IQueryAttributable
 
             case Android.Views.MotionEventActions.Cancel:
                 e.Handled = true;
+                break;
+
+            default:
+                // Other motion actions do not affect the exit-button drag.
                 break;
         }
     }
@@ -1911,6 +1919,10 @@ public partial class PerekPage : ContentPage, IQueryAttributable
             case GestureStatus.Running:
                 ExitFullScreenButton.TranslationX = _exitButtonPanStartX + e.TotalX;
                 ExitFullScreenButton.TranslationY = _exitButtonPanStartY + e.TotalY;
+                break;
+
+            default:
+                // Completed/canceled gestures keep the button where the pan left it.
                 break;
         }
     }
@@ -2022,6 +2034,9 @@ public partial class PerekPage : ContentPage, IQueryAttributable
         ExitFullScreenButton.TranslationX = 0;
         ExitFullScreenButton.TranslationY = 0;
         ExitFullScreenButton.IsVisible = true;
+#if ANDROID
+        UpdateReaderBack();
+#endif
     }
 
     /// <summary>
@@ -2039,6 +2054,9 @@ public partial class PerekPage : ContentPage, IQueryAttributable
         // Show bottom bar
         BottomBar.IsVisible = true;
         FloatingMenuContainer.IsVisible = true;
+#if ANDROID
+        UpdateReaderBack();
+#endif
     }
 
     #endregion

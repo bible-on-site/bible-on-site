@@ -21,9 +21,9 @@ import { toLetters } from "gematry";
 import { getPerekByPerekId } from "@/data/perek-dto";
 import { query } from "@/lib/api-client";
 import { authorNameToSlug } from "@/lib/authors";
+import type { Scored } from "./corpus";
 import { htmlToPlainText, searchTokens } from "./normalize";
 import { searchScore } from "./score";
-import type { Scored } from "./corpus";
 
 /**
  * Candidate rows pulled from MySQL before JS re-scoring. Bounded so a
@@ -150,6 +150,12 @@ export interface NoteHit {
 	perushName: string;
 	perekId: number;
 	pasukNum: number;
+	/**
+	 * The note row's index within the pasuk — carried into the result link so
+	 * the perush page can target this exact fragment, not the pasuk's first
+	 * note (#2078).
+	 */
+	noteIdx: number;
 	noteContent: string;
 	plain: string;
 }
@@ -172,10 +178,11 @@ export async function searchPerushNotes(
 		perush_name: string;
 		perek_id: number;
 		pasuk: number;
+		note_idx: number;
 		note_content: string;
 	}>(
 		`SELECT /*+ MAX_EXECUTION_TIME(${QUERY_TIME_BUDGET_MS}) */
-			n.perush_id, p.name AS perush_name, n.perek_id, n.pasuk, n.note_content
+			n.perush_id, p.name AS perush_name, n.perek_id, n.pasuk, n.note_idx, n.note_content
 		 FROM note n
 		 JOIN perush p ON n.perush_id = p.id
 		 WHERE ${where}
@@ -197,6 +204,7 @@ export async function searchPerushNotes(
 				perushName: row.perush_name,
 				perekId: row.perek_id,
 				pasukNum: row.pasuk,
+				noteIdx: row.note_idx,
 				noteContent: row.note_content,
 				plain,
 			},
@@ -260,7 +268,10 @@ export async function searchAuthors(
 			),
 		}))
 		.filter((hit) => hit.score > 0)
-		.sort((left, right) => right.score - left.score || left.entry.id - right.entry.id)
+		.sort(
+			(left, right) =>
+				right.score - left.score || left.entry.id - right.entry.id,
+		)
 		.slice(0, limit);
 }
 
@@ -304,7 +315,7 @@ export async function searchArticles(
 			a.id, a.perek_id, a.name, au.name AS author_name, a.content, a.abstract
 		 FROM tanah_article a
 		 JOIN tanah_author au ON a.author_id = au.id
-		 WHERE a.distributable = TRUE AND ${where}
+		 WHERE a.perek_id BETWEEN 1 AND 929 AND ${where}
 		 ORDER BY ${rank.orderBy}, a.id
 		 LIMIT ${CANDIDATE_LIMIT}`,
 		[...params, ...rank.params],
@@ -476,10 +487,7 @@ export async function searchTanahpediaEntries(
 				},
 				// Title and aliases are the name fields (x2 like author/article
 				// names); body content is the weak signal.
-				score: Math.max(
-					Math.max(titleScore, synonymScore) * 2,
-					contentScore,
-				),
+				score: Math.max(Math.max(titleScore, synonymScore) * 2, contentScore),
 			};
 		})
 		.filter((hit) => hit.score > 0)

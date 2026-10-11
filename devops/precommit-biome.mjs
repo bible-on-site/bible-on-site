@@ -39,7 +39,7 @@ function envBiomeJs() {
 	return null;
 }
 
-const stagedFiles = process.argv.slice(2).map((f) => f.replaceAll("\\", "/"));
+const stagedFiles = process.argv.slice(2).map((f) => f.replace(/\\/g, "/"));
 
 let failed = false;
 

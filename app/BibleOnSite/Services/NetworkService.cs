@@ -81,7 +81,11 @@ public class NetworkService : IDisposable
 
     public void Dispose()
     {
-        if (_disposed) return;
+        if (_disposed)
+        {
+            return;
+        }
+
         _disposed = true;
         StopMonitoring();
     }
