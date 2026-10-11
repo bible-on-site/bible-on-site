@@ -175,9 +175,19 @@ public abstract class MobileDeviceTest : IAsyncLifetime
     // — including its Android-only adb bridge — out of host-side unit tests.
     private void CollectAppCoverage(string name, string outcome)
     {
-        if (Driver != null)
+        if (Driver == null)
+        {
+            return;
+        }
+        try
         {
             AppCoverage.Collect(Configuration, name, outcome, Output);
+        }
+        catch (Exception exception)
+        {
+            // Coverage collection is diagnostic-only: a failure here must never
+            // decide (or mask) the scenario's own outcome.
+            Output.WriteLine($"{Configuration.Platform}: coverage collection failed: {exception.Message}");
         }
     }
 
