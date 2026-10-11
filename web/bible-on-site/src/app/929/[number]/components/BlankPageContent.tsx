@@ -65,7 +65,9 @@ export function BlankPageContent({
 				})
 				.catch((error) => {
 					console.error("Failed to load book article", {
-						perekId, articleId: article.id, error,
+						perekId,
+						articleId: article.id,
+						error,
 					});
 					if (!cancelled) setSlug(undefined);
 				})
@@ -80,7 +82,9 @@ export function BlankPageContent({
 				})
 				.catch((error) => {
 					console.error("Failed to load book commentary", {
-						perekId, perushId: perush.id, error,
+						perekId,
+						perushId: perush.id,
+						error,
 					});
 					if (!cancelled) setSlug(undefined);
 				})
@@ -139,12 +143,18 @@ export function BlankPageContent({
 								perushim={perushim}
 								onPerushClick={(perush) => navigate(perush.name)}
 								loading={perushLoading}
+								scrollStorageKey={
+									perekId ? `perushim-book-${perekId}` : undefined
+								}
 							/>
 						)}
 						<ArticlesSection
 							articles={articles}
 							onArticleClick={(article) => navigate(String(article.id))}
 							loading={articleLoading}
+							scrollStorageKey={
+								perekId ? `articles-book-${perekId}` : undefined
+							}
 						/>
 					</>
 				)}

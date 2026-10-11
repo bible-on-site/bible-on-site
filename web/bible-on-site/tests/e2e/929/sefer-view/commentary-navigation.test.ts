@@ -157,6 +157,47 @@ test.describe("Sefer commentary navigation", () => {
 		}
 	}
 
+	test("keeps the perushim carousel position across open, back, and browser Back", async ({
+		page,
+	}) => {
+		test.setTimeout(90_000);
+		const seferPage = new SeferPage(page);
+		await seferPage.openSeferViewForPerek(1);
+		const blank = page.locator('.he-book .page[data-page-index="4"]');
+		const perushLink = blank.getByRole("link", { name: /אבן עזרא/ });
+		const scroller = perushLink.locator("..");
+		const back = blank.getByRole("button", { name: "→ חזרה לפרשנים" });
+
+		// Scroll the carousel off its start edge (RTL scrollLeft is negative).
+		const position = await scroller.evaluate((el) => {
+			el.scrollLeft = -Math.min(
+				300,
+				Math.max(0, el.scrollWidth - el.clientWidth),
+			);
+			return el.scrollLeft;
+		});
+		expect(position).toBeLessThan(0);
+
+		// DOM click() never scrolls the link into view, so the carousel stays
+		// put until the open perush replaces it.
+		await perushLink.evaluate((el: HTMLElement) => el.click());
+		await expect(back).toBeVisible({ timeout: 30_000 });
+		await back.click();
+		await expect(perushLink).toBeVisible();
+		await expect
+			.poll(() => scroller.evaluate((el) => el.scrollLeft))
+			.toBe(position);
+
+		// The same position must survive leaving through the browser Back.
+		await perushLink.evaluate((el: HTMLElement) => el.click());
+		await expect(back).toBeVisible({ timeout: 30_000 });
+		await page.goBack();
+		await expect(perushLink).toBeVisible();
+		await expect
+			.poll(() => scroller.evaluate((el) => el.scrollLeft))
+			.toBe(position);
+	});
+
 	for (const kind of ["perush", "article"] as const) {
 		test(`opens ${kind} after a TOC jump to a different chapter`, async ({
 			page,

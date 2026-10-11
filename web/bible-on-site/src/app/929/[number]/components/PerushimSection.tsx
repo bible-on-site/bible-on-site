@@ -15,6 +15,8 @@ interface PerushimSectionProps {
 	onPerushClick?: (perush: PerushSummary) => void;
 	/** When true, show loading state (e.g. fetching perush for in-place view). */
 	loading?: boolean;
+	/** Session-scoped key so the carousel keeps its position across unmounts. */
+	scrollStorageKey?: string;
 }
 
 /**
@@ -31,6 +33,7 @@ export function PerushimSection({
 	emptyMessage = "אין פרשנות לפרק זה",
 	onPerushClick,
 	loading = false,
+	scrollStorageKey,
 }: PerushimSectionProps) {
 	const safePerushim = perushim ?? [];
 
@@ -56,6 +59,7 @@ export function PerushimSection({
 				className={styles.carousel}
 				prevLabel="פרשן קודם"
 				nextLabel="פרשן הבא"
+				scrollStorageKey={scrollStorageKey}
 			>
 				{safePerushim.length === 0 ? (
 					<p className={styles.emptyMessage}>{emptyMessage}</p>

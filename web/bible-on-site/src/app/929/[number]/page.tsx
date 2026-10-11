@@ -145,10 +145,17 @@ export default async function Perek({
 				/>
 
 				{/* Perushim section - commentaries carousel */}
-				<PerushimSection perekId={perekId} perushim={perushim} />
+				<PerushimSection
+					perekId={perekId}
+					perushim={perushim}
+					scrollStorageKey={`perushim-perek-${perekId}`}
+				/>
 
 				{/* Articles section - fetched directly from database for lower latency */}
-				<ArticlesSection articles={articles} />
+				<ArticlesSection
+					articles={articles}
+					scrollStorageKey={`articles-perek-${perekId}`}
+				/>
 			</div>
 		</>
 	);
