@@ -249,10 +249,11 @@ public class PerushimNotesService
     /// Attempts to download the notes database via the platform's on-demand delivery
     /// mechanism (PAD on Android, ODR on iOS). Call when IsAvailable is false.
     /// </summary>
-    public async Task<bool> TryDownloadNotesAsync(IProgress<double>? progress = null)
+    public async Task<bool> TryDownloadNotesAsync(IProgress<double>? progress = null,
+        CancellationToken cancellationToken = default)
     {
-        await _operationLock.WaitAsync();
-        try { return await TryDownloadNotesCoreAsync(progress); }
+        await _operationLock.WaitAsync(cancellationToken);
+        try { return await TryDownloadNotesCoreAsync(progress, cancellationToken); }
         finally { _operationLock.Release(); }
     }
 
@@ -283,7 +284,7 @@ public class PerushimNotesService
         finally { _operationLock.Release(); }
     }
 
-    private async Task<bool> TryDownloadNotesCoreAsync(IProgress<double>? progress)
+    private async Task<bool> TryDownloadNotesCoreAsync(IProgress<double>? progress, CancellationToken cancellationToken)
     {
         var dbPath = Path.Combine(DataDirectory, NotesDbName);
         if (File.Exists(dbPath))
@@ -312,7 +313,7 @@ public class PerushimNotesService
         }
 
         // Try on-demand fetch (downloads from store)
-        if (await _padService.FetchAsync(PerushimNotesPackName, progress))
+        if (await _padService.FetchAsync(PerushimNotesPackName, progress, cancellationToken))
         {
             padPath = await _padService.TryGetAssetPathAsync(PerushimNotesPackName);
             if (padPath != null && await TryCopyFromPadAsync(padPath, dbPath))

@@ -72,47 +72,43 @@ public class PreferencesService
     private const string LastLearntPerekKey = "lastLearntPerek";
     private const string PerekToLoadKey = "perekToLoad";
     private const string BookmarkedPerakimKey = "bookmarkedPerakim";
-    private const string RecitationEnabledKey = "recitationEnabled";
-    private bool _recitationEnabled;
-
-    public bool RecitationEnabled
-    {
-        get => _recitationEnabled;
-        set
-        {
-            if (_recitationEnabled == value)
-            {
-                return;
-            }
-
-            _recitationEnabled = value;
-            _storage.Set(RecitationEnabledKey, value);
-            OnPreferencesChanged();
-        }
-    }
 
     private double _recitationSpeed = 1;
     private double _recitationVolume = 1;
+    private double _lessonsVolume = 1;
+    private double _effectsVolume = 1;
     private double _recitationVersePauseMs = -1;
     // A negative pause preserves the original recording; custom pauses are wall-clock milliseconds.
     public double RecitationSpeed
     {
         get => _recitationSpeed;
-        set => SetRecitationValue(ref _recitationSpeed, "recitationSpeed", Normalize(value, 1, 0.5, 2));
+        set => SetAudioValue(ref _recitationSpeed, "recitationSpeed", Normalize(value, 1, 0.5, 2));
     }
     public double RecitationVolume
     {
         get => _recitationVolume;
-        set => SetRecitationValue(ref _recitationVolume, "recitationVolume", Normalize(value, 1, 0, 1));
+        set => SetAudioValue(ref _recitationVolume, "recitationVolume", Normalize(value, 1, 0, 1));
+    }
+    /// <summary>Recorded-lesson playback volume (article audio/video), independent of קריינות.</summary>
+    public double LessonsVolume
+    {
+        get => _lessonsVolume;
+        set => SetAudioValue(ref _lessonsVolume, "lessonsVolume", Normalize(value, 1, 0, 1));
+    }
+    /// <summary>Sound-effects volume, independent of speech playback.</summary>
+    public double EffectsVolume
+    {
+        get => _effectsVolume;
+        set => SetAudioValue(ref _effectsVolume, "effectsVolume", Normalize(value, 1, 0, 1));
     }
     public double RecitationVersePauseMs
     {
         get => _recitationVersePauseMs;
-        set => SetRecitationValue(ref _recitationVersePauseMs, "recitationVersePauseMs", Normalize(value, -1, -1, 5000));
+        set => SetAudioValue(ref _recitationVersePauseMs, "recitationVersePauseMs", Normalize(value, -1, -1, 5000));
     }
     private static double Normalize(double value, double fallback, double min, double max) =>
         double.IsFinite(value) ? Math.Clamp(value, min, max) : fallback;
-    private void SetRecitationValue(ref double field, string key, double value)
+    private void SetAudioValue(ref double field, string key, double value)
     {
         if (Math.Abs(field - value) < 0.000001) { return; }
         field = value;
@@ -207,9 +203,10 @@ public class PreferencesService
     /// </summary>
     public void Load()
     {
-        _recitationEnabled = _storage.Get(RecitationEnabledKey, false);
         _recitationSpeed = Normalize(_storage.Get("recitationSpeed", 1.0), 1, 0.5, 2);
         _recitationVolume = Normalize(_storage.Get("recitationVolume", 1.0), 1, 0, 1);
+        _lessonsVolume = Normalize(_storage.Get("lessonsVolume", 1.0), 1, 0, 1);
+        _effectsVolume = Normalize(_storage.Get("effectsVolume", 1.0), 1, 0, 1);
         _recitationVersePauseMs = Normalize(_storage.Get("recitationVersePauseMs", -1.0), -1, -1, 5000);
         _fontFactor = _storage.Get(FontFactorKey, 1.0);
 

@@ -183,7 +183,7 @@ public sealed class PerushimNotesServiceTests : IDisposable
             new FakePadDeliveryService { AssetPath = padDir },
             dataDir);
 
-        var downloaded = await service.TryDownloadNotesAsync();
+        var downloaded = await service.TryDownloadNotesAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         downloaded.Should().BeTrue();
         service.IsAvailable.Should().BeTrue();
@@ -209,7 +209,7 @@ public sealed class PerushimNotesServiceTests : IDisposable
 
         var service = PerushimNotesService.CreateForTesting(fakePad, dataDir);
 
-        var downloaded = await service.TryDownloadNotesAsync();
+        var downloaded = await service.TryDownloadNotesAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         downloaded.Should().BeTrue();
         fakePad.FetchCalls.Should().Be(1);
@@ -283,7 +283,7 @@ public sealed class PerushimNotesServiceTests : IDisposable
         var fakePad = new FakePadDeliveryService();
         var service = PerushimNotesService.CreateForTesting(fakePad, dataDir);
 
-        var downloaded = await service.TryDownloadNotesAsync();
+        var downloaded = await service.TryDownloadNotesAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         downloaded.Should().BeTrue();
         fakePad.FetchCalls.Should().Be(0);
@@ -304,7 +304,7 @@ public sealed class PerushimNotesServiceTests : IDisposable
         };
         var service = PerushimNotesService.CreateForTesting(fakePad, dataDir);
 
-        var downloaded = await service.TryDownloadNotesAsync();
+        var downloaded = await service.TryDownloadNotesAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         downloaded.Should().BeFalse();
         fakePad.FetchCalls.Should().Be(1);
@@ -322,7 +322,7 @@ public sealed class PerushimNotesServiceTests : IDisposable
             new FakePadDeliveryService { AssetPath = padDir },
             dataDir);
 
-        var downloaded = await service.TryDownloadNotesAsync();
+        var downloaded = await service.TryDownloadNotesAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         downloaded.Should().BeFalse();
         service.IsAvailable.Should().BeFalse();
@@ -357,7 +357,7 @@ public sealed class PerushimNotesServiceTests : IDisposable
         var progress = new Progress<double>();
         var service = PerushimNotesService.CreateForTesting(fakePad, dataDir);
 
-        var downloaded = await service.TryDownloadNotesAsync(progress);
+        var downloaded = await service.TryDownloadNotesAsync(progress, TestContext.Current.CancellationToken);
 
         downloaded.Should().BeFalse();
         fakePad.FetchCalls.Should().Be(1);

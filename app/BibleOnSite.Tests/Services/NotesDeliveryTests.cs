@@ -39,7 +39,7 @@ public class NotesDeliveryTests
         var service = Create(storage);
         if (download)
         {
-            (await service.TryDownloadNotesAsync()).Should().BeTrue();
+            (await service.TryDownloadNotesAsync(cancellationToken: TestContext.Current.CancellationToken)).Should().BeTrue();
         }
         else
         {
@@ -232,7 +232,7 @@ public class NotesDeliveryTests
     {
         await using var storage = new TestStorage();
         storage.FileSystem.Setup(f => f.OpenAppPackageFileAsync(It.IsAny<string>())).ThrowsAsync(new IOException("package unreadable"));
-        (await Create(storage).TryDownloadNotesAsync()).Should().BeFalse();
+        (await Create(storage).TryDownloadNotesAsync(cancellationToken: TestContext.Current.CancellationToken)).Should().BeFalse();
     }
 
     [Fact]

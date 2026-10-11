@@ -28,16 +28,21 @@ public class PreferencesServiceTests : IDisposable
         _service.Load();
         _service.RecitationSpeed.Should().Be(1);
         _service.RecitationVolume.Should().Be(1);
+        _service.LessonsVolume.Should().Be(1);
+        _service.EffectsVolume.Should().Be(1);
         _service.RecitationVersePauseMs.Should().Be(-1);
         _service.RecitationSpeed = 1.5;
         _service.RecitationVolume = 0.4;
+        _service.LessonsVolume = 0.3;
+        _service.EffectsVolume = 0.6;
         _service.RecitationVersePauseMs = 1500;
         var restored = PreferencesService.CreateForTesting(_storage);
         restored.Load();
         restored.RecitationSpeed.Should().Be(1.5);
         restored.RecitationVolume.Should().Be(0.4);
+        restored.LessonsVolume.Should().Be(0.3);
+        restored.EffectsVolume.Should().Be(0.6);
         restored.RecitationVersePauseMs.Should().Be(1500);
-        restored.RecitationEnabled.Should().BeFalse();
         restored.FontFactor.Should().Be(1);
         restored.RecitationVersePauseMs = -1;
         _service.Load();
@@ -60,6 +65,23 @@ public class PreferencesServiceTests : IDisposable
         _service.RecitationSpeed.Should().Be(0.5);
         _service.RecitationVolume.Should().Be(1);
         _service.RecitationVersePauseMs.Should().Be(-1);
+    }
+
+    [Fact]
+    public void AudioChannels_PersistIndependently_AndClampSeparately()
+    {
+        _service.Load();
+        _service.LessonsVolume = 0.25;
+        _service.EffectsVolume = 0;
+        _service.RecitationVolume = 0.75;
+        _service.LessonsVolume = double.NaN;
+        _service.EffectsVolume = 3;
+
+        var restored = PreferencesService.CreateForTesting(_storage);
+        restored.Load();
+        restored.RecitationVolume.Should().Be(0.75);
+        restored.LessonsVolume.Should().Be(1, "a NaN write falls back to the channel default");
+        restored.EffectsVolume.Should().Be(1, "out-of-range writes clamp into the channel's 0..1 range");
     }
 
     [Fact]

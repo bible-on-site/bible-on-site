@@ -23,8 +23,9 @@ public class DiagnosticsExportTests
         var share = new Mock<IShare>();
         var files = new List<string>();
         share.Setup(s => s.RequestAsync(It.IsAny<ShareFileRequest>())).Callback<ShareFileRequest>(r => files.Add(r.File!.FullPath));
-        var settings = new PreferencesViewModel(preferences, notes, storage.FileSystem.Object, share.Object);
-        await settings.ExportPerushimLogsCommand.ExecuteAsync(null);
+        // תמיכה settings export is always reachable — pack state is irrelevant.
+        var support = new SupportPreferencesViewModel(notes, storage.FileSystem.Object, share.Object, new Mock<IAppNavigator>().Object);
+        await support.ExportLogsCommand.ExecuteAsync(null);
         var chapter = new PerekViewModel(preferences, null, null, null, notes, null, storage.FileSystem.Object, share.Object);
         await chapter.ExportPerushimLogsCommand.ExecuteAsync(null);
         files.Should().HaveCount(2);
@@ -46,12 +47,19 @@ public class DiagnosticsExportTests
         var share = new Mock<IShare>();
         share.Setup(s => s.RequestAsync(It.IsAny<ShareFileRequest>())).ThrowsAsync(new IOException("share unavailable"));
         var navigator = new Mock<IAppNavigator>();
-        var settings = new PreferencesViewModel(preferences, notes, storage.FileSystem.Object, share.Object, navigator.Object);
-        await settings.ExportPerushimLogsAsync();
+        var support = new SupportPreferencesViewModel(notes, storage.FileSystem.Object, share.Object, navigator.Object);
+        await support.ExportLogsAsync();
         var chapter = new PerekViewModel(preferences, null, null, null, notes, navigator.Object,
             storage.FileSystem.Object, share.Object);
         await chapter.ExportPerushimLogsAsync();
         navigator.Verify(n => n.DisplayAlertAsync("שגיאה", It.Is<string>(m => m.Contains("share unavailable")), "אישור"), Times.Exactly(2));
+    }
+
+    private static ExtensionPacksViewModel Packs(TestStorage storage, PerushimNotesService notes, IAppNavigator navigator)
+    {
+        return new ExtensionPacksViewModel(notes,
+            new RecitationService(storage.FileSystem.Object, new Mock<IPadDeliveryService>().Object),
+            new PerekDataService(new LocalDatabaseService(storage.FileSystem.Object)), navigator);
     }
 
     [Fact]
@@ -61,17 +69,17 @@ public class DiagnosticsExportTests
         await storage.BundleDatabaseAsync("sefaria-dump-5784-sivan-4.perushim_notes.sqlite", "CREATE TABLE note (perush_id INTEGER)");
         var notes = new PerushimNotesService(NotesDeliveryTests.Pad().Object, storage.FileSystem.Object);
         var navigator = new Mock<IAppNavigator>();
-        var settings = new PreferencesViewModel(PreferencesService.CreateForTesting(new InMemoryPreferencesStorage()), notes,
-            storage.FileSystem.Object, new Mock<IShare>().Object, navigator.Object);
+        var packs = Packs(storage, notes, navigator.Object);
         var changes = new List<string?>();
-        settings.PropertyChanged += (_, e) => changes.Add(e.PropertyName);
-        await settings.DownloadPerushimCommand.ExecuteAsync(null);
-        settings.IsPerushimInstalled.Should().BeTrue();
-        settings.ShowPerushimDownload.Should().BeFalse();
-        settings.IsPerushimDownloading.Should().BeFalse();
-        settings.PerushimNotesStatusText.Should().Contain("מותקנת ✓");
-        changes.Should().Contain(nameof(settings.IsPerushimInstalled)).And.Contain(nameof(settings.ShowPerushimDownloadButton));
+        packs.PropertyChanged += (_, e) => changes.Add(e.PropertyName);
+        await packs.DownloadPerushimCommand.ExecuteAsync(null);
+        packs.IsPerushimInstalled.Should().BeTrue();
+        packs.ShowPerushimDownload.Should().BeFalse();
+        packs.IsPerushimDownloading.Should().BeFalse();
+        packs.PerushimNotesStatusText.Should().Contain("מותקנת ✓");
+        changes.Should().Contain(nameof(packs.IsPerushimInstalled)).And.Contain(nameof(packs.ShowPerushimDownloadButton));
         navigator.Verify(n => n.DisplayAlertAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+        await storage.CloseDatabaseFileAsync("sefaria-dump-5784-sivan-4.perushim_notes.sqlite");
     }
 
     [Fact]
@@ -79,12 +87,39 @@ public class DiagnosticsExportTests
     {
         await using var storage = new TestStorage();
         var navigator = new Mock<IAppNavigator>();
-        var settings = new PreferencesViewModel(PreferencesService.CreateForTesting(new InMemoryPreferencesStorage()),
-            new PerushimNotesService(NotesDeliveryTests.Pad().Object, storage.FileSystem.Object),
-            storage.FileSystem.Object, new Mock<IShare>().Object, navigator.Object);
-        await settings.DownloadPerushimAsync();
-        settings.IsPerushimDownloading.Should().BeFalse();
-        settings.ShowPerushimDownloadButton.Should().BeTrue();
+        var packs = Packs(storage,
+            new PerushimNotesService(NotesDeliveryTests.Pad().Object, storage.FileSystem.Object), navigator.Object);
+        await packs.DownloadPerushimAsync();
+        packs.IsPerushimDownloading.Should().BeFalse();
+        packs.ShowPerushimDownloadButton.Should().BeTrue();
         navigator.Verify(n => n.DisplayAlertAsync("שגיאה", It.Is<string>(m => m.Contains("לא ניתן להוריד")), "אישור"), Times.Once);
+    }
+
+    [Fact]
+    public async Task Download_WhenCancelledByUser_RestoresIdleStateWithoutAnError()
+    {
+        await using var storage = new TestStorage();
+        var navigator = new Mock<IAppNavigator>();
+        var delivery = new Mock<IPadDeliveryService>();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        delivery.Setup(d => d.FetchAsync("perushim_notes", It.IsAny<IProgress<double>>(), It.IsAny<CancellationToken>()))
+            .Returns(async (string _, IProgress<double>? _, CancellationToken ct) =>
+            {
+                entered.SetResult();
+                await Task.Delay(Timeout.Infinite, ct);
+                return false;
+            });
+        var packs = Packs(storage, new PerushimNotesService(delivery.Object, storage.FileSystem.Object), navigator.Object);
+
+        var downloading = packs.DownloadPerushimCommand.ExecuteAsync(null);
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+        packs.IsPerushimDownloading.Should().BeTrue();
+
+        packs.CancelPerushimDownloadCommand.Execute(null);
+        await downloading;
+
+        packs.IsPerushimDownloading.Should().BeFalse();
+        packs.ShowPerushimDownloadButton.Should().BeTrue("cancellation restores the install affordance");
+        navigator.Verify(n => n.DisplayAlertAsync("שגיאה", It.IsAny<string>(), It.IsAny<string>()), Times.Never);
     }
 }

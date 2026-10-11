@@ -1,8 +1,10 @@
-using BibleOnSite.Services;
 using BibleOnSite.ViewModels;
 
 namespace BibleOnSite.Pages;
 
+/// <summary>
+/// Settings overview: six category rows, each opening its own detail page.
+/// </summary>
 public partial class PreferencesPage : ContentPage
 {
     private readonly PreferencesViewModel _viewModel;
@@ -25,16 +27,5 @@ public partial class PreferencesPage : ContentPage
     {
         base.OnAppearing();
         await _viewModel.LoadAsync();
-    }
-
-    private void OnPerekToLoadRadioChanged(object? sender, CheckedChangedEventArgs e)
-    {
-        if (e.Value && sender is RadioButton rb)
-        {
-            if (rb == PerekTodaysRadio)
-                _viewModel.PerekToLoad = PerekToLoad.Todays;
-            else if (rb == PerekLastRadio)
-                _viewModel.PerekToLoad = PerekToLoad.LastLearnt;
-        }
     }
 }

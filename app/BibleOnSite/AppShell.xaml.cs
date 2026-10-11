@@ -30,6 +30,11 @@ public partial class AppShell : Shell
 		Routing.RegisterRoute("TosPage", typeof(TosPage));
 		Routing.RegisterRoute("PreferencesPage", typeof(PreferencesPage));
 		Routing.RegisterRoute(AppRoutes.RecitationPreferences, typeof(RecitationPreferencesPage));
+		Routing.RegisterRoute(AppRoutes.DisplayPreferences, typeof(DisplayPreferencesPage));
+		Routing.RegisterRoute(AppRoutes.PerekPreferences, typeof(PerekPreferencesPage));
+		Routing.RegisterRoute(AppRoutes.ExtensionPacks, typeof(ExtensionPacksPage));
+		Routing.RegisterRoute(AppRoutes.SoundPreferences, typeof(SoundPreferencesPage));
+		Routing.RegisterRoute(AppRoutes.SupportPreferences, typeof(SupportPreferencesPage));
 		Routing.RegisterRoute(AppRoutes.SearchReader, typeof(PerekPage));
 
 		Navigated += OnNavigated;

@@ -37,6 +37,11 @@ public static class AppRoutes
     public static string Perek => "PerekPage";
     public static string SearchReader => "searchReader";
     public static string RecitationPreferences => "RecitationPreferencesPage";
+    public static string DisplayPreferences => "DisplayPreferencesPage";
+    public static string PerekPreferences => "PerekPreferencesPage";
+    public static string ExtensionPacks => "ExtensionPacksPage";
+    public static string SoundPreferences => "SoundPreferencesPage";
+    public static string SupportPreferences => "SupportPreferencesPage";
 
     /// <summary>
     /// Flyout pages replace another menu page above the most recent reader.
