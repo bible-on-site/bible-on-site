@@ -1,0 +1,57 @@
+{
+	"schemaVersion": 1,
+	"suite": "app-mobile-e2e",
+	"collector": "appium-automation-id",
+	"collectorVersion": "1.1.0",
+	"platforms": {
+		"android": "Android",
+		"ios": "iOS"
+	},
+	"tests": {
+		"root": "app/BibleOnSite.Tests.MobileE2E",
+		"glob": "**/*Tests.cs",
+		"framework": "csharp-xunit",
+		"category": "MobileE2E"
+	},
+	"sources": {
+		"root": "app/BibleOnSite",
+		"globs": ["**/*.xaml", "**/*.cs"]
+	},
+	"alwaysRun": [
+		"BibleOnSite.Tests.MobileE2E.PerekPilotTests.StartupDisplaysPackagedPesukimAndUsableBottomNavigation"
+	],
+	"runAllOnChange": [
+		"bible-on-site.sln",
+		"bible-on-site.slnx",
+		"app/BibleOnSite/App.xaml",
+		"app/BibleOnSite/App.xaml.cs",
+		"app/BibleOnSite/AppShell.xaml",
+		"app/BibleOnSite/AppShell.xaml.cs",
+		"app/BibleOnSite/MainPage.xaml",
+		"app/BibleOnSite/MainPage.xaml.cs",
+		"app/BibleOnSite/MauiProgram.cs",
+		"app/BibleOnSite/BibleOnSite.csproj",
+		"app/BibleOnSite/packages.lock.json",
+		"app/BibleOnSite/Resources/**",
+		"app/BibleOnSite/Platforms/**",
+		"app/BibleOnSite/Properties/**",
+		"app/BibleOnSite/Config/**",
+		"app/devops/**",
+		"app/mobile-e2e/**",
+		"app/BibleOnSite.Tests.MobileE2E/BibleOnSite.Tests.MobileE2E.csproj",
+		"app/BibleOnSite.Tests.MobileE2E/packages.lock.json",
+		".github/**",
+		"devops/**",
+		"web/bible-on-site/package.json",
+		"web/bible-on-site/package-lock.json",
+		"web/bible-on-site/src/lib/recitation-audio.ts",
+		"data/recitation/**"
+	],
+	"noImpact": [
+		"docs/**",
+		"**/*.md",
+		"app/BibleOnSite.Tests/**",
+		"app/BibleOnSite.Tests.E2E/**"
+	],
+	"scope": ["app/**"]
+}

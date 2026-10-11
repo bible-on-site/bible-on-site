@@ -11,12 +11,14 @@
     "test:unit": "node --test simulator.test.mjs appium-readiness.test.mjs native-logs.test.mjs android-readiness.test.mjs android-snapshot-check.test.mjs",
     "android:ready": "node android-ready.mjs",
     "ios:wda": "node prepare-wda.mjs",
-    "ios:boot": "node boot-ios.mjs"
+    "ios:boot": "node boot-ios.mjs",
+    "ios:boot:start": "node boot-ios.mjs start",
+    "ios:boot:wait": "node boot-ios.mjs wait"
   },
   "devDependencies": {
     "appium": "3.8.0",
     "appium-uiautomator2-driver": "8.7.0",
-    "appium-xcuitest-driver": "12.16.0"
+    "appium-xcuitest-driver": "12.17.1"
   },
   "allowScripts": {
     "appium@3.8.0": true

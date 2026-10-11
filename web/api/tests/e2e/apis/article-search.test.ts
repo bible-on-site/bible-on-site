@@ -91,8 +91,20 @@ test.describe("ArticleSearch", () => {
 		expect(second!.hits[0]?.articleId).not.toBe(limited!.hits[0]?.articleId);
 	});
 
-	test("never returns non-distributable articles", async ({ request }) => {
-		// The seeded non-distributable article is the only row containing the
+	test("returns articles without daily bulletin approval", async ({
+		request,
+	}) => {
+		await waitForIndex(request);
+		const page = await search(request, "מאמר עם תמונה");
+		expect(page!.hits).toEqual(
+			expect.arrayContaining([expect.objectContaining({ articleId: 4 })]),
+		);
+	});
+
+	test("never returns articles outside the canonical chapter range", async ({
+		request,
+	}) => {
+		// The seeded invalid-chapter article is the only row containing the
 		// marker "רזאדשבתא" — a matching query must return nothing for it.
 		await waitForIndex(request);
 		const page = await search(request, "רזאדשבתא");
