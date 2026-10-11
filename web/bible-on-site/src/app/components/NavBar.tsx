@@ -84,6 +84,12 @@ export const NavBar = () => {
 							<span>על הפרק</span>
 						</Link>
 					</li>
+					<li className={`${styles.menuItem} ${styles.ribbonBuilding}`}>
+						<Image src="/icons/book.svg" alt="" width={16} height={16} />
+						<Link href="/מסורה">
+							<span>מסורה על הפרק</span>
+						</Link>
+					</li>
 					<li className={styles.menuItem}>
 						<Image src="/icons/rabbi.svg" alt="" width={16} height={16} />
 						<Link href="/929/authors">
