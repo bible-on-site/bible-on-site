@@ -46,6 +46,86 @@ public class MasoraDataServiceTests
     }
 
     [Fact]
+    public async Task UnloadedService_ReturnsEmptyDefaults()
+    {
+        await using var storage = new TestStorage();
+        var service = new MasoraDataService(new LocalDatabaseService(storage.FileSystem.Object));
+
+        service.IsLoaded.Should().BeFalse();
+        service.IsAvailable.Should().BeFalse();
+        service.Units.Should().BeNull();
+        service.UnitCount.Should().Be(0);
+        service.GetUnit(1).Should().BeNull();
+        service.GetFirstUnitsBySefer().Should().BeEmpty();
+        service.GetAdjacentUnits(1).Should().Be((null, null));
+        service.GetUnitContainingPasuk(1).Should().BeNull();
+        service.GetUnitContainingPasuk(1, 1).Should().BeNull();
+    }
+
+    [Fact]
+    public void Instance_ReturnsSharedSingleton()
+    {
+        MasoraDataService.Instance.Should().BeSameAs(MasoraDataService.Instance);
+    }
+
+    [Fact]
+    public async Task LoadAsync_ConcurrentAndRepeatCalls_LoadOnlyOnce()
+    {
+        await using var storage = new TestStorage();
+        var db = await storage.CreateDatabaseAsync(DbName, Schema);
+        foreach (var statement in Seed.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            await db.ExecuteAsync(statement);
+        }
+        var service = new MasoraDataService(new LocalDatabaseService(storage.FileSystem.Object));
+
+        // Concurrent callers funnel through the load lock — the second one
+        // re-checks _isLoaded inside the lock and returns without reloading.
+        await Task.WhenAll(service.LoadAsync(), service.LoadAsync());
+        // Already loaded → fast-path early return.
+        await service.LoadAsync();
+
+        service.IsLoaded.Should().BeTrue();
+        service.UnitCount.Should().Be(4);
+    }
+
+    [Fact]
+    public async Task GetUnitContainingPasuk_SingleArg_UsesFirstPasuk()
+    {
+        await using var storage = new TestStorage();
+        var service = await LoadedServiceAsync(storage, Seed);
+
+        service.GetUnitContainingPasuk(1)!.UnitId.Should().Be(1);
+        service.GetUnitContainingPasuk(2)!.UnitId.Should().Be(2);
+        service.GetUnitContainingPasuk(51)!.UnitId.Should().Be(9);
+    }
+
+    [Fact]
+    public async Task Load_MultiRangeUnit_GroupsAllRangesOnOneUnit()
+    {
+        await using var storage = new TestStorage();
+        var service = await LoadedServiceAsync(storage, Seed + """
+            INSERT INTO tanah_sefer VALUES (9,NULL,'x',60,61);
+            INSERT INTO tanah_reading_unit VALUES
+                ('masora',5,'5',1,4,'range span',NULL),
+                ('masora',6,'6',9,1,'nameless sefer unit',NULL);
+            INSERT INTO tanah_reading_unit_range VALUES
+                ('masora',5,0,NULL,4,1,NULL,4,2,NULL),
+                ('masora',5,1,NULL,4,4,NULL,4,6,NULL),
+                ('masora',6,0,NULL,60,1,NULL,60,1,NULL);
+            """);
+
+        var unit = service.GetUnit(5)!;
+        unit.Ranges.Should().HaveCount(2);
+        // Containment checks every range of the unit.
+        service.GetUnitContainingPasuk(4, 1)!.UnitId.Should().Be(5);
+        service.GetUnitContainingPasuk(4, 5)!.UnitId.Should().Be(5);
+        service.GetUnitContainingPasuk(4, 3).Should().BeNull();
+        // A sefer row with a NULL name maps to an empty display name.
+        service.GetUnit(6)!.SeferName.Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task Load_MapsUnitsWithRangesAndSeferNames()
     {
         await using var storage = new TestStorage();

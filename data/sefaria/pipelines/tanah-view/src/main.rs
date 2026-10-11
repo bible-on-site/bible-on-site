@@ -54,9 +54,7 @@ async fn main() -> Result<()> {
         return commands::compass_stages::generate();
     }
 
-    let format = cli
-        .format
-        .context("--format is required for json/sqlite output")?;
+    let format = require_format(cli.format)?;
 
     let sefarim = match &cli.from_json {
         Some(path) => load_from_json(path)?,
@@ -91,6 +89,12 @@ async fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+/// `--format` is only optional for the self-contained compass-stages mode,
+/// which is handled before this call.
+fn require_format(format: Option<OutputFormat>) -> Result<OutputFormat> {
+    format.context("--format is required for json/sqlite output")
 }
 
 /// Load the canonical corpus from a tanah_view JSON export (the same
@@ -227,6 +231,16 @@ mod tests {
         let sefarim = load_from_json(&corpus_path).unwrap();
         assert_eq!(sefarim.len(), 35);
         assert_eq!(sefarim[0].name, "בראשית");
+    }
+
+    #[test]
+    fn require_format_rejects_none_and_passes_each_format() {
+        assert!(require_format(None).is_err());
+        assert!(matches!(
+            require_format(Some(OutputFormat::Json)).unwrap(),
+            OutputFormat::Json
+        ));
+        assert!(require_format(Some(OutputFormat::Sqlite)).is_ok());
     }
 
     #[test]

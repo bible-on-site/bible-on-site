@@ -102,8 +102,20 @@ public partial class MasoraViewModel : ObservableObject //NOSONAR
     /// <summary>Whether to show the download perushim button (notes not yet available).</summary>
     public bool ShowDownloadPerushimButton => PerushimCatalogAvailable && !PerushimNotesAvailable;
 
+    /// <summary>
+    /// The production articles loader (GraphQL-backed). Lives on the
+    /// parameterless ctor — not inside the injectable ctor — so tests can
+    /// still exercise the loader-free path in LoadArticlesAsync.
+    /// </summary>
+    private static Func<int, Task<List<Article>>>? DefaultArticlesLoader =>
+#if MAUI
+        ArticleService.Instance.GetArticlesByPerekIdAsync;
+#else
+        null;
+#endif
+
     public MasoraViewModel() : this(MasoraDataService.Instance, PerekDataService.Instance,
-        PreferencesService.Instance, null, null, null)
+        PreferencesService.Instance, null, null, DefaultArticlesLoader)
     {
     }
 
@@ -116,11 +128,7 @@ public partial class MasoraViewModel : ObservableObject //NOSONAR
         _preferencesService = preferencesService;
         _catalogService = catalogService ?? PerushimCatalogService.Instance;
         _notesService = notesService ?? PerushimNotesService.Instance;
-#if MAUI
-        _articlesLoader = articlesLoader ?? ArticleService.Instance.GetArticlesByPerekIdAsync;
-#else
         _articlesLoader = articlesLoader;
-#endif
 
         // Sync FontFactor from preferences and listen for changes
         _fontFactor = _preferencesService.FontFactor;
