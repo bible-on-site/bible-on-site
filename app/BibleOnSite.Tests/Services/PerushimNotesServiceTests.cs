@@ -983,7 +983,7 @@ public sealed class PerushimNotesServiceTests : IDisposable
         fileSystem.SetupGet(f => f.AppDataDirectory).Returns(dataDir);
         fileSystem.Setup(f => f.OpenAppPackageFileAsync(It.IsAny<string>()))
             .Returns((string name) => name == NotesDbFileName
-                ? Task.FromResult<Stream>(new MemoryStream(notesBytes))
+                ? Task.FromResult(ByteStream(notesBytes))
                 : name == PerushimNotesService.SearchIndexDbName
                     ? Task.FromException<Stream>(new IOException("index read failed"))
                     : Task.FromException<Stream>(new FileNotFoundException(name)));
@@ -1050,11 +1050,13 @@ public sealed class PerushimNotesServiceTests : IDisposable
             {
                 var file = packageFiles.FirstOrDefault(f => f.Name == name);
                 return file.Bytes != null
-                    ? Task.FromResult<Stream>(new MemoryStream(file.Bytes))
+                    ? Task.FromResult(ByteStream(file.Bytes))
                     : Task.FromException<Stream>(new FileNotFoundException(name));
             });
         return fileSystem.Object;
     }
+
+    private static Stream ByteStream(byte[] bytes) => new MemoryStream(bytes);
 
     /// <summary>Builds a catalog fixture: `_metadata` + a `perush` table.</summary>
     private static async Task CreateCatalogDatabaseAsync(
