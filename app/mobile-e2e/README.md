@@ -117,7 +117,10 @@ APK and completes the iOS arm64 simulator `.app` build.
 Set `MOBILE_UDID` to a running device's identifier, then run `npm test` here.
 On macOS, `npm run ios:boot` selects an available iPhone runtime no newer than
 the selected Xcode SDK, boots it, and prints the identifier and `MOBILE_OS_VERSION`.
-Set both for local iOS runs; CI exports them automatically.
+Set both for local iOS runs; CI exports them automatically. CI splits the same
+script in two: `ios:boot:start` kicks the asynchronous boot before dependency
+installs and the app build, and `ios:boot:wait` gates the test step on the
+finished boot and the warmed Appium bridge.
 `MOBILE_APP_PATH` can select another compatible build. Each local
 run owns an Appium server on `127.0.0.1:4723`; keep that port free.
 
