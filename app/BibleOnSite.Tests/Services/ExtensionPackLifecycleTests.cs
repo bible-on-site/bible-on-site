@@ -42,9 +42,9 @@ public class ExtensionPackLifecycleTests
 
         public void Stock(string packName, string fileName, byte[] bytes)
         {
-            var directory = Path.Combine(root, "store", Path.GetFileName(packName));
+            var directory = Path.Join(root, "store", Path.GetFileName(packName));
             Directory.CreateDirectory(directory);
-            File.WriteAllBytes(Path.Combine(directory, Path.GetFileName(fileName)), bytes);
+            File.WriteAllBytes(Path.Join(directory, Path.GetFileName(fileName)), bytes);
             _stock[packName] = directory;
         }
 
@@ -91,15 +91,15 @@ public class ExtensionPackLifecycleTests
     private static async Task<byte[]> CreateNotesDbAsync(TestStorage storage, string relativeDirectory)
     {
         var directory = Path.GetFileName(relativeDirectory);
-        Directory.CreateDirectory(Path.Combine(storage.Root, directory));
-        var db = await storage.CreateDatabaseAsync(Path.Combine(directory, NotesDbName),
+        Directory.CreateDirectory(Path.Join(storage.Root, directory));
+        var db = await storage.CreateDatabaseAsync(Path.Join(directory, NotesDbName),
             "CREATE TABLE IF NOT EXISTS _metadata (key TEXT, value TEXT)",
             "INSERT INTO _metadata (key, value) VALUES ('build_timestamp', '1700000000')",
             "CREATE TABLE IF NOT EXISTS note (perush_id INTEGER, perek_id INTEGER, pasuk INTEGER, note_idx INTEGER, note_content TEXT)",
             "INSERT INTO note VALUES (1,1,1,0,'note')");
         // An open pooled connection locks the file; release it before copying the bytes.
         await db.CloseAsync();
-        return await File.ReadAllBytesAsync(Path.Combine(storage.Root, directory, NotesDbName),
+        return await File.ReadAllBytesAsync(Path.Join(storage.Root, directory, NotesDbName),
             TestContext.Current.CancellationToken);
     }
 
@@ -221,7 +221,7 @@ public class ExtensionPackLifecycleTests
         // Deleting a book's files is the only removal the app-owned storage allows —
         // nothing may re-download it on init, refresh, or restart (#2098 relies on this).
         var removed = catalog.Books[0].PerekIds.Select(id =>
-            Path.Combine(storage.Root, "extensions", "recitation", recitation.GetTrack(id)!.AudioSha256 + ".mp3"));
+            Path.Join(storage.Root, "extensions", "recitation", recitation.GetTrack(id)!.AudioSha256 + ".mp3"));
         foreach (var file in removed)
         {
             File.Delete(file);
@@ -263,7 +263,7 @@ public class ExtensionPackLifecycleTests
         var notes = Notes(storage, store.Delivery.Object);
         await notes.InitializeAsync();
         notes.IsAvailable.Should().BeTrue();
-        var localDb = Path.Combine(storage.Root, NotesDbName);
+        var localDb = Path.Join(storage.Root, NotesDbName);
 
         // Documented current behavior: while the OS pack stays installed, deleting the
         // app-owned copy is silently undone by the next initialization — #2098 must
@@ -293,7 +293,7 @@ public class ExtensionPackLifecycleTests
         // is not exposed by PAD or ODR; eviction is the only path that makes a
         // deleted local copy stay removed).
         await storage.CloseDatabaseFileAsync(NotesDbName); // the live notes connection holds the file open
-        File.Delete(Path.Combine(storage.Root, NotesDbName));
+        File.Delete(Path.Join(storage.Root, NotesDbName));
         store.Evict(NotesPack);
         var restarted = Notes(storage, store.Delivery.Object);
         await restarted.InitializeAsync();
@@ -312,8 +312,8 @@ public class ExtensionPackLifecycleTests
         var recitation = new RecitationService(storage.FileSystem.Object, store.Delivery.Object);
         (await notes.TryDownloadNotesAsync()).Should().BeTrue();
         await recitation.DownloadAsync([1]);
-        var notesDb = Path.Combine(storage.Root, NotesDbName);
-        var audioDir = Path.Combine(storage.Root, "extensions", "recitation");
+        var notesDb = Path.Join(storage.Root, NotesDbName);
+        var audioDir = Path.Join(storage.Root, "extensions", "recitation");
         var audioFiles = Directory.GetFiles(audioDir).ToList();
         audioFiles.Should().ContainSingle();
 
@@ -350,7 +350,7 @@ public class ExtensionPackLifecycleTests
         store.Wire();
         var recitation = new RecitationService(storage.FileSystem.Object, store.Delivery.Object);
         await recitation.DownloadAsync([1, 3]);
-        var obsoleteAudio = Path.Combine(storage.Root, "extensions", "recitation", Hash(audioV1) + ".mp3");
+        var obsoleteAudio = Path.Join(storage.Root, "extensions", "recitation", Hash(audioV1) + ".mp3");
         File.Exists(obsoleteAudio).Should().BeTrue();
 
         // App update: the bundled catalog changes book one's archive (new recording)
@@ -382,10 +382,10 @@ public class ExtensionPackLifecycleTests
         // without store delivery the fetch fails and the bundled archive is used.
         var pack = catalog.Books[0];
         storage.PackageFiles[pack.FileName] = await File.ReadAllBytesAsync(
-            Path.Combine(storage.Root, "store", Path.GetFileName(pack.PackName), Path.GetFileName(pack.FileName)),
+            Path.Join(storage.Root, "store", Path.GetFileName(pack.PackName), Path.GetFileName(pack.FileName)),
             TestContext.Current.CancellationToken);
         store.Unstock(pack.PackName);
-        Directory.Delete(Path.Combine(storage.Root, "store"), true);
+        Directory.Delete(Path.Join(storage.Root, "store"), true);
         store.Wire();
         var recitation = new RecitationService(storage.FileSystem.Object, store.Delivery.Object);
         await recitation.DownloadAsync([1]);

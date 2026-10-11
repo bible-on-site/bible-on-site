@@ -7,7 +7,7 @@ namespace BibleOnSite.Tests.Support;
 public sealed class TestStorage : IAsyncDisposable
 {
     private readonly List<SQLiteAsyncConnection> _connections = [];
-    public string Root { get; } = Path.Combine(Path.GetTempPath(), "BibleOnSite", Guid.NewGuid().ToString("N"));
+    public string Root { get; } = Path.Join(Path.GetTempPath(), "BibleOnSite", Guid.NewGuid().ToString("N"));
     public Mock<IFileSystem> FileSystem { get; } = new();
     public Dictionary<string, byte[]> PackageFiles { get; } = [];
 
@@ -24,7 +24,7 @@ public sealed class TestStorage : IAsyncDisposable
 
     public async Task<SQLiteAsyncConnection> CreateDatabaseAsync(string name, params string[] statements)
     {
-        var path = Path.Combine(Root, name);
+        var path = Path.Join(Root, name);
         var connection = new SQLiteAsyncConnection(path);
         _connections.Add(connection);
         // sqlite-net pools read-only and writable connections separately.
@@ -45,8 +45,8 @@ public sealed class TestStorage : IAsyncDisposable
         }
         var connection = await CreateDatabaseAsync(fileName, statements);
         await connection.CloseAsync();
-        PackageFiles[fileName] = await File.ReadAllBytesAsync(Path.Combine(Root, fileName));
-        File.Delete(Path.Combine(Root, fileName));
+        PackageFiles[fileName] = await File.ReadAllBytesAsync(Path.Join(Root, fileName));
+        File.Delete(Path.Join(Root, fileName));
     }
 
     /// <summary>
@@ -60,7 +60,7 @@ public sealed class TestStorage : IAsyncDisposable
     /// <inheritdoc cref="CloseDatabaseFileAsync(string)"/>
     public async Task CloseDatabaseFileAsync(string name, SQLiteOpenFlags flags)
     {
-        await new SQLiteAsyncConnection(Path.Combine(Root, name), flags).CloseAsync();
+        await new SQLiteAsyncConnection(Path.Join(Root, name), flags).CloseAsync();
     }
 
     public async ValueTask DisposeAsync()
