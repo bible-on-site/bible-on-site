@@ -245,15 +245,13 @@ public partial class PerekPage
             }
             else if (result is ArticleSearchResult article)
             {
-                // The result object carries the phrase and ranked excerpt the
-                // article page needs to scroll to the exact occurrence (#2078).
+                // Excerpt + phrase fully describe the jump target; plain query
+                // parameters keep the destination self-contained and survive
+                // Shell's string-only query handling (#2078).
                 await Shell.Current.GoToAsync(
-                    $"articleDetail?articleId={article.ArticleId}&perekId={article.PerekId}",
-                    false,
-                    new ShellNavigationQueryParameters
-                    {
-                        ["searchResult"] = article
-                    });
+                    $"articleDetail?articleId={article.ArticleId}&perekId={article.PerekId}" +
+                    $"&searchExcerpt={Uri.EscapeDataString(article.Excerpt)}" +
+                    $"&searchPhrase={Uri.EscapeDataString(article.SearchPhrase)}");
             }
             else if (GetSearchPerekId(result) > 0)
             {

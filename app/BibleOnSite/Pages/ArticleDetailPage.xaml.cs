@@ -1,6 +1,5 @@
 using BibleOnSite.Controls;
 using BibleOnSite.Helpers;
-using BibleOnSite.Models;
 using BibleOnSite.Services;
 using BibleOnSite.ViewModels;
 using CommunityToolkit.Maui.Views;
@@ -11,16 +10,25 @@ namespace BibleOnSite.Pages;
 /// <summary>
 /// Page displaying a single article's content.
 /// </summary>
-[QueryProperty(nameof(ArticleId), "articleId")]
-[QueryProperty(nameof(PerekId), "perekId")]
-public partial class ArticleDetailPage : ContentPage, IQueryAttributable
+[QueryProperty(nameof(ArticleId), "articleId"), QueryProperty(nameof(PerekId), "perekId")]
+[QueryProperty(nameof(SearchExcerpt), "searchExcerpt"), QueryProperty(nameof(SearchPhrase), "searchPhrase")]
+public partial class ArticleDetailPage : ContentPage
 {
     private readonly ArticleDetailViewModel _viewModel;
     private readonly List<MediaElement> _mediaElements = [];
-    private ArticleSearchResult? _searchJumpTarget;
 
     public int ArticleId { get; set; }
     public int PerekId { get; set; }
+
+    /// <summary>
+    /// Search-result excerpt anchoring the jump target — the query string keeps
+    /// the destination self-contained instead of carrying a navigation object
+    /// (#2078).
+    /// </summary>
+    public string? SearchExcerpt { get; set; }
+
+    /// <summary>Search phrase to locate inside the anchored excerpt window (#2078).</summary>
+    public string? SearchPhrase { get; set; }
 
     public ArticleDetailPage()
     {
@@ -191,20 +199,6 @@ public partial class ArticleDetailPage : ContentPage, IQueryAttributable
     }
 
     /// <summary>
-    /// Receives the selected search result (phrase + ranked excerpt) so the
-    /// page can scroll to the exact matching occurrence once content is built
-    /// and laid out (#2078). Object-valued parameters only flow through
-    /// IQueryAttributable.
-    /// </summary>
-    public void ApplyQueryAttributes(IDictionary<string, object> query)
-    {
-        if (query.TryGetValue("searchResult", out var value) && value is ArticleSearchResult result)
-        {
-            _searchJumpTarget = result;
-        }
-    }
-
-    /// <summary>
     /// Scrolls to the search result's exact occurrence: the excerpt anchors the
     /// matching window in the joined segment text, the resolved segment's
     /// HtmlView highlights the match, and the ScrollView lands it below the
@@ -212,9 +206,7 @@ public partial class ArticleDetailPage : ContentPage, IQueryAttributable
     /// </summary>
     private async Task ApplySearchJumpAsync()
     {
-        var target = _searchJumpTarget;
-        _searchJumpTarget = null;
-        if (target == null)
+        if (string.IsNullOrEmpty(SearchExcerpt))
         {
             return;
         }
@@ -225,8 +217,8 @@ public partial class ArticleDetailPage : ContentPage, IQueryAttributable
         }
         var resolved = SearchMatch.ResolveArticleTarget(
             htmlViews.Select(view => view.HtmlContent ?? string.Empty).ToList(),
-            target.Excerpt,
-            target.SearchPhrase);
+            SearchExcerpt,
+            SearchPhrase ?? string.Empty);
         if (resolved is not { } hit)
         {
             return;
@@ -254,7 +246,7 @@ public partial class ArticleDetailPage : ContentPage, IQueryAttributable
             }
             await Task.Delay(50);
         }
-        Console.Error.WriteLine($"Article search jump could not measure the match in article {target.ArticleId}.");
+        Console.Error.WriteLine($"Article search jump could not measure the match in article {ArticleId}.");
     }
 
     /// <summary>Accumulated Y of an element within the ScrollView's content.</summary>

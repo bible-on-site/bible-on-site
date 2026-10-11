@@ -26,8 +26,8 @@ public class HtmlViewHandler : ViewHandler<HtmlView, TextView>
         [nameof(HtmlView.H1FontSizeMultiplier)] = MapHeaderStyles,
         [nameof(HtmlView.H2FontSizeMultiplier)] = MapHeaderStyles,
         [nameof(HtmlView.H3FontSizeMultiplier)] = MapHeaderStyles,
-        [nameof(HtmlView.SearchMatchStart)] = MapSearchMatch,
-        [nameof(HtmlView.SearchMatchLength)] = MapSearchMatch
+        [nameof(HtmlView.SearchMatchStart)] = (handler, _) => handler.UpdateContent(),
+        [nameof(HtmlView.SearchMatchLength)] = (handler, _) => handler.UpdateContent()
     };
 
     public HtmlViewHandler() : base(PropertyMapper)
@@ -278,9 +278,6 @@ public class HtmlViewHandler : ViewHandler<HtmlView, TextView>
     }
 
     private static void MapHeaderStyles(HtmlViewHandler handler, HtmlView view)
-        => handler.UpdateContent();
-
-    private static void MapSearchMatch(HtmlViewHandler handler, HtmlView view)
         => handler.UpdateContent();
 
     private static void MapTextAlignment(HtmlViewHandler handler, HtmlView view)
