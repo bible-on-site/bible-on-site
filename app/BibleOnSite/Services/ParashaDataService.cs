@@ -47,7 +47,9 @@ public class ParashaDataService
         try
         {
             if (_isLoaded)
+            {
                 return;
+            }
             var db = await _databaseService.GetDatabaseAsync();
 
             // Primary ranges carry NULL auxiliary_ordinal; ordering them
@@ -90,7 +92,9 @@ public class ParashaDataService
                 // every parasha maps scripture) still yields one LEFT JOIN
                 // row whose start columns are NULL.
                 if (row.StartPerekId == 0 && row.RangeIndex == 0 && row.AuxiliaryId == null)
+                {
                     continue;
+                }
 
                 var unit = units[^1];
                 var range = new ScriptureRange
@@ -141,7 +145,9 @@ public class ParashaDataService
     public static (int Start, int End)? PasukBoundsForPerek(ScriptureRange range, int perekId)
     {
         if (perekId < range.StartPerekId || perekId > range.EndPerekId)
+        {
             return null;
+        }
         var start = perekId == range.StartPerekId ? range.StartPasuk : 1;
         var end = perekId == range.EndPerekId ? range.EndPasuk : int.MaxValue;
         return (start, end);
@@ -152,7 +158,9 @@ public class ParashaDataService
     {
         var bounds = PasukBoundsForPerek(range, perekId);
         if (bounds is null)
+        {
             return [];
+        }
         var (start, end) = bounds.Value;
         return pasukim.Where(pasuk => pasuk.PasukNum >= start && pasuk.PasukNum <= end).ToList();
     }

@@ -35,7 +35,9 @@ public partial class ParashaListViewModel : ObservableObject
     public async Task LoadAsync()
     {
         if (Groups.Count > 0)
+        {
             return;
+        }
         IsLoading = true;
         try
         {
@@ -48,7 +50,9 @@ public partial class ParashaListViewModel : ObservableObject
             {
                 var seferName = _perekService.GetPerek(unit.TorahRange.StartPerekId)?.SeferName ?? string.Empty;
                 if (groups.Count == 0 || groups[^1].SeferName != seferName)
+                {
                     groups.Add(new ParashaSeferGroup(seferName));
+                }
                 groups[^1].Add(unit);
             }
             Groups = groups;

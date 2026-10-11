@@ -4,8 +4,7 @@ using BibleOnSite.ViewModels;
 namespace BibleOnSite.Pages;
 
 /// <summary>פרשה על הפרק reader — Torah parasha plus Haftarah variants.</summary>
-[QueryProperty(nameof(UnitId), "unitId")]
-public partial class ParashaPage : ContentPage
+public partial class ParashaPage : ContentPage, IQueryAttributable
 {
     private readonly ParashaViewModel _viewModel;
 
@@ -16,10 +15,13 @@ public partial class ParashaPage : ContentPage
         BindingContext = _viewModel;
     }
 
-    /// <summary>The parasha unit id passed by the list page.</summary>
-    public int UnitId
+    /// <summary>Receives the parasha unit id passed by the list page.</summary>
+    public void ApplyQueryAttributes(IDictionary<string, object> query)
     {
-        set => _ = _viewModel.LoadAsync(value);
+        if (query.TryGetValue("unitId", out var value) && int.TryParse(Convert.ToString(value), out var unitId))
+        {
+            _ = _viewModel.LoadAsync(unitId);
+        }
     }
 
     protected override void OnAppearing()
