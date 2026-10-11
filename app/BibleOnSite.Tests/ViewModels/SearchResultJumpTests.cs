@@ -54,7 +54,7 @@ public class SearchResultJumpTests
 
         // Project the normalized span onto the rendered joined HTML — it must
         // cover "note 2" of the second note, not the first note's copy.
-        var (start, end) = SearchMatch.ToRawRange(display.DisplayContent, target.Value.Span);
+        var (start, end) = SearchMatch.ToRawRange(display.DisplayContent, target!.Value.Span);
         display.DisplayContent[start..end].Should().Be("note 2");
         start.Should().Be(display.DisplayContent.LastIndexOf("note 2", StringComparison.Ordinal));
     }

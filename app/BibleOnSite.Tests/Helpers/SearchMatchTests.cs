@@ -203,7 +203,7 @@ public class SearchMatchTests
 
         target.Should().NotBeNull();
         target!.Value.Display.PerushId.Should().Be(2);
-        target.Value.Span.Should().Be(new SearchMatchSpan(8, 6));
+        target!.Value.Span.Should().Be(new SearchMatchSpan(8, 6));
     }
 
     [Fact]
@@ -248,7 +248,7 @@ public class SearchMatchTests
         target.Should().NotBeNull();
         target!.Value.Segment.Should().Be(1);
         // Segment 1 normalized: "עוד פרטים כאן ומאמר נוסף" — מאמר inside ומאמר.
-        target.Value.Span.Should().Be(new SearchMatchSpan(15, 4));
+        target!.Value.Span.Should().Be(new SearchMatchSpan(15, 4));
     }
 
     [Fact]
