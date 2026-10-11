@@ -26,18 +26,29 @@ function mountArticle(
 	outsideIds: string[] = [],
 	staleHighlight = false,
 ): HTMLElement {
-	document.body.innerHTML = `
-		${outsideIds.map((id) => `<span id="${id}"></span>`).join("")}
-		<article data-unit-text="${scope}">
-			${insideIds.map((id) => `<span id="${id}"></span>`).join("")}
-			${staleHighlight ? `<span id="stale" data-pasuk-highlight aria-current="location"></span>` : ""}
-		</article>`;
-	return document.querySelector("article") as HTMLElement;
+	const span = (id: string) => {
+		const el = document.createElement("span");
+		el.id = id;
+		return el;
+	};
+	for (const id of outsideIds) document.body.appendChild(span(id));
+	const article = document.createElement("article");
+	article.dataset.unitText = scope;
+	for (const id of insideIds) article.appendChild(span(id));
+	if (staleHighlight) {
+		const stale = document.createElement("span");
+		stale.id = "stale";
+		stale.setAttribute("data-pasuk-highlight", "");
+		stale.setAttribute("aria-current", "location");
+		article.appendChild(stale);
+	}
+	document.body.appendChild(article);
+	return article;
 }
 
 describe("ScrollToUnitPasuk", () => {
 	beforeEach(() => {
-		document.body.innerHTML = "";
+		document.body.replaceChildren();
 		setHash("");
 		// jsdom lacks rAF/scrollIntoView; the effect schedules through them.
 		window.requestAnimationFrame = (cb: FrameRequestCallback) => {
@@ -49,7 +60,7 @@ describe("ScrollToUnitPasuk", () => {
 	});
 
 	afterEach(() => {
-		document.body.innerHTML = "";
+		document.body.replaceChildren();
 	});
 
 	it("does nothing when no article matches the scope", () => {
