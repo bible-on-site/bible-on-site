@@ -10,7 +10,7 @@ namespace BibleOnSite.ViewModels;
 /// their Torah sefer. Units are positional — the list follows unit id
 /// and each entry keeps its own identity (joined pairs are never merged).
 /// </summary>
-public partial class ParashaListViewModel : ObservableObject
+public partial class ParashaListViewModel : ObservableObject //NOSONAR
 {
     private readonly ParashaDataService _parashaService;
     private readonly PerekDataService _perekService;

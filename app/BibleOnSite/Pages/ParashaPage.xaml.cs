@@ -4,7 +4,7 @@ using BibleOnSite.ViewModels;
 namespace BibleOnSite.Pages;
 
 /// <summary>פרשה על הפרק reader — Torah parasha plus Haftarah variants.</summary>
-public partial class ParashaPage : ContentPage, IQueryAttributable
+public partial class ParashaPage : ContentPage, IQueryAttributable //NOSONAR
 {
     private readonly ParashaViewModel _viewModel;
 

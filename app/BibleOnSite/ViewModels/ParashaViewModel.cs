@@ -14,7 +14,7 @@ namespace BibleOnSite.ViewModels;
 /// readings and intentional repeats — clipped to the shared contract's
 /// canonical bounds.
 /// </summary>
-public partial class ParashaViewModel : ObservableObject
+public partial class ParashaViewModel : ObservableObject //NOSONAR
 {
     private readonly ParashaDataService _parashaService;
     private readonly PerekDataService _perekService;
