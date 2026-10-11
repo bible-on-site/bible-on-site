@@ -42,7 +42,7 @@ public class ExtensionPackLifecycleTests
 
         public void Stock(string packName, string fileName, byte[] bytes)
         {
-            var directory = Path.Combine(root, "store", packName);
+            var directory = Path.Combine(root, "store", Path.GetFileName(packName));
             Directory.CreateDirectory(directory);
             File.WriteAllBytes(Path.Combine(directory, Path.GetFileName(fileName)), bytes);
             _stock[packName] = directory;
@@ -90,15 +90,16 @@ public class ExtensionPackLifecycleTests
     // the pooled handle an open PerushimNotesService still holds on Windows.
     private static async Task<byte[]> CreateNotesDbAsync(TestStorage storage, string relativeDirectory)
     {
-        Directory.CreateDirectory(Path.Combine(storage.Root, relativeDirectory));
-        var db = await storage.CreateDatabaseAsync(Path.Combine(relativeDirectory, NotesDbName),
+        var directory = Path.GetFileName(relativeDirectory);
+        Directory.CreateDirectory(Path.Combine(storage.Root, directory));
+        var db = await storage.CreateDatabaseAsync(Path.Combine(directory, NotesDbName),
             "CREATE TABLE IF NOT EXISTS _metadata (key TEXT, value TEXT)",
             "INSERT INTO _metadata (key, value) VALUES ('build_timestamp', '1700000000')",
             "CREATE TABLE IF NOT EXISTS note (perush_id INTEGER, perek_id INTEGER, pasuk INTEGER, note_idx INTEGER, note_content TEXT)",
             "INSERT INTO note VALUES (1,1,1,0,'note')");
         // An open pooled connection locks the file; release it before copying the bytes.
         await db.CloseAsync();
-        return await File.ReadAllBytesAsync(Path.Combine(storage.Root, relativeDirectory, NotesDbName),
+        return await File.ReadAllBytesAsync(Path.Combine(storage.Root, directory, NotesDbName),
             TestContext.Current.CancellationToken);
     }
 
@@ -145,7 +146,7 @@ public class ExtensionPackLifecycleTests
     {
         await using var storage = new TestStorage();
         var store = new Store(storage.Root);
-        await StockNotesAsync(storage, store, Path.Combine("store", NotesPack));
+        await StockNotesAsync(storage, store, "notes-src");
         PublishRecitation(storage, store,
             (1, [(1, "genesis audio"u8.ToArray()), (2, "second chapter"u8.ToArray())]),
             (2, [(3, "exodus audio"u8.ToArray())]));
@@ -381,7 +382,8 @@ public class ExtensionPackLifecycleTests
         // without store delivery the fetch fails and the bundled archive is used.
         var pack = catalog.Books[0];
         storage.PackageFiles[pack.FileName] = await File.ReadAllBytesAsync(
-            Path.Combine(storage.Root, "store", pack.PackName, pack.FileName), TestContext.Current.CancellationToken);
+            Path.Combine(storage.Root, "store", Path.GetFileName(pack.PackName), Path.GetFileName(pack.FileName)),
+            TestContext.Current.CancellationToken);
         store.Unstock(pack.PackName);
         Directory.Delete(Path.Combine(storage.Root, "store"), true);
         store.Wire();
