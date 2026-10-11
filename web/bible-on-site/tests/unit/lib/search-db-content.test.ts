@@ -227,6 +227,17 @@ describe("searchArticles", () => {
 		jest.clearAllMocks();
 	});
 
+	it("never surfaces non-distributable articles", async () => {
+		mockQuery.mockResolvedValue([]);
+
+		await searchArticles("בראשית", 10);
+
+		expect(mockQuery).toHaveBeenCalledWith(
+			expect.stringContaining("a.distributable = TRUE"),
+			expect.anything(),
+		);
+	});
+
 	it("matches article names and strips HTML before scoring", async () => {
 		mockQuery.mockResolvedValue([
 			{
