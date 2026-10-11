@@ -9,7 +9,7 @@ import plistlib
 import zipfile
 
 
-def verify(package, catalog_path, platform):
+def verify(package, catalog_path, platform, datasets=None):
     catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
     with zipfile.ZipFile(package) as archive:
         names = archive.namelist()
@@ -22,6 +22,8 @@ def verify(package, catalog_path, platform):
             verify_apple(archive, catalog, names)
         elif platform == "Windows":
             verify_windows(archive, catalog, names)
+    if datasets is not None:
+        verify_datasets(datasets, catalog)
     print(f'Verified {len(catalog["books"])} {platform} recitation packs in {package.name}')
 
 
@@ -61,6 +63,20 @@ def verify_apple(archive, catalog, names):
             if ("Assets.car" not in resources.get(identifier, []) or pack not in declared_tags
                     or path not in names or archive.getinfo(path).file_size == 0):
                 raise ValueError(f"Missing compiled ODR audio payload: {pack}")
+
+
+def verify_datasets(datasets, catalog):
+    """The compiled Assets.car hides each signed audio archive; check the exact
+    .dataset payloads that actool embedded, before they were transformed."""
+    for book in catalog["books"]:
+        pack = f'recitation_{book["seferId"]}'
+        dataset = datasets / f"{pack}.dataset" / f"{pack}.zip"
+        if not dataset.is_file():
+            raise ValueError(f"Missing Apple ODR dataset: {pack}")
+        payload = dataset.read_bytes()
+        if hashlib.sha256(payload).hexdigest() != book["sha256"]:
+            raise ValueError(f"Mismatched Apple ODR dataset hash: {pack}")
+        verify_book_audio(payload, catalog, book)
 
 
 def verify_windows(archive, catalog, names):
@@ -103,5 +119,9 @@ if __name__ == "__main__":
     parser.add_argument("--package", type=Path, required=True)
     parser.add_argument("--catalog", type=Path, required=True)
     parser.add_argument("--platform", choices=["Android", "iOS", "Windows"], required=True)
+    parser.add_argument("--datasets", type=Path,
+                        help="xcassets directory whose .dataset archives back the signed iOS ODR payloads")
     args = parser.parse_args()
-    verify(args.package, args.catalog, args.platform)
+    if args.platform == "iOS" and args.datasets is None:
+        parser.error("--datasets is required for iOS so the signed audio archives are hashed")
+    verify(args.package, args.catalog, args.platform, args.datasets)

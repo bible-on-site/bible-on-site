@@ -94,6 +94,32 @@ class ReleaseArtifactTests(unittest.TestCase):
                 else:
                     with self.assertRaises(ValueError): verify(package, catalog, "iOS")
 
+    def test_ios_datasets_are_hashed_against_signed_book_archives(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            audio, metadata = self.book(opus=True)
+            catalog = root / "catalog.json"
+            catalog.write_text(json.dumps(metadata))
+            package = root / "app.ipa"
+            with zipfile.ZipFile(package, "w") as archive:
+                archive.writestr("Payload/Bible.app/recitation-catalog.json", catalog.read_bytes())
+                metadata_plist = {"NSBundleResourceRequestTags": {"recitation_1": {"NSAssetPacks": ["hashed-pack-id"]}},
+                                  "NSBundleResourceRequestAssetPacks": {"hashed-pack-id": ["Assets.car"]}}
+                archive.writestr("Payload/Bible.app/OnDemandResources.plist", plistlib.dumps(metadata_plist))
+                directory = "Payload/OnDemandResources/com.app.recitation_1.assetpack/"
+                archive.writestr(directory + "Assets.car", b"compiled dataset")
+                archive.writestr(directory + "Info.plist", plistlib.dumps({
+                    "CFBundleIdentifier": "hashed-pack-id", "Tags": ["recitation_1"]}))
+            datasets = root / "Recitation.xcassets" / "recitation_1.dataset"
+            datasets.mkdir(parents=True)
+            with self.assertRaises(ValueError):
+                verify(package, catalog, "iOS", datasets.parent)
+            (datasets / "recitation_1.zip").write_bytes(b"corrupt")
+            with self.assertRaises(ValueError):
+                verify(package, catalog, "iOS", datasets.parent)
+            (datasets / "recitation_1.zip").write_bytes(audio)
+            verify(package, catalog, "iOS", datasets.parent)
+
 
 if __name__ == "__main__":
     unittest.main()

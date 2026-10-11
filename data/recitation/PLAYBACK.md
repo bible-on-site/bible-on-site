@@ -10,10 +10,12 @@ flowchart LR
     CPU --> OGG[Immutable Ogg Opus copies on S3]
     OGG --> Web[Website: pinned WASM Opus decoder]
     OGG --> PAD[Android: per-book Play Asset Delivery]
+    OGG --> ODR[iOS: per-book Apple ODR]
     PAD --> App[Offline native playback + exact PCM clips]
+    ODR --> App
     Timings --> Web
     Timings --> App
-    MP3 --> ODR[iOS ODR / Windows MP3 packages]
+    MP3 --> WIN[Windows MP3 packages]
 ```
 
 `playback.py` converts at most two recordings concurrently, using CPU encoders with one thread each. It never trims silence, normalizes volume, changes playback speed, writes to the source directory or opens the worker checkpoint. It checks the original MP3 hash before and after conversion, and requires an identical decoded frame count at 48 kHz. Ogg pre-skip and end trimming preserve the recording time origin.
@@ -29,4 +31,4 @@ Android's bundled catalog keeps the original `audioSha256`, URL, duration, words
 
 The website and Android clip bridge use locked `ogg-opus-decoder` 1.7.5 / `opus-decoder` 0.7.12. Complete-file decoding applies pre-skip and final-page trimming before selecting the original millisecond ranges. No ML speech enhancement is enabled. The committed two-second fixture checks sample count, sample origin and exact clips against FFmpeg's libopus PCM reference, and the existing MP3 tests remain.
 
-Opus at 24 kbps is lossy playback compression, not a replacement for archival MP3s. The pipeline remains unchanged. Native iOS Ogg support is intentionally deferred to [Devin follow-up #2105](https://github.com/bible-on-site/bible-on-site/issues/2105); iOS and Windows packages retain MP3 in this delivery.
+iOS ODR packages carry the same source-bound derivatives. AVPlayer has no Ogg demuxer, so the app decodes complete chapters through the identical bundled WASM bridge into PCM WAV under its cache; word and verse clips already flowed through that bridge. The decoded output is keyed by playback hash and regenerated whenever the selected source changes. Opus at 24 kbps is lossy playback compression, not a replacement for archival MP3s. The pipeline remains unchanged. Windows packages retain MP3 in this delivery.
