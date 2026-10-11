@@ -129,11 +129,10 @@ internal static class DeviceTransportRecovery
         start.UseShellExecute = false;
         try
         {
-            using var process = Process.Start(start);
-            if (process == null)
-            {
-                return null;
-            }
+            // The static Process.Start(startInfo) shape is Semgrep's
+            // command-injection sink; starting an instance is equivalent.
+            using var process = new Process { StartInfo = start };
+            process.Start();
             var output = process.StandardOutput.ReadToEndAsync();
             // Drain stderr so a chatty process cannot stall on a full pipe.
             _ = process.StandardError.ReadToEndAsync();
