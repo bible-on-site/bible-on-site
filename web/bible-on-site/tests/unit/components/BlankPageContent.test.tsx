@@ -67,6 +67,7 @@ import {
 	getPerushNotesForPage,
 } from "../../../src/app/929/[number]/actions";
 import { BlankPageContent } from "../../../src/app/929/[number]/components/BlankPageContent";
+import { getSeferOpenPerush } from "../../../src/app/929/[number]/components/sefer-pasuk-navigation";
 import type { Article } from "../../../src/lib/articles";
 
 const mockGetArticleForBook = getArticleForBook as jest.MockedFunction<
@@ -627,6 +628,53 @@ describe("BlankPageContent", () => {
 				Reflect.deleteProperty(HTMLElement.prototype, "clientWidth");
 			}
 		}
+	});
+
+	it("publishes the open perush for pasuk navigation until it closes", async () => {
+		mockGetPerushNotesForPage.mockResolvedValue([
+			{ pasuk: 1, noteIdx: 0, noteContent: "<p>content</p>" },
+		]);
+
+		render(
+			<BlankPageContent
+				articles={[]}
+				perushim={mockPerushim}
+				perekId={1}
+				hebrewDateStr="date"
+			/>,
+		);
+		expect(getSeferOpenPerush(1)).toBeNull();
+
+		await act(async () => {
+			fireEvent.click(screen.getByRole("link", { name: /רש"י/ }));
+		});
+		await screen.findByText("→ חזרה לפרשנים");
+		expect(getSeferOpenPerush(1)?.name).toBe('רש"י');
+		expect(getSeferOpenPerush(1)?.pesukim.has(1)).toBe(true);
+
+		await act(async () => {
+			fireEvent.click(screen.getByText("→ חזרה לפרשנים"));
+		});
+		expect(getSeferOpenPerush(1)).toBeNull();
+	});
+
+	it("clears the published perush when the blank page unmounts", async () => {
+		mockGetPerushNotesForPage.mockResolvedValue([
+			{ pasuk: 1, noteIdx: 0, noteContent: "<p>content</p>" },
+		]);
+		const { unmount } = render(
+			<BlankPageContent
+				articles={[]}
+				perushim={mockPerushim}
+				perekId={1}
+				hebrewDateStr="date"
+				initialSlug={'רש"י'}
+			/>,
+		);
+		await screen.findByText("→ חזרה לפרשנים");
+		expect(getSeferOpenPerush(1)?.name).toBe('רש"י');
+		unmount();
+		expect(getSeferOpenPerush(1)).toBeNull();
 	});
 
 	it("logs a perush failure and keeps the carousel available", async () => {
