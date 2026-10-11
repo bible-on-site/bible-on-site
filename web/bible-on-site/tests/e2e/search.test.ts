@@ -9,16 +9,33 @@ import { expect, test } from "../util/playwright/test-fixture";
  */
 
 test.describe("Site search", () => {
-	test("is discoverable from a dedicated button beside the logo", async ({
+	test("is discoverable from an icon-only button pinned to the nav's left edge", async ({
 		page,
 	}) => {
 		await page.goto("/");
 
-		// Persistent search entry point beside the logo in the top nav,
-		// well separated from the hamburger trigger (#2102).
+		// Persistent icon-only search entry pinned to the physical left
+		// edge of the top nav, opposite the hamburger at the right edge.
+		// The accessible name comes from aria-label — no visible text (#2154).
 		const topNav = page.locator("nav.top-nav");
 		const searchEntry = topNav.getByRole("link", { name: "חיפוש" });
 		await expect(searchEntry).toBeVisible();
+		await expect(searchEntry).toHaveText("");
+
+		// At any viewport the button hugs the left edge with the normal
+		// padding while the hamburger hugs the right edge — never adjacent.
+		const width = page.viewportSize()?.width ?? 0;
+		const searchBox = await searchEntry.boundingBox();
+		const hamburgerBox = await page
+			.getByRole("button", { name: "תפריט ראשי" })
+			.boundingBox();
+		expect(searchBox).not.toBeNull();
+		expect(hamburgerBox).not.toBeNull();
+		expect(searchBox?.x ?? Infinity).toBeLessThan(width * 0.1);
+		expect((hamburgerBox?.x ?? 0) + (hamburgerBox?.width ?? 0)).toBeGreaterThan(
+			width * 0.9,
+		);
+
 		await searchEntry.click();
 		await page.waitForURL("**/search");
 		await expect(
