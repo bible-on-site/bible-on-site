@@ -1,6 +1,7 @@
 using BibleOnSite.Models;
 using BibleOnSite.Services;
 using BibleOnSite.Tests.Support;
+using System.Reflection;
 
 namespace BibleOnSite.Tests.Services;
 
@@ -71,6 +72,87 @@ public class ParashaDataServiceTests
             "start_perek_id,start_pasuk,start_segment_index,end_perek_id,end_pasuk,end_segment_index) VALUES " +
             "('parasha',2,0,NULL,NULL,NULL,3,5,NULL,3,5,NULL)," +
             "('parasha',2,0,0,'haftara-sefaradi','ספרדים',4,1,NULL,4,1,NULL)");
+        return storage;
+    }
+
+    /// <summary>
+    /// Edge fixtures for the reader's label and guard paths: a
+    /// single-perek multi-pasuk unit, a cross-sefer range, ranges whose
+    /// start or end perek is absent from the catalog, a same-sefer
+    /// additional split (שמואל א/ב), a unit with no range rows at all
+    /// (the LEFT JOIN null row), and degenerate rows exercising the
+    /// guard's remaining operands plus NULL auxiliary labels.
+    /// </summary>
+    private static async Task<TestStorage> SeedEdgeAsync(TestStorage storage)
+    {
+        var db = await storage.CreateDatabaseAsync(DbName, Schema);
+        await db.ExecuteAsync("INSERT INTO tanah_sefer VALUES " +
+            "(1,'בראשית','Genesis',1,3),(9,'שמואל','Samuel',6,7),(16,'ישעיהו','Isaiah',4,5)");
+        // שמואל splits into two additionals over perakim 6-7.
+        await db.ExecuteAsync("INSERT INTO tanah_additional VALUES " +
+            "(1,9,6,6,'א','Samuel I'),(2,9,7,7,'ב','Samuel II')");
+        // Perek 5 stays inside ישעיהו's span but gets no tanah_perek row.
+        await db.ExecuteAsync("INSERT INTO tanah_perek VALUES " +
+            "(1,1,'h1'),(2,2,'h2'),(3,3,'h3'),(4,40,'h40'),(6,1,'sh-a'),(7,1,'sh-b')");
+        var segmentId = 0;
+        for (var perekId = 1; perekId <= 7; perekId++)
+        {
+            for (var pasukId = 1; pasukId <= 5; pasukId++)
+            {
+                segmentId++;
+                await db.ExecuteAsync("INSERT INTO tanah_pasuk_segment VALUES (?,?,?,'qri')", segmentId, perekId, pasukId);
+                await db.ExecuteAsync("INSERT INTO tanah_pasuk_segment_value VALUES (?,?)", segmentId, $"word{perekId}-{pasukId}");
+            }
+        }
+
+        await db.ExecuteAsync("INSERT INTO tanah_reading_division VALUES ('parasha',1,'/פרשה','פרשה על הפרק')");
+        await db.ExecuteAsync("INSERT INTO tanah_reading_unit VALUES " +
+            "('parasha',1,'1',1,1,'מקוצרת',NULL)," +
+            "('parasha',2,'2',1,2,'חוצה',NULL)," +
+            "('parasha',3,'3',1,3,'מבט',NULL)," +
+            "('parasha',4,'4',1,4,'פתיחה',NULL)," +
+            "('parasha',5,'5',9,1,'מחולקת',NULL)," +
+            "('parasha',6,'6',9,2,'ריקה',NULL)," +
+            "('parasha',7,'7',9,3,'שומר',NULL)");
+
+        // Unit 1: one perek, several pesukim — "בראשית ב ב-ד".
+        await db.ExecuteAsync("INSERT INTO tanah_reading_unit_range " +
+            "(division_id,unit_id,range_index,auxiliary_ordinal,auxiliary_id,auxiliary_label," +
+            "start_perek_id,start_pasuk,start_segment_index,end_perek_id,end_pasuk,end_segment_index) VALUES " +
+            "('parasha',1,0,NULL,NULL,NULL,2,2,NULL,2,4,NULL)");
+        // Unit 2: a sefer jump — בראשית ג to ישעיהו מ.
+        await db.ExecuteAsync("INSERT INTO tanah_reading_unit_range " +
+            "(division_id,unit_id,range_index,auxiliary_ordinal,auxiliary_id,auxiliary_label," +
+            "start_perek_id,start_pasuk,start_segment_index,end_perek_id,end_pasuk,end_segment_index) VALUES " +
+            "('parasha',2,0,NULL,NULL,NULL,3,1,NULL,4,2,NULL)");
+        // Unit 3: ends on perek 8, which the catalog does not carry.
+        await db.ExecuteAsync("INSERT INTO tanah_reading_unit_range " +
+            "(division_id,unit_id,range_index,auxiliary_ordinal,auxiliary_id,auxiliary_label," +
+            "start_perek_id,start_pasuk,start_segment_index,end_perek_id,end_pasuk,end_segment_index) VALUES " +
+            "('parasha',3,0,NULL,NULL,NULL,3,1,NULL,8,2,NULL)");
+        // Unit 4: starts on perek 5 — inside ישעיהו's span but with no
+        // tanah_perek row, so the catalog never materializes it. (A
+        // start_perek_id of 0 would be indistinguishable from the LEFT
+        // JOIN null row the guard intentionally skips.)
+        await db.ExecuteAsync("INSERT INTO tanah_reading_unit_range " +
+            "(division_id,unit_id,range_index,auxiliary_ordinal,auxiliary_id,auxiliary_label," +
+            "start_perek_id,start_pasuk,start_segment_index,end_perek_id,end_pasuk,end_segment_index) VALUES " +
+            "('parasha',4,0,NULL,NULL,NULL,5,1,NULL,6,1,NULL)");
+        // Unit 5: same sefer, different additionals — שמואל א to שמואל ב.
+        await db.ExecuteAsync("INSERT INTO tanah_reading_unit_range " +
+            "(division_id,unit_id,range_index,auxiliary_ordinal,auxiliary_id,auxiliary_label," +
+            "start_perek_id,start_pasuk,start_segment_index,end_perek_id,end_pasuk,end_segment_index) VALUES " +
+            "('parasha',5,0,NULL,NULL,NULL,6,1,NULL,7,1,NULL)");
+        // Unit 6: no range rows — the LEFT JOIN emits one NULL-range row.
+        // Unit 7: a normal primary range plus degenerate rows that hit the
+        // guard's remaining operands, and an auxiliary with NULL columns.
+        await db.ExecuteAsync("INSERT INTO tanah_reading_unit_range " +
+            "(division_id,unit_id,range_index,auxiliary_ordinal,auxiliary_id,auxiliary_label," +
+            "start_perek_id,start_pasuk,start_segment_index,end_perek_id,end_pasuk,end_segment_index) VALUES " +
+            "('parasha',7,0,NULL,NULL,NULL,1,1,NULL,1,1,NULL)," +
+            "('parasha',7,5,NULL,NULL,NULL,0,1,NULL,0,1,NULL)," +
+            "('parasha',7,0,0,'haftara-x','מנהג',0,1,NULL,0,1,NULL)," +
+            "('parasha',7,1,1,NULL,NULL,4,1,NULL,4,1,NULL)");
         return storage;
     }
 
@@ -224,5 +306,192 @@ public class ParashaDataServiceTests
         ParashaDataService.PasukBoundsForPerek(range, 1).Should().Be((2, int.MaxValue));
         ParashaDataService.PasukBoundsForPerek(range, 2).Should().Be((1, int.MaxValue));
         ParashaDataService.PasukBoundsForPerek(range, 3).Should().Be((1, 4));
+    }
+
+    [Fact]
+    public void ClipPasukim_ReturnsEmpty_WhenPerekOutsideRange()
+    {
+        var range = new ScriptureRange { StartPerekId = 1, StartPasuk = 2, EndPerekId = 3, EndPasuk = 4 };
+        var pasukim = new List<Pasuk> { new() { PasukNum = 1, Text = "word" } };
+
+        ParashaDataService.ClipPasukim(pasukim, range, 0).Should().BeEmpty();
+        ParashaDataService.ClipPasukim(pasukim, range, 4).Should().BeEmpty();
+        ParashaDataService.ClipPasukim(pasukim, range, 2).Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task GetParasha_BeforeLoad_ReturnsNull()
+    {
+        await using var storage = new TestStorage();
+        var (parasha, _) = Services(storage);
+
+        parasha.GetParasha(1).Should().BeNull();
+        parasha.Parashiot.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Load_SecondCallerBehindLock_ReturnsWithoutReloading()
+    {
+        await using var storage = new TestStorage();
+        await SeedAsync(storage);
+        var (parasha, _) = Services(storage);
+
+        // Hold the load lock so a second caller reaches the inner
+        // double-checked `_isLoaded` instead of the fast path.
+        var loadLock = (SemaphoreSlim)typeof(ParashaDataService)
+            .GetField("_loadLock", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .GetValue(parasha)!;
+        var isLoadedField = typeof(ParashaDataService)
+            .GetField("_isLoaded", BindingFlags.NonPublic | BindingFlags.Instance)!;
+        await loadLock.WaitAsync(TestContext.Current.CancellationToken);
+        var pending = parasha.LoadAsync(); // passes the outer check, parks on the lock
+        isLoadedField.SetValue(parasha, true);
+        loadLock.Release();
+
+        await pending;
+        parasha.IsLoaded.Should().BeTrue();
+        // The inner return skips the query — the catalog stays unpublished.
+        parasha.Parashiot.Should().BeNull();
+    }
+
+    [Fact]
+    public void ViewModels_ParameterlessCtors_ResolveSingletons()
+    {
+        new BibleOnSite.ViewModels.ParashaViewModel().Should().NotBeNull();
+        new BibleOnSite.ViewModels.ParashaListViewModel().Should().NotBeNull();
+        ParashaDataService.Instance.Should().BeSameAs(ParashaDataService.Instance);
+    }
+
+    [Fact]
+    public async Task ViewModel_UnknownUnit_ResetsReaderState()
+    {
+        await using var storage = new TestStorage();
+        await SeedAsync(storage);
+        var (parasha, perakim) = Services(storage);
+        var viewModel = new BibleOnSite.ViewModels.ParashaViewModel(parasha, perakim);
+
+        await viewModel.LoadAsync(1);
+        await viewModel.LoadAsync(999);
+
+        viewModel.Title.Should().BeEmpty();
+        viewModel.Source.Should().BeEmpty();
+        viewModel.Items.Should().BeEmpty();
+        viewModel.CanGoToNext.Should().BeFalse();
+        viewModel.CanGoToPrevious.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task ListViewModel_SecondLoad_KeepsLoadedGroups()
+    {
+        await using var storage = new TestStorage();
+        await SeedAsync(storage);
+        var (parasha, perakim) = Services(storage);
+        var navigator = new Moq.Mock<IAppNavigator>();
+        var viewModel = new BibleOnSite.ViewModels.ParashaListViewModel(parasha, perakim, navigator.Object);
+
+        await viewModel.LoadAsync();
+        var loaded = viewModel.Groups;
+        await viewModel.LoadAsync();
+
+        viewModel.Groups.Should().BeSameAs(loaded);
+    }
+
+    [Fact]
+    public async Task ListViewModel_UnloadedCatalog_YieldsNoGroups()
+    {
+        await using var storage = new TestStorage();
+        await SeedAsync(storage);
+        var localDb = new LocalDatabaseService(storage.FileSystem.Object);
+        var parasha = new ParashaDataService(localDb);
+        // A concurrent caller that sees _isLoaded under the lock exits
+        // without publishing — Parashiot stays null for later readers.
+        typeof(ParashaDataService)
+            .GetField("_isLoaded", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .SetValue(parasha, true);
+        var viewModel = new BibleOnSite.ViewModels.ParashaListViewModel(
+            parasha, new PerekDataService(localDb), new Moq.Mock<IAppNavigator>().Object);
+
+        await viewModel.LoadAsync();
+
+        parasha.Parashiot.Should().BeNull();
+        viewModel.Groups.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Load_UnitWithoutRanges_OrDegenerateRows_StillMaterializes()
+    {
+        await using var storage = new TestStorage();
+        await SeedEdgeAsync(storage);
+        var (parasha, _) = Services(storage);
+
+        await parasha.LoadAsync();
+
+        // The LEFT JOIN null row yields the unit shell without a range.
+        var shell = parasha.GetParasha(6)!;
+        shell.Heading.Should().Be("ריקה");
+        shell.TorahRange.StartPerekId.Should().Be(0);
+        shell.Haftarot.Should().BeEmpty();
+
+        // Degenerate start_perek_id=0 rows that survive the guard flow
+        // through as regular primary/auxiliary data.
+        var guarded = parasha.GetParasha(7)!;
+        guarded.TorahRange.StartPerekId.Should().Be(0);
+        guarded.Haftarot.Should().HaveCount(2);
+        guarded.Haftarot[0].Id.Should().Be("haftara-x");
+        guarded.Haftarot[0].Ranges.Should().ContainSingle();
+        // NULL auxiliary columns fall back to empty strings.
+        guarded.Haftarot[1].Id.Should().BeEmpty();
+        guarded.Haftarot[1].Label.Should().BeEmpty();
+        guarded.Haftarot[1].Ranges[0].StartPerekId.Should().Be(4);
+    }
+
+    [Fact]
+    public async Task ViewModel_RangeLabel_FormatsEveryBoundaryShape()
+    {
+        await using var storage = new TestStorage();
+        await SeedEdgeAsync(storage);
+        var (parasha, perakim) = Services(storage);
+        var viewModel = new BibleOnSite.ViewModels.ParashaViewModel(parasha, perakim);
+
+        // Same perek, several pesukim.
+        await viewModel.LoadAsync(1);
+        viewModel.Source.Should().Be("בראשית ב ב-ד");
+
+        // Sefer jump — the end keeps its full source.
+        await viewModel.LoadAsync(2);
+        viewModel.Source.Should().Be("בראשית ג א - ישעיהו א ב");
+
+        // End perek missing from the catalog — the end ref stays empty.
+        await viewModel.LoadAsync(3);
+        viewModel.Source.Should().Be("בראשית ג א -  ב");
+        viewModel.Items.Where(item => item.IsPerekHeader).Select(item => item.Text)
+            .Should().Contain(string.Empty);
+
+        // Start perek missing — the start ref stays empty while the end resolves.
+        await viewModel.LoadAsync(4);
+        viewModel.Source.Should().Be(" א - שמואל א א א");
+
+        // Same sefer but different additionals — שמואל א to שמואל ב.
+        await viewModel.LoadAsync(5);
+        viewModel.Source.Should().Be("שמואל א א א - שמואל ב א א");
+    }
+
+    [Fact]
+    public async Task ListViewModel_MissingStartPerek_GroupsUnderEmptySefer()
+    {
+        await using var storage = new TestStorage();
+        await SeedEdgeAsync(storage);
+        var (parasha, perakim) = Services(storage);
+        var viewModel = new BibleOnSite.ViewModels.ParashaListViewModel(
+            parasha, perakim, new Moq.Mock<IAppNavigator>().Object);
+
+        await viewModel.LoadAsync();
+
+        // Units 4, 6, and 7 start on perakim the catalog does not carry.
+        viewModel.Groups.Select(group => group.SeferName).Should()
+            .Equal("בראשית", string.Empty, "שמואל", string.Empty);
+        var unnamed = viewModel.Groups.Where(group => group.SeferName == string.Empty).ToList();
+        unnamed[0].Select(unit => unit.UnitId).Should().Equal(4);
+        unnamed[1].Select(unit => unit.UnitId).Should().Equal(6, 7);
     }
 }

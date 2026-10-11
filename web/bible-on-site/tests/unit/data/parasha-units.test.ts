@@ -389,3 +389,142 @@ describe("unit counts", () => {
 		expect(getParashaUnitCount()).toBe(54);
 	});
 });
+
+describe("source-table validation", () => {
+	// Re-import the module with a mocked source table so each invalid row
+	// exercises its own validation branch. The real JSON is spread so only
+	// units/occasions differ.
+	function importModuleWith(
+		mockUnits: unknown[],
+		mockOccasions: unknown[] = [],
+	) {
+		jest.resetModules();
+		jest.doMock("../../../src/data/parasha/parasha-division.json", () => ({
+			...(jest.requireActual(
+				"../../../src/data/parasha/parasha-division.json",
+			) as Record<string, unknown>),
+			units: mockUnits,
+			occasions: mockOccasions,
+		}));
+		return require("../../../src/data/parasha/parasha-units") as typeof import(
+			"../../../src/data/parasha/parasha-units"
+		);
+	}
+
+	afterEach(() => {
+		jest.dontMock("../../../src/data/parasha/parasha-division.json");
+	});
+
+	const validUnit = (overrides: Record<string, unknown> = {}) => ({
+		name: "פלוני",
+		sefer: "בראשית",
+		start: { perek: 1, pasuk: 1 },
+		end: { perek: 1, pasuk: 2 },
+		haftarot: [],
+		...overrides,
+	});
+
+	const haftaraRange = (overrides: Record<string, unknown> = {}) => ({
+		sefer: "בראשית",
+		start: { perek: 1, pasuk: 1 },
+		end: { perek: 1, pasuk: 2 },
+		...overrides,
+	});
+
+	it("rejects a unit in an unknown sefer", () => {
+		const mod = importModuleWith([validUnit({ sefer: "דמיון" })]);
+		expect(() => mod.getAllParashaUnits()).toThrow(
+			'parasha data: unknown sefer "דמיון"',
+		);
+	});
+
+	it("requires an additional marker for split sefarim", () => {
+		const mod = importModuleWith([
+			validUnit({
+				haftarot: [{ customs: ["sefaradi"], ranges: [haftaraRange({ sefer: "מלכים" })] }],
+			}),
+		]);
+		expect(() => mod.getAllParashaUnits()).toThrow(
+			'"additional" is required',
+		);
+	});
+
+	it("rejects an additional on a non-split sefer", () => {
+		const mod = importModuleWith([
+			validUnit({
+				haftarot: [
+					{
+						customs: ["sefaradi"],
+						ranges: [haftaraRange({ additional: "א" })],
+					},
+				],
+			}),
+		]);
+		expect(() => mod.getAllParashaUnits()).toThrow(
+			'"בראשית" has no additional "א"',
+		);
+	});
+
+	it("rejects an unknown additional letter", () => {
+		const mod = importModuleWith([
+			validUnit({
+				haftarot: [
+					{
+						customs: ["sefaradi"],
+						ranges: [haftaraRange({ sefer: "מלכים", additional: "ג" })],
+					},
+				],
+			}),
+		]);
+		expect(() => mod.getAllParashaUnits()).toThrow(
+			'"מלכים" has no additional "ג"',
+		);
+	});
+
+	it("rejects a perek beyond the sefer's bounds", () => {
+		const mod = importModuleWith([
+			validUnit({ end: { perek: 51, pasuk: 1 } }),
+		]);
+		expect(() => mod.getAllParashaUnits()).toThrow(
+			"exceeds בראשית's perek count",
+		);
+	});
+
+	it.each([
+		["zero", { perek: 1, pasuk: 0 }],
+		["beyond the perek's pasuk count", { perek: 1, pasuk: 5000 }],
+	])("rejects a pasuk %s", (_case, start) => {
+		const mod = importModuleWith([validUnit({ start })]);
+		expect(() => mod.getAllParashaUnits()).toThrow(
+			"is outside the canonical",
+		);
+	});
+
+	it("rejects a backwards range", () => {
+		const mod = importModuleWith([
+			validUnit({
+				start: { perek: 2, pasuk: 1 },
+				end: { perek: 1, pasuk: 1 },
+			}),
+		]);
+		expect(() => mod.getAllParashaUnits()).toThrow("backwards range");
+	});
+
+	it("resolves a variant with no customs", () => {
+		const mod = importModuleWith([
+			validUnit({
+				haftarot: [{ customs: [], ranges: [haftaraRange()] }],
+			}),
+		]);
+		const unit = mod.getParashaUnitById(1);
+		expect(unit.auxiliaryReadings?.[0].ranges).toHaveLength(1);
+	});
+
+	it("returns no ranges for a unit without auxiliary readings", () => {
+		const unit = {
+			...getParashaUnitById(1),
+			auxiliaryReadings: undefined,
+		};
+		expect(parashaAuxiliaryRanges(unit)).toEqual([]);
+	});
+});

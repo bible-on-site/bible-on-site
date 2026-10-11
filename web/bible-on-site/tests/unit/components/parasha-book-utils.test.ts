@@ -14,6 +14,7 @@ import {
 	parashaBookPageFromPath,
 	parashaBookPageFromQuery,
 	parashaBookPageRoute,
+	pathnameWithParashaBookQuery,
 	type ParashaBookUnit,
 } from "@/app/parasha/[unit]/components/parasha-book-utils";
 
@@ -82,11 +83,18 @@ describe("parashaBookPageFromPath", () => {
 		).toBe("front");
 	});
 
+	it("resolves the English parasha root path", () => {
+		expect(parashaBookPageFromPath("/parasha/בראשית/כריכה")).toBe("front");
+		expect(parashaBookPageFromPath("/parasha/דברים/גב")).toBe("back");
+	});
+
 	it("rejects non-book and malformed paths", () => {
 		expect(parashaBookPageFromPath("/פרשה/1")).toBeNull();
 		expect(parashaBookPageFromPath("/929/5")).toBeNull();
 		expect(parashaBookPageFromPath("/פרשה/בראשית")).toBeNull();
 		expect(parashaBookPageFromPath("/פרשה")).toBeNull();
+		// A three-segment path whose slug is not a book page.
+		expect(parashaBookPageFromPath("/פרשה/בראשית/נח")).toBeNull();
 	});
 });
 
@@ -100,6 +108,8 @@ describe("buildParashaPageSemantics", () => {
 		expect(semantics.indexToSemanticName(4)).toBe("");
 		expect(semantics.indexToSemanticName(5)).toBe("ב");
 		expect(semantics.indexToSemanticName(7)).toBe("ג");
+		// A Torah page beyond the last unit is unnamed.
+		expect(semantics.indexToSemanticName(9)).toBe("");
 	});
 
 	it("resolves semantic names back to Torah page indices", () => {
@@ -169,6 +179,40 @@ describe("buildParashaHistoryMapper", () => {
 		const empty = buildParashaHistoryMapper([], "בראשית");
 		expect(empty.pageToRoute(3, undefined)).toBeNull();
 		expect(empty.routeToPage("/פרשה/1?book")).toBeNull();
+	});
+
+	it("rejects page indices before the content offset", () => {
+		expect(mapper.pageToRoute(-1, undefined)).toBeNull();
+	});
+});
+
+describe("pathnameWithParashaBookQuery", () => {
+	it("adds ?book while preserving other params", () => {
+		expect(pathnameWithParashaBookQuery("/פרשה/1", "haftara&x=1", true)).toBe(
+			"/פרשה/1?haftara=&x=1&book=",
+		);
+	});
+
+	it("accepts a leading question mark on the current query", () => {
+		expect(pathnameWithParashaBookQuery("/פרשה/1", "?keep=1", true)).toBe(
+			"/פרשה/1?keep=1&book=",
+		);
+	});
+
+	it("strips every book param when leaving book view", () => {
+		expect(
+			pathnameWithParashaBookQuery(
+				"/פרשה/1",
+				"book&haftara&toc=1&bookPage=front&keep=2",
+				false,
+			),
+		).toBe("/פרשה/1?keep=2");
+	});
+
+	it("returns the bare pathname when nothing remains", () => {
+		expect(pathnameWithParashaBookQuery("/פרשה/1", "book", false)).toBe(
+			"/פרשה/1",
+		);
 	});
 });
 

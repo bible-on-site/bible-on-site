@@ -273,6 +273,19 @@ describe("HaftaraSection", () => {
 		);
 		expect(screen.getByText(/ירמיהו א יט/)).toBeInTheDocument();
 	});
+
+	it("renders only the notes block when a unit has no auxiliary readings", () => {
+		const unit = {
+			...getParashaUnitById(1),
+			auxiliaryReadings: undefined,
+		};
+		render(<HaftaraSection unit={unit} entityRefsByPerek={{}} />);
+		expect(
+			screen.getByRole("heading", { name: "הפטרה", level: 2 }),
+		).toBeInTheDocument();
+		expect(screen.queryByText(/^הפטרה - /)).toBeNull();
+		expect(screen.getAllByRole("listitem").length).toBeGreaterThan(0);
+	});
 });
 
 describe("ParashaUnitLayout", () => {
