@@ -239,9 +239,7 @@ partial class Build
     /// </summary>
     void PublishE2ECoverageBuildArtifacts()
     {
-        // The intermediate output path is empty in single-TFM global-property
-        // builds, so the template may land at the project root or under obj;
-        // glob the project directory for either layout.
+        // The intermediate output path is empty in single-TFM global-property builds, so glob the project directory for either layout.
         var templates = SourceDirectory.GlobFiles("**/e2e-coverage/template.opencover.xml");
         if (templates.Count == 0)
         {

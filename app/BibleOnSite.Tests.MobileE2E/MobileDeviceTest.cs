@@ -170,9 +170,7 @@ public abstract class MobileDeviceTest : IAsyncLifetime
         }
     }
 
-    // No live session means no app process is answering the coverage endpoint;
-    // unit-test fakes never create a driver, so this also keeps the collection
-    // — including its Android-only adb bridge — out of host-side unit tests.
+    // No live session means no app process is answering the coverage endpoint; unit-test fakes never create a driver, so this also keeps collection out of host-side unit tests.
     private void CollectAppCoverage(string name, string outcome)
     {
         if (Driver == null)
