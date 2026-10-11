@@ -57,6 +57,7 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
     {
         public override bool ShouldInteractWithUrl(UITextView textView, NSUrl URL, NSRange _, UITextItemInteraction interaction)
         {
+            _ = textView; // The delegate decides only from the URL and interaction kind.
             var url = URL.AbsoluteString ?? URL.Description;
             if (interaction == UITextItemInteraction.InvokeDefaultAction &&
                 viewProvider()?.DispatchLinkTapped(url).Handled == true)
