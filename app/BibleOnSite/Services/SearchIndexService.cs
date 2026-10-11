@@ -318,17 +318,10 @@ public sealed class SearchIndexService : IAsyncDisposable
         try
         {
             await _index.CloseAsync();
-            try
-            {
-                File.Move(deliveredPath, _indexPath, overwrite: true);
-            }
-            catch (IOException)
-            {
-                // Different volume or platform quirk — copy then remove.
-                await using var source = File.OpenRead(deliveredPath);
-                await AtomicFile.CopyAsync(source, _indexPath);
-                File.Delete(deliveredPath);
-            }
+            // Copy through a temp file — a plain rename is not guaranteed when
+            // the staged index sits on a different volume than the cache.
+            await using var staged = File.OpenRead(deliveredPath);
+            await AtomicFile.CopyAsync(staged, _indexPath);
             _index = new SQLiteAsyncConnection(_indexPath);
             await OpenIndexAsync();
         }
@@ -336,6 +329,7 @@ public sealed class SearchIndexService : IAsyncDisposable
         {
             _gates["verses"].Release();
         }
+        await DeleteStagedIndexAsync();
     }
 
     /// <summary>

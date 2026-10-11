@@ -30,7 +30,7 @@ public static class SearchText
         }
         foreach (var node in (document.DocumentNode.SelectNodes("//br|//p|//div|//li|//tr|//h1|//h2|//h3") ?? Enumerable.Empty<HtmlNode>()).ToArray())
         {
-            node.ParentNode?.InsertAfter(document.CreateTextNode(" "), node);
+            node.ParentNode!.InsertAfter(document.CreateTextNode(" "), node);
         }
         return HtmlEntity.DeEntitize(document.DocumentNode.InnerText);
     }
@@ -169,7 +169,7 @@ public static class SearchText
         var end = matches.Count > 0 ? Math.Min(plain.Length, matches[0].End + 20) : Math.Min(plain.Length, 50);
         var result = new StringBuilder(start > 0 ? "..." : "");
         var cursor = start;
-        foreach (var match in matches.Where(match => match.Start >= start && match.End <= end))
+        foreach (var match in matches.Where(match => match.End <= end))
         {
             result.Append(WebUtility.HtmlEncode(plain[cursor..match.Start]));
             result.Append("<b>").Append(WebUtility.HtmlEncode(plain[match.Start..match.End])).Append("</b>");

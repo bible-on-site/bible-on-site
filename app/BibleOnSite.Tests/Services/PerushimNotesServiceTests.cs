@@ -1017,6 +1017,139 @@ public sealed class PerushimNotesServiceTests : IDisposable
             .And.Contain("IsAvailable: True");
     }
 
+    [Fact]
+    public async Task InitializeAsync_WhenStaleTempFileCannotBeDeleted_ToleratesSweepFailure()
+    {
+        var dataDir = Path.Join(_tempRoot, nameof(InitializeAsync_WhenStaleTempFileCannotBeDeleted_ToleratesSweepFailure));
+        Directory.CreateDirectory(dataDir);
+        await CreateNotesDatabaseAsync(dataDir, (7, 3, 1, 0, "local note"));
+        var stale = Path.Join(dataDir, $"{NotesDbFileName}.{Guid.NewGuid():N}.tmp");
+        await File.WriteAllTextAsync(stale, "partial copy", TestContext.Current.CancellationToken);
+
+        // Windows honors the open handle; on POSIX the delete needs a
+        // non-writable directory (advisory locks do not block unlink).
+        await using var locked = new FileStream(stale, FileMode.Open, FileAccess.Read, FileShare.None);
+        var lockedDirectory = !OperatingSystem.IsWindows();
+        if (lockedDirectory)
+        {
+            File.SetUnixFileMode(dataDir, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+        }
+        try
+        {
+            var service = PerushimNotesService.CreateForTesting(new FakePadDeliveryService(), dataDir);
+            await service.InitializeAsync();
+
+            service.IsAvailable.Should().BeTrue("a stuck temp file must not break initialization");
+            File.Exists(stale).Should().BeTrue("the undeletable temp file lingers until a later sweep");
+        }
+        finally
+        {
+            if (lockedDirectory)
+            {
+                File.SetUnixFileMode(dataDir,
+                    UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task InitializeAsync_WithUnsupportedSchemaVersion_RejectsAndMarksGeneration()
+    {
+        var dataDir = Path.Join(_tempRoot, nameof(InitializeAsync_WithUnsupportedSchemaVersion_RejectsAndMarksGeneration));
+        Directory.CreateDirectory(dataDir);
+        // A pack from a newer format we cannot query — wrong-but-present schema_version.
+        await CreateNotesDatabaseFromStatementsAsync(
+            dataDir,
+            [.. BibleOnSite.Tests.Support.NotesDbV2.Statements((7, 1, 1, 0, "a")),
+                "UPDATE _metadata SET value = '99' WHERE key = 'schema_version'",
+                "INSERT INTO _metadata VALUES ('build_timestamp','555')"]);
+
+        var service = PerushimNotesService.CreateForTesting(new FakePadDeliveryService(), dataDir);
+        await service.InitializeAsync();
+
+        var dbPath = Path.Join(dataDir, NotesDbFileName);
+        service.IsAvailable.Should().BeFalse();
+        File.Exists(dbPath).Should().BeFalse("an unqueryable schema generation must not linger");
+        (await File.ReadAllTextAsync(dbPath + ".rejected", TestContext.Current.CancellationToken))
+            .Should().Be("555", "the rejected generation is recorded so the same pack is not re-copied");
+    }
+
+    [Fact]
+    public async Task TryDownloadNotesAsync_WhenPadPackHasIncompatibleSchema_SkipsCopy()
+    {
+        var dataDir = Path.Join(_tempRoot, nameof(TryDownloadNotesAsync_WhenPadPackHasIncompatibleSchema_SkipsCopy));
+        var padDir = Path.Join(_tempRoot, "pad-wrong-schema");
+        Directory.CreateDirectory(dataDir);
+        Directory.CreateDirectory(padDir);
+        await CreateNotesDatabaseFromStatementsAsync(
+            padDir,
+            [.. BibleOnSite.Tests.Support.NotesDbV2.Statements((9, 4, 1, 0, "pad note")),
+                "UPDATE _metadata SET value = '99' WHERE key = 'schema_version'",
+                "INSERT INTO _metadata VALUES ('build_timestamp','555')"]);
+
+        var service = PerushimNotesService.CreateForTesting(
+            new FakePadDeliveryService { AssetPath = padDir, FetchResult = false },
+            dataDir);
+
+        var downloaded = await service.TryDownloadNotesAsync();
+
+        downloaded.Should().BeFalse("an incompatible pack is skipped instead of copied-then-deleted every launch");
+        File.Exists(Path.Join(dataDir, NotesDbFileName)).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task InitializeAsync_WhenRejectedMarkerExistsButPackHasNoTimestamp_CopiesPack()
+    {
+        var dataDir = Path.Join(_tempRoot, nameof(InitializeAsync_WhenRejectedMarkerExistsButPackHasNoTimestamp_CopiesPack));
+        var padDir = Path.Join(_tempRoot, "pad-no-timestamp");
+        Directory.CreateDirectory(dataDir);
+        Directory.CreateDirectory(padDir);
+        // A pack without build_timestamp cannot match the rejected generation.
+        await CreateNotesDatabaseFromStatementsAsync(
+            padDir,
+            BibleOnSite.Tests.Support.NotesDbV2.Statements((9, 4, 1, 0, "pad note")));
+        await File.WriteAllTextAsync(Path.Join(dataDir, NotesDbFileName + ".rejected"), "555",
+            TestContext.Current.CancellationToken);
+
+        var service = PerushimNotesService.CreateForTesting(
+            new FakePadDeliveryService { AssetPath = padDir }, dataDir);
+        await service.InitializeAsync();
+
+        service.IsAvailable.Should().BeTrue("an untimestamped pack is not the rejected generation");
+        File.Exists(Path.Join(dataDir, NotesDbFileName + ".rejected"))
+            .Should().BeFalse("a passing pack clears the stale marker");
+    }
+
+    [Fact]
+    public async Task TryDownloadNotesAsync_WhenLocalDbFailsInit_FallsThroughToPad()
+    {
+        var dataDir = Path.Join(_tempRoot, nameof(TryDownloadNotesAsync_WhenLocalDbFailsInit_FallsThroughToPad));
+        var padDir = Path.Join(_tempRoot, "pad-replaces-rejected-local");
+        Directory.CreateDirectory(dataDir);
+        Directory.CreateDirectory(padDir);
+        // A local DB with an incompatible schema fails initialization and gets
+        // rejected — an explicit download must still try the pack afterwards.
+        await CreateNotesDatabaseFromStatementsAsync(
+            dataDir,
+            [.. BibleOnSite.Tests.Support.NotesDbV2.Statements((7, 1, 1, 0, "a")),
+                "UPDATE _metadata SET value = '99' WHERE key = 'schema_version'",
+                "INSERT INTO _metadata VALUES ('build_timestamp','555')"]);
+        await CreateNotesDatabaseFromStatementsAsync(
+            padDir,
+            [.. BibleOnSite.Tests.Support.NotesDbV2.Statements((9, 4, 1, 0, "pad note")),
+                "INSERT INTO _metadata VALUES ('build_timestamp','777')"]);
+
+        var service = PerushimNotesService.CreateForTesting(
+            new FakePadDeliveryService { AssetPath = padDir }, dataDir);
+
+        var downloaded = await service.TryDownloadNotesAsync();
+
+        downloaded.Should().BeTrue("a rejected local DB must not block the explicit pack copy");
+        service.IsAvailable.Should().BeTrue();
+        File.Exists(Path.Join(dataDir, NotesDbFileName + ".rejected"))
+            .Should().BeFalse("the stale rejection is cleared once a valid pack lands");
+    }
+
     private const string CatalogDbFileName = "sefaria-dump-5784-sivan-4.perushim_catalog.sqlite";
 
     private static IDeviceInfo DeviceMock()

@@ -48,15 +48,36 @@ public class OdrCacheTests
         var app = App("5.0.104", "104");
         // A file held open inside a stale generation blocks recursive delete —
         // the sweep failure must not keep the app from resolving its own dir.
-        var staleDir = Path.Join(storage.Root, "odr_assets", "old-generation");
+        var assetsRoot = Path.Join(storage.Root, "odr_assets");
+        var staleDir = Path.Join(assetsRoot, "old-generation");
         Directory.CreateDirectory(staleDir);
+        // Pre-create the current generation so a locked assets root does not
+        // stop OdrCacheDirectory from resolving it.
+        Directory.CreateDirectory(Path.Join(assetsRoot, "5.0.104-104", Pack));
         var staleFile = Path.Join(staleDir, Notes);
         await File.WriteAllTextAsync(staleFile, "old notes", TestContext.Current.CancellationToken);
+        // Windows honors the open handle; on POSIX an advisory lock does not
+        // block unlink, so the assets root itself is made non-writable.
         await using var locked = new FileStream(staleFile, FileMode.Open, FileAccess.Read, FileShare.None);
+        var lockedDirectory = !OperatingSystem.IsWindows();
+        if (lockedDirectory)
+        {
+            File.SetUnixFileMode(assetsRoot, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+        }
+        try
+        {
+            var current = PadDeliveryService.OdrCacheDirectory(storage.FileSystem.Object, app.Object, Pack);
 
-        var current = PadDeliveryService.OdrCacheDirectory(storage.FileSystem.Object, app.Object, Pack);
-
-        Directory.Exists(current).Should().BeTrue();
+            Directory.Exists(current).Should().BeTrue();
+        }
+        finally
+        {
+            if (lockedDirectory)
+            {
+                File.SetUnixFileMode(assetsRoot,
+                    UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            }
+        }
     }
 
     [Fact]

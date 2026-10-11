@@ -157,15 +157,8 @@ public class PerushimNotesService
             lines.Add($"  PAD file at root: {atRoot}");
             lines.Add($"  PAD file in assets/: {atAssets}");
         }
-        try
-        {
-            var ts = await GetBuildTimestampAsync(dbPath);
-            lines.Add($"Local DB build_timestamp: {ts}");
-        }
-        catch (Exception ex)
-        {
-            lines.Add($"Local DB build_timestamp error: {ex.Message}");
-        }
+        var localTs = await GetBuildTimestampAsync(dbPath);
+        lines.Add($"Local DB build_timestamp: {localTs}");
 
         // Platform-specific delivery diagnostics (ODR on iOS, PAD on Android)
         try
@@ -183,15 +176,17 @@ public class PerushimNotesService
 
     private async Task<bool> AppPackageHasNotesAsync()
     {
+        var hasNotes = false;
         try
         {
             await using var s = await _fileSystem.OpenAppPackageFileAsync(NotesDbName);
-            return s != null;
+            hasNotes = s != null;
         }
         catch
         {
             return false;
         }
+        return hasNotes;
     }
 
     /// <summary>
@@ -370,13 +365,8 @@ public class PerushimNotesService
                 return true;
             }
 
-            string? snapshot = null;
-            try
-            {
-                snapshot = await _connection.ExecuteScalarAsync<string>(
-                    "SELECT value FROM _metadata WHERE key = 'perush_catalog'");
-            }
-            catch (SQLiteException) { /* Legacy notes may have no metadata. */ }
+            var snapshot = await _connection.ExecuteScalarAsync<string>(
+                "SELECT value FROM _metadata WHERE key = 'perush_catalog'");
 
             bool compatible;
             if (snapshot != null)
@@ -615,12 +605,6 @@ public class PerushimNotesService
             var localCompatible = localSchema == PerushNoteBlob.SchemaVersion;
             if ((!localCompatible || padTs > localTs) && !await IsRejectedGenerationAsync(padDbPath))
             {
-                // Close any existing connection before overwriting
-                if (_connection != null)
-                {
-                    await _connection.CloseAsync();
-                    _connection = null;
-                }
                 await using var source = File.OpenRead(padDbPath);
                 await AtomicFile.CopyAsync(source, localDbPath);
                 await TryCopyPadIndexAsync(padPath);
@@ -694,18 +678,19 @@ public class PerushimNotesService
             return false;
         }
 
+        var copied = false;
         try
         {
             await using var source = File.OpenRead(srcPath);
             await AtomicFile.CopyAsync(source, dbPath);
             await TryCopyPadIndexAsync(padAssetsPath);
-            return true;
+            copied = true;
         }
         catch (Exception ex)
         {
             Console.Error.WriteLine($"Failed to copy perushim notes from PAD: {ex.Message}");
-            return false;
         }
+        return copied;
     }
 
     /// <summary>

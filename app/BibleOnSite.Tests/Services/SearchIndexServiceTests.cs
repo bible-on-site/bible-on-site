@@ -616,16 +616,109 @@ public class SearchIndexServiceTests
         var delivered = await storage.CreateDatabaseAsync(PerushimNotesService.SearchIndexDbName,
             DeliveredIndexStatements("v4:999:n1", "סימן מובהק"));
         await delivered.CloseAsync();
+        var indexDir = Path.Join(storage.Root, "index");
+        Directory.CreateDirectory(indexDir);
         // A locked staged index cannot be deleted — the on-device build must
-        // still run instead of trusting the wrong-generation file.
+        // still run instead of trusting the wrong-generation file. Windows
+        // honors the open handle; on POSIX an advisory lock does not block
+        // unlink, so the data directory itself is made non-writable.
         await using var locked = new FileStream(deliveredPath, FileMode.Open, FileAccess.Read, FileShare.None);
+        var lockedDirectory = !OperatingSystem.IsWindows();
+        if (lockedDirectory)
+        {
+            File.SetUnixFileMode(storage.Root, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+        }
+        try
+        {
+            var notes = PerushimNotesService.CreateForTesting(NullPad().Object, storage.Root);
+            await using var index = new SearchIndexService(perakim, notes, Path.Join(indexDir, "search.sqlite"));
+
+            var hits = await index.SearchAsync("בראשית", new HashSet<SearchFilter> { SearchFilter.Perush },
+                new HashSet<int> { 1 }, 10, TestContext.Current.CancellationToken);
+
+            hits.Should().ContainSingle("the failed delete is tolerated and the build proceeds");
+            File.Exists(deliveredPath).Should().BeTrue("the undeletable staged file lingers");
+        }
+        finally
+        {
+            if (lockedDirectory)
+            {
+                File.SetUnixFileMode(storage.Root,
+                    UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            }
+        }
+    }
+
+    [Fact]
+    public void Instance_OnUnitTestHost_ThrowsPlatformNotImplemented()
+    {
+        // The production singleton resolves FileSystem.Current, which has no
+        // implementation in the unit-test host.
+        var act = () => _ = SearchIndexService.Instance;
+
+        act.Should().Throw<NotImplementedException>();
+    }
+
+    [Fact]
+    public async Task Initialization_WhenStaleTempCannotBeDeleted_StillServesQueries()
+    {
+        await using var storage = new TestStorage();
+        var perakim = await SeedAsync(storage);
+        var indexDir = Path.Join(storage.Root, "index");
+        Directory.CreateDirectory(indexDir);
+        var indexPath = Path.Join(indexDir, "search.sqlite");
+        // A read-only index directory must still serve queries: pre-create the
+        // index in WAL mode so -wal/-shm already exist and stay writable.
+        var preOpen = new SQLite.SQLiteAsyncConnection(indexPath);
+        await preOpen.ExecuteScalarAsync<string>("PRAGMA journal_mode=WAL");
+        await preOpen.ExecuteAsync("CREATE TABLE search_metadata (name TEXT PRIMARY KEY, fingerprint TEXT)");
+        var stale = Path.Join(indexDir, $"search.sqlite.{Guid.NewGuid():N}.tmp");
+        await File.WriteAllTextAsync(stale, "interrupted replace", TestContext.Current.CancellationToken);
+        // Windows honors the open handle; on POSIX an advisory lock does not
+        // block unlink, so the index directory itself is made non-writable.
+        await using var locked = new FileStream(stale, FileMode.Open, FileAccess.Read, FileShare.None);
+        var lockedDirectory = !OperatingSystem.IsWindows();
+        if (lockedDirectory)
+        {
+            File.SetUnixFileMode(indexDir, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+        }
+        try
+        {
+            await using var index = new SearchIndexService(perakim, null, indexPath);
+            var hits = await index.SearchAsync("בראשית", new HashSet<SearchFilter> { SearchFilter.Pasuk },
+                new HashSet<int> { 1 }, 10, TestContext.Current.CancellationToken);
+
+            hits.Should().ContainSingle("a stuck temp file must not break the index");
+            File.Exists(stale).Should().BeTrue("the undeletable temp file lingers until a later sweep");
+        }
+        finally
+        {
+            if (lockedDirectory)
+            {
+                File.SetUnixFileMode(indexDir,
+                    UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            }
+            await preOpen.CloseAsync();
+        }
+    }
+
+    [Fact]
+    public async Task GenerationOrdering_WithoutCommentaryYears_KeepsDocumentOrder()
+    {
+        await using var storage = new TestStorage();
+        var perakim = await SeedAsync(storage);
+        await storage.CreateDatabaseAsync(NotesDb,
+            NotesDbV2.Statements((7, 1, 1, 0, "בראשית"), (8, 1, 1, 0, "בראשית"), (9, 1, 1, 0, "בראשית")));
         var notes = PerushimNotesService.CreateForTesting(NullPad().Object, storage.Root);
         await using var index = new SearchIndexService(perakim, notes, Path.Join(storage.Root, "search.sqlite"));
+        // A catalog without publication years leaves every perush at the
+        // fallback ordering: perek, pasuk, insertion order.
+        var ordering = new SearchOrdering(SearchSort.Generation, new Dictionary<int, int>());
 
         var hits = await index.SearchAsync("בראשית", new HashSet<SearchFilter> { SearchFilter.Perush },
-            new HashSet<int> { 1 }, 10, TestContext.Current.CancellationToken);
+            new HashSet<int> { 1 }, 10, TestContext.Current.CancellationToken, null, ordering);
 
-        hits.Should().ContainSingle("the failed delete is tolerated and the build proceeds");
+        hits.Select(hit => hit.PerushId).Should().Equal(7, 8, 9);
     }
 
     private sealed class SourceBlobRow
