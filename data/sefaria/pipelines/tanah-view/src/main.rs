@@ -27,6 +27,14 @@ struct Cli {
     /// Output to dependent modules (web/bible-on-site for JSON, app/BibleOnSite for SQLite)
     #[arg(long)]
     output_to_dependant_modules: bool,
+
+    /// Read the canonical corpus from a tanah_view JSON export instead of
+    /// MongoDB. The JSON is the already-merged corpus the website consumes,
+    /// so SQLite regenerated from it keeps website/app parity by
+    /// construction (the recitation merge is skipped — its output is
+    /// already inside the export).
+    #[arg(long)]
+    from_json: Option<std::path::PathBuf>,
 }
 
 #[derive(Clone, ValueEnum)]
@@ -50,15 +58,21 @@ async fn main() -> Result<()> {
         .format
         .context("--format is required for json/sqlite output")?;
 
-    let mut sefarim = fetch_from_mongodb(&cli.dump_name).await?;
-    let default_recitation_db =
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../recitation/recitation.sqlite");
-    tanah_view::recitation::merge(
-        &mut sefarim,
-        cli.recitation_db
-            .as_deref()
-            .unwrap_or(&default_recitation_db),
-    )?;
+    let sefarim = match &cli.from_json {
+        Some(path) => load_from_json(path)?,
+        None => {
+            let mut sefarim = fetch_from_mongodb(&cli.dump_name).await?;
+            let default_recitation_db = Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../../recitation/recitation.sqlite");
+            tanah_view::recitation::merge(
+                &mut sefarim,
+                cli.recitation_db
+                    .as_deref()
+                    .unwrap_or(&default_recitation_db),
+            )?;
+            sefarim
+        }
+    };
 
     // TODO: Validate sefarim against tanah_view.schema.json before generating output
     // This will ensure the aggregation pipeline output matches the expected schema
@@ -77,6 +91,22 @@ async fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Load the canonical corpus from a tanah_view JSON export (the same
+/// `Vec<Sefer>` the MongoDB aggregation produces, with the recitation
+/// merge already applied at export time).
+fn load_from_json(path: &Path) -> Result<Vec<Sefer>> {
+    let json = std::fs::read_to_string(path)
+        .with_context(|| format!("Failed to read corpus {}", path.display()))?;
+    let sefarim: Vec<Sefer> = serde_json::from_str(&json)
+        .with_context(|| format!("Failed to parse corpus {}", path.display()))?;
+    println!(
+        "✅ Loaded {} sefarim from {}",
+        sefarim.len(),
+        path.display()
+    );
+    Ok(sefarim)
 }
 
 async fn fetch_from_mongodb(dump_name: &str) -> Result<Vec<Sefer>> {
@@ -176,6 +206,32 @@ mod tests {
         let cli = cli_from(&["--dump-name", "sefaria-dump-custom"]);
 
         assert_eq!(cli.dump_name, "sefaria-dump-custom");
+    }
+
+    #[test]
+    fn cli_accepts_from_json_corpus_path() {
+        let cli = cli_from(&[
+            "--format",
+            "sqlite",
+            "--from-json",
+            "dump.tanah_view.json",
+        ]);
+
+        assert!(cli.from_json.is_some());
+        assert_eq!(
+            cli.from_json.as_deref(),
+            Some(std::path::Path::new("dump.tanah_view.json"))
+        );
+    }
+
+    #[test]
+    fn load_from_json_reads_checked_in_corpus() {
+        let corpus_path = Path::new(env!("CARGO_MANIFEST_DIR")).join(
+            "../../../../web/bible-on-site/src/data/db/sefaria-dump-5784-sivan-4.tanah_view.json",
+        );
+        let sefarim = load_from_json(&corpus_path).unwrap();
+        assert_eq!(sefarim.len(), 35);
+        assert_eq!(sefarim[0].name, "בראשית");
     }
 
     #[test]

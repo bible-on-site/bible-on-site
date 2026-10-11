@@ -79,6 +79,21 @@ args = [
     "--output-to-dependant-modules",
 ]
 
+[tasks.generate-tanah-view-sqlite-from-json]
+description = "Regenerate the app tanah view SQLite from the checked-in website JSON corpus (no MongoDB needed)"
+cwd = "./sefaria/pipelines/tanah-view"
+command = "cargo"
+args = [
+    "run",
+    "--release",
+    "--",
+    "--format",
+    "sqlite",
+    "--output-to-dependant-modules",
+    "--from-json",
+    "../../../../web/bible-on-site/src/data/db/sefaria-dump-5784-sivan-4.tanah_view.json",
+]
+
 [tasks.generate-compass-stages]
 description = "Generate MongoDB Compass stages for debugging tanah-view aggregation pipeline"
 cwd = "./sefaria/pipelines/tanah-view"
