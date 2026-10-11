@@ -234,23 +234,51 @@ public sealed class RecitationService
                     throw new InvalidDataException("Playback must use original approved intervals.");
                 }
             }
-            var mp3 = AudioPath(track);
-            if (!await MatchesHashAsync(mp3, track.PlaybackSha256, cancellationToken))
+            var audio = AudioPath(track);
+            if (!await MatchesHashAsync(audio, track.PlaybackSha256, cancellationToken))
             {
                 throw new InvalidDataException("Download this book's recordings again in preferences.");
             }
 
             var cache = Path.Combine(_files.CacheDirectory, "recitation");
             Directory.CreateDirectory(cache);
+            var chapter = Path.Combine(cache, "chapter-" + track.PlaybackSha256 + ".wav");
             foreach (var old in Directory.EnumerateFiles(cache, "*.wav"))
             {
-                // Native players may finish releasing the previous file asynchronously.
-                try { File.Delete(old); } catch (IOException) { /* The native player can retain its last file until asynchronous release. */ }
+                // A decoded chapter survives for instant replay; native players may
+                // still finish releasing a previous file asynchronously.
+                if (old != chapter)
+                {
+                    try { File.Delete(old); } catch (IOException) { /* The native player can retain its last file until asynchronous release. */ }
+                }
             }
             cancellationToken.ThrowIfCancellationRequested();
-            if (ranges == null && (startMs is not double || endMs is not double))
+            if (intervals == null)
             {
-                return mp3;
+                if (track.Playback == null || OperatingSystem.IsAndroid())
+                {
+                    // MediaElement demuxes MP3 everywhere and Ogg through ExoPlayer.
+                    return audio;
+                }
+
+                // Apple's AVPlayer has no Ogg demuxer; decode the chapter once per source.
+                if (decoder == null)
+                {
+                    throw new InvalidOperationException("A precise audio decoder is required.");
+                }
+
+                if (!File.Exists(chapter))
+                {
+                    var decoded = await decoder.CreateChapterAsync(audio, cancellationToken);
+                    var temporary = chapter + ".download";
+                    try
+                    {
+                        await File.WriteAllBytesAsync(temporary, decoded, cancellationToken);
+                        File.Move(temporary, chapter, true);
+                    }
+                    finally { File.Delete(temporary); }
+                }
+                return chapter;
             }
 
             var clip = Path.Combine(cache, "clip-" + Guid.NewGuid().ToString("N") + ".wav");
@@ -264,8 +292,8 @@ public sealed class RecitationService
                 throw new InvalidDataException("Invalid verse pause.");
             }
             var pcm = pauseMs > 0
-                ? await decoder.CreateClipAsync(mp3, intervals!, cancellationToken, pauseMs)
-                : await decoder.CreateClipAsync(mp3, intervals!, cancellationToken);
+                ? await decoder.CreateClipAsync(audio, intervals!, cancellationToken, pauseMs)
+                : await decoder.CreateClipAsync(audio, intervals!, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             await File.WriteAllBytesAsync(clip, pcm, cancellationToken);
             return clip;
