@@ -1150,6 +1150,31 @@ public sealed class PerushimNotesServiceTests : IDisposable
             .Should().BeFalse("the stale rejection is cleared once a valid pack lands");
     }
 
+    [Fact]
+    public async Task TryDownloadNotesAsync_WhenLocalDbRejectedAndNothingDelivers_ReturnsFalse()
+    {
+        var dataDir = Path.Join(_tempRoot, nameof(TryDownloadNotesAsync_WhenLocalDbRejectedAndNothingDelivers_ReturnsFalse));
+        Directory.CreateDirectory(dataDir);
+        // A local DB that fails schema validation is rejected during init, so
+        // the download continues to the delivery paths — all empty here.
+        await CreateNotesDatabaseFromStatementsAsync(
+            dataDir,
+            [.. BibleOnSite.Tests.Support.NotesDbV2.Statements((7, 1, 1, 0, "a")),
+                "UPDATE _metadata SET value = '99' WHERE key = 'schema_version'",
+                "INSERT INTO _metadata VALUES ('build_timestamp','555')"]);
+        var fakePad = new FakePadDeliveryService();
+
+        var service = PerushimNotesService.CreateForTesting(fakePad, dataDir);
+
+        var downloaded = await service.TryDownloadNotesAsync();
+
+        downloaded.Should().BeFalse();
+        service.IsAvailable.Should().BeFalse();
+        fakePad.FetchCalls.Should().Be(1, "the rejected local DB must not short-circuit delivery attempts");
+        File.Exists(Path.Join(dataDir, NotesDbFileName + ".rejected"))
+            .Should().BeTrue("the rejected generation stays recorded for next launch");
+    }
+
     private const string CatalogDbFileName = "sefaria-dump-5784-sivan-4.perushim_catalog.sqlite";
 
     private static IDeviceInfo DeviceMock()

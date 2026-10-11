@@ -187,7 +187,9 @@ public sealed class SearchIndexService : IAsyncDisposable
     {
         try
         {
-            var directory = Path.GetDirectoryName(_indexPath) ?? ".";
+            // _indexPath always carries a directory — Path.Join(CacheDirectory, ...)
+            // in production, a full temp path in tests.
+            var directory = Path.GetDirectoryName(_indexPath)!;
             // The superseded v1 cache lives next to the working index — the same
             // directory on device, and nothing to do in test directories.
             var legacy = Path.Join(directory, "hebrew-search-v1.sqlite");
