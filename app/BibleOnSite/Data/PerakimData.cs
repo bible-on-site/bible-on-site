@@ -54,15 +54,22 @@ public static class PerakimData
     /// <summary>
     /// Total number of perakim in the 929 cycle.
     /// </summary>
-    public const int TotalPerakim = 929;
+    public static int TotalPerakim => 929;
 
     /// <summary>
     /// Gets the number of perakim for a sefer.
     /// </summary>
     /// <param name="seferId">The sefer ID.</param>
-    /// <param name="additional">The additional marker for split books (optional).</param>
     /// <returns>The number of perakim, or 0 if not found.</returns>
-    public static int GetPerakimCount(int seferId, int? additional = null)
+    public static int GetPerakimCount(int seferId) => GetPerakimCount(seferId, null);
+
+    /// <summary>
+    /// Gets the number of perakim for a sefer.
+    /// </summary>
+    /// <param name="seferId">The sefer ID.</param>
+    /// <param name="additional">The additional marker for split books.</param>
+    /// <returns>The number of perakim, or 0 if not found.</returns>
+    public static int GetPerakimCount(int seferId, int? additional)
     {
         if (!PerakimOfBooks.TryGetValue(seferId, out var value))
         {
