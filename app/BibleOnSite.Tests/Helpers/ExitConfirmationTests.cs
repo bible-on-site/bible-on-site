@@ -95,4 +95,24 @@ public class ExitConfirmationTests
 		await confirmation.ActivePrompt!;
 		prompts.Should().Be(2);
 	}
+
+	[Fact]
+	public async Task Shared_Request_PromptsThroughTheDefaultWiring()
+	{
+		// Shell.Current is null off-device, so the default prompt resolves to
+		// "stay" — this still drives the Shared singleton's prompt/exit wiring.
+		ExitConfirmation.Shared.Request().Should().BeTrue();
+		await ExitConfirmation.Shared.ActivePrompt!;
+
+		ExitConfirmation.Shared.IsPromptShowing.Should().BeFalse();
+	}
+
+	[Fact]
+	public void AlertText_MatchesTheRestoredFlutterStrings()
+	{
+		ExitConfirmation.Title.Should().Be("תנ\"ך על הפרק");
+		ExitConfirmation.Message.Should().Be("מקווים שהלימוד היה מועיל, להתראות בפרק הבא!");
+		ExitConfirmation.ExitLabel.Should().Be("צא מהישומון");
+		ExitConfirmation.StayLabel.Should().Be("המשך ללמוד");
+	}
 }

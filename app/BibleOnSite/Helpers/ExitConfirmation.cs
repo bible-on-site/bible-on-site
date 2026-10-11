@@ -81,6 +81,8 @@ public sealed class ExitConfirmation
 			exit: ExitApp);
 	}
 
+	[System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage(
+		Justification = "Platform exit path — each branch is #if-gated to its OS, so the unit-test host compiles to a no-op.")]
 	private static void ExitApp()
 	{
 #if ANDROID
