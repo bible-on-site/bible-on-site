@@ -10,7 +10,7 @@ namespace BibleOnSite.Pages;
 // Codacy: S2333 false positive — partial is required by the XAML code
 // generator and by the xaml.cs partial part.
 #pragma warning disable S2333
-public partial class MasoraPage
+public partial class MasoraPage //NOSONAR
 #pragma warning restore S2333
 {
     private bool _isPerushimOpen;

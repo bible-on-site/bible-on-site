@@ -16,7 +16,7 @@ namespace BibleOnSite.ViewModels;
 // Codacy: S2333 false positive — partial is required by the MVVM source
 // generators ([ObservableProperty]/[RelayCommand]) and the Perushim part.
 #pragma warning disable S2333
-public partial class MasoraViewModel : ObservableObject
+public partial class MasoraViewModel : ObservableObject //NOSONAR
 #pragma warning restore S2333
 {
     private readonly MasoraDataService _masoraDataService;

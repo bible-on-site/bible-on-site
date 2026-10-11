@@ -12,7 +12,7 @@ namespace BibleOnSite.ViewModels;
 // Codacy: S2333 false positive — partial is required by the MVVM source
 // generators and the main partial part.
 #pragma warning disable S2333
-public partial class MasoraViewModel
+public partial class MasoraViewModel //NOSONAR
 #pragma warning restore S2333
 {
 #if MAUI

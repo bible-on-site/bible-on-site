@@ -15,7 +15,7 @@ using Microsoft.Maui.Layouts;
 // Codacy: S2333 false positive — partial is required by the XAML code
 // generator and by the PerushimPanel partial part.
 #pragma warning disable S2333
-public partial class MasoraPage : ContentPage, IQueryAttributable
+public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
 #pragma warning restore S2333
 {
     private readonly MasoraViewModel _viewModel;

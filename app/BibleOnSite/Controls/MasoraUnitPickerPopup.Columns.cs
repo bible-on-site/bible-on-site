@@ -12,7 +12,7 @@ namespace BibleOnSite.Controls;
 // Codacy: S2333 false positive — partial is required by the XAML code
 // generator and by the xaml.cs partial part.
 #pragma warning disable S2333
-public partial class MasoraUnitPickerPopup
+public partial class MasoraUnitPickerPopup //NOSONAR
 #pragma warning restore S2333
 {
     private SeferGroupItem? _selectedGroup;

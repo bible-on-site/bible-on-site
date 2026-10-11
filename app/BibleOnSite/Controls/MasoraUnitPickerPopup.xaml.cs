@@ -12,7 +12,7 @@ namespace BibleOnSite.Controls;
 // Codacy: S2333 false positive — partial is required by the XAML code
 // generator and by the Columns partial part.
 #pragma warning disable S2333
-public partial class MasoraUnitPickerPopup : ContentView
+public partial class MasoraUnitPickerPopup : ContentView //NOSONAR
 #pragma warning restore S2333
 {
     /// <summary>
@@ -21,7 +21,7 @@ public partial class MasoraUnitPickerPopup : ContentView
     /// (same false-positive pattern as Perek.cs's PropertyChanged pragma).
     /// </summary>
 #pragma warning disable S3264 // Events should be invoked
-    public event EventHandler<int>? UnitSelected;
+    public event EventHandler<int>? UnitSelected; //NOSONAR
 #pragma warning restore S3264
 
     public MasoraUnitPickerPopup()
