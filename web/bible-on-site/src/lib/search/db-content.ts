@@ -304,7 +304,7 @@ export async function searchArticles(
 			a.id, a.perek_id, a.name, au.name AS author_name, a.content, a.abstract
 		 FROM tanah_article a
 		 JOIN tanah_author au ON a.author_id = au.id
-		 WHERE ${where}
+		 WHERE a.distributable = TRUE AND ${where}
 		 ORDER BY ${rank.orderBy}, a.id
 		 LIMIT ${CANDIDATE_LIMIT}`,
 		[...params, ...rank.params],

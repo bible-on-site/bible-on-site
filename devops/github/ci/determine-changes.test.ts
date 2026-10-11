@@ -97,6 +97,38 @@ describe("detectChanges", () => {
 		]);
 	});
 
+	for (const path of [
+		"app/BibleOnSite.Tests/Services/ArticleSearchServiceTests.cs",
+		"app/BibleOnSite.Tests.E2E/Navigation/ArticlesNavigationTests.cs",
+		"app/BibleOnSite.Tests.MobileE2E/PerekPilotTests.cs",
+		"app/mobile-e2e/run.mjs",
+	]) {
+		test(`${path} runs app checks without a store release`, () => {
+			assert.deepEqual(changed([path], "app"), [
+				{ module_changed: false, ci_changed: true },
+			]);
+		});
+	}
+
+	test("packaged app changes still release alongside test changes", () => {
+		assert.deepEqual(
+			changed(
+				[
+					"app/BibleOnSite/Pages/PerekPage.xaml",
+					"app/BibleOnSite.Tests/Services/PerekServiceTests.cs",
+				],
+				"app",
+			),
+			[{ module_changed: true, ci_changed: true }],
+		);
+	});
+
+	test("app build tooling changes still release the app", () => {
+		assert.deepEqual(changed(["app/devops/Build.Package.cs"], "app"), [
+			{ module_changed: true, ci_changed: false },
+		]);
+	});
+
 	test("CI workflow and detection changes validate every module without releasing it", () => {
 		for (const path of SHARED_FILES) {
 			for (const flags of Object.values(detectChanges([path]))) {
