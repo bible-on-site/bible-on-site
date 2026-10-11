@@ -274,35 +274,7 @@ public class PerekDataService
                 PairedOffset = row.QriKtivOffset
             };
             currentSegments.Add(segment);
-
-            switch (row.SegmentType)
-            {
-                case "ktiv":
-                case "qri":
-                    if (!string.IsNullOrEmpty(value))
-                    {
-                        // Add space before word unless:
-                        // - it's the first word
-                        // - previous char is a newline
-                        // - previous char is a maqaf (Hebrew hyphen)
-                        if (currentText.Length > 0 && currentText[^1] != '\n' && currentText[^1] != '־')
-                        {
-                            currentText.Append(' ');
-                        }
-                        currentText.Append(value);
-                    }
-                    break;
-                case "ptuha":
-                case "stuma":
-                    if (currentText.Length > 0 && currentText[^1] != '\n')
-                    {
-                        currentText.Append('\n');
-                    }
-                    break;
-                default:
-                    // Other segment types carry no inline text.
-                    break;
-            }
+            PerekDataServiceText.AppendSegmentText(currentText, segmentType, value);
         }
 
         if (currentPasukId != -1)

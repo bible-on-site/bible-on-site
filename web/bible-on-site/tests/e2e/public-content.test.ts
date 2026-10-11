@@ -26,6 +26,10 @@ test("bulletin-unapproved content remains public across website surfaces", async
 	);
 	expect(results.ok()).toBe(true);
 	expect((await results.json()).results).toEqual(
-		expect.arrayContaining([expect.objectContaining({ href: "/929/1/4" })]),
+		expect.arrayContaining([
+			expect.objectContaining({
+				href: `/929/1/4?q=${encodeURIComponent("מאמר עם תמונה")}`,
+			}),
+		]),
 	);
 });

@@ -535,6 +535,7 @@ public partial class PerekViewModel : ObservableObject
         .Select(g => new PerushNoteDisplay
         {
             PerushName = g.Key.PerushName,
+            PerushId = g.Key.PerushId,
             NoteContents = g.OrderBy(n => n.NoteIdx).Select(n => n.NoteContent).ToList()
         }).ToList();
 
@@ -600,6 +601,7 @@ public partial class PerekViewModel : ObservableObject
                 .Select(g => new PerushNoteDisplay
                 {
                     PerushName = g.Key.PerushName,
+                    PerushId = g.Key.PerushId,
                     NoteContents = g.OrderBy(n => n.NoteIdx).Select(n => n.NoteContent).ToList()
                 })
                 .ToList();

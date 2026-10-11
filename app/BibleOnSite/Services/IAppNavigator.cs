@@ -31,6 +31,9 @@ public static class AppRoutes
     /// </summary>
     public static string CalendarReader => "calendarReader";
 
+    /// <summary>The מסורה על הפרק reading instance — a flyout page like the other menu pages.</summary>
+    public static string Masora => "MasoraPage";
+
     /// <summary>
     /// Flyout pages replace another menu page above the most recent reader.
     /// Preserve search-reader history so Back returns to the chapter being read.

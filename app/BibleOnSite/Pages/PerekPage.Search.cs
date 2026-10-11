@@ -1,3 +1,5 @@
+using BibleOnSite.Controls;
+using BibleOnSite.Helpers;
 using BibleOnSite.Models;
 using BibleOnSite.Services;
 using Microsoft.Maui.Controls.Shapes;
@@ -254,7 +256,13 @@ public partial class PerekPage
             }
             else if (result is ArticleSearchResult article)
             {
-                await Shell.Current.GoToAsync($"articleDetail?articleId={article.ArticleId}&perekId={article.PerekId}");
+                // Excerpt + phrase fully describe the jump target; plain query
+                // parameters keep the destination self-contained and survive
+                // Shell's string-only query handling (#2078).
+                await Shell.Current.GoToAsync(
+                    $"articleDetail?articleId={article.ArticleId}&perekId={article.PerekId}" +
+                    $"&searchExcerpt={Uri.EscapeDataString(article.Excerpt)}" +
+                    $"&searchPhrase={Uri.EscapeDataString(article.SearchPhrase)}");
             }
             else if (GetSearchPerekId(result) > 0)
             {
@@ -285,28 +293,271 @@ public partial class PerekPage
             PerushSearchResult commentary => commentary.PasukNum,
             _ => 0
         };
-        if (result is PerushSearchResult note && int.TryParse(note.PerushId, out var perushId) && !_viewModel.IsPerushChecked(perushId))
+        var noteHit = result as PerushSearchResult;
+        if (noteHit != null &&
+            int.TryParse(noteHit.PerushId, out var perushId) &&
+            !_viewModel.IsPerushChecked(perushId))
         {
+            // Reveal the matched perush before measuring — enabling it changes
+            // the pasuk cell's height and renders its note views.
             _viewModel.ToggleCheckedPerush(perushId);
         }
         if (_viewModel.Perek?.Pasukim.FirstOrDefault(pasuk => pasuk.PasukNum == pasukNum) is not { } pasuk)
         {
             return;
         }
+        // Identity comes from the note row that produced the hit, not from the
+        // first rendered note for the pasuk — sibling notes can hold the same
+        // query words (#2078).
+        var matchTarget = noteHit == null
+            ? null
+            : SearchMatch.ResolvePerushTarget(noteHit, pasuk.PerushNotes);
 
-        // The carousel realizes its chapter list after the page is laid out.
-        // Scroll the ordinary reader instead of entering verse-selection mode.
-        for (var attempt = 0; attempt < 40; attempt++)
+        // The carousel realizes its chapter list after the page is laid out,
+        // and a just-enabled perush repaints its note views asynchronously —
+        // keep polling until the pasuk row, its HtmlView and the text layout
+        // are all realized and measurable. The landing is re-verified on every
+        // frame: a scroll issued while the CarouselView is still settling its
+        // item views can be silently reset, leaving the jump at the top of the
+        // chapter (#2078).
+        var stableFrames = 0;
+        var pasukScrolls = 0;
+        for (var attempt = 0; attempt < 120; attempt++)
         {
-            var list = PerekCarousel.GetVisualTreeDescendants().OfType<CollectionView>()
-                .FirstOrDefault(view => view.BindingContext == _viewModel.Perek && view.Handler != null && view.Height > 0);
-            if (list != null)
+            var list = FindReaderPasukList();
+            var item = list?.ItemsSource?.Cast<object>().OfType<PasukDisplayItem>()
+                .FirstOrDefault(display => display.IsFirstCopy && display.PasukNum == pasukNum);
+            if (list != null && item != null)
             {
-                list.ScrollTo(pasuk, position: ScrollToPosition.Start, animate: false);
-                return;
+                bool landed;
+                if (matchTarget is { } target)
+                {
+                    var perush = TryLandOnPerushMatch(list, target.Display, target.Span);
+                    landed = perush == PerushLanding.Landed;
+                    if (perush == PerushLanding.NotReady)
+                    {
+                        // The matched note row is not realized yet — keep the
+                        // pasuk row pinned at the top so it materializes.
+                        pasukScrolls = AnchorPasukRow(list, item, pasukScrolls);
+                    }
+                }
+                else
+                {
+                    landed = LandOnPasukRow(list, item, ref pasukScrolls);
+                }
+                stableFrames = landed ? stableFrames + 1 : 0;
+                if (stableFrames >= 4)
+                {
+                    return;
+                }
             }
             await Task.Delay(50);
         }
         Console.Error.WriteLine($"Search reader could not locate verse {pasukNum} in chapter {_viewModel.PerekId}.");
+    }
+
+    private CollectionView? FindReaderPasukList() => PerekCarousel
+        .GetVisualTreeDescendants()
+        .OfType<CollectionView>()
+        .FirstOrDefault(view => ReferenceEquals(view.BindingContext, _viewModel.Perek)
+            && view.Handler != null && view.Height > 0);
+
+    /// <summary>
+    /// Scrolls the pasuk row to the top of the list until the platform reports
+    /// it actually arrived there. Returns the verification verdict: true only
+    /// once the row is confirmed anchored (or, on platforms without a native
+    /// position check, after enough scrolls were issued to trust the jump).
+    /// </summary>
+    private static bool LandOnPasukRow(CollectionView list, PasukDisplayItem item, ref int pasukScrolls)
+    {
+        // Scroll to the display item, not the logical Pasuk: the list's
+        // ItemsSource holds PasukDisplayItem rows (שניים מקרא can duplicate
+        // each pasuk), so a Pasuk target matched no row and the jump silently
+        // failed.
+        var anchored = IsItemAnchoredAtTop(list, item);
+        pasukScrolls = AnchorPasukRow(list, item, pasukScrolls, anchored);
+        // Platforms without a native position check accept the jump after a
+        // few scroll issues instead of confirming the offset.
+        return anchored ?? pasukScrolls >= 4;
+    }
+
+    private static int AnchorPasukRow(CollectionView list, PasukDisplayItem item, int pasukScrolls, bool? anchored = null)
+    {
+        if (anchored != true && pasukScrolls < 60)
+        {
+            list.ScrollTo(item, position: ScrollToPosition.Start, animate: false);
+            pasukScrolls++;
+        }
+        return pasukScrolls;
+    }
+
+    /// <summary>Verdict of a perush match-scroll frame.</summary>
+    private enum PerushLanding
+    {
+        /// <summary>The note row is not realized yet — keep anchoring the pasuk row.</summary>
+        NotReady,
+        /// <summary>A match scroll is in play but the line is not verified visible yet.</summary>
+        Engaged,
+        /// <summary>The match line sits inside the viewport (or is trusted to).</summary>
+        Landed,
+    }
+
+    /// <summary>
+    /// Finds the realized <see cref="HtmlView"/> bound to the matched note
+    /// display, sets its normalized match span, and scrolls the pasuk list so
+    /// the match lands just below the toolbar — re-issuing the scroll on every
+    /// call until the match line verifies inside the viewport, because a
+    /// recycled/re-laid-out cell can silently undo an earlier scroll.
+    /// </summary>
+    private static PerushLanding TryLandOnPerushMatch(CollectionView list, PerushNoteDisplay display, SearchMatchSpan span)
+    {
+        var htmlView = list.GetVisualTreeDescendants().OfType<HtmlView>()
+            .FirstOrDefault(view => ReferenceEquals(view.BindingContext, display));
+        if (htmlView == null)
+        {
+            return PerushLanding.NotReady; // Note views for this pasuk are not realized yet.
+        }
+        if (!htmlView.HasSearchMatch)
+        {
+            htmlView.SearchMatchStart = span.Start;
+            htmlView.SearchMatchLength = span.Length;
+        }
+        var visible = IsMatchLineVisible(list, htmlView);
+        if (visible == true)
+        {
+            return PerushLanding.Landed;
+        }
+        if (!ScrollListToMatch(list, htmlView))
+        {
+            // The scroll primitives are not ready (no layout yet). When the
+            // platform cannot verify visibility we still report Engaged so
+            // the pasuk-row anchoring does not fight the pending scroll.
+            return visible == null ? PerushLanding.Engaged : PerushLanding.NotReady;
+        }
+        // Verified platforms re-check visibility next frame; unverifiable
+        // platforms trust the issued scroll.
+        return visible == null ? PerushLanding.Landed : PerushLanding.Engaged;
+    }
+
+    /// <summary>
+    /// True when the row bound to <paramref name="item"/> is the first visible
+    /// row of the list; false when it is not; null when the platform has no
+    /// native position check and the verdict cannot be verified.
+    /// </summary>
+    private static bool? IsItemAnchoredAtTop(CollectionView list, object item)
+    {
+#if ANDROID
+        if (list.Handler?.PlatformView is AndroidX.RecyclerView.Widget.RecyclerView recycler &&
+            recycler.GetLayoutManager() is AndroidX.RecyclerView.Widget.LinearLayoutManager layout)
+        {
+            var index = IndexOfItem(list, item);
+            return index >= 0 && layout.FindFirstVisibleItemPosition() == index;
+        }
+        return false;
+#elif IOS || MACCATALYST
+        if (list.Handler?.PlatformView is UIKit.UICollectionView collection)
+        {
+            var index = IndexOfItem(list, item);
+            var paths = collection.IndexPathsForVisibleItems;
+            return index >= 0 && paths is { Length: > 0 } && paths.Min(path => (int)path.Item) == index;
+        }
+        return false;
+#else
+        _ = list; // No native position check on this platform.
+        _ = item;
+        return null;
+#endif
+    }
+
+    /// <summary>
+    /// True when the match line of the note view is inside the list viewport;
+    /// false when it is not; null when the platform cannot measure it.
+    /// </summary>
+    private static bool? IsMatchLineVisible(CollectionView list, HtmlView htmlView)
+    {
+#if ANDROID
+        if (htmlView.GetSearchMatchTop() is not { } matchTop ||
+            htmlView.Handler?.PlatformView is not Android.Views.View noteView ||
+            list.Handler?.PlatformView is not AndroidX.RecyclerView.Widget.RecyclerView recycler)
+        {
+            return false;
+        }
+        var viewPos = new int[2];
+        var listPos = new int[2];
+        noteView.GetLocationOnScreen(viewPos);
+        recycler.GetLocationOnScreen(listPos);
+        var density = noteView.Resources?.DisplayMetrics?.Density ?? 1f;
+        var matchY = viewPos[1] + matchTop * density;
+        return matchY >= listPos[1] && matchY <= listPos[1] + recycler.Height - density;
+#elif IOS || MACCATALYST
+        if (htmlView.GetSearchMatchTop() is not { } matchTop ||
+            htmlView.Handler?.PlatformView is not UIKit.UIView noteView ||
+            list.Handler?.PlatformView is not UIKit.UICollectionView collection)
+        {
+            return false;
+        }
+        var point = noteView.ConvertPointToView(new CoreGraphics.CGPoint(0, matchTop), collection);
+        var top = collection.ContentOffset.Y;
+        var bottom = top + collection.Bounds.Height - collection.AdjustedContentInset.Top;
+        return point.Y >= top && point.Y <= bottom;
+#else
+        _ = list; // No measurement without the platform views.
+        _ = htmlView;
+        return null;
+#endif
+    }
+
+    private static int IndexOfItem(CollectionView list, object item)
+    {
+        var index = 0;
+        foreach (var entry in list.ItemsSource?.Cast<object>() ?? [])
+        {
+            if (ReferenceEquals(entry, item))
+            {
+                return index;
+            }
+            index++;
+        }
+        return -1;
+    }
+
+    private static bool ScrollListToMatch(CollectionView list, HtmlView htmlView)
+    {
+#if ANDROID
+        if (htmlView.GetSearchMatchTop() is not { } matchTop ||
+            htmlView.Handler?.PlatformView is not Android.Views.View noteView ||
+            list.Handler?.PlatformView is not AndroidX.RecyclerView.Widget.RecyclerView recycler)
+        {
+            return false;
+        }
+        var viewPos = new int[2];
+        var listPos = new int[2];
+        noteView.GetLocationOnScreen(viewPos);
+        recycler.GetLocationOnScreen(listPos);
+        var density = noteView.Resources?.DisplayMetrics?.Density ?? 1f;
+        recycler.ScrollBy(0, (int)(viewPos[1] + matchTop * density - listPos[1] - 8 * density));
+        return true;
+#elif IOS || MACCATALYST
+        if (htmlView.GetSearchMatchTop() is not { } matchTop ||
+            htmlView.Handler?.PlatformView is not UIKit.UIView noteView ||
+            list.Handler?.PlatformView is not UIKit.UICollectionView collection)
+        {
+            return false;
+        }
+        // Scroll-view coordinates are content space, so the converted point is
+        // already a content offset.
+        var point = noteView.ConvertPointToView(new CoreGraphics.CGPoint(0, matchTop), collection);
+        var target = point.Y - 8;
+        var min = -collection.AdjustedContentInset.Top;
+        var max = Math.Max(min, collection.ContentSize.Height - collection.Bounds.Height + collection.AdjustedContentInset.Bottom);
+        collection.SetContentOffset(
+            new CoreGraphics.CGPoint(collection.ContentOffset.X, Math.Clamp(target, min, max)), false);
+        return true;
+#else
+        // No per-line measurement on this platform: the pasuk-row scroll is the landing.
+        _ = list;
+        _ = htmlView;
+        return true;
+#endif
     }
 }

@@ -32,6 +32,7 @@ public partial class AppShell : Shell
 		Routing.RegisterRoute(AppRoutes.LearningCalendar, typeof(LearningCalendarPage));
 		Routing.RegisterRoute(AppRoutes.CalendarReader, typeof(PerekPage));
 		Routing.RegisterRoute(AppRoutes.SearchReader, typeof(PerekPage));
+		Routing.RegisterRoute(AppRoutes.Masora, typeof(MasoraPage));
 
 		Navigated += OnNavigated;
 	}
@@ -218,6 +219,12 @@ public partial class AppShell : Shell
 	{
 		FlyoutIsPresented = false;
 		await GoToAsync(AppRoutes.FlyoutPage(AppRoutes.LearningCalendar, CurrentState.Location.OriginalString));
+	}
+
+	private async void OnMasoraTapped(object? sender, TappedEventArgs e)
+	{
+		FlyoutIsPresented = false;
+		await GoToAsync(AppRoutes.FlyoutPage(AppRoutes.Masora, CurrentState.Location.OriginalString));
 	}
 
 	private async void OnAuthorsTapped(object? sender, TappedEventArgs e)

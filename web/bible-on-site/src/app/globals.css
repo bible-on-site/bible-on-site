@@ -112,20 +112,23 @@ a {
   z-index: 3;
 }
 
-/* Dedicated search button beside the logo — a clear, independent touch
-   target kept well away from the hamburger trigger (issue #2102). */
+/* Icon-only search button pinned to the physical left edge of the nav
+   bar with the same edge padding as the hamburger at the opposite/right
+   end (issue #2154). Absolute inside the bar keeps the logo centered. */
 .top-nav-search {
+  position: absolute;
+  left: 1.25rem;
+  top: 50%;
+  transform: translateY(-50%);
   display: inline-flex;
   align-items: center;
-  gap: 0.375rem;
-  min-height: 44px;
-  padding: 0 0.875rem;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
   border: 1px solid rgba(255, 255, 255, 0.65);
   border-radius: 999px;
   color: #fff;
-  font-size: 1rem;
-  font-weight: 600;
-  line-height: 1;
 }
 
 .top-nav-search img {
