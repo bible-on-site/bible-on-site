@@ -2,14 +2,17 @@
  * Search orchestrator: fans a query out to every requested provider and
  * normalizes the per-provider hits into the shared SearchResultItem
  * contract. A provider failure is degraded (that type is skipped and a
- * notice is recorded) rather than failing the whole search — perushim and
- * articles need MySQL, perakim/pesukim are always available.
+ * notice is recorded) rather than failing the whole search — perushim,
+ * articles and Tanahpedia entries need MySQL, perakim/pesukim are always
+ * available.
  */
 
+import { entryHref } from "@/lib/tanahpedia/synonym-resolution";
 import {
 	searchArticles,
 	searchAuthors,
 	searchPerushNotes,
+	searchTanahpediaEntries,
 	perushHitReference,
 } from "./db-content";
 import { normalizeSearchText } from "./normalize";
@@ -33,6 +36,7 @@ const AVAILABILITY_MESSAGES: Record<SearchResultType, string> = {
 	perush: "חיפוש הפירושים אינו זמין כרגע",
 	author: "חיפוש הרבנים אינו זמין כרגע",
 	article: "חיפוש המאמרים אינו זמין כרגע",
+	tanahpedia: "חיפוש התנכפדיה אינו זמין כרגע",
 };
 
 export interface SearchOptions {
@@ -166,6 +170,26 @@ export async function searchSite(
 					),
 				)
 				.catch((error) => fail("article", error)),
+		);
+	}
+	if (types.includes("tanahpedia")) {
+		tasks.push(
+			searchTanahpediaEntries(phrase, limit)
+				.then((hits) =>
+					add(
+						"tanahpedia",
+						hits.map(({ entry, score }) => ({
+							type: "tanahpedia" as const,
+							title: entry.title,
+							snippetHtml: entry.plain
+								? searchSnippet(entry.plain, phrase)
+								: null,
+							href: entryHref(entry.uniqueName),
+							score,
+						})),
+					),
+				)
+				.catch((error) => fail("tanahpedia", error)),
 		);
 	}
 	await Promise.all(tasks);
