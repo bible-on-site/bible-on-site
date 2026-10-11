@@ -155,7 +155,8 @@ public static class SearchMatch
         // join-space next to empty or punctuation-only segments, so segment
         // positions are found, not computed.
         var searchFrom = 0;
-        for (var i = 0; i < norms.Length; i++)
+        (int Segment, SearchMatchSpan Span)? result = null;
+        for (var i = 0; i < norms.Length && result is null; i++)
         {
             if (norms[i].Length == 0)
             {
@@ -171,11 +172,14 @@ public static class SearchMatch
                 var local = Math.Max(0, global.Start - position);
                 // A span bleeding past the segment edge is clipped — the next
                 // segment is media or unrelated text, not a continuation.
-                return (i, new SearchMatchSpan(local, Math.Min(global.Length, norms[i].Length - local)));
+                result = (i, new SearchMatchSpan(local, Math.Min(global.Length, norms[i].Length - local)));
             }
-            searchFrom = position + norms[i].Length;
+            else
+            {
+                searchFrom = position + norms[i].Length;
+            }
         }
-        return null;
+        return result;
     }
 
     /// <summary>
