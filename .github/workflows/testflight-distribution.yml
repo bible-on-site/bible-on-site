@@ -65,7 +65,9 @@ jobs:
 
       - name: Preserve TestFlight verification automation
         if: ${{ steps.guard.outputs.deploy == 'true' }}
-        run: cp devops/github/release/testflight-build.mjs "$RUNNER_TEMP/testflight-build.mjs"
+        run: |
+          cp devops/github/release/testflight-build.mjs "$RUNNER_TEMP/testflight-build.mjs"
+          cp devops/github/release/release-notes.mjs "$RUNNER_TEMP/release-notes.mjs"
 
       - name: Checkout artifact source
         if: ${{ steps.guard.outputs.deploy == 'true' }}
@@ -107,6 +109,19 @@ jobs:
           UPLOAD_EXIT_CODE: "0"
         run: node "$RUNNER_TEMP/testflight-build.mjs" postflight
 
+      - name: Build the TestFlight changelog from the release notes
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        id: changelog
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node "$RUNNER_TEMP/release-notes.mjs" --testflight "app-v$MODULE_VERSION" > "$RUNNER_TEMP/testflight-changelog.txt"
+          {
+            echo "CHANGELOG<<EOF"
+            cat "$RUNNER_TEMP/testflight-changelog.txt"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Install Fastlane
         if: ${{ steps.guard.outputs.deploy == 'true' }}
         run: gem install fastlane -NV
@@ -126,7 +141,7 @@ jobs:
             --beta_app_description "בכ\"ט כסלו תשע\"ה(21 דצמ' 14) התחילה תכנית לימוד תנ\"ך יומי של משרד החינוך, פרק ליום. כחודש לאחר מכן עלה לרשת אתר לימוד תנך באותו פורמט אשר מתעדכן מיום ליום במאמרים של רבנים. כמו כן יש רעיונות נוספים שעתידים להתחדש, תעקבו אחרינו! לימוד פורה, תנך.co.il" \
             --beta_app_feedback_email "tanah.site@gmail.com" \
             --beta_app_review_info '{"contact_email":"tanah.site@gmail.com","contact_first_name":"Dorad","contact_last_name":"Levinshtein","contact_phone":"+372 5707 8640"}' \
-            --changelog "Automated build v$MODULE_VERSION"
+            --changelog "${{ steps.changelog.outputs.CHANGELOG }}"
 
       - name: Record distribution result
         if: ${{ always() && steps.guard.outputs.deployment_id != '' }}

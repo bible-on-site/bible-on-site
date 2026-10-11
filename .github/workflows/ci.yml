@@ -2597,6 +2597,8 @@ jobs:
     with:
       module_name: website
       module_directory: ${{ needs.setup_env.outputs.website_directory }}
+      # Keep in sync with website extraModulePaths in devops/github/ci/determine-changes.ts
+      extra_module_paths: '["data/recitation/recitation.sqlite", "app/BibleOnSite/Resources/Raw/recitation-audio.html"]'
       module_version: ${{ needs.package_website.outputs.module_version }}
       artifacts_json: '[{"name": "${{ needs.package_website.outputs.docker_artifact_name }}", "path": "web/bible-on-site/.release", "glob": "*.tar.gz"}]'
       cd_event_type: deploy-aws

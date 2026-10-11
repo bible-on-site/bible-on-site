@@ -30,6 +30,14 @@ on:
         description: Event type for the CD workflow trigger (e.g., deploy-aws, deploy-app)
         required: true
         type: string
+      extra_module_paths:
+        description: |
+          JSON array of extra module paths (matching extraModulePaths in
+          devops/github/ci/determine-changes.ts) whose commits belong in the
+          module's release notes.
+        required: false
+        type: string
+        default: "[]"
     outputs:
       released:
         description: Whether the module was successfully released (for version bump coordination)
@@ -84,6 +92,8 @@ jobs:
         uses: actions/checkout@v7
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          # Release notes need the previous module tag and its commit range.
+          fetch-depth: 0
 
       - name: Configure Git
         run: |
@@ -215,6 +225,22 @@ jobs:
           git remote set-url origin git@github.com:${{ github.repository }}
           git push origin ${{ steps.check_tag.outputs.TAG_NAME }}
 
+      - name: Generate Release Notes
+        if: steps.check_tag.outputs.SKIP_RELEASE != 'true'
+        id: release_notes
+        run: |
+          node devops/github/release/release-notes.mjs --generate \
+            --module "${{ inputs.module_name }}" \
+            --tag "${{ steps.check_tag.outputs.TAG_NAME }}" \
+            --directory "${{ inputs.module_directory }}" \
+            --extras '${{ inputs.extra_module_paths }}' \
+            --out "$RUNNER_TEMP/release-notes.md"
+          {
+            echo "NOTES<<EOF"
+            cat "$RUNNER_TEMP/release-notes.md"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Download Artifacts
         if: steps.check_tag.outputs.SKIP_RELEASE != 'true'
         run: |
@@ -258,6 +284,10 @@ jobs:
       - name: Prepare Release
         if: steps.check_tag.outputs.SKIP_RELEASE != 'true'
         id: prepare_release
+        env:
+          # Notes are markdown built from PR titles; keep them out of the
+          # script text so quotes and `$` cannot alter the shell command.
+          RELEASE_NOTES: ${{ steps.release_notes.outputs.NOTES }}
         run: |
           set -e
 
@@ -292,6 +322,8 @@ jobs:
             # Simple single-artifact release
             BODY="Automated release for ${MODULE_NAME_CAP} version ${{ inputs.module_version }}."
           fi
+
+          BODY="${BODY}"$'\n\n'"$RELEASE_NOTES"
 
           DELIVERY_PAYLOAD='${{ steps.check_tag.outputs.CD_PAYLOAD || steps.build_payload.outputs.CD_PAYLOAD }}'
           BODY="${BODY}"$'\n\n'"<!-- release-delivery:${DELIVERY_PAYLOAD} -->"
