@@ -160,6 +160,12 @@ test.describe("Recitation in the book reader", () => {
 		await expect(first).toHaveCSS("background-color", "rgb(233, 239, 248)");
 		await expect(second).toHaveAttribute("aria-current", "true");
 		await expect(first).not.toHaveAttribute("aria-current", "true");
+		// During a pasuk preview the toggle is a chapter-Play button; it starts
+		// continuous playback at the preview's bookmark before it can pause.
+		await reader.getByRole("button", { name: "השמעת כל הפרק" }).click();
+		await expect(
+			reader.getByRole("button", { name: "השהיית ההקראה" }),
+		).toBeVisible();
 		await reader.getByRole("button", { name: "השהיית ההקראה" }).click();
 		const paused = await text
 			.locator('[data-recitation-active="true"]')
