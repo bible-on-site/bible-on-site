@@ -1,9 +1,9 @@
 # Extension packs — delivery, lifecycle, and independence
 
-Research for [#2099](https://github.com/bible-on-site/bible-on-site/issues/2099);
-input to the removal/state work in
+Researched in [#2099](https://github.com/bible-on-site/bible-on-site/issues/2099);
+the removal/state work below was implemented for
 [#2098](https://github.com/bible-on-site/bible-on-site/issues/2098).
-Every claim below is traced to code or packaging configuration.
+Every claim is traced to code or packaging configuration.
 
 ## Inventory
 
@@ -53,33 +53,51 @@ server-side pack update channel.
   refreshed by hash comparison on every `PerushimCatalogService.InitializeAsync`.
 - iOS extracted ODR copies are generation-scoped
   (`Caches/odr_assets/{version}-{build}/{pack}`), so an updated app re-extracts the
-  new payload instead of trusting the old file. Prior-generation directories are
-  left behind for the OS to purge — the app never cleans them.
+  new payload instead of trusting the old file. `OdrCacheDirectory` sweeps
+  prior-generation directories (and legacy unversioned pack dirs) on every access,
+  keeping only the current `{version}-{build}` directory.
 - Recitation: `UpdateAsync` re-reads the bundled catalog; `DownloadAsync` reuses
   local MP3s whose `audioSha256` still matches and re-extracts only books whose
   archive changed. Word timings live in the bundled catalog, so timing changes ride
-  app releases without re-downloading unchanged audio. Superseded MP3s (old
-  `audioSha256` names) are currently **orphaned on disk** — nothing collects them.
+  app releases without re-downloading unchanged audio. `UpdateAsync` also sweeps
+  `extensions/recitation` files the current catalog does not reference —
+  superseded `audioSha256` MP3s and aborted `*.download` fragments — while a
+  download in progress holds its gate and is never collected.
 
-## Removal behavior (current reality)
+## Removal behavior (implemented for #2098)
 
-There is **no removal API anywhere** — this is #2098's scope. What the platforms
-allow:
+Platform limits (unchanged):
 
 - Android PAD has no pack-deletion API (`AssetPackManager` exposes `Cancel`,
   `Fetch`, `GetPackLocation(s)`, listeners — no remove). Pack bytes are
   Play-managed and are reclaimed only on app uninstall.
 - iOS ODR has no force-delete; `EndAccessingResources` only makes the tag
   purgeable when the OS needs space.
-- App-owned copies **can** be deleted: the commentary DB in `AppDataDirectory`,
-  `extensions/recitation/*.mp3`, and the `odr_assets` cache dirs.
-- **Trap for #2098** (verified by `ExtensionPackLifecycleTests`): deleting the
-  commentary DB is silently undone — `InitializeCoreAsync` re-copies it from the
-  still-installed store pack on the next init (the reader page and preferences
-  invoke init). A deliberate removal needs a persistent tombstone honored by init,
-  not just file deletion.
-- Recitation removal is clean: init and `UpdateAsync` load catalog metadata only
-  and never re-download audio, so deleted MP3s stay deleted until `DownloadAsync`.
+- So removal deletes **app-owned copies only** — the commentary DB in
+  `AppDataDirectory`, `extensions/recitation/*`, and `odr_assets` cache dirs.
+  The settings UI offers install/remove actions against those copies and never
+  claims store bytes were reclaimed.
+
+Implemented semantics:
+
+- **Commentary** (`PerushimNotesService.RemoveNotesAsync`): writes a tombstone
+  (`{notes-db}.removed` in `AppDataDirectory`) **before** deleting the DB, so a
+  mid-removal crash cannot leave the pack half-restored without a record.
+  `InitializeCoreAsync` honors the tombstone and never re-copies the DB from a
+  still-delivered store pack or bundled asset — without it the trap verified by
+  `ExtensionPackLifecycleTests` applies: init silently undoes the deletion.
+  Only a successful explicit install (`TryDownloadNotesAsync`) lifts it.
+  `IsRemovedByUser` exposes the tombstone; diagnostics report `RemovedByUser`.
+- **Recitation** (`RecitationService.RemoveAsync`/`RemoveAllAsync`): deletes
+  the catalogued MP3s (plus `*.download` fragments) for the selected perakim, or
+  every file in the dedicated `extensions/recitation` directory — which needs no
+  catalog and therefore works even when the catalog is broken. Removal fires
+  `PlaybackStopRequested` first so active playback releases its file before
+  deletion. Init and `UpdateAsync` load catalog metadata only and never
+  re-download audio, so deleted MP3s stay deleted until `DownloadAsync`.
+- **State**: `RecitationService.InstallState`/`InstalledCount`/`AvailableCount`
+  count files on disk (`{audioSha256}.mp3` exists), never the bundled catalog —
+  yielding מותקנת / מותקנת חלקית / לא מותקנת in the two-level settings UI.
 
 ## Independence assessment
 
@@ -94,8 +112,9 @@ not exist by design:
   match the bundled Bible text (`TextSha256`), so a text-changing app update
   invalidates installed audio.
 - `RecitationService.IsInstalled` means "catalog loaded" — true on every properly
-  packaged release even with zero audio. It cannot drive the three-state summary
-  in #2098; that must be computed from `HasAudio` file state.
+  packaged release even with zero audio. The three-state summary is computed from
+  `InstallState`/`HasAudio` file state, never from `IsInstalled` or the playback
+  on/off preference.
 
 ## Verified vs. not verified
 
@@ -114,5 +133,6 @@ Not exercised anywhere:
 - Real iOS ODR download/purge (requires a TestFlight/App Store install; cannot be
   tested on the simulator or from Windows). CI verifies only IPA manifest/payload
   presence via `verify_recitation_assets.py`.
-- OS-level storage reclamation after a future removal feature (both stores keep
-  their copies regardless of what the app deletes).
+- OS-level storage reclamation after removal: both stores keep their copies
+  regardless of what the app deletes; the UI states only that the app's own
+  copy is removed.

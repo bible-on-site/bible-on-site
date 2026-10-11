@@ -18,6 +18,7 @@ public class PerushimNotesService
 {
     private const string NotesDbName = "sefaria-dump-5784-sivan-4.perushim_notes.sqlite";
     private const string PerushimNotesPackName = "perushim_notes";
+    private const string RemovedMarkerName = NotesDbName + ".removed";
 
     private readonly IPadDeliveryService _padService;
     private readonly string? _dataDirectoryOverride;
@@ -74,6 +75,17 @@ public class PerushimNotesService
 
     private string DataDirectory => _dataDirectoryOverride ?? _fileSystem.AppDataDirectory;
 
+    /// <summary>
+    /// Tombstone recording a deliberate user removal. Neither PAD nor ODR offers
+    /// a per-pack uninstall, so while the store copy stays delivered init would
+    /// silently re-copy the DB — this marker makes the removal persist until an
+    /// explicit install clears it.
+    /// </summary>
+    private string RemovedMarkerPath => Path.Combine(DataDirectory, RemovedMarkerName);
+
+    /// <summary>True after the user deliberately removed the notes pack (until reinstalled).</summary>
+    public bool IsRemovedByUser => File.Exists(RemovedMarkerPath);
+
     /// <summary>Whether compatible notes are available from PAD/ODR or a bundled asset.</summary>
     public bool IsAvailable => _initialized && !_notesMissing && _connection != null;
 
@@ -114,6 +126,7 @@ public class PerushimNotesService
             $"IsAvailable: {IsAvailable}",
             $"Initialized: {_initialized}",
             $"NotesMissing: {_notesMissing}",
+            $"RemovedByUser: {IsRemovedByUser}",
             $"Notes validation: {_notesValidationStatus}",
             $"JSON reflection enabled by default: {JsonSerializer.IsReflectionEnabledByDefault}",
             $"Local DB path: {dbPath}",
@@ -188,6 +201,23 @@ public class PerushimNotesService
 
         var dbPath = Path.Combine(DataDirectory, NotesDbName);
 
+        // A deliberate removal is never undone by initialization, a metadata
+        // refresh, or a still-delivered store pack. Only an explicit install
+        // (TryDownloadNotesAsync) lifts the tombstone.
+        if (File.Exists(RemovedMarkerPath))
+        {
+            if (_connection != null)
+            {
+                await _connection.CloseAsync();
+                _connection = null;
+            }
+            File.Delete(dbPath);
+            _notesMissing = true;
+            _notesValidationStatus = "Removed by user";
+            _initialized = true;
+            return;
+        }
+
         if (!File.Exists(dbPath))
         {
             // No local DB → try PAD/ODR first, then fallback to app package (e.g. Android Debug APK)
@@ -230,6 +260,33 @@ public class PerushimNotesService
         finally { _operationLock.Release(); }
     }
 
+    /// <summary>
+    /// Removes the app-owned notes copy so the pack reads as not installed.
+    /// The store-managed pack itself cannot be uninstalled (PAD/ODR expose no
+    /// removal), so a tombstone records the intent and init will not resurrect it.
+    /// </summary>
+    public async Task RemoveNotesAsync()
+    {
+        await _operationLock.WaitAsync();
+        try
+        {
+            // The tombstone is written before the delete so even a mid-removal
+            // crash cannot leave the pack half-restored without a record.
+            Directory.CreateDirectory(DataDirectory);
+            await File.WriteAllTextAsync(RemovedMarkerPath, DateTime.UtcNow.ToString("O"));
+            if (_connection != null)
+            {
+                await _connection.CloseAsync();
+                _connection = null;
+            }
+            File.Delete(Path.Combine(DataDirectory, NotesDbName));
+            _notesMissing = true;
+            _notesValidationStatus = "Removed by user";
+            _initialized = true;
+        }
+        finally { _operationLock.Release(); }
+    }
+
     private async Task<bool> TryDownloadNotesCoreAsync(IProgress<double>? progress)
     {
         var dbPath = Path.Combine(DataDirectory, NotesDbName);
@@ -238,6 +295,7 @@ public class PerushimNotesService
             await InitializeCoreAsync();
             if (IsAvailable)
             {
+                File.Delete(RemovedMarkerPath);
                 return true;
             }
         }
@@ -251,6 +309,8 @@ public class PerushimNotesService
             _initialized = true;
             if (await ValidateLocalNotesAsync())
             {
+                // A successful explicit install is the only action that lifts a removal.
+                File.Delete(RemovedMarkerPath);
                 return true;
             }
         }
@@ -266,6 +326,7 @@ public class PerushimNotesService
                 _initialized = true;
                 if (await ValidateLocalNotesAsync())
                 {
+                    File.Delete(RemovedMarkerPath);
                     return true;
                 }
             }
@@ -279,6 +340,7 @@ public class PerushimNotesService
             _initialized = true;
             if (await ValidateLocalNotesAsync())
             {
+                File.Delete(RemovedMarkerPath);
                 return true;
             }
         }

@@ -12,6 +12,7 @@ public partial class PreferencesViewModel : ObservableObject
 {
     private readonly PreferencesService _preferencesService;
     private readonly PerushimNotesService _perushimNotesService;
+    private readonly RecitationService _recitationService;
     private readonly IFileSystem _fileSystem;
     private readonly IShare _share;
     private readonly IAppNavigator _navigator;
@@ -39,14 +40,22 @@ public partial class PreferencesViewModel : ObservableObject
 
     public PreferencesViewModel(PreferencesService preferencesService, PerushimNotesService perushimNotesService,
         IFileSystem fileSystem, IShare share, IAppNavigator navigator)
+        : this(preferencesService, perushimNotesService, fileSystem, share, navigator, RecitationService.Instance)
+    {
+    }
+
+    public PreferencesViewModel(PreferencesService preferencesService, PerushimNotesService perushimNotesService,
+        IFileSystem fileSystem, IShare share, IAppNavigator navigator, RecitationService recitationService)
     {
         _preferencesService = preferencesService;
         _perushimNotesService = perushimNotesService;
+        _recitationService = recitationService;
         _fileSystem = fileSystem;
         _share = share;
         _navigator = navigator;
-        Recitation = new RecitationPreferencesViewModel(RecitationService.Instance, preferencesService, PerekDataService.Instance);
+        Recitation = new RecitationPreferencesViewModel(recitationService, preferencesService, PerekDataService.Instance, navigator);
         _preferencesService.PreferencesChanged += OnPreferencesChanged;
+        _recitationService.Changed += OnRecitationChanged;
     }
 
     /// <summary>
@@ -142,6 +151,15 @@ public partial class PreferencesViewModel : ObservableObject
             ? $"מוריד… {(int)Math.Round(PerushimDownloadProgress * 100)}%"
             : "מוריד…";
 
+    /// <summary>Whether to offer removing the installed commentary pack.</summary>
+    public bool ShowPerushimRemove => IsPerushimInstalled && !IsPerushimDownloading;
+
+    /// <summary>
+    /// Three-state קריינות summary computed from locally usable audio files,
+    /// not from the bundled catalog or the playback on/off preference.
+    /// </summary>
+    public string RecitationStateText => RecitationInstallStateText.Of(_recitationService.InstallState);
+
     /// <summary>
     /// Loads preferences from device storage.
     /// </summary>
@@ -150,15 +168,79 @@ public partial class PreferencesViewModel : ObservableObject
     {
         _preferencesService.Load();
         _ = _perushimNotesService.InitializeAsync();
+        _ = _recitationService.InitializeAsync();
         OnPropertyChanged(nameof(FontFactor));
         OnPropertyChanged(nameof(LastLearntPerek));
         OnPropertyChanged(nameof(PerekToLoad));
         OnPropertyChanged(nameof(IsPerekToLoadTodays));
         OnPropertyChanged(nameof(IsPerekToLoadLastLearnt));
+        NotifyPerushimState();
+        OnPropertyChanged(nameof(RecitationStateText));
+    }
+
+    /// <summary>
+    /// Loads preferences and waits for pack state so both summaries are accurate
+    /// before the page first renders. A missing or corrupt pack catalog must not
+    /// break the settings page.
+    /// </summary>
+    public async Task LoadAsync()
+    {
+        Load();
+        try { await _perushimNotesService.InitializeAsync(); }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Perushim init: {ex.Message}"); }
+        try { await _recitationService.InitializeAsync(); }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Recitation init: {ex.Message}"); }
+        NotifyPerushimState();
+        OnPropertyChanged(nameof(RecitationStateText));
+    }
+
+    /// <summary>Opens the second-level קריינות settings page.</summary>
+    [RelayCommand]
+    public async Task OpenRecitationAsync()
+    {
+        await _navigator.GoToAsync(AppRoutes.RecitationPreferences);
+    }
+
+    /// <summary>
+    /// Removes the commentary pack's app-owned copy after confirmation. Store-managed
+    /// bytes stay installed (PAD/ODR have no per-pack uninstall); a tombstone keeps
+    /// the deliberate removal from being silently undone by initialization.
+    /// </summary>
+    [RelayCommand]
+    public async Task RemovePerushimAsync()
+    {
+        if (!IsPerushimInstalled)
+        {
+            return;
+        }
+
+        var confirmed = await _navigator.DisplayChoiceAsync("הסרת חבילת הפירושים",
+            "הפירושים יוסרו מהמכשיר. ניתן להתקין את החבילה שוב בכל עת.", "הסרה", "ביטול");
+        if (!confirmed)
+        {
+            return;
+        }
+
+        try
+        {
+            await _perushimNotesService.RemoveNotesAsync();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Perushim removal failed: {ex.Message}");
+            await _navigator.DisplayAlertAsync("שגיאה", "לא ניתן להסיר את חבילת הפירושים. נסו שוב.", "אישור");
+        }
+
+        NotifyPerushimState();
+    }
+
+    private void NotifyPerushimState()
+    {
         OnPropertyChanged(nameof(ShowPerushimSection));
         OnPropertyChanged(nameof(IsPerushimInstalled));
         OnPropertyChanged(nameof(ShowPerushimDownload));
         OnPropertyChanged(nameof(ShowPerushimDownloadButton));
+        OnPropertyChanged(nameof(ShowPerushimRemove));
         OnPropertyChanged(nameof(PerushimNotesStatusText));
     }
 
@@ -185,11 +267,7 @@ public partial class PreferencesViewModel : ObservableObject
         finally
         {
             IsPerushimDownloading = false;
-            OnPropertyChanged(nameof(ShowPerushimSection));
-            OnPropertyChanged(nameof(IsPerushimInstalled));
-            OnPropertyChanged(nameof(ShowPerushimDownload));
-            OnPropertyChanged(nameof(ShowPerushimDownloadButton));
-            OnPropertyChanged(nameof(PerushimNotesStatusText));
+            NotifyPerushimState();
         }
     }
 
@@ -252,5 +330,10 @@ public partial class PreferencesViewModel : ObservableObject
         OnPropertyChanged(nameof(PerekToLoad));
         OnPropertyChanged(nameof(IsPerekToLoadTodays));
         OnPropertyChanged(nameof(IsPerekToLoadLastLearnt));
+    }
+
+    private void OnRecitationChanged(object? sender, EventArgs e)
+    {
+        OnPropertyChanged(nameof(RecitationStateText));
     }
 }

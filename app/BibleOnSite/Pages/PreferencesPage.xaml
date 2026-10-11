@@ -106,6 +106,16 @@
                                 TextColor="White"
                                 CornerRadius="8"
                                 IsVisible="{Binding ShowPerushimDownloadButton}"/>
+                        <Button Text="הסרת חבילת הפירושים"
+                                Command="{Binding RemovePerushimCommand}"
+                                AutomationId="RemovePerushimButton"
+                                BackgroundColor="Transparent"
+                                BorderColor="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}"
+                                BorderWidth="1"
+                                CornerRadius="8"
+                                TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"
+                                FontSize="13"
+                                IsVisible="{Binding ShowPerushimRemove}"/>
                         <!-- Download progress overlay (visible while the package downloads) -->
                         <VerticalStackLayout Spacing="6" IsVisible="{Binding IsPerushimDownloading}">
                             <Grid>
@@ -139,57 +149,48 @@
                 </Border>
             </VerticalStackLayout>
 
-            <Border Padding="16" StrokeShape="RoundRectangle 8"
-                    BackgroundColor="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}">
-                <VerticalStackLayout BindingContext="{Binding Recitation}" x:DataType="viewmodels:RecitationPreferencesViewModel" Spacing="12">
-                    <Label Text="קריינות" FontSize="20" FontAttributes="Bold" TextColor="{StaticResource Primary}"/>
-                    <Grid ColumnDefinitions="*,Auto">
-                        <Label Text="הפעלת הקראה" VerticalOptions="Center"/>
-                        <Switch Grid.Column="1" IsToggled="{Binding Enabled}" IsEnabled="{Binding IsInstalled}" AutomationId="RecitationEnabledSwitch"/>
+            <!-- ═══ קריינות ═══ -->
+            <VerticalStackLayout Spacing="8">
+                <Label Text="קריינות"
+                       FontSize="14"
+                       FontAttributes="Bold"
+                       TextColor="{StaticResource Primary}"
+                       Padding="4,0,0,0"/>
+
+                <Border Padding="16"
+                        StrokeShape="RoundRectangle 12"
+                        Stroke="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray700}}"
+                        StrokeThickness="1"
+                        BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Gray900}}">
+                    <Grid ColumnDefinitions="Auto,*,Auto"
+                          AutomationId="RecitationSettingsRow">
+                        <Grid.GestureRecognizers>
+                            <TapGestureRecognizer Command="{Binding OpenRecitationCommand}"/>
+                        </Grid.GestureRecognizers>
+                        <Label Text="{x:Static fonts:FluentUI.headphones_24_regular}"
+                               FontFamily="FluentIcons"
+                               FontSize="24"
+                               TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray350}}"
+                               VerticalOptions="Center"
+                               Margin="0,0,12,0"/>
+                        <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                            <Label Text="הגדרות הקראה והתקנת הקלטות"
+                                   FontSize="15"
+                                   TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
+                            <Label Text="{Binding RecitationStateText}"
+                                   AutomationId="RecitationSummaryState"
+                                   FontSize="13"
+                                   TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
+                        </VerticalStackLayout>
+                        <Label Grid.Column="2"
+                               Text="{x:Static fonts:FluentUI.chevron_circle_left_12_regular}"
+                               FontFamily="FluentIcons"
+                               FontSize="20"
+                               TextColor="{StaticResource Gray400}"
+                               VerticalOptions="Center"/>
                     </Grid>
-                    <VerticalStackLayout IsVisible="{Binding Enabled}" Spacing="8" AutomationId="RecitationPlaybackSettings">
-                        <Grid ColumnDefinitions="*,Auto">
-                            <Label Text="מהירות"/>
-                            <Label Grid.Column="1" Text="{Binding Speed, StringFormat='{0:0.##}×'}"/>
-                        </Grid>
-                        <Slider Minimum="0.5" Maximum="2" Value="{Binding Speed}" AutomationId="RecitationSpeedSlider" SemanticProperties.Description="מהירות"/>
-                        <Grid ColumnDefinitions="*,Auto">
-                            <Label Text="אורך הפסקה בין פסוקים"/>
-                            <Label Grid.Column="1" Text="{Binding PauseSeconds, StringFormat='{0:0.#} שניות'}" IsVisible="{Binding CustomPauses}"/>
-                        </Grid>
-                        <Grid ColumnDefinitions="*,Auto">
-                            <Label Text="לפי ההקלטה" VerticalOptions="Center"/>
-                            <Switch Grid.Column="1" IsToggled="{Binding OriginalPauses}" AutomationId="RecitationOriginalPausesSwitch"/>
-                        </Grid>
-                        <Slider Minimum="0" Maximum="5" Value="{Binding PauseSeconds}" IsVisible="{Binding CustomPauses}" AutomationId="RecitationPauseSlider" SemanticProperties.Description="אורך הפסקה בין פסוקים"/>
-                        <Label Text="הפסקה מותאמת זמינה בפרקים עם חלוקה לפסוקים" FontSize="12" TextColor="{StaticResource Gray500}"/>
-                        <Grid ColumnDefinitions="*,Auto">
-                            <Label Text="עוצמה"/>
-                            <Label Grid.Column="1" Text="{Binding Volume, StringFormat='{0:P0}'}"/>
-                        </Grid>
-                        <Slider Minimum="0" Maximum="1" Value="{Binding Volume}" AutomationId="RecitationVolumeSlider" SemanticProperties.Description="עוצמה"/>
-                    </VerticalStackLayout>
-                    <Label Text="חבילות הקראה נפרדות מהפירושים. בחרו ספרים לשימוש ללא אינטרנט, או את כל הספרים (כ-935 MB). חבילות ההקראה מתעדכנות יחד עם האפליקציה." LineBreakMode="WordWrap"/>
-                    <Label Text="{Binding Status}" AutomationId="RecitationPackageStatus" LineBreakMode="WordWrap"/>
-                    <Button Text="כל הספרים" Command="{Binding SelectAllCommand}" IsEnabled="{Binding IsIdle}" AutomationId="RecitationSelectAllButton"/>
-                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding Books}" IsEnabled="{Binding IsIdle}">
-                        <BindableLayout.ItemTemplate>
-                            <DataTemplate x:DataType="viewmodels:RecitationBookChoice">
-                                <Grid ColumnDefinitions="Auto,*" Padding="0,4" IsEnabled="{Binding CanSelect}">
-                                    <CheckBox IsChecked="{Binding IsSelected}" SemanticProperties.Description="{Binding Name}"/>
-                                    <VerticalStackLayout Grid.Column="1" VerticalOptions="Center">
-                                        <Label Text="{Binding Name}"/>
-                                        <Label Text="{Binding Status}" FontSize="12" TextColor="{StaticResource Gray500}"/>
-                                    </VerticalStackLayout>
-                                </Grid>
-                            </DataTemplate>
-                        </BindableLayout.ItemTemplate>
-                    </VerticalStackLayout>
-                    <ProgressBar Progress="{Binding Progress}" IsVisible="{Binding IsDownloading}" ProgressColor="{StaticResource Primary}"/>
-                    <Button Text="הורדת הספרים שנבחרו" Command="{Binding DownloadSelectedCommand}" IsEnabled="{Binding IsIdle}" AutomationId="RecitationDownloadButton"/>
-                    <Button Text="ביטול ההורדה" Command="{Binding CancelDownloadCommand}" IsVisible="{Binding IsDownloading}"/>
-                </VerticalStackLayout>
-            </Border>
+                </Border>
+            </VerticalStackLayout>
         </VerticalStackLayout>
     </ScrollView>
 </ContentPage>

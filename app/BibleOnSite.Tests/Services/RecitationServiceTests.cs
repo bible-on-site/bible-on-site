@@ -147,7 +147,11 @@ public class RecitationServiceTests
         }
         await service.UpdateAsync(TestContext.Current.CancellationToken);
         await service.Invoking(s => s.DownloadAsync([1])).Should().ThrowAsync<InvalidDataException>();
-        service.HasAudio(1).Should().BeFalse(); (await File.ReadAllBytesAsync(originalPath, TestContext.Current.CancellationToken)).Should().Equal("audio"u8.ToArray());
+        service.HasAudio(1).Should().BeFalse();
+        File.Exists(originalPath).Should().BeFalse(
+            "the rotated catalog orphaned the old audioSha256, so UpdateAsync swept it");
+        Directory.EnumerateFiles(Path.Combine(storage.Root, "extensions", "recitation")).Should().BeEmpty(
+            "a rejected pack lands nothing: no new audio, no orphaned MP3, no fragments");
         Directory.EnumerateFiles(storage.Root, "*.download", SearchOption.AllDirectories).Should().BeEmpty();
     }
 
@@ -277,6 +281,69 @@ public class RecitationServiceTests
         await model.DownloadSelectedAsync(); model.Enabled.Should().BeTrue();
         model.Books[0].Status.Should().Contain("1 מתוך 1").And.Contain("MB");
         model.Enabled = false; model.Enabled.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task PreferencesRemoveBook_RequiresConfirmation_AndDeletesOnlyThatBook()
+    {
+        await using var storage = new TestStorage();
+        var db = await storage.CreateDatabaseAsync("sefaria-dump-5784-sivan-4.tanah_view.sqlite", PerekDataServiceTests.Schema);
+        await db.ExecuteAsync("INSERT INTO tanah_sefer VALUES (1,'בראשית','Genesis',1,1),(2,'שמות','Exodus',2,2)");
+        await db.ExecuteAsync("INSERT INTO tanah_perek VALUES (1,1,NULL),(2,2,NULL)");
+        var extension = new Extension(storage) { Package = new(1, [Track(1, "audio"u8.ToArray()), Track(2, "second"u8.ToArray())]) };
+        extension.Audio["/recordings/2_record.mp3"] = "second"u8.ToArray();
+        extension.BookIds[1] = 1; extension.BookIds[2] = 2; extension.Bundle();
+        var service = extension.Service;
+        var navigator = new Mock<IAppNavigator>();
+        navigator.Setup(n => n.DisplayChoiceAsync(It.IsAny<string>(), It.IsAny<string>(), "הסרה", "ביטול")).ReturnsAsync(false);
+        var model = new RecitationPreferencesViewModel(service,
+            PreferencesService.CreateForTesting(new InMemoryPreferencesStorage()),
+            new PerekDataService(new LocalDatabaseService(storage.FileSystem.Object)), navigator.Object);
+        await model.LoadAsync();
+        model.SelectAllCommand.Execute(null); await model.DownloadSelectedAsync();
+        service.HasAudio(1).Should().BeTrue(); service.HasAudio(2).Should().BeTrue();
+        model.SummaryText.Should().Be("מותקנת - 2 מתוך 2 הקלטות מותקנות");
+
+        // Declining the confirmation removes nothing.
+        await model.RemoveBookAsync(model.Books[0]);
+        service.HasAudio(1).Should().BeTrue("a declined confirmation never deletes");
+
+        navigator.Setup(n => n.DisplayChoiceAsync(It.IsAny<string>(), It.IsAny<string>(), "הסרה", "ביטול")).ReturnsAsync(true);
+        await model.RemoveBookAsync(model.Books[0]);
+        service.HasAudio(1).Should().BeFalse();
+        service.HasAudio(2).Should().BeTrue("removal is scoped to the chosen book");
+        model.Books[0].HasInstalled.Should().BeFalse();
+        model.Books[1].HasInstalled.Should().BeTrue();
+        model.SummaryText.Should().Be("מותקנת חלקית - 1 מתוך 2 הקלטות מותקנות");
+        model.Status.Should().Contain("בראשית");
+        model.CanRemove.Should().BeTrue();
+
+        await model.RemoveAllAsync();
+        service.HasAudio(2).Should().BeFalse();
+        service.InstallState.Should().Be(RecitationInstallState.NotInstalled);
+        model.SummaryText.Should().Be("לא מותקנת");
+        model.CanRemove.Should().BeFalse();
+        model.Enabled.Should().BeFalse("with no audio left, playback cannot stay enabled");
+        model.Status.Should().Contain("הוסרו");
+
+        // Reinstall right after removal: the selected books download again.
+        await model.DownloadSelectedAsync();
+        service.HasAudio(1).Should().BeTrue(); service.HasAudio(2).Should().BeTrue();
+        model.SummaryText.Should().Be("מותקנת - 2 מתוך 2 הקלטות מותקנות");
+    }
+
+    [Fact]
+    public async Task PreferencesRemoveAll_WhenNothingInstalled_DoesNotAsk()
+    {
+        await using var storage = new TestStorage();
+        var extension = new Extension(storage) { Package = new(1, [Track(1, "audio"u8.ToArray())]) };
+        extension.Bundle();
+        var navigator = new Mock<IAppNavigator>();
+        var model = new RecitationPreferencesViewModel(extension.Service,
+            PreferencesService.CreateForTesting(new InMemoryPreferencesStorage()),
+            new PerekDataService(new LocalDatabaseService(storage.FileSystem.Object)), navigator.Object);
+        await model.RemoveAllAsync();
+        navigator.Verify(n => n.DisplayChoiceAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
     }
 
     [Fact]

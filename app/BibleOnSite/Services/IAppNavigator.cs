@@ -5,6 +5,12 @@ public interface IAppNavigator
 {
     Task GoToAsync(string route);
     Task DisplayAlertAsync(string title, string message, string cancel);
+
+    /// <summary>
+    /// Two-choice confirmation. Returns true only when the user accepts; false on
+    /// cancel and when no window can present the dialog (never a false accept).
+    /// </summary>
+    Task<bool> DisplayChoiceAsync(string title, string message, string accept, string cancel);
 }
 
 public sealed class ShellAppNavigator : IAppNavigator
@@ -18,12 +24,19 @@ public sealed class ShellAppNavigator : IAppNavigator
         var page = Application.Current?.Windows.FirstOrDefault()?.Page;
         return page?.DisplayAlertAsync(title, message, cancel) ?? Task.CompletedTask;
     }
+
+    public Task<bool> DisplayChoiceAsync(string title, string message, string accept, string cancel)
+    {
+        var page = Application.Current?.Windows.FirstOrDefault()?.Page;
+        return page?.DisplayAlertAsync(title, message, accept, cancel) ?? Task.FromResult(false);
+    }
 }
 
 public static class AppRoutes
 {
     public static string Perek => "PerekPage";
     public static string SearchReader => "searchReader";
+    public static string RecitationPreferences => "RecitationPreferencesPage";
 
     /// <summary>
     /// Flyout pages replace another menu page above the most recent reader.

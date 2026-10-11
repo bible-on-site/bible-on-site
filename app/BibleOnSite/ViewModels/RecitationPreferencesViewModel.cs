@@ -5,12 +5,24 @@ using CommunityToolkit.Mvvm.Input;
 
 namespace BibleOnSite.ViewModels;
 
+/// <summary>Hebrew wording for the recitation three-state summary shared by both settings levels.</summary>
+internal static class RecitationInstallStateText
+{
+    public static string Of(RecitationInstallState state) => state switch
+    {
+        RecitationInstallState.Installed => "מותקנת",
+        RecitationInstallState.Partial => "מותקנת חלקית",
+        _ => "לא מותקנת"
+    };
+}
+
 #pragma warning disable S2333 // ObservableProperty and RelayCommand generate partial implementations.
 public partial class RecitationBookChoice : ObservableObject
 {
     public required string Name { get; init; }
     public required List<int> PerekIds { get; init; }
     [ObservableProperty] private bool _canSelect = true;
+    [ObservableProperty] private bool _hasInstalled;
     [ObservableProperty] private bool _isSelected;
     [ObservableProperty] private string _status = "";
 }
@@ -20,13 +32,17 @@ public partial class RecitationPreferencesViewModel : ObservableObject
     private readonly RecitationService _recitation;
     private readonly PreferencesService _preferences;
     private readonly PerekDataService _perakim;
+    private readonly IAppNavigator _navigator;
     private CancellationTokenSource? _download;
     public ObservableCollection<RecitationBookChoice> Books { get; } = [];
     public RecitationPreferencesViewModel() : this(RecitationService.Instance, PreferencesService.Instance, PerekDataService.Instance) { }
     public RecitationPreferencesViewModel(RecitationService recitation, PreferencesService preferences, PerekDataService perakim)
+        : this(recitation, preferences, perakim, ShellAppNavigator.Instance) { }
+    public RecitationPreferencesViewModel(RecitationService recitation, PreferencesService preferences, PerekDataService perakim, IAppNavigator navigator)
     {
-        _recitation = recitation; _preferences = preferences; _perakim = perakim;
+        _recitation = recitation; _preferences = preferences; _perakim = perakim; _navigator = navigator;
     }
+    /// <summary>Catalog metadata is loaded. Audio presence is reported by <see cref="InstallState"/>.</summary>
     public bool IsInstalled => _recitation.IsInstalled;
     public bool Enabled
     {
@@ -64,6 +80,26 @@ public partial class RecitationPreferencesViewModel : ObservableObject
     [ObservableProperty] private double _progress;
     [ObservableProperty] private string _status = "התקינו הקראה לכל הספרים או לספרים שתבחרו.";
 
+    /// <summary>Three-state summary from verified audio on disk, never from catalog presence.</summary>
+    public RecitationInstallState InstallState => _recitation.InstallState;
+
+    /// <summary>Detailed installation state for this level: state word plus on-disk counts.</summary>
+    public string SummaryText
+    {
+        get
+        {
+            if (_recitation.InstalledCount == 0)
+            {
+                return RecitationInstallStateText.Of(RecitationInstallState.NotInstalled);
+            }
+
+            return $"{RecitationInstallStateText.Of(_recitation.InstallState)} - {_recitation.InstalledCount} מתוך {_recitation.AvailableCount} הקלטות מותקנות";
+        }
+    }
+
+    /// <summary>Whether any recording is installed and can be removed.</summary>
+    public bool CanRemove => IsIdle && _recitation.InstalledCount > 0;
+
     public async Task LoadAsync()
     {
         try
@@ -93,10 +129,12 @@ public partial class RecitationPreferencesViewModel : ObservableObject
             var size = _recitation.Books.Where(b => b.PerekIds.Any(book.PerekIds.Contains)).Sum(b => b.SizeBytes);
             // Unknown availability can be retried; a loaded catalog is authoritative.
             book.CanSelect = !IsInstalled || available > 0;
+            book.HasInstalled = installed > 0;
             if (!book.CanSelect) { book.IsSelected = false; }
             book.Status = !IsInstalled ? "זמינות תיבדק בעת ההורדה" : available == 0 ? "אין הקלטות זמינות" : $"{installed} מתוך {available} הקלטות מותקנות ({Math.Ceiling(size / 1_000_000d)} MB)";
         }
         OnPropertyChanged(nameof(IsInstalled)); OnPropertyChanged(nameof(Enabled));
+        OnPropertyChanged(nameof(InstallState)); OnPropertyChanged(nameof(SummaryText)); OnPropertyChanged(nameof(CanRemove));
     }
 
     [RelayCommand] private void SelectAll() { foreach (var book in Books)
@@ -105,6 +143,80 @@ public partial class RecitationPreferencesViewModel : ObservableObject
         }
     }
     [RelayCommand] private void CancelDownload() => _download?.Cancel();
+
+    /// <summary>Removes every installed recording after confirmation.</summary>
+    [RelayCommand]
+    public async Task RemoveAllAsync()
+    {
+        if (!IsIdle || _recitation.InstalledCount == 0)
+        {
+            return;
+        }
+
+        if (!await _navigator.DisplayChoiceAsync("הסרת כל ההקלטות",
+            "כל הקלטות הקריינות יוסרו מהמכשיר. ניתן להתקין אותן שוב בכל עת.", "הסרה", "ביטול"))
+        {
+            return;
+        }
+
+        try
+        {
+            await _recitation.RemoveAllAsync();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Recitation removal failed: {ex.Message}");
+            Status = "לא ניתן להסיר את ההקלטות. נסו שוב.";
+            Refresh();
+            return;
+        }
+
+        Enabled = false;
+        Status = "כל ההקלטות הוסרו. ניתן להתקין אותן שוב בכל עת.";
+        Refresh();
+    }
+
+    /// <summary>Removes one book's installed recordings after confirmation.</summary>
+    [RelayCommand]
+    public async Task RemoveBookAsync(RecitationBookChoice? book)
+    {
+        if (book == null || !IsIdle)
+        {
+            return;
+        }
+
+        if (!book.PerekIds.Any(_recitation.HasAudio))
+        {
+            Status = $"אין הקלטות מותקנות להסרה בספר {book.Name}.";
+            return;
+        }
+
+        if (!await _navigator.DisplayChoiceAsync("הסרת הקלטות",
+            $"ההקלטות של ספר {book.Name} יוסרו מהמכשיר. ניתן להתקין אותן שוב בכל עת.", "הסרה", "ביטול"))
+        {
+            return;
+        }
+
+        try
+        {
+            await _recitation.RemoveAsync(book.PerekIds);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Recitation removal failed: {ex.Message}");
+            Status = "לא ניתן להסיר את ההקלטות. נסו שוב.";
+            Refresh();
+            return;
+        }
+
+        if (_recitation.InstalledCount == 0)
+        {
+            Enabled = false;
+        }
+
+        Status = $"הקלטות ספר {book.Name} הוסרו. ניתן להתקין אותן שוב בכל עת.";
+        Refresh();
+    }
 
     [RelayCommand]
     public async Task DownloadSelectedAsync()

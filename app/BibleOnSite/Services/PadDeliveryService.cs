@@ -30,9 +30,40 @@ public sealed partial class PadDeliveryService : IPadDeliveryService
     {
         // Extracted ODR data belongs to this app build, just like the store resource.
         var generation = $"{appInfo.VersionString}-{appInfo.BuildString}";
-        var dir = Path.Combine(fileSystem.CacheDirectory, "odr_assets", generation, packName);
+        var root = Path.Combine(fileSystem.CacheDirectory, "odr_assets");
+        // Every ODR access sweeps stale generations: prior {version}-{build}
+        // directories (and any legacy unversioned pack dirs) are app-owned
+        // cache the OS will not reclaim.
+        SweepStaleOdrGenerations(root, generation);
+        var dir = Path.Combine(root, generation, packName);
         Directory.CreateDirectory(dir);
         return dir;
+    }
+
+    private static void SweepStaleOdrGenerations(string odrRoot, string currentGeneration)
+    {
+        try
+        {
+            if (!Directory.Exists(odrRoot))
+            {
+                return;
+            }
+
+            foreach (var stale in Directory.EnumerateDirectories(odrRoot).ToList())
+            {
+                if (Path.GetFileName(stale) == currentGeneration)
+                {
+                    continue;
+                }
+
+                try { Directory.Delete(stale, true); }
+                catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"ODR stale generation cleanup: {ex.Message}"); }
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"ODR stale generation cleanup: {ex.Message}");
+        }
     }
 
     /// <inheritdoc />

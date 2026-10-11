@@ -24,8 +24,7 @@ public partial class PreferencesPage : ContentPage
     protected override async void OnAppearing()
     {
         base.OnAppearing();
-        _viewModel.Load();
-        await _viewModel.Recitation.LoadAsync();
+        await _viewModel.LoadAsync();
     }
 
     private void OnPerekToLoadRadioChanged(object? sender, CheckedChangedEventArgs e)

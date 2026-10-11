@@ -12,7 +12,7 @@ public class OdrCacheTests
     [Theory]
     [InlineData("5.0.104", "100")]
     [InlineData("5.0.100", "104")]
-    public async Task UpdatedApp_DoesNotReusePreviousBuildsExtractedNotes(string version, string build)
+    public async Task UpdatedApp_DoesNotReuse_AndSweeps_PreviousBuildsExtractedNotes(string version, string build)
     {
         await using var storage = new TestStorage();
         var app = App("5.0.100", "100");
@@ -25,7 +25,8 @@ public class OdrCacheTests
 
         Directory.Exists(current).Should().BeTrue();
         File.Exists(Path.Join(current, Notes)).Should().BeFalse();
-        File.Exists(Path.Join(previous, Notes)).Should().BeTrue();
+        Directory.Exists(previous).Should().BeFalse(
+            "the generation sweep removes the previous build's extracted ODR cache");
     }
 
     [Fact]
@@ -42,7 +43,7 @@ public class OdrCacheTests
     }
 
     [Fact]
-    public async Task CurrentApp_DoesNotTrustLegacyUnversionedOdrCache()
+    public async Task CurrentApp_DoesNotTrustLegacyUnversionedOdrCache_AndSweepsIt()
     {
         await using var storage = new TestStorage();
         var legacy = Path.Join(storage.Root, "odr_assets", Pack);
@@ -53,6 +54,8 @@ public class OdrCacheTests
         var current = PadDeliveryService.OdrCacheDirectory(storage.FileSystem.Object, app.Object, Pack);
 
         File.Exists(Path.Join(current, Notes)).Should().BeFalse();
+        Directory.Exists(legacy).Should().BeFalse(
+            "the generation sweep removes legacy unversioned pack directories");
     }
 
     private static Mock<IAppInfo> App(string version, string build)
