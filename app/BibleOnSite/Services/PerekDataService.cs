@@ -213,11 +213,15 @@ public class PerekDataService
     public int GetTodaysPerekId()
     {
         if (_perakim == null || _perakim.Count == 0)
+        {
             return 1;
+        }
 
         var scheduleService = _scheduleService;
         if (scheduleService.IsLoaded)
+        {
             return scheduleService.GetTodaysPerekId();
+        }
 
         // Schedule not loaded yet (early startup race): keep the legacy
         // perakim-based estimate rather than blocking on async work.
@@ -370,7 +374,9 @@ public class PerekDataService
             return 0;
 
         if (int.TryParse(hebDate, out var result))
+        {
             return result;
+        }
 
         return 0;
     }
@@ -378,10 +384,14 @@ public class PerekDataService
     private static string FormatHebrewDate(string? hebDate)
     {
         if (string.IsNullOrWhiteSpace(hebDate))
+        {
             return string.Empty;
+        }
 
         if (hebDate.Length != 8 || !int.TryParse(hebDate, out var dateNum))
+        {
             return hebDate;
+        }
 
         var formatted = HebrewDateHelper.FormatHebrewDate(dateNum);
         return formatted == dateNum.ToString() ? hebDate : formatted;

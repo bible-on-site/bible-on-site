@@ -103,7 +103,9 @@ public partial class LearningCalendarViewModel : ObservableObject
     public async Task InitializeAsync()
     {
         if (IsLoading)
+        {
             return;
+        }
 
         IsLoading = true;
         try
@@ -228,14 +230,19 @@ public partial class LearningCalendarViewModel : ObservableObject
     partial void OnSelectedMonthChanged(PickerOption? value)
     {
         if (_suppressSelection || value is null || value.Value == _month)
+        {
             return;
+        }
+
         SetMonth(_year, value.Value);
     }
 
     partial void OnSelectedYearChanged(PickerOption? value)
     {
         if (_suppressSelection || value is null || value.Value == _year)
+        {
             return;
+        }
         // When the viewed month does not exist in the target year
         // (Adar I/II of a leap year), fall back to plain Adar.
         var month = HebrewDateHelper.GetMonthOrder(value.Value).Contains(_month) ? _month : 6;
@@ -245,7 +252,10 @@ public partial class LearningCalendarViewModel : ObservableObject
     partial void OnSelectedCycleChanged(PickerOption? value)
     {
         if (_suppressSelection || value is null)
+        {
             return;
+        }
+
         var cycle = _schedule.GetCycle(value.Value);
         var (year, month, _) = HebrewDateHelper.NumberToHebrewDate(cycle.StartDate);
         if (year != _year || month != _month)
@@ -283,7 +293,10 @@ public partial class LearningCalendarViewModel : ObservableObject
     private async Task OpenPerekAsync(CalendarCellViewModel? cell)
     {
         if (cell?.PerekId is not int perekId)
+        {
             return;
+        }
+
         await _navigator.GoToAsync($"{AppRoutes.CalendarReader}?perekId={perekId}");
     }
 }

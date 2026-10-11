@@ -28,7 +28,10 @@ public partial class LearningCalendarPage : ContentPage
         // Month/cycle state lives in the view-model; returning from the
         // reader (Back) restores the same viewed month without reloading.
         if (_initialized)
+        {
             return;
+        }
+
         _initialized = true;
         await _viewModel.InitializeAsync();
     }

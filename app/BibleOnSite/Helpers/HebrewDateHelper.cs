@@ -403,6 +403,10 @@ public static class HebrewDateHelper
     /// <summary>
     /// Hebrew month name for a legacy month number.
     /// </summary>
+    /// <remarks>
+    /// Legacy month numbers keep Nisan at 7 in every year; Adar I and II use
+    /// 13 and 14 in leap years.
+    /// </remarks>
     public static string GetHebrewMonthName(int legacyMonth, bool isLeapYear)
     {
         return legacyMonth switch
@@ -412,8 +416,6 @@ public static class HebrewDateHelper
             3 => "כסלו",
             4 => "טבת",
             5 => "שבט",
-            // Legacy month numbers keep Nisan at 7 in every year;
-            // Adar I and II use 13 and 14 in leap years.
             6 => isLeapYear ? "אדר ב" : "אדר",
             7 => "ניסן",
             8 => "אייר",
@@ -461,7 +463,9 @@ public static class HebrewDateHelper
         var order = GetMonthOrder(year);
         var index = Array.IndexOf(order, month);
         if (index < 0)
+        {
             throw new ArgumentException($"Month {month} does not exist in year {year}", nameof(month));
+        }
         return index + 1 < order.Length ? (year, order[index + 1]) : (year + 1, 1);
     }
 
@@ -473,7 +477,9 @@ public static class HebrewDateHelper
         var order = GetMonthOrder(year);
         var index = Array.IndexOf(order, month);
         if (index < 0)
+        {
             throw new ArgumentException($"Month {month} does not exist in year {year}", nameof(month));
+        }
         return index > 0 ? (year, order[index - 1]) : (year - 1, GetMonthOrder(year - 1)[^1]);
     }
 

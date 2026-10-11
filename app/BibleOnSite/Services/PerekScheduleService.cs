@@ -23,10 +23,13 @@ public class PerekScheduleService
     /// <summary>Singleton instance of the schedule service.</summary>
     public static PerekScheduleService Instance => _instance.Value;
 
-    public const int CycleDays = 1299;
-    public const int CycleSpanDays = 1302; // 1299-day cycle + 3 unscheduled gap days
-    public const int PerakimPerCycle = 929;
-    public const int StudyDaysPerWeek = 5; // Sunday-Thursday in projected cycles
+    public static int CycleDays { get; } = 1299;
+
+    public static int CycleSpanDays { get; } = 1302; // 1299-day cycle + 3 unscheduled gap days
+
+    public static int PerakimPerCycle { get; } = 929;
+
+    public static int StudyDaysPerWeek { get; } = 5; // Sunday-Thursday in projected cycles
 
     /// <summary>One scheduled assignment: a perek on a Hebrew date inside a cycle.</summary>
     public record ScheduleEntry(int PerekId, int Cycle, int DateNumber, DateTime Gregorian);
@@ -87,13 +90,17 @@ public class PerekScheduleService
     public async Task LoadAsync()
     {
         if (_isLoaded)
+        {
             return;
+        }
 
         await _loadLock.WaitAsync();
         try
         {
             if (_isLoaded)
+            {
                 return;
+            }
 
             var db = await _databaseService.GetDatabaseAsync();
             List<PerekDateRow> rows;
@@ -173,7 +180,9 @@ public class PerekScheduleService
     public StudyCycle GetCycle(int cycleNumber)
     {
         if (cycleNumber < 1)
+        {
             throw new ArgumentOutOfRangeException(nameof(cycleNumber));
+        }
 
         var starts = _confirmedStarts ?? throw new InvalidOperationException("Schedule not loaded");
 
@@ -188,7 +197,9 @@ public class PerekScheduleService
         }
 
         if (starts.Count == 0)
+        {
             throw new InvalidOperationException("No confirmed cycle data");
+        }
 
         // Project forward/backward on the 1302-day cadence from the nearest
         // confirmed anchor (last for future cycles, first for earlier ones).
@@ -215,27 +226,42 @@ public class PerekScheduleService
         {
             var offset = HebrewDateHelper.DaysBetween(start, dateNum);
             if (offset < 0)
+            {
                 return null;
+            }
+
             if (offset < CycleDays)
+            {
                 return GetCycle(number);
+            }
         }
 
         if (starts.Count == 0)
+        {
             return null;
+        }
 
         var projectedStart = starts[^1].StartDate;
-        for (var cycleNumber = starts[^1].Number + 1; ; cycleNumber++)
+        var cycleNumber = starts[^1].Number + 1;
+        while (true)
         {
             projectedStart = HebrewDateHelper.AddDays(projectedStart, CycleSpanDays);
             var offset = HebrewDateHelper.DaysBetween(projectedStart, dateNum);
             if (offset < 0)
+            {
                 return null;
+            }
+
             if (offset < CycleDays)
+            {
                 return new StudyCycle(
                     cycleNumber,
                     projectedStart,
                     HebrewDateHelper.AddDays(projectedStart, CycleDays - 1),
                     true);
+            }
+
+            cycleNumber++;
         }
     }
 
@@ -248,13 +274,17 @@ public class PerekScheduleService
     {
         var cycle = GetCycleForDate(dateNum);
         if (cycle is not null)
+        {
             return cycle;
+        }
 
         var starts = _confirmedStarts ?? throw new InvalidOperationException("Schedule not loaded");
         foreach (var (number, start) in starts)
         {
             if (HebrewDateHelper.DaysBetween(dateNum, start) > 0)
+            {
                 return GetCycle(number);
+            }
         }
 
         if (starts.Count == 0)
@@ -265,7 +295,8 @@ public class PerekScheduleService
         }
 
         var projectedStart = starts[^1].StartDate;
-        for (var cycleNumber = starts[^1].Number + 1; ; cycleNumber++)
+        var cycleNumber = starts[^1].Number + 1;
+        while (true)
         {
             projectedStart = HebrewDateHelper.AddDays(projectedStart, CycleSpanDays);
             if (HebrewDateHelper.DaysBetween(dateNum, projectedStart) > 0)
@@ -276,6 +307,8 @@ public class PerekScheduleService
                     HebrewDateHelper.AddDays(projectedStart, CycleDays - 1),
                     true);
             }
+
+            cycleNumber++;
         }
     }
 
@@ -290,7 +323,9 @@ public class PerekScheduleService
         var dayOfWeek = HebrewDateHelper.GetDayOfWeek(year, month, day);
 
         if (_entriesByDate is null || _entriesByCycle is null)
+        {
             throw new InvalidOperationException("Schedule not loaded");
+        }
 
         if (_entriesByDate.TryGetValue(dateNum, out var exact))
         {
@@ -381,7 +416,9 @@ public class PerekScheduleService
     public int GetTodaysPerekId()
     {
         if (!_isLoaded)
+        {
             return 1;
+        }
 
         var today = HebrewDateHelper.GetTodayDateNumber();
         return ResolveDay(today).PerekId ?? 1;
