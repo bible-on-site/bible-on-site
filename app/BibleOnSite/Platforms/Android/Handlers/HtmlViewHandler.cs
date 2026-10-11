@@ -50,7 +50,9 @@ public class HtmlViewHandler : ViewHandler<HtmlView, TextView>
     public override Microsoft.Maui.Graphics.Size GetDesiredSize(double widthConstraint, double heightConstraint)
     {
         if (PlatformView == null || VirtualView == null || Context == null)
+        {
             return Microsoft.Maui.Graphics.Size.Zero;
+        }
 
         if (!double.IsInfinity(widthConstraint) && widthConstraint > 0)
         {
@@ -114,7 +116,9 @@ public class HtmlViewHandler : ViewHandler<HtmlView, TextView>
     private void UpdateContent()
     {
         if (PlatformView == null || VirtualView == null)
+        {
             return;
+        }
 
         var html = VirtualView.HtmlContent;
         if (string.IsNullOrEmpty(html))
@@ -232,7 +236,10 @@ public class HtmlViewHandler : ViewHandler<HtmlView, TextView>
 
     private static void MapTextAlignment(HtmlViewHandler handler, HtmlView view)
     {
-        if (handler.PlatformView == null) return;
+        if (handler.PlatformView == null)
+        {
+            return;
+        }
 
         var isRtl = view.TextDirection == HtmlTextDirection.Rtl;
 
@@ -262,9 +269,13 @@ public class HtmlViewHandler : ViewHandler<HtmlView, TextView>
             };
 
             if (view.TextAlignment == HtmlTextAlignment.Center)
+            {
                 handler.PlatformView.Gravity = Android.Views.GravityFlags.CenterHorizontal | Android.Views.GravityFlags.Top;
+            }
             else
+            {
                 handler.PlatformView.Gravity = Android.Views.GravityFlags.Left | Android.Views.GravityFlags.Top;
+            }
         }
 
         // Justify complete lines in either direction. TextDirection and the RLM
@@ -286,7 +297,10 @@ public class HtmlViewHandler : ViewHandler<HtmlView, TextView>
 
     private static void MapTextDirection(HtmlViewHandler handler, HtmlView view)
     {
-        if (handler.PlatformView == null) return;
+        if (handler.PlatformView == null)
+        {
+            return;
+        }
 
         handler.PlatformView.TextDirection = view.TextDirection switch
         {

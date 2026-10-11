@@ -96,7 +96,7 @@ public class OdrCacheTests
         var service = PadDeliveryService.Instance;
 
         (await service.TryGetAssetPathAsync(Pack, TestContext.Current.CancellationToken)).Should().BeNull();
-        (await service.FetchAsync(Pack, cancellationToken: TestContext.Current.CancellationToken)).Should().BeFalse();
+        (await service.FetchAsync(Pack, progress: null, cancellationToken: TestContext.Current.CancellationToken)).Should().BeFalse();
         (await service.GetDeliveryDiagnosticsAsync(Pack))
             .Should().ContainSingle().Which.Should().Contain("no on-demand delivery");
     }
