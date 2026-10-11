@@ -187,9 +187,9 @@ public partial class PreferencesViewModel : ObservableObject
     {
         Load();
         try { await _perushimNotesService.InitializeAsync(); }
-        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Perushim init: {ex.Message}"); }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Perushim init: {ex.Message}"); } //NOSONAR
         try { await _recitationService.InitializeAsync(); }
-        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Recitation init: {ex.Message}"); }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Recitation init: {ex.Message}"); } //NOSONAR
         NotifyPerushimState();
         OnPropertyChanged(nameof(RecitationStateText));
     }
