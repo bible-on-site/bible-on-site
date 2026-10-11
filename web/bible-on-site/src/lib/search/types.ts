@@ -2,7 +2,7 @@
  * Website internal-search result contract.
  *
  * Mirrors the native app's `SearchFilter` result types (perakim, pesukim,
- * perushim, authors) and adds articles. The `/api/search` route and the
+ * perushim, authors) and adds articles and Tanahpedia entries. The `/api/search` route and the
  * `/search` page both speak this contract; the article-content provider seam
  * (`searchArticles`) is where the Rust semantic-search API from the #2039
  * follow-up plugs in once it is available.
@@ -14,6 +14,7 @@ export const SEARCH_RESULT_TYPES = [
 	"perush",
 	"author",
 	"article",
+	"tanahpedia",
 ] as const;
 
 export type SearchResultType = (typeof SEARCH_RESULT_TYPES)[number];
@@ -25,6 +26,7 @@ export const SEARCH_TYPE_LABELS: Record<SearchResultType, string> = {
 	perush: "פירושים",
 	author: "רבנים",
 	article: "מאמרים",
+	tanahpedia: "תנכפדיה",
 };
 
 /** Fixed, predictable section order for grouped results. */

@@ -12,6 +12,7 @@ import {
 	searchArticles,
 	searchAuthors,
 	searchPerushNotes,
+	searchTanahpediaEntries,
 	termRegexp,
 } from "@/lib/search/db-content";
 import { htmlToPlainText, normalizeSearchText } from "@/lib/search/normalize";
@@ -299,6 +300,129 @@ describe("searchArticles", () => {
 
 	it("returns empty for a blank phrase without querying", async () => {
 		expect(await searchArticles("---", 10)).toEqual([]);
+		expect(mockQuery).not.toHaveBeenCalled();
+	});
+});
+
+describe("searchTanahpediaEntries", () => {
+	beforeEach(() => {
+		jest.clearAllMocks();
+	});
+
+	/**
+	 * Route the two provider queries by their FROM clause: the candidate
+	 * query reads `tanahpedia_entry` (and mentions the synonym tables only
+	 * inside EXISTS), the follow-up reads the synonym tables directly.
+	 */
+	function mockEntries(
+		entries: unknown[],
+		synonyms: { entryId: string; name: string }[] = [],
+	) {
+		mockQuery.mockImplementation((sql: string) =>
+			Promise.resolve(
+				sql.includes("FROM tanahpedia_entry e")
+					? (entries as never)
+					: (synonyms as never),
+			),
+		);
+	}
+
+	it("issues a bounded ranked query over title, slug, content and aliases", async () => {
+		mockEntries([]);
+		await searchTanahpediaEntries("משה", 10);
+		const [sql, params] = mockQuery.mock.calls[0];
+		expect(sql).toContain("FROM tanahpedia_entry e");
+		expect(sql).toContain("MAX_EXECUTION_TIME");
+		expect(sql).toContain("LIMIT 1000");
+		// One REGEXP_LIKE per searchable field plus one inside the synonym
+		// EXISTS clause — four per term in WHERE, four in ORDER BY rank.
+		expect(sql.match(/REGEXP_LIKE\(/g)).toHaveLength(8);
+		expect(sql.match(/tanahpedia_entry_synonym/g)?.length).toBeGreaterThan(0);
+		expect(params).toEqual([
+			termRegexp("משה"),
+			termRegexp("משה"),
+			termRegexp("משה"),
+			termRegexp("משה"),
+			phraseRegexp(["משה"]),
+			phraseRegexp(["משה"]),
+			phraseRegexp(["משה"]),
+			phraseRegexp(["משה"]),
+		]);
+	});
+
+	it("matches entries by title and keeps content as the snippet source", async () => {
+		mockEntries([
+			{
+				id: "e1",
+				unique_name: "משה-רבנו",
+				title: "משה רבנו",
+				content: "<p>מושיען של ישראל</p>",
+			},
+		]);
+		const hits = await searchTanahpediaEntries("משה", 10);
+		expect(hits).toHaveLength(1);
+		expect(hits[0].entry.uniqueName).toBe("משה-רבנו");
+		expect(hits[0].entry.plain).toBe("מושיען של ישראל");
+		expect(hits[0].score).toBeGreaterThan(0);
+	});
+
+	it("matches entries by alias and exposes the alias as the snippet source", async () => {
+		mockEntries(
+			[
+				{
+					id: "e1",
+					unique_name: "יהושע-בן-נון",
+					title: "יהושע בן נון",
+					content: "<p>ממשיך דרכו של משה</p>",
+				},
+			],
+			[
+				{ entryId: "e1", name: "יהושע" },
+				{ entryId: "e1", name: "הושע בן נון" },
+			],
+		);
+		// "הושע" is too short for a fuzzy hit on "יהושע" — only the alias wins.
+		const hits = await searchTanahpediaEntries("הושע בן נון", 10);
+		expect(hits).toHaveLength(1);
+		expect(hits[0].entry.plain).toContain("הושע בן נון");
+		expect(hits[0].score).toBeGreaterThan(0);
+	});
+
+	it("scores an entry reachable through a disambiguation target", async () => {
+		// dis.entry_id hits reach the entry through a shared alias, exactly
+		// like the /pedia/[slug] resolver treats ambiguous names.
+		mockEntries(
+			[{ id: "e2", unique_name: "אחר", title: "ערך אחר", content: null }],
+			[{ entryId: "e2", name: "שם נרדף" }],
+		);
+		const hits = await searchTanahpediaEntries("שם נרדף", 10);
+		expect(hits).toHaveLength(1);
+		expect(hits[0].entry.uniqueName).toBe("אחר");
+	});
+
+	it("surfaces contentless entries by title with an empty snippet source", async () => {
+		mockEntries([
+			{
+				id: "e1",
+				unique_name: "ירושלים",
+				title: "ירושלים",
+				content: null,
+			},
+		]);
+		const hits = await searchTanahpediaEntries("ירושלים", 10);
+		expect(hits).toHaveLength(1);
+		expect(hits[0].entry.plain).toBe("");
+	});
+
+	it("skips the synonym query when no entries match", async () => {
+		mockEntries([]);
+		const hits = await searchTanahpediaEntries("בראשית", 10);
+		expect(hits).toEqual([]);
+		expect(mockQuery).toHaveBeenCalledTimes(1);
+	});
+
+	it("returns empty for a blank phrase without querying", async () => {
+		expect(await searchTanahpediaEntries("---", 10)).toEqual([]);
 		expect(mockQuery).not.toHaveBeenCalled();
 	});
 });
