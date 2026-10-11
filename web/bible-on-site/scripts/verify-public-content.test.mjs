@@ -48,6 +48,28 @@ test("database baseline catches partial content loss", async () => {
 		/expected at least 3/,
 	);
 });
+test("article links from another chapter cannot satisfy the baseline", async () => {
+	await assert.rejects(
+		verifyPublicContent("https://example.test", {
+			fetchPage: fetchFrom({
+				...healthy,
+				"/929/1": '<a href="/929/10/4">Other chapter</a>',
+			}),
+		}),
+		/articles, rendered 0/,
+	);
+});
+test("invalid baseline chapter IDs fail before fetching a chapter", async () => {
+	for (const perekId of [0, 930, 1.5, ".*"]) {
+		await assert.rejects(
+			verifyPublicContent("https://example.test", {
+				fetchPage: fetchFrom(healthy),
+				baseline: { authorCount: 2, perekId, articleCount: 1 },
+			}),
+			/chapter between 1 and 929/,
+		);
+	}
+});
 test("a missing article detail fails", async () => {
 	await assert.rejects(
 		verifyPublicContent("https://example.test", {

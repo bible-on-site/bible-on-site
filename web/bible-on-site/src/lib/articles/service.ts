@@ -135,7 +135,6 @@ export async function getAllArticlePerekIdPairs(): Promise<ArticlePerekPair[]> {
  * Fetch all article IDs grouped by perek ID.
  * Used by generateStaticParams for bulk fetching in a single query.
  */
-/* istanbul ignore next -- bulk query kept for future SSG use */
 export async function getAllArticleIdsByPerek(): Promise<
 	Map<number, number[]>
 > {

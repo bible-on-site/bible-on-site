@@ -17,6 +17,7 @@ jest.mock("../../../src/lib/authors/service", () => ({
 
 import { query } from "../../../src/lib/api-client";
 import {
+	getAllArticleIdsByPerek,
 	getAllArticlePerekIdPairs,
 	getArticleById,
 	getArticleSummariesByPerekId,
@@ -281,6 +282,39 @@ describe("articles service", () => {
 		});
 	});
 
+	describe("getAllArticleIdsByPerek", () => {
+		it("groups multiple articles per chapter while preserving database order", async () => {
+			mockQuery.mockResolvedValue([
+				{ id: 4, perek_id: 1 },
+				{ id: 7, perek_id: 1 },
+				{ id: 9, perek_id: 929 },
+			]);
+
+			expect(await getAllArticleIdsByPerek()).toEqual(
+				new Map([
+					[1, [4, 7]],
+					[929, [9]],
+				]),
+			);
+			const sql = mockQuery.mock.calls[0][0];
+			expect(sql).toContain("perek_id BETWEEN 1 AND 929");
+			expect(sql).not.toContain("distributable");
+		});
+
+		it("returns an empty map for an empty corpus", async () => {
+			mockQuery.mockResolvedValue([]);
+			expect(await getAllArticleIdsByPerek()).toEqual(new Map());
+		});
+
+		it.each([new Error("DB error"), "connection lost"])(
+			"rejects database failure %s instead of publishing missing URLs",
+			async (error) => {
+				mockQuery.mockRejectedValue(error);
+				await expect(getAllArticleIdsByPerek()).rejects.toBe(error);
+			},
+		);
+	});
+
 	describe("getArticleById", () => {
 		it("returns mapped article when found", async () => {
 			const mockRow = {
@@ -320,7 +354,7 @@ describe("articles service", () => {
 			expect(result).toBeNull();
 		});
 
-		it("returns null and logs warning on error", async () => {
+		it("rejects and logs database errors", async () => {
 			mockQuery.mockRejectedValue(new Error("DB error"));
 
 			await expect(getArticleById(1)).rejects.toThrow("DB error");

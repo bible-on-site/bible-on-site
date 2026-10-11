@@ -51,8 +51,12 @@ export async function verifyPublicContent(
 		);
 	}
 	const perekId = baseline?.perekId ?? 1;
+	if (!Number.isSafeInteger(perekId) || perekId < 1 || perekId > 929)
+		throw new Error("Content baseline requires a chapter between 1 and 929");
 	const chapter = await (await read(`/929/${perekId}`)).text();
-	const articles = links(chapter, new RegExp(`^/929/${perekId}/\\d+$`));
+	const articles = links(chapter, /^\/929\/\d+\/\d+$/).filter((href) =>
+		href.startsWith(`/929/${perekId}/`),
+	);
 	const expectedArticles = Number(baseline?.articleCount ?? 1);
 	if (
 		!Number.isSafeInteger(expectedArticles) ||
