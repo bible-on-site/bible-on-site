@@ -166,6 +166,15 @@ partial class Build
                     properties["RuntimeIdentifiers"] = "android-x64";
                     properties["EmbedAssembliesIntoApk"] = "true";
                     properties["AndroidPackageFormats"] = "apk";
+                    // Android Debug defaults to the Mono interpreter; an
+                    // interpreted recorder pays a slow dispatch per woven
+                    // Visit and starves the commentary-index build past the
+                    // 45s search wait, same as on iOS. JIT is available on
+                    // Android, so coverage builds skip interpretation (#1232).
+                    if (MobileE2ECoverage)
+                    {
+                        properties["UseInterpreter"] = "false";
+                    }
                 }
                 else
                 {
