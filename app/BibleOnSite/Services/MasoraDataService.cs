@@ -48,12 +48,16 @@ public class MasoraDataService
     public async Task LoadAsync()
     {
         if (_isLoaded)
+        {
             return;
+        }
         await _loadLock.WaitAsync();
         try
         {
             if (_isLoaded)
+            {
                 return;
+            }
             var db = await _databaseService.GetDatabaseAsync();
             await LoadUnitsAsync(db);
             _isLoaded = true;
@@ -132,7 +136,9 @@ public class MasoraDataService
     public MasoraUnit? GetUnit(int unitId)
     {
         if (_unitById == null)
+        {
             return null;
+        }
         _unitById.TryGetValue(unitId, out var unit);
         return unit;
     }
@@ -141,7 +147,9 @@ public class MasoraDataService
     public List<MasoraUnit> GetFirstUnitsBySefer()
     {
         if (_units == null)
+        {
             return new List<MasoraUnit>();
+        }
         return _units.Where(u => u.UnitOrder == 1).ToList();
     }
 
@@ -149,24 +157,34 @@ public class MasoraDataService
     public (MasoraUnit? Prev, MasoraUnit? Next) GetAdjacentUnits(int unitId)
     {
         if (_units == null || _units.Count == 0)
+        {
             return (null, null);
+        }
         var index = _units.FindIndex(u => u.UnitId == unitId);
         if (index < 0)
+        {
             return (null, null);
+        }
         var prev = index > 0 ? _units[index - 1] : null;
         var next = index < _units.Count - 1 ? _units[index + 1] : null;
         return (prev, next);
     }
 
     /// <summary>
-    /// The unit whose primary range contains the given canonical pasuk
-    /// (pasuk 1 when omitted) — used to position the reader when opening
-    /// from the per-perek resume point.
+    /// The unit whose primary range contains the given perek's first pasuk —
+    /// used to position the reader when opening from the per-perek resume point.
     /// </summary>
-    public MasoraUnit? GetUnitContainingPasuk(int perekId, int pasuk = 1)
+    public MasoraUnit? GetUnitContainingPasuk(int perekId) => GetUnitContainingPasuk(perekId, 1);
+
+    /// <summary>
+    /// The unit whose primary range contains the given canonical pasuk.
+    /// </summary>
+    public MasoraUnit? GetUnitContainingPasuk(int perekId, int pasuk)
     {
         if (_units == null)
+        {
             return null;
+        }
         return _units.FirstOrDefault(u =>
             u.Ranges.Any(range => RangeContainsPasuk(range, perekId, pasuk)));
     }

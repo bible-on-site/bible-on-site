@@ -155,8 +155,8 @@ public class MasoraDataServiceTests
         MasoraDataService.RangeContainsPasuk(endsMidPasuk, 1, 5).Should().BeTrue();
         MasoraDataService.RangeContainsPasuk(endsMidPasuk, 1, 6).Should().BeFalse();
 
-        // Range starting mid-pasuk does NOT claim that pasuk's leading segments;
-        // the pasuk counts as contained only in the earlier unit.
+        // A range starting mid-pasuk does not claim that pasuk's leading
+        // segments — the pasuk counts as contained only in the earlier unit.
         var startsMidPasuk = new MasoraUnitRange
         {
             StartPerekId = 1, StartPasuk = 5, StartSegmentIndex = 4,

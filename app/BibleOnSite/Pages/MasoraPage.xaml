@@ -549,8 +549,7 @@
         </AbsoluteLayout>
 
         <controls:MasoraUnitPickerPopup x:Name="MasoraUnitPickerPopup" Grid.Row="1"
-                                        ZIndex="200"
-                                        UnitSelected="OnUnitPickerSelected"/>
+                                        ZIndex="200"/>
     </Grid>
 
 </ContentPage>
