@@ -1,0 +1,42 @@
+namespace BibleOnSite.Helpers;
+
+/// <summary>
+/// What the shared Shell back hook should do with a Back press the base
+/// navigation pipeline left unconsumed.
+/// </summary>
+public enum BackExitAction
+{
+	/// <summary>Back was consumed (fullscreen dismissed or Shell handled it).</summary>
+	Consume,
+
+	/// <summary>
+	/// Defer to the native layer. An open flyout is closed by the drawer
+	/// layout's own back callback, so the press must keep propagating.
+	/// </summary>
+	DeferToNative,
+
+	/// <summary>
+	/// Nothing consumed Back at the app root — the press would leave the app,
+	/// so the exit confirmation must run first.
+	/// </summary>
+	ConfirmExit,
+}
+
+/// <summary>
+/// Pure ordering rules for <see cref="AppShell"/>'s back hook, kept separate so
+/// the dismissal → navigation → exit-confirmation order stays unit-testable.
+/// Fullscreen dismissal is evaluated by the caller before this point — a
+/// transient surface always owns Back before page navigation or app exit.
+/// </summary>
+public static class BackExitPlan
+{
+	public static BackExitAction Evaluate(bool shellHandled, bool flyoutPresented)
+	{
+		if (shellHandled)
+		{
+			return BackExitAction.Consume;
+		}
+
+		return flyoutPresented ? BackExitAction.DeferToNative : BackExitAction.ConfirmExit;
+	}
+}

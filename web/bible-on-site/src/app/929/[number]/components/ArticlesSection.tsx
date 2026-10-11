@@ -7,6 +7,10 @@ import { Carousel } from "./Carousel";
 
 interface ArticlesSectionProps {
 	articles?: ArticleSummary[] | null;
+	/** Section heading (defaults to the perek reader's title). */
+	title?: string;
+	/** Empty-state message (defaults to the perek reader's message). */
+	emptyMessage?: string;
 	/** When set, clicking an article calls this instead of navigating (e.g. open in-place in flipbook). */
 	onArticleClick?: (article: ArticleSummary) => void;
 	/** When true, show loading state (e.g. fetching article for in-place view). */
@@ -20,6 +24,8 @@ interface ArticlesSectionProps {
  */
 export function ArticlesSection({
 	articles = [],
+	title = "מאמרים על הפרק",
+	emptyMessage = "אין מאמרים לפרק זה",
 	onArticleClick,
 	loading = false,
 }: ArticlesSectionProps) {
@@ -39,7 +45,7 @@ export function ArticlesSection({
 					height={18}
 					className={styles.sectionIcon}
 				/>
-				<h2 className={styles.sectionTitle}>מאמרים על הפרק</h2>
+				<h2 className={styles.sectionTitle}>{title}</h2>
 			</header>
 
 			<Carousel
@@ -48,7 +54,7 @@ export function ArticlesSection({
 				nextLabel="מאמר הבא"
 			>
 				{safeArticles.length === 0 ? (
-					<p className={styles.emptyMessage}>אין מאמרים לפרק זה</p>
+					<p className={styles.emptyMessage}>{emptyMessage}</p>
 				) : loading ? (
 					<p className={styles.emptyMessage}>מתחבר למאמרים...</p>
 				) : (

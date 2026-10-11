@@ -277,7 +277,7 @@ public class ArticleSearchServiceTests
         using var http = new GraphQLTransport("{\"data\":{\"searchArticles\":null}}");
         var service = new ArticleService(http.Client);
 
-        var page = await service.SearchArticlesAsync("בראשית", 20, TestContext.Current.CancellationToken);
+        var page = await service.SearchArticlesAsync("בראשית", 20, cancellationToken: TestContext.Current.CancellationToken);
 
         page.Should().BeNull();
     }
@@ -291,7 +291,7 @@ public class ArticleSearchServiceTests
             """);
         var service = new ArticleService(http.Client);
 
-        var page = await service.SearchArticlesAsync("בראשית", 20, TestContext.Current.CancellationToken);
+        var page = await service.SearchArticlesAsync("בראשית", 20, cancellationToken: TestContext.Current.CancellationToken);
 
         page!.Hits.Should().ContainSingle().Which.Name.Should().BeEmpty();
         page.Hits[0].AuthorName.Should().BeEmpty();
@@ -301,7 +301,7 @@ public class ArticleSearchServiceTests
         // A null hits list coalesces to an empty page rather than throwing.
         http.Respond = _ => Task.FromResult(
             GraphQLTransport.JsonResponse("{\"data\":{\"searchArticles\":{\"total\":0,\"hits\":null}}}"));
-        var empty = await service.SearchArticlesAsync("בראשית", 20, TestContext.Current.CancellationToken);
+        var empty = await service.SearchArticlesAsync("בראשית", 20, cancellationToken: TestContext.Current.CancellationToken);
         empty!.Total.Should().Be(0);
         empty.Hits.Should().BeEmpty();
     }
