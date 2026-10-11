@@ -47,7 +47,7 @@ export const MODULES = {
 		// the site but never change the deployed bundle, so a test-only change
 		// must not package, release, or bump the website version (#2132).
 		ciOnlyPattern:
-			/^web\/bible-on-site\/(tests\/|.*\.test\.[^/]+$|jest\.config\.|playwright\.[^/]*\.config\.|\.test\.env$)/,
+			/^web\/bible-on-site\/(tests\/|.*\.test\.[^/]+$|jest[.-][^/]*$|playwright[.-][^/]*$|\.test\.env$)/,
 	},
 	api: { directory: "web/api", ciPaths: RELEASE_CI_PATHS },
 	app: {

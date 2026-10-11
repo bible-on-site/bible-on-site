@@ -92,8 +92,13 @@ describe("detectChanges", () => {
 			"web/bible-on-site/tests/e2e/search.test.ts",
 			"web/bible-on-site/scripts/start-server.test.mjs",
 			"web/bible-on-site/jest.config.js",
+			"web/bible-on-site/jest.setup.js",
+			"web/bible-on-site/jest-dom.setup.js",
+			"web/bible-on-site/jest.coverage-setup.js",
 			"web/bible-on-site/playwright.e2e.config.ts",
 			"web/bible-on-site/playwright.base.config.ts",
+			"web/bible-on-site/playwright-global-setup.js",
+			"web/bible-on-site/playwright-global-teardown-coverage.js",
 			"web/bible-on-site/.test.env",
 		]) {
 			assert.deepEqual(
