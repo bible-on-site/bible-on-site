@@ -54,6 +54,18 @@ public class MainActivity : MauiAppCompatActivity
     protected override void OnNewIntent(Intent? intent)
     {
         base.OnNewIntent(intent);
+#if !DISABLE_ANALYTICS
+        // singleTop relaunches deliver a marked suite intent here without
+        // OnCreate running — honor it so a reused activity stops emitting
+        // instead of leaking suite events under the previous launch's
+        // enabled collection (#2120).
+        if (intent?.GetBooleanExtra(Services.SearchIndexService.E2eEnvironmentVariable, false) ?? false)
+        {
+            Services.SearchIndexService.MarkE2eLaunchFromIntent();
+            Plugin.Firebase.Analytics.CrossFirebaseAnalytics.Current.IsAnalyticsCollectionEnabled = false;
+            Console.WriteLine("[Analytics] collection enabled=false (e2e relaunch)");
+        }
+#endif
         HandleAppLinkIntent(intent);
     }
 
