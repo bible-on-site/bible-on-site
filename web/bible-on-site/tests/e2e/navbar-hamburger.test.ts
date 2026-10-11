@@ -1,6 +1,8 @@
 import { expect, test } from "../util/playwright/test-fixture";
 
 const MENU_ITEMS = [
+	// Hebrew roots are percent-encoded in the URL — glob on the encoded path.
+	["מסורה על הפרק", `/${encodeURIComponent("מסורה")}`],
 	["הרבנים", "/929/authors"],
 	["תנכפדיה", "/pedia"],
 	["עלון יומי", "/dailyBulletin"],

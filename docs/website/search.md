@@ -2,21 +2,24 @@
 
 Implementation of [issue #2040](https://github.com/bible-on-site/bible-on-site/issues/2040):
 an internal search experience for the website, using the native app's
-floating-search work (PR #2032) as the functional reference.
+floating-search work (PR #2032) as the functional reference. Tanahpedia
+entries were added by
+[issue #2103](https://github.com/bible-on-site/bible-on-site/issues/2103).
 
 ## Scope and result contract
 
 Result types mirror the app's `SearchFilter` (`Author`, `Pasuk`, `Perush`,
-`Perek`) plus articles. The shared contract lives in
-`src/lib/search/types.ts`:
+`Perek`) plus articles and Tanahpedia entries. The shared contract lives
+in `src/lib/search/types.ts`:
 
-| Type     | Hebrew label | Corpus                          | Result link                              |
-| -------- | ------------ | ------------------------------- | ---------------------------------------- |
-| `perek`  | פרקים        | Bundled sefarim JSON (in-memory) | `/929/{perekId}`                          |
-| `pasuk`  | פסוקים       | Bundled sefarim JSON (in-memory) | `/929/{perekId}#pasuk-{n}`                |
-| `perush` | פירושים      | MySQL `note` + `perush`          | `/929/{perekId}/{perushName}?pasuk={n}`   |
-| `author` | רבנים        | MySQL `tanah_author`             | `/929/authors/{slug}`                     |
-| `article`| מאמרים       | MySQL `tanah_article`            | `/929/{perekId}/{articleId}`              |
+| Type        | Hebrew label | Corpus                              | Result link                                                |
+| ----------- | ------------ | ----------------------------------- | ---------------------------------------------------------- |
+| `perek`     | פרקים        | Bundled sefarim JSON (in-memory)     | `/929/{perekId}`                                           |
+| `pasuk`     | פסוקים       | Bundled sefarim JSON (in-memory)     | `/929/{perekId}#pasuk-{n}`                                 |
+| `perush`    | פירושים      | MySQL `note` + `perush`              | `/929/{perekId}/{perushName}?pasuk={n}&note={idx}&q={phrase}` |
+| `author`    | רבנים        | MySQL `tanah_author`                 | `/929/authors/{slug}`                                       |
+| `article`   | מאמרים       | MySQL `tanah_article`                | `/929/{perekId}/{articleId}?q={phrase}`                    |
+| `tanahpedia`| תנכפדיה      | MySQL `tanahpedia_entry` + synonyms  | `/pedia/{uniqueName}`                                      |
 
 Every result is `{ type, title, snippetHtml, href, score }`. `snippetHtml`
 is built server-side with all source bytes HTML-escaped and only `<mark>`
@@ -24,11 +27,9 @@ highlight tags emitted, so clients can render it via
 `dangerouslySetInnerHTML` with no XSS surface (`src/lib/search/snippet.ts`).
 `title` uses the site's plain-letter source convention (`רש"י בראשית א א`).
 
-Tanahpedia (`/pedia`) entries are intentionally out of the initial scope —
-the issue's contract lists chapters, verses, commentary, authors and
-articles. Per-sefer filtering is also deferred: results already carry
-`perekId`, so a future `sefer` URL param maps cleanly onto the same
-contract.
+Tanahpedia entries were initially out of scope and were added by #2103.
+Per-sefer filtering is still deferred: results already carry `perekId`,
+so a future `sefer` URL param maps cleanly onto the same contract.
 
 ## Matching approach
 
@@ -83,7 +84,18 @@ the strongest matches can no longer be truncated arbitrarily.
 Articles score name, abstract, and content independently (name keeps
 its ×2 weight) and the snippet is taken from the best-scoring field, so
 an abstract-only match is no longer discarded when unrelated content is
-present.
+present. Tanahpedia entries score title and unique_name plus the alias
+names that resolve to the entry — both `tanahpedia_entry_synonym` rows
+and `tanahpedia_entry_synonym_disambiguation` targets, matching the
+`/pedia/[slug]` resolver — at name weight, and body content at the weak
+weight; an ambiguous name therefore produces one hit per target entry,
+each linked to its canonical `/pedia/{uniqueName}` page. The snippet is
+the highlighted body excerpt for content matches, the alias list when an
+alias drove the match, and the body lead-in (or nothing) for title-only
+matches. Entries without body content are still discoverable by title
+and aliases. Every `tanahpedia_entry` row is public — proposals live in
+`tanahpedia_entry_revision` until applied — so no publish filter is
+needed.
 
 ## Architecture
 
@@ -105,6 +117,9 @@ GET /api/search?q=&type=&limit=
         authors         — MySQL REGEXP_LIKE on name/details, same ranking
         articles        — MySQL REGEXP_LIKE on name/abstract/content
                           (lexical; see #2039 seam below)
+        tanahpedia      — MySQL REGEXP_LIKE on title/unique_name/content
+                          plus an EXISTS over the synonym tables, then a
+                          follow-up name pull for scoring; same ranking
 ```
 
 Providers degrade independently: a MySQL failure removes only its result
@@ -132,6 +147,28 @@ refetched, and the browser's own scroll restoration preserves list
 position. Result links are plain `<Link>`s — ordinary crawlable anchors —
 so opening them in a new tab works normally. The form is a real
 `GET /search` form, so a no-JS submit lands on the SSR'd results page.
+
+### Deep-linking into content (#2078)
+
+Result links carry enough destination context to land on the exact match, not
+just the page:
+
+- `pasuk` results keep `#pasuk-{n}` — `ScrollToPasuk` scrolls and highlights
+  the verse.
+- `perush` results add `note={noteIdx}` (the note row's fragment index) and
+  `q` (the normalized phrase). `ScrollToPerushPasukNote` selects the specific
+  `[data-perush-pasuk][data-perush-note]` element — not the pasuk's first
+  note — and `dom-match.ts` re-locates the phrase inside the rendered note
+  with the index's normalization, wrapping the occurrence in
+  `<mark class="searchMatch">` before centering it.
+- `article` results add `q`. `ScrollToArticleMatch` re-locates and marks the
+  match inside `article-view`'s body; with no `q` the `article-view` anchor
+  scroll remains the landing.
+
+`q` is deliberately not a stable character offset: indexed/normalized offsets
+never equal DOM offsets (niqqud, entities, markup), so `dom-match.ts` maps
+normalized positions back onto DOM text nodes. A stale/absent target degrades
+to the anchor-level scroll — never to a wrong position.
 
 ### Fetch discipline
 
@@ -167,14 +204,17 @@ swap is isolated to one file; no caller or DTO changes needed.
   focus to the input (as does `Escape` on any result); `Escape` in the
   input clears the query.
 - Result groups are `<section>`s with labelled `<h2>`s and count badges —
-  a predictable fixed order (פרקים, פסוקים, פירושים, רבנים, מאמרים) rather
-  than order-by-score, which is less disorienting for screen readers.
+  a predictable fixed order (פרקים, פסוקים, פירושים, רבנים, מאמרים,
+  תנכפדיה) rather than order-by-score, which is less disorienting for
+  screen readers.
 - RTL: `dir="rtl"` is inherited; styles use logical properties
   (`margin-block`, `padding-inline`) where direction matters. The
   `<mark>` highlights inherit color and use underline+weight so they read
   in dark mode too.
-- Entry point: a persistent search button beside the hamburger on every
-  page plus a "חיפוש" item at the top of the main menu.
+- Entry point: a persistent icon-only search button (`aria-label="חיפוש"`)
+  pinned to the physical left edge of the top navigation bar — opposite the
+  hamburger — on every page. The main menu leads with על הפרק and holds no
+  search row.
 
 ## SEO policy (researched and deliberate)
 

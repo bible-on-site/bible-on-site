@@ -2,14 +2,87 @@ name: App Mobile E2E
 
 on:
   workflow_call:
+    inputs:
+      e2e_selection_mode:
+        # workflow_call inputs cannot be `choice`; only the exact value
+        # "enforce" narrows the run — anything else stays the shadow report.
+        description: "shadow reports the affected subset; enforce runs only it (#2085)"
+        type: string
+        default: shadow
+      force_full_suite:
+        description: "Skip coverage selection and run every applicable test"
+        type: boolean
+        default: false
+      perushim_notes_sqlite_artifact:
+        description: "Artifact name for perushim notes SQLite (empty = use master baseline)"
+        type: string
+        default: ""
   workflow_dispatch:
+    inputs:
+      e2e_selection_mode:
+        description: "shadow reports the affected subset; enforce runs only it (#2085)"
+        type: choice
+        options: [shadow, enforce]
+        default: shadow
+      force_full_suite:
+        description: "Skip coverage selection and run every applicable test"
+        type: boolean
+        default: false
+      perushim_notes_sqlite_artifact:
+        description: "Artifact name for perushim notes SQLite (empty = use master baseline)"
+        required: false
+        type: string
+        default: ""
 
 permissions:
   contents: read
+  # Reads the master coverage-tree baseline artifacts through the REST API.
+  actions: read
+
+env:
+  PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER: perushim-sqlite-v2.master
 
 jobs:
+  # Standalone dispatch runs get no caller-provided artifact name; fetch the
+  # master baseline artifact from a previous run and re-upload it so the
+  # appium job can resolve it through actions/download-artifact exactly like
+  # the CI-provided artifact (mirrors app-package.yml).
+  resolve_perushim_artifact:
+    name: Resolve Perushim Notes Artifact
+    if: ${{ inputs.perushim_notes_sqlite_artifact == '' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Download master baseline artifact via API
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ARTIFACT_NAME="${{ env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}"
+          ARTIFACT_ID=$(gh api "repos/${{ github.repository }}/actions/artifacts?name=$ARTIFACT_NAME" \
+            --jq "[.artifacts[] | select(.expired == false)] | first | .id")
+          if [ -z "$ARTIFACT_ID" ] || [ "$ARTIFACT_ID" = "null" ]; then
+            echo "::error::No master baseline artifact '$ARTIFACT_NAME' found. Run perushim_data on master first."
+            exit 1
+          fi
+          mkdir -p /tmp/$ARTIFACT_NAME
+          gh api "repos/${{ github.repository }}/actions/artifacts/$ARTIFACT_ID/zip" > /tmp/$ARTIFACT_NAME.zip
+          unzip -o /tmp/$ARTIFACT_NAME.zip -d /tmp/$ARTIFACT_NAME
+
+      - name: Re-upload for current workflow
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
+          path: /tmp/${{ env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
+          retention-days: 1
+          overwrite: true
+
   appium:
     name: Appium ${{ matrix.platform }}
+    needs: [resolve_perushim_artifact]
+    # The resolver is skipped when the caller provides an artifact name.
+    if: ${{ always() && !cancelled() && !failure() }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
     strategy:
@@ -69,6 +142,17 @@ jobs:
         with:
           node-version-file: devops/package.json
 
+      - name: Select compatible Xcode
+        if: matrix.platform == 'iOS'
+        run: sudo xcode-select --switch /Applications/Xcode_27.app/Contents/Developer
+
+      # simctl boot is asynchronous: the device boots on the host while the
+      # dependency installs run. This step needs no node_modules — it only
+      # selects a device and kicks simctl.
+      - name: Start iPhone simulator boot
+        if: matrix.platform == 'iOS'
+        run: npm run ios:boot:start --prefix app/mobile-e2e
+
       - name: Restore npm cache
         id: npm-cache
         uses: actions/cache/restore@v6
@@ -77,10 +161,57 @@ jobs:
           key: ${{ runner.os }}-npm-mobile-e2e-${{ hashFiles('devops/package-lock.json', 'app/mobile-e2e/package-lock.json') }}
           restore-keys: ${{ runner.os }}-npm-mobile-e2e-
 
+      # The coverage tree baseline is published only by successful master push
+      # runs. Missing or unreadable baselines are not an error here — the
+      # selector falls back to the full applicable suite (#2085).
+      - name: Download coverage-tree baseline
+        id: baseline
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node devops/github/ci/e2e-impact/e2e-impact.ts baseline-download \
+            --name "app-mobile-e2e-coverage.master.${{ matrix.artifact }}" \
+            --out "$MOBILE_E2E_ARTIFACTS/baseline"
+
+      # Shadow mode computes the deterministic subset for evidence while the
+      # suite still runs everything. A missing, stale or incompatible baseline,
+      # an undeterminable diff or a discovery problem resolves to selectAll —
+      # never to a silently empty run.
+      - name: Select affected tests
+        id: selection
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          BASELINE_ARGS=()
+          if [ "${{ steps.baseline.outputs.available }}" == "true" ]; then
+            BASELINE_ARGS=(--baseline "${{ steps.baseline.outputs.baseline-file }}")
+          fi
+          FORCE_ARGS=()
+          if [ "${{ inputs.force_full_suite }}" == "true" ]; then
+            FORCE_ARGS=(--force-full)
+          fi
+          node devops/github/ci/e2e-impact/e2e-impact.ts select \
+            --suite app/mobile-e2e \
+            --platform "${{ matrix.artifact }}" \
+            --tested-sha "${{ github.sha }}" \
+            --out "$MOBILE_E2E_ARTIFACTS/selection-manifest.json" \
+            --compare "${BASELINE_ARGS[@]}" "${FORCE_ARGS[@]}"
+
       - name: Install build and Appium dependencies
         run: |
           npm ci --prefix devops --no-audit
           npm ci --prefix app/mobile-e2e --no-audit
+
+      # The boot kicked above is still in flight; the wait also warms Appium's
+      # CoreSimulator bridge and exports MOBILE_UDID/MOBILE_OS_VERSION. Running
+      # it as a background step overlaps all of that with the MAUI workload
+      # install and the app build; `wait` below is the gate that surfaces the
+      # finished boot and the exported variables to the test step.
+      - name: Finish iPhone simulator setup
+        id: simulator
+        if: matrix.platform == 'iOS'
+        background: true
+        run: npm run ios:boot:wait --prefix app/mobile-e2e
 
       - name: Save npm cache
         if: ${{ github.ref == 'refs/heads/master' && steps.npm-cache.outputs.cache-hit != 'true' }}
@@ -102,13 +233,25 @@ jobs:
           distribution: microsoft
           java-version: "21"
 
-      - name: Select compatible Xcode
-        if: matrix.platform == 'iOS'
-        run: sudo xcode-select --switch /Applications/Xcode_27.app/Contents/Developer
-
       - name: Install MAUI workload
         # 10.0.401.1 selects the iOS 27 SDK, which requires Xcode 27; see #1871.
         run: dotnet workload install ${{ matrix.workload }} --version 10.0.401.1
+
+      # The Debug build bundles perushim data from the checkout's packaged
+      # paths, but the committed .gz fixture is only a local-dev fallback — the
+      # pair a release ships always comes from the perushim_data artifacts.
+      # Install the same validated catalog+notes pair package_app uses so E2E
+      # exercises the commentary data this commit would actually ship. The
+      # Shared commentary-search pilot builds the notes FTS index, so a missing
+      # or mismatched pair must fail here — before the build, not mid-suite.
+      - name: Download perushim SQLite pair
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ inputs.perushim_notes_sqlite_artifact || env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
+          path: ${{ runner.temp }}/perushim-sqlite
+
+      - name: Install matching perushim catalog and notes
+        run: python3 app/devops/prepare_perushim_assets.py --source "${{ runner.temp }}/perushim-sqlite" --app-directory app/BibleOnSite --platform ${{ matrix.platform }}
 
       - name: Build complete simulator app
         # Explicit bash enables pipefail, preserving npm failures through tee.
@@ -226,6 +369,8 @@ jobs:
         uses: reactivecircus/android-emulator-runner@v2.38.0
         env:
           MOBILE_UDID: emulator-5554
+          # Empty in shadow mode: the manifest is reported, not enforced.
+          MOBILE_E2E_SELECTION: ${{ inputs.e2e_selection_mode == 'enforce' && steps.selection.outputs.manifest || '' }}
         with:
           api-level: ${{ env.ANDROID_API_LEVEL }}
           arch: ${{ env.ANDROID_ABI }}
@@ -266,15 +411,53 @@ jobs:
         if: matrix.platform == 'iOS'
         run: npm run ios:wda --prefix app/mobile-e2e
 
-      - name: Boot iPhone simulator
-        if: matrix.platform == 'iOS'
-        run: npm run ios:boot --prefix app/mobile-e2e
+      - name: Wait for iPhone simulator
+        wait: simulator
 
       - name: Run shared pilot on iOS
         if: matrix.platform == 'iOS'
+        id: pilot-ios
         # Leave time to upload diagnostics when the expanded device suite expires.
         timeout-minutes: 45
+        env:
+          # Empty in shadow mode: the manifest is reported, not enforced.
+          MOBILE_E2E_SELECTION: ${{ inputs.e2e_selection_mode == 'enforce' && steps.selection.outputs.manifest || '' }}
         run: npm test --prefix app/mobile-e2e
+
+      # Evidence is collected even after a failed run — passed tests keep their
+      # coverage — but the tree is marked incomplete so a partial run can never
+      # shrink the trusted baseline.
+      - name: Collect per-test coverage evidence
+        if: always()
+        id: collect
+        env:
+          # Each matrix leg runs exactly one pilot; the other's outcome is
+          # "skipped" — a truthy string that would win an || chain — so route
+          # by platform instead of relying on fallback order.
+          PILOT_OUTCOME: ${{ matrix.platform == 'iOS' && steps['pilot-ios'].outcome || steps.pilot.outcome }}
+        run: |
+          INCOMPLETE_ARGS=()
+          if [ "$PILOT_OUTCOME" != "success" ]; then
+            INCOMPLETE_ARGS=(--incomplete)
+          fi
+          node devops/github/ci/e2e-impact/e2e-impact.ts collect-appium \
+            --suite app/mobile-e2e \
+            --platform "${{ matrix.artifact }}" \
+            --artifacts "$MOBILE_E2E_ARTIFACTS" \
+            --snapshot-sha "${{ github.sha }}" \
+            --out "$MOBILE_E2E_ARTIFACTS/coverage-tree.json" "${INCOMPLETE_ARGS[@]}"
+
+      # The authoritative baseline is published only from a completed,
+      # successful default-branch run; PR and merge-queue evidence stays
+      # provisional inside the run's appium artifact.
+      - name: Publish coverage-tree baseline
+        if: always() && github.event_name == 'push' && github.ref == 'refs/heads/master' && (steps.pilot.outcome == 'success' || steps['pilot-ios'].outcome == 'success') && steps.collect.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          name: app-mobile-e2e-coverage.master.${{ matrix.artifact }}
+          path: app/.artifacts/mobile-e2e/${{ matrix.artifact }}/coverage-tree.json
+          retention-days: 90
+          overwrite: true
 
       - name: Upload platform results and diagnostics
         if: always()

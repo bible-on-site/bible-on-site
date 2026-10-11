@@ -1,3 +1,4 @@
+
 namespace BibleOnSite.Services;
 
 #if ANDROID || IOS
@@ -20,10 +21,16 @@ public sealed class AnalyticsService : IAnalyticsService
 		false;
 #endif
 
-	public void SetScreen(string screenName, string? screenClassOverride = null)
+	public void SetScreen(string screenName) => SetScreen(screenName, null);
+
+	public void SetScreen(string screenName, string? screenClassOverride)
 	{
 #if ANDROID || IOS
-		if (!IsAvailable) return;
+		if (!IsAvailable)
+		{
+			return;
+		}
+
 		try
 		{
 			var analytics = CrossFirebaseAnalytics.Current;
@@ -44,7 +51,11 @@ public sealed class AnalyticsService : IAnalyticsService
 	public void LogSearch(string searchTerm)
 	{
 #if ANDROID || IOS
-		if (!IsAvailable) return;
+		if (!IsAvailable)
+		{
+			return;
+		}
+
 		try
 		{
 			CrossFirebaseAnalytics.Current.LogEvent("search", new Dictionary<string, object>
@@ -59,4 +70,3 @@ public sealed class AnalyticsService : IAnalyticsService
 #endif
 	}
 }
-

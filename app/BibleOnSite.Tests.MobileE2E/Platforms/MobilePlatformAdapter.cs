@@ -12,7 +12,18 @@ namespace BibleOnSite.Tests.MobileE2E.Platforms;
 public abstract class MobilePlatformAdapter
 {
     public virtual LayoutExpectations Layout => new();
-    public abstract By AutomationId(string id);
+    /// <summary>
+    /// Locates an element by its app-declared automation id. Every lookup is
+    /// attributed to the active scenario's coverage evidence (#2085), so tests
+    /// and page objects must resolve ids through this method rather than
+    /// building platform locators by hand.
+    /// </summary>
+    public By AutomationId(string id)
+    {
+        CoverageEvidence.RecordAutomationId(id);
+        return LocateAutomationId(id);
+    }
+    protected abstract By LocateAutomationId(string id);
     public abstract By FlyoutButton { get; }
     public virtual bool CanTap(AppiumElement element) => element.Enabled;
     public abstract bool IsChecked(AppiumElement element);
@@ -182,7 +193,7 @@ public sealed class AndroidPlatformAdapter : MobilePlatformAdapter
 {
     public override bool IsChecked(AppiumElement element) => element.GetAttribute("checked") == "true";
     // MAUI maps AutomationId to Android resource-id, preserving screen-reader text.
-    public override By AutomationId(string id) => By.Id($"com.tanah.daily929:id/{id}");
+    protected override By LocateAutomationId(string id) => By.Id($"com.tanah.daily929:id/{id}");
     public override By FlyoutButton => AutomationId("ReaderNavigationButton");
     public override void GoBack(AppiumDriver driver) => driver.Navigate().Back();
     public override AppiumDriver CreateDriver(Uri server, AppiumOptions options) =>
@@ -194,7 +205,7 @@ public sealed class IosPlatformAdapter : MobilePlatformAdapter
     public override void DismissSearchSheet(AppiumDriver driver) => Tap(driver, driver.FindElement(AutomationId("SearchSheetDismissButton")));
     public override bool IsChecked(AppiumElement element) => element.GetAttribute("value") == "1";
     public override void GoBackFromFocusedVerse(AppiumDriver driver) => Tap(driver, driver.FindElement(AutomationId("SelectionBackButton")));
-    public override By AutomationId(string id) => MobileBy.AccessibilityId(id);
+    protected override By LocateAutomationId(string id) => MobileBy.AccessibilityId(id);
     public override By FlyoutButton => AutomationId("ReaderNavigationButton");
     public override bool CanTap(AppiumElement element) => element.Enabled
         && string.Equals(element.GetAttribute("hittable"), "true", StringComparison.OrdinalIgnoreCase);

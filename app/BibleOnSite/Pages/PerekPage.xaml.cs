@@ -72,7 +72,6 @@ public partial class PerekPage : ContentPage, IQueryAttributable
         InitializeComponent();
 #if IOS
         ConfigureReaderSafeArea();
-        InitializeBottomBarDebugControls();
 #endif
         Console.WriteLine("[Startup] PerekPage binding context");
         _viewModel = new PerekViewModel();
@@ -92,7 +91,6 @@ public partial class PerekPage : ContentPage, IQueryAttributable
         InitializeComponent();
 #if IOS
         ConfigureReaderSafeArea();
-        InitializeBottomBarDebugControls();
 #endif
         _viewModel = viewModel;
         BindingContext = _viewModel;
@@ -744,69 +742,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable
         ReaderSafeArea.Configure(MainGrid);
     }
 
-    private void InitializeBottomBarDebugControls()
-    {
-        // XAML sets the default selection while constructing the page. Hook up
-        // changes only after all controls touched by the handler exist.
-        foreach (var choice in new[] { DebugFix0, DebugFix3, DebugFix4, DebugFix11, DebugFix15, DebugFix16, DebugFix17 })
-        {
-            choice.CheckedChanged += OnDebugFixChanged;
-        }
-    }
-
     private void OnPageSizeChanged(object? sender, EventArgs e) => ApplyBottomBarSafeArea();
-    private int _currentDebugFix = 4; // Default: TranslationY (confirmed best by tester)
-    private double _bottomInset;
-    private bool _debugDropdownOpen;
-
-    private static bool IsTestFlightBuild()
-    {
-        var receiptUrl = Foundation.NSBundle.MainBundle.AppStoreReceiptUrl;
-        return receiptUrl?.Path?.Contains("sandboxReceipt", StringComparison.OrdinalIgnoreCase) == true;
-    }
-
-    private void OnDebugToggleTapped(object? sender, TappedEventArgs e)
-    {
-        _debugDropdownOpen = !_debugDropdownOpen;
-        DebugDropdownPanel.IsVisible = _debugDropdownOpen;
-        DebugToggleIcon.Text = _debugDropdownOpen ? "✕" : "🔧";
-    }
-
-    private void OnDebugFixChanged(object? sender, CheckedChangedEventArgs e)
-    {
-        if (!e.Value || sender is not RadioButton rb)
-        {
-            return;
-        }
-
-        ResetBottomBarFixes();
-        _currentDebugFix = rb switch
-        {
-            _ when rb == DebugFix0 => 0,
-            _ when rb == DebugFix3 => 3,
-            _ when rb == DebugFix4 => 4,
-            _ when rb == DebugFix11 => 11,
-            _ when rb == DebugFix15 => 15,
-            _ when rb == DebugFix16 => 16,
-            _ when rb == DebugFix17 => 17,
-            _ => _currentDebugFix
-        };
-        ApplyBottomBarSafeArea();
-    }
-
-    private void ResetBottomBarFixes()
-    {
-        MainGrid.Margin = new Thickness(0);
-        this.Padding = new Thickness(0);
-        BottomBar.Margin = new Thickness(0);
-        BottomBar.TranslationY = 0;
-        BottomBar.Padding = new Thickness(0);
-        BottomBar.HeightRequest = 90;
-        FloatingMenuContainer.Padding = new Thickness(0);
-        FloatingMenuContainer.Margin = new Thickness(0);
-        FloatingMenuContainer.TranslationY = 0;
-        Resources["BottomBarTotalHeight"] = 90.0;
-    }
 
     private void ApplyBottomBarSafeArea()
     {
@@ -820,104 +756,22 @@ public partial class PerekPage : ContentPage, IQueryAttributable
             bottom = window.SafeAreaInsets.Bottom;
         }
 
-        _bottomInset = bottom;
-
-        if (IsTestFlightBuild())
-        {
-            BottomBarDebugOverlay.IsVisible = true;
-            DebugFixInfo.Text = $"inset={bottom:F1}pt fix={_currentDebugFix}";
-        }
-
-        if (bottom <= 0)
-        {
-            LayoutCircularMenu();
-            return;
-        }
-
+        // Shift the bars down over the home-indicator inset and pull the page
+        // up underneath so no gap shows (tester-confirmed combination).
+        // With no inset (iPad, landscape) the same assignments restore the
+        // layout defaults, so an inset disappearing never leaves stale values.
         var totalHeight = 90 + bottom;
-
-        switch (_currentDebugFix)
-        {
-            case 0: // No fix — baseline
-                break;
-
-            case 3: // BottomBar negative bottom margin
-            {
-                BottomBar.Margin = new Thickness(0, 0, 0, -bottom);
-                BottomBar.Padding = new Thickness(0, 0, 0, bottom);
-                BottomBar.HeightRequest = totalHeight;
-                FloatingMenuContainer.Margin = new Thickness(0, 0, 0, -bottom);
-                FloatingMenuContainer.Padding = new Thickness(0, 0, 0, bottom);
-                Resources["BottomBarTotalHeight"] = totalHeight;
-                break;
-            }
-
-            case 4: // TranslationY on BottomBar — visually shift down (BEST)
-            {
-                BottomBar.TranslationY = bottom;
-                BottomBar.Padding = new Thickness(0, 0, 0, bottom);
-                BottomBar.HeightRequest = totalHeight;
-                FloatingMenuContainer.TranslationY = bottom;
-                FloatingMenuContainer.Padding = new Thickness(0, 0, 0, bottom);
-                Resources["BottomBarTotalHeight"] = totalHeight;
-                break;
-            }
-
-            case 11: // ContentPage bottom padding = -bottom
-            {
-                this.Padding = new Thickness(0, 0, 0, -bottom);
-                BottomBar.Padding = new Thickness(0, 0, 0, bottom);
-                BottomBar.HeightRequest = totalHeight;
-                FloatingMenuContainer.Padding = new Thickness(0, 0, 0, bottom);
-                Resources["BottomBarTotalHeight"] = totalHeight;
-                break;
-            }
-
-            case 15: // TranslationY + bar negative margin combo
-            {
-                BottomBar.TranslationY = bottom;
-                BottomBar.Margin = new Thickness(0, 0, 0, -bottom);
-                BottomBar.Padding = new Thickness(0, 0, 0, bottom);
-                BottomBar.HeightRequest = totalHeight;
-                FloatingMenuContainer.TranslationY = bottom;
-                FloatingMenuContainer.Margin = new Thickness(0, 0, 0, -bottom);
-                FloatingMenuContainer.Padding = new Thickness(0, 0, 0, bottom);
-                Resources["BottomBarTotalHeight"] = totalHeight;
-                break;
-            }
-
-            case 16: // TranslationY + page padding combo
-            {
-                BottomBar.TranslationY = bottom;
-                BottomBar.Padding = new Thickness(0, 0, 0, bottom);
-                BottomBar.HeightRequest = totalHeight;
-                FloatingMenuContainer.TranslationY = bottom;
-                FloatingMenuContainer.Padding = new Thickness(0, 0, 0, bottom);
-                this.Padding = new Thickness(0, 0, 0, -bottom);
-                Resources["BottomBarTotalHeight"] = totalHeight;
-                break;
-            }
-
-            case 17: // TranslationY (half) + bar negative margin (half)
-            {
-                var half = bottom / 2;
-                BottomBar.TranslationY = half;
-                BottomBar.Margin = new Thickness(0, 0, 0, -half);
-                BottomBar.Padding = new Thickness(0, 0, 0, bottom);
-                BottomBar.HeightRequest = totalHeight;
-                FloatingMenuContainer.TranslationY = half;
-                FloatingMenuContainer.Margin = new Thickness(0, 0, 0, -half);
-                FloatingMenuContainer.Padding = new Thickness(0, 0, 0, bottom);
-                Resources["BottomBarTotalHeight"] = totalHeight;
-                break;
-            }
-        }
+        BottomBar.TranslationY = bottom;
+        BottomBar.Padding = new Thickness(0, 0, 0, bottom);
+        BottomBar.HeightRequest = totalHeight;
+        FloatingMenuContainer.TranslationY = bottom;
+        FloatingMenuContainer.Padding = new Thickness(0, 0, 0, bottom);
+        this.Padding = new Thickness(0, 0, 0, -bottom);
+        Resources["BottomBarTotalHeight"] = totalHeight;
 
         // Padding changes the arrange area without firing SizeChanged.
         LayoutCircularMenu();
     }
-#else
-    private void OnDebugToggleTapped(object? sender, TappedEventArgs e) { }
 #endif
 
     /// <summary>
@@ -961,7 +815,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable
             // If in selection mode, tap toggles selection
             if (_viewModel.Perek?.Pasukim.FirstOrDefault(p => p.PasukNum == pasukNum) is { } pasuk)
             {
-                await HandlePasukTapAsync(pasuk, sender);
+                await HandlePasukTapAsync(pasuk);
             }
         }
 #endif
@@ -990,7 +844,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable
         if (sender is LongPressBehavior behavior &&
             ResolvePasuk(behavior.AssociatedView?.BindingContext) is { } pasuk)
         {
-            await HandlePasukTapAsync(pasuk, behavior.AssociatedView);
+            await HandlePasukTapAsync(pasuk);
         }
     }
 
@@ -1017,7 +871,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable
             ResetRecitationContext();
             var wasEmpty = _viewModel.SelectedPasukNums.Count == 0;
             _viewModel.ToggleSelectedPasuk(pasukNum);
-            UpdatePasukSelection(sender, pasukNum);
+            UpdatePasukSelection();
             // Vibrate when entering selection mode
             if (wasEmpty && _viewModel.SelectedPasukNums.Count > 0)
             {
@@ -1131,7 +985,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable
     /// Updates the selection bar after selection change.
     /// The visual state is handled by DataTrigger in XAML.
     /// </summary>
-    private void UpdatePasukSelection(object? sender, int pasukNum)
+    private void UpdatePasukSelection()
     {
         UpdateSelectionBar();
     }
@@ -1351,7 +1205,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable
         }
 
         // Change FAB icon to X
-        CircularMenuButton.Text = "✕";
+        CircularMenuButton.Text = Fonts.FluentUI.dismiss_24_regular;
         CircularMenuButton.BackgroundColor = Colors.Red;
 
         // Animate FAB rotation and fade in all buttons (disabled = 0.4, enabled = 1)
@@ -1378,7 +1232,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable
         var buttons = new[] { PrevPerekButton, TodayButton, PerekPickerButton, NextPerekButton };
 
         // Change back to hamburger
-        CircularMenuButton.Text = "☰";
+        CircularMenuButton.Text = Fonts.FluentUI.navigation_24_regular;
         CircularMenuButton.BackgroundColor = (Color)Microsoft.Maui.Controls.Application.Current!.Resources["Primary"];
 
         // Animate FAB rotation and fade out all buttons
@@ -1512,7 +1366,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable
     /// <summary>
     /// Handles perek selection from the picker popup.
     /// </summary>
-    private async void OnPerekPickerSelected(object? sender, int perekId)
+    private async void OnPerekPickerSelected(int perekId)
     {
         if (perekId >= 1 && perekId <= 929 && perekId != _viewModel.PerekId)
         {
@@ -1928,6 +1782,10 @@ public partial class PerekPage : ContentPage, IQueryAttributable
                     }
                 }
                 break;
+
+            default:
+                // Other gesture statuses need no panel handling.
+                break;
         }
     }
 
@@ -2010,24 +1868,24 @@ public partial class PerekPage : ContentPage, IQueryAttributable
                 break;
 
             case Android.Views.MotionEventActions.Move:
-            {
-                var dx = motion.RawX - _exitButtonTouchStartRawX;
-                var dy = motion.RawY - _exitButtonTouchStartRawY;
-
-                if (!_exitButtonIsDragging &&
-                    (Math.Abs(dx) > _exitButtonTouchSlop || Math.Abs(dy) > _exitButtonTouchSlop))
                 {
-                    _exitButtonIsDragging = true;
-                }
+                    var dx = motion.RawX - _exitButtonTouchStartRawX;
+                    var dy = motion.RawY - _exitButtonTouchStartRawY;
 
-                if (_exitButtonIsDragging)
-                {
-                    ExitFullScreenButton.TranslationX = _exitButtonDragStartTx + dx / _exitButtonDensity;
-                    ExitFullScreenButton.TranslationY = _exitButtonDragStartTy + dy / _exitButtonDensity;
+                    if (!_exitButtonIsDragging &&
+                        (Math.Abs(dx) > _exitButtonTouchSlop || Math.Abs(dy) > _exitButtonTouchSlop))
+                    {
+                        _exitButtonIsDragging = true;
+                    }
+
+                    if (_exitButtonIsDragging)
+                    {
+                        ExitFullScreenButton.TranslationX = _exitButtonDragStartTx + dx / _exitButtonDensity;
+                        ExitFullScreenButton.TranslationY = _exitButtonDragStartTy + dy / _exitButtonDensity;
+                    }
+                    e.Handled = true;
+                    break;
                 }
-                e.Handled = true;
-                break;
-            }
 
             case Android.Views.MotionEventActions.Up:
                 if (!_exitButtonIsDragging)
@@ -2039,6 +1897,10 @@ public partial class PerekPage : ContentPage, IQueryAttributable
 
             case Android.Views.MotionEventActions.Cancel:
                 e.Handled = true;
+                break;
+
+            default:
+                // Other motion actions do not affect the exit-button drag.
                 break;
         }
     }
@@ -2057,6 +1919,10 @@ public partial class PerekPage : ContentPage, IQueryAttributable
             case GestureStatus.Running:
                 ExitFullScreenButton.TranslationX = _exitButtonPanStartX + e.TotalX;
                 ExitFullScreenButton.TranslationY = _exitButtonPanStartY + e.TotalY;
+                break;
+
+            default:
+                // Completed/canceled gestures keep the button where the pan left it.
                 break;
         }
     }
@@ -2151,7 +2017,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable
                 b.Opacity = 0;
                 b.InputTransparent = true;
             }
-            CircularMenuButton.Text = "☰";
+            CircularMenuButton.Text = Fonts.FluentUI.navigation_24_regular;
             CircularMenuButton.BackgroundColor = (Color)Microsoft.Maui.Controls.Application.Current!.Resources["Primary"];
             CircularMenuButton.Rotation = 0;
         }
@@ -2168,6 +2034,9 @@ public partial class PerekPage : ContentPage, IQueryAttributable
         ExitFullScreenButton.TranslationX = 0;
         ExitFullScreenButton.TranslationY = 0;
         ExitFullScreenButton.IsVisible = true;
+#if ANDROID
+        UpdateReaderBack();
+#endif
     }
 
     /// <summary>
@@ -2185,6 +2054,9 @@ public partial class PerekPage : ContentPage, IQueryAttributable
         // Show bottom bar
         BottomBar.IsVisible = true;
         FloatingMenuContainer.IsVisible = true;
+#if ANDROID
+        UpdateReaderBack();
+#endif
     }
 
     #endregion

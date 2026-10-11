@@ -26,7 +26,9 @@ public class HtmlViewHandler : ViewHandler<HtmlView, TextView>
         [nameof(HtmlView.LineHeight)] = MapLineHeight,
         [nameof(HtmlView.H1FontSizeMultiplier)] = MapHeaderStyles,
         [nameof(HtmlView.H2FontSizeMultiplier)] = MapHeaderStyles,
-        [nameof(HtmlView.H3FontSizeMultiplier)] = MapHeaderStyles
+        [nameof(HtmlView.H3FontSizeMultiplier)] = MapHeaderStyles,
+        [nameof(HtmlView.SearchMatchStart)] = (handler, _) => handler.UpdateContent(),
+        [nameof(HtmlView.SearchMatchLength)] = (handler, _) => handler.UpdateContent()
     };
 
     public HtmlViewHandler() : base(PropertyMapper)
@@ -53,7 +55,9 @@ public class HtmlViewHandler : ViewHandler<HtmlView, TextView>
     public override Microsoft.Maui.Graphics.Size GetDesiredSize(double widthConstraint, double heightConstraint)
     {
         if (PlatformView == null || VirtualView == null || Context == null)
+        {
             return Microsoft.Maui.Graphics.Size.Zero;
+        }
 
         if (!double.IsInfinity(widthConstraint) && widthConstraint > 0)
         {
@@ -117,7 +121,9 @@ public class HtmlViewHandler : ViewHandler<HtmlView, TextView>
     private void UpdateContent()
     {
         if (PlatformView == null || VirtualView == null)
+        {
             return;
+        }
 
         var html = VirtualView.HtmlContent;
         if (string.IsNullOrEmpty(html))
@@ -154,9 +160,57 @@ public class HtmlViewHandler : ViewHandler<HtmlView, TextView>
                 result = PrependRtlMark(result);
             }
             result = ReplaceUrlSpans(result);
+            result = ApplySearchMatch(result);
             PlatformView.SetText(result, TextView.BufferType.Spannable);
         }
         PlatformView.SetTextColor(GetTextColor());
+    }
+
+    /// <summary>
+    /// Paints the configured search match with a background span over the raw
+    /// rendered range (<see cref="Helpers.SearchMatch.ToRawRange"/> translates
+    /// the normalized span, so the leading RLM and trimmed block whitespace
+    /// never shift it).
+    /// </summary>
+    private ISpanned ApplySearchMatch(ISpanned result)
+    {
+        if (VirtualView is not { HasSearchMatch: true } view)
+        {
+            return result;
+        }
+        // Html.FromHtml can return an immutable SpannedString when no RTL or
+        // trim transform ran — copy it so the highlight span can be attached.
+        var spannable = result as ISpannable ?? new SpannableStringBuilder(result);
+        var (start, end) = Helpers.SearchMatch.ToRawRange(
+            result.ToString() ?? string.Empty,
+            new Helpers.SearchMatchSpan(view.SearchMatchStart, view.SearchMatchLength));
+        end = System.Math.Min(end, result.Length());
+        if (end > start)
+        {
+            spannable.SetSpan(new BackgroundColorSpan(Android.Graphics.Color.Argb(0x55, 0xFF, 0xE0, 0x50)),
+                start, end, SpanTypes.ExclusiveExclusive);
+        }
+        return spannable;
+    }
+
+    /// <summary>
+    /// Y offset (density-independent units) of the match's line inside the
+    /// TextView — null until the text layout exists.
+    /// </summary>
+    internal double? GetSearchMatchTopDips()
+    {
+        if (PlatformView?.Layout is not { } layout ||
+            VirtualView is not { HasSearchMatch: true } view ||
+            string.IsNullOrEmpty(PlatformView.Text))
+        {
+            return null;
+        }
+        var (start, _) = Helpers.SearchMatch.ToRawRange(
+            PlatformView.Text,
+            new Helpers.SearchMatchSpan(view.SearchMatchStart, view.SearchMatchLength));
+        var offset = System.Math.Clamp(start, 0, PlatformView.Text.Length - 1);
+        var top = layout.GetLineTop(layout.GetLineForOffset(offset));
+        return Context?.FromPixels(top) ?? top;
     }
 
     /// <summary>
@@ -288,7 +342,10 @@ public class HtmlViewHandler : ViewHandler<HtmlView, TextView>
 
     private static void MapTextAlignment(HtmlViewHandler handler, HtmlView view)
     {
-        if (handler.PlatformView == null) return;
+        if (handler.PlatformView == null)
+        {
+            return;
+        }
 
         var isRtl = view.TextDirection == HtmlTextDirection.Rtl;
 
@@ -318,9 +375,13 @@ public class HtmlViewHandler : ViewHandler<HtmlView, TextView>
             };
 
             if (view.TextAlignment == HtmlTextAlignment.Center)
+            {
                 handler.PlatformView.Gravity = Android.Views.GravityFlags.CenterHorizontal | Android.Views.GravityFlags.Top;
+            }
             else
+            {
                 handler.PlatformView.Gravity = Android.Views.GravityFlags.Left | Android.Views.GravityFlags.Top;
+            }
         }
 
         // Justify complete lines in either direction. TextDirection and the RLM
@@ -342,7 +403,10 @@ public class HtmlViewHandler : ViewHandler<HtmlView, TextView>
 
     private static void MapTextDirection(HtmlViewHandler handler, HtmlView view)
     {
-        if (handler.PlatformView == null) return;
+        if (handler.PlatformView == null)
+        {
+            return;
+        }
 
         handler.PlatformView.TextDirection = view.TextDirection switch
         {
