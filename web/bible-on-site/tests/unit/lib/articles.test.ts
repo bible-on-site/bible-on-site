@@ -21,6 +21,7 @@ import {
 	getAllArticlePerekIdPairs,
 	getArticleById,
 	getArticleSummariesByPerekId,
+	getArticleSummariesForRanges,
 	getArticlesByPerekId,
 } from "../../../src/lib/articles";
 
@@ -385,6 +386,56 @@ describe("articles service", () => {
 			expect(sqlCall).toContain("WHERE a.id = ?");
 			expect(sqlCall).toContain("a.perek_id BETWEEN 1 AND 929");
 			expect(mockQuery).toHaveBeenCalledWith(expect.any(String), [42]);
+		});
+	});
+
+	describe("getArticleSummariesForRanges", () => {
+		// בראשית א into בראשית ב — a cross-perek unit slice.
+		const crossPerekRanges = [
+			{
+				start: { perekId: 1, pasuk: 30 },
+				end: { perekId: 2, pasuk: 4 },
+			},
+		];
+
+		it("returns empty without querying for empty ranges", async () => {
+			const result = await getArticleSummariesForRanges([]);
+			expect(result).toEqual([]);
+			expect(mockQuery).not.toHaveBeenCalled();
+		});
+
+		it("queries every overlapping perek via IN", async () => {
+			mockQuery.mockResolvedValue([]);
+			await getArticleSummariesForRanges(crossPerekRanges);
+			const [sql, params] = mockQuery.mock.calls[0];
+			expect(sql).toContain("a.perek_id IN (?, ?)");
+			expect(params).toEqual([1, 2]);
+		});
+
+		it("maps rows to summaries", async () => {
+			mockQuery.mockResolvedValue([
+				{
+					id: 7,
+					perek_id: 2,
+					author_id: 10,
+					abstract: "<p>x</p>",
+					name: "Across chapters",
+					priority: 1,
+					author_name: "הרב דוגמה",
+				},
+			]);
+			const result = await getArticleSummariesForRanges(crossPerekRanges);
+			expect(result).toEqual([
+				expect.objectContaining({ id: 7, perekId: 2, name: "Across chapters" }),
+			]);
+		});
+
+		it("returns empty array on failure", async () => {
+			mockQuery.mockRejectedValue(new Error("DB error"));
+			const result = await getArticleSummariesForRanges(crossPerekRanges);
+			expect(result).toEqual([]);
+			mockQuery.mockRejectedValue("raw error");
+			expect(await getArticleSummariesForRanges(crossPerekRanges)).toEqual([]);
 		});
 	});
 });
