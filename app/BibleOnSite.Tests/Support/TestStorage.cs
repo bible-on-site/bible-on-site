@@ -49,6 +49,17 @@ public sealed class TestStorage : IAsyncDisposable
         File.Delete(Path.Combine(Root, fileName));
     }
 
+    /// <summary>
+    /// Closes the pooled sqlite-net connection for one file under <see cref="Root"/> —
+    /// including a connection a service opened and pooled itself — so tests can delete
+    /// or replace the file on Windows. Scoped to a single connection string; never
+    /// resets the shared pool, which other test classes may be using in parallel.
+    /// </summary>
+    public async Task CloseDatabaseFileAsync(string name, SQLiteOpenFlags flags = SQLiteOpenFlags.ReadOnly)
+    {
+        await new SQLiteAsyncConnection(Path.Combine(Root, name), flags).CloseAsync();
+    }
+
     public async ValueTask DisposeAsync()
     {
         foreach (var connection in _connections)
