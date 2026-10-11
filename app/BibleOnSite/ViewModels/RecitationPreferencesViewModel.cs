@@ -59,7 +59,7 @@ public partial class RecitationPreferencesViewModel : ObservableObject
             OnPropertyChanged();
         }
     }
-    [ObservableProperty] [NotifyPropertyChangedFor(nameof(IsIdle))] private bool _isDownloading;
+    [ObservableProperty][NotifyPropertyChangedFor(nameof(IsIdle))] private bool _isDownloading;
     public bool IsIdle => !IsDownloading;
     [ObservableProperty] private double _progress;
     [ObservableProperty] private string _status = "התקינו הקראה לכל הספרים או לספרים שתבחרו.";
@@ -74,8 +74,12 @@ public partial class RecitationPreferencesViewModel : ObservableObject
             {
                 foreach (var group in chapters.Values.GroupBy(p => p.SeferId).OrderBy(g => g.Key))
                 {
-                    Books.Add(new RecitationBookChoice { Name = group.First().SeferName, PerekIds = group.Select(p => p.PerekId).ToList(),
-                        IsSelected = group.Any(p => _recitation.HasAudio(p.PerekId)) });
+                    Books.Add(new RecitationBookChoice
+                    {
+                        Name = group.First().SeferName,
+                        PerekIds = group.Select(p => p.PerekId).ToList(),
+                        IsSelected = group.Any(p => _recitation.HasAudio(p.PerekId))
+                    });
                 }
             }
 
@@ -99,7 +103,10 @@ public partial class RecitationPreferencesViewModel : ObservableObject
         OnPropertyChanged(nameof(IsInstalled)); OnPropertyChanged(nameof(Enabled));
     }
 
-    [RelayCommand] private void SelectAll() { foreach (var book in Books)
+    [RelayCommand]
+    private void SelectAll()
+    {
+        foreach (var book in Books)
         {
             book.IsSelected = book.CanSelect;
         }
