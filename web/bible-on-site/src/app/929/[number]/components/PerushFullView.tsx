@@ -18,7 +18,8 @@ interface PerushFullViewProps {
 
 /**
  * Renders a single perush (title, parshan, notes grouped by pasuk) with a back action.
- * Used both in the SEO view (inline) and flipbook blank page (fullPage).
+ * Used on the flipbook blank page when the user clicks a perush from the carousel;
+ * outside the book the dedicated /929/{perek}/{perush} page is the single view.
  */
 export function PerushFullView({
 	perush,
