@@ -32,7 +32,7 @@ public class DiagnosticsExportTests
         {
             Path.GetDirectoryName(path).Should().Be(storage.Root);
             Path.GetFileName(path).Should().StartWith("perushim_diagnostics_").And.EndWith(".txt");
-            (await File.ReadAllTextAsync(path)).Should().Contain("Perushim notes diagnostics").And.Contain("IsAvailable: False");
+            (await File.ReadAllTextAsync(path, TestContext.Current.CancellationToken)).Should().Contain("Perushim notes diagnostics").And.Contain("IsAvailable: False");
         }
     }
 
