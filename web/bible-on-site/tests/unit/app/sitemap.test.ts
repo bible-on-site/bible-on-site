@@ -31,6 +31,7 @@ describe("sitemap", () => {
 	describe("constants", () => {
 		it("has correct sections defined", () => {
 			expect(SITEMAP_SECTIONS).toEqual([
+				"לוח",
 				"dailyBulletin",
 				"whatsappGroup",
 				"tos",
@@ -297,7 +298,7 @@ describe("sitemap", () => {
 		it("returns all entries combined", () => {
 			const result = generateSitemapEntries(mockConfig);
 
-			// 1 root + 6 sections + 1 929 index + 929 perakim + 1 authors index
+			// 1 root + 7 sections + 1 929 index + 929 perakim + 1 authors index
 			// + pedia static entries + 1 מסורה landing entry
 			const expectedLength =
 				1 +
