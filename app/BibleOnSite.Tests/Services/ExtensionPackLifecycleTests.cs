@@ -469,7 +469,7 @@ public class ExtensionPackLifecycleTests
     }
 
     /// <summary>The settings overview — category summaries and navigation only.</summary>
-    private static PreferencesViewModel Settings(TestStorage storage,
+    private static PreferencesViewModel Settings(
         PerushimNotesService notes, RecitationService recitation, Mock<IAppNavigator> navigator)
     {
         return new PreferencesViewModel(
@@ -495,7 +495,7 @@ public class ExtensionPackLifecycleTests
             (2, [(3, "other book"u8.ToArray())]));
         store.Wire();
         var recitation = new RecitationService(storage.FileSystem.Object, store.Delivery.Object);
-        var settings = Settings(storage, Notes(storage, store.Delivery.Object), recitation, new Mock<IAppNavigator>());
+        var settings = Settings(Notes(storage, store.Delivery.Object), recitation, new Mock<IAppNavigator>());
         var changes = new List<string?>();
         settings.PropertyChanged += (_, e) => changes.Add(e.PropertyName);
 
@@ -519,7 +519,7 @@ public class ExtensionPackLifecycleTests
         var store = new Store(storage.Root);
         store.Wire();
         var navigator = new Mock<IAppNavigator>();
-        var settings = Settings(storage, Notes(storage, store.Delivery.Object),
+        var settings = Settings(Notes(storage, store.Delivery.Object),
             new RecitationService(storage.FileSystem.Object, store.Delivery.Object), navigator);
 
         await settings.OpenRecitationCommand.ExecuteAsync(null);
@@ -611,7 +611,7 @@ public class ExtensionPackLifecycleTests
         store.Wire();
         var notes = Notes(storage, store.Delivery.Object);
         var recitation = new RecitationService(storage.FileSystem.Object, store.Delivery.Object);
-        var settings = Settings(storage, notes, recitation, new Mock<IAppNavigator>());
+        var settings = Settings(notes, recitation, new Mock<IAppNavigator>());
 
         await settings.LoadAsync();
 
@@ -630,7 +630,7 @@ public class ExtensionPackLifecycleTests
         var notes = Notes(storage, delivery.Object);
         // No bundled recitation catalog: OpenAppPackageFileAsync throws FileNotFoundException.
         var recitation = new RecitationService(storage.FileSystem.Object, delivery.Object);
-        var settings = Settings(storage, notes, recitation, new Mock<IAppNavigator>());
+        var settings = Settings(notes, recitation, new Mock<IAppNavigator>());
 
         await settings.LoadAsync();
 

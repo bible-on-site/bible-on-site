@@ -37,7 +37,7 @@ public class ChapterSearchTests
     {
         await using var storage = new TestStorage();
         var vm = new SearchViewModel(new PerekDataService(new LocalDatabaseService(storage.FileSystem.Object))) { SearchPhrase = "בראשית" };
-        await FluentActions.Awaiting(() => vm.SearchAsync()).Should().ThrowAsync<FileNotFoundException>();
+        await FluentActions.Awaiting(() => vm.SearchAsync(CancellationToken.None)).Should().ThrowAsync<FileNotFoundException>();
         vm.IsLoading.Should().BeFalse();
         vm.SearchResults.Should().BeEmpty();
     }

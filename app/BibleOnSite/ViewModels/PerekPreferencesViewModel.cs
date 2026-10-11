@@ -29,7 +29,10 @@ public partial class PerekPreferencesViewModel : ObservableObject
         get => _preferencesService.PerekToLoad;
         set
         {
-            if (_preferencesService.PerekToLoad == value) return;
+            if (_preferencesService.PerekToLoad == value)
+            {
+                return;
+            }
             _preferencesService.PerekToLoad = value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(IsPerekToLoadTodays));
@@ -41,14 +44,26 @@ public partial class PerekPreferencesViewModel : ObservableObject
     public bool IsPerekToLoadTodays
     {
         get => PerekToLoad == PerekToLoad.Todays;
-        set { if (value) PerekToLoad = PerekToLoad.Todays; }
+        set
+        {
+            if (value)
+            {
+                PerekToLoad = PerekToLoad.Todays;
+            }
+        }
     }
 
     /// <summary>True when startup perek is Last learnt.</summary>
     public bool IsPerekToLoadLastLearnt
     {
         get => PerekToLoad == PerekToLoad.LastLearnt;
-        set { if (value) PerekToLoad = PerekToLoad.LastLearnt; }
+        set
+        {
+            if (value)
+            {
+                PerekToLoad = PerekToLoad.LastLearnt;
+            }
+        }
     }
 
     /// <summary>Selects הפרק של היום as the startup perek.</summary>

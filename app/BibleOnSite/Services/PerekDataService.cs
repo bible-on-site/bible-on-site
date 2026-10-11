@@ -48,13 +48,18 @@ public class PerekDataService
     public async Task LoadAsync()
     {
         if (_isLoaded)
+        {
             return;
+        }
 
         await _loadLock.WaitAsync();
         try
         {
             if (_isLoaded)
+            {
                 return;
+            }
+
             var db = await _databaseService.GetDatabaseAsync();
             // A replaced query and the background index can arrive together.
             // Publish one complete catalog instead of replacing its dictionaries
@@ -165,7 +170,10 @@ public class PerekDataService
     public string? GetPerekSource(int perekId)
     {
         var perek = GetPerek(perekId);
-        if (perek == null) return null;
+        if (perek == null)
+        {
+            return null;
+        }
 
         var additionalPart = perek.Additional.HasValue ? $"{perek.Additional.Value.ToHebrewLetters()} " : string.Empty;
         return $"{perek.SeferName} {additionalPart}{perek.PerekNumber.ToHebrewLetters()}";
@@ -179,7 +187,9 @@ public class PerekDataService
     public int GetTodaysPerekId()
     {
         if (_perakim == null || _perakim.Count == 0)
+        {
             return 1;
+        }
 
         // Use the Hebrew date helper for proper calculation
         return HebrewDateHelper.GetTodaysPerekIdByHebrew(_perakim);
@@ -235,32 +245,7 @@ public class PerekDataService
                 PairedOffset = row.QriKtivOffset
             };
             currentSegments.Add(segment);
-
-            switch (row.SegmentType)
-            {
-                case "ktiv":
-                case "qri":
-                    if (!string.IsNullOrEmpty(value))
-                    {
-                        // Add space before word unless:
-                        // - it's the first word
-                        // - previous char is a newline
-                        // - previous char is a maqaf (Hebrew hyphen)
-                        if (currentText.Length > 0 && currentText[^1] != '\n' && currentText[^1] != '־')
-                        {
-                            currentText.Append(' ');
-                        }
-                        currentText.Append(value);
-                    }
-                    break;
-                case "ptuha":
-                case "stuma":
-                    if (currentText.Length > 0 && currentText[^1] != '\n')
-                    {
-                        currentText.Append('\n');
-                    }
-                    break;
-            }
+            PerekDataServiceText.AppendSegmentText(currentText, segmentType, value);
         }
 
         if (currentPasukId != -1)
@@ -291,7 +276,9 @@ public class PerekDataService
     private static int? ParseAdditionalLetter(string? letter)
     {
         if (string.IsNullOrWhiteSpace(letter))
+        {
             return null;
+        }
 
         return letter switch
         {
@@ -312,7 +299,9 @@ public class PerekDataService
     private static string FormatDate(string? date)
     {
         if (string.IsNullOrWhiteSpace(date))
+        {
             return string.Empty;
+        }
 
         if (date.Length == 8)
         {
@@ -328,10 +317,14 @@ public class PerekDataService
     private static int ParseHebDateNumeric(string? hebDate)
     {
         if (string.IsNullOrWhiteSpace(hebDate) || hebDate.Length != 8)
+        {
             return 0;
+        }
 
         if (int.TryParse(hebDate, out var result))
+        {
             return result;
+        }
 
         return 0;
     }
@@ -339,10 +332,14 @@ public class PerekDataService
     private static string FormatHebrewDate(string? hebDate)
     {
         if (string.IsNullOrWhiteSpace(hebDate))
+        {
             return string.Empty;
+        }
 
         if (hebDate.Length != 8 || !int.TryParse(hebDate, out var _))
+        {
             return hebDate;
+        }
 
         var year = int.Parse(hebDate[..4]);
         var month = int.Parse(hebDate.Substring(4, 2));

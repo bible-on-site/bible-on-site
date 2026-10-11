@@ -41,7 +41,9 @@ public partial class AuthorsViewModel : ObservableObject
         get
         {
             if (string.IsNullOrWhiteSpace(SearchPhrase))
+            {
                 return SearchPhraseAll;
+            }
 
             return SearchPhrase.Trim().Replace("הרב ", string.Empty);
         }
@@ -57,7 +59,9 @@ public partial class AuthorsViewModel : ObservableObject
             var authorsWithArticles = Authors.Where(a => a.ArticlesCount > 0);
 
             if (OptimizedSearchPhrase == SearchPhraseAll)
+            {
                 return authorsWithArticles.ToList();
+            }
 
             var searchTerm = OptimizedSearchPhrase.ToLowerInvariant();
 

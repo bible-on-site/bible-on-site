@@ -73,7 +73,7 @@ public sealed partial class PadDeliveryService : IPadDeliveryService
     public Task<string?> TryGetAssetPathAsync(string packName, CancellationToken cancellationToken = default)
     {
 #if ANDROID
-        return TryGetAssetPathAndroidAsync(packName, cancellationToken);
+        return TryGetAssetPathAndroidAsync(packName);
 #elif IOS || MACCATALYST
         return TryGetAssetPathIosAsync(packName, cancellationToken);
 #else
@@ -123,11 +123,13 @@ partial class PadDeliveryService
         return ctx != null ? AssetPackManagerFactory.GetInstance(ctx) : null;
     }
 
-    private static Task<string?> TryGetAssetPathAndroidAsync(string packName, CancellationToken cancellationToken)
+    private static Task<string?> TryGetAssetPathAndroidAsync(string packName)
     {
         var manager = GetAssetPackManager();
         if (manager == null)
+        {
             return Task.FromResult<string?>(null);
+        }
 
         try
         {
@@ -158,29 +160,41 @@ partial class PadDeliveryService
         {
             var location = manager.GetPackLocation(packName);
             if (location?.AssetsPath() != null)
+            {
                 return true;
+            }
 
             var listener = new AssetPackStateUpdateListenerWrapper();
             string? failure = null;
             listener.StateUpdate += (_, e) =>
             {
-                if (e.State?.Name() != packName) return;
+                if (e.State?.Name() != packName)
+                {
+                    return;
+                }
+
                 var status = e.State?.Status() ?? 0;
                 if ((status == (int)AssetPackStatus.Downloading || status == (int)AssetPackStatus.Transferring) && e.State != null)
                 {
                     var total = e.State.TotalBytesToDownload();
                     var downloaded = e.State.BytesDownloaded();
                     if (total > 0)
+                    {
                         progress?.Report((double)downloaded / total);
+                    }
                 }
                 else if (status == (int)AssetPackStatus.WaitingForWifi)
                 {
                     var activity = Platform.CurrentActivity;
                     if (activity != null)
+                    {
                         manager.ShowConfirmationDialog(activity);
+                    }
                 }
                 else if (status == (int)AssetPackStatus.Failed || status == (int)AssetPackStatus.Canceled)
+                {
                     failure = $"Pack '{packName}' ended with status {status}, error {e.State?.ErrorCode()}";
+                }
             };
 
             manager.RegisterListener(listener.Listener!);
@@ -203,7 +217,9 @@ partial class PadDeliveryService
                     }
                     var fetchedLocation = manager.GetPackLocation(packName);
                     if (fetchedLocation?.AssetsPath() != null)
+                    {
                         return true;
+                    }
 
                     await Task.Delay(500, cancellationToken);
                 }
@@ -237,7 +253,9 @@ partial class PadDeliveryService
         AppendInstallSourceLines(lines);
 
         if (!string.IsNullOrEmpty(LastAndroidPadError))
+        {
             lines.Add($"Last PAD fetch error: {LastAndroidPadError}");
+        }
 
         var manager = GetAssetPackManager();
         if (manager == null)
@@ -286,7 +304,9 @@ partial class PadDeliveryService
                 var installing = info?.InstallingPackageName;
                 lines.Add($"Install source (API {(int)Android.OS.BuildVersionCodes.R}+): {installing ?? "(null — not from a package installer, e.g. adb/sideload)"}");
                 if (installing != "com.android.vending")
+                {
                     lines.Add("PAD: On-demand packs are served for installs from Google Play (installer com.android.vending). Other sources often cannot download PAD.");
+                }
             }
 #pragma warning restore CA1416
             else
@@ -323,7 +343,9 @@ partial class PadDeliveryService
         ct.ThrowIfCancellationRequested();
         var cacheDir = OdrCacheDir(packName);
         if (File.Exists(Path.Combine(cacheDir, PayloadFileName(packName))))
+        {
             return cacheDir;
+        }
 
         try
         {
@@ -395,7 +417,10 @@ partial class PadDeliveryService
         finally
         {
             observer?.Dispose();
-            if (hasAccess) request.EndAccessingResources();
+            if (hasAccess)
+            {
+                request.EndAccessingResources();
+            }
         }
     }
 
@@ -422,7 +447,11 @@ partial class PadDeliveryService
             var temporary = destPath + ".download";
             try
             {
-                using (var fileStream = File.Create(temporary)) stream.CopyTo(fileStream);
+                using (var fileStream = File.Create(temporary))
+                {
+                    stream.CopyTo(fileStream);
+                }
+
                 File.Move(temporary, destPath, true);
             }
             finally { File.Delete(temporary); }
@@ -465,7 +494,9 @@ partial class PadDeliveryService
             var assetsCar = Path.Combine(mainBundle.BundlePath, "Assets.car");
             lines.Add($"Main Assets.car exists: {File.Exists(assetsCar)}");
             if (File.Exists(assetsCar))
+            {
                 lines.Add($"Main Assets.car size: {new FileInfo(assetsCar).Length} bytes");
+            }
         }
         catch (Exception ex)
         {
@@ -525,9 +556,14 @@ partial class PadDeliveryService
                             var files = Directory.GetFiles(bundlePath, "*", SearchOption.AllDirectories);
                             lines.Add($"Request bundle file count: {files.Length}");
                             foreach (var f in files.Take(20))
+                            {
                                 lines.Add($"  {f.Replace(bundlePath, "~")}");
+                            }
+
                             if (files.Length > 20)
+                            {
                                 lines.Add($"  ... and {files.Length - 20} more");
+                            }
                         }
                     }
                     catch (Exception enumEx)
