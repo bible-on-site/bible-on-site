@@ -348,8 +348,10 @@ jobs:
         if: always()
         id: collect
         env:
-          # Each matrix leg defines exactly one of the two pilot step ids.
-          PILOT_OUTCOME: ${{ steps.pilot.outcome || steps['pilot-ios'].outcome }}
+          # Each matrix leg runs exactly one pilot; the other's outcome is
+          # "skipped" — a truthy string that would win an || chain — so route
+          # by platform instead of relying on fallback order.
+          PILOT_OUTCOME: ${{ matrix.platform == 'iOS' && steps['pilot-ios'].outcome || steps.pilot.outcome }}
         run: |
           INCOMPLETE_ARGS=()
           if [ "$PILOT_OUTCOME" != "success" ]; then
