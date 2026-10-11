@@ -8,7 +8,9 @@ namespace BibleOnSite.ViewModels;
 /// תמיכה settings: diagnostics export, always reachable regardless of
 /// commentary-pack install state.
 /// </summary>
+#pragma warning disable S2333 // RelayCommand generates partial implementations.
 public partial class SupportPreferencesViewModel : ObservableObject
+#pragma warning restore S2333
 {
     private readonly PerushimNotesService _perushimNotesService;
     private readonly IFileSystem _fileSystem;

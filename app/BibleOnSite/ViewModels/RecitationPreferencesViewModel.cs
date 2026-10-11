@@ -9,7 +9,9 @@ namespace BibleOnSite.ViewModels;
 /// שמע. Recording installation lives under חבילות הרחבה (<see cref="RecitationPacksViewModel"/>);
 /// playback itself is controlled by the reader's player, not by a global switch.
 /// </summary>
+#pragma warning disable S2333 // RelayCommand generates partial implementations.
 public partial class RecitationPreferencesViewModel : ObservableObject
+#pragma warning restore S2333
 {
     private readonly RecitationService _recitation;
     private readonly PreferencesService _preferences;
