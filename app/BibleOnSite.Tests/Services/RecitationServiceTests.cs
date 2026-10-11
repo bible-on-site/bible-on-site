@@ -503,4 +503,312 @@ public class RecitationServiceTests
             .Should().ThrowAsync<InvalidDataException>();
     }
 
+    [Fact]
+    public async Task RemoveAll_OnAbsentDirectory_CompletesSilently()
+    {
+        await using var storage = new TestStorage();
+        var extension = new Extension(storage) { Package = new(1, [Track(1, "audio"u8.ToArray())]) };
+        extension.Bundle();
+        var service = extension.Service;
+        var stops = 0;
+        service.PlaybackStopRequested += (_, _) => stops++;
+
+        await service.RemoveAllAsync();
+
+        stops.Should().Be(1, "playback is stopped even when there is nothing to delete");
+        Directory.Exists(Path.Join(storage.Root, "extensions", "recitation")).Should().BeFalse();
+        service.InstallState.Should().Be(RecitationInstallState.NotInstalled);
+    }
+
+    [Fact]
+    public async Task OrphanSweep_SkipsWhileADownloadHoldsTheGate()
+    {
+        await using var storage = new TestStorage();
+        var extension = new Extension(storage) { Package = new(1, [Track(1, "audio"u8.ToArray())]) };
+        extension.Bundle();
+        var service = extension.Service;
+        await service.InitializeAsync();
+        var audioDir = Path.Join(storage.Root, "extensions", "recitation");
+        Directory.CreateDirectory(audioDir);
+        var orphan = Path.Join(audioDir, "stale-generation.mp3");
+        await File.WriteAllTextAsync(orphan, "orphan", TestContext.Current.CancellationToken);
+
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        extension.Delivery.Setup(d => d.FetchAsync("recitation_1", It.IsAny<IProgress<double>>(), It.IsAny<CancellationToken>()))
+            .Returns(async (string _, IProgress<double>? _, CancellationToken _) =>
+            {
+                entered.SetResult();
+                await release.Task;
+                return true;
+            });
+        var downloading = service.DownloadAsync([1]);
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+
+        // A catalog update mid-download must not sweep files the download may still write.
+        await service.UpdateAsync(TestContext.Current.CancellationToken);
+        File.Exists(orphan).Should().BeTrue("the sweep defers while the download gate is held");
+
+        release.SetResult();
+        // The store fetch resolves but no pack is delivered, so the bundled fallback is tried.
+        await FluentActions.Awaiting(() => downloading).Should().ThrowAsync<FileNotFoundException>();
+        await service.UpdateAsync(TestContext.Current.CancellationToken);
+        File.Exists(orphan).Should().BeFalse("the next sweep collects the orphan once the gate frees");
+    }
+
+    [Fact]
+    public async Task OrphanSweep_LogsUndeletableOrphans_AndKeepsSweeping()
+    {
+        await using var storage = new TestStorage();
+        var extension = new Extension(storage) { Package = new(1, [Track(1, "audio"u8.ToArray())]) };
+        extension.Bundle();
+        var service = extension.Service;
+        await service.InitializeAsync();
+        var audioDir = Path.Join(storage.Root, "extensions", "recitation");
+        Directory.CreateDirectory(audioDir);
+        var undeletable = Path.Join(audioDir, "locked-generation.mp3");
+        var collectible = Path.Join(audioDir, "collectible.mp3");
+        await File.WriteAllTextAsync(undeletable, "orphan", TestContext.Current.CancellationToken);
+        await File.WriteAllTextAsync(collectible, "orphan", TestContext.Current.CancellationToken);
+
+        // Read-only files cannot be deleted on Windows; a read-only parent blocks the unlink on Unix.
+        File.SetAttributes(undeletable, FileAttributes.ReadOnly);
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(audioDir, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+        }
+        try
+        {
+            await service.UpdateAsync(TestContext.Current.CancellationToken);
+            File.Exists(undeletable).Should().BeTrue("an IO failure is logged and skipped, never fatal");
+            File.Exists(collectible).Should().BeFalse("other orphans are still collected");
+        }
+        finally
+        {
+            File.SetAttributes(undeletable, FileAttributes.Normal);
+            if (!OperatingSystem.IsWindows())
+            {
+                File.SetUnixFileMode(audioDir, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task OrphanSweep_ToleratesAnUnreadableDirectory()
+    {
+        await using var storage = new TestStorage();
+        var extension = new Extension(storage) { Package = new(1, [Track(1, "audio"u8.ToArray())]) };
+        extension.Bundle();
+        var service = extension.Service;
+        await service.InitializeAsync();
+        var audioDir = Path.Join(storage.Root, "extensions", "recitation");
+        Directory.CreateDirectory(audioDir);
+        var orphan = Path.Join(audioDir, "stale.mp3");
+        await File.WriteAllTextAsync(orphan, "orphan", TestContext.Current.CancellationToken);
+
+        // Unix mode 0300: listable enumeration is denied while traversal stays possible.
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(audioDir, UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+        try
+        {
+            await service.UpdateAsync(TestContext.Current.CancellationToken);
+            if (OperatingSystem.IsWindows())
+            {
+                File.Exists(orphan).Should().BeFalse("without ACL denial the orphan is swept normally");
+            }
+            else
+            {
+                File.Exists(orphan).Should().BeTrue("enumeration was denied, but the update still completed");
+            }
+        }
+        finally
+        {
+            if (!OperatingSystem.IsWindows())
+            {
+                File.SetUnixFileMode(audioDir, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            }
+        }
+    }
+
+    private static RecitationPreferencesViewModel Preferences(TestStorage storage, RecitationService service,
+        Mock<IAppNavigator>? navigator = null) =>
+        new(service,
+            PreferencesService.CreateForTesting(new InMemoryPreferencesStorage()),
+            new PerekDataService(new LocalDatabaseService(storage.FileSystem.Object)),
+            (navigator ?? new Mock<IAppNavigator>()).Object);
+
+    [Fact]
+    public async Task PreferencesInstallState_ReflectsOnDiskAudioOnly()
+    {
+        await using var storage = new TestStorage();
+        var extension = new Extension(storage)
+        {
+            Package = new(1, [Track(1, "audio"u8.ToArray()), Track(2, "second"u8.ToArray())])
+        };
+        extension.Audio["/recordings/2_record.mp3"] = "second"u8.ToArray();
+        extension.BookIds[1] = 1; extension.BookIds[2] = 2;
+        extension.Bundle();
+        var service = extension.Service;
+        var model = Preferences(storage, service);
+        await service.InitializeAsync();
+
+        model.InstallState.Should().Be(RecitationInstallState.NotInstalled);
+        await service.DownloadAsync([1]);
+        model.InstallState.Should().Be(RecitationInstallState.Partial);
+        await service.DownloadAsync([2]);
+        model.InstallState.Should().Be(RecitationInstallState.Installed);
+    }
+
+    [Fact]
+    public async Task PreferencesRemoveAll_WhenDeclined_KeepsEveryRecording()
+    {
+        await using var storage = new TestStorage();
+        var extension = new Extension(storage) { Package = new(1, [Track(1, "audio"u8.ToArray())]) };
+        extension.Bundle();
+        var service = extension.Service;
+        await service.DownloadAsync([1]);
+        var navigator = new Mock<IAppNavigator>();
+        navigator.Setup(n => n.DisplayChoiceAsync(It.IsAny<string>(), It.IsAny<string>(), "הסרה", "ביטול")).ReturnsAsync(false);
+        var model = Preferences(storage, service, navigator);
+
+        await model.RemoveAllAsync();
+
+        service.HasAudio(1).Should().BeTrue("a declined confirmation never removes");
+        navigator.Verify(n => n.DisplayChoiceAsync(It.IsAny<string>(), It.IsAny<string>(), "הסרה", "ביטול"), Times.Once);
+    }
+
+    [Fact]
+    public async Task PreferencesRemoveAll_WhenDeletionThrows_ReportsARetriableError()
+    {
+        await using var storage = new TestStorage();
+        var extension = new Extension(storage) { Package = new(1, [Track(1, "audio"u8.ToArray())]) };
+        extension.Bundle();
+        var service = extension.Service;
+        await service.DownloadAsync([1]);
+        var navigator = new Mock<IAppNavigator>();
+        navigator.Setup(n => n.DisplayChoiceAsync(It.IsAny<string>(), It.IsAny<string>(), "הסרה", "ביטול")).ReturnsAsync(true);
+        var model = Preferences(storage, service, navigator);
+        service.PlaybackStopRequested += (_, _) => throw new IOException("audio device busy");
+
+        await model.RemoveAllAsync();
+
+        model.Status.Should().Be("לא ניתן להסיר את ההקלטות. נסו שוב.");
+        service.HasAudio(1).Should().BeTrue("a failed removal keeps the recordings");
+    }
+
+    [Fact]
+    public async Task PreferencesRemoveBook_IgnoresANullChoice()
+    {
+        await using var storage = new TestStorage();
+        var extension = new Extension(storage) { Package = new(1, [Track(1, "audio"u8.ToArray())]) };
+        extension.Bundle();
+        var service = extension.Service;
+        var navigator = new Mock<IAppNavigator>();
+        var model = Preferences(storage, service, navigator);
+
+        await model.RemoveBookAsync(null);
+
+        navigator.Verify(n => n.DisplayChoiceAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task PreferencesRemoveBook_WithoutInstalledAudio_SaysThereIsNothingToRemove()
+    {
+        await using var storage = new TestStorage();
+        var extension = new Extension(storage) { Package = new(1, [Track(1, "audio"u8.ToArray())]) };
+        extension.Bundle();
+        var service = extension.Service;
+        var navigator = new Mock<IAppNavigator>();
+        var model = Preferences(storage, service, navigator);
+        model.Books.Add(new RecitationBookChoice { Name = "בראשית", PerekIds = [1] });
+
+        await model.RemoveBookAsync(model.Books[0]);
+
+        model.Status.Should().Be("אין הקלטות מותקנות להסרה בספר בראשית.");
+        navigator.Verify(n => n.DisplayChoiceAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task PreferencesRemoveBook_WhenDeletionThrows_ReportsARetriableError()
+    {
+        await using var storage = new TestStorage();
+        var extension = new Extension(storage) { Package = new(1, [Track(1, "audio"u8.ToArray())]) };
+        extension.Bundle();
+        var service = extension.Service;
+        await service.DownloadAsync([1]);
+        var navigator = new Mock<IAppNavigator>();
+        navigator.Setup(n => n.DisplayChoiceAsync(It.IsAny<string>(), It.IsAny<string>(), "הסרה", "ביטול")).ReturnsAsync(true);
+        var model = Preferences(storage, service, navigator);
+        service.PlaybackStopRequested += (_, _) => throw new IOException("audio device busy");
+
+        await model.RemoveBookAsync(new RecitationBookChoice { Name = "בראשית", PerekIds = [1] });
+
+        model.Status.Should().Be("לא ניתן להסיר את ההקלטות. נסו שוב.");
+        service.HasAudio(1).Should().BeTrue("a failed removal keeps the recordings");
+    }
+
+    [Fact]
+    public async Task PreferencesRemoveBook_RemovingTheLastInstalledBook_DisablesPlayback()
+    {
+        await using var storage = new TestStorage();
+        var extension = new Extension(storage) { Package = new(1, [Track(1, "audio"u8.ToArray())]) };
+        extension.Bundle();
+        var service = extension.Service;
+        await service.DownloadAsync([1]);
+        var navigator = new Mock<IAppNavigator>();
+        navigator.Setup(n => n.DisplayChoiceAsync(It.IsAny<string>(), It.IsAny<string>(), "הסרה", "ביטול")).ReturnsAsync(true);
+        var model = Preferences(storage, service, navigator);
+        model.Enabled = true;
+        model.Enabled.Should().BeTrue();
+
+        await model.RemoveBookAsync(new RecitationBookChoice { Name = "בראשית", PerekIds = [1] });
+
+        service.HasAudio(1).Should().BeFalse();
+        service.InstallState.Should().Be(RecitationInstallState.NotInstalled);
+        model.Enabled.Should().BeFalse("with no audio left, playback cannot stay enabled");
+        model.Status.Should().Contain("הוסרו");
+    }
+
+    [Fact]
+    public async Task PreferencesRemoval_IsRejectedWhileADownloadIsInFlight()
+    {
+        await using var storage = new TestStorage();
+        var db = await storage.CreateDatabaseAsync("sefaria-dump-5784-sivan-4.tanah_view.sqlite", PerekDataServiceTests.Schema);
+        await db.ExecuteAsync("INSERT INTO tanah_sefer VALUES (1,'בראשית','Genesis',1,1)");
+        await db.ExecuteAsync("INSERT INTO tanah_perek VALUES (1,1,NULL)");
+        var extension = new Extension(storage) { Package = new(1, [Track(1, "audio"u8.ToArray())]) };
+        extension.Bundle();
+        var service = extension.Service;
+        var navigator = new Mock<IAppNavigator>();
+        var model = Preferences(storage, service, navigator);
+        await model.LoadAsync();
+        model.SelectAllCommand.Execute(null);
+
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var directory = Path.Join(storage.Root, "store", "recitation_1");
+        extension.Delivery.Setup(d => d.FetchAsync("recitation_1", It.IsAny<IProgress<double>>(), It.IsAny<CancellationToken>()))
+            .Returns(async (string _, IProgress<double>? _, CancellationToken _) =>
+            {
+                entered.SetResult();
+                await release.Task;
+                return true;
+            });
+        extension.Delivery.Setup(d => d.TryGetAssetPathAsync("recitation_1", It.IsAny<CancellationToken>()))
+            .Returns(() => Task.FromResult(release.Task.IsCompleted ? directory : null));
+        var downloading = model.DownloadSelectedAsync();
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+
+        await model.RemoveBookAsync(model.Books[0]);
+        await model.RemoveAllAsync();
+
+        navigator.Verify(n => n.DisplayChoiceAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never,
+            "removal commands must not interleave with an in-flight download");
+        release.SetResult();
+        await downloading;
+        service.HasAudio(1).Should().BeTrue();
+    }
+
 }

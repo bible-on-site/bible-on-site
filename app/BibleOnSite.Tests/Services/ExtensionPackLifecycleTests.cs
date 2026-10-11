@@ -593,6 +593,72 @@ public class ExtensionPackLifecycleTests
     }
 
     [Fact]
+    public async Task SettingsLoadAsync_InitializesBothPackSummaries()
+    {
+        await using var storage = new TestStorage();
+        var store = new Store(storage.Root);
+        await StockNotesAsync(storage, store, "notes-src");
+        store.MarkDelivered(NotesPack);
+        PublishRecitation(storage, store, (1, [(1, "audio"u8.ToArray())]));
+        store.Wire();
+        var notes = Notes(storage, store.Delivery.Object);
+        var recitation = new RecitationService(storage.FileSystem.Object, store.Delivery.Object);
+        var settings = Settings(storage, notes, recitation, new Mock<IAppNavigator>());
+
+        await settings.LoadAsync();
+
+        settings.IsPerushimInstalled.Should().BeTrue();
+        settings.RecitationStateText.Should().Be("לא מותקנת");
+        await storage.CloseDatabaseFileAsync(NotesDbName); // release the live notes handle for disposal
+    }
+
+    [Fact]
+    public async Task SettingsLoadAsync_ToleratesPackInitFailures_WithoutBreakingThePage()
+    {
+        await using var storage = new TestStorage();
+        var delivery = new Mock<IPadDeliveryService>();
+        delivery.Setup(d => d.TryGetAssetPathAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("store unreachable"));
+        var notes = Notes(storage, delivery.Object);
+        // No bundled recitation catalog: OpenAppPackageFileAsync throws FileNotFoundException.
+        var recitation = new RecitationService(storage.FileSystem.Object, delivery.Object);
+        var settings = Settings(storage, notes, recitation, new Mock<IAppNavigator>());
+
+        await settings.LoadAsync();
+
+        settings.IsPerushimInstalled.Should().BeFalse();
+        settings.RecitationStateText.Should().Be("לא מותקנת");
+    }
+
+    [Fact]
+    public async Task PerushimRemoval_WhenDeletionFails_AlertsAndKeepsThePackInstalled()
+    {
+        await using var storage = new TestStorage();
+        var store = new Store(storage.Root);
+        await StockNotesAsync(storage, store, "notes-src");
+        store.MarkDelivered(NotesPack);
+        store.Wire();
+        var notes = Notes(storage, store.Delivery.Object);
+        var navigator = new Mock<IAppNavigator>();
+        navigator.Setup(n => n.DisplayChoiceAsync(It.IsAny<string>(), It.IsAny<string>(), "הסרה", "ביטול")).ReturnsAsync(true);
+        var settings = Settings(storage, notes,
+            new RecitationService(storage.FileSystem.Object, store.Delivery.Object), navigator);
+        await notes.InitializeAsync();
+        settings.IsPerushimInstalled.Should().BeTrue();
+
+        // A directory at the tombstone path makes its write fail on every platform.
+        Directory.CreateDirectory(Path.Join(storage.Root, NotesDbName + ".removed"));
+
+        await settings.RemovePerushimCommand.ExecuteAsync(null);
+
+        navigator.Verify(n => n.DisplayAlertAsync("שגיאה",
+            It.Is<string>(m => m.Contains("לא ניתן להסיר")), "אישור"), Times.Once);
+        settings.IsPerushimInstalled.Should().BeTrue("a failed removal keeps the pack installed");
+        notes.IsRemovedByUser.Should().BeFalse("no tombstone was written, so init restores nothing anew");
+        await storage.CloseDatabaseFileAsync(NotesDbName); // release the live notes handle for disposal
+    }
+
+    [Fact]
     public async Task DebugAndDesktopBundledFallback_InstallsWithoutStoreDelivery()
     {
         await using var storage = new TestStorage();
