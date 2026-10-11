@@ -82,7 +82,9 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         Page.WaitForHidden("SearchSheet");
         SearchFor("בראשיט 1", "בראשית א");
         Platform.Tap(Driver!, Page.WaitFor("SearchResultTitle", element => element.Text == "בראשית א"));
-        Page.WaitFor("PerekSource", element => element.Text == "בראשית א");
+        // First perek navigation of the session loads the reader on a cold
+        // app — same loaded-runner cold path as WaitForStartup (2 minutes).
+        Page.WaitFor("PerekSource", element => element.Text == "בראשית א", TimeSpan.FromMinutes(3));
         AssertRegularReader();
         Platform.GoBack(Driver!);
         Page.WaitFor("PerekSearchInput", element => element.Text == "בראשיט 1");
