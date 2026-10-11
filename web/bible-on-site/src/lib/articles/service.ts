@@ -38,7 +38,7 @@ export async function getArticlesByPerekId(
 				au.name AS author_name
 			 FROM tanah_article a
 			 JOIN tanah_author au ON a.author_id = au.id
-			 WHERE a.perek_id = ?
+			 WHERE a.perek_id = ? AND a.distributable = TRUE
 			 ORDER BY a.priority ASC`,
 			[perekId],
 		);
@@ -79,7 +79,7 @@ export async function getArticleSummariesByPerekId(
 				au.name AS author_name
 			 FROM tanah_article a
 			 JOIN tanah_author au ON a.author_id = au.id
-			 WHERE a.perek_id = ?
+			 WHERE a.perek_id = ? AND a.distributable = TRUE
 			 ORDER BY a.priority ASC`,
 			[perekId],
 		);
@@ -117,7 +117,7 @@ export interface ArticlePerekPair {
 export async function getAllArticlePerekIdPairs(): Promise<ArticlePerekPair[]> {
 	try {
 		const rows = await query<{ id: number; perek_id: number }>(
-			`SELECT id, perek_id FROM tanah_article ORDER BY perek_id ASC, id ASC`,
+			`SELECT id, perek_id FROM tanah_article WHERE distributable = TRUE ORDER BY perek_id ASC, id ASC`,
 		);
 		return rows.map((row) => ({
 			articleId: row.id,
@@ -140,7 +140,7 @@ export async function getAllArticlePerekIdPairs(): Promise<ArticlePerekPair[]> {
 export async function getAllArticleIdsByPerek(): Promise<Map<number, number[]>> {
 	try {
 		const rows = await query<{ id: number; perek_id: number }>(
-			`SELECT id, perek_id FROM tanah_article ORDER BY perek_id ASC, id ASC`,
+			`SELECT id, perek_id FROM tanah_article WHERE distributable = TRUE ORDER BY perek_id ASC, id ASC`,
 		);
 		const map = new Map<number, number[]>();
 		for (const row of rows) {
@@ -175,7 +175,7 @@ export async function getArticleById(
 				au.name AS author_name
 			 FROM tanah_article a
 			 JOIN tanah_author au ON a.author_id = au.id
-			 WHERE a.id = ?`,
+			 WHERE a.id = ? AND a.distributable = TRUE`,
 			[articleId],
 		);
 
