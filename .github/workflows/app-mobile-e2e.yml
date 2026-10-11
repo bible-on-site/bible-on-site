@@ -173,8 +173,11 @@ jobs:
         background: true
         run: npm run ios:wda --prefix app/mobile-e2e
 
+      # npm ci is done here, so ~/.npm is frozen — the tar+upload can run in
+      # the background; the implicit wait-all before job cleanup completes it.
       - name: Save npm cache
         if: ${{ github.ref == 'refs/heads/master' && steps.npm-cache.outputs.cache-hit != 'true' }}
+        background: true
         uses: actions/cache/save@v6
         with:
           path: ~/.npm

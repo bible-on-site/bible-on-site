@@ -704,8 +704,11 @@ jobs:
         run: |
           npm ci --no-audit
 
+      # npm ci is done here, so ~/.npm is frozen — the tar+upload can run in
+      # the background; the implicit wait-all before job cleanup completes it.
       - name: Save npm cache
         if: ${{ github.ref == 'refs/heads/master' && steps.npm-cache.outputs.cache-hit != 'true' }}
+        background: true
         uses: actions/cache/save@v6
         with:
           path: ~/.npm
@@ -802,9 +805,11 @@ jobs:
         wait: playwright-install
 
       # Saved after the wait: the cache key's payload is what the background
-      # install produced.
+      # install produced. The upload itself backgrounds too — nothing writes
+      # ~/.cache/ms-playwright afterwards.
       - name: Save playwright binaries
         if: ${{ github.ref == 'refs/heads/master' && steps.playwright-cache.outputs.cache-hit != 'true' }}
+        background: true
         uses: actions/cache/save@v6
         with:
           path: ~/.cache/ms-playwright
@@ -928,8 +933,11 @@ jobs:
           node --version && npm --version
           npm ci --no-audit
 
+      # npm ci is done here, so ~/.npm is frozen — the tar+upload can run in
+      # the background; the implicit wait-all before job cleanup completes it.
       - name: Save npm cache
         if: ${{ github.ref == 'refs/heads/master' && steps.npm-cache.outputs.cache-hit != 'true' }}
+        background: true
         uses: actions/cache/save@v6
         with:
           path: ~/.npm
@@ -1035,9 +1043,11 @@ jobs:
         wait: crates
 
       # Saved after the wait: the cache key's payload is what the background
-      # install produced.
+      # install produced. The upload itself backgrounds too — nothing writes
+      # ~/.cache/ms-playwright afterwards.
       - name: Save playwright binaries
         if: ${{ github.ref == 'refs/heads/master' && steps.playwright-cache.outputs.cache-hit != 'true' }}
+        background: true
         uses: actions/cache/save@v6
         with:
           path: ~/.cache/ms-playwright
@@ -1173,8 +1183,11 @@ jobs:
         id: npm_ci
         run: npm ci --no-audit
 
+      # npm ci is done here, so ~/.npm is frozen — the tar+upload can run in
+      # the background; the implicit wait-all before job cleanup completes it.
       - name: Save npm cache
         if: ${{ github.ref == 'refs/heads/master' && steps.npm-cache.outputs.cache-hit != 'true' }}
+        background: true
         uses: actions/cache/save@v6
         with:
           path: ~/.npm
@@ -1427,8 +1440,11 @@ jobs:
         run: |
           npm ci --no-audit
 
+      # Both npm ci runs are done here, so ~/.npm is frozen — the tar+upload
+      # can run in the background; implicit wait-all completes it at job end.
       - name: Save npm cache
         if: ${{ github.ref == 'refs/heads/master' && steps.tests-npm-cache.outputs.cache-hit != 'true' }}
+        background: true
         uses: actions/cache/save@v6
         with:
           path: ~/.npm
@@ -2552,8 +2568,11 @@ jobs:
         run: |
           npm ci --no-audit
 
+      # npm ci is done here, so ~/.npm is frozen — the tar+upload can run in
+      # the background; the implicit wait-all before job cleanup completes it.
       - name: Save npm cache
         if: ${{ github.ref == 'refs/heads/master' && steps.devops-npm-cache.outputs.cache-hit != 'true' }}
+        background: true
         uses: actions/cache/save@v6
         with:
           path: ~/.npm
