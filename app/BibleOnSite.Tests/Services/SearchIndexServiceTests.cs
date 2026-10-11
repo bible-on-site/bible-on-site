@@ -394,7 +394,7 @@ public class SearchIndexServiceTests
         (await index.SearchAsync("סימן", new HashSet<SearchFilter> { SearchFilter.Perush },
             new HashSet<int> { 1 }, 10, TestContext.Current.CancellationToken))
             .Should().BeEmpty("the wrong-generation index must never be queried");
-        File.Exists(deliveredPath).Should().BeTrue("the rejected file stays for diagnostics; adoption only moves matching indexes");
+        File.Exists(deliveredPath).Should().BeFalse("an unadoptable staged index is removed rather than left on the device");
     }
 
     [Fact]

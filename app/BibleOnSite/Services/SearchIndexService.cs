@@ -187,7 +187,10 @@ public sealed class SearchIndexService : IAsyncDisposable
     {
         try
         {
-            var legacy = Path.Combine(FileSystem.Current.CacheDirectory, "hebrew-search-v1.sqlite");
+            var directory = Path.GetDirectoryName(_indexPath) ?? ".";
+            // The superseded v1 cache lives next to the working index — the same
+            // directory on device, and nothing to do in test directories.
+            var legacy = Path.Combine(directory, "hebrew-search-v1.sqlite");
             foreach (var path in new[] { legacy, legacy + "-wal", legacy + "-shm" })
             {
                 if (File.Exists(path))
@@ -195,14 +198,6 @@ public sealed class SearchIndexService : IAsyncDisposable
                     File.Delete(path);
                 }
             }
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"Failed to remove obsolete search cache: {ex.Message}");
-        }
-        try
-        {
-            var directory = Path.GetDirectoryName(_indexPath) ?? ".";
             foreach (var file in Directory.GetFiles(directory, Path.GetFileName(_indexPath) + ".*.tmp"))
             {
                 File.Delete(file);
@@ -210,7 +205,7 @@ public sealed class SearchIndexService : IAsyncDisposable
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"Failed to sweep stale search-index temp files: {ex.Message}");
+            Console.Error.WriteLine($"Failed to sweep obsolete search-index files: {ex.Message}");
         }
     }
 
@@ -284,6 +279,8 @@ public sealed class SearchIndexService : IAsyncDisposable
         if (stored == expected)
         {
             _ready["notes"] = expected;
+            // Working index already matches — the staged copy is dead weight.
+            await DeleteStagedIndexAsync();
             return;
         }
         var deliveredPath = await _notes!.GetDeliveredIndexPathAsync();
@@ -313,6 +310,9 @@ public sealed class SearchIndexService : IAsyncDisposable
         }
         if (deliveredFp != expected)
         {
+            // Index generated for another notes generation — it can never be
+            // adopted, so the staged file must not linger (~300 MB of dead data).
+            await DeleteStagedIndexAsync();
             return;
         }
 
@@ -338,6 +338,27 @@ public sealed class SearchIndexService : IAsyncDisposable
         finally
         {
             _gates["verses"].Release();
+        }
+    }
+
+    /// <summary>
+    /// Removes the staged delivered index once it can serve no purpose: either
+    /// the working index already covers this content generation, or the staged
+    /// file was built for a different one and would sit unadopted forever.
+    /// </summary>
+    private async Task DeleteStagedIndexAsync()
+    {
+        try
+        {
+            var path = await _notes!.GetDeliveredIndexPathAsync();
+            if (path != null && !string.Equals(path, _indexPath, StringComparison.Ordinal))
+            {
+                File.Delete(path);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Failed to delete unadoptable staged search index: {ex.Message}");
         }
     }
 
