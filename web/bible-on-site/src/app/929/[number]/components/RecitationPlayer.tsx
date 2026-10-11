@@ -105,22 +105,31 @@ export function RecitationWordControl({
 export function RecitationPasukControl({
 	pasuk,
 	children,
+	onNavigate,
 }: {
 	pasuk: number;
 	children: ReactNode;
+	/**
+	 * When set (a perush is open for this perek), activation jumps to the
+	 * pasuk's commentary group instead of playing the pasuk.
+	 */
+	onNavigate?: () => void;
 }) {
 	const context = useContext(RecitationContext);
 	const range = context?.enabled ? verseRange(context.words, pasuk) : null;
-	const label = `השמעת פסוק ${toLetters(pasuk)}`;
+	const label = onNavigate
+		? `מעבר לפירוש על פסוק ${toLetters(pasuk)}`
+		: `השמעת פסוק ${toLetters(pasuk)}`;
 	return (
 		<InlineRecitationControl
 			className={styles.pasuk}
-			label={range ? label : undefined}
-			title={range ? label : undefined}
+			label={onNavigate || range ? label : undefined}
+			title={onNavigate || range ? label : undefined}
 			onActivate={
-				range && context
+				onNavigate ??
+				(range && context
 					? () => context.play(range.startMs, range.endMs)
-					: undefined
+					: undefined)
 			}
 		>
 			{children}
@@ -184,8 +193,19 @@ function InlineRecitationControl({
 	);
 }
 
-export function RecitationVerse({ children }: { children: ReactNode }) {
-	return <span className={styles.verse}>{children}</span>;
+export function RecitationVerse({
+	children,
+	pasuk,
+}: {
+	children: ReactNode;
+	/** Pasuk number; marks the verse as a sefer pasuk-navigation target. */
+	pasuk?: number;
+}) {
+	return (
+		<span className={styles.verse} data-sefer-pasuk={pasuk}>
+			{children}
+		</span>
+	);
 }
 
 /** Keep entity links out of listening mode so interactive elements never nest. */
