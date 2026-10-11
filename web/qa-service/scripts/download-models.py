@@ -1,13 +1,11 @@
-"""Download and export ONNX models for the QA service.
-
-Models:
-  - Embedder: intfloat/multilingual-e5-small  (384-dim sentence embeddings, multilingual incl. Hebrew)
-  - QA:       deepset/xlm-roberta-base-squad2  (extractive QA, multilingual)
-
-Usage:
-  pip install -r requirements.txt
-  python download-models.py
-"""
+"""Download and export ONNX models for the QA service."""
+# Models:
+#   - Embedder: intfloat/multilingual-e5-small  (384-dim sentence embeddings, multilingual incl. Hebrew)
+#   - QA:       deepset/xlm-roberta-base-squad2  (extractive QA, multilingual)
+#
+# Usage:
+#   pip install -r requirements.txt
+#   python download-models.py
 
 from pathlib import Path
 from optimum.onnxruntime import ORTModelForFeatureExtraction, ORTModelForQuestionAnswering
