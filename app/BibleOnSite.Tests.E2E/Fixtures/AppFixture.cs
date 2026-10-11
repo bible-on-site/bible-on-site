@@ -2,6 +2,7 @@ using FlaUI.Core.Conditions;
 using System.Diagnostics;
 using System.Net.Http;
 using System.Net.Sockets;
+using System.Text.Json;
 using System.Drawing;
 using System.Runtime.InteropServices;
 using FlaUI.Core.Input;
@@ -346,6 +347,9 @@ public class AppFixture : IAsyncLifetime
     {
         try
         {
+            // Pull the app-process coverage snapshot while the instrumented
+            // app is still running (#1232); the endpoint dies with the process.
+            await CollectAppCoverageAsync();
             _app?.Close();
             await Task.Delay(500);
 
@@ -390,6 +394,56 @@ public class AppFixture : IAsyncLifetime
             _automation?.Dispose();
             _appProcess?.Dispose();
             _apiProcess?.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Exports real app-process coverage from an E2E-instrumented build
+    /// (#1232). Enabled by E2E_COVERAGE=1 with the dump written under
+    /// E2E_ARTIFACTS (default app/.artifacts/e2e) in the same
+    /// app-e2e-coverage-dump/1 shape the mobile harness produces, so the
+    /// CoverageMobileE2E merge handles every platform identically.
+    /// </summary>
+    private static async Task CollectAppCoverageAsync()
+    {
+        var enabled = Environment.GetEnvironmentVariable("E2E_COVERAGE");
+        if (!string.Equals(enabled, "1", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(enabled, "true", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+        var port = int.TryParse(Environment.GetEnvironmentVariable("E2E_COVERAGE_PORT"), out var configured) && configured > 0
+            ? configured
+            : 4787;
+        string? path = null;
+        try
+        {
+            var artifacts = Environment.GetEnvironmentVariable("E2E_ARTIFACTS")
+                ?? Path.GetFullPath(Path.Combine(AppPath, "..", "..", "..", "..", "..", "..", ".artifacts", "e2e"));
+            var directory = Path.Join(artifacts, "app-coverage");
+            Directory.CreateDirectory(directory);
+            path = Path.Join(directory, $"windows-{DateTime.UtcNow:yyyyMMddHHmmss}.json");
+            using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+            var snapshot = await client.GetStringAsync($"http://127.0.0.1:{port}/coverage");
+            using var parsed = JsonDocument.Parse(snapshot);
+            var record = new
+            {
+                kind = "app-e2e-coverage-dump/1",
+                test = "fixture",
+                platform = "windows",
+                outcome = "passed",
+                collectedUtc = DateTime.UtcNow.ToString("o"),
+                snapshot = parsed.RootElement.Clone()
+            };
+            File.WriteAllText(path, JsonSerializer.Serialize(record, new JsonSerializerOptions { WriteIndented = true }));
+        }
+        catch (Exception exception)
+        {
+            if (path != null)
+            {
+                File.WriteAllText(path + ".coverage-error.txt", exception.ToString());
+            }
+            Console.WriteLine($"App coverage dump failed: {exception}");
         }
     }
 

@@ -177,6 +177,87 @@ npm run coverage:merge
 
 This produces a combined LCOV file at `.coverage/lcov.info` that includes TypeScript (website), Rust (API), and C# (app) coverage, which is then uploaded to Codacy.
 
+## Real App-Process E2E Coverage
+
+Unit and integration coverage measure the portable test build. The mobile E2E
+suites additionally measure the **running application itself** (#1232): the
+device build is IL-instrumented so every executed sequence and branch point is
+counted inside the app process, exactly like unit coverage — never inferred
+from automation ids or selection fingerprints.
+
+### Instrumentation (`E2ECoverage`)
+
+`BibleOnSite.csproj` defines an `E2ECoverage` switch used only by instrumented
+test builds. When enabled:
+
+- `AltCover` rewrites `BibleOnSite.dll` after `XamlC` so every sequence point
+  calls `AltCover.Recorder.Instance.Visit(moduleHash, pointId)` (branch points
+  pass `int.MinValue | uspid`), emitting an OpenCover **template** keyed by the
+  build's module hash.
+- The `app/BibleOnSite.E2eCoverage` project supplies a substitute
+  `AltCover.Recorder.g` assembly (same name, version and public key token as
+  AltCover's generated recorder) that accumulates hits in memory and serves the
+  live snapshot from a loopback HTTP endpoint on `127.0.0.1:4787`:
+  `GET /coverage`, `GET /coverage/health`, `POST /coverage/reset`.
+- The endpoint starts with the first instrumented visit, listens only on
+  loopback, and a plain build afterwards restores the untouched assembly, so
+  instrumentation can never leak into store or production builds.
+
+### Collection (test harness)
+
+`MobileDeviceTest` pulls the snapshot after every scenario — while the app is
+still running, because Appium may kill the process at session teardown — and
+drops one `app-e2e-coverage-dump/1` JSON per test under
+`<artifacts>/app-coverage/`. A `_startup` dump captures app-launch hits before
+the per-test reset. Android tunnels the device loopback through `adb forward`;
+the iOS simulator shares the host loopback. Failed pulls leave
+`*.coverage-error.txt` diagnostics instead of failing the test.
+
+Enable locally with `MOBILE_E2E_COVERAGE=1`; the Windows FlaUI fixture uses
+`E2E_COVERAGE=1` and writes the same dump shape under `E2E_ARTIFACTS`.
+
+### Applying dumps → LCOV
+
+`CoverageMobileE2E` (and `CoverageE2EWindows` for the local Windows suite)
+replays dump hit counts onto the build's OpenCover template — matched by
+module hash, so dumps from a different build are reported `incompatible`
+rather than misapplied — then ReportGenerator converts it to `lcov.info`:
+
+```bash
+cd app
+MOBILE_PLATFORM=Android MOBILE_E2E_COVERAGE=1 dotnet run --project devops -- CompileMobileE2E
+npm test --prefix mobile-e2e          # runs the suite, collecting dumps
+MOBILE_PLATFORM=Android dotnet run --project devops -- CoverageMobileE2E
+# → .artifacts/mobile-e2e/android/coverage-app/lcov.info
+```
+
+The per-platform output directory keeps the applied OpenCover, per-test dumps
+and a `coverage-report-manifest.json` (`complete`, `dumpErrors`,
+`incompatibleDumps`, `unknownPointIds`) for diagnostics.
+
+### Authoritative merge
+
+`cross_module_ci` merges the three layers into the single app report consumed
+by the `app` Codecov flag (98.5% gate, 0% threshold):
+
+```
+unit/lcov.info + integration/lcov.info + e2e/{android,ios}/lcov.info
+        └─ merge-lcov.mts --relocate app/BibleOnSite/  →  .coverage/merged/lcov.info
+```
+
+- `merge-lcov.mts` unions records **by covered location** (`DA`, `BRDA`,
+  `FNDA` hit counts take the max), so a line exercised on any layer or
+  platform counts exactly once and lines executed nowhere stay uncovered.
+- `--relocate` canonicalizes absolute runner paths (Linux Android leg, macOS
+  iOS leg, local Windows) onto `app/BibleOnSite/`, so the same source line
+  never double-counts across runners.
+- When the mobile suite did not run, the trusted per-platform master baselines
+  (`app-e2e-coverage.master.{android,ios}`) fill the E2E layer; a successful
+  run must produce both platform reports or the merge fails.
+- The combined report is stored as `app-coverage.<run>` and, on master,
+  `app-coverage.master` — the baseline always contains every layer, so a
+  partial run can never overwrite a complete one.
+
 ## CI Integration
 
 In CI ([.github/workflows/ci.yml](../../../../.github/workflows/ci.yml)), the `app_ci` job:
@@ -186,8 +267,18 @@ In CI ([.github/workflows/ci.yml](../../../../.github/workflows/ci.yml)), the `a
 3. Restores dotnet tools and dependencies
 4. Runs unit tests with coverage via `CoverageUnit` target (generates LCOV directly)
 5. Runs integration tests against the API and merges the coverage reports
-6. Uploads the merged coverage artifact for cross-module merge and Codecov
+6. Uploads the unit+integration coverage artifact for cross-module merge
 
-The coverage is then:
-- Uploaded to Codecov with the `app` flag
-- Merged with other modules' coverage for Codacy reporting
+The `app_mobile_e2e` job ([app-mobile-e2e.yml](../../../../.github/workflows/app-mobile-e2e.yml)):
+
+1. Builds an instrumented Debug app (`MOBILE_E2E_COVERAGE=1` → `CompileMobileE2E`)
+2. Runs the Appium suite; the harness collects a per-test coverage dump even
+   when the scenario fails
+3. Applies the dumps via `CoverageMobileE2E` (runs even after a failed pilot so
+   partial coverage stays diagnosable) and uploads `app-e2e-coverage.<run>.<platform>`
+4. Publishes `app-e2e-coverage.master.<platform>` only from a completed,
+   successful default-branch run
+
+`cross_module_ci` then merges all layers as described above and publishes the
+authoritative report to Codecov with the `app` flag and to Codacy through the
+cross-module merge.
