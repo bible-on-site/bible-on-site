@@ -193,8 +193,8 @@ public class DatabasePopulatorFixture : IAsyncLifetime
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
 
-        // A populated idempotent run alone takes ~80s of script execution;
-        // cold builds, update checks and host load multiply that well past 2m.
+        // An already-populated run still takes ~80s of populator logic, and
+        // cold builds, update checks, or a loaded host stretch it well past 2m.
         var completed = await Task.Run(() => process.WaitForExit(300_000));
 
         if (!completed)

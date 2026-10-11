@@ -11,10 +11,10 @@ namespace BibleOnSite.Services;
 public interface ITanahpediaService
 {
     /// <summary>Published entries ordered by title — the browse list.</summary>
-    Task<List<TanahpediaEntry>> GetEntriesAsync(int limit, int offset, CancellationToken cancellationToken = default);
+    Task<List<TanahpediaEntry>> GetEntriesAsync(int limit, int offset, CancellationToken cancellationToken);
 
     /// <summary>Entries most recently updated — the landing "עודכנו לאחרונה" section.</summary>
-    Task<List<TanahpediaEntry>> GetRecentEntriesAsync(int limit, CancellationToken cancellationToken = default);
+    Task<List<TanahpediaEntry>> GetRecentEntriesAsync(int limit, CancellationToken cancellationToken);
 
     /// <summary>
     /// A single entry by its canonical <paramref name="uniqueName"/>, with linked
@@ -22,16 +22,16 @@ public interface ITanahpediaService
     /// callers then try <see cref="GetSynonymTargetsAsync"/> for alias or
     /// disambiguation resolution, like the website does.
     /// </summary>
-    Task<TanahpediaEntryDetail?> GetEntryDetailAsync(string uniqueName, CancellationToken cancellationToken = default);
+    Task<TanahpediaEntryDetail?> GetEntryDetailAsync(string uniqueName, CancellationToken cancellationToken);
 
     /// <summary>
     /// Entries a synonym name can lead to: 0 results = unknown name, 1 = plain
     /// alias, several = ambiguous — the client renders a chooser.
     /// </summary>
-    Task<List<TanahpediaSynonymTarget>> GetSynonymTargetsAsync(string name, CancellationToken cancellationToken = default);
+    Task<List<TanahpediaSynonymTarget>> GetSynonymTargetsAsync(string name, CancellationToken cancellationToken);
 
     /// <summary>Published-entry counts per category key for the landing grid.</summary>
-    Task<List<TanahpediaCategoryCount>> GetCategoryCountsAsync(CancellationToken cancellationToken = default);
+    Task<List<TanahpediaCategoryCount>> GetCategoryCountsAsync(CancellationToken cancellationToken);
 
     /// <summary>
     /// All entities of a category with the entries that describe them —
@@ -39,14 +39,14 @@ public interface ITanahpediaService
     /// a base entity type; <paramref name="sub"/> optionally narrows it
     /// (PROPHET/KING under PERSON, animal kinds/purities under ANIMAL).
     /// </summary>
-    Task<List<TanahpediaEntityWithEntries>> GetEntitiesWithEntriesAsync(string entityType, string? sub = null, CancellationToken cancellationToken = default);
+    Task<List<TanahpediaEntityWithEntries>> GetEntitiesWithEntriesAsync(string entityType, string? sub, CancellationToken cancellationToken);
 
     /// <summary>
     /// Entities whose Hebrew-date anniversary falls on the given Hebrew
     /// month/day — the landing "היום בתנ"ך" section.
     /// </summary>
-    Task<List<TanahpediaEntityWithEntries>> GetTodayEntitiesAsync(int hebrewMonth, int hebrewDay, CancellationToken cancellationToken = default);
+    Task<List<TanahpediaEntityWithEntries>> GetTodayEntitiesAsync(int hebrewMonth, int hebrewDay, CancellationToken cancellationToken);
 
     /// <summary>Homepage configuration (layout + intro) for an entity type, when configured.</summary>
-    Task<TanahpediaCategoryHomepage?> GetCategoryHomepageAsync(string entityType, CancellationToken cancellationToken = default);
+    Task<TanahpediaCategoryHomepage?> GetCategoryHomepageAsync(string entityType, CancellationToken cancellationToken);
 }

@@ -12,7 +12,9 @@ namespace BibleOnSite.ViewModels;
 /// one or several linked entries render as plain name, single link or a row of
 /// links — the same contract as the website category pages.
 /// </summary>
+#pragma warning disable S2333 // CommunityToolkit.Mvvm source generators supply the other partial declaration.
 public partial class TanahpediaEntityTypeViewModel : ObservableObject
+#pragma warning restore S2333
 {
     private readonly ITanahpediaService _service;
     private readonly IAppNavigator _navigator;
@@ -30,10 +32,12 @@ public partial class TanahpediaEntityTypeViewModel : ObservableObject
 #pragma warning disable MVVMTK0045
     /// <summary>Category key (e.g. PERSON, PROPHET, WAR) — drives the title.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(Title))]
     private string _categoryKey = string.Empty;
 
     /// <summary>Base entity type the listing query runs against.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(Title))]
     private string _entityType = string.Empty;
 
     /// <summary>Optional subcategory filter (PROPHET/KING, animal kind/purity).</summary>
@@ -44,13 +48,16 @@ public partial class TanahpediaEntityTypeViewModel : ObservableObject
     private bool _isLoading;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsEmpty))]
     private bool _isLoaded;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasError))]
     private string? _errorMessage;
 
     /// <summary>Admin-authored HTML intro from the category homepage config.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasIntro))]
     private string? _introContent;
 
     /// <summary>Configured homepage layout — LIST/MAP/GALLERY/TIMELINE.</summary>
@@ -58,6 +65,8 @@ public partial class TanahpediaEntityTypeViewModel : ObservableObject
     private string _layoutType = "LIST";
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsEmpty))]
+    [NotifyPropertyChangedFor(nameof(HasEntities))]
     private ObservableCollection<TanahpediaEntityItem> _entities = new();
 #pragma warning restore MVVMTK0045
 
@@ -70,31 +79,22 @@ public partial class TanahpediaEntityTypeViewModel : ObservableObject
     public bool HasEntities => Entities.Count > 0;
     public bool IsEmpty => IsLoaded && Entities.Count == 0;
 
-    partial void OnCategoryKeyChanged(string value) => OnPropertyChanged(nameof(Title));
-    partial void OnEntityTypeChanged(string value) => OnPropertyChanged(nameof(Title));
-    partial void OnErrorMessageChanged(string? value) => OnPropertyChanged(nameof(HasError));
-    partial void OnIntroContentChanged(string? value) => OnPropertyChanged(nameof(HasIntro));
-    partial void OnIsLoadedChanged(bool value) => OnPropertyChanged(nameof(IsEmpty));
-    partial void OnEntitiesChanged(ObservableCollection<TanahpediaEntityItem> value)
-    {
-        OnPropertyChanged(nameof(IsEmpty));
-        OnPropertyChanged(nameof(HasEntities));
-    }
-
     /// <summary>Loads the category homepage config and the entity listing.</summary>
     [RelayCommand]
     public async Task LoadAsync()
     {
         if (IsLoading || EntityType.Length == 0)
+        {
             return;
+        }
 
         IsLoading = true;
         ErrorMessage = null;
 
         try
         {
-            var homepageTask = _service.GetCategoryHomepageAsync(EntityType);
-            var entitiesTask = _service.GetEntitiesWithEntriesAsync(EntityType, Sub);
+            var homepageTask = _service.GetCategoryHomepageAsync(EntityType, CancellationToken.None);
+            var entitiesTask = _service.GetEntitiesWithEntriesAsync(EntityType, Sub, CancellationToken.None);
 
             // The listing must load; a homepage failure only drops the intro.
             TanahpediaCategoryHomepage? homepage = null;
@@ -131,7 +131,9 @@ public partial class TanahpediaEntityTypeViewModel : ObservableObject
     public async Task OpenEntryAsync(string? uniqueName)
     {
         if (string.IsNullOrEmpty(uniqueName))
+        {
             return;
+        }
 
         await _navigator.GoToAsync($"tanahpediaEntry?uniqueName={Uri.EscapeDataString(uniqueName)}");
     }

@@ -12,7 +12,9 @@ namespace BibleOnSite.Pages;
 [QueryProperty(nameof(CategoryKey), "key")]
 [QueryProperty(nameof(EntityType), "entityType")]
 [QueryProperty(nameof(Sub), "sub")]
+#pragma warning disable S2333 // MAUI XAML supplies the other partial declaration and controls.
 public partial class TanahpediaEntityTypePage : ContentPage
+#pragma warning restore S2333
 {
     private readonly TanahpediaEntityTypeViewModel _viewModel;
 

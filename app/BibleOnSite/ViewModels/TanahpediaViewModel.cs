@@ -12,7 +12,9 @@ namespace BibleOnSite.ViewModels;
 /// category hierarchy with entry counts, and recently updated entries,
 /// mirroring the website's <c>/pedia</c> landing.
 /// </summary>
+#pragma warning disable S2333 // CommunityToolkit.Mvvm source generators supply the other partial declaration.
 public partial class TanahpediaViewModel : ObservableObject
+#pragma warning restore S2333
 {
     private readonly ITanahpediaService _service;
     private readonly IAppNavigator _navigator;
@@ -35,30 +37,27 @@ public partial class TanahpediaViewModel : ObservableObject
     private bool _isLoaded;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasError))]
     private string? _errorMessage;
 
     [ObservableProperty]
     private string _hebrewDateText = string.Empty;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasToday))]
     private ObservableCollection<TanahpediaEntityItem> _todayEntities = new();
 
     [ObservableProperty]
     private ObservableCollection<TanahpediaCategoryGroup> _categoryGroups = new();
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasRecent))]
     private ObservableCollection<TanahpediaEntry> _recentEntries = new();
 #pragma warning restore MVVMTK0045
 
     public bool HasError => !string.IsNullOrEmpty(ErrorMessage);
     public bool HasToday => TodayEntities.Count > 0;
     public bool HasRecent => RecentEntries.Count > 0;
-
-    partial void OnErrorMessageChanged(string? value) => OnPropertyChanged(nameof(HasError));
-    partial void OnTodayEntitiesChanged(ObservableCollection<TanahpediaEntityItem> value) =>
-        OnPropertyChanged(nameof(HasToday));
-    partial void OnRecentEntriesChanged(ObservableCollection<TanahpediaEntry> value) =>
-        OnPropertyChanged(nameof(HasRecent));
 
     /// <summary>
     /// Loads counts, recent entries and today's anniversaries in parallel.
@@ -69,7 +68,9 @@ public partial class TanahpediaViewModel : ObservableObject
     public async Task LoadAsync()
     {
         if (IsLoading)
+        {
             return;
+        }
 
         IsLoading = true;
         ErrorMessage = null;
@@ -77,9 +78,9 @@ public partial class TanahpediaViewModel : ObservableObject
         try
         {
             var (month, day) = HebrewDateHelper.GetTodayHebrewMonthDay();
-            var countsTask = _service.GetCategoryCountsAsync();
-            var recentTask = _service.GetRecentEntriesAsync(8);
-            var todayTask = _service.GetTodayEntitiesAsync(month, day);
+            var countsTask = _service.GetCategoryCountsAsync(CancellationToken.None);
+            var recentTask = _service.GetRecentEntriesAsync(8, CancellationToken.None);
+            var todayTask = _service.GetTodayEntitiesAsync(month, day, CancellationToken.None);
 
             await Task.WhenAll(countsTask, recentTask, todayTask);
 
@@ -109,7 +110,9 @@ public partial class TanahpediaViewModel : ObservableObject
     public async Task OpenCategoryAsync(TanahpediaCategoryItem item)
     {
         if (item?.Category is not { } category)
+        {
             return;
+        }
 
         var route = $"tanahpediaCategory?key={Uri.EscapeDataString(category.Key)}" +
             $"&entityType={Uri.EscapeDataString(category.EntityType)}";
@@ -125,7 +128,9 @@ public partial class TanahpediaViewModel : ObservableObject
     public async Task OpenEntryAsync(string? uniqueName)
     {
         if (string.IsNullOrEmpty(uniqueName))
+        {
             return;
+        }
 
         await _navigator.GoToAsync($"tanahpediaEntry?uniqueName={Uri.EscapeDataString(uniqueName)}");
     }

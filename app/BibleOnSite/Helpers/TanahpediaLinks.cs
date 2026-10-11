@@ -23,7 +23,9 @@ public static class TanahpediaLinks
     {
         uniqueName = string.Empty;
         if (string.IsNullOrWhiteSpace(url))
+        {
             return false;
+        }
 
         var trimmed = url.Trim();
         var index = trimmed.IndexOf(PediaSegment, StringComparison.OrdinalIgnoreCase);
@@ -44,10 +46,14 @@ public static class TanahpediaLinks
         // Strip query/fragment — the slug ends there.
         var end = slug.IndexOfAny(['?', '#']);
         if (end >= 0)
+        {
             slug = slug[..end];
+        }
 
         if (slug.Length == 0)
+        {
             return false;
+        }
 
         try
         {

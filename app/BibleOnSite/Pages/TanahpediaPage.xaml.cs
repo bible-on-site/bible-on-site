@@ -7,7 +7,9 @@ namespace BibleOnSite.Pages;
 /// hierarchy and recently updated entries, mirroring the website's
 /// <c>/pedia</c> landing.
 /// </summary>
+#pragma warning disable S2333 // MAUI XAML supplies the other partial declaration and controls.
 public partial class TanahpediaPage : ContentPage
+#pragma warning restore S2333
 {
     private readonly TanahpediaViewModel _viewModel = new();
 

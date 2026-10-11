@@ -15,7 +15,7 @@ public class TanahpediaService : BaseGraphQLService, ITanahpediaService
     /// <summary>Singleton instance of the TanahpediaService.</summary>
     public static TanahpediaService Instance => _instance.Value;
 
-    private TanahpediaService() : base()
+    private TanahpediaService()
     {
     }
 
@@ -24,7 +24,7 @@ public class TanahpediaService : BaseGraphQLService, ITanahpediaService
     }
 
     /// <inheritdoc />
-    public async Task<List<TanahpediaEntry>> GetEntriesAsync(int limit, int offset, CancellationToken cancellationToken = default)
+    public async Task<List<TanahpediaEntry>> GetEntriesAsync(int limit, int offset, CancellationToken cancellationToken)
     {
         var data = await QueryAsync<EntriesResponse>(@"
             query TanahpediaEntries($limit: Int, $offset: Int) {
@@ -50,7 +50,7 @@ public class TanahpediaService : BaseGraphQLService, ITanahpediaService
     }
 
     /// <inheritdoc />
-    public async Task<List<TanahpediaEntry>> GetRecentEntriesAsync(int limit, CancellationToken cancellationToken = default)
+    public async Task<List<TanahpediaEntry>> GetRecentEntriesAsync(int limit, CancellationToken cancellationToken)
     {
         var data = await QueryAsync<RecentEntriesResponse>(@"
             query TanahpediaRecentEntries($limit: Int) {
@@ -76,7 +76,7 @@ public class TanahpediaService : BaseGraphQLService, ITanahpediaService
     }
 
     /// <inheritdoc />
-    public async Task<TanahpediaEntryDetail?> GetEntryDetailAsync(string uniqueName, CancellationToken cancellationToken = default)
+    public async Task<TanahpediaEntryDetail?> GetEntryDetailAsync(string uniqueName, CancellationToken cancellationToken)
     {
         var data = await QueryAsync<EntryDetailResponse>(@"
             query TanahpediaEntry($uniqueName: String!) {
@@ -106,7 +106,9 @@ public class TanahpediaService : BaseGraphQLService, ITanahpediaService
 
         var dto = data?.TanahpediaEntry;
         if (dto == null)
+        {
             return null;
+        }
 
         return new TanahpediaEntryDetail
         {
@@ -133,7 +135,7 @@ public class TanahpediaService : BaseGraphQLService, ITanahpediaService
     }
 
     /// <inheritdoc />
-    public async Task<List<TanahpediaSynonymTarget>> GetSynonymTargetsAsync(string name, CancellationToken cancellationToken = default)
+    public async Task<List<TanahpediaSynonymTarget>> GetSynonymTargetsAsync(string name, CancellationToken cancellationToken)
     {
         var data = await QueryAsync<SynonymTargetsResponse>(@"
             query TanahpediaSynonymTargets($name: String!) {
@@ -158,7 +160,7 @@ public class TanahpediaService : BaseGraphQLService, ITanahpediaService
     }
 
     /// <inheritdoc />
-    public async Task<List<TanahpediaCategoryCount>> GetCategoryCountsAsync(CancellationToken cancellationToken = default)
+    public async Task<List<TanahpediaCategoryCount>> GetCategoryCountsAsync(CancellationToken cancellationToken)
     {
         var data = await QueryAsync<CategoryCountsResponse>(@"
             query TanahpediaCategoryCounts {
@@ -179,7 +181,7 @@ public class TanahpediaService : BaseGraphQLService, ITanahpediaService
     }
 
     /// <inheritdoc />
-    public async Task<List<TanahpediaEntityWithEntries>> GetEntitiesWithEntriesAsync(string entityType, string? sub = null, CancellationToken cancellationToken = default)
+    public async Task<List<TanahpediaEntityWithEntries>> GetEntitiesWithEntriesAsync(string entityType, string? sub, CancellationToken cancellationToken)
     {
         var data = await QueryAsync<EntitiesResponse>(@"
             query TanahpediaEntities($entityType: String!, $sub: String) {
@@ -202,7 +204,7 @@ public class TanahpediaService : BaseGraphQLService, ITanahpediaService
     }
 
     /// <inheritdoc />
-    public async Task<List<TanahpediaEntityWithEntries>> GetTodayEntitiesAsync(int hebrewMonth, int hebrewDay, CancellationToken cancellationToken = default)
+    public async Task<List<TanahpediaEntityWithEntries>> GetTodayEntitiesAsync(int hebrewMonth, int hebrewDay, CancellationToken cancellationToken)
     {
         var data = await QueryAsync<TodayEntitiesResponse>(@"
             query TanahpediaTodayEntities($hebrewMonth: Int!, $hebrewDay: Int!) {
@@ -225,7 +227,7 @@ public class TanahpediaService : BaseGraphQLService, ITanahpediaService
     }
 
     /// <inheritdoc />
-    public async Task<TanahpediaCategoryHomepage?> GetCategoryHomepageAsync(string entityType, CancellationToken cancellationToken = default)
+    public async Task<TanahpediaCategoryHomepage?> GetCategoryHomepageAsync(string entityType, CancellationToken cancellationToken)
     {
         var data = await QueryAsync<CategoryHomepageResponse>(@"
             query TanahpediaCategoryHomepage($entityType: String!) {
@@ -241,7 +243,9 @@ public class TanahpediaService : BaseGraphQLService, ITanahpediaService
 
         var dto = data?.TanahpediaCategoryHomepage;
         if (dto == null)
+        {
             return null;
+        }
 
         return new TanahpediaCategoryHomepage
         {

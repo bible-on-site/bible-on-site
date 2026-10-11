@@ -14,7 +14,9 @@ namespace BibleOnSite.ViewModels;
 /// canonical entry, several render the disambiguation chooser, none show the
 /// not-found state.
 /// </summary>
+#pragma warning disable S2333 // CommunityToolkit.Mvvm source generators supply the other partial declaration.
 public partial class TanahpediaEntryViewModel : ObservableObject
+#pragma warning restore S2333
 {
     private readonly ITanahpediaService _service;
     private readonly IAppNavigator _navigator;
@@ -44,9 +46,11 @@ public partial class TanahpediaEntryViewModel : ObservableObject
 
     /// <summary>Loading finished (entry, disambiguation or not-found shown).</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowEntry))]
     private bool _isLoaded;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasError))]
     private string? _errorMessage;
 
     [ObservableProperty]
@@ -67,10 +71,12 @@ public partial class TanahpediaEntryViewModel : ObservableObject
 
     /// <summary>True when the name resolved to several possible entries.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowEntry))]
     private bool _isDisambiguation;
 
     /// <summary>True when the name matches neither an entry nor any synonym.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowEntry))]
     private bool _isNotFound;
 #pragma warning restore MVVMTK0045
 
@@ -82,11 +88,6 @@ public partial class TanahpediaEntryViewModel : ObservableObject
     /// <summary>Entry body is shown — loaded and not a disambiguation/not-found state.</summary>
     public bool ShowEntry => IsLoaded && !IsDisambiguation && !IsNotFound;
 
-    partial void OnIsLoadedChanged(bool value) => OnPropertyChanged(nameof(ShowEntry));
-    partial void OnIsDisambiguationChanged(bool value) => OnPropertyChanged(nameof(ShowEntry));
-    partial void OnIsNotFoundChanged(bool value) => OnPropertyChanged(nameof(ShowEntry));
-    partial void OnErrorMessageChanged(string? value) => OnPropertyChanged(nameof(HasError));
-
     /// <summary>
     /// Loads the entry by name, then resolves synonyms when no canonical entry
     /// owns it — mirroring the website's slug resolution (alias → single
@@ -96,7 +97,9 @@ public partial class TanahpediaEntryViewModel : ObservableObject
     public async Task LoadAsync()
     {
         if (IsLoading || UniqueName.Length == 0)
+        {
             return;
+        }
 
         IsLoading = true;
         ErrorMessage = null;
@@ -105,19 +108,19 @@ public partial class TanahpediaEntryViewModel : ObservableObject
 
         try
         {
-            var detail = await _service.GetEntryDetailAsync(UniqueName);
+            var detail = await _service.GetEntryDetailAsync(UniqueName, CancellationToken.None);
             if (detail != null)
             {
                 await SetEntryAsync(detail);
                 return;
             }
 
-            var targets = await _service.GetSynonymTargetsAsync(UniqueName);
+            var targets = await _service.GetSynonymTargetsAsync(UniqueName, CancellationToken.None);
             if (targets.Count == 1)
             {
                 // Plain alias — swap to the canonical entry (same UX as the
                 // website's permanent redirect).
-                var alias = await _service.GetEntryDetailAsync(targets[0].UniqueName);
+                var alias = await _service.GetEntryDetailAsync(targets[0].UniqueName, CancellationToken.None);
                 if (alias != null)
                 {
                     await SetEntryAsync(alias);
@@ -219,7 +222,9 @@ public partial class TanahpediaEntryViewModel : ObservableObject
     public async Task OpenEntryAsync(string? uniqueName)
     {
         if (string.IsNullOrEmpty(uniqueName) || uniqueName == UniqueName)
+        {
             return;
+        }
 
         await _navigator.GoToAsync($"tanahpediaEntry?uniqueName={Uri.EscapeDataString(uniqueName)}");
     }
@@ -229,7 +234,9 @@ public partial class TanahpediaEntryViewModel : ObservableObject
     public async Task OpenEntityCategoryAsync(TanahpediaLinkedEntity? entity)
     {
         if (entity is null)
+        {
             return;
+        }
 
         var category = TanahpediaTaxonomy.Find(entity.EntityType);
         var route = $"tanahpediaCategory?key={Uri.EscapeDataString(category?.Key ?? entity.EntityType)}" +

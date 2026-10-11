@@ -58,12 +58,13 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
         public override bool ShouldInteractWithUrl(UITextView textView, NSUrl URL, NSRange characterRange, UITextItemInteraction interaction)
         {
             var url = URL.AbsoluteString ?? URL.Description;
-            if (viewProvider()?.DispatchLinkTapped(url).Handled == true)
+            if (interaction == UITextItemInteraction.InvokeDefaultAction &&
+                viewProvider()?.DispatchLinkTapped(url).Handled == true)
             {
                 // We handled the tap — UIKit must not open the URL too.
                 return false;
             }
-            return true;
+            return base.ShouldInteractWithUrl(textView, URL, characterRange, interaction);
         }
     }
 

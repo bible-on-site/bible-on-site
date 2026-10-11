@@ -12,7 +12,9 @@ namespace BibleOnSite.Pages;
 /// entry; ambiguous names show the disambiguation chooser.
 /// </summary>
 [QueryProperty(nameof(UniqueName), "uniqueName")]
+#pragma warning disable S2333 // MAUI XAML supplies the other partial declaration and controls.
 public partial class TanahpediaEntryPage : ContentPage
+#pragma warning restore S2333
 {
     private readonly TanahpediaEntryViewModel _viewModel;
 
