@@ -71,6 +71,24 @@ for (const ranges of [
 		);
 	assert.ok(maximum <= 2, `Opus PCM diverged from FFmpeg: ${maximum}`);
 }
+// Whole-chapter PCM serves players without an Ogg demuxer (AVPlayer).
+const { length } = recitation.chapter();
+const pieces = [];
+for (let offset = 0; offset < length; offset += 262144)
+	pieces.push(Buffer.from(recitation.chunk(offset, 262144).data, "base64"));
+const chapter = Buffer.concat(pieces);
+assert.equal(chapter.toString("ascii", 0, 4), "RIFF");
+assert.equal(chapter.readUInt32LE(24), 48000);
+const payload = chapter.subarray(44);
+assert.equal(payload.length, reference.length);
+let drift = 0;
+for (let offset = 0; offset < payload.length; offset += 2)
+	drift = Math.max(
+		drift,
+		Math.abs(payload.readInt16LE(offset) - reference.readInt16LE(offset)),
+	);
+assert.ok(drift <= 2, `Opus chapter PCM diverged from FFmpeg: ${drift}`);
+assert.throws(() => recitation.chunk(0, 262145), /Invalid audio chunk/);
 console.log(
-	"96000 frames; exact range lengths; PCM matches FFmpeg within 2 quantization units",
+	"96000 frames; exact range lengths; chapter WAV complete; PCM matches FFmpeg within 2 quantization units",
 );
