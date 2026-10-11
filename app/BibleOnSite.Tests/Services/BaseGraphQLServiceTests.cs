@@ -11,7 +11,7 @@ public class BaseGraphQLServiceTests
         public Task<Result?> Query(CancellationToken token = default) =>
             QueryAsync<Result>("query Value($id: Int!) { value(id: $id) }", "Value", new { id = 7 }, token);
         public Task<Result?> QueryWithTimeout(TimeSpan timeout) =>
-            QueryWithTimeoutAsync<Result>("query { value }", timeout);
+            QueryWithTimeoutAsync<Result>("query { value }", timeout, null);
     }
     public sealed class Result { public int Value { get; set; } }
 

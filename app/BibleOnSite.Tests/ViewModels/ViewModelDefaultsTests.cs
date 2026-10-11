@@ -53,6 +53,32 @@ public class ViewModelDefaultsTests
             vm.Perek.Should().BeNull();
             vm.ToggleCheckedPerush(1);
             vm.IsPerushChecked(1).Should().BeTrue();
+
+            var masora = new MasoraViewModel();
+            masora.UnitId.Should().Be(0);
+            masora.Heading.Should().BeEmpty();
+            masora.SeferId.Should().Be(0);
+            masora.SeferName.Should().BeEmpty();
+            masora.UnitOrder.Should().Be(0);
+            masora.ClosingBreakLabel.Should().BeEmpty();
+            masora.HasClosingBreak.Should().BeFalse();
+            masora.UnitPositionText.Should().BeEmpty();
+            masora.NextUnitId.Should().Be(0);
+            masora.PreviousUnitId.Should().Be(0);
+            masora.CanGoToNextUnit.Should().BeFalse();
+            masora.CanGoToPreviousUnit.Should().BeFalse();
+            masora.ArticlesCount.Should().Be(0);
+            masora.HasArticles.Should().BeFalse();
+            masora.PerushimCount.Should().Be(0);
+            masora.HasPerushim.Should().BeFalse();
+            masora.PerushimEmptyMessage.Should().Be("אין קטלוג פירושים");
+            masora.ShowDownloadPerushimButton.Should().BeFalse();
+            masora.IsPerushChecked(1).Should().BeFalse();
+            masora.GetPerushimForRow(1, 1).Should().BeEmpty();
+            masora.GetUnitIdForPerek(1).Should().BeNull();
+            // Toggling without a loaded unit updates the checked set only.
+            masora.ToggleCheckedPerush(1);
+            masora.IsPerushChecked(1).Should().BeTrue();
             var changes = new List<string?>();
             vm.PropertyChanged += (_, e) => changes.Add(e.PropertyName);
             settings.FontFactor = 1.7;

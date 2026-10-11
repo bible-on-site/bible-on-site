@@ -109,7 +109,7 @@ public class PerushimNotesService
         }
         var dbPath = Path.Combine(DataDirectory, NotesDbName);
         string? padPath = null;
-        try { padPath = await _padService.TryGetAssetPathAsync(PerushimNotesPackName); }
+        try { padPath = await _padService.TryGetAssetPathAsync(PerushimNotesPackName, CancellationToken.None); }
         catch (Exception ex)
         {
             diagnosticErrors.Add($"PAD/ODR path error: {ex.GetType().Name}: {ex.Message}");
@@ -142,17 +142,14 @@ public class PerushimNotesService
             lines.Add($"  PAD file at root: {atRoot}");
             lines.Add($"  PAD file in assets/: {atAssets}");
         }
-        if (File.Exists(dbPath))
+        try
         {
-            try
-            {
-                var ts = await GetBuildTimestampAsync(dbPath);
-                lines.Add($"Local DB build_timestamp: {ts}");
-            }
-            catch (Exception ex)
-            {
-                lines.Add($"Local DB build_timestamp error: {ex.Message}");
-            }
+            var ts = await GetBuildTimestampAsync(dbPath);
+            lines.Add($"Local DB build_timestamp: {ts}");
+        }
+        catch (Exception ex)
+        {
+            lines.Add($"Local DB build_timestamp error: {ex.Message}");
         }
 
         // Platform-specific delivery diagnostics (ODR on iOS, PAD on Android)
@@ -197,7 +194,9 @@ public class PerushimNotesService
     private async Task InitializeCoreAsync()
     {
         if (_initialized)
+        {
             return;
+        }
 
         var dbPath = Path.Combine(DataDirectory, NotesDbName);
 
@@ -217,7 +216,7 @@ public class PerushimNotesService
         if (!File.Exists(dbPath))
         {
             // No local DB → try PAD/ODR first, then fallback to app package (e.g. Android Debug APK)
-            var padPath = await _padService.TryGetAssetPathAsync(PerushimNotesPackName);
+            var padPath = await _padService.TryGetAssetPathAsync(PerushimNotesPackName, CancellationToken.None);
             if (padPath != null && await TryCopyFromPadAsync(padPath, dbPath))
             {
                 _connection = new SQLiteAsyncConnection(dbPath, SQLiteOpenFlags.ReadOnly);
@@ -249,8 +248,15 @@ public class PerushimNotesService
     /// Attempts to download the notes database via the platform's on-demand delivery
     /// mechanism (PAD on Android, ODR on iOS). Call when IsAvailable is false.
     /// </summary>
-    public async Task<bool> TryDownloadNotesAsync(IProgress<double>? progress = null,
-        CancellationToken cancellationToken = default)
+    public Task<bool> TryDownloadNotesAsync() => TryDownloadNotesAsync(null, CancellationToken.None);
+
+    public Task<bool> TryDownloadNotesAsync(IProgress<double>? progress) =>
+        TryDownloadNotesAsync(progress, CancellationToken.None);
+
+    public Task<bool> TryDownloadNotesAsync(CancellationToken cancellationToken) =>
+        TryDownloadNotesAsync(null, cancellationToken);
+
+    public async Task<bool> TryDownloadNotesAsync(IProgress<double>? progress, CancellationToken cancellationToken)
     {
         await _operationLock.WaitAsync(cancellationToken);
         try { return await TryDownloadNotesCoreAsync(progress, cancellationToken); }
@@ -298,7 +304,7 @@ public class PerushimNotesService
         }
 
         // Try PAD/ODR path if already available
-        var padPath = await _padService.TryGetAssetPathAsync(PerushimNotesPackName);
+        var padPath = await _padService.TryGetAssetPathAsync(PerushimNotesPackName, CancellationToken.None);
         if (padPath != null && await TryCopyFromPadAsync(padPath, dbPath))
         {
             _connection = new SQLiteAsyncConnection(dbPath, SQLiteOpenFlags.ReadOnly);
@@ -315,7 +321,7 @@ public class PerushimNotesService
         // Try on-demand fetch (downloads from store)
         if (await _padService.FetchAsync(PerushimNotesPackName, progress, cancellationToken))
         {
-            padPath = await _padService.TryGetAssetPathAsync(PerushimNotesPackName);
+            padPath = await _padService.TryGetAssetPathAsync(PerushimNotesPackName, CancellationToken.None);
             if (padPath != null && await TryCopyFromPadAsync(padPath, dbPath))
             {
                 _connection = new SQLiteAsyncConnection(dbPath, SQLiteOpenFlags.ReadOnly);
@@ -427,13 +433,22 @@ public class PerushimNotesService
     {
         try
         {
-            var padPath = await _padService.TryGetAssetPathAsync(PerushimNotesPackName);
-            if (padPath == null) return;
+            var padPath = await _padService.TryGetAssetPathAsync(PerushimNotesPackName, CancellationToken.None);
+            if (padPath == null)
+            {
+                return;
+            }
 
             var padDbPath = Path.Combine(padPath, NotesDbName);
             if (!File.Exists(padDbPath))
+            {
                 padDbPath = Path.Combine(padPath, "assets", NotesDbName);
-            if (!File.Exists(padDbPath)) return;
+            }
+
+            if (!File.Exists(padDbPath))
+            {
+                return;
+            }
 
             var localTs = await GetBuildTimestampAsync(localDbPath);
             var padTs = await GetBuildTimestampAsync(padDbPath);
@@ -463,7 +478,11 @@ public class PerushimNotesService
     /// </summary>
     private static async Task<long> GetBuildTimestampAsync(string dbPath)
     {
-        if (!File.Exists(dbPath)) return 0;
+        if (!File.Exists(dbPath))
+        {
+            return 0;
+        }
+
         SQLiteAsyncConnection? conn = null;
         try
         {
@@ -471,12 +490,17 @@ public class PerushimNotesService
             var rows = await conn.QueryAsync<MetadataRow>(
                 "SELECT value AS Value FROM _metadata WHERE key = 'build_timestamp'");
             if (rows.Count > 0 && long.TryParse(rows[0].Value, out var ts))
+            {
                 return ts;
+            }
         }
         catch { /* DB may not have _metadata table (legacy) */ }
         finally
         {
-            if (conn != null) await conn.CloseAsync();
+            if (conn != null)
+            {
+                await conn.CloseAsync();
+            }
         }
         return 0;
     }
@@ -486,9 +510,15 @@ public class PerushimNotesService
         // PAD may expose pack root or an "assets" subfolder depending on SDK/version
         var srcPath = Path.Combine(padAssetsPath, NotesDbName);
         if (!File.Exists(srcPath))
+        {
             srcPath = Path.Combine(padAssetsPath, "assets", NotesDbName);
+        }
+
         if (!File.Exists(srcPath))
+        {
             return false;
+        }
+
         try
         {
             await using var source = File.OpenRead(srcPath);
@@ -531,7 +561,9 @@ public class PerushimNotesService
     {
         await InitializeAsync();
         if (_connection == null)
+        {
             return new List<int>();
+        }
 
         var rows = await _connection.QueryAsync<IdRow>(
             "SELECT DISTINCT perush_id AS Id FROM note WHERE perek_id = ? ORDER BY perush_id",
@@ -547,7 +579,9 @@ public class PerushimNotesService
     {
         await InitializeAsync();
         if (_connection == null)
+        {
             return new List<PerekPerushNote>();
+        }
 
         var rows = await _connection.QueryAsync<NoteRow>(
             "SELECT perush_id, perek_id, pasuk, note_idx, note_content FROM note " +

@@ -83,7 +83,9 @@ public class StarterService : BaseGraphQLService
     public async Task LoadAsync()
     {
         if (IsLoaded)
+        {
             return;
+        }
 
         await LoadFromApiAsync();
     }
@@ -94,7 +96,9 @@ public class StarterService : BaseGraphQLService
     public async Task LoadAsync(bool forceReload)
     {
         if (IsLoaded && !forceReload)
+        {
             return;
+        }
 
         await LoadFromApiAsync();
     }
@@ -110,7 +114,9 @@ public class StarterService : BaseGraphQLService
             "GetStarter");
 
         if (response?.Starter == null)
+        {
             return;
+        }
 
         ApplyResponse(response);
         IsFromCache = false;
@@ -194,7 +200,9 @@ public class StarterService : BaseGraphQLService
     public async Task LoadWithRetryAsync()
     {
         if (IsLoaded)
+        {
             return;
+        }
 
         // 1. Try the API (single attempt with 5-second timeout)
         try
@@ -242,7 +250,9 @@ public class StarterService : BaseGraphQLService
             Console.WriteLine("Refreshing starter data from API...");
             await LoadFromApiAsync();
             if (IsLoaded)
+            {
                 Console.WriteLine($"Refreshed {Authors.Count} authors from API");
+            }
         }
         catch (Exception ex)
         {
@@ -271,12 +281,16 @@ public class StarterService : BaseGraphQLService
     private async Task<bool> LoadFromCacheAsync()
     {
         if (!File.Exists(CachePath))
+        {
             return false;
+        }
 
         var json = await File.ReadAllTextAsync(CachePath);
         var response = JsonSerializer.Deserialize(json, StarterJsonContext.Default.StarterResponse);
         if (response?.Starter == null)
+        {
             return false;
+        }
 
         ApplyResponse(response);
         IsFromCache = true;

@@ -29,7 +29,10 @@ public partial class DisplayPreferencesViewModel : ObservableObject
         get => _preferencesService.FontFactor;
         set
         {
-            if (Math.Abs(_preferencesService.FontFactor - value) < 0.001) return;
+            if (Math.Abs(_preferencesService.FontFactor - value) < 0.001)
+            {
+                return;
+            }
             _preferencesService.FontFactor = value;
             OnPropertyChanged();
         }

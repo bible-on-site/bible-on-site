@@ -43,6 +43,9 @@ public static class AppRoutes
     public static string SoundPreferences => "SoundPreferencesPage";
     public static string SupportPreferences => "SupportPreferencesPage";
 
+    /// <summary>The מסורה על הפרק reading instance — a flyout page like the other menu pages.</summary>
+    public static string Masora => "MasoraPage";
+
     /// <summary>
     /// Flyout pages replace another menu page above the most recent reader.
     /// Preserve search-reader history so Back returns to the chapter being read.

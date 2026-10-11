@@ -277,7 +277,11 @@ public sealed class RecitationService
                 // Windows and sideloaded Debug builds use the same payload as a package asset.
                 // Store mobile builds never bundle this fallback and never contact S3.
                 await using var bundled = await _files.OpenAppPackageFileAsync(book.FileName);
-                await using (var file = File.Create(bundledCopy)) await bundled.CopyToAsync(file, cancellationToken);
+                await using (var file = File.Create(bundledCopy))
+                {
+                    await bundled.CopyToAsync(file, cancellationToken);
+                }
+
                 path = bundledCopy;
             }
             if (new FileInfo(path).Length != book.SizeBytes || !await MatchesHashAsync(path, book.Sha256, cancellationToken))
@@ -298,7 +302,11 @@ public sealed class RecitationService
                 try
                 {
                     await using var source = zip.GetEntry(track.AudioSha256 + ".mp3")!.Open();
-                    await using (var file = File.Create(temporary)) await source.CopyToAsync(file, cancellationToken);
+                    await using (var file = File.Create(temporary))
+                    {
+                        await source.CopyToAsync(file, cancellationToken);
+                    }
+
                     if (!await MatchesHashAsync(temporary, track.AudioSha256, cancellationToken))
                     {
                         throw new InvalidDataException("Recording checksum mismatch.");

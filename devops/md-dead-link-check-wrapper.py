@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""
-Wrapper script for md-dead-link-check that uses a CI-specific config
-when running in CI environments (no external network access).
+"""Wrapper script for md-dead-link-check that selects a CI-specific config.
+
+When running in CI environments (no external network access), the CI
+config is used.
 """
 
 import os
