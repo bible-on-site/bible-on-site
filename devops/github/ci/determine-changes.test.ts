@@ -86,6 +86,31 @@ describe("detectChanges", () => {
 		]);
 	});
 
+	test("website test-only changes run website checks without a release", () => {
+		for (const file of [
+			"web/bible-on-site/tests/unit/components/TopNav.test.tsx",
+			"web/bible-on-site/tests/e2e/search.test.ts",
+			"web/bible-on-site/scripts/start-server.test.mjs",
+			"web/bible-on-site/jest.config.js",
+			"web/bible-on-site/playwright.e2e.config.ts",
+			"web/bible-on-site/playwright.base.config.ts",
+			"web/bible-on-site/.test.env",
+		]) {
+			assert.deepEqual(
+				detectChanges([file]).website,
+				{ module_changed: false, ci_changed: true },
+				file,
+			);
+		}
+	});
+
+	test("website source changes still release the website", () => {
+		assert.deepEqual(
+			detectChanges(["web/bible-on-site/src/app/page.tsx"]).website,
+			{ module_changed: true, ci_changed: false },
+		);
+	});
+
 	test("unrelated website UI does not run app checks", () => {
 		assert.deepEqual(changed(["web/bible-on-site/src/app/page.tsx"], "app"), [
 			{ module_changed: false, ci_changed: false },
