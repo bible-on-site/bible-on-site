@@ -143,7 +143,9 @@ public partial class RecitationPreferencesViewModel : ObservableObject
             outcome = "ההקלטות מותקנות וזמינות גם ללא אינטרנט.";
         }
         catch (OperationCanceledException) { outcome = "ההורדה הופסקה. הקלטות שהושלמו נשמרו להמשך."; }
-        catch (Exception) { outcome = "לא ניתן להשלים את ההורדה. נסו שוב; הקלטות שהושלמו נשמרו."; }
+        // Any non-cancellation failure — catalog, package, checksum, filesystem
+        // or platform delivery errors — collapses to one retriable status.
+        catch (Exception ex) when (ex is not OperationCanceledException) { outcome = "לא ניתן להשלים את ההורדה. נסו שוב; הקלטות שהושלמו נשמרו."; }
         finally { _download = null; IsDownloading = false; }
         Status = outcome;
         Refresh();

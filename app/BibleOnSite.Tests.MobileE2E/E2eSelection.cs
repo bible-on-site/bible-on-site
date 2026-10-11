@@ -51,12 +51,10 @@ internal static class E2eSelection
         var ids = new HashSet<string>();
         if (root.TryGetProperty("selected", out var selected) && selected.ValueKind == JsonValueKind.Array)
         {
-            foreach (var entry in selected.EnumerateArray())
+            foreach (var entry in selected.EnumerateArray()
+                .Where(entry => entry.TryGetProperty("id", out var id) && id.ValueKind == JsonValueKind.String))
             {
-                if (entry.TryGetProperty("id", out var id) && id.ValueKind == JsonValueKind.String)
-                {
-                    ids.Add(id.GetString()!);
-                }
+                ids.Add(entry.GetProperty("id").GetString()!);
             }
         }
         return ids;
