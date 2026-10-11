@@ -171,9 +171,10 @@ public partial class AppShell : Shell
 	/// 2. The page/navigation pipeline then decides (reader overlays, section
 	///    stack pops, cancelled navigation).
 	/// 3. When nothing consumed the press and it would leave the app, the
-	///    single-Back exit confirmation runs first (#2118). Overriding this
-	///    method also keeps the platform back callback enabled at the root so
-	///    the press reaches here instead of finishing the activity directly.
+	///    single-Back exit confirmation runs first (#2118).
+	/// On Android, MainActivity's always-enabled AppBackPressedCallback
+	/// guarantees this method receives every press — MAUI's own callback is
+	/// disabled whenever CanConsumeBackNavigation reports no in-app history.
 	/// </summary>
 	protected override bool OnBackButtonPressed()
 	{
