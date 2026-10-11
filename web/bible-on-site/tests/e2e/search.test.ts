@@ -3,23 +3,48 @@ import { expect, test } from "../util/playwright/test-fixture";
 /**
  * E2E tests for site search (/search + /api/search).
  * Test data (tanah_test_data.sql) seeds authors/articles/notes on בראשית א,
- * so "בראשית" exercises every result type against the real stack.
+ * and the db-populator Tanahpedia seed adds entries (משה-רבנו, יהושע-בן-נון)
+ * with aliases, so "בראשית" plus a couple of entry queries exercise every
+ * result type against the real stack.
  */
 
 test.describe("Site search", () => {
-	test("is discoverable from the nav button and the main menu", async ({
+	test("is discoverable from a dedicated button beside the logo", async ({
 		page,
 	}) => {
 		await page.goto("/");
 
-		// Persistent search entry point next to the hamburger.
-		const searchEntry = page.getByRole("link", { name: "חיפוש" }).first();
+		// Persistent search entry point beside the logo in the top nav,
+		// well separated from the hamburger trigger (#2102).
+		const topNav = page.locator("nav.top-nav");
+		const searchEntry = topNav.getByRole("link", { name: "חיפוש" });
 		await expect(searchEntry).toBeVisible();
 		await searchEntry.click();
 		await page.waitForURL("**/search");
 		await expect(
 			page.getByRole("searchbox", { name: "מונח חיפוש" }),
 		).toBeVisible();
+	});
+
+	test("main menu leads with על הפרק and holds no search row", async ({
+		page,
+	}) => {
+		await page.goto("/");
+
+		await page.getByRole("button", { name: "תפריט ראשי" }).click();
+		const menu = page.locator("#main-menu");
+
+		// Search lives on its own header button; the first regular menu
+		// item is the reader (#2102).
+		const firstItem = menu.locator("ul li").first();
+		await expect(firstItem.getByRole("link")).toHaveText(/על הפרק/);
+		await expect(firstItem.getByRole("link")).toHaveAttribute(
+			"href",
+			"/929",
+		);
+		await expect(
+			menu.getByRole("link", { name: "חיפוש" }),
+		).toHaveCount(0);
 	});
 
 	test("renders SSR results for a shared query URL", async ({ page }) => {
@@ -88,6 +113,49 @@ test.describe("Site search", () => {
 		await expect(
 			page.getByRole("heading", { name: "פרקים" }),
 		).toBeVisible();
+	});
+
+	test("finds Tanahpedia entries by title, alias and body text", async ({
+		page,
+	}) => {
+		await page.goto(`/search?q=${encodeURIComponent("משה")}`);
+
+		// Title + alias match: the result links the canonical entry slug.
+		await expect(
+			page.getByRole("heading", { name: "תנכפדיה" }),
+		).toBeVisible();
+		const entryLink = page.locator(
+			`a[data-result-link][href="/pedia/${encodeURIComponent("משה-רבנו")}"]`,
+		);
+		await expect(entryLink).toBeVisible();
+
+		// A seeded alias ("הושע בן נון") resolves to its canonical entry.
+		await page.goto(`/search?q=${encodeURIComponent("הושע בן נון")}`);
+		const aliasLink = page.locator(
+			`a[data-result-link][href="/pedia/${encodeURIComponent("יהושע-בן-נון")}"]`,
+		);
+		await expect(aliasLink).toBeVisible();
+
+		// Body-text match: "עלינו לשבח" only appears in the יהושע entry body.
+		await page.goto(`/search?q=${encodeURIComponent("עלינו לשבח")}`);
+		await expect(
+			page.locator(
+				`a[data-result-link][href="/pedia/${encodeURIComponent("יהושע-בן-נון")}"]`,
+			),
+		).toBeVisible();
+	});
+
+	test("a Tanahpedia result opens the canonical entry page", async ({
+		page,
+	}) => {
+		await page.goto(`/search?q=${encodeURIComponent("הושע בן נון")}`);
+		const link = page.locator(
+			`a[data-result-link][href="/pedia/${encodeURIComponent("יהושע-בן-נון")}"]`,
+		);
+		await expect(link).toBeVisible();
+		await link.click();
+		await page.waitForURL("**/pedia/*");
+		await expect(page.locator("h1")).toContainText("יהושע בן נון");
 	});
 
 	test("arrow keys move focus between the input and result links", async ({

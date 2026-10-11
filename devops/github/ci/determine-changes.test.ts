@@ -42,6 +42,17 @@ describe("detectChanges", () => {
 		assert.equal(changes.website.ci_changed, false);
 	});
 
+	test("e2e-impact selector changes require app checks without a release", () => {
+		for (const file of [
+			"devops/github/ci/e2e-impact/select.ts",
+			"devops/github/ci/e2e-impact/e2e-impact.test.ts",
+		]) {
+			const changes = detectChanges([file]);
+			assert.deepEqual(changes.app, { module_changed: false, ci_changed: true }, file);
+			assert.equal(changes.website.ci_changed, false, file);
+		}
+	});
+
 	for (const path of [
 		"web/bible-on-site/package.json",
 		"web/bible-on-site/package-lock.json",
@@ -83,6 +94,38 @@ describe("detectChanges", () => {
 	test("unrelated website UI does not run app checks", () => {
 		assert.deepEqual(changed(["web/bible-on-site/src/app/page.tsx"], "app"), [
 			{ module_changed: false, ci_changed: false },
+		]);
+	});
+
+	for (const path of [
+		"app/BibleOnSite.Tests/Services/ArticleSearchServiceTests.cs",
+		"app/BibleOnSite.Tests.E2E/Navigation/ArticlesNavigationTests.cs",
+		"app/BibleOnSite.Tests.MobileE2E/PerekPilotTests.cs",
+		"app/mobile-e2e/run.mjs",
+	]) {
+		test(`${path} runs app checks without a store release`, () => {
+			assert.deepEqual(changed([path], "app"), [
+				{ module_changed: false, ci_changed: true },
+			]);
+		});
+	}
+
+	test("packaged app changes still release alongside test changes", () => {
+		assert.deepEqual(
+			changed(
+				[
+					"app/BibleOnSite/Pages/PerekPage.xaml",
+					"app/BibleOnSite.Tests/Services/PerekServiceTests.cs",
+				],
+				"app",
+			),
+			[{ module_changed: true, ci_changed: true }],
+		);
+	});
+
+	test("app build tooling changes still release the app", () => {
+		assert.deepEqual(changed(["app/devops/Build.Package.cs"], "app"), [
+			{ module_changed: true, ci_changed: false },
 		]);
 	});
 

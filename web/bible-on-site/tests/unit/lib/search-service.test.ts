@@ -5,6 +5,7 @@ jest.mock("@/lib/search/db-content", () => ({
 	searchPerushNotes: jest.fn(),
 	searchAuthors: jest.fn(),
 	searchArticles: jest.fn(),
+	searchTanahpediaEntries: jest.fn(),
 	perushHitReference: jest.fn(() => 'רש"י בראשית א א'),
 }));
 
@@ -28,6 +29,7 @@ import {
 	searchArticles,
 	searchAuthors,
 	searchPerushNotes,
+	searchTanahpediaEntries,
 } from "@/lib/search/db-content";
 import { searchSite } from "@/lib/search/service";
 import { parseSearchTypes } from "@/lib/search/types";
@@ -38,6 +40,9 @@ const mockNotes = searchPerushNotes as jest.MockedFunction<
 const mockAuthors = searchAuthors as jest.MockedFunction<typeof searchAuthors>;
 const mockArticles = searchArticles as jest.MockedFunction<
 	typeof searchArticles
+>;
+const mockTanahpedia = searchTanahpediaEntries as jest.MockedFunction<
+	typeof searchTanahpediaEntries
 >;
 const mockPerakim = searchPerakim as jest.MockedFunction<typeof searchPerakim>;
 const mockPesukim = searchPesukim as jest.MockedFunction<typeof searchPesukim>;
@@ -53,8 +58,9 @@ describe("parseSearchTypes", () => {
 			"perush",
 			"author",
 			"article",
+			"tanahpedia",
 		]);
-		expect(parseSearchTypes(undefined)).toHaveLength(5);
+		expect(parseSearchTypes(undefined)).toHaveLength(6);
 	});
 
 	it("parses csv and repeated params, dropping unknown values", () => {
@@ -75,6 +81,7 @@ describe("searchSite", () => {
 		mockNotes.mockResolvedValue([]);
 		mockAuthors.mockResolvedValue([]);
 		mockArticles.mockResolvedValue([]);
+		mockTanahpedia.mockResolvedValue([]);
 		mockPerakim.mockImplementation(actualCorpus.searchPerakim);
 		mockPesukim.mockImplementation(actualCorpus.searchPesukim);
 		jest.spyOn(console, "warn").mockImplementation(() => {});
@@ -101,11 +108,17 @@ describe("searchSite", () => {
 	});
 
 	it("returns empty results for a blank query without calling providers", async () => {
-		const response = await searchSite("---", ["perush", "author", "article"]);
+		const response = await searchSite("---", [
+			"perush",
+			"author",
+			"article",
+			"tanahpedia",
+		]);
 		expect(response.results).toHaveLength(0);
 		expect(mockNotes).not.toHaveBeenCalled();
 		expect(mockAuthors).not.toHaveBeenCalled();
 		expect(mockArticles).not.toHaveBeenCalled();
+		expect(mockTanahpedia).not.toHaveBeenCalled();
 	});
 
 	it("rejects queries with too many terms", async () => {
@@ -212,6 +225,50 @@ describe("searchSite", () => {
 		const response = await searchSite("בראשית", ["article", "perek"]);
 		expect(response.results.some((item) => item.type === "perek")).toBe(true);
 		expect(response.availability).toContain("חיפוש המאמרים אינו זמין כרגע");
+	});
+
+	it("maps tanahpedia hits to canonical entry links", async () => {
+		mockTanahpedia.mockResolvedValue([
+			{
+				score: 220,
+				entry: {
+					id: "e1",
+					uniqueName: "משה-רבנו",
+					title: "משה רבנו",
+					plain: "מושיען של ישראל",
+				},
+			},
+		]);
+		const response = await searchSite("משה", ["tanahpedia"]);
+		const entry = response.results[0];
+		expect(entry.type).toBe("tanahpedia");
+		expect(entry.title).toBe("משה רבנו");
+		expect(entry.href).toBe(`/pedia/${encodeURIComponent("משה-רבנו")}`);
+		expect(entry.snippetHtml).toContain("מושיען");
+	});
+
+	it("returns a null snippet for a contentless tanahpedia hit", async () => {
+		mockTanahpedia.mockResolvedValue([
+			{
+				score: 220,
+				entry: {
+					id: "e1",
+					uniqueName: "ירושלים",
+					title: "ירושלים",
+					plain: "",
+				},
+			},
+		]);
+		const response = await searchSite("ירושלים", ["tanahpedia"]);
+		expect(response.results[0].snippetHtml).toBeNull();
+		expect(response.counts.tanahpedia).toBe(1);
+	});
+
+	it("degrades a failing tanahpedia provider", async () => {
+		mockTanahpedia.mockRejectedValue(new Error("db down"));
+		const response = await searchSite("משה", ["tanahpedia", "perek"]);
+		expect(response.results.some((item) => item.type === "perek")).toBe(true);
+		expect(response.availability).toContain("חיפוש התנכפדיה אינו זמין כרגע");
 	});
 
 	it("honors the limit per type", async () => {
