@@ -758,7 +758,10 @@ for (const lab of labs) {
 function q(v) {
 	if (v === null || v === undefined) return "NULL";
 	if (typeof v === "number") return String(v);
-	return `'${String(v).replace(/'/g, "''")}'`;
+	const escaped = String(v).replace(/'/g, "''");
+	// Non-ASCII content needs the N'...' national-charset introducer so the
+	// generated SQL stays clean of Codacy's unicode-literal finding.
+	return /[^\x00-\x7F]/.test(escaped) ? `N'${escaped}'` : `'${escaped}'`;
 }
 
 const allEntityIds = entities.map((e) => e.id);
@@ -791,7 +794,7 @@ DELETE FROM tanahpedia_entity WHERE id IN (${allEntityIds.map((x) => q(x)).join(
 
 out.push(`
 INSERT INTO tanahpedia_entry (id, unique_name, title, content, created_at, updated_at) VALUES
-${entries.map((e) => `\t(${q(e.id)}, ${q(e.slug)}, ${q(e.title)}, '<p>דמו מעבדת מקרי קצה — לא לעריכה פומבית.</p>', NOW(), NOW())`).join(",\n")};
+${entries.map((e) => `\t(${q(e.id)}, ${q(e.slug)}, ${q(e.title)}, ${q("<p>דמו מעבדת מקרי קצה — לא לעריכה פומבית.</p>")}, NOW(), NOW())`).join(",\n")};
 `);
 
 out.push(`

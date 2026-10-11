@@ -21,7 +21,9 @@ public partial class LoadingPage : ContentPage
         base.OnAppearing();
 
         if (_isLoading)
+        {
             return;
+        }
 
         _isLoading = true;
 
@@ -36,7 +38,9 @@ public partial class LoadingPage : ContentPage
 
             // Load PerekDataService (tanah) so GetTodaysPerekId works for startup preference
             if (!PerekDataService.Instance.IsLoaded)
+            {
                 await PerekDataService.Instance.LoadAsync();
+            }
 
             await LoadStarterDataAsync();
         }

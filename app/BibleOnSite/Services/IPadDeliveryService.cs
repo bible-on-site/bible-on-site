@@ -12,7 +12,28 @@ public interface IPadDeliveryService
     /// Returns a directory path containing the asset pack's files if already
     /// available locally, or null when a download is still required.
     /// </summary>
-    Task<string?> TryGetAssetPathAsync(string packName, CancellationToken cancellationToken = default);
+    Task<string?> TryGetAssetPathAsync(string packName) =>
+        TryGetAssetPathAsync(packName, CancellationToken.None);
+
+    /// <summary>
+    /// Returns a directory path containing the asset pack's files if already
+    /// available locally, or null when a download is still required.
+    /// </summary>
+    Task<string?> TryGetAssetPathAsync(string packName, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Downloads the on-demand asset pack from the store.
+    /// Returns true once the pack is downloaded and ready at the assets path.
+    /// </summary>
+    Task<bool> FetchAsync(string packName, CancellationToken cancellationToken) =>
+        FetchAsync(packName, null, cancellationToken);
+
+    /// <summary>
+    /// Downloads the on-demand asset pack from the store.
+    /// Returns true once the pack is downloaded and ready at the assets path.
+    /// </summary>
+    Task<bool> FetchAsync(string packName, IProgress<double>? progress) =>
+        FetchAsync(packName, progress, CancellationToken.None);
 
     /// <summary>
     /// Downloads the on-demand asset pack from the store.
@@ -20,8 +41,8 @@ public interface IPadDeliveryService
     /// </summary>
     Task<bool> FetchAsync(
         string packName,
-        IProgress<double>? progress = null,
-        CancellationToken cancellationToken = default);
+        IProgress<double>? progress,
+        CancellationToken cancellationToken);
 
     /// <summary>
     /// Platform-specific delivery diagnostics (ODR on iOS, PAD on Android).

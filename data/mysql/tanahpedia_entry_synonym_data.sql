@@ -5,44 +5,44 @@ DELETE s
 FROM tanahpedia_entry_synonym s
     JOIN tanahpedia_entry e ON e.id = s.entry_id
 WHERE e.unique_name IN (
-        'משה-רבנו',
-        'יהושע-בן-נון',
-        'עלי-הכהן',
+        N'משה-רבנו',
+        N'יהושע-בן-נון',
+        N'עלי-הכהן',
         'eretz-yisrael'
     );
 INSERT INTO tanahpedia_entry_synonym (id, name, entry_id)
 SELECT UUID(),
-    'משה',
+    N'משה',
     id
 FROM tanahpedia_entry
-WHERE unique_name = 'משה-רבנו';
+WHERE unique_name = N'משה-רבנו';
 INSERT INTO tanahpedia_entry_synonym (id, name, entry_id)
 SELECT UUID(),
-    'משה בן עמרם',
+    N'משה בן עמרם',
     id
 FROM tanahpedia_entry
-WHERE unique_name = 'משה-רבנו';
+WHERE unique_name = N'משה-רבנו';
 INSERT INTO tanahpedia_entry_synonym (id, name, entry_id)
 SELECT UUID(),
-    'יהושע',
+    N'יהושע',
     id
 FROM tanahpedia_entry
-WHERE unique_name = 'יהושע-בן-נון';
+WHERE unique_name = N'יהושע-בן-נון';
 INSERT INTO tanahpedia_entry_synonym (id, name, entry_id)
 SELECT UUID(),
-    'הושע בן נון',
+    N'הושע בן נון',
     id
 FROM tanahpedia_entry
-WHERE unique_name = 'יהושע-בן-נון';
+WHERE unique_name = N'יהושע-בן-נון';
 INSERT INTO tanahpedia_entry_synonym (id, name, entry_id)
 SELECT UUID(),
-    'עלי',
+    N'עלי',
     id
 FROM tanahpedia_entry
-WHERE unique_name = 'עלי-הכהן';
+WHERE unique_name = N'עלי-הכהן';
 INSERT INTO tanahpedia_entry_synonym (id, name, entry_id)
 SELECT UUID(),
-    'ארץ ישראל',
+    N'ארץ ישראל',
     id
 FROM tanahpedia_entry
 WHERE unique_name = 'eretz-yisrael';

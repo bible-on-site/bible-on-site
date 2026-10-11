@@ -323,7 +323,7 @@ public class ArticleSearchServiceTests
         }
         vm.SetFilterEnabled(SearchFilter.Articles, true);
 
-        await vm.SearchAsync();
+        await vm.SearchAsync(CancellationToken.None);
 
         vm.AvailabilityMessage.Should().Contain("חיבור רשת");
         vm.ErrorMessage.Should().BeEmpty();
@@ -348,7 +348,7 @@ public class ArticleSearchServiceTests
         }
         vm.SetFilterEnabled(SearchFilter.Articles, true);
 
-        await vm.SearchAsync();
+        await vm.SearchAsync(CancellationToken.None);
 
         vm.SearchResults.Should().ContainSingle().Which.Should().BeOfType<AuthorSearchResult>();
         vm.AvailabilityMessage.Should().BeEmpty();

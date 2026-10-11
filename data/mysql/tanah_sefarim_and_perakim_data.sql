@@ -5,11 +5,11 @@
 SET FOREIGN_KEY_CHECKS = 0;
 -- tanah_helek
 INSERT INTO tanah_helek (id, name, sefer_id_from, sefer_id_to)
-VALUES (3, 'כתובים', 25, 35);
+VALUES (3, N'כתובים', 25, 35);
 INSERT INTO tanah_helek (id, name, sefer_id_from, sefer_id_to)
-VALUES (2, 'נביאים', 6, 24);
+VALUES (2, N'נביאים', 6, 24);
 INSERT INTO tanah_helek (id, name, sefer_id_from, sefer_id_to)
-VALUES (1, 'תורה', 1, 5);
+VALUES (1, N'תורה', 1, 5);
 -- tanah_sefer
 INSERT INTO tanah_sefer (
         id,
@@ -18,7 +18,7 @@ INSERT INTO tanah_sefer (
         perek_id_from,
         perek_id_to
     )
-VALUES (1, 'בראשית', 'Genesis', 1, 50);
+VALUES (1, N'בראשית', 'Genesis', 1, 50);
 INSERT INTO tanah_sefer (
         id,
         name,
@@ -26,7 +26,7 @@ INSERT INTO tanah_sefer (
         perek_id_from,
         perek_id_to
     )
-VALUES (2, 'שמות', 'Exodus', 51, 90);
+VALUES (2, N'שמות', 'Exodus', 51, 90);
 INSERT INTO tanah_sefer (
         id,
         name,
@@ -34,7 +34,7 @@ INSERT INTO tanah_sefer (
         perek_id_from,
         perek_id_to
     )
-VALUES (3, 'ויקרא', 'Leviticus', 91, 117);
+VALUES (3, N'ויקרא', 'Leviticus', 91, 117);
 INSERT INTO tanah_sefer (
         id,
         name,
@@ -42,7 +42,7 @@ INSERT INTO tanah_sefer (
         perek_id_from,
         perek_id_to
     )
-VALUES (4, 'במדבר', 'Numbers', 118, 153);
+VALUES (4, N'במדבר', 'Numbers', 118, 153);
 INSERT INTO tanah_sefer (
         id,
         name,
@@ -50,7 +50,7 @@ INSERT INTO tanah_sefer (
         perek_id_from,
         perek_id_to
     )
-VALUES (5, 'דברים', 'Deuteronomy', 154, 187);
+VALUES (5, N'דברים', 'Deuteronomy', 154, 187);
 INSERT INTO tanah_sefer (
         id,
         name,
@@ -58,7 +58,7 @@ INSERT INTO tanah_sefer (
         perek_id_from,
         perek_id_to
     )
-VALUES (6, 'יהושע', 'Joshua', 188, 211);
+VALUES (6, N'יהושע', 'Joshua', 188, 211);
 INSERT INTO tanah_sefer (
         id,
         name,
@@ -66,7 +66,7 @@ INSERT INTO tanah_sefer (
         perek_id_from,
         perek_id_to
     )
-VALUES (7, 'שופטים', 'Judges', 212, 232);
+VALUES (7, N'שופטים', 'Judges', 212, 232);
 INSERT INTO tanah_sefer (
         id,
         name,
@@ -74,7 +74,7 @@ INSERT INTO tanah_sefer (
         perek_id_from,
         perek_id_to
     )
-VALUES (8, 'שמואל', NULL, 233, 287);
+VALUES (8, N'שמואל', NULL, 233, 287);
 INSERT INTO tanah_sefer (
         id,
         name,
@@ -82,7 +82,7 @@ INSERT INTO tanah_sefer (
         perek_id_from,
         perek_id_to
     )
-VALUES (9, 'מלכים', NULL, 288, 334);
+VALUES (9, N'מלכים', NULL, 288, 334);
 INSERT INTO tanah_sefer (
         id,
         name,
@@ -90,7 +90,7 @@ INSERT INTO tanah_sefer (
         perek_id_from,
         perek_id_to
     )
-VALUES (10, 'ישעיהו', 'Isaiah', 335, 400);
+VALUES (10, N'ישעיהו', 'Isaiah', 335, 400);
 INSERT INTO tanah_sefer (
         id,
         name,
@@ -98,7 +98,7 @@ INSERT INTO tanah_sefer (
         perek_id_from,
         perek_id_to
     )
-VALUES (11, 'ירמיהו', 'Jeremiah', 401, 452);
+VALUES (11, N'ירמיהו', 'Jeremiah', 401, 452);
 INSERT INTO tanah_sefer (
         id,
         name,
@@ -106,7 +106,7 @@ INSERT INTO tanah_sefer (
         perek_id_from,
         perek_id_to
     )
-VALUES (12, 'יחזקאל', 'Ezekiel', 453, 500);
+VALUES (12, N'יחזקאל', 'Ezekiel', 453, 500);
 INSERT INTO tanah_sefer (
         id,
         name,
@@ -114,7 +114,7 @@ INSERT INTO tanah_sefer (
         perek_id_from,
         perek_id_to
     )
-VALUES (13, 'הושע', 'Hosea', 501, 514);
+VALUES (13, N'הושע', 'Hosea', 501, 514);
 INSERT INTO tanah_sefer (
         id,
         name,
@@ -122,7 +122,7 @@ INSERT INTO tanah_sefer (
         perek_id_from,
         perek_id_to
     )
-VALUES (14, 'יואל', 'Joel', 515, 518);
+VALUES (14, N'יואל', 'Joel', 515, 518);
 INSERT INTO tanah_sefer (
         id,
         name,
@@ -130,7 +130,7 @@ INSERT INTO tanah_sefer (
         perek_id_from,
         perek_id_to
     )
-VALUES (15, 'עמוס', 'Amos', 519, 527);
+VALUES (15, N'עמוס', 'Amos', 519, 527);
 INSERT INTO tanah_sefer (
         id,
         name,
@@ -138,7 +138,7 @@ INSERT INTO tanah_sefer (
         perek_id_from,
         perek_id_to
     )
-VALUES (16, 'עובדיה', 'Obadiah', 528, 528);
+VALUES (16, N'עובדיה', 'Obadiah', 528, 528);
 INSERT INTO tanah_sefer (
         id,
         name,
@@ -146,7 +146,7 @@ INSERT INTO tanah_sefer (
         perek_id_from,
         perek_id_to
     )
-VALUES (17, 'יונה', 'Jonah', 529, 532);
+VALUES (17, N'יונה', 'Jonah', 529, 532);
 INSERT INTO tanah_sefer (
         id,
         name,
@@ -154,7 +154,7 @@ INSERT INTO tanah_sefer (
         perek_id_from,
         perek_id_to
     )
-VALUES (18, 'מיכה', 'Micah', 533, 539);
+VALUES (18, N'מיכה', 'Micah', 533, 539);
 INSERT INTO tanah_sefer (
         id,
         name,
@@ -162,7 +162,7 @@ INSERT INTO tanah_sefer (
         perek_id_from,
         perek_id_to
     )
-VALUES (19, 'נחום', 'Nahum', 540, 542);
+VALUES (19, N'נחום', 'Nahum', 540, 542);
 INSERT INTO tanah_sefer (
         id,
         name,
@@ -170,7 +170,7 @@ INSERT INTO tanah_sefer (
         perek_id_from,
         perek_id_to
     )
-VALUES (20, 'חבקוק', 'Habakkuk', 543, 545);
+VALUES (20, N'חבקוק', 'Habakkuk', 543, 545);
 INSERT INTO tanah_sefer (
         id,
         name,
@@ -178,7 +178,7 @@ INSERT INTO tanah_sefer (
         perek_id_from,
         perek_id_to
     )
-VALUES (21, 'צפניה', 'Zephaniah', 546, 548);
+VALUES (21, N'צפניה', 'Zephaniah', 546, 548);
 INSERT INTO tanah_sefer (
         id,
         name,
@@ -186,7 +186,7 @@ INSERT INTO tanah_sefer (
         perek_id_from,
         perek_id_to
     )
-VALUES (22, 'חגי', 'Haggai', 549, 550);
+VALUES (22, N'חגי', 'Haggai', 549, 550);
 INSERT INTO tanah_sefer (
         id,
         name,
@@ -194,7 +194,7 @@ INSERT INTO tanah_sefer (
         perek_id_from,
         perek_id_to
     )
-VALUES (23, 'זכריה', 'Zechariah', 551, 564);
+VALUES (23, N'זכריה', 'Zechariah', 551, 564);
 INSERT INTO tanah_sefer (
         id,
         name,
@@ -202,7 +202,7 @@ INSERT INTO tanah_sefer (
         perek_id_from,
         perek_id_to
     )
-VALUES (24, 'מלאכי', 'Malachi', 565, 567);
+VALUES (24, N'מלאכי', 'Malachi', 565, 567);
 INSERT INTO tanah_sefer (
         id,
         name,
@@ -210,7 +210,7 @@ INSERT INTO tanah_sefer (
         perek_id_from,
         perek_id_to
     )
-VALUES (25, 'תהילים', 'Psalms', 568, 717);
+VALUES (25, N'תהילים', 'Psalms', 568, 717);
 INSERT INTO tanah_sefer (
         id,
         name,
@@ -218,7 +218,7 @@ INSERT INTO tanah_sefer (
         perek_id_from,
         perek_id_to
     )
-VALUES (26, 'משלי', 'Proverbs', 718, 748);
+VALUES (26, N'משלי', 'Proverbs', 718, 748);
 INSERT INTO tanah_sefer (
         id,
         name,
@@ -226,7 +226,7 @@ INSERT INTO tanah_sefer (
         perek_id_from,
         perek_id_to
     )
-VALUES (27, 'איוב', 'Job', 749, 790);
+VALUES (27, N'איוב', 'Job', 749, 790);
 INSERT INTO tanah_sefer (
         id,
         name,
@@ -234,7 +234,7 @@ INSERT INTO tanah_sefer (
         perek_id_from,
         perek_id_to
     )
-VALUES (28, 'שיר השירים', 'Song of Songs', 791, 798);
+VALUES (28, N'שיר השירים', 'Song of Songs', 791, 798);
 INSERT INTO tanah_sefer (
         id,
         name,
@@ -242,7 +242,7 @@ INSERT INTO tanah_sefer (
         perek_id_from,
         perek_id_to
     )
-VALUES (29, 'רות', 'Ruth', 799, 802);
+VALUES (29, N'רות', 'Ruth', 799, 802);
 INSERT INTO tanah_sefer (
         id,
         name,
@@ -250,7 +250,7 @@ INSERT INTO tanah_sefer (
         perek_id_from,
         perek_id_to
     )
-VALUES (30, 'איכה', 'Lamentations', 803, 807);
+VALUES (30, N'איכה', 'Lamentations', 803, 807);
 INSERT INTO tanah_sefer (
         id,
         name,
@@ -258,7 +258,7 @@ INSERT INTO tanah_sefer (
         perek_id_from,
         perek_id_to
     )
-VALUES (31, 'קהלת', 'Ecclesiastes', 808, 819);
+VALUES (31, N'קהלת', 'Ecclesiastes', 808, 819);
 INSERT INTO tanah_sefer (
         id,
         name,
@@ -266,7 +266,7 @@ INSERT INTO tanah_sefer (
         perek_id_from,
         perek_id_to
     )
-VALUES (32, 'אסתר', 'Esther', 820, 829);
+VALUES (32, N'אסתר', 'Esther', 820, 829);
 INSERT INTO tanah_sefer (
         id,
         name,
@@ -274,7 +274,7 @@ INSERT INTO tanah_sefer (
         perek_id_from,
         perek_id_to
     )
-VALUES (33, 'דניאל', 'Daniel', 830, 841);
+VALUES (33, N'דניאל', 'Daniel', 830, 841);
 INSERT INTO tanah_sefer (
         id,
         name,
@@ -282,7 +282,7 @@ INSERT INTO tanah_sefer (
         perek_id_from,
         perek_id_to
     )
-VALUES (34, 'עזרא', NULL, 842, 864);
+VALUES (34, N'עזרא', NULL, 842, 864);
 INSERT INTO tanah_sefer (
         id,
         name,
@@ -290,7 +290,7 @@ INSERT INTO tanah_sefer (
         perek_id_from,
         perek_id_to
     )
-VALUES (35, 'דברי הימים', NULL, 865, 929);
+VALUES (35, N'דברי הימים', NULL, 865, 929);
 -- tanah_additional
 INSERT INTO tanah_additional (
         sefer_id,
@@ -299,7 +299,7 @@ INSERT INTO tanah_additional (
         perek_from,
         perek_to
     )
-VALUES (8, 'א', 'I Samuel', 233, 263);
+VALUES (8, N'א', 'I Samuel', 233, 263);
 INSERT INTO tanah_additional (
         sefer_id,
         letter,
@@ -307,7 +307,7 @@ INSERT INTO tanah_additional (
         perek_from,
         perek_to
     )
-VALUES (8, 'ב', 'II Samuel', 264, 287);
+VALUES (8, N'ב', 'II Samuel', 264, 287);
 INSERT INTO tanah_additional (
         sefer_id,
         letter,
@@ -315,7 +315,7 @@ INSERT INTO tanah_additional (
         perek_from,
         perek_to
     )
-VALUES (9, 'א', 'I Kings', 288, 309);
+VALUES (9, N'א', 'I Kings', 288, 309);
 INSERT INTO tanah_additional (
         sefer_id,
         letter,
@@ -323,7 +323,7 @@ INSERT INTO tanah_additional (
         perek_from,
         perek_to
     )
-VALUES (9, 'ב', 'II Kings', 310, 334);
+VALUES (9, N'ב', 'II Kings', 310, 334);
 INSERT INTO tanah_additional (
         sefer_id,
         letter,
@@ -331,7 +331,7 @@ INSERT INTO tanah_additional (
         perek_from,
         perek_to
     )
-VALUES (34, 'ע', 'Ezra', 842, 851);
+VALUES (34, N'ע', 'Ezra', 842, 851);
 INSERT INTO tanah_additional (
         sefer_id,
         letter,
@@ -339,7 +339,7 @@ INSERT INTO tanah_additional (
         perek_from,
         perek_to
     )
-VALUES (34, 'נ', 'Nehemiah', 852, 864);
+VALUES (34, N'נ', 'Nehemiah', 852, 864);
 INSERT INTO tanah_additional (
         sefer_id,
         letter,
@@ -347,7 +347,7 @@ INSERT INTO tanah_additional (
         perek_from,
         perek_to
     )
-VALUES (35, 'א', 'I Chronicles', 865, 893);
+VALUES (35, N'א', 'I Chronicles', 865, 893);
 INSERT INTO tanah_additional (
         sefer_id,
         letter,
@@ -355,1573 +355,1573 @@ INSERT INTO tanah_additional (
         perek_from,
         perek_to
     )
-VALUES (35, 'ב', 'II Chronicles', 894, 929);
+VALUES (35, N'ב', 'II Chronicles', 894, 929);
 -- tanah_perek
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (1, 1, 'בריאת העולם');
+VALUES (1, 1, N'בריאת העולם');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (2, 2, 'גן בעדן, אדם ואשתו');
+VALUES (2, 2, N'גן בעדן, אדם ואשתו');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (3, 3, 'חטא עץ הדעת');
+VALUES (3, 3, N'חטא עץ הדעת');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (4, 4, 'קין והבל');
+VALUES (4, 4, N'קין והבל');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (5, 5, 'ספר תולדות אדם');
+VALUES (5, 5, N'ספר תולדות אדם');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (6, 6, 'הדרדרות הבריאה, נח והציווי על התיבה');
+VALUES (6, 6, N'הדרדרות הבריאה, נח והציווי על התיבה');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (7, 7, 'תיבת נח והמבול');
+VALUES (7, 7, N'תיבת נח והמבול');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (8, 8, 'יְבֹשֶׁת המים');
+VALUES (8, 8, N'יְבֹשֶׁת המים');
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         9,
         9,
-        'אִסּוּר רצח, ברית שלא יהיה עוד מבול, ברכה לשם ויפת וקללת כנען'
+        N'אִסּוּר רצח, ברית שלא יהיה עוד מבול, ברכה לשם ויפת וקללת כנען'
     );
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (10, 10, 'תולדות בני נח');
+VALUES (10, 10, N'תולדות בני נח');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (11, 11, 'מגדל בבל, מנח עד אברהם');
+VALUES (11, 11, N'מגדל בבל, מנח עד אברהם');
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         12,
         12,
-        'יציאת אברם מחרן לארץ כנען, ירידת אברם מצרימה'
+        N'יציאת אברם מחרן לארץ כנען, ירידת אברם מצרימה'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         13,
         13,
-        'הפרדות אברם מלוט, הבטחת ה\' לאברם לתת לו את ארץ כנען'
+        N'הפרדות אברם מלוט, הבטחת ה\' לאברם לתת לו את ארץ כנען'
     );
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (14, 14, 'מלחמת המלכים');
+VALUES (14, 14, N'מלחמת המלכים');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (15, 15, 'ברית בין הבתרים');
+VALUES (15, 15, N'ברית בין הבתרים');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (16, 16, 'עקרות שרה ולידת ישמעאל');
+VALUES (16, 16, N'עקרות שרה ולידת ישמעאל');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (17, 17, 'ברית המילה, מאברם לאברהם ומשרי לשרה');
+VALUES (17, 17, N'ברית המילה, מאברם לאברהם ומשרי לשרה');
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         18,
         18,
-        'ביקור המלאכים אצל אברהם, תפילת אברהם על סדום'
+        N'ביקור המלאכים אצל אברהם, תפילת אברהם על סדום'
     );
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (19, 19, 'הפיכת סדום, מעשה לוט ובנותיו');
+VALUES (19, 19, N'הפיכת סדום, מעשה לוט ובנותיו');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (20, 20, 'אברהם ושרה בגרר');
+VALUES (20, 20, N'אברהם ושרה בגרר');
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         21,
         21,
-        'לידת יצחק, גירוש ישמעאל, הברית בין אברהם לאבימלך'
+        N'לידת יצחק, גירוש ישמעאל, הברית בין אברהם לאבימלך'
     );
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (22, 22, 'העקידה');
+VALUES (22, 22, N'העקידה');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (23, 23, 'פטירת שרה, אברהם קונה את מערת המכפלה');
+VALUES (23, 23, N'פטירת שרה, אברהם קונה את מערת המכפלה');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (24, 24, 'מציאת שידוך ליצחק ונישואיו עם רבקה');
+VALUES (24, 24, N'מציאת שידוך ליצחק ונישואיו עם רבקה');
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         25,
         25,
-        'פטירת אברהם, תולדותיו, לידת יעקב ועשו, מכירת הבכורה'
+        N'פטירת אברהם, תולדותיו, לידת יעקב ועשו, מכירת הבכורה'
     );
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (26, 26, 'יצחק ורבקה בגרר');
+VALUES (26, 26, N'יצחק ורבקה בגרר');
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         27,
         27,
-        'ברכת יצחק לבניו, ציווי רבקה ליעקב לברוח ללבן'
+        N'ברכת יצחק לבניו, ציווי רבקה ליעקב לברוח ללבן'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         28,
         28,
-        'ציווי יצחק ליעקב ללכת ללבן ולָשֵׂאת אשה, ברכתו, חלום יעקב'
+        N'ציווי יצחק ליעקב ללכת ללבן ולָשֵׂאת אשה, ברכתו, חלום יעקב'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         29,
         29,
-        'יעקב אצל לבן, נישואיו ללאה ורחל, לידת ארבעה מבניו'
+        N'יעקב אצל לבן, נישואיו ללאה ורחל, לידת ארבעה מבניו'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         30,
         30,
-        'לידת שבעה בנים נוספים ודינה, יעקב מתעשר'
+        N'לידת שבעה בנים נוספים ודינה, יעקב מתעשר'
     );
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (31, 31, 'יעקב וביתו נפרדים מלבן');
+VALUES (31, 31, N'יעקב וביתו נפרדים מלבן');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (32, 32, 'יעקב מתכונן למפגש עם עשו, יעקב והמלאך');
+VALUES (32, 32, N'יעקב מתכונן למפגש עם עשו, יעקב והמלאך');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (33, 33, 'יעקב ועשו נפגשים, יעקב מתיישב בשכם');
+VALUES (33, 33, N'יעקב ועשו נפגשים, יעקב מתיישב בשכם');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (34, 34, 'מעשה דינה');
+VALUES (34, 34, N'מעשה דינה');
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         35,
         35,
-        'ההבטחה ליעקב בבית אל, פטירת רחל וְהֻלֶּדֶת בנימין, סִכּוּם השבטים, פטירת יצחק'
+        N'ההבטחה ליעקב בבית אל, פטירת רחל וְהֻלֶּדֶת בנימין, סִכּוּם השבטים, פטירת יצחק'
     );
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (36, 36, 'תולדות עשו ומלכי אדום');
+VALUES (36, 36, N'תולדות עשו ומלכי אדום');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (37, 37, 'חלומות יוסף ומכירתו');
+VALUES (37, 37, N'חלומות יוסף ומכירתו');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (38, 38, 'מעשה יהודה ותמר');
+VALUES (38, 38, N'מעשה יהודה ותמר');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (39, 39, 'יוסף בבית פוטיפר ובבית הסוהר');
+VALUES (39, 39, N'יוסף בבית פוטיפר ובבית הסוהר');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (40, 40, 'יוסף, שר האופים ושר הטבחים');
+VALUES (40, 40, N'יוסף, שר האופים ושר הטבחים');
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         41,
         41,
-        'חלום פרעה, יוסף מתמנה למשנה למלך ונושא אשה'
+        N'חלום פרעה, יוסף מתמנה למשנה למלך ונושא אשה'
     );
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (42, 42, 'אחי יוסף יורדים למצרים ובאים אליו');
+VALUES (42, 42, N'אחי יוסף יורדים למצרים ובאים אליו');
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         43,
         43,
-        'יעקב נאלץ להוריד את בנימין מצרימה למפגש עם יוסף'
+        N'יעקב נאלץ להוריד את בנימין מצרימה למפגש עם יוסף'
     );
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (44, 44, 'עלילת הגביע, דברי יהודה ליוסף');
+VALUES (44, 44, N'עלילת הגביע, דברי יהודה ליוסף');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (45, 45, 'יוסף מתוודע אל האחים ומזמין את יעקב');
+VALUES (45, 45, N'יוסף מתוודע אל האחים ומזמין את יעקב');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (46, 46, 'יעקב וצאצאיו מתיישבים במצרים');
+VALUES (46, 46, N'יעקב וצאצאיו מתיישבים במצרים');
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         47,
         47,
-        'מפגש יעקב ופרעה, קניית יוסף את הארץ, שבועת יוסף ליעקב שלא יקברנו במצרים'
+        N'מפגש יעקב ופרעה, קניית יוסף את הארץ, שבועת יוסף ליעקב שלא יקברנו במצרים'
     );
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (48, 48, 'ברכת יעקב ליוסף ובניו');
+VALUES (48, 48, N'ברכת יעקב ליוסף ובניו');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (49, 49, 'ברכת יעקב לשבטים ופטירתו');
+VALUES (49, 49, N'ברכת יעקב לשבטים ופטירתו');
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         50,
         50,
-        'חניטת יעקב במצרים וקבורתו במערת המכפלה, פטירת יוסף'
+        N'חניטת יעקב במצרים וקבורתו במערת המכפלה, פטירת יוסף'
     );
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (51, 51, 'בני ישראל מתרבים במצרים ופרעה משעבדם');
+VALUES (51, 51, N'בני ישראל מתרבים במצרים ופרעה משעבדם');
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         52,
         52,
-        'לידת משה, הריגתו את המצרי, בריחתו למדין, זעקת בני ישראל ושמיעת ה\' את זעקתם'
+        N'לידת משה, הריגתו את המצרי, בריחתו למדין, זעקת בני ישראל ושמיעת ה\' את זעקתם'
     );
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (53, 53, 'התגלות ה\' למשה בסנה');
+VALUES (53, 53, N'התגלות ה\' למשה בסנה');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (54, 54, 'המשך הדיון של משה עם ה\', חזרתו למצרים');
+VALUES (54, 54, N'המשך הדיון של משה עם ה\', חזרתו למצרים');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (55, 55, 'משה ואהרן אצל פרעה, הכבדת השעבוד');
+VALUES (55, 55, N'משה ואהרן אצל פרעה, הכבדת השעבוד');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (56, 56, 'דיבורי ה\' למשה, משפחות בני ישראל');
+VALUES (56, 56, N'דיבורי ה\' למשה, משפחות בני ישראל');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (57, 57, 'משה ואהרן (שוב) בבית פרעה, מכת דם');
+VALUES (57, 57, N'משה ואהרן (שוב) בבית פרעה, מכת דם');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (58, 58, 'מכות צפרדע כִּנִּים ועָרֹב');
+VALUES (58, 58, N'מכות צפרדע כִּנִּים ועָרֹב');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (59, 59, 'מכות דבר שחין וברד');
+VALUES (59, 59, N'מכות דבר שחין וברד');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (60, 60, 'מכות ארבה וחושך');
+VALUES (60, 60, N'מכות ארבה וחושך');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (61, 61, 'ההתראה על מכת בכורות');
+VALUES (61, 61, N'ההתראה על מכת בכורות');
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         62,
         62,
-        'קִדּוּשׁ הַחֹדֶשׁ, פֶּסַח מִצְרַיִם ופסח דורות, מכת בכרות ויציאת מִצְרַיִם'
+        N'קִדּוּשׁ הַחֹדֶשׁ, פֶּסַח מִצְרַיִם ופסח דורות, מכת בכרות ויציאת מִצְרַיִם'
     );
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (63, 63, 'פרשות "קדש לי" "והיה כי יביאך"');
+VALUES (63, 63, N'פרשות "קדש לי" "והיה כי יביאך"');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (64, 64, 'קריעת ים סוף');
+VALUES (64, 64, N'קריעת ים סוף');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (65, 65, 'שירת הים');
+VALUES (65, 65, N'שירת הים');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (66, 66, 'פרשת המן');
+VALUES (66, 66, N'פרשת המן');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (67, 67, 'מַסָּה וּמְרִיבָה, מלחמת עמלק');
+VALUES (67, 67, N'מַסָּה וּמְרִיבָה, מלחמת עמלק');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (68, 68, 'יתרו בא ומייעץ');
+VALUES (68, 68, N'יתרו בא ומייעץ');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (69, 69, 'ההכנות למתן תורה');
+VALUES (69, 69, N'ההכנות למתן תורה');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (70, 70, 'מתן תורה ומצוות נוספות');
+VALUES (70, 70, N'מתן תורה ומצוות נוספות');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (71, 71, 'פרשת עבד עברי, דיני נזיקין');
+VALUES (71, 71, N'פרשת עבד עברי, דיני נזיקין');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (72, 72, 'עוד דיני נזיקין ומצוות נוספות');
+VALUES (72, 72, N'עוד דיני נזיקין ומצוות נוספות');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (73, 73, 'מצוות נוספות');
+VALUES (73, 73, N'מצוות נוספות');
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         74,
         74,
-        'בניית המזבח, הקרבת הקרבנות, כריתת ברית עם ה\', משה עולה לקבל את הלֻחֹת'
+        N'בניית המזבח, הקרבת הקרבנות, כריתת ברית עם ה\', משה עולה לקבל את הלֻחֹת'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         75,
         75,
-        'ציווי התרומה, תבנית הארון, תבנית הַשֻּׁלְחָן, תבנית המנורה'
+        N'ציווי התרומה, תבנית הארון, תבנית הַשֻּׁלְחָן, תבנית המנורה'
     );
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (76, 76, 'תבנית המשכן');
+VALUES (76, 76, N'תבנית המשכן');
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         77,
         77,
-        'תבנית מזבח העולה, תבנית החצר, ציווי העלאת נר תמיד'
+        N'תבנית מזבח העולה, תבנית החצר, ציווי העלאת נר תמיד'
     );
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (78, 78, 'בגדי הכהונה');
+VALUES (78, 78, N'בגדי הכהונה');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (79, 79, 'אופן משיחת הכהנים ואופן קידוש המשכן');
+VALUES (79, 79, N'אופן משיחת הכהנים ואופן קידוש המשכן');
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         80,
         80,
-        'מזבח הקטורת, הכיור, אופן מניית העם, שמן המשחה והקטורת'
+        N'מזבח הקטורת, הכיור, אופן מניית העם, שמן המשחה והקטורת'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         81,
         81,
-        'מינוי בצלאל ואהליאב, ציווי על השבת, קבלת הלֻחֹת'
+        N'מינוי בצלאל ואהליאב, ציווי על השבת, קבלת הלֻחֹת'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         82,
         82,
-        'חטא העגל, תפילות משה, בני לוי הורגים את החוטאים'
+        N'חטא העגל, תפילות משה, בני לוי הורגים את החוטאים'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         83,
         83,
-        'משה מתיישב מחוץ למחנה, משה מבקש שה\' ישכון רק בקרב ישראל'
+        N'משה מתיישב מחוץ למחנה, משה מבקש שה\' ישכון רק בקרב ישראל'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         84,
         84,
-        'הַלֻּחֹת השניים, י"ג מידות, מצוות שונות'
+        N'הַלֻּחֹת השניים, י"ג מידות, מצוות שונות'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         85,
         85,
-        'בנ"י מצווים על השבת ותורמים למלאכת המשכן'
+        N'בנ"י מצווים על השבת ותורמים למלאכת המשכן'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         86,
         86,
-        'סוף ההתרמה, זימון החכמים העושים במלאכה, עֲשִׂיַּת המשכן'
+        N'סוף ההתרמה, זימון החכמים העושים במלאכה, עֲשִׂיַּת המשכן'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         87,
         87,
-        'עֲשִׂיַּת הארון, השלחן, המנורה, מִזְבֵּחַ הַקְּטֹרֶת, השמן והַקְּטֹרֶת'
+        N'עֲשִׂיַּת הארון, השלחן, המנורה, מִזְבֵּחַ הַקְּטֹרֶת, השמן והַקְּטֹרֶת'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         88,
         88,
-        'עֲשִׂיַּת מִזְבֵּחַ הָעוֹלָה, הַכִּיּוֹר וְהֶחָצֵר, פִּקּוּדֵי הַמִּשְׁכָּן'
+        N'עֲשִׂיַּת מִזְבֵּחַ הָעוֹלָה, הַכִּיּוֹר וְהֶחָצֵר, פִּקּוּדֵי הַמִּשְׁכָּן'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         89,
         89,
-        'עֲשִׂיַּת בִּגְדֵי הַכְּהֻנָּה, סִיּוּם עֲשִׂיַּת הַמִּשְׁכָּן וכלָיו והַבְּגָדִים'
+        N'עֲשִׂיַּת בִּגְדֵי הַכְּהֻנָּה, סִיּוּם עֲשִׂיַּת הַמִּשְׁכָּן וכלָיו והַבְּגָדִים'
     );
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (90, 90, 'הקמת המשכן, האש והענן על המשכן');
+VALUES (90, 90, N'הקמת המשכן, האש והענן על המשכן');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (91, 91, 'פָּרָשַׁת קָרְבַּן עוֹלָה');
+VALUES (91, 91, N'פָּרָשַׁת קָרְבַּן עוֹלָה');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (92, 92, 'פָּרָשַׁת קָרְבַּן מִנְחָה');
+VALUES (92, 92, N'פָּרָשַׁת קָרְבַּן מִנְחָה');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (93, 93, 'פָּרָשַׁת קָרְבַּן שְׁלָמִים');
+VALUES (93, 93, N'פָּרָשַׁת קָרְבַּן שְׁלָמִים');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (94, 94, 'פָּרָשַׁת קָרְבַּן חַטָּאת');
+VALUES (94, 94, N'פָּרָשַׁת קָרְבַּן חַטָּאת');
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         95,
         95,
-        'פָּרָשַׁת קָרְבַּן עוֹלֶה וְיוֹרֵד וּפָרָשַׁת קָרְבַּן אָשָׁם'
+        N'פָּרָשַׁת קָרְבַּן עוֹלֶה וְיוֹרֵד וּפָרָשַׁת קָרְבַּן אָשָׁם'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         96,
         96,
-        'דינים נוספים של העולה, של המנחה ושל החטאת'
+        N'דינים נוספים של העולה, של המנחה ושל החטאת'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         97,
         97,
-        'דינים נוספים של האשם ושל השלמים, איסור אכילת חלב ודם'
+        N'דינים נוספים של האשם ושל השלמים, איסור אכילת חלב ודם'
     );
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (98, 98, 'משיחת המשכן ואהרן ובניו');
+VALUES (98, 98, N'משיחת המשכן ואהרן ובניו');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (99, 99, 'היום השמיני למילואים');
+VALUES (99, 99, N'היום השמיני למילואים');
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         100,
         100,
-        'חטא נדב ואביהוא ומיתתם, איסור עבודה לשתויי יין'
+        N'חטא נדב ואביהוא ומיתתם, איסור עבודה לשתויי יין'
     );
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (101, 101, 'החיות המותרות והאסורות באכילה');
+VALUES (101, 101, N'החיות המותרות והאסורות באכילה');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (102, 102, 'טומאת היולדת וטהרתה');
+VALUES (102, 102, N'טומאת היולדת וטהרתה');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (103, 103, 'טומאת צרעת הגוף והבגדים');
+VALUES (103, 103, N'טומאת צרעת הגוף והבגדים');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (104, 104, 'טהרת המצורע, צרעת הבתים');
+VALUES (104, 104, N'טהרת המצורע, צרעת הבתים');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (105, 105, 'טומאת זב ובעל קרי, נדה וזבה וטהרתם');
+VALUES (105, 105, N'טומאת זב ובעל קרי, נדה וזבה וטהרתם');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (106, 106, 'סדר עבודת הכהן הגדול');
+VALUES (106, 106, N'סדר עבודת הכהן הגדול');
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         107,
         107,
-        'אִסּוּר שְׁחִיטַת חוץ והקרבה בַּבָּמוֹת, כִּסּוּי הדם, טֻמְאַת נְבֵלָה'
+        N'אִסּוּר שְׁחִיטַת חוץ והקרבה בַּבָּמוֹת, כִּסּוּי הדם, טֻמְאַת נְבֵלָה'
     );
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (108, 108, 'אזהרה על תועבות הגויים בתחום העריות');
+VALUES (108, 108, N'אזהרה על תועבות הגויים בתחום העריות');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (109, 109, 'מִצְוֹת רַבּוֹת');
+VALUES (109, 109, N'מִצְוֹת רַבּוֹת');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (110, 110, 'מִצְוֹת נוֹסָפוֹת, העונשים על העריות');
+VALUES (110, 110, N'מִצְוֹת נוֹסָפוֹת, העונשים על העריות');
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         111,
         111,
-        'צִוּוּיִּם מיוחדים לכהנים וכהנים גדולים, פסולי כהונה'
+        N'צִוּוּיִּם מיוחדים לכהנים וכהנים גדולים, פסולי כהונה'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         112,
         112,
-        'מִצְוֹת רַבּוֹת נוֹסָפוֹת הקשורות לכהנים ולקרבנות'
+        N'מִצְוֹת רַבּוֹת נוֹסָפוֹת הקשורות לכהנים ולקרבנות'
     );
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (113, 113, 'פָּרָשַׁת המועדות');
+VALUES (113, 113, N'פָּרָשַׁת המועדות');
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         114,
         114,
-        'ציווי העלאת נר תמיד, לחם הפנים, הַמְקַלֵּל, מכה נפש ובהמה'
+        N'ציווי העלאת נר תמיד, לחם הפנים, הַמְקַלֵּל, מכה נפש ובהמה'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         115,
         115,
-        'שְׁמִטָּה ויוֹבֵל, אִסּוּר רִבִּית, כמה מצוות בעניין עבד עברי'
+        N'שְׁמִטָּה ויוֹבֵל, אִסּוּר רִבִּית, כמה מצוות בעניין עבד עברי'
     );
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (116, 116, 'מספר אזהרות, הברכה והקללה');
+VALUES (116, 116, N'מספר אזהרות, הברכה והקללה');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (117, 117, 'הלכות ערכים וחרמים');
+VALUES (117, 117, N'הלכות ערכים וחרמים');
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         118,
         118,
-        'מפקד בני ישראל ללא הַלְוִיִּם, הפקדת הַלְוִיִּם על המשכן'
+        N'מפקד בני ישראל ללא הַלְוִיִּם, הפקדת הַלְוִיִּם על המשכן'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         119,
         119,
-        'צִוּוּיִּ על חניה לפי דגלים, קיום הַצִּוּוּי, נסיעה כפי החניה'
+        N'צִוּוּיִּ על חניה לפי דגלים, קיום הַצִּוּוּי, נסיעה כפי החניה'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         120,
         120,
-        'תֹּלְדוֹת אהרן, הַלְוִיִּם - משרתים, מפקד הַלְוִיִּם והַבְּכֹרֹת, החלפתם'
+        N'תֹּלְדוֹת אהרן, הַלְוִיִּם - משרתים, מפקד הַלְוִיִּם והַבְּכֹרֹת, החלפתם'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         121,
         121,
-        'פקודת הַלְוִיִּם לפי משפחות: קהת, גרשון ומררי'
+        N'פקודת הַלְוִיִּם לפי משפחות: קהת, גרשון ומררי'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         122,
         122,
-        'שִׁלּוּחַ טמאים מהמחנה, גוזל ונשבע, תרומה, קדשים, סוטה'
+        N'שִׁלּוּחַ טמאים מהמחנה, גוזל ונשבע, תרומה, קדשים, סוטה'
     );
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (123, 123, 'תורת הנזיר, בִּרְכַּת כֹּהֲנִים');
+VALUES (123, 123, N'תורת הנזיר, בִּרְכַּת כֹּהֲנִים');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (124, 124, 'קרבנות הנשיאים לחנוכת המזבח');
+VALUES (124, 124, N'קרבנות הנשיאים לחנוכת המזבח');
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         125,
         125,
-        'העלאת הַנֵּרֹת, מעשה הַמְּנֹרָה, טהרת וכפרת הַלְוִיִּם, גיל עֲבֹדָתָם'
+        N'העלאת הַנֵּרֹת, מעשה הַמְּנֹרָה, טהרת וכפרת הַלְוִיִּם, גיל עֲבֹדָתָם'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         126,
         126,
-        'פסח מדבר, הַצִּוּוּי על פסח שני, הַגֵּר בפסח, הענן'
+        N'פסח מדבר, הַצִּוּוּי על פסח שני, הַגֵּר בפסח, הענן'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         127,
         127,
-        'הַחֲצֹצְרוֹת, מסע המחנות, הַפְּנִיָּה לְחֹבָב, נְסִיעָת הָאָרוֹן'
+        N'הַחֲצֹצְרוֹת, מסע המחנות, הַפְּנִיָּה לְחֹבָב, נְסִיעָת הָאָרוֹן'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         128,
         128,
-        'הַמִּתְאוֹנֵנִים, הַמִּתְאַוִּים, תְּפִלַּת מֹשֶׁה, הַזְּקֵנִים, אֶלְדָּד וּמֵידָד'
+        N'הַמִּתְאוֹנֵנִים, הַמִּתְאַוִּים, תְּפִלַּת מֹשֶׁה, הַזְּקֵנִים, אֶלְדָּד וּמֵידָד'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         129,
         129,
-        'מעשה מרים, מעלת נבואתו של משה, עונש מרים'
+        N'מעשה מרים, מעלת נבואתו של משה, עונש מרים'
     );
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (130, 130, 'שליחת המרגלים, חזרתם ודבריהם');
+VALUES (130, 130, N'שליחת המרגלים, חזרתם ודבריהם');
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         131,
         131,
-        'תְּלוּנַת העם, תגובת ה\', תְּפִלַּת משה, עונש לדור, המעפילים'
+        N'תְּלוּנַת העם, תגובת ה\', תְּפִלַּת משה, עונש לדור, המעפילים'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         132,
         132,
-        'מנחה ונסכים, חלה, קָרְבָּנוֹת על עבודה זרה, מְקֹשֵׁשׁ, צִיצִת'
+        N'מנחה ונסכים, חלה, קָרְבָּנוֹת על עבודה זרה, מְקֹשֵׁשׁ, צִיצִת'
     );
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (133, 133, 'מחלוקת קרח, עונש המשתתפים');
+VALUES (133, 133, N'מחלוקת קרח, עונש המשתתפים');
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         134,
         134,
-        'מִחְזוּר הַמַּחְתּוֹת, תלונת העם וְעָנְשָם, מטה אהרן, חשש העם'
+        N'מִחְזוּר הַמַּחְתּוֹת, תלונת העם וְעָנְשָם, מטה אהרן, חשש העם'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         135,
         135,
-        'שמירת המקדש, מַתְּנֹת כְּהֻנָּה, מעשר ראשון, מעשר מן המעשר'
+        N'שמירת המקדש, מַתְּנֹת כְּהֻנָּה, מעשר ראשון, מעשר מן המעשר'
     );
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (136, 136, 'פָּרָה אֲדֻמָּה, טֻמְאַת מֵת');
+VALUES (136, 136, N'פָּרָה אֲדֻמָּה, טֻמְאַת מֵת');
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         137,
         137,
-        'מות מרים, תלונת העדה, חטא מי מריבה, הַפְּנִיָּה לאדום, מות אהרן'
+        N'מות מרים, תלונת העדה, חטא מי מריבה, הַפְּנִיָּה לאדום, מות אהרן'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         138,
         138,
-        'מלחמת ערד, תלונת העם וְתֹּצְאֹתֶיהָ, שירת הבאר, המלחמה בסיחון ובעוג'
+        N'מלחמת ערד, תלונת העם וְתֹּצְאֹתֶיהָ, שירת הבאר, המלחמה בסיחון ובעוג'
     );
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (139, 139, 'בלק שוכר את בלעם לקלל');
+VALUES (139, 139, N'בלק שוכר את בלעם לקלל');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (140, 140, 'בלעם מברך את ישראל פעמיים');
+VALUES (140, 140, N'בלעם מברך את ישראל פעמיים');
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         141,
         141,
-        'בלעם מברך את ישראל פעם נוספת ומנבא על ישראל והאומות'
+        N'בלעם מברך את ישראל פעם נוספת ומנבא על ישראל והאומות'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         142,
         142,
-        'בנות מואב ובני ישראל, קנאת פינחס והשכר שקיבל, צִוּוּי לְהִלָּחֵם במדין'
+        N'בנות מואב ובני ישראל, קנאת פינחס והשכר שקיבל, צִוּוּי לְהִלָּחֵם במדין'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         143,
         143,
-        'מפקד בני ישראל, אופן חלוקת הנחלות, פְּקוּדֵי הַלְוִיִּם'
+        N'מפקד בני ישראל, אופן חלוקת הנחלות, פְּקוּדֵי הַלְוִיִּם'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         144,
         144,
-        'בְּנוֹת צְלָפְחָד וְדִינָן, צִוּוּי ה\' לְמֹשֶׁה לַעֲלוֹת הָהָרָה, מִנּוּי יְהוֹשֻׁעַ'
+        N'בְּנוֹת צְלָפְחָד וְדִינָן, צִוּוּי ה\' לְמֹשֶׁה לַעֲלוֹת הָהָרָה, מִנּוּי יְהוֹשֻׁעַ'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         145,
         145,
-        'קרבנות התמיד, שבת, ראש חודש, פסח וחג המצות, שבועות'
+        N'קרבנות התמיד, שבת, ראש חודש, פסח וחג המצות, שבועות'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         146,
         146,
-        'קרבנות ראש השנה, יום הַכִּפּוּרִים, סוכות, שְׁמִינִי עֲצֶרֶת'
+        N'קרבנות ראש השנה, יום הַכִּפּוּרִים, סוכות, שְׁמִינִי עֲצֶרֶת'
     );
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (147, 147, 'פרשת נדרים');
+VALUES (147, 147, N'פרשת נדרים');
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         148,
         148,
-        'מלחמה במדין, הגעלת וטבילת כלים, חלוקת השלל מהמלחמה'
+        N'מלחמה במדין, הגעלת וטבילת כלים, חלוקת השלל מהמלחמה'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         149,
         149,
-        'ראובן, גד וחצי המנשה מבקשים את עבר הירדן המזרחי, התנאי של משה איתם'
+        N'ראובן, גד וחצי המנשה מבקשים את עבר הירדן המזרחי, התנאי של משה איתם'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         150,
         150,
-        'מסעי בני ישראל, הציווי להוריש את יושבי הארץ'
+        N'מסעי בני ישראל, הציווי להוריש את יושבי הארץ'
     );
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (151, 151, 'גבולות ארץ כנען, מנחילי הארץ');
+VALUES (151, 151, N'גבולות ארץ כנען, מנחילי הארץ');
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         152,
         152,
-        'עָרֵי הַלְוִיִּם, עָרֵי מִקְלָט ורוצח בשגגה'
+        N'עָרֵי הַלְוִיִּם, עָרֵי מִקְלָט ורוצח בשגגה'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         153,
         153,
-        'טענת בני מנשה, בְּנוֹת צְלָפְחָד נישאות לִבְנֵי דֹדֵיהֶן'
+        N'טענת בני מנשה, בְּנוֹת צְלָפְחָד נישאות לִבְנֵי דֹדֵיהֶן'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         154,
         154,
-        'מֹשֶׁה מתאר בפני ישראל את תחילת קורות המדבר'
+        N'מֹשֶׁה מתאר בפני ישראל את תחילת קורות המדבר'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         155,
         155,
-        'מֹשֶׁה מתאר בפני ישראל את סוף קורות המדבר'
+        N'מֹשֶׁה מתאר בפני ישראל את סוף קורות המדבר'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         156,
         156,
-        'מֹשֶׁה ממשיך לתאר בפני ישראל את סוף קורות המדבר'
+        N'מֹשֶׁה ממשיך לתאר בפני ישראל את סוף קורות המדבר'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         157,
         157,
-        'מֹשֶׁה מַתְרֶה בְיִשְׂרָאֵל לָלֶכֶת בְּדֶרֶךְ הַטּוֹב וּמַבְדִּיל שָׁלֹשׁ עָרֵי מִקְלָט'
+        N'מֹשֶׁה מַתְרֶה בְיִשְׂרָאֵל לָלֶכֶת בְּדֶרֶךְ הַטּוֹב וּמַבְדִּיל שָׁלֹשׁ עָרֵי מִקְלָט'
     );
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (158, 158, 'עשרת הדברות ומעמד הר סיני');
+VALUES (158, 158, N'עשרת הדברות ומעמד הר סיני');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (159, 159, 'אזהרות נוספות, פרשת שמע, שאלת הבן');
+VALUES (159, 159, N'אזהרות נוספות, פרשת שמע, שאלת הבן');
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         160,
         160,
-        'הבדל ישראל והעמים ומצוות קשורות, ברכה בזכות קיום המצוות'
+        N'הבדל ישראל והעמים ומצוות קשורות, ברכה בזכות קיום המצוות'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         161,
         161,
-        'קִיּוּם הַמִּצְוֹת מְחַיֶּה, זִכָּרוֹן נִסֵּי הַמִּדְבָּר, הָאָרֶץ הַטֹּבָה וּבִרְכָתָהּ וָעוֹד'
+        N'קִיּוּם הַמִּצְוֹת מְחַיֶּה, זִכָּרוֹן נִסֵּי הַמִּדְבָּר, הָאָרֶץ הַטֹּבָה וּבִרְכָתָהּ וָעוֹד'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         162,
         162,
-        'ה\' מוֹרִישׁ אֶת הַגּוֹיִם מִפְּנֵי רִשְׁעָתָם, מֹשֶׁה מַזְכִּיר מֵחֲטָאֵי הַמִּדְבָּר'
+        N'ה\' מוֹרִישׁ אֶת הַגּוֹיִם מִפְּנֵי רִשְׁעָתָם, מֹשֶׁה מַזְכִּיר מֵחֲטָאֵי הַמִּדְבָּר'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         163,
         163,
-        'מֹשֶׁה מַזְכִּיר אֶת הַלֻּחוֹת הַשְּׁנִיִּם וּמִקְרִים נוֹסָפִים, יִרְאַת וְאַהֲבַת ה\''
+        N'מֹשֶׁה מַזְכִּיר אֶת הַלֻּחוֹת הַשְּׁנִיִּם וּמִקְרִים נוֹסָפִים, יִרְאַת וְאַהֲבַת ה\''
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         164,
         164,
-        'שבחה של ארץ ישראל, פרשת "והיה אם שמוע", הבטחת ה\' לעם ישראל על ירושת הארץ'
+        N'שבחה של ארץ ישראל, פרשת "והיה אם שמוע", הבטחת ה\' לעם ישראל על ירושת הארץ'
     );
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (165, 165, 'מִצְוֹת רַבּוֹת הקשורות למקדש');
+VALUES (165, 165, N'מִצְוֹת רַבּוֹת הקשורות למקדש');
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         166,
         166,
-        'לֹא תֹסֵף וְלֹא תִגְרַע, נְבִיא שֶׁקֶר, מֵסִית ומדיח, עִיר הַנִּדַּחַת'
+        N'לֹא תֹסֵף וְלֹא תִגְרַע, נְבִיא שֶׁקֶר, מֵסִית ומדיח, עִיר הַנִּדַּחַת'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         167,
         167,
-        'לא לְהִתְגּוֹדֵּד, לא לִקְרֹח, מאכלות אסורות, מעשר שני ועני ועוד'
+        N'לא לְהִתְגּוֹדֵּד, לא לִקְרֹח, מאכלות אסורות, מעשר שני ועני ועוד'
     );
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (168, 168, 'שמיטת כספים, צדקה, הענקה, בכור');
+VALUES (168, 168, N'שמיטת כספים, צדקה, הענקה, בכור');
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         169,
         169,
-        'הרגלים, ספירת העומר, עֲלִיָּה לָרֶגֶל, שֹׁפְטִים וְשֹׁטְרִים, אִסֻּרֵי מַצֵּבָה וַאֲשֵרָה'
+        N'הרגלים, ספירת העומר, עֲלִיָּה לָרֶגֶל, שֹׁפְטִים וְשֹׁטְרִים, אִסֻּרֵי מַצֵּבָה וַאֲשֵרָה'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         170,
         170,
-        'חובת הריגת עובד עבודה זרה, זקן ממרא, מינוי מלך והלכותיו'
+        N'חובת הריגת עובד עבודה זרה, זקן ממרא, מינוי מלך והלכותיו'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         171,
         171,
-        'דיני הכהנים, איסור כישוף, החובה לשמוע לנביא, דיני נביא שקר'
+        N'דיני הכהנים, איסור כישוף, החובה לשמוע לנביא, דיני נביא שקר'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         172,
         172,
-        'עָרֵי מִקְלָט, לֹא לָחוֹס עַל רוֹצֵחַ וְחוֹבֵל, לֹא לְהַסּיג גְּבוּל, דִּינֵי עֵדִים'
+        N'עָרֵי מִקְלָט, לֹא לָחוֹס עַל רוֹצֵחַ וְחוֹבֵל, לֹא לְהַסּיג גְּבוּל, דִּינֵי עֵדִים'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         173,
         173,
-        'דִּינֵי מִלְחָמָה, וּבֵינֵיהֶם: היחס לְשִׁבְעָה עַמִּים, עֲצֵי מַאֲכָל בְּעֵת מָצוֹר'
+        N'דִּינֵי מִלְחָמָה, וּבֵינֵיהֶם: היחס לְשִׁבְעָה עַמִּים, עֲצֵי מַאֲכָל בְּעֵת מָצוֹר'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         174,
         174,
-        'עֶגְלָה עֲרֻפָה, אֵשֶׁת יְפַת תֹּאַר, בֵּן סוֹרֵר וּמֹרֶה, אִסּוּר הַלָּנַת מֵת'
+        N'עֶגְלָה עֲרֻפָה, אֵשֶׁת יְפַת תֹּאַר, בֵּן סוֹרֵר וּמֹרֶה, אִסּוּר הַלָּנַת מֵת'
     );
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (175, 175, 'מִצְוֹת רַבּוֹת');
+VALUES (175, 175, N'מִצְוֹת רַבּוֹת');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (176, 176, 'מִצְוֹת רַבּוֹת נוֹסָפוֹת');
+VALUES (176, 176, N'מִצְוֹת רַבּוֹת נוֹסָפוֹת');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (177, 177, 'מִצְוֹת רַבּוֹת נוֹסָפוֹת');
+VALUES (177, 177, N'מִצְוֹת רַבּוֹת נוֹסָפוֹת');
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         178,
         178,
-        'מלקות, אסור חסימת בהמה, יבום, חליצה, רודף, הצִוּוּי לזכור את מעשה עמלק ולמחותו'
+        N'מלקות, אסור חסימת בהמה, יבום, חליצה, רודף, הצִוּוּי לזכור את מעשה עמלק ולמחותו'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         179,
         179,
-        'מקרא בכורים, ודוי מעשר, אזהרת משה ללכת בדרך ה\'');
-INSERT INTO tanah_perek (id, perek, header) VALUES (180, 180, ' צווי על קיום מעמד ברכה וקללה בהר גרזים והר עיבל ');
-INSERT INTO tanah_perek (id, perek, header) VALUES (181, 181, ' ברית בערבות מואב / ברכות ותוכחות ');
-INSERT INTO tanah_perek (id, perek, header) VALUES (182, 182, ' ברית ערבות,
+        N'מקרא בכורים, ודוי מעשר, אזהרת משה ללכת בדרך ה\'');
+INSERT INTO tanah_perek (id, perek, header) VALUES (180, 180, N' צווי על קיום מעמד ברכה וקללה בהר גרזים והר עיבל ');
+INSERT INTO tanah_perek (id, perek, header) VALUES (181, 181, N' ברית בערבות מואב / ברכות ותוכחות ');
+INSERT INTO tanah_perek (id, perek, header) VALUES (182, 182, N' ברית ערבות,
         אזהרה על האלה,
         המכות - על עזיבת ה\''
     );
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (183, 183, 'פרשת התשובה, משה מזהיר לבחור בחיים');
+VALUES (183, 183, N'פרשת התשובה, משה מזהיר לבחור בחיים');
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         184,
         184,
-        'משה מחזק את ישראל ויהושע, מצות הקהל וכתיבת ספר תורה, יהושע נכנס לתפקיד'
+        N'משה מחזק את ישראל ויהושע, מצות הקהל וכתיבת ספר תורה, יהושע נכנס לתפקיד'
     );
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (185, 185, 'שירת האזינו, צווי על משה למות');
+VALUES (185, 185, N'שירת האזינו, צווי על משה למות');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (186, 186, 'ברכת משה לבני ישראל טרם מותו');
+VALUES (186, 186, N'ברכת משה לבני ישראל טרם מותו');
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         187,
         187,
-        'ה\' מראה למשה את הארץ, משה מת, שבח למשה'
+        N'ה\' מראה למשה את הארץ, משה מת, שבח למשה'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         188,
         188,
-        'חזוקי ה\' ליהושע, צווי להכין צידה, יהושע מזכיר לשנים וחצי השבטים את התחייבותם'
+        N'חזוקי ה\' ליהושע, צווי להכין צידה, יהושע מזכיר לשנים וחצי השבטים את התחייבותם'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         189,
         189,
-        'יהושע שולח שני מרגלים ליריחו, הם מגיעים לרחב, חוזרים ומדווחים לו'
+        N'יהושע שולח שני מרגלים ליריחו, הם מגיעים לרחב, חוזרים ומדווחים לו'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         190,
         190,
-        'הכנה למעבר הירדן, הכהנים נֹשאים את ארון הברית ומי הירדן נכרתים מפניו'
+        N'הכנה למעבר הירדן, הכהנים נֹשאים את ארון הברית ומי הירדן נכרתים מפניו'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         191,
         191,
-        'צווי על הקמת אבני זכרון, יהושע מתגדל, מעבר הירדן לפרטיו'
+        N'צווי על הקמת אבני זכרון, יהושע מתגדל, מעבר הירדן לפרטיו'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         192,
         192,
-        'הלב של מלכי עבר הירדן נמס, מילת העם, פסח גלגל, אכילת החדש, המלאך ויהושע'
+        N'הלב של מלכי עבר הירדן נמס, מילת העם, פסח גלגל, אכילת החדש, המלאך ויהושע'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         193,
         193,
-        'כיבוש יריחו, הצלת רחב, קללה למי שיבנה מחדש את יריחו'
+        N'כיבוש יריחו, הצלת רחב, קללה למי שיבנה מחדש את יריחו'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         194,
         194,
-        'מעילת עכן בחרם, כשלון ישראל במלחמת העי הראשונה'
+        N'מעילת עכן בחרם, כשלון ישראל במלחמת העי הראשונה'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         195,
         195,
-        'המלחמה השניה של ישראל בעי ונצחונם, קיום מעמד הברכה והקללה'
+        N'המלחמה השניה של ישראל בעי ונצחונם, קיום מעמד הברכה והקללה'
     );
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (196, 196, 'תרמית הגבעונים');
+VALUES (196, 196, N'תרמית הגבעונים');
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         197,
         197,
-        'מלחמת יהושע במלכי הדרום, כיבוש חלקים נרחבים מהארץ'
+        N'מלחמת יהושע במלכי הדרום, כיבוש חלקים נרחבים מהארץ'
     );
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (198, 198, 'מלחמת יהושע במלכי הצפון');
+VALUES (198, 198, N'מלחמת יהושע במלכי הצפון');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (199, 199, 'פירוט המלכים שהכו בני ישראל');
+VALUES (199, 199, N'פירוט המלכים שהכו בני ישראל');
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         200,
         200,
-        'צווי ה\' ליהושע להנחיל הארץ, נחלות ראובן גד, וחצי המנשה'
+        N'צווי ה\' ליהושע להנחיל הארץ, נחלות ראובן גד, וחצי המנשה'
     );
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (201, 201, 'כלב מבקש מיהושע את הר חברון ומקבלו');
+VALUES (201, 201, N'כלב מבקש מיהושע את הר חברון ומקבלו');
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         202,
         202,
-        'נחלת יהודה, עתניאל בן קנז כובש את דביר ומקבל את עכסה בת כלב, בקשת עכסה'
+        N'נחלת יהודה, עתניאל בן קנז כובש את דביר ומקבל את עכסה בת כלב, בקשת עכסה'
     );
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (203, 203, 'נחלת אפרים');
+VALUES (203, 203, N'נחלת אפרים');
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         204,
         204,
-        'נחלת מנשה, ברוא יער להרחבת נחלת בני יוסף'
+        N'נחלת מנשה, ברוא יער להרחבת נחלת בני יוסף'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         205,
         205,
-        'השכנת אהל מועד בשילה, כתיבת הארץ וגורלות לשבעה שבטים'
+        N'השכנת אהל מועד בשילה, כתיבת הארץ וגורלות לשבעה שבטים'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         206,
         206,
-        'גורלות שמעון, זבולן, יששכר, אשר, נפתלי ודן'
+        N'גורלות שמעון, זבולן, יששכר, אשר, נפתלי ודן'
     );
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (207, 207, 'הקדשת ערי מקלט בעבר הירדן המערבי');
+VALUES (207, 207, N'הקדשת ערי מקלט בעבר הירדן המערבי');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (208, 208, 'ערי הלוים ומגרשיהם, מנוחה מהגוים');
+VALUES (208, 208, N'ערי הלוים ומגרשיהם, מנוחה מהגוים');
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         209,
         209,
-        'יהושע משחרר את שנים וחצי השבטים והם בונים מזבח, דין ודברים עמם'
+        N'יהושע משחרר את שנים וחצי השבטים והם בונים מזבח, דין ודברים עמם'
     );
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (210, 210, 'נאום יהושע');
+VALUES (210, 210, N'נאום יהושע');
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         211,
         211,
-        'יהושע מזהיר מפני ע"ז וכורת ברית על עבודת ה\', מות יהושע, קבורת יוסף, מות אלעזר'
+        N'יהושע מזהיר מפני ע"ז וכורת ברית על עבודת ה\', מות יהושע, קבורת יוסף, מות אלעזר'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         212,
         212,
-        'כיבושי יהודה, שמעון ובני יוסף, עם ישראל לא הוריש את הכנענים'
+        N'כיבושי יהודה, שמעון ובני יוסף, עם ישראל לא הוריש את הכנענים'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         213,
         213,
-        'קם דור שלא ידע את ה\' ועבדו ע"ז, כשהיו חוזרים בתשובה היה ה\' מושיעם'
+        N'קם דור שלא ידע את ה\' ועבדו ע"ז, כשהיו חוזרים בתשובה היה ה\' מושיעם'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         214,
         214,
-        'הגוים המציקים, שפיטת עתניאל בן קנז, אהוד בן גרא ושמגר בן ענת'
+        N'הגוים המציקים, שפיטת עתניאל בן קנז, אהוד בן גרא ושמגר בן ענת'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         215,
         215,
-        'דבורה, ברק ושבטי זבולן ונפתלי נלחמים בסיסרא, יעל הורגתו'
+        N'דבורה, ברק ושבטי זבולן ונפתלי נלחמים בסיסרא, יעל הורגתו'
     );
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (216, 216, 'שירת דבורה, הארץ שוקטת ארבעים שנה');
+VALUES (216, 216, N'שירת דבורה, הארץ שוקטת ארבעים שנה');
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         217,
         217,
-        'נאום הנביא, דבר ה\' לגדעון, ריב גדעון בבעל ובקשת האותות'
+        N'נאום הנביא, דבר ה\' לגדעון, ריב גדעון בבעל ובקשת האותות'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         218,
         218,
-        'המלחמה במדין: מצבת הנלחמים, האות, התכסיס, הבהלה והמרדף'
+        N'המלחמה במדין: מצבת הנלחמים, האות, התכסיס, הבהלה והמרדף'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         219,
         219,
-        'המרדף אחר זבח וצלמנע ותצאתיו, מות גדעון'
+        N'המרדף אחר זבח וצלמנע ותצאתיו, מות גדעון'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         220,
         220,
-        'אבימלך ואנשי שכם רוצחים את בני גדעון, הרעה שבאה עליהם'
+        N'אבימלך ואנשי שכם רוצחים את בני גדעון, הרעה שבאה עליהם'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         221,
         221,
-        'שופטים נוספים, לחץ עמון על ישראל, דבר ה\', דבר שרי גלעד'
+        N'שופטים נוספים, לחץ עמון על ישראל, דבר ה\', דבר שרי גלעד'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         222,
         222,
-        'מינוי יפתח, שיח בינו למלך עמון, נדרו, הקרב בעמון, קיום הנדר'
+        N'מינוי יפתח, שיח בינו למלך עמון, נדרו, הקרב בעמון, קיום הנדר'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         223,
         223,
-        'פנית אפרים אל יפתח וענשם מאת הגלעדים, שופטים נוספים'
+        N'פנית אפרים אל יפתח וענשם מאת הגלעדים, שופטים נוספים'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         224,
         224,
-        'התגלות המלאך אל אשת מנוח, הולדת שמשון'
+        N'התגלות המלאך אל אשת מנוח, הולדת שמשון'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         225,
         225,
-        'שמשון, הארי והדבש, שמשון לוקח אישה, שמשון והמרעים'
+        N'שמשון, הארי והדבש, שמשון לוקח אישה, שמשון והמרעים'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         226,
         226,
-        'שמשון מכה בפלשתים, בורח מהם, מוסגר לידם ומכה בהם שוב'
+        N'שמשון מכה בפלשתים, בורח מהם, מוסגר לידם ומכה בהם שוב'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         227,
         227,
-        'שמשון ודלילה, קיצוץ שערותיו, הלכדו, מותו יחד עם הפלשתים'
+        N'שמשון ודלילה, קיצוץ שערותיו, הלכדו, מותו יחד עם הפלשתים'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         228,
         228,
-        'מיכה ואמו מקימים פסל ומסכה, הנער הלוי חובר למיכה'
+        N'מיכה ואמו מקימים פסל ומסכה, הנער הלוי חובר למיכה'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         229,
         229,
-        'בני דן לוקחים את פסל מיכה ואת הנער ועולים להלחם על ליש'
+        N'בני דן לוקחים את פסל מיכה ואת הנער ועולים להלחם על ליש'
     );
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (230, 230, 'פלגש בגבעה');
+VALUES (230, 230, N'פלגש בגבעה');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (231, 231, 'מלחמת ישראל ובנימין');
+VALUES (231, 231, N'מלחמת ישראל ובנימין');
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         232,
         232,
-        'שידוכים לבני בנימין הנותרים עם נשות יבש גלעד והחולות בשלה'
+        N'שידוכים לבני בנימין הנותרים עם נשות יבש גלעד והחולות בשלה'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         233,
         233,
-        'אלקנה ונשיו בשילה, נדר חנה, מפגשה עם עלי, הולדת שמואל'
+        N'אלקנה ונשיו בשילה, נדר חנה, מפגשה עם עלי, הולדת שמואל'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         234,
         234,
-        'תפלת חנה, שמואל משרת בשילה, בני עלי, נבואה קשה לעלי'
+        N'תפלת חנה, שמואל משרת בשילה, בני עלי, נבואה קשה לעלי'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         235,
         235,
-        'שמואל מתנבא לראשונה, שמואל גדל ומוחזק כנביא'
+        N'שמואל מתנבא לראשונה, שמואל גדל ומוחזק כנביא'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         236,
         236,
-        'המלחמה עם פלשתים, הלקח הארון, מות עלי ובניו וכלתו'
+        N'המלחמה עם פלשתים, הלקח הארון, מות עלי ובניו וכלתו'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         237,
         237,
-        'גלגוליו של הארון בערי פלשתים וענשם בשל כך'
+        N'גלגוליו של הארון בערי פלשתים וענשם בשל כך'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         238,
         238,
-        'פלשתים משיבים את הארון, אנשי בית שמש נגפים לפניו'
+        N'פלשתים משיבים את הארון, אנשי בית שמש נגפים לפניו'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         239,
         239,
-        'הארון בקרית יערים, שְׁמוּאֵל מוביל קרב נגד פלשתים, שְׁמוּאֵל שופט'
+        N'הארון בקרית יערים, שְׁמוּאֵל מוביל קרב נגד פלשתים, שְׁמוּאֵל שופט'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         240,
         240,
-        'בני שמואל, העם דורש מלך, שְׁמוּאֵל מזהירם, ה\' מאפשר להם'
+        N'בני שמואל, העם דורש מלך, שְׁמוּאֵל מזהירם, ה\' מאפשר להם'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         241,
         241,
-        'שָׁאוּל מתגלגל אל שְׁמוּאֵל, שְׁמוּאֵל מכבדו'
+        N'שָׁאוּל מתגלגל אל שְׁמוּאֵל, שְׁמוּאֵל מכבדו'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         242,
         242,
-        'שְׁמוּאֵל מושח את שָׁאוּל ומנבא לו, שָׁאוּל מתנבא, שָׁאוּל מומלך'
+        N'שְׁמוּאֵל מושח את שָׁאוּל ומנבא לו, שָׁאוּל מתנבא, שָׁאוּל מומלך'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         243,
         243,
-        'התנאי של נָחָשׁ הָֽעַמּוֹנִי, שָׁאוּל נלחם בְּעַמּוֹן, חִדּוּשׁ המלוכה'
+        N'התנאי של נָחָשׁ הָֽעַמּוֹנִי, שָׁאוּל נלחם בְּעַמּוֹן, חִדּוּשׁ המלוכה'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         244,
         244,
-        'טענת שמואל על הרצון בשלטון מלך, הכרזתו שהכל תלוי במעשים'
+        N'טענת שמואל על הרצון בשלטון מלך, הכרזתו שהכל תלוי במעשים'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         245,
         245,
-        'תחילת המלחמה בפלשתים, העם מתפזר, שאול לא מחכה לשמואל'
+        N'תחילת המלחמה בפלשתים, העם מתפזר, שאול לא מחכה לשמואל'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         246,
         246,
-        'מכת יונתן בפלשתים, עברו על שבועת אביו, חיזוק מלכות שאול'
+        N'מכת יונתן בפלשתים, עברו על שבועת אביו, חיזוק מלכות שאול'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         247,
         247,
-        'מלחמת שאול בעמלק, אי קיום ציווי שמואל ותוצאותיו'
+        N'מלחמת שאול בעמלק, אי קיום ציווי שמואל ותוצאותיו'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         248,
         248,
-        'שמואל מושח את דוד, רוח רעה שורה על שאול'
+        N'שמואל מושח את דוד, רוח רעה שורה על שאול'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         249,
         249,
-        'גלית מחרף, דוד הורגו, פלשתים מובסים, שאול מתשאל את דוד'
+        N'גלית מחרף, דוד הורגו, פלשתים מובסים, שאול מתשאל את דוד'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         250,
         250,
-        'ברית דוד ויהונתן, יחס שאול לדוד, נישואי דוד ומיכל, דוד משכיל וה\' עמו'
+        N'ברית דוד ויהונתן, יחס שאול לדוד, נישואי דוד ומיכל, דוד משכיל וה\' עמו'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         251,
         251,
-        'שאול מבקש את נפש דוד, מיכל מצילה את דוד, דוד ושמואל בניות ברמה, שאול מתנבא'
+        N'שאול מבקש את נפש דוד, מיכל מצילה את דוד, דוד ושמואל בניות ברמה, שאול מתנבא'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         252,
         252,
-        'יהונתן חוקר על יחס שאול לדוד בסעודת ראש חודש, מגלה שמבקש נפשו ומודיע לדוד'
+        N'יהונתן חוקר על יחס שאול לדוד בסעודת ראש חודש, מגלה שמבקש נפשו ומודיע לדוד'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         253,
         253,
-        'דוד בנב עיר הכהנים, מקבל מאחימלך לחם קדש וחרב, בורח אל אכיש ומתחזה למשוגע'
+        N'דוד בנב עיר הכהנים, מקבל מאחימלך לחם קדש וחרב, בורח אל אכיש ומתחזה למשוגע'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         254,
         254,
-        'אביו ואמו של דוד נקלטים במואב, אנשים מצטרפים לדוד, דואג גורם להשמדת נב'
+        N'אביו ואמו של דוד נקלטים במואב, אנשים מצטרפים לדוד, דואג גורם להשמדת נב'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         255,
         255,
-        'דוד מושיע את קעילה מפלשתים, יהונתן מעודד את דוד, שאול ממשיך לרדוף אחר דוד'
+        N'דוד מושיע את קעילה מפלשתים, יהונתן מעודד את דוד, שאול ממשיך לרדוף אחר דוד'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         256,
         256,
-        'דוד כורת את כנף המעיל של שאול, שאול משביע את דוד לא להכרית את ביתו'
+        N'דוד כורת את כנף המעיל של שאול, שאול משביע את דוד לא להכרית את ביתו'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         257,
         257,
-        'מות שמואל, מעשה נבל, דוד נושא את אביגיל ואחינעם, מיכל ניתנת לפלטי בן ליש'
+        N'מות שמואל, מעשה נבל, דוד נושא את אביגיל ואחינעם, מיכל ניתנת לפלטי בן ליש'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         258,
         258,
-        'דוד חס על שאול בגבעת החכילה, שאול מברך את דוד'
+        N'דוד חס על שאול בגבעת החכילה, שאול מברך את דוד'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         259,
         259,
-        'דוד ואנשיו בצקלג בחסות אכיש מלך גת, דוד פושט על עמי האזור ומסתיר זאת מאכיש'
+        N'דוד ואנשיו בצקלג בחסות אכיש מלך גת, דוד פושט על עמי האזור ומסתיר זאת מאכיש'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         260,
         260,
-        'אכיש מצרף את דוד לקרב בישראל, ה\' לא עונה לשאול, שאול מעלה את שמואל באוב'
+        N'אכיש מצרף את דוד לקרב בישראל, ה\' לא עונה לשאול, שאול מעלה את שמואל באוב'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         261,
         261,
-        'סרני פלשתים מתנגדים לשיתוף דוד בקרב, אכיש משחרר את דוד'
+        N'סרני פלשתים מתנגדים לשיתוף דוד בקרב, אכיש משחרר את דוד'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         262,
         262,
-        'עמלק פשטו על צקלג, דוד משמיד אותם, מחלק את השלל לכל הצבא וגם לערי יהודה'
+        N'עמלק פשטו על צקלג, דוד משמיד אותם, מחלק את השלל לכל הצבא וגם לערי יהודה'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         263,
         263,
-        'שאול ובניו מתים בקרב עם פלשתים בגלבוע, אנשי יבש גלעד קוברים את עצמותיהם'
+        N'שאול ובניו מתים בקרב עם פלשתים בגלבוע, אנשי יבש גלעד קוברים את עצמותיהם'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         264,
         264,
-        'נער עמלקי מבשר לדוד על מות שאול, דוד הורגו, דוד מקונן על מות שאול'
+        N'נער עמלקי מבשר לדוד על מות שאול, דוד הורגו, דוד מקונן על מות שאול'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         265,
         265,
-        'דוד נמשח בחברון, מברך את אנשי יבש גלעד, המלכת איש בשת, מאבק בין בתי המלוכה'
+        N'דוד נמשח בחברון, מברך את אנשי יבש גלעד, המלכת איש בשת, מאבק בין בתי המלוכה'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         266,
         266,
-        'הבנים של דוד בחברון, ברית אבנר ודוד, החזרת מיכל, יואב הורג את אבנר, דוד מתאבל'
+        N'הבנים של דוד בחברון, ברית אבנר ודוד, החזרת מיכל, יואב הורג את אבנר, דוד מתאבל'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         267,
         267,
-        'רכב ובענה רוצחים את איש בשת, באים לבשר לדוד ונהרגים על ידו'
+        N'רכב ובענה רוצחים את איש בשת, באים לבשר לדוד ונהרגים על ידו'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         268,
         268,
-        'דוד נמשח למלך על כל ישראל, כובש את ירושלים ומתבסס בה, מביס את פלשתים'
+        N'דוד נמשח למלך על כל ישראל, כובש את ירושלים ומתבסס בה, מביס את פלשתים'
     );
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (269, 269, 'דוד מעלה את הארון לירושלים');
+VALUES (269, 269, N'דוד מעלה את הארון לירושלים');
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         270,
         270,
-        'דוד מבקש לבנות את בית ה\', נתן מתנבא לדוד שבנו של דוד יבנה הבית'
+        N'דוד מבקש לבנות את בית ה\', נתן מתנבא לדוד שבנו של דוד יבנה הבית'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         271,
         271,
-        'דוד מכה את עמי הסביבה, תעי מברך את דוד, דוד מושיב נציבים באדום, מבנה המלכות'
+        N'דוד מכה את עמי הסביבה, תעי מברך את דוד, דוד מושיב נציבים באדום, מבנה המלכות'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         272,
         272,
-        'דוד קורא למפיבשת בן יהונתן בן שאול ודואג לנכסיו ולצרכיו'
+        N'דוד קורא למפיבשת בן יהונתן בן שאול ודואג לנכסיו ולצרכיו'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         273,
         273,
-        'דוד שולח לנחם את חנון מלך עמון, עמון משיבים בעוינות ונעזרים בארם, דוד מכה בארם'
+        N'דוד שולח לנחם את חנון מלך עמון, עמון משיבים בעוינות ונעזרים בארם, דוד מכה בארם'
     );
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (274, 274, 'דוד ובת שבע');
+VALUES (274, 274, N'דוד ובת שבע');
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         275,
         275,
-        'נתן הנביא מוכיח את דוד על דבר בת שבע, דוד מתוודה, פטירת בנה, הולדת שלמה'
+        N'נתן הנביא מוכיח את דוד על דבר בת שבע, דוד מתוודה, פטירת בנה, הולדת שלמה'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         276,
         276,
-        'אמנון ותמר, אבשלום הורג את אמנון ובורח, דוד מתאבל'
+        N'אמנון ותמר, אבשלום הורג את אמנון ובורח, דוד מתאבל'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         277,
         277,
-        'יואב שולח אשה תקועית לגרום לדוד לקרוא לאבשלום ומצליח, אבשלום נפגש עם אביו'
+        N'יואב שולח אשה תקועית לגרום לדוד לקרוא לאבשלום ומצליח, אבשלום נפגש עם אביו'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         278,
         278,
-        'אבשלום גונב את לב ישראל וקושר קשר על דוד, דוד בורח ושותל מרגלים אצל אבשלום'
+        N'אבשלום גונב את לב ישראל וקושר קשר על דוד, דוד בורח ושותל מרגלים אצל אבשלום'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         279,
         279,
-        'מפגש דוד וציבה, שמעי מקלל את דוד, אבשלום בא אל פלגשי אביו בעצת אחתופל'
+        N'מפגש דוד וציבה, שמעי מקלל את דוד, אבשלום בא אל פלגשי אביו בעצת אחתופל'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         280,
         280,
-        'עצת אחתופל לתקוף את דוד מופרת והוא מתאבד, דוד וצבאו מתארחים במחנים בברחם'
+        N'עצת אחתופל לתקוף את דוד מופרת והוא מתאבד, דוד וצבאו מתארחים במחנים בברחם'
     );
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (281, 281, 'צבא דוד נלחם בצבא אבשלום, מות אבשלום');
+VALUES (281, 281, N'צבא דוד נלחם בצבא אבשלום, מות אבשלום');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (282, 282, 'דוד חוזר לירושלים');
+VALUES (282, 282, N'דוד חוזר לירושלים');
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         283,
         283,
-        'יואב הורג את עמשא, אשה חכמה מוסרת את שבע בן בכרי, מבנה המלכות'
+        N'יואב הורג את עמשא, אשה חכמה מוסרת את שבע בן בכרי, מבנה המלכות'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         284,
         284,
-        'רעב בארץ, דוד מוסר מצאצאי שאול לגבעונים, הרעב נפסק, חיסול ארבעה בני הרפה'
+        N'רעב בארץ, דוד מוסר מצאצאי שאול לגבעונים, הרעב נפסק, חיסול ארבעה בני הרפה'
     );
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (285, 285, 'שירת דוד');
+VALUES (285, 285, N'שירת דוד');
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         286,
         286,
-        'נְאֻם דוד, הַגִּבֹּרִים אֲשֶׁר לְדָוִד'
+        N'נְאֻם דוד, הַגִּבֹּרִים אֲשֶׁר לְדָוִד'
     );
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (287, 287, 'המפקד, המגפה, קְנִייַּת גֹּרֶן ארונה');
+VALUES (287, 287, N'המפקד, המגפה, קְנִייַּת גֹּרֶן ארונה');
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         288,
         288,
-        'דוד זקן, אדניה מתנשא, נתן ובת שבע דוחפים להמלכת שלמה'
+        N'דוד זקן, אדניה מתנשא, נתן ובת שבע דוחפים להמלכת שלמה'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         289,
         289,
-        'צוואת דוד לשלמה, מות דוד, שלמה מחסל את אדניה וממלא את צוואת דוד'
+        N'צוואת דוד לשלמה, מות דוד, שלמה מחסל את אדניה וממלא את צוואת דוד'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         290,
         290,
-        'שלמה לוקח את בת פרעה, מקבל לב חכם מה\', משפט שלמה'
+        N'שלמה לוקח את בת פרעה, מקבל לב חכם מה\', משפט שלמה'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         291,
         291,
-        'שרי וניצבי המלך שלמה, עם ישראל רבים ושמחים'
+        N'שרי וניצבי המלך שלמה, עם ישראל רבים ושמחים'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         292,
         292,
-        'לחם שלמה, העם יושב בטח, חכמת שלמה, הכנת חומרי גלם למקדש'
+        N'לחם שלמה, העם יושב בטח, חכמת שלמה, הכנת חומרי גלם למקדש'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         293,
         293,
-        'בנין המקדש ומדותיו, דבר ה\' לשלמה, פרטי הבניה'
+        N'בנין המקדש ומדותיו, דבר ה\' לשלמה, פרטי הבניה'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         294,
         294,
-        'מעשה בית שלמה, העמודים יכין ובועז, ים של שלמה ועוד, השלמת המלאכה'
+        N'מעשה בית שלמה, העמודים יכין ובועז, ים של שלמה ועוד, השלמת המלאכה'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         295,
         295,
-        'העלאת הארון למקדש, תפילת שלמה, הודאתו לה\', חנוכת המזבח'
+        N'העלאת הארון למקדש, תפילת שלמה, הודאתו לה\', חנוכת המזבח'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         296,
         296,
-        'דבר ה\' לשלמה, התשלום לחירם ותגובתו, מעשי שלמה'
+        N'דבר ה\' לשלמה, התשלום לחירם ותגובתו, מעשי שלמה'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         297,
         297,
-        'מלכת שבא באה אל שלמה, עושר שלמה וחכמתו'
+        N'מלכת שבא באה אל שלמה, עושר שלמה וחכמתו'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         298,
         298,
-        'נשות שלמה, דבר ה\' אליו, מלכותו מאוימת, נבואת אחיה לירבעם'
+        N'נשות שלמה, דבר ה\' אליו, מלכותו מאוימת, נבואת אחיה לירבעם'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         299,
         299,
-        'רחבעם מקשיב לילדים, חלוקת המלוכה, נבואת שמעיה, עגלי הזהב'
+        N'רחבעם מקשיב לילדים, חלוקת המלוכה, נבואת שמעיה, עגלי הזהב'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         300,
         300,
-        'נבואת עִדּוֹ לירבעם, עברו על דברי עצמו, עונשו'
+        N'נבואת עִדּוֹ לירבעם, עברו על דברי עצמו, עונשו'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         301,
         301,
-        'אביה חולה, נבואת אחיה לאשת ירבעם, תום מלכות ירבעם ורחבעם'
+        N'אביה חולה, נבואת אחיה לאשת ירבעם, תום מלכות ירבעם ורחבעם'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         302,
         302,
-        'מלכויות אביה ואסא על יהודה ומלכויות נדב ובעשא על ישראל'
+        N'מלכויות אביה ואסא על יהודה ומלכויות נדב ובעשא על ישראל'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         303,
         303,
-        'העונש לבעשא, מלכות בנו אלה, זמרי, עמרי ואחאב על ישראל'
+        N'העונש לבעשא, מלכות בנו אלה, זמרי, עמרי ואחאב על ישראל'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         304,
         304,
-        'אליהו הנביא מביא בצורת, גלות אליהו צרפתה'
+        N'אליהו הנביא מביא בצורת, גלות אליהו צרפתה'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         305,
         305,
-        'אליהו הנביא נראה לאחאב, מעמד אליהו ונביאי הבעל בכרמל'
+        N'אליהו הנביא נראה לאחאב, מעמד אליהו ונביאי הבעל בכרמל'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         306,
         306,
-        'אליהו הנביא בורח מאיזבל, מבקש למות, התגלות ה\' אליו'
+        N'אליהו הנביא בורח מאיזבל, מבקש למות, התגלות ה\' אליו'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         307,
         307,
-        'מלחמת ישראל וארם, אחאב מחיה את בן הדד ומבושר כי ייענש'
+        N'מלחמת ישראל וארם, אחאב מחיה את בן הדד ומבושר כי ייענש'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         308,
         308,
-        'אחאב מבקש את כרם נבות, איזבל מסדרת שימות על שסרב, אליהו מבשר שייענשו'
+        N'אחאב מבקש את כרם נבות, איזבל מסדרת שימות על שסרב, אליהו מבשר שייענשו'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         309,
         309,
-        'מלחמת אחאב ויהושפט ברמות גלעד, מות אחאב, מלכויות יהושפט ואחזיהו'
+        N'מלחמת אחאב ויהושפט ברמות גלעד, מות אחאב, מלכויות יהושפט ואחזיהו'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         310,
         310,
-        'אחזיה דורש בבעל זבוב, אליהו הנביא מבשרו שימות וכך קורה'
+        N'אחזיה דורש בבעל זבוב, אליהו הנביא מבשרו שימות וכך קורה'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         311,
         311,
-        'אליהו הנביא עולה בסערה השמימה, אלישע מרפא את מי יריחו'
+        N'אליהו הנביא עולה בסערה השמימה, אלישע מרפא את מי יריחו'
     );
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (312, 312, 'מלחמת יהודה, ישראל ואדום במואב');
+VALUES (312, 312, N'מלחמת יהודה, ישראל ואדום במואב');
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         313,
         313,
-        'אלישע ואשת עובדיה, אלישע והאלמנה השונמית, ניסי אלישע'
+        N'אלישע ואשת עובדיה, אלישע והאלמנה השונמית, ניסי אלישע'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         314,
         314,
-        'צרעת נעמן, מפגשו עם אלישע וריפויו, מעשה גיחזי ותגובת אלישע'
+        N'צרעת נעמן, מפגשו עם אלישע וריפויו, מעשה גיחזי ותגובת אלישע'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         315,
         315,
-        'אלישע מציף ברזל, אלישע וחיל ארם, רעב בשומרון'
+        N'אלישע מציף ברזל, אלישע וחיל ארם, רעב בשומרון'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         316,
         316,
-        'ארבעה מצורעים ושלל מחנה ארם, שליש לועג לאלישע ונענש'
+        N'ארבעה מצורעים ושלל מחנה ארם, שליש לועג לאלישע ונענש'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         317,
         317,
-        'השונמית יוצאת מהארץ, אלישע בדמשק, מלכים נוספים'
+        N'השונמית יוצאת מהארץ, אלישע בדמשק, מלכים נוספים'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         318,
         318,
-        'אלישע הנביא מושח את יהוא, יהוא הורג את יהורם ואיזבל'
+        N'אלישע הנביא מושח את יהוא, יהוא הורג את יהורם ואיזבל'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         319,
         319,
-        'יהוא מכרית את בית אחאב ואת עבודת הבעל, פטירתו'
+        N'יהוא מכרית את בית אחאב ואת עבודת הבעל, פטירתו'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         320,
         320,
-        'מעשי עתליה, הצלת יואש והמלכתו על יהודה, מות עתליה'
+        N'מעשי עתליה, הצלת יואש והמלכתו על יהודה, מות עתליה'
     );
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (321, 321, 'מלכות יהואש על יהודה, בדק הבית');
+VALUES (321, 321, N'מלכות יהואש על יהודה, בדק הבית');
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         322,
         322,
-        'מלכות יהואחז ויואש על ישראל, אלישע ויואש, מות אלישע'
+        N'מלכות יהואחז ויואש על ישראל, אלישע ויואש, מות אלישע'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         323,
         323,
-        'אמציה מלך יהודה ויואש מלך ישראל, ירבעם השני ועוד'
+        N'אמציה מלך יהודה ויואש מלך ישראל, ירבעם השני ועוד'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         324,
         324,
-        'עוזיה ויותם מלכי יהודה. זכריה, שלום, מנחם, פקח והושע מלכי ישראל'
+        N'עוזיה ויותם מלכי יהודה. זכריה, שלום, מנחם, פקח והושע מלכי ישראל'
     );
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (325, 325, 'מלכות אחז, מזבח אחז');
+VALUES (325, 325, N'מלכות אחז, מזבח אחז');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (326, 326, 'גלות עשרת השבטים');
+VALUES (326, 326, N'גלות עשרת השבטים');
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         327,
         327,
-        'מלכות חזקיהו על יהודה וכפיפותו לסנחריב מלך אשור, דברי החירוף של רבשקה'
+        N'מלכות חזקיהו על יהודה וכפיפותו לסנחריב מלך אשור, דברי החירוף של רבשקה'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         328,
         328,
-        'חזקיה פונה לישעיה, מתפלל ונענה, צבא סחנריב נופל וסנחריב נרצח'
+        N'חזקיה פונה לישעיה, מתפלל ונענה, צבא סחנריב נופל וסנחריב נרצח'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         329,
         329,
-        'חזקיה חולה ונרפא בדבר ה\', חזקיה מראה למלך בבל את גנזיו ונענש'
+        N'חזקיה חולה ונרפא בדבר ה\', חזקיה מראה למלך בבל את גנזיו ונענש'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         330,
         330,
-        'מלכות מנשה, ה\' אומר שיהפוך את ירושלים בגלל מנשה, מלכות אמון'
+        N'מלכות מנשה, ה\' אומר שיהפוך את ירושלים בגלל מנשה, מלכות אמון'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         331,
         331,
-        'מלכות יאשיה, ספר תורה נמצא במקדש, נבואת חולדה'
+        N'מלכות יאשיה, ספר תורה נמצא במקדש, נבואת חולדה'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         332,
         332,
-        'יאשיה קורא מספר התורה, מכרית ע"ז, מקיים פסח. מלכות יְהוֹאָחָז ויהויקים על יהודה'
+        N'יאשיה קורא מספר התורה, מכרית ע"ז, מקיים פסח. מלכות יְהוֹאָחָז ויהויקים על יהודה'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         333,
         333,
-        'מרד יהויקים ומותו, מלכות יהויכין, מלכות צדקיהו'
+        N'מרד יהויקים ומותו, מלכות יהויכין, מלכות צדקיהו'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         334,
         334,
-        'לקיחת צדקיה לבבל, חרבן הבית, רצח גדליה'
+        N'לקיחת צדקיה לבבל, חרבן הבית, רצח גדליה'
     );
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (335, 335, 'חזון ישעיהו - תוכחה לממלכת יהודה');
+VALUES (335, 335, N'חזון ישעיהו - תוכחה לממלכת יהודה');
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         336,
         336,
-        'נבואת ישעיה על הר ה\' באחרית הימים, ה\' משפיל גאים'
+        N'נבואת ישעיה על הר ה\' באחרית הימים, ה\' משפיל גאים'
     );
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (337, 337, 'תוכחת ישעיה למנהיגים ולנשים');
+VALUES (337, 337, N'תוכחת ישעיה למנהיגים ולנשים');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (338, 338, 'נבואת נחמה קצרה');
+VALUES (338, 338, N'נבואת נחמה קצרה');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (339, 339, 'משל הכרם, קריאות הוי, נבואת פורענות');
+VALUES (339, 339, N'משל הכרם, קריאות הוי, נבואת פורענות');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (340, 340, 'הקדשת ישעיה לנביא');
+VALUES (340, 340, N'הקדשת ישעיה לנביא');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (341, 341, 'נבואות ישעיה לאחז');
+VALUES (341, 341, N'נבואות ישעיה לאחז');
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         342,
         342,
-        'האות "מַהֵר שָׁלָל חָשׁ בַּז", שטף אשור שיבוא על יהודה והפרת עצתם, דרך העם המוטעית'
+        N'האות "מַהֵר שָׁלָל חָשׁ בַּז", שטף אשור שיבוא על יהודה והפרת עצתם, דרך העם המוטעית'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         343,
         343,
-        'נבואה ישעיה על תשועה ליהודה ותוכחה לאפרים'
+        N'נבואה ישעיה על תשועה ליהודה ותוכחה לאפרים'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         344,
         344,
-        'קריאת "הוי" לחוקקים, נבואה על מפלת אשור ותשועה ליהודה'
+        N'קריאת "הוי" לחוקקים, נבואה על מפלת אשור ותשועה ליהודה'
     );
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (
         345,
         345,
-        'נבואה על המשיח, קיבוץ גלויות, אחדות עם ישראל, כיבוש ארץ ישראל'
+        N'נבואה על המשיח, קיבוץ גלויות, אחדות עם ישראל, כיבוש ארץ ישראל'
     );
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (346, 346, 'שירת הודאה על כל הטוב מפרק י"א');
+VALUES (346, 346, N'שירת הודאה על כל הטוב מפרק י"א');
 INSERT INTO tanah_perek (id, perek, header)
-VALUES (347, 347, 'משא בבל');
+VALUES (347, 347, N'משא בבל');
 INSERT INTO tanah_perek (id, perek, header)
 VALUES (348, 348, '');
 INSERT INTO tanah_perek (id, perek, header)

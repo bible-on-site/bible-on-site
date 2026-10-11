@@ -160,10 +160,10 @@ public class GimatryHelperTests
     [Fact]
     public void ToNumberWithMantzpach_WithMixedLetters_ShouldCalculateCorrectly()
     {
-        // אך = א(1) + ך(500) = 501
+        // חשבון: אך ← א(1) + ך(500) = 501
         GimatryHelper.ToNumberWithMantzpach("אך").Should().Be(501);
 
-        // שלום = ש(300) + ל(30) + ו(6) + ם(600) = 936
+        // חשבון: שלום ← ש(300) + ל(30) + ו(6) + ם(600) = 936
         GimatryHelper.ToNumberWithMantzpach("שלום").Should().Be(936);
     }
 

@@ -6,7 +6,7 @@ SET @occurrence_entity_id = (
     FROM tanahpedia_entry_entity ee
     JOIN tanahpedia_entry ent ON ent.id = ee.entry_id
     JOIN tanahpedia_entity e ON e.id = ee.entity_id
-    WHERE ent.unique_name = 'ירושלים' AND e.entity_type = 'PLACE'
+    WHERE ent.unique_name = N'ירושלים' AND e.entity_type = 'PLACE'
     ORDER BY ee.id LIMIT 1
 );
 

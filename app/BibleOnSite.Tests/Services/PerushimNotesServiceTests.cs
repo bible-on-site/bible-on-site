@@ -25,7 +25,9 @@ public sealed class PerushimNotesServiceTests : IDisposable
         try
         {
             if (Directory.Exists(_tempRoot))
+            {
                 Directory.Delete(_tempRoot, true);
+            }
         }
         catch
         {

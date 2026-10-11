@@ -19,7 +19,7 @@ DELETE FROM tanahpedia_entity
 WHERE id = 'e4000000-0000-4000-8000-000000000001';
 
 INSERT INTO tanahpedia_entity (id, entity_type, name, created_at, updated_at) VALUES
-	('e4000000-0000-4000-8000-000000000001', 'PLACE', 'ארץ ישראל', NOW(), NOW());
+	('e4000000-0000-4000-8000-000000000001', 'PLACE', N'ארץ ישראל', NOW(), NOW());
 
 INSERT INTO tanahpedia_place (id, entity_id) VALUES
 	('pl400000-0000-4000-8000-000000000001', 'e4000000-0000-4000-8000-000000000001');
@@ -35,7 +35,7 @@ INSERT INTO tanahpedia_place_identification (
 ) VALUES (
 	'pi400000-0000-4000-8000-000000000001',
 	'pl400000-0000-4000-8000-000000000001',
-	'נקודת ייחוס גאוגרפית (ירושלים)',
+	N'נקודת ייחוס גאוגרפית (ירושלים)',
 	31.7780132,
 	35.2351364,
 	NULL
@@ -44,7 +44,7 @@ INSERT INTO tanahpedia_place_identification (
 INSERT INTO tanahpedia_entry (id, unique_name, title, content, created_at, updated_at) VALUES (
 	'ea400000-0000-4000-8000-000000000001',
 	'eretz-yisrael',
-	'ארץ ישראל',
+	N'ארץ ישראל',
 	'',
 	NOW(),
 	NOW()
@@ -66,7 +66,7 @@ INSERT INTO tanahpedia_category_homepage (
 	'PLACE',
 	'MAP',
 	NULL,
-	'<p>ברוכים הבאים לקטגוריית המקומות.</p>',
+	N'<p>ברוכים הבאים לקטגוריית המקומות.</p>',
 	NOW()
 ) ON DUPLICATE KEY UPDATE
 	layout_type = VALUES(layout_type),
