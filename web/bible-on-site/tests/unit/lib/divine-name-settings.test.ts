@@ -104,7 +104,12 @@ describe("persistence and change notifications", () => {
 			DIVINE_NAME_MASKING_KEY,
 			JSON.stringify({ enabled: true, yhwh: "dalet" }),
 		);
-		window.dispatchEvent(new Event("storage"));
+		// Events for other keys are ignored; only our key re-reads.
+		window.dispatchEvent(new StorageEvent("storage", { key: "otherPref" }));
+		expect(getDivineNameMaskingSnapshot().yhwh).toBe("heh");
+		window.dispatchEvent(
+			new StorageEvent("storage", { key: DIVINE_NAME_MASKING_KEY }),
+		);
 		expect(getDivineNameMaskingSnapshot().yhwh).toBe("dalet");
 	});
 	it("keeps the snapshot object stable between changes", () => {

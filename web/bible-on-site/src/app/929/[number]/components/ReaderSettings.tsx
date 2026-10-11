@@ -8,6 +8,7 @@ import {
 } from "@/lib/divine-name-masking";
 import {
 	DIVINE_NAME_MASKING_EVENT,
+	DIVINE_NAME_MASKING_KEY,
 	getDivineNameMaskingSettings,
 	saveDivineNameMaskingSettings,
 } from "@/lib/divine-name-settings";
@@ -19,6 +20,7 @@ import {
 	PEREK_LINE_HEIGHTS,
 	PEREK_TANAKH_FONTS,
 	PEREK_WORD_SPACINGS,
+	READER_SETTINGS_STORAGE_KEY,
 	type ReaderSettings as ReaderState,
 	setStoredReaderSettings,
 } from "@/lib/reader-settings";
@@ -27,6 +29,7 @@ import {
 	getRecitationSettings,
 	OPEN_READER_SETTINGS_EVENT,
 	RECITATION_SETTINGS_EVENT,
+	RECITATION_SETTINGS_KEY,
 	type RecitationSettings,
 	type SettingsSection,
 	saveRecitationSettings,
@@ -103,7 +106,16 @@ export default function ReaderSettings() {
 			setRecitation((event as CustomEvent<RecitationSettings>).detail);
 		const maskingUpdated = (event: Event) =>
 			setMasking((event as CustomEvent<DivineNameMaskingSettings>).detail);
-		const stored = () => {
+		// Cross-tab storage events fire for every key — only re-read the
+		// preferences this panel actually shows, so unrelated writes elsewhere
+		// in another tab don't churn its controls.
+		const OWNED_KEYS = new Set<string>([
+			READER_SETTINGS_STORAGE_KEY,
+			RECITATION_SETTINGS_KEY,
+			DIVINE_NAME_MASKING_KEY,
+		]);
+		const stored = (event: StorageEvent) => {
+			if (!OWNED_KEYS.has(event.key ?? "")) return;
 			setDisplay(getStoredReaderSettings());
 			setRecitation(getRecitationSettings());
 			setMasking(getDivineNameMaskingSettings());

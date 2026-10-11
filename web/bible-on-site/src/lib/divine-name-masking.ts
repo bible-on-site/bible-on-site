@@ -81,12 +81,30 @@ export const DEFAULT_DIVINE_NAME_MASKING: DivineNameMaskingSettings = {
 	shaddaiCustom: "",
 };
 
-const HEBREW_LETTER = /[\u05d0-\u05ea]/;
-const COMBINING_MARK = /\p{Mn}|\p{Mc}/u;
 const MAQAF = "־";
 
+const isHebrewLetter = (ch: string): boolean => ch >= "\u05d0" && ch <= "\u05ea";
+
+/**
+ * Combining mark check. Corpus-verified: every mark in the tanach text lives
+ * in the Hebrew marks block 0591-05c7 (niqqud, taamim, dagesh, sin/shin dots,
+ * rafe). Four punctuation codepoints sit inside that block and are NOT marks —
+ * maqaf 05be, paseq 05c0, sof pasuk 05c3, nun hafukha 05c6 — so they are
+ * excluded explicitly (mirroring the app's UnicodeCategory check). A range
+ * test keeps this file regex-free (Codacy S5852).
+ */
+const isCombiningMark = (ch: string): boolean =>
+	ch >= "\u0591" &&
+	ch <= "\u05c7" &&
+	ch !== "\u05be" &&
+	ch !== "\u05c0" &&
+	ch !== "\u05c3" &&
+	ch !== "\u05c6";
+
 /** Hebrew niqqud vowel points (sheva..hataf qamats, qamats qatan). */
-const NIQQUD = /[\u05b0-\u05bd\u05c7]/;
+const isNiqqud = (ch: string): boolean =>
+	(ch >= "\u05b0" && ch <= "\u05bd") || ch === "\u05c7";
+const hasNiqqud = (marks: string): boolean => [...marks].some(isNiqqud);
 const TZEIRE = "\u05b5";
 const DAGESH = "\u05bc";
 const SIN_DOT = "\u05c2";
@@ -122,8 +140,8 @@ type DivineNameMatch = {
 function parseLetters(text: string): LetterMarks[] | null {
 	const letters: LetterMarks[] = [];
 	for (const ch of text.normalize("NFD")) {
-		if (HEBREW_LETTER.test(ch)) letters.push({ letter: ch, marks: "" });
-		else if (COMBINING_MARK.test(ch)) {
+		if (isHebrewLetter(ch)) letters.push({ letter: ch, marks: "" });
+		else if (isCombiningMark(ch)) {
 			const last = letters.at(-1);
 			if (!last) return null;
 			last.marks += ch;
@@ -137,8 +155,8 @@ function splitTail(value: string): [string, string] {
 	let cut = value.length;
 	while (
 		cut > 0 &&
-		!HEBREW_LETTER.test(value[cut - 1]) &&
-		!COMBINING_MARK.test(value[cut - 1])
+		!isHebrewLetter(value[cut - 1]) &&
+		!isCombiningMark(value[cut - 1])
 	) {
 		cut--;
 	}
@@ -163,7 +181,7 @@ function matchEl(lm: LetterMarks[], restStart: number): boolean {
 	if (aleph.marks.includes(TZEIRE)) return true;
 	// Unpointed אל is treated as the name; any other vowel point
 	// (אֶל/אַל/אֲל) is a different word.
-	return !NIQQUD.test(aleph.marks);
+	return !hasNiqqud(aleph.marks);
 }
 
 function matchShaddai(lm: LetterMarks[], restStart: number): boolean {
@@ -172,7 +190,7 @@ function matchShaddai(lm: LetterMarks[], restStart: number): boolean {
 	if (dalet.marks.includes(DAGESH)) return true;
 	// Unpointed שדי is masked; a pointed שדי whose ד lacks dagesh
 	// (שָׂדַי/שָׁדַי "my field") is not.
-	return !NIQQUD.test(shin.marks + dalet.marks + yod.marks);
+	return !hasNiqqud(shin.marks + dalet.marks + yod.marks);
 }
 
 function matchDivineName(value: string): DivineNameMatch | null {
