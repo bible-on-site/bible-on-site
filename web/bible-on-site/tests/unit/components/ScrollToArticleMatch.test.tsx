@@ -60,6 +60,16 @@ describe("ScrollToArticleMatch", () => {
 		expect(body.querySelector("mark")).toBeNull();
 	});
 
+	it("does nothing when the article body is missing", () => {
+		window.history.replaceState(null, "", "/929/1/42?q=בראשית");
+
+		render(<ScrollToArticleMatch />);
+		jest.advanceTimersByTime(120);
+
+		expect(document.querySelector("mark")).toBeNull();
+		expect(scrollSpy).not.toHaveBeenCalled();
+	});
+
 	it("does nothing when the phrase is not in the article", () => {
 		const body = document.createElement("div");
 		body.className = "articleBody";

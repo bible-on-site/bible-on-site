@@ -176,6 +176,8 @@ export function highlightDomMatch(
 		return [];
 	}
 	const match = rawRangeFromSpan(text, map, span);
+	/* istanbul ignore next -- locateNormalized only returns non-empty spans,
+	   which always map to a non-empty raw range; defensive guard */
 	if (!match || match.end <= match.start) {
 		return [];
 	}

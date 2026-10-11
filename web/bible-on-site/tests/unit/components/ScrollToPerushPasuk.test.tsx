@@ -104,6 +104,16 @@ describe("ScrollToPerushPasukNote", () => {
 		expect(jest.getTimerCount()).toBe(0);
 	});
 
+	it("rejects a pasuk beyond the safe-integer range", () => {
+		window.history.replaceState(
+			null,
+			"",
+			"/929/32/perush?pasuk=99999999999999999999",
+		);
+		render(<ScrollToPerushPasukNote />);
+		expect(jest.getTimerCount()).toBe(0);
+	});
+
 	it("targets the exact note_idx fragment, not the pasuk's first note", () => {
 		const first = document.createElement("div");
 		first.id = "perush-pasuk-2";

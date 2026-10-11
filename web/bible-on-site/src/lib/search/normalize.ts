@@ -69,8 +69,13 @@ export function normalizeWithMap(text: string): {
 				continue;
 			}
 			if (LETTER_OR_DIGIT.test(char)) {
-				normalized += char.toLowerCase();
-				map.push(i);
+				const lowered = char.toLowerCase();
+				normalized += lowered;
+				// One map entry per emitted UTF-16 unit, like the C# twin —
+				// astral letters occupy two units and both map to the pair start.
+				for (let u = 0; u < lowered.length; u++) {
+					map.push(i);
+				}
 			} else if (normalized.length > 0 && !normalized.endsWith(" ")) {
 				normalized += " ";
 				map.push(i);

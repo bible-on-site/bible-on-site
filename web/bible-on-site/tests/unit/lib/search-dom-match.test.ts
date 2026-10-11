@@ -24,6 +24,14 @@ describe("normalizeWithMap", () => {
 		expect(map[8]).toBe(15);
 		expect(map[9]).toBe(17);
 	});
+
+	it("maps astral-plane characters to their surrogate-pair index", () => {
+		// U+13000 Egyptian hieroglyph occupies two UTF-16 units; both normalized
+		// units map back to the pair's raw start, matching the C# twin.
+		const { normalized, map } = normalizeWithMap("א𓀀ב");
+		expect(map).toHaveLength(normalized.length);
+		expect(map).toEqual([0, 1, 1, 3]);
+	});
 });
 
 describe("collectTextNodes", () => {
@@ -101,6 +109,26 @@ describe("rawRangeFromSpan", () => {
 
 	it("returns null on an empty map", () => {
 		expect(rawRangeFromSpan("", [], { start: 0, end: 1 })).toBeNull();
+	});
+
+	it("returns a point range for an empty span", () => {
+		const { map } = normalizeWithMap("אב גד");
+		expect(rawRangeFromSpan("אב גד", map, { start: 1, end: 1 })).toEqual({
+			start: 1,
+			end: 1,
+		});
+	});
+
+	it("extends the range over trailing combining marks", () => {
+		// 'ב' carries hiriq + dagesh, which produce no normalized char but must
+		// stay inside the highlighted glyph.
+		const raw = "אבִּגד";
+		const { normalized, map } = normalizeWithMap(raw);
+		expect(normalized).toBe("אבגד");
+		expect(rawRangeFromSpan(raw, map, { start: 1, end: 2 })).toEqual({
+			start: 1,
+			end: 4,
+		});
 	});
 });
 

@@ -130,6 +130,17 @@ public class SearchMatchTests
         SearchMatch.LocateByExcerpt("אחד שתיים", null, "שלוש").Should().BeNull();
     }
 
+    [Fact]
+    public void LocateByExcerpt_handles_null_content_and_null_query()
+    {
+        // Null inputs degrade to empty strings; an empty window falls back to a
+        // query locate over empty content, and an empty query anchors a
+        // zero-length span at the excerpt position.
+        SearchMatch.LocateByExcerpt(null!, "חלון", "בראשית").Should().BeNull();
+        SearchMatch.LocateByExcerpt("אחד בראשית ברא", "בראשית ברא", null)
+            .Should().Be(new SearchMatchSpan(4, 0));
+    }
+
     #endregion
 
     #region LocateInJoinedNotes
@@ -183,6 +194,26 @@ public class SearchMatchTests
         var notes = new List<string> { "הערה ראשונה", "הערה שנייה" };
 
         SearchMatch.LocateInJoinedNotes(notes, "", "מונח נדיר").Should().BeNull();
+    }
+
+    [Fact]
+    public void LocateInJoinedNotes_handles_null_identity_and_null_query()
+    {
+        var notes = new List<string> { "הערה ראשונה", "הערה שנייה" };
+
+        SearchMatch.LocateInJoinedNotes(notes, null, null).Should().BeNull();
+    }
+
+    [Fact]
+    public void LocateInJoinedNotes_skips_empty_notes()
+    {
+        // Rows adjacent to media can normalize to nothing; the identity walk
+        // must skip them rather than match them.
+        var notes = new List<string> { "", "הערה שנייה" };
+
+        var span = SearchMatch.LocateInJoinedNotes(notes, "הערה שנייה", "הערה");
+
+        span.Should().Be(new SearchMatchSpan(0, 4));
     }
 
     #endregion
@@ -267,6 +298,18 @@ public class SearchMatchTests
             new List<string> { "תוכן אחר", "ועוד אחר" }, null, "נדיר");
 
         target.Should().BeNull();
+    }
+
+    [Fact]
+    public void ResolveArticleTarget_skips_empty_segments()
+    {
+        // Media splits leave empty text segments between content segments;
+        // the walk must skip them and still resolve the match's segment.
+        var segments = new List<string> { "", "<p>מאמר על בראשית</p>" };
+
+        var target = SearchMatch.ResolveArticleTarget(segments, "על בראשית", "בראשית");
+
+        target.Should().Be((1, new SearchMatchSpan(8, 6)));
     }
 
     #endregion
