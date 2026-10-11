@@ -1,9 +1,13 @@
 /**
  * Unit tests for the shared reading-unit contract range math.
  */
-import type { ReadingUnit, ScriptureRange } from "../../../../src/lib/reading/contract";
+import type {
+	ReadingUnit,
+	ScriptureRange,
+} from "../../../../src/lib/reading/contract";
 import {
 	compareCoordinates,
+	rangeContainsCoordinate,
 	rangeContainsPasuk,
 	rangeIsExactlyOnePerek,
 	rangePerekSlices,
@@ -175,6 +179,63 @@ describe("rangeContainsPasuk", () => {
 	});
 });
 
+describe("rangeContainsCoordinate", () => {
+	const range = {
+		start: { perekId: 2, pasuk: 3, segmentIndex: 2 },
+		end: { perekId: 3, pasuk: 4, segmentIndex: 1 },
+	};
+
+	it("defaults a missing coordinate segment to the pasuk start", () => {
+		// A bare position on the boundary pasuk is inside when the
+		// range opens at segment 0 of that pasuk.
+		expect(
+			rangeContainsCoordinate(
+				{ start: { perekId: 2, pasuk: 3 }, end: { perekId: 2, pasuk: 6 } },
+				{ perekId: 2, pasuk: 3 },
+			),
+		).toBe(true);
+		// …but falls before a mid-pasuk start bound.
+		expect(rangeContainsCoordinate(range, { perekId: 2, pasuk: 3 })).toBe(
+			false,
+		);
+	});
+
+	it("treats a missing end bound as the whole pasuk", () => {
+		// Range end carries no segmentIndex -> the coordinate inside
+		// the end pasuk counts as inside regardless of its segment.
+		expect(
+			rangeContainsCoordinate(
+				{ start: { perekId: 2, pasuk: 3 }, end: { perekId: 3, pasuk: 4 } },
+				{ perekId: 3, pasuk: 4, segmentIndex: 9 },
+			),
+		).toBe(true);
+		expect(
+			rangeContainsCoordinate(range, {
+				perekId: 3,
+				pasuk: 4,
+				segmentIndex: 0,
+			}),
+		).toBe(true);
+		expect(
+			rangeContainsCoordinate(range, {
+				perekId: 3,
+				pasuk: 4,
+				segmentIndex: 2,
+			}),
+		).toBe(false);
+	});
+
+	it("compares perek ids before pesukim", () => {
+		expect(rangeContainsCoordinate(range, { perekId: 1, pasuk: 9 })).toBe(
+			false,
+		);
+		expect(rangeContainsCoordinate(range, { perekId: 4, pasuk: 1 })).toBe(
+			false,
+		);
+		expect(rangeContainsCoordinate(range, { perekId: 3, pasuk: 1 })).toBe(true);
+	});
+});
+
 function makeUnit(overrides: Partial<ReadingUnit>): ReadingUnit {
 	return {
 		division: "masora",
@@ -293,5 +354,31 @@ describe("canonical consolidation policy helpers", () => {
 				pasukCount,
 			),
 		).toBeNull();
+	});
+
+	it("unitEquivalentPerekId rejects whole-perek units carrying auxiliary readings", () => {
+		// A parasha exactly one perek long plus a Haftarah must not
+		// collapse into the bare perek canonical.
+		const unit = makeUnit({
+			ranges: [
+				{
+					start: { perekId: 5, pasuk: 1 },
+					end: { perekId: 5, pasuk: 5 },
+				},
+			],
+			auxiliaryReadings: [
+				{
+					id: "haftara",
+					label: "הפטרה",
+					ranges: [
+						{
+							start: { perekId: 100, pasuk: 1 },
+							end: { perekId: 100, pasuk: 5 },
+						},
+					],
+				},
+			],
+		});
+		expect(unitEquivalentPerekId(unit, pasukCount)).toBeNull();
 	});
 });

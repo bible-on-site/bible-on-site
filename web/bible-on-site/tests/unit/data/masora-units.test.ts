@@ -105,13 +105,11 @@ describe("derivation integrity", () => {
 						const pasukNum = vi + 1;
 						if (pasukNum < startPasuk || pasukNum > endPasuk) return;
 						const startSeg =
-							perekId === range.start.perekId &&
-							pasukNum === range.start.pasuk
+							perekId === range.start.perekId && pasukNum === range.start.pasuk
 								? (range.start.segmentIndex ?? 0)
 								: 0;
 						const endSeg =
-							perekId === range.end.perekId &&
-							pasukNum === range.end.pasuk
+							perekId === range.end.perekId && pasukNum === range.end.pasuk
 								? (range.end.segmentIndex ?? pasuk.segments.length - 1)
 								: pasuk.segments.length - 1;
 						for (let si = startSeg; si <= endSeg; si++) {
@@ -170,9 +168,7 @@ describe("specific corpus boundaries", () => {
 		const bereshit = sefarim[0];
 		const corpusPerek =
 			"perakim" in bereshit ? bereshit.perakim[34] : undefined;
-		expect(corpusPerek?.pesukim[21].segments[markerIndex].type).toBe(
-			"ptuha",
-		);
+		expect(corpusPerek?.pesukim[21].segments[markerIndex].type).toBe("ptuha");
 
 		const following = getMasoraUnitById((ending?.unitId ?? 0) + 1);
 		expect(following.ranges[0].start.perekId).toBe(35);
@@ -208,18 +204,14 @@ describe("specific corpus boundaries", () => {
 				expect(unit.ranges[0].start.perekId).toBeGreaterThanOrEqual(
 					sefer.perekFrom,
 				);
-				expect(unit.ranges[0].end.perekId).toBeLessThanOrEqual(
-					sefer.perekTo,
-				);
+				expect(unit.ranges[0].end.perekId).toBeLessThanOrEqual(sefer.perekTo);
 			}
 		}
 		// A sefer with additionals (שמואל) lets a parasha cross the א/ב
 		// boundary when the corpus has no marker exactly at the seam.
 		const shmuel = sefarim.find((s) => s.name === "שמואל");
 		const seamEnd =
-			shmuel && "additionals" in shmuel
-				? shmuel.additionals[0].perekTo
-				: null;
+			shmuel && "additionals" in shmuel ? shmuel.additionals[0].perekTo : null;
 		const seamStart =
 			shmuel && "additionals" in shmuel
 				? shmuel.additionals[1].perekFrom
@@ -262,6 +254,11 @@ describe("lookup helpers", () => {
 			segmentIndex: markerIndex + 1,
 		});
 		expect(afterMarker?.unitId).toBe((closing?.unitId ?? 0) + 1);
+	});
+
+	it("returns null for a position outside every unit", () => {
+		// בראשית א has 31 pesukim; pasuk 999 matches no range.
+		expect(getMasoraUnitContaining({ perekId: 1, pasuk: 999 })).toBeNull();
 	});
 
 	it("returns prev/next units across the corpus edges", () => {
@@ -320,8 +317,6 @@ describe("canonical consolidation policy", () => {
 
 	it("derives per-perek slices for the commentary query path", () => {
 		const first = getMasoraUnitById(1);
-		expect(
-			rangePerekSlices(first.ranges[0], masoraPasukCount),
-		).toHaveLength(1);
+		expect(rangePerekSlices(first.ranges[0], masoraPasukCount)).toHaveLength(1);
 	});
 });

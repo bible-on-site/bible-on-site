@@ -9,11 +9,20 @@ jest.mock("../../../src/lib/api-client", () => ({
 
 // Mock the authors service to avoid S3 availability checks
 jest.mock("../../../src/lib/authors/service", () => ({
-	getAuthorImageUrl: jest.fn((authorId: number) => `https://test-bucket.s3.test-region.amazonaws.com/authors/high-res/${authorId}.jpg`),
+	getAuthorImageUrl: jest.fn(
+		(authorId: number) =>
+			`https://test-bucket.s3.test-region.amazonaws.com/authors/high-res/${authorId}.jpg`,
+	),
 }));
 
 import { query } from "../../../src/lib/api-client";
-import { getAllArticlePerekIdPairs, getArticleById, getArticlesByPerekId, getArticleSummariesByPerekId } from "../../../src/lib/articles";
+import {
+	getAllArticlePerekIdPairs,
+	getArticleById,
+	getArticleSummariesByPerekId,
+	getArticleSummariesForRanges,
+	getArticlesByPerekId,
+} from "../../../src/lib/articles";
 
 const mockQuery = query as jest.MockedFunction<typeof query>;
 
@@ -59,7 +68,9 @@ describe("articles service", () => {
 
 			expect(mockQuery).toHaveBeenCalledTimes(1);
 			expect(mockQuery).toHaveBeenCalledWith(
-				expect.stringContaining("a.id, a.perek_id, a.author_id, a.abstract, a.content, a.name, a.priority"),
+				expect.stringContaining(
+					"a.id, a.perek_id, a.author_id, a.abstract, a.content, a.name, a.priority",
+				),
 				[42],
 			);
 
@@ -73,7 +84,8 @@ describe("articles service", () => {
 					name: "Test Article",
 					priority: 1,
 					authorName: "הרב ישראל",
-					authorImageUrl: "https://test-bucket.s3.test-region.amazonaws.com/authors/high-res/10.jpg",
+					authorImageUrl:
+						"https://test-bucket.s3.test-region.amazonaws.com/authors/high-res/10.jpg",
 				},
 				{
 					id: 2,
@@ -84,7 +96,8 @@ describe("articles service", () => {
 					name: "Another Article",
 					priority: 2,
 					authorName: "הרב יעקב",
-					authorImageUrl: "https://test-bucket.s3.test-region.amazonaws.com/authors/high-res/20.jpg",
+					authorImageUrl:
+						"https://test-bucket.s3.test-region.amazonaws.com/authors/high-res/20.jpg",
 				},
 			]);
 		});
@@ -164,7 +177,8 @@ describe("articles service", () => {
 					name: "Test Article",
 					priority: 1,
 					authorName: "הרב ישראל",
-					authorImageUrl: "https://test-bucket.s3.test-region.amazonaws.com/authors/high-res/10.jpg",
+					authorImageUrl:
+						"https://test-bucket.s3.test-region.amazonaws.com/authors/high-res/10.jpg",
 				},
 			]);
 			expect(result[0]).not.toHaveProperty("content");
@@ -300,7 +314,8 @@ describe("articles service", () => {
 				name: "Test Article",
 				priority: 1,
 				authorName: "הרב ישראל",
-				authorImageUrl: "https://test-bucket.s3.test-region.amazonaws.com/authors/high-res/10.jpg",
+				authorImageUrl:
+					"https://test-bucket.s3.test-region.amazonaws.com/authors/high-res/10.jpg",
 			});
 		});
 
@@ -347,6 +362,56 @@ describe("articles service", () => {
 			expect(sqlCall).toContain("WHERE a.id = ?");
 			expect(sqlCall).toContain("a.distributable = TRUE");
 			expect(mockQuery).toHaveBeenCalledWith(expect.any(String), [42]);
+		});
+	});
+
+	describe("getArticleSummariesForRanges", () => {
+		// בראשית א into בראשית ב — a cross-perek unit slice.
+		const crossPerekRanges = [
+			{
+				start: { perekId: 1, pasuk: 30 },
+				end: { perekId: 2, pasuk: 4 },
+			},
+		];
+
+		it("returns empty without querying for empty ranges", async () => {
+			const result = await getArticleSummariesForRanges([]);
+			expect(result).toEqual([]);
+			expect(mockQuery).not.toHaveBeenCalled();
+		});
+
+		it("queries every overlapping perek via IN", async () => {
+			mockQuery.mockResolvedValue([]);
+			await getArticleSummariesForRanges(crossPerekRanges);
+			const [sql, params] = mockQuery.mock.calls[0];
+			expect(sql).toContain("a.perek_id IN (?, ?)");
+			expect(params).toEqual([1, 2]);
+		});
+
+		it("maps rows to summaries", async () => {
+			mockQuery.mockResolvedValue([
+				{
+					id: 7,
+					perek_id: 2,
+					author_id: 10,
+					abstract: "<p>x</p>",
+					name: "Across chapters",
+					priority: 1,
+					author_name: "הרב דוגמה",
+				},
+			]);
+			const result = await getArticleSummariesForRanges(crossPerekRanges);
+			expect(result).toEqual([
+				expect.objectContaining({ id: 7, perekId: 2, name: "Across chapters" }),
+			]);
+		});
+
+		it("returns empty array on failure", async () => {
+			mockQuery.mockRejectedValue(new Error("DB error"));
+			const result = await getArticleSummariesForRanges(crossPerekRanges);
+			expect(result).toEqual([]);
+			mockQuery.mockRejectedValue("raw error");
+			expect(await getArticleSummariesForRanges(crossPerekRanges)).toEqual([]);
 		});
 	});
 });

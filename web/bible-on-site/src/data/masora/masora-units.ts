@@ -6,8 +6,8 @@ import type {
 } from "@/lib/reading/contract";
 import { READING_CONTRACT_VERSION } from "@/lib/reading/contract";
 import { rangeContainsCoordinate } from "@/lib/reading/ranges";
-import type { Perek, Sefarim, SefarimItem } from "../db/tanah-view-types";
 import { sefarim } from "../db/sefarim";
+import type { Perek, Sefarim, SefarimItem } from "../db/tanah-view-types";
 import { getPerekByPerekId } from "../perek-dto";
 
 /**
@@ -74,6 +74,7 @@ function coordinateAfterMarker(
 	// A break at the very end of a perek: the next unit opens the next
 	// perek (perakim ids are contiguous across a sefer's additionals).
 	if (nextPerekId === null) {
+		/* istanbul ignore next -- defensive: corpus data never places a break after a sefer's final pasuk */
 		throw new Error(
 			`Masora break after final pasuk of sefer (perekId ${perekId})`,
 		);
@@ -120,7 +121,10 @@ function deriveUnitsFromSefarim(corpus: Sefarim): ReadingUnit[] {
 		};
 		let pendingStart: ScriptureCoordinate | null = null;
 		let order = 0;
-		const emit = (end: ScriptureCoordinate, closingBreak: "ptuha" | "stuma" | null) => {
+		const emit = (
+			end: ScriptureCoordinate,
+			closingBreak: "ptuha" | "stuma" | null,
+		) => {
 			const start = pendingStart ?? seferStart;
 			order += 1;
 			units.push({
@@ -167,10 +171,7 @@ function deriveUnitsFromSefarim(corpus: Sefarim): ReadingUnit[] {
 		}
 		const lastPart = parts[parts.length - 1];
 		const lastPerek = lastPart.perakim[lastPart.perakim.length - 1];
-		emit(
-			{ perekId: lastPart.perekTo, pasuk: lastPerek.pesukim.length },
-			null,
-		);
+		emit({ perekId: lastPart.perekTo, pasuk: lastPerek.pesukim.length }, null);
 	}
 	return units;
 }
@@ -222,7 +223,9 @@ export function getMasoraUnitContaining(
 	coordinate: ScriptureCoordinate,
 ): ReadingUnit | null {
 	for (const unit of getAllMasoraUnits()) {
-		if (unit.ranges.some((range) => rangeContainsCoordinate(range, coordinate))) {
+		if (
+			unit.ranges.some((range) => rangeContainsCoordinate(range, coordinate))
+		) {
 			return unit;
 		}
 	}
@@ -230,9 +233,10 @@ export function getMasoraUnitContaining(
 }
 
 /** Previous/next units in canonical order (null at the corpus edges). */
-export function getAdjacentMasoraUnits(
-	unitId: number,
-): { prev: ReadingUnit | null; next: ReadingUnit | null } {
+export function getAdjacentMasoraUnits(unitId: number): {
+	prev: ReadingUnit | null;
+	next: ReadingUnit | null;
+} {
 	const units = getAllMasoraUnits();
 	return {
 		prev: unitId > 1 ? units[unitId - 2] : null,

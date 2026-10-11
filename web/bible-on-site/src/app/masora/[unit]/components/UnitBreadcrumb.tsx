@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { BreadcrumbDropdown } from "@/app/929/[number]/components/BreadcrumbDropdown";
+import styles from "@/app/929/[number]/components/breadcrumb.module.css";
 import { sefarim } from "@/data/db/sefarim";
 import {
 	getMasoraFirstUnitBySefer,
@@ -7,8 +9,6 @@ import {
 } from "@/data/masora/masora-units";
 import { getSeferByName } from "@/data/sefer-dto";
 import type { ReadingUnit } from "@/lib/reading/contract";
-import { BreadcrumbDropdown } from "@/app/929/[number]/components/BreadcrumbDropdown";
-import styles from "@/app/929/[number]/components/breadcrumb.module.css";
 
 const HELEK_ORDER = ["תורה", "נביאים", "כתובים"];
 
@@ -57,7 +57,8 @@ export function UnitBreadcrumb({ unit }: { unit: ReadingUnit }) {
 								const firstSefer = sefarim.find((s) => s.helek === helek);
 								const target = firstSefer
 									? firstUnitBySefer.get(firstSefer.name)
-									: undefined;
+									: /* istanbul ignore next -- defensive: every helek has sefarim */
+										undefined;
 								return (
 									<li key={helek}>
 										{target ? (
