@@ -8,10 +8,10 @@ namespace BibleOnSite.Helpers;
 /// </summary>
 public sealed class ExitConfirmation
 {
-	public const string Title = "תנ\"ך על הפרק";
-	public const string Message = "מקווים שהלימוד היה מועיל, להתראות בפרק הבא!";
-	public const string ExitLabel = "צא מהישומון";
-	public const string StayLabel = "המשך ללמוד";
+	public static string Title => "תנ\"ך על הפרק";
+	public static string Message => "מקווים שהלימוד היה מועיל, להתראות בפרק הבא!";
+	public static string ExitLabel => "צא מהישומון";
+	public static string StayLabel => "המשך ללמוד";
 
 	private static readonly Lazy<ExitConfirmation> _shared = new(CreateDefault);
 
