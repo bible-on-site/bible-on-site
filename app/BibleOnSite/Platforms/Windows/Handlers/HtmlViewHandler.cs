@@ -117,6 +117,23 @@ public class HtmlViewHandler : ViewHandler<HtmlView, RichTextBlock>
         }
     }
 
+    /// <summary>
+    /// Routes a hyperlink click through the virtual view's LinkTapped event;
+    /// only an unhandled tap opens the URL in the external browser.
+    /// </summary>
+    private void OnHyperlinkClicked(string href)
+    {
+        if (VirtualView?.DispatchLinkTapped(href).Handled == true)
+        {
+            return;
+        }
+
+        if (Uri.TryCreate(href, UriKind.Absolute, out var uri))
+        {
+            _ = Windows.System.Launcher.LaunchUriAsync(uri);
+        }
+    }
+
     private void ParseNode(HtmlNode node, InlineCollection inlines)
     {
         foreach (var child in node.ChildNodes)
@@ -207,11 +224,9 @@ public class HtmlViewHandler : ViewHandler<HtmlView, RichTextBlock>
                         if (!string.IsNullOrEmpty(href))
                         {
                             var hyperlink = new Hyperlink();
-                            try
-                            {
-                                hyperlink.NavigateUri = new Uri(href);
-                            }
-                            catch { /* Invalid URI */ }
+                            // Route the tap through the virtual view's LinkTapped
+                            // event; only an unhandled tap opens the browser.
+                            hyperlink.Click += (_, _) => OnHyperlinkClicked(href);
                             ParseNode(child, hyperlink.Inlines);
                             inlines.Add(hyperlink);
                         }

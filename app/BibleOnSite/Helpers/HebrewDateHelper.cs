@@ -57,6 +57,64 @@ public static class HebrewDateHelper
     }
 
     /// <summary>
+    /// Today's Hebrew month (legacy numbering shared with the database date
+    /// columns: 1=Tishrei..5=Shevat, 6/13/14=Adar variants, 7=Nisan..12=Elul)
+    /// and day of month, tzeit-aware like the reader's daily-perek logic.
+    /// </summary>
+    internal static (int Month, int Day) GetTodayHebrewMonthDay()
+    {
+        var now = TimeZoneInfo.ConvertTimeBySystemTimeZoneId(
+            DateTime.UtcNow,
+            GetIsraelTimeZoneId());
+        var hebrewDate = GetTzeitAwareHebrewDate(now);
+        var legacyMonth = CalendarMonthToLegacy(hebrewDate.Year, hebrewDate.Month);
+        return (legacyMonth, hebrewDate.Day);
+    }
+
+    /// <summary>
+    /// Formats today's Hebrew date for display ("כה כסלו תשפו").
+    /// </summary>
+    internal static string FormatTodayHebrewDate()
+    {
+        var now = TimeZoneInfo.ConvertTimeBySystemTimeZoneId(
+            DateTime.UtcNow,
+            GetIsraelTimeZoneId());
+        var hebrewDate = GetTzeitAwareHebrewDate(now);
+        var legacyMonth = CalendarMonthToLegacy(hebrewDate.Year, hebrewDate.Month);
+        var monthName = GetHebrewMonthName(legacyMonth, IsHebrewLeapYear(hebrewDate.Year));
+        var dayText = hebrewDate.Day.ToHebrewLetters();
+        var yearText = (hebrewDate.Year % 1000).ToHebrewLetters();
+        return string.IsNullOrEmpty(monthName)
+            ? string.Empty
+            : $"{dayText} {monthName} {yearText}";
+    }
+
+    private static bool IsHebrewLeapYear(int hebrewYear)
+    {
+        var mod = hebrewYear % 19;
+        return mod is 0 or 3 or 6 or 8 or 11 or 14 or 17;
+    }
+
+    private static string GetHebrewMonthName(int month, bool isLeapYear) => month switch
+    {
+        1 => "תשרי",
+        2 => "חשוון",
+        3 => "כסלו",
+        4 => "טבת",
+        5 => "שבט",
+        6 => isLeapYear ? "אדר ב" : "אדר",
+        7 => "ניסן",
+        8 => "אייר",
+        9 => "סיון",
+        10 => "תמוז",
+        11 => "אב",
+        12 => "אלול",
+        13 when isLeapYear => "אדר א",
+        14 when isLeapYear => "אדר ב",
+        _ => string.Empty
+    };
+
+    /// <summary>
     /// Gets the Hebrew date, advancing to next day if after nightfall (tzeit).
     /// </summary>
     internal static (int Year, int Month, int Day) GetTzeitAwareHebrewDate(DateTime date)

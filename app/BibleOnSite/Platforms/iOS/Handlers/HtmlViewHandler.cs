@@ -45,8 +45,26 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
             TextContainerInset = UIEdgeInsets.Zero
         };
         textView.TextContainer.LineFragmentPadding = 0;
+        // Route link taps through the virtual view's LinkTapped event; an
+        // unhandled tap keeps UIKit's default (open the URL).
+        textView.Delegate = new HtmlLinkDelegate(() => VirtualView);
 
         return textView;
+    }
+
+    /// <summary>Routes link interaction through HtmlView.LinkTapped.</summary>
+    private sealed class HtmlLinkDelegate(Func<HtmlView?> viewProvider) : UITextViewDelegate
+    {
+        public override bool ShouldInteractWithUrl(UITextView textView, NSUrl URL, NSRange characterRange, UITextItemInteraction interaction)
+        {
+            var url = URL.AbsoluteString ?? URL.Description;
+            if (viewProvider()?.DispatchLinkTapped(url).Handled == true)
+            {
+                // We handled the tap — UIKit must not open the URL too.
+                return false;
+            }
+            return true;
+        }
     }
 
     protected override void ConnectHandler(UITextView platformView)

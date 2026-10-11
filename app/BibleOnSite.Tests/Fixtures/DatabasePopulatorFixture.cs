@@ -193,13 +193,14 @@ public class DatabasePopulatorFixture : IAsyncLifetime
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
 
-        // Wait up to 2 minutes for database population
-        var completed = await Task.Run(() => process.WaitForExit(120_000));
+        // A populated idempotent run alone takes ~80s of script execution;
+        // cold builds, update checks and host load multiply that well past 2m.
+        var completed = await Task.Run(() => process.WaitForExit(300_000));
 
         if (!completed)
         {
             try { process.Kill(entireProcessTree: true); } catch { }
-            throw new TimeoutException("Database population timed out after 2 minutes");
+            throw new TimeoutException("Database population timed out after 5 minutes");
         }
 
         if (process.ExitCode != 0)

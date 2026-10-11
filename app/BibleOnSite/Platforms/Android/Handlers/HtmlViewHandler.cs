@@ -1,4 +1,5 @@
 using Android.Text;
+using Android.Text.Method;
 using Android.Text.Style;
 using Android.Widget;
 using Java.Lang;
@@ -36,6 +37,8 @@ public class HtmlViewHandler : ViewHandler<HtmlView, TextView>
     {
         var textView = new TextView(Context);
         textView.SetTextColor(GetTextColor());
+        // Required for the TanahLinkSpan spans installed in UpdateContent.
+        textView.MovementMethod = LinkMovementMethod.Instance;
         return textView;
     }
 
@@ -150,6 +153,7 @@ public class HtmlViewHandler : ViewHandler<HtmlView, TextView>
                 result = StripAlignmentSpans(result);
                 result = PrependRtlMark(result);
             }
+            result = ReplaceUrlSpans(result);
             PlatformView.SetText(result, TextView.BufferType.Spannable);
         }
         PlatformView.SetTextColor(GetTextColor());
@@ -185,6 +189,58 @@ public class HtmlViewHandler : ViewHandler<HtmlView, TextView>
             }
         }
         return builder;
+    }
+
+    /// <summary>
+    /// Replaces Html.FromHtml() URLSpans with ClickableSpans that raise the
+    /// virtual view's LinkTapped event. When no subscriber marks the tap
+    /// handled, the URL opens in the external browser.
+    /// </summary>
+    private ISpanned ReplaceUrlSpans(ISpanned source)
+    {
+        var builder = source as SpannableStringBuilder ?? new SpannableStringBuilder(source);
+        var spans = builder.GetSpans(0, builder.Length(),
+            Java.Lang.Class.FromType(typeof(URLSpan)));
+        if (spans == null || spans.Length == 0)
+        {
+            return builder;
+        }
+
+        foreach (var spanObj in spans)
+        {
+            if (spanObj is not URLSpan urlSpan || urlSpan.URL is not { } url)
+            {
+                continue;
+            }
+            var start = builder.GetSpanStart(urlSpan);
+            var end = builder.GetSpanEnd(urlSpan);
+            var flags = builder.GetSpanFlags(urlSpan);
+            builder.RemoveSpan(urlSpan);
+            builder.SetSpan(new TanahLinkSpan(url, VirtualView), start, end, flags);
+        }
+        return builder;
+    }
+
+    /// <summary>Link span that routes taps through HtmlView.LinkTapped first.</summary>
+    private sealed class TanahLinkSpan(string url, HtmlView? view) : ClickableSpan
+    {
+        public override void OnClick(Android.Views.View widget)
+        {
+            if (view?.DispatchLinkTapped(url).Handled == true)
+            {
+                return;
+            }
+
+            try
+            {
+                widget.Context?.StartActivity(new Android.Content.Intent(
+                    Android.Content.Intent.ActionView, Android.Net.Uri.Parse(url)));
+            }
+            catch (Android.Content.ActivityNotFoundException)
+            {
+                // No browser available — the tap silently does nothing.
+            }
+        }
     }
 
     /// <summary>
