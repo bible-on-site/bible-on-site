@@ -78,14 +78,11 @@ describe("929/authors/page", () => {
 		expect(screen.getByText("אין רבנים להצגה")).toBeTruthy();
 	});
 
-	it("renders empty state when query throws an error", async () => {
+	it("rejects database failures instead of caching an empty page", async () => {
 		mockQuery.mockRejectedValue(new Error("DB connection failed"));
 		const consoleSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
 
-		const jsx = await AuthorsPage();
-		render(jsx);
-
-		expect(screen.getByText("אין רבנים להצגה")).toBeTruthy();
+		await expect(AuthorsPage()).rejects.toThrow("DB connection failed");
 		expect(consoleSpy).toHaveBeenCalledWith(
 			"Failed to fetch authors:",
 			"DB connection failed",
@@ -93,14 +90,11 @@ describe("929/authors/page", () => {
 		consoleSpy.mockRestore();
 	});
 
-	it("renders empty state when query throws a non-Error", async () => {
+	it("propagates non-Error database failures", async () => {
 		mockQuery.mockRejectedValue("string error");
 		const consoleSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
 
-		const jsx = await AuthorsPage();
-		render(jsx);
-
-		expect(screen.getByText("אין רבנים להצגה")).toBeTruthy();
+		await expect(AuthorsPage()).rejects.toBe("string error");
 		expect(consoleSpy).toHaveBeenCalledWith(
 			"Failed to fetch authors:",
 			"string error",

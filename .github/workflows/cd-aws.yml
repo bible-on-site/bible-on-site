@@ -121,6 +121,7 @@ jobs:
           python data/recitation/audit.py
           python data/recitation/deployment.py --origin https://xn--febl3a.co.il \
             --version "$MODULE_VERSION" --check-audio --attempts 30 --interval 20
+          node web/bible-on-site/scripts/verify-public-content.mjs --origin https://xn--febl3a.co.il
 
       - name: Record deployment result
         if: ${{ always() && steps.guard.outputs.deployment_id != '' }}

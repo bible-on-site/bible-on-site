@@ -204,12 +204,10 @@ describe("articles service", () => {
 			expect(sqlCall).toContain("a.name");
 		});
 
-		it("returns empty array on error", async () => {
+		it("rejects database failures instead of caching an empty list", async () => {
 			mockQuery.mockRejectedValue(new Error("DB error"));
 
-			const result = await getArticleSummariesByPerekId(1);
-
-			expect(result).toEqual([]);
+			await expect(getArticleSummariesByPerekId(1)).rejects.toThrow("DB error");
 			expect(console.warn).toHaveBeenCalledWith(
 				"Failed to fetch article summaries for perek %d:",
 				1,
@@ -217,12 +215,12 @@ describe("articles service", () => {
 			);
 		});
 
-		it("handles non-Error rejection gracefully", async () => {
+		it("propagates non-Error rejections without caching them", async () => {
 			mockQuery.mockRejectedValue("string error");
 
-			const result = await getArticleSummariesByPerekId(1);
-
-			expect(result).toEqual([]);
+			await expect(getArticleSummariesByPerekId(1)).rejects.toBe(
+				"string error",
+			);
 		});
 	});
 

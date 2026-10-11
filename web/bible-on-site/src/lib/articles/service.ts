@@ -100,7 +100,8 @@ export async function getArticleSummariesByPerekId(
 			perekId,
 			error instanceof Error ? error.message : error,
 		);
-		return [];
+		// Reject so a failed build/request cannot cache an empty article list.
+		throw error;
 	}
 }
 

@@ -43,7 +43,8 @@ async function getAllAuthors(): Promise<AuthorSummary[]> {
 			"Failed to fetch authors:",
 			error instanceof Error ? error.message : error,
 		);
-		return [];
+		// A database failure must not become an indefinitely cached empty page.
+		throw error;
 	}
 }
 

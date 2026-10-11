@@ -138,7 +138,7 @@ fn read_hash(row: &sea_orm::QueryResult) -> [u8; 16] {
 }
 
 /// Fetches one public article for indexing; `None` when the article was
-/// deleted or is not `distributable` (the queue consumer then removes the
+/// deleted or has no canonical chapter (the queue consumer then removes the
 /// index row — the same path that purges deletions).
 pub async fn fetch_article<C: ConnectionTrait>(
     conn: &C,
@@ -146,7 +146,7 @@ pub async fn fetch_article<C: ConnectionTrait>(
 ) -> Result<Option<ArticleSource>, DbErr> {
     let row = conn
         .query_one_raw(mysql(
-            "SELECT id, name, abstract, content FROM tanah_article WHERE id = ? AND distributable = TRUE",
+            "SELECT id, name, abstract, content FROM tanah_article WHERE id = ? AND perek_id BETWEEN 1 AND 929",
             vec![article_id.into()],
         ))
         .await?;
@@ -167,7 +167,7 @@ pub async fn sweep_hashes<C: ConnectionTrait>(conn: &C) -> Result<Vec<(i32, [u8;
     let rows = conn
         .query_all_raw(Statement::from_string(
             DbBackend::MySql,
-            format!("SELECT id, {CONTENT_HASH_EXPR} AS content_hash FROM tanah_article WHERE distributable = TRUE"),
+            format!("SELECT id, {CONTENT_HASH_EXPR} AS content_hash FROM tanah_article WHERE perek_id BETWEEN 1 AND 929"),
         ))
         .await?;
     rows.into_iter()
@@ -309,7 +309,7 @@ pub async fn upsert_doc<C: ConnectionTrait>(
         &format!(
             "REPLACE INTO article_search_doc (article_id, model_epoch, content_hash, plain_len, vector, terms)
              SELECT a.id, ?, {CONTENT_HASH_EXPR}, ?, ?, ? FROM tanah_article a
-             WHERE a.id = ? AND a.distributable = TRUE"
+             WHERE a.id = ? AND a.perek_id BETWEEN 1 AND 929"
         ),
         vec![
             model_epoch.into(),
@@ -390,7 +390,7 @@ pub async fn fetch_hit_rows<C: ConnectionTrait>(
                  FROM tanah_article a
                  LEFT JOIN tanah_author au ON au.id = a.author_id
                  LEFT JOIN tanah_perek_view p ON p.perek_id = a.perek_id
-                 WHERE a.id IN ({placeholders}) AND a.distributable = TRUE
+                 WHERE a.id IN ({placeholders}) AND a.perek_id BETWEEN 1 AND 929
                  ORDER BY FIELD(a.id, {placeholders})"
             ),
             values,
