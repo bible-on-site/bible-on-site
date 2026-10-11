@@ -10,8 +10,8 @@ namespace BibleOnSite.Pages;
 /// <summary>
 /// Page displaying a single article's content.
 /// </summary>
-[QueryProperty(nameof(ArticleId), "articleId")]
-[QueryProperty(nameof(PerekId), "perekId")]
+[QueryProperty(nameof(ArticleId), "articleId"), QueryProperty(nameof(PerekId), "perekId")]
+[QueryProperty(nameof(SearchExcerpt), "searchExcerpt"), QueryProperty(nameof(SearchPhrase), "searchPhrase")]
 public partial class ArticleDetailPage : ContentPage
 {
     private readonly ArticleDetailViewModel _viewModel;
@@ -19,6 +19,16 @@ public partial class ArticleDetailPage : ContentPage
 
     public int ArticleId { get; set; }
     public int PerekId { get; set; }
+
+    /// <summary>
+    /// Search-result excerpt anchoring the jump target — the query string keeps
+    /// the destination self-contained instead of carrying a navigation object
+    /// (#2078).
+    /// </summary>
+    public string? SearchExcerpt { get; set; }
+
+    /// <summary>Search phrase to locate inside the anchored excerpt window (#2078).</summary>
+    public string? SearchPhrase { get; set; }
 
     public ArticleDetailPage()
     {
@@ -68,6 +78,7 @@ public partial class ArticleDetailPage : ContentPage
             {
                 _viewModel.SetArticle(article);
                 BuildArticleContent(article.ArticleContent);
+                await ApplySearchJumpAsync();
             }
             else
             {
@@ -191,5 +202,69 @@ public partial class ArticleDetailPage : ContentPage
             me.Handler?.DisconnectHandler();
         }
         _mediaElements.Clear();
+    }
+
+    /// <summary>
+    /// Scrolls to the search result's exact occurrence: the excerpt anchors the
+    /// matching window in the joined segment text, the resolved segment's
+    /// HtmlView highlights the match, and the ScrollView lands it below the
+    /// header once the native text layout reports a line position (#2078).
+    /// </summary>
+    private async Task ApplySearchJumpAsync()
+    {
+        if (string.IsNullOrEmpty(SearchExcerpt))
+        {
+            return;
+        }
+        var htmlViews = ArticleContentContainer.Children.OfType<HtmlView>().ToList();
+        if (htmlViews.Count == 0)
+        {
+            return;
+        }
+        var resolved = SearchMatch.ResolveArticleTarget(
+            htmlViews.Select(view => view.HtmlContent ?? string.Empty).ToList(),
+            SearchExcerpt,
+            SearchPhrase ?? string.Empty);
+        if (resolved is not { } hit)
+        {
+            return;
+        }
+        var targetView = htmlViews[hit.Segment];
+        targetView.SearchMatchStart = hit.Span.Start;
+        targetView.SearchMatchLength = hit.Span.Length;
+
+        if (!HtmlView.CanMeasureSearchMatch)
+        {
+            // Platforms without a text-layout hook still land on the segment.
+            await ArticleScroll.ScrollToAsync(targetView, ScrollToPosition.Start, false);
+            return;
+        }
+        // The native text layout arrives after the handler's async render —
+        // poll until a measurable line position exists.
+        for (var attempt = 0; attempt < 60; attempt++)
+        {
+            if (targetView.Handler != null && targetView.Height > 0 &&
+                targetView.GetSearchMatchTop() is { } matchTop)
+            {
+                var y = Math.Max(0, ContentYOffset(targetView) + matchTop - 8);
+                await ArticleScroll.ScrollToAsync(0, y, false);
+                return;
+            }
+            await Task.Delay(50);
+        }
+        Console.Error.WriteLine($"Article search jump could not measure the match in article {ArticleId}.");
+    }
+
+    /// <summary>Accumulated Y of an element within the ScrollView's content.</summary>
+    private double ContentYOffset(VisualElement element)
+    {
+        double y = 0;
+        VisualElement? current = element;
+        while (current != null && !ReferenceEquals(current, ArticleScroll.Content))
+        {
+            y += current.Y;
+            current = current.Parent as VisualElement;
+        }
+        return y;
     }
 }
