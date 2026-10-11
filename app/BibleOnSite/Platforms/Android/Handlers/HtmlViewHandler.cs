@@ -25,7 +25,9 @@ public class HtmlViewHandler : ViewHandler<HtmlView, TextView>
         [nameof(HtmlView.LineHeight)] = MapLineHeight,
         [nameof(HtmlView.H1FontSizeMultiplier)] = MapHeaderStyles,
         [nameof(HtmlView.H2FontSizeMultiplier)] = MapHeaderStyles,
-        [nameof(HtmlView.H3FontSizeMultiplier)] = MapHeaderStyles
+        [nameof(HtmlView.H3FontSizeMultiplier)] = MapHeaderStyles,
+        [nameof(HtmlView.SearchMatchStart)] = MapSearchMatch,
+        [nameof(HtmlView.SearchMatchLength)] = MapSearchMatch
     };
 
     public HtmlViewHandler() : base(PropertyMapper)
@@ -84,20 +86,17 @@ public class HtmlViewHandler : ViewHandler<HtmlView, TextView>
         base.ConnectHandler(platformView);
         VirtualView.HtmlContentChanged += OnHtmlContentChanged;
         VirtualView.StyleChanged += OnStyleChanged;
-        VirtualView.SearchMatchChanged += OnSearchMatchChanged;
     }
 
     protected override void DisconnectHandler(TextView platformView)
     {
         VirtualView.HtmlContentChanged -= OnHtmlContentChanged;
         VirtualView.StyleChanged -= OnStyleChanged;
-        VirtualView.SearchMatchChanged -= OnSearchMatchChanged;
         base.DisconnectHandler(platformView);
     }
 
     private void OnHtmlContentChanged(object? sender, EventArgs e) => UpdateContent();
     private void OnStyleChanged(object? sender, EventArgs e) => UpdateContent();
-    private void OnSearchMatchChanged(object? sender, EventArgs e) => UpdateContent();
 
     private Android.Graphics.Color GetTextColor()
     {
@@ -279,6 +278,9 @@ public class HtmlViewHandler : ViewHandler<HtmlView, TextView>
     }
 
     private static void MapHeaderStyles(HtmlViewHandler handler, HtmlView view)
+        => handler.UpdateContent();
+
+    private static void MapSearchMatch(HtmlViewHandler handler, HtmlView view)
         => handler.UpdateContent();
 
     private static void MapTextAlignment(HtmlViewHandler handler, HtmlView view)

@@ -120,14 +120,6 @@ public class HtmlView : View
         0,
         propertyChanged: (bindable, _, _) => ((HtmlView)bindable).OnSearchMatchChanged());
 
-    public HtmlView()
-    {
-        // HasSearchMatch flips with the match properties; the notification also
-        // anchors the event in shared code — the rendering subscribers attach
-        // inside each platform handler.
-        SearchMatchChanged += (_, _) => OnPropertyChanged(nameof(HasSearchMatch));
-    }
-
     /// <summary>
     /// Gets or sets the HTML content to display.
     /// </summary>
@@ -282,15 +274,15 @@ public class HtmlView : View
     /// </summary>
     public event EventHandler<LinkTappedEventArgs>? LinkTapped;
 
-    /// <summary>
-    /// Raised when the search match location changes. Handlers re-highlight and
-    /// re-measure without a full content rebuild.
-    /// </summary>
-    public event EventHandler? SearchMatchChanged;
-
     private void OnHtmlContentChanged() => HtmlContentChanged?.Invoke(this, EventArgs.Empty);
     private void OnStyleChanged() => StyleChanged?.Invoke(this, EventArgs.Empty);
-    private void OnSearchMatchChanged() => SearchMatchChanged?.Invoke(this, EventArgs.Empty);
+
+    /// <summary>
+    /// <see cref="HasSearchMatch"/> is derived, so it has no property-changed
+    /// hook of its own; platform handlers re-highlight through the
+    /// PropertyMapper entries for the two match properties.
+    /// </summary>
+    private void OnSearchMatchChanged() => OnPropertyChanged(nameof(HasSearchMatch));
 
     /// <summary>
     /// Returns the Y offset (density-independent units) of the search match's

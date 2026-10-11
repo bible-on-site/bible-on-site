@@ -23,7 +23,9 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
         [nameof(HtmlView.LineHeight)] = MapLineHeight,
         [nameof(HtmlView.H1FontSizeMultiplier)] = MapHeaderStyles,
         [nameof(HtmlView.H2FontSizeMultiplier)] = MapHeaderStyles,
-        [nameof(HtmlView.H3FontSizeMultiplier)] = MapHeaderStyles
+        [nameof(HtmlView.H3FontSizeMultiplier)] = MapHeaderStyles,
+        [nameof(HtmlView.SearchMatchStart)] = MapSearchMatch,
+        [nameof(HtmlView.SearchMatchLength)] = MapSearchMatch
     };
 
     // Managed parsing avoids WebKit's nested main-thread run loop. The serial
@@ -62,7 +64,6 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
         base.ConnectHandler(platformView);
         VirtualView.HtmlContentChanged += OnHtmlContentChanged;
         VirtualView.StyleChanged += OnStyleChanged;
-        VirtualView.SearchMatchChanged += OnSearchMatchChanged;
     }
 
     protected override void DisconnectHandler(UITextView platformView)
@@ -73,13 +74,11 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
         _renderedHtml = null;
         VirtualView.HtmlContentChanged -= OnHtmlContentChanged;
         VirtualView.StyleChanged -= OnStyleChanged;
-        VirtualView.SearchMatchChanged -= OnSearchMatchChanged;
         base.DisconnectHandler(platformView);
     }
 
     private void OnHtmlContentChanged(object? sender, EventArgs e) => UpdateContent();
     private void OnStyleChanged(object? sender, EventArgs e) => UpdateContent();
-    private void OnSearchMatchChanged(object? sender, EventArgs e) => UpdateMatchHighlight();
 
     private UIColor GetTextColor()
     {
@@ -292,4 +291,7 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
 
     private static void MapHeaderStyles(HtmlViewHandler handler, HtmlView view)
         => handler.UpdateContent();
+
+    private static void MapSearchMatch(HtmlViewHandler handler, HtmlView view)
+        => handler.UpdateMatchHighlight();
 }
