@@ -177,6 +177,16 @@ partial class Build
                     // Normalization, reflection-based SQLite mapping and LINQ
                     // also execute in framework assemblies during the import.
                     properties["MtouchInterpreter"] = "all%2C-BibleOnSite%2C-HtmlAgilityPack%2C-SQLite-net%2C-System.Private.CoreLib%2C-System.Runtime%2C-System.Collections%2C-System.Linq%2C-System.Net.Primitives";
+                    // The E2E coverage recorder answers every sequence point in
+                    // the app — a single commentary-index import records tens of
+                    // millions of visits. Interpreted, each Visit costs
+                    // microseconds (plus the AOT→interpreter transition), which
+                    // starved the UI thread past the 45s search-result wait in
+                    // CI. AOT the recorder like the rest of the hot path (#1232).
+                    if (MobileE2ECoverage)
+                    {
+                        properties["MtouchInterpreter"] += "%2C-AltCover.Recorder.g";
+                    }
                 }
                 // #1232: weave app-process coverage into the test build only.
                 if (MobileE2ECoverage)

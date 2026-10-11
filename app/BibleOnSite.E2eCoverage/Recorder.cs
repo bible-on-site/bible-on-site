@@ -1,5 +1,5 @@
 using System;
-using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.IO;
 using System.Text;
 
@@ -34,8 +34,12 @@ namespace AltCover.Recorder
 	/// </summary>
 	public static class Instance
 	{
-		private static readonly object Gate = new();
-		private static readonly Dictionary<string, Dictionary<int, long>> Hits = new();
+		// Every instrumented sequence point calls Visit — background imports hit
+		// it millions of times a minute while the UI thread hits it on every
+		// binding and layout pass. A single global lock would serialize the whole
+		// app on the coverage path; striped concurrent dictionaries keep the
+		// per-visit cost near a plain counter even under heavy multi-thread load.
+		private static readonly ConcurrentDictionary<string, ConcurrentDictionary<int, long>> Hits = new();
 		private static readonly long StartedTicks = DateTime.UtcNow.Ticks;
 		private static readonly string ReportFileValue =
 			Path.GetFullPath("e2e-coverage.json");
@@ -57,15 +61,8 @@ namespace AltCover.Recorder
 		/// <summary>Records one sequence/branch point visit in <paramref name="moduleId"/>.</summary>
 		public static void Visit(string moduleId, int pointId)
 		{
-			lock (Gate)
-			{
-				if (!Hits.TryGetValue(moduleId, out var points))
-				{
-					points = new Dictionary<int, long>();
-					Hits[moduleId] = points;
-				}
-				points[pointId] = points.TryGetValue(pointId, out var count) ? count + 1 : 1;
-			}
+			var points = Hits.GetOrAdd(moduleId, static _ => new ConcurrentDictionary<int, long>());
+			points.AddOrUpdate(pointId, 1L, static (_, count) => count + 1);
 		}
 
 		// Call-context tracking is not enabled for app instrumentation; the
@@ -101,46 +98,42 @@ namespace AltCover.Recorder
 		/// <summary>Clears all recorded hits (per-test attribution across app restarts).</summary>
 		public static void Reset()
 		{
-			lock (Gate)
-			{
-				Hits.Clear();
-			}
+			Hits.Clear();
 		}
 
 		/// <summary>
 		/// Serializes the accumulated hits:
 		/// { "format": "altcover-visits/1", "modules": { "&lt;hash&gt;": { "&lt;pointKey&gt;": &lt;count&gt; } } }
+		/// Concurrent dictionaries enumerate a moment-in-time view while visits
+		/// keep recording, so a snapshot can never stall the app's hot paths.
 		/// </summary>
 		public static string SnapshotJson()
 		{
-			lock (Gate)
+			var builder = new StringBuilder(Hits.Count * 256);
+			builder.Append("{\"format\":\"altcover-visits/1\",\"modules\":{");
+			var firstModule = true;
+			foreach (var module in Hits)
 			{
-				var builder = new StringBuilder(Hits.Count * 256);
-				builder.Append("{\"format\":\"altcover-visits/1\",\"modules\":{");
-				var firstModule = true;
-				foreach (var module in Hits)
+				if (!firstModule)
 				{
-					if (!firstModule)
+					builder.Append(',');
+				}
+				firstModule = false;
+				builder.Append('\"').Append(module.Key).Append("\":{");
+				var firstPoint = true;
+				foreach (var point in module.Value)
+				{
+					if (!firstPoint)
 					{
 						builder.Append(',');
 					}
-					firstModule = false;
-					builder.Append('\"').Append(module.Key).Append("\":{");
-					var firstPoint = true;
-					foreach (var point in module.Value)
-					{
-						if (!firstPoint)
-						{
-							builder.Append(',');
-						}
-						firstPoint = false;
-						builder.Append('\"').Append(point.Key).Append("\":").Append(point.Value);
-					}
-					builder.Append('}');
+					firstPoint = false;
+					builder.Append('\"').Append(point.Key).Append("\":").Append(point.Value);
 				}
-				builder.Append("}}");
-				return builder.ToString();
+				builder.Append('}');
 			}
+			builder.Append("}}");
+			return builder.ToString();
 		}
 	}
 }
