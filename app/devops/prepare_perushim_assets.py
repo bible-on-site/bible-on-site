@@ -54,9 +54,9 @@ def validate_pair(source: Path) -> int:
 
 
 def validate_search_index(index_path: Path, notes_timestamp: int) -> None:
-    """Reject a delivered index that is missing, malformed, or from another
-    generation. The file is optional for older artifacts — the app falls back
-    to on-device indexing when the pack does not carry it."""
+    """Reject a delivered index that is missing, malformed, or from another generation."""
+    # The file is optional for older artifacts - the app falls back to
+    # on-device indexing when the pack does not carry it.
     if not index_path.is_file():
         print(f"No delivered search index at {index_path}; the app will build it on-device")
         return
@@ -70,9 +70,8 @@ def validate_search_index(index_path: Path, notes_timestamp: int) -> None:
             raise ValueError("Search index was built for a different notes generation")
         if not str(fingerprints.get("verses", "")).startswith("v4:"):
             raise ValueError("Search index lacks a verses fingerprint")
-        tables = {row[0] for row in index.execute(
-            "SELECT name FROM sqlite_master WHERE name IN "
-            "('verses','verses_documents','notes','notes_documents')")}
+        query = "SELECT name FROM sqlite_master WHERE name IN ('verses','verses_documents','notes','notes_documents')"
+        tables = {row[0] for row in index.execute(query)}
         if len(tables) != 4:
             raise ValueError("Search index is missing FTS/documents tables")
 

@@ -489,7 +489,7 @@ public class PerushimNotesService
 
     /// <summary>
     /// Deletes leftovers of interrupted atomic replacements. Any
-    /// `<db>.<guid>.tmp` file here is a stale artifact — live copies are only
+    /// "name.{guid}.tmp" file here is a stale artifact — live copies are only
     /// observable mid-flight to a concurrent caller, which the operation lock
     /// already serializes away.
     /// </summary>

@@ -19,9 +19,10 @@ def write_search_index(path: Path, notes_timestamp: int = 200) -> None:
                 ("notes", f"v4:{notes_timestamp}:n1"),
                 ("verses", "v4:2026-01-03 22:08:48 UTC:n1"),
             ])
-            for name in ("verses", "notes"):
-                db.execute(f"CREATE TABLE {name}_documents (rowid INTEGER PRIMARY KEY, Text TEXT)")
-                db.execute(f"CREATE VIRTUAL TABLE {name} USING fts5(Text)")
+            db.execute("CREATE TABLE verses_documents (rowid INTEGER PRIMARY KEY, Text TEXT)")
+            db.execute("CREATE TABLE notes_documents (rowid INTEGER PRIMARY KEY, Text TEXT)")
+            db.execute("CREATE VIRTUAL TABLE verses USING fts5(Text)")
+            db.execute("CREATE VIRTUAL TABLE notes USING fts5(Text)")
 
 
 class PreparePerushimAssetsTests(unittest.TestCase):

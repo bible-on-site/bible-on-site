@@ -307,7 +307,9 @@ mod tests {
 
     #[test]
     fn build_index_is_queryable_and_fingerprinted() {
-        let dir = std::env::temp_dir().join(format!("perushim_idx_test_{}", std::process::id()));
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("target")
+            .join(format!("perushim_idx_test_{}", std::process::id()));
         fs::create_dir_all(&dir).unwrap();
         let notes = notes_fixture(&dir);
         let tanah = tanah_fixture(&dir);
