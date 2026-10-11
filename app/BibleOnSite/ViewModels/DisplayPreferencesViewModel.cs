@@ -7,7 +7,9 @@ namespace BibleOnSite.ViewModels;
 /// <summary>
 /// תצוגה settings: font size with a live preview.
 /// </summary>
+#pragma warning disable S2333 // RelayCommand generates partial implementations.
 public partial class DisplayPreferencesViewModel : ObservableObject
+#pragma warning restore S2333
 {
     private readonly PreferencesService _preferencesService;
 

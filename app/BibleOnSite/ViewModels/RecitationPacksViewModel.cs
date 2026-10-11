@@ -73,7 +73,9 @@ public partial class RecitationBookChoice : ObservableObject
 /// קריינות recording management inside חבילות הרחבה: per-book lifecycle rows plus
 /// single-action download-all/remove-all, honest on-disk install states.
 /// </summary>
+#pragma warning disable S2333 // ObservableProperty and RelayCommand generate partial implementations.
 public partial class RecitationPacksViewModel : ObservableObject
+#pragma warning restore S2333
 {
     private readonly RecitationService _recitation;
     private readonly PerekDataService _perakim;

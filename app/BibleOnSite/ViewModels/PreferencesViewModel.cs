@@ -9,7 +9,9 @@ namespace BibleOnSite.ViewModels;
 /// summaries, each navigating to a focused detail page.
 /// Uses local storage (MAUI Preferences); Firebase sync can be added later as enhancement.
 /// </summary>
+#pragma warning disable S2333 // RelayCommand generates partial implementations.
 public partial class PreferencesViewModel : ObservableObject
+#pragma warning restore S2333
 {
     private readonly PreferencesService _preferencesService;
     private readonly PerushimNotesService _perushimNotesService;

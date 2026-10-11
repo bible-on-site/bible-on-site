@@ -6,8 +6,10 @@ namespace BibleOnSite.Pages;
 /// שמע settings: one persisted slider per audio channel. Opened with
 /// ?focus=recitation from קריינות to bring that channel into view.
 /// </summary>
+#pragma warning disable S2333 // MAUI XAML supplies the other partial declaration.
 [QueryProperty(nameof(FocusChannel), "focus")]
 public partial class SoundPreferencesPage : ContentPage
+#pragma warning restore S2333
 {
     public SoundPreferencesPage()
     {

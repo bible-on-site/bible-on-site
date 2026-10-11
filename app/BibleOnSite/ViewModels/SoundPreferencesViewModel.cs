@@ -8,7 +8,7 @@ namespace BibleOnSite.ViewModels;
 /// שיעורים מוקלטים and אפקטים. The קריינות slider edits the same
 /// <see cref="PreferencesService.RecitationVolume"/> the קריינות page links to.
 /// </summary>
-public partial class SoundPreferencesViewModel : ObservableObject
+public class SoundPreferencesViewModel : ObservableObject
 {
     private readonly PreferencesService _preferencesService;
 
