@@ -30,4 +30,8 @@ For a dependency upgrade task, refresh every dependency kind within the user's r
 
 # Pull Request Branch Sync
 
-Sync a pull request branch with its base only when both conditions hold: the current head has no green CI result, and there is an actual merge conflict. A branch being behind its base is not, by itself, a reason to sync.
+Assess the pull request's full merge status: current-head CI and other required checks, merge conflicts, and required reviews or unresolved review requests. Passing CI alone does not make the pull request green.
+
+Resolve failing checks, actual conflicts, and actionable review requests within the task's existing authorization. Sync the branch with its base when that is needed to resolve an actual conflict or a concrete check or review requirement, even if CI already passes. Being behind the base, or waiting for checks or reviews, is not by itself a reason to sync.
+
+After changing or syncing the branch, require the appropriate checks and reviews for the new head before merging; do not reuse an older head's green results as validation of the new head.
