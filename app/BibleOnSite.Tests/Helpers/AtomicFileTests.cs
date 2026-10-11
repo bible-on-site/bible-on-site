@@ -25,14 +25,14 @@ public class AtomicFileTests
         var destination = Path.Combine(storage.Root, "data.sqlite");
         if (exists)
         {
-            await File.WriteAllTextAsync(destination, "original");
+            await File.WriteAllTextAsync(destination, "original", TestContext.Current.CancellationToken);
         }
         await using var stream = new BrokenReadStream();
         await FluentActions.Awaiting(() => AtomicFile.CopyAsync(stream, destination))
             .Should().ThrowAsync<IOException>().WithMessage("interrupted transfer");
         if (exists)
         {
-            (await File.ReadAllTextAsync(destination)).Should().Be("original");
+            (await File.ReadAllTextAsync(destination, TestContext.Current.CancellationToken)).Should().Be("original");
         }
         else
         {

@@ -32,7 +32,8 @@
         <Grid x:Name="ReaderToolbar" Grid.Row="0" MinimumHeightRequest="56"
               BackgroundColor="{AppThemeBinding Light=#F2F7FE, Dark=#20304A}">
             <Grid x:Name="NormalNavigationBar" ColumnDefinitions="48,*,48" HeightRequest="56">
-                <Button x:Name="ReaderNavigationButton" Grid.Column="0" Text="☰" FontSize="24" WidthRequest="48" Padding="0"
+                <Button x:Name="ReaderNavigationButton" Grid.Column="0" Text="{x:Static fonts:FluentUI.navigation_24_regular}"
+                        FontFamily="FluentIcons" FontSize="24" WidthRequest="48" Padding="0"
                         BackgroundColor="Transparent" TextColor="{AppThemeBinding Light=Black, Dark=White}"
                         AutomationId="ReaderNavigationButton" SemanticProperties.Description="פתיחת תפריט הניווט"
                         Clicked="OnReaderMenuClicked"/>
@@ -159,60 +160,6 @@
                                     IsVisible="False" VerticalOptions="Fill" Margin="0"
                                     ResultSelected="OnSearchResultSelected"/>
 
-<!-- iOS bottom bar debug (beta-only collapsible dropdown) -->
-<Grid x:Name="BottomBarDebugOverlay" Grid.Row="1"
-      IsVisible="False"
-      ZIndex="999"
-      VerticalOptions="Start"
-      HorizontalOptions="Start"
-      Margin="8,4,0,0">
-    <!-- Toggle button (small, unobtrusive) -->
-    <Border x:Name="DebugToggleButton"
-            WidthRequest="28" HeightRequest="28"
-            StrokeShape="RoundRectangle 14"
-            BackgroundColor="{AppThemeBinding Light=#DDD, Dark=#444}"
-            HorizontalOptions="Start" VerticalOptions="Start"
-            ZIndex="1000">
-        <Border.GestureRecognizers>
-            <TapGestureRecognizer Tapped="OnDebugToggleTapped"/>
-        </Border.GestureRecognizers>
-        <Label x:Name="DebugToggleIcon" Text="🔧" FontSize="14"
-               HorizontalOptions="Center" VerticalOptions="Center"/>
-    </Border>
-    <!-- Dropdown panel (hidden by default) -->
-    <Border x:Name="DebugDropdownPanel"
-            IsVisible="False"
-            VerticalOptions="Start"
-            HorizontalOptions="Start"
-            Margin="0,32,0,0"
-            Padding="8"
-            BackgroundColor="{AppThemeBinding Light=#F5F5F5, Dark=#2A2A2A}"
-            StrokeShape="RoundRectangle 8"
-            Stroke="{AppThemeBinding Light=#CCC, Dark=#555}"
-            StrokeThickness="1">
-        <VerticalStackLayout Spacing="1">
-            <Label Text="Bottom Bar Fix" FontSize="11" FontAttributes="Bold"
-                   TextColor="{AppThemeBinding Light=Black, Dark=White}" FlowDirection="LeftToRight"/>
-            <RadioButton x:Name="DebugFix0" Content="0: No fix (baseline)" FontSize="10" FlowDirection="LeftToRight"
-                         GroupName="BottomBarDebug"/>
-            <RadioButton x:Name="DebugFix3" Content="3: Bar margin=-N" FontSize="10" FlowDirection="LeftToRight"
-                         GroupName="BottomBarDebug"/>
-            <RadioButton x:Name="DebugFix4" Content="4: TranslationY +N (default)" FontSize="10" FlowDirection="LeftToRight"
-                         GroupName="BottomBarDebug" IsChecked="True"/>
-            <RadioButton x:Name="DebugFix11" Content="11: Page padding=-N" FontSize="10" FlowDirection="LeftToRight"
-                         GroupName="BottomBarDebug"/>
-            <RadioButton x:Name="DebugFix15" Content="15: TranslationY + bar margin=-N" FontSize="10" FlowDirection="LeftToRight"
-                         GroupName="BottomBarDebug"/>
-            <RadioButton x:Name="DebugFix16" Content="16: TranslationY + page padding=-N" FontSize="10" FlowDirection="LeftToRight"
-                         GroupName="BottomBarDebug"/>
-            <RadioButton x:Name="DebugFix17" Content="17: TranslationY (half) + margin" FontSize="10" FlowDirection="LeftToRight"
-                         GroupName="BottomBarDebug"/>
-            <Label x:Name="DebugFixInfo" Text="" FontSize="10" FlowDirection="LeftToRight"
-                   TextColor="{AppThemeBinding Light=Gray, Dark=#AAA}"/>
-        </VerticalStackLayout>
-    </Border>
-</Grid>
-
         <!-- Exit Full Screen Button (floating, hidden by default) -->
         <!-- Gesture recognizers are set up in code-behind: native Android touch for
              pixel-perfect drag tracking, MAUI gesture recognizers for other platforms. -->
@@ -330,6 +277,7 @@
                                     <MultiBinding Converter="{StaticResource PasukDisplayItemsConverter}">
                                         <Binding Path="Pasukim"/>
                                         <Binding Path="BindingContext.IsShnayimMikraEnabled" Source="{x:Reference PerekPageRoot}"/>
+                                        <Binding Path="BindingContext.FontFactor" Source="{x:Reference PerekPageRoot}"/>
                                     </MultiBinding>
                                 </CollectionView.ItemsSource>
                                 <CollectionView.Footer>
@@ -375,16 +323,16 @@
                                                 <Label Grid.Column="0"
                                                        Text="{Binding PasukNumHeb}"
                                                        AutomationId="PasukNumber"
-                                                       FontSize="{DynamicResource PasukNumFontSize}"
+                                                       FontSize="{Binding MarkerFontSize}"
                                                        FontAttributes="Bold"
                                                        VerticalTextAlignment="Start"
                                                        HorizontalTextAlignment="Center"
                                                        Margin="0,1.5,0,0"
                                                        TextColor="{StaticResource Primary}"/>
                                                 <VerticalStackLayout Grid.Column="1" Spacing="2">
-                                                    <Label AutomationId="PasukText"
+                                                    <controls:PasukTextLabel AutomationId="PasukText"
                                                            FormattedText="{Binding Pasuk.FormattedText}"
-                                                           FontSize="{DynamicResource PasukFontSize}"
+                                                           FontSize="{Binding FontSize}"
                                                            FlowDirection="RightToLeft"
                                                            LineBreakMode="WordWrap"
                                                            LineHeight="1.4"/>
@@ -817,7 +765,8 @@
                         CascadeInputTransparent="False"
                         BackgroundColor="Transparent">
 
-            <!-- 4 satellite buttons - fan out from center -->
+            <!-- 4 satellite buttons + toggle — positions are computed in code-behind
+                 by FanMenuGeometry (elliptical arc, compact in every orientation) -->
 
             <!-- Previous perek (bottom-left satellite). Disabled at perek 1 via Command.CanExecute. -->
             <Button x:Name="PrevPerekButton"
@@ -833,9 +782,7 @@
                     Command="{Binding LoadPreviousCommand}"
                     Clicked="OnMenuItemClicked"
                     Opacity="0"
-                    InputTransparent="True"
-                    AbsoluteLayout.LayoutBounds="0.26,0.91,48,48"
-                    AbsoluteLayout.LayoutFlags="PositionProportional"/>
+                    InputTransparent="True"/>
 
             <!-- Today's perek (top-left satellite) -->
             <!-- Icon: calendar_date_24_regular (calendar with date) via x:Static for 5-digit Unicode -->
@@ -852,9 +799,7 @@
                     Command="{Binding LoadTodayCommand}"
                     Clicked="OnMenuItemClicked"
                     Opacity="0"
-                    InputTransparent="True"
-                    AbsoluteLayout.LayoutBounds="0.42,0.87,48,48"
-                    AbsoluteLayout.LayoutFlags="PositionProportional"/>
+                    InputTransparent="True"/>
 
             <!-- Perek Picker (top-right satellite) -->
             <Button x:Name="PerekPickerButton"
@@ -869,9 +814,7 @@
                     TextColor="White"
                     Clicked="OnPerekPickerClicked"
                     Opacity="0"
-                    InputTransparent="True"
-                    AbsoluteLayout.LayoutBounds="0.58,0.87,48,48"
-                    AbsoluteLayout.LayoutFlags="PositionProportional"/>
+                    InputTransparent="True"/>
 
             <!-- Next perek (bottom-right satellite). Disabled at perek 929 via Command.CanExecute. -->
             <Button x:Name="NextPerekButton"
@@ -888,14 +831,13 @@
                     Command="{Binding LoadNextCommand}"
                     Clicked="OnMenuItemClicked"
                     Opacity="0"
-                    InputTransparent="True"
-                    AbsoluteLayout.LayoutBounds="0.74,0.91,48,48"
-                    AbsoluteLayout.LayoutFlags="PositionProportional"/>
+                    InputTransparent="True"/>
 
             <!-- Center Circular FAB - placed last to be on top, sits in notch -->
             <Button x:Name="CircularMenuButton"
                     AutomationId="CircularMenuButton"
-                    Text="☰"
+                    Text="{x:Static fonts:FluentUI.navigation_24_regular}"
+                    FontFamily="FluentIcons"
                     FontSize="22"
                     WidthRequest="56"
                     HeightRequest="56"
@@ -904,9 +846,7 @@
                     TextColor="White"
                     Pressed="OnCircularMenuPressed"
                     Released="OnCircularMenuReleased"
-                    Clicked="OnCircularMenuClicked"
-                    AbsoluteLayout.LayoutBounds="0.5,0.95,56,56"
-                    AbsoluteLayout.LayoutFlags="PositionProportional">
+                    Clicked="OnCircularMenuClicked">
                 <Button.Shadow>
                     <Shadow Brush="Black"
                             Offset="0,3"
