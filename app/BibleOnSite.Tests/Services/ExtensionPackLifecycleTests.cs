@@ -44,7 +44,7 @@ public class ExtensionPackLifecycleTests
         {
             var directory = Path.Combine(root, "store", packName);
             Directory.CreateDirectory(directory);
-            File.WriteAllBytes(Path.Combine(directory, fileName), bytes);
+            File.WriteAllBytes(Path.Combine(directory, Path.GetFileName(fileName)), bytes);
             _stock[packName] = directory;
         }
 
@@ -217,7 +217,7 @@ public class ExtensionPackLifecycleTests
         await recitation.DownloadAsync([1, 3]);
         store.FetchLog.Should().Equal("recitation_1", "recitation_2");
 
-        // Deleting a book's files is the only removal the app-owned storage allows;
+        // Deleting a book's files is the only removal the app-owned storage allows —
         // nothing may re-download it on init, refresh, or restart (#2098 relies on this).
         var removed = catalog.Books[0].PerekIds.Select(id =>
             Path.Combine(storage.Root, "extensions", "recitation", recitation.GetTrack(id)!.AudioSha256 + ".mp3"));

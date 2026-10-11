@@ -55,7 +55,10 @@ public sealed class TestStorage : IAsyncDisposable
     /// or replace the file on Windows. Scoped to a single connection string; never
     /// resets the shared pool, which other test classes may be using in parallel.
     /// </summary>
-    public async Task CloseDatabaseFileAsync(string name, SQLiteOpenFlags flags = SQLiteOpenFlags.ReadOnly)
+    public Task CloseDatabaseFileAsync(string name) => CloseDatabaseFileAsync(name, SQLiteOpenFlags.ReadOnly);
+
+    /// <inheritdoc cref="CloseDatabaseFileAsync(string)"/>
+    public async Task CloseDatabaseFileAsync(string name, SQLiteOpenFlags flags)
     {
         await new SQLiteAsyncConnection(Path.Combine(Root, name), flags).CloseAsync();
     }
