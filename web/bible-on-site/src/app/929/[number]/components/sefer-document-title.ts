@@ -26,22 +26,23 @@ export interface SeferPerekTitle {
 
 /**
  * Build per-perek title parts from a loaded sefer. Sefarim split into
- * additionals (e.g. שמואל א/ב) restart their perek numbering per part, so the
- * source mirrors `PerekObj.source`: "{unit.name} {local numeral}".
+ * additionals (e.g. שמואל א/ב, עזרא/נחמיה) restart their perek numbering per
+ * part, so the source mirrors `PerekObj.source`: the sefer name plus the
+ * additional's letter — "עזרא נ א", not the additional's own name.
  */
 export function buildSeferPerekTitles(sefer: SefarimItem): SeferPerekTitle[] {
 	const units =
 		"perakim" in sefer
-			? [{ name: sefer.name, perakim: sefer.perakim }]
+			? [{ source: sefer.name, perakim: sefer.perakim }]
 			: sefer.additionals.map((additional) => ({
-					name: additional.name,
+					source: `${sefer.name} ${additional.letter}`,
 					perakim: additional.perakim,
 				}));
 	return units.flatMap((unit) =>
 		unit.perakim.map((_, perekIdx) => {
 			const perekHeb = toLetters(perekIdx + 1);
 			return {
-				source: `${unit.name} ${perekHeb}`,
+				source: `${unit.source} ${perekHeb}`,
 				seferName: sefer.name,
 				perekHeb,
 			};

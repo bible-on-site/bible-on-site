@@ -24,8 +24,19 @@ function seferWithAdditionals() {
 	return {
 		name: "שמואל",
 		additionals: [
-			{ name: "שמואל א", perakim: [{}] },
-			{ name: "שמואל ב", perakim: [{}, {}] },
+			{ name: "שמואל א", letter: "א", perakim: [{}] },
+			{ name: "שמואל ב", letter: "ב", perakim: [{}, {}] },
+		],
+	} as unknown as SefarimItem;
+}
+
+/** עזרא's second additional is named נחמיה — the letter, not the name, qualifies sources. */
+function ezraWithAdditionals() {
+	return {
+		name: "עזרא",
+		additionals: [
+			{ name: "עזרא", letter: "א", perakim: [{}] },
+			{ name: "נחמיה", letter: "נ", perakim: [{}] },
 		],
 	} as unknown as SefarimItem;
 }
@@ -44,6 +55,13 @@ describe("sefer-document-title", () => {
 				{ source: "שמואל א א", seferName: "שמואל", perekHeb: "א" },
 				{ source: "שמואל ב א", seferName: "שמואל", perekHeb: "א" },
 				{ source: "שמואל ב ב", seferName: "שמואל", perekHeb: "ב" },
+			]);
+		});
+
+		it("qualifies differently-named additionals by letter like the flat page", () => {
+			expect(buildSeferPerekTitles(ezraWithAdditionals())).toEqual([
+				{ source: "עזרא א א", seferName: "עזרא", perekHeb: "א" },
+				{ source: "עזרא נ א", seferName: "עזרא", perekHeb: "א" },
 			]);
 		});
 	});

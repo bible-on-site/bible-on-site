@@ -24,6 +24,7 @@ import {
 } from "html-flip-book-react/toolbar";
 import dynamic from "next/dynamic";
 import Image from "next/image";
+import { usePathname } from "next/navigation";
 import React, {
 	useCallback,
 	useEffect,
@@ -62,16 +63,14 @@ import RecitationPlayer, {
 import { Stuma } from "./Stuma";
 import styles from "./sefer.module.css";
 import {
+	articleDocumentTitle,
 	buildSeferDocumentTitleResolver,
 	buildSeferPerekTitles,
 	perekDocumentTitle,
+	perushDocumentTitle,
 	releaseSeferDocumentTitle,
 	setSeferDocumentTitle,
 } from "./sefer-document-title";
-import {
-	scrollToPerushPasuk,
-	useSeferOpenPerush,
-} from "./sefer-pasuk-navigation";
 import {
 	type BookPage,
 	bookPageRoute,
@@ -82,6 +81,10 @@ import {
 	toHebrewChapterNumber,
 	wrapDownloadResult,
 } from "./sefer-page-utils";
+import {
+	scrollToPerushPasuk,
+	useSeferOpenPerush,
+} from "./sefer-pasuk-navigation";
 import { TanahpediaLink } from "./TanahpediaLink";
 import { useSeferContentNavigation } from "./useSeferContentNavigation";
 import "html-flip-book-react/styles.css";
@@ -242,17 +245,36 @@ const Sefer = (props: {
 	// flat perek page; on unmount, release() restores it only if the reader
 	// still owns it, so a stale book cannot clobber another page's title.
 	const flatPageTitle = perekDocumentTitle(perekObj.source);
+	// On a standalone article/perush route the reader closes back onto that
+	// page — its own title, not the perek's, must be the release fallback.
+	const pathname = usePathname();
+	const standaloneTitle = useMemo(() => {
+		const slug = /^\/929\/\d+\/([^/]+)$/.exec(pathname ?? "")?.[1];
+		if (!slug) return null;
+		const decoded = decodeURIComponent(slug);
+		const article = articles.find((a) => String(a.id) === decoded);
+		if (article) return articleDocumentTitle(article);
+		const perush = perushim.find((p) => p.name === decoded);
+		return perush
+			? perushDocumentTitle(perush, {
+					source: perekObj.source,
+					seferName: sefer.name,
+					perekHeb: perekObj.perekHeb,
+				})
+			: null;
+	}, [pathname, articles, perushim, perekObj, sefer.name]);
+	const releaseTitle = standaloneTitle ?? flatPageTitle;
 	useEffect(() => {
 		if (!isVisible) {
-			releaseSeferDocumentTitle(flatPageTitle);
+			releaseSeferDocumentTitle(releaseTitle);
 			return;
 		}
 		const title = inBookContentTitle ?? bookPageTitle;
 		if (title != null) setSeferDocumentTitle(title);
-	}, [inBookContentTitle, bookPageTitle, isVisible, flatPageTitle]);
+	}, [inBookContentTitle, bookPageTitle, isVisible, releaseTitle]);
 	useEffect(
-		() => () => releaseSeferDocumentTitle(flatPageTitle),
-		[flatPageTitle],
+		() => () => releaseSeferDocumentTitle(releaseTitle),
+		[releaseTitle],
 	);
 
 	const { onPageFlipped: onContentPageFlipped } = contentNavigation;
