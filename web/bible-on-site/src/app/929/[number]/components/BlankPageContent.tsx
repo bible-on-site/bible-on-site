@@ -9,6 +9,7 @@ import { ArticlesSection } from "./ArticlesSection";
 import { PerushFullView } from "./PerushFullView";
 import { PerushimSection } from "./PerushimSection";
 import styles from "./sefer.module.css";
+import { setSeferOpenPerush } from "./sefer-pasuk-navigation";
 import { writeSeferContentHistory } from "./useSeferContentNavigation";
 
 interface BlankPageContentProps {
@@ -92,6 +93,23 @@ export function BlankPageContent({
 			cancelled = true;
 		};
 	}, [slug, articles, perushim, perekId]);
+
+	// Publish the open perush (with the pesukim it annotates) so pasuk numbers
+	// in the facing perek text page become navigation targets; cleared on
+	// close and on unmount.
+	useEffect(() => {
+		if (!perekId) return;
+		setSeferOpenPerush(
+			perekId,
+			selectedPerush
+				? {
+						name: selectedPerush.name,
+						pesukim: new Set(selectedPerush.notes.map((note) => note.pasuk)),
+					}
+				: null,
+		);
+		return () => setSeferOpenPerush(perekId, null);
+	}, [perekId, selectedPerush]);
 
 	const navigate = (nextSlug?: string) => {
 		if (onNavigate) onNavigate(nextSlug);
