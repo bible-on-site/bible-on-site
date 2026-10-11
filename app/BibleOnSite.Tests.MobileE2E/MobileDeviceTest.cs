@@ -181,7 +181,7 @@ public abstract class MobileDeviceTest : IAsyncLifetime
         {
             AppCoverage.Collect(Configuration, name, outcome, Output);
         }
-        catch (Exception exception)
+        catch (Exception exception) //NOSONAR
         {
             // Coverage collection is diagnostic-only: a failure here must never
             // decide (or mask) the scenario's own outcome.
