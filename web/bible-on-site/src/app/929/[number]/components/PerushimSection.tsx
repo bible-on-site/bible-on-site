@@ -6,7 +6,11 @@ import styles from "./perushim-section.module.css";
 
 interface PerushimSectionProps {
 	perekId: number;
-	perushim?: PerushSummary[] | null;
+	perushim?: (PerushSummary & { perekId?: number })[] | null;
+	/** Section heading (defaults to the perek reader's title). */
+	title?: string;
+	/** Empty-state message (defaults to the perek reader's message). */
+	emptyMessage?: string;
 	/** When set, clicking a perush calls this instead of navigating (e.g. open in-place in flipbook). */
 	onPerushClick?: (perush: PerushSummary) => void;
 	/** When true, show loading state (e.g. fetching perush for in-place view). */
@@ -23,6 +27,8 @@ interface PerushimSectionProps {
 export function PerushimSection({
 	perekId,
 	perushim = [],
+	title = "פרשנים על הפרק",
+	emptyMessage = "אין פרשנות לפרק זה",
 	onPerushClick,
 	loading = false,
 }: PerushimSectionProps) {
@@ -43,7 +49,7 @@ export function PerushimSection({
 					height={18}
 					className={styles.sectionIcon}
 				/>
-				<h2 className={styles.sectionTitle}>פרשנים על הפרק</h2>
+				<h2 className={styles.sectionTitle}>{title}</h2>
 			</header>
 
 			<Carousel
@@ -52,14 +58,14 @@ export function PerushimSection({
 				nextLabel="פרשן הבא"
 			>
 				{safePerushim.length === 0 ? (
-					<p className={styles.emptyMessage}>אין פרשנות לפרק זה</p>
+					<p className={styles.emptyMessage}>{emptyMessage}</p>
 				) : loading ? (
 					<p className={styles.emptyMessage}>מתחבר לפירוש...</p>
 				) : (
 					safePerushim.map((perush) => (
 						<Link
 							key={perush.id}
-							href={`/929/${perekId}/${encodeURIComponent(perush.name)}`}
+							href={`/929/${perush.perekId ?? perekId}/${encodeURIComponent(perush.name)}`}
 							className={styles.carouselItem}
 							onClick={
 								onPerushClick
