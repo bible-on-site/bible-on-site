@@ -80,6 +80,32 @@ public class GimatryHelperTests
         result.Should().Be(expected);
     }
 
+    [Theory]
+    [InlineData(1000, "", "תתר")]  // 1000 is not > 1000, so no thousands prefix
+    [InlineData(1001, "", "אא")]
+    [InlineData(2001, "", "בא")]
+    [InlineData(5786, "'", "ה'תשפו")]
+    [InlineData(2001, " ", "ב א")]
+    public void ToLetters_WithThousands_ShouldPrefixAlafim(int number, string separator, string expected)
+    {
+        // Act
+        var result = GimatryHelper.ToLetters(number, includeThousands: true, separator);
+
+        // Assert
+        result.Should().Be(expected);
+    }
+
+    [Fact]
+    public void ToLetters_WithThousands_WhenAlafimIsZero_ShouldSkipPrefix()
+    {
+        // 10500 -> alafim = (10500 / 1000) % 10 = 0, which maps to '\0' in the
+        // lookup table, so the thousands prefix is skipped and the remainder
+        // renders as ת repetitions plus the ק hundreds.
+        var result = GimatryHelper.ToLetters(10500, includeThousands: true, "'");
+
+        result.Should().Be(new string('ת', 26) + "ק");
+    }
+
     #endregion
 
     #region ToNumber Tests
