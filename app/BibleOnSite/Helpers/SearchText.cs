@@ -8,6 +8,14 @@ namespace BibleOnSite.Helpers;
 /// <summary>Shared Hebrew normalization and conservative offline spelling tolerance.</summary>
 public static class SearchText
 {
+    /// <summary>
+    /// Version folded into every search-index fingerprint (`v4:{content-id}:n{version}`).
+    /// Bump when <see cref="Normalize"/>/<see cref="PlainText"/> semantics change so the
+    /// pipeline (data/sefaria/pipelines/perushim-view search_text.rs NORM_VERSION) and
+    /// the app regenerate matching indexes.
+    /// </summary>
+    internal const int NormalizationVersion = 1;
+
     public static string PlainText(string text)
     {
         if (!text.Contains('<'))

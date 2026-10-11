@@ -108,7 +108,7 @@ public class SearchIndexServiceTests
         (await legacy.ExecuteScalarAsync<string>("SELECT Text FROM verses_documents WHERE PerekId = 1"))
             .Should().Contain("בְּרֵאשִׁ֖ית");
         (await legacy.ExecuteScalarAsync<string>("SELECT fingerprint FROM search_metadata WHERE name = 'verses'"))
-            .Should().StartWith("v3:");
+            .Should().StartWith("v4:");
         (await index.SearchAsync("ישן", new HashSet<SearchFilter> { SearchFilter.Pasuk }, new HashSet<int> { 1 }, 10, TestContext.Current.CancellationToken))
             .Should().BeEmpty("a migrated cache cannot retain stale search results");
     }
@@ -320,6 +320,132 @@ public class SearchIndexServiceTests
         await vm.SearchAsync(TestContext.Current.CancellationToken);
         vm.SearchResults.Should().ContainSingle().Which.Should().BeOfType<PerushSearchResult>()
             .Which.PerushId.Should().Be("8");
+    }
+
+    /// <summary>Minimal queryable index DB as the pipeline ships it: the
+    /// external-content FTS + documents tables + a fingerprint row.</summary>
+    private static string[] DeliveredIndexStatements(string notesFingerprint, string markerDoc) =>
+    [
+        "CREATE TABLE search_metadata (name TEXT PRIMARY KEY, fingerprint TEXT)",
+        $"INSERT INTO search_metadata VALUES ('notes','{notesFingerprint}')",
+        "CREATE TABLE notes_documents (rowid INTEGER PRIMARY KEY, Text TEXT, PerekId INTEGER, PasukNum INTEGER, PerushId INTEGER, SeferId INTEGER)",
+        $"INSERT INTO notes_documents VALUES (1,'{markerDoc}',1,1,7,1)",
+        "CREATE VIRTUAL TABLE notes USING fts5(Text, content='notes_documents', content_rowid='rowid')",
+        $"INSERT INTO notes(rowid,Text) VALUES (1,'{markerDoc}')",
+        "CREATE VIRTUAL TABLE notes_vocab USING fts5vocab(notes, 'row')",
+    ];
+
+    private static Mock<IPadDeliveryService> NullPad()
+    {
+        var delivery = new Mock<IPadDeliveryService>();
+        delivery.Setup(service => service.TryGetAssetPathAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((string?)null);
+        return delivery;
+    }
+
+    [Fact]
+    public async Task DeliveredIndex_WithMatchingFingerprint_IsAdoptedWithoutRebuilding()
+    {
+        await using var storage = new TestStorage();
+        var perakim = await SeedAsync(storage);
+        await storage.CreateDatabaseAsync(NotesDb,
+            [.. NotesDbV2.Statements((7, 1, 1, 0, "בראשית")), "INSERT INTO _metadata VALUES ('build_timestamp','42')"]);
+        // The staged pack payload carries a ready index for this generation.
+        var delivered = await storage.CreateDatabaseAsync(PerushimNotesService.SearchIndexDbName,
+            DeliveredIndexStatements($"v4:42:n{SearchText.NormalizationVersion}", "סימן מובהק"));
+        await delivered.CloseAsync();
+        var notes = PerushimNotesService.CreateForTesting(NullPad().Object, storage.Root);
+        await using var index = new SearchIndexService(perakim, notes, Path.Combine(storage.Root, "search.sqlite"));
+
+        var hits = await index.SearchAsync("סימן", new HashSet<SearchFilter> { SearchFilter.Perush },
+            new HashSet<int> { 1 }, 10, TestContext.Current.CancellationToken);
+
+        hits.Should().ContainSingle().Which.PerushId.Should().Be(7);
+        File.Exists(Path.Combine(storage.Root, PerushimNotesService.SearchIndexDbName))
+            .Should().BeFalse("adoption moves the staged file into place — no duplicate ~300 MB copies");
+        var inspection = new SQLite.SQLiteAsyncConnection(Path.Combine(storage.Root, "search.sqlite"), SQLite.SQLiteOpenFlags.ReadOnly);
+        try
+        {
+            var stored = await inspection.ExecuteScalarAsync<string>(
+                "SELECT fingerprint FROM search_metadata WHERE name = 'notes'");
+            stored.Should().Be($"v4:42:n{SearchText.NormalizationVersion}");
+        }
+        finally { await inspection.CloseAsync(); }
+    }
+
+    [Fact]
+    public async Task DeliveredIndex_WithWrongGeneration_IsIgnoredAndIndexBuiltOnDevice()
+    {
+        await using var storage = new TestStorage();
+        var perakim = await SeedAsync(storage);
+        await storage.CreateDatabaseAsync(NotesDb,
+            [.. NotesDbV2.Statements((7, 1, 1, 0, "בראשית")), "INSERT INTO _metadata VALUES ('build_timestamp','42')"]);
+        var deliveredPath = Path.Combine(storage.Root, PerushimNotesService.SearchIndexDbName);
+        var delivered = await storage.CreateDatabaseAsync(PerushimNotesService.SearchIndexDbName,
+            DeliveredIndexStatements("v4:999:n1", "סימן מובהק"));
+        await delivered.CloseAsync();
+        var notes = PerushimNotesService.CreateForTesting(NullPad().Object, storage.Root);
+        await using var index = new SearchIndexService(perakim, notes, Path.Combine(storage.Root, "search.sqlite"));
+
+        var hits = await index.SearchAsync("בראשית", new HashSet<SearchFilter> { SearchFilter.Perush },
+            new HashSet<int> { 1 }, 10, TestContext.Current.CancellationToken);
+
+        hits.Should().ContainSingle().Which.PerushId.Should().Be(7);
+        (await index.SearchAsync("סימן", new HashSet<SearchFilter> { SearchFilter.Perush },
+            new HashSet<int> { 1 }, 10, TestContext.Current.CancellationToken))
+            .Should().BeEmpty("the wrong-generation index must never be queried");
+        File.Exists(deliveredPath).Should().BeTrue("the rejected file stays for diagnostics; adoption only moves matching indexes");
+    }
+
+    [Fact]
+    public async Task DeliveredIndex_ForContentWithoutMetadata_MatchesByFileStats()
+    {
+        await using var storage = new TestStorage();
+        var perakim = await SeedAsync(storage);
+        // A hand-built v2 DB without build_timestamp — the fingerprint falls
+        // back to file size + modification time.
+        var notesDb = await storage.CreateDatabaseAsync(NotesDb,
+            NotesDbV2.Statements((7, 1, 1, 0, "בראשית")));
+        await notesDb.CloseAsync();
+        var notesFile = new FileInfo(Path.Combine(storage.Root, NotesDb));
+        var fingerprint = $"v4:{notesFile.Length}:{notesFile.LastWriteTimeUtc.Ticks}:n{SearchText.NormalizationVersion}";
+        var delivered = await storage.CreateDatabaseAsync(PerushimNotesService.SearchIndexDbName,
+            DeliveredIndexStatements(fingerprint, "סימן מובהק"));
+        await delivered.CloseAsync();
+        var notes = PerushimNotesService.CreateForTesting(NullPad().Object, storage.Root);
+        await using var index = new SearchIndexService(perakim, notes, Path.Combine(storage.Root, "search.sqlite"));
+
+        var hits = await index.SearchAsync("סימן", new HashSet<SearchFilter> { SearchFilter.Perush },
+            new HashSet<int> { 1 }, 10, TestContext.Current.CancellationToken);
+
+        hits.Should().ContainSingle().Which.PerushId.Should().Be(7);
+    }
+
+    [Fact]
+    public async Task Search_WhenNotesPackMissing_DropsStaleCommentaryIndex()
+    {
+        await using var storage = new TestStorage();
+        var perakim = await SeedAsync(storage);
+        // A working index already containing a stale notes table + fingerprint.
+        var working = await storage.CreateDatabaseAsync("search.sqlite",
+            DeliveredIndexStatements("v4:1:n1", "סימן מובהק"));
+        await working.CloseAsync();
+        var notes = PerushimNotesService.CreateForTesting(NullPad().Object, storage.Root);
+        await using var index = new SearchIndexService(perakim, notes, Path.Combine(storage.Root, "search.sqlite"));
+
+        var hits = await index.SearchAsync("סימן", new HashSet<SearchFilter> { SearchFilter.Perush },
+            new HashSet<int> { 1 }, 10, TestContext.Current.CancellationToken);
+
+        index.CommentaryAvailable.Should().BeFalse();
+        hits.Should().BeEmpty();
+        var inspection = new SQLite.SQLiteAsyncConnection(Path.Combine(storage.Root, "search.sqlite"), SQLite.SQLiteOpenFlags.ReadOnly);
+        try
+        {
+            var tables = await inspection.ExecuteScalarAsync<int>(
+                "SELECT COUNT(*) FROM sqlite_schema WHERE name = 'notes_documents'");
+            tables.Should().Be(0, "commentary index data is removed when its pack is gone");
+        }
+        finally { await inspection.CloseAsync(); }
     }
 
     private sealed class SourceBlobRow

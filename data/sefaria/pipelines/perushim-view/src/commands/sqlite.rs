@@ -14,13 +14,14 @@ use std::fs;
 use std::io::Write;
 use std::path::Path;
 
-use crate::commands::note_blob;
+use crate::commands::{note_blob, search_index};
 use crate::data::extract::{Extracted, Note, Parshan, Perush};
 
 pub fn generate(
     extracted: &Extracted,
     dump_name: &str,
     output_to_dependant_modules: bool,
+    tanah_view: &Path,
 ) -> Result<()> {
     let now = chrono::Utc::now();
     let build_timestamp = now.timestamp();
@@ -28,12 +29,13 @@ pub fn generate(
 
     println!("🕐 Build timestamp: {} ({})", build_timestamp, generated_at);
 
-    let (catalog_path, notes_path) = if output_to_dependant_modules {
+    let (catalog_path, notes_path, index_path) = if output_to_dependant_modules {
         let app_raw =
             Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../../app/BibleOnSite/Resources/Raw");
         (
             app_raw.join(format!("{}.perushim_catalog.sqlite", dump_name)),
-            // Notes go to Android PAD asset pack (on-demand delivery)
+            // Notes and its prebuilt search index go to the Android PAD pack
+            // (on-demand delivery); ODR uses the same files via the iOS dataset.
             {
                 let pad_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join(
                     "../../../../app/BibleOnSite/Platforms/Android/AssetPacks/perushim_notes",
@@ -41,6 +43,9 @@ pub fn generate(
                 fs::create_dir_all(&pad_dir)?;
                 pad_dir.join(format!("{}.perushim_notes.sqlite", dump_name))
             },
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../../../app/BibleOnSite/Platforms/Android/AssetPacks/perushim_notes")
+                .join(format!("{}.hebrew_search.sqlite", dump_name)),
         )
     } else {
         let outputs_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join(".output");
@@ -48,6 +53,7 @@ pub fn generate(
         (
             outputs_dir.join(format!("{}.perushim_catalog.sqlite", dump_name)),
             outputs_dir.join(format!("{}.perushim_notes.sqlite", dump_name)),
+            outputs_dir.join(format!("{}.hebrew_search.sqlite", dump_name)),
         )
     };
 
@@ -69,6 +75,10 @@ pub fn generate(
     )?;
     println!("📁 Notes written to: {}", notes_path.display());
 
+    search_index::build_search_index(&notes_path, tanah_view, &index_path)
+        .context("failed to build the delivered search index")?;
+    println!("📁 Search index written to: {}", index_path.display());
+
     // Create a gzip-compressed copy for git tracking (SQLite compresses ~75%).
     // The .sqlite.gz is committed to git; the uncompressed .sqlite is gitignored.
     // Perushim data updates are delivered via Play Asset Delivery (PAD) as part of the AAB —
@@ -76,6 +86,7 @@ pub fn generate(
     // app version bump → AAB rebuild → Google Play submission. The build_timestamp in
     // _metadata lets the client detect and apply the newer data on app update.
     compress_gz(&notes_path)?;
+    compress_gz(&index_path)?;
 
     Ok(())
 }

@@ -196,13 +196,14 @@ public class NotesDeliveryTests
     }
 
     [Fact]
-    public async Task Diagnostics_WhenLocalDatabaseIsCorrupt_ReportsZeroTimestamp()
+    public async Task Diagnostics_WhenLocalDatabaseIsCorrupt_ReportsItWasSwept()
     {
         await using var storage = new TestStorage();
         await File.WriteAllTextAsync(Path.Join(storage.Root, DbName), "not a sqlite database", TestContext.Current.CancellationToken);
         var service = Create(storage);
         var report = await service.GetDiagnosticsAsync();
-        report.Should().Contain("Local DB build_timestamp: 0");
+        report.Should().Contain("NotesMissing: True").And.Contain("Local DB exists: False",
+            "an unqueryable file is rejected and removed rather than left on the device");
     }
 
     [Fact]

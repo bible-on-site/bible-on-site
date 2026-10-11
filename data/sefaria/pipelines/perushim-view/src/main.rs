@@ -23,13 +23,24 @@ struct Cli {
     #[arg(long)]
     output_to_dependant_modules: bool,
 
-    /// Input v1 notes SQLite (convert-notes only)
+    /// Input v1 notes SQLite (convert-notes) or v2 notes SQLite (search-index)
     #[arg(long)]
     input: Option<std::path::PathBuf>,
 
-    /// Output v2 notes SQLite (convert-notes only)
+    /// Output file (convert-notes: v2 notes SQLite; search-index: index SQLite)
     #[arg(long)]
     output: Option<std::path::PathBuf>,
+
+    /// tanah_view SQLite the search index reads verses and sefer ranges from
+    /// (sqlite + search-index formats)
+    #[arg(long, default_value_os_t = default_tanah_view())]
+    tanah_view: std::path::PathBuf,
+}
+
+fn default_tanah_view() -> std::path::PathBuf {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(
+        "../../../../app/BibleOnSite/Resources/Raw/sefaria-dump-5784-sivan-4.tanah_view.sqlite",
+    )
 }
 
 #[derive(Clone, ValueEnum)]
@@ -44,6 +55,9 @@ enum OutputFormat {
     CompassStages,
     /// Convert a v1 notes SQLite to the v2 blob schema (no MongoDB needed)
     ConvertNotes,
+    /// Build the delivered FTS5 search index from a v2 notes SQLite + tanah_view
+    /// (no MongoDB needed)
+    SearchIndex,
 }
 
 #[tokio::main]
@@ -64,6 +78,17 @@ async fn main() -> Result<()> {
             .output
             .context("--output <v2.sqlite> is required for convert-notes")?;
         return commands::convert_notes::generate(&input, &output);
+    }
+
+    // search-index rebuilds the delivered index from existing DBs — no MongoDB
+    if matches!(cli.format, Some(OutputFormat::SearchIndex)) {
+        let input = cli
+            .input
+            .context("--input <v2 notes.sqlite> is required for search-index")?;
+        let output = cli
+            .output
+            .context("--output <hebrew_search.sqlite> is required for search-index")?;
+        return commands::search_index::build_search_index(&input, &cli.tanah_view, &output);
     }
 
     let format = cli
@@ -94,9 +119,10 @@ async fn main() -> Result<()> {
                 &extracted,
                 &cli.dump_name,
                 cli.output_to_dependant_modules,
+                &cli.tanah_view,
             )?;
         }
-        OutputFormat::CompassStages | OutputFormat::ConvertNotes => {
+        OutputFormat::CompassStages | OutputFormat::ConvertNotes | OutputFormat::SearchIndex => {
             unreachable!("Handled above")
         }
     }

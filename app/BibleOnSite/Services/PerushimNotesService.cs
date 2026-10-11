@@ -19,6 +19,13 @@ public class PerushimNotesService
     private const string NotesDbName = "sefaria-dump-5784-sivan-4.perushim_notes.sqlite";
     private const string PerushimNotesPackName = "perushim_notes";
 
+    /// <summary>
+    /// Ready-to-query FTS5 search index generated with the notes content — the
+    /// second payload file of the perushim_notes pack. It is staged here before
+    /// <see cref="SearchIndexService"/> adopts it into its cache.
+    /// </summary>
+    internal const string SearchIndexDbName = "sefaria-dump-5784-sivan-4.hebrew_search.sqlite";
+
     private readonly IPadDeliveryService _padService;
     private readonly string? _dataDirectoryOverride;
     private readonly IFileSystem _fileSystem;
@@ -138,6 +145,7 @@ public class PerushimNotesService
             $"JSON reflection enabled by default: {JsonSerializer.IsReflectionEnabledByDefault}",
             $"Local DB path: {dbPath}",
             $"Local DB exists: {File.Exists(dbPath)}",
+            $"Delivered search index exists: {File.Exists(Path.Combine(DataDirectory, SearchIndexDbName))}",
             $"PAD/ODR path: {(padPath ?? "(null)")}",
             $"App package has notes file: {appPackageHasFile}",
         };
@@ -206,6 +214,7 @@ public class PerushimNotesService
         if (_initialized)
             return;
 
+        SweepStaleTempFiles();
         var dbPath = Path.Combine(DataDirectory, NotesDbName);
 
         if (!File.Exists(dbPath))
@@ -262,9 +271,10 @@ public class PerushimNotesService
             }
         }
 
-        // Try PAD/ODR path if already available
+        // Try PAD/ODR path if already available. An explicit download retries a
+        // rejected generation on purpose — the marker only gates automatic copies.
         var padPath = await _padService.TryGetAssetPathAsync(PerushimNotesPackName);
-        if (padPath != null && await TryCopyFromPadAsync(padPath, dbPath))
+        if (padPath != null && await TryCopyFromPadAsync(padPath, dbPath, respectRejectionMarker: false))
         {
             _connection = new SQLiteAsyncConnection(dbPath, SQLiteOpenFlags.ReadOnly);
             _notesMissing = false;
@@ -279,7 +289,7 @@ public class PerushimNotesService
         if (await _padService.FetchAsync(PerushimNotesPackName, progress))
         {
             padPath = await _padService.TryGetAssetPathAsync(PerushimNotesPackName);
-            if (padPath != null && await TryCopyFromPadAsync(padPath, dbPath))
+            if (padPath != null && await TryCopyFromPadAsync(padPath, dbPath, respectRejectionMarker: false))
             {
                 _connection = new SQLiteAsyncConnection(dbPath, SQLiteOpenFlags.ReadOnly);
                 _notesMissing = false;
@@ -314,6 +324,17 @@ public class PerushimNotesService
     /// </summary>
     private async Task<bool> ValidateLocalNotesAsync()
     {
+        var valid = await ValidateLocalNotesCoreAsync();
+        if (valid)
+        {
+            // A pack that passed is a different generation than any rejected one.
+            TryDelete(Path.Combine(DataDirectory, NotesDbName + ".rejected"));
+        }
+        return valid;
+    }
+
+    private async Task<bool> ValidateLocalNotesCoreAsync()
+    {
         if (_connection == null)
         {
             return false;
@@ -327,7 +348,7 @@ public class PerushimNotesService
             _notesValidationStatus = schemaVersion == null
                 ? "Legacy notes schema (no schema_version); a v2 pack is required"
                 : $"Unsupported notes schema version {schemaVersion} (requires {PerushNoteBlob.SchemaVersion})";
-            await RejectNotesAsync();
+            await RejectNotesAsync(generationDefect: true);
             Console.Error.WriteLine("Perushim notes have an unsupported schema; download a matching pack.");
             return false;
         }
@@ -386,14 +407,25 @@ public class PerushimNotesService
         {
             _notesValidationStatus = $"Validation error: {ex.GetType().Name}: {ex.Message}";
             Console.Error.WriteLine($"Could not verify perushim attribution: {ex.Message}");
+            // A mid-validation error can come from a locally corrupted file —
+            // a healthy equal-build pack must stay allowed to replace it.
+            await RejectNotesAsync(generationDefect: false);
+            return false;
         }
 
-        await RejectNotesAsync();
+        await RejectNotesAsync(generationDefect: true);
         Console.Error.WriteLine("Perushim notes do not match the installed catalog; download a matching pack.");
         return false;
     }
 
-    private async Task RejectNotesAsync()
+    /// <param name="generationDefect">
+    /// True when the rejection proves the pack generation itself is unusable
+    /// (unsupported schema, catalog mismatch) — then a marker blocks the same
+    /// generation from being re-copied every launch. False for ambiguous
+    /// failures (e.g. a locally corrupted file), where a healthy equal-build
+    /// pack must stay allowed to replace it.
+    /// </param>
+    private async Task RejectNotesAsync(bool generationDefect)
     {
         if (_connection != null)
         {
@@ -401,6 +433,110 @@ public class PerushimNotesService
             _connection = null;
         }
         _notesMissing = true;
+        // Never leave an unusable generation on the device: the ~285 MB legacy
+        // DB, its paired search index, journal sidecars, and interrupted
+        // replacement leftovers are all app-owned and must go.
+        var dbPath = Path.Combine(DataDirectory, NotesDbName);
+        // Remember the rejected generation so a same-generation pack is not
+        // re-copied on every launch only to fail validation again.
+        var rejectedTimestamp = await GetBuildTimestampAsync(dbPath);
+        TryDelete(dbPath);
+        TryDelete(dbPath + "-wal");
+        TryDelete(dbPath + "-shm");
+        var indexPath = Path.Combine(DataDirectory, SearchIndexDbName);
+        TryDelete(indexPath);
+        TryDelete(indexPath + "-wal");
+        TryDelete(indexPath + "-shm");
+        if (!generationDefect)
+        {
+            return;
+        }
+        try
+        {
+            await File.WriteAllTextAsync(dbPath + ".rejected", rejectedTimestamp.ToString());
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Failed to record rejected notes generation: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// The generation marker left by <see cref="RejectNotesAsync"/>: when the
+    /// pack still carries the same build_timestamp that already failed
+    /// validation, copying it again would loop copy→reject→delete on every
+    /// launch. A different pack timestamp clears the marker by proceeding.
+    /// </summary>
+    private async Task<bool> IsRejectedGenerationAsync(string dbPath)
+    {
+        try
+        {
+            var marker = Path.Combine(DataDirectory, NotesDbName + ".rejected");
+            if (!File.Exists(marker))
+            {
+                return false;
+            }
+            var rejected = (await File.ReadAllTextAsync(marker)).Trim();
+            var candidate = await GetBuildTimestampAsync(dbPath);
+            return candidate > 0 && candidate.ToString() == rejected;
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Failed to check rejected notes generation: {ex.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Deletes leftovers of interrupted atomic replacements. Any
+    /// `<db>.<guid>.tmp` file here is a stale artifact — live copies are only
+    /// observable mid-flight to a concurrent caller, which the operation lock
+    /// already serializes away.
+    /// </summary>
+    private void SweepStaleTempFiles()
+    {
+        try
+        {
+            foreach (var name in new[] { NotesDbName, SearchIndexDbName })
+            {
+                foreach (var file in Directory.GetFiles(DataDirectory, name + ".*.tmp"))
+                {
+                    TryDelete(file);
+                }
+            }
+            // Staged app-package copy that never became the local DB.
+            TryDelete(Path.Combine(DataDirectory, NotesDbName + ".pkgcheck"));
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Failed to sweep stale perushim temp files: {ex.Message}");
+        }
+    }
+
+    private static void TryDelete(string path)
+    {
+        try
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Failed to delete obsolete perushim file '{path}': {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// The staged search index that arrived with the notes pack, or null when
+    /// the pack is older than the delivered-index format.
+    /// </summary>
+    internal async Task<string?> GetDeliveredIndexPathAsync()
+    {
+        await InitializeAsync();
+        var path = Path.Combine(DataDirectory, SearchIndexDbName);
+        return File.Exists(path) ? path : null;
     }
 
     private async Task<string?> ReadSchemaVersionAsync()
@@ -417,8 +553,33 @@ public class PerushimNotesService
         }
     }
 
+    private static async Task<string?> ReadSchemaVersionAsync(string dbPath)
+    {
+        SQLiteAsyncConnection? conn = null;
+        try
+        {
+            conn = new SQLiteAsyncConnection(dbPath, SQLiteOpenFlags.ReadOnly);
+            return await conn.ExecuteScalarAsync<string>(
+                "SELECT value FROM _metadata WHERE key = 'schema_version'");
+        }
+        catch (SQLiteException)
+        {
+            return null;
+        }
+        finally
+        {
+            if (conn != null)
+            {
+                await conn.CloseAsync();
+            }
+        }
+    }
+
     /// <summary>
-    /// Compares build_timestamp in local DB vs PAD DB; overwrites local if PAD is newer.
+    /// Compares the local DB with the PAD copy and overwrites local when the
+    /// pack is newer — or whenever the local file is an incompatible schema,
+    /// even at equal build timestamps (a stale format must never survive a
+    /// compatible pack that is already on the device).
     /// </summary>
     private async Task TryUpgradeFromPadAsync(string localDbPath)
     {
@@ -432,10 +593,17 @@ public class PerushimNotesService
                 padDbPath = Path.Combine(padPath, "assets", NotesDbName);
             if (!File.Exists(padDbPath)) return;
 
+            var localSchema = await ReadSchemaVersionAsync(localDbPath);
+            var padSchema = await ReadSchemaVersionAsync(padDbPath);
+            if (padSchema != PerushNoteBlob.SchemaVersion)
+            {
+                return;
+            }
+
             var localTs = await GetBuildTimestampAsync(localDbPath);
             var padTs = await GetBuildTimestampAsync(padDbPath);
-
-            if (padTs > localTs)
+            var localCompatible = localSchema == PerushNoteBlob.SchemaVersion;
+            if ((!localCompatible || padTs > localTs) && !await IsRejectedGenerationAsync(padDbPath))
             {
                 // Close any existing connection before overwriting
                 if (_connection != null)
@@ -445,6 +613,7 @@ public class PerushimNotesService
                 }
                 await using var source = File.OpenRead(padDbPath);
                 await AtomicFile.CopyAsync(source, localDbPath);
+                await TryCopyPadIndexAsync(padPath);
                 Console.WriteLine($"Perushim notes upgraded from PAD (local={localTs}, pad={padTs})");
             }
         }
@@ -478,7 +647,7 @@ public class PerushimNotesService
         return 0;
     }
 
-    private static async Task<bool> TryCopyFromPadAsync(string padAssetsPath, string dbPath)
+    private async Task<bool> TryCopyFromPadAsync(string padAssetsPath, string dbPath, bool respectRejectionMarker = true)
     {
         // PAD may expose pack root or an "assets" subfolder depending on SDK/version
         var srcPath = Path.Combine(padAssetsPath, NotesDbName);
@@ -486,10 +655,24 @@ public class PerushimNotesService
             srcPath = Path.Combine(padAssetsPath, "assets", NotesDbName);
         if (!File.Exists(srcPath))
             return false;
+        // An incompatible pack file would only be rejected and deleted after
+        // the copy — checking first also avoids re-copying ~65 MB on every
+        // launch while the store still serves an old generation.
+        if (await ReadSchemaVersionAsync(srcPath) != PerushNoteBlob.SchemaVersion)
+        {
+            Console.Error.WriteLine("PAD notes have an incompatible schema; skipping copy.");
+            return false;
+        }
+        if (respectRejectionMarker && await IsRejectedGenerationAsync(srcPath))
+        {
+            Console.Error.WriteLine("PAD notes match an already-rejected generation; skipping copy.");
+            return false;
+        }
         try
         {
             await using var source = File.OpenRead(srcPath);
             await AtomicFile.CopyAsync(source, dbPath);
+            await TryCopyPadIndexAsync(padAssetsPath);
             return true;
         }
         catch (Exception ex)
@@ -500,15 +683,42 @@ public class PerushimNotesService
     }
 
     /// <summary>
+    /// Copies the pack's delivered search index next to the notes DB when the
+    /// pack carries one. Optional: packs older than the delivered-index format
+    /// simply leave the app to build the index on-device.
+    /// </summary>
+    private async Task TryCopyPadIndexAsync(string padAssetsPath)
+    {
+        var srcPath = Path.Combine(padAssetsPath, SearchIndexDbName);
+        if (!File.Exists(srcPath))
+            srcPath = Path.Combine(padAssetsPath, "assets", SearchIndexDbName);
+        if (!File.Exists(srcPath))
+            return;
+        try
+        {
+            await using var source = File.OpenRead(srcPath);
+            await AtomicFile.CopyAsync(source, Path.Combine(DataDirectory, SearchIndexDbName));
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Failed to copy delivered search index from PAD: {ex.Message}");
+        }
+    }
+
+    /// <summary>
     /// Copies the notes DB from the app package when bundled (e.g. Android Debug MauiAsset fallback).
+    /// The package cannot be inspected without materializing it, so it lands in
+    /// a staging file first — the same schema and rejected-generation checks as
+    /// a PAD pack run before it becomes the local DB. Without the gate a
+    /// catalog-mismatched bundle would copy → reject → delete on every launch.
     /// </summary>
     private async Task<bool> TryCopyFromAppPackageAsync(string dbPath)
     {
+        var staged = dbPath + ".pkgcheck";
         try
         {
             await using var source = await _fileSystem.OpenAppPackageFileAsync(NotesDbName);
-            await AtomicFile.CopyAsync(source, dbPath);
-            return true;
+            await AtomicFile.CopyAsync(source, staged);
         }
         catch (FileNotFoundException)
         {
@@ -518,6 +728,32 @@ public class PerushimNotesService
         {
             System.Diagnostics.Debug.WriteLine($"Perushim notes copy from app package failed: {ex.Message}");
             return false;
+        }
+        if (await ReadSchemaVersionAsync(staged) != PerushNoteBlob.SchemaVersion ||
+            await IsRejectedGenerationAsync(staged))
+        {
+            TryDelete(staged);
+            return false;
+        }
+        File.Move(staged, dbPath, overwrite: true);
+        await TryCopyPackageIndexAsync();
+        return true;
+    }
+
+    private async Task TryCopyPackageIndexAsync()
+    {
+        try
+        {
+            await using var source = await _fileSystem.OpenAppPackageFileAsync(SearchIndexDbName);
+            await AtomicFile.CopyAsync(source, Path.Combine(DataDirectory, SearchIndexDbName));
+        }
+        catch (FileNotFoundException)
+        {
+            // Bundled package may not carry the index — the app builds it on-device.
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Delivered search index copy from app package failed: {ex.Message}");
         }
     }
 

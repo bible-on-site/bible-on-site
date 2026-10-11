@@ -30,8 +30,25 @@ public sealed partial class PadDeliveryService : IPadDeliveryService
     {
         // Extracted ODR data belongs to this app build, just like the store resource.
         var generation = $"{appInfo.VersionString}-{appInfo.BuildString}";
-        var dir = Path.Combine(fileSystem.CacheDirectory, "odr_assets", generation, packName);
+        var root = Path.Combine(fileSystem.CacheDirectory, "odr_assets");
+        var dir = Path.Combine(root, generation, packName);
         Directory.CreateDirectory(dir);
+        // Extractions from previous app versions are obsolete — each holds a
+        // full pack payload (hundreds of MB) and must not accumulate.
+        try
+        {
+            foreach (var stale in Directory.GetDirectories(root))
+            {
+                if (Path.GetFileName(stale) != generation)
+                {
+                    Directory.Delete(stale, recursive: true);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Failed to remove stale ODR generations: {ex.Message}");
+        }
         return dir;
     }
 
@@ -370,18 +387,36 @@ partial class PadDeliveryService
     /// actool compiles the .dataset into Assets.car, so we read it via NSDataAsset and
     /// write to disk for SQLite file-based access.
     /// ODR assets live in the request's bundle, not the main bundle.
+    /// The perushim pack also carries the prebuilt search index under the same
+    /// ODR tag — save it too when present so both files reach the delivery dir.
     /// </summary>
     private static string? SaveOdrDataAsset(string cacheDir, NSBundle bundle, string packName)
     {
-        using var asset = new NSDataAsset(packName, bundle);
+        if (!SaveNamedAsset(cacheDir, bundle, packName, PayloadFileName(packName), required: true))
+        {
+            return null;
+        }
+        if (packName == PerushimNotesPackName)
+        {
+            SaveNamedAsset(cacheDir, bundle, "perushim_search", PerushimNotesService.SearchIndexDbName, required: false);
+        }
+        return cacheDir;
+    }
+
+    private static bool SaveNamedAsset(string cacheDir, NSBundle bundle, string assetName, string fileName, bool required)
+    {
+        using var asset = new NSDataAsset(assetName, bundle);
         if (asset?.Data == null)
         {
-            System.Diagnostics.Debug.WriteLine($"ODR: NSDataAsset('{packName}') returned null");
-            return null;
+            if (required)
+            {
+                System.Diagnostics.Debug.WriteLine($"ODR: NSDataAsset('{assetName}') returned null");
+            }
+            return false;
         }
 
         System.Diagnostics.Debug.WriteLine($"ODR: NSDataAsset loaded, length={asset.Data.Length}");
-        var destPath = Path.Combine(cacheDir, PayloadFileName(packName));
+        var destPath = Path.Combine(cacheDir, fileName);
         try
         {
             using var stream = asset.Data.AsStream();
@@ -393,12 +428,12 @@ partial class PadDeliveryService
             }
             finally { File.Delete(temporary); }
             System.Diagnostics.Debug.WriteLine($"ODR: Saved to {destPath}");
-            return cacheDir;
+            return true;
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"ODR: Save failed: {ex.Message}");
-            return null;
+            return false;
         }
     }
 

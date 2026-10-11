@@ -13,7 +13,8 @@ public sealed class SearchIndexService : IAsyncDisposable
     private const int BlobImportBatchSize = 16;
     private readonly PerekDataService _perakim;
     private readonly PerushimNotesService? _notes;
-    private readonly SQLiteAsyncConnection _index;
+    private readonly string _indexPath;
+    private SQLiteAsyncConnection _index;
     private readonly Dictionary<string, SemaphoreSlim> _gates = new()
     {
         ["verses"] = new(1, 1),
@@ -26,13 +27,14 @@ public sealed class SearchIndexService : IAsyncDisposable
     private readonly object _buildSync = new();
 
     private static readonly Lazy<SearchIndexService> _instance = new(() => new(PerekDataService.Instance,
-        PerushimNotesService.Instance, Path.Combine(FileSystem.Current.CacheDirectory, "hebrew-search-v1.sqlite")));
+        PerushimNotesService.Instance, Path.Combine(FileSystem.Current.CacheDirectory, "hebrew-search.sqlite")));
     public static SearchIndexService Instance => _instance.Value;
 
     public SearchIndexService(PerekDataService perakim, PerushimNotesService? notes, string indexPath)
     {
         _perakim = perakim;
         _notes = notes;
+        _indexPath = indexPath;
         _index = new SQLiteAsyncConnection(indexPath);
         _initialization = InitializeIndexAsync();
     }
@@ -156,19 +158,60 @@ public sealed class SearchIndexService : IAsyncDisposable
 
     private async Task InitializeIndexAsync()
     {
+        DeleteObsoleteCaches();
         var legacyTables = await _index.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM sqlite_schema WHERE name IN ('verses_content','notes_content')");
         if (legacyTables > 0)
         {
             // Defensive SQLite can also forbid dropping the old _content table.
             // Replace this derived cache before any import/query can use it.
-            var path = _index.DatabasePath;
             await _index.CloseAsync();
-            File.Delete(path);
+            File.Delete(_indexPath);
+            _index = new SQLiteAsyncConnection(_indexPath);
         }
+        await OpenIndexAsync();
+    }
+
+    private async Task OpenIndexAsync()
+    {
         await _index.ExecuteScalarAsync<string>("PRAGMA journal_mode=WAL");
         await _index.ExecuteAsync("PRAGMA synchronous=NORMAL");
         await _index.ExecuteAsync("CREATE TABLE IF NOT EXISTS search_metadata (name TEXT PRIMARY KEY, fingerprint TEXT)");
+    }
+
+    /// <summary>
+    /// Removes the superseded v1 cache file and any interrupted atomic-replace
+    /// leftovers next to the working index.
+    /// </summary>
+    private void DeleteObsoleteCaches()
+    {
+        try
+        {
+            var legacy = Path.Combine(FileSystem.Current.CacheDirectory, "hebrew-search-v1.sqlite");
+            foreach (var path in new[] { legacy, legacy + "-wal", legacy + "-shm" })
+            {
+                if (File.Exists(path))
+                {
+                    File.Delete(path);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Failed to remove obsolete search cache: {ex.Message}");
+        }
+        try
+        {
+            var directory = Path.GetDirectoryName(_indexPath) ?? ".";
+            foreach (var file in Directory.GetFiles(directory, Path.GetFileName(_indexPath) + ".*.tmp"))
+            {
+                File.Delete(file);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Failed to sweep stale search-index temp files: {ex.Message}");
+        }
     }
 
     private async Task EnsureIndexAsync(string table)
@@ -188,21 +231,136 @@ public sealed class SearchIndexService : IAsyncDisposable
                 CommentaryAvailable = connection != null;
                 if (connection != null)
                 {
+                    await TryAdoptDeliveredIndexAsync(connection);
                     await BuildAsync("notes", connection, true);
                 }
                 else
                 {
-                    _ready.TryRemove("notes", out _);
+                    // The notes pack was rejected or never arrived — drop the
+                    // stale table so the obsolete index does not linger.
+                    await ClearTableAsync("notes");
                 }
             }
         }
         finally { _gates[table].Release(); }
     }
 
+    /// <summary>
+    /// Stable identity of the indexed content: the generation marker stored in
+    /// the content DB's `_metadata` (build_timestamp for notes, generated_at
+    /// for tanah_view) folded into `v4:{id}:n{norm}`. Falls back to file stats
+    /// only for sources without metadata — file times are never a validity
+    /// signal on their own.
+    /// </summary>
+    private static async Task<string> FingerprintAsync(SQLiteAsyncConnection source, string contentKey)
+    {
+        string? id = null;
+        try
+        {
+            id = await source.ExecuteScalarAsync<string>("SELECT value FROM _metadata WHERE key = ?", contentKey);
+        }
+        catch (SQLiteException)
+        {
+            // The content DB may not carry _metadata.
+        }
+        if (string.IsNullOrEmpty(id))
+        {
+            var file = new FileInfo(source.DatabasePath);
+            id = $"{file.Length}:{file.LastWriteTimeUtc.Ticks}";
+        }
+        return $"v4:{id}:n{SearchText.NormalizationVersion}";
+    }
+
+    /// <summary>
+    /// Adopts the prebuilt index staged with the notes pack when its stored
+    /// fingerprint matches the installed notes generation — replacing the
+    /// working index by atomic rename instead of re-importing ~363K notes.
+    /// </summary>
+    private async Task TryAdoptDeliveredIndexAsync(SQLiteAsyncConnection notesConnection)
+    {
+        var expected = await FingerprintAsync(notesConnection, "build_timestamp");
+        var stored = await _index.ExecuteScalarAsync<string>(
+            "SELECT fingerprint FROM search_metadata WHERE name = 'notes'");
+        if (stored == expected)
+        {
+            _ready["notes"] = expected;
+            return;
+        }
+        var deliveredPath = await _notes!.GetDeliveredIndexPathAsync();
+        if (deliveredPath == null || string.Equals(deliveredPath, _indexPath, StringComparison.Ordinal))
+        {
+            return;
+        }
+        // Read the staged file's fingerprint without disturbing _index.
+        string? deliveredFp = null;
+        SQLiteAsyncConnection? delivered = null;
+        try
+        {
+            delivered = new SQLiteAsyncConnection(deliveredPath, SQLiteOpenFlags.ReadOnly);
+            deliveredFp = await delivered.ExecuteScalarAsync<string>(
+                "SELECT fingerprint FROM search_metadata WHERE name = 'notes'");
+        }
+        catch (SQLiteException)
+        {
+            // Unusable delivered file — fall through to on-device build.
+        }
+        finally
+        {
+            if (delivered != null)
+            {
+                await delivered.CloseAsync();
+            }
+        }
+        if (deliveredFp != expected)
+        {
+            return;
+        }
+
+        // Swap under both gates: a concurrent verses build/query may hold _index.
+        await _gates["verses"].WaitAsync();
+        try
+        {
+            await _index.CloseAsync();
+            try
+            {
+                File.Move(deliveredPath, _indexPath, overwrite: true);
+            }
+            catch (IOException)
+            {
+                // Different volume or platform quirk — copy then remove.
+                await using var source = File.OpenRead(deliveredPath);
+                await AtomicFile.CopyAsync(source, _indexPath);
+                File.Delete(deliveredPath);
+            }
+            _index = new SQLiteAsyncConnection(_indexPath);
+            await OpenIndexAsync();
+        }
+        finally
+        {
+            _gates["verses"].Release();
+        }
+    }
+
+    /// <summary>Drops an index table whose content source is gone.</summary>
+    private async Task ClearTableAsync(string table)
+    {
+        _ready.TryRemove(table, out _);
+        var stored = await _index.ExecuteScalarAsync<string>(
+            "SELECT fingerprint FROM search_metadata WHERE name = ?", table);
+        if (stored == null)
+        {
+            return;
+        }
+        await _index.ExecuteAsync("DELETE FROM search_metadata WHERE name = ?", table);
+        await _index.ExecuteAsync($"DROP TABLE IF EXISTS {table}_vocab");
+        await _index.ExecuteAsync($"DROP TABLE IF EXISTS {table}");
+        await _index.ExecuteAsync($"DROP TABLE IF EXISTS {table}_content");
+        await _index.ExecuteAsync($"DROP TABLE IF EXISTS {table}_documents");
+    }
+
     private async Task BuildAsync(string table, SQLiteAsyncConnection source, bool commentary)
     {
-        var file = new FileInfo(source.DatabasePath);
-        var fingerprint = $"v3:{file.Length}:{file.LastWriteTimeUtc.Ticks}";
+        var fingerprint = await FingerprintAsync(source, commentary ? "build_timestamp" : "generated_at");
         if (_ready.GetValueOrDefault(table) == fingerprint)
         {
             return;

@@ -25,7 +25,7 @@ public class OdrCacheTests
 
         Directory.Exists(current).Should().BeTrue();
         File.Exists(Path.Join(current, Notes)).Should().BeFalse();
-        File.Exists(Path.Join(previous, Notes)).Should().BeTrue();
+        Directory.Exists(previous).Should().BeFalse("previous-generation extractions are purged, not just ignored");
     }
 
     [Fact]

@@ -102,7 +102,9 @@ public class PerushimAttributionTests
         var report = await service.GetDiagnosticsAsync();
 
         report.Should().Contain("Platform: iOS")
-            .And.Contain("Local DB exists: True").And.Contain("PAD file at root: True")
+            .And.Contain("Local DB exists: False",
+                "a rejected generation is removed from the device")
+            .And.Contain("PAD file at root: True")
             .And.Contain("IsAvailable: False")
             .And.Contain("Legacy build mismatch (notes=1790678024, catalog=200)");
         (await service.TryDownloadNotesAsync()).Should().BeFalse();

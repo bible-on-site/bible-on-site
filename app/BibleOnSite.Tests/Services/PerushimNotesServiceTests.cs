@@ -349,6 +349,108 @@ public sealed class PerushimNotesServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task InitializeAsync_WithLegacyV1DatabaseAndEqualTimestampPad_AdoptsPadCopy()
+    {
+        var dataDir = Path.Join(_tempRoot, nameof(InitializeAsync_WithLegacyV1DatabaseAndEqualTimestampPad_AdoptsPadCopy));
+        var padDir = Path.Join(_tempRoot, "pad-equal-ts");
+        Directory.CreateDirectory(dataDir);
+        Directory.CreateDirectory(padDir);
+
+        // A v1 row-based pack left over from an older app version — same
+        // generation as the store pack, so a timestamp comparison alone would
+        // keep it and the device would still carry an unqueryable ~285 MB file.
+        var legacy = new SQLiteAsyncConnection(Path.Join(dataDir, NotesDbFileName));
+        await legacy.ExecuteAsync("CREATE TABLE _metadata (key TEXT, value TEXT)");
+        await legacy.ExecuteAsync("INSERT INTO _metadata VALUES ('build_timestamp','1500000000')");
+        await legacy.ExecuteAsync("CREATE TABLE note (perush_id INTEGER, perek_id INTEGER, pasuk INTEGER, note_idx INTEGER, note_content TEXT)");
+        await legacy.ExecuteAsync("INSERT INTO note VALUES (9,4,1,0,'stale note')");
+        await legacy.CloseAsync();
+
+        await CreateNotesDatabaseAsync(
+            padDir,
+            buildTimestamp: 1500000000,
+            (9, 4, 1, 0, "fresh note"));
+
+        var service = PerushimNotesService.CreateForTesting(
+            new FakePadDeliveryService { AssetPath = padDir },
+            dataDir);
+
+        await service.InitializeAsync();
+
+        service.IsAvailable.Should().BeTrue();
+        var notes = await service.LoadNotesForPerekAsync(4, new Dictionary<int, Perush>());
+        notes.Should().ContainSingle().Which.NoteContent.Should().Be("fresh note");
+    }
+
+    [Fact]
+    public async Task InitializeAsync_WithLegacyV1Database_DeletesRejectedFilesAndStagedIndex()
+    {
+        var dataDir = Path.Join(_tempRoot, nameof(InitializeAsync_WithLegacyV1Database_DeletesRejectedFilesAndStagedIndex));
+        Directory.CreateDirectory(dataDir);
+
+        // v1 notes + a staged search index + journal sidecars — all must go so
+        // the device does not keep hundreds of MB of unusable data.
+        var legacy = new SQLiteAsyncConnection(Path.Join(dataDir, NotesDbFileName));
+        await legacy.ExecuteAsync("CREATE TABLE _metadata (key TEXT, value TEXT)");
+        await legacy.ExecuteAsync("CREATE TABLE note (perush_id INTEGER, perek_id INTEGER, pasuk INTEGER, note_idx INTEGER, note_content TEXT)");
+        await legacy.CloseAsync();
+        var indexPath = Path.Join(dataDir, PerushimNotesService.SearchIndexDbName);
+        await File.WriteAllTextAsync(indexPath, "staged index", TestContext.Current.CancellationToken);
+        await File.WriteAllTextAsync(indexPath + "-wal", "journal", TestContext.Current.CancellationToken);
+
+        var service = PerushimNotesService.CreateForTesting(new FakePadDeliveryService(), dataDir);
+
+        await service.InitializeAsync();
+
+        service.IsAvailable.Should().BeFalse();
+        File.Exists(Path.Join(dataDir, NotesDbFileName)).Should().BeFalse("a rejected legacy DB must not linger on the device");
+        File.Exists(indexPath).Should().BeFalse("the index belongs to the rejected generation");
+        File.Exists(indexPath + "-wal").Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task InitializeAsync_SweepsInterruptedAtomicCopyLeftovers()
+    {
+        var dataDir = Path.Join(_tempRoot, nameof(InitializeAsync_SweepsInterruptedAtomicCopyLeftovers));
+        Directory.CreateDirectory(dataDir);
+        await CreateNotesDatabaseAsync(dataDir, (7, 3, 1, 0, "local note"));
+        var staleNotes = Path.Join(dataDir, $"{NotesDbFileName}.{Guid.NewGuid():N}.tmp");
+        var staleIndex = Path.Join(dataDir, $"{PerushimNotesService.SearchIndexDbName}.{Guid.NewGuid():N}.tmp");
+        await File.WriteAllTextAsync(staleNotes, "partial copy", TestContext.Current.CancellationToken);
+        await File.WriteAllTextAsync(staleIndex, "partial copy", TestContext.Current.CancellationToken);
+
+        var service = PerushimNotesService.CreateForTesting(new FakePadDeliveryService(), dataDir);
+        await service.InitializeAsync();
+
+        service.IsAvailable.Should().BeTrue();
+        File.Exists(staleNotes).Should().BeFalse();
+        File.Exists(staleIndex).Should().BeFalse();
+        Directory.GetFiles(dataDir, "*.tmp").Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task InitializeAsync_CopiesDeliveredIndexAlongsidePadNotes()
+    {
+        var dataDir = Path.Join(_tempRoot, nameof(InitializeAsync_CopiesDeliveredIndexAlongsidePadNotes));
+        var padDir = Path.Join(_tempRoot, "pad-with-index");
+        Directory.CreateDirectory(dataDir);
+        Directory.CreateDirectory(padDir);
+        await CreateNotesDatabaseAsync(padDir, (9, 4, 1, 0, "pad note"));
+        await File.WriteAllTextAsync(Path.Join(padDir, PerushimNotesService.SearchIndexDbName), "delivered index", TestContext.Current.CancellationToken);
+
+        var service = PerushimNotesService.CreateForTesting(
+            new FakePadDeliveryService { AssetPath = padDir },
+            dataDir);
+
+        await service.InitializeAsync();
+
+        service.IsAvailable.Should().BeTrue();
+        var stagedIndex = Path.Join(dataDir, PerushimNotesService.SearchIndexDbName);
+        File.Exists(stagedIndex).Should().BeTrue();
+        (await service.GetDeliveredIndexPathAsync()).Should().Be(stagedIndex);
+    }
+
+    [Fact]
     public async Task InitializeAsync_WithLegacyV1Database_RejectsIt_AndDownloadRecovers()
     {
         var dataDir = Path.Join(_tempRoot, nameof(InitializeAsync_WithLegacyV1Database_RejectsIt_AndDownloadRecovers));

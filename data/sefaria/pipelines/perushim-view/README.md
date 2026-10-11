@@ -62,6 +62,23 @@ Re-generating the committed `.sqlite.gz` fallback without a MongoDB dump:
 `--format convert-notes --input <v1.sqlite> --output <v2.sqlite>` reads a v1
 row-based notes DB, emits v2, and verifies every decoded record against the source.
 
+### Search index (`hebrew_search.sqlite`) — prebuilt FTS5, same pack
+
+`--format sqlite` also emits a ready-to-query FTS5 search index next to the
+notes DB (verses + notes documents, `search_metadata` fingerprints binding it
+to the exact generation it was built from). The app adopts it instead of
+re-importing ~363K notes on-device. Its `.gz` is **not** committed — at ~121 MB
+it exceeds GitHub's push limit — so the index travels via CI artifacts into the
+same PAD/ODR pack.
+
+Rebuilding only the index without MongoDB:
+`--format search-index --input <v2 notes.sqlite> --output <index.sqlite>`
+(`--tanah-view` overrides the bundled verses source; `cargo make generate-search-index`).
+
+Text normalization lives in `search_text.rs` — a port of the app's
+`SearchText.PlainText`/`Normalize`. Bump `NORM_VERSION` together with
+`SearchText.NormalizationVersion` so pipeline and app fingerprints stay comparable.
+
 ## On-Demand Delivery for Mobile App
 
 Since note text data is very large, it should **not** be bundled with the mobile app:

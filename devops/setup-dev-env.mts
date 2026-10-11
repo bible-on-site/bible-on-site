@@ -93,30 +93,34 @@ function decompressPerushimNotes(): void {
 		"AssetPacks",
 		"perushim_notes",
 	);
-	const gzPath = path.join(
-		assetPackDir,
-		"sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz",
-	);
-	const sqlitePath = gzPath.replace(".gz", "");
+	// Notes pack payloads: the notes DB (its .gz is committed) and the optional
+	// prebuilt search index (its .gz is not committed — CI artifacts only).
+	for (const fileName of [
+		"sefaria-dump-5784-sivan-4.perushim_notes.sqlite",
+		"sefaria-dump-5784-sivan-4.hebrew_search.sqlite",
+	]) {
+		const gzPath = path.join(assetPackDir, `${fileName}.gz`);
+		const sqlitePath = path.join(assetPackDir, fileName);
 
-	if (fs.existsSync(sqlitePath)) {
-		console.info("Perushim notes SQLite already exists — skipping decompress.");
-		return;
-	}
-	if (!fs.existsSync(gzPath)) {
+		if (fs.existsSync(sqlitePath)) {
+			console.info(`${fileName} already exists — skipping decompress.`);
+			continue;
+		}
+		if (!fs.existsSync(gzPath)) {
+			console.info(
+				`${fileName}.gz not found — skipping (run: cd data && cargo make generate-perushim-view-sqlite).`,
+			);
+			continue;
+		}
+
+		console.info(`Decompressing ${fileName}...`);
+		const compressed = fs.readFileSync(gzPath);
+		const decompressed = zlib.gunzipSync(compressed);
+		fs.writeFileSync(sqlitePath, decompressed);
 		console.info(
-			"Perushim notes .gz not found — skipping (run: cd data && cargo make generate-perushim-view-sqlite).",
+			`  ${(compressed.length / 1_048_576).toFixed(1)} MB → ${(decompressed.length / 1_048_576).toFixed(1)} MB`,
 		);
-		return;
 	}
-
-	console.info("Decompressing perushim notes...");
-	const compressed = fs.readFileSync(gzPath);
-	const decompressed = zlib.gunzipSync(compressed);
-	fs.writeFileSync(sqlitePath, decompressed);
-	console.info(
-		`  ${(compressed.length / 1_048_576).toFixed(1)} MB → ${(decompressed.length / 1_048_576).toFixed(1)} MB`,
-	);
 }
 
 // --- sync-from-prod subcommand ---
