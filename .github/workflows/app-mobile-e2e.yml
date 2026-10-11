@@ -13,6 +13,10 @@ on:
         description: "Skip coverage selection and run every applicable test"
         type: boolean
         default: false
+      perushim_notes_sqlite_artifact:
+        description: "Artifact name for perushim notes SQLite (empty = use master baseline)"
+        type: string
+        default: ""
   workflow_dispatch:
     inputs:
       e2e_selection_mode:
@@ -24,15 +28,61 @@ on:
         description: "Skip coverage selection and run every applicable test"
         type: boolean
         default: false
+      perushim_notes_sqlite_artifact:
+        description: "Artifact name for perushim notes SQLite (empty = use master baseline)"
+        required: false
+        type: string
+        default: ""
 
 permissions:
   contents: read
   # Reads the master coverage-tree baseline artifacts through the REST API.
   actions: read
 
+env:
+  PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER: perushim-sqlite-v2.master
+
 jobs:
+  # Standalone dispatch runs get no caller-provided artifact name; fetch the
+  # master baseline artifact from a previous run and re-upload it so the
+  # appium job can resolve it through actions/download-artifact exactly like
+  # the CI-provided artifact (mirrors app-package.yml).
+  resolve_perushim_artifact:
+    name: Resolve Perushim Notes Artifact
+    if: ${{ inputs.perushim_notes_sqlite_artifact == '' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Download master baseline artifact via API
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ARTIFACT_NAME="${{ env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}"
+          ARTIFACT_ID=$(gh api "repos/${{ github.repository }}/actions/artifacts?name=$ARTIFACT_NAME" \
+            --jq "[.artifacts[] | select(.expired == false)] | first | .id")
+          if [ -z "$ARTIFACT_ID" ] || [ "$ARTIFACT_ID" = "null" ]; then
+            echo "::error::No master baseline artifact '$ARTIFACT_NAME' found. Run perushim_data on master first."
+            exit 1
+          fi
+          mkdir -p /tmp/$ARTIFACT_NAME
+          gh api "repos/${{ github.repository }}/actions/artifacts/$ARTIFACT_ID/zip" > /tmp/$ARTIFACT_NAME.zip
+          unzip -o /tmp/$ARTIFACT_NAME.zip -d /tmp/$ARTIFACT_NAME
+
+      - name: Re-upload for current workflow
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
+          path: /tmp/${{ env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
+          retention-days: 1
+          overwrite: true
+
   appium:
     name: Appium ${{ matrix.platform }}
+    needs: [resolve_perushim_artifact]
+    # The resolver is skipped when the caller provides an artifact name.
+    if: ${{ always() && !cancelled() && !failure() }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
     strategy:
@@ -163,8 +213,21 @@ jobs:
         background: true
         run: npm run ios:boot:wait --prefix app/mobile-e2e
 
+      # The WebDriverAgent xcodebuild only needs node_modules and the selected
+      # Xcode — no simulator — so it runs in the background too, overlapping
+      # the workload install and app build. MOBILE_WDA_PATH is exported to
+      # GITHUB_ENV and lands after the wait-all gate, before the test step.
+      - name: Prepare prebuilt iOS automation agent
+        id: wda
+        if: matrix.platform == 'iOS'
+        background: true
+        run: npm run ios:wda --prefix app/mobile-e2e
+
+      # npm ci is done here, so ~/.npm is frozen — the tar+upload can run in
+      # the background; the implicit wait-all before job cleanup completes it.
       - name: Save npm cache
         if: ${{ github.ref == 'refs/heads/master' && steps.npm-cache.outputs.cache-hit != 'true' }}
+        background: true
         uses: actions/cache/save@v6
         with:
           path: ~/.npm
@@ -186,6 +249,22 @@ jobs:
       - name: Install MAUI workload
         # 10.0.401.1 selects the iOS 27 SDK, which requires Xcode 27; see #1871.
         run: dotnet workload install ${{ matrix.workload }} --version 10.0.401.1
+
+      # The Debug build bundles perushim data from the checkout's packaged
+      # paths, but the committed .gz fixture is only a local-dev fallback — the
+      # pair a release ships always comes from the perushim_data artifacts.
+      # Install the same validated catalog+notes pair package_app uses so E2E
+      # exercises the commentary data this commit would actually ship. The
+      # Shared commentary-search pilot builds the notes FTS index, so a missing
+      # or mismatched pair must fail here — before the build, not mid-suite.
+      - name: Download perushim SQLite pair
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ inputs.perushim_notes_sqlite_artifact || env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
+          path: ${{ runner.temp }}/perushim-sqlite
+
+      - name: Install matching perushim catalog and notes
+        run: python3 app/devops/prepare_perushim_assets.py --source "${{ runner.temp }}/perushim-sqlite" --app-directory app/BibleOnSite --platform ${{ matrix.platform }}
 
       - name: Build complete simulator app
         # Explicit bash enables pipefail, preserving npm failures through tee.
@@ -341,12 +420,10 @@ jobs:
             ${{ steps.sdk-key.outputs.sdk-home }}/platform-tools
           key: ${{ steps.sdk-cache.outputs.cache-primary-key }}
 
-      - name: Prepare prebuilt iOS automation agent
-        if: matrix.platform == 'iOS'
-        run: npm run ios:wda --prefix app/mobile-e2e
-
+      # Gates both background steps: simulator readiness + env exports and the
+      # prebuilt WebDriverAgent. A no-op on the Android leg, which has none.
       - name: Wait for iPhone simulator
-        wait: simulator
+        wait-all:
 
       - name: Run shared pilot on iOS
         if: matrix.platform == 'iOS'

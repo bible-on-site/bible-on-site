@@ -83,7 +83,8 @@ public static class SearchText
         return scores.All(score => score > 0) ? scores.Min() : 0;
     }
 
-    private static int TokenScore(string word, string term)
+    /// <summary>Shared by <see cref="SearchMatch"/> so match location ranks words exactly like scoring.</summary>
+    internal static int TokenScore(string word, string term)
     {
         if (word == term)
         {
