@@ -63,6 +63,7 @@ fn create_db(path: &Path, sefarim: &[Sefer], dump_name: &str) -> Result<()> {
     insert_helek_data(&tx, sefarim)?;
     insert_sefarim(&tx, sefarim)?;
     crate::reading_units::insert_masora_reading_units(&tx, sefarim)?;
+    crate::reading_units::insert_parasha_reading_units(&tx, sefarim)?;
 
     // Commit transaction
     tx.commit()?;
@@ -478,6 +479,26 @@ mod tests {
             .unwrap();
         assert_eq!(division_count, 1);
 
+        // The parasha division row is exported even though this fixture
+        // corpus has no Torah sefarim — so it carries no parasha units.
+        let parasha_division_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM tanah_reading_division WHERE id = 'parasha'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(parasha_division_count, 1);
+
+        let parasha_unit_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM tanah_reading_unit WHERE division_id = 'parasha'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(parasha_unit_count, 0);
+
         let reading_unit_count: i64 = conn
             .query_row("SELECT COUNT(*) FROM tanah_reading_unit", [], |row| {
                 row.get(0)
@@ -511,6 +532,26 @@ mod tests {
         assert_eq!(reading_range_count, 4);
 
         fs::remove_dir_all(&dir).ok();
+    }
+
+    /// Rebuilds the bundled app database from the checked-in tanah_view
+    /// dump — the same `Vec<Sefer>` the Mongo aggregation produces — for
+    /// development environments without a running MongoDB. Run once with:
+    /// `cargo test -p tanah-view regenerate_packaged -- --ignored`.
+    /// The canonical path stays `cargo make generate-tanah-view-sqlite`.
+    #[test]
+    #[ignore = "regenerates the checked-in app artifact on demand"]
+    fn regenerate_packaged_db_from_checked_in_dump() {
+        let corpus_path = Path::new(env!("CARGO_MANIFEST_DIR")).join(
+            "../../../../web/bible-on-site/src/data/db/sefaria-dump-5784-sivan-4.tanah_view.json",
+        );
+        let json = fs::read_to_string(&corpus_path).unwrap();
+        let sefarim: Vec<Sefer> = serde_json::from_str(&json).unwrap();
+
+        let output_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../../app/BibleOnSite/Resources/Raw")
+            .join("sefaria-dump-5784-sivan-4.tanah_view.sqlite");
+        create_db(&output_path, &sefarim, "sefaria-dump-5784-sivan-4").unwrap();
     }
 
     #[test]

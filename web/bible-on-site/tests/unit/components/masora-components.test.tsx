@@ -97,7 +97,7 @@ jest.mock("@/data/masora/masora-units", () => ({
 	getMasoraFirstUnitBySefer: () => mockFirstUnits(),
 }));
 
-import { ScrollToUnitPasuk } from "@/app/masora/[unit]/components/ScrollToUnitPasuk";
+import { ScrollToUnitPasuk } from "@/app/components/reading/ScrollToUnitPasuk";
 import { UnitBreadcrumb } from "@/app/masora/[unit]/components/UnitBreadcrumb";
 import { UnitNav } from "@/app/masora/[unit]/components/UnitNav";
 import { UnitText } from "@/app/masora/[unit]/components/UnitText";
