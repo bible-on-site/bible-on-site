@@ -106,10 +106,15 @@ export default async function AuthorPage({
 	}
 
 	const articles = await getCachedAuthorArticles(author.id);
-	const rows = articles.map((article) => {
-		const perek = getPerekByPerekId(article.perekId);
-		return { ...article, sefer: perek.sefer, source: perek.source };
-	});
+	// Edge rows may reference perakim outside the canon (e.g. non-distributable
+	// test data) — they cannot render a source link, so skip them instead of
+	// letting getPerekByPerekId fail the whole prerender.
+	const rows = articles
+		.filter((article) => article.perekId >= 1 && article.perekId <= 929)
+		.map((article) => {
+			const perek = getPerekByPerekId(article.perekId);
+			return { ...article, sefer: perek.sefer, source: perek.source };
+		});
 
 	return (
 		<div className={styles.authorPage}>
