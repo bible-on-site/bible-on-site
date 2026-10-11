@@ -129,6 +129,37 @@ public class FlyoutMenuStateTests : IDisposable
     }
 
     [Fact]
+    public void Instance_TracksTheSharedPreferencesSingleton()
+    {
+        // The Shell flyout binds to Instance via x:Static, so it must reflect
+        // the shared PreferencesService singleton rather than a detached copy.
+        // Only this test touches Instance; the collection serializes singleton
+        // access, so the Lazy materialization is deterministic.
+        PreferencesService.Initialize(_storage);
+        PreferencesService.Instance.MasoraMenuEnabled = true;
+
+        var state = FlyoutMenuState.Instance;
+
+        state.Should().NotBeNull();
+        state.ShowMasoraEntry.Should().BeTrue();
+        FlyoutMenuState.Instance.Should().BeSameAs(state);
+    }
+
+    [Fact]
+    public void PreferencesViewModel_MasoraMenuEnabled_SameValueSet_IsANoOp()
+    {
+        var viewModel = new PreferencesViewModel(_service);
+        var notified = false;
+        viewModel.PropertyChanged += (_, e) =>
+            notified |= e.PropertyName == nameof(PreferencesViewModel.MasoraMenuEnabled);
+
+        viewModel.MasoraMenuEnabled = false; // already false by default
+
+        notified.Should().BeFalse("setting the stored value neither writes nor notifies");
+        _service.MasoraMenuEnabled.Should().BeFalse();
+    }
+
+    [Fact]
     public void PreferencesViewModel_MasoraMenuEnabled_MirrorsService()
     {
         var viewModel = new PreferencesViewModel(_service);
