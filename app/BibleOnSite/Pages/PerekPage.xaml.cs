@@ -13,7 +13,7 @@ using Microsoft.Maui.Controls.PlatformConfiguration.iOSSpecific;
 /// <summary>
 /// Page for displaying a Perek (chapter) with its pasukim (verses).
 /// </summary>
-public partial class PerekPage : ContentPage, IQueryAttributable
+public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScreenName
 {
     private readonly PerekViewModel _viewModel;
     private bool _isLoading;
@@ -773,6 +773,13 @@ public partial class PerekPage : ContentPage, IQueryAttributable
         LayoutCircularMenu();
     }
 #endif
+
+    /// <summary>
+    /// The reader reports its own logical screen (AlHaperek/{perekId}) from
+    /// page lifecycle and carousel swipes — transitions a Shell-level
+    /// screen_view would double-count — so the Shell report is suppressed.
+    /// </summary>
+    public string? AnalyticsScreenName => null;
 
     /// <summary>
     /// Logs current perek screen to analytics (legacy-style: AlHaperek/{perekId}).

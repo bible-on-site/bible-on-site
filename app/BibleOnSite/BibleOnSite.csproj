@@ -23,6 +23,16 @@
 		<!-- Define MAUI symbol for conditional compilation -->
 		<DefineConstants>$(DefineConstants);MAUI</DefineConstants>
 
+		<!-- Analytics gating (#2120): Debug builds — local dev and every mobile-e2e
+		     build (CompileMobileE2E also passes -p:DisableAnalytics=true explicitly
+		     so the protection is build-flag driven, not just configuration-derived) —
+		     get DISABLE_ANALYTICS: AnalyticsService becomes a no-op, the iOS Firebase
+		     init is skipped entirely, and firebase_analytics_collection_deactivated
+		     is baked into the Android manifest. Release builds default to analytics
+		     on; pass -p:DisableAnalytics=false to force a Debug build back on. -->
+		<DisableAnalytics Condition="'$(DisableAnalytics)' == '' AND '$(Configuration)' == 'Debug'">true</DisableAnalytics>
+		<DefineConstants Condition="'$(DisableAnalytics)' == 'true'">$(DefineConstants);DISABLE_ANALYTICS</DefineConstants>
+
 		<!-- Treat C# compiler warnings as errors so iOS/Android-only issues are caught early -->
 		<TreatWarningsAsErrors>true</TreatWarningsAsErrors>
 		<!-- Suppress XamlC warnings: XC0022 bindings without x:DataType; XC0045 Path in MultiBinding with Source=page validated against template DataType (Article) -->
@@ -110,6 +120,20 @@
 	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
 		<GoogleServicesJson Include="Platforms\Android\google-services.json" />
 	</ItemGroup>
+
+	<!-- #2120: inject firebase_analytics_collection_deactivated into the merged
+	     manifest so test builds permanently deactivate collection at the SDK
+	     layer — setAnalyticsCollectionEnabled cannot re-enable it and nothing
+	     is emitted, persisted or flushed. DisableAnalytics builds resolve to
+	     true; everything else resolves to false so production analytics keep
+	     working. The fallback guarantees the placeholder is always defined. -->
+	<PropertyGroup>
+		<FirebaseAnalyticsCollectionDeactivated Condition="'$(DisableAnalytics)' == 'true'">true</FirebaseAnalyticsCollectionDeactivated>
+		<FirebaseAnalyticsCollectionDeactivated Condition="'$(FirebaseAnalyticsCollectionDeactivated)' == ''">false</FirebaseAnalyticsCollectionDeactivated>
+	</PropertyGroup>
+	<PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
+		<AndroidManifestPlaceholders>$(AndroidManifestPlaceholders);firebaseAnalyticsCollectionDeactivated=$(FirebaseAnalyticsCollectionDeactivated)</AndroidManifestPlaceholders>
+	</PropertyGroup>
 
 	<!-- Firebase: GoogleService-Info.plist for iOS (same Firebase project: tanah-al-haperek) -->
 	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">
