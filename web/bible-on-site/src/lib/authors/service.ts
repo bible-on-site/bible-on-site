@@ -101,7 +101,7 @@ export async function getAuthorById(id: number): Promise<AuthorDetails | null> {
 			`Failed to fetch author ${id}:`,
 			error instanceof Error ? error.message : error,
 		);
-		return null;
+		throw error;
 	}
 }
 
@@ -115,7 +115,7 @@ export async function getArticlesByAuthorId(
 		const rows = await query<ArticleRow>(
 			`SELECT id, perek_id, name, abstract
 			 FROM tanah_article
-			 WHERE author_id = ? AND distributable = TRUE
+			 WHERE author_id = ? AND perek_id BETWEEN 1 AND 929
 			 ORDER BY perek_id ASC`,
 			[authorId],
 		);
@@ -131,7 +131,7 @@ export async function getArticlesByAuthorId(
 			`Failed to fetch articles for author ${authorId}:`,
 			error instanceof Error ? error.message : error,
 		);
-		return [];
+		throw error;
 	}
 }
 
@@ -142,7 +142,7 @@ export async function getAllAuthorIds(): Promise<number[]> {
 	try {
 		const rows = await query<{ id: number }>(
 			`SELECT a.id FROM tanah_author a
-			 WHERE EXISTS (SELECT 1 FROM tanah_article art WHERE art.author_id = a.id AND art.distributable = TRUE)
+			 WHERE EXISTS (SELECT 1 FROM tanah_article art WHERE art.author_id = a.id AND art.perek_id BETWEEN 1 AND 929)
 			 ORDER BY a.id`,
 		);
 		return rows.map((row) => row.id);
@@ -151,7 +151,7 @@ export async function getAllAuthorIds(): Promise<number[]> {
 			"Failed to fetch author IDs:",
 			error instanceof Error ? error.message : error,
 		);
-		return [];
+		throw error;
 	}
 }
 
@@ -167,7 +167,7 @@ export async function getAuthorByName(
 		const rows = await query<AuthorRow>(
 			`SELECT id, name, details
 			 FROM tanah_author
-			 WHERE EXISTS (SELECT 1 FROM tanah_article art WHERE art.author_id = tanah_author.id AND art.distributable = TRUE)`,
+			 WHERE EXISTS (SELECT 1 FROM tanah_article art WHERE art.author_id = tanah_author.id AND art.perek_id BETWEEN 1 AND 929)`,
 		);
 
 		const needle = normalizeAuthorName(rawName);
@@ -186,7 +186,7 @@ export async function getAuthorByName(
 			`Failed to fetch author by name "${rawName}":`,
 			error instanceof Error ? error.message : error,
 		);
-		return null;
+		throw error;
 	}
 }
 
@@ -198,7 +198,7 @@ export async function getAllAuthorSlugs(): Promise<string[]> {
 	try {
 		const rows = await query<AuthorRow>(
 			`SELECT a.id, a.name, a.details FROM tanah_author a
-			 WHERE EXISTS (SELECT 1 FROM tanah_article art WHERE art.author_id = a.id AND art.distributable = TRUE)
+			 WHERE EXISTS (SELECT 1 FROM tanah_article art WHERE art.author_id = a.id AND art.perek_id BETWEEN 1 AND 929)
 			 ORDER BY a.name ASC`,
 		);
 		return rows.map((row) => normalizeAuthorName(row.name));
@@ -207,6 +207,6 @@ export async function getAllAuthorSlugs(): Promise<string[]> {
 			"Failed to fetch author slugs:",
 			error instanceof Error ? error.message : error,
 		);
-		return [];
+		throw error;
 	}
 }

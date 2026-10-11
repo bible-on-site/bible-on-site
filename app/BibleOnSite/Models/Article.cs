@@ -32,7 +32,9 @@ public class Article
         get
         {
             if (string.IsNullOrEmpty(Abstract))
+            {
                 return string.Empty;
+            }
 
             var text = Abstract;
 

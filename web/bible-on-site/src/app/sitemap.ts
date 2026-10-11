@@ -84,6 +84,22 @@ export function generate929IndexEntry(
 }
 
 /**
+ * Generates the מסורה landing entry. Only the hub is listed: unit pages
+ * carry a deliberate non-indexing policy (see the מסורה unit page
+ * metadata), so they must not appear in the sitemap.
+ */
+export function generateMasoraIndexEntry(
+	config: SitemapConfig,
+): MetadataRoute.Sitemap[0] {
+	return {
+		url: `${config.baseUrl}/מסורה`,
+		lastModified: config.lastModified,
+		changeFrequency: "monthly",
+		priority: 0.7,
+	};
+}
+
+/**
  * Generates all 929 perek URL entries
  */
 export function generatePerekEntries(
@@ -228,6 +244,7 @@ export function generateSitemapEntries(
 		generatePediaIndexEntry(config),
 		...generatePediaCategoryEntries(config),
 		...generatePediaEntries(config, pediaUniqueNames),
+		generateMasoraIndexEntry(config),
 	];
 }
 

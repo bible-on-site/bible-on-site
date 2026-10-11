@@ -15,7 +15,10 @@
         <Border.Shadow>
             <Shadow Brush="Black" Offset="0,2" Radius="4" Opacity="0.15"/>
         </Border.Shadow>
-        <Grid RowDefinitions="Auto,Auto,Auto,Auto"
+        <!-- Rows: title (top) → optional perek source → author (flexible, bottom-aligned so it
+             sits directly above the footer) → footer. The * row absorbs title height differences
+             so the author/footer block is anchored identically on every card in a grid row. -->
+        <Grid RowDefinitions="Auto,Auto,*,Auto"
               Padding="12">
             <!-- Short Abstract (RTL: right-aligned) -->
             <Label Grid.Row="0"
@@ -36,32 +39,42 @@
                    IsVisible="{Binding ShowPerekSource, Source={x:Reference ThisCard}}"
                    Margin="0,0,0,4"/>
 
-            <!-- Author Info (RTL: rabbi name then image) -->
-            <HorizontalStackLayout Grid.Row="2"
-                                   Spacing="6"
-                                   Margin="0,0,2,0"
-                                   VerticalOptions="Center"
-                                   FlowDirection="RightToLeft">
+            <!-- Author Info (RTL: rabbi name on a full-width row, avatar centered on its own
+                 row below so short names never sit next to a truncated "..."). -->
+            <VerticalStackLayout Grid.Row="2"
+                                 VerticalOptions="End"
+                                 Spacing="4">
                 <Label Text="{Binding Article.Author.Name, Source={x:Reference ThisCard}}"
                        FontSize="11"
-                       VerticalTextAlignment="Center"
                        LineBreakMode="TailTruncation"
+                       MaxLines="2"
                        TextColor="{StaticResource Primary}"/>
                 <Border WidthRequest="26"
                         HeightRequest="26"
                         StrokeShape="RoundRectangle 13"
                         Stroke="{StaticResource Primary}"
-                        StrokeThickness="1">
-                    <Image Source="{Binding Article.Author.ImageUrl, Source={x:Reference ThisCard}}"
-                           Aspect="AspectFill"
-                           WidthRequest="24"
-                           HeightRequest="24"
-                           HorizontalOptions="Center"
-                           VerticalOptions="Center"/>
+                        StrokeThickness="1"
+                        HorizontalOptions="Center"
+                        BackgroundColor="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray600}}">
+                    <Grid>
+                        <!-- Placeholder glyph shown when the portrait fails to load -->
+                        <Label Text="{x:Static fonts:FluentUI.person_16_regular}"
+                               FontFamily="FluentIcons"
+                               FontSize="13"
+                               TextColor="{StaticResource Primary}"
+                               HorizontalOptions="Center"
+                               VerticalOptions="Center"/>
+                        <Image Source="{Binding Article.Author.ImageUrl, Source={x:Reference ThisCard}}"
+                               Aspect="AspectFill"
+                               WidthRequest="24"
+                               HeightRequest="24"
+                               HorizontalOptions="Center"
+                               VerticalOptions="Center"/>
+                    </Grid>
                 </Border>
-            </HorizontalStackLayout>
+            </VerticalStackLayout>
 
-            <!-- Read indicator (RTL: left side) -->
+            <!-- Read indicator pinned to the card bottom (RTL: left side) -->
             <HorizontalStackLayout Grid.Row="3"
                                    FlowDirection="RightToLeft"
                                    HorizontalOptions="End"
