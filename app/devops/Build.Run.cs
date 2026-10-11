@@ -61,7 +61,9 @@ partial class Build
     bool IsApiRunning()
     {
         if (IsPortOpen("127.0.0.1", 3003))
+        {
             return true;
+        }
 
         try
         {
@@ -170,17 +172,23 @@ partial class Build
         try
         {
             if (!System.IO.File.Exists(AppEnvFile))
+            {
                 return;
+            }
 
             foreach (var rawLine in System.IO.File.ReadAllLines(AppEnvFile))
             {
                 var line = rawLine.Trim();
                 if (string.IsNullOrWhiteSpace(line) || line.StartsWith('#'))
+                {
                     continue;
+                }
 
                 var separatorIndex = line.IndexOf('=');
                 if (separatorIndex <= 0)
+                {
                     continue;
+                }
 
                 var key = line.Substring(0, separatorIndex).Trim();
                 var value = line.Substring(separatorIndex + 1).Trim();

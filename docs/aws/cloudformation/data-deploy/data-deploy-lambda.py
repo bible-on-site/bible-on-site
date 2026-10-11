@@ -1,5 +1,4 @@
-"""
-Lambda function for deploying SQL data to RDS MySQL.
+"""Lambda function for deploying SQL data to RDS MySQL.
 
 This Lambda is deployed as: bible-on-site-db-populator
 Runtime: Python 3.11
@@ -24,8 +23,7 @@ import pymysql
 
 
 def handler(event, context):
-    """
-    Lambda handler for database population.
+    """Lambda handler for database population.
 
     Expected event format:
     {
@@ -99,7 +97,7 @@ def handler(event, context):
                     for stmt in stmts:
                         try:
                             cursor.execute(stmt)
-                        except Exception as e:
+                        except Exception:
                             print(f"Error executing: {stmt[:100]}...")
                             raise
                 count = len(stmts)
@@ -118,8 +116,7 @@ def handler(event, context):
 
 
 def find_statement_end(buf):
-    """
-    Find the index of the first ';' that is NOT inside a SQL string literal.
+    """Find the index of the first ';' that is NOT inside a SQL string literal.
 
     Tracks single-quoted strings and skips semicolons that appear within
     them.  Inside a string the following escape sequences are recognised
@@ -159,10 +156,10 @@ def find_statement_end(buf):
 
 
 def execute_sql_streaming(body, connection):
-    """
-    Stream-process a large SQL file from S3 to avoid loading it entirely
-    into memory.  Reads the S3 body in 1 MB chunks, accumulates a buffer,
-    and executes each semicolon-terminated statement as it is found.
+    """Stream-process a large SQL file from S3 to avoid loading it entirely.
+
+    Reads the S3 body in 1 MB chunks, accumulates a buffer, and executes
+    each semicolon-terminated statement as it is found.
 
     Uses quote-aware splitting so that semicolons inside SQL string
     literals (e.g. in perush names or note HTML) are not mistaken for
@@ -226,8 +223,7 @@ def execute_sql_streaming(body, connection):
 
 
 def parse_statements(sql_content):
-    """
-    Parse SQL into executable statements using quote-aware splitting.
+    """Parse SQL into executable statements using quote-aware splitting.
 
     Handles semicolons inside string literals correctly, and filters
     out comments, USE statements, and MySQL dump artifacts.
@@ -275,8 +271,7 @@ def _should_execute(stmt):
 
 
 def preprocess_sql(sql_content):
-    """
-    Add DROP statements before CREATE TABLE/VIEW.
+    """Add DROP statements before CREATE TABLE/VIEW.
 
     This ensures idempotent deployments - the same SQL can be
     run multiple times without "already exists" errors.

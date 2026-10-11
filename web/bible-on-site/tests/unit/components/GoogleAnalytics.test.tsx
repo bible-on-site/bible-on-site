@@ -34,6 +34,10 @@ function renderResult(result: ReturnType<typeof GoogleAnalytics>) {
 	return render(result as React.ReactElement);
 }
 
+// Mirrors the UA-sniff alternation embedded in the rendered GoogleAnalytics script.
+const BOT_UA_PATTERN =
+	/bot|crawl|spider|slurp|Bytespider|GPTBot|ClaudeBot|CCBot|Amazonbot|Diffbot|PetalBot|AhrefsBot|SemrushBot|DotBot|MJ12bot|BLEXBot|YandexBot|Sogou|Applebot|Googlebot|bingbot|PerplexityBot|FacebookBot|anthropic|TikTokSpider|Baiduspider|MegaIndex/i;
+
 describe("GoogleAnalytics", () => {
 	afterEach(() => {
 		jest.clearAllMocks();
@@ -87,8 +91,8 @@ describe("GoogleAnalytics", () => {
 				const script = getByTestId("google-analytics").textContent ?? "";
 				const regexMatch = script.match(/\/([^/]+)\/i\.test/);
 				if (!regexMatch?.[1]) throw new Error("Bot regex not found");
-				const regex = new RegExp(regexMatch[1], "i");
-				expect(regex.test(botName)).toBe(true);
+				expect(regexMatch[1]).toBe(BOT_UA_PATTERN.source);
+				expect(BOT_UA_PATTERN.test(botName)).toBe(true);
 			});
 
 			it("bot regex does not match regular browser UAs", () => {
@@ -97,9 +101,9 @@ describe("GoogleAnalytics", () => {
 				const script = getByTestId("google-analytics").textContent ?? "";
 				const regexMatch = script.match(/\/([^/]+)\/i\.test/);
 				if (!regexMatch?.[1]) throw new Error("Bot regex not found");
-				const regex = new RegExp(regexMatch[1], "i");
+				expect(regexMatch[1]).toBe(BOT_UA_PATTERN.source);
 				expect(
-					regex.test(
+					BOT_UA_PATTERN.test(
 						"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
 					),
 				).toBe(false);
