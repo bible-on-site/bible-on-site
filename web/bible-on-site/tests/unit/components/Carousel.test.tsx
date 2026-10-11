@@ -219,10 +219,10 @@ describe("Carousel", () => {
 		 */
 		function installTrackLayout({
 			dir = "rtl",
-			viewport = VIEWPORT_WIDTH,
+			dims = { viewport: VIEWPORT_WIDTH },
 		}: {
 			dir?: "rtl" | "ltr";
-			viewport?: number;
+			dims?: { viewport: number };
 		} = {}) {
 			const realRect = HTMLElement.prototype.getBoundingClientRect;
 			// jsdom's getComputedStyle does not inherit direction from the `dir`
@@ -241,12 +241,14 @@ describe("Carousel", () => {
 			HTMLElement.prototype.getBoundingClientRect = function (
 				this: HTMLElement,
 			) {
-				if (this.classList.contains("track")) return rect(0, viewport);
+				if (this.classList.contains("track")) return rect(0, dims.viewport);
 				const track = this.parentElement;
 				if (track?.classList.contains("track")) {
 					const i = Array.prototype.indexOf.call(track.children, this);
 					const start =
-						dir === "rtl" ? viewport - (i + 1) * CARD_WIDTH : i * CARD_WIDTH;
+						dir === "rtl"
+							? dims.viewport - (i + 1) * CARD_WIDTH
+							: i * CARD_WIDTH;
 					return rect(start - track.scrollLeft, CARD_WIDTH);
 				}
 				return realRect.call(this);
@@ -270,7 +272,7 @@ describe("Carousel", () => {
 			Object.defineProperty(HTMLElement.prototype, "clientWidth", {
 				configurable: true,
 				get(this: HTMLElement) {
-					return this.classList.contains("track") ? viewport : 0;
+					return this.classList.contains("track") ? dims.viewport : 0;
 				},
 			});
 			return () => {
@@ -389,13 +391,54 @@ describe("Carousel", () => {
 
 		it("restores the same card when the viewport changed while away", () => {
 			sessionStorage.setItem(KEY, JSON.stringify({ itemIndex: 3, itemGap: 0 }));
-			const undo = installTrackLayout({ viewport: 150 });
+			const undo = installTrackLayout({ dims: { viewport: 150 } });
 			const scroller = renderStored(5);
 			// Card 4 realigns to the start edge of the narrower viewport.
 			expect(scroller.scrollLeft).toBe(-3 * CARD_WIDTH);
 			expect(screen.getByTestId("carousel-position")).toHaveTextContent(
 				"4 / 5",
 			);
+			undo();
+		});
+
+		it("restores the place after a widened viewport briefly fits every card", () => {
+			const dims = { viewport: VIEWPORT_WIDTH };
+			const undo = installTrackLayout({ dims });
+			const rendered = render(
+				<div dir="rtl">
+					<Carousel
+						className="track"
+						prevLabel="פרשן קודם"
+						nextLabel="פרשן הבא"
+						scrollStorageKey={KEY}
+					>
+						{Array.from({ length: 5 }, (_, i) => (
+							// biome-ignore lint/suspicious/noArrayIndexKey: static test cards
+							<a key={i} href={`#${i}`}>
+								{i}
+							</a>
+						))}
+					</Carousel>
+				</div>,
+			);
+			const scroller = rendered.container.querySelector(
+				".track",
+			) as HTMLElement;
+			scroller.scrollLeft = -2 * CARD_WIDTH;
+			fireEvent.scroll(scroller);
+			expect(storedPosition()).toEqual({ itemIndex: 2, itemGap: 0 });
+
+			// Widening until every card fits clamps scrollLeft to the start —
+			// the remembered place must not be overwritten by that clamp.
+			dims.viewport = 5 * CARD_WIDTH;
+			scroller.scrollLeft = 0;
+			fireEvent.scroll(scroller);
+			expect(storedPosition()).toEqual({ itemIndex: 2, itemGap: 0 });
+
+			// Narrowing back replays the remembered card instead of the clamp.
+			dims.viewport = VIEWPORT_WIDTH;
+			fireEvent(window, new Event("resize"));
+			expect(scroller.scrollLeft).toBe(-2 * CARD_WIDTH);
 			undo();
 		});
 

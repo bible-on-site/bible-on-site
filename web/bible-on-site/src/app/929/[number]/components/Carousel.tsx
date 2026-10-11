@@ -199,11 +199,15 @@ export function Carousel({
 	const ref = useRef<HTMLDivElement>(null);
 	const [state, setState] = useState(INITIAL_STATE);
 	// The latest position this mount is responsible for: read from storage on
-	// first sight of the key, kept current on every scroll, and replayed when
-	// the items (re)appear so the user never loses their place.
+	// first sight of the key and kept current on every scroll. While the items
+	// cannot show it — a loading placeholder, a display:none subtree, or a
+	// viewport wide enough to fit every card — the browser clamps scrollLeft
+	// back to the start edge, so a restore stays owed and replays on the first
+	// overflowing measurement instead of letting that clamp overwrite the
+	// remembered place.
 	const positionKeyRef = useRef<string | undefined>(undefined);
 	const rememberedPosition = useRef<CarouselPosition | null>(null);
-	const firstChildRef = useRef<Element | null | undefined>(undefined);
+	const restoreOwed = useRef(false);
 
 	const update = useCallback(() => {
 		// A queued resize/scroll callback can arrive after navigation detaches the ref.
@@ -216,18 +220,18 @@ export function Carousel({
 			rememberedPosition.current = scrollStorageKey
 				? readStoredPosition(scrollStorageKey)
 				: null;
-			firstChildRef.current = undefined;
+			restoreOwed.current = true;
 		}
-		const itemsChanged = firstChildRef.current !== el.firstElementChild;
-		firstChildRef.current = el.firstElementChild;
 
-		if (next.overflows) {
-			const remembered = scrollStorageKey ? rememberedPosition.current : null;
-			if (itemsChanged && remembered) {
-				alignTo(el, next, remembered);
+		if (!next.overflows) {
+			restoreOwed.current = true;
+		} else {
+			if (restoreOwed.current && rememberedPosition.current) {
+				alignTo(el, next, rememberedPosition.current);
 				// Re-measure: the scroll just moved every card.
 				next = measure(el);
 			}
+			restoreOwed.current = false;
 			const current = positionOf(next);
 			rememberedPosition.current = current;
 			if (scrollStorageKey) writeStoredPosition(scrollStorageKey, current);
