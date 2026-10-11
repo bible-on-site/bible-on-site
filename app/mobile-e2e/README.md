@@ -117,7 +117,10 @@ APK and completes the iOS arm64 simulator `.app` build.
 Set `MOBILE_UDID` to a running device's identifier, then run `npm test` here.
 On macOS, `npm run ios:boot` selects an available iPhone runtime no newer than
 the selected Xcode SDK, boots it, and prints the identifier and `MOBILE_OS_VERSION`.
-Set both for local iOS runs; CI exports them automatically.
+Set both for local iOS runs; CI exports them automatically. CI splits the same
+script in two: `ios:boot:start` kicks the asynchronous boot before dependency
+installs and the app build, and `ios:boot:wait` gates the test step on the
+finished boot and the warmed Appium bridge.
 `MOBILE_APP_PATH` can select another compatible build. Each local
 run owns an Appium server on `127.0.0.1:4723`; keep that port free.
 
@@ -146,6 +149,21 @@ room for the scenario and diagnostics. `wdaConnectionTimeout` bounds every proxi
 WDA request including `POST /session`, so it stays at the driver default of 240
 seconds — a cold app launch can exceed 90 seconds before the first test runs.
 CI uploads a separate artifact for each platform even on test failures.
+
+## Coverage evidence and impacted-test selection
+
+Each scenario writes a `coverage-evidence/*.json` record into the artifacts
+directory — the automation ids it queried through `Platform.AutomationId` and
+the sessions attributed to it. CI collects these into a per-platform coverage
+tree (`app-mobile-e2e-coverage.master.<platform>` on master pushes) and the
+`devops/github/ci/e2e-impact` selector maps the accumulated diff onto the
+affected tests; per-file structural fingerprints persisted in the tree let
+comment/formatting-only edits resolve as `unchanged-structural` instead of
+invalidating coverage. Selection currently runs in shadow mode — the manifest is
+reported while every test still runs — until evidence supports enforcement;
+see [docs/tests/app/e2e-impact.md](../../docs/tests/app/e2e-impact.md).
+`MOBILE_E2E_SELECTION=<manifest>` narrows `dotnet test` through a
+FullyQualifiedName filter for enforce mode and local experiments.
 
 ## Dependency security
 
