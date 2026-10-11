@@ -306,9 +306,11 @@ fn compress_gz(path: &Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::commands::fixtures::{tanah_db, temp_dir};
     use crate::data::extract::{Extracted, Note, Parshan, Perush};
     use flate2::read::GzDecoder;
     use std::io::Read as _;
+    use std::path::PathBuf;
 
     fn sample_extracted() -> Extracted {
         Extracted {
@@ -372,8 +374,7 @@ mod tests {
 
     #[test]
     fn compress_gz_creates_decompressible_copy() {
-        let dir = std::env::temp_dir().join("perushim_test_compress");
-        fs::create_dir_all(&dir).unwrap();
+        let dir = temp_dir("compress");
         let original_path = dir.join("test.sqlite");
 
         // Write enough content for gzip to actually compress (small inputs grow due to header)
@@ -447,8 +448,7 @@ mod tests {
 
     #[test]
     fn create_catalog_db_roundtrip() {
-        let dir = std::env::temp_dir().join("perushim_test_catalog");
-        fs::create_dir_all(&dir).unwrap();
+        let dir = temp_dir("catalog");
         let path = dir.join("test.perushim_catalog.sqlite");
 
         let extracted = sample_extracted();
@@ -516,8 +516,7 @@ mod tests {
 
     #[test]
     fn create_notes_db_roundtrip() {
-        let dir = std::env::temp_dir().join("perushim_test_notes");
-        fs::create_dir_all(&dir).unwrap();
+        let dir = temp_dir("notes");
         let path = dir.join("test.perushim_notes.sqlite");
 
         let extracted = sample_extracted();
@@ -698,10 +697,163 @@ mod tests {
         );
     }
 
+    /// Minimal tanah_view the index builder can read verses + sefer ranges from.
+    fn index_source_fixture(dir: &Path) -> std::path::PathBuf {
+        let path = dir.join("tanah.sqlite");
+        tanah_db(
+            &path,
+            Some("2026-01-03 22:08:48 UTC"),
+            &[(1, 50, 1)],
+            &[(1, 1, 1, "qri", "בְּרֵאשִׁית בָּרָא")],
+            &["tanah_sefer", "tanah_pasuk_segment"],
+        );
+        path
+    }
+
+    /// Removes the files `generate` produces for a dump name in `dir`.
+    fn clean_generated(dir: &Path, dump: &str) {
+        for suffix in [
+            "perushim_catalog.sqlite",
+            "perushim_notes.sqlite",
+            "hebrew_search.sqlite",
+        ] {
+            let path = dir.join(format!("{dump}.{suffix}"));
+            let _ = fs::remove_file(&path);
+            let _ = fs::remove_file(path.with_extension("sqlite.gz"));
+        }
+    }
+
+    /// Deletes generated payloads on drop — a panicking assert must not leak
+    /// files into the app resource/asset directories the test writes to.
+    struct GeneratedFiles<'a> {
+        dirs: &'a [&'a Path],
+        dump: &'a str,
+    }
+
+    impl Drop for GeneratedFiles<'_> {
+        fn drop(&mut self) {
+            for dir in self.dirs {
+                clean_generated(dir, self.dump);
+            }
+        }
+    }
+
+    /// Asserts the notes + index payloads and their gzip copies exist in `dir`.
+    fn assert_notes_pack(dir: &Path, dump: &str) -> (PathBuf, PathBuf) {
+        let notes = dir.join(format!("{dump}.perushim_notes.sqlite"));
+        let index = dir.join(format!("{dump}.hebrew_search.sqlite"));
+        for path in [&notes, &index] {
+            assert!(path.exists(), "missing {}", path.display());
+            assert!(
+                path.with_extension("sqlite.gz").exists(),
+                "missing {}.gz",
+                path.display()
+            );
+        }
+        (notes, index)
+    }
+
+    #[test]
+    fn generate_writes_all_payloads_to_the_output_dir() {
+        let dir = temp_dir("sqlite_generate");
+        let tanah = index_source_fixture(&dir);
+        let dump = format!("sqlite-gen-test-{}", std::process::id());
+        let out_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join(".output");
+        let _cleanup = GeneratedFiles {
+            dirs: &[out_dir.as_path()],
+            dump: &dump,
+        };
+        clean_generated(&out_dir, &dump);
+
+        generate(&sample_extracted(), &dump, false, &tanah).unwrap();
+
+        let catalog = out_dir.join(format!("{dump}.perushim_catalog.sqlite"));
+        assert!(catalog.exists(), "missing {}", catalog.display());
+        let (notes, index) = assert_notes_pack(&out_dir, &dump);
+
+        // The delivered index is a real queryable FTS5 db fingerprinted to the
+        // notes build it was generated from.
+        let conn = Connection::open(&index).unwrap();
+        let notes_fp: Option<String> = conn
+            .query_row(
+                "SELECT fingerprint FROM search_metadata WHERE name='notes'",
+                [],
+                |r| r.get(0),
+            )
+            .ok();
+        assert!(
+            notes_fp.is_some_and(|fp| fp.starts_with("v4:")),
+            "index must publish a content fingerprint"
+        );
+        let hits: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM notes WHERE notes MATCH 'בראשית'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert!(hits > 0);
+        conn.close().unwrap();
+
+        // The notes payload carries the compressed blobs the app reads.
+        let notes_conn = Connection::open(&notes).unwrap();
+        assert_eq!(read_all_blobs(&notes_conn).len(), 1);
+        notes_conn.close().unwrap();
+
+        let catalog_conn = Connection::open(&catalog).unwrap();
+        let parshanim: i64 = catalog_conn
+            .query_row("SELECT COUNT(*) FROM parshan", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(parshanim, 2);
+        catalog_conn.close().unwrap();
+
+        clean_generated(&out_dir, &dump);
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn generate_writes_all_payloads_to_dependant_modules() {
+        let dir = temp_dir("sqlite_generate_app");
+        let tanah = index_source_fixture(&dir);
+        // Unique dump name: the files land next to committed app assets and
+        // are removed again at the end of the test.
+        let dump = format!("sqlite-gen-app-test-{}", std::process::id());
+        let app_raw =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../../app/BibleOnSite/Resources/Raw");
+        let pad_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../../app/BibleOnSite/Platforms/Android/AssetPacks/perushim_notes");
+        let _cleanup = GeneratedFiles {
+            dirs: &[app_raw.as_path(), pad_dir.as_path()],
+            dump: &dump,
+        };
+        clean_generated(&app_raw, &dump);
+        clean_generated(&pad_dir, &dump);
+
+        generate(&sample_extracted(), &dump, true, &tanah).unwrap();
+
+        // Catalog ships as an app resource; notes + index ship in the PAD pack.
+        let catalog = app_raw.join(format!("{dump}.perushim_catalog.sqlite"));
+        assert!(catalog.exists(), "missing {}", catalog.display());
+        let (_, index) = assert_notes_pack(&pad_dir, &dump);
+        let conn = Connection::open(&index).unwrap();
+        let verses_fp: Option<String> = conn
+            .query_row(
+                "SELECT fingerprint FROM search_metadata WHERE name='verses'",
+                [],
+                |r| r.get(0),
+            )
+            .ok();
+        assert!(verses_fp.is_some());
+        conn.close().unwrap();
+
+        clean_generated(&app_raw, &dump);
+        clean_generated(&pad_dir, &dump);
+        fs::remove_dir_all(&dir).ok();
+    }
+
     #[test]
     fn notes_db_overwrite_replaces_old_data() {
-        let dir = std::env::temp_dir().join("perushim_test_overwrite");
-        fs::create_dir_all(&dir).unwrap();
+        let dir = temp_dir("overwrite");
         let path = dir.join("test.perushim_notes.sqlite");
 
         // First generation

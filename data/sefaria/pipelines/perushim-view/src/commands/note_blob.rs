@@ -148,4 +148,91 @@ mod tests {
         let blob = encode_perek_blob(&[&note(1, 1, 0, "abc")]).unwrap();
         assert!(decode_perek_blob(&blob[..blob.len() / 2]).is_err());
     }
+
+    /// Compresses a hand-built uncompressed payload so malformed record tests
+    /// exercise the real zlib decode path.
+    fn compress(raw: &[u8]) -> Vec<u8> {
+        let mut encoder = ZlibEncoder::new(Vec::new(), Compression::best());
+        encoder.write_all(raw).unwrap();
+        encoder.finish().unwrap()
+    }
+
+    #[test]
+    fn decode_rejects_wrong_magic_in_a_valid_zlib_stream() {
+        let mut raw = Vec::new();
+        raw.extend_from_slice(b"PNB2");
+        raw.extend_from_slice(&0u32.to_le_bytes());
+        let err = decode_perek_blob(&compress(&raw)).unwrap_err();
+        assert!(err.to_string().contains("bad note blob magic"), "{err}");
+    }
+
+    #[test]
+    fn decode_rejects_payload_shorter_than_the_header() {
+        // Magic alone: no room for the record count.
+        let err = decode_perek_blob(&compress(BLOB_MAGIC)).unwrap_err();
+        assert!(
+            err.to_string().contains("truncated note blob record"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn decode_rejects_a_record_truncated_mid_header() {
+        let mut raw = Vec::new();
+        raw.extend_from_slice(BLOB_MAGIC);
+        raw.extend_from_slice(&1u32.to_le_bytes());
+        // Only perush_id + part of pasuk: the u32 reads must fail.
+        raw.extend_from_slice(&7u32.to_le_bytes());
+        raw.extend_from_slice(&[0x01, 0x00]);
+        let err = decode_perek_blob(&compress(&raw)).unwrap_err();
+        assert!(
+            err.to_string().contains("truncated note blob record"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn decode_rejects_content_shorter_than_its_declared_length() {
+        let mut raw = Vec::new();
+        raw.extend_from_slice(BLOB_MAGIC);
+        raw.extend_from_slice(&1u32.to_le_bytes());
+        raw.extend_from_slice(&7u32.to_le_bytes()); // perush_id
+        raw.extend_from_slice(&3u32.to_le_bytes()); // pasuk
+        raw.extend_from_slice(&0u32.to_le_bytes()); // note_idx
+        raw.extend_from_slice(&100u32.to_le_bytes()); // declared length
+        raw.extend_from_slice(b"abc"); // but only 3 bytes follow
+        let err = decode_perek_blob(&compress(&raw)).unwrap_err();
+        assert!(
+            err.to_string().contains("truncated note blob content"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn decode_rejects_non_utf8_content() {
+        let mut raw = Vec::new();
+        raw.extend_from_slice(BLOB_MAGIC);
+        raw.extend_from_slice(&1u32.to_le_bytes());
+        raw.extend_from_slice(&7u32.to_le_bytes());
+        raw.extend_from_slice(&3u32.to_le_bytes());
+        raw.extend_from_slice(&0u32.to_le_bytes());
+        raw.extend_from_slice(&2u32.to_le_bytes());
+        raw.extend_from_slice(&[0xFF, 0xFE]);
+        let err = decode_perek_blob(&compress(&raw)).unwrap_err();
+        assert!(err.to_string().contains("non-utf8"), "{err}");
+    }
+
+    #[test]
+    fn decode_rejects_count_beyond_available_records() {
+        let mut raw = Vec::new();
+        raw.extend_from_slice(BLOB_MAGIC);
+        raw.extend_from_slice(&2u32.to_le_bytes()); // claims 2 records
+        // …but only one complete record follows.
+        raw.extend_from_slice(&7u32.to_le_bytes());
+        raw.extend_from_slice(&3u32.to_le_bytes());
+        raw.extend_from_slice(&0u32.to_le_bytes());
+        raw.extend_from_slice(&1u32.to_le_bytes());
+        raw.extend_from_slice(b"x");
+        assert!(decode_perek_blob(&compress(&raw)).is_err());
+    }
 }

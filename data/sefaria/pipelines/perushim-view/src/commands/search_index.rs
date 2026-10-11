@@ -207,110 +207,62 @@ pub fn ensure_v2_notes(notes: &Connection) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::commands::note_blob::encode_perek_blob;
+    use crate::commands::fixtures::{tanah_db, temp_dir, v2_notes_db};
     use crate::data::extract::Note;
+    use rusqlite::Connection;
 
     fn notes_fixture(dir: &Path) -> std::path::PathBuf {
         let path = dir.join("notes.sqlite");
-        let conn = Connection::open(&path).unwrap();
-        conn.execute_batch(
-            "CREATE TABLE _metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL);
-             CREATE TABLE note_blob (perek_id INTEGER PRIMARY KEY, data BLOB NOT NULL);
-             CREATE TABLE perek_perush (perek_id INTEGER NOT NULL, perush_id INTEGER NOT NULL, PRIMARY KEY (perek_id, perush_id));",
-        )
-        .unwrap();
-        conn.execute(
-            "INSERT INTO _metadata VALUES ('build_timestamp','4242')",
-            [],
-        )
-        .unwrap();
-        conn.execute("INSERT INTO _metadata VALUES ('schema_version','2')", [])
-            .unwrap();
-        let notes = [
-            Note {
-                perush_id: 7,
-                perek_id: 1,
-                pasuk: 1,
-                note_idx: 0,
-                note_content: "<b>בְּרֵאשִׁית</b> בשביל התורה".into(),
-            },
-            Note {
-                perush_id: 7,
-                perek_id: 1,
-                pasuk: 1,
-                note_idx: 1,
-                note_content: "שני - עולם &amp; סוף".into(),
-            },
-            Note {
-                perush_id: 9,
-                perek_id: 1,
-                pasuk: 2,
-                note_idx: 0,
-                note_content: "והארץ היתה תהו<br>ובהו".into(),
-            },
-        ];
-        let refs: Vec<&Note> = notes.iter().collect();
-        let blob = encode_perek_blob(&refs).unwrap();
-        conn.execute("INSERT INTO note_blob VALUES (1, ?1)", [blob])
-            .unwrap();
-        conn.execute("INSERT INTO perek_perush VALUES (1, 7)", [])
-            .unwrap();
-        conn.execute("INSERT INTO perek_perush VALUES (1, 9)", [])
-            .unwrap();
-        conn.close().unwrap();
+        v2_notes_db(
+            &path,
+            Some(note_blob::SCHEMA_VERSION),
+            Some("4242"),
+            &[(
+                1,
+                vec![
+                    Note {
+                        perush_id: 7,
+                        perek_id: 1,
+                        pasuk: 1,
+                        note_idx: 0,
+                        note_content: "<b>בְּרֵאשִׁית</b> בשביל התורה".into(),
+                    },
+                    Note {
+                        perush_id: 7,
+                        perek_id: 1,
+                        pasuk: 1,
+                        note_idx: 1,
+                        note_content: "שני - עולם &amp; סוף".into(),
+                    },
+                    Note {
+                        perush_id: 9,
+                        perek_id: 1,
+                        pasuk: 2,
+                        note_idx: 0,
+                        note_content: "והארץ היתה תהו<br>ובהו".into(),
+                    },
+                ],
+            )],
+            &[],
+        );
         path
     }
 
     fn tanah_fixture(dir: &Path) -> std::path::PathBuf {
         let path = dir.join("tanah.sqlite");
-        let conn = Connection::open(&path).unwrap();
-        conn.execute_batch(
-            "CREATE TABLE _metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL);
-             CREATE TABLE tanah_sefer (id INTEGER NOT NULL, name TEXT, tanach_us_name TEXT, perek_id_from INTEGER NOT NULL, perek_id_to INTEGER NOT NULL, PRIMARY KEY (id));
-             CREATE TABLE tanah_pasuk_segment (id INTEGER PRIMARY KEY, perek_id INTEGER, pasuk_id INTEGER, segment_type TEXT);
-             CREATE TABLE tanah_pasuk_segment_value (id INTEGER, value TEXT);",
-        )
-        .unwrap();
-        conn.execute(
-            "INSERT INTO _metadata VALUES ('generated_at','2026-01-03 22:08:48 UTC')",
-            [],
-        )
-        .unwrap();
-        conn.execute(
-            "INSERT INTO tanah_sefer VALUES (1, 'בראשית', 'genesis', 1, 50)",
-            [],
-        )
-        .unwrap();
-        conn.execute(
-            "INSERT INTO tanah_pasuk_segment VALUES (1, 1, 1, 'qri')",
-            [],
-        )
-        .unwrap();
-        conn.execute(
-            "INSERT INTO tanah_pasuk_segment_value VALUES (1, 'בְּרֵאשִׁית בָּרָא')",
-            [],
-        )
-        .unwrap();
-        conn.execute(
-            "INSERT INTO tanah_pasuk_segment VALUES (2, 1, 2, 'ktiv')",
-            [],
-        )
-        .unwrap();
-        conn.execute(
-            "INSERT INTO tanah_pasuk_segment_value VALUES (2, 'אֱלֹהִים')",
-            [],
-        )
-        .unwrap();
-        conn.close().unwrap();
+        tanah_db(
+            &path,
+            Some("2026-01-03 22:08:48 UTC"),
+            &[(1, 50, 1)],
+            &[(1, 1, 1, "qri", "בְּרֵאשִׁית בָּרָא"), (2, 1, 2, "ktiv", "אֱלֹהִים")],
+            &["tanah_sefer", "tanah_pasuk_segment"],
+        );
         path
     }
 
     #[test]
     fn build_index_is_queryable_and_fingerprinted() {
-        let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("target")
-            .join(format!("perushim_idx_test_{}", std::process::id()));
-        fs::create_dir_all(&dir).unwrap();
+        let dir = temp_dir("idx_roundtrip");
         let notes = notes_fixture(&dir);
         let tanah = tanah_fixture(&dir);
         let out = dir.join("hebrew_search.sqlite");
@@ -378,6 +330,168 @@ mod tests {
         assert!(vocab > 0);
 
         index.close().unwrap();
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn build_index_rejects_notes_db_without_v2_schema() {
+        let dir = temp_dir("idx_reject_v1");
+        let notes = dir.join("notes.sqlite");
+        v2_notes_db(&notes, Some("1"), Some("7"), &[], &[]);
+        let tanah = tanah_fixture(&dir);
+
+        let err = build_search_index(&notes, &tanah, &dir.join("idx.sqlite")).unwrap_err();
+        assert!(
+            err.to_string().contains("v2 notes DB"),
+            "unexpected error: {err}"
+        );
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn build_index_requires_identity_metadata() {
+        let dir = temp_dir("idx_meta");
+        let tanah = tanah_fixture(&dir);
+
+        // v2 layout but no build_timestamp — the fingerprint cannot be built.
+        let notes = dir.join("notes-no-ts.sqlite");
+        v2_notes_db(&notes, Some(note_blob::SCHEMA_VERSION), None, &[], &[]);
+        let err = build_search_index(&notes, &tanah, &dir.join("idx.sqlite")).unwrap_err();
+        assert!(
+            err.to_string().contains("build_timestamp"),
+            "unexpected: {err}"
+        );
+
+        // Verses without generated_at fail the same way.
+        let tanah_missing = dir.join("tanah-no-meta.sqlite");
+        tanah_db(
+            &tanah_missing,
+            None,
+            &[(1, 50, 1)],
+            &[(1, 1, 1, "qri", "בראשית")],
+            &["tanah_sefer", "tanah_pasuk_segment"],
+        );
+        let err = build_search_index(
+            &notes_fixture(&dir),
+            &tanah_missing,
+            &dir.join("idx2.sqlite"),
+        )
+        .unwrap_err();
+        assert!(
+            err.to_string().contains("generated_at"),
+            "unexpected: {err}"
+        );
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn build_index_rejects_tanah_missing_schema_tables() {
+        let dir = temp_dir("idx_tanah_schema");
+        let notes = notes_fixture(&dir);
+
+        // No tanah_sefer: the range load fails.
+        let no_sefer = dir.join("tanah-no-sefer.sqlite");
+        tanah_db(&no_sefer, Some("2026"), &[], &[], &["tanah_pasuk_segment"]);
+        assert!(build_search_index(&notes, &no_sefer, &dir.join("a.sqlite")).is_err());
+
+        // No segment tables: the verses scan fails.
+        let no_segments = dir.join("tanah-no-segments.sqlite");
+        tanah_db(
+            &no_segments,
+            Some("2026"),
+            &[(1, 50, 1)],
+            &[],
+            &["tanah_sefer"],
+        );
+        assert!(build_search_index(&notes, &no_segments, &dir.join("b.sqlite")).is_err());
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn build_index_skips_content_outside_sefer_ranges() {
+        let dir = temp_dir("idx_out_of_range");
+        let notes = dir.join("notes.sqlite");
+        // Perek 900 has notes but no sefer range covers it.
+        v2_notes_db(
+            &notes,
+            Some(note_blob::SCHEMA_VERSION),
+            Some("4242"),
+            &[(
+                900,
+                vec![Note {
+                    perush_id: 7,
+                    perek_id: 900,
+                    pasuk: 1,
+                    note_idx: 0,
+                    note_content: "מחוץ לטווח".into(),
+                }],
+            )],
+            &[],
+        );
+        let tanah = dir.join("tanah.sqlite");
+        // Verses on perek 1 (in range) and perek 900 (out of range).
+        tanah_db(
+            &tanah,
+            Some("2026"),
+            &[(1, 50, 1)],
+            &[(1, 1, 1, "qri", "בראשית"), (2, 900, 1, "qri", "מחוץ")],
+            &["tanah_sefer", "tanah_pasuk_segment"],
+        );
+        let out = dir.join("idx.sqlite");
+
+        build_search_index(&notes, &tanah, &out).unwrap();
+
+        let index = Connection::open(&out).unwrap();
+        let note_docs: i64 = index
+            .query_row("SELECT COUNT(*) FROM notes_documents", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(note_docs, 0, "out-of-range perek notes must be skipped");
+        let verse_docs: i64 = index
+            .query_row("SELECT COUNT(*) FROM verses_documents", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(verse_docs, 1, "only the in-range pasuk is indexed");
+        index.close().unwrap();
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn build_index_replaces_an_existing_output_file() {
+        let dir = temp_dir("idx_overwrite");
+        let notes = notes_fixture(&dir);
+        let tanah = tanah_fixture(&dir);
+        let out = dir.join("idx.sqlite");
+        fs::write(&out, b"stale index bytes").unwrap();
+
+        build_search_index(&notes, &tanah, &out).unwrap();
+
+        let index = Connection::open(&out).unwrap();
+        let tables: i64 = index
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_schema WHERE name = 'search_metadata'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(tables, 1);
+        index.close().unwrap();
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn build_index_fails_on_undecodable_blob() {
+        let dir = temp_dir("idx_corrupt_blob");
+        let notes = dir.join("notes.sqlite");
+        v2_notes_db(
+            &notes,
+            Some(note_blob::SCHEMA_VERSION),
+            Some("4242"),
+            &[],
+            &[(1, b"definitely not a zlib stream".to_vec())],
+        );
+        let tanah = tanah_fixture(&dir);
+
+        let err = build_search_index(&notes, &tanah, &dir.join("idx.sqlite")).unwrap_err();
+        assert!(err.to_string().contains("zlib"), "unexpected error: {err}");
         fs::remove_dir_all(&dir).ok();
     }
 }

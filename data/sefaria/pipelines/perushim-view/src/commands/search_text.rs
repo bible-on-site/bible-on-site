@@ -235,6 +235,43 @@ mod tests {
     }
 
     #[test]
+    fn plain_text_removes_the_earliest_of_script_and_style() {
+        // A <script> block before a <style> block: the style candidate loses
+        // to the earlier script match and is left for the next pass.
+        assert_eq!(plain_text("a<script>x</script>b<style>y{}</style>c"), "abc");
+        // Neither block survives even when the other comes first repeatedly.
+        assert_eq!(
+            plain_text("a<style>x{}</style>b<script>y</script>c<style>z{}</style>d"),
+            "abcd"
+        );
+    }
+
+    #[test]
+    fn plain_text_treats_script_prefixed_tags_as_regular_markup() {
+        // `<scriptx` is not a script tag — the name must end at a
+        // non-identifier char; scanning continues past it. Unlike a real
+        // script block the inner text survives; the tags themselves drop.
+        assert_eq!(plain_text("a<scriptx>y</scriptx>b"), "ayb");
+        assert_eq!(plain_text("<styleable>x"), "x");
+    }
+
+    #[test]
+    fn plain_text_keeps_literal_ampersands_and_decodes_remaining_entities() {
+        // No ';' after '&' — the '&' stays literal and scanning continues.
+        assert_eq!(plain_text("a & b"), "a & b");
+        // Named entities beyond lt/gt/amp.
+        assert_eq!(plain_text("&quot;q&quot;"), "\"q\"");
+        assert_eq!(plain_text("&apos;a&apos;"), "'a'");
+        assert_eq!(plain_text("x&nbsp;y"), "x\u{00a0}y");
+        // Numeric entities, decimal and hex.
+        assert_eq!(plain_text("&#65;&#x42;&#X43;"), "ABC");
+        // Unknown entities and out-of-range code points stay literal.
+        assert_eq!(plain_text("&bogus; &#xD800; &#;"), "&bogus; &#xD800; &#;");
+        // Entities decode even inside markup-free text.
+        assert_eq!(plain_text("fish &amp; chips"), "fish & chips");
+    }
+
+    #[test]
     fn normalize_matches_searchtext_semantics() {
         // Nikud (non-spacing marks) are stripped; gershayim/gersh removed.
         assert_eq!(normalize("בְּרֵאשִׁית"), "בראשית");

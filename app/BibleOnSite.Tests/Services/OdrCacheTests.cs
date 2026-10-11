@@ -42,6 +42,24 @@ public class OdrCacheTests
     }
 
     [Fact]
+    public async Task StaleGeneration_ThatCannotBeDeleted_IsTolerated()
+    {
+        await using var storage = new TestStorage();
+        var app = App("5.0.104", "104");
+        // A file held open inside a stale generation blocks recursive delete —
+        // the sweep failure must not keep the app from resolving its own dir.
+        var staleDir = Path.Join(storage.Root, "odr_assets", "old-generation");
+        Directory.CreateDirectory(staleDir);
+        var staleFile = Path.Join(staleDir, Notes);
+        await File.WriteAllTextAsync(staleFile, "old notes", TestContext.Current.CancellationToken);
+        await using var locked = new FileStream(staleFile, FileMode.Open, FileAccess.Read, FileShare.None);
+
+        var current = PadDeliveryService.OdrCacheDirectory(storage.FileSystem.Object, app.Object, Pack);
+
+        Directory.Exists(current).Should().BeTrue();
+    }
+
+    [Fact]
     public async Task CurrentApp_DoesNotTrustLegacyUnversionedOdrCache()
     {
         await using var storage = new TestStorage();
@@ -61,5 +79,25 @@ public class OdrCacheTests
         app.SetupGet(a => a.VersionString).Returns(version);
         app.SetupGet(a => a.BuildString).Returns(build);
         return app;
+    }
+
+    [Fact]
+    public void PayloadFileName_UsesNotesDatabaseForTheNotesPack_AndZipOtherwise()
+    {
+        PadDeliveryService.PayloadFileName("perushim_notes")
+            .Should().Be("sefaria-dump-5784-sivan-4.perushim_notes.sqlite");
+        PadDeliveryService.PayloadFileName("other_pack").Should().Be("other_pack.zip");
+    }
+
+    [Fact]
+    public async Task UnsupportedPlatform_DeliveryIsANoOp()
+    {
+        // The net10.0 test host compiles the no-PAD/ODR branch of the service.
+        var service = PadDeliveryService.Instance;
+
+        (await service.TryGetAssetPathAsync(Pack, TestContext.Current.CancellationToken)).Should().BeNull();
+        (await service.FetchAsync(Pack, cancellationToken: TestContext.Current.CancellationToken)).Should().BeFalse();
+        (await service.GetDeliveryDiagnosticsAsync(Pack))
+            .Should().ContainSingle().Which.Should().Contain("no on-demand delivery");
     }
 }
