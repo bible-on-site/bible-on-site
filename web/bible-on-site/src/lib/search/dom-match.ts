@@ -176,8 +176,7 @@ export function highlightDomMatch(
 		return [];
 	}
 	const match = rawRangeFromSpan(text, map, span);
-	/* istanbul ignore next -- locateNormalized only returns non-empty spans,
-	   which always map to a non-empty raw range; defensive guard */
+	/* istanbul ignore next -- span implies map non-empty and end > start, so match is always a non-empty range */
 	if (!match || match.end <= match.start) {
 		return [];
 	}

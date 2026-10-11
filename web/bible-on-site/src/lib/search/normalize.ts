@@ -63,7 +63,8 @@ export function normalizeWithMap(text: string): {
 	let normalized = "";
 	const map: number[] = [];
 	for (let i = 0; i < text.length; i++) {
-		const unitLength = (text.codePointAt(i) ?? 0) > 0xffff ? 2 : 1;
+		const code = text.charCodeAt(i);
+		const unitLength = code >= 0xd800 && code <= 0xdbff ? 2 : 1;
 		for (const char of text.slice(i, i + unitLength).normalize("NFD")) {
 			if (MARKS.test(char) || QUOTES.has(char)) {
 				continue;
