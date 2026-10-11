@@ -126,14 +126,15 @@ public partial class Pasuk : ObservableObject
                     // only — segment.Value stays canonical)
                     if (!string.IsNullOrEmpty(segment.Value))
                     {
-                        plain.Append(DivineNameMasking.MaskValue(segment.Value));
+                        plain.Append(DivineNameMasking.MaskText(segment.Value));
                     }
                     break;
 
                 case SegmentType.Qri:
                     if (segment.IsQriDifferentThanKtiv)
                     {
-                        // Qri differs from ktiv: show "(קְרִי: value)" with special styling
+                        // Qri differs from ktiv: show "(קְרִי: value)" with special styling.
+                        // MaskText (not MaskValue) — a bracketed qri can hold several words.
                         FlushPlain();
                         formatted.Spans.Add(new Span
                         {
@@ -143,7 +144,7 @@ public partial class Pasuk : ObservableObject
                         });
                         formatted.Spans.Add(new Span
                         {
-                            Text = DivineNameMasking.MaskValue(segment.Value),
+                            Text = DivineNameMasking.MaskText(segment.Value),
                             TextColor = Color.FromArgb(RecitingSegment == i + 1 ? "#1c427b" : "#637598"),
                             BackgroundColor = RecitingSegment == i + 1 ? Color.FromArgb("#e9eff8") : null
                         });
@@ -164,14 +165,14 @@ public partial class Pasuk : ObservableObject
                                 FlushPlain();
                                 formatted.Spans.Add(new Span
                                 {
-                                    Text = DivineNameMasking.MaskValue(segment.Value),
+                                    Text = DivineNameMasking.MaskText(segment.Value),
                                     TextColor = Color.FromArgb("#1c427b"),
                                     BackgroundColor = Color.FromArgb("#e9eff8")
                                 });
                             }
                             else
                             {
-                                plain.Append(DivineNameMasking.MaskValue(segment.Value));
+                                plain.Append(DivineNameMasking.MaskText(segment.Value));
                             }
                         }
                     }
