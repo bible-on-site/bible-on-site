@@ -25,16 +25,23 @@ function normalize(lines: string[]): string[] {
 	const input = join(workDir, "in.info");
 	const output = join(workDir, "out.info");
 	writeFileSync(input, `${lines.join("\n")}\n`, "utf8");
+	// A fixed runner keeps paths out of constructed code (CodeQL).
+	const runner = join(workDir, "run-normalize.mjs");
+	writeFileSync(
+		runner,
+		"const m = await import(process.argv[2]);\n" +
+			"await m.normalizeLcovFile(process.argv[3], process.argv[4]);\n",
+		"utf8",
+	);
 	const result = spawnSync(
 		process.execPath,
-		[
-			"-e",
-			`import(${JSON.stringify(NORMALIZER_URL)}).then((m) => m.normalizeLcovFile(${JSON.stringify(input)}, ${JSON.stringify(output)}))`,
-		],
+		[runner, NORMALIZER_URL, input, output],
 		{ encoding: "utf8" },
 	);
 	if (result.status !== 0) {
-		throw new Error(`normalize-coverage exited ${result.status}: ${result.stderr}`);
+		throw new Error(
+			`normalize-coverage exited ${result.status}: ${result.stderr}`,
+		);
 	}
 	return readFileSync(output, "utf8").replace(/\n$/, "").split("\n");
 }
@@ -53,13 +60,7 @@ describe("normalizeLcovFile", () => {
 		// executes at module load while the function is never invoked, so the
 		// line is hit but no arm is — which lcov rejects as inconsistent.
 		const out = normalize(
-			section([
-				"DA:10,5",
-				"BRDA:10,0,0,0",
-				"BRDA:10,0,1,0",
-				"BRF:2",
-				"BRH:0",
-			]),
+			section(["DA:10,5", "BRDA:10,0,0,0", "BRDA:10,0,1,0", "BRF:2", "BRH:0"]),
 		);
 		expect(out).toContain("BRDA:10,0,0,5");
 		expect(out).toContain("BRDA:10,0,1,0");
@@ -78,13 +79,7 @@ describe("normalizeLcovFile", () => {
 
 	it("prefers a recorded arm over an unexecuted '-' arm", () => {
 		const out = normalize(
-			section([
-				"DA:13,4",
-				"BRDA:13,3,0,-",
-				"BRDA:13,3,1,0",
-				"BRF:2",
-				"BRH:0",
-			]),
+			section(["DA:13,4", "BRDA:13,3,0,-", "BRDA:13,3,1,0", "BRF:2", "BRH:0"]),
 		);
 		expect(out).toContain("BRDA:13,3,0,-");
 		expect(out).toContain("BRDA:13,3,1,4");
