@@ -1,4 +1,5 @@
 using BibleOnSite.Config;
+using BibleOnSite.Helpers;
 using BibleOnSite.Pages;
 using BibleOnSite.Services;
 
@@ -162,6 +163,32 @@ public partial class AppShell : Shell
 		return windows.FirstOrDefault(window => window.IsKeyWindow) ?? windows.FirstOrDefault();
 	}
 #endif
+
+	/// <summary>
+	/// Shared Back ordering for every Shell surface:
+	/// 1. A fullscreen media surface is released first (#2117) — a transient
+	///    surface always owns Back before page navigation or app exit.
+	/// 2. The page/navigation pipeline then decides (reader overlays, section
+	///    stack pops, cancelled navigation).
+	/// 3. When nothing consumed the press and it would leave the app, the
+	///    single-Back exit confirmation runs first (#2118). Overriding this
+	///    method also keeps the platform back callback enabled at the root so
+	///    the press reaches here instead of finishing the activity directly.
+	/// </summary>
+	protected override bool OnBackButtonPressed()
+	{
+		if (MediaFullscreen.TryExit())
+		{
+			return true;
+		}
+
+		return BackExitPlan.Evaluate(base.OnBackButtonPressed(), FlyoutIsPresented) switch
+		{
+			BackExitAction.Consume => true,
+			BackExitAction.ConfirmExit => ExitConfirmation.Shared.Request(),
+			_ => false,
+		};
+	}
 
 	private void OnNavigated(object? sender, ShellNavigatedEventArgs e)
 	{
