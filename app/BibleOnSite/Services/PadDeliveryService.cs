@@ -30,12 +30,12 @@ public sealed partial class PadDeliveryService : IPadDeliveryService
     {
         // Extracted ODR data belongs to this app build, just like the store resource.
         var generation = $"{appInfo.VersionString}-{appInfo.BuildString}";
-        var root = Path.Combine(fileSystem.CacheDirectory, "odr_assets");
+        var root = Path.Join(fileSystem.CacheDirectory, "odr_assets");
         // Every ODR access sweeps stale generations: prior {version}-{build}
         // directories (and any legacy unversioned pack dirs) are app-owned
         // cache the OS will not reclaim.
         SweepStaleOdrGenerations(root, generation);
-        var dir = Path.Combine(root, generation, packName);
+        var dir = Path.Join(root, generation, packName);
         Directory.CreateDirectory(dir);
         return dir;
     }
@@ -57,14 +57,17 @@ public sealed partial class PadDeliveryService : IPadDeliveryService
                 }
 
                 try { Directory.Delete(stale, true); }
-                catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"ODR stale generation cleanup: {ex.Message}"); }
+                // Cleanup is best-effort: only IO failures are swallowed.
+                catch (IOException ex) { LogOdrSweepFailure(ex); }
+                catch (UnauthorizedAccessException ex) { LogOdrSweepFailure(ex); }
             }
         }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"ODR stale generation cleanup: {ex.Message}");
-        }
+        catch (IOException ex) { LogOdrSweepFailure(ex); }
+        catch (UnauthorizedAccessException ex) { LogOdrSweepFailure(ex); }
     }
+
+    private static void LogOdrSweepFailure(Exception ex) =>
+        System.Diagnostics.Debug.WriteLine($"ODR stale generation cleanup: {ex.Message}");
 
     /// <inheritdoc />
     public Task<string?> TryGetAssetPathAsync(string packName, CancellationToken cancellationToken = default)

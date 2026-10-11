@@ -193,12 +193,20 @@ public sealed class RecitationService
                     continue;
                 }
 
+                // Cleanup is best-effort: only IO failures are swallowed.
                 try { File.Delete(file); }
-                catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Recitation orphan cleanup: {ex.Message}"); }
+                catch (IOException ex) { LogSweepFailure(ex); }
+                catch (UnauthorizedAccessException ex) { LogSweepFailure(ex); }
             }
         }
+        // The sweep must never fail a catalog update.
+        catch (IOException ex) { LogSweepFailure(ex); }
+        catch (UnauthorizedAccessException ex) { LogSweepFailure(ex); }
         finally { _downloadGate.Release(); }
     }
+
+    private static void LogSweepFailure(Exception ex) =>
+        System.Diagnostics.Debug.WriteLine($"Recitation orphan cleanup: {ex.Message}");
 
     public Task DownloadAsync(IEnumerable<int> perekIds) => DownloadAsync(perekIds, null, CancellationToken.None);
 
