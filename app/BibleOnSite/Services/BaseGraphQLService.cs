@@ -29,12 +29,6 @@ public abstract class BaseGraphQLService
     /// <summary>
     /// Executes a GraphQL query and returns the typed response.
     /// </summary>
-    protected async Task<T?> QueryAsync<T>(string query) =>
-        await QueryAsync<T>(query, null, null, CancellationToken.None);
-
-    /// <summary>
-    /// Executes a GraphQL query and returns the typed response.
-    /// </summary>
     protected async Task<T?> QueryAsync<T>(string query, string? operationName, object? variables, CancellationToken cancellationToken)
     {
         var request = new GraphQLRequest

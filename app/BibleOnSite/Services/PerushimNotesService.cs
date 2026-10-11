@@ -129,17 +129,14 @@ public class PerushimNotesService
             lines.Add($"  PAD file at root: {atRoot}");
             lines.Add($"  PAD file in assets/: {atAssets}");
         }
-        if (File.Exists(dbPath))
+        try
         {
-            try
-            {
-                var ts = await GetBuildTimestampAsync(dbPath);
-                lines.Add($"Local DB build_timestamp: {ts}");
-            }
-            catch (Exception ex)
-            {
-                lines.Add($"Local DB build_timestamp error: {ex.Message}");
-            }
+            var ts = await GetBuildTimestampAsync(dbPath);
+            lines.Add($"Local DB build_timestamp: {ts}");
+        }
+        catch (Exception ex)
+        {
+            lines.Add($"Local DB build_timestamp error: {ex.Message}");
         }
 
         // Platform-specific delivery diagnostics (ODR on iOS, PAD on Android)

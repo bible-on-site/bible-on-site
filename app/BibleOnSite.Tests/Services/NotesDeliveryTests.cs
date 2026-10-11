@@ -240,7 +240,7 @@ public class NotesDeliveryTests
     {
         var service = PadDeliveryService.Instance;
         (await service.TryGetAssetPathAsync("perushim_notes", TestContext.Current.CancellationToken)).Should().BeNull();
-        (await service.FetchAsync("perushim_notes", cancellationToken: TestContext.Current.CancellationToken)).Should().BeFalse();
+        (await service.FetchAsync("perushim_notes", null, TestContext.Current.CancellationToken)).Should().BeFalse();
         (await service.GetDeliveryDiagnosticsAsync("perushim_notes")).Should().Contain("Platform: no on-demand delivery support");
         var analytics = new AnalyticsService();
         analytics.SetScreen("test");

@@ -433,24 +433,34 @@ public partial class SearchViewModel : ObservableObject
         var visible = (Sorting == SearchSort.Generation
             ? results.OrderBy(result => result.GenerationOrder).ThenBy(result => result.SourceOrder).ThenByDescending(result => result.Score)
             : results.OrderByDescending(result => result.Score)).Take(limit).ToArray();
-        for (var position = 0; position < visible.Length; position++)
+        ReconcileVisibleResults(SearchResults, visible);
+        // Preserve native result rows while slower commentary matches are added.
+        OnPropertyChanged(nameof(SearchResults));
+    }
+
+    /// <summary>
+    /// Reconciles the bound results collection with the latest visible slice:
+    /// inserts newcomers at their position, moves reordered items, and trims
+    /// leftovers beyond the limit — without replacing the collection instance.
+    /// </summary>
+    internal static void ReconcileVisibleResults(ObservableCollection<SearchResult> target, IReadOnlyList<SearchResult> visible)
+    {
+        for (var position = 0; position < visible.Count; position++)
         {
-            var existing = SearchResults.IndexOf(visible[position]);
+            var existing = target.IndexOf(visible[position]);
             if (existing < 0)
             {
-                SearchResults.Insert(position, visible[position]);
+                target.Insert(position, visible[position]);
             }
             else if (existing != position)
             {
-                SearchResults.Move(existing, position);
+                target.Move(existing, position);
             }
         }
-        while (SearchResults.Count > visible.Length)
+        while (target.Count > visible.Count)
         {
-            SearchResults.RemoveAt(SearchResults.Count - 1);
+            target.RemoveAt(target.Count - 1);
         }
-        // Preserve native result rows while slower commentary matches are added.
-        OnPropertyChanged(nameof(SearchResults));
     }
 
     private IEnumerable<PerekSearchResult> GetPerekResults(string phrase, IReadOnlySet<int> books)

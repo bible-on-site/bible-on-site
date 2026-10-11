@@ -155,8 +155,7 @@ public static class GimatryHelper
     /// <param name="number">The number to convert (1-999 without thousands support, or higher with thousands).</param>
     /// <param name="includeThousands">Whether to include thousands representation.</param>
     /// <returns>The Hebrew letter representation.</returns>
-    public static string ToLetters(int number, bool includeThousands) =>
-        ToLetters(number, includeThousands, string.Empty);
+    public static string ToLetters(int number, bool includeThousands) => ToLetters(number, includeThousands, string.Empty);
 
     /// <summary>
     /// Converts a number to its Hebrew letter representation.
@@ -243,18 +242,4 @@ public static class GimatryExtensions
     /// Converts an integer to its Hebrew letter representation.
     /// </summary>
     public static string ToHebrewLetters(this int number) => GimatryHelper.ToLetters(number, false, string.Empty);
-
-    /// <summary>
-    /// Converts an integer to its Hebrew letter representation.
-    /// </summary>
-    public static string ToHebrewLetters(this int number, bool includeThousands) =>
-        GimatryHelper.ToLetters(number, includeThousands, string.Empty);
-
-    /// <summary>
-    /// Converts an integer to its Hebrew letter representation.
-    /// </summary>
-    public static string ToHebrewLetters(this int number, bool includeThousands, string thousandsSeparator)
-    {
-        return GimatryHelper.ToLetters(number, includeThousands, thousandsSeparator);
-    }
 }

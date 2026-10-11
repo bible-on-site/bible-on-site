@@ -1,6 +1,9 @@
 using BibleOnSite.Models;
 using BibleOnSite.Services;
+using BibleOnSite.Tests.Support;
 using FluentAssertions;
+using Microsoft.Maui.Devices;
+using Microsoft.Maui.Storage;
 using SQLite;
 
 namespace BibleOnSite.Tests.Services;
@@ -41,6 +44,25 @@ public sealed class PerushimNotesServiceTests : IDisposable
         var service = PerushimNotesService.CreateForTesting(new FakePadDeliveryService(), _tempRoot);
 
         service.IsAvailable.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task GetDiagnosticsAsync_WhenNotesDbMissing_ReportsZeroBuildTimestamp()
+    {
+        await using var storage = new TestStorage();
+        var device = new Mock<IDeviceInfo>();
+        device.SetupGet(d => d.Platform).Returns(DevicePlatform.Android);
+        device.SetupGet(d => d.VersionString).Returns("15");
+        var app = new Mock<IAppInfo>();
+        app.SetupGet(a => a.VersionString).Returns("1.2.3");
+        app.SetupGet(a => a.BuildString).Returns("123");
+        var service = new PerushimNotesService(
+            new FakePadDeliveryService(), storage.FileSystem.Object, device.Object, app.Object);
+
+        var diagnostics = await service.GetDiagnosticsAsync();
+
+        diagnostics.Should().Contain("Local DB build_timestamp: 0");
+        diagnostics.Should().Contain("PAD/ODR path: (null)");
     }
 
     [Fact]
