@@ -98,6 +98,10 @@ jest.mock("../../../src/app/929/[number]/[slug]/ScrollToArticle", () => ({
 	ScrollToArticle: () => null,
 }));
 
+jest.mock("../../../src/app/929/[number]/[slug]/ScrollToArticleMatch", () => ({
+	ScrollToArticleMatch: () => null,
+}));
+
 jest.mock("../../../src/app/929/[number]/[slug]/ScrollToPerushPasuk", () => ({
 	ScrollToPerushPasukNote: () => null,
 }));

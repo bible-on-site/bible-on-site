@@ -145,11 +145,31 @@ JSON consumers and SQLite consumers resolve identical mappings.
 - The sitemap lists only the `/מסורה` landing — never the 3197
   non-indexed unit pages.
 
+## Native app consumption
+
+The native app ships the same export in
+`app/BibleOnSite/Resources/Raw/sefaria-dump-5784-sivan-4.tanah_view.sqlite`
+and resolves it through the identical mapping:
+
+- `Services/MasoraDataService.cs` loads units plus their primary ranges
+  (`auxiliary_ordinal IS NULL`) from the three tables above and answers
+  stable-id, adjacency, and containing-unit lookups at whole-pasuk
+  precision.
+- `Helpers/MasoraUnitText.cs` is the app-side port of `rangesPerekSlices` /
+  segment clipping: a unit decomposes into per-perek slices, interior
+  perakim render whole, and boundary pesukim keep their `segmentIndex`
+  bounds (the closing `ptuha`/`stuma` marker is included in the unit's
+  tail, matching `emit`'s inclusive end coordinate).
+- `ViewModels/MasoraViewModel.cs` + `Pages/MasoraPage` render the clipped
+  canonical pesukim from `tanah_pasuk_segment` — the unit maps ranges, it
+  never duplicates scripture. Verse-addressed commentary and articles
+  attach to every covered pasuk via the union of the unit's overlapping
+  perakim.
+- A packaged database predating these tables degrades to an unavailable
+  empty state rather than crashing.
+
 ## Follow-up
 
 - `/פרשה` division and ordered multi-range Haftarah auxiliary readings:
   #2108. The contract's `AuxiliaryReading` and the
   `tanah_reading_unit_range` auxiliary columns are designed for it.
-- Native app consumption (reading-unit queries, menu entries): the
-  exported tables are the versioned contract; app-side readers land with
-  #934.
