@@ -2,6 +2,7 @@ using BibleOnSite.Services;
 using BibleOnSite.Tests.Support;
 using BibleOnSite.ViewModels;
 using FluentAssertions;
+using SQLite;
 
 namespace BibleOnSite.Tests.ViewModels;
 
@@ -436,6 +437,32 @@ public class PreferencesViewModelTests : IDisposable
             _viewModel.PerushimDownloadProgress = 0.426;
 
             _viewModel.PerushimDownloadStatusText.Should().EndWith("43%");
+        }
+
+        [Fact]
+        public void PerushimDownloadStatusText_ReturnsGenericMessage_BeforeProgressIsReported()
+        {
+            _viewModel.PerushimDownloadStatusText.Should().Be("מוריד…");
+        }
+
+        [Fact]
+        public async Task ShowPerushimDownload_ReturnsFalse_WhenNotesAlreadyInstalled()
+        {
+            var dataDir = Path.Join(_tempDir, nameof(ShowPerushimDownload_ReturnsFalse_WhenNotesAlreadyInstalled));
+            Directory.CreateDirectory(dataDir);
+            var dbPath = Path.Join(dataDir, "sefaria-dump-5784-sivan-4.perushim_notes.sqlite");
+            var conn = new SQLiteAsyncConnection(dbPath, SQLiteOpenFlags.ReadWrite | SQLiteOpenFlags.Create);
+            await conn.ExecuteAsync("CREATE TABLE IF NOT EXISTS _metadata (key TEXT, value TEXT)");
+            await conn.ExecuteAsync("INSERT INTO _metadata (key, value) VALUES ('build_timestamp', '1')");
+            await conn.ExecuteAsync("CREATE TABLE IF NOT EXISTS note (perush_id INTEGER, perek_id INTEGER, pasuk INTEGER, note_idx INTEGER, note_content TEXT)");
+            await conn.CloseAsync();
+
+            var perushim = PerushimNotesService.CreateForTesting(new FakePadDeliveryService(), dataDir);
+            await perushim.InitializeAsync();
+            var viewModel = new PreferencesViewModel(_service, perushim);
+
+            viewModel.ShowPerushimDownload.Should().BeFalse();
+            viewModel.ShowPerushimDownloadButton.Should().BeFalse();
         }
 
         [Fact]
