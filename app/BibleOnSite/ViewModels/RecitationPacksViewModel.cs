@@ -148,7 +148,11 @@ public partial class RecitationPacksViewModel : ObservableObject
 
             Refresh();
         }
-        catch (Exception) { Status = "לא ניתן לטעון את חבילת ההקראה. נסו להתקין אותה שוב."; }
+        catch (Exception ex) //NOSONAR — the install surface spans IO/network; a failed load shows the retry hint.
+        {
+            System.Diagnostics.Debug.WriteLine($"Recitation load failed: {ex.Message}");
+            Status = "לא ניתן לטעון את חבילת ההקראה. נסו להתקין אותה שוב.";
+        }
     }
 
     private void Refresh()
@@ -200,7 +204,7 @@ public partial class RecitationPacksViewModel : ObservableObject
         {
             await _recitation.RemoveAllAsync();
         }
-        catch (Exception ex)
+        catch (Exception ex) //NOSONAR — removal spans IO/platform errors; failure is reported and the list refreshed.
         {
             System.Diagnostics.Debug.WriteLine($"Recitation removal failed: {ex.Message}");
             Status = "לא ניתן להסיר את ההקלטות. נסו שוב.";
@@ -236,7 +240,7 @@ public partial class RecitationPacksViewModel : ObservableObject
         {
             await _recitation.RemoveAsync(book.PerekIds);
         }
-        catch (Exception ex)
+        catch (Exception ex) //NOSONAR — removal spans IO/platform errors; failure is reported and the list refreshed.
         {
             System.Diagnostics.Debug.WriteLine($"Recitation removal failed: {ex.Message}");
             Status = "לא ניתן להסיר את ההקלטות. נסו שוב.";
