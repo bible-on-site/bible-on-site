@@ -4,36 +4,15 @@ import { resolve } from "node:path";
 import { expect, type Locator, type Page } from "@playwright/test";
 import { test } from "../../../util/playwright/test-fixture";
 
-/** Exercise the real MP3 decoder without an external audio download. */
+/**
+ * Exercise the real MP3 decoder without an external audio download. The clip
+ * is a full two minutes while manifests describe the real recordings they
+ * stand in for, so resume→end playback can be much longer than the aligned
+ * tail — tests that wait for chapter completion must account for the gap.
+ */
 const recording = readFileSync(
 	resolve(process.cwd(), "../../data/recitation/fixtures/silence-120s.mp3"),
 );
-
-/**
- * PCM WAV of digital silence whose decoded duration equals the manifest's —
- * the MP3 fixture is 120s regardless of the real recording it stands in for,
- * so serving it would stretch open-ended (resume→end) playback far past the
- * aligned tail the manifest describes.
- */
-function silenceWav(durationMs: number): Buffer {
-	const rate = 22050;
-	const dataSize = Math.ceil((durationMs / 1000) * rate) * 2;
-	const header = Buffer.alloc(44);
-	header.write("RIFF", 0);
-	header.writeUInt32LE(36 + dataSize, 4);
-	header.write("WAVE", 8);
-	header.write("fmt ", 12);
-	header.writeUInt32LE(16, 16);
-	header.writeUInt16LE(1, 20); // PCM
-	header.writeUInt16LE(1, 22); // mono
-	header.writeUInt32LE(rate, 24);
-	header.writeUInt32LE(rate * 2, 28);
-	header.writeUInt16LE(2, 32);
-	header.writeUInt16LE(16, 34);
-	header.write("data", 36);
-	header.writeUInt32LE(dataSize, 40);
-	return Buffer.concat([header, Buffer.alloc(dataSize)]);
-}
 
 async function chapterReader(page: Page, perekId: number, chapter: string) {
 	await page.goto(`/929/${perekId}?book`);
@@ -147,26 +126,34 @@ test.describe("Recitation in the book reader", () => {
 	test("spoken words advance with real decoded audio, retain hover styling and never reflow scripture", async ({
 		page,
 	}) => {
-		test.setTimeout(90_000);
+		// Worst case the completion wait is half the 120s fixture plus margin.
+		test.setTimeout(120_000);
 		const response = await page.request.get("/api/recitation/829");
 		expect(response.ok()).toBe(true);
 		const manifest = await response.json();
-		const audio = silenceWav(manifest.durationMs);
 		await page.route("**/api/recitation/829", (route) =>
 			route.fulfill({
 				response,
 				json: {
 					...manifest,
-					audioSha256: createHash("sha256").update(audio).digest("hex"),
+					audioSha256: createHash("sha256").update(recording).digest("hex"),
 				},
 			}),
 		);
 		await page.route("**/recordings/829_record.mp3", (route) =>
 			route.fulfill({
-				body: audio,
-				contentType: "audio/wav",
-				headers: { "content-length": String(audio.length) },
+				body: recording,
+				contentType: "audio/mpeg",
+				headers: { "content-length": String(recording.length) },
 			}),
+		);
+		// 2× playback: the 120s fixture stretches resume→end playback far past
+		// the manifest's aligned tail; doubling speed halves the completion wait.
+		await page.addInitScript(() =>
+			localStorage.setItem(
+				"perekRecitationSettings",
+				JSON.stringify({ speed: 2, volume: 1, versePauseMs: null }),
+			),
 		);
 		const { toggle, reader, text } = await chapterReader(page, 829, "י");
 		await toggle.click();
@@ -226,11 +213,12 @@ test.describe("Recitation in the book reader", () => {
 			}
 		}
 		await reader.getByRole("button", { name: "המשך ההקראה" }).click();
-		// Continuous playback resumed at the last pasuk's bookmark, so only the
-		// clip's tail still plays before the controls settle back to idle.
+		// Continuous playback resumed at the last pasuk's bookmark and plays to
+		// the decoded buffer's end — the 120s fixture, not the manifest's
+		// duration; at 2× speed that tail is halved.
 		await expect(
 			reader.getByRole("button", { name: "השמעת כל הפרק" }),
-		).toBeVisible({ timeout: manifest.durationMs - lastPasukStart + 15_000 });
+		).toBeVisible({ timeout: (120_000 - lastPasukStart) / 2 + 15_000 });
 		await expect(text.locator('[data-recitation-active="true"]')).toHaveCount(
 			0,
 			{ timeout: 12_000 },
