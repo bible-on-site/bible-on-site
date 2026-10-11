@@ -65,13 +65,32 @@ test("serialized RSC link data does not count as rendered content", () => {
 		[],
 	);
 });
-test("script tokens accept case and whitespace in closing tags", () => {
+test("script blocks accept case, whitespace, and attributes in closing tags", () => {
 	assert.deepEqual(
 		links(
-			"<SCRIPT>const data = '<a href=\"/929/1/4\">';</SCRIPT >" +
+			"<SCRIPT>const data = '<a href=\"/929/1/4\">';</SCRIPT\t\n bar>" +
 				'<a href="/929/1/5">Rendered</a>',
 			/^\/929\/1\/\d+$/,
 		),
 		["/929/1/5"],
 	);
+});
+test("comments and inert template content do not count as rendered links", () => {
+	assert.deepEqual(
+		links(
+			'<template><a href="/929/1/4">Inert</a></template>' +
+				'<!-- <a href="/929/1/4">Comment</a> -->' +
+				"<a href='/929/1/5'>Rendered</a>",
+			/^\/929\/1\/\d+$/,
+		),
+		["/929/1/5"],
+	);
+});
+test("article titles can contain nested markup", async () => {
+	await verifyPublicContent("https://example.test", {
+		fetchPage: fetchFrom({
+			...healthy,
+			"/929/1/4": "<h1><span>Public article</span></h1>",
+		}),
+	});
 });

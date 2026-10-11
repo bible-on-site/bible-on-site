@@ -102,6 +102,7 @@
 		"jest-junit": "17.0.0",
 		"lighthouse": "13.5.0",
 		"monocart-reporter": "2.14.1",
+		"parse5": "8.0.1",
 		"picomatch": "4.0.7",
 		"postcss": "8.5.29",
 		"sass": "1.105.1",

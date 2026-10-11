@@ -1,18 +1,26 @@
+import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+// CD installs devops dependencies and supplies NODE_PATH; builds use website deps.
+const { parseFragment } = createRequire(import.meta.url)("parse5");
+
+function* nodes(root) {
+	yield root;
+	for (const child of root.childNodes ?? []) yield* nodes(child);
+}
+
 /** Count actual anchor markup, excluding link data serialized in RSC scripts. */
 export function links(html, pattern) {
-	// Consume script blocks as tokens so their serialized anchors are never read.
-	const tokens =
-		/<script\b[^>]*>[\s\S]*?<\/script\s*>|<a\b[^>]*\bhref="([^"]+)"/gi;
-	return [
-		...new Set(
-			[...html.matchAll(tokens)]
-				.map((match) => match[1])
-				.filter((href) => href !== undefined && pattern.test(href)),
-		),
-	];
+	const found = new Set();
+	for (const node of nodes(parseFragment(html))) {
+		if (node.tagName !== "a") continue;
+		const href = node.attrs.find(
+			(attribute) => attribute.name === "href",
+		)?.value;
+		if (href !== undefined && pattern.test(href)) found.add(href);
+	}
+	return [...found];
 }
 
 /** Verify user-facing content even when HTTP 200 and recitation both pass. */
@@ -59,8 +67,14 @@ export async function verifyPublicContent(
 	if (links(authorPage, /^\/929\/\d+\/\d+$/).length === 0)
 		throw new Error("Author detail has no article links");
 	const articlePage = await (await read(articles[0])).text();
-	if (!/<h1\b[^>]*>[^<]*\S/.test(articlePage))
-		throw new Error("Article detail has no title");
+	const hasTitle = [...nodes(parseFragment(articlePage))].some(
+		(node) =>
+			node.tagName === "h1" &&
+			[...nodes(node)].some(
+				(child) => child.nodeName === "#text" && child.value.trim(),
+			),
+	);
+	if (!hasTitle) throw new Error("Article detail has no title");
 	return { authors: authors.length, perekId, articles: articles.length };
 }
 
