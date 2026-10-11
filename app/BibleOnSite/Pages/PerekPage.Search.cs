@@ -11,6 +11,9 @@ public partial class PerekPage
 {
     private bool _preserveSearchOnDisappear;
     private SearchResult? _searchReaderResult;
+
+    /// <summary>Perek requested via the calendarReader?perekId= query route.</summary>
+    private int? _pendingPerekId;
     private View? _searchHeader;
     private double _searchHeaderHeight;
     private const string SearchExpansionAnimation = "ReaderSearchExpansion";
@@ -215,6 +218,14 @@ public partial class PerekPage
         if (query.TryGetValue("searchResult", out var value) && value is SearchResult result && GetSearchPerekId(result) > 0)
         {
             _searchReaderResult = result;
+        }
+
+        // The daily-learning calendar pushes calendarReader?perekId=N above it.
+        if (query.TryGetValue("perekId", out var perekValue) &&
+            int.TryParse(perekValue?.ToString(), out var perekId) &&
+            perekId is >= 1 and <= 929)
+        {
+            _pendingPerekId = perekId;
         }
     }
 

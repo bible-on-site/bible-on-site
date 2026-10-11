@@ -183,6 +183,53 @@ public class HebrewDateHelperTests
         result.Day.Should().Be(expectedDay);
     }
 
+    [Fact]
+    public void GetTzeitTimeOfDay_WinterDate_ShouldBeBefore1930()
+    {
+        // Jerusalem civil dusk on 2026-02-09 is ~17:45 IST, not 19:30.
+        var tzeit = HebrewDateHelper.GetTzeitTimeOfDay(new DateTime(2026, 2, 9));
+        tzeit.Should().BeGreaterThan(TimeSpan.FromHours(17));
+        tzeit.Should().BeLessThan(TimeSpan.FromHours(19));
+    }
+
+    [Fact]
+    public void GetTzeitTimeOfDay_SummerDate_ShouldBeAfter1930()
+    {
+        // Jerusalem civil dusk on 2026-07-15 is ~20:15 IDT, not 19:30.
+        var tzeit = HebrewDateHelper.GetTzeitTimeOfDay(new DateTime(2026, 7, 15));
+        tzeit.Should().BeGreaterThan(TimeSpan.FromHours(20));
+        tzeit.Should().BeLessThan(TimeSpan.FromHours(21));
+    }
+
+    [Fact]
+    public void GetTzeitAwareHebrewDate_WinterEveningBefore1930_ShouldAdvanceToNextDay()
+    {
+        // 18:00 on a winter day is after real dusk (~17:45) although before 19:30.
+        var date = new DateTime(2026, 2, 9, 18, 0, 0);
+        var calendar = new System.Globalization.HebrewCalendar();
+        var nextDay = date.AddDays(1);
+
+        var result = HebrewDateHelper.GetTzeitAwareHebrewDate(date);
+
+        result.Year.Should().Be(calendar.GetYear(nextDay));
+        result.Month.Should().Be(calendar.GetMonth(nextDay));
+        result.Day.Should().Be(calendar.GetDayOfMonth(nextDay));
+    }
+
+    [Fact]
+    public void GetTzeitAwareHebrewDate_SummerEveningAfter1930_ShouldStaySameDay()
+    {
+        // 19:45 on a summer day is before real dusk (~20:15) although after 19:30.
+        var date = new DateTime(2026, 7, 15, 19, 45, 0);
+        var calendar = new System.Globalization.HebrewCalendar();
+
+        var result = HebrewDateHelper.GetTzeitAwareHebrewDate(date);
+
+        result.Year.Should().Be(calendar.GetYear(date));
+        result.Month.Should().Be(calendar.GetMonth(date));
+        result.Day.Should().Be(calendar.GetDayOfMonth(date));
+    }
+
     #endregion
 
     #region AdjustForWeekend Tests

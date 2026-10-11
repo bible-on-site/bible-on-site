@@ -97,6 +97,17 @@ export const NavBar = () => {
 						</Link>
 					</li>
 					<li className={styles.menuItem}>
+						<Image
+							src="/icons/calendar-today.svg"
+							alt=""
+							width={16}
+							height={16}
+						/>
+						<Link href="/לוח">
+							<span>לוח לימוד יומי</span>
+						</Link>
+					</li>
+					<li className={styles.menuItem}>
 						<Image src="/icons/rabbi.svg" alt="" width={16} height={16} />
 						<Link href="/929/authors">
 							<span>הרבנים</span>

@@ -24,6 +24,12 @@ public static class AppRoutes
 {
     public static string Perek => "PerekPage";
     public static string SearchReader => "searchReader";
+    public static string LearningCalendar => "LearningCalendarPage";
+
+    /// <summary>
+    /// PerekPage pushed above the calendar so Back returns to the viewed month.
+    /// </summary>
+    public static string CalendarReader => "calendarReader";
 
     /// <summary>
     /// Flyout pages replace another menu page above the most recent reader.
