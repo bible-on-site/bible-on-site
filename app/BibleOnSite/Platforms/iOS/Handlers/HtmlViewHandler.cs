@@ -64,7 +64,7 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
                 // We handled the tap — UIKit must not open the URL too.
                 return false;
             }
-            return base.ShouldInteractWithUrl(textView, URL, characterRange, interaction);
+            return true;
         }
     }
 
