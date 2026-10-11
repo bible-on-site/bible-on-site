@@ -17,6 +17,7 @@ jest.mock("../../../src/lib/authors/service", () => ({
 
 import { query } from "../../../src/lib/api-client";
 import {
+	getAllArticleIdsByPerek,
 	getAllArticlePerekIdPairs,
 	getArticleById,
 	getArticleSummariesByPerekId,
@@ -110,25 +111,21 @@ describe("articles service", () => {
 			expect(result).toEqual([]);
 		});
 
-		it("returns empty array and logs warning when query fails", async () => {
+		it("rejects and logs database failures without caching empty content", async () => {
 			const mockError = new Error("Database connection failed");
 			mockQuery.mockRejectedValue(mockError);
 
-			const result = await getArticlesByPerekId(1);
-
-			expect(result).toEqual([]);
+			await expect(getArticlesByPerekId(1)).rejects.toBe(mockError);
 			expect(console.warn).toHaveBeenCalledWith(
 				"Failed to fetch articles for perek 1:",
 				"Database connection failed",
 			);
 		});
 
-		it("handles non-Error rejection gracefully", async () => {
+		it("propagates non-Error rejections without caching them", async () => {
 			mockQuery.mockRejectedValue("string error");
 
-			const result = await getArticlesByPerekId(1);
-
-			expect(result).toEqual([]);
+			await expect(getArticlesByPerekId(1)).rejects.toBe("string error");
 			expect(console.warn).toHaveBeenCalledWith(
 				"Failed to fetch articles for perek 1:",
 				"string error",
@@ -144,7 +141,7 @@ describe("articles service", () => {
 			expect(sqlCall).toContain("FROM tanah_article a");
 			expect(sqlCall).toContain("JOIN tanah_author au ON a.author_id = au.id");
 			expect(sqlCall).toContain("WHERE a.perek_id = ?");
-			expect(sqlCall).toContain("a.distributable = TRUE");
+			expect(sqlCall).toContain("a.perek_id BETWEEN 1 AND 929");
 			expect(sqlCall).toContain("ORDER BY a.priority ASC");
 			expect(sqlCall).toContain("au.name AS author_name");
 		});
@@ -184,12 +181,14 @@ describe("articles service", () => {
 			expect(result[0]).not.toHaveProperty("content");
 		});
 
-		it("only surfaces distributable articles", async () => {
+		it("only surfaces articles in the 929 chapter range", async () => {
 			mockQuery.mockResolvedValue([]);
 
 			await getArticleSummariesByPerekId(1);
 
-			expect(mockQuery.mock.calls[0][0]).toContain("a.distributable = TRUE");
+			expect(mockQuery.mock.calls[0][0]).toContain(
+				"a.perek_id BETWEEN 1 AND 929",
+			);
 		});
 
 		it("does not select content column in SQL", async () => {
@@ -203,12 +202,10 @@ describe("articles service", () => {
 			expect(sqlCall).toContain("a.name");
 		});
 
-		it("returns empty array on error", async () => {
+		it("rejects database failures instead of caching an empty list", async () => {
 			mockQuery.mockRejectedValue(new Error("DB error"));
 
-			const result = await getArticleSummariesByPerekId(1);
-
-			expect(result).toEqual([]);
+			await expect(getArticleSummariesByPerekId(1)).rejects.toThrow("DB error");
 			expect(console.warn).toHaveBeenCalledWith(
 				"Failed to fetch article summaries for perek %d:",
 				1,
@@ -216,12 +213,12 @@ describe("articles service", () => {
 			);
 		});
 
-		it("handles non-Error rejection gracefully", async () => {
+		it("propagates non-Error rejections without caching them", async () => {
 			mockQuery.mockRejectedValue("string error");
 
-			const result = await getArticleSummariesByPerekId(1);
-
-			expect(result).toEqual([]);
+			await expect(getArticleSummariesByPerekId(1)).rejects.toBe(
+				"string error",
+			);
 		});
 	});
 
@@ -252,24 +249,22 @@ describe("articles service", () => {
 			expect(result).toEqual([]);
 		});
 
-		it("returns empty array and logs warning on error", async () => {
+		it("rejects database failures without publishing missing URLs", async () => {
 			mockQuery.mockRejectedValue(new Error("Database connection failed"));
 
-			const result = await getAllArticlePerekIdPairs();
-
-			expect(result).toEqual([]);
+			await expect(getAllArticlePerekIdPairs()).rejects.toThrow(
+				"Database connection failed",
+			);
 			expect(console.warn).toHaveBeenCalledWith(
 				"Failed to fetch article-perek pairs:",
 				"Database connection failed",
 			);
 		});
 
-		it("handles non-Error rejection gracefully", async () => {
+		it("propagates non-Error rejections without caching them", async () => {
 			mockQuery.mockRejectedValue("string error");
 
-			const result = await getAllArticlePerekIdPairs();
-
-			expect(result).toEqual([]);
+			await expect(getAllArticlePerekIdPairs()).rejects.toBe("string error");
 			expect(console.warn).toHaveBeenCalledWith(
 				"Failed to fetch article-perek pairs:",
 				"string error",
@@ -283,9 +278,42 @@ describe("articles service", () => {
 
 			const sqlCall = mockQuery.mock.calls[0][0];
 			expect(sqlCall).toContain("SELECT id, perek_id FROM tanah_article");
-			expect(sqlCall).toContain("distributable = TRUE");
+			expect(sqlCall).toContain("perek_id BETWEEN 1 AND 929");
 			expect(sqlCall).toContain("ORDER BY perek_id ASC, id ASC");
 		});
+	});
+
+	describe("getAllArticleIdsByPerek", () => {
+		it("groups multiple articles per chapter while preserving database order", async () => {
+			mockQuery.mockResolvedValue([
+				{ id: 4, perek_id: 1 },
+				{ id: 7, perek_id: 1 },
+				{ id: 9, perek_id: 929 },
+			]);
+
+			expect(await getAllArticleIdsByPerek()).toEqual(
+				new Map([
+					[1, [4, 7]],
+					[929, [9]],
+				]),
+			);
+			const sql = mockQuery.mock.calls[0][0];
+			expect(sql).toContain("perek_id BETWEEN 1 AND 929");
+			expect(sql).not.toContain("distributable");
+		});
+
+		it("returns an empty map for an empty corpus", async () => {
+			mockQuery.mockResolvedValue([]);
+			expect(await getAllArticleIdsByPerek()).toEqual(new Map());
+		});
+
+		it.each([new Error("DB error"), "connection lost"])(
+			"rejects database failure %s instead of publishing missing URLs",
+			async (error) => {
+				mockQuery.mockRejectedValue(error);
+				await expect(getAllArticleIdsByPerek()).rejects.toBe(error);
+			},
+		);
 	});
 
 	describe("getArticleById", () => {
@@ -327,24 +355,20 @@ describe("articles service", () => {
 			expect(result).toBeNull();
 		});
 
-		it("returns null and logs warning on error", async () => {
+		it("rejects and logs database errors", async () => {
 			mockQuery.mockRejectedValue(new Error("DB error"));
 
-			const result = await getArticleById(1);
-
-			expect(result).toBeNull();
+			await expect(getArticleById(1)).rejects.toThrow("DB error");
 			expect(console.warn).toHaveBeenCalledWith(
 				"Failed to fetch article 1:",
 				"DB error",
 			);
 		});
 
-		it("handles non-Error rejection gracefully", async () => {
+		it("propagates non-Error rejections without caching them", async () => {
 			mockQuery.mockRejectedValue("string error");
 
-			const result = await getArticleById(1);
-
-			expect(result).toBeNull();
+			await expect(getArticleById(1)).rejects.toBe("string error");
 			expect(console.warn).toHaveBeenCalledWith(
 				"Failed to fetch article 1:",
 				"string error",
@@ -360,7 +384,7 @@ describe("articles service", () => {
 			expect(sqlCall).toContain("FROM tanah_article a");
 			expect(sqlCall).toContain("JOIN tanah_author au ON a.author_id = au.id");
 			expect(sqlCall).toContain("WHERE a.id = ?");
-			expect(sqlCall).toContain("a.distributable = TRUE");
+			expect(sqlCall).toContain("a.perek_id BETWEEN 1 AND 929");
 			expect(mockQuery).toHaveBeenCalledWith(expect.any(String), [42]);
 		});
 	});
