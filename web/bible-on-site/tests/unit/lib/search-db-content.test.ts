@@ -84,14 +84,14 @@ describe("searchPerushNotes", () => {
 		mockQuery.mockResolvedValue([
 			{
 				perush_id: 23,
-				perush_name: "רש\"י",
+				perush_name: 'רש"י',
 				perek_id: 1,
 				pasuk: 1,
 				note_content: "<p>בראשית - לשון בראייה</p>",
 			},
 			{
 				perush_id: 23,
-				perush_name: "רש\"י",
+				perush_name: 'רש"י',
 				perek_id: 1,
 				pasuk: 2,
 				note_content: "<p>טקסט אחר לגמרי</p>",
@@ -134,14 +134,14 @@ describe("searchPerushNotes", () => {
 		mockQuery.mockResolvedValue([
 			{
 				perush_id: 23,
-				perush_name: "רש\"י",
+				perush_name: 'רש"י',
 				perek_id: 1,
 				pasuk: 1,
 				note_content: "מלים על בראשית ועוד בראשית",
 			},
 			{
 				perush_id: 23,
-				perush_name: "רש\"י",
+				perush_name: 'רש"י',
 				perek_id: 1,
 				pasuk: 1,
 				note_content: "טקסט נוסף בראשית",
@@ -158,10 +158,31 @@ describe("searchPerushNotes", () => {
 		expect(mockQuery).not.toHaveBeenCalled();
 	});
 
+	it("ranks relevance before chapter and verse, then limits the results", async () => {
+		mockQuery.mockResolvedValue(
+			[
+				{ perek_id: 2, pasuk: 1, note_content: "על בראשית" },
+				{ perek_id: 1, pasuk: 3, note_content: "על בראשית" },
+				{ perek_id: 1, pasuk: 1, note_content: "על בראשית" },
+				{ perek_id: 3, pasuk: 1, note_content: "בראשית" },
+			].map((row) => ({ perush_id: 23, perush_name: 'רש"י', ...row })),
+		);
+
+		const hits = await searchPerushNotes("בראשית", 3);
+
+		expect(hits.map(({ entry }) => [entry.perekId, entry.pasukNum])).toEqual([
+			[3, 1],
+			[1, 1],
+			[1, 3],
+		]);
+		expect(hits[0].score).toBeGreaterThan(hits[1].score);
+		expect(hits[1].score).toBe(hits[2].score);
+	});
+
 	it("builds a canonical perush reference", () => {
 		const ref = perushHitReference({
 			perushId: 23,
-			perushName: "רש\"י",
+			perushName: 'רש"י',
 			perekId: 1,
 			pasukNum: 1,
 			noteContent: "",
@@ -228,13 +249,13 @@ describe("searchArticles", () => {
 		jest.clearAllMocks();
 	});
 
-	it("never surfaces non-distributable articles", async () => {
+	it("excludes articles outside the 929 chapter range", async () => {
 		mockQuery.mockResolvedValue([]);
 
 		await searchArticles("בראשית", 10);
 
 		expect(mockQuery).toHaveBeenCalledWith(
-			expect.stringContaining("a.distributable = TRUE"),
+			expect.stringContaining("a.perek_id BETWEEN 1 AND 929"),
 			expect.anything(),
 		);
 	});
@@ -430,6 +451,27 @@ describe("searchTanahpediaEntries", () => {
 		const hits = await searchTanahpediaEntries("בראשית", 10);
 		expect(hits).toEqual([]);
 		expect(mockQuery).toHaveBeenCalledTimes(1);
+	});
+
+	it("ranks relevance before Hebrew title and id, then limits the results", async () => {
+		mockEntries(
+			[
+				{ id: "z", title: "משה ב" },
+				{ id: "b", title: "משה א" },
+				{ id: "a", title: "משה א" },
+				{ id: "d", title: "משה" },
+			].map((row) => ({
+				unique_name: `entry-${row.id}`,
+				content: null,
+				...row,
+			})),
+		);
+
+		const hits = await searchTanahpediaEntries("משה", 3);
+
+		expect(hits.map(({ entry }) => entry.id)).toEqual(["d", "a", "b"]);
+		expect(hits[0].score).toBeGreaterThan(hits[1].score);
+		expect(hits[1].score).toBe(hits[2].score);
 	});
 
 	it("returns empty for a blank phrase without querying", async () => {

@@ -26,7 +26,7 @@ interface ArticleSummaryRow {
 /**
  * Fetch articles for a specific perek with author information.
  * JOINs with tanah_author to get author name.
- * Returns empty array if database is unavailable or no articles found.
+ * Returns an empty array when no articles are found; rejects database failures.
  */
 export async function getArticlesByPerekId(
 	perekId: number,
@@ -38,7 +38,7 @@ export async function getArticlesByPerekId(
 				au.name AS author_name
 			 FROM tanah_article a
 			 JOIN tanah_author au ON a.author_id = au.id
-			 WHERE a.perek_id = ? AND a.distributable = TRUE
+			 WHERE a.perek_id = ? AND a.perek_id BETWEEN 1 AND 929
 			 ORDER BY a.priority ASC`,
 			[perekId],
 		);
@@ -55,13 +55,11 @@ export async function getArticlesByPerekId(
 			authorImageUrl: getAuthorImageUrl(row.author_id),
 		}));
 	} catch (error) {
-		// During SSG build, database may not be available
-		// Return empty array gracefully
 		console.warn(
 			`Failed to fetch articles for perek ${perekId}:`,
 			error instanceof Error ? error.message : error,
 		);
-		return [];
+		throw error;
 	}
 }
 
@@ -79,7 +77,7 @@ export async function getArticleSummariesByPerekId(
 				au.name AS author_name
 			 FROM tanah_article a
 			 JOIN tanah_author au ON a.author_id = au.id
-			 WHERE a.perek_id = ? AND a.distributable = TRUE
+			 WHERE a.perek_id = ? AND a.perek_id BETWEEN 1 AND 929
 			 ORDER BY a.priority ASC`,
 			[perekId],
 		);
@@ -100,7 +98,8 @@ export async function getArticleSummariesByPerekId(
 			perekId,
 			error instanceof Error ? error.message : error,
 		);
-		return [];
+		// Reject so a failed build/request cannot cache an empty article list.
+		throw error;
 	}
 }
 
@@ -112,12 +111,12 @@ export interface ArticlePerekPair {
 /**
  * Fetch all article ID and perek ID pairs.
  * Used for sitemap generation to enumerate all article URLs.
- * Returns empty array if database is unavailable.
+ * Rejects database failures so static generation cannot publish missing URLs.
  */
 export async function getAllArticlePerekIdPairs(): Promise<ArticlePerekPair[]> {
 	try {
 		const rows = await query<{ id: number; perek_id: number }>(
-			`SELECT id, perek_id FROM tanah_article WHERE distributable = TRUE ORDER BY perek_id ASC, id ASC`,
+			`SELECT id, perek_id FROM tanah_article WHERE perek_id BETWEEN 1 AND 929 ORDER BY perek_id ASC, id ASC`,
 		);
 		return rows.map((row) => ({
 			articleId: row.id,
@@ -128,7 +127,7 @@ export async function getAllArticlePerekIdPairs(): Promise<ArticlePerekPair[]> {
 			"Failed to fetch article-perek pairs:",
 			error instanceof Error ? error.message : error,
 		);
-		return [];
+		throw error;
 	}
 }
 
@@ -136,11 +135,12 @@ export async function getAllArticlePerekIdPairs(): Promise<ArticlePerekPair[]> {
  * Fetch all article IDs grouped by perek ID.
  * Used by generateStaticParams for bulk fetching in a single query.
  */
-/* istanbul ignore next -- bulk query kept for future SSG use */
-export async function getAllArticleIdsByPerek(): Promise<Map<number, number[]>> {
+export async function getAllArticleIdsByPerek(): Promise<
+	Map<number, number[]>
+> {
 	try {
 		const rows = await query<{ id: number; perek_id: number }>(
-			`SELECT id, perek_id FROM tanah_article WHERE distributable = TRUE ORDER BY perek_id ASC, id ASC`,
+			`SELECT id, perek_id FROM tanah_article WHERE perek_id BETWEEN 1 AND 929 ORDER BY perek_id ASC, id ASC`,
 		);
 		const map = new Map<number, number[]>();
 		for (const row of rows) {
@@ -157,13 +157,13 @@ export async function getAllArticleIdsByPerek(): Promise<Map<number, number[]>> 
 			"Failed to fetch all article IDs by perek:",
 			error instanceof Error ? error.message : error,
 		);
-		return new Map();
+		throw error;
 	}
 }
 
 /**
  * Fetch a single article by ID with author information.
- * Returns null if not found or database unavailable.
+ * Returns null if not found; rejects database failures to avoid caching false 404s.
  */
 export async function getArticleById(
 	articleId: number,
@@ -175,7 +175,7 @@ export async function getArticleById(
 				au.name AS author_name
 			 FROM tanah_article a
 			 JOIN tanah_author au ON a.author_id = au.id
-			 WHERE a.id = ? AND a.distributable = TRUE`,
+			 WHERE a.id = ? AND a.perek_id BETWEEN 1 AND 929`,
 			[articleId],
 		);
 
@@ -200,6 +200,6 @@ export async function getArticleById(
 			`Failed to fetch article ${articleId}:`,
 			error instanceof Error ? error.message : error,
 		);
-		return null;
+		throw error;
 	}
 }
