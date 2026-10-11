@@ -74,6 +74,39 @@ public sealed class SessionFactoryTests
     }
 
     [Fact]
+    public void TransportLossDuringStartupDoesNotLatchTheDevice()
+    {
+        // adb dropping is self-diagnosing: recovery earns the retry, and a
+        // still-dead transport reports the real error per scenario instead of
+        // a memoized latch failure.
+        var factory = new MobileDeviceSessionFactory();
+        Assert.Throws<UnknownErrorException>(() => factory.Create<object>(() =>
+            throw new UnknownErrorException("adb: device offline")));
+
+        Assert.NotNull(factory.Create(() => new object()));
+    }
+
+    [Fact]
+    public void TransportLossDuringCleanupStillBlocksReuse()
+    {
+        // A lost transport leaves the server-side teardown unconfirmed; a
+        // replacement session may not race it, so the failure latches.
+        var factory = new MobileDeviceSessionFactory();
+        factory.Create(() => new object());
+        var failure = new UnknownErrorException("DELETE /session failed: adb: device offline");
+        Assert.Same(failure, Assert.Throws<UnknownErrorException>(() => factory.Cleanup(() => throw failure)));
+
+        var attemptedReplacement = false;
+        var blocked = Assert.Throws<InvalidOperationException>(() => factory.Create(() =>
+        {
+            attemptedReplacement = true;
+            return new object();
+        }));
+        Assert.False(attemptedReplacement);
+        Assert.Same(failure, blocked.InnerException);
+    }
+
+    [Fact]
     public void ConfirmedCleanupStillAllowsTheNextScenario()
     {
         var factory = new MobileDeviceSessionFactory();
