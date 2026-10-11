@@ -56,6 +56,7 @@ CREATE TABLE `tanah_article` (
     `abstract` varchar(10000) DEFAULT NULL,
     `name` varchar(700) NOT NULL,
     `priority` tinyint NOT NULL,
+    -- Approval for the daily bulletin only; all valid articles remain public on the site.
     `distributable` boolean NOT NULL DEFAULT FALSE,
     `content` mediumtext,
     PRIMARY KEY (`id`)
