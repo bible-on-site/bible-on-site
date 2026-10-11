@@ -18,6 +18,7 @@ import {
 	playableWords,
 	type Recitation,
 	type RecitationWord,
+	resumeRanges,
 	verseRange,
 	wordAtPosition,
 } from "@/lib/recitation";
@@ -239,6 +240,9 @@ export default function RecitationPlayer({
 	const precise = useRef<RecitationAudio | null>(null);
 	const settings = useRef<RecitationSettings>(getRecitationSettings());
 	const preparing = useRef(false);
+	// The last tapped word or pasuk marks where continuous playback resumes, in
+	// recording milliseconds; it stays independent of preview stop/reset state.
+	const resumeAt = useRef<number | null>(null);
 	useEffect(() => {
 		const apply = (next: RecitationSettings) => {
 			settings.current = next;
@@ -302,6 +306,8 @@ export default function RecitationPlayer({
 	useEffect(() => {
 		stop(true);
 		setData(null);
+		// A new perek or recording never inherits a stale resume position.
+		resumeAt.current = null;
 		if (!hasRecording) {
 			setOpen(false);
 			setMessage("");
@@ -370,6 +376,10 @@ export default function RecitationPlayer({
 		setState("loading");
 		setDownloadProgress(null);
 		setActiveWord(null);
+		// A tapped word or pasuk previews just that interval and marks where the
+		// next continuous playback resumes, even if Play is pressed mid-preview.
+		const preview = startMs !== undefined && endMs !== undefined;
+		if (preview) resumeAt.current = startMs;
 		try {
 			precise.current ??= createAudio(data);
 			precise.current.setOptions(
@@ -377,24 +387,24 @@ export default function RecitationPlayer({
 				settings.current.volume,
 			);
 			const ended = () => {
-				if (request.current === generation) finish();
+				if (request.current !== generation) return;
+				// Reaching the end of the perek consumes the resume position.
+				if (!preview) resumeAt.current = null;
+				finish();
 			};
-			const started = await (startMs !== undefined && endMs !== undefined
+			const resume = resumeAt.current;
+			const started = await (preview
 				? precise.current.play(startMs, endMs, ended)
 				: data.alignmentStatus === "ready" &&
 						settings.current.versePauseMs !== null
 					? precise.current.playRanges(
-							[...new Set(data.words.map((w) => w.pasuk))].map(
-								(pasuk) =>
-									verseRange(playableWords(data), pasuk) as {
-										startMs: number;
-										endMs: number;
-									},
-							),
+							resumeRanges(playableWords(data), resume),
 							settings.current.versePauseMs,
 							ended,
 						)
-					: precise.current.playChapter(ended));
+					: resume === null
+						? precise.current.playChapter(ended)
+						: precise.current.play(resume, undefined, ended));
 			if (!started) return;
 			if (request.current === generation) setState("playing");
 		} catch {

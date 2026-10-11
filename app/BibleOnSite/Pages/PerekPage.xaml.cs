@@ -137,7 +137,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable
         PerekCarousel.SizeChanged += OnCarouselSizeChanged;
         _viewModel.NavigationRequested += (_, perekId) =>
         {
-            ResetRecitationContext();
+            ResetRecitationSession();
             var targetIndex = perekId - 1;
             // Guard: suppress OnCarouselItemChanged while we reposition
             _carouselInitializing = true;
@@ -431,7 +431,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable
         {
             ChapterSearch.Close();
         }
-        ResetRecitationContext();
+        ResetRecitationSession();
         PreferencesService.Instance.PreferencesChanged -= OnRecitationPreferencesChanged;
         RecitationService.Instance.Changed -= OnRecitationPackageChanged;
         RecitationService.Instance.PlaybackStopRequested -= OnPlaybackStopRequested;
@@ -1957,7 +1957,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable
         _longPressTokenSource?.Cancel();
         _pressedPasukNum = -1;
 
-        ResetRecitationContext();
+        ResetRecitationSession();
 
         var hasPasukim = perek.Pasukim != null && perek.Pasukim.Count > 0;
         Console.WriteLine($"[Carousel] OnChanged PROCESS incoming={incomingId} prev={previousId} vmPerek={_viewModel.PerekId} pos={_viewModel.CarouselPosition} hasPasukim={hasPasukim}");
