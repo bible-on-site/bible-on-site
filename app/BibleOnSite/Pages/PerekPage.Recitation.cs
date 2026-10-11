@@ -25,6 +25,7 @@ public partial class PerekPage
     // into another perek's recording.
     private (int PerekId, double StartMs)? _resumePosition;
     private double? _pendingSeekMs;
+    private int _recitationGeneration;
     private MpegRecitationAudioDecoder? _audioDecoder;
     private IDispatcherTimer? _recitationFrameTimer;
     private RecitationTimeline? _recitationTimeline;
@@ -76,6 +77,8 @@ public partial class PerekPage
     private void StopRecitation()
     {
         ClearRecitationHighlight();
+        // Invalidates any MediaOpened handler still awaiting its seek.
+        _recitationGeneration++;
         _recitationRequest?.Cancel();
         _playWhenOpened = false;
         _playingKey = null;
@@ -390,7 +393,12 @@ public partial class PerekPage
 
     private async void OnSelectionRecitationClicked(object? sender, EventArgs e)
     {
-        if (_playingKey != null && RecitationPlayer.CurrentState is MediaElementState.Playing or MediaElementState.Paused)
+        // Only playback this button itself started (continuous or a verses range)
+        // toggles pause — a tapped word or pasuk preview is not the bar's
+        // playback, so Play during one starts continuous playback at the
+        // tap's bookmark instead.
+        var barIssued = _playingContinuous || _playingKey?.StartsWith("verses:", StringComparison.Ordinal) == true;
+        if (_playingKey != null && barIssued && RecitationPlayer.CurrentState is MediaElementState.Playing or MediaElementState.Paused)
         {
             if (RecitationPlayer.CurrentState == MediaElementState.Playing)
             {
@@ -409,7 +417,7 @@ public partial class PerekPage
         }
 
         var track = RecitationService.Instance.GetTrack(perek.PerekId);
-        if (_chapterRecitationSelection)
+        if (_chapterRecitationSelection || _playingKey != null)
         {
             await PlayRecitationAsync($"chapter:{perek.PerekId}");
             return;
@@ -520,6 +528,7 @@ public partial class PerekPage
         }
 
         _playWhenOpened = false;
+        var generation = _recitationGeneration;
         if (_pendingSeekMs is double seekMs)
         {
             _pendingSeekMs = null;
@@ -529,11 +538,15 @@ public partial class PerekPage
                 using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
                 await RecitationPlayer.SeekTo(TimeSpan.FromMilliseconds(seekMs), timeout.Token);
             }
-            catch (Exception ex)
+            catch (Exception ex) //NOSONAR — a platform that cannot seek here still plays from the start.
             {
-                // A platform that cannot seek here still plays from the start.
                 System.Diagnostics.Debug.WriteLine($"Recitation resume: {ex.Message}");
             }
+        }
+        if (generation != _recitationGeneration)
+        {
+            // StopRecitation ran during the seek — do not revive the old source.
+            return;
         }
         RecitationPlayer.Play();
     }

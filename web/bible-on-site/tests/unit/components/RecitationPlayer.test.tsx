@@ -199,6 +199,22 @@ test("a tapped word resumes chapter playback from its position instead of the st
 	await waitFor(() => expect(chapterPlay).toHaveBeenCalledTimes(1));
 });
 
+test("chapter Play during a word preview starts continuous playback at the bookmark", async () => {
+	await openPlayer();
+	fireEvent.click(screen.getByRole("button", { name: "השמעת המילה בָּרָא" }));
+	await screen.findByText("משמיע…");
+	expect(clipPlay).toHaveBeenLastCalledWith(1900, 2300, expect.any(Function));
+	// While a preview plays, the toggle stays a chapter-Play button.
+	fireEvent.click(screen.getByRole("button", { name: "השמעת כל הפרק" }));
+	await screen.findByText("משמיע…");
+	expect(clipStop).toHaveBeenCalled();
+	expect(clipPlay).toHaveBeenLastCalledWith(
+		1900,
+		undefined,
+		expect.any(Function),
+	);
+});
+
 test("verse pauses resume mid-pasuk and continue through the rest of the perek", async () => {
 	saveRecitationSettings({ speed: 1, volume: 1, versePauseMs: 1000 });
 	await openPlayer();
@@ -453,7 +469,7 @@ test("the chapter heading plays the same chapter as its adjacent play icon", asy
 
 test("one button pauses and resumes the selected clip without restarting it", async () => {
 	await openPlayer();
-	fireEvent.click(screen.getByRole("button", { name: "השמעת פסוק א" }));
+	fireEvent.click(screen.getByRole("button", { name: "השמעת כל הפרק" }));
 	await screen.findByText("משמיע…");
 	fireEvent.click(screen.getByRole("button", { name: "השהיית ההקראה" }));
 	await screen.findByText("מושהה");
@@ -461,7 +477,7 @@ test("one button pauses and resumes the selected clip without restarting it", as
 	fireEvent.click(screen.getByRole("button", { name: "המשך ההקראה" }));
 	await screen.findByText("משמיע…");
 	expect(clipResume).toHaveBeenCalledTimes(1);
-	expect(clipPlay).toHaveBeenCalledTimes(1);
+	expect(chapterPlay).toHaveBeenCalledTimes(1);
 });
 
 test("chapter-only recordings use the same volume, speed and resumable audio engine", async () => {
@@ -502,7 +518,7 @@ test("chapter-only recordings use the same volume, speed and resumable audio eng
 test("a finished clip cannot be paused or resumed", async () => {
 	clipPause.mockReturnValueOnce(false);
 	await openPlayer();
-	fireEvent.click(screen.getByRole("button", { name: "השמעת פסוק א" }));
+	fireEvent.click(screen.getByRole("button", { name: "השמעת כל הפרק" }));
 	await screen.findByText("משמיע…");
 	fireEvent.click(screen.getByRole("button", { name: "השהיית ההקראה" }));
 	expect(screen.getByRole("button", { name: "השמעת כל הפרק" })).toBeEnabled();
@@ -513,7 +529,7 @@ test("a finished clip cannot be paused or resumed", async () => {
 test("resume returning false resets the clip controls", async () => {
 	clipResume.mockResolvedValueOnce(false);
 	await openPlayer();
-	fireEvent.click(screen.getByRole("button", { name: "השמעת המילה בָּרָא" }));
+	fireEvent.click(screen.getByRole("button", { name: "השמעת כל הפרק" }));
 	await screen.findByText("משמיע…");
 	fireEvent.click(screen.getByRole("button", { name: "השהיית ההקראה" }));
 	fireEvent.click(screen.getByRole("button", { name: "המשך ההקראה" }));
@@ -527,14 +543,14 @@ test("resume returning false resets the clip controls", async () => {
 test("a rejected resume reports an error and permits fresh playback", async () => {
 	clipResume.mockRejectedValueOnce(new Error("resume failed"));
 	await openPlayer();
-	fireEvent.click(screen.getByRole("button", { name: "השמעת פסוק א" }));
+	fireEvent.click(screen.getByRole("button", { name: "השמעת כל הפרק" }));
 	await screen.findByText("משמיע…");
 	fireEvent.click(screen.getByRole("button", { name: "השהיית ההקראה" }));
 	fireEvent.click(screen.getByRole("button", { name: "המשך ההקראה" }));
 	await screen.findByText("ההקלטה לא נטענה. נסו שוב.");
 	fireEvent.click(screen.getByRole("button", { name: "השמעת פסוק א" }));
 	await screen.findByText("משמיע…");
-	expect(clipPlay).toHaveBeenCalledTimes(2);
+	expect(clipPlay).toHaveBeenCalledTimes(1);
 });
 
 test("chapter-only playback completion and errors update the controls", async () => {
@@ -572,7 +588,7 @@ test("visibility events keep a visible page's clip playing", async () => {
 	jest.spyOn(document, "hidden", "get").mockReturnValue(false);
 	fireEvent(document, new Event("visibilitychange"));
 	expect(clipDispose).not.toHaveBeenCalled();
-	expect(screen.getByRole("button", { name: "השהיית ההקראה" })).toBeEnabled();
+	expect(screen.getByRole("button", { name: "השמעת כל הפרק" })).toBeEnabled();
 });
 
 test("a chapter play rejection arriving after navigation cannot display an error", async () => {
@@ -715,7 +731,7 @@ test.each(["resolve", "reject", "started"] as const)(
 		const pending = deferred<boolean>();
 		clipResume.mockReturnValueOnce(pending.promise);
 		await openPlayer();
-		fireEvent.click(screen.getByRole("button", { name: "השמעת פסוק א" }));
+		fireEvent.click(screen.getByRole("button", { name: "השמעת כל הפרק" }));
 		await screen.findByText("משמיע…");
 		fireEvent.click(screen.getByRole("button", { name: "השהיית ההקראה" }));
 		fireEvent.click(screen.getByRole("button", { name: "המשך ההקראה" }));
@@ -740,7 +756,7 @@ test("a stale completion cannot stop playback started after navigation", async (
 	fireEvent.click(screen.getByRole("button", { name: "השמעת המילה בָּרָא" }));
 	await screen.findByText("משמיע…");
 	act(() => staleEnded());
-	expect(screen.getByRole("button", { name: "השהיית ההקראה" })).toBeEnabled();
+	expect(screen.getByRole("button", { name: "השמעת כל הפרק" })).toBeEnabled();
 });
 
 test("download progress surrounds the inactive toggle and activates mode once audio is prepared", async () => {
@@ -857,7 +873,7 @@ test("reloading precise audio after its context was released reports current dow
 	).toHaveAttribute("aria-valuenow", "60");
 	await act(async () => pending.resolve(true));
 	expect(screen.queryByRole("progressbar")).toBeNull();
-	expect(screen.getByRole("button", { name: "השהיית ההקראה" })).toBeEnabled();
+	expect(screen.getByRole("button", { name: "השמעת כל הפרק" })).toBeEnabled();
 });
 
 test("chapter highlights follow the audio clock, clear in gaps, freeze on pause and clear on completion", async () => {

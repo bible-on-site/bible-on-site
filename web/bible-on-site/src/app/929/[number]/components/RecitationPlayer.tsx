@@ -243,6 +243,9 @@ export default function RecitationPlayer({
 	// The last tapped word or pasuk marks where continuous playback resumes, in
 	// recording milliseconds; it stays independent of preview stop/reset state.
 	const resumeAt = useRef<number | null>(null);
+	// Whether the active plan is a bounded word/pasuk preview; the chapter Play
+	// button then starts continuous playback at the bookmark instead of pausing.
+	const previewActive = useRef(false);
 	useEffect(() => {
 		const apply = (next: RecitationSettings) => {
 			settings.current = next;
@@ -273,6 +276,7 @@ export default function RecitationPlayer({
 
 	const stop = useCallback((release = false) => {
 		request.current++;
+		previewActive.current = false;
 		precise.current?.stop();
 		if (release) {
 			precise.current?.dispose();
@@ -360,6 +364,7 @@ export default function RecitationPlayer({
 	}, [open, hasRecording, perekId, pesukim, stop, id, createAudio]);
 
 	function finish() {
+		previewActive.current = false;
 		setState("idle");
 		setActiveWord(null);
 	}
@@ -379,6 +384,7 @@ export default function RecitationPlayer({
 		// A tapped word or pasuk previews just that interval and marks where the
 		// next continuous playback resumes, even if Play is pressed mid-preview.
 		const preview = startMs !== undefined && endMs !== undefined;
+		previewActive.current = preview;
 		if (preview) resumeAt.current = startMs;
 		try {
 			precise.current ??= createAudio(data);
@@ -414,26 +420,34 @@ export default function RecitationPlayer({
 
 	async function togglePlayback() {
 		if (state === "loading") return;
-		if (state === "playing") {
+		if (state === "playing" || state === "paused") {
+			// A bounded word/pasuk preview is not the chapter's playback: Play
+			// during one starts continuous playback at the bookmark.
+			if (previewActive.current) {
+				request.current++;
+				precise.current?.stop();
+				await play();
+				return;
+			}
+			if (state === "paused") {
+				const generation = request.current;
+				setState("loading");
+				try {
+					if (!(await precise.current?.resume())) {
+						if (request.current === generation) finish();
+						return;
+					}
+					if (request.current === generation) setState("playing");
+				} catch {
+					if (request.current === generation) fail();
+				}
+				return;
+			}
 			if (!precise.current?.pause()) {
 				finish();
 				return;
 			}
 			setState("paused");
-			return;
-		}
-		if (state === "paused") {
-			const generation = request.current;
-			setState("loading");
-			try {
-				if (!(await precise.current?.resume())) {
-					if (request.current === generation) finish();
-					return;
-				}
-				if (request.current === generation) setState("playing");
-			} catch {
-				if (request.current === generation) fail();
-			}
 			return;
 		}
 		await play();
@@ -477,22 +491,22 @@ export default function RecitationPlayer({
 					onClick={() => void togglePlayback()}
 					disabled={state === "loading"}
 					aria-label={
-						state === "playing"
+						state === "playing" && !previewActive.current
 							? "השהיית ההקראה"
-							: state === "paused"
+							: state === "paused" && !previewActive.current
 								? "המשך ההקראה"
 								: "השמעת כל הפרק"
 					}
 					title={
-						state === "playing"
+						state === "playing" && !previewActive.current
 							? "השהיית ההקראה"
-							: state === "paused"
+							: state === "paused" && !previewActive.current
 								? "המשך ההקראה"
 								: "השמעת כל הפרק"
 					}
 				>
 					<svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true">
-						{state === "playing" ? (
+						{state === "playing" && !previewActive.current ? (
 							<path d="M3 2h4v12H3Zm6 0h4v12H9Z" fill="currentColor" />
 						) : (
 							<path d="M4 2v12l10-6Z" fill="currentColor" />
