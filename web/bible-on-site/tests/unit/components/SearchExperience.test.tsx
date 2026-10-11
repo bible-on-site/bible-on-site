@@ -24,7 +24,7 @@ import type { SearchResponse, SearchResultType } from "@/lib/search/types";
 
 const RESULTS: SearchResponse = {
 	query: "את",
-	types: ["perek", "pasuk", "perush", "author", "article"],
+	types: ["perek", "pasuk", "perush", "author", "article", "tanahpedia"],
 	results: [
 		{
 			type: "perek",
@@ -44,6 +44,7 @@ const ALL_TYPES: SearchResultType[] = [
 	"perush",
 	"author",
 	"article",
+	"tanahpedia",
 ];
 
 /** Two perek results (one without a snippet) plus an availability notice. */
@@ -181,6 +182,35 @@ describe("SearchExperience", () => {
 		expect(mockFetch).toHaveBeenLastCalledWith(
 			expect.stringContaining("type="),
 			expect.anything(),
+		);
+	});
+
+	it("renders the tanahpedia filter chip and a grouped result", () => {
+		renderSearch({
+			initialQuery: "משה",
+			initialResults: {
+				...RESULTS,
+				results: [
+					{
+						type: "tanahpedia",
+						title: "משה רבנו",
+						snippetHtml: "<mark>משה</mark> רבנו",
+						href: `/pedia/${encodeURIComponent("משה-רבנו")}`,
+						score: 220,
+					},
+				],
+				counts: { tanahpedia: 1 },
+			},
+		});
+		expect(
+			screen.getByRole("checkbox", { name: "תנכפדיה" }),
+		).toBeChecked();
+		expect(
+			screen.getByRole("heading", { name: /תנכפדיה/ }),
+		).toBeInTheDocument();
+		expect(screen.getByRole("link", { name: /משה רבנו/ })).toHaveAttribute(
+			"href",
+			`/pedia/${encodeURIComponent("משה-רבנו")}`,
 		);
 	});
 
