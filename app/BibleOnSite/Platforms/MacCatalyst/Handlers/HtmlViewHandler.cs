@@ -55,7 +55,7 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
     /// <summary>Routes link interaction through HtmlView.LinkTapped.</summary>
     private sealed class HtmlLinkDelegate(Func<HtmlView?> viewProvider) : UITextViewDelegate
     {
-        public override bool ShouldInteractWithUrl(UITextView textView, NSUrl URL, NSRange characterRange, UITextItemInteraction interaction)
+        public override bool ShouldInteractWithUrl(UITextView textView, NSUrl URL, NSRange _, UITextItemInteraction interaction)
         {
             var url = URL.AbsoluteString ?? URL.Description;
             if (interaction == UITextItemInteraction.InvokeDefaultAction &&
