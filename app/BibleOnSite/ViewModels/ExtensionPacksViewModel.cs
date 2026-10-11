@@ -112,7 +112,7 @@ public partial class ExtensionPacksViewModel : ObservableObject
         {
             await _perushimNotesService.RemoveNotesAsync();
         }
-        catch (Exception ex)
+        catch (Exception ex) //NOSONAR — removal spans IO/platform errors; failure is reported to the user.
         {
             System.Diagnostics.Debug.WriteLine($"Perushim removal failed: {ex.Message}");
             await _navigator.DisplayAlertAsync("שגיאה", "לא ניתן להסיר את חבילת הפירושים. נסו שוב.", "אישור");
