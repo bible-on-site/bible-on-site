@@ -151,22 +151,35 @@
 	<!-- Auto-decompress perushim notes .gz → .sqlite if needed (checked out from git as compressed).
 	     Calls the devops setup script which has the canonical decompress logic.
 	     WorkingDirectory must be devops/ so that tsx is resolvable from devops/node_modules. -->
-	<Target Name="DecompressPerushimNotes" BeforeTargets="PrepareForBuild" Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND&#xD;&#xA;			!Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite') AND&#xD;&#xA;			Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz')">
+	<Target Name="DecompressPerushimNotes" BeforeTargets="PrepareForBuild" Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND&#xD;&#xA;			((!Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite') AND&#xD;&#xA;			Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz')) OR&#xD;&#xA;			(!Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite') AND&#xD;&#xA;			Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite.gz')))">
 		<Exec Command="node --import tsx setup-dev-env.mts decompress-perushim-notes" WorkingDirectory="$(MSBuildProjectDirectory)/../../devops" />
 	</Target>
 
-	<!-- Android: PAD on-demand asset pack. Run perushim-view pipeline to generate. -->
+	<!-- Android: PAD on-demand asset pack. Run perushim-view pipeline to generate.
+	     The prebuilt search index rides in the same pack (optional — the app builds
+	     it on-device when the pack does not carry it). -->
 	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND (Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite') OR Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz'))">
 		<AndroidAsset Include="Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite" Link="sefaria-dump-5784-sivan-4.perushim_notes.sqlite" AssetPack="perushim_notes" DeliveryType="OnDemand" />
+		<AndroidAsset Include="Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite" Condition="Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite') OR Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite.gz')" Link="sefaria-dump-5784-sivan-4.hebrew_search.sqlite" AssetPack="perushim_notes" DeliveryType="OnDemand" />
 	</ItemGroup>
 
 	<!-- iOS: decompress .gz → .sqlite into the ODR dataset folder (macOS only; gunzip is always available).
 	     After decompression, explicitly add the .sqlite as an ImageAsset so actool compiles it
 	     into Assets.car. MSBuild globs evaluate at project load — before the file exists —
 	     so auto-discovery misses it. -->
-	<Target Name="DecompressPerushimNotesIos" BeforeTargets="PrepareForBuild;Build;_BeforeCoreCompileImageAssets;_CollectPackLibraryResources" Condition="($([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst') AND&#xD;&#xA;			!Exists('Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_notes.dataset\sefaria-dump-5784-sivan-4.perushim_notes.sqlite') AND&#xD;&#xA;			Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz')">
-		<MakeDir Directories="Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_notes.dataset" />
-		<Exec Command="gunzip -c '$(MSBuildProjectDirectory)/Platforms/Android/AssetPacks/perushim_notes/sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz' &gt; '$(MSBuildProjectDirectory)/Platforms/iOS/Assets/PerushimNotes.xcassets/perushim_notes.dataset/sefaria-dump-5784-sivan-4.perushim_notes.sqlite'" />
+	<Target Name="DecompressPerushimNotesIos" BeforeTargets="PrepareForBuild;Build;_BeforeCoreCompileImageAssets;_CollectPackLibraryResources" Condition="($([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst') AND&#xD;&#xA;			((!Exists('Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_notes.dataset\sefaria-dump-5784-sivan-4.perushim_notes.sqlite') AND&#xD;&#xA;			Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz')) OR&#xD;&#xA;			(!Exists('Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_search.dataset\sefaria-dump-5784-sivan-4.hebrew_search.sqlite') AND&#xD;&#xA;			Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite.gz')))">
+		<MakeDir Condition="!Exists('Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_notes.dataset\sefaria-dump-5784-sivan-4.perushim_notes.sqlite') AND Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz')" Directories="Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_notes.dataset" />
+		<Exec Condition="!Exists('Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_notes.dataset\sefaria-dump-5784-sivan-4.perushim_notes.sqlite') AND Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz')" Command="gunzip -c '$(MSBuildProjectDirectory)/Platforms/Android/AssetPacks/perushim_notes/sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz' &gt; '$(MSBuildProjectDirectory)/Platforms/iOS/Assets/PerushimNotes.xcassets/perushim_notes.dataset/sefaria-dump-5784-sivan-4.perushim_notes.sqlite'" />
+		<MakeDir Condition="!Exists('Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_search.dataset\sefaria-dump-5784-sivan-4.hebrew_search.sqlite') AND Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite.gz')" Directories="Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_search.dataset" />
+		<Exec Condition="!Exists('Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_search.dataset\sefaria-dump-5784-sivan-4.hebrew_search.sqlite') AND Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite.gz')" Command="gunzip -c '$(MSBuildProjectDirectory)/Platforms/Android/AssetPacks/perushim_notes/sefaria-dump-5784-sivan-4.hebrew_search.sqlite.gz' &gt; '$(MSBuildProjectDirectory)/Platforms/iOS/Assets/PerushimNotes.xcassets/perushim_search.dataset/sefaria-dump-5784-sivan-4.hebrew_search.sqlite'" />
+		<!-- The dataset only materializes when its payload exists — an empty .dataset
+		     (index not delivered/generated) would fail actool. The canonical
+		     Contents.json lives in app/devops next to the asset-prep script. -->
+		<MakeDir Condition="Exists('Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_search.dataset\sefaria-dump-5784-sivan-4.hebrew_search.sqlite')" Directories="Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_search.dataset" />
+		<Copy Condition="Exists('Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_search.dataset\sefaria-dump-5784-sivan-4.hebrew_search.sqlite')" SourceFiles="$(MSBuildProjectDirectory)/../devops/perushim_search.Contents.json" DestinationFiles="Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_search.dataset\Contents.json" />
+		<!-- Stale Contents.json from an earlier build whose payload was removed
+		     would make actool fail on a dataset referencing a missing file. -->
+		<Delete Condition="!Exists('Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_search.dataset\sefaria-dump-5784-sivan-4.hebrew_search.sqlite')" Files="Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_search.dataset\Contents.json" />
 	</Target>
 
 	<!-- Ensure the .sqlite is in the ImageAsset list before the SDK's core compilation dependencies.
@@ -175,6 +188,7 @@
 	<Target Name="_IncludePerushimNotesImageAsset" BeforeTargets="_RemoveProcessedImageAssets;_BeforeCoreCompileImageAssets;_CollectPackLibraryResources" DependsOnTargets="DecompressPerushimNotesIos" Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">
 		<ItemGroup>
 			<ImageAsset Include="Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_notes.dataset\sefaria-dump-5784-sivan-4.perushim_notes.sqlite" Condition="Exists('Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_notes.dataset\sefaria-dump-5784-sivan-4.perushim_notes.sqlite')" Link="Assets\PerushimNotes.xcassets\perushim_notes.dataset\sefaria-dump-5784-sivan-4.perushim_notes.sqlite" />
+			<ImageAsset Include="Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_search.dataset\sefaria-dump-5784-sivan-4.hebrew_search.sqlite" Condition="Exists('Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_search.dataset\sefaria-dump-5784-sivan-4.hebrew_search.sqlite')" Link="Assets\PerushimNotes.xcassets\perushim_search.dataset\sefaria-dump-5784-sivan-4.hebrew_search.sqlite" />
 		</ItemGroup>
 		<Message Importance="high" Text="=== _IncludePerushimNotesImageAsset: added .sqlite to ImageAsset list ===" Condition="Exists('Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_notes.dataset\sefaria-dump-5784-sivan-4.perushim_notes.sqlite')" />
 	</Target>
@@ -223,11 +237,13 @@
 	<!-- Android Debug fallback: bundle perushim notes in app package so they work without PAD (APK installs). -->
 	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND '$(Configuration)' == 'Debug' AND (Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite') OR Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz'))">
 		<MauiAsset Include="Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite" LogicalName="sefaria-dump-5784-sivan-4.perushim_notes.sqlite" />
+		<MauiAsset Include="Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite" Condition="Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite')" LogicalName="sefaria-dump-5784-sivan-4.hebrew_search.sqlite" />
 	</ItemGroup>
 
 	<!-- Simulator Debug installs cannot fetch a store-hosted ODR pack. -->
 	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' AND '$(Configuration)' == 'Debug' AND Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz')">
 		<MauiAsset Include="Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_notes.dataset\sefaria-dump-5784-sivan-4.perushim_notes.sqlite" LogicalName="sefaria-dump-5784-sivan-4.perushim_notes.sqlite" />
+		<MauiAsset Include="Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_search.dataset\sefaria-dump-5784-sivan-4.hebrew_search.sqlite" Condition="Exists('Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_search.dataset\sefaria-dump-5784-sivan-4.hebrew_search.sqlite')" LogicalName="sefaria-dump-5784-sivan-4.hebrew_search.sqlite" />
 	</ItemGroup>
 
 	<ItemGroup>
