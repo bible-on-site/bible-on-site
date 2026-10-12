@@ -840,4 +840,61 @@ describe("BlankPageContent", () => {
 			expect(mockGetArticleForBook).toHaveBeenCalledTimes(1);
 		});
 	});
+
+	describe("onContentTitle (issue #2176)", () => {
+		it("reports the article page title while a full article is shown", async () => {
+			mockGetArticleForBook.mockResolvedValue(mockArticles[0]);
+			const onContentTitle = jest.fn();
+			render(
+				<BlankPageContent
+					articles={mockArticles}
+					hebrewDateStr="י׳ בשבט"
+					initialSlug="1"
+					onContentTitle={onContentTitle}
+				/>,
+			);
+			await screen.findByText("חזרה למאמרים →");
+			expect(onContentTitle).toHaveBeenLastCalledWith(
+				'מאמר ראשון | הרב ישראל | תנ"ך על הפרק',
+			);
+		});
+
+		it("reports the perush page title while a full perush is shown", async () => {
+			mockGetPerushNotesForPage.mockResolvedValue([]);
+			const onContentTitle = jest.fn();
+			render(
+				<BlankPageContent
+					perushim={mockPerushim}
+					perekId={1}
+					hebrewDateStr="י׳ בשבט"
+					initialSlug={'רש"י'}
+					perekTitleParts={{
+						source: "שמואל ב א",
+						seferName: "שמואל",
+						perekHeb: "א",
+					}}
+					onContentTitle={onContentTitle}
+				/>,
+			);
+			await screen.findByText("→ חזרה לפרשנים");
+			expect(onContentTitle).toHaveBeenLastCalledWith(
+				'רש"י על שמואל א | תנ"ך על הפרק',
+			);
+		});
+
+		it("reports null when the selection returns to the carousels", async () => {
+			mockGetArticleForBook.mockResolvedValue(mockArticles[0]);
+			const onContentTitle = jest.fn();
+			render(
+				<BlankPageContent
+					articles={mockArticles}
+					hebrewDateStr="י׳ בשבט"
+					initialSlug="1"
+					onContentTitle={onContentTitle}
+				/>,
+			);
+			fireEvent.click(await screen.findByText("חזרה למאמרים →"));
+			expect(onContentTitle).toHaveBeenLastCalledWith(null);
+		});
+	});
 });
