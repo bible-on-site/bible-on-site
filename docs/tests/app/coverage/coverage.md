@@ -66,7 +66,7 @@ Each coverage target runs tests and generates LCOV internally:
 
 ## NUKE Build Targets
 
-The app uses [NUKE Build](https://nuke.build/) ([devops/Build.cs](../../../../app/devops/Build.cs)) to orchestrate coverage:
+The app uses [NUKE Build](https://github.com/nuke-build/nuke) ([devops/Build.cs](../../../../app/devops/Build.cs)) to orchestrate coverage:
 
 ### Coverage Targets
 
