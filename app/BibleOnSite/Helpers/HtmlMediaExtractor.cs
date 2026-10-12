@@ -18,7 +18,9 @@ public static class HtmlMediaExtractor
         var segments = new List<ContentSegment>();
 
         if (string.IsNullOrWhiteSpace(html))
+        {
             return segments;
+        }
 
         var doc = new HtmlDocument();
         doc.LoadHtml(html);
@@ -31,7 +33,10 @@ public static class HtmlMediaExtractor
         {
             var trimmed = html.Trim();
             if (!string.IsNullOrEmpty(trimmed))
+            {
                 segments.Add(new ContentSegment(SegmentKind.Html, trimmed, null, null));
+            }
+
             return segments;
         }
 
@@ -58,13 +63,17 @@ public static class HtmlMediaExtractor
             if (mediaMap.TryGetValue(part, out var media))
             {
                 if (!string.IsNullOrEmpty(media.Url))
+                {
                     segments.Add(new ContentSegment(SegmentKind.Media, null, media.Url, media.Type));
+                }
             }
             else
             {
                 var trimmed = part.Trim();
                 if (!string.IsNullOrEmpty(trimmed) && trimmed != "<br>" && trimmed != "<br/>")
+                {
                     segments.Add(new ContentSegment(SegmentKind.Html, trimmed, null, null));
+                }
             }
         }
 
@@ -77,7 +86,9 @@ public static class HtmlMediaExtractor
     public static bool ContainsMedia(string? html)
     {
         if (string.IsNullOrWhiteSpace(html))
+        {
             return false;
+        }
 
         return html.Contains("<video", StringComparison.OrdinalIgnoreCase)
             || html.Contains("<audio", StringComparison.OrdinalIgnoreCase);
@@ -94,7 +105,9 @@ public static class HtmlMediaExtractor
     {
         var src = mediaNode.GetAttributeValue("src", string.Empty);
         if (!string.IsNullOrEmpty(src))
+        {
             return src;
+        }
 
         var sourceChild = mediaNode.SelectSingleNode(".//source");
         var childSrc = sourceChild?.GetAttributeValue("src", string.Empty);

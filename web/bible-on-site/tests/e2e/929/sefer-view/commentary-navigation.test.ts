@@ -157,6 +157,228 @@ test.describe("Sefer commentary navigation", () => {
 		}
 	}
 
+	test("keeps the perushim carousel position across open, back, and browser Back", async ({
+		page,
+	}) => {
+		test.setTimeout(90_000);
+		const seferPage = new SeferPage(page);
+		await seferPage.openSeferViewForPerek(1);
+		const blank = page.locator('.he-book .page[data-page-index="4"]');
+		const perushLink = blank.getByRole("link", { name: /אבן עזרא/ });
+		const scroller = perushLink.locator("..");
+		const back = blank.getByRole("button", { name: "→ חזרה לפרשנים" });
+
+		// Scroll the carousel off its start edge (RTL scrollLeft is negative).
+		const position = await scroller.evaluate((el) => {
+			el.scrollLeft = -Math.min(
+				300,
+				Math.max(0, el.scrollWidth - el.clientWidth),
+			);
+			return el.scrollLeft;
+		});
+		expect(position).toBeLessThan(0);
+
+		// DOM click() never scrolls the link into view, so the carousel stays
+		// put until the open perush replaces it.
+		await perushLink.evaluate((el: HTMLElement) => el.click());
+		await expect(back).toBeVisible({ timeout: 30_000 });
+		await back.click();
+		await expect(perushLink).toBeVisible();
+		await expect
+			.poll(() => scroller.evaluate((el) => el.scrollLeft))
+			.toBe(position);
+
+		// The same position must survive leaving through the browser Back.
+		await perushLink.evaluate((el: HTMLElement) => el.click());
+		await expect(back).toBeVisible({ timeout: 30_000 });
+		await page.goBack();
+		await expect(perushLink).toBeVisible();
+		await expect
+			.poll(() => scroller.evaluate((el) => el.scrollLeft))
+			.toBe(position);
+	});
+
+	test.describe("Bidirectional pasuk navigation", () => {
+		test("jumps between scripture pasuk numbers and the open perush in both directions", async ({
+			page,
+		}) => {
+			test.setTimeout(90_000);
+			const seferPage = new SeferPage(page);
+			await seferPage.openSeferViewForPerek(1);
+			const perekPage = page.locator('.he-book .page[data-page-index="3"]');
+			const blank = page.locator('.he-book .page[data-page-index="4"]');
+			await blank.getByRole("link", { name: /רש"י/ }).click();
+			await expect(
+				blank.getByRole("button", { name: "→ חזרה לפרשנים" }),
+			).toBeVisible({ timeout: 30_000 });
+			const perushUrl = page.url();
+
+			// Deepest commentary pasuk, so its group starts below the fold.
+			const pasuk = await blank
+				.locator("[data-perush-pasuk]")
+				.last()
+				.getAttribute("data-perush-pasuk");
+			expect(pasuk).toBeTruthy();
+
+			// Scripture → perush: the group scrolls into view and is highlighted.
+			await perekPage
+				.locator(`[data-sefer-pasuk="${pasuk}"]`)
+				.getByRole("button", { name: /מעבר לפירוש/ })
+				.click();
+			const group = blank.locator(`[data-perush-pasuk="${pasuk}"]`);
+			await expect(group).toHaveAttribute("data-pasuk-highlight", "");
+			await expect(group).toHaveAttribute("aria-current", "location");
+			await expect(group).toBeInViewport();
+			// The perush stays open and the book route is untouched.
+			await expect(
+				blank.getByRole("button", { name: "→ חזרה לפרשנים" }),
+			).toBeVisible();
+			expect(page.url()).toBe(perushUrl);
+			await test.info().attach("scripture-pasuk-click-jumps-to-perush-group", {
+				body: await page.screenshot(),
+				contentType: "image/png",
+			});
+
+			// Perush → scripture: the pasuk in the perek text highlights in place.
+			await group.getByRole("button", { name: /מעבר לפסוק/ }).click();
+			const verse = perekPage.locator(`[data-sefer-pasuk="${pasuk}"]`);
+			await expect(verse).toHaveAttribute("data-pasuk-highlight", "");
+			await expect(verse).toHaveAttribute("aria-current", "location");
+			await expect(verse).toBeInViewport();
+			await expect(
+				blank.getByRole("button", { name: "→ חזרה לפרשנים" }),
+			).toBeVisible();
+			expect(page.url()).toBe(perushUrl);
+			await test.info().attach("perush-pasuk-click-jumps-to-scripture-verse", {
+				body: await page.screenshot(),
+				contentType: "image/png",
+			});
+		});
+
+		test("scopes pasuk navigation to the perek whose perush is open across page flips", async ({
+			page,
+		}) => {
+			test.setTimeout(90_000);
+			const seferPage = new SeferPage(page);
+			await seferPage.openSeferViewForPerek(1);
+			const blank = page.locator('.he-book .page[data-page-index="4"]');
+			await blank.getByRole("link", { name: /רש"י/ }).click();
+			await expect(
+				blank.getByRole("button", { name: "→ חזרה לפרשנים" }),
+			).toBeVisible({ timeout: 30_000 });
+			const pasuk = await blank
+				.locator("[data-perush-pasuk]")
+				.first()
+				.getAttribute("data-perush-pasuk");
+			expect(pasuk).toBeTruthy();
+
+			// Flip to perek 2's spread: its text reuses the same pasuk numbers
+			// but has no open perush, so none of them offer navigation into
+			// perek 1's perush.
+			await page.locator(".flipbook-toolbar-next").click();
+			await expect(page).toHaveURL(/\/929\/2\?book/);
+			const perek2Text = page.locator('.he-book .page[data-page-index="5"]');
+			await expect(
+				perek2Text.locator(`[data-sefer-pasuk="${pasuk}"]`),
+			).toBeAttached();
+			await expect(
+				perek2Text.getByRole("button", { name: /מעבר לפירוש/ }),
+			).toHaveCount(0);
+		});
+
+		test("updates the target mapping when switching perushim", async ({
+			page,
+		}) => {
+			test.setTimeout(90_000);
+			const seferPage = new SeferPage(page);
+			await seferPage.openSeferViewForPerek(1);
+			const perekPage = page.locator('.he-book .page[data-page-index="3"]');
+			const blank = page.locator('.he-book .page[data-page-index="4"]');
+			const back = blank.getByRole("button", { name: "→ חזרה לפרשנים" });
+			await blank.getByRole("link", { name: /רש"י/ }).click();
+			await expect(back).toBeVisible({ timeout: 30_000 });
+			// The panel is located by its perek marker: the perush name itself can
+			// contain quotes (רש"י), which would break a CSS attribute selector.
+			const panel = blank.locator('[data-sefer-perush-perek="1"]');
+			await expect(panel).toHaveAttribute("data-sefer-perush", 'רש"י');
+			await expect(panel.locator("[data-perush-pasuk]").first()).toBeAttached();
+
+			// Switch to אבן עזרא: the old panel unmounts and the registry follows
+			// the newly selected perush — exactly one panel stays mounted.
+			await back.click();
+			await blank.getByRole("link", { name: /אבן עזרא/ }).click();
+			await expect(back).toBeVisible({ timeout: 30_000 });
+			await expect(panel).toHaveCount(1);
+			await expect(panel).toHaveAttribute("data-sefer-perush", "אבן עזרא");
+
+			// Scripture → perush now targets אבן עזרא's own annotated pesukim.
+			const ezraPasuk = await panel
+				.locator("[data-perush-pasuk]")
+				.first()
+				.getAttribute("data-perush-pasuk");
+			expect(ezraPasuk).toBeTruthy();
+			await perekPage
+				.locator(`[data-sefer-pasuk="${ezraPasuk}"]`)
+				.getByRole("button", { name: /מעבר לפירוש/ })
+				.click();
+			await expect(
+				panel.locator(`[data-perush-pasuk="${ezraPasuk}"]`),
+			).toHaveAttribute("data-pasuk-highlight", "");
+		});
+
+		test("keeps the perush untouched when it has no note for a pasuk", async ({
+			page,
+		}) => {
+			test.setTimeout(90_000);
+			const seferPage = new SeferPage(page);
+			await seferPage.openSeferViewForPerek(1);
+			const perekPage = page.locator('.he-book .page[data-page-index="3"]');
+			const blank = page.locator('.he-book .page[data-page-index="4"]');
+			await blank.getByRole("link", { name: /רש"י/ }).click();
+			await expect(
+				blank.getByRole("button", { name: "→ חזרה לפרשנים" }),
+			).toBeVisible({ timeout: 30_000 });
+			const perushUrl = page.url();
+
+			// Find a scripture pasuk that the open perush does not annotate. The
+			// data sets differ between environments, so compute it live.
+			const missingPasuk = await page.evaluate(() => {
+				const panel = document.querySelector('[data-sefer-perush-perek="1"]');
+				const perekPageEl = document.querySelector(
+					'.he-book .page[data-page-index="3"]',
+				);
+				if (!panel || !perekPageEl) return null;
+				const covered = new Set(
+					Array.from(panel.querySelectorAll("[data-perush-pasuk]")).map((el) =>
+						el.getAttribute("data-perush-pasuk"),
+					),
+				);
+				for (const el of perekPageEl.querySelectorAll("[data-sefer-pasuk]")) {
+					const pasuk = el.getAttribute("data-sefer-pasuk");
+					if (pasuk && !covered.has(pasuk)) return pasuk;
+				}
+				return null;
+			});
+			test.skip(
+				!missingPasuk,
+				"the open perush annotates every pasuk of this perek",
+			);
+
+			// It offers no commentary navigation at all (keeping its recitation
+			// behaviour), and the open perush stays untouched.
+			await expect(
+				perekPage
+					.locator(`[data-sefer-pasuk="${missingPasuk}"]`)
+					.getByRole("button", { name: /מעבר לפירוש/ }),
+			).toHaveCount(0);
+			await expect(blank.locator("[data-pasuk-highlight]")).toHaveCount(0);
+			await expect(
+				blank.getByRole("button", { name: "→ חזרה לפרשנים" }),
+			).toBeVisible();
+			expect(page.url()).toBe(perushUrl);
+		});
+	});
+
 	for (const kind of ["perush", "article"] as const) {
 		test(`opens ${kind} after a TOC jump to a different chapter`, async ({
 			page,
@@ -196,11 +418,9 @@ test.describe("Sefer commentary navigation", () => {
 			});
 			await expect(back).toBeVisible({ timeout: 60_000 });
 			await expect(page).toHaveURL(
-				new RegExp(
-					kind === "article"
-						? "/929/1/1\\?book"
-						: "%D7%A8%D7%A9%22%D7%99\\?book",
-				),
+				kind === "article"
+					? /\/929\/1\/1\?book/
+					: /%D7%A8%D7%A9%22%D7%99\?book/,
 			);
 			await page.reload();
 			await expect(back).toBeVisible({ timeout: 60_000 });

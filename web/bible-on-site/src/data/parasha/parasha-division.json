@@ -1,0 +1,2048 @@
+{
+	"id": "parasha",
+	"version": 1,
+	"rootPath": "/פרשה",
+	"menuLabel": "פרשה על הפרק",
+	"description": "חלוקת התורה לפרשיות השבוע כנהוג בבית הכנסת, עם ההפטרות למנהגי הספרדים האשכנזים והתימנים",
+	"source": "טבלת הפרשיות וההפטרות - לוח יעקב מתלון (מצפה יריחו), מהדורת PDF כ\"ד ניסן התשס\"ד. הטבלה מתייחסת לנהוג בארץ ישראל בלבד ואינה מכסה את המנהגים בחו\"ל.",
+	"sources": [
+		"תיקון קוראים של הוצאת ספרי קדש מעיין חיים",
+		"תיקון קוראים סימנים ירושלים התשנ\"ו",
+		"ספר האבודרהם",
+		"למנהגי התימנים - ספר ההפטרות של הרב שלמה הכהן, הוצאת יריד הספרים, ירושלים",
+		"לוח שנה קרן בית הלוי עם הלכות ומנהגים לנוסח יהודי תימן - התשנ\"ד, התשנ\"ז"
+	],
+	"customs": {
+		"sefaradi": "ספרדים",
+		"ashkenazi": "אשכנזים",
+		"temani": "תימנים"
+	},
+	"customDefaultNote": "התימנים נוהגים בדרך-כלל כמו הספרדים, אלא-אם-כן צויין מנהג נפרד.",
+	"joinedReadings": {
+		"pairs": [
+			["ויקהל", "פקודי"],
+			["תזריע", "מצורע"],
+			["אחרי מות", "קדושים"],
+			["בהר", "בחוקותי"],
+			["מטות", "מסעי"],
+			["נצבים", "וילך"]
+		],
+		"note": "כאשר קוראים שתי פרשיות מחוברות - מפטירין את הפטרת הפרשה השניה, חוץ מנצבים ווילך כשהן מחוברות מפטירין את הפטרת נצבים, וכן יש מהאשכנזים שנוהגים להפטיר בשבת אחרי מות וקדושים את הפטרת אחרי מות."
+	},
+	"generalNotes": [
+		"הפטרת שבת ראש חודש, וכן הפטרת שבת ערב ראש חודש, נדחות מפני הפטרות שבת שקלים, החודש, שבת חנוכה, וכן ראש חודש מנחם-אב שחל בשבת. לגבי ראש חודש אלול או ערב ראש חודש אלול שחל בשבת - ראה הערת פרשת ראה.",
+		"הטבלה והנתונים מתייחסים לנהוג בארץ ישראל; מנהגי חוץ לארץ (למשל יום טוב שני) אינם מכוסים כאן."
+	],
+	"units": [
+		{
+			"name": "בראשית",
+			"sefer": "בראשית",
+			"start": { "perek": 1, "pasuk": 1 },
+			"end": { "perek": 6, "pasuk": 8 },
+			"haftarot": [
+				{
+					"customs": ["sefaradi"],
+					"ranges": [
+						{
+							"sefer": "ישעיהו",
+							"start": { "perek": 42, "pasuk": 5 },
+							"end": { "perek": 42, "pasuk": 21 }
+						}
+					]
+				},
+				{
+					"customs": ["ashkenazi"],
+					"ranges": [
+						{
+							"sefer": "ישעיהו",
+							"start": { "perek": 42, "pasuk": 5 },
+							"end": { "perek": 43, "pasuk": 10 }
+						}
+					]
+				},
+				{
+					"customs": ["temani"],
+					"ranges": [
+						{
+							"sefer": "ישעיהו",
+							"start": { "perek": 42, "pasuk": 1 },
+							"end": { "perek": 42, "pasuk": 16 }
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "נח",
+			"sefer": "בראשית",
+			"start": { "perek": 6, "pasuk": 9 },
+			"end": { "perek": 11, "pasuk": 32 },
+			"haftarot": [
+				{
+					"customs": ["sefaradi"],
+					"ranges": [
+						{
+							"sefer": "ישעיהו",
+							"start": { "perek": 54, "pasuk": 1 },
+							"end": { "perek": 54, "pasuk": 10 }
+						}
+					]
+				},
+				{
+					"customs": ["ashkenazi", "temani"],
+					"ranges": [
+						{
+							"sefer": "ישעיהו",
+							"start": { "perek": 54, "pasuk": 1 },
+							"end": { "perek": 55, "pasuk": 5 }
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "לך לך",
+			"sefer": "בראשית",
+			"start": { "perek": 12, "pasuk": 1 },
+			"end": { "perek": 17, "pasuk": 27 },
+			"haftarot": [
+				{
+					"customs": ["sefaradi", "ashkenazi"],
+					"ranges": [
+						{
+							"sefer": "ישעיהו",
+							"start": { "perek": 40, "pasuk": 27 },
+							"end": { "perek": 41, "pasuk": 16 }
+						}
+					]
+				},
+				{
+					"customs": ["temani"],
+					"ranges": [
+						{
+							"sefer": "ישעיהו",
+							"start": { "perek": 40, "pasuk": 25 },
+							"end": { "perek": 41, "pasuk": 17 }
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "וירא",
+			"sefer": "בראשית",
+			"start": { "perek": 18, "pasuk": 1 },
+			"end": { "perek": 22, "pasuk": 24 },
+			"haftarot": [
+				{
+					"customs": ["sefaradi"],
+					"ranges": [
+						{
+							"sefer": "מלכים",
+							"additional": "ב",
+							"start": { "perek": 4, "pasuk": 1 },
+							"end": { "perek": 4, "pasuk": 23 }
+						}
+					]
+				},
+				{
+					"customs": ["ashkenazi", "temani"],
+					"ranges": [
+						{
+							"sefer": "מלכים",
+							"additional": "ב",
+							"start": { "perek": 4, "pasuk": 1 },
+							"end": { "perek": 4, "pasuk": 37 }
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "חיי שרה",
+			"sefer": "בראשית",
+			"start": { "perek": 23, "pasuk": 1 },
+			"end": { "perek": 25, "pasuk": 18 },
+			"haftarot": [
+				{
+					"customs": ["sefaradi", "ashkenazi", "temani"],
+					"ranges": [
+						{
+							"sefer": "מלכים",
+							"additional": "א",
+							"start": { "perek": 1, "pasuk": 1 },
+							"end": { "perek": 1, "pasuk": 31 }
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "תולדות",
+			"sefer": "בראשית",
+			"start": { "perek": 25, "pasuk": 19 },
+			"end": { "perek": 28, "pasuk": 9 },
+			"haftarot": [
+				{
+					"customs": ["sefaradi", "ashkenazi"],
+					"ranges": [
+						{
+							"sefer": "מלאכי",
+							"start": { "perek": 1, "pasuk": 1 },
+							"end": { "perek": 2, "pasuk": 7 }
+						}
+					]
+				},
+				{
+					"customs": ["temani"],
+					"ranges": [
+						{
+							"sefer": "מלאכי",
+							"start": { "perek": 1, "pasuk": 1 },
+							"end": { "perek": 3, "pasuk": 4 }
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "ויצא",
+			"sefer": "בראשית",
+			"start": { "perek": 28, "pasuk": 10 },
+			"end": { "perek": 32, "pasuk": 3 },
+			"haftarot": [
+				{
+					"customs": ["sefaradi"],
+					"ranges": [
+						{
+							"sefer": "הושע",
+							"start": { "perek": 11, "pasuk": 7 },
+							"end": { "perek": 12, "pasuk": 12 }
+						}
+					],
+					"note": "ויש אומרים - עד הושע יג ה"
+				},
+				{
+					"customs": ["ashkenazi"],
+					"ranges": [
+						{
+							"sefer": "הושע",
+							"start": { "perek": 12, "pasuk": 13 },
+							"end": { "perek": 14, "pasuk": 10 }
+						}
+					],
+					"note": "ויש אומרים - מוסיפים יואל ב כו-כז. יש מן האשכנזים הנוהגים להפטיר בויצא \"ועמי תלואים\" (הושע יא ז - יב יב), ובוישלח להמשיך \"ויברח יעקב\" (יב יג) עד סוף הספר"
+				},
+				{
+					"customs": ["temani"],
+					"ranges": [
+						{
+							"sefer": "הושע",
+							"start": { "perek": 11, "pasuk": 7 },
+							"end": { "perek": 12, "pasuk": 14 }
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "וישלח",
+			"sefer": "בראשית",
+			"start": { "perek": 32, "pasuk": 4 },
+			"end": { "perek": 36, "pasuk": 43 },
+			"haftarot": [
+				{
+					"customs": ["sefaradi", "ashkenazi", "temani"],
+					"ranges": [
+						{
+							"sefer": "עובדיה",
+							"start": { "perek": 1, "pasuk": 1 },
+							"end": { "perek": 1, "pasuk": 21 }
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "וישב",
+			"sefer": "בראשית",
+			"start": { "perek": 37, "pasuk": 1 },
+			"end": { "perek": 40, "pasuk": 23 },
+			"haftarot": [
+				{
+					"customs": ["sefaradi", "ashkenazi", "temani"],
+					"ranges": [
+						{
+							"sefer": "עמוס",
+							"start": { "perek": 2, "pasuk": 6 },
+							"end": { "perek": 3, "pasuk": 8 }
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "מקץ",
+			"sefer": "בראשית",
+			"start": { "perek": 41, "pasuk": 1 },
+			"end": { "perek": 44, "pasuk": 17 },
+			"haftarot": [
+				{
+					"customs": ["sefaradi", "ashkenazi", "temani"],
+					"ranges": [
+						{
+							"sefer": "מלכים",
+							"additional": "א",
+							"start": { "perek": 3, "pasuk": 15 },
+							"end": { "perek": 4, "pasuk": 1 }
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "ויגש",
+			"sefer": "בראשית",
+			"start": { "perek": 44, "pasuk": 18 },
+			"end": { "perek": 47, "pasuk": 27 },
+			"haftarot": [
+				{
+					"customs": ["sefaradi", "ashkenazi", "temani"],
+					"ranges": [
+						{
+							"sefer": "יחזקאל",
+							"start": { "perek": 37, "pasuk": 15 },
+							"end": { "perek": 37, "pasuk": 28 }
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "ויחי",
+			"sefer": "בראשית",
+			"start": { "perek": 47, "pasuk": 28 },
+			"end": { "perek": 50, "pasuk": 26 },
+			"haftarot": [
+				{
+					"customs": ["sefaradi", "ashkenazi", "temani"],
+					"ranges": [
+						{
+							"sefer": "מלכים",
+							"additional": "א",
+							"start": { "perek": 2, "pasuk": 1 },
+							"end": { "perek": 2, "pasuk": 12 }
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "שמות",
+			"sefer": "שמות",
+			"start": { "perek": 1, "pasuk": 1 },
+			"end": { "perek": 6, "pasuk": 1 },
+			"haftarot": [
+				{
+					"customs": ["sefaradi"],
+					"ranges": [
+						{
+							"sefer": "ירמיהו",
+							"start": { "perek": 1, "pasuk": 1 },
+							"end": { "perek": 2, "pasuk": 3 }
+						}
+					]
+				},
+				{
+					"customs": ["ashkenazi"],
+					"ranges": [
+						{
+							"sefer": "ישעיהו",
+							"start": { "perek": 27, "pasuk": 6 },
+							"end": { "perek": 28, "pasuk": 13 }
+						},
+						{
+							"sefer": "ישעיהו",
+							"start": { "perek": 29, "pasuk": 22 },
+							"end": { "perek": 29, "pasuk": 23 }
+						}
+					]
+				},
+				{
+					"customs": ["temani"],
+					"ranges": [
+						{
+							"sefer": "יחזקאל",
+							"start": { "perek": 16, "pasuk": 1 },
+							"end": { "perek": 16, "pasuk": 14 }
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "וארא",
+			"sefer": "שמות",
+			"start": { "perek": 6, "pasuk": 2 },
+			"end": { "perek": 9, "pasuk": 35 },
+			"haftarot": [
+				{
+					"customs": ["sefaradi", "ashkenazi"],
+					"ranges": [
+						{
+							"sefer": "יחזקאל",
+							"start": { "perek": 28, "pasuk": 25 },
+							"end": { "perek": 29, "pasuk": 21 }
+						}
+					]
+				},
+				{
+					"customs": ["temani"],
+					"ranges": [
+						{
+							"sefer": "יחזקאל",
+							"start": { "perek": 28, "pasuk": 24 },
+							"end": { "perek": 29, "pasuk": 21 }
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "בא",
+			"sefer": "שמות",
+			"start": { "perek": 10, "pasuk": 1 },
+			"end": { "perek": 13, "pasuk": 16 },
+			"haftarot": [
+				{
+					"customs": ["sefaradi", "ashkenazi"],
+					"ranges": [
+						{
+							"sefer": "ירמיהו",
+							"start": { "perek": 46, "pasuk": 13 },
+							"end": { "perek": 46, "pasuk": 28 }
+						}
+					]
+				},
+				{
+					"customs": ["temani"],
+					"ranges": [
+						{
+							"sefer": "ישעיהו",
+							"start": { "perek": 19, "pasuk": 1 },
+							"end": { "perek": 19, "pasuk": 25 }
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "בשלח",
+			"sefer": "שמות",
+			"start": { "perek": 13, "pasuk": 17 },
+			"end": { "perek": 17, "pasuk": 16 },
+			"haftarot": [
+				{
+					"customs": ["sefaradi"],
+					"ranges": [
+						{
+							"sefer": "שופטים",
+							"start": { "perek": 5, "pasuk": 1 },
+							"end": { "perek": 5, "pasuk": 31 }
+						}
+					]
+				},
+				{
+					"customs": ["ashkenazi"],
+					"ranges": [
+						{
+							"sefer": "שופטים",
+							"start": { "perek": 4, "pasuk": 4 },
+							"end": { "perek": 5, "pasuk": 31 }
+						}
+					]
+				},
+				{
+					"customs": ["temani"],
+					"ranges": [
+						{
+							"sefer": "שופטים",
+							"start": { "perek": 4, "pasuk": 23 },
+							"end": { "perek": 5, "pasuk": 31 }
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "יתרו",
+			"sefer": "שמות",
+			"start": { "perek": 18, "pasuk": 1 },
+			"end": { "perek": 20, "pasuk": 23 },
+			"haftarot": [
+				{
+					"customs": ["sefaradi"],
+					"ranges": [
+						{
+							"sefer": "ישעיהו",
+							"start": { "perek": 6, "pasuk": 1 },
+							"end": { "perek": 6, "pasuk": 13 }
+						}
+					]
+				},
+				{
+					"customs": ["ashkenazi"],
+					"ranges": [
+						{
+							"sefer": "ישעיהו",
+							"start": { "perek": 6, "pasuk": 1 },
+							"end": { "perek": 7, "pasuk": 6 }
+						},
+						{
+							"sefer": "ישעיהו",
+							"start": { "perek": 9, "pasuk": 5 },
+							"end": { "perek": 9, "pasuk": 6 }
+						}
+					]
+				},
+				{
+					"customs": ["temani"],
+					"ranges": [
+						{
+							"sefer": "ישעיהו",
+							"start": { "perek": 6, "pasuk": 1 },
+							"end": { "perek": 6, "pasuk": 13 }
+						},
+						{
+							"sefer": "ישעיהו",
+							"start": { "perek": 9, "pasuk": 5 },
+							"end": { "perek": 9, "pasuk": 6 }
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "משפטים",
+			"sefer": "שמות",
+			"start": { "perek": 21, "pasuk": 1 },
+			"end": { "perek": 24, "pasuk": 18 },
+			"haftarot": [
+				{
+					"customs": ["sefaradi", "ashkenazi"],
+					"ranges": [
+						{
+							"sefer": "ירמיהו",
+							"start": { "perek": 34, "pasuk": 8 },
+							"end": { "perek": 34, "pasuk": 22 }
+						},
+						{
+							"sefer": "ירמיהו",
+							"start": { "perek": 33, "pasuk": 25 },
+							"end": { "perek": 33, "pasuk": 26 }
+						}
+					]
+				},
+				{
+					"customs": ["temani"],
+					"ranges": [
+						{
+							"sefer": "ירמיהו",
+							"start": { "perek": 34, "pasuk": 8 },
+							"end": { "perek": 35, "pasuk": 19 }
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "תרומה",
+			"sefer": "שמות",
+			"start": { "perek": 25, "pasuk": 1 },
+			"end": { "perek": 27, "pasuk": 19 },
+			"haftarot": [
+				{
+					"customs": ["sefaradi", "ashkenazi", "temani"],
+					"ranges": [
+						{
+							"sefer": "מלכים",
+							"additional": "א",
+							"start": { "perek": 5, "pasuk": 26 },
+							"end": { "perek": 6, "pasuk": 13 }
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "תצוה",
+			"sefer": "שמות",
+			"start": { "perek": 27, "pasuk": 20 },
+			"end": { "perek": 30, "pasuk": 10 },
+			"haftarot": [
+				{
+					"customs": ["sefaradi", "ashkenazi", "temani"],
+					"ranges": [
+						{
+							"sefer": "יחזקאל",
+							"start": { "perek": 43, "pasuk": 10 },
+							"end": { "perek": 43, "pasuk": 27 }
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "כי תשא",
+			"sefer": "שמות",
+			"start": { "perek": 30, "pasuk": 11 },
+			"end": { "perek": 34, "pasuk": 35 },
+			"haftarot": [
+				{
+					"customs": ["sefaradi"],
+					"ranges": [
+						{
+							"sefer": "מלכים",
+							"additional": "א",
+							"start": { "perek": 18, "pasuk": 20 },
+							"end": { "perek": 18, "pasuk": 39 }
+						}
+					]
+				},
+				{
+					"customs": ["ashkenazi"],
+					"ranges": [
+						{
+							"sefer": "מלכים",
+							"additional": "א",
+							"start": { "perek": 18, "pasuk": 1 },
+							"end": { "perek": 18, "pasuk": 39 }
+						}
+					]
+				},
+				{
+					"customs": ["temani"],
+					"ranges": [
+						{
+							"sefer": "מלכים",
+							"additional": "א",
+							"start": { "perek": 18, "pasuk": 1 },
+							"end": { "perek": 18, "pasuk": 46 }
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "ויקהל",
+			"sefer": "שמות",
+			"start": { "perek": 35, "pasuk": 1 },
+			"end": { "perek": 38, "pasuk": 20 },
+			"haftarot": [
+				{
+					"customs": ["sefaradi"],
+					"ranges": [
+						{
+							"sefer": "מלכים",
+							"additional": "א",
+							"start": { "perek": 7, "pasuk": 13 },
+							"end": { "perek": 7, "pasuk": 26 }
+						}
+					]
+				},
+				{
+					"customs": ["ashkenazi"],
+					"ranges": [
+						{
+							"sefer": "מלכים",
+							"additional": "א",
+							"start": { "perek": 7, "pasuk": 40 },
+							"end": { "perek": 7, "pasuk": 50 }
+						}
+					]
+				},
+				{
+					"customs": ["temani"],
+					"ranges": [
+						{
+							"sefer": "מלכים",
+							"additional": "א",
+							"start": { "perek": 7, "pasuk": 13 },
+							"end": { "perek": 7, "pasuk": 22 }
+						}
+					],
+					"note": "בטבלה מודפסת התחלה משובשת (ז מ); הסיום \"ותתם מלאכת העמודים\" (ז כב) ומקורות התימנים מלמדים שהקריאה מתחילה בז יג כמו הספרדים ומסתיימת מוקדם יותר"
+				}
+			]
+		},
+		{
+			"name": "פקודי",
+			"sefer": "שמות",
+			"start": { "perek": 38, "pasuk": 21 },
+			"end": { "perek": 40, "pasuk": 38 },
+			"haftarot": [
+				{
+					"customs": ["sefaradi", "temani"],
+					"ranges": [
+						{
+							"sefer": "מלכים",
+							"additional": "א",
+							"start": { "perek": 7, "pasuk": 40 },
+							"end": { "perek": 7, "pasuk": 50 }
+						}
+					]
+				},
+				{
+					"customs": ["ashkenazi"],
+					"ranges": [
+						{
+							"sefer": "מלכים",
+							"additional": "א",
+							"start": { "perek": 7, "pasuk": 51 },
+							"end": { "perek": 8, "pasuk": 21 }
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "ויקרא",
+			"sefer": "ויקרא",
+			"start": { "perek": 1, "pasuk": 1 },
+			"end": { "perek": 5, "pasuk": 26 },
+			"haftarot": [
+				{
+					"customs": ["sefaradi", "ashkenazi"],
+					"ranges": [
+						{
+							"sefer": "ישעיהו",
+							"start": { "perek": 43, "pasuk": 21 },
+							"end": { "perek": 44, "pasuk": 23 }
+						}
+					]
+				},
+				{
+					"customs": ["temani"],
+					"ranges": [
+						{
+							"sefer": "ישעיהו",
+							"start": { "perek": 43, "pasuk": 21 },
+							"end": { "perek": 44, "pasuk": 6 }
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "צו",
+			"sefer": "ויקרא",
+			"start": { "perek": 6, "pasuk": 1 },
+			"end": { "perek": 8, "pasuk": 36 },
+			"haftarot": [
+				{
+					"customs": ["sefaradi", "ashkenazi"],
+					"ranges": [
+						{
+							"sefer": "ירמיהו",
+							"start": { "perek": 7, "pasuk": 21 },
+							"end": { "perek": 8, "pasuk": 3 }
+						},
+						{
+							"sefer": "ירמיהו",
+							"start": { "perek": 9, "pasuk": 22 },
+							"end": { "perek": 9, "pasuk": 23 }
+						}
+					]
+				},
+				{
+					"customs": ["temani"],
+					"ranges": [
+						{
+							"sefer": "ירמיהו",
+							"start": { "perek": 7, "pasuk": 21 },
+							"end": { "perek": 7, "pasuk": 28 }
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "שמיני",
+			"sefer": "ויקרא",
+			"start": { "perek": 9, "pasuk": 1 },
+			"end": { "perek": 11, "pasuk": 47 },
+			"haftarot": [
+				{
+					"customs": ["sefaradi"],
+					"ranges": [
+						{
+							"sefer": "שמואל",
+							"additional": "ב",
+							"start": { "perek": 6, "pasuk": 1 },
+							"end": { "perek": 6, "pasuk": 19 }
+						}
+					],
+					"note": "יש מהספרדים שנוהגים להוסיף בסוף ההפטרה את שני הפסוקים האחרונים של הפטרת האשכנזים - \"ונאמן ביתך\" (ז טז-יז)"
+				},
+				{
+					"customs": ["ashkenazi"],
+					"ranges": [
+						{
+							"sefer": "שמואל",
+							"additional": "ב",
+							"start": { "perek": 6, "pasuk": 1 },
+							"end": { "perek": 7, "pasuk": 17 }
+						}
+					]
+				},
+				{
+					"customs": ["temani"],
+					"ranges": [
+						{
+							"sefer": "שמואל",
+							"additional": "ב",
+							"start": { "perek": 6, "pasuk": 1 },
+							"end": { "perek": 7, "pasuk": 3 }
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "תזריע",
+			"sefer": "ויקרא",
+			"start": { "perek": 12, "pasuk": 1 },
+			"end": { "perek": 13, "pasuk": 59 },
+			"haftarot": [
+				{
+					"customs": ["sefaradi", "ashkenazi", "temani"],
+					"ranges": [
+						{
+							"sefer": "מלכים",
+							"additional": "ב",
+							"start": { "perek": 4, "pasuk": 42 },
+							"end": { "perek": 5, "pasuk": 19 }
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "מצורע",
+			"sefer": "ויקרא",
+			"start": { "perek": 14, "pasuk": 1 },
+			"end": { "perek": 15, "pasuk": 33 },
+			"haftarot": [
+				{
+					"customs": ["sefaradi", "ashkenazi"],
+					"ranges": [
+						{
+							"sefer": "מלכים",
+							"additional": "ב",
+							"start": { "perek": 7, "pasuk": 3 },
+							"end": { "perek": 7, "pasuk": 20 }
+						}
+					]
+				},
+				{
+					"customs": ["temani"],
+					"ranges": [
+						{
+							"sefer": "מלכים",
+							"additional": "ב",
+							"start": { "perek": 7, "pasuk": 1 },
+							"end": { "perek": 7, "pasuk": 20 }
+						},
+						{
+							"sefer": "מלכים",
+							"additional": "ב",
+							"start": { "perek": 13, "pasuk": 23 },
+							"end": { "perek": 13, "pasuk": 23 }
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "אחרי מות",
+			"sefer": "ויקרא",
+			"start": { "perek": 16, "pasuk": 1 },
+			"end": { "perek": 18, "pasuk": 30 },
+			"haftarot": [
+				{
+					"customs": ["sefaradi", "temani"],
+					"ranges": [
+						{
+							"sefer": "יחזקאל",
+							"start": { "perek": 22, "pasuk": 1 },
+							"end": { "perek": 22, "pasuk": 16 }
+						}
+					]
+				},
+				{
+					"customs": ["ashkenazi"],
+					"ranges": [
+						{
+							"sefer": "עמוס",
+							"start": { "perek": 9, "pasuk": 7 },
+							"end": { "perek": 9, "pasuk": 15 }
+						}
+					]
+				}
+			],
+			"notes": [
+				"יש הנוהגים להחליף את הפטרות אחרי מות וקדושים זו בזו, ורבים המנהגים בזה."
+			]
+		},
+		{
+			"name": "קדושים",
+			"sefer": "ויקרא",
+			"start": { "perek": 19, "pasuk": 1 },
+			"end": { "perek": 20, "pasuk": 27 },
+			"haftarot": [
+				{
+					"customs": ["sefaradi"],
+					"ranges": [
+						{
+							"sefer": "יחזקאל",
+							"start": { "perek": 20, "pasuk": 2 },
+							"end": { "perek": 20, "pasuk": 20 }
+						}
+					]
+				},
+				{
+					"customs": ["ashkenazi"],
+					"ranges": [
+						{
+							"sefer": "יחזקאל",
+							"start": { "perek": 22, "pasuk": 1 },
+							"end": { "perek": 22, "pasuk": 16 }
+						}
+					]
+				},
+				{
+					"customs": ["temani"],
+					"ranges": [
+						{
+							"sefer": "יחזקאל",
+							"start": { "perek": 20, "pasuk": 1 },
+							"end": { "perek": 20, "pasuk": 20 }
+						}
+					],
+					"note": "בלדי - עד יחזקאל כ טו"
+				}
+			],
+			"notes": [
+				"יש הנוהגים להחליף את הפטרות אחרי מות וקדושים זו בזו, ורבים המנהגים בזה."
+			]
+		},
+		{
+			"name": "אמור",
+			"sefer": "ויקרא",
+			"start": { "perek": 21, "pasuk": 1 },
+			"end": { "perek": 24, "pasuk": 23 },
+			"haftarot": [
+				{
+					"customs": ["sefaradi", "ashkenazi", "temani"],
+					"ranges": [
+						{
+							"sefer": "יחזקאל",
+							"start": { "perek": 44, "pasuk": 15 },
+							"end": { "perek": 44, "pasuk": 31 }
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "בהר",
+			"sefer": "ויקרא",
+			"start": { "perek": 25, "pasuk": 1 },
+			"end": { "perek": 26, "pasuk": 2 },
+			"haftarot": [
+				{
+					"customs": ["sefaradi", "ashkenazi", "temani"],
+					"ranges": [
+						{
+							"sefer": "ירמיהו",
+							"start": { "perek": 32, "pasuk": 6 },
+							"end": { "perek": 32, "pasuk": 27 }
+						}
+					],
+					"note": "נהגו בהרבה קהילות לסיים את ההפטרה בפסוק כב - \"ארץ זבת חלב ודבש\""
+				}
+			]
+		},
+		{
+			"name": "בחוקותי",
+			"sefer": "ויקרא",
+			"start": { "perek": 26, "pasuk": 3 },
+			"end": { "perek": 27, "pasuk": 34 },
+			"haftarot": [
+				{
+					"customs": ["sefaradi", "ashkenazi"],
+					"ranges": [
+						{
+							"sefer": "ירמיהו",
+							"start": { "perek": 16, "pasuk": 19 },
+							"end": { "perek": 17, "pasuk": 14 }
+						}
+					]
+				},
+				{
+					"customs": ["temani"],
+					"ranges": [
+						{
+							"sefer": "יחזקאל",
+							"start": { "perek": 34, "pasuk": 1 },
+							"end": { "perek": 34, "pasuk": 27 }
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "במדבר",
+			"sefer": "במדבר",
+			"start": { "perek": 1, "pasuk": 1 },
+			"end": { "perek": 4, "pasuk": 20 },
+			"haftarot": [
+				{
+					"customs": ["sefaradi", "ashkenazi", "temani"],
+					"ranges": [
+						{
+							"sefer": "הושע",
+							"start": { "perek": 2, "pasuk": 1 },
+							"end": { "perek": 2, "pasuk": 22 }
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "נשא",
+			"sefer": "במדבר",
+			"start": { "perek": 4, "pasuk": 21 },
+			"end": { "perek": 7, "pasuk": 89 },
+			"haftarot": [
+				{
+					"customs": ["sefaradi", "ashkenazi", "temani"],
+					"ranges": [
+						{
+							"sefer": "שופטים",
+							"start": { "perek": 13, "pasuk": 2 },
+							"end": { "perek": 13, "pasuk": 25 }
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "בהעלותך",
+			"sefer": "במדבר",
+			"start": { "perek": 8, "pasuk": 1 },
+			"end": { "perek": 12, "pasuk": 16 },
+			"haftarot": [
+				{
+					"customs": ["sefaradi", "ashkenazi"],
+					"ranges": [
+						{
+							"sefer": "זכריה",
+							"start": { "perek": 2, "pasuk": 14 },
+							"end": { "perek": 4, "pasuk": 7 }
+						}
+					]
+				},
+				{
+					"customs": ["temani"],
+					"ranges": [
+						{
+							"sefer": "זכריה",
+							"start": { "perek": 2, "pasuk": 14 },
+							"end": { "perek": 4, "pasuk": 9 }
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "שלח",
+			"sefer": "במדבר",
+			"start": { "perek": 13, "pasuk": 1 },
+			"end": { "perek": 15, "pasuk": 41 },
+			"haftarot": [
+				{
+					"customs": ["sefaradi", "ashkenazi", "temani"],
+					"ranges": [
+						{
+							"sefer": "יהושע",
+							"start": { "perek": 2, "pasuk": 1 },
+							"end": { "perek": 2, "pasuk": 24 }
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "קרח",
+			"sefer": "במדבר",
+			"start": { "perek": 16, "pasuk": 1 },
+			"end": { "perek": 18, "pasuk": 32 },
+			"haftarot": [
+				{
+					"customs": ["sefaradi", "ashkenazi", "temani"],
+					"ranges": [
+						{
+							"sefer": "שמואל",
+							"additional": "א",
+							"start": { "perek": 11, "pasuk": 14 },
+							"end": { "perek": 12, "pasuk": 22 }
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "חוקת",
+			"sefer": "במדבר",
+			"start": { "perek": 19, "pasuk": 1 },
+			"end": { "perek": 22, "pasuk": 1 },
+			"haftarot": [
+				{
+					"customs": ["sefaradi", "ashkenazi"],
+					"ranges": [
+						{
+							"sefer": "שופטים",
+							"start": { "perek": 11, "pasuk": 1 },
+							"end": { "perek": 11, "pasuk": 33 }
+						}
+					]
+				},
+				{
+					"customs": ["temani"],
+					"ranges": [
+						{
+							"sefer": "שופטים",
+							"start": { "perek": 11, "pasuk": 1 },
+							"end": { "perek": 11, "pasuk": 40 }
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "בלק",
+			"sefer": "במדבר",
+			"start": { "perek": 22, "pasuk": 2 },
+			"end": { "perek": 25, "pasuk": 9 },
+			"haftarot": [
+				{
+					"customs": ["sefaradi", "ashkenazi", "temani"],
+					"ranges": [
+						{
+							"sefer": "מיכה",
+							"start": { "perek": 5, "pasuk": 6 },
+							"end": { "perek": 6, "pasuk": 8 }
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "פינחס",
+			"sefer": "במדבר",
+			"start": { "perek": 25, "pasuk": 10 },
+			"end": { "perek": 30, "pasuk": 1 },
+			"haftarot": [
+				{
+					"customs": ["sefaradi", "ashkenazi", "temani"],
+					"ranges": [
+						{
+							"sefer": "מלכים",
+							"additional": "א",
+							"start": { "perek": 18, "pasuk": 46 },
+							"end": { "perek": 19, "pasuk": 21 }
+						}
+					]
+				}
+			],
+			"notes": [
+				"בשנה שמחברים בה את פרשיות מטות ומסעי (כל השנים הפשוטות ושנים מעוברות שסימנן בח\"ה, זש\"ה ו-זח\"ג), פרשת פינחס חלה בשבת שלאחר י\"ז בתמוז, ואז מפטירים \"דברי ירמיהו\" - הפטרת מטות; ובשבת הבאה, פרשת מטות ומסעי (המחוברות), מפטירים הפטרת מסעי, \"שמעו דבר ה'\"."
+			]
+		},
+		{
+			"name": "מטות",
+			"sefer": "במדבר",
+			"start": { "perek": 30, "pasuk": 2 },
+			"end": { "perek": 32, "pasuk": 42 },
+			"haftarot": [
+				{
+					"customs": ["sefaradi", "ashkenazi"],
+					"ranges": [
+						{
+							"sefer": "ירמיהו",
+							"start": { "perek": 1, "pasuk": 1 },
+							"end": { "perek": 2, "pasuk": 3 }
+						}
+					]
+				},
+				{
+					"customs": ["temani"],
+					"ranges": [
+						{
+							"sefer": "ירמיהו",
+							"start": { "perek": 1, "pasuk": 1 },
+							"end": { "perek": 1, "pasuk": 19 }
+						}
+					],
+					"note": "בטבלה מודפס הסיום (א יז), אך פסוק הסיום המצוטט \"כי אתך אני נאם ה' להצילך\" הוא ירמיהו א יט"
+				}
+			]
+		},
+		{
+			"name": "מסעי",
+			"sefer": "במדבר",
+			"start": { "perek": 33, "pasuk": 1 },
+			"end": { "perek": 36, "pasuk": 13 },
+			"haftarot": [
+				{
+					"customs": ["sefaradi"],
+					"ranges": [
+						{
+							"sefer": "ירמיהו",
+							"start": { "perek": 2, "pasuk": 4 },
+							"end": { "perek": 2, "pasuk": 28 }
+						},
+						{
+							"sefer": "ירמיהו",
+							"start": { "perek": 4, "pasuk": 1 },
+							"end": { "perek": 4, "pasuk": 2 }
+						}
+					]
+				},
+				{
+					"customs": ["ashkenazi", "temani"],
+					"ranges": [
+						{
+							"sefer": "ירמיהו",
+							"start": { "perek": 2, "pasuk": 4 },
+							"end": { "perek": 2, "pasuk": 28 }
+						},
+						{
+							"sefer": "ירמיהו",
+							"start": { "perek": 3, "pasuk": 4 },
+							"end": { "perek": 3, "pasuk": 4 }
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "דברים",
+			"sefer": "דברים",
+			"start": { "perek": 1, "pasuk": 1 },
+			"end": { "perek": 3, "pasuk": 22 },
+			"haftarot": [
+				{
+					"customs": ["sefaradi", "ashkenazi"],
+					"ranges": [
+						{
+							"sefer": "ישעיהו",
+							"start": { "perek": 1, "pasuk": 1 },
+							"end": { "perek": 1, "pasuk": 27 }
+						}
+					]
+				},
+				{
+					"customs": ["temani"],
+					"ranges": [
+						{
+							"sefer": "ישעיהו",
+							"start": { "perek": 1, "pasuk": 1 },
+							"end": { "perek": 1, "pasuk": 31 }
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "ואתחנן",
+			"sefer": "דברים",
+			"start": { "perek": 3, "pasuk": 23 },
+			"end": { "perek": 7, "pasuk": 11 },
+			"haftarot": [
+				{
+					"customs": ["sefaradi", "ashkenazi"],
+					"ranges": [
+						{
+							"sefer": "ישעיהו",
+							"start": { "perek": 40, "pasuk": 1 },
+							"end": { "perek": 40, "pasuk": 26 }
+						}
+					]
+				},
+				{
+					"customs": ["temani"],
+					"ranges": [
+						{
+							"sefer": "ישעיהו",
+							"start": { "perek": 40, "pasuk": 1 },
+							"end": { "perek": 40, "pasuk": 26 }
+						},
+						{
+							"sefer": "ישעיהו",
+							"start": { "perek": 41, "pasuk": 17 },
+							"end": { "perek": 41, "pasuk": 17 }
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "עקב",
+			"sefer": "דברים",
+			"start": { "perek": 7, "pasuk": 12 },
+			"end": { "perek": 11, "pasuk": 25 },
+			"haftarot": [
+				{
+					"customs": ["sefaradi", "ashkenazi", "temani"],
+					"ranges": [
+						{
+							"sefer": "ישעיהו",
+							"start": { "perek": 49, "pasuk": 14 },
+							"end": { "perek": 51, "pasuk": 3 }
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "ראה",
+			"sefer": "דברים",
+			"start": { "perek": 11, "pasuk": 26 },
+			"end": { "perek": 16, "pasuk": 17 },
+			"haftarot": [
+				{
+					"customs": ["sefaradi", "ashkenazi", "temani"],
+					"ranges": [
+						{
+							"sefer": "ישעיהו",
+							"start": { "perek": 54, "pasuk": 11 },
+							"end": { "perek": 55, "pasuk": 5 }
+						}
+					]
+				}
+			],
+			"notes": [
+				"כאשר ראש חודש אלול חל בשבת, הספרדים מפטירים הפטרת ראה \"עניה סערה\", ומוסיפים פסוק ראשון ואחרון מהפטרת שבת וראש חודש \"השמים כסאי\", ואם ראש חודש אלול חל ביום ראשון - פסוק ראשון ואחרון מהפטרת \"מחר חודש\". האשכנזים מפטירים הפטרת שבת וראש חודש, \"השמים כסאי\", ובפרשת כי תצא מחברים את הפטרת כי תצא עם הפטרת ראה וקוראים אותם ביחד (שהרי שתי ההפטרות הן סמוכות, בישעיהו נד). לגבי שבת ערב ראש חודש (\"מחר חודש\") - יש מהאשכנזים הנוהגים לקרוא את הפטרת ראה, \"עניה סערה\", ולא את הפטרת \"מחר חודש\", אך יש גם נוהגים לקרוא את הפטרת \"מחר חודש\", ובפרשת כי תצא להשלים את הפטרת ראה. בכל המקרים, הפטרת שופטים (\"אנכי אנכי\") - הנמצאת בתווך, בין ראה לכי תצא - אינה משתנה."
+			]
+		},
+		{
+			"name": "שופטים",
+			"sefer": "דברים",
+			"start": { "perek": 16, "pasuk": 18 },
+			"end": { "perek": 21, "pasuk": 9 },
+			"haftarot": [
+				{
+					"customs": ["sefaradi", "ashkenazi", "temani"],
+					"ranges": [
+						{
+							"sefer": "ישעיהו",
+							"start": { "perek": 51, "pasuk": 12 },
+							"end": { "perek": 52, "pasuk": 12 }
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "כי תצא",
+			"sefer": "דברים",
+			"start": { "perek": 21, "pasuk": 10 },
+			"end": { "perek": 25, "pasuk": 19 },
+			"haftarot": [
+				{
+					"customs": ["sefaradi", "ashkenazi", "temani"],
+					"ranges": [
+						{
+							"sefer": "ישעיהו",
+							"start": { "perek": 54, "pasuk": 1 },
+							"end": { "perek": 54, "pasuk": 10 }
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "כי תבוא",
+			"sefer": "דברים",
+			"start": { "perek": 26, "pasuk": 1 },
+			"end": { "perek": 29, "pasuk": 8 },
+			"haftarot": [
+				{
+					"customs": ["sefaradi", "ashkenazi", "temani"],
+					"ranges": [
+						{
+							"sefer": "ישעיהו",
+							"start": { "perek": 60, "pasuk": 1 },
+							"end": { "perek": 60, "pasuk": 22 }
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "נצבים",
+			"sefer": "דברים",
+			"start": { "perek": 29, "pasuk": 9 },
+			"end": { "perek": 30, "pasuk": 20 },
+			"haftarot": [
+				{
+					"customs": ["sefaradi", "ashkenazi"],
+					"ranges": [
+						{
+							"sefer": "ישעיהו",
+							"start": { "perek": 61, "pasuk": 10 },
+							"end": { "perek": 63, "pasuk": 9 }
+						}
+					]
+				},
+				{
+					"customs": ["temani"],
+					"ranges": [
+						{
+							"sefer": "ישעיהו",
+							"start": { "perek": 61, "pasuk": 9 },
+							"end": { "perek": 63, "pasuk": 9 }
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "וילך",
+			"sefer": "דברים",
+			"start": { "perek": 31, "pasuk": 1 },
+			"end": { "perek": 31, "pasuk": 30 },
+			"haftarot": [
+				{
+					"customs": ["sefaradi", "temani"],
+					"ranges": [
+						{
+							"sefer": "הושע",
+							"start": { "perek": 14, "pasuk": 2 },
+							"end": { "perek": 14, "pasuk": 10 }
+						},
+						{
+							"sefer": "מיכה",
+							"start": { "perek": 7, "pasuk": 18 },
+							"end": { "perek": 7, "pasuk": 20 }
+						}
+					]
+				},
+				{
+					"customs": ["ashkenazi"],
+					"ranges": [
+						{
+							"sefer": "הושע",
+							"start": { "perek": 14, "pasuk": 2 },
+							"end": { "perek": 14, "pasuk": 10 }
+						},
+						{
+							"sefer": "יואל",
+							"start": { "perek": 2, "pasuk": 15 },
+							"end": { "perek": 2, "pasuk": 27 }
+						}
+					]
+				}
+			],
+			"notes": [
+				"כשקורין פרשת וילך בשבת שבין ראש השנה ליום הכיפורים (זה קורה כאשר ראש השנה חל ביום שני או שלישי), מפטירים \"שובה ישראל\". אבל אם נצבים ווילך מחוברות לפני ראש השנה (בשנה שבה חל ראש השנה ביום חמישי או שבת), שבת האזינו חלה בשבת שבין ראש השנה ליום הכיפורים (שבת שובה) - בשבת נצבים ווילך המחוברות מפטירים את הפטרת נצבים, ובשבת האזינו מפטירים \"שובה ישראל\"."
+			]
+		},
+		{
+			"name": "האזינו",
+			"sefer": "דברים",
+			"start": { "perek": 32, "pasuk": 1 },
+			"end": { "perek": 32, "pasuk": 52 },
+			"haftarot": [
+				{
+					"customs": ["sefaradi", "ashkenazi", "temani"],
+					"ranges": [
+						{
+							"sefer": "שמואל",
+							"additional": "ב",
+							"start": { "perek": 22, "pasuk": 1 },
+							"end": { "perek": 22, "pasuk": 51 }
+						}
+					]
+				}
+			],
+			"notes": [
+				"כששבת האזינו חלה בשבת שובה (בין ראש השנה ליום הכיפורים), מפטירים \"שובה ישראל\" - הפטרת וילך."
+			]
+		},
+		{
+			"name": "וזאת הברכה",
+			"sefer": "דברים",
+			"start": { "perek": 33, "pasuk": 1 },
+			"end": { "perek": 34, "pasuk": 12 },
+			"haftarot": [
+				{
+					"customs": ["sefaradi", "temani"],
+					"ranges": [
+						{
+							"sefer": "יהושע",
+							"start": { "perek": 1, "pasuk": 1 },
+							"end": { "perek": 1, "pasuk": 9 }
+						}
+					],
+					"note": "ויש אומרים - מוסיפים יהושע ו כז"
+				},
+				{
+					"customs": ["ashkenazi"],
+					"ranges": [
+						{
+							"sefer": "יהושע",
+							"start": { "perek": 1, "pasuk": 1 },
+							"end": { "perek": 1, "pasuk": 18 }
+						}
+					],
+					"note": "בשמחת תורה"
+				}
+			]
+		}
+	],
+	"occasions": [
+		{
+			"name": "שבת ראש חודש",
+			"haftarot": [
+				{
+					"customs": ["sefaradi", "ashkenazi", "temani"],
+					"ranges": [
+						{
+							"sefer": "ישעיהו",
+							"start": { "perek": 66, "pasuk": 1 },
+							"end": { "perek": 66, "pasuk": 24 }
+						},
+						{
+							"sefer": "ישעיהו",
+							"start": { "perek": 66, "pasuk": 23 },
+							"end": { "perek": 66, "pasuk": 23 }
+						}
+					]
+				}
+			],
+			"notes": [
+				"נדחית מפני הפטרות שבת שקלים, החודש, שבת חנוכה, וכן ראש חודש מנחם-אב שחל בשבת. לגבי ראש חודש אלול שחל בשבת - ראה הערת פרשת ראה.",
+				"הפסוק האחרון חוזר על \"והיה מדי חדשו בחדשו\" (סו כג) לאחר סיום הקריאה ב\"לכל בשר\" (סו כד)."
+			]
+		},
+		{
+			"name": "שבת ערב ראש חודש",
+			"haftarot": [
+				{
+					"customs": ["sefaradi", "ashkenazi", "temani"],
+					"ranges": [
+						{
+							"sefer": "שמואל",
+							"additional": "א",
+							"start": { "perek": 20, "pasuk": 18 },
+							"end": { "perek": 20, "pasuk": 42 }
+						}
+					]
+				}
+			],
+			"notes": [
+				"נדחית מפני הפטרות המיוחדות כמו שבת ראש חודש. לגבי ערב ראש חודש אלול - ראה הערת פרשת ראה."
+			]
+		},
+		{
+			"name": "תענית ציבור - מנחה",
+			"haftarot": [
+				{
+					"customs": ["ashkenazi"],
+					"ranges": [
+						{
+							"sefer": "ישעיהו",
+							"start": { "perek": 55, "pasuk": 6 },
+							"end": { "perek": 56, "pasuk": 8 }
+						}
+					]
+				}
+			],
+			"notes": ["הספרדים אין מפטירים בתענית ציבור."]
+		},
+		{
+			"name": "ראש השנה - יום א'",
+			"haftarot": [
+				{
+					"customs": ["sefaradi", "ashkenazi", "temani"],
+					"ranges": [
+						{
+							"sefer": "שמואל",
+							"additional": "א",
+							"start": { "perek": 1, "pasuk": 1 },
+							"end": { "perek": 2, "pasuk": 10 }
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "ראש השנה - יום ב'",
+			"haftarot": [
+				{
+					"customs": ["sefaradi", "ashkenazi", "temani"],
+					"ranges": [
+						{
+							"sefer": "ירמיהו",
+							"start": { "perek": 31, "pasuk": 1 },
+							"end": { "perek": 31, "pasuk": 19 }
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "יום כיפור - שחרית",
+			"haftarot": [
+				{
+					"customs": ["sefaradi", "ashkenazi", "temani"],
+					"ranges": [
+						{
+							"sefer": "ישעיהו",
+							"start": { "perek": 57, "pasuk": 14 },
+							"end": { "perek": 58, "pasuk": 14 }
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "יום כיפור - מנחה",
+			"haftarot": [
+				{
+					"customs": ["sefaradi", "ashkenazi", "temani"],
+					"ranges": [
+						{
+							"sefer": "יונה",
+							"start": { "perek": 1, "pasuk": 1 },
+							"end": { "perek": 4, "pasuk": 11 }
+						},
+						{
+							"sefer": "מיכה",
+							"start": { "perek": 7, "pasuk": 18 },
+							"end": { "perek": 7, "pasuk": 20 }
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "סוכות - יום א'",
+			"haftarot": [
+				{
+					"customs": ["sefaradi", "ashkenazi"],
+					"ranges": [
+						{
+							"sefer": "זכריה",
+							"start": { "perek": 14, "pasuk": 1 },
+							"end": { "perek": 14, "pasuk": 21 }
+						}
+					]
+				},
+				{
+					"customs": ["temani"],
+					"ranges": [
+						{
+							"sefer": "זכריה",
+							"start": { "perek": 13, "pasuk": 9 },
+							"end": { "perek": 14, "pasuk": 21 }
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "שבת חול המועד סוכות",
+			"haftarot": [
+				{
+					"customs": ["sefaradi", "ashkenazi"],
+					"ranges": [
+						{
+							"sefer": "יחזקאל",
+							"start": { "perek": 38, "pasuk": 18 },
+							"end": { "perek": 39, "pasuk": 16 }
+						}
+					]
+				},
+				{
+					"customs": ["temani"],
+					"ranges": [
+						{
+							"sefer": "יחזקאל",
+							"start": { "perek": 38, "pasuk": 1 },
+							"end": { "perek": 38, "pasuk": 23 }
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "שבת חנוכה - א'",
+			"haftarot": [
+				{
+					"customs": ["sefaradi", "ashkenazi", "temani"],
+					"ranges": [
+						{
+							"sefer": "זכריה",
+							"start": { "perek": 2, "pasuk": 14 },
+							"end": { "perek": 4, "pasuk": 7 }
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "שבת חנוכה - ב'",
+			"haftarot": [
+				{
+					"customs": ["sefaradi", "ashkenazi", "temani"],
+					"ranges": [
+						{
+							"sefer": "מלכים",
+							"additional": "א",
+							"start": { "perek": 7, "pasuk": 40 },
+							"end": { "perek": 7, "pasuk": 50 }
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "שבת שקלים",
+			"haftarot": [
+				{
+					"customs": ["sefaradi"],
+					"ranges": [
+						{
+							"sefer": "מלכים",
+							"additional": "ב",
+							"start": { "perek": 11, "pasuk": 17 },
+							"end": { "perek": 12, "pasuk": 17 }
+						}
+					]
+				},
+				{
+					"customs": ["ashkenazi", "temani"],
+					"ranges": [
+						{
+							"sefer": "מלכים",
+							"additional": "ב",
+							"start": { "perek": 12, "pasuk": 1 },
+							"end": { "perek": 12, "pasuk": 17 }
+						}
+					],
+					"note": "יש מן האשכנזים שנוהגים להתחיל כמו הספרדים - \"ויכרת יהוידע\""
+				}
+			]
+		},
+		{
+			"name": "שבת זכור",
+			"haftarot": [
+				{
+					"customs": ["sefaradi"],
+					"ranges": [
+						{
+							"sefer": "שמואל",
+							"additional": "א",
+							"start": { "perek": 15, "pasuk": 1 },
+							"end": { "perek": 15, "pasuk": 34 }
+						}
+					]
+				},
+				{
+					"customs": ["ashkenazi"],
+					"ranges": [
+						{
+							"sefer": "שמואל",
+							"additional": "א",
+							"start": { "perek": 15, "pasuk": 2 },
+							"end": { "perek": 15, "pasuk": 34 }
+						}
+					]
+				},
+				{
+					"customs": ["temani"],
+					"ranges": [
+						{
+							"sefer": "שמואל",
+							"additional": "א",
+							"start": { "perek": 14, "pasuk": 52 },
+							"end": { "perek": 15, "pasuk": 33 }
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "שבת פרה",
+			"haftarot": [
+				{
+					"customs": ["sefaradi", "temani"],
+					"ranges": [
+						{
+							"sefer": "יחזקאל",
+							"start": { "perek": 36, "pasuk": 16 },
+							"end": { "perek": 36, "pasuk": 36 }
+						}
+					]
+				},
+				{
+					"customs": ["ashkenazi"],
+					"ranges": [
+						{
+							"sefer": "יחזקאל",
+							"start": { "perek": 36, "pasuk": 16 },
+							"end": { "perek": 36, "pasuk": 38 }
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "שבת החודש",
+			"haftarot": [
+				{
+					"customs": ["sefaradi"],
+					"ranges": [
+						{
+							"sefer": "יחזקאל",
+							"start": { "perek": 45, "pasuk": 18 },
+							"end": { "perek": 46, "pasuk": 15 }
+						}
+					]
+				},
+				{
+					"customs": ["ashkenazi"],
+					"ranges": [
+						{
+							"sefer": "יחזקאל",
+							"start": { "perek": 45, "pasuk": 16 },
+							"end": { "perek": 46, "pasuk": 18 }
+						}
+					]
+				},
+				{
+					"customs": ["temani"],
+					"ranges": [
+						{
+							"sefer": "יחזקאל",
+							"start": { "perek": 45, "pasuk": 9 },
+							"end": { "perek": 46, "pasuk": 11 }
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "שבת הגדול",
+			"haftarot": [
+				{
+					"customs": ["sefaradi", "ashkenazi", "temani"],
+					"ranges": [
+						{
+							"sefer": "מלאכי",
+							"start": { "perek": 3, "pasuk": 4 },
+							"end": { "perek": 3, "pasuk": 24 }
+						},
+						{
+							"sefer": "מלאכי",
+							"start": { "perek": 3, "pasuk": 23 },
+							"end": { "perek": 3, "pasuk": 23 }
+						}
+					]
+				}
+			],
+			"notes": [
+				"הפסוק \"הנה אנכי שלח לכם\" (ג כג) נקרא שוב לאחר \"הארץ חרם\" (ג כד).",
+				"יש הנוהגים להפטיר בשבת הגדול \"כה אמר... עלותיכם ספו\" (ירמיהו ז כא - ח ג + ט כב-כג). אבל אם חל א' דפסח ביום ראשון, ושבת הגדול היא ערב פסח, כולם מפטירים \"וערבה לה'\"."
+			]
+		},
+		{
+			"name": "פסח - יום א'",
+			"haftarot": [
+				{
+					"customs": ["ashkenazi"],
+					"ranges": [
+						{
+							"sefer": "יהושע",
+							"start": { "perek": 5, "pasuk": 2 },
+							"end": { "perek": 6, "pasuk": 1 }
+						}
+					]
+				},
+				{
+					"customs": ["sefaradi", "temani"],
+					"ranges": [
+						{
+							"sefer": "יהושע",
+							"start": { "perek": 5, "pasuk": 2 },
+							"end": { "perek": 6, "pasuk": 1 }
+						},
+						{
+							"sefer": "יהושע",
+							"start": { "perek": 6, "pasuk": 27 },
+							"end": { "perek": 6, "pasuk": 27 }
+						}
+					]
+				}
+			],
+			"notes": [
+				"יש נוהגים להוסיף בתחילת הפרשה את הפסוקים ביהושע ג ה-ז - \"ויאמר יהושע אל העם התקדשו\"."
+			]
+		},
+		{
+			"name": "שבת חול המועד פסח",
+			"haftarot": [
+				{
+					"customs": ["sefaradi", "ashkenazi"],
+					"ranges": [
+						{
+							"sefer": "יחזקאל",
+							"start": { "perek": 37, "pasuk": 1 },
+							"end": { "perek": 37, "pasuk": 14 }
+						}
+					],
+					"note": "ויש אומרים - עד יחזקאל לז יז"
+				},
+				{
+					"customs": ["temani"],
+					"ranges": [
+						{
+							"sefer": "יחזקאל",
+							"start": { "perek": 36, "pasuk": 37 },
+							"end": { "perek": 37, "pasuk": 14 }
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "שביעי של פסח",
+			"haftarot": [
+				{
+					"customs": ["sefaradi", "ashkenazi", "temani"],
+					"ranges": [
+						{
+							"sefer": "שמואל",
+							"additional": "ב",
+							"start": { "perek": 22, "pasuk": 1 },
+							"end": { "perek": 22, "pasuk": 51 }
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "יום העצמאות",
+			"haftarot": [
+				{
+					"customs": ["sefaradi", "ashkenazi", "temani"],
+					"ranges": [
+						{
+							"sefer": "ישעיהו",
+							"start": { "perek": 10, "pasuk": 32 },
+							"end": { "perek": 12, "pasuk": 6 }
+						}
+					],
+					"note": "בטבלה מודפס הסיום (יא ו), אך פסוק הסיום המצוטט \"כי גדול בקרבך קדוש ישראל\" הוא ישעיהו יב ו"
+				}
+			],
+			"notes": [
+				"מדובר רק כאשר יום העצמאות חל ביום שני, או כאשר ה' באייר חל ביום שישי או בשבת - ואז יום העצמאות מוקדם ליום חמישי. קורין בפרשת השבוע, כבכל שני וחמישי, ומפטירין \"עוד היום בנב לעמד\". אבל כשחל בשאר ימות השבוע - אין קורין בתורה כלל. (סידור \"רינת ישראל\")"
+			]
+		},
+		{
+			"name": "שבועות",
+			"haftarot": [
+				{
+					"customs": ["sefaradi", "ashkenazi", "temani"],
+					"ranges": [
+						{
+							"sefer": "יחזקאל",
+							"start": { "perek": 1, "pasuk": 1 },
+							"end": { "perek": 1, "pasuk": 28 }
+						},
+						{
+							"sefer": "יחזקאל",
+							"start": { "perek": 3, "pasuk": 12 },
+							"end": { "perek": 3, "pasuk": 12 }
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "תשעה באב - שחרית",
+			"haftarot": [
+				{
+					"customs": ["sefaradi", "ashkenazi"],
+					"ranges": [
+						{
+							"sefer": "ירמיהו",
+							"start": { "perek": 8, "pasuk": 13 },
+							"end": { "perek": 9, "pasuk": 23 }
+						}
+					]
+				},
+				{
+					"customs": ["temani"],
+					"ranges": [
+						{
+							"sefer": "ירמיהו",
+							"start": { "perek": 6, "pasuk": 16 },
+							"end": { "perek": 6, "pasuk": 17 }
+						},
+						{
+							"sefer": "ירמיהו",
+							"start": { "perek": 8, "pasuk": 13 },
+							"end": { "perek": 9, "pasuk": 23 }
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "תשעה באב - מנחה",
+			"haftarot": [
+				{
+					"customs": ["sefaradi", "temani"],
+					"ranges": [
+						{
+							"sefer": "הושע",
+							"start": { "perek": 14, "pasuk": 2 },
+							"end": { "perek": 14, "pasuk": 10 }
+						},
+						{
+							"sefer": "מיכה",
+							"start": { "perek": 7, "pasuk": 18 },
+							"end": { "perek": 7, "pasuk": 20 }
+						}
+					]
+				},
+				{
+					"customs": ["ashkenazi"],
+					"ranges": [
+						{
+							"sefer": "ישעיהו",
+							"start": { "perek": 55, "pasuk": 6 },
+							"end": { "perek": 56, "pasuk": 8 }
+						}
+					]
+				}
+			]
+		}
+	]
+}
