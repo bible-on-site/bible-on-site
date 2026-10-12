@@ -493,7 +493,8 @@ partial class PadDeliveryService
     {
         ct.ThrowIfCancellationRequested();
         var cacheDir = AssetPackCacheDir(packName);
-        if (File.Exists(Path.Join(cacheDir, PayloadFileName(packName))))
+        if (File.Exists(Path.Join(cacheDir, PayloadFileName(packName))) &&
+                (packName != PerushimNotesPackName || File.Exists(Path.Join(cacheDir, PerushimNotesService.SearchIndexDbName))))
         {
             return cacheDir;
         }
@@ -512,7 +513,7 @@ partial class PadDeliveryService
             }
 
             ct.ThrowIfCancellationRequested();
-            return SaveAssetPackPayload(cacheDir, packName);
+            return await SaveAssetPackPayloadAsync(cacheDir, packName);
         }
         catch (Exception ex)
         {
@@ -532,7 +533,8 @@ partial class PadDeliveryService
         try
         {
             // An extracted payload remains usable even if the OS evicts its pack.
-            if (File.Exists(Path.Join(cacheDir, PayloadFileName(packName))))
+            if (File.Exists(Path.Join(cacheDir, PayloadFileName(packName))) &&
+                (packName != PerushimNotesPackName || File.Exists(Path.Join(cacheDir, PerushimNotesService.SearchIndexDbName))))
             {
                 return true;
             }
@@ -607,7 +609,7 @@ partial class PadDeliveryService
         // needs extraction, not a store round-trip.
         if (IsAssetPackLocallyAvailable(packName))
         {
-            return SaveAssetPackPayload(cacheDir, packName) != null
+            return await SaveAssetPackPayloadAsync(cacheDir, packName) != null
                 ? null
                 : "downloaded asset pack did not contain its payload";
         }
@@ -639,7 +641,7 @@ partial class PadDeliveryService
             ct.ThrowIfCancellationRequested();
             return $"EnsureLocalAvailability failed: {ex.Error.LocalizedDescription}";
         }
-        return SaveAssetPackPayload(cacheDir, packName) != null
+        return await SaveAssetPackPayloadAsync(cacheDir, packName) != null
             ? null
             : "downloaded asset pack did not contain its payload";
     }
@@ -706,22 +708,25 @@ partial class PadDeliveryService
     /// </summary>
     [SupportedOSPlatform("ios26.0")]
     [SupportedOSPlatform("maccatalyst26.0")]
-    private static string? SaveAssetPackPayload(string cacheDir, string packName)
+    private static async Task<string?> SaveAssetPackPayloadAsync(string cacheDir, string packName)
     {
-        if (!SavePackFile(cacheDir, packName, PayloadFileName(packName), required: true))
+        if (!await SavePackFileAsync(cacheDir, packName, PayloadFileName(packName), required: true))
         {
             return null;
         }
         if (packName == PerushimNotesPackName)
         {
-            SavePackFile(cacheDir, packName, PerushimNotesService.SearchIndexDbName, required: false);
+            if (!await SavePackFileAsync(cacheDir, packName, PerushimNotesService.SearchIndexDbName, required: true))
+            {
+                return null;
+            }
         }
         return cacheDir;
     }
 
     [SupportedOSPlatform("ios26.0")]
     [SupportedOSPlatform("maccatalyst26.0")]
-    private static bool SavePackFile(string cacheDir, string packName, string relative, bool required)
+    private static async Task<bool> SavePackFileAsync(string cacheDir, string packName, string relative, bool required)
     {
         using var data = BAAssetPackManager.SharedManager.GetContents(
             relative, packName, NSDataReadingOptions.Mapped, out var error);
@@ -749,18 +754,22 @@ partial class PadDeliveryService
         }
         try
         {
-            using var stream = data.AsStream();
-            var temporary = destPath + ".download";
-            try
+            // Retain the mapped native data until worker extraction completes.
+            await Task.Run(() =>
             {
-                using (var fileStream = File.Create(temporary))
+                using var stream = data.AsStream();
+                var temporary = destPath + ".download";
+                try
                 {
-                    stream.CopyTo(fileStream);
-                }
+                    using (var fileStream = File.Create(temporary))
+                    {
+                        stream.CopyTo(fileStream);
+                    }
 
-                File.Move(temporary, destPath, true);
-            }
-            finally { File.Delete(temporary); }
+                    File.Move(temporary, destPath, true);
+                }
+                finally { File.Delete(temporary); }
+            });
             System.Diagnostics.Debug.WriteLine($"BA: saved to {destPath}");
             return true;
         }

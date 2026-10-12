@@ -82,9 +82,7 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         Page.WaitForHidden("SearchSheet");
         SearchFor("בראשיט 1", "בראשית א");
         Platform.Tap(Driver!, Page.WaitFor("SearchResultTitle", element => element.Text == "בראשית א"));
-        // First perek navigation of the session loads the reader on a cold
-        // app — same loaded-runner cold path as WaitForStartup (2 minutes).
-        Page.WaitFor("PerekSource", element => element.Text == "בראשית א", TimeSpan.FromMinutes(3));
+        Page.WaitFor("PerekSource", element => element.Text == "בראשית א");
         AssertRegularReader();
         Platform.GoBack(Driver!);
         Page.WaitFor("PerekSearchInput", element => element.Text == "בראשיט 1");
@@ -120,20 +118,14 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         Page.Tap("SearchSheetApplyButton");
         Page.WaitForHidden("SearchSheet");
         SearchFor("בראשית ברא אלהים", "בראשית א א");
-        // A fresh installation builds the local index for the entire commentary
-        // package, and an interrupted import is discarded rather than resumed —
-        // a scenario boundary can throw away a nearly complete build, so the
-        // deadline must cover a full fresh import (~370s observed on a loaded
-        // macOS runner) plus result rendering and poll lag.
-        // Subsequent result and history assertions use normal deadlines.
-        var commentary = Page.WaitFor("SearchResultTitle", element => element.Text.Contains(" - בראשית א א", StringComparison.Ordinal), TimeSpan.FromMinutes(8));
+        // CI ships the generation-matched index; this must be an ordinary local query.
+        var commentary = Page.WaitFor("SearchResultTitle", element => element.Text.Contains(" - בראשית א א", StringComparison.Ordinal));
         var title = commentary.Text;
         var commentaryName = title.Split(" - ", StringSplitOptions.None)[0];
         var position = commentary.Location;
         Platform.Tap(driver, commentary);
         AssertRegularReader();
-        // The first commentary render also opens the freshly imported notes DB on a warm runner (#2161 class).
-        Page.WaitFor("InlinePerushName", element => element.Text == commentaryName, TimeSpan.FromMinutes(2));
+        Page.WaitFor("InlinePerushName", element => element.Text == commentaryName);
         SaveDiagnostics("FloatingSearchCommentaryReader", "passed");
         // Menu navigation must keep this reader above the retained search page.
         var readerSource = Page.Source;
@@ -184,10 +176,7 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
             ? bar : bar.FindElement(By.XPath(".//*[@class='android.widget.EditText' or @class='android.widget.AutoCompleteTextView' or @type='XCUIElementTypeSearchField' or @type='XCUIElementTypeTextField']"));
         input.Clear();
         input.SendKeys(text);
-        // The first query of a session builds the search index on-device —
-        // on a loaded simulator/emulator under coverage instrumentation it can
-        // far outlast the default wait; subsequent searches reuse the warm index.
-        Page.WaitFor("SearchResultTitle", element => element.Text == expectedTitle, TimeSpan.FromMinutes(3));
+        Page.WaitFor("SearchResultTitle", element => element.Text == expectedTitle);
     }
 
     private void AssertBookGroupColumns()

@@ -64,16 +64,14 @@ partial class Build
             var artifacts = Environment.GetEnvironmentVariable("MOBILE_E2E_ARTIFACTS")
                 ?? throw new ArgumentException("Set MOBILE_E2E_ARTIFACTS (npm test prepares it).");
             var resultsDirectory = Path.Join(artifacts, "results");
+            // The host guard includes Appium session setup and diagnostics. The
+            // delivered index keeps searches within ordinary interaction
+            // deadlines, so corpus construction must never justify extending
+            // the 10-minute hangdump budget.
             DotNetTestApp($"--project \"{MobileE2ETestProject}\" --configuration Debug -p:RestoreLockedMode=true" +
                           $" --results-directory \"{resultsDirectory}\"",
                 $"--filter-query \"/[{MobileE2ESelectionFilter()}]\"" +
-                // Per test: up to 5 min Appium session setup (IOSDriver budget), plus the
-                // first commentary search's one-time FTS import of the whole notes pack —
-                // ~7m on a loaded macOS runner, and every fresh session reinstalls the app
-                // so no prior build progress survives — plus scenario and diagnostics.
-                // A test that exceeds its own waits fails normally well before this guard.
-                // The guard exists only for a genuinely dead test host.
-                " --hangdump --hangdump-timeout 18m --hangdump-type Mini" +
+                " --hangdump --hangdump-timeout 10m --hangdump-type Mini" +
                 " --report-xunit-trx --report-xunit-trx-filename mobile-e2e.trx" +
                 " --report-xunit-junit --report-xunit-junit-filename mobile-e2e.xml");
         });
