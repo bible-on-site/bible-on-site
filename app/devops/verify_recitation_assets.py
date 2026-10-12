@@ -5,7 +5,7 @@ import hashlib
 import json
 from pathlib import Path
 import shutil
-import subprocess
+import subprocess  # nosec B404: only ever invokes the fixed argv 'aa extract' below.
 import tempfile
 import zipfile
 
@@ -45,12 +45,10 @@ def verify_android(archive, catalog, names):
 
 
 def aa_payload(archive_path, payload_name, work_dir):
-    """Extract one payload file from an Apple Archive (.aar) with the `aa` tool.
-
-    `xcrun ba-package` emits Apple Archives; hashing the archived bytes — rather
-    than only the source file — proves the artifact Apple will serve matches the
-    catalog. The extracted file must be consumed before work_dir is cleaned.
-    """
+    """Extract one payload file from an Apple Archive (.aar) with the `aa` tool."""
+    # `xcrun ba-package` emits Apple Archives; hashing the archived bytes —
+    # rather than only the source file — proves the artifact Apple will serve
+    # matches the catalog. Consume the result before work_dir is cleaned.
     aa = shutil.which("aa")
     if aa is None:
         raise ValueError("Apple Archive tool 'aa' is required to inspect .aar contents")
@@ -60,7 +58,7 @@ def aa_payload(archive_path, payload_name, work_dir):
         raise ValueError(
             f"{archive_path.name} is not an Apple Archive (magic {magic!r}); "
             "ba-package output changed — re-evaluate this verification")
-    result = subprocess.run(
+    result = subprocess.run(  # nosec B603: fixed argv (aa extract -i/-d), no shell.  # nosemgrep
         [aa, "extract", "-i", str(archive_path), "-d", str(work_dir)],
         capture_output=True, text=True)
     if result.returncode != 0:

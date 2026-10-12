@@ -10,7 +10,9 @@ public class ReleasePayloadDownloadTests
     private const string Notes = "sefaria-dump-5784-sivan-4.perushim_notes.sqlite";
     private const string Index = "sefaria-dump-5784-sivan-4.hebrew_search.sqlite";
 
-    private static Mock<IAppInfo> App(string version = "5.0.156")
+    private static Mock<IAppInfo> App() => App("5.0.156");
+
+    private static Mock<IAppInfo> App(string version)
     {
         var app = new Mock<IAppInfo>();
         app.SetupGet(a => a.VersionString).Returns(version);
@@ -25,6 +27,7 @@ public class ReleasePayloadDownloadTests
         protected override Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request, CancellationToken cancellationToken)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             Requested.Add(request.RequestUri);
             return Task.FromResult(respond(request));
         }
@@ -56,8 +59,7 @@ public class ReleasePayloadDownloadTests
     public async Task Download_WritesRequiredPayload_AndReportsOrderedFractions()
     {
         await using var storage = new TestStorage();
-        var bytes = new byte[200_000];
-        new Random(1).NextBytes(bytes);
+        var bytes = Enumerable.Range(0, 200_000).Select(i => (byte)(i % 251)).ToArray();
         var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
         {
             Content = new ByteArrayContent(bytes),
