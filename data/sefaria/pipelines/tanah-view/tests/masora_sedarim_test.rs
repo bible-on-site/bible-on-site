@@ -165,3 +165,24 @@ fn verification_outcome_matches_the_checked_in_snapshot() {
          cargo make verify-masora-sedarim and review the diff deliberately"
     );
 }
+
+#[test]
+fn committed_report_matches_the_expected_snapshot() {
+    let expected: SedarimVerification = serde_json::from_str(
+        &std::fs::read_to_string(manifest_path(
+            "fixtures/masora-sedarim-verification.expected.json",
+        ))
+        .expect("expected snapshot must exist — run cargo make verify-masora-sedarim"),
+    )
+    .expect("expected snapshot must parse");
+    let committed = std::fs::read_to_string(manifest_path(
+        "../../../../docs/data/masora-sedarim-verification.md",
+    ))
+    .expect("committed report must exist — run cargo make verify-masora-sedarim");
+    assert_eq!(
+        tanah_view::commands::sedarim_report::render_markdown(&expected),
+        committed,
+        "the committed report is stale — regenerate it with \
+         cargo make verify-masora-sedarim"
+    );
+}

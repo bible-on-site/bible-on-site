@@ -83,7 +83,11 @@ fn disposition_label(disposition: &Disposition) -> &'static str {
     }
 }
 
-fn render_markdown(v: &SedarimVerification) -> String {
+/// Render the verification report markdown. Kept deterministic so the
+/// committed report can be pinned by test against the expected
+/// snapshot — `tests/masora_sedarim_test.rs` asserts the two stay in
+/// sync.
+pub fn render_markdown(v: &SedarimVerification) -> String {
     let s = &v.summary;
     let mut out = String::new();
     out.push_str(
