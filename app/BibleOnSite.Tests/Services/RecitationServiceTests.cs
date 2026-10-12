@@ -139,7 +139,9 @@ public class RecitationServiceTests
         var chapter = await service.PrepareAudioAsync(1, Canonical(), null, null, TestContext.Current.CancellationToken, null, decoder.Object);
         Path.GetFileName(chapter).Should().Be("chapter-" + Hash(opus) + ".wav");
         (await File.ReadAllBytesAsync(chapter, TestContext.Current.CancellationToken)).Should().Equal(decodedWav);
-        var replay = await service.PrepareAudioAsync(1, Canonical(), null, null, TestContext.Current.CancellationToken, null, decoder.Object);
+        var restored = extension.Service;
+        await restored.InitializeAsync();
+        var replay = await restored.PrepareAudioAsync(1, Canonical(), null, null, TestContext.Current.CancellationToken, null, decoder.Object);
         replay.Should().Be(chapter, "a verified decoded chapter is replayed without decoding again");
         decoder.Verify(d => d.CreateChapterAsync(It.Is<string>(p => p.EndsWith(".ogg")), It.IsAny<CancellationToken>()), Times.Once);
         decoder.Verify(d => d.CreateClipAsync(It.IsAny<string>(), It.IsAny<IReadOnlyList<(double Start, double End)>>(),
@@ -174,6 +176,7 @@ public class RecitationServiceTests
 
     [Theory]
     [InlineData("garbage")] [InlineData("magic")] [InlineData("wave")] [InlineData("truncated")]
+    [InlineData("payload")] [InlineData("missingDigest")] [InlineData("badDigest")]
     public async Task OpusChapterCacheDamageDecodesAgain(string damage)
     {
         await using var storage = new TestStorage(); var extension = new Extension(storage);
@@ -194,9 +197,19 @@ public class RecitationServiceTests
             "truncated" => decodedWav[..^5],
             "magic" => Corrupt(decodedWav, 0),
             "wave" => Corrupt(decodedWav, 8),
+            "payload" => Corrupt(decodedWav, decodedWav.Length - 1),
+            "missingDigest" or "badDigest" => decodedWav,
             _ => "damaged"u8.ToArray(),
         };
         await File.WriteAllBytesAsync(chapter, damaged, TestContext.Current.CancellationToken);
+        if (damage == "missingDigest")
+        {
+            File.Delete(chapter + ".sha256");
+        }
+        if (damage == "badDigest")
+        {
+            await File.WriteAllTextAsync(chapter + ".sha256", "invalid", TestContext.Current.CancellationToken);
+        }
         var rebuilt = await service.PrepareAudioAsync(1, Canonical(), null, null, TestContext.Current.CancellationToken, null, decoder.Object);
         rebuilt.Should().Be(chapter);
         (await File.ReadAllBytesAsync(rebuilt, TestContext.Current.CancellationToken)).Should().Equal(decodedWav);

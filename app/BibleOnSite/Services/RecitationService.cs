@@ -265,7 +265,7 @@ public sealed class RecitationService
                 // still finish releasing a previous file asynchronously.
                 if (old != chapter)
                 {
-                    try { File.Delete(old); } catch (IOException) { /* The native player can retain its last file until asynchronous release. */ }
+                    try { File.Delete(old); File.Delete(old + ".sha256"); } catch (IOException) { /* The native player can retain its last file until asynchronous release. */ }
                 }
             }
             cancellationToken.ThrowIfCancellationRequested();
@@ -283,16 +283,24 @@ public sealed class RecitationService
                     throw new InvalidOperationException("A precise audio decoder is required.");
                 }
 
-                if (!IsCompleteWav(chapter))
+                if (!await IsVerifiedChapterAsync(chapter, cancellationToken))
                 {
                     var decoded = await decoder.CreateChapterAsync(audio, cancellationToken);
                     var temporary = chapter + ".download";
+                    var temporaryDigest = temporary + ".sha256";
                     try
                     {
                         await File.WriteAllBytesAsync(temporary, decoded, cancellationToken);
+                        if (!IsCompleteWav(temporary))
+                        {
+                            throw new InvalidDataException("Truncated decoded chapter.");
+                        }
+                        var digest = Convert.ToHexStringLower(SHA256.HashData(decoded));
+                        await File.WriteAllTextAsync(temporaryDigest, digest, cancellationToken);
                         File.Move(temporary, chapter, true);
+                        File.Move(temporaryDigest, chapter + ".sha256", true);
                     }
-                    finally { File.Delete(temporary); }
+                    finally { File.Delete(temporary); File.Delete(temporaryDigest); }
                 }
                 return chapter;
             }
@@ -315,6 +323,23 @@ public sealed class RecitationService
             return clip;
         }
         finally { _gate.Release(); }
+    }
+
+    private static async Task<bool> IsVerifiedChapterAsync(string path, CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (!IsCompleteWav(path))
+            {
+                return false;
+            }
+            var expected = await File.ReadAllTextAsync(path + ".sha256", cancellationToken);
+            return expected.Length == 64 && await MatchesHashAsync(path, expected, cancellationToken);
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
     }
 
     // A damaged cached chapter must be decoded again from its verified source:
