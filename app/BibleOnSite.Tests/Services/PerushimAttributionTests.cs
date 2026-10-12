@@ -88,7 +88,7 @@ public class PerushimAttributionTests
     }
 
     [Fact]
-    public async Task Diagnostics_ExplainsReportedLegacyPackMismatch_WhenOdrFileExists()
+    public async Task Diagnostics_ExplainsReportedLegacyPackMismatch_WhenAssetPackFileExists()
     {
         await using var storage = new TestStorage();
         await using var delivered = new TestStorage();

@@ -136,7 +136,6 @@ pub fn to_letters(n: i32) -> String {
 struct PerakimPart<'a> {
     perek_from: i32,
     perek_to: i32,
-    letter: Option<&'a str>,
     perakim: &'a [Perek],
 }
 
@@ -145,7 +144,6 @@ fn sefer_perakim_parts(sefer: &Sefer) -> Vec<PerakimPart<'_>> {
         vec![PerakimPart {
             perek_from: sefer.perek_from,
             perek_to: sefer.perek_to,
-            letter: None,
             perakim,
         }]
     } else {
@@ -158,7 +156,6 @@ fn sefer_perakim_parts(sefer: &Sefer) -> Vec<PerakimPart<'_>> {
                     .map(|additional| PerakimPart {
                         perek_from: additional.perek_from,
                         perek_to: additional.perek_to,
-                        letter: Some(additional.letter.as_str()),
                         perakim: &additional.perakim,
                     })
                     .collect()
@@ -167,85 +164,13 @@ fn sefer_perakim_parts(sefer: &Sefer) -> Vec<PerakimPart<'_>> {
     }
 }
 
-/// Lookup info for a canonical perek id: owning sefer, optional
-/// additional letter, and the perek's number inside its part.
-struct PerekInfo {
-    sefer_index: usize,
-    letter: Option<String>,
-    perek_num: i32,
-}
-
-fn build_perek_index(sefarim: &[Sefer]) -> HashMap<i32, PerekInfo> {
-    let mut index = HashMap::new();
-    for (sefer_index, sefer) in sefarim.iter().enumerate() {
-        for part in sefer_perakim_parts(sefer) {
-            for (pi, perek) in part.perakim.iter().enumerate() {
-                let perek_id = part.perek_from + pi as i32;
-                let _ = perek; // id derives from part range, matching the website
-                index.insert(
-                    perek_id,
-                    PerekInfo {
-                        sefer_index,
-                        letter: part.letter.map(str::to_string),
-                        perek_num: perek_id - part.perek_from + 1,
-                    },
-                );
-            }
-        }
-    }
-    index
-}
-
-/// The perek's source reference, e.g. "בראשית א" or "שמואל א יב".
-fn perek_source(
-    coordinate: &Coordinate,
-    sefarim: &[Sefer],
-    index: &HashMap<i32, PerekInfo>,
-) -> String {
-    let info = index
-        .get(&coordinate.perek_id)
-        .unwrap_or_else(|| panic!("No perek found for perekId: {}", coordinate.perek_id));
-    let sefer_name = &sefarim[info.sefer_index].name;
-    let perek_heb = to_letters(info.perek_num);
-    match &info.letter {
-        Some(letter) => format!("{sefer_name} {letter} {perek_heb}"),
-        None => format!("{sefer_name} {perek_heb}"),
-    }
-}
-
-/// Display heading for a unit — port of `formatMasoraUnitHeading`.
-/// Same-perek units collapse to "שמואל א יב ה-ז"; cross-perek units keep
-/// both endpoints ("בראשית לה כב - מ א").
-fn format_masora_heading(
-    start: &Coordinate,
-    end: &Coordinate,
-    sefarim: &[Sefer],
-    index: &HashMap<i32, PerekInfo>,
-) -> String {
-    // The start ref is "source pasuk": perek_source already carries the
-    // perek letters ("בראשית א"), so append the pasuk letters
-    // ("בראשית א א"), matching the website's perekRefOf.
-    let start_ref = format!(
-        "{} {}",
-        perek_source(start, sefarim, index),
-        to_letters(start.pasuk)
-    );
-    if start.perek_id == end.perek_id {
-        return if start.pasuk == end.pasuk {
-            start_ref
-        } else {
-            format!("{start_ref}-{}", to_letters(end.pasuk))
-        };
-    }
-    let end_info = index
-        .get(&end.perek_id)
-        .unwrap_or_else(|| panic!("No perek found for perekId: {}", end.perek_id));
-    let end_perek_heb = to_letters(end_info.perek_num);
-    let end_context = match &end_info.letter {
-        Some(letter) => format!("{letter} {end_perek_heb}"),
-        None => end_perek_heb,
-    };
-    format!("{start_ref} - {end_context} {}", to_letters(end.pasuk))
+/// Display heading for a unit — port of `formatMasoraUnitHeading`:
+/// the Masoretic parasha identity (sefer name + the unit's 1-based
+/// ordinal inside its sefer, e.g. "בראשית פרשה ח"). Conventional
+/// perek/pasuk references stay internal and never surface in the
+/// מסורה reader chrome.
+fn format_masora_heading(sefer_name: &str, order: i32) -> String {
+    format!("{sefer_name} פרשה {}", to_letters(order))
 }
 
 /// The coordinate that opens the unit after a break marker — port of
@@ -290,7 +215,6 @@ fn coordinate_after_marker(
 /// last unit is closed by the sefer end with `closing_break: None`.
 /// Unit ids are globally contiguous; `order` is 1-based per sefer.
 pub fn derive_masora_units(sefarim: &[Sefer]) -> Result<Vec<ReadingUnit>> {
-    let index = build_perek_index(sefarim);
     let mut units = Vec::new();
     let mut next_unit_id = 1i32;
 
@@ -318,7 +242,7 @@ pub fn derive_masora_units(sefarim: &[Sefer]) -> Result<Vec<ReadingUnit>> {
                     slug: next_unit_id.to_string(),
                     sefer_id,
                     order,
-                    heading: format_masora_heading(&start, &$end, sefarim, &index),
+                    heading: format_masora_heading(&sefer.name, order),
                     ranges: vec![ScriptureRange { start, end: $end }],
                     auxiliary_readings: Vec::new(),
                     closing_break: $closing_break,
@@ -1000,7 +924,7 @@ mod tests {
                 },
             }
         );
-        assert_eq!(units[0].heading, "בראשית א א");
+        assert_eq!(units[0].heading, "בראשית פרשה א");
 
         // Unit 2: rest of pasuk 1 through the marker ending pasuk 3.
         assert_eq!(units[1].closing_break, Some("ptuha"));
@@ -1020,7 +944,7 @@ mod tests {
                 segment_index: Some(1),
             }
         );
-        assert_eq!(units[1].heading, "בראשית א א-ג");
+        assert_eq!(units[1].heading, "בראשית פרשה ב");
 
         // Unit 3: whole pasuk 1 of perek 2, closed by stuma.
         assert_eq!(units[2].closing_break, Some("stuma"));
@@ -1039,7 +963,7 @@ mod tests {
                 },
             }
         );
-        assert_eq!(units[2].heading, "בראשית ב א");
+        assert_eq!(units[2].heading, "בראשית פרשה ג");
 
         // Unit 4: sefer-end unit of בראשית, no closing break.
         assert_eq!(units[3].closing_break, None);
@@ -1059,7 +983,7 @@ mod tests {
                 },
             }
         );
-        assert_eq!(units[3].heading, "בראשית ב ב");
+        assert_eq!(units[3].heading, "בראשית פרשה ד");
 
         // Unit 5: שמואל's first unit opens at sefer start (first perek
         // of additional א) and is closed by the ptuha at the last pasuk
@@ -1075,7 +999,7 @@ mod tests {
                 segment_index: Some(2),
             }
         );
-        assert_eq!(units[4].heading, "שמואל א א א");
+        assert_eq!(units[4].heading, "שמואל פרשה א");
 
         // Unit 6: the break at the end of additional א opens the unit
         // at perek 4 (first perek of additional ב); closed by sefer end.
@@ -1097,7 +1021,7 @@ mod tests {
                 },
             }
         );
-        assert_eq!(units[5].heading, "שמואל ב א א-ב");
+        assert_eq!(units[5].heading, "שמואל פרשה ב");
     }
 
     #[test]
@@ -1256,9 +1180,9 @@ mod tests {
         assert_eq!(units[93].sefer_id, 2); // שמואל starts unit 94
 
         // Spot-check headings the website formats identically.
-        assert_eq!(units[0].heading, "בראשית א א-ה");
-        assert_eq!(units[49].heading, "בראשית יז טו-כז");
-        assert_eq!(units[3196].heading, "דברי הימים ב לו כג");
+        assert_eq!(units[0].heading, "בראשית פרשה א");
+        assert_eq!(units[49].heading, "בראשית פרשה נ");
+        assert_eq!(units[3196].heading, "דברי הימים פרשה תכט");
         assert_eq!(units[3196].closing_break, None);
 
         // First unit's range endpoints, including the intra-pasuk bound.

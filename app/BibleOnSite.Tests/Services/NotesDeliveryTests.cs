@@ -74,7 +74,7 @@ public class NotesDeliveryTests
         var service = Create(storage, pad);
         var report = await service.GetDiagnosticsAsync();
         report.Should().Contain("IsAvailable: False").And.Contain("NotesMissing: True")
-            .And.Contain("PAD/ODR path: (null)").And.Contain("Delivery diagnostics error: IOException: store down");
+            .And.Contain("Delivery path: (null)").And.Contain("Delivery diagnostics error: IOException: store down");
         (await service.GetPerushIdsForPerekAsync(1)).Should().BeEmpty();
     }
 
@@ -94,7 +94,7 @@ public class NotesDeliveryTests
 
         var report = await Create(storage, pad).GetDiagnosticsAsync();
 
-        report.Should().Contain("PAD/ODR path error: IOException: store unavailable")
+        report.Should().Contain("Delivery path error: IOException: store unavailable")
             .And.Contain("delivery status").And.Contain($"IsAvailable: {localDatabaseExists}");
         if (!localDatabaseExists)
         {

@@ -4,7 +4,7 @@ using Microsoft.Maui.ApplicationModel;
 
 namespace BibleOnSite.Tests.Services;
 
-public class OdrCacheTests
+public class AssetPackCacheTests
 {
     private const string Pack = "perushim_notes";
     private const string Notes = "sefaria-dump-5784-sivan-4.perushim_notes.sqlite";
@@ -16,12 +16,12 @@ public class OdrCacheTests
     {
         await using var storage = new TestStorage();
         var app = App("5.0.100", "100");
-        var previous = PadDeliveryService.OdrCacheDirectory(storage.FileSystem.Object, app.Object, Pack);
+        var previous = PadDeliveryService.AssetPackCacheDirectory(storage.FileSystem.Object, app.Object, Pack);
         await File.WriteAllTextAsync(Path.Join(previous, Notes), "old notes", TestContext.Current.CancellationToken);
         app.SetupGet(a => a.VersionString).Returns(version);
         app.SetupGet(a => a.BuildString).Returns(build);
 
-        var current = PadDeliveryService.OdrCacheDirectory(storage.FileSystem.Object, app.Object, Pack);
+        var current = PadDeliveryService.AssetPackCacheDirectory(storage.FileSystem.Object, app.Object, Pack);
 
         Directory.Exists(current).Should().BeTrue();
         File.Exists(Path.Join(current, Notes)).Should().BeFalse();
@@ -34,10 +34,10 @@ public class OdrCacheTests
     {
         await using var storage = new TestStorage();
         var app = App("5.0.104", "104");
-        var first = PadDeliveryService.OdrCacheDirectory(storage.FileSystem.Object, app.Object, Pack);
+        var first = PadDeliveryService.AssetPackCacheDirectory(storage.FileSystem.Object, app.Object, Pack);
         await File.WriteAllTextAsync(Path.Join(first, Notes), "current notes", TestContext.Current.CancellationToken);
 
-        var second = PadDeliveryService.OdrCacheDirectory(storage.FileSystem.Object, app.Object, Pack);
+        var second = PadDeliveryService.AssetPackCacheDirectory(storage.FileSystem.Object, app.Object, Pack);
 
         (await File.ReadAllTextAsync(Path.Join(second, Notes), TestContext.Current.CancellationToken)).Should().Be("current notes");
     }
@@ -49,11 +49,11 @@ public class OdrCacheTests
         var app = App("5.0.104", "104");
         // A file held open inside a stale generation blocks recursive delete —
         // the sweep failure must not keep the app from resolving its own dir.
-        var assetsRoot = Path.Join(storage.Root, "odr_assets");
+        var assetsRoot = Path.Join(storage.Root, "asset_packs");
         var staleDir = Path.Join(assetsRoot, "old-generation");
         Directory.CreateDirectory(staleDir);
         // Pre-create the current generation so a locked assets root does not
-        // stop OdrCacheDirectory from resolving it.
+        // stop AssetPackCacheDirectory from resolving it.
         Directory.CreateDirectory(Path.Join(assetsRoot, "5.0.104-104", Pack));
         var staleFile = Path.Join(staleDir, Notes);
         await File.WriteAllTextAsync(staleFile, "old notes", TestContext.Current.CancellationToken);
@@ -67,7 +67,7 @@ public class OdrCacheTests
         }
         try
         {
-            var current = PadDeliveryService.OdrCacheDirectory(storage.FileSystem.Object, app.Object, Pack);
+            var current = PadDeliveryService.AssetPackCacheDirectory(storage.FileSystem.Object, app.Object, Pack);
 
             Directory.Exists(current).Should().BeTrue();
         }
@@ -82,15 +82,15 @@ public class OdrCacheTests
     }
 
     [Fact]
-    public async Task CurrentApp_DoesNotTrustLegacyUnversionedOdrCache_AndSweepsIt()
+    public async Task CurrentApp_DoesNotTrustLegacyUnversionedAssetPackCache_AndSweepsIt()
     {
         await using var storage = new TestStorage();
-        var legacy = Path.Join(storage.Root, "odr_assets", Pack);
+        var legacy = Path.Join(storage.Root, "asset_packs", Pack);
         Directory.CreateDirectory(legacy);
         await File.WriteAllTextAsync(Path.Join(legacy, Notes), "legacy notes", TestContext.Current.CancellationToken);
         var app = App("5.0.104", "104");
 
-        var current = PadDeliveryService.OdrCacheDirectory(storage.FileSystem.Object, app.Object, Pack);
+        var current = PadDeliveryService.AssetPackCacheDirectory(storage.FileSystem.Object, app.Object, Pack);
 
         File.Exists(Path.Join(current, Notes)).Should().BeFalse();
         Directory.Exists(legacy).Should().BeFalse(
@@ -101,9 +101,9 @@ public class OdrCacheTests
     public async Task UndeletableStaleGeneration_IsLoggedAndSkipped_WhileOthersAreSwept()
     {
         await using var storage = new TestStorage();
-        var odrRoot = Path.Join(storage.Root, "odr_assets");
-        var stubborn = Path.Join(odrRoot, "4.9.0-9");
-        var collectible = Path.Join(odrRoot, "4.8.0-8");
+        var packsRoot = Path.Join(storage.Root, "asset_packs");
+        var stubborn = Path.Join(packsRoot, "4.9.0-9");
+        var collectible = Path.Join(packsRoot, "4.8.0-8");
         Directory.CreateDirectory(stubborn);
         Directory.CreateDirectory(collectible);
         var file = Path.Join(stubborn, Notes);
@@ -121,7 +121,7 @@ public class OdrCacheTests
 
         try
         {
-            var current = PadDeliveryService.OdrCacheDirectory(storage.FileSystem.Object, App("5.0.104", "104").Object, Pack);
+            var current = PadDeliveryService.AssetPackCacheDirectory(storage.FileSystem.Object, App("5.0.104", "104").Object, Pack);
 
             Directory.Exists(current).Should().BeTrue();
             Directory.Exists(stubborn).Should().BeTrue("an IO failure is logged and skipped, never fatal");
@@ -138,11 +138,11 @@ public class OdrCacheTests
     }
 
     [Fact]
-    public async Task UnreadableOdrRoot_NeverBreaksCacheAccess()
+    public async Task UnreadableAssetPackRoot_NeverBreaksCacheAccess()
     {
         await using var storage = new TestStorage();
-        var odrRoot = Path.Join(storage.Root, "odr_assets");
-        var stale = Path.Join(odrRoot, "4.9.0-9");
+        var packsRoot = Path.Join(storage.Root, "asset_packs");
+        var stale = Path.Join(packsRoot, "4.9.0-9");
         Directory.CreateDirectory(stale);
         var app = App("5.0.104", "104");
 
@@ -150,14 +150,14 @@ public class OdrCacheTests
         // and subdirectory creation (need write+execute) stay possible.
         if (!OperatingSystem.IsWindows())
         {
-            File.SetUnixFileMode(odrRoot, UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            File.SetUnixFileMode(packsRoot, UnixFileMode.UserWrite | UnixFileMode.UserExecute);
         }
 
         try
         {
-            var current = PadDeliveryService.OdrCacheDirectory(storage.FileSystem.Object, app.Object, Pack);
+            var current = PadDeliveryService.AssetPackCacheDirectory(storage.FileSystem.Object, app.Object, Pack);
 
-            Directory.Exists(current).Should().BeTrue("a failed sweep must never block ODR access");
+            Directory.Exists(current).Should().BeTrue("a failed sweep must never block asset-pack access");
             if (OperatingSystem.IsWindows())
             {
                 Directory.Exists(stale).Should().BeFalse("without ACL denial the stale generation is swept");
@@ -171,7 +171,7 @@ public class OdrCacheTests
         {
             if (!OperatingSystem.IsWindows())
             {
-                File.SetUnixFileMode(odrRoot, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+                File.SetUnixFileMode(packsRoot, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
             }
         }
     }

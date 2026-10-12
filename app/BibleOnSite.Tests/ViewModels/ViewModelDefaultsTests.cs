@@ -98,4 +98,36 @@ public class ViewModelDefaultsTests
         }
         finally { PreferencesService.ResetForTesting(); }
     }
+
+    [Fact]
+    public void TanahpediaViewModels_HaveUsableDefaults()
+    {
+        var landing = new TanahpediaViewModel();
+        landing.IsLoading.Should().BeFalse();
+        landing.IsLoaded.Should().BeFalse();
+        landing.HasToday.Should().BeFalse();
+        landing.HasRecent.Should().BeFalse();
+        landing.CategoryGroups.Should().BeEmpty();
+        landing.TodayEntities.Should().BeEmpty();
+        landing.RecentEntries.Should().BeEmpty();
+        landing.LoadCommand.Should().NotBeNull();
+        landing.OpenEntryCommand.Should().NotBeNull();
+
+        var entityType = new TanahpediaEntityTypeViewModel();
+        entityType.EntityType.Should().BeEmpty();
+        entityType.CategoryKey.Should().BeEmpty();
+        entityType.HasError.Should().BeFalse();
+        entityType.HasIntro.Should().BeFalse();
+        entityType.Entities.Should().BeEmpty();
+
+        var entry = new TanahpediaEntryViewModel();
+        entry.UniqueName.Should().BeEmpty();
+        entry.ShowEntry.Should().BeFalse();
+        entry.IsDisambiguation.Should().BeFalse();
+        entry.IsNotFound.Should().BeFalse();
+        entry.HasOccurrences.Should().BeFalse();
+        entry.Occurrences.Should().BeEmpty();
+        entry.Entities.Should().BeEmpty();
+        entry.SynonymTargets.Should().BeEmpty();
+    }
 }

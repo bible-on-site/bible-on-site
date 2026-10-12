@@ -62,7 +62,7 @@ public sealed class PerushimNotesServiceTests : IDisposable
         var diagnostics = await service.GetDiagnosticsAsync();
 
         diagnostics.Should().Contain("Local DB build_timestamp: 0");
-        diagnostics.Should().Contain("PAD/ODR path: (null)");
+        diagnostics.Should().Contain("Delivery path: (null)");
     }
 
     [Fact]
@@ -859,7 +859,7 @@ public sealed class PerushimNotesServiceTests : IDisposable
 
         var diagnostics = await service.GetDiagnosticsAsync();
 
-        diagnostics.Should().Contain("PAD/ODR path error")
+        diagnostics.Should().Contain("Delivery path error")
             .And.Contain("Delivery diagnostics error")
             .And.Contain("IsAvailable: False");
     }

@@ -517,6 +517,24 @@ public class HebrewDateHelperTests
         tzId.Should().BeOneOf("Asia/Jerusalem", "Israel Standard Time");
     }
 
+    [Theory]
+    [InlineData(true, "Asia/Jerusalem")]
+    [InlineData(false, "Israel Standard Time")]
+    public void IsraelTimeZoneId_MapsProbeResult(bool hasJerusalemAlias, string expected)
+    {
+        HebrewDateHelper.IsraelTimeZoneId(hasJerusalemAlias).Should().Be(expected);
+    }
+
+    [Fact]
+    public void FormatTodayHebrewDate_ReturnsHebrewDateText()
+    {
+        // Shape: "<day letters> <month name> <year letters>" — same as
+        // FormatHebrewDate for today's tzeit-aware date number.
+        var expected = HebrewDateHelper.FormatHebrewDate(HebrewDateHelper.GetTodayDateNumber());
+
+        HebrewDateHelper.FormatTodayHebrewDate().Should().Be(expected);
+    }
+
     #endregion
 
     #region Polar-location tzeit Tests
