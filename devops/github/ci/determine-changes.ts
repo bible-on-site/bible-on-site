@@ -56,6 +56,7 @@ export const MODULES = {
 	api: { directory: "web/api", ciPaths: RELEASE_CI_PATHS },
 	app: {
 		directory: "app",
+		extraModulePaths: ["web/bible-on-site/src/data/recitation/opus-playback.json"],
 		// The e2e-impact selector/collector and the exec coverage-tree
 		// extractor drive the Appium suite (#2085).
 		ciPaths: [

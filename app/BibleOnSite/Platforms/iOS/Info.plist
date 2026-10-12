@@ -36,6 +36,19 @@
 	</array>
 	<key>XSAppIconAssets</key>
 	<string>Assets.xcassets/appicon.appiconset</string>
+	<!-- Firebase Analytics collection starts off; CrossFirebase initialization in
+	     MauiProgram enables it only for launches outside the e2e suite. -->
+	<key>FIREBASE_ANALYTICS_COLLECTION_ENABLED</key>
+	<false/>
+	<!-- #2119: screens are reported manually with logical page names
+	     (AnalyticsScreens/AppShell, PerekPage). Automatic tracking swizzles
+	     UIViewControllers and reports MAUI renderer classes
+	     (ShellSectionRootRenderer etc.) which polluted GA screen reports. The
+	     SDK renamed the flag, so both spellings are pinned. -->
+	<key>FirebaseAutomaticScreenReportingEnabled</key>
+	<false/>
+	<key>FirebaseScreenReportingEnabled</key>
+	<false/>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

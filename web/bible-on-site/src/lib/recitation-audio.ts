@@ -7,7 +7,7 @@ type Plan = {
 };
 type ScheduledRange = Range & { startsAt: number; endsAt: number };
 
-/** Play exact decoded sample ranges; HTMLMediaElement MP3 seeks can start late. */
+/** Play exact decoded sample ranges on the original recording clock. */
 export class RecitationAudio {
 	private context = new AudioContext();
 	private controller = new AbortController();
@@ -28,6 +28,7 @@ export class RecitationAudio {
 		private url: string,
 		private sha256: string,
 		private onProgress: (percent: number | null) => void = () => {},
+		private format: "mp3" | "ogg-opus" = "mp3",
 	) {}
 
 	private async recordingBytes(response: Response): Promise<ArrayBuffer> {
@@ -83,15 +84,20 @@ export class RecitationAudio {
 					(value) => value.toString(16).padStart(2, "0"),
 				).join("");
 				if (hash !== this.sha256)
-					throw new Error("Recording differs from aligned source");
+					throw new Error("Recording differs from expected playback asset");
 				if (this.disposed) throw new Error("Player disposed");
 				// The same pinned decoder runs in the app. Platform MP3 decoders
 				// disagree about the sample origin even when their lengths agree.
-				const { MPEGDecoderWebWorker } = await import("mpg123-decoder");
-				const decoder = new MPEGDecoderWebWorker();
+				const decoder =
+					this.format === "ogg-opus"
+						? new (await import("ogg-opus-decoder")).OggOpusDecoderWebWorker()
+						: new (await import("mpg123-decoder")).MPEGDecoderWebWorker();
 				try {
 					await decoder.ready;
-					const pcm = await decoder.decode(new Uint8Array(bytes));
+					const pcm =
+						"decodeFile" in decoder
+							? await decoder.decodeFile(new Uint8Array(bytes))
+							: await decoder.decode(new Uint8Array(bytes));
 					if (pcm.errors.length || !pcm.samplesDecoded)
 						throw new Error("Recording could not be decoded accurately");
 					if (this.disposed) throw new Error("Player disposed");

@@ -38,6 +38,57 @@ public class CommentaryMemoryTests
         GC.KeepAlive(preferences);
     }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(4)]
+    public void PreferencesDoNotRetainClosedSettingsScreens(int screen)
+    {
+        var preferences = PreferencesService.CreateForTesting(new InMemoryPreferencesStorage());
+        var settings = CreateClosedSettings(preferences, screen);
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+        settings.IsAlive.Should().BeFalse("category settings pages must not remain owned by singleton services");
+        preferences.FontFactor = 1.2;
+        GC.KeepAlive(preferences);
+    }
+
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private static WeakReference CreateClosedSettings(PreferencesService preferences, int screen) =>
+        new(screen switch
+        {
+            0 => (object)new PreferencesViewModel(preferences),
+            1 => new PerekPreferencesViewModel(preferences),
+            2 => new DisplayPreferencesViewModel(preferences),
+            3 => new SoundPreferencesViewModel(preferences),
+            _ => new RecitationPreferencesViewModel(RecitationService.Instance, preferences)
+        });
+
+    [Theory]
+    [InlineData(8.6, 9)]
+    [InlineData(0, 1)]
+    [InlineData(101, 100)]
+    [InlineData(double.NaN, 5)]
+    public void ChapterSettingsPersistTheCommentaryLimit(double selected, int expected)
+    {
+        var storage = new InMemoryPreferencesStorage();
+        var preferences = PreferencesService.CreateForTesting(storage);
+        var settings = new PerekPreferencesViewModel(preferences);
+        settings.InlineCommentaryLimit = selected;
+        settings.InlineCommentaryLimit.Should().Be(expected);
+        var reloaded = PreferencesService.CreateForTesting(storage);
+        reloaded.Load();
+        reloaded.InlineCommentaryLimit.Should().Be(expected);
+        var changed = new List<string?>();
+        settings.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+        preferences.InlineCommentaryLimit = 7;
+        settings.InlineCommentaryLimit.Should().Be(7);
+        changed.Should().Contain(nameof(PerekPreferencesViewModel.InlineCommentaryLimit));
+    }
+
     [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
     private static WeakReference CreateClosedReader(PreferencesService preferences) =>
         new(new PerekViewModel(preferences, _ => null));

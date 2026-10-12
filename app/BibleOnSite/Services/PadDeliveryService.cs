@@ -138,24 +138,43 @@ public sealed partial class PadDeliveryService : IPadDeliveryService
         // Extracted asset-pack data belongs to this app build, just like the store resource.
         var generation = $"{appInfo.VersionString}-{appInfo.BuildString}";
         var root = Path.Join(fileSystem.CacheDirectory, "asset_packs");
+        // Every ODR access sweeps stale generations: prior {version}-{build}
+        // directories (and any legacy unversioned pack dirs) are app-owned
+        // cache the OS will not reclaim.
+        SweepStaleAssetPackGenerations(root, generation);
         var dir = Path.Join(root, generation, packName);
         Directory.CreateDirectory(dir);
-        // Extractions from previous app versions are obsolete — each holds a
-        // full pack payload (hundreds of MB) and must not accumulate.
-        try
-        {
-            foreach (var stale in Directory.GetDirectories(root)
-                .Where(path => Path.GetFileName(path) != generation))
-            {
-                Directory.Delete(stale, recursive: true);
-            }
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            System.Diagnostics.Debug.WriteLine($"Failed to remove stale asset-pack generations: {ex.Message}");
-        }
         return dir;
     }
+
+    private static void SweepStaleAssetPackGenerations(string odrRoot, string currentGeneration)
+    {
+        try
+        {
+            if (!Directory.Exists(odrRoot))
+            {
+                return;
+            }
+
+            foreach (var stale in Directory.EnumerateDirectories(odrRoot).ToList())
+            {
+                if (Path.GetFileName(stale) == currentGeneration)
+                {
+                    continue;
+                }
+
+                try { Directory.Delete(stale, true); }
+                // Cleanup is best-effort: only IO failures are swallowed.
+                catch (IOException ex) { LogAssetPackSweepFailure(ex); }
+                catch (UnauthorizedAccessException ex) { LogAssetPackSweepFailure(ex); }
+            }
+        }
+        catch (IOException ex) { LogAssetPackSweepFailure(ex); }
+        catch (UnauthorizedAccessException ex) { LogAssetPackSweepFailure(ex); }
+    }
+
+    private static void LogAssetPackSweepFailure(Exception ex) =>
+        System.Diagnostics.Debug.WriteLine($"Asset-pack stale generation cleanup: {ex.Message}");
 
     /// <inheritdoc />
     public Task<string?> TryGetAssetPathAsync(string packName, CancellationToken cancellationToken = default)
@@ -718,7 +737,10 @@ partial class PadDeliveryService
         }
         if (packName == PerushimNotesPackName)
         {
-            await SavePackFileAsync(cacheDir, packName, PerushimNotesService.SearchIndexDbName, required: false);
+            if (!await SavePackFileAsync(cacheDir, packName, PerushimNotesService.SearchIndexDbName, required: true))
+            {
+                return null;
+            }
         }
         return cacheDir;
     }
@@ -882,7 +904,7 @@ partial class PadDeliveryService
                 lines.Add($"IsAssetPackAvailableLocally('{packName}'): {BAAssetPackManager.SharedManager.IsAssetPackAvailableLocally(packName)}");
                 try
                 {
-                    var status = await BAAssetPackManager.SharedManager.GetLocalStatusAsync(packName);
+                    var status = await BAAssetPackManager.SharedManager.GetLocalStatusAsync(packName).WaitAsync(TimeSpan.FromMinutes(2));
                     lines.Add($"Local status: {status}");
                 }
                 catch (Exception ex)
@@ -902,7 +924,7 @@ partial class PadDeliveryService
 
         try
         {
-            var packs = (await BAAssetPackManager.SharedManager.GetAllAssetPacksAsync())
+            var packs = (await BAAssetPackManager.SharedManager.GetAllAssetPacksAsync().WaitAsync(TimeSpan.FromMinutes(2)))
                 .Cast<BAAssetPack>().Select(p => p.Identifier).OrderBy(id => id).ToList();
             lines.Add($"Store packs ({packs.Count}): {string.Join(", ", packs)}");
         }

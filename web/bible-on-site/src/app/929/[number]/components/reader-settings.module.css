@@ -132,6 +132,49 @@
 	font-weight: normal;
 	line-height: 1.5;
 }
+.section .maskingToggle {
+	grid-column: 2;
+	width: auto;
+}
+.nameFieldset {
+	border: 0;
+	margin: 0;
+	padding: 0;
+	display: grid;
+	gap: 8px;
+}
+.nameFieldset legend {
+	padding: 0;
+	font-weight: 600;
+}
+.nameOptions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px 16px;
+}
+.nameOptions label {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	font-weight: normal;
+}
+.section .nameOptions input[type="radio"] {
+	grid-column: auto;
+	width: auto;
+	margin: 0;
+}
+.section .customText {
+	direction: rtl;
+	padding: 9px;
+	border: 1px solid #d8e1ef;
+	border-radius: 8px;
+	background: #fff;
+	color: #1c2c5d;
+	font: inherit;
+}
+.section .customText:disabled {
+	opacity: 0.55;
+}
 
 @media (prefers-color-scheme: dark) {
 	.button {
@@ -174,6 +217,12 @@
 	}
 
 	.section select {
+		border-color: #3b4256;
+		background: #12151c;
+		color: #a8b9ff;
+	}
+
+	.section .customText {
 		border-color: #3b4256;
 		background: #12151c;
 		color: #a8b9ff;

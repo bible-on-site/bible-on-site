@@ -228,6 +228,9 @@ public partial class PerekPage
         if (query.TryGetValue("searchResult", out var value) && value is SearchResult result && GetSearchPerekId(result) > 0)
         {
             _searchReaderResult = result;
+            // A genuinely new navigation request supersedes the remembered
+            // fresh-load target — only the retry button reuses _initialPerekId.
+            _initialPerekId = null;
         }
 
         // The daily-learning calendar pushes calendarReader?perekId=N above it.
@@ -236,6 +239,7 @@ public partial class PerekPage
             perekId is >= 1 and <= 929)
         {
             _pendingPerekId = perekId;
+            _initialPerekId = null;
         }
     }
 

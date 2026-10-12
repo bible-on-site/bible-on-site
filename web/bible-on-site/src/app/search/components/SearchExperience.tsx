@@ -274,6 +274,17 @@ export function SearchExperience({
 	const inputRef = useRef<HTMLInputElement>(null);
 	const resultsRef = useRef<HTMLDivElement>(null);
 
+	// The SSR input stays enabled so the native GET form works without
+	// JavaScript. Text typed before hydration lives only in the DOM, so
+	// adopt it here rather than disabling the field — a disabled input
+	// also drops `q` from unhydrated form submissions.
+	useEffect(() => {
+		const typed = inputRef.current?.value;
+		/* istanbul ignore next -- the input mounts in the same commit, so this effect always finds its ref */
+		if (typed === undefined) return;
+		setInput((current) => (typed === current ? current : typed));
+	}, []);
+
 	const resultLinks = () =>
 		Array.from(
 			/* istanbul ignore next -- the container div is always mounted before key handlers can run */
@@ -401,17 +412,15 @@ export function SearchExperience({
 
 			<div ref={resultsRef}>
 				{results && totalCount > 0 ? (
-					<SearchResults
-						response={results}
-						onResultKeyDown={onResultKeyDown}
-					/>
+					<SearchResults response={results} onResultKeyDown={onResultKeyDown} />
 				) : results && urlQuery && status !== "loading" ? (
 					<p className={styles.emptyState}>
 						לא נמצאו תוצאות עבור &quot;{urlQuery}&quot;
 					</p>
 				) : !urlQuery ? (
 					<p className={styles.emptyState}>
-						הקלידו מונח חיפוש כדי למצוא פרקים, פסוקים, פירושים, רבנים, מאמרים וערכי תנכפדיה.
+						הקלידו מונח חיפוש כדי למצוא פרקים, פסוקים, פירושים, רבנים, מאמרים
+						וערכי תנכפדיה.
 					</p>
 				) : null}
 			</div>

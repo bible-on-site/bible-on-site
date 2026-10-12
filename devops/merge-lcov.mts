@@ -7,12 +7,17 @@
  * record overwrite a rich unit record and silently dropping coverage.
  *
  * Usage:
- *   node --import tsx merge-lcov.mts --out <file> --prefix <dir> [--require <file>]... [--optional <file>]... [--rm-input-dirs]
+ *   node --import tsx merge-lcov.mts --out <file> --prefix <dir> [--require <file>]... [--optional <file>]... [--rm-input-dirs] [--relocate <needle>]...
  *
  * --require   input must exist; a missing one fails the merge (exit 1)
  * --optional  input is skipped with a warning when missing
  * --prefix    module dir relative to repo root (e.g. web/admin/) — rewrites
  *             bare `SF:src/...` records so Codecov flag paths match
+ * --relocate  canonicalize SF paths by cutting everything before the given
+ *             needle (e.g. --relocate app/ rewrites
+ *             /home/runner/work/repo/repo/app/X.cs and
+ *             /Users/runner/work/repo/repo/app/X.cs to app/X.cs, so reports
+ *             collected on different runners deduplicate correctly)
  * --rm-input-dirs  delete the parent directory of every consumed input afterwards
  *
  * Paths are resolved against the caller's working directory.
@@ -29,7 +34,7 @@ interface FileRecord {
 }
 
 /** Merge lcov contents into a single report body, one SF block per file. */
-export function mergeLcovTexts(contents: string[], prefix?: string): string {
+export function mergeLcovTexts(contents: string[], prefix?: string, relocates: string[] = []): string {
 	const files = new Map<string, FileRecord>();
 	const recordFor = (path: string): FileRecord => {
 		let rec = files.get(path);
@@ -46,6 +51,13 @@ export function mergeLcovTexts(contents: string[], prefix?: string): string {
 			const line = raw.trimEnd();
 			if (line.startsWith("SF:")) {
 				let p = line.slice(3).replace(/\\/g, "/");
+				for (const needle of relocates) {
+					const idx = p.indexOf(needle);
+					if (idx > 0) {
+						p = p.slice(idx);
+						break;
+					}
+				}
 				const prefixIdx = prefix ? p.indexOf(`${prefix}src/`) : -1;
 				if (prefixIdx > 0) {
 					p = p.slice(prefixIdx);
@@ -134,6 +146,7 @@ function main(): void {
 
 	const inputs = [...required, ...(flags.get("optional") ?? [])];
 	const prefix = flags.get("prefix")?.[0];
+	const relocates = flags.get("relocate") ?? [];
 	const rmInputDirs = flags.has("rm-input-dirs");
 
 	const consumedDirs = new Set<string>();
@@ -149,7 +162,7 @@ function main(): void {
 		console.log(`✓ Added coverage from ${inputPath}`);
 	}
 
-	const merged = mergeLcovTexts(contents, prefix);
+	const merged = mergeLcovTexts(contents, prefix, relocates);
 	const outPath = resolve(out);
 	mkdirSync(dirname(outPath), { recursive: true });
 	writeFileSync(outPath, merged);

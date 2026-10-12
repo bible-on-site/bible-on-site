@@ -1,3 +1,4 @@
+using BibleOnSite.Helpers;
 using BibleOnSite.Models;
 
 namespace BibleOnSite.Services;
@@ -88,54 +89,237 @@ public class PreferencesService
     private const string LastLearntPerekKey = "lastLearntPerek";
     private const string PerekToLoadKey = "perekToLoad";
     private const string BookmarkedPerakimKey = "bookmarkedPerakim";
-    private const string RecitationEnabledKey = "recitationEnabled";
     private const string MasoraMenuEnabledKey = "masoraMenuEnabled";
-    private bool _recitationEnabled;
 
-    public bool RecitationEnabled
-    {
-        get => _recitationEnabled;
-        set
+    // הסתר שם השם — stored values mirror the website's divineNameMasking
+    // settings (same option spellings), so the policy stays portable.
+    private const string DivineNameMaskingEnabledKey = "divineNameMaskingEnabled";
+    private const string DivineNameMaskElohimKey = "divineNameMaskElohim";
+    private const string DivineNameMaskElohimCustomKey = "divineNameMaskElohimCustom";
+    private const string DivineNameMaskYhwhKey = "divineNameMaskYhwh";
+    private const string DivineNameMaskYhwhCustomKey = "divineNameMaskYhwhCustom";
+    private const string DivineNameMaskElKey = "divineNameMaskEl";
+    private const string DivineNameMaskShaddaiKey = "divineNameMaskShaddai";
+    private const string DivineNameMaskShaddaiCustomKey = "divineNameMaskShaddaiCustom";
+
+    private const int MaxDivineNameCustomLength = 40;
+
+    private static readonly IReadOnlyDictionary<string, DivineNameMaskOption> MaskOptionNames =
+        new Dictionary<string, DivineNameMaskOption>(StringComparer.OrdinalIgnoreCase)
         {
-            if (_recitationEnabled == value)
-            {
-                return;
-            }
+            ["asis"] = DivineNameMaskOption.AsIs,
+            ["elokim"] = DivineNameMaskOption.Elokim,
+            ["hyphen"] = DivineNameMaskOption.Hyphen,
+            ["heh"] = DivineNameMaskOption.Heh,
+            ["dalet"] = DivineNameMaskOption.Dalet,
+            ["custom"] = DivineNameMaskOption.Custom,
+        };
 
-            _recitationEnabled = value;
-            _storage.Set(RecitationEnabledKey, value);
-            OnPreferencesChanged();
-        }
-    }
+    private static string MaskOptionName(DivineNameMaskOption option) => option switch
+    {
+        DivineNameMaskOption.AsIs => "asis",
+        DivineNameMaskOption.Elokim => "elokim",
+        DivineNameMaskOption.Hyphen => "hyphen",
+        DivineNameMaskOption.Heh => "heh",
+        DivineNameMaskOption.Dalet => "dalet",
+        _ => "custom",
+    };
+
+    /// <summary>The options each name allows; out-of-set values fall back to the default.</summary>
+    private static readonly DivineNameMaskOption[] ElohimOptions =
+        [DivineNameMaskOption.AsIs, DivineNameMaskOption.Elokim, DivineNameMaskOption.Hyphen, DivineNameMaskOption.Custom];
+    private static readonly DivineNameMaskOption[] YhwhOptions =
+        [DivineNameMaskOption.Heh, DivineNameMaskOption.Dalet, DivineNameMaskOption.Custom];
+    private static readonly DivineNameMaskOption[] ElOptions =
+        [DivineNameMaskOption.AsIs, DivineNameMaskOption.Hyphen];
+    private static readonly DivineNameMaskOption[] ShaddaiOptions =
+        [DivineNameMaskOption.AsIs, DivineNameMaskOption.Hyphen, DivineNameMaskOption.Custom];
+
 
     private double _recitationSpeed = 1;
     private double _recitationVolume = 1;
+    private double _lessonsVolume = 1;
+    private double _effectsVolume = 1;
     private double _recitationVersePauseMs = -1;
     // A negative pause preserves the original recording; custom pauses are wall-clock milliseconds.
     public double RecitationSpeed
     {
         get => _recitationSpeed;
-        set => SetRecitationValue(ref _recitationSpeed, "recitationSpeed", Normalize(value, 1, 0.5, 2));
+        set => SetAudioValue(ref _recitationSpeed, "recitationSpeed", Normalize(value, 1, 0.5, 2));
     }
     public double RecitationVolume
     {
         get => _recitationVolume;
-        set => SetRecitationValue(ref _recitationVolume, "recitationVolume", Normalize(value, 1, 0, 1));
+        set => SetAudioValue(ref _recitationVolume, "recitationVolume", Normalize(value, 1, 0, 1));
+    }
+    /// <summary>Recorded-lesson playback volume (article audio/video), independent of קריינות.</summary>
+    public double LessonsVolume
+    {
+        get => _lessonsVolume;
+        set => SetAudioValue(ref _lessonsVolume, "lessonsVolume", Normalize(value, 1, 0, 1));
+    }
+    /// <summary>Sound-effects volume, independent of speech playback.</summary>
+    public double EffectsVolume
+    {
+        get => _effectsVolume;
+        set => SetAudioValue(ref _effectsVolume, "effectsVolume", Normalize(value, 1, 0, 1));
     }
     public double RecitationVersePauseMs
     {
         get => _recitationVersePauseMs;
-        set => SetRecitationValue(ref _recitationVersePauseMs, "recitationVersePauseMs", Normalize(value, -1, -1, 5000));
+        set => SetAudioValue(ref _recitationVersePauseMs, "recitationVersePauseMs", Normalize(value, -1, -1, 5000));
     }
     private static double Normalize(double value, double fallback, double min, double max) =>
         double.IsFinite(value) ? Math.Clamp(value, min, max) : fallback;
-    private void SetRecitationValue(ref double field, string key, double value)
+    private void SetAudioValue(ref double field, string key, double value)
     {
         if (Math.Abs(field - value) < 0.000001) { return; }
         field = value;
         _storage.Set(key, value);
         OnPreferencesChanged();
     }
+
+    #region הסתר שם השם
+
+    private bool _divineNameMaskingEnabled;
+    private DivineNameMaskOption _divineNameMaskElohim = DivineNameMaskOption.Hyphen;
+    private string _divineNameMaskElohimCustom = "";
+    private DivineNameMaskOption _divineNameMaskYhwh = DivineNameMaskOption.Heh;
+    private string _divineNameMaskYhwhCustom = "";
+    private DivineNameMaskOption _divineNameMaskEl = DivineNameMaskOption.AsIs;
+    private DivineNameMaskOption _divineNameMaskShaddai = DivineNameMaskOption.AsIs;
+    private string _divineNameMaskShaddaiCustom = "";
+
+    /// <summary>
+    /// הסתר שם השם master toggle — independent of the per-name choices, which
+    /// keep their stored values while masking is off.
+    /// </summary>
+    public bool DivineNameMaskingEnabled
+    {
+        get => _divineNameMaskingEnabled;
+        set
+        {
+            if (_divineNameMaskingEnabled == value)
+            {
+                return;
+            }
+            _divineNameMaskingEnabled = value;
+            _storage.Set(DivineNameMaskingEnabledKey, value);
+            OnMaskingChanged();
+        }
+    }
+
+    /// <summary>אלהים display option (asis/elokim/hyphen/custom).</summary>
+    public DivineNameMaskOption DivineNameMaskElohim
+    {
+        get => _divineNameMaskElohim;
+        set => SetMaskOption(ref _divineNameMaskElohim, value, ElohimOptions,
+            DivineNameMaskOption.Hyphen, DivineNameMaskElohimKey);
+    }
+
+    /// <summary>Custom replacement text for אלהים when "אחר" is chosen.</summary>
+    public string DivineNameMaskElohimCustom
+    {
+        get => _divineNameMaskElohimCustom;
+        set => SetMaskCustom(ref _divineNameMaskElohimCustom, value, DivineNameMaskElohimCustomKey);
+    }
+
+    /// <summary>יהוה display option (heh/dalet/custom — no as-is).</summary>
+    public DivineNameMaskOption DivineNameMaskYhwh
+    {
+        get => _divineNameMaskYhwh;
+        set => SetMaskOption(ref _divineNameMaskYhwh, value, YhwhOptions,
+            DivineNameMaskOption.Heh, DivineNameMaskYhwhKey);
+    }
+
+    /// <summary>Custom replacement text for יהוה when "אחר" is chosen.</summary>
+    public string DivineNameMaskYhwhCustom
+    {
+        get => _divineNameMaskYhwhCustom;
+        set => SetMaskCustom(ref _divineNameMaskYhwhCustom, value, DivineNameMaskYhwhCustomKey);
+    }
+
+    /// <summary>אל display option (asis/hyphen — no custom).</summary>
+    public DivineNameMaskOption DivineNameMaskEl
+    {
+        get => _divineNameMaskEl;
+        set => SetMaskOption(ref _divineNameMaskEl, value, ElOptions,
+            DivineNameMaskOption.AsIs, DivineNameMaskElKey);
+    }
+
+    /// <summary>שדי display option (asis/hyphen/custom).</summary>
+    public DivineNameMaskOption DivineNameMaskShaddai
+    {
+        get => _divineNameMaskShaddai;
+        set => SetMaskOption(ref _divineNameMaskShaddai, value, ShaddaiOptions,
+            DivineNameMaskOption.AsIs, DivineNameMaskShaddaiKey);
+    }
+
+    /// <summary>Custom replacement text for שדי when "אחר" is chosen.</summary>
+    public string DivineNameMaskShaddaiCustom
+    {
+        get => _divineNameMaskShaddaiCustom;
+        set => SetMaskCustom(ref _divineNameMaskShaddaiCustom, value, DivineNameMaskShaddaiCustomKey);
+    }
+
+    private void SetMaskOption(ref DivineNameMaskOption field, DivineNameMaskOption value,
+        DivineNameMaskOption[] allowed, DivineNameMaskOption fallback, string key)
+    {
+        if (!allowed.Contains(value))
+        {
+            value = fallback;
+        }
+        if (field == value)
+        {
+            return;
+        }
+        field = value;
+        _storage.Set(key, MaskOptionName(value));
+        OnMaskingChanged();
+    }
+
+    private void SetMaskCustom(ref string field, string value, string key)
+    {
+        var trimmed = (value ?? "").Trim();
+        if (trimmed.Length > MaxDivineNameCustomLength)
+        {
+            trimmed = trimmed[..MaxDivineNameCustomLength];
+        }
+        if (field == trimmed)
+        {
+            return;
+        }
+        field = trimmed;
+        _storage.Set(key, trimmed);
+        OnMaskingChanged();
+    }
+
+    private static DivineNameMaskOption ParseMaskOption(string stored, DivineNameMaskOption[] allowed,
+        DivineNameMaskOption fallback) =>
+        MaskOptionNames.TryGetValue(stored, out var option) && allowed.Contains(option)
+            ? option
+            : fallback;
+
+    /// <summary>Builds the immutable options snapshot consumed by renderers.</summary>
+    public DivineNameMaskingOptions GetDivineNameMaskingOptions() => new(
+        _divineNameMaskingEnabled,
+        _divineNameMaskElohim, _divineNameMaskElohimCustom,
+        _divineNameMaskYhwh, _divineNameMaskYhwhCustom,
+        _divineNameMaskEl,
+        _divineNameMaskShaddai, _divineNameMaskShaddaiCustom);
+
+    /// <summary>
+    /// Publishes the current options to <see cref="DivineNameMasking"/> (bumping
+    /// its revision so cached renderings rebuild) and notifies preference
+    /// listeners so open pages refresh their displayed text.
+    /// </summary>
+    private void OnMaskingChanged()
+    {
+        DivineNameMasking.Apply(GetDivineNameMaskingOptions());
+        OnPreferencesChanged();
+    }
+
+    #endregion
 
     private bool _masoraMenuEnabled;
 
@@ -246,10 +430,11 @@ public class PreferencesService
     /// </summary>
     public void Load()
     {
-        _recitationEnabled = _storage.Get(RecitationEnabledKey, false);
         _masoraMenuEnabled = _storage.Get(MasoraMenuEnabledKey, false);
         _recitationSpeed = Normalize(_storage.Get("recitationSpeed", 1.0), 1, 0.5, 2);
         _recitationVolume = Normalize(_storage.Get("recitationVolume", 1.0), 1, 0, 1);
+        _lessonsVolume = Normalize(_storage.Get("lessonsVolume", 1.0), 1, 0, 1);
+        _effectsVolume = Normalize(_storage.Get("effectsVolume", 1.0), 1, 0, 1);
         _recitationVersePauseMs = Normalize(_storage.Get("recitationVersePauseMs", -1.0), -1, -1, 5000);
         _inlineCommentaryLimit = Math.Clamp(_storage.Get(InlineCommentaryLimitKey, 5), 1, 100);
         _fontFactor = _storage.Get(FontFactorKey, 1.0);
@@ -258,6 +443,27 @@ public class PreferencesService
         _lastLearntPerek = lastLearnt >= 0 ? lastLearnt : null;
 
         _perekToLoad = (PerekToLoad)_storage.Get(PerekToLoadKey, (int)PerekToLoad.Todays);
+
+        _divineNameMaskingEnabled = _storage.Get(DivineNameMaskingEnabledKey, false);
+        _divineNameMaskElohim = ParseMaskOption(_storage.Get(DivineNameMaskElohimKey, "hyphen"),
+            ElohimOptions, DivineNameMaskOption.Hyphen);
+        _divineNameMaskElohimCustom = _storage.Get(DivineNameMaskElohimCustomKey, "");
+        _divineNameMaskYhwh = ParseMaskOption(_storage.Get(DivineNameMaskYhwhKey, "heh"),
+            YhwhOptions, DivineNameMaskOption.Heh);
+        _divineNameMaskYhwhCustom = _storage.Get(DivineNameMaskYhwhCustomKey, "");
+        _divineNameMaskEl = ParseMaskOption(_storage.Get(DivineNameMaskElKey, "asis"),
+            ElOptions, DivineNameMaskOption.AsIs);
+        _divineNameMaskShaddai = ParseMaskOption(_storage.Get(DivineNameMaskShaddaiKey, "asis"),
+            ShaddaiOptions, DivineNameMaskOption.AsIs);
+        _divineNameMaskShaddaiCustom = _storage.Get(DivineNameMaskShaddaiCustomKey, "");
+        var revisionBefore = DivineNameMasking.Revision;
+        DivineNameMasking.Apply(GetDivineNameMaskingOptions());
+        if (DivineNameMasking.Revision != revisionBefore)
+        {
+            // Stored masking differs from the ambient state — notify so any
+            // already-open page re-renders its displayed text.
+            OnPreferencesChanged();
+        }
 
         var bookmarksJson = _storage.Get(BookmarkedPerakimKey, string.Empty);
         if (!string.IsNullOrEmpty(bookmarksJson))
