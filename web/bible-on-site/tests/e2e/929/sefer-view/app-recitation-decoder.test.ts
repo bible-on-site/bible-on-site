@@ -67,6 +67,8 @@ for (const fixture of [
 		name: "tagged gapless MP3",
 		recording,
 		frames: 88200,
+		sampleRate: 44100,
+		channels: 2,
 		selections: [
 			[{ start: 0, end: 2000 }],
 			[{ start: 101, end: 599 }],
@@ -90,6 +92,8 @@ for (const fixture of [
 		name: "original Esther 10 MP3",
 		recording: original,
 		frames: originalMetadata.frames,
+		sampleRate: originalMetadata.sampleRate,
+		channels: 2,
 		selections: (() => {
 			let offset = 0;
 			const individual = originalMetadata.ranges.map((range) => {
@@ -104,6 +108,35 @@ for (const fixture of [
 				{ ranges: originalMetadata.ranges, expected: originalReference },
 			];
 		})(),
+	},
+	{
+		name: "24 kbps Ogg Opus",
+		recording: readFileSync(resolve(root, "data/recitation/fixtures/seek.ogg")),
+		frames: 96000,
+		sampleRate: 48000,
+		channels: 1,
+		selections: [
+			[{ start: 0, end: 2000 }],
+			[{ start: 101, end: 599 }],
+			[
+				{ start: 0, end: 200 },
+				{ start: 1800, end: 2000 },
+			],
+		].map((ranges) => {
+			const pcm = gunzipSync(
+				readFileSync(
+					resolve(root, "data/recitation/fixtures/seek-opus.pcm.gz"),
+				),
+			);
+			return {
+				ranges,
+				expected: Buffer.concat(
+					ranges.map(({ start, end }) =>
+						pcm.subarray(Math.round(start * 48) * 2, Math.round(end * 48) * 2),
+					),
+				),
+			};
+		}),
 	},
 ]) {
 	test(`app decoder preserves FFmpeg time origin and approved sample ranges: ${fixture.name}`, async ({
@@ -155,9 +188,9 @@ for (const fixture of [
 			}
 			const wave = Buffer.concat(parts);
 			expect(wave.toString("ascii", 0, 4)).toBe("RIFF");
-			expect(wave.readUInt32LE(24)).toBe(44100);
+			expect(wave.readUInt32LE(24)).toBe(fixture.sampleRate);
 			const channels = wave.readUInt16LE(22);
-			expect(channels).toBe(2);
+			expect(channels).toBe(fixture.channels);
 			expect(wave.length - 44).toBe(expected.length * channels);
 			let squaredError = 0;
 			let squaredSignal = 0;
@@ -176,8 +209,8 @@ for (const fixture of [
 			[{ start: -100, end: 200 }],
 			[
 				{
-					start: fixture.frames / 44.1 - 100,
-					end: fixture.frames / 44.1 + 100,
+					start: fixture.frames / (fixture.sampleRate / 1000) - 100,
+					end: fixture.frames / (fixture.sampleRate / 1000) + 100,
 				},
 			],
 			[],
