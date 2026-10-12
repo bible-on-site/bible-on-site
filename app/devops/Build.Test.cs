@@ -64,12 +64,13 @@ partial class Build
             var artifacts = Environment.GetEnvironmentVariable("MOBILE_E2E_ARTIFACTS")
                 ?? throw new ArgumentException("Set MOBILE_E2E_ARTIFACTS (npm test prepares it).");
             var resultsDirectory = Path.Join(artifacts, "results");
+            // The host guard includes Appium session setup and diagnostics. The
+            // delivered index keeps searches within ordinary interaction
+            // deadlines, so corpus construction must never justify extending
+            // the 10-minute hangdump budget.
             DotNetTestApp($"--project \"{MobileE2ETestProject}\" --configuration Debug -p:RestoreLockedMode=true" +
                           $" --results-directory \"{resultsDirectory}\"",
                 $"--filter-query \"/[{MobileE2ESelectionFilter()}]\"" +
-                // The host guard includes Appium session setup and diagnostics.
-                // The delivered index keeps searches within ordinary interaction deadlines.
-                // corpus construction must never justify extending this budget.
                 " --hangdump --hangdump-timeout 10m --hangdump-type Mini" +
                 " --report-xunit-trx --report-xunit-trx-filename mobile-e2e.trx" +
                 " --report-xunit-junit --report-xunit-junit-filename mobile-e2e.xml");
