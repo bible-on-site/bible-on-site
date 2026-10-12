@@ -119,7 +119,7 @@ for (const fixture of [
 		name: "original Esther 10 MP3",
 		recording: original,
 		frames: originalMetadata.frames,
-		sampleRate: 44100,
+		sampleRate: originalMetadata.sampleRate,
 		channels: 2,
 		chapter: null,
 		selections: (() => {

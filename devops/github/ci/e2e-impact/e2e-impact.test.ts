@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { deflateRawSync } from "node:zlib";
 import { describe, test } from "node:test";
 
@@ -30,6 +32,10 @@ import {
 import { discoverSuiteTests, parseTestSource } from "./xunit-discovery.ts";
 import { extractZip } from "./github.ts";
 import { fingerprintSource } from "./fingerprint.ts";
+import type {
+	ExecCoverageTest,
+	ExecCoverageTree,
+} from "../../../e2e-coverage-trees/model.ts";
 
 // ── Fixtures ────────────────────────────────────────────────────────────
 
@@ -1007,5 +1013,462 @@ public class FloatingSearchBar
 			"unchanged-structural",
 		);
 		assert.equal(manifest.selectAll, false);
+	});
+});
+
+// ── exec coverage merge ───────────────────────────────────────────────
+
+const execEntry = (
+	id: string,
+	files: string[],
+	overrides: Partial<ExecCoverageTest> = {},
+): ExecCoverageTest => ({
+	id,
+	cases: [],
+	attribution: "per-test",
+	measured: true,
+	outcome: "passed",
+	evidenceSha: SNAPSHOT,
+	sessions: [],
+	startedUtc: "2026-01-01T00:00:00Z",
+	endedUtc: "2026-01-01T00:00:40Z",
+	nodes: [],
+	files,
+	visits: { sequence: 0, branch: 0, methodEntries: 0 },
+	...overrides,
+});
+
+const execTree = (
+	tests: Record<string, ExecCoverageTest>,
+	overrides: Partial<ExecCoverageTree> = {},
+): ExecCoverageTree => ({
+	kind: "exec-coverage-tree",
+	schemaVersion: 1,
+	suite: "app-mobile-e2e",
+	platform: "android",
+	configuration: "Debug",
+	snapshotSha: SNAPSHOT,
+	collector: "altcover-app-dump",
+	collectorVersion: "9.0.145",
+	collectedAtUtc: "2026-01-01T00:00:00Z",
+	complete: true,
+	envFingerprint: "f".repeat(64),
+	modules: [],
+	nodes: {},
+	tests,
+	shared: { reasons: [], nodes: [], files: [] },
+	unmatchedEvidence: [],
+	diagnostics: {
+		attribution: "per-test",
+		dumpsTotal: 0,
+		dumpsApplied: 0,
+		errorDumps: [],
+		incompatibleDumps: [],
+		unknownPointIds: 0,
+		missingDumps: [],
+	},
+	...overrides,
+});
+
+/**
+ * A minimal repo: one XAML page + one discovered test class with two
+ * facts, plus a single automation-id evidence record for `Startup`.
+ */
+function makeCollectRepo(): { repo: string; artifacts: string } {
+	const repo = mkdtempSync(join(tmpdir(), "e2e-impact-exec-"));
+	const sourceRoot = join(repo, "app/BibleOnSite/Pages");
+	const testsRoot = join(repo, "app/BibleOnSite.Tests.MobileE2E");
+	const evidenceDir = join(repo, "artifacts/coverage-evidence");
+	mkdirSync(sourceRoot, { recursive: true });
+	mkdirSync(testsRoot, { recursive: true });
+	mkdirSync(evidenceDir, { recursive: true });
+	writeFileSync(
+		join(sourceRoot, "PerekPage.xaml"),
+		`<Label AutomationId="PerekSource"/>`,
+	);
+	writeFileSync(join(sourceRoot, "PerekPage.xaml.cs"), `public partial class PerekPage {}`);
+	writeFileSync(
+		join(testsRoot, "PilotTests.cs"),
+		`namespace N;
+[Trait("Category", "MobileE2E")]
+[Trait("Platform", "Shared")]
+public class PilotTests
+{
+    [Fact] public void Startup() {}
+    [Fact] public void Scroll() {}
+}
+`,
+	);
+	writeFileSync(
+		join(evidenceDir, "Startup-passed.json"),
+		JSON.stringify({
+			test: "N.PilotTests.Startup",
+			platform: "android",
+			outcome: "passed",
+			sessions: ["s1"],
+			automationIds: ["PerekSource"],
+		}),
+	);
+	return { repo, artifacts: join(repo, "artifacts") };
+}
+
+const collect = (
+	repo: string,
+	artifacts: string,
+	exec: ExecCoverageTree | undefined,
+): CoverageTree =>
+	collectTree({
+		repoRoot: repo,
+		rules: RULES,
+		platform: "android",
+		artifactsDir: artifacts,
+		snapshotSha: SNAPSHOT,
+		complete: true,
+		...(exec !== undefined ? { execTree: exec } : {}),
+	});
+
+/** Strips the run timestamp — everything else must stay deterministic. */
+const deterministic = (tree: CoverageTree) => {
+	const { collectedAtUtc: _collectedAtUtc, ...rest } = tree;
+	return rest;
+};
+
+describe("collectTree exec merge", () => {
+	test("exec files and sessions union into the same test's entry", () => {
+		const { repo, artifacts } = makeCollectRepo();
+		try {
+			const tree = collect(repo, artifacts, execTree({
+				"N.PilotTests.Startup": execEntry(
+					"N.PilotTests.Startup",
+					["app/BibleOnSite/Controls/FloatingSearchBar.xaml.cs"],
+					{ sessions: ["s2"] },
+				),
+			}));
+			const entry = tree.tests["N.PilotTests.Startup"];
+			assert.deepEqual(entry.files, [
+				"app/BibleOnSite/Controls/FloatingSearchBar.xaml.cs",
+				"app/BibleOnSite/Pages/PerekPage.xaml",
+			]);
+			assert.deepEqual(entry.sessions, ["s1", "s2"]);
+			assert.deepEqual(entry.automationIds, ["PerekSource"]);
+			assert.equal(entry.outcome, "passed");
+		} finally {
+			rmSync(repo, { recursive: true, force: true });
+		}
+	});
+
+	test("exec-only tests join with the discovery-resolved file", () => {
+		const { repo, artifacts } = makeCollectRepo();
+		try {
+			const tree = collect(repo, artifacts, execTree({
+				"N.PilotTests.Scroll": execEntry(
+					"N.PilotTests.Scroll",
+					["app/BibleOnSite/Pages/PerekPage.xaml.cs"],
+					{ sessions: ["s9"] },
+				),
+			}));
+			const entry = tree.tests["N.PilotTests.Scroll"];
+			assert.equal(entry.file, "app/BibleOnSite.Tests.MobileE2E/PilotTests.cs");
+			assert.deepEqual(entry.files, ["app/BibleOnSite/Pages/PerekPage.xaml.cs"]);
+			assert.deepEqual(entry.sessions, ["s9"]);
+			assert.deepEqual(entry.automationIds, []);
+			assert.equal(entry.outcome, "passed");
+		} finally {
+			rmSync(repo, { recursive: true, force: true });
+		}
+	});
+
+	test("shared, unmeasured and error attributions create no per-test entries", () => {
+		const { repo, artifacts } = makeCollectRepo();
+		try {
+			const tree = collect(repo, artifacts, execTree(
+				{
+					"N.PilotTests.Scroll": execEntry(
+						"N.PilotTests.Scroll",
+						["app/BibleOnSite/Pages/PerekPage.xaml.cs"],
+						{ attribution: "shared", measured: false },
+					),
+					"N.PilotTests.Ghost": execEntry(
+						"N.PilotTests.Ghost",
+						["app/BibleOnSite/X.cs"],
+						{ attribution: "unmeasured", measured: false },
+					),
+					"N.PilotTests.Broken": execEntry(
+						"N.PilotTests.Broken",
+						["app/BibleOnSite/Y.cs"],
+						{ attribution: "error", measured: false, coverageError: "pull failed" },
+					),
+				},
+				{
+					shared: {
+						reasons: ["app-startup"],
+						nodes: [],
+						files: ["app/BibleOnSite/App.xaml.cs"],
+					},
+				},
+			));
+			assert.equal(tree.tests["N.PilotTests.Scroll"], undefined);
+			assert.equal(tree.tests["N.PilotTests.Ghost"], undefined);
+			assert.equal(tree.tests["N.PilotTests.Broken"], undefined);
+			assert.deepEqual(tree.sharedFiles, ["app/BibleOnSite/App.xaml.cs"]);
+		} finally {
+			rmSync(repo, { recursive: true, force: true });
+		}
+	});
+
+	test("missing exec evidence leaves the output identical", () => {
+		const { repo, artifacts } = makeCollectRepo();
+		try {
+			assert.deepEqual(
+				deterministic(collect(repo, artifacts, undefined)),
+				deterministic(collect(repo, artifacts, undefined)),
+			);
+			// An empty (compatible) exec tree merges nothing.
+			assert.deepEqual(
+				deterministic(collect(repo, artifacts, execTree({}))),
+				deterministic(collect(repo, artifacts, undefined)),
+			);
+		} finally {
+			rmSync(repo, { recursive: true, force: true });
+		}
+	});
+
+	test("incompatible exec trees are ignored, not applied", () => {
+		const { repo, artifacts } = makeCollectRepo();
+		try {
+			const baseline = deterministic(collect(repo, artifacts, undefined));
+			for (const bad of [
+				execTree({}, { platform: "ios" }),
+				execTree({}, { suite: "other-suite" }),
+				execTree({}, { snapshotSha: "3333333333333333333333333333333333333333" }),
+				execTree({}, { schemaVersion: 2 }),
+			]) {
+				assert.deepEqual(deterministic(collect(repo, artifacts, bad)), baseline);
+			}
+		} finally {
+			rmSync(repo, { recursive: true, force: true });
+		}
+	});
+
+	test("an incomplete exec tree keeps the merged tree incomplete", () => {
+		const { repo, artifacts } = makeCollectRepo();
+		try {
+			const tree = collect(
+				repo,
+				artifacts,
+				execTree({}, { complete: false }),
+			);
+			assert.equal(tree.complete, false);
+		} finally {
+			rmSync(repo, { recursive: true, force: true });
+		}
+	});
+
+	test("a failed exec outcome survives the union", () => {
+		const { repo, artifacts } = makeCollectRepo();
+		try {
+			const tree = collect(repo, artifacts, execTree({
+				"N.PilotTests.Startup": execEntry("N.PilotTests.Startup", [], {
+					outcome: "failed",
+				}),
+			}));
+			assert.equal(tree.tests["N.PilotTests.Startup"].outcome, "failed");
+			// The automation file set is untouched by the union.
+			assert.deepEqual(tree.tests["N.PilotTests.Startup"].files, [
+				"app/BibleOnSite/Pages/PerekPage.xaml",
+			]);
+		} finally {
+			rmSync(repo, { recursive: true, force: true });
+		}
+	});
+
+	test("exec entries for undiscovered tests join as unmatched evidence", () => {
+		const { repo, artifacts } = makeCollectRepo();
+		try {
+			const tree = collect(repo, artifacts, execTree(
+				{
+					"N.Elsewhere.Moved": execEntry("N.Elsewhere.Moved", [
+						"app/BibleOnSite/Pages/PerekPage.xaml.cs",
+					]),
+				},
+				{ unmatchedEvidence: ["Ghost-passed.json"] },
+			));
+			const entry = tree.tests["N.Elsewhere.Moved"];
+			assert.equal(entry.file, undefined);
+			assert.deepEqual(entry.files, ["app/BibleOnSite/Pages/PerekPage.xaml.cs"]);
+			assert.deepEqual(tree.unmatchedEvidence, [
+				"Ghost-passed.json",
+				"N.Elsewhere.Moved",
+			]);
+		} finally {
+			rmSync(repo, { recursive: true, force: true });
+		}
+	});
+});
+
+describe("collect-appium --exec-tree CLI", () => {
+	const IMPACT = fileURLToPath(new URL("./e2e-impact.ts", import.meta.url));
+	const REAL_TEST =
+		"BibleOnSite.Tests.MobileE2E.PerekPilotTests.StartupDisplaysPackagedPesukimAndUsableBottomNavigation";
+
+	const runCollect = (artifacts: string, extra: string[]) =>
+		spawnSync(
+			process.execPath,
+			[
+				IMPACT,
+				"collect-appium",
+				"--suite", "app/mobile-e2e",
+				"--platform", "android",
+				"--artifacts", artifacts,
+				"--snapshot-sha", SNAPSHOT,
+				"--out", join(artifacts, "coverage-tree.json"),
+				...extra,
+			],
+			{ encoding: "utf8" },
+		);
+
+	const readTree = (artifacts: string): CoverageTree =>
+		JSON.parse(readFileSync(join(artifacts, "coverage-tree.json"), "utf8"));
+
+	test("a compatible exec tree merges; missing or incompatible ones warn and change nothing", () => {
+		const dir = mkdtempSync(join(tmpdir(), "e2e-impact-cli-"));
+		try {
+			const artifacts = join(dir, "artifacts");
+			mkdirSync(join(artifacts, "coverage-evidence"), { recursive: true });
+			writeFileSync(
+				join(artifacts, "coverage-evidence", "Startup-passed.json"),
+				JSON.stringify({
+					test: REAL_TEST,
+					platform: "android",
+					outcome: "passed",
+					sessions: ["s1"],
+					automationIds: [],
+				}),
+			);
+			const exec = join(dir, "exec-coverage-tree.json");
+			writeFileSync(
+				exec,
+				JSON.stringify(
+					execTree(
+						{
+							[REAL_TEST]: execEntry(REAL_TEST, [
+								"app/BibleOnSite/App.xaml.cs",
+							], { sessions: ["e1"] }),
+						},
+						{
+							shared: {
+								reasons: [],
+								nodes: [],
+								files: ["app/BibleOnSite/Services/Startup.cs"],
+							},
+						},
+					),
+				),
+			);
+
+			// Automation-id only — the reference output.
+			const plain = runCollect(artifacts, []);
+			assert.equal(plain.status, 0, plain.stderr);
+			const baseline = deterministic(readTree(artifacts));
+
+			// Compatible tree: per-test files union, sharedFiles lands.
+			const merged = runCollect(artifacts, ["--exec-tree", exec]);
+			assert.equal(merged.status, 0, merged.stderr);
+			assert.match(merged.stdout, /exec tree: 1 per-test entries/);
+			const tree = readTree(artifacts);
+			const entry = tree.tests[REAL_TEST];
+			assert.ok(entry.files.includes("app/BibleOnSite/App.xaml.cs"));
+			assert.ok(entry.sessions.includes("e1"));
+			assert.ok(entry.sessions.includes("s1"));
+			assert.deepEqual(tree.sharedFiles, [
+				"app/BibleOnSite/Services/Startup.cs",
+			]);
+
+			// Missing path: warned, output identical to automation-id only.
+			const missing = runCollect(artifacts, [
+				"--exec-tree", join(dir, "absent.json"),
+			]);
+			assert.equal(missing.status, 0, missing.stderr);
+			assert.match(missing.stderr, /exec tree ignored: .* does not exist/);
+			assert.deepEqual(deterministic(readTree(artifacts)), baseline);
+
+			// Wrong snapshot: diagnosed and skipped, output identical.
+			const wrongSha = join(dir, "exec-old.json");
+			writeFileSync(
+				wrongSha,
+				JSON.stringify(execTree({}, { snapshotSha: "2".repeat(40) })),
+			);
+			const incompatible = runCollect(artifacts, ["--exec-tree", wrongSha]);
+			assert.equal(incompatible.status, 0, incompatible.stderr);
+			assert.match(incompatible.stderr, /exec tree .* ignored: snapshotSha/);
+			assert.deepEqual(deterministic(readTree(artifacts)), baseline);
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+});
+
+describe("selectTests shared coverage", () => {
+	test("a changed shared-covered file widens to the full suite", () => {
+		const manifest = select({
+			baseline: {
+				kind: "ok",
+				tree: makeTree({ sharedFiles: ["app/BibleOnSite/Services/Startup.cs"] }),
+			},
+			changedFiles: [{ path: "app/BibleOnSite/Services/Startup.cs", status: "modified" }],
+		});
+		assert.equal(manifest.selectAll, true);
+		assert.ok(
+			manifest.fallbacks.some((f) =>
+				f.startsWith("shared-coverage:app/BibleOnSite/Services/Startup.cs"),
+			),
+		);
+	});
+
+	test("shared coverage widens even where a test covers the file", () => {
+		// Search provably covers FloatingSearchBar.xaml, but the file also
+		// carries unattributable exec hits — those can only widen.
+		const manifest = select({
+			baseline: {
+				kind: "ok",
+				tree: makeTree({
+					sharedFiles: ["app/BibleOnSite/Controls/FloatingSearchBar.xaml"],
+				}),
+			},
+			changedFiles: [
+				{ path: "app/BibleOnSite/Controls/FloatingSearchBar.xaml", status: "modified" },
+			],
+		});
+		assert.equal(manifest.selectAll, true);
+	});
+
+	test("a unit-mate of a shared file widens too", () => {
+		// PerekPage.xaml.cs shares unit PerekPage with the changed xaml.
+		const manifest = select({
+			baseline: {
+				kind: "ok",
+				tree: makeTree({
+					sharedFiles: ["app/BibleOnSite/Pages/PerekPage.xaml.cs"],
+				}),
+			},
+			changedFiles: [
+				{ path: "app/BibleOnSite/Pages/PerekPage.xaml", status: "modified" },
+			],
+		});
+		assert.equal(manifest.selectAll, true);
+		assert.ok(manifest.fallbacks.some((f) => f.startsWith("shared-coverage:")));
+	});
+
+	test("a tree without shared coverage keeps per-test narrowing", () => {
+		const manifest = select({
+			changedFiles: [
+				{ path: "app/BibleOnSite/Controls/FloatingSearchBar.xaml", status: "modified" },
+			],
+		});
+		assert.equal(manifest.selectAll, false);
+		assert.deepEqual(selectedIds(manifest), [
+			"Suite.Pilot.Search",
+			"Suite.Pilot.Startup",
+		]);
 	});
 });

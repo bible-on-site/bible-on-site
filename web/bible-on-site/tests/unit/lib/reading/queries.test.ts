@@ -7,6 +7,7 @@ import {
 	coveringSourceSliceRank,
 	noteSliceCondition,
 	primaryPerekSliceRank,
+	rangePerekSources,
 	slicePerekIds,
 	slicePerekOrder,
 	slicesForRanges,
@@ -145,5 +146,25 @@ describe("perek ordering helpers", () => {
 describe("canonicalPasukCount", () => {
 	it("returns the corpus pasuk count of a perek", () => {
 		expect(canonicalPasukCount(1)).toBe(31);
+	});
+});
+
+describe("rangePerekSources", () => {
+	it("maps every covered perek to its canonical source label", () => {
+		expect(
+			rangePerekSources([
+				{ start: { perekId: 1, pasuk: 30 }, end: { perekId: 2, pasuk: 4 } },
+			]),
+		).toEqual({ 1: "בראשית א", 2: "בראשית ב" });
+	});
+
+	it("deduplicates a perek revisited by a later range", () => {
+		const sources = rangePerekSources([
+			{ start: { perekId: 100, pasuk: 10 }, end: { perekId: 100, pasuk: 12 } },
+			{ start: { perekId: 1, pasuk: 1 }, end: { perekId: 1, pasuk: 3 } },
+			{ start: { perekId: 100, pasuk: 12 }, end: { perekId: 100, pasuk: 12 } },
+		]);
+		expect(Object.keys(sources).sort()).toEqual(["1", "100"]);
+		expect(sources[1]).toBe("בראשית א");
 	});
 });
