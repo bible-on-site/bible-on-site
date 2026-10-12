@@ -28,11 +28,22 @@ public class TanahpediaViewModelTests
 
         vm.IsLoaded.Should().BeTrue();
         vm.HasError.Should().BeFalse();
+        vm.HasToday.Should().BeTrue();
+        vm.HasRecent.Should().BeTrue();
+        vm.HebrewDateText.Should().NotBeNullOrEmpty();
         vm.TodayEntities.Should().ContainSingle();
         vm.RecentEntries.Should().ContainSingle();
         vm.CategoryGroups.Should().HaveCount(TanahpediaTaxonomy.Hierarchy.Count);
-        vm.CategoryGroups.First(g => g.Parent.Category.Key == "PERSON").Parent.Count.Should().Be(12);
-        vm.CategoryGroups.First(g => g.Parent.Category.Key == "PLACE").Parent.Count.Should().Be(0);
+        var person = vm.CategoryGroups.First(g => g.Parent.Category.Key == "PERSON").Parent;
+        person.Count.Should().Be(12);
+        person.CountText.Should().Be("12 ערכים");
+        person.Label.Should().Be("אישים");
+        person.IsComingSoon.Should().BeFalse();
+        var place = vm.CategoryGroups.First(g => g.Parent.Category.Key == "PLACE");
+        place.Parent.Count.Should().Be(0);
+        place.Parent.IsComingSoon.Should().BeTrue();
+        place.HasChildren.Should().BeFalse();
+        vm.CategoryGroups.First(g => g.Parent.Category.Key == "PERSON").HasChildren.Should().BeTrue();
     }
 
     [Fact]
@@ -50,6 +61,29 @@ public class TanahpediaViewModelTests
     }
 
     [Fact]
+    public async Task Load_WhileLoading_IsIgnored()
+    {
+        var gate = new TaskCompletionSource<List<TanahpediaCategoryCount>>();
+        _service.Setup(s => s.GetCategoryCountsAsync(It.IsAny<CancellationToken>()))
+            .Returns(gate.Task);
+        _service.Setup(s => s.GetRecentEntriesAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+        _service.Setup(s => s.GetTodayEntitiesAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+
+        var vm = Create();
+        var pending = vm.LoadAsync();
+
+        vm.IsLoading.Should().BeTrue();
+        await vm.LoadAsync();
+        _service.Verify(s => s.GetCategoryCountsAsync(It.IsAny<CancellationToken>()), Times.Once);
+
+        gate.SetResult([]);
+        await pending;
+        vm.IsLoaded.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task OpenCategory_NavigatesWithSubFilter()
     {
         var vm = Create();
@@ -64,6 +98,30 @@ public class TanahpediaViewModelTests
     }
 
     [Fact]
+    public async Task OpenCategory_OmitsSubForTopLevelCategory()
+    {
+        var vm = Create();
+        var place = TanahpediaTaxonomy.Find("PLACE")!;
+
+        await vm.OpenCategoryAsync(new TanahpediaCategoryItem { Category = place });
+
+        _navigator.Verify(n => n.GoToAsync(
+            It.Is<string>(r => r.StartsWith("tanahpediaCategory") &&
+                r.Contains("key=PLACE") && r.Contains("entityType=PLACE") && !r.Contains("sub="))),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task OpenCategory_IgnoresNullItem()
+    {
+        var vm = Create();
+
+        await vm.OpenCategoryAsync(null!);
+
+        _navigator.Verify(n => n.GoToAsync(It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
     public async Task OpenEntry_NavigatesToEntryRoute()
     {
         var vm = Create();
@@ -72,6 +130,18 @@ public class TanahpediaViewModelTests
 
         _navigator.Verify(n => n.GoToAsync(
             It.Is<string>(r => r.StartsWith("tanahpediaEntry") && r.Contains("uniqueName="))), Times.Once);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public async Task OpenEntry_IgnoresEmptyName(string? uniqueName)
+    {
+        var vm = Create();
+
+        await vm.OpenEntryAsync(uniqueName);
+
+        _navigator.Verify(n => n.GoToAsync(It.IsAny<string>()), Times.Never);
     }
 }
 
@@ -110,6 +180,9 @@ public class TanahpediaEntityTypeViewModelTests
         vm.Title.Should().Be("מקומות");
         vm.LayoutType.Should().Be("MAP");
         vm.IntroContent.Should().Be("<p>מבוא</p>");
+        vm.HasIntro.Should().BeTrue();
+        vm.HasEntities.Should().BeTrue();
+        vm.IsEmpty.Should().BeFalse();
         vm.Entities.Should().ContainSingle()
             .Which.IsSingleLink.Should().BeTrue();
     }
@@ -149,6 +222,88 @@ public class TanahpediaEntityTypeViewModelTests
 
         vm.HasError.Should().BeTrue();
         vm.IsLoaded.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Load_SkipsWhenEntityTypeMissing()
+    {
+        var vm = Create();
+
+        await vm.LoadAsync();
+
+        vm.IsLoading.Should().BeFalse();
+        vm.IsLoaded.Should().BeFalse();
+        _service.Verify(s => s.GetEntitiesWithEntriesAsync(
+            It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Load_WhileLoading_IsIgnored()
+    {
+        var gate = new TaskCompletionSource<List<TanahpediaEntityWithEntries>>();
+        _service.Setup(s => s.GetCategoryHomepageAsync("PERSON", It.IsAny<CancellationToken>()))
+            .ReturnsAsync((TanahpediaCategoryHomepage?)null);
+        _service.Setup(s => s.GetEntitiesWithEntriesAsync("PERSON", null, It.IsAny<CancellationToken>()))
+            .Returns(gate.Task);
+
+        var vm = Create();
+        vm.EntityType = "PERSON";
+        var pending = vm.LoadAsync();
+
+        vm.IsLoading.Should().BeTrue();
+        await vm.LoadAsync();
+        _service.Verify(s => s.GetEntitiesWithEntriesAsync(
+            "PERSON", null, It.IsAny<CancellationToken>()), Times.Once);
+
+        gate.SetResult([]);
+        await pending;
+        vm.IsLoaded.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Load_EmptyListing_SetsIsEmpty()
+    {
+        _service.Setup(s => s.GetCategoryHomepageAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((TanahpediaCategoryHomepage?)null);
+        _service.Setup(s => s.GetEntitiesWithEntriesAsync("PLANT", null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+
+        var vm = Create();
+        vm.EntityType = "PLANT";
+        vm.IsEmpty.Should().BeFalse();
+
+        await vm.LoadAsync();
+
+        vm.IsLoaded.Should().BeTrue();
+        vm.HasError.Should().BeFalse();
+        vm.HasIntro.Should().BeFalse();
+        vm.HasEntities.Should().BeFalse();
+        vm.IsEmpty.Should().BeTrue();
+        vm.LayoutType.Should().Be("LIST");
+        vm.Title.Should().Be("צמחים");
+    }
+
+    [Fact]
+    public async Task OpenEntry_NavigatesToEntryRoute()
+    {
+        var vm = Create();
+
+        await vm.OpenEntryAsync("ירושלים");
+
+        _navigator.Verify(n => n.GoToAsync(
+            It.Is<string>(r => r.StartsWith("tanahpediaEntry") && r.Contains("uniqueName="))), Times.Once);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public async Task OpenEntry_IgnoresEmptyName(string? uniqueName)
+    {
+        var vm = Create();
+
+        await vm.OpenEntryAsync(uniqueName);
+
+        _navigator.Verify(n => n.GoToAsync(It.IsAny<string>()), Times.Never);
     }
 
     [Fact]
@@ -198,6 +353,22 @@ public class TanahpediaEntryViewModelTests
         return (data, storage);
     }
 
+    private static async Task<(PerekDataService Data, TestStorage Storage)> PerekDataWithoutPasukTablesAsync()
+    {
+        // Catalog tables only — LoadPasukimAsync fails per group and the
+        // occurrences render with empty verse text.
+        var storage = new TestStorage();
+        var db = await storage.CreateDatabaseAsync(DbName,
+            "CREATE TABLE tanah_sefer (id INTEGER, name TEXT, tanach_us_name TEXT, perek_id_from INTEGER, perek_id_to INTEGER)",
+            "CREATE TABLE tanah_perek (id INTEGER, perek INTEGER, header TEXT)",
+            "CREATE TABLE tanah_additional (id INTEGER, sefer_id INTEGER, perek_from INTEGER, perek_to INTEGER, letter TEXT, tanach_us_name TEXT)",
+            "CREATE TABLE tanah_perek_date (perek_id INTEGER, cycle INTEGER, date TEXT, hebdate TEXT, star_rise TEXT)");
+        await db.ExecuteAsync("INSERT INTO tanah_sefer VALUES (16,'שופטים','Judges',235,253)");
+        await db.ExecuteAsync("INSERT INTO tanah_perek VALUES (250,16,NULL)");
+        var data = new PerekDataService(new LocalDatabaseService(storage.FileSystem.Object));
+        return (data, storage);
+    }
+
     [Fact]
     public async Task Load_Entry_MapsDetailAndOccurrences()
     {
@@ -221,7 +392,9 @@ public class TanahpediaEntryViewModelTests
         vm.ShowEntry.Should().BeTrue();
         vm.Title.Should().Be("שמשון הגיבור");
         vm.HasContent.Should().BeTrue();
+        vm.HasEntities.Should().BeTrue();
         vm.Entities.Should().ContainSingle();
+        vm.HasOccurrences.Should().BeTrue();
         vm.Occurrences.Should().ContainSingle();
         var occurrence = vm.Occurrences[0];
         occurrence.Citation.Should().Be("שופטים טז ג");
@@ -299,6 +472,161 @@ public class TanahpediaEntryViewModelTests
 
         vm.HasError.Should().BeTrue();
         vm.IsLoaded.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Load_SkipsWithoutUniqueName()
+    {
+        var vm = Create();
+
+        await vm.LoadAsync();
+
+        vm.IsLoading.Should().BeFalse();
+        vm.IsLoaded.Should().BeFalse();
+        _service.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task Load_WhileLoading_IsIgnored()
+    {
+        var gate = new TaskCompletionSource<TanahpediaEntryDetail?>();
+        _service.Setup(s => s.GetEntryDetailAsync("שמשון", It.IsAny<CancellationToken>()))
+            .Returns(gate.Task);
+
+        var vm = Create();
+        vm.UniqueName = "שמשון";
+        var pending = vm.LoadAsync();
+
+        vm.IsLoading.Should().BeTrue();
+        await vm.LoadAsync();
+        _service.Verify(s => s.GetEntryDetailAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
+
+        gate.SetResult(new TanahpediaEntryDetail { UniqueName = "שמשון", Title = "שמשון" });
+        await pending;
+        vm.ShowEntry.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Load_AliasTargetMissing_ShowsDisambiguation()
+    {
+        _service.Setup(s => s.GetEntryDetailAsync("דתן", It.IsAny<CancellationToken>()))
+            .ReturnsAsync((TanahpediaEntryDetail?)null);
+        _service.Setup(s => s.GetSynonymTargetsAsync("דתן", It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new TanahpediaSynonymTarget { UniqueName = "דתן-ואבירם", Title = "דתן ואבירם" }]);
+        _service.Setup(s => s.GetEntryDetailAsync("דתן-ואבירם", It.IsAny<CancellationToken>()))
+            .ReturnsAsync((TanahpediaEntryDetail?)null);
+
+        var vm = Create();
+        vm.UniqueName = "דתן";
+        await vm.LoadAsync();
+
+        vm.IsDisambiguation.Should().BeTrue();
+        vm.IsNotFound.Should().BeFalse();
+        vm.SynonymTargets.Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task Load_OccurrencesWithoutPasukRows_RenderWithEmptyVerse()
+    {
+        var (perekData, storage) = await PerekDataWithoutPasukTablesAsync();
+        await using var _ = storage;
+
+        _service.Setup(s => s.GetEntryDetailAsync("שמשון", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TanahpediaEntryDetail
+            {
+                UniqueName = "שמשון",
+                Title = "שמשון",
+                Occurrences =
+                [
+                    new TanahpediaEntryOccurrence { PerekId = 250, PasukNumber = 3 },
+                    // A perek the local catalog does not know falls back to a
+                    // bare-pasuk citation.
+                    new TanahpediaEntryOccurrence { PerekId = 100, PasukNumber = 5 },
+                ],
+            });
+
+        var vm = Create(perekData);
+        vm.UniqueName = "שמשון";
+        await vm.LoadAsync();
+
+        vm.ShowEntry.Should().BeTrue();
+        vm.Occurrences.Should().HaveCount(2);
+        vm.Occurrences[0].Citation.Should().Be("שופטים טז ג");
+        vm.Occurrences[0].VerseText.Should().BeEmpty();
+        vm.Occurrences[1].Citation.Should().Be("ה");
+        vm.Occurrences[1].VerseText.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task OpenEntry_NavigatesToOtherEntry()
+    {
+        var vm = Create();
+        vm.UniqueName = "שמשון";
+
+        await vm.OpenEntryAsync("דלילה");
+
+        _navigator.Verify(n => n.GoToAsync(
+            It.Is<string>(r => r.StartsWith("tanahpediaEntry") && r.Contains("uniqueName="))), Times.Once);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("שמשון")]
+    public async Task OpenEntry_IgnoresEmptyOrCurrentName(string? uniqueName)
+    {
+        var vm = Create();
+        vm.UniqueName = "שמשון";
+
+        await vm.OpenEntryAsync(uniqueName);
+
+        _navigator.Verify(n => n.GoToAsync(It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task OpenEntityCategory_IgnoresNullEntity()
+    {
+        var vm = Create();
+
+        await vm.OpenEntityCategoryAsync(null);
+
+        _navigator.Verify(n => n.GoToAsync(It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task OpenEntityCategory_IncludesSubForSubcategoryType()
+    {
+        var vm = Create();
+
+        await vm.OpenEntityCategoryAsync(new TanahpediaLinkedEntity { EntityType = "KING", EntityName = "דוד" });
+
+        _navigator.Verify(n => n.GoToAsync(
+            It.Is<string>(r => r.StartsWith("tanahpediaCategory") &&
+                r.Contains("key=KING") && r.Contains("entityType=PERSON") && r.Contains("sub=KING"))),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task OpenEntityCategory_FallsBackToEntityTypeWhenUnknown()
+    {
+        var vm = Create();
+
+        await vm.OpenEntityCategoryAsync(new TanahpediaLinkedEntity { EntityType = "COMET", EntityName = "כוכב שביט" });
+
+        _navigator.Verify(n => n.GoToAsync(
+            It.Is<string>(r => r.StartsWith("tanahpediaCategory") &&
+                r.Contains("key=COMET") && r.Contains("entityType=COMET") && !r.Contains("sub="))),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task GoBack_NavigatesUp()
+    {
+        var vm = Create();
+
+        await vm.GoBackAsync();
+
+        _navigator.Verify(n => n.GoToAsync(".."), Times.Once);
     }
 
     [Fact]

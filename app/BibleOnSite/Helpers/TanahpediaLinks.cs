@@ -55,14 +55,9 @@ public static class TanahpediaLinks
             return false;
         }
 
-        try
-        {
-            slug = Uri.UnescapeDataString(slug);
-        }
-        catch (UriFormatException)
-        {
-            // Malformed escapes — use the raw segment as-is, like the website.
-        }
+        // Malformed escapes decode to themselves — UnescapeDataString keeps the
+        // raw '%' run, matching the website's tolerant slug handling.
+        slug = Uri.UnescapeDataString(slug);
 
         uniqueName = slug.Trim().Normalize();
         return uniqueName.Length > 0;

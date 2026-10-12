@@ -42,10 +42,25 @@ public class TanahpediaModelsTests
     [Fact]
     public void Taxonomy_FindCoversTopLevelAndChildren()
     {
-        TanahpediaTaxonomy.Find("PERSON")?.Label.Should().Be("אישים");
-        TanahpediaTaxonomy.Find("KING")?.Label.Should().Be("מלכים");
-        TanahpediaTaxonomy.Find("KING")?.Sub.Should().Be("KING");
-        TanahpediaTaxonomy.Find("TAHOR")?.EntityType.Should().Be("ANIMAL");
+        TanahpediaTaxonomy.Find("PERSON")!.Label.Should().Be("אישים");
+        TanahpediaTaxonomy.Find("KING")!.Label.Should().Be("מלכים");
+        TanahpediaTaxonomy.Find("KING")!.Sub.Should().Be("KING");
+        TanahpediaTaxonomy.Find("TAHOR")!.EntityType.Should().Be("ANIMAL");
+        TanahpediaTaxonomy.Find("PERSON")!.HasChildren.Should().BeTrue();
+        TanahpediaTaxonomy.Find("NATION")!.HasChildren.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Taxonomy_Find_ReturnsNullForNullOrUnknown()
+    {
+        TanahpediaTaxonomy.Find(null).Should().BeNull();
+        TanahpediaTaxonomy.Find("NOPE").Should().BeNull();
+    }
+
+    [Fact]
+    public void Taxonomy_LabelFor_ReturnsEmptyForNull()
+    {
+        TanahpediaTaxonomy.LabelFor(null).Should().BeEmpty();
     }
 
     [Theory]

@@ -1,3 +1,4 @@
+using BibleOnSite.Models;
 using BibleOnSite.Services;
 using BibleOnSite.Tests.Support;
 using GraphQL.Client.Http;
@@ -264,5 +265,283 @@ public class TanahpediaServiceTests
         var act = () => service.GetEntriesAsync(50, 0, TestContext.Current.CancellationToken);
 
         await act.Should().ThrowAsync<GraphQLException>();
+    }
+
+    [Fact]
+    public async Task GetEntriesAsync_returns_empty_when_data_missing()
+    {
+        var transport = new GraphQLTransport("""{ "data": null }""");
+        var service = CreateService(transport);
+
+        var entries = await service.GetEntriesAsync(50, 0, TestContext.Current.CancellationToken);
+
+        entries.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetEntriesAsync_fills_null_dto_fields()
+    {
+        var transport = new GraphQLTransport("""
+            {
+              "data": {
+                "tanahpediaEntries": [
+                  { "id": null, "uniqueName": null, "title": null, "content": null, "updatedAt": null }
+                ]
+              }
+            }
+            """);
+        var service = CreateService(transport);
+
+        var entries = await service.GetEntriesAsync(50, 0, TestContext.Current.CancellationToken);
+
+        entries.Should().ContainSingle().Which.Should().Match<TanahpediaEntry>(e =>
+            e.Id == string.Empty && e.UniqueName == string.Empty &&
+            e.Title == string.Empty && e.UpdatedAt == string.Empty);
+    }
+
+    [Fact]
+    public async Task GetRecentEntriesAsync_returns_empty_when_data_missing()
+    {
+        var transport = new GraphQLTransport("""{ "data": null }""");
+        var service = CreateService(transport);
+
+        var entries = await service.GetRecentEntriesAsync(5, TestContext.Current.CancellationToken);
+
+        entries.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetRecentEntriesAsync_fills_null_dto_fields()
+    {
+        var transport = new GraphQLTransport("""
+            {
+              "data": {
+                "tanahpediaRecentEntries": [
+                  { "id": null, "uniqueName": null, "title": null, "updatedAt": null }
+                ]
+              }
+            }
+            """);
+        var service = CreateService(transport);
+
+        var entries = await service.GetRecentEntriesAsync(5, TestContext.Current.CancellationToken);
+
+        entries.Should().ContainSingle().Which.Title.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetEntryDetailAsync_fills_null_dto_fields()
+    {
+        var transport = new GraphQLTransport("""
+            {
+              "data": {
+                "tanahpediaEntry": {
+                  "id": null, "uniqueName": null, "title": null, "updatedAt": null,
+                  "entities": [ { "id": null, "entityId": null, "entityType": null, "entityName": null } ],
+                  "occurrences": null
+                }
+              }
+            }
+            """);
+        var service = CreateService(transport);
+
+        var detail = await service.GetEntryDetailAsync("x", TestContext.Current.CancellationToken);
+
+        detail.Should().NotBeNull();
+        detail!.UniqueName.Should().BeEmpty();
+        detail.Entities.Should().ContainSingle().Which.EntityType.Should().BeEmpty();
+        detail.Occurrences.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetEntryDetailAsync_defaults_null_collections()
+    {
+        var transport = new GraphQLTransport("""
+            {
+              "data": {
+                "tanahpediaEntry": {
+                  "id": "e1", "uniqueName": "x", "title": "x", "updatedAt": "2026-01-01",
+                  "entities": null, "occurrences": null
+                }
+              }
+            }
+            """);
+        var service = CreateService(transport);
+
+        var detail = await service.GetEntryDetailAsync("x", TestContext.Current.CancellationToken);
+
+        detail.Should().NotBeNull();
+        detail!.Entities.Should().BeEmpty();
+        detail.Occurrences.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetEntryDetailAsync_returns_null_when_data_or_entry_missing()
+    {
+        var service = CreateService(new GraphQLTransport("""{ "data": null }"""));
+        (await service.GetEntryDetailAsync("x", TestContext.Current.CancellationToken))
+            .Should().BeNull();
+
+        service = CreateService(new GraphQLTransport("""{ "data": { "tanahpediaEntry": null } }"""));
+        (await service.GetEntryDetailAsync("x", TestContext.Current.CancellationToken))
+            .Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetSynonymTargetsAsync_returns_empty_when_data_missing()
+    {
+        var transport = new GraphQLTransport("""{ "data": null }""");
+        var service = CreateService(transport);
+
+        var targets = await service.GetSynonymTargetsAsync("x", TestContext.Current.CancellationToken);
+
+        targets.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetSynonymTargetsAsync_fills_null_dto_fields()
+    {
+        var transport = new GraphQLTransport("""
+            {
+              "data": {
+                "tanahpediaSynonymTargets": [
+                  { "entryId": null, "uniqueName": null, "title": null, "label": null }
+                ]
+              }
+            }
+            """);
+        var service = CreateService(transport);
+
+        var targets = await service.GetSynonymTargetsAsync("x", TestContext.Current.CancellationToken);
+
+        targets.Should().ContainSingle().Which.Should().Match<TanahpediaSynonymTarget>(t =>
+            t.EntryId == string.Empty && t.UniqueName == string.Empty &&
+            t.Title == string.Empty && t.Label == null);
+    }
+
+    [Fact]
+    public async Task GetCategoryCountsAsync_returns_empty_when_data_missing()
+    {
+        var transport = new GraphQLTransport("""{ "data": null }""");
+        var service = CreateService(transport);
+
+        var counts = await service.GetCategoryCountsAsync(TestContext.Current.CancellationToken);
+
+        counts.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetCategoryCountsAsync_fills_null_category()
+    {
+        var transport = new GraphQLTransport("""
+            {
+              "data": {
+                "tanahpediaCategoryCounts": [ { "category": null, "count": 3 } ]
+              }
+            }
+            """);
+        var service = CreateService(transport);
+
+        var counts = await service.GetCategoryCountsAsync(TestContext.Current.CancellationToken);
+
+        counts.Should().ContainSingle().Which.Category.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetEntitiesWithEntriesAsync_fills_null_dto_fields()
+    {
+        var transport = new GraphQLTransport("""
+            {
+              "data": {
+                "tanahpediaEntities": [
+                  {
+                    "entityId": null, "entityType": null, "entityName": null,
+                    "linkedEntries": [ { "id": null, "uniqueName": null, "title": null } ]
+                  }
+                ]
+              }
+            }
+            """);
+        var service = CreateService(transport);
+
+        var entities = await service.GetEntitiesWithEntriesAsync("PERSON", null, TestContext.Current.CancellationToken);
+
+        entities.Should().ContainSingle();
+        entities[0].EntityType.Should().BeEmpty();
+        entities[0].LinkedEntries.Should().ContainSingle().Which.Title.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetEntitiesWithEntriesAsync_returns_empty_when_data_missing()
+    {
+        var transport = new GraphQLTransport("""{ "data": null }""");
+        var service = CreateService(transport);
+
+        var entities = await service.GetEntitiesWithEntriesAsync("PERSON", null, TestContext.Current.CancellationToken);
+
+        entities.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetEntitiesWithEntriesAsync_defaults_null_linked_entries()
+    {
+        var transport = new GraphQLTransport("""
+            {
+              "data": {
+                "tanahpediaEntities": [
+                  { "entityId": "e1", "entityType": "PERSON", "entityName": "דתן", "linkedEntries": null }
+                ]
+              }
+            }
+            """);
+        var service = CreateService(transport);
+
+        var entities = await service.GetEntitiesWithEntriesAsync("PERSON", null, TestContext.Current.CancellationToken);
+
+        entities.Should().ContainSingle().Which.LinkedEntries.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetTodayEntitiesAsync_returns_empty_when_data_missing()
+    {
+        var transport = new GraphQLTransport("""{ "data": null }""");
+        var service = CreateService(transport);
+
+        var entities = await service.GetTodayEntitiesAsync(9, 25, TestContext.Current.CancellationToken);
+
+        entities.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetCategoryHomepageAsync_returns_null_when_data_missing()
+    {
+        var transport = new GraphQLTransport("""{ "data": null }""");
+        var service = CreateService(transport);
+
+        var homepage = await service.GetCategoryHomepageAsync("PLACE", TestContext.Current.CancellationToken);
+
+        homepage.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetCategoryHomepageAsync_fills_null_fields()
+    {
+        var transport = new GraphQLTransport("""
+            {
+              "data": {
+                "tanahpediaCategoryHomepage": {
+                  "entityType": null, "layoutType": null, "content": null
+                }
+              }
+            }
+            """);
+        var service = CreateService(transport);
+
+        var homepage = await service.GetCategoryHomepageAsync("PLACE", TestContext.Current.CancellationToken);
+
+        homepage.Should().NotBeNull();
+        homepage!.EntityType.Should().BeEmpty();
+        homepage.LayoutType.Should().BeEmpty();
+        homepage.Content.Should().BeNull();
     }
 }

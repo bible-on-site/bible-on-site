@@ -423,10 +423,12 @@ async fn entities_with_entries_by_role(
     db: &Database,
     role: &str,
 ) -> Result<Vec<TanahpediaEntityWithEntries>, ServiceError> {
-    let role_table = match role {
-        "PROPHET" => "tanahpedia_person_role_prophet",
-        "KING" => "tanahpedia_person_role_king",
-        _ => unreachable!("role filter is validated by the caller"),
+    // The caller validates `sub` is a person role before dispatching here.
+    let role_table = if role == "PROPHET" {
+        "tanahpedia_person_role_prophet"
+    } else {
+        debug_assert_eq!(role, "KING", "role filter is validated by the caller");
+        "tanahpedia_person_role_king"
     };
     let sql = format!(
         r#"SELECT e.id AS entity_id, e.name AS entity_name,
@@ -456,10 +458,15 @@ async fn entities_with_entries_by_animal_classification(
     dimension: &str,
     value: &str,
 ) -> Result<Vec<TanahpediaEntityWithEntries>, ServiceError> {
-    let (table, column) = match dimension {
-        "kind" => ("tanahpedia_animal_kind", "kind"),
-        "purity" => ("tanahpedia_animal_purity", "purity"),
-        _ => unreachable!("classification dimension is validated by the caller"),
+    // The caller validates the subcategory dimension before dispatching here.
+    let (table, column) = if dimension == "kind" {
+        ("tanahpedia_animal_kind", "kind")
+    } else {
+        debug_assert_eq!(
+            dimension, "purity",
+            "classification dimension is validated by the caller"
+        );
+        ("tanahpedia_animal_purity", "purity")
     };
     let sql = format!(
         r#"SELECT e.id AS entity_id, e.name AS entity_name,
@@ -1024,6 +1031,58 @@ mod tests {
 
         assert_eq!(entities.len(), 1);
         assert_eq!(entities[0].entity_type, "ANIMAL");
+        assert!(entities[0].linked_entries.is_empty());
+    }
+
+    #[tokio::test]
+    async fn get_entities_with_entries_routes_king_sub_to_role_table() {
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![mock_row([
+                        ("entity_id", "entity-1".into()),
+                        ("entity_name", "דָּוִד".into()),
+                        ("entry_id", "e1".into()),
+                        ("entry_unique_name", "דוד".into()),
+                        ("entry_title", "דוד המלך".into()),
+                    ])],
+                ])
+                .into_connection(),
+        );
+
+        let entities = get_entities_with_entries(&db, "PERSON", Some("KING"))
+            .await
+            .unwrap();
+
+        assert_eq!(entities.len(), 1);
+        assert_eq!(entities[0].entity_type, "PERSON");
+        assert_eq!(entities[0].entity_name, "דָּוִד");
+        assert_eq!(entities[0].linked_entries.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn get_entities_with_entries_routes_purity_sub_to_classification() {
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![mock_row([
+                        ("entity_id", "entity-1".into()),
+                        ("entity_name", "שׁוֹר".into()),
+                        ("entry_id", Value::String(None)),
+                        ("entry_unique_name", Value::String(None)),
+                        ("entry_title", Value::String(None)),
+                    ])],
+                ])
+                .into_connection(),
+        );
+
+        let entities = get_entities_with_entries(&db, "ANIMAL", Some("TAHOR"))
+            .await
+            .unwrap();
+
+        assert_eq!(entities.len(), 1);
+        assert_eq!(entities[0].entity_type, "ANIMAL");
+        assert_eq!(entities[0].entity_name, "שׁוֹר");
         assert!(entities[0].linked_entries.is_empty());
     }
 

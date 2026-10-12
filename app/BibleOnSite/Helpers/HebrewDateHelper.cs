@@ -137,13 +137,7 @@ public static class HebrewDateHelper
             DateTime.UtcNow,
             GetIsraelTimeZoneId());
         var hebrewDate = GetTzeitAwareHebrewDate(now);
-        var legacyMonth = CalendarMonthToLegacy(hebrewDate.Year, hebrewDate.Month);
-        var monthName = GetHebrewMonthName(legacyMonth, IsHebrewLeapYear(hebrewDate.Year));
-        var dayText = hebrewDate.Day.ToHebrewLetters();
-        var yearText = (hebrewDate.Year % 1000).ToHebrewLetters();
-        return string.IsNullOrEmpty(monthName)
-            ? string.Empty
-            : $"{dayText} {monthName} {yearText}";
+        return FormatHebrewDate(HebrewDateToNumber(hebrewDate));
     }
 
     /// <summary>
@@ -357,11 +351,15 @@ public static class HebrewDateHelper
     /// </summary>
     internal static string GetIsraelTimeZoneId()
     {
-        // Windows uses "Israel Standard Time", Unix uses "Asia/Jerusalem"
-        return TimeZoneInfo.TryFindSystemTimeZoneById("Asia/Jerusalem", out _)
-            ? "Asia/Jerusalem"
-            : "Israel Standard Time";
+        // Modern runtimes (ICU) alias "Asia/Jerusalem" everywhere; pre-ICU
+        // Windows only knows "Israel Standard Time".
+        return IsraelTimeZoneId(
+            TimeZoneInfo.TryFindSystemTimeZoneById("Asia/Jerusalem", out _));
     }
+
+    /// <summary>Picks the tz id that exists on the running platform.</summary>
+    internal static string IsraelTimeZoneId(bool hasJerusalemAlias) =>
+        hasJerusalemAlias ? "Asia/Jerusalem" : "Israel Standard Time";
 
     #region Hebrew month helpers (לוח לימוד יומי)
 
