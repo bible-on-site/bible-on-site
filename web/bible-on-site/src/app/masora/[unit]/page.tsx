@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import { unstable_cache } from "next/cache";
 import { notFound } from "next/navigation";
-import { getArticleSummariesForRanges } from "@/lib/articles/service";
-import { getPerushimForRanges } from "@/lib/perushim/service";
-import { unitEquivalentPerekId, unitPerekIds } from "@/lib/reading/ranges";
-import { fetchAllEntityRefs } from "@/lib/tanahpedia/perek-entity-refs";
-import { SITE_NAME } from "@/lib/seo/jsonld";
+import { Suspense } from "react";
+import { ArticlesSection } from "@/app/929/[number]/components/ArticlesSection";
+import { PerushimSection } from "@/app/929/[number]/components/PerushimSection";
+import perekStyles from "@/app/929/[number]/page.module.css";
+import { UnitPerushimSection } from "@/app/components/reading/UnitPerushimSection";
+import { unitPerushHref } from "@/app/components/reading/unit-perush";
 import {
 	getAdjacentMasoraUnits,
 	getMasoraUnitById,
@@ -13,9 +14,12 @@ import {
 	MASORA_DIVISION,
 	masoraPasukCount,
 } from "@/data/masora/masora-units";
-import { ArticlesSection } from "@/app/929/[number]/components/ArticlesSection";
-import { PerushimSection } from "@/app/929/[number]/components/PerushimSection";
-import perekStyles from "@/app/929/[number]/page.module.css";
+import { getArticleSummariesForRanges } from "@/lib/articles/service";
+import { getPerushimForRanges } from "@/lib/perushim/service";
+import { rangePerekSources } from "@/lib/reading/queries";
+import { unitEquivalentPerekId, unitPerekIds } from "@/lib/reading/ranges";
+import { SITE_NAME } from "@/lib/seo/jsonld";
+import { fetchAllEntityRefs } from "@/lib/tanahpedia/perek-entity-refs";
 import { UnitBreadcrumb } from "./components/UnitBreadcrumb";
 import { UnitNav } from "./components/UnitNav";
 import { UnitText } from "./components/UnitText";
@@ -129,19 +133,49 @@ export default async function MasoraUnitPage({
 			<UnitText unit={unit} entityRefsByPerek={entityRefsByPerek} />
 			<UnitNav prev={prev} next={next} />
 
-			{/* Perushim section - commentaries scoped to the unit's ranges */}
-			<PerushimSection
-				perekId={unit.ranges[0].start.perekId}
-				perushim={perushim}
-				title="פרשנים על הפרשה"
-				emptyMessage="אין פרשנות לפרשה זו"
-			/>
+			{/* Perushim section - commentaries bounded to the unit's ranges,
+				opening in place rather than redirecting to /929 (issue #2190).
+				useSearchParams inside the section requires a boundary so the
+				static shell can prerender; the fallback keeps the same
+				carousel with division-internal perush links. */}
+			<Suspense
+				fallback={
+					<PerushimSection
+						perekId={unit.ranges[0].start.perekId}
+						perushim={perushim}
+						title="פרשנים על הפרשה"
+						emptyMessage="אין פרשנות לפרשה זו"
+						hrefForPerush={(perush) =>
+							unitPerushHref(
+								`${MASORA_DIVISION.rootPath}/${unitId}`,
+								"torah",
+								perush.name,
+							)
+						}
+						scrollStorageKey={`perushim-masora-${unitId}`}
+					/>
+				}
+			>
+				<UnitPerushimSection
+					division="masora"
+					unitId={unitId}
+					scope="torah"
+					unitPath={`${MASORA_DIVISION.rootPath}/${unitId}`}
+					perekId={unit.ranges[0].start.perekId}
+					perushim={perushim}
+					title="פרשנים על הפרשה"
+					emptyMessage="אין פרשנות לפרשה זו"
+					scrollStorageKey={`perushim-masora-${unitId}`}
+					perekSources={rangePerekSources(unit.ranges)}
+				/>
+			</Suspense>
 
 			{/* Articles section - articles from every overlapping perek */}
 			<ArticlesSection
 				articles={articles}
 				title="מאמרים על הפרשה"
 				emptyMessage="אין מאמרים לפרשה זו"
+				scrollStorageKey={`articles-masora-${unitId}`}
 			/>
 		</div>
 	);
