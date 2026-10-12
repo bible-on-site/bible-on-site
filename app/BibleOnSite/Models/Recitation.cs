@@ -9,6 +9,13 @@ public sealed record RecitationWord(int Pasuk, int Segment, string Text, double?
 public sealed record RecitationTrack(int PerekId, string AudioUrl, string AudioSha256, string TextSha256,
     double DurationMs, string AlignmentStatus, List<RecitationWord> Words)
 {
+    // AudioSha256 always identifies the unchanged MP3 used for alignment.
+    public RecitationPlayback? Playback { get; init; }
+    [JsonIgnore]
+    public string PlaybackSha256 => Playback?.Sha256 ?? AudioSha256;
+    [JsonIgnore]
+    public string PlaybackFileName => PlaybackSha256 + (Playback == null ? ".mp3" : ".ogg");
+
     public bool Matches(IReadOnlyList<Pasuk> pasukim)
     {
         var canonical = pasukim.SelectMany(p => p.Segments.Select((s, i) => (p.PasukNum, Segment: i + 1, s.Type, s.Value)))
@@ -22,6 +29,11 @@ public sealed record RecitationTrack(int PerekId, string AudioUrl, string AudioS
 
     public void Validate()
     {
+        if (Playback != null && (Playback.Format != "ogg-opus" || !IsHash(Playback.Sha256) ||
+            Playback.SizeBytes <= 0 || Playback.Bitrate != 24000 || Playback.SourceSha256 != AudioSha256))
+        {
+            throw new InvalidDataException("Invalid derived playback metadata.");
+        }
         if (PerekId is < 1 or > 929 || !Uri.TryCreate(AudioUrl, UriKind.Absolute, out var url) ||
             url.Scheme is not ("https" or "http") || url.UserInfo.Length != 0 || url.Query.Length != 0 || url.Fragment.Length != 0 ||
             !url.AbsolutePath.EndsWith($"/recordings/{PerekId}_record.mp3", StringComparison.Ordinal) ||
@@ -70,6 +82,8 @@ public sealed record RecitationTrack(int PerekId, string AudioUrl, string AudioS
 
     private static bool IsHash(string? value) => value is { Length: 64 } && value.All(c => "0123456789abcdef".Contains(c));
 }
+
+public sealed record RecitationPlayback(string Format, string Sha256, long SizeBytes, int Bitrate, string SourceSha256);
 
 public sealed record RecitationPackage(int Version, List<RecitationTrack> Tracks)
 {
@@ -126,6 +140,7 @@ public sealed record RecitationExtensionCatalog(int Version, RecitationPackage P
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [JsonSerializable(typeof(RecitationPackage))]
 [JsonSerializable(typeof(RecitationTrack))]
+[JsonSerializable(typeof(RecitationPlayback))]
 [JsonSerializable(typeof(RecitationExtensionCatalog))]
 [JsonSerializable(typeof(string))]
 [JsonSerializable(typeof(List<RecitationClipRange>), TypeInfoPropertyName = "ClipRanges")]
