@@ -68,6 +68,9 @@ flags:
   admin:
     paths:
       - web/admin/src/
+  admin_e2e:
+    paths:
+      - web/admin/src/
   data:
     paths:
       - data/

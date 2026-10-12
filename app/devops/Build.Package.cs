@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 using Nuke.Common;
 using Nuke.Common.IO;
+using Nuke.Common.Tooling;
 using Nuke.Common.Tools.DotNet;
 using static Nuke.Common.Tools.DotNet.DotNetTasks;
 
@@ -45,7 +46,7 @@ partial class Build
             {
                 if (OperatingSystem.IsWindows())
                 {
-                    PackageWindows(version);
+                    PackageWindows();
                 }
                 else
                 {
@@ -55,14 +56,14 @@ partial class Build
 
             if (Platform.Equals("Android", StringComparison.OrdinalIgnoreCase) || Platform.Equals("All", StringComparison.OrdinalIgnoreCase))
             {
-                PackageAndroid(version);
+                PackageAndroid();
             }
 
             if (Platform.Equals("iOS", StringComparison.OrdinalIgnoreCase) || Platform.Equals("All", StringComparison.OrdinalIgnoreCase))
             {
                 if (OperatingSystem.IsMacOS())
                 {
-                    PackageIos(version);
+                    PackageIos();
                 }
                 else
                 {
@@ -76,7 +77,17 @@ partial class Build
         .Unlisted()
         .Executes(() =>
         {
-            // This target only restores the appropriate platform - build happens in publish
+            var platforms = Platform.Equals("All", StringComparison.OrdinalIgnoreCase)
+                ? new[] { "Android", OperatingSystem.IsMacOS() ? "iOS" : "Windows" }
+                : new[] { Platform };
+            foreach (var platform in platforms)
+            {
+                ProcessTasks.StartProcess(OperatingSystem.IsWindows() ? "python" : "python3",
+                    $"\"{RootDirectory / "devops/prepare_recitation_assets.py"}\" --platform {platform}", RootDirectory)
+                    .AssertZeroExitCode();
+            }
+
+            // Generate extension assets before project evaluation, then restore the target platform.
             if (Platform.Equals("Windows", StringComparison.OrdinalIgnoreCase))
             {
                 if (OperatingSystem.IsWindows())
@@ -111,7 +122,7 @@ partial class Build
             }
         });
 
-    void PackageWindows(string version)
+    void PackageWindows()
     {
         Serilog.Log.Information("Packaging for Windows (MSIX)...");
 
@@ -122,6 +133,7 @@ partial class Build
             ["AppxPackageDir"] = $"{ArtifactsDirectory}/",
             ["AppxPackageSigningEnabled"] = "true",
             ["TargetFramework"] = "net10.0-windows10.0.19041.0",
+            ["RequireRecitationAssets"] = "true",
             // Microsoft Store requires revision (4th component) to be 0
             // Override ApplicationVersion to 0 to produce X.Y.Z.0 version format
             ["ApplicationVersion"] = "0"
@@ -144,13 +156,14 @@ partial class Build
         Serilog.Log.Information($"Windows MSIX package created in {ArtifactsDirectory}");
     }
 
-    void PackageAndroid(string version)
+    void PackageAndroid()
     {
         Serilog.Log.Information("Packaging for Android (AAB)...");
 
         var msbuildProperties = new Dictionary<string, object>
         {
             ["AndroidPackageFormat"] = "aab",
+            ["RequireRecitationAssets"] = "true",
             ["RuntimeIdentifiers"] = "android-arm64"
         };
 
@@ -196,7 +209,7 @@ partial class Build
         Serilog.Log.Information($"Android AAB package created in {ArtifactsDirectory}");
     }
 
-    void PackageIos(string version)
+    void PackageIos()
     {
         Serilog.Log.Information("Packaging for iOS (IPA)...");
 
@@ -205,6 +218,7 @@ partial class Build
             ["TargetFramework"] = "net10.0-ios",
             ["ArchiveOnBuild"] = "true",
             ["BuildIpa"] = "true",
+            ["RequireRecitationAssets"] = "true",
             ["IpaPackageDir"] = $"{ArtifactsDirectory}/",
             ["SupportedOSPlatformVersion"] = "17.0",
             ["_ExcludeSimulatorArchitectures"] = "true"

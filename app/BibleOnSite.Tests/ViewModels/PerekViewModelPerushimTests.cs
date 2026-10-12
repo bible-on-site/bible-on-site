@@ -115,6 +115,20 @@ public class PerekViewModelPerushimTests
     #region FillFilteredPerushContents
 
     [Fact]
+    public void FocusedVerseShowsAllItsCommentaries_RegardlessOfInlineSelection()
+    {
+        var vm = CreateViewModelWithPerushimAndNotes();
+        vm.ToggleCheckedPerush(2);
+        vm.Perek!.Pasukim[0].PerushNotes.Should().ContainSingle().Which.PerushName.Should().Be("אבן עזרא");
+        var focused = vm.GetPerushimForPasuk(1);
+        focused.Select(n => n.PerushName).Should().Equal("רש\"י", "אבן עזרא");
+        focused[0].NoteContents.Should().Equal("בראשית - בשביל התורה");
+        vm.GetPerushimForPasuk(3).Should().ContainSingle().Which.NoteContents.Should().Equal("ויאמר - note 1", "ויאמר - note 2");
+        vm.GetPerushimForPasuk(4).Should().BeEmpty();
+        vm.IsPerushChecked(1).Should().BeFalse("focusing a verse must not change inline filters");
+    }
+
+    [Fact]
     public void RefreshingWithNoCheckedPerushimDoesNotRebindEmptyVerseNotes()
     {
         var vm = CreateViewModelWithPerushimAndNotes();

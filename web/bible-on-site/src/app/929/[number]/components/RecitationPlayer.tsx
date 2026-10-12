@@ -18,13 +18,23 @@ import {
 	playableWords,
 	type Recitation,
 	type RecitationWord,
+	resumeRanges,
 	verseRange,
+	wordAtPosition,
 } from "@/lib/recitation";
 import { RecitationAudio } from "@/lib/recitation-audio";
+import {
+	getRecitationSettings,
+	openReaderSettings,
+	RECITATION_SETTINGS_EVENT,
+	type RecitationSettings,
+} from "@/lib/recitation-settings";
 import styles from "./recitation-player.module.css";
+import SettingsIcon from "./SettingsIcon";
 
 const STOP_EVENT = "recitation-stop";
 const LOADING_MESSAGE = "טעינה על הפרק...";
+const NO_RECORDING_MESSAGE = "אין הקלטה לפרק זה";
 export function stopRecitation() {
 	window.dispatchEvent(new Event(STOP_EVENT));
 }
@@ -34,7 +44,7 @@ const RecitationContext = createContext<{
 	enabled: boolean;
 	words: RecitationWord[];
 	activeWord: string | null;
-	play: (start: number, end: number, word?: string) => void;
+	play: (start: number, end: number) => void;
 } | null>(null);
 
 export function RecitationHeader({ title }: { title: string }) {
@@ -76,43 +86,126 @@ export function RecitationWordControl({
 	const word = context?.enabled
 		? context.words.find((w) => w.pasuk === pasuk && w.segment === segment)
 		: undefined;
-	if (!word || !context) return <>{children}</>;
 	const key = `${pasuk}:${segment}`;
 	return (
-		<button
-			data-flipbook-no-flip
-			type="button"
+		<InlineRecitationControl
 			className={styles.word}
-			aria-label={`השמעת המילה ${word.text}`}
-			aria-pressed={context.activeWord === key}
-			onClick={() => context.play(word.startMs, word.endMs, key)}
+			label={word ? `השמעת המילה ${word.text}` : undefined}
+			pressed={context?.activeWord === key}
+			onActivate={
+				word && context
+					? () => context.play(word.startMs, word.endMs)
+					: undefined
+			}
 		>
 			{children}
-		</button>
+		</InlineRecitationControl>
 	);
 }
 
 export function RecitationPasukControl({
 	pasuk,
 	children,
+	onNavigate,
 }: {
 	pasuk: number;
 	children: ReactNode;
+	/**
+	 * When set (a perush is open for this perek), activation jumps to the
+	 * pasuk's commentary group instead of playing the pasuk.
+	 */
+	onNavigate?: () => void;
 }) {
 	const context = useContext(RecitationContext);
 	const range = context?.enabled ? verseRange(context.words, pasuk) : null;
-	if (!range || !context) return <>{children}</>;
+	const label = onNavigate
+		? `מעבר לפירוש על פסוק ${toLetters(pasuk)}`
+		: `השמעת פסוק ${toLetters(pasuk)}`;
 	return (
-		<button
-			data-flipbook-no-flip
-			type="button"
+		<InlineRecitationControl
 			className={styles.pasuk}
-			aria-label={`השמעת פסוק ${toLetters(pasuk)}`}
-			title={`השמעת פסוק ${toLetters(pasuk)}`}
-			onClick={() => context.play(range.startMs, range.endMs)}
+			label={onNavigate || range ? label : undefined}
+			title={onNavigate || range ? label : undefined}
+			onActivate={
+				onNavigate ??
+				(range && context
+					? () => context.play(range.startMs, range.endMs)
+					: undefined)
+			}
 		>
 			{children}
-		</button>
+		</InlineRecitationControl>
+	);
+}
+
+/** Native buttons form atomic text boxes and change Hebrew spacing and wrapping. */
+function InlineRecitationControl({
+	children,
+	className,
+	label,
+	title,
+	pressed,
+	onActivate,
+}: {
+	children: ReactNode;
+	className: string;
+	label?: string;
+	title?: string;
+	pressed?: boolean;
+	onActivate?: () => void;
+}) {
+	return (
+		// biome-ignore lint/a11y/noStaticElementInteractions lint/a11y/useAriaPropsSupportedByRole: The button role, ARIA, focus and keyboard handlers activate together while preserving inline Hebrew typography.
+		<span
+			className={className}
+			data-flipbook-no-flip={onActivate ? true : undefined}
+			role={onActivate ? "button" : undefined}
+			tabIndex={onActivate ? 0 : undefined}
+			aria-label={label}
+			aria-pressed={onActivate ? pressed : undefined}
+			aria-current={pressed ? "true" : undefined}
+			data-recitation-active={pressed || undefined}
+			title={title}
+			onClick={onActivate}
+			onKeyDown={
+				onActivate
+					? (event) => {
+							if (event.key === " ") event.preventDefault();
+							if (event.key === "Enter") {
+								event.preventDefault();
+								onActivate();
+							}
+						}
+					: undefined
+			}
+			onKeyUp={
+				onActivate
+					? (event) => {
+							if (event.key === " ") {
+								event.preventDefault();
+								onActivate();
+							}
+						}
+					: undefined
+			}
+		>
+			{children}
+		</span>
+	);
+}
+
+export function RecitationVerse({
+	children,
+	pasuk,
+}: {
+	children: ReactNode;
+	/** Pasuk number; marks the verse as a sefer pasuk-navigation target. */
+	pasuk?: number;
+}) {
+	return (
+		<span className={styles.verse} data-sefer-pasuk={pasuk}>
+			{children}
+		</span>
 	);
 }
 
@@ -147,10 +240,12 @@ function ListenIcon() {
 export default function RecitationPlayer({
 	perekId,
 	pesukim,
+	hasRecording,
 	children,
 }: {
 	perekId: number;
 	pesukim: Pasuk[];
+	hasRecording: boolean;
 	children?: ReactNode;
 }) {
 	const id = useId();
@@ -162,15 +257,32 @@ export default function RecitationPlayer({
 	const [state, setState] = useState<"idle" | "loading" | "playing" | "paused">(
 		"idle",
 	);
-	const audio = useRef<HTMLAudioElement | null>(null);
-	const attachAudio = useCallback((element: HTMLAudioElement | null) => {
-		audio.current?.pause();
-		audio.current = element;
-	}, []);
 	const precise = useRef<RecitationAudio | null>(null);
+	const settings = useRef<RecitationSettings>(getRecitationSettings());
 	const preparing = useRef(false);
+	// The last tapped word or pasuk marks where continuous playback resumes, in
+	// recording milliseconds; it stays independent of preview stop/reset state.
+	const resumeAt = useRef<number | null>(null);
+	// Whether the active plan is a bounded word/pasuk preview; the chapter Play
+	// button then starts continuous playback at the bookmark instead of pausing.
+	const previewActive = useRef(false);
+	useEffect(() => {
+		const apply = (next: RecitationSettings) => {
+			settings.current = next;
+			precise.current?.setOptions(next.speed, next.volume);
+		};
+		apply(getRecitationSettings());
+		const changed = (event: Event) =>
+			apply((event as CustomEvent<RecitationSettings>).detail);
+		const stored = () => apply(getRecitationSettings());
+		window.addEventListener(RECITATION_SETTINGS_EVENT, changed);
+		window.addEventListener("storage", stored);
+		return () => {
+			window.removeEventListener(RECITATION_SETTINGS_EVENT, changed);
+			window.removeEventListener("storage", stored);
+		};
+	}, []);
 	const request = useRef(0);
-	const kind = useRef<"chapter" | "clip" | null>(null);
 	const createAudio = useCallback((recitation: Recitation) => {
 		const player: RecitationAudio = new RecitationAudio(
 			recitation.audioUrl,
@@ -184,8 +296,7 @@ export default function RecitationPlayer({
 
 	const stop = useCallback((release = false) => {
 		request.current++;
-		kind.current = null;
-		audio.current?.pause();
+		previewActive.current = false;
 		precise.current?.stop();
 		if (release) {
 			precise.current?.dispose();
@@ -219,6 +330,14 @@ export default function RecitationPlayer({
 	useEffect(() => {
 		stop(true);
 		setData(null);
+		// A new perek or recording never inherits a stale resume position.
+		resumeAt.current = null;
+		if (!hasRecording) {
+			setOpen(false);
+			setMessage("");
+			setDownloadProgress(null);
+			return;
+		}
 		if (!open) return;
 		window.dispatchEvent(new CustomEvent(STOP_EVENT, { detail: id }));
 		const controller = new AbortController();
@@ -262,9 +381,10 @@ export default function RecitationPlayer({
 			controller.abort();
 			stop(true);
 		};
-	}, [open, perekId, pesukim, stop, id, createAudio]);
+	}, [open, hasRecording, perekId, pesukim, stop, id, createAudio]);
 
 	function finish() {
+		previewActive.current = false;
 		setState("idle");
 		setActiveWord(null);
 	}
@@ -273,27 +393,45 @@ export default function RecitationPlayer({
 		setMessage("ההקלטה לא נטענה. נסו שוב.");
 	}
 
-	async function play(startMs?: number, endMs?: number, segment?: string) {
-		if (!data || !audio.current) return;
+	async function play(startMs?: number, endMs?: number) {
+		if (!data) return;
 		window.dispatchEvent(new CustomEvent(STOP_EVENT, { detail: id }));
 		const generation = ++request.current;
 		setMessage("");
 		setState("loading");
 		setDownloadProgress(null);
-		setActiveWord(segment ?? null);
+		setActiveWord(null);
+		// A tapped word or pasuk previews just that interval and marks where the
+		// next continuous playback resumes, even if Play is pressed mid-preview.
+		const preview = startMs !== undefined && endMs !== undefined;
+		previewActive.current = preview;
+		if (preview) resumeAt.current = startMs;
 		try {
-			if (startMs !== undefined && endMs !== undefined) {
-				kind.current = "clip";
-				precise.current ??= createAudio(data);
-				const started = await precise.current.play(startMs, endMs, () => {
-					if (request.current === generation) finish();
-				});
-				if (!started) return;
-			} else {
-				kind.current = "chapter";
-				audio.current.currentTime = 0;
-				await audio.current.play();
-			}
+			precise.current ??= createAudio(data);
+			precise.current.setOptions(
+				settings.current.speed,
+				settings.current.volume,
+			);
+			const ended = () => {
+				if (request.current !== generation) return;
+				// Reaching the end of the perek consumes the resume position.
+				if (!preview) resumeAt.current = null;
+				finish();
+			};
+			const resume = resumeAt.current;
+			const started = await (preview
+				? precise.current.play(startMs, endMs, ended)
+				: data.alignmentStatus === "ready" &&
+						settings.current.versePauseMs !== null
+					? precise.current.playRanges(
+							resumeRanges(playableWords(data), resume),
+							settings.current.versePauseMs,
+							ended,
+						)
+					: resume === null
+						? precise.current.playChapter(ended)
+						: precise.current.play(resume, undefined, ended));
+			if (!started) return;
 			if (request.current === generation) setState("playing");
 		} catch {
 			if (request.current === generation) fail();
@@ -302,36 +440,54 @@ export default function RecitationPlayer({
 
 	async function togglePlayback() {
 		if (state === "loading") return;
-		if (state === "playing") {
-			if (kind.current === "clip") {
-				if (!precise.current?.pause()) {
-					finish();
-					return;
-				}
-			} else audio.current?.pause();
-			setState("paused");
-			return;
-		}
-		if (state === "paused") {
-			const generation = request.current;
-			setState("loading");
-			try {
-				if (kind.current === "clip") {
+		if (state === "playing" || state === "paused") {
+			// A bounded word/pasuk preview is not the chapter's playback: Play
+			// during one starts continuous playback at the bookmark.
+			if (previewActive.current) {
+				request.current++;
+				precise.current?.stop();
+				await play();
+				return;
+			}
+			if (state === "paused") {
+				const generation = request.current;
+				setState("loading");
+				try {
 					if (!(await precise.current?.resume())) {
 						if (request.current === generation) finish();
 						return;
 					}
-				} else await audio.current?.play();
-				if (request.current === generation) setState("playing");
-			} catch {
-				if (request.current === generation) fail();
+					if (request.current === generation) setState("playing");
+				} catch {
+					if (request.current === generation) fail();
+				}
+				return;
 			}
+			if (!precise.current?.pause()) {
+				finish();
+				return;
+			}
+			setState("paused");
 			return;
 		}
 		await play();
 	}
 
 	const alignedWords = useMemo(() => playableWords(data), [data]);
+	useEffect(() => {
+		if (state !== "playing" || alignedWords.length === 0) return;
+		let frame = 0;
+		const update = () => {
+			const word = wordAtPosition(
+				alignedWords,
+				precise.current?.positionMs ?? null,
+			);
+			setActiveWord(word ? `${word.pasuk}:${word.segment}` : null);
+			frame = requestAnimationFrame(update);
+		};
+		update();
+		return () => cancelAnimationFrame(frame);
+	}, [state, alignedWords]);
 	const loading = open && (message === LOADING_MESSAGE || state === "loading");
 	const status =
 		message ||
@@ -355,27 +511,41 @@ export default function RecitationPlayer({
 					onClick={() => void togglePlayback()}
 					disabled={state === "loading"}
 					aria-label={
-						state === "playing"
+						state === "playing" && !previewActive.current
 							? "השהיית ההקראה"
-							: state === "paused"
+							: state === "paused" && !previewActive.current
 								? "המשך ההקראה"
 								: "השמעת כל הפרק"
 					}
 					title={
-						state === "playing"
+						state === "playing" && !previewActive.current
 							? "השהיית ההקראה"
-							: state === "paused"
+							: state === "paused" && !previewActive.current
 								? "המשך ההקראה"
 								: "השמעת כל הפרק"
 					}
 				>
 					<svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true">
-						{state === "playing" ? (
+						{state === "playing" && !previewActive.current ? (
 							<path d="M3 2h4v12H3Zm6 0h4v12H9Z" fill="currentColor" />
 						) : (
 							<path d="M4 2v12l10-6Z" fill="currentColor" />
 						)}
 					</svg>
+				</button>
+			)}
+			{open && data && (
+				<button
+					data-flipbook-no-flip
+					type="button"
+					className={styles.action}
+					aria-label="הגדרות קריינות"
+					aria-haspopup="dialog"
+					onClick={(event) =>
+						openReaderSettings("recitation", event.currentTarget)
+					}
+				>
+					<SettingsIcon />
 				</button>
 			)}
 			<button
@@ -385,6 +555,8 @@ export default function RecitationPlayer({
 				aria-pressed={open && data !== null}
 				aria-busy={loading}
 				aria-label="מצב הקראה"
+				disabled={!hasRecording}
+				title={hasRecording ? undefined : NO_RECORDING_MESSAGE}
 				onClick={() => setOpen((value) => !value)}
 			>
 				<ListenIcon />
@@ -434,23 +606,9 @@ export default function RecitationPlayer({
 				enabled: open && alignedWords.length > 0,
 				words: alignedWords,
 				activeWord,
-				play: (start, end, word) => void play(start, end, word),
+				play: (start, end) => void play(start, end),
 			}}
 		>
-			{open && data && (
-				// biome-ignore lint/a11y/useMediaCaption: The visible scripture is the transcript.
-				<audio
-					ref={attachAudio}
-					src={data.audioUrl}
-					preload="none"
-					onEnded={() => {
-						if (kind.current === "chapter") finish();
-					}}
-					onError={() => {
-						if (kind.current === "chapter") fail();
-					}}
-				/>
-			)}
 			{children}
 		</RecitationContext.Provider>
 	);

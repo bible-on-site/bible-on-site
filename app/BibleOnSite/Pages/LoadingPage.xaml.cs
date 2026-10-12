@@ -21,7 +21,9 @@ public partial class LoadingPage : ContentPage
         base.OnAppearing();
 
         if (_isLoading)
+        {
             return;
+        }
 
         _isLoading = true;
 
@@ -36,7 +38,9 @@ public partial class LoadingPage : ContentPage
 
             // Load PerekDataService (tanah) so GetTodaysPerekId works for startup preference
             if (!PerekDataService.Instance.IsLoaded)
+            {
                 await PerekDataService.Instance.LoadAsync();
+            }
 
             await LoadStarterDataAsync();
         }
@@ -48,7 +52,7 @@ public partial class LoadingPage : ContentPage
         // Start monitoring connectivity changes so we can refresh when back online
         NetworkService.Instance.StartMonitoring();
 
-        // Always navigate — the app works without articles/authors
+        // Always open the reader — the app works without articles/authors
         await NavigateToMainPageAsync();
     }
 
@@ -71,7 +75,8 @@ public partial class LoadingPage : ContentPage
 
     private static async Task NavigateToMainPageAsync()
     {
-        // Navigate to the main PerekPage
-        await Shell.Current.GoToAsync("//PerekPage");
+        Console.WriteLine("[Startup] Opening PerekPage in the existing ShellContent");
+        await MainThread.InvokeOnMainThreadAsync(() => ((AppShell)Shell.Current).CompleteStartup());
+        Console.WriteLine("[Startup] PerekPage startup completed");
     }
 }

@@ -15,7 +15,13 @@ public enum SearchFilter
     Perush,
 
     /// <summary>Search for perek by name/source.</summary>
-    Perek
+    Perek,
+
+    /// <summary>
+    /// Search within article content through the API's semantic index.
+    /// Requires network access — performed remotely, unlike the local filters.
+    /// </summary>
+    Articles
 }
 
 /// <summary>
@@ -31,7 +37,15 @@ public static class SearchFilterExtensions
             SearchFilter.Pasuk => "תוכן פסוק",
             SearchFilter.Perush => "תוכן פירוש",
             SearchFilter.Perek => "פרק",
+            SearchFilter.Articles => "תוכן מאמרים (חיבור רשת נדרש)",
             _ => filter.ToString()
         };
     }
+
+    /// <summary>
+    /// Whether this kind is served remotely and therefore requires network
+    /// access. Remote kinds stay opt-in (off by default and on reset) so an
+    /// unreachable API can never delay or degrade the local search kinds.
+    /// </summary>
+    public static bool RequiresNetwork(this SearchFilter filter) => filter == SearchFilter.Articles;
 }

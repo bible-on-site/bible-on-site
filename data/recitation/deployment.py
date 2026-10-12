@@ -50,8 +50,9 @@ def verify(origin, version, database=DATABASE, check_audio=False):
         audio_url = actual.pop("audioUrl", None)
         reference = {k: v for k, v in expected.items() if k != "audioUrl"}
         if actual != reference:
-            raise ValueError(f"{pid}: deployed metadata or canonical word intervals differ")
-        if not isinstance(audio_url, str) or urlsplit(audio_url).path.rsplit('/', 1)[-1] != f"{pid}_record.mp3":
+            raise ValueError(f"{pid}: deployed metadata or canonical word intervals differ at "
+                             f"{difference_path(reference, actual)}")
+        if not valid_audio_url(audio_url, pid):
             raise ValueError(f"{pid}: invalid recording URL")
         if check_audio and expected["alignmentStatus"] == "ready":
             # This follows the browser's full CORS download, not native MP3 seeking.
@@ -63,7 +64,53 @@ def verify(origin, version, database=DATABASE, check_audio=False):
                 digest = hashlib.file_digest(response, "sha256").hexdigest()
                 if digest != expected["audioSha256"]:
                     raise ValueError(f"{pid}: deployed recording hash differs from approved audio")
-    print(f"Website {version}: {len(approved)} approved chapters have exact deployed word timings")
+    with http_response(f"{origin.rstrip('/')}/api/recitation?deployment={version}", {"Cache-Control": "no-cache"}) as response:
+        if response.headers.get("X-Website-Version") != version:
+            raise ValueError("App recitation extension is not serving the deployed website version")
+        extension = json.load(response)
+    fields = ("perekId", "audioSha256", "textSha256", "durationMs", "alignmentStatus")
+    expected_tracks = [{**{key: record[key] for key in fields},
+                       "words": record["words"] if record["alignmentStatus"] == "ready" else []}
+                       for record in records]
+    if extension.get("version") != 1 or not isinstance(extension.get("tracks"), list):
+        raise ValueError("App recitation extension is invalid")
+    actual_tracks = []
+    for track in extension["tracks"]:
+        audio_url = track.get("audioUrl")
+        if not valid_audio_url(audio_url, track.get("perekId")):
+            raise ValueError("App recitation extension contains an invalid recording URL")
+        actual_tracks.append({k: v for k, v in track.items() if k != "audioUrl"})
+    if expected_tracks != actual_tracks:
+        raise ValueError("App recitation extension differs from the canonical DB at " +
+                         difference_path(expected_tracks, actual_tracks))
+    print(f"Website {version}: {len(approved)} approved chapters have exact deployed word timings; "
+          f"app extension has {len(records)} recordings")
+
+
+def valid_audio_url(url, perek_id):
+    if not isinstance(url, str):
+        return False
+    parts = urlsplit(url)
+    return (parts.scheme in ("http", "https") and bool(parts.hostname) and
+            not (parts.username or parts.password or parts.query or parts.fragment) and
+            parts.path.endswith(f"/recordings/{perek_id}_record.mp3"))
+
+
+def difference_path(expected, actual, path="manifest"):
+    """Identify the first changed field without dumping the entire timing map."""
+    if isinstance(expected, dict) and isinstance(actual, dict):
+        for key in sorted(expected.keys() | actual.keys()):
+            if key not in expected or key not in actual:
+                return f"{path}.{key} (missing field)"
+            if expected[key] != actual[key]:
+                return difference_path(expected[key], actual[key], f"{path}.{key}")
+    elif isinstance(expected, list) and isinstance(actual, list):
+        if len(expected) != len(actual):
+            return f"{path}.length ({len(expected)} != {len(actual)})"
+        for index, (left, right) in enumerate(zip(expected, actual)):
+            if left != right:
+                return difference_path(left, right, f"{path}[{index}]")
+    return f"{path} ({expected!r} != {actual!r})"
 
 
 def main():

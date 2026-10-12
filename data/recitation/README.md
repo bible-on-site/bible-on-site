@@ -1,5 +1,17 @@
 # Recitation alignment
 
+See [the illustrated pipeline guide](PIPELINE.md) for the source-of-truth model,
+segmentation and acceptance gates, durable storage, delivery and live word highlighting.
+
+For isolated speed experiments, the preserved fallback and strict per-boundary
+golden comparisons, see [the lossless performance protocol](PERFORMANCE.md).
+`recite.py` remains the original default. The optional `validated_worker.py`
+enables the measured memory profile only after per-word evidence, fresh controls
+and held-case checks pass. Complete golden coverage remains the default; the
+owner-approved, immutable 17-chapter sample is an explicit option with truthful
+coverage in provenance. GPU capacity failures retry the original full-quality
+inference. See the performance protocol for its commands.
+
 The perakim JSON is the text authority. Whisper supplies acoustic landmarks; it
 never replaces, inserts, deletes, or merges the canonical words in the output.
 The identity of a spoken word is the existing **1-based perek ID, pasuk, segment**.
@@ -128,9 +140,10 @@ another chapter. Run this while the independent GPU batch continues:
 .venv/Scripts/python.exe audit.py
 ```
 
-Commit the intermediate DB and canonical JSON together, bump the website version,
-and deliver through CI/CD, which verifies every ready chapter against the running
-deployment. A pending or held chapter retains full-chapter playback only.
+Commit the intermediate DB and canonical JSON together, then deliver through CI/CD,
+which verifies every ready chapter against the running deployment. Website versions
+are bumped by the post-release workflow on master, not in this change. A pending or
+held chapter retains full-chapter playback only.
 
 On Windows, the batch requests system wakefulness for its lifetime and releases
 that request on completion or error. It does not alter global power settings or
@@ -138,6 +151,10 @@ keep the display on. For a worker started before this support was added,
 `awake.py --pid PROCESS_ID` holds the same request until that exact process exits.
 
 ## Review
+
+For a minimal verse queue with automatic local saving, see [verse listening](LISTENING.md).
+It collects source-bound feedback without changing the continuous worker or publishing timings.
+
 
 ```powershell
 .venv/Scripts/python.exe review.py --perek 829 --output .outputs/review-829.html
@@ -216,10 +233,13 @@ mode becomes active automatically after preparation finishes. Clicking an existi
 pasuk letter or spoken qri word plays that interval. Entity links and ordinary
 reading return when the mode is disabled. The adjacent play/pause icon and perek
 heading control playback; pause retains the audio-clock position for resume.
-Basic view has no playback controls. Chapter playback streams the original
-MP3; pasuk and word playback reuse the prepared chapter, verified by SHA-256
+Basic view has no playback controls. Aligned chapter playback and pasuk/word
+playback reuse the prepared chapter, verified by SHA-256
 against the alignment source, and schedule exact offsets and durations with
 `AudioBufferSourceNode.start`. No timestamp padding or stop timer is used.
+Chapters awaiting segmentation stream the original MP3. On ready chapters, the
+spoken word follows the playback clock with the existing hover colors, without
+changing text layout. Silence clears the highlight; pause preserves it for resume.
 Only the active player's decoded chapter is retained. Disabling recitation mode, changing
 chapter/player, hiding the document, or unmounting cancels playback and releases
 its audio context. Rapid clicks cannot revive an older download/play request.
@@ -291,3 +311,47 @@ Two canonical JSON defects found during the audit were repaired at the same
 segment IDs: the final words of Eikhah 5:22 and Kohelet 12:14 had absorbed editorial
 repetition notes and lost their first letter. The source aggregation now removes
 those notes before qri-bracket parsing; regression tests preserve genuine qri.
+
+## Apply targeted human listening
+
+`listening_review.py` saves actual source-bound verse decisions and their history.
+Use `listening_accept.py` to turn those decisions into complete recovered chapters:
+
+```powershell
+.venv/Scripts/python.exe listening_accept.py --queue /absolute/review/queue/queue.json --reviews /absolute/review/reviews.json --text /absolute/canonical.json --output /absolute/accepted --database /absolute/durable/recitation.sqlite
+.venv/Scripts/python.exe publish.py --input /absolute/durable/recitation.sqlite --database /absolute/canonical.json
+.venv/Scripts/python.exe audit.py --input /absolute/durable/recitation.sqlite --database /absolute/canonical.json
+```
+
+Run this import alongside automatic `trusted.py` staging at each collection follow-up.
+It reads saved snapshots and original MP3s without model inference or changing the
+continuous worker. Start with a copied durable database and verify the recovered
+chapters before overlaying the delivery database. Never point it at the active
+worker checkpoint. Only current GOOD decisions that cover every exact word cut
+can resolve the reviewed verse's ASR failure. A later problem/skip answer, changed
+source/candidate, unreviewed held verse, invalid duration or global overlap keeps
+the chapter held. The other verses retain the original automatic anchor, score,
+diagnostic and timing gates, including the existing low-acoustic-score warning
+policy. Nothing is padded, clamped or fabricated.
+
+Accepted provenance uses `trusted-process-with-human-verse-review` and the
+versioned `targeted-human-listening-v1` policy. It stores the actual reviewed
+pesukim, decisions, listening evidence, diagnostic/source hashes and unchanged
+execution profile. It does not claim whole-chapter human listening or set
+invented word-level `reviewed` flags. Publish and audit the durable overlay, then
+include recovered chapters in the same rolling timing batch. Preserve the review
+queue, answer history and original diagnostic evidence for corrections; do not
+feed verse feedback to the whole-chapter `review.py` importer.
+
+Revisiting an answer is supported: on the next import, a new problem/skip answer
+withdraws only this policy's approval and clears that chapter's published word
+rows atomically. Independent manual and automatic approvals stay intact. A new
+GOOD answer can recover it again after the same complete-chapter checks.
+
+Completed listening rounds can be copied with `listening_round.archive_round`. Add each returned immutable `path`/`sha256` descriptor to the next queue's `archivedQueues`. The active page shows only the new queue; `/archive` retains prior answers and notes. The importer validates archived sources and uses earlier good answers only for unchanged candidates. Changed cuts require fresh word listening and a new answer.
+
+Serve with `--recovery-database <separate-preview.sqlite> --recovery-output <preview-alignments>` to run the guarded importer after saved answers. Use a copy of the durable database, never the live worker checkpoint. The page reports completed local recoveries; normal canonical, native-package and delivery checks still precede publication.
+
+`listening_tail.py` prepares diagnostic-only trailing-vowel candidates from the pinned CTC character/separator path. It never changes the automatic worker, pads endpoints or approves a candidate. Every corrected boundary requires fresh human listening and the same complete-chapter geometry checks.
+
+Reported clipped starts, clipped endings and overlong cuts can also be proposed with `propose_path_boundaries`. Each endpoint must be an actual recorded letter/separator boundary from the same pinned CTC path. The verifier rejects unrecorded offsets, changed canonical identities or acoustic scores, missing/duplicate proof, overlaps and invalid durations. These remain diagnostic candidates: every changed verse requires fresh completed word listening before the guarded importer can recover its chapter.

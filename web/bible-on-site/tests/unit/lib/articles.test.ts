@@ -9,11 +9,21 @@ jest.mock("../../../src/lib/api-client", () => ({
 
 // Mock the authors service to avoid S3 availability checks
 jest.mock("../../../src/lib/authors/service", () => ({
-	getAuthorImageUrl: jest.fn((authorId: number) => `https://test-bucket.s3.test-region.amazonaws.com/authors/high-res/${authorId}.jpg`),
+	getAuthorImageUrl: jest.fn(
+		(authorId: number) =>
+			`https://test-bucket.s3.test-region.amazonaws.com/authors/high-res/${authorId}.jpg`,
+	),
 }));
 
 import { query } from "../../../src/lib/api-client";
-import { getAllArticlePerekIdPairs, getArticleById, getArticlesByPerekId, getArticleSummariesByPerekId } from "../../../src/lib/articles";
+import {
+	getAllArticleIdsByPerek,
+	getAllArticlePerekIdPairs,
+	getArticleById,
+	getArticleSummariesByPerekId,
+	getArticleSummariesForRanges,
+	getArticlesByPerekId,
+} from "../../../src/lib/articles";
 
 const mockQuery = query as jest.MockedFunction<typeof query>;
 
@@ -59,7 +69,9 @@ describe("articles service", () => {
 
 			expect(mockQuery).toHaveBeenCalledTimes(1);
 			expect(mockQuery).toHaveBeenCalledWith(
-				expect.stringContaining("a.id, a.perek_id, a.author_id, a.abstract, a.content, a.name, a.priority"),
+				expect.stringContaining(
+					"a.id, a.perek_id, a.author_id, a.abstract, a.content, a.name, a.priority",
+				),
 				[42],
 			);
 
@@ -73,7 +85,8 @@ describe("articles service", () => {
 					name: "Test Article",
 					priority: 1,
 					authorName: "הרב ישראל",
-					authorImageUrl: "https://test-bucket.s3.test-region.amazonaws.com/authors/high-res/10.jpg",
+					authorImageUrl:
+						"https://test-bucket.s3.test-region.amazonaws.com/authors/high-res/10.jpg",
 				},
 				{
 					id: 2,
@@ -84,7 +97,8 @@ describe("articles service", () => {
 					name: "Another Article",
 					priority: 2,
 					authorName: "הרב יעקב",
-					authorImageUrl: "https://test-bucket.s3.test-region.amazonaws.com/authors/high-res/20.jpg",
+					authorImageUrl:
+						"https://test-bucket.s3.test-region.amazonaws.com/authors/high-res/20.jpg",
 				},
 			]);
 		});
@@ -97,25 +111,21 @@ describe("articles service", () => {
 			expect(result).toEqual([]);
 		});
 
-		it("returns empty array and logs warning when query fails", async () => {
+		it("rejects and logs database failures without caching empty content", async () => {
 			const mockError = new Error("Database connection failed");
 			mockQuery.mockRejectedValue(mockError);
 
-			const result = await getArticlesByPerekId(1);
-
-			expect(result).toEqual([]);
+			await expect(getArticlesByPerekId(1)).rejects.toBe(mockError);
 			expect(console.warn).toHaveBeenCalledWith(
 				"Failed to fetch articles for perek 1:",
 				"Database connection failed",
 			);
 		});
 
-		it("handles non-Error rejection gracefully", async () => {
+		it("propagates non-Error rejections without caching them", async () => {
 			mockQuery.mockRejectedValue("string error");
 
-			const result = await getArticlesByPerekId(1);
-
-			expect(result).toEqual([]);
+			await expect(getArticlesByPerekId(1)).rejects.toBe("string error");
 			expect(console.warn).toHaveBeenCalledWith(
 				"Failed to fetch articles for perek 1:",
 				"string error",
@@ -131,6 +141,7 @@ describe("articles service", () => {
 			expect(sqlCall).toContain("FROM tanah_article a");
 			expect(sqlCall).toContain("JOIN tanah_author au ON a.author_id = au.id");
 			expect(sqlCall).toContain("WHERE a.perek_id = ?");
+			expect(sqlCall).toContain("a.perek_id BETWEEN 1 AND 929");
 			expect(sqlCall).toContain("ORDER BY a.priority ASC");
 			expect(sqlCall).toContain("au.name AS author_name");
 		});
@@ -163,10 +174,21 @@ describe("articles service", () => {
 					name: "Test Article",
 					priority: 1,
 					authorName: "הרב ישראל",
-					authorImageUrl: "https://test-bucket.s3.test-region.amazonaws.com/authors/high-res/10.jpg",
+					authorImageUrl:
+						"https://test-bucket.s3.test-region.amazonaws.com/authors/high-res/10.jpg",
 				},
 			]);
 			expect(result[0]).not.toHaveProperty("content");
+		});
+
+		it("only surfaces articles in the 929 chapter range", async () => {
+			mockQuery.mockResolvedValue([]);
+
+			await getArticleSummariesByPerekId(1);
+
+			expect(mockQuery.mock.calls[0][0]).toContain(
+				"a.perek_id BETWEEN 1 AND 929",
+			);
 		});
 
 		it("does not select content column in SQL", async () => {
@@ -180,12 +202,10 @@ describe("articles service", () => {
 			expect(sqlCall).toContain("a.name");
 		});
 
-		it("returns empty array on error", async () => {
+		it("rejects database failures instead of caching an empty list", async () => {
 			mockQuery.mockRejectedValue(new Error("DB error"));
 
-			const result = await getArticleSummariesByPerekId(1);
-
-			expect(result).toEqual([]);
+			await expect(getArticleSummariesByPerekId(1)).rejects.toThrow("DB error");
 			expect(console.warn).toHaveBeenCalledWith(
 				"Failed to fetch article summaries for perek %d:",
 				1,
@@ -193,12 +213,12 @@ describe("articles service", () => {
 			);
 		});
 
-		it("handles non-Error rejection gracefully", async () => {
+		it("propagates non-Error rejections without caching them", async () => {
 			mockQuery.mockRejectedValue("string error");
 
-			const result = await getArticleSummariesByPerekId(1);
-
-			expect(result).toEqual([]);
+			await expect(getArticleSummariesByPerekId(1)).rejects.toBe(
+				"string error",
+			);
 		});
 	});
 
@@ -229,24 +249,22 @@ describe("articles service", () => {
 			expect(result).toEqual([]);
 		});
 
-		it("returns empty array and logs warning on error", async () => {
+		it("rejects database failures without publishing missing URLs", async () => {
 			mockQuery.mockRejectedValue(new Error("Database connection failed"));
 
-			const result = await getAllArticlePerekIdPairs();
-
-			expect(result).toEqual([]);
+			await expect(getAllArticlePerekIdPairs()).rejects.toThrow(
+				"Database connection failed",
+			);
 			expect(console.warn).toHaveBeenCalledWith(
 				"Failed to fetch article-perek pairs:",
 				"Database connection failed",
 			);
 		});
 
-		it("handles non-Error rejection gracefully", async () => {
+		it("propagates non-Error rejections without caching them", async () => {
 			mockQuery.mockRejectedValue("string error");
 
-			const result = await getAllArticlePerekIdPairs();
-
-			expect(result).toEqual([]);
+			await expect(getAllArticlePerekIdPairs()).rejects.toBe("string error");
 			expect(console.warn).toHaveBeenCalledWith(
 				"Failed to fetch article-perek pairs:",
 				"string error",
@@ -260,8 +278,42 @@ describe("articles service", () => {
 
 			const sqlCall = mockQuery.mock.calls[0][0];
 			expect(sqlCall).toContain("SELECT id, perek_id FROM tanah_article");
+			expect(sqlCall).toContain("perek_id BETWEEN 1 AND 929");
 			expect(sqlCall).toContain("ORDER BY perek_id ASC, id ASC");
 		});
+	});
+
+	describe("getAllArticleIdsByPerek", () => {
+		it("groups multiple articles per chapter while preserving database order", async () => {
+			mockQuery.mockResolvedValue([
+				{ id: 4, perek_id: 1 },
+				{ id: 7, perek_id: 1 },
+				{ id: 9, perek_id: 929 },
+			]);
+
+			expect(await getAllArticleIdsByPerek()).toEqual(
+				new Map([
+					[1, [4, 7]],
+					[929, [9]],
+				]),
+			);
+			const sql = mockQuery.mock.calls[0][0];
+			expect(sql).toContain("perek_id BETWEEN 1 AND 929");
+			expect(sql).not.toContain("distributable");
+		});
+
+		it("returns an empty map for an empty corpus", async () => {
+			mockQuery.mockResolvedValue([]);
+			expect(await getAllArticleIdsByPerek()).toEqual(new Map());
+		});
+
+		it.each([new Error("DB error"), "connection lost"])(
+			"rejects database failure %s instead of publishing missing URLs",
+			async (error) => {
+				mockQuery.mockRejectedValue(error);
+				await expect(getAllArticleIdsByPerek()).rejects.toBe(error);
+			},
+		);
 	});
 
 	describe("getArticleById", () => {
@@ -290,7 +342,8 @@ describe("articles service", () => {
 				name: "Test Article",
 				priority: 1,
 				authorName: "הרב ישראל",
-				authorImageUrl: "https://test-bucket.s3.test-region.amazonaws.com/authors/high-res/10.jpg",
+				authorImageUrl:
+					"https://test-bucket.s3.test-region.amazonaws.com/authors/high-res/10.jpg",
 			});
 		});
 
@@ -302,24 +355,20 @@ describe("articles service", () => {
 			expect(result).toBeNull();
 		});
 
-		it("returns null and logs warning on error", async () => {
+		it("rejects and logs database errors", async () => {
 			mockQuery.mockRejectedValue(new Error("DB error"));
 
-			const result = await getArticleById(1);
-
-			expect(result).toBeNull();
+			await expect(getArticleById(1)).rejects.toThrow("DB error");
 			expect(console.warn).toHaveBeenCalledWith(
 				"Failed to fetch article 1:",
 				"DB error",
 			);
 		});
 
-		it("handles non-Error rejection gracefully", async () => {
+		it("propagates non-Error rejections without caching them", async () => {
 			mockQuery.mockRejectedValue("string error");
 
-			const result = await getArticleById(1);
-
-			expect(result).toBeNull();
+			await expect(getArticleById(1)).rejects.toBe("string error");
 			expect(console.warn).toHaveBeenCalledWith(
 				"Failed to fetch article 1:",
 				"string error",
@@ -335,7 +384,198 @@ describe("articles service", () => {
 			expect(sqlCall).toContain("FROM tanah_article a");
 			expect(sqlCall).toContain("JOIN tanah_author au ON a.author_id = au.id");
 			expect(sqlCall).toContain("WHERE a.id = ?");
+			expect(sqlCall).toContain("a.perek_id BETWEEN 1 AND 929");
 			expect(mockQuery).toHaveBeenCalledWith(expect.any(String), [42]);
+		});
+	});
+
+	describe("getArticleSummariesForRanges", () => {
+		// בראשית א into בראשית ב — a cross-perek unit slice.
+		const crossPerekRanges = [
+			{
+				start: { perekId: 1, pasuk: 30 },
+				end: { perekId: 2, pasuk: 4 },
+			},
+		];
+
+		it("returns empty without querying for empty ranges", async () => {
+			const result = await getArticleSummariesForRanges([]);
+			expect(result).toEqual([]);
+			expect(mockQuery).not.toHaveBeenCalled();
+		});
+
+		it("queries unverified articles by primary perek and verified ones by covering-source overlap", async () => {
+			mockQuery.mockResolvedValue([]);
+			await getArticleSummariesForRanges(crossPerekRanges);
+			const [sql, params] = mockQuery.mock.calls[0];
+			expect(sql).toContain("a.coverage_verified = FALSE");
+			expect(sql).toContain("a.perek_id IN (?, ?)");
+			expect(sql).toContain("a.coverage_verified = TRUE");
+			expect(sql).toContain("EXISTS");
+			expect(sql).toContain("FROM tanah_article_covering_source cs");
+			expect(sql).toContain(
+				"(cs.perek_id = ? AND cs.pasuk >= ? AND cs.pasuk <= ?)",
+			);
+			// בראשית א has 31 pesukim: the range clips to pasuk 30-31 there.
+			// Primary-perek ids, then the covering-source slice bounds, then
+			// the same bounds again for the ORDER BY rank derived table.
+			expect(params).toEqual([1, 2, 1, 30, 31, 2, 1, 4, 1, 30, 31, 2, 1, 4]);
+		});
+
+		it("orders articles by first matching slice in range order, then priority", async () => {
+			mockQuery.mockResolvedValue([]);
+			await getArticleSummariesForRanges(crossPerekRanges);
+			const sql = mockQuery.mock.calls[0][0];
+			expect(sql).toContain("ORDER BY (SELECT MIN(slice_match.slice_order)");
+			expect(sql).toContain("a.perek_id = slice_match.perek_id");
+			expect(sql).toContain("ASC, a.priority ASC");
+		});
+
+		it("does not gate on the bulletin-only distributable flag", async () => {
+			mockQuery.mockResolvedValue([]);
+			await getArticleSummariesForRanges(crossPerekRanges);
+			expect(mockQuery.mock.calls[0][0]).not.toContain("distributable");
+		});
+
+		it("maps rows to summaries", async () => {
+			mockQuery.mockResolvedValue([
+				{
+					id: 7,
+					perek_id: 2,
+					author_id: 10,
+					abstract: "<p>x</p>",
+					name: "Across chapters",
+					priority: 1,
+					author_name: "הרב דוגמה",
+				},
+			]);
+			const result = await getArticleSummariesForRanges(crossPerekRanges);
+			expect(result).toEqual([
+				expect.objectContaining({ id: 7, perekId: 2, name: "Across chapters" }),
+			]);
+		});
+
+		it("rejects database failures instead of caching an empty list", async () => {
+			const mockError = new Error("DB error");
+			mockQuery.mockRejectedValue(mockError);
+			await expect(getArticleSummariesForRanges(crossPerekRanges)).rejects.toBe(
+				mockError,
+			);
+			expect(console.warn).toHaveBeenCalledWith(
+				"Failed to fetch article summaries for ranges:",
+				"DB error",
+			);
+		});
+
+		it("propagates non-Error rejections without caching them", async () => {
+			mockQuery.mockRejectedValue("raw error");
+			await expect(getArticleSummariesForRanges(crossPerekRanges)).rejects.toBe(
+				"raw error",
+			);
+		});
+
+		describe("when the covering-source schema is not deployed yet", () => {
+			const missingColumnError = Object.assign(
+				new Error("Unknown column 'a.coverage_verified' in 'where clause'"),
+				{ code: "ER_BAD_FIELD_ERROR", errno: 1054 },
+			);
+			const missingTableError = Object.assign(
+				new Error("Table 'tanah.tanah_article_covering_source' doesn't exist"),
+				{ code: "ER_NO_SUCH_TABLE", errno: 1146 },
+			);
+
+			it.each([
+				["missing coverage_verified column", missingColumnError],
+				["missing covering-source table", missingTableError],
+			])(
+				"falls back to primary-perek matching on %s",
+				async (_label, schemaError) => {
+					const fallbackRows = [
+						{
+							id: 4,
+							perek_id: 1,
+							author_id: 2,
+							abstract: "abs",
+							name: "legacy",
+							priority: 1,
+							author_name: "author",
+						},
+					];
+					mockQuery
+						.mockRejectedValueOnce(schemaError)
+						.mockResolvedValueOnce(fallbackRows);
+
+					const result = await getArticleSummariesForRanges(crossPerekRanges);
+
+					expect(mockQuery).toHaveBeenCalledTimes(2);
+					const [fallbackSql, fallbackParams] = mockQuery.mock.calls[1];
+					// The pre-upgrade query references neither the new column
+					// nor the covering-source table, but keeps first-slice rank.
+					expect(fallbackSql).not.toContain("coverage_verified");
+					expect(fallbackSql).not.toContain("tanah_article_covering_source");
+					expect(fallbackSql).toContain("a.perek_id IN (?, ?)");
+					expect(fallbackSql).toContain(
+						"ORDER BY (SELECT MIN(slice_match.slice_order)",
+					);
+					expect(fallbackSql).toContain("a.perek_id = slice_match.perek_id");
+					expect(fallbackParams).toEqual([1, 2, 1, 30, 31, 2, 1, 4]);
+					expect(result).toEqual([
+						expect.objectContaining({ id: 4, name: "legacy" }),
+					]);
+				},
+			);
+
+			it("recognizes the numeric MySQL error codes without a code string", async () => {
+				mockQuery
+					.mockRejectedValueOnce({ errno: 1146 })
+					.mockResolvedValueOnce([]);
+
+				await getArticleSummariesForRanges(crossPerekRanges);
+
+				expect(mockQuery).toHaveBeenCalledTimes(2);
+				expect(mockQuery.mock.calls[1][0]).not.toContain("coverage_verified");
+			});
+
+			it("does not swallow real database failures as schema gaps", async () => {
+				const dbError = Object.assign(new Error("connection lost"), {
+					code: "PROTOCOL_CONNECTION_LOST",
+				});
+				mockQuery.mockRejectedValue(dbError);
+
+				await expect(
+					getArticleSummariesForRanges(crossPerekRanges),
+				).rejects.toBe(dbError);
+				expect(mockQuery).toHaveBeenCalledTimes(1);
+			});
+
+			it("rejects when the pre-upgrade fallback query fails too", async () => {
+				const dbError = new Error("timeout");
+				mockQuery
+					.mockRejectedValueOnce(missingTableError)
+					.mockRejectedValueOnce(dbError);
+
+				await expect(
+					getArticleSummariesForRanges(crossPerekRanges),
+				).rejects.toBe(dbError);
+				expect(mockQuery).toHaveBeenCalledTimes(2);
+			});
+
+			it("retries the covering-source query on the next call once the schema lands", async () => {
+				mockQuery
+					.mockRejectedValueOnce(missingColumnError)
+					.mockResolvedValueOnce([])
+					.mockResolvedValueOnce([]);
+
+				await getArticleSummariesForRanges(crossPerekRanges);
+				await getArticleSummariesForRanges(crossPerekRanges);
+
+				// No sticky fallback: the next call attempts the verified
+				// coverage query again and picks up the migrated schema.
+				expect(mockQuery).toHaveBeenCalledTimes(3);
+				expect(mockQuery.mock.calls[2][0]).toContain(
+					"tanah_article_covering_source",
+				);
+			});
 		});
 	});
 });

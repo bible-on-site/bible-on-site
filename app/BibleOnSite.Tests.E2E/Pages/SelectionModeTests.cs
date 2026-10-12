@@ -24,16 +24,16 @@ public class SelectionModeTests
     /// </summary>
     private async Task WaitForPasukimLoadedAsync()
     {
+        _fixture.MainWindow.Focus();
         var timeout = DateTime.UtcNow.AddSeconds(10);
         while (DateTime.UtcNow < timeout)
         {
-            var pasukElements = _fixture.MainWindow.FindAllDescendants(
-                _fixture.CF.ByAutomationId("PasukText"));
+            var pasukElements = GetPasukElements();
             if (pasukElements?.Length > 0)
             {
                 return;
             }
-            await Task.Delay(200);
+            await Task.Delay(200, TestContext.Current.CancellationToken);
         }
         throw new TimeoutException("Pasukim did not load within 10 seconds");
     }
@@ -43,8 +43,10 @@ public class SelectionModeTests
     /// </summary>
     private AutomationElement[] GetPasukElements()
     {
-        return _fixture.MainWindow.FindAllDescendants(
-            _fixture.CF.ByAutomationId("PasukText"));
+        var viewport = _fixture.MainWindow.BoundingRectangle;
+        return _fixture.MainWindow.FindAllDescendants(_fixture.CF.ByAutomationId("PasukText"))
+            .Where(p => !p.IsOffscreen && p.BoundingRectangle.Width > 0 && p.BoundingRectangle.Height > 0 &&
+                p.BoundingRectangle.IntersectsWith(viewport)).ToArray();
     }
 
     /// <summary>
@@ -56,7 +58,7 @@ public class SelectionModeTests
         if (backButton != null)
         {
             backButton.AsButton()?.Invoke();
-            await Task.Delay(300);
+            await Task.Delay(300, TestContext.Current.CancellationToken);
         }
     }
 
@@ -65,12 +67,33 @@ public class SelectionModeTests
     /// </summary>
     private async Task<bool> EnterSelectionModeAsync(AutomationElement[] pasukElements)
     {
-        Mouse.Click(pasukElements[0].GetClickablePoint(), MouseButton.Right);
-        await Task.Delay(800);
+        _fixture.MainWindow.Focus();
+        _fixture.Click(pasukElements[0], MouseButton.Right);
+        await Task.Delay(800, TestContext.Current.CancellationToken);
 
         // Verify selection mode is active by checking for count label
         var countLabel = _fixture.FindByAutomationId("SelectionCountLabel");
         return countLabel != null;
+    }
+
+    [Fact]
+    public async Task DoubleTap_ShowsOnlyFocusedPasuk_AndBackRestoresChapter()
+    {
+        await ExitSelectionModeAsync();
+        await WaitForPasukimLoadedAsync();
+        var pasuk = GetPasukElements()[0];
+        var original = pasuk.Name;
+        _fixture.Click(pasuk, doubleClick: true);
+        await Task.Delay(700, TestContext.Current.CancellationToken);
+        var focused = _fixture.FindByAutomationId("FocusedPasukText");
+        focused.Should().NotBeNull();
+        focused!.Name.Should().Be(original);
+        _fixture.FindByAutomationId("SelectionCountLabel").Should().BeNull();
+        _fixture.FindByAutomationId("SelectionCopyButton").Should().BeNull();
+        _fixture.FindByAutomationId("SelectionShareButton").Should().BeNull();
+        await ExitSelectionModeAsync();
+        _fixture.FindByAutomationId("FocusedPasukText").Should().BeNull();
+        GetPasukElements().Should().NotBeEmpty();
     }
 
     [Fact]
@@ -79,7 +102,7 @@ public class SelectionModeTests
         // Arrange
         await WaitForPasukimLoadedAsync();
         await ExitSelectionModeAsync();
-        await Task.Delay(300);
+        await Task.Delay(300, TestContext.Current.CancellationToken);
 
         var pasukElements = GetPasukElements();
         pasukElements.Should().HaveCountGreaterThan(1, "need at least 2 pasukim for this test");
@@ -94,8 +117,8 @@ public class SelectionModeTests
         countLabel!.Name.Should().Be("1", "count should be 1 after selecting one pasuk");
 
         // Act - Click to select second pasuk
-        Mouse.Click(pasukElements[1].GetClickablePoint(), MouseButton.Left);
-        await Task.Delay(500);
+        _fixture.Click(pasukElements[1]);
+        await Task.Delay(500, TestContext.Current.CancellationToken);
 
         // Assert - Count should be 2
         countLabel = _fixture.FindByAutomationId("SelectionCountLabel");
@@ -111,7 +134,7 @@ public class SelectionModeTests
         // Arrange
         await WaitForPasukimLoadedAsync();
         await ExitSelectionModeAsync();
-        await Task.Delay(300);
+        await Task.Delay(300, TestContext.Current.CancellationToken);
 
         var pasukElements = GetPasukElements();
 
@@ -123,8 +146,8 @@ public class SelectionModeTests
         countLabel!.Name.Should().Be("1");
 
         // Act - Click first pasuk again to deselect
-        Mouse.Click(pasukElements[0].GetClickablePoint(), MouseButton.Left);
-        await Task.Delay(500);
+        _fixture.Click(pasukElements[0]);
+        await Task.Delay(500, TestContext.Current.CancellationToken);
 
         // Assert - Count label should no longer be visible (selection mode exited)
         countLabel = _fixture.FindByAutomationId("SelectionCountLabel");
@@ -142,7 +165,7 @@ public class SelectionModeTests
         // Arrange
         await WaitForPasukimLoadedAsync();
         await ExitSelectionModeAsync();
-        await Task.Delay(300);
+        await Task.Delay(300, TestContext.Current.CancellationToken);
 
         var pasukElements = GetPasukElements();
 
@@ -158,7 +181,7 @@ public class SelectionModeTests
         var backButton = _fixture.FindByAutomationId("SelectionBackButton");
         backButton.Should().NotBeNull("back button should exist in selection bar");
         backButton!.AsButton()?.Invoke();
-        await Task.Delay(500);
+        await Task.Delay(500, TestContext.Current.CancellationToken);
 
         // Assert - Count label should no longer be visible
         countLabel = _fixture.FindByAutomationId("SelectionCountLabel");
@@ -175,7 +198,7 @@ public class SelectionModeTests
         // Arrange
         await WaitForPasukimLoadedAsync();
         await ExitSelectionModeAsync();
-        await Task.Delay(300);
+        await Task.Delay(300, TestContext.Current.CancellationToken);
 
         var pasukElements = GetPasukElements();
 
@@ -197,7 +220,7 @@ public class SelectionModeTests
         // Arrange
         await WaitForPasukimLoadedAsync();
         await ExitSelectionModeAsync();
-        await Task.Delay(300);
+        await Task.Delay(300, TestContext.Current.CancellationToken);
 
         var pasukElements = GetPasukElements();
 
@@ -219,7 +242,7 @@ public class SelectionModeTests
         // Arrange
         await WaitForPasukimLoadedAsync();
         await ExitSelectionModeAsync();
-        await Task.Delay(300);
+        await Task.Delay(300, TestContext.Current.CancellationToken);
 
         var pasukElements = GetPasukElements();
         pasukElements.Should().HaveCountGreaterThan(2, "need at least 3 pasukim for this test");
@@ -228,10 +251,10 @@ public class SelectionModeTests
         var entered = await EnterSelectionModeAsync(pasukElements);
         entered.Should().BeTrue("should enter selection mode");
 
-        Mouse.Click(pasukElements[2].GetClickablePoint(), MouseButton.Left);
-        await Task.Delay(500);
-        Mouse.Click(pasukElements[1].GetClickablePoint(), MouseButton.Left);
-        await Task.Delay(500);
+        _fixture.Click(pasukElements[2]);
+        await Task.Delay(500, TestContext.Current.CancellationToken);
+        _fixture.Click(pasukElements[1]);
+        await Task.Delay(500, TestContext.Current.CancellationToken);
 
         // Assert - Count should be 3
         var countLabel = _fixture.FindByAutomationId("SelectionCountLabel");
@@ -247,13 +270,13 @@ public class SelectionModeTests
         // Arrange
         await WaitForPasukimLoadedAsync();
         await ExitSelectionModeAsync();
-        await Task.Delay(500);
+        await Task.Delay(500, TestContext.Current.CancellationToken);
 
         var pasukElements = GetPasukElements();
 
         // Act - Quick tap (short click)
-        Mouse.Click(pasukElements[0].GetClickablePoint(), MouseButton.Left);
-        await Task.Delay(500);
+        _fixture.Click(pasukElements[0]);
+        await Task.Delay(500, TestContext.Current.CancellationToken);
 
         // Assert - Selection count label should NOT appear
         var countLabel = _fixture.FindByAutomationId("SelectionCountLabel");

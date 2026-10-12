@@ -64,6 +64,10 @@ struct Cli {
     #[arg(long, default_value = "../tanahpedia_alter_child_birth_order.sql")]
     tanahpedia_child_birth_order_upgrade_script: String,
 
+    /// Path to Tanahpedia entry-revision history upgrade SQL file
+    #[arg(long, default_value = "../tanahpedia_alter_entry_revision_history.sql")]
+    tanahpedia_entry_revision_history_upgrade_script: String,
+
     /// Path to Tanahpedia lookup seed SQL file
     #[arg(long, default_value = "../tanahpedia_seed_data.sql")]
     tanahpedia_seed_script: String,
@@ -263,6 +267,15 @@ async fn main() -> Result<()> {
         let dynamic_structure_path = base_path.join(&cli.dynamic_structure_script);
         execute_script(&mut conn, &dynamic_structure_path, "dynamic-structure").await?;
 
+        execute_script(
+            &mut conn,
+            &base_path.join("../tanah_daily_bulletin_upgrade.sql"),
+            "daily-bulletin-upgrade",
+        )
+        .await?;
+
+        apply_article_covering_source_upgrade(&mut conn, base_path).await?;
+
         let perek_images_path = base_path.join("../tanah_perek_images_structure.sql");
         execute_script(&mut conn, &perek_images_path, "perek-images-structure").await?;
 
@@ -315,6 +328,7 @@ struct TanahpediaScripts {
     source_citation_upgrade: std::path::PathBuf,
     person_source_citation_upgrade: std::path::PathBuf,
     child_birth_order_upgrade: std::path::PathBuf,
+    entry_revision_history_upgrade: std::path::PathBuf,
     seed: std::path::PathBuf,
     incremental_lookups: std::path::PathBuf,
     legacy: std::path::PathBuf,
@@ -334,6 +348,8 @@ impl TanahpediaScripts {
                 .join(&cli.tanahpedia_person_source_citation_upgrade_script),
             child_birth_order_upgrade: base_path
                 .join(&cli.tanahpedia_child_birth_order_upgrade_script),
+            entry_revision_history_upgrade: base_path
+                .join(&cli.tanahpedia_entry_revision_history_upgrade_script),
             seed: base_path.join(&cli.tanahpedia_seed_script),
             incremental_lookups: base_path.join(&cli.tanahpedia_incremental_lookups_script),
             legacy: base_path.join(&cli.tanahpedia_legacy_script),
@@ -396,7 +412,8 @@ async fn apply_tanahpedia_safe_upgrades(
 ) -> Result<()> {
     apply_source_citation_upgrade(conn, &scripts.source_citation_upgrade).await?;
     apply_person_source_citation_upgrade(conn, &scripts.person_source_citation_upgrade).await?;
-    apply_child_birth_order_upgrade(conn, &scripts.child_birth_order_upgrade).await
+    apply_child_birth_order_upgrade(conn, &scripts.child_birth_order_upgrade).await?;
+    apply_entry_revision_history_upgrade(conn, &scripts.entry_revision_history_upgrade).await
 }
 
 async fn apply_tanahpedia_incremental_lookups(
@@ -475,6 +492,18 @@ async fn apply_source_citation_upgrade(
     .await
 }
 
+async fn apply_article_covering_source_upgrade(
+    conn: &mut MySqlConnection,
+    base_path: &Path,
+) -> Result<()> {
+    execute_script(
+        conn,
+        &base_path.join("../tanah_article_covering_source_upgrade.sql"),
+        "article-covering-source-upgrade",
+    )
+    .await
+}
+
 async fn apply_person_source_citation_upgrade(
     conn: &mut MySqlConnection,
     script_path: &Path,
@@ -499,6 +528,20 @@ async fn apply_child_birth_order_upgrade(
         "tanahpedia_person_parent_child",
         "birth_order",
         "INT NULL",
+    )
+    .await
+}
+
+async fn apply_entry_revision_history_upgrade(
+    conn: &mut MySqlConnection,
+    script_path: &Path,
+) -> Result<()> {
+    apply_column_add_if_missing(
+        conn,
+        script_path,
+        "tanahpedia_entry_revision",
+        "base_revision_id",
+        "CHAR(36) NULL COMMENT 'APPLIED head this change was based on'",
     )
     .await
 }
@@ -905,6 +948,12 @@ SELECT 1";
             ),
         );
         assert_eq!(
+            scripts.entry_revision_history_upgrade,
+            PathBuf::from(
+                "/repo/data/mysql/db-populator/../tanahpedia_alter_entry_revision_history.sql"
+            ),
+        );
+        assert_eq!(
             scripts.incremental_lookups,
             PathBuf::from("/repo/data/mysql/db-populator/../tanahpedia_incremental_lookups.sql"),
         );
@@ -1031,6 +1080,35 @@ SELECT 1";
                 "test-perek-images-structure",
             )
             .await?;
+
+            // Simulate the pre-bulletin dynamic schema and upgrade it repeatedly.
+            raw_sql("ALTER TABLE tanah_article DROP COLUMN distributable")
+                .execute(&mut conn).await?;
+            let bulletin_upgrade = base_path.join("../tanah_daily_bulletin_upgrade.sql");
+            execute_script(&mut conn, &bulletin_upgrade, "test-bulletin-upgrade").await?;
+            raw_sql("INSERT INTO tanah_article (id, perek_id, author_id, name, priority, content, distributable) VALUES (42, 1, 1, 'Retained article', 1, 'Retained content', TRUE);
+                INSERT INTO tanah_daily_bulletin (bulletin_date, perek_id, input_json, subject, source, email_html, pdf_data, filename)
+                    VALUES ('2026-10-08', 1, '{}', 'Retained subject', 'Retained source', 'Retained HTML', 'Retained PDF', 'retained.pdf');
+                INSERT INTO tanah_daily_bulletin_delivery (bulletin_date, channel, status, provider_message_id)
+                    VALUES ('2026-10-08', 'email', 'sent', 'campaign-42');")
+                .execute(&mut conn).await?;
+            execute_script(&mut conn, &bulletin_upgrade, "test-bulletin-upgrade-repeat").await?;
+            assert_eq!(query_scalar::<MySql, i64>("SELECT COUNT(*) FROM tanah_article WHERE id = 42 AND distributable = TRUE AND content = 'Retained content'").fetch_one(&mut conn).await?, 1);
+            assert_eq!(query_scalar::<MySql, String>("SELECT email_html FROM tanah_daily_bulletin WHERE bulletin_date = '2026-10-08'").fetch_one(&mut conn).await?, "Retained HTML");
+            assert_eq!(query_scalar::<MySql, String>("SELECT provider_message_id FROM tanah_daily_bulletin_delivery WHERE bulletin_date = '2026-10-08' AND status = 'sent'").fetch_one(&mut conn).await?, "campaign-42");
+
+            // Simulate the pre-covering-source schema and upgrade it repeatedly.
+            raw_sql("DROP TABLE IF EXISTS tanah_article_covering_source;
+                ALTER TABLE tanah_article DROP COLUMN coverage_verified;")
+                .execute(&mut conn).await?;
+            apply_article_covering_source_upgrade(&mut conn, base_path).await?;
+            raw_sql("INSERT INTO tanah_perek (id) VALUES (1);
+                INSERT INTO tanah_article_covering_source (article_id, perek_id, pasuk) VALUES (42, 1, 3);
+                UPDATE tanah_article SET coverage_verified = TRUE WHERE id = 42;")
+                .execute(&mut conn).await?;
+            apply_article_covering_source_upgrade(&mut conn, base_path).await?;
+            assert_eq!(query_scalar::<MySql, i64>("SELECT COUNT(*) FROM tanah_article_covering_source WHERE article_id = 42 AND perek_id = 1 AND pasuk = 3").fetch_one(&mut conn).await?, 1);
+            assert_eq!(query_scalar::<MySql, i64>("SELECT COUNT(*) FROM tanah_article WHERE id = 42 AND coverage_verified = TRUE").fetch_one(&mut conn).await?, 1);
             execute_script(
                 &mut conn,
                 &base_path.join(&cli.perushim_structure_script),

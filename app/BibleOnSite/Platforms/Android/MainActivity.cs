@@ -1,19 +1,60 @@
 using Android.App;
+using Android.Content;
 using Android.Content.PM;
 using Android.OS;
 using Android.Views;
+using AndroidX.Activity;
 using BibleOnSite.Behaviors;
 using BibleOnSite.Helpers;
+using IWindow = Microsoft.Maui.IWindow;
 namespace BibleOnSite;
 
-[Activity(Theme = "@style/Maui.SplashTheme", MainLauncher = true, LaunchMode = LaunchMode.SingleTop, ConfigurationChanges = ConfigChanges.ScreenSize | ConfigChanges.Orientation | ConfigChanges.UiMode | ConfigChanges.ScreenLayout | ConfigChanges.SmallestScreenSize | ConfigChanges.Density)]
+[Activity(Theme = "@style/Maui.SplashTheme", MainLauncher = true, LaunchMode = LaunchMode.SingleTop, Exported = true, ConfigurationChanges = ConfigChanges.ScreenSize | ConfigChanges.Orientation | ConfigChanges.UiMode | ConfigChanges.ScreenLayout | ConfigChanges.SmallestScreenSize | ConfigChanges.Density)]
+// Android App Links: verified https links to perek pages on the website open
+// directly in the app. Both Hebrew IDN domains are claimed (תנך.co.il and
+// תנך.com serve the site and host /.well-known/assetlinks.json). 929.org.il
+// is a Cloudflare redirect and cannot host assetlinks.json, so it stays
+// unclaimed — filters for it could never verify on Android 12+.
+[IntentFilter(new[] { Intent.ActionView }, AutoVerify = true,
+    Categories = new[] { Intent.CategoryDefault, Intent.CategoryBrowsable },
+    DataScheme = "https", DataHosts = new[] { "xn--febl3a.co.il", "xn--febl3a.com" },
+    DataPathPrefix = "/929")]
 public class MainActivity : MauiAppCompatActivity
 {
     protected override void OnCreate(Bundle? savedInstanceState)
     {
         base.OnCreate(savedInstanceState);
+        // MAUI's own MauiOnBackPressedCallback is only enabled while
+        // Window.CanConsumeBackNavigation reports in-app history, so at the
+        // root (and over a detached fullscreen player) Back never reaches
+        // Shell.OnBackButtonPressed. This always-enabled callback delivers the
+        // press to the shared managed pipeline regardless of nav state; the
+        // exit confirmation (#2118) and media fullscreen dismissal (#2117)
+        // require intercepting exactly those presses. Registered after base
+        // OnCreate so it is consulted ahead of MAUI's callback.
+        OnBackPressedDispatcher.AddCallback(this, new AppBackPressedCallback(this));
+        HandleAppLinkIntent(Intent);
         // Firebase initialized from google-services.json (Plugin.Firebase / Xamarin.Firebase.Analytics process it at build).
         // For explicit init use Plugin.Firebase.Core CrossFirebase.Initialize(activity, settings) when needed.
+    }
+
+    protected override void OnNewIntent(Intent? intent)
+    {
+        base.OnNewIntent(intent);
+        HandleAppLinkIntent(intent);
+    }
+
+    /// <summary>Routes a VIEW intent for a website perek URL into app navigation.</summary>
+    private static void HandleAppLinkIntent(Intent? intent)
+    {
+        if (intent?.Action != Intent.ActionView)
+        {
+            return;
+        }
+        if (AppLinkHelper.TryParse(intent.Data?.ToString(), out var target))
+        {
+            AppLinkHelper.Request(target);
+        }
     }
 
     private readonly PressGestureTracker _touch = new();
@@ -101,5 +142,37 @@ public class MainActivity : MauiAppCompatActivity
             _singleTouchActive = false;
         }
         return handled;
+    }
+
+    /// <summary>
+    /// Always-enabled Back delivery into the managed pipeline. Runs the same
+    /// <see cref="IWindow.BackButtonClicked"/> route as MAUI's own back
+    /// callback — <see cref="AppShell.OnBackButtonPressed"/> orders fullscreen
+    /// media dismissal, reader/page overlays, Shell navigation, and the root
+    /// exit confirmation from there. When the managed layer declines the press
+    /// (e.g. an open flyout that defers to DrawerLayout), the callback steps
+    /// aside and re-dispatches so the platform/system handles it.
+    /// </summary>
+    private sealed class AppBackPressedCallback(MainActivity activity) : OnBackPressedCallback(true)
+    {
+        public override void HandleOnBackPressed()
+        {
+            var window = Microsoft.Maui.Controls.Application.Current?.Windows.FirstOrDefault();
+            var handled = window is not null && ((IWindow)window).BackButtonClicked();
+            if (handled)
+            {
+                return;
+            }
+
+            Enabled = false;
+            try
+            {
+                activity.OnBackPressedDispatcher.OnBackPressed();
+            }
+            finally
+            {
+                Enabled = true;
+            }
+        }
     }
 }

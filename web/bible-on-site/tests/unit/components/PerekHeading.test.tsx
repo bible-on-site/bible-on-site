@@ -12,9 +12,9 @@ const perekObj: PerekObj = {
 	pesukim: [],
 };
 
-it("uses the existing perek header in the SEO view", () => {
+it("joins the perek source and existing header with a plain hyphen", () => {
 	render(<PerekHeading perekObj={perekObj} />);
 	expect(
-		screen.getByRole("heading", { level: 1, name: "בריאת העולם" }),
+		screen.getByRole("heading", { level: 1, name: "בראשית א - בריאת העולם" }),
 	).toBeInTheDocument();
 });

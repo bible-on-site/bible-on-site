@@ -139,21 +139,27 @@ public class LongPressBehavior : Behavior<View>
     public static void BeginUnreceivedPress(float rawX, float rawY, Perek? currentPerek)
     {
         if (currentPerek?.Pasukim is not { Count: > 0 } pasukim)
+        {
             return;
+        }
 
         lock (_lock)
         {
             foreach (var behavior in _activeBehaviors)
             {
+                var bindingContext = behavior._associatedView?.BindingContext;
                 if (behavior._androidView is not { IsShown: true } view ||
-                    behavior._associatedView?.BindingContext is not Pasuk pasuk ||
-                    !pasukim.Contains(pasuk))
+                    !(bindingContext is Pasuk pasuk && pasukim.Contains(pasuk) || ReferenceEquals(bindingContext, currentPerek)))
+                {
                     continue;
+                }
 
                 var visibleBounds = new Android.Graphics.Rect();
                 if (!view.GetGlobalVisibleRect(visibleBounds) ||
                     !visibleBounds.Contains((int)rawX, (int)rawY))
+                {
                     continue;
+                }
 
                 if (!behavior._press.IsPressed)
                 {
@@ -189,7 +195,9 @@ public class LongPressBehavior : Behavior<View>
     private void OnAndroidTouch(object? sender, Android.Views.View.TouchEventArgs e)
     {
         if (e.Event is not { } motion)
+        {
             return;
+        }
 
         switch (motion.ActionMasked)
         {
@@ -213,7 +221,10 @@ public class LongPressBehavior : Behavior<View>
                 var tapped = _press.End();
                 CleanupTimer();
                 if (tapped)
+                {
                     NativeTapped?.Invoke(this, EventArgs.Empty);
+                }
+
                 break;
 
             case Android.Views.MotionEventActions.Cancel:
@@ -225,10 +236,44 @@ public class LongPressBehavior : Behavior<View>
             case Android.Views.MotionEventActions.Move:
                 _press.Move(motion.RawX, motion.RawY, isScrolling: false);
                 if (!_press.IsPressed)
+                {
                     CleanupTimer();
+                }
+
+                break;
+
+            default:
+                // Other actions (hover, scroll, etc.) leave press tracking
+                // untouched; the touch stays unhandled.
                 break;
         }
         e.Handled = false;
+    }
+#elif IOS || MACCATALYST
+    private UIKit.UIView? _appleView;
+    private UIKit.UILongPressGestureRecognizer? _applePress;
+    private void AttachNativeEvents()
+    {
+        if (_associatedView?.Handler?.PlatformView is not UIKit.UIView view)
+        {
+            return;
+        }
+
+        _appleView = view;
+        _applePress = new UIKit.UILongPressGestureRecognizer(gesture =>
+        {
+            if (gesture.State == UIKit.UIGestureRecognizerState.Began)
+            {
+                LongPressed?.Invoke(this, EventArgs.Empty);
+            }
+        }) { MinimumPressDuration = LongPressDuration / 1000.0, CancelsTouchesInView = false };
+        view.UserInteractionEnabled = true;
+        view.AddGestureRecognizer(_applePress);
+    }
+    private void DetachNativeEvents()
+    {
+        if (_applePress != null) { _appleView?.RemoveGestureRecognizer(_applePress); _applePress.Dispose(); }
+        _applePress = null; _appleView = null;
     }
 #else
     private void AttachNativeEvents() { }
@@ -249,6 +294,9 @@ public class LongPressBehavior : Behavior<View>
 
     private void CancelLongPressTimer()
     {
+#if IOS || MACCATALYST
+        if (_applePress != null) { _applePress.Enabled = false; _applePress.Enabled = true; }
+#endif
         _press.Cancel();
         CleanupTimer();
     }

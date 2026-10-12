@@ -40,6 +40,7 @@ async function main() {
 	console.info("Setting up devops...");
 	if (!setupPythonVenv(devopsDir))
 		throw new Error("Failed to set up Python virtual environment for devops");
+	installGitHooks();
 
 	const modules = [
 		{ name: "website", path: websiteDir },
@@ -92,30 +93,34 @@ function decompressPerushimNotes(): void {
 		"AssetPacks",
 		"perushim_notes",
 	);
-	const gzPath = path.join(
-		assetPackDir,
-		"sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz",
-	);
-	const sqlitePath = gzPath.replace(".gz", "");
+	// Notes pack payloads: the notes DB (its .gz is committed) and the optional
+	// prebuilt search index (its .gz is not committed — CI artifacts only).
+	for (const fileName of [
+		"sefaria-dump-5784-sivan-4.perushim_notes.sqlite",
+		"sefaria-dump-5784-sivan-4.hebrew_search.sqlite",
+	]) {
+		const gzPath = path.join(assetPackDir, `${fileName}.gz`);
+		const sqlitePath = path.join(assetPackDir, fileName);
 
-	if (fs.existsSync(sqlitePath)) {
-		console.info("Perushim notes SQLite already exists — skipping decompress.");
-		return;
-	}
-	if (!fs.existsSync(gzPath)) {
+		if (fs.existsSync(sqlitePath)) {
+			console.info(`${fileName} already exists — skipping decompress.`);
+			continue;
+		}
+		if (!fs.existsSync(gzPath)) {
+			console.info(
+				`${fileName}.gz not found — skipping (run: cd data && cargo make generate-perushim-view-sqlite).`,
+			);
+			continue;
+		}
+
+		console.info(`Decompressing ${fileName}...`);
+		const compressed = fs.readFileSync(gzPath);
+		const decompressed = zlib.gunzipSync(compressed);
+		fs.writeFileSync(sqlitePath, decompressed);
 		console.info(
-			"Perushim notes .gz not found — skipping (run: cd data && cargo make generate-perushim-view-sqlite).",
+			`  ${(compressed.length / 1_048_576).toFixed(1)} MB → ${(decompressed.length / 1_048_576).toFixed(1)} MB`,
 		);
-		return;
 	}
-
-	console.info("Decompressing perushim notes...");
-	const compressed = fs.readFileSync(gzPath);
-	const decompressed = zlib.gunzipSync(compressed);
-	fs.writeFileSync(sqlitePath, decompressed);
-	console.info(
-		`  ${(compressed.length / 1_048_576).toFixed(1)} MB → ${(decompressed.length / 1_048_576).toFixed(1)} MB`,
-	);
 }
 
 // --- sync-from-prod subcommand ---
@@ -819,6 +824,20 @@ function setupPythonVenv(dir: string, name = ".", fullSetup = true) {
 	}
 	return fullSetup ? pipInstall(dir) : false;
 }
+// Installs the pre-commit framework's git hooks (pre-commit + post-commit
+// stages); the logic lives in install-git-hooks.mjs so the root package.json
+// `prepare` script runs the same code on `npm install`/`npm ci`.
+function installGitHooks(): void {
+	const result = spawnSync(
+		"node",
+		[path.join(devopsDir, "install-git-hooks.mjs")],
+		{ cwd: projectDir, stdio: "inherit" },
+	);
+	if (result.status !== 0) {
+		throw new Error("Failed to install pre-commit git hooks");
+	}
+}
+
 function getActivationCommand(dir: string) {
 	return isWin
 		? path.join(dir, ".venv", "Scripts", "activate")
@@ -913,7 +932,7 @@ function assertPythonVersion() {
 	})
 		.output.toString()
 		.replace("Python", "")
-		.replaceAll(",", "")
+		.replace(/,/g, "")
 		.trim();
 	if (!supportedPythonVersions.includes(actualPythonVersion)) {
 		throw new Error(
@@ -929,7 +948,7 @@ function assertNodeJSVersion() {
 	const supportedNodeVersions = ["v26.10.0"];
 	const actualNodeVersion = spawnSync("node", ["--version"], { shell: isWin })
 		.output.toString()
-		.replaceAll(",", "")
+		.replace(/,/g, "")
 		.trim();
 	if (!supportedNodeVersions.includes(actualNodeVersion)) {
 		throw new Error(

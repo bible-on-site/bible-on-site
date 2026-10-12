@@ -813,37 +813,84 @@ export async function getAllEntityTypeParams(): Promise<
 }
 
 // ─── Today in Tanah ─────────────────────────────────────────
-// Returns events whose start_date Hebrew month+day matches the given month+day.
-
-export interface TodayInTanahEvent {
-	entityId: string;
-	entityName: string;
-	entryUniqueName: string | null;
-	entryTitle: string | null;
-	startDate: number | null;
-}
-
-export async function getTodayInTanahEvents(
+// Anniversaries match the Hebrew month and day, regardless of year.
+export async function getTodayInTanahEntities(
 	hebrewMonth: number,
 	hebrewDay: number,
-): Promise<TodayInTanahEvent[]> {
+): Promise<EntityWithEntries[]> {
 	const monthDay = hebrewMonth * 100 + hebrewDay;
-	return query<TodayInTanahEvent>(
-		`SELECT
+	const rows = await query<{
+		entityId: string;
+		entityName: string;
+		entityType: EntityType;
+		entryId: string | null;
+		entryUniqueName: string | null;
+		entryTitle: string | null;
+	}>(
+		`SELECT DISTINCT
 		   e.id AS entityId,
 		   e.name AS entityName,
+		   e.entity_type AS entityType,
+		   ent.id AS entryId,
 		   ent.unique_name AS entryUniqueName,
-		   ent.title AS entryTitle,
-		   edr.start_date AS startDate
-		 FROM tanahpedia_event_date_range edr
-		 JOIN tanahpedia_event ev ON ev.id = edr.event_id
-		 JOIN tanahpedia_entity e ON e.id = ev.entity_id
+		   ent.title AS entryTitle
+		 FROM tanahpedia_entity e
 		 LEFT JOIN tanahpedia_entry_entity ee ON ee.entity_id = e.id
 		 LEFT JOIN tanahpedia_entry ent ON ent.id = ee.entry_id
-		 WHERE (edr.start_date % 10000) = ?
-		 ORDER BY edr.start_date`,
-		[String(monthDay)],
+		 WHERE EXISTS (
+		   SELECT 1 FROM tanahpedia_event ev
+		   JOIN tanahpedia_event_date_range d ON d.event_id = ev.id
+		   WHERE ev.entity_id = e.id AND (
+		     (d.start_date > 0 AND d.start_date <> 99991229 AND d.start_date % 10000 = ?)
+		     OR (d.end_date > 0 AND d.end_date <> 99991229 AND d.end_date % 10000 = ?)
+		   )
+		 ) OR EXISTS (
+		   SELECT 1 FROM tanahpedia_saying s
+		   WHERE s.entity_id = e.id
+		     AND s.saying_date > 0 AND s.saying_date <> 99991229 AND s.saying_date % 10000 = ?
+		 ) OR EXISTS (
+		   SELECT 1 FROM tanahpedia_person p
+		   WHERE p.entity_id = e.id AND (
+		     EXISTS (
+		       SELECT 1 FROM tanahpedia_person_birth_date d WHERE d.person_id = p.id
+		       AND d.birth_date > 0 AND d.birth_date <> 99991229 AND d.birth_date % 10000 = ?
+		     ) OR EXISTS (
+		       SELECT 1 FROM tanahpedia_person_death_date d WHERE d.person_id = p.id
+		       AND d.death_date > 0 AND d.death_date <> 99991229 AND d.death_date % 10000 = ?
+		     ) OR EXISTS (
+		       SELECT 1 FROM tanahpedia_person_union u
+		       WHERE (u.person1_id = p.id OR u.person2_id = p.id) AND (
+		         (u.start_date > 0 AND u.start_date <> 99991229 AND u.start_date % 10000 = ?)
+		         OR (u.end_date > 0 AND u.end_date <> 99991229 AND u.end_date % 10000 = ?)
+		       )
+		     )
+		   )
+		 )
+		 ORDER BY e.name, e.id, ent.title, ent.id`,
+		Array(7).fill(monthDay),
 	);
+
+	const entities = new Map<string, EntityWithEntries>();
+	for (const row of rows) {
+		let entity = entities.get(row.entityId);
+		if (!entity) {
+			entity = {
+				entityId: row.entityId,
+				entityName: row.entityName,
+				entityType: row.entityType,
+				linkedEntries: [],
+			};
+			entities.set(row.entityId, entity);
+		}
+		if (row.entryId && row.entryUniqueName) {
+			entity.linkedEntries.push({
+				id: row.entryId,
+				uniqueName: row.entryUniqueName,
+				title: row.entryTitle ?? row.entityName,
+			});
+		}
+	}
+	return [...entities.values()];
 }
 
 // ─── Tanah al haperek integration ─────────────────────────

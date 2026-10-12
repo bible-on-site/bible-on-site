@@ -1,0 +1,57 @@
+root = true
+
+# Local gate for the recurring Codacy findings that map to real analyzer rules,
+# so the diagnostics surface in `dotnet build` (and any IDE) instead of first
+# appearing as post-push Codacy annotations. The SonarAnalyzer.CSharp package
+# (app/Directory.Build.props) is the same engine Codacy runs as "SonarC#", so
+# the rule IDs match one-to-one.
+#
+# The package ships hundreds of rules enabled at warning severity, and the app
+# project escalates warnings via TreatWarningsAsErrors — adopting it wholesale
+# would re-gate thousands of pre-existing patterns the repo never opted into.
+# The blanket `dotnet_analyzer_diagnostic.severity = none` below therefore
+# opts out of the full ruleset, and only the Codacy-parity subset is re-enabled
+# explicitly at `error` so violations fail every build uniformly — matching the
+# repo's 0-warning policy even in projects that do not set
+# TreatWarningsAsErrors. Compiler (CS) and MSBuild/NuGet diagnostics are not
+# analyzer diagnostics and are unaffected.
+#
+# Codacy-only patterns no .NET analyzer implements (SQL unicode literals,
+# Rust `env::args`, non-literal `RegExp`, `String.prototype.replaceAll`) are
+# covered by `devops/codacy-gate.mjs`, wired into pre-commit.
+# See docs/devops/pre-commit.md.
+[*.cs]
+# Repo convention: 4-space indent (matches the overwhelming majority of files).
+indent_style = space
+indent_size = 4
+dotnet_analyzer_diagnostic.severity = none
+
+# Braces around control blocks — Codacy S121 "Control structures should use
+# curly braces". csharp_prefer_braces additionally lets `dotnet format`
+# auto-apply the fix; both IDs are pinned to error explicitly.
+csharp_prefer_braces = true:error
+dotnet_diagnostic.IDE0011.severity = error
+dotnet_diagnostic.S121.severity = error
+# S131 "switch statements should end with a 'default' clause"
+dotnet_diagnostic.S131.severity = error
+# S3532 "Empty 'default' clauses should be removed" (a bare `default: break;`)
+dotnet_diagnostic.S3532.severity = error
+# S1994 "for loop stop conditions should test the loop counter"
+dotnet_diagnostic.S1994.severity = error
+# S2360 "Optional parameters should not be used (use overloading)"
+dotnet_diagnostic.S2360.severity = error
+# S1172 "Unused method parameters should be removed"
+dotnet_diagnostic.S1172.severity = error
+# S1244 "Floating point numbers should not be tested for equality"
+dotnet_diagnostic.S1244.severity = error
+# S2339 "Public constant members should not be used" (public/protected/internal
+# const -> static readonly property; private const stays legal)
+dotnet_diagnostic.S2339.severity = error
+# S125 "Sections of code should not be commented out"
+dotnet_diagnostic.S125.severity = error
+
+# FluentUI.cs is a generated font-glyph catalog: ~7,900 generated public const
+# fields. Regenerating the file would undo any manual conversion, so analyzers
+# treat it (and any sibling generated glyphs) as generated code and skip it.
+[app/BibleOnSite/Resources/Fonts/**]
+generated_code = true

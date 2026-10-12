@@ -26,8 +26,10 @@ vi.mock("~/server/db", () => ({
 
 import {
 	createEntityAndLinkToEntry,
+	getEntryStructuralContext,
 	linkExistingEntityToEntry,
 	searchEntities,
+	updateSayingDate,
 } from "~/server/tanahpedia/structural";
 
 /** Tables touched by the inserts, in order. */
@@ -99,22 +101,25 @@ describe("createEntityAndLinkToEntry", () => {
 			["WAR", "tanahpedia_event", "tanahpedia_war"],
 			["TEMPLE_TOOL", "tanahpedia_object", "tanahpedia_temple_tool"],
 			["PROPHECY", "tanahpedia_saying", "tanahpedia_prophecy"],
-		])("creates the parent row before the %s row", async (entityType, parentTable, table) => {
-			await createEntityAndLinkToEntry({
-				data: {
-					entryId: "entry-1",
-					entityType: entityType as "WAR",
-					displayName: "שם",
-				},
-			});
+		])(
+			"creates the parent row before the %s row",
+			async (entityType, parentTable, table) => {
+				await createEntityAndLinkToEntry({
+					data: {
+						entryId: "entry-1",
+						entityType: entityType as "WAR",
+						displayName: "שם",
+					},
+				});
 
-			expect(insertedTables()).toEqual([
-				"tanahpedia_entity",
-				parentTable,
-				table,
-				"tanahpedia_entry_entity",
-			]);
-		});
+				expect(insertedTables()).toEqual([
+					"tanahpedia_entity",
+					parentTable,
+					table,
+					"tanahpedia_entry_entity",
+				]);
+			},
+		);
 
 		it("points the derived row at the parent it just created", async () => {
 			await createEntityAndLinkToEntry({
@@ -214,4 +219,87 @@ describe("linkExistingEntityToEntry", () => {
 			expect(executeMock).not.toHaveBeenCalled();
 		});
 	});
+});
+
+describe("saying dates", () => {
+	beforeEach(() => {
+		executeMock.mockReset().mockResolvedValue(undefined);
+		queryMock.mockReset();
+		queryOneMock.mockReset();
+	});
+	it("keeps other entity types without fetching a saying date", async () => {
+		const row = {
+			linkId: "link",
+			entityId: "event",
+			entityType: "EVENT",
+			displayName: "אירוע",
+		};
+		queryMock.mockResolvedValue([row]);
+		const result = await getEntryStructuralContext({ data: "entry-1" });
+		expect(result.linkedEntities).toEqual([row]);
+		expect(queryOneMock).not.toHaveBeenCalled();
+	});
+	it.each([24480906, 906, 24480900, 24480000, 0, null])(
+		"saves or clears the date %s",
+		async (date) => {
+			await updateSayingDate({
+				data: { sayingId: "saying-1", sayingDate: date },
+			});
+			expect(executeMock).toHaveBeenCalledWith(
+				"UPDATE tanahpedia_saying SET saying_date = ? WHERE id = ?",
+				[date, "saying-1"],
+			);
+		},
+	);
+	it.each([-1, 24480931, 24481501, 24480001, 24480906.5, Number.NaN])(
+		"rejects the malformed date %s before writing",
+		async (date) => {
+			expect(() =>
+				updateSayingDate({ data: { sayingId: "saying-1", sayingDate: date } }),
+			).toThrow("תאריך עברי לא תקין");
+			expect(executeMock).not.toHaveBeenCalled();
+		},
+	);
+	it.each(["SAYING", "PROPHECY"])(
+		"loads the persisted date for %s",
+		async (type) => {
+			queryMock.mockResolvedValue([
+				{
+					linkId: "link",
+					entityId: "entity",
+					entityType: type,
+					displayName: "אמרה",
+				},
+			]);
+			queryOneMock.mockResolvedValue({ id: "saying-1", saying_date: 24480906 });
+			const result = await getEntryStructuralContext({ data: "entry-1" });
+			expect(result.linkedEntities[0].saying).toEqual({
+				sayingId: "saying-1",
+				sayingDate: 24480906,
+			});
+		},
+	);
+	it.each(["SAYING", "PROPHECY"])(
+		"omits date editing when %s has no subtype row",
+		async (type) => {
+			queryMock.mockResolvedValue([
+				{
+					linkId: "link",
+					entityId: "entity",
+					entityType: type,
+					displayName: "אמרה",
+				},
+			]);
+			queryOneMock.mockResolvedValue(null);
+			const result = await getEntryStructuralContext({ data: "entry-1" });
+			expect(result.linkedEntities).toEqual([
+				{
+					linkId: "link",
+					entityId: "entity",
+					entityType: type,
+					displayName: "אמרה",
+				},
+			]);
+		},
+	);
 });

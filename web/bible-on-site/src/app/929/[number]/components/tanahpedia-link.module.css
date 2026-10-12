@@ -56,3 +56,24 @@
   font-size: 11.5px;
   font-style: italic;
 }
+
+@media (prefers-color-scheme: dark) {
+  .previewTooltip {
+    background: #1a1f2e;
+    border-color: #3b4256;
+  }
+
+  .previewTitle {
+    color: #a8b9ff;
+  }
+
+  .previewSnippet {
+    color: #b8c2d9;
+  }
+
+  .previewSnippet h2,
+  .previewSnippet h3,
+  .previewSnippet h4 {
+    color: #a8b9ff;
+  }
+}
