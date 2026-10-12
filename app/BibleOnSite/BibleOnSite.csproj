@@ -156,8 +156,8 @@
 	</Target>
 
 	<!-- Android: PAD on-demand asset pack. Run perushim-view pipeline to generate.
-	     The prebuilt search index rides in the same pack (optional — the app builds
-	     it on-device when the pack does not carry it). -->
+	     The prebuilt search index is required by prepare_perushim_assets.py
+	     for CI and release packs. Local legacy packs retain the recovery path. -->
 	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND (Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite') OR Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz'))">
 		<AndroidAsset Include="Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite" Link="sefaria-dump-5784-sivan-4.perushim_notes.sqlite" AssetPack="perushim_notes" DeliveryType="OnDemand" />
 		<AndroidAsset Include="Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite" Condition="Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite') OR Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite.gz')" Link="sefaria-dump-5784-sivan-4.hebrew_search.sqlite" AssetPack="perushim_notes" DeliveryType="OnDemand" />
