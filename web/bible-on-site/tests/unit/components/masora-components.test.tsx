@@ -13,6 +13,7 @@ import {
 	screen,
 	waitFor,
 } from "@testing-library/react";
+import { toLetters } from "gematry";
 
 jest.mock("next/link", () => ({
 	__esModule: true,
@@ -105,6 +106,7 @@ import MasoraUnitLayout from "@/app/masora/[unit]/layout";
 import MasoraUnitPage from "@/app/masora/[unit]/page";
 import MasoraLanding from "@/app/masora/page";
 import { getMasoraUnitById } from "@/data/masora/masora-units";
+import type { ReadingUnit } from "@/lib/reading/contract";
 import type { PerekEntityReference } from "@/lib/tanahpedia/service";
 
 describe("UnitNav", () => {
@@ -191,13 +193,64 @@ describe("MasoraLanding", () => {
 });
 
 describe("UnitText", () => {
-	it("renders a cross-perek unit with perek labels and anchors", () => {
+	it("renders a cross-perek unit with anchors and parasha verse positions", () => {
 		const unit = getMasoraUnitById(8); // בראשית ב ד - ג טו
 		render(<UnitText unit={unit} entityRefsByPerek={{}} />);
 		expect(document.getElementById("pasuk-2-4")).toBeInTheDocument();
 		expect(document.getElementById("pasuk-3-15")).toBeInTheDocument();
-		// Multi-perek slices carry the perek source label.
-		expect(screen.getAllByText(/בראשית ב/).length).toBeGreaterThan(0);
+		// No conventional chapter apparatus: verse positions run as one
+		// continuous count across the parasha instead of restarting per
+		// perek or carrying perek source labels.
+		const positions = [
+			...document.querySelectorAll("[data-unit-text] .pasukNum"),
+		].map((el) => el.textContent ?? "");
+		expect(positions.length).toBeGreaterThan(0);
+		positions.forEach((text, index) => {
+			expect(text.startsWith(toLetters(index + 1))).toBe(true);
+		});
+		// The parasha closes mid-verse — its final marker says so.
+		expect(positions[positions.length - 1]).toBe(
+			`${toLetters(positions.length)} (סיום)`,
+		);
+		expect(screen.queryByText("בראשית ב")).toBeNull();
+	});
+
+	it("marks segment-clipped boundary pesukim as partial positions", () => {
+		// A unit that opens mid-verse: the first marker reads "א (התחלה)".
+		const midVerseStart = getMasoraUnitById(1);
+		const startClipped: ReadingUnit = {
+			...midVerseStart,
+			ranges: [
+				{
+					start: { perekId: 1, pasuk: 1, segmentIndex: 3 },
+					end: { perekId: 1, pasuk: 2 },
+				},
+			],
+		};
+		const { unmount } = render(
+			<UnitText unit={startClipped} entityRefsByPerek={{}} />,
+		);
+		let markers = [
+			...document.querySelectorAll("[data-unit-text] .pasukNum"),
+		].map((el) => el.textContent);
+		expect(markers).toEqual(["א (התחלה)", "ב"]);
+		unmount();
+
+		// A lone mid-verse excerpt reads "א (קטע)".
+		const excerpt: ReadingUnit = {
+			...midVerseStart,
+			ranges: [
+				{
+					start: { perekId: 1, pasuk: 1, segmentIndex: 2 },
+					end: { perekId: 1, pasuk: 1, segmentIndex: 5 },
+				},
+			],
+		};
+		render(<UnitText unit={excerpt} entityRefsByPerek={{}} />);
+		markers = [
+			...document.querySelectorAll("[data-unit-text] .pasukNum"),
+		].map((el) => el.textContent);
+		expect(markers).toEqual(["א (קטע)"]);
 	});
 
 	it("wraps referenced segments in Tanahpedia links", () => {
@@ -243,7 +296,7 @@ describe("MasoraUnitPage", () => {
 		});
 		render(jsx);
 		expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
-			"בראשית ב ד - ג טו",
+			"בראשית פרשה ח",
 		);
 		expect(document.getElementById("pasuk-2-4")).toBeInTheDocument();
 		expect(screen.getByTestId("perushim-section")).toBeInTheDocument();

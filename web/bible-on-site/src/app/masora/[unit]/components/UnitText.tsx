@@ -11,7 +11,6 @@ import { Ptuah } from "@/app/929/[number]/components/Ptuha";
 import { Stuma } from "@/app/929/[number]/components/Stuma";
 import { TanahpediaLink } from "@/app/929/[number]/components/TanahpediaLink";
 import { masoraPasukCount } from "@/data/masora/masora-units";
-import styles from "../page.module.css";
 import { ScrollToUnitPasuk } from "./ScrollToUnitPasuk";
 
 /**
@@ -19,8 +18,17 @@ import { ScrollToUnitPasuk } from "./ScrollToUnitPasuk";
  * presentation half. The unit's ranges decompose into per-perek slices;
  * each slice renders only its included pesukim, clipped at segment level
  * when a boundary cuts inside a pasuk (מסורה breaks may sit mid-verse).
- * Pasuk anchors keep canonical coordinates (`pasuk-{perekId}-{pasuk}`)
- * so a unit crossing perakim still addresses original verses.
+ *
+ * Conventional chapter chrome stays out of the מסורה reader: no perek
+ * break dividers and no chapter-relative verse numbers. Instead each
+ * rendered pasuk carries its position inside the parasha — a continuous
+ * 1-based count across the unit's slices, so a parasha crossing perakim
+ * keeps one unbroken sequence. A boundary-clipped partial pasuk still
+ * occupies its own position; its marker carries a suffix — `(התחלה)`
+ * when the parasha opens mid-verse, `(סיום)` when it closes mid-verse,
+ * `(קטע)` for a lone excerpt. Pasuk anchors keep canonical coordinates
+ * (`pasuk-{perekId}-{pasuk}`) so a unit crossing perakim still addresses
+ * original verses.
  */
 export function UnitText({
 	unit,
@@ -32,19 +40,26 @@ export function UnitText({
 	// Primary ranges carry the unit's own text; auxiliary readings (e.g.
 	// Haftarot) render in their own section and are excluded here.
 	const slices = rangesPerekSlices(unit.ranges, masoraPasukCount);
-	const multiPerek =
-		new Set(slices.map((slice) => slice.perekId)).size > 1;
+	// Verse-position numbering: each rendered pasuk row counts one
+	// position, so the first pasuk of every slice continues the running
+	// parasha sequence rather than restarting a chapter count.
+	const firstPositions: number[] = [];
+	let renderedCount = 0;
+	for (const slice of slices) {
+		firstPositions.push(renderedCount + 1);
+		renderedCount += slice.endPasuk - slice.startPasuk + 1;
+	}
 	return (
 		<article className={perekStyles.perekText} data-unit-text>
 			<Suspense>
 				<ScrollToUnitPasuk />
 			</Suspense>
-			{slices.map((slice) => (
+			{slices.map((slice, index) => (
 				<UnitPerekSlice
 					key={`${slice.perekId}-${slice.startPasuk}`}
 					slice={slice}
 					entityRefs={entityRefsByPerek[slice.perekId] ?? []}
-					showPerekLabel={multiPerek}
+					firstPosition={firstPositions[index]}
 				/>
 			))}
 		</article>
@@ -54,19 +69,16 @@ export function UnitText({
 function UnitPerekSlice({
 	slice,
 	entityRefs,
-	showPerekLabel,
+	firstPosition,
 }: {
 	slice: PerekSlice;
 	entityRefs: PerekEntityReference[];
-	showPerekLabel: boolean;
+	firstPosition: number;
 }) {
 	const perekObj = getPerekByPerekId(slice.perekId);
 	const entityRefLookup = buildEntityRefLookup(entityRefs);
 	return (
 		<>
-			{showPerekLabel && (
-				<span className={styles.perekBreakLabel}>{perekObj.source}</span>
-			)}
 			{perekObj.pesukim
 				.slice(slice.startPasuk - 1, slice.endPasuk)
 				.map((pasuk, offset) => {
@@ -80,14 +92,29 @@ function UnitPerekSlice({
 							? (slice.endSegmentIndex ?? pasuk.segments.length - 1)
 							: pasuk.segments.length - 1;
 					const pasukIdx = pasukNumber - 1;
+					// A segment-clipped boundary pasuk reads as a partial
+					// verse inside the parasha; the marker says so.
+					const position = toLetters(firstPosition + offset);
+					const startsMidVerse =
+						pasukNumber === slice.startPasuk &&
+						slice.startSegmentIndex !== undefined;
+					const endsMidVerse =
+						pasukNumber === slice.endPasuk &&
+						slice.endSegmentIndex !== undefined;
+					const marker =
+						startsMidVerse && endsMidVerse
+							? `${position} (קטע)`
+							: startsMidVerse
+								? `${position} (התחלה)`
+								: endsMidVerse
+									? `${position} (סיום)`
+									: position;
 					return (
 						<span
 							key={pasukNumber}
 							id={`pasuk-${slice.perekId}-${pasukNumber}`}
 						>
-							<span className={perekStyles.pasukNum}>
-								{toLetters(pasukNumber)}
-							</span>{" "}
+							<span className={perekStyles.pasukNum}>{marker}</span>{" "}
 							{renderPasukSegmentsWithEntityRefs(
 								pasuk.segments,
 								pasukIdx,

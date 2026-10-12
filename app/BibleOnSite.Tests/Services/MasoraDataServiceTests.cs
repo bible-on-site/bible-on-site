@@ -22,10 +22,10 @@ public class MasoraDataServiceTests
         INSERT INTO tanah_sefer VALUES (1,'בראשית','Genesis',1,50),(8,'שמואל','{}',51,55);
         INSERT INTO tanah_reading_division VALUES ('masora',1,'/מסורה','מסורה על הפרק');
         INSERT INTO tanah_reading_unit VALUES
-            ('masora',1,'1',1,1,'בראשית א א-ה','ptuha'),
-            ('masora',2,'2',1,2,'בראשית א ו - ב ג','stuma'),
-            ('masora',3,'3',1,3,'בראשית ב ד-ח','stuma'),
-            ('masora',9,'9',8,1,'שמואל א א א-י','ptuha');
+            ('masora',1,'1',1,1,'בראשית פרשה א','ptuha'),
+            ('masora',2,'2',1,2,'בראשית פרשה ב','stuma'),
+            ('masora',3,'3',1,3,'בראשית פרשה ג','stuma'),
+            ('masora',9,'9',8,1,'שמואל פרשה א','ptuha');
         INSERT INTO tanah_reading_unit_range VALUES
             ('masora',1,0,NULL,1,1,NULL,1,5,3),
             ('masora',2,0,NULL,1,5,4,2,3,NULL),
@@ -139,7 +139,7 @@ public class MasoraDataServiceTests
         unit.Slug.Should().Be("2");
         unit.SeferName.Should().Be("בראשית");
         unit.UnitOrder.Should().Be(2);
-        unit.Heading.Should().Be("בראשית א ו - ב ג");
+        unit.Heading.Should().Be("בראשית פרשה ב");
         unit.ClosingBreak.Should().Be("stuma");
         unit.ClosingBreakLabel.Should().Be("פרשה סתומה");
         unit.HasClosingBreak.Should().BeTrue();
