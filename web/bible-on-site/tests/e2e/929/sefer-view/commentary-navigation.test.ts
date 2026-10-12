@@ -157,6 +157,47 @@ test.describe("Sefer commentary navigation", () => {
 		}
 	}
 
+	test("keeps the perushim carousel position across open, back, and browser Back", async ({
+		page,
+	}) => {
+		test.setTimeout(90_000);
+		const seferPage = new SeferPage(page);
+		await seferPage.openSeferViewForPerek(1);
+		const blank = page.locator('.he-book .page[data-page-index="4"]');
+		const perushLink = blank.getByRole("link", { name: /אבן עזרא/ });
+		const scroller = perushLink.locator("..");
+		const back = blank.getByRole("button", { name: "→ חזרה לפרשנים" });
+
+		// Scroll the carousel off its start edge (RTL scrollLeft is negative).
+		const position = await scroller.evaluate((el) => {
+			el.scrollLeft = -Math.min(
+				300,
+				Math.max(0, el.scrollWidth - el.clientWidth),
+			);
+			return el.scrollLeft;
+		});
+		expect(position).toBeLessThan(0);
+
+		// DOM click() never scrolls the link into view, so the carousel stays
+		// put until the open perush replaces it.
+		await perushLink.evaluate((el: HTMLElement) => el.click());
+		await expect(back).toBeVisible({ timeout: 30_000 });
+		await back.click();
+		await expect(perushLink).toBeVisible();
+		await expect
+			.poll(() => scroller.evaluate((el) => el.scrollLeft))
+			.toBe(position);
+
+		// The same position must survive leaving through the browser Back.
+		await perushLink.evaluate((el: HTMLElement) => el.click());
+		await expect(back).toBeVisible({ timeout: 30_000 });
+		await page.goBack();
+		await expect(perushLink).toBeVisible();
+		await expect
+			.poll(() => scroller.evaluate((el) => el.scrollLeft))
+			.toBe(position);
+	});
+
 	test.describe("Bidirectional pasuk navigation", () => {
 		test("jumps between scripture pasuk numbers and the open perush in both directions", async ({
 			page,
@@ -236,9 +277,7 @@ test.describe("Sefer commentary navigation", () => {
 			// perek 1's perush.
 			await page.locator(".flipbook-toolbar-next").click();
 			await expect(page).toHaveURL(/\/929\/2\?book/);
-			const perek2Text = page.locator(
-				'.he-book .page[data-page-index="5"]',
-			);
+			const perek2Text = page.locator('.he-book .page[data-page-index="5"]');
 			await expect(
 				perek2Text.locator(`[data-sefer-pasuk="${pasuk}"]`),
 			).toBeAttached();
@@ -262,9 +301,7 @@ test.describe("Sefer commentary navigation", () => {
 			// contain quotes (רש"י), which would break a CSS attribute selector.
 			const panel = blank.locator('[data-sefer-perush-perek="1"]');
 			await expect(panel).toHaveAttribute("data-sefer-perush", 'רש"י');
-			await expect(
-				panel.locator("[data-perush-pasuk]").first(),
-			).toBeAttached();
+			await expect(panel.locator("[data-perush-pasuk]").first()).toBeAttached();
 
 			// Switch to אבן עזרא: the old panel unmounts and the registry follows
 			// the newly selected perush — exactly one panel stays mounted.
@@ -306,21 +343,17 @@ test.describe("Sefer commentary navigation", () => {
 			// Find a scripture pasuk that the open perush does not annotate. The
 			// data sets differ between environments, so compute it live.
 			const missingPasuk = await page.evaluate(() => {
-				const panel = document.querySelector(
-					'[data-sefer-perush-perek="1"]',
-				);
+				const panel = document.querySelector('[data-sefer-perush-perek="1"]');
 				const perekPageEl = document.querySelector(
 					'.he-book .page[data-page-index="3"]',
 				);
 				if (!panel || !perekPageEl) return null;
 				const covered = new Set(
-					Array.from(
-						panel.querySelectorAll("[data-perush-pasuk]"),
-					).map((el) => el.getAttribute("data-perush-pasuk")),
+					Array.from(panel.querySelectorAll("[data-perush-pasuk]")).map((el) =>
+						el.getAttribute("data-perush-pasuk"),
+					),
 				);
-				for (const el of perekPageEl.querySelectorAll(
-					"[data-sefer-pasuk]",
-				)) {
+				for (const el of perekPageEl.querySelectorAll("[data-sefer-pasuk]")) {
 					const pasuk = el.getAttribute("data-sefer-pasuk");
 					if (pasuk && !covered.has(pasuk)) return pasuk;
 				}
@@ -338,9 +371,7 @@ test.describe("Sefer commentary navigation", () => {
 					.locator(`[data-sefer-pasuk="${missingPasuk}"]`)
 					.getByRole("button", { name: /מעבר לפירוש/ }),
 			).toHaveCount(0);
-			await expect(
-				blank.locator("[data-pasuk-highlight]"),
-			).toHaveCount(0);
+			await expect(blank.locator("[data-pasuk-highlight]")).toHaveCount(0);
 			await expect(
 				blank.getByRole("button", { name: "→ חזרה לפרשנים" }),
 			).toBeVisible();

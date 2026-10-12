@@ -71,6 +71,39 @@ describe("diffHtmlWords", () => {
 		]);
 	});
 
+	it("keeps tokens shared by the middles as same during LCS backtracking", () => {
+		const parts = diffHtmlWords(
+			"<p><b>ראשון</b> אמצע <i>שני</i></p>",
+			"<p><b>ראשון</b> אחר <i>שלישי</i></p>",
+		);
+		expect(parts).toEqual([
+			{ type: "same", text: "<p><b>ראשון</b> " },
+			{ type: "del", text: "אמצע" },
+			{ type: "add", text: "אחר" },
+			{ type: "same", text: " <i>" },
+			{ type: "del", text: "שני" },
+			{ type: "add", text: "שלישי" },
+			{ type: "same", text: "</i></p>" },
+		]);
+	});
+
+	it("emits trailing deletes when the after side is exhausted mid-walk", () => {
+		// The LCS keeps "q r" but the before side still has a tail to delete.
+		expect(diffHtmlWords("p q r s", "q r")).toEqual([
+			{ type: "del", text: "p " },
+			{ type: "same", text: "q r" },
+			{ type: "del", text: " s" },
+		]);
+	});
+
+	it("emits trailing adds when the before side is exhausted mid-walk", () => {
+		expect(diffHtmlWords("q r", "p q r s")).toEqual([
+			{ type: "add", text: "p " },
+			{ type: "same", text: "q r" },
+			{ type: "add", text: " s" },
+		]);
+	});
+
 	it("falls back to whole-middle del+add beyond the LCS token cap", () => {
 		const a = `${`x ${"a".repeat(4)} `.repeat(1600)}x`;
 		const b = `${`x ${"b".repeat(4)} `.repeat(1600)}x`;
