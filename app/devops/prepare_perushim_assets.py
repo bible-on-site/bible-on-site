@@ -12,7 +12,7 @@ CATALOG = "sefaria-dump-5784-sivan-4.perushim_catalog.sqlite"
 NOTES = "sefaria-dump-5784-sivan-4.perushim_notes.sqlite"
 NOTES_DIRECTORIES = {
     "Android": "Platforms/Android/AssetPacks/perushim_notes",
-    "iOS": "Platforms/iOS/Assets/PerushimNotes.xcassets/perushim_notes.dataset",
+    "iOS": "Platforms/iOS/AssetPacks/perushim_notes",
 }
 
 

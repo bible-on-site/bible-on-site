@@ -4,7 +4,7 @@ using Microsoft.Maui.ApplicationModel;
 
 namespace BibleOnSite.Tests.Services;
 
-public class OdrCacheTests
+public class AssetPackCacheTests
 {
     private const string Pack = "perushim_notes";
     private const string Notes = "sefaria-dump-5784-sivan-4.perushim_notes.sqlite";
@@ -16,12 +16,12 @@ public class OdrCacheTests
     {
         await using var storage = new TestStorage();
         var app = App("5.0.100", "100");
-        var previous = PadDeliveryService.OdrCacheDirectory(storage.FileSystem.Object, app.Object, Pack);
+        var previous = PadDeliveryService.AssetPackCacheDirectory(storage.FileSystem.Object, app.Object, Pack);
         await File.WriteAllTextAsync(Path.Join(previous, Notes), "old notes", TestContext.Current.CancellationToken);
         app.SetupGet(a => a.VersionString).Returns(version);
         app.SetupGet(a => a.BuildString).Returns(build);
 
-        var current = PadDeliveryService.OdrCacheDirectory(storage.FileSystem.Object, app.Object, Pack);
+        var current = PadDeliveryService.AssetPackCacheDirectory(storage.FileSystem.Object, app.Object, Pack);
 
         Directory.Exists(current).Should().BeTrue();
         File.Exists(Path.Join(current, Notes)).Should().BeFalse();
@@ -33,24 +33,24 @@ public class OdrCacheTests
     {
         await using var storage = new TestStorage();
         var app = App("5.0.104", "104");
-        var first = PadDeliveryService.OdrCacheDirectory(storage.FileSystem.Object, app.Object, Pack);
+        var first = PadDeliveryService.AssetPackCacheDirectory(storage.FileSystem.Object, app.Object, Pack);
         await File.WriteAllTextAsync(Path.Join(first, Notes), "current notes", TestContext.Current.CancellationToken);
 
-        var second = PadDeliveryService.OdrCacheDirectory(storage.FileSystem.Object, app.Object, Pack);
+        var second = PadDeliveryService.AssetPackCacheDirectory(storage.FileSystem.Object, app.Object, Pack);
 
         (await File.ReadAllTextAsync(Path.Join(second, Notes), TestContext.Current.CancellationToken)).Should().Be("current notes");
     }
 
     [Fact]
-    public async Task CurrentApp_DoesNotTrustLegacyUnversionedOdrCache()
+    public async Task CurrentApp_DoesNotTrustLegacyUnversionedAssetPackCache()
     {
         await using var storage = new TestStorage();
-        var legacy = Path.Join(storage.Root, "odr_assets", Pack);
+        var legacy = Path.Join(storage.Root, "asset_packs", Pack);
         Directory.CreateDirectory(legacy);
         await File.WriteAllTextAsync(Path.Join(legacy, Notes), "legacy notes", TestContext.Current.CancellationToken);
         var app = App("5.0.104", "104");
 
-        var current = PadDeliveryService.OdrCacheDirectory(storage.FileSystem.Object, app.Object, Pack);
+        var current = PadDeliveryService.AssetPackCacheDirectory(storage.FileSystem.Object, app.Object, Pack);
 
         File.Exists(Path.Join(current, Notes)).Should().BeFalse();
     }

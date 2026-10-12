@@ -14,5 +14,8 @@ BibleOnSite/Resources/Raw/api-config.txt
 # Android: decompressed into PAD asset pack folder.
 BibleOnSite/Platforms/Android/AssetPacks/perushim_notes/*.sqlite
 !BibleOnSite/Platforms/Android/AssetPacks/perushim_notes/*.sqlite.gz
-# iOS: decompressed into ODR asset catalog dataset folder.
-BibleOnSite/Platforms/iOS/Assets/PerushimNotes.xcassets/perushim_notes.dataset/*.sqlite
+# iOS: decompressed into the managed asset-pack folder next to Manifest.json.
+BibleOnSite/Platforms/iOS/AssetPacks/perushim_notes/*.sqlite
+
+# xcodebuild derived data for the managed asset-pack downloader extension.
+extensions/AssetPackDownloader/build/

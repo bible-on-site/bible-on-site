@@ -1,7 +1,6 @@
 import hashlib
 import json
 from pathlib import Path
-import plistlib
 import tempfile
 import unittest
 import zipfile
@@ -47,27 +46,47 @@ class ReleaseArtifactTests(unittest.TestCase):
                 else:
                     with self.assertRaises(ValueError): verify(package, path, "Android")
 
-    def test_ipa_requires_tag_and_referenced_compiled_asset_pack(self):
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            catalog = root / "catalog.json"
-            catalog.write_text(json.dumps({"books": [{"seferId": 1}]}))
-            for payload in [True, False]:
-                package = root / "app.ipa"
-                with zipfile.ZipFile(package, "w") as archive:
-                    archive.writestr("Payload/Bible.app/recitation-catalog.json", catalog.read_bytes())
-                    # Apple's reference identifier differs from the physical assetpack directory.
-                    metadata = {"NSBundleResourceRequestTags": {"recitation_1": {"NSAssetPacks": ["hashed-pack-id"]}},
-                                "NSBundleResourceRequestAssetPacks": {"hashed-pack-id": ["Assets.car"]}}
-                    archive.writestr("Payload/Bible.app/OnDemandResources.plist", plistlib.dumps(metadata))
-                    if payload:
-                        directory = "Payload/OnDemandResources/com.app.recitation_1.assetpack/"
-                        archive.writestr(directory + "Assets.car", b"compiled lossless dataset")
-                        archive.writestr(directory + "Info.plist", plistlib.dumps({
-                            "CFBundleIdentifier": "hashed-pack-id", "Tags": ["recitation_1"]}))
-                if payload: verify(package, catalog, "iOS")
+    def _write_ios_fixture(self, root, audio, catalog_path, problems=()):
+        catalog = {"books": [{"seferId": 1, "sha256": hashlib.sha256(audio).hexdigest()}]}
+        catalog_path.write_text(json.dumps(catalog))
+        package = root / "app.ipa"
+        with zipfile.ZipFile(package, "w") as archive:
+            archive.writestr("Payload/Bible.app/recitation-catalog.json", catalog_path.read_bytes())
+            if "no-extension" not in problems:
+                archive.writestr("Payload/Bible.app/Extensions/AssetPackDownloader.appex/AssetPackDownloader",
+                                 b"appex binary")
+            if "odr-manifest" in problems:
+                archive.writestr("Payload/Bible.app/OnDemandResources.plist", b"metadata")
+            if "base-audio" in problems:
+                archive.writestr("Payload/Bible.app/recitation_1.zip", audio)
+        pack_dir = root / "AssetPacks" / "recitation_1"
+        pack_dir.mkdir(parents=True)
+        archive_dir = root / "aar"
+        archive_dir.mkdir()
+        if "no-manifest" not in problems:
+            manifest = {"assetPackID": "recitation_1", "downloadPolicy": {"onDemand": {}},
+                        "fileSelectors": [{"file": "recitation_1.zip"}],
+                        "platforms": ["macOS"] if "missing-ios-platform" in problems else ["iOS", "macOS"]}
+            (pack_dir / "Manifest.json").write_text(json.dumps(manifest))
+            (pack_dir / "recitation_1.zip").write_bytes(
+                b"corrupt" if "stale-payload" in problems else audio)
+        if "no-aar" not in problems:
+            (archive_dir / "recitation_1.aar").write_bytes(b"aar bytes")
+        return package, pack_dir.parent, archive_dir
+
+    def test_ipa_requires_aar_manifest_and_embedded_downloader_extension(self):
+        audio = b"book archive"
+        for problem in [None, "odr-manifest", "base-audio", "no-extension",
+                        "no-manifest", "stale-payload", "no-aar", "missing-ios-platform"]:
+            with self.subTest(problem=problem), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                package, packs, aars = self._write_ios_fixture(
+                    root, audio, root / "catalog.json", {problem} - {None})
+                if problem is None:
+                    verify(package, root / "catalog.json", "iOS", packs, aars)
                 else:
-                    with self.assertRaises(ValueError): verify(package, catalog, "iOS")
+                    with self.assertRaises(ValueError):
+                        verify(package, root / "catalog.json", "iOS", packs, aars)
 
 
 if __name__ == "__main__":

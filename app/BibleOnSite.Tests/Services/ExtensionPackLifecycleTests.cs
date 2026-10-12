@@ -13,7 +13,7 @@ namespace BibleOnSite.Tests.Services;
 /// Verifies extension-pack independence and lifecycle as implemented today (#2099):
 /// install permutations, restart, per-book update scope, and the removal semantics that
 /// #2098 must build on. The store doubles as Play Asset Delivery on Android and
-/// On-Demand Resources on iOS; both are IPadDeliveryService behind one contract.
+/// managed Background Assets on iOS; both are IPadDeliveryService behind one contract.
 /// </summary>
 public class ExtensionPackLifecycleTests
 {
@@ -29,7 +29,7 @@ public class ExtensionPackLifecycleTests
 
     /// <summary>
     /// An on-device store: packs exist on the store server, and only delivered packs
-    /// have a local asset path (PAD GetPackLocation / ODR conditional access).
+    /// have a local asset path (PAD GetPackLocation / Background Assets local probe).
     /// Downloaded packs stay usable offline; the store itself can go unreachable.
     /// </summary>
     private sealed class Store(string root)
@@ -290,7 +290,7 @@ public class ExtensionPackLifecycleTests
         notes.IsAvailable.Should().BeTrue();
 
         // Simulate OS-level reclamation of the delivered pack (uninstall-free removal
-        // is not exposed by PAD or ODR; eviction is the only path that makes a
+        // is not exposed by PAD or Background Assets; eviction is the only path that makes a
         // deleted local copy stay removed).
         await storage.CloseDatabaseFileAsync(NotesDbName); // the live notes connection holds the file open
         File.Delete(Path.Join(storage.Root, NotesDbName));

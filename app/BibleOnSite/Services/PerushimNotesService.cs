@@ -8,7 +8,7 @@ namespace BibleOnSite.Services;
 /// <summary>
 /// Service for loading perushim notes (commentary text per pasuk).
 /// Android: delivered via Play Asset Delivery (PAD) as an on-demand asset pack in the AAB.
-/// iOS: delivered via Apple On-Demand Resources (ODR) tagged in an asset catalog.
+/// iOS: delivered via Apple Background Assets as a managed on-demand asset pack.
 /// Data updates are coupled to app releases — updating perushim data requires a new app version.
 /// On app update the client compares build_timestamp in the local DB vs the store-delivered
 /// version and auto-upgrades if the store copy is newer.
@@ -74,7 +74,7 @@ public class PerushimNotesService
 
     private string DataDirectory => _dataDirectoryOverride ?? _fileSystem.AppDataDirectory;
 
-    /// <summary>Whether compatible notes are available from PAD/ODR or a bundled asset.</summary>
+    /// <summary>Whether compatible notes are available from store delivery or a bundled asset.</summary>
     public bool IsAvailable => _initialized && !_notesMissing && _connection != null;
 
     internal async Task<SQLiteAsyncConnection?> GetSearchConnectionAsync()
@@ -84,7 +84,7 @@ public class PerushimNotesService
     }
 
     /// <summary>
-    /// Builds a diagnostic report for support (platform, state, PAD/ODR path, app package).
+    /// Builds a diagnostic report for support (platform, state, delivery path, app package).
     /// Call when Perushim don't show so the user can export and share the file.
     /// </summary>
     public async Task<string> GetDiagnosticsAsync()
@@ -100,7 +100,7 @@ public class PerushimNotesService
         try { padPath = await _padService.TryGetAssetPathAsync(PerushimNotesPackName, CancellationToken.None); }
         catch (Exception ex)
         {
-            diagnosticErrors.Add($"PAD/ODR path error: {ex.GetType().Name}: {ex.Message}");
+            diagnosticErrors.Add($"Delivery path error: {ex.GetType().Name}: {ex.Message}");
         }
         var appPackageHasFile = await AppPackageHasNotesAsync();
 
@@ -118,7 +118,7 @@ public class PerushimNotesService
             $"JSON reflection enabled by default: {JsonSerializer.IsReflectionEnabledByDefault}",
             $"Local DB path: {dbPath}",
             $"Local DB exists: {File.Exists(dbPath)}",
-            $"PAD/ODR path: {(padPath ?? "(null)")}",
+            $"Delivery path: {(padPath ?? "(null)")}",
             $"App package has notes file: {appPackageHasFile}",
         };
         lines.AddRange(diagnosticErrors);
@@ -139,7 +139,7 @@ public class PerushimNotesService
             lines.Add($"Local DB build_timestamp error: {ex.Message}");
         }
 
-        // Platform-specific delivery diagnostics (ODR on iOS, PAD on Android)
+        // Platform-specific delivery diagnostics (Background Assets on iOS, PAD on Android)
         try
         {
             var deliveryDiag = await _padService.GetDeliveryDiagnosticsAsync(PerushimNotesPackName);
@@ -168,7 +168,7 @@ public class PerushimNotesService
 
     /// <summary>
     /// Initializes the notes connection. Does not download — only opens if file exists.
-    /// Also copies from the on-demand delivery cache (PAD on Android, ODR on iOS) if
+    /// Also copies from the on-demand delivery cache (PAD on Android, Background Assets on iOS) if
     /// the pack is already available or has a newer build.
     /// </summary>
     public async Task InitializeAsync()
@@ -189,7 +189,7 @@ public class PerushimNotesService
 
         if (!File.Exists(dbPath))
         {
-            // No local DB → try PAD/ODR first, then fallback to app package (e.g. Android Debug APK)
+            // No local DB → try the delivered pack first, then fallback to app package (e.g. Android Debug APK)
             var padPath = await _padService.TryGetAssetPathAsync(PerushimNotesPackName, CancellationToken.None);
             if (padPath != null && await TryCopyFromPadAsync(padPath, dbPath))
             {
@@ -220,7 +220,7 @@ public class PerushimNotesService
 
     /// <summary>
     /// Attempts to download the notes database via the platform's on-demand delivery
-    /// mechanism (PAD on Android, ODR on iOS). Call when IsAvailable is false.
+    /// mechanism (PAD on Android, Background Assets on iOS). Call when IsAvailable is false.
     /// </summary>
     public Task<bool> TryDownloadNotesAsync() => TryDownloadNotesAsync(null);
 
@@ -243,7 +243,7 @@ public class PerushimNotesService
             }
         }
 
-        // Try PAD/ODR path if already available
+        // Try the delivered pack path if already available
         var padPath = await _padService.TryGetAssetPathAsync(PerushimNotesPackName, CancellationToken.None);
         if (padPath != null && await TryCopyFromPadAsync(padPath, dbPath))
         {
@@ -284,7 +284,7 @@ public class PerushimNotesService
             }
         }
 
-        Console.Error.WriteLine("Perushim notes not available via on-demand delivery. Ensure the perushim_notes asset pack (Android) or ODR tag (iOS) is included in the build.");
+        Console.Error.WriteLine("Perushim notes not available via on-demand delivery. Ensure the perushim_notes on-demand pack (Android PAD / iOS asset pack) is included in the build.");
         return false;
     }
 

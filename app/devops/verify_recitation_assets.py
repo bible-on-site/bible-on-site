@@ -4,11 +4,15 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
-import plistlib
 import zipfile
 
 
-def verify(package, catalog_path, platform):
+def digest(path):
+    with path.open("rb") as source:
+        return hashlib.file_digest(source, "sha256").hexdigest()
+
+
+def verify(package, catalog_path, platform, asset_pack_dir=None, archive_dir=None):
     catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
     with zipfile.ZipFile(package) as archive:
         names = archive.namelist()
@@ -18,7 +22,7 @@ def verify(package, catalog_path, platform):
         if platform == "Android":
             verify_android(archive, catalog, names)
         elif platform == "iOS":
-            verify_apple(archive, catalog, names)
+            verify_apple(archive, catalog, names, asset_pack_dir, archive_dir)
         elif platform == "Windows":
             verify_windows(archive, catalog, names)
     print(f'Verified {len(catalog["books"])} {platform} recitation packs in {package.name}')
@@ -36,29 +40,39 @@ def verify_android(archive, catalog, names):
         raise ValueError("On-demand recordings were included in the Android base installation")
 
 
-def verify_apple(archive, catalog, names):
-    metadata = [plistlib.loads(archive.read(n)) for n in names if n.endswith("/OnDemandResources.plist")]
-    if len(metadata) != 1:
-        raise ValueError("Missing Apple ODR manifest")
-    tags = metadata[0].get("NSBundleResourceRequestTags", {})
-    resources = metadata[0].get("NSBundleResourceRequestAssetPacks", {})
-    payloads = {}
-    for name in names:
-        if name.endswith(".assetpack/Info.plist"):
-            info = plistlib.loads(archive.read(name))
-            payloads[info["CFBundleIdentifier"]] = (name.rsplit("/", 1)[0] + "/Assets.car", info.get("Tags", []))
+def verify_apple(archive, catalog, names, asset_pack_dir, archive_dir):
+    """iOS packs ship as Apple-hosted .aar archives beside the IPA, never inside it."""
+    if any(Path(n).name == "OnDemandResources.plist" for n in names):
+        raise ValueError("IPA still contains an On-Demand Resources manifest")
+    if any(".assetpack/" in n or n.startswith("Payload/OnDemandResources/") for n in names):
+        raise ValueError("IPA still contains ODR asset packs")
+    if any(Path(n).name.startswith("recitation_") and n.endswith(".zip") for n in names):
+        raise ValueError("On-demand recordings were included in the iOS base installation")
+    appex = [n for n in names if "/Extensions/AssetPackDownloader.appex/" in n
+             and Path(n).name not in ("Info.plist",)]
+    if not appex:
+        raise ValueError("IPA lacks the managed asset-pack downloader extension")
+    if asset_pack_dir is None or archive_dir is None:
+        raise ValueError("iOS verification requires --asset-pack-dir and --archive-dir")
     for book in catalog["books"]:
         pack = f'recitation_{book["seferId"]}'
-        if pack not in tags:
-            raise ValueError(f"Missing Apple ODR book tag: {pack}")
-        identifiers = tags[pack].get("NSAssetPacks", [])
-        if not identifiers:
-            raise ValueError(f"Apple ODR tag has no resource references: {pack}")
-        for identifier in identifiers:
-            path, declared_tags = payloads.get(identifier, ("", []))
-            if ("Assets.car" not in resources.get(identifier, []) or pack not in declared_tags
-                    or path not in names or archive.getinfo(path).file_size == 0):
-                raise ValueError(f"Missing compiled ODR audio payload: {pack}")
+        archive_path = archive_dir / f"{pack}.aar"
+        if not archive_path.is_file() or archive_path.stat().st_size == 0:
+            raise ValueError(f"Missing asset-pack archive: {archive_path}")
+        manifest_path = asset_pack_dir / pack / "Manifest.json"
+        if not manifest_path.is_file():
+            raise ValueError(f"Missing asset-pack manifest: {manifest_path}")
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        if manifest.get("assetPackID") != pack or "onDemand" not in manifest.get("downloadPolicy", {}):
+            raise ValueError(f"Malformed asset-pack manifest: {pack}")
+        if not {"iOS", "macOS"}.issubset(manifest.get("platforms", [])):
+            raise ValueError(f"Asset-pack manifest does not target iOS+macOS: {pack}")
+        selectors = manifest.get("fileSelectors", [])
+        if len(selectors) != 1 or "file" not in selectors[0]:
+            raise ValueError(f"Asset-pack manifest selects no payload file: {pack}")
+        payload = manifest_path.parent / selectors[0]["file"]
+        if not payload.is_file() or digest(payload) != book["sha256"]:
+            raise ValueError(f"Missing or mismatched asset-pack payload: {pack}")
 
 
 def verify_windows(archive, catalog, names):
@@ -74,5 +88,9 @@ if __name__ == "__main__":
     parser.add_argument("--package", type=Path, required=True)
     parser.add_argument("--catalog", type=Path, required=True)
     parser.add_argument("--platform", choices=["Android", "iOS", "Windows"], required=True)
+    parser.add_argument("--asset-pack-dir", type=Path,
+                        help="iOS: Platforms/iOS/AssetPacks source directory (manifests + payloads)")
+    parser.add_argument("--archive-dir", type=Path,
+                        help="iOS: directory holding the .aar archives produced by xcrun ba-package")
     args = parser.parse_args()
-    verify(args.package, args.catalog, args.platform)
+    verify(args.package, args.catalog, args.platform, args.asset_pack_dir, args.archive_dir)
