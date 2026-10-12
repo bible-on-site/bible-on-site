@@ -9,7 +9,6 @@ const mockExecute = jest.fn().mockResolvedValue([[{ id: 42 }]]);
 jest.mock("mysql2/promise", () => ({
 	createPool: jest.fn().mockReturnValue({
 		execute: mockExecute,
-		on: jest.fn(),
 	}),
 }));
 

@@ -5,7 +5,6 @@ import {
 	searchAuthors,
 	searchPerushNotes,
 	searchTanahpediaEntries,
-	termCandidateRegexp,
 	termGateRegexp,
 	termRankPatterns,
 	termRegexp,
@@ -105,36 +104,32 @@ test.describe("generated search patterns on real MySQL", () => {
 		expect(Number(rows[0].estimate)).toBe(0);
 	});
 
-	test("the CASE gate admits every text the candidate pattern selects", async () => {
-		// The gate is a strict superset: if a chunk-bearing text slipped
-		// it, the bounded candidate pattern would never run and results
-		// would silently disappear (#2140 follow-up).
-		const term = "ירושלימ";
-		for (const text of ["על ירושלים נאמר", "ירושלמי", "בירושלים"]) {
-			await expect(regexpLike(text, termGateRegexp(term))).resolves.toBe(true);
-		}
-		await expect(regexpLike("אזור", termGateRegexp(term))).resolves.toBe(false);
-	});
-
-	test("the WHERE candidate union admits the superset the rank flag narrows", async () => {
-		// WHERE runs the lookahead-free chunk union: every scorable word
+	test("the WHERE gate admits the superset the rank flag narrows", async () => {
+		// WHERE runs the anchor-free chunk union: every scorable word
 		// reaches it, plus dead candidates the windowed rank flag then
-		// rejects — the window lives in ORDER BY so the scan stays cheap
-		// (#2140 follow-up).
+		// rejects — the window lives in ORDER BY so the scan stays
+		// cheap and can never exhaust regexp_time_limit on a giant
+		// field (#2140 follow-up).
 		const term = "ירושלימ";
-		const where = termCandidateRegexp(term);
-		await expect(regexpLike("על ירושלים נאמר", where)).resolves.toBe(true);
-		await expect(regexpLike("בירושלים", where)).resolves.toBe(true);
+		const where = termGateRegexp(term);
+		for (const text of ["על ירושלים נאמר", "ירושלמי", "בירושלים"]) {
+			await expect(regexpLike(text, where)).resolves.toBe(true);
+		}
 		// The over-long word is admitted by WHERE — the windowed
 		// termRegexp flag is what drops it to rank 0.
 		await expect(regexpLike("אבגדירושאבגד", where)).resolves.toBe(true);
 		await expect(regexpLike("אבגדירושאבגד", termRegexp(term))).resolves.toBe(
 			false,
 		);
-		// A chunk too deep in the word can't belong to an in-window word.
+		// So is a chunk that sits too deep inside a word to ever be
+		// in-window — the gate keeps every fuzzy-eligible row, and the
+		// strict flag sheds the rest.
 		await expect(regexpLike("אאאאאאאאאאירושאאאאאאאאאא", where)).resolves.toBe(
-			false,
+			true,
 		);
+		await expect(
+			regexpLike("אאאאאאאאאאירושאאאאאאאאאא", termRegexp(term)),
+		).resolves.toBe(false);
 		await expect(regexpLike("אזור", where)).resolves.toBe(false);
 	});
 

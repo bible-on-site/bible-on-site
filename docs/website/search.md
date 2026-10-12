@@ -75,54 +75,65 @@ entities — so `שליטא` reaches a stored `שליט"א`, `בְּרֵאשִׁ
 normalization would split (e.g. a block tag inside a word) is a harmless
 extra candidate the JS scorer filters out.
 
-Candidates are ranked before the row cap: `ORDER BY` a word-bounded
-phrase `REGEXP_LIKE` flag per field (name first for authors/articles),
-which is exactly the candidate class the JS scorer rates highest
-(whole-word phrase containment or whole-text equality) — a single-term
-query skips it, since the estimate's exact flag is the same pattern
-and its 90 tier already sorts those rows first. The second
-tier per field is `LEAST` over the terms' word-level estimates —
-`10*exact + 20*prefix + 60*candidate` per term, each a single
-`REGEXP_LIKE` on a word-bounded pattern (a single-term query emits the
-bare estimate: MySQL `LEAST` requires two arguments). The candidate
-flag is the only place the length-windowed `termRegexp` still runs —
-WHERE admits the cheaper lookahead-free superset, so the flag's job is
-to drop over-long chunk words (dead candidates) to estimate 0. The
-three patterns nest
-(exact ⇒ prefix ⇒ fuzzy-eligible), so a term's estimate lands on the
-scorer's own 90/80/60 tiers; `LEAST` mirrors the scorer's
-minimum-term rule. Estimating per term, rather than counting the term's
-anchor pieces, keeps chunks spread across different words of a column
-(`ירוש לימ` for a `ירושלימ` query) from stacking into a stronger rank
-than one real fuzzy word. When a frequent term overflows the cap, the
-rows shed are the weakest candidates — the strongest matches can no
-longer be truncated arbitrarily.
+Candidates are ranked before the row cap, but the word-anchored rank
+patterns are the most expensive evals in the query — too expensive to
+run on every row a common term admits. So the providers run the scan
+in two stages with different cost profiles:
+
+- **WHERE — anchor-free gate only.** Each term is split into
+  `maxEdits(term) + 1` contiguous chunks and the gate is the union of
+  the chunks as bare ordered-letters patterns — the same cheap scan
+  shape the pre-#2140 WHERE ran on every row. Every fuzzy-eligible
+  word keeps at least one intact chunk (each edit corrupts at most one
+  chunk — the classic pigeonhole filter), so the union is a true
+  superset of everything the scorer can rate; mid-word chunk hits it
+  over-admits are cheap to shed later. It is deliberately *not*
+  word-anchored: an anchored alternation re-runs at every position,
+  and on a giant `note_content` row (base64-embedded images reach
+  ~260 KB) it can exhaust MySQL's per-match `regexp_time_limit` —
+  a hard statement error, not a slow row. Bare letter scans are the
+  only shape proven safe at any row size.
+- **Inner location-ordered LIMIT.** The WHERE runs in a derived table
+  ordered by the provider's location key (`perek_id, pasuk` for notes
+  — backed by `idx_note_perek_pasuk`), so a dense term stops scanning
+  as soon as `innerLimit` matches are found. The limit scales down
+  with the rank estimate's flag count (`6000 / fields×flags`) so the
+  per-row anchored evals stay bounded in total; for terms whose
+  candidate pool fits, nothing is dropped at all.
+- **ORDER BY — the tier estimate on bounded text.** Only the inner
+  rows pay the word-anchored flags, each evaluated on
+  `LEFT(field, 2048)`, so no single eval can hit `regexp_time_limit`
+  either. Per field: a word-bounded phrase `REGEXP_LIKE` flag
+  (skipped for single-term queries — the estimate's exact flag is the
+  same pattern), then `LEAST` over the terms' word-level estimates —
+  `10*exact + 20*prefix + 60*candidate` per term (single-term emits
+  the bare estimate: MySQL `LEAST` requires two arguments). The three
+  patterns nest (exact ⇒ prefix ⇒ fuzzy-eligible), so a term's
+  estimate lands on the scorer's own 90/80/60 tiers; `LEAST` mirrors
+  the scorer's minimum-term rule. The candidate flag is the only
+  place the length-windowed `termRegexp` runs — its job is to drop
+  chunk-bearing words outside `[term - edits, term + edits]` (dead
+  candidates) to estimate 0, below every real candidate the row cap
+  then keeps. Estimating per term, rather than counting chunk hits,
+  keeps chunks spread across different words of a column
+  (`ירוש לימ` for a `ירושלימ` query) from stacking into a stronger
+  rank than one real fuzzy word. Ranking reads the field's lead text:
+  a deeper candidate still reaches JS scoring via the row itself —
+  it just ranks as a weaker hit, which is the right bias anyway.
+  When a frequent term overflows the cap, the rows shed are the
+  weakest candidates — the strongest matches can no longer be
+  truncated arbitrarily.
 
 Typo tolerance (#2140): the JS scorer's fuzzy tier (bounded edit
 distance) used to be unreachable for DB-backed types, because the
-ordered-letters pattern can never select a misspelled row. Each term is
-now additionally split into `maxEdits(term) + 1` contiguous chunks and
-the WHERE clause admits a word containing any one intact chunk — since
-each edit can corrupt at most one chunk, every fuzzy-eligible word
-survives as a candidate (the classic pigeonhole filter). The WHERE
-pattern is a word-start anchor, one bounded in-word prefix (at most
-`term + edits - chunk` letters can precede a chunk in an in-window
-word), then the chunk union — every quantifier bounded, so no
-unbounded scan under a nested quantifier trips MySQL's
-`regexp_time_limit` on a full-table scan. The scorer's whole-word
-length window (`[term - edits, term + edits]`) is deliberately *not*
-re-checked in WHERE: keeping it there cost a per-word lookahead over
-half the table, while a chunk inside an over-long word can only ever
-rank 0 — so the windowed `termRegexp` runs once in the rank estimate,
-where it drops dead candidates below every real one for the row cap to
-shed. Even the bounded union is too expensive for rows without a
-chunk, so each WHERE field wraps the eval in
-`CASE WHEN REGEXP_LIKE(col, gate) THEN REGEXP_LIKE(col, candidate)
-ELSE 0 END`: the gate is the term's chunk union as bare
-ordered-letters patterns — a strict superset of every anchor (prefix
-words contain the whole term, fuzzy words an intact chunk) and the
-same cheap scan shape the pre-#2140 WHERE used — so chunk-free rows
-never pay the word-bounded pattern. Scoring is unchanged in JS, so the fuzzy
+ordered-letters pattern can never select a misspelled row. The chunk
+gate is what admits the fuzzable rows now — `ירושלימ`'s chunks
+`ירוש`/`לימ` select stored `ירושלים` because its first chunk survives
+the missing `ם` — and the scorer's whole-word length window is
+deliberately *not* re-checked in WHERE: the gate is a pure superset
+and the windowed `termRegexp` runs once in the rank estimate, where
+it drops dead candidates below every real one for the row cap to
+shed. Scoring is unchanged in JS, so the fuzzy
 60/80/90/100/110 tiers apply uniformly across all four DB providers
 exactly as they do for the in-memory corpora. Articles score name,
 abstract, and content independently (name keeps
@@ -156,8 +167,9 @@ GET /api/search?q=&type=&limit=
         perakim/pesukim — in-memory corpus built once per process from the
                           bundled tanah_view JSON (globalThis cache)
         perushim        — MySQL REGEXP_LIKE candidate pull (AND-ed terms,
-                          word-match ranked, LIMIT 1000,
-                          MAX_EXECUTION_TIME 12000) then normalize+score in JS
+                          inner location-ordered LIMIT, tier-estimate
+                          ranked, LIMIT 1000, MAX_EXECUTION_TIME 12000)
+                          then normalize+score in JS
         authors         — MySQL REGEXP_LIKE on name/details, same ranking
         articles        — MySQL REGEXP_LIKE on name/abstract/content
                           (lexical; see #2039 seam below)
@@ -306,18 +318,19 @@ Chosen policy:
   (same `globalThis` cache pattern as `sefarim.ts`); perakim/pesukim
   results are deterministic until the bundled text changes (deploys only).
 - DB providers run live queries; `MAX_EXECUTION_TIME(12000)` bounds the
-  worst case and `LIMIT 1000` bounds transferred ranked candidates. The
-  budget is sized for the fuzzy candidate path: the perushim `note`
-  column is an unindexed ~50k-row text column, and even the bare
-  letters gate scan costs a few seconds on it — the pre-#2140 3s bound
-  was already marginal for common terms and left no room for the
-  chunk-gated word-bounded eval, which a multi-term query pays once per
-  AND-ed term. The pool also raises the session `regexp_time_limit`:
-  MySQL's per-match engine budget (default 32 steps) can abort a single
-  `REGEXP_LIKE` on a very long row with error 3699 before the
-  statement's own time bound fires — the statement hint is the intended
-  wall-clock guardrail, so the per-match budget is raised high enough
-  that it is never the limiting factor.
+  worst case, an inner location-ordered LIMIT bounds how many rows the
+  rank estimate flags, and `LIMIT 1000` bounds transferred candidates.
+  The budget is sized for the fuzzy candidate path: the perushim
+  `note` column is an unindexed ~340k-row text column, and even the
+  bare letters gate scan costs a few seconds on it — the pre-#2140 3s
+  bound was already marginal for common terms and left no room for a
+  multi-term scan that pays the gate once per AND-ed term. MySQL's
+  per-match `regexp_time_limit` (default 32 steps) is global-only —
+  it cannot be raised per session or per statement — so instead the
+  patterns are kept inside the budget: WHERE runs only the anchor-free
+  chunk union, and the word-anchored rank flags evaluate on
+  `LEFT(field, 2048)` over the inner-limited rows, which bounds every
+  single match attempt well under the engine's step limit.
 - Queries are not persisted anywhere. Privacy note: query terms appear in
   URLs by design (shareable search URLs are a requirement), so they may
   appear in ordinary access logs — documented and accepted.

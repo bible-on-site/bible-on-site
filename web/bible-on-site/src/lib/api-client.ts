@@ -3,7 +3,6 @@
  * Direct database access for lower latency and reduced billing costs
  */
 
-import type { Connection as CoreConnection } from "mysql2";
 import mysql from "mysql2/promise";
 
 /**
@@ -52,26 +51,6 @@ function getPool(): mysql.Pool {
 			connectionLimit: 5,
 			queueLimit: 0,
 		});
-		// Search providers run normalization-aware REGEXP_LIKE scans over
-		// an unindexed ~50k-row text column. A single match attempt on a
-		// very long row can exhaust the engine's per-match step budget
-		// (MySQL error 3699, `regexp_time_limit`, default 32) well before
-		// the statement's own MAX_EXECUTION_TIME hint — which is the
-		// intended wall-clock bound — fires. Raise the per-match budget
-		// high enough that the statement hint is always the limiting
-		// factor (#2140).
-		pool.on("connection", (connection) => {
-			// The pool emits the core callback-API connection here, not a
-			// promise wrapper, so the session variable is set with a callback.
-			(connection as unknown as CoreConnection).query(
-				"SET SESSION regexp_time_limit = 16777216",
-				(err) => {
-					if (err) {
-						console.error("[db] regexp_time_limit session setup failed:", err);
-					}
-				},
-			);
-		});
 	}
 	return pool;
 }
@@ -84,5 +63,32 @@ export async function query<T>(sql: string, params?: unknown[]): Promise<T[]> {
 	// nosemgrep: javascript.lang.security.audit.db.formatted-sql-string -- sql is always a parameterized literal from callers
 	// biome-ignore lint/suspicious/noExplicitAny: mysql2 v3.17 narrowed QueryValues; safe cast from caller-provided params
 	const [rows] = await connection.execute(sql, (params ?? []) as any);
+	return rows as T[];
+}
+
+/**
+ * Execute a parameterized SQL query over the text protocol, with the
+ * driver interpolating `?` params into the statement as escaped
+ * literals (same escaping `execute` relies on).
+ *
+ * Needed by the search providers: a prepared `REGEXP_LIKE(col, ?)`
+ * treats the pattern as a runtime value, and MySQL re-validates and
+ * recompiles the ICU pattern for *every row evaluated* — on a
+ * ~340k-row text scan that alone costs tens of seconds, dwarfing the
+ * match work itself. With the text protocol the server sees a
+ * constant pattern and compiles it once per statement, which is what
+ * makes the bounded candidate scan fit its time budget (#2140). Only
+ * use this where params are generated patterns — prefer `query` for
+ * ordinary predicates so prepared-statement type coercion and caching
+ * still apply there.
+ */
+export async function queryText<T>(
+	sql: string,
+	params?: unknown[],
+): Promise<T[]> {
+	const connection = getPool();
+	// nosemgrep: javascript.lang.security.audit.db.formatted-sql-string -- params are escaped literals from callers
+	// biome-ignore lint/suspicious/noExplicitAny: mysql2 v3.17 narrowed QueryValues; safe cast from caller-provided params
+	const [rows] = await connection.query(sql, (params ?? []) as any);
 	return rows as T[];
 }
