@@ -30,7 +30,7 @@ describe("מסורה unit metadata", () => {
 			params: Promise.resolve({ unit: "523" }),
 		});
 		expect(metadata.alternates?.canonical).toBe("/929/153");
-		expect(metadata.title).toContain("במדבר לו א-יג");
+		expect(metadata.title).toContain("במדבר פרשה קס");
 		// Consolidated units stay indexable through their canonical.
 		expect(metadata.robots).toBeUndefined();
 	});
@@ -41,7 +41,7 @@ describe("מסורה unit metadata", () => {
 			params: Promise.resolve({ unit: "1" }),
 		});
 		expect(metadata.alternates?.canonical).toBe("/מסורה/1");
-		expect(metadata.title).toContain("בראשית א א-ה");
+		expect(metadata.title).toContain("בראשית פרשה א");
 		expect(metadata.robots).toEqual(
 			expect.objectContaining({ index: false, follow: true }),
 		);
