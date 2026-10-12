@@ -93,10 +93,8 @@ public class ExtensionPackLifecycleTests
         var directory = Path.GetFileName(relativeDirectory);
         Directory.CreateDirectory(Path.Join(storage.Root, directory));
         var db = await storage.CreateDatabaseAsync(Path.Join(directory, NotesDbName),
-            "CREATE TABLE IF NOT EXISTS _metadata (key TEXT, value TEXT)",
-            "INSERT INTO _metadata (key, value) VALUES ('build_timestamp', '1700000000')",
-            "CREATE TABLE IF NOT EXISTS note (perush_id INTEGER, perek_id INTEGER, pasuk INTEGER, note_idx INTEGER, note_content TEXT)",
-            "INSERT INTO note VALUES (1,1,1,0,'note')");
+            [.. NotesDbV2.Statements((1, 1, 1, 0, "note")),
+                "INSERT INTO _metadata (key, value) VALUES ('build_timestamp', '1700000000')"]);
         // An open pooled connection locks the file; release it before copying the bytes.
         await db.CloseAsync();
         return await File.ReadAllBytesAsync(Path.Join(storage.Root, directory, NotesDbName),

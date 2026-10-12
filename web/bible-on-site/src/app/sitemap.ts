@@ -14,6 +14,7 @@ import type { CategoryKey } from "../lib/tanahpedia/types";
  * Static section paths for the sitemap
  */
 export const SITEMAP_SECTIONS = [
+	"לוח",
 	"dailyBulletin",
 	"whatsappGroup",
 	"tos",
