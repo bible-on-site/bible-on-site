@@ -644,11 +644,11 @@ public partial class PerekViewModel : ObservableObject
     /// Half-window size for pasukim pre-loading around the current perek.
     /// The carousel always contains all 929 perakim, but only a buffer of pasukim is pre-loaded.
     /// </summary>
-    private const int PasukimBufferHalf = 10;
+    private const int PasukimBufferHalf = 1;
 
     /// <summary>
     /// Initializes the carousel with ALL 929 perakim (lightweight metadata).
-    /// Heavy work (building the list + preloading adjacent pasukim) runs on a
+    /// Building the metadata list runs on a
     /// background thread so the UI stays responsive.  The ObservableCollection
     /// and CarouselView updates happen back on the main thread.
     /// </summary>
@@ -664,8 +664,8 @@ public partial class PerekViewModel : ObservableObject
 
         Console.WriteLine($"[Carousel] InitializeCarouselAsync START perekId={perekId}");
 
-        // Build list + preload buffer on a background thread to avoid blocking UI.
-        var list = await Task.Run(async () =>
+        // Publish the requested reader without waiting for speculative chapter data.
+        var list = await Task.Run(() =>
         {
             var result = new List<Perek>(929);
             for (var id = 1; id <= 929; id++)
@@ -677,20 +677,15 @@ public partial class PerekViewModel : ObservableObject
                 }
             }
 
-            // Pre-load pasukim (and perushim notes) for a small buffer around the current perek
-            var loaded = await LoadMissingPasukimAsync(
-                Math.Max(1, perekId - PasukimBufferHalf), Math.Min(929, perekId + PasukimBufferHalf));
-
-            return (result, loaded);
+            return result;
         });
-        AssignLoadedPasukim(list.loaded);
 
-        Console.WriteLine($"[Carousel] InitializeCarouselAsync built list: {list.result.Count} items");
+        Console.WriteLine($"[Carousel] InitializeCarouselAsync built list: {list.Count} items");
 
         // Assign collection on the main thread.
         // NOTE: CarouselView resets Position to 0 when ItemsSource changes — the
         // code-behind ScrollTo(targetPos, animate:false) corrects this immediately.
-        CarouselPerakim = new System.Collections.ObjectModel.ObservableCollection<Perek>(list.result);
+        CarouselPerakim = new System.Collections.ObjectModel.ObservableCollection<Perek>(list);
         CurrentCarouselPerek = perek;
 
         Console.WriteLine($"[Carousel] InitializeCarouselAsync DONE perekId={perekId}");
