@@ -290,4 +290,126 @@ public class PerekLoadingTests
         fixture.Data.GetPerek(3)!.Pasukim.Should().BeEmpty("each navigation-stack reader owns its bound verse state");
         assignedOn.Should().BeSameAs(ui, "carousel cells bind Pasukim, so it must not change on a background thread");
     }
+
+    /// <summary>
+    /// A data service whose stages can be made to never complete — the same
+    /// shape as the wedged resource probe / queued query behind the iOS
+    /// reader hang (issue #2084).
+    /// </summary>
+    private sealed class StallingPerekDataService : PerekDataService
+    {
+        private readonly TaskCompletionSource<List<Pasuk>> _neverPasukim = new();
+        private readonly TaskCompletionSource<bool> _neverLoad = new();
+        public int PasukimCalls { get; private set; }
+        public int StallPasukimCalls { get; set; } = int.MaxValue;
+        public bool StallLoad { get; set; }
+
+        public StallingPerekDataService(LocalDatabaseService database) : base(database) { }
+
+        public override Task LoadAsync() => StallLoad ? _neverLoad.Task : base.LoadAsync();
+
+        public override Task<List<Pasuk>> LoadPasukimAsync(int perekId)
+        {
+            PasukimCalls++;
+            return PasukimCalls <= StallPasukimCalls ? _neverPasukim.Task : base.LoadPasukimAsync(perekId);
+        }
+    }
+
+    private static PerekViewModel StallingReader(Fixture fixture, StallingPerekDataService data)
+    {
+        var model = new PerekViewModel(
+            PreferencesService.CreateForTesting(new InMemoryPreferencesStorage()), null,
+            data, new PerushimCatalogService(fixture.Storage.FileSystem.Object),
+            new PerushimNotesService(NotesDeliveryTests.Pad().Object, fixture.Storage.FileSystem.Object),
+            fixture.Navigator.Object, fixture.Storage.FileSystem.Object, null);
+        model.LoadAttemptTimeout = TimeSpan.FromMilliseconds(50);
+        return model;
+    }
+
+    [Fact]
+    public async Task ChapterLoad_WhenAStageStalls_TimesOutAndReportsTheStallStage()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize(notes: false);
+        var data = new StallingPerekDataService(new LocalDatabaseService(fixture.Storage.FileSystem.Object));
+        await data.LoadAsync();
+        var vm = StallingReader(fixture, data);
+        vm.LoadMaxAttempts = 1;
+
+        var thrown = await vm.Awaiting(m => m.LoadByPerekIdAsync(1)).Should().ThrowAsync<TimeoutException>();
+
+        thrown.Which.Message.Should().Contain("pasukim");
+        vm.LoadStage.Should().Be("pasukim");
+        vm.Perek.Should().BeNull("the stalled stage precedes SetPerek");
+    }
+
+    [Fact]
+    public async Task ChapterLoad_WhenEveryAttemptStalls_RetriesBeforeSurfacingFailure()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize(notes: false);
+        var data = new StallingPerekDataService(new LocalDatabaseService(fixture.Storage.FileSystem.Object));
+        await data.LoadAsync();
+        var vm = StallingReader(fixture, data);
+        vm.LoadMaxAttempts = 2;
+
+        await vm.Awaiting(m => m.LoadByPerekIdAsync(1)).Should().ThrowAsync<TimeoutException>();
+
+        data.PasukimCalls.Should().Be(2, "each timed-out attempt re-enters the stalled stage");
+    }
+
+    [Fact]
+    public async Task ChapterLoad_WhenAStallClears_RetryCompletesTheLoad()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize(notes: false);
+        var data = new StallingPerekDataService(new LocalDatabaseService(fixture.Storage.FileSystem.Object))
+        {
+            StallPasukimCalls = 1,
+        };
+        await data.LoadAsync();
+        var vm = StallingReader(fixture, data);
+
+        await vm.LoadByPerekIdAsync(1);
+
+        vm.PerekId.Should().Be(1);
+        vm.Perek!.Pasukim.Single().Text.Should().Be("בראשית");
+        vm.LoadStage.Should().Be("loaded");
+        data.PasukimCalls.Should().BeGreaterThan(1, "the first attempt stalled and the retry re-ran the stage");
+    }
+
+    [Fact]
+    public async Task ChapterLoad_WhenDataServiceStalls_TimesOutAtDataServiceStage()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize(notes: false);
+        var data = new StallingPerekDataService(new LocalDatabaseService(fixture.Storage.FileSystem.Object))
+        {
+            StallLoad = true,
+        };
+        var vm = StallingReader(fixture, data);
+        vm.LoadMaxAttempts = 1;
+
+        var thrown = await vm.Awaiting(m => m.LoadByPerekIdAsync(1)).Should().ThrowAsync<TimeoutException>();
+
+        thrown.Which.Message.Should().Contain("data-service");
+        data.PasukimCalls.Should().Be(0);
+        vm.Perek.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task EnsurePasukimLoaded_WhenQueryStalls_ReturnsAfterTimeoutInsteadOfHanging()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize(notes: false);
+        var data = new StallingPerekDataService(new LocalDatabaseService(fixture.Storage.FileSystem.Object));
+        await data.LoadAsync();
+        var vm = StallingReader(fixture, data);
+        var perek = data.GetPerek(1)!;
+
+        await vm.Awaiting(m => m.EnsurePasukimLoadedAsync(perek)).Should().NotThrowAsync();
+
+        perek.Pasukim.Should().BeEmpty();
+        data.PasukimCalls.Should().Be(1);
+    }
 }

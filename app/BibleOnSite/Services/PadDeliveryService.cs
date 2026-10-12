@@ -313,6 +313,21 @@ partial class PadDeliveryService
 #pragma warning disable CA1422
 partial class PadDeliveryService
 {
+    /// <summary>
+    /// Bound for a conditional ODR probe — it only reports whether resources
+    /// are already on the device, so a healthy answer is immediate. On a wedged
+    /// simulator the resource-request daemon can hold the completion callback
+    /// forever (issue #2084); the probe must degrade instead of hanging the
+    /// calling lock (and with it the reader's perek load) without end.
+    /// </summary>
+    private static readonly TimeSpan ConditionalAccessTimeout = TimeSpan.FromSeconds(15);
+
+    /// <summary>
+    /// Bound for the fetch attempt inside the diagnostics probe — a real
+    /// download can legitimately take a while, but an unbounded wait would
+    /// hang the exported report on the same stalled daemon.
+    /// </summary>
+    private static readonly TimeSpan DiagnosticFetchTimeout = TimeSpan.FromMinutes(2);
 
     private static string OdrCacheDir(string packName)
     {
@@ -331,7 +346,8 @@ partial class PadDeliveryService
         try
         {
             using var request = new NSBundleResourceRequest(new NSSet<NSString>(new NSString(packName)));
-            var available = await request.ConditionallyBeginAccessingResourcesAsync();
+            var available = await request.ConditionallyBeginAccessingResourcesAsync()
+                .WaitAsync(ConditionalAccessTimeout);
             if (!available)
             {
                 System.Diagnostics.Debug.WriteLine("ODR: ConditionallyBeginAccessing returned false — resource not yet downloaded");
@@ -520,7 +536,8 @@ partial class PadDeliveryService
             lines.Add($"NSBundleResourceRequest created for tag '{packName}'");
             lines.Add($"Request bundle path (before access): {request.Bundle?.BundlePath ?? "(null)"}");
 
-            var conditionalOk = await request.ConditionallyBeginAccessingResourcesAsync();
+            var conditionalOk = await request.ConditionallyBeginAccessingResourcesAsync()
+                .WaitAsync(ConditionalAccessTimeout);
             lines.Add($"ConditionallyBeginAccessing: {conditionalOk}");
 
             if (conditionalOk)
@@ -535,7 +552,7 @@ partial class PadDeliveryService
                 try
                 {
                     using var fetchReq = new NSBundleResourceRequest(new NSSet<NSString>(new NSString(packName)));
-                    await fetchReq.BeginAccessingResourcesAsync();
+                    await fetchReq.BeginAccessingResourcesAsync().WaitAsync(DiagnosticFetchTimeout);
                     lines.Add("BeginAccessingResources: succeeded");
                     lines.Add($"Request bundle path (after fetch): {fetchReq.Bundle?.BundlePath ?? "(null)"}");
 

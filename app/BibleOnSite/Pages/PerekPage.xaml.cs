@@ -18,6 +18,10 @@ public partial class PerekPage : ContentPage, IQueryAttributable
     private readonly PerekViewModel _viewModel;
     private bool _isLoading;
 
+    // Resolved once for the fresh load; a retry must aim at the same perek
+    // even though GetInitialPerekId consumes its one-shot request sources.
+    private int? _initialPerekId;
+
     // Generation counter: each app-link request supersedes any earlier one
     // still waiting for the initial load.
     private long _appLinkGeneration;
@@ -519,50 +523,14 @@ public partial class PerekPage : ContentPage, IQueryAttributable
             _isLoading = true;
             try
             {
-                var perekId = GetInitialPerekId();
-
-                // Show loading overlay while the carousel initialises.
-                CarouselLoadingOverlay.IsVisible = true;
-
-                // Guard: ignore OnCarouselItemChanged during initial load.
-                // The CarouselView fires spurious CurrentItemChanged events when it
-                // first receives its ItemsSource, which would reset state.
-                _carouselInitializing = true;
-                await _viewModel.LoadByPerekIdAsync(perekId);
-
-                // CarouselView resets Position to 0 when ItemsSource changes.
-                // Force it to the correct position without animation.
-                var targetPos = _viewModel.PerekId - 1;
-                PerekCarousel.ScrollTo(targetPos, animate: false);
-
-                // Yield so the CarouselView processes the scroll + layout pass.
-                await Task.Delay(50);
-
-                // Sync the ViewModel position (two-way binding may lag)
-                _viewModel.CarouselPosition = targetPos;
-
-                _carouselInitializing = false;
-
-                // Hide loading overlay — carousel is ready
-                CarouselLoadingOverlay.IsVisible = false;
-
-                await ApplySearchReaderLocationAsync();
-                StartSearchIntroduction();
-
-                // Update articles count badge
-                await UpdateArticlesCountAsync();
-
-                // A cold-start link may also carry an article to open.
-                if (_pendingArticleId is int pendingArticleId)
-                {
-                    _pendingArticleId = null;
-                    await Shell.Current.GoToAsync($"articleDetail?articleId={pendingArticleId}");
-                }
+                await LoadInitialPerekAsync();
             }
             catch (Exception ex)
             {
-                Console.Error.WriteLine($"Failed to load perek: {ex.Message}");
-                await DisplayAlertAsync("Error", $"Failed to load perek: {ex.Message}", "OK");
+                // A load that cannot complete surfaces a retryable error instead
+                // of leaving the spinner up forever (issue #2084).
+                Console.Error.WriteLine($"Failed to load perek: {ex}");
+                ShowPerekLoadError(ex);
             }
             finally
             {
@@ -596,6 +564,106 @@ public partial class PerekPage : ContentPage, IQueryAttributable
 #if IOS
         Dispatcher.Dispatch(ConfigureIosReaderHistory);
 #endif
+    }
+
+    /// <summary>
+    /// Runs the full first-load sequence for this reader: resolve the perek to
+    /// open, wait out the bounded ViewModel load, snap the carousel, then apply
+    /// the search-reader landing. Throws whatever the load throws — the caller
+    /// turns that into the retryable error overlay.
+    /// </summary>
+    private async Task LoadInitialPerekAsync()
+    {
+        _initialPerekId ??= GetInitialPerekId();
+        var perekId = _initialPerekId.Value;
+        Console.WriteLine($"[PerekLoad] fresh load start perekId={perekId}");
+        ShowCarouselLoading();
+
+        // Guard: ignore OnCarouselItemChanged during initial load.
+        // The CarouselView fires spurious CurrentItemChanged events when it
+        // first receives its ItemsSource, which would reset state.
+        _carouselInitializing = true;
+        try
+        {
+            await _viewModel.LoadByPerekIdAsync(perekId);
+
+            // CarouselView resets Position to 0 when ItemsSource changes.
+            // Force it to the correct position without animation.
+            var targetPos = _viewModel.PerekId - 1;
+            PerekCarousel.ScrollTo(targetPos, animate: false);
+
+            // Yield so the CarouselView processes the scroll + layout pass.
+            await Task.Delay(50);
+
+            // Sync the ViewModel position (two-way binding may lag)
+            _viewModel.CarouselPosition = targetPos;
+        }
+        finally
+        {
+            _carouselInitializing = false;
+        }
+
+        // Hide loading overlay — carousel is ready
+        CarouselLoadingOverlay.IsVisible = false;
+
+        await ApplySearchReaderLocationAsync();
+        StartSearchIntroduction();
+
+        // Update articles count badge
+        await UpdateArticlesCountAsync();
+
+        // A cold-start link may also carry an article to open.
+        if (_pendingArticleId is int pendingArticleId)
+        {
+            _pendingArticleId = null;
+            await Shell.Current.GoToAsync($"articleDetail?articleId={pendingArticleId}");
+        }
+    }
+
+    /// <summary>Swaps the loading overlay to its spinner state (initial load and retry).</summary>
+    private void ShowCarouselLoading()
+    {
+        CarouselLoadErrorPanel.IsVisible = false;
+        CarouselLoadingIndicator.IsVisible = true;
+        CarouselLoadingOverlay.IsVisible = true;
+    }
+
+    /// <summary>Swaps the loading overlay to its retryable error state.</summary>
+    private void ShowPerekLoadError(Exception ex)
+    {
+        CarouselLoadingIndicator.IsVisible = false;
+        CarouselLoadErrorDetail.Text = ex.Message;
+        CarouselLoadErrorPanel.IsVisible = true;
+        CarouselLoadingOverlay.IsVisible = true;
+    }
+
+    /// <summary>Retry button on the load-failure overlay — re-runs the full fresh load.</summary>
+    private async void OnPerekLoadRetryClicked(object? sender, EventArgs e)
+    {
+        if (_isLoading)
+        {
+            return;
+        }
+
+        _isLoading = true;
+        try
+        {
+            await LoadInitialPerekAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Perek load retry failed: {ex}");
+            ShowPerekLoadError(ex);
+        }
+        finally
+        {
+            _isLoading = false;
+            if (_pendingCarouselResnap)
+            {
+                _pendingCarouselResnap = false;
+                Dispatcher.Dispatch(ResnapCarousel);
+            }
+        }
     }
 
     /// <summary>

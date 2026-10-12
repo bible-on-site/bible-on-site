@@ -302,28 +302,109 @@ public partial class PerekViewModel : ObservableObject
         }
     }
 
+#if MAUI
+    /// <summary>
+    /// Bound for a single perek-load attempt. Several stages await facilities
+    /// that can stall without completing — a queued SQLite call on a starved
+    /// pool, an on-demand resource probe whose daemon never answers — and an
+    /// unbounded await leaves the reader on its loading overlay forever
+    /// (issue #2084). Every attempt is abandoned after this budget instead.
+    /// </summary>
+    internal TimeSpan LoadAttemptTimeout { get; set; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>Attempts before a stubbornly-stalling load surfaces as an error.</summary>
+    internal int LoadMaxAttempts { get; set; } = 2;
+
+    /// <summary>
+    /// Stage reached by the in-flight (or last) load attempt — written into the
+    /// timeout log and exception so a stall reports where it froze.
+    /// </summary>
+    internal string LoadStage { get; private set; } = "not-started";
+
     /// <summary>
     /// Asynchronously loads a perek by its ID, including pasukim from the database.
-    /// This method is only available in MAUI builds.
+    /// Each attempt is time-boxed by <see cref="LoadAttemptTimeout"/>; when a
+    /// stage stalls, the load retries up to <see cref="LoadMaxAttempts"/> times,
+    /// then throws TimeoutException so the caller can surface a retryable error
+    /// instead of an endless spinner.
     /// </summary>
-#if MAUI
     public async Task LoadByPerekIdAsync(int perekId)
     {
+        var attempt = 0;
+        while (true)
+        {
+            attempt++;
+            var load = LoadByPerekIdCoreAsync(perekId);
+            try
+            {
+                await load.WaitAsync(LoadAttemptTimeout);
+                return;
+            }
+            catch (TimeoutException)
+            {
+                // A stalled attempt keeps running detached — observing its
+                // completion logs the late outcome and avoids unobserved exceptions.
+                _ = ObserveStaleLoadAsync(load, attempt, perekId);
+                Console.Error.WriteLine($"[PerekLoad] attempt {attempt} timed out after " +
+                    $"{LoadAttemptTimeout.TotalSeconds:0.##}s at stage '{LoadStage}' (perekId={perekId})");
+                if (attempt >= LoadMaxAttempts)
+                {
+                    throw new TimeoutException(
+                        $"Perek {perekId} load timed out after {attempt} attempt(s); last stage: {LoadStage}");
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Follows a detached, timed-out attempt to its eventual end so its late
+    /// completion (or failure) is logged rather than silently dropped.
+    /// </summary>
+    private async Task ObserveStaleLoadAsync(Task stale, int attempt, int perekId)
+    {
+        try
+        {
+            await stale;
+            Console.WriteLine($"[PerekLoad] stale attempt {attempt} eventually completed (perekId={perekId})");
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[PerekLoad] stale attempt {attempt} failed late (perekId={perekId}): {ex.Message}");
+        }
+    }
+
+    private void MarkLoadStage(string stage, int perekId)
+    {
+        LoadStage = stage;
+        Console.WriteLine($"[PerekLoad] stage={stage} perekId={perekId}");
+    }
+
+    private async Task LoadByPerekIdCoreAsync(int perekId)
+    {
         // Ensure data service is loaded
+        MarkLoadStage("data-service", perekId);
         if (!_perekDataService.IsLoaded)
         {
             await _perekDataService.LoadAsync();
         }
 
         var perek = GetReaderPerek(perekId);
-        if (perek != null)
+        if (perek == null)
         {
-            // Load pasukim
-            perek.Pasukim = await _perekDataService.LoadPasukimAsync(perekId);
-            SetPerek(perek);
-            await LoadPerushimAsync(perekId);
-            await InitializeCarouselAsync();
+            MarkLoadStage("missing-perek", perekId);
+            return;
         }
+
+        MarkLoadStage("pasukim", perekId);
+        // Load pasukim
+        perek.Pasukim = await _perekDataService.LoadPasukimAsync(perekId);
+        MarkLoadStage("set-perek", perekId);
+        SetPerek(perek);
+        MarkLoadStage("perushim", perekId);
+        await LoadPerushimAsync(perekId);
+        MarkLoadStage("carousel", perekId);
+        await InitializeCarouselAsync();
+        MarkLoadStage("loaded", perekId);
     }
 
     /// <summary>
@@ -708,7 +789,19 @@ public partial class PerekViewModel : ObservableObject
         }
 
         Console.WriteLine($"[Carousel] EnsurePasukimLoaded perekId={perek.PerekId}");
-        perek.Pasukim = await _perekDataService.LoadPasukimAsync(perek.PerekId);
+        try
+        {
+            // Bounded like the fresh-load path — a stalled query must not hold
+            // the awaiting navigation forever (issue #2084). The cell keeps its
+            // loading view and the next swipe retries the fetch.
+            perek.Pasukim = await _perekDataService.LoadPasukimAsync(perek.PerekId)
+                .WaitAsync(LoadAttemptTimeout);
+        }
+        catch (TimeoutException)
+        {
+            Console.Error.WriteLine($"[PerekLoad] EnsurePasukimLoaded timed out after " +
+                $"{LoadAttemptTimeout.TotalSeconds:0.##}s (perekId={perek.PerekId})");
+        }
     }
 
     /// <summary>
