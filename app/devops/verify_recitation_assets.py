@@ -41,7 +41,7 @@ def verify_android(archive, catalog, names):
 
 
 def verify_apple(archive, catalog, names, asset_pack_dir, archive_dir):
-    """iOS packs ship as Apple-hosted .aar archives beside the IPA, never inside it."""
+    """Apple-hosted .aar packs ship beside the IPA, never inside it."""
     if any(Path(n).name == "OnDemandResources.plist" for n in names):
         raise ValueError("IPA still contains an On-Demand Resources manifest")
     if any(".assetpack/" in n or n.startswith("Payload/OnDemandResources/") for n in names):
