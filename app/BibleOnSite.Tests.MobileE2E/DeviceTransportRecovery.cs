@@ -25,12 +25,17 @@ internal static class DeviceTransportLoss
 
 // A session-startup failure can come from the device transport rather than the
 // app under test: "adb: device offline" is a stale adb transport, not a dead
-// emulator. Recovery only runs for those transport signatures, probes
-// `adb` first, and reconnects when the transport is gone — then
-// requires the same readiness signal waitForAndroidDevice gates on (booted
-// system, responsive package manager) before the one session retry is spent.
-// A genuinely dead emulator still fails readiness, so recovery can never
-// mask an app regression.
+// emulator. The same drop also kills UiAutomator2's instrumentation, so a
+// confirmed session death can ride a dead adb transport without ever naming
+// it — "socket hang up" is how Appium reports that proxy loss. Recovery
+// therefore probes `adb` for every transport-plausible failure and heals only
+// when the probe proves the transport is gone: first the daemon's own
+// reconnect (plus the kick aimed at entries wedged in "offline"), then a
+// daemon restart when the daemon↔adbd link itself is stuck — the emulator
+// stays up throughout. Readiness is the same signal waitForAndroidDevice
+// gates on (booted system, responsive package manager) before the one session
+// retry is spent. A genuinely dead emulator still fails readiness, so
+// recovery can never mask an app regression.
 internal static class DeviceTransportRecovery
 {
     private const int ProbeTimeoutMs = 15_000;
@@ -45,6 +50,9 @@ internal static class DeviceTransportRecovery
     private enum Adb
     {
         Reconnect,
+        ReconnectOffline,
+        KillServer,
+        StartServer,
         WaitForDevice,
         GetState,
         BootCompleted,
@@ -52,9 +60,15 @@ internal static class DeviceTransportRecovery
         Devices,
     }
 
+    // Only failures that can plausibly come from the adb transport earn a
+    // probe: an explicit transport loss, or a session death whose cause may
+    // have been adb dropping underneath it.
+    internal static bool IsTransportPlausible(Exception exception) =>
+        DeviceTransportLoss.Matches(exception) || DeviceSessionDeath.Matches(exception);
+
     internal static bool TryReconnect(Exception failure)
     {
-        if (!DeviceTransportLoss.Matches(failure))
+        if (!IsTransportPlausible(failure))
         {
             return false;
         }
@@ -69,10 +83,30 @@ internal static class DeviceTransportRecovery
             // session payload — retrying cannot help it.
             return false;
         }
+        // `reconnect` asks the daemon to renegotiate the transport and
+        // `reconnect offline` kicks an entry wedged in the "offline" state;
+        // both stay below the session layer the suite rebuilds on top of.
         Run(Adb.Reconnect, ProbeTimeoutMs);
-        // wait-for-device returns the moment the transport is back, but Android
-        // can still be recovering; readiness is re-probed so a half-awake
-        // device does not burn the single retry on an early session attempt.
+        Run(Adb.ReconnectOffline, ProbeTimeoutMs);
+        if (AwaitResponsiveness())
+        {
+            return true;
+        }
+        // The transport stayed dead through the daemon's own kicks — the
+        // daemon↔adbd link itself is wedged, the failure mode that left every
+        // later session hitting "device offline" on a live emulator. A daemon
+        // restart forces a fresh handshake and is the last lever below the
+        // session layer before the device is honestly declared lost.
+        Run(Adb.KillServer, ProbeTimeoutMs);
+        Run(Adb.StartServer, ProbeTimeoutMs);
+        return AwaitResponsiveness();
+    }
+
+    // wait-for-device returns the moment the transport is back, but Android
+    // can still be recovering; readiness is re-probed so a half-awake device
+    // does not burn the single retry on an early session attempt.
+    private static bool AwaitResponsiveness()
+    {
         for (var round = 0; round < ReadinessRounds; round++)
         {
             Run(Adb.WaitForDevice, WaitForDeviceTimeoutMs);
@@ -110,6 +144,9 @@ internal static class DeviceTransportRecovery
         var arguments = command switch
         {
             Adb.Reconnect => new[] { "reconnect" },
+            Adb.ReconnectOffline => new[] { "reconnect", "offline" },
+            Adb.KillServer => new[] { "kill-server" },
+            Adb.StartServer => new[] { "start-server" },
             Adb.WaitForDevice => new[] { "wait-for-device" },
             Adb.GetState => new[] { "get-state" },
             Adb.BootCompleted => new[] { "shell", "getprop", "sys.boot_completed" },

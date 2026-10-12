@@ -27,6 +27,28 @@ public sealed class DeviceTransportLossTests
 [Trait("Category", "Unit")]
 public sealed class DeviceTransportRecoveryTests
 {
+    [Theory]
+    // A dropped adb transport kills UiAutomator2's proxy along with it, so a
+    // confirmed session death is worth one adb probe: when the death rode a
+    // dead transport, recovery heals adb before the rebuild is spent.
+    [InlineData("Could not proxy command to the remote server. Original error: socket hang up")]
+    [InlineData("invalid session id")]
+    [InlineData("adb: device offline")]
+    [InlineData("adb: cannot connect to daemon at tcp:5037: Connection refused")]
+    public void TransportLossAndSessionDeathAreTransportPlausible(string message) =>
+        Assert.True(DeviceTransportRecovery.IsTransportPlausible(new UnknownErrorException(message)));
+
+    [Theory]
+    // Driver failures unrelated to the transport never earn an adb probe.
+    [InlineData("element click intercepted: other element would receive the click")]
+    [InlineData("No visible element matching the locator met the condition.")]
+    public void UnrelatedDriverFailuresAreNotTransportPlausible(string message) =>
+        Assert.False(DeviceTransportRecovery.IsTransportPlausible(new UnknownErrorException(message)));
+
+    [Fact]
+    public void NonDriverFailuresAreNotTransportPlausible() =>
+        Assert.False(DeviceTransportRecovery.IsTransportPlausible(new InvalidOperationException("adb: device offline")));
+
     [Fact]
     public void RejectsNonDriverFailures() =>
         Assert.False(DeviceTransportRecovery.TryReconnect(new InvalidOperationException("device offline")));
