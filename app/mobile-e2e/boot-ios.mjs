@@ -21,6 +21,15 @@ if (!primary) throw new Error(`No available iPhone simulator runtime compatible 
 const devices = [primary];
 if (shardCount === 2) {
   const plan = planShardPeer(listDevices(), primary);
+  // A retained peer matching only the reserved name — cloned under a different
+  // model or an old runtime — would pair the shards with different device
+  // profiles, so it is deleted before the same-model sibling is reused or
+  // created in its place.
+  for (const stale of plan.stale) {
+    if (stale.state !== "Shutdown") run("simctl", "shutdown", stale.udid);
+    run("simctl", "delete", stale.udid);
+    console.log(`Deleted stale ${stale.name} (${stale.udid}) — not ${primary.deviceTypeIdentifier} on ${primary.runtime}.`);
+  }
   if (plan.device) {
     devices.push(plan.device);
   } else {

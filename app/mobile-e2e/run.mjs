@@ -9,6 +9,7 @@ import { probeAppiumReadiness, waitForAppiumReadiness } from "./appium-readiness
 import { prepareWda } from "./prepare-wda.mjs";
 import { exportNativeLog, startNativeLog } from "./native-logs.mjs";
 import { waitForAndroidDevice } from "./android-readiness.mjs";
+import { iosAppPids } from "./ios-processes.mjs";
 
 const directory = dirname(fileURLToPath(import.meta.url));
 const runStarted = Date.now();
@@ -81,16 +82,14 @@ const nativeStream = platform === "ios" ? startNativeLog("xcrun", ["simctl", "sp
 
 async function sampleIosApp() {
   try {
-    // A failed session may already have terminated the app; pgrep returns 1 then.
-    let processes;
-    try {
-      processes = await execute("pgrep", ["-x", "BibleOnSite"], { timeout: 30000 });
-    } catch (error) {
-      if (error.code === 1) return;
-      throw error;
-    }
-    for (const pid of processes.stdout.trim().split("\n")) {
-      if (!pid) continue;
+    // Two shard simulators share this host (#2083), so a name-wide pgrep would
+    // also sample the peer's healthy app — writing its stacks into this
+    // shard's failure artifacts and pausing it mid-test. The device's own
+    // launchd table resolves only this run's app; a failed session that
+    // already terminated the app simply leaves no PID row to find.
+    const listing = await execute("xcrun", ["simctl", "spawn", process.env.MOBILE_UDID,
+      "launchctl", "list"], { timeout: 30000 });
+    for (const pid of iosAppPids(listing.stdout)) {
       await execute("sample", [pid, "2", "1", "-mayDie", "-file", resolve(artifacts, `native-stack-${pid}.txt`)],
         { timeout: 120000 });
     }
