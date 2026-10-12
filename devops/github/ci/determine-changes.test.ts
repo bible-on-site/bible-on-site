@@ -41,6 +41,8 @@ describe("detectChanges", () => {
 		for (const file of [
 			"devops/github/ci/e2e-impact/select.ts",
 			"devops/github/ci/e2e-impact/e2e-impact.test.ts",
+			"devops/e2e-coverage-trees/extract.ts",
+			"devops/e2e-coverage-trees/to-selector-tree.ts",
 		]) {
 			const changes = detectChanges([file]);
 			assert.deepEqual(changes.app, { module_changed: false, ci_changed: true }, file);
