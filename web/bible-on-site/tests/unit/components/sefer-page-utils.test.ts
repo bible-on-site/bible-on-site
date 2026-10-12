@@ -5,6 +5,7 @@ import {
 	buildPageSemantics,
 	CONTENT_OFFSET,
 	computeInitialTurnedLeaves,
+	seferBookExitPath,
 	toHebrewChapterNumber,
 	wrapDownloadResult,
 } from "@/app/929/[number]/components/sefer-page-utils";
@@ -238,6 +239,32 @@ describe("sefer-page-utils", () => {
 
 		it("returns undefined when perekIds is undefined", () => {
 			expect(computeInitialTurnedLeaves(undefined, 10)).toBeUndefined();
+		});
+	});
+
+	describe("seferBookExitPath", () => {
+		it("returns the perek the flipbook's history wrote to the location", () => {
+			expect(seferBookExitPath("/929/30", "בראשית", 10)).toBe("/929/30");
+			expect(
+				seferBookExitPath("/929/30?book", "בראשית", 10),
+			).toBe("/929/30");
+		});
+
+		it("falls back to the entry perek on book-chrome exits", () => {
+			expect(seferBookExitPath("/929/בראשית/כריכה", "בראשית", 10)).toBe(
+				"/929/10",
+			);
+			expect(seferBookExitPath("/929/בראשית/תוכן", "בראשית", 10)).toBe(
+				"/929/10",
+			);
+			expect(seferBookExitPath("/929/בראשית/גב", "בראשית", 10)).toBe(
+				"/929/10",
+			);
+		});
+
+		it("falls back to the entry perek on non-perek paths", () => {
+			expect(seferBookExitPath("/929", "בראשית", 10)).toBe("/929/10");
+			expect(seferBookExitPath("/מסורה/8", "בראשית", 10)).toBe("/929/10");
 		});
 	});
 
