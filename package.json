@@ -5,6 +5,7 @@
 		"cross-env": "10.1.0"
 	},
 	"scripts": {
+		"backend": "node devops/local-backend.mjs",
 		"dev": "npm run dev --prefix devops --",
 		"images:prepare": "node devops/perek-images/prepare.mjs",
 		"prepare": "node devops/install-git-hooks.mjs",

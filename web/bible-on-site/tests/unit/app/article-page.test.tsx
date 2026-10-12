@@ -98,6 +98,10 @@ jest.mock("../../../src/app/929/[number]/[slug]/ScrollToArticle", () => ({
 	ScrollToArticle: () => null,
 }));
 
+jest.mock("../../../src/app/929/[number]/[slug]/ScrollToArticleMatch", () => ({
+	ScrollToArticleMatch: () => null,
+}));
+
 jest.mock("../../../src/app/929/[number]/[slug]/ScrollToPerushPasuk", () => ({
 	ScrollToPerushPasukNote: () => null,
 }));
@@ -115,6 +119,7 @@ jest.mock("../../../src/app/929/[number]/components/Stuma", () => ({
 }));
 
 import { render, screen, within } from "@testing-library/react";
+import DOMPurify from "isomorphic-dompurify";
 import ArticlePage, {
 	generateMetadata,
 	generateStaticParams,
@@ -681,6 +686,52 @@ describe("[slug] page", () => {
 			expect(secondNote?.getAttribute("data-perush-pasuk")).toBe("2");
 			expect(secondPasukNotes).toHaveLength(2);
 			expect(container.querySelector(".noteHighlight")).toBeNull();
+		});
+
+		it("renders a share link to the canonical perush path", async () => {
+			mockGetPerushimByPerekId.mockResolvedValue([
+				{ id: 1, name: 'רש"י', parshanName: 'רש"י', noteCount: 10 },
+			]);
+			mockGetPerushDetail.mockResolvedValue({
+				id: 1,
+				name: 'רש"י',
+				parshanName: 'רש"י',
+				notes: [{ pasuk: 1, noteIdx: 0, noteContent: "<p>פירוש</p>" }],
+			});
+
+			const jsx = await ArticlePage({
+				params: Promise.resolve({ number: "5", slug: 'רש"י' }),
+			});
+			render(jsx);
+
+			const shareLink = screen.getByRole("link", { name: "שיתוף" });
+			expect(shareLink.getAttribute("href")).toBe(
+				`/929/5/${encodeURIComponent('רש"י')}`,
+			);
+		});
+
+		// jest.setup.js mocks isomorphic-dompurify as pass-through, so this
+		// asserts the contract: every note goes through DOMPurify.sanitize.
+		it("passes each perush note through DOMPurify.sanitize", async () => {
+			const sanitizeSpy = jest.spyOn(DOMPurify, "sanitize");
+			const rawNote =
+				'<p>בטוח</p><script>alert("x")</script><img src="x" onerror="alert(1)">';
+			mockGetPerushimByPerekId.mockResolvedValue([
+				{ id: 1, name: 'רש"י', parshanName: 'רש"י', noteCount: 10 },
+			]);
+			mockGetPerushDetail.mockResolvedValue({
+				id: 1,
+				name: 'רש"י',
+				parshanName: 'רש"י',
+				notes: [{ pasuk: 1, noteIdx: 0, noteContent: rawNote }],
+			});
+
+			const jsx = await ArticlePage({
+				params: Promise.resolve({ number: "5", slug: 'רש"י' }),
+			});
+			render(jsx);
+
+			expect(sanitizeSpy).toHaveBeenCalledWith(rawNote);
 		});
 
 		it("decodes percent-encoded slug to match perush name", async () => {

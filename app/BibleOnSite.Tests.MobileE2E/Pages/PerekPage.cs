@@ -19,6 +19,9 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
     public AppiumElement WaitFor(string automationId, Func<AppiumElement, bool> condition) =>
         WaitFor(platform.AutomationId(automationId), condition);
 
+    public AppiumElement WaitFor(string automationId, Func<AppiumElement, bool> condition, TimeSpan timeout) =>
+        WaitFor(platform.AutomationId(automationId), condition, timeout);
+
     public AppiumElement WaitFor(By locator) => WaitFor(locator, _ => true);
 
     public AppiumElement WaitFor(By locator, Func<AppiumElement, bool> condition) =>

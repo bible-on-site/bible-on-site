@@ -14,8 +14,8 @@ internal static class HtmlAttributedStringFactory
 {
     /// <summary>
     /// Converts HTML to an attributed string using the managed HtmlRuns parser.
-    /// Returns null when the markup yields no text; callers fall back to plain
-    /// text. Never throws into native code.
+    /// Empty markup produces an empty attributed string. Returns null on a
+    /// conversion failure so callers can fall back to plain text.
     /// </summary>
     public static NSMutableAttributedString? FromHtml(
         string html, double fontSize, double h1Scale, double h2Scale, double h3Scale)
@@ -23,11 +23,6 @@ internal static class HtmlAttributedStringFactory
         try
         {
             var runs = HtmlRuns.FromHtml(html);
-            if (runs.Count == 0)
-            {
-                return null;
-            }
-
             var attributed = new NSMutableAttributedString();
             foreach (var run in runs)
             {

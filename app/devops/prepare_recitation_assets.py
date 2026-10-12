@@ -3,7 +3,9 @@
 import argparse
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
+import errno
 import hashlib
+from http.client import HTTPException, IncompleteRead, RemoteDisconnected
 import json
 from pathlib import Path
 import shutil
@@ -11,6 +13,8 @@ import sqlite3
 import ssl
 import sys
 import tempfile
+import time
+from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import HTTPSHandler, HTTPDefaultErrorHandler, HTTPErrorProcessor, OpenerDirector
 import zipfile
@@ -22,6 +26,7 @@ from audit_native import audit_native, NATIVE
 from publish import DATABASE, chapters_in, extract, publish
 
 CATALOG = "recitation-catalog.json"
+DOWNLOAD_ATTEMPTS = 4
 
 
 def open_https(url):
@@ -38,6 +43,38 @@ def digest(path):
         return hashlib.file_digest(source, "sha256").hexdigest()
 
 
+def transient_download_error(error):
+    if isinstance(error, HTTPError):
+        return error.code in (408, 429, 500, 502, 503, 504)
+    if isinstance(error, URLError):
+        error = error.reason
+    if isinstance(error, ssl.SSLCertVerificationError):
+        return False
+    return (isinstance(error, (TimeoutError, ConnectionError, IncompleteRead, RemoteDisconnected, ssl.SSLEOFError))
+            or (isinstance(error, OSError) and error.errno in (
+                errno.ECONNRESET, errno.ECONNABORTED, errno.ETIMEDOUT,
+                errno.ENETRESET, errno.EHOSTUNREACH, errno.ENETUNREACH, errno.EPIPE)))
+
+
+def download_original(url, temporary, perek_id):
+    """Restart an interrupted GET; never append partial bytes or retry bad content."""
+    for attempt in range(DOWNLOAD_ATTEMPTS):
+        try:
+            with open_https(url) as source, temporary.open("wb") as target:
+                if source.status != 200:
+                    raise ValueError(f'{perek_id}: recording download returned HTTP {source.status}')
+                shutil.copyfileobj(source, target)
+            return
+        except (OSError, HTTPException, URLError) as error:
+            temporary.unlink(missing_ok=True)
+            if not transient_download_error(error) or attempt + 1 == DOWNLOAD_ATTEMPTS:
+                raise
+            delay = 2 ** attempt
+            print(f'{perek_id}: transient recording download failure; retry {attempt + 2}/{DOWNLOAD_ATTEMPTS} in {delay}s',
+                  file=sys.stderr, flush=True)
+            time.sleep(delay)
+
+
 def recording(track, cache, recordings=None):
     """Only the build fetches S3; immutable byte hashes are checked before packaging."""
     destination = cache / (track["audioSha256"] + ".mp3")
@@ -52,10 +89,7 @@ def recording(track, cache, recordings=None):
             if (url.scheme != "https" or not url.hostname or url.username or url.password or url.query or url.fragment
                     or url.path != f'/recordings/{track["perekId"]}_record.mp3'):
                 raise ValueError("Build recording URLs must be HTTPS chapter assets")
-            with open_https(url.geturl()) as source, temporary.open("wb") as target:
-                if source.status != 200:
-                    raise ValueError(f'{track["perekId"]}: recording download returned HTTP {source.status}')
-                shutil.copyfileobj(source, target)
+            download_original(url.geturl(), temporary, track['perekId'])
         if digest(temporary) != track["audioSha256"]:
             raise ValueError(f'{track["perekId"]}: recording checksum mismatch')
         temporary.replace(destination)
@@ -102,7 +136,11 @@ def prepare_assets(app, platform, cache, recordings=None, intermediate=None, dat
         raise ValueError("Recitation inventory does not match the native books")
     with ThreadPoolExecutor(max_workers=4) as pool:
         unique_audio = {track["audioSha256"]: track for track in tracks}
-        list(pool.map(lambda track: recording(track, cache, recordings), unique_audio.values()))
+        try:
+            list(pool.map(lambda track: recording(track, cache, recordings), unique_audio.values()))
+        except BaseException:
+            pool.shutdown(wait=True, cancel_futures=True)
+            raise
     books = []
     for sid in sorted({mapping[t["perekId"]] for t in tracks}):
         selected = [t for t in tracks if mapping[t["perekId"]] == sid]

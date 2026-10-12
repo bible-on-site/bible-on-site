@@ -1,6 +1,5 @@
 using OpenQA.Selenium;
 using Xunit;
-using Xunit.Abstractions;
 
 namespace BibleOnSite.Tests.MobileE2E.Configuration;
 
@@ -77,9 +76,136 @@ public sealed class DeviceSessionRecoveryTests
         Assert.Equal(0, _test.Rebuilds);
     }
 
+    [Fact]
+    public async Task SessionDeathDuringStartupCreatesTheSessionOnceMore()
+    {
+        _test.ConnectFailures.Enqueue(new UnknownErrorException("invalid session id"));
+
+        await _test.Start();
+
+        Assert.Equal(2, _test.Rebuilds);
+        Assert.Contains(_log, line => line.Contains("died during startup"));
+    }
+
+    [Fact]
+    public async Task StartupFailuresUnrelatedToTheTransportAreNotRetried()
+    {
+        var failure = new TimeoutException("session creation timed out before a session id existed");
+        _test.ConnectFailures.Enqueue(failure);
+
+        var thrown = await Assert.ThrowsAsync<TimeoutException>(() => _test.Start().AsTask());
+
+        Assert.Same(failure, thrown);
+        Assert.Equal(1, _test.Rebuilds);
+    }
+
+    [Fact]
+    public async Task ASecondStartupDeathStillFails()
+    {
+        _test.ConnectFailures.Enqueue(new UnknownErrorException("invalid session id"));
+        _test.ConnectFailures.Enqueue(new UnknownErrorException("invalid session id"));
+
+        await Assert.ThrowsAsync<UnknownErrorException>(() => _test.Start().AsTask());
+
+        Assert.Equal(2, _test.Rebuilds);
+    }
+
+    [Fact]
+    public async Task TransportLossDuringStartupRetriesOnceAfterRecovery()
+    {
+        var previous = MobileDeviceTest.TransportRecovery;
+        MobileDeviceTest.TransportRecovery = _ => true;
+        try
+        {
+            _test.ConnectFailures.Enqueue(new UnknownErrorException("adb: device offline"));
+
+            await _test.Start();
+
+            Assert.Equal(2, _test.Rebuilds);
+            Assert.Contains(_log, line => line.Contains("adb transport recovered"));
+        }
+        finally
+        {
+            MobileDeviceTest.TransportRecovery = previous;
+        }
+    }
+
+    [Fact]
+    public async Task TransportLossDuringStartupWithoutRecoveryIsNotRetried()
+    {
+        var previous = MobileDeviceTest.TransportRecovery;
+        MobileDeviceTest.TransportRecovery = _ => false;
+        var failure = new UnknownErrorException("adb: device offline");
+        _test.ConnectFailures.Enqueue(failure);
+        try
+        {
+            var thrown = await Assert.ThrowsAsync<UnknownErrorException>(() => _test.Start().AsTask());
+
+            Assert.Same(failure, thrown);
+            Assert.Equal(1, _test.Rebuilds);
+        }
+        finally
+        {
+            MobileDeviceTest.TransportRecovery = previous;
+        }
+    }
+
+    [Fact]
+    public void TransportLossMidScenarioRebuildsAfterRecovery()
+    {
+        var previous = MobileDeviceTest.TransportRecovery;
+        MobileDeviceTest.TransportRecovery = _ => true;
+        var calls = 0;
+        try
+        {
+            _test.Execute(() =>
+            {
+                calls++;
+                if (calls == 1)
+                {
+                    throw new UnknownErrorException("adb: device offline");
+                }
+            });
+
+            Assert.Equal(2, calls);
+            Assert.Equal(1, _test.Rebuilds);
+        }
+        finally
+        {
+            MobileDeviceTest.TransportRecovery = previous;
+        }
+    }
+
+    [Fact]
+    public void TransportLossMidScenarioWithoutRecoveryFailsHonestly()
+    {
+        var previous = MobileDeviceTest.TransportRecovery;
+        MobileDeviceTest.TransportRecovery = _ => false;
+        var calls = 0;
+        var failure = new UnknownErrorException("adb: device offline");
+        try
+        {
+            var thrown = Assert.Throws<UnknownErrorException>(() => _test.Execute(() =>
+            {
+                calls++;
+                throw failure;
+            }));
+
+            Assert.Same(failure, thrown);
+            Assert.Equal(1, calls);
+            Assert.Equal(0, _test.Rebuilds);
+        }
+        finally
+        {
+            MobileDeviceTest.TransportRecovery = previous;
+        }
+    }
+
     private sealed class ListOutput(List<string> lines) : ITestOutputHelper
     {
         public string Output => string.Join("\n", lines);
+        public void Write(string message) => lines.Add(message);
+        public void Write(string format, params object[] args) => lines.Add(string.Format(format, args));
         public void WriteLine(string message) => lines.Add(message);
         public void WriteLine(string format, params object[] args) => lines.Add(string.Format(format, args));
     }
@@ -89,7 +215,16 @@ public sealed class DeviceSessionRecoveryTests
             MobilePlatform.Android, "/test/app", "test-device", artifacts, new Uri("http://127.0.0.1:4723")))
     {
         public int Rebuilds { get; private set; }
-        protected override void Connect() => Rebuilds++;
+        public Queue<Exception> ConnectFailures { get; } = new();
+        protected override void Connect()
+        {
+            Rebuilds++;
+            if (ConnectFailures.Count > 0)
+            {
+                throw ConnectFailures.Dequeue();
+            }
+        }
         public void Execute(Action run) => Scenario(run);
+        public ValueTask Start() => InitializeAsync();
     }
 }

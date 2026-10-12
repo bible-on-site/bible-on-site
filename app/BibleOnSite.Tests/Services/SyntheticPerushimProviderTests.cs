@@ -7,6 +7,7 @@ namespace BibleOnSite.Tests.Services;
 // The provider fabricates the perushim data that PerushimCellsSurviveScrollStorm
 // (iOS e2e) depends on; these tests pin its shape so the e2e cannot silently
 // lose its HtmlView coverage.
+[Collection("Process environment")]
 public class SyntheticPerushimProviderTests
 {
     [Fact]

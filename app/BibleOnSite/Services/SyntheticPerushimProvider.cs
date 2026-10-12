@@ -22,9 +22,9 @@ internal static class SyntheticPerushimProvider
     /// <summary>Synthetic commentaries: negative ids cannot collide with the real catalog.</summary>
     public static List<Perush> Perushim =>
     [
-        new() { Id = -1, Name = "מפרש א׳", Priority = 0 },
-        new() { Id = -2, Name = "מפרש ב׳", Priority = 1 },
-        new() { Id = -3, Name = "מפרש ג׳", Priority = 2 },
+        new() { Id = -1, Name = "מפרש א", Priority = 0 },
+        new() { Id = -2, Name = "מפרש ב", Priority = 1 },
+        new() { Id = -3, Name = "מפרש ג", Priority = 2 },
     ];
 
     /// <summary>

@@ -9,7 +9,7 @@ namespace BibleOnSite.Handlers;
 
 /// <summary>
 /// iOS handler for HtmlView control.
-/// Uses iOS's UITextView with NSAttributedString for proper HTML/CSS support including text-align justify.
+/// Renders managed HTML text runs in UITextView, including RTL justified paragraphs.
 /// </summary>
 public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
 {
@@ -23,19 +23,18 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
         [nameof(HtmlView.LineHeight)] = MapLineHeight,
         [nameof(HtmlView.H1FontSizeMultiplier)] = MapHeaderStyles,
         [nameof(HtmlView.H2FontSizeMultiplier)] = MapHeaderStyles,
-        [nameof(HtmlView.H3FontSizeMultiplier)] = MapHeaderStyles
+        [nameof(HtmlView.H3FontSizeMultiplier)] = MapHeaderStyles,
+        [nameof(HtmlView.SearchMatchStart)] = (handler, _) => handler.UpdateMatchHighlight(),
+        [nameof(HtmlView.SearchMatchLength)] = (handler, _) => handler.UpdateMatchHighlight()
     };
 
-    // NSAttributedString's NSHTML import is unusable here at any thread level:
-    // NSHTMLReader always marshals the actual parse back to the main thread via
-    // performSelectorOnMainThread, where the nested WebKit run loop re-enters
-    // UICollectionView cell updates and aborts the app (TestFlight incidents
-    // F0AF3C74 and 351F87DB). HtmlRuns converts the markup with a managed
-    // parser instead — no WebKit, no hidden main-thread work.
-    // _renderSerial still invalidates stale parses when the bound content
-    // changes while an earlier conversion is in flight.
+    // Managed parsing avoids WebKit's nested main-thread run loop. The serial
+    // discards stale completions after a cell is rebound or disconnected.
     private string? _renderedHtml;
     private int _renderSerial;
+    // Highlighted raw range applied by the search match — removed when the
+    // match moves or clears without repainting unrelated backgrounds.
+    private NSRange? _matchRange;
 
     public HtmlViewHandler() : base(PropertyMapper)
     {
@@ -61,7 +60,7 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
         // property mapper re-renders, and discard completions targeted at the
         // previous platform view.
         _renderedHtml = null;
-        _renderSerial++;
+        Interlocked.Increment(ref _renderSerial);
         base.ConnectHandler(platformView);
         VirtualView.HtmlContentChanged += OnHtmlContentChanged;
         VirtualView.StyleChanged += OnStyleChanged;
@@ -69,6 +68,10 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
 
     protected override void DisconnectHandler(UITextView platformView)
     {
+        // MAUI clears its platform reference before this callback. Invalidate
+        // every queued parse before it can apply to a recycled commentary cell.
+        Interlocked.Increment(ref _renderSerial);
+        _renderedHtml = null;
         VirtualView.HtmlContentChanged -= OnHtmlContentChanged;
         VirtualView.StyleChanged -= OnStyleChanged;
         base.DisconnectHandler(platformView);
@@ -87,63 +90,64 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
 
     private void UpdateContent()
     {
-        if (PlatformView == null || VirtualView == null)
-            return;
-
-        var html = VirtualView.HtmlContent;
-        if (string.IsNullOrEmpty(html))
+        var handler = (IElementHandler)this;
+        if (handler.PlatformView is not UITextView platformView || handler.VirtualView is not HtmlView virtualView)
         {
-            _renderedHtml = null;
-            _renderSerial++;
-            PlatformView.Text = string.Empty;
             return;
         }
 
-        var fontSize = VirtualView.EffectiveFontSize;
-        var h1Scale = VirtualView.H1FontSizeMultiplier;
-        var h2Scale = VirtualView.H2FontSizeMultiplier;
-        var h3Scale = VirtualView.H3FontSizeMultiplier;
-        var renderKey = $"{VirtualView.TextAlignment}|{VirtualView.TextDirection}|" +
-            $"{fontSize}|{VirtualView.LineHeight}|{h1Scale}|{h2Scale}|{h3Scale}|{html}";
+        var html = virtualView.HtmlContent;
+        if (string.IsNullOrEmpty(html))
+        {
+            _renderedHtml = null;
+            _matchRange = null;
+            Interlocked.Increment(ref _renderSerial);
+            platformView.Text = string.Empty;
+            return;
+        }
+
+        var fontSize = virtualView.EffectiveFontSize;
+        var h1Scale = virtualView.H1FontSizeMultiplier;
+        var h2Scale = virtualView.H2FontSizeMultiplier;
+        var h3Scale = virtualView.H3FontSizeMultiplier;
+        var renderKey = $"{virtualView.TextAlignment}|{virtualView.TextDirection}|{fontSize}|{virtualView.LineHeight}|{h1Scale}|{h2Scale}|{h3Scale}|{html}";
         if (renderKey == _renderedHtml)
         {
             return;
         }
         _renderedHtml = renderKey;
-        var serial = ++_renderSerial;
+        var serial = Interlocked.Increment(ref _renderSerial);
 
         var paragraphStyle = new NSMutableParagraphStyle
         {
-            Alignment = VirtualView.TextAlignment switch
+            Alignment = virtualView.TextAlignment switch
             {
                 HtmlTextAlignment.Center => UITextAlignment.Center,
-                HtmlTextAlignment.End => VirtualView.TextDirection == HtmlTextDirection.Rtl
+                HtmlTextAlignment.End => virtualView.TextDirection == HtmlTextDirection.Rtl
                     ? UITextAlignment.Left : UITextAlignment.Right,
                 HtmlTextAlignment.Justify => UITextAlignment.Justified,
-                _ => VirtualView.TextDirection == HtmlTextDirection.Rtl
+                _ => virtualView.TextDirection == HtmlTextDirection.Rtl
                     ? UITextAlignment.Right : UITextAlignment.Left
             },
-            LineHeightMultiple = (nfloat)VirtualView.LineHeight,
-            // The WebKit stylesheet set `dir` on the document; keep the same
-            // base writing direction so mixed-direction runs bidi-resolve alike.
-            BaseWritingDirection = VirtualView.TextDirection switch
+            LineHeightMultiple = (nfloat)virtualView.LineHeight,
+            BaseWritingDirection = virtualView.TextDirection switch
             {
-                HtmlTextDirection.Ltr => NSWritingDirection.LeftToRight,
                 HtmlTextDirection.Rtl => NSWritingDirection.RightToLeft,
+                HtmlTextDirection.Ltr => NSWritingDirection.LeftToRight,
                 _ => NSWritingDirection.Natural
             }
         };
         var textColor = GetTextColor();
-        var rtl = VirtualView.TextDirection == HtmlTextDirection.Rtl;
 
         // Clear recycled content before the parsed result arrives.
-        PlatformView.Text = string.Empty;
+        platformView.Text = string.Empty;
 
         Task.Run(() =>
         {
-            // Skip the conversion entirely when the bound content already moved on.
-            if (serial != _renderSerial)
+            if (serial != Volatile.Read(ref _renderSerial))
             {
+                paragraphStyle.Dispose();
+                textColor.Dispose();
                 return;
             }
             var attributedString = HtmlAttributedStringFactory.FromHtml(html, fontSize, h1Scale, h2Scale, h3Scale);
@@ -154,30 +158,117 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
                 attributedString.AddAttribute(UIStringAttributeKey.ForegroundColor, textColor, range);
             }
 
-            MainThread.BeginInvokeOnMainThread(() =>
-            {
-                if (PlatformView == null || VirtualView == null || serial != _renderSerial)
-                {
-                    return;
-                }
-                if (attributedString != null)
-                {
-                    PlatformView.AttributedText = attributedString;
-                }
-                else
-                {
-                    PlatformView.Text = html;
-                    PlatformView.TextColor = textColor;
-                }
-                if (rtl)
-                {
-                    PlatformView.TextAlignment = UITextAlignment.Right;
-                }
-                // The cell was measured while the text view was empty; re-measure
-                // now that the rendered content has arrived.
-                VirtualView.InvalidateMeasure();
-            });
+            MainThread.BeginInvokeOnMainThread(() => ApplyParsedContent(
+                platformView, virtualView, serial, html, attributedString, paragraphStyle, textColor));
         });
+    }
+
+    private void ApplyParsedContent(UITextView platformView, HtmlView virtualView, int serial, string html,
+        NSMutableAttributedString? attributedString, NSMutableParagraphStyle paragraphStyle, UIColor textColor)
+    {
+        try
+        {
+            var handler = (IElementHandler)this;
+            if (serial != Volatile.Read(ref _renderSerial) ||
+                !ReferenceEquals(handler.PlatformView, platformView) ||
+                !ReferenceEquals(handler.VirtualView, virtualView))
+            {
+                return;
+            }
+            _matchRange = null;
+            if (attributedString != null)
+            {
+                ApplySearchMatch(virtualView, attributedString);
+                platformView.AttributedText = attributedString;
+            }
+            else
+            {
+                platformView.Text = html;
+                platformView.TextColor = textColor;
+                platformView.TextAlignment = paragraphStyle.Alignment;
+            }
+            // Parsed text arrived after the original empty-cell measure.
+            virtualView.InvalidateMeasure();
+        }
+        finally
+        {
+            attributedString?.Dispose();
+            paragraphStyle.Dispose();
+            textColor.Dispose();
+        }
+    }
+
+    private void ApplySearchMatch(HtmlView virtualView, NSMutableAttributedString attributedString)
+    {
+        if (!virtualView.HasSearchMatch)
+        {
+            return;
+        }
+        var (start, end) = Helpers.SearchMatch.ToRawRange(
+            attributedString.Value?.ToString() ?? string.Empty,
+            new Helpers.SearchMatchSpan(virtualView.SearchMatchStart, virtualView.SearchMatchLength));
+        end = (int)Math.Min(end, attributedString.Length);
+        if (end > start)
+        {
+            var range = new NSRange(start, end - start);
+            using var highlight = UIColor.SystemYellow.ColorWithAlpha((nfloat)0.45);
+            attributedString.AddAttribute(UIStringAttributeKey.BackgroundColor, highlight, range);
+            _matchRange = range;
+        }
+    }
+
+    /// <summary>
+    /// Re-applies the match highlight on the already-rendered text — the match
+    /// properties can arrive after the async parse completes.
+    /// </summary>
+    private void UpdateMatchHighlight()
+    {
+        var handler = (IElementHandler)this;
+        if (handler.PlatformView is not UITextView platformView ||
+            handler.VirtualView is not HtmlView virtualView ||
+            platformView.AttributedText is not { Length: > 0 } current)
+        {
+            // Content not rendered yet — ApplyParsedContent applies the match.
+            return;
+        }
+        using var mutable = new NSMutableAttributedString(current);
+        if (_matchRange is { } previous)
+        {
+            mutable.RemoveAttribute(UIStringAttributeKey.BackgroundColor, previous);
+            _matchRange = null;
+        }
+        ApplySearchMatch(virtualView, mutable);
+        platformView.AttributedText = mutable;
+    }
+
+    /// <summary>
+    /// Y offset (density-independent units) of the match's line inside the
+    /// UITextView — null until the text is laid out.
+    /// </summary>
+    internal nfloat? GetSearchMatchTopDips()
+    {
+        if (PlatformView is not { } platformView || VirtualView is not { HasSearchMatch: true } view)
+        {
+            return null;
+        }
+        var text = platformView.AttributedText?.Value?.ToString();
+        if (string.IsNullOrEmpty(text))
+        {
+            return null;
+        }
+        var (start, _) = Helpers.SearchMatch.ToRawRange(
+            text,
+            new Helpers.SearchMatchSpan(view.SearchMatchStart, view.SearchMatchLength));
+        var position = platformView.GetPosition(platformView.BeginningOfDocument,
+            (nint)Math.Clamp(start, 0, text.Length - 1));
+        if (position == null)
+        {
+            return null;
+        }
+        var rect = platformView.GetCaretRectForPosition(position);
+        // The caret rect is already in text-view coordinates — the container
+        // inset is included, do not add it again.
+        return rect.Y;
     }
 
     private static void MapHtmlContent(HtmlViewHandler handler, HtmlView view)

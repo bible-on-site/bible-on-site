@@ -7,6 +7,7 @@ using BibleOnSite.ViewModels;
 
 namespace BibleOnSite.Tests.ViewModels;
 
+[Collection("Process environment")]
 public class PerekLoadingTests
 {
     private sealed class Fixture : IAsyncDisposable
@@ -39,13 +40,36 @@ public class PerekLoadingTests
                     "CREATE TABLE perush (id INTEGER, name TEXT, priority INTEGER)", "INSERT INTO perush VALUES (1,'Rashi',2),(2,'Targum',1)",
                     "CREATE TABLE _metadata (key TEXT,value TEXT)", "INSERT INTO _metadata VALUES ('build_timestamp','100')");
                 await Storage.CreateDatabaseAsync("sefaria-dump-5784-sivan-4.perushim_notes.sqlite",
-                    "CREATE TABLE _metadata (key TEXT,value TEXT)", "INSERT INTO _metadata VALUES ('build_timestamp','100')",
-                    "CREATE TABLE note (perush_id INTEGER,perek_id INTEGER,pasuk INTEGER,note_idx INTEGER,note_content TEXT)",
-                    "INSERT INTO note VALUES (1,1,1,0,'first'),(2,1,1,0,'second'),(1,2,1,0,'next'),(99,2,1,0,'unknown')");
+                    [.. NotesDbV2.Statements(
+                        (1, 1, 1, 0, "first"), (2, 1, 1, 0, "second"), (1, 2, 1, 0, "next"), (99, 2, 1, 0, "unknown")),
+                    "INSERT INTO _metadata VALUES ('build_timestamp','100')"]);
             }
         }
 
         public ValueTask DisposeAsync() => Storage.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task OpeningAnotherReader_PreservesThePreviousReadersCommentariesAndSelection()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize();
+        var original = fixture.Model;
+        await original.LoadByPerekIdAsync(1);
+        original.ToggleCheckedPerush(1);
+        original.Perek!.Pasukim.Single().IsSelected = true;
+        var next = new PerekViewModel(PreferencesService.CreateForTesting(new InMemoryPreferencesStorage()), null,
+            fixture.Data, new PerushimCatalogService(fixture.Storage.FileSystem.Object),
+            new PerushimNotesService(NotesDeliveryTests.Pad().Object, fixture.Storage.FileSystem.Object),
+            fixture.Navigator.Object, fixture.Storage.FileSystem.Object, null);
+        await next.LoadByPerekIdAsync(1);
+        next.ToggleCheckedPerush(2);
+
+        next.Perek.Should().NotBeSameAs(original.Perek);
+        next.Perek!.Pasukim.Single().PerushNotes.Single().PerushName.Should().Be("Targum");
+        original.Perek.Pasukim.Single().PerushNotes.Single().PerushName.Should().Be("Rashi");
+        original.Perek.Pasukim.Single().IsSelected.Should().BeTrue();
+        next.Perek.Pasukim.Single().IsSelected.Should().BeFalse();
     }
 
     [Fact]
@@ -167,10 +191,33 @@ public class PerekLoadingTests
         await fixture.Model.LoadByPerekIdAsync(1);
         // Chapter 20 is outside the initial preload buffer.
         var notes = new SQLite.SQLiteAsyncConnection(Path.Combine(fixture.Storage.Root, "sefaria-dump-5784-sivan-4.perushim_notes.sqlite"));
-        await notes.ExecuteAsync("DROP TABLE note");
+        await notes.ExecuteAsync("DROP TABLE note_blob");
         await fixture.Model.PreloadAdjacentPasukimAsync(20);
         fixture.Model.PerekId.Should().Be(1);
         fixture.Model.CarouselPerakim.Should().HaveCount(4);
+    }
+
+    [Fact]
+    public async Task LoadPerushimAsync_WhenSyntheticPerushimEnabled_UsesSyntheticDataAndSkipsServices()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize();
+        var vm = fixture.Model;
+        await vm.LoadByPerekIdAsync(1);
+        var previous = Environment.GetEnvironmentVariable("BIBLE_E2E_PERUSHIM");
+        Environment.SetEnvironmentVariable("BIBLE_E2E_PERUSHIM", "1");
+        try
+        {
+            await vm.LoadPerushimAsync(1);
+
+            vm.Perushim.Select(p => p.Id).Should().OnlyContain(id => id < 0);
+            vm.PerushimCatalogAvailable.Should().BeTrue();
+            vm.PerushimNotesAvailable.Should().BeTrue();
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("BIBLE_E2E_PERUSHIM", previous);
+        }
     }
 
     [Fact]
@@ -215,8 +262,9 @@ public class PerekLoadingTests
     {
         await using var fixture = new Fixture();
         await fixture.Initialize(allChapters: true);
-        await fixture.Data.LoadAsync();
-        var adjacent = fixture.Data.GetPerek(3)!;
+        await fixture.Model.LoadByPerekIdAsync(1);
+        var adjacent = fixture.Model.CarouselPerakim.Single(perek => perek.PerekId == 3);
+        adjacent.Pasukim = [];
         SynchronizationContext? assignedOn = null;
         adjacent.PropertyChanged += (_, e) =>
         {
@@ -239,6 +287,7 @@ public class PerekLoadingTests
         }
 
         adjacent.Pasukim.Single().Text.Should().Be("שלישי");
+        fixture.Data.GetPerek(3)!.Pasukim.Should().BeEmpty("each navigation-stack reader owns its bound verse state");
         assignedOn.Should().BeSameAs(ui, "carousel cells bind Pasukim, so it must not change on a background thread");
     }
 }

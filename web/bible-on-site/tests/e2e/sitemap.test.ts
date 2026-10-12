@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 
 // These values match the constants in src/app/sitemap.ts
 const SITEMAP_SECTIONS = [
+	"לוח",
 	"dailyBulletin",
 	"whatsappGroup",
 	"tos",
@@ -127,10 +128,12 @@ test.describe("sitemap.xml", () => {
 		// Pedia URLs use URL-encoded Hebrew unique names: /pedia/%D7...
 		const pediaEntries = (body.match(/\/pedia\/[^<]+<\/loc>/g) || []).length;
 
-		// Expected: 1 root + sections + 1 929 index + 929 perakim + N articles + N perushim + 1 authors index + N authors + 1 pedia index + N pedias
+		// Expected: 1 root + sections + 1 929 index + 1 מסורה index + 1 פרשה index + 929 perakim + N articles + N perushim + 1 authors index + N authors + 1 pedia index + N pedias
 		const expectedCount =
 			1 +
 			SITEMAP_SECTIONS.length +
+			1 +
+			1 +
 			1 +
 			TOTAL_PERAKIM +
 			articleEntries +

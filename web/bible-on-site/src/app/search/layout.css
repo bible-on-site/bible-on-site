@@ -1,0 +1,10 @@
+/* Set the nav background color for the search page */
+body:has(.search-layout) .top-nav {
+  background-color: #1552ac;
+}
+
+.search-layout {
+  overflow-x: hidden;
+  width: 100%;
+  max-width: 100%;
+}
