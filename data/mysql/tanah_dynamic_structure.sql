@@ -58,6 +58,10 @@ CREATE TABLE `tanah_article` (
     `priority` tinyint NOT NULL,
     -- Approval for the daily bulletin only; all valid articles remain public on the site.
     `distributable` boolean NOT NULL DEFAULT FALSE,
+    -- FALSE = verse-level coverage unknown (consumers fall back to the primary
+    -- perek association); TRUE = tanah_article_covering_source rows are the
+    -- verified coverage and drive verse/range lookups.
+    `coverage_verified` boolean NOT NULL DEFAULT FALSE,
     `content` mediumtext,
     PRIMARY KEY (`id`)
 ) ENGINE = InnoDB AUTO_INCREMENT = 1 DEFAULT CHARSET = utf8mb3;
@@ -91,6 +95,31 @@ CREATE TABLE `tanah_dedication_type` (
     `description` varchar(255) NOT NULL,
     PRIMARY KEY (`id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb3;
+/*!40101 SET character_set_client = @saved_cs_client */
+;
+--
+-- Table structure for table `tanah_article_covering_source`
+--
+DROP TABLE IF EXISTS `tanah_article_covering_source`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */
+;
+/*!50503 SET character_set_client = utf8mb4 */
+;
+-- Verified pasuk-level coverage of an article: each row links one article to
+-- one canonical {perek_id, pasuk} it covers. No rows are derived from
+-- perek_id alone — coverage is authored through the admin workflow, which
+-- also flips tanah_article.coverage_verified once mapping is complete.
+CREATE TABLE `tanah_article_covering_source` (
+    `article_id` mediumint NOT NULL,
+    `perek_id` int NOT NULL,
+    `pasuk` smallint NOT NULL COMMENT '1-based pasuk index within perek',
+    `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`article_id`, `perek_id`, `pasuk`),
+    KEY `idx_covering_source_perek_pasuk` (`perek_id`, `pasuk`),
+    CONSTRAINT `fk_covering_source_article` FOREIGN KEY (`article_id`) REFERENCES `tanah_article` (`id`) ON DELETE CASCADE,
+    CONSTRAINT `fk_covering_source_perek` FOREIGN KEY (`perek_id`) REFERENCES `tanah_perek` (`id`),
+    CONSTRAINT `chk_covering_source_pasuk` CHECK (`pasuk` >= 1)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 /*!40101 SET character_set_client = @saved_cs_client */
 ;
 --
