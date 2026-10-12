@@ -255,14 +255,14 @@ public class MasoraDataServiceTests
     private static string? FindPackagedDbPath()
     {
         var dir = new DirectoryInfo(Directory.GetCurrentDirectory());
-        while (dir != null && !Directory.Exists(Path.Combine(dir.FullName, "BibleOnSite")))
+        while (dir != null && !Directory.Exists(Path.Join(dir.FullName, "BibleOnSite")))
         {
             dir = dir.Parent;
         }
 
         return dir == null
             ? null
-            : Path.Combine(dir.FullName, "BibleOnSite", "Resources", "Raw", DbName);
+            : Path.Join(dir.FullName, "BibleOnSite", "Resources", "Raw", DbName);
     }
 
     [Fact]
