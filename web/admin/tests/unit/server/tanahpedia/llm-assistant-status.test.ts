@@ -163,6 +163,26 @@ describe("getLlmAssistantStatus", () => {
 			expect(body.messages[1].content).toContain("תקן את הכותרת");
 		});
 
+		it("falls back to the persisted entry fields and an empty-body marker", async () => {
+			const rawJson = '{"entry":{"title":"כותרת מוצעת"}}';
+			const fetchMock = stubOpenAiResponse(rawJson);
+
+			await suggestTanahpediaEntryEdits({
+				data: {
+					entryId: "entry-1",
+					userInstruction: "ערוך",
+					draftContentHtml: "",
+				},
+			});
+
+			const request = fetchMock.mock.calls[0]?.[1] as RequestInit;
+			const body = JSON.parse(String(request.body));
+			const userMessage = String(body.messages[1].content);
+			expect(userMessage).toContain("כותרת שמורה");
+			expect(userMessage).toContain("שם-שמור");
+			expect(userMessage).toContain("(empty)");
+		});
+
 		it("requires a configured API key", async () => {
 			delete process.env.OPENAI_API_KEY;
 			await expect(

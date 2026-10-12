@@ -102,6 +102,43 @@ describe("verifyServiceAccessToken", () => {
 
 		expect(await verifyServiceAccessToken("token")).toBe(false);
 	});
+
+	it("rejects a token whose scope claim is not a string", async () => {
+		vi.stubEnv("COGNITO_SERVICE_CLIENT_ID", "svc-client");
+		jwtVerifyMock.mockResolvedValue({
+			payload: {
+				token_use: "access",
+				client_id: "svc-client",
+			},
+		});
+		const { verifyServiceAccessToken } = await loadAuth();
+
+		expect(await verifyServiceAccessToken("token")).toBe(false);
+	});
+});
+
+describe("required environment", () => {
+	afterEach(() => {
+		vi.unstubAllEnvs();
+	});
+
+	it("throws at load when a required variable is missing and auth is not skipped", async () => {
+		vi.stubEnv("SKIP_AUTH", "false");
+
+		await expect(loadAuth()).rejects.toThrow(
+			"Missing required environment variable: COGNITO_USER_POOL_ID",
+		);
+	});
+
+	it("tolerates missing variables when auth is skipped", async () => {
+		vi.stubEnv("SKIP_AUTH", "true");
+
+		const { getLoginUrl } = await loadAuth();
+
+		expect(getLoginUrl("https://admin.example.com")).toContain(
+			"/oauth2/authorize",
+		);
+	});
 });
 
 describe("parseCookie", () => {
