@@ -115,6 +115,9 @@ env:
   PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_WF: perushim-sqlite-v2.${{ github.run_id }}
   PERUSHIM_NOTES_SQLITE_FILENAME: sefaria-dump-5784-sivan-4.perushim_notes.sqlite
   PERUSHIM_CATALOG_SQLITE_FILENAME: sefaria-dump-5784-sivan-4.perushim_catalog.sqlite
+  # Prebuilt FTS5 search index riding in the same notes pack (CI artifacts only —
+  # its .gz exceeds GitHub's 100 MB push limit).
+  PERUSHIM_SEARCH_SQLITE_FILENAME: sefaria-dump-5784-sivan-4.hebrew_search.sqlite
   PERUSHIM_NOTES_ANDROID_ASSET_RELDIR: Platforms/Android/AssetPacks/perushim_notes
   PERUSHIM_NOTES_IOS_ODR_DATASET_RELDIR: Platforms/iOS/Assets/PerushimNotes.xcassets/perushim_notes.dataset
   PERUSHIM_PIPELINE_DIRECTORY: data/sefaria/pipelines/perushim-view
@@ -2223,6 +2226,8 @@ jobs:
              "$SQLITE_DIR/${{ env.PERUSHIM_NOTES_SQLITE_FILENAME }}"
           mv "$SQLITE_DIR/${DUMP_NAME}.perushim_catalog.sqlite" \
              "$SQLITE_DIR/${{ env.PERUSHIM_CATALOG_SQLITE_FILENAME }}"
+          mv "$SQLITE_DIR/${DUMP_NAME}.hebrew_search.sqlite" \
+             "$SQLITE_DIR/${{ env.PERUSHIM_SEARCH_SQLITE_FILENAME }}"
 
       - name: Upload Perushim Notes SQLite Artifact
         uses: actions/upload-artifact@v7
@@ -2231,6 +2236,7 @@ jobs:
           path: |
             ${{ env.PERUSHIM_PIPELINE_DIRECTORY }}/.output/${{ env.PERUSHIM_NOTES_SQLITE_FILENAME }}
             ${{ env.PERUSHIM_PIPELINE_DIRECTORY }}/.output/${{ env.PERUSHIM_CATALOG_SQLITE_FILENAME }}
+            ${{ env.PERUSHIM_PIPELINE_DIRECTORY }}/.output/${{ env.PERUSHIM_SEARCH_SQLITE_FILENAME }}
           retention-days: 30
           overwrite: true
 
@@ -2242,6 +2248,7 @@ jobs:
           path: |
             ${{ env.PERUSHIM_PIPELINE_DIRECTORY }}/.output/${{ env.PERUSHIM_NOTES_SQLITE_FILENAME }}
             ${{ env.PERUSHIM_PIPELINE_DIRECTORY }}/.output/${{ env.PERUSHIM_CATALOG_SQLITE_FILENAME }}
+            ${{ env.PERUSHIM_PIPELINE_DIRECTORY }}/.output/${{ env.PERUSHIM_SEARCH_SQLITE_FILENAME }}
           retention-days: 90
           overwrite: true
 
@@ -2587,7 +2594,7 @@ jobs:
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         run: |
           npm run test:version
-          node --test github/ci/codecov-report-state.test.mjs github/ci/bencher-comparison.test.mjs github/ci/e2e-impact/e2e-impact.test.ts
+          node --test github/ci/codecov-report-state.test.mjs github/ci/bencher-comparison.test.mjs github/ci/e2e-impact/e2e-impact.test.ts e2e-coverage-trees/e2e-coverage-trees.test.ts
 
       - name: Merge Test Coverage (Website + API)
         run: npm run coverage:merge

@@ -10,7 +10,7 @@ replace canonical pesukim.
 | --------- | --------- | ------------------------------ | ------------ |
 | על הפרק   | `/929`    | Perek                          | Existing     |
 | מסורה על הפרק | `/מסורה` | Masoretic parasha (ptuha/stuma) | Implemented |
-| פרשה על הפרק  | `/פרשה`  | Synagogue Torah parasha + Haftarah | Follow-up (#2108) |
+| פרשה על הפרק  | `/פרשה`  | Synagogue Torah parasha + Haftarah | Implemented (#2108) |
 
 ## Contract types
 
@@ -34,9 +34,11 @@ Canonical website source: `web/bible-on-site/src/lib/reading/contract.ts`
   heading, ranges, auxiliaryReadings?, closingBreak? }`. `unitId` is a
   stable contiguous id within the division; `slug` is the decimal
   `unitId`; `order` is 1-based within the parent sefer; `heading` is the
-  display scripture-reference span. `closingBreak` records the
-  ptuha/stuma marker that ends a Masoretic unit (`null` for a sefer's
-  final unit, closed by the sefer end).
+  unit's display identity inside the division's own hierarchy — for
+  מסורה units the sefer name plus the parasha ordinal
+  ("בראשית פרשה ח"), with no conventional perek/pasuk references.
+  `closingBreak` records the ptuha/stuma marker that ends a Masoretic
+  unit (`null` for a sefer's final unit, closed by the sefer end).
 - **`ReadingDivision`** — `{ id, version, rootPath, menuLabel }`: the
   instance configuration behind which shared reader components run.
 
@@ -53,6 +55,12 @@ the canonical corpus:
   canonical coordinates even when a unit crosses perakim).
 - `unitPerekIds` returns the distinct overlapping canonical perek ids —
   the input for commentary, article, and entity-ref queries.
+- The מסורה reader renders no conventional chapter apparatus (no perek
+  dividers, no chapter pasuk numbers). Each rendered pasuk carries its
+  1-based position inside the parasha — one continuous count across
+  slices; segment-clipped boundary pesukim keep their position with a
+  suffix (`(התחלה)` opening mid-verse, `(סיום)` closing mid-verse,
+  `(קטע)` for a lone excerpt).
 - `rangeContainsCoordinate` / `getMasoraUnitContaining` implement the
   canonical-position → containing-unit direction. A bare
   `{ perekId, pasuk }` position resolves to the unit in which the pasuk
@@ -94,6 +102,38 @@ division stays ptuha/stuma-derived; adopting a סדרים division would be
 a separate product change. Note the reference covers Neviim and
 Ketuvim only — it lists no Torah sedarim.
 
+## פרשה derivation
+
+The weekly synagogue parashiot are **curated data**, not derived from
+corpus markers. The shared source table
+`web/bible-on-site/src/data/parasha/parasha-division.json` is consumed
+verbatim by the website (`src/data/parasha/parasha-units.ts`) and by the
+SQLite exporter (`reading_units.rs::derive_parasha_units`), so all
+consumers resolve identical units:
+
+- Exactly the five Torah sefarim carry primary units: **54 parashiot**
+  with positional decimal `unitId`s/`slug`s and per-sefer `order`.
+  Joined pairs (ויקהל–פקודי, תזריע–מצורע, אחרי מות–קדושים, בהר–בחוקותי,
+  מטות–מסעי, נצבים–וילך) stay **separate unit identities** — the
+  `joinedReadings` table records the combination for display, never
+  merges the units.
+- Each unit's `heading` is the parasha name; `closingBreak` is always
+  `null` (parasha boundaries are calendar data, not corpus markers).
+- The primary `ranges` list holds the single contiguous Torah range;
+  printed `(sefer, perek, pasuk)` references resolve to canonical
+  `perekId`s through each sefer's `perekFrom`, with additionals
+  (מלכים ב etc.) offsetting into their canonical perek span. Impossible
+  endpoints fail resolution at module load / export time.
+- Every Haftarah custom is an ordered `AuxiliaryReading`:
+  `id = haftara-{customs-joined}` (e.g. `haftara-sefaradi-temani`),
+  `label` is the conjunctive Hebrew form ("ספרדים ותימנים",
+  "ספרדים, אשכנזים ותימנים"). Customs are **never flattened** into one
+  reading; each variant keeps its own ordered ranges — including
+  multi-range readings, perek/sefer jumps, and intentional repeats.
+- `occasions` and `joinedReadings` in the JSON are reference data for
+  the landing page, not reading units — they are not exported to the
+  reading-unit tables.
+
 ## Range-based queries
 
 `web/bible-on-site/src/lib/reading/queries.ts` exposes the shared SQL
@@ -103,9 +143,22 @@ helpers:
 - `noteSliceCondition` — pasuk-bounded `WHERE` clauses:
   `(n.perek_id = ? AND n.pasuk >= ? AND n.pasuk <= ?)`. Boundary pesukim
   are included whole (pasuk granularity).
-- `slicePerekIds` — distinct perek ids for article queries
-  (`IN (...)`), which naturally deduplicates articles reached through
-  several ranges.
+- `coveringSourceSliceCondition` — the same pasuk-bounded clauses on the
+  `cs` alias, matching `tanah_article_covering_source` rows for the
+  verified-coverage article lookup.
+- `coveringSourceSliceRank` — a scalar `MIN(slice_order)` rank over a
+  per-slice ordinal derived table, so multi-range article results keep
+  the supplied reading order (each article takes its first matching
+  slice) ahead of priority.
+- `primaryPerekSliceRank` — the same rank restricted to primary-perek
+  matches; it references neither `coverage_verified` nor the
+  covering-source table, so `getArticleSummariesForRanges` can fall back
+  to it while the website ships ahead of the schema migration (the
+  website build runs independently of Data CD).
+- `slicePerekIds` — distinct perek ids for the legacy article fallback:
+  articles whose verse coverage was never mapped
+  (`coverage_verified = FALSE`) still match ranges through their primary
+  perek association (`IN (...)`), without claiming pasuk precision.
 
 Original perush/article source anchors are preserved — no synthetic
 perek ids and no duplicated content per division.
@@ -133,7 +186,12 @@ mapping and exports it in `cargo make generate-tanah-view-sqlite`:
 against the checked-in dump the website itself consumes
 (`web/bible-on-site/src/data/db/sefaria-dump-5784-sivan-4.tanah_view.json`)
 — the same `Vec<Sefer>` the pipeline serializes into the JSON export, so
-JSON consumers and SQLite consumers resolve identical mappings.
+JSON consumers and SQLite consumers resolve identical mappings. For
+מסורה it re-derives units from corpus markers; for פרשה it resolves the
+shared `parasha-division.json` against the corpus. A corpus carrying no
+Torah sefer at all (fixture or partial export) still gets the `parasha`
+division row but no units; any corpus with Torah sefarim resolves the
+full 54-unit mapping strictly.
 
 ## Routing and SEO policy
 
@@ -143,12 +201,13 @@ JSON consumers and SQLite consumers resolve identical mappings.
   item per #2102.
 - Hebrew route roots live in ASCII route directories behind
   `rewrites()` in `next.config.mjs` — non-ASCII route directories are
-  unreliable in dev and break prerender. `/מסורה` (raw and
-  percent-encoded) rewrites to `/masora`, the same pattern the
-  `/929/{sefer.name}` book routes use. Public URLs, links, canonicals,
-  and the sitemap all keep the Hebrew root.
-- `/מסורה` unit pages are statically generated (`generateStaticParams`,
-  `dynamicParams = false` — units are a closed list).
+  unreliable in dev and break prerender. `/מסורה` and `/פרשה` (raw and
+  percent-encoded) rewrite to `/masora` and `/parasha`, the same
+  pattern the `/929/{sefer.name}` book routes use. Public URLs, links,
+  canonicals, and the sitemap all keep the Hebrew root.
+- `/מסורה` and `/פרשה` unit pages are statically generated
+  (`generateStaticParams`, `dynamicParams = false` — units are a closed
+  list).
 - Canonical/indexing policy (Google canonicalization guidance): a unit
   spanning exactly one whole perek consolidates — its canonical points
   at the equivalent `/929/{perekId}` page. Every other unit is a
@@ -156,8 +215,8 @@ JSON consumers and SQLite consumers resolve identical mappings.
   with a self-referential canonical, so crawlers discover links without
   indexing a parallel copy or falsely canonicalizing multi-perek spans
   onto one perek.
-- The sitemap lists only the `/מסורה` landing — never the 3197
-  non-indexed unit pages.
+- The sitemap lists only the `/מסורה` and `/פרשה` landings — never the
+  thousands of non-indexed unit pages.
 
 ## Native app consumption
 
@@ -187,3 +246,6 @@ and resolves it through the identical mapping:
 - `/פרשה` division and ordered multi-range Haftarah auxiliary readings:
   #2108. The contract's `AuxiliaryReading` and the
   `tanah_reading_unit_range` auxiliary columns are designed for it.
+- Native app consumption (reading-unit queries, menu entries, Haftarah
+  rendering): the exported tables are the versioned contract; app-side
+  readers land with the app portions of #2108 and #934.

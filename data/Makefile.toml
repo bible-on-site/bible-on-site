@@ -127,7 +127,7 @@ command = "cargo"
 args = ["run", "--release", "--", "--format", "json"]
 
 [tasks.generate-perushim-view-sqlite]
-description = "Generate perushim SQLite: catalog (bundled) + notes (PAD/on-demand)"
+description = "Generate perushim SQLite: catalog (bundled) + notes + prebuilt search index (PAD/ODR)"
 cwd = "./sefaria/pipelines/perushim-view"
 command = "cargo"
 args = [
@@ -137,6 +137,22 @@ args = [
     "--format",
     "sqlite",
     "--output-to-dependant-modules",
+]
+
+[tasks.generate-search-index]
+description = "Rebuild only the prebuilt search index from an existing v2 notes DB (no MongoDB)"
+cwd = "./sefaria/pipelines/perushim-view"
+command = "cargo"
+args = [
+    "run",
+    "--release",
+    "--",
+    "--format",
+    "search-index",
+    "--input",
+    "../../../../app/BibleOnSite/Platforms/Android/AssetPacks/perushim_notes/sefaria-dump-5784-sivan-4.perushim_notes.sqlite",
+    "--output",
+    "../../../../app/BibleOnSite/Platforms/Android/AssetPacks/perushim_notes/sefaria-dump-5784-sivan-4.hebrew_search.sqlite",
 ]
 
 [tasks.generate-perushim-view-mysql]

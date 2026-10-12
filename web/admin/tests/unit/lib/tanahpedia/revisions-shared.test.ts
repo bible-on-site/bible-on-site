@@ -3,9 +3,9 @@ import {
 	isRevisionConflictError,
 	normalizeRevisionSource,
 	REVISION_CONFLICT_PREFIX,
-	REVISION_SQUASH_WINDOW_SECONDS,
 	REVISION_SOURCE_ADMIN,
 	REVISION_SOURCE_LLM,
+	REVISION_SQUASH_WINDOW_SECONDS,
 	RevisionConflictError,
 	shouldSquashIntoHead,
 } from "~/lib/tanahpedia/revisions-shared";

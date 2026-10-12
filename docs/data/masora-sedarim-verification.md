@@ -73,375 +73,375 @@ divergence, but lacking entry-specific evidence.
 
 | סדר | מראה מקום | alignment | containing unit | disposition |
 |---|---|---|---|---|
-| א | יהושע א א | parasha-boundary | יהושע א א-ט (693) | aligned |
-| ב | יהושע ג ז | parasha-boundary | יהושע ג ז-ח (699) | aligned |
-| ג | יהושע ד כד | parasha-last-pasuk (stuma) | יהושע ד טו-כד (704) | needs adjudication |
-| ד | יהושע ו כז | interior-of-parasha | יהושע ו כו - ז ט (711) | needs adjudication |
-| (ד) | יהושע ח א | parasha-boundary | יהושע ח א-יז (713) | manuscript-only |
-| ה | יהושע ח לג | interior-of-parasha | יהושע ח ל-לה (715) | needs adjudication |
-| ו | יהושע י ח | parasha-boundary | יהושע י ח-יא (719) | aligned |
-| ז | יהושע י מב | interior-of-parasha | יהושע י לח-מג (726) | needs adjudication |
-| ח | יהושע יג א | parasha-boundary | יהושע יג א-יד (734) | aligned |
-| ט | יהושע יד טו | parasha-last-pasuk (ptuha) | יהושע יד ו-טו (738) | needs adjudication |
-| י | יהושע יז ד | interior-of-parasha | יהושע יז א-יג (747) | needs adjudication |
-| יא | יהושע יח כח | parasha-last-pasuk (ptuha) | יהושע יח יא-כח (750) | needs adjudication |
-| יב | יהושע יט נא | parasha-last-pasuk (ptuha) | יהושע יט מט-נא (757) | documented system difference |
-| יג | יהושע כא מא | interior-of-parasha | יהושע כא לח-מב (774) | needs adjudication |
-| יד | יהושע כב לד | parasha-last-pasuk (ptuha) | יהושע כב ל-לד (781) | needs adjudication |
+| א | יהושע א א | parasha-boundary | יהושע פרשה א (693) | aligned |
+| ב | יהושע ג ז | parasha-boundary | יהושע פרשה ז (699) | aligned |
+| ג | יהושע ד כד | parasha-last-pasuk (stuma) | יהושע פרשה יב (704) | needs adjudication |
+| ד | יהושע ו כז | interior-of-parasha | יהושע פרשה יט (711) | needs adjudication |
+| (ד) | יהושע ח א | parasha-boundary | יהושע פרשה כא (713) | manuscript-only |
+| ה | יהושע ח לג | interior-of-parasha | יהושע פרשה כג (715) | needs adjudication |
+| ו | יהושע י ח | parasha-boundary | יהושע פרשה כז (719) | aligned |
+| ז | יהושע י מב | interior-of-parasha | יהושע פרשה לד (726) | needs adjudication |
+| ח | יהושע יג א | parasha-boundary | יהושע פרשה מב (734) | aligned |
+| ט | יהושע יד טו | parasha-last-pasuk (ptuha) | יהושע פרשה מו (738) | needs adjudication |
+| י | יהושע יז ד | interior-of-parasha | יהושע פרשה נה (747) | needs adjudication |
+| יא | יהושע יח כח | parasha-last-pasuk (ptuha) | יהושע פרשה נח (750) | needs adjudication |
+| יב | יהושע יט נא | parasha-last-pasuk (ptuha) | יהושע פרשה סה (757) | documented system difference |
+| יג | יהושע כא מא | interior-of-parasha | יהושע פרשה פב (774) | needs adjudication |
+| יד | יהושע כב לד | parasha-last-pasuk (ptuha) | יהושע פרשה פט (781) | needs adjudication |
 ### שופטים
 
 | סדר | מראה מקום | alignment | containing unit | disposition |
 |---|---|---|---|---|
-| א | שופטים א א | parasha-boundary | שופטים א א-ז (788) | aligned |
-| ב | שופטים ב ז | interior-of-parasha | שופטים ב ו-י (800) | needs adjudication |
-| ג | שופטים ג לא | parasha-boundary | שופטים ג לא (806) | aligned |
-| ד | שופטים ה לא | parasha-last-pasuk (ptuha) | שופטים ה א-לא (810) | needs adjudication |
-| ה | שופטים ו מ | parasha-last-pasuk (ptuha) | שופטים ו לג-מ (817) | needs adjudication |
-| ו | שופטים ח ג | interior-of-parasha | שופטים ז יט - ח ט (824) | needs adjudication |
-| ז | שופטים ט ז | interior-of-parasha | שופטים ט ו-כא (829) | needs adjudication |
-| ח | שופטים י א | parasha-boundary | שופטים י א-ב (837) | aligned |
-| ט | שופטים יא לב | parasha-boundary | שופטים יא לב-לג (846) | aligned |
-| י | שופטים יג כד | interior-of-parasha | שופטים יג יט-כה (855) | needs adjudication |
-| יא | שופטים טז ג | parasha-last-pasuk (ptuha) | שופטים טז א-ג (860) | needs adjudication |
-| יב | שופטים יח ו | parasha-last-pasuk (ptuha) | שופטים יח ב-ו (865) | needs adjudication |
-| יג | שופטים יט כ | interior-of-parasha | שופטים יט א-ל (867) | needs adjudication |
-| יד | שופטים כ כז | interior-of-parasha | שופטים כ כד-כט (873) | needs adjudication |
+| א | שופטים א א | parasha-boundary | שופטים פרשה א (788) | aligned |
+| ב | שופטים ב ז | interior-of-parasha | שופטים פרשה יג (800) | needs adjudication |
+| ג | שופטים ג לא | parasha-boundary | שופטים פרשה יט (806) | aligned |
+| ד | שופטים ה לא | parasha-last-pasuk (ptuha) | שופטים פרשה כג (810) | needs adjudication |
+| ה | שופטים ו מ | parasha-last-pasuk (ptuha) | שופטים פרשה ל (817) | needs adjudication |
+| ו | שופטים ח ג | interior-of-parasha | שופטים פרשה לז (824) | needs adjudication |
+| ז | שופטים ט ז | interior-of-parasha | שופטים פרשה מב (829) | needs adjudication |
+| ח | שופטים י א | parasha-boundary | שופטים פרשה נ (837) | aligned |
+| ט | שופטים יא לב | parasha-boundary | שופטים פרשה נט (846) | aligned |
+| י | שופטים יג כד | interior-of-parasha | שופטים פרשה סח (855) | needs adjudication |
+| יא | שופטים טז ג | parasha-last-pasuk (ptuha) | שופטים פרשה עג (860) | needs adjudication |
+| יב | שופטים יח ו | parasha-last-pasuk (ptuha) | שופטים פרשה עח (865) | needs adjudication |
+| יג | שופטים יט כ | interior-of-parasha | שופטים פרשה פ (867) | needs adjudication |
+| יד | שופטים כ כז | interior-of-parasha | שופטים פרשה פו (873) | needs adjudication |
 ### שמואל
 
 | סדר | מראה מקום | alignment | containing unit | disposition |
 |---|---|---|---|---|
-| א | שמואל א א א | parasha-boundary | שמואל א א א-כח (881) | aligned |
-| ב | שמואל א ב י | parasha-last-pasuk (ptuha) | שמואל א ב א-י (882) | needs adjudication |
-| ג | שמואל א ג כ | interior-of-parasha | שמואל א ג יט-כא (891) | edition divergence |
-| ד | שמואל א ו יד | parasha-last-pasuk (stuma) | שמואל א ה ט - א ו יד (896) | needs adjudication |
-| ה | שמואל א ט ב | interior-of-parasha | שמואל א ט א-יד (910) | needs adjudication |
-| ו | שמואל א י כד | parasha-last-pasuk (ptuha) | שמואל א י כב-כד (918) | documented system difference |
-| ז | שמואל א יב כב | interior-of-parasha | שמואל א יב כ-כה (926) | needs adjudication |
-| ח | שמואל א יד כג | interior-of-parasha | שמואל א יד יט-כד (936) | needs adjudication |
-| ט | שמואל א טו יז | parasha-boundary | שמואל א טו יז-יט (949) | aligned |
-| י | שמואל א טז יח | interior-of-parasha | שמואל א טז יז-כג (960) | needs adjudication |
-| יא | שמואל א יז לז | parasha-boundary | שמואל א יז לז (966) | aligned |
-| יב | שמואל א יח יד | parasha-boundary | שמואל א יח יד-טז (973) | aligned |
-| יג | שמואל א כ ד | parasha-last-pasuk (ptuha) | שמואל א כ א-ד (985) | needs adjudication |
-| יד | שמואל א כ מב | parasha-last-pasuk (ptuha) | שמואל א כ לה-מב (998) | needs adjudication |
-| טו | שמואל א כג ד | parasha-boundary | שמואל א כג ד (1010) | aligned |
-| טז | שמואל א כד כ | interior-of-parasha | שמואל א כד יז-כג (1022) | needs adjudication |
-| יז | שמואל א כה לג | interior-of-parasha | שמואל א כה לב-מג (1025) | needs adjudication |
-| יח | שמואל א כו כה | parasha-boundary | שמואל א כו כה (1030) | aligned |
-| יט | שמואל א כח כד | interior-of-parasha | שמואל א כח טז-כה (1037) | needs adjudication |
-| כ | שמואל א ל כה | parasha-boundary | שמואל א ל כה (1047) | aligned |
-| כא | שמואל ב ב ז | parasha-last-pasuk (ptuha) | שמואל ב ב ה-ז (1056) | needs adjudication |
-| כב | שמואל ב ג כא | interior-of-parasha | שמואל ב ג יד-ל (1063) | needs adjudication |
-| כג | שמואל ב ה י | parasha-last-pasuk (ptuha) | שמואל ב ה ד-י (1071) | needs adjudication |
-| כד | שמואל ב ז טז | interior-of-parasha | שמואל ב ז ד-יז (1078) | needs adjudication |
-| כה | שמואל ב י יב | interior-of-parasha | שמואל ב י א-יז (1084) | needs adjudication |
-| כו | שמואל ב יב יג | parasha-boundary | שמואל ב יב יג (1092) | aligned |
-| כז | שמואל ב יג כה | interior-of-parasha | שמואל ב יג כג-כז (1096) | needs adjudication |
-| כח | שמואל ב יד לג | parasha-last-pasuk (ptuha) | שמואל ב יד לא-לג (1111) | needs adjudication |
-| כט | שמואל ב טו לז | interior-of-parasha | שמואל ב טו כז - ב טז ט (1115) | needs adjudication |
-| ל | שמואל ב יז כ | parasha-last-pasuk (stuma) | שמואל ב יז טו-כ (1125) | needs adjudication |
-| לא | שמואל ב יח כז | interior-of-parasha | שמואל ב יח יט-כח (1132) | needs adjudication |
-| לב | שמואל ב יט מ | parasha-last-pasuk (stuma) | שמואל ב יט לט-מ (1145) | needs adjudication |
-| לג | שמואל ב כא ז | interior-of-parasha | שמואל ב כא ו-יד (1159) | needs adjudication |
-| לד | שמואל ב כב נא | parasha-last-pasuk (ptuha) | שמואל ב כב א-נא (1164) | needs adjudication |
+| א | שמואל א א א | parasha-boundary | שמואל פרשה א (881) | aligned |
+| ב | שמואל א ב י | parasha-last-pasuk (ptuha) | שמואל פרשה ב (882) | needs adjudication |
+| ג | שמואל א ג כ | interior-of-parasha | שמואל פרשה יא (891) | edition divergence |
+| ד | שמואל א ו יד | parasha-last-pasuk (stuma) | שמואל פרשה טז (896) | needs adjudication |
+| ה | שמואל א ט ב | interior-of-parasha | שמואל פרשה ל (910) | needs adjudication |
+| ו | שמואל א י כד | parasha-last-pasuk (ptuha) | שמואל פרשה לח (918) | documented system difference |
+| ז | שמואל א יב כב | interior-of-parasha | שמואל פרשה מו (926) | needs adjudication |
+| ח | שמואל א יד כג | interior-of-parasha | שמואל פרשה נו (936) | needs adjudication |
+| ט | שמואל א טו יז | parasha-boundary | שמואל פרשה סט (949) | aligned |
+| י | שמואל א טז יח | interior-of-parasha | שמואל פרשה פ (960) | needs adjudication |
+| יא | שמואל א יז לז | parasha-boundary | שמואל פרשה פו (966) | aligned |
+| יב | שמואל א יח יד | parasha-boundary | שמואל פרשה צג (973) | aligned |
+| יג | שמואל א כ ד | parasha-last-pasuk (ptuha) | שמואל פרשה קה (985) | needs adjudication |
+| יד | שמואל א כ מב | parasha-last-pasuk (ptuha) | שמואל פרשה קיח (998) | needs adjudication |
+| טו | שמואל א כג ד | parasha-boundary | שמואל פרשה קל (1010) | aligned |
+| טז | שמואל א כד כ | interior-of-parasha | שמואל פרשה קמב (1022) | needs adjudication |
+| יז | שמואל א כה לג | interior-of-parasha | שמואל פרשה קמה (1025) | needs adjudication |
+| יח | שמואל א כו כה | parasha-boundary | שמואל פרשה קנ (1030) | aligned |
+| יט | שמואל א כח כד | interior-of-parasha | שמואל פרשה קנז (1037) | needs adjudication |
+| כ | שמואל א ל כה | parasha-boundary | שמואל פרשה קסז (1047) | aligned |
+| כא | שמואל ב ב ז | parasha-last-pasuk (ptuha) | שמואל פרשה קעו (1056) | needs adjudication |
+| כב | שמואל ב ג כא | interior-of-parasha | שמואל פרשה קפג (1063) | needs adjudication |
+| כג | שמואל ב ה י | parasha-last-pasuk (ptuha) | שמואל פרשה קצא (1071) | needs adjudication |
+| כד | שמואל ב ז טז | interior-of-parasha | שמואל פרשה קצח (1078) | needs adjudication |
+| כה | שמואל ב י יב | interior-of-parasha | שמואל פרשה רד (1084) | needs adjudication |
+| כו | שמואל ב יב יג | parasha-boundary | שמואל פרשה ריב (1092) | aligned |
+| כז | שמואל ב יג כה | interior-of-parasha | שמואל פרשה רטז (1096) | needs adjudication |
+| כח | שמואל ב יד לג | parasha-last-pasuk (ptuha) | שמואל פרשה רלא (1111) | needs adjudication |
+| כט | שמואל ב טו לז | interior-of-parasha | שמואל פרשה רלה (1115) | needs adjudication |
+| ל | שמואל ב יז כ | parasha-last-pasuk (stuma) | שמואל פרשה רמה (1125) | needs adjudication |
+| לא | שמואל ב יח כז | interior-of-parasha | שמואל פרשה רנב (1132) | needs adjudication |
+| לב | שמואל ב יט מ | parasha-last-pasuk (stuma) | שמואל פרשה רסה (1145) | needs adjudication |
+| לג | שמואל ב כא ז | interior-of-parasha | שמואל פרשה רעט (1159) | needs adjudication |
+| לד | שמואל ב כב נא | parasha-last-pasuk (ptuha) | שמואל פרשה רפד (1164) | needs adjudication |
 ### מלכים
 
 | סדר | מראה מקום | alignment | containing unit | disposition |
 |---|---|---|---|---|
-| א | מלכים א א א | parasha-boundary | מלכים א א א-כז (1199) | aligned |
-| ב | מלכים א א מח | interior-of-parasha | מלכים א א לב-נג (1201) | needs adjudication |
-| ג | מלכים א ב מה | interior-of-parasha | מלכים א ב לט - א ג ב (1208) | needs adjudication |
-| ד | מלכים א ד כ | interior-of-parasha | מלכים א ד יט - א ה א (1227) | documented system difference |
-| ה | מלכים א ו יג | parasha-last-pasuk (stuma) | מלכים א ו יא-יג (1236) | needs adjudication |
-| ו | מלכים א ז כא | interior-of-parasha | מלכים א ז יג-כו (1238) | needs adjudication |
-| ז | מלכים א ח יא | parasha-last-pasuk (ptuha) | מלכים א ח א-יא (1243) | needs adjudication |
-| ח | מלכים א ח נח | interior-of-parasha | מלכים א ח נד - א ט א (1249) | needs adjudication |
-| ט | מלכים א י ט | interior-of-parasha | מלכים א י א-יג (1254) | needs adjudication |
-| י | מלכים א יא כח | parasha-last-pasuk (stuma) | מלכים א יא כו-כח (1261) | needs adjudication |
-| יא | מלכים א יב כד | parasha-last-pasuk (stuma) | מלכים א יב כב-כד (1267) | needs adjudication |
-| יב | מלכים א יג לא | interior-of-parasha | מלכים א יג כ-לב (1271) | needs adjudication |
-| יג | מלכים א טו ח | parasha-last-pasuk (ptuha) | מלכים א טו א-ח (1278) | needs adjudication |
-| יד | מלכים א טז טו | parasha-boundary | מלכים א טז טו-כ (1284) | aligned |
-| טו | מלכים א יז כד | parasha-last-pasuk (ptuha) | מלכים א יז יז-כד (1292) | needs adjudication |
-| טז | מלכים א יח לט | interior-of-parasha | מלכים א יח טו - א יט יד (1294) | needs adjudication |
-| יז | מלכים א כ יג | interior-of-parasha | מלכים א כ א-כב (1296) | needs adjudication |
-| יח | מלכים א כא יז | parasha-boundary | מלכים א כא יז-כו (1302) | aligned |
-| יט | מלכים א כב מג | interior-of-parasha | מלכים א כב מא-נא (1306) | needs adjudication |
-| כ | מלכים ב ב טו | interior-of-parasha | מלכים ב ב א-כב (1311) | needs adjudication |
-| כא | מלכים ב ד כו | interior-of-parasha | מלכים ב ד ח-לז (1316) | needs adjudication |
-| כב | מלכים ב ו כג | parasha-last-pasuk (ptuha) | מלכים ב ו ח-כג (1322) | needs adjudication |
-| כג | מלכים ב ז טז | interior-of-parasha | מלכים ב ז ג-כ (1325) | needs adjudication |
-| כד | מלכים ב ט יג | interior-of-parasha | מלכים ב ט א-כח (1330) | needs adjudication |
-| כה | מלכים ב י טו | parasha-boundary | מלכים ב י טו-יז (1333) | aligned |
-| כו | מלכים ב יב ג | interior-of-parasha | מלכים ב יב ב-ו (1342) | needs adjudication |
-| כז | מלכים ב יג כג | interior-of-parasha | מלכים ב יג כב-כה (1349) | needs adjudication |
-| כח | מלכים ב טו ז | parasha-last-pasuk (ptuha) | מלכים ב טו א-ז (1354) | needs adjudication |
-| כט | מלכים ב טז כ | parasha-last-pasuk (ptuha) | מלכים ב טז ז-כ (1363) | needs adjudication |
-| ל | מלכים ב יח ו | interior-of-parasha | מלכים ב יח א-ח (1367) | needs adjudication |
-| לא | מלכים ב יט יט | parasha-last-pasuk (stuma) | מלכים ב יט טו-יט (1371) | needs adjudication |
-| לב | מלכים ב כ ח | interior-of-parasha | מלכים ב כ ד-יא (1375) | needs adjudication |
-| לג | מלכים ב כב ב | parasha-last-pasuk (ptuha) | מלכים ב כב א-ב (1380) | documented system difference |
-| לד | מלכים ב כג כה | interior-of-parasha | מלכים ב כב ג - ב כג ל (1381) | needs adjudication |
-| לה | מלכים ב כד יח | parasha-boundary | מלכים ב כד יח-כ (1385) | aligned |
+| א | מלכים א א א | parasha-boundary | מלכים פרשה א (1199) | aligned |
+| ב | מלכים א א מח | interior-of-parasha | מלכים פרשה ג (1201) | needs adjudication |
+| ג | מלכים א ב מה | interior-of-parasha | מלכים פרשה י (1208) | needs adjudication |
+| ד | מלכים א ד כ | interior-of-parasha | מלכים פרשה כט (1227) | documented system difference |
+| ה | מלכים א ו יג | parasha-last-pasuk (stuma) | מלכים פרשה לח (1236) | needs adjudication |
+| ו | מלכים א ז כא | interior-of-parasha | מלכים פרשה מ (1238) | needs adjudication |
+| ז | מלכים א ח יא | parasha-last-pasuk (ptuha) | מלכים פרשה מה (1243) | needs adjudication |
+| ח | מלכים א ח נח | interior-of-parasha | מלכים פרשה נא (1249) | needs adjudication |
+| ט | מלכים א י ט | interior-of-parasha | מלכים פרשה נו (1254) | needs adjudication |
+| י | מלכים א יא כח | parasha-last-pasuk (stuma) | מלכים פרשה סג (1261) | needs adjudication |
+| יא | מלכים א יב כד | parasha-last-pasuk (stuma) | מלכים פרשה סט (1267) | needs adjudication |
+| יב | מלכים א יג לא | interior-of-parasha | מלכים פרשה עג (1271) | needs adjudication |
+| יג | מלכים א טו ח | parasha-last-pasuk (ptuha) | מלכים פרשה פ (1278) | needs adjudication |
+| יד | מלכים א טז טו | parasha-boundary | מלכים פרשה פו (1284) | aligned |
+| טו | מלכים א יז כד | parasha-last-pasuk (ptuha) | מלכים פרשה צד (1292) | needs adjudication |
+| טז | מלכים א יח לט | interior-of-parasha | מלכים פרשה צו (1294) | needs adjudication |
+| יז | מלכים א כ יג | interior-of-parasha | מלכים פרשה צח (1296) | needs adjudication |
+| יח | מלכים א כא יז | parasha-boundary | מלכים פרשה קד (1302) | aligned |
+| יט | מלכים א כב מג | interior-of-parasha | מלכים פרשה קח (1306) | needs adjudication |
+| כ | מלכים ב ב טו | interior-of-parasha | מלכים פרשה קיג (1311) | needs adjudication |
+| כא | מלכים ב ד כו | interior-of-parasha | מלכים פרשה קיח (1316) | needs adjudication |
+| כב | מלכים ב ו כג | parasha-last-pasuk (ptuha) | מלכים פרשה קכד (1322) | needs adjudication |
+| כג | מלכים ב ז טז | interior-of-parasha | מלכים פרשה קכז (1325) | needs adjudication |
+| כד | מלכים ב ט יג | interior-of-parasha | מלכים פרשה קלב (1330) | needs adjudication |
+| כה | מלכים ב י טו | parasha-boundary | מלכים פרשה קלה (1333) | aligned |
+| כו | מלכים ב יב ג | interior-of-parasha | מלכים פרשה קמד (1342) | needs adjudication |
+| כז | מלכים ב יג כג | interior-of-parasha | מלכים פרשה קנא (1349) | needs adjudication |
+| כח | מלכים ב טו ז | parasha-last-pasuk (ptuha) | מלכים פרשה קנו (1354) | needs adjudication |
+| כט | מלכים ב טז כ | parasha-last-pasuk (ptuha) | מלכים פרשה קסה (1363) | needs adjudication |
+| ל | מלכים ב יח ו | interior-of-parasha | מלכים פרשה קסט (1367) | needs adjudication |
+| לא | מלכים ב יט יט | parasha-last-pasuk (stuma) | מלכים פרשה קעג (1371) | needs adjudication |
+| לב | מלכים ב כ ח | interior-of-parasha | מלכים פרשה קעז (1375) | needs adjudication |
+| לג | מלכים ב כב ב | parasha-last-pasuk (ptuha) | מלכים פרשה קפב (1380) | documented system difference |
+| לד | מלכים ב כג כה | interior-of-parasha | מלכים פרשה קפג (1381) | needs adjudication |
+| לה | מלכים ב כד יח | parasha-boundary | מלכים פרשה קפז (1385) | aligned |
 ### ישעיהו
 
 | סדר | מראה מקום | alignment | containing unit | disposition |
 |---|---|---|---|---|
-| א | ישעיהו א א | parasha-boundary | ישעיהו א א-ט (1391) | aligned |
-| ב | ישעיהו ד ג | interior-of-parasha | ישעיהו ד ב-ו (1403) | needs adjudication |
-| ג | ישעיהו ו ג | interior-of-parasha | ישעיהו ו א-יג (1410) | needs adjudication |
-| ד | ישעיהו ט ו | parasha-last-pasuk (stuma) | ישעיהו ח יט - ט ו (1421) | needs adjudication |
-| ה | ישעיהו יא ב | interior-of-parasha | ישעיהו יא א-ט (1430) | needs adjudication |
-| ו | ישעיהו יד ב | parasha-last-pasuk (stuma) | ישעיהו יג א - יד ב (1433) | needs adjudication |
-| ז | ישעיהו טז ה | interior-of-parasha | ישעיהו טו א - טז ו (1437) | needs adjudication |
-| ח | ישעיהו יט כה | parasha-last-pasuk (stuma) | ישעיהו יט כד-כה (1449) | needs adjudication |
-| ט | ישעיהו כב כג | interior-of-parasha | ישעיהו כב טו-כה (1458) | needs adjudication |
-| י | ישעיהו כד כג | parasha-last-pasuk (ptuha) | ישעיהו כד כא-כג (1463) | needs adjudication |
-| יא | ישעיהו כז יב | parasha-boundary | ישעיהו כז יב (1474) | aligned |
-| יב | ישעיהו כט כג | interior-of-parasha | ישעיהו כט כב - ל ה (1485) | needs adjudication |
-| יג | ישעיהו לב יח | interior-of-parasha | ישעיהו לב ט-כ (1494) | needs adjudication |
-| יד | ישעיהו לה י | parasha-last-pasuk (ptuha) | ישעיהו לה ג-י (1500) | needs adjudication |
-| טו | ישעיהו לז כ | interior-of-parasha | ישעיהו לז א-לב (1503) | needs adjudication |
-| טז | ישעיהו מ א | parasha-boundary | ישעיהו מ א-ב (1510) | aligned |
-| יז | ישעיהו מא כז | interior-of-parasha | ישעיהו מא כא-כט (1522) | needs adjudication |
-| יח | ישעיהו מד ו | parasha-boundary | ישעיהו מד ו-כ (1535) | aligned |
-| יט | ישעיהו מה יז | parasha-last-pasuk (ptuha) | ישעיהו מה יד-יז (1543) | needs adjudication |
-| כ | ישעיהו מח ב | parasha-last-pasuk (stuma) | ישעיהו מח א-ב (1552) | needs adjudication |
-| כא | ישעיהו מט כו | parasha-last-pasuk (stuma) | ישעיהו מט כד-כו (1560) | needs adjudication |
-| כב | ישעיהו נב ז | interior-of-parasha | ישעיהו נב ג-י (1572) | needs adjudication |
-| כג | ישעיהו נה יג | parasha-last-pasuk (stuma) | ישעיהו נה ו-יג (1579) | needs adjudication |
-| כד | ישעיהו נח יד | parasha-last-pasuk (stuma) | ישעיהו נח א-יד (1586) | needs adjudication |
-| כה | ישעיהו סא ט | parasha-last-pasuk (stuma) | ישעיהו סא א-ט (1589) | needs adjudication |
-| כו | ישעיהו סה ט | interior-of-parasha | ישעיהו סה ח-יב (1595) | needs adjudication |
+| א | ישעיהו א א | parasha-boundary | ישעיהו פרשה א (1391) | aligned |
+| ב | ישעיהו ד ג | interior-of-parasha | ישעיהו פרשה יג (1403) | needs adjudication |
+| ג | ישעיהו ו ג | interior-of-parasha | ישעיהו פרשה כ (1410) | needs adjudication |
+| ד | ישעיהו ט ו | parasha-last-pasuk (stuma) | ישעיהו פרשה לא (1421) | needs adjudication |
+| ה | ישעיהו יא ב | interior-of-parasha | ישעיהו פרשה מ (1430) | needs adjudication |
+| ו | ישעיהו יד ב | parasha-last-pasuk (stuma) | ישעיהו פרשה מג (1433) | needs adjudication |
+| ז | ישעיהו טז ה | interior-of-parasha | ישעיהו פרשה מז (1437) | needs adjudication |
+| ח | ישעיהו יט כה | parasha-last-pasuk (stuma) | ישעיהו פרשה נט (1449) | needs adjudication |
+| ט | ישעיהו כב כג | interior-of-parasha | ישעיהו פרשה סח (1458) | needs adjudication |
+| י | ישעיהו כד כג | parasha-last-pasuk (ptuha) | ישעיהו פרשה עג (1463) | needs adjudication |
+| יא | ישעיהו כז יב | parasha-boundary | ישעיהו פרשה פד (1474) | aligned |
+| יב | ישעיהו כט כג | interior-of-parasha | ישעיהו פרשה צה (1485) | needs adjudication |
+| יג | ישעיהו לב יח | interior-of-parasha | ישעיהו פרשה קד (1494) | needs adjudication |
+| יד | ישעיהו לה י | parasha-last-pasuk (ptuha) | ישעיהו פרשה קי (1500) | needs adjudication |
+| טו | ישעיהו לז כ | interior-of-parasha | ישעיהו פרשה קיג (1503) | needs adjudication |
+| טז | ישעיהו מ א | parasha-boundary | ישעיהו פרשה קכ (1510) | aligned |
+| יז | ישעיהו מא כז | interior-of-parasha | ישעיהו פרשה קלב (1522) | needs adjudication |
+| יח | ישעיהו מד ו | parasha-boundary | ישעיהו פרשה קמה (1535) | aligned |
+| יט | ישעיהו מה יז | parasha-last-pasuk (ptuha) | ישעיהו פרשה קנג (1543) | needs adjudication |
+| כ | ישעיהו מח ב | parasha-last-pasuk (stuma) | ישעיהו פרשה קסב (1552) | needs adjudication |
+| כא | ישעיהו מט כו | parasha-last-pasuk (stuma) | ישעיהו פרשה קע (1560) | needs adjudication |
+| כב | ישעיהו נב ז | interior-of-parasha | ישעיהו פרשה קפב (1572) | needs adjudication |
+| כג | ישעיהו נה יג | parasha-last-pasuk (stuma) | ישעיהו פרשה קפט (1579) | needs adjudication |
+| כד | ישעיהו נח יד | parasha-last-pasuk (stuma) | ישעיהו פרשה קצו (1586) | needs adjudication |
+| כה | ישעיהו סא ט | parasha-last-pasuk (stuma) | ישעיהו פרשה קצט (1589) | needs adjudication |
+| כו | ישעיהו סה ט | interior-of-parasha | ישעיהו פרשה רה (1595) | needs adjudication |
 ### ירמיהו
 
 | סדר | מראה מקום | alignment | containing unit | disposition |
 |---|---|---|---|---|
-| א | ירמיהו א א | parasha-boundary | ירמיהו א א-ג (1601) | aligned |
-| ב | ירמיהו ג ד | interior-of-parasha | ירמיהו ב כט - ג ה (1608) | needs adjudication |
-| ג | ירמיהו ה א | parasha-boundary | ירמיהו ה א-ט (1618) | aligned |
-| ד | ירמיהו ו ג | interior-of-parasha | ירמיהו ה ל - ו ה (1622) | needs adjudication |
-| ה | ירמיהו ז כג | interior-of-parasha | ירמיהו ז כא-כח (1633) | needs adjudication |
-| ו | ירמיהו ט כג | parasha-last-pasuk (stuma) | ירמיהו ט כב-כג (1649) | needs adjudication |
-| ז | ירמיהו יב טו | interior-of-parasha | ירמיהו יב יד-יז (1673) | needs adjudication |
-| ח | ירמיהו יד כב | parasha-last-pasuk (ptuha) | ירמיהו יד יט-כב (1687) | needs adjudication |
-| ט | ירמיהו יז ז | parasha-boundary | ירמיהו יז ז-י (1703) | aligned |
-| (ט) | ירמיהו יז כו | interior-of-parasha | ירמיהו יז כא-כז (1707) | manuscript-only |
-| י | ירמיהו יח יט | interior-of-parasha | ירמיהו יח יח-כג (1714) | needs adjudication |
-| יא | ירמיהו כ יג | parasha-boundary | ירמיהו כ יג (1721) | aligned |
-| יב | ירמיהו כג ו | parasha-last-pasuk (stuma) | ירמיהו כג ה-ו (1736) | documented system difference |
-| יג | ירמיהו כד ז | parasha-last-pasuk (stuma) | ירמיהו כד ד-ז (1747) | needs adjudication |
-| יד | ירמיהו כו א | parasha-boundary | ירמיהו כו א-ו (1754) | aligned |
-| טו | ירמיהו כז ה | interior-of-parasha | ירמיהו כז א-יח (1758) | needs adjudication |
-| טז | ירמיהו כט ז | parasha-last-pasuk (ptuha) | ירמיהו כט ד-ז (1764) | needs adjudication |
-| יז | ירמיהו ל ט | parasha-last-pasuk (stuma) | ירמיהו ל ד-ט (1772) | needs adjudication |
-| יח | ירמיהו לא לב | interior-of-parasha | ירמיהו לא לא-לד (1786) | needs adjudication |
-| יט | ירמיהו לב כב | interior-of-parasha | ירמיהו לב טז-לה (1793) | needs adjudication |
-| כ | ירמיהו לג טז | parasha-last-pasuk (stuma) | ירמיהו לג יד-טז (1800) | documented system difference |
-| כא | ירמיהו לה י | interior-of-parasha | ירמיהו לה א-יא (1810) | needs adjudication |
-| כב | ירמיהו לו כו | parasha-last-pasuk (stuma) | ירמיהו לו יט-כו (1817) | needs adjudication |
-| כג | ירמיהו לח ח | interior-of-parasha | ירמיהו לח ז-יג (1829) | needs adjudication |
-| כד | ירמיהו לט יח | parasha-last-pasuk (stuma) | ירמיהו לט טו-יח (1840) | needs adjudication |
-| כה | ירמיהו מב יב | interior-of-parasha | ירמיהו מב ז-יז (1849) | needs adjudication |
-| כו | ירמיהו מד כ | parasha-boundary | ירמיהו מד כ-כג (1859) | aligned |
-| כז | ירמיהו מו כז | parasha-boundary | ירמיהו מו כז (1870) | aligned |
-| כח | ירמיהו מט ב | interior-of-parasha | ירמיהו מט א-ו (1878) | needs adjudication |
-| כט | ירמיהו נ ה | parasha-last-pasuk (stuma) | ירמיהו נ א-ה (1885) | needs adjudication |
-| ל | ירמיהו נא י | interior-of-parasha | ירמיהו נא א-יד (1894) | needs adjudication |
-| לא | ירמיהו נא נט | parasha-boundary | ירמיהו נא נט-סד (1903) | aligned |
+| א | ירמיהו א א | parasha-boundary | ירמיהו פרשה א (1601) | aligned |
+| ב | ירמיהו ג ד | interior-of-parasha | ירמיהו פרשה ח (1608) | needs adjudication |
+| ג | ירמיהו ה א | parasha-boundary | ירמיהו פרשה יח (1618) | aligned |
+| ד | ירמיהו ו ג | interior-of-parasha | ירמיהו פרשה כב (1622) | needs adjudication |
+| ה | ירמיהו ז כג | interior-of-parasha | ירמיהו פרשה לג (1633) | needs adjudication |
+| ו | ירמיהו ט כג | parasha-last-pasuk (stuma) | ירמיהו פרשה מט (1649) | needs adjudication |
+| ז | ירמיהו יב טו | interior-of-parasha | ירמיהו פרשה עג (1673) | needs adjudication |
+| ח | ירמיהו יד כב | parasha-last-pasuk (ptuha) | ירמיהו פרשה פז (1687) | needs adjudication |
+| ט | ירמיהו יז ז | parasha-boundary | ירמיהו פרשה קג (1703) | aligned |
+| (ט) | ירמיהו יז כו | interior-of-parasha | ירמיהו פרשה קז (1707) | manuscript-only |
+| י | ירמיהו יח יט | interior-of-parasha | ירמיהו פרשה קיד (1714) | needs adjudication |
+| יא | ירמיהו כ יג | parasha-boundary | ירמיהו פרשה קכא (1721) | aligned |
+| יב | ירמיהו כג ו | parasha-last-pasuk (stuma) | ירמיהו פרשה קלו (1736) | documented system difference |
+| יג | ירמיהו כד ז | parasha-last-pasuk (stuma) | ירמיהו פרשה קמז (1747) | needs adjudication |
+| יד | ירמיהו כו א | parasha-boundary | ירמיהו פרשה קנד (1754) | aligned |
+| טו | ירמיהו כז ה | interior-of-parasha | ירמיהו פרשה קנח (1758) | needs adjudication |
+| טז | ירמיהו כט ז | parasha-last-pasuk (ptuha) | ירמיהו פרשה קסד (1764) | needs adjudication |
+| יז | ירמיהו ל ט | parasha-last-pasuk (stuma) | ירמיהו פרשה קעב (1772) | needs adjudication |
+| יח | ירמיהו לא לב | interior-of-parasha | ירמיהו פרשה קפו (1786) | needs adjudication |
+| יט | ירמיהו לב כב | interior-of-parasha | ירמיהו פרשה קצג (1793) | needs adjudication |
+| כ | ירמיהו לג טז | parasha-last-pasuk (stuma) | ירמיהו פרשה ר (1800) | documented system difference |
+| כא | ירמיהו לה י | interior-of-parasha | ירמיהו פרשה רי (1810) | needs adjudication |
+| כב | ירמיהו לו כו | parasha-last-pasuk (stuma) | ירמיהו פרשה ריז (1817) | needs adjudication |
+| כג | ירמיהו לח ח | interior-of-parasha | ירמיהו פרשה רכט (1829) | needs adjudication |
+| כד | ירמיהו לט יח | parasha-last-pasuk (stuma) | ירמיהו פרשה רמ (1840) | needs adjudication |
+| כה | ירמיהו מב יב | interior-of-parasha | ירמיהו פרשה רמט (1849) | needs adjudication |
+| כו | ירמיהו מד כ | parasha-boundary | ירמיהו פרשה רנט (1859) | aligned |
+| כז | ירמיהו מו כז | parasha-boundary | ירמיהו פרשה רע (1870) | aligned |
+| כח | ירמיהו מט ב | interior-of-parasha | ירמיהו פרשה רעח (1878) | needs adjudication |
+| כט | ירמיהו נ ה | parasha-last-pasuk (stuma) | ירמיהו פרשה רפה (1885) | needs adjudication |
+| ל | ירמיהו נא י | interior-of-parasha | ירמיהו פרשה רצד (1894) | needs adjudication |
+| לא | ירמיהו נא נט | parasha-boundary | ירמיהו פרשה שג (1903) | aligned |
 ### יחזקאל
 
 | סדר | מראה מקום | alignment | containing unit | disposition |
 |---|---|---|---|---|
-| א | יחזקאל א א | parasha-boundary | יחזקאל א א-כח (1906) | aligned |
-| ב | יחזקאל ג יב | interior-of-parasha | יחזקאל ג י-טז (1913) | needs adjudication |
-| ג | יחזקאל ו א | parasha-boundary | יחזקאל ו א-י (1928) | aligned |
-| ד | יחזקאל ח א | parasha-boundary | יחזקאל ח א-ו (1933) | aligned |
-| ה | יחזקאל י א | parasha-boundary | יחזקאל י א - יא א (1937) | aligned |
-| ו | יחזקאל יא כ | interior-of-parasha | יחזקאל יא יז-כה (1942) | needs adjudication |
-| ז | יחזקאל יד א | parasha-last-pasuk (ptuha) | יחזקאל יג כ - יד א (1952) | needs adjudication |
-| ח | יחזקאל טז יד | interior-of-parasha | יחזקאל טז א-לה (1961) | needs adjudication |
-| ט | יחזקאל טז ס | interior-of-parasha | יחזקאל טז נט-סג (1964) | needs adjudication |
-| י | יחזקאל יח ט | interior-of-parasha | יחזקאל יח ה-כ (1971) | needs adjudication |
-| יא | יחזקאל כ א | parasha-boundary | יחזקאל כ א (1977) | aligned |
-| יב | יחזקאל כ מא | interior-of-parasha | יחזקאל כ כז-מד (1979) | needs adjudication |
-| יג | יחזקאל כב טז | parasha-last-pasuk (ptuha) | יחזקאל כב א-טז (1990) | needs adjudication |
-| יד | יחזקאל כג כז | parasha-last-pasuk (stuma) | יחזקאל כג כב-כז (1996) | needs adjudication |
-| טו | יחזקאל כד כד | parasha-last-pasuk (stuma) | יחזקאל כד טו-כד (2005) | needs adjudication |
-| טז | יחזקאל כו כ | interior-of-parasha | יחזקאל כו יט-כא (2015) | needs adjudication |
-| יז | יחזקאל כח יג | interior-of-parasha | יחזקאל כח יא-יט (2019) | needs adjudication |
-| יח | יחזקאל כט כא | parasha-boundary | יחזקאל כט כא (2027) | aligned |
-| יט | יחזקאל לב א | parasha-boundary | יחזקאל לב א-י (2037) | aligned |
-| כ | יחזקאל לג טז | interior-of-parasha | יחזקאל לג יב-כ (2043) | needs adjudication |
-| כא | יחזקאל לד כו | interior-of-parasha | יחזקאל לד כ-לא (2052) | needs adjudication |
-| כב | יחזקאל לו כה | interior-of-parasha | יחזקאל לו כב-לב (2059) | needs adjudication |
-| כג | יחזקאל לז כח | parasha-last-pasuk (stuma) | יחזקאל לז טו-כח (2065) | needs adjudication |
-| כד | יחזקאל לט כב | interior-of-parasha | יחזקאל לט יז-כד (2073) | needs adjudication |
-| כה | יחזקאל מ מה | interior-of-parasha | יחזקאל מ א - מג ט (2075) | needs adjudication |
-| כו | יחזקאל מב יג | interior-of-parasha | יחזקאל מ א - מג ט (2075) | needs adjudication |
-| כז | יחזקאל מג כז | mid-pasuk-boundary (segment 4) | יחזקאל מג י-כז (2076) | aligned |
-| כח | יחזקאל מה טו | interior-of-parasha | יחזקאל מה ט-יז (2081) | needs adjudication |
-| כט | יחזקאל מז יב | parasha-last-pasuk (stuma) | יחזקאל מו כ - מז יב (2086) | needs adjudication |
+| א | יחזקאל א א | parasha-boundary | יחזקאל פרשה א (1906) | aligned |
+| ב | יחזקאל ג יב | interior-of-parasha | יחזקאל פרשה ח (1913) | needs adjudication |
+| ג | יחזקאל ו א | parasha-boundary | יחזקאל פרשה כג (1928) | aligned |
+| ד | יחזקאל ח א | parasha-boundary | יחזקאל פרשה כח (1933) | aligned |
+| ה | יחזקאל י א | parasha-boundary | יחזקאל פרשה לב (1937) | aligned |
+| ו | יחזקאל יא כ | interior-of-parasha | יחזקאל פרשה לז (1942) | needs adjudication |
+| ז | יחזקאל יד א | parasha-last-pasuk (ptuha) | יחזקאל פרשה מז (1952) | needs adjudication |
+| ח | יחזקאל טז יד | interior-of-parasha | יחזקאל פרשה נו (1961) | needs adjudication |
+| ט | יחזקאל טז ס | interior-of-parasha | יחזקאל פרשה נט (1964) | needs adjudication |
+| י | יחזקאל יח ט | interior-of-parasha | יחזקאל פרשה סו (1971) | needs adjudication |
+| יא | יחזקאל כ א | parasha-boundary | יחזקאל פרשה עב (1977) | aligned |
+| יב | יחזקאל כ מא | interior-of-parasha | יחזקאל פרשה עד (1979) | needs adjudication |
+| יג | יחזקאל כב טז | parasha-last-pasuk (ptuha) | יחזקאל פרשה פה (1990) | needs adjudication |
+| יד | יחזקאל כג כז | parasha-last-pasuk (stuma) | יחזקאל פרשה צא (1996) | needs adjudication |
+| טו | יחזקאל כד כד | parasha-last-pasuk (stuma) | יחזקאל פרשה ק (2005) | needs adjudication |
+| טז | יחזקאל כו כ | interior-of-parasha | יחזקאל פרשה קי (2015) | needs adjudication |
+| יז | יחזקאל כח יג | interior-of-parasha | יחזקאל פרשה קיד (2019) | needs adjudication |
+| יח | יחזקאל כט כא | parasha-boundary | יחזקאל פרשה קכב (2027) | aligned |
+| יט | יחזקאל לב א | parasha-boundary | יחזקאל פרשה קלב (2037) | aligned |
+| כ | יחזקאל לג טז | interior-of-parasha | יחזקאל פרשה קלח (2043) | needs adjudication |
+| כא | יחזקאל לד כו | interior-of-parasha | יחזקאל פרשה קמז (2052) | needs adjudication |
+| כב | יחזקאל לו כה | interior-of-parasha | יחזקאל פרשה קנד (2059) | needs adjudication |
+| כג | יחזקאל לז כח | parasha-last-pasuk (stuma) | יחזקאל פרשה קס (2065) | needs adjudication |
+| כד | יחזקאל לט כב | interior-of-parasha | יחזקאל פרשה קסח (2073) | needs adjudication |
+| כה | יחזקאל מ מה | interior-of-parasha | יחזקאל פרשה קע (2075) | needs adjudication |
+| כו | יחזקאל מב יג | interior-of-parasha | יחזקאל פרשה קע (2075) | needs adjudication |
+| כז | יחזקאל מג כז | mid-pasuk-boundary (segment 4) | יחזקאל פרשה קעא (2076) | aligned |
+| כח | יחזקאל מה טו | interior-of-parasha | יחזקאל פרשה קעו (2081) | needs adjudication |
+| כט | יחזקאל מז יב | parasha-last-pasuk (stuma) | יחזקאל פרשה קפא (2086) | needs adjudication |
 ### תרי עשר
 
 | סדר | מראה מקום | alignment | containing unit | disposition |
 |---|---|---|---|---|
-| א | הושע א א | parasha-boundary | הושע א א-ב (2091) | aligned |
-| ב | הושע ו ב | interior-of-parasha | הושע ה ח - ו יא (2100) | needs adjudication |
-| ג | הושע י יב | interior-of-parasha | הושע י ט - יא יא (2107) | needs adjudication |
-| ד | הושע יד ו | interior-of-parasha | הושע יד ב-ח (2110) | needs adjudication |
-| ה | יואל ב כז | parasha-last-pasuk (stuma) | יואל ב טו-כז (2115) | needs adjudication |
-| ו | עמוס ב י | interior-of-parasha | עמוס ב ו-טז (2127) | needs adjudication |
-| ז | עמוס ה יד | interior-of-parasha | עמוס ה ט-טו (2135) | needs adjudication |
-| ח | עמוס ז טו | interior-of-parasha | עמוס ז יד-יז (2144) | needs adjudication |
-| ט | עובדיה א כא | interior-of-parasha — marker-free sefer | עובדיה א א-כא (2150) | needs adjudication |
-| י | מיכה א א | parasha-boundary | מיכה א א-טז (2155) | aligned |
-| יא | מיכה ד ה | parasha-last-pasuk (ptuha) | מיכה ד א-ה (2161) | needs adjudication |
-| יב | מיכה ז כ | interior-of-parasha | מיכה ז יד-כ (2171) | needs adjudication |
-| יג | חבקוק א א | parasha-boundary | חבקוק א א-יז (2176) | aligned |
-| יד | צפניה א א | parasha-boundary | צפניה א א-ט (2186) | aligned |
-| טו | צפניה ג כ | interior-of-parasha | צפניה ג יד-כ (2191) | needs adjudication |
-| טז | חגי ב כג | interior-of-parasha | חגי ב כ-כג (2199) | needs adjudication |
-| יז | זכריה ד ב | interior-of-parasha | זכריה ג א - ד ז (2208) | needs adjudication |
-| יח | זכריה ו יד | interior-of-parasha | זכריה ו ט-טו (2212) | needs adjudication |
-| יט | זכריה ח כג | parasha-boundary | זכריה ח כג (2224) | aligned |
-| כ | זכריה יב א | parasha-boundary | זכריה יב א (2232) | aligned |
-| כא | זכריה יד כא | interior-of-parasha | זכריה יד א-כא (2237) | needs adjudication |
+| א | הושע א א | parasha-boundary | הושע פרשה א (2091) | aligned |
+| ב | הושע ו ב | interior-of-parasha | הושע פרשה י (2100) | needs adjudication |
+| ג | הושע י יב | interior-of-parasha | הושע פרשה יז (2107) | needs adjudication |
+| ד | הושע יד ו | interior-of-parasha | הושע פרשה כ (2110) | needs adjudication |
+| ה | יואל ב כז | parasha-last-pasuk (stuma) | יואל פרשה ד (2115) | needs adjudication |
+| ו | עמוס ב י | interior-of-parasha | עמוס פרשה ט (2127) | needs adjudication |
+| ז | עמוס ה יד | interior-of-parasha | עמוס פרשה יז (2135) | needs adjudication |
+| ח | עמוס ז טו | interior-of-parasha | עמוס פרשה כו (2144) | needs adjudication |
+| ט | עובדיה א כא | interior-of-parasha — marker-free sefer | עובדיה פרשה א (2150) | needs adjudication |
+| י | מיכה א א | parasha-boundary | מיכה פרשה א (2155) | aligned |
+| יא | מיכה ד ה | parasha-last-pasuk (ptuha) | מיכה פרשה ז (2161) | needs adjudication |
+| יב | מיכה ז כ | interior-of-parasha | מיכה פרשה יז (2171) | needs adjudication |
+| יג | חבקוק א א | parasha-boundary | חבקוק פרשה א (2176) | aligned |
+| יד | צפניה א א | parasha-boundary | צפניה פרשה א (2186) | aligned |
+| טו | צפניה ג כ | interior-of-parasha | צפניה פרשה ו (2191) | needs adjudication |
+| טז | חגי ב כג | interior-of-parasha | חגי פרשה ח (2199) | needs adjudication |
+| יז | זכריה ד ב | interior-of-parasha | זכריה פרשה ט (2208) | needs adjudication |
+| יח | זכריה ו יד | interior-of-parasha | זכריה פרשה יג (2212) | needs adjudication |
+| יט | זכריה ח כג | parasha-boundary | זכריה פרשה כה (2224) | aligned |
+| כ | זכריה יב א | parasha-boundary | זכריה פרשה לג (2232) | aligned |
+| כא | זכריה יד כא | interior-of-parasha | זכריה פרשה לח (2237) | needs adjudication |
 ### תהלים
 
 | סדר | מראה מקום | alignment | containing unit | disposition |
 |---|---|---|---|---|
-| א | תהילים א א | parasha-boundary — marker-free sefer | תהילים א א - קנ ו (2246) | aligned |
-| ב | תהילים יא ז | interior-of-parasha — marker-free sefer | תהילים א א - קנ ו (2246) | needs adjudication |
-| ג | תהילים כ י | interior-of-parasha — marker-free sefer | תהילים א א - קנ ו (2246) | needs adjudication |
-| ד | תהילים כט יא | interior-of-parasha — marker-free sefer | תהילים א א - קנ ו (2246) | needs adjudication |
-| ה | תהילים לה כח | interior-of-parasha — marker-free sefer | תהילים א א - קנ ו (2246) | needs adjudication |
-| ו | תהילים מא יד | interior-of-parasha — marker-free sefer | תהילים א א - קנ ו (2246) | needs adjudication |
-| ז | תהילים מט יט | interior-of-parasha — marker-free sefer | תהילים א א - קנ ו (2246) | needs adjudication |
-| ח | תהילים נז יב | interior-of-parasha — marker-free sefer | תהילים א א - קנ ו (2246) | needs adjudication |
-| ט | תהילים סז ח | interior-of-parasha — marker-free sefer | תהילים א א - קנ ו (2246) | needs adjudication |
-| י | תהילים עב כ | interior-of-parasha — marker-free sefer | תהילים א א - קנ ו (2246) | needs adjudication |
-| יא | תהילים עח לח | interior-of-parasha — marker-free sefer | תהילים א א - קנ ו (2246) | needs adjudication |
-| יב | תהילים פד יג | interior-of-parasha — marker-free sefer | תהילים א א - קנ ו (2246) | needs adjudication |
-| יג | תהילים צ יז | interior-of-parasha — marker-free sefer | תהילים א א - קנ ו (2246) | needs adjudication |
-| יד | תהילים קא א | interior-of-parasha — marker-free sefer | תהילים א א - קנ ו (2246) | needs adjudication |
-| טו | תהילים קה מה | interior-of-parasha — marker-free sefer | תהילים א א - קנ ו (2246) | needs adjudication |
-| טז | תהילים קיא י | interior-of-parasha — marker-free sefer | תהילים א א - קנ ו (2246) | needs adjudication |
-| יז | תהילים קיט עב | interior-of-parasha — marker-free sefer | תהילים א א - קנ ו (2246) | needs adjudication |
-| יח | תהילים קכח ו | interior-of-parasha — marker-free sefer | תהילים א א - קנ ו (2246) | needs adjudication |
-| יט | תהילים קמ יד | interior-of-parasha — marker-free sefer | תהילים א א - קנ ו (2246) | needs adjudication |
+| א | תהילים א א | parasha-boundary — marker-free sefer | תהילים פרשה א (2246) | aligned |
+| ב | תהילים יא ז | interior-of-parasha — marker-free sefer | תהילים פרשה א (2246) | needs adjudication |
+| ג | תהילים כ י | interior-of-parasha — marker-free sefer | תהילים פרשה א (2246) | needs adjudication |
+| ד | תהילים כט יא | interior-of-parasha — marker-free sefer | תהילים פרשה א (2246) | needs adjudication |
+| ה | תהילים לה כח | interior-of-parasha — marker-free sefer | תהילים פרשה א (2246) | needs adjudication |
+| ו | תהילים מא יד | interior-of-parasha — marker-free sefer | תהילים פרשה א (2246) | needs adjudication |
+| ז | תהילים מט יט | interior-of-parasha — marker-free sefer | תהילים פרשה א (2246) | needs adjudication |
+| ח | תהילים נז יב | interior-of-parasha — marker-free sefer | תהילים פרשה א (2246) | needs adjudication |
+| ט | תהילים סז ח | interior-of-parasha — marker-free sefer | תהילים פרשה א (2246) | needs adjudication |
+| י | תהילים עב כ | interior-of-parasha — marker-free sefer | תהילים פרשה א (2246) | needs adjudication |
+| יא | תהילים עח לח | interior-of-parasha — marker-free sefer | תהילים פרשה א (2246) | needs adjudication |
+| יב | תהילים פד יג | interior-of-parasha — marker-free sefer | תהילים פרשה א (2246) | needs adjudication |
+| יג | תהילים צ יז | interior-of-parasha — marker-free sefer | תהילים פרשה א (2246) | needs adjudication |
+| יד | תהילים קא א | interior-of-parasha — marker-free sefer | תהילים פרשה א (2246) | needs adjudication |
+| טו | תהילים קה מה | interior-of-parasha — marker-free sefer | תהילים פרשה א (2246) | needs adjudication |
+| טז | תהילים קיא י | interior-of-parasha — marker-free sefer | תהילים פרשה א (2246) | needs adjudication |
+| יז | תהילים קיט עב | interior-of-parasha — marker-free sefer | תהילים פרשה א (2246) | needs adjudication |
+| יח | תהילים קכח ו | interior-of-parasha — marker-free sefer | תהילים פרשה א (2246) | needs adjudication |
+| יט | תהילים קמ יד | interior-of-parasha — marker-free sefer | תהילים פרשה א (2246) | needs adjudication |
 ### משלי
 
 | סדר | מראה מקום | alignment | containing unit | disposition |
 |---|---|---|---|---|
-| א | משלי א א | parasha-boundary | משלי א א-ז (2247) | aligned |
-| ב | משלי ה יח | interior-of-parasha | משלי ה ז-כג (2257) | needs adjudication |
-| ג | משלי ט יא | interior-of-parasha | משלי ט י-יח (2270) | needs adjudication |
-| ד | משלי יד ד | interior-of-parasha | משלי יד א - יט ט (2273) | needs adjudication |
-| ה | משלי יח י | interior-of-parasha | משלי יד א - יט ט (2273) | needs adjudication |
-| ו | משלי כב כא | parasha-last-pasuk (ptuha) | משלי כא לא - כב כא (2275) | needs adjudication |
-| ז | משלי כה יג | parasha-last-pasuk (ptuha) | משלי כה א-יג (2282) | needs adjudication |
-| ח | משלי כח טז | parasha-last-pasuk (ptuha) | משלי כח ה-טז (2287) | needs adjudication |
+| א | משלי א א | parasha-boundary | משלי פרשה א (2247) | aligned |
+| ב | משלי ה יח | interior-of-parasha | משלי פרשה יא (2257) | needs adjudication |
+| ג | משלי ט יא | interior-of-parasha | משלי פרשה כד (2270) | needs adjudication |
+| ד | משלי יד ד | interior-of-parasha | משלי פרשה כז (2273) | needs adjudication |
+| ה | משלי יח י | interior-of-parasha | משלי פרשה כז (2273) | needs adjudication |
+| ו | משלי כב כא | parasha-last-pasuk (ptuha) | משלי פרשה כט (2275) | needs adjudication |
+| ז | משלי כה יג | parasha-last-pasuk (ptuha) | משלי פרשה לו (2282) | needs adjudication |
+| ח | משלי כח טז | parasha-last-pasuk (ptuha) | משלי פרשה מא (2287) | needs adjudication |
 ### איוב
 
 | סדר | מראה מקום | alignment | containing unit | disposition |
 |---|---|---|---|---|
-| א | איוב א א | parasha-boundary | איוב א א-ה (2300) | aligned |
-| ב | איוב ה כז | parasha-last-pasuk (ptuha) | איוב ד א - ה כז (2305) | needs adjudication |
-| ג | איוב יא יט | interior-of-parasha | איוב יא א-כ (2309) | needs adjudication |
-| ד | איוב יז ט | interior-of-parasha | איוב טז א - יז טז (2312) | needs adjudication |
-| ה | איוב כב ל | parasha-last-pasuk (ptuha) | איוב כב א-ל (2317) | needs adjudication |
-| ו | איוב כט יד | interior-of-parasha | איוב כט א - לא ז (2324) | needs adjudication |
-| ז | איוב לג לג | parasha-last-pasuk (stuma) | איוב לב ו - לג לג (2328) | needs adjudication |
-| ח | איוב לח לה | interior-of-parasha | איוב לח א - לט ל (2332) | needs adjudication |
+| א | איוב א א | parasha-boundary | איוב פרשה א (2300) | aligned |
+| ב | איוב ה כז | parasha-last-pasuk (ptuha) | איוב פרשה ו (2305) | needs adjudication |
+| ג | איוב יא יט | interior-of-parasha | איוב פרשה י (2309) | needs adjudication |
+| ד | איוב יז ט | interior-of-parasha | איוב פרשה יג (2312) | needs adjudication |
+| ה | איוב כב ל | parasha-last-pasuk (ptuha) | איוב פרשה יח (2317) | needs adjudication |
+| ו | איוב כט יד | interior-of-parasha | איוב פרשה כה (2324) | needs adjudication |
+| ז | איוב לג לג | parasha-last-pasuk (stuma) | איוב פרשה כט (2328) | needs adjudication |
+| ח | איוב לח לה | interior-of-parasha | איוב פרשה לג (2332) | needs adjudication |
 ### שיר השירים
 
 | סדר | מראה מקום | alignment | containing unit | disposition |
 |---|---|---|---|---|
-| א | שיר השירים א א | parasha-boundary | שיר השירים א א-ד (2340) | aligned |
-| (ב) | שיר השירים ה ב | parasha-boundary | שיר השירים ה ב - ו ג (2353) | manuscript-only |
+| א | שיר השירים א א | parasha-boundary | שיר השירים פרשה א (2340) | aligned |
+| (ב) | שיר השירים ה ב | parasha-boundary | שיר השירים פרשה יד (2353) | manuscript-only |
 ### רות
 
 | סדר | מראה מקום | alignment | containing unit | disposition |
 |---|---|---|---|---|
-| א | רות א א | parasha-boundary | רות א א - ד יז (2361) | aligned |
-| (ב) | רות ב יב | interior-of-parasha | רות א א - ד יז (2361) | manuscript-only |
+| א | רות א א | parasha-boundary | רות פרשה א (2361) | aligned |
+| (ב) | רות ב יב | interior-of-parasha | רות פרשה א (2361) | manuscript-only |
 ### איכה
 
 | סדר | מראה מקום | alignment | containing unit | disposition |
 |---|---|---|---|---|
-| א | איכה א א | parasha-boundary | איכה א א (2363) | aligned |
+| א | איכה א א | parasha-boundary | איכה פרשה א (2363) | aligned |
 ### קהלת
 
 | סדר | מראה מקום | alignment | containing unit | disposition |
 |---|---|---|---|---|
-| א | קהלת א א | parasha-boundary | קהלת א א-יא (2453) | aligned |
-| ב | קהלת ג יג | interior-of-parasha | קהלת ג ט - ט י (2456) | needs adjudication |
-| ג | קהלת ז א | interior-of-parasha | קהלת ג ט - ט י (2456) | needs adjudication |
-| ד | קהלת ט ז | interior-of-parasha | קהלת ג ט - ט י (2456) | needs adjudication |
+| א | קהלת א א | parasha-boundary | קהלת פרשה א (2453) | aligned |
+| ב | קהלת ג יג | interior-of-parasha | קהלת פרשה ד (2456) | needs adjudication |
+| ג | קהלת ז א | interior-of-parasha | קהלת פרשה ד (2456) | needs adjudication |
+| ד | קהלת ט ז | interior-of-parasha | קהלת פרשה ד (2456) | needs adjudication |
 ### אסתר
 
 | סדר | מראה מקום | alignment | containing unit | disposition |
 |---|---|---|---|---|
-| א | אסתר א א | parasha-boundary | אסתר א א-ט (2458) | aligned |
-| ב | אסתר ב ה | parasha-boundary | אסתר ב ה-כ (2462) | aligned |
-| ג | אסתר ג ח | parasha-boundary | אסתר ג ח-טו (2465) | aligned |
-| ד | אסתר ו יא | interior-of-parasha | אסתר ו א - ז ד (2470) | needs adjudication |
-| ה | אסתר ח טז | interior-of-parasha | אסתר ח טו - ט ד (2476) | needs adjudication |
+| א | אסתר א א | parasha-boundary | אסתר פרשה א (2458) | aligned |
+| ב | אסתר ב ה | parasha-boundary | אסתר פרשה ה (2462) | aligned |
+| ג | אסתר ג ח | parasha-boundary | אסתר פרשה ח (2465) | aligned |
+| ד | אסתר ו יא | interior-of-parasha | אסתר פרשה יג (2470) | needs adjudication |
+| ה | אסתר ח טז | interior-of-parasha | אסתר פרשה יט (2476) | needs adjudication |
 ### דניאל
 
 | סדר | מראה מקום | alignment | containing unit | disposition |
 |---|---|---|---|---|
-| א | דניאל א א | parasha-boundary | דניאל א א-כא (2482) | aligned |
-| ב | דניאל ב לה | interior-of-parasha | דניאל ב כט-מה (2487) | needs adjudication |
-| ג | דניאל ג ל | parasha-last-pasuk (ptuha) | דניאל ג כו-ל (2493) | needs adjudication |
-| ד | דניאל ה יב | parasha-last-pasuk (ptuha) | דניאל ה ח-יב (2497) | needs adjudication |
-| ה | דניאל ו יא | parasha-last-pasuk (stuma) | דניאל ו ז-יא (2501) | needs adjudication |
-| ו | דניאל ט ד | interior-of-parasha | דניאל ט א-כז (2506) | needs adjudication |
-| ז | דניאל י כא | parasha-last-pasuk (ptuha) | דניאל י ד-כא (2508) | needs adjudication |
+| א | דניאל א א | parasha-boundary | דניאל פרשה א (2482) | aligned |
+| ב | דניאל ב לה | interior-of-parasha | דניאל פרשה ו (2487) | needs adjudication |
+| ג | דניאל ג ל | parasha-last-pasuk (ptuha) | דניאל פרשה יב (2493) | needs adjudication |
+| ד | דניאל ה יב | parasha-last-pasuk (ptuha) | דניאל פרשה טז (2497) | needs adjudication |
+| ה | דניאל ו יא | parasha-last-pasuk (stuma) | דניאל פרשה כ (2501) | needs adjudication |
+| ו | דניאל ט ד | interior-of-parasha | דניאל פרשה כה (2506) | needs adjudication |
+| ז | דניאל י כא | parasha-last-pasuk (ptuha) | דניאל פרשה כז (2508) | needs adjudication |
 ### עזרא נחמיה
 
 | סדר | מראה מקום | alignment | containing unit | disposition |
 |---|---|---|---|---|
-| א | עזרא א א | parasha-boundary | עזרא ע א א-ו (2513) | aligned |
-| ב | עזרא ג יג | parasha-last-pasuk (ptuha) | עזרא ע ג יב-יג (2569) | needs adjudication |
-| ג | עזרא ו יח | parasha-last-pasuk (ptuha) | עזרא ע ו טז-יח (2592) | needs adjudication |
-| ד | עזרא ח לה | parasha-boundary | עזרא ע ח לה (2619) | aligned |
-| ה | נחמיה א יא | parasha-last-pasuk (ptuha) | עזרא נ א א-יא (2648) | needs adjudication |
-| ו | נחמיה ג לח | parasha-last-pasuk (ptuha) | עזרא נ ג לו-לח (2687) | needs adjudication |
-| ז | נחמיה ו טו | parasha-last-pasuk (ptuha) | עזרא נ ו יד-טו (2695) | needs adjudication |
-| ח | נחמיה ח י | interior-of-parasha | עזרא נ ח ט-יב (2743) | needs adjudication |
-| ט | נחמיה י א | parasha-boundary | עזרא נ י א-ט (2748) | aligned |
-| י | נחמיה יב כז | parasha-boundary | עזרא נ יב כז-לד (2761) | aligned |
+| א | עזרא א א | parasha-boundary | עזרא פרשה א (2513) | aligned |
+| ב | עזרא ג יג | parasha-last-pasuk (ptuha) | עזרא פרשה נז (2569) | needs adjudication |
+| ג | עזרא ו יח | parasha-last-pasuk (ptuha) | עזרא פרשה פ (2592) | needs adjudication |
+| ד | עזרא ח לה | parasha-boundary | עזרא פרשה קז (2619) | aligned |
+| ה | נחמיה א יא | parasha-last-pasuk (ptuha) | עזרא פרשה קלו (2648) | needs adjudication |
+| ו | נחמיה ג לח | parasha-last-pasuk (ptuha) | עזרא פרשה קעה (2687) | needs adjudication |
+| ז | נחמיה ו טו | parasha-last-pasuk (ptuha) | עזרא פרשה קפג (2695) | needs adjudication |
+| ח | נחמיה ח י | interior-of-parasha | עזרא פרשה רלא (2743) | needs adjudication |
+| ט | נחמיה י א | parasha-boundary | עזרא פרשה רלו (2748) | aligned |
+| י | נחמיה יב כז | parasha-boundary | עזרא פרשה רמט (2761) | aligned |
 ### דברי הימים
 
 | סדר | מראה מקום | alignment | containing unit | disposition |
 |---|---|---|---|---|
-| א | דברי הימים א א א | parasha-boundary | דברי הימים א א א-ד (2769) | aligned |
-| ב | דברי הימים א ד י | interior-of-parasha | דברי הימים א ד ג-יב (2814) | needs adjudication |
-| ג | דברי הימים א ו לד | parasha-last-pasuk (ptuha) | דברי הימים א ו לג-לד (2833) | documented system difference |
-| ד | דברי הימים א ח מ | parasha-last-pasuk (ptuha) | דברי הימים א ח לה-מ (2860) | needs adjudication |
-| ה | דברי הימים א יא ט | parasha-last-pasuk (ptuha) | דברי הימים א יא ד-ט (2874) | needs adjudication |
-| ו | דברי הימים א יב מא | parasha-last-pasuk (ptuha) | דברי הימים א יב לח-מא (2921) | needs adjudication |
-| ז | דברי הימים א טז לו | parasha-last-pasuk (ptuha) | דברי הימים א טז כג-לו (2940) | needs adjudication |
-| ח | דברי הימים א יט יג | interior-of-parasha | דברי הימים א יט יב-טו (2951) | needs adjudication |
-| ט | דברי הימים א כב יט | parasha-last-pasuk (ptuha) | דברי הימים א כב ז-יט (2965) | needs adjudication |
-| י | דברי הימים א כו ה | parasha-last-pasuk (ptuha) | דברי הימים א כו א-ה (2985) | needs adjudication |
-| יא | דברי הימים א כח י | parasha-last-pasuk (ptuha) | דברי הימים א כח ט-י (3022) | needs adjudication |
-| יב | דברי הימים ב ב ג | interior-of-parasha | דברי הימים ב ב ב-ט (3032) | needs adjudication |
-| יג | דברי הימים ב ה יד | parasha-last-pasuk (ptuha) | דברי הימים ב ה יא-יד (3048) | needs adjudication |
-| יד | דברי הימים ב ז יא | parasha-last-pasuk (ptuha) | דברי הימים ב ז ז-יא (3057) | needs adjudication |
-| טו | דברי הימים ב ט כד | parasha-last-pasuk (ptuha) | דברי הימים ב ט כב-כד (3066) | needs adjudication |
-| טז | דברי הימים ב יב יב | parasha-last-pasuk (stuma) | דברי הימים ב יב ט-יב (3079) | needs adjudication |
-| יז | דברי הימים ב טו טו | interior-of-parasha | דברי הימים ב טו י-יט (3096) | needs adjudication |
-| יח | דברי הימים ב יח יח | parasha-boundary | דברי הימים ב יח יח-כב (3109) | aligned |
-| יט | דברי הימים ב כ לא | parasha-boundary | דברי הימים ב כ לא - ב כא ג (3115) | aligned |
-| כ | דברי הימים ב כג יא | parasha-last-pasuk (stuma) | דברי הימים ב כג א-יא (3119) | needs adjudication |
-| כא | דברי הימים ב כו ב | parasha-last-pasuk (ptuha) | דברי הימים ב כה כה - ב כו ב (3135) | needs adjudication |
-| כב | דברי הימים ב כט יא | parasha-last-pasuk (stuma) | דברי הימים ב כט א-יא (3148) | needs adjudication |
-| כג | דברי הימים ב לא י | parasha-last-pasuk (stuma) | דברי הימים ב לא ט-י (3170) | needs adjudication |
-| כד | דברי הימים ב לד ב | interior-of-parasha | דברי הימים ב לד א-ז (3180) | needs adjudication |
-| כה | דברי הימים ב לה ו | parasha-last-pasuk (ptuha) | דברי הימים ב לה א-ו (3187) | needs adjudication |
+| א | דברי הימים א א א | parasha-boundary | דברי הימים פרשה א (2769) | aligned |
+| ב | דברי הימים א ד י | interior-of-parasha | דברי הימים פרשה מו (2814) | needs adjudication |
+| ג | דברי הימים א ו לד | parasha-last-pasuk (ptuha) | דברי הימים פרשה סה (2833) | documented system difference |
+| ד | דברי הימים א ח מ | parasha-last-pasuk (ptuha) | דברי הימים פרשה צב (2860) | needs adjudication |
+| ה | דברי הימים א יא ט | parasha-last-pasuk (ptuha) | דברי הימים פרשה קו (2874) | needs adjudication |
+| ו | דברי הימים א יב מא | parasha-last-pasuk (ptuha) | דברי הימים פרשה קנג (2921) | needs adjudication |
+| ז | דברי הימים א טז לו | parasha-last-pasuk (ptuha) | דברי הימים פרשה קעב (2940) | needs adjudication |
+| ח | דברי הימים א יט יג | interior-of-parasha | דברי הימים פרשה קפג (2951) | needs adjudication |
+| ט | דברי הימים א כב יט | parasha-last-pasuk (ptuha) | דברי הימים פרשה קצז (2965) | needs adjudication |
+| י | דברי הימים א כו ה | parasha-last-pasuk (ptuha) | דברי הימים פרשה ריז (2985) | needs adjudication |
+| יא | דברי הימים א כח י | parasha-last-pasuk (ptuha) | דברי הימים פרשה רנד (3022) | needs adjudication |
+| יב | דברי הימים ב ב ג | interior-of-parasha | דברי הימים פרשה רסד (3032) | needs adjudication |
+| יג | דברי הימים ב ה יד | parasha-last-pasuk (ptuha) | דברי הימים פרשה רפ (3048) | needs adjudication |
+| יד | דברי הימים ב ז יא | parasha-last-pasuk (ptuha) | דברי הימים פרשה רפט (3057) | needs adjudication |
+| טו | דברי הימים ב ט כד | parasha-last-pasuk (ptuha) | דברי הימים פרשה רצח (3066) | needs adjudication |
+| טז | דברי הימים ב יב יב | parasha-last-pasuk (stuma) | דברי הימים פרשה שיא (3079) | needs adjudication |
+| יז | דברי הימים ב טו טו | interior-of-parasha | דברי הימים פרשה שכח (3096) | needs adjudication |
+| יח | דברי הימים ב יח יח | parasha-boundary | דברי הימים פרשה שמא (3109) | aligned |
+| יט | דברי הימים ב כ לא | parasha-boundary | דברי הימים פרשה שמז (3115) | aligned |
+| כ | דברי הימים ב כג יא | parasha-last-pasuk (stuma) | דברי הימים פרשה שנא (3119) | needs adjudication |
+| כא | דברי הימים ב כו ב | parasha-last-pasuk (ptuha) | דברי הימים פרשה שסז (3135) | needs adjudication |
+| כב | דברי הימים ב כט יא | parasha-last-pasuk (stuma) | דברי הימים פרשה שפ (3148) | needs adjudication |
+| כג | דברי הימים ב לא י | parasha-last-pasuk (stuma) | דברי הימים פרשה תב (3170) | needs adjudication |
+| כד | דברי הימים ב לד ב | interior-of-parasha | דברי הימים פרשה תיב (3180) | needs adjudication |
+| כה | דברי הימים ב לה ו | parasha-last-pasuk (ptuha) | דברי הימים פרשה תיט (3187) | needs adjudication |
 
 ## Adjudication
 

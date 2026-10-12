@@ -74,6 +74,15 @@
                                          IsChecked="{Binding IsPerekToLoadLastLearnt}"
                                          CheckedChanged="OnPerekToLoadRadioChanged"/>
                         </HorizontalStackLayout>
+                        <Grid ColumnDefinitions="*,Auto">
+                            <Label Text="הצגת מסורה על הפרק"
+                                   FontSize="15"
+                                   VerticalOptions="Center"
+                                   TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
+                            <Switch Grid.Column="1"
+                                    IsToggled="{Binding MasoraMenuEnabled}"
+                                    AutomationId="MasoraMenuEnabledSwitch"/>
+                        </Grid>
                     </VerticalStackLayout>
                 </Border>
             </VerticalStackLayout>
