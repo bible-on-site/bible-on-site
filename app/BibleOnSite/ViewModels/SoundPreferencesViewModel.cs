@@ -36,7 +36,8 @@ public class SoundPreferencesViewModel : ObservableObject
         set { _preferencesService.LessonsVolume = value; OnPropertyChanged(); }
     }
 
-    /// <summary>Sound-effects volume (0–1).</summary>
+    /// <summary>Sound-effects volume (0–1). No effects channel exists yet —
+    /// the preference is persisted and will be applied when one is added.</summary>
     public double EffectsVolume
     {
         get => _preferencesService.EffectsVolume;
