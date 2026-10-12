@@ -8,6 +8,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     xmlns:local="clr-namespace:BibleOnSite"
     xmlns:pages="clr-namespace:BibleOnSite.Pages"
+    xmlns:viewmodels="clr-namespace:BibleOnSite.ViewModels"
     xmlns:fonts="clr-namespace:Fonts"
     Shell.FlyoutBehavior="Flyout"
     FlyoutWidth="300"
@@ -118,8 +119,9 @@
                                VerticalOptions="Center"/>
                     </Grid>
 
-                    <!-- מסורה על הפרק -->
-                    <Grid Padding="16,12" ColumnDefinitions="Auto,*,Auto">
+                    <!-- מסורה על הפרק — opt-in entry gated by the מסורה preference (#2181) -->
+                    <Grid Padding="16,12" ColumnDefinitions="Auto,*,Auto"
+                          IsVisible="{Binding Source={x:Static viewmodels:FlyoutMenuState.Instance}, Path=ShowMasoraEntry}">
                         <Grid.GestureRecognizers>
                             <TapGestureRecognizer Tapped="OnMasoraTapped"/>
                         </Grid.GestureRecognizers>

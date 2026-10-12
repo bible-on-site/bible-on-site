@@ -10,9 +10,14 @@ import sys
 
 CATALOG = "sefaria-dump-5784-sivan-4.perushim_catalog.sqlite"
 NOTES = "sefaria-dump-5784-sivan-4.perushim_notes.sqlite"
+SEARCH_INDEX = "sefaria-dump-5784-sivan-4.hebrew_search.sqlite"
 NOTES_DIRECTORIES = {
     "Android": "Platforms/Android/AssetPacks/perushim_notes",
     "iOS": "Platforms/iOS/Assets/PerushimNotes.xcassets/perushim_notes.dataset",
+}
+SEARCH_INDEX_DIRECTORIES = {
+    "Android": "Platforms/Android/AssetPacks/perushim_notes",
+    "iOS": "Platforms/iOS/Assets/PerushimNotes.xcassets/perushim_search.dataset",
 }
 
 
@@ -27,6 +32,8 @@ def validate_pair(source: Path) -> int:
         catalog_metadata = dict(catalog.execute("SELECT key, value FROM _metadata"))
     with closing(sqlite3.connect((source / NOTES).resolve().as_uri() + "?mode=ro", uri=True)) as notes:
         notes_metadata = dict(notes.execute("SELECT key, value FROM _metadata"))
+        if notes_metadata.get("schema_version") != "2":
+            raise ValueError("Notes are not schema v2; regenerate the paired Perushim SQLite artifact")
         snapshot = notes_metadata.get("perush_catalog")
         if snapshot is None:
             raise ValueError("Notes lack perush_catalog; regenerate the paired Perushim SQLite artifact")
@@ -36,10 +43,37 @@ def validate_pair(source: Path) -> int:
         catalog_timestamp = int(catalog_metadata.get("build_timestamp", "0"))
         if notes_timestamp <= 0 or notes_timestamp != catalog_timestamp:
             raise ValueError("Catalog and notes must come from the same generation")
-        unknown_ids = {str(row[0]) for row in notes.execute("SELECT DISTINCT perush_id FROM note")} - mapping.keys()
+        unknown_ids = {str(row[0]) for row in notes.execute("SELECT DISTINCT perush_id FROM perek_perush")} - mapping.keys()
         if unknown_ids:
             raise ValueError(f"Notes contain IDs absent from the catalog: {sorted(unknown_ids)}")
+        if notes.execute("SELECT COUNT(*) FROM note_blob").fetchone()[0] != \
+                notes.execute("SELECT COUNT(DISTINCT perek_id) FROM perek_perush").fetchone()[0]:
+            raise ValueError("note_blob must carry every perek present in perek_perush")
+        validate_search_index(source / SEARCH_INDEX, notes_timestamp)
     return len(mapping)
+
+
+def validate_search_index(index_path: Path, notes_timestamp: int) -> None:
+    """Reject a delivered index that is missing, malformed, or from another generation."""
+    # The file is optional for older artifacts - the app falls back to
+    # on-device indexing when the pack does not carry it.
+    if not index_path.is_file():
+        print(f"No delivered search index at {index_path}; the app will build it on-device")
+        return
+    with closing(sqlite3.connect(index_path.resolve().as_uri() + "?mode=ro", uri=True)) as index:
+        try:
+            fingerprints = dict(index.execute("SELECT name, fingerprint FROM search_metadata"))
+        except sqlite3.Error as error:
+            raise ValueError("Search index lacks search_metadata fingerprints") from error
+        expected_notes = f"v4:{notes_timestamp}:n"
+        if not str(fingerprints.get("notes", "")).startswith(expected_notes):
+            raise ValueError("Search index was built for a different notes generation")
+        if not str(fingerprints.get("verses", "")).startswith("v4:"):
+            raise ValueError("Search index lacks a verses fingerprint")
+        query = "SELECT name FROM sqlite_master WHERE name IN ('verses','verses_documents','notes','notes_documents')"
+        tables = {row[0] for row in index.execute(query)}
+        if len(tables) != 4:
+            raise ValueError("Search index is missing FTS/documents tables")
 
 
 def prepare_assets(source: Path, app_directory: Path, platform: str) -> int:
@@ -51,6 +85,10 @@ def prepare_assets(source: Path, app_directory: Path, platform: str) -> int:
     notes_directory.mkdir(parents=True, exist_ok=True)
     shutil.copy2(source / CATALOG, catalog_directory / CATALOG)
     shutil.copy2(source / NOTES, notes_directory / NOTES)
+    if (source / SEARCH_INDEX).is_file():
+        index_directory = app_directory / SEARCH_INDEX_DIRECTORIES[platform]
+        index_directory.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source / SEARCH_INDEX, index_directory / SEARCH_INDEX)
     return count
 
 
