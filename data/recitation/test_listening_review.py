@@ -13,8 +13,9 @@ from unittest.mock import patch
 import wave
 
 from alignment import Word, text_hash
-from listening_review import (digest_file, hebrew_number, make_clip, make_server,
+from listening_review import (candidate_digest, digest_file, digest_json, hebrew_number, make_clip, make_server,
                               read_json, ReviewStore, validate_case, validate_decision)
+from listening_accept import verify_review
 
 
 class ListeningReviewTests(unittest.TestCase):
@@ -109,6 +110,65 @@ class ListeningReviewTests(unittest.TestCase):
                 self.store.save(self.case, {**self.payload, "verdict": "skip"})
         self.assertEqual(self.store.path.read_bytes(), before)
         self.assertEqual(self.store.snapshot()["191-15"]["verdict"], "good")
+
+    def prepare_unchanged_cut_reuse(self):
+        prior = deepcopy(self.case)
+        prior["diagnosticSha256"] = "original diagnostic"
+        prior["candidateSha256"] = candidate_digest(prior)
+        queue = {"cases": [prior], "queueSha256": digest_json([prior])}
+        decision = validate_decision(prior, {**self.payload, "candidateSha256": prior["candidateSha256"],
+                                           "verdict": "problem", "note": "first ending is clipped"})
+        decision["queueSha256"] = queue["queueSha256"]
+        queue_path, reviews_path = self.root / "prior-queue.json", self.root / "prior-reviews.json"
+        from listening_review import write_json
+        write_json(queue_path, queue)
+        write_json(reviews_path, {"version": 1, "entries": [decision]})
+        proof_path = self.root / "reuse.json"
+        write_json(proof_path, {"queuePath": str(queue_path), "queueFileSha256": digest_file(queue_path),
+            "reviewsPath": str(reviews_path), "reviewsFileSha256": digest_file(reviews_path),
+            "decisionIndex": 0, "decision": decision})
+        self.case = deepcopy(prior)
+        self.case["words"][0]["endMs"] = 610
+        self.case.update(listeningReusePath=str(proof_path), listeningReuseSha256=digest_file(proof_path),
+                         reusableHeardSegments=[3])
+        self.case["candidateSha256"] = candidate_digest(self.case)
+        self.payload.update(candidateSha256=self.case["candidateSha256"], freshHeardSegments=[1])
+
+    def test_only_identical_heard_cuts_reused_and_new_good_requires_changed_cut(self):
+        self.prepare_unchanged_cut_reuse()
+        with self.assertRaises(ValueError):
+            validate_decision(self.case, {**self.payload, "freshHeardSegments": []})
+        row = validate_decision(self.case, self.payload)
+        heard = row["listenEvidenceReportedByBrowser"]
+        self.assertEqual(heard["freshHeardSegments"], [1])
+        self.assertEqual(heard["reusedHeardSegments"], [3])
+        self.assertEqual(heard["reuseSource"]["verdict"], "problem")
+        row["queueSha256"] = "new queue"
+        verify_review(self.case, row, "new queue")
+        row["listenEvidenceReportedByBrowser"]["freshHeardSegments"] = []
+        with self.assertRaises(ValueError):
+            verify_review(self.case, row, "new queue")
+
+    def test_reuse_does_not_cover_changed_words_source_clip_or_unsaved_history(self):
+        self.prepare_unchanged_cut_reuse()
+        before = deepcopy(self.case)
+        for mutate in (
+                lambda c: c.update(reusableHeardSegments=[1, 3]),
+                lambda c: c.update(audioSha256="different"),
+                lambda c: c.update(clipSha256="different"),
+                lambda c: c["words"][1].update(endMs=1101),
+                lambda c: c.update(listeningReuseSha256="different")):
+            case = deepcopy(before)
+            mutate(case)
+            with self.subTest(mutate=mutate), self.assertRaises(ValueError):
+                validate_decision(case, self.payload)
+        proof = read_json(Path(self.case["listeningReusePath"]))
+        proof["decision"]["note"] = "not the saved answer"
+        from listening_review import write_json
+        write_json(Path(self.case["listeningReusePath"]), proof)
+        self.case["listeningReuseSha256"] = digest_file(Path(self.case["listeningReusePath"]))
+        with self.assertRaises(ValueError):
+            validate_decision(self.case, self.payload)
 
     def test_hebrew_references_have_plain_letters(self):
         self.assertEqual(hebrew_number(15), "טו")

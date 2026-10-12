@@ -362,11 +362,27 @@ neighboring-word endpoint is a targeted proposal for a specific heard defect,
 with its original path evidence preserved. Forced alignment and geometry alone
 do not establish that a cut sounds correct.
 
+Letter endpoints can also stop before a spoken vowel finishes. When a reported
+defect falls between the recorded CTC endpoints, inspect the original decoded
+source waveform and spectrogram for that word. `source-inspected-word-boundaries-v1`
+records a diagnostic proposal separately from the unchanged CTC letter score,
+with immutable inspection and actual problem-answer evidence. This is not an
+automatic alignment policy: it needs a new source-bound GOOD answer covering
+the exact proposed cuts, plus all existing complete-chapter checks. Do not apply
+one offset or endpoint rule to an entire review queue.
+
 Archive the previous queue before installing revised candidates and preserve the
 append-only answer history. Verify the complete archive chain in an isolated
 recovery preview so all earlier chapter approvals remain intact. Changed cuts
 require new candidate hashes and fresh listening; unchanged cases retain their
-actual answers. Verified source-bound CTC and lossless clip evidence may be
+actual answers. For a revised verse, `listeningReusePath` and
+`listeningReuseSha256` can reference an immutable prior queue and actual saved
+answer. Only byte-identical word rows from the same original source, canonical
+text and lossless clip retain their actual completed listening evidence. The
+human must freshly hear every changed cut and explicitly give the revised verse
+a new answer. Provenance distinguishes `freshHeardSegments` from
+`reusedHeardSegments`; a prior PROBLEM answer supplies listening evidence only,
+never approval. Verified source-bound CTC and lossless clip evidence may be
 reused, with no claim of fresh inference. The original-MP3 worker and approved
 intervals remain independent of this preparation.
 
