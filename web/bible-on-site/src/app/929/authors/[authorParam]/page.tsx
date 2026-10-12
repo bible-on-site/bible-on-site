@@ -105,9 +105,6 @@ export default async function AuthorPage({
 		notFound();
 	}
 
-	// Edge rows may reference perakim outside the canon (e.g. non-distributable
-	// test data) — they cannot render a source link, so skip them instead of
-	// letting getPerekByPerekId fail the whole prerender.
 	const articles = (await getCachedAuthorArticles(author.id)).filter(
 		({ perekId }) =>
 			Number.isInteger(perekId) && perekId >= 1 && perekId <= 929,
