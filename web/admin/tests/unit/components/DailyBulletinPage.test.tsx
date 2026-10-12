@@ -58,7 +58,7 @@ describe("daily bulletin preview", () => {
 		mocks.read.mockReset().mockResolvedValue(null);
 		mocks.prepare.mockReset().mockResolvedValue(saved);
 	});
-		afterEach(() => {
+	afterEach(() => {
 		cleanup();
 		vi.useRealTimers();
 		vi.restoreAllMocks();

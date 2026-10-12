@@ -180,19 +180,27 @@ describe("browser auth helpers", () => {
 		const { getLoginUrl, getLogoutUrl } = await loadAuth();
 
 		const login = new URL(getLoginUrl("https://admin.example.com"));
-		expect(login.origin).toBe("https://example.auth.il-central-1.amazoncognito.com");
+		expect(login.origin).toBe(
+			"https://example.auth.il-central-1.amazoncognito.com",
+		);
 		expect(login.pathname).toBe("/oauth2/authorize");
 		expect(login.searchParams.get("response_type")).toBe("code");
 		expect(login.searchParams.get("client_id")).toBe("web-client");
-		expect(login.searchParams.get("redirect_uri")).toBe("https://admin.example.com/auth/callback");
+		expect(login.searchParams.get("redirect_uri")).toBe(
+			"https://admin.example.com/auth/callback",
+		);
 		expect(login.searchParams.get("scope")).toBe("openid email profile");
 		expect(login.searchParams.get("identity_provider")).toBe("AWSSSO");
 
 		const logout = new URL(getLogoutUrl("https://admin.example.com"));
-		expect(logout.origin).toBe("https://example.auth.il-central-1.amazoncognito.com");
+		expect(logout.origin).toBe(
+			"https://example.auth.il-central-1.amazoncognito.com",
+		);
 		expect(logout.pathname).toBe("/logout");
 		expect(logout.searchParams.get("client_id")).toBe("web-client");
-		expect(logout.searchParams.get("logout_uri")).toBe("https://admin.example.com");
+		expect(logout.searchParams.get("logout_uri")).toBe(
+			"https://admin.example.com",
+		);
 	});
 
 	it("exchanges authorization code for Cognito tokens", async () => {
@@ -208,7 +216,9 @@ describe("browser auth helpers", () => {
 		vi.stubGlobal("fetch", fetchMock);
 		const { exchangeCodeForTokens } = await loadAuth();
 
-		await expect(exchangeCodeForTokens("auth-code", "https://admin.example.com")).resolves.toEqual({
+		await expect(
+			exchangeCodeForTokens("auth-code", "https://admin.example.com"),
+		).resolves.toEqual({
 			id_token: "id-token",
 			access_token: "access-token",
 			expires_in: 3600,
@@ -225,7 +235,9 @@ describe("browser auth helpers", () => {
 		expect(body.get("code")).toBe("auth-code");
 		expect(body.get("client_id")).toBe("web-client");
 		expect(body.get("client_secret")).toBe("web-secret");
-		expect(body.get("redirect_uri")).toBe("https://admin.example.com/auth/callback");
+		expect(body.get("redirect_uri")).toBe(
+			"https://admin.example.com/auth/callback",
+		);
 	});
 
 	it("throws when token exchange fails", async () => {
@@ -239,9 +251,9 @@ describe("browser auth helpers", () => {
 		);
 		const { exchangeCodeForTokens } = await loadAuth();
 
-		await expect(exchangeCodeForTokens("bad-code", "https://admin.example.com")).rejects.toThrow(
-			"Token exchange failed: 400 bad code",
-		);
+		await expect(
+			exchangeCodeForTokens("bad-code", "https://admin.example.com"),
+		).rejects.toThrow("Token exchange failed: 400 bad code");
 	});
 
 	it("verifies browser ID tokens for the configured client", async () => {
@@ -249,14 +261,10 @@ describe("browser auth helpers", () => {
 		const { verifyIdToken } = await loadAuth();
 
 		await expect(verifyIdToken("id-token")).resolves.toBe(true);
-		expect(jwtVerifyMock).toHaveBeenCalledWith(
-			"id-token",
-			expect.anything(),
-			{
-				issuer: "https://cognito-idp.il-central-1.amazonaws.com/pool-id",
-				audience: "web-client",
-			},
-		);
+		expect(jwtVerifyMock).toHaveBeenCalledWith("id-token", expect.anything(), {
+			issuer: "https://cognito-idp.il-central-1.amazonaws.com/pool-id",
+			audience: "web-client",
+		});
 	});
 
 	it("returns false when browser ID token verification fails", async () => {
@@ -275,6 +283,8 @@ describe("browser auth helpers", () => {
 		expect(buildSessionCookie("token", 60, true)).toBe(
 			"admin_session=token; HttpOnly; Path=/; SameSite=Lax; Max-Age=60; Secure",
 		);
-		expect(buildClearSessionCookie()).toBe("admin_session=; HttpOnly; Path=/; Max-Age=0");
+		expect(buildClearSessionCookie()).toBe(
+			"admin_session=; HttpOnly; Path=/; Max-Age=0",
+		);
 	});
 });

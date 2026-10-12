@@ -143,7 +143,9 @@ describe("getLlmAssistantStatus", () => {
 				'{"entry":{"title":"כותרת מוצעת"},"linkedEntities":[{"entityId":"entity-person","displayName":"משה רבנו"}]}';
 			const fetchMock = stubOpenAiResponse(rawJson);
 
-			await expect(suggestTanahpediaEntryEdits(suggestionInput)).resolves.toEqual({
+			await expect(
+				suggestTanahpediaEntryEdits(suggestionInput),
+			).resolves.toEqual({
 				proposal: {
 					entry: { title: "כותרת מוצעת" },
 					linkedEntities: [
@@ -163,9 +165,9 @@ describe("getLlmAssistantStatus", () => {
 
 		it("requires a configured API key", async () => {
 			delete process.env.OPENAI_API_KEY;
-			await expect(suggestTanahpediaEntryEdits(suggestionInput)).rejects.toThrow(
-				"OPENAI_API_KEY אינו מוגדר",
-			);
+			await expect(
+				suggestTanahpediaEntryEdits(suggestionInput),
+			).rejects.toThrow("OPENAI_API_KEY אינו מוגדר");
 		});
 
 		it("reports an upstream HTTP error", async () => {
@@ -178,40 +180,38 @@ describe("getLlmAssistantStatus", () => {
 				}),
 			);
 
-			await expect(suggestTanahpediaEntryEdits(suggestionInput)).rejects.toThrow(
-				"OpenAI HTTP 429: rate limited",
-			);
+			await expect(
+				suggestTanahpediaEntryEdits(suggestionInput),
+			).rejects.toThrow("OpenAI HTTP 429: rate limited");
 		});
 
 		it("rejects empty and malformed model responses", async () => {
 			stubOpenAiResponse(undefined);
-			await expect(suggestTanahpediaEntryEdits(suggestionInput)).rejects.toThrow(
-				"OpenAI: empty response",
-			);
+			await expect(
+				suggestTanahpediaEntryEdits(suggestionInput),
+			).rejects.toThrow("OpenAI: empty response");
 
 			stubOpenAiResponse("not json");
-			await expect(suggestTanahpediaEntryEdits(suggestionInput)).rejects.toThrow(
-				"המודל החזיר JSON לא תקין",
-			);
+			await expect(
+				suggestTanahpediaEntryEdits(suggestionInput),
+			).rejects.toThrow("המודל החזיר JSON לא תקין");
 		});
 
 		it("rejects proposals for entities outside the entry", async () => {
-			stubOpenAiResponse(
-				'{"linkedEntities":[{"entityId":"entity-unlinked"}]}',
-			);
+			stubOpenAiResponse('{"linkedEntities":[{"entityId":"entity-unlinked"}]}');
 
-			await expect(suggestTanahpediaEntryEdits(suggestionInput)).rejects.toThrow(
-				"entityId שלא מקושר לערך: entity-unlinked",
-			);
+			await expect(
+				suggestTanahpediaEntryEdits(suggestionInput),
+			).rejects.toThrow("entityId שלא מקושר לערך: entity-unlinked");
 		});
 
 		it("fails before calling the model when the entry is missing", async () => {
 			loadEntryMock.mockResolvedValue(null);
 			const fetchMock = stubOpenAiResponse("{}");
 
-			await expect(suggestTanahpediaEntryEdits(suggestionInput)).rejects.toThrow(
-				"Entry not found",
-			);
+			await expect(
+				suggestTanahpediaEntryEdits(suggestionInput),
+			).rejects.toThrow("Entry not found");
 			expect(fetchMock).not.toHaveBeenCalled();
 		});
 	});

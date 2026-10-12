@@ -1,8 +1,8 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import {
-	EntryLinkPicker,
 	type EntryLinkOption,
+	EntryLinkPicker,
 } from "~/components/editor/EntryLinkPicker";
 
 const ENTRIES: EntryLinkOption[] = [
@@ -10,11 +10,13 @@ const ENTRIES: EntryLinkOption[] = [
 	{ id: "2", title: "יהושע בן נון", uniqueName: "יהושע" },
 ];
 
-function renderPicker(overrides: Partial<{
-	search: (q: string) => Promise<EntryLinkOption[]>;
-	onSelect: (entry: EntryLinkOption) => void;
-	selectedUniqueName: string;
-}> = {}) {
+function renderPicker(
+	overrides: Partial<{
+		search: (q: string) => Promise<EntryLinkOption[]>;
+		onSelect: (entry: EntryLinkOption) => void;
+		selectedUniqueName: string;
+	}> = {},
+) {
 	const search = overrides.search ?? vi.fn(async () => ENTRIES);
 	const onSelect = overrides.onSelect ?? vi.fn();
 	render(
@@ -63,8 +65,12 @@ describe("EntryLinkPicker", () => {
 
 	describe("when the search fails", () => {
 		it("shows an error instead of an empty list", async () => {
-			renderPicker({ search: vi.fn(async () => Promise.reject(new Error("x"))) });
-			expect(await screen.findByText("טעינת רשימת הערכים נכשלה.")).toBeInTheDocument();
+			renderPicker({
+				search: vi.fn(async () => Promise.reject(new Error("x"))),
+			});
+			expect(
+				await screen.findByText("טעינת רשימת הערכים נכשלה."),
+			).toBeInTheDocument();
 		});
 	});
 

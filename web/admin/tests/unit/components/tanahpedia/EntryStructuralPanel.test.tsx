@@ -407,6 +407,8 @@ describe("EntryStructuralPanel", () => {
 			"תאריך עברי לא תקין",
 		);
 		expect(input).toHaveValue("24480931");
-		expect(screen.getByRole("button", { name: "שמור תאריך אמרה" })).toBeEnabled();
+		expect(
+			screen.getByRole("button", { name: "שמור תאריך אמרה" }),
+		).toBeEnabled();
 	});
 });
