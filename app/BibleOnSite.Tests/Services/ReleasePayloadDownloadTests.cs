@@ -66,9 +66,10 @@ public class ReleasePayloadDownloadTests
         });
         var progress = new List<double>();
         var cacheDir = Path.Join(storage.Root, "pack");
+        using var client = new HttpClient(handler);
 
         var failure = await PadDeliveryService.DownloadReleasePayloadsAsync(
-            new HttpClient(handler), App().Object, "recitation_5", cacheDir,
+            client, App().Object, "recitation_5", cacheDir,
             new CollectProgress(progress), TestContext.Current.CancellationToken);
 
         failure.Should().BeNull();
@@ -93,9 +94,10 @@ public class ReleasePayloadDownloadTests
             Content = new ByteArrayContent(request.RequestUri!.AbsolutePath.EndsWith(Index) ? index : notes),
         });
         var cacheDir = Path.Join(storage.Root, "pack");
+        using var client = new HttpClient(handler);
 
         var failure = await PadDeliveryService.DownloadReleasePayloadsAsync(
-            new HttpClient(handler), App().Object, "perushim_notes", cacheDir,
+            client, App().Object, "perushim_notes", cacheDir,
             progress: null, TestContext.Current.CancellationToken);
 
         failure.Should().BeNull();
@@ -112,9 +114,10 @@ public class ReleasePayloadDownloadTests
         await using var storage = new TestStorage();
         var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.NotFound));
         var cacheDir = Path.Join(storage.Root, "pack");
+        using var client = new HttpClient(handler);
 
         var failure = await PadDeliveryService.DownloadReleasePayloadsAsync(
-            new HttpClient(handler), App().Object, "recitation_5", cacheDir,
+            client, App().Object, "recitation_5", cacheDir,
             progress: null, TestContext.Current.CancellationToken);
 
         failure.Should().NotBeNull().And.Contain("404");
@@ -132,9 +135,10 @@ public class ReleasePayloadDownloadTests
             : new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(notes) });
         var cacheDir = Path.Join(storage.Root, "pack");
         Directory.CreateDirectory(cacheDir);
+        using var client = new HttpClient(handler);
 
         var failure = await PadDeliveryService.DownloadReleasePayloadsAsync(
-            new HttpClient(handler), App().Object, "perushim_notes", cacheDir,
+            client, App().Object, "perushim_notes", cacheDir,
             progress: null, TestContext.Current.CancellationToken);
 
         failure.Should().BeNull();
@@ -156,9 +160,10 @@ public class ReleasePayloadDownloadTests
             return new HttpResponseMessage(HttpStatusCode.OK) { Content = content };
         });
         var cacheDir = Path.Join(storage.Root, "pack");
+        using var client = new HttpClient(handler);
 
         var failure = await PadDeliveryService.DownloadReleasePayloadsAsync(
-            new HttpClient(handler), App().Object, "recitation_5", cacheDir,
+            client, App().Object, "recitation_5", cacheDir,
             progress: null, TestContext.Current.CancellationToken);
 
         failure.Should().NotBeNull().And.Contain("Truncated");
@@ -177,9 +182,10 @@ public class ReleasePayloadDownloadTests
             Content = new ByteArrayContent([1]),
         });
         var cacheDir = Path.Join(storage.Root, "pack");
+        using var client = new HttpClient(handler);
 
         await FluentActions.Awaiting(() => PadDeliveryService.DownloadReleasePayloadsAsync(
-                new HttpClient(handler), App().Object, "recitation_5", cacheDir,
+                client, App().Object, "recitation_5", cacheDir,
                 progress: null, cancelled.Token))
             .Should().ThrowAsync<OperationCanceledException>();
     }

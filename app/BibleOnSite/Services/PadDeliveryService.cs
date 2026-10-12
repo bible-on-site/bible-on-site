@@ -67,7 +67,7 @@ public sealed partial class PadDeliveryService : IPadDeliveryService
             try
             {
                 await DownloadReleaseFileAsync(client, ReleasePayloadUri(appInfo, fileName),
-                    Path.Combine(cacheDir, fileName),
+                    Path.Join(cacheDir, fileName),
                     new ScaledProgress(index, files.Count, progress),
                     cancellationToken);
             }
@@ -493,7 +493,7 @@ partial class PadDeliveryService
     {
         ct.ThrowIfCancellationRequested();
         var cacheDir = AssetPackCacheDir(packName);
-        if (File.Exists(Path.Combine(cacheDir, PayloadFileName(packName))))
+        if (File.Exists(Path.Join(cacheDir, PayloadFileName(packName))))
         {
             return cacheDir;
         }
@@ -532,7 +532,7 @@ partial class PadDeliveryService
         try
         {
             // An extracted payload remains usable even if the OS evicts its pack.
-            if (File.Exists(Path.Combine(cacheDir, PayloadFileName(packName))))
+            if (File.Exists(Path.Join(cacheDir, PayloadFileName(packName))))
             {
                 return true;
             }
@@ -800,7 +800,7 @@ partial class PadDeliveryService
         var lines = new List<string> { "--- Background Assets (iOS) delivery diagnostics ---" };
 
         var cacheDir = AssetPackCacheDir(packName);
-        var cachedFile = Path.Combine(cacheDir, PayloadFileName(packName));
+        var cachedFile = Path.Join(cacheDir, PayloadFileName(packName));
         lines.Add($"Cache dir: {cacheDir}");
         lines.Add($"Cached file exists: {File.Exists(cachedFile)}");
         if (File.Exists(cachedFile))

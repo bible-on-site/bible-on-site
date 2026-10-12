@@ -7,7 +7,6 @@ import unittest.mock
 import zipfile
 
 import verify_recitation_assets as verify_module
-from verify_recitation_assets import verify
 
 
 class ReleaseArtifactTests(unittest.TestCase):
@@ -23,10 +22,10 @@ class ReleaseArtifactTests(unittest.TestCase):
                     archive.writestr("recitation-catalog.json", catalog.read_bytes())
                     archive.writestr("recitation_1.zip", content)
                 if content == audio:
-                    verify(package, catalog, "Windows")
+                    verify_module.verify(package, catalog, "Windows")
                 else:
                     with self.assertRaises(ValueError):
-                        verify(package, catalog, "Windows")
+                        verify_module.verify(package, catalog, "Windows")
 
     def test_aab_requires_every_matching_module_and_excludes_base_audio(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -44,9 +43,9 @@ class ReleaseArtifactTests(unittest.TestCase):
                         archive.writestr("recitation_1/assets/recitation_1.zip", b"corrupt" if problem == "corrupt" else audio)
                     if problem == "base":
                         archive.writestr("base/assets/recitation_1.zip", audio)
-                if problem is None: verify(package, path, "Android")
+                if problem is None: verify_module.verify(package, path, "Android")
                 else:
-                    with self.assertRaises(ValueError): verify(package, path, "Android")
+                    with self.assertRaises(ValueError): verify_module.verify(package, path, "Android")
 
     def _write_ios_fixture(self, root, audio, catalog_path, problems=()):
         catalog = {"books": [{"seferId": 1, "sha256": hashlib.sha256(audio).hexdigest()}]}
@@ -100,10 +99,10 @@ class ReleaseArtifactTests(unittest.TestCase):
                 package, packs, aars, payloads, extract = self._write_ios_fixture(
                     root, audio, root / "catalog.json", {problem} - {None})
                 if problem is None:
-                    verify(package, root / "catalog.json", "iOS", packs, aars, payloads, extract)
+                    verify_module.verify(package, root / "catalog.json", "iOS", packs, aars, payloads, extract)
                 else:
                     with self.assertRaises(ValueError):
-                        verify(package, root / "catalog.json", "iOS", packs, aars, payloads, extract)
+                        verify_module.verify(package, root / "catalog.json", "iOS", packs, aars, payloads, extract)
 
     def test_aa_payload_rejects_non_apple_archive_bytes(self):
         with tempfile.TemporaryDirectory() as temporary, \
