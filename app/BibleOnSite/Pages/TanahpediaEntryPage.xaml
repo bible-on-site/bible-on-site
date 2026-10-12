@@ -129,6 +129,10 @@
                                                                FontSize="12"
                                                                IsVisible="{Binding HasSource}"
                                                                TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
+                                                        <Label Text="{Binding PersonSourceCitation, StringFormat='מקור האיש: {0}'}"
+                                                               FontSize="12"
+                                                               IsVisible="{Binding HasPersonSource}"
+                                                               TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
                                                     </VerticalStackLayout>
                                                 </DataTemplate>
                                             </BindableLayout.ItemTemplate>

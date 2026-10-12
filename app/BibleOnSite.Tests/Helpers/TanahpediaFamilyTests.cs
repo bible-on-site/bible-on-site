@@ -201,7 +201,75 @@ public class TanahpediaFamilyTests
 
         var row = TanahpediaFamily.BuildSections(family)[0].Rows[0];
 
-        row.Meta.Should().Be("פילגש · גירושין (2900-01-01-2915-01-01)");
+        row.Meta.Should().Be("פילגש · התחלה 2900-01-01 · גירושין 2915-01-01");
+    }
+
+    [Fact]
+    public void BuildSections_SpouseMeta_OngoingUnion_ShowsStartDate()
+    {
+        var family = new TanahpediaPersonFamily
+        {
+            Spouses =
+            [
+                new TanahpediaFamilySpouseEdge
+                {
+                    Related = Person("לאה"),
+                    UnionType = "MARRIAGE",
+                    UnionStartDate = 29000101,
+                },
+            ],
+        };
+
+        var row = TanahpediaFamily.BuildSections(family)[0].Rows[0];
+
+        // A live union has no end reason — the start date must still surface.
+        row.Meta.Should().Be("נישואין · התחלה 2900-01-01");
+    }
+
+    [Fact]
+    public void BuildSections_SpouseMeta_EndDateWithoutReason_UsesGenericEnd()
+    {
+        var family = new TanahpediaPersonFamily
+        {
+            Spouses =
+            [
+                new TanahpediaFamilySpouseEdge
+                {
+                    Related = Person("לאה"),
+                    UnionType = "MARRIAGE",
+                    UnionEndDate = 29150101,
+                },
+            ],
+        };
+
+        var row = TanahpediaFamily.BuildSections(family)[0].Rows[0];
+
+        row.Meta.Should().Be("נישואין · סיום 2915-01-01");
+    }
+
+    [Fact]
+    public void BuildSections_SpouseCitations_UnionAndPersonKeptSeparate()
+    {
+        var family = new TanahpediaPersonFamily
+        {
+            Spouses =
+            [
+                new TanahpediaFamilySpouseEdge
+                {
+                    Related = Person("רחל"),
+                    UnionType = "MARRIAGE",
+                    SourceCitation = "בראשית כט כח",
+                    PersonSourceCitation = "בראשית כט ו",
+                },
+            ],
+        };
+
+        var row = TanahpediaFamily.BuildSections(family)[0].Rows[0];
+
+        // SourceCitation stays the union/marriage citation; the spouse's own
+        // (e.g. birth-verse) citation renders separately — it must not replace it.
+        row.SourceCitation.Should().Be("בראשית כט כח");
+        row.PersonSourceCitation.Should().Be("בראשית כט ו");
     }
 
     [Fact]
@@ -360,8 +428,41 @@ public class TanahpediaFamilyTests
     }
 
     [Fact]
-    public void BuildSections_RepeatEdges_MarkOpinionOrdinals()
+    public void BuildSections_RepeatEdgesInOneOpinionGroup_MarkInterpretationOrdinals()
     {
+        // Two union edges for the SAME partner inside ONE alt group are
+        // interpretations of that relationship — the website's שיטה א'/ב'.
+        var family = new TanahpediaPersonFamily
+        {
+            Spouses =
+            [
+                new TanahpediaFamilySpouseEdge
+                {
+                    Related = Person("אישה", entityId: "e-wife"),
+                    UnionType = "MARRIAGE",
+                    AltGroupId = "alt-1",
+                },
+                new TanahpediaFamilySpouseEdge
+                {
+                    Related = Person("אישה", entityId: "e-wife"),
+                    UnionType = "PILEGESH",
+                    AltGroupId = "alt-1",
+                },
+            ],
+        };
+
+        var rows = TanahpediaFamily.BuildSections(family)[0].Rows;
+
+        rows.Should().HaveCount(2);
+        rows[0].Meta.Should().Be("חלופי · שיטה א' · נישואין");
+        rows[1].Meta.Should().Be("חלופי · שיטה ב' · פילגש");
+    }
+
+    [Fact]
+    public void BuildSections_SamePartnerAcrossAltGroups_SeparateAlternatives()
+    {
+        // Same partner modeled by two competing opinion groups — two separate
+        // alternatives, not interpretations: no ordinals, each marked חלופי.
         var family = new TanahpediaPersonFamily
         {
             Spouses =
@@ -384,8 +485,158 @@ public class TanahpediaFamilyTests
         var rows = TanahpediaFamily.BuildSections(family)[0].Rows;
 
         rows.Should().HaveCount(2);
+        rows[0].Meta.Should().Be("חלופי · נישואין");
+        rows[1].Meta.Should().Be("חלופי · פילגש");
+    }
+
+    [Fact]
+    public void BuildSections_AlternativeSpouses_MarkedAsAlternatives()
+    {
+        // Competing models pick different partners — never displayed as
+        // simultaneous wives.
+        var family = new TanahpediaPersonFamily
+        {
+            Spouses =
+            [
+                new TanahpediaFamilySpouseEdge
+                {
+                    Related = Person("לאה", entityId: "e-leah"),
+                    UnionType = "MARRIAGE",
+                    UnionOrder = 1,
+                },
+                new TanahpediaFamilySpouseEdge
+                {
+                    Related = Person("רחל", entityId: "e-rachel"),
+                    UnionType = "MARRIAGE",
+                    UnionOrder = 2,
+                    AltGroupId = "alt-1",
+                },
+                new TanahpediaFamilySpouseEdge
+                {
+                    Related = Person("בלהה", entityId: "e-bilhah"),
+                    UnionType = "MARRIAGE",
+                    UnionOrder = 3,
+                    AltGroupId = "alt-2",
+                },
+            ],
+        };
+
+        var rows = TanahpediaFamily.BuildSections(family)[0].Rows;
+
+        rows.Should().HaveCount(3);
+        rows[0].DisplayName.Should().Be("לאה");
+        rows[0].Meta.Should().Be("נישואין");
+        rows[1].DisplayName.Should().Be("רחל");
+        rows[1].Meta.Should().Be("חלופי · נישואין");
+        rows[2].DisplayName.Should().Be("בלהה");
+        rows[2].Meta.Should().Be("חלופי · נישואין");
+    }
+
+    [Fact]
+    public void BuildSections_MarriageAndForbiddenPair_FusedIntoInterpretations()
+    {
+        // The website fuses a canonical נישואין with a same-partner,
+        // same-union-order קשר פסול עם גויה edge — even across alt groups —
+        // into one partner card with interpretations.
+        var family = new TanahpediaPersonFamily
+        {
+            Spouses =
+            [
+                new TanahpediaFamilySpouseEdge
+                {
+                    Related = Person("אישה", entityId: "e-wife"),
+                    UnionType = "MARRIAGE",
+                    UnionOrder = 1,
+                },
+                new TanahpediaFamilySpouseEdge
+                {
+                    Related = Person("אישה", entityId: "e-wife"),
+                    UnionType = "FORBIDDEN_WITH_GENTILE",
+                    UnionOrder = 1,
+                    AltGroupId = "alt-1",
+                },
+            ],
+        };
+
+        var rows = TanahpediaFamily.BuildSections(family)[0].Rows;
+
+        rows.Should().HaveCount(2);
+        // One partner, two interpretations — the canonical marriage edge stays
+        // unmarked; only the alternative model's edge is flagged חלופי.
         rows[0].Meta.Should().Be("שיטה א' · נישואין");
-        rows[1].Meta.Should().Be("שיטה ב' · פילגש");
+        rows[1].Meta.Should().Be("חלופי · שיטה ב' · קשר פסול עם גויה");
+    }
+
+    [Fact]
+    public void BuildSections_AlternativeParents_MarkedAsAlternatives()
+    {
+        // A child with two alternative fathers on distinct alt groups —
+        // the canonical block first, alternatives marked חלופי.
+        var family = new TanahpediaPersonFamily
+        {
+            Parents =
+            [
+                new TanahpediaFamilyParentEdge
+                {
+                    Related = Person("אבי-א", entityId: "e-father-a"),
+                    ParentRole = "FATHER",
+                    RelationshipType = "BIOLOGICAL",
+                },
+                new TanahpediaFamilyParentEdge
+                {
+                    Related = Person("אבי-ב", entityId: "e-father-b"),
+                    ParentRole = "FATHER",
+                    RelationshipType = "BIOLOGICAL",
+                    AltGroupId = "alt-1",
+                },
+                new TanahpediaFamilyParentEdge
+                {
+                    Related = Person("אבי-ג", entityId: "e-father-c"),
+                    ParentRole = "FATHER",
+                    RelationshipType = "BIOLOGICAL",
+                    AltGroupId = "alt-2",
+                },
+            ],
+        };
+
+        var rows = TanahpediaFamily.BuildSections(family)[0].Rows;
+
+        rows.Should().HaveCount(3);
+        rows[0].Meta.Should().Be("אב");
+        rows[1].Meta.Should().Be("חלופי · אב");
+        rows[2].Meta.Should().Be("חלופי · אב");
+    }
+
+    [Fact]
+    public void BuildSections_AlternativeChildren_MarkedAsAlternatives()
+    {
+        var family = new TanahpediaPersonFamily
+        {
+            Children =
+            [
+                new TanahpediaFamilyChildEdge
+                {
+                    Related = Person("בן-א", entityId: "e-son-a"),
+                    RelationshipType = "BIOLOGICAL",
+                },
+                new TanahpediaFamilyChildEdge
+                {
+                    Related = Person("בן-ב", entityId: "e-son-b"),
+                    RelationshipType = "BIOLOGICAL",
+                    AltGroupId = "alt-1",
+                },
+            ],
+        };
+
+        // Each opinion block is its own section — canonical first, the
+        // alternative block flagged חלופי in its title (website parity).
+        var sections = TanahpediaFamily.BuildSections(family);
+
+        sections.Should().HaveCount(2);
+        sections[0].Title.Should().Be("ילדים");
+        sections[0].Rows.Should().ContainSingle().Which.DisplayName.Should().Be("בן-א");
+        sections[1].Title.Should().Be("חלופי · ילדים");
+        sections[1].Rows.Should().ContainSingle().Which.DisplayName.Should().Be("בן-ב");
     }
 
     [Fact]
