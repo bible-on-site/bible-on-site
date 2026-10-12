@@ -127,6 +127,17 @@ jobs:
         id: nuget-key
         run: node ${{ github.workspace }}/devops/github/ci/nuget-cache-key.mjs
 
+      # hashFiles() in step templates dies on a hard 120s budget on loaded
+      # runners (#2184); a run step computes the same input without the clock.
+      - name: Hash npm lockfile inputs
+        id: npm-key
+        run: node ${{ github.workspace }}/devops/github/ci/files-hash.mjs devops/package-lock.json app/mobile-e2e/package-lock.json
+
+      - name: Hash AVD readiness script inputs
+        id: readiness-key
+        if: matrix.platform == 'Android'
+        run: node ${{ github.workspace }}/devops/github/ci/files-hash.mjs app/mobile-e2e/android-readiness.mjs app/mobile-e2e/android-ready.mjs
+
       - name: Restore NuGet packages
         id: nuget-cache
         uses: actions/cache/restore@v6
@@ -158,7 +169,7 @@ jobs:
         uses: actions/cache/restore@v6
         with:
           path: ~/.npm
-          key: ${{ runner.os }}-npm-mobile-e2e-${{ hashFiles('devops/package-lock.json', 'app/mobile-e2e/package-lock.json') }}
+          key: ${{ runner.os }}-npm-mobile-e2e-${{ steps.npm-key.outputs.hash }}
           restore-keys: ${{ runner.os }}-npm-mobile-e2e-
 
       # The coverage tree baseline is published only by successful master push
@@ -331,7 +342,7 @@ jobs:
         uses: actions/cache/restore@v6
         with:
           path: ${{ steps.sdk-key.outputs.avd-home }}
-          key: android-avd-${{ steps.sdk-key.outputs.os-tag }}-${{ runner.arch }}-api${{ env.ANDROID_API_LEVEL }}-${{ env.ANDROID_TARGET }}-${{ env.ANDROID_ABI }}-${{ env.AVD_PROFILE }}-swiftshader-${{ steps.sdk-key.outputs.emulator-key }}-${{ env.AVD_SNAPSHOT_RECIPE }}-${{ hashFiles('app/mobile-e2e/android-readiness.mjs', 'app/mobile-e2e/android-ready.mjs') }}
+          key: android-avd-${{ steps.sdk-key.outputs.os-tag }}-${{ runner.arch }}-api${{ env.ANDROID_API_LEVEL }}-${{ env.ANDROID_TARGET }}-${{ env.ANDROID_ABI }}-${{ env.AVD_PROFILE }}-swiftshader-${{ steps.sdk-key.outputs.emulator-key }}-${{ env.AVD_SNAPSHOT_RECIPE }}-${{ steps.readiness-key.outputs.hash }}
 
       - name: Validate restored AVD snapshot
         if: matrix.platform == 'Android' && steps.avd-cache.outputs.cache-hit == 'true'
