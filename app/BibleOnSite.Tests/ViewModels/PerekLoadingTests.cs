@@ -107,6 +107,23 @@ public class PerekLoadingTests
     }
 
     [Fact]
+    public async Task OpeningReader_LoadsOnlyTheRequestedChapterBeforePublishingCarousel()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize(allChapters: true);
+        await fixture.Model.LoadByPerekIdAsync(2);
+
+        fixture.Model.CarouselPerakim.Should().HaveCount(929);
+        fixture.Model.CarouselPerakim.Where(perek => perek.Pasukim.Count > 0)
+            .Select(perek => perek.PerekId).Should().Equal([2],
+                "speculative neighbor loading must not delay opening a search result");
+
+        await fixture.Model.PreloadAdjacentPasukimAsync(2);
+        fixture.Model.CarouselPerakim.Single(perek => perek.PerekId == 1).Pasukim.Should().NotBeEmpty();
+        fixture.Model.CarouselPerakim.Single(perek => perek.PerekId == 3).Pasukim.Should().NotBeEmpty();
+    }
+
+    [Fact]
     public async Task Carousel_PreloadsAdjacentData_AndNavigatesWithoutRebuildingCollection()
     {
         await using var fixture = new Fixture();

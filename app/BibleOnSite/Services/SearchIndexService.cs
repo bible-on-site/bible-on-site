@@ -36,7 +36,7 @@ public sealed class SearchIndexService : IAsyncDisposable
         _notes = notes;
         _indexPath = indexPath;
         _index = new SQLiteAsyncConnection(indexPath);
-        _initialization = InitializeIndexAsync();
+        _initialization = Task.Run(InitializeIndexAsync);
     }
 
     public bool CommentaryAvailable { get; private set; }
@@ -49,7 +49,13 @@ public sealed class SearchIndexService : IAsyncDisposable
         IReadOnlySet<int> books, int limit, CancellationToken cancellationToken, IProgress<string>? progress) =>
         SearchAsync(query, filters, books, limit, cancellationToken, progress, SearchOrdering.Relevant);
 
-    public async Task<List<SearchHit>> SearchAsync(string query, IReadOnlySet<SearchFilter> filters,
+    public Task<List<SearchHit>> SearchAsync(string query, IReadOnlySet<SearchFilter> filters,
+        IReadOnlySet<int> books, int limit, CancellationToken cancellationToken, IProgress<string>? progress, SearchOrdering ordering) =>
+        // SQLite awaits alone do not move blob decoding, vocabulary expansion or
+        // text scoring off the caller's dispatcher. Keep the whole service on a worker.
+        Task.Run(() => SearchCoreAsync(query, filters, books, limit, cancellationToken, progress, ordering), cancellationToken);
+
+    private async Task<List<SearchHit>> SearchCoreAsync(string query, IReadOnlySet<SearchFilter> filters,
         IReadOnlySet<int> books, int limit, CancellationToken cancellationToken, IProgress<string>? progress, SearchOrdering ordering)
     {
         var terms = SearchText.Tokens(query);
@@ -74,7 +80,7 @@ public sealed class SearchIndexService : IAsyncDisposable
                 ObjectDisposedException.ThrowIf(_disposed, this);
                 if (!_buildTasks.TryGetValue(table, out build!) || build.IsCompleted)
                 {
-                    _buildTasks[table] = build = EnsureIndexAsync(table);
+                    _buildTasks[table] = build = Task.Run(() => EnsureIndexAsync(table));
                 }
             }
             await build.WaitAsync(cancellationToken);
@@ -211,6 +217,21 @@ public sealed class SearchIndexService : IAsyncDisposable
     private async Task EnsureIndexAsync(string table)
     {
         await _initialization;
+        if (table == "verses" && _notes?.HasInstalledSearchIndex == true)
+        {
+            // The delivered DB includes both indexes. Adopt before building
+            // verses, preserving the notes -> verses lock order used below.
+            await _gates["notes"].WaitAsync();
+            try
+            {
+                var source = await _notes.GetSearchConnectionAsync();
+                if (source != null)
+                {
+                    await TryAdoptDeliveredIndexAsync(source);
+                }
+            }
+            finally { _gates["notes"].Release(); }
+        }
         await _gates[table].WaitAsync();
         try
         {
@@ -325,6 +346,7 @@ public sealed class SearchIndexService : IAsyncDisposable
             await using var staged = File.OpenRead(deliveredPath);
             await AtomicFile.CopyAsync(staged, _indexPath);
             _index = new SQLiteAsyncConnection(_indexPath);
+            _ready.Clear();
             await OpenIndexAsync();
         }
         finally

@@ -163,6 +163,14 @@ describe("detectChanges", () => {
 		assert.equal(changes.app.module_changed, false);
 	});
 
+	test("bundled scripture changes regenerate the delivered search index", () => {
+		const changes = detectChanges([
+			"app/BibleOnSite/Resources/Raw/sefaria-dump-5784-sivan-4.tanah_view.sqlite",
+		]);
+		assert.equal(changes.perushim_pipeline.module_changed, true);
+		assert.equal(changes.app.module_changed, true);
+	});
+
 	test("the perushim pipeline is also part of the data module", () => {
 		const changes = detectChanges([
 			"data/sefaria/pipelines/perushim-view/src/main.rs",

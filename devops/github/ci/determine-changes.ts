@@ -81,6 +81,10 @@ export const MODULES = {
 	},
 	perushim_pipeline: {
 		directory: "data/sefaria/pipelines/perushim-view",
+		// The delivered FTS index also includes the app's bundled scripture.
+		extraModulePaths: [
+			"app/BibleOnSite/Resources/Raw/sefaria-dump-5784-sivan-4.tanah_view.sqlite",
+		],
 		ciPaths: SHARED_CI_PATHS,
 	},
 } satisfies Record<string, ModuleRule>;
