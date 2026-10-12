@@ -53,7 +53,7 @@ public class PerekDataService
     /// <summary>
     /// Loads all sefarim and perakim from the database.
     /// </summary>
-    public async Task LoadAsync()
+    public virtual async Task LoadAsync()
     {
         if (_isLoaded)
         {
@@ -227,7 +227,7 @@ public class PerekDataService
     /// <summary>
     /// Loads the pasukim text for a given perek.
     /// </summary>
-    public async Task<List<Pasuk>> LoadPasukimAsync(int perekId)
+    public virtual async Task<List<Pasuk>> LoadPasukimAsync(int perekId)
     {
         var db = await _databaseService.GetDatabaseAsync();
 
