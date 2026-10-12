@@ -9,8 +9,13 @@
  * sources widens each test to the files those files can reach.
  *
  * Conservative over-approximation by construction:
- * - `use` resolution maps every path prefix to its module file (an imported
- *   item need not be defined there — re-export chains add edges anyway).
+ * - `use` trees expand recursively (`a::b::{C, d::E}`) and each head edges
+ *   to its longest resolvable module prefix — the item's real module;
+ *   intermediate index modules are compile-time plumbing, not runtime
+ *   evidence. `mod child;` declarations edge parent → child module file so
+ *   `child::fn()` path calls (invisible to `use`) still attribute.
+ * - `self`/`super`/`crate`/`entities` prefixes resolve against the
+ *   containing module, including inline `mod` scopes.
  * - Router/dispatch files (`startup/app.rs`, `startup/schema_builder.rs`)
  *   land in `sharedFiles`, not per-test evidence — a change to the wiring
  *   every request flows through selects the whole suite.
