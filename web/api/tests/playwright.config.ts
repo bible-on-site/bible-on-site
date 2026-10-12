@@ -1,3 +1,4 @@
+import { join } from "node:path";
 import {
 	defineConfig,
 	devices,
@@ -11,6 +12,16 @@ import {
 
 const WEB_SERVER_URL = "http://127.0.0.1:3003";
 const isNonInteractive = isCI || isCopilot;
+
+// Deterministic e2e-impact evidence (#2085): under coverage runs the shared
+// reporter writes discovered/test-results JSON here. The API suite has no
+// per-test process coverage — Rust llvm-cov is suite-level — so the devops
+// collector attributes tests to source files statically instead.
+const E2E_IMPACT_DIR = join(__dirname, "..", ".coverage", "e2e-impact");
+if (shouldMeasureCov) {
+	process.env.E2E_IMPACT_DIR = E2E_IMPACT_DIR;
+}
+
 export default defineConfig({
 	testMatch: ["**/*.test.ts"],
 	testDir: "./e2e",
@@ -40,6 +51,9 @@ export default defineConfig({
 
 	reporter: [
 		["list"],
+		...(shouldMeasureCov
+			? [["../../shared/tests-util/e2e-impact.mjs"] as ReporterDescription]
+			: []),
 		// [
 		// 	"html",
 		// 	{
