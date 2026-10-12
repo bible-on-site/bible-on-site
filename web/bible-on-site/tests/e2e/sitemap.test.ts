@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 
 // These values match the constants in src/app/sitemap.ts
 const SITEMAP_SECTIONS = [
+	"לוח",
 	"dailyBulletin",
 	"whatsappGroup",
 	"tos",
