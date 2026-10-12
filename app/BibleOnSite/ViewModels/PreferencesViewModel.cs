@@ -10,10 +10,11 @@ namespace BibleOnSite.ViewModels;
 /// Uses local storage (MAUI Preferences); Firebase sync can be added later as enhancement.
 /// </summary>
 #pragma warning disable S2333 // RelayCommand generates partial implementations.
-public partial class PreferencesViewModel : ObservableObject
+public partial class PreferencesViewModel : DivineNamePreferencesViewModel
 #pragma warning restore S2333
 {
     private readonly PreferencesService _preferencesService;
+    protected override PreferencesService MaskingPreferences => _preferencesService;
     private readonly PerushimNotesService _perushimNotesService;
     private readonly RecitationService _recitationService;
     private readonly IAppNavigator _navigator;
@@ -227,6 +228,7 @@ public partial class PreferencesViewModel : ObservableObject
 
     private void NotifyPreferenceState()
     {
+        NotifyDivineNameMaskingChanged();
         OnPropertyChanged(nameof(FontFactor));
         OnPropertyChanged(nameof(LastLearntPerek));
         OnPropertyChanged(nameof(PerekToLoad));

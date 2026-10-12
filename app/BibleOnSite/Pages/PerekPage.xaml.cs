@@ -1454,6 +1454,16 @@ public partial class PerekPage : ContentPage, IQueryAttributable
     }
 
     /// <summary>
+    /// הסתר שם השם menu item - toggles divine-name display masking. The change
+    /// persists through PreferencesService and bumps DivineNameMasking.Revision,
+    /// which the pasukim MultiBinding and TikkunFlowView pick up to re-render.
+    /// </summary>
+    private void OnDivineNameMaskingTapped(object? sender, TappedEventArgs e)
+    {
+        _viewModel.DivineNameMaskingEnabled = !_viewModel.DivineNameMaskingEnabled;
+    }
+
+    /// <summary>
     /// Tap on the תיקון קוראים text - toggles niqqud+taamim for the entire perek.
     /// Runs on a dedicated view so it cannot trigger selection, playback or navigation.
     /// </summary>

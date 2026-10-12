@@ -202,18 +202,43 @@ public partial class PerekViewModel : ObservableObject
 
         // Sync FontFactor from preferences and listen for changes
         _fontFactor = _preferencesService.FontFactor;
+        _divineNameMaskingRevision = DivineNameMasking.Revision;
         _preferencesService.PreferencesChanged += (_, _) =>
         {
             if (Math.Abs(_fontFactor - _preferencesService.FontFactor) > 0.001)
             {
                 FontFactor = _preferencesService.FontFactor;
             }
+            // הסתר שם השם changed → re-raise the toggle and rebuild the
+            // rendered text (Pasuk.FormattedText caches are keyed on
+            // DivineNameMasking.Revision; the MultiBinding on the pasukim
+            // collection and TikkunFlowView.MaskingRevision pick this up).
+            if (_divineNameMaskingRevision != DivineNameMasking.Revision)
+            {
+                DivineNameMaskingRevision = DivineNameMasking.Revision;
+            }
+            OnPropertyChanged(nameof(DivineNameMaskingEnabled));
         };
     }
 
     /// <summary>Font scaling factor from user preferences (0.5–2.0).</summary>
     [ObservableProperty]
     private double _fontFactor = 1.0;
+
+    /// <summary>
+    /// Bumped whenever הסתר שם השם settings change. Bound into the pasukim
+    /// ItemsSource MultiBinding and TikkunFlowView.MaskingRevision so every
+    /// realized or recycled text row re-renders with the new masking.
+    /// </summary>
+    [ObservableProperty]
+    private int _divineNameMaskingRevision;
+
+    /// <summary>הסתר שם השם toggle — persisted through PreferencesService.</summary>
+    public bool DivineNameMaskingEnabled
+    {
+        get => _preferencesService.DivineNameMaskingEnabled;
+        set => _preferencesService.DivineNameMaskingEnabled = value;
+    }
 
     // The default loader returns null — perek content is loaded asynchronously
     // through PerekDataService.LoadByPerekIdAsync() instead.

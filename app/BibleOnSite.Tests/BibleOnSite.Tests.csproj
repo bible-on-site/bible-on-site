@@ -40,6 +40,7 @@
     <Compile Include="..\BibleOnSite\ViewModels\RecitationPreferencesViewModel.cs" Link="ViewModels\RecitationPreferencesViewModel.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\RecitationPacksViewModel.cs" Link="ViewModels\RecitationPacksViewModel.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\ExtensionPacksViewModel.cs" Link="ViewModels\ExtensionPacksViewModel.cs" />
+    <Compile Include="..\BibleOnSite\ViewModels\DivineNamePreferencesViewModel.cs" Link="ViewModels\DivineNamePreferencesViewModel.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\DisplayPreferencesViewModel.cs" Link="ViewModels\DisplayPreferencesViewModel.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\PerekPreferencesViewModel.cs" Link="ViewModels\PerekPreferencesViewModel.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\SoundPreferencesViewModel.cs" Link="ViewModels\SoundPreferencesViewModel.cs" />

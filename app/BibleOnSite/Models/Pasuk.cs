@@ -54,6 +54,10 @@ public partial class Pasuk : ObservableObject
     /// </summary>
     private List<PasukSegment> _segments = new();
     private WeakReference<FormattedString>? _formattedText;
+    // The masking revision the cached FormattedString was built under — a
+    // הסתר שם השם settings change bumps DivineNameMasking.Revision, which
+    // invalidates the cache without touching the canonical segments.
+    private int _formattedRevision = -1;
 
     public List<PasukSegment> Segments
     {
@@ -80,12 +84,14 @@ public partial class Pasuk : ObservableObject
     {
         get
         {
-            if (_formattedText?.TryGetTarget(out var formatted) == true)
+            if (_formattedText?.TryGetTarget(out var formatted) == true &&
+                _formattedRevision == DivineNameMasking.Revision)
             {
                 return formatted;
             }
 
             formatted = BuildFormattedText();
+            _formattedRevision = DivineNameMasking.Revision;
             // MAUI 10.0.90 Labels subscribe to a FormattedString. Retaining it
             // strongly in a buffered perek can also retain recycled Labels.
             _formattedText = new WeakReference<FormattedString>(formatted);
@@ -116,17 +122,19 @@ public partial class Pasuk : ObservableObject
             switch (segment.Type)
             {
                 case SegmentType.Ktiv:
-                    // Ktiv: always show the written text
+                    // Ktiv: always show the written text (masked for display
+                    // only — segment.Value stays canonical)
                     if (!string.IsNullOrEmpty(segment.Value))
                     {
-                        plain.Append(segment.Value);
+                        plain.Append(DivineNameMasking.MaskText(segment.Value));
                     }
                     break;
 
                 case SegmentType.Qri:
                     if (segment.IsQriDifferentThanKtiv)
                     {
-                        // Qri differs from ktiv: show "(קְרִי: value)" with special styling
+                        // Qri differs from ktiv: show "(קְרִי: value)" with special styling.
+                        // MaskText (not MaskValue) — a bracketed qri can hold several words.
                         FlushPlain();
                         formatted.Spans.Add(new Span
                         {
@@ -136,7 +144,7 @@ public partial class Pasuk : ObservableObject
                         });
                         formatted.Spans.Add(new Span
                         {
-                            Text = segment.Value,
+                            Text = DivineNameMasking.MaskText(segment.Value),
                             TextColor = Color.FromArgb(RecitingSegment == i + 1 ? "#1c427b" : "#637598"),
                             BackgroundColor = RecitingSegment == i + 1 ? Color.FromArgb("#e9eff8") : null
                         });
@@ -157,14 +165,14 @@ public partial class Pasuk : ObservableObject
                                 FlushPlain();
                                 formatted.Spans.Add(new Span
                                 {
-                                    Text = segment.Value,
+                                    Text = DivineNameMasking.MaskText(segment.Value),
                                     TextColor = Color.FromArgb("#1c427b"),
                                     BackgroundColor = Color.FromArgb("#e9eff8")
                                 });
                             }
                             else
                             {
-                                plain.Append(segment.Value);
+                                plain.Append(DivineNameMasking.MaskText(segment.Value));
                             }
                         }
                     }
