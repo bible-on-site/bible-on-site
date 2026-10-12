@@ -23,7 +23,7 @@ internal static class PerushNoteBlob
 
     internal readonly record struct Note(int PerushId, int Pasuk, int NoteIdx, string Content);
 
-    internal static List<Note> Decode(byte[] blob)
+    internal static List<Note> Decode(byte[] blob, Func<int, int, bool>? include = null)
     {
         using var stream = new ZLibStream(new MemoryStream(blob, writable: false), CompressionMode.Decompress);
         using var reader = new BinaryReader(stream, Encoding.UTF8);
@@ -35,6 +35,7 @@ internal static class PerushNoteBlob
 
         var count = reader.ReadUInt32();
         var notes = new List<Note>((int)Math.Min(count, 1 << 20));
+        Span<byte> skipBuffer = stackalloc byte[4096];
         for (var i = 0; i < count; i++)
         {
             var perushId = reader.ReadUInt32();
@@ -45,6 +46,11 @@ internal static class PerushNoteBlob
             {
                 throw new InvalidDataException("Perushim note blob record is implausibly large.");
             }
+            if (include != null && !include((int)perushId, (int)pasuk))
+            {
+                SkipContent(stream, len, skipBuffer);
+                continue;
+            }
             var content = reader.ReadBytes((int)len);
             if (content.Length != len)
             {
@@ -53,6 +59,47 @@ internal static class PerushNoteBlob
             notes.Add(new Note((int)perushId, (int)pasuk, (int)noteIdx, Encoding.UTF8.GetString(content)));
         }
         return notes;
+    }
+
+    internal readonly record struct Header(int PerushId, int Pasuk, int NoteIdx, int ContentBytes);
+
+    /// <summary>Read identities without materializing any commentary text.</summary>
+    internal static List<Header> ReadHeaders(byte[] blob)
+    {
+        using var stream = new ZLibStream(new MemoryStream(blob, writable: false), CompressionMode.Decompress);
+        using var reader = new BinaryReader(stream, Encoding.UTF8);
+        var magic = reader.ReadBytes(4);
+        if (magic.Length != 4 || !magic.AsSpan().SequenceEqual(Magic))
+        {
+            throw new InvalidDataException("Perushim note blob has a bad magic.");
+        }
+        var count = reader.ReadUInt32();
+        var headers = new List<Header>((int)Math.Min(count, 1 << 20));
+        Span<byte> skipBuffer = stackalloc byte[4096];
+        for (var i = 0; i < count; i++)
+        {
+            var perushId = reader.ReadUInt32();
+            var pasuk = reader.ReadUInt32();
+            var noteIdx = reader.ReadUInt32();
+            var length = reader.ReadUInt32();
+            if (length > MaxContentBytes)
+            {
+                throw new InvalidDataException("Perushim note blob record is implausibly large.");
+            }
+            SkipContent(stream, length, skipBuffer);
+            headers.Add(new Header((int)perushId, (int)pasuk, (int)noteIdx, (int)length));
+        }
+        return headers;
+    }
+
+    private static void SkipContent(Stream stream, uint length, Span<byte> buffer)
+    {
+        while (length > 0)
+        {
+            var size = (int)Math.Min(length, (uint)buffer.Length);
+            stream.ReadExactly(buffer[..size]);
+            length -= (uint)size;
+        }
     }
 
     /// <summary>Encodes one perek's notes; used by tests to build v2 fixtures.</summary>

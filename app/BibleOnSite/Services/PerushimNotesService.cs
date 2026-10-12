@@ -821,6 +821,16 @@ public class PerushimNotesService
         return rows.Select(r => r.Id).ToList();
     }
 
+    /// <summary>Retains the compressed chapter and lightweight identities, with no note strings.</summary>
+    internal async Task<PerushNoteChapter?> LoadChapterAsync(int perekId)
+    {
+        await InitializeAsync();
+        if (_connection == null) { return null; }
+        var rows = await _connection.QueryAsync<BlobRow>(
+            "SELECT data AS Data FROM note_blob WHERE perek_id = ?", perekId);
+        return rows.Count == 0 ? null : await Task.Run(() => new PerushNoteChapter(rows[0].Data));
+    }
+
     /// <summary>
     /// Loads all notes for a perek. Returns empty if notes DB is not available.
     /// </summary>

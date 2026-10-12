@@ -101,6 +101,15 @@
                         StrokeThickness="1"
                         BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Gray900}}">
                     <VerticalStackLayout Spacing="12">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <Label Text="מספר פירושים בו זמנית על הפרק" VerticalOptions="Center"/>
+                            <Label Grid.Column="1" Text="{Binding InlineCommentaryLimit}" FontAttributes="Bold" VerticalOptions="Center"/>
+                        </Grid>
+                        <Stepper Minimum="1" Maximum="100" Increment="1" Value="{Binding InlineCommentaryLimit}"
+                                 AutomationId="InlineCommentaryLimitStepper" HorizontalOptions="Start"/>
+                        <Label Text="ברירת המחדל היא 5. הגדלת המספר עלולה להאט את הקריאה ולהגדיל את השימוש בזיכרון, במיוחד בפרקים ארוכים."
+                               FontSize="13" LineBreakMode="WordWrap"
+                               TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
                         <Label Text="חבילת הפירושים (רש&quot;י, תרגום ועוד)"
                                FontSize="15"
                                TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"

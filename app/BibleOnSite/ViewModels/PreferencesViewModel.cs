@@ -46,7 +46,17 @@ public partial class PreferencesViewModel : ObservableObject
         _share = share;
         _navigator = navigator;
         Recitation = new RecitationPreferencesViewModel(RecitationService.Instance, preferencesService, PerekDataService.Instance);
-        _preferencesService.PreferencesChanged += OnPreferencesChanged;
+        BibleOnSite.Helpers.WeakPreferencesSubscription.Subscribe(this, _preferencesService, static model => model.OnPreferencesChanged(null, EventArgs.Empty));
+    }
+
+    public double InlineCommentaryLimit
+    {
+        get => _preferencesService.InlineCommentaryLimit;
+        set
+        {
+            _preferencesService.InlineCommentaryLimit = double.IsFinite(value) ? (int)Math.Clamp(Math.Round(value), 1, 100) : 5;
+            OnPropertyChanged();
+        }
     }
 
     /// <summary>
@@ -198,6 +208,7 @@ public partial class PreferencesViewModel : ObservableObject
         OnPropertyChanged(nameof(IsPerekToLoadTodays));
         OnPropertyChanged(nameof(IsPerekToLoadLastLearnt));
         OnPropertyChanged(nameof(MasoraMenuEnabled));
+        OnPropertyChanged(nameof(InlineCommentaryLimit));
         OnPropertyChanged(nameof(ShowPerushimSection));
         OnPropertyChanged(nameof(IsPerushimInstalled));
         OnPropertyChanged(nameof(ShowPerushimDownload));
@@ -298,5 +309,6 @@ public partial class PreferencesViewModel : ObservableObject
         OnPropertyChanged(nameof(IsPerekToLoadTodays));
         OnPropertyChanged(nameof(IsPerekToLoadLastLearnt));
         OnPropertyChanged(nameof(MasoraMenuEnabled));
+        OnPropertyChanged(nameof(InlineCommentaryLimit));
     }
 }

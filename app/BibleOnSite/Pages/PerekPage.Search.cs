@@ -300,7 +300,7 @@ public partial class PerekPage
         {
             // Reveal the matched perush before measuring — enabling it changes
             // the pasuk cell's height and renders its note views.
-            _viewModel.ToggleCheckedPerush(perushId);
+            _viewModel.ShowPerushForSearch(perushId);
         }
         if (_viewModel.Perek?.Pasukim.FirstOrDefault(pasuk => pasuk.PasukNum == pasukNum) is not { } pasuk)
         {
@@ -311,7 +311,7 @@ public partial class PerekPage
         // query words (#2078).
         var matchTarget = noteHit == null
             ? null
-            : SearchMatch.ResolvePerushTarget(noteHit, pasuk.PerushNotes);
+            : await SearchMatch.ResolvePerushTargetAsync(noteHit, pasuk.PerushNotes);
 
         // The carousel realizes its chapter list after the page is laid out,
         // and a just-enabled perush repaints its note views asynchronously —

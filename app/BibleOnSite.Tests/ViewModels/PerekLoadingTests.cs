@@ -93,7 +93,8 @@ public class PerekLoadingTests
         vm.PerekId.Should().Be(2);
         vm.CheckedPerushim.Should().Equal(1);
         vm.Perushim.Select(p => p.Id).Should().Equal(1);
-        vm.Perek!.Pasukim.Single().PerushNotes.Single().NoteContents.Should().Equal("next");
+        vm.Perek!.Pasukim.Single().PerushNotes.Single().NoteContents.Should().BeEmpty("text belongs to realized cells");
+        (await vm.Perek.Pasukim.Single().PerushNotes.Single().ContentLoader!()).Should().Equal("next");
         await vm.LoadPreviousCommand.ExecuteAsync(null);
         vm.PerekId.Should().Be(1);
         await vm.LoadPreviousAsync();
@@ -251,7 +252,8 @@ public class PerekLoadingTests
         await vm.LoadPerushimAsync(1);
 
         vm.Perushim.Select(p => p.Id).Should().Equal(1);
-        vm.Perek!.Pasukim.Single().PerushNotes.Single().NoteContents.Should().Equal("next");
+        vm.Perek!.Pasukim.Single().PerushNotes.Single().NoteContents.Should().BeEmpty("text belongs to realized cells");
+        (await vm.Perek.Pasukim.Single().PerushNotes.Single().ContentLoader!()).Should().Equal("next");
     }
 
     [Fact]

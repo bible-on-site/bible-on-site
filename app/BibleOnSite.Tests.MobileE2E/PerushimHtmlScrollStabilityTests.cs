@@ -19,8 +19,14 @@ public sealed class PerushimHtmlScrollStabilityTests(ITestOutputHelper output, M
 {
     protected override AppiumOptions CreateOptions() =>
         Platform.CreateOptions(Configuration,
-            new Dictionary<string, string> { ["BIBLE_E2E_PERUSHIM"] = "1" });
+            new Dictionary<string, string>
+            {
+                ["BIBLE_E2E_PERUSHIM"] = "1",
+                ["BIBLE_E2E_LONG_PERUSHIM"] = "1"
+            });
 
+    // A 267 KB-scale HTML block matches the largest delivered commentary group
+    // and exercises the 2026-10-12 TextKit watchdog surface through lazy cells.
     [Fact]
     public void PerushimCellsSurviveScrollStorm() => Scenario(() =>
     {
@@ -65,33 +71,24 @@ public sealed class PerushimHtmlScrollStabilityTests(ITestOutputHelper output, M
         Assert.NotEmpty(Page.FirstPasuk);
     });
 
-    // Opens the perushim panel and checks the first two synthetic commentaries
-    // so each pasuk cell renders HtmlView notes; returns how many were checked.
-    // Checking all three triples attributed-text layout cost without covering
-    // any additional code path — one HtmlView per commentary already exercises
-    // the parse/render pipeline that crashed.
+    // Add up to five visible sources sequentially, including the large first commentary.
     private int CheckAllPerushim()
     {
         Page.Tap("PerushimChevronButton");
 
-        // The panel animates up (~250 ms); poll briefly for rendered checkboxes.
-        List<AppiumElement> checkboxes = [];
-        for (var attempt = 0; attempt < 10 && checkboxes.Count == 0; attempt++)
-        {
-            Thread.Sleep(300);
-            checkboxes = Driver!
-                .FindElements(Platform.AutomationId("PerushCheckBox"))
-                .Where(element => element.Displayed)
-                .ToList();
-        }
+        Page.WaitFor("PerushCheckBox", element => element.Displayed);
+        var checkboxes = Driver!
+            .FindElements(Platform.AutomationId("PerushCheckBox"))
+            .Where(element => element.Displayed)
+            .ToList();
 
-        foreach (var checkbox in checkboxes.Take(2))
+        foreach (var checkbox in checkboxes.Take(5))
         {
             Platform.Tap(Driver!, checkbox);
         }
-        Output.WriteLine($"Checked {Math.Min(checkboxes.Count, 2)} synthetic perushim.");
+        Output.WriteLine($"Checked {Math.Min(checkboxes.Count, 5)} synthetic perushim.");
 
         Page.Tap("PerushimChevronButton");
-        return Math.Min(checkboxes.Count, 2);
+        return Math.Min(checkboxes.Count, 5);
     }
 }

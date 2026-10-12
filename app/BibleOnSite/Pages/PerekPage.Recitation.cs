@@ -153,6 +153,7 @@ public partial class PerekPage
         _focusedPasuk = null;
         _focusedWordSpans.Clear();
         FocusedPasukOverlay.IsVisible = false;
+        FocusedPerushim.ItemsSource = null;
         PerekCarousel.InputTransparent = false;
         AutomationProperties.SetExcludedWithChildren(PerekCarousel, false);
         if (_audioDecoder != null)
@@ -318,7 +319,7 @@ public partial class PerekPage
         PerekCarousel.InputTransparent = true;
         AutomationProperties.SetExcludedWithChildren(PerekCarousel, true);
         RefreshFocusedRecitation();
-        BindableLayout.SetItemsSource(FocusedPerushim, _viewModel.GetPerushimForPasuk(pasuk.PasukNum));
+        FocusedPerushim.ItemsSource = _viewModel.GetPerushimForPasuk(pasuk.PasukNum);
         UpdateSelectionBar();
         try
         {
@@ -326,7 +327,7 @@ public partial class PerekPage
             await _viewModel.LoadPerushimAsync(perekId);
             if (_focusedPasuk == pasuk && _viewModel.PerekId == perekId)
             {
-                BindableLayout.SetItemsSource(FocusedPerushim, _viewModel.GetPerushimForPasuk(pasuk.PasukNum));
+                FocusedPerushim.ItemsSource = _viewModel.GetPerushimForPasuk(pasuk.PasukNum);
             }
         }
         catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Focused commentaries: {ex.Message}"); }

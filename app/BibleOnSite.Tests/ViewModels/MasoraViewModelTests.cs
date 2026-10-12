@@ -180,8 +180,8 @@ public class MasoraViewModelTests
 
         // Unit 1 covers pasuk 1 only (it ends mid-pasuk 1); the pasuk-2 note is out of bounds.
         var row = fixture.Model.Unit!.Rows[0];
-        row.Pasuk.PerushNotes.Should().ContainSingle()
-            .Which.NoteContents.Should().Equal("inside");
+        row.Pasuk.PerushNotes.Should().ContainSingle().Which.NoteContents.Should().BeEmpty();
+        (await row.Pasuk.PerushNotes[0].ContentLoader!()).Should().Equal("inside");
     }
 
     [Fact]

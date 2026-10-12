@@ -187,7 +187,7 @@
                                                                FlowDirection="RightToLeft"
                                                                LineBreakMode="WordWrap"
                                                                LineHeight="1.4"/>
-                                                        <VerticalStackLayout BindableLayout.ItemsSource="{Binding Pasuk.PerushNotes}"
+                                                        <VerticalStackLayout BindableLayout.ItemsSource="{Binding Pasuk.VisiblePerushNotes}"
                                                                              Spacing="2"
                                                                              Margin="0,4,0,0">
                                                             <BindableLayout.ItemTemplate>
@@ -198,7 +198,7 @@
                                                                                FontSize="{DynamicResource PerushNameFontSize}"
                                                                                FontAttributes="Bold"
                                                                                TextColor="{StaticResource Primary}"/>
-                                                                        <controls:HtmlView HtmlContent="{Binding DisplayContent}"
+                                                                        <controls:HtmlView ContentLoader="{Binding ContentLoader}" HtmlContent="{Binding DisplayContent}"
                                                                                           FontSize="{DynamicResource PerushContentFontSize}"
                                                                                           TextAlignment="Justify"
                                                                                           TextDirection="Rtl"
@@ -317,13 +317,17 @@
                            FontAttributes="Bold"
                            HorizontalTextAlignment="Center"
                            TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryLight}}"/>
+                    <SearchBar Placeholder="חיפוש פירוש" Text="{Binding PerushNameFilter}"
+                               AutomationId="PerushNameSearch"/>
+                    <Label Text="{Binding InlineCommentaryLimitMessage}" FontSize="12" LineBreakMode="WordWrap"
+                           HorizontalTextAlignment="Center" AutomationId="InlineCommentaryLimitMessage"/>
                     <BoxView HeightRequest="1"
                              BackgroundColor="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray600}}"
                              Margin="0,4,0,0"/>
                 </VerticalStackLayout>
                 <ScrollView Grid.Row="1" Margin="0,8,0,90">
                     <CollectionView x:Name="PerushimCollection"
-                                   ItemsSource="{Binding Perushim}"
+                                   ItemsSource="{Binding FilteredPerushim}"
                                    SelectionMode="None"
                                    VerticalOptions="Start">
                         <CollectionView.ItemTemplate>
