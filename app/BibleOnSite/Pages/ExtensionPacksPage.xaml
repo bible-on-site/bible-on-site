@@ -133,8 +133,10 @@
                                              Spacing="4">
                             <BindableLayout.ItemTemplate>
                                 <DataTemplate x:DataType="viewmodels:RecitationBookChoice">
-                                    <Grid ColumnDefinitions="*,Auto" Padding="0,4">
-                                        <VerticalStackLayout VerticalOptions="Center" Spacing="2">
+                                    <!-- Stacked, not side-by-side: wide actions (e.g. השלמת הורדה at
+                                         increased text size) must never collide with the status text. -->
+                                    <VerticalStackLayout Padding="0,4" Spacing="6">
+                                        <VerticalStackLayout Spacing="2">
                                             <Label Text="{Binding Name}"
                                                    FontSize="15"
                                                    TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
@@ -143,11 +145,13 @@
                                                    LineBreakMode="WordWrap"
                                                    TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
                                         </VerticalStackLayout>
-                                        <VerticalStackLayout Grid.Column="1" Spacing="6" VerticalOptions="Center" HorizontalOptions="End">
+                                        <FlexLayout Direction="Row" Wrap="Wrap" JustifyContent="End" HorizontalOptions="End">
                                             <Label Text="מוריד…"
                                                    FontSize="13"
                                                    FontAttributes="Bold"
                                                    TextColor="{StaticResource Primary}"
+                                                   VerticalOptions="Center"
+                                                   Margin="8,0"
                                                    IsVisible="{Binding ShowProgress}"/>
                                             <Button Text="{Binding DownloadLabel}"
                                                     Clicked="OnDownloadBookClicked"
@@ -159,7 +163,8 @@
                                                     TextColor="White"
                                                     CornerRadius="8"
                                                     FontSize="12"
-                                                    Padding="12,4"/>
+                                                    Padding="12,4"
+                                                    Margin="8,4"/>
                                             <Button Text="הסרה"
                                                     Clicked="OnRemoveBookClicked"
                                                     CommandParameter="{Binding}"
@@ -171,10 +176,11 @@
                                                     CornerRadius="8"
                                                     FontSize="12"
                                                     Padding="12,4"
+                                                    Margin="0,4"
                                                     TextColor="{AppThemeBinding Light={StaticResource Error}, Dark={StaticResource ErrorDark}}"
                                                     SemanticProperties.Description="{Binding Name, StringFormat='הסרת הקלטות {0}'}"/>
-                                        </VerticalStackLayout>
-                                    </Grid>
+                                        </FlexLayout>
+                                    </VerticalStackLayout>
                                 </DataTemplate>
                             </BindableLayout.ItemTemplate>
                         </VerticalStackLayout>
