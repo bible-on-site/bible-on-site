@@ -26,7 +26,7 @@ test.describe("מסורה reading root", () => {
 		// First visit compiles the unit route — allow for cold dev servers.
 		await page.waitForURL(`**${MASORA_ROOT}/1`, { timeout: 60_000 });
 		await expect(
-			page.getByRole("heading", { level: 1, name: "בראשית א א-ה" }),
+			page.getByRole("heading", { level: 1, name: "בראשית פרשה א" }),
 		).toBeVisible();
 	});
 
@@ -37,7 +37,7 @@ test.describe("מסורה reading root", () => {
 		// Article/perush cards render h1s too — address the unit heading by name.
 		const heading = page.getByRole("heading", {
 			level: 1,
-			name: "בראשית א א-ה",
+			name: "בראשית פרשה א",
 		});
 		await expect(heading).toBeVisible();
 		// Unit 1 closes on a פתוחה marker.
@@ -72,7 +72,7 @@ test.describe("מסורה reading root", () => {
 		// Unit 8 spans בראשית ב ד - ג טו.
 		await page.goto(`${MASORA_ROOT}/8`);
 		await expect(
-			page.getByRole("heading", { level: 1, name: "בראשית ב ד - ג טו" }),
+			page.getByRole("heading", { level: 1, name: "בראשית פרשה ח" }),
 		).toBeVisible();
 		await expect(page.locator("#pasuk-2-4")).toBeAttached();
 		await expect(page.locator("#pasuk-3-15")).toBeAttached();
@@ -84,7 +84,7 @@ test.describe("מסורה reading root", () => {
 		// Unit 2826 is דברי הימים א ה כט — one pasuk cut mid-verse.
 		await page.goto(`${MASORA_ROOT}/2826`);
 		await expect(
-			page.getByRole("heading", { level: 1, name: "דברי הימים א ה כט" }),
+			page.getByRole("heading", { level: 1, name: "דברי הימים פרשה נח" }),
 		).toBeVisible();
 		await expect(page.locator("#pasuk-869-29")).toBeAttached();
 	});

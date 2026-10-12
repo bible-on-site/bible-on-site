@@ -13,6 +13,7 @@ import {
 	screen,
 	waitFor,
 } from "@testing-library/react";
+import { toLetters } from "gematry";
 
 jest.mock("next/link", () => ({
 	__esModule: true,
@@ -151,6 +152,7 @@ import MasoraUnitLayout from "@/app/masora/[unit]/layout";
 import MasoraUnitPage from "@/app/masora/[unit]/page";
 import MasoraLanding from "@/app/masora/page";
 import { getMasoraUnitById } from "@/data/masora/masora-units";
+import type { ReadingUnit } from "@/lib/reading/contract";
 import type { PerekEntityReference } from "@/lib/tanahpedia/service";
 
 describe("UnitNav", () => {
@@ -237,13 +239,121 @@ describe("MasoraLanding", () => {
 });
 
 describe("UnitText", () => {
-	it("renders a cross-perek unit with perek labels and anchors", () => {
+	it("renders a cross-perek unit with anchors and parasha verse positions", () => {
 		const unit = getMasoraUnitById(8); // בראשית ב ד - ג טו
 		render(<UnitText unit={unit} entityRefsByPerek={{}} />);
 		expect(document.getElementById("pasuk-2-4")).toBeInTheDocument();
 		expect(document.getElementById("pasuk-3-15")).toBeInTheDocument();
-		// Multi-perek slices carry the perek source label.
-		expect(screen.getAllByText(/בראשית ב/).length).toBeGreaterThan(0);
+		// No conventional chapter apparatus: verse positions run as one
+		// continuous count across the parasha instead of restarting per
+		// perek or carrying perek source labels.
+		const positions = [
+			...document.querySelectorAll("[data-unit-text] .pasukNum"),
+		].map((el) => el.textContent ?? "");
+		expect(positions.length).toBeGreaterThan(0);
+		positions.forEach((text, index) => {
+			expect(text.startsWith(toLetters(index + 1))).toBe(true);
+		});
+		// The parasha closes exactly at a pasuk boundary — its break is the
+		// pasuk's last segment, so the final position stays unmarked.
+		expect(positions[positions.length - 1]).toBe(toLetters(positions.length));
+		expect(screen.queryByText("בראשית ב")).toBeNull();
+	});
+
+	it("marks segment-clipped boundary pesukim as partial positions", () => {
+		// A unit that opens mid-verse: the first marker reads "א (התחלה)".
+		const midVerseStart = getMasoraUnitById(1);
+		const startClipped: ReadingUnit = {
+			...midVerseStart,
+			ranges: [
+				{
+					start: { perekId: 1, pasuk: 1, segmentIndex: 3 },
+					end: { perekId: 1, pasuk: 2 },
+				},
+			],
+		};
+		const { unmount } = render(
+			<UnitText unit={startClipped} entityRefsByPerek={{}} />,
+		);
+		let markers = [
+			...document.querySelectorAll("[data-unit-text] .pasukNum"),
+		].map((el) => el.textContent);
+		expect(markers).toEqual(["א (התחלה)", "ב"]);
+		unmount();
+
+		// A lone mid-verse excerpt reads "א (קטע)".
+		const excerpt: ReadingUnit = {
+			...midVerseStart,
+			ranges: [
+				{
+					start: { perekId: 1, pasuk: 1, segmentIndex: 2 },
+					end: { perekId: 1, pasuk: 1, segmentIndex: 5 },
+				},
+			],
+		};
+		const { unmount: unmountExcerpt } = render(
+			<UnitText unit={excerpt} entityRefsByPerek={{}} />,
+		);
+		markers = [
+			...document.querySelectorAll("[data-unit-text] .pasukNum"),
+		].map((el) => el.textContent);
+		expect(markers).toEqual(["א (קטע)"]);
+		unmountExcerpt();
+
+		// An excerpt that runs to the pasuk's last segment drops only its
+		// opening — the marker reads "א (התחלה)", not "א (קטע)".
+		const openEndedExcerpt: ReadingUnit = {
+			...midVerseStart,
+			ranges: [
+				{
+					start: { perekId: 1, pasuk: 1, segmentIndex: 2 },
+					end: { perekId: 1, pasuk: 1, segmentIndex: 6 }, // last segment
+				},
+			],
+		};
+		render(<UnitText unit={openEndedExcerpt} entityRefsByPerek={{}} />);
+		markers = [
+			...document.querySelectorAll("[data-unit-text] .pasukNum"),
+		].map((el) => el.textContent);
+		expect(markers).toEqual(["א (התחלה)"]);
+	});
+
+	it("keeps positions unmarked when a break lands on a pasuk boundary", () => {
+		// Real corpus: unit 1 closes at בראשית 1:5's last segment (a ptuha
+		// marker), so no position is clipped — plain א-ה markers.
+		const { unmount } = render(
+			<UnitText unit={getMasoraUnitById(1)} entityRefsByPerek={{}} />,
+		);
+		let markers = [
+			...document.querySelectorAll("[data-unit-text] .pasukNum"),
+		].map((el) => el.textContent);
+		expect(markers).toEqual(["א", "ב", "ג", "ד", "ה"]);
+		unmount();
+
+		// Unit 70 closes genuinely mid-verse (segment 14 of 20 at בראשית
+		// 35:22): its final position keeps the (סיום) suffix while earlier
+		// positions stay plain.
+		render(<UnitText unit={getMasoraUnitById(70)} entityRefsByPerek={{}} />);
+		markers = [
+			...document.querySelectorAll("[data-unit-text] .pasukNum"),
+		].map((el) => el.textContent);
+		expect(markers).toHaveLength(14);
+		expect(markers[13]).toBe("יד (סיום)");
+		markers.slice(0, 13).forEach((text, index) => {
+			expect(text).toBe(toLetters(index + 1));
+		});
+	});
+
+	it("marks a mid-verse opening (התחלה) even when the unit closes at a pasuk boundary", () => {
+		// Unit 71 opens at segment 15 of בראשית 35:22 and closes on the last
+		// segment of 35:29 — the opening is clipped, the ending is not.
+		render(<UnitText unit={getMasoraUnitById(71)} entityRefsByPerek={{}} />);
+		const markers = [
+			...document.querySelectorAll("[data-unit-text] .pasukNum"),
+		].map((el) => el.textContent);
+		expect(markers).toHaveLength(8);
+		expect(markers[0]).toBe("א (התחלה)");
+		expect(markers[7]).toBe("ח");
 	});
 
 	it("wraps referenced segments in Tanahpedia links", () => {
@@ -289,7 +399,7 @@ describe("MasoraUnitPage", () => {
 		});
 		render(jsx);
 		expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
-			"בראשית ב ד - ג טו",
+			"בראשית פרשה ח",
 		);
 		expect(document.getElementById("pasuk-2-4")).toBeInTheDocument();
 		expect(screen.getByTestId("perushim-section")).toBeInTheDocument();

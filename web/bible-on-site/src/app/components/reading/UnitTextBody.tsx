@@ -1,14 +1,14 @@
 import { toLetters } from "gematry";
+import { Ptuah } from "@/app/929/[number]/components/Ptuha";
+import { renderPasukSegmentsWithEntityRefs } from "@/app/929/[number]/components/pasuk-renderer";
+import { Stuma } from "@/app/929/[number]/components/Stuma";
+import { TanahpediaLink } from "@/app/929/[number]/components/TanahpediaLink";
+import perekStyles from "@/app/929/[number]/page.module.css";
 import type { Pasuk } from "@/data/db/tanah-view-types";
 import type { ScriptureRange } from "@/lib/reading/contract";
 import { type PerekSlice, rangesPerekSlices } from "@/lib/reading/ranges";
 import { buildEntityRefLookup } from "@/lib/tanahpedia/entity-ref-lookup";
 import type { PerekEntityReference } from "@/lib/tanahpedia/service";
-import perekStyles from "@/app/929/[number]/page.module.css";
-import { renderPasukSegmentsWithEntityRefs } from "@/app/929/[number]/components/pasuk-renderer";
-import { Ptuah } from "@/app/929/[number]/components/Ptuha";
-import { Stuma } from "@/app/929/[number]/components/Stuma";
-import { TanahpediaLink } from "@/app/929/[number]/components/TanahpediaLink";
 import styles from "./reading-unit-text.module.css";
 
 /** The slice of canonical perek data the renderer needs. */
@@ -37,6 +37,7 @@ export function UnitTextBody({
 	pasukCount,
 	resolvePerek,
 	anchorScope,
+	unitPositionMarkers,
 }: {
 	ranges: ScriptureRange[];
 	entityRefsByPerek: Record<number, PerekEntityReference[]>;
@@ -46,9 +47,24 @@ export function UnitTextBody({
 	 * same canonical pasuk on one page (e.g. Haftarah variants whose
 	 * ranges overlap). Canonical coordinates stay inside the id. */
 	anchorScope?: string;
+	/** Renders each pasuk's position inside the unit (1-based, continuous
+	 * across slices) instead of its canonical perek-relative number, and
+	 * drops perek-break labels — the alternative-division chrome where
+	 * conventional chapter apparatus stays hidden. Boundary-clipped
+	 * pesukim still count a position and carry a התחלה/סיום/קטע suffix. */
+	unitPositionMarkers?: boolean;
 }) {
 	const slices = rangesPerekSlices(ranges, pasukCount);
 	const multiPerek = new Set(slices.map((slice) => slice.perekId)).size > 1;
+	// Verse-position numbering: each rendered pasuk row counts one
+	// position, so the first pasuk of every slice continues the running
+	// parasha sequence rather than restarting a chapter count.
+	const firstPositions: number[] = [];
+	let renderedCount = 0;
+	for (const slice of slices) {
+		firstPositions.push(renderedCount + 1);
+		renderedCount += slice.endPasuk - slice.startPasuk + 1;
+	}
 	// Only a coordinate's first slice emits its anchor id — an
 	// intentionally repeated pasuk renders text again, not a second id.
 	const firstSliceByCoord = new Map<string, number>();
@@ -69,7 +85,10 @@ export function UnitTextBody({
 					anchorScope={anchorScope}
 					entityRefs={entityRefsByPerek[slice.perekId] ?? []}
 					resolvePerek={resolvePerek}
-					showPerekLabel={multiPerek}
+					showPerekLabel={multiPerek && !unitPositionMarkers}
+					firstPosition={
+						unitPositionMarkers ? firstPositions[sliceIndex] : undefined
+					}
 				/>
 			))}
 		</>
@@ -84,6 +103,7 @@ function UnitPerekSlice({
 	entityRefs,
 	resolvePerek,
 	showPerekLabel,
+	firstPosition,
 }: {
 	slice: PerekSlice;
 	sliceIndex: number;
@@ -92,6 +112,7 @@ function UnitPerekSlice({
 	entityRefs: PerekEntityReference[];
 	resolvePerek: UnitTextPerekResolver;
 	showPerekLabel: boolean;
+	firstPosition?: number;
 }) {
 	const perek = resolvePerek(slice.perekId);
 	if (!perek) return null;
@@ -114,6 +135,27 @@ function UnitPerekSlice({
 							? (slice.endSegmentIndex ?? pasuk.segments.length - 1)
 							: pasuk.segments.length - 1;
 					const pasukIdx = pasukNumber - 1;
+					// A boundary pasuk reads as a partial verse inside the
+					// unit only when the bound actually omits segments: a
+					// break marker sitting on the pasuk's last segment (or a
+					// unit opening at its first) leaves the whole verse
+					// inside, so the position stays unmarked.
+					const marker = (() => {
+						if (firstPosition == null) return toLetters(pasukNumber);
+						const position = toLetters(firstPosition + offset);
+						const startsMidVerse =
+							pasukNumber === slice.startPasuk && startIdx > 0;
+						const endsMidVerse =
+							pasukNumber === slice.endPasuk &&
+							endIdx < pasuk.segments.length - 1;
+						return startsMidVerse && endsMidVerse
+							? `${position} (קטע)`
+							: startsMidVerse
+								? `${position} (התחלה)`
+								: endsMidVerse
+									? `${position} (סיום)`
+									: position;
+					})();
 					const emitsAnchor =
 						firstSliceByCoord.get(`${slice.perekId}-${pasukNumber}`) ===
 						sliceIndex;
@@ -127,7 +169,7 @@ function UnitPerekSlice({
 							}
 						>
 							<span className={perekStyles.pasukNum} data-pasuk-num>
-								{toLetters(pasukNumber)}
+								{marker}
 							</span>{" "}
 							{renderPasukSegmentsWithEntityRefs(
 								pasuk.segments,
