@@ -32,6 +32,8 @@ jest.mock("next/link", () => ({
 
 jest.mock("next/navigation", () => ({
 	useSearchParams: () => new URLSearchParams(),
+	usePathname: () => "/מסורה/1",
+	useRouter: () => ({ replace: jest.fn(), push: jest.fn() }),
 	notFound: () => {
 		throw new Error("NEXT_NOT_FOUND");
 	},
@@ -52,8 +54,16 @@ jest.mock("@/lib/articles/service", () => ({
 jest.mock("@/lib/tanahpedia/perek-entity-refs", () => ({
 	fetchAllEntityRefs: jest.fn().mockResolvedValue([]),
 }));
+// Capture the props reaching the shared carousel so the page wiring —
+// in-place click handling and division-internal perush hrefs — is
+// assertable without rendering the section itself (covered by the
+// /929 suite).
+const perushimSectionProps: Record<string, unknown>[] = [];
 jest.mock("@/app/929/[number]/components/PerushimSection", () => ({
-	PerushimSection: () => <div data-testid="perushim-section" />,
+	PerushimSection: (props: Record<string, unknown>) => {
+		perushimSectionProps.push(props);
+		return <div data-testid="perushim-section" />;
+	},
 }));
 jest.mock("@/app/929/[number]/components/ArticlesSection", () => ({
 	ArticlesSection: () => <div data-testid="articles-section" />,
@@ -248,6 +258,28 @@ describe("MasoraUnitPage", () => {
 		expect(document.getElementById("pasuk-2-4")).toBeInTheDocument();
 		expect(screen.getByTestId("perushim-section")).toBeInTheDocument();
 		expect(screen.getByTestId("articles-section")).toBeInTheDocument();
+	});
+
+	it("keeps perushim inside the division page (issue #2190)", async () => {
+		perushimSectionProps.length = 0;
+		const jsx = await MasoraUnitPage({
+			params: Promise.resolve({ unit: "8" }),
+		});
+		render(jsx);
+		// Both the Suspense fallback and the live section build
+		// division-internal hrefs; the live one also opens in place.
+		expect(perushimSectionProps.length).toBeGreaterThan(0);
+		const hrefs = perushimSectionProps.map((props) =>
+			(props.hrefForPerush as (p: { name: string }) => string)({
+				name: 'רש"י',
+			}),
+		);
+		for (const href of hrefs) {
+			expect(decodeURIComponent(href)).toBe('/מסורה/8?perush=רש"י');
+		}
+		expect(
+			perushimSectionProps.some((props) => props.onPerushClick),
+		).toBe(true);
 	});
 
 	it("renders both closing-break labels", async () => {
