@@ -32,8 +32,11 @@ const SHADDAI_OPTIONS: readonly ShaddaiMaskOption[] = [
 	"custom",
 ];
 
-const pick = <T extends string>(value: unknown, allowed: readonly T[], fallback: T): T =>
-	allowed.includes(value as T) ? (value as T) : fallback;
+const pick = <T extends string>(
+	value: unknown,
+	allowed: readonly T[],
+	fallback: T,
+): T => (allowed.includes(value as T) ? (value as T) : fallback);
 
 /** Long enough for a phrase, short enough to keep pasuk layout sane. */
 const MAX_CUSTOM_LENGTH = 40;
@@ -51,7 +54,11 @@ export function normalizeDivineNameMasking(
 		yhwh: pick(s.yhwh, YHWH_OPTIONS, DEFAULT_DIVINE_NAME_MASKING.yhwh),
 		yhwhCustom: custom(s.yhwhCustom),
 		el: pick(s.el, EL_OPTIONS, DEFAULT_DIVINE_NAME_MASKING.el),
-		shaddai: pick(s.shaddai, SHADDAI_OPTIONS, DEFAULT_DIVINE_NAME_MASKING.shaddai),
+		shaddai: pick(
+			s.shaddai,
+			SHADDAI_OPTIONS,
+			DEFAULT_DIVINE_NAME_MASKING.shaddai,
+		),
 		shaddaiCustom: custom(s.shaddaiCustom),
 	};
 }

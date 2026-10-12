@@ -29,6 +29,7 @@ export function shardRuns(env, artifactsDir) {
         // WDA listens on the host-shared loopback inside each simulator, so it
         // needs a per-device port just like the Appium server.
         MOBILE_WDA_PORT: String(8099 + shard),
+        MOBILE_E2E_COVERAGE_PORT: String(4786 + shard),
         MOBILE_E2E_ARTIFACTS: artifacts,
         MOBILE_E2E_SHARD: String(shard),
       },
@@ -55,6 +56,20 @@ export function mergeShardEvidence(shardArtifactsDirs, destinationDir) {
         throw new Error(`Coverage overlap: ${file} was produced by more than one shard.`);
       }
       copyFileSync(join(evidenceDir, file), target);
+    }
+  }
+}
+
+// Executable coverage includes startup snapshots on every device. Preserve each
+// shard's dumps and errors, including identically named startup snapshots.
+export function mergeShardAppCoverage(shardArtifactsDirs, destinationDir) {
+  rmSync(destinationDir, { recursive: true, force: true });
+  mkdirSync(destinationDir, { recursive: true });
+  for (const [index, artifactsDir] of shardArtifactsDirs.entries()) {
+    const source = join(artifactsDir, "app-coverage");
+    if (!existsSync(source)) continue;
+    for (const file of readdirSync(source).sort()) {
+      copyFileSync(join(source, file), join(destinationDir, `shard${index + 1}-${file}`));
     }
   }
 }

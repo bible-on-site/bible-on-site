@@ -542,7 +542,7 @@ public class PerekLoadingTests
     }
 
     [Fact]
-    public async Task ChapterLoad_WhenSupersededDuringCarouselBuild_DropsTheCollectionSwap()
+    public async Task ChapterLoad_WhenNeighborQueriesStall_StillPublishesTheRequestedChapter()
     {
         await using var fixture = new Fixture();
         await fixture.Initialize(notes: false);
@@ -553,48 +553,15 @@ public class PerekLoadingTests
         };
         await data.LoadAsync();
         var vm = StallingReader(fixture, data);
-        // The park is the pasukim gate, not the attempt budget — keep WaitAsync
-        // out of the way so the attempt waits for the release below.
-        vm.LoadAttemptTimeout = TimeSpan.FromSeconds(10);
 
-        var load = vm.LoadByPerekIdAsync(1);
-        await WaitForStageAsync(vm, "carousel");
+        // Carousel metadata no longer waits for speculative neighbor queries.
+        // The old eager-loading path stalls here even though chapter 1 is ready.
+        await vm.LoadByPerekIdAsync(1).WaitAsync(TimeSpan.FromSeconds(1));
 
-        // A newer navigation supersedes the call while the carousel builds off-thread.
-        vm.InvalidatePendingLoads();
-        data.ReleasePasukim([]);
-        await load;
-
-        vm.LoadStage.Should().Be("carousel", "the stale attempt's 'loaded' mark must not land");
-        vm.CarouselPerakim.Should().BeEmpty();
-        vm.CurrentCarouselPerek.Should().BeNull();
-    }
-
-    [Fact]
-    public async Task ChapterLoad_WhenPerekReplacedDuringCarouselBuild_DropsTheCollectionSwap()
-    {
-        await using var fixture = new Fixture();
-        await fixture.Initialize(notes: false);
-        var data = new StallingPerekDataService(new LocalDatabaseService(fixture.Storage.FileSystem.Object))
-        {
-            StallPasukimCalls = 0,
-            StallPasukimFromCall = 2,
-        };
-        await data.LoadAsync();
-        var vm = StallingReader(fixture, data);
-        vm.LoadAttemptTimeout = TimeSpan.FromSeconds(10);
-
-        var load = vm.LoadByPerekIdAsync(1);
-        await WaitForStageAsync(vm, "carousel");
-
-        // A swipe lands a different perek while the carousel builds off-thread.
-        vm.Perek = data.GetPerek(2)!;
-        data.ReleasePasukim([]);
-        await load;
-
-        vm.PerekId.Should().Be(2, "the newer perek keeps the reader");
-        vm.CarouselPerakim.Should().BeEmpty();
-        vm.CurrentCarouselPerek.Should().BeNull();
+        vm.LoadStage.Should().Be("loaded");
+        vm.CurrentCarouselPerek!.PerekId.Should().Be(1);
+        vm.CarouselPerakim.Should().HaveCount(4);
+        data.PasukimCalls.Should().Be(1);
     }
 
     [Fact]

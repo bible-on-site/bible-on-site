@@ -2,7 +2,7 @@ import { execFileSync, spawn } from "node:child_process";
 import { createInterface } from "node:readline";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { mergeShardEvidence, shardRuns } from "./shards.mjs";
+import { mergeShardAppCoverage, mergeShardEvidence, shardRuns } from "./shards.mjs";
 
 // Runs the iOS suite split across two simulators on one runner (#2083): each
 // shard gets its own run.mjs child — its own Appium server, device, artifacts
@@ -52,4 +52,5 @@ const results = await Promise.all(shards.map(runShard));
 // failed, so merge whatever the runs produced; each shard already cleared its
 // own stale records at startup.
 mergeShardEvidence(shards.map((shard) => shard.artifacts), resolve(artifacts, "coverage-evidence"));
+mergeShardAppCoverage(shards.map((shard) => shard.artifacts), resolve(artifacts, "app-coverage"));
 if (results.some((code) => code !== 0)) process.exitCode = 1;
