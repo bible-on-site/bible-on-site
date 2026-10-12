@@ -31,3 +31,7 @@ For a dependency upgrade task, refresh every dependency kind within the user's r
 # Pull Request Branch Sync
 
 Sync a pull request branch with its base only when both conditions hold: the current head has no green CI result, and there is an actual merge conflict. A branch being behind its base is not, by itself, a reason to sync.
+
+# Visual Change Evidence
+
+When a change affects user-visible UI, show before/after evidence in the pull request description and when reporting the result to the user: screenshots, screen recordings, or captured device/emulator frames. Prefer real captures from the app's own e2e artifacts over mockups.
