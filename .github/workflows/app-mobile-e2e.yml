@@ -146,24 +146,20 @@ jobs:
         if: matrix.platform == 'iOS'
         run: sudo xcode-select --switch /Applications/Xcode_27.app/Contents/Developer
 
-      - name: Hash npm dependency inputs
-        id: npm-key
-        run: node ${{ github.workspace }}/devops/github/ci/mobile-npm-cache-key.mjs
-
-      - name: Restore npm cache
-        id: npm-cache
-        uses: actions/cache/restore@v6
-        with:
-          path: ~/.npm
-          key: ${{ runner.os }}-npm-mobile-e2e-${{ steps.npm-key.outputs.hash }}
-          restore-keys: ${{ runner.os }}-npm-mobile-e2e-
-
       # simctl boot is asynchronous: the device boots on the host while the
       # dependency installs run. This step needs no node_modules — it only
       # selects a device and kicks simctl.
       - name: Start iPhone simulator boot
         if: matrix.platform == 'iOS'
         run: npm run ios:boot:start --prefix app/mobile-e2e
+
+      - name: Restore npm cache
+        id: npm-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-mobile-e2e-${{ hashFiles('devops/package-lock.json', 'app/mobile-e2e/package-lock.json') }}
+          restore-keys: ${{ runner.os }}-npm-mobile-e2e-
 
       # The coverage tree baseline is published only by successful master push
       # runs. Missing or unreadable baselines are not an error here — the
