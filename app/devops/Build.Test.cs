@@ -68,7 +68,7 @@ partial class Build
                           $" --results-directory \"{resultsDirectory}\"",
                 $"--filter-query \"/[{MobileE2ESelectionFilter()}]\"" +
                 // The host guard includes Appium session setup and diagnostics.
-                // Queries use the delivered index and ordinary interaction waits;
+                // The delivered index keeps searches within ordinary interaction deadlines.
                 // corpus construction must never justify extending this budget.
                 " --hangdump --hangdump-timeout 10m --hangdump-type Mini" +
                 " --report-xunit-trx --report-xunit-trx-filename mobile-e2e.trx" +
