@@ -383,8 +383,10 @@ public class PreferencesViewModelTests : IDisposable
         viewModel.PerushimInstallStateText.Should().Be("לא מותקנת");
         viewModel.RecitationStateText.Should().Be("לא מותקנת");
         viewModel.PacksSummaryText.Should().Be("פירושים: לא מותקנת · קריינות: לא מותקנת");
-        viewModel.RecitationPlaybackSummary.Should().Be("מהירות 1.5× · עוצמה 70%");
-        viewModel.SoundSummaryText.Should().Be("קריינות 70% · שיעורים 50% · אפקטים 40%");
+        // Percent glyphs follow the ambient culture (e.g. "70%" vs "70 %"), so
+        // derive expectations with the same format the view model uses.
+        viewModel.RecitationPlaybackSummary.Should().Be($"מהירות 1.5× · עוצמה {0.7:P0}");
+        viewModel.SoundSummaryText.Should().Be($"קריינות {0.7:P0} · שיעורים {0.5:P0} · אפקטים {0.4:P0}");
     }
 
     [Fact]
