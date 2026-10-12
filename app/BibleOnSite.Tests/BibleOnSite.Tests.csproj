@@ -64,6 +64,8 @@
     <Compile Include="..\BibleOnSite\Services\PerushimCatalogService.cs" Link="Services\PerushimCatalogService.cs" />
     <Compile Include="..\BibleOnSite\Services\PerushimNotesService.cs" Link="Services\PerushimNotesService.cs" />
     <Compile Include="..\BibleOnSite\Services\SyntheticPerushimProvider.cs" Link="Services\SyntheticPerushimProvider.cs" />
+    <Compile Include="..\BibleOnSite\Services\ITanahpediaService.cs" Link="Services\ITanahpediaService.cs" />
+    <Compile Include="..\BibleOnSite\Services\TanahpediaService.cs" Link="Services\TanahpediaService.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\FlyoutMenuState.cs" Link="ViewModels\FlyoutMenuState.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\LearningCalendarViewModel.cs" Link="ViewModels\LearningCalendarViewModel.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\MasoraViewModel.cs" Link="ViewModels\MasoraViewModel.cs" />
@@ -76,6 +78,9 @@
     <Compile Include="..\BibleOnSite\ViewModels\SearchViewModel.cs" Link="ViewModels\SearchViewModel.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\ArticlesViewModel.cs" Link="ViewModels\ArticlesViewModel.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\ArticleDetailViewModel.cs" Link="ViewModels\ArticleDetailViewModel.cs" />
+    <Compile Include="..\BibleOnSite\ViewModels\TanahpediaViewModel.cs" Link="ViewModels\TanahpediaViewModel.cs" />
+    <Compile Include="..\BibleOnSite\ViewModels\TanahpediaEntityTypeViewModel.cs" Link="ViewModels\TanahpediaEntityTypeViewModel.cs" />
+    <Compile Include="..\BibleOnSite\ViewModels\TanahpediaEntryViewModel.cs" Link="ViewModels\TanahpediaEntryViewModel.cs" />
   </ItemGroup>
 
 </Project>
