@@ -123,17 +123,23 @@ const nextConfig = {
 
 	async rewrites() {
 		return {
-			beforeFiles: sefarimForBookRoutes.flatMap((sefer) =>
-				Object.entries(bookPageSlugs).flatMap(([page, slug]) => {
-					const destination = `/929/${sefer.perekFrom ?? sefer.additionals[0].perekFrom}?book&bookPage=${page}`;
-					// Browser requests and client navigation may supply percent-encoded
-					// Hebrew. Next matches rewrite sources before decoding the path.
-					return [
-						`/929/${sefer.name}/${slug}`,
-						`/929/${encodeURIComponent(sefer.name)}/${encodeURIComponent(slug)}`,
-					].map((source) => ({ source, destination }));
-				}),
-			),
+			beforeFiles: [
+				// Requests for /לוח arrive percent-encoded and never match the
+				// decoded filesystem route; serve the page from /calendar instead.
+				{ source: "/לוח", destination: "/calendar" },
+				{ source: "/%D7%9C%D7%95%D7%97", destination: "/calendar" },
+				...sefarimForBookRoutes.flatMap((sefer) =>
+					Object.entries(bookPageSlugs).flatMap(([page, slug]) => {
+						const destination = `/929/${sefer.perekFrom ?? sefer.additionals[0].perekFrom}?book&bookPage=${page}`;
+						// Browser requests and client navigation may supply percent-encoded
+						// Hebrew. Next matches rewrite sources before decoding the path.
+						return [
+							`/929/${sefer.name}/${slug}`,
+							`/929/${encodeURIComponent(sefer.name)}/${encodeURIComponent(slug)}`,
+						].map((source) => ({ source, destination }));
+					}),
+				),
+			],
 			afterFiles: [
 				// /929/rabbis → /929/authors alias
 				{ source: "/929/rabbis", destination: "/929/authors" },
@@ -160,6 +166,13 @@ const nextConfig = {
 
 	async redirects() {
 		return [
+			// The learning calendar lives at /calendar internally; its canonical
+			// URL is the Hebrew /לוח served through the rewrite above.
+			{
+				source: "/calendar",
+				destination: "/לוח",
+				permanent: true,
+			},
 			// Legacy /authors → /929/authors permanent redirect
 			{
 				source: "/authors",

@@ -31,8 +31,23 @@ public sealed partial class PadDeliveryService : IPadDeliveryService
     {
         // Extracted asset-pack data belongs to this app build, just like the store resource.
         var generation = $"{appInfo.VersionString}-{appInfo.BuildString}";
-        var dir = Path.Combine(fileSystem.CacheDirectory, "asset_packs", generation, packName);
+        var root = Path.Join(fileSystem.CacheDirectory, "asset_packs");
+        var dir = Path.Join(root, generation, packName);
         Directory.CreateDirectory(dir);
+        // Extractions from previous app versions are obsolete — each holds a
+        // full pack payload (hundreds of MB) and must not accumulate.
+        try
+        {
+            foreach (var stale in Directory.GetDirectories(root)
+                .Where(path => Path.GetFileName(path) != generation))
+            {
+                Directory.Delete(stale, recursive: true);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            System.Diagnostics.Debug.WriteLine($"Failed to remove stale asset-pack generations: {ex.Message}");
+        }
         return dir;
     }
 
@@ -491,22 +506,41 @@ partial class PadDeliveryService
     /// Copies the payload out of the downloaded asset pack into the versioned
     /// extraction cache, matching the previous ODR extraction semantics: callers
     /// always consume a plain directory path and a stale build's data is never reused.
+    /// The perushim pack also carries the prebuilt search index — save it too
+    /// when present so both files reach the delivery dir.
     /// </summary>
     [SupportedOSPlatform("ios26.0")]
     [SupportedOSPlatform("maccatalyst26.0")]
     private static string? SaveAssetPackPayload(string cacheDir, string packName)
     {
-        var relative = PayloadFileName(packName);
+        if (!SavePackFile(cacheDir, packName, PayloadFileName(packName), required: true))
+        {
+            return null;
+        }
+        if (packName == PerushimNotesPackName)
+        {
+            SavePackFile(cacheDir, packName, PerushimNotesService.SearchIndexDbName, required: false);
+        }
+        return cacheDir;
+    }
+
+    [SupportedOSPlatform("ios26.0")]
+    [SupportedOSPlatform("maccatalyst26.0")]
+    private static bool SavePackFile(string cacheDir, string packName, string relative, bool required)
+    {
         using var data = BAAssetPackManager.SharedManager.GetContents(
             relative, packName, NSDataReadingOptions.Mapped, out var error);
         if (data == null)
         {
-            System.Diagnostics.Debug.WriteLine(
-                $"BA: contents for '{relative}' in pack '{packName}' failed: {error?.LocalizedDescription ?? "unavailable"}");
-            return null;
+            if (required)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"BA: contents for '{relative}' in pack '{packName}' failed: {error?.LocalizedDescription ?? "unavailable"}");
+            }
+            return false;
         }
 
-        System.Diagnostics.Debug.WriteLine($"BA: payload loaded, length={data.Length}");
+        System.Diagnostics.Debug.WriteLine($"BA: '{relative}' loaded, length={data.Length}");
         var destPath = Path.Combine(cacheDir, relative);
         try
         {
@@ -523,12 +557,12 @@ partial class PadDeliveryService
             }
             finally { File.Delete(temporary); }
             System.Diagnostics.Debug.WriteLine($"BA: saved to {destPath}");
-            return cacheDir;
+            return true;
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"BA: save failed: {ex.Message}");
-            return null;
+            return false;
         }
     }
 

@@ -19,3 +19,7 @@ BibleOnSite/Platforms/iOS/AssetPacks/perushim_notes/*.sqlite
 
 # xcodebuild derived data for the managed asset-pack downloader extension.
 extensions/AssetPackDownloader/build/
+
+# The prebuilt search index rides in the same pack but its .gz (~121 MB) exceeds
+# GitHub's 100 MB push limit — it travels via CI artifacts + app packages only.
+BibleOnSite/Platforms/Android/AssetPacks/perushim_notes/*.hebrew_search.sqlite.gz

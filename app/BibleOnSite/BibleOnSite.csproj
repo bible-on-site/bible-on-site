@@ -48,11 +48,11 @@
 		<ApplicationId>com.tanah.daily929</ApplicationId>
 
 		<!-- Versions -->
-		<ApplicationDisplayVersion>5.0.155</ApplicationDisplayVersion>
+		<ApplicationDisplayVersion>5.0.156</ApplicationDisplayVersion>
 		<!-- Windows MSIX requires each version component ≤65535, so we use a separate incrementing value -->
 		<!-- Android versionCode can be large, continuing from Play Store's 40000017 -->
-		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">50000155</ApplicationVersion>
-		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) != 'android'">155</ApplicationVersion>
+		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">50000156</ApplicationVersion>
+		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) != 'android'">156</ApplicationVersion>
 
 		<!-- To develop, package, and publish an app to the Microsoft Store, see: https://aka.ms/MauiTemplateUnpackaged -->
 		<!-- WindowsPackageType None = unpackaged (fixes "Class not registered" when running from CLI). MSIX for Store: /p:WindowsPackageType=MSIX -->
@@ -173,21 +173,27 @@
 	<!-- Auto-decompress perushim notes .gz → .sqlite if needed (checked out from git as compressed).
 	     Calls the devops setup script which has the canonical decompress logic.
 	     WorkingDirectory must be devops/ so that tsx is resolvable from devops/node_modules. -->
-	<Target Name="DecompressPerushimNotes" BeforeTargets="PrepareForBuild" Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND&#xD;&#xA;			!Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite') AND&#xD;&#xA;			Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz')">
+	<Target Name="DecompressPerushimNotes" BeforeTargets="PrepareForBuild" Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND&#xD;&#xA;			((!Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite') AND&#xD;&#xA;			Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz')) OR&#xD;&#xA;			(!Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite') AND&#xD;&#xA;			Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite.gz')))">
 		<Exec Command="node --import tsx setup-dev-env.mts decompress-perushim-notes" WorkingDirectory="$(MSBuildProjectDirectory)/../../devops" />
 	</Target>
 
-	<!-- Android: PAD on-demand asset pack. Run perushim-view pipeline to generate. -->
+	<!-- Android: PAD on-demand asset pack. Run perushim-view pipeline to generate.
+	     The prebuilt search index rides in the same pack (optional — the app builds
+	     it on-device when the pack does not carry it). -->
 	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND (Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite') OR Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz'))">
 		<AndroidAsset Include="Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite" Link="sefaria-dump-5784-sivan-4.perushim_notes.sqlite" AssetPack="perushim_notes" DeliveryType="OnDemand" />
+		<AndroidAsset Include="Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite" Condition="Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite') OR Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite.gz')" Link="sefaria-dump-5784-sivan-4.hebrew_search.sqlite" AssetPack="perushim_notes" DeliveryType="OnDemand" />
 	</ItemGroup>
 
-	<!-- iOS: decompress .gz → .sqlite into the managed asset-pack folder (macOS only; gunzip is always
-	     available). The pack directory layout is produced by prepare_perushim_assets.py; the payload
-	     sits next to Manifest.json so `xcrun ba-package` can archive it for App Store Connect upload. -->
-	<Target Name="DecompressPerushimNotesIos" BeforeTargets="PrepareForBuild;Build" Condition="($([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst') AND&#xD;&#xA;			!Exists('Platforms\iOS\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite') AND&#xD;&#xA;			Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz')">
+	<!-- iOS: decompress .gz → .sqlite payloads into the managed asset-pack folder (macOS only; gunzip is
+	     always available). The pack directory layout is produced by prepare_perushim_assets.py; payloads
+	     sit next to Manifest.json so `xcrun ba-package` can archive the pack for App Store Connect upload.
+	     The prebuilt search index rides in the same pack (optional — the app builds it on-device when the
+	     pack does not carry it). -->
+	<Target Name="DecompressPerushimNotesIos" BeforeTargets="PrepareForBuild;Build" Condition="($([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst') AND&#xD;&#xA;			((!Exists('Platforms\iOS\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite') AND&#xD;&#xA;			Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz')) OR&#xD;&#xA;			(!Exists('Platforms\iOS\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite') AND&#xD;&#xA;			Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite.gz')))">
 		<MakeDir Directories="Platforms\iOS\AssetPacks\perushim_notes" />
-		<Exec Command="gunzip -c '$(MSBuildProjectDirectory)/Platforms/Android/AssetPacks/perushim_notes/sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz' &gt; '$(MSBuildProjectDirectory)/Platforms/iOS/AssetPacks/perushim_notes/sefaria-dump-5784-sivan-4.perushim_notes.sqlite'" />
+		<Exec Condition="!Exists('Platforms\iOS\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite') AND Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz')" Command="gunzip -c '$(MSBuildProjectDirectory)/Platforms/Android/AssetPacks/perushim_notes/sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz' &gt; '$(MSBuildProjectDirectory)/Platforms/iOS/AssetPacks/perushim_notes/sefaria-dump-5784-sivan-4.perushim_notes.sqlite'" />
+		<Exec Condition="!Exists('Platforms\iOS\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite') AND Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite.gz')" Command="gunzip -c '$(MSBuildProjectDirectory)/Platforms/Android/AssetPacks/perushim_notes/sefaria-dump-5784-sivan-4.hebrew_search.sqlite.gz' &gt; '$(MSBuildProjectDirectory)/Platforms/iOS/AssetPacks/perushim_notes/sefaria-dump-5784-sivan-4.hebrew_search.sqlite'" />
 	</Target>
 
 	<!-- Managed Background Assets need an ExtensionKit downloader extension embedded at
@@ -225,12 +231,14 @@
 	<!-- Android Debug fallback: bundle perushim notes in app package so they work without PAD (APK installs). -->
 	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND '$(Configuration)' == 'Debug' AND (Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite') OR Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz'))">
 		<MauiAsset Include="Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite" LogicalName="sefaria-dump-5784-sivan-4.perushim_notes.sqlite" />
+		<MauiAsset Include="Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite" Condition="Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite')" LogicalName="sefaria-dump-5784-sivan-4.hebrew_search.sqlite" />
 	</ItemGroup>
 
 	<!-- Simulator/local Debug installs cannot fetch a store-hosted asset pack (the
 	     downloader extension is only embedded for signed Release packaging). -->
 	<ItemGroup Condition="($([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst') AND '$(Configuration)' == 'Debug' AND Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz')">
 		<MauiAsset Include="Platforms\iOS\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite" LogicalName="sefaria-dump-5784-sivan-4.perushim_notes.sqlite" />
+		<MauiAsset Include="Platforms\iOS\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite" Condition="Exists('Platforms\iOS\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite')" LogicalName="sefaria-dump-5784-sivan-4.hebrew_search.sqlite" />
 	</ItemGroup>
 
 	<ItemGroup>

@@ -84,9 +84,9 @@ public class MasoraViewModelTests
             if (_includeNotes)
             {
                 await Storage.CreateDatabaseAsync("sefaria-dump-5784-sivan-4.perushim_notes.sqlite",
-                    "CREATE TABLE _metadata (key TEXT,value TEXT)", "INSERT INTO _metadata VALUES ('build_timestamp','100')",
-                    "CREATE TABLE note (perush_id INTEGER,perek_id INTEGER,pasuk INTEGER,note_idx INTEGER,note_content TEXT)",
-                    "INSERT INTO note VALUES (1,1,1,0,'inside'),(1,1,2,0,'outside')");
+                    [.. NotesDbV2.Statements(
+                        (1, 1, 1, 0, "inside"), (1, 1, 2, 0, "outside")),
+                        "INSERT INTO _metadata VALUES ('build_timestamp','100')"]);
             }
         }
 
@@ -110,7 +110,7 @@ public class MasoraViewModelTests
         fixture.Model.Heading.Should().Be("בראשית א א");
         fixture.Model.ClosingBreakLabel.Should().Be("פרשה סתומה");
         fixture.Model.CarouselUnits.Should().HaveCount(3);
-        fixture.Model.UnitPositionText.Should().Be("יחידה 1 מתוך 3");
+        fixture.Model.UnitPositionText.Should().Be("פרשה 1 מתוך 3");
         fixture.Model.CanGoToNextUnit.Should().BeTrue();
         fixture.Model.CanGoToPreviousUnit.Should().BeFalse();
     }
@@ -252,14 +252,14 @@ public class MasoraViewModelTests
         model.UnitOrder.Should().Be(2);
         model.ClosingBreakLabel.Should().Be("פרשה פתוחה");
         model.HasClosingBreak.Should().BeTrue();
-        model.UnitPositionText.Should().Be("יחידה 2 מתוך 3");
+        model.UnitPositionText.Should().Be("פרשה 2 מתוך 3");
         model.NextUnitId.Should().Be(3);
         model.PreviousUnitId.Should().Be(1);
         model.CanGoToNextUnit.Should().BeTrue();
         model.CanGoToPreviousUnit.Should().BeTrue();
         model.PerushimCount.Should().BeGreaterThan(0);
         model.HasPerushim.Should().BeTrue();
-        model.PerushimEmptyMessage.Should().Be("אין פרשנות ליחידה זו");
+        model.PerushimEmptyMessage.Should().Be("אין פרשנות לפרשה זו");
         model.ShowDownloadPerushimButton.Should().BeFalse();
         // Rows carry the Hebrew pasuk number used by the marker column.
         model.Unit!.Rows[0].PasukNumHeb.Should().Be(model.Unit.Rows[0].Pasuk.PasukNumHeb);

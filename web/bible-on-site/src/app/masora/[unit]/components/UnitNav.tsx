@@ -15,7 +15,7 @@ export function UnitNav({
 	next: ReadingUnit | null;
 }) {
 	return (
-		<nav className={styles.unitNav} aria-label="ניווט בין יחידות">
+		<nav className={styles.unitNav} aria-label="ניווט בין פרשות">
 			{prev ? (
 				<Link
 					className={styles.unitNavLink}
