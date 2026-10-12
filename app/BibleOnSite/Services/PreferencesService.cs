@@ -74,6 +74,7 @@ public class PreferencesService
     private const string PerekToLoadKey = "perekToLoad";
     private const string BookmarkedPerakimKey = "bookmarkedPerakim";
     private const string RecitationEnabledKey = "recitationEnabled";
+    private const string MasoraMenuEnabledKey = "masoraMenuEnabled";
 
     // הסתר שם השם — stored values mirror the website's divineNameMasking
     // settings (same option spellings), so the policy stays portable.
@@ -308,6 +309,28 @@ public class PreferencesService
 
     #endregion
 
+    private bool _masoraMenuEnabled;
+
+    /// <summary>
+    /// Whether the מסורה על הפרק flyout menu entry is shown. Opt-in only:
+    /// unset resolves to false for fresh installs and upgrades (#2181).
+    /// </summary>
+    public bool MasoraMenuEnabled
+    {
+        get => _masoraMenuEnabled;
+        set
+        {
+            if (_masoraMenuEnabled == value)
+            {
+                return;
+            }
+
+            _masoraMenuEnabled = value;
+            _storage.Set(MasoraMenuEnabledKey, value);
+            OnPreferencesChanged();
+        }
+    }
+
     private readonly IPreferencesStorage _storage;
     private double _fontFactor = 1.0;
     private int? _lastLearntPerek;
@@ -396,6 +419,7 @@ public class PreferencesService
     public void Load()
     {
         _recitationEnabled = _storage.Get(RecitationEnabledKey, false);
+        _masoraMenuEnabled = _storage.Get(MasoraMenuEnabledKey, false);
         _recitationSpeed = Normalize(_storage.Get("recitationSpeed", 1.0), 1, 0.5, 2);
         _recitationVolume = Normalize(_storage.Get("recitationVolume", 1.0), 1, 0, 1);
         _recitationVersePauseMs = Normalize(_storage.Get("recitationVersePauseMs", -1.0), -1, -1, 5000);
@@ -441,6 +465,10 @@ public class PreferencesService
                 _bookmarkedPerakim = new HashSet<int>();
             }
         }
+
+        // Bulk-loaded state is a change for subscribers that bound earlier
+        // (e.g. the Shell flyout content inflates before startup Load runs).
+        OnPreferencesChanged();
     }
 
     /// <summary>

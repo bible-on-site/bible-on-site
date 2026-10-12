@@ -23,13 +23,18 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
         [nameof(HtmlView.LineHeight)] = MapLineHeight,
         [nameof(HtmlView.H1FontSizeMultiplier)] = MapHeaderStyles,
         [nameof(HtmlView.H2FontSizeMultiplier)] = MapHeaderStyles,
-        [nameof(HtmlView.H3FontSizeMultiplier)] = MapHeaderStyles
+        [nameof(HtmlView.H3FontSizeMultiplier)] = MapHeaderStyles,
+        [nameof(HtmlView.SearchMatchStart)] = (handler, _) => handler.UpdateMatchHighlight(),
+        [nameof(HtmlView.SearchMatchLength)] = (handler, _) => handler.UpdateMatchHighlight()
     };
 
     // Managed parsing avoids WebKit's nested main-thread run loop. The serial
     // discards stale completions after a cell is rebound or disconnected.
     private string? _renderedHtml;
     private int _renderSerial;
+    // Highlighted raw range applied by the search match — removed when the
+    // match moves or clears without repainting unrelated backgrounds.
+    private NSRange? _matchRange;
 
     public HtmlViewHandler() : base(PropertyMapper)
     {
@@ -94,6 +99,7 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
         if (string.IsNullOrEmpty(html))
         {
             _renderedHtml = null;
+            _matchRange = null;
             Interlocked.Increment(ref _renderSerial);
             platformView.Text = string.Empty;
             return;
@@ -168,8 +174,10 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
             {
                 return;
             }
+            _matchRange = null;
             if (attributedString != null)
             {
+                ApplySearchMatch(virtualView, attributedString);
                 platformView.AttributedText = attributedString;
             }
             else
@@ -187,6 +195,79 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
             paragraphStyle.Dispose();
             textColor.Dispose();
         }
+    }
+
+    private void ApplySearchMatch(HtmlView virtualView, NSMutableAttributedString attributedString)
+    {
+        if (!virtualView.HasSearchMatch)
+        {
+            return;
+        }
+        var (start, end) = Helpers.SearchMatch.ToRawRange(
+            attributedString.Value?.ToString() ?? string.Empty,
+            new Helpers.SearchMatchSpan(virtualView.SearchMatchStart, virtualView.SearchMatchLength));
+        end = (int)Math.Min(end, attributedString.Length);
+        if (end > start)
+        {
+            var range = new NSRange(start, end - start);
+            using var highlight = UIColor.SystemYellow.ColorWithAlpha((nfloat)0.45);
+            attributedString.AddAttribute(UIStringAttributeKey.BackgroundColor, highlight, range);
+            _matchRange = range;
+        }
+    }
+
+    /// <summary>
+    /// Re-applies the match highlight on the already-rendered text — the match
+    /// properties can arrive after the async parse completes.
+    /// </summary>
+    private void UpdateMatchHighlight()
+    {
+        var handler = (IElementHandler)this;
+        if (handler.PlatformView is not UITextView platformView ||
+            handler.VirtualView is not HtmlView virtualView ||
+            platformView.AttributedText is not { Length: > 0 } current)
+        {
+            // Content not rendered yet — ApplyParsedContent applies the match.
+            return;
+        }
+        using var mutable = new NSMutableAttributedString(current);
+        if (_matchRange is { } previous)
+        {
+            mutable.RemoveAttribute(UIStringAttributeKey.BackgroundColor, previous);
+            _matchRange = null;
+        }
+        ApplySearchMatch(virtualView, mutable);
+        platformView.AttributedText = mutable;
+    }
+
+    /// <summary>
+    /// Y offset (density-independent units) of the match's line inside the
+    /// UITextView — null until the text is laid out.
+    /// </summary>
+    internal nfloat? GetSearchMatchTopDips()
+    {
+        if (PlatformView is not { } platformView || VirtualView is not { HasSearchMatch: true } view)
+        {
+            return null;
+        }
+        var text = platformView.AttributedText?.Value?.ToString();
+        if (string.IsNullOrEmpty(text))
+        {
+            return null;
+        }
+        var (start, _) = Helpers.SearchMatch.ToRawRange(
+            text,
+            new Helpers.SearchMatchSpan(view.SearchMatchStart, view.SearchMatchLength));
+        var position = platformView.GetPosition(platformView.BeginningOfDocument,
+            (nint)Math.Clamp(start, 0, text.Length - 1));
+        if (position == null)
+        {
+            return null;
+        }
+        var rect = platformView.GetCaretRectForPosition(position);
+        // The caret rect is already in text-view coordinates — the container
+        // inset is included, do not add it again.
+        return rect.Y;
     }
 
     private static void MapHtmlContent(HtmlViewHandler handler, HtmlView view)

@@ -74,7 +74,9 @@ describe("article search reindex enqueue", () => {
 		await createArticle({ data: article });
 		await updateArticle({ data: { ...article, id: 7 } });
 		const ensureCalls = mocks.execute.mock.calls.filter((c) =>
-			(c[0] as string).includes("CREATE TABLE IF NOT EXISTS article_search_queue"),
+			(c[0] as string).includes(
+				"CREATE TABLE IF NOT EXISTS article_search_queue",
+			),
 		);
 		expect(ensureCalls).toHaveLength(1);
 	});
@@ -98,9 +100,7 @@ describe("article search reindex enqueue", () => {
 		const enqueues = enqueueCalls();
 		expect(enqueues).toHaveLength(1);
 		expect(enqueues[0][2]).toEqual([42]);
-		expect(mocks.txExecute.mock.calls[0][1]).toContain(
-			"UPDATE tanah_article",
-		);
+		expect(mocks.txExecute.mock.calls[0][1]).toContain("UPDATE tanah_article");
 	});
 
 	it("enqueues the deleted article id so the worker purges it", async () => {
