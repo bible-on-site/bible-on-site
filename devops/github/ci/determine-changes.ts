@@ -56,11 +56,13 @@ export const MODULES = {
 	api: { directory: "web/api", ciPaths: RELEASE_CI_PATHS },
 	app: {
 		directory: "app",
-		// The e2e-impact selector and collector drive the Appium suite (#2085).
+		// The e2e-impact selector/collector and the exec coverage-tree
+		// extractor drive the Appium suite (#2085).
 		ciPaths: [
 			...RELEASE_CI_PATHS,
 			".github/workflows/app-mobile-e2e.yml",
 			"devops/github/ci/e2e-impact",
+			"devops/e2e-coverage-trees",
 		],
 		// Shared decoder changes need native checks. Only changes to the packaged
 		// app itself need an app version, package and release. Website timing
