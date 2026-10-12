@@ -1,54 +1,58 @@
-using System.Collections.ObjectModel;
 using BibleOnSite.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
 namespace BibleOnSite.ViewModels;
 
-#pragma warning disable S2333 // ObservableProperty and RelayCommand generate partial implementations.
-public partial class RecitationBookChoice : ObservableObject
-{
-    public required string Name { get; init; }
-    public required List<int> PerekIds { get; init; }
-    [ObservableProperty] private bool _canSelect = true;
-    [ObservableProperty] private bool _isSelected;
-    [ObservableProperty] private string _status = "";
-}
-
+/// <summary>
+/// קריינות playback preferences: speed, pause style and the volume shortcut into
+/// שמע. Recording installation lives under חבילות הרחבה (<see cref="RecitationPacksViewModel"/>);
+/// playback itself is controlled by the reader's player, not by a global switch.
+/// </summary>
+#pragma warning disable S2333 // RelayCommand generates partial implementations.
 public partial class RecitationPreferencesViewModel : ObservableObject
+#pragma warning restore S2333
 {
     private readonly RecitationService _recitation;
     private readonly PreferencesService _preferences;
-    private readonly PerekDataService _perakim;
-    private CancellationTokenSource? _download;
-    public ObservableCollection<RecitationBookChoice> Books { get; } = [];
-    public RecitationPreferencesViewModel() : this(RecitationService.Instance, PreferencesService.Instance, PerekDataService.Instance) { }
-    public RecitationPreferencesViewModel(RecitationService recitation, PreferencesService preferences, PerekDataService perakim)
+    private readonly IAppNavigator _navigator;
+
+    public RecitationPreferencesViewModel()
+        : this(RecitationService.Instance, PreferencesService.Instance, ShellAppNavigator.Instance) { }
+
+    public RecitationPreferencesViewModel(RecitationService recitation, PreferencesService preferences)
+        : this(recitation, preferences, ShellAppNavigator.Instance) { }
+
+    public RecitationPreferencesViewModel(RecitationService recitation, PreferencesService preferences, IAppNavigator navigator)
     {
-        _recitation = recitation; _preferences = preferences; _perakim = perakim;
+        _recitation = recitation;
+        _preferences = preferences;
+        _navigator = navigator;
+        _preferences.PreferencesChanged += OnPreferencesChanged;
+        _recitation.Changed += OnRecitationChanged;
     }
-    public bool IsInstalled => _recitation.IsInstalled;
-    public bool Enabled
-    {
-        get => _preferences.RecitationEnabled;
-        set { _preferences.RecitationEnabled = value && IsInstalled; OnPropertyChanged(); }
-    }
+
     public double Speed
     {
         get => _preferences.RecitationSpeed;
         set { _preferences.RecitationSpeed = Math.Round(value * 4) / 4; OnPropertyChanged(); }
     }
+
+    /// <summary>קריינות volume — the same setting the שמע page edits.</summary>
     public double Volume
     {
         get => _preferences.RecitationVolume;
         set { _preferences.RecitationVolume = value; OnPropertyChanged(); }
     }
+
     public bool OriginalPauses
     {
         get => _preferences.RecitationVersePauseMs < 0;
         set { _preferences.RecitationVersePauseMs = value ? -1 : 1000; OnPropertyChanged(); OnPropertyChanged(nameof(CustomPauses)); OnPropertyChanged(nameof(PauseSeconds)); }
     }
+
     public bool CustomPauses => !OriginalPauses;
+
     public double PauseSeconds
     {
         get => Math.Max(0, _preferences.RecitationVersePauseMs) / 1000;
@@ -59,104 +63,32 @@ public partial class RecitationPreferencesViewModel : ObservableObject
             OnPropertyChanged();
         }
     }
-    [ObservableProperty][NotifyPropertyChangedFor(nameof(IsIdle))] private bool _isDownloading;
-    public bool IsIdle => !IsDownloading;
-    [ObservableProperty] private double _progress;
-    [ObservableProperty] private string _status = "התקינו הקראה לכל הספרים או לספרים שתבחרו.";
 
-    public async Task LoadAsync()
-    {
-        try
-        {
-            await _recitation.InitializeAsync();
-            await _perakim.LoadAsync();
-            if (Books.Count == 0 && _perakim.Perakim is { } chapters)
-            {
-                foreach (var group in chapters.Values.GroupBy(p => p.SeferId).OrderBy(g => g.Key))
-                {
-                    Books.Add(new RecitationBookChoice
-                    {
-                        Name = group.First().SeferName,
-                        PerekIds = group.Select(p => p.PerekId).ToList(),
-                        IsSelected = group.Any(p => _recitation.HasAudio(p.PerekId))
-                    });
-                }
-            }
+    /// <summary>Honest on-disk install state for the התקנת הקלטות shortcut row.</summary>
+    public string InstallStateText => RecitationInstallStateText.Of(_recitation.InstallState);
 
-            Refresh();
-        }
-        catch (Exception) { Status = "לא ניתן לטעון את חבילת ההקראה. נסו להתקין אותה שוב."; }
-    }
-
-    private void Refresh()
-    {
-        foreach (var book in Books)
-        {
-            var available = book.PerekIds.Count(id => _recitation.GetTrack(id) != null);
-            var installed = book.PerekIds.Count(_recitation.HasAudio);
-            var size = _recitation.Books.Where(b => b.PerekIds.Any(book.PerekIds.Contains)).Sum(b => b.SizeBytes);
-            // Unknown availability can be retried; a loaded catalog is authoritative.
-            book.CanSelect = !IsInstalled || available > 0;
-            if (!book.CanSelect) { book.IsSelected = false; }
-            book.Status = !IsInstalled ? "זמינות תיבדק בעת ההורדה" : available == 0 ? "אין הקלטות זמינות" : $"{installed} מתוך {available} הקלטות מותקנות ({Math.Ceiling(size / 1_000_000d)} MB)";
-        }
-        OnPropertyChanged(nameof(IsInstalled)); OnPropertyChanged(nameof(Enabled));
-    }
-
+    /// <summary>Opens שמע focused on the קריינות volume control.</summary>
     [RelayCommand]
-    private void SelectAll()
+    public async Task OpenSoundAsync()
     {
-        foreach (var book in Books)
-        {
-            book.IsSelected = book.CanSelect;
-        }
+        await _navigator.GoToAsync($"{AppRoutes.SoundPreferences}?focus=recitation");
     }
-    [RelayCommand] private void CancelDownload() => _download?.Cancel();
 
+    /// <summary>Opens חבילות הרחבה where recitation recordings are installed and removed.</summary>
     [RelayCommand]
-    public async Task DownloadSelectedAsync()
+    public async Task OpenExtensionPacksAsync()
     {
-        if (IsDownloading)
-        {
-            return;
-        }
-
-        Refresh();
-        var ids = Books.Where(b => b.IsSelected && b.CanSelect).SelectMany(b => b.PerekIds).ToArray();
-        if (ids.Length == 0) { Status = "בחרו ספר אחד לפחות, או את כל הספרים."; return; }
-        IsDownloading = true; Progress = 0;
-        using var cancellation = new CancellationTokenSource();
-        _download = cancellation;
-        // Queued progress callbacks are only rejected once _download and
-        // IsDownloading are cleared, so the outcome is applied afterwards:
-        // a stale report that runs during the catch→finally window must not
-        // overwrite the completed or cancelled status.
-        string outcome;
-        try
-        {
-            Status = "מעדכן את חבילת ההקראה...";
-            await _recitation.UpdateAsync(cancellation.Token);
-            Status = "מוריד הקלטות...";
-            await _recitation.DownloadAsync(ids, new Progress<double>(p =>
-            {
-                // Queued progress must not replace the completed or cancelled status.
-                if (_download != cancellation || !IsDownloading)
-                {
-                    return;
-                }
-                Progress = p; Status = $"מוריד הקלטות... {p:P0}";
-            }), cancellation.Token);
-            Enabled = true;
-            outcome = "ההקלטות מותקנות וזמינות גם ללא אינטרנט.";
-        }
-        catch (OperationCanceledException) { outcome = "ההורדה הופסקה. הקלטות שהושלמו נשמרו להמשך."; }
-        // Any non-cancellation failure — catalog, package, checksum, filesystem
-        // or platform delivery errors — collapses to one retriable status.
-        catch (Exception ex) when (ex is not OperationCanceledException) { outcome = "לא ניתן להשלים את ההורדה. נסו שוב; הקלטות שהושלמו נשמרו."; }
-        finally { _download = null; IsDownloading = false; }
-        Status = outcome;
-        Refresh();
+        await _navigator.GoToAsync(AppRoutes.ExtensionPacks);
     }
 
+    private void OnPreferencesChanged(object? sender, EventArgs e)
+    {
+        OnPropertyChanged(nameof(Speed));
+        OnPropertyChanged(nameof(Volume));
+        OnPropertyChanged(nameof(OriginalPauses));
+        OnPropertyChanged(nameof(CustomPauses));
+        OnPropertyChanged(nameof(PauseSeconds));
+    }
+
+    private void OnRecitationChanged(object? sender, EventArgs e) => OnPropertyChanged(nameof(InstallStateText));
 }
-#pragma warning restore S2333

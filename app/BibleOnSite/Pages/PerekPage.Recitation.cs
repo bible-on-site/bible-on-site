@@ -32,7 +32,12 @@ public partial class PerekPage
     private Pasuk? _recitingPasuk;
     private RecitationWord? _recitingWord;
     private readonly Dictionary<int, Span> _focusedWordSpans = [];
-    private bool RecitationEnabled => PreferencesService.Instance.RecitationEnabled && RecitationService.Instance.IsInstalled;
+    /// <summary>
+    /// Whether the recitation catalog is available on this device. There is no
+    /// global on/off preference — the reader's play controls and the קריינות
+    /// menu mode start and stop playback directly.
+    /// </summary>
+    private bool RecitationAvailable => RecitationService.Instance.IsInstalled;
 
     private void SubscribeRecitation()
     {
@@ -49,20 +54,25 @@ public partial class PerekPage
 
     private void OnRecitationPreferencesChanged(object? sender, EventArgs e)
     {
-        if (!RecitationEnabled)
+        if (!RecitationAvailable)
         {
             StopRecitation();
         }
 
-        if (!RecitationEnabled && _audioDecoder != null)
+        if (!RecitationAvailable && _audioDecoder != null)
         {
             _ = _audioDecoder.ReleaseAsync();
         }
 
-        if (!RecitationEnabled && _chapterRecitationSelection)
+        if (!RecitationAvailable && _chapterRecitationSelection)
         {
             _chapterRecitationSelection = false;
         }
+
+        // The שמע/קריינות sliders update an in-flight playback, not only the next play.
+        var preferences = PreferencesService.Instance;
+        RecitationPlayer.Volume = preferences.RecitationVolume;
+        RecitationPlayer.Speed = preferences.RecitationSpeed;
 
         RefreshFocusedRecitation();
         UpdateSelectionBar();
@@ -173,7 +183,7 @@ public partial class PerekPage
 
     private void OnHeaderLongPressed(object? sender, EventArgs e)
     {
-        if (!RecitationEnabled || sender is not LongPressBehavior behavior ||
+        if (!RecitationAvailable || sender is not LongPressBehavior behavior ||
             behavior.AssociatedView?.BindingContext is not Perek perek || perek != _viewModel.Perek)
         {
             return;
@@ -194,7 +204,7 @@ public partial class PerekPage
 
     private async void OnHeaderPointerPressed(object? sender, PointerEventArgs e)
     {
-        if (OperatingSystem.IsAndroid() || OperatingSystem.IsIOS() || OperatingSystem.IsMacCatalyst() || !RecitationEnabled)
+        if (OperatingSystem.IsAndroid() || OperatingSystem.IsIOS() || OperatingSystem.IsMacCatalyst() || !RecitationAvailable)
         {
             return;
         }
@@ -341,10 +351,10 @@ public partial class PerekPage
         }
 
         var track = RecitationService.Instance.GetTrack(perek.PerekId);
-        var canPlayWords = RecitationEnabled && RecitationService.Instance.HasAudio(perek.PerekId) &&
+        var canPlayWords = RecitationAvailable && RecitationService.Instance.HasAudio(perek.PerekId) &&
             track?.AlignmentStatus == "ready" && track.Matches(perek.Pasukim);
         FocusedRecitationHint.Text = canPlayWords ? "הקישו על מילה כדי לשמוע אותה." :
-            RecitationEnabled && track != null && track.AlignmentStatus != "ready"
+            RecitationAvailable && track != null && track.AlignmentStatus != "ready"
                 ? "הקראת מילים ופסוקים לפרק זה עדיין בהכנה. ההקלטה המלאה זמינה בלחיצה ארוכה על כותרת הפרק." : "";
         FocusedRecitationHint.IsVisible = FocusedRecitationHint.Text.Length > 0;
         if (!canPlayWords) { FocusedPasukText.FormattedText = pasuk.FormattedText; return; }
@@ -440,7 +450,7 @@ public partial class PerekPage
     private async Task PlayRecitationAsync(string key, double? start = null, double? end = null,
         IReadOnlyList<(double Start, double End)>? ranges = null, double? resumeFromMs = null)
     {
-        if (!RecitationEnabled || _viewModel.Perek is not { } perek)
+        if (!RecitationAvailable || _viewModel.Perek is not { } perek)
         {
             return;
         }
@@ -487,7 +497,7 @@ public partial class PerekPage
                 ? preferences.RecitationVersePauseMs * preferences.RecitationSpeed : 0;
             _audioDecoder ??= new MpegRecitationAudioDecoder(RecitationDecoderView);
             var path = await RecitationService.Instance.PrepareAudioAsync(perek.PerekId, perek.Pasukim, start, end, request.Token, ranges, _audioDecoder, pauseMs);
-            if (request.IsCancellationRequested || _viewModel.Perek != perek || !RecitationEnabled)
+            if (request.IsCancellationRequested || _viewModel.Perek != perek || !RecitationAvailable)
             {
                 return;
             }
@@ -522,7 +532,7 @@ public partial class PerekPage
 
     private async void OnRecitationMediaOpened(object? sender, EventArgs e)
     {
-        if (!_playWhenOpened || !RecitationEnabled)
+        if (!_playWhenOpened || !RecitationAvailable)
         {
             return;
         }
