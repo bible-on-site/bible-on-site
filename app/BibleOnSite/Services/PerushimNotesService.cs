@@ -104,6 +104,10 @@ public class PerushimNotesService
     /// <summary>Whether compatible notes are available from PAD/ODR or a bundled asset.</summary>
     public bool IsAvailable => _initialized && !_notesMissing && _connection != null;
 
+    // A verse-only search may reuse an already installed index without waiting
+    // for store delivery or initializing an unavailable commentary pack.
+    internal bool HasInstalledSearchIndex => IsAvailable && File.Exists(Path.Join(DataDirectory, SearchIndexDbName));
+
     internal async Task<SQLiteAsyncConnection?> GetSearchConnectionAsync()
     {
         await InitializeAsync();

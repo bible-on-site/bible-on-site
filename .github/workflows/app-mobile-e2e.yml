@@ -40,7 +40,7 @@ permissions:
   actions: read
 
 env:
-  PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER: perushim-sqlite-v2.master
+  PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER: perushim-sqlite-v2-indexed.master
 
 jobs:
   # Standalone dispatch runs get no caller-provided artifact name; fetch the
