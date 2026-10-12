@@ -30,6 +30,7 @@ def verify_review(case, decision, queue_hash):
     checked = validate_decision(case, {
         "candidateSha256": decision["candidateSha256"], "verdict": decision["verdict"],
         "verseHeard": evidence["verseHeard"], "heardSegments": evidence["heardSegments"],
+        **({"freshHeardSegments": evidence["freshHeardSegments"]} if "freshHeardSegments" in evidence else {}),
         "note": decision["note"],
     })
     for key, value in checked.items():
