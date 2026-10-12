@@ -274,12 +274,7 @@ async fn main() -> Result<()> {
         )
         .await?;
 
-        execute_script(
-            &mut conn,
-            &base_path.join("../tanah_article_covering_source_upgrade.sql"),
-            "article-covering-source-upgrade",
-        )
-        .await?;
+        apply_article_covering_source_upgrade(&mut conn, base_path).await?;
 
         let perek_images_path = base_path.join("../tanah_perek_images_structure.sql");
         execute_script(&mut conn, &perek_images_path, "perek-images-structure").await?;
@@ -493,6 +488,18 @@ async fn apply_source_citation_upgrade(
         "tanahpedia_person_parent_child",
         "source_citation",
         "VARCHAR(400) NULL",
+    )
+    .await
+}
+
+async fn apply_article_covering_source_upgrade(
+    conn: &mut MySqlConnection,
+    base_path: &Path,
+) -> Result<()> {
+    execute_script(
+        conn,
+        &base_path.join("../tanah_article_covering_source_upgrade.sql"),
+        "article-covering-source-upgrade",
     )
     .await
 }
@@ -1094,14 +1101,12 @@ SELECT 1";
             raw_sql("DROP TABLE IF EXISTS tanah_article_covering_source;
                 ALTER TABLE tanah_article DROP COLUMN coverage_verified;")
                 .execute(&mut conn).await?;
-            let covering_upgrade =
-                base_path.join("../tanah_article_covering_source_upgrade.sql");
-            execute_script(&mut conn, &covering_upgrade, "test-covering-upgrade").await?;
+            apply_article_covering_source_upgrade(&mut conn, base_path).await?;
             raw_sql("INSERT INTO tanah_perek (id) VALUES (1);
                 INSERT INTO tanah_article_covering_source (article_id, perek_id, pasuk) VALUES (42, 1, 3);
                 UPDATE tanah_article SET coverage_verified = TRUE WHERE id = 42;")
                 .execute(&mut conn).await?;
-            execute_script(&mut conn, &covering_upgrade, "test-covering-upgrade-repeat").await?;
+            apply_article_covering_source_upgrade(&mut conn, base_path).await?;
             assert_eq!(query_scalar::<MySql, i64>("SELECT COUNT(*) FROM tanah_article_covering_source WHERE article_id = 42 AND perek_id = 1 AND pasuk = 3").fetch_one(&mut conn).await?, 1);
             assert_eq!(query_scalar::<MySql, i64>("SELECT COUNT(*) FROM tanah_article WHERE id = 42 AND coverage_verified = TRUE").fetch_one(&mut conn).await?, 1);
             execute_script(
