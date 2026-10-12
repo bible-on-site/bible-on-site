@@ -147,14 +147,35 @@ public abstract class MobileDeviceTest : IAsyncLifetime
             body();
             CoverageEvidence.RecordSession(Driver?.SessionId);
             CoverageEvidence.Finish("passed");
+            CollectAppCoverage(name, "passed");
             SaveDiagnostics(name, "passed");
         }
         catch
         {
             CoverageEvidence.RecordSession(Driver?.SessionId);
             CoverageEvidence.Finish("failed");
+            CollectAppCoverage(name, "failed");
             SaveDiagnostics(name, "failed");
             throw;
+        }
+    }
+
+    // No live session means no app process is answering the coverage endpoint; unit-test fakes never create a driver, so this also keeps collection out of host-side unit tests.
+    private void CollectAppCoverage(string name, string outcome)
+    {
+        if (Driver == null)
+        {
+            return;
+        }
+        try
+        {
+            AppCoverage.Collect(Configuration, name, outcome, Output);
+        }
+        catch (Exception exception) //NOSONAR
+        {
+            // Coverage collection is diagnostic-only: a failure here must never
+            // decide (or mask) the scenario's own outcome.
+            Output.WriteLine($"{Configuration.Platform}: coverage collection failed: {exception.Message}");
         }
     }
 
@@ -163,6 +184,12 @@ public abstract class MobileDeviceTest : IAsyncLifetime
         AcquireSession();
         Page = new(Driver!, Platform);
         Page.WaitForStartup();
+        // Launch code (App.xaml.cs, MauiProgram, startup navigation) only ever
+        // runs before the first reset; attribute it to a startup dump so the
+        // merged report still counts it (#1232). Later connects overwrite it —
+        // the content is identical app-init hits either way.
+        AppCoverage.Collect(Configuration, "_startup", "passed", Output);
+        AppCoverage.Reset(Configuration, Output);
     }
 
     // Unit coverage substitutes IMobileDeviceSession to observe this path
