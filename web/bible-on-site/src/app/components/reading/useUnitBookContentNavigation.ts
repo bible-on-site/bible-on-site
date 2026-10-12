@@ -61,17 +61,24 @@ export function useUnitBookContentNavigation(
 		};
 	}, []);
 
+	// Depend on the selection's fields rather than the object identity:
+	// callers build `initialContent` inline each render, and an
+	// identity-keyed effect would setContent on every render forever.
+	const seedScope = initialContent?.scope;
+	const seedKind = initialContent?.kind;
+	const seedSlug = initialContent?.slug;
 	useEffect(() => {
 		setContent(
-			initialContent
+			seedScope && seedKind && seedSlug != null
 				? ({
 						unitId,
-						haftara: initialContent.scope === "haftara",
-						[scopeParamKey(initialContent)]: initialContent.slug,
+						haftara: seedScope === "haftara",
+						[scopeParamKey({ scope: seedScope, kind: seedKind })]:
+							seedSlug,
 					} as UnitBookContent)
 				: null,
 		);
-	}, [unitId, initialContent]);
+	}, [unitId, seedScope, seedKind, seedSlug]);
 
 	const navigate = useCallback(
 		(

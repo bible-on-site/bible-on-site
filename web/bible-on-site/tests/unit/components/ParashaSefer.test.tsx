@@ -139,6 +139,18 @@ jest.mock("@/data/sefer-colors", () => ({
 	getSeferColor: () => "hsl(30, 80%, 50%)",
 }));
 
+// Document-title side effects are asserted as calls; the real resolver
+// utils still supply the titles themselves.
+const mockSetSeferDocumentTitle = jest.fn();
+const mockReleaseSeferDocumentTitle = jest.fn();
+jest.mock("@/app/929/[number]/components/sefer-document-title", () => ({
+	setSeferDocumentTitle: (...args: unknown[]) =>
+		mockSetSeferDocumentTitle(...args),
+	releaseSeferDocumentTitle: (...args: unknown[]) =>
+		mockReleaseSeferDocumentTitle(...args),
+}));
+
+import { setUnitOpenPerush } from "@/app/components/reading/unit-book-navigation";
 import ParashaSefer from "@/app/parasha/[unit]/components/ParashaSefer";
 import type {
 	BookPage,
@@ -267,6 +279,8 @@ describe("ParashaSefer", () => {
 		mockSummariesBatch.mockReset().mockReturnValue(
 			new Promise(() => {}),
 		);
+		mockSetSeferDocumentTitle.mockClear();
+		mockReleaseSeferDocumentTitle.mockClear();
 		history.replaceState(null, "", "/פרשה/1?book");
 	});
 
@@ -537,5 +551,194 @@ describe("ParashaSefer", () => {
 		expect(screen.getByTestId("mock-modal")).toBeInTheDocument();
 		fireEvent.click(screen.getByTestId("close-modal"));
 		expect(screen.queryByTestId("mock-modal")).toBeNull();
+	});
+
+	it("logs and survives a failed summary batch", async () => {
+		mockSummariesBatch.mockRejectedValue(new Error("offline"));
+		const errorSpy = jest
+			.spyOn(console, "error")
+			.mockImplementation(() => {});
+		try {
+			render(<ParashaSefer {...baseProps()} />);
+			await act(async () => {});
+			expect(errorSpy).toHaveBeenCalledWith(
+				"Failed to load parasha book summaries",
+				expect.objectContaining({ sefer: "בראשית" }),
+			);
+		} finally {
+			errorSpy.mockRestore();
+		}
+	});
+
+	it("skips the summary batch when every unit is current", () => {
+		render(<ParashaSefer {...baseProps()} units={[units[0]]} />);
+		expect(mockSummariesBatch).not.toHaveBeenCalled();
+	});
+
+	it("resolves each blank's fallback perek from its own spread", () => {
+		render(<ParashaSefer {...baseProps()} />);
+		// Unit 1's Haftarah blank anchors into the auxiliary reading
+		// (perek 335); unit 2 has no Haftarah so the blank falls back to
+		// the parasha's first Torah perek.
+		expect(mockBlankPages.get("1:torah")?.fallbackPerekId).toBe(1);
+		expect(mockBlankPages.get("1:haftara")?.fallbackPerekId).toBe(335);
+		expect(mockBlankPages.get("2:haftara")?.fallbackPerekId).toBe(6);
+	});
+
+	it("anchors blanks at perek 0 when a unit carries no ranges", () => {
+		// Defensive end of the fallback chain — degenerate unit data
+		// still yields a stable anchor instead of crashing the book.
+		const emptyUnit: ParashaBookUnit = {
+			unitId: 3,
+			name: "ריק",
+			order: 3,
+			refSpan: "",
+			ranges: [],
+			haftarot: [],
+			notes: [],
+		};
+		render(<ParashaSefer {...baseProps()} units={[...units, emptyUnit]} />);
+		expect(mockBlankPages.get("3:torah")?.fallbackPerekId).toBe(0);
+		expect(mockBlankPages.get("3:haftara")?.fallbackPerekId).toBe(0);
+	});
+
+	it("titles open commentary per spread scope", () => {
+		render(<ParashaSefer {...baseProps()} />);
+		const torahTitle = mockBlankPages.get("1:torah")?.perushTitle as (
+			n: string,
+		) => string;
+		const haftaraTitle = mockBlankPages.get("1:haftara")
+			?.perushTitle as (n: string) => string;
+		expect(torahTitle('רש"י')).toBe(
+			'רש"י על פרשת בראשית | פרשה על הפרק | תנ"ך על הפרק',
+		);
+		expect(haftaraTitle('רד"ק')).toBe(
+			'רד"ק על הפטרת בראשית | פרשה על הפרק | תנ"ך על הפרק',
+		);
+	});
+
+	it("updates the document title on page flips and open content", () => {
+		render(<ParashaSefer {...baseProps()} />);
+		const handlers = capturedFlipBookProps.handlers as {
+			onPageFlipped: () => void;
+		};
+		// Page 5 is unit 1's Haftarah text spread.
+		mockGetCurrentPageIndex.mockReturnValue(5);
+		act(() => handlers.onPageFlipped());
+		expect(mockSetSeferDocumentTitle).toHaveBeenLastCalledWith(
+			'הפטרת בראשית | פרשה על הפרק | תנ"ך על הפרק',
+		);
+		mockGetCurrentPageIndex.mockReturnValue(3);
+		act(() => handlers.onPageFlipped());
+		expect(mockSetSeferDocumentTitle).toHaveBeenLastCalledWith(
+			'פרשת בראשית | פרשה על הפרק | תנ"ך על הפרק',
+		);
+
+		// An open perush/article on a blank page wins over the page title.
+		const onContentTitle = mockBlankPages.get("1:haftara")
+			?.onContentTitle as (t: string | null) => void;
+		act(() => onContentTitle('רד"ק על ההפטרה'));
+		expect(mockSetSeferDocumentTitle).toHaveBeenLastCalledWith(
+			'רד"ק על ההפטרה',
+		);
+		act(() => onContentTitle(null));
+	});
+
+	it("releases the document title while hidden and on unmount", () => {
+		const view = render(<ParashaSefer {...baseProps()} />);
+		mockReleaseSeferDocumentTitle.mockClear();
+		view.rerender(<ParashaSefer {...baseProps()} isVisible={false} />);
+		expect(mockReleaseSeferDocumentTitle).toHaveBeenCalledWith(
+			'פרשת בראשית | פרשה על הפרק | תנ"ך על הפרק',
+		);
+		view.unmount();
+		expect(mockReleaseSeferDocumentTitle).toHaveBeenCalled();
+	});
+
+	it("delegates pasuk-numeral clicks per spread scope", () => {
+		render(<ParashaSefer {...baseProps()} />);
+		const scrollIntoView = jest.fn();
+		Element.prototype.scrollIntoView = scrollIntoView;
+		const haftaraPane = document.querySelector(
+			'[data-sefer-unit-text="1:haftara"]',
+		) as HTMLElement;
+		// The delegated onClick lives on the scroll wrapper inside the
+		// pane; the numeral must sit inside it to reach the handler.
+		(
+			haftaraPane.querySelector("article") as HTMLElement
+		).insertAdjacentHTML(
+			"beforeend",
+			`<span id="pasuk-335-5-book-1-haftara-ashkenazi"><b data-pasuk-num>ה</b></span>`,
+		);
+		document.body.insertAdjacentHTML(
+			"beforeend",
+			`<div data-sefer-unit-perush="1:haftara"><div data-unit-perush-pasuk="335-5">note</div></div>`,
+		);
+		try {
+			setUnitOpenPerush("1:haftara", {
+				name: 'רד"ק',
+				pesukim: new Set(["335-5"]),
+			});
+			fireEvent.click(
+				haftaraPane.querySelector("[data-pasuk-num]") as HTMLElement,
+			);
+			expect(scrollIntoView).toHaveBeenCalled();
+			expect(
+				document.querySelector('[data-unit-perush-pasuk="335-5"]'),
+			).toHaveAttribute("data-pasuk-highlight");
+
+			// A Torah-pane numeral does not resolve against the Haftarah
+			// pane's open perush.
+			scrollIntoView.mockClear();
+			const torahPane = document.querySelector(
+				'[data-sefer-unit-text="1:torah"]',
+			) as HTMLElement;
+			(
+				torahPane.querySelector("article") as HTMLElement
+			).insertAdjacentHTML(
+				"beforeend",
+				`<span id="pasuk-335-5-book-1"><b data-pasuk-num>ה</b></span>`,
+			);
+			fireEvent.click(
+				torahPane.querySelector("[data-pasuk-num]") as HTMLElement,
+			);
+			expect(scrollIntoView).not.toHaveBeenCalled();
+		} finally {
+			setUnitOpenPerush("1:haftara", null);
+			document
+				.querySelector('[data-sefer-unit-perush="1:haftara"]')
+				?.remove();
+		}
+	});
+
+	it("seeds a selection for a non-current unit's blank", () => {
+		render(<ParashaSefer {...baseProps()} />);
+		const onNavigate = mockBlankPages.get("2:torah")?.onNavigate as (
+			kind?: string,
+			slug?: string,
+		) => void;
+		act(() => onNavigate("article", "some-article"));
+		expect(window.location.search).toContain("article=some-article");
+		expect(mockBlankPages.get("2:torah")?.initialSlug).toBe(
+			"some-article",
+		);
+	});
+
+	it("routes Haftarah blank navigation to the haftara params", () => {
+		render(<ParashaSefer {...baseProps()} />);
+		const onNavigate = mockBlankPages.get("1:haftara")?.onNavigate as (
+			kind?: string,
+			slug?: string,
+		) => void;
+		act(() => onNavigate("perush", 'רד"ק'));
+		expect(decodeURIComponent(window.location.search)).toContain(
+			'haftaraPerush=רד"ק',
+		);
+		expect(mockBlankPages.get("1:haftara")?.initialSlug).toBe('רד"ק');
+		expect(mockBlankPages.get("1:torah")?.initialSlug).toBeUndefined();
+		// Clearing drops only the Haftarah scope's params.
+		act(() => onNavigate());
+		expect(window.location.search).not.toContain("haftaraPerush=");
+		expect(mockBlankPages.get("1:haftara")?.initialSlug).toBeUndefined();
 	});
 });

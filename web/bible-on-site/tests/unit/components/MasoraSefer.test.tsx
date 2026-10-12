@@ -138,6 +138,18 @@ jest.mock("@/data/sefer-colors", () => ({
 	getSeferColor: () => "hsl(30, 80%, 50%)",
 }));
 
+// Document-title side effects are asserted as calls; the real resolver
+// utils still supply the titles themselves.
+const mockSetSeferDocumentTitle = jest.fn();
+const mockReleaseSeferDocumentTitle = jest.fn();
+jest.mock("@/app/929/[number]/components/sefer-document-title", () => ({
+	setSeferDocumentTitle: (...args: unknown[]) =>
+		mockSetSeferDocumentTitle(...args),
+	releaseSeferDocumentTitle: (...args: unknown[]) =>
+			mockReleaseSeferDocumentTitle(...args),
+}));
+
+import { setUnitOpenPerush } from "@/app/components/reading/unit-book-navigation";
 import MasoraSefer from "@/app/masora/[unit]/components/MasoraSefer";
 import type {
 	BookPage,
@@ -229,6 +241,8 @@ describe("MasoraSefer", () => {
 		mockSummariesBatch.mockReset().mockReturnValue(
 			new Promise(() => {}),
 		);
+		mockSetSeferDocumentTitle.mockClear();
+		mockReleaseSeferDocumentTitle.mockClear();
 		history.replaceState(null, "", "/מסורה/1?book");
 	});
 
@@ -443,5 +457,109 @@ describe("MasoraSefer", () => {
 		expect(screen.getByTestId("mock-modal")).toBeInTheDocument();
 		fireEvent.click(screen.getByTestId("close-modal"));
 		expect(screen.queryByTestId("mock-modal")).toBeNull();
+	});
+
+	it("logs and survives a failed summary batch", async () => {
+		mockSummariesBatch.mockRejectedValue(new Error("offline"));
+		const errorSpy = jest
+			.spyOn(console, "error")
+			.mockImplementation(() => {});
+		try {
+			render(<MasoraSefer {...baseProps()} />);
+			await act(async () => {});
+			expect(errorSpy).toHaveBeenCalledWith(
+				"Failed to load masora book summaries",
+				expect.objectContaining({ sefer: "בראשית" }),
+			);
+		} finally {
+			errorSpy.mockRestore();
+		}
+	});
+
+	it("skips the summary batch when every unit is current", () => {
+		render(<MasoraSefer {...baseProps()} units={[units[0]]} />);
+		expect(mockSummariesBatch).not.toHaveBeenCalled();
+	});
+
+	it("updates the document title on page flips and open content", () => {
+		render(<MasoraSefer {...baseProps()} />);
+		const handlers = capturedFlipBookProps.handlers as {
+			onPageFlipped: () => void;
+		};
+		mockGetCurrentPageIndex.mockReturnValue(3);
+		act(() => handlers.onPageFlipped());
+		// Unit 1's text page resolves to its Masoretic unit title.
+		expect(mockSetSeferDocumentTitle).toHaveBeenLastCalledWith(
+			'בראשית א א-ה | מסורה על הפרק | תנ"ך על הפרק',
+		);
+
+		// An open perush/article on a blank page wins over the page title.
+		const onContentTitle = mockBlankPages.get("1:torah")
+			?.onContentTitle as (t: string | null) => void;
+		act(() => onContentTitle('רש"י על הפרשה'));
+		expect(mockSetSeferDocumentTitle).toHaveBeenLastCalledWith(
+			'רש"י על הפרשה',
+		);
+		act(() => onContentTitle(null));
+	});
+
+	it("releases the document title while hidden and on unmount", () => {
+		const view = render(<MasoraSefer {...baseProps()} />);
+		mockReleaseSeferDocumentTitle.mockClear();
+		view.rerender(<MasoraSefer {...baseProps()} isVisible={false} />);
+		expect(mockReleaseSeferDocumentTitle).toHaveBeenCalledWith(
+			expect.stringContaining("בראשית א א-ה"),
+		);
+		view.unmount();
+		expect(mockReleaseSeferDocumentTitle).toHaveBeenCalled();
+	});
+
+	it("titles open commentary with the Masoretic unit heading", () => {
+		render(<MasoraSefer {...baseProps()} />);
+		const perushTitle = mockBlankPages.get("1:torah")?.perushTitle as (
+			n: string,
+		) => string;
+		expect(perushTitle('רש"י')).toBe(
+			'רש"י על בראשית א א-ה | מסורה על הפרק | תנ"ך על הפרק',
+		);
+	});
+
+	it("delegates pasuk-numeral clicks to the facing open perush", () => {
+		render(<MasoraSefer {...baseProps()} />);
+		const scrollIntoView = jest.fn();
+		Element.prototype.scrollIntoView = scrollIntoView;
+		const textPane = document.querySelector(
+			'[data-sefer-unit-text="1:torah"]',
+		) as HTMLElement;
+		// The delegated onClick lives on the scroll wrapper inside the
+		// pane; the numeral must sit inside it to reach the handler.
+		(
+			textPane.querySelector("article") as HTMLElement
+		).insertAdjacentHTML(
+			"beforeend",
+			`<span id="pasuk-1-2-book-1"><b data-pasuk-num>ב</b></span>`,
+		);
+		document.body.insertAdjacentHTML(
+			"beforeend",
+			`<div data-sefer-unit-perush="1:torah"><div data-unit-perush-pasuk="1-2">note</div></div>`,
+		);
+		try {
+			setUnitOpenPerush("1:torah", {
+				name: 'רש"י',
+				pesukim: new Set(["1-2"]),
+			});
+			fireEvent.click(
+				textPane.querySelector("[data-pasuk-num]") as HTMLElement,
+			);
+			expect(scrollIntoView).toHaveBeenCalled();
+			expect(
+				document.querySelector('[data-unit-perush-pasuk="1-2"]'),
+			).toHaveAttribute("data-pasuk-highlight");
+		} finally {
+			setUnitOpenPerush("1:torah", null);
+			document
+				.querySelector('[data-sefer-unit-perush="1:torah"]')
+				?.remove();
+		}
 	});
 });

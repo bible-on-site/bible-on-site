@@ -54,6 +54,7 @@ jest.mock("next/dynamic", () => {
 			opts?.loading ?? null;
 		return function MockSefer(props: {
 			initialBookPage?: string | null;
+			initialContent?: { scope: string; kind: string; slug: string } | null;
 		}) {
 			const [mount] = useState(() => ++mockSeferMountCount);
 			return (
@@ -61,6 +62,9 @@ jest.mock("next/dynamic", () => {
 					data-testid="sefer"
 					data-book-page={props.initialBookPage ?? "unit"}
 					data-mount={mount}
+					data-initial-content={JSON.stringify(
+						props.initialContent ?? null,
+					)}
 				/>
 			);
 		};
@@ -232,6 +236,34 @@ describe("MasoraSeferComposite (wide screen)", () => {
 		expect(
 			(await screen.findByTestId("sefer")).getAttribute("data-book-page"),
 		).toBe("toc");
+	});
+
+	it("seeds a Torah perush deep link into the book", async () => {
+		mockGet.mockImplementation((key: string) =>
+			key === "book" ? "" : key === "perush" ? 'רש"י' : null,
+		);
+		render(<MasoraSeferComposite {...props} />);
+		expect(
+			JSON.parse(
+				(await screen.findByTestId("sefer")).getAttribute(
+					"data-initial-content",
+				) as string,
+			),
+		).toEqual({ scope: "torah", kind: "perush", slug: 'רש"י' });
+	});
+
+	it("seeds a Torah article deep link into the book", async () => {
+		mockGet.mockImplementation((key: string) =>
+			key === "book" ? "" : key === "article" ? "some-article" : null,
+		);
+		render(<MasoraSeferComposite {...props} />);
+		expect(
+			JSON.parse(
+				(await screen.findByTestId("sefer")).getAttribute(
+					"data-initial-content",
+				) as string,
+			),
+		).toEqual({ scope: "torah", kind: "article", slug: "some-article" });
 	});
 
 	it("provides a loading indicator for the dynamic Sefer import", () => {

@@ -117,6 +117,32 @@ jest.mock("@/data/masora/masora-units", () => ({
 	getMasoraFirstUnitBySefer: () => mockFirstUnits(),
 }));
 
+/**
+ * Collects `fallback` props off every Suspense element in an awaited
+ * server-component tree. Suspense fallbacks never mount under jsdom,
+ * so coverage of their props requires reaching into the JSX directly.
+ */
+function collectSuspenseFallbackProps(
+	node: unknown,
+	found: Array<Record<string, unknown>> = [],
+): Array<Record<string, unknown>> {
+	if (Array.isArray(node)) {
+		for (const child of node) collectSuspenseFallbackProps(child, found);
+		return found;
+	}
+	if (node == null || typeof node !== "object" || !("props" in node)) {
+		return found;
+	}
+	const props = (node as { props: Record<string, unknown> }).props;
+	if (props == null || typeof props !== "object") return found;
+	const fallback = props.fallback;
+	if (fallback != null && typeof fallback === "object" && "props" in fallback) {
+		found.push((fallback as { props: Record<string, unknown> }).props);
+	}
+	collectSuspenseFallbackProps(props.children, found);
+	return found;
+}
+
 import { ScrollToUnitPasuk } from "@/app/components/reading/ScrollToUnitPasuk";
 import { UnitBreadcrumb } from "@/app/masora/[unit]/components/UnitBreadcrumb";
 import { UnitNav } from "@/app/masora/[unit]/components/UnitNav";
@@ -323,6 +349,27 @@ describe("MasoraUnitPage", () => {
 		expect(perushimSectionProps.some((props) => props.onPerushClick)).toBe(
 			true,
 		);
+	});
+
+	it("keeps the Suspense fallback's perush href inside the division", async () => {
+		const jsx = await MasoraUnitPage({
+			params: Promise.resolve({ unit: "8" }),
+		});
+		// jsdom mounts the live children, never the fallback element —
+		// reach into the tree and invoke its href builder directly.
+		const fallbacks = collectSuspenseFallbackProps(jsx);
+		const perushFallbacks = fallbacks.filter(
+			(props) => typeof props.hrefForPerush === "function",
+		);
+		expect(perushFallbacks.length).toBeGreaterThan(0);
+		for (const props of perushFallbacks) {
+			const hrefForPerush = props.hrefForPerush as (p: {
+				name: string;
+			}) => string;
+			expect(decodeURIComponent(hrefForPerush({ name: 'רש"י' }))).toBe(
+				'/מסורה/8?perush=רש"י',
+			);
+		}
 	});
 
 	it("renders both closing-break labels", async () => {
