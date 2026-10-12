@@ -441,8 +441,8 @@ public partial class PerekPage
             return PerushLanding.Landed;
         }
         // The match is in view but its perush-name header is offscreen. When
-        // both can share the viewport, scroll the header in and re-verify;
-        // when they cannot (a very long pasuk), the match-only landing is the
+        // both can share the viewport, scroll the header in and re-verify.
+        // When they cannot (a very long pasuk), the match-only landing is the
         // final state — re-pinning the match every frame would never settle.
         // A null fit means the label's platform view is still attaching — stay
         // engaged one more frame instead of accepting a headerless landing.
