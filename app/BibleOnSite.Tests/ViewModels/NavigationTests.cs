@@ -170,4 +170,29 @@ public class NavigationTests
     }
 
     #endregion
+
+    #region Flyout Routes
+
+    [Fact]
+    public void FlyoutPage_WithoutLocation_StacksAboveDefaultReader()
+    {
+        AppRoutes.FlyoutPage(AppRoutes.SoundPreferences)
+            .Should().Be($"//{AppRoutes.Perek}/{AppRoutes.SoundPreferences}");
+    }
+
+    [Fact]
+    public void FlyoutPage_AboveReader_KeepsTheReaderInTheBackStack()
+    {
+        AppRoutes.FlyoutPage(AppRoutes.SupportPreferences, "//searchReader?perekId=5")
+            .Should().Be("//searchReader/SupportPreferencesPage");
+    }
+
+    [Fact]
+    public void FlyoutPage_ToReader_ReturnsTheReaderPath()
+    {
+        AppRoutes.FlyoutPage(AppRoutes.Perek, "//PerekPage?perekId=5")
+            .Should().Be("//PerekPage");
+    }
+
+    #endregion
 }

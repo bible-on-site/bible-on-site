@@ -24,6 +24,16 @@ public class ViewModelDefaultsTests
             recitationPacks.IsDownloading.Should().BeFalse();
             recitationPacks.Books.Should().BeEmpty();
             var packs = new ExtensionPacksViewModel();
+            var display = new DisplayPreferencesViewModel();
+            display.FontFactor.Should().Be(1);
+            var perekPrefs = new PerekPreferencesViewModel();
+            perekPrefs.IsPerekToLoadTodays.Should().BeTrue();
+            var sound = new SoundPreferencesViewModel();
+            sound.RecitationVolume.Should().Be(1);
+            sound.LessonsVolume.Should().Be(1);
+            sound.EffectsVolume.Should().Be(1);
+            var support = new SupportPreferencesViewModel();
+            support.ExportLogsCommand.Should().NotBeNull();
             vm.Source.Should().BeEmpty();
             vm.SeferTanahUsName.Should().BeEmpty();
             vm.Additional.Should().BeNull();

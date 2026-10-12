@@ -686,4 +686,74 @@ public class ExtensionPackLifecycleTests
         store.FetchLog.Should().Equal(["recitation_1"],
             "the store is still tried first; the bundled archive is only the fallback");
     }
+
+    [Fact]
+    public async Task ExtensionPacksLoadAsync_RefreshesBothSectionsAndMirrorsRecitationChanges()
+    {
+        await using var storage = new TestStorage();
+        var store = new Store(storage.Root);
+        await StockNotesAsync(storage, store, "notes-src");
+        store.MarkDelivered(NotesPack);
+        PublishRecitation(storage, store, (1, [(1, "audio"u8.ToArray())]));
+        store.Wire();
+        var notes = Notes(storage, store.Delivery.Object);
+        var recitation = new RecitationService(storage.FileSystem.Object, store.Delivery.Object);
+        var packs = Packs(storage, notes, recitation, new Mock<IAppNavigator>());
+        var changes = new List<string?>();
+        packs.PropertyChanged += (_, e) => changes.Add(e.PropertyName);
+
+        await packs.LoadAsync();
+
+        packs.IsPerushimInstalled.Should().BeTrue();
+        packs.RecitationStateText.Should().Be("לא מותקנת");
+        changes.Should().Contain(nameof(packs.RecitationStateText),
+            "the recitation Changed notification re-reads the honest file state");
+        await storage.CloseDatabaseFileAsync(NotesDbName); // release the live notes handle for disposal
+    }
+
+    [Fact]
+    public async Task ExtensionPacksLoadAsync_WhenPerushimInitFails_StillRendersPage()
+    {
+        await using var storage = new TestStorage();
+        var store = new Store(storage.Root);
+        PublishRecitation(storage, store, (1, [(1, "audio"u8.ToArray())]));
+        store.Wire();
+        var delivery = new Mock<IPadDeliveryService>();
+        delivery.Setup(d => d.TryGetAssetPathAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("store unreachable"));
+        var notes = Notes(storage, delivery.Object);
+        var recitation = new RecitationService(storage.FileSystem.Object, store.Delivery.Object);
+        var packs = Packs(storage, notes, recitation, new Mock<IAppNavigator>());
+
+        await packs.LoadAsync();
+
+        packs.IsPerushimInstalled.Should().BeFalse();
+        packs.RecitationStateText.Should().Be("לא מותקנת");
+    }
+
+    [Fact]
+    public async Task RecitationPreferencesInstallStateText_MirrorsOnDiskState()
+    {
+        await using var storage = new TestStorage();
+        var store = new Store(storage.Root);
+        PublishRecitation(storage, store,
+            (1, [(1, "audio"u8.ToArray())]),
+            (2, [(3, "other book"u8.ToArray())]));
+        store.Wire();
+        var recitation = new RecitationService(storage.FileSystem.Object, store.Delivery.Object);
+        var viewModel = new RecitationPreferencesViewModel(recitation,
+            PreferencesService.CreateForTesting(new InMemoryPreferencesStorage()),
+            new Mock<IAppNavigator>().Object);
+        var changes = new List<string?>();
+        viewModel.PropertyChanged += (_, e) => changes.Add(e.PropertyName);
+
+        viewModel.InstallStateText.Should().Be("לא מותקנת");
+
+        await recitation.InitializeAsync();
+        await recitation.DownloadAsync([1]);
+
+        viewModel.InstallStateText.Should().Be("מותקנת חלקית");
+        changes.Should().Contain(nameof(viewModel.InstallStateText),
+            "the Changed notification refreshes the shortcut row's install state");
+    }
 }
