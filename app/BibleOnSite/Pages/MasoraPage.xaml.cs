@@ -389,13 +389,16 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
             button.Opacity = 0;
         }
 
+        CircularMenuScrim.IsVisible = true;
+
         // Change FAB icon to X
         CircularMenuButton.Text = Fonts.FluentUI.dismiss_24_regular;
         CircularMenuButton.BackgroundColor = Colors.Red;
 
         var animations = new List<Task>
         {
-            CircularMenuButton.RotateToAsync(180, 250, Easing.SpringOut)
+            CircularMenuButton.RotateToAsync(180, 250, Easing.SpringOut),
+            CircularMenuScrim.FadeToAsync(1, 200)
         };
 
         foreach (var button in buttons)
@@ -417,7 +420,8 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
 
         var animations = new List<Task>
         {
-            CircularMenuButton.RotateToAsync(0, 200, Easing.SpringOut)
+            CircularMenuButton.RotateToAsync(0, 200, Easing.SpringOut),
+            CircularMenuScrim.FadeToAsync(0, 150)
         };
 
         foreach (var button in buttons)
@@ -427,9 +431,27 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
 
         await Task.WhenAll(animations);
 
+        // A reopen during the close animation wins — leave scrim and satellites alone
+        if (_isMenuOpen)
+        {
+            return;
+        }
+
+        CircularMenuScrim.IsVisible = false;
+
         foreach (var button in buttons)
         {
             button.InputTransparent = true;
+        }
+    }
+
+    /// <summary>Handles tap on the scrim — dismisses the open menu.</summary>
+    private async void OnOverlayTapped(object? sender, TappedEventArgs e)
+    {
+        if (_isMenuOpen)
+        {
+            _isMenuOpen = false;
+            await CloseCircularMenuAsync();
         }
     }
 
@@ -597,6 +619,8 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
             CircularMenuButton.Text = Fonts.FluentUI.navigation_24_regular;
             CircularMenuButton.BackgroundColor = (Color)Microsoft.Maui.Controls.Application.Current!.Resources["Primary"];
             CircularMenuButton.Rotation = 0;
+            CircularMenuScrim.Opacity = 0;
+            CircularMenuScrim.IsVisible = false;
         }
 
         ReaderToolbar.IsVisible = false;
