@@ -43,6 +43,15 @@ export const MODULES = {
 			"app/BibleOnSite/Resources/Raw/recitation-audio.html",
 		],
 		ciPaths: [...RELEASE_CI_PATHS, "devops/github/ci/bencher-comparison.mjs"],
+		// Test-only changes run website checks but cannot alter the deployed
+		// site, so they must not package, release, or bump the version (#2132):
+		// the tests/ tree, colocated *.test.*/​*.spec.* files (including
+		// .test.env), the root jest*/playwright* harness and the e2e-only
+		// helpers it imports, and coverage fixtures. package*.json,
+		// next.config.mjs, src/, public/, scripts/ (build-time), and
+		// Docker/tsconfig build inputs stay release-affecting.
+		ciOnlyPattern:
+			/^web\/bible-on-site\/(tests\/|.*\.(test|spec)\.[^/]+$|jest[^/]*\.[^/]*$|playwright[^/]*\.[^/]*$|\.covignore\.mjs$|shared\/typing\/coverage\.d\.ts$|get-debug-port\.js$|launch-e2e-server\.mts$)/,
 	},
 	api: { directory: "web/api", ciPaths: RELEASE_CI_PATHS },
 	app: {
