@@ -1270,6 +1270,13 @@ public partial class PerekPage : ContentPage, IQueryAttributable
         }
 
         await Task.WhenAll(animations);
+
+        // A reopen during the close animation wins — leave scrim and satellites alone
+        if (_isMenuOpen)
+        {
+            return;
+        }
+
         CircularMenuScrim.IsVisible = false;
 
         // Disable clicks on hidden buttons
