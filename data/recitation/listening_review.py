@@ -343,6 +343,7 @@ class ListeningHandler(BaseHTTPRequestHandler):
                     self.connection.settimeout(5)
                     self.rfile.read(size)
             except (ValueError, OSError):
+                # Invalid sessions remain rejected even if their body cannot be drained.
                 pass
             return self.json_response(403, {"error": "Local review session required"})
         if self.path != "/api/reviews":

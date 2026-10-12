@@ -89,6 +89,7 @@ def verify_corrections(diagnostic):
                 raise ValueError("Unrecorded boundary change")
         else:
             verify_boundary(row, prior, change, boundary_key)
+    return None
 
 
 def verify_boundary(row, prior, change, boundary_key):

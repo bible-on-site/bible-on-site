@@ -29,7 +29,7 @@ def load_review_evidence(queue_path):
         if path in visiting:
             raise ValueError("Cyclic review archive")
         if path in seen:
-            return
+            return None
         visiting.add(path)
         queue = load_queue(path)
         for archive in queue.get("archivedQueues", []):
