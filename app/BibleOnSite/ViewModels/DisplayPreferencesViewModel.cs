@@ -21,7 +21,7 @@ public partial class DisplayPreferencesViewModel : DivineNamePreferencesViewMode
     public DisplayPreferencesViewModel(PreferencesService preferencesService)
     {
         _preferencesService = preferencesService;
-        _preferencesService.PreferencesChanged += OnPreferencesChanged;
+        BibleOnSite.Helpers.WeakPreferencesSubscription.Subscribe(this, _preferencesService, static model => model.OnPreferencesChanged(null, EventArgs.Empty));
     }
 
     /// <summary>

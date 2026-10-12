@@ -1,10 +1,11 @@
 import { execFile, execFileSync, spawn } from "node:child_process";
-import { appendFileSync, closeSync, copyFileSync, existsSync, mkdirSync, openSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { appendFileSync, closeSync, copyFileSync, existsSync, mkdirSync, openSync, readdirSync, rmSync, statSync, writeFileSync, writeSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { createServer } from "node:net";
 import { promisify } from "node:util";
+import { monitorNativeInteractions } from "./native-hang-monitor.mjs";
 import { probeAppiumReadiness, waitForAppiumReadiness } from "./appium-readiness.mjs";
 import { prepareWda } from "./prepare-wda.mjs";
 import { exportNativeLog, startNativeLog } from "./native-logs.mjs";
@@ -62,12 +63,23 @@ if (platform === "android" && process.env.MOBILE_KEEP_APP === "1") {
     { timeout: 180000 });
   console.log(installation.stdout.trim());
 }
+let serverLogOpen = true;
 const serverLog = openSync(resolve(artifacts, "appium.log"), "w");
+const hangMonitor = platform === "ios" ? monitorNativeInteractions(async (command) => {
+  writeFileSync(resolve(artifacts, "native-hang-command.txt"), command);
+  await sampleIosApp();
+}) : undefined;
 const server = spawn(process.execPath, [resolve(directory, "node_modules/appium/index.js"),
   "--address", "127.0.0.1", "--port", appiumPort, "--log-no-colors", "--log-timestamp",
   "--use-drivers", platform === "android" ? "uiautomator2" : "xcuitest"], {
-  cwd: directory, windowsHide: true, stdio: ["ignore", serverLog, serverLog],
+  cwd: directory, windowsHide: true, stdio: ["ignore", hangMonitor ? "pipe" : serverLog, hangMonitor ? "pipe" : serverLog],
 });
+for (const stream of [server.stdout, server.stderr].filter(Boolean)) {
+  stream.on("data", (chunk) => {
+    if (serverLogOpen) writeSync(serverLog, chunk);
+    if (stream === server.stdout) hangMonitor?.write(chunk);
+  });
+}
 let serverExit;
 server.on("exit", (code, signal) => { serverExit = `code ${code}, signal ${signal}`; });
 const readinessLog = resolve(artifacts, "appium-readiness.jsonl");
@@ -80,7 +92,7 @@ server.on("spawn", () => observeReadiness({ phase: "spawned", pid: server.pid })
 let test;
 let diagnosticsFailed = false;
 const nativeStream = platform === "ios" ? startNativeLog("xcrun", ["simctl", "spawn", process.env.MOBILE_UDID,
-  "log", "stream", "--style", "compact", "--level", "debug", "--predicate", 'process == "BibleOnSite"'],
+  "log", "stream", "--style", "compact", "--level", "info", "--predicate", 'process == "BibleOnSite"'],
   resolve(artifacts, "device-live.log")) : undefined;
 
 async function sampleIosApp() {
@@ -120,6 +132,12 @@ try {
     test.on("exit", (code) => resolveExit(code ?? 1));
   });
 } finally {
+  try {
+    await hangMonitor?.stop();
+  } catch (error) {
+    diagnosticsFailed = true;
+    console.error("Could not finish native hang capture:", error);
+  }
   try {
     await nativeStream?.stop();
   } catch (error) {
@@ -168,5 +186,6 @@ try {
     process.exitCode ||= 1;
   }
   stop();
+  serverLogOpen = false;
   closeSync(serverLog);
 }

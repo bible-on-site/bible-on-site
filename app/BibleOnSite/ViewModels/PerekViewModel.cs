@@ -67,6 +67,7 @@ public partial class PerekViewModel : ObservableObject
 
     /// <summary>Available perushim for the current perek (ordered by priority).</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(FilteredPerushim))]
     private List<Perush> _perushim = new();
 
     /// <summary>Perush IDs that are currently checked (shown inline with text).</summary>
@@ -83,6 +84,7 @@ public partial class PerekViewModel : ObservableObject
 
     /// <summary>Message shown when no perushim (empty list or not available).</summary>
     public string PerushimEmptyMessage =>
+        Perushim.Count > 0 && !string.IsNullOrWhiteSpace(PerushNameFilter) ? "לא נמצאו פירושים תואמים" :
         !PerushimCatalogAvailable ? "אין קטלוג פירושים" :
         !PerushimNotesAvailable ? "להוריד פירושים" :
         "אין פרשנות לפרק זה";
@@ -91,6 +93,7 @@ public partial class PerekViewModel : ObservableObject
     public bool ShowDownloadPerushimButton => PerushimCatalogAvailable && !PerushimNotesAvailable;
 
     private List<PerekPerushNote> _perushNotesCache = new();
+    private PerushNoteChapter? _perushChapter;
 
     /// <summary>
     /// Pre-loaded perushim data keyed by perekId.
@@ -199,26 +202,12 @@ public partial class PerekViewModel : ObservableObject
         _fileSystem = fileSystem ?? FileSystem.Current;
         _share = share ?? Share.Default;
         _hasPerekAudio = hasPerekAudio;
+        _perushChapter = null;
 
         // Sync FontFactor from preferences and listen for changes
         _fontFactor = _preferencesService.FontFactor;
         _divineNameMaskingRevision = DivineNameMasking.Revision;
-        _preferencesService.PreferencesChanged += (_, _) =>
-        {
-            if (Math.Abs(_fontFactor - _preferencesService.FontFactor) > 0.001)
-            {
-                FontFactor = _preferencesService.FontFactor;
-            }
-            // הסתר שם השם changed → re-raise the toggle and rebuild the
-            // rendered text (Pasuk.FormattedText caches are keyed on
-            // DivineNameMasking.Revision; the MultiBinding on the pasukim
-            // collection and TikkunFlowView.MaskingRevision pick this up).
-            if (_divineNameMaskingRevision != DivineNameMasking.Revision)
-            {
-                DivineNameMaskingRevision = DivineNameMasking.Revision;
-            }
-            OnPropertyChanged(nameof(DivineNameMaskingEnabled));
-        };
+        WeakPreferencesSubscription.Subscribe(this, _preferencesService, static model => model.RefreshPreferences());
     }
 
     /// <summary>Font scaling factor from user preferences (0.5–2.0).</summary>
@@ -290,7 +279,17 @@ public partial class PerekViewModel : ObservableObject
     /// </summary>
     public bool HasArticles => ArticlesCount > 0;
 
-    /// <summary>Count of available perushim for the current perek.</summary>
+    /// <summary>Find commentary names in the selection menu.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(FilteredPerushim))]
+    [NotifyPropertyChangedFor(nameof(PerushimEmptyMessage))]
+    private string _perushNameFilter = string.Empty;
+
+    public List<Perush> FilteredPerushim => string.IsNullOrWhiteSpace(PerushNameFilter)
+        ? Perushim
+        : Perushim.Where(p => SearchText.Normalize(p.Name).Contains(
+            SearchText.Normalize(PerushNameFilter), StringComparison.Ordinal)).ToList();
+
     public int PerushimCount => Perushim.Count;
 
     /// <summary>Whether the current perek has any perushim.</summary>
@@ -523,6 +522,7 @@ public partial class PerekViewModel : ObservableObject
             {
                 return;
             }
+            _perushChapter = null;
             _perushNotesCache = new List<PerekPerushNote>();
             // Set CheckedPerushim BEFORE Perushim so the CollectionView sees correct state
             CheckedPerushim = new List<int>();
@@ -540,19 +540,19 @@ public partial class PerekViewModel : ObservableObject
 
         List<int> perushIds;
         Dictionary<int, Perush> perushById;
-        List<PerekPerushNote> notes;
+        PerushNoteChapter? chapter;
 
         if (cached != null)
         {
             perushIds = cached.PerushIds;
             perushById = cached.PerushById;
-            notes = cached.Notes;
+            chapter = cached.Chapter;
         }
         else
         {
             perushIds = await _notesService.GetPerushIdsForPerekAsync(perekId);
             perushById = perushIds.Count == 0 ? new() : await _catalogService.GetPerushimByIdsAsync(perushIds);
-            notes = perushIds.Count == 0 ? new() : await _notesService.LoadNotesForPerekAsync(perekId, perushById);
+            chapter = perushIds.Count == 0 ? null : await _notesService.LoadChapterAsync(perekId);
         }
 
         if (IsStalePerushimLoad(perekId))
@@ -562,6 +562,7 @@ public partial class PerekViewModel : ObservableObject
 
         if (perushIds.Count == 0)
         {
+            _perushChapter = null;
             _perushNotesCache = new List<PerekPerushNote>();
             CheckedPerushim = new List<int>();
             Perushim = new List<Perush>();
@@ -569,7 +570,8 @@ public partial class PerekViewModel : ObservableObject
             return;
         }
 
-        _perushNotesCache = notes;
+        _perushNotesCache = new();
+        _perushChapter = chapter;
 
         // Order perushim by priority (Targum first, Rashi second, etc.)
         var orderedPerushim = perushIds
@@ -583,7 +585,7 @@ public partial class PerekViewModel : ObservableObject
         // Set CheckedPerushim BEFORE Perushim so the CollectionView binding
         // sees the correct checked state when it re-renders items.
         var availableIds = new HashSet<int>(perushIds);
-        CheckedPerushim = CheckedPerushim.Where(id => availableIds.Contains(id)).ToList();
+        CheckedPerushim = CheckedPerushim.Where(id => availableIds.Contains(id)).Take(_preferencesService.InlineCommentaryLimit).ToList();
         Perushim = orderedPerushim;
 
         FillFilteredPerushContents();
@@ -610,8 +612,11 @@ public partial class PerekViewModel : ObservableObject
             return false;
         }
 
-        _perushNotesCache = SyntheticPerushimProvider.NotesFor(
+        var synthetic = SyntheticPerushimProvider.NotesFor(
             perekId, Perek?.Pasukim?.Select(p => p.PasukNum) ?? []);
+        _perushChapter = new PerushNoteChapter(PerushNoteBlob.Encode(synthetic.Select(n =>
+            new PerushNoteBlob.Note(n.PerushId, n.Pasuk, n.NoteIdx, n.NoteContent)).ToList()));
+        _perushNotesCache = new();
         CheckedPerushim = new List<int>();
         Perushim = SyntheticPerushimProvider.Perushim;
         PerushimCatalogAvailable = true;
@@ -709,7 +714,8 @@ public partial class PerekViewModel : ObservableObject
     /// <summary>
     /// All available commentary for focused verse reading, independent of inline filters.
     /// </summary>
-    public List<PerushNoteDisplay> GetPerushimForPasuk(int pasukNum) => _perushNotesCache
+    public List<PerushNoteDisplay> GetPerushimForPasuk(int pasukNum) =>
+        _perushChapter?.GetDisplays(pasukNum, Perushim) ?? _perushNotesCache
         .Where(n => n.Pasuk == pasukNum)
         .GroupBy(n => (n.PerushId, n.PerushName))
         .OrderBy(g => Perushim.FindIndex(p => p.Id == g.Key.PerushId))
@@ -719,6 +725,16 @@ public partial class PerekViewModel : ObservableObject
             PerushId = g.Key.PerushId,
             NoteContents = g.OrderBy(n => n.NoteIdx).Select(n => n.NoteContent).ToList()
         }).ToList();
+
+    public string InlineCommentaryLimitMessage => $"ניתן להציג עד {_preferencesService.InlineCommentaryLimit} פירושים על הפרק. ניתן לשנות בהעדפות.";
+
+    /// <summary>A search result must remain visible even when all inline slots are occupied.</summary>
+    public void ShowPerushForSearch(int perushId)
+    {
+        if (IsPerushChecked(perushId)) { return; }
+        CheckedPerushim = CheckedPerushim.Take(_preferencesService.InlineCommentaryLimit - 1).ToList();
+        ToggleCheckedPerush(perushId);
+    }
 
     /// <summary>Toggles commentary in the inline reader.</summary>
     [RelayCommand]
@@ -731,6 +747,7 @@ public partial class PerekViewModel : ObservableObject
         }
         else
         {
+            if (list.Count >= _preferencesService.InlineCommentaryLimit) { return; }
             list.Add(perushId);
         }
 
@@ -762,6 +779,16 @@ public partial class PerekViewModel : ObservableObject
                 {
                     pasuk.PerushNotes = new List<PerushNoteDisplay>();
                 }
+            }
+            return;
+        }
+
+        if (_perushChapter != null)
+        {
+            foreach (var pasuk in Perek.Pasukim)
+            {
+                var displays = _perushChapter.GetDisplays(pasuk.PasukNum, Perushim, checkedSet, pasuk.PerushNotes);
+                if (!displays.SequenceEqual(pasuk.PerushNotes)) { pasuk.PerushNotes = displays; }
             }
             return;
         }
@@ -1010,17 +1037,17 @@ public partial class PerekViewModel : ObservableObject
                     lock (_perushimPreloadCache)
                     {
                         _perushimPreloadCache[id] = new PreloadedPerushimData(
-                            new List<int>(), new Dictionary<int, Perush>(), new List<PerekPerushNote>());
+                            new List<int>(), new Dictionary<int, Perush>(), null);
                     }
                     continue;
                 }
 
                 var perushById = await _catalogService.GetPerushimByIdsAsync(perushIds);
-                var notes = await _notesService.LoadNotesForPerekAsync(id, perushById);
+                var chapter = await _notesService.LoadChapterAsync(id);
 
                 lock (_perushimPreloadCache)
                 {
-                    _perushimPreloadCache[id] = new PreloadedPerushimData(perushIds, perushById, notes);
+                    _perushimPreloadCache[id] = new PreloadedPerushimData(perushIds, perushById, chapter);
                 }
             }
             catch (Exception ex)
@@ -1181,6 +1208,25 @@ public partial class PerekViewModel : ObservableObject
     }
 
     #endregion
+
+    private void RefreshPreferences()
+    {
+        if (Math.Abs(_fontFactor - _preferencesService.FontFactor) > 0.001)
+        {
+            FontFactor = _preferencesService.FontFactor;
+        }
+        if (_divineNameMaskingRevision != DivineNameMasking.Revision)
+        {
+            DivineNameMaskingRevision = DivineNameMasking.Revision;
+        }
+        OnPropertyChanged(nameof(DivineNameMaskingEnabled));
+        OnPropertyChanged(nameof(InlineCommentaryLimitMessage));
+        if (CheckedPerushim.Count > _preferencesService.InlineCommentaryLimit)
+        {
+            CheckedPerushim = CheckedPerushim.Take(_preferencesService.InlineCommentaryLimit).ToList();
+            FillFilteredPerushContents();
+        }
+    }
 }
 
 /// <summary>
@@ -1189,4 +1235,4 @@ public partial class PerekViewModel : ObservableObject
 internal record PreloadedPerushimData(
     List<int> PerushIds,
     Dictionary<int, Perush> PerushById,
-    List<PerekPerushNote> Notes);
+    PerushNoteChapter? Chapter);

@@ -40,3 +40,9 @@ A desktop harness uses the real full-corpus generated artifact from PR 2109 and 
 | Warm commentary search | 2.2 ms | 1.8 ms |
 
 Warm verse search was unchanged in this run. Two additional tests verify that atomic publication replaces the complete payload and restores it after a publication failure. The repair removes corpus construction and speculative reader loading from the critical path; it does not change the existing fuzzy matching algorithm. Native Android and iOS CI validate the real UI against the restored interaction deadlines.
+
+## Strict production boundary
+
+The final commentary fix removes the mobile full-corpus notes importer entirely. The app adopts a matching prebuilt commentary index or marks commentary search unavailable. Missing, corrupt, wrong-generation and undeletable invalid deliveries never cause note-blob imports. Verse search keeps its small independent fallback. Cache eviction recovers the prebuilt index from the installed pack.
+
+Four regressions explicitly enforce this boundary. General search tests bootstrap prebuilt SQLite fixtures outside the application, then use the same adoption/query path as production.

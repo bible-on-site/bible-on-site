@@ -66,6 +66,7 @@ public partial class MasoraViewModel : ObservableObject //NOSONAR
 
     /// <summary>Available perushim for the current unit (union over its perakim, priority order).</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(FilteredPerushim))]
     private List<Perush> _perushim = new();
 
     /// <summary>Perush IDs that are currently checked (shown inline with text).</summary>
@@ -95,6 +96,7 @@ public partial class MasoraViewModel : ObservableObject //NOSONAR
 
     /// <summary>Message shown when no perushim (empty list or not available).</summary>
     public string PerushimEmptyMessage =>
+        Perushim.Count > 0 && !string.IsNullOrWhiteSpace(PerushNameFilter) ? "לא נמצאו פירושים תואמים" :
         !PerushimCatalogAvailable ? "אין קטלוג פירושים" :
         !PerushimNotesAvailable ? "להוריד פירושים" :
         "אין פרשנות לפרשה זו";
@@ -132,13 +134,7 @@ public partial class MasoraViewModel : ObservableObject //NOSONAR
 
         // Sync FontFactor from preferences and listen for changes
         _fontFactor = _preferencesService.FontFactor;
-        _preferencesService.PreferencesChanged += (_, _) =>
-        {
-            if (Math.Abs(_fontFactor - _preferencesService.FontFactor) > 0.001)
-            {
-                FontFactor = _preferencesService.FontFactor;
-            }
-        };
+        WeakPreferencesSubscription.Subscribe(this, _preferencesService, static model => model.RefreshPreferences());
     }
 
     #region Unit Properties
@@ -178,7 +174,17 @@ public partial class MasoraViewModel : ObservableObject //NOSONAR
     /// <summary>Whether the current unit has any overlapping articles.</summary>
     public bool HasArticles => ArticlesCount > 0;
 
-    /// <summary>Count of available perushim for the current unit.</summary>
+    /// <summary>Find commentary names in the selection menu.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(FilteredPerushim))]
+    [NotifyPropertyChangedFor(nameof(PerushimEmptyMessage))]
+    private string _perushNameFilter = string.Empty;
+
+    public List<Perush> FilteredPerushim => string.IsNullOrWhiteSpace(PerushNameFilter)
+        ? Perushim
+        : Perushim.Where(p => SearchText.Normalize(p.Name).Contains(
+            SearchText.Normalize(PerushNameFilter), StringComparison.Ordinal)).ToList();
+
     public int PerushimCount => Perushim.Count;
 
     /// <summary>Whether the current unit has any perushim.</summary>
@@ -474,5 +480,19 @@ public partial class MasoraViewModel : ObservableObject //NOSONAR
     private void SetUnit(MasoraUnit unit)
     {
         Unit = unit;
+    }
+
+    private void RefreshPreferences()
+    {
+        if (Math.Abs(_fontFactor - _preferencesService.FontFactor) > 0.001)
+        {
+            FontFactor = _preferencesService.FontFactor;
+        }
+        OnPropertyChanged(nameof(InlineCommentaryLimitMessage));
+        if (CheckedPerushim.Count > _preferencesService.InlineCommentaryLimit)
+        {
+            CheckedPerushim = CheckedPerushim.Take(_preferencesService.InlineCommentaryLimit).ToList();
+            if (Unit != null) { FillFilteredPerushContents(Unit); }
+        }
     }
 }

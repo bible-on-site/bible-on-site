@@ -128,6 +128,25 @@ public static class SearchMatch
         return null;
     }
 
+    /// <summary>Decode only the targeted verse/source while preserving exact note identity.</summary>
+    public static async Task<(PerushNoteDisplay Display, SearchMatchSpan Span)?> ResolvePerushTargetAsync(
+        PerushSearchResult hit, IReadOnlyList<PerushNoteDisplay> displays)
+    {
+        foreach (var display in displays)
+        {
+            if (int.TryParse(hit.PerushId, NumberStyles.Integer, CultureInfo.InvariantCulture, out var id) && display.PerushId != id)
+            {
+                continue;
+            }
+            var contents = display.ContentLoader == null ? display.NoteContents : await display.ContentLoader();
+            if (LocateInJoinedNotes(contents, hit.NoteContent, hit.SearchPhrase) is { } span)
+            {
+                return (display, span);
+            }
+        }
+        return null;
+    }
+
     /// <summary>
     /// Resolves an article hit to the content segment owning its occurrence.
     /// Article pages split HTML around media elements into sibling

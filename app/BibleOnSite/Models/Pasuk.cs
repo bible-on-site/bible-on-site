@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using BibleOnSite.Helpers;
 using CommunityToolkit.Mvvm.ComponentModel;
 using System.Text;
@@ -75,6 +76,23 @@ public partial class Pasuk : ObservableObject
     /// </summary>
     [ObservableProperty]
     private List<PerushNoteDisplay> _perushNotes = new();
+
+    /// <summary>BindableLayout receives incremental changes, preserving already rendered cells.</summary>
+    public ObservableCollection<PerushNoteDisplay> VisiblePerushNotes { get; } = new();
+
+    partial void OnPerushNotesChanged(List<PerushNoteDisplay> value)
+    {
+        for (var i = VisiblePerushNotes.Count - 1; i >= 0; i--)
+        {
+            if (!value.Contains(VisiblePerushNotes[i])) { VisiblePerushNotes.RemoveAt(i); }
+        }
+        for (var i = 0; i < value.Count; i++)
+        {
+            var previous = VisiblePerushNotes.IndexOf(value[i]);
+            if (previous < 0) { VisiblePerushNotes.Insert(i, value[i]); }
+            else if (previous != i) { VisiblePerushNotes.Move(previous, i); }
+        }
+    }
 
     /// <summary>
     /// Gets the formatted text representation with qri/ktiv handling.
