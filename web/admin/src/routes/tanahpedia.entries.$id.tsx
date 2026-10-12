@@ -231,9 +231,7 @@ function EntryEditPage() {
 					[
 						["content", "תוכן"],
 						["metadata", "מטא-דאטה"],
-						...(isNew
-							? []
-							: [["history", "היסטוריה"] as [typeof tab, string]]),
+						...(isNew ? [] : [["history", "היסטוריה"] as [typeof tab, string]]),
 					] as [typeof tab, string][]
 				).map(([key, label]) => (
 					<button

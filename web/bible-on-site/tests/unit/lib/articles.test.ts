@@ -404,12 +404,37 @@ describe("articles service", () => {
 			expect(mockQuery).not.toHaveBeenCalled();
 		});
 
-		it("queries every overlapping perek via IN", async () => {
+		it("queries unverified articles by primary perek and verified ones by covering-source overlap", async () => {
 			mockQuery.mockResolvedValue([]);
 			await getArticleSummariesForRanges(crossPerekRanges);
 			const [sql, params] = mockQuery.mock.calls[0];
+			expect(sql).toContain("a.coverage_verified = FALSE");
 			expect(sql).toContain("a.perek_id IN (?, ?)");
-			expect(params).toEqual([1, 2]);
+			expect(sql).toContain("a.coverage_verified = TRUE");
+			expect(sql).toContain("EXISTS");
+			expect(sql).toContain("FROM tanah_article_covering_source cs");
+			expect(sql).toContain(
+				"(cs.perek_id = ? AND cs.pasuk >= ? AND cs.pasuk <= ?)",
+			);
+			// בראשית א has 31 pesukim: the range clips to pasuk 30-31 there.
+			// Primary-perek ids, then the covering-source slice bounds, then
+			// the same bounds again for the ORDER BY rank derived table.
+			expect(params).toEqual([1, 2, 1, 30, 31, 2, 1, 4, 1, 30, 31, 2, 1, 4]);
+		});
+
+		it("orders articles by first matching slice in range order, then priority", async () => {
+			mockQuery.mockResolvedValue([]);
+			await getArticleSummariesForRanges(crossPerekRanges);
+			const sql = mockQuery.mock.calls[0][0];
+			expect(sql).toContain("ORDER BY (SELECT MIN(slice_match.slice_order)");
+			expect(sql).toContain("a.perek_id = slice_match.perek_id");
+			expect(sql).toContain("ASC, a.priority ASC");
+		});
+
+		it("does not gate on the bulletin-only distributable flag", async () => {
+			mockQuery.mockResolvedValue([]);
+			await getArticleSummariesForRanges(crossPerekRanges);
+			expect(mockQuery.mock.calls[0][0]).not.toContain("distributable");
 		});
 
 		it("maps rows to summaries", async () => {
@@ -430,12 +455,127 @@ describe("articles service", () => {
 			]);
 		});
 
-		it("returns empty array on failure", async () => {
-			mockQuery.mockRejectedValue(new Error("DB error"));
-			const result = await getArticleSummariesForRanges(crossPerekRanges);
-			expect(result).toEqual([]);
+		it("rejects database failures instead of caching an empty list", async () => {
+			const mockError = new Error("DB error");
+			mockQuery.mockRejectedValue(mockError);
+			await expect(getArticleSummariesForRanges(crossPerekRanges)).rejects.toBe(
+				mockError,
+			);
+			expect(console.warn).toHaveBeenCalledWith(
+				"Failed to fetch article summaries for ranges:",
+				"DB error",
+			);
+		});
+
+		it("propagates non-Error rejections without caching them", async () => {
 			mockQuery.mockRejectedValue("raw error");
-			expect(await getArticleSummariesForRanges(crossPerekRanges)).toEqual([]);
+			await expect(getArticleSummariesForRanges(crossPerekRanges)).rejects.toBe(
+				"raw error",
+			);
+		});
+
+		describe("when the covering-source schema is not deployed yet", () => {
+			const missingColumnError = Object.assign(
+				new Error("Unknown column 'a.coverage_verified' in 'where clause'"),
+				{ code: "ER_BAD_FIELD_ERROR", errno: 1054 },
+			);
+			const missingTableError = Object.assign(
+				new Error("Table 'tanah.tanah_article_covering_source' doesn't exist"),
+				{ code: "ER_NO_SUCH_TABLE", errno: 1146 },
+			);
+
+			it.each([
+				["missing coverage_verified column", missingColumnError],
+				["missing covering-source table", missingTableError],
+			])(
+				"falls back to primary-perek matching on %s",
+				async (_label, schemaError) => {
+					const fallbackRows = [
+						{
+							id: 4,
+							perek_id: 1,
+							author_id: 2,
+							abstract: "abs",
+							name: "legacy",
+							priority: 1,
+							author_name: "author",
+						},
+					];
+					mockQuery
+						.mockRejectedValueOnce(schemaError)
+						.mockResolvedValueOnce(fallbackRows);
+
+					const result = await getArticleSummariesForRanges(crossPerekRanges);
+
+					expect(mockQuery).toHaveBeenCalledTimes(2);
+					const [fallbackSql, fallbackParams] = mockQuery.mock.calls[1];
+					// The pre-upgrade query references neither the new column
+					// nor the covering-source table, but keeps first-slice rank.
+					expect(fallbackSql).not.toContain("coverage_verified");
+					expect(fallbackSql).not.toContain("tanah_article_covering_source");
+					expect(fallbackSql).toContain("a.perek_id IN (?, ?)");
+					expect(fallbackSql).toContain(
+						"ORDER BY (SELECT MIN(slice_match.slice_order)",
+					);
+					expect(fallbackSql).toContain("a.perek_id = slice_match.perek_id");
+					expect(fallbackParams).toEqual([1, 2, 1, 30, 31, 2, 1, 4]);
+					expect(result).toEqual([
+						expect.objectContaining({ id: 4, name: "legacy" }),
+					]);
+				},
+			);
+
+			it("recognizes the numeric MySQL error codes without a code string", async () => {
+				mockQuery
+					.mockRejectedValueOnce({ errno: 1146 })
+					.mockResolvedValueOnce([]);
+
+				await getArticleSummariesForRanges(crossPerekRanges);
+
+				expect(mockQuery).toHaveBeenCalledTimes(2);
+				expect(mockQuery.mock.calls[1][0]).not.toContain("coverage_verified");
+			});
+
+			it("does not swallow real database failures as schema gaps", async () => {
+				const dbError = Object.assign(new Error("connection lost"), {
+					code: "PROTOCOL_CONNECTION_LOST",
+				});
+				mockQuery.mockRejectedValue(dbError);
+
+				await expect(
+					getArticleSummariesForRanges(crossPerekRanges),
+				).rejects.toBe(dbError);
+				expect(mockQuery).toHaveBeenCalledTimes(1);
+			});
+
+			it("rejects when the pre-upgrade fallback query fails too", async () => {
+				const dbError = new Error("timeout");
+				mockQuery
+					.mockRejectedValueOnce(missingTableError)
+					.mockRejectedValueOnce(dbError);
+
+				await expect(
+					getArticleSummariesForRanges(crossPerekRanges),
+				).rejects.toBe(dbError);
+				expect(mockQuery).toHaveBeenCalledTimes(2);
+			});
+
+			it("retries the covering-source query on the next call once the schema lands", async () => {
+				mockQuery
+					.mockRejectedValueOnce(missingColumnError)
+					.mockResolvedValueOnce([])
+					.mockResolvedValueOnce([]);
+
+				await getArticleSummariesForRanges(crossPerekRanges);
+				await getArticleSummariesForRanges(crossPerekRanges);
+
+				// No sticky fallback: the next call attempts the verified
+				// coverage query again and picks up the migrated schema.
+				expect(mockQuery).toHaveBeenCalledTimes(3);
+				expect(mockQuery.mock.calls[2][0]).toContain(
+					"tanah_article_covering_source",
+				);
+			});
 		});
 	});
 });

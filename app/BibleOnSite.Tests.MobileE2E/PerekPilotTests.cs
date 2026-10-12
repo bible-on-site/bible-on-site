@@ -82,7 +82,9 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         Page.WaitForHidden("SearchSheet");
         SearchFor("בראשיט 1", "בראשית א");
         Platform.Tap(Driver!, Page.WaitFor("SearchResultTitle", element => element.Text == "בראשית א"));
-        Page.WaitFor("PerekSource", element => element.Text == "בראשית א");
+        // First perek navigation of the session loads the reader on a cold
+        // app — same loaded-runner cold path as WaitForStartup (2 minutes).
+        Page.WaitFor("PerekSource", element => element.Text == "בראשית א", TimeSpan.FromMinutes(3));
         AssertRegularReader();
         Platform.GoBack(Driver!);
         Page.WaitFor("PerekSearchInput", element => element.Text == "בראשיט 1");
@@ -182,7 +184,10 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
             ? bar : bar.FindElement(By.XPath(".//*[@class='android.widget.EditText' or @class='android.widget.AutoCompleteTextView' or @type='XCUIElementTypeSearchField' or @type='XCUIElementTypeTextField']"));
         input.Clear();
         input.SendKeys(text);
-        Page.WaitFor("SearchResultTitle", element => element.Text == expectedTitle);
+        // The first query of a session builds the search index on-device —
+        // on a loaded simulator/emulator under coverage instrumentation it can
+        // far outlast the default wait; subsequent searches reuse the warm index.
+        Page.WaitFor("SearchResultTitle", element => element.Text == expectedTitle, TimeSpan.FromMinutes(3));
     }
 
     private void AssertBookGroupColumns()
