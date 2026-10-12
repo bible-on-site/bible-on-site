@@ -260,7 +260,7 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
             catch (Exception ex)
             {
                 Console.Error.WriteLine($"Failed to load masora unit: {ex.Message}");
-                await DisplayAlertAsync("שגיאה", $"לא ניתן לטעון את יחידת המסורה: {ex.Message}", "אישור");
+                await DisplayAlertAsync("שגיאה", $"לא ניתן לטעון את פרשת המסורה: {ex.Message}", "אישור");
             }
             finally
             {
