@@ -25,6 +25,20 @@ const bookPageSlugs = JSON.parse(
 		"utf8",
 	),
 );
+const parashaDivision = JSON.parse(
+	readFileSync(
+		path.resolve(import.meta.dirname, "src/data/parasha/parasha-division.json"),
+		"utf8",
+	),
+);
+/** First parasha unitId per Torah sefer — the book-chrome URLs land
+ * there. Unit ids are positional (index + 1) like the data module's. */
+const parashaSeferFirstUnits = Object.entries(
+	parashaDivision.units.reduce((first, unit, index) => {
+		if (!(unit.sefer in first)) first[unit.sefer] = index + 1;
+		return first;
+	}, {}),
+);
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -158,6 +172,28 @@ const nextConfig = {
 				{
 					source: `/${encodeURIComponent("מסורה")}/:path*`,
 					destination: "/masora/:path*",
+				},
+				// /פרשה — the parasha reading division's public Hebrew root.
+				// Book-chrome URLs (/פרשה/{sefer}/{cover-slug}) land on the
+				// sefer's first parasha in book mode; unit URLs resolve through
+				// the /parasha route dir like מסורה does through /masora.
+				{ source: "/פרשה", destination: "/parasha" },
+				{ source: `/${encodeURIComponent("פרשה")}`, destination: "/parasha" },
+				...parashaSeferFirstUnits.flatMap(([sefer, unitId]) =>
+					Object.entries(bookPageSlugs).flatMap(([page, slug]) =>
+						[
+							`/פרשה/${sefer}/${slug}`,
+							`/פרשה/${encodeURIComponent(sefer)}/${encodeURIComponent(slug)}`,
+						].map((source) => ({
+							source,
+							destination: `/parasha/${unitId}?book&bookPage=${page}`,
+						})),
+					),
+				),
+				{ source: "/פרשה/:path*", destination: "/parasha/:path*" },
+				{
+					source: `/${encodeURIComponent("פרשה")}/:path*`,
+					destination: "/parasha/:path*",
 				},
 			],
 			fallback: [],
