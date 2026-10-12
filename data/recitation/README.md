@@ -354,4 +354,20 @@ Serve with `--recovery-database <separate-preview.sqlite> --recovery-output <pre
 
 `listening_tail.py` prepares diagnostic-only trailing-vowel candidates from the pinned CTC character/separator path. It never changes the automatic worker, pads endpoints or approves a candidate. Every corrected boundary requires fresh human listening and the same complete-chapter geometry checks.
 
+New missing-review candidates retain the pinned CTC letter start and end by
+default, using `propose_path_boundaries(rows, evidence, {})`. Do not extend every
+word to `followingWordStartMs`: that includes the interword gap and can produce
+overlong cuts even when complete-chapter timing geometry passes. A separator or
+neighboring-word endpoint is a targeted proposal for a specific heard defect,
+with its original path evidence preserved. Forced alignment and geometry alone
+do not establish that a cut sounds correct.
+
+Archive the previous queue before installing revised candidates and preserve the
+append-only answer history. Verify the complete archive chain in an isolated
+recovery preview so all earlier chapter approvals remain intact. Changed cuts
+require new candidate hashes and fresh listening; unchanged cases retain their
+actual answers. Verified source-bound CTC and lossless clip evidence may be
+reused, with no claim of fresh inference. The original-MP3 worker and approved
+intervals remain independent of this preparation.
+
 Reported clipped starts, clipped endings and overlong cuts can also be proposed with `propose_path_boundaries`. Each endpoint must be an actual recorded letter/separator boundary from the same pinned CTC path. The verifier rejects unrecorded offsets, changed canonical identities or acoustic scores, missing/duplicate proof, overlaps and invalid durations. These remain diagnostic candidates: every changed verse requires fresh completed word listening before the guarded importer can recover its chapter.
