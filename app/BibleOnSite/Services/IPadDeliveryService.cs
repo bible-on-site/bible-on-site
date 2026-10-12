@@ -3,7 +3,7 @@ namespace BibleOnSite.Services;
 /// <summary>
 /// On-demand asset delivery abstraction.
 /// Android: Play Asset Delivery (PAD) via AssetPackManager.
-/// iOS / Mac Catalyst: Apple On-Demand Resources (ODR) via NSBundleResourceRequest.
+/// iOS / Mac Catalyst: Apple Background Assets via BAAssetPackManager (managed asset packs).
 /// Other platforms: no-op (always returns false/null).
 /// </summary>
 public interface IPadDeliveryService
@@ -24,7 +24,7 @@ public interface IPadDeliveryService
         CancellationToken cancellationToken);
 
     /// <summary>
-    /// Platform-specific delivery diagnostics (ODR on iOS, PAD on Android).
+    /// Platform-specific delivery diagnostics (Background Assets on iOS, PAD on Android).
     /// Returns lines to append to the user-exportable diagnostic report.
     /// </summary>
     Task<List<string>> GetDeliveryDiagnosticsAsync(string packName);

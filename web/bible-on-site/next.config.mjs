@@ -168,6 +168,22 @@ const nextConfig = {
 				// matches rewrite sources before decoding the path.
 				{ source: "/מסורה", destination: "/masora" },
 				{ source: `/${encodeURIComponent("מסורה")}`, destination: "/masora" },
+				// Book-chrome pages for the מסורה sefer book:
+				// /מסורה/{firstUnitId}/{cover-slug}?book →
+				// /masora/{firstUnitId}?book&bookPage={page}. The unit id in
+				// the path resolves the sefer — masora units derive in TS,
+				// so unlike /פרשה there is no config-side sefer→unit table.
+				// Raw and percent-encoded variants cover client navigation
+				// and direct hits; numeric unit ids keep perush/article
+				// query-param routes out of this rule.
+				...Object.entries(bookPageSlugs).flatMap(([page, slug]) =>
+					["מסורה", encodeURIComponent("מסורה")].flatMap((root) =>
+						[slug, encodeURIComponent(slug)].map((pageSlug) => ({
+							source: `/${root}/:unitId(\\d+)/${pageSlug}`,
+							destination: `/masora/:unitId?book&bookPage=${page}`,
+						})),
+					),
+				),
 				{ source: "/מסורה/:path*", destination: "/masora/:path*" },
 				{
 					source: `/${encodeURIComponent("מסורה")}/:path*`,

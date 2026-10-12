@@ -111,6 +111,27 @@ test.describe("מסורה reading root", () => {
 		);
 	});
 
+	test("book view opens on ?book and shows the sefer book", async ({
+		page,
+	}) => {
+		await page.goto(`${MASORA_ROOT}/1?book`);
+		const overlay = page.locator('[class*="seferOverlay"]');
+		await expect(overlay).toBeVisible({ timeout: 15_000 });
+	});
+
+	test("book-chrome routes land on the sefer's first unit", async ({
+		page,
+	}) => {
+		// /מסורה/{firstUnitId}/{slug}?book rewrites to the unit in book
+		// mode with the chrome page in its bookPage query.
+		const response = await page.goto(
+			`${MASORA_ROOT}/1/${encodeURIComponent("כריכה")}?book`,
+		);
+		expect(response?.status()).toBe(200);
+		const overlay = page.locator('[class*="seferOverlay"]');
+		await expect(overlay).toBeVisible({ timeout: 15_000 });
+	});
+
 	test("unknown unit ids return 404", async ({ page }) => {
 		const response = await page.goto(`${MASORA_ROOT}/99999`);
 		expect(response?.status()).toBe(404);
