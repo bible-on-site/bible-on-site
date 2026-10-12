@@ -2,6 +2,7 @@ using System.Drawing;
 using BibleOnSite.Tests.MobileE2E.Platforms;
 using OpenQA.Selenium;
 using OpenQA.Selenium.Appium;
+using OpenQA.Selenium.Interactions;
 using Xunit;
 
 namespace BibleOnSite.Tests.MobileE2E.Pages;
@@ -113,6 +114,42 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
     public void Tap(string automationId) => Tap(platform.AutomationId(automationId));
 
     public void Tap(By locator) => platform.Tap(driver, WaitFor(locator, platform.CanTap));
+
+    /// <summary>
+    /// A long commentary hit can land several screens below its heading. Scroll
+    /// back to verify the selected commentary before testing reader history.
+    /// </summary>
+    public AppiumElement ScrollBackTo(string automationId, Func<AppiumElement, bool> condition)
+    {
+        var locator = platform.AutomationId(automationId);
+        for (var attempt = 0; attempt < 20; attempt++)
+        {
+            try
+            {
+                return WaitFor(locator, condition, TimeSpan.FromSeconds(attempt == 0 ? 8 : 2));
+            }
+            catch (WebDriverTimeoutException)
+            {
+                var window = driver.Manage().Window.Size;
+                var reader = WaitFor("PasukimCollection", element => element.Size.Width >= window.Width / 2);
+                var location = reader.Location;
+                var size = reader.Size;
+                var top = Math.Max(0, location.Y);
+                var bottom = Math.Min(window.Height, location.Y + size.Height);
+                var x = Math.Clamp(location.X + size.Width / 2, 1, window.Width - 1);
+                var finger = new PointerInputDevice(PointerKind.Touch, "reader-scroll");
+                var gesture = new ActionSequence(finger, 0);
+                gesture.AddAction(finger.CreatePointerMove(CoordinateOrigin.Viewport, x,
+                    top + (bottom - top) / 4, TimeSpan.Zero));
+                gesture.AddAction(finger.CreatePointerDown(MouseButton.Left));
+                gesture.AddAction(finger.CreatePointerMove(CoordinateOrigin.Viewport, x,
+                    top + (bottom - top) / 2, TimeSpan.FromMilliseconds(350)));
+                gesture.AddAction(finger.CreatePointerUp(MouseButton.Left));
+                driver.PerformActions([gesture]);
+            }
+        }
+        throw new WebDriverTimeoutException($"The selected heading {automationId} was not found after scrolling back through the reader.");
+    }
 
     public void OpenCircularMenu()
     {
