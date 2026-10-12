@@ -84,9 +84,9 @@ public class MasoraViewModelTests
             if (_includeNotes)
             {
                 await Storage.CreateDatabaseAsync("sefaria-dump-5784-sivan-4.perushim_notes.sqlite",
-                    "CREATE TABLE _metadata (key TEXT,value TEXT)", "INSERT INTO _metadata VALUES ('build_timestamp','100')",
-                    "CREATE TABLE note (perush_id INTEGER,perek_id INTEGER,pasuk INTEGER,note_idx INTEGER,note_content TEXT)",
-                    "INSERT INTO note VALUES (1,1,1,0,'inside'),(1,1,2,0,'outside')");
+                    [.. NotesDbV2.Statements(
+                        (1, 1, 1, 0, "inside"), (1, 1, 2, 0, "outside")),
+                        "INSERT INTO _metadata VALUES ('build_timestamp','100')"]);
             }
         }
 
