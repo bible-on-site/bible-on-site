@@ -16,6 +16,14 @@ public partial class PerekPage
 
     /// <summary>Perek requested via the calendarReader?perekId= query route.</summary>
     private int? _pendingPerekId;
+    /// <summary>
+    /// Target gap between the pasuk list's top edge and the landed match line.
+    /// Large enough to keep the pasuk text and the perush-name header visible
+    /// when the match sits near the note's start; deeper matches still land
+    /// just below the toolbar. Tighter values let an early scroll push the
+    /// name header offscreen before the visibility check settles (#2205).
+    /// </summary>
+    private const int MatchTopMargin = 96;
     private View? _searchHeader;
     private double _searchHeaderHeight;
     private const string SearchExpansionAnimation = "ReaderSearchExpansion";
@@ -535,7 +543,7 @@ public partial class PerekPage
         noteView.GetLocationOnScreen(viewPos);
         recycler.GetLocationOnScreen(listPos);
         var density = noteView.Resources?.DisplayMetrics?.Density ?? 1f;
-        recycler.ScrollBy(0, (int)(viewPos[1] + matchTop * density - listPos[1] - 8 * density));
+        recycler.ScrollBy(0, (int)(viewPos[1] + matchTop * density - listPos[1] - MatchTopMargin * density));
         return true;
 #elif IOS || MACCATALYST
         if (htmlView.GetSearchMatchTop() is not { } matchTop ||
@@ -547,7 +555,7 @@ public partial class PerekPage
         // Scroll-view coordinates are content space, so the converted point is
         // already a content offset.
         var point = noteView.ConvertPointToView(new CoreGraphics.CGPoint(0, matchTop), collection);
-        var target = point.Y - 8;
+        var target = point.Y - MatchTopMargin;
         var min = -collection.AdjustedContentInset.Top;
         var max = Math.Max(min, collection.ContentSize.Height - collection.Bounds.Height + collection.AdjustedContentInset.Bottom);
         collection.SetContentOffset(
