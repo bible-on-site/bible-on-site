@@ -3,6 +3,7 @@
  * Direct database access for lower latency and reduced billing costs
  */
 
+import type { Connection as CoreConnection } from "mysql2";
 import mysql from "mysql2/promise";
 
 /**
@@ -50,6 +51,26 @@ function getPool(): mysql.Pool {
 			waitForConnections: true,
 			connectionLimit: 5,
 			queueLimit: 0,
+		});
+		// Search providers run normalization-aware REGEXP_LIKE scans over
+		// an unindexed ~50k-row text column. A single match attempt on a
+		// very long row can exhaust the engine's per-match step budget
+		// (MySQL error 3699, `regexp_time_limit`, default 32) well before
+		// the statement's own MAX_EXECUTION_TIME hint — which is the
+		// intended wall-clock bound — fires. Raise the per-match budget
+		// high enough that the statement hint is always the limiting
+		// factor (#2140).
+		pool.on("connection", (connection) => {
+			// The pool emits the core callback-API connection here, not a
+			// promise wrapper, so the session variable is set with a callback.
+			(connection as unknown as CoreConnection).query(
+				"SET SESSION regexp_time_limit = 16777216",
+				(err) => {
+					if (err) {
+						console.error("[db] regexp_time_limit session setup failed:", err);
+					}
+				},
+			);
 		});
 	}
 	return pool;

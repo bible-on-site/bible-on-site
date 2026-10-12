@@ -78,15 +78,17 @@ extra candidate the JS scorer filters out.
 Candidates are ranked before the row cap: `ORDER BY` a word-bounded
 phrase `REGEXP_LIKE` flag per field (name first for authors/articles),
 which is exactly the candidate class the JS scorer rates highest
-(whole-word phrase containment or whole-text equality). The second
+(whole-word phrase containment or whole-text equality) — a single-term
+query skips it, since the estimate's exact flag is the same pattern
+and its 90 tier already sorts those rows first. The second
 tier per field is `LEAST` over the terms' word-level estimates —
 `10*exact + 20*prefix + 60*candidate` per term, each a single
 `REGEXP_LIKE` on a word-bounded pattern (a single-term query emits the
-bare estimate: MySQL `LEAST` requires two arguments). When a provider
-searches only one field the candidate flag is emitted as the constant
-`60` instead: the WHERE already admitted only rows whose one field
-matched, so re-running the lookahead-bearing pattern in ORDER BY would
-only burn time. The three patterns nest
+bare estimate: MySQL `LEAST` requires two arguments). The candidate
+flag is the only place the length-windowed `termRegexp` still runs —
+WHERE admits the cheaper lookahead-free superset, so the flag's job is
+to drop over-long chunk words (dead candidates) to estimate 0. The
+three patterns nest
 (exact ⇒ prefix ⇒ fuzzy-eligible), so a term's estimate lands on the
 scorer's own 90/80/60 tiers; `LEAST` mirrors the scorer's
 minimum-term rule. Estimating per term, rather than counting the term's
@@ -100,25 +102,27 @@ Typo tolerance (#2140): the JS scorer's fuzzy tier (bounded edit
 distance) used to be unreachable for DB-backed types, because the
 ordered-letters pattern can never select a misspelled row. Each term is
 now additionally split into `maxEdits(term) + 1` contiguous chunks and
-the WHERE clause admits a word containing any one intact chunk whose
-total length sits inside `[term - edits, term + edits]` — since each
-edit can corrupt at most one chunk, every fuzzy-eligible word survives
-as a candidate (the classic pigeonhole filter). The length window is
-asserted with a single bounded-range lookahead at the word start: it is
-the only range a
-bounded edit distance permits, so a chunk inside an over-long or
-too-short word (both dead candidates) is rejected outright and short
-chunks stay selective. Every quantifier in the pattern is bounded —
-the in-word prefix before a chunk is capped at `hi - chunk` letters —
-because an unbounded scan under a nested quantifier trips MySQL's
-`regexp_time_limit` on a full-table `WHERE` scan. Bounded or not, that
-scan is still too expensive to run on every row, so each WHERE field
-wraps the candidate eval in `CASE WHEN REGEXP_LIKE(col, gate) THEN
-REGEXP_LIKE(col, candidate) ELSE 0 END`: the gate is the term's chunk
-union as bare ordered-letters patterns — a strict superset of every
-anchor (prefix words contain the whole term, fuzzy words an intact
-chunk) and the same cheap scan shape the pre-#2140 WHERE used — so
-chunk-free rows never pay the word-bounded pattern. Scoring is unchanged in JS, so the fuzzy
+the WHERE clause admits a word containing any one intact chunk — since
+each edit can corrupt at most one chunk, every fuzzy-eligible word
+survives as a candidate (the classic pigeonhole filter). The WHERE
+pattern is a word-start anchor, one bounded in-word prefix (at most
+`term + edits - chunk` letters can precede a chunk in an in-window
+word), then the chunk union — every quantifier bounded, so no
+unbounded scan under a nested quantifier trips MySQL's
+`regexp_time_limit` on a full-table scan. The scorer's whole-word
+length window (`[term - edits, term + edits]`) is deliberately *not*
+re-checked in WHERE: keeping it there cost a per-word lookahead over
+half the table, while a chunk inside an over-long word can only ever
+rank 0 — so the windowed `termRegexp` runs once in the rank estimate,
+where it drops dead candidates below every real one for the row cap to
+shed. Even the bounded union is too expensive for rows without a
+chunk, so each WHERE field wraps the eval in
+`CASE WHEN REGEXP_LIKE(col, gate) THEN REGEXP_LIKE(col, candidate)
+ELSE 0 END`: the gate is the term's chunk union as bare
+ordered-letters patterns — a strict superset of every anchor (prefix
+words contain the whole term, fuzzy words an intact chunk) and the
+same cheap scan shape the pre-#2140 WHERE used — so chunk-free rows
+never pay the word-bounded pattern. Scoring is unchanged in JS, so the fuzzy
 60/80/90/100/110 tiers apply uniformly across all four DB providers
 exactly as they do for the in-memory corpora. Articles score name,
 abstract, and content independently (name keeps
@@ -308,7 +312,12 @@ Chosen policy:
   letters gate scan costs a few seconds on it — the pre-#2140 3s bound
   was already marginal for common terms and left no room for the
   chunk-gated word-bounded eval, which a multi-term query pays once per
-  AND-ed term.
+  AND-ed term. The pool also raises the session `regexp_time_limit`:
+  MySQL's per-match engine budget (default 32 steps) can abort a single
+  `REGEXP_LIKE` on a very long row with error 3699 before the
+  statement's own time bound fires — the statement hint is the intended
+  wall-clock guardrail, so the per-match budget is raised high enough
+  that it is never the limiting factor.
 - Queries are not persisted anywhere. Privacy note: query terms appear in
   URLs by design (shareable search URLs are a requirement), so they may
   appear in ordinary access logs — documented and accepted.

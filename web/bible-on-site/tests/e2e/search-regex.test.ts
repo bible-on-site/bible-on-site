@@ -5,6 +5,7 @@ import {
 	searchAuthors,
 	searchPerushNotes,
 	searchTanahpediaEntries,
+	termCandidateRegexp,
 	termGateRegexp,
 	termRankPatterns,
 	termRegexp,
@@ -15,9 +16,10 @@ import {
  * the real MySQL test database — the unit suite verifies the patterns
  * structurally (the codacy gate forbids compiling a non-literal RegExp
  * in repo code), while this spec asserts the actual ICU behavior the
- * providers rely on: fuzzy-eligible words are selected, words outside
- * the `[term - edits, term + edits]` length window are not, and the
- * pre-cap rank estimate lands on the scorer's 90/80/60 tiers (#2140).
+ * providers rely on: the WHERE superset selects every fuzzy-eligible
+ * word, the strict length window in the rank flag rejects words
+ * outside `[term - edits, term + edits]`, and the pre-cap rank
+ * estimate lands on the scorer's 90/80/60 tiers (#2140).
  */
 
 let connection: mysql.Connection;
@@ -112,6 +114,28 @@ test.describe("generated search patterns on real MySQL", () => {
 			await expect(regexpLike(text, termGateRegexp(term))).resolves.toBe(true);
 		}
 		await expect(regexpLike("אזור", termGateRegexp(term))).resolves.toBe(false);
+	});
+
+	test("the WHERE candidate union admits the superset the rank flag narrows", async () => {
+		// WHERE runs the lookahead-free chunk union: every scorable word
+		// reaches it, plus dead candidates the windowed rank flag then
+		// rejects — the window lives in ORDER BY so the scan stays cheap
+		// (#2140 follow-up).
+		const term = "ירושלימ";
+		const where = termCandidateRegexp(term);
+		await expect(regexpLike("על ירושלים נאמר", where)).resolves.toBe(true);
+		await expect(regexpLike("בירושלים", where)).resolves.toBe(true);
+		// The over-long word is admitted by WHERE — the windowed
+		// termRegexp flag is what drops it to rank 0.
+		await expect(regexpLike("אבגדירושאבגד", where)).resolves.toBe(true);
+		await expect(regexpLike("אבגדירושאבגד", termRegexp(term))).resolves.toBe(
+			false,
+		);
+		// A chunk too deep in the word can't belong to an in-window word.
+		await expect(regexpLike("אאאאאאאאאאירושאאאאאאאאאא", where)).resolves.toBe(
+			false,
+		);
+		await expect(regexpLike("אזור", where)).resolves.toBe(false);
 	});
 
 	test("executes every provider's candidate query end-to-end", async () => {

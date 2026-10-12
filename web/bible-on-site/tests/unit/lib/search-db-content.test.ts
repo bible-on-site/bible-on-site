@@ -14,6 +14,7 @@ import {
 	searchPerushNotes,
 	searchTanahpediaEntries,
 	termAnchors,
+	termCandidateRegexp,
 	termChunks,
 	termGateRegexp,
 	termRankPatterns,
@@ -52,6 +53,37 @@ function candidateSemantics(term: string, raw: string): boolean {
 			}
 			return chunks.some((chunk) => word.includes(chunk));
 		});
+}
+
+/**
+ * The contract the generated WHERE candidate pattern encodes — the
+ * lookahead-free superset {@link termCandidateRegexp} runs after the
+ * chunk gate: a stored word is selectable when it starts with the term
+ * (exact/prefix) or holds an intact chunk within `hi - minChunk`
+ * letters of the word start — the only offsets a word inside the
+ * scorer's length window allows. Unlike {@link candidateSemantics} it
+ * does not re-check the word's total length: over-long words are
+ * admitted on purpose and the rank estimate drops them to 0.
+ */
+function whereSemantics(term: string, raw: string): boolean {
+	const chunks = termChunks(term);
+	const edits = chunks.length - 1;
+	if (edits === 0) {
+		return normalized(raw)
+			.split(" ")
+			.some((word) => word.startsWith(term));
+	}
+	const hi = [...term].length + edits;
+	const room = hi - Math.min(...chunks.map((chunk) => [...chunk].length));
+	return normalized(raw)
+		.split(" ")
+		.filter((word) => word.length > 0)
+		.some((word) =>
+			chunks.some((chunk) => {
+				const offset = word.indexOf(chunk);
+				return offset >= 0 && offset <= room;
+			}),
+		);
 }
 
 /**
@@ -171,6 +203,60 @@ describe("termAnchors", () => {
 	});
 });
 
+describe("termCandidateRegexp", () => {
+	it("admits every word the strict candidate contract admits", () => {
+		// WHERE admits the lookahead-free superset; anything
+		// candidateSemantics selects must survive WHERE first.
+		for (const [term, word] of [
+			["ירושלימ", "ירושלים"],
+			["ירושלימ", "על ירושלים נאמר"],
+			["ירושלימ", "ירושלמי"],
+			["ירושלימ", "בירושלים"],
+			["אבגדהוזח", "אסגדהוזט"],
+			["בראשית", "בבראשית"],
+			["בראשית", "בראשיתו"],
+			["את", "אתר"],
+		] as const) {
+			expect(whereSemantics(term, word)).toBe(true);
+		}
+	});
+
+	it("admits an over-long chunk word whose rank flag will be 0", () => {
+		// The review's אבגדירושאבגד example: the strict candidate
+		// contract rejects it (12 letters > term + edits), but WHERE —
+		// which must stay a superset — admits it on the early chunk and
+		// lets the rank estimate shed it before the row cap.
+		expect(candidateSemantics("ירושלימ", "אבגדירושאבגד")).toBe(false);
+		expect(whereSemantics("ירושלימ", "אבגדירושאבגד")).toBe(true);
+	});
+
+	it("rejects chunks too deep inside a word to ever be in-window", () => {
+		// A chunk starting beyond `hi - minChunk` letters can only sit in
+		// a word longer than `term + edits` — never a candidate.
+		expect(whereSemantics("ירושלימ", "אאאאאאאאאאירושאאאאאאאאאא")).toBe(false);
+		expect(whereSemantics("ירושלימ", "אזור")).toBe(false);
+		expect(whereSemantics("את", "באת")).toBe(false);
+		// Split chunk words are admitted (a chunk at word start is
+		// in-bounds) but the rank flag drops them to 0 like over-longs.
+		expect(candidateSemantics("ירושלימ", "ירוש לימ")).toBe(false);
+		expect(whereSemantics("ירושלימ", "ירוש לימ")).toBe(true);
+		expect(whereSemantics("ירושלימ", "ירוש")).toBe(true);
+	});
+
+	it("is one word-anchored bounded prefix over the chunk union — no lookahead", () => {
+		const pattern = termCandidateRegexp("ירושלימ");
+		// The WHERE eval runs on every chunk-bearing row, so it carries
+		// a single bounded in-word prefix and no lookahead at all —
+		// the length-window check lives in the rank flag (#2140
+		// follow-up).
+		expect(pattern).toContain("(?:^|");
+		expect(pattern).toMatch(/\)\{0,[0-9]+\}\(\?:/);
+		expect(pattern).not.toContain("(?=");
+		expect(pattern).not.toContain("(?!");
+		expect(termCandidateRegexp("את")).toBe(termRankPatterns("את")[1]);
+	});
+});
+
 describe("termGateRegexp", () => {
 	it("unions the chunks as bare letter patterns — no anchoring or lookaheads", () => {
 		// The gate is a strict superset of the candidate anchors (every
@@ -261,21 +347,19 @@ describe("searchPerushNotes", () => {
 			expect.stringContaining("REGEXP_LIKE(n.note_content, ?, 'i')"),
 			[
 				termGateRegexp("בראשית"),
-				termRegexp("בראשית"),
-				phraseRegexp(["בראשית"]),
-				// Single-field provider: the 60*candidate flag is a
-				// constant on WHERE-matched rows — only exact and prefix
-				// patterns bind in the estimate.
-				...termRankPatterns("בראשית").slice(0, 2),
+				termCandidateRegexp("בראשית"),
+				...termRankPatterns("בראשית"),
 			],
 		);
 		expect(mockQuery).toHaveBeenCalledWith(
 			expect.stringContaining("MAX_EXECUTION_TIME"),
 			expect.anything(),
 		);
-		// Whole-word candidates are ranked before the row cap.
+		// Whole-word candidates are ranked before the row cap; a
+		// single-term query orders straight by the tier estimate (the
+		// phrase flag would repeat the exact flag's pattern).
 		expect(mockQuery).toHaveBeenCalledWith(
-			expect.stringContaining("ORDER BY REGEXP_LIKE"),
+			expect.stringContaining("ORDER BY (10*REGEXP_LIKE"),
 			expect.anything(),
 		);
 		expect(hits).toHaveLength(1);
@@ -289,20 +373,19 @@ describe("searchPerushNotes", () => {
 		await searchPerushNotes("אחד שני", 10);
 		const [sql, params] = mockQuery.mock.calls[0];
 		// Each term contributes a CASE gate + candidate eval in WHERE
-		// (4 total), one phrase-rank flag, and two rank patterns per
+		// (4 total), one phrase-rank flag, and three rank patterns per
 		// term inside the LEAST estimate — one LEAST call per ranked
-		// fragment, over both terms. The single-field 60*candidate flag
-		// is constant on WHERE-matched rows and needs no eval.
-		expect(sql.match(/REGEXP_LIKE\(n\.note_content/g)).toHaveLength(9);
+		// fragment, over both terms.
+		expect(sql.match(/REGEXP_LIKE\(n\.note_content/g)).toHaveLength(11);
 		expect(sql.match(/LEAST\(/g)).toHaveLength(1);
 		expect(params).toEqual([
 			termGateRegexp("אחד"),
-			termRegexp("אחד"),
+			termCandidateRegexp("אחד"),
 			termGateRegexp("שני"),
-			termRegexp("שני"),
+			termCandidateRegexp("שני"),
 			phraseRegexp(["אחד", "שני"]),
-			...termRankPatterns("אחד").slice(0, 2),
-			...termRankPatterns("שני").slice(0, 2),
+			...termRankPatterns("אחד"),
+			...termRankPatterns("שני"),
 		]);
 	});
 
@@ -315,14 +398,15 @@ describe("searchPerushNotes", () => {
 		// the same as one fuzzy-eligible word instead of stacking anchor
 		// flags above it (#2140 review). The estimate is emitted bare:
 		// MySQL LEAST requires two arguments, so a single term has none.
-		// This provider has one candidate field, so the `60*candidate`
-		// flag is a constant 60 on every row the WHERE admitted — the
-		// heavy lookahead pattern never runs in ORDER BY.
+		// The third flag is the length-windowed termRegexp — WHERE's
+		// cheaper termCandidateRegexp superset can't distinguish a real
+		// fuzzy word from an over-long chunk word, so the window check
+		// lives here where only matched rows pay it (#2140 follow-up).
 		expect(sql.match(/LEAST\(/g)).toBeNull();
 		expect(sql).toContain(
-			"(10*REGEXP_LIKE(n.note_content, ?, 'i') + 20*REGEXP_LIKE(n.note_content, ?, 'i') + 60) DESC",
+			"(10*REGEXP_LIKE(n.note_content, ?, 'i') + 20*REGEXP_LIKE(n.note_content, ?, 'i') + 60*REGEXP_LIKE(n.note_content, ?, 'i')) DESC",
 		);
-		expect(params?.slice(3)).toEqual(termRankPatterns("ירושלימ").slice(0, 2));
+		expect(params?.slice(2)).toEqual(termRankPatterns("ירושלימ"));
 	});
 
 	it("selects a note whose stored word is a misspelling of the query", async () => {
@@ -342,7 +426,8 @@ describe("searchPerushNotes", () => {
 		// generated pattern (bound after the gate param) encodes a candidate
 		// contract that would select the misspelled-relative text.
 		expect(params?.[0]).toBe(termGateRegexp("ירושלימ"));
-		expect(params?.[1]).toBe(termRegexp("ירושלימ"));
+		expect(params?.[1]).toBe(termCandidateRegexp("ירושלימ"));
+		expect(whereSemantics("ירושלימ", "על ירושלים נאמר")).toBe(true);
 		expect(candidateSemantics("ירושלימ", "על ירושלים נאמר")).toBe(true);
 		expect(hits).toHaveLength(1);
 		expect(hits[0].score).toBe(60); // fuzzy tier, reached only via the new path
@@ -453,17 +538,18 @@ describe("searchAuthors", () => {
 		expect(sql).toContain(
 			"CASE WHEN REGEXP_LIKE(name, ?, 'i') THEN REGEXP_LIKE(name, ?, 'i') ELSE 0 END OR CASE WHEN REGEXP_LIKE(details, ?, 'i') THEN REGEXP_LIKE(details, ?, 'i') ELSE 0 END",
 		);
+		// Single-term: no separate phrase flag — the estimate's exact
+		// flag is the same word-bounded pattern and its 90 tier sorts
+		// first anyway.
 		expect(sql).toContain(
-			"ORDER BY REGEXP_LIKE(name, ?, 'i') DESC, (10*REGEXP_LIKE(name, ?, 'i') + 20*REGEXP_LIKE(name, ?, 'i') + 60*REGEXP_LIKE(name, ?, 'i')) DESC, REGEXP_LIKE(details, ?, 'i') DESC, (10*REGEXP_LIKE(details, ?, 'i') + 20*REGEXP_LIKE(details, ?, 'i') + 60*REGEXP_LIKE(details, ?, 'i')) DESC",
+			"ORDER BY (10*REGEXP_LIKE(name, ?, 'i') + 20*REGEXP_LIKE(name, ?, 'i') + 60*REGEXP_LIKE(name, ?, 'i')) DESC, (10*REGEXP_LIKE(details, ?, 'i') + 20*REGEXP_LIKE(details, ?, 'i') + 60*REGEXP_LIKE(details, ?, 'i')) DESC",
 		);
 		expect(params).toEqual([
 			termGateRegexp("לוי"),
-			termRegexp("לוי"),
+			termCandidateRegexp("לוי"),
 			termGateRegexp("לוי"),
-			termRegexp("לוי"),
-			phraseRegexp(["לוי"]),
+			termCandidateRegexp("לוי"),
 			...termRankPatterns("לוי"),
-			phraseRegexp(["לוי"]),
 			...termRankPatterns("לוי"),
 		]);
 	});
@@ -473,7 +559,7 @@ describe("searchAuthors", () => {
 		const hits = await searchAuthors("ירושלימ", 10);
 		const [, params] = mockQuery.mock.calls[0];
 		expect(params?.[0]).toBe(termGateRegexp("ירושלימ"));
-		expect(params?.[1]).toBe(termRegexp("ירושלימ"));
+		expect(params?.[1]).toBe(termCandidateRegexp("ירושלימ"));
 		expect(candidateSemantics("ירושלימ", "ירושלים")).toBe(true);
 		expect(hits[0].score).toBe(120); // fuzzy 60 on the name, ×2 weight
 	});
@@ -582,7 +668,7 @@ describe("searchArticles", () => {
 		const hits = await searchArticles("ירושלימ", 10);
 		const [, params] = mockQuery.mock.calls[0];
 		expect(params?.[0]).toBe(termGateRegexp("ירושלימ"));
-		expect(params?.[1]).toBe(termRegexp("ירושלימ"));
+		expect(params?.[1]).toBe(termCandidateRegexp("ירושלימ"));
 		expect(candidateSemantics("ירושלימ", "ירושלים")).toBe(true);
 		expect(hits[0].score).toBe(120); // fuzzy 60 on the name, ×2 weight
 	});
@@ -640,26 +726,23 @@ describe("searchTanahpediaEntries", () => {
 		expect(sql).toContain("LIMIT 1000");
 		// Two REGEXP_LIKE per searchable field (gate + candidate) plus two
 		// inside the gated synonym EXISTS — eight per term in WHERE —
-		// then a phrase flag and a three-pattern estimate per fragment in
-		// ORDER BY rank.
-		expect(sql.match(/REGEXP_LIKE\(/g)).toHaveLength(24);
+		// then a three-pattern estimate per fragment in ORDER BY rank
+		// (single-term: no separate phrase flag — the estimate's exact
+		// flag is the same pattern).
+		expect(sql.match(/REGEXP_LIKE\(/g)).toHaveLength(20);
 		expect(sql.match(/tanahpedia_entry_synonym/g)?.length).toBeGreaterThan(0);
 		expect(params).toEqual([
 			termGateRegexp("משה"),
-			termRegexp("משה"),
+			termCandidateRegexp("משה"),
 			termGateRegexp("משה"),
-			termRegexp("משה"),
+			termCandidateRegexp("משה"),
 			termGateRegexp("משה"),
-			termRegexp("משה"),
+			termCandidateRegexp("משה"),
 			termGateRegexp("משה"),
-			termRegexp("משה"),
-			phraseRegexp(["משה"]),
+			termCandidateRegexp("משה"),
 			...termRankPatterns("משה"),
-			phraseRegexp(["משה"]),
 			...termRankPatterns("משה"),
-			phraseRegexp(["משה"]),
 			...termRankPatterns("משה"),
-			phraseRegexp(["משה"]),
 			...termRankPatterns("משה"),
 		]);
 	});
@@ -742,7 +825,7 @@ describe("searchTanahpediaEntries", () => {
 		// The mocked query returns rows without applying WHERE — verify the
 		// generated pattern's contract would select the misspelled title.
 		expect(params?.[0]).toBe(termGateRegexp("ירושלימ"));
-		expect(params?.[1]).toBe(termRegexp("ירושלימ"));
+		expect(params?.[1]).toBe(termCandidateRegexp("ירושלימ"));
 		expect(candidateSemantics("ירושלימ", "ירושלים")).toBe(true);
 		expect(hits).toHaveLength(1);
 		expect(hits[0].score).toBe(120); // fuzzy 60 at name weight

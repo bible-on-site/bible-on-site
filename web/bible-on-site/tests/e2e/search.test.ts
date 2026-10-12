@@ -136,8 +136,12 @@ test.describe("Site search", () => {
 		await page.goto(`/search?q=${encodeURIComponent("בראשת")}`);
 
 		// Perush notes on בראשית א contain בראשית — the fuzzy hit reaches
-		// the commentary group on the real REGEXP path.
-		await expect(page.getByRole("heading", { name: "פירושים" })).toBeVisible();
+		// the commentary group on the real REGEXP path. The fuzzy candidate
+		// scan takes several seconds on the ~50k-row note column, so allow
+		// more than the 5s expect default (#2140).
+		await expect(page.getByRole("heading", { name: "פירושים" })).toBeVisible({
+			timeout: 15000,
+		});
 		// Seeded article names contain בראשית too — same path, articles.
 		await expect(page.getByRole("heading", { name: "מאמרים" })).toBeVisible();
 
@@ -148,7 +152,7 @@ test.describe("Site search", () => {
 			page.locator(
 				`a[data-result-link][href="/pedia/${encodeURIComponent("יהושע-בן-נון")}"]`,
 			),
-		).toBeVisible();
+		).toBeVisible({ timeout: 15000 });
 	});
 
 	test("finds Tanahpedia entries by title, alias and body text", async ({

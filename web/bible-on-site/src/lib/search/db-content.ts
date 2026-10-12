@@ -12,11 +12,11 @@
  * exact-letter path, `termAnchors` adds bounded chunk patterns so a
  * word within the scorer's edit-distance budget is also selected
  * (#2140) — the same typo tolerance the in-memory corpora get by
- * scoring everything. Candidates are ordered by a word-bounded phrase
- * pattern, then by a per-term estimate that mirrors the scorer's
- * tiers, before the row cap, so when a frequent term overflows it, the
- * truncated rows are the weakest candidates rather than arbitrary
- * early rows. The note table has no usable full-text index today; the
+ * scoring everything. Candidates are ordered by a per-term estimate
+ * that mirrors the scorer's tiers (multi-term queries get a
+ * word-bounded phrase flag first) before the row cap, so when a
+ * frequent term overflows it, the truncated rows are the weakest
+ * candidates rather than arbitrary early rows. The note table has no usable full-text index today; the
  * bounded ranked REGEXP keeps worst-case cost predictable until a
  * derived index (see the article-search follow-up) covers commentary
  * too.
@@ -171,10 +171,16 @@ export function termAnchors(term: string): string[] {
 }
 
 /**
- * Candidate-selection pattern for one normalized term: the OR of its
- * {@link termAnchors}, so a row is selectable by the exact/prefix shape
- * or by any word that survived the scorer's edit-distance bound.
- * Exported for unit tests.
+ * The strict fuzzy-candidate pattern for one normalized term: the OR of
+ * its {@link termAnchors} — the exact/prefix shape plus one
+ * length-windowed anchor per chunk. This is the pattern that
+ * distinguishes a real fuzzy-eligible word (chunk inside a word of
+ * `[term - edits, term + edits]` letters) from a chunk-bearing word
+ * that can never score. WHERE does not run it — {@link termCandidateRegexp}
+ * is the cheaper superset used there; this pattern runs only in the
+ * pre-cap rank estimate, where its flag decides whether a matched row
+ * holds a real candidate word (60) or only dead ones (0). Exported for
+ * unit tests.
  */
 export function termRegexp(term: string): string {
 	const anchors = termAnchors(term);
@@ -182,14 +188,48 @@ export function termRegexp(term: string): string {
 }
 
 /**
- * Cheap superset of {@link termRegexp}: the union of the term's
- * {@link termChunks chunks} as bare ordered-letters patterns, with no
- * word anchoring — the same shape the pre-#2140 WHERE ran on every row.
- * Every candidate anchor implies an intact chunk in the text (the
- * prefix anchor contains all of the term's letters, so it contains
- * each chunk), which makes the union a strict superset: rows with no
- * chunk can skip the bounded-lookahead pattern entirely. The WHERE
- * instantiates it inside `CASE WHEN`, whose branch evaluation is
+ * Candidate-selection pattern run by WHERE behind the
+ * {@link termGateRegexp chunk gate}: a word-start anchor, one bounded
+ * in-word prefix, then the chunk union. It admits every word the
+ * scorer can rate — a word within `±edits` of the term has at most
+ * `term + edits` letters, so every intact chunk sits no further than
+ * `hi - chunk` letters from the word start — with a single bounded
+ * prefix scan per word start instead of the lookahead-plus-prefix pair
+ * {@link termAnchors} needs per anchor. The total-length window is
+ * deliberately *not* re-checked here: an over-long word with an early
+ * chunk still matches WHERE (the candidate superset must hold), but
+ * its rank-estimate flag is 0, so the row cap sheds it before any real
+ * candidate — the same outcome the in-WHERE window produced, at a
+ * fraction of the scan cost (#2140 follow-up). For short terms
+ * (edits = 0) the pattern is exactly the word-start prefix shape.
+ * Exported for unit tests.
+ */
+export function termCandidateRegexp(term: string): string {
+	const edits = maxEdits(term);
+	if (edits === 0) {
+		return prefixRegexp(term);
+	}
+	const chunks = termChunks(term);
+	const hi = [...term].length + edits;
+	const inWordPrefix = `(?:${WORD_CHAR}${IGNORABLE_RUN}*){0,${
+		hi - Math.min(...chunks.map((chunk) => [...chunk].length))
+	}}`;
+	return `(?:^|${WORD_BOUNDARY})${IGNORABLE_RUN}*${inWordPrefix}(?:${chunks
+		.map(lettersRegexp)
+		.join("|")})`;
+}
+
+/**
+ * Cheap superset of {@link termCandidateRegexp}: the union of the
+ * term's {@link termChunks chunks} as bare ordered-letters patterns,
+ * with no word anchoring — the same shape the pre-#2140 WHERE ran on
+ * every row.
+ * Every candidate match implies an intact chunk in the text — a word
+ * the candidate union selects holds one of these chunks, so its
+ * letters appear in order — which makes the union a strict superset of
+ * {@link termCandidateRegexp}: rows with no chunk can skip the
+ * word-anchored eval entirely. The WHERE instantiates it inside
+ * `CASE WHEN`, whose branch evaluation is
  * guaranteed lazy, so the expensive path runs only on chunk-bearing
  * rows — that is what keeps the full-table scan inside
  * `MAX_EXECUTION_TIME` (#2140 follow-up). Exported for unit tests.
@@ -230,12 +270,13 @@ export function phraseRegexp(terms: string[]): string {
  * Per-term candidate predicate: every term must match at least one of the
  * fragments (AND across terms, OR across fragments). Each fragment is a
  * boolean SQL expression containing exactly two `?` placeholders — the
- * {@link termGateRegexp gate} first, then the term's full candidate
- * pattern — inside a `CASE WHEN gate THEN full ELSE 0 END` (or an
- * equivalent compound like the Tanahpedia synonym subquery). The gate
- * keeps the bounded-lookahead pattern off rows that contain no chunk
- * at all, which is what keeps the full-table scan inside
- * `MAX_EXECUTION_TIME` (#2140 follow-up).
+ * {@link termGateRegexp gate} first, then the term's
+ * {@link termCandidateRegexp word-anchored candidate union} — inside a
+ * `CASE WHEN gate THEN candidate ELSE 0 END` (or an equivalent compound
+ * like the Tanahpedia synonym subquery). The gate keeps the
+ * word-anchored eval off rows that contain no chunk at all, which is
+ * what keeps the full-table scan inside `MAX_EXECUTION_TIME` (#2140
+ * follow-up).
  */
 function matchPredicates(
 	predicates: string[],
@@ -247,7 +288,10 @@ function matchPredicates(
 	return {
 		where: terms.map(() => `(${predicates.join(" OR ")})`).join(" AND "),
 		params: terms.flatMap((term) =>
-			predicates.flatMap(() => [termGateRegexp(term), termRegexp(term)]),
+			predicates.flatMap(() => [
+				termGateRegexp(term),
+				termCandidateRegexp(term),
+			]),
 		),
 	};
 }
@@ -275,16 +319,19 @@ function matchClauses(
  * descending weight order with two tiers per fragment: a word-bounded
  * exact-phrase flag — the candidate class the JS scorer rates highest —
  * then `LEAST` over the terms' word-level score estimates, mirroring
- * the scorer's minimum-term rule. Each term's estimate is
+ * the scorer's minimum-term rule. A single-term query skips the phrase
+ * flag: the estimate's exact flag is the same pattern, and the
+ * estimate's 90 tier already sorts those rows first. Each term's estimate is
  * `10*exact + 20*prefix + 60*candidate` evaluated on a single
  * `REGEXP_LIKE` per {@link termRankPatterns pattern}: the patterns are
  * nested (exact ⇒ prefix ⇒ fuzzy-eligible), so the sum lands on 90,
  * 80, 60, or 0 — the tier `tokenScore` gives the term's best word in
- * that fragment. For a single-field provider the `60*candidate` flag
- * is emitted as the constant `60` — the WHERE already admits only
- * rows whose one field matched, so re-running the lookahead-bearing
- * pattern in ORDER BY would only burn time. Estimating per *term*
- * rather than per anchor keeps a
+ * that fragment. The `60*candidate` flag is the length-windowed
+ * {@link termRegexp}: WHERE admits rows on the cheaper
+ * {@link termCandidateRegexp} superset, so a chunk inside an over-long
+ * word still reaches ORDER BY — but its flag is 0, which pushes the
+ * row below every real candidate for the row cap to shed. Estimating
+ * per *term* rather than per anchor keeps a
  * column whose words hit different chunks of the term separately —
  * `ירוש לימ` for a `ירושלימ` query — from outranking a real
  * fuzzy-eligible word the way a per-anchor flag count did (#2140
@@ -300,18 +347,15 @@ function rankPredicates(
 	params: string[];
 } {
 	const phrase = phraseRegexp(terms);
-	// With a single candidate field, the WHERE admits a row only when
-	// that field matched the full candidate pattern — so its fuzzy flag
-	// is provably 1 on every ranked row. Emit it as the constant 60
-	// rather than re-running the lookahead-bearing candidate pattern on
-	// what can be thousands of candidates on the big table (#2140
-	// follow-up).
-	const candidateConstant = predicates.length === 1;
+	// For a single term the word-bounded phrase flag and the estimate's
+	// exact flag are the same pattern — a one-term phrase is exactly a
+	// whole word — and the estimate's 90 tier already sorts those rows
+	// first, so a separate flag would pay a second identical
+	// REGEXP_LIKE per matched row on the big table.
+	const singleTerm = terms.length === 1;
 	const estimate = (predicate: string) => {
-		const estimates = terms.map(() =>
-			candidateConstant
-				? `(10*${predicate} + 20*${predicate} + 60)`
-				: `(10*${predicate} + 20*${predicate} + 60*${predicate})`,
+		const estimates = terms.map(
+			() => `(10*${predicate} + 20*${predicate} + 60*${predicate})`,
 		);
 		// LEAST takes two or more arguments — a single-term query emits
 		// the bare estimate.
@@ -321,19 +365,17 @@ function rankPredicates(
 	};
 	return {
 		orderBy: predicates
-			.flatMap((predicate) => [
-				`${predicate} DESC`,
-				`${estimate(predicate)} DESC`,
-			])
+			.flatMap((predicate) =>
+				singleTerm
+					? [`${estimate(predicate)} DESC`]
+					: [`${predicate} DESC`, `${estimate(predicate)} DESC`],
+			)
 			.join(", "),
-		params: predicates.flatMap(() => [
-			phrase,
-			...terms.flatMap((term) =>
-				candidateConstant
-					? termRankPatterns(term).slice(0, 2)
-					: termRankPatterns(term),
-			),
-		]),
+		params: predicates.flatMap(() =>
+			singleTerm
+				? terms.flatMap(termRankPatterns)
+				: [phrase, ...terms.flatMap(termRankPatterns)],
+		),
 	};
 }
 
