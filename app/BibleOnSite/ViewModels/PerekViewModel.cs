@@ -420,7 +420,7 @@ public partial class PerekViewModel : ObservableObject
     private bool IsStalePerushimLoad(int perekId) => Perek != null && Perek.PerekId != perekId;
 
     // E2E hook (BIBLE_E2E_PERUSHIM=1): fabricate notes so the HtmlView
-    // commentary path is exercised in CI, where no ODR pack exists. Excluded
+    // commentary path is exercised in CI, where no asset pack exists. Excluded
     // from unit coverage — it only activates under the e2e env var, which unit
     // tests must not mutate (process-global, races parallel fixtures); the
     // mobile e2e suite covers it.

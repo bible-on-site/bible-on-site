@@ -121,6 +121,10 @@ const baseProps = (units: ParashaBookUnit[] = [unitWithHaftara]) => ({
 	currentUnitId: 1,
 	entityRefsByPerek: {},
 	perekSources: {},
+	articles: [],
+	perushim: [],
+	haftaraArticles: [],
+	haftaraPerushim: [],
 	initialBookPage: null,
 	haftara: false,
 });

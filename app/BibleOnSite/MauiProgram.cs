@@ -100,6 +100,15 @@ public static class MauiProgram
         // Native crashes require a device crash report and cannot be caught here.
         builder.ConfigureLifecycleEvents(events =>
         {
+#if IOS || MACCATALYST
+            // Managed asset-pack downloads resume in the background; the download
+            // delegate must be installed before the system replays their callbacks.
+            events.AddiOS(iOS => iOS.WillFinishLaunching((_, __) =>
+            {
+                PadDeliveryService.ConfigureBackgroundAssets();
+                return true;
+            }));
+#endif
 #if IOS && !DISABLE_ANALYTICS
 			events.AddiOS(iOS => iOS.WillFinishLaunching((_, __) =>
 			{

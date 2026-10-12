@@ -2,29 +2,18 @@
 
 import { useEffect, useMemo, useState } from "react";
 import catalog from "@/data/db/client-catalog.generated.json";
-import type { Perek, SefarimItem } from "@/data/db/tanah-view-types";
-import { BookRequestError, loadSefer } from "@/data/load-sefer";
+import type { Perek } from "@/data/db/tanah-view-types";
+import { BookRequestError, loadSefer, seferPerekMap } from "@/data/load-sefer";
+import type { ArticleSummary } from "@/lib/articles";
+import type { RangePerushSummary } from "@/lib/perushim";
 import type { PerekEntityReference } from "@/lib/tanahpedia/service";
+import type {
+	UnitBookContentKind,
+	UnitBookScope,
+} from "@/app/components/reading/unit-book-content";
 import ParashaSefer from "./ParashaSefer";
 import type { BookPage, ParashaBookUnit } from "./parasha-book-utils";
 import styles from "@/app/929/[number]/components/sefer-composite.module.css";
-
-/** Map every perekId in a loaded sefer JSON to its Perek. */
-function seferPerekMap(sefer: SefarimItem): Map<number, Perek> {
-	const map = new Map<number, Perek>();
-	if ("perakim" in sefer) {
-		sefer.perakim.forEach((perek, idx) => {
-			map.set(sefer.perekFrom + idx, perek);
-		});
-		return map;
-	}
-	for (const additional of sefer.additionals) {
-		additional.perakim.forEach((perek, idx) => {
-			map.set(additional.perekFrom + idx, perek);
-		});
-	}
-	return map;
-}
 
 /**
  * Loads the Torah sefer plus every sefer its parashot's Haftarot reach,
@@ -38,8 +27,18 @@ export default function ParashaLoadedSefer(props: {
 	currentUnitId: number;
 	entityRefsByPerek: Record<number, PerekEntityReference[]>;
 	perekSources: Record<number, string>;
+	articles: ArticleSummary[];
+	perushim: RangePerushSummary[];
+	haftaraArticles: ArticleSummary[];
+	haftaraPerushim: RangePerushSummary[];
 	initialBookPage: BookPage | null;
 	haftara: boolean;
+	initialContent?: {
+		scope: UnitBookScope;
+		kind: UnitBookContentKind;
+		slug: string;
+	} | null;
+	isVisible?: boolean;
 }) {
 	const neededFiles = useMemo(() => {
 		const files = new Set<string>();
@@ -149,8 +148,14 @@ export default function ParashaLoadedSefer(props: {
 			entityRefsByPerek={props.entityRefsByPerek}
 			perekSources={props.perekSources}
 			perekById={loaded}
+			articles={props.articles}
+			perushim={props.perushim}
+			haftaraArticles={props.haftaraArticles}
+			haftaraPerushim={props.haftaraPerushim}
 			initialBookPage={props.initialBookPage}
 			haftara={props.haftara}
+			initialContent={props.initialContent}
+			isVisible={props.isVisible}
 		/>
 	);
 }

@@ -1,8 +1,8 @@
 # Faster only when the boundaries survive
 
 The production pipeline remains unchanged. Its recoverable baseline is the
-pushed annotated tag `recitation-baseline-2026-10-07`, commit
-`f600b484c65f7f3b13dee427cf19de52c58cdb8b`. That commit includes the complete
+pushed annotated tag `recitation-baseline-2026-10-12`, commit
+`d67d3c84e9ac850b92b604668c0df230e114dcf1`. That commit includes the complete
 pipeline, model pins, accepted SQLite database and canonical JSON. A separate
 worktree contains the experiments; they cannot publish timings.
 
@@ -225,8 +225,8 @@ python data/recitation/held_controls.py `
 python data/recitation/validated_worker.py `
   --memory-profile selected-heads-resident-self `
   --golden-sample data/recitation/benchmarks/resume-sample-2026-10-07.json `
-  --validation data/recitation/.outputs/benchmarks/golden-suite-2026-10-07 `
-  --final-control data/recitation/.outputs/benchmarks/final-source-338-2026-10-07 `
+  --validation data/recitation/.outputs/benchmarks/golden-suite-2026-10-12 `
+  --final-control data/recitation/.outputs/benchmarks/final-source-338-2026-10-12 `
   --held-controls data/recitation/.outputs/benchmarks/held-controls `
   --recordings C:/Users/Dorad/git/tanah-s3/recordings `
   --shortest-first --database path/to/working.sqlite --text path/to/working.json
@@ -240,3 +240,34 @@ worker, so completed matching chapters are skipped. Use the existing
 `data/recitation/.cache/huggingface` model cache in that collection worktree.
 The original command remains the fallback and the timing publication cadence
 is unchanged.
+
+## Dependency upgrades need a deliberate re-baseline
+
+`requirements.txt` is one of the eight hashed fallback files, so a pinned
+numpy/torch/transformers bump invalidates every recorded `sourceHashes` and the
+runtime environment stored in each piece of GPU evidence. Routine automation
+cannot upgrade these pins: Renovate holds the file (`enabled: false` in
+renovate.json) and CI rejects any drift with "The original fallback pipeline
+changed". Upgrade only deliberately, with a new preserved baseline and fresh
+GPU evidence:
+
+1. Bump the pins in `requirements.txt` and mirror them in the `recitation_ci`
+   venv installs in `.github/workflows/ci.yml`.
+2. Preserve a new baseline commit on top of the previous one — the same
+   pipeline sources, accepted database and canonical JSON with only the pin
+   change — and push the annotated `recitation-baseline-YYYY-MM-DD` tag.
+3. Regenerate `benchmarks/golden-*.json.gz` for the new tag, commit and
+   `sourceHashes`; the accepted chapter evidence itself does not change. Update
+   `BASELINE_TAG`, `BASELINE_COMMIT` and `GOLDEN_DIGEST` in `benchmark.py`, the
+   held fixture's `sourceHashes` and `DIGEST` in `held_controls.py`, the
+   sample's `goldenDigest` and `SAMPLE_DIGEST`, and `ARCHIVED_RUNNER` to the
+   runner that produces the re-baselined suite.
+4. On the GPU runner, check out the new baseline tag in the preserved baseline
+   worktree (keeping `.outputs`), install the new pins into the CUDA venv and
+   rerun `benchmark.py snapshot`; it reproduces the committed golden only when
+   the baseline source, database, recordings and cached evidence are unchanged.
+5. Rerun the golden suite, the fresh final-source pair and the held controls
+   into new output directories so every result records the new `goldenDigest`,
+   `sourceHashes`, `runFingerprint` and environment, then verify the
+   `--memory-profile` requalification with `--check-only` before resuming the
+   worker.
