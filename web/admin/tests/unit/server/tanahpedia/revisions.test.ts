@@ -214,6 +214,41 @@ describe("saveEntryRevisioned", () => {
 			),
 		).toBe(true);
 	});
+
+	it("treats an entry without a head revision as fresh and returns null head", async () => {
+		mockSaveQueries(null);
+		const result = await saveEntryRevisioned(fakeConn, {
+			id: "entry-1",
+			unique_name: "yaakov",
+			title: "יעקב",
+			content: "<p>old</p>",
+		});
+		expect(result.headRevisionId).toBeNull();
+		expect(txExecuteMock).not.toHaveBeenCalled();
+	});
+
+	it("opens the first revision on a headless entry and nulls empty content", async () => {
+		txQueryOneMock
+			.mockResolvedValueOnce(ENTRY) // lockEntry
+			.mockResolvedValueOnce(null) // no head revision yet
+			.mockResolvedValueOnce({ ...ENTRY, content: null }); // post-save reload
+
+		const result = await saveEntryRevisioned(fakeConn, {
+			id: "entry-1",
+			unique_name: "yaakov",
+			title: "יעקב",
+			content: "",
+		});
+
+		const insert = txExecuteMock.mock.calls.find(([, sql]) =>
+			(sql as string).includes("INSERT INTO tanahpedia_entry_revision"),
+		);
+		expect(insert).toBeTruthy();
+		// proposed_content is stored as NULL and base_revision_id is NULL.
+		expect(insert?.[2]?.[4]).toBeNull();
+		expect(insert?.[2]?.[7]).toBeNull();
+		expect(result.headRevisionId).toEqual(expect.any(String));
+	});
 });
 
 describe("approveEntryRevision", () => {
@@ -311,6 +346,41 @@ describe("approveEntryRevision", () => {
 			"proposedUniqueName and proposedTitle",
 		);
 	});
+
+	it("rejects when the targeted entry no longer exists", async () => {
+		txQueryOneMock
+			.mockResolvedValueOnce({ ...HEAD, id: "r1", status: "PENDING" })
+			.mockResolvedValueOnce(null); // lockEntry finds nothing
+
+		await expect(approveEntryRevision({ data: { id: "r1" } })).rejects.toThrow(
+			"the entry targeted by this revision no longer exists",
+		);
+	});
+
+	it("applies a proposal to an entry that has no head revision", async () => {
+		txQueryOneMock
+			.mockResolvedValueOnce({
+				...HEAD,
+				id: "r1",
+				status: "PENDING",
+				base_revision_id: null,
+				proposed_title: "יעקב אבינו",
+			})
+			.mockResolvedValueOnce(ENTRY) // lockEntry
+			.mockResolvedValueOnce(null); // no head revision yet
+
+		const result = await approveEntryRevision({ data: { id: "r1" } });
+
+		expect(result).toEqual({
+			revisionId: "r1",
+			entryId: "entry-1",
+			headRevisionId: "r1",
+		});
+		const stamp = txExecuteMock.mock.calls.find(([, sql]) =>
+			(sql as string).includes("status = 'APPLIED'"),
+		);
+		expect(stamp?.[2]).toEqual(["entry-1", null, "r1"]);
+	});
 });
 
 describe("rejectEntryRevision", () => {
@@ -367,6 +437,47 @@ describe("restoreEntryRevision", () => {
 		expect(insert?.[1]).toContain("'APPLIED'");
 		// last param is base_revision_id — the displaced head
 		expect(insert?.[2]?.[7]).toBe("rev-head");
+	});
+
+	it("rejects a missing revision", async () => {
+		txQueryOneMock.mockResolvedValueOnce(null);
+		await expect(
+			restoreEntryRevision({ data: { id: "gone" } }),
+		).rejects.toThrow("Revision not found");
+	});
+
+	it("rejects when the entry behind the revision is gone", async () => {
+		txQueryOneMock
+			.mockResolvedValueOnce({ ...HEAD, id: "old-rev" })
+			.mockResolvedValueOnce(null); // lockEntry finds nothing
+		await expect(
+			restoreEntryRevision({ data: { id: "old-rev" } }),
+		).rejects.toThrow("Entry not found");
+	});
+
+	it("restores fields the snapshot omits from the live entry, with no head", async () => {
+		txQueryOneMock
+			.mockResolvedValueOnce({
+				...HEAD,
+				id: "old-rev",
+				proposed_unique_name: null,
+				proposed_title: null,
+				proposed_content: null,
+			})
+			.mockResolvedValueOnce(ENTRY)
+			.mockResolvedValueOnce(null) // no head revision yet
+			.mockResolvedValueOnce(ENTRY);
+
+		await restoreEntryRevision({ data: { id: "old-rev" } });
+
+		const insert = txExecuteMock.mock.calls.find(([, sql]) =>
+			(sql as string).includes("INSERT INTO tanahpedia_entry_revision"),
+		);
+		// snapshot fields fell back to the live entry values, base is NULL.
+		expect(insert?.[2]?.[2]).toBe("yaakov");
+		expect(insert?.[2]?.[3]).toBe("יעקב");
+		expect(insert?.[2]?.[4]).toBe("<p>old</p>");
+		expect(insert?.[2]?.[7]).toBeNull();
 	});
 });
 

@@ -86,9 +86,7 @@ function PerekArticles() {
 				<div className="bg-linear-to-r from-blue-50 to-indigo-50 px-6 py-4 border-b border-gray-200">
 					<h2 className="font-semibold text-gray-900 flex items-center gap-2">
 						<span>📝</span>
-						<span>
-							מאמרים בפרק זה ({articles?.length ?? 0} מאמרים)
-						</span>
+						<span>מאמרים בפרק זה ({articles?.length ?? 0} מאמרים)</span>
 					</h2>
 				</div>
 
@@ -98,9 +96,7 @@ function PerekArticles() {
 						<h3 className="text-xl font-semibold text-gray-700 mb-2">
 							אין מאמרים בפרק זה עדיין
 						</h3>
-						<p className="text-gray-500 mb-4">
-							התחל להוסיף מאמרים לפרק זה
-						</p>
+						<p className="text-gray-500 mb-4">התחל להוסיף מאמרים לפרק זה</p>
 						<Link
 							to="/articles/$id"
 							params={{ id: "new" }}

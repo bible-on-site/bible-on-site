@@ -16,8 +16,9 @@ the executable-coverage tree produced by `devops/e2e-coverage-trees/`.
 | --- | --- | --- |
 | Automation-id coverage tree + selector (shadow/enforce) | Merged (#2092) | `devops/github/ci/e2e-impact/`, `app/mobile-e2e/e2e-impact.json`, `.github/workflows/app-mobile-e2e.yml` |
 | Real app-process coverage collection (AltCover + in-app recorder + per-test dumps) | In flight (#2156, branch `devin/e2e-coverage-merge`) | `app/BibleOnSite.E2eCoverage/`, `app/BibleOnSite.Tests.MobileE2E/AppCoverage.cs`, `app/devops/E2ECoverageApply.cs` |
-| Executable coverage-tree extraction (this slice) | This document + tool | `devops/e2e-coverage-trees/` |
-| AST-aware change comparison, selection wiring | Later slices | — |
+| Executable coverage-tree extraction | Merged (#2183) | `devops/e2e-coverage-trees/` |
+| Selector bridge: exec evidence unions into `coverage-tree.json` (this slice) | This document + tool | `devops/e2e-coverage-trees/to-selector-tree.ts`, `collect-appium --exec-tree`, `.github/workflows/app-mobile-e2e.yml` |
+| AST-aware change comparison, dependency edges | Later slices | — |
 
 Two evidence channels exist today and answer different questions:
 
@@ -29,12 +30,14 @@ Two evidence channels exist today and answer different questions:
 - **Executable coverage** (`app-coverage/*.json` + `coverage-app/`): the real
   IL sequence/branch points the app process executed per scenario, collected
   inside the running app by the AltCover `AltCover.Recorder.g` substitute and
-  pulled over a loopback endpoint by `AppCoverage.cs`. This is the input the
-  tool in this slice turns into the per-test coverage tree the issue describes.
+  pulled over a loopback endpoint by `AppCoverage.cs`. `e2e-coverage-trees.ts
+  extract` turns it into the per-test `exec-coverage-tree`.
 
-The selector will eventually consult both channels; they are complementary
-evidence about the same suite, not replacements. This slice only defines and
-builds the executable tree.
+The selector consults both channels; they are complementary evidence about
+the same suite, not replacements. The bridge in this slice unions the exec
+channel's per-test file evidence into `coverage-tree.json` at collection
+time (see "Selector bridge" below) — the selector schema and the selection
+order stay unchanged apart from the shared-coverage widening it adds.
 
 ## Where the evidence lands today
 
@@ -55,18 +58,21 @@ xUnit suite through `dotnet run --project devops -- TestMobileE2E`
 | `coverage-app/coverage-manifest.json` | `PublishE2ECoverageBuildArtifacts` | `app-e2e-coverage-build/1`: `sourceSha`, `platform`, `configuration`, `collectorVersion` (AltCover version) |
 | `coverage-app/coverage-report-manifest.json` | `ApplyE2ECoverageLayer` | `app-e2e-coverage/1`: apply statistics, `incompatibleDumps`, `unknownPointIds`, `complete` |
 | `results/mobile-e2e.trx`, `results/mobile-e2e.xml` | xUnit MTP reporters | Per-test identity (FQN via `TestMethod@className`+`@name`), outcomes, start/finish times |
-| `coverage-tree.json` | `e2e-impact.ts collect-appium` | The automation-id tree (schemaVersion 1) |
+| `exec-coverage-tree.json` | `e2e-coverage-trees.ts extract` | The exec tree (schemaVersion 1) — per-test executed files + the `shared` bucket |
+| `coverage-tree.json` | `e2e-impact.ts collect-appium` | The selector tree (schemaVersion 1): automation-id entries unioned with `--exec-tree` evidence when a compatible exec tree exists |
 | `selection-manifest.json` | `e2e-impact.ts select` | The deterministic selection manifest |
 
 Artifact upload (`app-mobile-e2e.yml`):
 
 - `appium-<platform>-<run_id>-<attempt>` — the whole artifacts directory
-  (diagnostics, evidence, dumps, reports).
+  (diagnostics, evidence, dumps, reports, `exec-coverage-tree.json`).
 - `app-e2e-coverage.<run_id>.<platform>` — `coverage-app/` per run (#2156).
 - `app-e2e-coverage.master.<platform>` — `coverage-app/` baseline, published
   only from successful master pushes.
-- `app-mobile-e2e-coverage.master.<platform>` — automation-id tree baseline,
-  same trust rule.
+- `app-mobile-e2e-coverage.master.<platform>` — selector tree baseline
+  (`coverage-tree.json`), same trust rule.
+- `app-mobile-e2e-exec-coverage.master.<platform>` — exec tree baseline,
+  same trust rule, skipped when the run produced no exec evidence.
 
 ## Executable coverage-tree schema
 
@@ -195,6 +201,55 @@ with `attribution: "shared"`. The tree stays usable and honest; the
 `shared` bucket carries the union and `diagnostics.attribution` records the
 degraded mode. **TODO(issue #2085):** delete the shared-mode fallback only
 once per-test dumps are mandatory on both platforms.
+
+## Selector bridge
+
+`devops/e2e-coverage-trees/to-selector-tree.ts` maps the exec tree onto the
+selector's `coverage-tree.json` (schemaVersion 1). The Appium workflow runs
+`extract` and then `collect-appium --exec-tree <exec-coverage-tree.json>`,
+which unions the two evidence channels inside one tree — same file covered
+by either channel selects the test.
+
+**What maps** — per `ExecCoverageTest`, keyed by the shared xUnit FQN
+identity:
+
+- `attribution: "per-test"` only. `shared`, `unmeasured` and `error`
+  entries never map onto a test — they carry no single test's claim.
+  `measured: false` per-test entries (baseline-carried evidence) still map;
+  they record real execution. `stale` entries never map either: a
+  baseline-carried test id the current revision no longer discovers cannot
+  run, and a file covered only by a ghost must not narrow to a selection
+  that executes nothing.
+- `files` ∪ into `CoverageTreeTest.files` — executed files union with
+  automation-id-mapped files; never replace.
+- `sessions` ∪ into `CoverageTreeTest.sessions`.
+- `outcome`: a non-`passed` value from either channel wins — the
+  previously-failing selection policy keys on `outcome !== "passed"`, so a
+  recorded failure can never be masked by the other channel's `passed`.
+- `file` (the declaring test file) resolves through the same discovery the
+  automation channel uses; exec-only tests join `unmatchedEvidence` when
+  discovery cannot claim them — same convention as evidence records.
+- Decl-level detail the selector schema cannot express (node ids,
+  `parents` containment edges, visit counts, per-entry `evidenceSha`) is
+  dropped deliberately — the exec tree stays the rich artifact for the AST
+  slice; `coverage-tree.json` stays file-granular.
+
+**Shared bucket → `sharedFiles`**: the exec tree's `shared.files` land on
+the optional `CoverageTree.sharedFiles` (additive; automation-id-only
+baselines predate it). During `select`, a changed file in `sharedFiles` —
+or sharing a logical unit with one — resolves `shared-coverage` and
+selects every applicable test: shared hits can widen but never narrow to a
+per-test claim. The check runs after `noImpact`/`runAllOnChange` and the
+structural-equivalence proof, before per-test file/unit narrowing.
+
+**Incompatibility is diagnosed, never applied**: `collect-appium` applies
+the exec tree only when `validateExecTree` passes for the suite+platform
+**and** `snapshotSha` equals the collected snapshot — coverage measured on
+another commit would attach wrong-revision files to tests. A missing,
+corrupt or mismatched `--exec-tree` logs a warning and the output stays
+byte-identical to the automation-id-only collection. `complete` merges as
+`AND`: an incomplete exec tree keeps the merged tree incomplete so a
+partial run can never publish a baseline.
 
 ## Storage and refresh policy
 
