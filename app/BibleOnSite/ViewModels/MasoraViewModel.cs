@@ -318,7 +318,6 @@ public partial class MasoraViewModel : ObservableObject //NOSONAR
         unit.Rows = await MasoraUnitText.BuildRowsAsync(
             unit,
             perekId => _perekDataService.LoadPasukimAsync(perekId),
-            perekId => _perekDataService.GetPerekSource(perekId),
             FontFactor);
     }
 
@@ -365,7 +364,6 @@ public partial class MasoraViewModel : ObservableObject //NOSONAR
                 var rows = await MasoraUnitText.BuildRowsAsync(
                     u,
                     perekId => _perekDataService.LoadPasukimAsync(perekId),
-                    perekId => _perekDataService.GetPerekSource(perekId),
                     FontFactor);
                 result.Add((u, rows));
             }
