@@ -13,7 +13,7 @@ import type { ReadingUnit } from "@/lib/reading/contract";
 const HELEK_ORDER = ["תורה", "נביאים", "כתובים"];
 
 /**
- * Breadcrumb for a מסורה unit: תנ"ך > מסורה על הפרק > חלק > ספר > יחידה.
+ * Breadcrumb for a מסורה unit: תנ"ך > מסורה על הפרק > חלק > ספר > פרשה.
  * The last dropdown lists the sefer's units by their scripture-span
  * headings — the unit-level "chapter picker" for this division.
  */
@@ -101,7 +101,7 @@ export function UnitBreadcrumb({ unit }: { unit: ReadingUnit }) {
 					</BreadcrumbDropdown>
 					<BreadcrumbDropdown
 						label={unit.heading}
-						ariaLabel={`יחידה נוכחית: ${unit.heading}. לחץ לבחירת יחידה אחרת`}
+						ariaLabel={`פרשה נוכחית: ${unit.heading}. לחץ לבחירת פרשה אחרת`}
 						isCurrentPage
 						dropClassName={styles["perek-grid"]}
 					>
