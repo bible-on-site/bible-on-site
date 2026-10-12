@@ -27,9 +27,9 @@ from recite import ROOT, align_track, audio_hash, decode, duration, transcribe, 
 from trusted import TRUSTED_PIPELINE, approve_alignment
 from whisper_experiment import PROFILES, experimental_memory
 
-BASELINE_TAG = "recitation-baseline-2026-10-07"
-BASELINE_COMMIT = "f600b484c65f7f3b13dee427cf19de52c58cdb8b"
-GOLDEN_DIGEST = "e39ce8284c31679801c149528a6606890e5283ca80bd235f642e8e40e70ac0ad"
+BASELINE_TAG = "recitation-baseline-2026-10-12"
+BASELINE_COMMIT = "d67d3c84e9ac850b92b604668c0df230e114dcf1"
+GOLDEN_DIGEST = "e75f4256887027ddb220fa93fc3d6a6a33aa459d3fc92ef56d9bd495f7624c4b"
 BASELINE_FILES = ("recite.py", "whisper_memory.py", "alignment.py", "acoustic.py",
                   "model_versions.py", "trusted.py", "awake.py", "requirements.txt")
 SETTINGS = {"dtype": "float32", "numBeams": 5, "language": "he", "task": "transcribe",

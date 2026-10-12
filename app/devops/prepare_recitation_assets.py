@@ -1,4 +1,4 @@
-"""Build release-coupled playback packs; original MP3 identities stay canonical."""
+"""Build release-coupled recitation packs for PAD / managed asset packs / desktop; MP3 stays canonical."""
 
 import argparse
 from concurrent.futures import ThreadPoolExecutor
@@ -145,7 +145,7 @@ def book_archive(destination, tracks, cache):
                 with archive.open(entry, "w") as target, (cache / filename).open("rb") as source:
                     shutil.copyfileobj(source, target)
         if temporary.stat().st_size > 512_000_000:
-            raise ValueError(f"{destination.name}: book exceeds the supported ODR tag limit")
+            raise ValueError(f"{destination.name}: book exceeds the supported asset-pack size limit")
         temporary.replace(destination)
     finally:
         temporary.unlink(missing_ok=True)
@@ -195,18 +195,16 @@ def prepare_assets(app, platform, cache, recordings=None, intermediate=None, dat
         if platform == "Android":
             directory = app / "Platforms/Android/AssetPacks" / pack
         elif platform == "iOS":
-            catalog = app / "Platforms/iOS/Assets/Recitation.xcassets"
-            catalog.mkdir(parents=True, exist_ok=True)
-            (catalog / "Contents.json").write_text(json.dumps({"info": {"author": "xcode", "version": 1}}), encoding="utf-8")
-            directory = catalog / (pack + ".dataset")
+            directory = app / "Platforms/iOS/AssetPacks" / pack
         else:
             directory = app / "Platforms/Windows/Recitation"
         directory.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(path, directory / path.name)
         if platform == "iOS":
-            contents = {"data": [{"filename": path.name, "universal-type-identifier": "public.zip-archive"}],
-                        "info": {"author": "xcode", "version": 1}, "properties": {"on-demand-resource-tags": [pack]}}
-            (directory / "Contents.json").write_text(json.dumps(contents, indent=2) + "\n", encoding="utf-8")
+            # xcrun ba-package turns each folder + manifest into an Apple-hosted .aar.
+            manifest = {"assetPackID": pack, "downloadPolicy": {"onDemand": {}},
+                        "fileSelectors": [{"file": path.name}], "platforms": ["iOS", "macOS"]}
+            (directory / "Manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     raw = app / "Resources/Raw"
     raw.mkdir(parents=True, exist_ok=True)
     catalog = {"version": 1, "package": {"version": 1, "tracks": tracks}, "books": books}
