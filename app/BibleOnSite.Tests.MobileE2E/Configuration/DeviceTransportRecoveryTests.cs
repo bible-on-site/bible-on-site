@@ -54,7 +54,7 @@ public sealed class DeviceTransportRecoveryTests
         Assert.False(DeviceTransportRecovery.TryReconnect(new InvalidOperationException("device offline")));
 
     [Fact]
-    public void RejectsDriverFailuresWithoutTheTransportSignature() =>
+    public void RejectsDriverFailuresWithoutATransportPlausibleSignature() =>
         // Recovery exists for a dropped adb transport, not every driver error.
         Assert.False(DeviceTransportRecovery.TryReconnect(
             new WebDriverException("element click intercepted")));
