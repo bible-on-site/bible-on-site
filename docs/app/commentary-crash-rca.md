@@ -33,3 +33,21 @@ Managed regressions cover excluded-text allocations, lazy verse/source loading a
 Native iOS validation must exercise the stress fixture; managed tests cannot establish UIKit layout performance. The crash stack supports the native layout diagnosis, but cannot prove which commentary or selection caused the incident.
 
 Apple documents [watchdog termination diagnosis](https://developer.apple.com/documentation/xcode/addressing-watchdog-terminations) and [UITextView's TextKit compatibility behavior](https://developer.apple.com/videos/play/wwdc2025/222/) (the bidirectional text section).
+
+## Native CI follow-up on 2026-10-12
+
+Run 38239220252 compiled the iOS app but failed the long-commentary stress
+scenario before scroll churn began. After three sources were selected, native
+element geometry and input commands took 70-111 seconds; XCTest later reported
+that the app main run loop did not respond. The simulator did not produce a
+crash report, and cleanup killed the app before the existing post-suite sampling
+could capture its original stack. TextKit 1 compatibility was confirmed in the
+native log, so compatibility mode alone is not a validated solution for the
+large commentary case.
+
+The live debug stream recorded more than 31,000 accessibility messages on the
+app main thread. The harness now keeps native info logs and captures a stack
+when the first in-session command exceeds the unchanged 45-second interaction
+deadline, while the original app is still alive. A fresh native run is required
+to distinguish text layout from accessibility traversal and measure this
+remaining bottleneck. No interaction or job deadline has been increased.
