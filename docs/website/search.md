@@ -101,10 +101,14 @@ the WHERE clause admits a word containing any one intact chunk whose
 total length sits inside `[term - edits, term + edits]` — since each
 edit can corrupt at most one chunk, every fuzzy-eligible word survives
 as a candidate (the classic pigeonhole filter). The length window is
-asserted with two lookaheads at the word start: it is the only range a
+asserted with a single bounded-range lookahead at the word start: it is
+the only range a
 bounded edit distance permits, so a chunk inside an over-long or
 too-short word (both dead candidates) is rejected outright and short
-chunks stay selective. Scoring is unchanged in JS, so the fuzzy
+chunks stay selective. Every quantifier in the pattern is bounded —
+the in-word prefix before a chunk is capped at `hi - chunk` letters —
+because an unbounded scan under a nested quantifier trips MySQL's
+`regexp_time_limit` on a full-table `WHERE` scan. Scoring is unchanged in JS, so the fuzzy
 60/80/90/100/110 tiers apply uniformly across all four DB providers
 exactly as they do for the in-memory corpora. Articles score name,
 abstract, and content independently (name keeps

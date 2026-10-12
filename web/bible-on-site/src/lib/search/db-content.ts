@@ -126,13 +126,21 @@ function exactRegexp(term: string): string {
  * Each remaining piece matches a *word* containing one intact
  * {@link termChunks chunk}: `maxEdits` edits can corrupt at most that
  * many chunks, so every fuzzy-eligible word still holds an intact
- * chunk. Two lookaheads at the word start bound the *whole* word's
+ * chunk. A lookahead at the word start bounds the *whole* word's
  * letter count to the only lengths a bounded edit distance permits —
  * `[term - edits, term + edits]` (the distance can't shrink or grow a
  * word by more than `edits`). Bounding the total, rather than the
  * letters on each side of the chunk independently, keeps a chunk
  * sitting inside an over-long or too-short word out of the candidate
  * pool: those rows could only ever score zero.
+ *
+ * Cost discipline: every piece is a bounded quantifier — one bounded
+ * lookahead and a bounded in-word prefix — never an unbounded `*`
+ * over a nested ignorable run. An unbounded scan under a nested
+ * quantifier makes ICU backtracking explode and trips MySQL's
+ * `regexp_time_limit` on a full-table `WHERE` scan (#2140 follow-up).
+ * The prefix bound `hi - chunk` is exact: a chunk starting further
+ * into the word would leave the word longer than the window anyway.
  * Exported for unit tests.
  */
 export function termAnchors(term: string): string[] {
@@ -142,13 +150,15 @@ export function termAnchors(term: string): string[] {
 		return anchors;
 	}
 	const length = [...term].length;
-	const wordLengthBounds =
-		`(?!(?:${WORD_CHAR}${IGNORABLE_RUN}*){0,${length - edits - 1}}(?:${WORD_BOUNDARY}|$))` +
-		`(?=(?:${WORD_CHAR}${IGNORABLE_RUN}*){0,${length + edits}}(?:${WORD_BOUNDARY}|$))`;
-	const inWord = `(?:${WORD_CHAR}${IGNORABLE_RUN}*)*`;
+	const wordLengthBound = `(?=(?:${WORD_CHAR}${IGNORABLE_RUN}*){${
+		length - edits
+	},${length + edits}}(?:${WORD_BOUNDARY}|$))`;
 	for (const chunk of termChunks(term)) {
+		const inWordPrefix = `(?:${WORD_CHAR}${IGNORABLE_RUN}*){0,${
+			length + edits - [...chunk].length
+		}}`;
 		anchors.push(
-			`(?:^|${WORD_BOUNDARY})${IGNORABLE_RUN}*${wordLengthBounds}${inWord}${lettersRegexp(chunk)}`,
+			`(?:^|${WORD_BOUNDARY})${IGNORABLE_RUN}*${wordLengthBound}${inWordPrefix}${lettersRegexp(chunk)}`,
 		);
 	}
 	return [...new Set(anchors)];

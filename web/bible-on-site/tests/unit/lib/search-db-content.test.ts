@@ -156,13 +156,15 @@ describe("termAnchors", () => {
 			expect(anchor).toContain(String.raw`[^\p{L}\p{N}]`); // word boundary
 		}
 		for (const chunkPattern of anchors.slice(1)) {
-			// Total word length asserted at the word start: not under
-			// `term - edits` (7-1-1=5 consumed letters then a boundary)
-			// and not over `term + edits` (7+1=8).
-			expect(chunkPattern).toContain("(?!(?:[\\p{L}\\p{N}]");
-			expect(chunkPattern).toContain("){0,5}(?:");
+			// Total word length asserted at the word start inside a single
+			// bounded-range lookahead: [term - edits, term + edits] =
+			// [6, 8] letters for `ירושלימ`. The in-word prefix is bounded
+			// to `hi - chunk` letters — an unbounded `*` over the nested
+			// ignorable run trips MySQL's regexp_time_limit on a
+			// full-table scan (#2140 follow-up).
 			expect(chunkPattern).toContain("(?=(?:[\\p{L}\\p{N}]");
-			expect(chunkPattern).toContain("){0,8}(?:");
+			expect(chunkPattern).toContain("){6,8}(?:");
+			expect(chunkPattern).toMatch(/\)\{0,[0-9]+\}/);
 		}
 		expect(termRegexp("ירושלימ")).toBe(`(?:${anchors.join("|")})`);
 	});
