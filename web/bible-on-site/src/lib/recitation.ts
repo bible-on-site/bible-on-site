@@ -161,3 +161,27 @@ export function verseRange(words: RecitationWord[], pasuk: number) {
 		? { startMs: verse[0].startMs, endMs: verse[verse.length - 1].endMs }
 		: null;
 }
+
+/**
+ * Pasuk ranges covering the whole perek. A tapped-word resume point trims the
+ * containing pasuk's range so continuous playback starts at that word and runs
+ * through the rest of the perek.
+ */
+export function resumeRanges(
+	words: RecitationWord[],
+	fromMs: number | null,
+): { startMs: number; endMs: number }[] {
+	const ranges = [...new Set(words.map((word) => word.pasuk))].map(
+		(pasuk) => verseRange(words, pasuk) as { startMs: number; endMs: number },
+	);
+	if (fromMs === null) return ranges;
+	const index = ranges.findIndex(
+		(range) => fromMs >= range.startMs && fromMs < range.endMs,
+	);
+	return index < 0
+		? ranges
+		: [
+				{ startMs: fromMs, endMs: ranges[index].endMs },
+				...ranges.slice(index + 1),
+			];
+}
