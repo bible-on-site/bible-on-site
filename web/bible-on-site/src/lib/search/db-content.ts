@@ -13,12 +13,13 @@
  * word within the scorer's edit-distance budget is also selected
  * (#2140) — the same typo tolerance the in-memory corpora get by
  * scoring everything. Candidates are ordered by a word-bounded phrase
- * pattern, then by how many of each term's anchors matched, before the
- * row cap, so when a frequent term overflows it, the truncated rows
- * are the weakest candidates rather than arbitrary early rows. The
- * note table has no usable full-text index today; the bounded ranked
- * REGEXP keeps worst-case cost predictable until a derived index (see
- * the article-search follow-up) covers commentary too.
+ * pattern, then by a per-term estimate that mirrors the scorer's
+ * tiers, before the row cap, so when a frequent term overflows it, the
+ * truncated rows are the weakest candidates rather than arbitrary
+ * early rows. The note table has no usable full-text index today; the
+ * bounded ranked REGEXP keeps worst-case cost predictable until a
+ * derived index (see the article-search follow-up) covers commentary
+ * too.
  */
 
 import { toLetters } from "gematry";
@@ -98,36 +99,56 @@ export function termChunks(term: string): string[] {
 }
 
 /**
+ * Word-start-anchored pattern admitting every exact (90) and prefix
+ * (80) word the JS scorer accepts: the term's letters in order from a
+ * word start, with any length tail.
+ */
+function prefixRegexp(term: string): string {
+	return `(?:^|${WORD_BOUNDARY})${IGNORABLE_RUN}*${lettersRegexp(term)}`;
+}
+
+/**
+ * Whole-word pattern: the word equals the term modulo erased runs —
+ * the scorer's 90 tier. Used only in the pre-cap rank estimate; the
+ * candidate path covers exact words through {@link prefixRegexp}.
+ */
+function exactRegexp(term: string): string {
+	return `(?:^|${WORD_BOUNDARY})${IGNORABLE_RUN}*${lettersRegexp(term)}${IGNORABLE_RUN}*(?:${WORD_BOUNDARY}|$)`;
+}
+
+/**
  * Typo-aware candidate alternands for one normalized term (#2140).
  *
  * The first piece keeps the exact/prefix path: the term's letters in
  * order from a word start, with any length tail — that admits every
  * exact (90) and prefix (80) word the JS scorer accepts.
  *
- * Each remaining piece bounds a *word* containing one intact
+ * Each remaining piece matches a *word* containing one intact
  * {@link termChunks chunk}: `maxEdits` edits can corrupt at most that
- * many chunks, so every fuzzy-eligible word still holds an intact chunk
- * and is at most `term + maxEdits` letters long. The counted
- * `{0,budget}` rooms on both sides of the chunk reject chunks sitting
- * inside longer words, which could never reach the fuzzy tier — that
- * keeps short chunks selective instead of flooding the candidate pool.
+ * many chunks, so every fuzzy-eligible word still holds an intact
+ * chunk. Two lookaheads at the word start bound the *whole* word's
+ * letter count to the only lengths a bounded edit distance permits —
+ * `[term - edits, term + edits]` (the distance can't shrink or grow a
+ * word by more than `edits`). Bounding the total, rather than the
+ * letters on each side of the chunk independently, keeps a chunk
+ * sitting inside an over-long or too-short word out of the candidate
+ * pool: those rows could only ever score zero.
  * Exported for unit tests.
  */
 export function termAnchors(term: string): string[] {
 	const edits = maxEdits(term);
-	const anchors = [
-		`(?:^|${WORD_BOUNDARY})${IGNORABLE_RUN}*${lettersRegexp(term)}`,
-	];
+	const anchors = [prefixRegexp(term)];
 	if (edits === 0) {
 		return anchors;
 	}
-	const room = (budget: number) =>
-		`(?:${WORD_CHAR}${IGNORABLE_RUN}*){0,${budget}}`;
 	const length = [...term].length;
+	const wordLengthBounds =
+		`(?!(?:${WORD_CHAR}${IGNORABLE_RUN}*){0,${length - edits - 1}}(?:${WORD_BOUNDARY}|$))` +
+		`(?=(?:${WORD_CHAR}${IGNORABLE_RUN}*){0,${length + edits}}(?:${WORD_BOUNDARY}|$))`;
+	const inWord = `(?:${WORD_CHAR}${IGNORABLE_RUN}*)*`;
 	for (const chunk of termChunks(term)) {
-		const budget = length + edits - [...chunk].length;
 		anchors.push(
-			`(?:^|${WORD_BOUNDARY})${IGNORABLE_RUN}*${room(budget)}${lettersRegexp(chunk)}${IGNORABLE_RUN}*${room(budget)}${IGNORABLE_RUN}*(?:${WORD_BOUNDARY}|$)`,
+			`(?:^|${WORD_BOUNDARY})${IGNORABLE_RUN}*${wordLengthBounds}${inWord}${lettersRegexp(chunk)}`,
 		);
 	}
 	return [...new Set(anchors)];
@@ -142,6 +163,20 @@ export function termAnchors(term: string): string[] {
 export function termRegexp(term: string): string {
 	const anchors = termAnchors(term);
 	return anchors.length === 1 ? anchors[0] : `(?:${anchors.join("|")})`;
+}
+
+/**
+ * The word-level patterns the pre-cap rank instantiates per term, in
+ * ascending match coverage: whole-word exact (scorer's 90 tier),
+ * word-start prefix (80), then the full {@link termRegexp} candidate
+ * union (adds the fuzzy chunk path — 60 at best). Since a word matching
+ * an earlier pattern always matches the later ones, the weighted sum
+ * `10*exact + 20*prefix + 60*candidate` lands on 90, 80, 60, or 0 —
+ * the same values `tokenScore` assigns to a word. Exported for unit
+ * tests.
+ */
+export function termRankPatterns(term: string): string[] {
+	return [exactRegexp(term), prefixRegexp(term), termRegexp(term)];
 }
 
 /**
@@ -195,12 +230,19 @@ function matchClauses(
  * Candidate ranking applied before the row cap, fragment-by-fragment in
  * descending weight order with two tiers per fragment: a word-bounded
  * exact-phrase flag — the candidate class the JS scorer rates highest —
- * then the count of each term's {@link termAnchors} pieces matched, so
- * rows carrying a fuzzy-eligible word (several chunk anchors hit
- * together) outrank rows where only a stray chunk matched. Each
- * fragment is a boolean SQL expression containing one `?` placeholder,
- * bound to the phrase pattern for the flag and to each anchor pattern
- * inside its count.
+ * then `LEAST` over the terms' word-level score estimates, mirroring
+ * the scorer's minimum-term rule. Each term's estimate is
+ * `10*exact + 20*prefix + 60*candidate` evaluated on a single
+ * `REGEXP_LIKE` per {@link termRankPatterns pattern}: the patterns are
+ * nested (exact ⇒ prefix ⇒ fuzzy-eligible), so the sum lands on 90,
+ * 80, 60, or 0 — the tier `tokenScore` gives the term's best word in
+ * that fragment. Estimating per *term* rather than per anchor keeps a
+ * column whose words hit different chunks of the term separately —
+ * `ירוש לימ` for a `ירושלימ` query — from outranking a real
+ * fuzzy-eligible word the way a per-anchor flag count did (#2140
+ * review). Each fragment is a boolean SQL expression containing one
+ * `?` placeholder, bound to the phrase pattern for the flag and to
+ * each rank pattern inside the estimate.
  */
 function rankPredicates(
 	predicates: string[],
@@ -210,15 +252,21 @@ function rankPredicates(
 	params: string[];
 } {
 	const phrase = phraseRegexp(terms);
-	const flags = terms.flatMap(termAnchors);
+	const estimate = (predicate: string) =>
+		`LEAST(${terms
+			.map(() => `(10*${predicate} + 20*${predicate} + 60*${predicate})`)
+			.join(", ")})`;
 	return {
 		orderBy: predicates
 			.flatMap((predicate) => [
 				`${predicate} DESC`,
-				`(${flags.map(() => predicate).join(" + ")}) DESC`,
+				`${estimate(predicate)} DESC`,
 			])
 			.join(", "),
-		params: predicates.flatMap(() => [phrase, ...flags]),
+		params: predicates.flatMap(() => [
+			phrase,
+			...terms.flatMap(termRankPatterns),
+		]),
 	};
 }
 

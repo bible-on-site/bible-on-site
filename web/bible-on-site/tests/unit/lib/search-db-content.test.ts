@@ -15,6 +15,7 @@ import {
 	searchTanahpediaEntries,
 	termAnchors,
 	termChunks,
+	termRankPatterns,
 	termRegexp,
 } from "@/lib/search/db-content";
 import { htmlToPlainText, normalizeSearchText } from "@/lib/search/normalize";
@@ -26,12 +27,13 @@ const mockQuery = query as jest.MockedFunction<typeof query>;
  * evaluated on the normalized text like the pipeline itself: a stored
  * word is selectable for `term` when it starts with the term (the
  * exact/prefix alternand) or, for terms long enough to carry the fuzzy
- * tier, when it holds one intact {@link termChunks chunk} with at most
- * `term + maxEdits` letters on either side — every word the scorer's
- * bounded edit distance accepts satisfies that. Asserting the contract
+ * tier, when it holds one intact {@link termChunks chunk} while its
+ * whole length stays inside `[term - edits, term + edits]` — the only
+ * lengths a bounded edit distance can reach. Asserting the contract
  * through the pipeline keeps these tests honest about the requirement
  * (the repo's codacy gate forbids compiling a non-literal RegExp even
- * in tests); the pattern itself is verified structurally.
+ * in tests); the pattern itself is verified structurally, and the
+ * e2e suite probes `REGEXP_LIKE` on a real MySQL.
  */
 function candidateSemantics(term: string, raw: string): boolean {
 	const chunks = termChunks(term);
@@ -43,22 +45,11 @@ function candidateSemantics(term: string, raw: string): boolean {
 		.some((word) => {
 			if (word.startsWith(term)) return true;
 			if (edits === 0) return false;
-			return chunks.some((chunk) => {
-				const budget = length + edits - [...chunk].length;
-				for (
-					let index = word.indexOf(chunk);
-					index !== -1;
-					index = word.indexOf(chunk, index + 1)
-				) {
-					if (
-						[...word.slice(0, index)].length <= budget &&
-						[...word.slice(index + chunk.length)].length <= budget
-					) {
-						return true;
-					}
-				}
+			const wordLength = [...word].length;
+			if (wordLength < length - edits || wordLength > length + edits) {
 				return false;
-			});
+			}
+			return chunks.some((chunk) => word.includes(chunk));
 		});
 }
 
@@ -134,10 +125,17 @@ describe("termAnchors", () => {
 		);
 	});
 
-	it("rejects chunks sitting inside words too long for the bound", () => {
+	it("rejects chunks sitting inside words outside the length bound", () => {
+		// Over the `term + edits` ceiling — the review's `אבגדירושאבגד`
+		// example (12 letters for a 7-letter term allowing one edit).
+		expect(candidateSemantics("ירושלימ", "אבגדירושאבגד")).toBe(false);
 		expect(candidateSemantics("ירושלימ", "אאאאאאאאאאירושאאאאאאאאאא")).toBe(
 			false,
 		);
+		// Under the `term - edits` floor — a bare chunk word is a dead
+		// candidate, and two split chunk words never form a fuzzy word.
+		expect(candidateSemantics("ירושלימ", "ירוש")).toBe(false);
+		expect(candidateSemantics("ירושלימ", "ירוש לימ")).toBe(false);
 		expect(candidateSemantics("ירושלימ", "אזור")).toBe(false);
 	});
 
@@ -158,10 +156,34 @@ describe("termAnchors", () => {
 			expect(anchor).toContain(String.raw`[^\p{L}\p{N}]`); // word boundary
 		}
 		for (const chunkPattern of anchors.slice(1)) {
-			expect(chunkPattern).toContain("{0,"); // bounded rooms each side
-			expect(chunkPattern).toContain("|$)"); // word-end boundary
+			// Total word length asserted at the word start: not under
+			// `term - edits` (7-1-1=5 consumed letters then a boundary)
+			// and not over `term + edits` (7+1=8).
+			expect(chunkPattern).toContain("(?!(?:[\\p{L}\\p{N}]");
+			expect(chunkPattern).toContain("){0,5}(?:");
+			expect(chunkPattern).toContain("(?=(?:[\\p{L}\\p{N}]");
+			expect(chunkPattern).toContain("){0,8}(?:");
 		}
 		expect(termRegexp("ירושלימ")).toBe(`(?:${anchors.join("|")})`);
+	});
+});
+
+describe("termRankPatterns", () => {
+	it("nests exact inside prefix inside the candidate union", () => {
+		const [exact, prefix, candidate] = termRankPatterns("ירושלימ");
+		// Textual nesting proves match nesting: the exact pattern is the
+		// prefix pattern plus a word-end bound, and the candidate union
+		// ORs the prefix piece with the chunk pieces — so the weighted
+		// rank `10e + 20p + 60f` lands on the scorer's 90/80/60 tiers.
+		expect(exact.startsWith(prefix)).toBe(true);
+		expect(candidate).toContain(prefix);
+		expect(candidate).toBe(termRegexp("ירושלימ"));
+	});
+
+	it("collapses the candidate union to the prefix path for short terms", () => {
+		const [exact, prefix, candidate] = termRankPatterns("את");
+		expect(candidate).toBe(prefix); // edits=0 → single anchor
+		expect(exact.startsWith(prefix)).toBe(true);
 	});
 });
 
@@ -213,7 +235,7 @@ describe("searchPerushNotes", () => {
 			[
 				termRegexp("בראשית"),
 				phraseRegexp(["בראשית"]),
-				...termAnchors("בראשית"),
+				...termRankPatterns("בראשית"),
 			],
 		);
 		expect(mockQuery).toHaveBeenCalledWith(
@@ -236,15 +258,27 @@ describe("searchPerushNotes", () => {
 		await searchPerushNotes("אחד שני", 10);
 		const [sql, params] = mockQuery.mock.calls[0];
 		// Two candidate predicates (one per term), one phrase-rank flag,
-		// and one anchor-count flag per term inside the rank sum.
-		expect(sql.match(/REGEXP_LIKE\(n\.note_content/g)).toHaveLength(5);
+		// and three rank patterns per term inside the LEAST estimate.
+		expect(sql.match(/REGEXP_LIKE\(n\.note_content/g)).toHaveLength(9);
 		expect(params).toEqual([
 			termRegexp("אחד"),
 			termRegexp("שני"),
 			phraseRegexp(["אחד", "שני"]),
-			...termAnchors("אחד"),
-			...termAnchors("שני"),
+			...termRankPatterns("אחד"),
+			...termRankPatterns("שני"),
 		]);
+	});
+
+	it("ranks each term once per fragment so split chunk words cannot inflate the order", async () => {
+		mockQuery.mockResolvedValue([]);
+		await searchPerushNotes("ירושלימ", 10);
+		const [sql, params] = mockQuery.mock.calls[0];
+		// A single word-level flag per pattern tier inside LEAST — a row
+		// whose words hit different chunks of the term separately (`ירוש
+		// לימ`) rates the same as one fuzzy-eligible word instead of
+		// stacking anchor flags above it (#2140 review).
+		expect(sql.match(/LEAST\(/g)).toHaveLength(1);
+		expect(params?.slice(2)).toEqual(termRankPatterns("ירושלימ"));
 	});
 
 	it("selects a note whose stored word is a misspelling of the query", async () => {
@@ -367,7 +401,7 @@ describe("searchAuthors", () => {
 		expect(hits[0].score).toBeGreaterThan(0);
 	});
 
-	it("ORs name and details per term and ranks phrase and anchors first", async () => {
+	it("ORs name and details per term and ranks phrase then tiered term estimates", async () => {
 		mockQuery.mockResolvedValue([]);
 		await searchAuthors("לוי", 10);
 		const [sql, params] = mockQuery.mock.calls[0];
@@ -375,15 +409,15 @@ describe("searchAuthors", () => {
 			"REGEXP_LIKE(name, ?, 'i') OR REGEXP_LIKE(details, ?, 'i')",
 		);
 		expect(sql).toContain(
-			"ORDER BY REGEXP_LIKE(name, ?, 'i') DESC, (REGEXP_LIKE(name, ?, 'i')) DESC, REGEXP_LIKE(details, ?, 'i') DESC, (REGEXP_LIKE(details, ?, 'i')) DESC",
+			"ORDER BY REGEXP_LIKE(name, ?, 'i') DESC, LEAST((10*REGEXP_LIKE(name, ?, 'i') + 20*REGEXP_LIKE(name, ?, 'i') + 60*REGEXP_LIKE(name, ?, 'i'))) DESC, REGEXP_LIKE(details, ?, 'i') DESC, LEAST((10*REGEXP_LIKE(details, ?, 'i') + 20*REGEXP_LIKE(details, ?, 'i') + 60*REGEXP_LIKE(details, ?, 'i'))) DESC",
 		);
 		expect(params).toEqual([
 			termRegexp("לוי"),
 			termRegexp("לוי"),
 			phraseRegexp(["לוי"]),
-			...termAnchors("לוי"),
+			...termRankPatterns("לוי"),
 			phraseRegexp(["לוי"]),
-			...termAnchors("לוי"),
+			...termRankPatterns("לוי"),
 		]);
 	});
 
@@ -556,9 +590,9 @@ describe("searchTanahpediaEntries", () => {
 		expect(sql).toContain("MAX_EXECUTION_TIME");
 		expect(sql).toContain("LIMIT 1000");
 		// One REGEXP_LIKE per searchable field plus one inside the synonym
-		// EXISTS clause — four per term in WHERE — then a phrase flag and an
-		// anchor count per fragment in ORDER BY rank.
-		expect(sql.match(/REGEXP_LIKE\(/g)).toHaveLength(12);
+		// EXISTS clause — four per term in WHERE — then a phrase flag and a
+		// three-pattern LEAST estimate per fragment in ORDER BY rank.
+		expect(sql.match(/REGEXP_LIKE\(/g)).toHaveLength(20);
 		expect(sql.match(/tanahpedia_entry_synonym/g)?.length).toBeGreaterThan(0);
 		expect(params).toEqual([
 			termRegexp("משה"),
@@ -566,13 +600,13 @@ describe("searchTanahpediaEntries", () => {
 			termRegexp("משה"),
 			termRegexp("משה"),
 			phraseRegexp(["משה"]),
-			...termAnchors("משה"),
+			...termRankPatterns("משה"),
 			phraseRegexp(["משה"]),
-			...termAnchors("משה"),
+			...termRankPatterns("משה"),
 			phraseRegexp(["משה"]),
-			...termAnchors("משה"),
+			...termRankPatterns("משה"),
 			phraseRegexp(["משה"]),
-			...termAnchors("משה"),
+			...termRankPatterns("משה"),
 		]);
 	});
 

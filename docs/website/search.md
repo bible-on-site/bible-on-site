@@ -78,24 +78,33 @@ extra candidate the JS scorer filters out.
 Candidates are ranked before the row cap: `ORDER BY` a word-bounded
 phrase `REGEXP_LIKE` flag per field (name first for authors/articles),
 which is exactly the candidate class the JS scorer rates highest
-(whole-word phrase containment or whole-text equality). When a frequent
-term overflows the cap, the rows shed are substring-only candidates —
-the strongest matches can no longer be truncated arbitrarily.
+(whole-word phrase containment or whole-text equality). The second
+tier per field is `LEAST` over the terms' word-level estimates —
+`10*exact + 20*prefix + 60*candidate` per term, each a single
+`REGEXP_LIKE` on a word-bounded pattern. The three patterns nest
+(exact ⇒ prefix ⇒ fuzzy-eligible), so a term's estimate lands on the
+scorer's own 90/80/60 tiers; `LEAST` mirrors the scorer's
+minimum-term rule. Estimating per term, rather than counting the term's
+anchor pieces, keeps chunks spread across different words of a column
+(`ירוש לימ` for a `ירושלימ` query) from stacking into a stronger rank
+than one real fuzzy word. When a frequent term overflows the cap, the
+rows shed are the weakest candidates — the strongest matches can no
+longer be truncated arbitrarily.
 
 Typo tolerance (#2140): the JS scorer's fuzzy tier (bounded edit
 distance) used to be unreachable for DB-backed types, because the
 ordered-letters pattern can never select a misspelled row. Each term is
 now additionally split into `maxEdits(term) + 1` contiguous chunks and
-the WHERE clause admits a word containing any one intact chunk with at
-most `term + maxEdits` letters around it — since each edit can corrupt
-at most one chunk, every fuzzy-eligible word survives as a candidate
-(the classic pigeonhole filter), while words longer than the bound are
-rejected outright so short chunks stay selective. Scoring is unchanged
-in JS, so the fuzzy 60/80/90/100/110 tiers apply uniformly across all
-four DB providers exactly as they do for the in-memory corpora. The
-pre-cap ordering adds a second tier per field — the count of each
-term's anchor pieces matched — so rows carrying a near-misspelled word
-outrank rows where only a stray chunk hit. Articles score name,
+the WHERE clause admits a word containing any one intact chunk whose
+total length sits inside `[term - edits, term + edits]` — since each
+edit can corrupt at most one chunk, every fuzzy-eligible word survives
+as a candidate (the classic pigeonhole filter). The length window is
+asserted with two lookaheads at the word start: it is the only range a
+bounded edit distance permits, so a chunk inside an over-long or
+too-short word (both dead candidates) is rejected outright and short
+chunks stay selective. Scoring is unchanged in JS, so the fuzzy
+60/80/90/100/110 tiers apply uniformly across all four DB providers
+exactly as they do for the in-memory corpora. Articles score name,
 abstract, and content independently (name keeps
 its ×2 weight) and the snippet is taken from the best-scoring field, so
 an abstract-only match is no longer discarded when unrelated content is
