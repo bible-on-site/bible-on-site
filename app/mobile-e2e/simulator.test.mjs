@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { loadIosSimulatorDriver, selectSimulator } from "./simulator.mjs";
+import { loadIosSimulatorDriver, planShardPeer, selectSimulator, SHARD_PEER_NAME } from "./simulator.mjs";
 
 test("loads the locked iOS simulator driver with its ESM-only export before booting a device", async () => {
   const driver = await loadIosSimulatorDriver();
@@ -31,4 +31,34 @@ test("ignores malformed runtime identifiers and other Apple platforms", () => {
     "com.apple.CoreSimulator.SimRuntime.iOS-26-5-invalid": devices,
     "com.apple.CoreSimulator.SimRuntime.tvOS-26-5": devices,
   }, "26.5"), undefined);
+});
+
+test("reuses a leftover shard-peer device on the primary's runtime", () => {
+  const runtime = "com.apple.CoreSimulator.SimRuntime.iOS-26-5";
+  const primary = { name: "iPhone 17 Pro", udid: "primary", version: "26.5", runtime, deviceTypeIdentifier: "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro" };
+  const leftover = { name: SHARD_PEER_NAME, udid: "peer", isAvailable: true };
+  const plan = planShardPeer({
+    [runtime]: [primary, leftover],
+    "com.apple.CoreSimulator.SimRuntime.iOS-26-4": [{ name: SHARD_PEER_NAME, udid: "wrong-runtime", isAvailable: true }],
+  }, primary);
+  assert.equal(plan.device.udid, "peer");
+  assert.equal(plan.device.version, "26.5");
+});
+
+test("clones the primary's model and runtime when no shard peer exists", () => {
+  const runtime = "com.apple.CoreSimulator.SimRuntime.iOS-26-5";
+  const primary = { name: "iPhone 17 Pro", udid: "primary", version: "26.5", runtime, deviceTypeIdentifier: "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro" };
+  const plan = planShardPeer({ [runtime]: [primary] }, primary);
+  assert.deepEqual(plan.create, {
+    name: SHARD_PEER_NAME,
+    deviceTypeIdentifier: "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro",
+    runtime,
+  });
+});
+
+test("keeps the selected device's runtime identifier for shard-peer cloning", () => {
+  const selected = selectSimulator({
+    "com.apple.CoreSimulator.SimRuntime.iOS-26-5": [{ name: "iPhone 17 Pro", udid: "device", isAvailable: true }],
+  }, "26.5");
+  assert.equal(selected.runtime, "com.apple.CoreSimulator.SimRuntime.iOS-26-5");
 });

@@ -89,6 +89,13 @@ partial class Build
         // Every predicate stays parenthesized — the filter-query grammar treats
         // a bare `A=B|C=D` group as one malformed predicate and runs zero tests.
         var baseFilter = $"(Category=MobileE2E)&((Platform=Shared)|(Platform={(MobileIsAndroid ? "Android" : "iOS")}))";
+        // A shard run (#2083) narrows the platform set to one Shard trait group;
+        // the shards' disjoint union reproduces the unsharded suite exactly.
+        var shard = Environment.GetEnvironmentVariable("MOBILE_E2E_SHARD");
+        if (!string.IsNullOrEmpty(shard))
+        {
+            baseFilter += $"&(Shard={shard})";
+        }
         var selectionPath = Environment.GetEnvironmentVariable("MOBILE_E2E_SELECTION");
         if (string.IsNullOrEmpty(selectionPath))
         {

@@ -5,7 +5,7 @@ import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { createServer } from "node:net";
 import { promisify } from "node:util";
-import { waitForAppiumReadiness } from "./appium-readiness.mjs";
+import { probeAppiumReadiness, waitForAppiumReadiness } from "./appium-readiness.mjs";
 import { prepareWda } from "./prepare-wda.mjs";
 import { exportNativeLog, startNativeLog } from "./native-logs.mjs";
 import { waitForAndroidDevice } from "./android-readiness.mjs";
@@ -40,12 +40,16 @@ if (platform === "android") {
     observe: (observation) => appendFileSync(deviceReadinessLog, `${JSON.stringify(observation)}\n`) });
 }
 const wdaPath = platform === "ios" ? (process.env.MOBILE_WDA_PATH ?? prepareWda()) : undefined;
+// Sharded iOS runs host one Appium server per simulator on the same runner, so
+// the port is configurable; a single run keeps the default 4723.
+const appiumPort = process.env.MOBILE_APPIUM_PORT ?? "4723";
+if (!/^[0-9]+$/.test(appiumPort)) throw new Error(`MOBILE_APPIUM_PORT must be a port number, got '${appiumPort}'.`);
 // Refuse an existing listener so a local run cannot accidentally use somebody
 // else's Appium session. CI assigns a whole runner to each matrix entry.
 await new Promise((resolvePort, reject) => {
   const probe = createServer();
   probe.on("error", reject);
-  probe.listen(4723, "127.0.0.1", () => probe.close(resolvePort));
+  probe.listen(Number(appiumPort), "127.0.0.1", () => probe.close(resolvePort));
 });
 if (platform === "android" && process.env.MOBILE_KEEP_APP === "1") {
   // UiAutomator2 skips installation entirely with noReset, even when
@@ -56,7 +60,7 @@ if (platform === "android" && process.env.MOBILE_KEEP_APP === "1") {
 }
 const serverLog = openSync(resolve(artifacts, "appium.log"), "w");
 const server = spawn(process.execPath, [resolve(directory, "node_modules/appium/index.js"),
-  "--address", "127.0.0.1", "--port", "4723", "--log-no-colors", "--log-timestamp",
+  "--address", "127.0.0.1", "--port", appiumPort, "--log-no-colors", "--log-timestamp",
   "--use-drivers", platform === "android" ? "uiautomator2" : "xcuitest"], {
   cwd: directory, windowsHide: true, stdio: ["ignore", serverLog, serverLog],
 });
@@ -101,12 +105,13 @@ process.on("SIGINT", stop);
 process.on("SIGTERM", stop);
 
 try {
-  const ready = await waitForAppiumReadiness({ observe: observeReadiness, exited: () => serverExit });
+  const ready = await waitForAppiumReadiness({ observe: observeReadiness, exited: () => serverExit,
+    probe: (options) => probeAppiumReadiness({ ...options, port: Number(appiumPort) }) });
   if (!ready) throw new Error(`Appium did not become ready. See ${artifacts}/appium.log`);
   test = spawn("dotnet", ["run", "--project", "devops", "--", "TestMobileE2E", "--configuration", "Debug"], {
     cwd: resolve(directory, ".."), windowsHide: true, stdio: "inherit",
     env: { ...process.env, MOBILE_APP_PATH: appPath, MOBILE_E2E_ARTIFACTS: artifacts,
-      ...(wdaPath ? { MOBILE_WDA_PATH: wdaPath } : {}), APPIUM_SERVER: "http://127.0.0.1:4723" },
+      ...(wdaPath ? { MOBILE_WDA_PATH: wdaPath } : {}), APPIUM_SERVER: `http://127.0.0.1:${appiumPort}` },
   });
   process.exitCode = await new Promise((resolveExit, reject) => {
     test.on("error", reject);

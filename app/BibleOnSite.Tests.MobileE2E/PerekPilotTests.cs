@@ -4,9 +4,14 @@ using Xunit;
 namespace BibleOnSite.Tests.MobileE2E;
 
 // One device per matrix runner; scenarios on that device run sequentially.
+// iOS shards the suite across two simulators (#2083): Shard=1 owns the shared
+// pilot while Shard=2 takes the iOS-only classes, keeping the two disjoint
+// groups close in scenario count. Android runs every applicable test and
+// ignores the trait.
 [Collection("Mobile device")]
 [Trait("Category", "MobileE2E")]
 [Trait("Platform", "Shared")]
+[Trait("Shard", "1")]
 public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessionFactory sessions)
     : MobileDeviceTest(output, sessions)
 {
