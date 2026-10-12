@@ -3,16 +3,18 @@ using Android.Gms.Extensions;
 using Xamarin.Google.Android.Play.Core.AssetPacks;
 using Xamarin.Google.Android.Play.Core.AssetPacks.Model;
 #elif IOS || MACCATALYST
+using BackgroundAssets;
 using Foundation;
-using UIKit;
+using System.Runtime.Versioning;
 #endif
+using System.Net.Http;
 
 namespace BibleOnSite.Services;
 
 /// <summary>
 /// On-demand asset delivery service.
 /// Android: Play Asset Delivery via AssetPackManager.
-/// iOS: Apple On-Demand Resources via NSBundleResourceRequest.
+/// iOS: Apple Background Assets via BAAssetPackManager (managed asset packs).
 /// Other platforms: no-op.
 /// </summary>
 public sealed partial class PadDeliveryService : IPadDeliveryService
@@ -22,15 +24,120 @@ public sealed partial class PadDeliveryService : IPadDeliveryService
     internal static string PayloadFileName(string packName) => packName == PerushimNotesPackName
         ? "sefaria-dump-5784-sivan-4.perushim_notes.sqlite" : packName + ".zip";
 
+    /// <summary>
+    /// Pack payload files published on the app-v* GitHub release — the delivery
+    /// path for runtimes where managed asset packs cannot exist (iOS/MacCatalyst
+    /// below 26, or builds without the app-group entitlement). The first entry
+    /// is the required payload; later entries are best-effort companions (the
+    /// prebuilt search index — the app rebuilds it on-device when absent).
+    /// </summary>
+    internal static IReadOnlyList<string> ReleasePayloadFiles(string packName)
+    {
+        var files = new List<string> { PayloadFileName(packName) };
+        if (packName == PerushimNotesPackName)
+        {
+            files.Add(PerushimNotesService.SearchIndexDbName);
+        }
+        return files;
+    }
+
+    /// <summary>Release-asset URL a pack payload is published under for this app version.</summary>
+    internal static Uri ReleasePayloadUri(IAppInfo appInfo, string fileName)
+    {
+        return new Uri(
+            $"https://github.com/bible-on-site/bible-on-site/releases/download/app-v{appInfo.VersionString}/{fileName}");
+    }
+
+    /// <summary>
+    /// Streams each release-published payload file into the pack's cache dir
+    /// through a ".download" temp + rename, so an interrupted fetch never leaves
+    /// a partial file that <see cref="TryGetAssetPathAsync"/> would then serve.
+    /// Returns the failure reason, or null once the required payload landed;
+    /// optional companions are skipped best-effort.
+    /// </summary>
+    internal static async Task<string?> DownloadReleasePayloadsAsync(
+        HttpClient client, IAppInfo appInfo, string packName, string cacheDir,
+        IProgress<double>? progress, CancellationToken cancellationToken)
+    {
+        Directory.CreateDirectory(cacheDir);
+        var files = ReleasePayloadFiles(packName);
+        for (var index = 0; index < files.Count; index++)
+        {
+            var fileName = files[index];
+            try
+            {
+                await DownloadReleaseFileAsync(client, ReleasePayloadUri(appInfo, fileName),
+                    Path.Join(cacheDir, fileName),
+                    new ScaledProgress(index, files.Count, progress),
+                    cancellationToken);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                if (index == 0)
+                {
+                    return $"{ex.GetType().Name}: {ex.Message}";
+                }
+                System.Diagnostics.Debug.WriteLine(
+                    $"Optional release payload '{fileName}' unavailable: {ex.Message}");
+            }
+        }
+        return null;
+    }
+
+    private static async Task DownloadReleaseFileAsync(
+        HttpClient client, Uri uri, string destination,
+        IProgress<double> progress, CancellationToken cancellationToken)
+    {
+        using var response = await client.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        response.EnsureSuccessStatusCode();
+        var expected = response.Content.Headers.ContentLength;
+        var temporary = destination + ".download";
+        try
+        {
+            long received = 0;
+            await using (var source = await response.Content.ReadAsStreamAsync(cancellationToken))
+            await using (var target = File.Create(temporary))
+            {
+                var buffer = new byte[81920];
+                int read;
+                while ((read = await source.ReadAsync(buffer, cancellationToken)) > 0)
+                {
+                    await target.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
+                    received += read;
+                    if (expected > 0)
+                    {
+                        progress.Report(Math.Clamp((double)received / expected.Value, 0, 1));
+                    }
+                }
+            }
+            if (expected.HasValue && received != expected.Value)
+            {
+                throw new IOException($"Truncated payload: received {received} of {expected} bytes");
+            }
+            File.Move(temporary, destination, overwrite: true);
+        }
+        finally { File.Delete(temporary); }
+    }
+
+    /// <summary>
+    /// Synchronous per-file progress adapter: maps a file's 0–1 fraction into
+    /// its slice of the whole payload set, so reports stay ordered across files.
+    /// </summary>
+    private sealed class ScaledProgress(int index, int count, IProgress<double>? inner) : IProgress<double>
+    {
+        public void Report(double value) =>
+            inner?.Report((index + Math.Clamp(value, 0, 1)) / count);
+    }
+
     public static IPadDeliveryService Instance { get; } = new PadDeliveryService();
 
     private PadDeliveryService() { }
 
-    internal static string OdrCacheDirectory(IFileSystem fileSystem, IAppInfo appInfo, string packName)
+    internal static string AssetPackCacheDirectory(IFileSystem fileSystem, IAppInfo appInfo, string packName)
     {
-        // Extracted ODR data belongs to this app build, just like the store resource.
+        // Extracted asset-pack data belongs to this app build, just like the store resource.
         var generation = $"{appInfo.VersionString}-{appInfo.BuildString}";
-        var root = Path.Join(fileSystem.CacheDirectory, "odr_assets");
+        var root = Path.Join(fileSystem.CacheDirectory, "asset_packs");
         var dir = Path.Join(root, generation, packName);
         Directory.CreateDirectory(dir);
         // Extractions from previous app versions are obsolete — each holds a
@@ -45,7 +152,7 @@ public sealed partial class PadDeliveryService : IPadDeliveryService
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            System.Diagnostics.Debug.WriteLine($"Failed to remove stale ODR generations: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"Failed to remove stale asset-pack generations: {ex.Message}");
         }
         return dir;
     }
@@ -307,67 +414,110 @@ partial class PadDeliveryService
 #endif
 
 #if IOS || MACCATALYST
-// NSBundleResourceRequest is obsoleted in the iOS 27 SDK (Apple directs new code to
-// Background Assets) but remains functional on iOS 27 devices; the BGAssetDownloadManager
-// port is tracked at https://github.com/bible-on-site/bible-on-site/issues/2036.
-#pragma warning disable CA1422
+// Apple obsoleted On-Demand Resources (NSBundleResourceRequest) in the iOS 27 SDK and
+// directs delivery to the Background Assets framework; this leg uses the managed
+// asset-pack API (BAAssetPackManager, iOS 26+) with Apple-hosted packs.
+// https://github.com/bible-on-site/bible-on-site/issues/2036
 partial class PadDeliveryService
 {
-    /// <summary>
-    /// Bound for a conditional ODR probe — it only reports whether resources
-    /// are already on the device, so a healthy answer is immediate. On a wedged
-    /// simulator the resource-request daemon can hold the completion callback
-    /// forever (issue #2084); the probe must degrade instead of hanging the
-    /// calling lock (and with it the reader's perek load) without end.
-    /// </summary>
-    private static readonly TimeSpan ConditionalAccessTimeout = TimeSpan.FromSeconds(15);
+    /// <summary>Last Background Assets fetch error or reason (for support diagnostics).</summary>
+    internal static string? LastIosDeliveryError { get; private set; }
+
+    // Referencing BAAssetPackManager.SharedManager opts the app into managed asset
+    // packs; installing its delegate at launch lets resumed downloads report
+    // progress and completion before the first fetch runs.
+    private static AssetPackDownloadEvents? _downloadEvents;
+
+    // Infinite client timeout — payloads run hundreds of MB and cancellation is
+    // owned by the caller's token, not by an arbitrary clock.
+    private static readonly Lazy<HttpClient> _releasePayloadClient =
+        new(() => new HttpClient { Timeout = Timeout.InfiniteTimeSpan });
+
+    private static string? BaAppGroupId =>
+        NSBundle.MainBundle.ObjectForInfoDictionary("BAAppGroupID")?.ToString();
 
     /// <summary>
-    /// Bound for the fetch attempt inside the diagnostics probe — a real
-    /// download can legitimately take a while, but an unbounded wait would
-    /// hang the exported report on the same stalled daemon.
+    /// Managed asset packs are usable only on iOS/MacCatalyst 26+ while the shared
+    /// app-group container is reachable. The container is granted by the
+    /// app-groups codesign entitlement, which unsigned simulator builds (Appium
+    /// CI) do not carry — BAAssetPackManager.SharedManager validates it once and
+    /// calls Swift fatalError when the group is inaccessible (observed as an
+    /// EXC_BREAKPOINT at launch in AssetPackManager.swift). Because that abort is
+    /// not catchable, every SharedManager access is gated on this probe — which
+    /// asks for exactly what the framework checks — rather than on the OS
+    /// version or simulator detection alone.
     /// </summary>
-    private static readonly TimeSpan DiagnosticFetchTimeout = TimeSpan.FromMinutes(2);
-
-    private static string OdrCacheDir(string packName)
+    [SupportedOSPlatformGuard("ios26.0")]
+    [SupportedOSPlatformGuard("maccatalyst26.0")]
+    private static bool ManagedDeliverySupported
     {
-        return OdrCacheDirectory(FileSystem.Current, AppInfo.Current, packName);
+        get
+        {
+#if MACCATALYST
+            if (!OperatingSystem.IsMacCatalystVersionAtLeast(26))
+#else
+            if (!OperatingSystem.IsIOSVersionAtLeast(26))
+#endif
+            {
+                return false;
+            }
+
+            var groupId = BaAppGroupId;
+            return !string.IsNullOrEmpty(groupId)
+                && NSFileManager.DefaultManager.GetContainerUrl(groupId) != null;
+        }
+    }
+
+    /// <summary>
+    /// Installs the managed asset-pack download delegate. Called once at app
+    /// startup (MauiProgram) so that downloads resumed by the system after an
+    /// update report into this service.
+    /// </summary>
+    internal static void ConfigureBackgroundAssets()
+    {
+        if (!ManagedDeliverySupported)
+        {
+            return;
+        }
+
+        _downloadEvents ??= new AssetPackDownloadEvents();
+        BAAssetPackManager.SharedManager.Delegate = _downloadEvents;
+    }
+
+    private static string AssetPackCacheDir(string packName)
+    {
+        return AssetPackCacheDirectory(FileSystem.Current, AppInfo.Current, packName);
     }
 
     private static async Task<string?> TryGetAssetPathIosAsync(string packName, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
-        var cacheDir = OdrCacheDir(packName);
+        var cacheDir = AssetPackCacheDir(packName);
         if (File.Exists(Path.Join(cacheDir, PayloadFileName(packName))))
         {
             return cacheDir;
         }
 
+        if (!ManagedDeliverySupported)
+        {
+            return null;
+        }
+
         try
         {
-            using var request = new NSBundleResourceRequest(new NSSet<NSString>(new NSString(packName)));
-            var available = await request.ConditionallyBeginAccessingResourcesAsync()
-                .WaitAsync(ConditionalAccessTimeout);
-            if (!available)
+            if (!IsAssetPackLocallyAvailable(packName))
             {
-                System.Diagnostics.Debug.WriteLine("ODR: ConditionallyBeginAccessing returned false — resource not yet downloaded");
+                System.Diagnostics.Debug.WriteLine($"BA: asset pack '{packName}' is not downloaded yet");
                 return null;
             }
 
-            try
-            {
-                ct.ThrowIfCancellationRequested();
-                return SaveOdrDataAsset(cacheDir, request.Bundle, packName);
-            }
-            finally
-            {
-                request.EndAccessingResources();
-            }
+            ct.ThrowIfCancellationRequested();
+            return SaveAssetPackPayload(cacheDir, packName);
         }
         catch (Exception ex)
         {
             ct.ThrowIfCancellationRequested();
-            System.Diagnostics.Debug.WriteLine($"ODR TryGetAssetPath failed: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"BA TryGetAssetPath failed: {ex.Message}");
             return null;
         }
     }
@@ -377,88 +527,229 @@ partial class PadDeliveryService
         IProgress<double>? progress,
         CancellationToken ct)
     {
-        using var request = new NSBundleResourceRequest(new NSSet<NSString>(new NSString(packName)));
-
-        using var cancellation = ct.Register(() => request.Progress.Cancel());
-        var hasAccess = false;
-        IDisposable? observer = null;
-        if (progress != null)
-        {
-            observer = request.Progress.AddObserver(
-                "fractionCompleted",
-                NSKeyValueObservingOptions.New,
-                _ => progress.Report(request.Progress.FractionCompleted));
-        }
-
+        LastIosDeliveryError = null;
+        var cacheDir = AssetPackCacheDir(packName);
         try
         {
-            System.Diagnostics.Debug.WriteLine($"ODR: BeginAccessingResources for tag '{packName}'...");
-            await request.BeginAccessingResourcesAsync();
-            hasAccess = true;
-            ct.ThrowIfCancellationRequested();
+            // An extracted payload remains usable even if the OS evicts its pack.
+            if (File.Exists(Path.Join(cacheDir, PayloadFileName(packName))))
+            {
+                return true;
+            }
 
-            var cacheDir = OdrCacheDir(packName);
-            var result = SaveOdrDataAsset(cacheDir, request.Bundle, packName);
-            return result != null;
+            string? failure = null;
+            if (ManagedDeliverySupported)
+            {
+                failure = await TryFetchManagedPackAsync(packName, cacheDir, progress, ct);
+                if (failure == null)
+                {
+                    return true;
+                }
+
+                // A managed fetch can still fail — the pack may not be
+                // registered with the store yet, or the system download may
+                // error — so fall through to the release leg rather than
+                // stranding the device when the same bytes are published.
+                System.Diagnostics.Debug.WriteLine($"BA: managed fetch failed, trying release payload: {failure}");
+            }
+
+            // Managed asset packs cannot exist below iOS/MacCatalyst 26 and
+            // need the app-group entitlement unsigned builds lack, so those
+            // runtimes download the same release-coupled payloads from the
+            // app-v* GitHub release into this same extraction cache.
+            var releaseFailure = await DownloadReleasePayloadsAsync(
+                _releasePayloadClient.Value, AppInfo.Current, packName, cacheDir, progress, ct);
+            if (releaseFailure == null)
+            {
+                return true;
+            }
+
+            LastIosDeliveryError = failure == null
+                ? $"Release-payload download failed: {releaseFailure}"
+                : $"Managed fetch: {failure}; release fallback: {releaseFailure}";
+            System.Diagnostics.Debug.WriteLine($"BA: {LastIosDeliveryError}");
+            return false;
         }
         catch (OperationCanceledException)
         {
             throw;
         }
+        catch (NSErrorException ex)
+        {
+            ct.ThrowIfCancellationRequested();
+            LastIosDeliveryError = $"EnsureLocalAvailability failed: {ex.Error.LocalizedDescription}";
+            System.Diagnostics.Debug.WriteLine($"BA: {LastIosDeliveryError}");
+            return false;
+        }
         catch (Exception ex)
         {
             ct.ThrowIfCancellationRequested();
-            System.Diagnostics.Debug.WriteLine($"ODR Fetch failed: {ex.Message}");
+            LastIosDeliveryError = $"{ex.GetType().Name}: {ex.Message}";
+            System.Diagnostics.Debug.WriteLine($"BA Fetch failed: {ex.Message}");
             return false;
-        }
-        finally
-        {
-            observer?.Dispose();
-            if (hasAccess)
-            {
-                request.EndAccessingResources();
-            }
         }
     }
 
     /// <summary>
-    /// After BeginAccessingResources, the asset catalog data is available via NSDataAsset.
-    /// actool compiles the .dataset into Assets.car, so we read it via NSDataAsset and
-    /// write to disk for SQLite file-based access.
-    /// ODR assets live in the request's bundle, not the main bundle.
-    /// The perushim pack also carries the prebuilt search index under the same
-    /// ODR tag — save it too when present so both files reach the delivery dir.
+    /// Managed asset-pack leg of <see cref="FetchIosAsync"/>: null on success,
+    /// an error string when the pack could not be delivered or extracted.
+    /// Call only when <see cref="ManagedDeliverySupported"/> is true.
     /// </summary>
-    private static string? SaveOdrDataAsset(string cacheDir, NSBundle bundle, string packName)
+    [SupportedOSPlatform("ios26.0")]
+    [SupportedOSPlatform("maccatalyst26.0")]
+    private static async Task<string?> TryFetchManagedPackAsync(
+        string packName,
+        string cacheDir,
+        IProgress<double>? progress,
+        CancellationToken ct)
     {
-        if (!SaveNamedAsset(cacheDir, bundle, packName, PayloadFileName(packName), required: true))
+        // Same short-circuit the ODR path had: an already-downloaded pack only
+        // needs extraction, not a store round-trip.
+        if (IsAssetPackLocallyAvailable(packName))
+        {
+            return SaveAssetPackPayload(cacheDir, packName) != null
+                ? null
+                : "downloaded asset pack did not contain its payload";
+        }
+
+        var pack = await ResolveAssetPackAsync(packName);
+        if (pack == null)
+        {
+            return $"Asset pack '{packName}' is not declared in the Background Assets manifest.";
+        }
+
+        ConfigureBackgroundAssets();
+        using var subscription = _downloadEvents?.Subscribe(packName, progress);
+        using var cancellation = ct.Register(() => CancelAssetPackDownload(pack));
+
+        // EnsureLocalAvailability completes with a faulted task on NSError.
+        var ensure = BAAssetPackManager.SharedManager.EnsureLocalAvailabilityAsync(pack);
+        var completed = await Task.WhenAny(ensure, Task.Delay(Timeout.Infinite, ct));
+        if (completed != ensure)
+        {
+            ct.ThrowIfCancellationRequested();
+        }
+
+        try
+        {
+            await ensure;
+        }
+        catch (NSErrorException ex)
+        {
+            ct.ThrowIfCancellationRequested();
+            return $"EnsureLocalAvailability failed: {ex.Error.LocalizedDescription}";
+        }
+        return SaveAssetPackPayload(cacheDir, packName) != null
+            ? null
+            : "downloaded asset pack did not contain its payload";
+    }
+
+    /// <summary>
+    /// Resolves the store-registered asset pack for this identifier. Uses the
+    /// enumeration API rather than GetAssetPack, which the iOS 27 SDK deprecates.
+    /// </summary>
+    [SupportedOSPlatform("ios26.0")]
+    [SupportedOSPlatform("maccatalyst26.0")]
+    private static async Task<BAAssetPack?> ResolveAssetPackAsync(string packName)
+    {
+        if (!ManagedDeliverySupported)
+        {
+            return null;
+        }
+
+        try
+        {
+            var packs = await BAAssetPackManager.SharedManager.GetAllAssetPacksAsync();
+            return packs.Cast<BAAssetPack>().FirstOrDefault(p => p.Identifier == packName);
+        }
+        catch (NSErrorException ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"BA: asset pack '{packName}' lookup failed: {ex.Error.LocalizedDescription}");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Whether the pack's payload is already on the device. iOS 26.4 has a
+    /// synchronous probe; earlier releases surface the same answer through the
+    /// content lookup's error.
+    /// </summary>
+    [SupportedOSPlatform("ios26.0")]
+    [SupportedOSPlatform("maccatalyst26.0")]
+    private static bool IsAssetPackLocallyAvailable(string packName)
+    {
+        if (!ManagedDeliverySupported)
+        {
+            return false;
+        }
+
+#if MACCATALYST
+        if (OperatingSystem.IsMacCatalystVersionAtLeast(26, 4))
+#else
+        if (OperatingSystem.IsIOSVersionAtLeast(26, 4))
+#endif
+        {
+            return BAAssetPackManager.SharedManager.IsAssetPackAvailableLocally(packName);
+        }
+
+        using var data = BAAssetPackManager.SharedManager.GetContents(
+            PayloadFileName(packName), packName, NSDataReadingOptions.Mapped, out _);
+        return data != null;
+    }
+
+    /// <summary>
+    /// Copies the payload out of the downloaded asset pack into the versioned
+    /// extraction cache, matching the previous ODR extraction semantics: callers
+    /// always consume a plain directory path and a stale build's data is never reused.
+    /// The perushim pack also carries the prebuilt search index — save it too
+    /// when present so both files reach the delivery dir.
+    /// </summary>
+    [SupportedOSPlatform("ios26.0")]
+    [SupportedOSPlatform("maccatalyst26.0")]
+    private static string? SaveAssetPackPayload(string cacheDir, string packName)
+    {
+        if (!SavePackFile(cacheDir, packName, PayloadFileName(packName), required: true))
         {
             return null;
         }
         if (packName == PerushimNotesPackName)
         {
-            SaveNamedAsset(cacheDir, bundle, "perushim_search", PerushimNotesService.SearchIndexDbName, required: false);
+            SavePackFile(cacheDir, packName, PerushimNotesService.SearchIndexDbName, required: false);
         }
         return cacheDir;
     }
 
-    private static bool SaveNamedAsset(string cacheDir, NSBundle bundle, string assetName, string fileName, bool required)
+    [SupportedOSPlatform("ios26.0")]
+    [SupportedOSPlatform("maccatalyst26.0")]
+    private static bool SavePackFile(string cacheDir, string packName, string relative, bool required)
     {
-        using var asset = new NSDataAsset(assetName, bundle);
-        if (asset?.Data == null)
+        using var data = BAAssetPackManager.SharedManager.GetContents(
+            relative, packName, NSDataReadingOptions.Mapped, out var error);
+        if (data == null)
         {
             if (required)
             {
-                System.Diagnostics.Debug.WriteLine($"ODR: NSDataAsset('{assetName}') returned null");
+                System.Diagnostics.Debug.WriteLine(
+                    $"BA: contents for '{relative}' in pack '{packName}' failed: {error?.LocalizedDescription ?? "unavailable"}");
             }
             return false;
         }
 
-        System.Diagnostics.Debug.WriteLine($"ODR: NSDataAsset loaded, length={asset.Data.Length}");
-        var destPath = Path.Join(cacheDir, fileName);
+        System.Diagnostics.Debug.WriteLine($"BA: '{relative}' loaded, length={data.Length}");
+
+        // `relative` names a file inside the pack. If it were ever rooted or
+        // contained '..', Path.Combine would silently drop cacheDir — refuse to
+        // write outside the extraction cache rather than trust pack contents.
+        var destPath = Path.GetFullPath(Path.Combine(cacheDir, relative));
+        var cacheRoot = Path.GetFullPath(cacheDir) + Path.DirectorySeparatorChar;
+        if (!destPath.StartsWith(cacheRoot, StringComparison.OrdinalIgnoreCase))
+        {
+            System.Diagnostics.Debug.WriteLine($"BA: refusing out-of-cache path '{relative}'");
+            return false;
+        }
         try
         {
-            using var stream = asset.Data.AsStream();
+            using var stream = data.AsStream();
             var temporary = destPath + ".download";
             try
             {
@@ -470,21 +761,45 @@ partial class PadDeliveryService
                 File.Move(temporary, destPath, true);
             }
             finally { File.Delete(temporary); }
-            System.Diagnostics.Debug.WriteLine($"ODR: Saved to {destPath}");
+            System.Diagnostics.Debug.WriteLine($"BA: saved to {destPath}");
             return true;
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"ODR: Save failed: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"BA: save failed: {ex.Message}");
             return false;
+        }
+    }
+
+    /// <summary>
+    /// Best-effort cancellation of an in-flight managed pack download. The system
+    /// owns managed downloads, so a rejected cancel is logged rather than thrown.
+    /// </summary>
+    [SupportedOSPlatform("ios26.0")]
+    [SupportedOSPlatform("maccatalyst26.0")]
+    private static void CancelAssetPackDownload(BAAssetPack pack)
+    {
+        try
+        {
+            using var download = pack.Download(BAContentRequest.Install);
+            var cancelled = BADownloadManager.SharedManager.CancelDownload(download, out var error);
+            if (!cancelled)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"BA: cancel for '{pack.Identifier}' did not apply: {error?.LocalizedDescription ?? "not scheduled"}");
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"BA: cancel failed: {ex.Message}");
         }
     }
 
     private static async Task<List<string>> GetDeliveryDiagnosticsIosAsync(string packName)
     {
-        var lines = new List<string> { "--- ODR (iOS) delivery diagnostics ---" };
+        var lines = new List<string> { "--- Background Assets (iOS) delivery diagnostics ---" };
 
-        var cacheDir = OdrCacheDir(packName);
+        var cacheDir = AssetPackCacheDir(packName);
         var cachedFile = Path.Join(cacheDir, PayloadFileName(packName));
         lines.Add($"Cache dir: {cacheDir}");
         lines.Add($"Cached file exists: {File.Exists(cachedFile)}");
@@ -501,103 +816,90 @@ partial class PadDeliveryService
             }
         }
 
-        // Main bundle info
+        // Everything above this point is safe on any build; the SharedManager
+        // probes below would abort the process when the app-group container is
+        // inaccessible (see ManagedDeliverySupported).
         try
         {
-            var mainBundle = NSBundle.MainBundle;
-            lines.Add($"Main bundle path: {mainBundle.BundlePath}");
-            var assetsCar = Path.Join(mainBundle.BundlePath, "Assets.car");
-            lines.Add($"Main Assets.car exists: {File.Exists(assetsCar)}");
-            if (File.Exists(assetsCar))
+            var info = NSBundle.MainBundle;
+            lines.Add($"BAHasManagedAssetPacks: {info.ObjectForInfoDictionary("BAHasManagedAssetPacks")?.ToString() ?? "(unset)"}");
+            lines.Add($"BAUsesAppleHosting: {info.ObjectForInfoDictionary("BAUsesAppleHosting")?.ToString() ?? "(unset)"}");
+            lines.Add($"BAAppGroupID: {info.ObjectForInfoDictionary("BAAppGroupID")?.ToString() ?? "(unset)"}");
+        }
+        catch (Exception ex)
+        {
+            lines.Add($"Info.plist probe error: {ex.Message}");
+        }
+
+        try
+        {
+            var groupId = BaAppGroupId;
+            var container = groupId == null
+                ? null
+                : NSFileManager.DefaultManager.GetContainerUrl(groupId);
+            lines.Add($"App-group container: {(container == null ? "inaccessible" : "accessible")}");
+        }
+        catch (Exception ex)
+        {
+            lines.Add($"App-group container probe error: {ex.Message}");
+        }
+
+        if (!ManagedDeliverySupported)
+        {
+            lines.Add(
+                "Managed delivery unavailable: requires iOS 26+ and an accessible app-group container "
+                + "— pack payloads download from the app-v* GitHub release instead.");
+            if (!string.IsNullOrEmpty(LastIosDeliveryError))
             {
-                lines.Add($"Main Assets.car size: {new FileInfo(assetsCar).Length} bytes");
+                lines.Add($"Last release-payload error: {LastIosDeliveryError}");
             }
-        }
-        catch (Exception ex)
-        {
-            lines.Add($"Main bundle info error: {ex.Message}");
+            return lines;
         }
 
-        // Probe NSDataAsset with main bundle
+        if (!string.IsNullOrEmpty(LastIosDeliveryError))
+        {
+            lines.Add($"Last BA fetch error: {LastIosDeliveryError}");
+        }
+
         try
         {
-            using var directAsset = new NSDataAsset(packName);
-            lines.Add($"NSDataAsset(main): {(directAsset?.Data != null ? $"length={directAsset.Data.Length}" : "(null)")}");
-        }
-        catch (Exception ex)
-        {
-            lines.Add($"NSDataAsset(main) error: {ex.GetType().Name}: {ex.Message}");
-        }
-
-        // ODR request
-        try
-        {
-            using var request = new NSBundleResourceRequest(new NSSet<NSString>(new NSString(packName)));
-            lines.Add($"NSBundleResourceRequest created for tag '{packName}'");
-            lines.Add($"Request bundle path (before access): {request.Bundle?.BundlePath ?? "(null)"}");
-
-            var conditionalOk = await request.ConditionallyBeginAccessingResourcesAsync()
-                .WaitAsync(ConditionalAccessTimeout);
-            lines.Add($"ConditionallyBeginAccessing: {conditionalOk}");
-
-            if (conditionalOk)
+            lines.Add($"Delegate installed: {_downloadEvents != null}");
+#if MACCATALYST
+            if (OperatingSystem.IsMacCatalystVersionAtLeast(26, 4))
+#else
+            if (OperatingSystem.IsIOSVersionAtLeast(26, 4))
+#endif
             {
-                lines.Add($"Request bundle path (after conditional): {request.Bundle?.BundlePath ?? "(null)"}");
-                ProbeNSDataAsset(lines, "ODR(conditional,request.Bundle)", packName, request.Bundle);
-                request.EndAccessingResources();
+                lines.Add($"IsAssetPackAvailableLocally('{packName}'): {BAAssetPackManager.SharedManager.IsAssetPackAvailableLocally(packName)}");
+                try
+                {
+                    var status = await BAAssetPackManager.SharedManager.GetLocalStatusAsync(packName);
+                    lines.Add($"Local status: {status}");
+                }
+                catch (Exception ex)
+                {
+                    lines.Add($"Local status error: {ex.GetType().Name}: {ex.Message}");
+                }
             }
             else
             {
-                lines.Add("Attempting BeginAccessingResources...");
-                try
-                {
-                    using var fetchReq = new NSBundleResourceRequest(new NSSet<NSString>(new NSString(packName)));
-                    await fetchReq.BeginAccessingResourcesAsync().WaitAsync(DiagnosticFetchTimeout);
-                    lines.Add("BeginAccessingResources: succeeded");
-                    lines.Add($"Request bundle path (after fetch): {fetchReq.Bundle?.BundlePath ?? "(null)"}");
-
-                    // Check if ODR asset pack was downloaded
-                    var odrDir = Path.Join(fetchReq.Bundle?.BundlePath ?? "", "OnDemandResources");
-                    lines.Add($"ODR dir in bundle exists: {Directory.Exists(odrDir)}");
-
-                    ProbeNSDataAsset(lines, "ODR(fetched,request.Bundle)", packName, fetchReq.Bundle);
-                    ProbeNSDataAsset(lines, "ODR(fetched,mainBundle)", packName, NSBundle.MainBundle);
-
-                    // Enumerate files in request bundle to see what's there
-                    try
-                    {
-                        var bundlePath = fetchReq.Bundle?.BundlePath;
-                        if (bundlePath != null && Directory.Exists(bundlePath))
-                        {
-                            var files = Directory.GetFiles(bundlePath, "*", SearchOption.AllDirectories);
-                            lines.Add($"Request bundle file count: {files.Length}");
-                            foreach (var f in files.Take(20))
-                            {
-                                lines.Add($"  {f.Replace(bundlePath, "~")}");
-                            }
-
-                            if (files.Length > 20)
-                            {
-                                lines.Add($"  ... and {files.Length - 20} more");
-                            }
-                        }
-                    }
-                    catch (Exception enumEx)
-                    {
-                        lines.Add($"Bundle enumeration error: {enumEx.Message}");
-                    }
-
-                    fetchReq.EndAccessingResources();
-                }
-                catch (Exception fetchEx)
-                {
-                    lines.Add($"BeginAccessingResources FAILED: {fetchEx.GetType().Name}: {fetchEx.Message}");
-                }
+                lines.Add("Local status probe requires iOS 26.4 or later.");
             }
         }
         catch (Exception ex)
         {
-            lines.Add($"ODR request error: {ex.GetType().Name}: {ex.Message}");
+            lines.Add($"Availability probe error: {ex.GetType().Name}: {ex.Message}");
+        }
+
+        try
+        {
+            var packs = (await BAAssetPackManager.SharedManager.GetAllAssetPacksAsync())
+                .Cast<BAAssetPack>().Select(p => p.Identifier).OrderBy(id => id).ToList();
+            lines.Add($"Store packs ({packs.Count}): {string.Join(", ", packs)}");
+        }
+        catch (Exception ex)
+        {
+            lines.Add($"GetAllAssetPacks error: {ex.GetType().Name}: {ex.Message}");
         }
 
         // Disk space
@@ -615,18 +917,77 @@ partial class PadDeliveryService
         return lines;
     }
 
-    private static void ProbeNSDataAsset(List<string> lines, string label, string assetName, NSBundle? bundle)
+    /// <summary>
+    /// Fans managed asset-pack download progress out to in-flight FetchAsync calls.
+    /// Progress callbacks only fire while the app process is alive, matching the
+    /// previous ODR Progress observer behavior.
+    /// </summary>
+    [SupportedOSPlatform("ios26.0")]
+    [SupportedOSPlatform("maccatalyst26.0")]
+    private sealed class AssetPackDownloadEvents : BAManagedAssetPackDownloadDelegate
     {
-        try
+        private readonly Dictionary<Guid, (string PackName, IProgress<double>? Progress)> _subscribers = new();
+        private readonly object _sync = new();
+
+        public IDisposable Subscribe(string packName, IProgress<double>? progress)
         {
-            using var asset = bundle != null ? new NSDataAsset(assetName, bundle) : new NSDataAsset(assetName);
-            lines.Add($"{label}: {(asset?.Data != null ? $"length={asset.Data.Length}" : "(null)")}");
+            var key = Guid.NewGuid();
+            lock (_sync)
+            {
+                _subscribers[key] = (packName, progress);
+            }
+            return new Subscription(this, key);
         }
-        catch (Exception ex)
+
+        public override void DownloadBegan(BAAssetPack assetPack)
         {
-            lines.Add($"{label} error: {ex.GetType().Name}: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"BA: download of '{assetPack.Identifier}' began");
+        }
+
+        public override void DownloadProgress(BAAssetPack assetPack, NSProgress progress)
+        {
+            IProgress<double>?[] subscribers;
+            lock (_sync)
+            {
+                subscribers = _subscribers.Values
+                    .Where(entry => entry.PackName == assetPack.Identifier)
+                    .Select(entry => entry.Progress)
+                    .ToArray();
+            }
+            foreach (var subscriber in subscribers)
+            {
+                subscriber?.Report(progress.FractionCompleted);
+            }
+        }
+
+        public override void DownloadPaused(BAAssetPack assetPack)
+        {
+            System.Diagnostics.Debug.WriteLine($"BA: download of '{assetPack.Identifier}' paused");
+        }
+
+        public override void DownloadFinished(BAAssetPack assetPack)
+        {
+            System.Diagnostics.Debug.WriteLine($"BA: download of '{assetPack.Identifier}' finished");
+        }
+
+        public override void DownloadFailed(BAAssetPack assetPack, NSError error)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"BA: download of '{assetPack.Identifier}' failed: {error.LocalizedDescription}");
+        }
+
+        private void Unsubscribe(Guid key)
+        {
+            lock (_sync)
+            {
+                _subscribers.Remove(key);
+            }
+        }
+
+        private sealed class Subscription(AssetPackDownloadEvents owner, Guid key) : IDisposable
+        {
+            public void Dispose() => owner.Unsubscribe(key);
         }
     }
 }
-#pragma warning restore CA1422
 #endif

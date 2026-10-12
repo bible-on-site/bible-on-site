@@ -278,6 +278,18 @@ public class HtmlView : View
     private void OnStyleChanged() => StyleChanged?.Invoke(this, EventArgs.Empty);
 
     /// <summary>
+    /// Raises the LinkTapped event and returns the event args so platform
+    /// handlers can honor <see cref="LinkTappedEventArgs.Handled"/> — falling
+    /// back to opening the browser when no subscriber handled the tap.
+    /// </summary>
+    public LinkTappedEventArgs DispatchLinkTapped(string url)
+    {
+        var args = new LinkTappedEventArgs(url);
+        LinkTapped?.Invoke(this, args);
+        return args;
+    }
+
+    /// <summary>
     /// <see cref="HasSearchMatch"/> is derived, so it has no property-changed
     /// hook of its own; platform handlers re-highlight through the
     /// PropertyMapper entries for the two match properties.
@@ -301,7 +313,7 @@ public class HtmlView : View
     /// <summary>
     /// Raises the LinkTapped event. Called by platform handlers.
     /// </summary>
-    public void RaiseLinkTapped(string url) => LinkTapped?.Invoke(this, new LinkTappedEventArgs(url));
+    public void RaiseLinkTapped(string url) => DispatchLinkTapped(url);
 
     /// <summary>
     /// Gets the CSS text-align value for the current TextAlignment.
