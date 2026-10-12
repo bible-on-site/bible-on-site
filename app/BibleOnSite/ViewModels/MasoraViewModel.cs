@@ -97,7 +97,7 @@ public partial class MasoraViewModel : ObservableObject //NOSONAR
     public string PerushimEmptyMessage =>
         !PerushimCatalogAvailable ? "אין קטלוג פירושים" :
         !PerushimNotesAvailable ? "להוריד פירושים" :
-        "אין פרשנות ליחידה זו";
+        "אין פרשנות לפרשה זו";
 
     /// <summary>Whether to show the download perushim button (notes not yet available).</summary>
     public bool ShowDownloadPerushimButton => PerushimCatalogAvailable && !PerushimNotesAvailable;
@@ -158,9 +158,9 @@ public partial class MasoraViewModel : ObservableObject //NOSONAR
 
     public bool HasClosingBreak => Unit?.HasClosingBreak ?? false;
 
-    /// <summary>"יחידה N מתוך M" — the unit's place inside the whole division.</summary>
+    /// <summary>"פרשה N מתוך M" — the unit's place inside the whole division.</summary>
     public string UnitPositionText =>
-        Unit == null ? string.Empty : $"יחידה {UnitId} מתוך {_masoraDataService.UnitCount}";
+        Unit == null ? string.Empty : $"פרשה {UnitId} מתוך {_masoraDataService.UnitCount}";
 
     public int NextUnitId => _masoraDataService.GetAdjacentUnits(UnitId).Next?.UnitId ?? 0;
 
@@ -318,7 +318,6 @@ public partial class MasoraViewModel : ObservableObject //NOSONAR
         unit.Rows = await MasoraUnitText.BuildRowsAsync(
             unit,
             perekId => _perekDataService.LoadPasukimAsync(perekId),
-            perekId => _perekDataService.GetPerekSource(perekId),
             FontFactor);
     }
 
@@ -365,7 +364,6 @@ public partial class MasoraViewModel : ObservableObject //NOSONAR
                 var rows = await MasoraUnitText.BuildRowsAsync(
                     u,
                     perekId => _perekDataService.LoadPasukimAsync(perekId),
-                    perekId => _perekDataService.GetPerekSource(perekId),
                     FontFactor);
                 result.Add((u, rows));
             }

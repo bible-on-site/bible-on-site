@@ -18,6 +18,21 @@ html[data-book-view] .top-nav {
   z-index: 10000;
 }
 
+/* While the book (Sefer) view is active, lock the outer document so wheel,
+   touch, and keyboard input cannot scroll the page behind the fixed overlay
+   (issue #2178). This rule lives in the eagerly loaded route stylesheet so
+   the lock applies from the moment the overlay appears — including while the
+   Sefer chunk is still loading. The mounted reader keeps the same lock via
+   data-sefer-view in sefer.css, which covers non-overlay consumers of Sefer.
+   scrollbar-gutter: stable keeps the scrollbar's space reserved so entering
+   and leaving the lock does not shift the layout underneath, and the existing
+   document scroll offset is preserved. Scrolling inside the book's content
+   panes is unaffected. */
+html[data-book-view] {
+  overflow: hidden;
+  scrollbar-gutter: stable;
+}
+
 /* When the book (Sefer) view is active, remove the heavy SEO content
    from the rendering pipeline entirely.  The SEO markup (full perek text,
    commentaries carousel, articles carousel) stays in the static HTML for

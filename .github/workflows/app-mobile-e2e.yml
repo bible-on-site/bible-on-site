@@ -130,6 +130,17 @@ jobs:
         id: nuget-key
         run: node ${{ github.workspace }}/devops/github/ci/nuget-cache-key.mjs
 
+      # hashFiles() in step templates dies on a hard 120s budget on loaded
+      # runners (#2184); a run step computes the same input without the clock.
+      - name: Hash npm lockfile inputs
+        id: npm-key
+        run: node ${{ github.workspace }}/devops/github/ci/files-hash.mjs devops/package-lock.json app/mobile-e2e/package-lock.json
+
+      - name: Hash AVD readiness script inputs
+        id: readiness-key
+        if: matrix.platform == 'Android'
+        run: node ${{ github.workspace }}/devops/github/ci/files-hash.mjs app/mobile-e2e/android-readiness.mjs app/mobile-e2e/android-ready.mjs
+
       - name: Restore NuGet packages
         id: nuget-cache
         uses: actions/cache/restore@v6
@@ -161,7 +172,7 @@ jobs:
         uses: actions/cache/restore@v6
         with:
           path: ~/.npm
-          key: ${{ runner.os }}-npm-mobile-e2e-${{ hashFiles('devops/package-lock.json', 'app/mobile-e2e/package-lock.json') }}
+          key: ${{ runner.os }}-npm-mobile-e2e-${{ steps.npm-key.outputs.hash }}
           restore-keys: ${{ runner.os }}-npm-mobile-e2e-
 
       # The coverage tree baseline is published only by successful master push
@@ -216,8 +227,21 @@ jobs:
         background: true
         run: npm run ios:boot:wait --prefix app/mobile-e2e
 
+      # The WebDriverAgent xcodebuild only needs node_modules and the selected
+      # Xcode — no simulator — so it runs in the background too, overlapping
+      # the workload install and app build. MOBILE_WDA_PATH is exported to
+      # GITHUB_ENV and lands after the wait-all gate, before the test step.
+      - name: Prepare prebuilt iOS automation agent
+        id: wda
+        if: matrix.platform == 'iOS'
+        background: true
+        run: npm run ios:wda --prefix app/mobile-e2e
+
+      # npm ci is done here, so ~/.npm is frozen — the tar+upload can run in
+      # the background; the implicit wait-all before job cleanup completes it.
       - name: Save npm cache
         if: ${{ github.ref == 'refs/heads/master' && steps.npm-cache.outputs.cache-hit != 'true' }}
+        background: true
         uses: actions/cache/save@v6
         with:
           path: ~/.npm
@@ -322,7 +346,7 @@ jobs:
         uses: actions/cache/restore@v6
         with:
           path: ${{ steps.sdk-key.outputs.avd-home }}
-          key: android-avd-${{ steps.sdk-key.outputs.os-tag }}-${{ runner.arch }}-api${{ env.ANDROID_API_LEVEL }}-${{ env.ANDROID_TARGET }}-${{ env.ANDROID_ABI }}-${{ env.AVD_PROFILE }}-swiftshader-${{ steps.sdk-key.outputs.emulator-key }}-${{ env.AVD_SNAPSHOT_RECIPE }}-${{ hashFiles('app/mobile-e2e/android-readiness.mjs', 'app/mobile-e2e/android-ready.mjs') }}
+          key: android-avd-${{ steps.sdk-key.outputs.os-tag }}-${{ runner.arch }}-api${{ env.ANDROID_API_LEVEL }}-${{ env.ANDROID_TARGET }}-${{ env.ANDROID_ABI }}-${{ env.AVD_PROFILE }}-swiftshader-${{ steps.sdk-key.outputs.emulator-key }}-${{ env.AVD_SNAPSHOT_RECIPE }}-${{ steps.readiness-key.outputs.hash }}
 
       - name: Validate restored AVD snapshot
         if: matrix.platform == 'Android' && steps.avd-cache.outputs.cache-hit == 'true'
@@ -411,12 +435,10 @@ jobs:
             ${{ steps.sdk-key.outputs.sdk-home }}/platform-tools
           key: ${{ steps.sdk-cache.outputs.cache-primary-key }}
 
-      - name: Prepare prebuilt iOS automation agent
-        if: matrix.platform == 'iOS'
-        run: npm run ios:wda --prefix app/mobile-e2e
-
+      # Gates both background steps: simulator readiness + env exports and the
+      # prebuilt WebDriverAgent. A no-op on the Android leg, which has none.
       - name: Wait for iPhone simulator
-        wait: simulator
+        wait-all:
 
       - name: Run shared pilot on iOS
         if: matrix.platform == 'iOS'
@@ -448,6 +470,39 @@ jobs:
           retention-days: 90
           if-no-files-found: error
 
+      # Real executed-code coverage (#2085): the AltCover template, per-test
+      # app-coverage dumps and the run reports become the exec tree, which the
+      # collect step unions into coverage-tree.json. Runs without the
+      # instrumented-coverage artifacts (pre-#2156 layout) skip extraction —
+      # the automation-id channel stands alone.
+      - name: Extract executable coverage tree
+        if: always()
+        id: exec-tree
+        env:
+          # Each matrix leg runs exactly one pilot; the other's outcome is
+          # "skipped" — a truthy string that would win an || chain — so route
+          # by platform instead of relying on fallback order.
+          PILOT_OUTCOME: ${{ matrix.platform == 'iOS' && steps['pilot-ios'].outcome || steps.pilot.outcome }}
+        run: |
+          # The extractor prefers the applied report and falls back to the
+          # template — extraction is possible when either exists.
+          if [ ! -f "$MOBILE_E2E_ARTIFACTS/coverage-app/coverage.opencover.xml" ] \
+            && [ ! -f "$MOBILE_E2E_ARTIFACTS/coverage-app/template.opencover.xml" ]; then
+            echo "[e2e-coverage-trees] no coverage-app OpenCover input — exec coverage unavailable this run"
+            exit 0
+          fi
+          INCOMPLETE_ARGS=()
+          if [ "$PILOT_OUTCOME" != "success" ]; then
+            INCOMPLETE_ARGS=(--incomplete)
+          fi
+          node devops/e2e-coverage-trees/e2e-coverage-trees.ts extract \
+            --suite app/mobile-e2e \
+            --platform "${{ matrix.artifact }}" \
+            --artifacts "$MOBILE_E2E_ARTIFACTS" \
+            --snapshot-sha "${{ github.sha }}" \
+            --out "$MOBILE_E2E_ARTIFACTS/exec-coverage-tree.json" "${INCOMPLETE_ARGS[@]}"
+          echo "exec-coverage-tree=$MOBILE_E2E_ARTIFACTS/exec-coverage-tree.json" >> "$GITHUB_OUTPUT"
+
       # Evidence is collected even after a failed run — passed tests keep their
       # coverage — but the tree is marked incomplete so a partial run can never
       # shrink the trusted baseline.
@@ -464,12 +519,16 @@ jobs:
           if [ "$PILOT_OUTCOME" != "success" ]; then
             INCOMPLETE_ARGS=(--incomplete)
           fi
+          EXEC_ARGS=()
+          if [ -f "$MOBILE_E2E_ARTIFACTS/exec-coverage-tree.json" ]; then
+            EXEC_ARGS=(--exec-tree "$MOBILE_E2E_ARTIFACTS/exec-coverage-tree.json")
+          fi
           node devops/github/ci/e2e-impact/e2e-impact.ts collect-appium \
             --suite app/mobile-e2e \
             --platform "${{ matrix.artifact }}" \
             --artifacts "$MOBILE_E2E_ARTIFACTS" \
             --snapshot-sha "${{ github.sha }}" \
-            --out "$MOBILE_E2E_ARTIFACTS/coverage-tree.json" "${INCOMPLETE_ARGS[@]}"
+            --out "$MOBILE_E2E_ARTIFACTS/coverage-tree.json" "${INCOMPLETE_ARGS[@]}" "${EXEC_ARGS[@]}"
 
       # The authoritative baseline is published only from a completed,
       # successful default-branch run; PR and merge-queue evidence stays
@@ -493,6 +552,19 @@ jobs:
         with:
           name: app-e2e-coverage.master.${{ matrix.artifact }}
           path: app/.artifacts/mobile-e2e/${{ matrix.artifact }}/coverage-app/
+          retention-days: 90
+          overwrite: true
+
+      # The exec tree gets its own baseline artifact per the storage policy
+      # in docs/devops/e2e-test-selection.md — same trust rule as the
+      # automation-id baseline above. Runs without exec coverage (no
+      # template → no extracted tree) skip the publish.
+      - name: Publish exec coverage-tree baseline
+        if: always() && github.event_name == 'push' && github.ref == 'refs/heads/master' && (steps.pilot.outcome == 'success' || steps['pilot-ios'].outcome == 'success') && steps['exec-tree'].outcome == 'success' && steps['exec-tree'].outputs.exec-coverage-tree != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: app-mobile-e2e-exec-coverage.master.${{ matrix.artifact }}
+          path: app/.artifacts/mobile-e2e/${{ matrix.artifact }}/exec-coverage-tree.json
           retention-days: 90
           overwrite: true
 
