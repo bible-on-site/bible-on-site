@@ -58,7 +58,7 @@ describe("daily bulletin preview", () => {
 		mocks.read.mockReset().mockResolvedValue(null);
 		mocks.prepare.mockReset().mockResolvedValue(saved);
 	});
-		afterEach(() => {
+	afterEach(() => {
 		cleanup();
 		vi.useRealTimers();
 		vi.restoreAllMocks();
@@ -121,6 +121,25 @@ describe("daily bulletin preview", () => {
 		);
 		expect(mocks.read).toHaveBeenLastCalledWith({ data: "2026-10-09" });
 	});
+	it("surfaces a failed bulletin read as an alert", async () => {
+		mocks.read.mockRejectedValue(new Error("קריאת העלון נכשלה"));
+		renderPage();
+
+		expect(await screen.findByRole("alert")).toHaveTextContent(
+			"קריאת העלון נכשלה",
+		);
+	});
+
+	it("shows an unknown delivery status verbatim", async () => {
+		mocks.read.mockResolvedValue({
+			...saved,
+			delivery: [{ channel: "email", status: "mystery-state" }],
+		});
+		renderPage();
+
+		expect(await screen.findByText('דוא"ל: mystery-state')).toBeInTheDocument();
+	});
+
 	it("keeps the date and submit button disabled while preparation runs", async () => {
 		mocks.prepare.mockReturnValue(new Promise(() => {}));
 		renderPage();

@@ -1,11 +1,9 @@
 import type { Metadata } from "next";
 import { unstable_cache } from "next/cache";
 import { notFound } from "next/navigation";
-import { getArticleSummariesForRanges } from "@/lib/articles/service";
-import { getPerushimForRanges } from "@/lib/perushim/service";
-import { unitEquivalentPerekId, unitPerekIds } from "@/lib/reading/ranges";
-import { fetchAllEntityRefs } from "@/lib/tanahpedia/perek-entity-refs";
-import { SITE_NAME } from "@/lib/seo/jsonld";
+import { ArticlesSection } from "@/app/929/[number]/components/ArticlesSection";
+import { PerushimSection } from "@/app/929/[number]/components/PerushimSection";
+import perekStyles from "@/app/929/[number]/page.module.css";
 import {
 	getAdjacentMasoraUnits,
 	getMasoraUnitById,
@@ -13,9 +11,11 @@ import {
 	MASORA_DIVISION,
 	masoraPasukCount,
 } from "@/data/masora/masora-units";
-import { ArticlesSection } from "@/app/929/[number]/components/ArticlesSection";
-import { PerushimSection } from "@/app/929/[number]/components/PerushimSection";
-import perekStyles from "@/app/929/[number]/page.module.css";
+import { getArticleSummariesForRanges } from "@/lib/articles/service";
+import { getPerushimForRanges } from "@/lib/perushim/service";
+import { unitEquivalentPerekId, unitPerekIds } from "@/lib/reading/ranges";
+import { SITE_NAME } from "@/lib/seo/jsonld";
+import { fetchAllEntityRefs } from "@/lib/tanahpedia/perek-entity-refs";
 import { UnitBreadcrumb } from "./components/UnitBreadcrumb";
 import { UnitNav } from "./components/UnitNav";
 import { UnitText } from "./components/UnitText";
@@ -135,6 +135,7 @@ export default async function MasoraUnitPage({
 				perushim={perushim}
 				title="פרשנים על הפרשה"
 				emptyMessage="אין פרשנות לפרשה זו"
+				scrollStorageKey={`perushim-masora-${unitId}`}
 			/>
 
 			{/* Articles section - articles from every overlapping perek */}
@@ -142,6 +143,7 @@ export default async function MasoraUnitPage({
 				articles={articles}
 				title="מאמרים על הפרשה"
 				emptyMessage="אין מאמרים לפרשה זו"
+				scrollStorageKey={`articles-masora-${unitId}`}
 			/>
 		</div>
 	);
