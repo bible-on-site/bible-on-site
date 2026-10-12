@@ -125,14 +125,25 @@
 
 	<!-- Codesigning entitlements: the iOS/MacCatalyst app groups entry shares a
 	     container with the AssetPackDownloader extension (managed Background Assets).
-	     Simulator builds skip it: app-group entitlements force the SDK to demand a
-	     signing identity, which unsigned iossimulator CI/e2e builds do not have. -->
-	<PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' AND !$(RuntimeIdentifier.Contains('iossimulator'))">
-		<CodesignEntitlements>Platforms\iOS\Entitlements.plist</CodesignEntitlements>
-	</PropertyGroup>
+	     Two SDK conventions shaped this wiring:
+	     - MAUI's SingleProject targets auto-assign $(iOSProjectFolder)Entitlements.plist
+	       to CodesignEntitlements whenever that exact path exists — bypassing any
+	       per-RID condition — so the file is named Entitlements.App.plist.
+	     - A non-empty CodesignEntitlements makes DetectSigningIdentity require a
+	       provisioning profile + signing key, which unsigned iossimulator CI/e2e
+	       builds do not have. RuntimeIdentifier defaults are only resolved after
+	       csproj evaluation (a RID-less Debug build lands on iossimulator), so the
+	       assignment runs in a target where the SDK-computed SdkIsSimulator flag —
+	       the same flag DetectSigningIdentity consumes — is already known. -->
 	<PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">
 		<CodesignEntitlements>Platforms\MacCatalyst\Entitlements.plist</CodesignEntitlements>
 	</PropertyGroup>
+	<Target Name="_SetIosCodesignEntitlements" BeforeTargets="_DetectSigningIdentity" Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' AND '$(SdkIsSimulator)' != 'true'">
+		<PropertyGroup>
+			<CodesignEntitlements>Platforms\iOS\Entitlements.App.plist</CodesignEntitlements>
+		</PropertyGroup>
+		<Message Importance="low" Text="=== iOS device/desktop build: CodesignEntitlements = $(CodesignEntitlements) ===" />
+	</Target>
 
 	<!-- Android: Play Asset Delivery SDK.
 	     XAAMM0000 manifest collisions with Plugin.Firebase are suppressed in NoWarn above. -->
