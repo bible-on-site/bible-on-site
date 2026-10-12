@@ -431,9 +431,32 @@ public partial class PerekPage
             htmlView.SearchMatchLength = span.Length;
         }
         var visible = IsMatchLineVisible(list, htmlView);
-        if (visible == true)
+        // The landing is only complete when the perush-name header shares the
+        // viewport with the match — visibility of the match line alone can
+        // leave the header scrolled offscreen (#2205).
+        var nameLabel = FindPerushNameLabel(list, display);
+        var nameVisible = nameLabel == null ? null : IsElementVisible(list, nameLabel);
+        if (visible == true && nameVisible != false)
         {
             return PerushLanding.Landed;
+        }
+        // The match is in view but its perush-name header is offscreen. When
+        // both can share the viewport, scroll the header in and re-verify;
+        // when they cannot (a very long pasuk), the match-only landing is the
+        // final state — re-pinning the match every frame would never settle.
+        // A null fit means the label's platform view is still attaching — stay
+        // engaged one more frame instead of accepting a headerless landing.
+        if (visible == true && nameVisible == false)
+        {
+            var fits = NameAndMatchFit(list, htmlView, nameLabel!);
+            if (fits == true)
+            {
+                ScrollNameToMargin(list, nameLabel!);
+            }
+            // Fit the header in and re-verify next frame; an unmeasurable fit
+            // (platform view still attaching) also stays engaged. Only a
+            // proven non-fit accepts the match-only landing.
+            return fits == false ? PerushLanding.Landed : PerushLanding.Engaged;
         }
         if (!ScrollListToMatch(list, htmlView))
         {
@@ -445,6 +468,138 @@ public partial class PerekPage
         // Verified platforms re-check visibility next frame; unverifiable
         // platforms trust the issued scroll.
         return visible == null ? PerushLanding.Landed : PerushLanding.Engaged;
+    }
+
+    /// <summary>
+    /// Finds the <see cref="Label"/> carrying the perush name bound to the same
+    /// note display as the matched <see cref="HtmlView"/> — both realize
+    /// together inside one cell of the notes template.
+    /// </summary>
+    private static Label? FindPerushNameLabel(CollectionView list, PerushNoteDisplay display)
+    {
+        return list.GetVisualTreeDescendants().OfType<Label>()
+            .FirstOrDefault(label =>
+                label.AutomationId == "InlinePerushName" &&
+                ReferenceEquals(label.BindingContext, display));
+    }
+
+    /// <summary>
+    /// True when the element's center is inside the list viewport; false when
+    /// it is not; null when the platform cannot measure it. Center-based to
+    /// match what e2e visibility checks accept.
+    /// </summary>
+    private static bool? IsElementVisible(CollectionView list, VisualElement element)
+    {
+#if ANDROID
+        if (element.Handler?.PlatformView is not Android.Views.View view ||
+            list.Handler?.PlatformView is not AndroidX.RecyclerView.Widget.RecyclerView recycler)
+        {
+            return false;
+        }
+        var viewPos = new int[2];
+        var listPos = new int[2];
+        view.GetLocationOnScreen(viewPos);
+        recycler.GetLocationOnScreen(listPos);
+        var centerY = viewPos[1] + view.Height / 2;
+        return centerY >= listPos[1] && centerY <= listPos[1] + recycler.Height;
+#elif IOS || MACCATALYST
+        if (element.Handler?.PlatformView is not UIKit.UIView view ||
+            list.Handler?.PlatformView is not UIKit.UICollectionView collection)
+        {
+            return false;
+        }
+        var point = view.ConvertPointToView(
+            new CoreGraphics.CGPoint(0, view.Bounds.Height / 2), collection);
+        var top = collection.ContentOffset.Y;
+        var bottom = top + collection.Bounds.Height - collection.AdjustedContentInset.Top;
+        return point.Y >= top && point.Y <= bottom;
+#else
+        _ = list; // No measurement without the platform views.
+        _ = element;
+        return null;
+#endif
+    }
+
+    /// <summary>
+    /// Whether the perush-name header and the match line can share the viewport
+    /// once the header lands <see cref="MatchTopMargin"/> below the list top;
+    /// null when either side cannot be measured on this platform.
+    /// </summary>
+    private static bool? NameAndMatchFit(CollectionView list, HtmlView htmlView, Label nameLabel)
+    {
+#if ANDROID
+        if (htmlView.GetSearchMatchTop() is not { } matchTop ||
+            htmlView.Handler?.PlatformView is not Android.Views.View noteView ||
+            nameLabel.Handler?.PlatformView is not Android.Views.View labelView ||
+            list.Handler?.PlatformView is not AndroidX.RecyclerView.Widget.RecyclerView recycler)
+        {
+            return null;
+        }
+        var notePos = new int[2];
+        var labelPos = new int[2];
+        noteView.GetLocationOnScreen(notePos);
+        labelView.GetLocationOnScreen(labelPos);
+        var density = noteView.Resources?.DisplayMetrics?.Density ?? 1f;
+        var gap = notePos[1] + matchTop * density - labelPos[1];
+        return gap <= recycler.Height - MatchTopMargin * density;
+#elif IOS || MACCATALYST
+        if (htmlView.GetSearchMatchTop() is not { } matchTop ||
+            htmlView.Handler?.PlatformView is not UIKit.UIView noteView ||
+            nameLabel.Handler?.PlatformView is not UIKit.UIView labelView ||
+            list.Handler?.PlatformView is not UIKit.UICollectionView collection)
+        {
+            return null;
+        }
+        var matchY = noteView.ConvertPointToView(new CoreGraphics.CGPoint(0, matchTop), collection).Y;
+        var nameY = labelView.ConvertPointToView(new CoreGraphics.CGPoint(0, 0), collection).Y;
+        return matchY - nameY <=
+            collection.Bounds.Height - collection.AdjustedContentInset.Top - MatchTopMargin;
+#else
+        _ = list;
+        _ = htmlView;
+        _ = nameLabel;
+        return null;
+#endif
+    }
+
+    /// <summary>
+    /// Scrolls the list so the perush-name header lands
+    /// <see cref="MatchTopMargin"/> below the list top, exposing the header
+    /// while keeping the match inside the viewport.
+    /// </summary>
+    private static bool ScrollNameToMargin(CollectionView list, Label nameLabel)
+    {
+#if ANDROID
+        if (nameLabel.Handler?.PlatformView is not Android.Views.View labelView ||
+            list.Handler?.PlatformView is not AndroidX.RecyclerView.Widget.RecyclerView recycler)
+        {
+            return false;
+        }
+        var labelPos = new int[2];
+        var listPos = new int[2];
+        labelView.GetLocationOnScreen(labelPos);
+        recycler.GetLocationOnScreen(listPos);
+        var density = labelView.Resources?.DisplayMetrics?.Density ?? 1f;
+        recycler.ScrollBy(0, (int)(labelPos[1] - listPos[1] - MatchTopMargin * density));
+        return true;
+#elif IOS || MACCATALYST
+        if (nameLabel.Handler?.PlatformView is not UIKit.UIView labelView ||
+            list.Handler?.PlatformView is not UIKit.UICollectionView collection)
+        {
+            return false;
+        }
+        var point = labelView.ConvertPointToView(new CoreGraphics.CGPoint(0, 0), collection);
+        var target = point.Y - MatchTopMargin;
+        var min = -collection.AdjustedContentInset.Top;
+        var max = Math.Max(min, collection.ContentSize.Height - collection.Bounds.Height + collection.AdjustedContentInset.Bottom);
+        collection.SetContentOffset(
+            new CoreGraphics.CGPoint(collection.ContentOffset.X, Math.Clamp(target, min, max)), false);
+        return true;
+#else
+        _ = list;
+        _ = nameLabel;
+        return true;
+#endif
     }
 
     /// <summary>
