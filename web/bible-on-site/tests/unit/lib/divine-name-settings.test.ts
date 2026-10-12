@@ -82,6 +82,10 @@ describe("persistence and change notifications", () => {
 		).toEqual(settings);
 		expect(getDivineNameMaskingSettings()).toEqual(settings);
 	});
+	it("falls back to defaults when stored JSON is malformed", () => {
+		localStorage.setItem(DIVINE_NAME_MASKING_KEY, "{oops");
+		expect(getDivineNameMaskingSettings()).toEqual(DEFAULT_DIVINE_NAME_MASKING);
+	});
 	it("dispatches a change event whose detail carries the settings", () => {
 		const seen: string[] = [];
 		const unsubscribe = subscribeDivineNameMasking(() =>

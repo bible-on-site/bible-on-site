@@ -178,6 +178,31 @@ describe("maskDivineNameValue", () => {
 			));
 	});
 
+	it("leaves words with non-Hebrew body characters alone", () => {
+		const s = enabled();
+		for (const value of ["אcב", "א1ב"]) {
+			expect(maskDivineNameValue(value, s)).toBe(value);
+		}
+	});
+	it("leaves a word that starts with a combining mark alone", () =>
+		expect(maskDivineNameValue("ְאל", enabled())).toBe("ְאל"));
+	it("leaves אל whose aleph carries qamats qatan alone", () =>
+		expect(maskDivineNameValue("אׇל", enabled())).toBe("אׇל"));
+	it("keeps the word untouched when the אלהים custom text is blank", () =>
+		expect(
+			maskDivineNameValue(
+				"אֱלֹהִ֑ים",
+				enabled({ elohim: "custom", elohimCustom: "  " }),
+			),
+		).toBe("אֱלֹהִ֑ים"));
+	it("keeps the word untouched when the שדי custom text is blank", () =>
+		expect(
+			maskDivineNameValue(
+				"שַׁדַּ֥י",
+				enabled({ shaddai: "custom", shaddaiCustom: "" }),
+			),
+		).toBe("שַׁדַּ֥י"));
+
 	it("never leaves orphaned combining marks", () => {
 		const s = enabled();
 		for (const value of [
