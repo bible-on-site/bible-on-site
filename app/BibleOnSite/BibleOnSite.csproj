@@ -124,8 +124,10 @@
 	     ============================================================ -->
 
 	<!-- Codesigning entitlements: the iOS/MacCatalyst app groups entry shares a
-	     container with the AssetPackDownloader extension (managed Background Assets). -->
-	<PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">
+	     container with the AssetPackDownloader extension (managed Background Assets).
+	     Simulator builds skip it: app-group entitlements force the SDK to demand a
+	     signing identity, which unsigned iossimulator CI/e2e builds do not have. -->
+	<PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' AND !$(RuntimeIdentifier.Contains('iossimulator'))">
 		<CodesignEntitlements>Platforms\iOS\Entitlements.plist</CodesignEntitlements>
 	</PropertyGroup>
 	<PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">

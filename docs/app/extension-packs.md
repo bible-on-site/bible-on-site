@@ -43,9 +43,16 @@ The `.aar` files upload to App Store Connect separately from the IPA.
 
 ## Update behavior
 
-All pack data is **app-release-coupled**: catalogs are bundled with the app and
-pack bytes are compiled into the AAB/IPA for that version. There is no independent
-server-side pack update channel.
+All pack data is **app-release-coupled**: catalogs are bundled with the app, and
+pack bytes ride the same release (inside the AAB for Android; as Apple-hosted
+`.aar` archives uploaded to App Store Connect by `cd-app.yml` for iOS). There is
+no independent server-side pack update channel.
+
+Managed Background Assets require **iOS 26 / macOS 26**: on older OS versions
+`PadDeliveryService` reports the packs unavailable. Content already copied into
+`AppDataDirectory` keeps working across the update; only new pack installs on
+iOS < 26 have no delivery path (the unmanaged BA download API exists back to
+iOS 16.1 but requires self-hosted infrastructure this repo does not have).
 
 - App update → store delivers updated packs (PAD packs and Apple-hosted asset
   packs version with the app; both stores re-download changed packs automatically).
