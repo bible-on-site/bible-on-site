@@ -4,6 +4,14 @@
 <dict>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<!-- Managed Background Assets: asset packs (perushim notes, recitation audio) are
+	     Apple-hosted and delivered on demand via the embedded downloader extension. -->
+	<key>BAHasManagedAssetPacks</key>
+	<true/>
+	<key>BAUsesAppleHosting</key>
+	<true/>
+	<key>BAAppGroupID</key>
+	<string>group.com.tanah.daily929.assets</string>
 	<key>UIDeviceFamily</key>
 	<array>
 		<integer>1</integer>

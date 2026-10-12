@@ -26,7 +26,7 @@ test.describe("מסורה reading root", () => {
 		// First visit compiles the unit route — allow for cold dev servers.
 		await page.waitForURL(`**${MASORA_ROOT}/1`, { timeout: 60_000 });
 		await expect(
-			page.getByRole("heading", { level: 1, name: "בראשית א א-ה" }),
+			page.getByRole("heading", { level: 1, name: "בראשית פרשה א" }),
 		).toBeVisible();
 	});
 
@@ -37,7 +37,7 @@ test.describe("מסורה reading root", () => {
 		// Article/perush cards render h1s too — address the unit heading by name.
 		const heading = page.getByRole("heading", {
 			level: 1,
-			name: "בראשית א א-ה",
+			name: "בראשית פרשה א",
 		});
 		await expect(heading).toBeVisible();
 		// Unit 1 closes on a פתוחה marker.
@@ -72,7 +72,7 @@ test.describe("מסורה reading root", () => {
 		// Unit 8 spans בראשית ב ד - ג טו.
 		await page.goto(`${MASORA_ROOT}/8`);
 		await expect(
-			page.getByRole("heading", { level: 1, name: "בראשית ב ד - ג טו" }),
+			page.getByRole("heading", { level: 1, name: "בראשית פרשה ח" }),
 		).toBeVisible();
 		await expect(page.locator("#pasuk-2-4")).toBeAttached();
 		await expect(page.locator("#pasuk-3-15")).toBeAttached();
@@ -84,7 +84,7 @@ test.describe("מסורה reading root", () => {
 		// Unit 2826 is דברי הימים א ה כט — one pasuk cut mid-verse.
 		await page.goto(`${MASORA_ROOT}/2826`);
 		await expect(
-			page.getByRole("heading", { level: 1, name: "דברי הימים א ה כט" }),
+			page.getByRole("heading", { level: 1, name: "דברי הימים פרשה נח" }),
 		).toBeVisible();
 		await expect(page.locator("#pasuk-869-29")).toBeAttached();
 	});
@@ -109,6 +109,27 @@ test.describe("מסורה reading root", () => {
 			"href",
 			/\/929\/153$/,
 		);
+	});
+
+	test("book view opens on ?book and shows the sefer book", async ({
+		page,
+	}) => {
+		await page.goto(`${MASORA_ROOT}/1?book`);
+		const overlay = page.locator('[class*="seferOverlay"]');
+		await expect(overlay).toBeVisible({ timeout: 15_000 });
+	});
+
+	test("book-chrome routes land on the sefer's first unit", async ({
+		page,
+	}) => {
+		// /מסורה/{firstUnitId}/{slug}?book rewrites to the unit in book
+		// mode with the chrome page in its bookPage query.
+		const response = await page.goto(
+			`${MASORA_ROOT}/1/${encodeURIComponent("כריכה")}?book`,
+		);
+		expect(response?.status()).toBe(200);
+		const overlay = page.locator('[class*="seferOverlay"]');
+		await expect(overlay).toBeVisible({ timeout: 15_000 });
 	});
 
 	test("unknown unit ids return 404", async ({ page }) => {

@@ -129,6 +129,10 @@ export interface RangePerushSummary extends PerushSummary {
  * (perush, perek); results are aggregated per perush, keeping the first
  * perek in range order for its canonical link and summing note counts
  * across overlapping perakim.
+ *
+ * `noteCount` counts DISTINCT covered pesukim — a pasuk carrying several
+ * notes counts once, so the displayed verse total never exceeds the
+ * unit's own pesukim (issue #2190).
  */
 export async function getPerushimForRanges(
 	ranges: ScriptureRange[],
@@ -143,7 +147,7 @@ export async function getPerushimForRanges(
 				p.name AS perush_name,
 				pa.name AS parshan_name,
 				n.perek_id AS perek_id,
-				COUNT(*) AS note_count,
+				COUNT(DISTINCT n.pasuk) AS note_count,
 				p.priority AS priority
 			 FROM note n
 			 JOIN perush p ON n.perush_id = p.id

@@ -4,7 +4,7 @@ namespace BibleOnSite.Services;
 
 /// <summary>
 /// E2E-only data source. iOS simulator builds never receive the perushim_notes
-/// ODR pack, so the HtmlView commentary path (the NSHTMLReader crash surface of
+/// asset pack, so the HtmlView commentary path (the NSHTMLReader crash surface of
 /// TestFlight incidents F0AF3C74 and 351F87DB) cannot be exercised in CI.
 /// When the app launches with BIBLE_E2E_PERUSHIM=1 — set by the mobile e2e
 /// suite through Appium processArguments — this provider fabricates realistic

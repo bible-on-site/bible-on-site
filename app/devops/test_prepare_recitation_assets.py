@@ -169,8 +169,13 @@ class RecitationAssetsTests(unittest.TestCase):
             self.assertEqual(result["package"]["tracks"][0]["words"][0]["startMs"], 123)
             self.assertEqual(result["package"]["tracks"][1]["words"], [])
             if platform == "iOS":
-                contents = json.loads((app / "Platforms/iOS/Assets/Recitation.xcassets/recitation_1.dataset/Contents.json").read_text())
-                self.assertEqual(contents["properties"]["on-demand-resource-tags"], ["recitation_1"])
+                pack_dir = app / "Platforms/iOS/AssetPacks/recitation_1"
+                manifest = json.loads((pack_dir / "Manifest.json").read_text())
+                self.assertEqual(manifest["assetPackID"], "recitation_1")
+                self.assertEqual(manifest["downloadPolicy"], {"onDemand": {}})
+                self.assertEqual(manifest["fileSelectors"], [{"file": "recitation_1.zip"}])
+                self.assertEqual(manifest["platforms"], ["iOS", "macOS"])
+                self.assertTrue((pack_dir / "recitation_1.zip").is_file())
         self.assertEqual(catalogs[0], catalogs[1])
         self.assertEqual(catalogs[1], catalogs[2])
         self.assertEqual(database.read_bytes(), source_bytes)
