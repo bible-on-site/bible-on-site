@@ -104,10 +104,6 @@ public class PerushimNotesService
     /// <summary>Whether compatible notes are available from PAD/ODR or a bundled asset.</summary>
     public bool IsAvailable => _initialized && !_notesMissing && _connection != null;
 
-    // A verse-only search may reuse an already installed index without waiting
-    // for store delivery or initializing an unavailable commentary pack.
-    internal bool HasInstalledSearchIndex => IsAvailable && File.Exists(Path.Join(DataDirectory, SearchIndexDbName));
-
     internal async Task<SQLiteAsyncConnection?> GetSearchConnectionAsync()
     {
         await InitializeAsync();
@@ -532,6 +528,37 @@ public class PerushimNotesService
         await InitializeAsync();
         var path = Path.Join(DataDirectory, SearchIndexDbName);
         return File.Exists(path) ? path : null;
+    }
+
+    /// <summary>Restages a delivered index after cache eviction, using only
+    /// already available assets. Never initiates a store download.</summary>
+    internal async Task<string?> RestoreDeliveredIndexPathAsync()
+    {
+        await _operationLock.WaitAsync();
+        try
+        {
+            await InitializeCoreAsync();
+            if (!IsAvailable)
+            {
+                return null;
+            }
+            var path = Path.Join(DataDirectory, SearchIndexDbName);
+            if (!File.Exists(path))
+            {
+                var padPath = await _padService.TryGetAssetPathAsync(PerushimNotesPackName, CancellationToken.None);
+                if (padPath != null)
+                {
+                    await TryCopyPadIndexAsync(padPath);
+                }
+                // Raw-note test instances isolate their directory from platform packages.
+                if (!File.Exists(path) && _dataDirectoryOverride == null)
+                {
+                    await TryCopyPackageIndexAsync();
+                }
+            }
+            return File.Exists(path) ? path : null;
+        }
+        finally { _operationLock.Release(); }
     }
 
     private async Task<string?> ReadSchemaVersionAsync()

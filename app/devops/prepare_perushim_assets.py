@@ -80,11 +80,17 @@ def validate_search_index(index_path: Path, notes_timestamp: int, tanah_view: Pa
         # Fingerprints alone cannot prove the FTS payload is present. Query it
         # through the same join as the app, including the vocabulary tables.
         index.execute("SELECT term FROM verses_vocab LIMIT 1").fetchall()
-        index.execute("SELECT c.PerekId, c.PasukNum, c.PerushId, c.SeferId, c.Text FROM verses JOIN verses_documents c ON c.rowid = verses.rowid WHERE verses MATCH ? LIMIT 1", ("בראשית",)).fetchall()
+        index.execute(
+            "SELECT PerekId, PasukNum, PerushId, SeferId, c.Text FROM verses JOIN verses_documents c ON c.rowid=verses.rowid WHERE verses MATCH ? LIMIT 1",
+            ("בראשית",),
+        ).fetchall()
         if index.execute("SELECT COUNT(*) FROM verses_documents").fetchone()[0] == 0:
             raise ValueError("Search index has no verses documents")
         index.execute("SELECT term FROM notes_vocab LIMIT 1").fetchall()
-        index.execute("SELECT c.PerekId, c.PasukNum, c.PerushId, c.SeferId, c.Text FROM notes JOIN notes_documents c ON c.rowid = notes.rowid WHERE notes MATCH ? LIMIT 1", ("בראשית",)).fetchall()
+        index.execute(
+            "SELECT PerekId, PasukNum, PerushId, SeferId, c.Text FROM notes JOIN notes_documents c ON c.rowid=notes.rowid WHERE notes MATCH ? LIMIT 1",
+            ("בראשית",),
+        ).fetchall()
         if index.execute("SELECT COUNT(*) FROM notes_documents").fetchone()[0] == 0:
             raise ValueError("Search index has no notes documents")
 
