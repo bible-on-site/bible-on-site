@@ -5,6 +5,19 @@
  * IMPORTANT: keep in sync with the library version.
  * =================================================================== */
 
+/* While a Sefer reader is mounted, lock the outer document so the page
+   cannot scroll behind the fixed book (issue #2178). Sefer.tsx owns the
+   data-sefer-view attribute for the reader's lifetime, so every consumer
+   (the perek overlay, the /dev/sefer host, future hosts) gets the lock.
+   The perek route's layout.css applies the same lock on data-book-view so
+   it is already effective during the lazy-loading phase. Inner content
+   panes keep their own overflow scrolling; scrollbar-gutter: stable avoids
+   a layout shift when the lock engages or releases. */
+html[data-sefer-view] {
+  overflow: hidden;
+  scrollbar-gutter: stable;
+}
+
 /* Container — the library adds .flipbook to this element. */
 .he-book {
   height: 100%;
