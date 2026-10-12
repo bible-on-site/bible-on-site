@@ -32,6 +32,11 @@ import {
 	validateExecTree,
 } from "./model.ts";
 import { parseOpenCover } from "./opencover.ts";
+import {
+	execSelectorView,
+	execTreeCompatible,
+	loadExecTree,
+} from "./to-selector-tree.ts";
 import { parseXml, XmlParseError } from "./xml.ts";
 
 const SHA = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
@@ -681,5 +686,203 @@ describe("schema", () => {
 			validateExecTree(parsed, { suite: "app-mobile-e2e", platform: "android" }),
 			null,
 		);
+	});
+});
+
+// ── Selector-tree bridge ───────────────────────────────────────────────
+
+describe("execSelectorView", () => {
+	test("maps per-test entries into selector-tree shape", () => {
+		const tree = extractTree(
+			baseInput({
+				dumps: [dump("Alpha", "passed", { DEADBEEF: { "1": 4, "2": 1 } })],
+				recordByStem: new Map([
+					["Alpha-passed", record("Ns.AlphaTests.Alpha", "passed", ["s-1"])],
+				]),
+			}),
+		);
+		const view = execSelectorView(tree);
+		const alpha = view.tests["Ns.AlphaTests.Alpha"];
+		assert.deepEqual(alpha.files, ["app/BibleOnSite/App.xaml.cs"]);
+		assert.deepEqual(alpha.sessions, ["s-1"]);
+		assert.equal(alpha.outcome, "passed");
+		// The exec channel records no automation ids and leaves the declaring
+		// file for the collector's discovery lookup.
+		assert.deepEqual(alpha.automationIds, []);
+		assert.deepEqual(alpha.unmappedIds, []);
+		assert.equal(alpha.file, undefined);
+	});
+
+	test("unmeasured and error entries never map onto a test", () => {
+		const tree = extractTree(
+			baseInput({
+				dumps: [dump("Alpha", "passed", { DEADBEEF: { "1": 1 } })],
+				dumpErrors: [{ fileBase: "Gamma", outcome: "passed", message: "pull failed" }],
+				recordByStem: new Map([
+					["Alpha-passed", record("Ns.AlphaTests.Alpha", "passed")],
+					["Gamma-passed", record("Ns.GammaTests.Gamma", "passed")],
+				]),
+				runRecords: [
+					record("Ns.AlphaTests.Alpha", "passed"),
+					record("Ns.BetaTests.Beta", "passed"),
+					record("Ns.GammaTests.Gamma", "passed"),
+				],
+			}),
+		);
+		assert.equal(tree.tests["Ns.BetaTests.Beta"].attribution, "unmeasured");
+		assert.equal(tree.tests["Ns.GammaTests.Gamma"].attribution, "error");
+		const view = execSelectorView(tree);
+		assert.deepEqual(Object.keys(view.tests), ["Ns.AlphaTests.Alpha"]);
+	});
+
+	test("shared-mode trees produce no per-test mappings but keep shared files", () => {
+		const applied = TEMPLATE_XML.replace('vc="0" uspid="1"', 'vc="3" uspid="1"');
+		const tree = extractTree(
+			baseInput({
+				cover: parseOpenCover(parseXml(applied)),
+				runRecords: [record("Ns.AlphaTests.Alpha", "passed")],
+			}),
+		);
+		assert.equal(tree.tests["Ns.AlphaTests.Alpha"].attribution, "shared");
+		const view = execSelectorView(tree);
+		assert.deepEqual(view.tests, {});
+		assert.deepEqual(view.sharedFiles, ["app/BibleOnSite/App.xaml.cs"]);
+	});
+
+	test("the shared bucket surfaces as sharedFiles, unmatched dumps pass through", () => {
+		const tree = extractTree(
+			baseInput({
+				dumps: [
+					dump("_startup", "passed", { DEADBEEF: { "3": 7 } }),
+					dump("Ghost", "passed", { DEADBEEF: { "4": 1 } }),
+				],
+			}),
+		);
+		const view = execSelectorView(tree);
+		assert.deepEqual(view.tests, {});
+		assert.deepEqual(view.unmatchedEvidence, ["Ghost-passed.json"]);
+		assert.deepEqual(view.sharedFiles, [
+			"app/BibleOnSite/App.xaml.cs",
+			"app/BibleOnSite/PerekPage.xaml.cs",
+		]);
+	});
+
+	test("baseline-carried per-test entries still map", () => {
+		const baseline = extractTree(
+			baseInput({
+				snapshotSha: SHA_OLD,
+				dumps: [dump("Beta", "passed", { DEADBEEF: { "4": 1 } })],
+				recordByStem: new Map([["Beta-passed", record("Ns.BetaTests.Beta", "passed")]]),
+			}),
+		);
+		const run = extractTree(
+			baseInput({
+				dumps: [dump("Alpha", "passed", { DEADBEEF: { "1": 1 } })],
+				recordByStem: new Map([["Alpha-passed", record("Ns.AlphaTests.Alpha", "passed")]]),
+			}),
+		);
+		const { tree } = mergeTrees(run, baseline);
+		assert.equal(tree.tests["Ns.BetaTests.Beta"].measured, false);
+		assert.equal(tree.tests["Ns.BetaTests.Beta"].attribution, "per-test");
+		assert.deepEqual(
+			execSelectorView(tree).tests["Ns.BetaTests.Beta"].files,
+			["app/BibleOnSite/PerekPage.xaml.cs"],
+		);
+	});
+
+	test("stale baseline entries never map — a vanished test claims nothing", () => {
+		const baseline = extractTree(
+			baseInput({
+				snapshotSha: SHA_OLD,
+				dumps: [dump("Beta", "passed", { DEADBEEF: { "4": 1 } })],
+				recordByStem: new Map([["Beta-passed", record("Ns.BetaTests.Beta", "passed")]]),
+			}),
+		);
+		const run = extractTree(
+			baseInput({
+				dumps: [dump("Alpha", "passed", { DEADBEEF: { "1": 1 } })],
+				recordByStem: new Map([["Alpha-passed", record("Ns.AlphaTests.Alpha", "passed")]]),
+			}),
+		);
+		// Alpha is the only test still discovered — Beta's baseline entry
+		// survives the merge flagged stale.
+		const { tree } = mergeTrees(run, baseline, {
+			discoveredIds: ["Ns.AlphaTests.Alpha"],
+		});
+		assert.equal(tree.tests["Ns.BetaTests.Beta"].stale, true);
+		// Its files must not join the selector tree: a selected id that no
+		// longer exists in the binary would run nothing for that change.
+		assert.deepEqual(Object.keys(execSelectorView(tree).tests), [
+			"Ns.AlphaTests.Alpha",
+		]);
+	});
+});
+
+describe("execTreeCompatible", () => {
+	const expect = {
+		suite: "app-mobile-e2e",
+		platform: "android",
+		snapshotSha: SHA,
+	};
+
+	test("accepts a matching tree", () => {
+		assert.equal(execTreeCompatible(extractTree(baseInput()), expect), null);
+	});
+
+	test("rejects platform, suite, snapshot and schema mismatches", () => {
+		const tree = extractTree(baseInput());
+		assert.match(
+			execTreeCompatible({ ...tree, platform: "ios" }, expect) ?? "",
+			/platform ios/,
+		);
+		assert.match(
+			execTreeCompatible({ ...tree, suite: "other" }, expect) ?? "",
+			/suite other/,
+		);
+		assert.match(
+			execTreeCompatible({ ...tree, snapshotSha: SHA_OLD }, expect) ?? "",
+			/snapshotSha/,
+		);
+		assert.match(
+			execTreeCompatible({ ...tree, schemaVersion: 2 }, expect) ?? "",
+			/schemaVersion 2/,
+		);
+		// A foreign tree kind arrives over the wire as a plain string.
+		const foreign = JSON.parse(
+			JSON.stringify({ ...tree, kind: "coverage-tree" }),
+		) as ExecCoverageTree;
+		assert.match(
+			execTreeCompatible(foreign, expect) ?? "",
+			/kind coverage-tree/,
+		);
+	});
+});
+
+describe("loadExecTree", () => {
+	test("reports missing and corrupt files, loads a valid tree", () => {
+		const dir = mkdtempSync(join(tmpdir(), "e2e-ct-load-"));
+		try {
+			assert.equal(loadExecTree(join(dir, "absent.json")).kind, "missing");
+			const bad = join(dir, "bad.json");
+			writeFileSync(bad, "{not json");
+			assert.equal(loadExecTree(bad).kind, "corrupt");
+			const good = join(dir, "exec.json");
+			writeFileSync(good, JSON.stringify(extractTree(baseInput())));
+			const loaded = loadExecTree(good);
+			assert.equal(loaded.kind, "ok");
+			if (loaded.kind === "ok") {
+				assert.equal(loaded.tree.platform, "android");
+				assert.equal(
+					execTreeCompatible(loaded.tree, {
+						suite: "app-mobile-e2e",
+						platform: "android",
+						snapshotSha: SHA,
+					}),
+					null,
+				);
+			}
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
 	});
 });
