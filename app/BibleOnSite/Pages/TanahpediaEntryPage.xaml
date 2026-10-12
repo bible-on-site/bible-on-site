@@ -4,6 +4,7 @@
              xmlns:viewmodels="clr-namespace:BibleOnSite.ViewModels"
              xmlns:models="clr-namespace:BibleOnSite.Models"
              xmlns:controls="clr-namespace:BibleOnSite.Controls"
+             xmlns:helpers="clr-namespace:BibleOnSite.Helpers"
              x:Class="BibleOnSite.Pages.TanahpediaEntryPage"
              x:Name="Page"
              x:DataType="viewmodels:TanahpediaEntryViewModel"
@@ -68,6 +69,75 @@
                             </BindableLayout.ItemTemplate>
                         </FlexLayout>
 
+                        <!-- Map of the entry's linked PLACE entities -->
+                        <VerticalStackLayout Spacing="6"
+                                             IsVisible="{Binding HasMap}">
+                            <Label Text="מפה"
+                                   FontSize="18"
+                                   FontAttributes="Bold"
+                                   TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
+                            <controls:TanahpediaPlacesMap Markers="{Binding PlaceMarkers}"
+                                                          EntryTappedCommand="{Binding OpenEntryCommand}"
+                                                          HeightRequest="300"/>
+                        </VerticalStackLayout>
+
+                        <!-- Family sections of the entry's PERSON entity —
+                             source-backed relationships (הורים/בני זוג/ילדים/אחים) -->
+                        <VerticalStackLayout Spacing="12"
+                                             IsVisible="{Binding HasFamily}"
+                                             BindableLayout.ItemsSource="{Binding FamilySections}">
+                            <BindableLayout.ItemTemplate>
+                                <DataTemplate x:DataType="helpers:TanahpediaFamilySection">
+                                    <VerticalStackLayout Spacing="4">
+                                        <Label Text="{Binding Title}"
+                                               FontSize="17"
+                                               FontAttributes="Bold"
+                                               TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
+                                        <VerticalStackLayout Spacing="2"
+                                                             BindableLayout.ItemsSource="{Binding Rows}">
+                                            <BindableLayout.ItemTemplate>
+                                                <DataTemplate x:DataType="helpers:TanahpediaFamilyRow">
+                                                    <VerticalStackLayout Spacing="0">
+                                                        <FlexLayout Wrap="Wrap"
+                                                                    AlignItems="Center">
+                                                            <Label Text="{Binding DisplayName}"
+                                                                   FontSize="15"
+                                                                   FontAttributes="Bold"
+                                                                   TextColor="{StaticResource Primary}"
+                                                                   TextDecorations="Underline"
+                                                                   IsVisible="{Binding IsLink}">
+                                                                <Label.GestureRecognizers>
+                                                                    <TapGestureRecognizer Command="{Binding Source={x:Reference Page}, Path=BindingContext.OpenEntryCommand}"
+                                                                                          CommandParameter="{Binding EntryUniqueName}"/>
+                                                                </Label.GestureRecognizers>
+                                                            </Label>
+                                                            <Label Text="{Binding DisplayName}"
+                                                                   FontSize="15"
+                                                                   FontAttributes="Bold"
+                                                                   IsVisible="{Binding IsLink, Converter={StaticResource InvertedBoolConverter}}"
+                                                                   TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
+                                                            <Label Text="{Binding SexMark, StringFormat=' ({0})'}"
+                                                                   FontSize="13"
+                                                                   IsVisible="{Binding SexMark, Converter={StaticResource StringNotEmptyConverter}}"
+                                                                   TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
+                                                            <Label Text="{Binding Meta, StringFormat=' · {0}'}"
+                                                                   FontSize="13"
+                                                                   IsVisible="{Binding HasMeta}"
+                                                                   TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
+                                                        </FlexLayout>
+                                                        <Label Text="{Binding SourceCitation, StringFormat='מקור: {0}'}"
+                                                               FontSize="12"
+                                                               IsVisible="{Binding HasSource}"
+                                                               TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
+                                                    </VerticalStackLayout>
+                                                </DataTemplate>
+                                            </BindableLayout.ItemTemplate>
+                                        </VerticalStackLayout>
+                                    </VerticalStackLayout>
+                                </DataTemplate>
+                            </BindableLayout.ItemTemplate>
+                        </VerticalStackLayout>
+
                         <!-- Admin-authored HTML body -->
                         <controls:HtmlView x:Name="EntryHtml"
                                            HtmlContent="{Binding Content}"
@@ -77,11 +147,11 @@
                                            IsVisible="{Binding HasContent}"/>
 
                         <!-- No-content notice (website parity: only when there is
-                             nothing else to show) -->
+                             nothing else to show — no content, map or occurrences) -->
                         <Label Text="אין תוכן עדיין לערך זה."
                                FontSize="14"
                                HorizontalTextAlignment="Center"
-                               IsVisible="{Binding HasContent, Converter={StaticResource InvertedBoolConverter}}"
+                               IsVisible="{Binding ShowNoContentNotice}"
                                TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
 
                         <!-- מופעים בתנ"ך -->
@@ -107,9 +177,9 @@
                                                    TextColor="{StaticResource Primary}"
                                                    TextDecorations="Underline"/>
                                             <Label Grid.Column="1"
-                                                   Text="{Binding VerseText}"
+                                                   FormattedText="{Binding VerseFormatted}"
                                                    FontSize="13"
-                                                   MaxLines="2"
+                                                   MaxLines="3"
                                                    LineBreakMode="TailTruncation"
                                                    TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
                                         </Grid>
