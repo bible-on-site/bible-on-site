@@ -177,6 +177,12 @@ public abstract class MobilePlatformAdapter
             // including POST /session. A cold app launch can exceed 90s; keep the
             // server default (240s) inside the five-minute IOSDriver budget.
             options.AddAdditionalAppiumOption("wdaConnectionTimeout", 240000);
+            if (configuration.WdaLocalPort is { } wdaLocalPort)
+            {
+                // A simulator's WDA binds the host loopback, so two devices on
+                // one runner need distinct listen ports (#2083 shard peers).
+                options.AddAdditionalAppiumOption("wdaLocalPort", wdaLocalPort);
+            }
             // XCTest gates each proxied command on the app main thread going
             // idle for this threshold. The shared-CPU simulator rarely stays
             // quiet for even one second during reader scroll churn (perushim
