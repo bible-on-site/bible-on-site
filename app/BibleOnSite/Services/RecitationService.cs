@@ -194,7 +194,8 @@ public sealed class RecitationService
                 return;
             }
 
-            var keep = _tracks.Values.Select(t => t.AudioSha256 + ".mp3").ToHashSet();
+            // Keep original downloads until their verified playback replacements install.
+            var keep = _tracks.Values.SelectMany(t => new[] { t.PlaybackFileName, t.AudioSha256 + ".mp3" }).ToHashSet();
             foreach (var file in Directory.EnumerateFiles(DirectoryPath).ToList())
             {
                 if (keep.Contains(Path.GetFileName(file)))
