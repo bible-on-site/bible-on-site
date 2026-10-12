@@ -4,10 +4,13 @@
  *
  * The params share the unit reader's scope names — `perush` and
  * `haftaraPerush` are the same selections the flat unit pages use for
- * in-place commentary (issue #2190), so a selection survives the
- * flat<->book mode toggle: `?perush=` means the same perush on the
- * flat unit page and on its `?book` blank page. `article` and
- * `haftaraArticle` do the same for the article carousels.
+ * in-place commentary (issue #2190), so a perush selection survives
+ * the flat<->book mode toggle: `?perush=` opens the same perush on
+ * the flat unit page and on its `?book` blank page. `article` and
+ * `haftaraArticle` are book-side selections only: flat unit pages keep
+ * opening articles on their canonical /929 routes, so an article
+ * param rides the flat URL untouched (the toggle preserves it) and
+ * regains its selection when the reader returns to the book.
  *
  * Every content route also names its book spread — Torah content rides
  * on `/יחידה?book`, Haftarah content on `/יחידה?book&haftara` — so the
