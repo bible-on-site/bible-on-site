@@ -29,6 +29,9 @@ public partial class AppShell : Shell
 		Routing.RegisterRoute("DonationsPage", typeof(DonationsPage));
 		Routing.RegisterRoute("TosPage", typeof(TosPage));
 		Routing.RegisterRoute("PreferencesPage", typeof(PreferencesPage));
+		Routing.RegisterRoute("TanahpediaPage", typeof(TanahpediaPage));
+		Routing.RegisterRoute("tanahpediaCategory", typeof(TanahpediaEntityTypePage));
+		Routing.RegisterRoute("tanahpediaEntry", typeof(TanahpediaEntryPage));
 		Routing.RegisterRoute("ParashaListPage", typeof(ParashaListPage));
 		Routing.RegisterRoute("ParashaPage", typeof(ParashaPage));
 		Routing.RegisterRoute(AppRoutes.LearningCalendar, typeof(LearningCalendarPage));
@@ -218,6 +221,12 @@ public partial class AppShell : Shell
 	{
 		FlyoutIsPresented = false;
 		await GoToAsync(AppRoutes.FlyoutPage("PerekPage", CurrentState.Location.OriginalString));
+	}
+
+	private async void OnTanahpediaTapped(object? sender, TappedEventArgs e)
+	{
+		FlyoutIsPresented = false;
+		await GoToAsync(AppRoutes.FlyoutPage("TanahpediaPage", CurrentState.Location.OriginalString));
 	}
 
 	private async void OnLearningCalendarTapped(object? sender, TappedEventArgs e)

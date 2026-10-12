@@ -12,7 +12,7 @@ from alignment import load_chapters, text_hash, words_for
 from model_versions import ALIGN_MODEL, ALIGN_REVISION, ASR_MODEL, ASR_REVISION
 from trusted import TRUSTED_PIPELINE, approve_alignment
 
-DIGEST = "5dc503afc58ce3348eab937861e8f6ad4b65eef2b4779d078f8fa42d90a62c26"
+DIGEST = "5455071eaeaaee886c75367a9dd959aa95a49eae224c1b5e7753cebfd28eefb5"
 PROFILE = "selected-heads-resident-self"
 
 

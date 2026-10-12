@@ -5,6 +5,8 @@
 export const PEREK_VIEW_MODE_STORAGE_KEY = "perekViewMode" as const;
 /** Separate key for the פרשה reader — its book preference is its own section's choice, not the /929 division's. */
 export const PARASHA_VIEW_MODE_STORAGE_KEY = "parashaViewMode" as const;
+/** Separate key for the מסורה reader — its book preference is its own section's choice. */
+export const MASORA_VIEW_MODE_STORAGE_KEY = "masoraViewMode" as const;
 
 export type PerekViewMode = "book" | "seo";
 
@@ -42,6 +44,14 @@ export function getStoredParashaViewMode(): PerekViewMode | null {
 
 export function setStoredParashaViewMode(mode: PerekViewMode): void {
 	setStoredViewMode(PARASHA_VIEW_MODE_STORAGE_KEY, mode);
+}
+
+export function getStoredMasoraViewMode(): PerekViewMode | null {
+	return getStoredViewMode(MASORA_VIEW_MODE_STORAGE_KEY);
+}
+
+export function setStoredMasoraViewMode(mode: PerekViewMode): void {
+	setStoredViewMode(MASORA_VIEW_MODE_STORAGE_KEY, mode);
 }
 
 /**

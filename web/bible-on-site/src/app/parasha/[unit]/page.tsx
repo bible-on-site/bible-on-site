@@ -2,13 +2,12 @@ import type { Metadata } from "next";
 import { unstable_cache } from "next/cache";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
-import { getArticleSummariesForRanges } from "@/lib/articles/service";
-import { getPerushimForRanges } from "@/lib/perushim/service";
-import { canonicalPasukCount, rangePerekSources } from "@/lib/reading/queries";
-import { unitEquivalentPerekId, unitPerekIds } from "@/lib/reading/ranges";
-import { fetchAllEntityRefs } from "@/lib/tanahpedia/perek-entity-refs";
-import { SITE_NAME } from "@/lib/seo/jsonld";
-import { getPerekByPerekId } from "@/data/perek-dto";
+import { ArticlesSection } from "@/app/929/[number]/components/ArticlesSection";
+import { PerushimSection } from "@/app/929/[number]/components/PerushimSection";
+import perekStyles from "@/app/929/[number]/page.module.css";
+import { UnitPerushimSection } from "@/app/components/reading/UnitPerushimSection";
+import { SharedUnitText } from "@/app/components/reading/UnitText";
+import { unitPerushHref } from "@/app/components/reading/unit-perush";
 import {
 	getAdjacentParashaUnits,
 	getParashaEntry,
@@ -20,12 +19,13 @@ import {
 	parashaRefSpan,
 	rangesRefSpans,
 } from "@/data/parasha/parasha-units";
-import { SharedUnitText } from "@/app/components/reading/UnitText";
-import { UnitPerushimSection } from "@/app/components/reading/UnitPerushimSection";
-import { unitPerushHref } from "@/app/components/reading/unit-perush";
-import { ArticlesSection } from "@/app/929/[number]/components/ArticlesSection";
-import { PerushimSection } from "@/app/929/[number]/components/PerushimSection";
-import perekStyles from "@/app/929/[number]/page.module.css";
+import { getPerekByPerekId } from "@/data/perek-dto";
+import { getArticleSummariesForRanges } from "@/lib/articles/service";
+import { getPerushimForRanges } from "@/lib/perushim/service";
+import { canonicalPasukCount, rangePerekSources } from "@/lib/reading/queries";
+import { unitEquivalentPerekId, unitPerekIds } from "@/lib/reading/ranges";
+import { SITE_NAME } from "@/lib/seo/jsonld";
+import { fetchAllEntityRefs } from "@/lib/tanahpedia/perek-entity-refs";
 import { HaftaraSection } from "./components/HaftaraSection";
 import { ParashaSeferComposite } from "./components/ParashaSeferComposite";
 import { UnitBreadcrumb } from "./components/UnitBreadcrumb";
@@ -171,103 +171,13 @@ export default async function ParashaUnitPage({
 	}
 
 	return (
-		<div className={perekStyles.perekContainer}>
-			<UnitBreadcrumb unit={unit} />
-			<h1 className={perekStyles.perekHeading}>
-				פרשת {unit.heading}
-				<span className={styles.refSpan}>{parashaRefSpan(unit)}</span>
-			</h1>
-			<h2 className={styles.readingLabel}>קריאת התורה</h2>
-			<SharedUnitText
-				ranges={unit.ranges}
-				entityRefsByPerek={entityRefsByPerek}
-				pasukCount={canonicalPasukCount}
-				scrollScope="torah"
-			/>
-			<HaftaraSection unit={unit} entityRefsByPerek={entityRefsByPerek} />
-			<UnitNav prev={prev} next={next} />
-
-			{/* Perushim/articles scoped to the parasha's Torah ranges —
-				commentary opens in place, bounded to the unit's canonical
-				bounds rather than redirecting to /929 (issue #2190). The
-				Suspense fallback keeps the same carousel with
-				division-internal perush links for prerendering. */}
-			<Suspense
-				fallback={
-					<PerushimSection
-						perekId={unit.ranges[0].start.perekId}
-						perushim={perushim}
-						title="פרשנים על הפרשה"
-						emptyMessage="אין פרשנות לפרשה זו"
-						hrefForPerush={(perush) =>
-							unitPerushHref(
-								`${PARASHA_DIVISION.rootPath}/${unitId}`,
-								"torah",
-								perush.name,
-							)
-						}
-					/>
-				}
-			>
-				<UnitPerushimSection
-					division="parasha"
-					unitId={unitId}
-					scope="torah"
-					unitPath={`${PARASHA_DIVISION.rootPath}/${unitId}`}
-					perekId={unit.ranges[0].start.perekId}
-					perushim={perushim}
-					title="פרשנים על הפרשה"
-					emptyMessage="אין פרשנות לפרשה זו"
-					perekSources={rangePerekSources(unit.ranges)}
-				/>
-			</Suspense>
-			<ArticlesSection
-				articles={articles}
-				title="מאמרים על הפרשה"
-				emptyMessage="אין מאמרים לפרשה זו"
-			/>
-
-			{/* Perushim/articles scoped to the Haftarah ranges — the
-				"haftara" scope bounds commentary to the union of the unit's
-				auxiliary readings and keeps a separate URL param so both
-				scopes can stay open independently. */}
-			<Suspense
-				fallback={
-					<PerushimSection
-						perekId={auxPerekId ?? unit.ranges[0].start.perekId}
-						perushim={haftaraPerushim}
-						title="פרשנים על ההפטרה"
-						emptyMessage="אין פרשנות להפטרה זו"
-						hrefForPerush={(perush) =>
-							unitPerushHref(
-								`${PARASHA_DIVISION.rootPath}/${unitId}`,
-								"haftara",
-								perush.name,
-							)
-						}
-					/>
-				}
-			>
-				<UnitPerushimSection
-					division="parasha"
-					unitId={unitId}
-					scope="haftara"
-					unitPath={`${PARASHA_DIVISION.rootPath}/${unitId}`}
-					perekId={auxPerekId ?? unit.ranges[0].start.perekId}
-					perushim={haftaraPerushim}
-					title="פרשנים על ההפטרה"
-					emptyMessage="אין פרשנות להפטרה זו"
-					perekSources={rangePerekSources(parashaAuxiliaryRanges(unit))}
-				/>
-			</Suspense>
-			<ArticlesSection
-				articles={haftaraArticles}
-				title="מאמרים על ההפטרה"
-				emptyMessage="אין מאמרים להפטרה זו"
-			/>
-
+		<>
 			{/* useSearchParams inside the composite requires a boundary so
-			 * the static shell can prerender (same pattern as /929). */}
+			 * the static shell can prerender (same pattern as /929). The
+			 * overlay stays OUTSIDE .seo-content — book view hides that
+			 * container, and the composite inside it would hide itself.
+			 * The current unit's flat-page summaries double as its book
+			 * blank pages' carousel data; every other unit loads lazily. */}
 			<Suspense>
 				<ParashaSeferComposite
 					units={bookUnits}
@@ -275,8 +185,107 @@ export default async function ParashaUnitPage({
 					currentUnitId={unitId}
 					entityRefsByPerek={entityRefsByPerek}
 					perekSources={bookPerekSources}
+					articles={articles}
+					perushim={perushim}
+					haftaraArticles={haftaraArticles}
+					haftaraPerushim={haftaraPerushim}
 				/>
 			</Suspense>
-		</div>
+			<div className={`${perekStyles.perekContainer} seo-content`}>
+				<UnitBreadcrumb unit={unit} />
+				<h1 className={perekStyles.perekHeading}>
+					פרשת {unit.heading}
+					<span className={styles.refSpan}>{parashaRefSpan(unit)}</span>
+				</h1>
+				<h2 className={styles.readingLabel}>קריאת התורה</h2>
+				<SharedUnitText
+					ranges={unit.ranges}
+					entityRefsByPerek={entityRefsByPerek}
+					pasukCount={canonicalPasukCount}
+					scrollScope="torah"
+				/>
+				<HaftaraSection unit={unit} entityRefsByPerek={entityRefsByPerek} />
+				<UnitNav prev={prev} next={next} />
+
+				{/* Perushim/articles scoped to the parasha's Torah ranges —
+					commentary opens in place, bounded to the unit's canonical
+					bounds rather than redirecting to /929 (issue #2190). The
+					Suspense fallback keeps the same carousel with
+					division-internal perush links for prerendering. */}
+				<Suspense
+					fallback={
+						<PerushimSection
+							perekId={unit.ranges[0].start.perekId}
+							perushim={perushim}
+							title="פרשנים על הפרשה"
+							emptyMessage="אין פרשנות לפרשה זו"
+							hrefForPerush={(perush) =>
+								unitPerushHref(
+									`${PARASHA_DIVISION.rootPath}/${unitId}`,
+									"torah",
+									perush.name,
+								)
+							}
+						/>
+					}
+				>
+					<UnitPerushimSection
+						division="parasha"
+						unitId={unitId}
+						scope="torah"
+						unitPath={`${PARASHA_DIVISION.rootPath}/${unitId}`}
+						perekId={unit.ranges[0].start.perekId}
+						perushim={perushim}
+						title="פרשנים על הפרשה"
+						emptyMessage="אין פרשנות לפרשה זו"
+						perekSources={rangePerekSources(unit.ranges)}
+					/>
+				</Suspense>
+				<ArticlesSection
+					articles={articles}
+					title="מאמרים על הפרשה"
+					emptyMessage="אין מאמרים לפרשה זו"
+				/>
+
+				{/* Perushim/articles scoped to the Haftarah ranges — the
+					"haftara" scope bounds commentary to the union of the unit's
+					auxiliary readings and keeps a separate URL param so both
+					scopes can stay open independently. */}
+				<Suspense
+					fallback={
+						<PerushimSection
+							perekId={auxPerekId ?? unit.ranges[0].start.perekId}
+							perushim={haftaraPerushim}
+							title="פרשנים על ההפטרה"
+							emptyMessage="אין פרשנות להפטרה זו"
+							hrefForPerush={(perush) =>
+								unitPerushHref(
+									`${PARASHA_DIVISION.rootPath}/${unitId}`,
+									"haftara",
+									perush.name,
+								)
+							}
+						/>
+					}
+				>
+					<UnitPerushimSection
+						division="parasha"
+						unitId={unitId}
+						scope="haftara"
+						unitPath={`${PARASHA_DIVISION.rootPath}/${unitId}`}
+						perekId={auxPerekId ?? unit.ranges[0].start.perekId}
+						perushim={haftaraPerushim}
+						title="פרשנים על ההפטרה"
+						emptyMessage="אין פרשנות להפטרה זו"
+						perekSources={rangePerekSources(parashaAuxiliaryRanges(unit))}
+					/>
+				</Suspense>
+				<ArticlesSection
+					articles={haftaraArticles}
+					title="מאמרים על ההפטרה"
+					emptyMessage="אין מאמרים להפטרה זו"
+				/>
+			</div>
+		</>
 	);
 }
