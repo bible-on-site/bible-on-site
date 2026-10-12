@@ -29,6 +29,8 @@ public partial class AppShell : Shell
 		Routing.RegisterRoute("DonationsPage", typeof(DonationsPage));
 		Routing.RegisterRoute("TosPage", typeof(TosPage));
 		Routing.RegisterRoute("PreferencesPage", typeof(PreferencesPage));
+		Routing.RegisterRoute("ParashaListPage", typeof(ParashaListPage));
+		Routing.RegisterRoute("ParashaPage", typeof(ParashaPage));
 		Routing.RegisterRoute(AppRoutes.LearningCalendar, typeof(LearningCalendarPage));
 		Routing.RegisterRoute(AppRoutes.CalendarReader, typeof(PerekPage));
 		Routing.RegisterRoute(AppRoutes.SearchReader, typeof(PerekPage));
@@ -225,6 +227,12 @@ public partial class AppShell : Shell
 	{
 		FlyoutIsPresented = false;
 		await GoToAsync(AppRoutes.FlyoutPage(AppRoutes.Masora, CurrentState.Location.OriginalString));
+	}
+
+	private async void OnParashaTapped(object? sender, TappedEventArgs e)
+	{
+		FlyoutIsPresented = false;
+		await GoToAsync(AppRoutes.FlyoutPage("ParashaListPage", CurrentState.Location.OriginalString));
 	}
 
 	private async void OnAuthorsTapped(object? sender, TappedEventArgs e)

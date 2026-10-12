@@ -46,19 +46,12 @@ public class MasoraModelTests
     public void PasukRow_ExposesPasukDisplayData()
     {
         var pasuk = new Pasuk { PasukNum = 3, Text = "א ב", Segments = new List<PasukSegment>() };
-        var row = new MasoraPasukRow(pasuk, 2, "ספר ב", 20, 12);
+        var row = new MasoraPasukRow(pasuk, 2, 20);
 
         row.Pasuk.Should().BeSameAs(pasuk);
         row.PerekId.Should().Be(2);
-        row.PerekLabel.Should().Be("ספר ב");
-        row.HasPerekLabel.Should().BeTrue();
         row.PasukNum.Should().Be(3);
-        row.PasukNumHeb.Should().Be(pasuk.PasukNumHeb);
         row.FontSize.Should().Be(20);
-        row.MarkerFontSize.Should().Be(12);
-
-        var unlabeled = new MasoraPasukRow(pasuk, 2, null, 20, 12);
-        unlabeled.HasPerekLabel.Should().BeFalse();
     }
 
     [Fact]
