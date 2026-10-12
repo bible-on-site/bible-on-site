@@ -24,6 +24,7 @@
             <converters:PerushCheckedConverter x:Key="PerushCheckedConverter"/>
             <converters:InvertedBoolConverter x:Key="InvertedBoolConverter"/>
             <converters:PasukDisplayItemsConverter x:Key="PasukDisplayItemsConverter"/>
+            <converters:PasukMarkerTextConverter x:Key="PasukMarkerTextConverter" MarkerColor="{StaticResource Primary}"/>
             <x:Double x:Key="BottomBarTotalHeight">90</x:Double>
         </ResourceDictionary>
     </ContentPage.Resources>
@@ -266,6 +267,14 @@
                                        HorizontalTextAlignment="Center"
                                        Padding="16,12"
                                        TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryLight}}">
+                                    <Label.Triggers>
+                                        <!-- Keep wrapped header text clear of the floating play button -->
+                                        <DataTrigger TargetType="Label"
+                                                     Binding="{Binding BindingContext.ShowHeaderPlayButton, Source={x:Reference PerekPageRoot}}"
+                                                     Value="True">
+                                            <Setter Property="Padding" Value="56,12"/>
+                                        </DataTrigger>
+                                    </Label.Triggers>
                                     <Label.GestureRecognizers>
                                         <PointerGestureRecognizer PointerPressed="OnHeaderPointerPressed" PointerReleased="OnHeaderPointerReleased" PointerMoved="OnHeaderPointerMoved"/>
                                     </Label.GestureRecognizers>
@@ -345,48 +354,43 @@
                                                                              LongPressed="OnPasukLongPressed"
                                                                              NativeTapped="OnPasukNativeTapped"/>
                                             </Border.Behaviors>
-                                            <Grid ColumnDefinitions="40,*"
-                                                  FlowDirection="RightToLeft">
-                                                <Label Grid.Column="0"
-                                                       Text="{Binding PasukNumHeb}"
-                                                       AutomationId="PasukNumber"
-                                                       FontSize="{Binding MarkerFontSize}"
-                                                       FontAttributes="Bold"
-                                                       VerticalTextAlignment="Start"
-                                                       HorizontalTextAlignment="Center"
-                                                       Margin="0,1.5,0,0"
-                                                       TextColor="{StaticResource Primary}"/>
-                                                <VerticalStackLayout Grid.Column="1" Spacing="2">
-                                                    <controls:PasukTextLabel AutomationId="PasukText"
-                                                           FormattedText="{Binding Pasuk.FormattedText}"
-                                                           FontSize="{Binding FontSize}"
-                                                           FlowDirection="RightToLeft"
-                                                           LineBreakMode="WordWrap"
-                                                           LineHeight="1.4"/>
-                                                    <!-- Perushim render once per pair in שניים מקרא mode -->
-                                                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding Pasuk.PerushNotes}"
-                                                                         IsVisible="{Binding IsFirstCopy}"
-                                                                         Spacing="2"
-                                                                         Margin="0,4,0,0">
-                                                        <BindableLayout.ItemTemplate>
-                                                            <DataTemplate x:DataType="models:PerushNoteDisplay">
-                                                                <VerticalStackLayout Spacing="2">
-                                                                    <Label Text="{Binding PerushName}"
-                                                                           AutomationId="InlinePerushName"
-                                                                           FontSize="{DynamicResource PerushNameFontSize}"
-                                                                           FontAttributes="Bold"
-                                                                           TextColor="{StaticResource Primary}"/>
-                                                                    <controls:HtmlView HtmlContent="{Binding DisplayContent}"
-                                                                                      FontSize="{DynamicResource PerushContentFontSize}"
-                                                                                      TextAlignment="Justify"
-                                                                                      TextDirection="Rtl"
-                                                                                      LineHeight="1.4"/>
-                                                                </VerticalStackLayout>
-                                                            </DataTemplate>
-                                                        </BindableLayout.ItemTemplate>
-                                                    </VerticalStackLayout>
+                                            <VerticalStackLayout Spacing="2">
+                                                <controls:PasukTextLabel AutomationId="PasukText"
+                                                         FontSize="{Binding FontSize}"
+                                                         FlowDirection="RightToLeft"
+                                                         LineBreakMode="WordWrap"
+                                                         LineHeight="1.4">
+                                                    <controls:PasukTextLabel.FormattedText>
+                                                        <MultiBinding Converter="{StaticResource PasukMarkerTextConverter}">
+                                                            <Binding Path="Pasuk.FormattedText"/>
+                                                            <Binding Path="PasukNumHeb"/>
+                                                            <Binding Path="MarkerFontSize"/>
+                                                        </MultiBinding>
+                                                    </controls:PasukTextLabel.FormattedText>
+                                                </controls:PasukTextLabel>
+                                                <!-- Perushim render once per pair in שניים מקרא mode -->
+                                                <VerticalStackLayout BindableLayout.ItemsSource="{Binding Pasuk.PerushNotes}"
+                                                                     IsVisible="{Binding IsFirstCopy}"
+                                                                     Spacing="2"
+                                                                     Margin="0,4,0,0">
+                                                    <BindableLayout.ItemTemplate>
+                                                        <DataTemplate x:DataType="models:PerushNoteDisplay">
+                                                            <VerticalStackLayout Spacing="2">
+                                                                <Label Text="{Binding PerushName}"
+                                                                       AutomationId="InlinePerushName"
+                                                                       FontSize="{DynamicResource PerushNameFontSize}"
+                                                                       FontAttributes="Bold"
+                                                                       TextColor="{StaticResource Primary}"/>
+                                                                <controls:HtmlView HtmlContent="{Binding DisplayContent}"
+                                                                                  FontSize="{DynamicResource PerushContentFontSize}"
+                                                                                  TextAlignment="Justify"
+                                                                                  TextDirection="Rtl"
+                                                                                  LineHeight="1.4"/>
+                                                            </VerticalStackLayout>
+                                                        </DataTemplate>
+                                                    </BindableLayout.ItemTemplate>
                                                 </VerticalStackLayout>
-                                            </Grid>
+                                            </VerticalStackLayout>
                                         </Border>
                                     </DataTemplate>
                                 </CollectionView.ItemTemplate>
@@ -783,6 +787,19 @@
                         AbsoluteLayout.LayoutFlags="PositionProportional"/>
 
             </AbsoluteLayout>
+        </Grid>
+
+        <!-- Scrim: dims the page (verses included) while the circular menu is open;
+             a tap anywhere dismisses the menu instead of hitting what is behind it -->
+        <Grid x:Name="CircularMenuScrim"
+              Grid.Row="1"
+              ZIndex="140"
+              IsVisible="False"
+              Opacity="0"
+              BackgroundColor="#66000000">
+            <Grid.GestureRecognizers>
+                <TapGestureRecognizer Tapped="OnOverlayTapped"/>
+            </Grid.GestureRecognizers>
         </Grid>
 
         <!-- Satellite buttons overlay - uses AbsoluteLayout for precise positioning -->

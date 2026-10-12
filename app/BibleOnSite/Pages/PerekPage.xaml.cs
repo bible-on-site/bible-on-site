@@ -1315,6 +1315,8 @@ public partial class PerekPage : ContentPage, IQueryAttributable
             button.Opacity = 0;
         }
 
+        CircularMenuScrim.IsVisible = true;
+
         // Change FAB icon to X
         CircularMenuButton.Text = Fonts.FluentUI.dismiss_24_regular;
         CircularMenuButton.BackgroundColor = Colors.Red;
@@ -1322,7 +1324,8 @@ public partial class PerekPage : ContentPage, IQueryAttributable
         // Animate FAB rotation and fade in all buttons (disabled = 0.4, enabled = 1)
         var animations = new List<Task>
         {
-            CircularMenuButton.RotateToAsync(180, 250, Easing.SpringOut)
+            CircularMenuButton.RotateToAsync(180, 250, Easing.SpringOut),
+            CircularMenuScrim.FadeToAsync(1, 200)
         };
 
         foreach (var button in buttons)
@@ -1349,7 +1352,8 @@ public partial class PerekPage : ContentPage, IQueryAttributable
         // Animate FAB rotation and fade out all buttons
         var animations = new List<Task>
         {
-            CircularMenuButton.RotateToAsync(0, 200, Easing.SpringOut)
+            CircularMenuButton.RotateToAsync(0, 200, Easing.SpringOut),
+            CircularMenuScrim.FadeToAsync(0, 150)
         };
 
         foreach (var button in buttons)
@@ -1358,6 +1362,14 @@ public partial class PerekPage : ContentPage, IQueryAttributable
         }
 
         await Task.WhenAll(animations);
+
+        // A reopen during the close animation wins — leave scrim and satellites alone
+        if (_isMenuOpen)
+        {
+            return;
+        }
+
+        CircularMenuScrim.IsVisible = false;
 
         // Disable clicks on hidden buttons
         foreach (var button in buttons)
@@ -2135,6 +2147,8 @@ public partial class PerekPage : ContentPage, IQueryAttributable
             CircularMenuButton.Text = Fonts.FluentUI.navigation_24_regular;
             CircularMenuButton.BackgroundColor = (Color)Microsoft.Maui.Controls.Application.Current!.Resources["Primary"];
             CircularMenuButton.Rotation = 0;
+            CircularMenuScrim.Opacity = 0;
+            CircularMenuScrim.IsVisible = false;
         }
 
         // Hide Shell navigation bar (no TabBar in this app - single page per FlyoutItem)
