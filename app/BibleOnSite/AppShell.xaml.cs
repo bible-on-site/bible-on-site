@@ -32,6 +32,12 @@ public partial class AppShell : Shell
 		Routing.RegisterRoute("TanahpediaPage", typeof(TanahpediaPage));
 		Routing.RegisterRoute("tanahpediaCategory", typeof(TanahpediaEntityTypePage));
 		Routing.RegisterRoute("tanahpediaEntry", typeof(TanahpediaEntryPage));
+		Routing.RegisterRoute(AppRoutes.RecitationPreferences, typeof(RecitationPreferencesPage));
+		Routing.RegisterRoute(AppRoutes.DisplayPreferences, typeof(DisplayPreferencesPage));
+		Routing.RegisterRoute(AppRoutes.PerekPreferences, typeof(PerekPreferencesPage));
+		Routing.RegisterRoute(AppRoutes.ExtensionPacks, typeof(ExtensionPacksPage));
+		Routing.RegisterRoute(AppRoutes.SoundPreferences, typeof(SoundPreferencesPage));
+		Routing.RegisterRoute(AppRoutes.SupportPreferences, typeof(SupportPreferencesPage));
 		Routing.RegisterRoute("ParashaListPage", typeof(ParashaListPage));
 		Routing.RegisterRoute("ParashaPage", typeof(ParashaPage));
 		Routing.RegisterRoute(AppRoutes.LearningCalendar, typeof(LearningCalendarPage));
