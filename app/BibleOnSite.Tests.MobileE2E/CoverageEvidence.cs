@@ -36,7 +36,8 @@ internal static class CoverageEvidence
 
     /// <summary>Starts recording for one scenario attempt.</summary>
     /// <param name="test">Stable xUnit identity: Namespace.Class.Method.</param>
-    /// <param name="fileBase">Artifact filename base (the scenario name).</param>
+    /// <param name="fileBase">Artifact filename base — the full test identity, so
+    /// same-named methods in different classes never collide on disk.</param>
     internal static void Begin(string test, MobilePlatform platform, string artifactsDirectory, string fileBase)
     {
         _current.Value = new Scope(test, platform, Path.Join(artifactsDirectory, "coverage-evidence"), fileBase);
