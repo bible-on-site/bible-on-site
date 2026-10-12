@@ -34,9 +34,11 @@ Canonical website source: `web/bible-on-site/src/lib/reading/contract.ts`
   heading, ranges, auxiliaryReadings?, closingBreak? }`. `unitId` is a
   stable contiguous id within the division; `slug` is the decimal
   `unitId`; `order` is 1-based within the parent sefer; `heading` is the
-  display scripture-reference span. `closingBreak` records the
-  ptuha/stuma marker that ends a Masoretic unit (`null` for a sefer's
-  final unit, closed by the sefer end).
+  unit's display identity inside the division's own hierarchy — for
+  מסורה units the sefer name plus the parasha ordinal
+  ("בראשית פרשה ח"), with no conventional perek/pasuk references.
+  `closingBreak` records the ptuha/stuma marker that ends a Masoretic
+  unit (`null` for a sefer's final unit, closed by the sefer end).
 - **`ReadingDivision`** — `{ id, version, rootPath, menuLabel }`: the
   instance configuration behind which shared reader components run.
 
@@ -53,6 +55,12 @@ the canonical corpus:
   canonical coordinates even when a unit crosses perakim).
 - `unitPerekIds` returns the distinct overlapping canonical perek ids —
   the input for commentary, article, and entity-ref queries.
+- The מסורה reader renders no conventional chapter apparatus (no perek
+  dividers, no chapter pasuk numbers). Each rendered pasuk carries its
+  1-based position inside the parasha — one continuous count across
+  slices; segment-clipped boundary pesukim keep their position with a
+  suffix (`(התחלה)` opening mid-verse, `(סיום)` closing mid-verse,
+  `(קטע)` for a lone excerpt).
 - `rangeContainsCoordinate` / `getMasoraUnitContaining` implement the
   canonical-position → containing-unit direction. A bare
   `{ perekId, pasuk }` position resolves to the unit in which the pasuk
