@@ -1883,7 +1883,7 @@ jobs:
         run: |
           python -m venv data/recitation/.venv
           data/recitation/.venv/bin/python -m pip install torch==2.14.1 --index-url https://download.pytorch.org/whl/cpu
-          data/recitation/.venv/bin/python -m pip install numpy==2.5.3 transformers==5.18.0
+          data/recitation/.venv/bin/python -m pip install numpy==2.5.4 transformers==5.19.0
           cd data/recitation
           .venv/bin/python -m unittest -v
           .venv/bin/python publish.py
