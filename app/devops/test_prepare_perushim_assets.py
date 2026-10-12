@@ -19,20 +19,18 @@ def write_search_index(path: Path, notes_timestamp: int = 200) -> None:
                 ("notes", f"v4:{notes_timestamp}:n1"),
                 ("verses", "v4:2026-01-03 22:08:48 UTC:n1"),
             ])
-            statements = (
-                "CREATE TABLE verses_documents (rowid INTEGER PRIMARY KEY, Text TEXT, PerekId INTEGER, PasukNum INTEGER, PerushId INTEGER, SeferId INTEGER)",
-                "INSERT INTO verses_documents VALUES (1,'בראשית',1,1,0,1)",
-                "CREATE VIRTUAL TABLE verses USING fts5(Text, content='verses_documents', content_rowid='rowid')",
-                "INSERT INTO verses(rowid,Text) VALUES (1,'בראשית')",
-                "CREATE VIRTUAL TABLE verses_vocab USING fts5vocab(verses, 'row')",
-                "CREATE TABLE notes_documents (rowid INTEGER PRIMARY KEY, Text TEXT, PerekId INTEGER, PasukNum INTEGER, PerushId INTEGER, SeferId INTEGER)",
-                "INSERT INTO notes_documents VALUES (1,'בראשית',1,1,0,1)",
-                "CREATE VIRTUAL TABLE notes USING fts5(Text, content='notes_documents', content_rowid='rowid')",
-                "INSERT INTO notes(rowid,Text) VALUES (1,'בראשית')",
-                "CREATE VIRTUAL TABLE notes_vocab USING fts5vocab(notes, 'row')",
-            )
-            for statement in statements:
-                db.execute(statement)
+            db.executescript("""
+                CREATE TABLE verses_documents (rowid INTEGER PRIMARY KEY, Text TEXT, PerekId INTEGER, PasukNum INTEGER, PerushId INTEGER, SeferId INTEGER);
+                INSERT INTO verses_documents VALUES (1,'בראשית',1,1,0,1);
+                CREATE VIRTUAL TABLE verses USING fts5(Text, content='verses_documents', content_rowid='rowid');
+                INSERT INTO verses(rowid,Text) VALUES (1,'בראשית');
+                CREATE VIRTUAL TABLE verses_vocab USING fts5vocab(verses, 'row');
+                CREATE TABLE notes_documents (rowid INTEGER PRIMARY KEY, Text TEXT, PerekId INTEGER, PasukNum INTEGER, PerushId INTEGER, SeferId INTEGER);
+                INSERT INTO notes_documents VALUES (1,'בראשית',1,1,0,1);
+                CREATE VIRTUAL TABLE notes USING fts5(Text, content='notes_documents', content_rowid='rowid');
+                INSERT INTO notes(rowid,Text) VALUES (1,'בראשית');
+                CREATE VIRTUAL TABLE notes_vocab USING fts5vocab(notes, 'row');
+            """)
 
 
 class PreparePerushimAssetsTests(unittest.TestCase):
