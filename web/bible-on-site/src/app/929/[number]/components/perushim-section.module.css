@@ -172,6 +172,16 @@
 .pasukGroup {
   border-right: 3px solid #d4c9a8;
   padding-right: 12px;
+  scroll-margin-block-start: 8px;
+}
+
+/* Pasuk group highlighted after perek→perush pasuk navigation (mirrors the
+   standalone perush page's .noteHighlight). */
+.pasukGroup[data-pasuk-highlight] {
+  background: rgba(254, 243, 199, 0.95);
+  border-right-color: #f59e0b;
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.35);
+  border-radius: 3px;
 }
 
 .pasukLabel {
@@ -179,6 +189,24 @@
   font-weight: 700;
   color: #6b5835;
   margin-bottom: 6px;
+}
+
+/* Pasuk label rendered as a perek-navigation button in the book view. */
+.pasukLink {
+  appearance: none;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  display: inline-block;
+}
+
+.pasukLink:hover {
+  color: #5a4a2e;
+  text-decoration: underline;
 }
 
 .noteContent {
@@ -244,6 +272,16 @@
   .pasukLabel,
   .parshanSubtitle {
     color: #b8a578;
+  }
+
+  .pasukLink:hover {
+    color: #cbb98c;
+  }
+
+  .pasukGroup[data-pasuk-highlight] {
+    background: rgba(58, 47, 16, 0.95);
+    border-right-color: #92600b;
+    box-shadow: 0 0 0 2px rgba(146, 96, 11, 0.45);
   }
 
   .carousel {
