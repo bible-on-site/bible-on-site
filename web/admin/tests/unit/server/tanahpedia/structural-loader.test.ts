@@ -63,6 +63,29 @@ describe("loadEntryStructuralContext", () => {
 		expect(ctx.linkedEntities[0].person).toBeUndefined();
 	});
 
+	it("nulls person details when the name and sex rows are missing", async () => {
+		queryMock.mockResolvedValue([linkRow("PERSON")]);
+		queryOneMock
+			.mockResolvedValueOnce({ id: "p1" }) // tanahpedia_person
+			.mockResolvedValueOnce(null) // no main name row
+			.mockResolvedValueOnce(null); // no sex row
+		const ctx = await loadEntryStructuralContext("entry-1");
+		expect(ctx.linkedEntities[0].person).toEqual({
+			personId: "p1",
+			mainName: null,
+			mainNameRowId: null,
+			sex: null,
+			sexRowId: null,
+		});
+	});
+
+	it("leaves place undefined when there is no place row", async () => {
+		queryMock.mockResolvedValue([linkRow("PLACE")]);
+		queryOneMock.mockResolvedValue(null);
+		const ctx = await loadEntryStructuralContext("entry-1");
+		expect(ctx.linkedEntities[0].place).toBeUndefined();
+	});
+
 	it("loads place identifications and coerces numeric coordinates", async () => {
 		queryMock.mockResolvedValueOnce([linkRow("PLACE")]).mockResolvedValueOnce([
 			{ id: "i1", modern_name: "ירושלים", latitude: "31.7", longitude: 35.2 },

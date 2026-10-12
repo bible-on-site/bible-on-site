@@ -319,10 +319,17 @@ export default async function ArticlePage({
 					/>
 
 					{/* Perushim section - commentaries carousel */}
-					<PerushimSection perekId={perekId} perushim={perushim} />
+					<PerushimSection
+						perekId={perekId}
+						perushim={perushim}
+						scrollStorageKey={`perushim-perek-${perekId}`}
+					/>
 
 					{/* Articles carousel */}
-					<ArticlesSection articles={articles} />
+					<ArticlesSection
+						articles={articles}
+						scrollStorageKey={`articles-perek-${perekId}`}
+					/>
 				</div>
 			</>
 		);
@@ -417,10 +424,17 @@ export default async function ArticlePage({
 				/>
 
 				{/* Perushim section - commentaries carousel */}
-				<PerushimSection perekId={perekId} perushim={perushim} />
+				<PerushimSection
+					perekId={perekId}
+					perushim={perushim}
+					scrollStorageKey={`perushim-perek-${perekId}`}
+				/>
 
 				{/* Articles carousel */}
-				<ArticlesSection articles={articles} />
+				<ArticlesSection
+					articles={articles}
+					scrollStorageKey={`articles-perek-${perekId}`}
+				/>
 			</div>
 		</>
 	);
