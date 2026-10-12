@@ -1,6 +1,7 @@
 import Image from "next/image";
 import type { PerekIllustration } from "@/lib/seo/perek-illustrations";
 import styles from "../page.module.css";
+import { ImageCaption } from "./ImageCaption";
 
 export function PerekIntro({ images }: { images: PerekIllustration[] }) {
 	if (images.length === 0) return null;
@@ -28,8 +29,7 @@ export function PerekIntro({ images }: { images: PerekIllustration[] }) {
 				/>
 			</picture>
 			<figcaption>
-				{illustration.caption}
-				{illustration.credit ? ` · ${illustration.credit}` : ""}
+				<ImageCaption image={illustration} />
 			</figcaption>
 		</figure>
 	));
