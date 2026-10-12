@@ -65,9 +65,9 @@ public class MasoraViewModelTests
                 "INSERT INTO tanah_reading_division VALUES ('masora',1,'/מסורה','מסורה על הפרק')");
             await db.ExecuteAsync(
                 "INSERT INTO tanah_reading_unit VALUES " +
-                "('masora',1,'1',1,1,'בראשית א א','stuma')," +
-                "('masora',2,'2',1,2,'בראשית א א - ב א','ptuha')," +
-                "('masora',3,'3',8,1,'שמואל א א-ב',NULL)");
+                "('masora',1,'1',1,1,'בראשית פרשה א','stuma')," +
+                "('masora',2,'2',1,2,'בראשית פרשה ב','ptuha')," +
+                "('masora',3,'3',8,1,'שמואל פרשה א',NULL)");
             await db.ExecuteAsync(
                 "INSERT INTO tanah_reading_unit_range VALUES " +
                 "('masora',1,0,NULL,1,1,NULL,1,1,2)," +
@@ -107,7 +107,7 @@ public class MasoraViewModelTests
         // Unit 1 ends at pasuk 1 segment index 2 → only 'א ב ס' rendered.
         unit.Rows[0].Pasuk.Segments.Select(s => s.Value).Should().Equal("א", "ב", "ס");
         unit.Rows[0].Pasuk.Text.Should().Be("א ב");
-        fixture.Model.Heading.Should().Be("בראשית א א");
+        fixture.Model.Heading.Should().Be("בראשית פרשה א");
         fixture.Model.ClosingBreakLabel.Should().Be("פרשה סתומה");
         fixture.Model.CarouselUnits.Should().HaveCount(3);
         fixture.Model.UnitPositionText.Should().Be("פרשה 1 מתוך 3");
@@ -130,12 +130,9 @@ public class MasoraViewModelTests
         unit.Rows.Should().HaveCount(3);
         unit.Rows[0].PerekId.Should().Be(1);
         unit.Rows[0].Pasuk.Segments.Select(s => s.Value).Should().Equal("ג");
-        unit.Rows[0].PerekLabel.Should().Be("בראשית א");
         unit.Rows[1].PerekId.Should().Be(1);
-        unit.Rows[1].PerekLabel.Should().BeNull();
         unit.Rows[1].Pasuk.Segments.Select(s => s.Value).Should().Equal("ד");
         unit.Rows[2].PerekId.Should().Be(2);
-        unit.Rows[2].PerekLabel.Should().Be("בראשית ב");
         unit.Rows[2].Pasuk.Segments.Select(s => s.Value).Should().Equal("ה");
     }
 
@@ -246,7 +243,7 @@ public class MasoraViewModelTests
 
         var model = fixture.Model;
         model.UnitId.Should().Be(2);
-        model.Heading.Should().Be("בראשית א א - ב א");
+        model.Heading.Should().Be("בראשית פרשה ב");
         model.SeferId.Should().Be(1);
         model.SeferName.Should().Be("בראשית");
         model.UnitOrder.Should().Be(2);
@@ -261,8 +258,6 @@ public class MasoraViewModelTests
         model.HasPerushim.Should().BeTrue();
         model.PerushimEmptyMessage.Should().Be("אין פרשנות לפרשה זו");
         model.ShowDownloadPerushimButton.Should().BeFalse();
-        // Rows carry the Hebrew pasuk number used by the marker column.
-        model.Unit!.Rows[0].PasukNumHeb.Should().Be(model.Unit.Rows[0].Pasuk.PasukNumHeb);
     }
 
     [Fact]

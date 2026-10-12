@@ -279,23 +279,14 @@ describe("lookup helpers", () => {
 });
 
 describe("headings and pasuk counts", () => {
-	it("formats same-perek headings as a collapsed pasuk range", () => {
-		// perek 1 of בראשית is global perekId 1.
-		expect(
-			formatMasoraUnitHeading(
-				{ perekId: 1, pasuk: 1 },
-				{ perekId: 1, pasuk: 5 },
-			),
-		).toBe("בראשית א א-ה");
+	it("formats the heading as the sefer's Masoretic parasha identity", () => {
+		expect(formatMasoraUnitHeading("בראשית", 1)).toBe("בראשית פרשה א");
+		expect(formatMasoraUnitHeading("שמואל", 123)).toBe("שמואל פרשה קכג");
 	});
 
-	it("formats cross-perek headings with both endpoints", () => {
-		expect(
-			formatMasoraUnitHeading(
-				{ perekId: 1, pasuk: 30 },
-				{ perekId: 2, pasuk: 4 },
-			),
-		).toBe("בראשית א ל - ב ד");
+	it("derives parasha-identity headings with no chapter references", () => {
+		expect(getMasoraUnitById(1).heading).toBe("בראשית פרשה א");
+		expect(getMasoraUnitById(8).heading).toBe("בראשית פרשה ח");
 	});
 
 	it("exposes the canonical pasuk count for the resolver", () => {
