@@ -167,7 +167,7 @@ class ListeningAcceptanceTests(unittest.TestCase):
         original_reviews = reviews.read_bytes()
         output = self.root / "accepted"
         write_json(output / "3.json", {**prior, "perekId": 3})
-        with patch("listening_accept.load_queue", return_value=queue), patch("listening_accept.duration", return_value=2000):
+        with patch("listening_round.load_queue", return_value=queue), patch("listening_accept.duration", return_value=2000):
             first = stage_reviews(self.root / "queue.json", reviews, canonical, output, database)
             self.assertEqual(first["accepted"], [1])
             self.assertEqual(first["words"], 3)

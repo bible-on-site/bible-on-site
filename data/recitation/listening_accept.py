@@ -11,8 +11,10 @@ import shutil
 import tempfile
 
 from alignment import load_chapters, reconcile, validate_timings, words_for
-from listening_review import (ReviewStore, digest_file, digest_json, load_queue,
+from listening_review import (ReviewStore, digest_file, digest_json,
                               read_json, validate_case, validate_decision)
+from listening_round import load_review_evidence
+from listening_tail import verify_corrections
 from model_versions import ALIGN_MODEL, ALIGN_REVISION, ASR_MODEL, ASR_REVISION
 from recite import cached_transcript, duration, export_database, write_json
 from trusted import POLICY_VERSION, SOFT_WARNING, TRUSTED_PIPELINE, valid_score, verify_source, verify_warnings
@@ -32,7 +34,8 @@ def verify_review(case, decision, queue_hash):
     for key, value in checked.items():
         if key != "savedAt" and decision.get(key) != value:
             raise ValueError(f"Saved listening evidence differs from candidate: {key}")
-    if decision.get("queueSha256") != queue_hash or not decision.get("savedAt"):
+    allowed = queue_hash.get(case["id"], []) if isinstance(queue_hash, dict) else [queue_hash]
+    if decision.get("queueSha256") not in allowed or not decision.get("savedAt"):
         raise ValueError("Listening answer is not bound to this queue")
     if decision["verdict"] != "good":
         raise ValueError(f"Human decision remains {decision['verdict']} for {case['id']}")
@@ -52,12 +55,14 @@ def verify_diagnostic(case):
                 and round(diagnostic["contextStartSec"] * 1000) == case["clipStartMs"]
                 and round(diagnostic["contextEndSec"] * 1000) == case["clipEndMs"]
                 and rows == case["words"]):
+            if diagnostic.get("boundaryMethod"):
+                verify_corrections(diagnostic)
             return
     raise ValueError("Listening candidate differs from actual acoustic result")
 
 
-def approve_chapter(manifest, report, cached, words, recording, duration_ms, cases, decisions, queue_hash):
-    """Human evidence resolves listed verses; all other verses keep original gates."""
+def verify_original_evidence(manifest, report, cached, words, recording, duration_ms):
+    """Require the original full-quality source, diagnostic and ASR snapshots."""
     verify_source(manifest, words, recording, duration_ms)
     for key in ("perekId", "audioSha256", "textSha256", "pipeline", "words"):
         if report.get(key) != manifest.get(key):
@@ -67,6 +72,10 @@ def approve_chapter(manifest, report, cached, words, recording, duration_ms, cas
     if not cached_transcript(cached, manifest["audioSha256"], ASR_MODEL, ASR_REVISION):
         raise ValueError("ASR evidence has a different source or model snapshot")
 
+
+
+def reviewed_replacements(manifest, report, words, cases, decisions, queue_hash):
+    """Every replaced verse needs its own current, source-bound good answer."""
     replacements, reviews = {}, []
     for case in cases:
         if case["perekId"] != manifest["perekId"] or case["pasuk"] in replacements:
@@ -88,6 +97,11 @@ def approve_chapter(manifest, report, cached, words, recording, duration_ms, cas
         if warning["reason"] != SOFT_WARNING and warning["pasuk"] not in replacements:
             raise ValueError(f"Unreviewed held pasuk {warning['pasuk']}: {warning['reason']}")
 
+    return replacements, reviews
+
+
+def merged_words(manifest, report, cached, words, replacements, duration_ms):
+    """Preserve the automatic remainder and validate full-chapter timing geometry."""
     original = {(row["pasuk"], row["segment"]): row for row in manifest["words"]}
     expected = {(word.pasuk, word.segment): word.text for word in words}
     if (len(original) != len(manifest["words"]) or set(original) != set(expected)
@@ -119,6 +133,14 @@ def approve_chapter(manifest, report, cached, words, recording, duration_ms, cas
             raise ValueError(f"Insufficient automatic ASR anchors in unreviewed pasuk {pasuk}")
     verify_warnings(rows, [warning for warning in report["review"] if warning["pasuk"] not in replacements])
 
+    return rows
+
+
+def approve_chapter(manifest, report, cached, words, recording, duration_ms, cases, decisions, queue_hash):
+    """Human evidence resolves listed verses; all other verses keep original gates."""
+    verify_original_evidence(manifest, report, cached, words, recording, duration_ms)
+    replacements, reviews = reviewed_replacements(manifest, report, words, cases, decisions, queue_hash)
+    rows = merged_words(manifest, report, cached, words, replacements, duration_ms)
     accepted = deepcopy(manifest)
     accepted.update(alignmentStatus="ready", words=rows, reviewMethod="trusted-process-with-human-verse-review",
                     acceptancePolicy={"name": POLICY, "version": 1,
@@ -128,15 +150,15 @@ def approve_chapter(manifest, report, cached, words, recording, duration_ms, cas
                         "diagnostics": deepcopy(report["review"]),
                         "sourceEvidence": {"manifestSha256": digest_json(manifest),
                             "reportSha256": digest_json(report), "asrSha256": digest_json(cached),
-                            "queueSha256": queue_hash}})
+                            "queueSha256": reviews[0]["queueSha256"] if len({r["queueSha256"] for r in reviews}) == 1
+                            else sorted({r["queueSha256"] for r in reviews})}})
     return accepted
 
 
 def overlay_reviews(staged, database, withdrawn):
     """Withdraw only this policy's approvals, atomically with the validated overlay."""
-    with tempfile.NamedTemporaryFile(dir=database.parent, suffix=".sqlite", delete=False) as handle:
-        temporary = Path(handle.name)
-    try:
+    with tempfile.TemporaryDirectory(dir=database.parent) as folder:
+        temporary = Path(folder) / "recitation.sqlite"
         shutil.copy2(database, temporary)
         with closing(sqlite3.connect(temporary)) as db:
             for pid in withdrawn:
@@ -147,12 +169,11 @@ def overlay_reviews(staged, database, withdrawn):
             db.commit()
         export_database(staged, temporary)
         temporary.replace(database)
-    finally:
-        temporary.unlink(missing_ok=True)
+
 
 def stage_reviews(queue_path, reviews_path, text, output, database):
     """Overlay complete recoveries only, preserving already accepted tracks."""
-    queue = load_queue(queue_path)
+    queue, bindings = load_review_evidence(queue_path)
     decisions = ReviewStore(reviews_path, queue).snapshot()
     chapters = load_chapters(text)
     cases_by_chapter = defaultdict(list)
@@ -182,7 +203,7 @@ def stage_reviews(queue_path, reviews_path, text, output, database):
                 recording = Path(cases[0]["audioPath"])
                 accepted = approve_chapter(manifest, read_json(reports / f"{pid}.review.json"),
                     read_json(reports / f"{pid}.asr.json"), words_for(chapters[pid]), recording,
-                    duration(recording), cases, decisions, queue["queueSha256"])
+                    duration(recording), cases, decisions, bindings)
                 if was_recovered and accepted["acceptancePolicy"] == prior[3].get("acceptancePolicy"):
                     summary["alreadyAccepted"].append(pid)
                     continue

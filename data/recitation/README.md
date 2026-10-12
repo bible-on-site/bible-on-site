@@ -347,3 +347,9 @@ Revisiting an answer is supported: on the next import, a new problem/skip answer
 withdraws only this policy's approval and clears that chapter's published word
 rows atomically. Independent manual and automatic approvals stay intact. A new
 GOOD answer can recover it again after the same complete-chapter checks.
+
+Completed listening rounds can be copied with `listening_round.archive_round`. Add each returned immutable `path`/`sha256` descriptor to the next queue's `archivedQueues`. The active page shows only the new queue; `/archive` retains prior answers and notes. The importer validates archived sources and uses earlier good answers only for unchanged candidates. Changed cuts require fresh word listening and a new answer.
+
+Serve with `--recovery-database <separate-preview.sqlite> --recovery-output <preview-alignments>` to run the guarded importer after saved answers. Use a copy of the durable database, never the live worker checkpoint. The page reports completed local recoveries; normal canonical, native-package and delivery checks still precede publication.
+
+`listening_tail.py` prepares diagnostic-only trailing-vowel candidates from the pinned CTC character/separator path. It never changes the automatic worker, pads endpoints or approves a candidate. Every corrected boundary requires fresh human listening and the same complete-chapter geometry checks.

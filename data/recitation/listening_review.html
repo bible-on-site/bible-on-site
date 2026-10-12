@@ -40,11 +40,12 @@ footer {font-size:13px;color:#6f7b8c;margin-top:20px;line-height:1.7}
 </head>
 <body>
 <main>
-<header><h1>בדיקת הקלטות</h1><a href="/api/export" download="listening-reviews.json">הורדת התשובות</a></header>
+<header><h1>בדיקת הקלטות</h1><a href="/archive">ארכיון התשובות</a><a href="/api/export" download="listening-reviews.json">הורדת התשובות</a></header>
 <section class="card" aria-labelledby="reference">
 <div id="progress">טוען...</div>
 <h2 id="reference">הקלטות לבדיקה</h2>
 <p class="instructions">האזינו לחיתוכי המילים. אפשר גם ללחוץ על מילה בנפרד, או להשמיע את הפסוק וההקשר. אם מילה חסרה, נחתכת או כוללת מילה אחרת - סמנו בעיה.</p>
+<p id="prior" class="instructions" hidden></p>
 <div class="controls">
 <button class="primary" id="verse">▶ הפסוק</button>
 <button id="cuts">▶ חיתוכי המילים</button>
@@ -63,7 +64,8 @@ footer {font-size:13px;color:#6f7b8c;margin-top:20px;line-height:1.7}
 <div class="nav"><button id="previous">→ הקודם</button><button id="next">הבא ←</button></div>
 <p id="status" role="status" aria-live="polite"></p>
 </section>
-<footer>התשובות נשמרות אוטומטית במחשב. אפשר לחזור ולהמשיך בכל עת.<br>הבדיקה נוגעת לפסוק המוצג בלבד. לאחר מכן נבדוק את התוצאה לפני פרסום.</footer>
+<p id="recovery" role="status"></p>
+<footer>התשובות נשמרות אוטומטית במחשב. אפשר לחזור ולהמשיך בכל עת.<br>תשובות שמאפשרות להשלים פרק נבדקות אוטומטית. הפרסום יתבצע באצווה הרגילה.</footer>
 </main>
 <script>
 "use strict";
@@ -102,6 +104,8 @@ function render() {
   }
   $("progress").textContent = "פסוק " + (index + 1) + " מתוך " + cases.length + " · " + Object.keys(decisions).length + " תשובות נשמרו";
   $("reference").textContent = item.label;
+  $("prior").hidden = !item.reviewKind;
+  $("prior").textContent = (item.reviewKind === "corrected" ? "חיתוכים מתוקנים לבדיקה חוזרת." : "פסוק שעדיין לא נבדק.") + (item.correctionNote ? " " + item.correctionNote : "") + (item.priorNote ? " ההערה הקודמת נשמרה: " + item.priorNote : "");
   $("words").replaceChildren();
   for (const word of item.words) {
     const button = document.createElement("button");
@@ -228,6 +232,17 @@ $("problem").onclick = () => void save("problem");
 $("skip").onclick = () => void save("skip");
 $("previous").onclick = () => { if (!saving && index > 0) { index--; render(); } };
 $("next").onclick = () => { if (!saving && index < cases.length - 1) { index++; render(); } };
+async function updateRecovery() {
+  try {
+    const response = await fetch("/api/recovery");
+    const state = await response.json();
+    if (state.state === "validating") $("recovery").textContent = "בודקים את התשובות להשלמת פרקים...";
+    else if (state.state === "complete") $("recovery").textContent = "פרקים שהושלמו בעזרת הבדיקה: " + state.humanRecoveredChapters + ". נשמרו להכנה לפרסום.";
+    else if (state.state === "error") $("recovery").textContent = "התשובות נשמרו. בדיקת ההשלמה דורשת טיפול.";
+  } catch {}
+}
+setInterval(() => void updateRecovery(), 5000);
+void updateRecovery();
 document.addEventListener("visibilitychange", () => { if (document.hidden) stop(); });
 window.addEventListener("pagehide", stop);
 (async () => {

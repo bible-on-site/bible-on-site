@@ -91,6 +91,16 @@ class ListeningReviewTests(unittest.TestCase):
         changed["cases"][0]["candidateSha256"] = "new"
         self.assertEqual(ReviewStore(self.store.path, changed).snapshot(), {})
 
+    def test_recovery_notification_follows_durable_answer_save(self):
+        calls = []
+        self.store.on_saved = lambda: calls.append(read_json(self.store.path)["entries"][-1]["verdict"])
+        self.store.save(self.case, self.payload)
+        self.assertEqual(calls, ["good"])
+        with patch("pathlib.Path.replace", side_effect=OSError("disk error")):
+            with self.assertRaises(OSError):
+                self.store.save(self.case, {**self.payload, "verdict": "problem"})
+        self.assertEqual(calls, ["good"])
+
     def test_failed_atomic_save_keeps_previous_feedback(self):
         self.store.save(self.case, self.payload)
         before = self.store.path.read_bytes()
@@ -126,6 +136,9 @@ class ListeningReviewTests(unittest.TestCase):
 
         status, body = request("/api/queue")
         self.assertEqual(status, 200)
+        self.assertEqual(request("/api/archive"), (200, b"[]"))
+        self.assertEqual(request("/archive")[0], 200)
+        self.assertEqual(request("/api/recovery"), (200, b"{}"))
         public = json.loads(body)
         self.assertNotIn("audioPath", public["cases"][0])
         headers = {"Content-Type": "application/json", "Origin": server.origin,

@@ -243,6 +243,7 @@ class ReviewStore:
         self.path, self.queue = path, queue
         self.lock = threading.Lock()
         self.decisions = {}
+        self.on_saved = None
         self.entries = read_json(path)["entries"] if path.exists() else []
         for row in self.entries:
             case = next((case for case in queue["cases"] if case["id"] == row["caseId"]), None)
@@ -257,6 +258,8 @@ class ReviewStore:
             write_json(self.path, {"version": 1, "entries": entries})
             self.entries = entries
             self.decisions[case["id"]] = row
+        if self.on_saved is not None:
+            self.on_saved()
         return row
 
     def snapshot(self):
@@ -292,6 +295,12 @@ class ListeningHandler(BaseHTTPRequestHandler):
                       for case in self.server.queue["cases"]]
             return self.json_response(200, {"cases": public, "token": self.server.token,
                                            "decisions": self.server.review_store.snapshot()})
+        if self.path == "/api/recovery":
+            return self.json_response(200, self.server.recovery.snapshot() if self.server.recovery else {})
+        if self.path == "/api/archive":
+            return self.json_response(200, self.server.archived_rounds)
+        if self.path == "/archive":
+            return self.send(200, Path(__file__).with_name("listening_archive.html").read_bytes(), "text/html; charset=utf-8")
         if self.path == "/api/export":
             return self.json_response(200, {"queueSha256": self.server.queue["queueSha256"],
                                            "decisions": self.server.review_store.snapshot(),
@@ -325,6 +334,15 @@ class ListeningHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         if not self.review_session_valid():
+            # Drain a bounded rejected body before closing, avoiding a TCP reset
+            # that can hide the useful 403 response on Windows.
+            try:
+                size = int(self.headers.get("Content-Length", "0"))
+                if 0 < size <= 16384:
+                    self.connection.settimeout(5)
+                    self.rfile.read(size)
+            except (ValueError, OSError):
+                pass
             return self.json_response(403, {"error": "Local review session required"})
         if self.path != "/api/reviews":
             return self.json_response(404, {"error": "Not found"})
@@ -338,14 +356,25 @@ class ListeningHandler(BaseHTTPRequestHandler):
             return self.json_response(500, {"error": "Could not save review; please retry"})
 
 
-def make_server(queue, store, port):
+def make_server(queue, store, port, recovery=None):
     server = ThreadingHTTPServer(("127.0.0.1", port), ListeningHandler)
+    server.recovery = recovery
     server.origin = f"http://127.0.0.1:{server.server_port}"
     server.token = secrets.token_urlsafe(32)
     server.template = Path(__file__).with_name("listening_review.html").read_bytes()
     server.queue = queue
     server.cases = {case["id"]: case for case in queue["cases"]}
     server.review_store = store
+    server.archived_rounds = []
+    for archive in queue.get("archivedQueues", []):
+        path = Path(archive["path"])
+        if digest_file(path) != archive["sha256"]:
+            raise ValueError("Completed archive changed")
+        archived = load_queue(path)
+        decisions = ReviewStore(store.path, archived).snapshot()
+        server.archived_rounds.append({"caseCount": len(archived["cases"]),
+            "cases": [{"id": case["id"], "label": case["label"],
+                       "decision": decisions.get(case["id"])} for case in archived["cases"]]})
     return server
 
 
@@ -361,6 +390,8 @@ def main():
     serve.add_argument("--reviews", type=Path, required=True)
     serve.add_argument("--port", type=int, default=8766)
     serve.add_argument("--check-only", action="store_true")
+    serve.add_argument("--recovery-database", type=Path)
+    serve.add_argument("--recovery-output", type=Path)
     args = parser.parse_args()
     if args.command == "prepare":
         prepare(args)
@@ -370,7 +401,16 @@ def main():
             print(f"Verified {len(queue['cases'])} source-bound verse candidates", flush=True)
             return
         store = ReviewStore(args.reviews, queue)
-        server = make_server(queue, store, args.port)
+        recovery = None
+        if bool(args.recovery_database) != bool(args.recovery_output):
+            parser.error("Both recovery preview paths are required")
+        if args.recovery_database:
+            from listening_monitor import RecoveryMonitor
+            recovery = RecoveryMonitor(args.queue, args.reviews, Path(queue["canonicalPath"]),
+                                       args.recovery_output, args.recovery_database)
+            store.on_saved = recovery.notify
+            recovery.start()
+        server = make_server(queue, store, args.port, recovery)
         print(f"http://127.0.0.1:{server.server_port}/ - {len(queue['cases'])} verses", flush=True)
         try:
             server.serve_forever()
@@ -378,6 +418,8 @@ def main():
             # Ctrl+C is normal shutdown; the finally block closes the server.
             pass
         finally:
+            if recovery:
+                recovery.close()
             server.server_close()
 
 
