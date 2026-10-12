@@ -145,3 +145,18 @@ export function slicePerekOrder(slices: PerekSlice[]): Map<number, number> {
 	}
 	return order;
 }
+
+/**
+ * Canonical perek source labels (e.g. "בראשית ג") for every perek a
+ * range list covers — the label map range-bounded commentary applies
+ * on perek boundaries, matching the unit text's break labels.
+ */
+export function rangePerekSources(
+	ranges: ScriptureRange[],
+): Record<number, string> {
+	const sources: Record<number, string> = {};
+	for (const perekId of slicePerekIds(slicesForRanges(ranges))) {
+		sources[perekId] = getPerekByPerekId(perekId).source;
+	}
+	return sources;
+}
