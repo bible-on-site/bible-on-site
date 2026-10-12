@@ -861,7 +861,7 @@ public class SearchIndexServiceTests
         var source = (await notes.GetSearchConnectionAsync())!;
         string? generation = null;
         try { generation = await source.ExecuteScalarAsync<string>("SELECT value FROM _metadata WHERE key = 'build_timestamp'"); }
-        catch (SQLite.SQLiteException) { }
+        catch (SQLite.SQLiteException) { generation = string.Empty; }
         if (string.IsNullOrEmpty(generation))
         {
             var file = new FileInfo(source.DatabasePath);
