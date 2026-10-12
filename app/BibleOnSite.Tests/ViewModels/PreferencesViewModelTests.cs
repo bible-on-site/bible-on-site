@@ -337,6 +337,117 @@ public class PreferencesViewModelTests : IDisposable
 
     #endregion
 
+    #region Overview summaries and sound channels
+
+    [Fact]
+    public void OverviewPerekToLoad_WhenChanged_UpdatesChoiceAndSummary()
+    {
+        _service.PerekToLoad = PerekToLoad.LastLearnt;
+
+        _viewModel.PerekToLoad = PerekToLoad.Todays;
+
+        _service.PerekToLoad.Should().Be(PerekToLoad.Todays);
+        _viewModel.IsPerekToLoadTodays.Should().BeTrue();
+        _viewModel.IsPerekToLoadLastLearnt.Should().BeFalse();
+        _viewModel.PerekToLoadSummary.Should().Be("הפרק של היום");
+    }
+
+    [Fact]
+    public void OverviewPerekChoiceFlags_SelectEachStartupOption()
+    {
+        _service.PerekToLoad = PerekToLoad.LastLearnt;
+
+        _viewModel.IsPerekToLoadTodays = true;
+        _service.PerekToLoad.Should().Be(PerekToLoad.Todays);
+        _viewModel.IsPerekToLoadLastLearnt.Should().BeFalse();
+
+        _viewModel.IsPerekToLoadLastLearnt = true;
+        _service.PerekToLoad.Should().Be(PerekToLoad.LastLearnt);
+        _viewModel.PerekToLoadSummary.Should().Be("האחרון שלמדתי");
+    }
+
+    [Fact]
+    public void OverviewCategorySummaries_ReflectPackAndPlaybackState()
+    {
+        var navigator = new Mock<IAppNavigator>();
+        var viewModel = new PreferencesViewModel(_service,
+            PerushimNotesService.CreateForTesting(new FakePadDeliveryService(),
+                Path.Join(Path.GetTempPath(), Path.GetRandomFileName())),
+            new RecitationService(new Mock<IFileSystem>().Object, new Mock<IPadDeliveryService>().Object),
+            navigator.Object);
+        _service.RecitationSpeed = 1.5;
+        _service.RecitationVolume = 0.7;
+        _service.LessonsVolume = 0.5;
+        _service.EffectsVolume = 0.4;
+
+        viewModel.PerushimInstallStateText.Should().Be("לא מותקנת");
+        viewModel.RecitationStateText.Should().Be("לא מותקנת");
+        viewModel.PacksSummaryText.Should().Be("פירושים: לא מותקנת · קריינות: לא מותקנת");
+        viewModel.RecitationPlaybackSummary.Should().Be("מהירות 1.5× · עוצמה 70%");
+        viewModel.SoundSummaryText.Should().Be("קריינות 70% · שיעורים 50% · אפקטים 40%");
+    }
+
+    [Fact]
+    public void SoundChannels_EachVolumePersistsIndependently()
+    {
+        var sound = new SoundPreferencesViewModel(_service);
+
+        sound.RecitationVolume = 0.8;
+        sound.LessonsVolume = 0.6;
+        sound.EffectsVolume = 0.4;
+
+        _service.RecitationVolume.Should().Be(0.8);
+        _service.LessonsVolume.Should().Be(0.6);
+        _service.EffectsVolume.Should().Be(0.4);
+        sound.RecitationVolume.Should().Be(0.8);
+        sound.LessonsVolume.Should().Be(0.6);
+        sound.EffectsVolume.Should().Be(0.4);
+    }
+
+    [Fact]
+    public void RecitationBookChoice_DerivesLifecycleFromOnDiskCounts()
+    {
+        var book = new RecitationBookChoice { Name = "יונה", PerekIds = [1] };
+        book.AvailableCount = 4;
+
+        book.ShowDownload.Should().BeTrue();
+        book.DownloadLabel.Should().Be("הורדה");
+
+        book.InstalledCount = 2;
+        book.IsPartiallyInstalled.Should().BeTrue();
+        book.DownloadLabel.Should().Be("השלמת הורדה");
+        book.ShowRemove.Should().BeTrue();
+
+        book.InstalledCount = 4;
+        book.IsFullyInstalled.Should().BeTrue();
+        book.IsPartiallyInstalled.Should().BeFalse();
+        book.ShowDownload.Should().BeFalse();
+
+        book.IsDownloading = true;
+        book.ShowProgress.Should().BeTrue();
+        book.ShowDownload.Should().BeFalse();
+        book.ShowRemove.Should().BeFalse();
+        book.HasInstalled.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task RecitationPacksDownloadAll_WhenNoBooksOffered_ReportsUnavailable()
+    {
+        var fileSystem = new Mock<IFileSystem>();
+        var viewModel = new RecitationPacksViewModel(
+            new RecitationService(fileSystem.Object, new Mock<IPadDeliveryService>().Object),
+            new PerekDataService(new LocalDatabaseService(fileSystem.Object)), new Mock<IAppNavigator>().Object);
+
+        viewModel.RecitationStateText.Should().Be("לא מותקנת");
+
+        await viewModel.DownloadAllCommand.ExecuteAsync(null);
+
+        viewModel.Status.Should().Be("אין הקלטות זמינות להורדה.");
+        viewModel.IsDownloading.Should().BeFalse();
+    }
+
+    #endregion
+
     #region PreferencesChanged Event Tests
 
     [Fact]
