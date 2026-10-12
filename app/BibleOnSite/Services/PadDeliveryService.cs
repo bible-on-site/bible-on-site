@@ -541,7 +541,17 @@ partial class PadDeliveryService
         }
 
         System.Diagnostics.Debug.WriteLine($"BA: '{relative}' loaded, length={data.Length}");
-        var destPath = Path.Combine(cacheDir, relative);
+
+        // `relative` names a file inside the pack. If it were ever rooted or
+        // contained '..', Path.Combine would silently drop cacheDir — refuse to
+        // write outside the extraction cache rather than trust pack contents.
+        var destPath = Path.GetFullPath(Path.Combine(cacheDir, relative));
+        var cacheRoot = Path.GetFullPath(cacheDir) + Path.DirectorySeparatorChar;
+        if (!destPath.StartsWith(cacheRoot, StringComparison.OrdinalIgnoreCase))
+        {
+            System.Diagnostics.Debug.WriteLine($"BA: refusing out-of-cache path '{relative}'");
+            return false;
+        }
         try
         {
             using var stream = data.AsStream();
