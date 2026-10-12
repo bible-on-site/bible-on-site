@@ -288,7 +288,7 @@ public partial class SearchViewModel : ObservableObject
 
             if (filters.Contains(SearchFilter.Perek))
             {
-                results.AddRange(GetPerekResults(phrase, books));
+                results.AddRange(await Task.Run(() => GetPerekResults(phrase, books).ToList(), token));
             }
 
             token.ThrowIfCancellationRequested();
@@ -469,14 +469,18 @@ public partial class SearchViewModel : ObservableObject
             ? number.ToHebrewLetters() : word));
         return _perekDataService.Perakim!.Values
             .Where(perek => books.Contains(perek.SeferId))
-            .Select(perek => new PerekSearchResult(perek, phrase)
+            .Select(perek => (Perek: perek, Source: _perekDataService.GetPerekSource(perek.PerekId) ?? string.Empty))
+            .Select(row => (row.Perek, row.Source,
+                Score: Math.Max(SearchText.Score(row.Source, referenceQuery), SearchText.Score(row.Perek.Header, phrase))))
+            .Where(row => row.Score > 0)
+            .OrderByDescending(row => row.Score).ThenBy(row => row.Perek.PerekId)
+            .Select(row => new PerekSearchResult(row.Perek, phrase)
             {
-                Title = _perekDataService.GetPerekSource(perek.PerekId) ?? string.Empty,
-                SubtitleHtml = SearchText.Snippet(perek.Header, phrase),
+                Title = row.Source,
+                SubtitleHtml = SearchText.Snippet(row.Perek.Header, phrase),
                 GenerationOrder = int.MinValue,
-                Score = Math.Max(SearchText.Score(_perekDataService.GetPerekSource(perek.PerekId) ?? "", referenceQuery), SearchText.Score(perek.Header, phrase))
-            })
-            .Where(result => result.Score > 0).OrderByDescending(result => result.Score).ThenBy(result => result.Perek.PerekId);
+                Score = row.Score
+            });
     }
 #endif
 

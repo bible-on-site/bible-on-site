@@ -1,4 +1,4 @@
-"""Validate and install the catalog/notes pair produced by one data generation."""
+"""Validate and install the catalog, notes and prebuilt index from one generation."""
 
 import argparse
 from contextlib import closing
@@ -10,6 +10,7 @@ import sys
 
 CATALOG = "sefaria-dump-5784-sivan-4.perushim_catalog.sqlite"
 NOTES = "sefaria-dump-5784-sivan-4.perushim_notes.sqlite"
+TANAH = "sefaria-dump-5784-sivan-4.tanah_view.sqlite"
 SEARCH_INDEX = "sefaria-dump-5784-sivan-4.hebrew_search.sqlite"
 NOTES_DIRECTORIES = {
     "Android": "Platforms/Android/AssetPacks/perushim_notes",
@@ -22,9 +23,9 @@ SEARCH_INDEX_DIRECTORIES = {
 }
 
 
-def validate_pair(source: Path) -> int:
+def validate_pair(source: Path, tanah_view: Path | None = None) -> int:
     """Reject stale, corrupt, or independently generated inputs before copying."""
-    for name in (CATALOG, NOTES):
+    for name in (CATALOG, NOTES, SEARCH_INDEX):
         if not (source / name).is_file():
             raise ValueError(f"Missing {name}; regenerate the paired Perushim SQLite artifact")
 
@@ -50,46 +51,63 @@ def validate_pair(source: Path) -> int:
         if notes.execute("SELECT COUNT(*) FROM note_blob").fetchone()[0] != \
                 notes.execute("SELECT COUNT(DISTINCT perek_id) FROM perek_perush").fetchone()[0]:
             raise ValueError("note_blob must carry every perek present in perek_perush")
-        validate_search_index(source / SEARCH_INDEX, notes_timestamp)
+        validate_search_index(source / SEARCH_INDEX, notes_timestamp, tanah_view)
     return len(mapping)
 
 
-def validate_search_index(index_path: Path, notes_timestamp: int) -> None:
+def validate_search_index(index_path: Path, notes_timestamp: int, tanah_view: Path | None = None) -> None:
     """Reject a delivered index that is missing, malformed, or from another generation."""
-    # The file is optional for older artifacts - the app falls back to
-    # on-device indexing when the pack does not carry it.
     if not index_path.is_file():
-        print(f"No delivered search index at {index_path}; the app will build it on-device")
-        return
+        raise ValueError("Missing prebuilt search index; regenerate the indexed Perushim SQLite artifact")
     with closing(sqlite3.connect(index_path.resolve().as_uri() + "?mode=ro", uri=True)) as index:
         try:
             fingerprints = dict(index.execute("SELECT name, fingerprint FROM search_metadata"))
         except sqlite3.Error as error:
             raise ValueError("Search index lacks search_metadata fingerprints") from error
-        expected_notes = f"v4:{notes_timestamp}:n"
-        if not str(fingerprints.get("notes", "")).startswith(expected_notes):
+        expected_notes = f"v4:{notes_timestamp}:n1"
+        if fingerprints.get("notes") != expected_notes:
             raise ValueError("Search index was built for a different notes generation")
-        if not str(fingerprints.get("verses", "")).startswith("v4:"):
+        if not str(fingerprints.get("verses", "")).startswith("v4:") or not str(fingerprints["verses"]).endswith(":n1"):
             raise ValueError("Search index lacks a verses fingerprint")
-        query = "SELECT name FROM sqlite_master WHERE name IN ('verses','verses_documents','notes','notes_documents')"
-        tables = {row[0] for row in index.execute(query)}
-        if len(tables) != 4:
-            raise ValueError("Search index is missing FTS/documents tables")
+        if tanah_view is not None:
+            with closing(sqlite3.connect(tanah_view.resolve().as_uri() + "?mode=ro", uri=True)) as scripture:
+                generated_at = scripture.execute("SELECT value FROM _metadata WHERE key = 'generated_at'").fetchone()
+            if not generated_at or fingerprints["verses"] != f"v4:{generated_at[0]}:n1":
+                raise ValueError("Search index was built for different bundled scripture; regenerate the indexed artifact")
+        required = {"verses", "verses_documents", "verses_vocab", "notes", "notes_documents", "notes_vocab"}
+        tables = {row[0] for row in index.execute("SELECT name FROM sqlite_master")}
+        if not required <= tables:
+            raise ValueError("Search index is missing FTS/documents/vocabulary tables")
+        # Fingerprints alone cannot prove the FTS payload is present. Query it
+        # through the same join as the app, including the vocabulary tables.
+        index.execute("SELECT term FROM verses_vocab LIMIT 1").fetchall()
+        index.execute(
+            "SELECT PerekId, PasukNum, PerushId, SeferId, c.Text FROM verses JOIN verses_documents c ON c.rowid=verses.rowid WHERE verses MATCH ? LIMIT 1",
+            ("בראשית",),
+        ).fetchall()
+        if index.execute("SELECT COUNT(*) FROM verses_documents").fetchone()[0] == 0:
+            raise ValueError("Search index has no verses documents")
+        index.execute("SELECT term FROM notes_vocab LIMIT 1").fetchall()
+        index.execute(
+            "SELECT PerekId, PasukNum, PerushId, SeferId, c.Text FROM notes JOIN notes_documents c ON c.rowid=notes.rowid WHERE notes MATCH ? LIMIT 1",
+            ("בראשית",),
+        ).fetchall()
+        if index.execute("SELECT COUNT(*) FROM notes_documents").fetchone()[0] == 0:
+            raise ValueError("Search index has no notes documents")
 
 
 def prepare_assets(source: Path, app_directory: Path, platform: str) -> int:
     destination = NOTES_DIRECTORIES[platform]
-    count = validate_pair(source)
+    count = validate_pair(source, app_directory / "Resources/Raw" / TANAH)
     catalog_directory = app_directory / "Resources/Raw"
     notes_directory = app_directory / destination
     catalog_directory.mkdir(parents=True, exist_ok=True)
     notes_directory.mkdir(parents=True, exist_ok=True)
     shutil.copy2(source / CATALOG, catalog_directory / CATALOG)
     shutil.copy2(source / NOTES, notes_directory / NOTES)
-    if (source / SEARCH_INDEX).is_file():
-        index_directory = app_directory / SEARCH_INDEX_DIRECTORIES[platform]
-        index_directory.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source / SEARCH_INDEX, index_directory / SEARCH_INDEX)
+    index_directory = app_directory / SEARCH_INDEX_DIRECTORIES[platform]
+    index_directory.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source / SEARCH_INDEX, index_directory / SEARCH_INDEX)
     return count
 
 
@@ -104,7 +122,7 @@ def main() -> int:
     except (OSError, sqlite3.Error, ValueError) as error:
         print(f"Perushim asset preparation failed: {error}", file=sys.stderr)
         return 1
-    print(f"Prepared matching catalog and notes ({count} commentary mappings) for {args.platform}")
+    print(f"Prepared matching catalog, notes and prebuilt search index ({count} commentary mappings) for {args.platform}")
     return 0
 
 
