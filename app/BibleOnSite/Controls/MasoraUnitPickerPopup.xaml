@@ -35,7 +35,7 @@
                 <Border Grid.Row="0"
                         BackgroundColor="{StaticResource Primary}"
                         Padding="16,12">
-                    <Label Text="בחירת יחידה - מסורה על הפרק"
+                    <Label Text="בחירת פרשה - מסורה על הפרק"
                            FontSize="18"
                            FontAttributes="Bold"
                            TextColor="White"
@@ -62,7 +62,7 @@
                            TextColor="{StaticResource Gray500}"
                            HorizontalTextAlignment="Center"/>
                     <Label Grid.Row="0" Grid.Column="2"
-                           Text="יחידה"
+                           Text="פרשה"
                            FontSize="12"
                            TextColor="{StaticResource Gray500}"
                            HorizontalTextAlignment="Center"/>

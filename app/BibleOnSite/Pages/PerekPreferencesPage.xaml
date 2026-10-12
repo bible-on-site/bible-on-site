@@ -119,6 +119,31 @@
                     </Border>
                 </VerticalStackLayout>
             </VerticalStackLayout>
+
+            <!-- ═══ מסורה על הפרק ═══ -->
+            <VerticalStackLayout Spacing="8">
+                <Label Text="מסורה על הפרק"
+                       FontSize="14"
+                       FontAttributes="Bold"
+                       TextColor="{StaticResource Primary}"
+                       Padding="4,0,0,0"/>
+
+                <Border Padding="16"
+                        StrokeShape="RoundRectangle 12"
+                        Stroke="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray700}}"
+                        StrokeThickness="1"
+                        BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Gray900}}">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <Label Text="הצגת מסורה על הפרק"
+                               FontSize="15"
+                               VerticalOptions="Center"
+                               TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
+                        <Switch Grid.Column="1"
+                                IsToggled="{Binding MasoraMenuEnabled}"
+                                AutomationId="MasoraMenuEnabledSwitch"/>
+                    </Grid>
+                </Border>
+            </VerticalStackLayout>
         </VerticalStackLayout>
     </ScrollView>
 </ContentPage>

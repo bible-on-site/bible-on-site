@@ -72,6 +72,7 @@ public class PreferencesService
     private const string LastLearntPerekKey = "lastLearntPerek";
     private const string PerekToLoadKey = "perekToLoad";
     private const string BookmarkedPerakimKey = "bookmarkedPerakim";
+    private const string MasoraMenuEnabledKey = "masoraMenuEnabled";
 
     private double _recitationSpeed = 1;
     private double _recitationVolume = 1;
@@ -114,6 +115,28 @@ public class PreferencesService
         field = value;
         _storage.Set(key, value);
         OnPreferencesChanged();
+    }
+
+    private bool _masoraMenuEnabled;
+
+    /// <summary>
+    /// Whether the מסורה על הפרק flyout menu entry is shown. Opt-in only:
+    /// unset resolves to false for fresh installs and upgrades (#2181).
+    /// </summary>
+    public bool MasoraMenuEnabled
+    {
+        get => _masoraMenuEnabled;
+        set
+        {
+            if (_masoraMenuEnabled == value)
+            {
+                return;
+            }
+
+            _masoraMenuEnabled = value;
+            _storage.Set(MasoraMenuEnabledKey, value);
+            OnPreferencesChanged();
+        }
     }
 
     private readonly IPreferencesStorage _storage;
@@ -203,6 +226,7 @@ public class PreferencesService
     /// </summary>
     public void Load()
     {
+        _masoraMenuEnabled = _storage.Get(MasoraMenuEnabledKey, false);
         _recitationSpeed = Normalize(_storage.Get("recitationSpeed", 1.0), 1, 0.5, 2);
         _recitationVolume = Normalize(_storage.Get("recitationVolume", 1.0), 1, 0, 1);
         _lessonsVolume = Normalize(_storage.Get("lessonsVolume", 1.0), 1, 0, 1);
@@ -229,6 +253,10 @@ public class PreferencesService
                 _bookmarkedPerakim = new HashSet<int>();
             }
         }
+
+        // Bulk-loaded state is a change for subscribers that bound earlier
+        // (e.g. the Shell flyout content inflates before startup Load runs).
+        OnPreferencesChanged();
     }
 
     /// <summary>

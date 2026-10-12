@@ -213,8 +213,21 @@ jobs:
         background: true
         run: npm run ios:boot:wait --prefix app/mobile-e2e
 
+      # The WebDriverAgent xcodebuild only needs node_modules and the selected
+      # Xcode — no simulator — so it runs in the background too, overlapping
+      # the workload install and app build. MOBILE_WDA_PATH is exported to
+      # GITHUB_ENV and lands after the wait-all gate, before the test step.
+      - name: Prepare prebuilt iOS automation agent
+        id: wda
+        if: matrix.platform == 'iOS'
+        background: true
+        run: npm run ios:wda --prefix app/mobile-e2e
+
+      # npm ci is done here, so ~/.npm is frozen — the tar+upload can run in
+      # the background; the implicit wait-all before job cleanup completes it.
       - name: Save npm cache
         if: ${{ github.ref == 'refs/heads/master' && steps.npm-cache.outputs.cache-hit != 'true' }}
+        background: true
         uses: actions/cache/save@v6
         with:
           path: ~/.npm
@@ -407,12 +420,10 @@ jobs:
             ${{ steps.sdk-key.outputs.sdk-home }}/platform-tools
           key: ${{ steps.sdk-cache.outputs.cache-primary-key }}
 
-      - name: Prepare prebuilt iOS automation agent
-        if: matrix.platform == 'iOS'
-        run: npm run ios:wda --prefix app/mobile-e2e
-
+      # Gates both background steps: simulator readiness + env exports and the
+      # prebuilt WebDriverAgent. A no-op on the Android leg, which has none.
       - name: Wait for iPhone simulator
-        wait: simulator
+        wait-all:
 
       - name: Run shared pilot on iOS
         if: matrix.platform == 'iOS'

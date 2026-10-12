@@ -183,6 +183,53 @@ public class HebrewDateHelperTests
         result.Day.Should().Be(expectedDay);
     }
 
+    [Fact]
+    public void GetTzeitTimeOfDay_WinterDate_ShouldBeBefore1930()
+    {
+        // Jerusalem civil dusk on 2026-02-09 is ~17:45 IST, not 19:30.
+        var tzeit = HebrewDateHelper.GetTzeitTimeOfDay(new DateTime(2026, 2, 9));
+        tzeit.Should().BeGreaterThan(TimeSpan.FromHours(17));
+        tzeit.Should().BeLessThan(TimeSpan.FromHours(19));
+    }
+
+    [Fact]
+    public void GetTzeitTimeOfDay_SummerDate_ShouldBeAfter1930()
+    {
+        // Jerusalem civil dusk on 2026-07-15 is ~20:15 IDT, not 19:30.
+        var tzeit = HebrewDateHelper.GetTzeitTimeOfDay(new DateTime(2026, 7, 15));
+        tzeit.Should().BeGreaterThan(TimeSpan.FromHours(20));
+        tzeit.Should().BeLessThan(TimeSpan.FromHours(21));
+    }
+
+    [Fact]
+    public void GetTzeitAwareHebrewDate_WinterEveningBefore1930_ShouldAdvanceToNextDay()
+    {
+        // 18:00 on a winter day is after real dusk (~17:45) although before 19:30.
+        var date = new DateTime(2026, 2, 9, 18, 0, 0);
+        var calendar = new System.Globalization.HebrewCalendar();
+        var nextDay = date.AddDays(1);
+
+        var result = HebrewDateHelper.GetTzeitAwareHebrewDate(date);
+
+        result.Year.Should().Be(calendar.GetYear(nextDay));
+        result.Month.Should().Be(calendar.GetMonth(nextDay));
+        result.Day.Should().Be(calendar.GetDayOfMonth(nextDay));
+    }
+
+    [Fact]
+    public void GetTzeitAwareHebrewDate_SummerEveningAfter1930_ShouldStaySameDay()
+    {
+        // 19:45 on a summer day is before real dusk (~20:15) although after 19:30.
+        var date = new DateTime(2026, 7, 15, 19, 45, 0);
+        var calendar = new System.Globalization.HebrewCalendar();
+
+        var result = HebrewDateHelper.GetTzeitAwareHebrewDate(date);
+
+        result.Year.Should().Be(calendar.GetYear(date));
+        result.Month.Should().Be(calendar.GetMonth(date));
+        result.Day.Should().Be(calendar.GetDayOfMonth(date));
+    }
+
     #endregion
 
     #region AdjustForWeekend Tests
@@ -468,6 +515,105 @@ public class HebrewDateHelperTests
         var tzId = HebrewDateHelper.GetIsraelTimeZoneId();
         // On Windows: "Israel Standard Time", on Unix: "Asia/Jerusalem"
         tzId.Should().BeOneOf("Asia/Jerusalem", "Israel Standard Time");
+    }
+
+    #endregion
+
+    #region Polar-location tzeit Tests
+
+    [Fact]
+    public void GetTzeitTimeOfDay_PolarLocationWithoutDusk_ReturnsFallback()
+    {
+        // At 85°N near an equinox the sun never reaches zenith 96°, so the
+        // hour-angle domain check must return the fixed fallback.
+        var tzeit = HebrewDateHelper.GetTzeitTimeOfDay(new DateTime(2026, 3, 20), 85.0, 0.0);
+
+        tzeit.Should().Be(new TimeSpan(19, 30, 0));
+    }
+
+    [Fact]
+    public void GetTzeitTimeOfDay_OtherLocation_ReturnsLocalDusk()
+    {
+        // New York (40.7°N, 74°W) on the same winter day: dusk exists (no
+        // fallback) but at that longitude the UTC instant maps to just after
+        // midnight on the Israel clock used for display.
+        var tzeit = HebrewDateHelper.GetTzeitTimeOfDay(new DateTime(2026, 2, 9), 40.7, -74.0);
+
+        tzeit.Should().NotBe(new TimeSpan(19, 30, 0));
+        tzeit.Should().BeLessThan(TimeSpan.FromHours(3));
+    }
+
+    #endregion
+
+    #region GetMonthOrder Tests
+
+    [Fact]
+    public void GetMonthOrder_NonLeapYear_ReturnsTwelveMonths()
+    {
+        HebrewDateHelper.GetMonthOrder(5785).Should()
+            .Equal(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12);
+    }
+
+    [Fact]
+    public void GetMonthOrder_LeapYear_InsertsAdarIAndIIAfterShevat()
+    {
+        HebrewDateHelper.GetMonthOrder(5784).Should()
+            .Equal(1, 2, 3, 4, 5, 13, 14, 7, 8, 9, 10, 11, 12);
+    }
+
+    #endregion
+
+    #region NextMonth / PrevMonth Tests
+
+    [Fact]
+    public void NextMonth_WithinYear_ReturnsFollowingMonth()
+    {
+        HebrewDateHelper.NextMonth(5785, 3).Should().Be((5785, 4));
+    }
+
+    [Fact]
+    public void NextMonth_LeapYear_ShevatToAdarI()
+    {
+        HebrewDateHelper.NextMonth(5784, 5).Should().Be((5784, 13));
+        HebrewDateHelper.NextMonth(5784, 14).Should().Be((5784, 7));
+    }
+
+    [Fact]
+    public void NextMonth_Elul_CrossesToNextYearTishrei()
+    {
+        HebrewDateHelper.NextMonth(5784, 12).Should().Be((5785, 1));
+    }
+
+    [Fact]
+    public void NextMonth_InvalidMonthForYear_Throws()
+    {
+        var act = () => HebrewDateHelper.NextMonth(5785, 13);
+        act.Should().Throw<ArgumentException>().WithMessage("*13*5785*");
+    }
+
+    [Fact]
+    public void PrevMonth_WithinYear_ReturnsPreviousMonth()
+    {
+        HebrewDateHelper.PrevMonth(5785, 4).Should().Be((5785, 3));
+    }
+
+    [Fact]
+    public void PrevMonth_LeapYear_AdarIToShevat()
+    {
+        HebrewDateHelper.PrevMonth(5784, 13).Should().Be((5784, 5));
+    }
+
+    [Fact]
+    public void PrevMonth_Tishrei_CrossesToPreviousYearElul()
+    {
+        HebrewDateHelper.PrevMonth(5785, 1).Should().Be((5784, 12));
+    }
+
+    [Fact]
+    public void PrevMonth_InvalidMonthForYear_Throws()
+    {
+        var act = () => HebrewDateHelper.PrevMonth(5785, 14);
+        act.Should().Throw<ArgumentException>().WithMessage("*14*5785*");
     }
 
     #endregion

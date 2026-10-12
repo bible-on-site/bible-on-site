@@ -42,6 +42,12 @@ public static class AppRoutes
     public static string ExtensionPacks => "ExtensionPacksPage";
     public static string SoundPreferences => "SoundPreferencesPage";
     public static string SupportPreferences => "SupportPreferencesPage";
+    public static string LearningCalendar => "LearningCalendarPage";
+
+    /// <summary>
+    /// PerekPage pushed above the calendar so Back returns to the viewed month.
+    /// </summary>
+    public static string CalendarReader => "calendarReader";
 
     /// <summary>The מסורה על הפרק reading instance — a flyout page like the other menu pages.</summary>
     public static string Masora => "MasoraPage";

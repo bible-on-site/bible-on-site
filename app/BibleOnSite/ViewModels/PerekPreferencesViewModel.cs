@@ -82,10 +82,29 @@ public partial class PerekPreferencesViewModel : ObservableObject
         PerekToLoad = PerekToLoad.LastLearnt;
     }
 
+    /// <summary>
+    /// Whether the מסורה על הפרק flyout menu entry is shown (opt-in, #2181).
+    /// </summary>
+    public bool MasoraMenuEnabled
+    {
+        get => _preferencesService.MasoraMenuEnabled;
+        set
+        {
+            if (_preferencesService.MasoraMenuEnabled == value)
+            {
+                return;
+            }
+
+            _preferencesService.MasoraMenuEnabled = value;
+            OnPropertyChanged();
+        }
+    }
+
     private void OnPreferencesChanged(object? sender, EventArgs e)
     {
         OnPropertyChanged(nameof(PerekToLoad));
         OnPropertyChanged(nameof(IsPerekToLoadTodays));
         OnPropertyChanged(nameof(IsPerekToLoadLastLearnt));
+        OnPropertyChanged(nameof(MasoraMenuEnabled));
     }
 }
