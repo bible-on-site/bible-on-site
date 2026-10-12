@@ -105,7 +105,9 @@ function render() {
   $("progress").textContent = "פסוק " + (index + 1) + " מתוך " + cases.length + " · " + Object.keys(decisions).length + " תשובות נשמרו";
   $("reference").textContent = item.label;
   $("prior").hidden = !item.reviewKind;
-  $("prior").textContent = (item.reviewKind === "corrected" ? "חיתוכים מתוקנים לבדיקה חוזרת." : "פסוק שעדיין לא נבדק.") + (item.correctionNote ? " " + item.correctionNote : "") + (item.priorNote ? " ההערה הקודמת נשמרה: " + item.priorNote : "");
+  const reviewDescription = item.reviewKind === "corrected" ? "חיתוכים מתוקנים לבדיקה חוזרת."
+    : decisions[item.id] ? "נשמרה תשובה לפסוק. אפשר לשנות אותה." : "פסוק שעדיין לא נבדק.";
+  $("prior").textContent = reviewDescription + (item.correctionNote ? " " + item.correctionNote : "") + (item.priorNote ? " ההערה הקודמת נשמרה: " + item.priorNote : "");
   $("words").replaceChildren();
   for (const word of item.words) {
     const button = document.createElement("button");
