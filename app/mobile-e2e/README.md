@@ -205,3 +205,10 @@ Android also bundles other vulnerable packages. npm overrides do not replace
 those bundled files. Keep their alerts visible and follow
 [#1995](https://github.com/bible-on-site/bible-on-site/issues/1995) for patched
 upstream distributions. Verify nested copies after every driver upgrade.
+
+On iOS, an in-session command still pending at the ordinary 45-second
+interaction deadline triggers one native app stack capture before cleanup.
+The pending command is saved in `native-hang-command.txt`; the stack is saved
+in `native-stack-<pid>.txt`. This observes a failure without changing command
+or test deadlines. Native live logs use info level so accessibility debug
+logging does not amplify the workload being measured.

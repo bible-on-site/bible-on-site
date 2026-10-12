@@ -19,7 +19,7 @@ public class SoundPreferencesViewModel : ObservableObject
     public SoundPreferencesViewModel(PreferencesService preferencesService)
     {
         _preferencesService = preferencesService;
-        _preferencesService.PreferencesChanged += OnPreferencesChanged;
+        BibleOnSite.Helpers.WeakPreferencesSubscription.Subscribe(this, _preferencesService, static model => model.OnPreferencesChanged(null, EventArgs.Empty));
     }
 
     /// <summary>קריינות playback volume (0–1).</summary>
