@@ -349,14 +349,14 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
     /// NSAttributedString is thread-safe, so the bound runs on a background
     /// task and the measure reads the cached height instead of typesetting.
     /// </summary>
-    public override SizeRequest GetDesiredSize(double widthConstraint, double heightConstraint)
+    public override Microsoft.Maui.Graphics.Size GetDesiredSize(double widthConstraint, double heightConstraint)
     {
         if (widthConstraint > 0 && !double.IsInfinity(widthConstraint) &&
             _appliedText is { } text)
         {
             if (Math.Abs(widthConstraint - _measuredWidth) < 0.5 && _measuredHeight >= 0)
             {
-                return new SizeRequest(new Size(widthConstraint, _measuredHeight));
+                return new Microsoft.Maui.Graphics.Size(widthConstraint, _measuredHeight);
             }
             EnsureMeasuredAsync(text, widthConstraint);
             var estimate = _measuredHeight >= 0
@@ -364,7 +364,7 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
                 : ((IElementHandler)this).VirtualView is HtmlView view
                     ? view.EffectiveFontSize * view.LineHeight
                     : 0;
-            return new SizeRequest(new Size(widthConstraint, estimate));
+            return new Microsoft.Maui.Graphics.Size(widthConstraint, estimate);
         }
         return base.GetDesiredSize(widthConstraint, heightConstraint);
     }
