@@ -137,7 +137,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable
         PerekCarousel.SizeChanged += OnCarouselSizeChanged;
         _viewModel.NavigationRequested += (_, perekId) =>
         {
-            ResetRecitationContext();
+            ResetRecitationSession();
             var targetIndex = perekId - 1;
             // Guard: suppress OnCarouselItemChanged while we reposition
             _carouselInitializing = true;
@@ -431,7 +431,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable
         {
             ChapterSearch.Close();
         }
-        ResetRecitationContext();
+        ResetRecitationSession();
         PreferencesService.Instance.PreferencesChanged -= OnRecitationPreferencesChanged;
         RecitationService.Instance.Changed -= OnRecitationPackageChanged;
         RecitationService.Instance.PlaybackStopRequested -= OnPlaybackStopRequested;
@@ -576,6 +576,18 @@ public partial class PerekPage : ContentPage, IQueryAttributable
         }
         else if (_viewModel.PerekId > 0 && !_isLoading)
         {
+            // An already-running reader may still get a ?perekId= query
+            // (e.g. a calendar day tap): honor it like a fresh load.
+            if (_pendingPerekId is int pendingPerek &&
+                pendingPerek != _viewModel.PerekId)
+            {
+                _pendingPerekId = null;
+                await _viewModel.NavigateToPerekAsync(pendingPerek);
+            }
+            else
+            {
+                _pendingPerekId = null;
+            }
             // Perushim may have been installed (downloaded in Preferences) or cleared by the OS
             // since this page last appeared. Re-check and reload so they show without an app restart.
             await RefreshPerushimIfAvailabilityChangedAsync();
@@ -668,6 +680,13 @@ public partial class PerekPage : ContentPage, IQueryAttributable
 
     private int GetInitialPerekId()
     {
+        // A perek explicitly requested by navigation (e.g. calendar day tap)
+        // wins over search-reader and preference defaults.
+        if (_pendingPerekId is int pendingPerek)
+        {
+            _pendingPerekId = null;
+            return pendingPerek;
+        }
         if (_searchReaderResult is { } result)
         {
             return GetSearchPerekId(result);
@@ -1957,7 +1976,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable
         _longPressTokenSource?.Cancel();
         _pressedPasukNum = -1;
 
-        ResetRecitationContext();
+        ResetRecitationSession();
 
         var hasPasukim = perek.Pasukim != null && perek.Pasukim.Count > 0;
         Console.WriteLine($"[Carousel] OnChanged PROCESS incoming={incomingId} prev={previousId} vmPerek={_viewModel.PerekId} pos={_viewModel.CarouselPosition} hasPasukim={hasPasukim}");

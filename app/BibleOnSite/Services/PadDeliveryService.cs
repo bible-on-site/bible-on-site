@@ -342,7 +342,7 @@ partial class PadDeliveryService
     {
         ct.ThrowIfCancellationRequested();
         var cacheDir = OdrCacheDir(packName);
-        if (File.Exists(Path.Combine(cacheDir, PayloadFileName(packName))))
+        if (File.Exists(Path.Join(cacheDir, PayloadFileName(packName))))
         {
             return cacheDir;
         }
@@ -429,18 +429,36 @@ partial class PadDeliveryService
     /// actool compiles the .dataset into Assets.car, so we read it via NSDataAsset and
     /// write to disk for SQLite file-based access.
     /// ODR assets live in the request's bundle, not the main bundle.
+    /// The perushim pack also carries the prebuilt search index under the same
+    /// ODR tag — save it too when present so both files reach the delivery dir.
     /// </summary>
     private static string? SaveOdrDataAsset(string cacheDir, NSBundle bundle, string packName)
     {
-        using var asset = new NSDataAsset(packName, bundle);
+        if (!SaveNamedAsset(cacheDir, bundle, packName, PayloadFileName(packName), required: true))
+        {
+            return null;
+        }
+        if (packName == PerushimNotesPackName)
+        {
+            SaveNamedAsset(cacheDir, bundle, "perushim_search", PerushimNotesService.SearchIndexDbName, required: false);
+        }
+        return cacheDir;
+    }
+
+    private static bool SaveNamedAsset(string cacheDir, NSBundle bundle, string assetName, string fileName, bool required)
+    {
+        using var asset = new NSDataAsset(assetName, bundle);
         if (asset?.Data == null)
         {
-            System.Diagnostics.Debug.WriteLine($"ODR: NSDataAsset('{packName}') returned null");
-            return null;
+            if (required)
+            {
+                System.Diagnostics.Debug.WriteLine($"ODR: NSDataAsset('{assetName}') returned null");
+            }
+            return false;
         }
 
         System.Diagnostics.Debug.WriteLine($"ODR: NSDataAsset loaded, length={asset.Data.Length}");
-        var destPath = Path.Combine(cacheDir, PayloadFileName(packName));
+        var destPath = Path.Join(cacheDir, fileName);
         try
         {
             using var stream = asset.Data.AsStream();
@@ -456,12 +474,12 @@ partial class PadDeliveryService
             }
             finally { File.Delete(temporary); }
             System.Diagnostics.Debug.WriteLine($"ODR: Saved to {destPath}");
-            return cacheDir;
+            return true;
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"ODR: Save failed: {ex.Message}");
-            return null;
+            return false;
         }
     }
 
@@ -470,7 +488,7 @@ partial class PadDeliveryService
         var lines = new List<string> { "--- ODR (iOS) delivery diagnostics ---" };
 
         var cacheDir = OdrCacheDir(packName);
-        var cachedFile = Path.Combine(cacheDir, PayloadFileName(packName));
+        var cachedFile = Path.Join(cacheDir, PayloadFileName(packName));
         lines.Add($"Cache dir: {cacheDir}");
         lines.Add($"Cached file exists: {File.Exists(cachedFile)}");
         if (File.Exists(cachedFile))
@@ -491,7 +509,7 @@ partial class PadDeliveryService
         {
             var mainBundle = NSBundle.MainBundle;
             lines.Add($"Main bundle path: {mainBundle.BundlePath}");
-            var assetsCar = Path.Combine(mainBundle.BundlePath, "Assets.car");
+            var assetsCar = Path.Join(mainBundle.BundlePath, "Assets.car");
             lines.Add($"Main Assets.car exists: {File.Exists(assetsCar)}");
             if (File.Exists(assetsCar))
             {
@@ -541,7 +559,7 @@ partial class PadDeliveryService
                     lines.Add($"Request bundle path (after fetch): {fetchReq.Bundle?.BundlePath ?? "(null)"}");
 
                     // Check if ODR asset pack was downloaded
-                    var odrDir = Path.Combine(fetchReq.Bundle?.BundlePath ?? "", "OnDemandResources");
+                    var odrDir = Path.Join(fetchReq.Bundle?.BundlePath ?? "", "OnDemandResources");
                     lines.Add($"ODR dir in bundle exists: {Directory.Exists(odrDir)}");
 
                     ProbeNSDataAsset(lines, "ODR(fetched,request.Bundle)", packName, fetchReq.Bundle);

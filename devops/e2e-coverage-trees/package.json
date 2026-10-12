@@ -1,0 +1,13 @@
+{
+	"name": "e2e-coverage-trees",
+	"private": true,
+	"type": "module",
+	"engines": {
+		"node": ">=26.10.0 <27"
+	},
+	"scripts": {
+		"extract": "node e2e-coverage-trees.ts extract",
+		"validate": "node e2e-coverage-trees.ts validate",
+		"test": "node --test e2e-coverage-trees.test.ts"
+	}
+}

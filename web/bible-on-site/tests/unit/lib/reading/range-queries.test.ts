@@ -55,7 +55,7 @@ describe("getPerushimForRanges", () => {
 			{
 				perush_id: 1,
 				perush_name: "Rashi",
-				parshan_name: "רש\"י",
+				parshan_name: 'רש"י',
 				perek_id: 2,
 				note_count: 3,
 				priority: 100,
@@ -63,7 +63,7 @@ describe("getPerushimForRanges", () => {
 			{
 				perush_id: 1,
 				perush_name: "Rashi",
-				parshan_name: "רש\"י",
+				parshan_name: 'רש"י',
 				perek_id: 1,
 				note_count: 5,
 				priority: 100,
@@ -74,7 +74,7 @@ describe("getPerushimForRanges", () => {
 		expect(result[0]).toEqual({
 			id: 1,
 			name: "Rashi",
-			parshanName: "רש\"י",
+			parshanName: 'רש"י',
 			noteCount: 8,
 			perekId: 1,
 		});
@@ -194,7 +194,38 @@ describe("getArticleSummariesForRanges", () => {
 		await getArticleSummariesForRanges(MULTI_RANGE);
 		const [sql, params] = mockQuery.mock.calls[0];
 		expect(sql).toContain("a.perek_id IN (?, ?)");
-		expect(params).toEqual([100, 1]);
+		// Primary-perek fallback ids first, then the covering-source slice
+		// bounds in declared range order (perek 100 before perek 1, and the
+		// repeated concluding pasuk kept), then the same bounds again for
+		// the ORDER BY rank derived table.
+		expect(params).toEqual([
+			100, 1, 100, 10, 12, 1, 1, 3, 100, 12, 12, 100, 10, 12, 1, 1, 3, 100, 12,
+			12,
+		]);
+	});
+
+	it("orders by first matching slice in declared range order, then priority", async () => {
+		mockQuery.mockResolvedValue([]);
+		await getArticleSummariesForRanges(MULTI_RANGE);
+		const sql = mockQuery.mock.calls[0][0];
+		expect(sql).toContain("ORDER BY (SELECT MIN(slice_match.slice_order)");
+		// Slice ordinals follow the supplied ranges: perek 100 leads, and
+		// its concluding-pasuk repeat keeps its own later rank.
+		expect(sql).toContain("SELECT 0 AS slice_order");
+		expect(sql).toContain("UNION ALL SELECT 1 AS slice_order");
+		expect(sql).toContain("UNION ALL SELECT 2 AS slice_order");
+		expect(sql).toContain("ASC, a.priority ASC");
+	});
+
+	it("matches verified articles by pasuk-granular covering-source rows", async () => {
+		mockQuery.mockResolvedValue([]);
+		await getArticleSummariesForRanges(CROSS_PEREK);
+		const sql = mockQuery.mock.calls[0][0];
+		expect(sql).toContain("FROM tanah_article_covering_source cs");
+		expect(sql).toContain("cs.article_id = a.id");
+		expect(sql).toContain(
+			"(cs.perek_id = ? AND cs.pasuk >= ? AND cs.pasuk <= ?)",
+		);
 	});
 
 	it("maps rows to article summaries", async () => {
@@ -224,8 +255,9 @@ describe("getArticleSummariesForRanges", () => {
 		]);
 	});
 
-	it("returns empty array on query failure", async () => {
-		mockQuery.mockRejectedValue(new Error("DB error"));
-		expect(await getArticleSummariesForRanges(CROSS_PEREK)).toEqual([]);
+	it("rejects query failures like the per-perek path", async () => {
+		const error = new Error("DB error");
+		mockQuery.mockRejectedValue(error);
+		await expect(getArticleSummariesForRanges(CROSS_PEREK)).rejects.toBe(error);
 	});
 });
