@@ -20,6 +20,8 @@ public partial class PerekPage : ContentPage, IQueryAttributable
 
     // Resolved once for the fresh load; a retry must aim at the same perek
     // even though GetInitialPerekId consumes its one-shot request sources.
+    // Cleared by ApplyQueryAttributes when a genuinely new navigation request
+    // arrives, so the new target supersedes a previously failed one.
     private int? _initialPerekId;
 
     // Generation counter: each app-link request supersedes any earlier one
@@ -525,12 +527,21 @@ public partial class PerekPage : ContentPage, IQueryAttributable
             {
                 await LoadInitialPerekAsync();
             }
-            catch (Exception ex)
+            catch (Exception ex) //NOSONAR — failure boundary: any load failure lands on the retryable error panel instead of crashing the reader.
             {
                 // A load that cannot complete surfaces a retryable error instead
-                // of leaving the spinner up forever (issue #2084).
+                // of leaving the spinner up forever (issue #2084) — unless a
+                // newer navigation already put a perek on screen, in which case
+                // this failure is stale and must not cover it.
                 Console.Error.WriteLine($"Failed to load perek: {ex}");
-                ShowPerekLoadError(ex);
+                if (_viewModel.Perek == null)
+                {
+                    ShowPerekLoadError(ex);
+                }
+                else
+                {
+                    CarouselLoadingOverlay.IsVisible = false;
+                }
             }
             finally
             {
@@ -650,10 +661,19 @@ public partial class PerekPage : ContentPage, IQueryAttributable
         {
             await LoadInitialPerekAsync();
         }
-        catch (Exception ex)
+        catch (Exception ex) //NOSONAR — failure boundary: a failed retry must land back on the retryable error panel, not crash the reader.
         {
             Console.Error.WriteLine($"Perek load retry failed: {ex}");
-            ShowPerekLoadError(ex);
+            // Same staleness rule as the initial load: a navigation that
+            // succeeded meanwhile owns the reader now.
+            if (_viewModel.Perek == null)
+            {
+                ShowPerekLoadError(ex);
+            }
+            else
+            {
+                CarouselLoadingOverlay.IsVisible = false;
+            }
         }
         finally
         {
@@ -739,6 +759,9 @@ public partial class PerekPage : ContentPage, IQueryAttributable
                 await shell.GoToAsync(AppRoutes.FlyoutPage(AppRoutes.Perek));
             }
             await _viewModel.NavigateToPerekAsync(target.PerekId);
+            // A link that landed while the load-failure panel was up replaces
+            // it with the freshly navigated perek.
+            CarouselLoadingOverlay.IsVisible = false;
             if (target.ArticleId is int articleId && Shell.Current != null)
             {
                 await Shell.Current.GoToAsync($"articleDetail?articleId={articleId}");
@@ -2054,6 +2077,10 @@ public partial class PerekPage : ContentPage, IQueryAttributable
         {
             await _viewModel.EnsurePasukimLoadedAsync(perek);
         }
+
+        // A timed-out fresh-load attempt may still be running detached — it is
+        // now obsolete and must not overwrite the perek this swipe landed on.
+        _viewModel.InvalidatePendingLoads();
 
         // Synchronous state update — fast, no guard needed.
         // The carousel collection is NEVER modified here, so no re-entrancy risk.

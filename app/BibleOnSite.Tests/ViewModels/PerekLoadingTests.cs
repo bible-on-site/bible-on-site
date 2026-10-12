@@ -313,6 +313,9 @@ public class PerekLoadingTests
             PasukimCalls++;
             return PasukimCalls <= StallPasukimCalls ? _neverPasukim.Task : base.LoadPasukimAsync(perekId);
         }
+
+        /// <summary>Lets a stalled pasukim query finally return — the late unblock a timed-out attempt sees.</summary>
+        public void ReleasePasukim(List<Pasuk> pasukim) => _neverPasukim.TrySetResult(pasukim);
     }
 
     private static PerekViewModel StallingReader(Fixture fixture, StallingPerekDataService data)
@@ -395,6 +398,58 @@ public class PerekLoadingTests
         thrown.Which.Message.Should().Contain("data-service");
         data.PasukimCalls.Should().Be(0);
         vm.Perek.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task ChapterLoad_WhenSupersededByNewerLoad_ReportsNoErrorAndKeepsTheNewerPerek()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize(notes: false);
+        var data = new StallingPerekDataService(new LocalDatabaseService(fixture.Storage.FileSystem.Object))
+        {
+            StallPasukimCalls = 1,
+        };
+        await data.LoadAsync();
+        var vm = StallingReader(fixture, data);
+        vm.LoadMaxAttempts = 1;
+
+        // The stalled call is superseded before its timeout surfaces — it must
+        // not throw over the newer load that now owns the reader.
+        var superseded = vm.LoadByPerekIdAsync(1);
+        await vm.LoadByPerekIdAsync(2);
+        await superseded;
+
+        vm.PerekId.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task ChapterLoad_WhenTimedOutAttemptCompletesLate_DoesNotOverwriteNewerNavigation()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize(notes: false);
+        var data = new StallingPerekDataService(new LocalDatabaseService(fixture.Storage.FileSystem.Object))
+        {
+            StallPasukimCalls = 1,
+        };
+        await data.LoadAsync();
+        var vm = StallingReader(fixture, data);
+        vm.LoadMaxAttempts = 1;
+
+        await vm.Awaiting(m => m.LoadByPerekIdAsync(1)).Should().ThrowAsync<TimeoutException>();
+        vm.Perek.Should().BeNull();
+
+        // A newer navigation supersedes the abandoned call and wins the reader.
+        await vm.LoadByPerekIdAsync(2);
+        vm.PerekId.Should().Be(2);
+        vm.LoadStage.Should().Be("loaded");
+
+        // The abandoned attempt's stalled query finally returns — its late
+        // writes must not replace the newer perek or the load-stage marker.
+        data.ReleasePasukim([]);
+        await Task.Delay(200);
+
+        vm.PerekId.Should().Be(2);
+        vm.LoadStage.Should().Be("loaded");
     }
 
     [Fact]
