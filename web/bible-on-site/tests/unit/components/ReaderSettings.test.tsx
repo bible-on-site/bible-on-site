@@ -109,6 +109,8 @@ test("Escape closes the modal and cross-tab preferences update its controls", ()
 		);
 		// Unrelated keys must not refresh the panel; the owned key does.
 		window.dispatchEvent(new StorageEvent("storage", { key: "otherPref" }));
+		// A null key (e.g. localStorage.clear() in another tab) is ignored too.
+		window.dispatchEvent(new StorageEvent("storage"));
 		expect(screen.getByRole("slider", { name: "גודל גופן" })).toHaveValue("2");
 		window.dispatchEvent(
 			new StorageEvent("storage", { key: READER_SETTINGS_STORAGE_KEY }),
