@@ -6,6 +6,25 @@ CI creates one independent runner per matrix entry (`app-mobile-e2e.yml`), with
 on an individual device run sequentially and start with a freshly reset app.
 Android uses a full app reset. iOS reinstalls the app without erasing the booted
 simulator, and Appium operates the simulator headlessly.
+
+The iOS leg shards the suite across two simulators on its one runner (#2083):
+`ios:boot` provisions a second same-model clone of the selected device when
+`MOBILE_E2E_SHARD_COUNT=2`, and `npm run test:sharded` runs two `run.mjs`
+children in parallel — each with its own `MOBILE_UDID`, Appium port
+(`MOBILE_APPIUM_PORT`, 4723/4724), WebDriverAgent listen port
+(`MOBILE_WDA_PORT`, 8100/8101 — simulators share the host loopback, so
+concurrent WDA instances must not collide), artifacts subdirectory
+(`<platform>/shard<N>/`) and disjoint `Shard` trait group (`MOBILE_E2E_SHARD`,
+added to the `TestMobileE2E` filter by the Nuke target). Every MobileE2E class
+carries `[Trait("Shard", "1")]` or `[Trait("Shard", "2")]` so the union
+reproduces the unsharded suite exactly (shard 1: `PerekPilotTests`, shard 2:
+the iOS-only classes); Android ignores the trait and keeps
+running everything on one emulator. `ShardAssignmentTests` fails the harness
+unit run when an iOS-applicable class lacks exactly one of those values, so a
+new class cannot silently drop out of every shard. `run-sharded.mjs` merges the per-shard
+`coverage-evidence/` back into the top-level artifacts directory for the
+coverage-tree collect step and fails if both shards produced the same test's
+evidence.
 Before iOS tests, Appium downloads the official simulator WebDriverAgent matching
 the locked driver dependency and launches it directly. This keeps cold Xcode
 compilation outside session startup; `npm test` also prepares the agent locally.
@@ -31,6 +50,10 @@ branching or skipping an entire shared scenario. Shared classes use
 `[Trait("Platform", "Android")]` or `[Trait("Platform", "iOS")]` alongside
 `[Trait("Category", "MobileE2E")]`; the Nuke target automatically selects shared
 tests plus the current platform, leaving platform-only behavior easy to add.
+Every class runnable on iOS must also carry exactly one
+`[Trait("Shard", "1")]` or `[Trait("Shard", "2")]` — the iOS leg splits the
+suite between two simulators on that value and `ShardAssignmentTests` fails
+the harness unit run when a class is left out.
 Use `[Collection("Mobile device")]` on every mobile test class to serialize
 scenarios that own the same device. Inject `MobileDeviceSessionFactory` and create
 drivers through `sessions.Create(...)`. If session startup or cleanup fails in a
@@ -125,7 +148,10 @@ installed, overlapping the readiness monitor and Appium bridge preflight with
 the MAUI workload install and the app build. A `wait` step before the tests is
 the gate that surfaces the finished boot and the exported variables.
 `MOBILE_APP_PATH` can select another compatible build. Each local
-run owns an Appium server on `127.0.0.1:4723`; keep that port free.
+run owns an Appium server on `127.0.0.1:4723` (override with
+`MOBILE_APPIUM_PORT`); keep that port free. To reproduce the CI shard split
+locally, run `MOBILE_E2E_SHARD_COUNT=2 npm run ios:boot` to provision both
+simulators, then `npm run test:sharded`.
 
 Set `MOBILE_KEEP_APP=1` to keep the installed app and its data for manual review
 after a local run. The runner installs the current build while preserving that
@@ -141,7 +167,9 @@ From `app/`, `dotnet run --project devops -- TestMobileE2EUnit` checks platform
 configuration and device capabilities without a device or mobile workload.
 
 Screenshots and native view trees are captured for each scenario, alongside
-timestamped Appium and device logs, TRX and JUnit reports, under `app/.artifacts/mobile-e2e/<platform>`.
+timestamped Appium and device logs, TRX and JUnit reports, under `app/.artifacts/mobile-e2e/<platform>`
+(`shard<N>/` subdirectories when the iOS suite runs sharded, with merged
+`coverage-evidence/` at the top level).
 iOS also exports app lifecycle logs and fresh app crash reports. Failed runs
 collect a short native stack sample if the app is still running, without
 competing with healthy tests for simulator resources.

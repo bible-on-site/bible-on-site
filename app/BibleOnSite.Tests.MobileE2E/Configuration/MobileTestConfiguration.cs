@@ -11,6 +11,7 @@ public sealed record MobileTestConfiguration(
 {
     public string? PlatformVersion { get; init; }
     public string? PrebuiltWdaPath { get; init; }
+    public int? WdaLocalPort { get; init; }
     public bool KeepAppForReview { get; init; }
 
     public static MobilePlatform ParsePlatform(string? value) => value?.ToLowerInvariant() switch
@@ -34,6 +35,9 @@ public sealed record MobileTestConfiguration(
             new Uri(Environment.GetEnvironmentVariable("APPIUM_SERVER") ?? "http://127.0.0.1:4723"))
         {
             PlatformVersion = Environment.GetEnvironmentVariable("MOBILE_OS_VERSION"),
+            WdaLocalPort = int.TryParse(Environment.GetEnvironmentVariable("MOBILE_WDA_PORT"), out var wdaPort)
+                ? wdaPort
+                : null,
             KeepAppForReview = Environment.GetEnvironmentVariable("MOBILE_KEEP_APP") == "1",
             PrebuiltWdaPath = platform == MobilePlatform.IOS ? Required("MOBILE_WDA_PATH") : null
         };
