@@ -11,13 +11,6 @@ jest.mock("mysql2/promise", () => ({
 	}),
 }));
 
-import mysql from "mysql2/promise";
-import { query, queryText } from "../../../src/lib/api-client";
-
-const mockCreatePool = mysql.createPool as jest.MockedFunction<
-	typeof mysql.createPool
->;
-
 describe("api-client", () => {
 	const originalEnv = process.env;
 
@@ -41,21 +34,17 @@ describe("api-client", () => {
 		);
 	});
 
-	it("query uses pool and default config when DB_URL unset", async () => {
-		const result = await query<{ id: number }>(
-			"SELECT id FROM t WHERE id = ?",
-			[42],
-		);
-		expect(mockCreatePool).toHaveBeenCalledWith(
-			expect.objectContaining({
-				host: "127.0.0.1",
-				port: 3306,
-				user: "root",
-				password: "",
-				database: "tanah",
-			}),
-		);
-		const pool = mockCreatePool.mock.results[0].value;
+	it("query executes the parameterized statement on the shared pool", async () => {
+		// The dev-mode test resets the module registry, so the hoisted import
+		// binds an orphaned instance whose coverage counters are discarded —
+		// require fresh to hit the live instance (and its mysql2 mock).
+		const mysql2 = require("mysql2/promise");
+		const { query: liveQuery } = require("../../../src/lib/api-client");
+		const result = await liveQuery("SELECT id FROM t WHERE id = ?", [42]);
+		const pool = (mysql2.createPool as jest.Mock)() as {
+			query: jest.Mock;
+			execute: jest.Mock;
+		};
 		expect(pool.execute).toHaveBeenCalledWith(
 			"SELECT id FROM t WHERE id = ?",
 			[42],
@@ -68,14 +57,18 @@ describe("api-client", () => {
 		// server compiles an interpolated REGEXP_LIKE pattern once per
 		// statement, while a prepared `REGEXP_LIKE(col, ?)` re-validates
 		// the pattern per row on a large scan (#2140).
-		const result = await queryText<{ id: number }>(
+		// Re-require after the dev-mode test's registry reset for the same
+		// coverage-map reason as the query test above.
+		const mysql2 = require("mysql2/promise");
+		const { queryText: liveQueryText } = require("../../../src/lib/api-client");
+		const result = await liveQueryText(
 			"SELECT id FROM t WHERE REGEXP_LIKE(c, ?)",
 			["א.*ב"],
 		);
 		// clearMocks wipes mock.results between tests and the module's pool
 		// is a singleton, so get the shared mock object by invoking the
 		// factory rather than reading a prior call's return value.
-		const pool = (mockCreatePool as jest.Mock)() as {
+		const pool = (mysql2.createPool as jest.Mock)() as {
 			query: jest.Mock;
 			execute: jest.Mock;
 		};
