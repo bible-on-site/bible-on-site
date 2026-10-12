@@ -119,6 +119,8 @@ describe("seo/core-jsonld", () => {
 						socialHeight: 900,
 						alt: "איור לדוגמה",
 						caption: "כיתוב לדוגמה",
+						captionMarkdown: null,
+						verseRanges: [{ perekId: 1, pasukFrom: 1, pasukTo: 31 }],
 						description: null,
 						credit: null,
 					},
