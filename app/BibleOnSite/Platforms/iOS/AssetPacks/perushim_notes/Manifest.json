@@ -1,0 +1,15 @@
+{
+  "assetPackID": "perushim_notes",
+  "downloadPolicy": {
+    "onDemand": {}
+  },
+  "fileSelectors": [
+    {
+      "file": "sefaria-dump-5784-sivan-4.perushim_notes.sqlite"
+    }
+  ],
+  "platforms": [
+    "iOS",
+    "macOS"
+  ]
+}
