@@ -57,6 +57,13 @@ env:
   API_TESTS_NODE_CACHE_PATH: web/api/tests/package-lock.json
   API_TESTS_NODE_VERSION_FILE: web/api/tests/package.json
   API_UNIT_JUNIT_REPORT_ARTIFACT_NAME: api-unit-junit-report-${{ github.run_id }}
+  # Deterministic e2e-impact coverage-tree baselines (#2085): published only
+  # by successful default-branch runs; every run downloads them for the
+  # shadow-mode selection manifest. Evidence lives under each suite's
+  # .coverage/e2e-impact/.
+  API_E2E_IMPACT_ARTIFACT_NAME_MASTER: api-e2e-coverage.master
+  ADMIN_E2E_IMPACT_ARTIFACT_NAME_MASTER: admin-e2e-coverage.master
+  WEBSITE_E2E_IMPACT_ARTIFACT_NAME_MASTER: website-e2e-coverage.master
   APP_COVERAGE_ARTIFACT_NAME_MASTER: app-coverage.master
   APP_COVERAGE_ARTIFACT_NAME_WF: app-coverage.${{ github.run_id }}
   APP_COVERAGE_DIRECTORY: app/.coverage
@@ -928,6 +935,8 @@ jobs:
         working-directory: ${{ env.WEBSITE_DIRECTORY }}
     permissions:
       contents: read
+      # Reads the master coverage-tree baseline artifacts through the REST API.
+      actions: read
 
     steps:
       - name: Checkout
@@ -1089,13 +1098,99 @@ jobs:
           path: ~/.cache/ms-playwright
           key: ${{ steps.playwright-cache.outputs.cache-primary-key }}
 
+      # The e2e-impact coverage tree is published only by successful master
+      # push runs. A missing baseline is not an error — the selector falls
+      # back to the full suite (#2085).
+      - name: Download e2e-impact coverage baseline
+        id: impact-baseline
+        working-directory: ${{ github.workspace }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node devops/github/ci/e2e-impact/e2e-impact.ts baseline-download \
+            --name "${{ env.WEBSITE_E2E_IMPACT_ARTIFACT_NAME_MASTER }}" \
+            --out "$GITHUB_WORKSPACE/web/bible-on-site/.coverage/e2e-impact/baseline"
+
+      # Shadow mode computes the deterministic subset for evidence while the
+      # suite still runs everything. A missing, stale or incompatible baseline,
+      # an undeterminable diff or a discovery problem resolves to selectAll —
+      # never to a silently empty run.
+      - name: Select affected E2E tests (shadow)
+        id: impact-selection
+        working-directory: ${{ github.workspace }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          BASELINE_ARGS=()
+          if [ "${{ steps.impact-baseline.outputs.available }}" == "true" ]; then
+            BASELINE_ARGS=(--baseline "${{ steps.impact-baseline.outputs.baseline-file }}")
+          fi
+          node devops/github/ci/e2e-impact/e2e-impact.ts select \
+            --suite web/bible-on-site \
+            --platform web \
+            --tested-sha "${{ github.sha }}" \
+            --out "$GITHUB_WORKSPACE/web/bible-on-site/.coverage/e2e-impact/selection-manifest.json" \
+            --compare "${BASELINE_ARGS[@]}"
+
       # coverage:e2e starts next dev; the production build and standalone-server
       # checks run in Website Performance, which remains a Cross Module CI gate.
+      # The run also drops e2e-impact evidence under .coverage/e2e-impact/.
       - name: E2E Test
         id: npm-e2e-test
         env:
           DB_URL: mysql://root:test_123@127.0.0.1:3306/tanah_test
         run: npm run coverage:e2e
+
+      # Evidence is collected even after a failed run — passed tests keep
+      # their coverage — but the tree marks incomplete so a partial run can
+      # never shrink the trusted baseline.
+      - name: Collect per-test coverage evidence
+        if: always()
+        id: impact-collect
+        working-directory: ${{ github.workspace }}
+        env:
+          E2E_OUTCOME: ${{ steps.npm-e2e-test.outcome }}
+        run: |
+          INCOMPLETE_ARGS=()
+          if [ "$E2E_OUTCOME" != "success" ]; then
+            INCOMPLETE_ARGS=(--incomplete)
+          fi
+          node devops/github/ci/e2e-impact/e2e-impact.ts collect-playwright \
+            --suite web/bible-on-site \
+            --platform web \
+            --artifacts "$GITHUB_WORKSPACE/web/bible-on-site/.coverage/e2e-impact" \
+            --snapshot-sha "${{ github.sha }}" \
+            --out "$GITHUB_WORKSPACE/web/bible-on-site/.coverage/e2e-impact/coverage-tree.json" "${INCOMPLETE_ARGS[@]}"
+          # Only a complete tree may replace the trusted master baseline.
+          COMPLETE=$(node -e "console.log(JSON.parse(require('node:fs').readFileSync('$GITHUB_WORKSPACE/web/bible-on-site/.coverage/e2e-impact/coverage-tree.json','utf8')).complete === true)")
+          echo "complete=$COMPLETE" >> "$GITHUB_OUTPUT"
+
+      # Selection manifest + collected tree for shadow-mode inspection.
+      - name: Store e2e-impact evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: website-e2e-impact-${{ github.run_id }}
+          path: |
+            web/bible-on-site/.coverage/e2e-impact/selection-manifest.json
+            web/bible-on-site/.coverage/e2e-impact/coverage-tree.json
+            web/bible-on-site/.coverage/e2e-impact/test-results.json
+            web/bible-on-site/.coverage/e2e-impact/discovered.json
+          retention-days: 7
+          overwrite: true
+          if-no-files-found: ignore
+
+      # The authoritative baseline is published only from a completed,
+      # successful default-branch run; PR and merge-queue evidence stays
+      # provisional inside the run's diagnostics artifact.
+      - name: Publish e2e-impact coverage baseline
+        if: always() && github.event_name == 'push' && github.ref == 'refs/heads/master' && steps.npm-e2e-test.outcome == 'success' && steps.impact-collect.outcome == 'success' && steps.impact-collect.outputs.complete == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.WEBSITE_E2E_IMPACT_ARTIFACT_NAME_MASTER }}
+          path: web/bible-on-site/.coverage/e2e-impact/coverage-tree.json
+          retention-days: 90
+          overwrite: true
 
       - name: Store Website E2E HTML Report
         if: ${{ !cancelled() }}
@@ -1178,6 +1273,8 @@ jobs:
         working-directory: ${{ env.ADMIN_DIRECTORY }}
     permissions:
       contents: read
+      # Reads the master coverage-tree baseline artifacts through the REST API.
+      actions: read
 
     steps:
       - name: Checkout
@@ -1321,6 +1418,40 @@ jobs:
       - name: Wait for data crate build
         wait: crates
 
+      # The e2e-impact coverage tree is published only by successful master
+      # push runs. A missing baseline is not an error — the selector falls
+      # back to the full suite (#2085).
+      - name: Download e2e-impact coverage baseline
+        id: impact-baseline
+        working-directory: ${{ github.workspace }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node devops/github/ci/e2e-impact/e2e-impact.ts baseline-download \
+            --name "${{ env.ADMIN_E2E_IMPACT_ARTIFACT_NAME_MASTER }}" \
+            --out "$GITHUB_WORKSPACE/web/admin/.coverage/e2e-impact/baseline"
+
+      # Shadow mode computes the deterministic subset for evidence while the
+      # suite still runs everything. A missing, stale or incompatible baseline,
+      # an undeterminable diff or a discovery problem resolves to selectAll —
+      # never to a silently empty run.
+      - name: Select affected E2E tests (shadow)
+        id: impact-selection
+        working-directory: ${{ github.workspace }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          BASELINE_ARGS=()
+          if [ "${{ steps.impact-baseline.outputs.available }}" == "true" ]; then
+            BASELINE_ARGS=(--baseline "${{ steps.impact-baseline.outputs.baseline-file }}")
+          fi
+          node devops/github/ci/e2e-impact/e2e-impact.ts select \
+            --suite web/admin \
+            --platform web \
+            --tested-sha "${{ github.sha }}" \
+            --out "$GITHUB_WORKSPACE/web/admin/.coverage/e2e-impact/selection-manifest.json" \
+            --compare "${BASELINE_ARGS[@]}"
+
       - name: E2E Test with Coverage
         id: npm-e2e-test
         env:
@@ -1332,6 +1463,57 @@ jobs:
           S3_SECRET_ACCESS_KEY: test_1234
           S3_FORCE_PATH_STYLE: "true"
         run: npm run coverage:e2e
+
+      # Evidence is collected even after a failed run — passed tests keep
+      # their coverage — but the tree marks incomplete so a partial run can
+      # never shrink the trusted baseline.
+      - name: Collect per-test coverage evidence
+        if: always()
+        id: impact-collect
+        working-directory: ${{ github.workspace }}
+        env:
+          E2E_OUTCOME: ${{ steps.npm-e2e-test.outcome }}
+        run: |
+          INCOMPLETE_ARGS=()
+          if [ "$E2E_OUTCOME" != "success" ]; then
+            INCOMPLETE_ARGS=(--incomplete)
+          fi
+          node devops/github/ci/e2e-impact/e2e-impact.ts collect-playwright \
+            --suite web/admin \
+            --platform web \
+            --artifacts "$GITHUB_WORKSPACE/web/admin/.coverage/e2e-impact" \
+            --snapshot-sha "${{ github.sha }}" \
+            --out "$GITHUB_WORKSPACE/web/admin/.coverage/e2e-impact/coverage-tree.json" "${INCOMPLETE_ARGS[@]}"
+          # Only a complete tree may replace the trusted master baseline.
+          COMPLETE=$(node -e "console.log(JSON.parse(require('node:fs').readFileSync('$GITHUB_WORKSPACE/web/admin/.coverage/e2e-impact/coverage-tree.json','utf8')).complete === true)")
+          echo "complete=$COMPLETE" >> "$GITHUB_OUTPUT"
+
+      # Selection manifest + collected tree for shadow-mode inspection.
+      - name: Store e2e-impact evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: admin-e2e-impact-${{ github.run_id }}
+          path: |
+            web/admin/.coverage/e2e-impact/selection-manifest.json
+            web/admin/.coverage/e2e-impact/coverage-tree.json
+            web/admin/.coverage/e2e-impact/test-results.json
+            web/admin/.coverage/e2e-impact/discovered.json
+          retention-days: 7
+          overwrite: true
+          if-no-files-found: ignore
+
+      # The authoritative baseline is published only from a completed,
+      # successful default-branch run; PR and merge-queue evidence stays
+      # provisional inside the run's diagnostics artifact.
+      - name: Publish e2e-impact coverage baseline
+        if: always() && github.event_name == 'push' && github.ref == 'refs/heads/master' && steps.npm-e2e-test.outcome == 'success' && steps.impact-collect.outcome == 'success' && steps.impact-collect.outputs.complete == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.ADMIN_E2E_IMPACT_ARTIFACT_NAME_MASTER }}
+          path: web/admin/.coverage/e2e-impact/coverage-tree.json
+          retention-days: 90
+          overwrite: true
 
       - name: Merge test coverage (unit; E2E lcov when enabled)
         run: npm run coverage:merge
@@ -1385,6 +1567,8 @@ jobs:
     if: ${{ always() && !cancelled() && !failure() && (needs.determine_changes.outputs.api_module_changed == 'true' || needs.determine_changes.outputs.api_ci_changed == 'true' || needs.determine_baseline_availability.outputs.is_api_master_coverage_available == 'false') }}
     permissions:
       contents: read
+      # Reads the master coverage-tree baseline artifacts through the REST API.
+      actions: read
 
     steps:
       - name: Checkout
@@ -1486,8 +1670,41 @@ jobs:
           path: ~/.npm
           key: ${{ steps.tests-npm-cache.outputs.cache-primary-key }}
 
+      # The e2e-impact coverage tree is published only by successful master
+      # push runs. A missing baseline is not an error — the selector falls
+      # back to the full suite (#2085).
+      - name: Download e2e-impact coverage baseline
+        id: impact-baseline
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node devops/github/ci/e2e-impact/e2e-impact.ts baseline-download \
+            --name "${{ env.API_E2E_IMPACT_ARTIFACT_NAME_MASTER }}" \
+            --out "$GITHUB_WORKSPACE/web/api/.coverage/e2e-impact/baseline"
+
+      # Shadow mode computes the deterministic subset for evidence while the
+      # suite still runs everything. A missing, stale or incompatible baseline,
+      # an undeterminable diff or a discovery problem resolves to selectAll —
+      # never to a silently empty run.
+      - name: Select affected E2E tests (shadow)
+        id: impact-selection
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          BASELINE_ARGS=()
+          if [ "${{ steps.impact-baseline.outputs.available }}" == "true" ]; then
+            BASELINE_ARGS=(--baseline "${{ steps.impact-baseline.outputs.baseline-file }}")
+          fi
+          node devops/github/ci/e2e-impact/e2e-impact.ts select \
+            --suite web/api \
+            --platform api \
+            --tested-sha "${{ github.sha }}" \
+            --out "$GITHUB_WORKSPACE/web/api/.coverage/e2e-impact/selection-manifest.json" \
+            --compare "${BASELINE_ARGS[@]}"
+
       # API tests use Playwright's HTTP request fixture and node:http2 only;
       # they do not launch a browser or need browser/system-dependency installs.
+      # The run drops e2e-impact evidence under .coverage/e2e-impact/.
       - name: E2E Test
         id: api-e2e
         working-directory: ${{ env.API_DIRECTORY }}
@@ -1495,6 +1712,56 @@ jobs:
           DB_URL: mysql://root:test_123@127.0.0.1:3306/tanah_test
         run: |
           cargo make coverage-e2e
+
+      # Evidence is collected even after a failed run — passed tests keep
+      # their coverage — but the tree marks incomplete so a partial run can
+      # never shrink the trusted baseline.
+      - name: Collect per-test coverage evidence
+        if: always()
+        id: impact-collect
+        env:
+          E2E_OUTCOME: ${{ steps.api-e2e.outcome }}
+        run: |
+          INCOMPLETE_ARGS=()
+          if [ "$E2E_OUTCOME" != "success" ]; then
+            INCOMPLETE_ARGS=(--incomplete)
+          fi
+          node devops/github/ci/e2e-impact/e2e-impact.ts collect-playwright \
+            --suite web/api \
+            --platform api \
+            --artifacts "$GITHUB_WORKSPACE/web/api/.coverage/e2e-impact" \
+            --snapshot-sha "${{ github.sha }}" \
+            --out "$GITHUB_WORKSPACE/web/api/.coverage/e2e-impact/coverage-tree.json" "${INCOMPLETE_ARGS[@]}"
+          # Only a complete tree may replace the trusted master baseline.
+          COMPLETE=$(node -e "console.log(JSON.parse(require('node:fs').readFileSync('$GITHUB_WORKSPACE/web/api/.coverage/e2e-impact/coverage-tree.json','utf8')).complete === true)")
+          echo "complete=$COMPLETE" >> "$GITHUB_OUTPUT"
+
+      # Selection manifest + collected tree for shadow-mode inspection.
+      - name: Store e2e-impact evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: api-e2e-impact-${{ github.run_id }}
+          path: |
+            web/api/.coverage/e2e-impact/selection-manifest.json
+            web/api/.coverage/e2e-impact/coverage-tree.json
+            web/api/.coverage/e2e-impact/test-results.json
+            web/api/.coverage/e2e-impact/discovered.json
+          retention-days: 7
+          overwrite: true
+          if-no-files-found: ignore
+
+      # The authoritative baseline is published only from a completed,
+      # successful default-branch run; PR and merge-queue evidence stays
+      # provisional inside the run's diagnostics artifact.
+      - name: Publish e2e-impact coverage baseline
+        if: always() && github.event_name == 'push' && github.ref == 'refs/heads/master' && steps.api-e2e.outcome == 'success' && steps.impact-collect.outcome == 'success' && steps.impact-collect.outputs.complete == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.API_E2E_IMPACT_ARTIFACT_NAME_MASTER }}
+          path: web/api/.coverage/e2e-impact/coverage-tree.json
+          retention-days: 90
+          overwrite: true
 
       - name: Show E2E Debug Logs
         if: ${{ always() }}
@@ -2621,7 +2888,7 @@ jobs:
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         run: |
           npm run test:version
-          node --test github/ci/codecov-report-state.test.mjs github/ci/bencher-comparison.test.mjs github/ci/e2e-impact/e2e-impact.test.ts e2e-coverage-trees/e2e-coverage-trees.test.ts
+          node --test github/ci/codecov-report-state.test.mjs github/ci/bencher-comparison.test.mjs github/ci/e2e-impact/e2e-impact.test.ts github/ci/e2e-impact/playwright-impact.test.ts e2e-coverage-trees/e2e-coverage-trees.test.ts
 
       # Real app-process coverage from the instrumented mobile E2E legs
       # (#1232). A successful mobile run must contribute both platform reports;

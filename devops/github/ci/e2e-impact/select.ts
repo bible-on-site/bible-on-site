@@ -62,6 +62,14 @@ export interface SelectionInput {
 	 * treated as changed.
 	 */
 	currentFingerprints?: ReadonlyMap<string, SourceFingerprint | null>;
+	/**
+	 * Repo-relative test files whose declarations cannot all be resolved
+	 * statically (non-literal Playwright titles, parse anomalies, zero
+	 * discovered tests). A change to one selects every applicable test, and
+	 * enforce-mode runners must execute them wholesale — their tests are
+	 * never narrowed by id. Suites without dynamic files omit this.
+	 */
+	dynamicTestFiles?: ReadonlySet<string>;
 }
 
 export interface FileResolution {
@@ -100,7 +108,24 @@ export interface SelectionManifest {
 	 * platform (other platform or another test category) — diagnostics only.
 	 */
 	nonApplicableTestChanges: string[];
-	filter: { vstest: string | null };
+	/**
+	 * Test files discovery could not fully resolve statically — any change
+	 * to them selected the whole suite, and enforce-mode runners must run
+	 * them wholesale rather than by test id.
+	 */
+	dynamicTestFiles: string[];
+	filter: {
+		/** `--filter FullyQualifiedName=…` for xUnit suites; null otherwise. */
+		vstest: string | null;
+		/**
+		 * `--grep`-able selection for Playwright suites, grouped by the
+		 * repo-relative test file. A title is the test's describe path joined
+		 * by spaces — the exact string Playwright's `--grep` matches.
+		 * Dynamic test files carry no resolvable titles; enforce-mode runners
+		 * run them wholesale from `dynamicTestFiles` instead.
+		 */
+		playwright: { file: string; titles: string[] }[] | null;
+	};
 }
 
 /** Test ids applicable to a platform job (its own tests plus shared ones). */
@@ -229,6 +254,11 @@ export function selectTests(input: SelectionInput): SelectionManifest {
 
 		if (inTestRoot(path)) {
 			if (isTestFile(testRootRelative(path))) {
+				// A file discovery could not fully resolve is shared harness:
+				// under-resolved tests must never be narrowed away (#2085).
+				if (input.dynamicTestFiles?.has(path)) {
+					return finish("all", "dynamic-test-file");
+				}
 				const declared = candidates.filter((test) => test.file === path);
 				const declaredIds = declared.map((test) => test.id);
 				if (declared.length === 0 && status !== "deleted") {
@@ -378,13 +408,37 @@ export function selectTests(input: SelectionInput): SelectionManifest {
 			.map((resolution) => resolution.path)
 			.sort(),
 		nonApplicableTestChanges: nonApplicableTestChanges.sort(),
+		dynamicTestFiles: [...(input.dynamicTestFiles ?? [])].sort(),
 		filter: {
-			vstest: selectAllMode
-				? null
-				: selected.map((test) => `FullyQualifiedName=${test.id}`).join("|"),
+			vstest:
+				selectAllMode || rules.tests.framework !== "csharp-xunit"
+					? null
+					: selected.map((test) => `FullyQualifiedName=${test.id}`).join("|"),
+			playwright:
+				selectAllMode || rules.tests.framework !== "playwright"
+					? null
+					: playwrightFilter(selected),
 		},
 	};
 	return manifest;
+}
+
+/**
+ * Groups selected Playwright tests into `{repo-relative file, titles}`:
+ * each title is the id's describe/test path joined by spaces — the exact
+ * string `--grep` matches against. Sorted for manifest determinism.
+ */
+function playwrightFilter(
+	selected: DiscoveredTest[],
+): { file: string; titles: string[] }[] {
+	const byFile = new Map<string, string[]>();
+	for (const test of selected) {
+		const title = test.id.split(" :: ").slice(1).join(" ");
+		byFile.set(test.file, [...(byFile.get(test.file) ?? []), title]);
+	}
+	return [...byFile.entries()]
+		.sort(([a], [b]) => a.localeCompare(b))
+		.map(([file, titles]) => ({ file, titles: titles.sort() }));
 }
 
 /** Convenience loader for the tested-revision file reader used by fileToUnit. */

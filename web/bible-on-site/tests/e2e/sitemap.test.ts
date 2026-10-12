@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "../util/playwright/test-fixture";
 
 // These values match the constants in src/app/sitemap.ts
 const SITEMAP_SECTIONS = [
