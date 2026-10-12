@@ -3,7 +3,7 @@
 Recitation is independent of the Perushim notes extension. Preferences lets readers
 select whole books or all available books and shows each book's download size.
 Android downloads `recitation_<seferId>` on-demand Play Asset Delivery modules.
-iOS downloads the corresponding Apple On-Demand Resource tags through the same
+iOS downloads the corresponding Apple-hosted managed asset packs through the same
 delivery service used by Perushim. Playback never downloads an MP3 or catalog from
 S3 or the website.
 
@@ -33,8 +33,9 @@ builds also embed the archives for testing without Play. Mobile store Release
 builds keep the audio out of the base installation.
 
 CI generates real book packages, builds an Android release bundle, and checks
-every module and archive hash. Store packaging also rejects an IPA without every
-expected ODR tag and its compiled payload. Generated audio stays out of Git.
+every module and archive hash. Store packaging also rejects an IPA without the
+embedded downloader extension, an asset-pack manifest, or a matching `.aar`
+payload. Generated audio stays out of Git.
 
 ```mermaid
 flowchart LR
