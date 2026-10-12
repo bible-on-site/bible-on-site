@@ -75,7 +75,7 @@ jest.mock(
 				{children}
 			</button>
 		),
-		BookshelfIcon: () => <span>shelf</span>,
+		BookshelfIcon: () => <span>{"shelf"}</span>,
 		FirstPageButton: () => <div />,
 		FullscreenButton: () => <div />,
 		LastPageButton: () => <div />,

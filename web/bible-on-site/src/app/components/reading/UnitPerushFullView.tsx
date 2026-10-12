@@ -138,6 +138,7 @@ export function UnitPerushFullView({
 									<div
 										key={`${note.perekId}-${note.pasuk}-${note.noteIdx}`}
 										className={styles.noteContent}
+										// nosemgrep -- DOMPurify-sanitized perush note
 										// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify
 										dangerouslySetInnerHTML={{
 											__html: DOMPurify.sanitize(note.noteContent),
