@@ -62,6 +62,13 @@ env:
   APP_COVERAGE_DIRECTORY: app/.coverage
   APP_COVERAGE_REPORT: app/.coverage/merged/lcov.info
   APP_MERGED_COVERAGE_DIRECTORY: app/.coverage/merged
+  # Real app-process coverage collected by the instrumented mobile E2E legs
+  # (#1232). Per-run artifacts merge into the app report; the master artifacts
+  # are trusted baselines reused only when a run produces no fresh layer.
+  APP_E2E_COVERAGE_ARTIFACT_NAME_WF: app-e2e-coverage.${{ github.run_id }}
+  APP_E2E_COVERAGE_ARTIFACT_NAME_MASTER_ANDROID: app-e2e-coverage.master.android
+  APP_E2E_COVERAGE_ARTIFACT_NAME_MASTER_IOS: app-e2e-coverage.master.ios
+  APP_E2E_COVERAGE_DIRECTORY: app/.coverage/e2e
   APP_DIRECTORY: app
   CROSS_MODULE_COVERAGE_REPORT: .coverage/lcov.info
   DATA_COVERAGE_ARTIFACT_NAME_MASTER: data-coverage.master
@@ -166,6 +173,8 @@ jobs:
       is_data_master_coverage_available: ${{ steps.check_master_coverage_artifacts.outputs.is_data_master_coverage_available }}
       is_perushim_data_sql_available: ${{ steps.check_master_coverage_artifacts.outputs.is_perushim_data_sql_available }}
       is_perushim_notes_sqlite_available: ${{ steps.check_master_coverage_artifacts.outputs.is_perushim_notes_sqlite_available }}
+      is_app_e2e_android_coverage_available: ${{ steps.check_master_coverage_artifacts.outputs.is_app_e2e_android_coverage_available }}
+      is_app_e2e_ios_coverage_available: ${{ steps.check_master_coverage_artifacts.outputs.is_app_e2e_ios_coverage_available }}
     steps:
       - name: Check and restore master baseline artifacts
         id: check_master_coverage_artifacts
@@ -200,6 +209,8 @@ jobs:
           IS_DATA_MASTER_COVERAGE_AVAILABLE=$(check_and_download_artifact "${{ env.DATA_COVERAGE_ARTIFACT_NAME_MASTER }}")
           IS_PERUSHIM_DATA_SQL_AVAILABLE=$(check_and_download_artifact "${{ env.PERUSHIM_DATA_SQL_ARTIFACT_NAME_MASTER }}")
           IS_PERUSHIM_NOTES_SQLITE_AVAILABLE=$(check_and_download_artifact "${{ env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}")
+          IS_APP_E2E_ANDROID_COVERAGE_AVAILABLE=$(check_and_download_artifact "${{ env.APP_E2E_COVERAGE_ARTIFACT_NAME_MASTER_ANDROID }}")
+          IS_APP_E2E_IOS_COVERAGE_AVAILABLE=$(check_and_download_artifact "${{ env.APP_E2E_COVERAGE_ARTIFACT_NAME_MASTER_IOS }}")
 
           echo "API master coverage available: $IS_API_MASTER_COVERAGE_AVAILABLE"
           echo "App master coverage available: $IS_APP_MASTER_COVERAGE_AVAILABLE"
@@ -209,6 +220,8 @@ jobs:
           echo "Data master coverage available: $IS_DATA_MASTER_COVERAGE_AVAILABLE"
           echo "Perushim data SQL available: $IS_PERUSHIM_DATA_SQL_AVAILABLE"
           echo "Perushim notes SQLite available: $IS_PERUSHIM_NOTES_SQLITE_AVAILABLE"
+          echo "App E2E Android coverage available: $IS_APP_E2E_ANDROID_COVERAGE_AVAILABLE"
+          echo "App E2E iOS coverage available: $IS_APP_E2E_IOS_COVERAGE_AVAILABLE"
 
           echo "is_api_master_coverage_available=$IS_API_MASTER_COVERAGE_AVAILABLE" >> $GITHUB_OUTPUT
           echo "is_app_master_coverage_available=$IS_APP_MASTER_COVERAGE_AVAILABLE" >> $GITHUB_OUTPUT
@@ -218,6 +231,8 @@ jobs:
           echo "is_data_master_coverage_available=$IS_DATA_MASTER_COVERAGE_AVAILABLE" >> $GITHUB_OUTPUT
           echo "is_perushim_data_sql_available=$IS_PERUSHIM_DATA_SQL_AVAILABLE" >> $GITHUB_OUTPUT
           echo "is_perushim_notes_sqlite_available=$IS_PERUSHIM_NOTES_SQLITE_AVAILABLE" >> $GITHUB_OUTPUT
+          echo "is_app_e2e_android_coverage_available=$IS_APP_E2E_ANDROID_COVERAGE_AVAILABLE" >> $GITHUB_OUTPUT
+          echo "is_app_e2e_ios_coverage_available=$IS_APP_E2E_IOS_COVERAGE_AVAILABLE" >> $GITHUB_OUTPUT
 
       # Keep JS action startup sequential: the runner's shared event.json can
       # be truncated while another parallel action reads it.
@@ -288,6 +303,24 @@ jobs:
         with:
           name: ${{ env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
           path: /tmp/${{ env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
+          retention-days: 90
+          overwrite: true
+
+      - name: Re-upload App E2E Android coverage for current workflow
+        if: steps.check_master_coverage_artifacts.outputs.is_app_e2e_android_coverage_available == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.APP_E2E_COVERAGE_ARTIFACT_NAME_MASTER_ANDROID }}
+          path: /tmp/${{ env.APP_E2E_COVERAGE_ARTIFACT_NAME_MASTER_ANDROID }}
+          retention-days: 90
+          overwrite: true
+
+      - name: Re-upload App E2E iOS coverage for current workflow
+        if: steps.check_master_coverage_artifacts.outputs.is_app_e2e_ios_coverage_available == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.APP_E2E_COVERAGE_ARTIFACT_NAME_MASTER_IOS }}
+          path: /tmp/${{ env.APP_E2E_COVERAGE_ARTIFACT_NAME_MASTER_IOS }}
           retention-days: 90
           overwrite: true
 
@@ -1641,6 +1674,10 @@ jobs:
       - name: Run Unit Tests with Coverage
         run: dotnet run --project devops -- CoverageUnit --configuration Release
 
+      # Pure fixture tests for the E2E coverage apply/merge helpers (#1232).
+      - name: Run devops Unit Tests
+        run: dotnet test devops.Tests/devops.Tests.csproj --configuration Release
+
       - name: Save NuGet packages
         if: ${{ github.ref == 'refs/heads/master' && steps.nuget-cache.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@v6
@@ -1727,6 +1764,9 @@ jobs:
       - name: Merge Coverage Reports
         run: dotnet run --project devops -- CoverageMerge --configuration Release
 
+      # Unit+integration layer only. The mobile E2E legs contribute their own
+      # app-process coverage (#1232) and cross_module_ci merges every layer
+      # before publishing the authoritative app report and the master baseline.
       - name: Store App Coverage Report (wf)
         uses: actions/upload-artifact@v7
         with:
@@ -1736,22 +1776,16 @@ jobs:
           overwrite: true
           if-no-files-found: error
 
-      - name: Store App Coverage Report (master)
-        if: ${{ env.IS_MASTER_BRANCH == 'true' }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ env.APP_COVERAGE_ARTIFACT_NAME_MASTER }}
-          path: ${{ env.APP_COVERAGE_REPORT }}
-          retention-days: 90
-          overwrite: true
-
   app_mobile_e2e:
     name: App Mobile E2E
     # Wait for perushim_data so the app under test packages the same catalog/notes
     # pair package_app ships — the run artifact when the pipeline regenerated it,
     # the master baseline otherwise — never a stale committed fixture.
-    needs: [setup_env, determine_changes, perushim_data]
-    if: ${{ always() && !cancelled() && !failure() && (needs.determine_changes.outputs.app_module_changed == 'true' || needs.determine_changes.outputs.app_ci_changed == 'true') }}
+    # determine_baseline_availability: a missing app-coverage.master forces a
+    # full recovery run, and the rebuilt baseline must include the E2E layer
+    # (#1232), not just unit+integration.
+    needs: [setup_env, determine_changes, perushim_data, determine_baseline_availability]
+    if: ${{ always() && !cancelled() && !failure() && (needs.determine_changes.outputs.app_module_changed == 'true' || needs.determine_changes.outputs.app_ci_changed == 'true' || needs.determine_baseline_availability.outputs.is_app_master_coverage_available == 'false') }}
     permissions:
       contents: read
       # Reads the master coverage-tree baseline artifacts through the REST API (#2085).
@@ -2385,7 +2419,7 @@ jobs:
             fi
           fi
 
-          if [ "$APP_MODULE_CHANGED" = "true" ] || [ "$APP_CI_CHANGED" = "true" ]; then
+          if [ "$APP_MODULE_CHANGED" = "true" ] || [ "$APP_CI_CHANGED" = "true" ] || [ "$APP_MASTER_COVERAGE_AVAILABLE" = "false" ]; then
             if [ "${{ needs.app_mobile_e2e.result }}" != "success" ]; then
               echo "Appium mobile E2E matrix failed or did not run"
               exit 1
@@ -2488,15 +2522,6 @@ jobs:
           name: ${{ needs.app_ci.result != 'skipped' && env.APP_COVERAGE_ARTIFACT_NAME_WF || env.APP_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: ${{ env.APP_MERGED_COVERAGE_DIRECTORY }}
 
-      - name: Publish App Coverage To Codecov
-        uses: codecov/codecov-action@v7
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ${{ env.APP_COVERAGE_REPORT }}
-          disable_search: true
-          flags: app
-          fail_ci_if_error: false
-
       - name: Restore Bulletin Coverage Report
         uses: actions/download-artifact@v8
         with:
@@ -2597,6 +2622,94 @@ jobs:
         run: |
           npm run test:version
           node --test github/ci/codecov-report-state.test.mjs github/ci/bencher-comparison.test.mjs github/ci/e2e-impact/e2e-impact.test.ts e2e-coverage-trees/e2e-coverage-trees.test.ts
+
+      # Real app-process coverage from the instrumented mobile E2E legs
+      # (#1232). A successful mobile run must contribute both platform reports;
+      # when the suite was not applicable this falls back to the trusted
+      # per-platform baselines re-uploaded by determine_baseline_availability.
+      - name: Restore App E2E coverage (this run, Android)
+        if: needs.app_mobile_e2e.result == 'success'
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ env.APP_E2E_COVERAGE_ARTIFACT_NAME_WF }}.android
+          path: ${{ env.APP_E2E_COVERAGE_DIRECTORY }}/android
+
+      - name: Restore App E2E coverage (this run, iOS)
+        if: needs.app_mobile_e2e.result == 'success'
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ env.APP_E2E_COVERAGE_ARTIFACT_NAME_WF }}.ios
+          path: ${{ env.APP_E2E_COVERAGE_DIRECTORY }}/ios
+
+      - name: Restore App E2E coverage (master baseline, Android)
+        if: needs.app_mobile_e2e.result != 'success' && needs.determine_baseline_availability.outputs.is_app_e2e_android_coverage_available == 'true'
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ env.APP_E2E_COVERAGE_ARTIFACT_NAME_MASTER_ANDROID }}
+          path: ${{ env.APP_E2E_COVERAGE_DIRECTORY }}/android
+
+      - name: Restore App E2E coverage (master baseline, iOS)
+        if: needs.app_mobile_e2e.result != 'success' && needs.determine_baseline_availability.outputs.is_app_e2e_ios_coverage_available == 'true'
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ env.APP_E2E_COVERAGE_ARTIFACT_NAME_MASTER_IOS }}
+          path: ${{ env.APP_E2E_COVERAGE_DIRECTORY }}/ios
+
+      # Merge unit + integration + E2E layers by covered locations, never by
+      # percentage. --relocate canonicalizes absolute runner paths (Linux and
+      # macOS legs differ) so the same source line counts exactly once.
+      - name: Merge App coverage layers
+        if: needs.app_ci.result == 'success'
+        working-directory: ${{ env.DEVOPS_DIRECTORY }}
+        run: |
+          REPORT="${{ github.workspace }}/${{ env.APP_COVERAGE_REPORT }}"
+          MERGE_ARGS=(--out "$REPORT" --relocate app/BibleOnSite/ --require "$REPORT")
+          FOUND=0
+          for platform in android ios; do
+            LCOV="${{ github.workspace }}/${{ env.APP_E2E_COVERAGE_DIRECTORY }}/$platform/lcov.info"
+            if [ -f "$LCOV" ]; then
+              MERGE_ARGS+=(--require "$LCOV")
+              FOUND=$((FOUND+1))
+            fi
+          done
+          if [ "${{ needs.app_mobile_e2e.result }}" = "success" ] && [ "$FOUND" -lt 2 ]; then
+            echo "::error::Mobile E2E succeeded but its coverage reports are missing (found $FOUND/2)."
+            exit 1
+          fi
+          if [ "$FOUND" -eq 0 ]; then
+            echo "::warning::No mobile E2E coverage layer available; merging unit + integration only."
+          fi
+          node --import tsx merge-lcov.mts "${MERGE_ARGS[@]}"
+
+      # The combined report replaces the unit+integration artifact: the
+      # authoritative app report and the master baseline always contain every
+      # layer, so a partial run can never overwrite a complete baseline.
+      - name: Store App Coverage Report (wf)
+        if: needs.app_ci.result == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.APP_COVERAGE_ARTIFACT_NAME_WF }}
+          path: ${{ env.APP_COVERAGE_REPORT }}
+          retention-days: 90
+          overwrite: true
+
+      - name: Store App Coverage Report (master)
+        if: needs.app_ci.result == 'success' && env.IS_MASTER_BRANCH == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.APP_COVERAGE_ARTIFACT_NAME_MASTER }}
+          path: ${{ env.APP_COVERAGE_REPORT }}
+          retention-days: 90
+          overwrite: true
+
+      - name: Publish App Coverage To Codecov
+        uses: codecov/codecov-action@v7
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ${{ env.APP_COVERAGE_REPORT }}
+          disable_search: true
+          flags: app
+          fail_ci_if_error: false
 
       - name: Merge Test Coverage (Website + API)
         run: npm run coverage:merge
