@@ -403,13 +403,21 @@ pub fn insert_masora_reading_units(tx: &Transaction, sefarim: &[Sefer]) -> Resul
     )?;
 
     let units = derive_masora_units(sefarim)?;
-    for unit in &units {
+    insert_units(tx, MASORA_DIVISION_ID, &units)
+}
+
+/// Insert one division's units — every unit row, its ordered primary
+/// ranges (auxiliary columns NULL), and each auxiliary reading's ranges
+/// keyed by (auxiliary_ordinal, auxiliary_id). The unit shape is shared
+/// across divisions; only the derive step differs between them.
+fn insert_units(tx: &Transaction, division_id: &str, units: &[ReadingUnit]) -> Result<()> {
+    for unit in units {
         tx.execute(
             "INSERT INTO tanah_reading_unit
              (division_id, unit_id, slug, sefer_id, unit_order, heading, closing_break)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
             (
-                MASORA_DIVISION_ID,
+                division_id,
                 unit.unit_id,
                 &unit.slug,
                 unit.sefer_id,
@@ -422,7 +430,7 @@ pub fn insert_masora_reading_units(tx: &Transaction, sefarim: &[Sefer]) -> Resul
         for (range_index, range) in unit.ranges.iter().enumerate() {
             insert_range(
                 tx,
-                MASORA_DIVISION_ID,
+                division_id,
                 unit.unit_id,
                 range_index as i32,
                 None,
@@ -435,7 +443,7 @@ pub fn insert_masora_reading_units(tx: &Transaction, sefarim: &[Sefer]) -> Resul
             for (range_index, range) in aux.ranges.iter().enumerate() {
                 insert_range(
                     tx,
-                    MASORA_DIVISION_ID,
+                    division_id,
                     unit.unit_id,
                     range_index as i32,
                     Some(aux_ordinal as i32),
@@ -789,51 +797,7 @@ pub fn insert_parasha_reading_units(tx: &Transaction, sefarim: &[Sefer]) -> Resu
     }
 
     let units = derive_parasha_units(&source, sefarim)?;
-    for unit in &units {
-        tx.execute(
-            "INSERT INTO tanah_reading_unit
-             (division_id, unit_id, slug, sefer_id, unit_order, heading, closing_break)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-            (
-                PARASHA_DIVISION_ID,
-                unit.unit_id,
-                &unit.slug,
-                unit.sefer_id,
-                unit.order,
-                &unit.heading,
-                unit.closing_break,
-            ),
-        )?;
-
-        for (range_index, range) in unit.ranges.iter().enumerate() {
-            insert_range(
-                tx,
-                PARASHA_DIVISION_ID,
-                unit.unit_id,
-                range_index as i32,
-                None,
-                None,
-                None,
-                range,
-            )?;
-        }
-        for (aux_ordinal, aux) in unit.auxiliary_readings.iter().enumerate() {
-            for (range_index, range) in aux.ranges.iter().enumerate() {
-                insert_range(
-                    tx,
-                    PARASHA_DIVISION_ID,
-                    unit.unit_id,
-                    range_index as i32,
-                    Some(aux_ordinal as i32),
-                    Some(&aux.id),
-                    Some(&aux.label),
-                    range,
-                )?;
-            }
-        }
-    }
-
-    Ok(())
+    insert_units(tx, PARASHA_DIVISION_ID, &units)
 }
 
 #[cfg(test)]
@@ -987,6 +951,27 @@ mod tests {
                 perakim: None,
             },
         ]
+    }
+
+    #[test]
+    fn derive_masora_units_skips_sefarim_without_perakim_parts() {
+        // A sefer carrying neither `perakim` nor `additionals` has no
+        // perakim parts at all — the derive loop skips it entirely.
+        let mut sefarim = masora_sample_sefarim();
+        sefarim.push(Sefer {
+            id: "empty".to_string(),
+            name: "ריק".to_string(),
+            tanach_us_name: None,
+            helek: "כתובים".to_string(),
+            pesukim_count: 0,
+            perek_from: 5,
+            perek_to: 4,
+            additionals: None,
+            perakim: None,
+        });
+        let units = derive_masora_units(&sefarim).unwrap();
+        assert_eq!(units.len(), 6);
+        assert!(units.iter().all(|unit| unit.sefer_id != 3));
     }
 
     #[test]
@@ -1471,6 +1456,272 @@ mod tests {
         source.units[26].haftarot[0].ranges[0].additional = None;
         let err = derive_parasha_units(&source, &sefarim).unwrap_err();
         assert!(err.to_string().contains("split into additionals"));
+    }
+
+    /// Small corpus for parasha resolution edge cases: בראשית unsplit
+    /// (perakim 1..=3, five pesukim each) and מלכים split into
+    /// additionals א (perek 4) and ב (perek 5).
+    fn parasha_fixture_sefarim() -> Vec<Sefer> {
+        let five_pesukim = || (0..5).map(|_| text_pasuk()).collect::<Vec<_>>();
+        vec![
+            Sefer {
+                id: "bereshit".to_string(),
+                name: "בראשית".to_string(),
+                tanach_us_name: None,
+                helek: "תורה".to_string(),
+                pesukim_count: 15,
+                perek_from: 1,
+                perek_to: 3,
+                additionals: None,
+                perakim: Some(vec![
+                    perek(1, five_pesukim()),
+                    perek(2, five_pesukim()),
+                    perek(3, five_pesukim()),
+                ]),
+            },
+            Sefer {
+                id: "melachim".to_string(),
+                name: "מלכים".to_string(),
+                tanach_us_name: None,
+                helek: "נביאים".to_string(),
+                pesukim_count: 10,
+                perek_from: 4,
+                perek_to: 5,
+                additionals: Some(vec![
+                    Additional {
+                        letter: "א".to_string(),
+                        name: "מלכים א".to_string(),
+                        tanach_us_name: None,
+                        helek: "נביאים".to_string(),
+                        order: 1,
+                        pesukim_count: 5,
+                        perek_from: 4,
+                        perek_to: 4,
+                        perakim: vec![perek(4, five_pesukim())],
+                    },
+                    Additional {
+                        letter: "ב".to_string(),
+                        name: "מלכים ב".to_string(),
+                        tanach_us_name: None,
+                        helek: "נביאים".to_string(),
+                        order: 2,
+                        pesukim_count: 5,
+                        perek_from: 5,
+                        perek_to: 5,
+                        perakim: vec![perek(5, five_pesukim())],
+                    },
+                ]),
+                perakim: None,
+            },
+        ]
+    }
+
+    fn source_verse(perek: i32, pasuk: i32) -> SourceVerse {
+        SourceVerse { perek, pasuk }
+    }
+
+    fn source_range(
+        sefer: &str,
+        additional: Option<&str>,
+        start: (i32, i32),
+        end: (i32, i32),
+    ) -> SourceRange {
+        SourceRange {
+            sefer: sefer.to_string(),
+            additional: additional.map(str::to_string),
+            start: source_verse(start.0, start.1),
+            end: source_verse(end.0, end.1),
+        }
+    }
+
+    fn parasha_fixture_source(units: Vec<ParashaSourceUnit>) -> ParashaDivisionSource {
+        ParashaDivisionSource {
+            root_path: "/פרשה".to_string(),
+            menu_label: "פרשה על הפרק".to_string(),
+            customs: HashMap::from([("ashkenazi".to_string(), "אשכנזים".to_string())]),
+            units,
+        }
+    }
+
+    fn parasha_fixture_unit(
+        sefer: &str,
+        start: (i32, i32),
+        end: (i32, i32),
+        haftarot: Vec<SourceHaftara>,
+    ) -> ParashaSourceUnit {
+        ParashaSourceUnit {
+            name: "פלוני".to_string(),
+            sefer: sefer.to_string(),
+            start: source_verse(start.0, start.1),
+            end: source_verse(end.0, end.1),
+            haftarot,
+        }
+    }
+
+    /// An "additional" letter on a sefer that is not split at all fails
+    /// the sefer-part lookup.
+    #[test]
+    fn parasha_derivation_rejects_additional_on_unsplit_sefer() {
+        let source = parasha_fixture_source(vec![parasha_fixture_unit(
+            "בראשית",
+            (1, 1),
+            (1, 5),
+            vec![SourceHaftara {
+                customs: vec!["ashkenazi".to_string()],
+                ranges: vec![source_range("בראשית", Some("א"), (1, 1), (1, 2))],
+            }],
+        )]);
+        let err = derive_parasha_units(&source, &parasha_fixture_sefarim()).unwrap_err();
+        assert!(err.to_string().contains("has no additional \"א\""), "{err}");
+    }
+
+    /// A letter outside the sefer's real additionals fails the same
+    /// lookup after the parts list is found.
+    #[test]
+    fn parasha_derivation_rejects_unknown_additional_letter() {
+        let source = parasha_fixture_source(vec![parasha_fixture_unit(
+            "בראשית",
+            (1, 1),
+            (1, 5),
+            vec![SourceHaftara {
+                customs: vec!["ashkenazi".to_string()],
+                ranges: vec![source_range("מלכים", Some("ז"), (1, 1), (1, 2))],
+            }],
+        )]);
+        let err = derive_parasha_units(&source, &parasha_fixture_sefarim()).unwrap_err();
+        assert!(err.to_string().contains("has no additional \"ז\""), "{err}");
+    }
+
+    /// A printed perek below the sefer's range resolves to a perekId
+    /// that exists in no part, failing the pasuk-count lookup.
+    #[test]
+    fn parasha_derivation_rejects_perek_below_sefer_range() {
+        let source =
+            parasha_fixture_source(vec![parasha_fixture_unit("בראשית", (0, 1), (1, 5), vec![])]);
+        let err = derive_parasha_units(&source, &parasha_fixture_sefarim()).unwrap_err();
+        assert!(err.to_string().contains("unknown perekId"), "{err}");
+    }
+
+    /// Endpoints that move backwards — across perakim or within one
+    /// perek — are impossible references, not reading order.
+    #[test]
+    fn parasha_derivation_rejects_backwards_ranges() {
+        for (start, end) in [((3, 1), (1, 5)), ((2, 5), (2, 3))] {
+            let source =
+                parasha_fixture_source(vec![parasha_fixture_unit("בראשית", start, end, vec![])]);
+            let err = derive_parasha_units(&source, &parasha_fixture_sefarim()).unwrap_err();
+            assert!(err.to_string().contains("backwards range"), "{err}");
+        }
+    }
+
+    /// A haftara with no customs gets the bare `haftara-` id and an
+    /// empty label; a custom name missing from the labels table falls
+    /// back to the raw key.
+    #[test]
+    fn parasha_derivation_labels_haftara_from_custom_keys() {
+        let haftara = |customs: Vec<String>| SourceHaftara {
+            customs,
+            ranges: vec![source_range("מלכים", Some("ב"), (1, 1), (1, 2))],
+        };
+        let source = parasha_fixture_source(vec![parasha_fixture_unit(
+            "בראשית",
+            (1, 1),
+            (1, 5),
+            vec![haftara(vec![]), haftara(vec!["מנהג-אחר".to_string()])],
+        )]);
+        let units = derive_parasha_units(&source, &parasha_fixture_sefarim()).unwrap();
+        let auxiliaries = &units[0].auxiliary_readings;
+        assert_eq!(auxiliaries[0].id, "haftara-");
+        assert_eq!(auxiliaries[0].label, "");
+        assert_eq!(auxiliaries[1].id, "haftara-מנהג-אחר");
+        assert_eq!(auxiliaries[1].label, "מנהג-אחר");
+    }
+
+    /// The reading-unit tables used by the insert-path tests; the range
+    /// table's column list is parameterizable to exercise `?`
+    /// propagation from schema mismatches.
+    fn create_reading_unit_tables(conn: &Connection, range_table_sql: &str) {
+        conn.execute_batch(&format!(
+            "CREATE TABLE tanah_reading_division (
+                id TEXT PRIMARY KEY,
+                contract_version INTEGER NOT NULL,
+                root_path TEXT NOT NULL,
+                menu_label TEXT NOT NULL
+            );
+            CREATE TABLE tanah_reading_unit (
+                division_id TEXT NOT NULL,
+                unit_id INTEGER NOT NULL,
+                slug TEXT NOT NULL,
+                sefer_id INTEGER NOT NULL,
+                unit_order INTEGER NOT NULL,
+                heading TEXT NOT NULL,
+                closing_break TEXT,
+                PRIMARY KEY (division_id, unit_id)
+            );
+            {range_table_sql}"
+        ))
+        .unwrap();
+    }
+
+    /// When the range table cannot accept a primary range (here:
+    /// auxiliary_ordinal must be non-NULL), the `?` on the primary
+    /// insert propagates the failure out of the export.
+    #[test]
+    fn insert_parasha_reading_units_propagates_primary_range_failures() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        create_reading_unit_tables(
+            &conn,
+            "CREATE TABLE tanah_reading_unit_range (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                division_id TEXT NOT NULL,
+                unit_id INTEGER NOT NULL,
+                range_index INTEGER NOT NULL,
+                auxiliary_ordinal INTEGER CHECK (auxiliary_ordinal IS NOT NULL),
+                auxiliary_id TEXT,
+                auxiliary_label TEXT,
+                start_perek_id INTEGER NOT NULL,
+                start_pasuk INTEGER NOT NULL,
+                start_segment_index INTEGER,
+                end_perek_id INTEGER NOT NULL,
+                end_pasuk INTEGER NOT NULL,
+                end_segment_index INTEGER
+            );",
+        );
+
+        let tx = conn.transaction().unwrap();
+        let err = insert_parasha_reading_units(&tx, &corpus_sefarim()).unwrap_err();
+        assert!(err.to_string().contains("auxiliary_ordinal"), "{err}");
+    }
+
+    /// When the range table accepts primary ranges but rejects
+    /// auxiliary rows (here: auxiliary_id must stay NULL), the failure
+    /// propagates through the auxiliary `?` after all primary inserts
+    /// already succeeded.
+    #[test]
+    fn insert_parasha_reading_units_propagates_auxiliary_range_failures() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        create_reading_unit_tables(
+            &conn,
+            "CREATE TABLE tanah_reading_unit_range (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                division_id TEXT NOT NULL,
+                unit_id INTEGER NOT NULL,
+                range_index INTEGER NOT NULL,
+                auxiliary_ordinal INTEGER,
+                auxiliary_id TEXT CHECK (auxiliary_id IS NULL),
+                auxiliary_label TEXT,
+                start_perek_id INTEGER NOT NULL,
+                start_pasuk INTEGER NOT NULL,
+                start_segment_index INTEGER,
+                end_perek_id INTEGER NOT NULL,
+                end_pasuk INTEGER NOT NULL,
+                end_segment_index INTEGER
+            );",
+        );
+
+        let tx = conn.transaction().unwrap();
+        let err = insert_parasha_reading_units(&tx, &corpus_sefarim()).unwrap_err();
+        assert!(err.to_string().contains("auxiliary_id"), "{err}");
     }
 
     /// The insert path writes the division row, all units, primary

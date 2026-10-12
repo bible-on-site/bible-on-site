@@ -534,24 +534,46 @@ mod tests {
         fs::remove_dir_all(&dir).ok();
     }
 
-    /// Rebuilds the bundled app database from the checked-in tanah_view
-    /// dump — the same `Vec<Sefer>` the Mongo aggregation produces — for
-    /// development environments without a running MongoDB. Run once with:
-    /// `cargo test -p tanah-view regenerate_packaged -- --ignored`.
-    /// The canonical path stays `cargo make generate-tanah-view-sqlite`.
+    /// The outputs-dir path writes a real database under the crate's
+    /// gitignored .output directory.
     #[test]
-    #[ignore = "regenerates the checked-in app artifact on demand"]
-    fn regenerate_packaged_db_from_checked_in_dump() {
-        let corpus_path = Path::new(env!("CARGO_MANIFEST_DIR")).join(
-            "../../../../web/bible-on-site/src/data/db/sefaria-dump-5784-sivan-4.tanah_view.json",
-        );
-        let json = fs::read_to_string(&corpus_path).unwrap();
-        let sefarim: Vec<Sefer> = serde_json::from_str(&json).unwrap();
+    fn generate_writes_database_to_outputs_dir() {
+        let dump_name = format!("coverage-test-{}", std::process::id());
+        let output = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join(".output")
+            .join(format!("{dump_name}.tanah_view.sqlite"));
 
-        let output_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        generate(&sample_sefarim()[..1], &dump_name, false).unwrap();
+
+        let conn = Connection::open(&output).unwrap();
+        let source: String = conn
+            .query_row(
+                "SELECT value FROM _metadata WHERE key = 'source'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(source, dump_name);
+
+        // Windows refuses to delete a file while a connection holds it.
+        drop(conn);
+        fs::remove_file(&output).ok();
+    }
+
+    /// The dependant-modules path writes a real database into the app's
+    /// bundled resources directory; the uniquely-named artifact is
+    /// removed so the test leaves the tree as it found it.
+    #[test]
+    fn generate_writes_database_to_dependant_resources() {
+        let dump_name = format!("coverage-test-dependant-{}", std::process::id());
+        let output = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../../../app/BibleOnSite/Resources/Raw")
-            .join("sefaria-dump-5784-sivan-4.tanah_view.sqlite");
-        create_db(&output_path, &sefarim, "sefaria-dump-5784-sivan-4").unwrap();
+            .join(format!("{dump_name}.tanah_view.sqlite"));
+
+        generate(&sample_sefarim()[..1], &dump_name, true).unwrap();
+        assert!(output.exists());
+
+        fs::remove_file(&output).ok();
     }
 
     #[test]

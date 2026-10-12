@@ -132,6 +132,37 @@ describe("ScrollToUnitPasuk", () => {
 		expect(verse).toHaveAttribute("data-pasuk-highlight");
 	});
 
+	it("cancels a pending highlight frame before selecting again", () => {
+		mountArticle("", [HASH.slice(1)]);
+		setHash(HASH);
+		const cancelSpy = jest.fn();
+		window.cancelAnimationFrame = cancelSpy;
+		render(<ScrollToUnitPasuk />);
+		expect(document.getElementById(HASH.slice(1))).toHaveAttribute(
+			"data-pasuk-highlight",
+		);
+		// The first selection already scheduled a frame; the next selection
+		// must cancel it instead of stacking scrollIntoView callbacks.
+		setHash("");
+		window.dispatchEvent(new Event("hashchange"));
+		expect(cancelSpy).toHaveBeenCalledWith(1);
+	});
+
+	it("highlights nothing when the scoped anchor is absent too", () => {
+		// The canonical pasuk lives in the Torah article while the Haftarah
+		// variant never rendered a matching scoped anchor — the canonical
+		// element outside this article must not be highlighted.
+		mountArticle("haftara-x", [], [HASH.slice(1)]);
+		setHash(HASH);
+		render(<ScrollToUnitPasuk scope="haftara-x" />);
+		expect(document.getElementById(HASH.slice(1))).not.toHaveAttribute(
+			"data-pasuk-highlight",
+		);
+		expect(
+			document.querySelector("[data-pasuk-highlight]"),
+		).toBeNull();
+	});
+
 	it("re-selects the pasuk on popstate", () => {
 		mountArticle("", [HASH.slice(1)]);
 		setHash("");
