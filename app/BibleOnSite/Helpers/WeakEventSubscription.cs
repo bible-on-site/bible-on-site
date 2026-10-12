@@ -4,7 +4,7 @@ namespace BibleOnSite.Helpers;
 internal static class WeakEventSubscription
 {
     internal static void Subscribe<T, TSource>(T target, TSource source,
-        Action<TSource, EventHandler> subscribe, Action<TSource, EventHandler> unsubscribe,
+        Action<TSource, EventHandler> addHandler, Action<TSource, EventHandler> removeHandler,
         Action<T> changed) where T : class
     {
         var reference = new WeakReference<T>(target);
@@ -12,8 +12,8 @@ internal static class WeakEventSubscription
         handler = (_, _) =>
         {
             if (reference.TryGetTarget(out var current)) { changed(current); }
-            else { unsubscribe(source, handler!); }
+            else { removeHandler(source, handler!); }
         };
-        subscribe(source, handler);
+        addHandler(source, handler);
     }
 }
