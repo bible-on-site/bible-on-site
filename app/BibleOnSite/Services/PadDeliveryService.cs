@@ -882,7 +882,7 @@ partial class PadDeliveryService
                 lines.Add($"IsAssetPackAvailableLocally('{packName}'): {BAAssetPackManager.SharedManager.IsAssetPackAvailableLocally(packName)}");
                 try
                 {
-                    var status = await BAAssetPackManager.SharedManager.GetLocalStatusAsync(packName);
+                    var status = await BAAssetPackManager.SharedManager.GetLocalStatusAsync(packName).WaitAsync(TimeSpan.FromMinutes(2));
                     lines.Add($"Local status: {status}");
                 }
                 catch (Exception ex)
@@ -902,7 +902,7 @@ partial class PadDeliveryService
 
         try
         {
-            var packs = (await BAAssetPackManager.SharedManager.GetAllAssetPacksAsync())
+            var packs = (await BAAssetPackManager.SharedManager.GetAllAssetPacksAsync().WaitAsync(TimeSpan.FromMinutes(2)))
                 .Cast<BAAssetPack>().Select(p => p.Identifier).OrderBy(id => id).ToList();
             lines.Add($"Store packs ({packs.Count}): {string.Join(", ", packs)}");
         }
