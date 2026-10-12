@@ -3,14 +3,16 @@
  */
 
 export const PEREK_VIEW_MODE_STORAGE_KEY = "perekViewMode" as const;
+/** Separate key for the פרשה reader — its book preference is its own section's choice, not the /929 division's. */
+export const PARASHA_VIEW_MODE_STORAGE_KEY = "parashaViewMode" as const;
 
 export type PerekViewMode = "book" | "seo";
 
-export function getStoredPerekViewMode(): PerekViewMode | null {
+function getStoredViewMode(storageKey: string): PerekViewMode | null {
 	/* istanbul ignore next: SSR */
 	if (typeof window === "undefined") return null;
 	try {
-		const raw = localStorage.getItem(PEREK_VIEW_MODE_STORAGE_KEY);
+		const raw = localStorage.getItem(storageKey);
 		if (raw === "book" || raw === "seo") return raw;
 		return null;
 	} catch {
@@ -18,12 +20,28 @@ export function getStoredPerekViewMode(): PerekViewMode | null {
 	}
 }
 
-export function setStoredPerekViewMode(mode: PerekViewMode): void {
+function setStoredViewMode(storageKey: string, mode: PerekViewMode): void {
 	try {
-		localStorage.setItem(PEREK_VIEW_MODE_STORAGE_KEY, mode);
+		localStorage.setItem(storageKey, mode);
 	} catch {
 		/* quota / private mode */
 	}
+}
+
+export function getStoredPerekViewMode(): PerekViewMode | null {
+	return getStoredViewMode(PEREK_VIEW_MODE_STORAGE_KEY);
+}
+
+export function setStoredPerekViewMode(mode: PerekViewMode): void {
+	setStoredViewMode(PEREK_VIEW_MODE_STORAGE_KEY, mode);
+}
+
+export function getStoredParashaViewMode(): PerekViewMode | null {
+	return getStoredViewMode(PARASHA_VIEW_MODE_STORAGE_KEY);
+}
+
+export function setStoredParashaViewMode(mode: PerekViewMode): void {
+	setStoredViewMode(PARASHA_VIEW_MODE_STORAGE_KEY, mode);
 }
 
 /**

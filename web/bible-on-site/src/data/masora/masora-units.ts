@@ -1,10 +1,10 @@
-import { toLetters } from "gematry";
 import type {
 	ReadingDivision,
 	ReadingUnit,
 	ScriptureCoordinate,
 } from "@/lib/reading/contract";
 import { READING_CONTRACT_VERSION } from "@/lib/reading/contract";
+import { formatCoordinateSpan } from "@/lib/reading/format";
 import { rangeContainsCoordinate } from "@/lib/reading/ranges";
 import { sefarim } from "../db/sefarim";
 import type { Perek, Sefarim, SefarimItem } from "../db/tanah-view-types";
@@ -82,11 +82,6 @@ function coordinateAfterMarker(
 	return { perekId: nextPerekId, pasuk: 1 };
 }
 
-function perekRefOf(coordinate: ScriptureCoordinate): string {
-	const perek = getPerekByPerekId(coordinate.perekId);
-	return `${perek.source} ${toLetters(coordinate.pasuk)}`;
-}
-
 /**
  * Display heading for a unit: the scripture reference span.
  * Same-perek units collapse to "שמואל א יב ה-ז"; cross-perek units keep
@@ -97,17 +92,7 @@ export function formatMasoraUnitHeading(
 	start: ScriptureCoordinate,
 	end: ScriptureCoordinate,
 ): string {
-	const startRef = perekRefOf(start);
-	const endPerek = getPerekByPerekId(end.perekId);
-	if (start.perekId === end.perekId) {
-		return start.pasuk === end.pasuk
-			? startRef
-			: `${startRef}-${toLetters(end.pasuk)}`;
-	}
-	const endPerekContext = endPerek.additional
-		? `${endPerek.additional} ${endPerek.perekHeb}`
-		: endPerek.perekHeb;
-	return `${startRef} - ${endPerekContext} ${toLetters(end.pasuk)}`;
+	return formatCoordinateSpan(start, end);
 }
 
 function deriveUnitsFromSefarim(corpus: Sefarim): ReadingUnit[] {
