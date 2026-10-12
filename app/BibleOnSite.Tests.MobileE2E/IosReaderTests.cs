@@ -11,6 +11,7 @@ namespace BibleOnSite.Tests.MobileE2E;
 [Collection("Mobile device")]
 [Trait("Category", "MobileE2E")]
 [Trait("Platform", "iOS")]
+[Trait("Shard", "2")]
 public sealed class IosReaderTests(ITestOutputHelper output, MobileDeviceSessionFactory sessions)
     : MobileDeviceTest(output, sessions)
 {
