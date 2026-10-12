@@ -5,8 +5,9 @@ using BibleOnSite.Services;
 using BibleOnSite.ViewModels;
 using BibleOnSite.Controls;
 using BibleOnSite.Handlers;
-#if IOS
+#if IOS && !DISABLE_ANALYTICS
 using Plugin.Firebase.Core.Platforms.iOS;
+using Plugin.Firebase.Analytics;
 #endif
 
 // Force rebuild for font resource loading
@@ -92,6 +93,9 @@ public static class MauiProgram
         // Without this, CrossFirebaseAnalytics.Current silently fails on iOS.
         // Note: Plugin.Firebase 4.0.0 does NOT support MacCatalyst — only iOS and Android.
         //
+        // #2120: DISABLE_ANALYTICS builds (Debug/e2e) skip Firebase entirely —
+        // with no init call the SDK never configures, so no automatic or manual
+        // event can be emitted, queued or flushed on iOS.
         // If initialization raises a managed exception, leave analytics disabled.
         // Native crashes require a device crash report and cannot be caught here.
         builder.ConfigureLifecycleEvents(events =>
@@ -105,13 +109,21 @@ public static class MauiProgram
                 return true;
             }));
 #endif
-#if IOS
+#if IOS && !DISABLE_ANALYTICS
 			events.AddiOS(iOS => iOS.WillFinishLaunching((_, __) =>
 			{
 				try
 				{
 					CrossFirebase.Initialize();
 					IsFirebaseInitialized = true;
+					// Info.plist keeps collection off so nothing can emit before
+					// this point; e2e-marked processes keep it off so automatic
+					// and custom suite events never reach the production
+					// property, and the explicit value also overrides a flag a
+					// previous non-suite install persisted on this device.
+					var analyticsCollectionEnabled = !SearchIndexService.IsE2eMarkedProcess();
+					CrossFirebaseAnalytics.Current.IsAnalyticsCollectionEnabled = analyticsCollectionEnabled;
+					Console.WriteLine($"[Analytics] collection enabled={analyticsCollectionEnabled}");
 				}
 				catch (Exception ex)
 				{

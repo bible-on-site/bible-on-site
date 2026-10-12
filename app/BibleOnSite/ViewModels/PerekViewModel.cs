@@ -748,7 +748,7 @@ public partial class PerekViewModel : ObservableObject
     /// </summary>
     private void FillFilteredPerushContents()
     {
-        if (Perek?.Pasukim == null)
+        if (Perek?.Pasukim is not { } pasukim)
         {
             return;
         }
@@ -756,7 +756,7 @@ public partial class PerekViewModel : ObservableObject
         var checkedSet = new HashSet<int>(CheckedPerushim);
         if (checkedSet.Count == 0)
         {
-            foreach (var pasuk in Perek.Pasukim)
+            foreach (var pasuk in pasukim)
             {
                 if (pasuk.PerushNotes.Count > 0)
                 {
@@ -773,7 +773,7 @@ public partial class PerekViewModel : ObservableObject
 
         var priorityOrder = Perushim.Select((p, i) => (p.Id, i)).ToDictionary(x => x.Id, x => x.i);
 
-        foreach (var pasuk in Perek.Pasukim)
+        foreach (var pasuk in pasukim)
         {
             var notesForPasuk = byPasuk.GetValueOrDefault(pasuk.PasukNum) ?? new List<PerekPerushNote>();
             var groups = notesForPasuk
