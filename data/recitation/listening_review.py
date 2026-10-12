@@ -331,11 +331,11 @@ class ListeningHandler(BaseHTTPRequestHandler):
         try:
             case, payload = self.review_payload()
             row = self.server.review_store.save(case, payload)
-            self.json_response(200, row)
+            return self.json_response(200, row)
         except (ValueError, KeyError, TypeError) as error:
-            self.json_response(400, {"error": str(error)})
+            return self.json_response(400, {"error": str(error)})
         except OSError:
-            self.json_response(500, {"error": "Could not save review; please retry"})
+            return self.json_response(500, {"error": "Could not save review; please retry"})
 
 
 def make_server(queue, store, port):
@@ -375,6 +375,7 @@ def main():
         try:
             server.serve_forever()
         except KeyboardInterrupt:
+            # Ctrl+C is normal shutdown; the finally block closes the server.
             pass
         finally:
             server.server_close()
