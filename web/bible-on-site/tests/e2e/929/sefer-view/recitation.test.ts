@@ -4,7 +4,12 @@ import { resolve } from "node:path";
 import { expect, type Locator, type Page } from "@playwright/test";
 import { test } from "../../../util/playwright/test-fixture";
 
-/** Exercise the real MP3 decoder without an external audio download. */
+/**
+ * Exercise the real MP3 decoder without an external audio download. The clip
+ * is a full two minutes while manifests describe the real recordings they
+ * stand in for, so resume→end playback can be much longer than the aligned
+ * tail — tests that wait for chapter completion must account for the gap.
+ */
 const recording = readFileSync(
 	resolve(process.cwd(), "../../data/recitation/fixtures/silence-120s.mp3"),
 );
@@ -121,7 +126,8 @@ test.describe("Recitation in the book reader", () => {
 	test("spoken words advance with real decoded audio, retain hover styling and never reflow scripture", async ({
 		page,
 	}) => {
-		test.setTimeout(90_000);
+		// Worst case the completion wait is half the 120s fixture plus margin.
+		test.setTimeout(120_000);
 		const response = await page.request.get("/api/recitation/829");
 		expect(response.ok()).toBe(true);
 		const manifest = await response.json();
@@ -140,6 +146,14 @@ test.describe("Recitation in the book reader", () => {
 				contentType: "audio/mpeg",
 				headers: { "content-length": String(recording.length) },
 			}),
+		);
+		// 2× playback: the 120s fixture stretches resume→end playback far past
+		// the manifest's aligned tail; doubling speed halves the completion wait.
+		await page.addInitScript(() =>
+			localStorage.setItem(
+				"perekRecitationSettings",
+				JSON.stringify({ speed: 2, volume: 1, versePauseMs: null }),
+			),
 		);
 		const { toggle, reader, text } = await chapterReader(page, 829, "י");
 		await toggle.click();
@@ -160,6 +174,27 @@ test.describe("Recitation in the book reader", () => {
 		await expect(first).toHaveCSS("background-color", "rgb(233, 239, 248)");
 		await expect(second).toHaveAttribute("aria-current", "true");
 		await expect(first).not.toHaveAttribute("aria-current", "true");
+		// A pasuk preview bookmarks where continuous playback resumes. Preview
+		// the final pasuk so the continuous tail stays inside the test window —
+		// the fixture recording is a full two minutes.
+		const lastPasuk = manifest.words.at(-1).pasuk;
+		const starts = (
+			manifest.words as { pasuk: number; startMs: number | null }[]
+		)
+			.filter((w) => w.pasuk === lastPasuk)
+			.map((w) => w.startMs)
+			.filter((s): s is number => s !== null);
+		const lastPasukStart = starts.length ? Math.min(...starts) : 0;
+		await reader
+			.getByRole("button", { name: /^השמעת פסוק / })
+			.last()
+			.click();
+		// During a pasuk preview the toggle is a chapter-Play button; it starts
+		// continuous playback at the preview's bookmark before it can pause.
+		await reader.getByRole("button", { name: "השמעת כל הפרק" }).click();
+		await expect(
+			reader.getByRole("button", { name: "השהיית ההקראה" }),
+		).toBeVisible();
 		await reader.getByRole("button", { name: "השהיית ההקראה" }).click();
 		const paused = await text
 			.locator('[data-recitation-active="true"]')
@@ -178,9 +213,12 @@ test.describe("Recitation in the book reader", () => {
 			}
 		}
 		await reader.getByRole("button", { name: "המשך ההקראה" }).click();
+		// Continuous playback resumed at the last pasuk's bookmark and plays to
+		// the decoded buffer's end — the 120s fixture, not the manifest's
+		// duration; at 2× speed that tail is halved.
 		await expect(
 			reader.getByRole("button", { name: "השמעת כל הפרק" }),
-		).toBeVisible({ timeout: 30_000 });
+		).toBeVisible({ timeout: (120_000 - lastPasukStart) / 2 + 15_000 });
 		await expect(text.locator('[data-recitation-active="true"]')).toHaveCount(
 			0,
 			{ timeout: 12_000 },
