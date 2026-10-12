@@ -329,6 +329,23 @@ describe("perushim service", () => {
 				);
 			});
 
+			// Issue #2190: displayed verse totals must count distinct covered
+			// pesukim — a pasuk with several notes counts once, while the same
+			// pasuk number in another covered perek counts separately
+			// (canonical {perekId, pasuk} identity). The query therefore counts
+			// DISTINCT pasuk per (perush, perek) group before aggregation.
+			it("counts distinct pesukim per covered perek", async () => {
+				mockQuery.mockResolvedValue([]);
+
+				await getPerushimForRanges(crossPerekRanges);
+
+				const sql = mockQuery.mock.calls[0][0];
+				expect(sql).toContain("COUNT(DISTINCT n.pasuk) AS note_count");
+				expect(sql).toContain(
+					"GROUP BY p.id, p.name, pa.name, p.priority, n.perek_id",
+				);
+			});
+
 			it("breaks priority ties by descending note count", async () => {
 				mockQuery.mockResolvedValue([
 					{

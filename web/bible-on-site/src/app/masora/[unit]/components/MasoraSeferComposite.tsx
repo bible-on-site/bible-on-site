@@ -9,22 +9,21 @@ import {
 	useRef,
 	useState,
 } from "react";
+import ReadModeToggler from "@/app/929/[number]/components/ReadModeToggler";
+import seferStyles from "@/app/929/[number]/components/sefer-composite.module.css";
+import { TABLET_MIN_WIDTH, useIsWideEnough } from "@/hooks/useIsWideEnough";
+import type { ArticleSummary } from "@/lib/articles";
 import {
 	getStoredMasoraViewMode,
 	setStoredMasoraViewMode,
 } from "@/lib/perek-view-preference";
-import type { ArticleSummary } from "@/lib/articles";
 import type { RangePerushSummary } from "@/lib/perushim";
 import type { PerekEntityReference } from "@/lib/tanahpedia/service";
-import { TABLET_MIN_WIDTH, useIsWideEnough } from "@/hooks/useIsWideEnough";
-import ReadModeToggler from "@/app/929/[number]/components/ReadModeToggler";
-import seferStyles from "@/app/929/[number]/components/sefer-composite.module.css";
 import {
-	MASORA_ROOT,
+	type MasoraBookUnit,
 	masoraBookExitPath,
 	masoraBookPageFromPath,
 	masoraBookPageFromQuery,
-	type MasoraBookUnit,
 	pathnameWithMasoraBookQuery,
 } from "./masora-book-utils";
 
@@ -141,11 +140,7 @@ export const MasoraSeferComposite = (props: {
 			const search = wantBook
 				? searchParams.toString()
 				: window.location.search;
-			const next = pathnameWithMasoraBookQuery(
-				togglePath,
-				search,
-				wantBook,
-			);
+			const next = pathnameWithMasoraBookQuery(togglePath, search, wantBook);
 			router.replace(next, { scroll: false });
 			handleToggle(wantBook, wantBook);
 		},

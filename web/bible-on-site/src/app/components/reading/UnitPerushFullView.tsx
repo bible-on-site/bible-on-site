@@ -3,12 +3,12 @@
 import { toLetters } from "gematry";
 import DOMPurify from "isomorphic-dompurify";
 import { useMemo } from "react";
-import type { RangedPerushNote } from "@/lib/perushim";
-import { ShareButton } from "@/app/929/[number]/components/ShareButton";
 import styles from "@/app/929/[number]/components/perushim-section.module.css";
+import { ShareButton } from "@/app/929/[number]/components/ShareButton";
 import seferStyles from "@/app/929/[number]/components/sefer.module.css";
-import { scrollToUnitTextPasuk } from "./unit-book-navigation";
+import type { RangedPerushNote } from "@/lib/perushim";
 import unitStyles from "./unit-book.module.css";
+import { scrollToUnitTextPasuk } from "./unit-book-navigation";
 
 interface PasukGroup {
 	perekId: number;
@@ -100,7 +100,9 @@ export function UnitPerushFullView({
 				)}
 			</header>
 
-			<div className={`${styles.notesContainer} ${seferStyles.perushNotesInBook}`}>
+			<div
+				className={`${styles.notesContainer} ${seferStyles.perushNotesInBook}`}
+			>
 				{groups.length === 0 ? (
 					<p className={styles.emptyMessage}>{emptyMessage}</p>
 				) : (
@@ -114,9 +116,7 @@ export function UnitPerushFullView({
 								data-unit-perush-pasuk={`${group.perekId}-${group.pasuk}`}
 							>
 								{multiPerek && group.firstOfPerek && perekLabel && (
-									<span className={unitStyles.perekContext}>
-										{perekLabel}
-									</span>
+									<span className={unitStyles.perekContext}>{perekLabel}</span>
 								)}
 								<button
 									type="button"
@@ -125,11 +125,7 @@ export function UnitPerushFullView({
 									title={`מעבר לפסוק ${letters} בפרשה`}
 									aria-label={`מעבר לפסוק ${letters} בפרשה`}
 									onClick={() =>
-										scrollToUnitTextPasuk(
-											bookKey,
-											group.perekId,
-											group.pasuk,
-										)
+										scrollToUnitTextPasuk(bookKey, group.perekId, group.pasuk)
 									}
 								>
 									פסוק {letters}
@@ -138,9 +134,9 @@ export function UnitPerushFullView({
 									<div
 										key={`${note.perekId}-${note.pasuk}-${note.noteIdx}`}
 										className={styles.noteContent}
-										// nosemgrep -- DOMPurify-sanitized perush note
 										// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify
 										dangerouslySetInnerHTML={{
+											// nosemgrep -- DOMPurify-sanitized perush note
 											__html: DOMPurify.sanitize(note.noteContent),
 										}}
 									/>
