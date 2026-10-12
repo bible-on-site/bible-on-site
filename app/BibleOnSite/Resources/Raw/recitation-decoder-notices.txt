@@ -1,5 +1,8 @@
-The recitation decoder includes mpg123-decoder 1.0.3 and its locked dependencies.
-It is bundled from their unchanged ESM implementation, using esbuild 0.28.1.
+The recitation decoder includes mpg123-decoder 1.0.3, ogg-opus-decoder 1.7.5,
+opus-decoder 0.7.12 and their locked dependencies.
+It is bundled from their ESM implementation, using esbuild 0.28.2.
+Optional ML speech enhancement is disabled and its unused module is excluded.
+The ordinary libopus and MPEG codec implementations are unchanged.
 No codec source has been modified. The app's JS bridge and bundle build source
 are available in this repository. Users may rebuild and replace the decoder.
 
@@ -12,7 +15,13 @@ mpg123 library:
 Copyright (c) 1995-2020 by Michael Hipp and others.
 Free software under the LGPL v2.1. See recitation-mpg123-license.txt.
 
-mpg123-decoder, @wasm-audio-decoders/common, simple-yenc:
+libopus:
+Copyright 2001-2023 Xiph.Org and its contributors. BSD license:
+see recitation-opus-license.txt.
+https://github.com/xiph/opus
+
+mpg123-decoder, ogg-opus-decoder, opus-decoder, codec-parser,
+@wasm-audio-decoders/common, simple-yenc:
 Copyright 2021-2025 Ethan Halsall. MIT license:
 
 Permission is hereby granted, free of charge, to any person obtaining a copy

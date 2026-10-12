@@ -13,6 +13,25 @@ namespace BibleOnSite.Tests.Services;
 public class RecitationServiceTests
 {
     private static string Hash(byte[] value) => Convert.ToHexStringLower(SHA256.HashData(value));
+    private static byte[] Wav(byte[] pcm)
+    {
+        var wav = new byte[44 + pcm.Length];
+        "RIFF"u8.ToArray().CopyTo(wav, 0);
+        BitConverter.GetBytes(36 + pcm.Length).CopyTo(wav, 4);
+        "WAVE"u8.ToArray().CopyTo(wav, 8);
+        "fmt "u8.ToArray().CopyTo(wav, 12);
+        BitConverter.GetBytes(16).CopyTo(wav, 16);
+        BitConverter.GetBytes((short)1).CopyTo(wav, 20);
+        BitConverter.GetBytes((short)1).CopyTo(wav, 22);
+        BitConverter.GetBytes(48000).CopyTo(wav, 24);
+        BitConverter.GetBytes(96000).CopyTo(wav, 28);
+        BitConverter.GetBytes((short)2).CopyTo(wav, 32);
+        BitConverter.GetBytes((short)16).CopyTo(wav, 34);
+        "data"u8.ToArray().CopyTo(wav, 36);
+        BitConverter.GetBytes(pcm.Length).CopyTo(wav, 40);
+        pcm.CopyTo(wav, 44);
+        return wav;
+    }
     private static List<Pasuk> Canonical() => [new() { PasukNum = 1, Text = "ברא אור", Segments = [
         new() { Type = SegmentType.Qri, Value = "ברא" }, new() { Type = SegmentType.Qri, Value = "אור" }] }];
     private static RecitationTrack Track(int id, byte[] audio, string status = "ready") => new(id,
@@ -45,9 +64,9 @@ public class RecitationServiceTests
                 using var output = new MemoryStream();
                 using (var zip = new ZipArchive(output, ZipArchiveMode.Create, true))
                 {
-                    foreach (var track in group.DistinctBy(t => t.AudioSha256))
+                    foreach (var track in group.DistinctBy(t => t.PlaybackFileName))
                     {
-                        using var entry = zip.CreateEntry(track.AudioSha256 + ".mp3").Open();
+                        using var entry = zip.CreateEntry(track.PlaybackFileName).Open();
                         entry.Write(Audio.GetValueOrDefault($"/recordings/{track.PerekId}_record.mp3", "audio"u8.ToArray()));
                     }
                 }
@@ -76,6 +95,174 @@ public class RecitationServiceTests
             }
             Catalog = new(1, Package, books); SaveCatalog();
         }
+    }
+
+    [Fact]
+    public async Task OpusBookUsesDerivedHashAndFilename_WithoutChangingMp3IdentityOrTimings()
+    {
+        await using var storage = new TestStorage(); var extension = new Extension(storage);
+        var source = "original alignment MP3"u8.ToArray();
+        var opus = "OggS derived playback"u8.ToArray();
+        var track = Track(1, source) with { Playback = new("ogg-opus", Hash(opus), opus.Length, 24000, Hash(source)) };
+        extension.Package = new(1, [track]);
+        extension.Audio["/recordings/1_record.mp3"] = opus;
+        extension.Bundle(); var service = extension.Service;
+        await service.DownloadAsync([1]);
+        var ogg = Directory.EnumerateFiles(Path.Join(storage.Root, "extensions", "recitation"), "*.ogg").Should().ContainSingle().Subject;
+        Path.GetFileName(ogg).Should().Be(Hash(opus) + ".ogg");
+        (await File.ReadAllBytesAsync(ogg, TestContext.Current.CancellationToken)).Should().Equal(opus);
+        service.GetTrack(1)!.AudioSha256.Should().Be(Hash(source));
+        service.GetTrack(1)!.Words.Should().Equal(track.Words);
+        await File.WriteAllBytesAsync(ogg, source, TestContext.Current.CancellationToken);
+        var corrupted = () => service.PrepareAudioAsync(1, Canonical(), null, null, TestContext.Current.CancellationToken,
+            null, new Mock<IRecitationAudioDecoder>().Object);
+        await corrupted.Should().ThrowAsync<InvalidDataException>();
+    }
+
+    [Fact]
+    public async Task OpusChapterNeedsDecoderOnce_AndReplaysTheDecodedWav()
+    {
+        await using var storage = new TestStorage(); var extension = new Extension(storage);
+        var source = "original alignment MP3"u8.ToArray();
+        var opus = "OggS derived playback"u8.ToArray();
+        var track = Track(1, source) with { Playback = new("ogg-opus", Hash(opus), opus.Length, 24000, Hash(source)) };
+        extension.Package = new(1, [track]);
+        extension.Audio["/recordings/1_record.mp3"] = opus;
+        extension.Bundle(); var service = extension.Service;
+        await service.DownloadAsync([1]);
+        // AVPlayer has no Ogg demuxer; Android keeps native Ogg and never reaches this.
+        await service.Invoking(s => s.PrepareAudioAsync(1, Canonical())).Should().ThrowAsync<InvalidOperationException>();
+        var decoder = new Mock<IRecitationAudioDecoder>();
+        var decodedWav = Wav("decoded chapter PCM"u8.ToArray());
+        decoder.Setup(d => d.CreateChapterAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(decodedWav);
+        var chapter = await service.PrepareAudioAsync(1, Canonical(), null, null, TestContext.Current.CancellationToken, null, decoder.Object);
+        Path.GetFileName(chapter).Should().Be("chapter-" + Hash(opus) + ".wav");
+        (await File.ReadAllBytesAsync(chapter, TestContext.Current.CancellationToken)).Should().Equal(decodedWav);
+        var restored = extension.Service;
+        await restored.InitializeAsync();
+        var replay = await restored.PrepareAudioAsync(1, Canonical(), null, null, TestContext.Current.CancellationToken, null, decoder.Object);
+        replay.Should().Be(chapter, "a verified decoded chapter is replayed without decoding again");
+        decoder.Verify(d => d.CreateChapterAsync(It.Is<string>(p => p.EndsWith(".ogg")), It.IsAny<CancellationToken>()), Times.Once);
+        decoder.Verify(d => d.CreateClipAsync(It.IsAny<string>(), It.IsAny<IReadOnlyList<(double Start, double End)>>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task AndroidKeepsNativeOggPlayback_WithoutDecoder()
+    {
+        await using var storage = new TestStorage(); var extension = new Extension(storage);
+        var source = "original alignment MP3"u8.ToArray();
+        var opus = "OggS derived playback"u8.ToArray();
+        var track = Track(1, source) with { Playback = new("ogg-opus", Hash(opus), opus.Length, 24000, Hash(source)) };
+        extension.Package = new(1, [track]);
+        extension.Audio["/recordings/1_record.mp3"] = opus;
+        extension.Bundle();
+        // ExoPlayer demuxes Ogg natively, so no WAV chapter is produced for it.
+        var service = new RecitationService(storage.FileSystem.Object, extension.Delivery.Object, () => true);
+        await service.DownloadAsync([1]);
+        var audio = await service.PrepareAudioAsync(1, Canonical());
+        audio.Should().EndWith(".ogg");
+        (await File.ReadAllBytesAsync(audio, TestContext.Current.CancellationToken)).Should().Equal(opus);
+        Directory.EnumerateFiles(storage.Root, "*.wav", SearchOption.AllDirectories).Should().BeEmpty();
+    }
+
+    private static byte[] Corrupt(byte[] wav, int offset)
+    {
+        var copy = wav.ToArray();
+        copy[offset] = 0;
+        return copy;
+    }
+
+    [Theory]
+    [InlineData("garbage")] [InlineData("magic")] [InlineData("wave")] [InlineData("truncated")]
+    [InlineData("payload")] [InlineData("missingDigest")] [InlineData("badDigest")]
+    public async Task OpusChapterCacheDamageDecodesAgain(string damage)
+    {
+        await using var storage = new TestStorage(); var extension = new Extension(storage);
+        var source = "original alignment MP3"u8.ToArray();
+        var opus = "OggS derived playback"u8.ToArray();
+        var track = Track(1, source) with { Playback = new("ogg-opus", Hash(opus), opus.Length, 24000, Hash(source)) };
+        extension.Package = new(1, [track]);
+        extension.Audio["/recordings/1_record.mp3"] = opus;
+        extension.Bundle(); var service = extension.Service;
+        await service.DownloadAsync([1]);
+        var decoder = new Mock<IRecitationAudioDecoder>();
+        var decodedWav = Wav("decoded chapter PCM"u8.ToArray());
+        decoder.Setup(d => d.CreateChapterAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(decodedWav);
+        var chapter = await service.PrepareAudioAsync(1, Canonical(), null, null, TestContext.Current.CancellationToken, null, decoder.Object);
+        var damaged = damage switch
+        {
+            "truncated" => decodedWav[..^5],
+            "magic" => Corrupt(decodedWav, 0),
+            "wave" => Corrupt(decodedWav, 8),
+            "payload" => Corrupt(decodedWav, decodedWav.Length - 1),
+            "missingDigest" or "badDigest" => decodedWav,
+            _ => "damaged"u8.ToArray(),
+        };
+        await File.WriteAllBytesAsync(chapter, damaged, TestContext.Current.CancellationToken);
+        if (damage == "missingDigest")
+        {
+            File.Delete(chapter + ".sha256");
+        }
+        if (damage == "badDigest")
+        {
+            await File.WriteAllTextAsync(chapter + ".sha256", "invalid", TestContext.Current.CancellationToken);
+        }
+        var rebuilt = await service.PrepareAudioAsync(1, Canonical(), null, null, TestContext.Current.CancellationToken, null, decoder.Object);
+        rebuilt.Should().Be(chapter);
+        (await File.ReadAllBytesAsync(rebuilt, TestContext.Current.CancellationToken)).Should().Equal(decodedWav);
+        decoder.Verify(d => d.CreateChapterAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Exactly(2));
+    }
+
+    [Fact]
+    public async Task OpusClipsStillUseApprovedRanges_NotTheChapterFallback()
+    {
+        await using var storage = new TestStorage(); var extension = new Extension(storage);
+        var source = "original alignment MP3"u8.ToArray();
+        var opus = "OggS derived playback"u8.ToArray();
+        var track = Track(1, source) with { Playback = new("ogg-opus", Hash(opus), opus.Length, 24000, Hash(source)) };
+        extension.Package = new(1, [track]);
+        extension.Audio["/recordings/1_record.mp3"] = opus;
+        extension.Bundle(); var service = extension.Service;
+        await service.DownloadAsync([1]);
+        var decoder = new Mock<IRecitationAudioDecoder>();
+        decoder.Setup(d => d.CreateClipAsync(It.IsAny<string>(), It.IsAny<IReadOnlyList<(double Start, double End)>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("clip WAV"u8.ToArray());
+        var clip = await service.PrepareAudioAsync(1, Canonical(), 100, 800, decoder: decoder.Object);
+        Path.GetFileName(clip).Should().StartWith("clip-");
+        (await File.ReadAllBytesAsync(clip, TestContext.Current.CancellationToken)).Should().Equal("clip WAV"u8.ToArray());
+        (double Start, double End)[] approved = [(100, 800)];
+        decoder.Verify(d => d.CreateClipAsync(It.Is<string>(p => p.EndsWith(".ogg")),
+            It.Is<IReadOnlyList<(double Start, double End)>>(r => r.SequenceEqual(approved)),
+            It.IsAny<CancellationToken>()), Times.Once);
+        decoder.Verify(d => d.CreateChapterAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Mp3UpgradeDeletesOnlyReplacedDownloads_AndKeepsThemOnFailure(bool stillRequired)
+    {
+        await using var storage = new TestStorage(); var extension = new Extension(storage);
+        var source = "original MP3"u8.ToArray(); var opus = "OggS playback"u8.ToArray();
+        extension.Package = new(1, [Track(1, source)]);
+        extension.Audio["/recordings/1_record.mp3"] = source;
+        extension.Bundle(); var service = extension.Service;
+        await service.DownloadAsync([1]);
+        var original = await service.PrepareAudioAsync(1, Canonical());
+        var upgraded = Track(1, source) with { Playback = new("ogg-opus", Hash(opus), opus.Length, 24000, Hash(source)) };
+        extension.Package = new(1, stillRequired ? [upgraded, Track(2, source)] : [upgraded]);
+        extension.Audio["/recordings/1_record.mp3"] = "corrupt"u8.ToArray();
+        extension.Bundle(); await service.UpdateAsync(TestContext.Current.CancellationToken);
+        await service.Invoking(s => s.DownloadAsync([1])).Should().ThrowAsync<InvalidDataException>();
+        File.Exists(original).Should().BeTrue();
+        extension.Audio["/recordings/1_record.mp3"] = opus;
+        extension.Bundle(); await service.UpdateAsync(TestContext.Current.CancellationToken);
+        await service.DownloadAsync([1]);
+        File.Exists(original).Should().Be(stillRequired);
+        var ogg = Directory.EnumerateFiles(Path.Join(storage.Root, "extensions", "recitation"), "*.ogg").Should().ContainSingle().Subject;
+        (await File.ReadAllBytesAsync(ogg, TestContext.Current.CancellationToken)).Should().Equal(opus);
     }
 
     [Fact]

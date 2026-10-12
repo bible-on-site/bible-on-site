@@ -7,6 +7,22 @@ namespace BibleOnSite.Tests.Models;
 
 public class RecitationTests
 {
+    [Fact]
+    public void DerivedPlaybackIsBoundToOriginalSource_AndRejectsUnknownFormats()
+    {
+        var source = Valid();
+        var track = source with { Playback = new("ogg-opus", new string('b', 64), 500, 24000, source.AudioSha256) };
+        track.Validate();
+        var json = JsonSerializer.Serialize(track, RecitationJsonContext.Default.RecitationTrack);
+        JsonSerializer.Deserialize(json, RecitationJsonContext.Default.RecitationTrack)!.Playback.Should().Be(track.Playback);
+        foreach (var invalid in new[] { track.Playback with { SourceSha256 = new string('c', 64) },
+                 track.Playback with { Format = "unknown" }, track.Playback with { Bitrate = 12000 },
+                 track.Playback with { Sha256 = "../../escape" }, track.Playback with { SizeBytes = 0 } })
+        {
+            var validate = () => (track with { Playback = invalid }).Validate();
+            validate.Should().Throw<InvalidDataException>();
+        }
+    }
     private static RecitationTrack Valid() => new(1, "https://example.com/recordings/1_record.mp3", new string('a', 64),
         Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes("1:1:ברא\n1:2:אור"))),
         3000, "ready", [new(1, 1, "ברא", 100, 800), new(1, 2, "אור", 900, 1800)]);
