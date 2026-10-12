@@ -252,10 +252,16 @@ function rankPredicates(
 	params: string[];
 } {
 	const phrase = phraseRegexp(terms);
-	const estimate = (predicate: string) =>
-		`LEAST(${terms
-			.map(() => `(10*${predicate} + 20*${predicate} + 60*${predicate})`)
-			.join(", ")})`;
+	const estimate = (predicate: string) => {
+		const estimates = terms.map(
+			() => `(10*${predicate} + 20*${predicate} + 60*${predicate})`,
+		);
+		// LEAST takes two or more arguments — a single-term query emits
+		// the bare estimate.
+		return estimates.length === 1
+			? estimates[0]
+			: `LEAST(${estimates.join(", ")})`;
+	};
 	return {
 		orderBy: predicates
 			.flatMap((predicate) => [

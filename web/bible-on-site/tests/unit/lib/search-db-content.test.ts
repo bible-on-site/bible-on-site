@@ -258,8 +258,10 @@ describe("searchPerushNotes", () => {
 		await searchPerushNotes("אחד שני", 10);
 		const [sql, params] = mockQuery.mock.calls[0];
 		// Two candidate predicates (one per term), one phrase-rank flag,
-		// and three rank patterns per term inside the LEAST estimate.
+		// and three rank patterns per term inside the LEAST estimate —
+		// one LEAST call per ranked fragment, over both terms.
 		expect(sql.match(/REGEXP_LIKE\(n\.note_content/g)).toHaveLength(9);
+		expect(sql.match(/LEAST\(/g)).toHaveLength(1);
 		expect(params).toEqual([
 			termRegexp("אחד"),
 			termRegexp("שני"),
@@ -273,11 +275,15 @@ describe("searchPerushNotes", () => {
 		mockQuery.mockResolvedValue([]);
 		await searchPerushNotes("ירושלימ", 10);
 		const [sql, params] = mockQuery.mock.calls[0];
-		// A single word-level flag per pattern tier inside LEAST — a row
-		// whose words hit different chunks of the term separately (`ירוש
-		// לימ`) rates the same as one fuzzy-eligible word instead of
-		// stacking anchor flags above it (#2140 review).
-		expect(sql.match(/LEAST\(/g)).toHaveLength(1);
+		// A single word-level estimate per fragment — a row whose words
+		// hit different chunks of the term separately (`ירוש לימ`) rates
+		// the same as one fuzzy-eligible word instead of stacking anchor
+		// flags above it (#2140 review). The estimate is emitted bare:
+		// MySQL LEAST requires two arguments, so a single term has none.
+		expect(sql.match(/LEAST\(/g)).toBeNull();
+		expect(sql).toContain(
+			"(10*REGEXP_LIKE(n.note_content, ?, 'i') + 20*REGEXP_LIKE(n.note_content, ?, 'i') + 60*REGEXP_LIKE(n.note_content, ?, 'i')) DESC",
+		);
 		expect(params?.slice(2)).toEqual(termRankPatterns("ירושלימ"));
 	});
 
@@ -409,7 +415,7 @@ describe("searchAuthors", () => {
 			"REGEXP_LIKE(name, ?, 'i') OR REGEXP_LIKE(details, ?, 'i')",
 		);
 		expect(sql).toContain(
-			"ORDER BY REGEXP_LIKE(name, ?, 'i') DESC, LEAST((10*REGEXP_LIKE(name, ?, 'i') + 20*REGEXP_LIKE(name, ?, 'i') + 60*REGEXP_LIKE(name, ?, 'i'))) DESC, REGEXP_LIKE(details, ?, 'i') DESC, LEAST((10*REGEXP_LIKE(details, ?, 'i') + 20*REGEXP_LIKE(details, ?, 'i') + 60*REGEXP_LIKE(details, ?, 'i'))) DESC",
+			"ORDER BY REGEXP_LIKE(name, ?, 'i') DESC, (10*REGEXP_LIKE(name, ?, 'i') + 20*REGEXP_LIKE(name, ?, 'i') + 60*REGEXP_LIKE(name, ?, 'i')) DESC, REGEXP_LIKE(details, ?, 'i') DESC, (10*REGEXP_LIKE(details, ?, 'i') + 20*REGEXP_LIKE(details, ?, 'i') + 60*REGEXP_LIKE(details, ?, 'i')) DESC",
 		);
 		expect(params).toEqual([
 			termRegexp("לוי"),
@@ -591,7 +597,7 @@ describe("searchTanahpediaEntries", () => {
 		expect(sql).toContain("LIMIT 1000");
 		// One REGEXP_LIKE per searchable field plus one inside the synonym
 		// EXISTS clause — four per term in WHERE — then a phrase flag and a
-		// three-pattern LEAST estimate per fragment in ORDER BY rank.
+		// three-pattern estimate per fragment in ORDER BY rank.
 		expect(sql.match(/REGEXP_LIKE\(/g)).toHaveLength(20);
 		expect(sql.match(/tanahpedia_entry_synonym/g)?.length).toBeGreaterThan(0);
 		expect(params).toEqual([

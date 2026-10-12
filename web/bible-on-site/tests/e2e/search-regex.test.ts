@@ -1,6 +1,13 @@
 import { expect, test } from "@playwright/test";
 import mysql, { type RowDataPacket } from "mysql2/promise";
-import { termRankPatterns, termRegexp } from "../../src/lib/search/db-content";
+import {
+	searchArticles,
+	searchAuthors,
+	searchPerushNotes,
+	searchTanahpediaEntries,
+	termRankPatterns,
+	termRegexp,
+} from "../../src/lib/search/db-content";
 
 /**
  * Probes the generated candidate/rank patterns through `REGEXP_LIKE` on
@@ -93,5 +100,28 @@ test.describe("generated search patterns on real MySQL", () => {
 			["ירוש לימ", e, "ירוש לימ", p, "ירוש לימ", f],
 		);
 		expect(Number(rows[0].estimate)).toBe(0);
+	});
+
+	test("executes every provider's candidate query end-to-end", async () => {
+		// The probes above assert the generated patterns in isolation, but
+		// the providers compose them into WHERE/ORDER BY clauses that only
+		// execute inside a provider call — which is how a single-argument
+		// LEAST shipped green on the probes while every single-term
+		// provider query errored at runtime (#2140 follow-up). Run the
+		// real provider SQL on both term-count shapes: single-term emits
+		// the bare tier estimate, multi-term emits LEAST.
+		const singleTerm = [
+			["perush notes", () => searchPerushNotes("בראשית", 5)],
+			["authors", () => searchAuthors("לדוגמא", 5)],
+			["articles", () => searchArticles("בראשית", 5)],
+			["tanahpedia entries", () => searchTanahpediaEntries("משה", 5)],
+		] as const;
+		for (const [label, run] of singleTerm) {
+			expect(await run(), label).not.toHaveLength(0);
+		}
+		// Multi-term shape — LEAST over per-term estimates, against the
+		// smallest candidate pool (notes) and the synonym EXISTS path.
+		expect(await searchPerushNotes("בראשית ברא", 5)).not.toHaveLength(0);
+		expect(await searchTanahpediaEntries("הושע בן נון", 5)).not.toHaveLength(0);
 	});
 });

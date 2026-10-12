@@ -81,7 +81,9 @@ which is exactly the candidate class the JS scorer rates highest
 (whole-word phrase containment or whole-text equality). The second
 tier per field is `LEAST` over the terms' word-level estimates —
 `10*exact + 20*prefix + 60*candidate` per term, each a single
-`REGEXP_LIKE` on a word-bounded pattern. The three patterns nest
+`REGEXP_LIKE` on a word-bounded pattern (a single-term query emits the
+bare estimate: MySQL `LEAST` requires two arguments). The three
+patterns nest
 (exact ⇒ prefix ⇒ fuzzy-eligible), so a term's estimate lands on the
 scorer's own 90/80/60 tiers; `LEAST` mirrors the scorer's
 minimum-term rule. Estimating per term, rather than counting the term's
