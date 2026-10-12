@@ -218,6 +218,45 @@ public class DivineNameMaskingTests
         }
 
         [Fact]
+        public void leaves_words_with_non_hebrew_body_characters_alone()
+        {
+            var s = Enabled();
+            foreach (var value in new[] { "אcב", "א1ב" })
+            {
+                DivineNameMasking.MaskValue(value, s).Should().Be(value);
+            }
+        }
+
+        [Fact]
+        public void leaves_a_word_that_starts_with_a_combining_mark_alone() =>
+            DivineNameMasking.MaskValue("ְאל", Enabled()).Should().Be("ְאל");
+
+        [Fact]
+        public void leaves_el_whose_aleph_carries_qamats_qatan_alone() =>
+            DivineNameMasking.MaskValue("אׇל", Enabled()).Should().Be("אׇל");
+
+        [Fact]
+        public void keeps_elohim_untouched_when_the_custom_text_is_blank() =>
+            DivineNameMasking.MaskValue("אֱלֹהִ֑ים",
+                    Enabled(elohim: DivineNameMaskOption.Custom, elohimCustom: "  "))
+                .Should().Be("אֱלֹהִ֑ים");
+
+        [Fact]
+        public void keeps_shaddai_untouched_when_the_custom_text_is_blank() =>
+            DivineNameMasking.MaskValue("שַׁדַּ֥י",
+                    Enabled(shaddai: DivineNameMaskOption.Custom, shaddaiCustom: ""))
+                .Should().Be("שַׁדַּ֥י");
+
+        [Fact]
+        public void keeps_yhwh_untouched_for_a_non_yhwh_option_value() =>
+            // An out-of-set option falls through to the custom-text arm; a blank
+            // stored custom leaves the word untouched (service normalizes to
+            // prevent this in practice).
+            DivineNameMasking.MaskValue("יְהוָ֑ה",
+                    Enabled(yhwh: DivineNameMaskOption.AsIs))
+                .Should().Be("יְהוָ֑ה");
+
+        [Fact]
         public void tolerates_null_input() =>
             DivineNameMasking.MaskValue(null, Enabled()).Should().BeEmpty();
     }
@@ -239,6 +278,17 @@ public class DivineNameMaskingTests
         public void returns_text_unchanged_when_disabled() =>
             DivineNameMasking.MaskText("יְהוָ֑ה אֱלֹהִ֖ים", DivineNameMaskingOptions.Disabled)
                 .Should().Be("יְהוָ֑ה אֱלֹהִ֖ים");
+
+        [Fact]
+        public void tolerates_null_input() =>
+            DivineNameMasking.MaskText(null, Enabled()).Should().BeEmpty();
+
+        [Theory]
+        [InlineData("אֱלֹהִ֑ים  שַׁדַּ֥י", "א-להים  שד-י")]
+        [InlineData("אֱלֹהִ֑ים ", "א-להים ")]
+        [InlineData(" ", " ")]
+        public void keeps_consecutive_and_trailing_separators_intact(string text, string expected) =>
+            DivineNameMasking.MaskText(text, Enabled()).Should().Be(expected);
     }
 
     public class AmbientState
@@ -556,6 +606,45 @@ public class DivineNameMaskingTests
             _service.DivineNameMaskElohim = DivineNameMaskOption.Hyphen; // already default
 
             eventCount.Should().Be(0);
+        }
+
+        [Fact]
+        public void switching_an_option_back_to_as_is_persists_the_name()
+        {
+            _service.Load();
+            _service.DivineNameMaskEl = DivineNameMaskOption.Hyphen;
+
+            _service.DivineNameMaskEl = DivineNameMaskOption.AsIs;
+
+            _service.DivineNameMaskEl.Should().Be(DivineNameMaskOption.AsIs);
+            _storage.Get("divineNameMaskEl", "").Should().Be("asis");
+        }
+
+        [Fact]
+        public void a_null_custom_text_normalizes_to_empty_and_is_a_no_op()
+        {
+            _service.Load();
+            var eventCount = 0;
+            _service.PreferencesChanged += (_, _) => eventCount++;
+
+            _service.DivineNameMaskYhwhCustom = null!;
+
+            _service.DivineNameMaskYhwhCustom.Should().BeEmpty();
+            eventCount.Should().Be(0, "an unchanged normalized value must not notify");
+        }
+
+        [Fact]
+        public void setting_the_same_custom_text_again_does_not_notify()
+        {
+            _service.Load();
+            _service.DivineNameMaskShaddaiCustom = "אל שדי";
+            var eventCount = 0;
+            _service.PreferencesChanged += (_, _) => eventCount++;
+
+            _service.DivineNameMaskShaddaiCustom = " אל שדי "; // trims to the stored value
+
+            eventCount.Should().Be(0);
+            _storage.Get("divineNameMaskShaddaiCustom", "").Should().Be("אל שדי");
         }
 
         [Fact]
