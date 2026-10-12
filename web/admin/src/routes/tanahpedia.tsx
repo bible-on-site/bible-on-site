@@ -241,9 +241,7 @@ function TanahpediaIndexPage() {
 								<button
 									type="button"
 									onClick={() =>
-										setCategory(
-											category === cat.type ? undefined : cat.type,
-										)
+										setCategory(category === cat.type ? undefined : cat.type)
 									}
 									className={`text-right flex-1 rounded-lg p-2 -m-2 transition-colors ${
 										category === cat.type
@@ -255,9 +253,7 @@ function TanahpediaIndexPage() {
 										{CATEGORY_LABELS[cat.type]}
 									</div>
 									<div className="text-sm text-gray-500 mt-1">
-										{countsLoading
-											? "…"
-											: `${counts?.[cat.type] ?? 0} ערכים`}
+										{countsLoading ? "…" : `${counts?.[cat.type] ?? 0} ערכים`}
 									</div>
 								</button>
 								<a

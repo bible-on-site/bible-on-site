@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using BibleOnSite.Models;
 using BibleOnSite.ViewModels;
 using FluentAssertions;
@@ -193,6 +194,75 @@ public class SearchViewModelTests
     }
 
     #endregion
+
+    #region ReconcileVisibleResults Tests
+
+    [Fact]
+    public void ReconcileVisibleResults_WhenEmpty_InsertsAllAtPositions()
+    {
+        var target = new ObservableCollection<SearchResult>();
+        var first = CreatePerekResult(1);
+        var second = CreatePerekResult(2);
+
+        SearchViewModel.ReconcileVisibleResults(target, new[] { first, second });
+
+        target.Should().Equal(first, second);
+    }
+
+    [Fact]
+    public void ReconcileVisibleResults_WhenReordered_MovesExisting()
+    {
+        var first = CreatePerekResult(1);
+        var second = CreatePerekResult(2);
+        var third = CreatePerekResult(3);
+        var target = new ObservableCollection<SearchResult> { first, second, third };
+
+        SearchViewModel.ReconcileVisibleResults(target, new[] { third, first, second });
+
+        target.Should().Equal(third, first, second);
+    }
+
+    [Fact]
+    public void ReconcileVisibleResults_WhenListShrinks_RemovesTail()
+    {
+        var first = CreatePerekResult(1);
+        var second = CreatePerekResult(2);
+        var third = CreatePerekResult(3);
+        var target = new ObservableCollection<SearchResult> { first, second, third };
+
+        SearchViewModel.ReconcileVisibleResults(target, new[] { first });
+
+        target.Should().Equal(first);
+    }
+
+    [Fact]
+    public void ReconcileVisibleResults_MixedChange_InsertsMovesAndTrims()
+    {
+        var first = CreatePerekResult(1);
+        var second = CreatePerekResult(2);
+        var third = CreatePerekResult(3);
+        var fourth = CreatePerekResult(4);
+        var target = new ObservableCollection<SearchResult> { first, second, third };
+
+        SearchViewModel.ReconcileVisibleResults(target, new[] { fourth, third });
+
+        target.Should().Equal(fourth, third);
+    }
+
+    #endregion
+
+    private static PerekSearchResult CreatePerekResult(int perekId) =>
+        new(new Perek
+        {
+            PerekId = perekId,
+            SeferId = 1,
+            SeferName = "בראשית",
+            SeferTanahUsName = "Genesis",
+            PerekNumber = perekId,
+            Date = "2026-01-01",
+            HebDate = "כב שבט",
+            Tseit = "18:00"
+        }, "חיפוש");
 
     private static List<Author> CreateTestAuthors()
     {

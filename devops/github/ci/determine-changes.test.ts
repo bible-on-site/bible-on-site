@@ -37,6 +37,19 @@ describe("detectChanges", () => {
 		assert.equal(changes.website.ci_changed, false);
 	});
 
+	test("e2e-impact selector changes require app checks without a release", () => {
+		for (const file of [
+			"devops/github/ci/e2e-impact/select.ts",
+			"devops/github/ci/e2e-impact/e2e-impact.test.ts",
+			"devops/e2e-coverage-trees/extract.ts",
+			"devops/e2e-coverage-trees/to-selector-tree.ts",
+		]) {
+			const changes = detectChanges([file]);
+			assert.deepEqual(changes.app, { module_changed: false, ci_changed: true }, file);
+			assert.equal(changes.website.ci_changed, false, file);
+		}
+	});
+
 	for (const path of [
 		"web/bible-on-site/package.json",
 		"web/bible-on-site/package-lock.json",
@@ -79,6 +92,114 @@ describe("detectChanges", () => {
 		assert.deepEqual(changed(["web/bible-on-site/src/app/page.tsx"], "app"), [
 			{ module_changed: false, ci_changed: false },
 		]);
+	});
+
+	for (const path of [
+		"app/BibleOnSite.Tests/Services/ArticleSearchServiceTests.cs",
+		"app/BibleOnSite.Tests.E2E/Navigation/ArticlesNavigationTests.cs",
+		"app/BibleOnSite.Tests.MobileE2E/PerekPilotTests.cs",
+		"app/mobile-e2e/run.mjs",
+	]) {
+		test(`${path} runs app checks without a store release`, () => {
+			assert.deepEqual(changed([path], "app"), [
+				{ module_changed: false, ci_changed: true },
+			]);
+		});
+	}
+
+	test("packaged app changes still release alongside test changes", () => {
+		assert.deepEqual(
+			changed(
+				[
+					"app/BibleOnSite/Pages/PerekPage.xaml",
+					"app/BibleOnSite.Tests/Services/PerekServiceTests.cs",
+				],
+				"app",
+			),
+			[{ module_changed: true, ci_changed: true }],
+		);
+	});
+
+	test("app build tooling changes still release the app", () => {
+		assert.deepEqual(changed(["app/devops/Build.Package.cs"], "app"), [
+			{ module_changed: true, ci_changed: false },
+		]);
+	});
+
+	for (const path of [
+		// The tests/ tree, including its coverage fixtures.
+		"web/bible-on-site/tests/unit/components/TopNav.test.tsx",
+		"web/bible-on-site/tests/e2e/search.test.ts",
+		"web/bible-on-site/tests/integration/lib/bulletin-client.test.ts",
+		"web/bible-on-site/tests/perf/build-size.test.ts",
+		"web/bible-on-site/tests/util/coverage/merge-coverage.mts",
+		// Colocated *.test.* / *.spec.* files anywhere in the module.
+		"web/bible-on-site/scripts/start-server.test.mjs",
+		"web/bible-on-site/scripts/verify-public-content.test.mjs",
+		"web/bible-on-site/src/lib/search/service.spec.ts",
+		// The jest harness.
+		"web/bible-on-site/jest.config.js",
+		"web/bible-on-site/jest.setup.js",
+		"web/bible-on-site/jest-dom.setup.js",
+		"web/bible-on-site/jest.coverage-setup.js",
+		// The playwright harness and the e2e-only helpers it imports.
+		"web/bible-on-site/playwright.base.config.ts",
+		"web/bible-on-site/playwright.e2e.config.ts",
+		"web/bible-on-site/playwright.perf.config.ts",
+		"web/bible-on-site/playwright.recitation.config.ts",
+		"web/bible-on-site/playwright-global-setup.js",
+		"web/bible-on-site/playwright-global-teardown-coverage.js",
+		"web/bible-on-site/launch-e2e-server.mts",
+		"web/bible-on-site/get-debug-port.js",
+		// Test env and coverage fixtures.
+		"web/bible-on-site/.test.env",
+		"web/bible-on-site/.covignore.mjs",
+		"web/bible-on-site/shared/typing/coverage.d.ts",
+	]) {
+		test(`${path} runs website checks without a release`, () => {
+			assert.deepEqual(changed([path], "website"), [
+				{ module_changed: false, ci_changed: true },
+			]);
+		});
+	}
+
+	for (const path of [
+		"web/bible-on-site/package.json",
+		"web/bible-on-site/package-lock.json",
+		"web/bible-on-site/next.config.mjs",
+		"web/bible-on-site/tsconfig.json",
+		"web/bible-on-site/biome.json",
+		"web/bible-on-site/.dev.env",
+		"web/bible-on-site/.npmrc",
+		"web/bible-on-site/Dockerfile",
+		"web/bible-on-site/src/app/page.tsx",
+		"web/bible-on-site/src/lib/recitation-audio.ts",
+		"web/bible-on-site/src/util/latest.ts",
+		"web/bible-on-site/public/icons/search.svg",
+		"web/bible-on-site/scripts/start-server.mjs",
+		"web/bible-on-site/scripts/generate-client-catalog.mjs",
+		"web/bible-on-site/scripts/coverage-gaps.mjs",
+		"web/bible-on-site/shared/typing/other.d.ts",
+		"web/bible-on-site/tests2/util/helper.ts",
+	]) {
+		test(`${path} still releases the website`, () => {
+			assert.deepEqual(changed([path], "website"), [
+				{ module_changed: true, ci_changed: false },
+			]);
+		});
+	}
+
+	test("packaged website changes still release alongside test changes", () => {
+		assert.deepEqual(
+			changed(
+				[
+					"web/bible-on-site/src/app/page.tsx",
+					"web/bible-on-site/tests/unit/components/TopNav.test.tsx",
+				],
+				"website",
+			),
+			[{ module_changed: true, ci_changed: true }],
+		);
 	});
 
 	test("CI workflow and detection changes validate every module without releasing it", () => {

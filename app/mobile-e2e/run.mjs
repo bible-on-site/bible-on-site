@@ -1,13 +1,13 @@
 import { execFile, execFileSync, spawn } from "node:child_process";
-import { appendFileSync, closeSync, copyFileSync, existsSync, mkdirSync, openSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { appendFileSync, closeSync, copyFileSync, existsSync, mkdirSync, openSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
-import { setTimeout as delay } from "node:timers/promises";
 import { createServer } from "node:net";
 import { promisify } from "node:util";
-import { probeAppiumReadiness } from "./appium-readiness.mjs";
+import { waitForAppiumReadiness } from "./appium-readiness.mjs";
 import { prepareWda } from "./prepare-wda.mjs";
+import { exportNativeLog, startNativeLog } from "./native-logs.mjs";
 import { waitForAndroidDevice } from "./android-readiness.mjs";
 
 const directory = dirname(fileURLToPath(import.meta.url));
@@ -17,6 +17,9 @@ if (!["android", "ios"].includes(platform)) throw new Error("Set MOBILE_PLATFORM
 if (!process.env.MOBILE_UDID) throw new Error("Set MOBILE_UDID to the emulator/simulator identifier.");
 const artifacts = process.env.MOBILE_E2E_ARTIFACTS ?? resolve(directory, "../.artifacts/mobile-e2e", platform);
 mkdirSync(artifacts, { recursive: true });
+// Coverage evidence is per-run state: a stale record from an earlier run must
+// never attribute its automation ids to tests of this run (#2085).
+rmSync(resolve(artifacts, "coverage-evidence"), { recursive: true, force: true });
 const appPath = process.env.MOBILE_APP_PATH ?? resolve(directory,
   platform === "android"
     ? "../BibleOnSite/bin/Debug/net10.0-android/android-x64/com.tanah.daily929-Signed.apk"
@@ -26,9 +29,11 @@ if (platform === "ios" && !existsSync(resolve(appPath, "GoogleService-Info.plist
   throw new Error("The iOS app is missing its root Firebase configuration resource.");
 }
 const execute = promisify(execFile);
+let androidAdb;
 if (platform === "android") {
   const androidSdk = process.env.ANDROID_HOME ?? process.env.ANDROID_SDK_ROOT;
   const adb = androidSdk ? resolve(androidSdk, "platform-tools", process.platform === "win32" ? "adb.exe" : "adb") : "adb";
+  androidAdb = adb;
   const deviceReadinessLog = resolve(artifacts, "device-readiness.jsonl");
   writeFileSync(deviceReadinessLog, "");
   await waitForAndroidDevice({ adb, udid: process.env.MOBILE_UDID, execute,
@@ -42,6 +47,13 @@ await new Promise((resolvePort, reject) => {
   probe.on("error", reject);
   probe.listen(4723, "127.0.0.1", () => probe.close(resolvePort));
 });
+if (platform === "android" && process.env.MOBILE_KEEP_APP === "1") {
+  // UiAutomator2 skips installation entirely with noReset, even when
+  // enforceAppInstall is set. Replace the APK while retaining the review data.
+  const installation = await execute(androidAdb, ["-s", process.env.MOBILE_UDID, "install", "-r", appPath],
+    { timeout: 180000 });
+  console.log(installation.stdout.trim());
+}
 const serverLog = openSync(resolve(artifacts, "appium.log"), "w");
 const server = spawn(process.execPath, [resolve(directory, "node_modules/appium/index.js"),
   "--address", "127.0.0.1", "--port", "4723", "--log-no-colors", "--log-timestamp",
@@ -59,6 +71,9 @@ const observeReadiness = (observation) => appendFileSync(readinessLog, `${JSON.s
 server.on("spawn", () => observeReadiness({ phase: "spawned", pid: server.pid }));
 let test;
 let diagnosticsFailed = false;
+const nativeStream = platform === "ios" ? startNativeLog("xcrun", ["simctl", "spawn", process.env.MOBILE_UDID,
+  "log", "stream", "--style", "compact", "--level", "debug", "--predicate", 'process == "BibleOnSite"'],
+  resolve(artifacts, "device-live.log")) : undefined;
 
 async function sampleIosApp() {
   try {
@@ -81,18 +96,12 @@ async function sampleIosApp() {
     console.error("Could not sample the iOS app:", error);
   }
 }
-const stop = () => { test?.kill(); server.kill(); };
+const stop = () => { test?.kill(); server.kill(); nativeStream?.kill(); };
 process.on("SIGINT", stop);
 process.on("SIGTERM", stop);
 
 try {
-  const deadline = Date.now() + 60000;
-  let ready = false;
-  while (Date.now() < deadline) {
-    if (serverExit) throw new Error(`Appium exited (${serverExit}). See ${artifacts}/appium.log`);
-    if (await probeAppiumReadiness({ observe: observeReadiness })) { ready = true; break; }
-    await delay(250);
-  }
+  const ready = await waitForAppiumReadiness({ observe: observeReadiness, exited: () => serverExit });
   if (!ready) throw new Error(`Appium did not become ready. See ${artifacts}/appium.log`);
   test = spawn("dotnet", ["run", "--project", "devops", "--", "TestMobileE2E", "--configuration", "Debug"], {
     cwd: resolve(directory, ".."), windowsHide: true, stdio: "inherit",
@@ -104,6 +113,12 @@ try {
     test.on("exit", (code) => resolveExit(code ?? 1));
   });
 } finally {
+  try {
+    await nativeStream?.stop();
+  } catch (error) {
+    diagnosticsFailed = true;
+    console.error("Could not finish native log stream:", error);
+  }
   if (platform === "ios" && process.exitCode !== 0) {
     // Symbolication can consume substantial resources on simulator runners.
     // Sample surviving failed/hung apps after tests, never alongside healthy runs.
@@ -116,16 +131,16 @@ try {
     // Log export duration scales with how long the suite ran; a 30s budget
     // intermittently times out after a full test pass and fails the job.
     const logExportTimeout = 120000;
-    const nativeLog = platform === "android"
-      ? execFileSync(adb, ["-s", process.env.MOBILE_UDID, "logcat", "-d"], { encoding: "utf8", timeout: logExportTimeout, maxBuffer: 20 * 1024 * 1024, windowsHide: true })
-      : execFileSync("xcrun", ["simctl", "spawn", process.env.MOBILE_UDID, "log", "show", "--style", "compact", "--last", `${Math.ceil((Date.now() - runStarted) / 1000)}s`, "--predicate", 'process == "BibleOnSite"'], { encoding: "utf8", timeout: logExportTimeout, maxBuffer: 20 * 1024 * 1024 });
-    writeFileSync(resolve(artifacts, "device.log"), nativeLog);
+    const command = platform === "android" ? adb : "xcrun";
+    const args = platform === "android"
+      ? ["-s", process.env.MOBILE_UDID, "logcat", "-d"]
+      : ["simctl", "spawn", process.env.MOBILE_UDID, "log", "show", "--style", "compact", "--last", `${Math.ceil((Date.now() - runStarted) / 1000)}s`, "--predicate", 'process == "BibleOnSite"'];
+    exportNativeLog(command, args, resolve(artifacts, "device.log"), logExportTimeout);
     if (platform === "ios") {
-      const lifecycleLog = execFileSync("xcrun", ["simctl", "spawn", process.env.MOBILE_UDID,
+      exportNativeLog("xcrun", ["simctl", "spawn", process.env.MOBILE_UDID,
         "log", "show", "--style", "compact", "--last", "10m", "--predicate",
         '(process == "SpringBoard" OR process == "runningboardd" OR process == "ReportCrash" OR process == "testmanagerd") AND (eventMessage CONTAINS[c] "daily929" OR eventMessage CONTAINS[c] "BibleOnSite" OR eventMessage CONTAINS[c] "WebDriverAgent" OR eventMessage CONTAINS[c] "xctrunner")'],
-      { encoding: "utf8", timeout: logExportTimeout, maxBuffer: 20 * 1024 * 1024 });
-      writeFileSync(resolve(artifacts, "app-lifecycle.log"), lifecycleLog);
+      resolve(artifacts, "app-lifecycle.log"), logExportTimeout);
       const reportDirectories = [resolve(homedir(), "Library/Logs/DiagnosticReports"),
         resolve(homedir(), "Library/Developer/CoreSimulator/Devices", process.env.MOBILE_UDID,
           "data/Library/Logs/CrashReporter")];

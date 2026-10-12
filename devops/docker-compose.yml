@@ -1,4 +1,30 @@
 services:
+  api:
+    profiles: ["backend"]
+    image: bible-on-site-api:dev
+    build:
+      context: ../web
+      dockerfile: api/Dockerfile
+    ports:
+      - "127.0.0.1:3003:3003"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    env_file: ../web/api/.dev.env
+    environment:
+      HOST: "0.0.0.0"
+      PORT: "3003"
+      PROFILE: dev
+      DB_URL: "${LOCAL_BACKEND_DB_URL:-mysql://root:test_123@host.docker.internal:3306/tanah-dev?ssl-mode=DISABLED}"
+      S3_ENDPOINT: http://rustfs:9000
+    depends_on:
+      rustfs:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3003/health"]
+      interval: 2s
+      timeout: 5s
+      retries: 60
+
   rustfs:
     # Pin the multi-platform manifest so local development and CI use one build.
     image: rustfs/rustfs:1.0.1@sha256:1803faef57627e2d9c2e7d89d655d712ddded5389040054987163043fecb6a3c

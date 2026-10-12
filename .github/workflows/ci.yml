@@ -115,6 +115,9 @@ env:
   PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_WF: perushim-sqlite-v2.${{ github.run_id }}
   PERUSHIM_NOTES_SQLITE_FILENAME: sefaria-dump-5784-sivan-4.perushim_notes.sqlite
   PERUSHIM_CATALOG_SQLITE_FILENAME: sefaria-dump-5784-sivan-4.perushim_catalog.sqlite
+  # Prebuilt FTS5 search index riding in the same notes pack (CI artifacts only —
+  # its .gz exceeds GitHub's 100 MB push limit).
+  PERUSHIM_SEARCH_SQLITE_FILENAME: sefaria-dump-5784-sivan-4.hebrew_search.sqlite
   PERUSHIM_NOTES_ANDROID_ASSET_RELDIR: Platforms/Android/AssetPacks/perushim_notes
   PERUSHIM_NOTES_IOS_ODR_DATASET_RELDIR: Platforms/iOS/Assets/PerushimNotes.xcassets/perushim_notes.dataset
   PERUSHIM_PIPELINE_DIRECTORY: data/sefaria/pipelines/perushim-view
@@ -704,27 +707,28 @@ jobs:
         run: |
           npm ci --no-audit
 
+      # npm ci is done here, so ~/.npm is frozen — the tar+upload can run in
+      # the background; the implicit wait-all before job cleanup completes it.
       - name: Save npm cache
         if: ${{ github.ref == 'refs/heads/master' && steps.npm-cache.outputs.cache-hit != 'true' }}
+        background: true
         uses: actions/cache/save@v6
         with:
           path: ~/.npm
           key: ${{ steps.npm-cache.outputs.cache-primary-key }}
 
+      # The browser install only needs node_modules; it runs in the background
+      # across MySQL/Rust/populate/build and is gated before the perf test. On
+      # a binary-cache hit only the system dependencies are installed.
       - name: Install Playwright Browsers
-        if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: npx playwright install --with-deps chromium
-
-      - name: Save playwright binaries
-        if: ${{ github.ref == 'refs/heads/master' && steps.playwright-cache.outputs.cache-hit != 'true' }}
-        uses: actions/cache/save@v6
-        with:
-          path: ~/.cache/ms-playwright
-          key: ${{ steps.playwright-cache.outputs.cache-primary-key }}
-
-      - name: Install Playwright System Dependencies
-        if: steps.playwright-cache.outputs.cache-hit == 'true'
-        run: npx playwright install-deps chromium
+        id: playwright-install
+        background: true
+        run: |
+          if [ "${{ steps.playwright-cache.outputs.cache-hit }}" = "true" ]; then
+            npx playwright install-deps chromium
+          else
+            npx playwright install --with-deps chromium
+          fi
 
       - name: Restore Next.js build cache
         id: nextjs-cache
@@ -799,6 +803,20 @@ jobs:
 
       - name: Verify approved recitation in the production build
         run: node scripts/verify-recitation-build.mjs
+
+      - name: Wait for Playwright install
+        wait: playwright-install
+
+      # Saved after the wait: the cache key's payload is what the background
+      # install produced. The upload itself backgrounds too — nothing writes
+      # ~/.cache/ms-playwright afterwards.
+      - name: Save playwright binaries
+        if: ${{ github.ref == 'refs/heads/master' && steps.playwright-cache.outputs.cache-hit != 'true' }}
+        background: true
+        uses: actions/cache/save@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ steps.playwright-cache.outputs.cache-primary-key }}
 
       - name: Perf Test
         id: npm-perf-test
@@ -918,8 +936,11 @@ jobs:
           node --version && npm --version
           npm ci --no-audit
 
+      # npm ci is done here, so ~/.npm is frozen — the tar+upload can run in
+      # the background; the implicit wait-all before job cleanup completes it.
       - name: Save npm cache
         if: ${{ github.ref == 'refs/heads/master' && steps.npm-cache.outputs.cache-hit != 'true' }}
+        background: true
         uses: actions/cache/save@v6
         with:
           path: ~/.npm
@@ -934,20 +955,47 @@ jobs:
         # here with the exact same image on every run.
         run: docker run --rm -v "$PWD":/app -w /app node:26.10.0-alpine npm ci --dry-run --ignore-scripts --no-audit --no-fund
 
+      # The browser install only needs node_modules; it runs in the background
+      # across lint/unit/MySQL/Rust and is gated before E2E. On a binary-cache
+      # hit only the system dependencies are installed.
       - name: Install Playwright Browsers
-        if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: npx playwright install --with-deps chromium
+        id: playwright-install
+        background: true
+        run: |
+          if [ "${{ steps.playwright-cache.outputs.cache-hit }}" = "true" ]; then
+            npx playwright install-deps chromium
+          else
+            npx playwright install --with-deps chromium
+          fi
 
-      - name: Save playwright binaries
-        if: ${{ github.ref == 'refs/heads/master' && steps.playwright-cache.outputs.cache-hit != 'true' }}
-        uses: actions/cache/save@v6
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-make
+        uses: taiki-e/install-action@v2
         with:
-          path: ~/.cache/ms-playwright
-          key: ${{ steps.playwright-cache.outputs.cache-primary-key }}
+          tool: cargo-make
 
-      - name: Install Playwright System Dependencies
-        if: steps.playwright-cache.outputs.cache-hit == 'true'
-        run: npx playwright install-deps chromium
+      - name: Cache Cargo dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/master' }}
+          workspaces: ${{ env.DATA_DIRECTORY }}
+          # Release-profile cache shared with admin_ci; data_ci keeps its own
+          # key because its coverage builds produce debug-profile artifacts.
+          shared-key: "e2e-release-crates"
+
+      # Build only the seeders used by the E2E launchers, not every data
+      # pipeline. Both shared-key consumers must build the same crate set:
+      # rust-cache never overwrites an existing key, so whichever job saves
+      # first must persist the full artifact set (db-populator + s3-populator).
+      # The build runs in the background across the JS track; `wait` before the
+      # E2E step is the gate.
+      - name: Pre-build data crate for E2E tests
+        id: crates
+        background: true
+        working-directory: ${{ env.DATA_DIRECTORY }}
+        run: cargo build --release -p db-populator -p s3-populator
 
       - name: Lint
         id: npm-lint
@@ -975,31 +1023,6 @@ jobs:
           distribution: "mysql"
           auto-start: true
 
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install cargo-make
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-make
-
-      - name: Cache Cargo dependencies
-        uses: Swatinem/rust-cache@v2
-        with:
-          save-if: ${{ github.ref == 'refs/heads/master' }}
-          workspaces: ${{ env.DATA_DIRECTORY }}
-          # Release-profile cache shared with admin_ci; data_ci keeps its own
-          # key because its coverage builds produce debug-profile artifacts.
-          shared-key: "e2e-release-crates"
-
-      # Build only the seeders used by the E2E launchers, not every data
-      # pipeline. Both shared-key consumers must build the same crate set:
-      # rust-cache never overwrites an existing key, so whichever job saves
-      # first must persist the full artifact set (db-populator + s3-populator).
-      - name: Pre-build data crate for E2E tests
-        working-directory: ${{ env.DATA_DIRECTORY }}
-        run: cargo build --release -p db-populator -p s3-populator
-
       # The E2E launcher populates MySQL once before starting next dev. Restore
       # its SQL input here, preferring this run's generated data over the baseline.
       - name: Download perushim SQL
@@ -1013,6 +1036,25 @@ jobs:
         if: ${{ needs.perushim_data.result == 'success' || needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
         working-directory: ${{ env.DATA_DIRECTORY }}
         run: cp mysql/perushim-sql-master/perushim_data.sql mysql/perushim_data.sql
+
+      # Gates for the background installs started above: browsers on the JS
+      # side, seeder crates for the E2E launcher.
+      - name: Wait for Playwright install
+        wait: playwright-install
+
+      - name: Wait for data crate build
+        wait: crates
+
+      # Saved after the wait: the cache key's payload is what the background
+      # install produced. The upload itself backgrounds too — nothing writes
+      # ~/.cache/ms-playwright afterwards.
+      - name: Save playwright binaries
+        if: ${{ github.ref == 'refs/heads/master' && steps.playwright-cache.outputs.cache-hit != 'true' }}
+        background: true
+        uses: actions/cache/save@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ steps.playwright-cache.outputs.cache-primary-key }}
 
       # coverage:e2e starts next dev; the production build and standalone-server
       # checks run in Website Performance, which remains a Cross Module CI gate.
@@ -1111,6 +1153,21 @@ jobs:
         with:
           ref: ${{ github.sha }}
 
+      # RustFS + bucket init only need the checked-out compose files and the
+      # docker daemon, so the whole stack (image pulls included) runs in the
+      # background across the JS toolchain installs; `wait` before the S3
+      # compatibility check is the gate.
+      - name: Start RustFS and initialize S3 buckets
+        id: rustfs
+        background: true
+        working-directory: ${{ github.workspace }}
+        run: |
+          if ! docker compose -f devops/docker-compose.yml up -d --wait --wait-timeout 180; then
+            docker compose -f devops/docker-compose.yml logs
+            exit 1
+          fi
+          docker compose -f devops/docker-compose.yml run --build --rm --no-deps rustfs-init
+
       - name: Setup Node.js
         id: setup-node
         uses: actions/setup-node@v7
@@ -1129,8 +1186,11 @@ jobs:
         id: npm_ci
         run: npm ci --no-audit
 
+      # npm ci is done here, so ~/.npm is frozen — the tar+upload can run in
+      # the background; the implicit wait-all before job cleanup completes it.
       - name: Save npm cache
         if: ${{ github.ref == 'refs/heads/master' && steps.npm-cache.outputs.cache-hit != 'true' }}
+        background: true
         uses: actions/cache/save@v6
         with:
           path: ~/.npm
@@ -1145,8 +1205,38 @@ jobs:
         # here with the exact same image on every run.
         run: docker run --rm -v "$PWD":/app -w /app node:26.10.0-alpine npm ci --dry-run --ignore-scripts --no-audit --no-fund
 
+      # The browser install only needs node_modules; it runs in the background
+      # across lint/typecheck/unit/build and is gated before E2E.
       - name: Install Playwright Browsers
+        id: playwright-install
+        background: true
         run: npx playwright install --with-deps chromium
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-make
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-make
+
+      - name: Cache Cargo dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/master' }}
+          workspaces: ${{ env.DATA_DIRECTORY }}
+          # Same release-profile populator cache as website_ci.
+          shared-key: "e2e-release-crates"
+
+      # Build only the two seeders used by the E2E launcher.
+      # This prevents timeout when the E2E launcher runs cargo make mysql-populate and s3-populate-test.
+      # The build runs in the background across the JS track; `wait` before the
+      # E2E step is the gate.
+      - name: Pre-build data crates for E2E tests
+        id: crates
+        background: true
+        working-directory: ${{ env.DATA_DIRECTORY }}
+        run: cargo build --release -p db-populator -p s3-populator
 
       - name: Lint
         id: npm-lint
@@ -1173,7 +1263,7 @@ jobs:
           overwrite: true
           if-no-files-found: ignore
 
-      # ============ MySQL and RustFS Setup for E2E Tests ============
+      # ============ MySQL Setup for E2E Tests ============
       - name: Install and start MySQL
         id: mysql
         uses: shogo82148/actions-setup-mysql@v1
@@ -1183,14 +1273,8 @@ jobs:
           distribution: "mysql"
           auto-start: true
 
-      - name: Start RustFS and initialize S3 buckets
-        working-directory: ${{ github.workspace }}
-        run: |
-          if ! docker compose -f devops/docker-compose.yml up -d --wait --wait-timeout 180; then
-            docker compose -f devops/docker-compose.yml logs
-            exit 1
-          fi
-          docker compose -f devops/docker-compose.yml run --build --rm --no-deps rustfs-init
+      - name: Wait for RustFS and S3 buckets
+        wait: rustfs
 
       - name: Verify local S3 compatibility
         working-directory: ${{ env.ADMIN_DIRECTORY }}
@@ -1198,27 +1282,11 @@ jobs:
           S3_ENDPOINT: http://localhost:4566
         run: npm run test:s3
 
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+      - name: Wait for Playwright install
+        wait: playwright-install
 
-      - name: Install cargo-make
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-make
-
-      - name: Cache Cargo dependencies
-        uses: Swatinem/rust-cache@v2
-        with:
-          save-if: ${{ github.ref == 'refs/heads/master' }}
-          workspaces: ${{ env.DATA_DIRECTORY }}
-          # Same release-profile populator cache as website_ci.
-          shared-key: "e2e-release-crates"
-
-      # Build only the two seeders used by the E2E launcher.
-      # This prevents timeout when the E2E launcher runs cargo make mysql-populate and s3-populate-test
-      - name: Pre-build data crates for E2E tests
-        working-directory: ${{ env.DATA_DIRECTORY }}
-        run: cargo build --release -p db-populator -p s3-populator
+      - name: Wait for data crate build
+        wait: crates
 
       - name: E2E Test with Coverage
         id: npm-e2e-test
@@ -1375,8 +1443,11 @@ jobs:
         run: |
           npm ci --no-audit
 
+      # Both npm ci runs are done here, so ~/.npm is frozen — the tar+upload
+      # can run in the background; implicit wait-all completes it at job end.
       - name: Save npm cache
         if: ${{ github.ref == 'refs/heads/master' && steps.tests-npm-cache.outputs.cache-hit != 'true' }}
+        background: true
         uses: actions/cache/save@v6
         with:
           path: ~/.npm
@@ -1529,7 +1600,7 @@ jobs:
       - name: Setup Python for recitation extension packaging
         uses: actions/setup-python@v7
         with:
-          python-version: "3.14"
+          python-version: "3.15"
 
       - name: Restore original recitation audio cache
         uses: actions/cache@v6
@@ -1676,9 +1747,18 @@ jobs:
 
   app_mobile_e2e:
     name: App Mobile E2E
-    needs: [setup_env, determine_changes]
+    # Wait for perushim_data so the app under test packages the same catalog/notes
+    # pair package_app ships — the run artifact when the pipeline regenerated it,
+    # the master baseline otherwise — never a stale committed fixture.
+    needs: [setup_env, determine_changes, perushim_data]
     if: ${{ always() && !cancelled() && !failure() && (needs.determine_changes.outputs.app_module_changed == 'true' || needs.determine_changes.outputs.app_ci_changed == 'true') }}
+    permissions:
+      contents: read
+      # Reads the master coverage-tree baseline artifacts through the REST API (#2085).
+      actions: read
     uses: ./.github/workflows/app-mobile-e2e.yml
+    with:
+      perushim_notes_sqlite_artifact: ${{ needs.perushim_data.result != 'skipped' && format('perushim-sqlite-v2.{0}', github.run_id) || 'perushim-sqlite-v2.master' }}
 
   app_ios_ci:
     name: App iOS native audio CI
@@ -2056,18 +2136,12 @@ jobs:
         with:
           ref: ${{ github.sha }}
 
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache Cargo dependencies
-        uses: Swatinem/rust-cache@v2
-        with:
-          save-if: ${{ github.ref == 'refs/heads/master' }}
-          workspaces: ${{ env.DATA_DIRECTORY }}
-          cache-on-failure: true
-          shared-key: "perushim-data-rust"
-
+      # Same overlap as data_ci: the image pull (or artifact download + load)
+      # only depends on the needs/ outputs, so it runs in the background while
+      # the toolchain installs; `wait` below is the gate before the container.
       - name: Pull Sefaria MongoDB Docker Image
+        id: pull-sefaria-mongo
+        background: true
         env:
           GH_TOKEN: ${{ github.token }}
           SEFARIA_MONGO_IMAGE: ${{ needs.determine_docker_image_availability.outputs.sefaria_mongo_image }}
@@ -2081,6 +2155,20 @@ jobs:
             docker pull "$SEFARIA_MONGO_IMAGE"
           fi
           df -h /
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/master' }}
+          workspaces: ${{ env.DATA_DIRECTORY }}
+          cache-on-failure: true
+          shared-key: "perushim-data-rust"
+
+      - name: Wait for Sefaria MongoDB Docker Image
+        wait: pull-sefaria-mongo
 
       - name: Start MongoDB Container
         id: setup-mongodb
@@ -2138,6 +2226,8 @@ jobs:
              "$SQLITE_DIR/${{ env.PERUSHIM_NOTES_SQLITE_FILENAME }}"
           mv "$SQLITE_DIR/${DUMP_NAME}.perushim_catalog.sqlite" \
              "$SQLITE_DIR/${{ env.PERUSHIM_CATALOG_SQLITE_FILENAME }}"
+          mv "$SQLITE_DIR/${DUMP_NAME}.hebrew_search.sqlite" \
+             "$SQLITE_DIR/${{ env.PERUSHIM_SEARCH_SQLITE_FILENAME }}"
 
       - name: Upload Perushim Notes SQLite Artifact
         uses: actions/upload-artifact@v7
@@ -2146,6 +2236,7 @@ jobs:
           path: |
             ${{ env.PERUSHIM_PIPELINE_DIRECTORY }}/.output/${{ env.PERUSHIM_NOTES_SQLITE_FILENAME }}
             ${{ env.PERUSHIM_PIPELINE_DIRECTORY }}/.output/${{ env.PERUSHIM_CATALOG_SQLITE_FILENAME }}
+            ${{ env.PERUSHIM_PIPELINE_DIRECTORY }}/.output/${{ env.PERUSHIM_SEARCH_SQLITE_FILENAME }}
           retention-days: 30
           overwrite: true
 
@@ -2157,6 +2248,7 @@ jobs:
           path: |
             ${{ env.PERUSHIM_PIPELINE_DIRECTORY }}/.output/${{ env.PERUSHIM_NOTES_SQLITE_FILENAME }}
             ${{ env.PERUSHIM_PIPELINE_DIRECTORY }}/.output/${{ env.PERUSHIM_CATALOG_SQLITE_FILENAME }}
+            ${{ env.PERUSHIM_PIPELINE_DIRECTORY }}/.output/${{ env.PERUSHIM_SEARCH_SQLITE_FILENAME }}
           retention-days: 90
           overwrite: true
 
@@ -2488,8 +2580,11 @@ jobs:
         run: |
           npm ci --no-audit
 
+      # npm ci is done here, so ~/.npm is frozen — the tar+upload can run in
+      # the background; the implicit wait-all before job cleanup completes it.
       - name: Save npm cache
         if: ${{ github.ref == 'refs/heads/master' && steps.devops-npm-cache.outputs.cache-hit != 'true' }}
+        background: true
         uses: actions/cache/save@v6
         with:
           path: ~/.npm
@@ -2499,7 +2594,7 @@ jobs:
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         run: |
           npm run test:version
-          node --test github/ci/codecov-report-state.test.mjs github/ci/bencher-comparison.test.mjs
+          node --test github/ci/codecov-report-state.test.mjs github/ci/bencher-comparison.test.mjs github/ci/e2e-impact/e2e-impact.test.ts e2e-coverage-trees/e2e-coverage-trees.test.ts
 
       - name: Merge Test Coverage (Website + API)
         run: npm run coverage:merge
@@ -2597,6 +2692,8 @@ jobs:
     with:
       module_name: website
       module_directory: ${{ needs.setup_env.outputs.website_directory }}
+      # Keep in sync with website extraModulePaths in devops/github/ci/determine-changes.ts
+      extra_module_paths: '["data/recitation/recitation.sqlite", "app/BibleOnSite/Resources/Raw/recitation-audio.html"]'
       module_version: ${{ needs.package_website.outputs.module_version }}
       artifacts_json: '[{"name": "${{ needs.package_website.outputs.docker_artifact_name }}", "path": "web/bible-on-site/.release", "glob": "*.tar.gz"}]'
       cd_event_type: deploy-aws

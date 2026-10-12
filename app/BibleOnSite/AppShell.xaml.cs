@@ -1,4 +1,5 @@
 using BibleOnSite.Config;
+using BibleOnSite.Helpers;
 using BibleOnSite.Pages;
 using BibleOnSite.Services;
 
@@ -28,6 +29,12 @@ public partial class AppShell : Shell
 		Routing.RegisterRoute("DonationsPage", typeof(DonationsPage));
 		Routing.RegisterRoute("TosPage", typeof(TosPage));
 		Routing.RegisterRoute("PreferencesPage", typeof(PreferencesPage));
+		Routing.RegisterRoute("ParashaListPage", typeof(ParashaListPage));
+		Routing.RegisterRoute("ParashaPage", typeof(ParashaPage));
+		Routing.RegisterRoute(AppRoutes.LearningCalendar, typeof(LearningCalendarPage));
+		Routing.RegisterRoute(AppRoutes.CalendarReader, typeof(PerekPage));
+		Routing.RegisterRoute(AppRoutes.SearchReader, typeof(PerekPage));
+		Routing.RegisterRoute(AppRoutes.Masora, typeof(MasoraPage));
 
 		Navigated += OnNavigated;
 	}
@@ -89,8 +96,11 @@ public partial class AppShell : Shell
 		// Honor the selection-mode lock: when a pasuk is selected the page
 		// sets FlyoutBehavior.Disabled and the drawer must stay closed.
 		if (shell.CurrentPage is null ||
-			GetFlyoutBehavior(shell.CurrentPage) != FlyoutBehavior.Flyout)
+			GetFlyoutBehavior(shell.CurrentPage) != FlyoutBehavior.Flyout ||
+			shell.Navigation.NavigationStack.Count > 1)
 		{
+			// Above the root, iOS owns this edge for standard history Back.
+			// The reader's hamburger still opens the drawer after a search jump.
 			return false;
 		}
 		// MAUI's own flyout pan only engages in the left 10% band; mirror it on
@@ -159,49 +169,99 @@ public partial class AppShell : Shell
 	}
 #endif
 
+	/// <summary>
+	/// Shared Back ordering for every Shell surface:
+	/// 1. A fullscreen media surface is released first (#2117) — a transient
+	///    surface always owns Back before page navigation or app exit.
+	/// 2. The page/navigation pipeline then decides (reader overlays, section
+	///    stack pops, cancelled navigation).
+	/// 3. When nothing consumed the press and it would leave the app, the
+	///    single-Back exit confirmation runs first (#2118).
+	/// On Android, MainActivity's always-enabled AppBackPressedCallback
+	/// guarantees this method receives every press — MAUI's own callback is
+	/// disabled whenever CanConsumeBackNavigation reports no in-app history.
+	/// </summary>
+	protected override bool OnBackButtonPressed()
+	{
+		if (MediaFullscreen.TryExit())
+		{
+			return true;
+		}
+
+		return BackExitPlan.Evaluate(base.OnBackButtonPressed(), FlyoutIsPresented) switch
+		{
+			BackExitAction.Consume => true,
+			BackExitAction.ConfirmExit => ExitConfirmation.Shared.Request(),
+			_ => false,
+		};
+	}
+
 	private void OnNavigated(object? sender, ShellNavigatedEventArgs e)
 	{
 		var analytics = Application.Current?.Handler?.MauiContext?.Services.GetService<IAnalyticsService>();
-		if (analytics == null) return;
+		if (analytics == null)
+		{
+			return;
+		}
 		// Populate analytics with route (legacy-style: clear screen names for GA)
 		var loc = e.Current?.Location?.ToString();
 		if (!string.IsNullOrEmpty(loc))
+		{
 			analytics.SetScreen(loc.TrimStart('/'), "Shell");
+		}
 	}
 
 	private async void OnAlHaperekTapped(object? sender, TappedEventArgs e)
 	{
 		FlyoutIsPresented = false;
-		await GoToAsync(AppRoutes.FlyoutPage("PerekPage"));
+		await GoToAsync(AppRoutes.FlyoutPage("PerekPage", CurrentState.Location.OriginalString));
+	}
+
+	private async void OnLearningCalendarTapped(object? sender, TappedEventArgs e)
+	{
+		FlyoutIsPresented = false;
+		await GoToAsync(AppRoutes.FlyoutPage(AppRoutes.LearningCalendar, CurrentState.Location.OriginalString));
+	}
+
+	private async void OnMasoraTapped(object? sender, TappedEventArgs e)
+	{
+		FlyoutIsPresented = false;
+		await GoToAsync(AppRoutes.FlyoutPage(AppRoutes.Masora, CurrentState.Location.OriginalString));
+	}
+
+	private async void OnParashaTapped(object? sender, TappedEventArgs e)
+	{
+		FlyoutIsPresented = false;
+		await GoToAsync(AppRoutes.FlyoutPage("ParashaListPage", CurrentState.Location.OriginalString));
 	}
 
 	private async void OnAuthorsTapped(object? sender, TappedEventArgs e)
 	{
 		FlyoutIsPresented = false;
-		await GoToAsync(AppRoutes.FlyoutPage("AuthorsPage"));
+		await GoToAsync(AppRoutes.FlyoutPage("AuthorsPage", CurrentState.Location.OriginalString));
 	}
 
 	private async void OnTermsTapped(object? sender, TappedEventArgs e)
 	{
 		FlyoutIsPresented = false;
-		await GoToAsync(AppRoutes.FlyoutPage("TosPage"));
+		await GoToAsync(AppRoutes.FlyoutPage("TosPage", CurrentState.Location.OriginalString));
 	}
 
 	private async void OnPreferencesTapped(object? sender, TappedEventArgs e)
 	{
 		FlyoutIsPresented = false;
-		await GoToAsync(AppRoutes.FlyoutPage("PreferencesPage"));
+		await GoToAsync(AppRoutes.FlyoutPage("PreferencesPage", CurrentState.Location.OriginalString));
 	}
 
 	private async void OnContactTapped(object? sender, TappedEventArgs e)
 	{
 		FlyoutIsPresented = false;
-		await GoToAsync(AppRoutes.FlyoutPage("ContactPage"));
+		await GoToAsync(AppRoutes.FlyoutPage("ContactPage", CurrentState.Location.OriginalString));
 	}
 
 	private async void OnDonationsTapped(object? sender, TappedEventArgs e)
 	{
 		FlyoutIsPresented = false;
-		await GoToAsync(AppRoutes.FlyoutPage("DonationsPage"));
+		await GoToAsync(AppRoutes.FlyoutPage("DonationsPage", CurrentState.Location.OriginalString));
 	}
 }

@@ -29,7 +29,7 @@ public abstract class BaseGraphQLService
     /// <summary>
     /// Executes a GraphQL query and returns the typed response.
     /// </summary>
-    protected async Task<T?> QueryAsync<T>(string query, string? operationName = null, object? variables = null, CancellationToken cancellationToken = default)
+    protected async Task<T?> QueryAsync<T>(string query, string? operationName, object? variables, CancellationToken cancellationToken)
     {
         var request = new GraphQLRequest
         {
@@ -61,7 +61,13 @@ public abstract class BaseGraphQLService
     /// <summary>
     /// Executes a GraphQL query with timeout support.
     /// </summary>
-    protected async Task<T?> QueryWithTimeoutAsync<T>(string query, TimeSpan timeout, string? operationName = null, object? variables = null)
+    protected async Task<T?> QueryWithTimeoutAsync<T>(string query, TimeSpan timeout, string? operationName) =>
+        await QueryWithTimeoutAsync<T>(query, timeout, operationName, null);
+
+    /// <summary>
+    /// Executes a GraphQL query with timeout support.
+    /// </summary>
+    protected async Task<T?> QueryWithTimeoutAsync<T>(string query, TimeSpan timeout, string? operationName, object? variables)
     {
         using var cts = new CancellationTokenSource(timeout);
         return await QueryAsync<T>(query, operationName, variables, cts.Token);

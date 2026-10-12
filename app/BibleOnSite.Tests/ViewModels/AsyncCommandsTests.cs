@@ -116,13 +116,15 @@ public class AsyncCommandsTests
         var vm = new SearchViewModel();
         vm.SetAuthors([new Author { Id = 1, Name = "הרב משה", Details = "" }]);
         vm.SetFilterEnabled(SearchFilter.Perek, false);
+        vm.SetFilterEnabled(SearchFilter.Pasuk, false);
+        vm.SetFilterEnabled(SearchFilter.Perush, false);
         vm.SearchPhrase = "משה";
-        await vm.SearchAsync();
+        await vm.SearchAsync(TestContext.Current.CancellationToken);
         vm.SearchResults.Should().ContainSingle().Which.Should().BeOfType<AuthorSearchResult>();
         vm.IsLoading.Should().BeFalse();
         vm.SetFilterEnabled(SearchFilter.Author, false);
         vm.SetFilterEnabled(SearchFilter.Perek, false);
-        await vm.SearchAsync();
+        await vm.SearchAsync(TestContext.Current.CancellationToken);
         vm.SearchResults.Should().BeEmpty();
         vm.SetSeferGroupFilterEnabled(0, true);
         vm.IsSeferGroupFilterEnabled(0).Should().BeTrue();
@@ -130,7 +132,7 @@ public class AsyncCommandsTests
         vm.GetAuthorResults().Should().BeEmpty("the author filter is disabled");
         vm.SetFilterEnabled(SearchFilter.Author, true);
         vm.GetAuthorResults().Should().ContainSingle().Which.Author.Name.Should().Be("הרב משה");
-        await vm.SearchAsync();
+        await vm.SearchAsync(TestContext.Current.CancellationToken);
         vm.SearchResults.Should().BeEmpty();
     }
 }
