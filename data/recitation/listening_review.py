@@ -108,7 +108,7 @@ def make_clip(audio, destination, start, end):
     executable = shutil.which("ffmpeg")
     if executable is None:
         raise FileNotFoundError("FFmpeg not installed")
-    decoded = subprocess.run([  # nosec B603: resolved executable, absolute source, argv only.
+    decoded = subprocess.run([  # nosec B603: resolved FFmpeg, absolute input, no shell.  # nosemgrep
         executable, "-hide_banner", "-loglevel", "error", "-nostdin", "-threads", "2",
         "-i", str(audio.resolve()), "-ar", str(RATE), "-ac", "1", "-f", "s32le", "pipe:1",
     ], check=True, timeout=120, capture_output=True)
@@ -219,8 +219,8 @@ def validate_decision(case, payload):
             len(set(segments)) != len(segments) or not set(segments) <= allowed):
         raise ValueError("Listening evidence contains unknown/duplicate word identities")
     verse = payload.get("verseHeard") is True
-    if payload["verdict"] == "good" and (not verse or set(segments) != allowed):
-        raise ValueError("Listen to the whole verse and every exact word cut before confirming")
+    if payload["verdict"] == "good" and set(segments) != allowed:
+        raise ValueError("Listen to every exact word cut before confirming")
     note = payload.get("note", "")
     if not isinstance(note, str) or len(note) > 2000:
         raise ValueError("Note must be text of at most 2000 characters")

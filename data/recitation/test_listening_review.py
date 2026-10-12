@@ -55,13 +55,20 @@ class ListeningReviewTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 validate_case(case, self.words, self.manifest)
 
-    def test_good_requires_verse_and_every_exact_cut(self):
-        for change in ({"verseHeard": False}, {"heardSegments": [1]},
+    def test_good_requires_every_exact_cut(self):
+        for change in ({"heardSegments": [1]},
                        {"heardSegments": [1, 1, 3]}, {"heardSegments": [True, 3]},
                        {"heardSegments": [1, 4]}, {"candidateSha256": "other"},
                        {"note": "x" * 2001}):
             with self.assertRaises(ValueError):
                 validate_decision(self.case, {**self.payload, **change})
+
+    def test_all_word_cuts_unlock_good_without_separate_verse_playback(self):
+        row = self.store.save(self.case, {**self.payload, "verseHeard": False})
+        self.assertFalse(row["listenEvidenceReportedByBrowser"]["verseHeard"])
+        self.assertEqual(row["listenEvidenceReportedByBrowser"]["heardSegments"], [1, 3])
+        self.assertEqual(row["verdict"], "good")
+        self.assertEqual(row["publicationStatus"], "held")
 
     def test_problem_can_save_partial_listening_without_approval(self):
         row = validate_decision(self.case, {**self.payload, "verdict": "problem",
@@ -139,21 +146,21 @@ class ListeningReviewTests(unittest.TestCase):
         paths = []
         for rate in (44100, 32000):
             path = self.root / f"{rate}.mp3"
-            subprocess.run([  # nosec B603: resolved FFmpeg, fixed fixture argv.
+            subprocess.run([  # nosec B603: resolved FFmpeg, fixed fixture argv.  # nosemgrep
                             shutil.which("ffmpeg"), "-loglevel", "error", "-f", "lavfi", "-i",
                             f"sine=frequency=440:sample_rate={rate}:duration=2",
                             "-c:a", "libmp3lame", "-b:a", "48k", "-write_xing", "0",
-                            str(path)], check=True, capture_output=True)  # nosec B603: resolved FFmpeg, fixed fixture argv.
+                            str(path)], check=True, capture_output=True)  # nosec B603: resolved FFmpeg, fixed fixture argv.  # nosemgrep
             paths.append(path)
         original = self.root / "mixed.mp3"
         original.write_bytes(b"".join(path.read_bytes() for path in paths))
         before = digest_file(original)
         clip = self.root / "clip.wav"
         make_clip(original, clip, 500, 3500)
-        full = subprocess.run([  # nosec B603: resolved FFmpeg, fixed fixture argv.
+        full = subprocess.run([  # nosec B603: resolved FFmpeg, fixed fixture argv.  # nosemgrep
                             shutil.which("ffmpeg"), "-loglevel", "error", "-i", str(original),
-                               "-ar", "16000", "-ac", "1", "-f", "s32le", "pipe:1"],
-                              check=True, capture_output=True).stdout  # nosec B603: resolved FFmpeg, fixed fixture argv.
+                            "-ar", "16000", "-ac", "1", "-f", "s32le", "pipe:1"],
+                              check=True, capture_output=True).stdout  # nosec B603: resolved FFmpeg, fixed fixture argv.  # nosemgrep
         with wave.open(str(clip), "rb") as stream:
             self.assertEqual(stream.getframerate(), 16000)
             self.assertEqual(stream.getnframes(), 48000)

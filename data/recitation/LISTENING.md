@@ -12,11 +12,11 @@ python listening_review.py prepare --canonical /path/to/canonical.json --snapsho
 python listening_review.py serve --queue .outputs/listening-review/queue.json --reviews .outputs/listening-review/reviews.json --port 8766
 ~~~
 
-Open http://127.0.0.1:8766/. Play the verse, then "חיתוכי המילים"
-to hear every proposed word cut separately. Clicking a word replays just that
+Open http://127.0.0.1:8766/. Play "חיתוכי המילים" to hear every proposed
+word cut separately. Verse playback is optional. Clicking a word replays just that
 cut. "עם הקשר" plays the diagnostic's original surrounding context.
 Choose good, problem, or skip; an optional note helps locate a bad cut.
-Good is enabled only after the verse and every individual cut have finished.
+Good is enabled after every individual cut has finished. Separate verse playback is optional.
 Interrupted playback never counts as a completed listen. Decisions save
 automatically and resume when the page is reopened. Export downloads a backup.
 
