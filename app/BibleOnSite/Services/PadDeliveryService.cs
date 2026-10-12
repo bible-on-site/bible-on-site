@@ -388,10 +388,15 @@ partial class PadDeliveryService
         var cacheDir = AssetPackCacheDir(packName);
         try
         {
+            // An extracted payload remains usable even if the OS evicts its pack.
+            if (File.Exists(Path.Combine(cacheDir, PayloadFileName(packName))))
+            {
+                return true;
+            }
+
             // Same short-circuit the ODR path had: an already-downloaded pack only
             // needs extraction, not a store round-trip.
-            if (File.Exists(Path.Combine(cacheDir, PayloadFileName(packName))) ||
-                IsAssetPackLocallyAvailable(packName))
+            if (IsAssetPackLocallyAvailable(packName))
             {
                 return SaveAssetPackPayload(cacheDir, packName) != null;
             }
@@ -664,16 +669,17 @@ partial class PadDeliveryService
     [SupportedOSPlatform("maccatalyst26.0")]
     private sealed class AssetPackDownloadEvents : BAManagedAssetPackDownloadDelegate
     {
-        private readonly Dictionary<string, IProgress<double>?> _subscribers = new();
+        private readonly Dictionary<Guid, (string PackName, IProgress<double>? Progress)> _subscribers = new();
         private readonly object _sync = new();
 
         public IDisposable Subscribe(string packName, IProgress<double>? progress)
         {
+            var key = Guid.NewGuid();
             lock (_sync)
             {
-                _subscribers[packName] = progress;
+                _subscribers[key] = (packName, progress);
             }
-            return new Subscription(this, packName);
+            return new Subscription(this, key);
         }
 
         public override void DownloadBegan(BAAssetPack assetPack)
@@ -683,12 +689,18 @@ partial class PadDeliveryService
 
         public override void DownloadProgress(BAAssetPack assetPack, NSProgress progress)
         {
-            IProgress<double>? subscriber;
+            IProgress<double>?[] subscribers;
             lock (_sync)
             {
-                _subscribers.TryGetValue(assetPack.Identifier, out subscriber);
+                subscribers = _subscribers.Values
+                    .Where(entry => entry.PackName == assetPack.Identifier)
+                    .Select(entry => entry.Progress)
+                    .ToArray();
             }
-            subscriber?.Report(progress.FractionCompleted);
+            foreach (var subscriber in subscribers)
+            {
+                subscriber?.Report(progress.FractionCompleted);
+            }
         }
 
         public override void DownloadPaused(BAAssetPack assetPack)
@@ -707,17 +719,17 @@ partial class PadDeliveryService
                 $"BA: download of '{assetPack.Identifier}' failed: {error.LocalizedDescription}");
         }
 
-        private void Unsubscribe(string packName)
+        private void Unsubscribe(Guid key)
         {
             lock (_sync)
             {
-                _subscribers.Remove(packName);
+                _subscribers.Remove(key);
             }
         }
 
-        private sealed class Subscription(AssetPackDownloadEvents owner, string packName) : IDisposable
+        private sealed class Subscription(AssetPackDownloadEvents owner, Guid key) : IDisposable
         {
-            public void Dispose() => owner.Unsubscribe(packName);
+            public void Dispose() => owner.Unsubscribe(key);
         }
     }
 }
