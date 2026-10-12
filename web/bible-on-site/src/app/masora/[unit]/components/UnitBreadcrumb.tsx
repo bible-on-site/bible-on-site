@@ -14,8 +14,8 @@ const HELEK_ORDER = ["תורה", "נביאים", "כתובים"];
 
 /**
  * Breadcrumb for a מסורה unit: תנ"ך > מסורה על הפרק > חלק > ספר > פרשה.
- * The last dropdown lists the sefer's units by their scripture-span
- * headings — the unit-level "chapter picker" for this division.
+ * The last dropdown lists the sefer's units by their parasha-identity
+ * headings — the unit-level picker for this division.
  */
 export function UnitBreadcrumb({ unit }: { unit: ReadingUnit }) {
 	const sefer = getSeferByName(unit.seferName);
