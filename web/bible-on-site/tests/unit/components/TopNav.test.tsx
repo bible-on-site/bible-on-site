@@ -13,7 +13,7 @@ jest.mock("next/image", () => ({
 import { TopNav } from "@/app/components/TopNav";
 
 describe("TopNav", () => {
-	it("links the logo home and exposes a labelled search button", () => {
+	it("links the logo home and exposes an icon-only labelled search button", () => {
 		render(<TopNav />);
 
 		const nav = screen.getByRole("navigation", { name: "ניווט עליון" });
@@ -25,9 +25,13 @@ describe("TopNav", () => {
 		expect(logoLink).toBeInTheDocument();
 		expect(nav.querySelector('[data-alt=\'תנ"ך על הפרק\']')).toBeTruthy();
 
+		// Icon-only: the accessible name comes from aria-label, and the
+		// button renders no visible text (#2154).
 		const searchLink = screen.getByRole("link", { name: "חיפוש" });
 		expect(searchLink).toHaveAttribute("href", "/search");
+		expect(searchLink).toHaveAttribute("aria-label", "חיפוש");
 		expect(searchLink).toHaveClass("top-nav-search");
+		expect(searchLink).not.toHaveTextContent(/\S/);
 	});
 
 	it("renders exactly the logo and search entries, in that order", () => {

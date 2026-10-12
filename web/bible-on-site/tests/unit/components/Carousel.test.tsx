@@ -182,4 +182,313 @@ describe("Carousel", () => {
 		// @ts-expect-error restore jsdom, which has no ResizeObserver
 		delete global.ResizeObserver;
 	});
+
+	describe("scrollStorageKey position memory", () => {
+		const KEY = "carousel-scroll-test";
+
+		beforeEach(() => sessionStorage.clear());
+
+		function renderStored(count: number, key: string | null = KEY) {
+			return render(
+				<div dir="rtl">
+					<Carousel
+						className="track"
+						prevLabel="פרשן קודם"
+						nextLabel="פרשן הבא"
+						scrollStorageKey={key ?? undefined}
+					>
+						{Array.from({ length: count }, (_, i) => (
+							// biome-ignore lint/suspicious/noArrayIndexKey: static test cards
+							<a key={i} href={`#${i}`}>
+								{i}
+							</a>
+						))}
+					</Carousel>
+				</div>,
+			).container.querySelector(".track") as HTMLElement;
+		}
+
+		function storedPosition() {
+			const raw = sessionStorage.getItem(KEY);
+			return raw ? JSON.parse(raw) : null;
+		}
+
+		/**
+		 * Uniform card layout resolved through the prototypes, so even a
+		 * remounted scroller reports real geometry to the mount-time restore.
+		 */
+		function installTrackLayout({
+			dir = "rtl",
+			dims = { viewport: VIEWPORT_WIDTH },
+		}: {
+			dir?: "rtl" | "ltr";
+			dims?: { viewport: number };
+		} = {}) {
+			const realRect = HTMLElement.prototype.getBoundingClientRect;
+			// jsdom's getComputedStyle does not inherit direction from the `dir`
+			// attribute, so report it for the track like a real browser would.
+			const realGetComputedStyle = window.getComputedStyle;
+			window.getComputedStyle = (el: Element, pseudo?: string | null) => {
+				const style = realGetComputedStyle(el, pseudo);
+				if (el instanceof HTMLElement && el.classList.contains("track")) {
+					Object.defineProperty(style, "direction", {
+						configurable: true,
+						value: dir,
+					});
+				}
+				return style;
+			};
+			HTMLElement.prototype.getBoundingClientRect = function (
+				this: HTMLElement,
+			) {
+				if (this.classList.contains("track")) return rect(0, dims.viewport);
+				const track = this.parentElement;
+				if (track?.classList.contains("track")) {
+					const i = Array.prototype.indexOf.call(track.children, this);
+					const start =
+						dir === "rtl"
+							? dims.viewport - (i + 1) * CARD_WIDTH
+							: i * CARD_WIDTH;
+					return rect(start - track.scrollLeft, CARD_WIDTH);
+				}
+				return realRect.call(this);
+			};
+			const scrollWidth = Object.getOwnPropertyDescriptor(
+				HTMLElement.prototype,
+				"scrollWidth",
+			);
+			const clientWidth = Object.getOwnPropertyDescriptor(
+				HTMLElement.prototype,
+				"clientWidth",
+			);
+			Object.defineProperty(HTMLElement.prototype, "scrollWidth", {
+				configurable: true,
+				get(this: HTMLElement) {
+					return this.classList.contains("track")
+						? this.children.length * CARD_WIDTH
+						: 0;
+				},
+			});
+			Object.defineProperty(HTMLElement.prototype, "clientWidth", {
+				configurable: true,
+				get(this: HTMLElement) {
+					return this.classList.contains("track") ? dims.viewport : 0;
+				},
+			});
+			return () => {
+				HTMLElement.prototype.getBoundingClientRect = realRect;
+				window.getComputedStyle = realGetComputedStyle;
+				if (scrollWidth) {
+					Object.defineProperty(
+						HTMLElement.prototype,
+						"scrollWidth",
+						scrollWidth,
+					);
+				} else {
+					Reflect.deleteProperty(HTMLElement.prototype, "scrollWidth");
+				}
+				if (clientWidth) {
+					Object.defineProperty(
+						HTMLElement.prototype,
+						"clientWidth",
+						clientWidth,
+					);
+				} else {
+					Reflect.deleteProperty(HTMLElement.prototype, "clientWidth");
+				}
+			};
+		}
+
+		it("remembers the scrolled position and restores it on remount", () => {
+			const undo = installTrackLayout();
+			const scroller = renderStored(5);
+			scroller.scrollLeft = -2 * CARD_WIDTH;
+			fireEvent.scroll(scroller);
+			expect(storedPosition()).toEqual({ itemIndex: 2, itemGap: 0 });
+
+			// A second mount (e.g. returning from a perush) picks it back up.
+			const remounted = renderStored(5);
+			expect(remounted.scrollLeft).toBe(-2 * CARD_WIDTH);
+			undo();
+		});
+
+		it("restores the stored position even before any layout", () => {
+			sessionStorage.setItem(KEY, JSON.stringify({ itemIndex: 2, itemGap: 0 }));
+			const undo = installTrackLayout();
+			const scroller = renderStored(5);
+			expect(scroller.scrollLeft).toBe(-2 * CARD_WIDTH);
+			expect(screen.getByTestId("carousel-position")).toHaveTextContent(
+				"3-4 / 5",
+			);
+			undo();
+		});
+
+		it("keeps the position while a loading placeholder shrinks the scroller, then restores it when the items return", () => {
+			const undo = installTrackLayout();
+			const rendered = render(
+				<div dir="rtl">
+					<Carousel
+						className="track"
+						prevLabel="פרשן קודם"
+						nextLabel="פרשן הבא"
+						scrollStorageKey={KEY}
+					>
+						{Array.from({ length: 5 }, (_, i) => (
+							// biome-ignore lint/suspicious/noArrayIndexKey: static test cards
+							<a key={i} href={`#${i}`}>
+								{i}
+							</a>
+						))}
+					</Carousel>
+				</div>,
+			);
+			const scroller = rendered.container.querySelector(
+				".track",
+			) as HTMLElement;
+			scroller.scrollLeft = -2 * CARD_WIDTH;
+			fireEvent.scroll(scroller);
+			expect(storedPosition()).toEqual({ itemIndex: 2, itemGap: 0 });
+
+			// Loading placeholder: the scroller shrinks and the browser clamps
+			// scrollLeft back to 0 — the remembered position must survive both.
+			rendered.rerender(
+				<div dir="rtl">
+					<Carousel
+						className="track"
+						prevLabel="פרשן קודם"
+						nextLabel="פרשן הבא"
+						scrollStorageKey={KEY}
+					>
+						<p>מתחבר לפירוש...</p>
+					</Carousel>
+				</div>,
+			);
+			scroller.scrollLeft = 0; // the browser's clamp on shrink
+			fireEvent.scroll(scroller);
+			expect(storedPosition()).toEqual({ itemIndex: 2, itemGap: 0 });
+
+			// The cards return in the same instance (e.g. a failed load).
+			rendered.rerender(
+				<div dir="rtl">
+					<Carousel
+						className="track"
+						prevLabel="פרשן קודם"
+						nextLabel="פרשן הבא"
+						scrollStorageKey={KEY}
+					>
+						{Array.from({ length: 5 }, (_, i) => (
+							// biome-ignore lint/suspicious/noArrayIndexKey: static test cards
+							<a key={i} href={`#${i}`}>
+								{i}
+							</a>
+						))}
+					</Carousel>
+				</div>,
+			);
+			expect(scroller.scrollLeft).toBe(-2 * CARD_WIDTH);
+			undo();
+		});
+
+		it("restores the same card when the viewport changed while away", () => {
+			sessionStorage.setItem(KEY, JSON.stringify({ itemIndex: 3, itemGap: 0 }));
+			const undo = installTrackLayout({ dims: { viewport: 150 } });
+			const scroller = renderStored(5);
+			// Card 4 realigns to the start edge of the narrower viewport.
+			expect(scroller.scrollLeft).toBe(-3 * CARD_WIDTH);
+			expect(screen.getByTestId("carousel-position")).toHaveTextContent(
+				"4 / 5",
+			);
+			undo();
+		});
+
+		it("restores the place after a widened viewport briefly fits every card", () => {
+			const dims = { viewport: VIEWPORT_WIDTH };
+			const undo = installTrackLayout({ dims });
+			const rendered = render(
+				<div dir="rtl">
+					<Carousel
+						className="track"
+						prevLabel="פרשן קודם"
+						nextLabel="פרשן הבא"
+						scrollStorageKey={KEY}
+					>
+						{Array.from({ length: 5 }, (_, i) => (
+							// biome-ignore lint/suspicious/noArrayIndexKey: static test cards
+							<a key={i} href={`#${i}`}>
+								{i}
+							</a>
+						))}
+					</Carousel>
+				</div>,
+			);
+			const scroller = rendered.container.querySelector(
+				".track",
+			) as HTMLElement;
+			scroller.scrollLeft = -2 * CARD_WIDTH;
+			fireEvent.scroll(scroller);
+			expect(storedPosition()).toEqual({ itemIndex: 2, itemGap: 0 });
+
+			// Widening until every card fits clamps scrollLeft to the start —
+			// the remembered place must not be overwritten by that clamp.
+			dims.viewport = 5 * CARD_WIDTH;
+			scroller.scrollLeft = 0;
+			fireEvent.scroll(scroller);
+			expect(storedPosition()).toEqual({ itemIndex: 2, itemGap: 0 });
+
+			// Narrowing back replays the remembered card instead of the clamp.
+			dims.viewport = VIEWPORT_WIDTH;
+			fireEvent(window, new Event("resize"));
+			expect(scroller.scrollLeft).toBe(-2 * CARD_WIDTH);
+			undo();
+		});
+
+		it("skips realignment when the stored position already matches", () => {
+			sessionStorage.setItem(KEY, JSON.stringify({ itemIndex: 0, itemGap: 0 }));
+			const undo = installTrackLayout();
+			const scroller = renderStored(5);
+			expect(scroller.scrollLeft).toBe(0);
+			expect(storedPosition()).toEqual({ itemIndex: 0, itemGap: 0 });
+			undo();
+		});
+
+		it("starts fresh when the stored value is unreadable or malformed", () => {
+			const undo = installTrackLayout();
+			for (const bad of [
+				"{",
+				'"x"',
+				"{}",
+				'{"itemIndex":"x","itemGap":0}',
+				'{"itemIndex":1}',
+			]) {
+				sessionStorage.setItem(KEY, bad);
+				const scroller = renderStored(5);
+				expect(scroller.scrollLeft).toBe(0);
+			}
+			undo();
+		});
+
+		it("survives a stored position while the scroller reports no items", () => {
+			sessionStorage.setItem(KEY, JSON.stringify({ itemIndex: 2, itemGap: 0 }));
+			const undo = installTrackLayout();
+			const scroller = renderStored(0);
+			// Degenerate layout: overflow reported with zero items to clamp into.
+			Object.defineProperty(scroller, "scrollWidth", {
+				configurable: true,
+				value: 5 * CARD_WIDTH,
+			});
+			fireEvent.scroll(scroller);
+			expect(scroller.scrollLeft).toBe(0);
+			expect(storedPosition()).toEqual({ itemIndex: 0, itemGap: 0 });
+			undo();
+		});
+
+		it("leaves storage and position alone without a key", () => {
+			const undo = installTrackLayout();
+			const scroller = renderStored(5, null);
+			scroller.scrollLeft = -2 * CARD_WIDTH;
+			fireEvent.scroll(scroller);
+			expect(sessionStorage.length).toBe(0);
+			undo();
+		});
+	});
 });

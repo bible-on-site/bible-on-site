@@ -703,9 +703,10 @@ public class PreferencesViewModelTests : IDisposable
             Directory.CreateDirectory(dataDir);
             var dbPath = Path.Join(dataDir, "sefaria-dump-5784-sivan-4.perushim_notes.sqlite");
             var conn = new SQLiteAsyncConnection(dbPath, SQLiteOpenFlags.ReadWrite | SQLiteOpenFlags.Create);
-            await conn.ExecuteAsync("CREATE TABLE IF NOT EXISTS _metadata (key TEXT, value TEXT)");
-            await conn.ExecuteAsync("INSERT INTO _metadata (key, value) VALUES ('build_timestamp', '1')");
-            await conn.ExecuteAsync("CREATE TABLE IF NOT EXISTS note (perush_id INTEGER, perek_id INTEGER, pasuk INTEGER, note_idx INTEGER, note_content TEXT)");
+            foreach (var statement in NotesDbV2.Statements((1, 1, 1, 0, "note")))
+            {
+                await conn.ExecuteAsync(statement);
+            }
             await conn.CloseAsync();
 
             var perushim = PerushimNotesService.CreateForTesting(new FakePadDeliveryService(), dataDir);
