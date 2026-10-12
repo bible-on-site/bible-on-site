@@ -18,6 +18,7 @@ Before this fix the reader decoded every commentary in each cached chapter befor
 - iOS deliberately selects TextKit 1 before assigning attributed text. This removes the TextKit 2 whole-text caret-enumeration path shown in the report while preserving native links, formatting and exact search positioning.
 - Preferences subscriptions hold readers weakly, so closed screens and their caches can be collected.
 - Chapter-wide selection defaults to five sources. Preferences allows a different limit with a Hebrew note about slower reading and increased memory use. Lowering the limit trims the active selection. A search jump can replace the last slot to reveal its source without exceeding the limit.
+- Production commentary search cannot import note blobs into FTS. Missing, corrupt, wrong-generation and undeletable invalid indexes leave commentary search unavailable while verse search remains usable; the installed pack restores an evicted index. Prebuilt fixtures exercise the production search path.
 - The commentary menu filters source names, including Hebrew abbreviation punctuation, without changing the selected sources. The focused one-verse view still offers every source.
 - The iOS scroll stress fixture now uses 2,200 RTL paragraphs and up to five sources under the ordinary interaction deadlines. No watchdog or timeout allowance is increased.
 

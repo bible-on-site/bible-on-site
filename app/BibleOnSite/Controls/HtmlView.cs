@@ -10,7 +10,7 @@ public class HtmlView : View
 {
     public static readonly BindableProperty ContentLoaderProperty = BindableProperty.Create(
         nameof(ContentLoader), typeof(Func<Task<List<string>>>), typeof(HtmlView), default(Func<Task<List<string>>>),
-        propertyChanged: (bindable, _, _) => ((HtmlView)bindable).LoadCellContent());
+        propertyChanged: (bindable, _, _) => { _ = ((HtmlView)bindable).LoadCellContentAsync(); });
 
     /// <summary>A realized cell owns its plain text; the reader model owns only compressed data.</summary>
     public Func<Task<List<string>>>? ContentLoader
@@ -29,10 +29,10 @@ public class HtmlView : View
             Interlocked.Increment(ref _contentLoadSerial);
             if (ContentLoader != null) { HtmlContent = null; }
         }
-        else { LoadCellContent(); }
+        else { _ = LoadCellContentAsync(); }
     }
 
-    private async void LoadCellContent()
+    private async Task LoadCellContentAsync()
     {
         var serial = Interlocked.Increment(ref _contentLoadSerial);
         var loader = ContentLoader;

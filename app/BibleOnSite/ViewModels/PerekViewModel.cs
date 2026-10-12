@@ -202,6 +202,7 @@ public partial class PerekViewModel : ObservableObject
         _fileSystem = fileSystem ?? FileSystem.Current;
         _share = share ?? Share.Default;
         _hasPerekAudio = hasPerekAudio;
+        _perushChapter = null;
 
         // Sync FontFactor from preferences and listen for changes
         _fontFactor = _preferencesService.FontFactor;
