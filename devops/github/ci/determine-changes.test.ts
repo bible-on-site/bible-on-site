@@ -22,6 +22,11 @@ const changed = (files: string[], ...keys: ModuleKey[]) =>
 	keys.map((key) => detectChanges(files)[key]);
 
 describe("detectChanges", () => {
+	test("playback derivatives release both website and native book packages", () => {
+		assert.deepEqual(changed(["web/bible-on-site/src/data/recitation/opus-playback.json"], "website", "app"), [
+			{ module_changed: true, ci_changed: false }, { module_changed: true, ci_changed: false },
+		]);
+	});
 	test("benchmark comparison changes check the website without releasing a module", () => {
 		const changes = detectChanges(["devops/github/ci/bencher-comparison.mjs"]);
 		assert.deepEqual(changes.website, { module_changed: false, ci_changed: true });
@@ -360,7 +365,8 @@ describe("main", () => {
 			} else {
 				commit(work, "web/bible-on-site/src/page.tsx");
 			}
-			git(directory, "clone", "--quiet", "--bare", work, origin);
+			// Use the Git transport so background maintenance cannot race a loose-object copy.
+			git(directory, "clone", "--quiet", "--no-local", "--bare", work, origin);
 			// A force push leaves the replaced commit unreachable from any ref.
 			git(origin, "branch", "--quiet", "-D", "replaced");
 			// GitHub serves fetches of commits by SHA.
