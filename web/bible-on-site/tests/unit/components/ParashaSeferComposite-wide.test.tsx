@@ -55,6 +55,7 @@ jest.mock("next/dynamic", () => {
 		return function MockSefer(props: {
 			initialBookPage?: string | null;
 			haftara?: boolean;
+			initialContent?: { scope: string; kind: string; slug: string } | null;
 		}) {
 			const [mount] = useState(() => ++mockSeferMountCount);
 			return (
@@ -63,6 +64,9 @@ jest.mock("next/dynamic", () => {
 					data-book-page={props.initialBookPage ?? "unit"}
 					data-mount={mount}
 					data-haftara={String(props.haftara)}
+					data-initial-content={JSON.stringify(
+						props.initialContent ?? null,
+					)}
 				/>
 			);
 		};
@@ -78,6 +82,10 @@ describe("ParashaSeferComposite (wide screen)", () => {
 		currentUnitId: 5,
 		entityRefsByPerek: {},
 		perekSources: {},
+		articles: [],
+		perushim: [],
+		haftaraArticles: [],
+		haftaraPerushim: [],
 	};
 
 	beforeEach(() => {
@@ -255,5 +263,47 @@ describe("ParashaSeferComposite (wide screen)", () => {
 		expect(
 			container.querySelector('[aria-label="טוען תצוגת ספר..."]'),
 		).toBeTruthy();
+	});
+
+	it.each([
+		["haftaraPerush", 'רד"ק', { scope: "haftara", kind: "perush", slug: 'רד"ק' }],
+		["haftaraArticle", "haft-article", { scope: "haftara", kind: "article", slug: "haft-article" }],
+		["perush", 'רש"י', { scope: "torah", kind: "perush", slug: 'רש"י' }],
+		["article", "torah-article", { scope: "torah", kind: "article", slug: "torah-article" }],
+	] as const)(
+		"seeds a %s deep link into the book",
+		async (param, slug, expected) => {
+			mockGet.mockImplementation((key: string) =>
+				key === "book" ? "" : key === param ? slug : null,
+			);
+			render(<ParashaSeferComposite {...props} />);
+			expect(
+				JSON.parse(
+					(await screen.findByTestId("sefer")).getAttribute(
+						"data-initial-content",
+					) as string,
+				),
+			).toEqual(expected);
+		},
+	);
+
+	it("prefers the Haftarah scope when both scopes carry content", async () => {
+		mockGet.mockImplementation((key: string) =>
+			key === "book"
+				? ""
+				: key === "haftaraPerush"
+					? 'רד"ק'
+					: key === "perush"
+						? 'רש"י'
+						: null,
+		);
+		render(<ParashaSeferComposite {...props} />);
+		expect(
+			JSON.parse(
+				(await screen.findByTestId("sefer")).getAttribute(
+					"data-initial-content",
+				) as string,
+			),
+		).toEqual({ scope: "haftara", kind: "perush", slug: 'רד"ק' });
 	});
 });

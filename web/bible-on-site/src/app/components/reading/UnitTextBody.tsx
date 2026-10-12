@@ -168,7 +168,9 @@ function UnitPerekSlice({
 									: undefined
 							}
 						>
-							<span className={perekStyles.pasukNum}>{marker}</span>{" "}
+							<span className={perekStyles.pasukNum} data-pasuk-num>
+								{marker}
+							</span>{" "}
 							{renderPasukSegmentsWithEntityRefs(
 								pasuk.segments,
 								pasukIdx,
