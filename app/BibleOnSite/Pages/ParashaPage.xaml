@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:viewmodels="clr-namespace:BibleOnSite.ViewModels"
+             xmlns:models="clr-namespace:BibleOnSite.Models"
+             xmlns:fonts="clr-namespace:Fonts"
+             xmlns:controls="clr-namespace:BibleOnSite.Controls"
+             xmlns:converters="clr-namespace:BibleOnSite.Converters"
+             x:Class="BibleOnSite.Pages.ParashaPage"
+             x:DataType="viewmodels:ParashaViewModel"
+             Title="פרשה על הפרק"
+             FlowDirection="RightToLeft">
+
+    <ContentPage.Resources>
+        <converters:NotNullConverter x:Key="NotNullToBoolConverter"/>
+    </ContentPage.Resources>
+
+    <Shell.TitleView>
+        <Grid ColumnDefinitions="Auto,Auto" ColumnSpacing="4">
+            <Button Text="{x:Static fonts:FluentUI.line_horizontal_3_20_regular}"
+                    FontFamily="FluentIcons"
+                    FontSize="20"
+                    WidthRequest="40"
+                    HeightRequest="40"
+                    Padding="0"
+                    BackgroundColor="Transparent"
+                    TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"
+                    SemanticProperties.Description="תפריט"
+                    AutomationId="ParashaReaderMenuButton"
+                    VerticalOptions="Center"
+                    HorizontalOptions="Start"
+                    Clicked="OnMenuButtonClicked"/>
+            <Label Grid.Column="1"
+                   Text="{Binding Title}"
+                   AutomationId="ParashaTitle"
+                   FontSize="20"
+                   VerticalOptions="Center"
+                   HorizontalOptions="Start"
+                   TextColor="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource SecondaryDarkText}}"/>
+        </Grid>
+    </Shell.TitleView>
+
+    <Grid RowDefinitions="Auto,*">
+        <!-- Header: parasha identity, original-reference source span,
+             and previous/next unit navigation. -->
+        <Border Grid.Row="0"
+                StrokeShape="RoundRectangle 0"
+                Padding="12,8"
+                StrokeThickness="0"
+                BackgroundColor="{AppThemeBinding Light=#F2F7FE, Dark=#20304A}">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <Button Grid.Column="0"
+                        Text="הקודם"
+                        AutomationId="PreviousParashaButton"
+                        Command="{Binding PreviousCommand}"
+                        FontSize="14"
+                        Padding="10,4"
+                        HeightRequest="36"
+                        VerticalOptions="Center"/>
+                <Label Grid.Column="1"
+                       Text="{Binding Source}"
+                       AutomationId="ParashaSource"
+                       FontSize="15"
+                       VerticalOptions="Center"
+                       HorizontalOptions="Center"
+                       TextColor="{AppThemeBinding Light=#26384E, Dark=#E7EEF8}"/>
+                <Button Grid.Column="2"
+                        Text="הבא"
+                        AutomationId="NextParashaButton"
+                        Command="{Binding NextCommand}"
+                        FontSize="14"
+                        Padding="10,4"
+                        HeightRequest="36"
+                        VerticalOptions="Center"/>
+            </Grid>
+        </Border>
+
+        <!-- Torah section followed by each ordered Haftarah variant. -->
+        <CollectionView Grid.Row="1"
+                        ItemsSource="{Binding Items}"
+                        SelectionMode="None"
+                        Margin="8">
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="models:ParashaDisplayItem">
+                    <Grid>
+                        <Label Text="{Binding Text}"
+                               AutomationId="ParashaSectionHeader"
+                               IsVisible="{Binding IsSectionHeader}"
+                               FontSize="19"
+                               FontAttributes="Bold"
+                               Padding="8,18,8,6"
+                               TextColor="{StaticResource Primary}"/>
+                        <Label Text="{Binding Text}"
+                               AutomationId="ParashaPerekHeader"
+                               IsVisible="{Binding IsPerekHeader}"
+                               FontSize="15"
+                               FontAttributes="Bold"
+                               Padding="8,10,8,2"
+                               TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                        <Border Padding="12,8"
+                                Margin="0,2"
+                                StrokeShape="RoundRectangle 8"
+                                Stroke="Transparent"
+                                IsVisible="{Binding Pasuk, Converter={StaticResource NotNullToBoolConverter}}"
+                                BackgroundColor="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}">
+                            <Grid ColumnDefinitions="40,*" FlowDirection="RightToLeft">
+                                <Label Grid.Column="0"
+                                       Text="{Binding Pasuk.PasukNumHeb}"
+                                       AutomationId="ParashaPasukNumber"
+                                       FontSize="14"
+                                       FontAttributes="Bold"
+                                       VerticalTextAlignment="Start"
+                                       HorizontalTextAlignment="Center"
+                                       Margin="0,1.5,0,0"
+                                       TextColor="{StaticResource Primary}"/>
+                                <controls:PasukTextLabel Grid.Column="1"
+                                       AutomationId="ParashaPasukText"
+                                       FormattedText="{Binding Pasuk.FormattedText}"
+                                       FontSize="{DynamicResource PasukFontSize}"
+                                       FlowDirection="RightToLeft"
+                                       LineBreakMode="WordWrap"
+                                       LineHeight="1.4"/>
+                            </Grid>
+                        </Border>
+                    </Grid>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+
+        <ActivityIndicator Grid.Row="1"
+                           IsVisible="{Binding IsLoading}"
+                           IsRunning="{Binding IsLoading}"
+                           VerticalOptions="Center"
+                           HorizontalOptions="Center"/>
+    </Grid>
+</ContentPage>
