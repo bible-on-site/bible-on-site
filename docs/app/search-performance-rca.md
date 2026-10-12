@@ -19,13 +19,13 @@ Four regressions reproduce independently against the original implementation:
 
 CI, mobile tests and release packaging now use `perushim-sqlite-v2-indexed.*`. This forces a new baseline with compressed notes and the complete index. Asset preparation rejects missing indexes, missing FTS/document/vocabulary tables, empty document payloads, incorrect normalization and mismatched notes or scripture generations before copying anything. Changes to bundled scripture also trigger regeneration.
 
-The first verse query can adopt an already installed index. Atomic adoption clears readiness for both replaced tables. The entire search service, its independent build tasks and chapter result scoring run on workers. Reader initialization publishes only the requested chapter; immediate neighbors preload after the reader is visible.
+The first verse query can adopt an already installed index. Atomic adoption clears readiness for both replaced tables. The entire search service, its independent build tasks and chapter result scoring run on workers. Reader initialization publishes only the requested chapter; immediate neighbors preload after the reader is visible. iOS ODR extraction also copies the large notes/index payload on a worker while preserving the native resource-access lifetime.
 
 The added 2-, 3- and 8-minute interaction overrides are removed, restoring the ordinary 45-second mobile test deadline. The test-host hang guard returns from 18 to 10 minutes. Repository guidance explicitly prohibits extending waits, retries or watchdog limits to conceal performance failures.
 
 ## Local validation
 
-All four new regressions fail against the original code and pass with the repair. The full unit suite passes 1,626 tests. Asset preparation passes 18 tests, including stale scripture rejection. CI change detection passes 34 tests. Android compilation succeeds with zero warnings and zero errors.
+All four new regressions fail against the original code and pass with the repair. The full unit suite passes 1,626 tests. Asset preparation passes 18 tests, including stale scripture rejection. CI change detection passes 34 tests. The mobile test harness passes 49 tests. Android compilation succeeds with zero warnings and zero errors.
 
 A desktop harness uses the real full-corpus generated artifact from PR 2109 and the packaged scripture. These measurements include service queries but exclude native UI rendering and store asset delivery; they are not emulator performance claims.
 
