@@ -208,10 +208,9 @@ describe("UnitText", () => {
 		positions.forEach((text, index) => {
 			expect(text.startsWith(toLetters(index + 1))).toBe(true);
 		});
-		// The parasha closes mid-verse — its final marker says so.
-		expect(positions[positions.length - 1]).toBe(
-			`${toLetters(positions.length)} (סיום)`,
-		);
+		// The parasha closes exactly at a pasuk boundary — its break is the
+		// pasuk's last segment, so the final position stays unmarked.
+		expect(positions[positions.length - 1]).toBe(toLetters(positions.length));
 		expect(screen.queryByText("בראשית ב")).toBeNull();
 	});
 
@@ -246,11 +245,69 @@ describe("UnitText", () => {
 				},
 			],
 		};
-		render(<UnitText unit={excerpt} entityRefsByPerek={{}} />);
+		const { unmount: unmountExcerpt } = render(
+			<UnitText unit={excerpt} entityRefsByPerek={{}} />,
+		);
 		markers = [
 			...document.querySelectorAll("[data-unit-text] .pasukNum"),
 		].map((el) => el.textContent);
 		expect(markers).toEqual(["א (קטע)"]);
+		unmountExcerpt();
+
+		// An excerpt that runs to the pasuk's last segment drops only its
+		// opening — the marker reads "א (התחלה)", not "א (קטע)".
+		const openEndedExcerpt: ReadingUnit = {
+			...midVerseStart,
+			ranges: [
+				{
+					start: { perekId: 1, pasuk: 1, segmentIndex: 2 },
+					end: { perekId: 1, pasuk: 1, segmentIndex: 6 }, // last segment
+				},
+			],
+		};
+		render(<UnitText unit={openEndedExcerpt} entityRefsByPerek={{}} />);
+		markers = [
+			...document.querySelectorAll("[data-unit-text] .pasukNum"),
+		].map((el) => el.textContent);
+		expect(markers).toEqual(["א (התחלה)"]);
+	});
+
+	it("keeps positions unmarked when a break lands on a pasuk boundary", () => {
+		// Real corpus: unit 1 closes at בראשית 1:5's last segment (a ptuha
+		// marker), so no position is clipped — plain א-ה markers.
+		const { unmount } = render(
+			<UnitText unit={getMasoraUnitById(1)} entityRefsByPerek={{}} />,
+		);
+		let markers = [
+			...document.querySelectorAll("[data-unit-text] .pasukNum"),
+		].map((el) => el.textContent);
+		expect(markers).toEqual(["א", "ב", "ג", "ד", "ה"]);
+		unmount();
+
+		// Unit 70 closes genuinely mid-verse (segment 14 of 20 at בראשית
+		// 35:22): its final position keeps the (סיום) suffix while earlier
+		// positions stay plain.
+		render(<UnitText unit={getMasoraUnitById(70)} entityRefsByPerek={{}} />);
+		markers = [
+			...document.querySelectorAll("[data-unit-text] .pasukNum"),
+		].map((el) => el.textContent);
+		expect(markers).toHaveLength(14);
+		expect(markers[13]).toBe("יד (סיום)");
+		markers.slice(0, 13).forEach((text, index) => {
+			expect(text).toBe(toLetters(index + 1));
+		});
+	});
+
+	it("marks a mid-verse opening (התחלה) even when the unit closes at a pasuk boundary", () => {
+		// Unit 71 opens at segment 15 of בראשית 35:22 and closes on the last
+		// segment of 35:29 — the opening is clipped, the ending is not.
+		render(<UnitText unit={getMasoraUnitById(71)} entityRefsByPerek={{}} />);
+		const markers = [
+			...document.querySelectorAll("[data-unit-text] .pasukNum"),
+		].map((el) => el.textContent);
+		expect(markers).toHaveLength(8);
+		expect(markers[0]).toBe("א (התחלה)");
+		expect(markers[7]).toBe("ח");
 	});
 
 	it("wraps referenced segments in Tanahpedia links", () => {

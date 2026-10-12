@@ -92,15 +92,17 @@ function UnitPerekSlice({
 							? (slice.endSegmentIndex ?? pasuk.segments.length - 1)
 							: pasuk.segments.length - 1;
 					const pasukIdx = pasukNumber - 1;
-					// A segment-clipped boundary pasuk reads as a partial
-					// verse inside the parasha; the marker says so.
+					// A boundary pasuk reads as a partial verse inside the
+					// parasha only when the unit's bound actually omits
+					// segments: a break marker sitting on the pasuk's last
+					// segment (or a unit opening at its first) leaves the
+					// whole verse inside, so the position stays unmarked.
 					const position = toLetters(firstPosition + offset);
 					const startsMidVerse =
-						pasukNumber === slice.startPasuk &&
-						slice.startSegmentIndex !== undefined;
+						pasukNumber === slice.startPasuk && startIdx > 0;
 					const endsMidVerse =
 						pasukNumber === slice.endPasuk &&
-						slice.endSegmentIndex !== undefined;
+						endIdx < pasuk.segments.length - 1;
 					const marker =
 						startsMidVerse && endsMidVerse
 							? `${position} (קטע)`
