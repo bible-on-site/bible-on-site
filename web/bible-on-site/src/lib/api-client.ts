@@ -87,8 +87,7 @@ export async function queryText<T>(
 	params?: unknown[],
 ): Promise<T[]> {
 	const connection = getPool();
-	// nosemgrep: javascript.lang.security.audit.db.formatted-sql-string -- params are escaped literals from callers
-	// biome-ignore lint/suspicious/noExplicitAny: mysql2 v3.17 narrowed QueryValues; safe cast from caller-provided params
-	const [rows] = await connection.query(sql, (params ?? []) as any);
+	// nosemgrep: node-mysql-sqli -- sql is generated literals plus ? placeholders only; params are driver-escaped
+	const [rows] = await connection.query(sql, params ?? []);
 	return rows as T[];
 }
