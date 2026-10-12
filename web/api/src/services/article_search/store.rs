@@ -15,8 +15,9 @@
 use sea_orm::{ConnectionTrait, DbBackend, DbErr, Statement, Value};
 
 /// Schema version persisted in `article_search_state`; bump when the model
-/// format or normalization changes so stale indexes rebuild automatically.
-pub const SCHEMA_VERSION: i32 = 1;
+/// format, normalization, or public eligibility changes so stale indexes rebuild.
+/// Version 2 includes articles independently of daily bulletin approval.
+pub const SCHEMA_VERSION: i32 = 2;
 
 /// Queue rows failing this many times are skipped by the regular drain and are
 /// retried only after a reconcile sweep resets their attempts — protects the
@@ -138,7 +139,7 @@ fn read_hash(row: &sea_orm::QueryResult) -> [u8; 16] {
 }
 
 /// Fetches one public article for indexing; `None` when the article was
-/// deleted or is not `distributable` (the queue consumer then removes the
+/// deleted or has no canonical chapter (the queue consumer then removes the
 /// index row — the same path that purges deletions).
 pub async fn fetch_article<C: ConnectionTrait>(
     conn: &C,
@@ -146,7 +147,7 @@ pub async fn fetch_article<C: ConnectionTrait>(
 ) -> Result<Option<ArticleSource>, DbErr> {
     let row = conn
         .query_one_raw(mysql(
-            "SELECT id, name, abstract, content FROM tanah_article WHERE id = ? AND distributable = TRUE",
+            "SELECT id, name, abstract, content FROM tanah_article WHERE id = ? AND perek_id BETWEEN 1 AND 929",
             vec![article_id.into()],
         ))
         .await?;
@@ -167,7 +168,7 @@ pub async fn sweep_hashes<C: ConnectionTrait>(conn: &C) -> Result<Vec<(i32, [u8;
     let rows = conn
         .query_all_raw(Statement::from_string(
             DbBackend::MySql,
-            format!("SELECT id, {CONTENT_HASH_EXPR} AS content_hash FROM tanah_article WHERE distributable = TRUE"),
+            format!("SELECT id, {CONTENT_HASH_EXPR} AS content_hash FROM tanah_article WHERE perek_id BETWEEN 1 AND 929"),
         ))
         .await?;
     rows.into_iter()
@@ -249,11 +250,12 @@ pub async fn save_state<C: ConnectionTrait>(
 }
 
 /// The current model epoch/doc-count without the blob — a cheap change probe.
+/// An older schema returns no state so startup rebuilds it before serving hits.
 pub async fn state_probe<C: ConnectionTrait>(conn: &C) -> Result<Option<(i32, i32)>, DbErr> {
     let row = conn
-        .query_one_raw(Statement::from_string(
-            DbBackend::MySql,
-            "SELECT model_epoch, doc_count FROM article_search_state WHERE id = 1",
+        .query_one_raw(mysql(
+            "SELECT model_epoch, doc_count FROM article_search_state WHERE id = 1 AND schema_version = ?",
+            vec![SCHEMA_VERSION.into()],
         ))
         .await?;
     row.map(|row| {
@@ -309,7 +311,7 @@ pub async fn upsert_doc<C: ConnectionTrait>(
         &format!(
             "REPLACE INTO article_search_doc (article_id, model_epoch, content_hash, plain_len, vector, terms)
              SELECT a.id, ?, {CONTENT_HASH_EXPR}, ?, ?, ? FROM tanah_article a
-             WHERE a.id = ? AND a.distributable = TRUE"
+             WHERE a.id = ? AND a.perek_id BETWEEN 1 AND 929"
         ),
         vec![
             model_epoch.into(),
@@ -390,7 +392,7 @@ pub async fn fetch_hit_rows<C: ConnectionTrait>(
                  FROM tanah_article a
                  LEFT JOIN tanah_author au ON au.id = a.author_id
                  LEFT JOIN tanah_perek_view p ON p.perek_id = a.perek_id
-                 WHERE a.id IN ({placeholders}) AND a.distributable = TRUE
+                 WHERE a.id IN ({placeholders}) AND a.perek_id BETWEEN 1 AND 929
                  ORDER BY FIELD(a.id, {placeholders})"
             ),
             values,

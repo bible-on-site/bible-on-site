@@ -483,14 +483,14 @@ async fn reconcile(conn: &DatabaseConnection) -> Result<usize, DbErr> {
             dirty += 1;
         }
     }
-    // Orphaned docs — articles deleted outside the queue path, or made
-    // non-distributable since they were indexed.
+    // Orphaned docs — articles deleted outside the queue path, or
+    // moved outside the canonical chapter range since they were indexed.
     let orphans = conn
         .query_all_raw(sea_orm::Statement::from_string(
             sea_orm::DbBackend::MySql,
             "SELECT d.article_id FROM article_search_doc d \
              LEFT JOIN tanah_article a ON a.id = d.article_id \
-             WHERE a.id IS NULL OR a.distributable = FALSE",
+             WHERE a.id IS NULL OR a.perek_id NOT BETWEEN 1 AND 929",
         ))
         .await?;
     for row in orphans {
@@ -522,7 +522,7 @@ async fn retrain_locked(conn: &DatabaseConnection) -> Result<usize, DbErr> {
     let rows = conn
         .query_all_raw(sea_orm::Statement::from_string(
             sea_orm::DbBackend::MySql,
-            "SELECT id, name, abstract, content FROM tanah_article WHERE distributable = TRUE",
+            "SELECT id, name, abstract, content FROM tanah_article WHERE perek_id BETWEEN 1 AND 929",
         ))
         .await?;
     let mut counts_per_doc = Vec::with_capacity(rows.len());

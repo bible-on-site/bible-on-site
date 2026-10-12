@@ -1371,8 +1371,12 @@ describe("PersonFamilyTree", () => {
 
 		render(<PersonFamilyTree summary={summary} />);
 
-		expect(screen.getAllByText(new RegExp(sara)).length).toBeGreaterThan(0);
-		expect(screen.getAllByText(new RegExp(hagar)).length).toBeGreaterThan(0);
+		expect(
+			screen.getAllByText((content) => content.includes(sara)).length,
+		).toBeGreaterThan(0);
+		expect(
+			screen.getAllByText((content) => content.includes(hagar)).length,
+		).toBeGreaterThan(0);
 		expect(
 			screen.getByText(/\u05dc\u05d0 \u05de\u05d6\u05d5\u05d4\u05d4/),
 		).toBeInTheDocument();
@@ -1990,10 +1994,14 @@ describe("PersonFamilyTree", () => {
 		render(<PersonFamilyTree summary={summary} />);
 
 		expect(
-			screen.getByRole("group", { name: new RegExp(leah) }),
+			screen.getByRole("group", {
+				name: (name) => name.includes(leah),
+			}),
 		).toBeInTheDocument();
 		expect(
-			screen.getByRole("group", { name: new RegExp(rachel) }),
+			screen.getByRole("group", {
+				name: (name) => name.includes(rachel),
+			}),
 		).toBeInTheDocument();
 		const treeText =
 			screen.getByRole("region", { name: /\u05de\u05e9\u05e4\u05d7\u05d4/ })

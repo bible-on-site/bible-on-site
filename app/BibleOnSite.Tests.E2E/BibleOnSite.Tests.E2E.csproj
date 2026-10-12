@@ -20,7 +20,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="xunit.v3" Version="4.0.1" />
+    <PackageReference Include="xunit.v3" Version="4.0.2" />
     <PackageReference Include="FluentAssertions" Version="8.11.0" />
     <!-- FlaUI for Windows UI Automation -->
     <PackageReference Include="FlaUI.Core" Version="5.0.0" />

@@ -2,6 +2,7 @@ using BibleOnSite.Services;
 using BibleOnSite.Tests.Support;
 using BibleOnSite.ViewModels;
 using FluentAssertions;
+using SQLite;
 
 namespace BibleOnSite.Tests.ViewModels;
 
@@ -439,6 +440,33 @@ public class PreferencesViewModelTests : IDisposable
         }
 
         [Fact]
+        public void PerushimDownloadStatusText_ReturnsGenericMessage_BeforeProgressIsReported()
+        {
+            _viewModel.PerushimDownloadStatusText.Should().Be("מוריד…");
+        }
+
+        [Fact]
+        public async Task ShowPerushimDownload_ReturnsFalse_WhenNotesAlreadyInstalled()
+        {
+            var dataDir = Path.Join(_tempDir, nameof(ShowPerushimDownload_ReturnsFalse_WhenNotesAlreadyInstalled));
+            Directory.CreateDirectory(dataDir);
+            var dbPath = Path.Join(dataDir, "sefaria-dump-5784-sivan-4.perushim_notes.sqlite");
+            var conn = new SQLiteAsyncConnection(dbPath, SQLiteOpenFlags.ReadWrite | SQLiteOpenFlags.Create);
+            foreach (var statement in NotesDbV2.Statements((1, 1, 1, 0, "note")))
+            {
+                await conn.ExecuteAsync(statement);
+            }
+            await conn.CloseAsync();
+
+            var perushim = PerushimNotesService.CreateForTesting(new FakePadDeliveryService(), dataDir);
+            await perushim.InitializeAsync();
+            var viewModel = new PreferencesViewModel(_service, perushim);
+
+            viewModel.ShowPerushimDownload.Should().BeFalse();
+            viewModel.ShowPerushimDownloadButton.Should().BeFalse();
+        }
+
+        [Fact]
         public void PerushimNotesStatusText_ReturnsNotInstalledText_WhenNotAvailable()
         {
             _viewModel.PerushimNotesStatusText.Should().Be("חבילת הפירושים לא הותקנה. הורידו כדי להפעיל פירושים.");
@@ -488,7 +516,7 @@ public class PreferencesViewModelTests : IDisposable
             await viewModel.DownloadPerushimCommand.ExecuteAsync(null);
             // Progress<T>.Report dispatches asynchronously; wait until the report applies.
             var deadline = DateTime.UtcNow.AddSeconds(5);
-            while (viewModel.PerushimDownloadProgress != 1 && DateTime.UtcNow < deadline)
+            while (viewModel.PerushimDownloadProgress < 1 && DateTime.UtcNow < deadline)
             {
                 await Task.Delay(10, TestContext.Current.CancellationToken);
             }

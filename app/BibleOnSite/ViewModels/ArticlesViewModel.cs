@@ -58,7 +58,10 @@ public partial class ArticlesViewModel : ObservableObject
         get
         {
             if (IsFilterByAuthor)
+            {
                 return $"מאמרים של {AuthorName}";
+            }
+
             return $"מאמרים על {PerekTitle}";
         }
     }
@@ -196,7 +199,9 @@ public partial class ArticlesViewModel : ObservableObject
     public async Task OpenArticleAsync(Article article)
     {
         if (article == null)
+        {
             return;
+        }
 
         // Navigate to article detail page
         await _navigator.GoToAsync($"articleDetail?articleId={article.Id}&perekId={article.PerekId}");

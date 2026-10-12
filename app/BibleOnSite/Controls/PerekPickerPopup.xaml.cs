@@ -19,7 +19,7 @@ public partial class PerekPickerPopup : ContentView
     /// <summary>
     /// Event raised when a perek is selected and confirmed.
     /// </summary>
-    public event EventHandler<int>? PerekSelected;
+    public event Action<int>? PerekSelected;
 
     /// <summary>
     /// Event raised when the popup is dismissed.
@@ -35,15 +35,19 @@ public partial class PerekPickerPopup : ContentView
     /// <summary>
     /// Shows the picker popup.
     /// </summary>
-    /// <param name="currentPerekId">Optional current perek ID to pre-select.</param>
-    public void Show(int? currentPerekId = null)
+    public void Show()
     {
         IsVisible = true;
+    }
 
-        if (currentPerekId.HasValue)
-        {
-            PreSelectPerek(currentPerekId.Value);
-        }
+    /// <summary>
+    /// Shows the picker popup with a perek pre-selected.
+    /// </summary>
+    /// <param name="currentPerekId">Current perek ID to pre-select.</param>
+    public void Show(int currentPerekId)
+    {
+        IsVisible = true;
+        PreSelectPerek(currentPerekId);
     }
 
     /// <summary>
@@ -70,7 +74,10 @@ public partial class PerekPickerPopup : ContentView
     private void PreSelectPerek(int perekId)
     {
         var perek = PerekDataService.Instance.GetPerek(perekId);
-        if (perek == null) return;
+        if (perek == null)
+        {
+            return;
+        }
 
         var seferGroup = SefarimData.GetSeferGroup(perek.SeferId);
 
@@ -119,13 +126,19 @@ public partial class PerekPickerPopup : ContentView
 
     private void OnSeferGroupSelected(object? sender, SelectionChangedEventArgs e)
     {
-        if (e.CurrentSelection.Count == 0) return;
+        if (e.CurrentSelection.Count == 0)
+        {
+            return;
+        }
 
         _selectedGroup = e.CurrentSelection[0] as SeferGroupItem;
         _selectedSefer = null;
         _selectedPerek = null;
 
-        if (_selectedGroup == null) return;
+        if (_selectedGroup == null)
+        {
+            return;
+        }
 
         // Load sefarim for this group
         LoadSefarimForGroup(_selectedGroup.Id);
@@ -212,9 +225,15 @@ public partial class PerekPickerPopup : ContentView
     {
         var perakimData = PerakimData.PerakimOfBooks.GetValueOrDefault(seferId);
         if (perakimData is int count)
+        {
             return count;
+        }
+
         if (perakimData is Dictionary<int, int> additionalCounts)
+        {
             return additionalCounts.Values.Sum();
+        }
+
         return 0;
     }
 
@@ -231,12 +250,18 @@ public partial class PerekPickerPopup : ContentView
 
     private void OnSeferSelected(object? sender, SelectionChangedEventArgs e)
     {
-        if (e.CurrentSelection.Count == 0) return;
+        if (e.CurrentSelection.Count == 0)
+        {
+            return;
+        }
 
         _selectedSefer = e.CurrentSelection[0] as SeferItem;
         _selectedPerek = null;
 
-        if (_selectedSefer == null) return;
+        if (_selectedSefer == null)
+        {
+            return;
+        }
 
         // Load perakim for this sefer
         LoadPerakimForSefer(_selectedSefer);
@@ -303,15 +328,25 @@ public partial class PerekPickerPopup : ContentView
     private static string GetAdditionalPrefix(int additional)
     {
         // For עזרא/נחמיה: 70=עזרא, 50=נחמיה
-        if (additional == 70) return "ע";
-        if (additional == 50) return "נ";
+        if (additional == 70)
+        {
+            return "ע";
+        }
+
+        if (additional == 50)
+        {
+            return "נ";
+        }
         // For שמואל, מלכים, דברי הימים: 1=א, 2=ב
         return GetAdditionalLetter(additional);
     }
 
     private void OnPerekSelected(object? sender, SelectionChangedEventArgs e)
     {
-        if (e.CurrentSelection.Count == 0) return;
+        if (e.CurrentSelection.Count == 0)
+        {
+            return;
+        }
 
         _selectedPerek = e.CurrentSelection[0] as PerekItem;
         UpdateConfirmButtonState();
@@ -336,7 +371,7 @@ public partial class PerekPickerPopup : ContentView
     {
         if (_selectedPerek != null)
         {
-            PerekSelected?.Invoke(this, _selectedPerek.PerekId);
+            PerekSelected?.Invoke(_selectedPerek.PerekId);
             Hide();
         }
     }
