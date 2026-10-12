@@ -341,7 +341,7 @@ partial class PadDeliveryService
             try
             {
                 ct.ThrowIfCancellationRequested();
-                return SaveOdrDataAsset(cacheDir, request.Bundle, packName);
+                return await SaveOdrDataAssetAsync(cacheDir, request.Bundle, packName);
             }
             finally
             {
@@ -382,7 +382,7 @@ partial class PadDeliveryService
             ct.ThrowIfCancellationRequested();
 
             var cacheDir = OdrCacheDir(packName);
-            var result = SaveOdrDataAsset(cacheDir, request.Bundle, packName);
+            var result = await SaveOdrDataAssetAsync(cacheDir, request.Bundle, packName);
             return result != null;
         }
         catch (OperationCanceledException)
@@ -413,20 +413,20 @@ partial class PadDeliveryService
     /// The perushim pack also carries the prebuilt search index under the same
     /// ODR tag — save it too when present so both files reach the delivery dir.
     /// </summary>
-    private static string? SaveOdrDataAsset(string cacheDir, NSBundle bundle, string packName)
+    private static async Task<string?> SaveOdrDataAssetAsync(string cacheDir, NSBundle bundle, string packName)
     {
-        if (!SaveNamedAsset(cacheDir, bundle, packName, PayloadFileName(packName), required: true))
+        if (!await SaveNamedAssetAsync(cacheDir, bundle, packName, PayloadFileName(packName), required: true))
         {
             return null;
         }
         if (packName == PerushimNotesPackName)
         {
-            SaveNamedAsset(cacheDir, bundle, "perushim_search", PerushimNotesService.SearchIndexDbName, required: false);
+            await SaveNamedAssetAsync(cacheDir, bundle, "perushim_search", PerushimNotesService.SearchIndexDbName, required: false);
         }
         return cacheDir;
     }
 
-    private static bool SaveNamedAsset(string cacheDir, NSBundle bundle, string assetName, string fileName, bool required)
+    private static async Task<bool> SaveNamedAssetAsync(string cacheDir, NSBundle bundle, string assetName, string fileName, bool required)
     {
         using var asset = new NSDataAsset(assetName, bundle);
         if (asset?.Data == null)
@@ -442,18 +442,23 @@ partial class PadDeliveryService
         var destPath = Path.Join(cacheDir, fileName);
         try
         {
-            using var stream = asset.Data.AsStream();
-            var temporary = destPath + ".download";
-            try
+            // Keep the native asset lookup and lifetime on the caller's context,
+            // but extracting the full notes/index payload must not block its UI.
+            await Task.Run(() =>
             {
-                using (var fileStream = File.Create(temporary))
+                using var stream = asset.Data.AsStream();
+                var temporary = destPath + ".download";
+                try
                 {
-                    stream.CopyTo(fileStream);
-                }
+                    using (var fileStream = File.Create(temporary))
+                    {
+                        stream.CopyTo(fileStream);
+                    }
 
-                File.Move(temporary, destPath, true);
-            }
-            finally { File.Delete(temporary); }
+                    File.Move(temporary, destPath, true);
+                }
+                finally { File.Delete(temporary); }
+            });
             System.Diagnostics.Debug.WriteLine($"ODR: Saved to {destPath}");
             return true;
         }
