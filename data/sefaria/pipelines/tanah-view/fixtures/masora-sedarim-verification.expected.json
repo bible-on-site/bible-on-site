@@ -1,0 +1,5531 @@
+{
+  "reference_title": "חלוקת ה\"סדרים\" של המסורה",
+  "reference_source_url": "https://www.tanachyomi.co.il/PDFFiles/prakim.pdf",
+  "reference_sha256": "c958940c28ea85bd41ed0ea3484f1ca0af5346b4e13edf204e1270994482d7dd",
+  "corpus": "sefaria-dump-5784-sivan-4",
+  "checks": [
+    {
+      "name": "reference-group-count",
+      "status": "pass",
+      "detail": "19 book groups"
+    },
+    {
+      "name": "reference-entry-counts",
+      "status": "pass",
+      "detail": "297 entries: 293 numbered + 4 parenthesized"
+    },
+    {
+      "name": "seder-numbering",
+      "status": "pass",
+      "detail": "numbered entries run consecutively; parenthesized entries sit outside the sequence"
+    },
+    {
+      "name": "letter-number-agreement",
+      "status": "pass",
+      "detail": "every perek/pasuk letters string equals its numeric field"
+    },
+    {
+      "name": "references-resolve",
+      "status": "pass",
+      "detail": "every entry resolves inside the corpus"
+    },
+    {
+      "name": "ordered-no-repeats",
+      "status": "pass",
+      "detail": "seder heads increase strictly inside every group — no omissions or repeats"
+    },
+    {
+      "name": "first-seder-at-book-start",
+      "status": "pass",
+      "detail": "every group's first numbered seder opens at the book's first pasuk"
+    },
+    {
+      "name": "sub-book-mapping",
+      "status": "pass",
+      "detail": "sub-book labels map to corpus additionals; unreferenced תרי עשר members lie inside seder spans"
+    },
+    {
+      "name": "unit-counts",
+      "status": "pass",
+      "detail": "3197 units (1181 ptuha, 1981 stuma, 35 sefer-end)"
+    },
+    {
+      "name": "marker-free-sefarim",
+      "status": "pass",
+      "detail": "sefarim with no parasha markers: עובדיה, תהילים"
+    },
+    {
+      "name": "contiguous-tiling",
+      "status": "pass",
+      "detail": "units tile every sefer contiguously; each marker-closed end is a corpus marker"
+    },
+    {
+      "name": "marker-roundtrip",
+      "status": "pass",
+      "detail": "3162 corpus markers close 1181+1981 units"
+    },
+    {
+      "name": "cross-perek-units",
+      "status": "pass",
+      "detail": "153 units span perek boundaries"
+    }
+  ],
+  "summary": {
+    "total": 297,
+    "regular": 293,
+    "parenthesized": 4,
+    "parasha_boundary": 66,
+    "mid_pasuk_boundary": 1,
+    "parasha_last_pasuk": 92,
+    "interior_of_parasha": 138,
+    "unresolved": 0,
+    "corpus_units": 3197,
+    "ptuha_closing": 1181,
+    "stuma_closing": 1981,
+    "sefer_end_closing": 35,
+    "cross_perek_units": 153,
+    "mid_pasuk_unit_starts": 97
+  },
+  "sedarim": [
+    {
+      "book": "יהושע",
+      "seder": "א",
+      "paren": false,
+      "reference": "יהושע א א",
+      "perek_id": 188,
+      "pasuk": 1,
+      "alignment": {
+        "kind": "parasha-boundary"
+      },
+      "disposition": {
+        "kind": "aligned"
+      },
+      "unit_id": 693,
+      "unit_heading": "יהושע א א-ט",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "יהושע",
+      "seder": "ב",
+      "paren": false,
+      "reference": "יהושע ג ז",
+      "perek_id": 190,
+      "pasuk": 7,
+      "alignment": {
+        "kind": "parasha-boundary"
+      },
+      "disposition": {
+        "kind": "aligned"
+      },
+      "unit_id": 699,
+      "unit_heading": "יהושע ג ז-ח",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "יהושע",
+      "seder": "ג",
+      "paren": false,
+      "reference": "יהושע ד כד",
+      "perek_id": 191,
+      "pasuk": 24,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "stuma"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 704,
+      "unit_heading": "יהושע ד טו-כד",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "יהושע",
+      "seder": "ד",
+      "paren": false,
+      "reference": "יהושע ו כז",
+      "perek_id": 193,
+      "pasuk": 27,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 711,
+      "unit_heading": "יהושע ו כו - ז ט",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "יהושע",
+      "seder": "ד",
+      "paren": true,
+      "reference": "יהושע ח א",
+      "perek_id": 195,
+      "pasuk": 1,
+      "alignment": {
+        "kind": "parasha-boundary"
+      },
+      "disposition": {
+        "kind": "manuscript-only"
+      },
+      "unit_id": 713,
+      "unit_heading": "יהושע ח א-יז",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "יהושע",
+      "seder": "ה",
+      "paren": false,
+      "reference": "יהושע ח לג",
+      "perek_id": 195,
+      "pasuk": 33,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 715,
+      "unit_heading": "יהושע ח ל-לה",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "יהושע",
+      "seder": "ו",
+      "paren": false,
+      "reference": "יהושע י ח",
+      "perek_id": 197,
+      "pasuk": 8,
+      "alignment": {
+        "kind": "parasha-boundary"
+      },
+      "disposition": {
+        "kind": "aligned"
+      },
+      "unit_id": 719,
+      "unit_heading": "יהושע י ח-יא",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "יהושע",
+      "seder": "ז",
+      "paren": false,
+      "reference": "יהושע י מב",
+      "perek_id": 197,
+      "pasuk": 42,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 726,
+      "unit_heading": "יהושע י לח-מג",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "יהושע",
+      "seder": "ח",
+      "paren": false,
+      "reference": "יהושע יג א",
+      "perek_id": 200,
+      "pasuk": 1,
+      "alignment": {
+        "kind": "parasha-boundary"
+      },
+      "disposition": {
+        "kind": "aligned"
+      },
+      "unit_id": 734,
+      "unit_heading": "יהושע יג א-יד",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "יהושע",
+      "seder": "ט",
+      "paren": false,
+      "reference": "יהושע יד טו",
+      "perek_id": 201,
+      "pasuk": 15,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "ptuha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 738,
+      "unit_heading": "יהושע יד ו-טו",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "יהושע",
+      "seder": "י",
+      "paren": false,
+      "reference": "יהושע יז ד",
+      "perek_id": 204,
+      "pasuk": 4,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 747,
+      "unit_heading": "יהושע יז א-יג",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "יהושע",
+      "seder": "יא",
+      "paren": false,
+      "reference": "יהושע יח כח",
+      "perek_id": 205,
+      "pasuk": 28,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "ptuha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 750,
+      "unit_heading": "יהושע יח יא-כח",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "יהושע",
+      "seder": "יב",
+      "paren": false,
+      "reference": "יהושע יט נא",
+      "perek_id": 206,
+      "pasuk": 51,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "ptuha"
+      },
+      "disposition": {
+        "kind": "documented-system-difference"
+      },
+      "unit_id": 757,
+      "unit_heading": "יהושע יט מט-נא",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "יהושע",
+      "seder": "יג",
+      "paren": false,
+      "reference": "יהושע כא מא",
+      "perek_id": 208,
+      "pasuk": 41,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 774,
+      "unit_heading": "יהושע כא לח-מב",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "יהושע",
+      "seder": "יד",
+      "paren": false,
+      "reference": "יהושע כב לד",
+      "perek_id": 209,
+      "pasuk": 34,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "ptuha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 781,
+      "unit_heading": "יהושע כב ל-לד",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "שופטים",
+      "seder": "א",
+      "paren": false,
+      "reference": "שופטים א א",
+      "perek_id": 212,
+      "pasuk": 1,
+      "alignment": {
+        "kind": "parasha-boundary"
+      },
+      "disposition": {
+        "kind": "aligned"
+      },
+      "unit_id": 788,
+      "unit_heading": "שופטים א א-ז",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "שופטים",
+      "seder": "ב",
+      "paren": false,
+      "reference": "שופטים ב ז",
+      "perek_id": 213,
+      "pasuk": 7,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 800,
+      "unit_heading": "שופטים ב ו-י",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "שופטים",
+      "seder": "ג",
+      "paren": false,
+      "reference": "שופטים ג לא",
+      "perek_id": 214,
+      "pasuk": 31,
+      "alignment": {
+        "kind": "parasha-boundary"
+      },
+      "disposition": {
+        "kind": "aligned"
+      },
+      "unit_id": 806,
+      "unit_heading": "שופטים ג לא",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "שופטים",
+      "seder": "ד",
+      "paren": false,
+      "reference": "שופטים ה לא",
+      "perek_id": 216,
+      "pasuk": 31,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "ptuha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 810,
+      "unit_heading": "שופטים ה א-לא",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "שופטים",
+      "seder": "ה",
+      "paren": false,
+      "reference": "שופטים ו מ",
+      "perek_id": 217,
+      "pasuk": 40,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "ptuha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 817,
+      "unit_heading": "שופטים ו לג-מ",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "שופטים",
+      "seder": "ו",
+      "paren": false,
+      "reference": "שופטים ח ג",
+      "perek_id": 219,
+      "pasuk": 3,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 824,
+      "unit_heading": "שופטים ז יט - ח ט",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "שופטים",
+      "seder": "ז",
+      "paren": false,
+      "reference": "שופטים ט ז",
+      "perek_id": 220,
+      "pasuk": 7,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 829,
+      "unit_heading": "שופטים ט ו-כא",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "שופטים",
+      "seder": "ח",
+      "paren": false,
+      "reference": "שופטים י א",
+      "perek_id": 221,
+      "pasuk": 1,
+      "alignment": {
+        "kind": "parasha-boundary"
+      },
+      "disposition": {
+        "kind": "aligned"
+      },
+      "unit_id": 837,
+      "unit_heading": "שופטים י א-ב",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "שופטים",
+      "seder": "ט",
+      "paren": false,
+      "reference": "שופטים יא לב",
+      "perek_id": 222,
+      "pasuk": 32,
+      "alignment": {
+        "kind": "parasha-boundary"
+      },
+      "disposition": {
+        "kind": "aligned"
+      },
+      "unit_id": 846,
+      "unit_heading": "שופטים יא לב-לג",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "שופטים",
+      "seder": "י",
+      "paren": false,
+      "reference": "שופטים יג כד",
+      "perek_id": 224,
+      "pasuk": 24,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 855,
+      "unit_heading": "שופטים יג יט-כה",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "שופטים",
+      "seder": "יא",
+      "paren": false,
+      "reference": "שופטים טז ג",
+      "perek_id": 227,
+      "pasuk": 3,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "ptuha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 860,
+      "unit_heading": "שופטים טז א-ג",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "שופטים",
+      "seder": "יב",
+      "paren": false,
+      "reference": "שופטים יח ו",
+      "perek_id": 229,
+      "pasuk": 6,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "ptuha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 865,
+      "unit_heading": "שופטים יח ב-ו",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "שופטים",
+      "seder": "יג",
+      "paren": false,
+      "reference": "שופטים יט כ",
+      "perek_id": 230,
+      "pasuk": 20,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 867,
+      "unit_heading": "שופטים יט א-ל",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "שופטים",
+      "seder": "יד",
+      "paren": false,
+      "reference": "שופטים כ כז",
+      "perek_id": 231,
+      "pasuk": 27,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 873,
+      "unit_heading": "שופטים כ כד-כט",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "שמואל",
+      "seder": "א",
+      "paren": false,
+      "reference": "שמואל א א א",
+      "perek_id": 233,
+      "pasuk": 1,
+      "alignment": {
+        "kind": "parasha-boundary"
+      },
+      "disposition": {
+        "kind": "aligned"
+      },
+      "unit_id": 881,
+      "unit_heading": "שמואל א א א-כח",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "שמואל",
+      "seder": "ב",
+      "paren": false,
+      "reference": "שמואל א ב י",
+      "perek_id": 234,
+      "pasuk": 10,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "ptuha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 882,
+      "unit_heading": "שמואל א ב א-י",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "שמואל",
+      "seder": "ג",
+      "paren": false,
+      "reference": "שמואל א ג כ",
+      "perek_id": 235,
+      "pasuk": 20,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "edition-divergence",
+        "detail": "documented as the second pasuk of a two-pasuk parasha; the corpus parasha שמואל א ג יט-כא has three pesukim"
+      },
+      "unit_id": 891,
+      "unit_heading": "שמואל א ג יט-כא",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "שמואל",
+      "seder": "ד",
+      "paren": false,
+      "reference": "שמואל א ו יד",
+      "perek_id": 238,
+      "pasuk": 14,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "stuma"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 896,
+      "unit_heading": "שמואל א ה ט - א ו יד",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "שמואל",
+      "seder": "ה",
+      "paren": false,
+      "reference": "שמואל א ט ב",
+      "perek_id": 241,
+      "pasuk": 2,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 910,
+      "unit_heading": "שמואל א ט א-יד",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "שמואל",
+      "seder": "ו",
+      "paren": false,
+      "reference": "שמואל א י כד",
+      "perek_id": 242,
+      "pasuk": 24,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "ptuha"
+      },
+      "disposition": {
+        "kind": "documented-system-difference"
+      },
+      "unit_id": 918,
+      "unit_heading": "שמואל א י כב-כד",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "שמואל",
+      "seder": "ז",
+      "paren": false,
+      "reference": "שמואל א יב כב",
+      "perek_id": 244,
+      "pasuk": 22,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 926,
+      "unit_heading": "שמואל א יב כ-כה",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "שמואל",
+      "seder": "ח",
+      "paren": false,
+      "reference": "שמואל א יד כג",
+      "perek_id": 246,
+      "pasuk": 23,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 936,
+      "unit_heading": "שמואל א יד יט-כד",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "שמואל",
+      "seder": "ט",
+      "paren": false,
+      "reference": "שמואל א טו יז",
+      "perek_id": 247,
+      "pasuk": 17,
+      "alignment": {
+        "kind": "parasha-boundary"
+      },
+      "disposition": {
+        "kind": "aligned"
+      },
+      "unit_id": 949,
+      "unit_heading": "שמואל א טו יז-יט",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "שמואל",
+      "seder": "י",
+      "paren": false,
+      "reference": "שמואל א טז יח",
+      "perek_id": 248,
+      "pasuk": 18,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 960,
+      "unit_heading": "שמואל א טז יז-כג",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "שמואל",
+      "seder": "יא",
+      "paren": false,
+      "reference": "שמואל א יז לז",
+      "perek_id": 249,
+      "pasuk": 37,
+      "alignment": {
+        "kind": "parasha-boundary"
+      },
+      "disposition": {
+        "kind": "aligned"
+      },
+      "unit_id": 966,
+      "unit_heading": "שמואל א יז לז",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "שמואל",
+      "seder": "יב",
+      "paren": false,
+      "reference": "שמואל א יח יד",
+      "perek_id": 250,
+      "pasuk": 14,
+      "alignment": {
+        "kind": "parasha-boundary"
+      },
+      "disposition": {
+        "kind": "aligned"
+      },
+      "unit_id": 973,
+      "unit_heading": "שמואל א יח יד-טז",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "שמואל",
+      "seder": "יג",
+      "paren": false,
+      "reference": "שמואל א כ ד",
+      "perek_id": 252,
+      "pasuk": 4,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "ptuha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 985,
+      "unit_heading": "שמואל א כ א-ד",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "שמואל",
+      "seder": "יד",
+      "paren": false,
+      "reference": "שמואל א כ מב",
+      "perek_id": 252,
+      "pasuk": 42,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "ptuha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 998,
+      "unit_heading": "שמואל א כ לה-מב",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "שמואל",
+      "seder": "טו",
+      "paren": false,
+      "reference": "שמואל א כג ד",
+      "perek_id": 255,
+      "pasuk": 4,
+      "alignment": {
+        "kind": "parasha-boundary"
+      },
+      "disposition": {
+        "kind": "aligned"
+      },
+      "unit_id": 1010,
+      "unit_heading": "שמואל א כג ד",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "שמואל",
+      "seder": "טז",
+      "paren": false,
+      "reference": "שמואל א כד כ",
+      "perek_id": 256,
+      "pasuk": 20,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1022,
+      "unit_heading": "שמואל א כד יז-כג",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "שמואל",
+      "seder": "יז",
+      "paren": false,
+      "reference": "שמואל א כה לג",
+      "perek_id": 257,
+      "pasuk": 33,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1025,
+      "unit_heading": "שמואל א כה לב-מג",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "שמואל",
+      "seder": "יח",
+      "paren": false,
+      "reference": "שמואל א כו כה",
+      "perek_id": 258,
+      "pasuk": 25,
+      "alignment": {
+        "kind": "parasha-boundary"
+      },
+      "disposition": {
+        "kind": "aligned"
+      },
+      "unit_id": 1030,
+      "unit_heading": "שמואל א כו כה",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "שמואל",
+      "seder": "יט",
+      "paren": false,
+      "reference": "שמואל א כח כד",
+      "perek_id": 260,
+      "pasuk": 24,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1037,
+      "unit_heading": "שמואל א כח טז-כה",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "שמואל",
+      "seder": "כ",
+      "paren": false,
+      "reference": "שמואל א ל כה",
+      "perek_id": 262,
+      "pasuk": 25,
+      "alignment": {
+        "kind": "parasha-boundary"
+      },
+      "disposition": {
+        "kind": "aligned"
+      },
+      "unit_id": 1047,
+      "unit_heading": "שמואל א ל כה",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "שמואל",
+      "seder": "כא",
+      "paren": false,
+      "reference": "שמואל ב ב ז",
+      "perek_id": 265,
+      "pasuk": 7,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "ptuha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1056,
+      "unit_heading": "שמואל ב ב ה-ז",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "שמואל",
+      "seder": "כב",
+      "paren": false,
+      "reference": "שמואל ב ג כא",
+      "perek_id": 266,
+      "pasuk": 21,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1063,
+      "unit_heading": "שמואל ב ג יד-ל",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "שמואל",
+      "seder": "כג",
+      "paren": false,
+      "reference": "שמואל ב ה י",
+      "perek_id": 268,
+      "pasuk": 10,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "ptuha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1071,
+      "unit_heading": "שמואל ב ה ד-י",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "שמואל",
+      "seder": "כד",
+      "paren": false,
+      "reference": "שמואל ב ז טז",
+      "perek_id": 270,
+      "pasuk": 16,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1078,
+      "unit_heading": "שמואל ב ז ד-יז",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "שמואל",
+      "seder": "כה",
+      "paren": false,
+      "reference": "שמואל ב י יב",
+      "perek_id": 273,
+      "pasuk": 12,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1084,
+      "unit_heading": "שמואל ב י א-יז",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "שמואל",
+      "seder": "כו",
+      "paren": false,
+      "reference": "שמואל ב יב יג",
+      "perek_id": 275,
+      "pasuk": 13,
+      "alignment": {
+        "kind": "parasha-boundary"
+      },
+      "disposition": {
+        "kind": "aligned"
+      },
+      "unit_id": 1092,
+      "unit_heading": "שמואל ב יב יג",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "שמואל",
+      "seder": "כז",
+      "paren": false,
+      "reference": "שמואל ב יג כה",
+      "perek_id": 276,
+      "pasuk": 25,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1096,
+      "unit_heading": "שמואל ב יג כג-כז",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "שמואל",
+      "seder": "כח",
+      "paren": false,
+      "reference": "שמואל ב יד לג",
+      "perek_id": 277,
+      "pasuk": 33,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "ptuha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1111,
+      "unit_heading": "שמואל ב יד לא-לג",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "שמואל",
+      "seder": "כט",
+      "paren": false,
+      "reference": "שמואל ב טו לז",
+      "perek_id": 278,
+      "pasuk": 37,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1115,
+      "unit_heading": "שמואל ב טו כז - ב טז ט",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "שמואל",
+      "seder": "ל",
+      "paren": false,
+      "reference": "שמואל ב יז כ",
+      "perek_id": 280,
+      "pasuk": 20,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "stuma"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1125,
+      "unit_heading": "שמואל ב יז טו-כ",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "שמואל",
+      "seder": "לא",
+      "paren": false,
+      "reference": "שמואל ב יח כז",
+      "perek_id": 281,
+      "pasuk": 27,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1132,
+      "unit_heading": "שמואל ב יח יט-כח",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "שמואל",
+      "seder": "לב",
+      "paren": false,
+      "reference": "שמואל ב יט מ",
+      "perek_id": 282,
+      "pasuk": 40,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "stuma"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1145,
+      "unit_heading": "שמואל ב יט לט-מ",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "שמואל",
+      "seder": "לג",
+      "paren": false,
+      "reference": "שמואל ב כא ז",
+      "perek_id": 284,
+      "pasuk": 7,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1159,
+      "unit_heading": "שמואל ב כא ו-יד",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "שמואל",
+      "seder": "לד",
+      "paren": false,
+      "reference": "שמואל ב כב נא",
+      "perek_id": 285,
+      "pasuk": 51,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "ptuha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1164,
+      "unit_heading": "שמואל ב כב א-נא",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "מלכים",
+      "seder": "א",
+      "paren": false,
+      "reference": "מלכים א א א",
+      "perek_id": 288,
+      "pasuk": 1,
+      "alignment": {
+        "kind": "parasha-boundary"
+      },
+      "disposition": {
+        "kind": "aligned"
+      },
+      "unit_id": 1199,
+      "unit_heading": "מלכים א א א-כז",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "מלכים",
+      "seder": "ב",
+      "paren": false,
+      "reference": "מלכים א א מח",
+      "perek_id": 288,
+      "pasuk": 48,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1201,
+      "unit_heading": "מלכים א א לב-נג",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "מלכים",
+      "seder": "ג",
+      "paren": false,
+      "reference": "מלכים א ב מה",
+      "perek_id": 289,
+      "pasuk": 45,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1208,
+      "unit_heading": "מלכים א ב לט - א ג ב",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "מלכים",
+      "seder": "ד",
+      "paren": false,
+      "reference": "מלכים א ד כ",
+      "perek_id": 291,
+      "pasuk": 20,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "documented-system-difference"
+      },
+      "unit_id": 1227,
+      "unit_heading": "מלכים א ד יט - א ה א",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "מלכים",
+      "seder": "ה",
+      "paren": false,
+      "reference": "מלכים א ו יג",
+      "perek_id": 293,
+      "pasuk": 13,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "stuma"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1236,
+      "unit_heading": "מלכים א ו יא-יג",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "מלכים",
+      "seder": "ו",
+      "paren": false,
+      "reference": "מלכים א ז כא",
+      "perek_id": 294,
+      "pasuk": 21,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1238,
+      "unit_heading": "מלכים א ז יג-כו",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "מלכים",
+      "seder": "ז",
+      "paren": false,
+      "reference": "מלכים א ח יא",
+      "perek_id": 295,
+      "pasuk": 11,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "ptuha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1243,
+      "unit_heading": "מלכים א ח א-יא",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "מלכים",
+      "seder": "ח",
+      "paren": false,
+      "reference": "מלכים א ח נח",
+      "perek_id": 295,
+      "pasuk": 58,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1249,
+      "unit_heading": "מלכים א ח נד - א ט א",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "מלכים",
+      "seder": "ט",
+      "paren": false,
+      "reference": "מלכים א י ט",
+      "perek_id": 297,
+      "pasuk": 9,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1254,
+      "unit_heading": "מלכים א י א-יג",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "מלכים",
+      "seder": "י",
+      "paren": false,
+      "reference": "מלכים א יא כח",
+      "perek_id": 298,
+      "pasuk": 28,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "stuma"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1261,
+      "unit_heading": "מלכים א יא כו-כח",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "מלכים",
+      "seder": "יא",
+      "paren": false,
+      "reference": "מלכים א יב כד",
+      "perek_id": 299,
+      "pasuk": 24,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "stuma"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1267,
+      "unit_heading": "מלכים א יב כב-כד",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "מלכים",
+      "seder": "יב",
+      "paren": false,
+      "reference": "מלכים א יג לא",
+      "perek_id": 300,
+      "pasuk": 31,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1271,
+      "unit_heading": "מלכים א יג כ-לב",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "מלכים",
+      "seder": "יג",
+      "paren": false,
+      "reference": "מלכים א טו ח",
+      "perek_id": 302,
+      "pasuk": 8,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "ptuha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1278,
+      "unit_heading": "מלכים א טו א-ח",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "מלכים",
+      "seder": "יד",
+      "paren": false,
+      "reference": "מלכים א טז טו",
+      "perek_id": 303,
+      "pasuk": 15,
+      "alignment": {
+        "kind": "parasha-boundary"
+      },
+      "disposition": {
+        "kind": "aligned"
+      },
+      "unit_id": 1284,
+      "unit_heading": "מלכים א טז טו-כ",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "מלכים",
+      "seder": "טו",
+      "paren": false,
+      "reference": "מלכים א יז כד",
+      "perek_id": 304,
+      "pasuk": 24,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "ptuha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1292,
+      "unit_heading": "מלכים א יז יז-כד",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "מלכים",
+      "seder": "טז",
+      "paren": false,
+      "reference": "מלכים א יח לט",
+      "perek_id": 305,
+      "pasuk": 39,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1294,
+      "unit_heading": "מלכים א יח טו - א יט יד",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "מלכים",
+      "seder": "יז",
+      "paren": false,
+      "reference": "מלכים א כ יג",
+      "perek_id": 307,
+      "pasuk": 13,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1296,
+      "unit_heading": "מלכים א כ א-כב",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "מלכים",
+      "seder": "יח",
+      "paren": false,
+      "reference": "מלכים א כא יז",
+      "perek_id": 308,
+      "pasuk": 17,
+      "alignment": {
+        "kind": "parasha-boundary"
+      },
+      "disposition": {
+        "kind": "aligned"
+      },
+      "unit_id": 1302,
+      "unit_heading": "מלכים א כא יז-כו",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "מלכים",
+      "seder": "יט",
+      "paren": false,
+      "reference": "מלכים א כב מג",
+      "perek_id": 309,
+      "pasuk": 43,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1306,
+      "unit_heading": "מלכים א כב מא-נא",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "מלכים",
+      "seder": "כ",
+      "paren": false,
+      "reference": "מלכים ב ב טו",
+      "perek_id": 311,
+      "pasuk": 15,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1311,
+      "unit_heading": "מלכים ב ב א-כב",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "מלכים",
+      "seder": "כא",
+      "paren": false,
+      "reference": "מלכים ב ד כו",
+      "perek_id": 313,
+      "pasuk": 26,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1316,
+      "unit_heading": "מלכים ב ד ח-לז",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "מלכים",
+      "seder": "כב",
+      "paren": false,
+      "reference": "מלכים ב ו כג",
+      "perek_id": 315,
+      "pasuk": 23,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "ptuha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1322,
+      "unit_heading": "מלכים ב ו ח-כג",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "מלכים",
+      "seder": "כג",
+      "paren": false,
+      "reference": "מלכים ב ז טז",
+      "perek_id": 316,
+      "pasuk": 16,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1325,
+      "unit_heading": "מלכים ב ז ג-כ",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "מלכים",
+      "seder": "כד",
+      "paren": false,
+      "reference": "מלכים ב ט יג",
+      "perek_id": 318,
+      "pasuk": 13,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1330,
+      "unit_heading": "מלכים ב ט א-כח",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "מלכים",
+      "seder": "כה",
+      "paren": false,
+      "reference": "מלכים ב י טו",
+      "perek_id": 319,
+      "pasuk": 15,
+      "alignment": {
+        "kind": "parasha-boundary"
+      },
+      "disposition": {
+        "kind": "aligned"
+      },
+      "unit_id": 1333,
+      "unit_heading": "מלכים ב י טו-יז",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "מלכים",
+      "seder": "כו",
+      "paren": false,
+      "reference": "מלכים ב יב ג",
+      "perek_id": 321,
+      "pasuk": 3,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1342,
+      "unit_heading": "מלכים ב יב ב-ו",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "מלכים",
+      "seder": "כז",
+      "paren": false,
+      "reference": "מלכים ב יג כג",
+      "perek_id": 322,
+      "pasuk": 23,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1349,
+      "unit_heading": "מלכים ב יג כב-כה",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "מלכים",
+      "seder": "כח",
+      "paren": false,
+      "reference": "מלכים ב טו ז",
+      "perek_id": 324,
+      "pasuk": 7,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "ptuha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1354,
+      "unit_heading": "מלכים ב טו א-ז",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "מלכים",
+      "seder": "כט",
+      "paren": false,
+      "reference": "מלכים ב טז כ",
+      "perek_id": 325,
+      "pasuk": 20,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "ptuha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1363,
+      "unit_heading": "מלכים ב טז ז-כ",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "מלכים",
+      "seder": "ל",
+      "paren": false,
+      "reference": "מלכים ב יח ו",
+      "perek_id": 327,
+      "pasuk": 6,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1367,
+      "unit_heading": "מלכים ב יח א-ח",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "מלכים",
+      "seder": "לא",
+      "paren": false,
+      "reference": "מלכים ב יט יט",
+      "perek_id": 328,
+      "pasuk": 19,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "stuma"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1371,
+      "unit_heading": "מלכים ב יט טו-יט",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "מלכים",
+      "seder": "לב",
+      "paren": false,
+      "reference": "מלכים ב כ ח",
+      "perek_id": 329,
+      "pasuk": 8,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1375,
+      "unit_heading": "מלכים ב כ ד-יא",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "מלכים",
+      "seder": "לג",
+      "paren": false,
+      "reference": "מלכים ב כב ב",
+      "perek_id": 331,
+      "pasuk": 2,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "ptuha"
+      },
+      "disposition": {
+        "kind": "documented-system-difference"
+      },
+      "unit_id": 1380,
+      "unit_heading": "מלכים ב כב א-ב",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "מלכים",
+      "seder": "לד",
+      "paren": false,
+      "reference": "מלכים ב כג כה",
+      "perek_id": 332,
+      "pasuk": 25,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1381,
+      "unit_heading": "מלכים ב כב ג - ב כג ל",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "מלכים",
+      "seder": "לה",
+      "paren": false,
+      "reference": "מלכים ב כד יח",
+      "perek_id": 333,
+      "pasuk": 18,
+      "alignment": {
+        "kind": "parasha-boundary"
+      },
+      "disposition": {
+        "kind": "aligned"
+      },
+      "unit_id": 1385,
+      "unit_heading": "מלכים ב כד יח-כ",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "ישעיהו",
+      "seder": "א",
+      "paren": false,
+      "reference": "ישעיהו א א",
+      "perek_id": 335,
+      "pasuk": 1,
+      "alignment": {
+        "kind": "parasha-boundary"
+      },
+      "disposition": {
+        "kind": "aligned"
+      },
+      "unit_id": 1391,
+      "unit_heading": "ישעיהו א א-ט",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "ישעיהו",
+      "seder": "ב",
+      "paren": false,
+      "reference": "ישעיהו ד ג",
+      "perek_id": 338,
+      "pasuk": 3,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1403,
+      "unit_heading": "ישעיהו ד ב-ו",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "ישעיהו",
+      "seder": "ג",
+      "paren": false,
+      "reference": "ישעיהו ו ג",
+      "perek_id": 340,
+      "pasuk": 3,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1410,
+      "unit_heading": "ישעיהו ו א-יג",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "ישעיהו",
+      "seder": "ד",
+      "paren": false,
+      "reference": "ישעיהו ט ו",
+      "perek_id": 343,
+      "pasuk": 6,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "stuma"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1421,
+      "unit_heading": "ישעיהו ח יט - ט ו",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "ישעיהו",
+      "seder": "ה",
+      "paren": false,
+      "reference": "ישעיהו יא ב",
+      "perek_id": 345,
+      "pasuk": 2,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1430,
+      "unit_heading": "ישעיהו יא א-ט",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "ישעיהו",
+      "seder": "ו",
+      "paren": false,
+      "reference": "ישעיהו יד ב",
+      "perek_id": 348,
+      "pasuk": 2,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "stuma"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1433,
+      "unit_heading": "ישעיהו יג א - יד ב",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "ישעיהו",
+      "seder": "ז",
+      "paren": false,
+      "reference": "ישעיהו טז ה",
+      "perek_id": 350,
+      "pasuk": 5,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1437,
+      "unit_heading": "ישעיהו טו א - טז ו",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "ישעיהו",
+      "seder": "ח",
+      "paren": false,
+      "reference": "ישעיהו יט כה",
+      "perek_id": 353,
+      "pasuk": 25,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "stuma"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1449,
+      "unit_heading": "ישעיהו יט כד-כה",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "ישעיהו",
+      "seder": "ט",
+      "paren": false,
+      "reference": "ישעיהו כב כג",
+      "perek_id": 356,
+      "pasuk": 23,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1458,
+      "unit_heading": "ישעיהו כב טו-כה",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "ישעיהו",
+      "seder": "י",
+      "paren": false,
+      "reference": "ישעיהו כד כג",
+      "perek_id": 358,
+      "pasuk": 23,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "ptuha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1463,
+      "unit_heading": "ישעיהו כד כא-כג",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "ישעיהו",
+      "seder": "יא",
+      "paren": false,
+      "reference": "ישעיהו כז יב",
+      "perek_id": 361,
+      "pasuk": 12,
+      "alignment": {
+        "kind": "parasha-boundary"
+      },
+      "disposition": {
+        "kind": "aligned"
+      },
+      "unit_id": 1474,
+      "unit_heading": "ישעיהו כז יב",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "ישעיהו",
+      "seder": "יב",
+      "paren": false,
+      "reference": "ישעיהו כט כג",
+      "perek_id": 363,
+      "pasuk": 23,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1485,
+      "unit_heading": "ישעיהו כט כב - ל ה",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "ישעיהו",
+      "seder": "יג",
+      "paren": false,
+      "reference": "ישעיהו לב יח",
+      "perek_id": 366,
+      "pasuk": 18,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1494,
+      "unit_heading": "ישעיהו לב ט-כ",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "ישעיהו",
+      "seder": "יד",
+      "paren": false,
+      "reference": "ישעיהו לה י",
+      "perek_id": 369,
+      "pasuk": 10,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "ptuha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1500,
+      "unit_heading": "ישעיהו לה ג-י",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "ישעיהו",
+      "seder": "טו",
+      "paren": false,
+      "reference": "ישעיהו לז כ",
+      "perek_id": 371,
+      "pasuk": 20,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1503,
+      "unit_heading": "ישעיהו לז א-לב",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "ישעיהו",
+      "seder": "טז",
+      "paren": false,
+      "reference": "ישעיהו מ א",
+      "perek_id": 374,
+      "pasuk": 1,
+      "alignment": {
+        "kind": "parasha-boundary"
+      },
+      "disposition": {
+        "kind": "aligned"
+      },
+      "unit_id": 1510,
+      "unit_heading": "ישעיהו מ א-ב",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "ישעיהו",
+      "seder": "יז",
+      "paren": false,
+      "reference": "ישעיהו מא כז",
+      "perek_id": 375,
+      "pasuk": 27,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1522,
+      "unit_heading": "ישעיהו מא כא-כט",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "ישעיהו",
+      "seder": "יח",
+      "paren": false,
+      "reference": "ישעיהו מד ו",
+      "perek_id": 378,
+      "pasuk": 6,
+      "alignment": {
+        "kind": "parasha-boundary"
+      },
+      "disposition": {
+        "kind": "aligned"
+      },
+      "unit_id": 1535,
+      "unit_heading": "ישעיהו מד ו-כ",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "ישעיהו",
+      "seder": "יט",
+      "paren": false,
+      "reference": "ישעיהו מה יז",
+      "perek_id": 379,
+      "pasuk": 17,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "ptuha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1543,
+      "unit_heading": "ישעיהו מה יד-יז",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "ישעיהו",
+      "seder": "כ",
+      "paren": false,
+      "reference": "ישעיהו מח ב",
+      "perek_id": 382,
+      "pasuk": 2,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "stuma"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1552,
+      "unit_heading": "ישעיהו מח א-ב",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "ישעיהו",
+      "seder": "כא",
+      "paren": false,
+      "reference": "ישעיהו מט כו",
+      "perek_id": 383,
+      "pasuk": 26,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "stuma"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1560,
+      "unit_heading": "ישעיהו מט כד-כו",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "ישעיהו",
+      "seder": "כב",
+      "paren": false,
+      "reference": "ישעיהו נב ז",
+      "perek_id": 386,
+      "pasuk": 7,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1572,
+      "unit_heading": "ישעיהו נב ג-י",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "ישעיהו",
+      "seder": "כג",
+      "paren": false,
+      "reference": "ישעיהו נה יג",
+      "perek_id": 389,
+      "pasuk": 13,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "stuma"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1579,
+      "unit_heading": "ישעיהו נה ו-יג",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "ישעיהו",
+      "seder": "כד",
+      "paren": false,
+      "reference": "ישעיהו נח יד",
+      "perek_id": 392,
+      "pasuk": 14,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "stuma"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1586,
+      "unit_heading": "ישעיהו נח א-יד",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "ישעיהו",
+      "seder": "כה",
+      "paren": false,
+      "reference": "ישעיהו סא ט",
+      "perek_id": 395,
+      "pasuk": 9,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "stuma"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1589,
+      "unit_heading": "ישעיהו סא א-ט",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "ישעיהו",
+      "seder": "כו",
+      "paren": false,
+      "reference": "ישעיהו סה ט",
+      "perek_id": 399,
+      "pasuk": 9,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1595,
+      "unit_heading": "ישעיהו סה ח-יב",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "ירמיהו",
+      "seder": "א",
+      "paren": false,
+      "reference": "ירמיהו א א",
+      "perek_id": 401,
+      "pasuk": 1,
+      "alignment": {
+        "kind": "parasha-boundary"
+      },
+      "disposition": {
+        "kind": "aligned"
+      },
+      "unit_id": 1601,
+      "unit_heading": "ירמיהו א א-ג",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "ירמיהו",
+      "seder": "ב",
+      "paren": false,
+      "reference": "ירמיהו ג ד",
+      "perek_id": 403,
+      "pasuk": 4,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1608,
+      "unit_heading": "ירמיהו ב כט - ג ה",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "ירמיהו",
+      "seder": "ג",
+      "paren": false,
+      "reference": "ירמיהו ה א",
+      "perek_id": 405,
+      "pasuk": 1,
+      "alignment": {
+        "kind": "parasha-boundary"
+      },
+      "disposition": {
+        "kind": "aligned"
+      },
+      "unit_id": 1618,
+      "unit_heading": "ירמיהו ה א-ט",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "ירמיהו",
+      "seder": "ד",
+      "paren": false,
+      "reference": "ירמיהו ו ג",
+      "perek_id": 406,
+      "pasuk": 3,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1622,
+      "unit_heading": "ירמיהו ה ל - ו ה",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "ירמיהו",
+      "seder": "ה",
+      "paren": false,
+      "reference": "ירמיהו ז כג",
+      "perek_id": 407,
+      "pasuk": 23,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1633,
+      "unit_heading": "ירמיהו ז כא-כח",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "ירמיהו",
+      "seder": "ו",
+      "paren": false,
+      "reference": "ירמיהו ט כג",
+      "perek_id": 409,
+      "pasuk": 23,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "stuma"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1649,
+      "unit_heading": "ירמיהו ט כב-כג",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "ירמיהו",
+      "seder": "ז",
+      "paren": false,
+      "reference": "ירמיהו יב טו",
+      "perek_id": 412,
+      "pasuk": 15,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1673,
+      "unit_heading": "ירמיהו יב יד-יז",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "ירמיהו",
+      "seder": "ח",
+      "paren": false,
+      "reference": "ירמיהו יד כב",
+      "perek_id": 414,
+      "pasuk": 22,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "ptuha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1687,
+      "unit_heading": "ירמיהו יד יט-כב",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "ירמיהו",
+      "seder": "ט",
+      "paren": false,
+      "reference": "ירמיהו יז ז",
+      "perek_id": 417,
+      "pasuk": 7,
+      "alignment": {
+        "kind": "parasha-boundary"
+      },
+      "disposition": {
+        "kind": "aligned"
+      },
+      "unit_id": 1703,
+      "unit_heading": "ירמיהו יז ז-י",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "ירמיהו",
+      "seder": "ט",
+      "paren": true,
+      "reference": "ירמיהו יז כו",
+      "perek_id": 417,
+      "pasuk": 26,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "manuscript-only"
+      },
+      "unit_id": 1707,
+      "unit_heading": "ירמיהו יז כא-כז",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "ירמיהו",
+      "seder": "י",
+      "paren": false,
+      "reference": "ירמיהו יח יט",
+      "perek_id": 418,
+      "pasuk": 19,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1714,
+      "unit_heading": "ירמיהו יח יח-כג",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "ירמיהו",
+      "seder": "יא",
+      "paren": false,
+      "reference": "ירמיהו כ יג",
+      "perek_id": 420,
+      "pasuk": 13,
+      "alignment": {
+        "kind": "parasha-boundary"
+      },
+      "disposition": {
+        "kind": "aligned"
+      },
+      "unit_id": 1721,
+      "unit_heading": "ירמיהו כ יג",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "ירמיהו",
+      "seder": "יב",
+      "paren": false,
+      "reference": "ירמיהו כג ו",
+      "perek_id": 423,
+      "pasuk": 6,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "stuma"
+      },
+      "disposition": {
+        "kind": "documented-system-difference"
+      },
+      "unit_id": 1736,
+      "unit_heading": "ירמיהו כג ה-ו",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "ירמיהו",
+      "seder": "יג",
+      "paren": false,
+      "reference": "ירמיהו כד ז",
+      "perek_id": 424,
+      "pasuk": 7,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "stuma"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1747,
+      "unit_heading": "ירמיהו כד ד-ז",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "ירמיהו",
+      "seder": "יד",
+      "paren": false,
+      "reference": "ירמיהו כו א",
+      "perek_id": 426,
+      "pasuk": 1,
+      "alignment": {
+        "kind": "parasha-boundary"
+      },
+      "disposition": {
+        "kind": "aligned"
+      },
+      "unit_id": 1754,
+      "unit_heading": "ירמיהו כו א-ו",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "ירמיהו",
+      "seder": "טו",
+      "paren": false,
+      "reference": "ירמיהו כז ה",
+      "perek_id": 427,
+      "pasuk": 5,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1758,
+      "unit_heading": "ירמיהו כז א-יח",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "ירמיהו",
+      "seder": "טז",
+      "paren": false,
+      "reference": "ירמיהו כט ז",
+      "perek_id": 429,
+      "pasuk": 7,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "ptuha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1764,
+      "unit_heading": "ירמיהו כט ד-ז",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "ירמיהו",
+      "seder": "יז",
+      "paren": false,
+      "reference": "ירמיהו ל ט",
+      "perek_id": 430,
+      "pasuk": 9,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "stuma"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1772,
+      "unit_heading": "ירמיהו ל ד-ט",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "ירמיהו",
+      "seder": "יח",
+      "paren": false,
+      "reference": "ירמיהו לא לב",
+      "perek_id": 431,
+      "pasuk": 32,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1786,
+      "unit_heading": "ירמיהו לא לא-לד",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "ירמיהו",
+      "seder": "יט",
+      "paren": false,
+      "reference": "ירמיהו לב כב",
+      "perek_id": 432,
+      "pasuk": 22,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1793,
+      "unit_heading": "ירמיהו לב טז-לה",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "ירמיהו",
+      "seder": "כ",
+      "paren": false,
+      "reference": "ירמיהו לג טז",
+      "perek_id": 433,
+      "pasuk": 16,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "stuma"
+      },
+      "disposition": {
+        "kind": "documented-system-difference"
+      },
+      "unit_id": 1800,
+      "unit_heading": "ירמיהו לג יד-טז",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "ירמיהו",
+      "seder": "כא",
+      "paren": false,
+      "reference": "ירמיהו לה י",
+      "perek_id": 435,
+      "pasuk": 10,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1810,
+      "unit_heading": "ירמיהו לה א-יא",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "ירמיהו",
+      "seder": "כב",
+      "paren": false,
+      "reference": "ירמיהו לו כו",
+      "perek_id": 436,
+      "pasuk": 26,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "stuma"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1817,
+      "unit_heading": "ירמיהו לו יט-כו",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "ירמיהו",
+      "seder": "כג",
+      "paren": false,
+      "reference": "ירמיהו לח ח",
+      "perek_id": 438,
+      "pasuk": 8,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1829,
+      "unit_heading": "ירמיהו לח ז-יג",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "ירמיהו",
+      "seder": "כד",
+      "paren": false,
+      "reference": "ירמיהו לט יח",
+      "perek_id": 439,
+      "pasuk": 18,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "stuma"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1840,
+      "unit_heading": "ירמיהו לט טו-יח",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "ירמיהו",
+      "seder": "כה",
+      "paren": false,
+      "reference": "ירמיהו מב יב",
+      "perek_id": 442,
+      "pasuk": 12,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1849,
+      "unit_heading": "ירמיהו מב ז-יז",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "ירמיהו",
+      "seder": "כו",
+      "paren": false,
+      "reference": "ירמיהו מד כ",
+      "perek_id": 444,
+      "pasuk": 20,
+      "alignment": {
+        "kind": "parasha-boundary"
+      },
+      "disposition": {
+        "kind": "aligned"
+      },
+      "unit_id": 1859,
+      "unit_heading": "ירמיהו מד כ-כג",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "ירמיהו",
+      "seder": "כז",
+      "paren": false,
+      "reference": "ירמיהו מו כז",
+      "perek_id": 446,
+      "pasuk": 27,
+      "alignment": {
+        "kind": "parasha-boundary"
+      },
+      "disposition": {
+        "kind": "aligned"
+      },
+      "unit_id": 1870,
+      "unit_heading": "ירמיהו מו כז",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "ירמיהו",
+      "seder": "כח",
+      "paren": false,
+      "reference": "ירמיהו מט ב",
+      "perek_id": 449,
+      "pasuk": 2,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1878,
+      "unit_heading": "ירמיהו מט א-ו",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "ירמיהו",
+      "seder": "כט",
+      "paren": false,
+      "reference": "ירמיהו נ ה",
+      "perek_id": 450,
+      "pasuk": 5,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "stuma"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1885,
+      "unit_heading": "ירמיהו נ א-ה",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "ירמיהו",
+      "seder": "ל",
+      "paren": false,
+      "reference": "ירמיהו נא י",
+      "perek_id": 451,
+      "pasuk": 10,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1894,
+      "unit_heading": "ירמיהו נא א-יד",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "ירמיהו",
+      "seder": "לא",
+      "paren": false,
+      "reference": "ירמיהו נא נט",
+      "perek_id": 451,
+      "pasuk": 59,
+      "alignment": {
+        "kind": "parasha-boundary"
+      },
+      "disposition": {
+        "kind": "aligned"
+      },
+      "unit_id": 1903,
+      "unit_heading": "ירמיהו נא נט-סד",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "יחזקאל",
+      "seder": "א",
+      "paren": false,
+      "reference": "יחזקאל א א",
+      "perek_id": 453,
+      "pasuk": 1,
+      "alignment": {
+        "kind": "parasha-boundary"
+      },
+      "disposition": {
+        "kind": "aligned"
+      },
+      "unit_id": 1906,
+      "unit_heading": "יחזקאל א א-כח",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "יחזקאל",
+      "seder": "ב",
+      "paren": false,
+      "reference": "יחזקאל ג יב",
+      "perek_id": 455,
+      "pasuk": 12,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1913,
+      "unit_heading": "יחזקאל ג י-טז",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "יחזקאל",
+      "seder": "ג",
+      "paren": false,
+      "reference": "יחזקאל ו א",
+      "perek_id": 458,
+      "pasuk": 1,
+      "alignment": {
+        "kind": "parasha-boundary"
+      },
+      "disposition": {
+        "kind": "aligned"
+      },
+      "unit_id": 1928,
+      "unit_heading": "יחזקאל ו א-י",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "יחזקאל",
+      "seder": "ד",
+      "paren": false,
+      "reference": "יחזקאל ח א",
+      "perek_id": 460,
+      "pasuk": 1,
+      "alignment": {
+        "kind": "parasha-boundary"
+      },
+      "disposition": {
+        "kind": "aligned"
+      },
+      "unit_id": 1933,
+      "unit_heading": "יחזקאל ח א-ו",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "יחזקאל",
+      "seder": "ה",
+      "paren": false,
+      "reference": "יחזקאל י א",
+      "perek_id": 462,
+      "pasuk": 1,
+      "alignment": {
+        "kind": "parasha-boundary"
+      },
+      "disposition": {
+        "kind": "aligned"
+      },
+      "unit_id": 1937,
+      "unit_heading": "יחזקאל י א - יא א",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "יחזקאל",
+      "seder": "ו",
+      "paren": false,
+      "reference": "יחזקאל יא כ",
+      "perek_id": 463,
+      "pasuk": 20,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1942,
+      "unit_heading": "יחזקאל יא יז-כה",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "יחזקאל",
+      "seder": "ז",
+      "paren": false,
+      "reference": "יחזקאל יד א",
+      "perek_id": 466,
+      "pasuk": 1,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "ptuha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1952,
+      "unit_heading": "יחזקאל יג כ - יד א",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "יחזקאל",
+      "seder": "ח",
+      "paren": false,
+      "reference": "יחזקאל טז יד",
+      "perek_id": 468,
+      "pasuk": 14,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1961,
+      "unit_heading": "יחזקאל טז א-לה",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "יחזקאל",
+      "seder": "ט",
+      "paren": false,
+      "reference": "יחזקאל טז ס",
+      "perek_id": 468,
+      "pasuk": 60,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1964,
+      "unit_heading": "יחזקאל טז נט-סג",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "יחזקאל",
+      "seder": "י",
+      "paren": false,
+      "reference": "יחזקאל יח ט",
+      "perek_id": 470,
+      "pasuk": 9,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1971,
+      "unit_heading": "יחזקאל יח ה-כ",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "יחזקאל",
+      "seder": "יא",
+      "paren": false,
+      "reference": "יחזקאל כ א",
+      "perek_id": 472,
+      "pasuk": 1,
+      "alignment": {
+        "kind": "parasha-boundary"
+      },
+      "disposition": {
+        "kind": "aligned"
+      },
+      "unit_id": 1977,
+      "unit_heading": "יחזקאל כ א",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "יחזקאל",
+      "seder": "יב",
+      "paren": false,
+      "reference": "יחזקאל כ מא",
+      "perek_id": 472,
+      "pasuk": 41,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1979,
+      "unit_heading": "יחזקאל כ כז-מד",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "יחזקאל",
+      "seder": "יג",
+      "paren": false,
+      "reference": "יחזקאל כב טז",
+      "perek_id": 474,
+      "pasuk": 16,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "ptuha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1990,
+      "unit_heading": "יחזקאל כב א-טז",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "יחזקאל",
+      "seder": "יד",
+      "paren": false,
+      "reference": "יחזקאל כג כז",
+      "perek_id": 475,
+      "pasuk": 27,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "stuma"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 1996,
+      "unit_heading": "יחזקאל כג כב-כז",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "יחזקאל",
+      "seder": "טו",
+      "paren": false,
+      "reference": "יחזקאל כד כד",
+      "perek_id": 476,
+      "pasuk": 24,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "stuma"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2005,
+      "unit_heading": "יחזקאל כד טו-כד",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "יחזקאל",
+      "seder": "טז",
+      "paren": false,
+      "reference": "יחזקאל כו כ",
+      "perek_id": 478,
+      "pasuk": 20,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2015,
+      "unit_heading": "יחזקאל כו יט-כא",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "יחזקאל",
+      "seder": "יז",
+      "paren": false,
+      "reference": "יחזקאל כח יג",
+      "perek_id": 480,
+      "pasuk": 13,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2019,
+      "unit_heading": "יחזקאל כח יא-יט",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "יחזקאל",
+      "seder": "יח",
+      "paren": false,
+      "reference": "יחזקאל כט כא",
+      "perek_id": 481,
+      "pasuk": 21,
+      "alignment": {
+        "kind": "parasha-boundary"
+      },
+      "disposition": {
+        "kind": "aligned"
+      },
+      "unit_id": 2027,
+      "unit_heading": "יחזקאל כט כא",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "יחזקאל",
+      "seder": "יט",
+      "paren": false,
+      "reference": "יחזקאל לב א",
+      "perek_id": 484,
+      "pasuk": 1,
+      "alignment": {
+        "kind": "parasha-boundary"
+      },
+      "disposition": {
+        "kind": "aligned"
+      },
+      "unit_id": 2037,
+      "unit_heading": "יחזקאל לב א-י",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "יחזקאל",
+      "seder": "כ",
+      "paren": false,
+      "reference": "יחזקאל לג טז",
+      "perek_id": 485,
+      "pasuk": 16,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2043,
+      "unit_heading": "יחזקאל לג יב-כ",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "יחזקאל",
+      "seder": "כא",
+      "paren": false,
+      "reference": "יחזקאל לד כו",
+      "perek_id": 486,
+      "pasuk": 26,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2052,
+      "unit_heading": "יחזקאל לד כ-לא",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "יחזקאל",
+      "seder": "כב",
+      "paren": false,
+      "reference": "יחזקאל לו כה",
+      "perek_id": 488,
+      "pasuk": 25,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2059,
+      "unit_heading": "יחזקאל לו כב-לב",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "יחזקאל",
+      "seder": "כג",
+      "paren": false,
+      "reference": "יחזקאל לז כח",
+      "perek_id": 489,
+      "pasuk": 28,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "stuma"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2065,
+      "unit_heading": "יחזקאל לז טו-כח",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "יחזקאל",
+      "seder": "כד",
+      "paren": false,
+      "reference": "יחזקאל לט כב",
+      "perek_id": 491,
+      "pasuk": 22,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2073,
+      "unit_heading": "יחזקאל לט יז-כד",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "יחזקאל",
+      "seder": "כה",
+      "paren": false,
+      "reference": "יחזקאל מ מה",
+      "perek_id": 492,
+      "pasuk": 45,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2075,
+      "unit_heading": "יחזקאל מ א - מג ט",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "יחזקאל",
+      "seder": "כו",
+      "paren": false,
+      "reference": "יחזקאל מב יג",
+      "perek_id": 494,
+      "pasuk": 13,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2075,
+      "unit_heading": "יחזקאל מ א - מג ט",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "יחזקאל",
+      "seder": "כז",
+      "paren": false,
+      "reference": "יחזקאל מג כז",
+      "perek_id": 495,
+      "pasuk": 27,
+      "alignment": {
+        "kind": "mid-pasuk-boundary",
+        "segment_index": 4
+      },
+      "disposition": {
+        "kind": "aligned"
+      },
+      "unit_id": 2076,
+      "unit_heading": "יחזקאל מג י-כז",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "יחזקאל",
+      "seder": "כח",
+      "paren": false,
+      "reference": "יחזקאל מה טו",
+      "perek_id": 497,
+      "pasuk": 15,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2081,
+      "unit_heading": "יחזקאל מה ט-יז",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "יחזקאל",
+      "seder": "כט",
+      "paren": false,
+      "reference": "יחזקאל מז יב",
+      "perek_id": 499,
+      "pasuk": 12,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "stuma"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2086,
+      "unit_heading": "יחזקאל מו כ - מז יב",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "תרי עשר",
+      "seder": "א",
+      "paren": false,
+      "reference": "הושע א א",
+      "perek_id": 501,
+      "pasuk": 1,
+      "alignment": {
+        "kind": "parasha-boundary"
+      },
+      "disposition": {
+        "kind": "aligned"
+      },
+      "unit_id": 2091,
+      "unit_heading": "הושע א א-ב",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "תרי עשר",
+      "seder": "ב",
+      "paren": false,
+      "reference": "הושע ו ב",
+      "perek_id": 506,
+      "pasuk": 2,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2100,
+      "unit_heading": "הושע ה ח - ו יא",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "תרי עשר",
+      "seder": "ג",
+      "paren": false,
+      "reference": "הושע י יב",
+      "perek_id": 510,
+      "pasuk": 12,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2107,
+      "unit_heading": "הושע י ט - יא יא",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "תרי עשר",
+      "seder": "ד",
+      "paren": false,
+      "reference": "הושע יד ו",
+      "perek_id": 514,
+      "pasuk": 6,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2110,
+      "unit_heading": "הושע יד ב-ח",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "תרי עשר",
+      "seder": "ה",
+      "paren": false,
+      "reference": "יואל ב כז",
+      "perek_id": 516,
+      "pasuk": 27,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "stuma"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2115,
+      "unit_heading": "יואל ב טו-כז",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "תרי עשר",
+      "seder": "ו",
+      "paren": false,
+      "reference": "עמוס ב י",
+      "perek_id": 520,
+      "pasuk": 10,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2127,
+      "unit_heading": "עמוס ב ו-טז",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "תרי עשר",
+      "seder": "ז",
+      "paren": false,
+      "reference": "עמוס ה יד",
+      "perek_id": 523,
+      "pasuk": 14,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2135,
+      "unit_heading": "עמוס ה ט-טו",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "תרי עשר",
+      "seder": "ח",
+      "paren": false,
+      "reference": "עמוס ז טו",
+      "perek_id": 525,
+      "pasuk": 15,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2144,
+      "unit_heading": "עמוס ז יד-יז",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "תרי עשר",
+      "seder": "ט",
+      "paren": false,
+      "reference": "עובדיה א כא",
+      "perek_id": 528,
+      "pasuk": 21,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2150,
+      "unit_heading": "עובדיה א א-כא",
+      "unit_closing_break": null,
+      "marker_free_sefer": true
+    },
+    {
+      "book": "תרי עשר",
+      "seder": "י",
+      "paren": false,
+      "reference": "מיכה א א",
+      "perek_id": 533,
+      "pasuk": 1,
+      "alignment": {
+        "kind": "parasha-boundary"
+      },
+      "disposition": {
+        "kind": "aligned"
+      },
+      "unit_id": 2155,
+      "unit_heading": "מיכה א א-טז",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "תרי עשר",
+      "seder": "יא",
+      "paren": false,
+      "reference": "מיכה ד ה",
+      "perek_id": 536,
+      "pasuk": 5,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "ptuha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2161,
+      "unit_heading": "מיכה ד א-ה",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "תרי עשר",
+      "seder": "יב",
+      "paren": false,
+      "reference": "מיכה ז כ",
+      "perek_id": 539,
+      "pasuk": 20,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2171,
+      "unit_heading": "מיכה ז יד-כ",
+      "unit_closing_break": null,
+      "marker_free_sefer": false
+    },
+    {
+      "book": "תרי עשר",
+      "seder": "יג",
+      "paren": false,
+      "reference": "חבקוק א א",
+      "perek_id": 543,
+      "pasuk": 1,
+      "alignment": {
+        "kind": "parasha-boundary"
+      },
+      "disposition": {
+        "kind": "aligned"
+      },
+      "unit_id": 2176,
+      "unit_heading": "חבקוק א א-יז",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "תרי עשר",
+      "seder": "יד",
+      "paren": false,
+      "reference": "צפניה א א",
+      "perek_id": 546,
+      "pasuk": 1,
+      "alignment": {
+        "kind": "parasha-boundary"
+      },
+      "disposition": {
+        "kind": "aligned"
+      },
+      "unit_id": 2186,
+      "unit_heading": "צפניה א א-ט",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "תרי עשר",
+      "seder": "טו",
+      "paren": false,
+      "reference": "צפניה ג כ",
+      "perek_id": 548,
+      "pasuk": 20,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2191,
+      "unit_heading": "צפניה ג יד-כ",
+      "unit_closing_break": null,
+      "marker_free_sefer": false
+    },
+    {
+      "book": "תרי עשר",
+      "seder": "טז",
+      "paren": false,
+      "reference": "חגי ב כג",
+      "perek_id": 550,
+      "pasuk": 23,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2199,
+      "unit_heading": "חגי ב כ-כג",
+      "unit_closing_break": null,
+      "marker_free_sefer": false
+    },
+    {
+      "book": "תרי עשר",
+      "seder": "יז",
+      "paren": false,
+      "reference": "זכריה ד ב",
+      "perek_id": 554,
+      "pasuk": 2,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2208,
+      "unit_heading": "זכריה ג א - ד ז",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "תרי עשר",
+      "seder": "יח",
+      "paren": false,
+      "reference": "זכריה ו יד",
+      "perek_id": 556,
+      "pasuk": 14,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2212,
+      "unit_heading": "זכריה ו ט-טו",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "תרי עשר",
+      "seder": "יט",
+      "paren": false,
+      "reference": "זכריה ח כג",
+      "perek_id": 558,
+      "pasuk": 23,
+      "alignment": {
+        "kind": "parasha-boundary"
+      },
+      "disposition": {
+        "kind": "aligned"
+      },
+      "unit_id": 2224,
+      "unit_heading": "זכריה ח כג",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "תרי עשר",
+      "seder": "כ",
+      "paren": false,
+      "reference": "זכריה יב א",
+      "perek_id": 562,
+      "pasuk": 1,
+      "alignment": {
+        "kind": "parasha-boundary"
+      },
+      "disposition": {
+        "kind": "aligned"
+      },
+      "unit_id": 2232,
+      "unit_heading": "זכריה יב א",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "תרי עשר",
+      "seder": "כא",
+      "paren": false,
+      "reference": "זכריה יד כא",
+      "perek_id": 564,
+      "pasuk": 21,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2237,
+      "unit_heading": "זכריה יד א-כא",
+      "unit_closing_break": null,
+      "marker_free_sefer": false
+    },
+    {
+      "book": "תהלים",
+      "seder": "א",
+      "paren": false,
+      "reference": "תהילים א א",
+      "perek_id": 568,
+      "pasuk": 1,
+      "alignment": {
+        "kind": "parasha-boundary"
+      },
+      "disposition": {
+        "kind": "aligned"
+      },
+      "unit_id": 2246,
+      "unit_heading": "תהילים א א - קנ ו",
+      "unit_closing_break": null,
+      "marker_free_sefer": true
+    },
+    {
+      "book": "תהלים",
+      "seder": "ב",
+      "paren": false,
+      "reference": "תהילים יא ז",
+      "perek_id": 578,
+      "pasuk": 7,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2246,
+      "unit_heading": "תהילים א א - קנ ו",
+      "unit_closing_break": null,
+      "marker_free_sefer": true
+    },
+    {
+      "book": "תהלים",
+      "seder": "ג",
+      "paren": false,
+      "reference": "תהילים כ י",
+      "perek_id": 587,
+      "pasuk": 10,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2246,
+      "unit_heading": "תהילים א א - קנ ו",
+      "unit_closing_break": null,
+      "marker_free_sefer": true
+    },
+    {
+      "book": "תהלים",
+      "seder": "ד",
+      "paren": false,
+      "reference": "תהילים כט יא",
+      "perek_id": 596,
+      "pasuk": 11,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2246,
+      "unit_heading": "תהילים א א - קנ ו",
+      "unit_closing_break": null,
+      "marker_free_sefer": true
+    },
+    {
+      "book": "תהלים",
+      "seder": "ה",
+      "paren": false,
+      "reference": "תהילים לה כח",
+      "perek_id": 602,
+      "pasuk": 28,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2246,
+      "unit_heading": "תהילים א א - קנ ו",
+      "unit_closing_break": null,
+      "marker_free_sefer": true
+    },
+    {
+      "book": "תהלים",
+      "seder": "ו",
+      "paren": false,
+      "reference": "תהילים מא יד",
+      "perek_id": 608,
+      "pasuk": 14,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2246,
+      "unit_heading": "תהילים א א - קנ ו",
+      "unit_closing_break": null,
+      "marker_free_sefer": true
+    },
+    {
+      "book": "תהלים",
+      "seder": "ז",
+      "paren": false,
+      "reference": "תהילים מט יט",
+      "perek_id": 616,
+      "pasuk": 19,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2246,
+      "unit_heading": "תהילים א א - קנ ו",
+      "unit_closing_break": null,
+      "marker_free_sefer": true
+    },
+    {
+      "book": "תהלים",
+      "seder": "ח",
+      "paren": false,
+      "reference": "תהילים נז יב",
+      "perek_id": 624,
+      "pasuk": 12,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2246,
+      "unit_heading": "תהילים א א - קנ ו",
+      "unit_closing_break": null,
+      "marker_free_sefer": true
+    },
+    {
+      "book": "תהלים",
+      "seder": "ט",
+      "paren": false,
+      "reference": "תהילים סז ח",
+      "perek_id": 634,
+      "pasuk": 8,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2246,
+      "unit_heading": "תהילים א א - קנ ו",
+      "unit_closing_break": null,
+      "marker_free_sefer": true
+    },
+    {
+      "book": "תהלים",
+      "seder": "י",
+      "paren": false,
+      "reference": "תהילים עב כ",
+      "perek_id": 639,
+      "pasuk": 20,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2246,
+      "unit_heading": "תהילים א א - קנ ו",
+      "unit_closing_break": null,
+      "marker_free_sefer": true
+    },
+    {
+      "book": "תהלים",
+      "seder": "יא",
+      "paren": false,
+      "reference": "תהילים עח לח",
+      "perek_id": 645,
+      "pasuk": 38,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2246,
+      "unit_heading": "תהילים א א - קנ ו",
+      "unit_closing_break": null,
+      "marker_free_sefer": true
+    },
+    {
+      "book": "תהלים",
+      "seder": "יב",
+      "paren": false,
+      "reference": "תהילים פד יג",
+      "perek_id": 651,
+      "pasuk": 13,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2246,
+      "unit_heading": "תהילים א א - קנ ו",
+      "unit_closing_break": null,
+      "marker_free_sefer": true
+    },
+    {
+      "book": "תהלים",
+      "seder": "יג",
+      "paren": false,
+      "reference": "תהילים צ יז",
+      "perek_id": 657,
+      "pasuk": 17,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2246,
+      "unit_heading": "תהילים א א - קנ ו",
+      "unit_closing_break": null,
+      "marker_free_sefer": true
+    },
+    {
+      "book": "תהלים",
+      "seder": "יד",
+      "paren": false,
+      "reference": "תהילים קא א",
+      "perek_id": 668,
+      "pasuk": 1,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2246,
+      "unit_heading": "תהילים א א - קנ ו",
+      "unit_closing_break": null,
+      "marker_free_sefer": true
+    },
+    {
+      "book": "תהלים",
+      "seder": "טו",
+      "paren": false,
+      "reference": "תהילים קה מה",
+      "perek_id": 672,
+      "pasuk": 45,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2246,
+      "unit_heading": "תהילים א א - קנ ו",
+      "unit_closing_break": null,
+      "marker_free_sefer": true
+    },
+    {
+      "book": "תהלים",
+      "seder": "טז",
+      "paren": false,
+      "reference": "תהילים קיא י",
+      "perek_id": 678,
+      "pasuk": 10,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2246,
+      "unit_heading": "תהילים א א - קנ ו",
+      "unit_closing_break": null,
+      "marker_free_sefer": true
+    },
+    {
+      "book": "תהלים",
+      "seder": "יז",
+      "paren": false,
+      "reference": "תהילים קיט עב",
+      "perek_id": 686,
+      "pasuk": 72,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2246,
+      "unit_heading": "תהילים א א - קנ ו",
+      "unit_closing_break": null,
+      "marker_free_sefer": true
+    },
+    {
+      "book": "תהלים",
+      "seder": "יח",
+      "paren": false,
+      "reference": "תהילים קכח ו",
+      "perek_id": 695,
+      "pasuk": 6,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2246,
+      "unit_heading": "תהילים א א - קנ ו",
+      "unit_closing_break": null,
+      "marker_free_sefer": true
+    },
+    {
+      "book": "תהלים",
+      "seder": "יט",
+      "paren": false,
+      "reference": "תהילים קמ יד",
+      "perek_id": 707,
+      "pasuk": 14,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2246,
+      "unit_heading": "תהילים א א - קנ ו",
+      "unit_closing_break": null,
+      "marker_free_sefer": true
+    },
+    {
+      "book": "משלי",
+      "seder": "א",
+      "paren": false,
+      "reference": "משלי א א",
+      "perek_id": 718,
+      "pasuk": 1,
+      "alignment": {
+        "kind": "parasha-boundary"
+      },
+      "disposition": {
+        "kind": "aligned"
+      },
+      "unit_id": 2247,
+      "unit_heading": "משלי א א-ז",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "משלי",
+      "seder": "ב",
+      "paren": false,
+      "reference": "משלי ה יח",
+      "perek_id": 722,
+      "pasuk": 18,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2257,
+      "unit_heading": "משלי ה ז-כג",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "משלי",
+      "seder": "ג",
+      "paren": false,
+      "reference": "משלי ט יא",
+      "perek_id": 726,
+      "pasuk": 11,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2270,
+      "unit_heading": "משלי ט י-יח",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "משלי",
+      "seder": "ד",
+      "paren": false,
+      "reference": "משלי יד ד",
+      "perek_id": 731,
+      "pasuk": 4,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2273,
+      "unit_heading": "משלי יד א - יט ט",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "משלי",
+      "seder": "ה",
+      "paren": false,
+      "reference": "משלי יח י",
+      "perek_id": 735,
+      "pasuk": 10,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2273,
+      "unit_heading": "משלי יד א - יט ט",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "משלי",
+      "seder": "ו",
+      "paren": false,
+      "reference": "משלי כב כא",
+      "perek_id": 739,
+      "pasuk": 21,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "ptuha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2275,
+      "unit_heading": "משלי כא לא - כב כא",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "משלי",
+      "seder": "ז",
+      "paren": false,
+      "reference": "משלי כה יג",
+      "perek_id": 742,
+      "pasuk": 13,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "ptuha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2282,
+      "unit_heading": "משלי כה א-יג",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "משלי",
+      "seder": "ח",
+      "paren": false,
+      "reference": "משלי כח טז",
+      "perek_id": 745,
+      "pasuk": 16,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "ptuha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2287,
+      "unit_heading": "משלי כח ה-טז",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "איוב",
+      "seder": "א",
+      "paren": false,
+      "reference": "איוב א א",
+      "perek_id": 749,
+      "pasuk": 1,
+      "alignment": {
+        "kind": "parasha-boundary"
+      },
+      "disposition": {
+        "kind": "aligned"
+      },
+      "unit_id": 2300,
+      "unit_heading": "איוב א א-ה",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "איוב",
+      "seder": "ב",
+      "paren": false,
+      "reference": "איוב ה כז",
+      "perek_id": 753,
+      "pasuk": 27,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "ptuha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2305,
+      "unit_heading": "איוב ד א - ה כז",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "איוב",
+      "seder": "ג",
+      "paren": false,
+      "reference": "איוב יא יט",
+      "perek_id": 759,
+      "pasuk": 19,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2309,
+      "unit_heading": "איוב יא א-כ",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "איוב",
+      "seder": "ד",
+      "paren": false,
+      "reference": "איוב יז ט",
+      "perek_id": 765,
+      "pasuk": 9,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2312,
+      "unit_heading": "איוב טז א - יז טז",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "איוב",
+      "seder": "ה",
+      "paren": false,
+      "reference": "איוב כב ל",
+      "perek_id": 770,
+      "pasuk": 30,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "ptuha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2317,
+      "unit_heading": "איוב כב א-ל",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "איוב",
+      "seder": "ו",
+      "paren": false,
+      "reference": "איוב כט יד",
+      "perek_id": 777,
+      "pasuk": 14,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2324,
+      "unit_heading": "איוב כט א - לא ז",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "איוב",
+      "seder": "ז",
+      "paren": false,
+      "reference": "איוב לג לג",
+      "perek_id": 781,
+      "pasuk": 33,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "stuma"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2328,
+      "unit_heading": "איוב לב ו - לג לג",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "איוב",
+      "seder": "ח",
+      "paren": false,
+      "reference": "איוב לח לה",
+      "perek_id": 786,
+      "pasuk": 35,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2332,
+      "unit_heading": "איוב לח א - לט ל",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "שיר השירים",
+      "seder": "א",
+      "paren": false,
+      "reference": "שיר השירים א א",
+      "perek_id": 791,
+      "pasuk": 1,
+      "alignment": {
+        "kind": "parasha-boundary"
+      },
+      "disposition": {
+        "kind": "aligned"
+      },
+      "unit_id": 2340,
+      "unit_heading": "שיר השירים א א-ד",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "שיר השירים",
+      "seder": "ב",
+      "paren": true,
+      "reference": "שיר השירים ה ב",
+      "perek_id": 795,
+      "pasuk": 2,
+      "alignment": {
+        "kind": "parasha-boundary"
+      },
+      "disposition": {
+        "kind": "manuscript-only"
+      },
+      "unit_id": 2353,
+      "unit_heading": "שיר השירים ה ב - ו ג",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "רות",
+      "seder": "א",
+      "paren": false,
+      "reference": "רות א א",
+      "perek_id": 799,
+      "pasuk": 1,
+      "alignment": {
+        "kind": "parasha-boundary"
+      },
+      "disposition": {
+        "kind": "aligned"
+      },
+      "unit_id": 2361,
+      "unit_heading": "רות א א - ד יז",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "רות",
+      "seder": "ב",
+      "paren": true,
+      "reference": "רות ב יב",
+      "perek_id": 800,
+      "pasuk": 12,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "manuscript-only"
+      },
+      "unit_id": 2361,
+      "unit_heading": "רות א א - ד יז",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "איכה",
+      "seder": "א",
+      "paren": false,
+      "reference": "איכה א א",
+      "perek_id": 803,
+      "pasuk": 1,
+      "alignment": {
+        "kind": "parasha-boundary"
+      },
+      "disposition": {
+        "kind": "aligned"
+      },
+      "unit_id": 2363,
+      "unit_heading": "איכה א א",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "קהלת",
+      "seder": "א",
+      "paren": false,
+      "reference": "קהלת א א",
+      "perek_id": 808,
+      "pasuk": 1,
+      "alignment": {
+        "kind": "parasha-boundary"
+      },
+      "disposition": {
+        "kind": "aligned"
+      },
+      "unit_id": 2453,
+      "unit_heading": "קהלת א א-יא",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "קהלת",
+      "seder": "ב",
+      "paren": false,
+      "reference": "קהלת ג יג",
+      "perek_id": 810,
+      "pasuk": 13,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2456,
+      "unit_heading": "קהלת ג ט - ט י",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "קהלת",
+      "seder": "ג",
+      "paren": false,
+      "reference": "קהלת ז א",
+      "perek_id": 814,
+      "pasuk": 1,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2456,
+      "unit_heading": "קהלת ג ט - ט י",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "קהלת",
+      "seder": "ד",
+      "paren": false,
+      "reference": "קהלת ט ז",
+      "perek_id": 816,
+      "pasuk": 7,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2456,
+      "unit_heading": "קהלת ג ט - ט י",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "אסתר",
+      "seder": "א",
+      "paren": false,
+      "reference": "אסתר א א",
+      "perek_id": 820,
+      "pasuk": 1,
+      "alignment": {
+        "kind": "parasha-boundary"
+      },
+      "disposition": {
+        "kind": "aligned"
+      },
+      "unit_id": 2458,
+      "unit_heading": "אסתר א א-ט",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "אסתר",
+      "seder": "ב",
+      "paren": false,
+      "reference": "אסתר ב ה",
+      "perek_id": 821,
+      "pasuk": 5,
+      "alignment": {
+        "kind": "parasha-boundary"
+      },
+      "disposition": {
+        "kind": "aligned"
+      },
+      "unit_id": 2462,
+      "unit_heading": "אסתר ב ה-כ",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "אסתר",
+      "seder": "ג",
+      "paren": false,
+      "reference": "אסתר ג ח",
+      "perek_id": 822,
+      "pasuk": 8,
+      "alignment": {
+        "kind": "parasha-boundary"
+      },
+      "disposition": {
+        "kind": "aligned"
+      },
+      "unit_id": 2465,
+      "unit_heading": "אסתר ג ח-טו",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "אסתר",
+      "seder": "ד",
+      "paren": false,
+      "reference": "אסתר ו יא",
+      "perek_id": 825,
+      "pasuk": 11,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2470,
+      "unit_heading": "אסתר ו א - ז ד",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "אסתר",
+      "seder": "ה",
+      "paren": false,
+      "reference": "אסתר ח טז",
+      "perek_id": 827,
+      "pasuk": 16,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2476,
+      "unit_heading": "אסתר ח טו - ט ד",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "דניאל",
+      "seder": "א",
+      "paren": false,
+      "reference": "דניאל א א",
+      "perek_id": 830,
+      "pasuk": 1,
+      "alignment": {
+        "kind": "parasha-boundary"
+      },
+      "disposition": {
+        "kind": "aligned"
+      },
+      "unit_id": 2482,
+      "unit_heading": "דניאל א א-כא",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "דניאל",
+      "seder": "ב",
+      "paren": false,
+      "reference": "דניאל ב לה",
+      "perek_id": 831,
+      "pasuk": 35,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2487,
+      "unit_heading": "דניאל ב כט-מה",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "דניאל",
+      "seder": "ג",
+      "paren": false,
+      "reference": "דניאל ג ל",
+      "perek_id": 832,
+      "pasuk": 30,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "ptuha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2493,
+      "unit_heading": "דניאל ג כו-ל",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "דניאל",
+      "seder": "ד",
+      "paren": false,
+      "reference": "דניאל ה יב",
+      "perek_id": 834,
+      "pasuk": 12,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "ptuha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2497,
+      "unit_heading": "דניאל ה ח-יב",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "דניאל",
+      "seder": "ה",
+      "paren": false,
+      "reference": "דניאל ו יא",
+      "perek_id": 835,
+      "pasuk": 11,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "stuma"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2501,
+      "unit_heading": "דניאל ו ז-יא",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "דניאל",
+      "seder": "ו",
+      "paren": false,
+      "reference": "דניאל ט ד",
+      "perek_id": 838,
+      "pasuk": 4,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2506,
+      "unit_heading": "דניאל ט א-כז",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "דניאל",
+      "seder": "ז",
+      "paren": false,
+      "reference": "דניאל י כא",
+      "perek_id": 839,
+      "pasuk": 21,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "ptuha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2508,
+      "unit_heading": "דניאל י ד-כא",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "עזרא נחמיה",
+      "seder": "א",
+      "paren": false,
+      "reference": "עזרא א א",
+      "perek_id": 842,
+      "pasuk": 1,
+      "alignment": {
+        "kind": "parasha-boundary"
+      },
+      "disposition": {
+        "kind": "aligned"
+      },
+      "unit_id": 2513,
+      "unit_heading": "עזרא ע א א-ו",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "עזרא נחמיה",
+      "seder": "ב",
+      "paren": false,
+      "reference": "עזרא ג יג",
+      "perek_id": 844,
+      "pasuk": 13,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "ptuha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2569,
+      "unit_heading": "עזרא ע ג יב-יג",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "עזרא נחמיה",
+      "seder": "ג",
+      "paren": false,
+      "reference": "עזרא ו יח",
+      "perek_id": 847,
+      "pasuk": 18,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "ptuha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2592,
+      "unit_heading": "עזרא ע ו טז-יח",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "עזרא נחמיה",
+      "seder": "ד",
+      "paren": false,
+      "reference": "עזרא ח לה",
+      "perek_id": 849,
+      "pasuk": 35,
+      "alignment": {
+        "kind": "parasha-boundary"
+      },
+      "disposition": {
+        "kind": "aligned"
+      },
+      "unit_id": 2619,
+      "unit_heading": "עזרא ע ח לה",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "עזרא נחמיה",
+      "seder": "ה",
+      "paren": false,
+      "reference": "נחמיה א יא",
+      "perek_id": 852,
+      "pasuk": 11,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "ptuha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2648,
+      "unit_heading": "עזרא נ א א-יא",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "עזרא נחמיה",
+      "seder": "ו",
+      "paren": false,
+      "reference": "נחמיה ג לח",
+      "perek_id": 854,
+      "pasuk": 38,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "ptuha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2687,
+      "unit_heading": "עזרא נ ג לו-לח",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "עזרא נחמיה",
+      "seder": "ז",
+      "paren": false,
+      "reference": "נחמיה ו טו",
+      "perek_id": 857,
+      "pasuk": 15,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "ptuha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2695,
+      "unit_heading": "עזרא נ ו יד-טו",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "עזרא נחמיה",
+      "seder": "ח",
+      "paren": false,
+      "reference": "נחמיה ח י",
+      "perek_id": 859,
+      "pasuk": 10,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2743,
+      "unit_heading": "עזרא נ ח ט-יב",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "עזרא נחמיה",
+      "seder": "ט",
+      "paren": false,
+      "reference": "נחמיה י א",
+      "perek_id": 861,
+      "pasuk": 1,
+      "alignment": {
+        "kind": "parasha-boundary"
+      },
+      "disposition": {
+        "kind": "aligned"
+      },
+      "unit_id": 2748,
+      "unit_heading": "עזרא נ י א-ט",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "עזרא נחמיה",
+      "seder": "י",
+      "paren": false,
+      "reference": "נחמיה יב כז",
+      "perek_id": 863,
+      "pasuk": 27,
+      "alignment": {
+        "kind": "parasha-boundary"
+      },
+      "disposition": {
+        "kind": "aligned"
+      },
+      "unit_id": 2761,
+      "unit_heading": "עזרא נ יב כז-לד",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "דברי הימים",
+      "seder": "א",
+      "paren": false,
+      "reference": "דברי הימים א א א",
+      "perek_id": 865,
+      "pasuk": 1,
+      "alignment": {
+        "kind": "parasha-boundary"
+      },
+      "disposition": {
+        "kind": "aligned"
+      },
+      "unit_id": 2769,
+      "unit_heading": "דברי הימים א א א-ד",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "דברי הימים",
+      "seder": "ב",
+      "paren": false,
+      "reference": "דברי הימים א ד י",
+      "perek_id": 868,
+      "pasuk": 10,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2814,
+      "unit_heading": "דברי הימים א ד ג-יב",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "דברי הימים",
+      "seder": "ג",
+      "paren": false,
+      "reference": "דברי הימים א ו לד",
+      "perek_id": 870,
+      "pasuk": 34,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "ptuha"
+      },
+      "disposition": {
+        "kind": "documented-system-difference"
+      },
+      "unit_id": 2833,
+      "unit_heading": "דברי הימים א ו לג-לד",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "דברי הימים",
+      "seder": "ד",
+      "paren": false,
+      "reference": "דברי הימים א ח מ",
+      "perek_id": 872,
+      "pasuk": 40,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "ptuha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2860,
+      "unit_heading": "דברי הימים א ח לה-מ",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "דברי הימים",
+      "seder": "ה",
+      "paren": false,
+      "reference": "דברי הימים א יא ט",
+      "perek_id": 875,
+      "pasuk": 9,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "ptuha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2874,
+      "unit_heading": "דברי הימים א יא ד-ט",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "דברי הימים",
+      "seder": "ו",
+      "paren": false,
+      "reference": "דברי הימים א יב מא",
+      "perek_id": 876,
+      "pasuk": 41,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "ptuha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2921,
+      "unit_heading": "דברי הימים א יב לח-מא",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "דברי הימים",
+      "seder": "ז",
+      "paren": false,
+      "reference": "דברי הימים א טז לו",
+      "perek_id": 880,
+      "pasuk": 36,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "ptuha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2940,
+      "unit_heading": "דברי הימים א טז כג-לו",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "דברי הימים",
+      "seder": "ח",
+      "paren": false,
+      "reference": "דברי הימים א יט יג",
+      "perek_id": 883,
+      "pasuk": 13,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2951,
+      "unit_heading": "דברי הימים א יט יב-טו",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "דברי הימים",
+      "seder": "ט",
+      "paren": false,
+      "reference": "דברי הימים א כב יט",
+      "perek_id": 886,
+      "pasuk": 19,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "ptuha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2965,
+      "unit_heading": "דברי הימים א כב ז-יט",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "דברי הימים",
+      "seder": "י",
+      "paren": false,
+      "reference": "דברי הימים א כו ה",
+      "perek_id": 890,
+      "pasuk": 5,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "ptuha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 2985,
+      "unit_heading": "דברי הימים א כו א-ה",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "דברי הימים",
+      "seder": "יא",
+      "paren": false,
+      "reference": "דברי הימים א כח י",
+      "perek_id": 892,
+      "pasuk": 10,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "ptuha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 3022,
+      "unit_heading": "דברי הימים א כח ט-י",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "דברי הימים",
+      "seder": "יב",
+      "paren": false,
+      "reference": "דברי הימים ב ב ג",
+      "perek_id": 895,
+      "pasuk": 3,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 3032,
+      "unit_heading": "דברי הימים ב ב ב-ט",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "דברי הימים",
+      "seder": "יג",
+      "paren": false,
+      "reference": "דברי הימים ב ה יד",
+      "perek_id": 898,
+      "pasuk": 14,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "ptuha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 3048,
+      "unit_heading": "דברי הימים ב ה יא-יד",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "דברי הימים",
+      "seder": "יד",
+      "paren": false,
+      "reference": "דברי הימים ב ז יא",
+      "perek_id": 900,
+      "pasuk": 11,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "ptuha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 3057,
+      "unit_heading": "דברי הימים ב ז ז-יא",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "דברי הימים",
+      "seder": "טו",
+      "paren": false,
+      "reference": "דברי הימים ב ט כד",
+      "perek_id": 902,
+      "pasuk": 24,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "ptuha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 3066,
+      "unit_heading": "דברי הימים ב ט כב-כד",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "דברי הימים",
+      "seder": "טז",
+      "paren": false,
+      "reference": "דברי הימים ב יב יב",
+      "perek_id": 905,
+      "pasuk": 12,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "stuma"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 3079,
+      "unit_heading": "דברי הימים ב יב ט-יב",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "דברי הימים",
+      "seder": "יז",
+      "paren": false,
+      "reference": "דברי הימים ב טו טו",
+      "perek_id": 908,
+      "pasuk": 15,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 3096,
+      "unit_heading": "דברי הימים ב טו י-יט",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "דברי הימים",
+      "seder": "יח",
+      "paren": false,
+      "reference": "דברי הימים ב יח יח",
+      "perek_id": 911,
+      "pasuk": 18,
+      "alignment": {
+        "kind": "parasha-boundary"
+      },
+      "disposition": {
+        "kind": "aligned"
+      },
+      "unit_id": 3109,
+      "unit_heading": "דברי הימים ב יח יח-כב",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "דברי הימים",
+      "seder": "יט",
+      "paren": false,
+      "reference": "דברי הימים ב כ לא",
+      "perek_id": 913,
+      "pasuk": 31,
+      "alignment": {
+        "kind": "parasha-boundary"
+      },
+      "disposition": {
+        "kind": "aligned"
+      },
+      "unit_id": 3115,
+      "unit_heading": "דברי הימים ב כ לא - ב כא ג",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "דברי הימים",
+      "seder": "כ",
+      "paren": false,
+      "reference": "דברי הימים ב כג יא",
+      "perek_id": 916,
+      "pasuk": 11,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "stuma"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 3119,
+      "unit_heading": "דברי הימים ב כג א-יא",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "דברי הימים",
+      "seder": "כא",
+      "paren": false,
+      "reference": "דברי הימים ב כו ב",
+      "perek_id": 919,
+      "pasuk": 2,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "ptuha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 3135,
+      "unit_heading": "דברי הימים ב כה כה - ב כו ב",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "דברי הימים",
+      "seder": "כב",
+      "paren": false,
+      "reference": "דברי הימים ב כט יא",
+      "perek_id": 922,
+      "pasuk": 11,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "stuma"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 3148,
+      "unit_heading": "דברי הימים ב כט א-יא",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "דברי הימים",
+      "seder": "כג",
+      "paren": false,
+      "reference": "דברי הימים ב לא י",
+      "perek_id": 924,
+      "pasuk": 10,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "stuma"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 3170,
+      "unit_heading": "דברי הימים ב לא ט-י",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "דברי הימים",
+      "seder": "כד",
+      "paren": false,
+      "reference": "דברי הימים ב לד ב",
+      "perek_id": 927,
+      "pasuk": 2,
+      "alignment": {
+        "kind": "interior-of-parasha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 3180,
+      "unit_heading": "דברי הימים ב לד א-ז",
+      "unit_closing_break": "stuma",
+      "marker_free_sefer": false
+    },
+    {
+      "book": "דברי הימים",
+      "seder": "כה",
+      "paren": false,
+      "reference": "דברי הימים ב לה ו",
+      "perek_id": 928,
+      "pasuk": 6,
+      "alignment": {
+        "kind": "parasha-last-pasuk",
+        "closing_break": "ptuha"
+      },
+      "disposition": {
+        "kind": "needs-adjudication"
+      },
+      "unit_id": 3187,
+      "unit_heading": "דברי הימים ב לה א-ו",
+      "unit_closing_break": "ptuha",
+      "marker_free_sefer": false
+    }
+  ]
+}
