@@ -1,4 +1,5 @@
 import hashlib
+from io import BytesIO
 import json
 from pathlib import Path
 import tempfile
@@ -10,12 +11,29 @@ import verify_recitation_assets as verify_module
 
 
 class ReleaseArtifactTests(unittest.TestCase):
+    @staticmethod
+    def book(opus=False, corrupt=False):
+        content = b"OggS verified playback" if opus else b"original MP3"
+        sha = hashlib.sha256(content).hexdigest()
+        track = {"perekId": 1, "audioSha256": sha}
+        if opus:
+            track["audioSha256"] = "a" * 64
+            track["playback"] = {"format": "ogg-opus", "bitrate": 24000, "sha256": sha,
+                                 "sizeBytes": len(content), "sourceSha256": "a" * 64}
+        payload = BytesIO()
+        with zipfile.ZipFile(payload, "w") as archive:
+            archive.writestr(sha + (".ogg" if opus else ".mp3"), b"corrupt" if corrupt else content)
+        audio = payload.getvalue()
+        catalog = {"package": {"tracks": [track]}, "books": [{"seferId": 1,
+                   "perekIds": [1], "sha256": hashlib.sha256(audio).hexdigest()}]}
+        return audio, catalog
+
     def test_windows_requires_root_catalog_and_exact_packaged_archives(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            audio = b"book archive"
+            audio, metadata = self.book()
             catalog = root / "catalog.json"
-            catalog.write_text(json.dumps({"books": [{"seferId": 1, "sha256": hashlib.sha256(audio).hexdigest()}]}))
+            catalog.write_text(json.dumps(metadata))
             for content in [audio, b"corrupt"]:
                 package = root / "app.msix"
                 with zipfile.ZipFile(package, "w") as archive:
@@ -30,8 +48,7 @@ class ReleaseArtifactTests(unittest.TestCase):
     def test_aab_requires_every_matching_module_and_excludes_base_audio(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            audio = b"book archive"
-            catalog = {"books": [{"seferId": 1, "sha256": hashlib.sha256(audio).hexdigest()}]}
+            audio, catalog = self.book(opus=True)
             path = root / "catalog.json"
             path.write_text(json.dumps(catalog))
             for problem in [None, "missing", "corrupt", "base"]:
@@ -47,8 +64,15 @@ class ReleaseArtifactTests(unittest.TestCase):
                 else:
                     with self.assertRaises(ValueError): verify_module.verify(package, path, "Android")
 
-    def _write_ios_fixture(self, root, audio, catalog_path, problems=()):
-        catalog = {"books": [{"seferId": 1, "sha256": hashlib.sha256(audio).hexdigest()}]}
+    def test_matching_outer_hash_cannot_hide_corrupt_audio_or_wrong_source(self):
+        from verify_recitation_assets import verify_book_audio
+        audio, catalog = self.book(opus=True, corrupt=True)
+        with self.assertRaises(ValueError): verify_book_audio(audio, catalog, catalog["books"][0])
+        audio, catalog = self.book(opus=True)
+        catalog["package"]["tracks"][0]["playback"]["sourceSha256"] = "b" * 64
+        with self.assertRaises(ValueError): verify_book_audio(audio, catalog, catalog["books"][0])
+
+    def _write_ios_fixture(self, root, audio, catalog_path, catalog, problems=()):
         catalog_path.write_text(json.dumps(catalog))
         package = root / "app.ipa"
         with zipfile.ZipFile(package, "w") as archive:
@@ -90,14 +114,14 @@ class ReleaseArtifactTests(unittest.TestCase):
         return package, pack_dir.parent, archive_dir, payload_dir, fake_extract
 
     def test_ipa_requires_aar_manifest_and_embedded_downloader_extension(self):
-        audio = b"book archive"
+        audio, catalog = self.book(opus=True)
         for problem in [None, "odr-manifest", "base-audio", "no-extension",
                         "no-manifest", "stale-payload", "no-aar", "missing-ios-platform",
                         "corrupt-archive", "no-payload", "staged-mismatch"]:
             with self.subTest(problem=problem), tempfile.TemporaryDirectory() as temporary:
                 root = Path(temporary)
                 package, packs, aars, payloads, extract = self._write_ios_fixture(
-                    root, audio, root / "catalog.json", {problem} - {None})
+                    root, audio, root / "catalog.json", catalog, {problem} - {None})
                 if problem is None:
                     verify_module.verify(package, root / "catalog.json", "iOS", packs, aars, payloads, extract)
                 else:
@@ -121,6 +145,32 @@ class ReleaseArtifactTests(unittest.TestCase):
             archive.write_bytes(b"AA01fake")
             with self.assertRaisesRegex(ValueError, "'aa' is required"):
                 verify_module.aa_payload(archive, "recitation_1.zip", root)
+
+    def test_ios_datasets_are_hashed_against_signed_book_archives(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            audio, metadata = self.book(opus=True)
+            catalog = root / "catalog.json"
+            catalog.write_text(json.dumps(metadata))
+            package = root / "app.ipa"
+            with zipfile.ZipFile(package, "w") as archive:
+                archive.writestr("Payload/Bible.app/recitation-catalog.json", catalog.read_bytes())
+                metadata_plist = {"NSBundleResourceRequestTags": {"recitation_1": {"NSAssetPacks": ["hashed-pack-id"]}},
+                                  "NSBundleResourceRequestAssetPacks": {"hashed-pack-id": ["Assets.car"]}}
+                archive.writestr("Payload/Bible.app/OnDemandResources.plist", plistlib.dumps(metadata_plist))
+                directory = "Payload/OnDemandResources/com.app.recitation_1.assetpack/"
+                archive.writestr(directory + "Assets.car", b"compiled dataset")
+                archive.writestr(directory + "Info.plist", plistlib.dumps({
+                    "CFBundleIdentifier": "hashed-pack-id", "Tags": ["recitation_1"]}))
+            datasets = root / "Recitation.xcassets" / "recitation_1.dataset"
+            datasets.mkdir(parents=True)
+            with self.assertRaises(ValueError):
+                verify(package, catalog, "iOS", datasets.parent)
+            (datasets / "recitation_1.zip").write_bytes(b"corrupt")
+            with self.assertRaises(ValueError):
+                verify(package, catalog, "iOS", datasets.parent)
+            (datasets / "recitation_1.zip").write_bytes(audio)
+            verify(package, catalog, "iOS", datasets.parent)
 
 
 if __name__ == "__main__":

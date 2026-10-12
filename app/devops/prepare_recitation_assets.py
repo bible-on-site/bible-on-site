@@ -1,4 +1,4 @@
-"""Build lossless, release-coupled recitation book packs for PAD / managed asset packs / desktop."""
+"""Build release-coupled playback packs; original MP3 identities stay canonical."""
 
 import argparse
 from concurrent.futures import ThreadPoolExecutor
@@ -24,6 +24,7 @@ sys.path.insert(0, str(ROOT / "data/recitation"))
 from audit import audit
 from audit_native import audit_native, NATIVE
 from publish import DATABASE, chapters_in, extract, publish
+from playback import load_playback
 
 CATALOG = "recitation-catalog.json"
 DOWNLOAD_ATTEMPTS = 4
@@ -98,15 +99,50 @@ def recording(track, cache, recordings=None):
         temporary.unlink(missing_ok=True)
 
 
+def playback_recording(track, cache, recordings=None):
+    """Store playback comes from immutable derived S3 assets, never runtime HTTP."""
+    metadata = load_playback(track["perekId"], track["audioSha256"])
+    destination = cache / (metadata["sha256"] + ".ogg")
+    if not destination.exists() or digest(destination) != metadata["sha256"]:
+        temporary = destination.with_suffix(".download")
+        try:
+            local = recordings / destination.name if recordings is not None else None
+            if local is not None and local.exists():
+                shutil.copyfile(local, temporary)
+            else:
+                origin = urlsplit(track["audioUrl"])
+                if origin.scheme != "https" or origin.username or origin.password:
+                    raise ValueError("Build recording URLs must be HTTPS chapter assets")
+                download_original(f"{origin.scheme}://{origin.netloc}/{metadata['key']}", temporary, track["perekId"])
+            if temporary.stat().st_size != metadata["sizeBytes"] or digest(temporary) != metadata["sha256"]:
+                raise ValueError("Derived playback checksum mismatch")
+            temporary.replace(destination)
+        finally:
+            temporary.unlink(missing_ok=True)
+    select_playback(track, metadata)
+    return destination
+
+
+def select_playback(track, metadata):
+    track["playback"] = {"format": "ogg-opus", "sha256": metadata["sha256"],
+                         "sizeBytes": metadata["sizeBytes"], "bitrate": 24000,
+                         "sourceSha256": track["audioSha256"]}
+
+
+def audio_filename(track):
+    playback = track.get("playback")
+    return (playback["sha256"] + ".ogg") if playback else (track["audioSha256"] + ".mp3")
+
+
 def book_archive(destination, tracks, cache):
     temporary = destination.with_suffix(".download")
     try:
         with zipfile.ZipFile(temporary, "w", compression=zipfile.ZIP_STORED) as archive:
-            for sha in sorted({track["audioSha256"] for track in tracks}):
-                # Fixed timestamps make a repeated build byte-identical, without re-encoding MP3.
-                entry = zipfile.ZipInfo(sha + ".mp3", (1980, 1, 1, 0, 0, 0))
+            for filename in sorted({audio_filename(track) for track in tracks}):
+                # Archives are reproducible; CI never re-encodes playback assets.
+                entry = zipfile.ZipInfo(filename, (1980, 1, 1, 0, 0, 0))
                 entry.external_attr = 0o100644 << 16
-                with archive.open(entry, "w") as target, (cache / (sha + ".mp3")).open("rb") as source:
+                with archive.open(entry, "w") as target, (cache / filename).open("rb") as source:
                     shutil.copyfileobj(source, target)
         if temporary.stat().st_size > 512_000_000:
             raise ValueError(f"{destination.name}: book exceeds the supported asset-pack size limit")
@@ -134,10 +170,17 @@ def prepare_assets(app, platform, cache, recordings=None, intermediate=None, dat
                    for pid in range(first, last + 1)}
     if not tracks or any(t["perekId"] not in mapping for t in tracks):
         raise ValueError("Recitation inventory does not match the native books")
+    if platform in ("Android", "iOS"):
+        for track in tracks:
+            select_playback(track, load_playback(track["perekId"], track["audioSha256"]))
+    # Duplicate audio identities share a cache file; never race its temporary
+    # write. Every chapter still carries its own source-bound descriptor.
+    recordings_by_name = {audio_filename(track): track for track in tracks}
     with ThreadPoolExecutor(max_workers=4) as pool:
-        unique_audio = {track["audioSha256"]: track for track in tracks}
         try:
-            list(pool.map(lambda track: recording(track, cache, recordings), unique_audio.values()))
+            # Windows desktop packages keep original MP3 playback for now.
+            fetch = playback_recording if platform in ("Android", "iOS") else recording
+            list(pool.map(lambda track: fetch(track, cache, recordings), recordings_by_name.values()))
         except BaseException:
             pool.shutdown(wait=True, cancel_futures=True)
             raise
@@ -166,7 +209,7 @@ def prepare_assets(app, platform, cache, recordings=None, intermediate=None, dat
     raw.mkdir(parents=True, exist_ok=True)
     catalog = {"version": 1, "package": {"version": 1, "tracks": tracks}, "books": books}
     (raw / CATALOG).write_text(json.dumps(catalog, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    print(f"Prepared {len(tracks)} original recordings in {len(books)} {platform} book packs")
+    print(f"Prepared {len(tracks)} playback recordings in {len(books)} {platform} book packs")
     return catalog
 
 
