@@ -19,10 +19,28 @@ export function selectSimulator(devices, sdkVersion) {
       const runtimeVersion = parts.join(".");
       if (compare(version(runtimeVersion), sdk) > 0) return [];
       return entries.filter((device) => device.isAvailable && device.name.startsWith("iPhone"))
-        .map((device) => ({ ...device, version: runtimeVersion }));
+        .map((device) => ({ ...device, version: runtimeVersion, runtime }));
     })
     .sort((left, right) => compare(version(right.version), version(left.version))
       || left.name.localeCompare(right.name))[0];
+}
+
+// Reserved name of the second shard's simulator (#2083).
+export const SHARD_PEER_NAME = "mobile-e2e-shard-2";
+
+// The second shard runs on a same-model sibling of the primary so both halves
+// share one hardware profile — a runner's preinstalled mix need not contain
+// two of anything. A leftover device carrying the reserved name on the same
+// runtime is reused, keeping re-runs idempotent; otherwise the caller creates
+// the described clone through `simctl create`.
+export function planShardPeer(devices, primary, name = SHARD_PEER_NAME) {
+  const siblings = devices[primary.runtime] ?? [];
+  const existing = siblings.find((device) => device.name === name && device.isAvailable);
+  if (existing) return { device: { ...existing, version: primary.version, runtime: primary.runtime } };
+  if (!primary.deviceTypeIdentifier) {
+    throw new Error(`The primary simulator ${primary.udid} has no deviceTypeIdentifier; cannot clone it for the second shard.`);
+  }
+  return { create: { name, deviceTypeIdentifier: primary.deviceTypeIdentifier, runtime: primary.runtime } };
 }
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
