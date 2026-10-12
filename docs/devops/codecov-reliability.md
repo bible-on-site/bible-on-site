@@ -16,7 +16,7 @@ Reporting" step cannot resolve `ci_passed`.
 | Coverage uploads in `cross_module_ci` (website/api/app/data) | `fail_ci_if_error: true` → step fails → job fails | **Yes** |
 | Coverage uploads in `cross_module_ci` (bulletin/admin) | `fail_ci_if_error: false` | No |
 | JUnit test-results uploads in module jobs | default `fail_ci_if_error: false` | No |
-| `codecov/patch`, `codecov/project/<flag>` status checks | fail/absent, but not required checks | No |
+| `codecov/patch`, `codecov/project`, `codecov/project/<flag>` status checks | fail/absent; required by the default ruleset (id 1141934) | **Yes** |
 | "Verify Coverage 3rd Party Reporting" step | polls `api.codecov.io` for `ci_passed` with backoff; on unresolved → `::warning::` and proceeds; fails only on explicit `ci_passed=false`. A transport failure (e.g. TLS handshake) killed `curl` under `bash -e` before reaching that warn path | **Yes** |
 
 Before this PR the four strict coverage uploads blocked the required check,
