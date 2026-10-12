@@ -1,16 +1,15 @@
 """Source-bound listening and truthful verse-only feedback regression tests."""
 
 from copy import deepcopy
+from http.client import HTTPConnection
 import json
 from pathlib import Path
 import shutil
-import subprocess
+import subprocess  # nosec B404: fixed fixture argv with no shell.
 import tempfile
 import threading
 import unittest
 from unittest.mock import patch
-from urllib.error import HTTPError
-from urllib.request import Request, urlopen
 import wave
 
 from alignment import Word, text_hash
@@ -107,50 +106,54 @@ class ListeningReviewTests(unittest.TestCase):
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
         self.addCleanup(server.shutdown)
-        base = f"http://127.0.0.1:{server.server_port}"
-        with urlopen(base + "/api/queue", timeout=5) as response:
-            public = json.load(response)
+
+        def request(path, payload=None, headers=None):
+            connection = HTTPConnection("127.0.0.1", server.server_port, timeout=5)
+            try:
+                body = json.dumps(payload) if payload is not None else None
+                connection.request("POST" if body else "GET", path, body, headers or {})
+                response = connection.getresponse()
+                return response.status, response.read()
+            finally:
+                connection.close()
+
+        status, body = request("/api/queue")
+        self.assertEqual(status, 200)
+        public = json.loads(body)
         self.assertNotIn("audioPath", public["cases"][0])
-        headers = {"Content-Type": "application/json", "Origin": base,
+        headers = {"Content-Type": "application/json", "Origin": server.origin,
                    "X-Review-Token": public["token"]}
         for change in ({"Origin": "https://foreign.example"}, {"X-Review-Token": "invalid"},
                        {"Host": "foreign.example"}):
-            request = Request(base + "/api/reviews", data=json.dumps(self.payload).encode(),
-                              headers={**headers, **change})
-            with self.assertRaises(HTTPError) as error:
-                urlopen(request, timeout=5)
-            self.assertEqual(error.exception.code, 403)
-        request = Request(base + "/api/reviews", data=json.dumps(self.payload).encode(), headers=headers)
-        with urlopen(request, timeout=5) as response:
-            self.assertEqual(json.load(response)["publicationStatus"], "held")
-        with urlopen(base + "/clips/191-15", timeout=5) as response:
-            self.assertEqual(response.read(), b"audio clip")
+            self.assertEqual(request("/api/reviews", self.payload, {**headers, **change})[0], 403)
+        status, body = request("/api/reviews", self.payload, headers)
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body)["publicationStatus"], "held")
+        self.assertEqual(request("/clips/191-15"), (200, b"audio clip"))
         Path(self.case["clipPath"]).write_bytes(b"changed")
-        with self.assertRaises(HTTPError) as error:
-            urlopen(base + "/clips/191-15", timeout=5)
-        self.assertEqual(error.exception.code, 409)
-        with self.assertRaises(HTTPError) as error:
-            urlopen(base + "/clips/../private.mp3", timeout=5)
-        self.assertEqual(error.exception.code, 404)
+        self.assertEqual(request("/clips/191-15")[0], 409)
+        self.assertEqual(request("/clips/../private.mp3")[0], 404)
 
     @unittest.skipUnless(shutil.which("ffmpeg"), "FFmpeg not installed")
     def test_exact_pcm_indices_across_midstream_rate_change(self):
         paths = []
         for rate in (44100, 32000):
             path = self.root / f"{rate}.mp3"
-            subprocess.run(["ffmpeg", "-loglevel", "error", "-f", "lavfi", "-i",
+            subprocess.run([  # nosec B603: resolved FFmpeg, fixed fixture argv.
+                            shutil.which("ffmpeg"), "-loglevel", "error", "-f", "lavfi", "-i",
                             f"sine=frequency=440:sample_rate={rate}:duration=2",
                             "-c:a", "libmp3lame", "-b:a", "48k", "-write_xing", "0",
-                            str(path)], check=True, capture_output=True)
+                            str(path)], check=True, capture_output=True)  # nosec B603: resolved FFmpeg, fixed fixture argv.
             paths.append(path)
         original = self.root / "mixed.mp3"
         original.write_bytes(b"".join(path.read_bytes() for path in paths))
         before = digest_file(original)
         clip = self.root / "clip.wav"
         make_clip(original, clip, 500, 3500)
-        full = subprocess.run(["ffmpeg", "-loglevel", "error", "-i", str(original),
+        full = subprocess.run([  # nosec B603: resolved FFmpeg, fixed fixture argv.
+                            shutil.which("ffmpeg"), "-loglevel", "error", "-i", str(original),
                                "-ar", "16000", "-ac", "1", "-f", "s32le", "pipe:1"],
-                              check=True, capture_output=True).stdout
+                              check=True, capture_output=True).stdout  # nosec B603: resolved FFmpeg, fixed fixture argv.
         with wave.open(str(clip), "rb") as stream:
             self.assertEqual(stream.getframerate(), 16000)
             self.assertEqual(stream.getnframes(), 48000)

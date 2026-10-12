@@ -8,7 +8,8 @@ import json
 import os
 from pathlib import Path
 import secrets
-import subprocess
+import shutil
+import subprocess  # nosec B404: fixed FFmpeg argv, no shell.
 import threading
 import wave
 
@@ -88,7 +89,8 @@ def validate_case(case, canonical_words, manifest):
         raise ValueError("Unknown canonical verse")
     validate_timings(verse_words, case["words"], manifest["durationMs"], require_complete=True)
     start, end = case["clipStartMs"], case["clipEndMs"]
-    if (type(start) is not int or type(end) is not int or
+    if (not isinstance(start, int) or isinstance(start, bool) or
+            not isinstance(end, int) or isinstance(end, bool) or
             not 0 <= start < end <= manifest["durationMs"] or end - start > 45000):
         raise ValueError("Context must be inside the original recording and at most 45 seconds")
     for word in case["words"]:
@@ -103,9 +105,12 @@ def make_clip(audio, destination, start, end):
     # Some originals change sample rate midstream. An atrim filter resets its
     # sample counter on reconfiguration, so decode first and slice the complete
     # PCM stream, just as the analysis pipeline does. Never seek in MP3 bytes.
-    decoded = subprocess.run([
-        "ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin", "-threads", "2",
-        "-i", str(audio), "-ar", str(RATE), "-ac", "1", "-f", "s32le", "pipe:1",
+    executable = shutil.which("ffmpeg")
+    if executable is None:
+        raise FileNotFoundError("FFmpeg not installed")
+    decoded = subprocess.run([  # nosec B603: resolved executable, absolute source, argv only.
+        executable, "-hide_banner", "-loglevel", "error", "-nostdin", "-threads", "2",
+        "-i", str(audio.resolve()), "-ar", str(RATE), "-ac", "1", "-f", "s32le", "pipe:1",
     ], check=True, timeout=120, capture_output=True)
     first, last = start * 16 * 4, end * 16 * 4
     if len(decoded.stdout) < last:
@@ -210,7 +215,7 @@ def validate_decision(case, payload):
         raise ValueError("Unknown listening decision")
     segments = payload.get("heardSegments", [])
     allowed = {word["segment"] for word in case["words"]}
-    if (not isinstance(segments, list) or any(type(item) is not int for item in segments) or
+    if (not isinstance(segments, list) or any(not isinstance(item, int) or isinstance(item, bool) for item in segments) or
             len(set(segments)) != len(segments) or not set(segments) <= allowed):
         raise ValueError("Listening evidence contains unknown/duplicate word identities")
     verse = payload.get("verseHeard") is True
@@ -234,6 +239,7 @@ def validate_decision(case, payload):
 
 class ReviewStore:
     def __init__(self, path, queue):
+        """Resume verse feedback without modifying candidate or approved data."""
         self.path, self.queue = path, queue
         self.lock = threading.Lock()
         self.decisions = {}
@@ -257,79 +263,89 @@ class ReviewStore:
         with self.lock:
             return dict(self.decisions)
 
-def make_server(queue, store, port):
-    token = secrets.token_urlsafe(32)
-    template = Path(__file__).with_name("listening_review.html").read_bytes()
-    cases = {case["id"]: case for case in queue["cases"]}
-    origin = f"http://127.0.0.1:{port}"
+class ListeningHandler(BaseHTTPRequestHandler):
+    def log_message(self, *_args):
+        pass
 
-    class Handler(BaseHTTPRequestHandler):
-        def log_message(self, *_args):
-            pass
+    def send(self, status, content, content_type="application/json"):
+        self.send_response(status)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(content)))
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.end_headers()
+        self.wfile.write(content)
 
-        def send(self, status, content, content_type="application/json"):
-            self.send_response(status)
-            self.send_header("Content-Type", content_type)
-            self.send_header("Content-Length", str(len(content)))
-            self.send_header("Cache-Control", "no-store")
-            self.send_header("X-Content-Type-Options", "nosniff")
-            self.end_headers()
-            self.wfile.write(content)
+    def json_response(self, status, content):
+        self.send(status, json.dumps(content, ensure_ascii=False).encode())
 
-        def json_response(self, status, content):
-            self.send(status, json.dumps(content, ensure_ascii=False).encode())
+    def valid_host(self):
+        return self.headers.get("Host") == self.server.origin.removeprefix("http://")
 
-        def valid_host(self):
-            return self.headers.get("Host") == origin.removeprefix("http://")
+    def do_GET(self):
+        if not self.valid_host():
+            return self.json_response(403, {"error": "Loopback host required"})
+        if self.path == "/":
+            return self.send(200, self.server.template, "text/html; charset=utf-8")
+        if self.path == "/api/queue":
+            public = [{key: value for key, value in case.items() if not key.endswith("Path")}
+                      for case in self.server.queue["cases"]]
+            return self.json_response(200, {"cases": public, "token": self.server.token,
+                                           "decisions": self.server.review_store.snapshot()})
+        if self.path == "/api/export":
+            return self.json_response(200, {"queueSha256": self.server.queue["queueSha256"],
+                                           "decisions": self.server.review_store.snapshot(),
+                                           "publicationStatus": "held"})
+        if self.path.startswith("/clips/"):
+            case = self.server.cases.get(self.path.removeprefix("/clips/"))
+            if case:
+                data = Path(case["clipPath"]).read_bytes()
+                if hashlib.sha256(data).hexdigest() != case["clipSha256"]:
+                    return self.json_response(409, {"error": "Listening audio changed"})
+                return self.send(200, data, "audio/wav")
+        return self.json_response(404, {"error": "Not found"})
 
-        def do_GET(self):
-            if not self.valid_host():
-                return self.json_response(403, {"error": "Loopback host required"})
-            if self.path == "/":
-                return self.send(200, template, "text/html; charset=utf-8")
-            if self.path == "/api/queue":
-                public = [{key: value for key, value in case.items() if not key.endswith("Path")}
-                          for case in queue["cases"]]
-                return self.json_response(200, {"cases": public, "token": token,
-                                               "decisions": store.snapshot()})
-            if self.path == "/api/export":
-                return self.json_response(200, {"queueSha256": queue["queueSha256"],
-                                               "decisions": store.snapshot(),
-                                               "publicationStatus": "held"})
-            if self.path.startswith("/clips/"):
-                case = cases.get(self.path.removeprefix("/clips/"))
-                if case:
-                    data = Path(case["clipPath"]).read_bytes()
-                    if hashlib.sha256(data).hexdigest() != case["clipSha256"]:
-                        return self.json_response(409, {"error": "Listening audio changed"})
-                    return self.send(200, data, "audio/wav")
+
+    def review_session_valid(self):
+        return (self.valid_host() and self.headers.get("Origin") == self.server.origin and
+                secrets.compare_digest(self.headers.get("X-Review-Token", "").encode(),
+                                       self.server.token.encode()))
+
+    def review_payload(self):
+        size = int(self.headers.get("Content-Length", "0"))
+        if not 0 < size <= 16384 or self.headers.get("Content-Type") != "application/json":
+            raise ValueError("Invalid review request")
+        payload = json.loads(self.rfile.read(size))
+        if not isinstance(payload, dict):
+            raise ValueError("Expected a review object")
+        case = self.server.cases.get(payload.get("caseId"))
+        if case is None:
+            raise ValueError("Unknown listening case")
+        return case, payload
+
+    def do_POST(self):
+        if not self.review_session_valid():
+            return self.json_response(403, {"error": "Local review session required"})
+        if self.path != "/api/reviews":
             return self.json_response(404, {"error": "Not found"})
+        try:
+            case, payload = self.review_payload()
+            row = self.server.review_store.save(case, payload)
+            self.json_response(200, row)
+        except (ValueError, KeyError, TypeError) as error:
+            self.json_response(400, {"error": str(error)})
+        except OSError:
+            self.json_response(500, {"error": "Could not save review; please retry"})
 
-        def do_POST(self):
-            if (not self.valid_host() or self.headers.get("Origin") != origin or
-                    not secrets.compare_digest(self.headers.get("X-Review-Token", "").encode(), token.encode())):
-                return self.json_response(403, {"error": "Local review session required"})
-            if self.path != "/api/reviews":
-                return self.json_response(404, {"error": "Not found"})
-            try:
-                size = int(self.headers.get("Content-Length", "0"))
-                if not 0 < size <= 16384 or self.headers.get("Content-Type") != "application/json":
-                    raise ValueError("Invalid review request")
-                payload = json.loads(self.rfile.read(size))
-                if not isinstance(payload, dict):
-                    raise ValueError("Expected a review object")
-                case = cases.get(payload.get("caseId"))
-                if case is None:
-                    raise ValueError("Unknown listening case")
-                row = store.save(case, payload)
-                self.json_response(200, row)
-            except (ValueError, KeyError, TypeError) as error:
-                self.json_response(400, {"error": str(error)})
-            except OSError:
-                self.json_response(500, {"error": "Could not save review; please retry"})
 
-    server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
-    origin = f"http://127.0.0.1:{server.server_port}"
+def make_server(queue, store, port):
+    server = ThreadingHTTPServer(("127.0.0.1", port), ListeningHandler)
+    server.origin = f"http://127.0.0.1:{server.server_port}"
+    server.token = secrets.token_urlsafe(32)
+    server.template = Path(__file__).with_name("listening_review.html").read_bytes()
+    server.queue = queue
+    server.cases = {case["id"]: case for case in queue["cases"]}
+    server.review_store = store
     return server
 
 
