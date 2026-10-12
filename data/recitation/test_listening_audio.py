@@ -36,7 +36,7 @@ class ListeningAudioTests(unittest.TestCase):
             first = session_token(path, "queue-one")
             self.assertEqual(session_token(path, "queue-one"), first)
             self.assertNotEqual(session_token(path, "queue-two"), first)
-            path.write_text(json.dumps({"queueSha256": "queue-two", "token": "invalid"}))
+            path.write_text(json.dumps({"queueSha256": "queue-two", "token": "invalid"}))  # nosec B105: deliberately invalid fixture.
             self.assertNotEqual(session_token(path, "queue-two"), "invalid")
 
 

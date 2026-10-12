@@ -6,6 +6,7 @@ from acoustic import ctc_spans
 
 METHOD = "ctc-following-separator-start-v1"
 END_METHOD = "ctc-following-separator-end-v1"
+PATH_METHOD = "ctc-delimiter-word-boundaries-v1"
 
 
 def separator_candidates(aligner, audio, words, start_seconds):
@@ -39,6 +40,11 @@ def separator_candidates(aligner, audio, words, start_seconds):
         rows.append(row)
         evidence.append(proof)
         offset += 1
+    for index in range(1, len(evidence)):
+        previous = evidence[index - 1]
+        evidence[index].update(precedingWordEndMs=rows[index - 1]["endMs"],
+                               precedingSeparatorStartMs=previous["separatorStartMs"],
+                               precedingSeparatorEndMs=previous["separatorEndMs"])
     return rows, evidence
 
 
@@ -64,6 +70,8 @@ def correct_ends(rows, evidence, identities, boundary="start"):
 
 def verify_corrections(diagnostic):
     """Every changed end must be the recorded pinned-path separator, never a pad."""
+    if diagnostic.get("boundaryMethod") == PATH_METHOD:
+        return verify_path_corrections(diagnostic)
     if diagnostic.get("boundaryMethod") not in (METHOD, END_METHOD):
         raise ValueError("Unknown boundary correction method")
     boundary_key = "separatorStartMs" if diagnostic["boundaryMethod"] == METHOD else "separatorEndMs"
@@ -91,3 +99,68 @@ def verify_boundary(row, prior, change, boundary_key):
             or not prior["endMs"] < row["endMs"] <= change["followingWordStartMs"]
             or not 40 <= row["endMs"] - row["startMs"] <= 3000):
         raise ValueError("Tail boundary lacks the actual model separator")
+
+START_FIELDS = {"letterStartMs", "precedingSeparatorStartMs", "precedingSeparatorEndMs"}
+END_FIELDS = {"letterEndMs", "separatorStartMs", "separatorEndMs", "followingWordStartMs"}
+
+
+def propose_path_boundaries(rows, evidence, endpoints):
+    """Use only actual pinned-path endpoints, requiring fresh listening of all cuts."""
+    result, changes = [], []
+    for original, proof in zip(rows, evidence, strict=True):
+        key = original["pasuk"], original["segment"]
+        selected = endpoints.get(key, {})
+        start_key = selected.get("start", "letterStartMs")
+        end_key = selected.get("end", "letterEndMs")
+        if start_key not in START_FIELDS or end_key not in END_FIELDS:
+            raise ValueError("Unknown model boundary")
+        row = {**original, "startMs": proof[start_key], "endMs": proof[end_key]}
+        change = {**proof, "originalStartMs": original["startMs"], "originalEndMs": original["endMs"],
+                  "proposedStartMs": row["startMs"], "proposedEndMs": row["endMs"],
+                  "startBoundary": start_key, "endBoundary": end_key}
+        verify_path_boundary(row, original, change)
+        result.append(row)
+        if row != original:
+            changes.append(change)
+    return result, changes
+
+
+def verify_path_boundary(row, original, change):
+    """Reject fabricated boundaries, changed scores, overlap and invalid durations."""
+    start_key, end_key = change["startBoundary"], change["endBoundary"]
+    if start_key not in START_FIELDS or end_key not in END_FIELDS:
+        raise ValueError("Unknown model boundary")
+    if ({k: v for k, v in row.items() if k not in ("startMs", "endMs")} !=
+            {k: v for k, v in original.items() if k not in ("startMs", "endMs")}):
+        raise ValueError("Boundary proposal changed canonical identity or acoustic evidence")
+    if (change["originalStartMs"] != original["startMs"]
+            or change["originalEndMs"] != original["endMs"]
+            or row["startMs"] != change["proposedStartMs"] or row["startMs"] != change[start_key]
+            or row["endMs"] != change["proposedEndMs"] or row["endMs"] != change[end_key]
+            or row["startMs"] < change.get("precedingWordEndMs", original["startMs"])
+            or row["endMs"] > change.get("followingWordStartMs", original["endMs"])
+            or not 40 <= row["endMs"] - row["startMs"] <= 3000):
+        raise ValueError("Boundary lacks actual pinned-path support or violates timing geometry")
+
+
+def verify_path_corrections(diagnostic):
+    """Verify every proposed change, including earlier starts and shorter ends."""
+    originals = diagnostic["letterCandidates"]
+    correction_rows = diagnostic["boundaryCorrections"]
+    original = {(r["pasuk"], r["segment"]): r for r in originals}
+    changes = {(r["pasuk"], r["segment"]): r for r in correction_rows}
+    candidates = diagnostic["diagnosticCandidates"]
+    if (len(original) != len(originals) or len(changes) != len(correction_rows)
+            or set(original) != {(r["pasuk"], r["segment"]) for r in candidates}
+            or len(candidates) != len(original)):
+        raise ValueError("Duplicate or missing boundary identity")
+    used = set()
+    for row in candidates:
+        key = row["pasuk"], row["segment"]
+        if key in changes:
+            verify_path_boundary(row, original[key], changes[key])
+            used.add(key)
+        elif row != original[key]:
+            raise ValueError("Unrecorded boundary change")
+    if used != changes.keys():
+        raise ValueError("Boundary proof includes an unrelated word")
