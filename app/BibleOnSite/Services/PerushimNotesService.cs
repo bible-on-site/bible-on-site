@@ -530,6 +530,37 @@ public class PerushimNotesService
         return File.Exists(path) ? path : null;
     }
 
+    /// <summary>Restages a delivered index after cache eviction, using only
+    /// already available assets. Never initiates a store download.</summary>
+    internal async Task<string?> RestoreDeliveredIndexPathAsync()
+    {
+        await _operationLock.WaitAsync();
+        try
+        {
+            await InitializeCoreAsync();
+            if (!IsAvailable)
+            {
+                return null;
+            }
+            var path = Path.Join(DataDirectory, SearchIndexDbName);
+            if (!File.Exists(path))
+            {
+                var padPath = await _padService.TryGetAssetPathAsync(PerushimNotesPackName, CancellationToken.None);
+                if (padPath != null)
+                {
+                    await TryCopyPadIndexAsync(padPath);
+                }
+                // Raw-note test instances isolate their directory from platform packages.
+                if (!File.Exists(path) && _dataDirectoryOverride == null)
+                {
+                    await TryCopyPackageIndexAsync();
+                }
+            }
+            return File.Exists(path) ? path : null;
+        }
+        finally { _operationLock.Release(); }
+    }
+
     private async Task<string?> ReadSchemaVersionAsync()
     {
         try

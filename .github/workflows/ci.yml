@@ -110,9 +110,9 @@ env:
   DATA_UNIT_JUNIT_REPORT_ARTIFACT_NAME: data-unit-junit-report-${{ github.run_id }}
   DATA_INTEGRATION_JUNIT_REPORT_ARTIFACT_NAME: data-integration-junit-report-${{ github.run_id }}
   PERUSHIM_DATA_SQL_ARTIFACT_NAME_MASTER: perushim-data-sql.master
-  # v2 carries a catalog/notes pair; old notes-only baselines cannot be reused.
-  PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER: perushim-sqlite-v2.master
-  PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_WF: perushim-sqlite-v2.${{ github.run_id }}
+  # Indexed v2 carries catalog, compressed notes and FTS; never reuse the older pair-only baseline.
+  PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER: perushim-sqlite-v2-indexed.master
+  PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_WF: perushim-sqlite-v2-indexed.${{ github.run_id }}
   PERUSHIM_NOTES_SQLITE_FILENAME: sefaria-dump-5784-sivan-4.perushim_notes.sqlite
   PERUSHIM_CATALOG_SQLITE_FILENAME: sefaria-dump-5784-sivan-4.perushim_catalog.sqlite
   # Prebuilt FTS5 search index riding in the same notes pack (CI artifacts only —
@@ -431,7 +431,7 @@ jobs:
     uses: ./.github/workflows/app-package.yml
     with:
       platform: All
-      perushim_notes_sqlite_artifact: ${{ needs.perushim_data.result != 'skipped' && format('perushim-sqlite-v2.{0}', github.run_id) || 'perushim-sqlite-v2.master' }}
+      perushim_notes_sqlite_artifact: ${{ needs.perushim_data.result != 'skipped' && format('perushim-sqlite-v2-indexed.{0}', github.run_id) || 'perushim-sqlite-v2-indexed.master' }}
 
   package_bulletin:
     name: Package Bulletin
@@ -1758,7 +1758,7 @@ jobs:
       actions: read
     uses: ./.github/workflows/app-mobile-e2e.yml
     with:
-      perushim_notes_sqlite_artifact: ${{ needs.perushim_data.result != 'skipped' && format('perushim-sqlite-v2.{0}', github.run_id) || 'perushim-sqlite-v2.master' }}
+      perushim_notes_sqlite_artifact: ${{ needs.perushim_data.result != 'skipped' && format('perushim-sqlite-v2-indexed.{0}', github.run_id) || 'perushim-sqlite-v2-indexed.master' }}
 
   app_ios_ci:
     name: App iOS native audio CI

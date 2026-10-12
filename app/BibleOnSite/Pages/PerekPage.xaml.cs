@@ -547,6 +547,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable
                 CarouselLoadingOverlay.IsVisible = false;
 
                 await ApplySearchReaderLocationAsync();
+                _ = _viewModel.PreloadAdjacentPasukimAsync(_viewModel.PerekId);
                 StartSearchIntroduction();
 
                 // Update articles count badge
