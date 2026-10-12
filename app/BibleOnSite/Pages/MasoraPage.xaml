@@ -18,7 +18,6 @@
         <ResourceDictionary>
             <converters:IntEqualityConverter x:Key="IntEqualityConverter"/>
             <converters:PerushCheckedConverter x:Key="PerushCheckedConverter"/>
-            <converters:PasukMarkerTextConverter x:Key="PasukMarkerTextConverter" MarkerColor="{StaticResource Primary}"/>
             <x:Double x:Key="BottomBarTotalHeight">90</x:Double>
         </ResourceDictionary>
     </ContentPage.Resources>
@@ -121,7 +120,7 @@
                     <DataTemplate x:DataType="models:MasoraUnit">
                         <!-- Unit page: header + CollectionView of rows -->
                         <Grid RowDefinitions="Auto,*">
-                            <!-- Unit header: scripture-reference heading + break label -->
+                            <!-- Unit header: parasha-identity heading + break label -->
                             <VerticalStackLayout Grid.Row="0" Spacing="2" Padding="16,12,16,8">
                                 <Label AutomationId="MasoraUnitHeading"
                                        Text="{Binding Heading}"
@@ -150,15 +149,8 @@
                                 <CollectionView.ItemTemplate>
                                     <DataTemplate x:DataType="models:MasoraPasukRow">
                                         <VerticalStackLayout Spacing="0">
-                                            <!-- Perek divider for multi-perek units -->
-                                            <Label Text="{Binding PerekLabel}"
-                                                   IsVisible="{Binding HasPerekLabel}"
-                                                   AutomationId="MasoraPerekLabel"
-                                                   FontSize="15"
-                                                   FontAttributes="Bold"
-                                                   HorizontalTextAlignment="Center"
-                                                   Padding="0,10,0,2"
-                                                   TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryLight}}"/>
+                                            <!-- No perek dividers or chapter pasuk numbers: the מסורה
+                                                 reader presents the parasha as one continuous text. -->
                                             <Border Padding="12,8"
                                                     Margin="0,4"
                                                     StrokeShape="RoundRectangle 8"
@@ -170,41 +162,37 @@
                                                         <On Platform="MacCatalyst" Value="RightToLeft"/>
                                                     </OnPlatform>
                                                 </Border.FlowDirection>
-                                                <VerticalStackLayout Spacing="2">
-                                                    <controls:PasukTextLabel AutomationId="PasukText"
-                                                             FontSize="{Binding FontSize}"
-                                                             FlowDirection="RightToLeft"
-                                                             LineBreakMode="WordWrap"
-                                                             LineHeight="1.4">
-                                                        <controls:PasukTextLabel.FormattedText>
-                                                            <MultiBinding Converter="{StaticResource PasukMarkerTextConverter}">
-                                                                <Binding Path="Pasuk.FormattedText"/>
-                                                                <Binding Path="PasukNumHeb"/>
-                                                                <Binding Path="MarkerFontSize"/>
-                                                            </MultiBinding>
-                                                        </controls:PasukTextLabel.FormattedText>
-                                                    </controls:PasukTextLabel>
-                                                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding Pasuk.PerushNotes}"
-                                                                         Spacing="2"
-                                                                         Margin="0,4,0,0">
-                                                        <BindableLayout.ItemTemplate>
-                                                            <DataTemplate x:DataType="models:PerushNoteDisplay">
-                                                                <VerticalStackLayout Spacing="2">
-                                                                    <Label Text="{Binding PerushName}"
-                                                                           AutomationId="InlinePerushName"
-                                                                           FontSize="{DynamicResource PerushNameFontSize}"
-                                                                           FontAttributes="Bold"
-                                                                           TextColor="{StaticResource Primary}"/>
-                                                                    <controls:HtmlView HtmlContent="{Binding DisplayContent}"
-                                                                                      FontSize="{DynamicResource PerushContentFontSize}"
-                                                                                      TextAlignment="Justify"
-                                                                                      TextDirection="Rtl"
-                                                                                      LineHeight="1.4"/>
-                                                                </VerticalStackLayout>
-                                                            </DataTemplate>
-                                                        </BindableLayout.ItemTemplate>
+                                                <Grid ColumnDefinitions="*"
+                                                      FlowDirection="RightToLeft">
+                                                    <VerticalStackLayout Grid.Column="0" Spacing="2">
+                                                        <controls:PasukTextLabel AutomationId="PasukText"
+                                                               FormattedText="{Binding Pasuk.FormattedText}"
+                                                               FontSize="{Binding FontSize}"
+                                                               FlowDirection="RightToLeft"
+                                                               LineBreakMode="WordWrap"
+                                                               LineHeight="1.4"/>
+                                                        <VerticalStackLayout BindableLayout.ItemsSource="{Binding Pasuk.PerushNotes}"
+                                                                             Spacing="2"
+                                                                             Margin="0,4,0,0">
+                                                            <BindableLayout.ItemTemplate>
+                                                                <DataTemplate x:DataType="models:PerushNoteDisplay">
+                                                                    <VerticalStackLayout Spacing="2">
+                                                                        <Label Text="{Binding PerushName}"
+                                                                               AutomationId="InlinePerushName"
+                                                                               FontSize="{DynamicResource PerushNameFontSize}"
+                                                                               FontAttributes="Bold"
+                                                                               TextColor="{StaticResource Primary}"/>
+                                                                        <controls:HtmlView HtmlContent="{Binding DisplayContent}"
+                                                                                          FontSize="{DynamicResource PerushContentFontSize}"
+                                                                                          TextAlignment="Justify"
+                                                                                          TextDirection="Rtl"
+                                                                                          LineHeight="1.4"/>
+                                                                    </VerticalStackLayout>
+                                                                </DataTemplate>
+                                                            </BindableLayout.ItemTemplate>
+                                                        </VerticalStackLayout>
                                                     </VerticalStackLayout>
-                                                </VerticalStackLayout>
+                                                </Grid>
                                             </Border>
                                         </VerticalStackLayout>
                                     </DataTemplate>
