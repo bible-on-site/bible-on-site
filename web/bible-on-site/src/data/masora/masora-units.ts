@@ -1,10 +1,10 @@
+import { toLetters } from "gematry";
 import type {
 	ReadingDivision,
 	ReadingUnit,
 	ScriptureCoordinate,
 } from "@/lib/reading/contract";
 import { READING_CONTRACT_VERSION } from "@/lib/reading/contract";
-import { formatCoordinateSpan } from "@/lib/reading/format";
 import { rangeContainsCoordinate } from "@/lib/reading/ranges";
 import { sefarim } from "../db/sefarim";
 import type { Perek, Sefarim, SefarimItem } from "../db/tanah-view-types";
@@ -83,16 +83,16 @@ function coordinateAfterMarker(
 }
 
 /**
- * Display heading for a unit: the scripture reference span.
- * Same-perek units collapse to "שמואל א יב ה-ז"; cross-perek units keep
- * both endpoints ("בראשית לה כב - מ א"). The sefer name prefixes the
- * start ref; the end ref repeats only the perek context.
+ * Display heading for a unit: the Masoretic parasha identity —
+ * sefer name + the unit's 1-based ordinal inside its sefer
+ * ("בראשית פרשה ח"). Conventional perek/pasuk references stay
+ * internal; they never surface in the מסורה reader chrome.
  */
 export function formatMasoraUnitHeading(
-	start: ScriptureCoordinate,
-	end: ScriptureCoordinate,
+	seferName: string,
+	order: number,
 ): string {
-	return formatCoordinateSpan(start, end);
+	return `${seferName} פרשה ${toLetters(order)}`;
 }
 
 function deriveUnitsFromSefarim(corpus: Sefarim): ReadingUnit[] {
@@ -118,7 +118,7 @@ function deriveUnitsFromSefarim(corpus: Sefarim): ReadingUnit[] {
 				slug: String(nextUnitId),
 				seferName: sefer.name,
 				order,
-				heading: formatMasoraUnitHeading(start, end),
+				heading: formatMasoraUnitHeading(sefer.name, order),
 				ranges: [{ start, end }],
 				closingBreak,
 			});
