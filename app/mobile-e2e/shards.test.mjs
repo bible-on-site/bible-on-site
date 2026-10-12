@@ -3,7 +3,7 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { mergeShardEvidence, shardRuns, SHARD_COUNT } from "./shards.mjs";
+import { mergeShardAppCoverage, mergeShardEvidence, shardRuns, SHARD_COUNT } from "./shards.mjs";
 
 test("builds one run environment per shard with its own device, port, artifacts and filter", () => {
   const runs = shardRuns({
@@ -18,6 +18,8 @@ test("builds one run environment per shard with its own device, port, artifacts 
   assert.equal(runs[1].env.MOBILE_APPIUM_PORT, "4724");
   assert.equal(runs[0].env.MOBILE_WDA_PORT, "8100");
   assert.equal(runs[1].env.MOBILE_WDA_PORT, "8101");
+  assert.equal(runs[0].env.MOBILE_E2E_COVERAGE_PORT, "4787");
+  assert.equal(runs[1].env.MOBILE_E2E_COVERAGE_PORT, "4788");
   assert.equal(runs[0].env.MOBILE_E2E_ARTIFACTS, join("/artifacts/ios", "shard1"));
   assert.equal(runs[1].env.MOBILE_E2E_ARTIFACTS, join("/artifacts/ios", "shard2"));
   assert.equal(runs[0].env.MOBILE_E2E_SHARD, "1");
@@ -75,6 +77,29 @@ test("clears stale merged evidence before merging a new run", () => {
     mergeShardEvidence([join(root, "shard1")], destination);
     assert.throws(() => readFileSync(join(destination, "stale-passed.json")));
     assert.equal(readFileSync(join(destination, "fresh-passed.json"), "utf8"), "{}");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("preserves both simulator startup dumps and collection errors for the coverage apply step", () => {
+  const root = mkdtempSync(join(tmpdir(), "shard-app-coverage-"));
+  try {
+    const inputs = [join(root, "shard1"), join(root, "shard2")];
+    for (const [index, input] of inputs.entries()) {
+      const source = join(input, "app-coverage");
+      mkdirSync(source, { recursive: true });
+      writeFileSync(join(source, "_startup-passed.json"), JSON.stringify({ module: index }));
+      writeFileSync(join(source, "test.json.coverage-error.txt"), `failure ${index}`);
+    }
+    const output = join(root, "app-coverage");
+    mkdirSync(output, { recursive: true });
+    writeFileSync(join(output, "stale.json"), "{}");
+    mergeShardAppCoverage(inputs, output);
+    assert.equal(readFileSync(join(output, "shard1-_startup-passed.json"), "utf8"), '{"module":0}');
+    assert.equal(readFileSync(join(output, "shard2-_startup-passed.json"), "utf8"), '{"module":1}');
+    assert.equal(readFileSync(join(output, "shard2-test.json.coverage-error.txt"), "utf8"), "failure 1");
+    assert.throws(() => readFileSync(join(output, "stale.json")));
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

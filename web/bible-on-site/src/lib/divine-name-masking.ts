@@ -83,7 +83,8 @@ export const DEFAULT_DIVINE_NAME_MASKING: DivineNameMaskingSettings = {
 
 const MAQAF = "־";
 
-const isHebrewLetter = (ch: string): boolean => ch >= "\u05d0" && ch <= "\u05ea";
+const isHebrewLetter = (ch: string): boolean =>
+	ch >= "\u05d0" && ch <= "\u05ea";
 
 /**
  * Combining mark check. Corpus-verified: every mark in the tanach text lives
@@ -113,7 +114,21 @@ const CLITICS = "ובכלמהש";
 const EL_CLITICS = "ובכלמה";
 
 const ELOHIM_STEM_SUFFIXES: Readonly<Record<string, readonly string[]>> = {
-	אלהי: ["", "ם", "ו", "ך", "יך", "כם", "כן", "נו", "ה", "הו", "הם", "הן", "מו"],
+	אלהי: [
+		"",
+		"ם",
+		"ו",
+		"ך",
+		"יך",
+		"כם",
+		"כן",
+		"נו",
+		"ה",
+		"הו",
+		"הם",
+		"הן",
+		"מו",
+	],
 	אלוה: ["", "י", "יך", "יו", "יכם", "יכן", "ינו", "ה", "הו", "הם", "הן"],
 	אלה: ["א", "יא", "ה", "הם", "הון", "ין", "ך", "כם", "כון", "ו", "הו", "נא"],
 };

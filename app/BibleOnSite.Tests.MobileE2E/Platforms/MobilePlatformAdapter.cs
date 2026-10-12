@@ -206,8 +206,12 @@ public abstract class MobilePlatformAdapter
 
     // Marks every suite launch so the app can run CI-only startup work such as
     // warming the search index while other scenarios execute.
-    internal static readonly IReadOnlyDictionary<string, string> IosE2eEnvironment =
-        new Dictionary<string, string> { ["BIBLE_E2E"] = "1" };
+    internal static IReadOnlyDictionary<string, string> IosE2eEnvironment =>
+        new Dictionary<string, string>
+        {
+            ["BIBLE_E2E"] = "1",
+            ["BIBLE_E2E_COVERAGE_PORT"] = AppCoverage.Port.ToString(System.Globalization.CultureInfo.InvariantCulture)
+        };
 
     public static MobilePlatformAdapter For(MobilePlatform platform) => platform switch
     {
