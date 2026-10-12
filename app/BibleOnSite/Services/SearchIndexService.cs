@@ -341,10 +341,9 @@ public sealed class SearchIndexService : IAsyncDisposable
         try
         {
             await _index.CloseAsync();
-            // Copy through a temp file — a plain rename is not guaranteed when
-            // the staged index sits on a different volume than the cache.
-            await using var staged = File.OpenRead(deliveredPath);
-            await AtomicFile.CopyAsync(staged, _indexPath);
+            // Move through a cache-local temporary destination. This is an
+            // atomic rename on the same filesystem, with no full-index copy.
+            AtomicFile.Move(deliveredPath, _indexPath);
             _index = new SQLiteAsyncConnection(_indexPath);
             _ready.Clear();
             await OpenIndexAsync();
