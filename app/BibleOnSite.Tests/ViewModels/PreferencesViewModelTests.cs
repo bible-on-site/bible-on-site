@@ -26,6 +26,7 @@ public class PreferencesViewModelTests : IDisposable
     public void Dispose()
     {
         PreferencesService.ResetForTesting();
+        BibleOnSite.Helpers.DivineNameMasking.Apply(BibleOnSite.Helpers.DivineNameMaskingOptions.Disabled);
     }
 
     #region FontFactor Tests
@@ -124,6 +125,256 @@ public class PreferencesViewModelTests : IDisposable
 
         // Assert
         _service.PerekToLoad.Should().Be(PerekToLoad.Todays);
+    }
+
+    #endregion
+
+    #region הסתר שם השם Tests
+
+    [Fact]
+    public void DivineNameMaskingEnabled_Get_ReturnsServiceValue()
+    {
+        _service.DivineNameMaskingEnabled = true;
+
+        _viewModel.DivineNameMaskingEnabled.Should().BeTrue();
+    }
+
+    [Fact]
+    public void DivineNameMaskingEnabled_Set_UpdatesServiceValue()
+    {
+        _viewModel.DivineNameMaskingEnabled = true;
+
+        _service.DivineNameMaskingEnabled.Should().BeTrue();
+    }
+
+    [Fact]
+    public void DivineNameMaskingEnabled_WhenSameValue_DoesNotFirePropertyChanged()
+    {
+        _viewModel.DivineNameMaskingEnabled = true;
+        var eventCount = 0;
+        _viewModel.PropertyChanged += (_, _) => eventCount++;
+
+        _viewModel.DivineNameMaskingEnabled = true;
+
+        eventCount.Should().Be(0);
+    }
+
+    [Fact]
+    public void DivineNameMaskElohim_Get_ReturnsServiceValue()
+    {
+        _service.DivineNameMaskElohim = BibleOnSite.Helpers.DivineNameMaskOption.Elokim;
+
+        _viewModel.DivineNameMaskElohim.Should().Be(BibleOnSite.Helpers.DivineNameMaskOption.Elokim);
+    }
+
+    [Fact]
+    public void DivineNameMaskElohim_Set_UpdatesServiceAndNotifiesAllRadioWrappers()
+    {
+        var notified = new List<string>();
+        _viewModel.PropertyChanged += (_, args) => notified.Add(args.PropertyName!);
+
+        _viewModel.DivineNameMaskElohim = BibleOnSite.Helpers.DivineNameMaskOption.Elokim;
+
+        _service.DivineNameMaskElohim.Should().Be(BibleOnSite.Helpers.DivineNameMaskOption.Elokim);
+        notified.Should().Contain([
+            nameof(PreferencesViewModel.DivineNameMaskElohim),
+            nameof(PreferencesViewModel.IsMaskElohimAsIs),
+            nameof(PreferencesViewModel.IsMaskElohimElokim),
+            nameof(PreferencesViewModel.IsMaskElohimHyphen),
+            nameof(PreferencesViewModel.IsMaskElohimCustom)]);
+    }
+
+    [Theory]
+    [InlineData(nameof(PreferencesViewModel.IsMaskElohimAsIs), BibleOnSite.Helpers.DivineNameMaskOption.AsIs)]
+    [InlineData(nameof(PreferencesViewModel.IsMaskElohimElokim), BibleOnSite.Helpers.DivineNameMaskOption.Elokim)]
+    [InlineData(nameof(PreferencesViewModel.IsMaskElohimHyphen), BibleOnSite.Helpers.DivineNameMaskOption.Hyphen)]
+    [InlineData(nameof(PreferencesViewModel.IsMaskElohimCustom), BibleOnSite.Helpers.DivineNameMaskOption.Custom)]
+    public void IsMaskElohim_SetTrue_SelectsTheOption(string property, BibleOnSite.Helpers.DivineNameMaskOption option)
+    {
+        var prop = typeof(PreferencesViewModel).GetProperty(property)!;
+
+        prop.SetValue(_viewModel, true);
+
+        _viewModel.DivineNameMaskElohim.Should().Be(option);
+        prop.GetValue(_viewModel).Should().Be(true);
+    }
+
+    [Fact]
+    public void IsMaskElohim_SetFalse_IsANoOpWriteBack()
+    {
+        _service.DivineNameMaskElohim = BibleOnSite.Helpers.DivineNameMaskOption.Elokim;
+
+        _viewModel.IsMaskElohimAsIs = false;
+
+        _service.DivineNameMaskElohim.Should().Be(BibleOnSite.Helpers.DivineNameMaskOption.Elokim);
+        _viewModel.IsMaskElohimAsIs.Should().BeFalse();
+        _viewModel.IsMaskElohimElokim.Should().BeTrue();
+    }
+
+    [Fact]
+    public void DivineNameMaskElohimCustom_GetSet_AndSameValueSkipsNotification()
+    {
+        _viewModel.DivineNameMaskElohimCustom = "אלופו";
+        _service.DivineNameMaskElohimCustom.Should().Be("אלופו");
+        _viewModel.DivineNameMaskElohimCustom.Should().Be("אלופו");
+
+        var eventCount = 0;
+        _viewModel.PropertyChanged += (_, _) => eventCount++;
+        _viewModel.DivineNameMaskElohimCustom = "אלופו";
+
+        eventCount.Should().Be(0);
+    }
+
+    [Fact]
+    public void DivineNameMaskYhwh_Set_UpdatesServiceAndNotifiesAllRadioWrappers()
+    {
+        var notified = new List<string>();
+        _viewModel.PropertyChanged += (_, args) => notified.Add(args.PropertyName!);
+
+        _viewModel.DivineNameMaskYhwh = BibleOnSite.Helpers.DivineNameMaskOption.Dalet;
+
+        _service.DivineNameMaskYhwh.Should().Be(BibleOnSite.Helpers.DivineNameMaskOption.Dalet);
+        notified.Should().Contain([
+            nameof(PreferencesViewModel.DivineNameMaskYhwh),
+            nameof(PreferencesViewModel.IsMaskYhwhHeh),
+            nameof(PreferencesViewModel.IsMaskYhwhDalet),
+            nameof(PreferencesViewModel.IsMaskYhwhCustom)]);
+    }
+
+    [Theory]
+    [InlineData(nameof(PreferencesViewModel.IsMaskYhwhHeh), BibleOnSite.Helpers.DivineNameMaskOption.Heh)]
+    [InlineData(nameof(PreferencesViewModel.IsMaskYhwhDalet), BibleOnSite.Helpers.DivineNameMaskOption.Dalet)]
+    [InlineData(nameof(PreferencesViewModel.IsMaskYhwhCustom), BibleOnSite.Helpers.DivineNameMaskOption.Custom)]
+    public void IsMaskYhwh_SetTrue_SelectsTheOption(string property, BibleOnSite.Helpers.DivineNameMaskOption option)
+    {
+        var prop = typeof(PreferencesViewModel).GetProperty(property)!;
+
+        prop.SetValue(_viewModel, true);
+
+        _viewModel.DivineNameMaskYhwh.Should().Be(option);
+        prop.GetValue(_viewModel).Should().Be(true);
+    }
+
+    [Fact]
+    public void IsMaskYhwh_SetFalse_IsANoOpWriteBack()
+    {
+        _service.DivineNameMaskYhwh = BibleOnSite.Helpers.DivineNameMaskOption.Dalet;
+
+        _viewModel.IsMaskYhwhHeh = false;
+
+        _service.DivineNameMaskYhwh.Should().Be(BibleOnSite.Helpers.DivineNameMaskOption.Dalet);
+        _viewModel.IsMaskYhwhHeh.Should().BeFalse();
+        _viewModel.IsMaskYhwhDalet.Should().BeTrue();
+    }
+
+    [Fact]
+    public void DivineNameMaskYhwhCustom_GetSet_AndSameValueSkipsNotification()
+    {
+        _viewModel.DivineNameMaskYhwhCustom = "השם";
+        _service.DivineNameMaskYhwhCustom.Should().Be("השם");
+        _viewModel.DivineNameMaskYhwhCustom.Should().Be("השם");
+
+        var eventCount = 0;
+        _viewModel.PropertyChanged += (_, _) => eventCount++;
+        _viewModel.DivineNameMaskYhwhCustom = "השם";
+
+        eventCount.Should().Be(0);
+    }
+
+    [Fact]
+    public void DivineNameMaskEl_Set_UpdatesServiceAndNotifiesAllRadioWrappers()
+    {
+        var notified = new List<string>();
+        _viewModel.PropertyChanged += (_, args) => notified.Add(args.PropertyName!);
+
+        _viewModel.DivineNameMaskEl = BibleOnSite.Helpers.DivineNameMaskOption.Hyphen;
+
+        _service.DivineNameMaskEl.Should().Be(BibleOnSite.Helpers.DivineNameMaskOption.Hyphen);
+        notified.Should().Contain([
+            nameof(PreferencesViewModel.DivineNameMaskEl),
+            nameof(PreferencesViewModel.IsMaskElAsIs),
+            nameof(PreferencesViewModel.IsMaskElHyphen)]);
+    }
+
+    [Theory]
+    [InlineData(nameof(PreferencesViewModel.IsMaskElAsIs), BibleOnSite.Helpers.DivineNameMaskOption.AsIs)]
+    [InlineData(nameof(PreferencesViewModel.IsMaskElHyphen), BibleOnSite.Helpers.DivineNameMaskOption.Hyphen)]
+    public void IsMaskEl_SetTrue_SelectsTheOption(string property, BibleOnSite.Helpers.DivineNameMaskOption option)
+    {
+        var prop = typeof(PreferencesViewModel).GetProperty(property)!;
+
+        prop.SetValue(_viewModel, true);
+
+        _viewModel.DivineNameMaskEl.Should().Be(option);
+        prop.GetValue(_viewModel).Should().Be(true);
+    }
+
+    [Fact]
+    public void IsMaskEl_SetFalse_IsANoOpWriteBack()
+    {
+        _service.DivineNameMaskEl = BibleOnSite.Helpers.DivineNameMaskOption.Hyphen;
+
+        _viewModel.IsMaskElAsIs = false;
+
+        _service.DivineNameMaskEl.Should().Be(BibleOnSite.Helpers.DivineNameMaskOption.Hyphen);
+        _viewModel.IsMaskElAsIs.Should().BeFalse();
+        _viewModel.IsMaskElHyphen.Should().BeTrue();
+    }
+
+    [Fact]
+    public void DivineNameMaskShaddai_Set_UpdatesServiceAndNotifiesAllRadioWrappers()
+    {
+        var notified = new List<string>();
+        _viewModel.PropertyChanged += (_, args) => notified.Add(args.PropertyName!);
+
+        _viewModel.DivineNameMaskShaddai = BibleOnSite.Helpers.DivineNameMaskOption.Custom;
+
+        _service.DivineNameMaskShaddai.Should().Be(BibleOnSite.Helpers.DivineNameMaskOption.Custom);
+        notified.Should().Contain([
+            nameof(PreferencesViewModel.DivineNameMaskShaddai),
+            nameof(PreferencesViewModel.IsMaskShaddaiAsIs),
+            nameof(PreferencesViewModel.IsMaskShaddaiHyphen),
+            nameof(PreferencesViewModel.IsMaskShaddaiCustom)]);
+    }
+
+    [Theory]
+    [InlineData(nameof(PreferencesViewModel.IsMaskShaddaiAsIs), BibleOnSite.Helpers.DivineNameMaskOption.AsIs)]
+    [InlineData(nameof(PreferencesViewModel.IsMaskShaddaiHyphen), BibleOnSite.Helpers.DivineNameMaskOption.Hyphen)]
+    [InlineData(nameof(PreferencesViewModel.IsMaskShaddaiCustom), BibleOnSite.Helpers.DivineNameMaskOption.Custom)]
+    public void IsMaskShaddai_SetTrue_SelectsTheOption(string property, BibleOnSite.Helpers.DivineNameMaskOption option)
+    {
+        var prop = typeof(PreferencesViewModel).GetProperty(property)!;
+
+        prop.SetValue(_viewModel, true);
+
+        _viewModel.DivineNameMaskShaddai.Should().Be(option);
+        prop.GetValue(_viewModel).Should().Be(true);
+    }
+
+    [Fact]
+    public void IsMaskShaddai_SetFalse_IsANoOpWriteBack()
+    {
+        _service.DivineNameMaskShaddai = BibleOnSite.Helpers.DivineNameMaskOption.Hyphen;
+
+        _viewModel.IsMaskShaddaiAsIs = false;
+
+        _service.DivineNameMaskShaddai.Should().Be(BibleOnSite.Helpers.DivineNameMaskOption.Hyphen);
+        _viewModel.IsMaskShaddaiAsIs.Should().BeFalse();
+        _viewModel.IsMaskShaddaiHyphen.Should().BeTrue();
+    }
+
+    [Fact]
+    public void DivineNameMaskShaddaiCustom_GetSet_AndSameValueSkipsNotification()
+    {
+        _viewModel.DivineNameMaskShaddaiCustom = "אל שדי";
+        _service.DivineNameMaskShaddaiCustom.Should().Be("אל שדי");
+        _viewModel.DivineNameMaskShaddaiCustom.Should().Be("אל שדי");
+
+        var eventCount = 0;
+        _viewModel.PropertyChanged += (_, _) => eventCount++;
+        _viewModel.DivineNameMaskShaddaiCustom = "אל שדי";
+
+        eventCount.Should().Be(0);
     }
 
     #endregion

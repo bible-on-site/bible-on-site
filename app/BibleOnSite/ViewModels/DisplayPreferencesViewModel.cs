@@ -8,10 +8,11 @@ namespace BibleOnSite.ViewModels;
 /// תצוגה settings: font size with a live preview.
 /// </summary>
 #pragma warning disable S2333 // RelayCommand generates partial implementations.
-public partial class DisplayPreferencesViewModel : ObservableObject
+public partial class DisplayPreferencesViewModel : DivineNamePreferencesViewModel
 #pragma warning restore S2333
 {
     private readonly PreferencesService _preferencesService;
+    protected override PreferencesService MaskingPreferences => _preferencesService;
 
     public DisplayPreferencesViewModel() : this(PreferencesService.Instance)
     {
@@ -67,5 +68,9 @@ public partial class DisplayPreferencesViewModel : ObservableObject
         FontFactor = 1.0;
     }
 
-    private void OnPreferencesChanged(object? sender, EventArgs e) => OnPropertyChanged(nameof(FontFactor));
+    private void OnPreferencesChanged(object? sender, EventArgs e)
+    {
+        OnPropertyChanged(nameof(FontFactor));
+        NotifyDivineNameMaskingChanged();
+    }
 }
