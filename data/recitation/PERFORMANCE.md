@@ -225,8 +225,8 @@ python data/recitation/held_controls.py `
 python data/recitation/validated_worker.py `
   --memory-profile selected-heads-resident-self `
   --golden-sample data/recitation/benchmarks/resume-sample-2026-10-07.json `
-  --validation data/recitation/.outputs/benchmarks/golden-suite-2026-10-07 `
-  --final-control data/recitation/.outputs/benchmarks/final-source-338-2026-10-07 `
+  --validation data/recitation/.outputs/benchmarks/golden-suite-2026-10-12 `
+  --final-control data/recitation/.outputs/benchmarks/final-source-338-2026-10-12 `
   --held-controls data/recitation/.outputs/benchmarks/held-controls `
   --recordings C:/Users/Dorad/git/tanah-s3/recordings `
   --shortest-first --database path/to/working.sqlite --text path/to/working.json
