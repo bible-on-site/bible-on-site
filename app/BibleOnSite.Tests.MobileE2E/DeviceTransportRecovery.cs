@@ -84,7 +84,7 @@ internal static class DeviceTransportRecovery
             return false;
         }
         // `reconnect` asks the daemon to renegotiate the transport and
-        // `reconnect offline` kicks an entry wedged in the "offline" state;
+        // `reconnect offline` kicks an entry wedged in the "offline" state —
         // both stay below the session layer the suite rebuilds on top of.
         Run(Adb.Reconnect, ProbeTimeoutMs);
         Run(Adb.ReconnectOffline, ProbeTimeoutMs);
