@@ -174,8 +174,17 @@ class RecitationAssetsTests(unittest.TestCase):
             self.assertEqual(result["package"]["tracks"][0]["words"][0]["startMs"], 123)
             self.assertEqual(result["package"]["tracks"][1]["words"], [])
             if platform == "iOS":
-                contents = json.loads((app / "Platforms/iOS/Assets/Recitation.xcassets/recitation_1.dataset/Contents.json").read_text())
-                self.assertEqual(contents["properties"]["on-demand-resource-tags"], ["recitation_1"])
+                pack_dir = app / "Platforms/iOS/AssetPacks/recitation_1"
+                manifest = json.loads((pack_dir / "Manifest.json").read_text())
+                self.assertEqual(manifest["assetPackID"], "recitation_1")
+                self.assertEqual(manifest["downloadPolicy"], {"onDemand": {}})
+                self.assertEqual(manifest["fileSelectors"], [{"file": "recitation_1.zip"}])
+                self.assertEqual(manifest["platforms"], ["iOS", "macOS"])
+                self.assertTrue((pack_dir / "recitation_1.zip").is_file())
+                # Managed packs carry the identical Opus bytes as the Android modules.
+                with zipfile.ZipFile(pack_dir / "recitation_1.zip") as packed:
+                    self.assertEqual(packed.namelist(), [opus_sha + ".ogg"])
+                    self.assertEqual(packed.read(opus_sha + ".ogg"), opus)
         android = catalogs[0]["package"]["tracks"][0]
         self.assertEqual(android["audioSha256"], self.sha)
         self.assertEqual(android["playback"]["sha256"], opus_sha)
@@ -183,11 +192,8 @@ class RecitationAssetsTests(unittest.TestCase):
         with zipfile.ZipFile(self.root / "Android/Platforms/Android/AssetPacks/recitation_1/recitation_1.zip") as packed:
             self.assertEqual(packed.namelist(), [opus_sha + ".ogg"])
             self.assertEqual(packed.read(opus_sha + ".ogg"), opus)
-        # Apple ODR datasets carry the identical Opus bytes as the Android modules.
+        # Apple managed asset packs carry the identical Opus bytes as the Android modules.
         self.assertEqual(catalogs[0], catalogs[1])
-        with zipfile.ZipFile(self.root / "iOS/Platforms/iOS/Assets/Recitation.xcassets/recitation_1.dataset/recitation_1.zip") as packed:
-            self.assertEqual(packed.namelist(), [opus_sha + ".ogg"])
-            self.assertEqual(packed.read(opus_sha + ".ogg"), opus)
         self.assertNotIn("playback", catalogs[2]["package"]["tracks"][0])
         self.assertEqual(database.read_bytes(), source_bytes)
 

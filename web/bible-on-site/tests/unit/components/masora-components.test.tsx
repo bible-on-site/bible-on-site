@@ -86,6 +86,16 @@ jest.mock("@/app/929/[number]/components/TanahpediaLink", () => ({
 	),
 }));
 
+// The book overlay is covered by its own suite; capturing its props
+// proves the page wires the whole-sefer units and the SSG summaries.
+let capturedMasoraBookProps: Record<string, unknown> | null = null;
+jest.mock("@/app/masora/[unit]/components/MasoraSeferComposite", () => ({
+	MasoraSeferComposite: (props: Record<string, unknown>) => {
+		capturedMasoraBookProps = props;
+		return <div data-testid="masora-book" />;
+	},
+}));
+
 // Layout collaborators are covered elsewhere; isolate the wiring.
 jest.mock("@/app/components/UnitSwipeNavigation", () => ({
 	__esModule: true,
@@ -107,6 +117,32 @@ jest.mock("@/data/masora/masora-units", () => ({
 	...jest.requireActual("@/data/masora/masora-units"),
 	getMasoraFirstUnitBySefer: () => mockFirstUnits(),
 }));
+
+/**
+ * Collects `fallback` props off every Suspense element in an awaited
+ * server-component tree. Suspense fallbacks never mount under jsdom,
+ * so coverage of their props requires reaching into the JSX directly.
+ */
+function collectSuspenseFallbackProps(
+	node: unknown,
+	found: Array<Record<string, unknown>> = [],
+): Array<Record<string, unknown>> {
+	if (Array.isArray(node)) {
+		for (const child of node) collectSuspenseFallbackProps(child, found);
+		return found;
+	}
+	if (node == null || typeof node !== "object" || !("props" in node)) {
+		return found;
+	}
+	const props = (node as { props: Record<string, unknown> }).props;
+	if (props == null || typeof props !== "object") return found;
+	const fallback = props.fallback;
+	if (fallback != null && typeof fallback === "object" && "props" in fallback) {
+		found.push((fallback as { props: Record<string, unknown> }).props);
+	}
+	collectSuspenseFallbackProps(props.children, found);
+	return found;
+}
 
 import { ScrollToUnitPasuk } from "@/app/components/reading/ScrollToUnitPasuk";
 import { UnitBreadcrumb } from "@/app/masora/[unit]/components/UnitBreadcrumb";
@@ -370,6 +406,39 @@ describe("MasoraUnitPage", () => {
 		expect(screen.getByTestId("articles-section")).toBeInTheDocument();
 	});
 
+	it("wires the sefer's units and summaries into the book overlay", async () => {
+		const jsx = await MasoraUnitPage({
+			params: Promise.resolve({ unit: "8" }),
+		});
+		render(jsx);
+		expect(screen.getByTestId("masora-book")).toBeInTheDocument();
+		const props = capturedMasoraBookProps;
+		expect(props?.seferName).toBe("בראשית");
+		expect(props?.currentUnitId).toBe(8);
+		// The book renders every Masoretic unit of the sefer, not just
+		// the requested one.
+		const bereshit = actualMasora.getMasoraUnitsForSefer("בראשית");
+		const units = props?.units as Array<{
+			unitId: number;
+			order: number;
+			heading: string;
+		}>;
+		expect(units.map((unit) => unit.unitId)).toEqual(
+			bereshit.map((unit) => unit.unitId),
+		);
+		expect(units.map((unit) => unit.order)).toEqual(
+			bereshit.map((unit) => unit.order),
+		);
+		expect(units[0].heading).toBe(bereshit[0].heading);
+		// Flat-page summaries double as the current unit's book data.
+		expect(props?.articles).toEqual([]);
+		expect(props?.perushim).toEqual([]);
+		// Canonical perek sources cover every perek the sefer's units span.
+		const perekSources = props?.perekSources as Record<number, string>;
+		expect(Object.keys(perekSources).length).toBeGreaterThan(0);
+		expect(perekSources[1]).toBe("בראשית א");
+	});
+
 	it("keeps perushim inside the division page (issue #2190)", async () => {
 		perushimSectionProps.length = 0;
 		const jsx = await MasoraUnitPage({
@@ -387,9 +456,30 @@ describe("MasoraUnitPage", () => {
 		for (const href of hrefs) {
 			expect(decodeURIComponent(href)).toBe('/מסורה/8?perush=רש"י');
 		}
-		expect(
-			perushimSectionProps.some((props) => props.onPerushClick),
-		).toBe(true);
+		expect(perushimSectionProps.some((props) => props.onPerushClick)).toBe(
+			true,
+		);
+	});
+
+	it("keeps the Suspense fallback's perush href inside the division", async () => {
+		const jsx = await MasoraUnitPage({
+			params: Promise.resolve({ unit: "8" }),
+		});
+		// jsdom mounts the live children, never the fallback element —
+		// reach into the tree and invoke its href builder directly.
+		const fallbacks = collectSuspenseFallbackProps(jsx);
+		const perushFallbacks = fallbacks.filter(
+			(props) => typeof props.hrefForPerush === "function",
+		);
+		expect(perushFallbacks.length).toBeGreaterThan(0);
+		for (const props of perushFallbacks) {
+			const hrefForPerush = props.hrefForPerush as (p: {
+				name: string;
+			}) => string;
+			expect(decodeURIComponent(hrefForPerush({ name: 'רש"י' }))).toBe(
+				'/מסורה/8?perush=רש"י',
+			);
+		}
 	});
 
 	it("renders both closing-break labels", async () => {
