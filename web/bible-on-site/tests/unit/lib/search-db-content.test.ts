@@ -15,6 +15,7 @@ import {
 	searchTanahpediaEntries,
 	termAnchors,
 	termChunks,
+	termGateRegexp,
 	termRankPatterns,
 	termRegexp,
 } from "@/lib/search/db-content";
@@ -170,6 +171,30 @@ describe("termAnchors", () => {
 	});
 });
 
+describe("termGateRegexp", () => {
+	it("unions the chunks as bare letter patterns — no anchoring or lookaheads", () => {
+		// The gate is a strict superset of the candidate anchors (every
+		// anchor implies an intact chunk), evaluated first inside
+		// `CASE WHEN` so chunk-free rows never pay the bounded-lookahead
+		// pattern (#2140 follow-up).
+		const gate = termGateRegexp("ירושלימ");
+		expect(gate.startsWith("(?:")).toBe(true);
+		for (const letter of "ירושלימ") {
+			expect(gate).toContain(letter);
+		}
+		expect(gate).not.toContain("(?:^|");
+		expect(gate).not.toContain("(?=");
+		expect(gate).not.toContain("(?!");
+	});
+
+	it("collapses to the term's letters for single-chunk terms", () => {
+		// No union wrapper and no word anchor — the same bare
+		// ordered-letters scan the pre-#2140 WHERE ran.
+		expect(termGateRegexp("את").startsWith("א")).toBe(true);
+		expect(termGateRegexp("את")).not.toContain("(?:^|");
+	});
+});
+
 describe("termRankPatterns", () => {
 	it("nests exact inside prefix inside the candidate union", () => {
 		const [exact, prefix, candidate] = termRankPatterns("ירושלימ");
@@ -235,6 +260,7 @@ describe("searchPerushNotes", () => {
 		expect(mockQuery).toHaveBeenCalledWith(
 			expect.stringContaining("REGEXP_LIKE(n.note_content, ?, 'i')"),
 			[
+				termGateRegexp("בראשית"),
 				termRegexp("בראשית"),
 				phraseRegexp(["בראשית"]),
 				...termRankPatterns("בראשית"),
@@ -259,13 +285,16 @@ describe("searchPerushNotes", () => {
 		mockQuery.mockResolvedValue([]);
 		await searchPerushNotes("אחד שני", 10);
 		const [sql, params] = mockQuery.mock.calls[0];
-		// Two candidate predicates (one per term), one phrase-rank flag,
-		// and three rank patterns per term inside the LEAST estimate —
-		// one LEAST call per ranked fragment, over both terms.
-		expect(sql.match(/REGEXP_LIKE\(n\.note_content/g)).toHaveLength(9);
+		// Each term contributes a CASE gate + candidate eval in WHERE
+		// (4 total), one phrase-rank flag, and three rank patterns per
+		// term inside the LEAST estimate — one LEAST call per ranked
+		// fragment, over both terms.
+		expect(sql.match(/REGEXP_LIKE\(n\.note_content/g)).toHaveLength(11);
 		expect(sql.match(/LEAST\(/g)).toHaveLength(1);
 		expect(params).toEqual([
+			termGateRegexp("אחד"),
 			termRegexp("אחד"),
+			termGateRegexp("שני"),
 			termRegexp("שני"),
 			phraseRegexp(["אחד", "שני"]),
 			...termRankPatterns("אחד"),
@@ -286,7 +315,7 @@ describe("searchPerushNotes", () => {
 		expect(sql).toContain(
 			"(10*REGEXP_LIKE(n.note_content, ?, 'i') + 20*REGEXP_LIKE(n.note_content, ?, 'i') + 60*REGEXP_LIKE(n.note_content, ?, 'i')) DESC",
 		);
-		expect(params?.slice(2)).toEqual(termRankPatterns("ירושלימ"));
+		expect(params?.slice(3)).toEqual(termRankPatterns("ירושלימ"));
 	});
 
 	it("selects a note whose stored word is a misspelling of the query", async () => {
@@ -303,9 +332,10 @@ describe("searchPerushNotes", () => {
 		const hits = await searchPerushNotes("ירושלימ", 10);
 		const [, params] = mockQuery.mock.calls[0];
 		// The mocked query returns rows without applying WHERE — verify the
-		// generated pattern (bound as the first param) encodes a candidate
+		// generated pattern (bound after the gate param) encodes a candidate
 		// contract that would select the misspelled-relative text.
-		expect(params?.[0]).toBe(termRegexp("ירושלימ"));
+		expect(params?.[0]).toBe(termGateRegexp("ירושלימ"));
+		expect(params?.[1]).toBe(termRegexp("ירושלימ"));
 		expect(candidateSemantics("ירושלימ", "על ירושלים נאמר")).toBe(true);
 		expect(hits).toHaveLength(1);
 		expect(hits[0].score).toBe(60); // fuzzy tier, reached only via the new path
@@ -414,13 +444,15 @@ describe("searchAuthors", () => {
 		await searchAuthors("לוי", 10);
 		const [sql, params] = mockQuery.mock.calls[0];
 		expect(sql).toContain(
-			"REGEXP_LIKE(name, ?, 'i') OR REGEXP_LIKE(details, ?, 'i')",
+			"CASE WHEN REGEXP_LIKE(name, ?, 'i') THEN REGEXP_LIKE(name, ?, 'i') ELSE 0 END OR CASE WHEN REGEXP_LIKE(details, ?, 'i') THEN REGEXP_LIKE(details, ?, 'i') ELSE 0 END",
 		);
 		expect(sql).toContain(
 			"ORDER BY REGEXP_LIKE(name, ?, 'i') DESC, (10*REGEXP_LIKE(name, ?, 'i') + 20*REGEXP_LIKE(name, ?, 'i') + 60*REGEXP_LIKE(name, ?, 'i')) DESC, REGEXP_LIKE(details, ?, 'i') DESC, (10*REGEXP_LIKE(details, ?, 'i') + 20*REGEXP_LIKE(details, ?, 'i') + 60*REGEXP_LIKE(details, ?, 'i')) DESC",
 		);
 		expect(params).toEqual([
+			termGateRegexp("לוי"),
 			termRegexp("לוי"),
+			termGateRegexp("לוי"),
 			termRegexp("לוי"),
 			phraseRegexp(["לוי"]),
 			...termRankPatterns("לוי"),
@@ -433,7 +465,8 @@ describe("searchAuthors", () => {
 		mockQuery.mockResolvedValue([{ id: 7, name: "ירושלים", details: null }]);
 		const hits = await searchAuthors("ירושלימ", 10);
 		const [, params] = mockQuery.mock.calls[0];
-		expect(params?.[0]).toBe(termRegexp("ירושלימ"));
+		expect(params?.[0]).toBe(termGateRegexp("ירושלימ"));
+		expect(params?.[1]).toBe(termRegexp("ירושלימ"));
 		expect(candidateSemantics("ירושלימ", "ירושלים")).toBe(true);
 		expect(hits[0].score).toBe(120); // fuzzy 60 on the name, ×2 weight
 	});
@@ -541,7 +574,8 @@ describe("searchArticles", () => {
 		]);
 		const hits = await searchArticles("ירושלימ", 10);
 		const [, params] = mockQuery.mock.calls[0];
-		expect(params?.[0]).toBe(termRegexp("ירושלימ"));
+		expect(params?.[0]).toBe(termGateRegexp("ירושלימ"));
+		expect(params?.[1]).toBe(termRegexp("ירושלימ"));
 		expect(candidateSemantics("ירושלימ", "ירושלים")).toBe(true);
 		expect(hits[0].score).toBe(120); // fuzzy 60 on the name, ×2 weight
 	});
@@ -597,15 +631,20 @@ describe("searchTanahpediaEntries", () => {
 		expect(sql).toContain("FROM tanahpedia_entry e");
 		expect(sql).toContain("MAX_EXECUTION_TIME");
 		expect(sql).toContain("LIMIT 1000");
-		// One REGEXP_LIKE per searchable field plus one inside the synonym
-		// EXISTS clause — four per term in WHERE — then a phrase flag and a
-		// three-pattern estimate per fragment in ORDER BY rank.
-		expect(sql.match(/REGEXP_LIKE\(/g)).toHaveLength(20);
+		// Two REGEXP_LIKE per searchable field (gate + candidate) plus two
+		// inside the gated synonym EXISTS — eight per term in WHERE —
+		// then a phrase flag and a three-pattern estimate per fragment in
+		// ORDER BY rank.
+		expect(sql.match(/REGEXP_LIKE\(/g)).toHaveLength(24);
 		expect(sql.match(/tanahpedia_entry_synonym/g)?.length).toBeGreaterThan(0);
 		expect(params).toEqual([
+			termGateRegexp("משה"),
 			termRegexp("משה"),
+			termGateRegexp("משה"),
 			termRegexp("משה"),
+			termGateRegexp("משה"),
 			termRegexp("משה"),
+			termGateRegexp("משה"),
 			termRegexp("משה"),
 			phraseRegexp(["משה"]),
 			...termRankPatterns("משה"),
@@ -695,7 +734,8 @@ describe("searchTanahpediaEntries", () => {
 		const [, params] = mockQuery.mock.calls[0];
 		// The mocked query returns rows without applying WHERE — verify the
 		// generated pattern's contract would select the misspelled title.
-		expect(params?.[0]).toBe(termRegexp("ירושלימ"));
+		expect(params?.[0]).toBe(termGateRegexp("ירושלימ"));
+		expect(params?.[1]).toBe(termRegexp("ירושלימ"));
 		expect(candidateSemantics("ירושלימ", "ירושלים")).toBe(true);
 		expect(hits).toHaveLength(1);
 		expect(hits[0].score).toBe(120); // fuzzy 60 at name weight

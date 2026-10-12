@@ -108,7 +108,14 @@ too-short word (both dead candidates) is rejected outright and short
 chunks stay selective. Every quantifier in the pattern is bounded —
 the in-word prefix before a chunk is capped at `hi - chunk` letters —
 because an unbounded scan under a nested quantifier trips MySQL's
-`regexp_time_limit` on a full-table `WHERE` scan. Scoring is unchanged in JS, so the fuzzy
+`regexp_time_limit` on a full-table `WHERE` scan. Bounded or not, that
+scan is still too expensive to run on every row, so each WHERE field
+wraps the candidate eval in `CASE WHEN REGEXP_LIKE(col, gate) THEN
+REGEXP_LIKE(col, candidate) ELSE 0 END`: the gate is the term's chunk
+union as bare ordered-letters patterns — a strict superset of every
+anchor (prefix words contain the whole term, fuzzy words an intact
+chunk) and the same cheap scan shape the pre-#2140 WHERE used — so
+chunk-free rows never pay the word-bounded pattern. Scoring is unchanged in JS, so the fuzzy
 60/80/90/100/110 tiers apply uniformly across all four DB providers
 exactly as they do for the in-memory corpora. Articles score name,
 abstract, and content independently (name keeps

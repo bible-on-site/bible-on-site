@@ -5,6 +5,7 @@ import {
 	searchAuthors,
 	searchPerushNotes,
 	searchTanahpediaEntries,
+	termGateRegexp,
 	termRankPatterns,
 	termRegexp,
 } from "../../src/lib/search/db-content";
@@ -100,6 +101,17 @@ test.describe("generated search patterns on real MySQL", () => {
 			["ירוש לימ", e, "ירוש לימ", p, "ירוש לימ", f],
 		);
 		expect(Number(rows[0].estimate)).toBe(0);
+	});
+
+	test("the CASE gate admits every text the candidate pattern selects", async () => {
+		// The gate is a strict superset: if a chunk-bearing text slipped
+		// it, the bounded candidate pattern would never run and results
+		// would silently disappear (#2140 follow-up).
+		const term = "ירושלימ";
+		for (const text of ["על ירושלים נאמר", "ירושלמי", "בירושלים"]) {
+			await expect(regexpLike(text, termGateRegexp(term))).resolves.toBe(true);
+		}
+		await expect(regexpLike("אזור", termGateRegexp(term))).resolves.toBe(false);
 	});
 
 	test("executes every provider's candidate query end-to-end", async () => {

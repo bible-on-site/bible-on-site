@@ -176,6 +176,24 @@ export function termRegexp(term: string): string {
 }
 
 /**
+ * Cheap superset of {@link termRegexp}: the union of the term's
+ * {@link termChunks chunks} as bare ordered-letters patterns, with no
+ * word anchoring — the same shape the pre-#2140 WHERE ran on every row.
+ * Every candidate anchor implies an intact chunk in the text (the
+ * prefix anchor contains all of the term's letters, so it contains
+ * each chunk), which makes the union a strict superset: rows with no
+ * chunk can skip the bounded-lookahead pattern entirely. The WHERE
+ * instantiates it inside `CASE WHEN`, whose branch evaluation is
+ * guaranteed lazy, so the expensive path runs only on chunk-bearing
+ * rows — that is what keeps the full-table scan inside
+ * `MAX_EXECUTION_TIME` (#2140 follow-up). Exported for unit tests.
+ */
+export function termGateRegexp(term: string): string {
+	const chunks = termChunks(term).map(lettersRegexp);
+	return chunks.length === 1 ? chunks[0] : `(?:${chunks.join("|")})`;
+}
+
+/**
  * The word-level patterns the pre-cap rank instantiates per term, in
  * ascending match coverage: whole-word exact (scorer's 90 tier),
  * word-start prefix (80), then the full {@link termRegexp} candidate
@@ -205,9 +223,13 @@ export function phraseRegexp(terms: string[]): string {
 /**
  * Per-term candidate predicate: every term must match at least one of the
  * fragments (AND across terms, OR across fragments). Each fragment is a
- * boolean SQL expression containing exactly one `?` placeholder bound to
- * the term's regexp pattern — a `REGEXP_LIKE(col, ?, 'i')` or a compound
- * expression built around one (e.g. the Tanahpedia synonym subquery).
+ * boolean SQL expression containing exactly two `?` placeholders — the
+ * {@link termGateRegexp gate} first, then the term's full candidate
+ * pattern — inside a `CASE WHEN gate THEN full ELSE 0 END` (or an
+ * equivalent compound like the Tanahpedia synonym subquery). The gate
+ * keeps the bounded-lookahead pattern off rows that contain no chunk
+ * at all, which is what keeps the full-table scan inside
+ * `MAX_EXECUTION_TIME` (#2140 follow-up).
  */
 function matchPredicates(
 	predicates: string[],
@@ -218,7 +240,9 @@ function matchPredicates(
 } {
 	return {
 		where: terms.map(() => `(${predicates.join(" OR ")})`).join(" AND "),
-		params: terms.flatMap((term) => predicates.map(() => termRegexp(term))),
+		params: terms.flatMap((term) =>
+			predicates.flatMap(() => [termGateRegexp(term), termRegexp(term)]),
+		),
 	};
 }
 
@@ -231,7 +255,11 @@ function matchClauses(
 	params: string[];
 } {
 	return matchPredicates(
-		columns.map((col) => `REGEXP_LIKE(${col}, ?, 'i')`),
+		columns.map(
+			(col) =>
+				`CASE WHEN REGEXP_LIKE(${col}, ?, 'i') ` +
+				`THEN REGEXP_LIKE(${col}, ?, 'i') ELSE 0 END`,
+		),
 		terms,
 	);
 }
@@ -541,6 +569,22 @@ const TANAHPEDIA_SYNONYM_MATCH = `EXISTS (
 		   AND REGEXP_LIKE(syn.name, ?, 'i'))`;
 
 /**
+ * The WHERE-clause form of {@link TANAHPEDIA_SYNONYM_MATCH}: the same
+ * correlated `EXISTS` with the candidate pattern gated behind the
+ * term's cheap chunk union, so entries whose aliases hold no chunk
+ * skip the bounded-lookahead eval. Two `?` placeholders — gate then
+ * full pattern — like every other match predicate.
+ */
+const TANAHPEDIA_SYNONYM_GATED_MATCH = `EXISTS (
+		SELECT 1
+		  FROM tanahpedia_entry_synonym syn
+		  LEFT JOIN tanahpedia_entry_synonym_disambiguation dis
+		    ON dis.synonym_id = syn.id
+		 WHERE (syn.entry_id = e.id OR dis.entry_id = e.id)
+		   AND CASE WHEN REGEXP_LIKE(syn.name, ?, 'i')
+		            THEN REGEXP_LIKE(syn.name, ?, 'i') ELSE 0 END)`;
+
+/**
  * Lexical Tanahpedia entry search over title, unique_name, synonym names,
  * and body content. Every `tanahpedia_entry` row is public (proposals
  * stay in `tanahpedia_entry_revision` until applied), so the full table
@@ -555,10 +599,13 @@ export async function searchTanahpediaEntries(
 	if (terms.length === 0) return [];
 	const { where, params } = matchPredicates(
 		[
-			"REGEXP_LIKE(e.title, ?, 'i')",
-			"REGEXP_LIKE(e.unique_name, ?, 'i')",
-			"REGEXP_LIKE(e.content, ?, 'i')",
-			TANAHPEDIA_SYNONYM_MATCH,
+			"CASE WHEN REGEXP_LIKE(e.title, ?, 'i') " +
+				"THEN REGEXP_LIKE(e.title, ?, 'i') ELSE 0 END",
+			"CASE WHEN REGEXP_LIKE(e.unique_name, ?, 'i') " +
+				"THEN REGEXP_LIKE(e.unique_name, ?, 'i') ELSE 0 END",
+			"CASE WHEN REGEXP_LIKE(e.content, ?, 'i') " +
+				"THEN REGEXP_LIKE(e.content, ?, 'i') ELSE 0 END",
+			TANAHPEDIA_SYNONYM_GATED_MATCH,
 		],
 		terms,
 	);
