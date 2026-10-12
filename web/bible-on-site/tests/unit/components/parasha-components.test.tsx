@@ -49,10 +49,15 @@ jest.mock("@/lib/articles/service", () => ({
 jest.mock("@/lib/tanahpedia/perek-entity-refs", () => ({
 	fetchAllEntityRefs: jest.fn().mockResolvedValue([]),
 }));
+// Capture the props reaching the shared carousel so the page wiring —
+// in-place click handling and scope-correct division perush hrefs — is
+// assertable without rendering the section itself.
+const perushimSectionProps: Record<string, unknown>[] = [];
 jest.mock("@/app/929/[number]/components/PerushimSection", () => ({
-	PerushimSection: ({ title }: { title: string }) => (
-		<div data-testid={`perushim-${title}`} />
-	),
+	PerushimSection: (props: Record<string, unknown> & { title: string }) => {
+		perushimSectionProps.push(props);
+		return <div data-testid={`perushim-${props.title}`} />;
+	},
 }));
 jest.mock("@/app/929/[number]/components/ArticlesSection", () => ({
 	ArticlesSection: ({ title }: { title: string }) => (
@@ -329,6 +334,38 @@ describe("ParashaUnitPage", () => {
 		expect(screen.getByTestId("perushim-פרשנים על ההפטרה")).toBeInTheDocument();
 		expect(screen.getByTestId("articles-מאמרים על ההפטרה")).toBeInTheDocument();
 		expect(screen.getByTestId("parasha-book")).toBeInTheDocument();
+	});
+
+	it("keeps Torah and Haftarah perushim inside the division page (issue #2190)", async () => {
+		perushimSectionProps.length = 0;
+		const jsx = await ParashaUnitPage({
+			params: Promise.resolve({ unit: "1" }),
+		});
+		render(jsx);
+		const hrefOf = (props: Record<string, unknown>) =>
+			(props.hrefForPerush as (p: { name: string }) => string)({
+				name: 'רש"י',
+			});
+		const torahProps = perushimSectionProps.filter(
+			(props) => props.title === "פרשנים על הפרשה",
+		);
+		const haftaraProps = perushimSectionProps.filter(
+			(props) => props.title === "פרשנים על ההפטרה",
+		);
+		expect(torahProps.length).toBeGreaterThan(0);
+		expect(haftaraProps.length).toBeGreaterThan(0);
+		for (const props of torahProps) {
+			expect(decodeURIComponent(hrefOf(props))).toBe('/פרשה/1?perush=רש"י');
+		}
+		for (const props of haftaraProps) {
+			expect(decodeURIComponent(hrefOf(props))).toBe(
+				'/פרשה/1?haftaraPerush=רש"י',
+			);
+		}
+		// Each scope also opens in place via its live section.
+		expect(
+			perushimSectionProps.filter((props) => props.onPerushClick),
+		).toHaveLength(2);
 	});
 
 	it("renders prev/next parasha links", async () => {

@@ -1,8 +1,8 @@
 import { Suspense } from "react";
+import perekStyles from "@/app/929/[number]/page.module.css";
 import { getPerekByPerekId } from "@/data/perek-dto";
 import type { ScriptureRange } from "@/lib/reading/contract";
 import type { PerekEntityReference } from "@/lib/tanahpedia/service";
-import perekStyles from "@/app/929/[number]/page.module.css";
 import { ScrollToUnitPasuk } from "./ScrollToUnitPasuk";
 import { UnitTextBody } from "./UnitTextBody";
 
@@ -23,6 +23,7 @@ export function SharedUnitText({
 	pasukCount,
 	scrollScope = "",
 	anchorScope,
+	unitPositionMarkers,
 }: {
 	ranges: ScriptureRange[];
 	entityRefsByPerek: Record<number, PerekEntityReference[]>;
@@ -32,6 +33,10 @@ export function SharedUnitText({
 	 * ranges overlap another article's pesukim — the hash scroller falls
 	 * back to the scoped id inside the matching article. */
 	anchorScope?: string;
+	/** Forwarded to UnitTextBody — parasha-position markers and no perek
+	 * chrome, for division readers that hide conventional chapter
+	 * apparatus. */
+	unitPositionMarkers?: boolean;
 }) {
 	return (
 		<article className={perekStyles.perekText} data-unit-text={scrollScope}>
@@ -43,6 +48,7 @@ export function SharedUnitText({
 				entityRefsByPerek={entityRefsByPerek}
 				pasukCount={pasukCount}
 				anchorScope={anchorScope}
+				unitPositionMarkers={unitPositionMarkers}
 				resolvePerek={(perekId) => {
 					const perek = getPerekByPerekId(perekId);
 					return perek
