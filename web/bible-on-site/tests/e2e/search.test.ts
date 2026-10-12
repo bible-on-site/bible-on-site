@@ -55,13 +55,8 @@ test.describe("Site search", () => {
 		// item is the reader (#2102).
 		const firstItem = menu.locator("ul li").first();
 		await expect(firstItem.getByRole("link")).toHaveText(/על הפרק/);
-		await expect(firstItem.getByRole("link")).toHaveAttribute(
-			"href",
-			"/929",
-		);
-		await expect(
-			menu.getByRole("link", { name: "חיפוש" }),
-		).toHaveCount(0);
+		await expect(firstItem.getByRole("link")).toHaveAttribute("href", "/929");
+		await expect(menu.getByRole("link", { name: "חיפוש" })).toHaveCount(0);
 	});
 
 	test("renders SSR results for a shared query URL", async ({ page }) => {
@@ -73,12 +68,8 @@ test.describe("Site search", () => {
 		await expect(perekLink).toBeVisible();
 
 		// Result groups are headed by their Hebrew type names.
-		await expect(
-			page.getByRole("heading", { name: "פרקים" }),
-		).toBeVisible();
-		await expect(
-			page.getByRole("heading", { name: "פסוקים" }),
-		).toBeVisible();
+		await expect(page.getByRole("heading", { name: "פרקים" })).toBeVisible();
+		await expect(page.getByRole("heading", { name: "פסוקים" })).toBeVisible();
 	});
 
 	test("typing settles into a shareable URL and live results", async ({
@@ -91,18 +82,19 @@ test.describe("Site search", () => {
 		await page.waitForURL(/q=/, { timeout: 5000 });
 		await expect(page).toHaveURL(/q=%D7%A9%D7%9E%D7%A2/);
 		// שמע ישראל appears in several perakim; דברים ו ד must be among them.
+		// The response waits on the DB providers too — the perushim
+		// REGEXP candidate scan takes several seconds on the ~50k-row
+		// note column (#2140), so allow more than the 5s expect default.
 		await expect(
 			page.locator('a[data-result-link][href="/929/159#pasuk-4"]'),
-		).toBeVisible();
+		).toBeVisible({ timeout: 15000 });
 	});
 
 	test("result links are ordinary crawlable links to canonical pages", async ({
 		page,
 	}) => {
 		await page.goto("/search?q=שמע ישראל");
-		const link = page.locator(
-			'a[data-result-link][href="/929/159#pasuk-4"]',
-		);
+		const link = page.locator('a[data-result-link][href="/929/159#pasuk-4"]');
 		await expect(link).toBeVisible();
 		await link.click();
 		await page.waitForURL("**/929/159**");
@@ -124,12 +116,43 @@ test.describe("Site search", () => {
 		await page.goto("/search?q=בראשית");
 		await page.getByRole("checkbox", { name: "פסוקים" }).click();
 		await expect(page).toHaveURL(/type=/);
+		// Toggling a filter refetches live — including the multi-second
+		// perushim candidate scan — so the swapped result groups need a
+		// wider window than the 5s expect default (#2140).
+		await expect(page.getByRole("heading", { name: "פסוקים" })).toHaveCount(0, {
+			timeout: 15000,
+		});
+		await expect(page.getByRole("heading", { name: "פרקים" })).toBeVisible({
+			timeout: 15000,
+		});
+	});
+
+	test("finds DB-backed results for a misspelled query (#2140)", async ({
+		page,
+	}) => {
+		// בראשת is one deletion away from בראשית — inside the scorer's
+		// 1-edit bound, so the fuzzy-eligible rows must be selected by
+		// MySQL and ranked by the JS scorer.
+		await page.goto(`/search?q=${encodeURIComponent("בראשת")}`);
+
+		// Perush notes on בראשית א contain בראשית — the fuzzy hit reaches
+		// the commentary group on the real REGEXP path. The fuzzy candidate
+		// scan takes several seconds on the ~50k-row note column, so allow
+		// more than the 5s expect default (#2140).
+		await expect(page.getByRole("heading", { name: "פירושים" })).toBeVisible({
+			timeout: 15000,
+		});
+		// Seeded article names contain בראשית too — same path, articles.
+		await expect(page.getByRole("heading", { name: "מאמרים" })).toBeVisible();
+
+		// יהוסע is one deletion away from the יהושע title/alias — the
+		// Tanahpedia provider must surface its canonical entry.
+		await page.goto(`/search?q=${encodeURIComponent("יהוסע")}`);
 		await expect(
-			page.getByRole("heading", { name: "פסוקים" }),
-		).toHaveCount(0);
-		await expect(
-			page.getByRole("heading", { name: "פרקים" }),
-		).toBeVisible();
+			page.locator(
+				`a[data-result-link][href="/pedia/${encodeURIComponent("יהושע-בן-נון")}"]`,
+			),
+		).toBeVisible({ timeout: 15000 });
 	});
 
 	test("finds Tanahpedia entries by title, alias and body text", async ({
@@ -138,9 +161,7 @@ test.describe("Site search", () => {
 		await page.goto(`/search?q=${encodeURIComponent("משה")}`);
 
 		// Title + alias match: the result links the canonical entry slug.
-		await expect(
-			page.getByRole("heading", { name: "תנכפדיה" }),
-		).toBeVisible();
+		await expect(page.getByRole("heading", { name: "תנכפדיה" })).toBeVisible();
 		const entryLink = page.locator(
 			`a[data-result-link][href="/pedia/${encodeURIComponent("משה-רבנו")}"]`,
 		);
@@ -196,18 +217,15 @@ test.describe("Site search", () => {
 	}) => {
 		const response = await page.goto("/search?q=בראשית");
 		expect(response?.status()).toBe(200);
-		await expect(
-			page.locator('meta[name="robots"]'),
-		).toHaveAttribute("content", /noindex/);
+		await expect(page.locator('meta[name="robots"]')).toHaveAttribute(
+			"content",
+			/noindex/,
+		);
 		// The search page itself must not appear in the sitemap.
 	});
 
-	test("sitemap stays limited to canonical content", async ({
-		request,
-	}) => {
-		const sitemap = await (
-			await request.get("/sitemap.xml")
-		).text();
+	test("sitemap stays limited to canonical content", async ({ request }) => {
+		const sitemap = await (await request.get("/sitemap.xml")).text();
 		expect(sitemap).not.toContain("/search");
 	});
 });
@@ -232,4 +250,3 @@ test.describe("/api/search", () => {
 		expect(response.status()).toBe(400);
 	});
 });
-
