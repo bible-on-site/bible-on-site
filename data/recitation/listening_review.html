@@ -27,6 +27,7 @@ button:disabled {opacity:.45;cursor:default}
 .word {font-family:"Times New Roman",serif;font-size:28px;padding:5px 12px;border-color:transparent;background:#f5f7fa}
 .word.heard {border-bottom-color:#4c8d72}
 .word.active {background:#dbeaff;outline:2px solid #8ab5e9}
+.word.changed {border:1px solid #d7ac60}
 #listening {color:#607086;font-size:14px;min-height:22px}
 textarea {resize:vertical;width:100%;border:1px solid #d5dde7;border-radius:10px;padding:12px;font:inherit;margin:8px 0 20px}
 .actions {display:flex;gap:8px;flex-wrap:wrap}
@@ -88,6 +89,7 @@ function stop() {
 function updateEvidence() {
   const heard = heardNow();
   $("listening").textContent = heard.segments.size + "/" + caseNow().words.length + " חיתוכים נשמעו" + (heard.verse ? " · הפסוק נשמע" : "");
+  if (caseNow().reusableHeardSegments?.length) $("listening").textContent += " · " + caseNow().reusableHeardSegments.length + " חיתוכים ללא שינוי מההאזנה הקודמת";
   $("good").disabled = saving || heard.segments.size !== caseNow().words.length;
 }
 function render() {
@@ -100,7 +102,9 @@ function render() {
   }
   if (!evidence.has(item.id)) {
     const saved = decisions[item.id]?.listenEvidenceReportedByBrowser;
-    evidence.set(item.id, {verse: saved?.verseHeard === true, segments: new Set(saved?.heardSegments ?? [])});
+    evidence.set(item.id, {verse: saved?.verseHeard === true,
+      segments: new Set(saved?.heardSegments ?? item.reusableHeardSegments ?? []),
+      fresh: new Set(saved?.freshHeardSegments ?? (item.reusableHeardSegments ? [] : saved?.heardSegments ?? []))});
   }
   $("progress").textContent = "פסוק " + (index + 1) + " מתוך " + cases.length + " · " + Object.keys(decisions).length + " תשובות נשמרו";
   $("reference").textContent = item.label;
@@ -112,13 +116,14 @@ function render() {
   for (const word of item.words) {
     const button = document.createElement("button");
     button.className = "word" + (heardNow().segments.has(word.segment) ? " heard" : "");
+    if (item.changedSegments?.includes(word.segment)) button.classList.add("changed");
     button.textContent = word.text;
     button.dataset.segment = word.segment;
     button.setAttribute("aria-label", "האזנה לחיתוך " + word.text);
     button.onclick = () => void play("word", word);
     $("words").append(button);
   }
-  $("note").value = decisions[item.id]?.note ?? "";
+  $("note").value = decisions[item.id]?.note ?? item.priorNote ?? "";
   $("previous").disabled = index === 0;
   $("next").disabled = index === cases.length - 1;
   $("status").textContent = decisions[item.id] ? "תשובה נשמרה: " + {good:"החיתוכים טובים",problem:"יש בעיה",skip:"דילוג"}[decisions[item.id].verdict] : "";
@@ -181,6 +186,7 @@ async function play(mode, selected) {
       for (const word of mode === "cuts" ? item.words : [selected]) {
         if (!await playSlice(buffer,item,word.startMs,word.endMs,request,word)) return;
         evidence.get(item.id).segments.add(word.segment);
+        evidence.get(item.id).fresh.add(word.segment);
         document.querySelector('[data-segment="' + word.segment + '"]')?.classList.add("heard");
         updateEvidence();
         if (mode === "cuts") await new Promise(resolve => setTimeout(resolve,160));
@@ -207,7 +213,7 @@ async function save(verdict) {
     const response = await fetch("/api/reviews", {
       method:"POST", headers:{"Content-Type":"application/json","X-Review-Token":token},
       body:JSON.stringify({caseId:item.id,candidateSha256:item.candidateSha256,verdict,
-        verseHeard:heard.verse,heardSegments:[...heard.segments],note:$("note").value})
+        verseHeard:heard.verse,heardSegments:[...heard.segments],freshHeardSegments:[...heard.fresh],note:$("note").value})
     });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error);
