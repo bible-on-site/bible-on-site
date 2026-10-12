@@ -113,6 +113,17 @@ describe("adminEditorShortcuts", () => {
 			linkType: "comment",
 		});
 
+		vi.mocked(editor.getAttributes).mockReturnValue({
+			href: "#note-4",
+			linkType: "comment",
+		});
+		promptSpy.mockReturnValueOnce("#note-5");
+		expect(parseStoredShortcutExtras(editor)["Mod-k"]()).toBe(true);
+		expect(promptSpy).toHaveBeenLastCalledWith(
+			"מספר הערה או #note-1",
+			"#note-4",
+		);
+
 		promptSpy.mockReturnValueOnce("");
 		expect(parseStoredShortcutExtras(editor)["Mod-k"]()).toBe(true);
 		expect(chain.extendMarkRange).toHaveBeenCalledWith("link");
