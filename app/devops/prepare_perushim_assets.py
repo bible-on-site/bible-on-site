@@ -13,11 +13,12 @@ NOTES = "sefaria-dump-5784-sivan-4.perushim_notes.sqlite"
 SEARCH_INDEX = "sefaria-dump-5784-sivan-4.hebrew_search.sqlite"
 NOTES_DIRECTORIES = {
     "Android": "Platforms/Android/AssetPacks/perushim_notes",
-    "iOS": "Platforms/iOS/Assets/PerushimNotes.xcassets/perushim_notes.dataset",
+    "iOS": "Platforms/iOS/AssetPacks/perushim_notes",
 }
+# The prebuilt search index rides in the same asset pack as the notes payload.
 SEARCH_INDEX_DIRECTORIES = {
     "Android": "Platforms/Android/AssetPacks/perushim_notes",
-    "iOS": "Platforms/iOS/Assets/PerushimNotes.xcassets/perushim_search.dataset",
+    "iOS": "Platforms/iOS/AssetPacks/perushim_notes",
 }
 
 
