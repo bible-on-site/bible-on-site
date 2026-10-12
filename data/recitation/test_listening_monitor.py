@@ -3,6 +3,7 @@ from contextlib import closing
 import json
 from pathlib import Path
 import sqlite3
+import subprocess  # nosec B404: creates a probe-error fixture only.
 import tempfile
 import threading
 import unittest
@@ -25,7 +26,9 @@ class ListeningMonitorTests(unittest.TestCase):
 
             def stage(*args):
                 calls.append(args)
-                if len(calls) > 1:
+                if len(calls) == 2:
+                    raise subprocess.CalledProcessError(3221225786, ["ffprobe"])
+                if len(calls) == 3:
                     raise ValueError("stale source")
                 return {"accepted": [7], "withdrawn": []}
             monitor = RecoveryMonitor(root / "queue.json", root / "reviews.json",
@@ -44,10 +47,20 @@ class ListeningMonitorTests(unittest.TestCase):
                 completed.clear()
                 monitor.notify()
                 self.assertTrue(completed.wait(5))
+                self.assertIn("3221225786", monitor.snapshot()["error"])
+                self.assertTrue(monitor.thread.is_alive())
+                completed.clear()
+                monitor.notify()
+                self.assertTrue(completed.wait(5))
                 self.assertEqual(monitor.snapshot()["error"], "stale source")
+                completed.clear()
+                monitor.notify()
+                self.assertTrue(completed.wait(5))
+                self.assertEqual(monitor.snapshot()["state"], "complete")
+                self.assertIsNone(monitor.snapshot()["error"])
                 monitor.close()
             self.assertEqual(database.read_bytes(), before)
-            self.assertEqual(len(calls), 2)
+            self.assertEqual(len(calls), 4)
 
 
 if __name__ == "__main__":

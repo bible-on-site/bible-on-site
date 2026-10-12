@@ -14,6 +14,7 @@ import threading
 import wave
 
 from alignment import load_chapters, text_hash, validate_timings, words_for
+from listening_audio import hidden_audio_options
 
 RATE = 16000
 ALIGN_REVISION = "b2e683004903f1b11bee2c6092a7c323ed858d82"
@@ -111,7 +112,7 @@ def make_clip(audio, destination, start, end):
     decoded = subprocess.run([  # nosec B603: resolved FFmpeg, absolute input, no shell.  # nosemgrep
         executable, "-hide_banner", "-loglevel", "error", "-nostdin", "-threads", "2",
         "-i", str(audio.resolve()), "-ar", str(RATE), "-ac", "1", "-f", "s32le", "pipe:1",
-    ], check=True, timeout=120, capture_output=True)
+    ], check=True, timeout=120, capture_output=True, **hidden_audio_options())
     first, last = start * 16 * 4, end * 16 * 4
     if len(decoded.stdout) < last:
         raise ValueError("Context extends beyond the fully decoded original recording")
@@ -356,11 +357,25 @@ class ListeningHandler(BaseHTTPRequestHandler):
             return self.json_response(500, {"error": "Could not save review; please retry"})
 
 
-def make_server(queue, store, port, recovery=None):
+def session_token(path, queue_hash):
+    """Keep an open browser session valid through a same-queue server restart."""
+    if path and path.exists():
+        saved = read_json(path)
+        token = saved.get("token")
+        if (saved.get("queueSha256") == queue_hash and isinstance(token, str)
+                and len(token) >= 43 and all(c.isascii() and (c.isalnum() or c in "_-") for c in token)):
+            return token
+    token = secrets.token_urlsafe(32)
+    if path:
+        write_json(path, {"queueSha256": queue_hash, "token": token})
+    return token
+
+
+def make_server(queue, store, port, recovery=None, token_path=None):
     server = ThreadingHTTPServer(("127.0.0.1", port), ListeningHandler)
     server.recovery = recovery
     server.origin = f"http://127.0.0.1:{server.server_port}"
-    server.token = secrets.token_urlsafe(32)
+    server.token = session_token(token_path, queue["queueSha256"])
     server.template = Path(__file__).with_name("listening_review.html").read_bytes()
     server.queue = queue
     server.cases = {case["id"]: case for case in queue["cases"]}
@@ -390,6 +405,7 @@ def main():
     serve.add_argument("--reviews", type=Path, required=True)
     serve.add_argument("--port", type=int, default=8766)
     serve.add_argument("--check-only", action="store_true")
+    serve.add_argument("--session-token-file", type=Path)
     serve.add_argument("--recovery-database", type=Path)
     serve.add_argument("--recovery-output", type=Path)
     args = parser.parse_args()
@@ -410,7 +426,7 @@ def main():
                                        args.recovery_output, args.recovery_database)
             store.on_saved = recovery.notify
             recovery.start()
-        server = make_server(queue, store, args.port, recovery)
+        server = make_server(queue, store, args.port, recovery, args.session_token_file)
         print(f"http://127.0.0.1:{server.server_port}/ - {len(queue['cases'])} verses", flush=True)
         try:
             server.serve_forever()

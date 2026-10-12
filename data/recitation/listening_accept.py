@@ -11,12 +11,13 @@ import shutil
 import tempfile
 
 from alignment import load_chapters, reconcile, validate_timings, words_for
+from listening_audio import duration
 from listening_review import (ReviewStore, digest_file, digest_json,
                               read_json, validate_case, validate_decision)
 from listening_round import load_review_evidence
 from listening_tail import verify_corrections
 from model_versions import ALIGN_MODEL, ALIGN_REVISION, ASR_MODEL, ASR_REVISION
-from recite import cached_transcript, duration, export_database, write_json
+from recite import cached_transcript, export_database, write_json
 from trusted import POLICY_VERSION, SOFT_WARNING, TRUSTED_PIPELINE, valid_score, verify_source, verify_warnings
 
 POLICY = "targeted-human-listening-v1"

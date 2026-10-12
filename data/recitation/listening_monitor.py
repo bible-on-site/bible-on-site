@@ -2,6 +2,7 @@
 from contextlib import closing
 import json
 import sqlite3
+import subprocess  # nosec B404: catches audio probe errors; launches no process.
 import threading
 
 from listening_accept import stage_reviews
@@ -52,5 +53,5 @@ class RecoveryMonitor:
                         for row in db.execute("SELECT provenance_json FROM recitation_track WHERE alignment_status='ready'"))
                 self.update(state="complete", humanRecoveredChapters=count,
                             accepted=summary["accepted"], withdrawn=summary["withdrawn"], error=None)
-            except (ValueError, KeyError, TypeError, OSError, sqlite3.Error) as error:
+            except (ValueError, KeyError, TypeError, OSError, sqlite3.Error, subprocess.SubprocessError) as error:
                 self.update(state="error", error=str(error))
