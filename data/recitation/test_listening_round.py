@@ -23,8 +23,11 @@ class ListeningRoundTests(unittest.TestCase):
         self.assertEqual(self.reviews.read_bytes(),before)
     def test_changed_candidate_requires_new_answer_unchanged_candidate_keeps_binding(self):
         for expected in ['old','new']:
-            active={'cases':[] if expected=='old' else [{**self.case,'candidateSha256':'new'}], 'queueSha256':'new-queue','archivedQueues':[{'path':str(self.path),'sha256':digest_file(self.path)}]}
-            with patch('listening_round.load_queue',side_effect=lambda p:self.old if p==self.path else active):q,b=load_review_evidence(self.root/'active.json')
+            active = {'cases': [] if expected == 'old' else [{**self.case, 'candidateSha256': 'new'}],
+                      'queueSha256': 'new-queue',
+                      'archivedQueues': [{'path': str(self.path), 'sha256': digest_file(self.path)}]}
+            with patch('listening_round.load_queue', side_effect=lambda p: self.old if p == self.path else active):
+                q, b = load_review_evidence(self.root / 'active.json')
             self.assertEqual(q['cases'][0]['candidateSha256'],expected)
             self.assertEqual(b['1-1'],['old-queue'] if expected=='old' else ['new-queue'])
             self.assertEqual(bool(ReviewStore(self.reviews,q).snapshot()),expected=='old')
@@ -41,7 +44,11 @@ class ListeningRoundTests(unittest.TestCase):
         corrected,changes=correct_ends(rows,evidence,{(1,1)})
         self.assertEqual(corrected[0]['endMs'],570);self.assertEqual(rows[0]['endMs'],400)
         d={'boundaryMethod':METHOD,'letterCandidates':rows,'diagnosticCandidates':corrected,'boundaryCorrections':changes};verify_corrections(d)
-        for change in [lambda d:d['diagnosticCandidates'][0].update(endMs=600),lambda d:d['diagnosticCandidates'][0].update(startMs=80),lambda d:d.update(boundaryCorrections=[]),lambda d:d['boundaryCorrections'][0].update(followingWordStartMs=550)]:
+        mutations = (lambda d: d['diagnosticCandidates'][0].update(endMs=600),
+                     lambda d: d['diagnosticCandidates'][0].update(startMs=80),
+                     lambda d: d.update(boundaryCorrections=[]),
+                     lambda d: d['boundaryCorrections'][0].update(followingWordStartMs=550))
+        for change in mutations:
             candidate=deepcopy(d);change(candidate)
             with self.assertRaises(ValueError):verify_corrections(candidate)
         evidence[0]['separatorStartMs']=400
@@ -51,5 +58,6 @@ class ListeningRoundTests(unittest.TestCase):
             'diagnosticCandidates':corrected,'boundaryCorrections':changes})
         evidence[0]['separatorStartMs']=390
         with self.assertRaises(ValueError):correct_ends(rows,evidence,{(1,1)})
+
 
 if __name__=='__main__':unittest.main()

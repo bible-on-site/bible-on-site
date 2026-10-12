@@ -22,6 +22,7 @@ class ListeningMonitorTests(unittest.TestCase):
             before = database.read_bytes()
             calls = []
             completed = threading.Event()
+
             def stage(*args):
                 calls.append(args)
                 if len(calls) > 1:
@@ -30,6 +31,7 @@ class ListeningMonitorTests(unittest.TestCase):
             monitor = RecoveryMonitor(root / "queue.json", root / "reviews.json",
                 root / "text.json", root / "results", database)
             original_update = monitor.update
+
             def update(**values):
                 original_update(**values)
                 if values.get("state") in ("complete", "error"):
@@ -46,6 +48,7 @@ class ListeningMonitorTests(unittest.TestCase):
                 monitor.close()
             self.assertEqual(database.read_bytes(), before)
             self.assertEqual(len(calls), 2)
+
 
 if __name__ == "__main__":
     unittest.main()

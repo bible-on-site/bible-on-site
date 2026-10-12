@@ -9,6 +9,7 @@ from listening_review import write_json
 
 class RecoveryMonitor:
     def __init__(self, queue, reviews, text, output, database):
+        """Bind only explicit source paths and a separate recovery preview database."""
         self.arguments = queue, reviews, text, output, database
         self.output, self.database = output, database
         self.changed, self.stopping = threading.Event(), threading.Event()
