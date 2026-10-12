@@ -12,7 +12,7 @@ public class AssetPackCacheTests
     [Theory]
     [InlineData("5.0.104", "100")]
     [InlineData("5.0.100", "104")]
-    public async Task UpdatedApp_DoesNotReusePreviousBuildsExtractedNotes(string version, string build)
+    public async Task UpdatedApp_DoesNotReuse_AndSweeps_PreviousBuildsExtractedNotes(string version, string build)
     {
         await using var storage = new TestStorage();
         var app = App("5.0.100", "100");
@@ -25,7 +25,8 @@ public class AssetPackCacheTests
 
         Directory.Exists(current).Should().BeTrue();
         File.Exists(Path.Join(current, Notes)).Should().BeFalse();
-        Directory.Exists(previous).Should().BeFalse("previous-generation extractions are purged, not just ignored");
+        Directory.Exists(previous).Should().BeFalse(
+            "the generation sweep removes the previous build's extracted ODR cache");
     }
 
     [Fact]
@@ -81,7 +82,7 @@ public class AssetPackCacheTests
     }
 
     [Fact]
-    public async Task CurrentApp_DoesNotTrustLegacyUnversionedAssetPackCache()
+    public async Task CurrentApp_DoesNotTrustLegacyUnversionedAssetPackCache_AndSweepsIt()
     {
         await using var storage = new TestStorage();
         var legacy = Path.Join(storage.Root, "asset_packs", Pack);
@@ -92,6 +93,87 @@ public class AssetPackCacheTests
         var current = PadDeliveryService.AssetPackCacheDirectory(storage.FileSystem.Object, app.Object, Pack);
 
         File.Exists(Path.Join(current, Notes)).Should().BeFalse();
+        Directory.Exists(legacy).Should().BeFalse(
+            "the generation sweep removes legacy unversioned pack directories");
+    }
+
+    [Fact]
+    public async Task UndeletableStaleGeneration_IsLoggedAndSkipped_WhileOthersAreSwept()
+    {
+        await using var storage = new TestStorage();
+        var odrRoot = Path.Join(storage.Root, "asset_packs");
+        var stubborn = Path.Join(odrRoot, "4.9.0-9");
+        var collectible = Path.Join(odrRoot, "4.8.0-8");
+        Directory.CreateDirectory(stubborn);
+        Directory.CreateDirectory(collectible);
+        var file = Path.Join(stubborn, Notes);
+        await File.WriteAllTextAsync(file, "old notes", TestContext.Current.CancellationToken);
+        await File.WriteAllTextAsync(Path.Join(collectible, Notes), "old notes", TestContext.Current.CancellationToken);
+
+        // Read-only payloads cannot be deleted on Windows; a read-only
+        // generation directory blocks the unlink on Unix. Either way the
+        // generation delete fails and the sweep must keep going.
+        File.SetAttributes(file, FileAttributes.ReadOnly);
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(stubborn, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+        }
+
+        try
+        {
+            var current = PadDeliveryService.AssetPackCacheDirectory(storage.FileSystem.Object, App("5.0.104", "104").Object, Pack);
+
+            Directory.Exists(current).Should().BeTrue();
+            Directory.Exists(stubborn).Should().BeTrue("an IO failure is logged and skipped, never fatal");
+            Directory.Exists(collectible).Should().BeFalse("other stale generations are still swept");
+        }
+        finally
+        {
+            File.SetAttributes(file, FileAttributes.Normal);
+            if (!OperatingSystem.IsWindows())
+            {
+                File.SetUnixFileMode(stubborn, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task UnreadableOdrRoot_NeverBreaksCacheAccess()
+    {
+        await using var storage = new TestStorage();
+        var odrRoot = Path.Join(storage.Root, "asset_packs");
+        var stale = Path.Join(odrRoot, "4.9.0-9");
+        Directory.CreateDirectory(stale);
+        var app = App("5.0.104", "104");
+
+        // Unix mode 0300: enumeration (needs read) is denied while traversal
+        // and subdirectory creation (need write+execute) stay possible.
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(odrRoot, UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+
+        try
+        {
+            var current = PadDeliveryService.AssetPackCacheDirectory(storage.FileSystem.Object, app.Object, Pack);
+
+            Directory.Exists(current).Should().BeTrue("a failed sweep must never block ODR access");
+            if (OperatingSystem.IsWindows())
+            {
+                Directory.Exists(stale).Should().BeFalse("without ACL denial the stale generation is swept");
+            }
+            else
+            {
+                Directory.Exists(stale).Should().BeTrue("enumeration was denied, so nothing was swept");
+            }
+        }
+        finally
+        {
+            if (!OperatingSystem.IsWindows())
+            {
+                File.SetUnixFileMode(odrRoot, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            }
+        }
     }
 
     private static Mock<IAppInfo> App(string version, string build)
