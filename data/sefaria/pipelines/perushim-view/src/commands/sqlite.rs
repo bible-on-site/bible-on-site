@@ -14,12 +14,14 @@ use std::fs;
 use std::io::Write;
 use std::path::Path;
 
+use crate::commands::{note_blob, search_index};
 use crate::data::extract::{Extracted, Note, Parshan, Perush};
 
 pub fn generate(
     extracted: &Extracted,
     dump_name: &str,
     output_to_dependant_modules: bool,
+    tanah_view: &Path,
 ) -> Result<()> {
     let now = chrono::Utc::now();
     let build_timestamp = now.timestamp();
@@ -27,12 +29,13 @@ pub fn generate(
 
     println!("🕐 Build timestamp: {} ({})", build_timestamp, generated_at);
 
-    let (catalog_path, notes_path) = if output_to_dependant_modules {
+    let (catalog_path, notes_path, index_path) = if output_to_dependant_modules {
         let app_raw =
             Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../../app/BibleOnSite/Resources/Raw");
         (
             app_raw.join(format!("{}.perushim_catalog.sqlite", dump_name)),
-            // Notes go to Android PAD asset pack (on-demand delivery)
+            // Notes and its prebuilt search index go to the Android PAD pack
+            // (on-demand delivery); ODR uses the same files via the iOS dataset.
             {
                 let pad_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join(
                     "../../../../app/BibleOnSite/Platforms/Android/AssetPacks/perushim_notes",
@@ -40,6 +43,9 @@ pub fn generate(
                 fs::create_dir_all(&pad_dir)?;
                 pad_dir.join(format!("{}.perushim_notes.sqlite", dump_name))
             },
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../../../app/BibleOnSite/Platforms/Android/AssetPacks/perushim_notes")
+                .join(format!("{}.hebrew_search.sqlite", dump_name)),
         )
     } else {
         let outputs_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join(".output");
@@ -47,6 +53,7 @@ pub fn generate(
         (
             outputs_dir.join(format!("{}.perushim_catalog.sqlite", dump_name)),
             outputs_dir.join(format!("{}.perushim_notes.sqlite", dump_name)),
+            outputs_dir.join(format!("{}.hebrew_search.sqlite", dump_name)),
         )
     };
 
@@ -68,6 +75,10 @@ pub fn generate(
     )?;
     println!("📁 Notes written to: {}", notes_path.display());
 
+    search_index::build_search_index(&notes_path, tanah_view, &index_path)
+        .context("failed to build the delivered search index")?;
+    println!("📁 Search index written to: {}", index_path.display());
+
     // Create a gzip-compressed copy for git tracking (SQLite compresses ~75%).
     // The .sqlite.gz is committed to git; the uncompressed .sqlite is gitignored.
     // Perushim data updates are delivered via Play Asset Delivery (PAD) as part of the AAB —
@@ -75,6 +86,7 @@ pub fn generate(
     // app version bump → AAB rebuild → Google Play submission. The build_timestamp in
     // _metadata lets the client detect and apply the newer data on app update.
     compress_gz(&notes_path)?;
+    compress_gz(&index_path)?;
 
     Ok(())
 }
@@ -206,6 +218,10 @@ fn create_notes_db(
     let tx = conn.transaction()?;
 
     insert_metadata(&tx, dump_name, build_timestamp, generated_at)?;
+    tx.execute(
+        "INSERT INTO _metadata (key,value) VALUES ('schema_version',?1)",
+        [note_blob::SCHEMA_VERSION],
+    )?;
     // These IDs are assigned during extraction and may move between generations.
     // Carry their names with the independently delivered notes pack so clients can
     // verify the entire mapping before joining it to a bundled catalog.
@@ -218,34 +234,42 @@ fn create_notes_db(
         "INSERT INTO _metadata (key,value) VALUES ('perush_catalog',?1)",
         [serde_json::to_string(&mapping)?],
     )?;
-    insert_notes(&tx, &extracted.notes)?;
+    insert_note_blobs(&tx, &extracted.notes)?;
+    insert_perek_perush(&tx, &extracted.notes)?;
 
     tx.commit()?;
-
-    // Create indexes after bulk insert
-    conn.execute_batch(
-        r#"
-        CREATE INDEX idx_note_perush ON note(perush_id);
-        CREATE INDEX idx_note_perek ON note(perek_id);
-        CREATE INDEX idx_note_perek_pasuk ON note(perek_id, pasuk);
-        "#,
-    )?;
+    conn.execute_batch("VACUUM")?;
 
     Ok(())
 }
 
-fn insert_notes(tx: &rusqlite::Transaction, notes: &[Note]) -> Result<()> {
-    let mut stmt = tx.prepare(
-        "INSERT OR IGNORE INTO note (perush_id, perek_id, pasuk, note_idx, note_content) VALUES (?1, ?2, ?3, ?4, ?5)",
-    )?;
+/// Packs every note of a perek into one compressed blob and inserts it into
+/// `note_blob`. Notes are ordered by (pasuk, perush_id, note_idx) inside the
+/// blob — the read order every consumer expects.
+fn insert_note_blobs(tx: &rusqlite::Transaction, notes: &[Note]) -> Result<()> {
+    let mut by_perek: std::collections::BTreeMap<i64, Vec<&Note>> =
+        std::collections::BTreeMap::new();
     for n in notes {
-        stmt.execute(rusqlite::params![
-            n.perush_id,
-            n.perek_id,
-            n.pasuk,
-            n.note_idx,
-            n.note_content
-        ])?;
+        by_perek.entry(n.perek_id).or_default().push(n);
+    }
+
+    let mut stmt = tx.prepare("INSERT INTO note_blob (perek_id, data) VALUES (?1, ?2)")?;
+    for (perek_id, mut perek_notes) in by_perek {
+        perek_notes.sort_by_key(|n| (n.pasuk, n.perush_id, n.note_idx));
+        let blob = note_blob::encode_perek_blob(&perek_notes)?;
+        stmt.execute(rusqlite::params![perek_id, blob])?;
+    }
+    Ok(())
+}
+
+/// One row per (perek, perush) — the picker's "which perushim exist here" table.
+fn insert_perek_perush(tx: &rusqlite::Transaction, notes: &[Note]) -> Result<()> {
+    let pairs: std::collections::BTreeSet<(i64, i64)> =
+        notes.iter().map(|n| (n.perek_id, n.perush_id)).collect();
+
+    let mut stmt = tx.prepare("INSERT INTO perek_perush (perek_id, perush_id) VALUES (?1, ?2)")?;
+    for (perek_id, perush_id) in pairs {
+        stmt.execute(rusqlite::params![perek_id, perush_id])?;
     }
     Ok(())
 }
@@ -282,9 +306,11 @@ fn compress_gz(path: &Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::commands::fixtures::{tanah_db, temp_dir};
     use crate::data::extract::{Extracted, Note, Parshan, Perush};
     use flate2::read::GzDecoder;
     use std::io::Read as _;
+    use std::path::PathBuf;
 
     fn sample_extracted() -> Extracted {
         Extracted {
@@ -348,8 +374,7 @@ mod tests {
 
     #[test]
     fn compress_gz_creates_decompressible_copy() {
-        let dir = std::env::temp_dir().join("perushim_test_compress");
-        fs::create_dir_all(&dir).unwrap();
+        let dir = temp_dir("compress");
         let original_path = dir.join("test.sqlite");
 
         // Write enough content for gzip to actually compress (small inputs grow due to header)
@@ -423,8 +448,7 @@ mod tests {
 
     #[test]
     fn create_catalog_db_roundtrip() {
-        let dir = std::env::temp_dir().join("perushim_test_catalog");
-        fs::create_dir_all(&dir).unwrap();
+        let dir = temp_dir("catalog");
         let path = dir.join("test.perushim_catalog.sqlite");
 
         let extracted = sample_extracted();
@@ -475,10 +499,24 @@ mod tests {
         fs::remove_dir_all(&dir).ok();
     }
 
+    /// Decodes every `note_blob` row into (perek_id, notes) — the v2 read path.
+    fn read_all_blobs(conn: &Connection) -> Vec<(i64, Vec<note_blob::DecodedNote>)> {
+        conn.prepare("SELECT perek_id, data FROM note_blob ORDER BY perek_id")
+            .unwrap()
+            .query_map([], |r| {
+                Ok((
+                    r.get::<_, i64>(0)?,
+                    note_blob::decode_perek_blob(&r.get::<_, Vec<u8>>(1)?).unwrap(),
+                ))
+            })
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap()
+    }
+
     #[test]
     fn create_notes_db_roundtrip() {
-        let dir = std::env::temp_dir().join("perushim_test_notes");
-        fs::create_dir_all(&dir).unwrap();
+        let dir = temp_dir("notes");
         let path = dir.join("test.perushim_notes.sqlite");
 
         let extracted = sample_extracted();
@@ -493,34 +531,47 @@ mod tests {
 
         let conn = Connection::open(&path).unwrap();
 
-        // Check note count
-        let note_count: i64 = conn
-            .query_row("SELECT COUNT(*) FROM note", [], |r| r.get(0))
-            .unwrap();
-        assert_eq!(note_count, 3);
-
-        // Check notes for perek 1, pasuk 1
-        let pasuk1_count: i64 = conn
+        // v2 schema: no row-oriented note table
+        let legacy_table: i64 = conn
             .query_row(
-                "SELECT COUNT(*) FROM note WHERE perek_id = 1 AND pasuk = 1",
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='note'",
                 [],
                 |r| r.get(0),
             )
             .unwrap();
+        assert_eq!(legacy_table, 0, "v2 must not create the note table");
+
+        let version: String = conn
+            .query_row(
+                "SELECT value FROM _metadata WHERE key = 'schema_version'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(version, note_blob::SCHEMA_VERSION);
+
+        // Check notes survive the blob roundtrip, ordered by (pasuk, perush_id, note_idx)
+        let blobs = read_all_blobs(&conn);
+        assert_eq!(blobs.len(), 1, "only perek 1 has notes");
+        let (perek_id, notes) = &blobs[0];
+        assert_eq!(*perek_id, 1);
+        assert_eq!(notes.len(), 3);
+        let pasuk1: Vec<_> = notes.iter().filter(|n| n.pasuk == 1).collect();
         assert_eq!(
-            pasuk1_count, 2,
+            pasuk1.len(),
+            2,
             "pasuk 1 should have notes from both Rashi and Ibn Ezra"
         );
 
-        // Check indexes exist
-        let idx_count: i64 = conn
-            .query_row(
-                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name LIKE 'idx_note%'",
-                [],
-                |r| r.get(0),
-            )
+        // perek_perush holds one row per (perek, perush) pair
+        let pairs: Vec<(i64, i64)> = conn
+            .prepare("SELECT perek_id, perush_id FROM perek_perush ORDER BY perush_id")
+            .unwrap()
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))
+            .unwrap()
+            .collect::<Result<_, _>>()
             .unwrap();
-        assert_eq!(idx_count, 3, "should have 3 note indexes");
+        assert_eq!(pairs, vec![(1, 1), (1, 2)]);
 
         // Check metadata build_timestamp
         let ts: String = conn
@@ -646,10 +697,163 @@ mod tests {
         );
     }
 
+    /// Minimal tanah_view the index builder can read verses + sefer ranges from.
+    fn index_source_fixture(dir: &Path) -> std::path::PathBuf {
+        let path = dir.join("tanah.sqlite");
+        tanah_db(
+            &path,
+            Some("2026-01-03 22:08:48 UTC"),
+            &[(1, 50, 1)],
+            &[(1, 1, 1, "qri", "בְּרֵאשִׁית בָּרָא")],
+            &["tanah_sefer", "tanah_pasuk_segment"],
+        );
+        path
+    }
+
+    /// Removes the files `generate` produces for a dump name in `dir`.
+    fn clean_generated(dir: &Path, dump: &str) {
+        for suffix in [
+            "perushim_catalog.sqlite",
+            "perushim_notes.sqlite",
+            "hebrew_search.sqlite",
+        ] {
+            let path = dir.join(format!("{dump}.{suffix}"));
+            let _ = fs::remove_file(&path);
+            let _ = fs::remove_file(path.with_extension("sqlite.gz"));
+        }
+    }
+
+    /// Deletes generated payloads on drop — a panicking assert must not leak
+    /// files into the app resource/asset directories the test writes to.
+    struct GeneratedFiles<'a> {
+        dirs: &'a [&'a Path],
+        dump: &'a str,
+    }
+
+    impl Drop for GeneratedFiles<'_> {
+        fn drop(&mut self) {
+            for dir in self.dirs {
+                clean_generated(dir, self.dump);
+            }
+        }
+    }
+
+    /// Asserts the notes + index payloads and their gzip copies exist in `dir`.
+    fn assert_notes_pack(dir: &Path, dump: &str) -> (PathBuf, PathBuf) {
+        let notes = dir.join(format!("{dump}.perushim_notes.sqlite"));
+        let index = dir.join(format!("{dump}.hebrew_search.sqlite"));
+        for path in [&notes, &index] {
+            assert!(path.exists(), "missing {}", path.display());
+            assert!(
+                path.with_extension("sqlite.gz").exists(),
+                "missing {}.gz",
+                path.display()
+            );
+        }
+        (notes, index)
+    }
+
+    #[test]
+    fn generate_writes_all_payloads_to_the_output_dir() {
+        let dir = temp_dir("sqlite_generate");
+        let tanah = index_source_fixture(&dir);
+        let dump = format!("sqlite-gen-test-{}", std::process::id());
+        let out_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join(".output");
+        let _cleanup = GeneratedFiles {
+            dirs: &[out_dir.as_path()],
+            dump: &dump,
+        };
+        clean_generated(&out_dir, &dump);
+
+        generate(&sample_extracted(), &dump, false, &tanah).unwrap();
+
+        let catalog = out_dir.join(format!("{dump}.perushim_catalog.sqlite"));
+        assert!(catalog.exists(), "missing {}", catalog.display());
+        let (notes, index) = assert_notes_pack(&out_dir, &dump);
+
+        // The delivered index is a real queryable FTS5 db fingerprinted to the
+        // notes build it was generated from.
+        let conn = Connection::open(&index).unwrap();
+        let notes_fp: Option<String> = conn
+            .query_row(
+                "SELECT fingerprint FROM search_metadata WHERE name='notes'",
+                [],
+                |r| r.get(0),
+            )
+            .ok();
+        assert!(
+            notes_fp.is_some_and(|fp| fp.starts_with("v4:")),
+            "index must publish a content fingerprint"
+        );
+        let hits: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM notes WHERE notes MATCH 'בראשית'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert!(hits > 0);
+        conn.close().unwrap();
+
+        // The notes payload carries the compressed blobs the app reads.
+        let notes_conn = Connection::open(&notes).unwrap();
+        assert_eq!(read_all_blobs(&notes_conn).len(), 1);
+        notes_conn.close().unwrap();
+
+        let catalog_conn = Connection::open(&catalog).unwrap();
+        let parshanim: i64 = catalog_conn
+            .query_row("SELECT COUNT(*) FROM parshan", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(parshanim, 2);
+        catalog_conn.close().unwrap();
+
+        clean_generated(&out_dir, &dump);
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn generate_writes_all_payloads_to_dependant_modules() {
+        let dir = temp_dir("sqlite_generate_app");
+        let tanah = index_source_fixture(&dir);
+        // Unique dump name: the files land next to committed app assets and
+        // are removed again at the end of the test.
+        let dump = format!("sqlite-gen-app-test-{}", std::process::id());
+        let app_raw =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../../app/BibleOnSite/Resources/Raw");
+        let pad_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../../app/BibleOnSite/Platforms/Android/AssetPacks/perushim_notes");
+        let _cleanup = GeneratedFiles {
+            dirs: &[app_raw.as_path(), pad_dir.as_path()],
+            dump: &dump,
+        };
+        clean_generated(&app_raw, &dump);
+        clean_generated(&pad_dir, &dump);
+
+        generate(&sample_extracted(), &dump, true, &tanah).unwrap();
+
+        // Catalog ships as an app resource; notes + index ship in the PAD pack.
+        let catalog = app_raw.join(format!("{dump}.perushim_catalog.sqlite"));
+        assert!(catalog.exists(), "missing {}", catalog.display());
+        let (_, index) = assert_notes_pack(&pad_dir, &dump);
+        let conn = Connection::open(&index).unwrap();
+        let verses_fp: Option<String> = conn
+            .query_row(
+                "SELECT fingerprint FROM search_metadata WHERE name='verses'",
+                [],
+                |r| r.get(0),
+            )
+            .ok();
+        assert!(verses_fp.is_some());
+        conn.close().unwrap();
+
+        clean_generated(&app_raw, &dump);
+        clean_generated(&pad_dir, &dump);
+        fs::remove_dir_all(&dir).ok();
+    }
+
     #[test]
     fn notes_db_overwrite_replaces_old_data() {
-        let dir = std::env::temp_dir().join("perushim_test_overwrite");
-        fs::create_dir_all(&dir).unwrap();
+        let dir = temp_dir("overwrite");
         let path = dir.join("test.perushim_notes.sqlite");
 
         // First generation
@@ -667,9 +871,10 @@ mod tests {
         create_notes_db(&path, &extracted, "dump-v2", 2000, "new").unwrap();
 
         let conn = Connection::open(&path).unwrap();
-        let note_count: i64 = conn
-            .query_row("SELECT COUNT(*) FROM note", [], |r| r.get(0))
-            .unwrap();
+        let note_count: usize = read_all_blobs(&conn)
+            .iter()
+            .map(|(_, notes)| notes.len())
+            .sum();
         assert_eq!(
             note_count, 4,
             "re-export should contain all notes from second run"

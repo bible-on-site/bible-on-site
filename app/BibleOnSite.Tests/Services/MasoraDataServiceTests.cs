@@ -1,6 +1,7 @@
 using BibleOnSite.Models;
 using BibleOnSite.Services;
 using BibleOnSite.Tests.Support;
+using SQLite;
 
 namespace BibleOnSite.Tests.Services;
 
@@ -22,10 +23,10 @@ public class MasoraDataServiceTests
         INSERT INTO tanah_sefer VALUES (1,'בראשית','Genesis',1,50),(8,'שמואל','{}',51,55);
         INSERT INTO tanah_reading_division VALUES ('masora',1,'/מסורה','מסורה על הפרק');
         INSERT INTO tanah_reading_unit VALUES
-            ('masora',1,'1',1,1,'בראשית א א-ה','ptuha'),
-            ('masora',2,'2',1,2,'בראשית א ו - ב ג','stuma'),
-            ('masora',3,'3',1,3,'בראשית ב ד-ח','stuma'),
-            ('masora',9,'9',8,1,'שמואל א א א-י','ptuha');
+            ('masora',1,'1',1,1,'בראשית פרשה א','ptuha'),
+            ('masora',2,'2',1,2,'בראשית פרשה ב','stuma'),
+            ('masora',3,'3',1,3,'בראשית פרשה ג','stuma'),
+            ('masora',9,'9',8,1,'שמואל פרשה א','ptuha');
         INSERT INTO tanah_reading_unit_range VALUES
             ('masora',1,0,NULL,1,1,NULL,1,5,3),
             ('masora',2,0,NULL,1,5,4,2,3,NULL),
@@ -139,7 +140,7 @@ public class MasoraDataServiceTests
         unit.Slug.Should().Be("2");
         unit.SeferName.Should().Be("בראשית");
         unit.UnitOrder.Should().Be(2);
-        unit.Heading.Should().Be("בראשית א ו - ב ג");
+        unit.Heading.Should().Be("בראשית פרשה ב");
         unit.ClosingBreak.Should().Be("stuma");
         unit.ClosingBreakLabel.Should().Be("פרשה סתומה");
         unit.HasClosingBreak.Should().BeTrue();
@@ -244,5 +245,58 @@ public class MasoraDataServiceTests
         };
         MasoraDataService.RangeContainsPasuk(startsMidPasuk, 1, 5).Should().BeFalse();
         MasoraDataService.RangeContainsPasuk(startsMidPasuk, 1, 6).Should().BeTrue();
+    }
+
+    /// <summary>
+    /// Locates the tracked packaged tanah_view database under
+    /// BibleOnSite/Resources/Raw (same project-root walk as
+    /// LocalDatabaseServiceTests).
+    /// </summary>
+    private static string? FindPackagedDbPath()
+    {
+        var dir = new DirectoryInfo(Directory.GetCurrentDirectory());
+        while (dir != null && !Directory.Exists(Path.Join(dir.FullName, "BibleOnSite")))
+        {
+            dir = dir.Parent;
+        }
+
+        return dir == null
+            ? null
+            : Path.Join(dir.FullName, "BibleOnSite", "Resources", "Raw", DbName);
+    }
+
+    [Fact]
+    public async Task PackagedAsset_MasoraHeadings_CarryParashaIdentity()
+    {
+        // The app reads `heading` verbatim from the packaged tanah_view
+        // database, so the tracked asset itself must carry parasha-identity
+        // headings — fresh test fixtures cannot catch a stale package.
+        // Regenerate with `cd data && cargo make generate-tanah-view-sqlite-from-json`.
+        var dbPath = FindPackagedDbPath();
+        Assert.SkipUnless(dbPath != null && File.Exists(dbPath), "Packaged tanah_view database not present");
+
+        var db = new SQLiteAsyncConnection(dbPath, SQLiteOpenFlags.ReadOnly);
+        try
+        {
+            var unitCount = await db.ExecuteScalarAsync<int>(
+                "SELECT COUNT(*) FROM tanah_reading_unit WHERE division_id = 'masora'");
+            unitCount.Should().Be(3197);
+
+            // Every heading is the parasha identity "<sefer name> פרשה <ordinal>" —
+            // a scripture-reference span (e.g. "בראשית א א-ה") fails this check.
+            var nonParashaHeadings = await db.ExecuteScalarAsync<int>(
+                "SELECT COUNT(*) FROM tanah_reading_unit u " +
+                "JOIN tanah_sefer s ON s.id = u.sefer_id " +
+                "WHERE u.division_id = 'masora' AND u.heading NOT LIKE s.name || ' פרשה %'");
+            nonParashaHeadings.Should().Be(0);
+
+            var firstHeading = await db.ExecuteScalarAsync<string>(
+                "SELECT heading FROM tanah_reading_unit WHERE division_id = 'masora' AND unit_id = 1");
+            firstHeading.Should().Be("בראשית פרשה א");
+        }
+        finally
+        {
+            await db.CloseAsync();
+        }
     }
 }

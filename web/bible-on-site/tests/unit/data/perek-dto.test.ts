@@ -30,11 +30,26 @@ describe("getPerekIdByDate", () => {
 			expect(actual).toBe(1);
 		});
 	});
-	describe("after last cycle (I.E. year 5811)", () => {
-		it("returns last perek (929)", () => {
+	describe("inside the inter-cycle gap (1 Av 5778)", () => {
+		it("returns the upcoming cycle's first perek", () => {
+			const actual = getPerekIdByDate(parseKosherChristianDate("13/July/18"));
+			expect(actual).toBe(1);
+		});
+	});
+	describe("after last confirmed cycle (projected cycle 11)", () => {
+		it("returns the projected perek for the date", () => {
+			// 15 March 2051 falls 213 days into projected cycle 11
+			// (starts Sunday 14 August 2050): week 30 day 3 -> perek 154.
 			const actual = getPerekIdByDate(
 				parseKosherChristianDate("15/March/51"),
 			);
+			expect(actual).toBe(154);
+		});
+	});
+	describe("last day of a cycle", () => {
+		it("returns perek 929 instead of the next cycle's first perek", () => {
+			// כח תמוז תשע"ח (11 July 2018) is the last study day of cycle 1.
+			const actual = getPerekIdByDate(parseKosherChristianDate("11/July/18"));
 			expect(actual).toBe(929);
 		});
 	});
