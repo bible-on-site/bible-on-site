@@ -497,6 +497,118 @@ test.describe("Sefer view", () => {
 		await expect(indicator).toHaveValue("א / נ");
 	});
 
+	test("locks outer page scrolling while open and restores it on close", async ({
+		page,
+	}) => {
+		const seferPage = new SeferPage(page);
+		await page.goto("/929/1");
+		// The flat reader scrolls inside its own container before the book opens.
+		const flatScrolls = await page.evaluate(() => {
+			const container = document.querySelector<HTMLElement>(
+				'[class*="perekContainer"]',
+			);
+			if (!container) return false;
+			container.scrollTop = 400;
+			return container.scrollTop > 0;
+		});
+		expect(flatScrolls).toBe(true);
+
+		await seferPage.openSeferView();
+		await expect(page.locator("html")).toHaveAttribute("data-sefer-view", "");
+		const lockedOverflow = await page.evaluate(
+			() => getComputedStyle(document.documentElement).overflowY,
+		);
+		expect(lockedOverflow).toBe("hidden");
+		// Real wheel input over the book must not move the outer document —
+		// programmatic scrollTo is not checked because overflow:hidden still
+		// allows it by design; the issue concerns user-driven scrolling.
+		await page.mouse.move(720, 450);
+		const yBefore = await page.evaluate(() => window.scrollY);
+		for (let i = 0; i < 8; i++) {
+			await page.mouse.wheel(0, 500);
+			await page.waitForTimeout(50);
+		}
+		expect(await page.evaluate(() => window.scrollY)).toBe(yBefore);
+
+		// The scripture pane inside the book still scrolls from real wheel input.
+		const paneBox = await page.evaluate(() => {
+			const pane = document.querySelector<HTMLElement>(
+				'.he-book .page.current-page [class*="perekTextScrollWrapper"]',
+			);
+			if (!pane) return null;
+			const r = pane.getBoundingClientRect();
+			return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+		});
+		expect(paneBox).not.toBeNull();
+		if (!paneBox) return;
+		await page.mouse.move(paneBox.x, paneBox.y);
+		for (let i = 0; i < 4; i++) {
+			await page.mouse.wheel(0, 400);
+			await page.waitForTimeout(50);
+		}
+		const paneTop = await page.evaluate(
+			() =>
+				document.querySelector<HTMLElement>(
+					'.he-book .page.current-page [class*="perekTextScrollWrapper"]',
+				)?.scrollTop ?? -1,
+		);
+		expect(paneTop).toBeGreaterThan(0);
+
+		// Closing the book unlocks the document and re-enables the flat reader.
+		const toggler = page.getByTestId("read-mode-toggler");
+		await toggler.click();
+		const overlay = page.locator('[class*="seferOverlay"]');
+		await expect(overlay).not.toBeVisible();
+		await expect(page.locator("html[data-sefer-view]")).toHaveCount(0);
+		const unlocked = await page.evaluate(() => {
+			const container = document.querySelector<HTMLElement>(
+				'[class*="perekContainer"]',
+			);
+			if (!container) return { overflow: "", scrolls: false };
+			container.scrollTop = 400;
+			return {
+				overflow: getComputedStyle(document.documentElement).overflowY,
+				scrolls: container.scrollTop > 0,
+			};
+		});
+		expect(unlocked.overflow).not.toBe("hidden");
+		expect(unlocked.scrolls).toBe(true);
+	});
+
+	test("synchronizes the tab title with the visible book page and history", async ({
+		page,
+	}) => {
+		test.setTimeout(90_000);
+		const seferPage = new SeferPage(page);
+		await seferPage.openSeferViewForPerek(1);
+		await expect(page).toHaveTitle('בראשית א | תנ"ך על הפרק');
+
+		await page.locator(".flipbook-toolbar-next").click();
+		await expect(page).toHaveURL(/\/929\/2\?book/);
+		await expect(page).toHaveTitle('בראשית ב | תנ"ך על הפרק');
+
+		await page.locator(".flipbook-toolbar-toc").click();
+		await expect
+			.poll(() => decodeURIComponent(new URL(page.url()).pathname))
+			.toBe("/929/בראשית/תוכן");
+		await expect(page).toHaveTitle(
+			'ספר בראשית - תוכן העניינים | תנ"ך על הפרק',
+		);
+
+		// Browser history restoration returns the matching title.
+		await page.goBack();
+		await expect(page).toHaveURL(/\/929\/2\?book/);
+		await expect(page).toHaveTitle('בראשית ב | תנ"ך על הפרק');
+
+		// Leaving Sefer view hands the title back to the flat perek page.
+		const toggler = page.getByTestId("read-mode-toggler");
+		await toggler.click();
+		await expect(
+			page.locator('[class*="seferOverlay"]'),
+		).not.toBeVisible();
+		await expect(page).toHaveTitle('בראשית א | תנ"ך על הפרק');
+	});
+
 	test.describe("Touch swipe", () => {
 		test.use({ hasTouch: true });
 

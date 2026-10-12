@@ -216,10 +216,9 @@ function RevisionRow({
 				<div
 					className="admin-prose mt-3 rounded-lg border border-gray-200 bg-white p-4 max-h-72 overflow-auto"
 					// biome-ignore lint/security/noDangerouslySetInnerHtml: DOMPurify-sanitized revision snapshot preview
-					dangerouslySetInnerHTML={{ // nosemgrep -- DOMPurify-sanitized revision snapshot preview
-						__html: DOMPurify.sanitize(
-							revision.proposed_content || "<p></p>",
-						),
+					dangerouslySetInnerHTML={{
+						// nosemgrep -- DOMPurify-sanitized revision snapshot preview
+						__html: DOMPurify.sanitize(revision.proposed_content || "<p></p>"),
 					}}
 				/>
 			)}
@@ -317,8 +316,7 @@ export function EntryHistoryPanel({
 							revision={revision}
 							baseContent={
 								revision.base_revision_id
-									? byId.get(revision.base_revision_id)
-											?.proposed_content
+									? byId.get(revision.base_revision_id)?.proposed_content
 									: undefined
 							}
 							currentContent={currentContent ?? ""}

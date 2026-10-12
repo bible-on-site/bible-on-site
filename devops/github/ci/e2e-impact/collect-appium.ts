@@ -12,9 +12,21 @@
  * interpolated `$"Prefix{n}"` forms, and `SetAutomationId` calls), groups
  * files into logical units (`X.xaml` + `X.xaml.cs` + verified `X.*.cs`
  * partials), and emits the deterministic tree consumed by `select`.
+ *
+ * When a compatible `exec-coverage-tree` of the same run is supplied
+ * (`CollectOptions.execTree`), its per-test executed-file evidence unions
+ * into the same entries — the channels are complementary, so a file
+ * covered by either selects the test — and its `shared` bucket surfaces
+ * as `sharedFiles` (selection widens, never narrows). Missing or
+ * incompatible exec input leaves the automation-id output untouched.
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, relative } from "node:path";
+import type { ExecCoverageTree } from "../../../e2e-coverage-trees/model.ts";
+import {
+	execSelectorView,
+	execTreeCompatible,
+} from "../../../e2e-coverage-trees/to-selector-tree.ts";
 import { fingerprintSource, type SourceFingerprint } from "./fingerprint.ts";
 import { globMatcher } from "./glob.ts";
 import { stripExtension } from "./select.ts";
@@ -142,7 +154,25 @@ export interface CollectOptions {
 	snapshotSha: string;
 	/** Mark false when the test run did not finish — evidence stays partial. */
 	complete: boolean;
+	/**
+	 * The run's `exec-coverage-tree`, when the extractor produced one
+	 * (#2085). Only a compatible tree (suite/platform/snapshot — see
+	 * `execTreeCompatible`) merges; anything else is ignored so exec
+	 * evidence can widen but never replace the automation-id channel.
+	 */
+	execTree?: ExecCoverageTree;
 }
+
+const unionSorted = (a: string[], b: string[]): string[] =>
+	[...new Set([...a, ...b])].sort();
+
+/**
+ * A non-"passed" outcome from either channel wins: `previously-failing`
+ * selection keys on `outcome !== "passed"`, so masking a failure or a
+ * skipped record would under-select.
+ */
+const mergeOutcome = (primary: string, exec: string): string =>
+	primary !== "passed" ? primary : exec;
 
 export function collectTree(options: CollectOptions): CoverageTree {
 	const { repoRoot, rules, platform } = options;
@@ -202,6 +232,46 @@ export function collectTree(options: CollectOptions): CoverageTree {
 		};
 	}
 
+	// Executable coverage unions in when a compatible exec tree is supplied:
+	// per-test evidence widens the same test's file set (never shrinks the
+	// automation-id channel), the shared bucket surfaces as `sharedFiles`
+	// for select-time widening, and an incomplete exec tree keeps the merged
+	// tree incomplete. Incompatible input is ignored — the CLI diagnoses
+	// the reason before ever passing it here.
+	let sharedFiles: string[] | undefined;
+	let complete = options.complete;
+	if (
+		options.execTree !== undefined &&
+		execTreeCompatible(options.execTree, {
+			suite: rules.suite,
+			platform,
+			snapshotSha: options.snapshotSha,
+		}) === null
+	) {
+		const view = execSelectorView(options.execTree);
+		for (const [id, execTest] of Object.entries(view.tests)) {
+			const existing = tests[id];
+			if (existing === undefined) {
+				if (fileByTest.get(id) === undefined && !unmatchedEvidence.includes(id)) {
+					unmatchedEvidence.push(id);
+				}
+				tests[id] = {
+					...execTest,
+					...(fileByTest.has(id) ? { file: fileByTest.get(id) } : {}),
+				};
+			} else {
+				existing.files = unionSorted(existing.files, execTest.files);
+				existing.sessions = unionSorted(existing.sessions, execTest.sessions);
+				existing.outcome = mergeOutcome(existing.outcome, execTest.outcome);
+			}
+		}
+		for (const name of view.unmatchedEvidence) {
+			if (!unmatchedEvidence.includes(name)) unmatchedEvidence.push(name);
+		}
+		if (view.sharedFiles.length > 0) sharedFiles = view.sharedFiles;
+		complete = complete && options.execTree.complete;
+	}
+
 	return {
 		schemaVersion: SCHEMA_VERSION,
 		suite: rules.suite,
@@ -209,10 +279,11 @@ export function collectTree(options: CollectOptions): CoverageTree {
 		snapshotSha: options.snapshotSha,
 		collectorVersion: rules.collectorVersion,
 		collectedAtUtc: new Date().toISOString(),
-		complete: options.complete,
+		complete,
 		sourceUnits,
 		sourceFiles,
 		sourceFingerprints,
+		...(sharedFiles !== undefined ? { sharedFiles } : {}),
 		tests: Object.fromEntries(
 			Object.entries(tests).sort(([a], [b]) => a.localeCompare(b)),
 		),

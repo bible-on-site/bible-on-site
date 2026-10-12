@@ -44,7 +44,7 @@
                    VerticalOptions="Center"
                    HorizontalOptions="Fill"
                    Margin="4,0"
-                   SemanticProperties.Hint="הקישו לפתיחת בחירת יחידה"
+                   SemanticProperties.Hint="הקישו לפתיחת בחירת פרשה"
                    Clicked="OnUnitSourceClicked"/>
                 <ContentView Grid.Column="2"/>
             </Grid>
@@ -120,7 +120,7 @@
                     <DataTemplate x:DataType="models:MasoraUnit">
                         <!-- Unit page: header + CollectionView of rows -->
                         <Grid RowDefinitions="Auto,*">
-                            <!-- Unit header: scripture-reference heading + break label -->
+                            <!-- Unit header: parasha-identity heading + break label -->
                             <VerticalStackLayout Grid.Row="0" Spacing="2" Padding="16,12,16,8">
                                 <Label AutomationId="MasoraUnitHeading"
                                        Text="{Binding Heading}"
@@ -149,15 +149,8 @@
                                 <CollectionView.ItemTemplate>
                                     <DataTemplate x:DataType="models:MasoraPasukRow">
                                         <VerticalStackLayout Spacing="0">
-                                            <!-- Perek divider for multi-perek units -->
-                                            <Label Text="{Binding PerekLabel}"
-                                                   IsVisible="{Binding HasPerekLabel}"
-                                                   AutomationId="MasoraPerekLabel"
-                                                   FontSize="15"
-                                                   FontAttributes="Bold"
-                                                   HorizontalTextAlignment="Center"
-                                                   Padding="0,10,0,2"
-                                                   TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryLight}}"/>
+                                            <!-- No perek dividers or chapter pasuk numbers: the מסורה
+                                                 reader presents the parasha as one continuous text. -->
                                             <Border Padding="12,8"
                                                     Margin="0,4"
                                                     StrokeShape="RoundRectangle 8"
@@ -169,18 +162,9 @@
                                                         <On Platform="MacCatalyst" Value="RightToLeft"/>
                                                     </OnPlatform>
                                                 </Border.FlowDirection>
-                                                <Grid ColumnDefinitions="40,*"
+                                                <Grid ColumnDefinitions="*"
                                                       FlowDirection="RightToLeft">
-                                                    <Label Grid.Column="0"
-                                                           Text="{Binding PasukNumHeb}"
-                                                           AutomationId="PasukNumber"
-                                                           FontSize="{Binding MarkerFontSize}"
-                                                           FontAttributes="Bold"
-                                                           VerticalTextAlignment="Start"
-                                                           HorizontalTextAlignment="Center"
-                                                           Margin="0,1.5,0,0"
-                                                           TextColor="{StaticResource Primary}"/>
-                                                    <VerticalStackLayout Grid.Column="1" Spacing="2">
+                                                    <VerticalStackLayout Grid.Column="0" Spacing="2">
                                                         <controls:PasukTextLabel AutomationId="PasukText"
                                                                FormattedText="{Binding Pasuk.FormattedText}"
                                                                FontSize="{Binding FontSize}"
@@ -222,7 +206,7 @@
                                                HeightRequest="60"
                                                WidthRequest="60"
                                                Aspect="AspectFit"/>
-                                        <Label Text="מתחבר ליחידה..."
+                                        <Label Text="מתחבר לפרשה..."
                                                AutomationId="MasoraLoadingLabel"
                                                FontSize="18"
                                                HorizontalTextAlignment="Center"
@@ -279,7 +263,7 @@
                     <VerticalStackLayout VerticalOptions="Center"
                                          HorizontalOptions="Center"
                                          Padding="20">
-                        <Label Text="אין מאמרים ליחידה זו"
+                        <Label Text="אין מאמרים לפרשה זו"
                                FontSize="18"
                                HorizontalTextAlignment="Center"
                                TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray400}}"/>

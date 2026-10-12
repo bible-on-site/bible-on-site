@@ -4,6 +4,7 @@ import {
 	generateAuthorEntries,
 	generateAuthorsIndexEntry,
 	generateMasoraIndexEntry,
+	generateParashaIndexEntry,
 	generatePediaEntries,
 	generatePerekEntries,
 	generateRootEntry,
@@ -31,6 +32,7 @@ describe("sitemap", () => {
 	describe("constants", () => {
 		it("has correct sections defined", () => {
 			expect(SITEMAP_SECTIONS).toEqual([
+				"לוח",
 				"dailyBulletin",
 				"whatsappGroup",
 				"tos",
@@ -120,6 +122,19 @@ describe("sitemap", () => {
 
 			expect(result).toEqual({
 				url: "https://example.com/מסורה",
+				lastModified: mockConfig.lastModified,
+				changeFrequency: "monthly",
+				priority: 0.7,
+			});
+		});
+	});
+
+	describe("generateParashaIndexEntry", () => {
+		it("returns the פרשה landing entry only", () => {
+			const result = generateParashaIndexEntry(mockConfig);
+
+			expect(result).toEqual({
+				url: "https://example.com/פרשה",
 				lastModified: mockConfig.lastModified,
 				changeFrequency: "monthly",
 				priority: 0.7,
@@ -297,8 +312,8 @@ describe("sitemap", () => {
 		it("returns all entries combined", () => {
 			const result = generateSitemapEntries(mockConfig);
 
-			// 1 root + 6 sections + 1 929 index + 929 perakim + 1 authors index
-			// + pedia static entries + 1 מסורה landing entry
+			// 1 root + 7 sections + 1 929 index + 929 perakim + 1 authors index
+			// + pedia static entries + 1 מסורה + 1 פרשה landing entries
 			const expectedLength =
 				1 +
 				SITEMAP_SECTIONS.length +
@@ -306,18 +321,18 @@ describe("sitemap", () => {
 				TOTAL_PERAKIM +
 				1 +
 				PEDIA_STATIC_COUNT +
+				1 +
 				1;
 			expect(result).toHaveLength(expectedLength);
 		});
 
-		it("ends with the מסורה landing entry only (unit pages are noindex)", () => {
+		it("ends with the מסורה and פרשה landing entries only (unit pages are noindex)", () => {
 			const result = generateSitemapEntries(mockConfig);
 
-			const last = result[result.length - 1];
-			expect(last.url).toBe("https://example.com/מסורה");
-			expect(
-				result.some((entry) => entry.url.includes("/מסורה/")),
-			).toBe(false);
+			expect(result[result.length - 2].url).toBe("https://example.com/מסורה");
+			expect(result[result.length - 1].url).toBe("https://example.com/פרשה");
+			expect(result.some((entry) => entry.url.includes("/מסורה/"))).toBe(false);
+			expect(result.some((entry) => entry.url.includes("/פרשה/"))).toBe(false);
 		});
 
 		it("has root entry first with highest priority", () => {
@@ -388,7 +403,7 @@ describe("sitemap", () => {
 			const slugs = ["הרב א", "הרב ב", "הרב ג"];
 			const result = generateSitemapEntries(mockConfig, slugs);
 
-			// 1 root + 6 sections + 1 929 index + 929 perakim + 1 authors index + 3 authors + 1 מסורה landing
+			// 1 root + 6 sections + 1 929 index + 929 perakim + 1 authors index + 3 authors + 1 מסורה + 1 פרשה landing
 			const expectedLength =
 				1 +
 				SITEMAP_SECTIONS.length +
@@ -397,12 +412,13 @@ describe("sitemap", () => {
 				1 +
 				3 +
 				PEDIA_STATIC_COUNT +
+				1 +
 				1;
 			expect(result).toHaveLength(expectedLength);
 
 			// Author pages come right before the pedia landing/category block
-			// (the trailing מסורה landing entry follows the pedia block)
-			const authorEnd = result.length - PEDIA_STATIC_COUNT - 1;
+			// (the trailing מסורה/פרשה landing entries follow the pedia block)
+			const authorEnd = result.length - PEDIA_STATIC_COUNT - 2;
 			expect(result[authorEnd - 1].url).toBe(
 				`https://example.com/929/authors/${encodeURIComponent("הרב ג")}`,
 			);
@@ -422,7 +438,7 @@ describe("sitemap", () => {
 			const slugs = ["הרב א", "הרב ב"];
 			const result = generateSitemapEntries(mockConfig, slugs, mockArticles);
 
-			// 1 root + 6 sections + 1 929 index + 929 perakim + 2 articles + 1 authors index + 2 authors + 1 מסורה landing
+			// 1 root + 6 sections + 1 929 index + 929 perakim + 2 articles + 1 authors index + 2 authors + 1 מסורה + 1 פרשה landing
 			const expectedLength =
 				1 +
 				SITEMAP_SECTIONS.length +
@@ -432,6 +448,7 @@ describe("sitemap", () => {
 				1 +
 				2 +
 				PEDIA_STATIC_COUNT +
+				1 +
 				1;
 			expect(result).toHaveLength(expectedLength);
 
@@ -460,16 +477,15 @@ describe("sitemap", () => {
 				pediaNames,
 			);
 
-			// Pedia URLs sit just before the trailing מסורה landing entry
-			expect(result[result.length - 3].url).toBe(
+			// Pedia URLs sit just before the trailing מסורה/פרשה landing entries
+			expect(result[result.length - 4].url).toBe(
 				`https://example.com/pedia/${encodeURIComponent("יעקב")}`,
 			);
-			expect(result[result.length - 2].url).toBe(
+			expect(result[result.length - 3].url).toBe(
 				`https://example.com/pedia/${encodeURIComponent("שמשון")}`,
 			);
-			expect(result[result.length - 1].url).toBe(
-				"https://example.com/מסורה",
-			);
+			expect(result[result.length - 2].url).toBe("https://example.com/מסורה");
+			expect(result[result.length - 1].url).toBe("https://example.com/פרשה");
 		});
 
 		it("omits pedia entry URLs when no unique names provided", () => {

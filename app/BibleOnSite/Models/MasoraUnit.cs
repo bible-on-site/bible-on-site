@@ -35,7 +35,11 @@ public class MasoraUnit : INotifyPropertyChanged
     /// <summary>1-based order of this unit inside its sefer.</summary>
     public int UnitOrder { get; set; }
 
-    /// <summary>Display heading — the scripture reference span (e.g. "בראשית לה כב - מ א").</summary>
+    /// <summary>
+    /// Display heading — the Masoretic parasha identity: the sefer name plus
+    /// the unit's 1-based ordinal inside it (e.g. "בראשית פרשה ח"). Conventional
+    /// perek/pasuk references stay internal and never surface in the מסורה reader.
+    /// </summary>
     public required string Heading { get; set; }
 
     /// <summary>
@@ -62,7 +66,8 @@ public class MasoraUnit : INotifyPropertyChanged
     public int ArticlesCount { get; set; }
 
     /// <summary>
-    /// Display rows for this unit (perek labels + clipped pasukim), lazy-loaded
+    /// Display rows for this unit — pesukim clipped to the unit's canonical
+    /// bounds, with no perek labels or chapter pasuk numbers — lazy-loaded
     /// by the reading pipeline. Setter raises PropertyChanged so the UI rebinds.
     /// </summary>
     private List<MasoraPasukRow> _rows = new();

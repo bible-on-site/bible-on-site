@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:viewmodels="clr-namespace:BibleOnSite.ViewModels"
+             xmlns:models="clr-namespace:BibleOnSite.Models"
+             xmlns:fonts="clr-namespace:Fonts"
+             x:Class="BibleOnSite.Pages.ParashaListPage"
+             x:DataType="viewmodels:ParashaListViewModel"
+             Title="פרשה על הפרק"
+             FlowDirection="RightToLeft">
+
+    <Shell.BackButtonBehavior>
+        <BackButtonBehavior IsVisible="False"/>
+    </Shell.BackButtonBehavior>
+
+    <Shell.TitleView>
+        <Grid ColumnDefinitions="Auto,Auto" ColumnSpacing="4">
+            <Button Text="{x:Static fonts:FluentUI.line_horizontal_3_20_regular}"
+                    FontFamily="FluentIcons"
+                    FontSize="20"
+                    WidthRequest="40"
+                    HeightRequest="40"
+                    Padding="0"
+                    BackgroundColor="Transparent"
+                    TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"
+                    SemanticProperties.Description="תפריט"
+                    AutomationId="ParashaMenuButton"
+                    VerticalOptions="Center"
+                    HorizontalOptions="Start"
+                    Clicked="OnMenuButtonClicked"/>
+            <Label Grid.Column="1"
+                   Text="פרשה על הפרק"
+                   FontSize="20"
+                   VerticalOptions="Center"
+                   HorizontalOptions="Start"
+                   TextColor="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource SecondaryDarkText}}"/>
+        </Grid>
+    </Shell.TitleView>
+
+    <Grid RowDefinitions="*">
+        <!-- The 54 weekly parashiot grouped by their Torah sefer. Each
+             unit keeps its own identity — joined pairs stay separate. -->
+        <CollectionView ItemsSource="{Binding Groups}"
+                        IsGrouped="True"
+                        SelectionMode="None"
+                        Margin="8">
+            <CollectionView.GroupHeaderTemplate>
+                <DataTemplate x:DataType="viewmodels:ParashaSeferGroup">
+                    <Label Text="{Binding SeferName}"
+                           FontSize="17"
+                           FontAttributes="Bold"
+                           Padding="8,12,8,4"
+                           TextColor="{StaticResource Primary}"/>
+                </DataTemplate>
+            </CollectionView.GroupHeaderTemplate>
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="models:ParashaUnit">
+                    <Border Padding="12,10"
+                            Margin="0,3"
+                            StrokeShape="RoundRectangle 8"
+                            Stroke="Transparent"
+                            BackgroundColor="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}">
+                        <Border.GestureRecognizers>
+                            <TapGestureRecognizer Command="{Binding Source={RelativeSource AncestorType={x:Type viewmodels:ParashaListViewModel}}, Path=OpenParashaCommand}"
+                                                  CommandParameter="{Binding .}"/>
+                        </Border.GestureRecognizers>
+                        <Grid ColumnDefinitions="*,Auto" InputTransparent="True">
+                            <Label Grid.Column="0"
+                                   Text="{Binding Heading}"
+                                   AutomationId="ParashaName"
+                                   FontSize="16"
+                                   VerticalOptions="Center"/>
+                            <Label Grid.Column="1"
+                                   Text="{x:Static fonts:FluentUI.chevron_circle_left_12_regular}"
+                                   FontFamily="FluentIcons"
+                                   FontSize="18"
+                                   TextColor="{StaticResource Gray400}"
+                                   VerticalOptions="Center"/>
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+
+        <ActivityIndicator IsVisible="{Binding IsLoading}"
+                           IsRunning="{Binding IsLoading}"
+                           VerticalOptions="Center"
+                           HorizontalOptions="Center"/>
+    </Grid>
+</ContentPage>
