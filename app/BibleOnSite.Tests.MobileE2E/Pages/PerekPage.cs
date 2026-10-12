@@ -12,8 +12,8 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
     // The first native snapshot on a cold simulator can finish after the
     // loading page has been replaced, while returning that earlier empty tree.
     // Allow another snapshot before applying the normal interaction deadlines.
-    public void WaitForStartup() => WaitFor(platform.AutomationId("PerekSource"),
-        element => !string.IsNullOrWhiteSpace(element.Text), TimeSpan.FromMinutes(2));
+    public void WaitForStartup() => WaitFor("PerekSource",
+        element => !string.IsNullOrWhiteSpace(element.Text));
 
     public AppiumElement WaitFor(string automationId) => WaitFor(automationId, _ => true);
 

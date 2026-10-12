@@ -49,6 +49,10 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
             BackgroundColor = UIColor.Clear,
             TextContainerInset = UIEdgeInsets.Zero
         };
+        // This read deliberately selects TextKit 1. TextKit 2 content sizing
+        // enumerates RTL caret offsets for the entire unscrollable text view,
+        // which blocked the main thread in the 2026-10-12 watchdog report.
+        _ = textView.LayoutManager;
         textView.TextContainer.LineFragmentPadding = 0;
         // Route link taps through the virtual view's LinkTapped event; an
         // unhandled tap keeps UIKit's default (open the URL).

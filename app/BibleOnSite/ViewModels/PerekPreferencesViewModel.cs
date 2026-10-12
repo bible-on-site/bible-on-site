@@ -20,7 +20,7 @@ public partial class PerekPreferencesViewModel : ObservableObject
     public PerekPreferencesViewModel(PreferencesService preferencesService)
     {
         _preferencesService = preferencesService;
-        _preferencesService.PreferencesChanged += OnPreferencesChanged;
+        BibleOnSite.Helpers.WeakPreferencesSubscription.Subscribe(this, _preferencesService, static model => model.OnPreferencesChanged(null, EventArgs.Empty));
     }
 
     /// <summary>
@@ -100,11 +100,23 @@ public partial class PerekPreferencesViewModel : ObservableObject
         }
     }
 
+    /// <summary>Maximum commentary sources shown across a whole chapter.</summary>
+    public double InlineCommentaryLimit
+    {
+        get => _preferencesService.InlineCommentaryLimit;
+        set
+        {
+            _preferencesService.InlineCommentaryLimit = double.IsFinite(value) ? (int)Math.Clamp(Math.Round(value), 1, 100) : 5;
+            OnPropertyChanged();
+        }
+    }
+
     private void OnPreferencesChanged(object? sender, EventArgs e)
     {
         OnPropertyChanged(nameof(PerekToLoad));
         OnPropertyChanged(nameof(IsPerekToLoadTodays));
         OnPropertyChanged(nameof(IsPerekToLoadLastLearnt));
         OnPropertyChanged(nameof(MasoraMenuEnabled));
+        OnPropertyChanged(nameof(InlineCommentaryLimit));
     }
 }

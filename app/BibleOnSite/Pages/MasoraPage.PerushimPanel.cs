@@ -51,6 +51,7 @@ public partial class MasoraPage //NOSONAR
         try
         {
             _viewModel.ToggleCheckedPerush(perush.Id);
+            checkBox.IsChecked = _viewModel.IsPerushChecked(perush.Id);
         }
         finally
         {

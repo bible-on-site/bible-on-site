@@ -144,6 +144,31 @@
                     </Grid>
                 </Border>
             </VerticalStackLayout>
+            <!-- ═══ פירושים על הפרק ═══ -->
+            <VerticalStackLayout Spacing="8">
+                <Label Text="פירושים על הפרק"
+                       FontSize="14"
+                       FontAttributes="Bold"
+                       TextColor="{StaticResource Primary}"
+                       Padding="4,0,0,0"/>
+                <Border Padding="16"
+                        StrokeShape="RoundRectangle 12"
+                        Stroke="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray700}}"
+                        StrokeThickness="1"
+                        BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Gray900}}">
+                    <VerticalStackLayout Spacing="12">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <Label Text="מספר פירושים בו זמנית על הפרק" VerticalOptions="Center"/>
+                            <Label Grid.Column="1" Text="{Binding InlineCommentaryLimit}" FontAttributes="Bold" VerticalOptions="Center"/>
+                        </Grid>
+                        <Stepper Minimum="1" Maximum="100" Increment="1" Value="{Binding InlineCommentaryLimit}"
+                                 AutomationId="InlineCommentaryLimitStepper" HorizontalOptions="Start"/>
+                        <Label Text="ברירת המחדל היא 5. הגדלת המספר עלולה להאט את הקריאה ולהגדיל את השימוש בזיכרון, במיוחד בפרקים ארוכים."
+                               FontSize="13" LineBreakMode="WordWrap"
+                               TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
+                    </VerticalStackLayout>
+                </Border>
+            </VerticalStackLayout>
         </VerticalStackLayout>
     </ScrollView>
 </ContentPage>

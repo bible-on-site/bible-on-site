@@ -46,8 +46,11 @@ public partial class PreferencesViewModel : DivineNamePreferencesViewModel
         _perushimNotesService = perushimNotesService;
         _recitationService = recitationService;
         _navigator = navigator;
-        _preferencesService.PreferencesChanged += OnPreferencesChanged;
-        _recitationService.Changed += OnRecitationChanged;
+        BibleOnSite.Helpers.WeakPreferencesSubscription.Subscribe(this, _preferencesService, static model => model.OnPreferencesChanged(null, EventArgs.Empty));
+        BibleOnSite.Helpers.WeakEventSubscription.Subscribe(this, _recitationService,
+            static (service, handler) => service.Changed += handler,
+            static (service, handler) => service.Changed -= handler,
+            static model => model.OnRecitationChanged(null, EventArgs.Empty));
     }
 
     /// <summary>
