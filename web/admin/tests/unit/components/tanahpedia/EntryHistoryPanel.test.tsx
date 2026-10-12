@@ -157,4 +157,120 @@ describe("EntryHistoryPanel", () => {
 			await screen.findByText(/נשמר בינתיים בסשן אחר/),
 		).toBeInTheDocument();
 	});
+
+	it("shows a plain error message for non-conflict failures", async () => {
+		listMock.mockResolvedValue([makeRevision({ status: "PENDING" })]);
+		rejectMock.mockRejectedValue(new Error("db kaput"));
+		renderPanel();
+		fireEvent.click(await screen.findByText("דחה"));
+		expect(await screen.findByText("db kaput")).toBeInTheDocument();
+	});
+
+	it("stringifies non-Error rejections", async () => {
+		listMock.mockResolvedValue([makeRevision({ status: "PENDING" })]);
+		rejectMock.mockRejectedValue("raw failure");
+		renderPanel();
+		fireEvent.click(await screen.findByText("דחה"));
+		expect(await screen.findByText("raw failure")).toBeInTheDocument();
+	});
+
+	it("falls back to a gray badge and the raw value for unknown statuses and bad dates", async () => {
+		listMock.mockResolvedValue([
+			makeRevision({
+				id: "rev-weird",
+				status: "ARCHIVED",
+				created_at: "not-a-date",
+			}),
+		]);
+		renderPanel();
+		expect(await screen.findByText("ARCHIVED")).toBeInTheDocument();
+		expect(screen.getByText("not-a-date")).toBeInTheDocument();
+	});
+
+	it("diffs an applied revision against its own base revision", async () => {
+		listMock.mockResolvedValue([
+			makeRevision({
+				id: "rev-new",
+				proposed_content: "after words",
+				base_revision_id: "rev-base",
+			}),
+			makeRevision({
+				id: "rev-base",
+				proposed_content: "before words",
+			}),
+		]);
+		renderPanel({ currentContent: "live words" });
+
+		const diffButtons = await screen.findAllByText("הצג הבדלים");
+		fireEvent.click(diffButtons[0]);
+
+		// APPLIED + known base → base (before) vs proposed (after).
+		const diff = document.querySelector(".whitespace-pre-wrap");
+		expect(diff).toHaveTextContent("before");
+		expect(diff).toHaveTextContent("after");
+		expect(diff).not.toHaveTextContent("live");
+	});
+
+	it("diffs against an empty before when the base snapshot has no content", async () => {
+		listMock.mockResolvedValue([
+			makeRevision({
+				id: "rev-new",
+				status: "APPLIED",
+				proposed_content: "after words",
+				base_revision_id: "rev-base",
+			}),
+			makeRevision({
+				id: "rev-base",
+				status: "APPLIED",
+				proposed_content: null,
+				base_revision_id: "rev-new",
+			}),
+		]);
+		renderPanel({ currentContent: "live words" });
+
+		const diffButtons = await screen.findAllByText("הצג הבדלים");
+		fireEvent.click(diffButtons[0]);
+
+		const diff = document.querySelector(".whitespace-pre-wrap");
+		expect(diff).toHaveTextContent("after");
+		expect(diff).not.toHaveTextContent("live");
+	});
+
+	it("diffs a dangling base reference against the live content instead", async () => {
+		listMock.mockResolvedValue([
+			makeRevision({
+				id: "rev-orphan",
+				proposed_content: "proposed words",
+				base_revision_id: "rev-missing",
+			}),
+		]);
+		renderPanel({ currentContent: "live words" });
+
+		fireEvent.click(await screen.findByText("הצג הבדלים"));
+
+		const diff = document.querySelector(".whitespace-pre-wrap");
+		expect(diff).toHaveTextContent("proposed");
+		expect(diff).toHaveTextContent("live");
+	});
+
+	it("previews an empty paragraph when the proposal has no content", async () => {
+		listMock.mockResolvedValue([makeRevision({ proposed_content: null })]);
+		renderPanel();
+		fireEvent.click(await screen.findByText("תצוגה מקדימה"));
+
+		const preview = document.querySelector(".admin-prose");
+		expect(preview?.innerHTML).toContain("<p></p>");
+	});
+
+	it("treats a null live content as an empty diff target", async () => {
+		listMock.mockResolvedValue([
+			makeRevision({ proposed_content: "proposed words" }),
+		]);
+		renderPanel({ currentContent: null });
+
+		fireEvent.click(await screen.findByText("הצג הבדלים"));
+
+		const diff = document.querySelector(".whitespace-pre-wrap");
+		expect(diff).toHaveTextContent("proposed");
+	});
 });

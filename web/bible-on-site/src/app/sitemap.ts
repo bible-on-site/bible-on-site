@@ -101,6 +101,22 @@ export function generateMasoraIndexEntry(
 }
 
 /**
+ * Generates the פרשה landing entry. Same policy as מסורה: only the hub
+ * is listed because unit pages carry a deliberate non-indexing policy
+ * (see the פרשה unit page metadata).
+ */
+export function generateParashaIndexEntry(
+	config: SitemapConfig,
+): MetadataRoute.Sitemap[0] {
+	return {
+		url: `${config.baseUrl}/פרשה`,
+		lastModified: config.lastModified,
+		changeFrequency: "monthly",
+		priority: 0.7,
+	};
+}
+
+/**
  * Generates all 929 perek URL entries
  */
 export function generatePerekEntries(
@@ -246,6 +262,7 @@ export function generateSitemapEntries(
 		...generatePediaCategoryEntries(config),
 		...generatePediaEntries(config, pediaUniqueNames),
 		generateMasoraIndexEntry(config),
+		generateParashaIndexEntry(config),
 	];
 }
 
