@@ -259,6 +259,12 @@ button.backLink {
   box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.35);
 }
 
+.searchMatch {
+  background: rgba(245, 158, 11, 0.45);
+  border-radius: 2px;
+  color: inherit;
+}
+
 .notePasuk {
   display: inline-block;
   font-weight: 700;
@@ -355,5 +361,9 @@ button.backLink {
   .noteHighlight {
     background: rgba(58, 47, 16, 0.95);
     border-right-color: #92600b;
+  }
+
+  .searchMatch {
+    background: rgba(146, 96, 11, 0.6);
   }
 }

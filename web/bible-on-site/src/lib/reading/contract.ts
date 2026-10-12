@@ -71,7 +71,12 @@ export interface ReadingUnit {
 	seferName: string;
 	/** 1-based order of this unit inside its sefer. */
 	order: number;
-	/** Display heading (scripture reference span, e.g. "בראשית לה כב - מ א"). */
+	/**
+	 * Display heading — the unit's identity within the division's own
+	 * hierarchy. For מסורה units this is the sefer name + the parasha's
+	 * 1-based ordinal inside that sefer (e.g. "בראשית פרשה ח");
+	 * conventional perek/pasuk references stay internal.
+	 */
 	heading: string;
 	/**
 	 * Primary reading ranges in order. Most divisions have exactly one.

@@ -15,9 +15,10 @@
 //!
 //! See docs/data/reading-units.md for the full contract.
 
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
 use rusqlite::Transaction;
 use std::collections::HashMap;
+use std::path::Path;
 
 use crate::models::{Perek, Sefer};
 
@@ -26,6 +27,7 @@ pub const READING_CONTRACT_VERSION: i64 = 1;
 pub const MASORA_DIVISION_ID: &str = "masora";
 pub const MASORA_ROOT_PATH: &str = "/מסורה";
 pub const MASORA_MENU_LABEL: &str = "מסורה על הפרק";
+pub const PARASHA_DIVISION_ID: &str = "parasha";
 
 /// A canonical scripture position. `segment_index` is the 0-based index
 /// into the pasuk's segment list for precise intra-pasuk bounds;
@@ -134,7 +136,6 @@ pub fn to_letters(n: i32) -> String {
 struct PerakimPart<'a> {
     perek_from: i32,
     perek_to: i32,
-    letter: Option<&'a str>,
     perakim: &'a [Perek],
 }
 
@@ -143,7 +144,6 @@ fn sefer_perakim_parts(sefer: &Sefer) -> Vec<PerakimPart<'_>> {
         vec![PerakimPart {
             perek_from: sefer.perek_from,
             perek_to: sefer.perek_to,
-            letter: None,
             perakim,
         }]
     } else {
@@ -156,7 +156,6 @@ fn sefer_perakim_parts(sefer: &Sefer) -> Vec<PerakimPart<'_>> {
                     .map(|additional| PerakimPart {
                         perek_from: additional.perek_from,
                         perek_to: additional.perek_to,
-                        letter: Some(additional.letter.as_str()),
                         perakim: &additional.perakim,
                     })
                     .collect()
@@ -165,85 +164,13 @@ fn sefer_perakim_parts(sefer: &Sefer) -> Vec<PerakimPart<'_>> {
     }
 }
 
-/// Lookup info for a canonical perek id: owning sefer, optional
-/// additional letter, and the perek's number inside its part.
-struct PerekInfo {
-    sefer_index: usize,
-    letter: Option<String>,
-    perek_num: i32,
-}
-
-fn build_perek_index(sefarim: &[Sefer]) -> HashMap<i32, PerekInfo> {
-    let mut index = HashMap::new();
-    for (sefer_index, sefer) in sefarim.iter().enumerate() {
-        for part in sefer_perakim_parts(sefer) {
-            for (pi, perek) in part.perakim.iter().enumerate() {
-                let perek_id = part.perek_from + pi as i32;
-                let _ = perek; // id derives from part range, matching the website
-                index.insert(
-                    perek_id,
-                    PerekInfo {
-                        sefer_index,
-                        letter: part.letter.map(str::to_string),
-                        perek_num: perek_id - part.perek_from + 1,
-                    },
-                );
-            }
-        }
-    }
-    index
-}
-
-/// The perek's source reference, e.g. "בראשית א" or "שמואל א יב".
-fn perek_source(
-    coordinate: &Coordinate,
-    sefarim: &[Sefer],
-    index: &HashMap<i32, PerekInfo>,
-) -> String {
-    let info = index
-        .get(&coordinate.perek_id)
-        .unwrap_or_else(|| panic!("No perek found for perekId: {}", coordinate.perek_id));
-    let sefer_name = &sefarim[info.sefer_index].name;
-    let perek_heb = to_letters(info.perek_num);
-    match &info.letter {
-        Some(letter) => format!("{sefer_name} {letter} {perek_heb}"),
-        None => format!("{sefer_name} {perek_heb}"),
-    }
-}
-
-/// Display heading for a unit — port of `formatMasoraUnitHeading`.
-/// Same-perek units collapse to "שמואל א יב ה-ז"; cross-perek units keep
-/// both endpoints ("בראשית לה כב - מ א").
-fn format_masora_heading(
-    start: &Coordinate,
-    end: &Coordinate,
-    sefarim: &[Sefer],
-    index: &HashMap<i32, PerekInfo>,
-) -> String {
-    // The start ref is "source pasuk": perek_source already carries the
-    // perek letters ("בראשית א"), so append the pasuk letters
-    // ("בראשית א א"), matching the website's perekRefOf.
-    let start_ref = format!(
-        "{} {}",
-        perek_source(start, sefarim, index),
-        to_letters(start.pasuk)
-    );
-    if start.perek_id == end.perek_id {
-        return if start.pasuk == end.pasuk {
-            start_ref
-        } else {
-            format!("{start_ref}-{}", to_letters(end.pasuk))
-        };
-    }
-    let end_info = index
-        .get(&end.perek_id)
-        .unwrap_or_else(|| panic!("No perek found for perekId: {}", end.perek_id));
-    let end_perek_heb = to_letters(end_info.perek_num);
-    let end_context = match &end_info.letter {
-        Some(letter) => format!("{letter} {end_perek_heb}"),
-        None => end_perek_heb,
-    };
-    format!("{start_ref} - {end_context} {}", to_letters(end.pasuk))
+/// Display heading for a unit — port of `formatMasoraUnitHeading`:
+/// the Masoretic parasha identity (sefer name + the unit's 1-based
+/// ordinal inside its sefer, e.g. "בראשית פרשה ח"). Conventional
+/// perek/pasuk references stay internal and never surface in the
+/// מסורה reader chrome.
+fn format_masora_heading(sefer_name: &str, order: i32) -> String {
+    format!("{sefer_name} פרשה {}", to_letters(order))
 }
 
 /// The coordinate that opens the unit after a break marker — port of
@@ -288,7 +215,6 @@ fn coordinate_after_marker(
 /// last unit is closed by the sefer end with `closing_break: None`.
 /// Unit ids are globally contiguous; `order` is 1-based per sefer.
 pub fn derive_masora_units(sefarim: &[Sefer]) -> Result<Vec<ReadingUnit>> {
-    let index = build_perek_index(sefarim);
     let mut units = Vec::new();
     let mut next_unit_id = 1i32;
 
@@ -316,7 +242,7 @@ pub fn derive_masora_units(sefarim: &[Sefer]) -> Result<Vec<ReadingUnit>> {
                     slug: next_unit_id.to_string(),
                     sefer_id,
                     order,
-                    heading: format_masora_heading(&start, &$end, sefarim, &index),
+                    heading: format_masora_heading(&sefer.name, order),
                     ranges: vec![ScriptureRange { start, end: $end }],
                     auxiliary_readings: Vec::new(),
                     closing_break: $closing_break,
@@ -401,13 +327,21 @@ pub fn insert_masora_reading_units(tx: &Transaction, sefarim: &[Sefer]) -> Resul
     )?;
 
     let units = derive_masora_units(sefarim)?;
-    for unit in &units {
+    insert_units(tx, MASORA_DIVISION_ID, &units)
+}
+
+/// Insert one division's units — every unit row, its ordered primary
+/// ranges (auxiliary columns NULL), and each auxiliary reading's ranges
+/// keyed by (auxiliary_ordinal, auxiliary_id). The unit shape is shared
+/// across divisions; only the derive step differs between them.
+fn insert_units(tx: &Transaction, division_id: &str, units: &[ReadingUnit]) -> Result<()> {
+    for unit in units {
         tx.execute(
             "INSERT INTO tanah_reading_unit
              (division_id, unit_id, slug, sefer_id, unit_order, heading, closing_break)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
             (
-                MASORA_DIVISION_ID,
+                division_id,
                 unit.unit_id,
                 &unit.slug,
                 unit.sefer_id,
@@ -420,6 +354,7 @@ pub fn insert_masora_reading_units(tx: &Transaction, sefarim: &[Sefer]) -> Resul
         for (range_index, range) in unit.ranges.iter().enumerate() {
             insert_range(
                 tx,
+                division_id,
                 unit.unit_id,
                 range_index as i32,
                 None,
@@ -432,6 +367,7 @@ pub fn insert_masora_reading_units(tx: &Transaction, sefarim: &[Sefer]) -> Resul
             for (range_index, range) in aux.ranges.iter().enumerate() {
                 insert_range(
                     tx,
+                    division_id,
                     unit.unit_id,
                     range_index as i32,
                     Some(aux_ordinal as i32),
@@ -449,6 +385,7 @@ pub fn insert_masora_reading_units(tx: &Transaction, sefarim: &[Sefer]) -> Resul
 #[allow(clippy::too_many_arguments)]
 fn insert_range(
     tx: &Transaction,
+    division_id: &str,
     unit_id: i32,
     range_index: i32,
     auxiliary_ordinal: Option<i32>,
@@ -463,7 +400,7 @@ fn insert_range(
           end_perek_id, end_pasuk, end_segment_index)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
         (
-            MASORA_DIVISION_ID,
+            division_id,
             unit_id,
             range_index,
             auxiliary_ordinal,
@@ -478,6 +415,313 @@ fn insert_range(
         ),
     )?;
     Ok(())
+}
+
+// ===== פרשה על הפרק — the synagogue Torah parasha division =====
+//
+// Unlike מסורה (derived from corpus break markers), the weekly
+// parashiot come from a curated source table shared verbatim with the
+// website: web/bible-on-site/src/data/parasha/parasha-division.json.
+// This module resolves that table's (sefer, printed perek, pasuk)
+// references to canonical perekId coordinates — the exact resolution
+// parasha-units.ts performs at module load — so the SQLite export and
+// the website stay in parity.
+
+/// Source-table mirror of parasha-division.json. Only the fields the
+/// export needs are modeled; `occasions` are landing-page reference
+/// data, not reading units.
+#[derive(Debug, serde::Deserialize)]
+pub struct ParashaDivisionSource {
+    #[serde(rename = "rootPath")]
+    pub root_path: String,
+    #[serde(rename = "menuLabel")]
+    pub menu_label: String,
+    pub customs: HashMap<String, String>,
+    pub units: Vec<ParashaSourceUnit>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct ParashaSourceUnit {
+    pub name: String,
+    pub sefer: String,
+    pub start: SourceVerse,
+    pub end: SourceVerse,
+    #[serde(default)]
+    pub haftarot: Vec<SourceHaftara>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct SourceVerse {
+    pub perek: i32,
+    pub pasuk: i32,
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct SourceRange {
+    pub sefer: String,
+    pub additional: Option<String>,
+    pub start: SourceVerse,
+    pub end: SourceVerse,
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct SourceHaftara {
+    pub customs: Vec<String>,
+    pub ranges: Vec<SourceRange>,
+}
+
+/// The (perek_from, perek_to) span of a sefer part named in the source
+/// table — the sefer itself or one additional (מלכים א etc.).
+fn sefer_part_range(
+    sefarim: &[Sefer],
+    sefer_name: &str,
+    additional: Option<&str>,
+) -> Result<(i32, i32)> {
+    let sefer = sefarim
+        .iter()
+        .find(|s| s.name == sefer_name)
+        .ok_or_else(|| anyhow::anyhow!("parasha data: unknown sefer \"{sefer_name}\""))?;
+    match additional {
+        None => {
+            if sefer.additionals.is_some() {
+                bail!(
+                    "parasha data: \"{sefer_name}\" is split into additionals; \"additional\" is required"
+                );
+            }
+            Ok((sefer.perek_from, sefer.perek_to))
+        }
+        Some(letter) => {
+            let part = sefer
+                .additionals
+                .as_ref()
+                .ok_or_else(|| {
+                    anyhow::anyhow!("parasha data: \"{sefer_name}\" has no additional \"{letter}\"")
+                })?
+                .iter()
+                .find(|a| a.letter == letter)
+                .ok_or_else(|| {
+                    anyhow::anyhow!("parasha data: \"{sefer_name}\" has no additional \"{letter}\"")
+                })?;
+            Ok((part.perek_from, part.perek_to))
+        }
+    }
+}
+
+/// Canonical pasuk count of a perek id, resolved over sefer parts.
+fn parasha_pasuk_count(sefarim: &[Sefer], perek_id: i32) -> Result<i32> {
+    for sefer in sefarim {
+        for part in sefer_perakim_parts(sefer) {
+            if perek_id >= part.perek_from && perek_id <= part.perek_to {
+                return Ok(part.perakim[(perek_id - part.perek_from) as usize]
+                    .pesukim
+                    .len() as i32);
+            }
+        }
+    }
+    bail!("parasha data: unknown perekId {perek_id}");
+}
+
+/// Resolve one printed reference to canonical coordinates — port of the
+/// website's resolveVerse, including its bounds validation.
+fn resolve_parasha_verse(
+    sefarim: &[Sefer],
+    range: &SourceRange,
+    verse: &SourceVerse,
+) -> Result<Coordinate> {
+    let (perek_from, perek_to) =
+        sefer_part_range(sefarim, &range.sefer, range.additional.as_deref())?;
+    let perek_id = perek_from + verse.perek - 1;
+    let display = format!(
+        "{}{} {}",
+        range.sefer,
+        range
+            .additional
+            .as_ref()
+            .map(|a| format!(" {a}"))
+            .unwrap_or_default(),
+        verse.perek,
+    );
+    if perek_id > perek_to {
+        bail!(
+            "parasha data: {display} exceeds {}'s perek count",
+            range.sefer
+        );
+    }
+    let pasuk_count = parasha_pasuk_count(sefarim, perek_id)?;
+    if verse.pasuk < 1 || verse.pasuk > pasuk_count {
+        bail!(
+            "parasha data: {display}:{} is outside the canonical {pasuk_count} pesukim",
+            verse.pasuk
+        );
+    }
+    Ok(Coordinate {
+        perek_id,
+        pasuk: verse.pasuk,
+        segment_index: None,
+    })
+}
+
+fn resolve_parasha_range(sefarim: &[Sefer], range: &SourceRange) -> Result<ScriptureRange> {
+    let resolved = ScriptureRange {
+        start: resolve_parasha_verse(sefarim, range, &range.start)?,
+        end: resolve_parasha_verse(sefarim, range, &range.end)?,
+    };
+    // Backwards ranges are impossible endpoints, not reading order —
+    // ordered multi-range lists stay untouched (jumps are legal).
+    if resolved.start.perek_id > resolved.end.perek_id
+        || (resolved.start.perek_id == resolved.end.perek_id
+            && resolved.start.pasuk > resolved.end.pasuk)
+    {
+        bail!(
+            "parasha data: backwards range in {} {}:{} - {}:{}",
+            range.sefer,
+            range.start.perek,
+            range.start.pasuk,
+            range.end.perek,
+            range.end.pasuk,
+        );
+    }
+    Ok(resolved)
+}
+
+/// Port of the website's haftaraId: `haftara-{customs-joined}`.
+fn haftara_id(customs: &[String]) -> String {
+    format!("haftara-{}", customs.join("-"))
+}
+
+/// Port of the website's haftaraLabel: custom labels with a Hebrew
+/// conjunction before the last ("ספרדים ותימנים").
+fn haftara_label(customs: &[String], labels: &HashMap<String, String>) -> String {
+    let names: Vec<String> = customs
+        .iter()
+        .map(|custom| {
+            labels
+                .get(custom)
+                .cloned()
+                .unwrap_or_else(|| custom.clone())
+        })
+        .collect();
+    match names.len() {
+        0 => String::new(),
+        1 => names[0].clone(),
+        2 => format!("{} ו{}", names[0], names[1]),
+        n => format!("{} ו{}", names[..n - 1].join(", "), names[n - 1]),
+    }
+}
+
+/// Resolve the parasha source table into contract units — port of
+/// parasha-units.ts `deriveUnits`: positional unit ids, per-sefer order,
+/// the parasha name as heading, one primary Torah range, and every
+/// Haftarah custom as an ordered auxiliary reading.
+pub fn derive_parasha_units(
+    source: &ParashaDivisionSource,
+    sefarim: &[Sefer],
+) -> Result<Vec<ReadingUnit>> {
+    let mut units = Vec::with_capacity(source.units.len());
+    let mut order_by_sefer: HashMap<&str, i32> = HashMap::new();
+
+    for (index, parasha) in source.units.iter().enumerate() {
+        let order = order_by_sefer.entry(parasha.sefer.as_str()).or_insert(0);
+        *order += 1;
+        let order = *order;
+
+        let primary_range = resolve_parasha_range(
+            sefarim,
+            &SourceRange {
+                sefer: parasha.sefer.clone(),
+                additional: None,
+                start: SourceVerse {
+                    perek: parasha.start.perek,
+                    pasuk: parasha.start.pasuk,
+                },
+                end: SourceVerse {
+                    perek: parasha.end.perek,
+                    pasuk: parasha.end.pasuk,
+                },
+            },
+        )?;
+
+        let mut auxiliary_readings = Vec::with_capacity(parasha.haftarot.len());
+        for haftara in &parasha.haftarot {
+            let ranges = haftara
+                .ranges
+                .iter()
+                .map(|range| resolve_parasha_range(sefarim, range))
+                .collect::<Result<Vec<_>>>()?;
+            auxiliary_readings.push(AuxiliaryReading {
+                id: haftara_id(&haftara.customs),
+                label: haftara_label(&haftara.customs, &source.customs),
+                ranges,
+            });
+        }
+
+        let sefer_id = sefarim
+            .iter()
+            .position(|s| s.name == parasha.sefer)
+            .ok_or_else(|| anyhow::anyhow!("parasha data: unknown sefer \"{}\"", parasha.sefer))?
+            as i32
+            + 1;
+
+        let unit_id = index as i32 + 1;
+        units.push(ReadingUnit {
+            unit_id,
+            slug: unit_id.to_string(),
+            sefer_id,
+            order,
+            heading: parasha.name.clone(),
+            ranges: vec![primary_range],
+            auxiliary_readings,
+            closing_break: None,
+        });
+    }
+    Ok(units)
+}
+
+/// Path of the shared source table the website also consumes.
+pub fn parasha_division_path() -> std::path::PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../../../web/bible-on-site/src/data/parasha/parasha-division.json")
+}
+
+/// Load and parse the shared parasha source table.
+pub fn load_parasha_division() -> Result<ParashaDivisionSource> {
+    let path = parasha_division_path();
+    let json = std::fs::read_to_string(&path)
+        .with_context(|| format!("Failed to read parasha division {}", path.display()))?;
+    serde_json::from_str(&json)
+        .with_context(|| format!("Failed to parse parasha division {}", path.display()))
+}
+
+/// Insert the פרשה division row plus all 54 units, their Torah ranges,
+/// and every ordered Haftarah auxiliary range.
+pub fn insert_parasha_reading_units(tx: &Transaction, sefarim: &[Sefer]) -> Result<()> {
+    let source = load_parasha_division()?;
+    tx.execute(
+        "INSERT INTO tanah_reading_division (id, contract_version, root_path, menu_label)
+         VALUES (?1, ?2, ?3, ?4)",
+        (
+            PARASHA_DIVISION_ID,
+            READING_CONTRACT_VERSION,
+            &source.root_path,
+            &source.menu_label,
+        ),
+    )?;
+
+    // The parasha division is defined over the five Torah sefarim only.
+    // A corpus that carries none of them (a fixture or a partial
+    // export) still gets the division row — for a stable schema — but
+    // no units. When any Torah sefer is present, resolution stays
+    // strict: impossible references fail the export.
+    if !source
+        .units
+        .iter()
+        .any(|unit| sefarim.iter().any(|sefer| sefer.name == unit.sefer))
+    {
+        return Ok(());
+    }
+
+    let units = derive_parasha_units(&source, sefarim)?;
+    insert_units(tx, PARASHA_DIVISION_ID, &units)
 }
 
 #[cfg(test)]
@@ -634,6 +878,27 @@ mod tests {
     }
 
     #[test]
+    fn derive_masora_units_skips_sefarim_without_perakim_parts() {
+        // A sefer carrying neither `perakim` nor `additionals` has no
+        // perakim parts at all — the derive loop skips it entirely.
+        let mut sefarim = masora_sample_sefarim();
+        sefarim.push(Sefer {
+            id: "empty".to_string(),
+            name: "ריק".to_string(),
+            tanach_us_name: None,
+            helek: "כתובים".to_string(),
+            pesukim_count: 0,
+            perek_from: 5,
+            perek_to: 4,
+            additionals: None,
+            perakim: None,
+        });
+        let units = derive_masora_units(&sefarim).unwrap();
+        assert_eq!(units.len(), 6);
+        assert!(units.iter().all(|unit| unit.sefer_id != 3));
+    }
+
+    #[test]
     fn derive_masora_units_maps_breaks_and_boundaries() {
         let units = derive_masora_units(&masora_sample_sefarim()).unwrap();
         // 4 units in בראשית + 2 units in שמואל.
@@ -659,7 +924,7 @@ mod tests {
                 },
             }
         );
-        assert_eq!(units[0].heading, "בראשית א א");
+        assert_eq!(units[0].heading, "בראשית פרשה א");
 
         // Unit 2: rest of pasuk 1 through the marker ending pasuk 3.
         assert_eq!(units[1].closing_break, Some("ptuha"));
@@ -679,7 +944,7 @@ mod tests {
                 segment_index: Some(1),
             }
         );
-        assert_eq!(units[1].heading, "בראשית א א-ג");
+        assert_eq!(units[1].heading, "בראשית פרשה ב");
 
         // Unit 3: whole pasuk 1 of perek 2, closed by stuma.
         assert_eq!(units[2].closing_break, Some("stuma"));
@@ -698,7 +963,7 @@ mod tests {
                 },
             }
         );
-        assert_eq!(units[2].heading, "בראשית ב א");
+        assert_eq!(units[2].heading, "בראשית פרשה ג");
 
         // Unit 4: sefer-end unit of בראשית, no closing break.
         assert_eq!(units[3].closing_break, None);
@@ -718,7 +983,7 @@ mod tests {
                 },
             }
         );
-        assert_eq!(units[3].heading, "בראשית ב ב");
+        assert_eq!(units[3].heading, "בראשית פרשה ד");
 
         // Unit 5: שמואל's first unit opens at sefer start (first perek
         // of additional א) and is closed by the ptuha at the last pasuk
@@ -734,7 +999,7 @@ mod tests {
                 segment_index: Some(2),
             }
         );
-        assert_eq!(units[4].heading, "שמואל א א א");
+        assert_eq!(units[4].heading, "שמואל פרשה א");
 
         // Unit 6: the break at the end of additional א opens the unit
         // at perek 4 (first perek of additional ב); closed by sefer end.
@@ -756,7 +1021,7 @@ mod tests {
                 },
             }
         );
-        assert_eq!(units[5].heading, "שמואל ב א א-ב");
+        assert_eq!(units[5].heading, "שמואל פרשה ב");
     }
 
     #[test]
@@ -915,9 +1180,9 @@ mod tests {
         assert_eq!(units[93].sefer_id, 2); // שמואל starts unit 94
 
         // Spot-check headings the website formats identically.
-        assert_eq!(units[0].heading, "בראשית א א-ה");
-        assert_eq!(units[49].heading, "בראשית יז טו-כז");
-        assert_eq!(units[3196].heading, "דברי הימים ב לו כג");
+        assert_eq!(units[0].heading, "בראשית פרשה א");
+        assert_eq!(units[49].heading, "בראשית פרשה נ");
+        assert_eq!(units[3196].heading, "דברי הימים פרשה תכט");
         assert_eq!(units[3196].closing_break, None);
 
         // First unit's range endpoints, including the intra-pasuk bound.
@@ -935,6 +1200,562 @@ mod tests {
                     segment_index: Some(13),
                 },
             }
+        );
+    }
+
+    /// Load the checked-in tanah_view dump — the exact JSON the website
+    /// resolves parasha references against.
+    fn corpus_sefarim() -> Vec<Sefer> {
+        let corpus_path = Path::new(env!("CARGO_MANIFEST_DIR")).join(
+            "../../../../web/bible-on-site/src/data/db/sefaria-dump-5784-sivan-4.tanah_view.json",
+        );
+        let json = fs::read_to_string(&corpus_path)
+            .unwrap_or_else(|e| panic!("Failed to read corpus {}: {e}", corpus_path.display()));
+        serde_json::from_str(&json).unwrap()
+    }
+
+    /// Export parity: resolve the shared parasha source table against
+    /// the checked-in dump and assert the exact units, ranges, and
+    /// auxiliary readings the website's parasha-units.ts produces.
+    #[test]
+    fn parasha_derivation_matches_website_export_parity() {
+        let sefarim = corpus_sefarim();
+        let source = load_parasha_division().unwrap();
+        let units = derive_parasha_units(&source, &sefarim).unwrap();
+
+        // 54 weekly parashiot — joined pairs stay separate identities.
+        assert_eq!(units.len(), 54);
+        for (i, unit) in units.iter().enumerate() {
+            assert_eq!(unit.unit_id, i as i32 + 1);
+            assert_eq!(unit.slug, (i as i32 + 1).to_string());
+            assert_eq!(unit.closing_break, None);
+            assert_eq!(unit.ranges.len(), 1);
+        }
+
+        // Only the five Torah sefarim carry primary parasha units, in
+        // canonical order with per-sefer order resetting.
+        let torah_sefer_ids: Vec<i32> = (1..=5).collect();
+        assert!(units.iter().all(|u| torah_sefer_ids.contains(&u.sefer_id)));
+        assert_eq!(units[0].sefer_id, 1);
+        assert_eq!(units[0].order, 1);
+        assert_eq!(units[11].order, 12); // ויחי — בראשית's 12th parasha
+        assert_eq!(units[12].sefer_id, 2); // שמות — שמות's 1st
+        assert_eq!(units[12].order, 1);
+        assert_eq!(units[23].sefer_id, 3); // ויקרא
+        assert_eq!(units[33].sefer_id, 4); // במדבר
+        assert_eq!(units[43].sefer_id, 5); // דברים
+        assert_eq!(units[53].sefer_id, 5);
+        assert_eq!(units[53].order, 11); // וזאת הברכה — דברים's 11th
+
+        // Headings are the parasha names — unit identities, not ref
+        // spans — and joined pairs are never merged.
+        assert_eq!(units[0].heading, "בראשית");
+        assert_eq!(units[21].heading, "ויקהל");
+        assert_eq!(units[22].heading, "פקודי");
+        assert_eq!(units[41].heading, "מטות");
+        assert_eq!(units[42].heading, "מסעי");
+
+        // Unit 1: בראשית א א - ו ח → canonical perekIds 1..6.
+        assert_eq!(
+            units[0].ranges[0],
+            ScriptureRange {
+                start: Coordinate {
+                    perek_id: 1,
+                    pasuk: 1,
+                    segment_index: None,
+                },
+                end: Coordinate {
+                    perek_id: 6,
+                    pasuk: 8,
+                    segment_index: None,
+                },
+            }
+        );
+
+        // Unit 54 ends the Torah: דברים לד יב → last perekId of דברים.
+        let devarim_last = sefarim[4].perek_to;
+        assert_eq!(
+            units[53].ranges[0].end,
+            Coordinate {
+                perek_id: devarim_last,
+                pasuk: 12,
+                segment_index: None,
+            }
+        );
+
+        // Every primary range resolves inside its own Torah sefer.
+        for unit in &units {
+            let sefer = &sefarim[(unit.sefer_id - 1) as usize];
+            let range = &unit.ranges[0];
+            assert!(range.start.perek_id >= sefer.perek_from);
+            assert!(range.end.perek_id <= sefer.perek_to);
+        }
+
+        // Auxiliary Haftarah readings: ordered, custom-keyed, never
+        // flattened into a single reading.
+        let aux_count: usize = units.iter().map(|u| u.auxiliary_readings.len()).sum();
+        assert!(aux_count > 54); // most parashiot carry 2-3 custom variants
+
+        // פרשת יתרו (unit 17): אשכנזים reads two ordered ranges with a
+        // perek jump inside ישעיהו — order and non-contiguity preserved.
+        let yitro = &units[16];
+        assert_eq!(yitro.heading, "יתרו");
+        let ashkenazi = yitro
+            .auxiliary_readings
+            .iter()
+            .find(|a| a.id == "haftara-ashkenazi")
+            .expect("יתרו ashkenazi haftara");
+        assert_eq!(ashkenazi.label, "אשכנזים");
+        assert_eq!(ashkenazi.ranges.len(), 2);
+        assert!(ashkenazi.ranges[0].end.perek_id < ashkenazi.ranges[1].start.perek_id);
+
+        // פרשת תזריע (unit 27): one reading shared by all three customs —
+        // joined id, conjunctive label, and מלכים ב resolved through its
+        // additional into מלכים's canonical perek space.
+        let tazria = &units[26];
+        assert_eq!(tazria.heading, "תזריע");
+        let shared_tazria = tazria
+            .auxiliary_readings
+            .iter()
+            .find(|a| a.id == "haftara-sefaradi-ashkenazi-temani")
+            .expect("תזריע shared haftara");
+        assert_eq!(shared_tazria.label, "ספרדים, אשכנזים ותימנים");
+        assert_eq!(shared_tazria.ranges.len(), 1);
+        let melachim = sefarim
+            .iter()
+            .find(|s| s.name == "מלכים")
+            .expect("מלכים in corpus");
+        let bet = melachim
+            .additionals
+            .as_ref()
+            .expect("מלכים additionals")
+            .iter()
+            .find(|a| a.letter == "ב")
+            .expect("מלכים ב");
+        assert_eq!(
+            shared_tazria.ranges[0].start.perek_id,
+            bet.perek_from + 4 - 1
+        );
+
+        // מטות (unit 42): תימנים reads ירמיהו א א-יט — resolves in
+        // ירמיהו's own perek space, beyond the אשכנזים end at ב ג.
+        let matot = &units[41];
+        let temani = matot
+            .auxiliary_readings
+            .iter()
+            .find(|a| a.id == "haftara-temani")
+            .expect("מטות temani haftara");
+        assert_eq!(temani.ranges[0].end.pasuk, 19);
+
+        // Shared-custom readings get a joined id and a conjunctive label.
+        let vezot = &units[53];
+        let shared = vezot
+            .auxiliary_readings
+            .iter()
+            .find(|a| a.id == "haftara-sefaradi-temani")
+            .expect("וזאת הברכה shared sefaradi+temani haftara");
+        assert_eq!(shared.label, "ספרדים ותימנים");
+    }
+
+    /// Impossible references fail resolution, mirroring the website's
+    /// module-load validation.
+    #[test]
+    fn parasha_derivation_rejects_impossible_references() {
+        let sefarim = corpus_sefarim();
+        let mut source = load_parasha_division().unwrap();
+
+        // דברים has no perek 35.
+        source.units[53].end.perek = 35;
+        let err = derive_parasha_units(&source, &sefarim).unwrap_err();
+        assert!(err.to_string().contains("exceeds"));
+
+        let mut source = load_parasha_division().unwrap();
+        // ירמיהו א has 19 pesukim; pasuk 20 is impossible.
+        source.units[41].haftarot[1].ranges[0].end.pasuk = 20;
+        let err = derive_parasha_units(&source, &sefarim).unwrap_err();
+        assert!(err.to_string().contains("outside the canonical"));
+
+        let mut source = load_parasha_division().unwrap();
+        // מלכים is split into additionals — the letter is required.
+        source.units[26].haftarot[0].ranges[0].additional = None;
+        let err = derive_parasha_units(&source, &sefarim).unwrap_err();
+        assert!(err.to_string().contains("split into additionals"));
+    }
+
+    /// Small corpus for parasha resolution edge cases: בראשית unsplit
+    /// (perakim 1..=3, five pesukim each) and מלכים split into
+    /// additionals א (perek 4) and ב (perek 5).
+    fn parasha_fixture_sefarim() -> Vec<Sefer> {
+        let five_pesukim = || (0..5).map(|_| text_pasuk()).collect::<Vec<_>>();
+        vec![
+            Sefer {
+                id: "bereshit".to_string(),
+                name: "בראשית".to_string(),
+                tanach_us_name: None,
+                helek: "תורה".to_string(),
+                pesukim_count: 15,
+                perek_from: 1,
+                perek_to: 3,
+                additionals: None,
+                perakim: Some(vec![
+                    perek(1, five_pesukim()),
+                    perek(2, five_pesukim()),
+                    perek(3, five_pesukim()),
+                ]),
+            },
+            Sefer {
+                id: "melachim".to_string(),
+                name: "מלכים".to_string(),
+                tanach_us_name: None,
+                helek: "נביאים".to_string(),
+                pesukim_count: 10,
+                perek_from: 4,
+                perek_to: 5,
+                additionals: Some(vec![
+                    Additional {
+                        letter: "א".to_string(),
+                        name: "מלכים א".to_string(),
+                        tanach_us_name: None,
+                        helek: "נביאים".to_string(),
+                        order: 1,
+                        pesukim_count: 5,
+                        perek_from: 4,
+                        perek_to: 4,
+                        perakim: vec![perek(4, five_pesukim())],
+                    },
+                    Additional {
+                        letter: "ב".to_string(),
+                        name: "מלכים ב".to_string(),
+                        tanach_us_name: None,
+                        helek: "נביאים".to_string(),
+                        order: 2,
+                        pesukim_count: 5,
+                        perek_from: 5,
+                        perek_to: 5,
+                        perakim: vec![perek(5, five_pesukim())],
+                    },
+                ]),
+                perakim: None,
+            },
+        ]
+    }
+
+    fn source_verse(perek: i32, pasuk: i32) -> SourceVerse {
+        SourceVerse { perek, pasuk }
+    }
+
+    fn source_range(
+        sefer: &str,
+        additional: Option<&str>,
+        start: (i32, i32),
+        end: (i32, i32),
+    ) -> SourceRange {
+        SourceRange {
+            sefer: sefer.to_string(),
+            additional: additional.map(str::to_string),
+            start: source_verse(start.0, start.1),
+            end: source_verse(end.0, end.1),
+        }
+    }
+
+    fn parasha_fixture_source(units: Vec<ParashaSourceUnit>) -> ParashaDivisionSource {
+        ParashaDivisionSource {
+            root_path: "/פרשה".to_string(),
+            menu_label: "פרשה על הפרק".to_string(),
+            customs: HashMap::from([("ashkenazi".to_string(), "אשכנזים".to_string())]),
+            units,
+        }
+    }
+
+    fn parasha_fixture_unit(
+        sefer: &str,
+        start: (i32, i32),
+        end: (i32, i32),
+        haftarot: Vec<SourceHaftara>,
+    ) -> ParashaSourceUnit {
+        ParashaSourceUnit {
+            name: "פלוני".to_string(),
+            sefer: sefer.to_string(),
+            start: source_verse(start.0, start.1),
+            end: source_verse(end.0, end.1),
+            haftarot,
+        }
+    }
+
+    /// An "additional" letter on a sefer that is not split at all fails
+    /// the sefer-part lookup.
+    #[test]
+    fn parasha_derivation_rejects_additional_on_unsplit_sefer() {
+        let source = parasha_fixture_source(vec![parasha_fixture_unit(
+            "בראשית",
+            (1, 1),
+            (1, 5),
+            vec![SourceHaftara {
+                customs: vec!["ashkenazi".to_string()],
+                ranges: vec![source_range("בראשית", Some("א"), (1, 1), (1, 2))],
+            }],
+        )]);
+        let err = derive_parasha_units(&source, &parasha_fixture_sefarim()).unwrap_err();
+        assert!(err.to_string().contains("has no additional \"א\""), "{err}");
+    }
+
+    /// A letter outside the sefer's real additionals fails the same
+    /// lookup after the parts list is found.
+    #[test]
+    fn parasha_derivation_rejects_unknown_additional_letter() {
+        let source = parasha_fixture_source(vec![parasha_fixture_unit(
+            "בראשית",
+            (1, 1),
+            (1, 5),
+            vec![SourceHaftara {
+                customs: vec!["ashkenazi".to_string()],
+                ranges: vec![source_range("מלכים", Some("ז"), (1, 1), (1, 2))],
+            }],
+        )]);
+        let err = derive_parasha_units(&source, &parasha_fixture_sefarim()).unwrap_err();
+        assert!(err.to_string().contains("has no additional \"ז\""), "{err}");
+    }
+
+    /// A printed perek below the sefer's range resolves to a perekId
+    /// that exists in no part, failing the pasuk-count lookup.
+    #[test]
+    fn parasha_derivation_rejects_perek_below_sefer_range() {
+        let source =
+            parasha_fixture_source(vec![parasha_fixture_unit("בראשית", (0, 1), (1, 5), vec![])]);
+        let err = derive_parasha_units(&source, &parasha_fixture_sefarim()).unwrap_err();
+        assert!(err.to_string().contains("unknown perekId"), "{err}");
+    }
+
+    /// Endpoints that move backwards — across perakim or within one
+    /// perek — are impossible references, not reading order.
+    #[test]
+    fn parasha_derivation_rejects_backwards_ranges() {
+        for (start, end) in [((3, 1), (1, 5)), ((2, 5), (2, 3))] {
+            let source =
+                parasha_fixture_source(vec![parasha_fixture_unit("בראשית", start, end, vec![])]);
+            let err = derive_parasha_units(&source, &parasha_fixture_sefarim()).unwrap_err();
+            assert!(err.to_string().contains("backwards range"), "{err}");
+        }
+    }
+
+    /// A haftara with no customs gets the bare `haftara-` id and an
+    /// empty label; a custom name missing from the labels table falls
+    /// back to the raw key.
+    #[test]
+    fn parasha_derivation_labels_haftara_from_custom_keys() {
+        let haftara = |customs: Vec<String>| SourceHaftara {
+            customs,
+            ranges: vec![source_range("מלכים", Some("ב"), (1, 1), (1, 2))],
+        };
+        let source = parasha_fixture_source(vec![parasha_fixture_unit(
+            "בראשית",
+            (1, 1),
+            (1, 5),
+            vec![haftara(vec![]), haftara(vec!["מנהג-אחר".to_string()])],
+        )]);
+        let units = derive_parasha_units(&source, &parasha_fixture_sefarim()).unwrap();
+        let auxiliaries = &units[0].auxiliary_readings;
+        assert_eq!(auxiliaries[0].id, "haftara-");
+        assert_eq!(auxiliaries[0].label, "");
+        assert_eq!(auxiliaries[1].id, "haftara-מנהג-אחר");
+        assert_eq!(auxiliaries[1].label, "מנהג-אחר");
+    }
+
+    /// The reading-unit tables used by the insert-path tests; the range
+    /// table's column list is parameterizable to exercise `?`
+    /// propagation from schema mismatches.
+    fn create_reading_unit_tables(conn: &Connection, range_table_sql: &str) {
+        conn.execute_batch(&format!(
+            "CREATE TABLE tanah_reading_division (
+                id TEXT PRIMARY KEY,
+                contract_version INTEGER NOT NULL,
+                root_path TEXT NOT NULL,
+                menu_label TEXT NOT NULL
+            );
+            CREATE TABLE tanah_reading_unit (
+                division_id TEXT NOT NULL,
+                unit_id INTEGER NOT NULL,
+                slug TEXT NOT NULL,
+                sefer_id INTEGER NOT NULL,
+                unit_order INTEGER NOT NULL,
+                heading TEXT NOT NULL,
+                closing_break TEXT,
+                PRIMARY KEY (division_id, unit_id)
+            );
+            {range_table_sql}"
+        ))
+        .unwrap();
+    }
+
+    /// When the range table cannot accept a primary range (here:
+    /// auxiliary_ordinal must be non-NULL), the `?` on the primary
+    /// insert propagates the failure out of the export.
+    #[test]
+    fn insert_parasha_reading_units_propagates_primary_range_failures() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        create_reading_unit_tables(
+            &conn,
+            "CREATE TABLE tanah_reading_unit_range (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                division_id TEXT NOT NULL,
+                unit_id INTEGER NOT NULL,
+                range_index INTEGER NOT NULL,
+                auxiliary_ordinal INTEGER CHECK (auxiliary_ordinal IS NOT NULL),
+                auxiliary_id TEXT,
+                auxiliary_label TEXT,
+                start_perek_id INTEGER NOT NULL,
+                start_pasuk INTEGER NOT NULL,
+                start_segment_index INTEGER,
+                end_perek_id INTEGER NOT NULL,
+                end_pasuk INTEGER NOT NULL,
+                end_segment_index INTEGER
+            );",
+        );
+
+        let tx = conn.transaction().unwrap();
+        let err = insert_parasha_reading_units(&tx, &corpus_sefarim()).unwrap_err();
+        assert!(err.to_string().contains("auxiliary_ordinal"), "{err}");
+    }
+
+    /// When the range table accepts primary ranges but rejects
+    /// auxiliary rows (here: auxiliary_id must stay NULL), the failure
+    /// propagates through the auxiliary `?` after all primary inserts
+    /// already succeeded.
+    #[test]
+    fn insert_parasha_reading_units_propagates_auxiliary_range_failures() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        create_reading_unit_tables(
+            &conn,
+            "CREATE TABLE tanah_reading_unit_range (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                division_id TEXT NOT NULL,
+                unit_id INTEGER NOT NULL,
+                range_index INTEGER NOT NULL,
+                auxiliary_ordinal INTEGER,
+                auxiliary_id TEXT CHECK (auxiliary_id IS NULL),
+                auxiliary_label TEXT,
+                start_perek_id INTEGER NOT NULL,
+                start_pasuk INTEGER NOT NULL,
+                start_segment_index INTEGER,
+                end_perek_id INTEGER NOT NULL,
+                end_pasuk INTEGER NOT NULL,
+                end_segment_index INTEGER
+            );",
+        );
+
+        let tx = conn.transaction().unwrap();
+        let err = insert_parasha_reading_units(&tx, &corpus_sefarim()).unwrap_err();
+        assert!(err.to_string().contains("auxiliary_id"), "{err}");
+    }
+
+    /// The insert path writes the division row, all units, primary
+    /// ranges, and auxiliary rows keyed by haftara id.
+    #[test]
+    fn insert_parasha_reading_units_writes_units_ranges_and_auxiliaries() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE tanah_reading_division (
+                id TEXT PRIMARY KEY,
+                contract_version INTEGER NOT NULL,
+                root_path TEXT NOT NULL,
+                menu_label TEXT NOT NULL
+            );
+            CREATE TABLE tanah_reading_unit (
+                division_id TEXT NOT NULL,
+                unit_id INTEGER NOT NULL,
+                slug TEXT NOT NULL,
+                sefer_id INTEGER NOT NULL,
+                unit_order INTEGER NOT NULL,
+                heading TEXT NOT NULL,
+                closing_break TEXT,
+                PRIMARY KEY (division_id, unit_id)
+            );
+            CREATE TABLE tanah_reading_unit_range (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                division_id TEXT NOT NULL,
+                unit_id INTEGER NOT NULL,
+                range_index INTEGER NOT NULL,
+                auxiliary_ordinal INTEGER,
+                auxiliary_id TEXT,
+                auxiliary_label TEXT,
+                start_perek_id INTEGER NOT NULL,
+                start_pasuk INTEGER NOT NULL,
+                start_segment_index INTEGER,
+                end_perek_id INTEGER NOT NULL,
+                end_pasuk INTEGER NOT NULL,
+                end_segment_index INTEGER
+            );",
+        )
+        .unwrap();
+
+        let tx = conn.transaction().unwrap();
+        insert_parasha_reading_units(&tx, &corpus_sefarim()).unwrap();
+        tx.commit().unwrap();
+
+        let division: (String, i64, String, String) = conn
+            .query_row(
+                "SELECT id, contract_version, root_path, menu_label
+                 FROM tanah_reading_division WHERE id = 'parasha'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            )
+            .unwrap();
+        assert_eq!(
+            division,
+            (
+                PARASHA_DIVISION_ID.to_string(),
+                READING_CONTRACT_VERSION,
+                "/פרשה".to_string(),
+                "פרשה על הפרק".to_string(),
+            )
+        );
+
+        let unit_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM tanah_reading_unit", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(unit_count, 54);
+
+        let primary_range_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM tanah_reading_unit_range WHERE auxiliary_id IS NULL",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(primary_range_count, 54);
+
+        let aux_range_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM tanah_reading_unit_range WHERE auxiliary_id IS NOT NULL",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(aux_range_count > 54);
+
+        // Auxiliary ordinals preserve the source order within a unit.
+        let ordered_aux: Vec<String> = {
+            let mut stmt = conn
+                .prepare(
+                    "SELECT DISTINCT auxiliary_id FROM tanah_reading_unit_range
+                     WHERE unit_id = 1 AND auxiliary_id IS NOT NULL
+                     ORDER BY auxiliary_ordinal",
+                )
+                .unwrap();
+            stmt.query_map([], |row| row.get(0))
+                .unwrap()
+                .collect::<rusqlite::Result<Vec<_>>>()
+                .unwrap()
+        };
+        assert_eq!(
+            ordered_aux,
+            vec![
+                "haftara-sefaradi".to_string(),
+                "haftara-ashkenazi".to_string(),
+                "haftara-temani".to_string(),
+            ]
         );
     }
 }

@@ -19,6 +19,13 @@ public partial class PerekPage
     private bool _recitationBusy;
     private bool _playWhenOpened;
     private string? _playingKey;
+    private bool _playingContinuous;
+    // The last tapped word or pasuk marks where continuous playback resumes, in
+    // recording milliseconds. Keyed by perek so a stale position can never leak
+    // into another perek's recording.
+    private (int PerekId, double StartMs)? _resumePosition;
+    private double? _pendingSeekMs;
+    private int _recitationGeneration;
     private MpegRecitationAudioDecoder? _audioDecoder;
     private IDispatcherTimer? _recitationFrameTimer;
     private RecitationTimeline? _recitationTimeline;
@@ -70,9 +77,13 @@ public partial class PerekPage
     private void StopRecitation()
     {
         ClearRecitationHighlight();
+        // Invalidates any MediaOpened handler still awaiting its seek.
+        _recitationGeneration++;
         _recitationRequest?.Cancel();
         _playWhenOpened = false;
         _playingKey = null;
+        _playingContinuous = false;
+        _pendingSeekMs = null;
         _recitationBusy = false;
         if (RecitationPlayer.Source != null)
         {
@@ -148,6 +159,16 @@ public partial class PerekPage
         {
             _ = _audioDecoder.ReleaseAsync();
         }
+    }
+
+    /// <summary>
+    /// Perek changes and page exits also drop the continuous-playback resume
+    /// position; opening or closing the focused pasuk keeps it.
+    /// </summary>
+    private void ResetRecitationSession()
+    {
+        ResetRecitationContext();
+        _resumePosition = null;
     }
 
     private void OnHeaderLongPressed(object? sender, EventArgs e)
@@ -266,7 +287,8 @@ public partial class PerekPage
             return;
         }
 
-        await PlayRecitationAsync(key, ranges: [(words[0].StartMs!.Value, words[^1].EndMs!.Value)]);
+        await PlayRecitationAsync(key, ranges: [(words[0].StartMs!.Value, words[^1].EndMs!.Value)],
+            resumeFromMs: words[0].StartMs!.Value);
     }
 
     private async void OnPasukDoubleTapped(object? sender, TappedEventArgs e)
@@ -354,7 +376,8 @@ public partial class PerekPage
                 span.TextColor = Color.FromArgb(_recitingWord == word ? "#1c427b" : "#637598");
                 span.BackgroundColor = _recitingWord == word ? Color.FromArgb("#e9eff8") : null;
                 var tap = new TapGestureRecognizer();
-                tap.Tapped += async (_, _) => await PlayRecitationAsync($"word:{perek.PerekId}:{word.Pasuk}:{word.Segment}", word.StartMs, word.EndMs);
+                tap.Tapped += async (_, _) => await PlayRecitationAsync($"word:{perek.PerekId}:{word.Pasuk}:{word.Segment}",
+                    word.StartMs, word.EndMs, resumeFromMs: word.StartMs);
                 span.GestureRecognizers.Add(tap);
             }
             formatted.Spans.Add(span);
@@ -373,7 +396,12 @@ public partial class PerekPage
 
     private async void OnSelectionRecitationClicked(object? sender, EventArgs e)
     {
-        if (_playingKey != null && RecitationPlayer.CurrentState is MediaElementState.Playing or MediaElementState.Paused)
+        // Only playback this button itself started (continuous or a verses range)
+        // toggles pause — a tapped word or pasuk preview is not the bar's
+        // playback, so Play during one starts continuous playback at the
+        // tap's bookmark instead.
+        var barIssued = _playingContinuous || _playingKey?.StartsWith("verses:", StringComparison.Ordinal) == true;
+        if (_playingKey != null && barIssued && RecitationPlayer.CurrentState is MediaElementState.Playing or MediaElementState.Paused)
         {
             if (RecitationPlayer.CurrentState == MediaElementState.Playing)
             {
@@ -392,7 +420,7 @@ public partial class PerekPage
         }
 
         var track = RecitationService.Instance.GetTrack(perek.PerekId);
-        if (_chapterRecitationSelection)
+        if (_chapterRecitationSelection || _playingKey != null)
         {
             await PlayRecitationAsync($"chapter:{perek.PerekId}");
             return;
@@ -413,12 +441,21 @@ public partial class PerekPage
     }
 
     private async Task PlayRecitationAsync(string key, double? start = null, double? end = null,
-        IReadOnlyList<(double Start, double End)>? ranges = null)
+        IReadOnlyList<(double Start, double End)>? ranges = null, double? resumeFromMs = null)
     {
         if (!RecitationEnabled || _viewModel.Perek is not { } perek)
         {
             return;
         }
+
+        // A tapped word or pasuk marks where the next continuous playback resumes.
+        // It is set on request so pressing Play before the preview finishes still
+        // resumes there, and it outlives the preview's own stop/reset.
+        if (resumeFromMs is double resume)
+        {
+            _resumePosition = (perek.PerekId, resume);
+        }
+        var continuous = start == null && ranges == null;
 
         if (_playingKey == key && RecitationPlayer.CurrentState is MediaElementState.Playing or MediaElementState.Paused)
         {
@@ -459,8 +496,13 @@ public partial class PerekPage
             }
 
             _playingKey = key;
+            _playingContinuous = continuous;
             _recitationTimeline = track?.AlignmentStatus == "ready"
                 ? new RecitationTimeline(track, ranges ?? (start.HasValue && end.HasValue ? [(start.Value, end.Value)] : null), pauseMs) : null;
+            // The timeline maps the tapped-word resume point into this clip's position.
+            _pendingSeekMs = continuous && _resumePosition is { } point && point.PerekId == perek.PerekId
+                ? _recitationTimeline?.PositionOf(point.StartMs)
+                : null;
             RecitationPlayer.Speed = preferences.RecitationSpeed;
             RecitationPlayer.Volume = preferences.RecitationVolume;
             _playWhenOpened = true;
@@ -481,13 +523,45 @@ public partial class PerekPage
         }
     }
 
-    private void OnRecitationMediaOpened(object? sender, EventArgs e)
+    private async void OnRecitationMediaOpened(object? sender, EventArgs e)
     {
-        if (_playWhenOpened && RecitationEnabled) { _playWhenOpened = false; RecitationPlayer.Play(); }
+        if (!_playWhenOpened || !RecitationEnabled)
+        {
+            return;
+        }
+
+        _playWhenOpened = false;
+        var generation = _recitationGeneration;
+        if (_pendingSeekMs is double seekMs)
+        {
+            _pendingSeekMs = null;
+            try
+            {
+                // Resume continuous playback from the tapped word's position.
+                using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+                await RecitationPlayer.SeekTo(TimeSpan.FromMilliseconds(seekMs), timeout.Token);
+            }
+            catch (Exception ex) //NOSONAR — a platform that cannot seek here still plays from the start.
+            {
+                System.Diagnostics.Debug.WriteLine($"Recitation resume: {ex.Message}");
+            }
+        }
+        if (generation != _recitationGeneration)
+        {
+            // StopRecitation ran during the seek — do not revive the old source.
+            return;
+        }
+        RecitationPlayer.Play();
     }
     private void OnRecitationMediaEnded(object? sender, EventArgs e)
     {
+        if (_playingContinuous)
+        {
+            // The resumed playback ran to the end of the perek; the next Play starts over.
+            _resumePosition = null;
+        }
         _playingKey = null;
+        _playingContinuous = false;
         ClearRecitationHighlight();
         UpdateSelectionBar();
     }

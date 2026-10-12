@@ -41,6 +41,7 @@ import SeferComposite from "../components/SeferComposite";
 import { ShareButton } from "../components/ShareButton";
 import styles from "./page.module.css";
 import { ScrollToSlug } from "./ScrollToArticle";
+import { ScrollToArticleMatch } from "./ScrollToArticleMatch";
 import { ScrollToPerushPasukNote } from "./ScrollToPerushPasuk";
 
 /**
@@ -260,6 +261,9 @@ export default async function ArticlePage({
 					})}
 				/>
 				<ScrollToSlug targetId="article-view" />
+				<Suspense fallback={null}>
+					<ScrollToArticleMatch />
+				</Suspense>
 				<section id="article-view" className={styles.expandedArticle}>
 					<header className={styles.articleHeader}>
 						<Link
@@ -315,10 +319,17 @@ export default async function ArticlePage({
 					/>
 
 					{/* Perushim section - commentaries carousel */}
-					<PerushimSection perekId={perekId} perushim={perushim} />
+					<PerushimSection
+						perekId={perekId}
+						perushim={perushim}
+						scrollStorageKey={`perushim-perek-${perekId}`}
+					/>
 
 					{/* Articles carousel */}
-					<ArticlesSection articles={articles} />
+					<ArticlesSection
+						articles={articles}
+						scrollStorageKey={`articles-perek-${perekId}`}
+					/>
 				</div>
 			</>
 		);
@@ -369,6 +380,7 @@ export default async function ArticlePage({
 								id={noteAnchorId}
 								className={styles.note}
 								data-perush-pasuk={note.pasuk}
+								data-perush-note={note.noteIdx}
 							>
 								<span className={styles.notePasuk}>
 									פסוק {toLetters(note.pasuk)}:
@@ -412,10 +424,17 @@ export default async function ArticlePage({
 				/>
 
 				{/* Perushim section - commentaries carousel */}
-				<PerushimSection perekId={perekId} perushim={perushim} />
+				<PerushimSection
+					perekId={perekId}
+					perushim={perushim}
+					scrollStorageKey={`perushim-perek-${perekId}`}
+				/>
 
 				{/* Articles carousel */}
-				<ArticlesSection articles={articles} />
+				<ArticlesSection
+					articles={articles}
+					scrollStorageKey={`articles-perek-${perekId}`}
+				/>
 			</div>
 		</>
 	);
