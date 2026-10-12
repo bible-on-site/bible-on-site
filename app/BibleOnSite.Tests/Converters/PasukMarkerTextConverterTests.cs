@@ -66,4 +66,35 @@ public class PasukMarkerTextConverterTests
         Convert("plain").Should().Be("plain");
         Convert((object?)null).Should().Be(string.Empty);
     }
+
+    [Fact]
+    public void missing_values_return_string_empty()
+    {
+        Convert().Should().Be(string.Empty);
+        new PasukMarkerTextConverter()
+            .Convert(null!, typeof(object), null, CultureInfo.InvariantCulture)
+            .Should().Be(string.Empty);
+    }
+
+    [Fact]
+    public void a_missing_marker_returns_the_same_formatted_text()
+    {
+        var text = PasukText("פסוק");
+
+        Convert(text).Should().BeSameAs(text);
+        Convert(text, new object()).Should().BeSameAs(text);
+    }
+
+    [Fact]
+    public void a_missing_or_invalid_font_size_keeps_the_default()
+    {
+        var text = PasukText("פסוק");
+
+        MarkerFontSize(Convert(text, "א")).Should().BeNaN();
+        MarkerFontSize(Convert(text, "א", "large")).Should().BeNaN();
+        MarkerFontSize(Convert(text, "א", -1.0)).Should().BeNaN();
+    }
+
+    private static double MarkerFontSize(object converted) =>
+        ((FormattedString)converted).Spans[0].FontSize;
 }
