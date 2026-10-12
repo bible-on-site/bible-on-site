@@ -176,6 +176,19 @@ class ListeningAcceptanceTests(unittest.TestCase):
             self.assertEqual(second["accepted"], [])
             self.assertEqual(second["alreadyAccepted"], [1])
             self.assertEqual(database.read_bytes(), before)
+            problem = {**deepcopy(self.decision), "verdict": "problem", "note": "ending is clipped"}
+            write_json(reviews, {"version": 1, "entries": [self.decision, problem]})
+            third = stage_reviews(self.root / "queue.json", reviews, canonical, output, database)
+            self.assertEqual(third["withdrawn"], [1])
+            with closing(sqlite3.connect(database)) as db:
+                self.assertEqual(db.execute("SELECT alignment_status FROM recitation_track WHERE perek_id=1").fetchone()[0], "needs_review")
+                self.assertEqual(db.execute("SELECT count(*) FROM recitation_word WHERE perek_id=1").fetchone()[0], 0)
+                self.assertEqual(db.execute("SELECT alignment_status FROM recitation_track WHERE perek_id=2").fetchone()[0], "ready")
+            self.assertEqual(len(json.loads(reviews.read_text(encoding="utf-8"))["entries"]), 2)
+            write_json(reviews, {"version": 1, "entries": [self.decision, problem, self.decision]})
+            fourth = stage_reviews(self.root / "queue.json", reviews, canonical, output, database)
+            self.assertEqual(fourth["accepted"], [1])
+            write_json(reviews, {"version": 1, "entries": [self.decision]})
         self.assertEqual(reviews.read_bytes(), original_reviews)
         with closing(sqlite3.connect(database)) as db:
             self.assertEqual(db.execute("SELECT perek_id,alignment_status FROM recitation_track ORDER BY perek_id").fetchall(),

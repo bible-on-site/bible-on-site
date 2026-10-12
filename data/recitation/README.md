@@ -342,3 +342,8 @@ invented word-level `reviewed` flags. Publish and audit the durable overlay, the
 include recovered chapters in the same rolling timing batch. Preserve the review
 queue, answer history and original diagnostic evidence for corrections; do not
 feed verse feedback to the whole-chapter `review.py` importer.
+
+Revisiting an answer is supported: on the next import, a new problem/skip answer
+withdraws only this policy's approval and clears that chapter's published word
+rows atomically. Independent manual and automatic approvals stay intact. A new
+GOOD answer can recover it again after the same complete-chapter checks.

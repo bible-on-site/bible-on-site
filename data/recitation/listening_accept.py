@@ -7,6 +7,7 @@ from copy import deepcopy
 import json
 from pathlib import Path
 import sqlite3
+import shutil
 import tempfile
 
 from alignment import load_chapters, reconcile, validate_timings, words_for
@@ -131,6 +132,24 @@ def approve_chapter(manifest, report, cached, words, recording, duration_ms, cas
     return accepted
 
 
+def overlay_reviews(staged, database, withdrawn):
+    """Withdraw only this policy's approvals, atomically with the validated overlay."""
+    with tempfile.NamedTemporaryFile(dir=database.parent, suffix=".sqlite", delete=False) as handle:
+        temporary = Path(handle.name)
+    try:
+        shutil.copy2(database, temporary)
+        with closing(sqlite3.connect(temporary)) as db:
+            for pid in withdrawn:
+                metadata = json.loads(db.execute("SELECT provenance_json FROM recitation_track WHERE perek_id=?", (pid,)).fetchone()[0])
+                if metadata.get("reviewMethod") != "trusted-process-with-human-verse-review":
+                    raise ValueError("Cannot withdraw an independent prior approval")
+                db.execute("UPDATE recitation_track SET alignment_status='needs_review' WHERE perek_id=?", (pid,))
+            db.commit()
+        export_database(staged, temporary)
+        temporary.replace(database)
+    finally:
+        temporary.unlink(missing_ok=True)
+
 def stage_reviews(queue_path, reviews_path, text, output, database):
     """Overlay complete recoveries only, preserving already accepted tracks."""
     queue = load_queue(queue_path)
@@ -140,19 +159,23 @@ def stage_reviews(queue_path, reviews_path, text, output, database):
     for case in queue["cases"]:
         cases_by_chapter[case["perekId"]].append(case)
     with closing(sqlite3.connect(f"{database.resolve().as_uri()}?mode=ro", uri=True)) as db:
-        existing = {pid: (status, audio, canonical) for pid, status, audio, canonical in db.execute(
-            "SELECT perek_id,alignment_status,audio_sha256,text_sha256 FROM recitation_track")}
-    summary = {"policy": POLICY, "accepted": [], "held": [], "alreadyAccepted": [], "words": 0}
+        existing = {pid: (status, audio, canonical, json.loads(metadata)) for pid, status, audio, canonical, metadata in db.execute(
+            "SELECT perek_id,alignment_status,audio_sha256,text_sha256,provenance_json FROM recitation_track")}
+    summary = {"policy": POLICY, "accepted": [], "held": [], "alreadyAccepted": [], "updatedReviews": [], "withdrawn": [], "words": 0}
     with tempfile.TemporaryDirectory() as folder:
         staged = Path(folder)
         for pid, cases in sorted(cases_by_chapter.items()):
+            prior = existing.get(pid)
+            was_recovered = bool(prior and prior[0] == "ready"
+                and prior[3].get("reviewMethod") == "trusted-process-with-human-verse-review")
+            manifest = None
             try:
                 paths = {case["manifestPath"] for case in cases}
                 if len(paths) != 1:
                     raise ValueError("Cases refer to different alignment snapshots")
                 path = Path(cases[0]["manifestPath"])
                 manifest = read_json(path)
-                if existing.get(pid) == ("ready", manifest["audioSha256"], manifest["textSha256"]):
+                if prior and prior[:3] == ("ready", manifest["audioSha256"], manifest["textSha256"]) and not was_recovered:
                     summary["alreadyAccepted"].append(pid)
                     continue
                 reports = path.parent.parent
@@ -160,15 +183,30 @@ def stage_reviews(queue_path, reviews_path, text, output, database):
                 accepted = approve_chapter(manifest, read_json(reports / f"{pid}.review.json"),
                     read_json(reports / f"{pid}.asr.json"), words_for(chapters[pid]), recording,
                     duration(recording), cases, decisions, queue["queueSha256"])
+                if was_recovered and accepted["acceptancePolicy"] == prior[3].get("acceptancePolicy"):
+                    summary["alreadyAccepted"].append(pid)
+                    continue
                 write_json(staged / f"{pid}.json", accepted)
                 write_json(output / f"{pid}.json", accepted)
-                summary["accepted"].append(pid)
-                summary["words"] += len(accepted["words"])
+                if was_recovered:
+                    summary["updatedReviews"].append(pid)
+                else:
+                    summary["accepted"].append(pid)
+                    summary["words"] += len(accepted["words"])
             except (ValueError, KeyError, TypeError, OSError, StopIteration) as error:
                 summary["held"].append({"perekId": pid, "reason": str(error)})
+                if was_recovered and manifest is not None:
+                    withdrawn = deepcopy(manifest)
+                    withdrawn.update(alignmentStatus="needs_review", reviewMethod="human-verse-review-withdrawn",
+                        acceptancePolicy={"name": POLICY, "version": 1, "withdrawalReason": str(error),
+                            "previousAcceptancePolicy": prior[3]["acceptancePolicy"],
+                            "latestHumanReviews": [deepcopy(decisions[c["id"]]) for c in cases if c["id"] in decisions]})
+                    write_json(staged / f"{pid}.json", withdrawn)
+                    write_json(output / f"{pid}.json", withdrawn)
+                    summary["withdrawn"].append(pid)
         # Ignore stale files in the output directory: export only this validated pass.
-        if summary["accepted"]:
-            export_database(staged, database)
+        if summary["accepted"] or summary["updatedReviews"] or summary["withdrawn"]:
+            overlay_reviews(staged, database, summary["withdrawn"])
     write_json(output / "summary.json", summary)
     return summary
 
