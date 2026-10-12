@@ -44,7 +44,7 @@
                    VerticalOptions="Center"
                    HorizontalOptions="Fill"
                    Margin="4,0"
-                   SemanticProperties.Hint="הקישו לפתיחת בחירת יחידה"
+                   SemanticProperties.Hint="הקישו לפתיחת בחירת פרשה"
                    Clicked="OnUnitSourceClicked"/>
                 <ContentView Grid.Column="2"/>
             </Grid>
@@ -222,7 +222,7 @@
                                                HeightRequest="60"
                                                WidthRequest="60"
                                                Aspect="AspectFit"/>
-                                        <Label Text="מתחבר ליחידה..."
+                                        <Label Text="מתחבר לפרשה..."
                                                AutomationId="MasoraLoadingLabel"
                                                FontSize="18"
                                                HorizontalTextAlignment="Center"
@@ -279,7 +279,7 @@
                     <VerticalStackLayout VerticalOptions="Center"
                                          HorizontalOptions="Center"
                                          Padding="20">
-                        <Label Text="אין מאמרים ליחידה זו"
+                        <Label Text="אין מאמרים לפרשה זו"
                                FontSize="18"
                                HorizontalTextAlignment="Center"
                                TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray400}}"/>

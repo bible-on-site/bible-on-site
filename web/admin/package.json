@@ -1,6 +1,6 @@
 {
 	"name": "admin",
-	"version": "0.1.118",
+	"version": "0.1.121",
 	"private": true,
 	"type": "module",
 	"scripts": {
@@ -42,7 +42,7 @@
 		"@aws-sdk/client-lambda": "3.1149.0",
 		"@aws-sdk/client-s3": "3.1149.0",
 		"@aws-sdk/s3-request-presigner": "3.1149.0",
-		"@tanstack/react-query": "5.104.1",
+		"@tanstack/react-query": "5.104.2",
 		"@tanstack/react-router": "1.170.42",
 		"@tanstack/react-router-devtools": "1.167.2",
 		"@tanstack/react-start": "1.168.61",

@@ -14,5 +14,11 @@ BibleOnSite/Resources/Raw/api-config.txt
 # Android: decompressed into PAD asset pack folder.
 BibleOnSite/Platforms/Android/AssetPacks/perushim_notes/*.sqlite
 !BibleOnSite/Platforms/Android/AssetPacks/perushim_notes/*.sqlite.gz
+# The prebuilt search index rides in the same pack but its .gz (~121 MB) exceeds
+# GitHub's 100 MB push limit — it travels via CI artifacts + app packages only.
+BibleOnSite/Platforms/Android/AssetPacks/perushim_notes/*.hebrew_search.sqlite.gz
 # iOS: decompressed into ODR asset catalog dataset folder.
 BibleOnSite/Platforms/iOS/Assets/PerushimNotes.xcassets/perushim_notes.dataset/*.sqlite
+# The search-index dataset materializes at build time only when its payload
+# exists (Contents.json is generated; the canonical copy is app/devops/).
+BibleOnSite/Platforms/iOS/Assets/PerushimNotes.xcassets/perushim_search.dataset/

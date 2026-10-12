@@ -1212,6 +1212,58 @@ describe("tanahpedia family api", () => {
 				updatePersonName({ data: { id: "missing", name: "Israel" } }),
 			).rejects.toThrow("Person name not found: missing");
 		});
+
+		it("rejects a nameType outside the family vocabulary", async () => {
+			await expect(
+				updatePersonName({
+					data: { id: "name-1", nameType: "MAIN" as "NICKNAME" },
+				}),
+			).rejects.toThrow("Invalid nameType");
+			expect(executeMock).not.toHaveBeenCalled();
+		});
+
+		it("throws when the requested name type has no lookup row", async () => {
+			queryOneMock.mockResolvedValueOnce(null);
+
+			await expect(
+				updatePersonName({ data: { id: "name-1", nameType: "NICKNAME" } }),
+			).rejects.toThrow("Missing tanahpedia_lookup_name_type row for NICKNAME");
+			expect(executeMock).not.toHaveBeenCalled();
+		});
+
+		it("throws when a giver-only update targets a missing name row", async () => {
+			queryOneMock.mockResolvedValueOnce(null);
+
+			await expect(
+				updatePersonName({ data: { id: "missing", giverPersonId: null } }),
+			).rejects.toThrow("Person name not found: missing");
+		});
+
+		it("clears the God-given flag without touching the human giver", async () => {
+			queryOneMock.mockResolvedValueOnce({ id: "name-1" });
+			executeMock.mockResolvedValue(undefined);
+
+			await updatePersonName({
+				data: { id: "name-1", isGodGiven: false },
+			});
+
+			expect(executeMock).toHaveBeenCalledTimes(1);
+			expect(executeMock).toHaveBeenCalledWith(
+				"DELETE FROM tanahpedia_person_name_giver_god WHERE person_name_id = ?",
+				["name-1"],
+			);
+		});
+
+		it("throws when the God singleton row is missing", async () => {
+			queryOneMock
+				.mockResolvedValueOnce({ id: "name-1" })
+				.mockResolvedValueOnce(null);
+			executeMock.mockResolvedValue(undefined);
+
+			await expect(
+				updatePersonName({ data: { id: "name-1", isGodGiven: true } }),
+			).rejects.toThrow("Missing tanahpedia_god singleton row");
+		});
 	});
 
 	describe("deletePersonName", () => {
