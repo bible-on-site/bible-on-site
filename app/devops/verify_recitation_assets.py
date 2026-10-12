@@ -4,6 +4,9 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+import shutil
+import subprocess
+import tempfile
 import zipfile
 
 
@@ -12,7 +15,8 @@ def digest(path):
         return hashlib.file_digest(source, "sha256").hexdigest()
 
 
-def verify(package, catalog_path, platform, asset_pack_dir=None, archive_dir=None):
+def verify(package, catalog_path, platform, asset_pack_dir=None, archive_dir=None,
+           payload_dir=None, extract=None):
     catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
     with zipfile.ZipFile(package) as archive:
         names = archive.namelist()
@@ -22,7 +26,7 @@ def verify(package, catalog_path, platform, asset_pack_dir=None, archive_dir=Non
         if platform == "Android":
             verify_android(archive, catalog, names)
         elif platform == "iOS":
-            verify_apple(archive, catalog, names, asset_pack_dir, archive_dir)
+            verify_apple(archive, catalog, names, asset_pack_dir, archive_dir, payload_dir, extract)
         elif platform == "Windows":
             verify_windows(archive, catalog, names)
     print(f'Verified {len(catalog["books"])} {platform} recitation packs in {package.name}')
@@ -40,7 +44,36 @@ def verify_android(archive, catalog, names):
         raise ValueError("On-demand recordings were included in the Android base installation")
 
 
-def verify_apple(archive, catalog, names, asset_pack_dir, archive_dir):
+def aa_payload(archive_path, payload_name, work_dir):
+    """Extract one payload file from an Apple Archive (.aar) with the `aa` tool.
+
+    `xcrun ba-package` emits Apple Archives; hashing the archived bytes — rather
+    than only the source file — proves the artifact Apple will serve matches the
+    catalog. The extracted file must be consumed before work_dir is cleaned.
+    """
+    aa = shutil.which("aa")
+    if aa is None:
+        raise ValueError("Apple Archive tool 'aa' is required to inspect .aar contents")
+    with archive_path.open("rb") as source:
+        magic = source.read(4)
+    if magic not in (b"AA01", b"YAA1"):
+        raise ValueError(
+            f"{archive_path.name} is not an Apple Archive (magic {magic!r}); "
+            "ba-package output changed — re-evaluate this verification")
+    result = subprocess.run(
+        [aa, "extract", "-i", str(archive_path), "-d", str(work_dir)],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout).strip()
+        raise ValueError(f"aa extract failed for {archive_path.name}: {detail}")
+    matches = [path for path in work_dir.rglob(payload_name) if path.is_file()]
+    if len(matches) != 1:
+        raise ValueError(
+            f"{archive_path.name}: expected exactly one '{payload_name}' entry, found {len(matches)}")
+    return matches[0]
+
+
+def verify_apple(archive, catalog, names, asset_pack_dir, archive_dir, payload_dir, extract=None):
     """Apple-hosted .aar packs ship beside the IPA, never inside it."""
     if any(Path(n).name == "OnDemandResources.plist" for n in names):
         raise ValueError("IPA still contains an On-Demand Resources manifest")
@@ -52,8 +85,9 @@ def verify_apple(archive, catalog, names, asset_pack_dir, archive_dir):
              and Path(n).name not in ("Info.plist",)]
     if not appex:
         raise ValueError("IPA lacks the managed asset-pack downloader extension")
-    if asset_pack_dir is None or archive_dir is None:
-        raise ValueError("iOS verification requires --asset-pack-dir and --archive-dir")
+    if asset_pack_dir is None or archive_dir is None or payload_dir is None:
+        raise ValueError("iOS verification requires --asset-pack-dir, --archive-dir and --payload-dir")
+    extract = extract or aa_payload
     for book in catalog["books"]:
         pack = f'recitation_{book["seferId"]}'
         archive_path = archive_dir / f"{pack}.aar"
@@ -73,6 +107,16 @@ def verify_apple(archive, catalog, names, asset_pack_dir, archive_dir):
         payload = manifest_path.parent / selectors[0]["file"]
         if not payload.is_file() or digest(payload) != book["sha256"]:
             raise ValueError(f"Missing or mismatched asset-pack payload: {pack}")
+        payload_name = Path(selectors[0]["file"]).name
+        with tempfile.TemporaryDirectory() as work:
+            archived = extract(archive_path, payload_name, Path(work))
+            if digest(archived) != book["sha256"]:
+                raise ValueError(f"Missing or mismatched archived payload in {archive_path}")
+        # Same bytes staged for the app-v* release; iOS < 26 runtimes fetch them
+        # over HTTPS into the extraction cache (PadDeliveryService fallback).
+        staged = payload_dir / payload_name
+        if not staged.is_file() or digest(staged) != book["sha256"]:
+            raise ValueError(f"Missing or mismatched release payload: {staged}")
 
 
 def verify_windows(archive, catalog, names):
@@ -92,5 +136,8 @@ if __name__ == "__main__":
                         help="iOS: Platforms/iOS/AssetPacks source directory (manifests + payloads)")
     parser.add_argument("--archive-dir", type=Path,
                         help="iOS: directory holding the .aar archives produced by xcrun ba-package")
+    parser.add_argument("--payload-dir", type=Path,
+                        help="iOS: directory of raw payloads staged for release-asset delivery below iOS 26")
     args = parser.parse_args()
-    verify(args.package, args.catalog, args.platform, args.asset_pack_dir, args.archive_dir)
+    verify(args.package, args.catalog, args.platform, args.asset_pack_dir,
+           args.archive_dir, args.payload_dir)

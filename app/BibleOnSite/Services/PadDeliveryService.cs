@@ -7,6 +7,7 @@ using BackgroundAssets;
 using Foundation;
 using System.Runtime.Versioning;
 #endif
+using System.Net.Http;
 
 namespace BibleOnSite.Services;
 
@@ -22,6 +23,111 @@ public sealed partial class PadDeliveryService : IPadDeliveryService
 
     internal static string PayloadFileName(string packName) => packName == PerushimNotesPackName
         ? "sefaria-dump-5784-sivan-4.perushim_notes.sqlite" : packName + ".zip";
+
+    /// <summary>
+    /// Pack payload files published on the app-v* GitHub release — the delivery
+    /// path for runtimes where managed asset packs cannot exist (iOS/MacCatalyst
+    /// below 26, or builds without the app-group entitlement). The first entry
+    /// is the required payload; later entries are best-effort companions (the
+    /// prebuilt search index — the app rebuilds it on-device when absent).
+    /// </summary>
+    internal static IReadOnlyList<string> ReleasePayloadFiles(string packName)
+    {
+        var files = new List<string> { PayloadFileName(packName) };
+        if (packName == PerushimNotesPackName)
+        {
+            files.Add(PerushimNotesService.SearchIndexDbName);
+        }
+        return files;
+    }
+
+    /// <summary>Release-asset URL a pack payload is published under for this app version.</summary>
+    internal static Uri ReleasePayloadUri(IAppInfo appInfo, string fileName)
+    {
+        return new Uri(
+            $"https://github.com/bible-on-site/bible-on-site/releases/download/app-v{appInfo.VersionString}/{fileName}");
+    }
+
+    /// <summary>
+    /// Streams each release-published payload file into the pack's cache dir
+    /// through a ".download" temp + rename, so an interrupted fetch never leaves
+    /// a partial file that <see cref="TryGetAssetPathAsync"/> would then serve.
+    /// Returns the failure reason, or null once the required payload landed;
+    /// optional companions are skipped best-effort.
+    /// </summary>
+    internal static async Task<string?> DownloadReleasePayloadsAsync(
+        HttpClient client, IAppInfo appInfo, string packName, string cacheDir,
+        IProgress<double>? progress, CancellationToken cancellationToken)
+    {
+        Directory.CreateDirectory(cacheDir);
+        var files = ReleasePayloadFiles(packName);
+        for (var index = 0; index < files.Count; index++)
+        {
+            var fileName = files[index];
+            try
+            {
+                await DownloadReleaseFileAsync(client, ReleasePayloadUri(appInfo, fileName),
+                    Path.Combine(cacheDir, fileName),
+                    new ScaledProgress(index, files.Count, progress),
+                    cancellationToken);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                if (index == 0)
+                {
+                    return $"{ex.GetType().Name}: {ex.Message}";
+                }
+                System.Diagnostics.Debug.WriteLine(
+                    $"Optional release payload '{fileName}' unavailable: {ex.Message}");
+            }
+        }
+        return null;
+    }
+
+    private static async Task DownloadReleaseFileAsync(
+        HttpClient client, Uri uri, string destination,
+        IProgress<double> progress, CancellationToken cancellationToken)
+    {
+        using var response = await client.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        response.EnsureSuccessStatusCode();
+        var expected = response.Content.Headers.ContentLength;
+        var temporary = destination + ".download";
+        try
+        {
+            long received = 0;
+            await using (var source = await response.Content.ReadAsStreamAsync(cancellationToken))
+            await using (var target = File.Create(temporary))
+            {
+                var buffer = new byte[81920];
+                int read;
+                while ((read = await source.ReadAsync(buffer, cancellationToken)) > 0)
+                {
+                    await target.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
+                    received += read;
+                    if (expected > 0)
+                    {
+                        progress.Report(Math.Clamp((double)received / expected.Value, 0, 1));
+                    }
+                }
+            }
+            if (expected.HasValue && received != expected.Value)
+            {
+                throw new IOException($"Truncated payload: received {received} of {expected} bytes");
+            }
+            File.Move(temporary, destination, overwrite: true);
+        }
+        finally { File.Delete(temporary); }
+    }
+
+    /// <summary>
+    /// Synchronous per-file progress adapter: maps a file's 0–1 fraction into
+    /// its slice of the whole payload set, so reports stay ordered across files.
+    /// </summary>
+    private sealed class ScaledProgress(int index, int count, IProgress<double>? inner) : IProgress<double>
+    {
+        public void Report(double value) =>
+            inner?.Report((index + Math.Clamp(value, 0, 1)) / count);
+    }
 
     public static IPadDeliveryService Instance { get; } = new PadDeliveryService();
 
@@ -322,6 +428,11 @@ partial class PadDeliveryService
     // progress and completion before the first fetch runs.
     private static AssetPackDownloadEvents? _downloadEvents;
 
+    // Infinite client timeout — payloads run hundreds of MB and cancellation is
+    // owned by the caller's token, not by an arbitrary clock.
+    private static readonly Lazy<HttpClient> _releasePayloadClient =
+        new(() => new HttpClient { Timeout = Timeout.InfiniteTimeSpan });
+
     private static string? BaAppGroupId =>
         NSBundle.MainBundle.ObjectForInfoDictionary("BAAppGroupID")?.ToString();
 
@@ -426,43 +537,38 @@ partial class PadDeliveryService
                 return true;
             }
 
-            if (!ManagedDeliverySupported)
+            string? failure = null;
+            if (ManagedDeliverySupported)
             {
-                LastIosDeliveryError =
-                    "Managed asset packs require iOS 26+ and an accessible app-group container "
-                    + "(unsigned simulator builds carry no app-group entitlement).";
-                return false;
+                failure = await TryFetchManagedPackAsync(packName, cacheDir, progress, ct);
+                if (failure == null)
+                {
+                    return true;
+                }
+
+                // A managed fetch can still fail — the pack may not be
+                // registered with the store yet, or the system download may
+                // error — so fall through to the release leg rather than
+                // stranding the device when the same bytes are published.
+                System.Diagnostics.Debug.WriteLine($"BA: managed fetch failed, trying release payload: {failure}");
             }
 
-            // Same short-circuit the ODR path had: an already-downloaded pack only
-            // needs extraction, not a store round-trip.
-            if (IsAssetPackLocallyAvailable(packName))
+            // Managed asset packs cannot exist below iOS/MacCatalyst 26 and
+            // need the app-group entitlement unsigned builds lack, so those
+            // runtimes download the same release-coupled payloads from the
+            // app-v* GitHub release into this same extraction cache.
+            var releaseFailure = await DownloadReleasePayloadsAsync(
+                _releasePayloadClient.Value, AppInfo.Current, packName, cacheDir, progress, ct);
+            if (releaseFailure == null)
             {
-                return SaveAssetPackPayload(cacheDir, packName) != null;
+                return true;
             }
 
-            var pack = await ResolveAssetPackAsync(packName);
-            if (pack == null)
-            {
-                LastIosDeliveryError =
-                    $"Asset pack '{packName}' is not declared in the Background Assets manifest.";
-                return false;
-            }
-
-            ConfigureBackgroundAssets();
-            using var subscription = _downloadEvents?.Subscribe(packName, progress);
-            using var cancellation = ct.Register(() => CancelAssetPackDownload(pack));
-
-            // EnsureLocalAvailability completes with a faulted task on NSError.
-            var ensure = BAAssetPackManager.SharedManager.EnsureLocalAvailabilityAsync(pack);
-            var completed = await Task.WhenAny(ensure, Task.Delay(Timeout.Infinite, ct));
-            if (completed != ensure)
-            {
-                ct.ThrowIfCancellationRequested();
-            }
-
-            await ensure;
-            return SaveAssetPackPayload(cacheDir, packName) != null;
+            LastIosDeliveryError = failure == null
+                ? $"Release-payload download failed: {releaseFailure}"
+                : $"Managed fetch: {failure}; release fallback: {releaseFailure}";
+            System.Diagnostics.Debug.WriteLine($"BA: {LastIosDeliveryError}");
+            return false;
         }
         catch (OperationCanceledException)
         {
@@ -482,6 +588,60 @@ partial class PadDeliveryService
             System.Diagnostics.Debug.WriteLine($"BA Fetch failed: {ex.Message}");
             return false;
         }
+    }
+
+    /// <summary>
+    /// Managed asset-pack leg of <see cref="FetchIosAsync"/>: null on success,
+    /// an error string when the pack could not be delivered or extracted.
+    /// Call only when <see cref="ManagedDeliverySupported"/> is true.
+    /// </summary>
+    [SupportedOSPlatform("ios26.0")]
+    [SupportedOSPlatform("maccatalyst26.0")]
+    private static async Task<string?> TryFetchManagedPackAsync(
+        string packName,
+        string cacheDir,
+        IProgress<double>? progress,
+        CancellationToken ct)
+    {
+        // Same short-circuit the ODR path had: an already-downloaded pack only
+        // needs extraction, not a store round-trip.
+        if (IsAssetPackLocallyAvailable(packName))
+        {
+            return SaveAssetPackPayload(cacheDir, packName) != null
+                ? null
+                : "downloaded asset pack did not contain its payload";
+        }
+
+        var pack = await ResolveAssetPackAsync(packName);
+        if (pack == null)
+        {
+            return $"Asset pack '{packName}' is not declared in the Background Assets manifest.";
+        }
+
+        ConfigureBackgroundAssets();
+        using var subscription = _downloadEvents?.Subscribe(packName, progress);
+        using var cancellation = ct.Register(() => CancelAssetPackDownload(pack));
+
+        // EnsureLocalAvailability completes with a faulted task on NSError.
+        var ensure = BAAssetPackManager.SharedManager.EnsureLocalAvailabilityAsync(pack);
+        var completed = await Task.WhenAny(ensure, Task.Delay(Timeout.Infinite, ct));
+        if (completed != ensure)
+        {
+            ct.ThrowIfCancellationRequested();
+        }
+
+        try
+        {
+            await ensure;
+        }
+        catch (NSErrorException ex)
+        {
+            ct.ThrowIfCancellationRequested();
+            return $"EnsureLocalAvailability failed: {ex.Error.LocalizedDescription}";
+        }
+        return SaveAssetPackPayload(cacheDir, packName) != null
+            ? null
+            : "downloaded asset pack did not contain its payload";
     }
 
     /// <summary>
@@ -686,7 +846,13 @@ partial class PadDeliveryService
 
         if (!ManagedDeliverySupported)
         {
-            lines.Add("Managed delivery unavailable: requires iOS 26+ and an accessible app-group container.");
+            lines.Add(
+                "Managed delivery unavailable: requires iOS 26+ and an accessible app-group container "
+                + "— pack payloads download from the app-v* GitHub release instead.");
+            if (!string.IsNullOrEmpty(LastIosDeliveryError))
+            {
+                lines.Add($"Last release-payload error: {LastIosDeliveryError}");
+            }
             return lines;
         }
 

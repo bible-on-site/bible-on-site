@@ -3,8 +3,10 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+import unittest.mock
 import zipfile
 
+import verify_recitation_assets as verify_module
 from verify_recitation_assets import verify
 
 
@@ -63,6 +65,8 @@ class ReleaseArtifactTests(unittest.TestCase):
         pack_dir.mkdir(parents=True)
         archive_dir = root / "aar"
         archive_dir.mkdir()
+        payload_dir = root / "payloads"
+        payload_dir.mkdir()
         if "no-manifest" not in problems:
             manifest = {"assetPackID": "recitation_1", "downloadPolicy": {"onDemand": {}},
                         "fileSelectors": [{"file": "recitation_1.zip"}],
@@ -72,21 +76,52 @@ class ReleaseArtifactTests(unittest.TestCase):
                 b"corrupt" if "stale-payload" in problems else audio)
         if "no-aar" not in problems:
             (archive_dir / "recitation_1.aar").write_bytes(b"aar bytes")
-        return package, pack_dir.parent, archive_dir
+        if "no-payload" not in problems:
+            (payload_dir / "recitation_1.zip").write_bytes(
+                b"corrupt" if "staged-mismatch" in problems else audio)
+
+        # Stands in for `aa` extraction: serves the bytes the archive carried.
+        archived = b"corrupt" if "corrupt-archive" in problems else audio
+
+        def fake_extract(archive_path, payload_name, work_dir):
+            payload = work_dir / payload_name
+            payload.write_bytes(archived)
+            return payload
+
+        return package, pack_dir.parent, archive_dir, payload_dir, fake_extract
 
     def test_ipa_requires_aar_manifest_and_embedded_downloader_extension(self):
         audio = b"book archive"
         for problem in [None, "odr-manifest", "base-audio", "no-extension",
-                        "no-manifest", "stale-payload", "no-aar", "missing-ios-platform"]:
+                        "no-manifest", "stale-payload", "no-aar", "missing-ios-platform",
+                        "corrupt-archive", "no-payload", "staged-mismatch"]:
             with self.subTest(problem=problem), tempfile.TemporaryDirectory() as temporary:
                 root = Path(temporary)
-                package, packs, aars = self._write_ios_fixture(
+                package, packs, aars, payloads, extract = self._write_ios_fixture(
                     root, audio, root / "catalog.json", {problem} - {None})
                 if problem is None:
-                    verify(package, root / "catalog.json", "iOS", packs, aars)
+                    verify(package, root / "catalog.json", "iOS", packs, aars, payloads, extract)
                 else:
                     with self.assertRaises(ValueError):
-                        verify(package, root / "catalog.json", "iOS", packs, aars)
+                        verify(package, root / "catalog.json", "iOS", packs, aars, payloads, extract)
+
+    def test_aa_payload_rejects_non_apple_archive_bytes(self):
+        with tempfile.TemporaryDirectory() as temporary, \
+                unittest.mock.patch.object(verify_module.shutil, "which", return_value="/usr/bin/aa"):
+            root = Path(temporary)
+            archive = root / "recitation_1.aar"
+            archive.write_bytes(b"not an apple archive")
+            with self.assertRaisesRegex(ValueError, "not an Apple Archive"):
+                verify_module.aa_payload(archive, "recitation_1.zip", root)
+
+    def test_aa_payload_requires_the_aa_tool(self):
+        with tempfile.TemporaryDirectory() as temporary, \
+                unittest.mock.patch.object(verify_module.shutil, "which", return_value=None):
+            root = Path(temporary)
+            archive = root / "recitation_1.aar"
+            archive.write_bytes(b"AA01fake")
+            with self.assertRaisesRegex(ValueError, "'aa' is required"):
+                verify_module.aa_payload(archive, "recitation_1.zip", root)
 
 
 if __name__ == "__main__":

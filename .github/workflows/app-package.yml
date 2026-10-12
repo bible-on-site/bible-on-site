@@ -609,7 +609,7 @@ jobs:
           key: ${{ steps.nuget-cache.outputs.cache-primary-key }}
 
       - name: Verify all recitation asset packs and payloads
-        run: python app/devops/verify_recitation_assets.py --platform iOS --catalog app/BibleOnSite/Resources/Raw/recitation-catalog.json --package "$(find app/.artifacts -name '*.ipa' -print -quit)" --asset-pack-dir app/BibleOnSite/Platforms/iOS/AssetPacks --archive-dir app/.artifacts/assetpacks
+        run: python app/devops/verify_recitation_assets.py --platform iOS --catalog app/BibleOnSite/Resources/Raw/recitation-catalog.json --package "$(find app/.artifacts -name '*.ipa' -print -quit)" --asset-pack-dir app/BibleOnSite/Platforms/iOS/AssetPacks --archive-dir app/.artifacts/assetpacks --payload-dir app/.artifacts/payloads
 
       - name: Set artifact name output
         id: set_artifact_name
@@ -622,6 +622,7 @@ jobs:
           path: |
             ${{ env.APP_DIRECTORY }}/.artifacts/*.ipa
             ${{ env.APP_DIRECTORY }}/.artifacts/assetpacks/*.aar
+            ${{ env.APP_DIRECTORY }}/.artifacts/payloads/*
           retention-days: 30
           if-no-files-found: error
           include-hidden-files: true

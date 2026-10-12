@@ -17,10 +17,16 @@ Every claim below is traced to code or packaging configuration.
 The store-side payloads are produced at packaging time: `prepare_perushim_assets.py`
 installs a paired catalog+notes artifact (CI `app-package.yml`), and
 `prepare_recitation_assets.py --platform {Android|iOS|Windows}` writes the packs,
-the per-pack `Manifest.json` files, and the bundled catalog. Release artifacts are
+the per-pack `Manifest.json` files, and the bundled catalog. For iOS, the raw
+payloads are additionally staged flat under `.artifacts/payloads` and published
+as plain `app-v*` release assets — that is the HTTPS delivery source for
+runtimes where managed packs cannot exist (see below). Release artifacts are
 checked by `verify_recitation_assets.py` (AAB modules/manifests, IPA embedded
-downloader extension + per-pack `.aar`/manifest/payload match, MSIX archives).
-The `.aar` files upload to App Store Connect separately from the IPA.
+downloader extension, per-pack `Manifest.json`/source-payload match, `.aar`
+extracted via `aa` and hashed against the catalog, staged release payload match,
+MSIX archives). The `.aar` files upload to App Store Connect separately from
+the IPA (`cd-app.yml`, `xcrun altool --upload-asset-pack` on an Xcode 26+
+toolchain).
 
 ## Install paths
 
@@ -48,11 +54,16 @@ pack bytes ride the same release (inside the AAB for Android; as Apple-hosted
 `.aar` archives uploaded to App Store Connect by `cd-app.yml` for iOS). There is
 no independent server-side pack update channel.
 
-Managed Background Assets require **iOS 26 / macOS 26**: on older OS versions
-`PadDeliveryService` reports the packs unavailable. Content already copied into
-`AppDataDirectory` keeps working across the update; only new pack installs on
-iOS < 26 have no delivery path (the unmanaged BA download API exists back to
-iOS 16.1 but requires self-hosted infrastructure this repo does not have).
+Managed Background Assets require **iOS 26 / macOS 26** — plus the app-group
+entitlement, which unsigned simulator/dev builds lack. On runtimes without
+managed delivery `FetchAsync` instead downloads the same pack payloads over
+HTTPS from the `app-v{version}` GitHub release (they are release assets beside
+the `.aar` files) into the same generation-scoped extraction cache, so
+`TryGetAssetPathAsync` and the install paths are identical on either leg. Each
+payload is streamed through a `.download` temp file with atomic rename — an
+interrupted fetch never leaves a partial file the next probe would serve —
+and the optional search-index companion is best-effort: if it is absent the
+index rebuilds on device, as with an older pack that never carried it.
 
 - App update → store delivers updated packs (PAD packs and Apple-hosted asset
   packs version with the app; both stores re-download changed packs automatically).
@@ -61,8 +72,9 @@ iOS 16.1 but requires self-hosted infrastructure this repo does not have).
   refreshed by hash comparison on every `PerushimCatalogService.InitializeAsync`.
 - iOS extracted asset-pack copies are generation-scoped
   (`Caches/asset_packs/{version}-{build}/{pack}`), so an updated app re-extracts the
-  new payload instead of trusting the old file. Prior-generation directories are
-  left behind for the OS to purge — the app never cleans them.
+  new payload instead of trusting the old file. Prior-generation directories
+  are deleted on the next fetch so pack payloads (hundreds of MB) never
+  accumulate.
 - Recitation: `UpdateAsync` re-reads the bundled catalog; `DownloadAsync` reuses
   local MP3s whose `audioSha256` still matches and re-extracts only books whose
   archive changed. Word timings live in the bundled catalog, so timing changes ride
@@ -121,7 +133,9 @@ Not exercised anywhere:
   Debug APK always takes the bundled fallback, so PAD code never runs there.
 - Real iOS managed asset-pack download/purge (requires a TestFlight/App Store
   install or an `xcrun ba-serve` self-hosted harness; cannot be tested on the
-  simulator or from Windows). CI verifies only IPA/manifest/`.aar` presence via
-  `verify_recitation_assets.py`.
+  simulator or from Windows). CI verifies IPA/manifest/payload correspondence
+  and extracts each `.aar` with `aa` to hash the archived bytes
+  (`verify_recitation_assets.py`); the release-asset download leg is unit-tested
+  in `ReleasePayloadDownloadTests` with a stubbed `HttpMessageHandler`.
 - OS-level storage reclamation after a future removal feature (both stores keep
   their copies regardless of what the app deletes).

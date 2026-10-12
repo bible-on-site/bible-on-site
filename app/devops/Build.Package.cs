@@ -302,6 +302,10 @@ partial class Build
     /// Archive (.aar) via `xcrun ba-package`. The archives upload to App Store
     /// Connect separately from the IPA (Transporter); on device they resolve
     /// through BAAssetPackManager managed asset packs.
+    /// The raw payloads are also staged flat under .artifacts/payloads: releases
+    /// publish them as plain assets so runtimes without managed delivery
+    /// (iOS/MacCatalyst below 26, unsigned builds) can download the same bytes
+    /// over HTTPS into their extraction cache.
     /// </summary>
     void PackageIosAssetPacks()
     {
@@ -314,6 +318,17 @@ partial class Build
             Serilog.Log.Information($"ba-package {manifest.Parent.Name} -> {archivePath}");
             ProcessTasks.StartProcess("xcrun", $"ba-package \"{manifest}\" -o \"{archivePath}\"", manifest.Parent)
                 .AssertZeroExitCode();
+        }
+
+        var payloadsDirectory = ArtifactsDirectory / "payloads";
+        payloadsDirectory.CreateDirectory();
+        foreach (var packDirectory in assetPacksDirectory.GlobDirectories("*").OrderBy(p => (string)p.Name, StringComparer.Ordinal))
+        {
+            foreach (var payload in packDirectory.GlobFiles("*").Where(f => f.Name != "Manifest.json"))
+            {
+                Serilog.Log.Information($"payload {packDirectory.Name}/{payload.Name} -> {payloadsDirectory}");
+                payload.CopyToDirectory(payloadsDirectory, ExistsPolicy.FileOverwrite);
+            }
         }
     }
 

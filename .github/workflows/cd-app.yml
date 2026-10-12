@@ -379,6 +379,15 @@ jobs:
           # by xcrun ba-package and uploaded to the app release by CI. altool
           # authenticates with the same AuthKey in ~/private_keys provisioned
           # above and associates each pack with the app's numeric Apple ID.
+          # --upload-asset-pack exists only in the Xcode 26+ altool; macos-15
+          # still defaults xcode-select to Xcode 16, so switch toolchains first.
+          XCODE_PATH=$(ls -d /Applications/Xcode_2[6-9]*.app 2>/dev/null | sort -V | tail -1)
+          if [ -z "$XCODE_PATH" ]; then
+            echo "::error::No Xcode 26+ installation found — altool --upload-asset-pack is unavailable"
+            exit 1
+          fi
+          sudo xcode-select -s "$XCODE_PATH/Contents/Developer"
+          xcodebuild -version
           node "$RUNNER_TEMP/asset-pack-upload.mjs" "${{ env.APP_DIRECTORY }}/.artifacts/assetpacks"
 
       - name: Record deployment result
