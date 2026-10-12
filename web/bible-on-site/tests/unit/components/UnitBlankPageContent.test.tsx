@@ -88,10 +88,19 @@ jest.mock("@/app/components/reading/unit-book-actions", () => ({
 	getUnitBookPerushNotes: jest.fn(),
 }));
 
-jest.mock("@/app/929/[number]/components/perushim-section.module.css", () => ({}));
+jest.mock(
+	"@/app/929/[number]/components/perushim-section.module.css",
+	() => ({}),
+);
 jest.mock("@/app/929/[number]/components/sefer.module.css", () => ({}));
 
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+	act,
+	fireEvent,
+	render,
+	screen,
+	waitFor,
+} from "@testing-library/react";
 import { getArticleForBook } from "@/app/929/[number]/actions";
 import { UnitBlankPageContent } from "@/app/components/reading/UnitBlankPageContent";
 import { getUnitBookPerushNotes } from "@/app/components/reading/unit-book-actions";
@@ -101,13 +110,11 @@ const mockGetArticleForBook = getArticleForBook as jest.MockedFunction<
 	typeof getArticleForBook
 >;
 const mockGetUnitBookPerushNotes =
-	getUnitBookPerushNotes as jest.MockedFunction<
-		typeof getUnitBookPerushNotes
-	>;
+	getUnitBookPerushNotes as jest.MockedFunction<typeof getUnitBookPerushNotes>;
 
 const PERUSHIM = [
 	{ id: 38, name: 'רש"י', parshanName: 'רש"י', noteCount: 5, perekId: 1 },
-	{ id: 40, name: "רמב\"ן", parshanName: "רמב\"ן", noteCount: 3, perekId: 1 },
+	{ id: 40, name: 'רמב"ן', parshanName: 'רמב"ן', noteCount: 3, perekId: 1 },
 ];
 
 const ARTICLES = [
@@ -207,9 +214,7 @@ describe("UnitBlankPageContent", () => {
 			(perushProps.hrefForPerush as (p: { name: string }) => string)({
 				name: 'רש"י',
 			}),
-		).toBe(
-			`/מסורה/8?book=&perush=${encodeURIComponent('רש"י')}`,
-		);
+		).toBe(`/מסורה/8?book=&perush=${encodeURIComponent('רש"י')}`);
 
 		const articleProps = last(articlesSectionProps);
 		expect(articleProps.title).toBe("מאמרים על הפרשה");
@@ -241,7 +246,11 @@ describe("UnitBlankPageContent", () => {
 	it("opens a perush in place, publishes its pesukim, and reports its title", async () => {
 		const onNavigate = jest.fn();
 		const onContentTitle = jest.fn();
-		renderPage({ onNavigate, onContentTitle, perushTitle: (n: string) => `${n} על פרשה` });
+		renderPage({
+			onNavigate,
+			onContentTitle,
+			perushTitle: (n: string) => `${n} על פרשה`,
+		});
 
 		clickPerush();
 		expect(onNavigate).toHaveBeenCalledWith("perush", 'רש"י');
@@ -286,9 +295,7 @@ describe("UnitBlankPageContent", () => {
 		expect(onNavigate).toHaveBeenCalledWith("article", "7");
 		await screen.findByTestId("article-full-view");
 		expect(mockGetArticleForBook).toHaveBeenCalledWith(7);
-		expect(onContentTitle).toHaveBeenLastCalledWith(
-			"ARTICLE_TITLE:מאמר ראשון",
-		);
+		expect(onContentTitle).toHaveBeenLastCalledWith("ARTICLE_TITLE:מאמר ראשון");
 
 		fireEvent.click(screen.getByText("article back"));
 		await screen.findByTestId("articles-section");
@@ -383,6 +390,60 @@ describe("UnitBlankPageContent", () => {
 		expect(last(articlesSectionProps).articles).toEqual([]);
 		expect(screen.queryByTestId("perushim-section")).toBeNull();
 	});
+
+	it.each([
+		["article", "resolve"],
+		["article", "reject"],
+		["commentary", "resolve"],
+		["commentary", "reject"],
+	] as const)(
+		"keeps the current article when an earlier %s request later %s",
+		async (kind, outcome) => {
+			let resolve!: (value: never) => void;
+			let reject!: (reason: Error) => void;
+			const pending = new Promise<never>((onResolve, onReject) => {
+				resolve = onResolve;
+				reject = onReject;
+			});
+			const currentArticle = { id: 9, name: "Current article" };
+			mockGetArticleForBook.mockResolvedValue(currentArticle as never);
+			if (kind === "article") {
+				mockGetArticleForBook.mockReturnValueOnce(pending);
+			} else {
+				mockGetUnitBookPerushNotes.mockReturnValueOnce(pending);
+			}
+			const onContentTitle = jest.fn();
+			renderPage({
+				initialSlug: kind === "article" ? "7" : PERUSHIM[0].name,
+				onContentTitle,
+			});
+			clickArticle(9);
+			await screen.findByTestId("article-full-view");
+			await waitFor(() =>
+				expect(onContentTitle).toHaveBeenLastCalledWith(
+					"ARTICLE_TITLE:Current article",
+				),
+			);
+			await act(async () => {
+				if (outcome === "reject") {
+					reject(new Error("Previous request failed after navigation"));
+				} else {
+					resolve(
+						(kind === "article"
+							? { id: 7, name: "Old article" }
+							: NOTES) as never,
+					);
+				}
+				await pending.catch(() => {});
+			});
+			expect(screen.getByTestId("article-full-view")).toBeInTheDocument();
+			expect(screen.queryByTestId("unit-perush-full-view")).toBeNull();
+			expect(onContentTitle).toHaveBeenLastCalledWith(
+				"ARTICLE_TITLE:Current article",
+			);
+			expect(getUnitOpenPerush("8:torah")).toBeNull();
+		},
+	);
 
 	it("ignores a slug that matches neither carousel", async () => {
 		renderPage({ initialSlug: "does-not-exist" });
