@@ -311,3 +311,34 @@ Two canonical JSON defects found during the audit were repaired at the same
 segment IDs: the final words of Eikhah 5:22 and Kohelet 12:14 had absorbed editorial
 repetition notes and lost their first letter. The source aggregation now removes
 those notes before qri-bracket parsing; regression tests preserve genuine qri.
+
+## Apply targeted human listening
+
+`listening_review.py` saves actual source-bound verse decisions and their history.
+Use `listening_accept.py` to turn those decisions into complete recovered chapters:
+
+```powershell
+.venv/Scripts/python.exe listening_accept.py --queue /absolute/review/queue/queue.json --reviews /absolute/review/reviews.json --text /absolute/canonical.json --output /absolute/accepted --database /absolute/durable/recitation.sqlite
+.venv/Scripts/python.exe publish.py --input /absolute/durable/recitation.sqlite --database /absolute/canonical.json
+.venv/Scripts/python.exe audit.py --input /absolute/durable/recitation.sqlite --database /absolute/canonical.json
+```
+
+Run this import alongside automatic `trusted.py` staging at each collection follow-up.
+It reads saved snapshots and original MP3s without model inference or changing the
+continuous worker. Start with a copied durable database and verify the recovered
+chapters before overlaying the delivery database. Never point it at the active
+worker checkpoint. Only current GOOD decisions that cover every exact word cut
+can resolve the reviewed verse's ASR failure. A later problem/skip answer, changed
+source/candidate, unreviewed held verse, invalid duration or global overlap keeps
+the chapter held. The other verses retain the original automatic anchor, score,
+diagnostic and timing gates, including the existing low-acoustic-score warning
+policy. Nothing is padded, clamped or fabricated.
+
+Accepted provenance uses `trusted-process-with-human-verse-review` and the
+versioned `targeted-human-listening-v1` policy. It stores the actual reviewed
+pesukim, decisions, listening evidence, diagnostic/source hashes and unchanged
+execution profile. It does not claim whole-chapter human listening or set
+invented word-level `reviewed` flags. Publish and audit the durable overlay, then
+include recovered chapters in the same rolling timing batch. Preserve the review
+queue, answer history and original diagnostic evidence for corrections; do not
+feed verse feedback to the whole-chapter `review.py` importer.
