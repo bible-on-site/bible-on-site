@@ -8,13 +8,17 @@
  * term's letters may be separated in stored text by anything the JS
  * pipeline erases (niqqud/taamim combining marks, quote chars such as
  * gershayim, HTML tags, entities), so `שליטא` still reaches a stored
- * `שליט"א`, which `LIKE '%שליטא%'` could never select. Candidates are
- * ordered by a word-bounded phrase pattern before the row cap, so when
- * a frequent term overflows it, the truncated rows are the weakest
- * substring-only candidates rather than arbitrary early rows. The note
- * table has no usable full-text index today; the bounded ranked REGEXP
- * keeps worst-case cost predictable until a derived index (see the
- * article-search follow-up) covers commentary too.
+ * `שליט"א`, which `LIKE '%שליטא%'` could never select. Beyond the
+ * exact-letter path, `termAnchors` adds bounded chunk patterns so a
+ * word within the scorer's edit-distance budget is also selected
+ * (#2140) — the same typo tolerance the in-memory corpora get by
+ * scoring everything. Candidates are ordered by a word-bounded phrase
+ * pattern, then by how many of each term's anchors matched, before the
+ * row cap, so when a frequent term overflows it, the truncated rows
+ * are the weakest candidates rather than arbitrary early rows. The
+ * note table has no usable full-text index today; the bounded ranked
+ * REGEXP keeps worst-case cost predictable until a derived index (see
+ * the article-search follow-up) covers commentary too.
  */
 
 import { toLetters } from "gematry";
@@ -23,7 +27,7 @@ import { query } from "@/lib/api-client";
 import { authorNameToSlug } from "@/lib/authors";
 import type { Scored } from "./corpus";
 import { htmlToPlainText, searchTokens } from "./normalize";
-import { searchScore } from "./score";
+import { maxEdits, searchScore } from "./score";
 
 /**
  * Candidate rows pulled from MySQL before JS re-scoring. Bounded so a
@@ -56,11 +60,88 @@ const IGNORABLE_RUN = String.raw`(?:\p{M}|["'׳״‘’“”]|<[^>]+>|&[a-zA-Z#
 const WORD_BOUNDARY = String.raw`(?:[^\p{L}\p{N}]|<[^>]+>|&[a-zA-Z#0-9]+;)`;
 
 /**
- * Candidate-selection pattern for one normalized term: its letters in
- * order, allowing ignorable runs between them. Exported for unit tests.
+ * Regex fragment matching one letter or digit in raw storage — what a
+ * normalized word is made of. Counted repetitions of it bound a word's
+ * normalized length inside the typo-tolerant chunk patterns below.
+ */
+const WORD_CHAR = String.raw`[\p{L}\p{N}]`;
+
+/**
+ * A fragment's letters in order, allowing ignorable runs between them —
+ * the shape every candidate alternand is built from.
+ */
+function lettersRegexp(fragment: string): string {
+	return [...fragment].join(`${IGNORABLE_RUN}*`);
+}
+
+/**
+ * Split a normalized term into `maxEdits(term) + 1` contiguous chunks as
+ * equal in length as possible. Each edit (substitution, insertion,
+ * deletion) corrupts at most one chunk, so every word within the JS
+ * scorer's bounded edit distance keeps at least one chunk intact and
+ * contiguous — the classic pigeonhole filter that makes the chunk
+ * patterns below a superset of the fuzzy-eligible rows. Exported for
+ * unit tests.
+ */
+export function termChunks(term: string): string[] {
+	const count = maxEdits(term) + 1;
+	const chars = [...term];
+	const base = Math.floor(chars.length / count);
+	const chunks: string[] = [];
+	let offset = 0;
+	for (let i = 0; i < count; i++) {
+		const width = base + (i < chars.length % count ? 1 : 0);
+		chunks.push(chars.slice(offset, offset + width).join(""));
+		offset += width;
+	}
+	return chunks;
+}
+
+/**
+ * Typo-aware candidate alternands for one normalized term (#2140).
+ *
+ * The first piece keeps the exact/prefix path: the term's letters in
+ * order from a word start, with any length tail — that admits every
+ * exact (90) and prefix (80) word the JS scorer accepts.
+ *
+ * Each remaining piece bounds a *word* containing one intact
+ * {@link termChunks chunk}: `maxEdits` edits can corrupt at most that
+ * many chunks, so every fuzzy-eligible word still holds an intact chunk
+ * and is at most `term + maxEdits` letters long. The counted
+ * `{0,budget}` rooms on both sides of the chunk reject chunks sitting
+ * inside longer words, which could never reach the fuzzy tier — that
+ * keeps short chunks selective instead of flooding the candidate pool.
+ * Exported for unit tests.
+ */
+export function termAnchors(term: string): string[] {
+	const edits = maxEdits(term);
+	const anchors = [
+		`(?:^|${WORD_BOUNDARY})${IGNORABLE_RUN}*${lettersRegexp(term)}`,
+	];
+	if (edits === 0) {
+		return anchors;
+	}
+	const room = (budget: number) =>
+		`(?:${WORD_CHAR}${IGNORABLE_RUN}*){0,${budget}}`;
+	const length = [...term].length;
+	for (const chunk of termChunks(term)) {
+		const budget = length + edits - [...chunk].length;
+		anchors.push(
+			`(?:^|${WORD_BOUNDARY})${IGNORABLE_RUN}*${room(budget)}${lettersRegexp(chunk)}${IGNORABLE_RUN}*${room(budget)}${IGNORABLE_RUN}*(?:${WORD_BOUNDARY}|$)`,
+		);
+	}
+	return [...new Set(anchors)];
+}
+
+/**
+ * Candidate-selection pattern for one normalized term: the OR of its
+ * {@link termAnchors}, so a row is selectable by the exact/prefix shape
+ * or by any word that survived the scorer's edit-distance bound.
+ * Exported for unit tests.
  */
 export function termRegexp(term: string): string {
-	return [...term].join(`${IGNORABLE_RUN}*`);
+	const anchors = termAnchors(term);
+	return anchors.length === 1 ? anchors[0] : `(?:${anchors.join("|")})`;
 }
 
 /**
@@ -72,7 +153,7 @@ export function termRegexp(term: string): string {
  * Exported for unit tests.
  */
 export function phraseRegexp(terms: string[]): string {
-	const body = terms.map(termRegexp).join(`${WORD_BOUNDARY}+`);
+	const body = terms.map(lettersRegexp).join(`${WORD_BOUNDARY}+`);
 	return `(?:^|${WORD_BOUNDARY})${body}(?:${WORD_BOUNDARY}|$)`;
 }
 
@@ -111,11 +192,15 @@ function matchClauses(
 }
 
 /**
- * Candidate ranking applied before the row cap: word-bounded phrase
- * matches first, fragment-by-fragment in descending weight order, so an
- * overflowing candidate pool sheds substring-only rows first. Each
- * fragment is an ORDER BY expression containing exactly one `?`
- * placeholder bound to the phrase's word-bounded pattern.
+ * Candidate ranking applied before the row cap, fragment-by-fragment in
+ * descending weight order with two tiers per fragment: a word-bounded
+ * exact-phrase flag — the candidate class the JS scorer rates highest —
+ * then the count of each term's {@link termAnchors} pieces matched, so
+ * rows carrying a fuzzy-eligible word (several chunk anchors hit
+ * together) outrank rows where only a stray chunk matched. Each
+ * fragment is a boolean SQL expression containing one `?` placeholder,
+ * bound to the phrase pattern for the flag and to each anchor pattern
+ * inside its count.
  */
 function rankPredicates(
 	predicates: string[],
@@ -125,9 +210,15 @@ function rankPredicates(
 	params: string[];
 } {
 	const phrase = phraseRegexp(terms);
+	const flags = terms.flatMap(termAnchors);
 	return {
-		orderBy: predicates.join(", "),
-		params: predicates.map(() => phrase),
+		orderBy: predicates
+			.flatMap((predicate) => [
+				`${predicate} DESC`,
+				`(${flags.map(() => predicate).join(" + ")}) DESC`,
+			])
+			.join(", "),
+		params: predicates.flatMap(() => [phrase, ...flags]),
 	};
 }
 
@@ -140,7 +231,7 @@ function rankClauses(
 	params: string[];
 } {
 	return rankPredicates(
-		columns.map((col) => `REGEXP_LIKE(${col}, ?, 'i') DESC`),
+		columns.map((col) => `REGEXP_LIKE(${col}, ?, 'i')`),
 		terms,
 	);
 }
@@ -409,10 +500,10 @@ export async function searchTanahpediaEntries(
 	);
 	const rank = rankPredicates(
 		[
-			"REGEXP_LIKE(e.title, ?, 'i') DESC",
-			"REGEXP_LIKE(e.unique_name, ?, 'i') DESC",
-			`${TANAHPEDIA_SYNONYM_MATCH} DESC`,
-			"REGEXP_LIKE(e.content, ?, 'i') DESC",
+			"REGEXP_LIKE(e.title, ?, 'i')",
+			"REGEXP_LIKE(e.unique_name, ?, 'i')",
+			TANAHPEDIA_SYNONYM_MATCH,
+			"REGEXP_LIKE(e.content, ?, 'i')",
 		],
 		terms,
 	);

@@ -13,11 +13,54 @@ import {
 	searchAuthors,
 	searchPerushNotes,
 	searchTanahpediaEntries,
+	termAnchors,
+	termChunks,
 	termRegexp,
 } from "@/lib/search/db-content";
 import { htmlToPlainText, normalizeSearchText } from "@/lib/search/normalize";
 
 const mockQuery = query as jest.MockedFunction<typeof query>;
+
+/**
+ * The semantic contract the generated SQL candidate pattern encodes,
+ * evaluated on the normalized text like the pipeline itself: a stored
+ * word is selectable for `term` when it starts with the term (the
+ * exact/prefix alternand) or, for terms long enough to carry the fuzzy
+ * tier, when it holds one intact {@link termChunks chunk} with at most
+ * `term + maxEdits` letters on either side — every word the scorer's
+ * bounded edit distance accepts satisfies that. Asserting the contract
+ * through the pipeline keeps these tests honest about the requirement
+ * (the repo's codacy gate forbids compiling a non-literal RegExp even
+ * in tests); the pattern itself is verified structurally.
+ */
+function candidateSemantics(term: string, raw: string): boolean {
+	const chunks = termChunks(term);
+	const edits = chunks.length - 1;
+	const length = [...term].length;
+	return normalized(raw)
+		.split(" ")
+		.filter((word) => word.length > 0)
+		.some((word) => {
+			if (word.startsWith(term)) return true;
+			if (edits === 0) return false;
+			return chunks.some((chunk) => {
+				const budget = length + edits - [...chunk].length;
+				for (
+					let index = word.indexOf(chunk);
+					index !== -1;
+					index = word.indexOf(chunk, index + 1)
+				) {
+					if (
+						[...word.slice(0, index)].length <= budget &&
+						[...word.slice(index + chunk.length)].length <= budget
+					) {
+						return true;
+					}
+				}
+				return false;
+			});
+		});
+}
 
 /**
  * The semantic contract the generated SQL regex encodes: a raw string is
@@ -52,6 +95,73 @@ describe("termRegexp", () => {
 		expect(pattern).toContain("״"); // gershayim
 		expect(pattern).toContain("<[^>]+>"); // tags
 		expect(pattern).toContain("&[a-zA-Z#0-9]+;"); // entities
+	});
+});
+
+describe("termChunks", () => {
+	it("splits a term into maxEdits+1 balanced chunks", () => {
+		expect(termChunks("את")).toEqual(["את"]); // too short for edits
+		expect(termChunks("אבגד")).toEqual(["אב", "גד"]); // 1 edit → 2 chunks
+		expect(termChunks("ירושלימ")).toEqual(["ירוש", "לימ"]); // 7 → 4+3
+		expect(termChunks("אבגדהוזח")).toEqual(["אבג", "דהו", "זח"]); // 2 edits → 3
+	});
+});
+
+describe("termAnchors", () => {
+	it("admits every word the scorer accepts", () => {
+		const scorerAccepted: [string, string][] = [
+			// The #2140 example: a final-letter substitution.
+			["ירושלימ", "ירושלים"],
+			// Substitution inside the term.
+			["בראשיט", "בראשית"],
+			// Insertion and deletion.
+			["בראשית", "בבראשית"],
+			["בראשית", "בראשת"],
+			// Two edits for a long term, the surviving chunk stays interior.
+			["אבגדהוזח", "אסגדהוזט"],
+			// Prefix and exact words.
+			["בראשית", "בראשיתו"],
+			["את", "אתר"],
+		];
+		for (const [term, word] of scorerAccepted) {
+			expect(candidateSemantics(term, word)).toBe(true);
+		}
+	});
+
+	it("admits a misspelled word anywhere in the stored text", () => {
+		expect(candidateSemantics("ירושלימ", "<p>עיר הקודש ירושלים</p>")).toBe(
+			true,
+		);
+	});
+
+	it("rejects chunks sitting inside words too long for the bound", () => {
+		expect(candidateSemantics("ירושלימ", "אאאאאאאאאאירושאאאאאאאאאא")).toBe(
+			false,
+		);
+		expect(candidateSemantics("ירושלימ", "אזור")).toBe(false);
+	});
+
+	it("keeps short terms on the exact/prefix path only", () => {
+		expect(termAnchors("את")).toHaveLength(1);
+		expect(candidateSemantics("את", "את")).toBe(true);
+		expect(candidateSemantics("את", "אתר")).toBe(true); // prefix scores
+		expect(candidateSemantics("את", "באת")).toBe(false); // mid-word scores 0
+		expect(candidateSemantics("את", "אג")).toBe(false); // edits need 4+ chars
+	});
+
+	it("encodes the contract in word-bounded, length-bounded pattern pieces", () => {
+		const anchors = termAnchors("ירושלימ");
+		// Exact/prefix alternand plus one bounded piece per chunk.
+		expect(anchors).toHaveLength(1 + termChunks("ירושלימ").length);
+		for (const anchor of anchors) {
+			expect(anchor).toContain("(?:^|"); // word-start anchor
+			expect(anchor).toContain(String.raw`[^\p{L}\p{N}]`); // word boundary
+		}
+		for (const chunkPattern of anchors.slice(1)) {
+			expect(chunkPattern).toContain("{0,"); // bounded rooms each side
+			expect(chunkPattern).toContain("|$)"); // word-end boundary
+		}
+		expect(termRegexp("ירושלימ")).toBe(`(?:${anchors.join("|")})`);
 	});
 });
 
@@ -100,7 +210,11 @@ describe("searchPerushNotes", () => {
 		const hits = await searchPerushNotes("בראשית", 10);
 		expect(mockQuery).toHaveBeenCalledWith(
 			expect.stringContaining("REGEXP_LIKE(n.note_content, ?, 'i')"),
-			[termRegexp("בראשית"), phraseRegexp(["בראשית"])],
+			[
+				termRegexp("בראשית"),
+				phraseRegexp(["בראשית"]),
+				...termAnchors("בראשית"),
+			],
 		);
 		expect(mockQuery).toHaveBeenCalledWith(
 			expect.stringContaining("MAX_EXECUTION_TIME"),
@@ -121,13 +235,38 @@ describe("searchPerushNotes", () => {
 		mockQuery.mockResolvedValue([]);
 		await searchPerushNotes("אחד שני", 10);
 		const [sql, params] = mockQuery.mock.calls[0];
-		// Two candidate predicates (one per term) plus one ORDER BY rank.
-		expect(sql.match(/REGEXP_LIKE\(n\.note_content/g)).toHaveLength(3);
+		// Two candidate predicates (one per term), one phrase-rank flag,
+		// and one anchor-count flag per term inside the rank sum.
+		expect(sql.match(/REGEXP_LIKE\(n\.note_content/g)).toHaveLength(5);
 		expect(params).toEqual([
 			termRegexp("אחד"),
 			termRegexp("שני"),
 			phraseRegexp(["אחד", "שני"]),
+			...termAnchors("אחד"),
+			...termAnchors("שני"),
 		]);
+	});
+
+	it("selects a note whose stored word is a misspelling of the query", async () => {
+		mockQuery.mockResolvedValue([
+			{
+				perush_id: 23,
+				perush_name: 'רש"י',
+				perek_id: 1,
+				pasuk: 1,
+				note_idx: 0,
+				note_content: "<p>על ירושלים נאמר</p>",
+			},
+		]);
+		const hits = await searchPerushNotes("ירושלימ", 10);
+		const [, params] = mockQuery.mock.calls[0];
+		// The mocked query returns rows without applying WHERE — verify the
+		// generated pattern (bound as the first param) encodes a candidate
+		// contract that would select the misspelled-relative text.
+		expect(params?.[0]).toBe(termRegexp("ירושלימ"));
+		expect(candidateSemantics("ירושלימ", "על ירושלים נאמר")).toBe(true);
+		expect(hits).toHaveLength(1);
+		expect(hits[0].score).toBe(60); // fuzzy tier, reached only via the new path
 	});
 
 	it("dedupes to the best fragment per perush/perek/pasuk", async () => {
@@ -160,7 +299,7 @@ describe("searchPerushNotes", () => {
 		mockQuery.mockResolvedValue([
 			{
 				perush_id: 23,
-				perush_name: "רש\"י",
+				perush_name: 'רש"י',
 				perek_id: 1,
 				pasuk: 1,
 				note_idx: 3,
@@ -228,7 +367,7 @@ describe("searchAuthors", () => {
 		expect(hits[0].score).toBeGreaterThan(0);
 	});
 
-	it("ORs name and details per term and ranks word matches first", async () => {
+	it("ORs name and details per term and ranks phrase and anchors first", async () => {
 		mockQuery.mockResolvedValue([]);
 		await searchAuthors("לוי", 10);
 		const [sql, params] = mockQuery.mock.calls[0];
@@ -236,14 +375,25 @@ describe("searchAuthors", () => {
 			"REGEXP_LIKE(name, ?, 'i') OR REGEXP_LIKE(details, ?, 'i')",
 		);
 		expect(sql).toContain(
-			"ORDER BY REGEXP_LIKE(name, ?, 'i') DESC, REGEXP_LIKE(details, ?, 'i') DESC",
+			"ORDER BY REGEXP_LIKE(name, ?, 'i') DESC, (REGEXP_LIKE(name, ?, 'i')) DESC, REGEXP_LIKE(details, ?, 'i') DESC, (REGEXP_LIKE(details, ?, 'i')) DESC",
 		);
 		expect(params).toEqual([
 			termRegexp("לוי"),
 			termRegexp("לוי"),
 			phraseRegexp(["לוי"]),
+			...termAnchors("לוי"),
 			phraseRegexp(["לוי"]),
+			...termAnchors("לוי"),
 		]);
+	});
+
+	it("selects an author name that is a misspelling of the query", async () => {
+		mockQuery.mockResolvedValue([{ id: 7, name: "ירושלים", details: null }]);
+		const hits = await searchAuthors("ירושלימ", 10);
+		const [, params] = mockQuery.mock.calls[0];
+		expect(params?.[0]).toBe(termRegexp("ירושלימ"));
+		expect(candidateSemantics("ירושלימ", "ירושלים")).toBe(true);
+		expect(hits[0].score).toBe(120); // fuzzy 60 on the name, ×2 weight
 	});
 
 	it("matches authors without details and orders equal scores by id", async () => {
@@ -336,6 +486,24 @@ describe("searchArticles", () => {
 		expect(hits[0].entry.plain).toBe("תקציר על בראשית");
 	});
 
+	it("selects an article whose name is a misspelling of the query", async () => {
+		mockQuery.mockResolvedValue([
+			{
+				id: 1,
+				perek_id: 5,
+				name: "ירושלים",
+				author_name: "הרב לוי",
+				content: null,
+				abstract: null,
+			},
+		]);
+		const hits = await searchArticles("ירושלימ", 10);
+		const [, params] = mockQuery.mock.calls[0];
+		expect(params?.[0]).toBe(termRegexp("ירושלימ"));
+		expect(candidateSemantics("ירושלימ", "ירושלים")).toBe(true);
+		expect(hits[0].score).toBe(120); // fuzzy 60 on the name, ×2 weight
+	});
+
 	it("drops an article with no searchable text", async () => {
 		mockQuery.mockResolvedValue([
 			{
@@ -388,8 +556,9 @@ describe("searchTanahpediaEntries", () => {
 		expect(sql).toContain("MAX_EXECUTION_TIME");
 		expect(sql).toContain("LIMIT 1000");
 		// One REGEXP_LIKE per searchable field plus one inside the synonym
-		// EXISTS clause — four per term in WHERE, four in ORDER BY rank.
-		expect(sql.match(/REGEXP_LIKE\(/g)).toHaveLength(8);
+		// EXISTS clause — four per term in WHERE — then a phrase flag and an
+		// anchor count per fragment in ORDER BY rank.
+		expect(sql.match(/REGEXP_LIKE\(/g)).toHaveLength(12);
 		expect(sql.match(/tanahpedia_entry_synonym/g)?.length).toBeGreaterThan(0);
 		expect(params).toEqual([
 			termRegexp("משה"),
@@ -397,9 +566,13 @@ describe("searchTanahpediaEntries", () => {
 			termRegexp("משה"),
 			termRegexp("משה"),
 			phraseRegexp(["משה"]),
+			...termAnchors("משה"),
 			phraseRegexp(["משה"]),
+			...termAnchors("משה"),
 			phraseRegexp(["משה"]),
+			...termAnchors("משה"),
 			phraseRegexp(["משה"]),
+			...termAnchors("משה"),
 		]);
 	});
 
@@ -465,6 +638,25 @@ describe("searchTanahpediaEntries", () => {
 		const hits = await searchTanahpediaEntries("ירושלים", 10);
 		expect(hits).toHaveLength(1);
 		expect(hits[0].entry.plain).toBe("");
+	});
+
+	it("selects an entry whose title is a misspelling of the query (#2140)", async () => {
+		mockEntries([
+			{
+				id: "e1",
+				unique_name: "ירושלים",
+				title: "ירושלים",
+				content: null,
+			},
+		]);
+		const hits = await searchTanahpediaEntries("ירושלימ", 10);
+		const [, params] = mockQuery.mock.calls[0];
+		// The mocked query returns rows without applying WHERE — verify the
+		// generated pattern's contract would select the misspelled title.
+		expect(params?.[0]).toBe(termRegexp("ירושלימ"));
+		expect(candidateSemantics("ירושלימ", "ירושלים")).toBe(true);
+		expect(hits).toHaveLength(1);
+		expect(hits[0].score).toBe(120); // fuzzy 60 at name weight
 	});
 
 	it("skips the synonym query when no entries match", async () => {

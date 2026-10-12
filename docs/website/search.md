@@ -81,7 +81,22 @@ which is exactly the candidate class the JS scorer rates highest
 (whole-word phrase containment or whole-text equality). When a frequent
 term overflows the cap, the rows shed are substring-only candidates —
 the strongest matches can no longer be truncated arbitrarily.
-Articles score name, abstract, and content independently (name keeps
+
+Typo tolerance (#2140): the JS scorer's fuzzy tier (bounded edit
+distance) used to be unreachable for DB-backed types, because the
+ordered-letters pattern can never select a misspelled row. Each term is
+now additionally split into `maxEdits(term) + 1` contiguous chunks and
+the WHERE clause admits a word containing any one intact chunk with at
+most `term + maxEdits` letters around it — since each edit can corrupt
+at most one chunk, every fuzzy-eligible word survives as a candidate
+(the classic pigeonhole filter), while words longer than the bound are
+rejected outright so short chunks stay selective. Scoring is unchanged
+in JS, so the fuzzy 60/80/90/100/110 tiers apply uniformly across all
+four DB providers exactly as they do for the in-memory corpora. The
+pre-cap ordering adds a second tier per field — the count of each
+term's anchor pieces matched — so rows carrying a near-misspelled word
+outrank rows where only a stray chunk hit. Articles score name,
+abstract, and content independently (name keeps
 its ×2 weight) and the snippet is taken from the best-scoring field, so
 an abstract-only match is no longer discarded when unrelated content is
 present. Tanahpedia entries score title and unique_name plus the alias
