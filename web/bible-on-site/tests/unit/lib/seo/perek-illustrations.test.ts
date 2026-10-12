@@ -2,6 +2,7 @@ import {
 	type ImageRow,
 	imagesFromRows,
 	perekImageUrl,
+	selectImagesForVerseRanges,
 	selectPerekImages,
 } from "../../../../src/lib/seo/perek-illustrations";
 
@@ -10,6 +11,7 @@ const base: ImageRow = {
 	perek_id: 1,
 	alt_text: "איור לדוגמה",
 	caption: "כיתוב לדוגמה",
+	caption_markdown: null,
 	description: "תיאור לדוגמה",
 	credit: null,
 	role: null,
@@ -114,4 +116,59 @@ it("does not publish an image without a WebP display fallback", () => {
 			},
 		]),
 	).toEqual({});
+});
+
+it("matches reading divisions across chapters without duplicating variants or images", () => {
+	const rows: ImageRow[] = [
+		{
+			...base,
+			role: "display",
+			format: "webp",
+			width: 1600,
+			height: 900,
+			s3_key: "a.webp",
+		},
+		{
+			...base,
+			role: "display",
+			format: "avif",
+			width: 640,
+			height: 360,
+			s3_key: "a.avif",
+		},
+		{
+			...base,
+			id: 5,
+			role: "display",
+			format: "webp",
+			width: 1600,
+			height: 900,
+			s3_key: "b.webp",
+		},
+	];
+	const images = imagesFromRows(rows, [
+		{ image_id: 4, perek_id: 1, pasuk_from: 30, pasuk_to: 31 },
+		{ image_id: 4, perek_id: 2, pasuk_from: 1, pasuk_to: 3 },
+	]);
+	expect(images[1][0].avifSrcSet).toMatch(/a.avif 640w$/);
+	expect(images[1][0].verseRanges).toHaveLength(2);
+	const reading = [
+		{ perekId: 1, pasukFrom: 31, pasukTo: 31 },
+		{ perekId: 2, pasukFrom: 1, pasukTo: 1 },
+	];
+	expect(
+		selectImagesForVerseRanges({ ...images, 2: images[1] }, reading).map(
+			(i) => i.id,
+		),
+	).toEqual([4]);
+	expect(
+		selectImagesForVerseRanges(images, [
+			{ perekId: 2, pasukFrom: 4, pasukTo: 8 },
+		]),
+	).toEqual([]);
+	expect(
+		selectImagesForVerseRanges(images, [
+			{ perekId: 3, pasukFrom: 1, pasukTo: 3 },
+		]),
+	).toEqual([]);
 });
