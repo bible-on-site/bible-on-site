@@ -322,19 +322,63 @@ public partial class PerekViewModel : ObservableObject
     internal string LoadStage { get; private set; } = "not-started";
 
     /// <summary>
+    /// Currency of the freshest load call or direct navigation. A timed-out
+    /// attempt keeps running detached next to its own retry — and beside newer
+    /// navigations — so before writing observable state (Perek, LoadStage,
+    /// carousel) an attempt proves it is still current; a superseded attempt's
+    /// late writes are dropped instead of replacing the perek now on screen
+    /// (issue #2084).
+    /// </summary>
+    private long _loadGeneration;
+
+    /// <summary>
+    /// Per-call attempt currency: the newest attempt of the newest load call
+    /// owns observable state. Retries bump <see cref="LatestAttempt"/> so the
+    /// attempt abandoned by a timeout loses to its own successor, while
+    /// <see cref="Generation"/> keeps a call superseded by a newer load or
+    /// navigation dead even when it retries.
+    /// </summary>
+    private sealed class LoadGate
+    {
+        public LoadGate(long generation) => Generation = generation;
+
+        public readonly long Generation;
+        public int LatestAttempt;
+    }
+
+    /// <summary>True while the attempt still owns the reader's observable state.</summary>
+    private bool IsCurrentLoad(LoadGate gate, int attemptStamp) =>
+        gate.Generation == Interlocked.Read(ref _loadGeneration) &&
+        attemptStamp == Volatile.Read(ref gate.LatestAttempt);
+
+    /// <summary>
+    /// Orphans every in-flight load attempt. Navigation paths that set the
+    /// perek directly (carousel swipe, prev/next, app link) call this so a
+    /// detached attempt's late writes cannot replace the newer perek.
+    /// </summary>
+    public void InvalidatePendingLoads() => Interlocked.Increment(ref _loadGeneration);
+
+    /// <summary>
     /// Asynchronously loads a perek by its ID, including pasukim from the database.
     /// Each attempt is time-boxed by <see cref="LoadAttemptTimeout"/>; when a
     /// stage stalls, the load retries up to <see cref="LoadMaxAttempts"/> times,
     /// then throws TimeoutException so the caller can surface a retryable error
-    /// instead of an endless spinner.
+    /// instead of an endless spinner. A call superseded by a newer load or
+    /// navigation reports nothing — the newer owner decides what the UI shows.
     /// </summary>
     public async Task LoadByPerekIdAsync(int perekId)
     {
+        var gate = new LoadGate(Interlocked.Increment(ref _loadGeneration));
         var attempt = 0;
         while (true)
         {
             attempt++;
-            var load = LoadByPerekIdCoreAsync(perekId);
+            // Each attempt claims the call's currency. The attempt orphaned by
+            // this timeout keeps running detached; every observable write
+            // downstream checks the stamp so it cannot overwrite the retry —
+            // or a newer navigation — once it finally unblocks.
+            var attemptStamp = Interlocked.Increment(ref gate.LatestAttempt);
+            var load = LoadByPerekIdCoreAsync(perekId, gate, attemptStamp);
             try
             {
                 await load.WaitAsync(LoadAttemptTimeout);
@@ -349,6 +393,12 @@ public partial class PerekViewModel : ObservableObject
                     $"{LoadAttemptTimeout.TotalSeconds:0.##}s at stage '{LoadStage}' (perekId={perekId})");
                 if (attempt >= LoadMaxAttempts)
                 {
+                    // A newer load or navigation already owns the reader —
+                    // this abandoned call must not resurface an error over it.
+                    if (!IsCurrentLoad(gate, attemptStamp))
+                    {
+                        return;
+                    }
                     throw new TimeoutException(
                         $"Perek {perekId} load timed out after {attempt} attempt(s); last stage: {LoadStage}");
                 }
@@ -373,16 +423,21 @@ public partial class PerekViewModel : ObservableObject
         }
     }
 
-    private void MarkLoadStage(string stage, int perekId)
+    private void MarkLoadStage(string stage, int perekId, LoadGate gate, int attemptStamp)
     {
-        LoadStage = stage;
+        // A superseded attempt still reports progress to the log, but only a
+        // current attempt may move the LoadStage marker that timeouts cite.
+        if (IsCurrentLoad(gate, attemptStamp))
+        {
+            LoadStage = stage;
+        }
         Console.WriteLine($"[PerekLoad] stage={stage} perekId={perekId}");
     }
 
-    private async Task LoadByPerekIdCoreAsync(int perekId)
+    private async Task LoadByPerekIdCoreAsync(int perekId, LoadGate gate, int attemptStamp)
     {
         // Ensure data service is loaded
-        MarkLoadStage("data-service", perekId);
+        MarkLoadStage("data-service", perekId, gate, attemptStamp);
         if (!_perekDataService.IsLoaded)
         {
             await _perekDataService.LoadAsync();
@@ -391,20 +446,32 @@ public partial class PerekViewModel : ObservableObject
         var perek = GetReaderPerek(perekId);
         if (perek == null)
         {
-            MarkLoadStage("missing-perek", perekId);
+            MarkLoadStage("missing-perek", perekId, gate, attemptStamp);
             return;
         }
 
-        MarkLoadStage("pasukim", perekId);
-        // Load pasukim
-        perek.Pasukim = await _perekDataService.LoadPasukimAsync(perekId);
-        MarkLoadStage("set-perek", perekId);
+        MarkLoadStage("pasukim", perekId, gate, attemptStamp);
+        var pasukim = await _perekDataService.LoadPasukimAsync(perekId);
+        // Everything below writes observable state (the perek's Pasukim are
+        // bound once the carousel holds it, then Perek, perushim, carousel),
+        // so it is gated on still being the current attempt — a timed-out
+        // attempt must not resurrect over its own retry or a newer navigation.
+        if (!IsCurrentLoad(gate, attemptStamp))
+        {
+            return;
+        }
+        perek.Pasukim = pasukim;
+        MarkLoadStage("set-perek", perekId, gate, attemptStamp);
         SetPerek(perek);
-        MarkLoadStage("perushim", perekId);
+        MarkLoadStage("perushim", perekId, gate, attemptStamp);
         await LoadPerushimAsync(perekId);
-        MarkLoadStage("carousel", perekId);
-        await InitializeCarouselAsync();
-        MarkLoadStage("loaded", perekId);
+        if (!IsCurrentLoad(gate, attemptStamp))
+        {
+            return;
+        }
+        MarkLoadStage("carousel", perekId, gate, attemptStamp);
+        await InitializeCarouselCoreAsync(gate, attemptStamp);
+        MarkLoadStage("loaded", perekId, gate, attemptStamp);
     }
 
     /// <summary>
@@ -426,6 +493,11 @@ public partial class PerekViewModel : ObservableObject
 
         if (!PerushimNotesAvailable || !PerushimCatalogAvailable)
         {
+            // A stale load must not wipe the perushim of the perek now on screen.
+            if (IsStalePerushimLoad(perekId))
+            {
+                return;
+            }
             _perushNotesCache = new List<PerekPerushNote>();
             // Set CheckedPerushim BEFORE Perushim so the CollectionView sees correct state
             CheckedPerushim = new List<int>();
@@ -584,6 +656,9 @@ public partial class PerekViewModel : ObservableObject
     /// </summary>
     public async Task NavigateToPerekAsync(int perekId)
     {
+        // A newer navigation supersedes every in-flight load attempt: a
+        // detached timed-out attempt must not overwrite this perek late.
+        InvalidatePendingLoads();
         if (CarouselPerakim != null && CarouselPerakim.Count == 929)
         {
             var targetPerek = GetReaderPerek(perekId);
@@ -733,7 +808,14 @@ public partial class PerekViewModel : ObservableObject
     /// background thread so the UI stays responsive.  The ObservableCollection
     /// and CarouselView updates happen back on the main thread.
     /// </summary>
-    public async Task InitializeCarouselAsync()
+    public Task InitializeCarouselAsync() => InitializeCarouselCoreAsync(null, 0);
+
+    /// <summary>
+    /// Carousel initialization for the perek-load pipeline: when called with a
+    /// <paramref name="gate"/>, the bound-collection swap is dropped if the
+    /// attempt was superseded while the list was building off-thread.
+    /// </summary>
+    private async Task InitializeCarouselCoreAsync(LoadGate? gate, int attemptStamp)
     {
         if (Perek == null)
         {
@@ -764,6 +846,15 @@ public partial class PerekViewModel : ObservableObject
 
             return (result, loaded);
         });
+
+        // A superseded attempt must not swap the bound collection or steal
+        // CurrentCarouselPerek — likewise bail if the perek changed under us
+        // for any other reason (e.g. a swipe landed mid-build).
+        if (!ReferenceEquals(Perek, perek) ||
+            (gate != null && !IsCurrentLoad(gate, attemptStamp)))
+        {
+            return;
+        }
         AssignLoadedPasukim(list.loaded);
 
         Console.WriteLine($"[Carousel] InitializeCarouselAsync built list: {list.result.Count} items");
