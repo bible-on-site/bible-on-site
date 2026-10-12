@@ -11,9 +11,30 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const pkgPath = path.resolve(__dirname, "..", "package.json");
+const repoRoot = path.resolve(__dirname, "..", "..", "..");
 
-const LOCAL_REF = "file:../../../html-flip-book/react";
-const NPM_VERSION = "0.0.0-alpha.45"; // Update this when upgrading
+// The sibling html-flip-book repo renamed its package folders after the
+// alpha.46 layout (react/, base/) to coherent names — accept both.
+const LOCAL_REACT_DIRS = ["react", "html-flip-book-react"];
+const NPM_VERSION = "0.0.0-alpha.46"; // Update this when upgrading
+
+function localReactRef() {
+	for (const dir of LOCAL_REACT_DIRS) {
+		const pkgJson = path.join(
+			repoRoot,
+			"..",
+			"html-flip-book",
+			dir,
+			"package.json",
+		);
+		// nosemgrep -- fixed local directory list, no user input
+		if (fs.existsSync(pkgJson)) {
+			return `file:../../../html-flip-book/${dir}`;
+		}
+	}
+	// Fall back to the alpha.46 layout so the ref matches the consumed version.
+	return `file:../../../html-flip-book/${LOCAL_REACT_DIRS[0]}`;
+}
 
 const mode = process.argv[2];
 
@@ -36,7 +57,7 @@ if (mode === "check") {
 	process.exit(0);
 }
 
-const target = mode === "local" ? LOCAL_REF : NPM_VERSION;
+const target = mode === "local" ? localReactRef() : NPM_VERSION;
 
 if (current === target) {
 	console.log(`html-flip-book-react already set to ${mode} (${target})`);

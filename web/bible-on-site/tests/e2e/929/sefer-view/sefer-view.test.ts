@@ -15,17 +15,25 @@ import { test } from "../../../util/playwright/test-fixture";
  * Tests use the skipOnMobile fixture to automatically skip on mobile viewports.
  */
 
-function activePageAngle(page: Page, signed = false) {
-	return page.evaluate((signed) => {
-		const turningPage = Array.from(
-			document.querySelectorAll<HTMLElement>(".he-book .page"),
-		).find((page) => page.style.willChange === "transform");
-		const angle = turningPage?.style.transform.match(
-			/rotateY\((-?[\d.]+)deg\)/,
+/**
+ * alpha.46 turns paper leaves as a clipped corner fold, not a rotateY:
+ * both faces of the turning leaf carry .page--folded — the flat remainder
+ * keeps a translateX plus a clip-path polygon while the reflected flap gets
+ * a matrix() transform (covers keep rigid rotateY and no .page--folded).
+ * Returns null while no paper leaf is folding; otherwise a signature string
+ * of the live fold geometry that changes as the fold follows the pointer
+ * and stays stable while the fold is held.
+ */
+function foldSignature(page: Page) {
+	return page.evaluate(() => {
+		const folded = Array.from(
+			document.querySelectorAll<HTMLElement>(".he-book .page--folded"),
 		);
-		const value = angle ? Number(angle[1]) : 0;
-		return signed ? value : Math.abs(value);
-	}, signed);
+		if (folded.length === 0) return null;
+		return folded
+			.map((el) => `${el.style.transform}|${el.style.clipPath}`)
+			.join("~");
+	});
 }
 
 async function fastMouseSwipe(page: Page, x: number, y: number, delta: number) {
@@ -407,34 +415,34 @@ test.describe("Sefer view", () => {
 		).toBe(true);
 		const indicator = page.locator(".flipbook-toolbar-indicator");
 		await expect(indicator).toHaveValue("א / נ");
-		const turningAngle = () => activePageAngle(page);
+		const fold = () => foldSignature(page);
 
 		await page.mouse.move(x, y);
 		await page.mouse.down();
 		await page.waitForTimeout(550);
 		await page.mouse.move(x + 80, y, { steps: 8 });
-		await expect.poll(turningAngle).toBeGreaterThan(2);
+		// The leaf lifts into a fold that tracks the pointer directly.
+		await expect.poll(fold).not.toBeNull();
+		const nearFold = await fold();
 		await page.mouse.move(x + 300, y, { steps: 6 });
-		await expect.poll(turningAngle).toBeGreaterThan(10);
-		const heldAt = await turningAngle();
+		await expect.poll(fold).not.toBe(nearFold);
+		const heldFold = await fold();
 		await page.waitForTimeout(250);
-		expect(await turningAngle()).toBeGreaterThan(10);
+		expect(await fold()).toBe(heldFold);
 		await page.mouse.move(x + 480, y, { steps: 4 });
-		await expect
-			.poll(async () => Math.abs((await turningAngle()) - heldAt))
-			.toBeGreaterThan(10);
-		const fartherAngle = await turningAngle();
+		await expect.poll(fold).not.toBe(heldFold);
+		const fartherFold = await fold();
 		await page.waitForTimeout(250);
 		await page.mouse.move(x + 200, y, { steps: 8 });
-		await expect
-			.poll(async () => Math.abs((await turningAngle()) - fartherAngle))
-			.toBeGreaterThan(10);
+		await expect.poll(fold).not.toBe(fartherFold);
 		await expect(indicator).toHaveValue("א / נ");
 		await page.mouse.move(x + 600, y, { steps: 3 });
 		await page.waitForTimeout(250);
 		await page.mouse.up();
+		// Released short of halfway: the turn cancels and the page flattens back.
 		await expect(indicator).toHaveValue("א / נ");
-		await expect.poll(turningAngle).toBe(0);
+		await expect.poll(fold).toBeNull();
+		await expect(page.locator(".he-book .page--flipping")).toHaveCount(0);
 	});
 
 	test("Mouse selection mode can be toggled back to native page dragging", async ({
@@ -466,7 +474,7 @@ test.describe("Sefer view", () => {
 		await page.mouse.move(x, y);
 		await page.mouse.down();
 		await page.mouse.move(x + 300, y, { steps: 8 });
-		await expect.poll(() => activePageAngle(page)).toBeGreaterThan(10);
+		await expect.poll(() => foldSignature(page)).not.toBeNull();
 		await page.mouse.up();
 	});
 
@@ -648,18 +656,21 @@ test.describe("Sefer view", () => {
 					touchPoints: [{ x: x - offset, y }],
 				});
 				if (offset === 300) {
-					await expect.poll(() => activePageAngle(page)).toBeGreaterThan(10);
+					// alpha.46 lifts the leaf into a fold that tracks the pointer
+					// directly; a held finger freezes the fold geometry in place.
+					await expect.poll(() => foldSignature(page)).not.toBeNull();
+					const held = await foldSignature(page);
 					await page.waitForTimeout(150);
-					expect(await activePageAngle(page)).toBeGreaterThan(10);
+					expect(await foldSignature(page)).toBe(held);
 				}
 			}
 			// Confirm a real drag beyond halfway before releasing, so completion
-			// checks distance rather than a timing-sensitive flick. The library
-			// mirrors the page past halfway, changing this backward drag's rotation
-			// from negative to positive.
-			await expect.poll(() => activePageAngle(page, true)).toBeGreaterThan(10);
-			await page.waitForTimeout(150);
-			expect(await activePageAngle(page, true)).toBeGreaterThan(10);
+			// checks distance rather than a timing-sensitive flick: the final
+			// touch point sits left of the spine, and under direct pointer
+			// tracking the lifted corner follows it. When the drag already rests
+			// at the destination edge the fold has visually settled (classes
+			// clear), but the turn still commits only on release.
+			await expect(indicator).toHaveValue("ב / נ");
 			await client.send("Input.dispatchTouchEvent", {
 				type: "touchEnd",
 				touchPoints: [],
