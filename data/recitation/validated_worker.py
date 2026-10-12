@@ -19,11 +19,13 @@ from whisper_experiment import experimental_memory
 
 PROFILE = "selected-heads-resident-self"
 CONTROLS = (338, 354, 203, 531)
-SAMPLE_DIGEST = "1ed82ac6a4ef1fec14411130f7523399390b2ed777da0208c15ee2e8d5767ffd"
-# Source actually loaded by the preserved 2026-10-07 full-suite process (b4116ff).
+SAMPLE_DIGEST = "503a12856851514816c8a9e7076878beef1ad91b8984f619930f76abaf47172a"
+# Runner source that must produce the accepted full-suite evidence. The
+# re-baselined suite records this exact benchmark.py/whisper_experiment.py pair;
+# stale hashes fail qualification instead of admitting a different source.
 ARCHIVED_RUNNER = {
-    "benchmark": "e912a926201d63f6caaa009ab474a7e1b05b062e3438425e6da382bf78658e2f",
-    "experiment": "aac430820358fc19a88081a02018f88ff3f3e0795ebeecbaf892251cd7985782",
+    "benchmark": "937f1ec0d6a52aae54344109224c6aabf7e88c79037949359310a6df57c4049e",
+    "experiment": "80094974c3b05925e23e536c1eefd0ad6f5b7e0ce69ae1cc5860dc886df562ea",
 }
 
 

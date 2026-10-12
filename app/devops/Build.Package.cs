@@ -237,6 +237,31 @@ partial class Build
             Serilog.Log.Warning("No iOS Team ID provided - building without specific signing");
         }
 
+        // Managed asset packs need the ExtensionKit downloader extension embedded
+        // (built by CI via xcodebuild — .NET cannot produce .appex binaries). The
+        // csproj _EmbedAssetPackDownloader target copies and re-signs it.
+        var appex = (RootDirectory / "extensions" / "AssetPackDownloader")
+            .GlobDirectories("build/Build/Products/*/AssetPackDownloader.appex")
+            .FirstOrDefault();
+        if (appex != null)
+        {
+            msbuildProperties["AssetPackDownloaderAppex"] = $"{appex}/";
+            Serilog.Log.Information($"Embedding asset-pack downloader extension: {appex}");
+            var extensionProfile = Environment.GetEnvironmentVariable("ASSET_PACK_DOWNLOADER_PROFILE");
+            if (!string.IsNullOrEmpty(extensionProfile))
+            {
+                msbuildProperties["AssetPackDownloaderProfile"] = extensionProfile;
+            }
+            else
+            {
+                Serilog.Log.Warning("ASSET_PACK_DOWNLOADER_PROFILE is unset - the embedded extension has no provisioning profile");
+            }
+        }
+        else
+        {
+            Serilog.Log.Warning("No AssetPackDownloader.appex build found - the IPA cannot download managed asset packs");
+        }
+
         DotNetPublish(s => s
             .SetProject(MainProject)
             .SetConfiguration(Configuration)
@@ -244,6 +269,8 @@ partial class Build
             .SetRuntime("ios-arm64")
             .SetProperties(msbuildProperties)
             .EnableNoRestore());
+
+        PackageIosAssetPacks();
 
         // Find and copy IPA to artifacts directory
         var binDir = MainProject.Parent / "bin" / Configuration / "net10.0-ios" / "ios-arm64";
@@ -268,6 +295,41 @@ partial class Build
         }
 
         Serilog.Log.Information($"iOS IPA package created in {ArtifactsDirectory}");
+    }
+
+    /// <summary>
+    /// Archives every iOS asset pack (perushim_notes + recitation_*) into an Apple
+    /// Archive (.aar) via `xcrun ba-package`. The archives upload to App Store
+    /// Connect separately from the IPA (Transporter); on device they resolve
+    /// through BAAssetPackManager managed asset packs.
+    /// The raw payloads are also staged flat under .artifacts/payloads: releases
+    /// publish them as plain assets so runtimes without managed delivery
+    /// (iOS/MacCatalyst below 26, unsigned builds) can download the same bytes
+    /// over HTTPS into their extraction cache.
+    /// </summary>
+    void PackageIosAssetPacks()
+    {
+        var assetPacksDirectory = MainProject.Parent / "Platforms" / "iOS" / "AssetPacks";
+        var archivesDirectory = ArtifactsDirectory / "assetpacks";
+        archivesDirectory.CreateDirectory();
+        foreach (var manifest in assetPacksDirectory.GlobFiles("*/Manifest.json").OrderBy(p => (string)p.Parent.Name, StringComparer.Ordinal))
+        {
+            var archivePath = archivesDirectory / $"{manifest.Parent.Name}.aar";
+            Serilog.Log.Information($"ba-package {manifest.Parent.Name} -> {archivePath}");
+            ProcessTasks.StartProcess("xcrun", $"ba-package \"{manifest}\" -o \"{archivePath}\"", manifest.Parent)
+                .AssertZeroExitCode();
+        }
+
+        var payloadsDirectory = ArtifactsDirectory / "payloads";
+        payloadsDirectory.CreateDirectory();
+        foreach (var packDirectory in assetPacksDirectory.GlobDirectories("*").OrderBy(p => (string)p.Name, StringComparer.Ordinal))
+        {
+            foreach (var payload in packDirectory.GlobFiles("*").Where(f => f.Name != "Manifest.json"))
+            {
+                Serilog.Log.Information($"payload {packDirectory.Name}/{payload.Name} -> {payloadsDirectory}");
+                payload.CopyToDirectory(payloadsDirectory, ExistsPolicy.FileOverwrite);
+            }
+        }
     }
 
     Target Version => _ => _
