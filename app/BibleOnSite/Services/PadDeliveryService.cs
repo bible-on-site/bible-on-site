@@ -322,6 +322,41 @@ partial class PadDeliveryService
     // progress and completion before the first fetch runs.
     private static AssetPackDownloadEvents? _downloadEvents;
 
+    private static string? BaAppGroupId =>
+        NSBundle.MainBundle.ObjectForInfoDictionary("BAAppGroupID")?.ToString();
+
+    /// <summary>
+    /// Managed asset packs are usable only on iOS/MacCatalyst 26+ while the shared
+    /// app-group container is reachable. The container is granted by the
+    /// app-groups codesign entitlement, which unsigned simulator builds (Appium
+    /// CI) do not carry — BAAssetPackManager.SharedManager validates it once and
+    /// calls Swift fatalError when the group is inaccessible (observed as an
+    /// EXC_BREAKPOINT at launch in AssetPackManager.swift). Because that abort is
+    /// not catchable, every SharedManager access is gated on this probe — which
+    /// asks for exactly what the framework checks — rather than on the OS
+    /// version or simulator detection alone.
+    /// </summary>
+    [SupportedOSPlatformGuard("ios26.0")]
+    [SupportedOSPlatformGuard("maccatalyst26.0")]
+    private static bool ManagedDeliverySupported
+    {
+        get
+        {
+#if MACCATALYST
+            if (!OperatingSystem.IsMacCatalystVersionAtLeast(26))
+#else
+            if (!OperatingSystem.IsIOSVersionAtLeast(26))
+#endif
+            {
+                return false;
+            }
+
+            var groupId = BaAppGroupId;
+            return !string.IsNullOrEmpty(groupId)
+                && NSFileManager.DefaultManager.GetContainerUrl(groupId) != null;
+        }
+    }
+
     /// <summary>
     /// Installs the managed asset-pack download delegate. Called once at app
     /// startup (MauiProgram) so that downloads resumed by the system after an
@@ -329,11 +364,7 @@ partial class PadDeliveryService
     /// </summary>
     internal static void ConfigureBackgroundAssets()
     {
-#if MACCATALYST
-        if (!OperatingSystem.IsMacCatalystVersionAtLeast(26))
-#else
-        if (!OperatingSystem.IsIOSVersionAtLeast(26))
-#endif
+        if (!ManagedDeliverySupported)
         {
             return;
         }
@@ -356,11 +387,7 @@ partial class PadDeliveryService
             return cacheDir;
         }
 
-#if MACCATALYST
-        if (!OperatingSystem.IsMacCatalystVersionAtLeast(26))
-#else
-        if (!OperatingSystem.IsIOSVersionAtLeast(26))
-#endif
+        if (!ManagedDeliverySupported)
         {
             return null;
         }
@@ -390,16 +417,6 @@ partial class PadDeliveryService
         CancellationToken ct)
     {
         LastIosDeliveryError = null;
-#if MACCATALYST
-        if (!OperatingSystem.IsMacCatalystVersionAtLeast(26))
-#else
-        if (!OperatingSystem.IsIOSVersionAtLeast(26))
-#endif
-        {
-            LastIosDeliveryError = "Background Assets requires iOS 26 or later.";
-            return false;
-        }
-
         var cacheDir = AssetPackCacheDir(packName);
         try
         {
@@ -407,6 +424,14 @@ partial class PadDeliveryService
             if (File.Exists(Path.Combine(cacheDir, PayloadFileName(packName))))
             {
                 return true;
+            }
+
+            if (!ManagedDeliverySupported)
+            {
+                LastIosDeliveryError =
+                    "Managed asset packs require iOS 26+ and an accessible app-group container "
+                    + "(unsigned simulator builds carry no app-group entitlement).";
+                return false;
             }
 
             // Same short-circuit the ODR path had: an already-downloaded pack only
@@ -467,6 +492,11 @@ partial class PadDeliveryService
     [SupportedOSPlatform("maccatalyst26.0")]
     private static async Task<BAAssetPack?> ResolveAssetPackAsync(string packName)
     {
+        if (!ManagedDeliverySupported)
+        {
+            return null;
+        }
+
         try
         {
             var packs = await BAAssetPackManager.SharedManager.GetAllAssetPacksAsync();
@@ -488,6 +518,11 @@ partial class PadDeliveryService
     [SupportedOSPlatform("maccatalyst26.0")]
     private static bool IsAssetPackLocallyAvailable(string packName)
     {
+        if (!ManagedDeliverySupported)
+        {
+            return false;
+        }
+
 #if MACCATALYST
         if (OperatingSystem.IsMacCatalystVersionAtLeast(26, 4))
 #else
@@ -621,16 +656,9 @@ partial class PadDeliveryService
             }
         }
 
-#if MACCATALYST
-        if (!OperatingSystem.IsMacCatalystVersionAtLeast(26))
-#else
-        if (!OperatingSystem.IsIOSVersionAtLeast(26))
-#endif
-        {
-            lines.Add("Managed asset packs require iOS 26 or later.");
-            return lines;
-        }
-
+        // Everything above this point is safe on any build; the SharedManager
+        // probes below would abort the process when the app-group container is
+        // inaccessible (see ManagedDeliverySupported).
         try
         {
             var info = NSBundle.MainBundle;
@@ -641,6 +669,25 @@ partial class PadDeliveryService
         catch (Exception ex)
         {
             lines.Add($"Info.plist probe error: {ex.Message}");
+        }
+
+        try
+        {
+            var groupId = BaAppGroupId;
+            var container = groupId == null
+                ? null
+                : NSFileManager.DefaultManager.GetContainerUrl(groupId);
+            lines.Add($"App-group container: {(container == null ? "inaccessible" : "accessible")}");
+        }
+        catch (Exception ex)
+        {
+            lines.Add($"App-group container probe error: {ex.Message}");
+        }
+
+        if (!ManagedDeliverySupported)
+        {
+            lines.Add("Managed delivery unavailable: requires iOS 26+ and an accessible app-group container.");
+            return lines;
         }
 
         if (!string.IsNullOrEmpty(LastIosDeliveryError))
