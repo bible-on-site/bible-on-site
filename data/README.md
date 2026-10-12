@@ -54,6 +54,7 @@ Outputs will be written to `sefaria/.outputs/`.
 | `sefaria-populate` | Import Sefaria dump into MongoDB |
 | `generate-tanah-view-json` | Generate Tanah view as JSON |
 | `generate-tanah-view-sqlite` | Generate Tanah view as SQLite |
+| `generate-tanah-view-sqlite-from-json` | Regenerate the app-packaged tanah_view SQLite (`app/BibleOnSite/Resources/Raw/`) from the checked-in website JSON corpus — no MongoDB needed |
 | `mysql-populate` | Populate MySQL database with structure and test data |
 | `mysql-populate-data-only` | Populate MySQL database with test data only |
 | `mysql-upgrade-tanahpedia-structure` | Safely create/upgrade Tanahpedia structure without dropping existing content |

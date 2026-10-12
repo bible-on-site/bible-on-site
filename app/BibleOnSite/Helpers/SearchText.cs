@@ -8,6 +8,14 @@ namespace BibleOnSite.Helpers;
 /// <summary>Shared Hebrew normalization and conservative offline spelling tolerance.</summary>
 public static class SearchText
 {
+    /// <summary>
+    /// Version folded into every search-index fingerprint (`v4:{content-id}:n{version}`).
+    /// Bump when <see cref="Normalize"/>/<see cref="PlainText"/> semantics change so the
+    /// pipeline (data/sefaria/pipelines/perushim-view search_text.rs NORM_VERSION) and
+    /// the app regenerate matching indexes.
+    /// </summary>
+    internal const int NormalizationVersion = 1;
+
     public static string PlainText(string text)
     {
         if (!text.Contains('<'))
@@ -22,7 +30,7 @@ public static class SearchText
         }
         foreach (var node in (document.DocumentNode.SelectNodes("//br|//p|//div|//li|//tr|//h1|//h2|//h3") ?? Enumerable.Empty<HtmlNode>()).ToArray())
         {
-            node.ParentNode?.InsertAfter(document.CreateTextNode(" "), node);
+            node.ParentNode!.InsertAfter(document.CreateTextNode(" "), node);
         }
         return HtmlEntity.DeEntitize(document.DocumentNode.InnerText);
     }
@@ -75,7 +83,8 @@ public static class SearchText
         return scores.All(score => score > 0) ? scores.Min() : 0;
     }
 
-    private static int TokenScore(string word, string term)
+    /// <summary>Shared by <see cref="SearchMatch"/> so match location ranks words exactly like scoring.</summary>
+    internal static int TokenScore(string word, string term)
     {
         if (word == term)
         {
@@ -161,8 +170,12 @@ public static class SearchText
         var end = matches.Count > 0 ? Math.Min(plain.Length, matches[0].End + 20) : Math.Min(plain.Length, 50);
         var result = new StringBuilder(start > 0 ? "..." : "");
         var cursor = start;
-        foreach (var match in matches.Where(match => match.Start >= start && match.End <= end))
+        foreach (var match in matches)
         {
+            if (match.End > end)
+            {
+                continue;
+            }
             result.Append(WebUtility.HtmlEncode(plain[cursor..match.Start]));
             result.Append("<b>").Append(WebUtility.HtmlEncode(plain[match.Start..match.End])).Append("</b>");
             cursor = match.End;

@@ -63,6 +63,7 @@ fn create_db(path: &Path, sefarim: &[Sefer], dump_name: &str) -> Result<()> {
     insert_helek_data(&tx, sefarim)?;
     insert_sefarim(&tx, sefarim)?;
     crate::reading_units::insert_masora_reading_units(&tx, sefarim)?;
+    crate::reading_units::insert_parasha_reading_units(&tx, sefarim)?;
 
     // Commit transaction
     tx.commit()?;
@@ -478,6 +479,26 @@ mod tests {
             .unwrap();
         assert_eq!(division_count, 1);
 
+        // The parasha division row is exported even though this fixture
+        // corpus has no Torah sefarim — so it carries no parasha units.
+        let parasha_division_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM tanah_reading_division WHERE id = 'parasha'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(parasha_division_count, 1);
+
+        let parasha_unit_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM tanah_reading_unit WHERE division_id = 'parasha'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(parasha_unit_count, 0);
+
         let reading_unit_count: i64 = conn
             .query_row("SELECT COUNT(*) FROM tanah_reading_unit", [], |row| {
                 row.get(0)
@@ -511,6 +532,48 @@ mod tests {
         assert_eq!(reading_range_count, 4);
 
         fs::remove_dir_all(&dir).ok();
+    }
+
+    /// The outputs-dir path writes a real database under the crate's
+    /// gitignored .output directory.
+    #[test]
+    fn generate_writes_database_to_outputs_dir() {
+        let dump_name = format!("coverage-test-{}", std::process::id());
+        let output = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join(".output")
+            .join(format!("{dump_name}.tanah_view.sqlite"));
+
+        generate(&sample_sefarim()[..1], &dump_name, false).unwrap();
+
+        let conn = Connection::open(&output).unwrap();
+        let source: String = conn
+            .query_row(
+                "SELECT value FROM _metadata WHERE key = 'source'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(source, dump_name);
+
+        // Windows refuses to delete a file while a connection holds it.
+        drop(conn);
+        fs::remove_file(&output).ok();
+    }
+
+    /// The dependant-modules path writes a real database into the app's
+    /// bundled resources directory; the uniquely-named artifact is
+    /// removed so the test leaves the tree as it found it.
+    #[test]
+    fn generate_writes_database_to_dependant_resources() {
+        let dump_name = format!("coverage-test-dependant-{}", std::process::id());
+        let output = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../../app/BibleOnSite/Resources/Raw")
+            .join(format!("{dump_name}.tanah_view.sqlite"));
+
+        generate(&sample_sefarim()[..1], &dump_name, true).unwrap();
+        assert!(output.exists());
+
+        fs::remove_file(&output).ok();
     }
 
     #[test]

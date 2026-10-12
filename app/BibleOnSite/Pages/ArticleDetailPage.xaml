@@ -44,7 +44,8 @@
         </Grid>
 
         <!-- Content -->
-        <ScrollView Grid.Row="1"
+        <ScrollView x:Name="ArticleScroll"
+                    Grid.Row="1"
                     Padding="16,0">
             <VerticalStackLayout Spacing="16">
                 <!-- Author section -->

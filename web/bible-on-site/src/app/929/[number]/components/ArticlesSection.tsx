@@ -15,6 +15,8 @@ interface ArticlesSectionProps {
 	onArticleClick?: (article: ArticleSummary) => void;
 	/** When true, show loading state (e.g. fetching article for in-place view). */
 	loading?: boolean;
+	/** Session-scoped key so the carousel keeps its position across unmounts. */
+	scrollStorageKey?: string;
 }
 
 /**
@@ -28,6 +30,7 @@ export function ArticlesSection({
 	emptyMessage = "אין מאמרים לפרק זה",
 	onArticleClick,
 	loading = false,
+	scrollStorageKey,
 }: ArticlesSectionProps) {
 	const safeArticles = articles ?? [];
 	return (
@@ -52,6 +55,7 @@ export function ArticlesSection({
 				className={styles.carousel}
 				prevLabel="מאמר קודם"
 				nextLabel="מאמר הבא"
+				scrollStorageKey={scrollStorageKey}
 			>
 				{safeArticles.length === 0 ? (
 					<p className={styles.emptyMessage}>{emptyMessage}</p>

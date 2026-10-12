@@ -14,6 +14,7 @@ import type { CategoryKey } from "../lib/tanahpedia/types";
  * Static section paths for the sitemap
  */
 export const SITEMAP_SECTIONS = [
+	"לוח",
 	"dailyBulletin",
 	"whatsappGroup",
 	"tos",
@@ -93,6 +94,22 @@ export function generateMasoraIndexEntry(
 ): MetadataRoute.Sitemap[0] {
 	return {
 		url: `${config.baseUrl}/מסורה`,
+		lastModified: config.lastModified,
+		changeFrequency: "monthly",
+		priority: 0.7,
+	};
+}
+
+/**
+ * Generates the פרשה landing entry. Same policy as מסורה: only the hub
+ * is listed because unit pages carry a deliberate non-indexing policy
+ * (see the פרשה unit page metadata).
+ */
+export function generateParashaIndexEntry(
+	config: SitemapConfig,
+): MetadataRoute.Sitemap[0] {
+	return {
+		url: `${config.baseUrl}/פרשה`,
 		lastModified: config.lastModified,
 		changeFrequency: "monthly",
 		priority: 0.7,
@@ -245,6 +262,7 @@ export function generateSitemapEntries(
 		...generatePediaCategoryEntries(config),
 		...generatePediaEntries(config, pediaUniqueNames),
 		generateMasoraIndexEntry(config),
+		generateParashaIndexEntry(config),
 	];
 }
 

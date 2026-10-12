@@ -69,7 +69,8 @@ export function buildLinkHref(
 	}
 	if (type === "external") {
 		if (!trimmed) return { href: "https://", linkType: "external" };
-		if (/^https?:\/\//i.test(trimmed)) return { href: trimmed, linkType: "external" };
+		if (/^https?:\/\//i.test(trimmed))
+			return { href: trimmed, linkType: "external" };
 		return { href: `https://${trimmed}`, linkType: "external" };
 	}
 	return { href: trimmed, linkType: "internal" };
