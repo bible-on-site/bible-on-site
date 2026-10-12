@@ -88,6 +88,20 @@ deterministically from the canonical `sefarim` corpus:
   1981 stuma-closed, 35 sefer-end units; 153 units cross perek
   boundaries; 97 markers sit mid-pasuk.
 
+## סדרים cross-check (verification only)
+
+The Masoretic סדרים division is a *different* system from ptuha/stuma
+parashot: the Tanach Yomi reference (`חלוקת ה"סדרים" של המסורה`,
+prakim.pdf) marks seder heads that sit at parasha starts, on
+parasha-final pesukim, and inside parashot.
+`cargo make verify-masora-sedarim` classifies every one of the 297
+listed heads (293 numbered + 4 parenthesized manuscript-only) against
+the shipped units and runs integrity checks — see
+`docs/data/masora-sedarim-verification.md` (issue #2187). The shipped
+division stays ptuha/stuma-derived; adopting a סדרים division would be
+a separate product change. Note the reference covers Neviim and
+Ketuvim only — it lists no Torah sedarim.
+
 ## פרשה derivation
 
 The weekly synagogue parashiot are **curated data**, not derived from
