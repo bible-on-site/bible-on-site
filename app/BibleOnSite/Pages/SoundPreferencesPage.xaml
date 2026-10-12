@@ -117,6 +117,10 @@
                             SemanticProperties.Description="עוצמת אפקטים"
                             MinimumTrackColor="{StaticResource Primary}"
                             MaximumTrackColor="{AppThemeBinding Light={StaticResource Gray250}, Dark={StaticResource Gray600}}"/>
+                    <Label Text="אין כרגע צלילי אפקטים באפליקציה; ההעדפה נשמרת ותיושם כשיתווספו"
+                           FontSize="12"
+                           LineBreakMode="WordWrap"
+                           TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
                 </VerticalStackLayout>
             </Border>
         </VerticalStackLayout>
