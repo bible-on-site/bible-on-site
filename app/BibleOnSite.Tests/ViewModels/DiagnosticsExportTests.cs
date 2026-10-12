@@ -32,7 +32,7 @@ public class DiagnosticsExportTests
         {
             Path.GetDirectoryName(path).Should().Be(storage.Root);
             Path.GetFileName(path).Should().StartWith("perushim_diagnostics_").And.EndWith(".txt");
-            (await File.ReadAllTextAsync(path)).Should().Contain("Perushim notes diagnostics").And.Contain("IsAvailable: False");
+            (await File.ReadAllTextAsync(path, TestContext.Current.CancellationToken)).Should().Contain("Perushim notes diagnostics").And.Contain("IsAvailable: False");
         }
     }
 
@@ -58,7 +58,7 @@ public class DiagnosticsExportTests
     public async Task Download_WhenSuccessful_UpdatesInstalledStatusAndNotifiesBindings()
     {
         await using var storage = new TestStorage();
-        await storage.BundleDatabaseAsync("sefaria-dump-5784-sivan-4.perushim_notes.sqlite", "CREATE TABLE note (perush_id INTEGER)");
+        await storage.BundleDatabaseAsync("sefaria-dump-5784-sivan-4.perushim_notes.sqlite", NotesDbV2.Statements());
         var notes = new PerushimNotesService(NotesDeliveryTests.Pad().Object, storage.FileSystem.Object);
         var navigator = new Mock<IAppNavigator>();
         var settings = new PreferencesViewModel(PreferencesService.CreateForTesting(new InMemoryPreferencesStorage()), notes,

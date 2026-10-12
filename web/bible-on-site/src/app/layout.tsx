@@ -2,8 +2,6 @@ import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
 
-import Image from "next/image";
-import Link from "next/link";
 import { READER_SETTINGS_BOOTSTRAP } from "@/lib/reader-settings";
 import {
 	buildGraph,
@@ -15,6 +13,7 @@ import {
 import { GoogleAnalytics } from "./components/GoogleAnalytics";
 import { JsonLd } from "./components/JsonLd";
 import { NavBar } from "./components/NavBar";
+import { TopNav } from "./components/TopNav";
 
 /* istanbul ignore next */
 const geistSans = localFont({
@@ -64,18 +63,7 @@ export default function RootLayout({
 				<JsonLd data={siteJsonLd} />
 			</head>
 			<body className={`${geistSans.variable} ${geistMono.variable}`}>
-				<nav className="top-nav">
-					<Link href="/">
-						<Image
-							src="/images/logos/logo-white-letters-69.webp"
-							alt='תנ"ך על הפרק'
-							loading="eager"
-							width={69}
-							height={50}
-							style={{ width: 72, height: "auto" }}
-						/>
-					</Link>
-				</nav>
+				<TopNav />
 
 				<NavBar />
 				{children}

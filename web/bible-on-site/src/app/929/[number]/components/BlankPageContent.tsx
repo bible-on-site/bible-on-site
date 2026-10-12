@@ -10,6 +10,12 @@ import { ArticlesSection } from "./ArticlesSection";
 import { PerushFullView } from "./PerushFullView";
 import { PerushimSection } from "./PerushimSection";
 import styles from "./sefer.module.css";
+import {
+	articleDocumentTitle,
+	perushDocumentTitle,
+	type SeferPerekTitle,
+} from "./sefer-document-title";
+import { setSeferOpenPerush } from "./sefer-pasuk-navigation";
 import { writeSeferContentHistory } from "./useSeferContentNavigation";
 
 interface BlankPageContentProps {
@@ -28,6 +34,10 @@ interface BlankPageContentProps {
 	/** Target note index for scrolling after perush expansion */
 	expandNoteIdx?: number;
 	onNavigate?: (slug?: string) => void;
+	/** Title parts of this page's perek, for the perush full-view title. */
+	perekTitleParts?: SeferPerekTitle;
+	/** Reports the shown article/perush document title (null when none). */
+	onContentTitle?: (title: string | null) => void;
 }
 
 const NO_ARTICLES: ArticleSummary[] = [];
@@ -49,6 +59,8 @@ export function BlankPageContent({
 	expandNotePasuk,
 	expandNoteIdx,
 	onNavigate,
+	perekTitleParts,
+	onContentTitle,
 }: BlankPageContentProps) {
 	const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
 	const [articleLoading, setArticleLoading] = useState(false);
@@ -78,7 +90,9 @@ export function BlankPageContent({
 				})
 				.catch((error) => {
 					console.error("Failed to load book article", {
-						perekId, articleId: article.id, error,
+						perekId,
+						articleId: article.id,
+						error,
 					});
 					if (!cancelled) setSlug(undefined);
 				})
@@ -93,7 +107,9 @@ export function BlankPageContent({
 				})
 				.catch((error) => {
 					console.error("Failed to load book commentary", {
-						perekId, perushId: perush.id, error,
+						perekId,
+						perushId: perush.id,
+						error,
 					});
 					if (!cancelled) setSlug(undefined);
 				})
@@ -105,6 +121,40 @@ export function BlankPageContent({
 			cancelled = true;
 		};
 	}, [slug, articles, perushim, perekId]);
+
+	// Report the full-view document title (issue #2176): while an article or
+	// perush is shown inside the book, the tab names that content exactly like
+	// its standalone page; clearing the selection hands the title back to the
+	// page-level title managed by Sefer.
+	useEffect(() => {
+		if (!onContentTitle) return;
+		const title = selectedArticle
+			? articleDocumentTitle(selectedArticle)
+			: selectedPerush && perekTitleParts
+				? perushDocumentTitle(selectedPerush, perekTitleParts)
+				: null;
+		onContentTitle(title);
+		// If this page unmounts while a full view is open (the flipbook buffers
+		// out distant leaves), release the title back to the page-level one.
+		return () => onContentTitle(null);
+	}, [selectedArticle, selectedPerush, onContentTitle, perekTitleParts]);
+
+	// Publish the open perush (with the pesukim it annotates) so pasuk numbers
+	// in the facing perek text page become navigation targets; cleared on
+	// close and on unmount.
+	useEffect(() => {
+		if (!perekId) return;
+		setSeferOpenPerush(
+			perekId,
+			selectedPerush
+				? {
+						name: selectedPerush.name,
+						pesukim: new Set(selectedPerush.notes.map((note) => note.pasuk)),
+					}
+				: null,
+		);
+		return () => setSeferOpenPerush(perekId, null);
+	}, [perekId, selectedPerush]);
 
 	const navigate = useCallback(
 		(nextSlug?: string) => {
@@ -183,12 +233,18 @@ export function BlankPageContent({
 								perushim={perushim}
 								onPerushClick={(perush) => navigate(perush.name)}
 								loading={perushLoading}
+								scrollStorageKey={
+									perekId ? `perushim-book-${perekId}` : undefined
+								}
 							/>
 						)}
 						<ArticlesSection
 							articles={articles}
 							onArticleClick={(article) => navigate(String(article.id))}
 							loading={articleLoading}
+							scrollStorageKey={
+								perekId ? `articles-book-${perekId}` : undefined
+							}
 						/>
 					</>
 				)}

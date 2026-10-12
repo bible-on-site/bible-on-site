@@ -120,13 +120,19 @@ public class TikkunFlowView : GraphicsView
             var defaultColor = isDark ? Color.FromArgb("#e0e0e0") : Color.FromArgb("#1a1a1a");
             var padLeft = (float)ContentPadding.Left;
             var padTop = (float)ContentPadding.Top;
+            var lineHeight = (float)_view.TextFontSize * (float)LineHeightFactor;
             foreach (var word in _layout.Words)
             {
                 canvas.Font = word.IsBold ? GraphicsFont.DefaultBold : GraphicsFont.Default;
                 canvas.FontSize = word.FontSize;
                 canvas.FontColor = word.TextColor ?? defaultColor;
+                // The draw box must be exactly the measured word width (plus a
+                // hair of slack): Android builds a StaticLayout per call whose
+                // paragraph alignment follows the text's own direction — a box
+                // wider than the word lets Hebrew text re-align or wrap inside
+                // it, which is what produced the overlapping pileup in #2069.
                 canvas.DrawString(word.Text, padLeft + word.X, padTop + word.Y,
-                    Math.Max(0, textWidth - word.X), (float)_view.TextFontSize * (float)LineHeightFactor,
+                    word.Width + 0.5f, lineHeight,
                     HorizontalAlignment.Left, VerticalAlignment.Center, TextFlow.OverflowBounds);
             }
 

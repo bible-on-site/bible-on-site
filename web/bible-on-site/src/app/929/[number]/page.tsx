@@ -13,12 +13,12 @@ import { getPerekImagesByChapter } from "../../../lib/seo/perek-images-data";
 import { fetchAllEntityRefs } from "../../../lib/tanahpedia/perek-entity-refs";
 import { JsonLd } from "../../components/JsonLd";
 import { ArticlesSection } from "./components/ArticlesSection";
-import { QaWidget } from "./components/QaWidget";
 import Breadcrumb from "./components/Breadcrumb";
 import { PerekHeading } from "./components/PerekHeading";
 import { PerekIntro } from "./components/PerekIntro";
 import { PerekText } from "./components/PerekText";
 import { PerushimSection } from "./components/PerushimSection";
+import { QaWidget } from "./components/QaWidget";
 import SeferComposite from "./components/SeferComposite";
 import styles from "./page.module.css";
 // perakim are a closed list — no fallback rendering for unknown IDs.
@@ -146,10 +146,17 @@ export default async function Perek({
 				/>
 
 				{/* Perushim section - commentaries carousel */}
-				<PerushimSection perekId={perekId} perushim={perushim} />
+				<PerushimSection
+					perekId={perekId}
+					perushim={perushim}
+					scrollStorageKey={`perushim-perek-${perekId}`}
+				/>
 
 				{/* Articles section - fetched directly from database for lower latency */}
-				<ArticlesSection articles={articles} />
+				<ArticlesSection
+					articles={articles}
+					scrollStorageKey={`articles-perek-${perekId}`}
+				/>
 			</div>
 
 			{/* QaWidget must be outside perekContainer (z-index:6 stacking context)

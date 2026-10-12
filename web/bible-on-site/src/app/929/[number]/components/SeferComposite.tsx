@@ -203,6 +203,7 @@ const ClientWrapper = (props: {
 						imagesByPerek={props.imagesByPerek}
 						initialSlug={props.initialSlug}
 						initialBookPage={initialBookPage}
+						isVisible={currentlyToggled}
 					/>
 				) : currentlyToggled ? (
 					<SeferLoadingIndicator />

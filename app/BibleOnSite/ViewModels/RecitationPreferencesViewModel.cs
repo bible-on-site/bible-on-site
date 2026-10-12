@@ -59,7 +59,7 @@ public partial class RecitationPreferencesViewModel : ObservableObject
             OnPropertyChanged();
         }
     }
-    [ObservableProperty] [NotifyPropertyChangedFor(nameof(IsIdle))] private bool _isDownloading;
+    [ObservableProperty][NotifyPropertyChangedFor(nameof(IsIdle))] private bool _isDownloading;
     public bool IsIdle => !IsDownloading;
     [ObservableProperty] private double _progress;
     [ObservableProperty] private string _status = "התקינו הקראה לכל הספרים או לספרים שתבחרו.";
@@ -74,8 +74,12 @@ public partial class RecitationPreferencesViewModel : ObservableObject
             {
                 foreach (var group in chapters.Values.GroupBy(p => p.SeferId).OrderBy(g => g.Key))
                 {
-                    Books.Add(new RecitationBookChoice { Name = group.First().SeferName, PerekIds = group.Select(p => p.PerekId).ToList(),
-                        IsSelected = group.Any(p => _recitation.HasAudio(p.PerekId)) });
+                    Books.Add(new RecitationBookChoice
+                    {
+                        Name = group.First().SeferName,
+                        PerekIds = group.Select(p => p.PerekId).ToList(),
+                        IsSelected = group.Any(p => _recitation.HasAudio(p.PerekId))
+                    });
                 }
             }
 
@@ -99,7 +103,10 @@ public partial class RecitationPreferencesViewModel : ObservableObject
         OnPropertyChanged(nameof(IsInstalled)); OnPropertyChanged(nameof(Enabled));
     }
 
-    [RelayCommand] private void SelectAll() { foreach (var book in Books)
+    [RelayCommand]
+    private void SelectAll()
+    {
+        foreach (var book in Books)
         {
             book.IsSelected = book.CanSelect;
         }
@@ -120,6 +127,11 @@ public partial class RecitationPreferencesViewModel : ObservableObject
         IsDownloading = true; Progress = 0;
         using var cancellation = new CancellationTokenSource();
         _download = cancellation;
+        // Queued progress callbacks are only rejected once _download and
+        // IsDownloading are cleared, so the outcome is applied afterwards:
+        // a stale report that runs during the catch→finally window must not
+        // overwrite the completed or cancelled status.
+        string outcome;
         try
         {
             Status = "מעדכן את חבילת ההקראה...";
@@ -135,11 +147,15 @@ public partial class RecitationPreferencesViewModel : ObservableObject
                 Progress = p; Status = $"מוריד הקלטות... {p:P0}";
             }), cancellation.Token);
             Enabled = true;
-            Status = "ההקלטות מותקנות וזמינות גם ללא אינטרנט.";
+            outcome = "ההקלטות מותקנות וזמינות גם ללא אינטרנט.";
         }
-        catch (OperationCanceledException) { Status = "ההורדה הופסקה. הקלטות שהושלמו נשמרו להמשך."; }
-        catch (Exception) { Status = "לא ניתן להשלים את ההורדה. נסו שוב; הקלטות שהושלמו נשמרו."; }
-        finally { _download = null; IsDownloading = false; Refresh(); }
+        catch (OperationCanceledException) { outcome = "ההורדה הופסקה. הקלטות שהושלמו נשמרו להמשך."; }
+        // Any non-cancellation failure — catalog, package, checksum, filesystem
+        // or platform delivery errors — collapses to one retriable status.
+        catch (Exception ex) when (ex is not OperationCanceledException) { outcome = "לא ניתן להשלים את ההורדה. נסו שוב; הקלטות שהושלמו נשמרו."; }
+        finally { _download = null; IsDownloading = false; }
+        Status = outcome;
+        Refresh();
     }
 
 }

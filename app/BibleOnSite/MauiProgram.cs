@@ -14,51 +14,51 @@ namespace BibleOnSite;
 
 public static class MauiProgram
 {
-	/// <summary>
-	/// Indicates whether Firebase was successfully initialized on iOS.
-	/// Always false on non-iOS platforms (Android auto-inits, others don't use Firebase).
-	/// When false on iOS, analytics calls are skipped to avoid repeated exceptions.
-	/// </summary>
-	internal static bool IsFirebaseInitialized { get; private set; }
+    /// <summary>
+    /// Indicates whether Firebase was successfully initialized on iOS.
+    /// Always false on non-iOS platforms (Android auto-inits, others don't use Firebase).
+    /// When false on iOS, analytics calls are skipped to avoid repeated exceptions.
+    /// </summary>
+    internal static bool IsFirebaseInitialized { get; private set; }
 
-	public static MauiApp CreateMauiApp()
-	{
-		var builder = MauiApp.CreateBuilder();
+    public static MauiApp CreateMauiApp()
+    {
+        var builder = MauiApp.CreateBuilder();
 #pragma warning disable CA1416 // MediaElement requires Android 26+; harmless on older devices
-		builder
-			.UseMauiApp<App>()
-			.UseMauiCommunityToolkit()
-			.UseMauiCommunityToolkitMediaElement(false)
+        builder
+            .UseMauiApp<App>()
+            .UseMauiCommunityToolkit()
+            .UseMauiCommunityToolkitMediaElement(false)
 #pragma warning restore CA1416
-			.ConfigureFonts(fonts =>
-			{
-				fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
-				fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
-				fonts.AddFont("FluentSystemIcons-Regular.ttf", "FluentIcons");
-			})
-			.ConfigureMauiHandlers(handlers =>
-			{
-				handlers.AddHandler<HtmlView, HtmlViewHandler>();
+            .ConfigureFonts(fonts =>
+            {
+                fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
+                fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
+                fonts.AddFont("FluentSystemIcons-Regular.ttf", "FluentIcons");
+            })
+            .ConfigureMauiHandlers(handlers =>
+            {
+                handlers.AddHandler<HtmlView, HtmlViewHandler>();
 #if IOS || MACCATALYST
 				// Use optimized CollectionView handler for iOS/Mac (default in .NET 10)
 				handlers.AddHandler<CollectionView, Microsoft.Maui.Controls.Handlers.Items2.CollectionViewHandler2>();
 #endif
-			});
+            });
 
 #if ANDROID
-		// Increase CarouselView's internal RecyclerView cache so pre-rendered views
-		// aren't evicted after ~2 swipes. This eliminates the ~250ms lag when visiting
-		// a perek for the first time.
-		Microsoft.Maui.Controls.Handlers.Items.CarouselViewHandler.Mapper.AppendToMapping("LargerViewCache", (handler, _) =>
-		{
-			if (handler.PlatformView is AndroidX.RecyclerView.Widget.RecyclerView recyclerView)
-			{
-				// Keep up to 10 off-screen views in cache (default is ~2)
-				recyclerView.SetItemViewCacheSize(10);
-				// Also increase the recycled view pool so evicted views are reused faster
-				recyclerView.GetRecycledViewPool()?.SetMaxRecycledViews(0, 10);
-			}
-		});
+        // Increase CarouselView's internal RecyclerView cache so pre-rendered views
+        // aren't evicted after ~2 swipes. This eliminates the ~250ms lag when visiting
+        // a perek for the first time.
+        Microsoft.Maui.Controls.Handlers.Items.CarouselViewHandler.Mapper.AppendToMapping("LargerViewCache", (handler, _) =>
+        {
+            if (handler.PlatformView is AndroidX.RecyclerView.Widget.RecyclerView recyclerView)
+            {
+                // Keep up to 10 off-screen views in cache (default is ~2)
+                recyclerView.SetItemViewCacheSize(10);
+                // Also increase the recycled view pool so evicted views are reused faster
+                recyclerView.GetRecycledViewPool()?.SetMaxRecycledViews(0, 10);
+            }
+        });
 
 #endif
 
@@ -87,15 +87,15 @@ public static class MauiProgram
 		});
 #endif
 
-		// Initialize Firebase on iOS from GoogleService-Info.plist (the iOS equivalent of google-services.json).
-		// Android auto-inits from google-services.json at build time, but iOS requires an explicit init call.
-		// Without this, CrossFirebaseAnalytics.Current silently fails on iOS.
-		// Note: Plugin.Firebase 4.0.0 does NOT support MacCatalyst — only iOS and Android.
-		//
-		// If initialization raises a managed exception, leave analytics disabled.
-		// Native crashes require a device crash report and cannot be caught here.
-		builder.ConfigureLifecycleEvents(events =>
-		{
+        // Initialize Firebase on iOS from GoogleService-Info.plist (the iOS equivalent of google-services.json).
+        // Android auto-inits from google-services.json at build time, but iOS requires an explicit init call.
+        // Without this, CrossFirebaseAnalytics.Current silently fails on iOS.
+        // Note: Plugin.Firebase 4.0.0 does NOT support MacCatalyst — only iOS and Android.
+        //
+        // If initialization raises a managed exception, leave analytics disabled.
+        // Native crashes require a device crash report and cannot be caught here.
+        builder.ConfigureLifecycleEvents(events =>
+        {
 #if IOS
 			events.AddiOS(iOS => iOS.WillFinishLaunching((_, __) =>
 			{
@@ -112,30 +112,30 @@ public static class MauiProgram
 				return false;
 			}));
 #endif
-		});
+        });
 
-		// Initialize PreferencesService with MAUI storage
-		PreferencesService.Initialize(new MauiPreferencesStorage());
+        // Initialize PreferencesService with MAUI storage
+        PreferencesService.Initialize(new MauiPreferencesStorage());
 
-		// Register services
-		builder.Services.AddSingleton<IPadDeliveryService>(_ => PadDeliveryService.Instance);
-		builder.Services.AddSingleton(_ => PreferencesService.Instance);
-		builder.Services.AddSingleton(_ => StarterService.Instance);
-		builder.Services.AddSingleton<IAnalyticsService, AnalyticsService>();
+        // Register services
+        builder.Services.AddSingleton<IPadDeliveryService>(_ => PadDeliveryService.Instance);
+        builder.Services.AddSingleton(_ => PreferencesService.Instance);
+        builder.Services.AddSingleton(_ => StarterService.Instance);
+        builder.Services.AddSingleton<IAnalyticsService, AnalyticsService>();
 
-		// Register ViewModels
-		builder.Services.AddTransient<PerekViewModel>();
-		builder.Services.AddTransient<PreferencesViewModel>();
+        // Register ViewModels
+        builder.Services.AddTransient<PerekViewModel>();
+        builder.Services.AddTransient<PreferencesViewModel>();
 
-		// Register Pages
-		builder.Services.AddTransient<MainPage>();
+        // Register Pages
+        builder.Services.AddTransient<MainPage>();
 
 #if DEBUG
-		builder.Logging.AddDebug();
+        builder.Logging.AddDebug();
 #endif
 
-		return builder.Build();
-	}
+        return builder.Build();
+    }
 
 #if IOS || MACCATALYST
 	private static T? FindDescendant<T>(UIKit.UIView? root) where T : UIKit.UIView

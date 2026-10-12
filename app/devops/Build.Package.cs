@@ -46,7 +46,7 @@ partial class Build
             {
                 if (OperatingSystem.IsWindows())
                 {
-                    PackageWindows(version);
+                    PackageWindows();
                 }
                 else
                 {
@@ -56,14 +56,14 @@ partial class Build
 
             if (Platform.Equals("Android", StringComparison.OrdinalIgnoreCase) || Platform.Equals("All", StringComparison.OrdinalIgnoreCase))
             {
-                PackageAndroid(version);
+                PackageAndroid();
             }
 
             if (Platform.Equals("iOS", StringComparison.OrdinalIgnoreCase) || Platform.Equals("All", StringComparison.OrdinalIgnoreCase))
             {
                 if (OperatingSystem.IsMacOS())
                 {
-                    PackageIos(version);
+                    PackageIos();
                 }
                 else
                 {
@@ -122,7 +122,7 @@ partial class Build
             }
         });
 
-    void PackageWindows(string version)
+    void PackageWindows()
     {
         Serilog.Log.Information("Packaging for Windows (MSIX)...");
 
@@ -156,7 +156,7 @@ partial class Build
         Serilog.Log.Information($"Windows MSIX package created in {ArtifactsDirectory}");
     }
 
-    void PackageAndroid(string version)
+    void PackageAndroid()
     {
         Serilog.Log.Information("Packaging for Android (AAB)...");
 
@@ -209,7 +209,7 @@ partial class Build
         Serilog.Log.Information($"Android AAB package created in {ArtifactsDirectory}");
     }
 
-    void PackageIos(string version)
+    void PackageIos()
     {
         Serilog.Log.Information("Packaging for iOS (IPA)...");
 

@@ -12,31 +12,64 @@
              x:Name="PerekPageRoot"
              x:DataType="viewmodels:PerekViewModel"
              Title="{Binding Source}"
-             FlowDirection="RightToLeft">
+             BackgroundColor="{AppThemeBinding Light=#F2F7FE, Dark=#20304A}"
+             FlowDirection="RightToLeft"
+             Shell.NavBarIsVisible="False">
 
-    <Shell.TitleView>
-        <Grid>
-            <Label x:Name="NormalNavigationTitle"
+    <ContentPage.Resources>
+        <ResourceDictionary>
+            <Color x:Key="SelectedPasukBackground">#E3F2FD</Color>
+            <Color x:Key="SelectedPasukBackgroundDark">#9FB4E0</Color>
+            <converters:IntEqualityConverter x:Key="IntEqualityConverter"/>
+            <converters:PerushCheckedConverter x:Key="PerushCheckedConverter"/>
+            <converters:InvertedBoolConverter x:Key="InvertedBoolConverter"/>
+            <converters:PasukDisplayItemsConverter x:Key="PasukDisplayItemsConverter"/>
+            <x:Double x:Key="BottomBarTotalHeight">90</x:Double>
+        </ResourceDictionary>
+    </ContentPage.Resources>
+
+    <Grid x:Name="MainGrid" RowDefinitions="Auto,*">
+        <Grid x:Name="ReaderToolbar" Grid.Row="0" MinimumHeightRequest="56"
+              BackgroundColor="{AppThemeBinding Light=#F2F7FE, Dark=#20304A}">
+            <Grid x:Name="NormalNavigationBar" ColumnDefinitions="48,*,48" HeightRequest="56">
+                <Button x:Name="ReaderNavigationButton" Grid.Column="0" Text="{x:Static fonts:FluentUI.navigation_24_regular}"
+                        FontFamily="FluentIcons" FontSize="24" WidthRequest="48" Padding="0"
+                        BackgroundColor="Transparent" TextColor="{AppThemeBinding Light=Black, Dark=White}"
+                        AutomationId="ReaderNavigationButton" SemanticProperties.Description="פתיחת תפריט הניווט"
+                        Clicked="OnReaderMenuClicked"/>
+                <Button Grid.Column="1" x:Name="NormalNavigationTitle"
                    AutomationId="PerekSource"
                    Text="{Binding Source}"
                    FontSize="20"
-                   TextColor="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource SecondaryDarkText}}"
+                   Padding="12,0"
+                   HeightRequest="40"
+                   CornerRadius="14"
+                   BorderWidth="0"
+                   IsVisible="False"
+                   BackgroundColor="{AppThemeBinding Light=#E4EFFD, Dark=#2C4569}"
+                   TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark=#AACBFF}"
                    VerticalOptions="Center"
-                   HorizontalOptions="Start"/>
-            <!-- Reader options menu (recitations, שניים מקרא, תיקון קוראים) -->
-            <Button x:Name="ReaderMenuButton"
-                    AutomationId="ReaderMenuButton"
-                    Text="{x:Static fonts:FluentUI.more_vertical_24_regular}"
-                    FontFamily="FluentIcons"
-                    FontSize="20"
-                    WidthRequest="40"
-                    HeightRequest="40"
-                    Padding="0"
-                    BackgroundColor="Transparent"
-                    TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"
-                    VerticalOptions="Center"
-                    HorizontalOptions="End"
-                    Clicked="OnReaderMenuButtonClicked"/>
+                   HorizontalOptions="Fill"
+                   Margin="4,0"
+                   SemanticProperties.Hint="הקישו לפתיחת החיפוש"
+                   Clicked="OnPerekSourceClicked"/>
+                <Border x:Name="SearchIntroduction" Grid.Column="1" HorizontalOptions="Fill" VerticalOptions="Center"
+                        HeightRequest="40" Margin="4,0" Padding="12,0" StrokeThickness="0" StrokeShape="RoundRectangle 14"
+                        BackgroundColor="{AppThemeBinding Light=#E4EFFD, Dark=#2C4569}">
+                    <Border.GestureRecognizers>
+                        <TapGestureRecognizer Tapped="OnPerekSourceClicked"/>
+                    </Border.GestureRecognizers>
+                    <Label x:Name="SearchIntroductionText" Text="חיפוש בתנ&quot;ך..." FontSize="20" VerticalOptions="Center"
+                           HorizontalTextAlignment="Center" TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark=#AACBFF}"/>
+                </Border>
+                <Button x:Name="ReaderMenuButton" Grid.Column="2" AutomationId="ReaderMenuButton"
+                        Text="{x:Static fonts:FluentUI.more_vertical_24_regular}" FontFamily="FluentIcons" FontSize="20"
+                        WidthRequest="48" HeightRequest="44" Padding="0" BackgroundColor="Transparent"
+                        TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark=#AACBFF}"
+                        VerticalOptions="Center" SemanticProperties.Description="אפשרויות הקריאה"
+                        Clicked="OnReaderMenuButtonClicked"/>
+            </Grid>
+            <ContentView x:Name="SearchTitleHost" IsVisible="False" Margin="0" VerticalOptions="Center"/>
             <Grid
                   x:Name="SelectionBar"
                   AutomationId="SelectionBar"
@@ -119,81 +152,18 @@
                         TextColor="White"
                         Clicked="OnSelectionCopyClicked"/>
             </Grid>
+            <BoxView HeightRequest="1" VerticalOptions="End" InputTransparent="True" ZIndex="10"
+                     Color="{AppThemeBinding Light=#DBE8F8, Dark=#47658E}"/>
         </Grid>
-    </Shell.TitleView>
 
-    <ContentPage.Resources>
-        <ResourceDictionary>
-            <Color x:Key="SelectedPasukBackground">#E3F2FD</Color>
-            <Color x:Key="SelectedPasukBackgroundDark">#9FB4E0</Color>
-            <converters:IntEqualityConverter x:Key="IntEqualityConverter"/>
-            <converters:PerushCheckedConverter x:Key="PerushCheckedConverter"/>
-            <converters:InvertedBoolConverter x:Key="InvertedBoolConverter"/>
-            <converters:PasukDisplayItemsConverter x:Key="PasukDisplayItemsConverter"/>
-            <x:Double x:Key="BottomBarTotalHeight">90</x:Double>
-        </ResourceDictionary>
-    </ContentPage.Resources>
-
-    <Grid x:Name="MainGrid">
-
-<!-- iOS bottom bar debug (beta-only collapsible dropdown) -->
-<Grid x:Name="BottomBarDebugOverlay"
-      IsVisible="False"
-      ZIndex="999"
-      VerticalOptions="Start"
-      HorizontalOptions="Start"
-      Margin="8,4,0,0">
-    <!-- Toggle button (small, unobtrusive) -->
-    <Border x:Name="DebugToggleButton"
-            WidthRequest="28" HeightRequest="28"
-            StrokeShape="RoundRectangle 14"
-            BackgroundColor="{AppThemeBinding Light=#DDD, Dark=#444}"
-            HorizontalOptions="Start" VerticalOptions="Start"
-            ZIndex="1000">
-        <Border.GestureRecognizers>
-            <TapGestureRecognizer Tapped="OnDebugToggleTapped"/>
-        </Border.GestureRecognizers>
-        <Label x:Name="DebugToggleIcon" Text="🔧" FontSize="14"
-               HorizontalOptions="Center" VerticalOptions="Center"/>
-    </Border>
-    <!-- Dropdown panel (hidden by default) -->
-    <Border x:Name="DebugDropdownPanel"
-            IsVisible="False"
-            VerticalOptions="Start"
-            HorizontalOptions="Start"
-            Margin="0,32,0,0"
-            Padding="8"
-            BackgroundColor="{AppThemeBinding Light=#F5F5F5, Dark=#2A2A2A}"
-            StrokeShape="RoundRectangle 8"
-            Stroke="{AppThemeBinding Light=#CCC, Dark=#555}"
-            StrokeThickness="1">
-        <VerticalStackLayout Spacing="1">
-            <Label Text="Bottom Bar Fix" FontSize="11" FontAttributes="Bold"
-                   TextColor="{AppThemeBinding Light=Black, Dark=White}" FlowDirection="LeftToRight"/>
-            <RadioButton x:Name="DebugFix0" Content="0: No fix (baseline)" FontSize="10" FlowDirection="LeftToRight"
-                         GroupName="BottomBarDebug"/>
-            <RadioButton x:Name="DebugFix3" Content="3: Bar margin=-N" FontSize="10" FlowDirection="LeftToRight"
-                         GroupName="BottomBarDebug"/>
-            <RadioButton x:Name="DebugFix4" Content="4: TranslationY +N (default)" FontSize="10" FlowDirection="LeftToRight"
-                         GroupName="BottomBarDebug" IsChecked="True"/>
-            <RadioButton x:Name="DebugFix11" Content="11: Page padding=-N" FontSize="10" FlowDirection="LeftToRight"
-                         GroupName="BottomBarDebug"/>
-            <RadioButton x:Name="DebugFix15" Content="15: TranslationY + bar margin=-N" FontSize="10" FlowDirection="LeftToRight"
-                         GroupName="BottomBarDebug"/>
-            <RadioButton x:Name="DebugFix16" Content="16: TranslationY + page padding=-N" FontSize="10" FlowDirection="LeftToRight"
-                         GroupName="BottomBarDebug"/>
-            <RadioButton x:Name="DebugFix17" Content="17: TranslationY (half) + margin" FontSize="10" FlowDirection="LeftToRight"
-                         GroupName="BottomBarDebug"/>
-            <Label x:Name="DebugFixInfo" Text="" FontSize="10" FlowDirection="LeftToRight"
-                   TextColor="{AppThemeBinding Light=Gray, Dark=#AAA}"/>
-        </VerticalStackLayout>
-    </Border>
-</Grid>
+        <controls:FloatingSearchBar x:Name="ChapterSearch" Grid.Row="1" ZIndex="300"
+                                    IsVisible="False" VerticalOptions="Fill" Margin="0"
+                                    ResultSelected="OnSearchResultSelected"/>
 
         <!-- Exit Full Screen Button (floating, hidden by default) -->
         <!-- Gesture recognizers are set up in code-behind: native Android touch for
              pixel-perfect drag tracking, MAUI gesture recognizers for other platforms. -->
-        <Border x:Name="ExitFullScreenButton"
+        <Border x:Name="ExitFullScreenButton" Grid.Row="1"
                 WidthRequest="48"
                 HeightRequest="48"
                 StrokeShape="RoundRectangle 24"
@@ -220,7 +190,7 @@
         </Border>
 
         <!-- Main Content Area - fills entire viewport -->
-        <Grid x:Name="ContentArea"
+        <Grid x:Name="ContentArea" Grid.Row="1" BackgroundColor="{AppThemeBinding Light=White, Dark={StaticResource OffBlack}}"
               ZIndex="0"
               RowDefinitions="Auto,Auto,*">
 
@@ -307,6 +277,7 @@
                                     <MultiBinding Converter="{StaticResource PasukDisplayItemsConverter}">
                                         <Binding Path="Pasukim"/>
                                         <Binding Path="BindingContext.IsShnayimMikraEnabled" Source="{x:Reference PerekPageRoot}"/>
+                                        <Binding Path="BindingContext.FontFactor" Source="{x:Reference PerekPageRoot}"/>
                                     </MultiBinding>
                                 </CollectionView.ItemsSource>
                                 <CollectionView.Footer>
@@ -351,16 +322,17 @@
                                                   FlowDirection="RightToLeft">
                                                 <Label Grid.Column="0"
                                                        Text="{Binding PasukNumHeb}"
-                                                       FontSize="{DynamicResource PasukNumFontSize}"
+                                                       AutomationId="PasukNumber"
+                                                       FontSize="{Binding MarkerFontSize}"
                                                        FontAttributes="Bold"
                                                        VerticalTextAlignment="Start"
                                                        HorizontalTextAlignment="Center"
                                                        Margin="0,1.5,0,0"
                                                        TextColor="{StaticResource Primary}"/>
                                                 <VerticalStackLayout Grid.Column="1" Spacing="2">
-                                                    <Label AutomationId="PasukText"
+                                                    <controls:PasukTextLabel AutomationId="PasukText"
                                                            FormattedText="{Binding Pasuk.FormattedText}"
-                                                           FontSize="{DynamicResource PasukFontSize}"
+                                                           FontSize="{Binding FontSize}"
                                                            FlowDirection="RightToLeft"
                                                            LineBreakMode="WordWrap"
                                                            LineHeight="1.4"/>
@@ -373,6 +345,7 @@
                                                             <DataTemplate x:DataType="models:PerushNoteDisplay">
                                                                 <VerticalStackLayout Spacing="2">
                                                                     <Label Text="{Binding PerushName}"
+                                                                           AutomationId="InlinePerushName"
                                                                            FontSize="{DynamicResource PerushNameFontSize}"
                                                                            FontAttributes="Bold"
                                                                            TextColor="{StaticResource Primary}"/>
@@ -497,7 +470,7 @@
         </Grid>
 
         <!-- Perushim Panel (slides up from bottom, above content but behind bottom bar) -->
-        <Border x:Name="PerushimPanel"
+        <Border x:Name="PerushimPanel" Grid.Row="1"
                 BackgroundColor="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}"
                 StrokeShape="RoundRectangle 16,16,0,0"
                 Stroke="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray600}}"
@@ -593,6 +566,7 @@
         <!-- Reader options menu - dropdown anchored under the ⋮ button -->
         <Grid x:Name="ReaderMenuOverlay"
               AutomationId="ReaderMenuOverlay"
+              Grid.Row="1"
               IsVisible="False"
               ZIndex="160"
               BackgroundColor="Transparent">
@@ -683,7 +657,7 @@
         </Grid>
 
         <!-- Bottom Navigation Bar with Circular Menu - OVERLAY floating at bottom -->
-        <Grid x:Name="BottomBar"
+        <Grid x:Name="BottomBar" Grid.Row="1"
               HeightRequest="90"
               VerticalOptions="End"
               ZIndex="100"
@@ -785,13 +759,14 @@
         </Grid>
 
         <!-- Satellite buttons overlay - uses AbsoluteLayout for precise positioning -->
-        <AbsoluteLayout x:Name="FloatingMenuContainer"
+        <AbsoluteLayout x:Name="FloatingMenuContainer" Grid.Row="1"
                         ZIndex="150"
                         InputTransparent="True"
                         CascadeInputTransparent="False"
                         BackgroundColor="Transparent">
 
-            <!-- 4 satellite buttons - fan out from center -->
+            <!-- 4 satellite buttons + toggle — positions are computed in code-behind
+                 by FanMenuGeometry (elliptical arc, compact in every orientation) -->
 
             <!-- Previous perek (bottom-left satellite). Disabled at perek 1 via Command.CanExecute. -->
             <Button x:Name="PrevPerekButton"
@@ -807,9 +782,7 @@
                     Command="{Binding LoadPreviousCommand}"
                     Clicked="OnMenuItemClicked"
                     Opacity="0"
-                    InputTransparent="True"
-                    AbsoluteLayout.LayoutBounds="0.26,0.91,48,48"
-                    AbsoluteLayout.LayoutFlags="PositionProportional"/>
+                    InputTransparent="True"/>
 
             <!-- Today's perek (top-left satellite) -->
             <!-- Icon: calendar_date_24_regular (calendar with date) via x:Static for 5-digit Unicode -->
@@ -826,9 +799,7 @@
                     Command="{Binding LoadTodayCommand}"
                     Clicked="OnMenuItemClicked"
                     Opacity="0"
-                    InputTransparent="True"
-                    AbsoluteLayout.LayoutBounds="0.42,0.87,48,48"
-                    AbsoluteLayout.LayoutFlags="PositionProportional"/>
+                    InputTransparent="True"/>
 
             <!-- Perek Picker (top-right satellite) -->
             <Button x:Name="PerekPickerButton"
@@ -843,9 +814,7 @@
                     TextColor="White"
                     Clicked="OnPerekPickerClicked"
                     Opacity="0"
-                    InputTransparent="True"
-                    AbsoluteLayout.LayoutBounds="0.58,0.87,48,48"
-                    AbsoluteLayout.LayoutFlags="PositionProportional"/>
+                    InputTransparent="True"/>
 
             <!-- Next perek (bottom-right satellite). Disabled at perek 929 via Command.CanExecute. -->
             <Button x:Name="NextPerekButton"
@@ -862,14 +831,13 @@
                     Command="{Binding LoadNextCommand}"
                     Clicked="OnMenuItemClicked"
                     Opacity="0"
-                    InputTransparent="True"
-                    AbsoluteLayout.LayoutBounds="0.74,0.91,48,48"
-                    AbsoluteLayout.LayoutFlags="PositionProportional"/>
+                    InputTransparent="True"/>
 
             <!-- Center Circular FAB - placed last to be on top, sits in notch -->
             <Button x:Name="CircularMenuButton"
                     AutomationId="CircularMenuButton"
-                    Text="☰"
+                    Text="{x:Static fonts:FluentUI.navigation_24_regular}"
+                    FontFamily="FluentIcons"
                     FontSize="22"
                     WidthRequest="56"
                     HeightRequest="56"
@@ -878,9 +846,7 @@
                     TextColor="White"
                     Pressed="OnCircularMenuPressed"
                     Released="OnCircularMenuReleased"
-                    Clicked="OnCircularMenuClicked"
-                    AbsoluteLayout.LayoutBounds="0.5,0.95,56,56"
-                    AbsoluteLayout.LayoutFlags="PositionProportional">
+                    Clicked="OnCircularMenuClicked">
                 <Button.Shadow>
                     <Shadow Brush="Black"
                             Offset="0,3"
@@ -891,7 +857,7 @@
         </AbsoluteLayout>
 
         <!-- Perek Picker Popup Overlay -->
-        <Grid x:Name="FocusedPasukOverlay" IsVisible="False" ZIndex="150"
+        <Grid x:Name="FocusedPasukOverlay" Grid.Row="1" IsVisible="False" ZIndex="150"
               AutomationId="FocusedPasukOverlay" BackgroundColor="{AppThemeBinding Light=White, Dark=#1C1C1E}">
             <ScrollView>
                 <VerticalStackLayout Padding="20,16" Spacing="16">
@@ -914,12 +880,12 @@
                 </VerticalStackLayout>
             </ScrollView>
         </Grid>
-        <WebView x:Name="RecitationDecoderView" WidthRequest="1" HeightRequest="1" Opacity="0" InputTransparent="True"/>
-        <toolkit:MediaElement x:Name="RecitationPlayer" WidthRequest="1" HeightRequest="1" Opacity="0"
+        <WebView x:Name="RecitationDecoderView" Grid.Row="1" WidthRequest="1" HeightRequest="1" Opacity="0" InputTransparent="True"/>
+        <toolkit:MediaElement x:Name="RecitationPlayer" Grid.Row="1" WidthRequest="1" HeightRequest="1" Opacity="0"
                               InputTransparent="True" ShouldAutoPlay="False" ShouldShowPlaybackControls="False"
                               MediaOpened="OnRecitationMediaOpened" MediaEnded="OnRecitationMediaEnded"
                               MediaFailed="OnRecitationMediaFailed" StateChanged="OnRecitationStateChanged"/>
-        <controls:PerekPickerPopup x:Name="PerekPickerPopup"
+        <controls:PerekPickerPopup x:Name="PerekPickerPopup" Grid.Row="1"
                                    ZIndex="200"
                                    PerekSelected="OnPerekPickerSelected"/>
     </Grid>
