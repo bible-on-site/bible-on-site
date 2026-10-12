@@ -149,21 +149,25 @@ public abstract class MobileDeviceTest : IAsyncLifetime
     {
         // The caller-member name is the [Fact]/[Theory] method; combining it
         // with the declaring type reproduces the xUnit FullyQualifiedName the
-        // coverage tree uses as test identity (#2085).
-        CoverageEvidence.Begin($"{GetType().FullName}.{name}", Configuration.Platform,
-            Configuration.ArtifactDirectory, name);
+        // coverage tree uses as test identity (#2085). That identity also names
+        // the per-test artifacts: method names are not unique across classes,
+        // so two tests sharing one would overwrite each other's evidence inside
+        // a run and collide again at the shard merge (#2083).
+        var test = $"{GetType().FullName}.{name}";
+        CoverageEvidence.Begin(test, Configuration.Platform,
+            Configuration.ArtifactDirectory, test);
         try
         {
             body();
             CoverageEvidence.RecordSession(Driver?.SessionId);
             CoverageEvidence.Finish("passed");
-            SaveDiagnostics(name, "passed");
+            SaveDiagnostics(test, "passed");
         }
         catch
         {
             CoverageEvidence.RecordSession(Driver?.SessionId);
             CoverageEvidence.Finish("failed");
-            SaveDiagnostics(name, "failed");
+            SaveDiagnostics(test, "failed");
             throw;
         }
     }

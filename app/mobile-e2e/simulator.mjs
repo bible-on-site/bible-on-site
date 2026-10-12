@@ -30,17 +30,30 @@ export const SHARD_PEER_NAME = "mobile-e2e-shard-2";
 
 // The second shard runs on a same-model sibling of the primary so both halves
 // share one hardware profile — a runner's preinstalled mix need not contain
-// two of anything. A leftover device carrying the reserved name on the same
-// runtime is reused, keeping re-runs idempotent; otherwise the caller creates
-// the described clone through `simctl create`.
+// two of anything. The runner retains devices between runs, so a leftover
+// peer carrying the reserved name is reused only when it also matches the
+// primary's runtime AND device model: a peer cloned under a different model
+// would silently unpair the shards. Every other reserved-name device is stale
+// — the caller deletes it — and a missing or mismatched peer is described by
+// `create` for `simctl create`.
 export function planShardPeer(devices, primary, name = SHARD_PEER_NAME) {
-  const siblings = devices[primary.runtime] ?? [];
-  const existing = siblings.find((device) => device.name === name && device.isAvailable);
-  if (existing) return { device: { ...existing, version: primary.version, runtime: primary.runtime } };
   if (!primary.deviceTypeIdentifier) {
     throw new Error(`The primary simulator ${primary.udid} has no deviceTypeIdentifier; cannot clone it for the second shard.`);
   }
-  return { create: { name, deviceTypeIdentifier: primary.deviceTypeIdentifier, runtime: primary.runtime } };
+  // `simctl list` groups devices by runtime; stamping each peer with its own
+  // lets one pass compare against the primary's (runtime, model) pair.
+  const peers = Object.entries(devices).flatMap(([runtime, entries]) =>
+    entries
+      .filter((entry) => entry.name === name && entry.isAvailable)
+      .map((entry) => ({ ...entry, runtime })));
+  const match = peers.find((peer) => peer.runtime === primary.runtime
+    && peer.deviceTypeIdentifier === primary.deviceTypeIdentifier);
+  return {
+    device: match ? { ...match, version: primary.version } : undefined,
+    create: match ? undefined
+      : { name, deviceTypeIdentifier: primary.deviceTypeIdentifier, runtime: primary.runtime },
+    stale: peers.filter((peer) => peer !== match),
+  };
 }
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";

@@ -39,8 +39,10 @@ export function shardRuns(env, artifactsDir) {
 
 // Merges per-shard coverage evidence into the run's top-level artifacts dir,
 // which is where the e2e-impact collect step looks. Every scenario must run on
-// exactly one shard, so a filename shared by two shard directories means the
-// filters overlapped — fail rather than publish double-counted coverage.
+// exactly one shard, and each record is named by the full test identity —
+// Namespace.Class.Method — so a filename shared by two shard directories can
+// only be the same test running twice: fail rather than publish double-counted
+// coverage.
 export function mergeShardEvidence(shardArtifactsDirs, destinationDir) {
   rmSync(destinationDir, { recursive: true, force: true });
   mkdirSync(destinationDir, { recursive: true });
