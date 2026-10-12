@@ -25,7 +25,7 @@ public class OdrCacheTests
 
         Directory.Exists(current).Should().BeTrue();
         File.Exists(Path.Join(current, Notes)).Should().BeFalse();
-        File.Exists(Path.Join(previous, Notes)).Should().BeTrue();
+        Directory.Exists(previous).Should().BeFalse("previous-generation extractions are purged, not just ignored");
     }
 
     [Fact]
@@ -39,6 +39,45 @@ public class OdrCacheTests
         var second = PadDeliveryService.OdrCacheDirectory(storage.FileSystem.Object, app.Object, Pack);
 
         (await File.ReadAllTextAsync(Path.Join(second, Notes), TestContext.Current.CancellationToken)).Should().Be("current notes");
+    }
+
+    [Fact]
+    public async Task StaleGeneration_ThatCannotBeDeleted_IsTolerated()
+    {
+        await using var storage = new TestStorage();
+        var app = App("5.0.104", "104");
+        // A file held open inside a stale generation blocks recursive delete —
+        // the sweep failure must not keep the app from resolving its own dir.
+        var assetsRoot = Path.Join(storage.Root, "odr_assets");
+        var staleDir = Path.Join(assetsRoot, "old-generation");
+        Directory.CreateDirectory(staleDir);
+        // Pre-create the current generation so a locked assets root does not
+        // stop OdrCacheDirectory from resolving it.
+        Directory.CreateDirectory(Path.Join(assetsRoot, "5.0.104-104", Pack));
+        var staleFile = Path.Join(staleDir, Notes);
+        await File.WriteAllTextAsync(staleFile, "old notes", TestContext.Current.CancellationToken);
+        // Windows honors the open handle; on POSIX an advisory lock does not
+        // block unlink, so the assets root itself is made non-writable.
+        await using var locked = new FileStream(staleFile, FileMode.Open, FileAccess.Read, FileShare.None);
+        var lockedDirectory = !OperatingSystem.IsWindows();
+        if (lockedDirectory)
+        {
+            File.SetUnixFileMode(assetsRoot, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+        }
+        try
+        {
+            var current = PadDeliveryService.OdrCacheDirectory(storage.FileSystem.Object, app.Object, Pack);
+
+            Directory.Exists(current).Should().BeTrue();
+        }
+        finally
+        {
+            if (lockedDirectory)
+            {
+                File.SetUnixFileMode(assetsRoot,
+                    UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            }
+        }
     }
 
     [Fact]
@@ -61,5 +100,25 @@ public class OdrCacheTests
         app.SetupGet(a => a.VersionString).Returns(version);
         app.SetupGet(a => a.BuildString).Returns(build);
         return app;
+    }
+
+    [Fact]
+    public void PayloadFileName_UsesNotesDatabaseForTheNotesPack_AndZipOtherwise()
+    {
+        PadDeliveryService.PayloadFileName("perushim_notes")
+            .Should().Be("sefaria-dump-5784-sivan-4.perushim_notes.sqlite");
+        PadDeliveryService.PayloadFileName("other_pack").Should().Be("other_pack.zip");
+    }
+
+    [Fact]
+    public async Task UnsupportedPlatform_DeliveryIsANoOp()
+    {
+        // The net10.0 test host compiles the no-PAD/ODR branch of the service.
+        var service = PadDeliveryService.Instance;
+
+        (await service.TryGetAssetPathAsync(Pack, TestContext.Current.CancellationToken)).Should().BeNull();
+        (await service.FetchAsync(Pack, progress: null, cancellationToken: TestContext.Current.CancellationToken)).Should().BeFalse();
+        (await service.GetDeliveryDiagnosticsAsync(Pack))
+            .Should().ContainSingle().Which.Should().Contain("no on-demand delivery");
     }
 }
