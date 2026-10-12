@@ -13,6 +13,7 @@ import {
 	screen,
 	waitFor,
 } from "@testing-library/react";
+import { toLetters } from "gematry";
 
 jest.mock("next/link", () => ({
 	__esModule: true,
@@ -32,6 +33,8 @@ jest.mock("next/link", () => ({
 
 jest.mock("next/navigation", () => ({
 	useSearchParams: () => new URLSearchParams(),
+	usePathname: () => "/מסורה/1",
+	useRouter: () => ({ replace: jest.fn(), push: jest.fn() }),
 	notFound: () => {
 		throw new Error("NEXT_NOT_FOUND");
 	},
@@ -52,8 +55,16 @@ jest.mock("@/lib/articles/service", () => ({
 jest.mock("@/lib/tanahpedia/perek-entity-refs", () => ({
 	fetchAllEntityRefs: jest.fn().mockResolvedValue([]),
 }));
+// Capture the props reaching the shared carousel so the page wiring —
+// in-place click handling and division-internal perush hrefs — is
+// assertable without rendering the section itself (covered by the
+// /929 suite).
+const perushimSectionProps: Record<string, unknown>[] = [];
 jest.mock("@/app/929/[number]/components/PerushimSection", () => ({
-	PerushimSection: () => <div data-testid="perushim-section" />,
+	PerushimSection: (props: Record<string, unknown>) => {
+		perushimSectionProps.push(props);
+		return <div data-testid="perushim-section" />;
+	},
 }));
 jest.mock("@/app/929/[number]/components/ArticlesSection", () => ({
 	ArticlesSection: () => <div data-testid="articles-section" />,
@@ -73,6 +84,16 @@ jest.mock("@/app/929/[number]/components/TanahpediaLink", () => ({
 			{children}
 		</a>
 	),
+}));
+
+// The book overlay is covered by its own suite; capturing its props
+// proves the page wires the whole-sefer units and the SSG summaries.
+let capturedMasoraBookProps: Record<string, unknown> | null = null;
+jest.mock("@/app/masora/[unit]/components/MasoraSeferComposite", () => ({
+	MasoraSeferComposite: (props: Record<string, unknown>) => {
+		capturedMasoraBookProps = props;
+		return <div data-testid="masora-book" />;
+	},
 }));
 
 // Layout collaborators are covered elsewhere; isolate the wiring.
@@ -97,6 +118,32 @@ jest.mock("@/data/masora/masora-units", () => ({
 	getMasoraFirstUnitBySefer: () => mockFirstUnits(),
 }));
 
+/**
+ * Collects `fallback` props off every Suspense element in an awaited
+ * server-component tree. Suspense fallbacks never mount under jsdom,
+ * so coverage of their props requires reaching into the JSX directly.
+ */
+function collectSuspenseFallbackProps(
+	node: unknown,
+	found: Array<Record<string, unknown>> = [],
+): Array<Record<string, unknown>> {
+	if (Array.isArray(node)) {
+		for (const child of node) collectSuspenseFallbackProps(child, found);
+		return found;
+	}
+	if (node == null || typeof node !== "object" || !("props" in node)) {
+		return found;
+	}
+	const props = (node as { props: Record<string, unknown> }).props;
+	if (props == null || typeof props !== "object") return found;
+	const fallback = props.fallback;
+	if (fallback != null && typeof fallback === "object" && "props" in fallback) {
+		found.push((fallback as { props: Record<string, unknown> }).props);
+	}
+	collectSuspenseFallbackProps(props.children, found);
+	return found;
+}
+
 import { ScrollToUnitPasuk } from "@/app/components/reading/ScrollToUnitPasuk";
 import { UnitBreadcrumb } from "@/app/masora/[unit]/components/UnitBreadcrumb";
 import { UnitNav } from "@/app/masora/[unit]/components/UnitNav";
@@ -105,6 +152,7 @@ import MasoraUnitLayout from "@/app/masora/[unit]/layout";
 import MasoraUnitPage from "@/app/masora/[unit]/page";
 import MasoraLanding from "@/app/masora/page";
 import { getMasoraUnitById } from "@/data/masora/masora-units";
+import type { ReadingUnit } from "@/lib/reading/contract";
 import type { PerekEntityReference } from "@/lib/tanahpedia/service";
 
 describe("UnitNav", () => {
@@ -191,13 +239,121 @@ describe("MasoraLanding", () => {
 });
 
 describe("UnitText", () => {
-	it("renders a cross-perek unit with perek labels and anchors", () => {
+	it("renders a cross-perek unit with anchors and parasha verse positions", () => {
 		const unit = getMasoraUnitById(8); // בראשית ב ד - ג טו
 		render(<UnitText unit={unit} entityRefsByPerek={{}} />);
 		expect(document.getElementById("pasuk-2-4")).toBeInTheDocument();
 		expect(document.getElementById("pasuk-3-15")).toBeInTheDocument();
-		// Multi-perek slices carry the perek source label.
-		expect(screen.getAllByText(/בראשית ב/).length).toBeGreaterThan(0);
+		// No conventional chapter apparatus: verse positions run as one
+		// continuous count across the parasha instead of restarting per
+		// perek or carrying perek source labels.
+		const positions = [
+			...document.querySelectorAll("[data-unit-text] .pasukNum"),
+		].map((el) => el.textContent ?? "");
+		expect(positions.length).toBeGreaterThan(0);
+		positions.forEach((text, index) => {
+			expect(text.startsWith(toLetters(index + 1))).toBe(true);
+		});
+		// The parasha closes exactly at a pasuk boundary — its break is the
+		// pasuk's last segment, so the final position stays unmarked.
+		expect(positions[positions.length - 1]).toBe(toLetters(positions.length));
+		expect(screen.queryByText("בראשית ב")).toBeNull();
+	});
+
+	it("marks segment-clipped boundary pesukim as partial positions", () => {
+		// A unit that opens mid-verse: the first marker reads "א (התחלה)".
+		const midVerseStart = getMasoraUnitById(1);
+		const startClipped: ReadingUnit = {
+			...midVerseStart,
+			ranges: [
+				{
+					start: { perekId: 1, pasuk: 1, segmentIndex: 3 },
+					end: { perekId: 1, pasuk: 2 },
+				},
+			],
+		};
+		const { unmount } = render(
+			<UnitText unit={startClipped} entityRefsByPerek={{}} />,
+		);
+		let markers = [
+			...document.querySelectorAll("[data-unit-text] .pasukNum"),
+		].map((el) => el.textContent);
+		expect(markers).toEqual(["א (התחלה)", "ב"]);
+		unmount();
+
+		// A lone mid-verse excerpt reads "א (קטע)".
+		const excerpt: ReadingUnit = {
+			...midVerseStart,
+			ranges: [
+				{
+					start: { perekId: 1, pasuk: 1, segmentIndex: 2 },
+					end: { perekId: 1, pasuk: 1, segmentIndex: 5 },
+				},
+			],
+		};
+		const { unmount: unmountExcerpt } = render(
+			<UnitText unit={excerpt} entityRefsByPerek={{}} />,
+		);
+		markers = [
+			...document.querySelectorAll("[data-unit-text] .pasukNum"),
+		].map((el) => el.textContent);
+		expect(markers).toEqual(["א (קטע)"]);
+		unmountExcerpt();
+
+		// An excerpt that runs to the pasuk's last segment drops only its
+		// opening — the marker reads "א (התחלה)", not "א (קטע)".
+		const openEndedExcerpt: ReadingUnit = {
+			...midVerseStart,
+			ranges: [
+				{
+					start: { perekId: 1, pasuk: 1, segmentIndex: 2 },
+					end: { perekId: 1, pasuk: 1, segmentIndex: 6 }, // last segment
+				},
+			],
+		};
+		render(<UnitText unit={openEndedExcerpt} entityRefsByPerek={{}} />);
+		markers = [
+			...document.querySelectorAll("[data-unit-text] .pasukNum"),
+		].map((el) => el.textContent);
+		expect(markers).toEqual(["א (התחלה)"]);
+	});
+
+	it("keeps positions unmarked when a break lands on a pasuk boundary", () => {
+		// Real corpus: unit 1 closes at בראשית 1:5's last segment (a ptuha
+		// marker), so no position is clipped — plain א-ה markers.
+		const { unmount } = render(
+			<UnitText unit={getMasoraUnitById(1)} entityRefsByPerek={{}} />,
+		);
+		let markers = [
+			...document.querySelectorAll("[data-unit-text] .pasukNum"),
+		].map((el) => el.textContent);
+		expect(markers).toEqual(["א", "ב", "ג", "ד", "ה"]);
+		unmount();
+
+		// Unit 70 closes genuinely mid-verse (segment 14 of 20 at בראשית
+		// 35:22): its final position keeps the (סיום) suffix while earlier
+		// positions stay plain.
+		render(<UnitText unit={getMasoraUnitById(70)} entityRefsByPerek={{}} />);
+		markers = [
+			...document.querySelectorAll("[data-unit-text] .pasukNum"),
+		].map((el) => el.textContent);
+		expect(markers).toHaveLength(14);
+		expect(markers[13]).toBe("יד (סיום)");
+		markers.slice(0, 13).forEach((text, index) => {
+			expect(text).toBe(toLetters(index + 1));
+		});
+	});
+
+	it("marks a mid-verse opening (התחלה) even when the unit closes at a pasuk boundary", () => {
+		// Unit 71 opens at segment 15 of בראשית 35:22 and closes on the last
+		// segment of 35:29 — the opening is clipped, the ending is not.
+		render(<UnitText unit={getMasoraUnitById(71)} entityRefsByPerek={{}} />);
+		const markers = [
+			...document.querySelectorAll("[data-unit-text] .pasukNum"),
+		].map((el) => el.textContent);
+		expect(markers).toHaveLength(8);
+		expect(markers[0]).toBe("א (התחלה)");
+		expect(markers[7]).toBe("ח");
 	});
 
 	it("wraps referenced segments in Tanahpedia links", () => {
@@ -243,11 +399,87 @@ describe("MasoraUnitPage", () => {
 		});
 		render(jsx);
 		expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
-			"בראשית ב ד - ג טו",
+			"בראשית פרשה ח",
 		);
 		expect(document.getElementById("pasuk-2-4")).toBeInTheDocument();
 		expect(screen.getByTestId("perushim-section")).toBeInTheDocument();
 		expect(screen.getByTestId("articles-section")).toBeInTheDocument();
+	});
+
+	it("wires the sefer's units and summaries into the book overlay", async () => {
+		const jsx = await MasoraUnitPage({
+			params: Promise.resolve({ unit: "8" }),
+		});
+		render(jsx);
+		expect(screen.getByTestId("masora-book")).toBeInTheDocument();
+		const props = capturedMasoraBookProps;
+		expect(props?.seferName).toBe("בראשית");
+		expect(props?.currentUnitId).toBe(8);
+		// The book renders every Masoretic unit of the sefer, not just
+		// the requested one.
+		const bereshit = actualMasora.getMasoraUnitsForSefer("בראשית");
+		const units = props?.units as Array<{
+			unitId: number;
+			order: number;
+			heading: string;
+		}>;
+		expect(units.map((unit) => unit.unitId)).toEqual(
+			bereshit.map((unit) => unit.unitId),
+		);
+		expect(units.map((unit) => unit.order)).toEqual(
+			bereshit.map((unit) => unit.order),
+		);
+		expect(units[0].heading).toBe(bereshit[0].heading);
+		// Flat-page summaries double as the current unit's book data.
+		expect(props?.articles).toEqual([]);
+		expect(props?.perushim).toEqual([]);
+		// Canonical perek sources cover every perek the sefer's units span.
+		const perekSources = props?.perekSources as Record<number, string>;
+		expect(Object.keys(perekSources).length).toBeGreaterThan(0);
+		expect(perekSources[1]).toBe("בראשית א");
+	});
+
+	it("keeps perushim inside the division page (issue #2190)", async () => {
+		perushimSectionProps.length = 0;
+		const jsx = await MasoraUnitPage({
+			params: Promise.resolve({ unit: "8" }),
+		});
+		render(jsx);
+		// Both the Suspense fallback and the live section build
+		// division-internal hrefs; the live one also opens in place.
+		expect(perushimSectionProps.length).toBeGreaterThan(0);
+		const hrefs = perushimSectionProps.map((props) =>
+			(props.hrefForPerush as (p: { name: string }) => string)({
+				name: 'רש"י',
+			}),
+		);
+		for (const href of hrefs) {
+			expect(decodeURIComponent(href)).toBe('/מסורה/8?perush=רש"י');
+		}
+		expect(perushimSectionProps.some((props) => props.onPerushClick)).toBe(
+			true,
+		);
+	});
+
+	it("keeps the Suspense fallback's perush href inside the division", async () => {
+		const jsx = await MasoraUnitPage({
+			params: Promise.resolve({ unit: "8" }),
+		});
+		// jsdom mounts the live children, never the fallback element —
+		// reach into the tree and invoke its href builder directly.
+		const fallbacks = collectSuspenseFallbackProps(jsx);
+		const perushFallbacks = fallbacks.filter(
+			(props) => typeof props.hrefForPerush === "function",
+		);
+		expect(perushFallbacks.length).toBeGreaterThan(0);
+		for (const props of perushFallbacks) {
+			const hrefForPerush = props.hrefForPerush as (p: {
+				name: string;
+			}) => string;
+			expect(decodeURIComponent(hrefForPerush({ name: 'רש"י' }))).toBe(
+				'/מסורה/8?perush=רש"י',
+			);
+		}
 	});
 
 	it("renders both closing-break labels", async () => {
