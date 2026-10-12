@@ -46,7 +46,7 @@ export default function MasoraLanding() {
 			<h1 className={styles.heading}>{MASORA_DIVISION.menuLabel}</h1>
 			<p className={styles.intro}>
 				קריאת התנ&quot;ך לפי חלוקת המסורה — הפרשיות הפתוחות והסתומות המסורתיות
-				שבטקסט. כל יחידה מוצגת עם הטקסט המדויק שלה, כולל גבולות בתוך פסוק.
+				שבטקסט. כל פרשה מוצגת עם הטקסט המדויק שלה, כולל גבולות בתוך פסוק.
 			</p>
 			{HELEK_ORDER.map((helek) => (
 				<section key={helek} className={styles.helekSection}>
@@ -68,7 +68,7 @@ export default function MasoraLanding() {
 											>
 												<span className={styles.seferName}>{sefer.name}</span>
 												<span className={styles.unitCount}>
-													{unitCount} יחידות
+													{unitCount} פרשות
 												</span>
 											</Link>
 										) : (

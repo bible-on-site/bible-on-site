@@ -2,6 +2,7 @@ using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using BibleOnSite.Helpers;
 using BibleOnSite.Models;
 using BibleOnSite.Services;
 using BibleOnSite.Tests.Support;
@@ -586,6 +587,40 @@ public class RecitationServiceTests
         server.Bundle(); await service.UpdateAsync(TestContext.Current.CancellationToken); await service.DownloadAsync([1]);
         File.Exists(await service.PrepareAudioAsync(1, Canonical())).Should().BeTrue();
         await service.Invoking(s => s.PrepareAudioAsync(1, Canonical(), 100, 800)).Should().ThrowAsync<InvalidDataException>();
+    }
+
+    [Fact]
+    public async Task WordPreviewMarksTheResumePositionForChapterPlayback()
+    {
+        await using var storage = new TestStorage();
+        var server = new Extension(storage);
+        var audio = "approved audio"u8.ToArray();
+        var track = new RecitationTrack(1, "https://example.com/recordings/1_record.mp3", Hash(audio),
+            Hash(Encoding.UTF8.GetBytes("1:1:א\n1:2:ב\n2:1:ג")), 3000, "ready",
+            [new(1, 1, "א", 100, 800), new(1, 2, "ב", 900, 1800), new(2, 1, "ג", 2000, 2600)]);
+        server.Package = new(1, [track]); server.Audio["/recordings/1_record.mp3"] = audio;
+        var service = server.Service;
+        server.Bundle(); await service.UpdateAsync(TestContext.Current.CancellationToken); await service.DownloadAsync([1]);
+        List<Pasuk> pasukim = [
+            new() { PasukNum = 1, Text = "א ב", Segments = [new() { Type = SegmentType.Qri, Value = "א" }, new() { Type = SegmentType.Qri, Value = "ב" }] },
+            new() { PasukNum = 2, Text = "ג", Segments = [new() { Type = SegmentType.Qri, Value = "ג" }] }];
+        var decoder = new Mock<IRecitationAudioDecoder>();
+        decoder.Setup(d => d.CreateClipAsync(It.IsAny<string>(), It.IsAny<IReadOnlyList<(double Start, double End)>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("PCM WAV"u8.ToArray());
+        // The tapped word still plays only its own approved interval.
+        var wordClip = await service.PrepareAudioAsync(1, pasukim, 900, 1800, decoder: decoder.Object);
+        (await File.ReadAllBytesAsync(wordClip, TestContext.Current.CancellationToken)).Should().Equal("PCM WAV"u8.ToArray());
+        (double Start, double End)[] wordRange = [(900, 1800)];
+        decoder.Verify(d => d.CreateClipAsync(It.IsAny<string>(), It.Is<IReadOnlyList<(double Start, double End)>>(r => r.SequenceEqual(wordRange)), It.IsAny<CancellationToken>()), Times.Once);
+        // The main Play button prepares the whole perek as joined pasuk ranges...
+        var chapterRanges = track.Words.GroupBy(w => w.Pasuk).OrderBy(g => g.Key)
+            .Select(g => (g.First().StartMs!.Value, g.Last().EndMs!.Value)).ToList();
+        var chapterClip = await service.PrepareAudioAsync(1, pasukim, null, null, CancellationToken.None, chapterRanges, decoder.Object, 0);
+        File.Exists(chapterClip).Should().BeTrue();
+        // ...and the tapped word maps to its position inside that clip, not zero.
+        var timeline = new RecitationTimeline(track, chapterRanges, 0);
+        timeline.PositionOf(900).Should().Be(800);
+        timeline.PositionOf(2000).Should().Be(1700);
     }
 
     [Fact]

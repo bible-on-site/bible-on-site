@@ -25,10 +25,18 @@ public class PerekDataService
     private readonly SemaphoreSlim _loadLock = new(1, 1);
 
     private readonly LocalDatabaseService _databaseService;
+    private readonly PerekScheduleService _scheduleService;
 
-    private PerekDataService() : this(LocalDatabaseService.Instance) { }
+    private PerekDataService() : this(LocalDatabaseService.Instance, PerekScheduleService.Instance) { }
 
-    public PerekDataService(LocalDatabaseService databaseService) { _databaseService = databaseService; }
+    public PerekDataService(LocalDatabaseService databaseService)
+        : this(databaseService, new PerekScheduleService(databaseService)) { }
+
+    internal PerekDataService(LocalDatabaseService databaseService, PerekScheduleService scheduleService)
+    {
+        _databaseService = databaseService;
+        _scheduleService = scheduleService;
+    }
 
     /// <summary>
     /// Whether perek data has been loaded.
@@ -64,6 +72,7 @@ public class PerekDataService
             // A replaced query and the background index can arrive together.
             // Publish one complete catalog instead of replacing its dictionaries
             // while another caller is already reading chapter search results.
+            await _scheduleService.LoadAsync();
             await LoadSefarimAsync(db);
             await LoadPerakimAsync(db);
             _isLoaded = true;
@@ -105,6 +114,14 @@ public class PerekDataService
     {
         _perakim = new Dictionary<int, Perek>();
 
+        // Perek dates shown in the reader come from the cycle containing
+        // today (or the next cycle to start when today is unscheduled),
+        // not simply the highest cycle stored in the table. Databases
+        // without usable cycle rows keep the historical latest-cycle join.
+        var displayCycle = _scheduleService.ConfirmedCycleCount > 0
+            ? _scheduleService.GetCycleForDateOrUpcoming(HebrewDateHelper.GetTodayDateNumber()).Number
+            : await GetLatestStoredCycleAsync(db);
+
         var perekRows = await db.QueryAsync<PerekRow>(
             "SELECT p.id AS perek_id, " +
             "p.perek, " +
@@ -124,10 +141,9 @@ public class PerekDataService
             "FROM tanah_perek p " +
             "JOIN tanah_sefer s ON p.id BETWEEN s.perek_id_from AND s.perek_id_to " +
             "LEFT JOIN tanah_additional a ON a.sefer_id = s.id AND p.id BETWEEN a.perek_from AND a.perek_to " +
-            "LEFT JOIN tanah_perek_date pd ON pd.perek_id = p.id AND pd.cycle = (" +
-            "  SELECT MAX(pd2.cycle) FROM tanah_perek_date pd2 WHERE pd2.perek_id = p.id" +
-            ") " +
-            "ORDER BY p.id");
+            "LEFT JOIN tanah_perek_date pd ON pd.perek_id = p.id AND pd.cycle = ? " +
+            "ORDER BY p.id",
+            displayCycle);
 
         foreach (var row in perekRows)
         {
@@ -157,6 +173,17 @@ public class PerekDataService
     }
 
     /// <summary>
+    /// Highest cycle stored in tanah_perek_date; 1 when the table is empty
+    /// (preserves the pre-schedule latest-cycle join). A database without the
+    /// table at all fails the perakim query below just as it always has.
+    /// </summary>
+    private static async Task<int> GetLatestStoredCycleAsync(SQLiteAsyncConnection db)
+    {
+        var latest = await db.ExecuteScalarAsync<int?>("SELECT MAX(cycle) FROM tanah_perek_date");
+        return latest is > 0 ? latest.Value : 1;
+    }
+
+    /// <summary>
     /// Gets a perek by ID.
     /// </summary>
     public Perek? GetPerek(int perekId)
@@ -181,8 +208,9 @@ public class PerekDataService
 
     /// <summary>
     /// Gets today's perek ID based on Hebrew date calculation.
-    /// Uses the same logic as the web implementation for consistency.
-    /// Handles tzeit (nightfall), weekend adjustment, and cycle boundaries.
+    /// Delegates to the multi-cycle schedule so "today's perek" agrees with
+    /// the לוח לימוד יומי calendar: scheduled days return their exact perek
+    /// and review days the perek being reviewed, for every stored cycle.
     /// </summary>
     public int GetTodaysPerekId()
     {
@@ -191,8 +219,9 @@ public class PerekDataService
             return 1;
         }
 
-        // Use the Hebrew date helper for proper calculation
-        return HebrewDateHelper.GetTodaysPerekIdByHebrew(_perakim);
+        // LoadAsync always runs the schedule load before filling _perakim,
+        // so a populated catalog implies a loaded schedule.
+        return _scheduleService.GetTodaysPerekId();
     }
 
     /// <summary>
@@ -336,53 +365,13 @@ public class PerekDataService
             return string.Empty;
         }
 
-        if (hebDate.Length != 8 || !int.TryParse(hebDate, out var _))
+        if (hebDate.Length != 8 || !int.TryParse(hebDate, out var dateNum))
         {
             return hebDate;
         }
 
-        var year = int.Parse(hebDate[..4]);
-        var month = int.Parse(hebDate.Substring(4, 2));
-        var day = int.Parse(hebDate.Substring(6, 2));
-
-        var dayText = day.ToHebrewLetters();
-        var monthText = GetHebrewMonthName(month, IsHebrewLeapYear(year));
-        var yearText = GimatryHelper.ToLetters(year % 1000);
-
-        return string.IsNullOrEmpty(monthText)
-            ? hebDate
-            : $"{dayText} {monthText} {yearText}";
-    }
-
-    private static bool IsHebrewLeapYear(int hebrewYear)
-    {
-        // Leap years in the 19-year cycle: 3, 6, 8, 11, 14, 17, 19
-        var mod = hebrewYear % 19;
-        return mod is 0 or 3 or 6 or 8 or 11 or 14 or 17;
-    }
-
-    private static string GetHebrewMonthName(int month, bool isLeapYear)
-    {
-        return month switch
-        {
-            1 => "תשרי",
-            2 => "חשוון",
-            3 => "כסלו",
-            4 => "טבת",
-            5 => "שבט",
-            // Database dates use legacy month numbers: Nisan stays 7 in
-            // every year; Adar I and II use 13 and 14 in leap years.
-            6 => isLeapYear ? "אדר ב" : "אדר",
-            7 => "ניסן",
-            8 => "אייר",
-            9 => "סיון",
-            10 => "תמוז",
-            11 => "אב",
-            12 => "אלול",
-            13 when isLeapYear => "אדר א",
-            14 when isLeapYear => "אדר ב",
-            _ => string.Empty
-        };
+        var formatted = HebrewDateHelper.FormatHebrewDate(dateNum);
+        return formatted == dateNum.ToString() ? hebDate : formatted;
     }
 
     #region Database Row Classes

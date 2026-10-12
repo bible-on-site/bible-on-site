@@ -184,4 +184,22 @@ public class PerekDataServiceTests
         service.Perakim.Should().BeEmpty();
         service.GetTodaysPerekId().Should().Be(1);
     }
+
+    [Fact]
+    public async Task Load_WithoutScheduleTable_FailsOnThePerakimQuery()
+    {
+        // A database without tanah_perek_date at all cannot serve the date
+        // join: the schedule load degrades to empty, then the perakim query
+        // surfaces the missing table as a SQLite error.
+        await using var storage = new TestStorage();
+        var schema = Schema.Where(statement => !statement.Contains("tanah_perek_date")).ToArray();
+        var db = await storage.CreateDatabaseAsync(DbName, schema);
+        await db.ExecuteAsync("INSERT INTO tanah_sefer VALUES (1,'בראשית','Genesis',1,2)");
+        await db.ExecuteAsync("INSERT INTO tanah_perek VALUES (1,1,NULL),(2,2,NULL)");
+        var service = new PerekDataService(new LocalDatabaseService(storage.FileSystem.Object));
+
+        var act = () => service.LoadAsync();
+        await act.Should().ThrowAsync<SQLite.SQLiteException>()
+            .WithMessage("*tanah_perek_date*");
+    }
 }

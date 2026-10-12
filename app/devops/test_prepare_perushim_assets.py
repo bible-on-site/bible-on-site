@@ -7,7 +7,22 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from prepare_perushim_assets import CATALOG, NOTES, NOTES_DIRECTORIES, main, prepare_assets, validate_pair
+from prepare_perushim_assets import CATALOG, NOTES, NOTES_DIRECTORIES, SEARCH_INDEX, SEARCH_INDEX_DIRECTORIES, main, prepare_assets, validate_pair
+
+
+def write_search_index(path: Path, notes_timestamp: int = 200) -> None:
+    """A minimal delivered-index fixture carrying the generation fingerprints."""
+    with closing(sqlite3.connect(path)) as db:
+        with db:
+            db.execute("CREATE TABLE search_metadata (name TEXT PRIMARY KEY, fingerprint TEXT)")
+            db.executemany("INSERT INTO search_metadata VALUES (?, ?)", [
+                ("notes", f"v4:{notes_timestamp}:n1"),
+                ("verses", "v4:2026-01-03 22:08:48 UTC:n1"),
+            ])
+            db.execute("CREATE TABLE verses_documents (rowid INTEGER PRIMARY KEY, Text TEXT)")
+            db.execute("CREATE TABLE notes_documents (rowid INTEGER PRIMARY KEY, Text TEXT)")
+            db.execute("CREATE VIRTUAL TABLE verses USING fts5(Text)")
+            db.execute("CREATE VIRTUAL TABLE notes USING fts5(Text)")
 
 
 class PreparePerushimAssetsTests(unittest.TestCase):
@@ -27,11 +42,15 @@ class PreparePerushimAssetsTests(unittest.TestCase):
                 db.execute("INSERT INTO _metadata VALUES ('build_timestamp', '200')")
         with closing(sqlite3.connect(self.source / NOTES)) as db:
             with db:
-                db.execute("CREATE TABLE note (perush_id INTEGER)")
-                db.execute("INSERT INTO note VALUES (13)")
+                db.execute("CREATE TABLE note_blob (perek_id INTEGER PRIMARY KEY, data BLOB NOT NULL)")
+                db.execute("INSERT INTO note_blob VALUES (1, X'504e4231')")
+                db.execute("CREATE TABLE perek_perush (perek_id INTEGER, perush_id INTEGER,"
+                           " PRIMARY KEY (perek_id, perush_id))")
+                db.execute("INSERT INTO perek_perush VALUES (1, 13)")
                 db.execute("CREATE TABLE _metadata (key TEXT PRIMARY KEY, value TEXT)")
                 db.executemany("INSERT INTO _metadata VALUES (?, ?)",
-                               [("build_timestamp", "200"), ("perush_catalog", json.dumps(self.mapping))])
+                               [("build_timestamp", "200"), ("schema_version", "2"),
+                                ("perush_catalog", json.dumps(self.mapping))])
 
     def metadata(self, key, value):
         with closing(sqlite3.connect(self.source / NOTES)) as db:
@@ -81,9 +100,49 @@ class PreparePerushimAssetsTests(unittest.TestCase):
     def test_notes_cannot_reference_unknown_ids(self):
         with closing(sqlite3.connect(self.source / NOTES)) as db:
             with db:
-                db.execute("INSERT INTO note VALUES (999)")
+                db.execute("INSERT INTO perek_perush VALUES (2, 999)")
+                db.execute("INSERT INTO note_blob VALUES (2, X'504e4231')")
         with self.assertRaisesRegex(ValueError, "IDs absent from the catalog"):
             validate_pair(self.source)
+
+    def test_wrong_schema_version_is_rejected(self):
+        for version in [None, "1", "3"]:
+            with self.subTest(version=version):
+                self.metadata("schema_version", version)
+                with self.assertRaisesRegex(ValueError, "schema v2"):
+                    validate_pair(self.source)
+
+    def test_blob_must_cover_every_perek(self):
+        with closing(sqlite3.connect(self.source / NOTES)) as db:
+            with db:
+                db.execute("INSERT INTO perek_perush VALUES (2, 13)")
+        with self.assertRaisesRegex(ValueError, "every perek"):
+            validate_pair(self.source)
+
+    def test_delivered_index_is_staged_and_validated(self):
+        write_search_index(self.source / SEARCH_INDEX)
+        for platform, directory in SEARCH_INDEX_DIRECTORIES.items():
+            with self.subTest(platform=platform):
+                self.assertEqual(prepare_assets(self.source, self.app, platform), 2)
+                self.assertEqual((self.app / directory / SEARCH_INDEX).read_bytes(),
+                                 (self.source / SEARCH_INDEX).read_bytes())
+
+    def test_index_from_another_generation_is_rejected(self):
+        write_search_index(self.source / SEARCH_INDEX, notes_timestamp=999)
+        with self.assertRaisesRegex(ValueError, "different notes generation"):
+            validate_pair(self.source)
+
+    def test_index_missing_fingerprint_or_tables_is_rejected(self):
+        path = self.source / SEARCH_INDEX
+        with closing(sqlite3.connect(path)) as db:
+            with db:
+                db.execute("CREATE TABLE search_metadata (name TEXT PRIMARY KEY, fingerprint TEXT)")
+        with self.assertRaisesRegex(ValueError, "different notes generation|verses fingerprint"):
+            validate_pair(self.source)
+
+    def test_missing_index_only_warns(self):
+        self.assertEqual(prepare_assets(self.source, self.app, "Android"), 2)
+        self.assertFalse((self.app / SEARCH_INDEX_DIRECTORIES["Android"] / SEARCH_INDEX).exists())
 
     def test_missing_pair_is_rejected(self):
         for name in [CATALOG, NOTES]:
