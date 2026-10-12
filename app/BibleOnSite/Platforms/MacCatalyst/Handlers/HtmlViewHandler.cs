@@ -371,7 +371,7 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
 
     private void EnsureMeasuredAsync(NSAttributedString text, double width)
     {
-        if (_inflightWidth == width)
+        if (Math.Abs(_inflightWidth - width) < 0.5)
         {
             return; // A bound for this width is already running.
         }
