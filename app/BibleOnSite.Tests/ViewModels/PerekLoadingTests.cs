@@ -115,6 +115,9 @@ public class PerekLoadingTests
         await vm.InitializeCarouselAsync();
         await vm.LoadByPerekIdAsync(1);
         vm.CarouselPerakim.Should().HaveCount(929);
+        // The public (ungated) init path also rebuilds around the shown perek.
+        await vm.InitializeCarouselAsync();
+        vm.CarouselPerakim.Should().HaveCount(929);
         vm.CurrentCarouselPerek.Should().BeSameAs(vm.Perek);
         var collection = vm.CarouselPerakim;
         await vm.NavigateToPerekAsync(2);
@@ -302,6 +305,7 @@ public class PerekLoadingTests
         private readonly TaskCompletionSource<bool> _neverLoad = new();
         public int PasukimCalls { get; private set; }
         public int StallPasukimCalls { get; set; } = int.MaxValue;
+        public int StallPasukimFromCall { get; set; } = int.MaxValue;
         public bool StallLoad { get; set; }
 
         public StallingPerekDataService(LocalDatabaseService database) : base(database) { }
@@ -311,11 +315,15 @@ public class PerekLoadingTests
         public override Task<List<Pasuk>> LoadPasukimAsync(int perekId)
         {
             PasukimCalls++;
-            return PasukimCalls <= StallPasukimCalls ? _neverPasukim.Task : base.LoadPasukimAsync(perekId);
+            return PasukimCalls <= StallPasukimCalls || PasukimCalls >= StallPasukimFromCall
+                ? _neverPasukim.Task : base.LoadPasukimAsync(perekId);
         }
 
         /// <summary>Lets a stalled pasukim query finally return — the late unblock a timed-out attempt sees.</summary>
         public void ReleasePasukim(List<Pasuk> pasukim) => _neverPasukim.TrySetResult(pasukim);
+
+        /// <summary>Fails a stalled pasukim query late — the detached attempt faults after it was abandoned.</summary>
+        public void FaultPasukim(Exception error) => _neverPasukim.TrySetException(error);
     }
 
     private static PerekViewModel StallingReader(Fixture fixture, StallingPerekDataService data)
@@ -450,6 +458,167 @@ public class PerekLoadingTests
 
         vm.PerekId.Should().Be(2);
         vm.LoadStage.Should().Be("loaded");
+    }
+
+    /// <summary>Waits until the load pipeline reports the given stage.</summary>
+    private static async Task WaitForStageAsync(PerekViewModel vm, string stage)
+    {
+        for (var i = 0; i < 1000 && vm.LoadStage != stage; i++)
+        {
+            await Task.Delay(5);
+        }
+        vm.LoadStage.Should().Be(stage);
+    }
+
+    [Fact]
+    public async Task ChapterLoad_WhenAbandonedAttemptUnblocksAfterItsRetry_DropsItsLateWrites()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize(notes: false);
+        var data = new StallingPerekDataService(new LocalDatabaseService(fixture.Storage.FileSystem.Object))
+        {
+            StallPasukimCalls = 1,
+        };
+        await data.LoadAsync();
+        var vm = StallingReader(fixture, data);
+
+        // Attempt 1 stalls at pasukim and is abandoned; the retry loads for real.
+        await vm.LoadByPerekIdAsync(1);
+        vm.PerekId.Should().Be(1);
+        vm.Perek!.Pasukim.Single().Text.Should().Be("בראשית");
+        vm.LoadStage.Should().Be("loaded");
+
+        // The abandoned attempt unblocks late, inside the SAME call — only its
+        // attempt stamp lost currency — so its released pasukim and stage marks
+        // must not touch the state the retry already produced.
+        data.ReleasePasukim([]);
+        await Task.Delay(200);
+
+        vm.PerekId.Should().Be(1);
+        vm.Perek!.Pasukim.Should().NotBeEmpty("the stale attempt's released data must not reach the bound perek");
+        vm.LoadStage.Should().Be("loaded");
+    }
+
+    [Fact]
+    public async Task ChapterLoad_WhenSupersededDuringPerushim_DropsTheRemainingStages()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize(notes: false);
+        // Park the load inside LoadPerushimAsync by gating the packaged catalog open.
+        var catalogGate = new TaskCompletionSource<Stream>(TaskCreationOptions.RunContinuationsAsynchronously);
+        fixture.Storage.FileSystem
+            .Setup(f => f.OpenAppPackageFileAsync("sefaria-dump-5784-sivan-4.perushim_catalog.sqlite"))
+            .Returns(catalogGate.Task);
+        var vm = fixture.Model;
+
+        var load = vm.LoadByPerekIdAsync(1);
+        await WaitForStageAsync(vm, "perushim");
+
+        // A newer navigation supersedes the call while it waits on the catalog.
+        vm.InvalidatePendingLoads();
+        catalogGate.SetException(new FileNotFoundException("gone"));
+        await load;
+
+        vm.PerekId.Should().Be(1, "SetPerek already landed before the park");
+        vm.LoadStage.Should().Be("perushim", "the stale attempt dropped before the carousel and loaded marks");
+        vm.CarouselPerakim.Should().BeEmpty("the superseded attempt must not build the carousel");
+    }
+
+    [Fact]
+    public async Task ChapterLoad_WhenSupersededDuringCarouselBuild_DropsTheCollectionSwap()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize(notes: false);
+        var data = new StallingPerekDataService(new LocalDatabaseService(fixture.Storage.FileSystem.Object))
+        {
+            StallPasukimCalls = 0,
+            StallPasukimFromCall = 2,
+        };
+        await data.LoadAsync();
+        var vm = StallingReader(fixture, data);
+        // The park is the pasukim gate, not the attempt budget — keep WaitAsync
+        // out of the way so the attempt waits for the release below.
+        vm.LoadAttemptTimeout = TimeSpan.FromSeconds(10);
+
+        var load = vm.LoadByPerekIdAsync(1);
+        await WaitForStageAsync(vm, "carousel");
+
+        // A newer navigation supersedes the call while the carousel builds off-thread.
+        vm.InvalidatePendingLoads();
+        data.ReleasePasukim([]);
+        await load;
+
+        vm.LoadStage.Should().Be("carousel", "the stale attempt's 'loaded' mark must not land");
+        vm.CarouselPerakim.Should().BeEmpty();
+        vm.CurrentCarouselPerek.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task ChapterLoad_WhenPerekReplacedDuringCarouselBuild_DropsTheCollectionSwap()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize(notes: false);
+        var data = new StallingPerekDataService(new LocalDatabaseService(fixture.Storage.FileSystem.Object))
+        {
+            StallPasukimCalls = 0,
+            StallPasukimFromCall = 2,
+        };
+        await data.LoadAsync();
+        var vm = StallingReader(fixture, data);
+        vm.LoadAttemptTimeout = TimeSpan.FromSeconds(10);
+
+        var load = vm.LoadByPerekIdAsync(1);
+        await WaitForStageAsync(vm, "carousel");
+
+        // A swipe lands a different perek while the carousel builds off-thread.
+        vm.Perek = data.GetPerek(2)!;
+        data.ReleasePasukim([]);
+        await load;
+
+        vm.PerekId.Should().Be(2, "the newer perek keeps the reader");
+        vm.CarouselPerakim.Should().BeEmpty();
+        vm.CurrentCarouselPerek.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task ChapterLoad_WhenStaleAttemptFailsLate_ObservesTheError()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize(notes: false);
+        var data = new StallingPerekDataService(new LocalDatabaseService(fixture.Storage.FileSystem.Object))
+        {
+            StallPasukimCalls = 1,
+        };
+        await data.LoadAsync();
+        var vm = StallingReader(fixture, data);
+        vm.LoadMaxAttempts = 1;
+
+        await vm.Awaiting(m => m.LoadByPerekIdAsync(1)).Should().ThrowAsync<TimeoutException>();
+
+        // The abandoned query faults late — the detached-attempt observer must
+        // swallow it into the log instead of leaving an unobserved exception.
+        data.FaultPasukim(new InvalidOperationException("late failure"));
+        await Task.Delay(200);
+
+        vm.Perek.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task LoadPerushimAsync_WhenNotesMissingAndPerekMovedOn_KeepsCurrentPerushimState()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize(notes: false);
+        var vm = fixture.Model;
+        await vm.LoadByPerekIdAsync(2);
+        vm.CheckedPerushim = [1];
+
+        // A stale perushim load for a perek already left must not wipe the
+        // commentary state of the perek now on screen.
+        await vm.LoadPerushimAsync(1);
+
+        vm.CheckedPerushim.Should().Equal(1);
+        vm.PerushimCatalogAvailable.Should().BeFalse();
+        vm.PerushimNotesAvailable.Should().BeFalse();
     }
 
     [Fact]
