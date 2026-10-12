@@ -430,6 +430,13 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
         }
 
         await Task.WhenAll(animations);
+
+        // A reopen during the close animation wins — leave scrim and satellites alone
+        if (_isMenuOpen)
+        {
+            return;
+        }
+
         CircularMenuScrim.IsVisible = false;
 
         foreach (var button in buttons)
