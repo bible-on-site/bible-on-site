@@ -130,13 +130,17 @@ export function UnitPerushFullView({
 								>
 									פסוק {letters}
 								</button>
+								{/* Codacy anchors the XSS finding at this map
+								 * expression, so the nosemgrep suppression must
+								 * sit here rather than beside the attribute. */}
+								{/* nosemgrep -- DOMPurify-sanitized perush note */}
 								{group.notes.map((note) => (
 									<div
 										key={`${note.perekId}-${note.pasuk}-${note.noteIdx}`}
 										className={styles.noteContent}
+										// nosemgrep -- DOMPurify-sanitized perush note
 										// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify
 										dangerouslySetInnerHTML={{
-											// nosemgrep -- DOMPurify-sanitized perush note
 											__html: DOMPurify.sanitize(note.noteContent),
 										}}
 									/>
