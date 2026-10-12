@@ -1,4 +1,4 @@
-import type { SefarimItem } from "./db/tanah-view-types";
+import type { Perek, SefarimItem } from "./db/tanah-view-types";
 
 export class BookRequestError extends Error {
 	constructor(readonly status: number) {
@@ -10,6 +10,23 @@ export class BookRequestError extends Error {
 // Keep a few recent books, rather than reconstructing the complete corpus in memory.
 const cache = new Map<string, Promise<SefarimItem>>();
 const MAX_CACHED_BOOKS = 4;
+
+/** Map every perekId in a loaded sefer JSON to its Perek. */
+export function seferPerekMap(sefer: SefarimItem): Map<number, Perek> {
+	const map = new Map<number, Perek>();
+	if ("perakim" in sefer) {
+		sefer.perakim.forEach((perek, idx) => {
+			map.set(sefer.perekFrom + idx, perek);
+		});
+		return map;
+	}
+	for (const additional of sefer.additionals) {
+		additional.perakim.forEach((perek, idx) => {
+			map.set(additional.perekFrom + idx, perek);
+		});
+	}
+	return map;
+}
 
 export function loadSefer(file: string): Promise<SefarimItem> {
 	const existing = cache.get(file);
