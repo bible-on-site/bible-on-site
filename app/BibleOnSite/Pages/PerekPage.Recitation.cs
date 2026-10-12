@@ -373,7 +373,10 @@ public partial class PerekPage
                 {
                     SegmentType.Ptuha => " {פ} ",
                     SegmentType.Stuma => " {ס} ",
-                    _ => segment.Value
+                    // Display masking only — word/segment indices stay canonical
+                    // so tapped-word recitation keeps its timing alignment.
+                    // MaskText (not MaskValue): a bracketed qri holds several words.
+                    _ => DivineNameMasking.MaskText(segment.Value)
                 }
             };
             var word = track!.Words.FirstOrDefault(w => w.Pasuk == pasuk.PasukNum && w.Segment == i + 1);

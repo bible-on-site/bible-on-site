@@ -67,11 +67,13 @@ public class TikkunFlowViewTests
         view.Pasukim = pesukim;
         view.RepeatEachPasuk = true;
         view.HideMarks = true;
+        view.MaskingRevision = 7;
         view.TextFontSize = 24;
 
         view.Pasukim.Should().BeSameAs(pesukim);
         view.RepeatEachPasuk.Should().BeTrue();
         view.HideMarks.Should().BeTrue();
+        view.MaskingRevision.Should().Be(7);
         view.TextFontSize.Should().Be(24);
     }
 

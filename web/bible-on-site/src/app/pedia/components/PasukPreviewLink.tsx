@@ -8,8 +8,15 @@ import {
 	useEffect,
 	useRef,
 	useState,
+	useSyncExternalStore,
 } from "react";
 import { createPortal } from "react-dom";
+import { maskDivineNameText } from "@/lib/divine-name-masking";
+import {
+	getDivineNameMaskingServerSnapshot,
+	getDivineNameMaskingSnapshot,
+	subscribeDivineNameMasking,
+} from "@/lib/divine-name-settings";
 import styles from "./pasuk-preview-link.module.css";
 
 interface PasukPreviewData {
@@ -74,6 +81,11 @@ export function PasukPreviewLink({
 	children: ReactNode;
 }): JSX.Element {
 	const pasukRef = parsePasukRefFromHref(href);
+	const masking = useSyncExternalStore(
+		subscribeDivineNameMasking,
+		getDivineNameMaskingSnapshot,
+		getDivineNameMaskingServerSnapshot,
+	);
 	const [preview, setPreview] = useState<PasukPreviewData | null>(null);
 	const [visible, setVisible] = useState(false);
 	const [position, setPosition] = useState<{ x: number; y: number }>({
@@ -128,7 +140,9 @@ export function PasukPreviewLink({
 						<div className={styles.pasukTooltipReference}>
 							{preview.reference}
 						</div>
-						<div className={styles.pasukTooltipText}>{preview.text}</div>
+						<div className={styles.pasukTooltipText}>
+							{maskDivineNameText(preview.text, masking)}
+						</div>
 						{preview.noteHtml ? (
 							<div
 								className={styles.pasukTooltipNote}

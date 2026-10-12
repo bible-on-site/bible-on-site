@@ -52,6 +52,142 @@
                     </VerticalStackLayout>
                 </Border>
             </VerticalStackLayout>
+            <!-- ═══ הסתרת שם השם ═══ -->
+            <VerticalStackLayout Spacing="8">
+                <Label Text="הסתרת שם השם"
+                       FontSize="14"
+                       FontAttributes="Bold"
+                       TextColor="{StaticResource Primary}"
+                       Padding="4,0,0,0"/>
+
+                <Border Padding="16"
+                        StrokeShape="RoundRectangle 12"
+                        Stroke="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray700}}"
+                        StrokeThickness="1"
+                        BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Gray900}}">
+                    <VerticalStackLayout Spacing="12">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <Label Text="הסתר שם השם"
+                                   FontSize="16"
+                                   VerticalOptions="Center"
+                                   TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
+                            <Switch Grid.Column="1"
+                                    IsToggled="{Binding DivineNameMaskingEnabled}"
+                                    AutomationId="DivineNameMaskingSwitch"/>
+                        </Grid>
+
+                        <VerticalStackLayout Spacing="10"
+                                             IsVisible="{Binding DivineNameMaskingEnabled}"
+                                             AutomationId="DivineNameMaskingOptions">
+                            <!-- אלהים -->
+                            <Label Text="אלהים"
+                                   FontSize="14"
+                                   FontAttributes="Bold"
+                                   TextColor="{AppThemeBinding Light={StaticResource Gray700}, Dark={StaticResource Gray300}}"/>
+                            <RadioButton AutomationId="MaskElohimAsIs"
+                                         Content="כמות שהוא"
+                                         GroupName="MaskElohim"
+                                         IsChecked="{Binding IsMaskElohimAsIs}"
+                                         CheckedChanged="OnMaskElohimRadioChanged"/>
+                            <RadioButton AutomationId="MaskElohimElokim"
+                                         Content="אלקים"
+                                         GroupName="MaskElohim"
+                                         IsChecked="{Binding IsMaskElohimElokim}"
+                                         CheckedChanged="OnMaskElohimRadioChanged"/>
+                            <RadioButton AutomationId="MaskElohimHyphen"
+                                         Content="א-להים"
+                                         GroupName="MaskElohim"
+                                         IsChecked="{Binding IsMaskElohimHyphen}"
+                                         CheckedChanged="OnMaskElohimRadioChanged"/>
+                            <HorizontalStackLayout Spacing="8">
+                                <RadioButton AutomationId="MaskElohimCustomRadio"
+                                             Content="אחר:"
+                                             GroupName="MaskElohim"
+                                             IsChecked="{Binding IsMaskElohimCustom}"
+                                             CheckedChanged="OnMaskElohimRadioChanged"/>
+                                <Entry Text="{Binding DivineNameMaskElohimCustom}"
+                                       IsEnabled="{Binding IsMaskElohimCustom}"
+                                       AutomationId="MaskElohimCustomEntry"
+                                       WidthRequest="160"
+                                       FontSize="14"/>
+                            </HorizontalStackLayout>
+
+                            <!-- יהוה -->
+                            <Label Text="יהוה"
+                                   FontSize="14"
+                                   FontAttributes="Bold"
+                                   TextColor="{AppThemeBinding Light={StaticResource Gray700}, Dark={StaticResource Gray300}}"/>
+                            <RadioButton AutomationId="MaskYhwhHeh"
+                                         Content="ה'"
+                                         GroupName="MaskYhwh"
+                                         IsChecked="{Binding IsMaskYhwhHeh}"
+                                         CheckedChanged="OnMaskYhwhRadioChanged"/>
+                            <RadioButton AutomationId="MaskYhwhDalet"
+                                         Content="ד'"
+                                         GroupName="MaskYhwh"
+                                         IsChecked="{Binding IsMaskYhwhDalet}"
+                                         CheckedChanged="OnMaskYhwhRadioChanged"/>
+                            <HorizontalStackLayout Spacing="8">
+                                <RadioButton AutomationId="MaskYhwhCustomRadio"
+                                             Content="אחר:"
+                                             GroupName="MaskYhwh"
+                                             IsChecked="{Binding IsMaskYhwhCustom}"
+                                             CheckedChanged="OnMaskYhwhRadioChanged"/>
+                                <Entry Text="{Binding DivineNameMaskYhwhCustom}"
+                                       IsEnabled="{Binding IsMaskYhwhCustom}"
+                                       AutomationId="MaskYhwhCustomEntry"
+                                       WidthRequest="160"
+                                       FontSize="14"/>
+                            </HorizontalStackLayout>
+
+                            <!-- אל -->
+                            <Label Text="אל"
+                                   FontSize="14"
+                                   FontAttributes="Bold"
+                                   TextColor="{AppThemeBinding Light={StaticResource Gray700}, Dark={StaticResource Gray300}}"/>
+                            <RadioButton AutomationId="MaskElAsIs"
+                                         Content="כמות שהוא"
+                                         GroupName="MaskEl"
+                                         IsChecked="{Binding IsMaskElAsIs}"
+                                         CheckedChanged="OnMaskElRadioChanged"/>
+                            <RadioButton AutomationId="MaskElHyphen"
+                                         Content="א-ל"
+                                         GroupName="MaskEl"
+                                         IsChecked="{Binding IsMaskElHyphen}"
+                                         CheckedChanged="OnMaskElRadioChanged"/>
+
+                            <!-- שדי -->
+                            <Label Text="שדי"
+                                   FontSize="14"
+                                   FontAttributes="Bold"
+                                   TextColor="{AppThemeBinding Light={StaticResource Gray700}, Dark={StaticResource Gray300}}"/>
+                            <RadioButton AutomationId="MaskShaddaiAsIs"
+                                         Content="כמות שהוא"
+                                         GroupName="MaskShaddai"
+                                         IsChecked="{Binding IsMaskShaddaiAsIs}"
+                                         CheckedChanged="OnMaskShaddaiRadioChanged"/>
+                            <RadioButton AutomationId="MaskShaddaiHyphen"
+                                         Content="שד-י"
+                                         GroupName="MaskShaddai"
+                                         IsChecked="{Binding IsMaskShaddaiHyphen}"
+                                         CheckedChanged="OnMaskShaddaiRadioChanged"/>
+                            <HorizontalStackLayout Spacing="8">
+                                <RadioButton AutomationId="MaskShaddaiCustomRadio"
+                                             Content="אחר:"
+                                             GroupName="MaskShaddai"
+                                             IsChecked="{Binding IsMaskShaddaiCustom}"
+                                             CheckedChanged="OnMaskShaddaiRadioChanged"/>
+                                <Entry Text="{Binding DivineNameMaskShaddaiCustom}"
+                                       IsEnabled="{Binding IsMaskShaddaiCustom}"
+                                       AutomationId="MaskShaddaiCustomEntry"
+                                       WidthRequest="160"
+                                       FontSize="14"/>
+                            </HorizontalStackLayout>
+                        </VerticalStackLayout>
+                    </VerticalStackLayout>
+                </Border>
+            </VerticalStackLayout>
+
         </VerticalStackLayout>
     </ScrollView>
 </ContentPage>
