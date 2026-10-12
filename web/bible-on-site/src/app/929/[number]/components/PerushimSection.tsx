@@ -13,6 +13,8 @@ interface PerushimSectionProps {
 	emptyMessage?: string;
 	/** When set, clicking a perush calls this instead of navigating (e.g. open in-place in flipbook). */
 	onPerushClick?: (perush: PerushSummary) => void;
+	/** Overrides the default /929 perush href (e.g. alternative divisions link inside their own reader). */
+	hrefForPerush?: (perush: PerushSummary) => string;
 	/** When true, show loading state (e.g. fetching perush for in-place view). */
 	loading?: boolean;
 	/** Session-scoped key so the carousel keeps its position across unmounts. */
@@ -32,6 +34,7 @@ export function PerushimSection({
 	title = "פרשנים על הפרק",
 	emptyMessage = "אין פרשנות לפרק זה",
 	onPerushClick,
+	hrefForPerush,
 	loading = false,
 	scrollStorageKey,
 }: PerushimSectionProps) {
@@ -69,7 +72,10 @@ export function PerushimSection({
 					safePerushim.map((perush) => (
 						<Link
 							key={perush.id}
-							href={`/929/${perush.perekId ?? perekId}/${encodeURIComponent(perush.name)}`}
+							href={
+								hrefForPerush?.(perush) ??
+								`/929/${perush.perekId ?? perekId}/${encodeURIComponent(perush.name)}`
+							}
 							className={styles.carouselItem}
 							onClick={
 								onPerushClick
