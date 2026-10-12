@@ -217,7 +217,7 @@ public sealed class SearchIndexService : IAsyncDisposable
     private async Task EnsureIndexAsync(string table)
     {
         await _initialization;
-        if (table == "verses" && _notes?.HasInstalledSearchIndex == true)
+        if (table == "verses" && _notes?.IsAvailable == true)
         {
             // The delivered DB includes both indexes. Adopt before building
             // verses, preserving the notes -> verses lock order used below.
@@ -303,7 +303,7 @@ public sealed class SearchIndexService : IAsyncDisposable
             await DeleteStagedIndexAsync();
             return;
         }
-        var deliveredPath = await _notes!.GetDeliveredIndexPathAsync();
+        var deliveredPath = await _notes!.RestoreDeliveredIndexPathAsync();
         if (deliveredPath == null || string.Equals(deliveredPath, _indexPath, StringComparison.Ordinal))
         {
             return;

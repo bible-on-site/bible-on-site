@@ -323,7 +323,9 @@ partial class PadDeliveryService
     {
         ct.ThrowIfCancellationRequested();
         var cacheDir = OdrCacheDir(packName);
-        if (File.Exists(Path.Join(cacheDir, PayloadFileName(packName))))
+        // A partial extraction must not hide a missing prebuilt index.
+        if (File.Exists(Path.Join(cacheDir, PayloadFileName(packName))) &&
+            (packName != PerushimNotesPackName || File.Exists(Path.Join(cacheDir, PerushimNotesService.SearchIndexDbName))))
         {
             return cacheDir;
         }
