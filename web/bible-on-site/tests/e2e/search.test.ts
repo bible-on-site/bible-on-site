@@ -82,9 +82,12 @@ test.describe("Site search", () => {
 		await page.waitForURL(/q=/, { timeout: 5000 });
 		await expect(page).toHaveURL(/q=%D7%A9%D7%9E%D7%A2/);
 		// שמע ישראל appears in several perakim; דברים ו ד must be among them.
+		// The response waits on the DB providers too — the perushim
+		// REGEXP candidate scan takes several seconds on the ~50k-row
+		// note column (#2140), so allow more than the 5s expect default.
 		await expect(
 			page.locator('a[data-result-link][href="/929/159#pasuk-4"]'),
-		).toBeVisible();
+		).toBeVisible({ timeout: 15000 });
 	});
 
 	test("result links are ordinary crawlable links to canonical pages", async ({
@@ -113,8 +116,15 @@ test.describe("Site search", () => {
 		await page.goto("/search?q=בראשית");
 		await page.getByRole("checkbox", { name: "פסוקים" }).click();
 		await expect(page).toHaveURL(/type=/);
-		await expect(page.getByRole("heading", { name: "פסוקים" })).toHaveCount(0);
-		await expect(page.getByRole("heading", { name: "פרקים" })).toBeVisible();
+		// Toggling a filter refetches live — including the multi-second
+		// perushim candidate scan — so the swapped result groups need a
+		// wider window than the 5s expect default (#2140).
+		await expect(page.getByRole("heading", { name: "פסוקים" })).toHaveCount(0, {
+			timeout: 15000,
+		});
+		await expect(page.getByRole("heading", { name: "פרקים" })).toBeVisible({
+			timeout: 15000,
+		});
 	});
 
 	test("finds DB-backed results for a misspelled query (#2140)", async ({

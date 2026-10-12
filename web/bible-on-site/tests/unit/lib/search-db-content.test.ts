@@ -263,7 +263,10 @@ describe("searchPerushNotes", () => {
 				termGateRegexp("בראשית"),
 				termRegexp("בראשית"),
 				phraseRegexp(["בראשית"]),
-				...termRankPatterns("בראשית"),
+				// Single-field provider: the 60*candidate flag is a
+				// constant on WHERE-matched rows — only exact and prefix
+				// patterns bind in the estimate.
+				...termRankPatterns("בראשית").slice(0, 2),
 			],
 		);
 		expect(mockQuery).toHaveBeenCalledWith(
@@ -286,10 +289,11 @@ describe("searchPerushNotes", () => {
 		await searchPerushNotes("אחד שני", 10);
 		const [sql, params] = mockQuery.mock.calls[0];
 		// Each term contributes a CASE gate + candidate eval in WHERE
-		// (4 total), one phrase-rank flag, and three rank patterns per
+		// (4 total), one phrase-rank flag, and two rank patterns per
 		// term inside the LEAST estimate — one LEAST call per ranked
-		// fragment, over both terms.
-		expect(sql.match(/REGEXP_LIKE\(n\.note_content/g)).toHaveLength(11);
+		// fragment, over both terms. The single-field 60*candidate flag
+		// is constant on WHERE-matched rows and needs no eval.
+		expect(sql.match(/REGEXP_LIKE\(n\.note_content/g)).toHaveLength(9);
 		expect(sql.match(/LEAST\(/g)).toHaveLength(1);
 		expect(params).toEqual([
 			termGateRegexp("אחד"),
@@ -297,8 +301,8 @@ describe("searchPerushNotes", () => {
 			termGateRegexp("שני"),
 			termRegexp("שני"),
 			phraseRegexp(["אחד", "שני"]),
-			...termRankPatterns("אחד"),
-			...termRankPatterns("שני"),
+			...termRankPatterns("אחד").slice(0, 2),
+			...termRankPatterns("שני").slice(0, 2),
 		]);
 	});
 
@@ -311,11 +315,14 @@ describe("searchPerushNotes", () => {
 		// the same as one fuzzy-eligible word instead of stacking anchor
 		// flags above it (#2140 review). The estimate is emitted bare:
 		// MySQL LEAST requires two arguments, so a single term has none.
+		// This provider has one candidate field, so the `60*candidate`
+		// flag is a constant 60 on every row the WHERE admitted — the
+		// heavy lookahead pattern never runs in ORDER BY.
 		expect(sql.match(/LEAST\(/g)).toBeNull();
 		expect(sql).toContain(
-			"(10*REGEXP_LIKE(n.note_content, ?, 'i') + 20*REGEXP_LIKE(n.note_content, ?, 'i') + 60*REGEXP_LIKE(n.note_content, ?, 'i')) DESC",
+			"(10*REGEXP_LIKE(n.note_content, ?, 'i') + 20*REGEXP_LIKE(n.note_content, ?, 'i') + 60) DESC",
 		);
-		expect(params?.slice(3)).toEqual(termRankPatterns("ירושלימ"));
+		expect(params?.slice(3)).toEqual(termRankPatterns("ירושלימ").slice(0, 2));
 	});
 
 	it("selects a note whose stored word is a misspelling of the query", async () => {

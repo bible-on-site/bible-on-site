@@ -40,9 +40,15 @@ const CANDIDATE_LIMIT = 1000;
 /**
  * Bound a single statement's wall-clock time so a rare-term full scan
  * can't stall the request path. Requires MySQL 5.7.8+; ignored harmlessly
- * is worse than a hanging query, so it stays a literal hint.
+ * is worse than a hanging query, so it stays a literal hint. The fuzzy
+ * candidate path scans an unindexed ~50k-row text column with a
+ * normalization-aware `REGEXP_LIKE`, which legitimately costs a few
+ * seconds on the perushim corpus — 3s was sized for the pre-#2140
+ * bare-letters scan; 12s keeps a bound on runaway queries while letting
+ * common-chunk terms finish, with headroom for multi-term queries that
+ * pay the scan once per AND-ed term (#2140).
  */
-const QUERY_TIME_BUDGET_MS = 3000;
+const QUERY_TIME_BUDGET_MS = 12000;
 
 /**
  * Regex fragment matching raw-storage characters the JS pipeline
@@ -274,7 +280,11 @@ function matchClauses(
  * `REGEXP_LIKE` per {@link termRankPatterns pattern}: the patterns are
  * nested (exact ⇒ prefix ⇒ fuzzy-eligible), so the sum lands on 90,
  * 80, 60, or 0 — the tier `tokenScore` gives the term's best word in
- * that fragment. Estimating per *term* rather than per anchor keeps a
+ * that fragment. For a single-field provider the `60*candidate` flag
+ * is emitted as the constant `60` — the WHERE already admits only
+ * rows whose one field matched, so re-running the lookahead-bearing
+ * pattern in ORDER BY would only burn time. Estimating per *term*
+ * rather than per anchor keeps a
  * column whose words hit different chunks of the term separately —
  * `ירוש לימ` for a `ירושלימ` query — from outranking a real
  * fuzzy-eligible word the way a per-anchor flag count did (#2140
@@ -290,9 +300,18 @@ function rankPredicates(
 	params: string[];
 } {
 	const phrase = phraseRegexp(terms);
+	// With a single candidate field, the WHERE admits a row only when
+	// that field matched the full candidate pattern — so its fuzzy flag
+	// is provably 1 on every ranked row. Emit it as the constant 60
+	// rather than re-running the lookahead-bearing candidate pattern on
+	// what can be thousands of candidates on the big table (#2140
+	// follow-up).
+	const candidateConstant = predicates.length === 1;
 	const estimate = (predicate: string) => {
-		const estimates = terms.map(
-			() => `(10*${predicate} + 20*${predicate} + 60*${predicate})`,
+		const estimates = terms.map(() =>
+			candidateConstant
+				? `(10*${predicate} + 20*${predicate} + 60)`
+				: `(10*${predicate} + 20*${predicate} + 60*${predicate})`,
 		);
 		// LEAST takes two or more arguments — a single-term query emits
 		// the bare estimate.
@@ -309,7 +328,11 @@ function rankPredicates(
 			.join(", "),
 		params: predicates.flatMap(() => [
 			phrase,
-			...terms.flatMap(termRankPatterns),
+			...terms.flatMap((term) =>
+				candidateConstant
+					? termRankPatterns(term).slice(0, 2)
+					: termRankPatterns(term),
+			),
 		]),
 	};
 }

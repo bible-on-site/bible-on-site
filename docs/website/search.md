@@ -82,8 +82,11 @@ which is exactly the candidate class the JS scorer rates highest
 tier per field is `LEAST` over the terms' word-level estimates —
 `10*exact + 20*prefix + 60*candidate` per term, each a single
 `REGEXP_LIKE` on a word-bounded pattern (a single-term query emits the
-bare estimate: MySQL `LEAST` requires two arguments). The three
-patterns nest
+bare estimate: MySQL `LEAST` requires two arguments). When a provider
+searches only one field the candidate flag is emitted as the constant
+`60` instead: the WHERE already admitted only rows whose one field
+matched, so re-running the lookahead-bearing pattern in ORDER BY would
+only burn time. The three patterns nest
 (exact ⇒ prefix ⇒ fuzzy-eligible), so a term's estimate lands on the
 scorer's own 90/80/60 tiers; `LEAST` mirrors the scorer's
 minimum-term rule. Estimating per term, rather than counting the term's
@@ -150,7 +153,7 @@ GET /api/search?q=&type=&limit=
                           bundled tanah_view JSON (globalThis cache)
         perushim        — MySQL REGEXP_LIKE candidate pull (AND-ed terms,
                           word-match ranked, LIMIT 1000,
-                          MAX_EXECUTION_TIME 3000) then normalize+score in JS
+                          MAX_EXECUTION_TIME 12000) then normalize+score in JS
         authors         — MySQL REGEXP_LIKE on name/details, same ranking
         articles        — MySQL REGEXP_LIKE on name/abstract/content
                           (lexical; see #2039 seam below)
@@ -298,8 +301,14 @@ Chosen policy:
 - Corpus index: built lazily per server process over the bundled JSON
   (same `globalThis` cache pattern as `sefarim.ts`); perakim/pesukim
   results are deterministic until the bundled text changes (deploys only).
-- DB providers run live queries; `MAX_EXECUTION_TIME(3000)` bounds the
-  worst case and `LIMIT 1000` bounds transferred ranked candidates.
+- DB providers run live queries; `MAX_EXECUTION_TIME(12000)` bounds the
+  worst case and `LIMIT 1000` bounds transferred ranked candidates. The
+  budget is sized for the fuzzy candidate path: the perushim `note`
+  column is an unindexed ~50k-row text column, and even the bare
+  letters gate scan costs a few seconds on it — the pre-#2140 3s bound
+  was already marginal for common terms and left no room for the
+  chunk-gated word-bounded eval, which a multi-term query pays once per
+  AND-ed term.
 - Queries are not persisted anywhere. Privacy note: query terms appear in
   URLs by design (shareable search URLs are a requirement), so they may
   appear in ordinary access logs — documented and accepted.
