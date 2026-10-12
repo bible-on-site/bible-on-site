@@ -1,5 +1,11 @@
 import type { Pasuk } from "@/data/db/tanah-view-types";
-import { parseRecitation, playableWords, verseRange } from "@/lib/recitation";
+import {
+	parseRecitation,
+	playableWords,
+	resumeRanges,
+	verseRange,
+	wordAtPosition,
+} from "@/lib/recitation";
 
 const pesukim = [
 	{
@@ -102,3 +108,75 @@ test.each([
 		"Invalid recitation manifest",
 	);
 });
+
+test.each([
+	[null, null],
+	[Number.NaN, null],
+	[Number.POSITIVE_INFINITY, null],
+	[0, null],
+	[1200, 1],
+	[1799.9, 1],
+	[1800, null],
+	[1900, 2],
+	[2300, null],
+	[9000, null],
+])(
+	"word at audio-clock position %s preserves silence and exclusive end boundaries",
+	(position, segment) => {
+		expect(wordAtPosition(manifest.words, position)?.segment ?? null).toBe(
+			segment,
+		);
+	},
+);
+
+const aligned = [
+	{ pasuk: 1, segment: 1, text: "בְּרֵאשִׁית", startMs: 1200, endMs: 1800 },
+	{ pasuk: 1, segment: 2, text: "בָּרָא", startMs: 1900, endMs: 2300 },
+	{ pasuk: 2, segment: 1, text: "שָׁמָּה", startMs: 3000, endMs: 3800 },
+];
+
+test.each([
+	[
+		null,
+		[
+			[1200, 2300],
+			[3000, 3800],
+		],
+	],
+	[
+		1200,
+		[
+			[1200, 2300],
+			[3000, 3800],
+		],
+	],
+	[
+		1900,
+		[
+			[1900, 2300],
+			[3000, 3800],
+		],
+	],
+	[
+		2000,
+		[
+			[2000, 2300],
+			[3000, 3800],
+		],
+	],
+	[3000, [[3000, 3800]]],
+	[
+		4000,
+		[
+			[1200, 2300],
+			[3000, 3800],
+		],
+	],
+])(
+	"a tapped word at %s trims continuous playback to resume there",
+	(fromMs, expected) => {
+		expect(resumeRanges(aligned, fromMs)).toEqual(
+			expected.map(([startMs, endMs]) => ({ startMs, endMs })),
+		);
+	},
+);

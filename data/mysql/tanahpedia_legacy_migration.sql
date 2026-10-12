@@ -65,7 +65,6 @@ INSERT INTO tanahpedia_entity (id, entity_type, name, created_at, updated_at) VA
   ('evt-akedat-yitzchak-001', 'EVENT', 'עקידת יצחק', NOW(), NOW()),
   ('evt-tzom-gedalya-001', 'EVENT', 'רצח גדליה בן אחיקם', NOW(), NOW()),
   ('evt-luchot2-001', 'EVENT', 'נתינת הלוחות השניים', NOW(), NOW()),
-  ('evt-simchat-torah-001', 'EVENT', 'סיום קריאת התורה וחזרה לבראשית', NOW(), NOW()),
   ('evt-chanukah-001', 'EVENT', 'נס חנוכה', NOW(), NOW()),
   ('evt-matzor-001', 'EVENT', 'תחילת מצור ירושלים בידי נבוכדנאצר', NOW(), NOW()),
   ('evt-moshe-pet-001', 'EVENT', 'פטירת משה רבנו', NOW(), NOW()),
@@ -87,7 +86,6 @@ INSERT INTO tanahpedia_event (id, entity_id) VALUES
   ('ev-akedat-yitzchak-001', 'evt-akedat-yitzchak-001'),
   ('ev-tzom-gedalya-001', 'evt-tzom-gedalya-001'),
   ('ev-luchot2-001', 'evt-luchot2-001'),
-  ('ev-simchat-torah-001', 'evt-simchat-torah-001'),
   ('ev-chanukah-001', 'evt-chanukah-001'),
   ('ev-matzor-001', 'evt-matzor-001'),
   ('ev-moshe-pet-001', 'evt-moshe-pet-001'),
@@ -109,7 +107,6 @@ INSERT INTO tanahpedia_event_date_range (id, event_id, start_date) VALUES
   ('edr-akedat-yitzchak-001', 'ev-akedat-yitzchak-001', 20850101),  -- 1 Tishrei
   ('edr-tzom-gedalya-001', 'ev-tzom-gedalya-001', 33390103),        -- 3 Tishrei
   ('edr-luchot2-001', 'ev-luchot2-001', 24490110),                  -- 10 Tishrei
-  ('edr-simchat-torah-001', 'ev-simchat-torah-001', 57860122),      -- 22 Tishrei
   ('edr-chanukah-001', 'ev-chanukah-001', 36220325),                -- 25 Kislev
   ('edr-matzor-001', 'ev-matzor-001', 33370410),                    -- 10 Tevet
   ('edr-moshe-pet-001', 'ev-moshe-pet-001', 24880607),              -- 7 Adar

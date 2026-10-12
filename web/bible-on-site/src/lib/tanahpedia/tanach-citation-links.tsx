@@ -1,12 +1,10 @@
 import { toNumber } from "gematry";
 import type { ReactNode } from "react";
 import { PasukPreviewLink } from "@/app/pedia/components/PasukPreviewLink";
+import catalog from "@/data/db/client-catalog.generated.json";
 import { perushNames } from "@/data/db/perush-names";
-import { sefarim } from "@/data/db/sefarim";
-import type {
-	AdditionalsItem,
-	SefarimItemWithPerakim,
-} from "@/data/db/tanah-view-types";
+
+type SeferVolume = (typeof catalog.volumes)[number];
 
 interface TanachRefMatch {
 	index: number;
@@ -29,26 +27,15 @@ function displayTanachRef(match: TanachRefMatch): string {
 }
 
 /** ספר או כרך (למשל שמואל א) כפי שמופיע במקורות בטקסט */
-function resolveSeferVolume(
-	seferCitation: string,
-): SefarimItemWithPerakim | AdditionalsItem | null {
-	for (const s of sefarim) {
-		if ("perakim" in s && s.name === seferCitation) {
-			return s;
-		}
-		if ("additionals" in s) {
-			const add = s.additionals.find((a) => a.name === seferCitation);
-			if (add) return add;
-		}
-	}
-	return null;
+function resolveSeferVolume(seferCitation: string): SeferVolume | null {
+	return (
+		catalog.volumes.find((volume) => volume.name === seferCitation) ?? null
+	);
 }
 
-function perekIdsForVolume(
-	vol: SefarimItemWithPerakim | AdditionalsItem,
-): number[] {
+function perekIdsForVolume(vol: SeferVolume): number[] {
 	return Array.from(
-		{ length: vol.perakim.length },
+		{ length: vol.perekTo - vol.perekFrom + 1 },
 		(_, i) => vol.perekFrom + i,
 	);
 }
@@ -61,17 +48,7 @@ function normalizePerekLetters(raw: string): string {
 let cachedNames: string[] | null = null;
 function seferNamesForCitations(): string[] {
 	if (cachedNames) return cachedNames;
-	const keys = new Set<string>();
-	for (const s of sefarim) {
-		if ("perakim" in s) {
-			keys.add(s.name);
-		}
-		if ("additionals" in s) {
-			for (const a of s.additionals) {
-				keys.add(a.name);
-			}
-		}
-	}
+	const keys = new Set(catalog.volumes.map(({ name }) => name));
 	cachedNames = [...keys].sort((a, b) => b.length - a.length);
 	return cachedNames;
 }

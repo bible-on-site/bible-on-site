@@ -1,0 +1,41 @@
+The recitation decoder includes mpg123-decoder 1.0.3 and its locked dependencies.
+It is bundled from their unchanged ESM implementation, using esbuild 0.28.1.
+No codec source has been modified. The app's JS bridge and bundle build source
+are available in this repository. Users may rebuild and replace the decoder.
+
+Source and build instructions:
+https://github.com/eshaz/wasm-audio-decoders/tree/8f2428c1cd96b54dab74836c8471ff75fe35cbee
+https://github.com/madebr/mpg123/tree/08247b317163175e62035893af3ff9e71a5dfefd
+https://github.com/bible-on-site/bible-on-site/blob/master/web/bible-on-site/scripts/build-native-recitation-decoder.mjs
+
+mpg123 library:
+Copyright (c) 1995-2020 by Michael Hipp and others.
+Free software under the LGPL v2.1. See recitation-mpg123-license.txt.
+
+mpg123-decoder, @wasm-audio-decoders/common, simple-yenc:
+Copyright 2021-2025 Ethan Halsall. MIT license:
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+puff decompressor from zlib:
+Copyright (C) 2002-2013 Mark Adler, all rights reserved.
+See recitation-puff-license.txt.
+
+@eshaz/web-worker:
+Apache License 2.0. See recitation-worker-license.txt.

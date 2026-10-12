@@ -15,6 +15,7 @@ public partial class PreferencesViewModel : ObservableObject
     private readonly IFileSystem _fileSystem;
     private readonly IShare _share;
     private readonly IAppNavigator _navigator;
+    public RecitationPreferencesViewModel Recitation { get; }
 
     public PreferencesViewModel() : this(PreferencesService.Instance, PerushimNotesService.Instance)
     {
@@ -44,6 +45,7 @@ public partial class PreferencesViewModel : ObservableObject
         _fileSystem = fileSystem;
         _share = share;
         _navigator = navigator;
+        Recitation = new RecitationPreferencesViewModel(RecitationService.Instance, preferencesService, PerekDataService.Instance);
         _preferencesService.PreferencesChanged += OnPreferencesChanged;
     }
 
@@ -55,7 +57,11 @@ public partial class PreferencesViewModel : ObservableObject
         get => _preferencesService.FontFactor;
         set
         {
-            if (Math.Abs(_preferencesService.FontFactor - value) < 0.001) return;
+            if (Math.Abs(_preferencesService.FontFactor - value) < 0.001)
+            {
+                return;
+            }
+
             _preferencesService.FontFactor = value;
             OnPropertyChanged();
         }
@@ -69,7 +75,11 @@ public partial class PreferencesViewModel : ObservableObject
         get => _preferencesService.LastLearntPerek;
         set
         {
-            if (_preferencesService.LastLearntPerek == value) return;
+            if (_preferencesService.LastLearntPerek == value)
+            {
+                return;
+            }
+
             _preferencesService.LastLearntPerek = value;
             OnPropertyChanged();
         }
@@ -83,7 +93,11 @@ public partial class PreferencesViewModel : ObservableObject
         get => _preferencesService.PerekToLoad;
         set
         {
-            if (_preferencesService.PerekToLoad == value) return;
+            if (_preferencesService.PerekToLoad == value)
+            {
+                return;
+            }
+
             _preferencesService.PerekToLoad = value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(IsPerekToLoadTodays));
@@ -95,14 +109,44 @@ public partial class PreferencesViewModel : ObservableObject
     public bool IsPerekToLoadTodays
     {
         get => PerekToLoad == PerekToLoad.Todays;
-        set { if (value) PerekToLoad = PerekToLoad.Todays; }
+        set
+        {
+            if (value)
+            {
+                PerekToLoad = PerekToLoad.Todays;
+            }
+        }
     }
 
     /// <summary>True when startup perek is Last learnt.</summary>
     public bool IsPerekToLoadLastLearnt
     {
         get => PerekToLoad == PerekToLoad.LastLearnt;
-        set { if (value) PerekToLoad = PerekToLoad.LastLearnt; }
+        set
+        {
+            if (value)
+            {
+                PerekToLoad = PerekToLoad.LastLearnt;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Whether the מסורה על הפרק flyout menu entry is shown (opt-in, #2181).
+    /// </summary>
+    public bool MasoraMenuEnabled
+    {
+        get => _preferencesService.MasoraMenuEnabled;
+        set
+        {
+            if (_preferencesService.MasoraMenuEnabled == value)
+            {
+                return;
+            }
+
+            _preferencesService.MasoraMenuEnabled = value;
+            OnPropertyChanged();
+        }
     }
 
     /// <summary>Always show the perushim section — with different content based on install state.</summary>
@@ -153,6 +197,7 @@ public partial class PreferencesViewModel : ObservableObject
         OnPropertyChanged(nameof(PerekToLoad));
         OnPropertyChanged(nameof(IsPerekToLoadTodays));
         OnPropertyChanged(nameof(IsPerekToLoadLastLearnt));
+        OnPropertyChanged(nameof(MasoraMenuEnabled));
         OnPropertyChanged(nameof(ShowPerushimSection));
         OnPropertyChanged(nameof(IsPerushimInstalled));
         OnPropertyChanged(nameof(ShowPerushimDownload));
@@ -167,7 +212,9 @@ public partial class PreferencesViewModel : ObservableObject
     public async Task DownloadPerushimAsync()
     {
         if (IsPerushimDownloading)
+        {
             return;
+        }
 
         IsPerushimDownloading = true;
         PerushimDownloadProgress = 0;
@@ -250,5 +297,6 @@ public partial class PreferencesViewModel : ObservableObject
         OnPropertyChanged(nameof(PerekToLoad));
         OnPropertyChanged(nameof(IsPerekToLoadTodays));
         OnPropertyChanged(nameof(IsPerekToLoadLastLearnt));
+        OnPropertyChanged(nameof(MasoraMenuEnabled));
     }
 }

@@ -246,3 +246,13 @@
     background-image: url(/root/al-haperek-devider-xl.svg);
   }
 }
+
+@media (prefers-color-scheme: dark) {
+  .page input + label {
+    color: #7eb0ff;
+  }
+
+  .page input + label::after {
+    background: #7eb0ff;
+  }
+}

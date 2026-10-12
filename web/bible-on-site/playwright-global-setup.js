@@ -9,7 +9,11 @@ const BENCHMARK_OUTPUT_FILE = resolve(BENCHMARK_OUTPUT_DIR, "benchmark.json");
 
 const WEB_SERVER_URL = "http://127.0.0.1:3001";
 
-// Routes to warm up before running e2e tests with coverage
+// Routes to warm up before running e2e tests with coverage.
+// Every dynamic route pattern gets one sequential hit so its static-paths
+// resolution finishes before parallel workers start — concurrent first-hits
+// race a non-atomic .next/prerender-manifest.json write (vercel/next.js#96259)
+// and surface in the browser as "Unexpected end of JSON input" (#2005).
 const WARMUP_ROUTES = [
 	"",
 	"929",
@@ -18,6 +22,14 @@ const WARMUP_ROUTES = [
 	"929/250",
 	"929/727",
 	"929/764",
+	// 929/[number]/[slug]
+	"929/1/1",
+	// 929/authors/[authorParam]
+	"929/authors/1",
+	// pedia/[slug]
+	`pedia/${encodeURIComponent("יעקב")}`,
+	// [section]
+	"tos",
 ];
 
 /**

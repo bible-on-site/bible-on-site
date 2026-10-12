@@ -77,3 +77,65 @@
   color: #4338ca;
   font-weight: 600;
 }
+
+@media (prefers-color-scheme: dark) {
+  .mapRoot {
+    border-color: #2d3548;
+  }
+
+  .markerDot {
+    background: #a5b4fc;
+    border-color: #1a1f2e;
+  }
+
+  .mapRoot :global(.mapboxgl-popup-content) {
+    background: #1a1f2e;
+    color: #e8eaed;
+  }
+
+  .mapRoot :global(.mapboxgl-popup-close-button) {
+    color: #9aa0a6;
+  }
+
+  .mapRoot :global(.mapboxgl-popup-anchor-bottom .mapboxgl-popup-tip) {
+    border-top-color: #1a1f2e;
+  }
+
+  .mapRoot :global(.mapboxgl-popup-anchor-top .mapboxgl-popup-tip) {
+    border-bottom-color: #1a1f2e;
+  }
+
+  .mapRoot :global(.mapboxgl-popup-anchor-left .mapboxgl-popup-tip) {
+    border-right-color: #1a1f2e;
+  }
+
+  .mapRoot :global(.mapboxgl-popup-anchor-right .mapboxgl-popup-tip) {
+    border-left-color: #1a1f2e;
+  }
+
+  .mapboxPlace + .mapboxPlace {
+    border-top-color: #2d3548;
+  }
+
+  .mapboxPopup a,
+  .mapRoot :global(.leaflet-popup-content a) {
+    color: #a5b4fc;
+  }
+
+  .mapboxPopup span {
+    color: #9aa0a6;
+  }
+
+  .mapError {
+    border-color: #2d3548;
+    background: #12151c;
+    color: #b8c2d9;
+  }
+
+  /* Leaflet popup chrome is rendered by the library outside the module tree. */
+  .mapRoot :global(.leaflet-popup-content-wrapper),
+  .mapRoot :global(.leaflet-popup-tip) {
+    background: #1a1f2e;
+    color: #e8eaed;
+  }
+}

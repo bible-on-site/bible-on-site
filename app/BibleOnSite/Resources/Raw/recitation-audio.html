@@ -1,0 +1,85 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"></head><body>
+<script>
+// Local decoder only. Playback remains native; no browser autoplay permission is needed.
+globalThis.recitation = (() => {
+    let buffer, upload = [], wave, status = { state: "idle" }, generation = 0;
+    // Return objects: MAUI trims string-result quotes without unescaping them.
+    // Each native handler serializes this object once for the C# JSON parser.
+    const result = value => value;
+    function reset() {
+        generation++;
+        buffer = null;
+        wave = null;
+        upload = [];
+        status = { state: "idle" };
+    }
+    function load(base64) {
+        reset();
+        const current = generation;
+        status = { state: "loading" };
+        const binary = atob(base64);
+        const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
+        const decoder = new globalThis.recitationMpeg.MPEGDecoder();
+        decoder.ready.then(() => {
+            if (current !== generation) return;
+            const decoded = decoder.decode(bytes);
+            if (decoded.errors.length || !decoded.samplesDecoded) throw new Error("Invalid decoded recording");
+            buffer = decoded;
+            status = { state: "ready", sampleRate: buffer.sampleRate, frames: buffer.samplesDecoded };
+        }).finally(() => decoder.free()).catch(error => { if (current === generation) status = { state: "error", error: String(error) }; });
+        return result(status);
+    }
+    function clip(ranges, pauseMs = 0) {
+        if (!buffer) throw new Error("Audio is not decoded");
+        if (!Array.isArray(ranges) || !ranges.length) throw new Error("Empty selection");
+        const cuts = ranges.map(({ start, end }) => {
+            if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start || end * buffer.sampleRate / 1000 > buffer.samplesDecoded)
+                throw new Error("Invalid original interval");
+            const from = Math.round(start * buffer.sampleRate / 1000);
+            const to = Math.round(end * buffer.sampleRate / 1000);
+            if (to <= from) throw new Error("Empty word");
+            return { from, to };
+        });
+        if (!Number.isFinite(pauseMs) || pauseMs < 0 || pauseMs > 10000) throw new Error("Invalid verse pause");
+        const pauseFrames = Math.round(pauseMs * buffer.sampleRate / 1000);
+        const channels = buffer.channelData.length;
+        const frames = cuts.reduce((n, c) => n + c.to - c.from, 0) + (cuts.length - 1) * pauseFrames;
+        const bytes = new Uint8Array(44 + frames * channels * 2);
+        const view = new DataView(bytes.buffer);
+        const text = (offset, value) => { for (let i = 0; i < value.length; i++) bytes[offset + i] = value.charCodeAt(i); };
+        text(0, "RIFF"); view.setUint32(4, bytes.length - 8, true); text(8, "WAVEfmt ");
+        view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, channels, true);
+        view.setUint32(24, buffer.sampleRate, true); view.setUint32(28, buffer.sampleRate * channels * 2, true);
+        view.setUint16(32, channels * 2, true); view.setUint16(34, 16, true);
+        text(36, "data"); view.setUint32(40, bytes.length - 44, true);
+        const pcm = buffer.channelData;
+        let offset = 44;
+        for (let i = 0; i < cuts.length; i++) {
+            const { from, to } = cuts[i];
+            for (let frame = from; frame < to; frame++) for (let ch = 0; ch < channels; ch++) {
+                view.setInt16(offset, Math.max(-32768, Math.min(32767, Math.round(pcm[ch][frame] * 32768))), true);
+                offset += 2;
+            }
+            // Deliberate silence between approved verses, never padding a word boundary.
+            if (i < cuts.length - 1) offset += pauseFrames * channels * 2;
+        }
+        wave = bytes;
+        return result({ length: bytes.length });
+    }
+    function chunk(offset, size) {
+        if (!wave || !Number.isInteger(offset) || offset < 0 || !Number.isInteger(size) || size <= 0 || size > 49152)
+            throw new Error("Invalid audio chunk");
+        const part = wave.subarray(offset, offset + size);
+        let binary = "";
+        for (let i = 0; i < part.length; i += 16384) binary += String.fromCharCode(...part.subarray(i, i + 16384));
+        const data = btoa(binary);
+        if (offset + size >= wave.length) wave = null;
+        return result({ data });
+    }
+    return { load, clip, chunk, reset, status: () => result(status),
+        begin: () => { reset(); return result(status); },
+        append: part => { upload.push(part); return result(status); },
+        finish: () => load(upload.join("")) };
+})();
+</script></body></html>

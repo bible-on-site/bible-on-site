@@ -48,11 +48,24 @@ function resolveRequestOrigin(request: Request): {
 
 export default createServerEntry({
 	async fetch(request) {
+		const url = new URL(request.url);
+
+		// E2E coverage drain: instrumented SSR modules write istanbul coverage to
+		// this realm's globalThis; the Playwright fixture fetches it per test.
+		if (
+			process.env.MEASURE_COV === "1" &&
+			url.pathname === "/api/dev/coverage"
+		) {
+			const g = globalThis as { __coverage__?: unknown };
+			const coverage = g.__coverage__ ?? {};
+			g.__coverage__ = {};
+			return Response.json(coverage);
+		}
+
 		if (SKIP_AUTH) {
 			return handler.fetch(request);
 		}
 
-		const url = new URL(request.url);
 		const { origin, isSecure } = resolveRequestOrigin(request);
 
 		if (url.pathname === "/auth/callback") {

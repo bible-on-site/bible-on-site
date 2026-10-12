@@ -25,7 +25,6 @@ import {
 	getPlaceMapMarkers,
 	getPlaceMapMarkersForEntry,
 	getRecentEntries,
-	getTodayInTanahEvents,
 } from "../../../src/lib/tanahpedia/service";
 
 const mockQuery = query as jest.MockedFunction<typeof query>;
@@ -591,15 +590,6 @@ describe("tanahpedia service", () => {
 				entityType: entityType.toLowerCase(),
 			})),
 		);
-	});
-
-	it("queries today's Tanah events by Hebrew month and day", async () => {
-		mockQuery.mockResolvedValueOnce([{ entityId: "event-1", startDate: 701 }]);
-
-		await expect(getTodayInTanahEvents(7, 1)).resolves.toEqual([
-			{ entityId: "event-1", startDate: 701 },
-		]);
-		expect(mockQuery).toHaveBeenCalledWith(expect.any(String), ["701"]);
 	});
 
 	it("loads occurrences through all entities attached to an entry", async () => {

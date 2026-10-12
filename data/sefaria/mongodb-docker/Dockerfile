@@ -9,12 +9,15 @@
 # To work around this, we restore to /mongodb-data (not a volume) and
 # copy it to /data/db at container startup via a custom entrypoint.
 
-FROM mongo:7
+FROM mongo:9
+
+# Fail the build if any stage of a pipeline (e.g. find | head) exits nonzero.
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 # Install curl for downloading the dump
 # Use --no-install-recommends per Codacy guidelines
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl \
+    && apt-get install -y --no-install-recommends curl=8.5.* \
     && rm -rf /var/lib/apt/lists/*
 
 # Download and extract Sefaria dump
@@ -28,7 +31,7 @@ RUN curl -L ${DUMP_URL} -o dump.tar.gz \
     && tar -xzf dump.tar.gz \
     && rm dump.tar.gz \
     && ls -la \
-    && EXTRACTED_DIR=$(find . -maxdepth 1 -type d ! -name '.' | head -1) \
+    && EXTRACTED_DIR=$(find . -mindepth 1 -maxdepth 1 -type d | head -1) \
     && echo "Found extracted directory: $EXTRACTED_DIR" \
     && mv "$EXTRACTED_DIR" /dump
 
@@ -66,11 +69,10 @@ RUN mkdir -p /mongodb-data && \
 # Verify the data was actually written to disk in a separate RUN layer
 # This ensures buildkit commits the /mongodb-data directory to the image
 RUN echo "Verifying /mongodb-data exists and has data..." && \
-    ls -la /mongodb-data && \
     du -sh /mongodb-data && \
     test -d /mongodb-data && \
-    test "$(ls -A /mongodb-data)" && \
-    echo "Verification passed: /mongodb-data contains $(ls -1 /mongodb-data | wc -l) items"
+    test -n "$(find /mongodb-data -mindepth 1 -print -quit)" && \
+    echo "Verification passed: /mongodb-data contains $(find /mongodb-data -mindepth 1 -maxdepth 1 | wc -l) items"
 
 # Create a custom entrypoint script that copies data from /mongodb-data to /data/db
 # on first startup, then starts mongod normally

@@ -51,6 +51,30 @@ export const updateEntityDisplayName = createServerFn({ method: "POST" })
 		return { success: true };
 	});
 
+export const updateSayingDate = createServerFn({ method: "POST" })
+	.validator((data: { sayingId: string; sayingDate: number | null }) => {
+		const date = data.sayingDate;
+		if (
+			date !== null &&
+			(!Number.isInteger(date) ||
+				date < 0 ||
+				date > 99999999 ||
+				Math.floor((date % 10000) / 100) > 14 ||
+				date % 100 > 30 ||
+				(date % 100 > 0 && Math.floor((date % 10000) / 100) === 0))
+		) {
+			throw new Error("תאריך עברי לא תקין");
+		}
+		return data;
+	})
+	.handler(async ({ data }) => {
+		await execute("UPDATE tanahpedia_saying SET saying_date = ? WHERE id = ?", [
+			data.sayingDate,
+			data.sayingId,
+		]);
+		return { success: true };
+	});
+
 export const updatePersonMainName = createServerFn({ method: "POST" })
 	.validator(
 		(data: { personId: string; name: string; mainNameRowId?: string | null }) =>

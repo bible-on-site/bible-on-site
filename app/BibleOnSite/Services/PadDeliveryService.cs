@@ -19,6 +19,9 @@ public sealed partial class PadDeliveryService : IPadDeliveryService
 {
     private const string PerushimNotesPackName = "perushim_notes";
 
+    internal static string PayloadFileName(string packName) => packName == PerushimNotesPackName
+        ? "sefaria-dump-5784-sivan-4.perushim_notes.sqlite" : packName + ".zip";
+
     public static IPadDeliveryService Instance { get; } = new PadDeliveryService();
 
     private PadDeliveryService() { }
@@ -27,8 +30,23 @@ public sealed partial class PadDeliveryService : IPadDeliveryService
     {
         // Extracted ODR data belongs to this app build, just like the store resource.
         var generation = $"{appInfo.VersionString}-{appInfo.BuildString}";
-        var dir = Path.Combine(fileSystem.CacheDirectory, "odr_assets", generation, packName);
+        var root = Path.Join(fileSystem.CacheDirectory, "odr_assets");
+        var dir = Path.Join(root, generation, packName);
         Directory.CreateDirectory(dir);
+        // Extractions from previous app versions are obsolete — each holds a
+        // full pack payload (hundreds of MB) and must not accumulate.
+        try
+        {
+            foreach (var stale in Directory.GetDirectories(root)
+                .Where(path => Path.GetFileName(path) != generation))
+            {
+                Directory.Delete(stale, recursive: true);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            System.Diagnostics.Debug.WriteLine($"Failed to remove stale ODR generations: {ex.Message}");
+        }
         return dir;
     }
 
@@ -36,7 +54,7 @@ public sealed partial class PadDeliveryService : IPadDeliveryService
     public Task<string?> TryGetAssetPathAsync(string packName, CancellationToken cancellationToken = default)
     {
 #if ANDROID
-        return TryGetAssetPathAndroidAsync(packName, cancellationToken);
+        return TryGetAssetPathAndroidAsync(packName);
 #elif IOS || MACCATALYST
         return TryGetAssetPathIosAsync(packName, cancellationToken);
 #else
@@ -86,11 +104,13 @@ partial class PadDeliveryService
         return ctx != null ? AssetPackManagerFactory.GetInstance(ctx) : null;
     }
 
-    private static Task<string?> TryGetAssetPathAndroidAsync(string packName, CancellationToken cancellationToken)
+    private static Task<string?> TryGetAssetPathAndroidAsync(string packName)
     {
         var manager = GetAssetPackManager();
         if (manager == null)
+        {
             return Task.FromResult<string?>(null);
+        }
 
         try
         {
@@ -121,30 +141,44 @@ partial class PadDeliveryService
         {
             var location = manager.GetPackLocation(packName);
             if (location?.AssetsPath() != null)
+            {
                 return true;
+            }
 
             var listener = new AssetPackStateUpdateListenerWrapper();
+            string? failure = null;
             listener.StateUpdate += (_, e) =>
             {
+                if (e.State?.Name() != packName)
+                {
+                    return;
+                }
+
                 var status = e.State?.Status() ?? 0;
                 if ((status == (int)AssetPackStatus.Downloading || status == (int)AssetPackStatus.Transferring) && e.State != null)
                 {
                     var total = e.State.TotalBytesToDownload();
                     var downloaded = e.State.BytesDownloaded();
                     if (total > 0)
+                    {
                         progress?.Report((double)downloaded / total);
+                    }
                 }
                 else if (status == (int)AssetPackStatus.WaitingForWifi)
                 {
                     var activity = Platform.CurrentActivity;
                     if (activity != null)
+                    {
                         manager.ShowConfirmationDialog(activity);
+                    }
+                }
+                else if (status == (int)AssetPackStatus.Failed || status == (int)AssetPackStatus.Canceled)
+                {
+                    failure = $"Pack '{packName}' ended with status {status}, error {e.State?.ErrorCode()}";
                 }
             };
 
-            var activity = Platform.CurrentActivity;
-            if (activity != null)
-                manager.RegisterListener(listener.Listener!);
+            manager.RegisterListener(listener.Listener!);
 
             try
             {
@@ -154,24 +188,36 @@ partial class PadDeliveryService
                 // In local-testing mode (bundletool --local-testing), the
                 // FakeAssetPackService extracts the pack asynchronously after
                 // Fetch resolves. Poll until the location becomes available.
-                for (var attempt = 0; attempt < 60; attempt++)
+                for (var attempt = 0; attempt < 3600; attempt++)
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (failure != null)
+                    {
+                        LastAndroidPadError = failure;
+                        return false;
+                    }
                     var fetchedLocation = manager.GetPackLocation(packName);
                     if (fetchedLocation?.AssetsPath() != null)
+                    {
                         return true;
+                    }
 
                     await Task.Delay(500, cancellationToken);
                 }
 
                 LastAndroidPadError =
-                    "Fetch finished but GetPackLocation still null after 30s — pack may be missing from the Play-delivered bundle, or install was not from Play Store.";
+                    $"Pack '{packName}' did not become available within 30 minutes.";
                 return false;
             }
             finally
             {
-                if (activity != null)
-                    manager.UnregisterListener(listener.Listener!);
+                manager.UnregisterListener(listener.Listener!);
             }
+        }
+        catch (OperationCanceledException)
+        {
+            manager.Cancel(new[] { packName });
+            throw;
         }
         catch (Exception ex)
         {
@@ -188,7 +234,9 @@ partial class PadDeliveryService
         AppendInstallSourceLines(lines);
 
         if (!string.IsNullOrEmpty(LastAndroidPadError))
+        {
             lines.Add($"Last PAD fetch error: {LastAndroidPadError}");
+        }
 
         var manager = GetAssetPackManager();
         if (manager == null)
@@ -237,7 +285,9 @@ partial class PadDeliveryService
                 var installing = info?.InstallingPackageName;
                 lines.Add($"Install source (API {(int)Android.OS.BuildVersionCodes.R}+): {installing ?? "(null — not from a package installer, e.g. adb/sideload)"}");
                 if (installing != "com.android.vending")
+                {
                     lines.Add("PAD: On-demand packs are served for installs from Google Play (installer com.android.vending). Other sources often cannot download PAD.");
+                }
             }
 #pragma warning restore CA1416
             else
@@ -257,10 +307,12 @@ partial class PadDeliveryService
 #endif
 
 #if IOS || MACCATALYST
+// NSBundleResourceRequest is obsoleted in the iOS 27 SDK (Apple directs new code to
+// Background Assets) but remains functional on iOS 27 devices; the BGAssetDownloadManager
+// port is tracked at https://github.com/bible-on-site/bible-on-site/issues/2036.
+#pragma warning disable CA1422
 partial class PadDeliveryService
 {
-    private const string NotesDbName = "sefaria-dump-5784-sivan-4.perushim_notes.sqlite";
-    private const string DatasetAssetName = "perushim_notes";
 
     private static string OdrCacheDir(string packName)
     {
@@ -269,9 +321,12 @@ partial class PadDeliveryService
 
     private static async Task<string?> TryGetAssetPathIosAsync(string packName, CancellationToken ct)
     {
+        ct.ThrowIfCancellationRequested();
         var cacheDir = OdrCacheDir(packName);
-        if (File.Exists(Path.Combine(cacheDir, NotesDbName)))
+        if (File.Exists(Path.Join(cacheDir, PayloadFileName(packName))))
+        {
             return cacheDir;
+        }
 
         try
         {
@@ -285,7 +340,8 @@ partial class PadDeliveryService
 
             try
             {
-                return SaveOdrDataAsset(cacheDir, request.Bundle);
+                ct.ThrowIfCancellationRequested();
+                return SaveOdrDataAsset(cacheDir, request.Bundle, packName);
             }
             finally
             {
@@ -294,6 +350,7 @@ partial class PadDeliveryService
         }
         catch (Exception ex)
         {
+            ct.ThrowIfCancellationRequested();
             System.Diagnostics.Debug.WriteLine($"ODR TryGetAssetPath failed: {ex.Message}");
             return null;
         }
@@ -306,6 +363,8 @@ partial class PadDeliveryService
     {
         using var request = new NSBundleResourceRequest(new NSSet<NSString>(new NSString(packName)));
 
+        using var cancellation = ct.Register(() => request.Progress.Cancel());
+        var hasAccess = false;
         IDisposable? observer = null;
         if (progress != null)
         {
@@ -319,10 +378,11 @@ partial class PadDeliveryService
         {
             System.Diagnostics.Debug.WriteLine($"ODR: BeginAccessingResources for tag '{packName}'...");
             await request.BeginAccessingResourcesAsync();
+            hasAccess = true;
             ct.ThrowIfCancellationRequested();
 
             var cacheDir = OdrCacheDir(packName);
-            var result = SaveOdrDataAsset(cacheDir, request.Bundle);
+            var result = SaveOdrDataAsset(cacheDir, request.Bundle, packName);
             return result != null;
         }
         catch (OperationCanceledException)
@@ -331,13 +391,17 @@ partial class PadDeliveryService
         }
         catch (Exception ex)
         {
+            ct.ThrowIfCancellationRequested();
             System.Diagnostics.Debug.WriteLine($"ODR Fetch failed: {ex.Message}");
             return false;
         }
         finally
         {
             observer?.Dispose();
-            request.EndAccessingResources();
+            if (hasAccess)
+            {
+                request.EndAccessingResources();
+            }
         }
     }
 
@@ -346,30 +410,57 @@ partial class PadDeliveryService
     /// actool compiles the .dataset into Assets.car, so we read it via NSDataAsset and
     /// write to disk for SQLite file-based access.
     /// ODR assets live in the request's bundle, not the main bundle.
+    /// The perushim pack also carries the prebuilt search index under the same
+    /// ODR tag — save it too when present so both files reach the delivery dir.
     /// </summary>
-    private static string? SaveOdrDataAsset(string cacheDir, NSBundle bundle)
+    private static string? SaveOdrDataAsset(string cacheDir, NSBundle bundle, string packName)
     {
-        using var asset = new NSDataAsset(DatasetAssetName, bundle);
+        if (!SaveNamedAsset(cacheDir, bundle, packName, PayloadFileName(packName), required: true))
+        {
+            return null;
+        }
+        if (packName == PerushimNotesPackName)
+        {
+            SaveNamedAsset(cacheDir, bundle, "perushim_search", PerushimNotesService.SearchIndexDbName, required: false);
+        }
+        return cacheDir;
+    }
+
+    private static bool SaveNamedAsset(string cacheDir, NSBundle bundle, string assetName, string fileName, bool required)
+    {
+        using var asset = new NSDataAsset(assetName, bundle);
         if (asset?.Data == null)
         {
-            System.Diagnostics.Debug.WriteLine($"ODR: NSDataAsset('{DatasetAssetName}') returned null");
-            return null;
+            if (required)
+            {
+                System.Diagnostics.Debug.WriteLine($"ODR: NSDataAsset('{assetName}') returned null");
+            }
+            return false;
         }
 
         System.Diagnostics.Debug.WriteLine($"ODR: NSDataAsset loaded, length={asset.Data.Length}");
-        var destPath = Path.Combine(cacheDir, NotesDbName);
+        var destPath = Path.Join(cacheDir, fileName);
         try
         {
             using var stream = asset.Data.AsStream();
-            using var fileStream = File.Create(destPath);
-            stream.CopyTo(fileStream);
+            var temporary = destPath + ".download";
+            try
+            {
+                using (var fileStream = File.Create(temporary))
+                {
+                    stream.CopyTo(fileStream);
+                }
+
+                File.Move(temporary, destPath, true);
+            }
+            finally { File.Delete(temporary); }
             System.Diagnostics.Debug.WriteLine($"ODR: Saved to {destPath}");
-            return cacheDir;
+            return true;
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"ODR: Save failed: {ex.Message}");
-            return null;
+            return false;
         }
     }
 
@@ -378,7 +469,7 @@ partial class PadDeliveryService
         var lines = new List<string> { "--- ODR (iOS) delivery diagnostics ---" };
 
         var cacheDir = OdrCacheDir(packName);
-        var cachedFile = Path.Combine(cacheDir, NotesDbName);
+        var cachedFile = Path.Join(cacheDir, PayloadFileName(packName));
         lines.Add($"Cache dir: {cacheDir}");
         lines.Add($"Cached file exists: {File.Exists(cachedFile)}");
         if (File.Exists(cachedFile))
@@ -399,10 +490,12 @@ partial class PadDeliveryService
         {
             var mainBundle = NSBundle.MainBundle;
             lines.Add($"Main bundle path: {mainBundle.BundlePath}");
-            var assetsCar = Path.Combine(mainBundle.BundlePath, "Assets.car");
+            var assetsCar = Path.Join(mainBundle.BundlePath, "Assets.car");
             lines.Add($"Main Assets.car exists: {File.Exists(assetsCar)}");
             if (File.Exists(assetsCar))
+            {
                 lines.Add($"Main Assets.car size: {new FileInfo(assetsCar).Length} bytes");
+            }
         }
         catch (Exception ex)
         {
@@ -412,7 +505,7 @@ partial class PadDeliveryService
         // Probe NSDataAsset with main bundle
         try
         {
-            using var directAsset = new NSDataAsset(DatasetAssetName);
+            using var directAsset = new NSDataAsset(packName);
             lines.Add($"NSDataAsset(main): {(directAsset?.Data != null ? $"length={directAsset.Data.Length}" : "(null)")}");
         }
         catch (Exception ex)
@@ -433,7 +526,7 @@ partial class PadDeliveryService
             if (conditionalOk)
             {
                 lines.Add($"Request bundle path (after conditional): {request.Bundle?.BundlePath ?? "(null)"}");
-                ProbeNSDataAsset(lines, "ODR(conditional,request.Bundle)", DatasetAssetName, request.Bundle);
+                ProbeNSDataAsset(lines, "ODR(conditional,request.Bundle)", packName, request.Bundle);
                 request.EndAccessingResources();
             }
             else
@@ -447,11 +540,11 @@ partial class PadDeliveryService
                     lines.Add($"Request bundle path (after fetch): {fetchReq.Bundle?.BundlePath ?? "(null)"}");
 
                     // Check if ODR asset pack was downloaded
-                    var odrDir = Path.Combine(fetchReq.Bundle?.BundlePath ?? "", "OnDemandResources");
+                    var odrDir = Path.Join(fetchReq.Bundle?.BundlePath ?? "", "OnDemandResources");
                     lines.Add($"ODR dir in bundle exists: {Directory.Exists(odrDir)}");
 
-                    ProbeNSDataAsset(lines, "ODR(fetched,request.Bundle)", DatasetAssetName, fetchReq.Bundle);
-                    ProbeNSDataAsset(lines, "ODR(fetched,mainBundle)", DatasetAssetName, NSBundle.MainBundle);
+                    ProbeNSDataAsset(lines, "ODR(fetched,request.Bundle)", packName, fetchReq.Bundle);
+                    ProbeNSDataAsset(lines, "ODR(fetched,mainBundle)", packName, NSBundle.MainBundle);
 
                     // Enumerate files in request bundle to see what's there
                     try
@@ -462,9 +555,14 @@ partial class PadDeliveryService
                             var files = Directory.GetFiles(bundlePath, "*", SearchOption.AllDirectories);
                             lines.Add($"Request bundle file count: {files.Length}");
                             foreach (var f in files.Take(20))
+                            {
                                 lines.Add($"  {f.Replace(bundlePath, "~")}");
+                            }
+
                             if (files.Length > 20)
+                            {
                                 lines.Add($"  ... and {files.Length - 20} more");
+                            }
                         }
                     }
                     catch (Exception enumEx)
@@ -513,4 +611,5 @@ partial class PadDeliveryService
         }
     }
 }
+#pragma warning restore CA1422
 #endif

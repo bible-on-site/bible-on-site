@@ -15,6 +15,7 @@ use serde::Serialize;
 use tracing_actix_web::TracingLogger;
 
 use crate::providers::Database;
+use crate::services::article_search::{self, ArticleSearchIndex};
 
 use super::schema_builder::{build_schema, graphql_playground, graphql_request};
 use tokio::time::Duration;
@@ -32,7 +33,8 @@ impl ActixApp {
         } else {
             format!(".{}.env", profile)
         };
-        if let Err(e) = dotenvy::from_filename_override(env_file_name.clone()) {
+        // Explicit launch configuration (CI, containers, local DB overrides) takes precedence.
+        if let Err(e) = dotenvy::from_filename(env_file_name.clone()) {
             tracing::warn!("Failed to load {} file: {}", env_file_name, e);
             tracing::warn!("Using default environment variables");
         }
@@ -42,17 +44,27 @@ impl ActixApp {
             .unwrap_or_else(|_| "3003".to_string())
             .parse::<u16>()
             .unwrap_or(3003);
-        let listener = TcpListener::bind(format!("{}:{}", &host, &port))?;
+        let listener = TcpListener::bind(format!("{}:{}", host, port))?;
         let port = listener.local_addr().unwrap().port();
         let db: Database = Database::new().await?;
+        // Derived article-search index: loads its persisted snapshot, then a
+        // background worker keeps it in sync with tanah_article via the queue
+        // table and periodic hash reconcile.
+        let article_index = ArticleSearchIndex::new(db.clone());
+        tokio::spawn(article_search::run_worker(article_index.clone()));
         let shutdown_signal = Arc::new(AtomicBool::new(false));
         let server = HttpServer::new({
             let shutdown_signal = shutdown_signal.clone();
+            let article_index = article_index.clone();
             move || {
                 App::new()
                     .wrap(Compress::default())
                     .wrap(TracingLogger::default())
-                    .configure(Self::build_app_config(&db, shutdown_signal.clone()))
+                    .configure(Self::build_app_config(
+                        &db,
+                        &article_index,
+                        shutdown_signal.clone(),
+                    ))
             }
         })
         .listen_auto_h2c(listener)?
@@ -82,11 +94,13 @@ impl ActixApp {
 
     pub fn build_app_config(
         db: &Database,
+        article_index: &ArticleSearchIndex,
         shutdown_signal: Arc<AtomicBool>,
     ) -> impl Fn(&mut web::ServiceConfig) {
         let db = db.clone();
+        let article_index = article_index.clone();
         move |cfg: &mut web::ServiceConfig| {
-            cfg.app_data(web::Data::new(build_schema(&db)))
+            cfg.app_data(web::Data::new(build_schema(&db, &article_index)))
                 .service(web::resource("/").guard(guard::Post()).to(graphql_request))
                 .service(
                     web::resource("/")
@@ -171,10 +185,13 @@ mod tests {
     #[actix_web::test]
     async fn build_app_config_wires_health_playground_and_graphql_post() {
         let db = mock_database();
+        let article_index = ArticleSearchIndex::new(db.clone());
         let shutdown_signal = Arc::new(AtomicBool::new(false));
-        let app = test::init_service(
-            App::new().configure(ActixApp::build_app_config(&db, shutdown_signal)),
-        )
+        let app = test::init_service(App::new().configure(ActixApp::build_app_config(
+            &db,
+            &article_index,
+            shutdown_signal,
+        )))
         .await;
 
         let health_response =

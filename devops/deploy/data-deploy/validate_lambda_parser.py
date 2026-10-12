@@ -1,5 +1,5 @@
-"""
-Validate deployed SQL files with the production Lambda's parser, in manifest order.
+"""Validate deployed SQL files with the production Lambda's parser, in manifest order.
+
 Use --parse-only for the database-free compatibility check used in Data CI.
 Without --parse-only, execute the statements against a disposable local MySQL
 database (the parser injects DROP TABLE/VIEW statements).
@@ -154,6 +154,15 @@ def validate_lambda_safe_comments(filepath):
                 raise ValueError(
                     f"{filepath}:{line_number}: Lambda-unsafe SQL line comment "
                     "contains a semicolon or apostrophe"
+                )
+            if stripped.startswith("--") and re.search(
+                r"\bCREATE\s+(?:TABLE|(?:OR\s+REPLACE\s+)?VIEW)\b",
+                stripped,
+                re.IGNORECASE,
+            ):
+                raise ValueError(
+                    f"{filepath}:{line_number}: Lambda-unsafe SQL line comment "
+                    "contains table/view creation keywords"
                 )
 
 

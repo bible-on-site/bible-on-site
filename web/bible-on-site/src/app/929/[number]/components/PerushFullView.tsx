@@ -4,6 +4,7 @@ import { toLetters } from "gematry";
 import DOMPurify from "isomorphic-dompurify";
 import type { PerushDetail, PerushNote } from "@/lib/perushim";
 import styles from "./perushim-section.module.css";
+import { scrollToSeferPasuk } from "./sefer-pasuk-navigation";
 import { ShareButton } from "./ShareButton";
 import seferStyles from "./sefer.module.css";
 
@@ -18,7 +19,8 @@ interface PerushFullViewProps {
 
 /**
  * Renders a single perush (title, parshan, notes grouped by pasuk) with a back action.
- * Used both in the SEO view (inline) and flipbook blank page (fullPage).
+ * Used on the flipbook blank page when the user clicks a perush from the carousel;
+ * outside the book the dedicated /929/{perek}/{perush} page is the single view.
  */
 export function PerushFullView({
 	perush,
@@ -47,7 +49,12 @@ export function PerushFullView({
 		: null;
 
 	return (
-		<section className={rootClass}>
+		<section
+			className={rootClass}
+			data-flipbook-no-flip
+			data-sefer-perush={perush.name}
+			data-sefer-perush-perek={perekId}
+		>
 			<header className={styles.fullViewHeader}>
 				<button type="button" className={styles.backButton} onClick={onBack}>
 					&rarr; חזרה לפרשנים
@@ -66,8 +73,27 @@ export function PerushFullView({
 
 			<div className={notesClass}>
 				{Array.from(grouped.entries()).map(([pasuk, notes]) => (
-					<div key={pasuk} className={styles.pasukGroup}>
-						<div className={styles.pasukLabel}>פסוק {toLetters(pasuk)}</div>
+					<div
+						key={pasuk}
+						className={styles.pasukGroup}
+						data-perush-pasuk={pasuk}
+					>
+						{perekId ? (
+							<button
+								type="button"
+								className={`${styles.pasukLabel} ${styles.pasukLink}`}
+								data-flipbook-no-flip
+								title={`מעבר לפסוק ${toLetters(pasuk)} בפרק`}
+								aria-label={`מעבר לפסוק ${toLetters(pasuk)} בפרק`}
+								onClick={() => scrollToSeferPasuk(perekId, pasuk)}
+							>
+								פסוק {toLetters(pasuk)}
+							</button>
+						) : (
+							<div className={styles.pasukLabel}>
+								פסוק {toLetters(pasuk)}
+							</div>
+						)}
 						{notes.map((note) => (
 							<div
 								key={`${note.pasuk}-${note.noteIdx}`}

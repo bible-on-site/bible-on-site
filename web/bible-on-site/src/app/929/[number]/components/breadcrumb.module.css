@@ -389,3 +389,77 @@
   background-color: #f0f6ff;
   color: #0066cc;
 }
+
+@media (prefers-color-scheme: dark) {
+  .breadcrumb {
+    color: #b8c2d9;
+  }
+
+  .breadcrumb > li:not(:last-child):after {
+    color: #64748b;
+  }
+
+  .breadcrumb li a {
+    color: #7eb0ff;
+  }
+
+  .breadcrumb li a:hover {
+    color: #a8b9ff;
+    background-color: #232a45;
+  }
+
+  .active {
+    color: #e8eaed;
+  }
+
+  .active > button:hover {
+    background-color: #232a45;
+  }
+
+  .bg-white {
+    background-color: #1a1f2e;
+  }
+
+  .drop {
+    background-color: #1a1f2e;
+    border-color: #2d3548;
+  }
+
+  .drop ul li a {
+    color: #e8eaed;
+  }
+
+  .drop ul li a:hover {
+    background-color: #232a45;
+    color: #7eb0ff;
+  }
+
+  .drop ul li a:focus {
+    background-color: #232a45;
+    color: #7eb0ff;
+  }
+
+  .small {
+    color: #9aa0a6;
+  }
+
+  .drop .tanahpedia-category-parent {
+    color: #e8eaed;
+  }
+
+  .drop .tanahpedia-category-parent:hover,
+  .drop .tanahpedia-category-parent:focus {
+    background-color: #232a45;
+    color: #7eb0ff;
+  }
+
+  .drop .tanahpedia-nested li a {
+    color: #b8c2d9;
+  }
+
+  .drop .tanahpedia-nested li a:hover,
+  .drop .tanahpedia-nested li a:focus {
+    background-color: #232a45;
+    color: #7eb0ff;
+  }
+}

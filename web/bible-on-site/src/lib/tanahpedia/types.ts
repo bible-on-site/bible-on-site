@@ -359,6 +359,7 @@ export interface Saying {
 	id: string;
 	entityId: string;
 	content: string | null;
+	sayingDate: number | null;
 }
 
 export interface SayingLocation {

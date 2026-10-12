@@ -262,10 +262,15 @@ export function buildPerushGraph(input: PerushGraphInput): Graph {
 		url,
 		inLanguage: "he",
 		author: { "@id": commentatorId },
+		publisher: { "@id": ORG_ID },
 		about: { "@id": chapterId },
 		isPartOf: { "@id": WEBSITE_ID },
 		mainEntityOfPage: url,
 	};
+	const notesHtml = perush.notes.map((note) => note.noteContent).join(" ");
+	if (hasContent(notesHtml)) {
+		articleNode.description = plainText(notesHtml, 300);
+	}
 	const webPage: Record<string, unknown> = {
 		"@type": "WebPage",
 		"@id": nodeId(path, "webpage"),
@@ -273,6 +278,7 @@ export function buildPerushGraph(input: PerushGraphInput): Graph {
 		name: title,
 		inLanguage: "he",
 		isPartOf: { "@id": WEBSITE_ID },
+		mainEntity: { "@id": articleNode["@id"] },
 		breadcrumb: { "@id": breadcrumb["@id"] },
 	};
 	return buildGraph([

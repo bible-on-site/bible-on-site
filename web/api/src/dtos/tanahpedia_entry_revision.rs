@@ -16,8 +16,11 @@ pub struct EntryRevision {
     pub source: String,
     /// AI rationale / notes for the human editor.
     pub notes: Option<String>,
-    /// Lifecycle marker: `PENDING`, `APPLIED`, `APPROVED`, or `REJECTED`.
+    /// Lifecycle marker: `PENDING`, `APPLIED`, or `REJECTED`.
     pub status: String,
+    /// The APPLIED head revision this change was based on (optimistic
+    /// concurrency + restore audit); `None` when unknown or not yet applied.
+    pub base_revision_id: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -33,6 +36,7 @@ impl From<Model> for EntryRevision {
             source: value.source,
             notes: value.notes,
             status: value.status,
+            base_revision_id: value.base_revision_id,
             created_at: value.created_at.to_string(),
             updated_at: value.updated_at.to_string(),
         }
@@ -42,6 +46,9 @@ impl From<Model> for EntryRevision {
 /// Input for `submitEntryRevision`. At least one of the `proposed_*` fields must
 /// be present, and `source` must be non-empty. When `entry_id` is provided it
 /// must reference an existing entry; omit it to propose a brand-new entry.
+/// `base_revision_id` may declare the APPLIED head the proposal was authored
+/// against; when set, `applyEntryRevision` rejects the apply if the head has
+/// meanwhile moved (optimistic concurrency).
 #[derive(InputObject, Debug, Clone, Default)]
 pub struct SubmitEntryRevisionInput {
     pub entry_id: Option<String>,
@@ -50,4 +57,5 @@ pub struct SubmitEntryRevisionInput {
     pub proposed_content: Option<String>,
     pub source: String,
     pub notes: Option<String>,
+    pub base_revision_id: Option<String>,
 }

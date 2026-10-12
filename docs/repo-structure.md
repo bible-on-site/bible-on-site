@@ -4,7 +4,7 @@
 bible-on-site/
 ├── .github/
 │   └── workflows/ <-- GitHub Actions CI/CD Workflows
-├── .husky/ <-- cross-module pre-commit hooks for git
+├── .pre-commit-config.yaml <-- git hook checks (installed via pre-commit)
 ├── app/ <-- Mobile Application
 ├── data/ <-- Data Generation Scripts and pipelines as code
 ├── devops/ <-- cross-module DevOps related scripts
@@ -21,7 +21,6 @@ bible-on-site/
 └── web/ <-- Services
     ├── admin/ <-- Admin Panel (React + Vite)
     ├── api/ <-- Backend API (Mostly for mobile app) Service
-    │   ├── .husky/ <-- pre-commit hooks for git
     │   ├── devops/ <-- DevOps related scripts
     │   ├── entities/ <-- Database Entities
     │   ├── src/
@@ -33,7 +32,6 @@ bible-on-site/
     │   │   └── startup/ <-- Application Startup Code
     │   └── tests/ <-- Tests
     ├── bible-on-site/
-    │   ├── .husky/ <-- pre-commit hooks for git
     │   ├── public/ <-- Public Assets
     │   │   ├── icons/ <-- icons
     │   │   ├── images/ <-- general images

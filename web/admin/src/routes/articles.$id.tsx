@@ -7,8 +7,8 @@ import {
 } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import { AutoSaveIndicator } from "~/components/AutoSaveIndicator";
-import { WysiwygEditor } from "~/components/WysiwygEditor";
 import { searchEntriesForLink } from "~/components/editor/entryLinkSearch";
+import { WysiwygEditor } from "~/components/WysiwygEditor";
 import {
 	type Article,
 	createArticle,
@@ -26,6 +26,7 @@ interface ArticleFormData {
 	abstract: string;
 	name: string;
 	priority: number;
+	distributable: boolean;
 	content: string;
 }
 
@@ -58,6 +59,7 @@ function ArticleEditPage() {
 		abstract: "",
 		name: "",
 		priority: 1,
+		distributable: false,
 		content: "",
 	});
 
@@ -87,6 +89,7 @@ function ArticleEditPage() {
 				abstract: article.abstract ?? "",
 				name: article.name,
 				priority: article.priority,
+				distributable: Boolean(article.distributable),
 				content: article.content ?? "",
 			});
 		}
@@ -308,6 +311,16 @@ function ArticleEditPage() {
 						</div>
 					</div>
 
+					<label className="flex items-center gap-3 text-sm font-semibold text-gray-700">
+						<input
+							type="checkbox"
+							checked={formData.distributable}
+							onChange={(e) =>
+								handleFieldChange("distributable", e.target.checked)
+							}
+						/>
+						מאושר לפרסום בעלון היומי
+					</label>
 					<div>
 						<label
 							htmlFor="abstract"

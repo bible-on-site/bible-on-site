@@ -16,6 +16,7 @@ const {
 	updateEntityDisplayNameMock,
 	updatePersonMainNameMock,
 	updatePersonSexMock,
+	updateSayingDateMock,
 } = vi.hoisted(() => ({
 	createEntityMock: vi.fn(),
 	getEntryStructuralContextMock: vi.fn(),
@@ -24,6 +25,7 @@ const {
 	updateEntityDisplayNameMock: vi.fn(),
 	updatePersonMainNameMock: vi.fn(),
 	updatePersonSexMock: vi.fn(),
+	updateSayingDateMock: vi.fn(),
 }));
 
 vi.mock("~/server/tanahpedia/structural", () => ({
@@ -32,6 +34,7 @@ vi.mock("~/server/tanahpedia/structural", () => ({
 	updateEntityDisplayName: updateEntityDisplayNameMock,
 	updatePersonMainName: updatePersonMainNameMock,
 	updatePersonSex: updatePersonSexMock,
+	updateSayingDate: updateSayingDateMock,
 	replacePlaceIdentifications: replacePlaceIdentificationsMock,
 	searchEntities: vi.fn().mockResolvedValue([]),
 	linkExistingEntityToEntry: vi.fn(),
@@ -69,6 +72,7 @@ describe("EntryStructuralPanel", () => {
 			updateEntityDisplayNameMock,
 			updatePersonMainNameMock,
 			updatePersonSexMock,
+			updateSayingDateMock,
 		]) {
 			mock.mockReset().mockResolvedValue({ ok: true });
 		}
@@ -148,6 +152,17 @@ describe("EntryStructuralPanel", () => {
 			fireEvent.click(screen.getByRole("button", { name: "צור וקשר לערך" }));
 
 			expect(await screen.findByText("duplicate entity")).toBeInTheDocument();
+		});
+
+		it("stringifies a non-Error rejection from entity creation", async () => {
+			createEntityMock.mockRejectedValue("raw create failure");
+			renderPanel();
+			const name = await screen.findByLabelText("שם ראשוני");
+
+			fireEvent.change(name, { target: { value: "ערך" } });
+			fireEvent.click(screen.getByRole("button", { name: "צור וקשר לערך" }));
+
+			expect(await screen.findByText("raw create failure")).toBeInTheDocument();
 		});
 	});
 
@@ -299,6 +314,95 @@ describe("EntryStructuralPanel", () => {
 			});
 		});
 
+		it("renders empty fields for a person and place row with null details", async () => {
+			getEntryStructuralContextMock.mockResolvedValue({
+				entryId: "entry-1",
+				linkedEntities: [
+					{
+						linkId: "person-link",
+						entityId: "person-entity",
+						entityType: "PERSON",
+						displayName: "אלמני",
+						person: {
+							personId: "person-id",
+							mainName: null,
+							mainNameRowId: null,
+							sex: null,
+							sexRowId: null,
+						},
+						place: null,
+					},
+					{
+						linkId: "place-link",
+						entityId: "place-entity",
+						entityType: "PLACE",
+						displayName: "מקום",
+						person: null,
+						place: {
+							placeId: "place-id",
+							identifications: [
+								{
+									id: "",
+									modern_name: null,
+									latitude: null,
+									longitude: null,
+								},
+							],
+						},
+					},
+				],
+			});
+			renderPanel();
+
+			const personId = await screen.findByText("person-entity");
+			const personCard = personId.closest("div.rounded-lg") as HTMLElement;
+			const personControls = within(personCard);
+			expect(personControls.getByLabelText(/person_name/)).toHaveValue("");
+			expect(personControls.getByLabelText(/person_sex/)).toHaveValue("");
+			expect(
+				personControls.getByRole("button", { name: "שמור מין" }),
+			).toBeDisabled();
+
+			const placeId = await screen.findByText("place-entity");
+			const placeCard = placeId.closest("div.rounded-lg") as HTMLElement;
+			const placeControls = within(placeCard);
+			expect(placeControls.getByPlaceholderText("שם מודרני")).toHaveValue("");
+			// number inputs report valueAsNumber: empty is null
+			expect(placeControls.getByPlaceholderText("latitude")).toHaveValue(null);
+			expect(placeControls.getByPlaceholderText("longitude")).toHaveValue(null);
+		});
+
+		it("removes an identification row before saving", async () => {
+			renderPanel();
+			const id = await screen.findByText("place-entity");
+			const card = id.closest("div.rounded-lg");
+			if (!card) throw new Error("Expected place card");
+			const controls = within(card as HTMLElement);
+
+			fireEvent.click(controls.getByRole("button", { name: "+ שורה" }));
+			expect(controls.getAllByPlaceholderText("שם מודרני")).toHaveLength(2);
+
+			fireEvent.click(controls.getAllByRole("button", { name: "מחק" })[1]);
+			expect(controls.getAllByPlaceholderText("שם מודרני")).toHaveLength(1);
+
+			fireEvent.click(controls.getByRole("button", { name: "שמור זיהויים" }));
+			await waitFor(() =>
+				expect(replacePlaceIdentificationsMock).toHaveBeenCalledWith({
+					data: {
+						placeId: "place-id",
+						rows: [
+							{
+								id: "identification-id",
+								modern_name: "Jerusalem",
+								latitude: 31.77,
+								longitude: 35.23,
+							},
+						],
+					},
+				}),
+			);
+		});
+
 		it("edits, removes, and unlinks a generic entity", async () => {
 			renderPanel();
 			const id = await screen.findByText("nation-entity");
@@ -318,6 +422,25 @@ describe("EntryStructuralPanel", () => {
 				});
 				expect(removeEntityMock).toHaveBeenCalledWith({ data: "nation-link" });
 			});
+		});
+
+		it("keeps the link when the unlink confirmation is cancelled", async () => {
+			vi.stubGlobal(
+				"confirm",
+				vi.fn(() => false),
+			);
+			renderPanel();
+			const id = await screen.findByText("person-entity");
+			const card = id.closest("div.rounded-lg");
+			if (!card) throw new Error("Expected person card");
+
+			fireEvent.click(
+				within(card as HTMLElement).getByRole("button", {
+					name: "הסר קישור",
+				}),
+			);
+
+			expect(removeEntityMock).not.toHaveBeenCalled();
 		});
 	});
 
@@ -343,5 +466,68 @@ describe("EntryStructuralPanel", () => {
 				),
 			).toBeInTheDocument();
 		});
+	});
+	it("edits and clears a saying date", async () => {
+		getEntryStructuralContextMock.mockResolvedValue({
+			entryId: "entry-1",
+			linkedEntities: [
+				{
+					linkId: "link",
+					entityId: "entity",
+					entityType: "SAYING",
+					displayName: "אמרה",
+					saying: { sayingId: "saying-1", sayingDate: 24480906 },
+				},
+			],
+		});
+		renderPanel();
+		const input = await screen.findByLabelText("תאריך האמרה");
+		expect(input).toHaveValue("24480906");
+		fireEvent.change(input, { target: { value: "24480907" } });
+		fireEvent.click(screen.getByRole("button", { name: "שמור תאריך אמרה" }));
+		await waitFor(() =>
+			expect(updateSayingDateMock).toHaveBeenCalledWith({
+				data: { sayingId: "saying-1", sayingDate: 24480907 },
+			}),
+		);
+		await waitFor(() =>
+			expect(
+				screen.getByRole("button", { name: "שמור תאריך אמרה" }),
+			).toBeEnabled(),
+		);
+		fireEvent.change(input, { target: { value: "" } });
+		fireEvent.click(screen.getByRole("button", { name: "שמור תאריך אמרה" }));
+		await waitFor(() =>
+			expect(updateSayingDateMock).toHaveBeenLastCalledWith({
+				data: { sayingId: "saying-1", sayingDate: null },
+			}),
+		);
+	});
+	it("starts an undated saying empty and preserves input when saving fails", async () => {
+		getEntryStructuralContextMock.mockResolvedValue({
+			entryId: "entry-1",
+			linkedEntities: [
+				{
+					linkId: "link",
+					entityId: "entity",
+					entityType: "SAYING",
+					displayName: "אמרה",
+					saying: { sayingId: "saying-1", sayingDate: null },
+				},
+			],
+		});
+		updateSayingDateMock.mockRejectedValue(new Error("תאריך עברי לא תקין"));
+		renderPanel();
+		const input = await screen.findByLabelText("תאריך האמרה");
+		expect(input).toHaveValue("");
+		fireEvent.change(input, { target: { value: "24480931" } });
+		fireEvent.click(screen.getByRole("button", { name: "שמור תאריך אמרה" }));
+		expect(await screen.findByRole("alert")).toHaveTextContent(
+			"תאריך עברי לא תקין",
+		);
+		expect(input).toHaveValue("24480931");
+		expect(
+			screen.getByRole("button", { name: "שמור תאריך אמרה" }),
+		).toBeEnabled();
 	});
 });

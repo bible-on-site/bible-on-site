@@ -57,6 +57,48 @@ The website communicates **directly** with the MySQL database rather than going 
 | Dedications | Direct MySQL query | Dynamic content, frequently updated |
 | PDF Bulletins | AWS Lambda (`bible-on-site-bulletin`) | On-demand generation, offloaded to Lambda for compute isolation |
 
+### Browser Data Boundary
+
+Keep the full canonical scripture JSON in server imports. The bookshelf, date
+lookup and citation parser use `client-catalog.generated.json`, a small projection
+of book ranges and learning dates. `scripts/generate-client-catalog.mjs` also writes
+individual reader books under `public/generated/sefarim/`, named by their content
+hash. Installation, builds and unit tests regenerate both outputs from the same
+canonical source; generated files are ignored. Do not edit them or maintain a
+second content source. After an intentional source change during development,
+rerun the generator or restart `npm run dev`.
+
+`LoadedSefer` fetches the selected book when the reader opens, with visible loading
+and retry feedback. Uninitialized reader pages stay unpainted until FlipBook
+has applied their dimensions, preserving geometry and preventing a layout flash.
+Network requests revalidate HTTP cache entries so an older
+server's cached 404 cannot prevent recovery during a rolling deployment. A missing
+asset offers a full page refresh, preserving the reader route and query while
+loading the current asset catalog. The browser cache retains at most four recent
+books. Avoid
+passing whole books through every static page: that repeats scripture in HTML/RSC
+and increases server memory and deployment size. Chapter navigation within the
+same book reuses its data; late requests cannot replace another selected book.
+Download helpers load only when requested, so metadata requests do not initialize
+the PDF generator's corpus.
+
+The source text, reading order and recitation fields remain unchanged, including
+canonical JSON precision handling in `next.config.mjs`. Tests compare every
+metadata row and generated book with the canonical source. Production performance
+tests reject browser scripts over 5 MiB and retain the existing memory/build limits.
+
+### Production validation on Windows
+
+Next.js 16.4.0-canary.61 cannot persist native Windows route-cache entries for
+commentary URLs containing an ASCII quote, such as `רש"י`. The framework appends
+the decoded pathname to a filesystem key; Windows rejects that filename. A
+successful page response does not prove that the cache write succeeded.
+
+Production and CI use Linux. Use Linux, Docker or WSL when validating production
+cache persistence. Keep the existing commentary URLs and cache behavior. The
+supported upstream fix and cross-platform checks are tracked in
+[the Windows route-cache issue](https://github.com/bible-on-site/bible-on-site/issues/1999).
+
 ### SSG Compatibility
 
 The website uses Next.js Static Site Generation (SSG) with the following patterns:

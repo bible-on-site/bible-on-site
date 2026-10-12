@@ -6,25 +6,40 @@
  * (web/bible-on-site, web/admin) and they may pin different Biome versions, so
  * Biome cannot be run once from the repo root ("Found a nested root
  * configuration, but there's already a root configuration"). We bucket the
- * staged paths by module, then run *that module's own* locally-installed Biome
- * from inside the module on the module-relative paths — exactly how CI lints
- * each module, and with the version the module actually pins. This is fully
+ * staged paths by module, then run Biome from inside the module on the
+ * module-relative paths — exactly how CI lints each module. This is fully
  * cross-platform (no shell heredocs), unlike semgrep which has no native
  * Windows support.
  *
- * This is a local convenience gate (see `ci.skip` in .pre-commit-config.yaml):
- * the authoritative remote check is each module's CI lint job. If a module's
- * Biome is not installed (developer hasn't run `npm ci` there), we print a
- * notice and skip that module rather than blocking the commit.
+ * Each run prefers the module's own locally-installed Biome (the version that
+ * module pins). When the module isn't npm-installed — e.g. pre-commit.ci — it
+ * falls back to the Biome that the hook's `additional_dependencies` install
+ * into the hook environment (synced by sync-pre-commit-deps).
  */
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 
 /** Modules that have their own biome.json, in lint order. */
 const MODULES = ["web/bible-on-site", "web/admin"];
 
-const stagedFiles = process.argv.slice(2).map((f) => f.replaceAll("\\", "/"));
+/**
+ * Locate the hook-env Biome's JavaScript bin (installed by
+ * additional_dependencies) on Windows without a shell: the env's biome.cmd
+ * would otherwise force cmd.exe, letting staged filenames be re-parsed as
+ * shell syntax. Global npm layout puts the package beside the .cmd shim at
+ * <env>/node_modules/@biomejs/biome/bin/biome.
+ */
+function envBiomeJs() {
+	if (process.platform !== "win32") return null;
+	for (const dir of (process.env.PATH ?? "").split(";").filter(Boolean)) {
+		const js = join(dir, "node_modules", "@biomejs", "biome", "bin", "biome");
+		if (existsSync(join(dir, "biome.cmd")) && existsSync(js)) return js;
+	}
+	return null;
+}
+
+const stagedFiles = process.argv.slice(2).map((f) => f.replace(/\\/g, "/"));
 
 let failed = false;
 
@@ -35,24 +50,32 @@ for (const dir of MODULES) {
 		.map((file) => file.slice(prefix.length));
 	if (moduleFiles.length === 0) continue;
 
-	const localBin = resolve(
-		dir,
-		"node_modules",
-		".bin",
-		process.platform === "win32" ? "biome.cmd" : "biome",
-	);
-	if (!existsSync(localBin)) {
-		console.warn(
-			`[biome-lint] skipping ${dir}: Biome not installed (run \`npm ci\` in ${dir}).`,
-		);
-		continue;
+	// Prefer the module's pinned Biome through its JavaScript bin, which Node
+	// runs directly — no .cmd shim, no shell. This keeps staged filenames as
+	// literal argv entries so metacharacters can never reach cmd.exe, and
+	// checkout paths with spaces need no quoting.
+	const localBin = resolve(dir, "node_modules", "@biomejs", "biome", "bin", "biome");
+	const envBin = envBiomeJs();
+	const result = existsSync(localBin)
+		? spawnSync( // nosemgrep
+				process.execPath,
+				[localBin, "lint", ...moduleFiles],
+				{ cwd: resolve(dir), stdio: "inherit" },
+			)
+		: envBin
+			? spawnSync( // nosemgrep
+					process.execPath,
+					[envBin, "lint", ...moduleFiles],
+					{ cwd: resolve(dir), stdio: "inherit" },
+				)
+			: spawnSync( // nosemgrep — POSIX hook env exposes a shebang bin
+					"biome",
+					["lint", ...moduleFiles],
+					{ cwd: resolve(dir), stdio: "inherit" },
+				);
+	if (result.error) {
+		console.error(`biome-lint: could not run Biome for ${dir}: ${result.error.message}`);
 	}
-
-	const result = spawnSync(localBin, ["lint", ...moduleFiles], {
-		cwd: resolve(dir),
-		stdio: "inherit",
-		shell: process.platform === "win32",
-	});
 	if (result.status !== 0) failed = true;
 }
 

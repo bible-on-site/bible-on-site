@@ -12,6 +12,7 @@ jest.mock("next/navigation", () => ({
 	notFound: jest.fn(() => {
 		throw new Error("NEXT_NOT_FOUND");
 	}),
+	useRouter: () => ({ push: jest.fn() }),
 }));
 
 jest.mock("next/image", () => ({

@@ -34,6 +34,13 @@ coverage
 .env.local
 *.local
 
+# Generated build/config artifacts
+app.config.timestamp_*.js
+tsconfig.tsbuildinfo
+
 # Test results
 test-results
 playwright-report
+.playwright-report
+.playwright-results
+monocart-report/

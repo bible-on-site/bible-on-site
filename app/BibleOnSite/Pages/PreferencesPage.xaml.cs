@@ -21,10 +21,11 @@ public partial class PreferencesPage : ContentPage
         BindingContext = _viewModel;
     }
 
-    protected override void OnAppearing()
+    protected override async void OnAppearing()
     {
         base.OnAppearing();
         _viewModel.Load();
+        await _viewModel.Recitation.LoadAsync();
     }
 
     private void OnPerekToLoadRadioChanged(object? sender, CheckedChangedEventArgs e)
@@ -32,9 +33,13 @@ public partial class PreferencesPage : ContentPage
         if (e.Value && sender is RadioButton rb)
         {
             if (rb == PerekTodaysRadio)
+            {
                 _viewModel.PerekToLoad = PerekToLoad.Todays;
+            }
             else if (rb == PerekLastRadio)
+            {
                 _viewModel.PerekToLoad = PerekToLoad.LastLearnt;
+            }
         }
     }
 }

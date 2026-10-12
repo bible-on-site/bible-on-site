@@ -23,8 +23,9 @@ jobs:
         id: check-pr
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_HEAD: ${{ github.ref_name }}
         run: |
-          PR_EXISTS=$(gh pr list --head "${{ github.ref_name }}" --json number --jq 'length')
+          PR_EXISTS=$(gh pr list --base master --head "$PR_HEAD" --json number --jq 'length')
           echo "exists=$PR_EXISTS" >> $GITHUB_OUTPUT
 
       - name: Extract commit message
@@ -53,10 +54,16 @@ jobs:
           GH_TOKEN: ${{ secrets.BOT_PAT }}
           PR_TITLE: ${{ steps.commit-msg.outputs.title }}
           PR_BODY: ${{ steps.commit-msg.outputs.body }}
+          PR_HEAD: ${{ github.ref_name }}
         run: |
           # Use --body-file with stdin to avoid shell quoting issues with special characters
-          echo "$PR_BODY" | gh pr create \
+          if ! printf '%s\n' "$PR_BODY" | gh pr create \
             --title "$PR_TITLE" \
             --body-file - \
             --base master \
-            --head "${{ github.ref_name }}"
+            --head "$PR_HEAD"; then
+            # Another actor can create the PR after the initial existence check.
+            # Preserve real creation/API failures unless that exact PR now exists.
+            PR_EXISTS=$(gh pr list --base master --head "$PR_HEAD" --json number --jq 'length')
+            if [ "$PR_EXISTS" -eq 0 ]; then exit 1; fi
+          fi

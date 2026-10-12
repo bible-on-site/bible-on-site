@@ -25,13 +25,37 @@ const bookPageSlugs = JSON.parse(
 		"utf8",
 	),
 );
+const parashaDivision = JSON.parse(
+	readFileSync(
+		path.resolve(import.meta.dirname, "src/data/parasha/parasha-division.json"),
+		"utf8",
+	),
+);
+/** First parasha unitId per Torah sefer — the book-chrome URLs land
+ * there. Unit ids are positional (index + 1) like the data module's. */
+const parashaSeferFirstUnits = Object.entries(
+	parashaDivision.units.reduce((first, unit, index) => {
+		if (!(unit.sefer in first)) first[unit.sefer] = index + 1;
+		return first;
+	}, {}),
+);
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
 	output: "standalone",
+	// Keep the canonical source bytes outside JavaScript chunks and present in
+	// standalone images for both route handlers and server component runtimes.
+	outputFileTracingIncludes: {
+		"/*": ["./src/data/db/sefaria-dump-5784-sivan-4.tanah_view.json"],
+	},
 	transpilePackages: ["html-flip-book-react"],
 	turbopack: {
 		root: import.meta.dirname,
+		// Preserve the canonical JSON number literals: Turbopack's JSON parser
+		// can change the last digit of alignment diagnostics during bundling.
+		rules: {
+			"sefaria-dump-5784-sivan-4.tanah_view.json": { type: "text" },
+		},
 		...(isProduction
 			? {
 					resolveAlias: {
@@ -42,6 +66,10 @@ const nextConfig = {
 			: {}),
 	},
 	webpack(config) {
+		config.module.rules.push({
+			test: /sefaria-dump-5784-sivan-4\.tanah_view\.json$/,
+			type: "asset/source",
+		});
 		// The package exports only ESM entry points; coverage instrumentation can
 		// turn its imports into require calls. Resolve those exports as ESM first.
 		for (const entry of [
@@ -109,23 +137,63 @@ const nextConfig = {
 
 	async rewrites() {
 		return {
-			beforeFiles: sefarimForBookRoutes.flatMap((sefer) =>
-				Object.entries(bookPageSlugs).flatMap(([page, slug]) => {
-					const destination = `/929/${sefer.perekFrom ?? sefer.additionals[0].perekFrom}?book&bookPage=${page}`;
-					// Browser requests and client navigation may supply percent-encoded
-					// Hebrew. Next matches rewrite sources before decoding the path.
-					return [
-						`/929/${sefer.name}/${slug}`,
-						`/929/${encodeURIComponent(sefer.name)}/${encodeURIComponent(slug)}`,
-					].map((source) => ({ source, destination }));
-				}),
-			),
+			beforeFiles: [
+				// Requests for /לוח arrive percent-encoded and never match the
+				// decoded filesystem route; serve the page from /calendar instead.
+				{ source: "/לוח", destination: "/calendar" },
+				{ source: "/%D7%9C%D7%95%D7%97", destination: "/calendar" },
+				...sefarimForBookRoutes.flatMap((sefer) =>
+					Object.entries(bookPageSlugs).flatMap(([page, slug]) => {
+						const destination = `/929/${sefer.perekFrom ?? sefer.additionals[0].perekFrom}?book&bookPage=${page}`;
+						// Browser requests and client navigation may supply percent-encoded
+						// Hebrew. Next matches rewrite sources before decoding the path.
+						return [
+							`/929/${sefer.name}/${slug}`,
+							`/929/${encodeURIComponent(sefer.name)}/${encodeURIComponent(slug)}`,
+						].map((source) => ({ source, destination }));
+					}),
+				),
+			],
 			afterFiles: [
 				// /929/rabbis → /929/authors alias
 				{ source: "/929/rabbis", destination: "/929/authors" },
 				{
 					source: "/929/rabbis/:authorParam*",
 					destination: "/929/authors/:authorParam*",
+				},
+				// /מסורה — the Masoretic reading division's public Hebrew root
+				// lives in an ASCII route dir (non-ASCII route directories are
+				// unreliable across dev/build). Like the book rewrites above,
+				// both raw and percent-encoded sources are needed because Next
+				// matches rewrite sources before decoding the path.
+				{ source: "/מסורה", destination: "/masora" },
+				{ source: `/${encodeURIComponent("מסורה")}`, destination: "/masora" },
+				{ source: "/מסורה/:path*", destination: "/masora/:path*" },
+				{
+					source: `/${encodeURIComponent("מסורה")}/:path*`,
+					destination: "/masora/:path*",
+				},
+				// /פרשה — the parasha reading division's public Hebrew root.
+				// Book-chrome URLs (/פרשה/{sefer}/{cover-slug}) land on the
+				// sefer's first parasha in book mode; unit URLs resolve through
+				// the /parasha route dir like מסורה does through /masora.
+				{ source: "/פרשה", destination: "/parasha" },
+				{ source: `/${encodeURIComponent("פרשה")}`, destination: "/parasha" },
+				...parashaSeferFirstUnits.flatMap(([sefer, unitId]) =>
+					Object.entries(bookPageSlugs).flatMap(([page, slug]) =>
+						[
+							`/פרשה/${sefer}/${slug}`,
+							`/פרשה/${encodeURIComponent(sefer)}/${encodeURIComponent(slug)}`,
+						].map((source) => ({
+							source,
+							destination: `/parasha/${unitId}?book&bookPage=${page}`,
+						})),
+					),
+				),
+				{ source: "/פרשה/:path*", destination: "/parasha/:path*" },
+				{
+					source: `/${encodeURIComponent("פרשה")}/:path*`,
+					destination: "/parasha/:path*",
 				},
 			],
 			fallback: [],
@@ -134,6 +202,13 @@ const nextConfig = {
 
 	async redirects() {
 		return [
+			// The learning calendar lives at /calendar internally; its canonical
+			// URL is the Hebrew /לוח served through the rewrite above.
+			{
+				source: "/calendar",
+				destination: "/לוח",
+				permanent: true,
+			},
 			// Legacy /authors → /929/authors permanent redirect
 			{
 				source: "/authors",

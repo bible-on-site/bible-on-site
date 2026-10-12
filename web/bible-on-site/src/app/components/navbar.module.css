@@ -232,3 +232,9 @@
   /* biome-ignore lint/complexity/noImportantStyles: TODO: find a way without !important */
   content: none !important;
 }
+
+@media (prefers-color-scheme: dark) {
+  .menuBox::before {
+    background: linear-gradient(to right, #000 -100%, #1a1f2e 100%);
+  }
+}

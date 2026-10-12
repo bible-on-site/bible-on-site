@@ -19,7 +19,7 @@ public class DatabasePopulatorFixture : IAsyncLifetime
     private static string GetDbUrl() =>
         Environment.GetEnvironmentVariable("DB_URL") ?? DefaultTestDbUrl;
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         // Populate the test database (idempotent - safe to run multiple times)
         Console.WriteLine("[DatabasePopulatorFixture] Ensuring test database is populated...");
@@ -44,7 +44,7 @@ public class DatabasePopulatorFixture : IAsyncLifetime
         await PopulateDatabase(dataDir);
     }
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         // Drop the test database to ensure clean state for next run
         // This helps reproduce CI issues locally
@@ -135,7 +135,10 @@ public class DatabasePopulatorFixture : IAsyncLifetime
             };
 
             using var process = Process.Start(startInfo);
-            if (process == null) return false;
+            if (process == null)
+            {
+                return false;
+            }
 
             await process.WaitForExitAsync();
             return process.ExitCode == 0;

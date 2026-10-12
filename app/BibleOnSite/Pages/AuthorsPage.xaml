@@ -3,19 +3,83 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:viewmodels="clr-namespace:BibleOnSite.ViewModels"
              xmlns:models="clr-namespace:BibleOnSite.Models"
+             xmlns:fonts="clr-namespace:Fonts"
+             xmlns:controls="clr-namespace:BibleOnSite.Controls"
              x:Class="BibleOnSite.Pages.AuthorsPage"
              x:DataType="viewmodels:AuthorsViewModel"
              Title="רבנים"
              FlowDirection="RightToLeft">
 
+       <!-- Regular page presentation: no popup chrome or on-screen Back
+            arrow. The page stays on the navigation stack, so the
+            device/system Back still returns to the previous page. -->
+       <Shell.BackButtonBehavior>
+              <BackButtonBehavior IsVisible="False"/>
+       </Shell.BackButtonBehavior>
+
+       <!-- Shared top bar: hamburger that opens the flyout, like every
+            other page in the app. -->
+       <Shell.TitleView>
+              <Grid ColumnDefinitions="Auto,Auto" ColumnSpacing="4">
+                     <Button Text="{x:Static fonts:FluentUI.line_horizontal_3_20_regular}"
+                             FontFamily="FluentIcons"
+                             FontSize="20"
+                             WidthRequest="40"
+                             HeightRequest="40"
+                             Padding="0"
+                             BackgroundColor="Transparent"
+                             TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"
+                             SemanticProperties.Description="תפריט"
+                             AutomationId="AuthorsMenuButton"
+                             VerticalOptions="Center"
+                             HorizontalOptions="Start"
+                             Clicked="OnMenuButtonClicked"/>
+                     <Label Grid.Column="1"
+                            Text="רבנים"
+                            FontSize="20"
+                            VerticalOptions="Center"
+                            HorizontalOptions="Start"
+                            TextColor="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource SecondaryDarkText}}"/>
+              </Grid>
+       </Shell.TitleView>
+
        <Grid RowDefinitions="Auto,*">
-              <!-- Search Bar -->
-              <SearchBar Grid.Row="0"
-                         Placeholder="חיפוש רבנים..."
-                         Text="{Binding SearchPhrase}"
-                         TextChanged="OnSearchTextChanged"
-                         BackgroundColor="{AppThemeBinding Light={StaticResource Gray100}, Dark={StaticResource Gray900}}"
-                         Margin="8,8,8,0"/>
+              <!-- Search header aligned with the reader's על הפרק
+                   floating search: same shape, colors and interaction. -->
+              <Border Grid.Row="0"
+                      StrokeShape="RoundRectangle 0"
+                      Padding="8,0"
+                      StrokeThickness="0"
+                      HeightRequest="56"
+                      BackgroundColor="{AppThemeBinding Light=#F2F7FE, Dark=#20304A}">
+                     <Grid ColumnDefinitions="*,Auto">
+                            <controls:SearchEntry x:Name="AuthorsSearchInput"
+                                                  AutomationId="AuthorsSearchInput"
+                                                  Text="{Binding SearchPhrase, Mode=TwoWay}"
+                                                  Placeholder="חיפוש רבנים..."
+                                                  FontSize="17"
+                                                  VerticalOptions="Center"
+                                                  HeightRequest="48"
+                                                  TextColor="{AppThemeBinding Light=#26384E, Dark=#E7EEF8}"
+                                                  PlaceholderColor="{AppThemeBinding Light=#52647C, Dark=#B2C2D8}"
+                                                  TextChanged="OnSearchTextChanged"/>
+                            <Button Grid.Column="1"
+                                    x:Name="ClearSearchButton"
+                                    IsVisible="False"
+                                    Text="{x:Static fonts:FluentUI.dismiss_24_regular}"
+                                    FontFamily="FluentIcons"
+                                    FontSize="24"
+                                    WidthRequest="44"
+                                    HeightRequest="44"
+                                    Padding="10"
+                                    BorderWidth="0"
+                                    BackgroundColor="Transparent"
+                                    TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark=#AACBFF}"
+                                    SemanticProperties.Description="ניקוי החיפוש"
+                                    AutomationId="ClearAuthorsSearchButton"
+                                    Clicked="OnClearSearchClicked"/>
+                     </Grid>
+              </Border>
 
               <!-- Authors Grid with CollectionView for virtualization/lazy loading -->
               <CollectionView Grid.Row="1"

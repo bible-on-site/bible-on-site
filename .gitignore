@@ -27,9 +27,13 @@ __pycache__/
 app/BibleOnSite/Resources/Raw/*
 !app/BibleOnSite/Resources/Raw/*.sqlite
 !app/BibleOnSite/Resources/Raw/AboutAssets.txt
+!app/BibleOnSite/Resources/Raw/recitation-audio.html
 **/.raw/
 **/.outputs/
 app/.artifacts/
+app/BibleOnSite/Platforms/Android/AssetPacks/recitation_*/
+app/BibleOnSite/Platforms/iOS/Assets/Recitation.xcassets/
+app/BibleOnSite/Platforms/Windows/Recitation/
 data/mysql/tanah_full_dump.sql
 data/mysql/perushim_data.sql
 nul
