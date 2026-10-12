@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>בדיקת הקלטות</title>
+<style>
+:root {color-scheme:light;font-family:system-ui,sans-serif;color:#17283c;background:#f3f5f7}
+* {box-sizing:border-box}
+body {margin:0}
+main {max-width:760px;margin:40px auto;padding:24px}
+header {display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:28px}
+h1 {font-size:19px;margin:0}
+a {color:#315b9a;font-size:14px}
+.card {background:#fff;border:1px solid #e1e7ed;border-radius:20px;padding:32px;box-shadow:0 8px 30px #17283c06}
+#progress {font-size:14px;color:#607086}
+h2 {font-size:28px;margin:8px 0 16px}
+.instructions {color:#607086;line-height:1.7;margin:0 0 22px}
+button {font:inherit;border:1px solid #d5dde7;border-radius:10px;background:white;color:#263951;padding:12px 18px;cursor:pointer}
+button:hover:not(:disabled) {background:#eef3fa}
+button:focus-visible,a:focus-visible,textarea:focus-visible {outline:3px solid #6698e0;outline-offset:3px}
+button:disabled {opacity:.45;cursor:default}
+.controls {display:flex;gap:8px;flex-wrap:wrap}
+.primary {background:#285c9d;color:white;border-color:#285c9d}
+.primary:hover:not(:disabled) {background:#214e86}
+#words {display:flex;flex-wrap:wrap;gap:8px;margin:26px 0;line-height:1.8}
+.word {font-family:"Times New Roman",serif;font-size:28px;padding:5px 12px;border-color:transparent;background:#f5f7fa}
+.word.heard {border-bottom-color:#4c8d72}
+.word.active {background:#dbeaff;outline:2px solid #8ab5e9}
+#listening {color:#607086;font-size:14px;min-height:22px}
+textarea {resize:vertical;width:100%;border:1px solid #d5dde7;border-radius:10px;padding:12px;font:inherit;margin:8px 0 20px}
+.actions {display:flex;gap:8px;flex-wrap:wrap}
+#good {background:#e8f4ed;border-color:#a8cdb5;color:#245d3b}
+#problem {background:#fff2e9;border-color:#dfc2ac;color:#7e4523}
+.nav {display:flex;justify-content:space-between;gap:12px;margin-top:20px}
+#status {min-height:24px;line-height:1.6;font-size:14px;color:#365579}
+footer {font-size:13px;color:#6f7b8c;margin-top:20px;line-height:1.7}
+@media(max-width:550px) {main {margin:12px auto;padding:16px}.card {padding:22px}h2 {font-size:24px}.controls button {flex:1}.word {font-size:26px}}
+</style>
+</head>
+<body>
+<main>
+<header><h1>בדיקת הקלטות</h1><a href="/api/export" download="listening-reviews.json">הורדת התשובות</a></header>
+<section class="card" aria-labelledby="reference">
+<div id="progress">טוען...</div>
+<h2 id="reference">הקלטות לבדיקה</h2>
+<p class="instructions">האזינו לפסוק ואז לחיתוכי המילים. אפשר גם ללחוץ על מילה בנפרד. אם מילה חסרה, נחתכת או כוללת מילה אחרת - סמנו בעיה.</p>
+<div class="controls">
+<button class="primary" id="verse">▶ הפסוק</button>
+<button id="cuts">▶ חיתוכי המילים</button>
+<button id="context">עם הקשר</button>
+<button id="stop" aria-label="עצירת הנגינה">■ עצירה</button>
+</div>
+<div id="words" aria-label="מילים להאזנה"></div>
+<div id="listening" role="status"></div>
+<label for="note">הערה (רשות)</label>
+<textarea id="note" rows="2" maxlength="2000" placeholder="למשל: המילה השנייה נחתכת בתחילתה"></textarea>
+<div class="actions">
+<button id="good" disabled>✓ החיתוכים טובים</button>
+<button id="problem">יש בעיה</button>
+<button id="skip">דלגו בינתיים</button>
+</div>
+<div class="nav"><button id="previous">→ הקודם</button><button id="next">הבא ←</button></div>
+<p id="status" role="status" aria-live="polite"></p>
+</section>
+<footer>התשובות נשמרות אוטומטית במחשב. אפשר לחזור ולהמשיך בכל עת.<br>הבדיקה נוגעת לפסוק המוצג בלבד. לאחר מכן נבדוק את התוצאה לפני פרסום.</footer>
+</main>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+let cases = [], decisions = {}, token, index = 0, audioContext, currentSource, generation = 0;
+const buffers = new Map(), evidence = new Map();
+let saving = false, cancelPlayback;
+const caseNow = () => cases[index];
+const heardNow = () => evidence.get(caseNow().id);
+function stop() {
+  generation++;
+  if (currentSource) {
+    currentSource.onended = null;
+    try { currentSource.stop(); } catch {}
+    currentSource.disconnect(); currentSource = null;
+  }
+  cancelPlayback?.(); cancelPlayback = null;
+  document.querySelectorAll(".word.active").forEach(el => el.classList.remove("active"));
+}
+function updateEvidence() {
+  const heard = heardNow();
+  $("listening").textContent = (heard.verse ? "הפסוק נשמע" : "האזינו לפסוק") + " · " + heard.segments.size + "/" + caseNow().words.length + " חיתוכים נשמעו";
+  $("good").disabled = saving || !heard.verse || heard.segments.size !== caseNow().words.length;
+}
+function render() {
+  stop();
+  const item = caseNow();
+  if (!item) {
+    $("reference").textContent = "אין עדיין פסוקים מוכנים";
+    document.querySelectorAll("button").forEach(button => { button.disabled = true; });
+    return;
+  }
+  if (!evidence.has(item.id)) {
+    const saved = decisions[item.id]?.listenEvidenceReportedByBrowser;
+    evidence.set(item.id, {verse: saved?.verseHeard === true, segments: new Set(saved?.heardSegments ?? [])});
+  }
+  $("progress").textContent = "פסוק " + (index + 1) + " מתוך " + cases.length + " · " + Object.keys(decisions).length + " תשובות נשמרו";
+  $("reference").textContent = item.label;
+  $("words").replaceChildren();
+  for (const word of item.words) {
+    const button = document.createElement("button");
+    button.className = "word" + (heardNow().segments.has(word.segment) ? " heard" : "");
+    button.textContent = word.text;
+    button.dataset.segment = word.segment;
+    button.setAttribute("aria-label", "האזנה לחיתוך " + word.text);
+    button.onclick = () => void play("word", word);
+    $("words").append(button);
+  }
+  $("note").value = decisions[item.id]?.note ?? "";
+  $("previous").disabled = index === 0;
+  $("next").disabled = index === cases.length - 1;
+  $("status").textContent = decisions[item.id] ? "תשובה נשמרה: " + {good:"החיתוכים טובים",problem:"יש בעיה",skip:"דילוג"}[decisions[item.id].verdict] : "";
+  updateEvidence();
+}
+async function getBuffer(item) {
+  if (!buffers.has(item.id)) {
+    buffers.set(item.id, (async () => {
+      const response = await fetch("/clips/" + item.id);
+      if (!response.ok) throw new Error("לא ניתן לטעון את ההקלטה");
+      const bytes = await response.arrayBuffer();
+      const digest = await crypto.subtle.digest("SHA-256", bytes);
+      const hash = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2,"0")).join("");
+      if (hash !== item.clipSha256) throw new Error("ההקלטה השתנתה");
+      return audioContext.decodeAudioData(bytes);
+    })().catch(error => { buffers.delete(item.id); throw error; }));
+  }
+  if (buffers.size > 4) {
+    const oldest = buffers.keys().next().value;
+    if (oldest !== item.id) buffers.delete(oldest);
+  }
+  return buffers.get(item.id);
+}
+function playSlice(buffer, item, start, end, request, word) {
+  return new Promise(resolve => {
+    if (request !== generation) return resolve(false);
+    const offset = (start - item.clipStartMs) / 1000;
+    const duration = (end - start) / 1000;
+    if (offset < 0 || duration <= 0 || offset + duration > buffer.duration + 0.0001)
+      throw new Error("החיתוך מחוץ להקלטה");
+    const source = audioContext.createBufferSource();
+    source.buffer = buffer;
+    source.connect(audioContext.destination);
+    currentSource = source;
+    cancelPlayback = () => resolve(false);
+    const element = word ? document.querySelector('[data-segment="' + word.segment + '"]') : null;
+    element?.classList.add("active");
+    const began = audioContext.currentTime;
+    source.onended = () => {
+      element?.classList.remove("active");
+      source.disconnect();
+      if (currentSource === source) currentSource = null;
+      cancelPlayback = null;
+      resolve(request === generation && audioContext.currentTime - began >= duration - 0.015);
+    };
+    source.start(0, offset, duration);
+  });
+}
+async function play(mode, selected) {
+  stop();
+  const request = generation, item = caseNow();
+  $("status").textContent = "טוען הקלטה...";
+  try {
+    audioContext ??= new AudioContext();
+    await audioContext.resume();
+    const buffer = await getBuffer(item);
+    if (request !== generation) return;
+    $("status").textContent = mode === "cuts" ? "מנגנים כל מילה בנפרד..." : "מנגן...";
+    if (mode === "cuts" || mode === "word") {
+      for (const word of mode === "cuts" ? item.words : [selected]) {
+        if (!await playSlice(buffer,item,word.startMs,word.endMs,request,word)) return;
+        evidence.get(item.id).segments.add(word.segment);
+        document.querySelector('[data-segment="' + word.segment + '"]')?.classList.add("heard");
+        updateEvidence();
+        if (mode === "cuts") await new Promise(resolve => setTimeout(resolve,160));
+        if (request !== generation) return;
+      }
+    } else {
+      const start = mode === "context" ? item.clipStartMs : item.words[0].startMs;
+      const end = mode === "context" ? item.clipEndMs : item.words.at(-1).endMs;
+      if (!await playSlice(buffer,item,start,end,request)) return;
+      if (mode === "verse") evidence.get(item.id).verse = true;
+      updateEvidence();
+    }
+    if (request === generation) $("status").textContent = "אפשר להשמיע שוב או לשמור תשובה.";
+  } catch (error) {
+    if (request === generation) $("status").textContent = error.message;
+  }
+}
+async function save(verdict) {
+  if (saving || !caseNow()) return;
+  stop(); saving = true; updateEvidence();
+  document.querySelectorAll(".actions button,.nav button").forEach(button => { button.disabled = true; });
+  const item = caseNow(), heard = heardNow();
+  try {
+    const response = await fetch("/api/reviews", {
+      method:"POST", headers:{"Content-Type":"application/json","X-Review-Token":token},
+      body:JSON.stringify({caseId:item.id,candidateSha256:item.candidateSha256,verdict,
+        verseHeard:heard.verse,heardSegments:[...heard.segments],note:$("note").value})
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error);
+    decisions[item.id] = result;
+    saving = false;
+    if (index < cases.length - 1) index++;
+    render();
+    $("status").textContent = index === cases.length - 1 && Object.keys(decisions).length === cases.length
+      ? "כל התשובות נשמרו. תודה! אפשר לחזור ולשנות תשובה." : "התשובה נשמרה.";
+  } catch (error) {
+    $("status").textContent = "השמירה לא הצליחה: " + error.message;
+    saving = false; updateEvidence();
+  } finally {
+    $("problem").disabled = false; $("skip").disabled = false;
+    $("previous").disabled = index === 0; $("next").disabled = index === cases.length - 1;
+  }
+}
+$("verse").onclick = () => void play("verse");
+$("cuts").onclick = () => void play("cuts");
+$("context").onclick = () => void play("context");
+$("stop").onclick = stop;
+$("good").onclick = () => void save("good");
+$("problem").onclick = () => void save("problem");
+$("skip").onclick = () => void save("skip");
+$("previous").onclick = () => { if (!saving && index > 0) { index--; render(); } };
+$("next").onclick = () => { if (!saving && index < cases.length - 1) { index++; render(); } };
+document.addEventListener("visibilitychange", () => { if (document.hidden) stop(); });
+window.addEventListener("pagehide", stop);
+(async () => {
+  try {
+    const response = await fetch("/api/queue");
+    if (!response.ok) throw new Error("לא ניתן לטעון את התור");
+    ({cases, decisions, token} = await response.json());
+    index = Math.max(0, cases.findIndex(item => !decisions[item.id]));
+    render();
+  } catch (error) { $("status").textContent = error.message; }
+})();
+</script>
+</body>
+</html>

@@ -152,6 +152,10 @@ keep the display on. For a worker started before this support was added,
 
 ## Review
 
+For a minimal verse queue with automatic local saving, see [verse listening](LISTENING.md).
+It collects source-bound feedback without changing the continuous worker or publishing timings.
+
+
 ```powershell
 .venv/Scripts/python.exe review.py --perek 829 --output .outputs/review-829.html
 .venv/Scripts/python.exe -m http.server 8765 --bind 127.0.0.1 --directory .outputs
