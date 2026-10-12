@@ -202,7 +202,8 @@
                   IsVisible="True"
                   ZIndex="10"
                   BackgroundColor="{AppThemeBinding Light=White, Dark=#1C1C1E}">
-                <VerticalStackLayout VerticalOptions="Center" HorizontalOptions="Center" Spacing="12">
+                <VerticalStackLayout x:Name="CarouselLoadingIndicator"
+                                     VerticalOptions="Center" HorizontalOptions="Center" Spacing="12">
                     <ActivityIndicator IsRunning="True"
                                        Color="{StaticResource Primary}"
                                        HeightRequest="48"
@@ -211,6 +212,32 @@
                            FontSize="18"
                            HorizontalTextAlignment="Center"
                            TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray200}}"/>
+                </VerticalStackLayout>
+                <!-- Load failure: the bounded perek load surfaces here with a
+                     retry instead of leaving the spinner up forever (#2084). -->
+                <VerticalStackLayout x:Name="CarouselLoadErrorPanel"
+                                     IsVisible="False"
+                                     Padding="24"
+                                     Spacing="12"
+                                     VerticalOptions="Center" HorizontalOptions="Center">
+                    <Label Text="שגיאה בטעינת הפרק"
+                           AutomationId="PerekLoadError"
+                           FontSize="18"
+                           HorizontalTextAlignment="Center"
+                           TextColor="{AppThemeBinding Light={StaticResource Error}, Dark={StaticResource ErrorDark}}"/>
+                    <Label x:Name="CarouselLoadErrorDetail"
+                           AutomationId="PerekLoadErrorDetail"
+                           FontSize="13"
+                           LineBreakMode="WordWrap"
+                           HorizontalTextAlignment="Center"
+                           TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray200}}"/>
+                    <Button Text="נסו שוב"
+                            AutomationId="PerekLoadRetryButton"
+                            BackgroundColor="{StaticResource Primary}"
+                            TextColor="White"
+                            CornerRadius="8"
+                            Padding="32,10"
+                            Clicked="OnPerekLoadRetryClicked"/>
                 </VerticalStackLayout>
             </Grid>
 
