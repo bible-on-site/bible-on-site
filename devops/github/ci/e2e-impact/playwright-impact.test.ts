@@ -518,6 +518,37 @@ impl R {
 		}
 	});
 
+	test("use super::* inside an inline mod tests does not hub to the parent index", () => {
+		const root = tmpRepo();
+		try {
+			for (const [rel, content] of Object.entries(API_FIXTURE)) {
+				write(root, `web/api/${rel}`, content);
+			}
+			// `super` inside `mod tests` is the file's own module — it must not
+			// resolve to `services/mod.rs`, whose mod edges would fan this file
+			// out to every sibling service.
+			write(
+				root,
+				"web/api/src/services/lonely_service.rs",
+				`pub struct Lonely;
+mod tests {
+	use super::*;
+	use sea_orm::DbErr;
+}
+`,
+			);
+			write(root, "web/api/src/services.rs", "pub mod article_service;\npub mod article_search;\npub mod lonely_service;");
+			const map = buildApiSourceMap(join(root, "web/api"), "web/api");
+			const deps = map.deps["web/api/src/services/lonely_service.rs"];
+			assert.ok(
+				!deps.includes("web/api/src/services/mod.rs"),
+				`super::* inside mod tests must not edge to the index: ${deps.join(",")}`,
+			);
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
 	test("ComplexObject and SimpleObject members join the field map", () => {
 		const root = tmpRepo();
 		try {
