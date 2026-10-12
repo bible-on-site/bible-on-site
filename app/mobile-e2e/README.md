@@ -199,8 +199,8 @@ FullyQualifiedName filter for enforce mode and local experiments.
 ## Dependency security
 
 The `shell-quote` override replaces the non-bundled copy pinned by Appium support
-with 1.11.0, which fixes command injection involving a line terminator after a
-comment token. Both published drivers still contain bundled shell-quote 1.10.0;
+with 1.12.0, which fixes command injection involving a line terminator after a
+comment token. The pinned Android 8.7.0 and iOS 12.17.3 drivers still contain bundled shell-quote 1.10.0;
 Android also bundles other vulnerable packages. npm overrides do not replace
 those bundled files. Keep their alerts visible and follow
 [#1995](https://github.com/bible-on-site/bible-on-site/issues/1995) for patched
