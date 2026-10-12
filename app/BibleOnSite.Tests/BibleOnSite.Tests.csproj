@@ -18,7 +18,7 @@
 
   <ItemGroup>
     <PackageReference Include="HtmlAgilityPack" Version="1.13.0" />
-    <PackageReference Include="xunit.v3" Version="4.0.1" />
+    <PackageReference Include="xunit.v3" Version="4.0.2" />
     <PackageReference Include="FluentAssertions" Version="8.11.0" />
     <PackageReference Include="Moq" Version="4.21.0" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
@@ -39,7 +39,7 @@
     <Compile Include="..\BibleOnSite\Services\RecitationService.cs" Link="Services\RecitationService.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\RecitationPreferencesViewModel.cs" Link="ViewModels\RecitationPreferencesViewModel.cs" />
     <!-- Exclude XAML code-behind files as they require MAUI XAML compilation -->
-    <Compile Include="..\BibleOnSite\Controls\*.cs" Exclude="..\BibleOnSite\Controls\*.xaml.cs;..\BibleOnSite\Controls\FloatingSearchBar.Filters.cs" Link="Controls\%(Filename)%(Extension)" />
+    <Compile Include="..\BibleOnSite\Controls\*.cs" Exclude="..\BibleOnSite\Controls\*.xaml.cs;..\BibleOnSite\Controls\FloatingSearchBar.Filters.cs;..\BibleOnSite\Controls\MasoraUnitPickerPopup.Columns.cs" Link="Controls\%(Filename)%(Extension)" />
     <Compile Include="..\BibleOnSite\Data\*.cs" Link="Data\%(Filename)%(Extension)" />
     <Compile Include="..\BibleOnSite\Helpers\*.cs" Link="Helpers\%(Filename)%(Extension)" />
     <Compile Include="..\BibleOnSite\Models\*.cs" Link="Models\%(Filename)%(Extension)" />
@@ -48,7 +48,10 @@
     <Compile Include="..\BibleOnSite\Services\ArticleService.cs" Link="Services\ArticleService.cs" />
     <Compile Include="..\BibleOnSite\Services\StarterService.cs" Link="Services\StarterService.cs" />
     <Compile Include="..\BibleOnSite\Services\LocalDatabaseService.cs" Link="Services\LocalDatabaseService.cs" />
+    <Compile Include="..\BibleOnSite\Services\MasoraDataService.cs" Link="Services\MasoraDataService.cs" />
     <Compile Include="..\BibleOnSite\Services\PerekDataService.cs" Link="Services\PerekDataService.cs" />
+    <Compile Include="..\BibleOnSite\Services\ParashaDataService.cs" Link="Services\ParashaDataService.cs" />
+    <Compile Include="..\BibleOnSite\Services\PerekScheduleService.cs" Link="Services\PerekScheduleService.cs" />
     <Compile Include="..\BibleOnSite\Services\SearchIndexService.cs" Link="Services\SearchIndexService.cs" />
     <Compile Include="..\BibleOnSite\Services\SearchHistoryService.cs" Link="Services\SearchHistoryService.cs" />
     <Compile Include="..\BibleOnSite\Services\NetworkService.cs" Link="Services\NetworkService.cs" />
@@ -61,7 +64,13 @@
     <Compile Include="..\BibleOnSite\Services\PerushimCatalogService.cs" Link="Services\PerushimCatalogService.cs" />
     <Compile Include="..\BibleOnSite\Services\PerushimNotesService.cs" Link="Services\PerushimNotesService.cs" />
     <Compile Include="..\BibleOnSite\Services\SyntheticPerushimProvider.cs" Link="Services\SyntheticPerushimProvider.cs" />
+    <Compile Include="..\BibleOnSite\ViewModels\FlyoutMenuState.cs" Link="ViewModels\FlyoutMenuState.cs" />
+    <Compile Include="..\BibleOnSite\ViewModels\LearningCalendarViewModel.cs" Link="ViewModels\LearningCalendarViewModel.cs" />
+    <Compile Include="..\BibleOnSite\ViewModels\MasoraViewModel.cs" Link="ViewModels\MasoraViewModel.cs" />
+    <Compile Include="..\BibleOnSite\ViewModels\MasoraViewModel.Perushim.cs" Link="ViewModels\MasoraViewModel.Perushim.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\PerekViewModel.cs" Link="ViewModels\PerekViewModel.cs" />
+    <Compile Include="..\BibleOnSite\ViewModels\ParashaListViewModel.cs" Link="ViewModels\ParashaListViewModel.cs" />
+    <Compile Include="..\BibleOnSite\ViewModels\ParashaViewModel.cs" Link="ViewModels\ParashaViewModel.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\PreferencesViewModel.cs" Link="ViewModels\PreferencesViewModel.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\AuthorsViewModel.cs" Link="ViewModels\AuthorsViewModel.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\SearchViewModel.cs" Link="ViewModels\SearchViewModel.cs" />

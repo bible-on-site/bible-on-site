@@ -21,7 +21,11 @@ public class LocalDatabaseServiceTests
         try
         {
             var projectRoot = GetProjectRoot();
-            if (projectRoot == null) return null;
+            if (projectRoot == null)
+            {
+                return null;
+            }
+
             return Path.Combine(projectRoot, "BibleOnSite", "Resources", "Raw");
         }
         catch
@@ -33,7 +37,11 @@ public class LocalDatabaseServiceTests
     private static bool DatabaseFileExists()
     {
         var rawPath = GetRawResourcesPath();
-        if (rawPath == null || !Directory.Exists(rawPath)) return false;
+        if (rawPath == null || !Directory.Exists(rawPath))
+        {
+            return false;
+        }
+
         var dbPath = Path.Combine(rawPath, ExpectedDbName);
         return File.Exists(dbPath);
     }

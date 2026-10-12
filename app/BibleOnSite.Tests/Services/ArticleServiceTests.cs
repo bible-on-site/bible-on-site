@@ -130,6 +130,45 @@ public class ArticleServiceTests
         articles.Should().BeEmpty();
     }
 
+    [Fact]
+    public async Task SearchArticlesAsync_returns_null_when_search_payload_is_missing()
+    {
+        await using var server = new GraphQLStubServer(_ => """
+            {
+              "data": {
+                "searchArticles": null
+              }
+            }
+            """);
+        var service = CreateService(server.Url);
+
+        var page = await service.SearchArticlesAsync("בראשית", 10, TestContext.Current.CancellationToken);
+
+        page.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task SearchArticlesAsync_treats_missing_hits_as_empty_page()
+    {
+        await using var server = new GraphQLStubServer(_ => """
+            {
+              "data": {
+                "searchArticles": {
+                  "total": 0,
+                  "hits": null
+                }
+              }
+            }
+            """);
+        var service = CreateService(server.Url);
+
+        var page = await service.SearchArticlesAsync("בראשית", 10, TestContext.Current.CancellationToken);
+
+        page.Should().NotBeNull();
+        page!.Total.Should().Be(0);
+        page.Hits.Should().BeEmpty();
+    }
+
     private static ArticleService CreateService(string url)
     {
         var constructor = typeof(ArticleService).GetConstructor(

@@ -1,5 +1,4 @@
-"""
-Undeployed ECR to ECS scale-up proposal (#2016)
+"""Undeployed ECR to ECS scale-up proposal (#2016)
 
 Triggered by EventBridge when an ECR image is pushed.
 Forces a new deployment of the corresponding ECS service.
@@ -28,8 +27,8 @@ POLL_INTERVAL = 10  # seconds between checks
 
 
 def handler(event, context):
-    """
-    Triggered by EventBridge when an ECR image is pushed.
+    """Triggered by EventBridge when an ECR image is pushed.
+
     Illustrates the undeployed scale-up proposal; availability is unvalidated.
     """
     print(f"Event received: {json.dumps(event)}")

@@ -8,6 +8,7 @@
  *       [--force-full] [--ancestor-status <status>]
  *   node e2e-impact.ts collect-appium --suite <dir> --platform <key>
  *       --artifacts <dir> --snapshot-sha <sha> --out <tree.json> [--incomplete]
+ *       [--exec-tree <exec-coverage-tree.json>]
  *   node e2e-impact.ts baseline-download --repo <owner/name> --name <artifact>
  *       --out <dir> [--file coverage-tree.json]
  *
@@ -20,6 +21,12 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } fr
 import { execFileSync } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+	execSelectorView,
+	execTreeCompatible,
+	loadExecTree,
+} from "../../../e2e-coverage-trees/to-selector-tree.ts";
+import type { ExecCoverageTree } from "../../../e2e-coverage-trees/model.ts";
 import { collectTree, writeTree } from "./collect-appium.ts";
 import { fingerprintSource, type SourceFingerprint } from "./fingerprint.ts";
 import { compareRevisions, downloadArtifact, findArtifact } from "./github.ts";
@@ -291,6 +298,33 @@ async function collectAppium(flags: Map<string, string>): Promise<void> {
 	const snapshotSha = required(flags, "snapshot-sha");
 	const out = required(flags, "out");
 	const rules = loadRules(join(REPO_ROOT, suiteDir, "e2e-impact.json"));
+	// The exec channel is optional: a missing, corrupt or mismatched tree is
+	// diagnosed and the automation-id collection proceeds untouched — exec
+	// evidence may widen the selection surface, never shrink it.
+	let execTree: ExecCoverageTree | undefined;
+	const execTreePath = flags.get("exec-tree");
+	if (execTreePath !== undefined) {
+		const loaded = loadExecTree(execTreePath);
+		if (loaded.kind !== "ok") {
+			console.warn(`[e2e-impact] exec tree ignored: ${loaded.reason}`);
+		} else {
+			const problem = execTreeCompatible(loaded.tree, {
+				suite: rules.suite,
+				platform,
+				snapshotSha,
+			});
+			if (problem !== null) {
+				console.warn(`[e2e-impact] exec tree ${execTreePath} ignored: ${problem}`);
+			} else {
+				execTree = loaded.tree;
+				const view = execSelectorView(execTree);
+				console.log(
+					`[e2e-impact] exec tree: ${Object.keys(view.tests).length} per-test entries, ` +
+						`${view.sharedFiles.length} shared files`,
+				);
+			}
+		}
+	}
 	const tree = collectTree({
 		repoRoot: REPO_ROOT,
 		rules,
@@ -298,6 +332,7 @@ async function collectAppium(flags: Map<string, string>): Promise<void> {
 		artifactsDir: artifacts,
 		snapshotSha,
 		complete: !flags.has("incomplete"),
+		execTree,
 	});
 	writeTree(tree, out);
 	const count = Object.keys(tree.tests).length;

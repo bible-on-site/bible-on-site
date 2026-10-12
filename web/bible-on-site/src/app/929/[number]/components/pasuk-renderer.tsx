@@ -78,6 +78,25 @@ export function renderSegmentRange(
 }
 
 /**
+ * Intersects pasuk runs with a segment bound for partial-pasuk rendering
+ * (reading-division range bounds may start or end mid-pasuk). Runs fully
+ * outside the bound are dropped; boundary runs are clipped.
+ */
+export function clipSegmentRuns<T extends { startIdx: number; endIdx: number }>(
+	runs: T[],
+	startIdx: number,
+	endIdx: number,
+): T[] {
+	return runs
+		.map((run) => ({
+			...run,
+			startIdx: Math.max(run.startIdx, startIdx),
+			endIdx: Math.min(run.endIdx, endIdx),
+		}))
+		.filter((run) => run.startIdx <= run.endIdx);
+}
+
+/**
  * Renders a pasuk's segments with entity ref links.
  * linkWrapper: renders a linked run (receives entryUniqueName, children, key).
  */
@@ -95,7 +114,48 @@ export function renderPasukWithEntityRefs(
 	) => React.ReactNode,
 	wordWrapper?: WordWrapper,
 ): React.ReactNode[] {
-	const runs = getSegmentRuns(entityRefLookup, pasukIdx + 1, segments.length);
+	return renderPasukSegmentsWithEntityRefs(
+		segments,
+		pasukIdx,
+		0,
+		segments.length - 1,
+		entityRefLookup,
+		ptuha,
+		stuma,
+		qriClassName,
+		linkWrapper,
+		wordWrapper,
+	);
+}
+
+/**
+ * Renders a segment sub-range of a pasuk with entity ref links — the
+ * shared text resolver for reading-division units whose bounds may cut
+ * inside a pasuk (מסורה intra-pasuk breaks, Haftarah partial pesukim).
+ * Entity-ref runs are clipped to the bound, so a linked phrase cut by a
+ * unit boundary keeps its link on the included portion.
+ */
+export function renderPasukSegmentsWithEntityRefs(
+	segments: Segment[],
+	pasukIdx: number,
+	startIdx: number,
+	endIdx: number,
+	entityRefLookup: EntityRefLookup,
+	ptuha: () => React.ReactNode,
+	stuma: () => React.ReactNode,
+	qriClassName: string,
+	linkWrapper: (
+		entryUniqueName: string,
+		children: React.ReactNode[],
+		key: string,
+	) => React.ReactNode,
+	wordWrapper?: WordWrapper,
+): React.ReactNode[] {
+	const runs = clipSegmentRuns(
+		getSegmentRuns(entityRefLookup, pasukIdx + 1, segments.length),
+		startIdx,
+		endIdx,
+	);
 	return runs.map((run) => {
 		const { content, trailingSpace } = renderSegmentRange(
 			segments,
