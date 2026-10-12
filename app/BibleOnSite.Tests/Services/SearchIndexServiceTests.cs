@@ -374,6 +374,39 @@ public class SearchIndexServiceTests
     }
 
     [Fact]
+    public async Task EvictedWorkingCache_RestoresTheAvailablePackIndexWithoutImportingNotes()
+    {
+        await using var storage = new TestStorage();
+        await using var pack = new TestStorage();
+        var perakim = await SeedAsync(storage);
+        await storage.CreateDatabaseAsync(NotesDb,
+            [.. NotesDbV2.Statements((7, 1, 1, 0, "בראשית")), "INSERT INTO _metadata VALUES ('build_timestamp','42')"]);
+        var delivered = await pack.CreateDatabaseAsync(PerushimNotesService.SearchIndexDbName,
+            DeliveredIndexStatements("v4:42:n1", "סימן מובהק"));
+        await delivered.CloseAsync();
+        File.Copy(Path.Join(pack.Root, PerushimNotesService.SearchIndexDbName),
+            Path.Join(storage.Root, PerushimNotesService.SearchIndexDbName));
+        var delivery = NullPad();
+        delivery.Setup(service => service.TryGetAssetPathAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(pack.Root);
+        var notes = PerushimNotesService.CreateForTesting(delivery.Object, storage.Root);
+        var cachePath = Path.Join(storage.Root, "search.sqlite");
+        var filters = new HashSet<SearchFilter> { SearchFilter.Perush };
+        var books = new HashSet<int> { 1 };
+        await using (var first = new SearchIndexService(perakim, notes, cachePath))
+        {
+            (await first.SearchAsync("סימן", filters, books, 10, TestContext.Current.CancellationToken))
+                .Should().ContainSingle();
+        }
+        File.Delete(cachePath);
+        await using var restored = new SearchIndexService(perakim, notes, cachePath);
+        (await restored.SearchAsync("סימן", filters, books, 10, TestContext.Current.CancellationToken))
+            .Should().ContainSingle("cache eviction must restore the pack's index instead of rebuilding the corpus");
+        delivery.Verify(service => service.FetchAsync(It.IsAny<string>(), It.IsAny<IProgress<double>>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
     public async Task FirstVerseQuery_UsesTheInstalledDeliveredIndexBeforeBuilding()
     {
         await using var storage = new TestStorage();
