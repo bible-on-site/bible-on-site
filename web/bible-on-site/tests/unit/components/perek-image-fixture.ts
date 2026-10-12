@@ -13,6 +13,8 @@ export const sampleImage: PerekIllustration = {
 	socialHeight: 900,
 	alt: "איור לדוגמה לפרק",
 	caption: "איור לדוגמה לפרק.",
+	captionMarkdown: null,
+	verseRanges: [{ perekId: 1, pasukFrom: 1, pasukTo: 31 }],
 	description: "תיאור לדוגמה.",
 	credit: null,
 };

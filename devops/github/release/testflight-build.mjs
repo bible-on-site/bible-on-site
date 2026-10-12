@@ -48,7 +48,7 @@ export function apiToken(credentials, now = Math.floor(Date.now() / 1000)) {
 	return `${message}.${sign("sha256", Buffer.from(message), { key, dsaEncoding: "ieee-p1363" }).toString("base64url")}`;
 }
 
-function appleReader(credentials, fetcher) {
+export function appleReader(credentials, fetcher) {
 	return async (path, parameters) => {
 		const url = new URL(`https://api.appstoreconnect.apple.com/v1/${path}`);
 		url.search = new URLSearchParams(parameters).toString();
@@ -68,7 +68,7 @@ function appleReader(credentials, fetcher) {
 	};
 }
 
-async function findApp(metadata, read) {
+export async function findApp(metadata, read) {
 	const apps = (
 		await read("apps", { "filter[bundleId]": metadata.bundle, limit: "200" })
 	).data;

@@ -1,0 +1,215 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:viewmodels="clr-namespace:BibleOnSite.ViewModels"
+             xmlns:models="clr-namespace:BibleOnSite.Models"
+             xmlns:controls="clr-namespace:BibleOnSite.Controls"
+             x:Class="BibleOnSite.Pages.TanahpediaEntryPage"
+             x:Name="Page"
+             x:DataType="viewmodels:TanahpediaEntryViewModel"
+             Title="{Binding Title}"
+             FlowDirection="RightToLeft"
+             Shell.NavBarIsVisible="False">
+
+    <Grid RowDefinitions="Auto,*">
+        <!-- Toolbar with back button and entry title -->
+        <Grid Grid.Row="0"
+              Padding="8,8,8,4"
+              ColumnDefinitions="Auto,*,Auto"
+              BackgroundColor="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}">
+            <Button Grid.Column="0"
+                    Text="→"
+                    FontSize="24"
+                    BackgroundColor="Transparent"
+                    TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"
+                    Command="{Binding GoBackCommand}"
+                    SemanticProperties.Description="חזור"/>
+            <Label Grid.Column="1"
+                   Text="{Binding Title}"
+                   FontSize="16"
+                   FontAttributes="Bold"
+                   VerticalTextAlignment="Center"
+                   LineBreakMode="TailTruncation"
+                   MaxLines="1"
+                   TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
+        </Grid>
+
+        <Grid Grid.Row="1">
+            <!-- Entry content -->
+            <ScrollView IsVisible="{Binding ShowEntry}">
+                <VerticalStackLayout Padding="16" Spacing="14">
+                    <VerticalStackLayout IsVisible="{Binding IsDisambiguation, Converter={StaticResource InvertedBoolConverter}}"
+                                         Spacing="14">
+                        <Label Text="{Binding Title}"
+                               FontSize="24"
+                               FontAttributes="Bold"
+                               TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
+
+                        <!-- Entity type badges → category pages -->
+                        <FlexLayout Wrap="Wrap"
+                                    BindableLayout.ItemsSource="{Binding Entities}"
+                                    IsVisible="{Binding HasEntities}">
+                            <BindableLayout.ItemTemplate>
+                                <DataTemplate x:DataType="models:TanahpediaLinkedEntity">
+                                    <Border Padding="10,4"
+                                            Margin="0,0,8,8"
+                                            StrokeShape="RoundRectangle 14"
+                                            Stroke="{StaticResource Primary}"
+                                            StrokeThickness="1">
+                                        <Border.GestureRecognizers>
+                                            <TapGestureRecognizer Command="{Binding Source={x:Reference Page}, Path=BindingContext.OpenEntityCategoryCommand}"
+                                                                  CommandParameter="{Binding .}"/>
+                                        </Border.GestureRecognizers>
+                                        <Label Text="{Binding EntityType, Converter={StaticResource TanahpediaCategoryLabelConverter}}"
+                                               FontSize="13"
+                                               TextColor="{StaticResource Primary}"/>
+                                    </Border>
+                                </DataTemplate>
+                            </BindableLayout.ItemTemplate>
+                        </FlexLayout>
+
+                        <!-- Admin-authored HTML body -->
+                        <controls:HtmlView x:Name="EntryHtml"
+                                           HtmlContent="{Binding Content}"
+                                           TextDirection="Rtl"
+                                           TextAlignment="Justify"
+                                           LineHeight="1.6"
+                                           IsVisible="{Binding HasContent}"/>
+
+                        <!-- No-content notice (website parity: only when there is
+                             nothing else to show) -->
+                        <Label Text="אין תוכן עדיין לערך זה."
+                               FontSize="14"
+                               HorizontalTextAlignment="Center"
+                               IsVisible="{Binding HasContent, Converter={StaticResource InvertedBoolConverter}}"
+                               TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
+
+                        <!-- מופעים בתנ"ך -->
+                        <VerticalStackLayout Spacing="8"
+                                             IsVisible="{Binding HasOccurrences}">
+                            <Label Text="מופעים בתנ&quot;ך"
+                                   FontSize="18"
+                                   FontAttributes="Bold"
+                                   TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
+                            <VerticalStackLayout Spacing="6"
+                                                 BindableLayout.ItemsSource="{Binding Occurrences}">
+                                <BindableLayout.ItemTemplate>
+                                    <DataTemplate x:DataType="viewmodels:TanahpediaOccurrenceItem">
+                                        <Grid ColumnDefinitions="Auto,*"
+                                              ColumnSpacing="12"
+                                              Padding="0,4">
+                                            <Grid.GestureRecognizers>
+                                                <TapGestureRecognizer Tapped="OnOccurrenceTapped"/>
+                                            </Grid.GestureRecognizers>
+                                            <Label Text="{Binding Citation}"
+                                                   FontSize="14"
+                                                   FontAttributes="Bold"
+                                                   TextColor="{StaticResource Primary}"
+                                                   TextDecorations="Underline"/>
+                                            <Label Grid.Column="1"
+                                                   Text="{Binding VerseText}"
+                                                   FontSize="13"
+                                                   MaxLines="2"
+                                                   LineBreakMode="TailTruncation"
+                                                   TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </BindableLayout.ItemTemplate>
+                            </VerticalStackLayout>
+                        </VerticalStackLayout>
+                    </VerticalStackLayout>
+                </VerticalStackLayout>
+            </ScrollView>
+
+            <!-- Disambiguation — the name leads to several entries -->
+            <ScrollView IsVisible="{Binding IsDisambiguation}">
+                <VerticalStackLayout Padding="16" Spacing="12">
+                    <Label Text="{Binding UniqueName}"
+                           FontSize="24"
+                           FontAttributes="Bold"
+                           TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
+                    <Label Text="{Binding UniqueName, StringFormat='השם «{0}» מוביל ליותר מערך אחד. בחר את הערך המבוקש:'}"
+                           FontSize="14"
+                           TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                    <VerticalStackLayout Spacing="4"
+                                         BindableLayout.ItemsSource="{Binding SynonymTargets}">
+                        <BindableLayout.ItemTemplate>
+                            <DataTemplate x:DataType="models:TanahpediaSynonymTarget">
+                                <HorizontalStackLayout Spacing="4"
+                                                       Margin="0,2">
+                                    <Label Text="{Binding Title}"
+                                           FontSize="16"
+                                           TextColor="{StaticResource Primary}"
+                                           TextDecorations="Underline">
+                                        <Label.GestureRecognizers>
+                                            <TapGestureRecognizer Command="{Binding Source={x:Reference Page}, Path=BindingContext.OpenEntryCommand}"
+                                                                  CommandParameter="{Binding UniqueName}"/>
+                                        </Label.GestureRecognizers>
+                                    </Label>
+                                    <Label Text="{Binding Label, StringFormat=' - {0}'}"
+                                           FontSize="14"
+                                           IsVisible="{Binding Label, Converter={StaticResource StringNotEmptyConverter}}"
+                                           TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                                </HorizontalStackLayout>
+                            </DataTemplate>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
+                </VerticalStackLayout>
+            </ScrollView>
+
+            <!-- Not found -->
+            <VerticalStackLayout VerticalOptions="Center"
+                                 HorizontalOptions="Center"
+                                 Padding="24"
+                                 Spacing="10"
+                                 IsVisible="{Binding IsNotFound}">
+                <Label Text="{Binding UniqueName, StringFormat='השם «{0}» לא נמצא בתנכפדיה'}"
+                       FontSize="18"
+                       FontAttributes="Bold"
+                       HorizontalTextAlignment="Center"
+                       TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
+                <Button Text="חזרה לתנכפדיה"
+                        Clicked="OnBackToPediaClicked"
+                        BackgroundColor="{StaticResource Primary}"
+                        TextColor="White"
+                        HorizontalOptions="Center"/>
+            </VerticalStackLayout>
+
+            <!-- Loading overlay -->
+            <VerticalStackLayout VerticalOptions="Center"
+                                 HorizontalOptions="Center"
+                                 IsVisible="{Binding IsLoading}">
+                <Image Source="loading_book_anim.gif"
+                       IsAnimationPlaying="True"
+                       HeightRequest="60"
+                       WidthRequest="60"
+                       Aspect="AspectFit"/>
+                <Label Text="טוען ערך..."
+                       FontSize="16"
+                       HorizontalTextAlignment="Center"/>
+            </VerticalStackLayout>
+
+            <!-- Error state with retry -->
+            <VerticalStackLayout VerticalOptions="Center"
+                                 HorizontalOptions="Center"
+                                 Padding="24"
+                                 Spacing="12"
+                                 IsVisible="{Binding HasError}">
+                <Label Text="התוכן אינו זמין כרגע"
+                       FontSize="18"
+                       FontAttributes="Bold"
+                       HorizontalTextAlignment="Center"
+                       TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
+                <Label Text="אירעה שגיאה בטעינת הנתונים"
+                       FontSize="14"
+                       HorizontalTextAlignment="Center"
+                       TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
+                <Button Text="נסו שוב"
+                        Command="{Binding LoadCommand}"
+                        BackgroundColor="{StaticResource Primary}"
+                        TextColor="White"
+                        HorizontalOptions="Center"/>
+            </VerticalStackLayout>
+        </Grid>
+    </Grid>
+</ContentPage>

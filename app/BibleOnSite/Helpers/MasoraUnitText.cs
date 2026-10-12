@@ -110,24 +110,20 @@ public static class MasoraUnitText
     }
 
     /// <summary>
-    /// Builds the display rows for a unit: pasukim clipped to slice bounds,
-    /// with a perek source label on the first row of each perek slice when
-    /// the unit crosses perek boundaries.
+    /// Builds the display rows for a unit: pasukim clipped to slice bounds.
+    /// The מסורה reader shows no conventional chapter apparatus — rows carry
+    /// canonical perek/pasuk ids for joins only, never a perek label.
     /// </summary>
     /// <param name="unit">The Masoretic unit.</param>
     /// <param name="loadPasukim">Loads a perek's pesukim (with unclipped segments).</param>
-    /// <param name="perekSource">Display source per perek id (e.g. "שמואל א יב").</param>
     /// <param name="fontFactor">User font-scaling factor.</param>
     public static async Task<List<MasoraPasukRow>> BuildRowsAsync(
         MasoraUnit unit,
         Func<int, Task<List<Pasuk>>> loadPasukim,
-        Func<int, string?> perekSource,
         double fontFactor)
     {
         var slices = PerekSlicesForUnit(unit);
-        var multiPerek = IsMultiPerek(unit);
         var fontSize = PasukDisplayItems.PasukFontSizeBase * fontFactor;
-        var markerFontSize = PasukDisplayItems.PasukMarkerFontSizeBase * fontFactor;
 
         var rows = new List<MasoraPasukRow>();
         // Several slices can share one perek (multi-range units); load once.
@@ -148,10 +144,7 @@ public static class MasoraUnitText
                 var clipped = startIndex == null && endIndex == null
                     ? pasuk
                     : ClipPasuk(pasuk, startIndex, endIndex);
-                var label = multiPerek && pasukNum == slice.StartPasuk
-                    ? perekSource(slice.PerekId)
-                    : null;
-                rows.Add(new MasoraPasukRow(clipped, slice.PerekId, label, fontSize, markerFontSize));
+                rows.Add(new MasoraPasukRow(clipped, slice.PerekId, fontSize));
             }
         }
         return rows;
