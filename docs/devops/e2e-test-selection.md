@@ -48,7 +48,7 @@ xUnit suite through `dotnet run --project devops -- TestMobileE2E`
 
 | Path | Producer | Content |
 | --- | --- | --- |
-| `coverage-evidence/<fileBase>-<outcome>.json` | `CoverageEvidence.cs` | `test` (xUnit FQN), `platform`, `outcome`, `sessions[]`, `automationIds[]`, `startedUtc`/`endedUtc` — the per-test session boundaries |
+| `coverage-evidence/<fileBase>-<outcome>.json` | `CoverageEvidence.cs` | `test` (xUnit FQN — also `fileBase`, so shared method names cannot collide), `platform`, `outcome`, `sessions[]`, `automationIds[]`, `startedUtc`/`endedUtc` — the per-test session boundaries |
 | `app-coverage/<fileBase>-<outcome>.json` | `AppCoverage.cs` (#2156) | `app-e2e-coverage-dump/1`: `test` (fileBase = scenario method name), `outcome`, `collectedUtc`, `snapshot.modules[hash][pointKey]=hits` (`altcover-visits/1`) |
 | `app-coverage/_startup-passed.json` | `AppCoverage.cs` | Launch-path hits recorded once per session before the post-connect reset — app-init code is shared evidence, never one test's |
 | `app-coverage/*.coverage-error.txt` | `AppCoverage.cs` | Diagnostics for dumps that could not be pulled; the scenario itself is unaffected |
