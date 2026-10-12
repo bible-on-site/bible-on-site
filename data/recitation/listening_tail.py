@@ -100,6 +100,7 @@ def verify_boundary(row, prior, change, boundary_key):
             or not 40 <= row["endMs"] - row["startMs"] <= 3000):
         raise ValueError("Tail boundary lacks the actual model separator")
 
+
 START_FIELDS = {"letterStartMs", "precedingSeparatorStartMs", "precedingSeparatorEndMs"}
 END_FIELDS = {"letterEndMs", "separatorStartMs", "separatorEndMs", "followingWordStartMs"}
 
