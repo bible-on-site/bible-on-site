@@ -50,6 +50,7 @@ import { buildEntityRefLookup } from "@/lib/tanahpedia/entity-ref-lookup";
 import type { PerekEntityReference } from "@/lib/tanahpedia/service";
 import { constructTsetAwareHDate } from "@/util/hebdates-util";
 import { BlankPageContent } from "./BlankPageContent";
+import { ImageCaption } from "./ImageCaption";
 import { Ptuah } from "./Ptuha";
 import { renderPasukWithEntityRefs } from "./pasuk-renderer";
 import RecitationPlayer, {
@@ -449,8 +450,7 @@ const Sefer = (props: {
 										/>
 									</picture>
 									<figcaption>
-										{illustration.caption}
-										{illustration.credit ? ` · ${illustration.credit}` : ""}
+										<ImageCaption image={illustration} />
 									</figcaption>
 								</figure>
 							))}

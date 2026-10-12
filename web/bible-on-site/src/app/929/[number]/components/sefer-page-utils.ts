@@ -42,6 +42,25 @@ export function bookPageFromPath(
 	);
 }
 
+/**
+ * Flat route to land on when the user leaves the sefer book. While the
+ * book is open the flipbook owns browser history — window.location
+ * names the perek the user actually reached, which the router's stale
+ * pathname cannot see. Book-chrome exits and paths without a perek id
+ * fall back to the perek the book was opened from.
+ */
+export function seferBookExitPath(
+	pathname: string,
+	seferName: string,
+	fallbackPerekId: number,
+): string {
+	if (bookPageFromPath(pathname, seferName)) {
+		return `/929/${fallbackPerekId}`;
+	}
+	const match = pathname.match(/\/929\/(\d+)/);
+	return match ? `/929/${match[1]}` : `/929/${fallbackPerekId}`;
+}
+
 export function toHebrewChapterNumber(num: number): string {
 	return toLetters(num);
 }

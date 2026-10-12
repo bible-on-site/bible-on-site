@@ -82,32 +82,17 @@ function coordinateAfterMarker(
 	return { perekId: nextPerekId, pasuk: 1 };
 }
 
-function perekRefOf(coordinate: ScriptureCoordinate): string {
-	const perek = getPerekByPerekId(coordinate.perekId);
-	return `${perek.source} ${toLetters(coordinate.pasuk)}`;
-}
-
 /**
- * Display heading for a unit: the scripture reference span.
- * Same-perek units collapse to "שמואל א יב ה-ז"; cross-perek units keep
- * both endpoints ("בראשית לה כב - מ א"). The sefer name prefixes the
- * start ref; the end ref repeats only the perek context.
+ * Display heading for a unit: the Masoretic parasha identity —
+ * sefer name + the unit's 1-based ordinal inside its sefer
+ * ("בראשית פרשה ח"). Conventional perek/pasuk references stay
+ * internal; they never surface in the מסורה reader chrome.
  */
 export function formatMasoraUnitHeading(
-	start: ScriptureCoordinate,
-	end: ScriptureCoordinate,
+	seferName: string,
+	order: number,
 ): string {
-	const startRef = perekRefOf(start);
-	const endPerek = getPerekByPerekId(end.perekId);
-	if (start.perekId === end.perekId) {
-		return start.pasuk === end.pasuk
-			? startRef
-			: `${startRef}-${toLetters(end.pasuk)}`;
-	}
-	const endPerekContext = endPerek.additional
-		? `${endPerek.additional} ${endPerek.perekHeb}`
-		: endPerek.perekHeb;
-	return `${startRef} - ${endPerekContext} ${toLetters(end.pasuk)}`;
+	return `${seferName} פרשה ${toLetters(order)}`;
 }
 
 function deriveUnitsFromSefarim(corpus: Sefarim): ReadingUnit[] {
@@ -133,7 +118,7 @@ function deriveUnitsFromSefarim(corpus: Sefarim): ReadingUnit[] {
 				slug: String(nextUnitId),
 				seferName: sefer.name,
 				order,
-				heading: formatMasoraUnitHeading(start, end),
+				heading: formatMasoraUnitHeading(sefer.name, order),
 				ranges: [{ start, end }],
 				closingBreak,
 			});
