@@ -63,6 +63,14 @@ export interface CoverageTree {
 	 * Optional so older baselines stay compatible.
 	 */
 	sourceFingerprints?: Record<string, SourceFingerprint>;
+	/**
+	 * App files the executable-coverage channel could not attribute to a
+	 * single test — the exec tree's `shared` bucket (startup code,
+	 * unmatched/untimed dumps, whole-report shared mode). A change touching
+	 * one widens to every applicable test rather than trusting a per-test
+	 * covering claim. Optional: automation-id-only trees predate the merge.
+	 */
+	sharedFiles?: string[];
 	tests: Record<string, CoverageTreeTest>;
 	/** Evidence records that no discovered test claimed (diagnostics). */
 	unmatchedEvidence?: string[];
