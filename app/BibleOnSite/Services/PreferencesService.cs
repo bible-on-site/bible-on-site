@@ -69,6 +69,22 @@ public class PreferencesService
         }
     }
 
+    private const string InlineCommentaryLimitKey = "inlineCommentaryLimit";
+    private int _inlineCommentaryLimit = 5;
+
+    public int InlineCommentaryLimit
+    {
+        get => _inlineCommentaryLimit;
+        set
+        {
+            var normalized = Math.Clamp(value, 1, 100);
+            if (_inlineCommentaryLimit == normalized) { return; }
+            _inlineCommentaryLimit = normalized;
+            _storage.Set(InlineCommentaryLimitKey, normalized);
+            OnPreferencesChanged();
+        }
+    }
+
     private const string FontFactorKey = "fontFactor";
     private const string LastLearntPerekKey = "lastLearntPerek";
     private const string PerekToLoadKey = "perekToLoad";
@@ -420,6 +436,7 @@ public class PreferencesService
         _lessonsVolume = Normalize(_storage.Get("lessonsVolume", 1.0), 1, 0, 1);
         _effectsVolume = Normalize(_storage.Get("effectsVolume", 1.0), 1, 0, 1);
         _recitationVersePauseMs = Normalize(_storage.Get("recitationVersePauseMs", -1.0), -1, -1, 5000);
+        _inlineCommentaryLimit = Math.Clamp(_storage.Get(InlineCommentaryLimitKey, 5), 1, 100);
         _fontFactor = _storage.Get(FontFactorKey, 1.0);
 
         var lastLearnt = _storage.Get(LastLearntPerekKey, -1);

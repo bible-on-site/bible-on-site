@@ -512,8 +512,9 @@ partial class PadDeliveryService
     {
         ct.ThrowIfCancellationRequested();
         var cacheDir = AssetPackCacheDir(packName);
+        // A partial extraction must not hide a missing prebuilt index.
         if (File.Exists(Path.Join(cacheDir, PayloadFileName(packName))) &&
-                (packName != PerushimNotesPackName || File.Exists(Path.Join(cacheDir, PerushimNotesService.SearchIndexDbName))))
+            (packName != PerushimNotesPackName || File.Exists(Path.Join(cacheDir, PerushimNotesService.SearchIndexDbName))))
         {
             return cacheDir;
         }
@@ -551,7 +552,8 @@ partial class PadDeliveryService
         var cacheDir = AssetPackCacheDir(packName);
         try
         {
-            // An extracted payload remains usable even if the OS evicts its pack.
+            // An extracted payload remains usable even if the OS evicts its
+            // pack — but a partial extraction must not hide a missing index.
             if (File.Exists(Path.Join(cacheDir, PayloadFileName(packName))) &&
                 (packName != PerushimNotesPackName || File.Exists(Path.Join(cacheDir, PerushimNotesService.SearchIndexDbName))))
             {
@@ -773,7 +775,8 @@ partial class PadDeliveryService
         }
         try
         {
-            // Retain the mapped native data until worker extraction completes.
+            // Keep the native asset lookup and lifetime on the caller's context,
+            // but extracting the full notes/index payload must not block its UI.
             await Task.Run(() =>
             {
                 using var stream = data.AsStream();

@@ -1727,6 +1727,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         try
         {
             _viewModel.ToggleCheckedPerush(perush.Id);
+            checkBox.IsChecked = _viewModel.IsPerushChecked(perush.Id);
         }
         finally
         {

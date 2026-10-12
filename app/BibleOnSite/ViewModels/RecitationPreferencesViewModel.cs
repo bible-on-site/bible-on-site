@@ -28,8 +28,11 @@ public partial class RecitationPreferencesViewModel : ObservableObject
         _recitation = recitation;
         _preferences = preferences;
         _navigator = navigator;
-        _preferences.PreferencesChanged += OnPreferencesChanged;
-        _recitation.Changed += OnRecitationChanged;
+        BibleOnSite.Helpers.WeakPreferencesSubscription.Subscribe(this, _preferences, static model => model.OnPreferencesChanged(null, EventArgs.Empty));
+        BibleOnSite.Helpers.WeakEventSubscription.Subscribe(this, _recitation,
+            static (service, handler) => service.Changed += handler,
+            static (service, handler) => service.Changed -= handler,
+            static model => model.OnRecitationChanged(null, EventArgs.Empty));
     }
 
     public double Speed
