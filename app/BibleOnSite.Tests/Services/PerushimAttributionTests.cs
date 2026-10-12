@@ -107,7 +107,7 @@ public class PerushimAttributionTests
             .And.Contain("PAD file at root: True")
             .And.Contain("IsAvailable: False")
             .And.Contain("Legacy build mismatch (notes=1790678024, catalog=200)");
-        (await service.TryDownloadNotesAsync()).Should().BeFalse();
+        (await service.TryDownloadNotesAsync(cancellationToken: TestContext.Current.CancellationToken)).Should().BeFalse();
         (await service.GetPerushIdsForPerekAsync(4)).Should().BeEmpty();
     }
 
@@ -144,7 +144,7 @@ public class PerushimAttributionTests
         await service.InitializeAsync();
         service.IsAvailable.Should().BeFalse();
 
-        (await service.TryDownloadNotesAsync()).Should().BeTrue();
+        (await service.TryDownloadNotesAsync(cancellationToken: TestContext.Current.CancellationToken)).Should().BeTrue();
 
         service.IsAvailable.Should().BeTrue();
         (await service.GetDiagnosticsAsync()).Should().Contain("Compatible catalog mapping (2 entries)");
@@ -212,7 +212,7 @@ public class PerushimAttributionTests
         var service = new PerushimNotesService(pad.Object, storage.FileSystem.Object);
         await service.InitializeAsync();
 
-        (await service.TryDownloadNotesAsync()).Should().BeTrue();
+        (await service.TryDownloadNotesAsync(cancellationToken: TestContext.Current.CancellationToken)).Should().BeTrue();
         service.IsAvailable.Should().BeTrue();
         pad.Verify(p => p.FetchAsync("perushim_notes", It.IsAny<IProgress<double>?>(), It.IsAny<CancellationToken>()), Times.Once);
         var catalog = new PerushimCatalogService(storage.FileSystem.Object);
@@ -231,7 +231,7 @@ public class PerushimAttributionTests
         pad.Setup(p => p.TryGetAssetPathAsync("perushim_notes", It.IsAny<CancellationToken>())).ReturnsAsync(delivered.Root);
         var service = new PerushimNotesService(pad.Object, storage.FileSystem.Object);
 
-        (await service.TryDownloadNotesAsync()).Should().BeFalse();
+        (await service.TryDownloadNotesAsync(cancellationToken: TestContext.Current.CancellationToken)).Should().BeFalse();
         service.IsAvailable.Should().BeFalse();
         (await service.GetPerushIdsForPerekAsync(4)).Should().BeEmpty();
     }
@@ -258,7 +258,7 @@ public class PerushimAttributionTests
         }
         var service = new PerushimNotesService(pad.Object, storage.FileSystem.Object);
 
-        (await service.TryDownloadNotesAsync()).Should().BeFalse();
+        (await service.TryDownloadNotesAsync(cancellationToken: TestContext.Current.CancellationToken)).Should().BeFalse();
         service.IsAvailable.Should().BeFalse();
         (await service.LoadNotesForPerekAsync(4, new Dictionary<int, Perush>())).Should().BeEmpty();
     }

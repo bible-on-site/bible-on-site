@@ -43,6 +43,65 @@ public class NavigationBoundaryTests
     }
 
     [Fact]
+    public async Task Choice_BeforeWindowOrPageCreation_ReturnsFalse_NeverAFalseAccept()
+    {
+        var previous = Application.Current;
+        try
+        {
+            var application = new TestApplication(null);
+            Application.Current = application;
+            ((IApplication)application).CreateWindow(null!);
+            (await ShellAppNavigator.Instance.DisplayChoiceAsync("title", "message", "accept", "cancel"))
+                .Should().BeFalse("a dialog that cannot appear must never report acceptance");
+        }
+        finally
+        {
+            Application.Current = previous;
+        }
+    }
+
+    [Fact]
+    public async Task Choice_ForwardsArgumentsAndResultToTheWindowDialogService()
+    {
+        var previous = Application.Current;
+        try
+        {
+            var page = new ContentPage();
+            var application = new TestApplication(page);
+            Application.Current = application;
+            var window = ((IApplication)application).CreateWindow(null!);
+            AlertArguments? request = null;
+            using var services = new ServiceCollection()
+                .AddKeyedSingleton<Func<Page, AlertArguments, Task<bool>>>("Microsoft.Maui.Controls.DisplayAlert", (_, _) =>
+                    (_, arguments) =>
+                    {
+                        request = arguments;
+                        return Task.FromResult(true);
+                    })
+                .BuildServiceProvider();
+            var context = new Mock<IMauiContext>();
+            context.SetupGet(c => c.Services).Returns(services);
+            var windowHandler = new Mock<IElementHandler>();
+            windowHandler.SetupGet(h => h.MauiContext).Returns(context.Object);
+            window.Handler = windowHandler.Object;
+            var pageHandler = new Mock<IViewHandler>();
+            pageHandler.SetupGet(h => h.MauiContext).Returns(context.Object);
+            page.Handler = pageHandler.Object;
+            (await ShellAppNavigator.Instance.DisplayChoiceAsync("title", "message", "accept", "cancel")
+                .WaitAsync(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken)).Should().BeTrue();
+            request.Should().NotBeNull();
+            request!.Title.Should().Be("title");
+            request.Message.Should().Be("message");
+            request.Accept.Should().Be("accept");
+            request.Cancel.Should().Be("cancel");
+        }
+        finally
+        {
+            Application.Current = previous;
+        }
+    }
+
+    [Fact]
     public async Task Navigation_ForwardsTheRouteToShell_AndPreservesInvalidRouteError()
     {
         var previous = Application.Current;

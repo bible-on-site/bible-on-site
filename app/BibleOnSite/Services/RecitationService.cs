@@ -5,6 +5,22 @@ using BibleOnSite.Models;
 
 namespace BibleOnSite.Services;
 
+/// <summary>
+/// Recitation installation state computed from verified audio files on disk —
+/// never from catalog metadata, which is bundled and loads even with zero audio.
+/// </summary>
+public enum RecitationInstallState
+{
+    /// <summary>No usable recordings are stored locally.</summary>
+    NotInstalled,
+
+    /// <summary>Some, but not all, catalogued recordings are stored locally.</summary>
+    Partial,
+
+    /// <summary>Every recording in the bundled catalog is stored locally.</summary>
+    Installed
+}
+
 /// <summary>Independent store-delivered book packs; playback uses verified, persistent local audio.</summary>
 public sealed class RecitationService
 {
@@ -22,9 +38,32 @@ public sealed class RecitationService
     public event EventHandler? PlaybackStopRequested;
 #pragma warning restore S3264
     public void RequestPlaybackStop() => PlaybackStopRequested?.Invoke(this, EventArgs.Empty);
+
+    /// <summary>Catalog metadata is loaded. Says nothing about audio on disk — use <see cref="InstallState"/>.</summary>
     public bool IsInstalled => _tracks.Count > 0;
     public IReadOnlyCollection<RecitationTrack> Tracks => _tracks.Values;
     public IReadOnlyList<RecitationBookPack> Books => _books;
+
+    /// <summary>Recordings offered by the bundled catalog — the installed-state denominator.</summary>
+    public int AvailableCount => _tracks.Count;
+
+    /// <summary>Recordings whose catalogued audio file exists locally.</summary>
+    public int InstalledCount => _tracks.Values.Count(track => File.Exists(AudioPath(track)));
+
+    /// <summary>Three-state summary of locally usable audio (none / partial / complete).</summary>
+    public RecitationInstallState InstallState
+    {
+        get
+        {
+            var installed = InstalledCount;
+            if (installed == 0)
+            {
+                return RecitationInstallState.NotInstalled;
+            }
+
+            return installed == AvailableCount ? RecitationInstallState.Installed : RecitationInstallState.Partial;
+        }
+    }
     private string DirectoryPath => Path.Combine(_files.AppDataDirectory, "extensions", "recitation");
     private string AudioPath(RecitationTrack track) => Path.Combine(DirectoryPath, track.AudioSha256 + ".mp3");
 
@@ -66,8 +105,108 @@ public sealed class RecitationService
             _initialized = true;
         }
         finally { _gate.Release(); }
+        SweepOrphanedAudioFiles();
         Changed?.Invoke(this, EventArgs.Empty);
     }
+
+    /// <summary>
+    /// Deletes recordings for the given chapters. Only the app-owned copies in
+    /// AppDataDirectory are removed — neither PAD nor ODR exposes a per-pack
+    /// uninstall, so store-held bytes are reclaimed at the store's discretion.
+    /// Local files stay removed: init and catalog refreshes never re-download.
+    /// </summary>
+    public async Task RemoveAsync(IEnumerable<int> perekIds)
+    {
+        await InitializeAsync();
+        await _downloadGate.WaitAsync();
+        try
+        {
+            // Playback must stop before its source file is deleted underneath it.
+            RequestPlaybackStop();
+            var selected = perekIds.ToHashSet();
+            foreach (var track in _tracks.Values.Where(t => selected.Contains(t.PerekId)))
+            {
+                File.Delete(AudioPath(track));
+                File.Delete(AudioPath(track) + ".download");
+            }
+        }
+        finally
+        {
+            _downloadGate.Release();
+            Changed?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    /// <summary>
+    /// Deletes every file in the recitation extension directory. Works even when
+    /// the catalog is broken or unavailable — the directory is dedicated to
+    /// recitation audio, so enumeration needs no metadata.
+    /// </summary>
+    public async Task RemoveAllAsync()
+    {
+        await _downloadGate.WaitAsync();
+        try
+        {
+            RequestPlaybackStop();
+            if (!Directory.Exists(DirectoryPath))
+            {
+                return;
+            }
+
+            foreach (var file in Directory.EnumerateFiles(DirectoryPath).ToList())
+            {
+                File.Delete(file);
+            }
+        }
+        finally
+        {
+            _downloadGate.Release();
+            Changed?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    /// <summary>
+    /// Catalog updates own the cleanup of recordings the current catalog no
+    /// longer references: superseded audioSha256 files after an app update and
+    /// aborted *.download / pack-archive fragments. Skipped while a download
+    /// holds its gate so in-progress writes are never collected.
+    /// </summary>
+    private void SweepOrphanedAudioFiles()
+    {
+        if (!_downloadGate.Wait(0))
+        {
+            return;
+        }
+
+        try
+        {
+            if (!Directory.Exists(DirectoryPath))
+            {
+                return;
+            }
+
+            var keep = _tracks.Values.Select(t => t.AudioSha256 + ".mp3").ToHashSet();
+            foreach (var file in Directory.EnumerateFiles(DirectoryPath).ToList())
+            {
+                if (keep.Contains(Path.GetFileName(file)))
+                {
+                    continue;
+                }
+
+                // Cleanup is best-effort: only IO failures are swallowed.
+                try { File.Delete(file); }
+                catch (IOException ex) { LogSweepFailure(ex); }
+                catch (UnauthorizedAccessException ex) { LogSweepFailure(ex); }
+            }
+        }
+        // The sweep must never fail a catalog update.
+        catch (IOException ex) { LogSweepFailure(ex); }
+        catch (UnauthorizedAccessException ex) { LogSweepFailure(ex); }
+        finally { _downloadGate.Release(); }
+    }
+
+    private static void LogSweepFailure(Exception ex) =>
+        System.Diagnostics.Debug.WriteLine($"Recitation orphan cleanup: {ex.Message}");
 
     public Task DownloadAsync(IEnumerable<int> perekIds) => DownloadAsync(perekIds, null, CancellationToken.None);
 
