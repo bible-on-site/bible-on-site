@@ -97,7 +97,7 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
             .First(element => element.Displayed && element.Text == "בראשית א ז");
         Platform.Tap(Driver, result);
         AssertRegularReader();
-        Page.WaitFor("PasukNumber", element => element.Text == "ז");
+        Page.WaitFor("PasukText", element => element.Text.StartsWith("ז "));
         Platform.GoBack(Driver);
         Page.WaitFor("PerekSearchInput", element => element.Text == "ויעש אלהים את הרקיע");
         Page.WaitFor("SearchResultTitle", element => element.Text == "בראשית א ז");
