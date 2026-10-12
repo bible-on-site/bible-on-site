@@ -14,7 +14,7 @@
 	},
 	"sources": {
 		"root": "web/bible-on-site",
-		"globs": ["src/**", "shared/src/**"]
+		"globs": ["src/**"]
 	},
 	"alwaysRun": [
 		"e2e/health.test.ts :: /api/health :: returns 200 with status ok"
