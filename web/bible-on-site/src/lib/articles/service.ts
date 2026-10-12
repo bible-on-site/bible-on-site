@@ -3,6 +3,8 @@ import { getAuthorImageUrl } from "../authors/service";
 import type { ScriptureRange } from "../reading/contract";
 import {
 	coveringSourceSliceCondition,
+	coveringSourceSliceRank,
+	primaryPerekSliceRank,
 	slicePerekIds,
 	slicesForRanges,
 } from "../reading/queries";
@@ -110,6 +112,24 @@ export async function getArticleSummariesByPerekId(
 }
 
 /**
+ * Whether a query rejection means the covering-source schema (#2189)
+ * is not deployed yet. MySQL reports ER_BAD_FIELD_ERROR (1054) for the
+ * missing `coverage_verified` column and ER_NO_SUCH_TABLE (1146) for
+ * the missing `tanah_article_covering_source` table — the only errors
+ * the reader may degrade on; anything else is a real failure.
+ */
+function isCoveringSourceSchemaMissing(error: unknown): boolean {
+	if (typeof error !== "object" || error === null) return false;
+	const { code, errno } = error as { code?: unknown; errno?: unknown };
+	return (
+		code === "ER_BAD_FIELD_ERROR" ||
+		code === "ER_NO_SUCH_TABLE" ||
+		errno === 1054 ||
+		errno === 1146
+	);
+}
+
+/**
  * Fetch article summaries whose scripture coverage overlaps the given
  * canonical ranges — the shared unit->article path for the reading
  * divisions (מסורה units, פרשה ranges, ordered multi-range Haftarah
@@ -126,9 +146,24 @@ export async function getArticleSummariesByPerekId(
  *   primary perek association — honest perek-level matching that does
  *   not claim pasuk precision.
  *
+ * Results keep reading order: each article ranks by the ordinal of its
+ * FIRST matching slice in supplied range order (covering-row slices for
+ * verified articles, primary-perek slices for unverified ones), then by
+ * priority — so an article reached through a later Haftarah jump never
+ * precedes one from the opening range just because its priority is
+ * lower.
+ *
+ * The website ships independently of Data CD, and packaging prerenders
+ * Masora pages against production RDS: between merge and the schema
+ * upgrade the new column/table do not exist yet. When the database
+ * reports the covering-source schema missing, the reader degrades to
+ * the pre-upgrade query — every article matched through its primary
+ * perek, ranked the same way — instead of failing the build; any other
+ * failure still rejects so a failed build/request cannot cache an
+ * empty article list.
+ *
  * All public articles are eligible: `distributable` gates only the daily
- * bulletin email, never the site. Like the per-perek path, database
- * failures reject rather than caching an empty article list.
+ * bulletin email, never the site.
  */
 export async function getArticleSummariesForRanges(
 	ranges: ScriptureRange[],
@@ -138,23 +173,46 @@ export async function getArticleSummariesForRanges(
 	const perekIds = slicePerekIds(slices);
 	const placeholders = perekIds.map(() => "?").join(", ");
 	const covering = coveringSourceSliceCondition(slices);
+	const coveringRank = coveringSourceSliceRank(slices);
+	const perekRank = primaryPerekSliceRank(slices);
+	const selectSummary = `SELECT
+			a.id, a.perek_id, a.author_id, a.abstract, a.name, a.priority,
+			au.name AS author_name
+		 FROM tanah_article a
+		 JOIN tanah_author au ON a.author_id = au.id`;
+	const coveringSourceSql = `${selectSummary}
+		 WHERE (a.coverage_verified = FALSE
+				AND a.perek_id BETWEEN 1 AND 929
+				AND a.perek_id IN (${placeholders}))
+			OR (a.coverage_verified = TRUE
+				AND EXISTS (
+					SELECT 1 FROM tanah_article_covering_source cs
+					WHERE cs.article_id = a.id AND (${covering.sql})))
+		 ORDER BY ${coveringRank.sql} ASC, a.priority ASC`;
+	// Pre-upgrade schema: coverage_verified and the covering-source
+	// table do not exist yet, so every article matches through its
+	// primary perek alone — the same match granularity the unverified
+	// branch above keeps after the migration.
+	const primaryPerekSql = `${selectSummary}
+		 WHERE a.perek_id BETWEEN 1 AND 929
+			AND a.perek_id IN (${placeholders})
+		 ORDER BY ${perekRank.sql} ASC, a.priority ASC`;
 	try {
-		const rows = await query<ArticleSummaryRow>(
-			`SELECT
-				a.id, a.perek_id, a.author_id, a.abstract, a.name, a.priority,
-				au.name AS author_name
-			 FROM tanah_article a
-			 JOIN tanah_author au ON a.author_id = au.id
-			 WHERE (a.coverage_verified = FALSE
-					AND a.perek_id BETWEEN 1 AND 929
-					AND a.perek_id IN (${placeholders}))
-				OR (a.coverage_verified = TRUE
-					AND EXISTS (
-						SELECT 1 FROM tanah_article_covering_source cs
-						WHERE cs.article_id = a.id AND (${covering.sql})))
-			 ORDER BY a.priority ASC`,
-			[...perekIds, ...covering.params],
-		);
+		const rows = await query<ArticleSummaryRow>(coveringSourceSql, [
+			...perekIds,
+			...covering.params,
+			...coveringRank.params,
+		]).catch((error: unknown) => {
+			if (!isCoveringSourceSchemaMissing(error)) throw error;
+			console.warn(
+				"Article covering-source schema is not deployed yet; " +
+					"matching articles by primary perek until the migration runs.",
+			);
+			return query<ArticleSummaryRow>(primaryPerekSql, [
+				...perekIds,
+				...perekRank.params,
+			]);
+		});
 
 		return rows.map((row) => ({
 			id: row.id,

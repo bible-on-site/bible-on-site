@@ -92,6 +92,15 @@ helpers:
 - `coveringSourceSliceCondition` — the same pasuk-bounded clauses on the
   `cs` alias, matching `tanah_article_covering_source` rows for the
   verified-coverage article lookup.
+- `coveringSourceSliceRank` — a scalar `MIN(slice_order)` rank over a
+  per-slice ordinal derived table, so multi-range article results keep
+  the supplied reading order (each article takes its first matching
+  slice) ahead of priority.
+- `primaryPerekSliceRank` — the same rank restricted to primary-perek
+  matches; it references neither `coverage_verified` nor the
+  covering-source table, so `getArticleSummariesForRanges` can fall back
+  to it while the website ships ahead of the schema migration (the
+  website build runs independently of Data CD).
 - `slicePerekIds` — distinct perek ids for the legacy article fallback:
   articles whose verse coverage was never mapped
   (`coverage_verified = FALSE`) still match ranges through their primary
