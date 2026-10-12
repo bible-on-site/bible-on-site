@@ -17,12 +17,11 @@ public class SearchIndexServiceTests
         await using var storage = new TestStorage();
         var perakim = await SeedAsync(storage);
         await storage.CreateDatabaseAsync(NotesDb,
-            "CREATE TABLE note (perush_id INTEGER,perek_id INTEGER,pasuk INTEGER,note_idx INTEGER,note_content TEXT)",
-            "INSERT INTO note VALUES (7,1,1,0,'בראשית'),(8,1,1,0,'בראשית'),(9,1,1,0,'בראשית')");
+            NotesDbV2.Statements((7, 1, 1, 0, "בראשית"), (8, 1, 1, 0, "בראשית"), (9, 1, 1, 0, "בראשית")));
         var delivery = new Mock<IPadDeliveryService>();
         delivery.Setup(service => service.TryGetAssetPathAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync((string?)null);
         var notes = PerushimNotesService.CreateForTesting(delivery.Object, storage.Root);
-        await using var index = new SearchIndexService(perakim, notes, Path.Combine(storage.Root, "search.sqlite"));
+        await using var index = new SearchIndexService(perakim, notes, Path.Join(storage.Root, "search.sqlite"));
         var ordering = new SearchOrdering(SearchSort.Generation, new Dictionary<int, int> { [7] = 1800, [8] = 1040 });
         var hits = await index.SearchAsync("בראשית", new HashSet<SearchFilter> { SearchFilter.Perush }, new HashSet<int> { 1 }, 1, TestContext.Current.CancellationToken, null, ordering);
         hits.Should().ContainSingle().Which.PerushId.Should().Be(8);
@@ -48,14 +47,13 @@ public class SearchIndexServiceTests
         await using var storage = new TestStorage();
         var perakim = await SeedAsync(storage);
         await storage.CreateDatabaseAsync(NotesDb,
-            "CREATE TABLE note (perush_id INTEGER,perek_id INTEGER,pasuk INTEGER,note_idx INTEGER,note_content TEXT)",
-            "WITH RECURSIVE entries(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM entries WHERE n < 32769) " +
-            "INSERT INTO note SELECT 7,1,1,n,CASE WHEN n = 32769 THEN 'אחרון' ELSE 'רגיל' END FROM entries");
+            NotesDbV2.Statements([.. Enumerable.Range(1, 32769)
+                .Select(n => (7, 1, 1, n, n == 32769 ? "אחרון" : "רגיל"))]));
         var delivery = new Mock<IPadDeliveryService>();
         delivery.Setup(service => service.TryGetAssetPathAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((string?)null);
         var notes = PerushimNotesService.CreateForTesting(delivery.Object, storage.Root);
-        await using var index = new SearchIndexService(perakim, notes, Path.Combine(storage.Root, "search.sqlite"));
+        await using var index = new SearchIndexService(perakim, notes, Path.Join(storage.Root, "search.sqlite"));
 
         var hits = await index.SearchAsync("אחרון", new HashSet<SearchFilter> { SearchFilter.Perush },
             new HashSet<int> { 1 }, 10, TestContext.Current.CancellationToken);
@@ -64,47 +62,11 @@ public class SearchIndexServiceTests
     }
 
     [Fact]
-    public async Task CommentaryImport_ResumesTheCommittedPrefixAfterProcessLoss()
-    {
-        await using var storage = new TestStorage();
-        var perakim = await SeedAsync(storage);
-        await storage.CreateDatabaseAsync(NotesDb,
-            "CREATE TABLE note (perush_id INTEGER,perek_id INTEGER,pasuk INTEGER,note_idx INTEGER,note_content TEXT)",
-            "INSERT INTO note VALUES (7,1,1,0,'ראשונה'),(8,1,1,0,'שניה'),(9,1,1,0,'שלישית')");
-        // A process killed mid-import leaves this exact committed state: the
-        // first batch's documents plus the progress row, all under one WAL.
-        var partial = await storage.CreateDatabaseAsync("search.sqlite",
-            "CREATE TABLE search_metadata (name TEXT PRIMARY KEY, fingerprint TEXT)",
-            "CREATE TABLE search_build_progress (name TEXT PRIMARY KEY, fingerprint TEXT, last_id INTEGER)",
-            "CREATE TABLE notes_documents (rowid INTEGER PRIMARY KEY, Text TEXT, " +
-                "PerekId INTEGER, PasukNum INTEGER, PerushId INTEGER, SeferId INTEGER)",
-            "CREATE VIRTUAL TABLE notes USING fts5(Text, content='notes_documents', content_rowid='rowid')",
-            "INSERT INTO notes_documents VALUES (1,'סמל שרד',1,1,7,1)",
-            "INSERT INTO notes(rowid, Text) VALUES (1,'סמל שרד')");
-        var source = new FileInfo(Path.Join(storage.Root, NotesDb));
-        await partial.ExecuteAsync("INSERT INTO search_build_progress VALUES ('notes', ?, 1)",
-            $"v3:{source.Length}:{source.LastWriteTimeUtc.Ticks}");
-        var delivery = new Mock<IPadDeliveryService>();
-        delivery.Setup(service => service.TryGetAssetPathAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync((string?)null);
-        var notes = PerushimNotesService.CreateForTesting(delivery.Object, storage.Root);
-        await using var index = new SearchIndexService(perakim, notes, Path.Join(storage.Root, "search.sqlite"));
-        var filters = new HashSet<SearchFilter> { SearchFilter.Perush };
-        var books = new HashSet<int> { 1 };
-        // The resumed import fills the tail without re-importing the prefix.
-        (await index.SearchAsync("שניה", filters, books, 10, TestContext.Current.CancellationToken)).Should().ContainSingle()
-            .Which.PerushId.Should().Be(8);
-        (await index.SearchAsync("סמל", filters, books, 10, TestContext.Current.CancellationToken)).Should().ContainSingle(
-            "a rebuilt index would have dropped the sentinel left by the killed process");
-        (await partial.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM notes_documents")).Should().Be(3);
-        (await partial.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM search_build_progress")).Should().Be(0);
-    }
-
-    [Fact]
     public async Task HebrewSearch_IgnoresVowels_RequiresEveryWord_AndFiltersBeforeLimiting()
     {
         await using var storage = new TestStorage();
         var perakim = await SeedAsync(storage);
-        await using var index = new SearchIndexService(perakim, null, Path.Combine(storage.Root, "search.sqlite"));
+        await using var index = new SearchIndexService(perakim, null, Path.Join(storage.Root, "search.sqlite"));
         var filters = new HashSet<SearchFilter> { SearchFilter.Pasuk };
         var books = new HashSet<int> { 1, 2 };
         var hits = await index.SearchAsync("ברא אלהים", filters, books, 10, TestContext.Current.CancellationToken);
@@ -123,7 +85,7 @@ public class SearchIndexServiceTests
     {
         await using var storage = new TestStorage();
         var perakim = await SeedAsync(storage);
-        var path = Path.Combine(storage.Root, "search.sqlite");
+        var path = Path.Join(storage.Root, "search.sqlite");
         string[] schema = version == 1 ? [
             "CREATE VIRTUAL TABLE verses USING fts5(Text, Body UNINDEXED, PerekId UNINDEXED, PasukNum UNINDEXED, PerushId UNINDEXED, SeferId UNINDEXED)",
             "INSERT INTO verses VALUES ('ישן','תוכן ישן',1,1,0,1)"
@@ -135,7 +97,7 @@ public class SearchIndexServiceTests
         ];
         var legacy = await storage.CreateDatabaseAsync("search.sqlite",
             ["CREATE TABLE search_metadata (name TEXT PRIMARY KEY, fingerprint TEXT)", .. schema]);
-        var source = new FileInfo(Path.Combine(storage.Root, BibleDb));
+        var source = new FileInfo(Path.Join(storage.Root, BibleDb));
         await legacy.ExecuteAsync("INSERT INTO search_metadata VALUES ('verses', ?)", $"v{version}:{source.Length}:{source.LastWriteTimeUtc.Ticks}");
         await legacy.RunInTransactionAsync(connection =>
             SQLitePCL.raw.sqlite3_db_config(connection.Handle, SQLitePCL.raw.SQLITE_DBCONFIG_DEFENSIVE, 1, out _)
@@ -146,7 +108,7 @@ public class SearchIndexServiceTests
         (await legacy.ExecuteScalarAsync<string>("SELECT Text FROM verses_documents WHERE PerekId = 1"))
             .Should().Contain("בְּרֵאשִׁ֖ית");
         (await legacy.ExecuteScalarAsync<string>("SELECT fingerprint FROM search_metadata WHERE name = 'verses'"))
-            .Should().StartWith("v3:");
+            .Should().StartWith("v4:");
         (await index.SearchAsync("ישן", new HashSet<SearchFilter> { SearchFilter.Pasuk }, new HashSet<int> { 1 }, 10, TestContext.Current.CancellationToken))
             .Should().BeEmpty("a migrated cache cannot retain stale search results");
     }
@@ -157,8 +119,7 @@ public class SearchIndexServiceTests
         await using var storage = new TestStorage();
         var perakim = await SeedAsync(storage);
         await storage.CreateDatabaseAsync(NotesDb,
-            "CREATE TABLE note (perush_id INTEGER,perek_id INTEGER,pasuk INTEGER,note_idx INTEGER,note_content TEXT)",
-            "INSERT INTO note VALUES (7,1,1,0,'בראשית ברא אלהים')");
+            NotesDbV2.Statements((7, 1, 1, 0, "בראשית ברא אלהים")));
         var inspection = await storage.CreateDatabaseAsync("search.sqlite");
         await inspection.RunInTransactionAsync(connection =>
         {
@@ -169,7 +130,7 @@ public class SearchIndexServiceTests
         var delivery = new Mock<IPadDeliveryService>();
         delivery.Setup(service => service.TryGetAssetPathAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync((string?)null);
         var notes = PerushimNotesService.CreateForTesting(delivery.Object, storage.Root);
-        await using var index = new SearchIndexService(perakim, notes, Path.Combine(storage.Root, "search.sqlite"));
+        await using var index = new SearchIndexService(perakim, notes, Path.Join(storage.Root, "search.sqlite"));
         var hits = await index.SearchAsync("בראשית ברא אלהים",
             new HashSet<SearchFilter> { SearchFilter.Pasuk, SearchFilter.Perush }, new HashSet<int> { 1 }, 10, TestContext.Current.CancellationToken);
         hits.Should().HaveCount(2);
@@ -182,7 +143,7 @@ public class SearchIndexServiceTests
     {
         await using var storage = new TestStorage();
         var perakim = await SeedAsync(storage);
-        var path = Path.Combine(storage.Root, "search.sqlite");
+        var path = Path.Join(storage.Root, "search.sqlite");
         var filters = new HashSet<SearchFilter> { SearchFilter.Pasuk };
         var books = new HashSet<int> { 1 };
         await using (var index = new SearchIndexService(perakim, null, path))
@@ -203,12 +164,11 @@ public class SearchIndexServiceTests
         await using var storage = new TestStorage();
         var perakim = await SeedAsync(storage);
         var notesDb = await storage.CreateDatabaseAsync(NotesDb,
-            "CREATE TABLE note (perush_id INTEGER,perek_id INTEGER,pasuk INTEGER,note_idx INTEGER,note_content TEXT)",
-            "INSERT INTO note VALUES (7,1,1,0,'<b>בריאת</b> הָעוֹלָם'),(8,3,1,0,'בריאת העולם')");
+            NotesDbV2.Statements((7, 1, 1, 0, "<b>בריאת</b> הָעוֹלָם"), (8, 3, 1, 0, "בריאת העולם")));
         var delivery = new Mock<IPadDeliveryService>();
         delivery.Setup(service => service.TryGetAssetPathAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync((string?)null);
         var notes = PerushimNotesService.CreateForTesting(delivery.Object, storage.Root);
-        await using var index = new SearchIndexService(perakim, notes, Path.Combine(storage.Root, "search.sqlite"));
+        await using var index = new SearchIndexService(perakim, notes, Path.Join(storage.Root, "search.sqlite"));
         var hits = await index.SearchAsync("בריאת העולם", new HashSet<SearchFilter> { SearchFilter.Perush }, new HashSet<int> { 1 }, 10, TestContext.Current.CancellationToken);
         index.CommentaryAvailable.Should().BeTrue();
         hits.Should().ContainSingle();
@@ -216,7 +176,8 @@ public class SearchIndexServiceTests
         hits[0].PasukNum.Should().Be(1);
         hits[0].PerekId.Should().Be(1);
         hits[0].Text.Should().NotContain("<b>");
-        (await notesDb.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM note")).Should().Be(2, "search must not alter source content");
+        var sourceBlobs = await notesDb.QueryAsync<SourceBlobRow>("SELECT perek_id AS PerekId, data AS Data FROM note_blob");
+        sourceBlobs.Sum(row => PerushNoteBlob.Decode(row.Data).Count).Should().Be(2, "search must not alter source content");
         var vm = new SearchViewModel(perakim, index) { SearchPhrase = "בריאת העולם" };
         vm.SetPerushim([new Perush { Id = 7, Name = "רש\"י" }]);
         await vm.SearchAsync(TestContext.Current.CancellationToken);
@@ -228,7 +189,7 @@ public class SearchIndexServiceTests
     {
         await using var storage = new TestStorage();
         var perakim = await SeedAsync(storage);
-        await using var index = new SearchIndexService(perakim, null, Path.Combine(storage.Root, "search.sqlite"));
+        await using var index = new SearchIndexService(perakim, null, Path.Join(storage.Root, "search.sqlite"));
         var vm = new SearchViewModel(perakim, index) { SearchPhrase = "בראשית", ResultsLimit = 2 };
         vm.SetAuthors([new Author { Id = 1, Name = "הרב בראשית", Details = "<i>תיאור</i>" }]);
         await vm.SearchAsync(TestContext.Current.CancellationToken);
@@ -248,7 +209,7 @@ public class SearchIndexServiceTests
     {
         await using var storage = new TestStorage();
         var perakim = await SeedAsync(storage);
-        await using var index = new SearchIndexService(perakim, null, Path.Combine(storage.Root, "search.sqlite"));
+        await using var index = new SearchIndexService(perakim, null, Path.Join(storage.Root, "search.sqlite"));
         var vm = new SearchViewModel(perakim, index) { SearchPhrase = "בראשית" };
         vm.SetFilterEnabled(SearchFilter.Perush, false);
         var previous = vm.SearchAsync(TestContext.Current.CancellationToken);
@@ -306,7 +267,7 @@ public class SearchIndexServiceTests
     {
         await using var storage = new TestStorage();
         var perakim = await SeedAsync(storage);
-        await using var index = new SearchIndexService(perakim, null, Path.Combine(storage.Root, "search.sqlite"));
+        await using var index = new SearchIndexService(perakim, null, Path.Join(storage.Root, "search.sqlite"));
         var hits = await index.SearchAsync("ברא", new HashSet<SearchFilter> { SearchFilter.Pasuk }, new HashSet<int> { 1 }, 1, TestContext.Current.CancellationToken);
         hits.Should().ContainSingle();
         SearchText.Tokens(hits[0].Text).Should().Contain("ברא");
@@ -323,7 +284,7 @@ public class SearchIndexServiceTests
         delivery.Setup(service => service.TryGetAssetPathAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .Returns(() => { entered.TrySetResult(); return release.Task; });
         var notes = PerushimNotesService.CreateForTesting(delivery.Object, storage.Root);
-        await using var index = new SearchIndexService(perakim, notes, Path.Combine(storage.Root, "search.sqlite"));
+        await using var index = new SearchIndexService(perakim, notes, Path.Join(storage.Root, "search.sqlite"));
         var books = new HashSet<int> { 1 };
         var verses = new HashSet<SearchFilter> { SearchFilter.Pasuk };
         await index.SearchAsync("בראשית", verses, books, 10, TestContext.Current.CancellationToken);
@@ -347,12 +308,11 @@ public class SearchIndexServiceTests
         await using var storage = new TestStorage();
         var perakim = await SeedAsync(storage);
         await storage.CreateDatabaseAsync(NotesDb,
-            "CREATE TABLE note (perush_id INTEGER,perek_id INTEGER,pasuk INTEGER,note_idx INTEGER,note_content TEXT)",
-            "INSERT INTO note VALUES (7,1,1,0,'אמר משה'),(8,1,1,0,'אמר הרב משה')");
+            NotesDbV2.Statements((7, 1, 1, 0, "אמר משה"), (8, 1, 1, 0, "אמר הרב משה")));
         var delivery = new Mock<IPadDeliveryService>();
         delivery.Setup(service => service.TryGetAssetPathAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync((string?)null);
         var notes = PerushimNotesService.CreateForTesting(delivery.Object, storage.Root);
-        await using var index = new SearchIndexService(perakim, notes, Path.Combine(storage.Root, "search.sqlite"));
+        await using var index = new SearchIndexService(perakim, notes, Path.Join(storage.Root, "search.sqlite"));
         var vm = new SearchViewModel(perakim, index) { SearchPhrase = "הרב משה" };
         vm.SetFilterEnabled(SearchFilter.Author, false);
         vm.SetFilterEnabled(SearchFilter.Pasuk, false);
@@ -360,5 +320,410 @@ public class SearchIndexServiceTests
         await vm.SearchAsync(TestContext.Current.CancellationToken);
         vm.SearchResults.Should().ContainSingle().Which.Should().BeOfType<PerushSearchResult>()
             .Which.PerushId.Should().Be("8");
+    }
+
+    /// <summary>Minimal queryable index DB as the pipeline ships it: the
+    /// external-content FTS + documents tables + a fingerprint row.</summary>
+    private static string[] DeliveredIndexStatements(string notesFingerprint, string markerDoc) =>
+    [
+        "CREATE TABLE search_metadata (name TEXT PRIMARY KEY, fingerprint TEXT)",
+        $"INSERT INTO search_metadata VALUES ('notes','{notesFingerprint}')",
+        "CREATE TABLE notes_documents (rowid INTEGER PRIMARY KEY, Text TEXT, PerekId INTEGER, PasukNum INTEGER, PerushId INTEGER, SeferId INTEGER)",
+        $"INSERT INTO notes_documents VALUES (1,'{markerDoc}',1,1,7,1)",
+        "CREATE VIRTUAL TABLE notes USING fts5(Text, content='notes_documents', content_rowid='rowid')",
+        $"INSERT INTO notes(rowid,Text) VALUES (1,'{markerDoc}')",
+        "CREATE VIRTUAL TABLE notes_vocab USING fts5vocab(notes, 'row')",
+    ];
+
+    private static Mock<IPadDeliveryService> NullPad()
+    {
+        var delivery = new Mock<IPadDeliveryService>();
+        delivery.Setup(service => service.TryGetAssetPathAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((string?)null);
+        return delivery;
+    }
+
+    [Fact]
+    public async Task DeliveredIndex_WithMatchingFingerprint_IsAdoptedWithoutRebuilding()
+    {
+        await using var storage = new TestStorage();
+        var perakim = await SeedAsync(storage);
+        await storage.CreateDatabaseAsync(NotesDb,
+            [.. NotesDbV2.Statements((7, 1, 1, 0, "בראשית")), "INSERT INTO _metadata VALUES ('build_timestamp','42')"]);
+        // The staged pack payload carries a ready index for this generation.
+        var delivered = await storage.CreateDatabaseAsync(PerushimNotesService.SearchIndexDbName,
+            DeliveredIndexStatements($"v4:42:n{SearchText.NormalizationVersion}", "סימן מובהק"));
+        await delivered.CloseAsync();
+        var notes = PerushimNotesService.CreateForTesting(NullPad().Object, storage.Root);
+        await using var index = new SearchIndexService(perakim, notes, Path.Join(storage.Root, "search.sqlite"));
+
+        var hits = await index.SearchAsync("סימן", new HashSet<SearchFilter> { SearchFilter.Perush },
+            new HashSet<int> { 1 }, 10, TestContext.Current.CancellationToken);
+
+        hits.Should().ContainSingle().Which.PerushId.Should().Be(7);
+        File.Exists(Path.Join(storage.Root, PerushimNotesService.SearchIndexDbName))
+            .Should().BeFalse("adoption moves the staged file into place — no duplicate ~300 MB copies");
+        var inspection = new SQLite.SQLiteAsyncConnection(Path.Join(storage.Root, "search.sqlite"), SQLite.SQLiteOpenFlags.ReadOnly);
+        try
+        {
+            var stored = await inspection.ExecuteScalarAsync<string>(
+                "SELECT fingerprint FROM search_metadata WHERE name = 'notes'");
+            stored.Should().Be($"v4:42:n{SearchText.NormalizationVersion}");
+        }
+        finally { await inspection.CloseAsync(); }
+    }
+
+    [Fact]
+    public async Task DeliveredIndex_WithWrongGeneration_IsIgnoredAndIndexBuiltOnDevice()
+    {
+        await using var storage = new TestStorage();
+        var perakim = await SeedAsync(storage);
+        await storage.CreateDatabaseAsync(NotesDb,
+            [.. NotesDbV2.Statements((7, 1, 1, 0, "בראשית")), "INSERT INTO _metadata VALUES ('build_timestamp','42')"]);
+        var deliveredPath = Path.Join(storage.Root, PerushimNotesService.SearchIndexDbName);
+        var delivered = await storage.CreateDatabaseAsync(PerushimNotesService.SearchIndexDbName,
+            DeliveredIndexStatements("v4:999:n1", "סימן מובהק"));
+        await delivered.CloseAsync();
+        var notes = PerushimNotesService.CreateForTesting(NullPad().Object, storage.Root);
+        await using var index = new SearchIndexService(perakim, notes, Path.Join(storage.Root, "search.sqlite"));
+
+        var hits = await index.SearchAsync("בראשית", new HashSet<SearchFilter> { SearchFilter.Perush },
+            new HashSet<int> { 1 }, 10, TestContext.Current.CancellationToken);
+
+        hits.Should().ContainSingle().Which.PerushId.Should().Be(7);
+        (await index.SearchAsync("סימן", new HashSet<SearchFilter> { SearchFilter.Perush },
+            new HashSet<int> { 1 }, 10, TestContext.Current.CancellationToken))
+            .Should().BeEmpty("the wrong-generation index must never be queried");
+        File.Exists(deliveredPath).Should().BeFalse("an unadoptable staged index is removed rather than left on the device");
+    }
+
+    [Fact]
+    public async Task DeliveredIndex_ForContentWithoutMetadata_MatchesByFileStats()
+    {
+        await using var storage = new TestStorage();
+        var perakim = await SeedAsync(storage);
+        // A hand-built v2 DB without build_timestamp — the fingerprint falls
+        // back to file size + modification time.
+        var notesDb = await storage.CreateDatabaseAsync(NotesDb,
+            NotesDbV2.Statements((7, 1, 1, 0, "בראשית")));
+        await notesDb.CloseAsync();
+        var notesFile = new FileInfo(Path.Join(storage.Root, NotesDb));
+        var fingerprint = $"v4:{notesFile.Length}:{notesFile.LastWriteTimeUtc.Ticks}:n{SearchText.NormalizationVersion}";
+        var delivered = await storage.CreateDatabaseAsync(PerushimNotesService.SearchIndexDbName,
+            DeliveredIndexStatements(fingerprint, "סימן מובהק"));
+        await delivered.CloseAsync();
+        var notes = PerushimNotesService.CreateForTesting(NullPad().Object, storage.Root);
+        await using var index = new SearchIndexService(perakim, notes, Path.Join(storage.Root, "search.sqlite"));
+
+        var hits = await index.SearchAsync("סימן", new HashSet<SearchFilter> { SearchFilter.Perush },
+            new HashSet<int> { 1 }, 10, TestContext.Current.CancellationToken);
+
+        hits.Should().ContainSingle().Which.PerushId.Should().Be(7);
+    }
+
+    [Fact]
+    public async Task Search_WhenNotesPackMissing_DropsStaleCommentaryIndex()
+    {
+        await using var storage = new TestStorage();
+        var perakim = await SeedAsync(storage);
+        // A working index already containing a stale notes table + fingerprint.
+        var working = await storage.CreateDatabaseAsync("search.sqlite",
+            DeliveredIndexStatements("v4:1:n1", "סימן מובהק"));
+        await working.CloseAsync();
+        var notes = PerushimNotesService.CreateForTesting(NullPad().Object, storage.Root);
+        await using var index = new SearchIndexService(perakim, notes, Path.Join(storage.Root, "search.sqlite"));
+
+        var hits = await index.SearchAsync("סימן", new HashSet<SearchFilter> { SearchFilter.Perush },
+            new HashSet<int> { 1 }, 10, TestContext.Current.CancellationToken);
+
+        index.CommentaryAvailable.Should().BeFalse();
+        hits.Should().BeEmpty();
+        var inspection = new SQLite.SQLiteAsyncConnection(Path.Join(storage.Root, "search.sqlite"), SQLite.SQLiteOpenFlags.ReadOnly);
+        try
+        {
+            var tables = await inspection.ExecuteScalarAsync<int>(
+                "SELECT COUNT(*) FROM sqlite_schema WHERE name = 'notes_documents'");
+            tables.Should().Be(0, "commentary index data is removed when its pack is gone");
+        }
+        finally { await inspection.CloseAsync(); }
+    }
+
+    [Fact]
+    public async Task SearchAsync_ReportsProgressWhileNotesIndexBuilds()
+    {
+        await using var storage = new TestStorage();
+        var perakim = await SeedAsync(storage);
+        await storage.CreateDatabaseAsync(NotesDb,
+            NotesDbV2.Statements((7, 1, 1, 0, "בראשית")));
+        var notes = PerushimNotesService.CreateForTesting(NullPad().Object, storage.Root);
+        await using var index = new SearchIndexService(perakim, notes, Path.Join(storage.Root, "search.sqlite"));
+        var reports = new List<string>();
+        var progress = new Progress<string>(reports.Add);
+
+        var hits = await index.SearchAsync("בראשית", new HashSet<SearchFilter> { SearchFilter.Perush },
+            new HashSet<int> { 1 }, 10, TestContext.Current.CancellationToken, progress);
+
+        hits.Should().ContainSingle();
+        reports.Should().Contain(r => r.Contains("מכין"),
+            "a notes search that is still importing reports the longer wait");
+    }
+
+    [Fact]
+    public async Task SearchAsync_RejectsOversizedQueries()
+    {
+        await using var storage = new TestStorage();
+        var perakim = await SeedAsync(storage);
+        await using var index = new SearchIndexService(perakim, null, Path.Join(storage.Root, "search.sqlite"));
+        var filters = new HashSet<SearchFilter> { SearchFilter.Pasuk };
+        var books = new HashSet<int> { 1 };
+
+        // 17 terms and a 65-character term are both beyond the query contract.
+        var tooMany = string.Join(' ', Enumerable.Range(1, 17).Select(_ => "ברא"));
+        (await index.SearchAsync(tooMany, filters, books, 10, TestContext.Current.CancellationToken))
+            .Should().BeEmpty();
+        (await index.SearchAsync(new string('ב', 65), filters, books, 10, TestContext.Current.CancellationToken))
+            .Should().BeEmpty();
+        // A well-formed query still works afterwards.
+        (await index.SearchAsync("בראשית", filters, books, 10, TestContext.Current.CancellationToken))
+            .Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task SearchAsync_AfterDispose_Throws()
+    {
+        await using var storage = new TestStorage();
+        var perakim = await SeedAsync(storage);
+        var index = new SearchIndexService(perakim, null, Path.Join(storage.Root, "search.sqlite"));
+        await index.DisposeAsync();
+
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => index.SearchAsync("בראשית",
+            new HashSet<SearchFilter> { SearchFilter.Pasuk }, new HashSet<int> { 1 },
+            10, TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task DeliveredIndex_WithCorruptFile_FallsBackToOnDeviceBuild()
+    {
+        await using var storage = new TestStorage();
+        var perakim = await SeedAsync(storage);
+        await storage.CreateDatabaseAsync(NotesDb,
+            [.. NotesDbV2.Statements((7, 1, 1, 0, "בראשית")), "INSERT INTO _metadata VALUES ('build_timestamp','42')"]);
+        var deliveredPath = Path.Join(storage.Root, PerushimNotesService.SearchIndexDbName);
+        await File.WriteAllTextAsync(deliveredPath, "not a sqlite index", TestContext.Current.CancellationToken);
+        var notes = PerushimNotesService.CreateForTesting(NullPad().Object, storage.Root);
+        await using var index = new SearchIndexService(perakim, notes, Path.Join(storage.Root, "search.sqlite"));
+
+        var hits = await index.SearchAsync("בראשית", new HashSet<SearchFilter> { SearchFilter.Perush },
+            new HashSet<int> { 1 }, 10, TestContext.Current.CancellationToken);
+
+        hits.Should().ContainSingle("an unreadable staged index falls back to importing the blobs");
+        File.Exists(deliveredPath).Should().BeFalse("the unusable staged index is removed");
+    }
+
+    [Fact]
+    public async Task DeliveredIndex_Missing_IsIgnoredAndIndexBuiltOnDevice()
+    {
+        await using var storage = new TestStorage();
+        var perakim = await SeedAsync(storage);
+        // Notes pack without a staged index — the oldest delivered format.
+        await storage.CreateDatabaseAsync(NotesDb,
+            [.. NotesDbV2.Statements((7, 1, 1, 0, "מיוחד")), "INSERT INTO _metadata VALUES ('build_timestamp','42')"]);
+        var notes = PerushimNotesService.CreateForTesting(NullPad().Object, storage.Root);
+        await using var index = new SearchIndexService(perakim, notes, Path.Join(storage.Root, "search.sqlite"));
+
+        var hits = await index.SearchAsync("מיוחד", new HashSet<SearchFilter> { SearchFilter.Perush },
+            new HashSet<int> { 1 }, 10, TestContext.Current.CancellationToken);
+
+        hits.Should().ContainSingle("with no staged index the notes import runs on-device");
+    }
+
+    [Fact]
+    public async Task CommentaryImport_SkipsNotesForUnknownPerakim()
+    {
+        await using var storage = new TestStorage();
+        var perakim = await SeedAsync(storage);
+        // Perek 999 is outside the sefer map — its notes cannot be navigated
+        // to and are skipped instead of indexed with a broken SeferId.
+        await storage.CreateDatabaseAsync(NotesDb,
+            NotesDbV2.Statements((7, 999, 1, 0, "אורפן"), (7, 1, 1, 0, "שלם")));
+        var notes = PerushimNotesService.CreateForTesting(NullPad().Object, storage.Root);
+        await using var index = new SearchIndexService(perakim, notes, Path.Join(storage.Root, "search.sqlite"));
+
+        var hits = await index.SearchAsync("אורפן", new HashSet<SearchFilter> { SearchFilter.Perush },
+            new HashSet<int> { 1 }, 10, TestContext.Current.CancellationToken);
+
+        hits.Should().BeEmpty();
+        (await index.SearchAsync("שלם", new HashSet<SearchFilter> { SearchFilter.Perush },
+            new HashSet<int> { 1 }, 10, TestContext.Current.CancellationToken))
+            .Should().ContainSingle("in-range notes still index normally");
+        var inspection = new SQLite.SQLiteAsyncConnection(Path.Join(storage.Root, "search.sqlite"), SQLite.SQLiteOpenFlags.ReadOnly);
+        try
+        {
+            (await inspection.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM notes_documents"))
+                .Should().Be(1, "only the known perek made it into the index");
+        }
+        finally { await inspection.CloseAsync(); }
+    }
+
+    [Fact]
+    public async Task Search_WhenNotesPackMissing_WithoutPriorIndex_Succeeds()
+    {
+        await using var storage = new TestStorage();
+        var perakim = await SeedAsync(storage);
+        var notes = PerushimNotesService.CreateForTesting(NullPad().Object, storage.Root);
+        await using var index = new SearchIndexService(perakim, notes, Path.Join(storage.Root, "search.sqlite"));
+
+        var hits = await index.SearchAsync("בראשית", new HashSet<SearchFilter> { SearchFilter.Perush },
+            new HashSet<int> { 1 }, 10, TestContext.Current.CancellationToken);
+
+        index.CommentaryAvailable.Should().BeFalse();
+        hits.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Initialization_SweepsObsoleteIndexFiles()
+    {
+        await using var storage = new TestStorage();
+        var perakim = await SeedAsync(storage);
+        var indexPath = Path.Join(storage.Root, "search.sqlite");
+        // The superseded v1 cache + interrupted atomic-replace leftovers sit
+        // next to the working index and must not accumulate.
+        foreach (var name in new[] { "hebrew-search-v1.sqlite", "hebrew-search-v1.sqlite-wal",
+                 "hebrew-search-v1.sqlite-shm", $"search.sqlite.{Guid.NewGuid():N}.tmp" })
+        {
+            await File.WriteAllTextAsync(Path.Join(storage.Root, name), "stale", TestContext.Current.CancellationToken);
+        }
+
+        await using (var index = new SearchIndexService(perakim, null, indexPath))
+        {
+            (await index.SearchAsync("בראשית", new HashSet<SearchFilter> { SearchFilter.Pasuk },
+                new HashSet<int> { 1 }, 10, TestContext.Current.CancellationToken))
+                .Should().ContainSingle();
+        }
+
+        Directory.GetFiles(storage.Root, "hebrew-search-v1.sqlite*").Should().BeEmpty();
+        Directory.GetFiles(storage.Root, "search.sqlite.*.tmp").Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task DeliveredIndex_WhenDeleteFails_StillBuildsOnDevice()
+    {
+        await using var storage = new TestStorage();
+        var perakim = await SeedAsync(storage);
+        await storage.CreateDatabaseAsync(NotesDb,
+            [.. NotesDbV2.Statements((7, 1, 1, 0, "בראשית")), "INSERT INTO _metadata VALUES ('build_timestamp','42')"]);
+        var deliveredPath = Path.Join(storage.Root, PerushimNotesService.SearchIndexDbName);
+        var delivered = await storage.CreateDatabaseAsync(PerushimNotesService.SearchIndexDbName,
+            DeliveredIndexStatements("v4:999:n1", "סימן מובהק"));
+        await delivered.CloseAsync();
+        var indexDir = Path.Join(storage.Root, "index");
+        Directory.CreateDirectory(indexDir);
+        // A locked staged index cannot be deleted — the on-device build must
+        // still run instead of trusting the wrong-generation file. Windows
+        // honors the open handle; on POSIX an advisory lock does not block
+        // unlink, so the data directory itself is made non-writable.
+        await using var locked = new FileStream(deliveredPath, FileMode.Open, FileAccess.Read, FileShare.None);
+        var lockedDirectory = !OperatingSystem.IsWindows();
+        if (lockedDirectory)
+        {
+            File.SetUnixFileMode(storage.Root, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+        }
+        try
+        {
+            var notes = PerushimNotesService.CreateForTesting(NullPad().Object, storage.Root);
+            await using var index = new SearchIndexService(perakim, notes, Path.Join(indexDir, "search.sqlite"));
+
+            var hits = await index.SearchAsync("בראשית", new HashSet<SearchFilter> { SearchFilter.Perush },
+                new HashSet<int> { 1 }, 10, TestContext.Current.CancellationToken);
+
+            hits.Should().ContainSingle("the failed delete is tolerated and the build proceeds");
+            File.Exists(deliveredPath).Should().BeTrue("the undeletable staged file lingers");
+        }
+        finally
+        {
+            if (lockedDirectory)
+            {
+                File.SetUnixFileMode(storage.Root,
+                    UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            }
+        }
+    }
+
+    [Fact]
+    public void Instance_OnUnitTestHost_ThrowsPlatformNotImplemented()
+    {
+        // The production singleton resolves FileSystem.Current, which has no
+        // implementation in the unit-test host.
+        var act = () => _ = SearchIndexService.Instance;
+
+        act.Should().Throw<NotImplementedException>();
+    }
+
+    [Fact]
+    public async Task Initialization_WhenStaleTempCannotBeDeleted_StillServesQueries()
+    {
+        await using var storage = new TestStorage();
+        var perakim = await SeedAsync(storage);
+        var indexDir = Path.Join(storage.Root, "index");
+        Directory.CreateDirectory(indexDir);
+        var indexPath = Path.Join(indexDir, "search.sqlite");
+        // A read-only index directory must still serve queries: pre-create the
+        // index in WAL mode so -wal/-shm already exist and stay writable.
+        var preOpen = new SQLite.SQLiteAsyncConnection(indexPath);
+        await preOpen.ExecuteScalarAsync<string>("PRAGMA journal_mode=WAL");
+        await preOpen.ExecuteAsync("CREATE TABLE search_metadata (name TEXT PRIMARY KEY, fingerprint TEXT)");
+        var stale = Path.Join(indexDir, $"search.sqlite.{Guid.NewGuid():N}.tmp");
+        await File.WriteAllTextAsync(stale, "interrupted replace", TestContext.Current.CancellationToken);
+        // Windows honors the open handle; on POSIX an advisory lock does not
+        // block unlink, so the index directory itself is made non-writable.
+        await using var locked = new FileStream(stale, FileMode.Open, FileAccess.Read, FileShare.None);
+        var lockedDirectory = !OperatingSystem.IsWindows();
+        if (lockedDirectory)
+        {
+            File.SetUnixFileMode(indexDir, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+        }
+        try
+        {
+            await using var index = new SearchIndexService(perakim, null, indexPath);
+            var hits = await index.SearchAsync("בראשית", new HashSet<SearchFilter> { SearchFilter.Pasuk },
+                new HashSet<int> { 1 }, 10, TestContext.Current.CancellationToken);
+
+            hits.Should().ContainSingle("a stuck temp file must not break the index");
+            File.Exists(stale).Should().BeTrue("the undeletable temp file lingers until a later sweep");
+        }
+        finally
+        {
+            if (lockedDirectory)
+            {
+                File.SetUnixFileMode(indexDir,
+                    UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            }
+            await preOpen.CloseAsync();
+        }
+    }
+
+    [Fact]
+    public async Task GenerationOrdering_WithoutCommentaryYears_KeepsDocumentOrder()
+    {
+        await using var storage = new TestStorage();
+        var perakim = await SeedAsync(storage);
+        await storage.CreateDatabaseAsync(NotesDb,
+            NotesDbV2.Statements((7, 1, 1, 0, "בראשית"), (8, 1, 1, 0, "בראשית"), (9, 1, 1, 0, "בראשית")));
+        var notes = PerushimNotesService.CreateForTesting(NullPad().Object, storage.Root);
+        await using var index = new SearchIndexService(perakim, notes, Path.Join(storage.Root, "search.sqlite"));
+        // A catalog without publication years leaves every perush at the
+        // fallback ordering: perek, pasuk, insertion order.
+        var ordering = new SearchOrdering(SearchSort.Generation, new Dictionary<int, int>());
+
+        var hits = await index.SearchAsync("בראשית", new HashSet<SearchFilter> { SearchFilter.Perush },
+            new HashSet<int> { 1 }, 10, TestContext.Current.CancellationToken, null, ordering);
+
+        hits.Select(hit => hit.PerushId).Should().Equal(7, 8, 9);
+    }
+
+    private sealed class SourceBlobRow
+    {
+        public int PerekId { get; set; }
+        public byte[] Data { get; set; } = [];
     }
 }
