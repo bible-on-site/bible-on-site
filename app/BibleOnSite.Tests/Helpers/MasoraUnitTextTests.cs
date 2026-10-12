@@ -12,7 +12,7 @@ public class MasoraUnitTextTests
         SeferId = 1,
         SeferName = "בראשית",
         UnitOrder = 1,
-        Heading = "בראשית א א",
+        Heading = "בראשית פרשה א",
         Ranges = ranges.ToList()
     };
 
@@ -141,21 +141,20 @@ public class MasoraUnitTextTests
     }
 
     [Fact]
-    public async Task BuildRows_SamePerekUnit_NoPerekLabels()
+    public async Task BuildRows_SamePerekUnit_ReturnsSliceRows()
     {
         var unit = Unit(Range(1, 1, null, 1, 2, null));
         var pasukim = new List<Pasuk> { PasukOf(1, Word("א")), PasukOf(2, Word("ב")), PasukOf(3, Word("ג")) };
 
-        var rows = await MasoraUnitText.BuildRowsAsync(unit, _ => Task.FromResult(pasukim), _ => "בראשית א", 1.0);
+        var rows = await MasoraUnitText.BuildRowsAsync(unit, _ => Task.FromResult(pasukim), 1.0);
 
         rows.Should().HaveCount(2);
-        rows.Should().OnlyContain(r => !r.HasPerekLabel);
         rows.Select(r => r.PasukNum).Should().Equal(1, 2);
         rows[0].FontSize.Should().Be(PasukDisplayItems.PasukFontSizeBase);
     }
 
     [Fact]
-    public async Task BuildRows_CrossPerekUnit_LabelsFirstRowOfEachPerek()
+    public async Task BuildRows_CrossPerekUnit_KeepsCanonicalPerekIds()
     {
         var unit = Unit(Range(1, 2, null, 2, 1, null));
         var perakim = new Dictionary<int, List<Pasuk>>
@@ -165,12 +164,12 @@ public class MasoraUnitTextTests
         };
 
         var rows = await MasoraUnitText.BuildRowsAsync(
-            unit, id => Task.FromResult(perakim[id]), id => $"ספר {id}", 1.0);
+            unit, id => Task.FromResult(perakim[id]), 1.0);
 
+        // Canonical perek ids stay on the rows for joins even though the
+        // מסורה reader renders no perek labels.
         rows.Should().HaveCount(2);
-        rows[0].PerekLabel.Should().Be("ספר 1");
-        rows[1].PerekLabel.Should().Be("ספר 2");
-        rows[1].PerekId.Should().Be(2);
+        rows.Select(r => r.PerekId).Should().Equal(1, 2);
     }
 
     [Fact]
@@ -179,7 +178,7 @@ public class MasoraUnitTextTests
         var unit = Unit(Range(1, 1, 1, 1, 1, null));
         var pasukim = new List<Pasuk> { PasukOf(1, Word("א"), Word("ב"), Word("ג")) };
 
-        var rows = await MasoraUnitText.BuildRowsAsync(unit, _ => Task.FromResult(pasukim), _ => null, 1.0);
+        var rows = await MasoraUnitText.BuildRowsAsync(unit, _ => Task.FromResult(pasukim), 1.0);
 
         rows.Should().ContainSingle();
         rows[0].Pasuk.Segments.Select(s => s.Value).Should().Equal("ב", "ג");
@@ -192,10 +191,9 @@ public class MasoraUnitTextTests
         var unit = Unit(Range(1, 2, null, 1, 3, null));
         var pasukim = new List<Pasuk> { PasukOf(1, Word("א")), PasukOf(2, Word("ב")), PasukOf(3, Word("ג")) };
 
-        var rows = await MasoraUnitText.BuildRowsAsync(unit, _ => Task.FromResult(pasukim), _ => "בראשית א", 1.0);
+        var rows = await MasoraUnitText.BuildRowsAsync(unit, _ => Task.FromResult(pasukim), 1.0);
 
         rows.Select(r => r.PasukNum).Should().Equal(2, 3);
-        // Single-perek unit → no perek labels even though it starts mid-perek.
-        rows.Should().OnlyContain(r => !r.HasPerekLabel);
+        rows.Should().OnlyContain(r => r.PerekId == 1);
     }
 }
