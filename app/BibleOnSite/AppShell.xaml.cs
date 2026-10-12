@@ -212,11 +212,14 @@ public partial class AppShell : Shell
 		{
 			return;
 		}
-		// Populate analytics with route (legacy-style: clear screen names for GA)
-		var loc = e.Current?.Location?.ToString();
-		if (!string.IsNullOrEmpty(loc))
+		// Logical screen names for GA (#2119): the route URI embeds Shell
+		// container segments and query strings, and Firebase's automatic
+		// tracking only saw MainActivity/renderer classes before it was
+		// disabled in the manifests — the page's logical name replaces both.
+		var name = AnalyticsScreens.ScreenNameFor(CurrentPage);
+		if (name is not null)
 		{
-			analytics.SetScreen(loc.TrimStart('/'), "Shell");
+			analytics.SetScreen(name, name);
 		}
 	}
 

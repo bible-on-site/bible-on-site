@@ -7,9 +7,12 @@ namespace BibleOnSite.Pages;
 /// Loading page shown on app startup while starter data is being loaded.
 /// Handles offline mode gracefully — never blocks indefinitely.
 /// </summary>
-public partial class LoadingPage : ContentPage
+public partial class LoadingPage : ContentPage, IAnalyticsScreenName
 {
     private bool _isLoading;
+
+    /// <summary>Transient bootstrap screen — never a reportable GA screen.</summary>
+    public string? AnalyticsScreenName => null;
 
     public LoadingPage()
     {
