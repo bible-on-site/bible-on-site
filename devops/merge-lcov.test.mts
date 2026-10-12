@@ -77,4 +77,24 @@ describe("mergeLcovTexts", () => {
 	it("emits nothing for no inputs", () => {
 		assert.equal(mergeLcovTexts([]), "");
 	});
+
+	it("relocates absolute SF paths from different runners onto the needle", () => {
+		// #1232: mobile E2E coverage is produced on Linux (Android) and macOS
+		// (iOS) runners, so the same source file arrives under different roots.
+		const linux =
+			"TN:\nSF:/home/runner/work/bible-on-site/bible-on-site/app/BibleOnSite/Helpers/AppLinkHelper.cs\nDA:1,3\nDA:2,0\nLF:2\nLH:1\nend_of_record\n";
+		const macos =
+			"TN:\nSF:/Users/runner/work/bible-on-site/bible-on-site/app/BibleOnSite/Helpers/AppLinkHelper.cs\nDA:1,0\nDA:2,7\nLF:2\nLH:1\nend_of_record\n";
+		const out = mergeLcovTexts([linux, macos], undefined, ["app/BibleOnSite/"]);
+		const sfs = out.match(/^SF:.+$/gm);
+		assert.deepEqual(sfs, ["SF:app/BibleOnSite/Helpers/AppLinkHelper.cs"]);
+		assert.ok(out.includes("DA:1,3\nDA:2,7\n"), out);
+	});
+
+	it("leaves already-relative SF paths untouched by relocate", () => {
+		const rel =
+			"TN:\nSF:app/BibleOnSite/Helpers/AppLinkHelper.cs\nDA:1,1\nLF:1\nLH:1\nend_of_record\n";
+		const out = mergeLcovTexts([rel], undefined, ["app/BibleOnSite/"]);
+		assert.match(out, /^SF:app\/BibleOnSite\/Helpers\/AppLinkHelper\.cs$/m);
+	});
 });

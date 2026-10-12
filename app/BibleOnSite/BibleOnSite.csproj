@@ -288,4 +288,71 @@
 		<PackageReference Include="Plugin.Firebase.Core" Version="4.2.0" />
 	</ItemGroup>
 
+	<!-- ============================================================
+	     E2E app-process coverage (#1232)
+	     Activated only by -p:E2ECoverage=true on instrumented test builds
+	     (mobile E2E, Windows FlaUI). AltCover weaves sequence/branch visit
+	     calls into the compiled assembly; the BibleOnSite.E2eCoverage
+	     project provides the AltCover.Recorder.g substitute that collects
+	     the real hits and serves them to the E2E harness over a loopback
+	     endpoint. Store and production builds never set E2ECoverage.
+	     ============================================================ -->
+	<PropertyGroup>
+		<AltCoverVersion>9.0.145</AltCoverVersion>
+		<_E2EAltCoverTool Condition="'$(NuGetPackageRoot)' != ''">$(NuGetPackageRoot)altcover\$(AltCoverVersion)\tools\net8.0\AltCover.dll</_E2EAltCoverTool>
+		<_E2EAltCoverTool Condition="'$(_E2EAltCoverTool)' == '' AND '$(NUGET_PACKAGES)' != ''">$(NUGET_PACKAGES)\altcover\$(AltCoverVersion)\tools\net8.0\AltCover.dll</_E2EAltCoverTool>
+		<_E2EAltCoverTool Condition="'$(_E2EAltCoverTool)' == '' AND '$(USERPROFILE)' != ''">$(USERPROFILE)\.nuget\packages\altcover\$(AltCoverVersion)\tools\net8.0\AltCover.dll</_E2EAltCoverTool>
+		<_E2EAltCoverTool Condition="'$(_E2EAltCoverTool)' == '' AND '$(HOME)' != ''">$(HOME)/.nuget/packages/altcover/$(AltCoverVersion)/tools/net8.0/AltCover.dll</_E2EAltCoverTool>
+	</PropertyGroup>
+	<ItemGroup Condition="'$(E2ECoverage)' == 'true'">
+		<!-- The recorder is built as a standalone netstandard2.0 library by the
+		     devops target before the app build, then referenced by path. A
+		     ProjectReference would inherit the app build's global
+		     TargetFrameworks and restore for the app's TFM. -->
+		<Reference Include="AltCover.Recorder.g">
+			<HintPath>..\BibleOnSite.E2eCoverage\bin\$(Configuration)\AltCover.Recorder.g.dll</HintPath>
+		</Reference>
+		<PackageReference Include="altcover" Version="$(AltCoverVersion)" PrivateAssets="all" ExcludeAssets="all" />
+	</ItemGroup>
+
+	<!-- Weave coverage calls into the compiled assembly. Runs after XamlC so
+	     Debug (Runtime inflator / validate-only) and Release (IL rewrite)
+	     both instrument the final IL. The pristine assembly is preserved for
+	     restore on plain builds. -->
+	<Target Name="_E2ECoverageInstrument" AfterTargets="XamlC" Condition="'$(E2ECoverage)' == 'true'"
+			Inputs="$(IntermediateOutputPath)$(TargetFileName);$(IntermediateOutputPath)$(TargetName).pdb"
+			Outputs="$(IntermediateOutputPath)e2e-coverage.stamp">
+		<PropertyGroup>
+			<!-- Evaluated inside the target: at load time IntermediateOutputPath
+			     is still empty, which would leak artifacts to the project root. -->
+			<_E2EAltDir>$(IntermediateOutputPath)e2e-coverage\</_E2EAltDir>
+		</PropertyGroup>
+		<Error Condition="!Exists('$(_E2EAltCoverTool)')" Text="AltCover tool not found at $(_E2EAltCoverTool); restore the altcover package." />
+		<Copy SourceFiles="$(IntermediateOutputPath)$(TargetFileName)" DestinationFiles="$(IntermediateOutputPath)$(TargetName).uninstrumented.dll" />
+		<Copy SourceFiles="$(IntermediateOutputPath)$(TargetName).pdb" DestinationFiles="$(IntermediateOutputPath)$(TargetName).uninstrumented.pdb" Condition="Exists('$(IntermediateOutputPath)$(TargetName).pdb')" />
+		<MakeDir Directories="$(_E2EAltDir)stage;$(_E2EAltDir)instr" />
+		<Copy SourceFiles="$(IntermediateOutputPath)$(TargetFileName)" DestinationFolder="$(_E2EAltDir)stage" />
+		<Copy SourceFiles="$(IntermediateOutputPath)$(TargetName).pdb" DestinationFolder="$(_E2EAltDir)stage" Condition="Exists('$(IntermediateOutputPath)$(TargetName).pdb')" />
+		<Exec Command="dotnet &quot;$(_E2EAltCoverTool)&quot; -i &quot;$(_E2EAltDir)stage&quot; -o &quot;$(_E2EAltDir)instr&quot; --localSource --visibleBranches -r &quot;$(_E2EAltDir)template.opencover.xml&quot; -a ExcludeFromCodeCoverage -a GeneratedCodeAttribute -a CompilerGeneratedAttribute -a DebuggerNonUserCode -a Obsolete" />
+		<Copy SourceFiles="$(_E2EAltDir)instr\$(TargetFileName)" DestinationFiles="$(IntermediateOutputPath)$(TargetFileName)" />
+		<Copy SourceFiles="$(_E2EAltDir)instr\$(TargetName).pdb" DestinationFiles="$(IntermediateOutputPath)$(TargetName).pdb" Condition="Exists('$(_E2EAltDir)instr\$(TargetName).pdb')" />
+		<Touch Files="$(IntermediateOutputPath)e2e-coverage.stamp" AlwaysCreate="true" />
+		<Message Importance="high" Text="E2E coverage: instrumented $(TargetFileName); OpenCover template at $(_E2EAltDir)template.opencover.xml" />
+	</Target>
+
+	<!-- Plain builds after an instrumented one restore the untouched assembly
+	     so coverage instrumentation never leaks into non-test builds. -->
+	<Target Name="_E2ECoverageRestore" AfterTargets="XamlC" Condition="'$(E2ECoverage)' != 'true'">
+		<PropertyGroup>
+			<_E2EWasInstrumented Condition="Exists('$(IntermediateOutputPath)e2e-coverage.stamp')">true</_E2EWasInstrumented>
+		</PropertyGroup>
+		<Copy SourceFiles="$(IntermediateOutputPath)$(TargetName).uninstrumented.dll" DestinationFiles="$(IntermediateOutputPath)$(TargetFileName)"
+				Condition="'$(_E2EWasInstrumented)' == 'true' AND Exists('$(IntermediateOutputPath)$(TargetName).uninstrumented.dll')" />
+		<Copy SourceFiles="$(IntermediateOutputPath)$(TargetName).uninstrumented.pdb" DestinationFiles="$(IntermediateOutputPath)$(TargetName).pdb"
+				Condition="'$(_E2EWasInstrumented)' == 'true' AND Exists('$(IntermediateOutputPath)$(TargetName).uninstrumented.pdb')" />
+		<Delete Files="$(TargetDir)$(TargetFileName);$(TargetDir)$(TargetName).pdb;$(TargetDir)AltCover.Recorder.g.dll" Condition="'$(_E2EWasInstrumented)' == 'true'" />
+		<Delete Files="$(IntermediateOutputPath)e2e-coverage.stamp" Condition="'$(_E2EWasInstrumented)' == 'true'" />
+		<Message Importance="high" Text="E2E coverage: restored uninstrumented $(TargetFileName)" Condition="'$(_E2EWasInstrumented)' == 'true'" />
+	</Target>
+
 </Project>

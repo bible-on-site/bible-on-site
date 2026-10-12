@@ -20,6 +20,9 @@ mkdirSync(artifacts, { recursive: true });
 // Coverage evidence is per-run state: a stale record from an earlier run must
 // never attribute its automation ids to tests of this run (#2085).
 rmSync(resolve(artifacts, "coverage-evidence"), { recursive: true, force: true });
+// Same for executable coverage dumps pulled from the instrumented app
+// process (#1232): a stale dump would merge another build's hits.
+rmSync(resolve(artifacts, "app-coverage"), { recursive: true, force: true });
 const appPath = process.env.MOBILE_APP_PATH ?? resolve(directory,
   platform === "android"
     ? "../BibleOnSite/bin/Debug/net10.0-android/android-x64/com.tanah.daily929-Signed.apk"
