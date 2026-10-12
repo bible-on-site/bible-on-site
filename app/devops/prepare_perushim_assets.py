@@ -77,14 +77,22 @@ def validate_search_index(index_path: Path, notes_timestamp: int, tanah_view: Pa
         tables = {row[0] for row in index.execute("SELECT name FROM sqlite_master")}
         if not required <= tables:
             raise ValueError("Search index is missing FTS/documents/vocabulary tables")
-        for table in ("verses", "notes"):
+        checks = (
+            ("verses", "SELECT term FROM verses_vocab LIMIT 1",
+             "SELECT c.PerekId, c.PasukNum, c.PerushId, c.SeferId, c.Text FROM verses "
+             "JOIN verses_documents c ON c.rowid = verses.rowid WHERE verses MATCH ? LIMIT 1",
+             "SELECT COUNT(*) FROM verses_documents"),
+            ("notes", "SELECT term FROM notes_vocab LIMIT 1",
+             "SELECT c.PerekId, c.PasukNum, c.PerushId, c.SeferId, c.Text FROM notes "
+             "JOIN notes_documents c ON c.rowid = notes.rowid WHERE notes MATCH ? LIMIT 1",
+             "SELECT COUNT(*) FROM notes_documents"),
+        )
+        for table, vocabulary_query, match_query, count_query in checks:
             # Fingerprints alone cannot prove the FTS payload is present. Query
             # it through the same join as the app, including the vocabulary.
-            index.execute(f"SELECT term FROM {table}_vocab LIMIT 1").fetchall()
-            index.execute(f"SELECT c.PerekId, c.PasukNum, c.PerushId, c.SeferId, c.Text "
-                          f"FROM {table} JOIN {table}_documents c ON c.rowid = {table}.rowid "
-                          f"WHERE {table} MATCH ? LIMIT 1", ("בראשית",)).fetchall()
-            if index.execute(f"SELECT COUNT(*) FROM {table}_documents").fetchone()[0] == 0:
+            index.execute(vocabulary_query).fetchall()
+            index.execute(match_query, ("בראשית",)).fetchall()
+            if index.execute(count_query).fetchone()[0] == 0:
                 raise ValueError(f"Search index has no {table} documents")
 
 
