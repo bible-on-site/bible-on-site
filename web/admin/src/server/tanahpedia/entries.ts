@@ -6,16 +6,9 @@ import {
 	type EntityType,
 } from "~/lib/tanahpedia/labels";
 import type { EntryRevisionRow } from "~/lib/tanahpedia/revisions-shared";
-import {
-	execute,
-	query,
-	queryOne,
-	transaction,
-	txExecute,
-	txQueryOne,
-} from "../db";
 import { loadTanahpediaEntryById } from "./entry-loader.server";
 import { saveEntryRevisioned } from "./revisions";
+import { execute, query, queryOne, transaction, txExecute, txQueryOne } from "../db";
 
 const ANIMAL_KIND_KEYS = ["BEHEMA", "CHAYA", "OF", "SHERETZ"] as const;
 const ANIMAL_PURITY_KEYS = ["TAHOR", "TAMEH"] as const;

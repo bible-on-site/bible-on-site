@@ -77,8 +77,7 @@ function HomePage() {
 					<li className="flex items-start gap-3">
 						<span className="text-green-500 mt-1">✓</span>
 						<span>
-							<strong>ניווט מהיר</strong> - ניתן לנווט למאמרים לפי מספר פרק
-							(1-929)
+							<strong>ניווט מהיר</strong> - ניתן לנווט למאמרים לפי מספר פרק (1-929)
 						</span>
 					</li>
 					<li className="flex items-start gap-3">

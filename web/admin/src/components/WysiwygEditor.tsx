@@ -8,6 +8,12 @@ import StarterKit from "@tiptap/starter-kit";
 import DOMPurify from "dompurify";
 import type { MouseEvent as ReactMouseEvent } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { EditorShortcutModal } from "./editor/EditorShortcutModal";
+import {
+	EntryLinkPicker,
+	type EntryLinkOption,
+	type EntrySearch,
+} from "./editor/EntryLinkPicker";
 import {
 	ADMIN_EDITOR_SHORTCUT_EXTRAS_KEY,
 	adminEditorShortcutsExtension,
@@ -28,18 +34,12 @@ import {
 } from "./editor/adminFootnoteMigration";
 import {
 	AdminLink,
-	type AdminLinkType,
 	buildLinkHref,
 	inferLinkType,
+	type AdminLinkType,
 	type TipTapLinkMarkAttrs,
 } from "./editor/adminLinkExtension";
 import { AdminOrderedList } from "./editor/adminOrderedListExtension";
-import { EditorShortcutModal } from "./editor/EditorShortcutModal";
-import {
-	type EntryLinkOption,
-	EntryLinkPicker,
-	type EntrySearch,
-} from "./editor/EntryLinkPicker";
 
 const ItalicNoShortcut = Italic.extend({
 	addKeyboardShortcuts() {
@@ -284,8 +284,7 @@ export function WysiwygEditor({
 		[editor, syncLinkPanelFromEditor],
 	);
 
-	const beginNewLink = useCallback(() => {
-		if (!editor) return;
+	const beginNewLink = useCallback(() => {		if (!editor) return;
 		const { empty } = editor.state.selection;
 		if (empty) {
 			window.alert("סמן טקסט ואז לחץ «קישור חדש».");
@@ -298,10 +297,7 @@ export function WysiwygEditor({
 		editor
 			.chain()
 			.focus()
-			.setLink({
-				href: "https://",
-				linkType: "external",
-			} as TipTapLinkMarkAttrs)
+			.setLink({ href: "https://", linkType: "external" } as TipTapLinkMarkAttrs)
 			.run();
 	}, [editor]);
 
@@ -342,8 +338,7 @@ export function WysiwygEditor({
 		}
 		if (!insertFootnoteAtSelection(editor)) {
 			window.alert("לחץ בגוף הטקסט במקום שבו תופיע ההערה, ואז «+ הערה».");
-		}
-	}, [editor]);
+		}	}, [editor]);
 
 	const removeFootnote = useCallback(() => {
 		if (!editor) return;
@@ -434,223 +429,226 @@ export function WysiwygEditor({
 			/>
 
 			<div className="sticky top-16 z-40 bg-white/95 backdrop-blur-sm border-b border-gray-300 shadow-sm">
-				<div className="bg-gray-50 border-b border-gray-200 p-2 flex flex-wrap gap-2 items-center">
-					<div className="flex gap-1 flex-wrap items-center">
-						{modeBtn("visual", "עריכה")}
-						{modeBtn("preview", "תצוגה מקדימה")}
-						{modeBtn("source", "מקור HTML")}
+			<div className="bg-gray-50 border-b border-gray-200 p-2 flex flex-wrap gap-2 items-center">
+				<div className="flex gap-1 flex-wrap items-center">
+					{modeBtn("visual", "עריכה")}
+					{modeBtn("preview", "תצוגה מקדימה")}
+					{modeBtn("source", "מקור HTML")}
+				</div>
+				<span className="w-px h-6 bg-gray-300 mx-1" />
+				<button
+					type="button"
+					onClick={openHelp}
+					className="px-3 py-1.5 rounded text-sm font-medium bg-white border border-gray-300 hover:bg-gray-100"
+				>
+					קיצורים
+				</button>
+				{mode === "visual" && (
+					<>
+						<span className="w-px h-6 bg-gray-300 mx-1" />
+						<button
+							type="button"
+							onClick={() => editor.chain().focus().toggleBold().run()}
+							className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+								editor.isActive("bold")
+									? "bg-blue-600 text-white"
+									: "bg-white hover:bg-gray-100 border"
+							}`}
+						>
+							<strong>B</strong>
+						</button>
+						<button
+							type="button"
+							onClick={() => editor.chain().focus().toggleItalic().run()}
+							className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+								editor.isActive("italic")
+									? "bg-blue-600 text-white"
+									: "bg-white hover:bg-gray-100 border"
+							}`}
+						>
+							<em>I</em>
+						</button>
+						<button
+							type="button"
+							onClick={() => editor.chain().focus().toggleStrike().run()}
+							className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+								editor.isActive("strike")
+									? "bg-blue-600 text-white"
+									: "bg-white hover:bg-gray-100 border"
+							}`}
+						>
+							<s>S</s>
+						</button>
+						<span className="w-px bg-gray-300 mx-1 h-6" />
+						{([1, 2, 3] as const).map((level) => (
+							<button
+								key={level}
+								type="button"
+								onClick={() =>
+									editor
+										.chain()
+										.focus()
+										.toggleHeading({ level })
+										.run()
+								}
+								className={`px-2 py-1 rounded text-sm font-medium ${
+									editor.isActive("heading", { level })
+										? "bg-blue-600 text-white"
+										: "bg-white hover:bg-gray-100 border"
+								}`}
+							>
+								H{level}
+							</button>
+						))}
+						<button
+							type="button"
+							onClick={() => editor.chain().focus().toggleBulletList().run()}
+							className={`px-2 py-1 rounded text-sm ${
+								editor.isActive("bulletList")
+									? "bg-blue-600 text-white"
+									: "bg-white border"
+							}`}
+						>
+							• תבליטים
+						</button>
+						<button
+							type="button"
+							onClick={() => setOrderedStyle("decimal")}
+							className={`px-2 py-1 rounded text-sm ${
+								editor.isActive("orderedList") &&
+								editor.getAttributes("orderedList").orderedType === "decimal"
+									? "bg-blue-600 text-white"
+									: "bg-white border"
+							}`}
+						>
+							1. מספרים
+						</button>
+						<button
+							type="button"
+							onClick={() => setOrderedStyle("hebrew-alpha")}
+							className={`px-2 py-1 rounded text-sm ${
+								editor.isActive("orderedList") &&
+								editor.getAttributes("orderedList").orderedType === "hebrew-alpha"
+									? "bg-blue-600 text-white"
+									: "bg-white border"
+							}`}
+						>
+							א' עברית
+						</button>
+						<button
+							type="button"
+							onClick={beginNewLink}
+							className="px-2 py-1 rounded text-sm bg-white border"
+						>
+							קישור חדש
+						</button>
+						<button
+							type="button"
+							onClick={addImage}
+							className="px-2 py-1 rounded text-sm bg-white border"
+						>
+							תמונה
+						</button>
+						<button
+							type="button"
+							onMouseDown={keepCaret}
+							onClick={addFootnote}
+							title="מוסיפה אזכור במיקום הסמן וקופצת להערה החדשה לכתיבת התוכן; המספור מתעדכן לבד"
+							className="px-2 py-1 rounded text-sm bg-amber-50 border border-amber-200 text-amber-950"
+						>
+							+ הערה
+						</button>
+						<button
+							type="button"
+							onMouseDown={keepCaret}
+							onClick={removeFootnote}
+							disabled={!canRemoveFootnote(editor)}
+							title="מוחקת את ההערה שהסמן עליה - האזכור והפריט ברשימה גם יחד"
+							className="px-2 py-1 rounded text-sm bg-white border border-amber-200 text-amber-900 disabled:opacity-40"
+						>
+							− הערה
+						</button>
+					</>
+				)}
+			</div>
+
+			{mode === "visual" && (
+				<div className="border-b border-gray-200 bg-slate-50 px-3 py-2 space-y-2">
+					<div className="text-xs font-semibold text-slate-600">
+						{linkPanelActive
+							? "עריכת קישור"
+							: "לחץ על קישור בטקסט לעריכה, או «קישור חדש» עם טקסט מסומן"}
 					</div>
-					<span className="w-px h-6 bg-gray-300 mx-1" />
-					<button
-						type="button"
-						onClick={openHelp}
-						className="px-3 py-1.5 rounded text-sm font-medium bg-white border border-gray-300 hover:bg-gray-100"
-					>
-						קיצורים
-					</button>
-					{mode === "visual" && (
-						<>
-							<span className="w-px h-6 bg-gray-300 mx-1" />
-							<button
-								type="button"
-								onClick={() => editor.chain().focus().toggleBold().run()}
-								className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
-									editor.isActive("bold")
-										? "bg-blue-600 text-white"
-										: "bg-white hover:bg-gray-100 border"
-								}`}
+					<input
+						type="text"
+						value={linkPanelHref}
+						onChange={(e) => setLinkPanelHref(e.target.value)}
+						className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono"
+						dir="ltr"
+						placeholder="https://… / slug / #note-1"
+					/>
+					<div className="flex flex-wrap gap-4 text-sm items-center">
+						<span className="text-gray-600">סוג:</span>
+						{(
+							[
+								["external", "חיצוני"],
+								["internal", "פנימי"],
+								["comment", "הערה (#note)"],
+							] as const
+						).map(([v, label]) => (
+							<label
+								key={v}
+								className="inline-flex items-center gap-1.5 cursor-pointer"
 							>
-								<strong>B</strong>
-							</button>
-							<button
-								type="button"
-								onClick={() => editor.chain().focus().toggleItalic().run()}
-								className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
-									editor.isActive("italic")
-										? "bg-blue-600 text-white"
-										: "bg-white hover:bg-gray-100 border"
-								}`}
-							>
-								<em>I</em>
-							</button>
-							<button
-								type="button"
-								onClick={() => editor.chain().focus().toggleStrike().run()}
-								className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
-									editor.isActive("strike")
-										? "bg-blue-600 text-white"
-										: "bg-white hover:bg-gray-100 border"
-								}`}
-							>
-								<s>S</s>
-							</button>
-							<span className="w-px bg-gray-300 mx-1 h-6" />
-							{([1, 2, 3] as const).map((level) => (
-								<button
-									key={level}
-									type="button"
-									onClick={() =>
-										editor.chain().focus().toggleHeading({ level }).run()
-									}
-									className={`px-2 py-1 rounded text-sm font-medium ${
-										editor.isActive("heading", { level })
-											? "bg-blue-600 text-white"
-											: "bg-white hover:bg-gray-100 border"
-									}`}
-								>
-									H{level}
-								</button>
-							))}
-							<button
-								type="button"
-								onClick={() => editor.chain().focus().toggleBulletList().run()}
-								className={`px-2 py-1 rounded text-sm ${
-									editor.isActive("bulletList")
-										? "bg-blue-600 text-white"
-										: "bg-white border"
-								}`}
-							>
-								• תבליטים
-							</button>
-							<button
-								type="button"
-								onClick={() => setOrderedStyle("decimal")}
-								className={`px-2 py-1 rounded text-sm ${
-									editor.isActive("orderedList") &&
-									editor.getAttributes("orderedList").orderedType === "decimal"
-										? "bg-blue-600 text-white"
-										: "bg-white border"
-								}`}
-							>
-								1. מספרים
-							</button>
-							<button
-								type="button"
-								onClick={() => setOrderedStyle("hebrew-alpha")}
-								className={`px-2 py-1 rounded text-sm ${
-									editor.isActive("orderedList") &&
-									editor.getAttributes("orderedList").orderedType ===
-										"hebrew-alpha"
-										? "bg-blue-600 text-white"
-										: "bg-white border"
-								}`}
-							>
-								א' עברית
-							</button>
-							<button
-								type="button"
-								onClick={beginNewLink}
-								className="px-2 py-1 rounded text-sm bg-white border"
-							>
-								קישור חדש
-							</button>
-							<button
-								type="button"
-								onClick={addImage}
-								className="px-2 py-1 rounded text-sm bg-white border"
-							>
-								תמונה
-							</button>
-							<button
-								type="button"
-								onMouseDown={keepCaret}
-								onClick={addFootnote}
-								title="מוסיפה אזכור במיקום הסמן וקופצת להערה החדשה לכתיבת התוכן; המספור מתעדכן לבד"
-								className="px-2 py-1 rounded text-sm bg-amber-50 border border-amber-200 text-amber-950"
-							>
-								+ הערה
-							</button>
-							<button
-								type="button"
-								onMouseDown={keepCaret}
-								onClick={removeFootnote}
-								disabled={!canRemoveFootnote(editor)}
-								title="מוחקת את ההערה שהסמן עליה - האזכור והפריט ברשימה גם יחד"
-								className="px-2 py-1 rounded text-sm bg-white border border-amber-200 text-amber-900 disabled:opacity-40"
-							>
-								− הערה
-							</button>
-						</>
+								<input
+									type="radio"
+									name="linkType"
+									checked={linkPanelType === v}
+									onChange={() => {
+										setLinkPanelType(v);
+										if (v === "comment" && !linkPanelHref.startsWith("#")) {
+											setLinkPanelHref("#note-1");
+										}
+									}}
+								/>
+								{label}
+							</label>
+						))}
+						{linkPanelType === "external" && (
+							<label className="inline-flex items-center gap-1.5 cursor-pointer mr-4">
+								<input
+									type="checkbox"
+									checked={linkPanelBlank}
+									onChange={(e) => setLinkPanelBlank(e.target.checked)}
+								/>
+								חלון חדש
+							</label>
+						)}
+						<button
+							type="button"
+							onClick={applyLinkFromPanel}
+							className="mr-auto px-3 py-1 bg-blue-600 text-white rounded text-sm"
+						>
+							עדכן קישור
+						</button>
+						<button
+							type="button"
+							onClick={removeLinkFromPanel}
+							disabled={!editor.isActive("link")}
+							className="px-3 py-1 border border-red-200 text-red-700 rounded text-sm disabled:opacity-40"
+						>
+							הסר קישור
+						</button>
+					</div>
+					{linkPanelType === "internal" && searchEntries && (
+						<EntryLinkPicker
+							search={searchEntries}
+							selectedUniqueName={decodeEntrySlug(linkPanelHref)}
+							onSelect={selectEntryLink}
+						/>
 					)}
 				</div>
-
-				{mode === "visual" && (
-					<div className="border-b border-gray-200 bg-slate-50 px-3 py-2 space-y-2">
-						<div className="text-xs font-semibold text-slate-600">
-							{linkPanelActive
-								? "עריכת קישור"
-								: "לחץ על קישור בטקסט לעריכה, או «קישור חדש» עם טקסט מסומן"}
-						</div>
-						<input
-							type="text"
-							value={linkPanelHref}
-							onChange={(e) => setLinkPanelHref(e.target.value)}
-							className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono"
-							dir="ltr"
-							placeholder="https://… / slug / #note-1"
-						/>
-						<div className="flex flex-wrap gap-4 text-sm items-center">
-							<span className="text-gray-600">סוג:</span>
-							{(
-								[
-									["external", "חיצוני"],
-									["internal", "פנימי"],
-									["comment", "הערה (#note)"],
-								] as const
-							).map(([v, label]) => (
-								<label
-									key={v}
-									className="inline-flex items-center gap-1.5 cursor-pointer"
-								>
-									<input
-										type="radio"
-										name="linkType"
-										checked={linkPanelType === v}
-										onChange={() => {
-											setLinkPanelType(v);
-											if (v === "comment" && !linkPanelHref.startsWith("#")) {
-												setLinkPanelHref("#note-1");
-											}
-										}}
-									/>
-									{label}
-								</label>
-							))}
-							{linkPanelType === "external" && (
-								<label className="inline-flex items-center gap-1.5 cursor-pointer mr-4">
-									<input
-										type="checkbox"
-										checked={linkPanelBlank}
-										onChange={(e) => setLinkPanelBlank(e.target.checked)}
-									/>
-									חלון חדש
-								</label>
-							)}
-							<button
-								type="button"
-								onClick={applyLinkFromPanel}
-								className="mr-auto px-3 py-1 bg-blue-600 text-white rounded text-sm"
-							>
-								עדכן קישור
-							</button>
-							<button
-								type="button"
-								onClick={removeLinkFromPanel}
-								disabled={!editor.isActive("link")}
-								className="px-3 py-1 border border-red-200 text-red-700 rounded text-sm disabled:opacity-40"
-							>
-								הסר קישור
-							</button>
-						</div>
-						{linkPanelType === "internal" && searchEntries && (
-							<EntryLinkPicker
-								search={searchEntries}
-								selectedUniqueName={decodeEntrySlug(linkPanelHref)}
-								onSelect={selectEntryLink}
-							/>
-						)}
-					</div>
-				)}
+			)}
 			</div>
 
 			{mode === "visual" && (

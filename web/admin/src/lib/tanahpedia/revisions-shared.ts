@@ -29,7 +29,9 @@ export class RevisionConflictError extends Error {
 }
 
 export function isRevisionConflictError(err: unknown): boolean {
-	return err instanceof Error && err.message.includes(REVISION_CONFLICT_PREFIX);
+	return (
+		err instanceof Error && err.message.includes(REVISION_CONFLICT_PREFIX)
+	);
 }
 
 export function normalizeRevisionSource(source: string | undefined): string {
@@ -63,6 +65,8 @@ export function shouldSquashIntoHead(
 	windowSeconds = REVISION_SQUASH_WINDOW_SECONDS,
 ): boolean {
 	return (
-		head !== null && head.source === source && head.ageSeconds < windowSeconds
+		head !== null &&
+		head.source === source &&
+		head.ageSeconds < windowSeconds
 	);
 }

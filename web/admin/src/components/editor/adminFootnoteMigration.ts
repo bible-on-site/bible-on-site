@@ -255,10 +255,10 @@ export function toEditorFootnoteHtml(html: string): string {
 	const migrated = migrateLegacyFootnotes(html);
 	if (!migrated.includes("#fnref:")) return migrated;
 	const root = parseFragment(migrated);
-	for (const link of Array.from(root.querySelectorAll(BACKREF_SELECTOR))) {
-		link.remove();
-	}
-	return root.innerHTML;
+        for (const link of Array.from(root.querySelectorAll(BACKREF_SELECTOR))) {
+                link.remove();
+        }
+        return root.innerHTML;
 }
 
 /** Stored/published form: every footnote gets a link back to its reference. */
