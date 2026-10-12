@@ -273,7 +273,9 @@ jobs:
 
       - name: Preserve TestFlight recovery automation
         if: ${{ steps.guard.outputs.deploy == 'true' }}
-        run: cp devops/github/release/testflight-build.mjs "$RUNNER_TEMP/testflight-build.mjs"
+        run: |
+          cp devops/github/release/testflight-build.mjs "$RUNNER_TEMP/testflight-build.mjs"
+          cp devops/github/release/asset-pack-upload.mjs "$RUNNER_TEMP/asset-pack-upload.mjs"
 
       - name: Checkout artifact source
         if: ${{ steps.guard.outputs.deploy == 'true' }}
@@ -286,6 +288,20 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release download "app-v${{ env.MODULE_VERSION }}" --pattern "*.ipa" --dir "${{ env.APP_DIRECTORY }}/.artifacts"
+
+      - name: Restore iOS asset packs
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        id: assetpacks
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Releases from before the Background Assets migration carry no .aar
+          # files; their ODR-era builds need none, so skip quietly for those.
+          AAR_COUNT=$(gh release view "app-v${{ env.MODULE_VERSION }}" --json assets --jq '[.assets[].name | select(endswith(".aar"))] | length')
+          echo "aar_count=$AAR_COUNT" >> "$GITHUB_OUTPUT"
+          if [ "$AAR_COUNT" -gt 0 ]; then
+            gh release download "app-v${{ env.MODULE_VERSION }}" --pattern "*.aar" --dir "${{ env.APP_DIRECTORY }}/.artifacts/assetpacks" --clobber
+          fi
 
       - name: Find IPA file
         if: ${{ steps.guard.outputs.deploy == 'true' }}
@@ -355,6 +371,24 @@ jobs:
           IPA_FILE: ${{ steps.find_ipa.outputs.IPA_FILE }}
           UPLOAD_EXIT_CODE: ${{ steps.upload.outputs.exit_code || '0' }}
         run: node "$RUNNER_TEMP/testflight-build.mjs" postflight
+
+      - name: Upload managed asset packs to App Store Connect
+        if: ${{ steps.guard.outputs.deploy == 'true' && steps.assetpacks.outputs.aar_count != '0' }}
+        run: |
+          # Managed Background Assets travel beside the IPA: each .aar was built
+          # by xcrun ba-package and uploaded to the app release by CI. altool
+          # authenticates with the same AuthKey in ~/private_keys provisioned
+          # above and associates each pack with the app's numeric Apple ID.
+          # --upload-asset-pack exists only in the Xcode 26+ altool; macos-15
+          # still defaults xcode-select to Xcode 16, so switch toolchains first.
+          XCODE_PATH=$(ls -d /Applications/Xcode_2[6-9]*.app 2>/dev/null | sort -V | tail -1)
+          if [ -z "$XCODE_PATH" ]; then
+            echo "::error::No Xcode 26+ installation found — altool --upload-asset-pack is unavailable"
+            exit 1
+          fi
+          sudo xcode-select -s "$XCODE_PATH/Contents/Developer"
+          xcodebuild -version
+          node "$RUNNER_TEMP/asset-pack-upload.mjs" "${{ env.APP_DIRECTORY }}/.artifacts/assetpacks"
 
       - name: Record deployment result
         if: ${{ always() && steps.guard.outputs.deployment_id != '' }}
