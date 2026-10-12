@@ -71,7 +71,8 @@ def correct_ends(rows, evidence, identities, boundary="start"):
 def verify_corrections(diagnostic):
     """Every changed end must be the recorded pinned-path separator, never a pad."""
     if diagnostic.get("boundaryMethod") == PATH_METHOD:
-        return verify_path_corrections(diagnostic)
+        verify_path_corrections(diagnostic)
+        return None
     if diagnostic.get("boundaryMethod") not in (METHOD, END_METHOD):
         raise ValueError("Unknown boundary correction method")
     boundary_key = "separatorStartMs" if diagnostic["boundaryMethod"] == METHOD else "separatorEndMs"
