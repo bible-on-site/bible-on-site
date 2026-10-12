@@ -239,6 +239,13 @@ const MasoraSefer = (props: {
 								entityRefsByPerek={entityRefsByPerek}
 								pasukCount={pasukCount}
 								resolvePerek={resolvePerek}
+								/* Book-side anchors carry a unit-unique scope so they
+								 * never duplicate the flat page's canonical
+								 * pasuk-{perek}-{pasuk} ids — a mounted book
+								 * must not shadow the flat anchors' getElementById
+								 * resolution (boundary pesukim appear in two
+								 * adjacent units, so the unit id scopes them). */
+								anchorScope={`book-${unit.unitId}`}
 							/>
 						</article>
 					</div>

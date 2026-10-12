@@ -14,6 +14,7 @@ import {
 	buildParashaPageSemantics,
 	computeParashaInitialTurnedLeaves,
 	PARASHA_CONTENT_OFFSET,
+	parashaBookExitPath,
 	parashaBookPageFromPath,
 	parashaBookPageFromQuery,
 	parashaBookPageRoute,
@@ -229,6 +230,31 @@ describe("pathnameWithParashaBookQuery", () => {
 		expect(pathnameWithParashaBookQuery("/פרשה/1", "book", false)).toBe(
 			"/פרשה/1",
 		);
+	});
+});
+
+describe("parashaBookExitPath", () => {
+	it("returns the unit the flipbook's history wrote to the location", () => {
+		expect(parashaBookExitPath("/פרשה/8", 1)).toBe("/פרשה/8");
+		expect(parashaBookExitPath("/parasha/8", 1)).toBe("/פרשה/8");
+		expect(
+			parashaBookExitPath("/%D7%A4%D7%A8%D7%A9%D7%94/8", 1),
+		).toBe("/פרשה/8");
+	});
+
+	it("falls back to the entry unit on book-chrome exits", () => {
+		expect(parashaBookExitPath("/פרשה/בראשית/כריכה", 5)).toBe(
+			"/פרשה/5",
+		);
+		expect(parashaBookExitPath("/פרשה/בראשית/תוכן", 5)).toBe(
+			"/פרשה/5",
+		);
+		expect(parashaBookExitPath("/פרשה/בראשית/גב", 5)).toBe("/פרשה/5");
+	});
+
+	it("falls back to the entry unit on non-unit paths", () => {
+		expect(parashaBookExitPath("/פרשה", 3)).toBe("/פרשה/3");
+		expect(parashaBookExitPath("/929/12", 3)).toBe("/פרשה/3");
 	});
 });
 

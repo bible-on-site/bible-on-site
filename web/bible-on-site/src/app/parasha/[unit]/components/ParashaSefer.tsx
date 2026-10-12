@@ -261,6 +261,10 @@ const ParashaSefer = (props: {
 								entityRefsByPerek={entityRefsByPerek}
 								pasukCount={pasukCount}
 								resolvePerek={resolvePerek}
+								/* Book-side anchors carry a unit-unique scope so they
+								 * never duplicate the flat page's canonical
+								 * pasuk-{perek}-{pasuk} ids. */
+								anchorScope={`book-${unit.unitId}`}
 							/>
 						</article>
 					</div>
@@ -345,7 +349,12 @@ const ParashaSefer = (props: {
 										entityRefsByPerek={entityRefsByPerek}
 										pasukCount={pasukCount}
 										resolvePerek={resolvePerek}
-										anchorScope={haftaraReading.id}
+										/* Same unit-unique book scope as the Torah
+										 * page, extended per variant so several
+										 * Haftarot on one page stay distinct — and
+										 * neither collides with the flat page's
+										 * {auxId}-suffixed anchors. */
+										anchorScope={`book-${unit.unitId}-${haftaraReading.id}`}
 									/>
 								</article>
 								{haftaraReading.note && (

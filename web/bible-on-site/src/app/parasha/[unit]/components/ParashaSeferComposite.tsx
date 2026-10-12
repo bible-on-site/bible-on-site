@@ -15,11 +15,11 @@ import {
 import type { ArticleSummary } from "@/lib/articles";
 import type { RangePerushSummary } from "@/lib/perushim";
 import type { PerekEntityReference } from "@/lib/tanahpedia/service";
-import divisionData from "@/data/parasha/parasha-division.json";
 import { TABLET_MIN_WIDTH, useIsWideEnough } from "@/hooks/useIsWideEnough";
 import ReadModeToggler from "@/app/929/[number]/components/ReadModeToggler";
 import seferStyles from "@/app/929/[number]/components/sefer-composite.module.css";
 import {
+	parashaBookExitPath,
 	parashaBookPageFromPath,
 	parashaBookPageFromQuery,
 	pathnameWithParashaBookQuery,
@@ -132,13 +132,22 @@ export const ParashaSeferComposite = (props: {
 		(wantBook: boolean) => {
 			handledUserToggle.current = true;
 			setStoredParashaViewMode(wantBook ? "book" : "seo");
-			const togglePath =
-				!wantBook && parashaBookPageFromPath(pathname)
-					? `${divisionData.rootPath}/${props.currentUnitId}`
-					: pathname;
+			// While the book is open the flipbook owns the URL — on exit
+			// read the live location so flipping to another unit returns
+			// to that unit's flat page, and an open content selection
+			// keeps its flat-page meaning via the shared params.
+			const togglePath = wantBook
+				? pathname
+				: parashaBookExitPath(
+						window.location.pathname,
+						props.currentUnitId,
+					);
+			const search = wantBook
+				? searchParams.toString()
+				: window.location.search;
 			const next = pathnameWithParashaBookQuery(
 				togglePath,
-				searchParams.toString(),
+				search,
 				wantBook,
 			);
 			router.replace(next, { scroll: false });

@@ -16,6 +16,7 @@ import {
 	MASORA_CONTENT_OFFSET,
 	MASORA_ROOT,
 	type MasoraBookUnit,
+	masoraBookExitPath,
 	masoraBookPageFromPath,
 	masoraBookPageFromQuery,
 	masoraBookPageRoute,
@@ -222,6 +223,32 @@ describe("pathnameWithMasoraBookQuery", () => {
 				false,
 			),
 		).toBe("/מסורה/1?keep=2");
+	});
+});
+
+describe("masoraBookExitPath", () => {
+	it("returns the unit the flipbook's history wrote to the location", () => {
+		// The router's pathname stays on the entry unit; the live
+		// location names the unit the user flipped to.
+		expect(masoraBookExitPath("/מסורה/8", 1)).toBe("/מסורה/8");
+		expect(masoraBookExitPath("/masora/8", 1)).toBe("/מסורה/8");
+		expect(
+			masoraBookExitPath(
+				"/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/8",
+				1,
+			),
+		).toBe("/מסורה/8");
+	});
+
+	it("falls back to the entry unit on book-chrome exits", () => {
+		expect(masoraBookExitPath("/מסורה/1/כריכה", 5)).toBe("/מסורה/5");
+		expect(masoraBookExitPath("/מסורה/1/תוכן", 5)).toBe("/מסורה/5");
+		expect(masoraBookExitPath("/מסורה/1/גב", 5)).toBe("/מסורה/5");
+	});
+
+	it("falls back to the entry unit on non-unit paths", () => {
+		expect(masoraBookExitPath("/מסורה", 3)).toBe("/מסורה/3");
+		expect(masoraBookExitPath("/929/12", 3)).toBe("/מסורה/3");
 	});
 });
 

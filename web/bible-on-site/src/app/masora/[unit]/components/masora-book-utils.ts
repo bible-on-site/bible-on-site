@@ -207,6 +207,29 @@ export function pathnameWithMasoraBookQuery(
 	return q.length > 0 ? `${pathname}?${q}` : pathname;
 }
 
+/**
+ * Flat route to land on when the user leaves the מסורה book. While the
+ * book is open the flipbook owns browser history — window.location
+ * names the unit the user actually reached, which the router's stale
+ * pathname cannot see. Book-chrome exits and paths without a unit id
+ * fall back to the unit the book was opened from (the /929 reader's
+ * behaviour).
+ */
+export function masoraBookExitPath(
+	pathname: string,
+	fallbackUnitId: number,
+): string {
+	if (masoraBookPageFromPath(pathname)) {
+		return `${MASORA_ROOT}/${fallbackUnitId}`;
+	}
+	const match = decodeURIComponent(pathname).match(
+		/\/(?:מסורה|masora)\/(\d+)/,
+	);
+	return match
+		? `${MASORA_ROOT}/${match[1]}`
+		: `${MASORA_ROOT}/${fallbackUnitId}`;
+}
+
 /** Title of a flat masora unit page, matching generateMetadata. */
 export function masoraUnitDocumentTitle(heading: string): string {
 	return `${heading} | ${MASORA_MENU_LABEL} | ${SITE_NAME}`;

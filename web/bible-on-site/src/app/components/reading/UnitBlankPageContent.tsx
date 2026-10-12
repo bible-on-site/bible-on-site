@@ -282,6 +282,14 @@ export function UnitBlankPageContent({
 							onArticleClick={(article) =>
 								navigate("article", String(article.id))
 							}
+							hrefForArticle={(article) =>
+								unitBookContentHref(
+									unitPath,
+									scope,
+									"article",
+									String(article.id),
+								)
+							}
 							loading={articleLoading}
 							scrollStorageKey={
 								scrollStorageKey

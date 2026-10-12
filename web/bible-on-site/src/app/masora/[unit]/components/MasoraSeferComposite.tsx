@@ -21,6 +21,7 @@ import ReadModeToggler from "@/app/929/[number]/components/ReadModeToggler";
 import seferStyles from "@/app/929/[number]/components/sefer-composite.module.css";
 import {
 	MASORA_ROOT,
+	masoraBookExitPath,
 	masoraBookPageFromPath,
 	masoraBookPageFromQuery,
 	type MasoraBookUnit,
@@ -130,13 +131,19 @@ export const MasoraSeferComposite = (props: {
 		(wantBook: boolean) => {
 			handledUserToggle.current = true;
 			setStoredMasoraViewMode(wantBook ? "book" : "seo");
-			const togglePath =
-				!wantBook && masoraBookPageFromPath(pathname)
-					? `${MASORA_ROOT}/${props.currentUnitId}`
-					: pathname;
+			// While the book is open the flipbook owns the URL — on exit
+			// read the live location so flipping to another unit returns
+			// to that unit's flat page, and an open content selection
+			// keeps its flat-page meaning via the shared params.
+			const togglePath = wantBook
+				? pathname
+				: masoraBookExitPath(window.location.pathname, props.currentUnitId);
+			const search = wantBook
+				? searchParams.toString()
+				: window.location.search;
 			const next = pathnameWithMasoraBookQuery(
 				togglePath,
-				searchParams.toString(),
+				search,
 				wantBook,
 			);
 			router.replace(next, { scroll: false });

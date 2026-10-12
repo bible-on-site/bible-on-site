@@ -299,10 +299,14 @@ describe("ParashaSefer", () => {
 		expect(screen.getByText("a parasha note")).toBeInTheDocument();
 		expect(screen.getByText("פרשת נח")).toBeInTheDocument();
 		// One Torah body per unit plus one body per Haftarah variant.
+		// Book-side anchors carry a unit-unique `book-{unitId}` scope so
+		// they never duplicate the flat page's canonical pasuk ids.
 		expect(mockUnitTextBodies).toHaveLength(3);
-		expect(mockUnitTextBodies[0].anchorScope).toBeUndefined();
-		expect(mockUnitTextBodies[1].anchorScope).toBe("haftara-ashkenazi");
-		expect(mockUnitTextBodies[2].anchorScope).toBeUndefined();
+		expect(mockUnitTextBodies[0].anchorScope).toBe("book-1");
+		expect(mockUnitTextBodies[1].anchorScope).toBe(
+			"book-1-haftara-ashkenazi",
+		);
+		expect(mockUnitTextBodies[2].anchorScope).toBe("book-2");
 	});
 
 	it("gives every unit a Torah blank and a Haftarah blank", () => {
