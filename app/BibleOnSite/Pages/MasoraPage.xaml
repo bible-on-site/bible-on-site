@@ -453,6 +453,19 @@
             </AbsoluteLayout>
         </Grid>
 
+        <!-- Scrim: dims the page while the circular menu is open;
+             a tap anywhere dismisses the menu instead of hitting what is behind it -->
+        <Grid x:Name="CircularMenuScrim"
+              Grid.Row="1"
+              ZIndex="140"
+              IsVisible="False"
+              Opacity="0"
+              BackgroundColor="#66000000">
+            <Grid.GestureRecognizers>
+                <TapGestureRecognizer Tapped="OnOverlayTapped"/>
+            </Grid.GestureRecognizers>
+        </Grid>
+
         <!-- Satellite buttons overlay - uses AbsoluteLayout for precise positioning -->
         <AbsoluteLayout x:Name="FloatingMenuContainer" Grid.Row="1"
                         ZIndex="150"

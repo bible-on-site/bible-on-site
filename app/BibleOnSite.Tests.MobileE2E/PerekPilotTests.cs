@@ -95,7 +95,7 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
             .First(element => element.Displayed && element.Text == "בראשית א ז");
         Platform.Tap(Driver, result);
         AssertRegularReader();
-        Page.WaitFor("PasukNumber", element => element.Text == "ז");
+        Page.WaitFor("PasukText", element => element.Text.StartsWith("ז "));
         Platform.GoBack(Driver);
         Page.WaitFor("PerekSearchInput", element => element.Text == "ויעש אלהים את הרקיע");
         Page.WaitFor("SearchResultTitle", element => element.Text == "בראשית א ז");
@@ -230,10 +230,15 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         var backward = next.Enabled ? "PrevPerekButton" : "NextPerekButton";
         Page.Tap(forward);
         Page.WaitFor("PerekSource", element => element.Text != source);
+        // The open menu's scrim covers the reader; XCTest marks covered text
+        // invisible, so close the menu before asserting pasuk content.
+        Page.Tap("CircularMenuButton");
         Page.WaitFor("PasukText", element => !string.IsNullOrWhiteSpace(element.Text) && element.Text != pasuk);
+        Page.OpenCircularMenu();
         // Satellite navigation keeps the menu open for further chapter changes.
         Page.Tap(backward);
         Page.WaitFor("PerekSource", element => element.Text == source);
+        Page.Tap("CircularMenuButton");
         Page.WaitFor("PasukText", element => element.Text == pasuk);
         Page.AssertBottomNavigationLayout();
     });
