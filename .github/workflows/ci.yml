@@ -1161,6 +1161,9 @@ jobs:
             --artifacts "$GITHUB_WORKSPACE/web/bible-on-site/.coverage/e2e-impact" \
             --snapshot-sha "${{ github.sha }}" \
             --out "$GITHUB_WORKSPACE/web/bible-on-site/.coverage/e2e-impact/coverage-tree.json" "${INCOMPLETE_ARGS[@]}"
+          # Only a complete tree may replace the trusted master baseline.
+          COMPLETE=$(node -e "console.log(JSON.parse(require('node:fs').readFileSync('$GITHUB_WORKSPACE/web/bible-on-site/.coverage/e2e-impact/coverage-tree.json','utf8')).complete === true)")
+          echo "complete=$COMPLETE" >> "$GITHUB_OUTPUT"
 
       # Selection manifest + collected tree for shadow-mode inspection.
       - name: Store e2e-impact evidence
@@ -1181,7 +1184,7 @@ jobs:
       # successful default-branch run; PR and merge-queue evidence stays
       # provisional inside the run's diagnostics artifact.
       - name: Publish e2e-impact coverage baseline
-        if: always() && github.event_name == 'push' && github.ref == 'refs/heads/master' && steps.npm-e2e-test.outcome == 'success' && steps.impact-collect.outcome == 'success'
+        if: always() && github.event_name == 'push' && github.ref == 'refs/heads/master' && steps.npm-e2e-test.outcome == 'success' && steps.impact-collect.outcome == 'success' && steps.impact-collect.outputs.complete == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: ${{ env.WEBSITE_E2E_IMPACT_ARTIFACT_NAME_MASTER }}
@@ -1481,6 +1484,9 @@ jobs:
             --artifacts "$GITHUB_WORKSPACE/web/admin/.coverage/e2e-impact" \
             --snapshot-sha "${{ github.sha }}" \
             --out "$GITHUB_WORKSPACE/web/admin/.coverage/e2e-impact/coverage-tree.json" "${INCOMPLETE_ARGS[@]}"
+          # Only a complete tree may replace the trusted master baseline.
+          COMPLETE=$(node -e "console.log(JSON.parse(require('node:fs').readFileSync('$GITHUB_WORKSPACE/web/admin/.coverage/e2e-impact/coverage-tree.json','utf8')).complete === true)")
+          echo "complete=$COMPLETE" >> "$GITHUB_OUTPUT"
 
       # Selection manifest + collected tree for shadow-mode inspection.
       - name: Store e2e-impact evidence
@@ -1501,7 +1507,7 @@ jobs:
       # successful default-branch run; PR and merge-queue evidence stays
       # provisional inside the run's diagnostics artifact.
       - name: Publish e2e-impact coverage baseline
-        if: always() && github.event_name == 'push' && github.ref == 'refs/heads/master' && steps.npm-e2e-test.outcome == 'success' && steps.impact-collect.outcome == 'success'
+        if: always() && github.event_name == 'push' && github.ref == 'refs/heads/master' && steps.npm-e2e-test.outcome == 'success' && steps.impact-collect.outcome == 'success' && steps.impact-collect.outputs.complete == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: ${{ env.ADMIN_E2E_IMPACT_ARTIFACT_NAME_MASTER }}
@@ -1726,6 +1732,9 @@ jobs:
             --artifacts "$GITHUB_WORKSPACE/web/api/.coverage/e2e-impact" \
             --snapshot-sha "${{ github.sha }}" \
             --out "$GITHUB_WORKSPACE/web/api/.coverage/e2e-impact/coverage-tree.json" "${INCOMPLETE_ARGS[@]}"
+          # Only a complete tree may replace the trusted master baseline.
+          COMPLETE=$(node -e "console.log(JSON.parse(require('node:fs').readFileSync('$GITHUB_WORKSPACE/web/api/.coverage/e2e-impact/coverage-tree.json','utf8')).complete === true)")
+          echo "complete=$COMPLETE" >> "$GITHUB_OUTPUT"
 
       # Selection manifest + collected tree for shadow-mode inspection.
       - name: Store e2e-impact evidence
@@ -1746,7 +1755,7 @@ jobs:
       # successful default-branch run; PR and merge-queue evidence stays
       # provisional inside the run's diagnostics artifact.
       - name: Publish e2e-impact coverage baseline
-        if: always() && github.event_name == 'push' && github.ref == 'refs/heads/master' && steps.api-e2e.outcome == 'success' && steps.impact-collect.outcome == 'success'
+        if: always() && github.event_name == 'push' && github.ref == 'refs/heads/master' && steps.api-e2e.outcome == 'success' && steps.impact-collect.outcome == 'success' && steps.impact-collect.outputs.complete == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: ${{ env.API_E2E_IMPACT_ARTIFACT_NAME_MASTER }}

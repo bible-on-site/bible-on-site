@@ -92,12 +92,19 @@ export function dumpImpactCoverage(testInfo, realm, coverage) {
 	const id = impactTestId(testInfo.titlePath);
 	const seq = coverageSeq.get(id) ?? 0;
 	coverageSeq.set(id, seq + 1);
-	// The project names the dump file (Desktop and Mobile workers run the same
-	// test concurrently) but not the test identity — coverage unions across
-	// projects.
+	// The filename stays unique across every writer that can produce a dump
+	// for this identity: `project` separates Desktop/Mobile workers running
+	// the test concurrently, `workerIndex` separates worker processes (each
+	// has its own `coverageSeq`), and `retry` separates attempts — a retried
+	// test on a fresh worker must never overwrite an earlier attempt's
+	// evidence. None of these enter the identity: coverage unions across
+	// projects and retries.
 	writeJson(
 		dir,
-		["coverage", `${shortHash(id)}-${project}-${seq}.json`],
+		[
+			"coverage",
+			`${shortHash(id)}-${project}-w${testInfo.workerIndex}-r${testInfo.retry}-${seq}.json`,
+		],
 		{ id, project, file, titlePath, realm, coverage },
 	);
 }

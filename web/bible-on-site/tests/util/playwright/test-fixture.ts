@@ -72,13 +72,16 @@ async function handlePageCoverage(page: Page) {
 	await page.evaluate(async () => {
 		if (window.__coverage__) {
 			window.collectIstanbulCoverage(window.__coverage__);
-		} else {
-			// If __coverage__ is not available (possibly due to server-side route), fetch it via API.
-			// Server-side counters accumulate on the shared dev-server process,
-			// so this drain is tagged "server" for the impact collector.
-			const res = await fetch("/api/dev/coverage");
-			const coverage = await res.json();
-			window.collectIstanbulCoverage(coverage, "server");
+		}
+		// The server realm drains independently of browser coverage: a page
+		// can hold client counters while its SSR route also executed
+		// server-only modules. Server-side counters accumulate on the shared
+		// dev-server process, so this drain is tagged "server" for the
+		// impact collector.
+		const res = await fetch("/api/dev/coverage");
+		const serverCoverage = await res.json();
+		if (serverCoverage && Object.keys(serverCoverage).length > 0) {
+			window.collectIstanbulCoverage(serverCoverage, "server");
 		}
 	});
 }

@@ -197,6 +197,10 @@ export function validateTree(
 	if (tree.platform !== platform) return `platform ${tree.platform}`;
 	if (!isHexSha(tree.snapshotSha)) return `snapshotSha ${tree.snapshotSha}`;
 	if (typeof tree.tests !== "object" || tree.tests === null) return "missing tests";
+	// A partial-evidence tree can never back a narrowing selection — the
+	// publish step gates on `complete` too, so reaching this means an older
+	// or hand-built artifact; treat it as an untrusted baseline.
+	if (tree.complete !== true) return "incomplete tree";
 	return null;
 }
 

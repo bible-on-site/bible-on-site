@@ -7,6 +7,8 @@ import { describe, test } from "node:test";
 import {
 	buildApiSourceMap,
 	depsClosure,
+	graphqlAllFields,
+	graphqlAllFieldsInSource,
 	graphqlOperationsInSource,
 	graphqlTopLevelFields,
 	restPaths,
@@ -322,7 +324,7 @@ describe("graphqlOperationsInSource", () => {
 // ── buildApiSourceMap ───────────────────────────────────────────────────
 
 const API_FIXTURE: Record<string, string> = {
-	"src/main.rs": "mod resolvers;\nmod startup;\nfn main() {}",
+	"src/main.rs": "mod resolvers;\nmod common;\nmod dtos;\nmod services;\nmod startup;\nfn main() {}",
 	"src/resolvers.rs": "pub mod articles_resolver;",
 	"src/resolvers/articles_resolver.rs": `
 use crate::services::article_service::ArticleService;
@@ -333,8 +335,38 @@ impl ArticlesQuery {
 	async fn articles(&self) -> Vec<Article> { vec![] }
 }
 `,
-	"src/services.rs": "pub mod article_service;",
-	"src/services/article_service.rs": "use entities::article::Entity;\npub struct ArticleService;",
+	"src/common.rs": "pub mod error_handling;",
+	"src/common/error_handling.rs": "pub struct ServiceError;\npub struct AppError;",
+	"src/dtos.rs": "pub mod author;",
+	// Mirrors web/api: computed fields live in #[ComplexObject] impls, plain
+	// members in #[derive(SimpleObject)] structs.
+	"src/dtos/author.rs": `
+use async_graphql::{ComplexObject, SimpleObject};
+#[derive(SimpleObject)]
+pub struct AuthorName {
+	pub first: String,
+}
+#[ComplexObject]
+impl Author {
+	#[graphql(name = "articlesCount")]
+	async fn articles_count(&self) -> i64 { 0 }
+}
+`,
+	"src/services.rs": "pub mod article_service;\npub mod article_search;",
+	// Mirrors the real multiline nested group: `use crate::{common::x::{..},
+	// services::article_search::{self, store}}`.
+	"src/services/article_service.rs": `
+use crate::{
+	common::error_handling::{AppError, ServiceError},
+	services::article_search::{self, store},
+};
+use entities::article::Entity;
+pub struct ArticleService;
+`,
+	"src/services/article_search.rs": "pub mod lsa;\npub mod store;\npub mod text;\npub struct ArticleSearchIndex;",
+	"src/services/article_search/lsa.rs": "pub struct LsaModel;",
+	"src/services/article_search/store.rs": "pub struct Store;",
+	"src/services/article_search/text.rs": "pub fn normalize() {}",
 	"src/startup.rs": "pub mod app;",
 	"src/startup/app.rs": `
 use actix_web::web;
@@ -426,6 +458,109 @@ impl R {
 			rmSync(root, { recursive: true, force: true });
 		}
 	});
+
+	test("nested grouped use paths resolve through the brace tree", () => {
+		const root = tmpRepo();
+		try {
+			for (const [rel, content] of Object.entries(API_FIXTURE)) {
+				write(root, `web/api/${rel}`, content);
+			}
+			const map = buildApiSourceMap(join(root, "web/api"), "web/api");
+			const deps = map.deps["web/api/src/services/article_service.rs"];
+			assert.ok(
+				deps.includes("web/api/src/common/error_handling.rs"),
+				`nested error_handling import missing from ${deps.join(",")}`,
+			);
+			assert.ok(
+				deps.includes("web/api/src/services/article_search.rs"),
+				`article_search self import missing from ${deps.join(",")}`,
+			);
+			assert.ok(
+				deps.includes("web/api/src/services/article_search/store.rs"),
+				`nested store import missing from ${deps.join(",")}`,
+			);
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	test("mod declarations create edges so submodule changes select", () => {
+		const root = tmpRepo();
+		try {
+			for (const [rel, content] of Object.entries(API_FIXTURE)) {
+				write(root, `web/api/${rel}`, content);
+			}
+			const map = buildApiSourceMap(join(root, "web/api"), "web/api");
+			const searchDeps = map.deps["web/api/src/services/article_search.rs"];
+			for (const child of ["lsa", "store", "text"]) {
+				assert.ok(
+					searchDeps.includes(
+						`web/api/src/services/article_search/${child}.rs`,
+					),
+					`mod ${child} edge missing from ${searchDeps.join(",")}`,
+				);
+			}
+			// The resolver's closure reaches the whole search index tree —
+			// an lsa.rs ranking change must select the searchArticles tests.
+			const closure = depsClosure(map.deps, [
+				"web/api/src/resolvers/articles_resolver.rs",
+			]);
+			for (const child of ["lsa", "store", "text"]) {
+				assert.ok(
+					closure.includes(
+						`web/api/src/services/article_search/${child}.rs`,
+					),
+					`closure misses article_search/${child}.rs`,
+				);
+			}
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	test("ComplexObject and SimpleObject members join the field map", () => {
+		const root = tmpRepo();
+		try {
+			for (const [rel, content] of Object.entries(API_FIXTURE)) {
+				write(root, `web/api/${rel}`, content);
+			}
+			const map = buildApiSourceMap(join(root, "web/api"), "web/api");
+			assert.deepEqual(map.fields["articlesCount"], [
+				"web/api/src/dtos/author.rs",
+			]);
+			assert.deepEqual(map.fields["first"], ["web/api/src/dtos/author.rs"]);
+			// Top-level resolver ops still map as before.
+			assert.equal(
+				map.operations["articles"],
+				"web/api/src/resolvers/articles_resolver.rs",
+			);
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+});
+
+describe("graphqlAllFields", () => {
+	test("collects nested field names, skipping args and directives", () => {
+		const fields = graphqlAllFields(
+			'query Q($id: Int!) { articles(id: $id) @include(if: $flag) { id author { articlesCount } } }',
+		);
+		assert.ok(fields.includes("articles"));
+		assert.ok(fields.includes("id"));
+		assert.ok(fields.includes("author"));
+		assert.ok(fields.includes("articlesCount"));
+		assert.ok(!fields.includes("include"), "directive names are not fields");
+		assert.ok(!fields.includes("Q"), "operation name is not a field");
+	});
+
+	test("graphqlAllFieldsInSource unions across document literals", () => {
+		const names = graphqlAllFieldsInSource(
+			'const q = "{ starter { authors { articlesCount } } }"; const r = "{ health }";',
+		);
+		assert.ok(names.includes("starter"));
+		assert.ok(names.includes("articlesCount"));
+		assert.ok(names.includes("health"));
+	});
 });
 
 // ── normalizeCoveragePath ───────────────────────────────────────────────
@@ -497,6 +632,10 @@ describe("collectPlaywrightTree", () => {
 			write(artifacts, "test-results.json", JSON.stringify({
 				schema: "e2e-impact-results/1",
 				tests: [{ id: "e2e/a.test.ts :: d :: t", project: "Desktop", retry: 0, status: "passed", outcome: "expected" }],
+			}));
+			write(artifacts, "discovered.json", JSON.stringify({
+				schema: "e2e-impact-discovery/1",
+				tests: [{ id: "e2e/a.test.ts :: d :: t", project: "Desktop", file: "e2e/a.test.ts", titlePath: ["d", "t"] }],
 			}));
 			const tree = collectPlaywrightTree({
 				repoRoot: root,
@@ -584,6 +723,32 @@ describe("collectPlaywrightTree", () => {
 		}
 	});
 
+	test("missing reporter evidence marks the tree incomplete", () => {
+		const root = makeIstanbulRepo();
+		try {
+			const artifacts = join(root, "artifacts");
+			write(artifacts, "coverage/dump.json", JSON.stringify({
+				id: "e2e/a.test.ts :: d :: t",
+				realm: "browser",
+				coverage: { "/x/web/site/src/used.ts": {} },
+			}));
+			// Coverage dumps exist but the reporter wrote neither results nor
+			// runtime discovery — outcomes are all unknown and the tree must
+			// never be published as a trusted baseline.
+			const tree = collectPlaywrightTree({
+				repoRoot: root,
+				rules: WEB_RULES,
+				platform: "web",
+				artifactsDir: artifacts,
+				snapshotSha: SNAPSHOT,
+				complete: true,
+			});
+			assert.equal(tree.complete, false);
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
 	test("the api collector attributes operations statically", () => {
 		const root = tmpRepo();
 		try {
@@ -614,6 +779,10 @@ describe("collectPlaywrightTree", () => {
 			assert.ok(articles.files.includes("web/api/src/resolvers/articles_resolver.rs"));
 			assert.ok(articles.files.includes("web/api/src/services/article_service.rs"));
 			assert.ok(articles.files.includes("web/api/entities/src/article.rs"));
+			// The use-graph closure widens through nested group imports and
+			// mod declarations to the search index children.
+			assert.ok(articles.files.includes("web/api/src/common/error_handling.rs"));
+			assert.ok(articles.files.includes("web/api/src/services/article_search/lsa.rs"));
 			// Route registrar files land in shared coverage, not per-test claims.
 			assert.ok(tree.sharedFiles?.includes("web/api/src/startup/app.rs"));
 			const health = tree.tests["health.test.ts :: h"];
@@ -622,6 +791,39 @@ describe("collectPlaywrightTree", () => {
 			// covered change, never narrowed away (#2085).
 			assert.equal(health.unattributed, true);
 			assert.ok(health.files.includes("web/api/src/startup/app.rs"));
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	test("nested graphql fields attribute DTO impl files", () => {
+		const root = tmpRepo();
+		try {
+			for (const [rel, content] of Object.entries(API_FIXTURE)) {
+				write(root, `web/api/${rel}`, content);
+			}
+			write(
+				root,
+				"web/api/tests/e2e/starter.test.ts",
+				`test("s", async ({ request }) => {
+	await request.post("/graphql", { data: { query: "{ articles { author { articlesCount } } }" } });
+});`,
+			);
+			const tree = collectPlaywrightTree({
+				repoRoot: root,
+				rules: API_RULES,
+				platform: "api",
+				artifactsDir: join(root, "artifacts"),
+				snapshotSha: SNAPSHOT,
+				complete: true,
+			});
+			const entry = tree.tests["starter.test.ts :: s"];
+			// `articles` resolves the resolver root; the nested `articlesCount`
+			// selection executes the DTO's ComplexObject impl — both attribute.
+			assert.ok(
+				entry.files.includes("web/api/src/dtos/author.rs"),
+				`DTO field file missing from ${entry.files.join(",")}`,
+			);
 		} finally {
 			rmSync(root, { recursive: true, force: true });
 		}
@@ -697,6 +899,22 @@ describe("selectTests playwright", () => {
 		assert.deepEqual(
 			manifest.selected.map((s) => s.id),
 			["e2e/b.test.ts :: x"],
+		);
+	});
+
+	test("an incomplete baseline tree falls back to the full suite", () => {
+		const manifest = selectTests({
+			rules: WEB_RULES,
+			baseline: { kind: "ok", tree: makeTree({ ...baselineTree, complete: false }) },
+			changedFiles: [{ path: "web/site/src/a.ts", status: "modified" }],
+			discovered,
+			platform: "web",
+			testedSha: TESTED,
+		});
+		assert.equal(manifest.selectAll, true);
+		assert.ok(
+			manifest.fallbacks.some((f) => f.includes("incompatible-baseline")),
+			`expected incompatible-baseline fallback, got ${manifest.fallbacks.join(",")}`,
 		);
 	});
 

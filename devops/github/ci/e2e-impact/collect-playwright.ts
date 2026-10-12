@@ -29,6 +29,7 @@ import { join, relative } from "node:path";
 import {
 	buildApiSourceMap,
 	depsClosure,
+	graphqlAllFieldsInSource,
 	graphqlOperationsInSource,
 	restPaths,
 } from "./api-map.ts";
@@ -250,6 +251,17 @@ export function collectPlaywrightTree(
 					}
 				}
 			}
+			// Nested selections widen through the field map: a nested
+			// `articlesCount` executes the DTO `ComplexObject` impl, which a
+			// top-level-operation lookup alone cannot reach. Names without a
+			// definition are plain scalar fields — no evidence to record.
+			for (const name of graphqlAllFieldsInSource(source)) {
+				for (const file of map.fields[name] ?? []) {
+					for (const dep of depsClosure(map.deps, [file])) {
+						if (sourceSet.has(dep)) opFiles.add(dep);
+					}
+				}
+			}
 			for (const path of paths) {
 				const mapped = map.routes[path];
 				if (mapped === undefined) {
@@ -332,6 +344,14 @@ export function collectPlaywrightTree(
 		if (fileByTest.get(id) === undefined) unmatched.add(id);
 	}
 
+	// A complete tree requires the reporter's own evidence files — without
+	// `test-results.json` every outcome is `unknown` and without
+	// `discovered.json` runtime reconciliation is absent, so such a tree can
+	// diagnose a run but must never be trusted as a new baseline.
+	const reporterEvidence =
+		existsSync(join(options.artifactsDir, "test-results.json")) &&
+		existsSync(join(options.artifactsDir, "discovered.json"));
+
 	return {
 		schemaVersion: SCHEMA_VERSION,
 		suite: rules.suite,
@@ -342,6 +362,7 @@ export function collectPlaywrightTree(
 		complete:
 			options.complete &&
 			corrupt.length === 0 &&
+			reporterEvidence &&
 			(rules.collector === "api-operations" ||
 				existsSync(join(options.artifactsDir, "coverage"))),
 		sourceUnits,

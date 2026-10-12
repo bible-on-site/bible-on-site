@@ -304,8 +304,13 @@ Tests bypassing the fixture or producing no dump are marked
 `unattributed: true` and cover the union of every attributed file plus
 shared coverage — they run on any covered change and can never be narrowed
 away. Dumps whose id static discovery cannot claim (dynamic files) widen
-into `sharedFiles` as well; corrupt evidence files mark the tree
-`complete: false` so a damaged run can never publish a baseline.
+into `sharedFiles` as well; dump filenames carry the worker index and
+retry number so a retried attempt can never overwrite an earlier dump.
+Corrupt evidence files — and missing `test-results.json`/`discovered.json`
+reporter output — mark the tree `complete: false`; incomplete trees can
+neither publish a baseline (the publish step gates on the tree's
+`complete` flag) nor serve as one (`validateTree` rejects them, so
+selection falls back to the full suite).
 
 ### The `api-operations` collector
 
@@ -317,7 +322,16 @@ API process is shared by every test), so `web/api` attributes tests
   payload literals resolve to the `#[Object] impl` resolver file declaring
   them (`#[graphql(name = "…")]` renames honored); a `use`-graph closure
   over `web/api/src` and `web/api/entities/src` widens each test to the
-  modules its resolvers can reach.
+  modules its resolvers can reach. `use` trees expand recursively
+  (`crate::{a::b::{C, D}, e}`), `mod child;` declarations add file → child
+  module edges (e.g. `article_search.rs` → `article_search/lsa.rs`), and
+  `self::`/`super::` prefixes resolve relative to the declaring module.
+- Nested selection fields widen attribution further: every field name at
+  any selection depth resolves through a field map covering `#[Object]`,
+  `#[ComplexObject]` and `#[Interface]` impl methods plus
+  `#[derive(SimpleObject)]` members — so `authors { articlesCount }`
+  reaches the DTO impl that computes it, not just the root resolver.
+  Unresolved nested names are scalar fields and are ignored.
 - REST path literals resolve through `web::resource("…").to(handler)`
   registrations; registrar/dispatch files (`startup/app.rs`,
   `startup/schema_builder.rs`) are shared, never per-test.
