@@ -75,6 +75,16 @@ jest.mock("@/app/929/[number]/components/TanahpediaLink", () => ({
 	),
 }));
 
+// The book overlay is covered by its own suite; capturing its props
+// proves the page wires the whole-sefer units and the SSG summaries.
+let capturedMasoraBookProps: Record<string, unknown> | null = null;
+jest.mock("@/app/masora/[unit]/components/MasoraSeferComposite", () => ({
+	MasoraSeferComposite: (props: Record<string, unknown>) => {
+		capturedMasoraBookProps = props;
+		return <div data-testid="masora-book" />;
+	},
+}));
+
 // Layout collaborators are covered elsewhere; isolate the wiring.
 jest.mock("@/app/components/UnitSwipeNavigation", () => ({
 	__esModule: true,
@@ -248,6 +258,39 @@ describe("MasoraUnitPage", () => {
 		expect(document.getElementById("pasuk-2-4")).toBeInTheDocument();
 		expect(screen.getByTestId("perushim-section")).toBeInTheDocument();
 		expect(screen.getByTestId("articles-section")).toBeInTheDocument();
+	});
+
+	it("wires the sefer's units and summaries into the book overlay", async () => {
+		const jsx = await MasoraUnitPage({
+			params: Promise.resolve({ unit: "8" }),
+		});
+		render(jsx);
+		expect(screen.getByTestId("masora-book")).toBeInTheDocument();
+		const props = capturedMasoraBookProps;
+		expect(props?.seferName).toBe("בראשית");
+		expect(props?.currentUnitId).toBe(8);
+		// The book renders every Masoretic unit of the sefer, not just
+		// the requested one.
+		const bereshit = actualMasora.getMasoraUnitsForSefer("בראשית");
+		const units = props?.units as Array<{
+			unitId: number;
+			order: number;
+			heading: string;
+		}>;
+		expect(units.map((unit) => unit.unitId)).toEqual(
+			bereshit.map((unit) => unit.unitId),
+		);
+		expect(units.map((unit) => unit.order)).toEqual(
+			bereshit.map((unit) => unit.order),
+		);
+		expect(units[0].heading).toBe(bereshit[0].heading);
+		// Flat-page summaries double as the current unit's book data.
+		expect(props?.articles).toEqual([]);
+		expect(props?.perushim).toEqual([]);
+		// Canonical perek sources cover every perek the sefer's units span.
+		const perekSources = props?.perekSources as Record<number, string>;
+		expect(Object.keys(perekSources).length).toBeGreaterThan(0);
+		expect(perekSources[1]).toBe("בראשית א");
 	});
 
 	it("renders both closing-break labels", async () => {

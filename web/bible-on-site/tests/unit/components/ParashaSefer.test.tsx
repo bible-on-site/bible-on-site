@@ -2,20 +2,27 @@
  * @jest-environment jsdom
  *
  * Unit tests for ParashaSefer — the פרשה flipbook that lays a Torah
- * sefer out as parasha pages, each followed by its Haftarah variants.
- * The FlipBook, its toolbar, and the TOC come from html-flip-book-react
- * and are mocked here; the tests assert the props the component wires
- * (pages, semantics, history, toolbar actions) and the per-unit page
- * structure it renders.
+ * sefer out as parasha spreads, each Torah and Haftarah text page
+ * followed by its bounded commentary blank. The shared book chrome
+ * (UnitSeferBook) renders here for real against mocked
+ * html-flip-book-react primitives; the blank-page content and the
+ * summary server action are mocked so the tests assert the wiring —
+ * pages, semantics, history, toolbar, content navigation — without
+ * pulling database modules into jsdom.
  */
 import { act, fireEvent, render, screen } from "@testing-library/react";
 
 let capturedFlipBookProps: Record<string, unknown> = {};
 let capturedTocProps: Record<string, unknown> = {};
 const mockUnitTextBodies: Array<Record<string, unknown>> = [];
+// Latest props per blank page, keyed `{unitId}:{scope}` — the book
+// re-renders (summary batch, content selection), and only the newest
+// props describe what a reader sees.
+const mockBlankPages = new Map<string, Record<string, unknown>>();
 const mockRestorePage = jest.fn();
 const mockJumpToPage = jest.fn();
 const mockGetCurrentPageIndex = jest.fn().mockReturnValue(0);
+const mockSummariesBatch = jest.fn();
 
 jest.mock("next/dynamic", () => {
 	const { forwardRef, useImperativeHandle } =
@@ -114,6 +121,20 @@ jest.mock("@/app/components/reading/UnitTextBody", () => ({
 	},
 }));
 
+jest.mock("@/app/components/reading/UnitBlankPageContent", () => ({
+	UnitBlankPageContent: (props: Record<string, unknown>) => {
+		mockBlankPages.set(`${props.unitId}:${props.scope}`, props);
+		return <div data-testid="unit-blank" />;
+	},
+}));
+
+// Keep the server action (and its database/corpus imports) out of
+// jsdom; the batch returns per-scope summaries the blank pages consume.
+jest.mock("@/app/components/reading/unit-book-actions", () => ({
+	getUnitScopeSummariesBatch: (...args: unknown[]) =>
+		mockSummariesBatch(...args),
+}));
+
 jest.mock("@/data/sefer-colors", () => ({
 	getSeferColor: () => "hsl(30, 80%, 50%)",
 }));
@@ -172,6 +193,51 @@ const units: ParashaBookUnit[] = [
 	},
 ];
 
+const currentUnitSummaries = {
+	articles: [
+		{
+			id: 7,
+			perekId: 1,
+			authorId: 1,
+			abstract: null,
+			name: "מאמר בראשית",
+			priority: 1,
+			authorName: "מחבר",
+			authorImageUrl: "",
+		},
+	],
+	perushim: [
+		{
+			id: 3,
+			name: 'רש"י',
+			parshanName: 'רש"י',
+			noteCount: 4,
+			perekId: 1,
+		},
+	],
+	haftaraArticles: [
+		{
+			id: 9,
+			perekId: 335,
+			authorId: 2,
+			abstract: null,
+			name: "מאמר הפטרה",
+			priority: 1,
+			authorName: "מחבר ב",
+			authorImageUrl: "",
+		},
+	],
+	haftaraPerushim: [
+		{
+			id: 5,
+			name: 'רד"ק',
+			parshanName: 'רד"ק',
+			noteCount: 2,
+			perekId: 335,
+		},
+	],
+};
+
 const baseProps = () => ({
 	units,
 	seferName: "בראשית",
@@ -182,6 +248,7 @@ const baseProps = () => ({
 		[1, perek(3)],
 		[335, perek(2)],
 	]),
+	...currentUnitSummaries,
 	initialBookPage: null as BookPage | null,
 	haftara: false,
 });
@@ -191,18 +258,26 @@ describe("ParashaSefer", () => {
 		capturedFlipBookProps = {};
 		capturedTocProps = {};
 		mockUnitTextBodies.length = 0;
+		mockBlankPages.clear();
 		mockRestorePage.mockClear();
 		mockJumpToPage.mockClear();
 		mockGetCurrentPageIndex.mockReset().mockReturnValue(0);
+		// Never resolve by default — tests that don't await the batch
+		// would otherwise hit act() warnings on the summary setState.
+		mockSummariesBatch.mockReset().mockReturnValue(
+			new Promise(() => {}),
+		);
+		history.replaceState(null, "", "/פרשה/1?book");
 	});
 
-	it("lays out cover, contents, and one Torah + Haftarah page per parasha", () => {
+	it("lays out cover, contents, and Torah + Haftarah spreads per parasha", () => {
 		render(<ParashaSefer {...baseProps()} />);
 		expect(screen.getByTestId("mock-flipbook")).toBeInTheDocument();
 		expect(screen.getByTestId("mock-toc")).toBeInTheDocument();
-		// cover + cover-interior + TOC + (units * 2) + back cover.
+		// cover + cover-interior + TOC + (units * 4) + back cover —
+		// each unit's Torah spread and Haftarah spread is text + blank.
 		const pages = capturedFlipBookProps.pages as React.ReactNode[];
-		expect(pages).toHaveLength(3 + units.length * 2 + 1);
+		expect(pages).toHaveLength(3 + units.length * 4 + 1);
 		expect(capturedFlipBookProps.mouseModeStorageKey).toBe(
 			"parasha-sefer-mouse-book-mode",
 		);
@@ -230,16 +305,70 @@ describe("ParashaSefer", () => {
 		expect(mockUnitTextBodies[2].anchorScope).toBeUndefined();
 	});
 
-	it("opens the current parasha's page on mount", () => {
+	it("gives every unit a Torah blank and a Haftarah blank", () => {
+		render(<ParashaSefer {...baseProps()} />);
+		// 2 units × 2 blank pages (torah + haftara scopes).
+		expect(mockBlankPages.size).toBe(4);
+		expect(
+			[...mockBlankPages.values()].map((page) => page.scope),
+		).toEqual(["torah", "haftara", "torah", "haftara"]);
+		expect(
+			[...mockBlankPages.values()].every(
+				(page) => page.division === "parasha",
+			),
+		).toBe(true);
+	});
+
+	it("passes the current unit's SSG summaries to its blanks", () => {
+		render(<ParashaSefer {...baseProps()} />);
+		const torahBlank = mockBlankPages.get("1:torah");
+		const haftaraBlank = mockBlankPages.get("1:haftara");
+		expect(torahBlank?.articles).toBe(currentUnitSummaries.articles);
+		expect(torahBlank?.perushim).toBe(currentUnitSummaries.perushim);
+		expect(haftaraBlank?.articles).toBe(
+			currentUnitSummaries.haftaraArticles,
+		);
+		expect(haftaraBlank?.perushim).toBe(
+			currentUnitSummaries.haftaraPerushim,
+		);
+	});
+
+	it("batch-loads commentary summaries for the other units' blanks", async () => {
+		mockSummariesBatch.mockImplementation(
+			(_division: string, _ids: number[], scope: string) =>
+				Promise.resolve(
+					scope === "torah"
+						? { "2": { articles: [], perushim: currentUnitSummaries.perushim } }
+						: { "2": { articles: currentUnitSummaries.haftaraArticles, perushim: [] } },
+				),
+		);
+		render(<ParashaSefer {...baseProps()} />);
+		// Both scopes batch over the units except the current one.
+		expect(mockSummariesBatch).toHaveBeenCalledWith("parasha", [2], "torah");
+		expect(mockSummariesBatch).toHaveBeenCalledWith(
+			"parasha",
+			[2],
+			"haftara",
+		);
+		await act(async () => {});
+		expect(mockBlankPages.get("2:torah")?.perushim).toBe(
+			currentUnitSummaries.perushim,
+		);
+		expect(mockBlankPages.get("2:haftara")?.articles).toBe(
+			currentUnitSummaries.haftaraArticles,
+		);
+	});
+
+	it("opens the current parasha's Torah text page on mount", () => {
 		render(<ParashaSefer {...baseProps()} currentUnitId={2} />);
-		// Unit index 1 sits at page 5 → ceil(5 / 2) turned leaves.
-		expect(capturedFlipBookProps.initialTurnedLeaves).toEqual([0, 1, 2]);
+		// Unit 2's Torah text sits at page 7 → ceil(7 / 2) turned leaves.
+		expect(capturedFlipBookProps.initialTurnedLeaves).toEqual([0, 1, 2, 3]);
 	});
 
 	it.each([
 		["front", []],
 		["toc", [0]],
-		["back", [0, 1, 2, 3]],
+		["back", [0, 1, 2, 3, 4, 5]],
 	] as const)(
 		"opens the book chrome %s page at its leaf",
 		(page, expected) => {
@@ -250,18 +379,68 @@ describe("ParashaSefer", () => {
 
 	it("restores the requested page when it differs from the current page", () => {
 		render(<ParashaSefer {...baseProps()} currentUnitId={2} />);
-		expect(mockRestorePage).toHaveBeenCalledWith(5);
+		expect(mockRestorePage).toHaveBeenCalledWith(7);
 	});
 
-	it("restores the Haftarah page when the haftara flag is set", () => {
+	it("restores the Haftarah text page when the haftara flag is set", () => {
 		render(<ParashaSefer {...baseProps()} currentUnitId={2} haftara />);
-		expect(mockRestorePage).toHaveBeenCalledWith(6);
+		expect(mockRestorePage).toHaveBeenCalledWith(9);
 	});
 
 	it("does not restore when the book already shows the requested page", () => {
 		mockGetCurrentPageIndex.mockReturnValue(3);
 		render(<ParashaSefer {...baseProps()} />);
 		expect(mockRestorePage).not.toHaveBeenCalled();
+	});
+
+	it("seeds a content selection from an initial deep link", () => {
+		render(
+			<ParashaSefer
+				{...baseProps()}
+				initialContent={{ scope: "haftara", kind: "perush", slug: 'רד"ק' }}
+			/>,
+		);
+		// The Haftarah blank of unit 1 restores the perush slug.
+		expect(mockBlankPages.get("1:haftara")?.initialSlug).toBe('רד"ק');
+		expect(mockBlankPages.get("1:torah")?.initialSlug).toBeUndefined();
+	});
+
+	it("routes blank-page navigation through the unit content history", () => {
+		render(<ParashaSefer {...baseProps()} />);
+		const onNavigate = mockBlankPages.get("1:torah")?.onNavigate as (
+			kind?: string,
+			slug?: string,
+		) => void;
+		expect(typeof onNavigate).toBe("function");
+		act(() => {
+			onNavigate("perush", 'רש"י');
+		});
+		expect(decodeURIComponent(window.location.search)).toContain(
+			'perush=רש"י',
+		);
+		expect(window.location.search).toContain("book=");
+		// The selection publishes back into the blank's restore slug.
+		expect(mockBlankPages.get("1:torah")?.initialSlug).toBe('רש"י');
+		// Clearing the selection drops only that scope's params.
+		act(() => {
+			onNavigate();
+		});
+		expect(window.location.search).not.toContain("perush=");
+		expect(mockBlankPages.get("1:torah")?.initialSlug).toBeUndefined();
+	});
+
+	it("marks text pages for the facing blank's pasuk navigation", () => {
+		render(<ParashaSefer {...baseProps()} />);
+		// Each text section carries the pane key ({unitId}:{scope}) the
+		// blank's open perush publishes against.
+		const torahPage = document.querySelector(
+			'[data-sefer-unit-text="1:torah"]',
+		);
+		const haftaraPage = document.querySelector(
+			'[data-sefer-unit-text="1:haftara"]',
+		);
+		expect(torahPage).not.toBeNull();
+		expect(haftaraPage).not.toBeNull();
 	});
 
 	it("resolves perek data and pasuk counts through the loaded map", () => {
@@ -308,10 +487,18 @@ describe("ParashaSefer", () => {
 		expect(
 			getHref({ pageIndex: 3, semanticName: "א", title: "פרשת בראשית" }),
 		).toBe("/פרשה/1?book");
+		// The blank shares the Torah spread's route; the Haftarah spread
+		// rides on &haftara.
 		expect(
-			getHref({ pageIndex: 4, semanticName: "", title: "הפטרת בראשית" }),
+			getHref({ pageIndex: 4, semanticName: "", title: "" }),
+		).toBe("/פרשה/1?book");
+		expect(
+			getHref({ pageIndex: 5, semanticName: "", title: "הפטרת בראשית" }),
 		).toBe("/פרשה/1?book&haftara");
-		expect(getHref({ pageIndex: 7, semanticName: "", title: "" })).toBe(
+		expect(
+			getHref({ pageIndex: 7, semanticName: "ב", title: "פרשת נח" }),
+		).toBe("/פרשה/2?book");
+		expect(getHref({ pageIndex: 11, semanticName: "", title: "" })).toBe(
 			"/פרשה/בראשית/גב?book",
 		);
 

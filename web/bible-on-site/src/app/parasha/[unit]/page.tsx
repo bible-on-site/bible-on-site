@@ -169,50 +169,13 @@ export default async function ParashaUnitPage({
 	}
 
 	return (
-		<div className={perekStyles.perekContainer}>
-			<UnitBreadcrumb unit={unit} />
-			<h1 className={perekStyles.perekHeading}>
-				פרשת {unit.heading}
-				<span className={styles.refSpan}>{parashaRefSpan(unit)}</span>
-			</h1>
-			<h2 className={styles.readingLabel}>קריאת התורה</h2>
-			<SharedUnitText
-				ranges={unit.ranges}
-				entityRefsByPerek={entityRefsByPerek}
-				pasukCount={canonicalPasukCount}
-				scrollScope="torah"
-			/>
-			<HaftaraSection unit={unit} entityRefsByPerek={entityRefsByPerek} />
-			<UnitNav prev={prev} next={next} />
-
-			{/* Perushim/articles scoped to the parasha's Torah ranges */}
-			<PerushimSection
-				perekId={unit.ranges[0].start.perekId}
-				perushim={perushim}
-				title="פרשנים על הפרשה"
-				emptyMessage="אין פרשנות לפרשה זו"
-			/>
-			<ArticlesSection
-				articles={articles}
-				title="מאמרים על הפרשה"
-				emptyMessage="אין מאמרים לפרשה זו"
-			/>
-
-			{/* Perushim/articles scoped to the Haftarah ranges */}
-			<PerushimSection
-				perekId={auxPerekId ?? unit.ranges[0].start.perekId}
-				perushim={haftaraPerushim}
-				title="פרשנים על ההפטרה"
-				emptyMessage="אין פרשנות להפטרה זו"
-			/>
-			<ArticlesSection
-				articles={haftaraArticles}
-				title="מאמרים על ההפטרה"
-				emptyMessage="אין מאמרים להפטרה זו"
-			/>
-
+		<>
 			{/* useSearchParams inside the composite requires a boundary so
-			 * the static shell can prerender (same pattern as /929). */}
+			 * the static shell can prerender (same pattern as /929). The
+			 * overlay stays OUTSIDE .seo-content — book view hides that
+			 * container, and the composite inside it would hide itself.
+			 * The current unit's flat-page summaries double as its book
+			 * blank pages' carousel data; every other unit loads lazily. */}
 			<Suspense>
 				<ParashaSeferComposite
 					units={bookUnits}
@@ -220,8 +183,54 @@ export default async function ParashaUnitPage({
 					currentUnitId={unitId}
 					entityRefsByPerek={entityRefsByPerek}
 					perekSources={bookPerekSources}
+					articles={articles}
+					perushim={perushim}
+					haftaraArticles={haftaraArticles}
+					haftaraPerushim={haftaraPerushim}
 				/>
 			</Suspense>
-		</div>
+			<div className={`${perekStyles.perekContainer} seo-content`}>
+				<UnitBreadcrumb unit={unit} />
+				<h1 className={perekStyles.perekHeading}>
+					פרשת {unit.heading}
+					<span className={styles.refSpan}>{parashaRefSpan(unit)}</span>
+				</h1>
+				<h2 className={styles.readingLabel}>קריאת התורה</h2>
+				<SharedUnitText
+					ranges={unit.ranges}
+					entityRefsByPerek={entityRefsByPerek}
+					pasukCount={canonicalPasukCount}
+					scrollScope="torah"
+				/>
+				<HaftaraSection unit={unit} entityRefsByPerek={entityRefsByPerek} />
+				<UnitNav prev={prev} next={next} />
+
+				{/* Perushim/articles scoped to the parasha's Torah ranges */}
+				<PerushimSection
+					perekId={unit.ranges[0].start.perekId}
+					perushim={perushim}
+					title="פרשנים על הפרשה"
+					emptyMessage="אין פרשנות לפרשה זו"
+				/>
+				<ArticlesSection
+					articles={articles}
+					title="מאמרים על הפרשה"
+					emptyMessage="אין מאמרים לפרשה זו"
+				/>
+
+				{/* Perushim/articles scoped to the Haftarah ranges */}
+				<PerushimSection
+					perekId={auxPerekId ?? unit.ranges[0].start.perekId}
+					perushim={haftaraPerushim}
+					title="פרשנים על ההפטרה"
+					emptyMessage="אין פרשנות להפטרה זו"
+				/>
+				<ArticlesSection
+					articles={haftaraArticles}
+					title="מאמרים על ההפטרה"
+					emptyMessage="אין מאמרים להפטרה זו"
+				/>
+			</div>
+		</>
 	);
 }

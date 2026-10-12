@@ -126,7 +126,7 @@ function UnitPerekSlice({
 									: undefined
 							}
 						>
-							<span className={perekStyles.pasukNum}>
+							<span className={perekStyles.pasukNum} data-pasuk-num>
 								{toLetters(pasukNumber)}
 							</span>{" "}
 							{renderPasukSegmentsWithEntityRefs(

@@ -78,6 +78,10 @@ describe("ParashaSeferComposite (wide screen)", () => {
 		currentUnitId: 5,
 		entityRefsByPerek: {},
 		perekSources: {},
+		articles: [],
+		perushim: [],
+		haftaraArticles: [],
+		haftaraPerushim: [],
 	};
 
 	beforeEach(() => {
