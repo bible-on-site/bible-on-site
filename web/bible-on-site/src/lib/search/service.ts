@@ -123,7 +123,10 @@ export async function searchSite(
 							type: "perush" as const,
 							title: perushHitReference(entry),
 							snippetHtml: searchSnippet(entry.plain, phrase),
-							href: `/929/${entry.perekId}/${encodeURIComponent(entry.perushName)}?pasuk=${entry.pasukNum}`,
+							// `note` names the exact note_idx fragment and `q` carries the
+							// phrase for the in-content match — the page scrolls to the
+							// hit note, not the pasuk's first note (#2078).
+							href: `/929/${entry.perekId}/${encodeURIComponent(entry.perushName)}?pasuk=${entry.pasukNum}&note=${entry.noteIdx}&q=${encodeURIComponent(phrase)}`,
 							score,
 						})),
 					),
@@ -160,7 +163,8 @@ export async function searchSite(
 							type: "article" as const,
 							title: `${entry.name} - ${entry.authorName}`,
 							snippetHtml: searchSnippet(entry.plain, phrase),
-							href: `/929/${entry.perekId}/${entry.id}`,
+							// `q` carries the phrase for the in-content match scroll (#2078).
+							href: `/929/${entry.perekId}/${entry.id}?q=${encodeURIComponent(phrase)}`,
 							score,
 						})),
 					),

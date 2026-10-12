@@ -345,6 +345,24 @@ public partial class PreferencesViewModel : ObservableObject
 
     #endregion
 
+    /// <summary>
+    /// Whether the מסורה על הפרק flyout menu entry is shown (opt-in, #2181).
+    /// </summary>
+    public bool MasoraMenuEnabled
+    {
+        get => _preferencesService.MasoraMenuEnabled;
+        set
+        {
+            if (_preferencesService.MasoraMenuEnabled == value)
+            {
+                return;
+            }
+
+            _preferencesService.MasoraMenuEnabled = value;
+            OnPropertyChanged();
+        }
+    }
+
     /// <summary>Always show the perushim section — with different content based on install state.</summary>
     public bool ShowPerushimSection => true;
 
@@ -393,6 +411,7 @@ public partial class PreferencesViewModel : ObservableObject
         OnPropertyChanged(nameof(PerekToLoad));
         OnPropertyChanged(nameof(IsPerekToLoadTodays));
         OnPropertyChanged(nameof(IsPerekToLoadLastLearnt));
+        OnPropertyChanged(nameof(MasoraMenuEnabled));
         OnPropertyChanged(nameof(ShowPerushimSection));
         OnPropertyChanged(nameof(IsPerushimInstalled));
         OnPropertyChanged(nameof(ShowPerushimDownload));
@@ -493,6 +512,7 @@ public partial class PreferencesViewModel : ObservableObject
         OnPropertyChanged(nameof(PerekToLoad));
         OnPropertyChanged(nameof(IsPerekToLoadTodays));
         OnPropertyChanged(nameof(IsPerekToLoadLastLearnt));
+        OnPropertyChanged(nameof(MasoraMenuEnabled));
         NotifyDivineNameMaskingChanged();
     }
 

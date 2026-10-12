@@ -7,6 +7,7 @@ SET FOREIGN_KEY_CHECKS = 0;
 TRUNCATE TABLE tanah_perek_image_variant;
 TRUNCATE TABLE tanah_perek_image;
 
+TRUNCATE TABLE tanah_article_covering_source;
 TRUNCATE TABLE tanah_article;
 TRUNCATE TABLE tanah_article_dedication;
 TRUNCATE TABLE tanah_dedication;
