@@ -37,6 +37,8 @@ public sealed class PerushimHtmlScrollStabilityTests(ITestOutputHelper output, M
         Assert.True(checkedCount > 0,
             "Synthetic perushim must render checkboxes — otherwise HtmlView cells are never created");
 
+        SaveDiagnostics("LongPerushimBeforeScroll", "passed");
+
         var list = Page.WaitFor("PasukimCollection");
         var centerX = list.Location.X + list.Size.Width / 2;
         var topY = list.Location.Y + list.Size.Height / 5;
