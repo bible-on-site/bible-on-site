@@ -7,7 +7,7 @@ import {
 import libCoverage from "istanbul-lib-coverage";
 import libSourceMaps from "istanbul-lib-source-maps";
 import { addCoverageReport } from "monocart-reporter";
-import { dumpImpactCoverage } from "../../../shared/tests-util/e2e-impact.mjs";
+import { dumpImpactCoverage } from "../../../shared/tests-util/e2e-impact";
 import { shouldMeasureCov } from "../../../shared/tests-util/environment.mjs";
 
 declare global {
