@@ -157,7 +157,11 @@ it touches no `node_modules`, so it can run before `npm ci` — and
 `ios:boot:wait` then runs as a `background: true` step once dependencies are
 installed, overlapping the readiness monitor and Appium bridge preflight with
 the MAUI workload install and the app build. A `wait` step before the tests is
-the gate that surfaces the finished boot and the exported variables.
+the gate that surfaces the finished boot and the exported variables. The
+coverage-tree baseline download and test selection also run as one background
+step — the baseline REST fetch sees 1s–2m20s transfer variance, so it never
+stalls `npm ci`, the boot or the build; each pilot waits on the manifest
+through `wait`/`wait-all`.
 `MOBILE_APP_PATH` can select another compatible build. Each local
 run owns an Appium server on `127.0.0.1:4723`; keep that port free.
 

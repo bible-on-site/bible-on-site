@@ -215,29 +215,25 @@ jobs:
           key: ${{ runner.os }}-node-modules-e2e-${{ steps.npm-key.outputs.hash }}
 
       # The coverage tree baseline is published only by successful master push
-      # runs. Missing or unreadable baselines are not an error here — the
-      # selector falls back to the full applicable suite (#2085).
-      - name: Download coverage-tree baseline
-        id: baseline
+      # runs; its REST download sees 1s–2m20s transfer variance, so the whole
+      # resolve+select runs in the background and never stalls npm ci, the boot
+      # or the build. Missing or unreadable baselines are not an error — the
+      # selector falls back to the full applicable suite (#2085). Shadow mode
+      # computes the deterministic subset for evidence while the suite still
+      # runs everything; a discovery problem resolves to selectAll — never to
+      # a silently empty run.
+      - name: Download baseline and select affected tests
+        id: selection
+        background: true
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           node devops/github/ci/e2e-impact/e2e-impact.ts baseline-download \
             --name "app-mobile-e2e-coverage.master.${{ matrix.artifact }}" \
             --out "$MOBILE_E2E_ARTIFACTS/baseline"
-
-      # Shadow mode computes the deterministic subset for evidence while the
-      # suite still runs everything. A missing, stale or incompatible baseline,
-      # an undeterminable diff or a discovery problem resolves to selectAll —
-      # never to a silently empty run.
-      - name: Select affected tests
-        id: selection
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
           BASELINE_ARGS=()
-          if [ "${{ steps.baseline.outputs.available }}" == "true" ]; then
-            BASELINE_ARGS=(--baseline "${{ steps.baseline.outputs.baseline-file }}")
+          if [ -f "$MOBILE_E2E_ARTIFACTS/baseline/coverage-tree.json" ]; then
+            BASELINE_ARGS=(--baseline "$MOBILE_E2E_ARTIFACTS/baseline/coverage-tree.json")
           fi
           FORCE_ARGS=()
           if [ "${{ inputs.force_full_suite }}" == "true" ]; then
@@ -288,6 +284,23 @@ jobs:
             devops/node_modules
             app/mobile-e2e/node_modules
           key: ${{ runner.os }}-node-modules-e2e-${{ steps.npm-key.outputs.hash }}
+
+      # .NET's DerivedData equivalent: obj intermediates from the last master
+      # build turn the simulator compile incremental. Restored before the
+      # harness so its devops compile reuses them too. Master-only saves
+      # below; PR runs restore through the toolchain-prefixed fallback key.
+      - name: Restore iOS obj intermediates
+        id: obj-cache
+        if: matrix.platform == 'iOS'
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            app/BibleOnSite/obj
+            app/BibleOnSite.Tests.MobileE2E/obj
+            app/devops/obj
+          key: ios-e2e-obj-${{ steps.toolchain.outputs.id }}-${{ github.sha }}
+          restore-keys: |
+            ios-e2e-obj-${{ steps.toolchain.outputs.id }}-
 
       - name: Validate the test harness
         working-directory: app
@@ -349,22 +362,6 @@ jobs:
 
       - name: Install matching perushim catalog and notes
         run: python3 app/devops/prepare_perushim_assets.py --source "${{ runner.temp }}/perushim-sqlite" --app-directory app/BibleOnSite --platform ${{ matrix.platform }}
-
-      # .NET's DerivedData equivalent: obj intermediates from the last master
-      # build turn the simulator compile incremental. Master-only saves below;
-      # PR runs restore through the toolchain-prefixed fallback key.
-      - name: Restore iOS obj intermediates
-        id: obj-cache
-        if: matrix.platform == 'iOS'
-        uses: actions/cache/restore@v6
-        with:
-          path: |
-            app/BibleOnSite/obj
-            app/BibleOnSite.Tests.MobileE2E/obj
-            app/devops/obj
-          key: ios-e2e-obj-${{ steps.toolchain.outputs.id }}-${{ github.sha }}
-          restore-keys: |
-            ios-e2e-obj-${{ steps.toolchain.outputs.id }}-
 
       - name: Build complete simulator app
         # Explicit bash enables pipefail, preserving npm failures through tee.
@@ -485,6 +482,12 @@ jobs:
         with:
           path: ${{ steps.sdk-key.outputs.avd-home }}
           key: ${{ steps.avd-cache.outputs.cache-primary-key }}
+
+      # The Android pilot's env consumes the selection manifest, so its leg
+      # cannot start until the background selection finishes. The iOS leg
+      # reaches the same gate through wait-all below.
+      - name: Wait for test selection
+        wait: selection
 
       - name: Run shared pilot on Android
         if: matrix.platform == 'Android'
