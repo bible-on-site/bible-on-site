@@ -60,12 +60,13 @@ for (const reason of ["deadline", "cancellation", "blocked-wrapper"]) {
     const ready = join(directory, "pids.json");
     let run;
     let triggerDeadline;
+    let pids = [];
     try {
       run = supervise(process.execPath, ["-e", stubbornTree, ready, reason === "blocked-wrapper" ? "block" : "idle"], {
         graceMs: 100, stdio: "ignore",
         scheduleDeadline(callback) { triggerDeadline = callback; },
       });
-      const pids = await waitForTree(ready);
+      pids = await waitForTree(ready);
       if (reason === "cancellation") run.stop();
       else triggerDeadline();
       assert.equal(await run.result, reason === "cancellation" ? 143 : 124);
@@ -73,6 +74,13 @@ for (const reason of ["deadline", "cancellation", "blocked-wrapper"]) {
     } finally {
       run?.stop();
       if (run) await run.result;
+      // A failed tree-shutdown assertion must not leave owned children keeping
+      // the test worker alive. This cleanup runs after the assertion, so a
+      // shutdown failure remains a failure.
+      for (const pid of pids) {
+        try { process.kill(pid, "SIGKILL"); }
+        catch (error) { if (error.code !== "ESRCH") throw error; }
+      }
       rmSync(directory, { recursive: true, force: true });
     }
   });

@@ -73,6 +73,9 @@ partial class Build
             DotNetTestApp($"--project \"{MobileE2ETestProject}\" --configuration Debug -p:RestoreLockedMode=true" +
                           $" --results-directory \"{resultsDirectory}\"{prebuilt}",
                 $"--filter-query \"/[{MobileE2ESelectionFilter()}]\"" +
+                // Finish a failed pilot's report instead of repeatedly recovering.
+                // All selected scenarios still execute on a successful run.
+                " --stop-on-fail on" +
                 " --hangdump --hangdump-timeout 10m --hangdump-type Mini" +
                 " --report-xunit-trx --report-xunit-trx-filename mobile-e2e.trx" +
                 " --report-xunit-junit --report-xunit-junit-filename mobile-e2e.xml");
