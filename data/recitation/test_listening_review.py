@@ -170,6 +170,78 @@ class ListeningReviewTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             validate_decision(self.case, self.payload)
 
+    def prepare_fresh_hearing_after_a_reused_round(self):
+        self.prepare_unchanged_cut_reuse()
+        prior = deepcopy(self.case)
+        queue = {"cases": [prior], "queueSha256": digest_json([prior])}
+        decision = validate_decision(prior, {**self.payload, "verdict": "problem"})
+        decision["queueSha256"] = queue["queueSha256"]
+        from listening_review import write_json
+        queue_path, reviews_path = self.root / "second-queue.json", self.root / "second-reviews.json"
+        write_json(queue_path, queue)
+        write_json(reviews_path, {"version": 1, "entries": [decision]})
+        proof_path = self.root / "second-reuse.json"
+        write_json(proof_path, {"queuePath": str(queue_path), "queueFileSha256": digest_file(queue_path),
+            "reviewsPath": str(reviews_path), "reviewsFileSha256": digest_file(reviews_path),
+            "decisionIndex": 0, "decision": decision})
+        self.case = deepcopy(prior)
+        self.case["words"][1]["endMs"] = 1110
+        self.case.update(listeningReusePath=str(proof_path), listeningReuseSha256=digest_file(proof_path),
+                         reusableHeardSegments=[1])
+        self.case["candidateSha256"] = candidate_digest(self.case)
+        self.payload.update(candidateSha256=self.case["candidateSha256"], freshHeardSegments=[3])
+
+    def test_direct_fresh_hearing_can_be_reused_after_another_cut_was_reused(self):
+        self.prepare_fresh_hearing_after_a_reused_round()
+        row = validate_decision(self.case, self.payload)
+        heard = row["listenEvidenceReportedByBrowser"]
+        self.assertEqual(heard["freshHeardSegments"], [3])
+        self.assertEqual(heard["reusedHeardSegments"], [1])
+        row["queueSha256"] = "third queue"
+        verify_review(self.case, row, "third queue")
+        with self.assertRaises(ValueError):
+            validate_decision(self.case, {**self.payload, "freshHeardSegments": []})
+
+    def test_inherited_hearing_never_becomes_direct_fresh_hearing(self):
+        self.prepare_fresh_hearing_after_a_reused_round()
+        self.case["words"][1]["endMs"] = 1100
+        self.case["words"][0]["endMs"] = 620
+        self.case["reusableHeardSegments"] = [3]
+        self.case["candidateSha256"] = candidate_digest(self.case)
+        with self.assertRaises(ValueError):
+            validate_decision(self.case, {**self.payload, "candidateSha256": self.case["candidateSha256"],
+                                          "freshHeardSegments": [1]})
+
+    def test_later_reuse_still_rejects_changed_source_clip_words_and_earlier_history(self):
+        self.prepare_fresh_hearing_after_a_reused_round()
+        for mutate in (lambda c: c.update(audioSha256="changed source"),
+                       lambda c: c.update(clipSha256="changed clip"),
+                       lambda c: c["words"][0].update(endMs=611),
+                       lambda c: c.update(reusableHeardSegments=[1, 3])):
+            case = deepcopy(self.case)
+            mutate(case)
+            with self.subTest(mutate=mutate), self.assertRaises(ValueError):
+                validate_decision(case, self.payload)
+        first = read_json(self.root / "reuse.json")
+        from listening_review import write_json
+        history = read_json(Path(first["reviewsPath"]))
+        history["entries"][0]["note"] = "edited after archiving"
+        write_json(Path(first["reviewsPath"]), history)
+        with self.assertRaises(ValueError):
+            validate_decision(self.case, self.payload)
+
+    def test_reused_round_without_saved_fresh_word_evidence_is_rejected(self):
+        self.prepare_fresh_hearing_after_a_reused_round()
+        proof_path = Path(self.case["listeningReusePath"])
+        proof = read_json(proof_path)
+        proof["decision"]["listenEvidenceReportedByBrowser"].pop("freshHeardSegments")
+        from listening_review import write_json
+        write_json(Path(proof["reviewsPath"]), {"version": 1, "entries": [proof["decision"]]})
+        proof["reviewsFileSha256"] = digest_file(Path(proof["reviewsPath"]))
+        write_json(proof_path, proof)
+        self.case["listeningReuseSha256"] = digest_file(proof_path)
+        with self.assertRaises(ValueError):
+            validate_decision(self.case, self.payload)
     def test_hebrew_references_have_plain_letters(self):
         self.assertEqual(hebrew_number(15), "טו")
         self.assertEqual(hebrew_number(16), "טז")
