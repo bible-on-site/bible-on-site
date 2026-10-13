@@ -60,21 +60,12 @@ namespace AltCover.Recorder
 
 		private static void Listen()
 		{
-			TcpListener listener;
+			TcpListener? listener = null;
 			try
 			{
 				listener = new TcpListener(IPAddress.Loopback, Port);
 				listener.Start();
-			}
-			catch (Exception exception) when (exception is SocketException or IOException)
-			{
-				Console.Error.WriteLine(
-					$"E2E coverage endpoint could not bind 127.0.0.1:{Port}: {exception.Message}");
-				return;
-			}
-			Console.Error.WriteLine($"E2E coverage endpoint listening on 127.0.0.1:{Port}");
-			try
-			{
+				Console.Error.WriteLine($"E2E coverage endpoint listening on 127.0.0.1:{Port}");
 				while (true)
 				{
 					TcpClient client;
@@ -90,10 +81,25 @@ namespace AltCover.Recorder
 					ThreadPool.QueueUserWorkItem(_ => Serve(client));
 				}
 			}
+			catch (Exception exception) when (exception is SocketException or IOException)
+			{
+				Console.Error.WriteLine(
+					$"E2E coverage endpoint could not bind 127.0.0.1:{Port}: {exception.Message}");
+			}
 			finally
 			{
-				listener.Stop();
-				listener.Server.Dispose();
+				// Modern runtimes implement IDisposable, but the recorder's
+				// netstandard2.0 reference contract does not expose it.
+				if (listener is IDisposable disposable)
+				{
+					disposable.Dispose();
+				}
+				else if (listener != null)
+				{
+					listener.Stop();
+					// Stop creates a replacement socket even when the bind failed.
+					listener.Server.Dispose();
+				}
 			}
 		}
 

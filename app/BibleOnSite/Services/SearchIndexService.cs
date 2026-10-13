@@ -129,12 +129,11 @@ public sealed class SearchIndexService : IAsyncDisposable
         // the iOS scenarios fabricate a tiny perushim pack instead. Let the
         // notes index stay lazy there; the shared build task still dedups a
         // mid-test build if one is ever requested.
-        if (DeviceInfo.Platform == DevicePlatform.iOS)
-        {
-            await service.WarmTableAsync("verses");
-            return;
-        }
+#if IOS
+        await service.WarmTableAsync("verses");
+#else
         await Task.WhenAll(service.WarmTableAsync("verses"), service.WarmTableAsync("notes"));
+#endif
     }
 
     // Shares the search path's dedup so a warmup build is also the build a
