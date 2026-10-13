@@ -126,6 +126,14 @@ jobs:
       # Bump when the clean-snapshot recipe changes (boot options, readiness
       # flow, runner-action version) so stale snapshots cannot be restored.
       AVD_SNAPSHOT_RECIPE: r3
+      # Same idea for the iOS device-state capture below: bump when the quiesce
+      # or restore semantics change so a differently-captured dir cannot load.
+      IOS_SIM_STATE_RECIPE: r1
+      # Single source for the .NET SDK and workload-set pins (see #1871):
+      # setup-dotnet, the toolchain cache id and the workload install all read
+      # from here so a bump cannot skew the cache keys.
+      DOTNET_SDK_VERSION: "10.0.401"
+      MAUI_WORKLOAD_SET: "10.0.401.1"
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -134,7 +142,7 @@ jobs:
         uses: actions/setup-dotnet@v6
         with:
           # Keep aligned with Xcode 27 and the iOS packaging workload; see #1871.
-          dotnet-version: "10.0.401"
+          dotnet-version: ${{ env.DOTNET_SDK_VERSION }}
 
       - name: Hash NuGet dependency inputs
         id: nuget-key
@@ -180,7 +188,26 @@ jobs:
         run: |
           XCODE_VER=$(xcodebuild -version | tr '\n' '-' | tr -d ' ')
           DOTNET_VER=$(dotnet --version)
-          echo "id=xcode${XCODE_VER}-dotnet${DOTNET_VER}-mauiios10.0.401.1" >> "$GITHUB_OUTPUT"
+          echo "id=xcode${XCODE_VER}-dotnet${DOTNET_VER}-mauiios${{ env.MAUI_WORKLOAD_SET }}" >> "$GITHUB_OUTPUT"
+
+      # Resolve-before-restore: the same selection boot uses, without the
+      # runtime download — a miss leaves boot's download fallback untouched.
+      - name: Resolve iOS simulator device
+        if: matrix.platform == 'iOS'
+        id: ios-device
+        run: npm run ios:boot:resolve --prefix app/mobile-e2e
+
+      # The image bakes a fixed UDID per version, so the key self-invalidates on
+      # every image update; the toolchain stamp covers updates that keep the
+      # UDID, and the recipe covers capture-logic changes. Exact key only:
+      # another device's state must never restore over this one.
+      - name: Restore iOS simulator state
+        if: matrix.platform == 'iOS' && steps.ios-device.outputs.udid != ''
+        id: ios-sim-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ~/Library/Developer/CoreSimulator/Devices/${{ steps.ios-device.outputs.udid }}
+          key: ${{ runner.os }}-ios-sim-${{ steps.ios-device.outputs.udid }}-${{ steps.toolchain.outputs.id }}-${{ env.IOS_SIM_STATE_RECIPE }}
 
 
       # node_modules keyed on the lockfile hash is the exact install result —
@@ -196,29 +223,25 @@ jobs:
           key: ${{ runner.os }}-node-modules-e2e-${{ steps.npm-key.outputs.hash }}
 
       # The coverage tree baseline is published only by successful master push
-      # runs. Missing or unreadable baselines are not an error here — the
-      # selector falls back to the full applicable suite (#2085).
-      - name: Download coverage-tree baseline
-        id: baseline
+      # runs; its REST download sees 1s–2m20s transfer variance, so the whole
+      # resolve+select runs in the background and never stalls npm ci, the boot
+      # or the build. Missing or unreadable baselines are not an error — the
+      # selector falls back to the full applicable suite (#2085). Shadow mode
+      # computes the deterministic subset for evidence while the suite still
+      # runs everything; a discovery problem resolves to selectAll — never to
+      # a silently empty run.
+      - name: Download baseline and select affected tests
+        id: selection
+        background: true
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           node devops/github/ci/e2e-impact/e2e-impact.ts baseline-download \
             --name "app-mobile-e2e-coverage.master.${{ matrix.artifact }}" \
             --out "$MOBILE_E2E_ARTIFACTS/baseline"
-
-      # Shadow mode computes the deterministic subset for evidence while the
-      # suite still runs everything. A missing, stale or incompatible baseline,
-      # an undeterminable diff or a discovery problem resolves to selectAll —
-      # never to a silently empty run.
-      - name: Select affected tests
-        id: selection
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
           BASELINE_ARGS=()
-          if [ "${{ steps.baseline.outputs.available }}" == "true" ]; then
-            BASELINE_ARGS=(--baseline "${{ steps.baseline.outputs.baseline-file }}")
+          if [ -f "$MOBILE_E2E_ARTIFACTS/baseline/coverage-tree.json" ]; then
+            BASELINE_ARGS=(--baseline "$MOBILE_E2E_ARTIFACTS/baseline/coverage-tree.json")
           fi
           FORCE_ARGS=()
           if [ "${{ inputs.force_full_suite }}" == "true" ]; then
@@ -237,18 +260,6 @@ jobs:
           npm ci --prefix devops --no-audit
           npm ci --prefix app/mobile-e2e --no-audit
 
-      - name: Validate the test harness
-        working-directory: app
-        shell: bash
-        run: |
-          mkdir -p "$MOBILE_E2E_ARTIFACTS"
-          npm run test:unit --prefix mobile-e2e 2>&1 | tee "$MOBILE_E2E_ARTIFACTS/harness-validation.log"
-          dotnet run --project devops -- TestMobileE2EUnit 2>&1 | tee -a "$MOBILE_E2E_ARTIFACTS/harness-validation.log"
-          dotnet test --project devops.Tests/devops.Tests.csproj --configuration Release 2>&1 | tee -a "$MOBILE_E2E_ARTIFACTS/harness-validation.log"
-
-      # Validate before booting either device: cold simulator startup competes
-      # with cache extraction and subprocess tests. The asynchronous boot still
-      # overlaps workload installation and the full app build.
       - name: Start iPhone simulator boot
         if: matrix.platform == 'iOS'
         run: npm run ios:boot:start --prefix app/mobile-e2e
@@ -287,6 +298,38 @@ jobs:
             app/mobile-e2e/node_modules
           key: ${{ runner.os }}-node-modules-e2e-${{ steps.npm-key.outputs.hash }}
 
+      # .NET's DerivedData equivalent: obj intermediates from the last master
+      # build turn the harness compile incremental. Restored before the
+      # harness so its devops compile reuses them too. Master-only saves
+      # below; PR runs restore through the toolchain-prefixed fallback key.
+      # app/BibleOnSite/obj is deliberately excluded: its codesign skip-stamps
+      # let a cross-commit restore emit a .app whose signature no longer
+      # covers its pages — the run dies at launch with SIGKILL Invalid Page
+      # (observed on this branch's first completed pilot, twice).
+      - name: Restore iOS obj intermediates
+        id: obj-cache
+        if: matrix.platform == 'iOS'
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            app/BibleOnSite.Tests.MobileE2E/obj
+            app/devops/obj
+          key: ios-e2e-obj-${{ steps.toolchain.outputs.id }}-${{ github.sha }}
+          restore-keys: |
+            ios-e2e-obj-${{ steps.toolchain.outputs.id }}-
+
+      - name: Validate the test harness
+        working-directory: app
+        shell: bash
+        run: |
+          mkdir -p "$MOBILE_E2E_ARTIFACTS"
+          npm run test:unit --prefix mobile-e2e 2>&1 | tee "$MOBILE_E2E_ARTIFACTS/harness-validation.log"
+          dotnet run --project devops -- TestMobileE2EUnit 2>&1 | tee -a "$MOBILE_E2E_ARTIFACTS/harness-validation.log"
+          dotnet test --project devops.Tests/devops.Tests.csproj --configuration Release 2>&1 | tee -a "$MOBILE_E2E_ARTIFACTS/harness-validation.log"
+
+      # Validate before booting either device: cold simulator startup competes
+      # with cache extraction and subprocess tests. The asynchronous boot still
+      # overlaps workload installation and the full app build.
       - name: Setup Java
         if: matrix.platform == 'Android'
         uses: actions/setup-java@v6
@@ -294,9 +337,37 @@ jobs:
           distribution: microsoft
           java-version: "21"
 
+      # The workload set is a multi-GB silent NuGet download (~6 min cold in
+      # run 38438842693); restored packs turn the install into a verify no-op.
+      # Exact key only — a partial restore is worse than downloading.
+      - name: Restore MAUI workload packs
+        id: workload-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            ${{ env.DOTNET_ROOT }}/packs
+            ${{ env.DOTNET_ROOT }}/metadata
+            ${{ env.DOTNET_ROOT }}/sdk-manifests
+            ${{ env.DOTNET_ROOT }}/template-packs
+          key: ${{ runner.os }}-${{ runner.arch }}-dotnet-${{ env.DOTNET_SDK_VERSION }}-${{ matrix.workload }}-${{ env.MAUI_WORKLOAD_SET }}
+
       - name: Install MAUI workload
         # 10.0.401.1 selects the iOS 27 SDK, which requires Xcode 27; see #1871.
-        run: dotnet workload install ${{ matrix.workload }} --version 10.0.401.1
+        run: dotnet workload install ${{ matrix.workload }} --version ${{ env.MAUI_WORKLOAD_SET }}
+
+      # Background like the other cache saves: compression and upload stay off
+      # the build's critical path; the wait-all gate still bounds it.
+      - name: Save MAUI workload packs
+        if: github.event_name != 'pull_request' && github.event_name != 'merge_group' && steps.workload-cache.outputs.cache-hit != 'true'
+        background: true
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            ${{ env.DOTNET_ROOT }}/packs
+            ${{ env.DOTNET_ROOT }}/metadata
+            ${{ env.DOTNET_ROOT }}/sdk-manifests
+            ${{ env.DOTNET_ROOT }}/template-packs
+          key: ${{ steps.workload-cache.outputs.cache-primary-key }}
 
       # The Debug build bundles perushim data from the checkout's packaged
       # paths, but the committed .gz fixture is only a local-dev fallback — the
@@ -313,22 +384,6 @@ jobs:
 
       - name: Install matching perushim catalog and notes
         run: python3 app/devops/prepare_perushim_assets.py --source "${{ runner.temp }}/perushim-sqlite" --app-directory app/BibleOnSite --platform ${{ matrix.platform }}
-
-      # .NET's DerivedData equivalent: obj intermediates from the last master
-      # build turn the simulator compile incremental. Master-only saves below;
-      # PR runs restore through the toolchain-prefixed fallback key.
-      - name: Restore iOS obj intermediates
-        id: obj-cache
-        if: matrix.platform == 'iOS'
-        uses: actions/cache/restore@v6
-        with:
-          path: |
-            app/BibleOnSite/obj
-            app/BibleOnSite.Tests.MobileE2E/obj
-            app/devops/obj
-          key: ios-e2e-obj-${{ steps.toolchain.outputs.id }}-${{ github.sha }}
-          restore-keys: |
-            ios-e2e-obj-${{ steps.toolchain.outputs.id }}-
 
       - name: Build complete simulator app
         id: build-app
@@ -349,7 +404,6 @@ jobs:
         uses: actions/cache/save@v6
         with:
           path: |
-            app/BibleOnSite/obj
             app/BibleOnSite.Tests.MobileE2E/obj
             app/devops/obj
           key: ios-e2e-obj-${{ steps.toolchain.outputs.id }}-${{ github.sha }}
@@ -458,6 +512,12 @@ jobs:
           path: ${{ steps.sdk-key.outputs.avd-home }}
           key: ${{ steps.avd-cache.outputs.cache-primary-key }}
 
+      # The Android pilot's env consumes the selection manifest, so its leg
+      # cannot start until the background selection finishes. The iOS leg
+      # reaches the same gate through wait-all below.
+      - name: Wait for test selection
+        wait: selection
+
       - name: Run shared pilot on Android
         if: matrix.platform == 'Android'
         id: pilot
@@ -542,6 +602,21 @@ jobs:
           path: app/.artifacts/mobile-e2e/${{ matrix.artifact }}/coverage-app/
           retention-days: 90
           if-no-files-found: error
+      # Captured post-test so the saved device keeps session warm-state, but
+      # quiesced first: test apps are removed and the device is shut down so
+      # the directory is a consistent Shutdown image. A device that does not
+      # match the resolved UDID is never captured under its key.
+      - name: Quiesce iOS simulator for state capture
+        if: matrix.platform == 'iOS' && always() && github.event_name != 'pull_request' && github.event_name != 'merge_group' && steps.ios-device.outputs.udid != '' && steps.ios-sim-cache.outputs.cache-hit != 'true' && steps.simulator.outcome == 'success'
+        id: ios-sim-quiesce
+        run: node app/mobile-e2e/ios-sim-state.mjs quiesce "${{ steps.ios-device.outputs.udid }}"
+
+      - name: Save iOS simulator state
+        if: matrix.platform == 'iOS' && always() && steps.ios-sim-quiesce.outputs.saved == 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: ~/Library/Developer/CoreSimulator/Devices/${{ steps.ios-device.outputs.udid }}
+          key: ${{ steps.ios-sim-cache.outputs.cache-primary-key }}
 
       # Real executed-code coverage (#2085): the AltCover template, per-test
       # app-coverage dumps and the run reports become the exec tree, which the

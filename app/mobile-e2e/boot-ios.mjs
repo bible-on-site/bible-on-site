@@ -4,7 +4,7 @@ import { promisify } from "node:util";
 import { loadIosSimulatorDriver, planShardPeer, selectSimulator } from "./simulator.mjs";
 
 const mode = process.argv[2] ?? "boot";
-if (!["start", "wait", "boot"].includes(mode)) throw new Error(`Unknown ios:boot mode '${mode}'.`);
+if (!["start", "wait", "boot", "resolve"].includes(mode)) throw new Error(`Unknown ios:boot mode '${mode}'.`);
 // MOBILE_E2E_SHARD_COUNT=2 boots a second same-model simulator next to the
 // primary so the iOS suite can split across two devices (#2083).
 const shardCount = process.env.MOBILE_E2E_SHARD_COUNT === "2" ? 2 : 1;
@@ -13,6 +13,18 @@ const sdk = run("--sdk", "iphonesimulator", "--show-sdk-version").trim();
 const listDevices = () => JSON.parse(run("simctl", "list", "devices", "available", "--json")).devices;
 const select = () => selectSimulator(listDevices(), sdk);
 let primary = select();
+// "resolve" only reports the deterministic pick so the workflow can restore
+// that primary's saved state before boot. It never downloads a runtime: a
+// missing one stays the boot path's job, which re-selects afterwards.
+if (mode === "resolve") {
+  if (primary) {
+    console.log(`Selected ${primary.name}, iOS ${primary.version}, ${primary.udid}`);
+    if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `udid=${primary.udid}\nversion=${primary.version}\n`);
+  } else {
+    console.log(`No available iPhone simulator runtime compatible with iOS SDK ${sdk}.`);
+  }
+  process.exit(0);
+}
 if (!primary) {
   execFileSync("xcodebuild", ["-downloadPlatform", "iOS"], { stdio: "inherit", timeout: 900000 });
   primary = select();
