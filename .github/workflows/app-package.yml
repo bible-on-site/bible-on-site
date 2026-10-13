@@ -492,6 +492,31 @@ jobs:
           echo "Xcode version:"
           xcodebuild -version
 
+      # Xcode or the workload invalidates compiled intermediates, so every iOS
+      # cache key below carries this toolchain stamp — a mismatched restore is
+      # worse than a miss.
+      - name: Compute iOS toolchain cache id
+        id: toolchain
+        run: |
+          XCODE_VER=$(xcodebuild -version | tr '\n' '-' | tr -d ' ')
+          DOTNET_VER=$(dotnet --version)
+          echo "id=xcode${XCODE_VER}-dotnet${DOTNET_VER}-mauiios10.0.401.1" >> "$GITHUB_OUTPUT"
+
+      # .NET's DerivedData equivalent: the obj tree holds the mtouch/AOT output
+      # that dominates the publish step. Restoring the last master build turns
+      # it incremental; the save below is master-only so PRs restore instead of
+      # filling the cache allowance with per-PR entries.
+      - name: Restore iOS obj intermediates
+        id: obj-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            app/BibleOnSite/obj
+            app/devops/obj
+          key: ios-pkg-obj-${{ steps.toolchain.outputs.id }}-${{ github.sha }}
+          restore-keys: |
+            ios-pkg-obj-${{ steps.toolchain.outputs.id }}-
+
       - name: Install compatible iOS simulator runtime
         run: |
           echo "Current simulator runtimes:"
@@ -581,7 +606,21 @@ jobs:
             echo "ASSET_PACK_DOWNLOADER_PROFILE=$PROFILE_PATH" >> $GITHUB_ENV
           fi
 
+      # The extension's DerivedData is keyed on its own sources: any hit means
+      # the .appex is already built and the xcodebuild step below is skipped.
+      - name: Hash extension sources
+        id: ext-key
+        run: node ${{ github.workspace }}/devops/github/ci/files-hash.mjs app/extensions/AssetPackDownloader/AssetPackDownloader.xcodeproj/project.pbxproj app/extensions/AssetPackDownloader/AssetPackDownloader/DownloaderExtension.swift app/extensions/AssetPackDownloader/AssetPackDownloader/AssetPackDownloader.entitlements app/extensions/AssetPackDownloader/AssetPackDownloader/Info.plist
+
+      - name: Restore extension build cache
+        id: ext-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: app/extensions/AssetPackDownloader/build
+          key: ios-ext-${{ steps.toolchain.outputs.id }}-${{ steps.ext-key.outputs.hash }}
+
       - name: Build asset-pack downloader extension
+        if: ${{ steps.ext-cache.outputs.cache-hit != 'true' }}
         run: |
           # ExtensionKit .appex cannot be produced by the .NET iOS toolchain; build
           # it unsigned here — the app packaging step re-signs it during embed.
@@ -590,8 +629,16 @@ jobs:
             -configuration Release \
             -derivedDataPath extensions/AssetPackDownloader/build \
             -destination 'generic/platform=iOS' \
+            COMPILER_INDEX_STORE_ENABLE=NO \
             CODE_SIGNING_ALLOWED=NO
         working-directory: ${{ env.APP_DIRECTORY }}
+
+      - name: Save extension build cache
+        if: ${{ github.ref == 'refs/heads/master' && steps.ext-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: app/extensions/AssetPackDownloader/build
+          key: ios-ext-${{ steps.toolchain.outputs.id }}-${{ steps.ext-key.outputs.hash }}
 
       - name: Package IPA
         working-directory: ${{ env.APP_DIRECTORY }}
@@ -600,6 +647,15 @@ jobs:
           dotnet run --project devops -- Package --platform iOS --configuration Release \
             --ios-team-id "${{ secrets.IOS_TEAM_ID }}" \
             2>&1 | sed -E 's/(Apple (Distribution|Development): )[^(]+(\([^)]*\))/\1[masked] \3/g'
+
+      - name: Save iOS obj intermediates
+        if: ${{ github.ref == 'refs/heads/master' && steps.obj-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            app/BibleOnSite/obj
+            app/devops/obj
+          key: ios-pkg-obj-${{ steps.toolchain.outputs.id }}-${{ github.sha }}
 
       - name: Save NuGet packages
         if: ${{ github.ref == 'refs/heads/master' && steps.nuget-cache.outputs.cache-hit != 'true' }}

@@ -157,6 +157,16 @@ jobs:
         if: matrix.platform == 'iOS'
         run: sudo xcode-select --switch /Applications/Xcode_27.app/Contents/Developer
 
+      # Xcode or the workload invalidates compiled intermediates — stamp every
+      # iOS cache key with the toolchain so a mismatched restore can't happen.
+      - name: Compute iOS toolchain cache id
+        id: toolchain
+        if: matrix.platform == 'iOS'
+        run: |
+          XCODE_VER=$(xcodebuild -version | tr '\n' '-' | tr -d ' ')
+          DOTNET_VER=$(dotnet --version)
+          echo "id=xcode${XCODE_VER}-dotnet${DOTNET_VER}-mauiios10.0.401.1" >> "$GITHUB_OUTPUT"
+
       # simctl boot is asynchronous: the device boots on the host while the
       # dependency installs run. This step needs no node_modules — it only
       # selects a device and kicks simctl.
@@ -164,13 +174,17 @@ jobs:
         if: matrix.platform == 'iOS'
         run: npm run ios:boot:start --prefix app/mobile-e2e
 
-      - name: Restore npm cache
-        id: npm-cache
+      # node_modules keyed on the lockfile hash is the exact install result —
+      # a hit lets npm ci skip entirely. The ~/.npm cacache this replaces kept
+      # every tarball under a rolling prefix and took ~4.5 min to restore.
+      - name: Restore node_modules
+        id: node-modules-cache
         uses: actions/cache/restore@v6
         with:
-          path: ~/.npm
-          key: ${{ runner.os }}-npm-mobile-e2e-${{ steps.npm-key.outputs.hash }}
-          restore-keys: ${{ runner.os }}-npm-mobile-e2e-
+          path: |
+            devops/node_modules
+            app/mobile-e2e/node_modules
+          key: ${{ runner.os }}-node-modules-e2e-${{ steps.npm-key.outputs.hash }}
 
       # The coverage tree baseline is published only by successful master push
       # runs. Missing or unreadable baselines are not an error here — the
@@ -209,6 +223,7 @@ jobs:
             --compare "${BASELINE_ARGS[@]}" "${FORCE_ARGS[@]}"
 
       - name: Install build and Appium dependencies
+        if: ${{ steps.node-modules-cache.outputs.cache-hit != 'true' }}
         run: |
           npm ci --prefix devops --no-audit
           npm ci --prefix app/mobile-e2e --no-audit
@@ -234,15 +249,17 @@ jobs:
         background: true
         run: npm run ios:wda --prefix app/mobile-e2e
 
-      # npm ci is done here, so ~/.npm is frozen — the tar+upload can run in
-      # the background; the implicit wait-all before job cleanup completes it.
-      - name: Save npm cache
-        if: ${{ github.ref == 'refs/heads/master' && steps.npm-cache.outputs.cache-hit != 'true' }}
+      # npm ci is done here, so node_modules is frozen — the tar+upload can run
+      # in the background; the implicit wait-all before job cleanup completes it.
+      - name: Save node_modules
+        if: ${{ github.ref == 'refs/heads/master' && steps.node-modules-cache.outputs.cache-hit != 'true' }}
         background: true
         uses: actions/cache/save@v6
         with:
-          path: ~/.npm
-          key: ${{ steps.npm-cache.outputs.cache-primary-key }}
+          path: |
+            devops/node_modules
+            app/mobile-e2e/node_modules
+          key: ${{ runner.os }}-node-modules-e2e-${{ steps.npm-key.outputs.hash }}
 
       - name: Validate the test harness
         working-directory: app
@@ -277,12 +294,38 @@ jobs:
       - name: Install matching perushim catalog and notes
         run: python3 app/devops/prepare_perushim_assets.py --source "${{ runner.temp }}/perushim-sqlite" --app-directory app/BibleOnSite --platform ${{ matrix.platform }}
 
+      # .NET's DerivedData equivalent: obj intermediates from the last master
+      # build turn the simulator compile incremental. Master-only saves below;
+      # PR runs restore through the toolchain-prefixed fallback key.
+      - name: Restore iOS obj intermediates
+        id: obj-cache
+        if: matrix.platform == 'iOS'
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            app/BibleOnSite/obj
+            app/BibleOnSite.Tests.MobileE2E/obj
+            app/devops/obj
+          key: ios-e2e-obj-${{ steps.toolchain.outputs.id }}-${{ github.sha }}
+          restore-keys: |
+            ios-e2e-obj-${{ steps.toolchain.outputs.id }}-
+
       - name: Build complete simulator app
         # Explicit bash enables pipefail, preserving npm failures through tee.
         shell: bash
         run: |
           mkdir -p "$MOBILE_E2E_ARTIFACTS"
           npm run build:app --prefix app/mobile-e2e 2>&1 | tee "$MOBILE_E2E_ARTIFACTS/build.log"
+
+      - name: Save iOS obj intermediates
+        if: ${{ matrix.platform == 'iOS' && github.ref == 'refs/heads/master' && steps.obj-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            app/BibleOnSite/obj
+            app/BibleOnSite.Tests.MobileE2E/obj
+            app/devops/obj
+          key: ios-e2e-obj-${{ steps.toolchain.outputs.id }}-${{ github.sha }}
 
       - name: Save NuGet packages
         if: ${{ github.ref == 'refs/heads/master' && steps.nuget-cache.outputs.cache-hit != 'true' }}

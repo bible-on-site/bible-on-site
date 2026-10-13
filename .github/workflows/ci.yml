@@ -1777,12 +1777,34 @@ jobs:
         with:
           node-version-file: web/bible-on-site/package.json
 
+      - name: Hash Playwright lockfile inputs
+        id: playwright-key
+        run: node ${{ github.workspace }}/devops/github/ci/files-hash.mjs web/bible-on-site/package-lock.json
+
+      # This job runs on PRs only, so the cache is PR-scoped by design: a save
+      # on miss speeds up reruns and later pushes of the same pull request,
+      # which are the runs that repeat the ~500MB browser download.
+      - name: Restore Playwright browsers
+        id: playwright-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ~/Library/Caches/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright-key.outputs.hash }}
+          restore-keys: playwright-${{ runner.os }}-
+
       - name: Verify native audio time origin on Chromium and Apple WebKit
         working-directory: web/bible-on-site
         run: |
           npm ci --ignore-scripts --no-audit
           npx playwright install chromium webkit
           npx playwright test --config playwright.recitation.config.ts
+
+      - name: Save Playwright browsers
+        if: ${{ steps.playwright-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: ~/Library/Caches/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright-key.outputs.hash }}
 
   bulletin_ci:
     name: Bulletin CI
