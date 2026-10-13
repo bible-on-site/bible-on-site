@@ -117,6 +117,20 @@ public class E2ECoverageApplyTests
     }
 
     [Fact]
+    public void Empty_dumps_do_not_claim_that_the_app_came_from_another_build()
+    {
+        var warnings = new List<string>();
+        var dump = """{"snapshot":{"format":"altcover-visits/1","modules":{}}}""";
+        var applied = E2ECoverageApply.ApplyDumps(Modules(), [("empty.json", dump)],
+            out var stats, warnings.Add);
+
+        Assert.Equal(0, applied);
+        Assert.Equal(1, stats.IncompatibleDumps);
+        Assert.Contains("no recorded modules", Assert.Single(warnings));
+        Assert.DoesNotContain("different build", warnings[0]);
+    }
+
+    [Fact]
     public void Counts_dumps_without_a_snapshot_as_incompatible()
     {
         var modules = Modules();
