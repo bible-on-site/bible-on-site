@@ -2,7 +2,7 @@ using Xunit;
 
 namespace BibleOnSite.Tests.MobileE2E.Configuration;
 
-// The iOS CI leg splits the suite across two simulators keyed on the Shard
+// Optional sharded iOS runs split the suite across two simulators by the Shard
 // trait (#2083). An iOS-applicable class without exactly one Shard=1|2 value
 // matches no shard filter and would silently drop from every iOS run while
 // still running on Android — this guard keeps the partition complete.
