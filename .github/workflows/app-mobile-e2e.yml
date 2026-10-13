@@ -472,9 +472,11 @@ jobs:
       # from the instrumented app at the end of every scenario. This applies
       # them onto the build's OpenCover template and emits lcov.info. The step
       # also runs after a failed pilot so partial coverage stays diagnosable;
-      # a missing template or a run with zero dumps fails loudly here.
+      # a missing template or a run with zero dumps fails loudly here. Canceled
+      # runs skip processing so they release the runner for the replacement;
+      # the unconditional diagnostic upload below still preserves raw evidence.
       - name: Apply app-process coverage dumps
-        if: always() && steps.build-app.outcome != 'skipped'
+        if: always() && !cancelled() && steps.build-app.outcome != 'skipped'
         id: coverage-apply
         working-directory: app
         run: dotnet run --project devops -- CoverageMobileE2E
@@ -494,7 +496,7 @@ jobs:
       # instrumented-coverage artifacts (pre-#2156 layout) skip extraction —
       # the automation-id channel stands alone.
       - name: Extract executable coverage tree
-        if: always()
+        if: always() && !cancelled()
         id: exec-tree
         env:
           # Each matrix leg runs exactly one pilot; the other's outcome is
@@ -525,7 +527,7 @@ jobs:
       # coverage — but the tree is marked incomplete so a partial run can never
       # shrink the trusted baseline.
       - name: Collect per-test coverage evidence
-        if: always()
+        if: always() && !cancelled()
         id: collect
         env:
           # Each matrix leg runs exactly one pilot; the other's outcome is
