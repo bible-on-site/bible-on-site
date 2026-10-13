@@ -143,6 +143,41 @@ options, device profile, readiness flow or the runner-action version change;
 bump nothing else by hand — emulator and system-image updates rotate keys on
 their own.
 
+## MAUI workload caching
+
+Both legs cache the workload payload under `$DOTNET_ROOT` (`packs`,
+`metadata`, `sdk-manifests`, `template-packs`) under
+`<os>-<arch>-dotnet-<sdk>-<workload>-<set>` — the `dotnet workload install`
+download is a multi-GB silent NuGet fetch (~6 min cold), and restored packs
+turn the install into a verify no-op. Exact key only: a partial restore is
+worse than downloading. `DOTNET_SDK_VERSION`/`MAUI_WORKLOAD_SET` are the single
+source for the pins shared by setup-dotnet, the toolchain id and the install.
+Saves run in the background on `push`/`workflow_dispatch` misses.
+
+## iOS simulator state caching
+
+The iOS leg caches `~/Library/Developer/CoreSimulator/Devices/<udid>` under
+`macOS-ios-sim-<udid>-<toolchain>-<recipe>`. The runner image bakes a fixed
+device UDID per image version, so the key self-invalidates on every image
+update, and the toolchain stamp covers updates that keep the UDID; there are
+no restore-keys, since another device's state must never load over this one.
+`ios:boot:resolve` runs the same selection as the boot path — without the
+runtime download — and emits the UDID before restore, and `selectSimulator`
+breaks name+runtime ties on UDID so resolve, boot and capture always agree.
+
+Restoring a previously booted device skips the multi-minute first-boot
+provisioning inside `simctl boot`. Capture runs post-test through
+`ios-sim-state.mjs quiesce`: it removes the test app and WebDriverAgent so the
+saved state stays clean (a leftover app could make Appium skip reinstalling the
+fresh build), then shuts the device down so the directory is a consistent
+Shutdown image rather than a mid-write Booted one. Only a fully Booted device
+whose UDID matches the resolved key is captured — a runtime download, a
+deregistered device or an unfinished boot all degrade to `saved=false` and the
+run simply falls back to a cold boot next time. Saves follow the same
+push/`workflow_dispatch` publishing rule as the Android caches; pull requests
+only restore. Bump `IOS_SIM_STATE_RECIPE` when the capture or restore semantics
+change.
+
 ## Running locally
 
 Install the platform's .NET MAUI workload, Android SDK/JDK or compatible Xcode,
@@ -159,7 +194,11 @@ it touches no `node_modules`, so it can run before `npm ci` — and
 `ios:boot:wait` then runs as a `background: true` step once dependencies are
 installed, overlapping the readiness monitor and Appium bridge preflight with
 the MAUI workload install and the app build. A `wait` step before the tests is
-the gate that surfaces the finished boot and the exported variables.
+the gate that surfaces the finished boot and the exported variables. The
+coverage-tree baseline download and test selection also run as one background
+step — the baseline REST fetch sees 1s–2m20s transfer variance, so it never
+stalls `npm ci`, the boot or the build; each pilot waits on the manifest
+through `wait`/`wait-all`.
 `MOBILE_APP_PATH` can select another compatible build. Each local
 run owns an Appium server on `127.0.0.1:4723` (override with
 `MOBILE_APPIUM_PORT`); keep that port free. To reproduce the CI shard split
