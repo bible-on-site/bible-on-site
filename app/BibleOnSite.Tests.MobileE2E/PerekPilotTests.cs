@@ -56,8 +56,7 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         Assert.True(input.Location.X + input.Size.Width <= navigation.Location.X, "Back belongs at the right edge in RTL.");
         Platform.Tap(Driver, Page.WaitFor("SearchResultTitle", element => element.Text == "בראשית א"));
         AssertRegularReader();
-        Platform.GoBack(Driver);
-        Page.WaitFor("PerekSearchInput", element => element.Text == "בראשיט 1");
+        Page.GoBackTo("PerekSearchInput", element => element.Text == "בראשיט 1");
         Page.Tap("ClearSearchButton");
         Page.WaitFor("RecentSearchPhrase", element => element.Text == "בראשיט 1");
         Platform.Tap(Driver, Page.WaitFor("RecentSearchPhrase", element => element.Text == "בראשיט 1"));
@@ -86,8 +85,7 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         // app — same loaded-runner cold path as WaitForStartup (2 minutes).
         Page.WaitFor("PerekSource", element => element.Text == "בראשית א", TimeSpan.FromMinutes(3));
         AssertRegularReader();
-        Platform.GoBack(Driver!);
-        Page.WaitFor("PerekSearchInput", element => element.Text == "בראשיט 1");
+        Page.GoBackTo("PerekSearchInput", element => element.Text == "בראשיט 1");
         Page.WaitFor("SearchResultTitle", element => element.Text == "בראשית א");
 
         SearchFor("ויעש אלהים את הרקיע", "בראשית א ז");
@@ -98,8 +96,7 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         Platform.Tap(Driver, result);
         AssertRegularReader();
         Page.WaitFor("PasukNumber", element => element.Text == "ז");
-        Platform.GoBack(Driver);
-        Page.WaitFor("PerekSearchInput", element => element.Text == "ויעש אלהים את הרקיע");
+        Page.GoBackTo("PerekSearchInput", element => element.Text == "ויעש אלהים את הרקיע");
         Page.WaitFor("SearchResultTitle", element => element.Text == "בראשית א ז");
         Page.Tap("SearchNavigationButton");
         AssertRegularReader();
@@ -141,19 +138,16 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         Page.Tap(Platform.FlyoutButton);
         Page.Tap("FlyoutPreferences");
         Page.WaitFor("FontFactorSlider");
-        Platform.GoBack(driver);
-        Page.WaitFor("PerekSource", element => element.Text == readerSource);
+        Page.GoBackTo("PerekSource", element => element.Text == readerSource);
         Page.WaitFor("InlinePerushName", element => element.Text == commentaryName);
         AssertRegularReader();
-        Platform.GoBack(driver);
-        Page.WaitFor("PerekSearchInput", element => element.Text == "בראשית ברא אלהים");
+        Page.GoBackTo("PerekSearchInput", element => element.Text == "בראשית ברא אלהים");
         var restored = Page.WaitFor("SearchResultTitle", element => element.Text == title);
         Assert.Equal(position, restored.Location);
         var alternative = Page.WaitFor("SearchResultTitle", element => element.Text == "בראשית א א");
         Platform.Tap(driver, alternative);
         AssertRegularReader();
-        Platform.GoBack(driver);
-        Page.WaitFor("PerekSearchInput", element => element.Text == "בראשית ברא אלהים");
+        Page.GoBackTo("PerekSearchInput", element => element.Text == "בראשית ברא אלהים");
         if (Configuration.KeepAppForReview)
         {
             Platform.Tap(driver, Page.WaitFor("SearchResultTitle", element => element.Text == title));
@@ -259,8 +253,7 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         Assert.True(Page.WaitFor("FontFactorSlider").Enabled);
         Assert.True(Page.WaitFor("PerekTodaysRadio").Enabled);
         Assert.True(Page.WaitFor("PerekLastRadio").Enabled);
-        Platform.GoBack(Driver!);
-        Page.WaitFor("PerekSource", element => element.Text == source);
+        Page.GoBackTo("PerekSource", element => element.Text == source);
         Page.AssertBottomNavigationLayout();
     });
 }

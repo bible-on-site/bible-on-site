@@ -138,6 +138,56 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
         throw new WebDriverTimeoutException($"The frame of {locator} did not stabilize within {timeout.TotalSeconds} seconds.");
     }
 
+    /// <summary>
+    /// The iOS edge-back gesture races the reader's own recognizers and a
+    /// delivered gesture is sometimes dropped without any page change (#1306):
+    /// re-issue it while the destination element stays absent. Presence — not
+    /// the condition — ends retries, so a slow state restore (search text,
+    /// reader label) waits normally instead of navigating back a second time.
+    /// </summary>
+    public AppiumElement GoBackTo(string automationId, Func<AppiumElement, bool> condition)
+    {
+        var locator = platform.AutomationId(automationId);
+        for (var attempt = 0; attempt < MaxBackAttempts; attempt++)
+        {
+            if (attempt > 0)
+            {
+                DismissCapturedFlyout();
+            }
+            platform.GoBack(driver);
+            try
+            {
+                WaitFor(locator, _ => true, BackResponseWindow);
+                break;
+            }
+            catch (WebDriverTimeoutException)
+            {
+                // The destination stayed absent through a full settle window:
+                // the gesture was dropped rather than a late transition.
+            }
+        }
+        return WaitFor(locator, condition, TimeSpan.FromSeconds(45));
+    }
+
+    /// <summary>
+    /// A right-edge gesture the app captured as a drawer-open leaves the flyout
+    /// up instead of navigating back; close it so the retry reaches the page.
+    /// </summary>
+    private void DismissCapturedFlyout()
+    {
+        var flyout = driver.FindElements(platform.AutomationId("FlyoutPreferences"))
+            .FirstOrDefault(element => element.Displayed);
+        if (flyout == null)
+        {
+            return;
+        }
+        platform.DismissFlyoutViaScrim(driver);
+        WaitForHidden("FlyoutPreferences");
+    }
+
+    private static readonly TimeSpan BackResponseWindow = TimeSpan.FromSeconds(15);
+    private const int MaxBackAttempts = 3;
+
     public void Tap(string automationId) => Tap(platform.AutomationId(automationId));
 
     public void Tap(By locator) => platform.Tap(driver, WaitFor(locator, platform.CanTap));
