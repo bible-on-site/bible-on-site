@@ -104,6 +104,7 @@ async function sampleIosApp() {
     // already terminated the app simply leaves no PID row to find.
     const listing = await execute("xcrun", ["simctl", "spawn", process.env.MOBILE_UDID,
       "launchctl", "list"], { timeout: 30000 });
+    writeFileSync(resolve(artifacts, "native-processes.txt"), listing.stdout);
     for (const pid of iosAppPids(listing.stdout)) {
       await execute("sample", [pid, "2", "1", "-mayDie", "-file", resolve(artifacts, `native-stack-${pid}.txt`)],
         { timeout: 120000 });
