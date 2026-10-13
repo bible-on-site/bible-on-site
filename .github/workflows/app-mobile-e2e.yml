@@ -287,16 +287,19 @@ jobs:
           key: ${{ runner.os }}-node-modules-e2e-${{ steps.npm-key.outputs.hash }}
 
       # .NET's DerivedData equivalent: obj intermediates from the last master
-      # build turn the simulator compile incremental. Restored before the
+      # build turn the harness compile incremental. Restored before the
       # harness so its devops compile reuses them too. Master-only saves
       # below; PR runs restore through the toolchain-prefixed fallback key.
+      # app/BibleOnSite/obj is deliberately excluded: its codesign skip-stamps
+      # let a cross-commit restore emit a .app whose signature no longer
+      # covers its pages — the run dies at launch with SIGKILL Invalid Page
+      # (observed on this branch's first completed pilot, twice).
       - name: Restore iOS obj intermediates
         id: obj-cache
         if: matrix.platform == 'iOS'
         uses: actions/cache/restore@v6
         with:
           path: |
-            app/BibleOnSite/obj
             app/BibleOnSite.Tests.MobileE2E/obj
             app/devops/obj
           key: ios-e2e-obj-${{ steps.toolchain.outputs.id }}-${{ github.sha }}
@@ -376,7 +379,6 @@ jobs:
         uses: actions/cache/save@v6
         with:
           path: |
-            app/BibleOnSite/obj
             app/BibleOnSite.Tests.MobileE2E/obj
             app/devops/obj
           key: ios-e2e-obj-${{ steps.toolchain.outputs.id }}-${{ github.sha }}
