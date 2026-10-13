@@ -52,7 +52,7 @@ mod tests {
             hebdate: None,
             tseit: None,
             header: Some("Header".to_string()),
-            pasuk_count: None,
+            pasuk_count: Some(31),
         }
     }
 

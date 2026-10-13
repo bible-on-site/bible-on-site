@@ -128,14 +128,34 @@ class ReleaseArtifactTests(unittest.TestCase):
                     with self.assertRaises(ValueError):
                         verify_module.verify(package, root / "catalog.json", "iOS", packs, aars, payloads, extract)
 
-    def test_aa_payload_rejects_non_apple_archive_bytes(self):
+    def test_aa_payload_propagates_decoder_errors_for_invalid_and_truncated_archives(self):
+        for encoded in (b"not an apple archive", b"pbze"):
+            with self.subTest(encoded=encoded), tempfile.TemporaryDirectory() as temporary, \
+                    unittest.mock.patch.object(verify_module.shutil, "which", return_value="/usr/bin/aa"), \
+                    unittest.mock.patch.object(verify_module.subprocess, "run") as decoder:
+                root = Path(temporary)
+                archive = root / "recitation_1.aar"
+                archive.write_bytes(encoded)
+                decoder.return_value = verify_module.subprocess.CompletedProcess(
+                    [], 1, stdout="", stderr="invalid or truncated archive")
+                with self.assertRaisesRegex(ValueError, "aa extract failed.*invalid or truncated archive"):
+                    verify_module.aa_payload(archive, "recitation_1.zip", root)
+                decoder.assert_called_once()
+
+    def test_aa_payload_delegates_compressed_archive_decoding_to_apple(self):
         with tempfile.TemporaryDirectory() as temporary, \
-                unittest.mock.patch.object(verify_module.shutil, "which", return_value="/usr/bin/aa"):
+                unittest.mock.patch.object(verify_module.shutil, "which", return_value="/usr/bin/aa"), \
+                unittest.mock.patch.object(verify_module.subprocess, "run") as decoder:
             root = Path(temporary)
             archive = root / "recitation_1.aar"
-            archive.write_bytes(b"not an apple archive")
-            with self.assertRaisesRegex(ValueError, "not an Apple Archive"):
-                verify_module.aa_payload(archive, "recitation_1.zip", root)
+            archive.write_bytes(b"pbze compressed archive fixture")
+            payload = root / "recitation_1.zip"
+            payload.write_bytes(b"decoded payload")
+            decoder.return_value = verify_module.subprocess.CompletedProcess([], 0, stdout="", stderr="")
+            self.assertEqual(verify_module.aa_payload(archive, payload.name, root), payload)
+            decoder.assert_called_once_with(
+                ["/usr/bin/aa", "extract", "-i", str(archive), "-d", str(root)],
+                capture_output=True, text=True)
 
     def test_aa_payload_requires_the_aa_tool(self):
         with tempfile.TemporaryDirectory() as temporary, \
