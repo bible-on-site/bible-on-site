@@ -225,7 +225,9 @@ public class HtmlViewHandler : ViewHandler<HtmlView, ViewportTextView>
                 // Snapshot before the mutable instance is disposed: measure
                 // boundings run on this immutable copy off the main thread.
                 _appliedText = (NSAttributedString)attributedString.Copy();
+                NativeReaderTrace.Write($"text-apply:start length={attributedString.Length}");
                 platformView.AttributedText = attributedString;
+                NativeReaderTrace.Write("text-apply:end");
             }
             else
             {
@@ -373,9 +375,11 @@ public class HtmlViewHandler : ViewHandler<HtmlView, ViewportTextView>
         var serial = Interlocked.Increment(ref _measureSerial);
         Task.Run(() =>
         {
+            NativeReaderTrace.Write($"text-measure:start length={text.Length} width={width}");
             var rect = text.GetBoundingRect(new CGSize(width, NFloat.MaxValue),
                 NSStringDrawingOptions.UsesLineFragmentOrigin | NSStringDrawingOptions.UsesFontLeading,
                 null);
+            NativeReaderTrace.Write($"text-measure:end height={rect.Height}");
             MainThread.BeginInvokeOnMainThread(() =>
             {
                 if (serial != Volatile.Read(ref _measureSerial) ||
