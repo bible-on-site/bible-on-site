@@ -93,6 +93,7 @@ namespace AltCover.Recorder
 			finally
 			{
 				listener.Stop();
+				listener.Server.Dispose();
 			}
 		}
 
