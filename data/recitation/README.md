@@ -354,13 +354,23 @@ Serve with `--recovery-database <separate-preview.sqlite> --recovery-output <pre
 
 `listening_tail.py` prepares diagnostic-only trailing-vowel candidates from the pinned CTC character/separator path. It never changes the automatic worker, pads endpoints or approves a candidate. Every corrected boundary requires fresh human listening and the same complete-chapter geometry checks.
 
-New missing-review candidates retain the pinned CTC letter start and end by
-default, using `propose_path_boundaries(rows, evidence, {})`. Do not extend every
-word to `followingWordStartMs`: that includes the interword gap and can produce
-overlong cuts even when complete-chapter timing geometry passes. A separator or
-neighboring-word endpoint is a targeted proposal for a specific heard defect,
-with its original path evidence preserved. Forced alignment and geometry alone
-do not establish that a cut sounds correct.
+The pinned CTC letter endpoints are raw diagnostic evidence, not proof that a
+spoken ending is complete. Before installing a new listening queue, inspect each
+candidate against the original decoded source, including trailing vowels,
+frication and consonant decay. Do not send a known clipped letter endpoint back
+to the listener unchanged. Do not extend every word to `followingWordStartMs` or
+apply one offset: either can include a gap or part of the next word.
+
+For a first candidate, `source-inspected-initial-candidate-v1` supports individually
+inspected boundaries without inventing an earlier problem answer. It binds the
+unchanged pinned CPU/full-FP32/two-thread raw diagnostic, original letter rows and
+scores, source spectrum hash, context and per-word observations. It preserves
+canonical identities and all original timing geometry. The candidate remains
+unapproved: every cut needs genuine fresh hearing and a current source-bound
+GOOD answer; inherited listening and stale answers cannot approve it. Automatic
+worker/model/ASR gates are unchanged. Reported-problem revisions continue using
+`source-inspected-word-boundaries-v1` and their actual saved feedback. Neither
+source inspection nor forced alignment approves or publishes an interval.
 
 Letter endpoints can also stop before a spoken vowel finishes. When a reported
 defect falls between the recorded CTC endpoints, inspect the original decoded
