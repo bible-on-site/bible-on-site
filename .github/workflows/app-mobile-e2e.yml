@@ -116,6 +116,11 @@ jobs:
       # Same idea for the iOS device-state capture below: bump when the quiesce
       # or restore semantics change so a differently-captured dir cannot load.
       IOS_SIM_STATE_RECIPE: r1
+      # Single source for the .NET SDK and workload-set pins (see #1871):
+      # setup-dotnet, the toolchain cache id and the workload install all read
+      # from here so a bump cannot skew the cache keys.
+      DOTNET_SDK_VERSION: "10.0.401"
+      MAUI_WORKLOAD_SET: "10.0.401.1"
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -124,7 +129,7 @@ jobs:
         uses: actions/setup-dotnet@v6
         with:
           # Keep aligned with Xcode 27 and the iOS packaging workload; see #1871.
-          dotnet-version: "10.0.401"
+          dotnet-version: ${{ env.DOTNET_SDK_VERSION }}
 
       - name: Hash NuGet dependency inputs
         id: nuget-key
@@ -170,7 +175,7 @@ jobs:
         run: |
           XCODE_VER=$(xcodebuild -version | tr '\n' '-' | tr -d ' ')
           DOTNET_VER=$(dotnet --version)
-          echo "id=xcode${XCODE_VER}-dotnet${DOTNET_VER}-mauiios10.0.401.1" >> "$GITHUB_OUTPUT"
+          echo "id=xcode${XCODE_VER}-dotnet${DOTNET_VER}-mauiios${{ env.MAUI_WORKLOAD_SET }}" >> "$GITHUB_OUTPUT"
 
       # Resolve-before-restore: the same selection boot uses, without the
       # runtime download — a miss leaves boot's download fallback untouched.
@@ -297,9 +302,37 @@ jobs:
           distribution: microsoft
           java-version: "21"
 
+      # The workload set is a multi-GB silent NuGet download (~6 min cold in
+      # run 38438842693); restored packs turn the install into a verify no-op.
+      # Exact key only — a partial restore is worse than downloading.
+      - name: Restore MAUI workload packs
+        id: workload-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            ${{ env.DOTNET_ROOT }}/packs
+            ${{ env.DOTNET_ROOT }}/metadata
+            ${{ env.DOTNET_ROOT }}/sdk-manifests
+            ${{ env.DOTNET_ROOT }}/template-packs
+          key: ${{ runner.os }}-${{ runner.arch }}-dotnet-${{ env.DOTNET_SDK_VERSION }}-${{ matrix.workload }}-${{ env.MAUI_WORKLOAD_SET }}
+
       - name: Install MAUI workload
         # 10.0.401.1 selects the iOS 27 SDK, which requires Xcode 27; see #1871.
-        run: dotnet workload install ${{ matrix.workload }} --version 10.0.401.1
+        run: dotnet workload install ${{ matrix.workload }} --version ${{ env.MAUI_WORKLOAD_SET }}
+
+      # Background like the other cache saves: compression and upload stay off
+      # the build's critical path; the wait-all gate still bounds it.
+      - name: Save MAUI workload packs
+        if: github.event_name != 'pull_request' && github.event_name != 'merge_group' && steps.workload-cache.outputs.cache-hit != 'true'
+        background: true
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            ${{ env.DOTNET_ROOT }}/packs
+            ${{ env.DOTNET_ROOT }}/metadata
+            ${{ env.DOTNET_ROOT }}/sdk-manifests
+            ${{ env.DOTNET_ROOT }}/template-packs
+          key: ${{ steps.workload-cache.outputs.cache-primary-key }}
 
       # The Debug build bundles perushim data from the checkout's packaged
       # paths, but the committed .gz fixture is only a local-dev fallback — the
