@@ -37,6 +37,14 @@ endpoint for this pilot, so startup exercises offline behavior without relying
 on production or an external API. The build restores any local API override
 after packaging. Canonical content comes from the existing packaged database.
 
+The pilot runs under an independent 15-minute wall-clock supervisor, including
+local harness builds and Appium setup. Cancellation stops the owned process
+group and escalates after three seconds, including child processes left behind
+by a terminated wrapper. `pilot-timing.json` records duration and timeout status.
+The sharded runner builds the harness once; its children use those outputs
+without restoring or rebuilding. Commentary searches use the shipped index and
+the ordinary 45-second deadline, including on a fresh install.
+
 ## Adding scenarios and platform differences
 
 Keep user flows and business assertions shared in the C# tests and page objects.

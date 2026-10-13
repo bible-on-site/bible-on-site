@@ -198,17 +198,11 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
     // reader appeared go back to the retained search page and tap once more.
     private (string Title, System.Drawing.Point Position) OpenCommentaryResult(string rowSuffix, string searchPhrase)
     {
-        // One cold-index attempt plus a single retry on the warm index.
+        // The shipped index serves the first search. A missed coordinate tap
+        // gets one retry, within the same ordinary interaction deadline.
         for (var attempt = 0; attempt < 2; attempt++)
         {
-            // A fresh installation builds the local index for the entire
-            // commentary package, and an interrupted import is discarded rather
-            // than resumed — a scenario boundary can throw away a nearly
-            // complete build, so the deadline must cover a full fresh import
-            // (~370s observed on a loaded macOS runner) plus result rendering
-            // and poll lag. The retry lands on the already-warm index.
-            var timeout = attempt == 0 ? TimeSpan.FromMinutes(8) : TimeSpan.FromSeconds(45);
-            var (commentary, _) = WaitForSettledRow(rowSuffix, timeout);
+            var (commentary, _) = WaitForSettledRow(rowSuffix, TimeSpan.FromSeconds(45));
             var title = commentary.Text;
             var position = commentary.Location;
             Platform.Tap(Driver!, commentary);
