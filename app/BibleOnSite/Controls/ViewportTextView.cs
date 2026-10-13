@@ -12,7 +12,7 @@ namespace BibleOnSite.Controls;
 /// </summary>
 public sealed class ViewportTextView : UIView
 {
-    public UITextView TextView { get; } = new()
+    public UITextView TextView { get; } = new TracedTextView()
     {
         Editable = false,
         ScrollEnabled = true,
@@ -22,6 +22,21 @@ public sealed class ViewportTextView : UIView
     };
 
     private readonly List<IDisposable> _scrollObservers = [];
+
+    private sealed class TracedTextView : UITextView
+    {
+        public override void LayoutSubviews()
+        {
+#if DEBUG
+            var length = TextStorage.Length;
+            if (length > 100_000) { NativeReaderTrace.Write($"text-layout:start length={length} frame={Frame}"); }
+#endif
+            base.LayoutSubviews();
+#if DEBUG
+            if (length > 100_000) { NativeReaderTrace.Write("text-layout:end"); }
+#endif
+        }
+    }
 
     public ViewportTextView()
     {
@@ -84,9 +99,19 @@ public sealed class ViewportTextView : UIView
         TextView.Hidden = viewport.Height <= 0 || horizontal.Height <= 0;
         if (TextView.Hidden) { return; }
         var frame = new CGRect(0, viewport.Offset, (double)Bounds.Width, viewport.Height);
-        if (TextView.Frame != frame) { TextView.Frame = frame; }
+        if (TextView.Frame != frame)
+        {
+            NativeReaderTrace.Write($"viewport-frame:start {frame}");
+            TextView.Frame = frame;
+            NativeReaderTrace.Write("viewport-frame:end");
+        }
         var offset = new CGPoint(0, viewport.Offset);
-        if (TextView.ContentOffset != offset) { TextView.SetContentOffset(offset, false); }
+        if (TextView.ContentOffset != offset)
+        {
+            NativeReaderTrace.Write($"viewport-offset:start {offset}");
+            TextView.SetContentOffset(offset, false);
+            NativeReaderTrace.Write("viewport-offset:end");
+        }
     }
 
     protected override void Dispose(bool disposing)

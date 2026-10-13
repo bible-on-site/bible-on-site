@@ -106,8 +106,13 @@ async function sampleIosApp() {
       "launchctl", "list"], { timeout: 30000 });
     writeFileSync(resolve(artifacts, "native-processes.txt"), listing.stdout);
     for (const pid of iosAppPids(listing.stdout)) {
-      await execute("sample", [pid, "2", "1", "-mayDie", "-file", resolve(artifacts, `native-stack-${pid}.txt`)],
+      const stats = await execute("ps", ["-p", pid, "-o", "pid,ppid,%cpu,rss,state"], { timeout: 30000 });
+      writeFileSync(resolve(artifacts, `native-process-${pid}.txt`), stats.stdout);
+      // User-level sampling returned images without thread frames. Preserve
+      // privileged sampler output as well as the scoped app's stack report.
+      const sampled = await execute("sudo", ["-n", "sample", pid, "2", "1", "-mayDie", "-file", resolve(artifacts, `native-stack-${pid}.txt`)],
         { timeout: 120000 });
+      writeFileSync(resolve(artifacts, `native-sampler-${pid}.txt`), sampled.stdout + sampled.stderr);
     }
   } catch (error) {
     diagnosticsFailed = true;
