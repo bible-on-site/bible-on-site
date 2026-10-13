@@ -16,8 +16,10 @@ public partial class SearchViewModel : ObservableObject
     private readonly Services.PerekDataService _perekDataService;
     private readonly SearchIndexService? _searchIndex;
     private readonly ArticleService? _articleService;
+    private readonly ITanahpediaService? _tanahpediaService;
     private readonly bool _useDefaultIndex;
     private readonly bool _useDefaultArticleService;
+    private readonly bool _useDefaultTanahpediaService;
     private CancellationTokenSource? _searchCancellation;
     private int _searchVersion;
     private IReadOnlyDictionary<int, Perush> _perushim = new Dictionary<int, Perush>();
@@ -56,6 +58,7 @@ public partial class SearchViewModel : ObservableObject
     {
         _useDefaultIndex = true;
         _useDefaultArticleService = true;
+        _useDefaultTanahpediaService = true;
     }
 
     public SearchViewModel(PerekDataService perekDataService) : this(perekDataService, null) { }
@@ -64,12 +67,17 @@ public partial class SearchViewModel : ObservableObject
         : this(perekDataService, searchIndex, null) { }
 
     public SearchViewModel(PerekDataService perekDataService, SearchIndexService? searchIndex, ArticleService? articleService)
+        : this(perekDataService, searchIndex, articleService, null) { }
+
+    public SearchViewModel(PerekDataService perekDataService, SearchIndexService? searchIndex, ArticleService? articleService, ITanahpediaService? tanahpediaService)
     {
         _perekDataService = perekDataService;
         _searchIndex = searchIndex;
         _articleService = articleService;
-        // Local kinds are enabled by default. Remote kinds (Articles) stay
-        // opt-in: a network round-trip must never gate an otherwise-local search.
+        _tanahpediaService = tanahpediaService;
+        // Local kinds are enabled by default. Remote kinds (Articles,
+        // Tanahpedia) stay opt-in: a network round-trip must never gate an
+        // otherwise-local search.
         _enabledFilters = new HashSet<SearchFilter>(Enum.GetValues<SearchFilter>().Where(filter => !filter.RequiresNetwork()));
 
         // Initialize all sefarim (1-35) as enabled
@@ -273,15 +281,20 @@ public partial class SearchViewModel : ObservableObject
         {
             IsLoading = true;
             var results = new List<SearchResult>(GetAuthorResults());
-            // Remote article hits run beside the local pipeline: the request is
+            var availability = new List<string>();
+            // Remote hits run beside the local pipeline: each request is
             // already in flight while the local indexes load, and a slow or
-            // unreachable API can never hold back local results. The task only
-            // carries the outcome back so the local result list stays single-writer.
+            // unreachable API can never hold back local results. The tasks
+            // only carry the outcome back so the result list stays
+            // single-writer.
             var articleMerge = filters.Contains(SearchFilter.Articles)
                 ? MergeArticleResultsAsync(phrase, limit, version, token)
                 : null;
-            // Article search is remote — it must not force the local perek DB load.
-            if (filters.Any(filter => filter != SearchFilter.Author && filter != SearchFilter.Articles))
+            var tanahpediaMerge = filters.Contains(SearchFilter.Tanahpedia)
+                ? MergeTanahpediaResultsAsync(phrase, limit, version, token)
+                : null;
+            // Remote kinds are remote — they must not force the local perek DB load.
+            if (filters.Any(filter => filter != SearchFilter.Author && !filter.RequiresNetwork()))
             {
                 await _perekDataService.LoadAsync().WaitAsync(token);
             }
@@ -329,22 +342,39 @@ public partial class SearchViewModel : ObservableObject
                 }
                 if (version == _searchVersion && filters.Contains(SearchFilter.Perush) && !searchIndex.CommentaryAvailable)
                 {
-                    AvailabilityMessage = "לחיפוש בפירושים, הורידו את הפירושים בהגדרות";
+                    availability.Add("לחיפוש בפירושים, הורידו את הפירושים בהגדרות");
+                    AvailabilityMessage = string.Join('\n', availability);
                 }
             }
+            // Consume each remote merge as it completes — a stalled request
+            // (e.g. article timeout) must not hold back an already-finished
+            // Tanahpedia response.
+            var merges = new List<Task<RemoteSearchOutcome?>>();
             if (articleMerge != null)
             {
-                var articleOutcome = await articleMerge;
-                if (version == _searchVersion && articleOutcome != null)
+                merges.Add(articleMerge);
+            }
+            if (tanahpediaMerge != null)
+            {
+                merges.Add(tanahpediaMerge);
+            }
+            while (merges.Count > 0)
+            {
+                var done = await Task.WhenAny(merges);
+                merges.Remove(done);
+                var outcome = await done;
+                if (version != _searchVersion || outcome == null)
                 {
-                    if (articleOutcome.UnavailableMessage != null)
-                    {
-                        AvailabilityMessage = articleOutcome.UnavailableMessage;
-                    }
-                    else if (articleOutcome.Hits != null)
-                    {
-                        results.AddRange(articleOutcome.Hits);
-                    }
+                    continue;
+                }
+                if (outcome.UnavailableMessage != null)
+                {
+                    availability.Add(outcome.UnavailableMessage);
+                    AvailabilityMessage = string.Join('\n', availability);
+                }
+                else if (outcome.Hits != null)
+                {
+                    results.AddRange(outcome.Hits);
                 }
             }
             token.ThrowIfCancellationRequested();
@@ -372,20 +402,20 @@ public partial class SearchViewModel : ObservableObject
         }
     }
 
-    /// <summary>Result of a remote article-content request: either merged hits or an availability note.</summary>
-    private sealed class ArticleSearchOutcome
+    /// <summary>Result of a remote search request: either merged hits or an availability note.</summary>
+    private sealed class RemoteSearchOutcome
     {
         public List<SearchResult>? Hits { get; init; }
         public string? UnavailableMessage { get; init; }
     }
 
     /// <summary>
-    /// Fetches remote article-content hits for an in-flight search. This is the
-    /// only kind that cannot be served locally, so failures degrade to an
-    /// availability note instead of an error — and never throw. Hits are
-    /// returned rather than published so the result list stays single-writer.
+    /// Fetches remote article-content hits for an in-flight search. Remote
+    /// kinds cannot be served locally, so failures degrade to an availability
+    /// note instead of an error — and never throw. Hits are returned rather
+    /// than published so the result list stays single-writer.
     /// </summary>
-    private async Task<ArticleSearchOutcome?> MergeArticleResultsAsync(string phrase, int limit, int version, CancellationToken token)
+    private async Task<RemoteSearchOutcome?> MergeArticleResultsAsync(string phrase, int limit, int version, CancellationToken token)
     {
         try
         {
@@ -401,7 +431,7 @@ public partial class SearchViewModel : ObservableObject
             }
             if (page == null)
             {
-                return new ArticleSearchOutcome { UnavailableMessage = "חיפוש תוכן מאמרים זמין רק עם חיבור רשת" };
+                return new RemoteSearchOutcome { UnavailableMessage = "חיפוש תוכן מאמרים זמין רק עם חיבור רשת" };
             }
             var hits = new List<SearchResult>(page.Hits.Count);
             foreach (var hit in page.Hits)
@@ -413,7 +443,7 @@ public partial class SearchViewModel : ObservableObject
                     Score = (int)Math.Round(hit.Score * 100),
                 });
             }
-            return new ArticleSearchOutcome { Hits = hits };
+            return new RemoteSearchOutcome { Hits = hits };
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
@@ -424,7 +454,57 @@ public partial class SearchViewModel : ObservableObject
         catch (Exception ex)
         {
             Console.Error.WriteLine($"Article search failed: {ex.Message}");
-            return new ArticleSearchOutcome { UnavailableMessage = "חיפוש תוכן מאמרים דורש חיבור רשת תקין" };
+            return new RemoteSearchOutcome { UnavailableMessage = "חיפוש תוכן מאמרים דורש חיבור רשת תקין" };
+        }
+    }
+
+    /// <summary>
+    /// Fetches remote Tanahpedia entry hits for an in-flight search — entry
+    /// titles, canonical/alias names and body text, ranked by the API exactly
+    /// like the website's /search provider. The service resolves aliases and
+    /// disambiguation targets to canonical entries (one hit per entry), so
+    /// navigation always uses <see cref="TanahpediaSearchResult.UniqueName"/>.
+    /// Failures degrade to an availability note — and never throw.
+    /// </summary>
+    private async Task<RemoteSearchOutcome?> MergeTanahpediaResultsAsync(string phrase, int limit, int version, CancellationToken token)
+    {
+        try
+        {
+            var service = _useDefaultTanahpediaService ? (ITanahpediaService?)TanahpediaService.Instance : _tanahpediaService;
+            if (service == null)
+            {
+                return null;
+            }
+            var hits = await service.SearchEntriesAsync(phrase, limit, token);
+            if (version != _searchVersion)
+            {
+                return null;
+            }
+            var results = new List<SearchResult>(hits.Count);
+            foreach (var hit in hits)
+            {
+                results.Add(new TanahpediaSearchResult(hit.Id, hit.UniqueName, hit.Excerpt, hit.Score, phrase)
+                {
+                    Title = hit.Title,
+                    // The excerpt is plain text; Snippet re-highlights the
+                    // phrase and HTML-escapes it for the subtitle label.
+                    SubtitleHtml = string.IsNullOrWhiteSpace(hit.Excerpt)
+                        ? string.Empty
+                        : SearchText.Snippet(hit.Excerpt, phrase),
+                });
+            }
+            return new RemoteSearchOutcome { Hits = results };
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+            // A newer query or a closed panel cancelled this request; the latest
+            // search version owns the result list now.
+            return null;
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Tanahpedia search failed: {ex.Message}");
+            return new RemoteSearchOutcome { UnavailableMessage = "חיפוש התנכפדיה אינו זמין כרגע" };
         }
     }
 

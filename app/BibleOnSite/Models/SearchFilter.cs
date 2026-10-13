@@ -21,7 +21,14 @@ public enum SearchFilter
     /// Search within article content through the API's semantic index.
     /// Requires network access — performed remotely, unlike the local filters.
     /// </summary>
-    Articles
+    Articles,
+
+    /// <summary>
+    /// Search within Tanahpedia encyclopedia entries (titles, canonical and
+    /// alias names, and body text) through the GraphQL API — the same
+    /// provider the website's /search uses. Requires network access.
+    /// </summary>
+    Tanahpedia
 }
 
 /// <summary>
@@ -38,6 +45,7 @@ public static class SearchFilterExtensions
             SearchFilter.Perush => "תוכן פירוש",
             SearchFilter.Perek => "פרק",
             SearchFilter.Articles => "תוכן מאמרים (חיבור רשת נדרש)",
+            SearchFilter.Tanahpedia => "תנכפדיה (חיבור רשת נדרש)",
             _ => filter.ToString()
         };
     }
@@ -47,5 +55,6 @@ public static class SearchFilterExtensions
     /// access. Remote kinds stay opt-in (off by default and on reset) so an
     /// unreachable API can never delay or degrade the local search kinds.
     /// </summary>
-    public static bool RequiresNetwork(this SearchFilter filter) => filter == SearchFilter.Articles;
+    public static bool RequiresNetwork(this SearchFilter filter) =>
+        filter is SearchFilter.Articles or SearchFilter.Tanahpedia;
 }
