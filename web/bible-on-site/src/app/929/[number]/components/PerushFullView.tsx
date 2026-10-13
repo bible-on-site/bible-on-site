@@ -97,6 +97,7 @@ export function PerushFullView({
 						{notes.map((note) => (
 							<div
 								key={`${note.pasuk}-${note.noteIdx}`}
+								id={`book-note-${toLetters(note.pasuk)}-${note.noteIdx + 1}`}
 								className={styles.noteContent}
 								// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify
 								dangerouslySetInnerHTML={{
