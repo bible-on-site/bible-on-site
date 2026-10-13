@@ -41,6 +41,7 @@ public static class MauiProgram
             {
                 handlers.AddHandler<HtmlView, HtmlViewHandler>();
 #if IOS || MACCATALYST
+                handlers.AddHandler<ReaderCellBorder, ReaderCellBorderHandler>();
 				// Use optimized CollectionView handler for iOS/Mac (default in .NET 10)
 				handlers.AddHandler<CollectionView, Microsoft.Maui.Controls.Handlers.Items2.CollectionViewHandler2>();
 #endif
