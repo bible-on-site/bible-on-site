@@ -39,8 +39,13 @@ public sealed class PerushimHtmlScrollStabilityTests(ITestOutputHelper output, M
 
         // Grouping must retain every paragraph, including text far outside the
         // visible viewport. This also exercises the formerly blocking AX lookup.
-        var longNote = Page.WaitFor("LongCommentaryDocument");
-        var spokenText = longNote.GetAttribute("label");
+        Page.WaitFor("CommentaryTextSection");
+        var sections = System.Xml.Linq.XDocument.Parse(Driver!.PageSource).Descendants()
+            .Where(element => (string?)element.Attribute("name") == "CommentaryTextSection")
+            .Select(element => (string?)element.Attribute("label") ?? string.Empty).ToArray();
+        Assert.NotEmpty(sections);
+        Assert.All(sections, text => Assert.InRange(text.Length, 1, 1024));
+        var spokenText = string.Concat(sections);
         Assert.Equal(2200, System.Text.RegularExpressions.Regex.Matches(spokenText, "פירוש ארוך").Count);
         Assert.Contains("עם פירוש נוסף על הפסוק.", spokenText);
         SaveDiagnostics("LongPerushimBeforeScroll", "passed");
