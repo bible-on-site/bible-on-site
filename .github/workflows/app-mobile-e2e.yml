@@ -338,6 +338,12 @@ jobs:
           mkdir -p "$MOBILE_E2E_ARTIFACTS"
           npm run build:app --prefix app/mobile-e2e 2>&1 | tee "$MOBILE_E2E_ARTIFACTS/build.log"
 
+      # Cached native outputs can retain stale code-signing pages. Sign the
+      # final simulator payload inside out and verify it before any launch.
+      - name: Sign and verify iOS simulator app
+        if: matrix.platform == 'iOS'
+        run: npm run ios:sign --prefix app/mobile-e2e
+
       - name: Save iOS obj intermediates
         if: ${{ matrix.platform == 'iOS' && github.ref == 'refs/heads/master' && steps.obj-cache.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@v6
