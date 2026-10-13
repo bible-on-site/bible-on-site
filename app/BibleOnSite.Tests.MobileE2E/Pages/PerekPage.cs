@@ -31,16 +31,18 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
     private AppiumElement WaitFor(By locator, Func<AppiumElement, bool> condition, TimeSpan timeout)
     {
         var deadline = DateTime.UtcNow.Add(timeout);
-        // Window.Size is a device round-trip; on iOS it costs ~0.4s. The
-        // orientation cannot change while this synchronous poll runs, so a
-        // single fetch per call keeps the per-element filter loop cheap.
-        var window = driver.Manage().Window.Size;
+        // Window.Size is a device round-trip; on iOS it costs ~0.4s. One fetch
+        // per poll iteration (and only once candidates exist) keeps the
+        // per-element filter cheap while still picking up rotations between
+        // polls.
         while (DateTime.UtcNow < deadline)
         {
+            Size? window = null;
             try
             {
                 var element = driver.FindElements(locator)
-                    .FirstOrDefault(element => element.Displayed && HasVisibleCenter(element, window)
+                    .FirstOrDefault(element => element.Displayed
+                        && HasVisibleCenter(element, window ??= driver.Manage().Window.Size)
                         && condition(element));
                 if (element != null)
                 {
@@ -70,13 +72,14 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
         var locator = platform.AutomationId(automationId);
         var timeout = TimeSpan.FromSeconds(30);
         var deadline = DateTime.UtcNow.Add(timeout);
-        var window = driver.Manage().Window.Size;
         while (DateTime.UtcNow < deadline)
         {
+            Size? window = null;
             try
             {
                 var visible = driver.FindElements(locator)
-                    .Any(element => element.Displayed && HasVisibleCenter(element, window));
+                    .Any(element => element.Displayed
+                        && HasVisibleCenter(element, window ??= driver.Manage().Window.Size));
                 if (!visible)
                 {
                     return;
