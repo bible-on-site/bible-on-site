@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { mkdtempSync, existsSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -18,12 +19,12 @@ for (const code of [0, 7]) {
 const stubbornTree = `
 const {spawn} = require('node:child_process');
 const {writeFileSync} = require('node:fs');
-const child = spawn(process.execPath, ['-e', "process.on('SIGTERM', () => {}); setInterval(() => {}, 1000)"], {stdio:'ignore'});
+const child = spawn(process.execPath, ['-e', "process.on('SIGTERM', () => {}); process.send('ready'); setInterval(() => {}, 1000)"], {stdio:['ignore','ignore','ignore','ipc']});
 process.on('SIGTERM', () => process.exit(0));
-setTimeout(() => {
+child.once('message', () => {
   writeFileSync(process.argv[1], JSON.stringify([process.pid, child.pid]));
   if (process.argv[2] === "block") Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0);
-}, 200);
+});
 setInterval(() => {}, 1000);
 `;
 async function waitForTree(path) {
@@ -37,6 +38,18 @@ async function assertStopped(pid) {
   while (Date.now() < deadline) {
     try { process.kill(pid, 0); }
     catch (error) { if (error.code === "ESRCH") return; throw error; }
+    if (process.platform !== "win32") {
+      try {
+        const state = execFileSync("ps", ["-o", "stat=", "-p", String(pid)],
+          { encoding: "utf8", timeout: 1000, killSignal: "SIGKILL" }).trim();
+        // A zombie has exited and cannot execute code, although its PID still
+        // answers kill(0) while the OS/parent waits to reap its exit status.
+        if (/^[ZX]/.test(state)) return;
+      } catch (error) {
+        if (error.status === 1) return;
+        throw error;
+      }
+    }
     await new Promise(resolve => setTimeout(resolve, 20));
   }
   assert.fail(`Owned process ${pid} survived shutdown`);
@@ -46,12 +59,15 @@ for (const reason of ["deadline", "cancellation", "blocked-wrapper"]) {
     const directory = mkdtempSync(join(tmpdir(), "mobile-supervisor-"));
     const ready = join(directory, "pids.json");
     let run;
+    let triggerDeadline;
     try {
       run = supervise(process.execPath, ["-e", stubbornTree, ready, reason === "blocked-wrapper" ? "block" : "idle"], {
-        timeoutMs: reason === "cancellation" ? 10000 : 3000, graceMs: 100, stdio: "ignore",
+        graceMs: 100, stdio: "ignore",
+        scheduleDeadline(callback) { triggerDeadline = callback; },
       });
       const pids = await waitForTree(ready);
       if (reason === "cancellation") run.stop();
+      else triggerDeadline();
       assert.equal(await run.result, reason === "cancellation" ? 143 : 124);
       for (const pid of pids) await assertStopped(pid);
     } finally {
@@ -61,3 +77,12 @@ for (const reason of ["deadline", "cancellation", "blocked-wrapper"]) {
     }
   });
 }
+
+test("the production clock expires without waiting for child progress", async () => {
+  let expired = false;
+  const run = supervise(process.execPath, ["-e", "Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0)"], {
+    timeoutMs: 100, graceMs: 100, stdio: "ignore", onDeadline() { expired = true; },
+  });
+  assert.equal(await run.result, 124);
+  assert.equal(expired, true);
+});

@@ -11,6 +11,7 @@ export const PILOT_TIMEOUT_MS = 15 * 60 * 1000;
 export function supervise(command, args, {
   timeoutMs = PILOT_TIMEOUT_MS, graceMs = 3000, cwd, env = process.env,
   stdio = "inherit", onDeadline = () => {},
+  scheduleDeadline = callback => setTimeout(callback, timeoutMs), cancelDeadline = clearTimeout,
 } = {}) {
   const child = spawn(command, args, {
     cwd, env, stdio, windowsHide: true, detached: process.platform !== "win32",
@@ -24,7 +25,7 @@ export function supervise(command, args, {
   const finish = code => {
     if (finished) return;
     finished = true;
-    clearTimeout(timer);
+    cancelDeadline(timer);
     clearTimeout(escalation);
     process.off("SIGINT", interrupt);
     process.off("SIGTERM", terminate);
@@ -41,7 +42,25 @@ export function supervise(command, args, {
         process.kill(-child.pid, signal);
       }
     } catch (error) {
-      if (error.code !== "ESRCH") console.error("Could not stop the mobile process group:", error);
+      if (error.code === "ESRCH") return;
+      if (process.platform !== "win32" && error.code === "EPERM") {
+        // Darwin can retain a dead group's zombie records until reaping. A
+        // second signal has no work to do when every member already exited.
+        // An EPERM affecting live members remains an explicit shutdown error.
+        try {
+          const listing = execFileSync("ps", ["-axo", "pgid=,stat="], {
+            encoding: "utf8", timeout: 1000, killSignal: "SIGKILL", windowsHide: true,
+          });
+          const live = listing.split("\n").some(line => {
+            const [group, state] = line.trim().split(/\s+/);
+            return Number(group) === child.pid && state && !/^[ZX]/.test(state);
+          });
+          if (!live) return;
+        } catch (probeError) {
+          console.error("Could not verify the failed process-group signal:", probeError);
+        }
+      }
+      console.error("Could not stop the mobile process group:", error);
     }
   };
   const stop = (code = 143) => {
@@ -66,12 +85,12 @@ export function supervise(command, args, {
       finish(code ?? 1);
     }
   });
-  timer = setTimeout(() => {
+  timer = scheduleDeadline(() => {
     console.error(`Mobile pilot exceeded its ${timeoutMs / 60000}-minute wall-clock deadline.`);
     try { onDeadline(); }
     catch (error) { console.error("Could not save mobile deadline evidence:", error); }
     finally { stop(124); }
-  }, timeoutMs);
+  });
   return { child, result, stop };
 }
 
