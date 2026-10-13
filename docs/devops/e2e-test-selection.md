@@ -18,7 +18,7 @@ the executable-coverage tree produced by `devops/e2e-coverage-trees/`.
 | Real app-process coverage collection (AltCover + in-app recorder + per-test dumps) | In flight (#2156, branch `devin/e2e-coverage-merge`) | `app/BibleOnSite.E2eCoverage/`, `app/BibleOnSite.Tests.MobileE2E/AppCoverage.cs`, `app/devops/E2ECoverageApply.cs` |
 | Executable coverage-tree extraction | Merged (#2183) | `devops/e2e-coverage-trees/` |
 | Selector bridge: exec evidence unions into `coverage-tree.json` | Merged (#2195, #2230) | `devops/e2e-coverage-trees/to-selector-tree.ts`, `collect-appium --exec-tree`, `.github/workflows/app-mobile-e2e.yml` |
-| Playwright suites (website, admin, API): evidence, discovery, collectors, shadow CI | This slice | `web/shared/tests-util/e2e-impact.mjs`, `*/e2e-impact.json`, `collect-playwright`, `.github/workflows/ci.yml` |
+| Playwright suites (website, admin, API): evidence, discovery, collectors, shadow CI | This slice | `web/shared/tests-util/e2e-impact.ts`, `*/e2e-impact.json`, `collect-playwright`, `.github/workflows/ci.yml` |
 | AST-aware change comparison, dependency edges | Later slices | — |
 
 Two evidence channels exist today and answer different questions:
@@ -278,7 +278,7 @@ runners must execute it wholesale rather than by id.
 
 ### Evidence layout and the shared reporter
 
-`web/shared/tests-util/e2e-impact.mjs` is the single evidence module every
+`web/shared/tests-util/e2e-impact.ts` is the single evidence module every
 suite consumes. It does nothing unless `E2E_IMPACT_DIR` is set — each
 suite's Playwright config sets it to `<package>/.coverage/e2e-impact/` under
 `MEASURE_COV=1` (the `coverage:e2e` scripts) and registers the reporter.

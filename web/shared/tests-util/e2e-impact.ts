@@ -25,27 +25,62 @@
  * part of the identity: a selection cannot split a test across projects —
  * `--grep` runs it on every project — so per-test coverage unions across
  * Desktop/Mobile runs of the same test.
+ *
+ * TypeScript (not .mjs): Playwright loads reporters through its ESM path but
+ * compiles CJS-package test files to `require` — a shared .mjs ends up
+ * loaded through both module systems and fails under CI's Node.
  */
 import { createHash } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
+// Structural subsets of @playwright/test types — this file lives outside the
+// suites' node_modules reach, so it cannot import the package's types. Every
+// real TestInfo/TestCase/TestResult/Reporter satisfies these structurally.
+interface TestInfoLike {
+	titlePath: string[];
+	workerIndex: number;
+	retry: number;
+}
+interface TestCaseLike {
+	titlePath(): string[];
+	outcome(): string;
+}
+interface TestResultLike {
+	retry: number;
+	status: string;
+}
+interface RunConfigLike {
+	rootDir: string;
+}
+interface SuiteLike {
+	allTests(): TestCaseLike[];
+}
+interface ReporterLike {
+	onBegin(config: RunConfigLike, suite: SuiteLike): void;
+	onTestEnd(test: TestCaseLike, result: TestResultLike): void;
+	onEnd(): void;
+}
+
 const EVIDENCE_DIR_ENV = "E2E_IMPACT_DIR";
 
-export function impactEvidenceDir() {
+export function impactEvidenceDir(): string | null {
 	const dir = process.env[EVIDENCE_DIR_ENV];
 	return dir === undefined || dir === "" ? null : dir;
 }
 
-const normalizeSlashes = (value) => value.replace(/\\/g, "/");
+const normalizeSlashes = (value: string) => value.replace(/\\/g, "/");
 
 /**
  * The canonical parts of a test identity: titlePath element 1 is the project
  * name, element 2 the testDir-relative file, elements 3+ the describe/test
  * titles.
- * @param {string[]} titlePath
  */
-export function impactIdParts(titlePath) {
+export function impactIdParts(titlePath: string[]): {
+	project: string;
+	file: string;
+	titlePath: string[];
+} {
 	return {
 		project: titlePath[1] ?? "",
 		file: normalizeSlashes(titlePath[2] ?? ""),
@@ -57,7 +92,7 @@ export function impactIdParts(titlePath) {
  * `<file> :: <describe> :: <title>` — stable test identity. The file and
  * titles are titlePath elements 2+, so element 1 (the project) is skipped.
  */
-export function impactTestId(titlePath) {
+export function impactTestId(titlePath: string[]): string {
 	return titlePath
 		.slice(2)
 		.filter((part) => part !== "")
@@ -65,10 +100,10 @@ export function impactTestId(titlePath) {
 		.join(" :: ");
 }
 
-const shortHash = (id) =>
+const shortHash = (id: string) =>
 	createHash("sha256").update(id).digest("hex").slice(0, 16);
 
-const writeJson = (dir, segments, value) => {
+const writeJson = (dir: string, segments: string[], value: unknown) => {
 	const file = path.join(dir, ...segments);
 	mkdirSync(path.dirname(file), { recursive: true });
 	writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
@@ -76,16 +111,19 @@ const writeJson = (dir, segments, value) => {
 };
 
 /** Per-process sequence so several dumps of one test stay distinct. */
-const coverageSeq = new Map();
+const coverageSeq = new Map<string, number>();
 
 /**
  * Persists one istanbul coverage map attributed to the current test.
  * `realm` is `"browser"` for `window.__coverage__` (per-context, exact) or
  * `"server"` for the dev-server `/api/dev/coverage` drain (shared process —
  * may include a parallel worker's hits, so the collector widens with it).
- * @param {import("@playwright/test").TestInfo} testInfo
  */
-export function dumpImpactCoverage(testInfo, realm, coverage) {
+export function dumpImpactCoverage(
+	testInfo: TestInfoLike,
+	realm: "browser" | "server",
+	coverage: Record<string, unknown>,
+): void {
 	const dir = impactEvidenceDir();
 	if (dir === null || !coverage || Object.keys(coverage).length === 0) return;
 	const { file, titlePath, project } = impactIdParts(testInfo.titlePath);
@@ -109,7 +147,7 @@ export function dumpImpactCoverage(testInfo, realm, coverage) {
 	);
 }
 
-const outcomeOf = (test, result) => {
+const outcomeOf = (test: TestCaseLike, result: TestResultLike) => {
 	try {
 		return test.outcome();
 	} catch {
@@ -117,18 +155,25 @@ const outcomeOf = (test, result) => {
 	}
 };
 
+interface ImpactResultEntry {
+	id: string;
+	project: string;
+	file: string;
+	retry: number;
+	status: string;
+	outcome: string;
+}
+
 /**
  * Playwright reporter that persists discovery and outcome evidence.
  * In `--list` mode `onBegin` still runs, so the devops discovery command
  * reuses the exact same identity computation as a live run.
  */
-export default class E2eImpactReporter {
-	constructor() {
-		this.results = [];
-		this.dir = impactEvidenceDir();
-	}
+export default class E2eImpactReporter implements ReporterLike {
+	private readonly results: ImpactResultEntry[] = [];
+	private readonly dir = impactEvidenceDir();
 
-	onBegin(config, suite) {
+	onBegin(config: RunConfigLike, suite: SuiteLike) {
 		if (this.dir === null) return;
 		const tests = suite
 			.allTests()
@@ -151,7 +196,7 @@ export default class E2eImpactReporter {
 		});
 	}
 
-	onTestEnd(test, result) {
+	onTestEnd(test: TestCaseLike, result: TestResultLike) {
 		const titlePath = test.titlePath();
 		const { file, project } = impactIdParts(titlePath);
 		this.results.push({

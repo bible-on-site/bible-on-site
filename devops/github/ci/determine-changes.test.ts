@@ -42,10 +42,29 @@ describe("detectChanges", () => {
 		assert.equal(changes.website.ci_changed, false);
 	});
 
-	test("e2e-impact selector changes require app checks without a release", () => {
+	test("e2e-impact selector changes check every served suite without a release", () => {
+		// The devops selector drives Appium too; web/shared/tests-util feeds
+		// only the Playwright suites, so it does not mark the app.
+		for (const [file, marksApp] of [
+			["devops/github/ci/e2e-impact/select.ts", true],
+			["devops/github/ci/e2e-impact/e2e-impact.test.ts", true],
+			["web/shared/tests-util/e2e-impact.ts", false],
+		] as const) {
+			const changes = detectChanges([file]);
+			for (const key of ["website", "api", "admin"] as const) {
+				assert.deepEqual(
+					changes[key],
+					{ module_changed: false, ci_changed: true },
+					`${file} -> ${key}`,
+				);
+			}
+			assert.deepEqual(
+				changes.app,
+				{ module_changed: false, ci_changed: marksApp },
+				`${file} -> app`,
+			);
+		}
 		for (const file of [
-			"devops/github/ci/e2e-impact/select.ts",
-			"devops/github/ci/e2e-impact/e2e-impact.test.ts",
 			"devops/e2e-coverage-trees/extract.ts",
 			"devops/e2e-coverage-trees/to-selector-tree.ts",
 		]) {

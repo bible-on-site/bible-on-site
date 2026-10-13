@@ -7,7 +7,7 @@
  *
  * Test identity is `<testDir-relative file> :: <describe/test titles>`,
  * exactly what the runtime evidence helpers
- * (`web/shared/tests-util/e2e-impact.mjs`) compute from `titlePath.slice(2)`
+ * (`web/shared/tests-util/e2e-impact.ts`) compute from `titlePath.slice(2)`
  * — the project (titlePath[1]) is not part of identity because a selection
  * can never run a test on one project but not another.
  *
@@ -380,7 +380,7 @@ export function parsePlaywrightSource(source: string): {
 	return { titles, dynamic };
 }
 
-/** `<file> :: <describe> :: <title>` — mirrors impactTestId in e2e-impact.mjs. */
+/** `<file> :: <describe> :: <title>` — mirrors impactTestId in e2e-impact.ts. */
 export function playwrightTestId(file: string, titlePath: string[]): string {
 	return [file, ...titlePath].join(" :: ");
 }
