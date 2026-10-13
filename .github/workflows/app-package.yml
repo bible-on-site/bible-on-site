@@ -625,7 +625,7 @@ jobs:
           # ExtensionKit .appex cannot be produced by the .NET iOS toolchain; build
           # it unsigned here — the app packaging step re-signs it during embed.
           xcodebuild -project extensions/AssetPackDownloader/AssetPackDownloader.xcodeproj \
-            -target AssetPackDownloader \
+            -scheme AssetPackDownloader \
             -configuration Release \
             -derivedDataPath extensions/AssetPackDownloader/build \
             -destination 'generic/platform=iOS' \
