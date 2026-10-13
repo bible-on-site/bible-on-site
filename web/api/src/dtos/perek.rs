@@ -122,6 +122,9 @@ pub struct Perek {
     pub header: Option<String>,
     /// The source reference with gematry (Hebrew letters for numbers)
     pub compiled_source: Option<String>,
+    /// Canonical number of pesukim in the perek; NULL means the bound is
+    /// unknown (corpus counts not loaded), not that the perek is empty.
+    pub pasuk_count: Option<i32>,
 }
 
 impl From<Model> for Perek {
@@ -151,6 +154,7 @@ impl From<Model> for Perek {
             tseit: value.tseit.map(|t| t.to_string()),
             header: value.header,
             compiled_source,
+            pasuk_count: value.pasuk_count.map(|count| count as i32),
         }
     }
 }
@@ -187,6 +191,7 @@ mod tests {
             hebdate: Some("57850101".to_string()),
             tseit: Some(NaiveTime::from_hms_opt(20, 30, 0).unwrap()),
             header: Some("Opening".to_string()),
+            pasuk_count: Some(27),
         }
     }
 
@@ -285,6 +290,7 @@ mod tests {
         assert_eq!(dto.hebdate.as_deref(), Some("57850101"));
         assert_eq!(dto.tseit.as_deref(), Some("20:30:00"));
         assert_eq!(dto.header.as_deref(), Some("Opening"));
+        assert_eq!(dto.pasuk_count, Some(27));
         assert!(
             dto.compiled_hebdate
                 .as_deref()
