@@ -6,7 +6,10 @@ use crate::{
     services::article_search::{self, store, text},
 };
 use entities::article::{Column, Entity, Model};
-use sea_orm::{ColumnTrait, DbErr, EntityTrait, QueryFilter};
+use entities::article_covering_source::{
+    Column as CoveringSourceColumn, Entity as CoveringSourceEntity, Model as CoveringSourceModel,
+};
+use sea_orm::{ColumnTrait, DbErr, EntityTrait, QueryFilter, QueryOrder};
 
 /// Returns all articles from the database
 pub async fn find_all(db: &Database) -> Result<Vec<Model>, ServiceError> {
@@ -63,6 +66,33 @@ pub async fn find_by_author_id(db: &Database, author_id: i32) -> Result<Vec<Mode
         })?;
     tracing::info!("Found {} articles for author {}", articles.len(), author_id);
     Ok(articles)
+}
+
+/// Returns the article's persisted covering sources ordered by canonical
+/// coordinate (#2189 / epic #2175 §3). An empty result means no pesukim are
+/// mapped — consumers interpret it through the article's coverage_verified
+/// flag rather than as "covers nothing".
+pub async fn find_covering_sources_by_article_id(
+    db: &Database,
+    article_id: i32,
+) -> Result<Vec<CoveringSourceModel>, ServiceError> {
+    tracing::info_span!("articles_service::find_covering_sources_by_article_id", %article_id);
+    let sources = CoveringSourceEntity::find()
+        .filter(CoveringSourceColumn::ArticleId.eq(article_id))
+        .order_by_asc(CoveringSourceColumn::PerekId)
+        .order_by_asc(CoveringSourceColumn::Pasuk)
+        .all(db.get_connection())
+        .await
+        .map_err(|db_err| {
+            ServiceError::internal_server_error(INTERNAL_SERVER_ERROR, Some(db_err))
+        })?;
+    let covering_source_count = sources.len();
+    tracing::info!(
+        "Found {} covering sources for article {}",
+        covering_source_count,
+        article_id
+    );
+    Ok(sources)
 }
 
 /// Returns a 929-element vector where each index i contains the count of articles for perek (i + 1)
@@ -333,6 +363,7 @@ mod tests {
             name: format!("Article {id}"),
             priority: 1,
             content: Some(format!("content-{id}")),
+            coverage_verified: false,
         }
     }
 
@@ -720,5 +751,85 @@ mod tests {
             .expect("empty phrase");
         assert_eq!(results.total, 0);
         assert!(results.hits.is_empty());
+    }
+
+    fn covering_source_model(article_id: i32, perek_id: i32, pasuk: i16) -> CoveringSourceModel {
+        CoveringSourceModel {
+            article_id,
+            perek_id,
+            pasuk,
+            created_at: chrono::NaiveDate::from_ymd_opt(2026, 1, 1)
+                .unwrap()
+                .and_hms_opt(0, 0, 0)
+                .unwrap(),
+        }
+    }
+
+    #[tokio::test]
+    async fn find_covering_sources_by_article_id_returns_rows_ordered() {
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<CoveringSourceModel, Vec<CoveringSourceModel>, _>([vec![
+                    covering_source_model(7, 1, 5),
+                    covering_source_model(7, 1, 9),
+                    covering_source_model(7, 42, 2),
+                ]])
+                .into_connection(),
+        );
+
+        let sources = find_covering_sources_by_article_id(&db, 7)
+            .await
+            .expect("covering sources should load");
+
+        assert_eq!(
+            sources
+                .iter()
+                .map(|source| (source.perek_id, source.pasuk))
+                .collect::<Vec<_>>(),
+            vec![(1, 5), (1, 9), (42, 2)]
+        );
+    }
+
+    #[tokio::test]
+    async fn find_covering_sources_by_article_id_returns_empty_when_unmapped() {
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<CoveringSourceModel, Vec<CoveringSourceModel>, _>([vec![]])
+                .into_connection(),
+        );
+
+        let sources = find_covering_sources_by_article_id(&db, 7)
+            .await
+            .expect("unmapped article should return an empty set");
+
+        assert!(sources.is_empty());
+    }
+
+    #[tokio::test]
+    async fn find_covering_sources_by_article_id_returns_internal_server_error_on_db_failure() {
+        let db = create_mock_db_with_query_error("covering table missing");
+
+        let result = find_covering_sources_by_article_id(&db, 7).await;
+
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            ServiceError::InternalServerError(_)
+        ));
+    }
+
+    #[test]
+    fn article_covering_source_relations_generate_the_canonical_table_join() {
+        use sea_orm::{QueryTrait, Related};
+
+        let article_side = <Entity as Related<CoveringSourceEntity>>::find_related()
+            .build(sea_orm::DatabaseBackend::MySql)
+            .to_string();
+        assert!(article_side.contains("tanah_article_covering_source"));
+
+        let covering_side = <CoveringSourceEntity as Related<Entity>>::find_related()
+            .build(sea_orm::DatabaseBackend::MySql)
+            .to_string();
+        assert!(covering_side.contains("`tanah_article`"));
     }
 }

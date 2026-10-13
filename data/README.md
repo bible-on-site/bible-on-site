@@ -96,6 +96,14 @@ Jerusalem word links and the reverse occurrences table share the persisted `tana
 node data/mysql/scripts/generate-tanahpedia-occurrences.mjs --entry ירושלים --entity-type PLACE --spellings ירושלם,ירושלים,ירושליים,ירושלמה,ירושלימה --output data/mysql/tanahpedia_jerusalem_occurrences_data.sql
 ```
 
+`tanah_perek.pasuk_count` is canonical structural metadata — the number of pesukim the corpus holds per perek — used by the admin article covering-source write path to validate pasuk coordinates (epic #2175 §3; see `docs/data/reading-units.md`). `tanah_perek_pasuk_count_data.sql` fills all 929 rows through database deployment and is regenerated from the checked-in corpus dump, like the occurrences generator above:
+
+```bash
+node data/mysql/scripts/generate-perek-pasuk-counts.mjs --output data/mysql/tanah_perek_pasuk_count_data.sql
+```
+
+The generator reads the checked-in `web/bible-on-site/src/data/db/sefaria-dump-*.tanah_view.json` corpus; add `--check` to verify the file without rewriting. Regenerated `tanah view` MySQL output emits `pasuk_count` too, so future corpus regen keeps the counts in step.
+
 After that, when `tanahpedia_family_jacob_data.sql` is present, full populate applies the **יעקב** demo (Tanahpedia entry `יעקב`, parents, four wives including בלהה וזלפה as full wives per הכתב והקבלה בראשית לב כג, children, and brother עשו) only when the entry is missing. `mysql-apply-tanahpedia-families` forces the family/place demo scripts. The demo scripts use fixed UUIDs (`e200…` / `p200…` / `ea200…` — each script deletes only its own fixed demo rows before re-insert), so do not use the forced demo task as the normal content editing path after production content is edited remotely.
 
 **יעקב** does **not** come from `tanahpedia_legacy_migration.sql`; if the DB was filled without running the full data phase (e.g. prod sync only), run the family scripts explicitly (see below).

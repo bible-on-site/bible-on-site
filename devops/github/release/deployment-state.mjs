@@ -1,19 +1,9 @@
-import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-export const request = (endpoint, body) =>
-	JSON.parse(
-		execFileSync(
-			"gh",
-			["api", endpoint, ...(body ? ["--method", "POST", "--input", "-"] : [])],
-			{
-				input: body ? JSON.stringify(body) : undefined,
-				encoding: "utf8",
-				maxBuffer: 16 * 1024 * 1024,
-			},
-		),
-	);
+import { ghApi } from "./gh-api.mjs";
+
+export const request = (endpoint, body) => ghApi(endpoint, body);
 
 /** Runs inside the same target lock as the production writes. */
 export function startDeployment(
