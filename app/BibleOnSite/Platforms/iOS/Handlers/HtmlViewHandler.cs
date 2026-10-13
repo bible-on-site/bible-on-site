@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using Foundation;
 using Microsoft.Maui.Graphics;
 using Microsoft.Maui.Handlers;
@@ -12,7 +13,7 @@ namespace BibleOnSite.Handlers;
 /// iOS handler for HtmlView control.
 /// Renders managed HTML text runs in UITextView, including RTL justified paragraphs.
 /// </summary>
-public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
+public class HtmlViewHandler : ViewHandler<HtmlView, ViewportTextView>
 {
     public static IPropertyMapper<HtmlView, HtmlViewHandler> PropertyMapper = new PropertyMapper<HtmlView, HtmlViewHandler>(ViewMapper)
     {
@@ -50,33 +51,11 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
     {
     }
 
-    protected override UITextView CreatePlatformView()
+    protected override ViewportTextView CreatePlatformView()
     {
-        var textView = new UITextView
-        {
-            Editable = false,
-            // Noncontiguous TextKit layout requires scrolling to stay enabled.
-            // Our cached measurement supplies the full height; no intrinsic-size
-            // request should force the entire commentary through main-thread layout.
-            ScrollEnabled = true,
-            Bounces = false,
-            BackgroundColor = UIColor.Clear,
-            TextContainerInset = UIEdgeInsets.Zero
-        };
-        // This read deliberately selects TextKit 1. TextKit 2 content sizing
-        // enumerates RTL caret offsets for the entire unscrollable text view,
-        // which blocked the main thread in the 2026-10-12 watchdog report.
-        _ = textView.LayoutManager;
-        textView.TextContainer.LineFragmentPadding = 0;
-        // Keep post-edit layout fills incremental: a whole-range hole fill after
-        // every text change is what made per-cell typesetting exceed the scene
-        // update budget during perek swipes.
-        textView.LayoutManager.AllowsNonContiguousLayout = true;
-        // Route link taps through the virtual view's LinkTapped event; an
-        // unhandled tap keeps UIKit's default (open the URL).
-        textView.Delegate = new HtmlLinkDelegate(() => VirtualView);
-
-        return textView;
+        var viewport = new ViewportTextView();
+        viewport.TextView.Delegate = new HtmlLinkDelegate(() => VirtualView);
+        return viewport;
     }
 
     /// <summary>Routes link interaction through HtmlView.LinkTapped.</summary>
@@ -97,35 +76,32 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
         }
     }
 
-    protected override void ConnectHandler(UITextView platformView)
+    protected override void ConnectHandler(ViewportTextView platformView)
     {
         // A reconnect gets a fresh UITextView: invalidate the render cache so the
         // property mapper re-renders, and discard completions targeted at the
         // previous platform view.
         _renderedHtml = null;
         _appliedText = null;
-        _measuredWidth = -1;
-        _measuredHeight = -1;
         Interlocked.Increment(ref _renderSerial);
-        Interlocked.Increment(ref _measureSerial);
+        ResetMeasurement();
         base.ConnectHandler(platformView);
         VirtualView.HtmlContentChanged += OnHtmlContentChanged;
         VirtualView.StyleChanged += OnStyleChanged;
     }
 
-    protected override void DisconnectHandler(UITextView platformView)
+    protected override void DisconnectHandler(ViewportTextView platformView)
     {
         // MAUI clears its platform reference before this callback. Invalidate
         // every queued parse before it can apply to a recycled commentary cell.
         Interlocked.Increment(ref _renderSerial);
-        Interlocked.Increment(ref _measureSerial);
+        ResetMeasurement();
         _renderedHtml = null;
         _matchRange = null;
         _appliedText = null;
-        _measuredWidth = -1;
-        _measuredHeight = -1;
         VirtualView.HtmlContentChanged -= OnHtmlContentChanged;
         VirtualView.StyleChanged -= OnStyleChanged;
+        platformView.StopTracking();
         base.DisconnectHandler(platformView);
     }
 
@@ -143,21 +119,20 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
     private void UpdateContent()
     {
         var handler = (IElementHandler)this;
-        if (handler.PlatformView is not UITextView platformView || handler.VirtualView is not HtmlView virtualView)
+        if (handler.PlatformView is not ViewportTextView viewport || handler.VirtualView is not HtmlView virtualView)
         {
             return;
         }
 
+        var platformView = viewport.TextView;
         var html = virtualView.HtmlContent;
         if (string.IsNullOrEmpty(html))
         {
             _renderedHtml = null;
             _matchRange = null;
             _appliedText = null;
-            _measuredWidth = -1;
-            _measuredHeight = -1;
             Interlocked.Increment(ref _renderSerial);
-            Interlocked.Increment(ref _measureSerial);
+            ResetMeasurement();
             if (platformView.TextStorage.Length > 0)
             {
                 platformView.Text = string.Empty;
@@ -176,7 +151,8 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
         }
         _renderedHtml = renderKey;
         var serial = Interlocked.Increment(ref _renderSerial);
-        Interlocked.Increment(ref _measureSerial);
+        _appliedText = null;
+        ResetMeasurement();
 
         var paragraphStyle = new NSMutableParagraphStyle
         {
@@ -189,7 +165,7 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
                 _ => virtualView.TextDirection == HtmlTextDirection.Rtl
                     ? UITextAlignment.Right : UITextAlignment.Left
             },
-            LineHeightMultiple = (nfloat)virtualView.LineHeight,
+            LineHeightMultiple = (NFloat)virtualView.LineHeight,
             BaseWritingDirection = virtualView.TextDirection switch
             {
                 HtmlTextDirection.Rtl => NSWritingDirection.RightToLeft,
@@ -235,15 +211,14 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
         {
             var handler = (IElementHandler)this;
             if (serial != Volatile.Read(ref _renderSerial) ||
-                !ReferenceEquals(handler.PlatformView, platformView) ||
+                !ReferenceEquals((handler.PlatformView as ViewportTextView)?.TextView, platformView) ||
                 !ReferenceEquals(handler.VirtualView, virtualView))
             {
                 return;
             }
             _matchRange = null;
             _appliedText = null;
-            _measuredWidth = -1;
-            _measuredHeight = -1;
+            ResetMeasurement();
             if (attributedString != null)
             {
                 ApplySearchMatch(virtualView, attributedString);
@@ -259,7 +234,7 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
                 platformView.TextAlignment = paragraphStyle.Alignment;
             }
             // Parsed text arrived after the original empty-cell measure.
-            virtualView.InvalidateMeasure();
+            ((IView)virtualView).InvalidateMeasure();
         }
         finally
         {
@@ -282,7 +257,7 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
         if (end > start)
         {
             var range = new NSRange(start, end - start);
-            using var highlight = UIColor.SystemYellow.ColorWithAlpha((nfloat)0.45);
+            using var highlight = UIColor.SystemYellow.ColorWithAlpha((NFloat)0.45);
             attributedString.AddAttribute(UIStringAttributeKey.BackgroundColor, highlight, range);
             _matchRange = range;
         }
@@ -297,9 +272,9 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
     private void UpdateMatchHighlight()
     {
         var handler = (IElementHandler)this;
-        if (handler.PlatformView is not UITextView platformView ||
+        if (handler.PlatformView is not ViewportTextView viewport ||
             handler.VirtualView is not HtmlView virtualView ||
-            platformView.TextStorage is not { Length: > 0 } textStorage)
+            viewport.TextView.TextStorage is not { Length: > 0 } textStorage)
         {
             // Content not rendered yet — ApplyParsedContent applies the match.
             return;
@@ -323,12 +298,13 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
     /// Y offset (density-independent units) of the match's line inside the
     /// UITextView — null until the text is laid out.
     /// </summary>
-    internal nfloat? GetSearchMatchTopDips()
+    internal NFloat? GetSearchMatchTopDips()
     {
-        if (PlatformView is not { } platformView || VirtualView is not { HasSearchMatch: true } view)
+        if (PlatformView is not { } viewport || VirtualView is not { HasSearchMatch: true } view)
         {
             return null;
         }
+        var platformView = viewport.TextView;
         var text = platformView.AttributedText?.Value?.ToString();
         if (string.IsNullOrEmpty(text))
         {
@@ -346,7 +322,7 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
         var rect = platformView.GetCaretRectForPosition(position);
         // The caret rect is already in text-view coordinates — the container
         // inset is included, do not add it again.
-        return rect.Y;
+        return platformView.ConvertRectToView(rect, viewport).Y;
     }
 
     /// <summary>
@@ -377,6 +353,16 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
         return base.GetDesiredSize(widthConstraint, heightConstraint);
     }
 
+    // A recycled cell or new text must not inherit a pending width measurement.
+    // Stale completions also cannot clear a newer measurement's pending state.
+    private void ResetMeasurement()
+    {
+        Interlocked.Increment(ref _measureSerial);
+        _inflightWidth = double.NaN;
+        _measuredWidth = -1;
+        _measuredHeight = -1;
+    }
+
     private void EnsureMeasuredAsync(NSAttributedString text, double width)
     {
         if (Math.Abs(_inflightWidth - width) < 0.5)
@@ -387,20 +373,20 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
         var serial = Interlocked.Increment(ref _measureSerial);
         Task.Run(() =>
         {
-            var rect = text.GetBoundingRect(new CGSize(width, nfloat.MaxValue),
+            var rect = text.GetBoundingRect(new CGSize(width, NFloat.MaxValue),
                 NSStringDrawingOptions.UsesLineFragmentOrigin | NSStringDrawingOptions.UsesFontLeading,
                 null);
             MainThread.BeginInvokeOnMainThread(() =>
             {
-                _inflightWidth = double.NaN;
                 if (serial != Volatile.Read(ref _measureSerial) ||
                     !ReferenceEquals(_appliedText, text))
                 {
                     return;
                 }
+                _inflightWidth = double.NaN;
                 _measuredWidth = width;
                 _measuredHeight = Math.Ceiling(rect.Height);
-                VirtualView?.InvalidateMeasure();
+                ((IView?)VirtualView)?.InvalidateMeasure();
             });
         });
     }
