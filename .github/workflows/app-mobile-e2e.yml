@@ -84,7 +84,9 @@ jobs:
     # The resolver is skipped when the caller provides an artifact name.
     if: ${{ always() && !cancelled() && !failure() }}
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 60
+    # Reserve setup/build and diagnostics around the unchanged 45-minute iOS pilot.
+    # A 60-minute whole job can end before that step and its artifact upload finish.
+    timeout-minutes: ${{ matrix.platform == 'iOS' && 90 || 60 }}
     strategy:
       # Each platform owns its runner, device, server and artifacts. Preserve
       # both results when one platform fails; there is no cross-platform dependency.
