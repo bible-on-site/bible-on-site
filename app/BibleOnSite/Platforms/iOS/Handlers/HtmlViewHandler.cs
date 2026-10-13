@@ -58,6 +58,14 @@ public class HtmlViewHandler : ViewHandler<HtmlView, ViewportTextView>
         return viewport;
     }
 
+    private bool ActivateAccessibilityLink(string url)
+    {
+        if (VirtualView?.DispatchLinkTapped(url).Handled == true) { return true; }
+        using var nativeUrl = new NSUrl(url);
+        var options = new UIApplicationOpenUrlOptions();
+        UIApplication.SharedApplication.OpenUrl(nativeUrl, options, null);
+        return true;
+    }
     /// <summary>Routes link interaction through HtmlView.LinkTapped.</summary>
     private sealed class HtmlLinkDelegate(Func<HtmlView?> viewProvider) : UITextViewDelegate
     {
@@ -86,6 +94,7 @@ public class HtmlViewHandler : ViewHandler<HtmlView, ViewportTextView>
         Interlocked.Increment(ref _renderSerial);
         ResetMeasurement();
         base.ConnectHandler(platformView);
+        platformView.ActivateLink = ActivateAccessibilityLink;
         VirtualView.HtmlContentChanged += OnHtmlContentChanged;
         VirtualView.StyleChanged += OnStyleChanged;
     }
@@ -101,6 +110,7 @@ public class HtmlViewHandler : ViewHandler<HtmlView, ViewportTextView>
         _appliedText = null;
         VirtualView.HtmlContentChanged -= OnHtmlContentChanged;
         VirtualView.StyleChanged -= OnStyleChanged;
+        platformView.ActivateLink = null;
         platformView.StopTracking();
         base.DisconnectHandler(platformView);
     }
@@ -136,6 +146,7 @@ public class HtmlViewHandler : ViewHandler<HtmlView, ViewportTextView>
             if (platformView.TextStorage.Length > 0)
             {
                 platformView.Text = string.Empty;
+                viewport.UpdateDocumentAccessibility();
             }
             return;
         }
@@ -181,6 +192,7 @@ public class HtmlViewHandler : ViewHandler<HtmlView, ViewportTextView>
         if (platformView.TextStorage.Length > 0)
         {
             platformView.Text = string.Empty;
+            viewport.UpdateDocumentAccessibility();
         }
 
         Task.Run(() =>
@@ -235,6 +247,7 @@ public class HtmlViewHandler : ViewHandler<HtmlView, ViewportTextView>
                 platformView.TextColor = textColor;
                 platformView.TextAlignment = paragraphStyle.Alignment;
             }
+            ((ViewportTextView)handler.PlatformView!).UpdateDocumentAccessibility();
             // Parsed text arrived after the original empty-cell measure.
             ((IView)virtualView).InvalidateMeasure();
         }

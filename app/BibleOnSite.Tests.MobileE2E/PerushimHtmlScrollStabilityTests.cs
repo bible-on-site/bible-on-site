@@ -37,6 +37,12 @@ public sealed class PerushimHtmlScrollStabilityTests(ITestOutputHelper output, M
         Assert.True(checkedCount > 0,
             "Synthetic perushim must render checkboxes — otherwise HtmlView cells are never created");
 
+        // Grouping must retain every paragraph, including text far outside the
+        // visible viewport. This also exercises the formerly blocking AX lookup.
+        var longNote = Page.WaitFor("LongCommentaryDocument");
+        var spokenText = longNote.GetAttribute("label");
+        Assert.Equal(2200, System.Text.RegularExpressions.Regex.Matches(spokenText, "פירוש ארוך").Count);
+        Assert.Contains("עם פירוש נוסף על הפסוק.", spokenText);
         SaveDiagnostics("LongPerushimBeforeScroll", "passed");
 
         var list = Page.WaitFor("PasukimCollection");

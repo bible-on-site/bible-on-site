@@ -25,46 +25,6 @@ public sealed class ViewportTextView : UIView
 
     private sealed class TracedTextView : UITextView
     {
-#if DEBUG
-        private T ReadAccessibility<T>(string operation, Func<T> read)
-        {
-            if (TextStorage.Length <= 100_000) { return read(); }
-            NativeReaderTrace.Write($"{operation}:start");
-            var result = read();
-            NativeReaderTrace.Write($"{operation}:end");
-            return result;
-        }
-
-        public override string? AccessibilityLabel
-        {
-            get => ReadAccessibility("ax-label", () => base.AccessibilityLabel);
-            set => base.AccessibilityLabel = value;
-        }
-
-        public override string? AccessibilityValue
-        {
-            get => ReadAccessibility("ax-value", () => base.AccessibilityValue);
-            set => base.AccessibilityValue = value;
-        }
-
-        public override NSAttributedString? AccessibilityAttributedLabel
-        {
-            get => ReadAccessibility("ax-attributed-label", () => base.AccessibilityAttributedLabel);
-            set => base.AccessibilityAttributedLabel = value;
-        }
-
-        public override NSAttributedString? AccessibilityAttributedValue
-        {
-            get => ReadAccessibility("ax-attributed-value", () => base.AccessibilityAttributedValue);
-            set => base.AccessibilityAttributedValue = value;
-        }
-
-        public override CGRect AccessibilityFrame
-        {
-            get => ReadAccessibility("ax-frame", () => base.AccessibilityFrame);
-            set => base.AccessibilityFrame = value;
-        }
-#endif
         public override void LayoutSubviews()
         {
 #if DEBUG
@@ -87,6 +47,51 @@ public sealed class ViewportTextView : UIView
         TextView.TextContainer.LineFragmentPadding = 0;
         TextView.PanGestureRecognizer.Enabled = false;
         AddSubview(TextView);
+    }
+
+    /// <summary>
+    /// UIKit expands a read-only text view into one accessibility object per
+    /// paragraph, even when only a small viewport is visible. Group large notes
+    /// without dropping their text or link actions from assistive navigation.
+    /// </summary>
+    internal void UpdateDocumentAccessibility()
+    {
+        var text = TextView.AttributedText;
+        var value = text?.Value ?? string.Empty;
+        var grouped = value.Length > 16_384 || value.Count(c => c == '\n') > 128;
+        TextView.AccessibilityElementsHidden = grouped;
+        IsAccessibilityElement = grouped;
+        AccessibilityIdentifier = grouped ? "LongCommentaryDocument" : null;
+        AccessibilityTraits = UIAccessibilityTrait.StaticText;
+        AccessibilityAttributedLabel = grouped ? text : null;
+        AccessibilityCustomActions = grouped && text is not null ? CreateLinkActions(text, value) : null;
+    }
+
+    internal Func<string, bool>? ActivateLink { get; set; }
+
+    private UIAccessibilityCustomAction[] CreateLinkActions(NSAttributedString text, string value)
+    {
+        var actions = new List<UIAccessibilityCustomAction>();
+        for (nint index = 0; index < text.Length;)
+        {
+            var link = text.GetAttribute(UIStringAttributeKey.Link, index, out var range);
+            index = Math.Max(index + 1, range.Location + range.Length);
+            if (link is null) { continue; }
+            var url = link is NSUrl nativeUrl ? nativeUrl.AbsoluteString : link.ToString();
+            if (string.IsNullOrEmpty(url)) { continue; }
+            var label = value.Substring((int)range.Location, (int)range.Length).Trim();
+            actions.Add(new UIAccessibilityCustomAction(string.IsNullOrEmpty(label) ? url : label,
+                new Func<UIAccessibilityCustomAction, bool>(_ => ActivateLink?.Invoke(url) == true)));
+        }
+        return actions.ToArray();
+    }
+
+    public override CGRect AccessibilityFrame
+    {
+        get => IsAccessibilityElement && Window is not null
+            ? UIAccessibility.ConvertFrameToScreenCoordinates(TextView.Frame, this)
+            : base.AccessibilityFrame;
+        set => base.AccessibilityFrame = value;
     }
 
     public override void MovedToWindow()
@@ -137,6 +142,7 @@ public sealed class ViewportTextView : UIView
         var viewport = TextViewport.Clip((double)Bounds.Height, top, bottom);
         var horizontal = TextViewport.Clip((double)Bounds.Width, left, right);
         TextView.Hidden = viewport.Height <= 0 || horizontal.Height <= 0;
+        AccessibilityElementsHidden = TextView.Hidden;
         if (TextView.Hidden) { return; }
         var frame = new CGRect(0, viewport.Offset, (double)Bounds.Width, viewport.Height);
         if (TextView.Frame != frame)
