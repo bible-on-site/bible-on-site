@@ -54,14 +54,15 @@ for (const [status, bump, skip, releaseState, exit = 0] of [
 		t.after(() => rmSync(root, { recursive: true, force: true }));
 		const output = join(root, "output");
 		mkdirSync(join(root, "devops/github/release"), { recursive: true });
-		copyFileSync(
-			new URL("./release-assets.mjs", import.meta.url),
-			join(root, "devops/github/release/release-assets.mjs"),
-		);
-		copyFileSync(
-			new URL("./release-provenance.mjs", import.meta.url),
-			join(root, "devops/github/release/release-provenance.mjs"),
-		);
+		for (const file of [
+			"release-assets.mjs",
+			"release-provenance.mjs",
+			"gh-api.mjs",
+		])
+			copyFileSync(
+				new URL(`./${file}`, import.meta.url),
+				join(root, "devops/github/release", file),
+			);
 		const result = spawnSync(
 			shell,
 			[
@@ -136,7 +137,11 @@ for (const state of ["complete", "truncated", "unavailable", "invalid-id"]) {
 		const root = mkdtempSync(join(tmpdir(), "release-publish-"));
 		t.after(() => rmSync(root, { recursive: true, force: true }));
 		mkdirSync(join(root, "devops/github/release"), { recursive: true });
-		for (const file of ["release-assets.mjs", "release-provenance.mjs"])
+		for (const file of [
+			"release-assets.mjs",
+			"release-provenance.mjs",
+			"gh-api.mjs",
+		])
 			copyFileSync(
 				new URL(`./${file}`, import.meta.url),
 				join(root, "devops/github/release", file),

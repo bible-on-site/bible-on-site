@@ -156,8 +156,8 @@ jobs:
         run: rm -f "$API_KEY_PATH"
 
       - name: Distribution summary
-        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        if: ${{ always() && steps.guard.outputs.deploy == 'true' }}
         run: |
           echo "## TestFlight Distribution Summary" >> "$GITHUB_STEP_SUMMARY"
           echo "**Version:** $MODULE_VERSION" >> "$GITHUB_STEP_SUMMARY"
-          echo "**Status:** Submitted to the beta group ✅" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Status:** ${{ job.status == 'success' && 'Submitted to the beta group ✅' || 'Failed ❌ — see the failing step log for the actionable cause' }}" >> "$GITHUB_STEP_SUMMARY"
