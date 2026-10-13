@@ -52,6 +52,7 @@ mod tests {
             hebdate: None,
             tseit: None,
             header: Some("Header".to_string()),
+            pasuk_count: None,
         }
     }
 
@@ -64,6 +65,7 @@ mod tests {
             name: format!("Article {id}"),
             priority: id as i8,
             content: Some(format!("content-{id}")),
+            coverage_verified: false,
         }
     }
 
