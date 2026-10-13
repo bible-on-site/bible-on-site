@@ -1,7 +1,5 @@
 using System;
-using System.Collections.Concurrent;
 using System.IO;
-using System.Text;
 
 namespace AltCover.Recorder
 {
@@ -34,12 +32,7 @@ namespace AltCover.Recorder
 	/// </summary>
 	public static class Instance
 	{
-		// Every instrumented sequence point calls Visit — background imports hit
-		// it millions of times a minute while the UI thread hits it on every
-		// binding and layout pass. A single global lock would serialize the whole
-		// app on the coverage path; striped concurrent dictionaries keep the
-		// per-visit cost near a plain counter even under heavy multi-thread load.
-		private static readonly ConcurrentDictionary<string, ConcurrentDictionary<int, long>> Hits = new();
+		private static readonly VisitCounters Hits = new();
 		private static readonly long StartedTicks = DateTime.UtcNow.Ticks;
 		private static readonly string ReportFileValue =
 			Path.GetFullPath("e2e-coverage.json");
@@ -61,8 +54,7 @@ namespace AltCover.Recorder
 		/// <summary>Records one sequence/branch point visit in <paramref name="moduleId"/>.</summary>
 		public static void Visit(string moduleId, int pointId)
 		{
-			var points = Hits.GetOrAdd(moduleId, static _ => new ConcurrentDictionary<int, long>());
-			points.AddOrUpdate(pointId, 1L, static (_, count) => count + 1);
+			Hits.Visit(moduleId, pointId);
 		}
 
 		// Call-context tracking is not enabled for app instrumentation; the
@@ -98,42 +90,18 @@ namespace AltCover.Recorder
 		/// <summary>Clears all recorded hits (per-test attribution across app restarts).</summary>
 		public static void Reset()
 		{
-			Hits.Clear();
+			Hits.Reset();
 		}
 
 		/// <summary>
 		/// Serializes the accumulated hits:
 		/// { "format": "altcover-visits/1", "modules": { "&lt;hash&gt;": { "&lt;pointKey&gt;": &lt;count&gt; } } }
-		/// Concurrent dictionaries enumerate a moment-in-time view while visits
-		/// keep recording, so a snapshot can never stall the app's hot paths.
+		/// The snapshot reads atomic counters while visits keep recording, without
+		/// locking the app's hot paths.
 		/// </summary>
 		public static string SnapshotJson()
 		{
-			var builder = new StringBuilder(Hits.Count * 256);
-			builder.Append("{\"format\":\"altcover-visits/1\",\"modules\":{");
-			var firstModule = true;
-			foreach (var module in Hits)
-			{
-				if (!firstModule)
-				{
-					builder.Append(',');
-				}
-				firstModule = false;
-				builder.Append('\"').Append(module.Key).Append("\":{");
-				var firstPoint = true;
-				foreach (var point in module.Value)
-				{
-					if (!firstPoint)
-					{
-						builder.Append(',');
-					}
-					firstPoint = false;
-					builder.Append('\"').Append(point.Key).Append("\":").Append(point.Value);
-				}
-				builder.Append('}');
-			}
-			builder.Append("}}");
-			return builder.ToString();
+			return Hits.SnapshotJson();
 		}
 	}
 }

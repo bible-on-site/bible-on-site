@@ -261,6 +261,7 @@ jobs:
         run: |
           npm run test:unit --prefix mobile-e2e
           dotnet run --project devops -- TestMobileE2EUnit
+          dotnet test --project devops.Tests/devops.Tests.csproj --configuration Release
 
       - name: Setup Java
         if: matrix.platform == 'Android'
