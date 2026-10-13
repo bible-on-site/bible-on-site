@@ -121,9 +121,10 @@ internal static class E2ECoverageApply
             if (!matchedAnyModule)
             {
                 incompatible++;
-                warn(
-                    $"Coverage dump {name} matches no instrumented module hash; " +
-                    "it was produced by a different build and was skipped.");
+                var reason = dumpModules.EnumerateObject().Any()
+                    ? "it was produced by a different build"
+                    : "it contains no recorded modules";
+                warn($"Coverage dump {name} matches no instrumented module hash; {reason} and was skipped.");
             }
         }
         var seqVisited = sequencePoints.Values.Count(p => (long.TryParse(p.Attribute("vc")?.Value, out var v) ? v : 0) > 0);
