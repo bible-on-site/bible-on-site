@@ -122,7 +122,8 @@ try {
   const ready = await waitForAppiumReadiness({ observe: observeReadiness, exited: () => serverExit,
     probe: (options) => probeAppiumReadiness({ ...options, port: Number(appiumPort) }) });
   if (!ready) throw new Error(`Appium did not become ready. See ${artifacts}/appium.log`);
-  test = spawn("dotnet", ["run", "--project", "devops", "--", "TestMobileE2E", "--configuration", "Debug"], {
+  const prebuilt = process.env.MOBILE_E2E_PREBUILT === "1" ? ["--no-build", "--no-restore"] : [];
+  test = spawn("dotnet", ["run", "--project", "devops", ...prebuilt, "--", "TestMobileE2E", "--configuration", "Debug"], {
     cwd: resolve(directory, ".."), windowsHide: true, stdio: "inherit",
     env: { ...process.env, MOBILE_APP_PATH: appPath, MOBILE_E2E_ARTIFACTS: artifacts,
       ...(wdaPath ? { MOBILE_WDA_PATH: wdaPath } : {}), APPIUM_SERVER: `http://127.0.0.1:${appiumPort}` },

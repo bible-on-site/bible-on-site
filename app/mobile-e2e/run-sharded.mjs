@@ -31,7 +31,7 @@ process.on("SIGTERM", killChildren);
 // per-shard artifacts keep logs, results and diagnostics separate.
 const runShard = ({ shard, env }) => new Promise((resolveRun) => {
   const child = spawn(process.execPath, [resolve(directory, "run.mjs")], {
-    cwd: directory, env, windowsHide: true, stdio: ["ignore", "pipe", "pipe"],
+    cwd: directory, env: { ...env, MOBILE_E2E_PREBUILT: "1" }, windowsHide: true, stdio: ["ignore", "pipe", "pipe"],
   });
   children.add(child);
   for (const [stream, target] of [[child.stdout, process.stdout], [child.stderr, process.stderr]]) {
