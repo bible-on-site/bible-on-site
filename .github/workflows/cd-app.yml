@@ -343,7 +343,8 @@ jobs:
 
       - name: Install Fastlane
         if: ${{ steps.guard.outputs.deploy == 'true' }}
-        run: gem install fastlane -NV
+        # macos-15's image ships fastlane; install only when it is missing.
+        run: command -v fastlane >/dev/null 2>&1 || gem install fastlane -NV
 
       - name: Check the exact TestFlight build before uploading
         if: ${{ steps.guard.outputs.deploy == 'true' }}
