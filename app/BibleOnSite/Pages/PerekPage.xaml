@@ -324,7 +324,7 @@
                                 </CollectionView.Footer>
                                 <CollectionView.ItemTemplate>
                                     <DataTemplate x:DataType="models:PasukDisplayItem">
-                                        <Border Padding="12,8"
+                                        <controls:ReaderCellBorder Padding="12,8"
                                                 Margin="0,4"
                                                 StrokeShape="RoundRectangle 8"
                                                 Stroke="Transparent"
@@ -394,7 +394,7 @@
                                                     </BindableLayout.ItemTemplate>
                                                 </VerticalStackLayout>
                                             </VerticalStackLayout>
-                                        </Border>
+                                        </controls:ReaderCellBorder>
                                     </DataTemplate>
                                 </CollectionView.ItemTemplate>
                                 <CollectionView.EmptyView>
