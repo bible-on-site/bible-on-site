@@ -125,7 +125,7 @@ jobs:
       AVD_PROFILE: pixel_7
       # Bump when the clean-snapshot recipe changes (boot options, readiness
       # flow, runner-action version) so stale snapshots cannot be restored.
-      AVD_SNAPSHOT_RECIPE: r2
+      AVD_SNAPSHOT_RECIPE: r3
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -151,7 +151,7 @@ jobs:
       - name: Hash AVD readiness script inputs
         id: readiness-key
         if: matrix.platform == 'Android'
-        run: node ${{ github.workspace }}/devops/github/ci/files-hash.mjs app/mobile-e2e/android-readiness.mjs app/mobile-e2e/android-ready.mjs
+        run: node ${{ github.workspace }}/devops/github/ci/files-hash.mjs app/mobile-e2e/android-readiness.mjs app/mobile-e2e/android-ready.mjs app/mobile-e2e/configure-avd-display.mjs
 
       - name: Restore NuGet packages
         id: nuget-cache
@@ -429,6 +429,7 @@ jobs:
           profile: ${{ env.AVD_PROFILE }}
           avd-name: ${{ env.AVD_NAME }}
           force-avd-creation: false
+          pre-emulator-launch-script: node app/mobile-e2e/configure-avd-display.mjs
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader -noaudio -no-boot-anim -no-metrics -memory 4096
           script: npm run android:ready --prefix app/mobile-e2e
@@ -466,6 +467,7 @@ jobs:
           profile: ${{ env.AVD_PROFILE }}
           avd-name: ${{ env.AVD_NAME }}
           force-avd-creation: false
+          pre-emulator-launch-script: node app/mobile-e2e/configure-avd-display.mjs
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader -noaudio -no-boot-anim -no-snapshot-save -no-metrics -memory 4096
           script: npm test --prefix app/mobile-e2e

@@ -151,7 +151,7 @@
                                         <VerticalStackLayout Spacing="0">
                                             <!-- No perek dividers or chapter pasuk numbers: the מסורה
                                                  reader presents the parasha as one continuous text. -->
-                                            <Border Padding="12,8"
+                                            <controls:ReaderCellBorder Padding="12,8"
                                                     Margin="0,4"
                                                     StrokeShape="RoundRectangle 8"
                                                     Stroke="Transparent"
@@ -193,7 +193,7 @@
                                                         </VerticalStackLayout>
                                                     </VerticalStackLayout>
                                                 </Grid>
-                                            </Border>
+                                            </controls:ReaderCellBorder>
                                         </VerticalStackLayout>
                                     </DataTemplate>
                                 </CollectionView.ItemTemplate>

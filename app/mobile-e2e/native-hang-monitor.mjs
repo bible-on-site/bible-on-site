@@ -1,7 +1,7 @@
 // Capture the app while an ordinary interaction deadline is being exceeded,
 // before diagnostics query the same blocked UI or session cleanup kills it.
 export function monitorNativeInteractions(capture, {
-  schedule = (callback) => setTimeout(callback, 45000), cancel = clearTimeout,
+  schedule = (callback) => setTimeout(callback, 25000), cancel = clearTimeout,
 } = {}) {
   let partial = '';
   const pending = new Map();
