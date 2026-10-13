@@ -131,7 +131,7 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         var position = commentary.Location;
         Platform.Tap(driver, commentary);
         AssertRegularReader();
-        // Preserve the highlighted landing before checking a long note heading.
+        // Capture the highlighted match, then scroll back to the selected heading.
         SaveDiagnostics("FloatingSearchCommentaryLanding", "passed");
         Page.ScrollBackTo("InlinePerushName", element => element.Text == commentaryName);
         SaveDiagnostics("FloatingSearchCommentaryReader", "passed");
