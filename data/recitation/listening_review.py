@@ -235,23 +235,26 @@ def reusable_listening(case):
     if digest_json(prior_queue["cases"]) != prior_queue["queueSha256"]:
         raise ValueError("Original listening queue is not source-bound")
     prior = next(item for item in prior_queue["cases"] if item["id"] == case["id"])
-    if prior.get("listeningReuseSha256"):
-        raise ValueError("Listening reuse must refer directly to an actual heard cut")
     decision = proof["decision"]
     if candidate_digest(prior) != prior["candidateSha256"]:
         raise ValueError("Original heard candidate changed")
     heard = decision["listenEvidenceReportedByBrowser"]
+    if prior.get("listeningReuseSha256") and "freshHeardSegments" not in heard:
+        raise ValueError("Prior reused round lacks actual fresh word hearing")
     checked = validate_decision(prior, {"candidateSha256": decision["candidateSha256"],
         "verdict": decision["verdict"], "verseHeard": heard["verseHeard"],
-        "heardSegments": heard["heardSegments"], "note": decision["note"]})
+        "heardSegments": heard["heardSegments"], "note": decision["note"],
+        **({"freshHeardSegments": heard["freshHeardSegments"]} if "freshHeardSegments" in heard else {})})
     if (any(decision.get(key) != value for key, value in checked.items() if key != "savedAt")
             or decision.get("queueSha256") != prior_queue["queueSha256"] or not decision.get("savedAt")
             or any(prior[key] != case[key] for key in
                    ("id", "perekId", "pasuk", "audioSha256", "textSha256", "clipSha256", "clipStartMs", "clipEndMs"))):
         raise ValueError("Reusable listening differs from actual source-bound feedback")
+    # A reused round may contain new direct hearing, but inherited cuts are never promoted.
+    directly_heard = heard["freshHeardSegments"] if prior.get("listeningReuseSha256") else heard["heardSegments"]
     old_words = {word["segment"]: word for word in prior["words"]}
     reusable = sorted(word["segment"] for word in case["words"]
-                      if word["segment"] in heard["heardSegments"] and old_words.get(word["segment"]) == word)
+                      if word["segment"] in directly_heard and old_words.get(word["segment"]) == word)
     if not reusable or reusable != case.get("reusableHeardSegments"):
         raise ValueError("Changed or unlistened cuts cannot reuse listening")
     return {"heardSegments": reusable, "decisionSha256": digest_json(decision),
