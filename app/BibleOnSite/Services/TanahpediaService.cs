@@ -12,6 +12,12 @@ public class TanahpediaService : BaseGraphQLService, ITanahpediaService
 {
     private static readonly Lazy<TanahpediaService> _instance = new(() => new TanahpediaService());
 
+    /// <summary>API's accepted range for `searchTanahpediaEntries(limit:)`.</summary>
+    private const int MaxSearchLimit = 50;
+
+    /// <summary>Remote search budget — matches ArticleService's search deadline.</summary>
+    private static readonly TimeSpan DefaultSearchTimeout = TimeSpan.FromSeconds(8);
+
     /// <summary>Singleton instance of the TanahpediaService.</summary>
     public static TanahpediaService Instance => _instance.Value;
 
@@ -132,6 +138,48 @@ public class TanahpediaService : BaseGraphQLService, ITanahpediaService
                 SegmentEnd = o.SegmentEnd,
             }).ToList(),
         };
+    }
+
+    /// <inheritdoc />
+    public async Task<List<TanahpediaSearchHit>> SearchEntriesAsync(string phrase, int limit, CancellationToken cancellationToken)
+    {
+        // The API accepts 1-50 and rejects out-of-range values — clamp here so
+        // the documented contract holds for every caller.
+        limit = Math.Clamp(limit, 1, MaxSearchLimit);
+        using var timeoutSource = new CancellationTokenSource(DefaultSearchTimeout);
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutSource.Token);
+        try
+        {
+            var data = await QueryAsync<SearchHitsResponse>(@"
+                query SearchTanahpediaEntries($phrase: String!, $limit: Int) {
+                    searchTanahpediaEntries(phrase: $phrase, limit: $limit) {
+                        id
+                        uniqueName
+                        title
+                        excerpt
+                        score
+                    }
+                }",
+                "SearchTanahpediaEntries",
+                new { phrase, limit },
+                linked.Token);
+
+            return (data?.SearchTanahpediaEntries ?? []).Select(dto => new TanahpediaSearchHit
+            {
+                Id = dto.Id ?? string.Empty,
+                UniqueName = dto.UniqueName ?? string.Empty,
+                Title = dto.Title ?? string.Empty,
+                Excerpt = dto.Excerpt ?? string.Empty,
+                Score = dto.Score,
+            }).ToList();
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            // Timeout source fired — translate to a TimeoutException so the
+            // caller can surface the availability note instead of hanging on
+            // the transport timeout (same contract as article search).
+            throw new TimeoutException("Tanahpedia search timed out");
+        }
     }
 
     /// <inheritdoc />
@@ -336,6 +384,26 @@ public class TanahpediaService : BaseGraphQLService, ITanahpediaService
         public int? SegmentStart { get; set; }
         [Newtonsoft.Json.JsonProperty("segmentEnd")]
         public int? SegmentEnd { get; set; }
+    }
+
+    private class SearchHitsResponse
+    {
+        [Newtonsoft.Json.JsonProperty("searchTanahpediaEntries")]
+        public List<SearchHitDto>? SearchTanahpediaEntries { get; set; }
+    }
+
+    private class SearchHitDto
+    {
+        [Newtonsoft.Json.JsonProperty("id")]
+        public string? Id { get; set; }
+        [Newtonsoft.Json.JsonProperty("uniqueName")]
+        public string? UniqueName { get; set; }
+        [Newtonsoft.Json.JsonProperty("title")]
+        public string? Title { get; set; }
+        [Newtonsoft.Json.JsonProperty("excerpt")]
+        public string? Excerpt { get; set; }
+        [Newtonsoft.Json.JsonProperty("score")]
+        public int Score { get; set; }
     }
 
     private class SynonymTargetsResponse
