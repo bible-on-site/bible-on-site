@@ -25,6 +25,46 @@ public sealed class ViewportTextView : UIView
 
     private sealed class TracedTextView : UITextView
     {
+#if DEBUG
+        private T ReadAccessibility<T>(string operation, Func<T> read)
+        {
+            if (TextStorage.Length <= 100_000) { return read(); }
+            NativeReaderTrace.Write($"{operation}:start");
+            var result = read();
+            NativeReaderTrace.Write($"{operation}:end");
+            return result;
+        }
+
+        public override string? AccessibilityLabel
+        {
+            get => ReadAccessibility("ax-label", () => base.AccessibilityLabel);
+            set => base.AccessibilityLabel = value;
+        }
+
+        public override string? AccessibilityValue
+        {
+            get => ReadAccessibility("ax-value", () => base.AccessibilityValue);
+            set => base.AccessibilityValue = value;
+        }
+
+        public override NSAttributedString? AccessibilityAttributedLabel
+        {
+            get => ReadAccessibility("ax-attributed-label", () => base.AccessibilityAttributedLabel);
+            set => base.AccessibilityAttributedLabel = value;
+        }
+
+        public override NSAttributedString? AccessibilityAttributedValue
+        {
+            get => ReadAccessibility("ax-attributed-value", () => base.AccessibilityAttributedValue);
+            set => base.AccessibilityAttributedValue = value;
+        }
+
+        public override CGRect AccessibilityFrame
+        {
+            get => ReadAccessibility("ax-frame", () => base.AccessibilityFrame);
+            set => base.AccessibilityFrame = value;
+        }
+#endif
         public override void LayoutSubviews()
         {
 #if DEBUG
