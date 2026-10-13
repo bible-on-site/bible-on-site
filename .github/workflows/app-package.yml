@@ -667,6 +667,18 @@ jobs:
       - name: Verify all recitation asset packs and payloads
         run: python app/devops/verify_recitation_assets.py --platform iOS --catalog app/BibleOnSite/Resources/Raw/recitation-catalog.json --package "$(find app/.artifacts -name '*.ipa' -print -quit)" --asset-pack-dir app/BibleOnSite/Platforms/iOS/AssetPacks --archive-dir app/.artifacts/assetpacks --payload-dir app/.artifacts/payloads
 
+      # Keep one real ba-package result when decoding or payload verification fails.
+      - name: Upload failed audio archive diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ios-audio-archive-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            app/.artifacts/assetpacks/recitation_1.aar
+            app/BibleOnSite/Platforms/iOS/AssetPacks/recitation_1/Manifest.json
+          retention-days: 7
+          include-hidden-files: true
+
       - name: Set artifact name output
         id: set_artifact_name
         run: echo "artifact_name=app-ios-v${{ steps.get_version.outputs.VERSION }}" >> $GITHUB_OUTPUT
