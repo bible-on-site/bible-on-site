@@ -28,15 +28,19 @@ public sealed class ReaderCellBorderHandler : BorderHandler
 
     public ReaderCellBorderHandler() : base(ReaderMapper) { }
 
+    // Differences below a thousandth of a point cannot change a rendered pixel.
+    private static bool SameCornerRadius(double first, double second) =>
+        double.IsFinite(first) && double.IsFinite(second) && Math.Abs(first - second) < 0.001;
+
     private static void MapAppearance(ReaderCellBorderHandler handler, IBorderView border)
     {
         var platformView = handler.PlatformView;
         if (platformView is null) { return; }
         var layer = platformView.Layer;
         if (border.Shape is not RoundRectangle round ||
-            round.CornerRadius.TopLeft != round.CornerRadius.TopRight ||
-            round.CornerRadius.TopLeft != round.CornerRadius.BottomLeft ||
-            round.CornerRadius.TopLeft != round.CornerRadius.BottomRight ||
+            !SameCornerRadius(round.CornerRadius.TopLeft, round.CornerRadius.TopRight) ||
+            !SameCornerRadius(round.CornerRadius.TopLeft, round.CornerRadius.BottomLeft) ||
+            !SameCornerRadius(round.CornerRadius.TopLeft, round.CornerRadius.BottomRight) ||
             border.Background is not (null or SolidPaint) ||
             (border.StrokeThickness > 0 && border.Stroke is not (null or SolidPaint { Color.Alpha: 0 })))
         {
