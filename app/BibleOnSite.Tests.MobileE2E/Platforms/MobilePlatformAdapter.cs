@@ -47,6 +47,39 @@ public abstract class MobilePlatformAdapter
     public abstract AppiumDriver CreateDriver(Uri server, AppiumOptions options);
 
     /// <summary>
+    /// Replays the fresh-session app state inside an existing session:
+    /// enforceAppInstall/fullReset reinstall the app on every session today, so
+    /// terminate → reinstall → relaunch gives each scenario the same clean
+    /// start without the ~30-70s WDA session handshake. Launch environment is
+    /// re-applied through the platform's activate command.
+    /// </summary>
+    public void ResetApp(AppiumDriver driver, MobileTestConfiguration configuration,
+        IReadOnlyDictionary<string, string>? appEnvironment)
+    {
+        driver.TerminateApp(AppId);
+        if (!configuration.KeepAppForReview)
+        {
+            driver.RemoveApp(AppId);
+            driver.InstallApp(configuration.AppPath);
+        }
+        ActivateApp(driver, appEnvironment);
+    }
+
+    protected const string AppId = "com.tanah.daily929";
+
+    protected virtual void ActivateApp(AppiumDriver driver, IReadOnlyDictionary<string, string>? appEnvironment)
+    {
+        if (appEnvironment is { Count: > 0 })
+        {
+            // This platform's activateApp cannot carry the session's
+            // processArguments env; the caller rebuilds the session instead.
+            throw new NotSupportedException(
+                "Reusing a session cannot re-apply launch environment on this platform.");
+        }
+        driver.ActivateApp(AppId);
+    }
+
+    /// <summary>
     /// RTL navigation drawer gesture: a swipe starting at the right screen edge
     /// and travelling left. The perek carousel competes for the same touches on
     /// iOS, so the sequence must begin inside the native edge band (#1306).
@@ -229,6 +262,22 @@ public sealed class IosPlatformAdapter : MobilePlatformAdapter
         }
         // Reader jumps keep the hamburger. Use iOS's standard RTL edge-back gesture.
         driver.PerformActions([CreateEdgeSwipeSequence(driver.Manage().Window.Size)]);
+    }
+    protected override void ActivateApp(AppiumDriver driver, IReadOnlyDictionary<string, string>? appEnvironment)
+    {
+        if (appEnvironment is { Count: > 0 })
+        {
+            // mobile: activateApp accepts the same processArguments env the
+            // session was created with (e.g. BIBLE_E2E_PERUSHIM), so a reused
+            // session relaunches the app under the scenario's environment.
+            driver.ExecuteScript("mobile: activateApp", new Dictionary<string, object>
+            {
+                ["bundleId"] = AppId,
+                ["environment"] = appEnvironment
+            });
+            return;
+        }
+        base.ActivateApp(driver, appEnvironment);
     }
     public override AppiumDriver CreateDriver(Uri server, AppiumOptions options) =>
         // The five-minute client budget fits inside the ten-minute per-test hang

@@ -99,18 +99,9 @@ public abstract class MobileDeviceTest : IAsyncLifetime
 
     public virtual ValueTask DisposeAsync()
     {
-        try
-        {
-            _sessions.Cleanup(CloseDriver);
-        }
-        catch (WebDriverException exception)
-        {
-            Output.WriteLine(DeviceSessionDeath.Matches(exception)
-                ? $"{Configuration.Platform}: session cleanup failed; the device had already dropped it: {exception.Message}"
-                // Uncertain cleanup stays latched in the factory: Appium may
-                // still run the failed session's shutdown against the device.
-                : $"{Configuration.Platform}: session cleanup failed; device reuse blocked: {exception.Message}");
-        }
+        // The session persists across the collection; the fixture quits it once
+        // at the end. The next scenario's Connect resets app state inside it —
+        // no per-test teardown means nothing here can race a stale shutdown.
         return default;
     }
 
@@ -173,46 +164,84 @@ public abstract class MobileDeviceTest : IAsyncLifetime
     // Quit is re-attempted so a released session is proven before reuse; if the
     // retry also fails the factory latches the device rather than risk a
     // zombie teardown colliding with the next session.
-    private void CloseDriver()
+    private static void CloseSession(AppiumDriver driver)
     {
         try
         {
             try
             {
-                Driver?.Quit();
+                driver.Quit();
             }
             catch (WebDriverException exception) when (DeviceTransportLoss.Matches(exception)
                 && TransportRecovery(exception))
             {
-                Driver?.Quit();
+                driver.Quit();
             }
         }
         finally
         {
-            Driver?.Dispose();
+            driver.Dispose();
         }
     }
 
     protected virtual void Connect()
     {
+        var shared = _sessions.Shared;
+        var driver = shared != null && TryReattach(shared)
+            ? shared
+            : _sessions.Create(() => Platform.CreateDriver(Configuration.Server, CreateOptions()));
+        Driver = driver;
+        _sessions.Shared = driver;
+        Page = new(driver, Platform);
+        Page.WaitForStartup();
+    }
+
+    // A shared session skips the WDA handshake; the app is reset in place to
+    // the same state a fresh session would install and launch. Any reuse
+    // failure falls back to building a new session — a genuine app regression
+    // still fails, just after one extra rebuild.
+    private bool TryReattach(AppiumDriver shared)
+    {
         try
         {
-            _sessions.Cleanup(CloseDriver);
+            Platform.ResetApp(shared, Configuration, AppEnvironment);
+            return true;
+        }
+        catch (Exception exception)
+        {
+            Output.WriteLine($"{Configuration.Platform}: session reuse failed " +
+                $"({exception.Message}); rebuilding the session.");
+            ReleaseShared();
+            return false;
+        }
+    }
+
+    private void ReleaseShared()
+    {
+        var shared = _sessions.Shared;
+        _sessions.Shared = null;
+        if (shared == null)
+        {
+            return;
+        }
+        try
+        {
+            _sessions.Cleanup(() => CloseSession(shared));
         }
         catch (WebDriverException exception) when (DeviceSessionDeath.Matches(exception))
         {
             // The dropped session has nothing left for Appium to clean.
             Output.WriteLine($"{Configuration.Platform}: dead session rejected cleanup ({exception.Message}); continuing.");
         }
-        Driver = _sessions.Create(() => Platform.CreateDriver(Configuration.Server, CreateOptions()));
-        Page = new(Driver, Platform);
-        Page.WaitForStartup();
     }
 
     // Scenarios that need extra launch environment (e.g. BIBLE_E2E_PERUSHIM
     // synthetic commentary data) override this instead of reimplementing
-    // session management.
-    protected virtual AppiumOptions CreateOptions() => Platform.CreateOptions(Configuration);
+    // session management. Reused sessions re-apply it through activateApp.
+    protected virtual IReadOnlyDictionary<string, string>? AppEnvironment => null;
+
+    protected virtual AppiumOptions CreateOptions() =>
+        Platform.CreateOptions(Configuration, AppEnvironment);
 
     protected void SaveDiagnostics(string name, string outcome) =>
         SaveDiagnostics(name, outcome, null);
