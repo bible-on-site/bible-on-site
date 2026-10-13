@@ -74,7 +74,8 @@ def verify_corrections(diagnostic):
     """Every changed end must be the recorded pinned-path separator, never a pad."""
     if diagnostic.get("boundaryMethod") == INITIAL_SOURCE_METHOD:
         from listening_signal import verify_initial_source_proposals
-        return verify_initial_source_proposals(diagnostic)
+        verify_initial_source_proposals(diagnostic)
+        return
     if diagnostic.get("boundaryMethod") == SOURCE_METHOD:
         from listening_signal import verify_source_proposals
         verify_source_proposals(diagnostic)
