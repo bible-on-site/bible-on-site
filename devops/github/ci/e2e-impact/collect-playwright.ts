@@ -3,7 +3,7 @@
  * a coverage tree for the website, admin and API e2e suites.
  *
  * Evidence layout under `--artifacts <dir>` (the suite's
- * `.coverage/e2e-impact/`, written by `web/shared/tests-util/e2e-impact.mjs`
+ * `.coverage/e2e-impact/`, written by `web/shared/tests-util/e2e-impact.ts`
  * during `MEASURE_COV` runs):
  * - `discovered.json` — the runtime test list (reconciled with the static
  *   discovery the selector uses; runtime-only ids are diagnostics).
