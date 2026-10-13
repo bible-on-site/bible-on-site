@@ -18,6 +18,14 @@ test("chooses the newest available iPhone runtime compatible with Xcode, not a n
   assert.equal(selected.version, "26.5");
 });
 
+test("picks one deterministic UDID among identical devices so resolve and boot agree", () => {
+  const device = (udid) => ({ name: "iPhone 17", udid, isAvailable: true });
+  const selected = selectSimulator({
+    "com.apple.CoreSimulator.SimRuntime.iOS-27-0": [device("BBBB-0000"), device("AAAA-0000")],
+  }, "27.0");
+  assert.equal(selected.udid, "AAAA-0000");
+});
+
 test("reports no compatible device rather than silently choosing an unsupported OS", () => {
   assert.equal(selectSimulator({ "com.apple.CoreSimulator.SimRuntime.iOS-27-0": [
     { name: "iPhone 18", udid: "too-new", isAvailable: true },

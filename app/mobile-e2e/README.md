@@ -107,6 +107,29 @@ options, device profile, readiness flow or the runner-action version change;
 bump nothing else by hand — emulator and system-image updates rotate keys on
 their own.
 
+## iOS simulator state caching
+
+The iOS leg caches `~/Library/Developer/CoreSimulator/Devices/<udid>` under
+`macOS-ios-sim-<udid>-<recipe>`. The runner image bakes a fixed device UDID per
+image version, so the key self-invalidates on every image update; there are no
+restore-keys, since another device's state must never load over this one.
+`ios:boot:resolve` runs the same selection as the boot path — without the
+runtime download — and emits the UDID before restore, and `selectSimulator`
+breaks name+runtime ties on UDID so resolve, boot and capture always agree.
+
+Restoring a previously booted device skips the multi-minute first-boot
+provisioning inside `simctl boot`. Capture runs post-test through
+`ios-sim-state.mjs quiesce`: it removes the test app and WebDriverAgent so the
+saved state stays clean (a leftover app could make Appium skip reinstalling the
+fresh build), then shuts the device down so the directory is a consistent
+Shutdown image rather than a mid-write Booted one. Only a fully Booted device
+whose UDID matches the resolved key is captured — a runtime download, a
+deregistered device or an unfinished boot all degrade to `saved=false` and the
+run simply falls back to a cold boot next time. Saves follow the same
+push/`workflow_dispatch` publishing rule as the Android caches; pull requests
+only restore. Bump `IOS_SIM_STATE_RECIPE` when the capture or restore semantics
+change.
+
 ## Running locally
 
 Install the platform's .NET MAUI workload, Android SDK/JDK or compatible Xcode,

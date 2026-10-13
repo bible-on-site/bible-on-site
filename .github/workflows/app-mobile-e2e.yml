@@ -113,6 +113,9 @@ jobs:
       # Bump when the clean-snapshot recipe changes (boot options, readiness
       # flow, runner-action version) so stale snapshots cannot be restored.
       AVD_SNAPSHOT_RECIPE: r1
+      # Same idea for the iOS device-state capture below: bump when the quiesce
+      # or restore semantics change so a differently-captured dir cannot load.
+      IOS_SIM_STATE_RECIPE: r1
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -168,6 +171,24 @@ jobs:
           XCODE_VER=$(xcodebuild -version | tr '\n' '-' | tr -d ' ')
           DOTNET_VER=$(dotnet --version)
           echo "id=xcode${XCODE_VER}-dotnet${DOTNET_VER}-mauiios10.0.401.1" >> "$GITHUB_OUTPUT"
+
+      # Resolve-before-restore: the same selection boot uses, without the
+      # runtime download — a miss leaves boot's download fallback untouched.
+      - name: Resolve iOS simulator device
+        if: matrix.platform == 'iOS'
+        id: ios-device
+        run: npm run ios:boot:resolve --prefix app/mobile-e2e
+
+      # The image bakes a fixed UDID per version, so the key self-invalidates on
+      # every image update; the recipe covers capture-logic changes. Exact key
+      # only: another device's state must never restore over this one.
+      - name: Restore iOS simulator state
+        if: matrix.platform == 'iOS' && steps.ios-device.outputs.udid != ''
+        id: ios-sim-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ~/Library/Developer/CoreSimulator/Devices/${{ steps.ios-device.outputs.udid }}
+          key: ${{ runner.os }}-ios-sim-${{ steps.ios-device.outputs.udid }}-${{ env.IOS_SIM_STATE_RECIPE }}
 
       # simctl boot is asynchronous: the device boots on the host while the
       # dependency installs run. This step needs no node_modules — it only
@@ -490,6 +511,22 @@ jobs:
           # Empty in shadow mode: the manifest is reported, not enforced.
           MOBILE_E2E_SELECTION: ${{ inputs.e2e_selection_mode == 'enforce' && steps.selection.outputs.manifest || '' }}
         run: npm test --prefix app/mobile-e2e
+
+      # Captured post-test so the saved device keeps session warm-state, but
+      # quiesced first: test apps are removed and the device is shut down so
+      # the directory is a consistent Shutdown image. A device that does not
+      # match the resolved UDID is never captured under its key.
+      - name: Quiesce iOS simulator for state capture
+        if: matrix.platform == 'iOS' && always() && github.event_name != 'pull_request' && github.event_name != 'merge_group' && steps.ios-device.outputs.udid != '' && steps.ios-sim-cache.outputs.cache-hit != 'true' && steps.simulator.outcome == 'success'
+        id: ios-sim-quiesce
+        run: node app/mobile-e2e/ios-sim-state.mjs quiesce "${{ steps.ios-device.outputs.udid }}"
+
+      - name: Save iOS simulator state
+        if: matrix.platform == 'iOS' && always() && steps.ios-sim-quiesce.outputs.saved == 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: ~/Library/Developer/CoreSimulator/Devices/${{ steps.ios-device.outputs.udid }}
+          key: ${{ steps.ios-sim-cache.outputs.cache-primary-key }}
 
       # Real executed-code coverage (#2085): the AltCover template, per-test
       # app-coverage dumps and the run reports become the exec tree, which the
