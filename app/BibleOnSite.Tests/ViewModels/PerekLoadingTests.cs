@@ -441,10 +441,12 @@ public class PerekLoadingTests
         vm.LoadMaxAttempts = 1;
 
         // The stalled call is superseded before its timeout surfaces — it must
-        // not throw over the newer load that now owns the reader.
+        // not throw over the newer load that now owns the reader, and it must
+        // report the supersession so page continuations skip their landing.
         var superseded = vm.LoadByPerekIdAsync(1);
-        await vm.LoadByPerekIdAsync(2);
-        await superseded;
+        var newerStamp = await vm.LoadByPerekIdAsync(2);
+        (await superseded).Should().BeNull("a superseded load reports null so callers skip post-load actions");
+        newerStamp.Should().Be(vm.ReaderLoadStamp, "the owning load returns the live stamp");
 
         vm.PerekId.Should().Be(2);
     }
