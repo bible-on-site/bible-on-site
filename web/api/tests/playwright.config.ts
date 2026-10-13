@@ -52,7 +52,7 @@ export default defineConfig({
 	reporter: [
 		["list"],
 		...(shouldMeasureCov
-			? [["../../shared/tests-util/e2e-impact.mjs"] as ReporterDescription]
+			? [["../../shared/tests-util/e2e-impact"] as ReporterDescription]
 			: []),
 		// [
 		// 	"html",

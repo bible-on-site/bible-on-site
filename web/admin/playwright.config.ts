@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
 	defineConfig,
 	devices,
@@ -14,7 +15,11 @@ const webServerCommand = "node --import tsx ./tests/util/launch-e2e-server.mts";
 // Deterministic e2e-impact evidence (#2085): under coverage runs the shared
 // reporter writes discovered/test-results JSON here and the test fixture
 // drops per-test istanbul dumps alongside it. Nothing is written otherwise.
-const E2E_IMPACT_DIR = join(__dirname, ".coverage", "e2e-impact");
+const E2E_IMPACT_DIR = join(
+	dirname(fileURLToPath(import.meta.url)),
+	".coverage",
+	"e2e-impact",
+);
 if (shouldMeasureCov) {
 	process.env.E2E_IMPACT_DIR = E2E_IMPACT_DIR;
 }
@@ -29,7 +34,7 @@ export default defineConfig({
 		["html", { outputFolder: ".playwright-report" }],
 		...(shouldMeasureCov ? [getMonocartReporter()] : []),
 		...(shouldMeasureCov
-			? [["../shared/tests-util/e2e-impact.mjs"] as ReporterDescription]
+			? [["../shared/tests-util/e2e-impact"] as ReporterDescription]
 			: []),
 	],
 	outputDir: ".playwright-results",

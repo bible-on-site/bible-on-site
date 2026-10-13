@@ -26,7 +26,7 @@ export default defineConfig({
 	reporter: [
 		...(baseConfig.reporter as ReporterDescription[]),
 		...(shouldMeasureCov
-			? [["../shared/tests-util/e2e-impact.mjs"] as ReporterDescription]
+			? [["../shared/tests-util/e2e-impact"] as ReporterDescription]
 			: []),
 	],
 	webServer: {
