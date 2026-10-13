@@ -1,12 +1,12 @@
 import hashlib
 import json
 from pathlib import Path
-import plistlib
 import tempfile
 import unittest
+import unittest.mock
 import zipfile
 
-from verify_recitation_assets import verify
+import verify_recitation_assets as verify_module
 
 
 class ReleaseArtifactTests(unittest.TestCase):
@@ -22,10 +22,10 @@ class ReleaseArtifactTests(unittest.TestCase):
                     archive.writestr("recitation-catalog.json", catalog.read_bytes())
                     archive.writestr("recitation_1.zip", content)
                 if content == audio:
-                    verify(package, catalog, "Windows")
+                    verify_module.verify(package, catalog, "Windows")
                 else:
                     with self.assertRaises(ValueError):
-                        verify(package, catalog, "Windows")
+                        verify_module.verify(package, catalog, "Windows")
 
     def test_aab_requires_every_matching_module_and_excludes_base_audio(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -43,31 +43,104 @@ class ReleaseArtifactTests(unittest.TestCase):
                         archive.writestr("recitation_1/assets/recitation_1.zip", b"corrupt" if problem == "corrupt" else audio)
                     if problem == "base":
                         archive.writestr("base/assets/recitation_1.zip", audio)
-                if problem is None: verify(package, path, "Android")
+                if problem is None: verify_module.verify(package, path, "Android")
                 else:
-                    with self.assertRaises(ValueError): verify(package, path, "Android")
+                    with self.assertRaises(ValueError): verify_module.verify(package, path, "Android")
 
-    def test_ipa_requires_tag_and_referenced_compiled_asset_pack(self):
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            catalog = root / "catalog.json"
-            catalog.write_text(json.dumps({"books": [{"seferId": 1}]}))
-            for payload in [True, False]:
-                package = root / "app.ipa"
-                with zipfile.ZipFile(package, "w") as archive:
-                    archive.writestr("Payload/Bible.app/recitation-catalog.json", catalog.read_bytes())
-                    # Apple's reference identifier differs from the physical assetpack directory.
-                    metadata = {"NSBundleResourceRequestTags": {"recitation_1": {"NSAssetPacks": ["hashed-pack-id"]}},
-                                "NSBundleResourceRequestAssetPacks": {"hashed-pack-id": ["Assets.car"]}}
-                    archive.writestr("Payload/Bible.app/OnDemandResources.plist", plistlib.dumps(metadata))
-                    if payload:
-                        directory = "Payload/OnDemandResources/com.app.recitation_1.assetpack/"
-                        archive.writestr(directory + "Assets.car", b"compiled lossless dataset")
-                        archive.writestr(directory + "Info.plist", plistlib.dumps({
-                            "CFBundleIdentifier": "hashed-pack-id", "Tags": ["recitation_1"]}))
-                if payload: verify(package, catalog, "iOS")
+    def _write_ios_fixture(self, root, audio, catalog_path, problems=()):
+        catalog = {"books": [{"seferId": 1, "sha256": hashlib.sha256(audio).hexdigest()}]}
+        catalog_path.write_text(json.dumps(catalog))
+        package = root / "app.ipa"
+        with zipfile.ZipFile(package, "w") as archive:
+            archive.writestr("Payload/Bible.app/recitation-catalog.json", catalog_path.read_bytes())
+            if "no-extension" not in problems:
+                archive.writestr("Payload/Bible.app/Extensions/AssetPackDownloader.appex/AssetPackDownloader",
+                                 b"appex binary")
+            if "odr-manifest" in problems:
+                archive.writestr("Payload/Bible.app/OnDemandResources.plist", b"metadata")
+            if "base-audio" in problems:
+                archive.writestr("Payload/Bible.app/recitation_1.zip", audio)
+        pack_dir = root / "AssetPacks" / "recitation_1"
+        pack_dir.mkdir(parents=True)
+        archive_dir = root / "aar"
+        archive_dir.mkdir()
+        payload_dir = root / "payloads"
+        payload_dir.mkdir()
+        if "no-manifest" not in problems:
+            manifest = {"assetPackID": "recitation_1", "downloadPolicy": {"onDemand": {}},
+                        "fileSelectors": [{"file": "recitation_1.zip"}],
+                        "platforms": ["macOS"] if "missing-ios-platform" in problems else ["iOS", "macOS"]}
+            (pack_dir / "Manifest.json").write_text(json.dumps(manifest))
+            (pack_dir / "recitation_1.zip").write_bytes(
+                b"corrupt" if "stale-payload" in problems else audio)
+        if "no-aar" not in problems:
+            (archive_dir / "recitation_1.aar").write_bytes(b"aar bytes")
+        if "no-payload" not in problems:
+            (payload_dir / "recitation_1.zip").write_bytes(
+                b"corrupt" if "staged-mismatch" in problems else audio)
+
+        # Stands in for `aa` extraction: serves the bytes the archive carried.
+        archived = b"corrupt" if "corrupt-archive" in problems else audio
+
+        def fake_extract(archive_path, payload_name, work_dir):
+            payload = work_dir / payload_name
+            payload.write_bytes(archived)
+            return payload
+
+        return package, pack_dir.parent, archive_dir, payload_dir, fake_extract
+
+    def test_ipa_requires_aar_manifest_and_embedded_downloader_extension(self):
+        audio = b"book archive"
+        for problem in [None, "odr-manifest", "base-audio", "no-extension",
+                        "no-manifest", "stale-payload", "no-aar", "missing-ios-platform",
+                        "corrupt-archive", "no-payload", "staged-mismatch"]:
+            with self.subTest(problem=problem), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                package, packs, aars, payloads, extract = self._write_ios_fixture(
+                    root, audio, root / "catalog.json", {problem} - {None})
+                if problem is None:
+                    verify_module.verify(package, root / "catalog.json", "iOS", packs, aars, payloads, extract)
                 else:
-                    with self.assertRaises(ValueError): verify(package, catalog, "iOS")
+                    with self.assertRaises(ValueError):
+                        verify_module.verify(package, root / "catalog.json", "iOS", packs, aars, payloads, extract)
+
+    def test_aa_payload_propagates_decoder_errors_for_invalid_and_truncated_archives(self):
+        for encoded in (b"not an apple archive", b"pbze"):
+            with self.subTest(encoded=encoded), tempfile.TemporaryDirectory() as temporary, \
+                    unittest.mock.patch.object(verify_module.shutil, "which", return_value="/usr/bin/aa"), \
+                    unittest.mock.patch.object(verify_module.subprocess, "run") as decoder:
+                root = Path(temporary)
+                archive = root / "recitation_1.aar"
+                archive.write_bytes(encoded)
+                decoder.return_value = verify_module.subprocess.CompletedProcess(
+                    [], 1, stdout="", stderr="invalid or truncated archive")
+                with self.assertRaisesRegex(ValueError, "aa extract failed.*invalid or truncated archive"):
+                    verify_module.aa_payload(archive, "recitation_1.zip", root)
+                decoder.assert_called_once()
+
+    def test_aa_payload_delegates_compressed_archive_decoding_to_apple(self):
+        with tempfile.TemporaryDirectory() as temporary, \
+                unittest.mock.patch.object(verify_module.shutil, "which", return_value="/usr/bin/aa"), \
+                unittest.mock.patch.object(verify_module.subprocess, "run") as decoder:
+            root = Path(temporary)
+            archive = root / "recitation_1.aar"
+            archive.write_bytes(b"pbze compressed archive fixture")
+            payload = root / "recitation_1.zip"
+            payload.write_bytes(b"decoded payload")
+            decoder.return_value = verify_module.subprocess.CompletedProcess([], 0, stdout="", stderr="")
+            self.assertEqual(verify_module.aa_payload(archive, payload.name, root), payload)
+            decoder.assert_called_once_with(
+                ["/usr/bin/aa", "extract", "-i", str(archive), "-d", str(root)],
+                capture_output=True, text=True)
+
+    def test_aa_payload_requires_the_aa_tool(self):
+        with tempfile.TemporaryDirectory() as temporary, \
+                unittest.mock.patch.object(verify_module.shutil, "which", return_value=None):
+            root = Path(temporary)
+            archive = root / "recitation_1.aar"
+            archive.write_bytes(b"AA01fake")
+            with self.assertRaisesRegex(ValueError, "'aa' is required"):
+                verify_module.aa_payload(archive, "recitation_1.zip", root)
 
 
 if __name__ == "__main__":

@@ -48,11 +48,11 @@
 		<ApplicationId>com.tanah.daily929</ApplicationId>
 
 		<!-- Versions -->
-		<ApplicationDisplayVersion>5.0.162</ApplicationDisplayVersion>
+		<ApplicationDisplayVersion>5.0.163</ApplicationDisplayVersion>
 		<!-- Windows MSIX requires each version component ≤65535, so we use a separate incrementing value -->
 		<!-- Android versionCode can be large, continuing from Play Store's 40000017 -->
-		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">50000162</ApplicationVersion>
-		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) != 'android'">162</ApplicationVersion>
+		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">50000163</ApplicationVersion>
+		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) != 'android'">163</ApplicationVersion>
 
 		<!-- To develop, package, and publish an app to the Microsoft Store, see: https://aka.ms/MauiTemplateUnpackaged -->
 		<!-- WindowsPackageType None = unpackaged (fixes "Class not registered" when running from CLI). MSIX for Store: /p:WindowsPackageType=MSIX -->
@@ -120,8 +120,30 @@
 	</ItemGroup>
 
 	<!-- ============================================================
-	     Perushim Notes — on-demand delivery (Android PAD + iOS ODR)
+	     Perushim Notes — on-demand delivery (Android PAD + iOS managed asset packs)
 	     ============================================================ -->
+
+	<!-- Codesigning entitlements: the iOS/MacCatalyst app groups entry shares a
+	     container with the AssetPackDownloader extension (managed Background Assets).
+	     Two SDK conventions shaped this wiring:
+	     - MAUI's SingleProject targets auto-assign $(iOSProjectFolder)Entitlements.plist
+	       to CodesignEntitlements whenever that exact path exists — bypassing any
+	       per-RID condition — so the file is named Entitlements.App.plist.
+	     - A non-empty CodesignEntitlements makes DetectSigningIdentity require a
+	       provisioning profile + signing key, which unsigned iossimulator CI/e2e
+	       builds do not have. RuntimeIdentifier defaults are only resolved after
+	       csproj evaluation (a RID-less Debug build lands on iossimulator), so the
+	       assignment runs in a target where the SDK-computed SdkIsSimulator flag —
+	       the same flag DetectSigningIdentity consumes — is already known. -->
+	<PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">
+		<CodesignEntitlements>Platforms\MacCatalyst\Entitlements.plist</CodesignEntitlements>
+	</PropertyGroup>
+	<Target Name="_SetIosCodesignEntitlements" BeforeTargets="_DetectSigningIdentity" Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' AND '$(SdkIsSimulator)' != 'true'">
+		<PropertyGroup>
+			<CodesignEntitlements>Platforms\iOS\Entitlements.App.plist</CodesignEntitlements>
+		</PropertyGroup>
+		<Message Importance="low" Text="=== iOS device/desktop build: CodesignEntitlements = $(CodesignEntitlements) ===" />
+	</Target>
 
 	<!-- Android: Play Asset Delivery SDK.
 	     XAAMM0000 manifest collisions with Plugin.Firebase are suppressed in NoWarn above. -->
@@ -163,64 +185,36 @@
 		<AndroidAsset Include="Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite" Condition="Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite') OR Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite.gz')" Link="sefaria-dump-5784-sivan-4.hebrew_search.sqlite" AssetPack="perushim_notes" DeliveryType="OnDemand" />
 	</ItemGroup>
 
-	<!-- iOS: decompress .gz → .sqlite into the ODR dataset folder (macOS only; gunzip is always available).
-	     After decompression, explicitly add the .sqlite as an ImageAsset so actool compiles it
-	     into Assets.car. MSBuild globs evaluate at project load — before the file exists —
-	     so auto-discovery misses it. -->
-	<Target Name="DecompressPerushimNotesIos" BeforeTargets="PrepareForBuild;Build;_BeforeCoreCompileImageAssets;_CollectPackLibraryResources" Condition="($([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst') AND&#xD;&#xA;			((!Exists('Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_notes.dataset\sefaria-dump-5784-sivan-4.perushim_notes.sqlite') AND&#xD;&#xA;			Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz')) OR&#xD;&#xA;			(!Exists('Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_search.dataset\sefaria-dump-5784-sivan-4.hebrew_search.sqlite') AND&#xD;&#xA;			Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite.gz')))">
-		<MakeDir Condition="!Exists('Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_notes.dataset\sefaria-dump-5784-sivan-4.perushim_notes.sqlite') AND Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz')" Directories="Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_notes.dataset" />
-		<Exec Condition="!Exists('Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_notes.dataset\sefaria-dump-5784-sivan-4.perushim_notes.sqlite') AND Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz')" Command="gunzip -c '$(MSBuildProjectDirectory)/Platforms/Android/AssetPacks/perushim_notes/sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz' &gt; '$(MSBuildProjectDirectory)/Platforms/iOS/Assets/PerushimNotes.xcassets/perushim_notes.dataset/sefaria-dump-5784-sivan-4.perushim_notes.sqlite'" />
-		<MakeDir Condition="!Exists('Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_search.dataset\sefaria-dump-5784-sivan-4.hebrew_search.sqlite') AND Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite.gz')" Directories="Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_search.dataset" />
-		<Exec Condition="!Exists('Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_search.dataset\sefaria-dump-5784-sivan-4.hebrew_search.sqlite') AND Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite.gz')" Command="gunzip -c '$(MSBuildProjectDirectory)/Platforms/Android/AssetPacks/perushim_notes/sefaria-dump-5784-sivan-4.hebrew_search.sqlite.gz' &gt; '$(MSBuildProjectDirectory)/Platforms/iOS/Assets/PerushimNotes.xcassets/perushim_search.dataset/sefaria-dump-5784-sivan-4.hebrew_search.sqlite'" />
-		<!-- The dataset only materializes when its payload exists — an empty .dataset
-		     (index not delivered/generated) would fail actool. The canonical
-		     Contents.json lives in app/devops next to the asset-prep script. -->
-		<MakeDir Condition="Exists('Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_search.dataset\sefaria-dump-5784-sivan-4.hebrew_search.sqlite')" Directories="Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_search.dataset" />
-		<Copy Condition="Exists('Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_search.dataset\sefaria-dump-5784-sivan-4.hebrew_search.sqlite')" SourceFiles="$(MSBuildProjectDirectory)/../devops/perushim_search.Contents.json" DestinationFiles="Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_search.dataset\Contents.json" />
-		<!-- Stale Contents.json from an earlier build whose payload was removed
-		     would make actool fail on a dataset referencing a missing file. -->
-		<Delete Condition="!Exists('Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_search.dataset\sefaria-dump-5784-sivan-4.hebrew_search.sqlite')" Files="Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_search.dataset\Contents.json" />
+	<!-- iOS: decompress .gz → .sqlite payloads into the managed asset-pack folder (macOS only; gunzip is
+	     always available). The pack directory layout is produced by prepare_perushim_assets.py; payloads
+	     sit next to Manifest.json so `xcrun ba-package` can archive the pack for App Store Connect upload.
+	     The prebuilt search index rides in the same pack (optional — the app builds it on-device when the
+	     pack does not carry it). -->
+	<Target Name="DecompressPerushimNotesIos" BeforeTargets="PrepareForBuild;Build" Condition="($([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst') AND&#xD;&#xA;			((!Exists('Platforms\iOS\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite') AND&#xD;&#xA;			Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz')) OR&#xD;&#xA;			(!Exists('Platforms\iOS\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite') AND&#xD;&#xA;			Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite.gz')))">
+		<MakeDir Directories="Platforms\iOS\AssetPacks\perushim_notes" />
+		<Exec Condition="!Exists('Platforms\iOS\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite') AND Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz')" Command="gunzip -c '$(MSBuildProjectDirectory)/Platforms/Android/AssetPacks/perushim_notes/sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz' &gt; '$(MSBuildProjectDirectory)/Platforms/iOS/AssetPacks/perushim_notes/sefaria-dump-5784-sivan-4.perushim_notes.sqlite'" />
+		<Exec Condition="!Exists('Platforms\iOS\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite') AND Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite.gz')" Command="gunzip -c '$(MSBuildProjectDirectory)/Platforms/Android/AssetPacks/perushim_notes/sefaria-dump-5784-sivan-4.hebrew_search.sqlite.gz' &gt; '$(MSBuildProjectDirectory)/Platforms/iOS/AssetPacks/perushim_notes/sefaria-dump-5784-sivan-4.hebrew_search.sqlite'" />
 	</Target>
 
-	<!-- Ensure the .sqlite is in the ImageAsset list before the SDK's core compilation dependencies.
-	     BeforeTargets=_CompileImageAssets runs too late: its dependencies already invoke actool.
-	     The Condition on the item (Exists) prevents errors if the file is absent (e.g. Windows dev). -->
-	<Target Name="_IncludePerushimNotesImageAsset" BeforeTargets="_RemoveProcessedImageAssets;_BeforeCoreCompileImageAssets;_CollectPackLibraryResources" DependsOnTargets="DecompressPerushimNotesIos" Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">
-		<ItemGroup>
-			<ImageAsset Include="Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_notes.dataset\sefaria-dump-5784-sivan-4.perushim_notes.sqlite" Condition="Exists('Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_notes.dataset\sefaria-dump-5784-sivan-4.perushim_notes.sqlite')" Link="Assets\PerushimNotes.xcassets\perushim_notes.dataset\sefaria-dump-5784-sivan-4.perushim_notes.sqlite" />
-			<ImageAsset Include="Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_search.dataset\sefaria-dump-5784-sivan-4.hebrew_search.sqlite" Condition="Exists('Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_search.dataset\sefaria-dump-5784-sivan-4.hebrew_search.sqlite')" Link="Assets\PerushimNotes.xcassets\perushim_search.dataset\sefaria-dump-5784-sivan-4.hebrew_search.sqlite" />
-		</ItemGroup>
-		<Message Importance="high" Text="=== _IncludePerushimNotesImageAsset: added .sqlite to ImageAsset list ===" Condition="Exists('Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_notes.dataset\sefaria-dump-5784-sivan-4.perushim_notes.sqlite')" />
-	</Target>
-
-	<!-- iOS ODR: perushim notes are delivered via On-Demand Resources.
-	     The xcassets/Contents.json has on-demand-resource-tags which actool reads to create
-	     an ODR asset pack. At runtime, NSBundleResourceRequest downloads the tag and
-	     the compiled data becomes accessible via NSDataAsset. -->
-
-	<!-- ODR build diagnostics (temporary): log what the SDK computed for ODR asset packs. -->
-	<Target Name="_LogOdrDiagnostics" AfterTargets="_ComputeBundleResourceOutputPaths" Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">
-		<Message Importance="high" Text="=== ODR Build Diagnostics ===" />
-		<Message Importance="high" Text="EnableOnDemandResources = $(EnableOnDemandResources)" />
-		<Message Importance="high" Text="_DistributionType = $(_DistributionType)" />
-		<Message Importance="high" Text="BuildIpa = $(BuildIpa)" />
-		<Message Importance="high" Text="_BundleResourceWithOutputPath ODR items:" />
-		<Message Importance="high" Text="  %(_BundleResourceWithOutputPath.Identity) → %(_BundleResourceWithOutputPath.OutputPath)" Condition="'%(_BundleResourceWithOutputPath.OutputPath)' != '' AND $([System.String]::new('%(_BundleResourceWithOutputPath.OutputPath)').Contains('OnDemandResources'))" />
-	</Target>
-
-	<!-- _DetectSigningIdentity overrides _DistributionType based on the provisioning
-	     profile. With automatic signing and an empty CodesignProvision, it sets "Any",
-	     which prevents _PackageOnDemandResources from running (it requires AppStore|AdHoc).
-	     Force AppStore after detection so the ODR asset packs are packaged into the IPA. -->
-	<Target Name="_ForceDistributionTypeForOdr" AfterTargets="_DetectSigningIdentity" Condition="('$(_DistributionType)' == '' OR '$(_DistributionType)' == 'Any') AND&#xD;&#xA;			'$(BuildIpa)' == 'true' AND '$(EnableOnDemandResources)' == 'true' AND&#xD;&#xA;			($([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst')">
-		<Message Importance="high" Text="=== _ForceDistributionTypeForOdr: overriding _DistributionType from '$(_DistributionType)' to 'AppStore' ===" />
+	<!-- Managed Background Assets need an ExtensionKit downloader extension embedded at
+	     <app>/Extensions — a binary .NET cannot produce (Swift-only entry point), so the
+	     packaging pipeline builds app/extensions/AssetPackDownloader via xcodebuild and
+	     passes the .appex path plus its provisioning profile. Skipped when unset, which
+	     leaves pack downloads unavailable but never breaks the build (Debug/simulator
+	     builds already rely on the bundled MauiAsset fallback below). -->
+	<Target Name="_EmbedAssetPackDownloader" BeforeTargets="_CodesignAppBundle" Condition="'$(AssetPackDownloaderAppex)' != '' AND&#xD;&#xA;			Exists('$(AssetPackDownloaderAppex)') AND&#xD;&#xA;			($([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst')">
 		<PropertyGroup>
-			<_DistributionType>AppStore</_DistributionType>
+			<_AssetPackExtensionDir Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">$(AppBundleDir)/Extensions</_AssetPackExtensionDir>
+			<_AssetPackExtensionDir Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">$(AppBundleDir)/Contents/Extensions</_AssetPackExtensionDir>
+			<_AssetPackExtensionProfile Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">embedded.mobileprovision</_AssetPackExtensionProfile>
+			<_AssetPackExtensionProfile Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">embedded.provisionprofile</_AssetPackExtensionProfile>
 		</PropertyGroup>
-	</Target>
-
-	<Target Name="_LogOdrPackaging" AfterTargets="_PackageOnDemandResources" Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">
-		<Message Importance="high" Text="=== ODR Packaging: _PackageOnDemandResources executed ===" />
+		<MakeDir Directories="$(_AssetPackExtensionDir)" />
+		<Exec Command="ditto '$(AssetPackDownloaderAppex)' '$(_AssetPackExtensionDir)/AssetPackDownloader.appex'" />
+		<Exec Command="cp '$(AssetPackDownloaderProfile)' '$(_AssetPackExtensionDir)/AssetPackDownloader.appex/$(_AssetPackExtensionProfile)'" Condition="'$(AssetPackDownloaderProfile)' != '' AND Exists('$(AssetPackDownloaderProfile)')" />
+		<Exec Command="codesign --force --sign '$(CodesignKey)' --entitlements '$(MSBuildProjectDirectory)/../extensions/AssetPackDownloader/AssetPackDownloader/AssetPackDownloader.entitlements' --timestamp=none '$(_AssetPackExtensionDir)/AssetPackDownloader.appex'" Condition="'$(CodesignKey)' != ''" />
+		<Exec Command="codesign --verify --strict '$(_AssetPackExtensionDir)/AssetPackDownloader.appex'" Condition="'$(CodesignKey)' != ''" />
+		<Message Importance="high" Text="=== Embedded AssetPackDownloader.appex into $(AppBundleDir) ===" />
 	</Target>
 
 	<!-- Generated book packs use the same delivery SDK, independently of perushim_notes. -->
@@ -240,10 +234,11 @@
 		<MauiAsset Include="Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite" Condition="Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite')" LogicalName="sefaria-dump-5784-sivan-4.hebrew_search.sqlite" />
 	</ItemGroup>
 
-	<!-- Simulator Debug installs cannot fetch a store-hosted ODR pack. -->
-	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' AND '$(Configuration)' == 'Debug' AND Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz')">
-		<MauiAsset Include="Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_notes.dataset\sefaria-dump-5784-sivan-4.perushim_notes.sqlite" LogicalName="sefaria-dump-5784-sivan-4.perushim_notes.sqlite" />
-		<MauiAsset Include="Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_search.dataset\sefaria-dump-5784-sivan-4.hebrew_search.sqlite" Condition="Exists('Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_search.dataset\sefaria-dump-5784-sivan-4.hebrew_search.sqlite')" LogicalName="sefaria-dump-5784-sivan-4.hebrew_search.sqlite" />
+	<!-- Simulator/local Debug installs cannot fetch a store-hosted asset pack (the
+	     downloader extension is only embedded for signed Release packaging). -->
+	<ItemGroup Condition="($([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst') AND '$(Configuration)' == 'Debug' AND Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz')">
+		<MauiAsset Include="Platforms\iOS\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite" LogicalName="sefaria-dump-5784-sivan-4.perushim_notes.sqlite" />
+		<MauiAsset Include="Platforms\iOS\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite" Condition="Exists('Platforms\iOS\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite')" LogicalName="sefaria-dump-5784-sivan-4.hebrew_search.sqlite" />
 	</ItemGroup>
 
 	<ItemGroup>
@@ -252,7 +247,7 @@
 		<PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
 		<PackageReference Include="GraphQL.Client" Version="6.1.0" />
 		<PackageReference Include="GraphQL.Client.Serializer.Newtonsoft" Version="6.1.0" />
-		<PackageReference Include="HtmlAgilityPack" Version="1.13.0" />
+		<PackageReference Include="HtmlAgilityPack" Version="1.13.1" />
 		<PackageReference Include="Microsoft.Maui.Controls" Version="10.0.110" />
 		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.12" />
 		<PackageReference Include="sqlite-net-pcl" Version="1.11.285" />
