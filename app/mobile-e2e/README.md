@@ -121,9 +121,10 @@ Saves run in the background on `push`/`workflow_dispatch` misses.
 ## iOS simulator state caching
 
 The iOS leg caches `~/Library/Developer/CoreSimulator/Devices/<udid>` under
-`macOS-ios-sim-<udid>-<recipe>`. The runner image bakes a fixed device UDID per
-image version, so the key self-invalidates on every image update; there are no
-restore-keys, since another device's state must never load over this one.
+`macOS-ios-sim-<udid>-<toolchain>-<recipe>`. The runner image bakes a fixed
+device UDID per image version, so the key self-invalidates on every image
+update, and the toolchain stamp covers updates that keep the UDID; there are
+no restore-keys, since another device's state must never load over this one.
 `ios:boot:resolve` runs the same selection as the boot path — without the
 runtime download — and emits the UDID before restore, and `selectSimulator`
 breaks name+runtime ties on UDID so resolve, boot and capture always agree.

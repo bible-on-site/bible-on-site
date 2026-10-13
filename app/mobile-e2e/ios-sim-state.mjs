@@ -80,6 +80,22 @@ export async function quiesce({
       observe({ note: `uninstall ${id} skipped`, error: String(error) });
     }
   }
+  // A leftover test app in the saved device could make Appium skip
+  // reinstalling the fresh build, so removal is verified before capture:
+  // a device that still reports test bundles — or whose installed list can
+  // no longer be read — is not a clean state to publish.
+  try {
+    const listing = run("xcrun", ["simctl", "listapps", udid]);
+    const json = run("plutil", ["-convert", "json", "-o", "-", "-"], { input: listing });
+    const remaining = testBundleIds(JSON.parse(json.toString()));
+    if (remaining.length > 0) {
+      observe({ saved: false, reason: "test apps still installed", remaining });
+      return false;
+    }
+  } catch (error) {
+    observe({ saved: false, reason: "cannot verify test-app removal", error: String(error) });
+    return false;
+  }
   try {
     run("xcrun", ["simctl", "shutdown", udid]);
   } catch (error) {

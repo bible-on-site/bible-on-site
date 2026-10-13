@@ -185,15 +185,16 @@ jobs:
         run: npm run ios:boot:resolve --prefix app/mobile-e2e
 
       # The image bakes a fixed UDID per version, so the key self-invalidates on
-      # every image update; the recipe covers capture-logic changes. Exact key
-      # only: another device's state must never restore over this one.
+      # every image update; the toolchain stamp covers updates that keep the
+      # UDID, and the recipe covers capture-logic changes. Exact key only:
+      # another device's state must never restore over this one.
       - name: Restore iOS simulator state
         if: matrix.platform == 'iOS' && steps.ios-device.outputs.udid != ''
         id: ios-sim-cache
         uses: actions/cache/restore@v6
         with:
           path: ~/Library/Developer/CoreSimulator/Devices/${{ steps.ios-device.outputs.udid }}
-          key: ${{ runner.os }}-ios-sim-${{ steps.ios-device.outputs.udid }}-${{ env.IOS_SIM_STATE_RECIPE }}
+          key: ${{ runner.os }}-ios-sim-${{ steps.ios-device.outputs.udid }}-${{ steps.toolchain.outputs.id }}-${{ env.IOS_SIM_STATE_RECIPE }}
 
       # simctl boot is asynchronous: the device boots on the host while the
       # dependency installs run. This step needs no node_modules — it only
