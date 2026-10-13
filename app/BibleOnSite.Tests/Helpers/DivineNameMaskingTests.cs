@@ -291,6 +291,7 @@ public class DivineNameMaskingTests
             DivineNameMasking.MaskText(text, Enabled()).Should().Be(expected);
     }
 
+    [Collection(PreferencesServiceCollection.Name)]
     public class AmbientState
     {
         [Fact]
