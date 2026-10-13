@@ -610,7 +610,7 @@ jobs:
       # the .appex is already built and the xcodebuild step below is skipped.
       - name: Hash extension sources
         id: ext-key
-        run: node ${{ github.workspace }}/devops/github/ci/files-hash.mjs app/extensions/AssetPackDownloader/AssetPackDownloader.xcodeproj/project.pbxproj app/extensions/AssetPackDownloader/AssetPackDownloader/DownloaderExtension.swift app/extensions/AssetPackDownloader/AssetPackDownloader/AssetPackDownloader.entitlements app/extensions/AssetPackDownloader/AssetPackDownloader/Info.plist
+        run: node ${{ github.workspace }}/devops/github/ci/files-hash.mjs app/extensions/AssetPackDownloader/AssetPackDownloader.xcodeproj/project.pbxproj app/extensions/AssetPackDownloader/AssetPackDownloader.xcodeproj/xcshareddata/xcschemes/AssetPackDownloader.xcscheme app/extensions/AssetPackDownloader/AssetPackDownloader/DownloaderExtension.swift app/extensions/AssetPackDownloader/AssetPackDownloader/AssetPackDownloader.entitlements app/extensions/AssetPackDownloader/AssetPackDownloader/Info.plist
 
       - name: Restore extension build cache
         id: ext-cache
