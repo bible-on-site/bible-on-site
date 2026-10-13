@@ -594,9 +594,16 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         // The CarouselView fires spurious CurrentItemChanged events when it
         // first receives its ItemsSource, which would reset state.
         _carouselInitializing = true;
+        long? loadStamp;
         try
         {
-            await _viewModel.LoadByPerekIdAsync(perekId);
+            loadStamp = await _viewModel.LoadByPerekIdAsync(perekId);
+            if (loadStamp is null)
+            {
+                // A newer load or navigation superseded this one mid-flight —
+                // it owns the reader now, so skip the scroll and landing below.
+                return;
+            }
 
             // CarouselView resets Position to 0 when ItemsSource changes.
             // Force it to the correct position without animation.
@@ -612,6 +619,13 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         finally
         {
             _carouselInitializing = false;
+        }
+
+        // The layout yield above still admits a navigation: when it happened,
+        // the newer load owns the overlay and the search landing — leave both.
+        if (_viewModel.ReaderLoadStamp != loadStamp)
+        {
+            return;
         }
 
         // Hide loading overlay — carousel is ready

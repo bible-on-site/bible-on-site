@@ -86,6 +86,29 @@ public sealed class SearchIndexService : IAsyncDisposable
 
     [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage(
         Justification = "E2E-only startup hook; the mobile suite launches with BIBLE_E2E.")]
+    // The coverage endpoint's shared secret reaches Android the same way the
+    // launch marker does: an intent extra on the suite's session launch. The
+    // file survives the adb relaunches that drop extras; the endpoint resolves
+    // env first, then this file.
+    private static string E2eCoverageTokenPath => Path.Join(FileSystem.AppDataDirectory, "e2e-coverage-token");
+
+    [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage(
+        Justification = "E2E-only startup hook; the mobile suite launches with BIBLE_E2E_COVERAGE_TOKEN.")]
+    internal static void MarkE2eCoverageToken(string token)
+    {
+        Environment.SetEnvironmentVariable("BIBLE_E2E_COVERAGE_TOKEN", token);
+        try
+        {
+            File.WriteAllText(E2eCoverageTokenPath, token);
+        }
+        catch (IOException exception)
+        {
+            Console.WriteLine($"E2E coverage token persist failed: {exception.Message}");
+        }
+    }
+
+    [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage(
+        Justification = "E2E-only startup hook; the mobile suite launches with BIBLE_E2E.")]
     internal static bool IsE2eMarkedProcess()
     {
         if (Environment.GetEnvironmentVariable(E2eEnvironmentVariable) == "1")

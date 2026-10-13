@@ -18,11 +18,22 @@ namespace AltCover.Recorder
 	///   GET  /coverage/health — liveness probe for harness readiness checks
 	///   GET  /coverage        — current hit snapshot (altcover-visits/1 JSON)
 	///   POST /coverage/reset  — clear hits so per-test dumps stay attributed
+	///
+	/// Reset is authenticated: any loopback process could otherwise erase hits
+	/// mid-scenario and corrupt the merged report. The harness generates a
+	/// per-run token and delivers it as BIBLE_E2E_COVERAGE_TOKEN (iOS launch
+	/// environment; Android intent extra persisted to <Personal>/e2e-coverage-token
+	/// for the relaunches that drop extras). Requests must echo it in the
+	/// X-Bible-Coverage-Token header. When no token reaches the app, reset is
+	/// refused rather than left open.
 	/// </summary>
 	internal static class CoverageEndpoint
 	{
 		internal const int DefaultPort = 4787;
 		private const int MaxRequestBytes = 16 * 1024;
+		private const string TokenVariable = "BIBLE_E2E_COVERAGE_TOKEN";
+		private const string TokenHeader = "x-bible-coverage-token";
+		private const string TokenFileName = "e2e-coverage-token";
 		private static readonly byte[] HealthBody = Encoding.UTF8.GetBytes("{\"ok\":true}");
 		private static int _started;
 
@@ -94,12 +105,13 @@ namespace AltCover.Recorder
 					client.ReceiveTimeout = 5000;
 					client.SendTimeout = 5000;
 					var stream = client.GetStream();
-					var request = ReadRequestLine(stream);
-					if (request == null)
+					var head = ReadRequestHead(stream);
+					if (head == null)
 					{
 						return;
 					}
-					var parts = request.Split(' ');
+					var requestLine = head.Split(new[] { "\r\n" }, StringSplitOptions.None)[0];
+					var parts = requestLine.Split(' ');
 					if (parts.Length < 2)
 					{
 						WriteResponse(stream, 400, "text/plain", Encoding.UTF8.GetBytes("bad request"));
@@ -118,6 +130,12 @@ namespace AltCover.Recorder
 							break;
 						case ("POST", "/coverage/reset"):
 						case ("GET", "/coverage/reset"):
+							if (!IsAuthorized(head))
+							{
+								WriteResponse(stream, 403, "text/plain",
+									Encoding.UTF8.GetBytes("forbidden"));
+								break;
+							}
 							Instance.Reset();
 							WriteResponse(stream, 200, "application/json", HealthBody);
 							break;
@@ -134,7 +152,11 @@ namespace AltCover.Recorder
 			}
 		}
 
-		private static string? ReadRequestLine(NetworkStream stream)
+		/// <summary>
+		/// The request's first header line plus headers, i.e. everything through
+		/// the blank line. Bodies are never read — the routes need no payload.
+		/// </summary>
+		private static string? ReadRequestHead(NetworkStream stream)
 		{
 			var buffer = new byte[MaxRequestBytes];
 			var total = 0;
@@ -147,11 +169,60 @@ namespace AltCover.Recorder
 				}
 				total += read;
 				var text = Encoding.ASCII.GetString(buffer, 0, total);
-				var end = text.IndexOf("\r\n", StringComparison.Ordinal);
-				if (end > 0)
+				if (text.Contains("\r\n\r\n"))
 				{
-					return text.Substring(0, end);
+					return text;
 				}
+			}
+			return null;
+		}
+
+		private static bool IsAuthorized(string requestHead)
+		{
+			var required = RequiredToken();
+			if (required == null)
+			{
+				return false;
+			}
+			foreach (var line in requestHead.Split(new[] { "\r\n" }, StringSplitOptions.None))
+			{
+				var colon = line.IndexOf(':');
+				if (colon > 0 &&
+					string.Equals(line.Substring(0, colon).Trim(), TokenHeader, StringComparison.OrdinalIgnoreCase) &&
+					line.Substring(colon + 1).Trim() == required)
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+
+		/// <summary>
+		/// The token a reset must echo: the launch environment when the platform
+		/// supplies one (iOS, Windows), else the file the app's intent-extra
+		/// handler persisted (Android relaunches drop extras).
+		/// </summary>
+		private static string? RequiredToken()
+		{
+			var configured = Environment.GetEnvironmentVariable(TokenVariable);
+			if (!string.IsNullOrEmpty(configured))
+			{
+				return configured;
+			}
+			try
+			{
+				var path = Path.Combine(
+					Environment.GetFolderPath(Environment.SpecialFolder.Personal), TokenFileName);
+				if (File.Exists(path))
+				{
+					var persisted = File.ReadAllText(path).Trim();
+					return string.IsNullOrEmpty(persisted) ? null : persisted;
+				}
+			}
+			catch (Exception exception) when (exception is IOException
+				or UnauthorizedAccessException or NotSupportedException)
+			{
+				Console.Error.WriteLine($"E2E coverage token file unreadable: {exception.Message}");
 			}
 			return null;
 		}
