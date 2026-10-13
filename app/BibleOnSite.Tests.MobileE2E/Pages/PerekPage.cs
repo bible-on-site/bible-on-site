@@ -31,18 +31,18 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
     private AppiumElement WaitFor(By locator, Func<AppiumElement, bool> condition, TimeSpan timeout)
     {
         var deadline = DateTime.UtcNow.Add(timeout);
-        // Window.Size is a device round-trip; on iOS it costs ~0.4s. One fetch
-        // per poll iteration (and only once candidates exist) keeps the
-        // per-element filter cheap while still picking up rotations between
-        // polls.
+        // Window.Size is a device round-trip; on iOS it costs ~0.4s. One lazy
+        // fetch per poll iteration keeps the per-element filter cheap while
+        // still picking up rotations between polls.
+        Size? window = null;
         while (DateTime.UtcNow < deadline)
         {
-            Size? window = null;
+            window = null;
             try
             {
                 var element = driver.FindElements(locator)
                     .FirstOrDefault(element => element.Displayed
-                        && HasVisibleCenter(element, window ??= driver.Manage().Window.Size)
+                        && HasVisibleCenter(element, WindowSize())
                         && condition(element));
                 if (element != null)
                 {
@@ -56,6 +56,15 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
             Thread.Sleep(200);
         }
         throw new WebDriverTimeoutException($"No visible element matching {locator} met the condition within {timeout.TotalSeconds} seconds.");
+
+        Size WindowSize()
+        {
+            if (!window.HasValue)
+            {
+                window = driver.Manage().Window.Size;
+            }
+            return window.Value;
+        }
     }
 
     public string Source => WaitFor("PerekSource", element => !string.IsNullOrWhiteSpace(element.Text)).Text;
@@ -72,14 +81,15 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
         var locator = platform.AutomationId(automationId);
         var timeout = TimeSpan.FromSeconds(30);
         var deadline = DateTime.UtcNow.Add(timeout);
+        Size? window = null;
         while (DateTime.UtcNow < deadline)
         {
-            Size? window = null;
+            window = null;
             try
             {
                 var visible = driver.FindElements(locator)
                     .Any(element => element.Displayed
-                        && HasVisibleCenter(element, window ??= driver.Manage().Window.Size));
+                        && HasVisibleCenter(element, WindowSize()));
                 if (!visible)
                 {
                     return;
@@ -92,6 +102,15 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
             Thread.Sleep(200);
         }
         throw new WebDriverTimeoutException($"Element matching {locator} stayed visible for {timeout.TotalSeconds} seconds.");
+
+        Size WindowSize()
+        {
+            if (!window.HasValue)
+            {
+                window = driver.Manage().Window.Size;
+            }
+            return window.Value;
+        }
     }
 
     /// <summary>
