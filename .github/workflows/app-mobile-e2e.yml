@@ -167,14 +167,6 @@ jobs:
         if: matrix.platform == 'iOS'
         run: sudo xcode-select --switch /Applications/Xcode_27.app/Contents/Developer
 
-      # simctl boot is asynchronous: the devices boot on the host while the
-      # dependency installs run. This step needs no node_modules — it only
-      # selects devices and kicks simctl. With MOBILE_E2E_SHARD_COUNT=2 it also
-      # clones the primary device for the second shard.
-      - name: Start iPhone simulator boot
-        if: matrix.platform == 'iOS'
-        run: npm run ios:boot:start --prefix app/mobile-e2e
-
       - name: Restore npm cache
         id: npm-cache
         uses: actions/cache/restore@v6
@@ -224,6 +216,22 @@ jobs:
           npm ci --prefix devops --no-audit
           npm ci --prefix app/mobile-e2e --no-audit
 
+      - name: Validate the test harness
+        working-directory: app
+        shell: bash
+        run: |
+          mkdir -p "$MOBILE_E2E_ARTIFACTS"
+          npm run test:unit --prefix mobile-e2e 2>&1 | tee "$MOBILE_E2E_ARTIFACTS/harness-validation.log"
+          dotnet run --project devops -- TestMobileE2EUnit 2>&1 | tee -a "$MOBILE_E2E_ARTIFACTS/harness-validation.log"
+          dotnet test --project devops.Tests/devops.Tests.csproj --configuration Release 2>&1 | tee -a "$MOBILE_E2E_ARTIFACTS/harness-validation.log"
+
+      # Validate before booting either device: cold simulator startup competes
+      # with cache extraction and subprocess tests. The asynchronous boot still
+      # overlaps workload installation and the full app build.
+      - name: Start iPhone simulator boot
+        if: matrix.platform == 'iOS'
+        run: npm run ios:boot:start --prefix app/mobile-e2e
+
       # The boot kicked above is still in flight; the wait also warms Appium's
       # CoreSimulator bridge and exports the device UDIDs (MOBILE_UDID, or
       # MOBILE_UDID_SHARD_N when sharded) plus MOBILE_OS_VERSION. Running
@@ -255,13 +263,6 @@ jobs:
         with:
           path: ~/.npm
           key: ${{ steps.npm-cache.outputs.cache-primary-key }}
-
-      - name: Validate the test harness
-        working-directory: app
-        run: |
-          npm run test:unit --prefix mobile-e2e
-          dotnet run --project devops -- TestMobileE2EUnit
-          dotnet test --project devops.Tests/devops.Tests.csproj --configuration Release
 
       - name: Setup Java
         if: matrix.platform == 'Android'
