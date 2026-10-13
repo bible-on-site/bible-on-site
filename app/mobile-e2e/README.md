@@ -107,6 +107,17 @@ options, device profile, readiness flow or the runner-action version change;
 bump nothing else by hand — emulator and system-image updates rotate keys on
 their own.
 
+## MAUI workload caching
+
+Both legs cache the workload payload under `$DOTNET_ROOT` (`packs`,
+`metadata`, `sdk-manifests`, `template-packs`) under
+`<os>-<arch>-dotnet-<sdk>-<workload>-<set>` — the `dotnet workload install`
+download is a multi-GB silent NuGet fetch (~6 min cold), and restored packs
+turn the install into a verify no-op. Exact key only: a partial restore is
+worse than downloading. `DOTNET_SDK_VERSION`/`MAUI_WORKLOAD_SET` are the single
+source for the pins shared by setup-dotnet, the toolchain id and the install.
+Saves run in the background on `push`/`workflow_dispatch` misses.
+
 ## iOS simulator state caching
 
 The iOS leg caches `~/Library/Developer/CoreSimulator/Devices/<udid>` under
