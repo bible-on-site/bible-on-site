@@ -32,6 +32,13 @@ public class MainActivity : MauiAppCompatActivity
         {
             Services.SearchIndexService.MarkE2eLaunchFromIntent();
         }
+        // The coverage reset token rides the same launch intent; persisting it
+        // covers later relaunches whose extras adb drops.
+        var e2eCoverageToken = Intent?.GetStringExtra("BIBLE_E2E_COVERAGE_TOKEN");
+        if (!string.IsNullOrEmpty(e2eCoverageToken))
+        {
+            Services.SearchIndexService.MarkE2eCoverageToken(e2eCoverageToken);
+        }
         base.OnCreate(savedInstanceState);
         // MAUI's own MauiOnBackPressedCallback is only enabled while
         // Window.CanConsumeBackNavigation reports in-app history, so at the

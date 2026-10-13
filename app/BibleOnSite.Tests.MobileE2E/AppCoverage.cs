@@ -26,6 +26,12 @@ internal static class AppCoverage
     private static readonly object ForwardLock = new();
     private static bool _forwardReady;
 
+    // Per-run shared secret the app's coverage endpoint requires on reset —
+    // another loopback process must not be able to erase hits mid-scenario.
+    // Reaches the app as BIBLE_E2E_COVERAGE_TOKEN: inside iOS launch env, and
+    // as an Android intent extra the app persists to its data directory.
+    internal static readonly string Token = Guid.NewGuid().ToString("N");
+
     internal static bool Enabled =>
         Environment.GetEnvironmentVariable("MOBILE_E2E_COVERAGE") is { } flag &&
         (flag.Equals("1", StringComparison.OrdinalIgnoreCase) ||
@@ -98,8 +104,11 @@ internal static class AppCoverage
     private static string Send(MobileTestConfiguration configuration, string route)
     {
         EnsureReachable(configuration);
-        return Client.GetStringAsync(new Uri($"http://127.0.0.1:{Port}/{route}"))
-            .GetAwaiter().GetResult();
+        using var request = new HttpRequestMessage(HttpMethod.Get,
+            new Uri($"http://127.0.0.1:{Port}/{route}"));
+        request.Headers.TryAddWithoutValidation("X-Bible-Coverage-Token", Token);
+        using var response = Client.SendAsync(request).GetAwaiter().GetResult();
+        return response.EnsureSuccessStatusCode().Content.ReadAsStringAsync().GetAwaiter().GetResult();
     }
 
     private static string? TrySend(MobileTestConfiguration configuration, string route)
