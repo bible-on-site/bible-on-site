@@ -193,6 +193,12 @@ public abstract class MobilePlatformAdapter
             // already poll explicit element state instead of relying on WDA's
             // implicit synchronization.
             options.AddAdditionalAppiumOption("waitForIdleTimeout", 0);
+            // The instrumented e2e build never goes quiescent at launch: the
+            // coverage recorder and the search-index warmup keep worker threads
+            // churning well past XCTest's launch window ("Timed out attempting
+            // to launch app"). The suite's explicit WaitFor polling does the
+            // real synchronization, so skipping the idle gate is safe.
+            options.AddAdditionalAppiumOption("waitForQuiescence", false);
             // The suite marker reaches the app through processArguments on the
             // session's own launch; per-scenario restarts pass it through
             // launchApp because XCUITest does not merge the two.

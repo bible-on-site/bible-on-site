@@ -123,6 +123,17 @@ public sealed class SearchIndexService : IAsyncDisposable
     private static async Task WarmupIndexesAsync()
     {
         var service = Instance;
+        // The notes import dwarfs every other warmup cost. On the iOS leg the
+        // instrumented simulator build cannot absorb it inside suite budgets —
+        // the full build is only needed by searches with real commentary, and
+        // the iOS scenarios fabricate a tiny perushim pack instead. Let the
+        // notes index stay lazy there; the shared build task still dedups a
+        // mid-test build if one is ever requested.
+        if (DeviceInfo.Platform == DevicePlatform.iOS)
+        {
+            await service.WarmTableAsync("verses");
+            return;
+        }
         await Task.WhenAll(service.WarmTableAsync("verses"), service.WarmTableAsync("notes"));
     }
 
