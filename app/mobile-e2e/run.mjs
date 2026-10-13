@@ -67,7 +67,7 @@ let serverLogOpen = true;
 const serverLog = openSync(resolve(artifacts, "appium.log"), "w");
 const hangMonitor = platform === "ios" ? monitorNativeInteractions(async (command) => {
   writeFileSync(resolve(artifacts, "native-hang-command.txt"), command);
-  await sampleIosApp();
+  await sampleIosApp("interaction");
 }) : undefined;
 const server = spawn(process.execPath, [resolve(directory, "node_modules/appium/index.js"),
   "--address", "127.0.0.1", "--port", appiumPort, "--log-no-colors", "--log-timestamp",
@@ -95,7 +95,7 @@ const nativeStream = platform === "ios" ? startNativeLog("xcrun", ["simctl", "sp
   "log", "stream", "--style", "compact", "--level", "info", "--predicate", 'process == "BibleOnSite"'],
   resolve(artifacts, "device-live.log")) : undefined;
 
-async function sampleIosApp() {
+async function sampleIosApp(phase) {
   try {
     // Two shard simulators share this host (#2083), so a name-wide pgrep would
     // also sample the peer's healthy app — writing its stacks into this
@@ -104,19 +104,19 @@ async function sampleIosApp() {
     // already terminated the app simply leaves no PID row to find.
     const listing = await execute("xcrun", ["simctl", "spawn", process.env.MOBILE_UDID,
       "launchctl", "list"], { timeout: 30000 });
-    writeFileSync(resolve(artifacts, "native-processes.txt"), listing.stdout);
+    writeFileSync(resolve(artifacts, `native-${phase}-processes.txt`), listing.stdout);
     for (const pid of iosAppPids(listing.stdout)) {
       const stats = await execute("ps", ["-p", pid, "-o", "pid,ppid,%cpu,rss,state"], { timeout: 30000 });
-      writeFileSync(resolve(artifacts, `native-process-${pid}.txt`), stats.stdout);
+      writeFileSync(resolve(artifacts, `native-${phase}-process-${pid}.txt`), stats.stdout);
       // User-level sampling returned images without thread frames. Preserve
       // privileged sampler output as well as the scoped app's stack report.
-      const sampled = await execute("sudo", ["-n", "sample", pid, "2", "1", "-mayDie", "-file", resolve(artifacts, `native-stack-${pid}.txt`)],
+      const sampled = await execute("sudo", ["-n", "sample", pid, "2", "1", "-mayDie", "-file", resolve(artifacts, `native-${phase}-stack-${pid}.txt`)],
         { timeout: 120000 });
-      writeFileSync(resolve(artifacts, `native-sampler-${pid}.txt`), sampled.stdout + sampled.stderr);
+      writeFileSync(resolve(artifacts, `native-${phase}-sampler-${pid}.txt`), sampled.stdout + sampled.stderr);
     }
   } catch (error) {
     diagnosticsFailed = true;
-    writeFileSync(resolve(artifacts, "native-stack-error.txt"), String(error));
+    writeFileSync(resolve(artifacts, `native-${phase}-stack-error.txt`), String(error));
     console.error("Could not sample the iOS app:", error);
   }
 }
@@ -154,7 +154,7 @@ try {
   if (platform === "ios" && process.exitCode !== 0) {
     // Symbolication can consume substantial resources on simulator runners.
     // Sample surviving failed/hung apps after tests, never alongside healthy runs.
-    await sampleIosApp();
+    await sampleIosApp("cleanup");
   }
   if (diagnosticsFailed) process.exitCode ||= 1;
   try {
