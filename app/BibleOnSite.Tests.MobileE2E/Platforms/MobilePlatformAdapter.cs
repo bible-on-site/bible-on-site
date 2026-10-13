@@ -156,7 +156,8 @@ public abstract class MobilePlatformAdapter
             // so the suite marker rides as an extra on the session's launch
             // intent; MainActivity persists it for the install's later
             // restarts whose adb activateApp calls drop extras.
-            options.AddAdditionalAppiumOption("optionalIntentArguments", "--ez BIBLE_E2E true");
+            options.AddAdditionalAppiumOption("optionalIntentArguments",
+                $"--ez BIBLE_E2E true --es BIBLE_E2E_COVERAGE_TOKEN {AppCoverage.Token}");
         }
         else
         {
@@ -210,7 +211,8 @@ public abstract class MobilePlatformAdapter
         new Dictionary<string, string>
         {
             ["BIBLE_E2E"] = "1",
-            ["BIBLE_E2E_COVERAGE_PORT"] = AppCoverage.Port.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            ["BIBLE_E2E_COVERAGE_PORT"] = AppCoverage.Port.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            ["BIBLE_E2E_COVERAGE_TOKEN"] = AppCoverage.Token
         };
 
     public static MobilePlatformAdapter For(MobilePlatform platform) => platform switch

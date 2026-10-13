@@ -94,7 +94,12 @@ public partial class RecitationPacksViewModel : ObservableObject
         _recitation = recitation;
         _perakim = perakim;
         _navigator = navigator;
-        _recitation.Changed += OnRecitationChanged;
+        // The service is a singleton: a strong subscription would retain every
+        // opened settings page. The weak subscription self-removes on collect.
+        BibleOnSite.Helpers.WeakEventSubscription.Subscribe(this, _recitation,
+            static (service, handler) => service.Changed += handler,
+            static (service, handler) => service.Changed -= handler,
+            static model => model.OnRecitationChanged(null, EventArgs.Empty));
     }
 
     /// <summary>Catalog metadata is loaded. Audio presence is reported by <see cref="InstallState"/>.</summary>

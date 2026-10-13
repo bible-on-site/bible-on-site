@@ -383,6 +383,14 @@ public partial class PerekViewModel : ObservableObject
     public void InvalidatePendingLoads() => Interlocked.Increment(ref _loadGeneration);
 
     /// <summary>
+    /// Stamp of the newest reader load/navigation. A caller holding the stamp a
+    /// load returned can compare it after an <c>await</c> boundary — a mismatch
+    /// means a newer navigation owns the reader and the caller's remaining
+    /// continuation must not run.
+    /// </summary>
+    public long ReaderLoadStamp => Interlocked.Read(ref _loadGeneration);
+
+    /// <summary>
     /// Asynchronously loads a perek by its ID, including pasukim from the database.
     /// Each attempt is time-boxed by <see cref="LoadAttemptTimeout"/>; when a
     /// stage stalls, the load retries up to <see cref="LoadMaxAttempts"/> times,
@@ -390,7 +398,13 @@ public partial class PerekViewModel : ObservableObject
     /// instead of an endless spinner. A call superseded by a newer load or
     /// navigation reports nothing — the newer owner decides what the UI shows.
     /// </summary>
-    public async Task LoadByPerekIdAsync(int perekId)
+    /// <returns>
+    /// This load's stamp when it still owns the reader at completion, or
+    /// <see langword="null"/> when a newer load/navigation superseded it
+    /// mid-flight — callers must then skip every post-load action (scroll,
+    /// search landing) that would touch the newer owner's reader.
+    /// </returns>
+    public async Task<long?> LoadByPerekIdAsync(int perekId)
     {
         var gate = new LoadGate(Interlocked.Increment(ref _loadGeneration));
         var attempt = 0;
@@ -406,7 +420,9 @@ public partial class PerekViewModel : ObservableObject
             try
             {
                 await load.WaitAsync(LoadAttemptTimeout);
-                return;
+                // The core may have returned early on a mid-flight supersede —
+                // surface that instead of reporting a successful load.
+                return IsCurrentLoad(gate, attemptStamp) ? gate.Generation : null;
             }
             catch (TimeoutException)
             {
@@ -421,7 +437,7 @@ public partial class PerekViewModel : ObservableObject
                     // this abandoned call must not resurface an error over it.
                     if (!IsCurrentLoad(gate, attemptStamp))
                     {
-                        return;
+                        return null;
                     }
                     throw new TimeoutException(
                         $"Perek {perekId} load timed out after {attempt} attempt(s); last stage: {LoadStage}");
