@@ -175,7 +175,7 @@ public partial class RecitationPacksViewModel : ObservableObject
             var sizeMb = Math.Ceiling(size / 1_000_000d);
             book.Status = !IsInstalled ? "זמינות תיבדק בעת ההורדה"
                 : available == 0 ? "אין הקלטות זמינות"
-                : installed == 0 ? $"לא מותקן — 0 מתוך {available} הקלטות ({sizeMb} MB)"
+                : installed == 0 ? $"לא מותקן - 0 מתוך {available} הקלטות ({sizeMb} MB)"
                 : installed < available ? $"מותקן חלקית — {installed} מתוך {available} הקלטות ({sizeMb} MB)"
                 : $"מותקן — {installed} מתוך {available} הקלטות ({sizeMb} MB)";
         }
