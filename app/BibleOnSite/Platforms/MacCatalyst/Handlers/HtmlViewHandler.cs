@@ -55,7 +55,11 @@ public class HtmlViewHandler : ViewHandler<HtmlView, UITextView>
         var textView = new UITextView
         {
             Editable = false,
-            ScrollEnabled = false,
+            // Noncontiguous TextKit layout requires scrolling to stay enabled.
+            // Our cached measurement supplies the full height; no intrinsic-size
+            // request should force the entire commentary through main-thread layout.
+            ScrollEnabled = true,
+            Bounces = false,
             BackgroundColor = UIColor.Clear,
             TextContainerInset = UIEdgeInsets.Zero
         };
