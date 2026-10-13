@@ -84,9 +84,9 @@ jobs:
     # The resolver is skipped when the caller provides an artifact name.
     if: ${{ always() && !cancelled() && !failure() }}
     runs-on: ${{ matrix.runner }}
-    # Reserve setup/build and diagnostics around the unchanged 45-minute iOS pilot.
-    # A 60-minute whole job can end before that step and its artifact upload finish.
-    timeout-minutes: ${{ matrix.platform == 'iOS' && 90 || 60 }}
+    # The supervised pilot has its own 15-minute wall-clock deadline.
+    # Keep setup, coverage and uploads within the original whole-job limit.
+    timeout-minutes: 60
     strategy:
       # Each platform owns its runner, device, server and artifacts. Preserve
       # both results when one platform fails; there is no cross-platform dependency.
@@ -458,8 +458,9 @@ jobs:
       - name: Run sharded pilot on iOS
         if: matrix.platform == 'iOS'
         id: pilot-ios
-        # Leave time to upload diagnostics when the expanded device suite expires.
-        timeout-minutes: 45
+        # The independent supervisor stops the full process tree at 15 minutes;
+        # this outer limit also bounds a blocked supervisor or runner step.
+        timeout-minutes: 20
         env:
           # Empty in shadow mode: the manifest is reported, not enforced.
           MOBILE_E2E_SELECTION: ${{ inputs.e2e_selection_mode == 'enforce' && steps.selection.outputs.manifest || '' }}
