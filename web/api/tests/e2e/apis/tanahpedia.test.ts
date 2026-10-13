@@ -115,6 +115,60 @@ test.describe("TanahpediaEntriesService", () => {
 		});
 	});
 
+	test.describe("searchTanahpediaEntries", () => {
+		test("returns ranked hits for a name phrase", async ({ request }) => {
+			const body = await queryApi(
+				request,
+				`query ($phrase: String!) {
+					searchTanahpediaEntries(phrase: $phrase) {
+						id uniqueName title excerpt score
+					}
+				}`,
+				{ phrase: "משה רבנו" },
+			);
+			expect(body.errors).toBeUndefined();
+			const hits = body.data.searchTanahpediaEntries;
+			expect(hits.length).toBeGreaterThan(0);
+			expect(hits[0].uniqueName).toBe("משה-רבנו");
+			// One hit per entry — aliases and disambiguation targets collapse
+			// into the canonical entry, never duplicate rows.
+			const uniqueNames = hits.map((hit: { uniqueName: string }) => hit.uniqueName);
+			expect(new Set(uniqueNames).size).toBe(uniqueNames.length);
+			for (const hit of hits) {
+				expect(hit.score).toBeGreaterThan(0);
+			}
+		});
+
+		test("resolves an alias to its canonical entry", async ({ request }) => {
+			const body = await queryApi(
+				request,
+				'{ searchTanahpediaEntries(phrase: "משה") { uniqueName } }',
+			);
+			expect(body.errors).toBeUndefined();
+			const uniqueNames = body.data.searchTanahpediaEntries.map(
+				(hit: { uniqueName: string }) => hit.uniqueName,
+			);
+			expect(uniqueNames).toContain("משה-רבנו");
+		});
+
+		test("returns empty for a blank phrase and rejects a bad limit", async ({
+			request,
+		}) => {
+			const blank = await queryApi(
+				request,
+				'{ searchTanahpediaEntries(phrase: "   ") { uniqueName } }',
+			);
+			expect(blank.errors).toBeUndefined();
+			expect(blank.data.searchTanahpediaEntries).toEqual([]);
+
+			const badLimit = await queryApi(
+				request,
+				'{ searchTanahpediaEntries(phrase: "משה", limit: 0) { uniqueName } }',
+			);
+			expect(badLimit.errors).toBeDefined();
+		});
+	});
+
 	test.describe("tanahpediaSynonymTargets", () => {
 		test("resolves an alias to its canonical entry", async ({ request }) => {
 			const body = await queryApi(

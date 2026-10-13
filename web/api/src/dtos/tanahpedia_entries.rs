@@ -103,3 +103,23 @@ pub struct TanahpediaCategoryHomepage {
     /// Admin-authored HTML intro rendered above the listing.
     pub content: Option<String>,
 }
+
+/// One ranked Tanahpedia search hit — the API counterpart of the website's
+/// `/search` `tanahpedia` result (`searchTanahpediaEntries` in
+/// `web/bible-on-site/src/lib/search/db-content.ts`).
+#[derive(SimpleObject, Debug, Clone)]
+pub struct TanahpediaSearchHit {
+    pub id: String,
+    /// Canonical entry slug (`unique_name`) — the client's navigation key.
+    pub unique_name: String,
+    pub title: String,
+    /// Snippet source text, selected like the website's `plain` field: the
+    /// body window around the match for content hits, the `נקרא גם:` alias
+    /// list when an alias drove the match, or the body lead-in for a
+    /// title-only match. Empty when the entry has no body and no aliases.
+    pub excerpt: String,
+    /// Relevance score — the website/app tier ladder (90/80/60 word scores,
+    /// whole-phrase 100/110) with the name fields (title, unique_name, alias
+    /// names) at ×2 weight over body content.
+    pub score: i32,
+}
