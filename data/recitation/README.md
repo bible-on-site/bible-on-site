@@ -354,4 +354,50 @@ Serve with `--recovery-database <separate-preview.sqlite> --recovery-output <pre
 
 `listening_tail.py` prepares diagnostic-only trailing-vowel candidates from the pinned CTC character/separator path. It never changes the automatic worker, pads endpoints or approves a candidate. Every corrected boundary requires fresh human listening and the same complete-chapter geometry checks.
 
+The pinned CTC letter endpoints are raw diagnostic evidence, not proof that a
+spoken ending is complete. Before installing a new listening queue, inspect each
+candidate against the original decoded source, including trailing vowels,
+frication and consonant decay. Do not send a known clipped letter endpoint back
+to the listener unchanged. Do not extend every word to `followingWordStartMs` or
+apply one offset: either can include a gap or part of the next word.
+
+For a first candidate, `source-inspected-initial-candidate-v1` supports individually
+inspected boundaries without inventing an earlier problem answer. It binds the
+unchanged pinned CPU/full-FP32/two-thread raw diagnostic, original letter rows and
+scores, source spectrum hash, context and per-word observations. It preserves
+canonical identities and all original timing geometry. The candidate remains
+unapproved: every cut needs genuine fresh hearing and a current source-bound
+GOOD answer; inherited listening and stale answers cannot approve it. Automatic
+worker/model/ASR gates are unchanged. Reported-problem revisions continue using
+`source-inspected-word-boundaries-v1` and their actual saved feedback. Neither
+source inspection nor forced alignment approves or publishes an interval.
+
+Letter endpoints can also stop before a spoken vowel finishes. When a reported
+defect falls between the recorded CTC endpoints, inspect the original decoded
+source waveform and spectrogram for that word. `source-inspected-word-boundaries-v1`
+records a diagnostic proposal separately from the unchanged CTC letter score,
+with immutable inspection and actual problem-answer evidence. This is not an
+automatic alignment policy: it needs a new source-bound GOOD answer covering
+the exact proposed cuts, plus all existing complete-chapter checks. Do not apply
+one offset or endpoint rule to an entire review queue.
+
+Archive the previous queue before installing revised candidates and preserve the
+append-only answer history. Verify the complete archive chain in an isolated
+recovery preview so all earlier chapter approvals remain intact. Changed cuts
+require new candidate hashes and fresh listening; unchanged cases retain their
+actual answers. For a revised verse, `listeningReusePath` and
+`listeningReuseSha256` can reference an immutable prior queue and actual saved
+answer. Only byte-identical word rows from the same original source, canonical
+text and lossless clip retain their actual completed listening evidence. The
+human must freshly hear every changed cut and explicitly give the revised verse
+a new answer. Provenance distinguishes `freshHeardSegments` from
+`reusedHeardSegments`; a prior PROBLEM answer supplies listening evidence only,
+never approval. Verified source-bound CTC and lossless clip evidence may be
+reused, with no claim of fresh inference. The original-MP3 worker and approved
+intervals remain independent of this preparation.
+
 Reported clipped starts, clipped endings and overlong cuts can also be proposed with `propose_path_boundaries`. Each endpoint must be an actual recorded letter/separator boundary from the same pinned CTC path. The verifier rejects unrecorded offsets, changed canonical identities or acoustic scores, missing/duplicate proof, overlaps and invalid durations. These remain diagnostic candidates: every changed verse requires fresh completed word listening before the guarded importer can recover its chapter.
+
+A later review round can reuse a cut directly heard in a round that also reused other cuts. The importer revalidates that round and every original source/history binding, then uses only its saved `freshHeardSegments`. Inherited cuts never become fresh hearing. Changed cuts still require genuine listening and a new answer.
+
+Unchanged cuts directly heard in different completed rounds may share one `listeningReusePath` proof with a `sources` list. Each source retains its immutable queue/history hashes and exact saved answer. The verifier independently revalidates each source and pools only identical cuts listed in that round's actual direct hearing. Inherited hearing never becomes direct hearing, and every changed cut still requires fresh listening and a new answer.

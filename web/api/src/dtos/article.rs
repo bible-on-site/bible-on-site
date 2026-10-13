@@ -1,6 +1,18 @@
-use async_graphql::{ComplexObject, SimpleObject};
+use async_graphql::{ComplexObject, Context, Result, SimpleObject};
 
+use crate::{providers::Database, services::articles_service};
 use entities::article::Model;
+
+/// One canonical {perek_id, pasuk} coordinate an article covers
+/// (tanah_article_covering_source). Meaningful for readers only when the
+/// article's coverageVerified is true — see Article.coverage_verified.
+#[derive(SimpleObject, Debug, Clone)]
+pub struct ArticleCoveringSource {
+    /// Canonical perek id (1-929).
+    pub perek_id: i32,
+    /// 1-based pasuk within the perek.
+    pub pasuk: i32,
+}
 
 #[derive(SimpleObject, Debug, Clone)]
 #[graphql(complex)]
@@ -16,6 +28,11 @@ pub struct Article {
     pub article_content: Option<String>,
     pub name: String,
     pub priority: i32,
+    /// TRUE: coveringSources is the article's verified verse-level coverage
+    /// and drives verse/range lookups. FALSE: detailed coverage is unknown —
+    /// consumers use the primary perek association without claiming pasuk
+    /// precision (legacy articles whose coverage was never mapped).
+    pub coverage_verified: bool,
 }
 
 impl From<Model> for Article {
@@ -28,12 +45,30 @@ impl From<Model> for Article {
             article_content: value.content,
             name: value.name,
             priority: value.priority as i32,
+            coverage_verified: value.coverage_verified,
         }
     }
 }
 
 #[ComplexObject]
-impl Article {}
+impl Article {
+    /// The article's persisted covering sources, ordered by coordinate.
+    /// The set may span several perakim. An empty list means no pesukim are
+    /// mapped — interpret it through coverage_verified (verified-empty is
+    /// rejected on write, so empty + verified does not occur in practice).
+    async fn covering_sources(&self, ctx: &Context<'_>) -> Result<Vec<ArticleCoveringSource>> {
+        let sources =
+            articles_service::find_covering_sources_by_article_id(ctx.data::<Database>()?, self.id)
+                .await?;
+        Ok(sources
+            .into_iter()
+            .map(|model| ArticleCoveringSource {
+                perek_id: model.perek_id,
+                pasuk: model.pasuk as i32,
+            })
+            .collect())
+    }
+}
 
 /// One ranked hit of the semantic article-content search. Excerpts are plain
 /// text — markup is stripped server-side — so clients can render them

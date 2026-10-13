@@ -114,6 +114,33 @@ public static class HebrewDateHelper
     private static double RadiansToDegrees(double radians) => radians * 180 / Math.PI;
 
     /// <summary>
+    /// Today's Hebrew month (legacy numbering shared with the database date
+    /// columns: 1=Tishrei..5=Shevat, 6/13/14=Adar variants, 7=Nisan..12=Elul)
+    /// and day of month, tzeit-aware like the reader's daily-perek logic.
+    /// </summary>
+    internal static (int Month, int Day) GetTodayHebrewMonthDay()
+    {
+        var now = TimeZoneInfo.ConvertTimeBySystemTimeZoneId(
+            DateTime.UtcNow,
+            GetIsraelTimeZoneId());
+        var hebrewDate = GetTzeitAwareHebrewDate(now);
+        var legacyMonth = CalendarMonthToLegacy(hebrewDate.Year, hebrewDate.Month);
+        return (legacyMonth, hebrewDate.Day);
+    }
+
+    /// <summary>
+    /// Formats today's Hebrew date for display ("כה כסלו תשפו").
+    /// </summary>
+    internal static string FormatTodayHebrewDate()
+    {
+        var now = TimeZoneInfo.ConvertTimeBySystemTimeZoneId(
+            DateTime.UtcNow,
+            GetIsraelTimeZoneId());
+        var hebrewDate = GetTzeitAwareHebrewDate(now);
+        return FormatHebrewDate(HebrewDateToNumber(hebrewDate));
+    }
+
+    /// <summary>
     /// Gets the Hebrew date, advancing to next day if after nightfall (tzeit).
     /// </summary>
     internal static (int Year, int Month, int Day) GetTzeitAwareHebrewDate(DateTime date)
@@ -324,11 +351,15 @@ public static class HebrewDateHelper
     /// </summary>
     internal static string GetIsraelTimeZoneId()
     {
-        // Windows uses "Israel Standard Time", Unix uses "Asia/Jerusalem"
-        return TimeZoneInfo.TryFindSystemTimeZoneById("Asia/Jerusalem", out _)
-            ? "Asia/Jerusalem"
-            : "Israel Standard Time";
+        // Modern runtimes (ICU) alias "Asia/Jerusalem" everywhere; pre-ICU
+        // Windows only knows "Israel Standard Time".
+        return IsraelTimeZoneId(
+            TimeZoneInfo.TryFindSystemTimeZoneById("Asia/Jerusalem", out _));
     }
+
+    /// <summary>Picks the tz id that exists on the running platform.</summary>
+    internal static string IsraelTimeZoneId(bool hasJerusalemAlias) =>
+        hasJerusalemAlias ? "Asia/Jerusalem" : "Israel Standard Time";
 
     #region Hebrew month helpers (לוח לימוד יומי)
 

@@ -119,7 +119,7 @@ env:
   # its .gz exceeds GitHub's 100 MB push limit).
   PERUSHIM_SEARCH_SQLITE_FILENAME: sefaria-dump-5784-sivan-4.hebrew_search.sqlite
   PERUSHIM_NOTES_ANDROID_ASSET_RELDIR: Platforms/Android/AssetPacks/perushim_notes
-  PERUSHIM_NOTES_IOS_ODR_DATASET_RELDIR: Platforms/iOS/Assets/PerushimNotes.xcassets/perushim_notes.dataset
+  PERUSHIM_NOTES_IOS_ASSETPACK_RELDIR: Platforms/iOS/AssetPacks/perushim_notes
   PERUSHIM_PIPELINE_DIRECTORY: data/sefaria/pipelines/perushim-view
   LCOV_DOCKER_IMAGE_ARTIFACT_NAME: lcov-docker-image
   SEFARIA_MONGO_IMAGE_ARTIFACT_NAME: sefaria-mongo-image
@@ -1777,12 +1777,29 @@ jobs:
         with:
           node-version-file: web/bible-on-site/package.json
 
+      # Same browser cache the website jobs use, at the macOS path. This job
+      # runs on PRs only, so the entry is PR-scoped by design: a save on miss
+      # speeds up reruns and later pushes of the same pull request.
+      - name: Restore playwright binaries
+        id: playwright-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ~/Library/Caches/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ needs.setup_env.outputs.website_playwright_version }}
+
       - name: Verify native audio time origin on Chromium and Apple WebKit
         working-directory: web/bible-on-site
         run: |
           npm ci --ignore-scripts --no-audit
           npx playwright install chromium webkit
           npx playwright test --config playwright.recitation.config.ts
+
+      - name: Save playwright binaries
+        if: ${{ steps.playwright-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: ~/Library/Caches/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ needs.setup_env.outputs.website_playwright_version }}
 
   bulletin_ci:
     name: Bulletin CI
@@ -1883,7 +1900,7 @@ jobs:
         run: |
           python -m venv data/recitation/.venv
           data/recitation/.venv/bin/python -m pip install torch==2.14.1 --index-url https://download.pytorch.org/whl/cpu
-          data/recitation/.venv/bin/python -m pip install numpy==2.5.3 transformers==5.18.0
+          data/recitation/.venv/bin/python -m pip install numpy==2.5.4 transformers==5.19.0
           cd data/recitation
           .venv/bin/python -m unittest -v
           .venv/bin/python publish.py
@@ -2735,7 +2752,9 @@ jobs:
         [
           {"name": "${{ needs.package_app.outputs.windows_artifact_name }}", "path": "app/.artifacts/windows", "glob": "**/BibleOnSite*.msix", "label": "Windows (MSIX)", "cd_key": "windows_artifact_name"},
           {"name": "${{ needs.package_app.outputs.android_artifact_name }}", "path": "app/.artifacts/android", "glob": "**/*.aab", "label": "Android (AAB)", "cd_key": "android_artifact_name"},
-          {"name": "${{ needs.package_app.outputs.ios_artifact_name }}", "path": "app/.artifacts/ios", "glob": "**/*.ipa", "label": "iOS (IPA)", "cd_key": "ios_artifact_name"}
+          {"name": "${{ needs.package_app.outputs.ios_artifact_name }}", "path": "app/.artifacts/ios", "glob": "**/*.ipa", "label": "iOS (IPA)", "cd_key": "ios_artifact_name"},
+          {"name": "${{ needs.package_app.outputs.ios_artifact_name }}", "path": "app/.artifacts/ios", "glob": "**/*.aar", "label": "iOS asset packs (.aar — Apple-hosted Background Assets)", "cd_key": "ios_assetpacks_artifact_name"},
+          {"name": "${{ needs.package_app.outputs.ios_artifact_name }}", "path": "app/.artifacts/ios", "glob": "payloads/*", "label": "iOS pack payloads (HTTPS delivery below iOS 26)", "cd_key": "ios_payloads_artifact_name"}
         ]
       cd_event_type: deploy-app
 
