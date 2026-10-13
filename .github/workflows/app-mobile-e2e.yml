@@ -129,9 +129,11 @@ jobs:
 
       # hashFiles() in step templates dies on a hard 120s budget on loaded
       # runners (#2184); a run step computes the same input without the clock.
-      - name: Hash npm lockfile inputs
+      - name: Hash npm dependency inputs
         id: npm-key
-        run: node ${{ github.workspace }}/devops/github/ci/files-hash.mjs devops/package-lock.json app/mobile-e2e/package-lock.json
+        # package.json is hashed too: a manifest edit (e.g. an install script)
+        # without a lockfile change must still rotate the node_modules key.
+        run: node ${{ github.workspace }}/devops/github/ci/files-hash.mjs devops/package.json devops/package-lock.json app/mobile-e2e/package.json app/mobile-e2e/package-lock.json
 
       - name: Hash AVD readiness script inputs
         id: readiness-key
