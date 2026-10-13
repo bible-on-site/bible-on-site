@@ -276,6 +276,13 @@ public partial class PerekPage
                     $"&searchExcerpt={Uri.EscapeDataString(article.Excerpt)}" +
                     $"&searchPhrase={Uri.EscapeDataString(article.SearchPhrase)}");
             }
+            else if (result is TanahpediaSearchResult entry)
+            {
+                // UniqueName is the canonical slug — alias hits already resolve
+                // server-side, so this always opens the right entry (#2104).
+                await Shell.Current.GoToAsync(
+                    $"tanahpediaEntry?uniqueName={Uri.EscapeDataString(entry.UniqueName)}");
+            }
             else if (GetSearchPerekId(result) > 0)
             {
                 await Shell.Current.GoToAsync(AppRoutes.SearchReader, false, new ShellNavigationQueryParameters
