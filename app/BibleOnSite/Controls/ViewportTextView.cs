@@ -10,7 +10,7 @@ namespace BibleOnSite.Controls;
 /// An inline document keeps its full reader height while TextKit lays out only
 /// the part intersecting the reader's viewport. The outer reader owns scrolling.
 /// </summary>
-public sealed class ViewportTextView : UIView
+public sealed class ViewportTextView : UIView, IUIAccessibilityContainer
 {
     public UITextView TextView { get; } = new TracedTextView()
     {
@@ -49,22 +49,41 @@ public sealed class ViewportTextView : UIView
         AddSubview(TextView);
     }
 
+    private AccessibleSection[] _accessibleSections = [];
+    private bool _sectionedAccessibility;
+    private int _accessibilitySerial;
+    private bool _disposed;
+
     /// <summary>
-    /// UIKit expands a read-only text view into one accessibility object per
-    /// paragraph, even when only a small viewport is visible. Group large notes
-    /// without dropping their text or link actions from assistive navigation.
+    /// Bound both the number of accessibility objects and each spoken label.
+    /// One label for a whole large document still makes XCTest snapshots costly.
+    /// Text remains complete, ordered, and available with its link actions.
     /// </summary>
     internal void UpdateDocumentAccessibility()
     {
+        var serial = ++_accessibilitySerial;
         var text = TextView.AttributedText;
         var value = text?.Value ?? string.Empty;
-        var grouped = value.Length > 16_384 || value.Count(c => c == '\n') > 128;
-        TextView.AccessibilityElementsHidden = grouped;
-        IsAccessibilityElement = grouped;
-        AccessibilityIdentifier = grouped ? "LongCommentaryDocument" : null;
-        AccessibilityTraits = UIAccessibilityTrait.StaticText;
-        AccessibilityAttributedLabel = grouped ? text : null;
-        AccessibilityCustomActions = grouped && text is not null ? CreateLinkActions(text, value) : null;
+        _sectionedAccessibility = value.Length > 16_384 || value.Count(c => c == '\n') > 128;
+        TextView.AccessibilityElementsHidden = _sectionedAccessibility;
+        IsAccessibilityElement = false;
+        AccessibilityAttributedLabel = null;
+        AccessibilityIdentifier = null;
+        AccessibilityCustomActions = null;
+        _accessibleSections = _sectionedAccessibility && text is not null
+            ? AccessibleTextSections.Split(value).Select(section =>
+            {
+                var range = new NSRange(section.Start, section.Length);
+                using var part = text.Substring(range.Location, range.Length);
+                return new AccessibleSection(this, range, serial)
+                {
+                    AccessibilityLabel = value.Substring(section.Start, section.Length),
+                    AccessibilityIdentifier = "CommentaryTextSection",
+                    AccessibilityTraits = (ulong)UIAccessibilityTrait.StaticText,
+                    AccessibilityCustomActions = CreateLinkActions(part, part.Value ?? string.Empty)
+                };
+            }).ToArray()
+            : [];
     }
 
     internal Func<string, bool>? ActivateLink { get; set; }
@@ -86,14 +105,64 @@ public sealed class ViewportTextView : UIView
         return actions.ToArray();
     }
 
-    public override CGRect AccessibilityFrame
+    [Export("accessibilityElementCount")]
+    public nint AccessibilityElementCount() => _sectionedAccessibility ? _accessibleSections.Length : 1;
+
+    [Export("accessibilityElementAtIndex:")]
+    public NSObject GetAccessibilityElementAt(nint index)
+        => index < 0 || index >= AccessibilityElementCount() ? null!
+            : _sectionedAccessibility ? _accessibleSections[(int)index] : TextView;
+
+    [Export("indexOfAccessibilityElement:")]
+    public nint GetIndexOfAccessibilityElement(NSObject element)
     {
-        get => IsAccessibilityElement && Window is not null
-            ? UIAccessibility.ConvertFrameToScreenCoordinates(TextView.Frame, this)
-            : base.AccessibilityFrame;
-        set => base.AccessibilityFrame = value;
+        var index = _sectionedAccessibility
+            ? Array.FindIndex(_accessibleSections, section => section.Handle == element.Handle)
+            : element.Handle == TextView.Handle ? 0 : -1;
+        return index < 0 ? nint.MaxValue : index;
     }
 
+    [Export("accessibilityElements")]
+    public NSObject[] GetAccessibilityElements() => _sectionedAccessibility ? _accessibleSections : [TextView];
+
+    private sealed class AccessibleSection : UIAccessibilityElement
+    {
+        private readonly WeakReference<ViewportTextView> _owner;
+        private readonly NSRange _range;
+        private readonly int _serial;
+        private double _measuredWidth = -1;
+        private CGRect _textBounds;
+
+        public AccessibleSection(ViewportTextView owner, NSRange range, int serial) : base(owner)
+        {
+            _owner = new(owner);
+            _range = range;
+            _serial = serial;
+        }
+
+        public override CGRect AccessibilityFrame
+        {
+            get
+            {
+                if (!_owner.TryGetTarget(out var owner) || owner._disposed || owner.Window is null ||
+                    _serial != owner._accessibilitySerial) { return CGRect.Empty; }
+                var view = owner.TextView;
+                if (_range.Location + _range.Length > view.TextStorage.Length) { return CGRect.Empty; }
+                var width = (double)view.TextContainer.Size.Width;
+                if (Math.Abs(width - _measuredWidth) > 0.5)
+                {
+                    var glyphs = view.LayoutManager.GetGlyphRange(_range);
+                    _textBounds = view.LayoutManager.GetBoundingRect(glyphs, view.TextContainer);
+                    _measuredWidth = width;
+                }
+                // TextKit coordinates include the document offset; the text
+                // view's bounds remove it when converted into the wrapper.
+                var rect = view.ConvertRectToView(_textBounds, owner);
+                return UIAccessibility.ConvertFrameToScreenCoordinates(rect, owner);
+            }
+            set => base.AccessibilityFrame = value;
+        }
+    }
     public override void MovedToWindow()
     {
         base.MovedToWindow();
@@ -162,6 +231,10 @@ public sealed class ViewportTextView : UIView
 
     protected override void Dispose(bool disposing)
     {
+        _disposed = true;
+        ++_accessibilitySerial;
+        _accessibleSections = [];
+        ActivateLink = null;
         if (disposing)
         {
             StopTracking();
