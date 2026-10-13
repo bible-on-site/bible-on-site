@@ -7,7 +7,12 @@ on an individual device run sequentially and start with a freshly reset app.
 Android uses a full app reset. iOS reinstalls the app without erasing the booted
 simulator, and Appium operates the simulator headlessly.
 
-The iOS leg shards the suite across two simulators on its one runner (#2083):
+CI runs the complete iOS suite on one simulator and one shared Appium session.
+The standard `xcode-27` host has only 3 CPUs and 7 GB RAM; two simulators compete
+with workload installation, compilation and the instrumented app. No Shard
+filter is set, so every shared and iOS-only scenario still runs once.
+
+Optional sharding remains available on a host with sufficient resources (#2083):
 `ios:boot` provisions a second same-model clone of the selected device when
 `MOBILE_E2E_SHARD_COUNT=2`, and `npm run test:sharded` runs two `run.mjs`
 children in parallel — each with its own `MOBILE_UDID`, Appium port
