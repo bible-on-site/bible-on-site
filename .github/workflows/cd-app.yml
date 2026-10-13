@@ -118,13 +118,13 @@ jobs:
         run: rm -f ${{ runner.temp }}/service-account.json
 
       - name: Deployment Summary
-        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        if: ${{ always() && steps.guard.outputs.deploy == 'true' }}
         run: |
           echo "## Android Deployment Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Version:** ${{ env.MODULE_VERSION }}" >> $GITHUB_STEP_SUMMARY
           echo "**Track:** Internal" >> $GITHUB_STEP_SUMMARY
-          echo "**Status:** Deployed ✅" >> $GITHUB_STEP_SUMMARY
+          echo "**Status:** ${{ job.status == 'success' && 'Deployed ✅' || 'Failed ❌ — see the upload step log for the actionable cause' }}" >> $GITHUB_STEP_SUMMARY
 
   deploy_microsoft_store:
     name: Deploy to Microsoft Store
@@ -192,6 +192,10 @@ jobs:
       - name: Setup Microsoft Store Developer CLI
         if: ${{ steps.guard.outputs.deploy == 'true' }}
         uses: microsoft/setup-msstore-cli@v1
+        with:
+          # Pin the last-validated release instead of tracking 'latest' so an
+          # untested upstream CLI release cannot silently break deployments.
+          version: v0.4.3
 
       - name: Configure Microsoft Store Developer CLI
         if: ${{ steps.guard.outputs.deploy == 'true' }}
@@ -233,14 +237,14 @@ jobs:
         run: node "${{ runner.temp }}/deployment-state.mjs"
 
       - name: Deployment Summary
-        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        if: ${{ always() && steps.guard.outputs.deploy == 'true' }}
         shell: pwsh
         run: |
           "## Windows Deployment Summary" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
           "" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
           "**Version:** ${{ env.MODULE_VERSION }}" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
           "**Target:** Microsoft Store (Internal Flight)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
-          "**Status:** Submitted ✅" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          "**Status:** ${{ job.status == 'success' && 'Submitted ✅' || 'Failed ❌ — see the upload step log for the Partner Center error' }}" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
 
   deploy_app_store:
     name: Deploy to App Store (TestFlight)
@@ -273,7 +277,9 @@ jobs:
 
       - name: Preserve TestFlight recovery automation
         if: ${{ steps.guard.outputs.deploy == 'true' }}
-        run: cp devops/github/release/testflight-build.mjs "$RUNNER_TEMP/testflight-build.mjs"
+        run: |
+          cp devops/github/release/testflight-build.mjs "$RUNNER_TEMP/testflight-build.mjs"
+          cp devops/github/release/asset-pack-upload.mjs "$RUNNER_TEMP/asset-pack-upload.mjs"
 
       - name: Checkout artifact source
         if: ${{ steps.guard.outputs.deploy == 'true' }}
@@ -286,6 +292,20 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release download "app-v${{ env.MODULE_VERSION }}" --pattern "*.ipa" --dir "${{ env.APP_DIRECTORY }}/.artifacts"
+
+      - name: Restore iOS asset packs
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        id: assetpacks
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Releases from before the Background Assets migration carry no .aar
+          # files; their ODR-era builds need none, so skip quietly for those.
+          AAR_COUNT=$(gh release view "app-v${{ env.MODULE_VERSION }}" --json assets --jq '[.assets[].name | select(endswith(".aar"))] | length')
+          echo "aar_count=$AAR_COUNT" >> "$GITHUB_OUTPUT"
+          if [ "$AAR_COUNT" -gt 0 ]; then
+            gh release download "app-v${{ env.MODULE_VERSION }}" --pattern "*.aar" --dir "${{ env.APP_DIRECTORY }}/.artifacts/assetpacks" --clobber
+          fi
 
       - name: Find IPA file
         if: ${{ steps.guard.outputs.deploy == 'true' }}
@@ -323,7 +343,8 @@ jobs:
 
       - name: Install Fastlane
         if: ${{ steps.guard.outputs.deploy == 'true' }}
-        run: gem install fastlane -NV
+        # macos-15's image ships fastlane; install only when it is missing.
+        run: command -v fastlane >/dev/null 2>&1 || gem install fastlane -NV
 
       - name: Check the exact TestFlight build before uploading
         if: ${{ steps.guard.outputs.deploy == 'true' }}
@@ -356,6 +377,24 @@ jobs:
           UPLOAD_EXIT_CODE: ${{ steps.upload.outputs.exit_code || '0' }}
         run: node "$RUNNER_TEMP/testflight-build.mjs" postflight
 
+      - name: Upload managed asset packs to App Store Connect
+        if: ${{ steps.guard.outputs.deploy == 'true' && steps.assetpacks.outputs.aar_count != '0' }}
+        run: |
+          # Managed Background Assets travel beside the IPA: each .aar was built
+          # by xcrun ba-package and uploaded to the app release by CI. altool
+          # authenticates with the same AuthKey in ~/private_keys provisioned
+          # above and associates each pack with the app's numeric Apple ID.
+          # --upload-asset-pack exists only in the Xcode 26+ altool; macos-15
+          # still defaults xcode-select to Xcode 16, so switch toolchains first.
+          XCODE_PATH=$(ls -d /Applications/Xcode_2[6-9]*.app 2>/dev/null | sort -V | tail -1)
+          if [ -z "$XCODE_PATH" ]; then
+            echo "::error::No Xcode 26+ installation found — altool --upload-asset-pack is unavailable"
+            exit 1
+          fi
+          sudo xcode-select -s "$XCODE_PATH/Contents/Developer"
+          xcodebuild -version
+          node "$RUNNER_TEMP/asset-pack-upload.mjs" "${{ env.APP_DIRECTORY }}/.artifacts/assetpacks"
+
       - name: Record deployment result
         if: ${{ always() && steps.guard.outputs.deployment_id != '' }}
         env:
@@ -369,13 +408,13 @@ jobs:
         run: rm -rf $HOME/private_keys
 
       - name: Deployment Summary
-        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        if: ${{ always() && steps.guard.outputs.deploy == 'true' }}
         run: |
           echo "## iOS Deployment Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Version:** ${{ env.MODULE_VERSION }}" >> $GITHUB_STEP_SUMMARY
           echo "**Target:** TestFlight" >> $GITHUB_STEP_SUMMARY
-          echo "**Status:** Uploaded ✅" >> $GITHUB_STEP_SUMMARY
+          echo "**Status:** ${{ job.status == 'success' && 'Uploaded ✅' || 'Failed ❌ — see the failing step log for the actionable cause' }}" >> $GITHUB_STEP_SUMMARY
 
   distribute_app_store:
     name: Distribute to TestFlight

@@ -159,21 +159,72 @@ test.describe("Recitation in the book reader", () => {
 		await toggle.click();
 		await expect(toggle).toHaveAttribute("aria-pressed", "true");
 		const original = await characterPositions(text);
-		const first = reader.getByRole("button", {
-			name: `השמעת המילה ${manifest.words[0].text}`,
-			exact: true,
-		});
-		const second = reader.getByRole("button", {
-			name: `השמעת המילה ${manifest.words[1].text}`,
-			exact: true,
-		});
+		// Observe each real playback highlight and its styling in the same DOM
+		// update. Separate browser assertions can outlive a short word at 2x
+		// speed and accidentally inspect the next word instead.
+		const wordLabels: string[] = manifest.words
+			.slice(0, 2)
+			.map((word: { text: string }) => "השמעת המילה " + word.text);
+		await reader.evaluate((element, labels) => {
+			const targets = labels.map((label: string) =>
+				Array.from(element.querySelectorAll('[role="button"]')).find(
+					(word) => word.getAttribute("aria-label") === label,
+				),
+			);
+			if (targets.some((word) => !word))
+				throw new Error("Missing canonical word");
+			const observations: {
+				label: string;
+				color: string;
+				previousInactive: boolean;
+			}[] = [];
+			const observer = new MutationObserver(() => {
+				for (let i = 0; i < targets.length; i++) {
+					const word = targets[i];
+					if (!word || word.getAttribute("aria-current") !== "true") continue;
+					if (observations.some((sample) => sample.label === labels[i]))
+						continue;
+					observations.push({
+						label: labels[i],
+						color: getComputedStyle(word).backgroundColor,
+						previousInactive:
+							i === 0 ||
+							targets[i - 1]?.getAttribute("aria-current") !== "true",
+					});
+				}
+				element.setAttribute(
+					"data-test-word-observations",
+					JSON.stringify(observations),
+				);
+				if (observations.length === targets.length) observer.disconnect();
+			});
+			observer.observe(element, {
+				subtree: true,
+				attributes: true,
+				attributeFilter: ["aria-current"],
+			});
+		}, wordLabels);
 		await reader
 			.getByRole("button", { name: "השמעת פסוק א", exact: true })
 			.click();
-		await expect(first).toHaveAttribute("aria-current", "true");
-		await expect(first).toHaveCSS("background-color", "rgb(233, 239, 248)");
-		await expect(second).toHaveAttribute("aria-current", "true");
-		await expect(first).not.toHaveAttribute("aria-current", "true");
+		await expect
+			.poll(async () =>
+				JSON.parse(
+					(await reader.getAttribute("data-test-word-observations")) ?? "[]",
+				),
+			)
+			.toEqual([
+				{
+					label: wordLabels[0],
+					color: "rgb(233, 239, 248)",
+					previousInactive: true,
+				},
+				{
+					label: wordLabels[1],
+					color: "rgb(233, 239, 248)",
+					previousInactive: true,
+				},
+			]);
 		// A pasuk preview bookmarks where continuous playback resumes. Preview
 		// the final pasuk so the continuous tail stays inside the test window —
 		// the fixture recording is a full two minutes.

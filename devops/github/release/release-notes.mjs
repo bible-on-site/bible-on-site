@@ -24,6 +24,8 @@ import { writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { ghApi } from "./gh-api.mjs";
+
 export const MAX_COMMITS = 100;
 export const TESTFLIGHT_LIMIT = 4000;
 
@@ -75,14 +77,6 @@ const runGit = (args, cwd) =>
 		encoding: "utf8",
 		maxBuffer: 32 * 1024 * 1024,
 	}).trim();
-
-const ghApi = (endpoint) =>
-	JSON.parse(
-		execFileSync("gh", ["api", endpoint], {
-			encoding: "utf8",
-			maxBuffer: 16 * 1024 * 1024,
-		}),
-	);
 
 /** Module release tags sorted newest-first by semantic version. */
 export function moduleTags(tagPrefix, git = runGit) {

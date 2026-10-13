@@ -331,11 +331,14 @@
 	text-decoration: underline;
 }
 /* Destination verse after perush→perek pasuk navigation (same look as the
-   reader's hash-selected verse). */
-.perekText [data-sefer-pasuk] {
+   reader's hash-selected verse). Division book pages anchor pesukim by id
+   (`pasuk-{perekId}-{pasuk}`) instead of data-sefer-pasuk. */
+.perekText [data-sefer-pasuk],
+.perekText [id^="pasuk-"] {
 	scroll-margin-block-start: 8px;
 }
-.perekText [data-sefer-pasuk][data-pasuk-highlight] {
+.perekText [data-sefer-pasuk][data-pasuk-highlight],
+.perekText [id^="pasuk-"][data-pasuk-highlight] {
 	background: rgba(254, 243, 199, 0.95);
 	box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.35);
 	border-radius: 3px;
@@ -385,7 +388,8 @@
 		color: #a8b9ff;
 	}
 
-	.perekText [data-sefer-pasuk][data-pasuk-highlight] {
+	.perekText [data-sefer-pasuk][data-pasuk-highlight],
+	.perekText [id^="pasuk-"][data-pasuk-highlight] {
 		background: rgba(58, 47, 16, 0.95);
 		box-shadow: 0 0 0 2px rgba(146, 96, 11, 0.55);
 	}

@@ -132,8 +132,9 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         var position = commentary.Location;
         Platform.Tap(driver, commentary);
         AssertRegularReader();
-        // The first commentary render also opens the freshly imported notes DB on a warm runner (#2161 class).
-        Page.WaitFor("InlinePerushName", element => element.Text == commentaryName, TimeSpan.FromMinutes(2));
+        // Capture the highlighted match, then scroll back to the selected heading.
+        SaveDiagnostics("FloatingSearchCommentaryLanding", "passed");
+        Page.ScrollBackTo("InlinePerushName", element => element.Text == commentaryName);
         SaveDiagnostics("FloatingSearchCommentaryReader", "passed");
         // Menu navigation must keep this reader above the retained search page.
         var readerSource = Page.Source;
@@ -157,7 +158,7 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         {
             Platform.Tap(driver, Page.WaitFor("SearchResultTitle", element => element.Text == title));
             AssertRegularReader();
-            Page.WaitFor("InlinePerushName", element => element.Text == commentaryName);
+            Page.ScrollBackTo("InlinePerushName", element => element.Text == commentaryName);
             SaveDiagnostics("FloatingSearchReview", "passed");
         }
     });

@@ -9,7 +9,7 @@ namespace BibleOnSite.Tests.MobileE2E;
 // removed the UICollectionView reentrancy — scroll churn during perushim cell
 // rendering still aborted the app. The fix replaces WebKit's import with the
 // managed HtmlRuns parser; this test exercises perushim HtmlView cells under
-// scroll stress. iOS simulator builds carry no ODR notes pack, so the app
+// scroll stress. iOS simulator builds carry no notes asset pack, so the app
 // launches with BIBLE_E2E_PERUSHIM=1 which fabricates perushim notes.
 [Collection("Mobile device")]
 [Trait("Category", "MobileE2E")]

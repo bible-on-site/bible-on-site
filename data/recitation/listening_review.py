@@ -36,7 +36,10 @@ def digest_json(value):
 def candidate_digest(case):
     keys = ("perekId", "pasuk", "audioSha256", "textSha256", "clipStartMs",
             "clipEndMs", "words", "diagnosticSha256")
-    return digest_json({key: case[key] for key in keys})
+    bound = {key: case[key] for key in keys}
+    if case.get("listeningReuseSha256"):
+        bound["listeningReuseSha256"] = case["listeningReuseSha256"]
+    return digest_json(bound)
 
 
 def read_json(path):
@@ -204,9 +207,79 @@ def load_queue(path):
             sources[source] = digest_file(source)
         if sources[source] != case["audioSha256"] or digest_file(Path(case["clipPath"])) != case["clipSha256"]:
             raise ValueError("Original recording or lossless listening clip changed")
+        reusable_listening(case)
     if len({case["id"] for case in queue["cases"]}) != len(queue["cases"]):
         raise ValueError("Duplicate listening case")
     return queue
+
+
+def reusable_listening(case):
+    """Reuse only actually heard, byte-identical cuts from an immutable prior queue."""
+    if not case.get("listeningReuseSha256"):
+        if case.get("reusableHeardSegments"):
+            raise ValueError("Reusable listening lacks its original evidence")
+        return None
+    proof_path = Path(case["listeningReusePath"])
+    if digest_file(proof_path) != case["listeningReuseSha256"]:
+        raise ValueError("Reusable listening evidence changed")
+    proof = read_json(proof_path)
+    if not isinstance(proof, dict):
+        raise ValueError("Reusable listening requires a source proof object")
+    multiple = "sources" in proof
+    sources = proof["sources"] if multiple else [proof]
+    if (not isinstance(sources, list) or not sources
+            or any(not isinstance(source, dict) for source in sources)
+            or len({digest_json(source) for source in sources}) != len(sources)
+            or (multiple and set(proof) != {"sources"})):
+        raise ValueError("Reusable listening requires distinct saved sources")
+    checked = [verified_listening_source(case, source) for source in sources]
+    reusable = sorted({segment for source in checked for segment in source["heardSegments"]})
+    if reusable != case.get("reusableHeardSegments"):
+        raise ValueError("Changed or unlistened cuts cannot reuse listening")
+    if multiple:
+        return {"heardSegments": reusable, "sources": checked, "proofSha256": case["listeningReuseSha256"]}
+    return {**checked[0], "proofSha256": case["listeningReuseSha256"]}
+
+
+def verified_listening_source(case, proof):
+    """Revalidate one actual answer; inherited hearing never becomes direct hearing."""
+    reviews_path = Path(proof["reviewsPath"])
+    if digest_file(reviews_path) != proof["reviewsFileSha256"]:
+        raise ValueError("Original listening history changed")
+    if read_json(reviews_path)["entries"][proof["decisionIndex"]] != proof["decision"]:
+        raise ValueError("Reusable listening is not an actual saved answer")
+    queue_path = Path(proof["queuePath"])
+    if digest_file(queue_path) != proof["queueFileSha256"]:
+        raise ValueError("Original listening queue changed")
+    prior_queue = read_json(queue_path)
+    if digest_json(prior_queue["cases"]) != prior_queue["queueSha256"]:
+        raise ValueError("Original listening queue is not source-bound")
+    prior = next(item for item in prior_queue["cases"] if item["id"] == case["id"])
+    decision = proof["decision"]
+    if candidate_digest(prior) != prior["candidateSha256"]:
+        raise ValueError("Original heard candidate changed")
+    heard = decision["listenEvidenceReportedByBrowser"]
+    if prior.get("listeningReuseSha256") and "freshHeardSegments" not in heard:
+        raise ValueError("Prior reused round lacks actual fresh word hearing")
+    checked = validate_decision(prior, {"candidateSha256": decision["candidateSha256"],
+        "verdict": decision["verdict"], "verseHeard": heard["verseHeard"],
+        "heardSegments": heard["heardSegments"], "note": decision["note"],
+        **({"freshHeardSegments": heard["freshHeardSegments"]} if "freshHeardSegments" in heard else {})})
+    if (any(decision.get(key) != value for key, value in checked.items() if key != "savedAt")
+            or decision.get("queueSha256") != prior_queue["queueSha256"] or not decision.get("savedAt")
+            or any(prior[key] != case[key] for key in
+                   ("id", "perekId", "pasuk", "audioSha256", "textSha256", "clipSha256", "clipStartMs", "clipEndMs"))):
+        raise ValueError("Reusable listening differs from actual source-bound feedback")
+    # A reused round may contain new direct hearing, but inherited cuts are never promoted.
+    directly_heard = heard["freshHeardSegments"] if prior.get("listeningReuseSha256") else heard["heardSegments"]
+    old_words = {word["segment"]: word for word in prior["words"]}
+    reusable = sorted(word["segment"] for word in case["words"]
+                      if word["segment"] in directly_heard and old_words.get(word["segment"]) == word)
+    if not reusable:
+        raise ValueError("Changed or unlistened cuts cannot reuse listening")
+    return {"heardSegments": reusable, "decisionSha256": digest_json(decision),
+            "candidateSha256": prior["candidateSha256"], "savedAt": decision["savedAt"],
+            "verdict": decision["verdict"]}
 
 
 def validate_decision(case, payload):
@@ -220,17 +293,28 @@ def validate_decision(case, payload):
             len(set(segments)) != len(segments) or not set(segments) <= allowed):
         raise ValueError("Listening evidence contains unknown/duplicate word identities")
     verse = payload.get("verseHeard") is True
+    reuse = reusable_listening(case)
+    if reuse:
+        fresh = payload.get("freshHeardSegments", [])
+        if (not isinstance(fresh, list) or any(not isinstance(item, int) or isinstance(item, bool) for item in fresh)
+                or len(set(fresh)) != len(fresh) or not set(fresh) <= allowed
+                or set(segments) != set(fresh) | set(reuse["heardSegments"])):
+            raise ValueError("Fresh listening must cover changed cuts; only identical cuts can be reused")
     if payload["verdict"] == "good" and set(segments) != allowed:
         raise ValueError("Listen to every exact word cut before confirming")
     note = payload.get("note", "")
     if not isinstance(note, str) or len(note) > 2000:
         raise ValueError("Note must be text of at most 2000 characters")
+    evidence = {"verseHeard": verse, "heardSegments": sorted(segments)}
+    if reuse:
+        evidence.update(freshHeardSegments=sorted(fresh), reusedHeardSegments=reuse["heardSegments"],
+                        reuseSource= {key: value for key, value in reuse.items() if key != "heardSegments"})
     return {
         "caseId": case["id"], "perekId": case["perekId"], "pasuk": case["pasuk"],
         "audioSha256": case["audioSha256"], "textSha256": case["textSha256"],
         "candidateSha256": case["candidateSha256"], "clipSha256": case["clipSha256"],
         "verdict": payload["verdict"], "note": note.strip(),
-        "listenEvidenceReportedByBrowser": {"verseHeard": verse, "heardSegments": sorted(segments)},
+        "listenEvidenceReportedByBrowser": evidence,
         "scope": "one-verse-candidate", "publicationStatus": "held",
         "candidateWords": case["words"], "diagnosticSha256": case.get("diagnosticSha256"),
         "reviewMethod": "human-listening-feedback",

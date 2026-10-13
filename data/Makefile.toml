@@ -100,6 +100,22 @@ cwd = "./sefaria/pipelines/tanah-view"
 command = "cargo"
 args = ["run", "--release", "--", "--format", "compass-stages"]
 
+[tasks.verify-masora-sedarim]
+description = "Verify the מסורה division against the Tanach Yomi sedarim reference; regenerates docs/data/masora-sedarim-verification.md and the expected snapshot fixture"
+cwd = "./sefaria/pipelines/tanah-view"
+command = "cargo"
+args = [
+    "run",
+    "--release",
+    "--",
+    "--format",
+    "sedarim-report",
+    "--from-json",
+    "../../../../web/bible-on-site/src/data/db/sefaria-dump-5784-sivan-4.tanah_view.json",
+    "--sedarim-reference",
+    "fixtures/masora-sedarim-tanachyomi.json",
+]
+
 # =============================================================================
 # Perusim Pipeline Tasks
 # =============================================================================
