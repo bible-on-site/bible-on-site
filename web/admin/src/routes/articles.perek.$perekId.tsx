@@ -128,6 +128,16 @@ function PerekArticles() {
 											👤 מאת: {article.author_name}
 										</span>
 									)}
+									{article.coverage_verified && (
+										<span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-50 border border-green-200 rounded-full px-2 py-0.5 mt-1">
+											<span>✓</span>
+											<span>
+												כיסוי פסוקים מאומת
+												{article.covering_count != null &&
+													` (${article.covering_count} פסוקים)`}
+											</span>
+										</span>
+									)}
 								</div>
 								<div className="flex gap-3 shrink-0">
 									<Link

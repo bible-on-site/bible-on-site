@@ -91,6 +91,7 @@ mod tests {
             name: format!("Article {id}"),
             priority: id as i8,
             content: Some(format!("content-{id}")),
+            coverage_verified: false,
         }
     }
 
@@ -116,6 +117,7 @@ mod tests {
             hebdate: None,
             tseit: None,
             header: Some("Header".to_string()),
+            pasuk_count: Some(31),
         }
     }
 
@@ -184,6 +186,57 @@ mod tests {
         let by_perek_json = by_perek.data.into_json().unwrap();
         assert_eq!(by_perek_json["articlesByPerekId"][0]["id"], 8);
         assert_eq!(by_perek_json["articlesByPerekId"][1]["authorId"], 4);
+    }
+
+    #[tokio::test]
+    async fn schema_article_by_id_exposes_verified_covering_sources() {
+        let mut verified_article = article_model(7, 42, 3);
+        verified_article.coverage_verified = true;
+        let created_at = chrono::NaiveDate::from_ymd_opt(2026, 1, 1)
+            .unwrap()
+            .and_hms_opt(0, 0, 0)
+            .unwrap();
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<entities::article::Model, Vec<entities::article::Model>, _>(
+                    [vec![verified_article]],
+                )
+                .append_query_results::<
+                    entities::article_covering_source::Model,
+                    Vec<entities::article_covering_source::Model>,
+                    _,
+                >([vec![
+                    entities::article_covering_source::Model {
+                        article_id: 7,
+                        perek_id: 42,
+                        pasuk: 3,
+                        created_at,
+                    },
+                    entities::article_covering_source::Model {
+                        article_id: 7,
+                        perek_id: 43,
+                        pasuk: 1,
+                        created_at,
+                    },
+                ]])
+                .into_connection(),
+        );
+        let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
+
+        let response = schema
+            .execute(Request::new(
+                "{ articleById(id: 7) { id perekId coverageVerified coveringSources { perekId pasuk } } }",
+            ))
+            .await;
+
+        assert!(response.errors.is_empty(), "{:?}", response.errors);
+        let json = response.data.into_json().unwrap();
+        let article = &json["articleById"];
+        assert_eq!(article["coverageVerified"], true);
+        assert_eq!(article["coveringSources"].as_array().unwrap().len(), 2);
+        assert_eq!(article["coveringSources"][0]["perekId"], 42);
+        assert_eq!(article["coveringSources"][0]["pasuk"], 3);
+        assert_eq!(article["coveringSources"][1]["perekId"], 43);
     }
 
     #[tokio::test]
