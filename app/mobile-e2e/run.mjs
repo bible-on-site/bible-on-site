@@ -96,6 +96,7 @@ const nativeStream = platform === "ios" ? startNativeLog("xcrun", ["simctl", "sp
   resolve(artifacts, "device-live.log")) : undefined;
 
 async function sampleIosApp(phase) {
+  const captureSignal = AbortSignal.timeout(15000);
   try {
     // Two shard simulators share this host (#2083), so a name-wide pgrep would
     // also sample the peer's healthy app — writing its stacks into this
@@ -103,20 +104,35 @@ async function sampleIosApp(phase) {
     // launchd table resolves only this run's app; a failed session that
     // already terminated the app simply leaves no PID row to find.
     const listing = await execute("xcrun", ["simctl", "spawn", process.env.MOBILE_UDID,
-      "launchctl", "list"], { timeout: 30000 });
+      "launchctl", "list"], { timeout: 5000, signal: captureSignal });
     writeFileSync(resolve(artifacts, `native-${phase}-processes.txt`), listing.stdout);
+    try {
+      await execute("xcrun", ["simctl", "io", process.env.MOBILE_UDID, "screenshot",
+        resolve(artifacts, `native-${phase}.png`)], { timeout: 5000, signal: captureSignal });
+    } catch (error) {
+      diagnosticsFailed = true;
+      writeFileSync(resolve(artifacts, `native-${phase}-screenshot-error.txt`), String(error));
+      console.error("Could not capture the iOS frame:", error.message);
+    }
     for (const pid of iosAppPids(listing.stdout)) {
-      const stats = await execute("ps", ["-p", pid, "-o", "pid,ppid,%cpu,rss,state"], { timeout: 30000 });
+      const stats = await execute("ps", ["-p", pid, "-o", "pid,ppid,%cpu,rss,state"], { timeout: 5000, signal: captureSignal });
       writeFileSync(resolve(artifacts, `native-${phase}-process-${pid}.txt`), stats.stdout);
-      // User-level sampling returned images without thread frames. Preserve
-      // privileged sampler output as well as the scoped app's stack report.
-      const sampled = await execute("sudo", ["-n", "sample", pid, "2", "1", "-mayDie", "-file", resolve(artifacts, `native-${phase}-stack-${pid}.txt`)],
-        { timeout: 120000 });
-      writeFileSync(resolve(artifacts, `native-${phase}-sampler-${pid}.txt`), sampled.stdout + sampled.stderr);
+      // Sampling a busy process stalled for its entire 120-second budget.
+      // Attach without eager symbol loading, capture a bounded backtrace and
+      // detach. Loss of debugger connection must also leave the app detached.
+      const captured = await execute("sudo", ["-n", "xcrun", "lldb", "--no-lldbinit", "--batch",
+        "--one-line-before-file", "settings set target.preload-symbols false",
+        "--one-line-before-file", "settings set target.detach-on-error true",
+        "--attach-pid", pid, "--one-line", "thread backtrace -c 40 all",
+        "--one-line", "process detach"], { timeout: 10000, signal: captureSignal });
+      writeFileSync(resolve(artifacts, `native-${phase}-stack-${pid}.txt`), captured.stdout + captured.stderr);
     }
   } catch (error) {
     diagnosticsFailed = true;
-    writeFileSync(resolve(artifacts, `native-${phase}-stack-error.txt`), String(error));
+    writeFileSync(resolve(artifacts, `native-${phase}-stack-error.txt`), JSON.stringify({
+      message: error.message, code: error.code, killed: error.killed, signal: error.signal,
+      stdout: error.stdout, stderr: error.stderr,
+    }, null, 2));
     console.error("Could not sample the iOS app:", error);
   }
 }
