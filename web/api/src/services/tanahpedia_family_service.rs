@@ -2350,6 +2350,7 @@ mod tests {
             hebdate: None,
             tseit: None,
             header: None,
+            pasuk_count: None,
         }
     }
 

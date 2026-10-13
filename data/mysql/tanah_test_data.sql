@@ -7,6 +7,7 @@
 --
 -- Tables covered:
 --   tanah_author, tanah_article          (articles feature)
+--   tanah_article_covering_source        (verse-level article coverage)
 --   parshan, perush, note                (perushim / commentaries feature)
 -- --------------------------------------------------------------------------
 
@@ -113,6 +114,16 @@ VALUES (
         N'<p>מאמר זה אינו מיועד להפצה ומכיל את הביטוי הייחודי רזאדשבתא הנסתרת.</p>',
         FALSE
     );
+
+-- Representative test data for tanah_article_covering_source. Article 1 gets
+-- verified coverage of its two opening pesukim. Every other fixture article
+-- keeps coverage_verified = FALSE (coverage unknown -> primary-perek
+-- fallback), so range lookups exercise both matching branches.
+-- The perek FK needs tanah_perek populated, so the db-populator loads this
+-- file only after tanah_sefarim_and_perakim_data.sql.
+INSERT INTO tanah_article_covering_source (article_id, perek_id, pasuk)
+VALUES (1, 1, 1), (1, 1, 2);
+UPDATE tanah_article SET coverage_verified = TRUE WHERE id = 1;
 
 -- ---------------------------------------------------------------------------
 -- Representative test data for perushim (commentaries)
