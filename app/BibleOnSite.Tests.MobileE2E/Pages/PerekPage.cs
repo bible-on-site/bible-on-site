@@ -31,12 +31,16 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
     private AppiumElement WaitFor(By locator, Func<AppiumElement, bool> condition, TimeSpan timeout)
     {
         var deadline = DateTime.UtcNow.Add(timeout);
+        // Window.Size is a device round-trip; on iOS it costs ~0.4s. The
+        // orientation cannot change while this synchronous poll runs, so a
+        // single fetch per call keeps the per-element filter loop cheap.
+        var window = driver.Manage().Window.Size;
         while (DateTime.UtcNow < deadline)
         {
             try
             {
                 var element = driver.FindElements(locator)
-                    .FirstOrDefault(element => element.Displayed && HasVisibleCenter(element)
+                    .FirstOrDefault(element => element.Displayed && HasVisibleCenter(element, window)
                         && condition(element));
                 if (element != null)
                 {
@@ -66,12 +70,13 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
         var locator = platform.AutomationId(automationId);
         var timeout = TimeSpan.FromSeconds(30);
         var deadline = DateTime.UtcNow.Add(timeout);
+        var window = driver.Manage().Window.Size;
         while (DateTime.UtcNow < deadline)
         {
             try
             {
                 var visible = driver.FindElements(locator)
-                    .Any(element => element.Displayed && HasVisibleCenter(element));
+                    .Any(element => element.Displayed && HasVisibleCenter(element, window));
                 if (!visible)
                 {
                     return;
@@ -181,11 +186,8 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
         Assert.InRange(menuCenter, 0.5 - platform.Layout.MenuCenterTolerance, 0.5 + platform.Layout.MenuCenterTolerance);
     }
 
-    private bool HasVisibleCenter(AppiumElement element)
-    {
-        var window = driver.Manage().Window.Size;
-        return HasVisibleCenter(element.Location, element.Size, window);
-    }
+    private bool HasVisibleCenter(AppiumElement element, Size window) =>
+        HasVisibleCenter(element.Location, element.Size, window);
 
     private static bool HasVisibleCenter(Point location, Size size, Size window)
     {

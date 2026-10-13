@@ -235,7 +235,13 @@ public abstract class MobileDeviceTest : IAsyncLifetime
             try
             {
                 Driver.GetScreenshot().SaveAsFile(prefix + ".png");
-                File.WriteAllText(prefix + ".xml", Driver.PageSource);
+                // PageSource costs ~25s per dump on iOS. A passing scenario's
+                // screenshot records the visual state; the full tree is only
+                // worth its latency when there is a failure to diagnose.
+                if (outcome == "failed")
+                {
+                    File.WriteAllText(prefix + ".xml", Driver.PageSource);
+                }
             }
             catch (WebDriverException exception)
             {
