@@ -106,6 +106,7 @@ namespace AltCover.Recorder
 					client.SendTimeout = 5000;
 					var stream = client.GetStream();
 					var head = ReadRequestHead(stream);
+					var authorized = IsAuthorized(head);
 					if (head == null)
 					{
 						return;
@@ -130,7 +131,7 @@ namespace AltCover.Recorder
 							break;
 						case ("POST", "/coverage/reset"):
 						case ("GET", "/coverage/reset"):
-							if (!IsAuthorized(head))
+							if (!authorized)
 							{
 								WriteResponse(stream, 403, "text/plain",
 									Encoding.UTF8.GetBytes("forbidden"));
@@ -177,10 +178,10 @@ namespace AltCover.Recorder
 			return null;
 		}
 
-		private static bool IsAuthorized(string requestHead)
+		private static bool IsAuthorized(string? requestHead)
 		{
 			var required = RequiredToken();
-			if (required == null)
+			if (requestHead == null || required == null)
 			{
 				return false;
 			}
