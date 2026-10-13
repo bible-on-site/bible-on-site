@@ -163,6 +163,68 @@ helpers:
 Original perush/article source anchors are preserved — no synthetic
 perek ids and no duplicated content per division.
 
+## Verse-level article coverage (#2189 / epic #2175 §3)
+
+`tanah_article_covering_source` maps an article to each canonical
+`{perek_id, pasuk}` it verifiably covers; an article has many rows and
+they may span several perakim. `tanah_article.perek_id` stays the
+primary perek association. The composite PK
+`(article_id, perek_id, pasuk)` prevents duplicate mappings, the
+`(perek_id, pasuk)` index serves verse/range lookups, and `pasuk >= 1`
+is a CHECK. FKs: `article_id → tanah_article` (ON DELETE CASCADE) and
+`perek_id → tanah_perek`.
+
+**Verified vs unknown coverage** — `tanah_article.coverage_verified`:
+
+- `FALSE` (default; every legacy article): detailed coverage was never
+  mapped. Consumers match the article through its primary perek only —
+  no verse precision is claimed.
+- `TRUE`: the covering-source rows are the verified coverage and drive
+  range lookups; the article surfaces only for slices overlapping those
+  coordinates (and no longer through unrelated slices of its primary
+  perek).
+
+There is deliberately **no backfill** from `perek_id`: a primary perek
+alone must not fabricate whole-perek coverage. Mappings are authored
+through the admin article form (verified flag + per-row coordinates)
+and live in the database — never in populators or fixture files
+(`tanah_test_data.sql` carries demo rows for CI fixtures only).
+
+**Pasuk existence** — `tanah_perek.pasuk_count` stores the canonical
+number of pesukim per perek (corpus-derived; NULL = bound unknown, not
+zero). MySQL has no per-row dynamic CHECK, so write paths validate
+`pasuk <= pasuk_count` against it and reject writes when the bound was
+never loaded. The column ships in `tanah_static_structure.sql` /
+`tanah_perek_view`, is backfilled for existing databases by the
+idempotent `tanah_perek_pasuk_count_upgrade.sql`, and filled by
+`tanah_perek_pasuk_count_data.sql` (929 perakim, regenerated from the
+checked-in corpus by `data/mysql/scripts/generate-perek-pasuk-counts.mjs`).
+Regenerated `tanah view` MySQL output also emits the column.
+
+**Write-path contract** (admin server `articles.ts` /
+`covering-sources.ts`):
+
+- `coveringSources` omitted on update → coverage untouched (older
+  clients and unrelated edits can never wipe mappings).
+- `coveringSources: []` → the persisted set is cleared and the flag is
+  stored as unverified; verified+empty is rejected (verified coverage
+  requires at least one row).
+- `coverageVerified` alone toggles the flag on the persisted set; TRUE
+  requires at least one stored covering row.
+- Validation order: shape/integers + duplicates pre-flight, perek
+  existence + pasuk bounds inside the transaction, then replace
+  (DELETE + INSERT + flag) and the article write commit atomically —
+  failures roll back everything.
+- Deletes remove covering rows explicitly inside the transaction (the
+  CASCADE is the backstop), and article/perek search invalidation is
+  enqueued in the same transaction.
+- A pre-upgrade database (no covering table / flag / pasuk_count)
+  degrades to coverage-unknown reads and never writes coverage state.
+
+**API exposure** — the GraphQL `Article` type adds `coverageVerified`
+and a lazy `coveringSources { perekId pasuk }` field; `Perek` adds
+`pasukCount`. The admin perek list badges verified articles.
+
 ## SQLite export parity
 
 `data/sqlite/tanah_structure.sql` declares the native-side contract;

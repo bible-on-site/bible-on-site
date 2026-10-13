@@ -177,39 +177,101 @@ partial class Build
 
     string CreateMsStoreFlight()
     {
+        const int maxAttempts = 3;
         var version = GetCurrentVersion();
         var flightName = $"v{version}-{DateTime.UtcNow:yyyyMMdd-HHmmss}";
-        Serilog.Log.Information($"Creating new flight: {flightName}");
+        var baselineKnown = TryListMsStoreFlights(out var baselineFlights);
+        string lastFailure = "";
 
-        var output = new List<Nuke.Common.Tooling.Output>();
-        var process = ProcessTasks.StartProcess(
-            "msstore",
-            $"flights create \"{MsStoreAppId}\" \"{flightName}\" --group-ids \"{MsStoreFlightGroupId}\"",
-            logOutput: true,
-            logInvocation: true
-        );
-        process.WaitForExit();
-        output.AddRange(process.Output);
-        process.AssertZeroExitCode();
-
-        // Parse the flight ID from the JSON output
-        var jsonOutput = string.Join("", output.Select(o => o.Text));
-        var startIndex = jsonOutput.IndexOf('{');
-        if (startIndex >= 0)
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
         {
-            var jsonPart = jsonOutput.Substring(startIndex);
-            using var doc = JsonDocument.Parse(jsonPart);
-            if (doc.RootElement.TryGetProperty("FlightId", out var flightIdProp))
+            Serilog.Log.Information(
+                $"Creating new flight: {flightName} (attempt {attempt}/{maxAttempts})");
+
+            // --verbose makes the msstore CLI log the underlying Partner Center
+            // API error. Without it the CLI only prints "Error while creating
+            // flight. Please try again." and the actionable reason is lost.
+            var process = ProcessTasks.StartProcess(
+                "msstore",
+                $"flights create \"{MsStoreAppId}\" \"{flightName}\" --group-ids \"{MsStoreFlightGroupId}\" --verbose",
+                logOutput: false,
+                logInvocation: true
+            );
+            process.WaitForExit();
+            var output = string.Join("\n", process.Output.Select(o => o.Text));
+
+            if (process.ExitCode == 0 && TryParseFlightId(output, out var flightId))
             {
-                var flightId = flightIdProp.GetString();
                 Serilog.Log.Information($"Created flight with ID: {flightId}");
-                return flightId!;
+                return flightId;
+            }
+
+            // The flight may exist even though the command reported failure
+            // (Partner Center can commit the create and still lose the
+            // response). Reuse it instead of stacking duplicate flights. This
+            // requires a trustworthy baseline: if either listing failed, the
+            // difference would misidentify pre-existing flights as new.
+            var leakedFlights = baselineKnown && TryListMsStoreFlights(out var currentFlights)
+                ? currentFlights.Except(baselineFlights).ToList()
+                : [];
+            if (leakedFlights.Count > 0)
+            {
+                var recovered = leakedFlights.Last();
+                Serilog.Log.Warning(
+                    $"Flight creation reported failure but flight {recovered} now exists; deploying to it");
+                return recovered;
+            }
+
+            lastFailure = TrimForLog(output);
+            Serilog.Log.Warning(
+                $"Flight creation attempt {attempt}/{maxAttempts} failed (exit {process.ExitCode}): {lastFailure}");
+            if (attempt < maxAttempts)
+            {
+                Thread.Sleep(TimeSpan.FromSeconds(15));
             }
         }
 
-        Assert.Fail("Failed to parse flight ID from msstore output");
+        Serilog.Log.Error(
+            "Partner Center rejected flight creation after every attempt. This is a " +
+            "store-side blocker, not a build problem. Verify the flight group " +
+            "(MS_STORE_FLIGHT_GROUP_ID) still exists in Partner Center and that no " +
+            "Partner Center submission is blocking API writes. See " +
+            "https://github.com/bible-on-site/bible-on-site/issues/2221");
+        Assert.Fail($"Microsoft Store flight creation failed: {lastFailure}");
         return null!;
     }
+
+    static bool TryParseFlightId(string output, out string flightId)
+    {
+        flightId = "";
+        var startIndex = output.IndexOf('{');
+        if (startIndex < 0)
+        {
+            return false;
+        }
+        try
+        {
+            using var doc = JsonDocument.Parse(output.Substring(startIndex));
+            if (doc.RootElement.TryGetProperty("FlightId", out var flightIdProp))
+            {
+                flightId = flightIdProp.GetString() ?? "";
+            }
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+        return !string.IsNullOrEmpty(flightId);
+    }
+
+    static string TrimForLog(string text, int maxLength = 2000)
+    {
+        var clean = AnsiPattern.Replace(text, "").Trim();
+        return clean.Length <= maxLength ? clean : $"{clean.Substring(0, maxLength)}...";
+    }
+
+    static readonly System.Text.RegularExpressions.Regex AnsiPattern =
+        new(@"\x1b\[[0-9;]*m");
 
     void DeletePendingFlightSubmission(string flightId)
     {
@@ -223,22 +285,35 @@ partial class Build
         }
     }
 
-    void CleanupOldFlights()
+    /// <summary>
+    /// Lists the app's current flight IDs, oldest first. The msstore CLI exits
+    /// non-zero both for real API errors and for an empty flight list — the
+    /// latter is the normal state once every flight is published, so it is
+    /// reported at information level instead of polluting the log with
+    /// ##[error] entries. Real failures surface as warnings with the captured
+    /// CLI output and return false.
+    /// </summary>
+    bool TryListMsStoreFlights(out List<string> flightIds)
     {
-        Serilog.Log.Information($"Cleaning up old flights (keeping {MaxFlightsToKeep} most recent)...");
-
+        flightIds = [];
         var listProcess = ProcessTasks.StartProcess(
             "msstore",
             $"flights list \"{MsStoreAppId}\"",
-            logOutput: true,
+            logOutput: false,
             logInvocation: true
         );
         listProcess.WaitForExit();
+        var rawOutput = string.Join("\n", listProcess.Output.Select(o => o.Text));
 
         if (listProcess.ExitCode != 0)
         {
-            Serilog.Log.Warning("Could not list flights for cleanup");
-            return;
+            if (AnsiPattern.Replace(rawOutput, "").Contains("no Flights"))
+            {
+                Serilog.Log.Information("No existing flights");
+                return true;
+            }
+            Serilog.Log.Warning($"Could not list flights: {TrimForLog(rawOutput)}");
+            return false;
         }
 
         // The CLI wraps long content across multiple lines in a table format.
@@ -251,9 +326,6 @@ partial class Build
         // │    │ 718-80c949 │            │ ...
         // │    │ c69e73     │            │ ...
         // │ 2  │ c30667c3-9 │ v4.0.29-20 │ ...
-
-        var rawOutput = string.Join("\n", listProcess.Output.Select(o => o.Text));
-        Serilog.Log.Information($"Raw output length: {rawOutput.Length} chars");
 
         // Split into lines and extract the FlightId column (2nd column after splitting by │)
         var lines = rawOutput.Split('\n');
@@ -273,13 +345,7 @@ partial class Build
             }
         }
 
-        var flightIdColumn = flightIdColumnParts.ToString();
-
-        // Strip ANSI escape codes (the CLI adds formatting like [1;4m for underline/bold)
-        var ansiPattern = new System.Text.RegularExpressions.Regex(@"\x1b\[[0-9;]*m");
-        flightIdColumn = ansiPattern.Replace(flightIdColumn, "");
-
-        Serilog.Log.Information($"FlightId column content (first 200): {flightIdColumn.Substring(0, Math.Min(200, flightIdColumn.Length))}");
+        var flightIdColumn = AnsiPattern.Replace(flightIdColumnParts.ToString(), "");
 
         // Now extract complete UUIDs from the concatenated FlightId column
         // Microsoft Store has a hard limit of 25 flights per app
@@ -287,11 +353,23 @@ partial class Build
             @"([a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12})",
             System.Text.RegularExpressions.RegexOptions.IgnoreCase);
         var matches = uuidPattern.Matches(flightIdColumn);
-        var flightIds = matches.Cast<System.Text.RegularExpressions.Match>()
+        flightIds = matches.Cast<System.Text.RegularExpressions.Match>()
             .Select(m => m.Value.ToLowerInvariant())
             .Distinct()
             .ToList();
 
+        return true;
+    }
+
+    void CleanupOldFlights()
+    {
+        Serilog.Log.Information($"Cleaning up old flights (keeping {MaxFlightsToKeep} most recent)...");
+
+        if (!TryListMsStoreFlights(out var flightIds))
+        {
+            // The failure was already logged with the captured CLI output.
+            return;
+        }
         Serilog.Log.Information($"Found {flightIds.Count} flights");
         if (flightIds.Count > 0)
         {

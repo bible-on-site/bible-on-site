@@ -118,13 +118,13 @@ jobs:
         run: rm -f ${{ runner.temp }}/service-account.json
 
       - name: Deployment Summary
-        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        if: ${{ always() && steps.guard.outputs.deploy == 'true' }}
         run: |
           echo "## Android Deployment Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Version:** ${{ env.MODULE_VERSION }}" >> $GITHUB_STEP_SUMMARY
           echo "**Track:** Internal" >> $GITHUB_STEP_SUMMARY
-          echo "**Status:** Deployed ✅" >> $GITHUB_STEP_SUMMARY
+          echo "**Status:** ${{ job.status == 'success' && 'Deployed ✅' || 'Failed ❌ — see the upload step log for the actionable cause' }}" >> $GITHUB_STEP_SUMMARY
 
   deploy_microsoft_store:
     name: Deploy to Microsoft Store
@@ -192,6 +192,10 @@ jobs:
       - name: Setup Microsoft Store Developer CLI
         if: ${{ steps.guard.outputs.deploy == 'true' }}
         uses: microsoft/setup-msstore-cli@v1
+        with:
+          # Pin the last-validated release instead of tracking 'latest' so an
+          # untested upstream CLI release cannot silently break deployments.
+          version: v0.4.3
 
       - name: Configure Microsoft Store Developer CLI
         if: ${{ steps.guard.outputs.deploy == 'true' }}
@@ -233,14 +237,14 @@ jobs:
         run: node "${{ runner.temp }}/deployment-state.mjs"
 
       - name: Deployment Summary
-        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        if: ${{ always() && steps.guard.outputs.deploy == 'true' }}
         shell: pwsh
         run: |
           "## Windows Deployment Summary" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
           "" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
           "**Version:** ${{ env.MODULE_VERSION }}" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
           "**Target:** Microsoft Store (Internal Flight)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
-          "**Status:** Submitted ✅" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          "**Status:** ${{ job.status == 'success' && 'Submitted ✅' || 'Failed ❌ — see the upload step log for the Partner Center error' }}" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
 
   deploy_app_store:
     name: Deploy to App Store (TestFlight)
@@ -403,13 +407,13 @@ jobs:
         run: rm -rf $HOME/private_keys
 
       - name: Deployment Summary
-        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        if: ${{ always() && steps.guard.outputs.deploy == 'true' }}
         run: |
           echo "## iOS Deployment Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Version:** ${{ env.MODULE_VERSION }}" >> $GITHUB_STEP_SUMMARY
           echo "**Target:** TestFlight" >> $GITHUB_STEP_SUMMARY
-          echo "**Status:** Uploaded ✅" >> $GITHUB_STEP_SUMMARY
+          echo "**Status:** ${{ job.status == 'success' && 'Uploaded ✅' || 'Failed ❌ — see the failing step log for the actionable cause' }}" >> $GITHUB_STEP_SUMMARY
 
   distribute_app_store:
     name: Distribute to TestFlight
