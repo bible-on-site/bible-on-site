@@ -315,11 +315,7 @@ pub async fn get_category_counts(
     .await
     .map_err(db_error)?;
 
-    for row in entity_rows
-        .into_iter()
-        .chain(role_rows)
-        .chain(animal_rows)
-    {
+    for row in entity_rows.into_iter().chain(role_rows).chain(animal_rows) {
         counts.insert(row.category, row.cnt);
     }
 
@@ -372,12 +368,10 @@ fn group_entities(
     let mut order: Vec<String> = Vec::new();
     let mut grouped: HashMap<String, (String, Vec<TanahpediaEntryStub>)> = HashMap::new();
     for row in rows {
-        let group = grouped
-            .entry(row.entity_id.clone())
-            .or_insert_with(|| {
-                order.push(row.entity_id.clone());
-                (row.entity_name.clone(), Vec::new())
-            });
+        let group = grouped.entry(row.entity_id.clone()).or_insert_with(|| {
+            order.push(row.entity_id.clone());
+            (row.entity_name.clone(), Vec::new())
+        });
         if let (Some(id), Some(unique_name), Some(title)) =
             (row.entry_id, row.entry_unique_name, row.entry_title)
         {
@@ -589,22 +583,14 @@ struct TodayEntityRow {
     entry_title: Option<String>,
 }
 
-fn group_today_entities(
-    rows: Vec<TodayEntityRow>,
-) -> Vec<TanahpediaEntityWithEntries> {
+fn group_today_entities(rows: Vec<TodayEntityRow>) -> Vec<TanahpediaEntityWithEntries> {
     let mut order: Vec<String> = Vec::new();
     let mut grouped: HashMap<String, (String, String, Vec<TanahpediaEntryStub>)> = HashMap::new();
     for row in rows {
-        let group = grouped
-            .entry(row.entity_id.clone())
-            .or_insert_with(|| {
-                order.push(row.entity_id.clone());
-                (
-                    row.entity_name.clone(),
-                    row.entity_type.clone(),
-                    Vec::new(),
-                )
-            });
+        let group = grouped.entry(row.entity_id.clone()).or_insert_with(|| {
+            order.push(row.entity_id.clone());
+            (row.entity_name.clone(), row.entity_type.clone(), Vec::new())
+        });
         if let (Some(id), Some(unique_name), Some(title)) =
             (row.entry_id, row.entry_unique_name, row.entry_title)
         {
@@ -721,13 +707,14 @@ mod tests {
 
     #[tokio::test]
     async fn get_recent_entries_returns_entries() {
-        let db = Database::from_connection(
-            MockDatabase::new(DatabaseBackend::MySql)
-                .append_query_results::<entry::Model, Vec<entry::Model>, _>([vec![entry_model(
-                    "e1", "שמשון", "שמשון",
-                )]])
-                .into_connection(),
-        );
+        let db =
+            Database::from_connection(
+                MockDatabase::new(DatabaseBackend::MySql)
+                    .append_query_results::<entry::Model, Vec<entry::Model>, _>([vec![
+                        entry_model("e1", "שמשון", "שמשון"),
+                    ]])
+                    .into_connection(),
+            );
 
         let entries = get_recent_entries(&db, 10).await.unwrap();
 
@@ -753,7 +740,9 @@ mod tests {
         let db = Database::from_connection(
             MockDatabase::new(DatabaseBackend::MySql)
                 .append_query_results::<entry::Model, Vec<entry::Model>, _>([vec![entry_model(
-                    "entry-1", "שמשון", "שמשון",
+                    "entry-1",
+                    "שמשון",
+                    "שמשון",
                 )]])
                 .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
                     vec![mock_row([
@@ -974,7 +963,9 @@ mod tests {
                 .into_connection(),
         );
 
-        let entities = get_entities_with_entries(&db, "PERSON", None).await.unwrap();
+        let entities = get_entities_with_entries(&db, "PERSON", None)
+            .await
+            .unwrap();
 
         assert_eq!(entities.len(), 2);
         assert_eq!(entities[0].entity_name, "דתן");
@@ -1088,9 +1079,8 @@ mod tests {
 
     #[tokio::test]
     async fn get_entities_with_entries_returns_empty_for_unknown_sub() {
-        let db = Database::from_connection(
-            MockDatabase::new(DatabaseBackend::MySql).into_connection(),
-        );
+        let db =
+            Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());
 
         let entities = get_entities_with_entries(&db, "PERSON", Some("BOGUS"))
             .await
@@ -1140,11 +1130,9 @@ mod tests {
     async fn get_category_homepage_returns_none_when_unconfigured() {
         let db = Database::from_connection(
             MockDatabase::new(DatabaseBackend::MySql)
-                .append_query_results::<
-                    category_homepage::Model,
-                    Vec<category_homepage::Model>,
-                    _,
-                >([vec![]])
+                .append_query_results::<category_homepage::Model, Vec<category_homepage::Model>, _>(
+                    [vec![]],
+                )
                 .into_connection(),
         );
 
@@ -1157,18 +1145,16 @@ mod tests {
     async fn get_category_homepage_returns_configured_page() {
         let db = Database::from_connection(
             MockDatabase::new(DatabaseBackend::MySql)
-                .append_query_results::<
-                    category_homepage::Model,
-                    Vec<category_homepage::Model>,
-                    _,
-                >([vec![category_homepage::Model {
-                    id: "hp-1".to_string(),
-                    entity_type: "PLACE".to_string(),
-                    layout_type: "MAP".to_string(),
-                    config: None,
-                    content: Some("<p>מפת המקומות</p>".to_string()),
-                    updated_at: now(),
-                }]])
+                .append_query_results::<category_homepage::Model, Vec<category_homepage::Model>, _>(
+                    [vec![category_homepage::Model {
+                        id: "hp-1".to_string(),
+                        entity_type: "PLACE".to_string(),
+                        layout_type: "MAP".to_string(),
+                        config: None,
+                        content: Some("<p>מפת המקומות</p>".to_string()),
+                        updated_at: now(),
+                    }]],
+                )
                 .into_connection(),
         );
 

@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => {
 		queryOne: vi.fn(),
 		query: vi.fn(),
 		txExecute: vi.fn(),
+		txQuery: vi.fn(),
 		txQueryOne: vi.fn(),
 		// transaction() runs the callback on the fake pooled connection.
 		transaction: vi.fn((fn: (c: typeof conn) => unknown) => fn(conn)),
@@ -49,6 +50,7 @@ describe("article distribution eligibility", () => {
 			mocks.queryOne,
 			mocks.query,
 			mocks.txExecute,
+			mocks.txQuery,
 			mocks.txQueryOne,
 		])
 			mock.mockReset();
