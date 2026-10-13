@@ -613,19 +613,19 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
             // Yield so the CarouselView processes the scroll + layout pass.
             await Task.Delay(50);
 
+            // A navigation during layout owns the reader now. Check before
+            // writing the carousel position as well as the search landing.
+            if (_viewModel.ReaderLoadStamp != loadStamp)
+            {
+                return;
+            }
+
             // Sync the ViewModel position (two-way binding may lag)
             _viewModel.CarouselPosition = targetPos;
         }
         finally
         {
             _carouselInitializing = false;
-        }
-
-        // The layout yield above still admits a navigation: when it happened,
-        // the newer load owns the overlay and the search landing — leave both.
-        if (_viewModel.ReaderLoadStamp != loadStamp)
-        {
-            return;
         }
 
         // Hide loading overlay — carousel is ready
