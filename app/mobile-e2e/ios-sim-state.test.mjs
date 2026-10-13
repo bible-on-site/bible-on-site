@@ -54,8 +54,10 @@ test("quiesce removes test apps, shuts down and confirms a consistent device dir
     "com.facebook.WebDriverAgentRunner.xctrunner": {},
     "com.apple.mobilesafari": {},
   });
+  const clean = JSON.stringify({ "com.apple.mobilesafari": {} });
   const states = ["Booted", "Booting", "Shutdown"];
   const ran = [];
+  let listings = 0;
   const saved = await quiesce({
     udid: "AAA",
     expectedUdid: "AAA",
@@ -64,7 +66,7 @@ test("quiesce removes test apps, shuts down and confirms a consistent device dir
     run: (command, args) => {
       ran.push(args.join(" "));
       if (args[0] === "simctl" && args[1] === "listapps") return Buffer.from("<plist/>");
-      if (command === "plutil") return Buffer.from(apps);
+      if (command === "plutil") return Buffer.from(++listings === 1 ? apps : clean);
       if (args[1] === "list") {
         const state = states.length > 1 ? states.shift() : states[0];
         return Buffer.from(JSON.stringify({ devices: { [runtime]: [{ udid: "AAA", state }] } }));
@@ -77,6 +79,28 @@ test("quiesce removes test apps, shuts down and confirms a consistent device dir
   assert.ok(ran.includes("simctl uninstall AAA com.facebook.WebDriverAgentRunner.xctrunner"));
   assert.ok(!ran.some((line) => line.includes("mobilesafari")));
   assert.ok(ran.includes("simctl shutdown AAA"));
+});
+
+test("quiesce refuses to save when a test app survives the uninstall pass", async () => {
+  const apps = JSON.stringify({ "com.tanah.daily929": {} });
+  const ran = [];
+  const saved = await quiesce({
+    udid: "AAA",
+    expectedUdid: "AAA",
+    sleep: () => Promise.resolve(),
+    run: (command, args) => {
+      ran.push(args.join(" "));
+      if (args[0] === "simctl" && args[1] === "listapps") return Buffer.from("<plist/>");
+      if (command === "plutil") return Buffer.from(apps);
+      if (args[1] === "list") {
+        return Buffer.from(JSON.stringify({ devices: { [runtime]: [{ udid: "AAA", state: "Booted" }] } }));
+      }
+      if (args[1] === "uninstall") throw new Error("uninstall failed");
+      return Buffer.from("");
+    },
+  });
+  assert.equal(saved, false);
+  assert.ok(!ran.includes("simctl shutdown AAA"));
 });
 
 test("quiesce does not capture a device that never reached Booted", async () => {
