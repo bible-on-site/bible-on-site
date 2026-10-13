@@ -1777,12 +1777,29 @@ jobs:
         with:
           node-version-file: web/bible-on-site/package.json
 
+      # Same browser cache the website jobs use, at the macOS path. This job
+      # runs on PRs only, so the entry is PR-scoped by design: a save on miss
+      # speeds up reruns and later pushes of the same pull request.
+      - name: Restore playwright binaries
+        id: playwright-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ~/Library/Caches/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ needs.setup_env.outputs.website_playwright_version }}
+
       - name: Verify native audio time origin on Chromium and Apple WebKit
         working-directory: web/bible-on-site
         run: |
           npm ci --ignore-scripts --no-audit
           npx playwright install chromium webkit
           npx playwright test --config playwright.recitation.config.ts
+
+      - name: Save playwright binaries
+        if: ${{ steps.playwright-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: ~/Library/Caches/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ needs.setup_env.outputs.website_playwright_version }}
 
   bulletin_ci:
     name: Bulletin CI

@@ -52,12 +52,9 @@ def aa_payload(archive_path, payload_name, work_dir):
     aa = shutil.which("aa")
     if aa is None:
         raise ValueError("Apple Archive tool 'aa' is required to inspect .aar contents")
-    with archive_path.open("rb") as source:
-        magic = source.read(4)
-    if magic not in (b"AA01", b"YAA1"):
-        raise ValueError(
-            f"{archive_path.name} is not an Apple Archive (magic {magic!r}); "
-            "ba-package output changed — re-evaluate this verification")
+    # Compressed Apple Archives (including ba-package's pbze envelope) do not
+    # carry the uncompressed AA01/YAA1 header. Let Apple's decoder validate the
+    # container; decoding errors remain fatal and the extracted bytes are hashed.
     result = subprocess.run(  # nosec B603: fixed argv (aa extract -i/-d), no shell.  # nosemgrep
         [aa, "extract", "-i", str(archive_path), "-d", str(work_dir)],
         capture_output=True, text=True)
