@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
@@ -41,6 +42,11 @@ test("round-trip keeps exact app/harness bytes, coverage identity, executable mo
   if (process.platform !== "win32") {
     chmodSync(executable, 0o755);
     symlinkSync("BibleOnSite", join(workspace, appBundle, "Current"));
+  }
+  if (process.platform === "darwin") {
+    // Apple's tar would otherwise add undeclared ._Debug/._coverage-app entries.
+    execFileSync("xattr", ["-w", "com.apple.metadata:test", "test-build", join(workspace, "app/devops/bin/Debug")]);
+    execFileSync("xattr", ["-w", "com.apple.metadata:test", "test-build", coverage]);
   }
   const packed = await packIosBuild(workspace, coverage, output, sha, toolchain);
   for (const path of files) rmSync(join(workspace, path));

@@ -72,9 +72,14 @@ export async function packIosBuild(root, coverage, output, sourceSha, toolchain)
   await mkdir(output, { recursive: true });
   const archive = join(output, "ios-build.tar.gz");
   // tar preserves Mach-O modes and framework symlinks; upload-artifact's ZIP
-  // alone does not. The coverage template travels with these exact assemblies.
+  // alone does not. Exclude Apple's companion metadata entries, which are
+  // outside the declared output roots; signatures live in the bundle itself.
+  // https://github.com/libarchive/libarchive/blob/master/tar/bsdtar.c
+  // The coverage template travels with these exact assemblies.
   await execute("tar", ["-czf", archive, "-C", root, appBundle, ...projectOutputs,
-    "-C", dirname(coverage), "coverage-app"], { windowsHide: true });
+    "-C", dirname(coverage), "coverage-app"], {
+    windowsHide: true, env: { ...process.env, COPYFILE_DISABLE: "1" },
+  });
   const { stdout } = await execute("tar", ["-tzf", archive], { maxBuffer: 8 * 1024 * 1024, windowsHide: true });
   validateArchiveEntries(stdout);
   const manifest = {
