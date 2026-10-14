@@ -2063,7 +2063,7 @@ jobs:
 
   app_ios_ci:
     name: App iOS native audio CI
-    runs-on: macos-26
+    runs-on: ubuntu-latest
     needs: [setup_env, determine_changes]
     # Only on PRs — on master, Package iOS (IPA) already validates the full iOS build.
     if: ${{ github.event_name == 'pull_request' && always() && !cancelled() && !failure() && (needs.determine_changes.outputs.app_module_changed == 'true' || needs.determine_changes.outputs.app_ci_changed == 'true') }}
@@ -2078,29 +2078,33 @@ jobs:
         with:
           node-version-file: web/bible-on-site/package.json
 
-      # Same browser cache the website jobs use, at the macOS path. This job
-      # runs on PRs only, so the entry is PR-scoped by design: a save on miss
+      # Needs webkit on top of chromium, so it cannot share the website jobs'
+      # Linux playwright cache entry. PR-scoped by design: a save on miss
       # speeds up reruns and later pushes of the same pull request.
       - name: Restore playwright binaries
         id: playwright-cache
         uses: actions/cache/restore@v6
         with:
-          path: ~/Library/Caches/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ needs.setup_env.outputs.website_playwright_version }}
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-webkit-${{ needs.setup_env.outputs.website_playwright_version }}
 
       - name: Verify native audio time origin on Chromium and Apple WebKit
         working-directory: web/bible-on-site
         run: |
           npm ci --ignore-scripts --no-audit
-          npx playwright install chromium webkit
+          if [ "${{ steps.playwright-cache.outputs.cache-hit }}" = "true" ]; then
+            npx playwright install-deps chromium webkit
+          else
+            npx playwright install --with-deps chromium webkit
+          fi
           npx playwright test --config playwright.recitation.config.ts
 
       - name: Save playwright binaries
         if: ${{ steps.playwright-cache.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@v6
         with:
-          path: ~/Library/Caches/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ needs.setup_env.outputs.website_playwright_version }}
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-webkit-${{ needs.setup_env.outputs.website_playwright_version }}
 
   bulletin_ci:
     name: Bulletin CI
