@@ -5,7 +5,12 @@ CI creates one independent runner per matrix entry (`app-mobile-e2e.yml`), with
 `fail-fast: false`, and requires both results through the main CI gate. Tests
 on an individual device run sequentially and start with a freshly reset app.
 Android uses a full app reset. iOS reinstalls the app without erasing the booted
-simulator, and Appium operates the simulator headlessly.
+simulator, and Appium operates the simulator headlessly. One Appium session is
+shared across the collection: the first scenario builds it and later scenarios
+replay the same reset — terminate, reinstall, relaunch — inside it, skipping
+the ~30-70s WDA session handshake per test. Launch environment (e.g.
+`BIBLE_E2E_PERUSHIM`) is re-applied through `activateApp`; a platform that
+cannot replay it falls back to building a new session.
 Before iOS tests, Appium downloads the official simulator WebDriverAgent matching
 the locked driver dependency and launches it directly. This keeps cold Xcode
 compilation outside session startup; `npm test` also prepares the agent locally.
@@ -32,8 +37,9 @@ branching or skipping an entire shared scenario. Shared classes use
 `[Trait("Category", "MobileE2E")]`; the Nuke target automatically selects shared
 tests plus the current platform, leaving platform-only behavior easy to add.
 Use `[Collection("Mobile device")]` on every mobile test class to serialize
-scenarios that own the same device. Inject `MobileDeviceSessionFactory` and create
-drivers through `sessions.Create(...)`. If session startup or cleanup fails in a
+scenarios that own the same device. Inject `MobileDeviceSessionFactory`; the
+collection fixture keeps the live session in `sessions.Shared` and quits it
+once at the end. If session startup or cleanup fails in a
 way that could leave Appium working on the device, subsequent scenarios fail
 without requesting another session on it; the original failure remains in the
 test report. Failures matching `DeviceSessionDeath` mean the session is already
@@ -59,7 +65,8 @@ poll explicit element state instead of relying on implicit synchronization. See
 the [Appium idle-wait capability](https://appium.github.io/appium-xcuitest-driver/latest/reference/capabilities/).
 A session the device already dropped mid-startup or mid-scenario is recreated
 once; ambiguous startup or cleanup failures still block the device, since stale
-session work could race a replacement.
+session work could race a replacement. A shared session that fails its app
+reset is torn down through the same latched cleanup and rebuilt once.
 
 The pilot matrix deliberately covers Android and iOS. Existing Windows FlaUI
 tests and Android gesture regressions remain separate. Additional device/OS

@@ -31,12 +31,18 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
     private AppiumElement WaitFor(By locator, Func<AppiumElement, bool> condition, TimeSpan timeout)
     {
         var deadline = DateTime.UtcNow.Add(timeout);
+        // Window.Size is a device round-trip; on iOS it costs ~0.4s. One lazy
+        // fetch per poll iteration keeps the per-element filter cheap while
+        // still picking up rotations between polls.
+        Size? window = null;
         while (DateTime.UtcNow < deadline)
         {
+            window = null;
             try
             {
                 var element = driver.FindElements(locator)
-                    .FirstOrDefault(element => element.Displayed && HasVisibleCenter(element)
+                    .FirstOrDefault(element => element.Displayed
+                        && HasVisibleCenter(element, WindowSize())
                         && condition(element));
                 if (element != null)
                 {
@@ -50,6 +56,15 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
             Thread.Sleep(200);
         }
         throw new WebDriverTimeoutException($"No visible element matching {locator} met the condition within {timeout.TotalSeconds} seconds.");
+
+        Size WindowSize()
+        {
+            if (!window.HasValue)
+            {
+                window = driver.Manage().Window.Size;
+            }
+            return window.Value;
+        }
     }
 
     public string Source => WaitFor("PerekSource", element => !string.IsNullOrWhiteSpace(element.Text)).Text;
@@ -66,12 +81,15 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
         var locator = platform.AutomationId(automationId);
         var timeout = TimeSpan.FromSeconds(30);
         var deadline = DateTime.UtcNow.Add(timeout);
+        Size? window = null;
         while (DateTime.UtcNow < deadline)
         {
+            window = null;
             try
             {
                 var visible = driver.FindElements(locator)
-                    .Any(element => element.Displayed && HasVisibleCenter(element));
+                    .Any(element => element.Displayed
+                        && HasVisibleCenter(element, WindowSize()));
                 if (!visible)
                 {
                     return;
@@ -84,6 +102,15 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
             Thread.Sleep(200);
         }
         throw new WebDriverTimeoutException($"Element matching {locator} stayed visible for {timeout.TotalSeconds} seconds.");
+
+        Size WindowSize()
+        {
+            if (!window.HasValue)
+            {
+                window = driver.Manage().Window.Size;
+            }
+            return window.Value;
+        }
     }
 
     /// <summary>
@@ -110,6 +137,56 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
         }
         throw new WebDriverTimeoutException($"The frame of {locator} did not stabilize within {timeout.TotalSeconds} seconds.");
     }
+
+    /// <summary>
+    /// The iOS edge-back gesture races the reader's own recognizers and a
+    /// delivered gesture is sometimes dropped without any page change (#1306):
+    /// re-issue it while the destination element stays absent. Presence — not
+    /// the condition — ends retries, so a slow state restore (search text,
+    /// reader label) waits normally instead of navigating back a second time.
+    /// </summary>
+    public AppiumElement GoBackTo(string automationId, Func<AppiumElement, bool> condition)
+    {
+        var locator = platform.AutomationId(automationId);
+        for (var attempt = 0; attempt < MaxBackAttempts; attempt++)
+        {
+            if (attempt > 0)
+            {
+                DismissCapturedFlyout();
+            }
+            platform.GoBack(driver);
+            try
+            {
+                WaitFor(locator, _ => true, BackResponseWindow);
+                break;
+            }
+            catch (WebDriverTimeoutException)
+            {
+                // The destination stayed absent through a full settle window:
+                // the gesture was dropped rather than a late transition.
+            }
+        }
+        return WaitFor(locator, condition, TimeSpan.FromSeconds(45));
+    }
+
+    /// <summary>
+    /// A right-edge gesture the app captured as a drawer-open leaves the flyout
+    /// up instead of navigating back; close it so the retry reaches the page.
+    /// </summary>
+    private void DismissCapturedFlyout()
+    {
+        var flyout = driver.FindElements(platform.AutomationId("FlyoutPreferences"))
+            .FirstOrDefault(element => element.Displayed);
+        if (flyout == null)
+        {
+            return;
+        }
+        platform.DismissFlyoutViaScrim(driver);
+        WaitForHidden("FlyoutPreferences");
+    }
+
+    private static readonly TimeSpan BackResponseWindow = TimeSpan.FromSeconds(15);
+    private const int MaxBackAttempts = 3;
 
     public void Tap(string automationId) => Tap(platform.AutomationId(automationId));
 
@@ -181,11 +258,8 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
         Assert.InRange(menuCenter, 0.5 - platform.Layout.MenuCenterTolerance, 0.5 + platform.Layout.MenuCenterTolerance);
     }
 
-    private bool HasVisibleCenter(AppiumElement element)
-    {
-        var window = driver.Manage().Window.Size;
-        return HasVisibleCenter(element.Location, element.Size, window);
-    }
+    private bool HasVisibleCenter(AppiumElement element, Size window) =>
+        HasVisibleCenter(element.Location, element.Size, window);
 
     private static bool HasVisibleCenter(Point location, Size size, Size window)
     {
