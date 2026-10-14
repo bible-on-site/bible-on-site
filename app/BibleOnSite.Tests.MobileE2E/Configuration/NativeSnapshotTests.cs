@@ -34,8 +34,8 @@ public sealed class NativeSnapshotTests
         Assert.Equal("first", first.Snapshot.Id);
         Assert.Equal("next", next.Snapshot.Id);
         Assert.Equal(2, executor.Lookups);
-        Assert.Equal("-ios predicate string", executor.LastParameters!["using"]);
-        Assert.Equal("""name == "PerekSource" AND visible == 1""", executor.LastParameters["value"]);
+        Assert.Equal("accessibility id", executor.LastParameters!["using"]);
+        Assert.Equal("PerekSource", executor.LastParameters["value"]);
         Assert.DoesNotContain(DriverCommand.IsElementDisplayed, executor.Commands);
         Assert.DoesNotContain(DriverCommand.GetElementRect, executor.Commands);
     }
