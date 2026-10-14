@@ -40,18 +40,19 @@ public sealed class VisitCountersTests
     }
 
     [Fact]
-    public void ResetStartsAnEmptyGenerationAndKeepsNewVisits()
+    public void ResetClearsVisitsAndPreservesModuleIdentity()
     {
         var counters = new VisitCounters();
         counters.Visit("old", 10);
         counters.Visit("old", int.MinValue + 10);
         counters.Reset();
         using var empty = JsonDocument.Parse(counters.SnapshotJson());
-        Assert.Empty(empty.RootElement.GetProperty("modules").EnumerateObject());
+        Assert.Empty(empty.RootElement.GetProperty("modules").GetProperty("old").EnumerateObject());
         counters.Visit("new", 10);
         using var fresh = JsonDocument.Parse(counters.SnapshotJson());
         var modules = fresh.RootElement.GetProperty("modules");
-        Assert.Single(modules.EnumerateObject());
+        Assert.Equal(2, modules.EnumerateObject().Count());
+        Assert.Empty(modules.GetProperty("old").EnumerateObject());
         Assert.Equal(1, modules.GetProperty("new").GetProperty("10").GetInt64());
     }
 

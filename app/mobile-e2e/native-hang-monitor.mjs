@@ -1,5 +1,5 @@
-// Capture the app while an ordinary interaction deadline is being exceeded,
-// before diagnostics query the same blocked UI or session cleanup kills it.
+// Observe the first command still pending at the pre-deadline threshold.
+// The caller captures a live frame without attaching to a potentially healthy app.
 export function monitorNativeInteractions(capture, {
   schedule = (callback) => setTimeout(callback, 25000), cancel = clearTimeout,
 } = {}) {
