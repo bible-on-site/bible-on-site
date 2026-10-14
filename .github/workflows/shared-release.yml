@@ -255,8 +255,9 @@ jobs:
           test "$(gh api "repos/${{ github.repository }}/actions/runs/$SOURCE_RUN" --jq .run_attempt)" = "$SOURCE_ATTEMPT"
           gh api "repos/${{ github.repository }}/actions/runs/$SOURCE_RUN/artifacts" --paginate --jq '.artifacts[]' > "$RUNNER_TEMP/release-artifacts.jsonl"
 
-          # Pin each archive before downloading; never follow a replaced artifact name.
-          echo "$ARTIFACTS" | jq -c '.[]' | while read -r artifact; do
+          # Several release globs can share one Actions artifact (IPA, Apple packs,
+          # and fallback payloads). Pin and extract it once per destination.
+          echo "$ARTIFACTS" | jq -c 'unique_by([.name, .path])[]' | while read -r artifact; do
             NAME=$(echo "$artifact" | jq -r '.name // empty')
             PATH_DIR=$(echo "$artifact" | jq -r '.path')
 
@@ -277,7 +278,7 @@ jobs:
             ARCHIVE="$RUNNER_TEMP/release-$ID.zip"
             gh api "repos/${{ github.repository }}/actions/artifacts/$ID/zip" > "$ARCHIVE"
             printf '%s  %s\n' "${DIGEST#sha256:}" "$ARCHIVE" | sha256sum --check --status
-            unzip -q "$ARCHIVE" -d "$PATH_DIR"
+            unzip -q -o "$ARCHIVE" -d "$PATH_DIR" < /dev/null
             ls -la "$PATH_DIR"
           done
 
