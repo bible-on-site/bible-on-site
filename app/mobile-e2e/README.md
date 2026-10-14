@@ -3,9 +3,10 @@
 The shared C# suite in `../BibleOnSite.Tests.MobileE2E` runs on Android and iOS.
 CI creates one independent runner per matrix entry (`app-mobile-e2e.yml`), with
 `fail-fast: false`, and requires both results through the main CI gate. Tests
-on an individual device run sequentially and start with a freshly reset app.
-Android uses a full app reset. iOS reinstalls the app without erasing the booted
-simulator, and Appium operates the simulator headlessly.
+on an individual device run sequentially. The first session installs and resets
+the app; later scenarios restart its process with their launch environment.
+The install and built search index survive these restarts. Appium operates
+the simulator headlessly.
 
 CI runs the complete iOS suite on one simulator and one shared Appium session.
 The standard `xcode-27` host has only 3 CPUs and 7 GB RAM; two simulators compete
@@ -64,12 +65,13 @@ branching or skipping an entire shared scenario. Shared classes use
 `[Trait("Category", "MobileE2E")]`; the Nuke target automatically selects shared
 tests plus the current platform, leaving platform-only behavior easy to add.
 Every class runnable on iOS must also carry exactly one
-`[Trait("Shard", "1")]` or `[Trait("Shard", "2")]` — the iOS leg splits the
-suite between two simulators on that value and `ShardAssignmentTests` fails
+`[Trait("Shard", "1")]` or `[Trait("Shard", "2")]` for optional sharding.
+`ShardAssignmentTests` fails
 the harness unit run when a class is left out.
 Use `[Collection("Mobile device")]` on every mobile test class to serialize
-scenarios that own the same device. Inject `MobileDeviceSessionFactory` and create
-drivers through `sessions.Create(...)`. If session startup or cleanup fails in a
+scenarios that own the same device. Inject `MobileDeviceSession`; this collection
+fixture owns one driver and releases it after the last scenario. The session
+factory latches uncertain startup or cleanup failures. If either fails in a
 way that could leave Appium working on the device, subsequent scenarios fail
 without requesting another session on it; the original failure remains in the
 test report. Failures matching `DeviceSessionDeath` mean the session is already
@@ -81,11 +83,9 @@ exercises the real touch target of rounded floating controls while avoiding
 XCTest's automatic hit-point selection. Native device logs record menu press,
 release, click and completed animations to diagnose touch delivery. Android uses
 native element clicks. UI assertions and readiness deadlines remain shared.
-After session creation, allow two minutes for the first reader snapshot: a cold
-iOS lookup can take longer than 45 seconds and return the earlier loading tree
-even though the reader has appeared. This startup gate requires a visible,
-nonempty perek source and captures failure diagnostics. Subsequent scenario
-lookups and navigation retain their 45-second deadlines.
+The startup gate requires a visible, nonempty perek source within the same
+45-second deadline as ordinary scenario lookups and navigation. A failure
+captures device diagnostics.
 iOS disables XCTest idle checks (`waitForIdleTimeout` 0): every proxied WDA
 command otherwise waits for the app main thread to stay quiet for the whole
 threshold, which a reader that keeps re-rendering commentary cells (or a
@@ -218,7 +218,9 @@ ESM loading without a device.
 From `app/`, `dotnet run --project devops -- TestMobileE2EUnit` checks platform
 configuration and device capabilities without a device or mobile workload.
 
-Screenshots and native view trees are captured for each scenario, alongside
+Screenshots are captured for each scenario. Failed scenarios also save native
+view trees; content assertions still inspect the complete native tree.
+These captures are saved alongside
 timestamped Appium and device logs, TRX and JUnit reports, under `app/.artifacts/mobile-e2e/<platform>`
 (`shard<N>/` subdirectories when the iOS suite runs sharded, with merged
 `coverage-evidence/` at the top level).
