@@ -186,6 +186,11 @@ public abstract class MobilePlatformAdapter
             // run.mjs exports device/lifecycle/crash logs independently. Appium's
             // duplicate live stream can stall cold simulator session startup.
             options.AddAdditionalAppiumOption("skipLogCapture", true);
+            // All scenario assertions can finish while XCTest's application
+            // termination blocks DELETE /session. Let WDA release its session
+            // without that app query; run.mjs owns bounded simulator termination
+            // after the harness exits, preserving the existing delete deadline.
+            options.AddAdditionalAppiumOption("shouldTerminateApp", false);
             options.AddAdditionalAppiumOption("showXcodeLog", true);
             options.AddAdditionalAppiumOption("usePreinstalledWDA", true);
             options.AddAdditionalAppiumOption("prebuiltWDAPath", configuration.PrebuiltWdaPath

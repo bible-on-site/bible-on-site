@@ -35,8 +35,10 @@ export function supervise(command, args, {
     if (!child.pid) return;
     try {
       if (process.platform === "win32") {
-        // Kill the tree before its parent can exit and orphan grandchildren.
-        execFileSync("taskkill", ["/pid", String(child.pid), "/T", "/F"],
+        // The native .NET tree walk avoids taskkill's stalled process query.
+        // Terminate only this supervisor's owned process tree.
+        execFileSync("pwsh", ["-NoProfile", "-NonInteractive", "-Command",
+          `[System.Diagnostics.Process]::GetProcessById(${child.pid}).Kill($true)`],
           { windowsHide: true, stdio: "ignore", timeout: 2000 });
       } else {
         process.kill(-child.pid, signal);

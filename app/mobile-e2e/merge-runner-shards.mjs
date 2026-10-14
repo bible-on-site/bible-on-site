@@ -15,7 +15,7 @@ const union = (...arrays) => [...new Set(arrays.flat())].sort();
 // Execution evidence joins by source declaration; retain every module/hash
 // and each shard's diagnostics instead of attaching dumps to another build.
 export function mergeExecTrees(trees, snapshotSha, complete) {
-  if (trees.length !== 2) throw new Error("Expected both iOS runner trees.");
+  if (trees.length < 2) throw new Error("Expected at least two iOS runner trees.");
   const result = structuredClone(trees[0]);
   result.nodes = {};
   result.tests = {};
@@ -67,7 +67,7 @@ export function mergeExecTrees(trees, snapshotSha, complete) {
 }
 
 export function validateRunnerEvidence(parts, expectedIds) {
-  if (parts.length !== 2) throw new Error("Expected both independent iOS runners.");
+  if (parts.length < 2) throw new Error("Expected at least two independent iOS runners.");
   const seen = new Set();
   for (const part of parts) {
     if (part.timing.status !== "completed" || part.timing.exitCode !== 0) {
@@ -118,14 +118,14 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     .filter((test) => test.platform.toLowerCase() === "ios" || test.platform === "Shared")
     .map((test) => test.id);
   const output = resolve(outputArg);
-  const inputs = [join(output, "shard1"), join(output, "shard2")];
+  const inputs = ["shard1", "shard2", "shard3"].map(shard => join(output, shard));
   let expected = full;
   if (mode === "enforce") {
     const manifests = inputs.map((input) => readJson(join(input, "selection-manifest.json")));
-    if (canonicalize(manifests[0]) !== canonicalize(manifests[1])) throw new Error("iOS selection manifests differ.");
+    if (manifests.some(manifest => canonicalize(manifest) !== canonicalize(manifests[0]))) throw new Error("iOS selection manifests differ.");
     if (!manifests[0].selectAll) expected = manifests[0].selected;
   }
   const complete = mergeRunnerArtifacts(inputs, output, snapshotSha, expected, full);
   if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `complete=${complete}\n`);
-  console.log(`Merged both iOS runners: ${expected.length} passed scenarios; full suite=${complete}.`);
+  console.log(`Merged all three iOS runners: ${expected.length} passed scenarios; full suite=${complete}.`);
 }
