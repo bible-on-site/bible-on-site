@@ -28,7 +28,7 @@ concurrency:
 jobs:
   deploy_google_play:
     name: Deploy to Google Play (Internal Track)
-    if: ${{ github.event.client_payload.android_artifact_name != '' }}
+    if: ${{ (github.event.client_payload.artifacts.android_artifact_name || github.event.client_payload.android_artifact_name) != '' }}
     permissions:
       contents: read
       actions: read
@@ -37,7 +37,7 @@ jobs:
 
     env:
       MODULE_VERSION: ${{ github.event.client_payload.module_version }}
-      ANDROID_ARTIFACT_NAME: ${{ github.event.client_payload.android_artifact_name }}
+      ANDROID_ARTIFACT_NAME: ${{ github.event.client_payload.artifacts.android_artifact_name || github.event.client_payload.android_artifact_name }}
       CI_RUN_ID: ${{ github.event.client_payload.ci_run_id }}
       APP_DIRECTORY: app
 
@@ -128,7 +128,7 @@ jobs:
 
   deploy_microsoft_store:
     name: Deploy to Microsoft Store
-    if: ${{ github.event.client_payload.windows_artifact_name != '' }}
+    if: ${{ (github.event.client_payload.artifacts.windows_artifact_name || github.event.client_payload.windows_artifact_name) != '' }}
     permissions:
       contents: read
       actions: read
@@ -137,7 +137,7 @@ jobs:
 
     env:
       MODULE_VERSION: ${{ github.event.client_payload.module_version }}
-      WINDOWS_ARTIFACT_NAME: ${{ github.event.client_payload.windows_artifact_name }}
+      WINDOWS_ARTIFACT_NAME: ${{ github.event.client_payload.artifacts.windows_artifact_name || github.event.client_payload.windows_artifact_name }}
       CI_RUN_ID: ${{ github.event.client_payload.ci_run_id }}
       APP_DIRECTORY: app
 
@@ -248,7 +248,7 @@ jobs:
 
   deploy_app_store:
     name: Deploy to App Store (TestFlight)
-    if: ${{ (github.event.client_payload.ios_artifact_name != '' || inputs.ios_artifact_name != '') && !inputs.inspect_ios_build }}
+    if: ${{ ((github.event.client_payload.artifacts.ios_artifact_name || github.event.client_payload.ios_artifact_name) != '' || inputs.ios_artifact_name != '') && !inputs.inspect_ios_build }}
     permissions:
       contents: read
       actions: read
@@ -257,7 +257,7 @@ jobs:
 
     env:
       MODULE_VERSION: ${{ github.event.client_payload.module_version || '0.0.0' }}
-      IOS_ARTIFACT_NAME: ${{ github.event.client_payload.ios_artifact_name || inputs.ios_artifact_name }}
+      IOS_ARTIFACT_NAME: ${{ github.event.client_payload.artifacts.ios_artifact_name || github.event.client_payload.ios_artifact_name || inputs.ios_artifact_name }}
       CI_RUN_ID: ${{ github.event.client_payload.ci_run_id || inputs.ci_run_id }}
       APP_DIRECTORY: app
 
@@ -419,14 +419,14 @@ jobs:
   distribute_app_store:
     name: Distribute to TestFlight
     needs: deploy_app_store
-    if: ${{ always() && needs.deploy_app_store.result == 'success' && (github.event.client_payload.ios_artifact_name != '' || inputs.ios_artifact_name != '') && !inputs.inspect_ios_build }}
+    if: ${{ always() && needs.deploy_app_store.result == 'success' && ((github.event.client_payload.artifacts.ios_artifact_name || github.event.client_payload.ios_artifact_name) != '' || inputs.ios_artifact_name != '') && !inputs.inspect_ios_build }}
     permissions:
       contents: read
       actions: read
       deployments: write
     uses: ./.github/workflows/testflight-distribution.yml
     with:
-      ios_artifact_name: ${{ github.event.client_payload.ios_artifact_name || inputs.ios_artifact_name }}
+      ios_artifact_name: ${{ github.event.client_payload.artifacts.ios_artifact_name || github.event.client_payload.ios_artifact_name || inputs.ios_artifact_name }}
       ci_run_id: ${{ github.event.client_payload.ci_run_id || inputs.ci_run_id }}
       parent_lock_held: true
     secrets: inherit
