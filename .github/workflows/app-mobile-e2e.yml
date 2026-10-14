@@ -79,7 +79,7 @@ jobs:
           overwrite: true
 
   appium:
-    name: Appium ${{ matrix.platform }}
+    name: Appium ${{ matrix.platform }}${{ matrix.shard != '' && format(' shard {0}', matrix.shard) || '' }}
     needs: [resolve_perushim_artifact]
     # The resolver is skipped when the caller provides an artifact name.
     if: ${{ always() && !cancelled() && !failure() }}
@@ -95,17 +95,24 @@ jobs:
         include:
           - platform: Android
             artifact: android
+            platform_id: android
             runner: ubuntu-latest
             workload: maui-android
+            shard: ""
+          # One simulator per independent runner keeps all ten iOS scenarios
+          # in the disjoint Shard=1|2 partition without shared CPU/RAM contention.
           - platform: iOS
-            artifact: ios
+            artifact: ios-shard1
+            platform_id: ios
             runner: xcode-27
             workload: maui-ios
-            # The standard arm64 runner has 3 CPUs and 7 GB RAM. Run the full
-            # suite on one simulator so boot, build and two app/WDA stacks do
-            # not compete for that memory. Optional sharding remains available
-            # through test:sharded on a host with sufficient capacity (#2083).
-            shards: "1"
+            shard: "1"
+          - platform: iOS
+            artifact: ios-shard2
+            platform_id: ios
+            runner: xcode-27
+            workload: maui-ios
+            shard: "2"
     env:
       MOBILE_PLATFORM: ${{ matrix.platform }}
       MOBILE_E2E_ARTIFACTS: ${{ github.workspace }}/app/.artifacts/mobile-e2e/${{ matrix.artifact }}
@@ -114,7 +121,8 @@ jobs:
       MOBILE_E2E_COVERAGE: "1"
       # The preflight builds both Debug harness projects before any device run.
       MOBILE_E2E_PREBUILT: "1"
-      MOBILE_E2E_SHARD_COUNT: ${{ matrix.shards || '1' }}
+      MOBILE_E2E_SHARD_COUNT: "1"
+      MOBILE_E2E_SHARD: ${{ matrix.shard }}
       # Android emulator coordinates shared by the sdkmanager install, the
       # cache keys and the runner action, so any bump invalidates the caches.
       ANDROID_API_LEVEL: "36"
@@ -237,7 +245,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           node devops/github/ci/e2e-impact/e2e-impact.ts baseline-download \
-            --name "app-mobile-e2e-coverage.master.${{ matrix.artifact }}" \
+            --name "app-mobile-e2e-coverage.master.${{ matrix.platform_id }}" \
             --out "$MOBILE_E2E_ARTIFACTS/baseline"
           BASELINE_ARGS=()
           if [ -f "$MOBILE_E2E_ARTIFACTS/baseline/coverage-tree.json" ]; then
@@ -249,7 +257,7 @@ jobs:
           fi
           node devops/github/ci/e2e-impact/e2e-impact.ts select \
             --suite app/mobile-e2e \
-            --platform "${{ matrix.artifact }}" \
+            --platform "${{ matrix.platform_id }}" \
             --tested-sha "${{ github.sha }}" \
             --out "$MOBILE_E2E_ARTIFACTS/selection-manifest.json" \
             --compare "${BASELINE_ARGS[@]}" "${FORCE_ARGS[@]}"
@@ -568,9 +576,9 @@ jobs:
       - name: Wait for iPhone simulator
         wait-all:
 
-      # Run every shared and iOS-only scenario with one shared session. No Shard
-      # filter is set: all ten cases still run once, with the same coverage gate.
-      - name: Run full pilot on iOS
+      # Each runner owns one simulator/session and its existing Shard trait.
+      # The final merge verifies their union against all discovered iOS tests.
+      - name: Run iOS runner shard
         if: matrix.platform == 'iOS'
         id: pilot-ios
         # The independent supervisor stops the full process tree at 15 minutes;
@@ -640,12 +648,12 @@ jobs:
             exit 0
           fi
           INCOMPLETE_ARGS=()
-          if [ "$PILOT_OUTCOME" != "success" ]; then
+          if [ "$PILOT_OUTCOME" != "success" ] || [ "${{ matrix.platform }}" = "iOS" ]; then
             INCOMPLETE_ARGS=(--incomplete)
           fi
           node devops/e2e-coverage-trees/e2e-coverage-trees.ts extract \
             --suite app/mobile-e2e \
-            --platform "${{ matrix.artifact }}" \
+            --platform "${{ matrix.platform_id }}" \
             --artifacts "$MOBILE_E2E_ARTIFACTS" \
             --snapshot-sha "${{ github.sha }}" \
             --out "$MOBILE_E2E_ARTIFACTS/exec-coverage-tree.json" "${INCOMPLETE_ARGS[@]}"
@@ -664,7 +672,7 @@ jobs:
           PILOT_OUTCOME: ${{ matrix.platform == 'iOS' && steps['pilot-ios'].outcome || steps.pilot.outcome }}
         run: |
           INCOMPLETE_ARGS=()
-          if [ "$PILOT_OUTCOME" != "success" ]; then
+          if [ "$PILOT_OUTCOME" != "success" ] || [ "${{ matrix.platform }}" = "iOS" ]; then
             INCOMPLETE_ARGS=(--incomplete)
           fi
           EXEC_ARGS=()
@@ -673,7 +681,7 @@ jobs:
           fi
           node devops/github/ci/e2e-impact/e2e-impact.ts collect-appium \
             --suite app/mobile-e2e \
-            --platform "${{ matrix.artifact }}" \
+            --platform "${{ matrix.platform_id }}" \
             --artifacts "$MOBILE_E2E_ARTIFACTS" \
             --snapshot-sha "${{ github.sha }}" \
             --out "$MOBILE_E2E_ARTIFACTS/coverage-tree.json" "${INCOMPLETE_ARGS[@]}" "${EXEC_ARGS[@]}"
@@ -682,10 +690,10 @@ jobs:
       # successful default-branch run; PR and merge-queue evidence stays
       # provisional inside the run's appium artifact.
       - name: Publish coverage-tree baseline
-        if: always() && github.event_name == 'push' && github.ref == 'refs/heads/master' && (steps.pilot.outcome == 'success' || steps['pilot-ios'].outcome == 'success') && steps.collect.outcome == 'success'
+        if: matrix.platform == 'Android' && always() && github.event_name == 'push' && github.ref == 'refs/heads/master' && (steps.pilot.outcome == 'success' || steps['pilot-ios'].outcome == 'success') && steps.collect.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
-          name: app-mobile-e2e-coverage.master.${{ matrix.artifact }}
+          name: app-mobile-e2e-coverage.master.${{ matrix.platform_id }}
           path: app/.artifacts/mobile-e2e/${{ matrix.artifact }}/coverage-tree.json
           retention-days: 90
           overwrite: true
@@ -695,7 +703,7 @@ jobs:
       # default-branch run refreshes it, so a partial or selected run can
       # never overwrite a complete baseline.
       - name: Publish app coverage baseline
-        if: always() && github.event_name == 'push' && github.ref == 'refs/heads/master' && (steps.pilot.outcome == 'success' || steps['pilot-ios'].outcome == 'success') && steps.coverage-apply.outcome == 'success'
+        if: matrix.platform == 'Android' && always() && github.event_name == 'push' && github.ref == 'refs/heads/master' && (steps.pilot.outcome == 'success' || steps['pilot-ios'].outcome == 'success') && steps.coverage-apply.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
           name: app-e2e-coverage.master.${{ matrix.artifact }}
@@ -708,13 +716,23 @@ jobs:
       # automation-id baseline above. Runs without exec coverage (no
       # template → no extracted tree) skip the publish.
       - name: Publish exec coverage-tree baseline
-        if: always() && github.event_name == 'push' && github.ref == 'refs/heads/master' && (steps.pilot.outcome == 'success' || steps['pilot-ios'].outcome == 'success') && steps['exec-tree'].outcome == 'success' && steps['exec-tree'].outputs.exec-coverage-tree != ''
+        if: matrix.platform == 'Android' && always() && github.event_name == 'push' && github.ref == 'refs/heads/master' && (steps.pilot.outcome == 'success' || steps['pilot-ios'].outcome == 'success') && steps['exec-tree'].outcome == 'success' && steps['exec-tree'].outputs.exec-coverage-tree != ''
         uses: actions/upload-artifact@v7
         with:
           name: app-mobile-e2e-exec-coverage.master.${{ matrix.artifact }}
           path: app/.artifacts/mobile-e2e/${{ matrix.artifact }}/exec-coverage-tree.json
           retention-days: 90
           overwrite: true
+
+      - name: Upload iOS runner merge inputs
+        if: matrix.platform == 'iOS' && always() && !cancelled()
+        uses: actions/upload-artifact@v7
+        with:
+          name: app-mobile-e2e-shard.${{ github.run_id }}.${{ matrix.artifact }}
+          path: app/.artifacts/mobile-e2e/${{ matrix.artifact }}/
+          retention-days: 14
+          include-hidden-files: true
+          if-no-files-found: error
 
       - name: Upload platform results and diagnostics
         if: always()
@@ -727,3 +745,79 @@ jobs:
           retention-days: 14
           # Only the explicit diagnostics paths above are included.
           include-hidden-files: true
+
+  merge_ios:
+    name: Merge complete iOS suite
+    needs: [appium]
+    if: success()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: devops/package.json
+      - name: Download first iOS runner
+        uses: actions/download-artifact@v8
+        with:
+          name: app-mobile-e2e-shard.${{ github.run_id }}.ios-shard1
+          path: app/.artifacts/mobile-e2e/ios/shard1
+      - name: Download second iOS runner
+        uses: actions/download-artifact@v8
+        with:
+          name: app-mobile-e2e-shard.${{ github.run_id }}.ios-shard2
+          path: app/.artifacts/mobile-e2e/ios/shard2
+      - name: Verify full disjoint suite and merge native coverage
+        id: merge
+        run: node app/mobile-e2e/merge-runner-shards.mjs app/.artifacts/mobile-e2e/ios "${{ github.sha }}" "${{ inputs.e2e_selection_mode }}"
+      - name: Collect complete iOS test coverage tree
+        run: |
+          INCOMPLETE_ARGS=()
+          if [ "${{ steps.merge.outputs.complete }}" != "true" ]; then
+            INCOMPLETE_ARGS=(--incomplete)
+          fi
+          node devops/github/ci/e2e-impact/e2e-impact.ts collect-appium \
+            --suite app/mobile-e2e --platform ios \
+            --artifacts app/.artifacts/mobile-e2e/ios --snapshot-sha "${{ github.sha }}" \
+            --exec-tree app/.artifacts/mobile-e2e/ios/exec-coverage-tree.json \
+            --out app/.artifacts/mobile-e2e/ios/coverage-tree.json "${INCOMPLETE_ARGS[@]}"
+      - name: Upload combined iOS app coverage
+        uses: actions/upload-artifact@v7
+        with:
+          name: app-e2e-coverage.${{ github.run_id }}.ios
+          path: app/.artifacts/mobile-e2e/ios/coverage-app/
+          retention-days: 90
+          if-no-files-found: error
+      - name: Upload complete iOS suite evidence
+        uses: actions/upload-artifact@v7
+        with:
+          name: appium-ios-${{ github.run_id }}-${{ github.run_attempt }}
+          path: app/.artifacts/mobile-e2e/ios/
+          retention-days: 14
+          include-hidden-files: true
+          if-no-files-found: error
+      - name: Publish complete iOS selector baseline
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master' && steps.merge.outputs.complete == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: app-mobile-e2e-coverage.master.ios
+          path: app/.artifacts/mobile-e2e/ios/coverage-tree.json
+          retention-days: 90
+          overwrite: true
+      - name: Publish complete iOS execution baseline
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master' && steps.merge.outputs.complete == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: app-mobile-e2e-exec-coverage.master.ios
+          path: app/.artifacts/mobile-e2e/ios/exec-coverage-tree.json
+          retention-days: 90
+          overwrite: true
+      - name: Publish complete iOS app coverage baseline
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master' && steps.merge.outputs.complete == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: app-e2e-coverage.master.ios
+          path: app/.artifacts/mobile-e2e/ios/coverage-app/
+          retention-days: 90
+          overwrite: true
