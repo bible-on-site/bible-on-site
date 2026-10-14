@@ -28,6 +28,16 @@ public abstract class MobilePlatformAdapter
     public virtual bool CanTap(AppiumElement element) => element.Enabled;
     public abstract bool IsChecked(AppiumElement element);
     public virtual void Tap(AppiumDriver driver, AppiumElement element) => element.Click();
+
+    public static (System.Drawing.Point Location, System.Drawing.Size Size) ReadFrame(AppiumElement element)
+    {
+        if (element is NativeLiveElement native)
+        {
+            var frame = native.ReadFrame();
+            return (frame.Location, frame.Size);
+        }
+        return (element.Location, element.Size);
+    }
     public abstract void GoBack(AppiumDriver driver);
     public virtual void GoBackFromFocusedVerse(AppiumDriver driver) => GoBack(driver);
     public virtual void DismissSearchSheet(AppiumDriver driver) => GoBack(driver);
@@ -372,7 +382,8 @@ public sealed class IosPlatformAdapter : MobilePlatformAdapter
         // Use viewport coordinates rather than XCTest's element-relative tap.
         // One down/up pair with a short dwell produces a native touch, not a
         // long press or a second attempt when the expected UI does not appear.
-        driver.PerformActions([CreateTapSequence(element.Location, element.Size)]);
+        var frame = ReadFrame(element);
+        driver.PerformActions([CreateTapSequence(frame.Location, frame.Size)]);
     }
     internal static ActionSequence CreateTapSequence(System.Drawing.Point location, System.Drawing.Size size) =>
         CreateTapAtSequence(location.X + size.Width / 2, location.Y + size.Height / 2);
