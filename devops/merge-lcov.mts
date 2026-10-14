@@ -7,9 +7,14 @@
  * record overwrite a rich unit record and silently dropping coverage.
  *
  * Usage:
- *   node --import tsx merge-lcov.mts --out <file> --prefix <dir> [--require <file>]... [--optional <file>]... [--rm-input-dirs] [--relocate <needle>]...
+ *   node --import tsx merge-lcov.mts --out <file> --prefix <dir> [--require <file>]... [--hits-only <file>]... [--optional <file>]... [--rm-input-dirs] [--relocate <needle>]...
  *
  * --require   input must exist; a missing one fails the merge (exit 1)
+ * --hits-only like --require, but only covered records merge: a line, branch,
+ *             or function the input did not hit contributes nothing. Use for
+ *             inputs whose instrumented-line universe is not comparable with
+ *             the other layers (e.g. a separately built e2e app), so their
+ *             zero-hit enumeration cannot inflate the merged denominator.
  * --optional  input is skipped with a warning when missing
  * --prefix    module dir relative to repo root (e.g. web/admin/) — rewrites
  *             bare `SF:src/...` records so Codecov flag paths match
@@ -33,8 +38,19 @@ interface FileRecord {
 	fn: Set<string>; // function definitions "line,name"
 }
 
-/** Merge lcov contents into a single report body, one SF block per file. */
-export function mergeLcovTexts(contents: string[], prefix?: string, relocates: string[] = []): string {
+/**
+ * Merge lcov contents into a single report body, one SF block per file.
+ * `hitsOnly` (indexed like `contents`) marks inputs that contribute only
+ * covered records: their zero-hit DA/BRDA/FNDA entries and the FN definitions
+ * of unhit functions are dropped, so a foreign build's instrumented-line
+ * enumeration cannot inflate the merged denominator. Hits still union in.
+ */
+export function mergeLcovTexts(
+	contents: string[],
+	prefix?: string,
+	relocates: string[] = [],
+	hitsOnly: ReadonlySet<number> = new Set(),
+): string {
 	const files = new Map<string, FileRecord>();
 	const recordFor = (path: string): FileRecord => {
 		let rec = files.get(path);
@@ -45,8 +61,16 @@ export function mergeLcovTexts(contents: string[], prefix?: string, relocates: s
 		return rec;
 	};
 
-	for (const content of contents) {
+	for (const [index, content] of contents.entries()) {
+		const coveredOnly = hitsOnly.has(index);
 		let rec: FileRecord | null = null;
+		// FN definitions precede their FNDA hits in a record, so a covered-only
+		// input parks them until end_of_record reveals which functions ran.
+		// Zero-hit branches drop unconditionally: a foreign build's BRDA
+		// block/branch indices need not match the canonical build's, so an
+		// unhit arm is enumeration, not partial coverage.
+		const pendingFn = new Map<string, string>();
+		const hitFn = new Set<string>();
 		for (const raw of content.split(/\r?\n/)) {
 			const line = raw.trimEnd();
 			if (line.startsWith("SF:")) {
@@ -68,30 +92,51 @@ export function mergeLcovTexts(contents: string[], prefix?: string, relocates: s
 				continue;
 			}
 			if (!rec || line === "end_of_record") {
+				if (line === "end_of_record" && rec) {
+					for (const [name, fn] of pendingFn) {
+						if (hitFn.has(name)) rec.fn.add(fn);
+					}
+					pendingFn.clear();
+					hitFn.clear();
+				}
 				rec = line === "end_of_record" ? null : rec;
 				continue;
 			}
 			if (line.startsWith("DA:")) {
 				const [ln, hits] = line.slice(3).split(",");
 				const n = Number(ln);
-				rec.da.set(n, Math.max(rec.da.get(n) ?? 0, Number(hits)));
+				const h = Number(hits);
+				if (coveredOnly && !(h > 0)) continue;
+				rec.da.set(n, Math.max(rec.da.get(n) ?? 0, h));
 			} else if (line.startsWith("BRDA:")) {
 				const [ln, block, branch, hits] = line.slice(5).split(",");
+				const h = Number(hits) || 0;
+				if (coveredOnly && h <= 0) continue;
 				const key = `${ln},${block},${branch}`;
-				rec.brda.set(key, Math.max(rec.brda.get(key) ?? 0, Number(hits) || 0));
+				rec.brda.set(key, Math.max(rec.brda.get(key) ?? 0, h));
 			} else if (line.startsWith("FNDA:")) {
 				const comma = line.indexOf(",", 5);
 				const hits = Number(line.slice(5, comma));
 				const name = line.slice(comma + 1);
+				if (coveredOnly && !(hits > 0)) continue;
 				rec.fnda.set(name, Math.max(rec.fnda.get(name) ?? 0, hits));
+				hitFn.add(name);
 			} else if (line.startsWith("FN:")) {
-				rec.fn.add(line.slice(3));
+				const fn = line.slice(3);
+				if (coveredOnly) {
+					pendingFn.set(fn.slice(fn.indexOf(",") + 1), fn);
+				} else {
+					rec.fn.add(fn);
+				}
 			}
 		}
 	}
 
 	const chunks: string[] = [];
 	for (const [path, rec] of [...files.entries()].sort()) {
+		// A hits-only input can leave a file record empty when it covered
+		// nothing there; such a file has nothing to merge.
+		if (!rec.da.size && !rec.brda.size && !rec.fnda.size && !rec.fn.size) continue;
 		const lines: string[] = [`TN:`, `SF:${path}`];
 		for (const fn of [...rec.fn].sort()) lines.push(`FN:${fn}`);
 		for (const [name, hits] of [...rec.fnda.entries()].sort()) lines.push(`FNDA:${hits},${name}`);
@@ -137,13 +182,14 @@ function main(): void {
 		process.exit(1);
 	}
 
-	const required = flags.get("require") ?? [];
+	const required = [...(flags.get("require") ?? []), ...(flags.get("hits-only") ?? [])];
 	const missing = required.filter((p) => !existsSync(resolve(p)));
 	if (missing.length > 0) {
 		console.error(`✗ Required coverage input(s) missing:\n  ${missing.join("\n  ")}`);
 		process.exit(1);
 	}
 
+	const hitsOnlySet = new Set(flags.get("hits-only") ?? []);
 	const inputs = [...required, ...(flags.get("optional") ?? [])];
 	const prefix = flags.get("prefix")?.[0];
 	const relocates = flags.get("relocate") ?? [];
@@ -151,6 +197,7 @@ function main(): void {
 
 	const consumedDirs = new Set<string>();
 	const contents: string[] = [];
+	const hitsOnly = new Set<number>();
 	for (const input of inputs) {
 		const inputPath = resolve(input);
 		if (!existsSync(inputPath)) {
@@ -158,11 +205,12 @@ function main(): void {
 			continue;
 		}
 		contents.push(readFileSync(inputPath, "utf8"));
+		if (hitsOnlySet.has(input)) hitsOnly.add(contents.length - 1);
 		consumedDirs.add(dirname(inputPath));
 		console.log(`✓ Added coverage from ${inputPath}`);
 	}
 
-	const merged = mergeLcovTexts(contents, prefix, relocates);
+	const merged = mergeLcovTexts(contents, prefix, relocates, hitsOnly);
 	const outPath = resolve(out);
 	mkdirSync(dirname(outPath), { recursive: true });
 	writeFileSync(outPath, merged);
