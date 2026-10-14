@@ -223,6 +223,26 @@ def reusable_listening(case):
     if digest_file(proof_path) != case["listeningReuseSha256"]:
         raise ValueError("Reusable listening evidence changed")
     proof = read_json(proof_path)
+    if not isinstance(proof, dict):
+        raise ValueError("Reusable listening requires a source proof object")
+    multiple = "sources" in proof
+    sources = proof["sources"] if multiple else [proof]
+    if (not isinstance(sources, list) or not sources
+            or any(not isinstance(source, dict) for source in sources)
+            or len({digest_json(source) for source in sources}) != len(sources)
+            or (multiple and set(proof) != {"sources"})):
+        raise ValueError("Reusable listening requires distinct saved sources")
+    checked = [verified_listening_source(case, source) for source in sources]
+    reusable = sorted({segment for source in checked for segment in source["heardSegments"]})
+    if reusable != case.get("reusableHeardSegments"):
+        raise ValueError("Changed or unlistened cuts cannot reuse listening")
+    if multiple:
+        return {"heardSegments": reusable, "sources": checked, "proofSha256": case["listeningReuseSha256"]}
+    return {**checked[0], "proofSha256": case["listeningReuseSha256"]}
+
+
+def verified_listening_source(case, proof):
+    """Revalidate one actual answer; inherited hearing never becomes direct hearing."""
     reviews_path = Path(proof["reviewsPath"])
     if digest_file(reviews_path) != proof["reviewsFileSha256"]:
         raise ValueError("Original listening history changed")
@@ -255,11 +275,11 @@ def reusable_listening(case):
     old_words = {word["segment"]: word for word in prior["words"]}
     reusable = sorted(word["segment"] for word in case["words"]
                       if word["segment"] in directly_heard and old_words.get(word["segment"]) == word)
-    if not reusable or reusable != case.get("reusableHeardSegments"):
+    if not reusable:
         raise ValueError("Changed or unlistened cuts cannot reuse listening")
     return {"heardSegments": reusable, "decisionSha256": digest_json(decision),
             "candidateSha256": prior["candidateSha256"], "savedAt": decision["savedAt"],
-            "verdict": decision["verdict"], "proofSha256": case["listeningReuseSha256"]}
+            "verdict": decision["verdict"]}
 
 
 def validate_decision(case, payload):
