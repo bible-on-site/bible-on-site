@@ -24,7 +24,10 @@ const changed = (files: string[], ...keys: ModuleKey[]) =>
 describe("detectChanges", () => {
 	test("benchmark comparison changes check the website without releasing a module", () => {
 		const changes = detectChanges(["devops/github/ci/bencher-comparison.mjs"]);
-		assert.deepEqual(changes.website, { module_changed: false, ci_changed: true });
+		assert.deepEqual(changes.website, {
+			module_changed: false,
+			ci_changed: true,
+		});
 		for (const [key, flags] of Object.entries(changes)) {
 			if (key !== "website")
 				assert.deepEqual(flags, { module_changed: false, ci_changed: false });
@@ -45,7 +48,11 @@ describe("detectChanges", () => {
 			"devops/e2e-coverage-trees/to-selector-tree.ts",
 		]) {
 			const changes = detectChanges([file]);
-			assert.deepEqual(changes.app, { module_changed: false, ci_changed: true }, file);
+			assert.deepEqual(
+				changes.app,
+				{ module_changed: false, ci_changed: true },
+				file,
+			);
 			assert.equal(changes.website.ci_changed, false, file);
 		}
 	});
@@ -62,15 +69,39 @@ describe("detectChanges", () => {
 		});
 	}
 
-	test("approved timings release the website without releasing the app", () => {
+	test("approved timings release both website and native app without a version-file change", () => {
 		assert.deepEqual(
 			changed(["data/recitation/recitation.sqlite"], "website", "app", "data"),
 			[
 				{ module_changed: true, ci_changed: false },
-				{ module_changed: false, ci_changed: false },
+				{ module_changed: true, ci_changed: false },
 				{ module_changed: true, ci_changed: false },
 			],
 		);
+	});
+
+	test("held diagnostics and sibling names cannot release the native app", () => {
+		for (const file of [
+			"data/recitation/recitation.sqlite.bak",
+			"data/recitation/.outputs/held.json",
+		]) {
+			assert.equal(detectChanges([file]).app.module_changed, false, file);
+		}
+	});
+
+	test("native release notes include every external packaged timing input", () => {
+		const ci = readFileSync(
+			new URL("../../../.github/workflows/ci.yml", import.meta.url),
+			"utf8",
+		).replace(/\r/g, "");
+		const release = ci
+			.split("  release_app:\n")[1]
+			.split("\n  release_bulletin:")[0];
+		const match = release.match(/^      extra_module_paths: '([^']+)'$/m);
+		assert.ok(match, "Native timing inputs must be passed to release notes");
+		assert.deepEqual(JSON.parse(match[1]), [
+			"data/recitation/recitation.sqlite",
+		]);
 	});
 
 	test("a packaged decoder change releases the app", () => {
@@ -318,6 +349,7 @@ describe("main", () => {
 	function run(
 		eventName: string,
 		event: (shas: { root: string; replaced: string; base: string }) => object,
+		changedPath = "web/bible-on-site/src/page.tsx",
 	) {
 		const directory = mkdtempSync(join(tmpdir(), "determine-changes-"));
 		try {
@@ -350,7 +382,7 @@ describe("main", () => {
 					"Tested PR merge",
 				);
 			} else {
-				commit(work, "web/bible-on-site/src/page.tsx");
+				commit(work, changedPath);
 			}
 			git(directory, "clone", "--quiet", "--bare", work, origin);
 			// A force push leaves the replaced commit unreachable from any ref.
@@ -412,6 +444,22 @@ describe("main", () => {
 		assert.match(output, /^website_ci_changed=false$/m);
 		assert.match(output, /^admin_module_changed=false$/m);
 		assert.match(output, /^bulletin_module_changed=false$/m);
+	});
+
+	test("a timing-only master push schedules native packaging with unchanged app version", () => {
+		const { changes, output } = run(
+			"push",
+			({ base }) => ({ before: base }),
+			"data/recitation/recitation.sqlite",
+		);
+		assert.deepEqual(
+			Object.entries(changes)
+				.filter(([, flags]) => flags.module_changed)
+				.map(([key]) => key),
+			["website", "app", "data"],
+		);
+		assert.match(output, /^app_module_changed=true$/m);
+		assert.match(output, /^website_module_changed=true$/m);
 	});
 
 	test("push compares with the commit before the push", () => {
