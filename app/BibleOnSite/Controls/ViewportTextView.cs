@@ -71,6 +71,9 @@ public sealed class ViewportTextView : UIView, IUIAccessibilityContainer
         var value = text?.Value ?? string.Empty;
         _sectionedAccessibility = value.Length > 16_384 || value.Count(c => c == '\n') > 128;
         TextView.AccessibilityElementsHidden = _sectionedAccessibility;
+        // The bounded container sections own long-text accessibility. Hiding
+        // children alone leaves UITextView's whole-document element exposed.
+        TextView.IsAccessibilityElement = !_sectionedAccessibility;
         IsAccessibilityElement = false;
         AccessibilityAttributedLabel = null;
         AccessibilityIdentifier = null;
