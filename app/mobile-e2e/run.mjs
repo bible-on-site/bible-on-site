@@ -1,5 +1,5 @@
 import { execFile, execFileSync, spawn } from "node:child_process";
-import { appendFileSync, closeSync, copyFileSync, existsSync, mkdirSync, openSync, readdirSync, rmSync, statSync, writeFileSync, writeSync } from "node:fs";
+import { appendFileSync, closeSync, copyFileSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync, writeSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -10,7 +10,8 @@ import { probeAppiumReadiness, waitForAppiumReadiness } from "./appium-readiness
 import { prepareWda } from "./prepare-wda.mjs";
 import { captureNativeFrame, exportNativeLog, startNativeLog } from "./native-logs.mjs";
 import { waitForAndroidDevice } from "./android-readiness.mjs";
-import { iosAppPids } from "./ios-processes.mjs";
+import { iosAppLogPids, iosAppPids } from "./ios-processes.mjs";
+import { terminateIosTestApp } from "./ios-app-cleanup.mjs";
 
 const directory = dirname(fileURLToPath(import.meta.url));
 const runStarted = Date.now();
@@ -149,8 +150,10 @@ try {
   const ready = await waitForAppiumReadiness({ observe: observeReadiness, exited: () => serverExit,
     probe: (options) => probeAppiumReadiness({ ...options, port: Number(appiumPort) }) });
   if (!ready) throw new Error(`Appium did not become ready. See ${artifacts}/appium.log`);
-  const prebuilt = process.env.MOBILE_E2E_PREBUILT === "1" ? ["--no-build", "--no-restore"] : [];
-  test = spawn("dotnet", ["run", "--project", "devops", ...prebuilt, "--", "TestMobileE2E", "--configuration", "Debug"], {
+  const launch = process.env.MOBILE_E2E_PREBUILT === "1"
+    ? [resolve(directory, "../devops/bin/Debug/_build.dll")]
+    : ["run", "--project", "devops", "--"];
+  test = spawn("dotnet", [...launch, "TestMobileE2E", "--configuration", "Debug"], {
     cwd: resolve(directory, ".."), windowsHide: true, stdio: "inherit",
     env: { ...process.env, MOBILE_APP_PATH: appPath, MOBILE_E2E_ARTIFACTS: artifacts,
       ...(wdaPath ? { MOBILE_WDA_PATH: wdaPath } : {}), APPIUM_SERVER: `http://127.0.0.1:${appiumPort}` },
@@ -178,6 +181,19 @@ try {
     await sampleIosApp("cleanup");
   }
   if (diagnosticsFailed) process.exitCode ||= 1;
+  if (platform === "ios") {
+    try {
+      const cleanup = await terminateIosTestApp(process.env.MOBILE_UDID, {
+        keepApp: process.env.MOBILE_KEEP_APP === "1",
+        observedPids: () => iosAppLogPids(readFileSync(resolve(artifacts, "device-live.log"), "utf8")),
+      });
+      writeFileSync(resolve(artifacts, "ios-app-cleanup.json"), JSON.stringify(cleanup, null, 2));
+    } catch (error) {
+      writeFileSync(resolve(artifacts, "ios-app-cleanup-error.txt"), String(error));
+      console.error("Could not terminate this run's iOS app:", error);
+      process.exitCode ||= 1;
+    }
+  }
   try {
     const androidSdk = process.env.ANDROID_HOME ?? process.env.ANDROID_SDK_ROOT;
     const adb = androidSdk ? resolve(androidSdk, "platform-tools", process.platform === "win32" ? "adb.exe" : "adb") : "adb";
