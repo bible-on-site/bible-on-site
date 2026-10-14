@@ -38,6 +38,13 @@
     <Compile Include="..\BibleOnSite\Services\IRecitationAudioDecoder.cs" Link="Services\IRecitationAudioDecoder.cs" />
     <Compile Include="..\BibleOnSite\Services\RecitationService.cs" Link="Services\RecitationService.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\RecitationPreferencesViewModel.cs" Link="ViewModels\RecitationPreferencesViewModel.cs" />
+    <Compile Include="..\BibleOnSite\ViewModels\RecitationPacksViewModel.cs" Link="ViewModels\RecitationPacksViewModel.cs" />
+    <Compile Include="..\BibleOnSite\ViewModels\ExtensionPacksViewModel.cs" Link="ViewModels\ExtensionPacksViewModel.cs" />
+    <Compile Include="..\BibleOnSite\ViewModels\DivineNamePreferencesViewModel.cs" Link="ViewModels\DivineNamePreferencesViewModel.cs" />
+    <Compile Include="..\BibleOnSite\ViewModels\DisplayPreferencesViewModel.cs" Link="ViewModels\DisplayPreferencesViewModel.cs" />
+    <Compile Include="..\BibleOnSite\ViewModels\PerekPreferencesViewModel.cs" Link="ViewModels\PerekPreferencesViewModel.cs" />
+    <Compile Include="..\BibleOnSite\ViewModels\SoundPreferencesViewModel.cs" Link="ViewModels\SoundPreferencesViewModel.cs" />
+    <Compile Include="..\BibleOnSite\ViewModels\SupportPreferencesViewModel.cs" Link="ViewModels\SupportPreferencesViewModel.cs" />
     <!-- Exclude XAML code-behind files as they require MAUI XAML compilation -->
     <Compile Include="..\BibleOnSite\Controls\*.cs" Exclude="..\BibleOnSite\Controls\*.xaml.cs;..\BibleOnSite\Controls\FloatingSearchBar.Filters.cs;..\BibleOnSite\Controls\MasoraUnitPickerPopup.Columns.cs" Link="Controls\%(Filename)%(Extension)" />
     <Compile Include="..\BibleOnSite\Data\*.cs" Link="Data\%(Filename)%(Extension)" />
@@ -57,6 +64,7 @@
     <Compile Include="..\BibleOnSite\Services\NetworkService.cs" Link="Services\NetworkService.cs" />
     <Compile Include="..\BibleOnSite\Services\IAnalyticsService.cs" Link="Services\IAnalyticsService.cs" />
     <Compile Include="..\BibleOnSite\Services\AnalyticsService.cs" Link="Services\AnalyticsService.cs" />
+    <Compile Include="..\BibleOnSite\Services\AnalyticsScreens.cs" Link="Services\AnalyticsScreens.cs" />
     <Compile Include="..\BibleOnSite\Services\IPreferencesStorage.cs" Link="Services\IPreferencesStorage.cs" />
     <Compile Include="..\BibleOnSite\Services\PreferencesService.cs" Link="Services\PreferencesService.cs" />
     <Compile Include="..\BibleOnSite\Services\IPadDeliveryService.cs" Link="Services\IPadDeliveryService.cs" />

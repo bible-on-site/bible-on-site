@@ -1,9 +1,9 @@
 # Extension packs — delivery, lifecycle, and independence
 
-Research for [#2099](https://github.com/bible-on-site/bible-on-site/issues/2099);
-input to the removal/state work in
+Researched in [#2099](https://github.com/bible-on-site/bible-on-site/issues/2099);
+the removal/state work below was implemented for
 [#2098](https://github.com/bible-on-site/bible-on-site/issues/2098).
-Every claim below is traced to code or packaging configuration.
+Every claim is traced to code or packaging configuration.
 
 ## Inventory
 
@@ -72,19 +72,20 @@ index rebuilds on device, as with an older pack that never carried it.
   refreshed by hash comparison on every `PerushimCatalogService.InitializeAsync`.
 - iOS extracted asset-pack copies are generation-scoped
   (`Caches/asset_packs/{version}-{build}/{pack}`), so an updated app re-extracts the
-  new payload instead of trusting the old file. Prior-generation directories
-  are deleted on the next fetch so pack payloads (hundreds of MB) never
+  new payload instead of trusting the old file. Prior-generation and legacy unversioned directories
+  are deleted on the next access so pack payloads (hundreds of MB) never
   accumulate.
 - Recitation: `UpdateAsync` re-reads the bundled catalog; `DownloadAsync` reuses
   local MP3s whose `audioSha256` still matches and re-extracts only books whose
   archive changed. Word timings live in the bundled catalog, so timing changes ride
-  app releases without re-downloading unchanged audio. Superseded MP3s (old
-  `audioSha256` names) are currently **orphaned on disk** — nothing collects them.
+  app releases without re-downloading unchanged audio. `UpdateAsync` also sweeps
+  `extensions/recitation` files the current catalog does not reference —
+  superseded `audioSha256` MP3s and aborted `*.download` fragments — while a
+  download in progress holds its gate and is never collected.
 
-## Removal behavior (current reality)
+## Removal behavior (implemented for #2098)
 
-There is **no removal API anywhere** — this is #2098's scope. What the platforms
-allow:
+Platform limits (unchanged):
 
 - Android PAD has no pack-deletion API (`AssetPackManager` exposes `Cancel`,
   `Fetch`, `GetPackLocation(s)`, listeners — no remove). Pack bytes are
@@ -114,8 +115,9 @@ not exist by design:
   match the bundled Bible text (`TextSha256`), so a text-changing app update
   invalidates installed audio.
 - `RecitationService.IsInstalled` means "catalog loaded" — true on every properly
-  packaged release even with zero audio. It cannot drive the three-state summary
-  in #2098; that must be computed from `HasAudio` file state.
+  packaged release even with zero audio. The three-state summary is computed from
+  `InstallState`/`HasAudio` file state, never from `IsInstalled` or the playback
+  on/off preference.
 
 ## Verified vs. not verified
 
@@ -137,5 +139,5 @@ Not exercised anywhere:
   and extracts each `.aar` with `aa` to hash the archived bytes
   (`verify_recitation_assets.py`); the release-asset download leg is unit-tested
   in `ReleasePayloadDownloadTests` with a stubbed `HttpMessageHandler`.
-- OS-level storage reclamation after a future removal feature (both stores keep
+- OS-level storage reclamation after removal (both stores keep
   their copies regardless of what the app deletes).
