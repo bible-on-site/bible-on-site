@@ -674,6 +674,22 @@ describe("loaders", () => {
 	});
 });
 
+test("MTP fully qualified JUnit names join their existing evidence without duplicate test identities", () => {
+	const dir = mkdtempSync(join(tmpdir(), "e2e-ct-"));
+	try {
+		const junit = join(dir, "mobile-e2e.xml");
+		writeFileSync(junit,
+			`<testsuite><testcase classname="Ns.A" name="Ns.A.Alpha"/><testcase className="Ns.B" name="Ns.B.Beta"><failure/></testcase></testsuite>`);
+		const records = loadJunit(junit);
+		assert.deepEqual(records.map((entry) => entry.id), ["Ns.A.Alpha", "Ns.B.Beta"]);
+		const evidence = [record("Ns.A.Alpha", "passed", ["s-1"]), record("Ns.B.Beta", "passed", ["s-1"])];
+		assert.deepEqual(records.map((entry) => entry.id), evidence.map((entry) => entry.id));
+		assert.equal(new Set([...evidence, ...records].map((entry) => entry.id)).size, 2);
+		assert.equal(records.find((entry) => entry.id === "Ns.B.Beta")?.outcome, "failed");
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
+});
 // ── Schema round-trip ────────────────────────────────────────────────────
 
 describe("schema", () => {
