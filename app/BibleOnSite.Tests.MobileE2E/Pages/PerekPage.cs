@@ -35,9 +35,7 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
         {
             try
             {
-                var element = driver.FindElements(locator)
-                    .FirstOrDefault(element => element.Displayed && HasVisibleCenter(element)
-                        && condition(element));
+                var element = FindVisible(locator).FirstOrDefault(condition);
                 if (element != null)
                 {
                     return element;
@@ -70,8 +68,7 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
         {
             try
             {
-                var visible = driver.FindElements(locator)
-                    .Any(element => element.Displayed && HasVisibleCenter(element));
+                var visible = FindVisible(locator).Any();
                 if (!visible)
                 {
                     return;
@@ -179,6 +176,25 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
         }
         var menuCenter = (buttons[0].Location.X + buttons[0].Size.Width / 2.0) / window.Width;
         Assert.InRange(menuCenter, 0.5 - platform.Layout.MenuCenterTolerance, 0.5 + platform.Layout.MenuCenterTolerance);
+    }
+
+    private IEnumerable<AppiumElement> FindVisible(By locator)
+    {
+        if (driver is IosSnapshotDriver snapshots)
+        {
+            var matches = snapshots.FindSnapshots(locator);
+            if (matches.Count == 0)
+            {
+                return [];
+            }
+            // One fresh viewport read per lookup; rotation is never cached
+            // across polls. Visibility and bounds belong to that same lookup.
+            var window = driver.Manage().Window.Size;
+            return matches.Where(match => match.Snapshot.IsVisibleIn(window))
+                .Select(match => match.Element);
+        }
+        return driver.FindElements(locator)
+            .Where(element => element.Displayed && HasVisibleCenter(element));
     }
 
     private bool HasVisibleCenter(AppiumElement element)
