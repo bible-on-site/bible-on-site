@@ -12,6 +12,7 @@ import { captureNativeFrame, exportNativeLog, startNativeLog } from "./native-lo
 import { waitForAndroidDevice } from "./android-readiness.mjs";
 import { iosAppLogPids, iosAppPids } from "./ios-processes.mjs";
 import { terminateIosTestApp } from "./ios-app-cleanup.mjs";
+import { prepareIosProcessInspector } from "./ios-process-inspector.mjs";
 
 const directory = dirname(fileURLToPath(import.meta.url));
 const runStarted = Date.now();
@@ -45,6 +46,7 @@ if (platform === "android") {
   await waitForAndroidDevice({ adb, udid: process.env.MOBILE_UDID, execute,
     observe: (observation) => appendFileSync(deviceReadinessLog, `${JSON.stringify(observation)}\n`) });
 }
+const inspectorPath = platform === "ios" ? await prepareIosProcessInspector() : undefined;
 const wdaPath = platform === "ios" ? (process.env.MOBILE_WDA_PATH ?? prepareWda()) : undefined;
 // Sharded iOS runs host one Appium server per simulator on the same runner, so
 // the port is configurable; a single run keeps the default 4723.
@@ -184,7 +186,7 @@ try {
   if (platform === "ios") {
     try {
       const cleanup = await terminateIosTestApp(process.env.MOBILE_UDID, {
-        keepApp: process.env.MOBILE_KEEP_APP === "1",
+        keepApp: process.env.MOBILE_KEEP_APP === "1", inspectorPath,
         observedPids: () => iosAppLogPids(readFileSync(resolve(artifacts, "device-live.log"), "utf8")),
       });
       writeFileSync(resolve(artifacts, "ios-app-cleanup.json"), JSON.stringify(cleanup, null, 2));
