@@ -48,6 +48,8 @@ public sealed class PerushimHtmlScrollStabilityTests(ITestOutputHelper output, M
         var spokenText = string.Concat(sections);
         Assert.Equal(2200, System.Text.RegularExpressions.Regex.Matches(spokenText, "פירוש ארוך").Count);
         Assert.Contains("עם פירוש נוסף על הפסוק.", spokenText);
+        var sourceBeforeStorm = Page.Source;
+        var verseBeforeStorm = Page.FirstPasuk;
         SaveDiagnostics("LongPerushimBeforeScroll", "passed");
 
         var list = Page.WaitFor("PasukimCollection");
@@ -83,8 +85,12 @@ public sealed class PerushimHtmlScrollStabilityTests(ITestOutputHelper output, M
         Output.WriteLine($"App state after perushim scroll storm: {appState}");
         // 4 = running in foreground. A crashed app reports 1 (not running).
         Assert.Equal(4L, Convert.ToInt64(appState));
-        Assert.NotEmpty(Page.Source);
-        Assert.NotEmpty(Page.FirstPasuk);
+        Assert.Equal(sourceBeforeStorm, Page.Source);
+        // Opposite flicks need not cancel their inertia. The reader can remain
+        // inside the huge note, with every verse outside the visible viewport.
+        Page.ScrollBackTo("PasukText", element => element.Text == verseBeforeStorm);
+        Assert.Equal(verseBeforeStorm, Page.FirstPasuk);
+        SaveDiagnostics("LongPerushimAfterScroll", "passed");
     });
 
     // Add up to five visible sources sequentially, including the large first commentary.
