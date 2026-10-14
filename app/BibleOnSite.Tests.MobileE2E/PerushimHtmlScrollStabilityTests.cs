@@ -17,9 +17,8 @@ namespace BibleOnSite.Tests.MobileE2E;
 public sealed class PerushimHtmlScrollStabilityTests(ITestOutputHelper output, MobileDeviceSessionFactory sessions)
     : MobileDeviceTest(output, sessions)
 {
-    protected override AppiumOptions CreateOptions() =>
-        Platform.CreateOptions(Configuration,
-            new Dictionary<string, string> { ["BIBLE_E2E_PERUSHIM"] = "1" });
+    protected override IReadOnlyDictionary<string, string> AppEnvironment { get; } =
+        new Dictionary<string, string> { ["BIBLE_E2E_PERUSHIM"] = "1" };
 
     [Fact]
     public void PerushimCellsSurviveScrollStorm() => Scenario(() =>
