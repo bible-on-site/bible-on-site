@@ -22,7 +22,7 @@ test("builds one run environment per shard with its own device, port, artifacts 
   assert.equal(runs[1].env.MOBILE_E2E_COVERAGE_PORT, "4788");
   assert.equal(runs[0].env.MOBILE_E2E_ARTIFACTS, join("/artifacts/ios", "shard1"));
   assert.equal(runs[1].env.MOBILE_E2E_ARTIFACTS, join("/artifacts/ios", "shard2"));
-  assert.equal(runs[0].env.MOBILE_E2E_SHARD, "1");
+  assert.equal(runs[0].env.MOBILE_E2E_SHARD, "1,3");
   assert.equal(runs[1].env.MOBILE_E2E_SHARD, "2");
   assert.equal(runs[0].env.MOBILE_PLATFORM, "iOS");
 });

@@ -12,7 +12,7 @@ namespace BibleOnSite.Tests.MobileE2E;
 [Collection("Mobile device")]
 [Trait("Category", "MobileE2E")]
 [Trait("Platform", "iOS")]
-[Trait("Shard", "2")]
+[Trait("Shard", "1")]
 public sealed class PerekScrollStabilityTests(ITestOutputHelper output, MobileDeviceSession session)
     : MobileDeviceTest(output, session)
 {
@@ -30,10 +30,11 @@ public sealed class PerekScrollStabilityTests(ITestOutputHelper output, MobileDe
 
         // Fast back-to-back flicks maximize prefetch churn: cells are created,
         // dequeued and recycled while perushim HTML is being imported.
-        // WDA resolves every pointer move during event synthesis. A single
-        // 40-flick request took 36.5s and the reverse request exceeded the 45s
-        // command deadline. Ten-flick bursts keep that work bounded while
-        // preserving all 80 lifted touches and continuous churn within a burst.
+        // WDA resolves every pointer move through XCTest's app coordinates.
+        // A ten-flick burst normally took 9-12s, but repeated AX frame queries
+        // grew to several seconds each on a loaded host and exceeded 45s.
+        // Two-flick bursts bound that synthesis work without changing any of
+        // the 80 lifted touches, their travel time or the gap within a burst.
         foreach (var sequence in CreateFlickBursts(centerX, bottomY, centerX, topY, 40)
             .Concat(CreateFlickBursts(centerX, topY, centerX, bottomY, 40)))
         {
@@ -79,7 +80,7 @@ public sealed class PerekScrollStabilityTests(ITestOutputHelper output, MobileDe
     internal static IReadOnlyList<ActionSequence> CreateFlickBursts(int fromX, int fromY, int toX, int toY, int repetitions)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(repetitions);
-        const int maximumFlicksPerCommand = 10;
+        const int maximumFlicksPerCommand = 2;
         var bursts = new List<ActionSequence>();
         for (var remaining = repetitions; remaining > 0; remaining -= maximumFlicksPerCommand)
         {

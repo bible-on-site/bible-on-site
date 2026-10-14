@@ -11,7 +11,7 @@ public sealed class IosScrollActionsTests
     public void ScrollStormPreservesFortyShortLiftedTouchesInEachDirection(int fromY, int toY)
     {
         var bursts = PerekScrollStabilityTests.CreateFlickBursts(201, fromY, 201, toY, 40);
-        Assert.Equal(4, bursts.Count);
+        Assert.Equal(20, bursts.Count);
         var totalTouches = 0;
         foreach (var burst in bursts)
         {
@@ -20,11 +20,11 @@ public sealed class IosScrollActionsTests
             var parameters = Assert.IsType<Dictionary<string, object>>(sequence["parameters"]);
             Assert.Equal("touch", parameters["pointerType"]);
             var actions = Actions(burst);
-            Assert.Equal(49, actions.Length);
-            Assert.Equal(10, actions.Count(action => Equals(action["type"], "pointerDown")));
-            Assert.Equal(10, actions.Count(action => Equals(action["type"], "pointerUp")));
-            totalTouches += 10;
-            for (var gesture = 0; gesture < 10; gesture++)
+            Assert.Equal(9, actions.Length);
+            Assert.Equal(2, actions.Count(action => Equals(action["type"], "pointerDown")));
+            Assert.Equal(2, actions.Count(action => Equals(action["type"], "pointerUp")));
+            totalTouches += 2;
+            for (var gesture = 0; gesture < 2; gesture++)
             {
                 var start = gesture * 5;
                 Assert.Equal(new[] { "pointerMove", "pointerDown", "pointerMove", "pointerUp" },
@@ -37,7 +37,7 @@ public sealed class IosScrollActionsTests
                 Assert.Equal(201, actions[start + 2]["x"]);
                 Assert.Equal(toY, actions[start + 2]["y"]);
                 Assert.Equal(120, Convert.ToInt32(actions[start + 2]["duration"]));
-                if (gesture < 9)
+                if (gesture < 1)
                 {
                     Assert.Equal("pause", actions[start + 4]["type"]);
                     Assert.Equal(100, Convert.ToInt32(actions[start + 4]["duration"]));
@@ -51,7 +51,7 @@ public sealed class IosScrollActionsTests
     public void PartialBurstPreservesTheRemainingTouchesWithoutRoundingUp()
     {
         var bursts = PerekScrollStabilityTests.CreateFlickBursts(201, 712, 201, 328, 23);
-        Assert.Equal(new[] { 10, 10, 3 }, bursts.Select(burst =>
+        Assert.Equal(Enumerable.Repeat(2, 11).Append(1), bursts.Select(burst =>
             Actions(burst).Count(action => Equals(action["type"], "pointerUp"))));
         Assert.All(bursts, burst => Assert.Equal("pointerUp", Actions(burst)[^1]["type"]));
         Assert.Throws<ArgumentOutOfRangeException>(() =>
