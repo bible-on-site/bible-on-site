@@ -1,0 +1,730 @@
+name: Mobile E2E Runner
+
+on:
+  workflow_call:
+    inputs:
+      platform:
+        type: string
+        required: true
+      platform_id:
+        type: string
+        required: true
+      artifact:
+        type: string
+        required: true
+      runner:
+        type: string
+        required: true
+      workload:
+        type: string
+        required: true
+      shard:
+        type: string
+        default: ""
+      mode:
+        description: "build, prebuilt-run, or build-and-run"
+        type: string
+        required: true
+      e2e_selection_mode:
+        type: string
+        default: shadow
+      force_full_suite:
+        type: boolean
+        default: false
+      perushim_notes_sqlite_artifact:
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER: perushim-sqlite-v2-indexed.master
+
+jobs:
+  runner:
+    name: ${{ inputs.platform }} ${{ inputs.mode }}${{ inputs.shard != '' && format(' shard {0}', inputs.shard) || '' }}
+    runs-on: ${{ inputs.runner }}
+    # Keep the original job/pilot budgets for build and device hosts.
+    timeout-minutes: 60
+    env:
+      MOBILE_PLATFORM: ${{ inputs.platform }}
+      MOBILE_E2E_ARTIFACTS: ${{ github.workspace }}/app/.artifacts/mobile-e2e/${{ inputs.artifact }}
+      # Instruments the app build and makes the harness pull real app-process
+      # coverage dumps after every scenario (#1232).
+      MOBILE_E2E_COVERAGE: "1"
+      # The builder preflight compiles the Debug harness and build tool once.
+      MOBILE_E2E_PREBUILT: "1"
+      MOBILE_E2E_SHARD_COUNT: "1"
+      MOBILE_E2E_SHARD: ${{ inputs.shard }}
+      # Android emulator coordinates shared by the sdkmanager install, the
+      # cache keys and the runner action, so any bump invalidates the caches.
+      ANDROID_API_LEVEL: "36"
+      ANDROID_TARGET: google_apis
+      ANDROID_ABI: x86_64
+      ANDROID_BUILD_TOOLS: "37.0.0"
+      AVD_NAME: mobile_e2e
+      AVD_PROFILE: pixel_7
+      # Bump when the clean-snapshot recipe changes (boot options, readiness
+      # flow, runner-action version) so stale snapshots cannot be restored.
+      AVD_SNAPSHOT_RECIPE: r3
+      # Same idea for the iOS device-state capture below: bump when the quiesce
+      # or restore semantics change so a differently-captured dir cannot load.
+      IOS_SIM_STATE_RECIPE: r1
+      # Single source for the .NET SDK and workload-set pins (see #1871):
+      # setup-dotnet, the toolchain cache id and the workload install all read
+      # from here so a bump cannot skew the cache keys.
+      DOTNET_SDK_VERSION: "10.0.401"
+      MAUI_WORKLOAD_SET: "10.0.401.1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          # Keep aligned with Xcode 27 and the iOS packaging workload; see #1871.
+          dotnet-version: ${{ env.DOTNET_SDK_VERSION }}
+
+      - name: Hash NuGet dependency inputs
+        id: nuget-key
+        run: node ${{ github.workspace }}/devops/github/ci/nuget-cache-key.mjs
+
+      # hashFiles() in step templates dies on a hard 120s budget on loaded
+      # runners (#2184); a run step computes the same input without the clock.
+      - name: Hash npm dependency inputs
+        if: inputs.mode != 'build'
+        id: npm-key
+        # package.json is hashed too: a manifest edit (e.g. an install script)
+        # without a lockfile change must still rotate the node_modules key.
+        run: node ${{ github.workspace }}/devops/github/ci/files-hash.mjs devops/package.json devops/package-lock.json app/mobile-e2e/package.json app/mobile-e2e/package-lock.json
+
+      - name: Hash AVD readiness script inputs
+        id: readiness-key
+        if: inputs.platform == 'Android'
+        run: node ${{ github.workspace }}/devops/github/ci/files-hash.mjs app/mobile-e2e/android-readiness.mjs app/mobile-e2e/android-ready.mjs app/mobile-e2e/configure-avd-display.mjs
+
+      - name: Restore NuGet packages
+        id: nuget-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-mobile-e2e-${{ inputs.platform }}-${{ steps.nuget-key.outputs.hash }}
+          restore-keys: |
+            ${{ runner.os }}-mobile-e2e-${{ inputs.platform }}-
+            ${{ runner.os }}-nuget-
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: devops/package.json
+
+      - name: Select compatible Xcode
+        if: inputs.platform == 'iOS'
+        run: sudo xcode-select --switch /Applications/Xcode_27.app/Contents/Developer
+
+      # Xcode or the workload invalidates compiled intermediates — stamp every
+      # iOS cache key with the toolchain so a mismatched restore can't happen.
+      - name: Compute iOS toolchain cache id
+        id: toolchain
+        if: inputs.platform == 'iOS'
+        run: |
+          XCODE_VER=$(xcodebuild -version | tr '\n' '-' | tr -d ' ')
+          DOTNET_VER=$(dotnet --version)
+          echo "id=xcode${XCODE_VER}-dotnet${DOTNET_VER}-mauiios${{ env.MAUI_WORKLOAD_SET }}" >> "$GITHUB_OUTPUT"
+
+      # Resolve-before-restore: the same selection boot uses, without the
+      # runtime download — a miss leaves boot's download fallback untouched.
+      - name: Resolve iOS simulator device
+        if: inputs.mode != 'build' && (inputs.platform == 'iOS')
+        id: ios-device
+        run: npm run ios:boot:resolve --prefix app/mobile-e2e
+
+      # The image bakes a fixed UDID per version, so the key self-invalidates on
+      # every image update; the toolchain stamp covers updates that keep the
+      # UDID, and the recipe covers capture-logic changes. Exact key only:
+      # another device's state must never restore over this one.
+      - name: Restore iOS simulator state
+        if: inputs.mode != 'build' && (inputs.platform == 'iOS' && steps.ios-device.outputs.udid != '')
+        id: ios-sim-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ~/Library/Developer/CoreSimulator/Devices/${{ steps.ios-device.outputs.udid }}
+          key: ${{ runner.os }}-ios-sim-${{ steps.ios-device.outputs.udid }}-${{ steps.toolchain.outputs.id }}-${{ env.IOS_SIM_STATE_RECIPE }}
+
+
+      # node_modules keyed on the lockfile hash is the exact install result —
+      # a hit lets npm ci skip entirely. The ~/.npm cacache this replaces kept
+      # every tarball under a rolling prefix and took ~4.5 min to restore.
+      - name: Restore node_modules
+        if: inputs.mode != 'build'
+        id: node-modules-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            devops/node_modules
+            app/mobile-e2e/node_modules
+          key: ${{ runner.os }}-node-modules-e2e-${{ steps.npm-key.outputs.hash }}
+
+      # The coverage tree baseline is published only by successful master push
+      # runs; its REST download sees 1s–2m20s transfer variance, so the whole
+      # resolve+select runs in the background and never stalls npm ci, the boot
+      # or the build. Missing or unreadable baselines are not an error — the
+      # selector falls back to the full applicable suite (#2085). Shadow mode
+      # computes the deterministic subset for evidence while the suite still
+      # runs everything; a discovery problem resolves to selectAll — never to
+      # a silently empty run.
+      - name: Download baseline and select affected tests
+        if: inputs.mode != 'build'
+        id: selection
+        background: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node devops/github/ci/e2e-impact/e2e-impact.ts baseline-download \
+            --name "app-mobile-e2e-coverage.master.${{ inputs.platform_id }}" \
+            --out "$MOBILE_E2E_ARTIFACTS/baseline"
+          BASELINE_ARGS=()
+          if [ -f "$MOBILE_E2E_ARTIFACTS/baseline/coverage-tree.json" ]; then
+            BASELINE_ARGS=(--baseline "$MOBILE_E2E_ARTIFACTS/baseline/coverage-tree.json")
+          fi
+          FORCE_ARGS=()
+          if [ "${{ inputs.force_full_suite }}" == "true" ]; then
+            FORCE_ARGS=(--force-full)
+          fi
+          node devops/github/ci/e2e-impact/e2e-impact.ts select \
+            --suite app/mobile-e2e \
+            --platform "${{ inputs.platform_id }}" \
+            --tested-sha "${{ github.sha }}" \
+            --out "$MOBILE_E2E_ARTIFACTS/selection-manifest.json" \
+            --compare "${BASELINE_ARGS[@]}" "${FORCE_ARGS[@]}"
+
+      - name: Install build and Appium dependencies
+        if: inputs.mode != 'build' && (steps.node-modules-cache.outputs.cache-hit != 'true')
+        run: |
+          npm ci --prefix devops --no-audit
+          npm ci --prefix app/mobile-e2e --no-audit
+
+      # .NET's DerivedData equivalent: obj intermediates from the last master
+      # build turn the harness compile incremental. Restored before the
+      # harness so its devops compile reuses them too. Master-only saves
+      # below; PR runs restore through the toolchain-prefixed fallback key.
+      # app/BibleOnSite/obj is deliberately excluded: its codesign skip-stamps
+      # let a cross-commit restore emit a .app whose signature no longer
+      # covers its pages — the run dies at launch with SIGKILL Invalid Page
+      # (observed on this branch's first completed pilot, twice).
+      - name: Restore iOS obj intermediates
+        id: obj-cache
+        if: inputs.mode != 'prebuilt-run' && (inputs.platform == 'iOS')
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            app/BibleOnSite.Tests.MobileE2E/obj
+            app/devops/obj
+          key: ios-e2e-obj-${{ steps.toolchain.outputs.id }}-${{ github.sha }}
+          restore-keys: |
+            ios-e2e-obj-${{ steps.toolchain.outputs.id }}-
+
+      - name: Validate the test harness
+        if: inputs.mode != 'prebuilt-run'
+        working-directory: app
+        shell: bash
+        run: |
+          mkdir -p "$MOBILE_E2E_ARTIFACTS"
+          dotnet run --project devops -- TestMobileE2EUnit 2>&1 | tee -a "$MOBILE_E2E_ARTIFACTS/harness-validation.log"
+          dotnet test --project devops.Tests/devops.Tests.csproj --configuration Release 2>&1 | tee -a "$MOBILE_E2E_ARTIFACTS/harness-validation.log"
+
+      # Validate before booting either device: cold simulator startup competes
+      # with cache extraction and subprocess tests. The asynchronous boot still
+      # overlaps shared-build transfer or Android-independent setup.
+      - name: Validate mobile helper scripts
+        if: inputs.mode != 'build'
+        shell: bash
+        run: |
+          mkdir -p "$MOBILE_E2E_ARTIFACTS"
+          npm run test:unit --prefix app/mobile-e2e 2>&1 | tee -a "$MOBILE_E2E_ARTIFACTS/harness-validation.log"
+
+      - name: Start iPhone simulator boot
+        if: inputs.mode != 'build' && (inputs.platform == 'iOS')
+        run: npm run ios:boot:start --prefix app/mobile-e2e
+
+      # The boot kicked above is still in flight; the wait also warms Appium's
+      # CoreSimulator bridge and exports the device UDIDs (MOBILE_UDID, or
+      # MOBILE_UDID_SHARD_N when sharded) plus MOBILE_OS_VERSION. Running
+      # it as a background step overlaps all of that with the shared-build
+      # archive transfer; `wait` below is the gate that surfaces the
+      # finished boot and the exported variables to the test step.
+      - name: Finish iPhone simulator setup
+        id: simulator
+        if: inputs.mode != 'build' && (inputs.platform == 'iOS')
+        background: true
+        run: npm run ios:boot:wait --prefix app/mobile-e2e
+
+      # WebDriverAgent preparation only needs node_modules and the selected
+      # Xcode, so it runs in the background too, overlapping
+      # shared-build transfer. MOBILE_WDA_PATH is exported to
+      # GITHUB_ENV and lands after the wait-all gate, before the test step.
+      - name: Prepare prebuilt iOS automation agent
+        id: wda
+        if: inputs.mode != 'build' && (inputs.platform == 'iOS')
+        background: true
+        run: npm run ios:wda --prefix app/mobile-e2e
+
+      # The simulator and WDA are already warming while the archive transfers.
+      - name: Download shared iOS build
+        if: inputs.mode == 'prebuilt-run'
+        uses: actions/download-artifact@v8
+        with:
+          name: app-mobile-e2e-build.${{ github.run_id }}.ios
+          path: ${{ runner.temp }}/ios-e2e-build
+
+      - name: Restore and verify shared iOS build
+        id: restore-build
+        if: inputs.mode == 'prebuilt-run'
+        run: |
+          node app/mobile-e2e/ios-build-artifact.mjs restore "$GITHUB_WORKSPACE" "${{ runner.temp }}/ios-e2e-build" "$MOBILE_E2E_ARTIFACTS" "${{ github.sha }}" "${{ steps.toolchain.outputs.id }}"
+          codesign --verify --deep --strict app/BibleOnSite/bin/Debug/net10.0-ios/iossimulator-arm64/BibleOnSite.app
+
+      # npm ci is done, so node_modules is frozen. Background cache publication
+      # finishes at the wait-all gate before device tests.
+      - name: Save node_modules
+        if: inputs.mode != 'build' && (github.ref == 'refs/heads/master' && steps.node-modules-cache.outputs.cache-hit != 'true')
+        background: true
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            devops/node_modules
+            app/mobile-e2e/node_modules
+          key: ${{ runner.os }}-node-modules-e2e-${{ steps.npm-key.outputs.hash }}
+
+      - name: Setup Java
+        if: inputs.platform == 'Android'
+        uses: actions/setup-java@v6
+        with:
+          distribution: microsoft
+          java-version: "21"
+
+      # The workload set is a multi-GB silent NuGet download (~6 min cold in
+      # run 38438842693); restored packs turn the install into a verify no-op.
+      # Exact key only — a partial restore is worse than downloading.
+      - name: Restore MAUI workload packs
+        if: inputs.mode != 'prebuilt-run'
+        id: workload-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            ${{ env.DOTNET_ROOT }}/packs
+            ${{ env.DOTNET_ROOT }}/metadata
+            ${{ env.DOTNET_ROOT }}/sdk-manifests
+            ${{ env.DOTNET_ROOT }}/template-packs
+          key: ${{ runner.os }}-${{ runner.arch }}-dotnet-${{ env.DOTNET_SDK_VERSION }}-${{ inputs.workload }}-${{ env.MAUI_WORKLOAD_SET }}
+
+      - name: Install MAUI workload
+        if: inputs.mode != 'prebuilt-run'
+        # 10.0.401.1 selects the iOS 27 SDK, which requires Xcode 27; see #1871.
+        run: dotnet workload install ${{ inputs.workload }} --version ${{ env.MAUI_WORKLOAD_SET }}
+
+      # Background like the other cache saves: compression and upload stay off
+      # the build's critical path; the wait-all gate still bounds it.
+      - name: Save MAUI workload packs
+        if: inputs.mode != 'prebuilt-run' && (github.event_name != 'pull_request' && github.event_name != 'merge_group' && steps.workload-cache.outputs.cache-hit != 'true')
+        background: true
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            ${{ env.DOTNET_ROOT }}/packs
+            ${{ env.DOTNET_ROOT }}/metadata
+            ${{ env.DOTNET_ROOT }}/sdk-manifests
+            ${{ env.DOTNET_ROOT }}/template-packs
+          key: ${{ steps.workload-cache.outputs.cache-primary-key }}
+
+      # The Debug build bundles perushim data from the checkout's packaged
+      # paths, but the committed .gz fixture is only a local-dev fallback — the
+      # pair a release ships always comes from the perushim_data artifacts.
+      # Install the same validated catalog+notes pair package_app uses so E2E
+      # exercises the commentary data this commit would actually ship. The
+      # Shared commentary-search pilot builds the notes FTS index, so a missing
+      # or mismatched pair must fail here — before the build, not mid-suite.
+      - name: Download perushim SQLite pair
+        if: inputs.mode != 'prebuilt-run'
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ inputs.perushim_notes_sqlite_artifact || env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
+          path: ${{ runner.temp }}/perushim-sqlite
+
+      - name: Install matching perushim catalog and notes
+        if: inputs.mode != 'prebuilt-run'
+        run: python3 app/devops/prepare_perushim_assets.py --source "${{ runner.temp }}/perushim-sqlite" --app-directory app/BibleOnSite --platform ${{ inputs.platform }}
+
+      - name: Build complete simulator app
+        if: inputs.mode != 'prebuilt-run'
+        id: build-app
+        # Explicit bash enables pipefail, preserving npm failures through tee.
+        shell: bash
+        run: |
+          mkdir -p "$MOBILE_E2E_ARTIFACTS"
+          npm run build:app --prefix app/mobile-e2e 2>&1 | tee "$MOBILE_E2E_ARTIFACTS/build.log"
+
+      # Cached native outputs can retain stale code-signing pages. Sign the
+      # final simulator payload inside out and verify it before any launch.
+      - name: Sign and verify iOS simulator app
+        if: inputs.mode != 'prebuilt-run' && (inputs.platform == 'iOS')
+        run: npm run ios:sign --prefix app/mobile-e2e
+
+      - name: Package shared iOS build with coverage and harness
+        if: inputs.mode == 'build'
+        run: node app/mobile-e2e/ios-build-artifact.mjs pack "$GITHUB_WORKSPACE" "$MOBILE_E2E_ARTIFACTS/coverage-app" "${{ runner.temp }}/ios-e2e-build" "${{ github.sha }}" "${{ steps.toolchain.outputs.id }}"
+
+      - name: Upload shared iOS build
+        if: inputs.mode == 'build'
+        uses: actions/upload-artifact@v7
+        with:
+          overwrite: true
+          name: app-mobile-e2e-build.${{ github.run_id }}.ios
+          path: ${{ runner.temp }}/ios-e2e-build/
+          retention-days: 1
+          compression-level: 0
+          if-no-files-found: error
+
+      - name: Save iOS obj intermediates
+        if: inputs.mode != 'prebuilt-run' && (inputs.platform == 'iOS' && github.ref == 'refs/heads/master' && steps.obj-cache.outputs.cache-hit != 'true')
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            app/BibleOnSite.Tests.MobileE2E/obj
+            app/devops/obj
+          key: ios-e2e-obj-${{ steps.toolchain.outputs.id }}-${{ github.sha }}
+
+      - name: Save NuGet packages
+        if: inputs.mode != 'prebuilt-run' && (github.ref == 'refs/heads/master' && steps.nuget-cache.outputs.cache-hit != 'true')
+        uses: actions/cache/save@v6
+        with:
+          path: ~/.nuget/packages
+          key: ${{ steps.nuget-cache.outputs.cache-primary-key }}
+
+      - name: Prepare Android emulator runtime and hardware acceleration
+        if: inputs.platform == 'Android'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y libpulse0
+          sudo chmod 666 /dev/kvm
+
+      # Caches resolve before any install: the action always asks sdkmanager for
+      # the newest stable emulator and system image, so keys must track what
+      # Google's manifests currently serve. An unresolved key never matches a
+      # saved cache and is never saved back; the install step then takes the
+      # same bounded sdkmanager fallback it would without caching.
+      - name: Resolve Android SDK cache coordinates
+        if: inputs.platform == 'Android'
+        id: sdk-key
+        run: node devops/github/ci/android-sdk-manifest.mjs
+
+      # Package metadata (package.xml) is cached inside each directory so
+      # sdkmanager recognizes installed packages. The narrow restore-key
+      # intentionally allows an older emulator revision: sdkmanager updates it
+      # in place while the large system image stays usable.
+      - name: Restore Android SDK packages
+        if: inputs.platform == 'Android'
+        id: sdk-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            ${{ steps.sdk-key.outputs.sdk-home }}/emulator
+            ${{ steps.sdk-key.outputs.sdk-home }}/system-images/android-${{ env.ANDROID_API_LEVEL }}
+            ${{ steps.sdk-key.outputs.sdk-home }}/platforms/android-${{ env.ANDROID_API_LEVEL }}
+            ${{ steps.sdk-key.outputs.sdk-home }}/build-tools/${{ env.ANDROID_BUILD_TOOLS }}
+            ${{ steps.sdk-key.outputs.sdk-home }}/platform-tools
+          key: android-sdk-${{ steps.sdk-key.outputs.os-tag }}-${{ runner.arch }}-${{ steps.sdk-key.outputs.sdk-key }}
+          restore-keys: |
+            android-sdk-${{ steps.sdk-key.outputs.os-tag }}-${{ runner.arch }}-
+
+      # sdkmanager trusts package.xml even when the payload is truncated, so the
+      # script verifies content first, removes corrupt restorations, and only
+      # then downloads with bounded retries.
+      - name: Install or repair Android SDK packages
+        if: inputs.platform == 'Android'
+        run: node devops/github/ci/android-sdk-install.mjs
+
+      # Exact-key only: a snapshot built under different coordinates can be
+      # worse than a cold boot, so misses rebuild through the snapshot stage.
+      - name: Restore clean AVD snapshot
+        if: inputs.platform == 'Android'
+        id: avd-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ steps.sdk-key.outputs.avd-home }}
+          key: android-avd-${{ steps.sdk-key.outputs.os-tag }}-${{ runner.arch }}-api${{ env.ANDROID_API_LEVEL }}-${{ env.ANDROID_TARGET }}-${{ env.ANDROID_ABI }}-${{ env.AVD_PROFILE }}-swiftshader-${{ steps.sdk-key.outputs.emulator-key }}-${{ env.AVD_SNAPSHOT_RECIPE }}-${{ steps.readiness-key.outputs.hash }}
+
+      - name: Validate restored AVD snapshot
+        if: inputs.platform == 'Android' && steps.avd-cache.outputs.cache-hit == 'true'
+        id: avd-check
+        run: node app/mobile-e2e/android-snapshot-check.mjs validate-restored
+
+      # Two-stage snapshot pattern: on a cache miss the action creates the AVD,
+      # cold-boots it and runs only the device readiness check — never the app
+      # install or an Appium session — so the saved state stays clean.
+      - name: Create clean AVD snapshot
+        if: inputs.platform == 'Android' && (steps.avd-cache.outputs.cache-hit != 'true' || steps.avd-check.outputs.usable == 'false')
+        id: avd-snapshot
+        uses: reactivecircus/android-emulator-runner@v2.38.0
+        env:
+          MOBILE_UDID: emulator-5554
+        with:
+          api-level: ${{ env.ANDROID_API_LEVEL }}
+          arch: ${{ env.ANDROID_ABI }}
+          target: ${{ env.ANDROID_TARGET }}
+          profile: ${{ env.AVD_PROFILE }}
+          avd-name: ${{ env.AVD_NAME }}
+          force-avd-creation: false
+          pre-emulator-launch-script: node app/mobile-e2e/configure-avd-display.mjs
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader -noaudio -no-boot-anim -no-metrics -memory 4096
+          script: npm run android:ready --prefix app/mobile-e2e
+
+      # `emu kill` is graceful but asynchronous; the snapshot payload must reach
+      # the AVD directory before the save step may capture it.
+      - name: Confirm snapshot persisted
+        if: inputs.platform == 'Android' && steps.avd-snapshot.outcome == 'success'
+        id: snapshot-files
+        env:
+          MOBILE_UDID: emulator-5554
+        run: node app/mobile-e2e/android-snapshot-check.mjs confirm-saved
+
+      # Caches are written from push/workflow_dispatch runs: default-branch runs
+      # publish for every PR, while PR and merge-queue runs only restore.
+      - name: Save clean AVD snapshot
+        if: inputs.platform == 'Android' && github.event_name != 'pull_request' && github.event_name != 'merge_group' && steps.sdk-key.outputs.resolved == 'true' && steps.avd-cache.outputs.cache-hit != 'true' && steps.snapshot-files.outputs.saved == 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ steps.sdk-key.outputs.avd-home }}
+          key: ${{ steps.avd-cache.outputs.cache-primary-key }}
+
+      # The Android pilot's env consumes the selection manifest, so its leg
+      # cannot start until the background selection finishes. The iOS leg
+      # reaches the same gate through wait-all below.
+      - name: Wait for test selection
+        wait-all:
+
+      - name: Run shared pilot on Android
+        if: inputs.platform == 'Android'
+        id: pilot
+        uses: reactivecircus/android-emulator-runner@v2.38.0
+        env:
+          MOBILE_UDID: emulator-5554
+          # Empty in shadow mode: the manifest is reported, not enforced.
+          MOBILE_E2E_SELECTION: ${{ inputs.e2e_selection_mode == 'enforce' && steps.selection.outputs.manifest || '' }}
+        with:
+          api-level: ${{ env.ANDROID_API_LEVEL }}
+          arch: ${{ env.ANDROID_ABI }}
+          target: ${{ env.ANDROID_TARGET }}
+          profile: ${{ env.AVD_PROFILE }}
+          avd-name: ${{ env.AVD_NAME }}
+          force-avd-creation: false
+          pre-emulator-launch-script: node app/mobile-e2e/configure-avd-display.mjs
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader -noaudio -no-boot-anim -no-snapshot-save -no-metrics -memory 4096
+          script: npm test --prefix app/mobile-e2e
+
+      # The SDK save waits for a genuinely booted device (any stage's readiness
+      # log) rather than trusting installed packages, and stays disabled for
+      # PR/merge-queue runs so only default-branch scope publishes caches.
+      - name: Record device readiness for cache validation
+        if: inputs.platform == 'Android' && always()
+        id: device-ready
+        run: |
+          if grep -q '"ready":true' "$MOBILE_E2E_ARTIFACTS/device-readiness.jsonl" 2>/dev/null; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Save Android SDK packages
+        if: inputs.platform == 'Android' && always() && github.event_name != 'pull_request' && github.event_name != 'merge_group' && steps.sdk-key.outputs.resolved == 'true' && steps.sdk-cache.outputs.cache-hit != 'true' && steps.device-ready.outputs.ready == 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            ${{ steps.sdk-key.outputs.sdk-home }}/emulator
+            ${{ steps.sdk-key.outputs.sdk-home }}/system-images/android-${{ env.ANDROID_API_LEVEL }}
+            ${{ steps.sdk-key.outputs.sdk-home }}/platforms/android-${{ env.ANDROID_API_LEVEL }}
+            ${{ steps.sdk-key.outputs.sdk-home }}/build-tools/${{ env.ANDROID_BUILD_TOOLS }}
+            ${{ steps.sdk-key.outputs.sdk-home }}/platform-tools
+          key: ${{ steps.sdk-cache.outputs.cache-primary-key }}
+
+      # Gates both background steps: simulator readiness + env exports and the
+      # prebuilt WebDriverAgent. A no-op on the Android leg, which has none.
+      - name: Wait for iPhone simulator
+        wait-all:
+
+      # Each runner owns one simulator/session and its existing Shard trait.
+      # The final merge verifies their union against all discovered iOS tests.
+      - name: Run iOS runner shard
+        if: inputs.mode != 'build' && (inputs.platform == 'iOS')
+        id: pilot-ios
+        # The independent supervisor stops the full process tree at 15 minutes;
+        # this outer limit also bounds a blocked supervisor or runner step.
+        timeout-minutes: 20
+        env:
+          # Empty in shadow mode: the manifest is reported, not enforced.
+          MOBILE_E2E_SELECTION: ${{ inputs.e2e_selection_mode == 'enforce' && steps.selection.outputs.manifest || '' }}
+        run: npm test --prefix app/mobile-e2e
+
+      # Real app-process coverage (#1232): the harness pulled a live hit dump
+      # from the instrumented app at the end of every scenario. This applies
+      # them onto the build's OpenCover template and emits lcov.info. The step
+      # also runs after a failed pilot so partial coverage stays diagnosable;
+      # a missing template or a run with zero dumps fails loudly here. Canceled
+      # runs skip processing so they release the runner for the replacement;
+      # the unconditional diagnostic upload below still preserves raw evidence.
+      - name: Apply app-process coverage dumps
+        if: inputs.mode != 'build' && always() && !cancelled() && (steps.build-app.outcome == 'success' || steps.restore-build.outcome == 'success')
+        id: coverage-apply
+        working-directory: app
+        run: dotnet run --project devops --no-build --no-restore -- CoverageMobileE2E
+
+      - name: Upload app coverage report
+        if: always() && steps.coverage-apply.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          overwrite: true
+          name: app-e2e-coverage.${{ github.run_id }}.${{ inputs.artifact }}
+          path: app/.artifacts/mobile-e2e/${{ inputs.artifact }}/coverage-app/
+          retention-days: 90
+          if-no-files-found: error
+      # Captured post-test so the saved device keeps session warm-state, but
+      # quiesced first: test apps are removed and the device is shut down so
+      # the directory is a consistent Shutdown image. A device that does not
+      # match the resolved UDID is never captured under its key.
+      - name: Quiesce iOS simulator for state capture
+        if: inputs.mode != 'build' && (inputs.platform == 'iOS' && always() && github.event_name != 'pull_request' && github.event_name != 'merge_group' && steps.ios-device.outputs.udid != '' && steps.ios-sim-cache.outputs.cache-hit != 'true' && steps.simulator.outcome == 'success')
+        id: ios-sim-quiesce
+        run: node app/mobile-e2e/ios-sim-state.mjs quiesce "${{ steps.ios-device.outputs.udid }}"
+
+      - name: Save iOS simulator state
+        if: inputs.mode != 'build' && (inputs.platform == 'iOS' && always() && steps.ios-sim-quiesce.outputs.saved == 'true')
+        uses: actions/cache/save@v6
+        with:
+          path: ~/Library/Developer/CoreSimulator/Devices/${{ steps.ios-device.outputs.udid }}
+          key: ${{ steps.ios-sim-cache.outputs.cache-primary-key }}
+
+      # Real executed-code coverage (#2085): the AltCover template, per-test
+      # app-coverage dumps and the run reports become the exec tree, which the
+      # collect step unions into coverage-tree.json. Runs without the
+      # instrumented-coverage artifacts (pre-#2156 layout) skip extraction —
+      # the automation-id channel stands alone.
+      - name: Extract executable coverage tree
+        if: inputs.mode != 'build' && (always() && !cancelled())
+        id: exec-tree
+        env:
+          # Each device host runs exactly one pilot; the other's outcome is
+          # "skipped" — a truthy string that would win an || chain — so route
+          # by platform instead of relying on fallback order.
+          PILOT_OUTCOME: ${{ inputs.platform == 'iOS' && steps['pilot-ios'].outcome || steps.pilot.outcome }}
+        run: |
+          # The extractor prefers the applied report and falls back to the
+          # template — extraction is possible when either exists.
+          if [ ! -f "$MOBILE_E2E_ARTIFACTS/coverage-app/coverage.opencover.xml" ] \
+            && [ ! -f "$MOBILE_E2E_ARTIFACTS/coverage-app/template.opencover.xml" ]; then
+            echo "[e2e-coverage-trees] no coverage-app OpenCover input — exec coverage unavailable this run"
+            exit 0
+          fi
+          INCOMPLETE_ARGS=()
+          if [ "$PILOT_OUTCOME" != "success" ] || [ "${{ inputs.platform }}" = "iOS" ]; then
+            INCOMPLETE_ARGS=(--incomplete)
+          fi
+          node devops/e2e-coverage-trees/e2e-coverage-trees.ts extract \
+            --suite app/mobile-e2e \
+            --platform "${{ inputs.platform_id }}" \
+            --artifacts "$MOBILE_E2E_ARTIFACTS" \
+            --snapshot-sha "${{ github.sha }}" \
+            --out "$MOBILE_E2E_ARTIFACTS/exec-coverage-tree.json" "${INCOMPLETE_ARGS[@]}"
+          echo "exec-coverage-tree=$MOBILE_E2E_ARTIFACTS/exec-coverage-tree.json" >> "$GITHUB_OUTPUT"
+
+      # Evidence is collected even after a failed run — passed tests keep their
+      # coverage — but the tree is marked incomplete so a partial run can never
+      # shrink the trusted baseline.
+      - name: Collect per-test coverage evidence
+        if: inputs.mode != 'build' && (always() && !cancelled())
+        id: collect
+        env:
+          # Each device host runs exactly one pilot; the other's outcome is
+          # "skipped" — a truthy string that would win an || chain — so route
+          # by platform instead of relying on fallback order.
+          PILOT_OUTCOME: ${{ inputs.platform == 'iOS' && steps['pilot-ios'].outcome || steps.pilot.outcome }}
+        run: |
+          INCOMPLETE_ARGS=()
+          if [ "$PILOT_OUTCOME" != "success" ] || [ "${{ inputs.platform }}" = "iOS" ]; then
+            INCOMPLETE_ARGS=(--incomplete)
+          fi
+          EXEC_ARGS=()
+          if [ -f "$MOBILE_E2E_ARTIFACTS/exec-coverage-tree.json" ]; then
+            EXEC_ARGS=(--exec-tree "$MOBILE_E2E_ARTIFACTS/exec-coverage-tree.json")
+          fi
+          node devops/github/ci/e2e-impact/e2e-impact.ts collect-appium \
+            --suite app/mobile-e2e \
+            --platform "${{ inputs.platform_id }}" \
+            --artifacts "$MOBILE_E2E_ARTIFACTS" \
+            --snapshot-sha "${{ github.sha }}" \
+            --out "$MOBILE_E2E_ARTIFACTS/coverage-tree.json" "${INCOMPLETE_ARGS[@]}" "${EXEC_ARGS[@]}"
+
+      # The authoritative baseline is published only from a completed,
+      # successful default-branch run; PR and merge-queue evidence stays
+      # provisional inside the run's appium artifact.
+      - name: Publish coverage-tree baseline
+        if: inputs.platform == 'Android' && always() && github.event_name == 'push' && github.ref == 'refs/heads/master' && (steps.pilot.outcome == 'success' || steps['pilot-ios'].outcome == 'success') && steps.collect.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          name: app-mobile-e2e-coverage.master.${{ inputs.platform_id }}
+          path: app/.artifacts/mobile-e2e/${{ inputs.artifact }}/coverage-tree.json
+          retention-days: 90
+          overwrite: true
+
+      # Executable coverage baseline (#1232): published under the same trust
+      # rules as the coverage tree — only a completed, successful
+      # default-branch run refreshes it, so a partial or selected run can
+      # never overwrite a complete baseline.
+      - name: Publish app coverage baseline
+        if: inputs.platform == 'Android' && always() && github.event_name == 'push' && github.ref == 'refs/heads/master' && (steps.pilot.outcome == 'success' || steps['pilot-ios'].outcome == 'success') && steps.coverage-apply.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          name: app-e2e-coverage.master.${{ inputs.artifact }}
+          path: app/.artifacts/mobile-e2e/${{ inputs.artifact }}/coverage-app/
+          retention-days: 90
+          overwrite: true
+
+      # The exec tree gets its own baseline artifact per the storage policy
+      # in docs/devops/e2e-test-selection.md — same trust rule as the
+      # automation-id baseline above. Runs without exec coverage (no
+      # template → no extracted tree) skip the publish.
+      - name: Publish exec coverage-tree baseline
+        if: inputs.platform == 'Android' && always() && github.event_name == 'push' && github.ref == 'refs/heads/master' && (steps.pilot.outcome == 'success' || steps['pilot-ios'].outcome == 'success') && steps['exec-tree'].outcome == 'success' && steps['exec-tree'].outputs.exec-coverage-tree != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: app-mobile-e2e-exec-coverage.master.${{ inputs.artifact }}
+          path: app/.artifacts/mobile-e2e/${{ inputs.artifact }}/exec-coverage-tree.json
+          retention-days: 90
+          overwrite: true
+
+      - name: Upload iOS runner merge inputs
+        if: inputs.mode != 'build' && (inputs.platform == 'iOS' && always() && !cancelled())
+        uses: actions/upload-artifact@v7
+        with:
+          overwrite: true
+          name: app-mobile-e2e-shard.${{ github.run_id }}.${{ inputs.artifact }}
+          path: app/.artifacts/mobile-e2e/${{ inputs.artifact }}/
+          retention-days: 14
+          include-hidden-files: true
+          if-no-files-found: error
+
+      - name: Upload platform results and diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: appium-${{ inputs.artifact }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            app/.artifacts/mobile-e2e/${{ inputs.artifact }}/
+            app/.nuke/temp/build*.log
+          retention-days: 14
+          # Only the explicit diagnostics paths above are included.
+          include-hidden-files: true
+

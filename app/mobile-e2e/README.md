@@ -17,6 +17,16 @@ successful evidence for the whole discovered suite, rejects duplicates, and
 combines native line coverage and execution/automation evidence. Only a full
 successful union can replace a trusted iOS baseline.
 
+A separate iOS build host restores MAUI and compiles/signs the app once, without
+booting a simulator. Both device hosts receive the same archive, including the
+prebuilt Debug harness/build tool and the exact OpenCover template. The archive
+preserves executable modes and framework symlinks; its SHA256, source SHA,
+checkout path and toolchain must match before extraction, and each host strictly
+verifies the simulator signature before launch. Device hosts need the .NET SDK
+and NuGet test dependencies, but skip MAUI restoration and app compilation.
+Simulator/WDA preparation overlaps archive transfer. Android has no dependency
+on the iOS builder. All pilot, interaction and watchdog budgets stay unchanged.
+
 Optional sharding remains available on a host with sufficient resources (#2083):
 `ios:boot` provisions a second same-model clone of the selected device when
 `MOBILE_E2E_SHARD_COUNT=2`, and `npm run test:sharded` runs two `run.mjs`
