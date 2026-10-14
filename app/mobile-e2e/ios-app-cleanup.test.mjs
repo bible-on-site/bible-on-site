@@ -1,12 +1,17 @@
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { once } from "node:events";
+import { copyFileSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { promisify } from "node:util";
+import { prepareIosProcessInspector } from "./ios-process-inspector.mjs";
 import { test } from "node:test";
 import { ownedIosTestAppProcesses as parseOwned, terminateIosTestApp as terminateOwned } from "./ios-app-cleanup.mjs";
 
 const devicesRoot = "/Users/runner with spaces/Library/Developer/CoreSimulator/Devices";
 const ownedIosTestAppProcesses = (listing, udid) => parseOwned(listing, udid, devicesRoot);
-const terminateIosTestApp = (udid, options = {}) => terminateOwned(udid, { devicesRoot, observedPids: [1234, 2345], ...options });
+const terminateIosTestApp = (udid, options = {}) => terminateOwned(udid, { devicesRoot, inspectorPath: "/owned/native-inspector", observedPids: [1234, 2345], ...options });
 
 const udid = "CD85F334-D4C3-44B6-A7B8-EAABB9C6C1B4";
 const otherUdid = "B8D3DB6B-98FB-4E92-9ACE-9BC307F7FDE7";
@@ -36,8 +41,8 @@ test("terminates only owned PIDs and confirms their exit within the original tot
   });
   assert.deepEqual(signals, [[1234, "SIGKILL"]]);
   assert.deepEqual(calls, [
-    ["/bin/ps", ["-p", "1234,2345", "-ww", "-o", "pid=,stat=,comm="], { timeout: 5000, windowsHide: true }],
-    ["/bin/ps", ["-p", "1234,2345", "-ww", "-o", "pid=,stat=,comm="], { timeout: 4985, windowsHide: true }],
+    ["/owned/native-inspector", ["1234", "2345"], { timeout: 5000, windowsHide: true }],
+    ["/owned/native-inspector", ["1234", "2345"], { timeout: 4985, windowsHide: true }],
   ]);
   assert.equal(result.status, "terminated");
   assert.deepEqual(result.pids, [1234]);
@@ -82,13 +87,18 @@ test("missing or invalid observed PIDs fail before inspecting the host", async (
   }
 });
 
-test("confirmed exited selected PIDs are accepted, but ps diagnostics are fatal", async () => {
-  const gone = Object.assign(new Error("ps exited 1"), { code: 1, stdout: "", stderr: "" });
-  assert.equal((await terminateIosTestApp(udid, { execute: async () => { throw gone; } })).status, "already-stopped");
-  for (const error of [Object.assign(new Error("ps failed"), { code: 1, stdout: "", stderr: "permission denied" }),
-    Object.assign(new Error("ps failed"), { code: 1, stdout: "partial output", stderr: "" })]) {
+test("native inspector failures cannot masquerade as an already stopped app", async () => {
+  for (const error of [Object.assign(new Error("inspector exited 1"), { code: 1, stdout: "", stderr: "" }),
+    Object.assign(new Error("inspection failed"), { code: 1, stdout: "", stderr: "permission denied" }),
+    Object.assign(new Error("inspection failed"), { code: 1, stdout: "partial output", stderr: "" })]) {
     await assert.rejects(terminateIosTestApp(udid, { execute: async () => { throw error; } }), e => e === error);
   }
+});
+
+test("missing inspector and malformed native output fail before signaling", async () => {
+  await assert.rejects(terminateIosTestApp(udid, { inspectorPath: undefined,
+    execute: async () => { throw new Error("must not execute"); } }), /prepared native/);
+  assert.throws(() => ownedIosTestAppProcesses("unidentified process", udid), /inspection output/);
 });
 
 test("process-inspection diagnostics cannot pass even with exit zero", async () => {
@@ -114,22 +124,37 @@ test("a surviving observed app fails at five seconds with no second termination"
   assert.equal(time, 5000);
 });
 
-test("Darwin process cleanup kills a real owned child and leaves another device alive", {
+test("Darwin kernel inspection kills the owned child and rejects other-device and argv spoofing", {
   skip: process.platform !== "darwin",
 }, async () => {
-  const children = [udid, otherUdid].map(device => spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], {
-    argv0: appPath(device), stdio: "ignore",
+  const temporary = realpathSync(mkdtempSync(join(tmpdir(), "ios-app-owner-")));
+  const nativeDevicesRoot = join(temporary, "Devices");
+  const inspectorPath = await prepareIosProcessInspector({ outputPath: join(temporary, "inspector") });
+  const source = join(temporary, "child.c");
+  const binary = join(temporary, "child");
+  writeFileSync(source, "#include <unistd.h>\nint main(void) { for (;;) pause(); }\n");
+  await promisify(execFile)("/usr/bin/xcrun", ["clang", "-Wall", "-Wextra", "-Werror", source, "-o", binary],
+    { timeout: 5000, windowsHide: true });
+  const paths = [udid, otherUdid].map(device => join(nativeDevicesRoot, device,
+    "data/Containers/Bundle/Application/51DBBA3D-91A6-4E0F-BE84-D779BCE6C0F3/BibleOnSite.app/BibleOnSite"));
+  for (const path of paths) { mkdirSync(dirname(path), { recursive: true }); copyFileSync(binary, path); }
+  const children = paths.map(path => spawn(path, [], { stdio: "ignore" }));
+  children.push(spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], {
+    argv0: paths[0], stdio: "ignore",
   }));
   try {
     await Promise.all(children.map(child => once(child, "spawn")));
     const ended = once(children[0], "exit");
-    const result = await terminateIosTestApp(udid, { observedPids: children.map(child => child.pid) });
+    const result = await terminateIosTestApp(udid, { inspectorPath, devicesRoot: nativeDevicesRoot,
+      observedPids: children.map(child => child.pid) });
     assert.equal(result.status, "terminated");
     assert.deepEqual(result.pids, [children[0].pid]);
     await ended;
     assert.equal(children[0].signalCode, "SIGKILL");
-    assert.equal(children[1].exitCode, null);
-    assert.equal(children[1].signalCode, null);
+    for (const child of children.slice(1)) {
+      assert.equal(child.exitCode, null);
+      assert.equal(child.signalCode, null);
+    }
     assert.ok(result.elapsedMs < 5000);
   } finally {
     for (const child of children) if (child.exitCode === null && child.signalCode === null) {
@@ -137,5 +162,6 @@ test("Darwin process cleanup kills a real owned child and leaves another device 
       child.kill("SIGKILL");
       await ended;
     }
+    rmSync(temporary, { recursive: true, force: true });
   }
 });

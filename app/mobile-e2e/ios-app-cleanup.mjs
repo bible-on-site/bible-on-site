@@ -18,7 +18,10 @@ export function ownedIosTestAppProcesses(listing, udid, devicesRoot = defaultDev
   const records = [];
   for (const line of listing.split("\n")) {
     const fields = line.trim().match(/^(\d+)\s+(\S+)\s+(.+)$/);
-    if (!fields) continue;
+    if (!fields) {
+      if (line.trim()) throw new Error("Invalid native process inspection output.");
+      continue;
+    }
     const [, pid, state, executable] = fields;
     if (executable === "BibleOnSite" || executable === "(BibleOnSite)") {
       throw new Error("Cannot establish simulator ownership of an unqualified BibleOnSite process.");
@@ -38,7 +41,7 @@ export function ownedIosTestAppProcesses(listing, udid, devicesRoot = defaultDev
 
 export async function terminateIosTestApp(udid, {
   keepApp = false, execute = executeFile, signal = (pid, value) => process.kill(pid, value),
-  sleep = delay, now = Date.now, devicesRoot = defaultDevicesRoot, observedPids = [],
+  sleep = delay, now = Date.now, devicesRoot = defaultDevicesRoot, observedPids = [], inspectorPath,
 } = {}) {
   // Validate ownership even when keeping an app for local review.
   ownedIosTestAppProcesses("", udid, devicesRoot);
@@ -52,21 +55,13 @@ export async function terminateIosTestApp(udid, {
         candidates.some(pid => !Number.isSafeInteger(pid) || pid <= 1)) {
       throw new Error("Require app PIDs observed in this simulator's live log.");
     }
-    // Broad ps snapshots inspect Mach tasks for every host process, even
-    // with few output columns. Restrict inspection to this device's observed
-    // app PIDs, then verify their complete installed executable paths.
-    let stdout, stderr;
-    try {
-      ({ stdout, stderr = "" } = await execute("/bin/ps", ["-p", [...new Set(candidates)].join(","),
-        "-ww", "-o", "pid=,stat=,comm="], { timeout: remaining, windowsHide: true }));
-    } catch (error) {
-      // Header-free ps exits 1 with no output only when all selected PIDs
-      // have exited. Timeouts and diagnostic/permission errors remain fatal.
-      if (error.code !== 1 || error.killed || typeof error.stdout !== "string" ||
-          typeof error.stderr !== "string" || error.stdout.trim() || error.stderr.trim()) throw error;
-      stdout = "";
-      stderr = "";
+    if (typeof inspectorPath !== "string" || !posix.isAbsolute(inspectorPath)) {
+      throw new Error("Require the prepared native iOS process inspector.");
     }
+    // The helper reads kernel BSD state and the actual executable path, without
+    // requesting Mach task/thread data or trusting a mutable argv prefix.
+    const { stdout, stderr = "" } = await execute(inspectorPath,
+      [...new Set(candidates)].map(String), { timeout: remaining, windowsHide: true });
     if (stderr.trim()) throw new Error(`App process inspection failed: ${stderr.trim()}`);
     if (now() - started >= cleanupDeadlineMs) throw new Error("The owned iOS app did not exit within five seconds.");
     return ownedIosTestAppProcesses(stdout, udid, devicesRoot).filter(record => !record.state.startsWith("Z"));

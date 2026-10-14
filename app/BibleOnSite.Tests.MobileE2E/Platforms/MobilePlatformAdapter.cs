@@ -295,63 +295,27 @@ public sealed class IosPlatformAdapter : MobilePlatformAdapter
 {
     public override string AppId => "com.tanah.daily929";
 
-    // XCTest relaunches a terminated app through the launchEnvironment stored
-    // on WDA's XCUIApplication: /wda/apps/activate inherits whatever the last
-    // launch set — it does not fall back to the session capabilities. Once a
-    // scenario launches with extra variables, an env-free activate would keep
-    // them, so the following restart must launchApp once more to replace the
-    // stored environment (this flag tracks that debt).
-    private bool _launchedWithExtraEnvironment;
-
-    public override void OnSessionRecreated() => _launchedWithExtraEnvironment = false;
-
-    // True when only mobile: launchApp produces the requested environment —
-    // either the scenario asks for variables, or the previous launch stored
-    // extra ones that an activate would silently reuse. Deciding also settles
-    // the stored-environment tracker for the launch that is about to happen.
-    internal bool RequiresLaunchForEnvironment(IReadOnlyDictionary<string, string>? environment)
-    {
-        if (environment?.Count > 0 || _launchedWithExtraEnvironment)
-        {
-            _launchedWithExtraEnvironment = environment?.Count > 0;
-            return true;
-        }
-        return false;
-    }
-
     public override void RestartApp(AppiumDriver driver,
         IReadOnlyDictionary<string, string>? environment)
     {
         driver.TerminateApp(AppId);
-        if (RequiresLaunchForEnvironment(environment))
+        // Activation brings a running app forward. After termination, XCTest's
+        // activate path can block without launching a new process. Always use
+        // the explicit launch path and replace its complete environment, so
+        // synthetic commentary variables cannot leak into the next scenario.
+        var env = new Dictionary<string, string>(IosE2eEnvironment);
+        if (environment != null)
         {
-            // mobile: launchApp replaces the stored launch environment, so it
-            // both applies this scenario's variables and clears any a previous
-            // scenario left behind. The suite marker always rides along because
-            // the session's processArguments are not reapplied on relaunch.
-            var env = new Dictionary<string, string>(IosE2eEnvironment);
-            if (environment != null)
+            foreach (var (key, value) in environment)
             {
-                foreach (var (key, value) in environment)
-                {
-                    env[key] = value;
-                }
+                env[key] = value;
             }
-            Relaunch(driver, "mobile: launchApp", new Dictionary<string, object>
-            {
-                ["bundleId"] = AppId,
-                ["environment"] = env
-            });
         }
-        else
+        Relaunch(driver, "mobile: launchApp", new Dictionary<string, object>
         {
-            // /wda/apps/activate relaunches through the stored environment,
-            // which is safe only because it still equals the suite baseline.
-            Relaunch(driver, "mobile: activateApp", new Dictionary<string, object>
-            {
-                ["bundleId"] = AppId
-            });
-        }
+            ["bundleId"] = AppId,
+            ["environment"] = env
+        });
         EnsurePortrait(driver);
     }
 
