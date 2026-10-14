@@ -215,7 +215,7 @@ public abstract class MobilePlatformAdapter
                 ["pageSourceExcludedAttributes"] = "visible,accessible",
                 // Return each candidate's real visibility and frame in its lookup.
                 ["shouldUseCompactResponses"] = false,
-                ["elementResponseAttributes"] = "rect,displayed"
+                ["elementResponseAttributes"] = "rect,displayed,text,enabled"
             });
             // The instrumented e2e build never goes quiescent at launch: the
             // coverage recorder and the search-index warmup keep worker threads
