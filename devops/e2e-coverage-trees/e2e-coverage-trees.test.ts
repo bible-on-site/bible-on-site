@@ -369,6 +369,20 @@ describe("extractTree", () => {
 		assert.deepEqual(tree.diagnostics.missingDumps, ["Ns.BetaTests.Beta"]);
 	});
 
+	test("a known module with zero visits is measured without claiming code hits", () => {
+		const tree = extractTree(baseInput({
+			dumps: [dump("Alpha", "passed", { DEADBEEF: {} })],
+			recordByStem: new Map([["Alpha-passed", record("Ns.AlphaTests.Alpha", "passed")]]),
+		}));
+		const alpha = tree.tests["Ns.AlphaTests.Alpha"];
+		assert.equal(alpha.measured, true);
+		assert.equal(alpha.attribution, "per-test");
+		assert.deepEqual(alpha.nodes, []);
+		assert.deepEqual(alpha.files, []);
+		assert.deepEqual(alpha.visits, { sequence: 0, branch: 0, methodEntries: 0 });
+		assert.deepEqual(tree.diagnostics.incompatibleDumps, []);
+		assert.deepEqual(tree.diagnostics.missingDumps, []);
+	});
 	test("overloaded decls get a deterministic token suffix", () => {
 		const tree = extractTree(
 			baseInput({
