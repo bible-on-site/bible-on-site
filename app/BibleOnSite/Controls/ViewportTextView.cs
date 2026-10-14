@@ -1,4 +1,5 @@
 #if IOS || MACCATALYST
+using System.Runtime.InteropServices;
 using CoreGraphics;
 using CoreText;
 using Foundation;
@@ -170,7 +171,7 @@ public sealed class ViewportTextView : UIView, IUIAccessibilityContainer
     {
         using var framesetter = new CTFramesetter(text);
         var range = new NSRange(0, text.Length);
-        var size = framesetter.SuggestFrameSize(range, null, new CGSize(width, NFloat.MaxValue), out _);
+        var size = framesetter.SuggestFrameSize(range, null, new CGSize((NFloat)width, NFloat.MaxValue), out _);
         var height = Math.Max(1, Math.Ceiling((double)size.Height) + 1);
         using var path = new CGPath();
         path.AddRect(new CGRect(0, 0, width, height));
