@@ -1,0 +1,164 @@
+using System.Drawing;
+using BibleOnSite.Tests.MobileE2E.Platforms;
+using OpenQA.Selenium;
+using OpenQA.Selenium.Appium;
+using Xunit;
+
+namespace BibleOnSite.Tests.MobileE2E.Configuration;
+
+[Trait("Category", "Unit")]
+public sealed class NativeSnapshotTests
+{
+    private static Dictionary<string, object> Entry(string id, bool displayed = true, double x = 0) => new()
+    {
+        ["element-6066-11e4-a52e-4f735466cecf"] = id,
+        ["displayed"] = displayed,
+        ["rect"] = new Dictionary<string, object>
+        {
+            ["x"] = x, ["y"] = 0L, ["width"] = 20, ["height"] = 20d
+        }
+    };
+
+    [Fact]
+    public void EachLookupReturnsItsOwnNativeStateInOneCommand()
+    {
+        var executor = new SnapshotExecutor([Entry("first"), Entry("next", false)]);
+        using var driver = new IosSnapshotDriver(executor, new AppiumOptions { PlatformName = "iOS" });
+        var first = Assert.Single(driver.FindSnapshots(MobileBy.AccessibilityId("PerekSource")));
+        var next = Assert.Single(driver.FindSnapshots(MobileBy.AccessibilityId("PerekSource")));
+        Assert.True(first.Snapshot.IsVisibleIn(new(100, 100)));
+        Assert.False(next.Snapshot.IsVisibleIn(new(100, 100)));
+        Assert.Equal("first", first.Snapshot.Id);
+        Assert.Equal("next", next.Snapshot.Id);
+        Assert.Equal(2, executor.Lookups);
+        Assert.Equal("accessibility id", executor.LastParameters!["using"]);
+        Assert.Equal("PerekSource", executor.LastParameters["value"]);
+        Assert.DoesNotContain(DriverCommand.IsElementDisplayed, executor.Commands);
+        Assert.DoesNotContain(DriverCommand.GetElementRect, executor.Commands);
+    }
+
+    [Fact]
+    public void NativeStaleErrorsKeepTheSdkExceptionType()
+    {
+        var executor = new SnapshotExecutor([]) { Stale = true };
+        using var driver = new IosSnapshotDriver(executor, new AppiumOptions { PlatformName = "iOS" });
+        Assert.Throws<StaleElementReferenceException>(() => driver.FindSnapshots(By.XPath("//*")));
+    }
+
+    [Fact]
+    public void PreloadedOffscreenElementsAreExcludedEvenWhenDisplayed()
+    {
+        var snapshot = Assert.Single(NativeElementSnapshot.Decode(new object[] { Entry("outside", x: 200) }));
+        Assert.False(snapshot.IsVisibleIn(new(100, 100)));
+    }
+
+    [Fact]
+    public void VisibilityUsesTheCurrentViewportAfterRotation()
+    {
+        var snapshot = Assert.Single(NativeElementSnapshot.Decode(new object[] { Entry("rotated", x: 120) }));
+        Assert.False(snapshot.IsVisibleIn(new(100, 200)));
+        Assert.True(snapshot.IsVisibleIn(new(200, 100)));
+    }
+
+    [Fact]
+    public void ZeroSizedFramesAreNeverVisible() =>
+        Assert.False(new NativeElementSnapshot("empty", true, 0, 0, 0, 20).IsVisibleIn(new(100, 100)));
+
+    [Fact]
+    public void FractionalNativeCoordinatesArePreserved()
+    {
+        var entry = Entry("fractional", x: -10.25);
+        var snapshot = Assert.Single(NativeElementSnapshot.Decode(new object[] { entry }));
+        Assert.Equal(-10.25, snapshot.X);
+        Assert.False(snapshot.IsVisibleIn(new(100, 100)));
+    }
+
+    [Theory]
+    [InlineData("element-6066-11e4-a52e-4f735466cecf")]
+    [InlineData("displayed")]
+    [InlineData("rect")]
+    public void IncompleteMetadataCannotBecomeASuccessfulVisibilityCheck(string missing)
+    {
+        var entry = Entry("incomplete");
+        entry.Remove(missing);
+        Assert.Throws<WebDriverException>(() => NativeElementSnapshot.Decode(new object[] { entry }));
+    }
+
+    [Fact]
+    public void NonfiniteFramesFailInsteadOfHidingControls()
+    {
+        var entry = Entry("bad", x: double.NaN);
+        Assert.Throws<WebDriverException>(() => NativeElementSnapshot.Decode(new object[] { entry }));
+    }
+
+    [Fact]
+    public void AnEmptyLookupStaysEmpty() => Assert.Empty(NativeElementSnapshot.Decode(Array.Empty<object>()));
+
+    [Fact]
+    public void RealWireJsonUsesTheSameDecoderAsTheDriver()
+    {
+        var response = Response.FromJson("""
+            {"value":[{"element-6066-11e4-a52e-4f735466cecf":"wire-id","displayed":true,"rect":{"x":1.25,"y":2,"width":20,"height":30}}]}
+            """);
+        var snapshot = Assert.Single(NativeElementSnapshot.Decode(response.Value));
+        Assert.Equal("wire-id", snapshot.Id);
+        Assert.Equal(1.25, snapshot.X);
+        Assert.True(snapshot.IsVisibleIn(new(100, 100)));
+    }
+
+    [Theory]
+    [InlineData("PORTRAIT", 0)]
+    [InlineData("LANDSCAPE", 1)]
+    public void PortraitResetUsesTheActualOrientationAndAvoidsRedundantRotation(string initial, int rotations)
+    {
+        var executor = new SnapshotExecutor([]) { Orientation = initial };
+        using var driver = new IosSnapshotDriver(executor, new AppiumOptions { PlatformName = "iOS" });
+        MobilePlatformAdapter.EnsurePortrait(driver);
+        Assert.Equal(ScreenOrientation.Portrait, driver.Orientation);
+        Assert.Equal(rotations, executor.Commands.Count(command => command == "setOrientation"));
+    }
+
+    private sealed class SnapshotExecutor(Dictionary<string, object>[] results) : ICommandExecutor
+    {
+        public List<string> Commands { get; } = [];
+        public int Lookups { get; private set; }
+        public Dictionary<string, object?>? LastParameters { get; private set; }
+        public bool Stale { get; init; }
+        public string Orientation { get; set; } = "PORTRAIT";
+        public bool TryAddCommand(string name, CommandInfo? info) => true;
+        public void Dispose() { }
+        public Response Execute(Command command) => ExecuteAsync(command).GetAwaiter().GetResult();
+        public Task<Response> ExecuteAsync(Command command)
+        {
+            Commands.Add(command.Name);
+            object? value = null;
+            var status = WebDriverResult.Success;
+            if (command.Name == DriverCommand.NewSession)
+            {
+                value = new Dictionary<string, object> { ["platformName"] = "iOS" };
+            }
+            else if (command.Name == DriverCommand.FindElements)
+            {
+                LastParameters = command.Parameters;
+                if (Stale)
+                {
+                    status = WebDriverResult.ObsoleteElement;
+                    value = new Dictionary<string, object> { ["message"] = "The native element changed." };
+                }
+                else
+                {
+                    value = new object[] { results[Lookups++] };
+                }
+            }
+            else if (command.Name == "getOrientation")
+            {
+                value = Orientation;
+            }
+            else if (command.Name == "setOrientation")
+            {
+                Orientation = (string)command.Parameters["orientation"]!;
+            }
+            return Task.FromResult(new Response("snapshot-session", value, status));
+        }
+    }
+}
