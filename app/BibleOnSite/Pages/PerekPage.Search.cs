@@ -194,8 +194,7 @@ public partial class PerekPage
     {
         if (Handler is not IPlatformViewHandler pageHandler ||
             pageHandler.ViewController?.NavigationController is not { } navigation ||
-            navigation.InteractivePopGestureRecognizer is not { } back ||
-            PerekCarousel.Handler?.PlatformView is not UIKit.UIView carousel)
+            navigation.InteractivePopGestureRecognizer is not { } back)
         {
             return;
         }
@@ -206,7 +205,10 @@ public partial class PerekPage
         }
         // Native history owns the edge before the chapter carousel or verse list.
         // Keep UIKit's interactive pop and MAUI's navigation delegate intact.
-        GiveNativeBackPriority(carousel, back);
+        if (PerekCarousel.Handler?.PlatformView is UIKit.UIView carousel)
+        {
+            GiveNativeBackPriority(carousel, back);
+        }
         Console.WriteLine($"[ReaderBack] stack={Navigation.NavigationStack.Count} enabled={back.Enabled} direction={navigation.View.EffectiveUserInterfaceLayoutDirection}");
     }
 
@@ -374,6 +376,10 @@ public partial class PerekPage
             }
             await Task.Delay(50);
         }
+#if IOS || MACCATALYST
+        var nativeList = GetNativeReaderCollection(FindReaderPasukList());
+        Console.Error.WriteLine($"[SearchLanding] native={nativeList?.GetType().Name ?? "none"} offset={nativeList?.ContentOffset.Y} visible={string.Join(",", nativeList?.IndexPathsForVisibleItems?.Select(path => $"{path.Section}:{path.Item}") ?? [])}");
+#endif
         Console.Error.WriteLine($"Search reader could not locate verse {pasukNum} in chapter {_viewModel.PerekId}.");
     }
 
@@ -517,7 +523,7 @@ public partial class PerekPage
         return centerY >= listPos[1] && centerY <= listPos[1] + recycler.Height;
 #elif IOS || MACCATALYST
         if (element.Handler?.PlatformView is not UIKit.UIView view ||
-            list.Handler?.PlatformView is not UIKit.UICollectionView collection)
+            GetNativeReaderCollection(list) is not { } collection)
         {
             return false;
         }
@@ -559,7 +565,7 @@ public partial class PerekPage
         if (htmlView.GetSearchMatchTop() is not { } matchTop ||
             htmlView.Handler?.PlatformView is not UIKit.UIView noteView ||
             nameLabel.Handler?.PlatformView is not UIKit.UIView labelView ||
-            list.Handler?.PlatformView is not UIKit.UICollectionView collection)
+            GetNativeReaderCollection(list) is not { } collection)
         {
             return null;
         }
@@ -597,7 +603,7 @@ public partial class PerekPage
         return true;
 #elif IOS || MACCATALYST
         if (nameLabel.Handler?.PlatformView is not UIKit.UIView labelView ||
-            list.Handler?.PlatformView is not UIKit.UICollectionView collection)
+            GetNativeReaderCollection(list) is not { } collection)
         {
             return false;
         }
@@ -631,7 +637,7 @@ public partial class PerekPage
         }
         return false;
 #elif IOS || MACCATALYST
-        if (list.Handler?.PlatformView is UIKit.UICollectionView collection)
+        if (GetNativeReaderCollection(list) is { } collection)
         {
             var index = IndexOfItem(list, item);
             var paths = collection.IndexPathsForVisibleItems;
@@ -668,7 +674,7 @@ public partial class PerekPage
 #elif IOS || MACCATALYST
         if (htmlView.GetSearchMatchTop() is not { } matchTop ||
             htmlView.Handler?.PlatformView is not UIKit.UIView noteView ||
-            list.Handler?.PlatformView is not UIKit.UICollectionView collection)
+            GetNativeReaderCollection(list) is not { } collection)
         {
             return false;
         }
@@ -682,6 +688,18 @@ public partial class PerekPage
         return null;
 #endif
     }
+
+#if IOS || MACCATALYST
+    // Optimized MAUI handlers expose the controller's UIView. Accept both a
+    // collection root and a collection nested inside that native view.
+    private static UIKit.UICollectionView? GetNativeReaderCollection(CollectionView? list) =>
+        list?.Handler?.PlatformView switch
+        {
+            UIKit.UICollectionView collection => collection,
+            UIKit.UIView view => FindDescendantCollectionView(view),
+            _ => null
+        };
+#endif
 
     private static int IndexOfItem(CollectionView list, object item)
     {
@@ -716,7 +734,7 @@ public partial class PerekPage
 #elif IOS || MACCATALYST
         if (htmlView.GetSearchMatchTop() is not { } matchTop ||
             htmlView.Handler?.PlatformView is not UIKit.UIView noteView ||
-            list.Handler?.PlatformView is not UIKit.UICollectionView collection)
+            GetNativeReaderCollection(list) is not { } collection)
         {
             return false;
         }
