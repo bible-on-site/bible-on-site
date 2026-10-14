@@ -228,7 +228,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         _carouselInitializing = false;
     }
 
-#if IOS
+#if IOS || MACCATALYST
     private static UIKit.UICollectionView? FindDescendantCollectionView(UIKit.UIView view)
     {
         foreach (var subview in view.Subviews)
@@ -506,6 +506,10 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         RegisterReaderKeyboardBack();
 #endif
         SubscribeRecitation();
+#if IOS
+        // Native history must be ready before asynchronous reader positioning.
+        ConfigureIosReaderHistory();
+#endif
         await InitializeRecitationAsync();
         Console.WriteLine("[Startup] PerekPage recitation initialized");
 #if ANDROID
@@ -574,6 +578,14 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         }
 #if IOS
         Dispatcher.Dispatch(ConfigureIosReaderHistory);
+#endif
+    }
+
+    private void OnReaderListLoaded(object? sender, EventArgs e)
+    {
+#if IOS
+        // Newly realized verse lists must yield the edge gesture to history.
+        ConfigureIosReaderHistory();
 #endif
     }
 

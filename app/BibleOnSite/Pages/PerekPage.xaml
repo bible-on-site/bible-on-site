@@ -307,6 +307,7 @@
                                             AutomationId="PasukimCollection"
                                             IsVisible="{Binding BindingContext.IsTikkunKorimEnabled, Source={x:Reference PerekPageRoot}, Converter={StaticResource InvertedBoolConverter}}"
                                             SelectionMode="None"
+                                            Loaded="OnReaderListLoaded"
                                             Scrolled="OnPasukimScrolled"
                                             Margin="8,0,8,0">
                                 <CollectionView.ItemsSource>
