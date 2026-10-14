@@ -1,6 +1,19 @@
 import { execFileSync, spawn } from "node:child_process";
-import { closeSync, openSync } from "node:fs";
+import { closeSync, openSync, writeFileSync } from "node:fs";
 
+// A pre-deadline observation must not pause a healthy app with launchctl/LLDB
+// or replace a successful test exit with a failed diagnostic probe.
+export async function captureNativeFrame(command, args, destination, execute) {
+  try {
+    await execute(command, [...args, destination], { timeout: 5000, windowsHide: true });
+    return null;
+  } catch (error) {
+    writeFileSync(`${destination}-error.json`, JSON.stringify({
+      message: error.message, code: error.code, killed: error.killed, signal: error.signal,
+    }, null, 2));
+    return error;
+  }
+}
 // Native logs can exceed tens of megabytes after a fresh commentary import.
 // Stream stdout to the artifact instead of buffering the entire log in Node.
 export function exportNativeLog(command, args, destination, timeout = 120000) {

@@ -8,7 +8,7 @@ import { promisify } from "node:util";
 import { monitorNativeInteractions } from "./native-hang-monitor.mjs";
 import { probeAppiumReadiness, waitForAppiumReadiness } from "./appium-readiness.mjs";
 import { prepareWda } from "./prepare-wda.mjs";
-import { exportNativeLog, startNativeLog } from "./native-logs.mjs";
+import { captureNativeFrame, exportNativeLog, startNativeLog } from "./native-logs.mjs";
 import { waitForAndroidDevice } from "./android-readiness.mjs";
 import { iosAppPids } from "./ios-processes.mjs";
 
@@ -67,7 +67,12 @@ let serverLogOpen = true;
 const serverLog = openSync(resolve(artifacts, "appium.log"), "w");
 const hangMonitor = platform === "ios" ? monitorNativeInteractions(async (command) => {
   writeFileSync(resolve(artifacts, "native-hang-command.txt"), command);
-  await sampleIosApp("interaction");
+  // Commands can exceed the observation threshold and still finish within
+  // their interaction deadline. Capture through CoreSimulator without app
+  // process queries or debugger attachment; sample stacks only after failure.
+  const error = await captureNativeFrame("xcrun", ["simctl", "io", process.env.MOBILE_UDID, "screenshot"],
+    resolve(artifacts, "native-interaction.png"), execute);
+  if (error) console.error("Could not capture the pending interaction frame:", error.message);
 }) : undefined;
 const server = spawn(process.execPath, [resolve(directory, "node_modules/appium/index.js"),
   "--address", "127.0.0.1", "--port", appiumPort, "--log-no-colors", "--log-timestamp",
