@@ -8,6 +8,14 @@ the app; later scenarios restart its process with their launch environment.
 The install and built search index survive these restarts. Appium operates
 the simulator headlessly.
 
+WDA releases its session without terminating the app through XCTest. That
+termination path can stall `DELETE /session` after all assertions pass and
+trigger recursive Appium teardown. Once the harness exits, `run.mjs` terminates
+only this app on the explicit simulator through `simctl`, within five seconds,
+before exporting logs. Confirmed already-stopped apps are accepted; transport
+and timeout failures fail the run. `MOBILE_KEEP_APP=1` retains the review app.
+The existing 15-second session-delete and 15-minute pilot limits remain intact.
+
 CI runs the complete iOS suite across two independent `xcode-27` runners, each
 with one simulator and one shared Appium session. Each host has 3 CPUs and
 7 GB RAM. The existing `Shard=1|2` traits form a disjoint partition: all six

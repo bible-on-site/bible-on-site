@@ -11,6 +11,7 @@ import { prepareWda } from "./prepare-wda.mjs";
 import { captureNativeFrame, exportNativeLog, startNativeLog } from "./native-logs.mjs";
 import { waitForAndroidDevice } from "./android-readiness.mjs";
 import { iosAppPids } from "./ios-processes.mjs";
+import { terminateIosTestApp } from "./ios-app-cleanup.mjs";
 
 const directory = dirname(fileURLToPath(import.meta.url));
 const runStarted = Date.now();
@@ -178,6 +179,18 @@ try {
     await sampleIosApp("cleanup");
   }
   if (diagnosticsFailed) process.exitCode ||= 1;
+  if (platform === "ios") {
+    try {
+      const cleanup = await terminateIosTestApp(process.env.MOBILE_UDID, {
+        keepApp: process.env.MOBILE_KEEP_APP === "1",
+      });
+      writeFileSync(resolve(artifacts, "ios-app-cleanup.json"), JSON.stringify(cleanup, null, 2));
+    } catch (error) {
+      writeFileSync(resolve(artifacts, "ios-app-cleanup-error.txt"), String(error));
+      console.error("Could not terminate this run's iOS app:", error);
+      process.exitCode ||= 1;
+    }
+  }
   try {
     const androidSdk = process.env.ANDROID_HOME ?? process.env.ANDROID_SDK_ROOT;
     const adb = androidSdk ? resolve(androidSdk, "platform-tools", process.platform === "win32" ? "adb.exe" : "adb") : "adb";
