@@ -24,7 +24,18 @@ namespace AltCover.Recorder
             Interlocked.Increment(ref counters[pointId & (BlockSize - 1)]);
         }
 
-        public void Reset() => Interlocked.Exchange(ref _modules, new());
+        public void Reset()
+        {
+            // A read-only scenario may add no visits after reset. Retain the
+            // observed build identities so its empty counters remain a valid
+            // dump; replace every block so prior-test hits cannot leak through.
+            var cleared = new ConcurrentDictionary<string, ConcurrentDictionary<int, long[]>>();
+            foreach (var moduleId in Volatile.Read(ref _modules).Keys)
+            {
+                cleared[moduleId] = new ConcurrentDictionary<int, long[]>();
+            }
+            Interlocked.Exchange(ref _modules, cleared);
+        }
 
         public string SnapshotJson()
         {

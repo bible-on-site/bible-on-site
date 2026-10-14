@@ -131,7 +131,21 @@ public class E2ECoverageApplyTests
     }
 
     [Fact]
-    public void Counts_dumps_without_a_snapshot_as_incompatible()
+    public void ZeroHitDumpRetainsItsBuildIdentityWithoutClaimingCoverage()
+    {
+        var modules = Modules();
+        var warnings = new List<string>();
+        var applied = E2ECoverageApply.ApplyDumps(modules,
+            [("read-only.json", Dump(Hash, new Dictionary<string, long>()))], out var stats, warnings.Add);
+
+        Assert.Equal(0, applied);
+        Assert.Equal(0, stats.IncompatibleDumps);
+        Assert.Equal(0, stats.UnknownPointIds);
+        Assert.Empty(warnings);
+        Assert.Equal("0", Point(modules[0], "SequencePoint", "10").Attribute("vc")?.Value);
+    }
+
+    [Fact]    public void Counts_dumps_without_a_snapshot_as_incompatible()
     {
         var modules = Modules();
 

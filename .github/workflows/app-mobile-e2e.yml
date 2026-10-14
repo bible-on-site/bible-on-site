@@ -749,7 +749,8 @@ jobs:
   merge_ios:
     name: Merge complete iOS suite
     needs: [appium]
-    if: success()
+    # The optional resolver may be skipped even when all Appium legs pass.
+    if: ${{ always() && !cancelled() && needs.appium.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
