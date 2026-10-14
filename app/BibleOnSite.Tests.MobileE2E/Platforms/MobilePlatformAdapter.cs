@@ -122,6 +122,14 @@ public abstract class MobilePlatformAdapter
     {
     }
 
+    internal static void EnsurePortrait(AppiumDriver driver)
+    {
+        if (driver.Orientation != ScreenOrientation.Portrait)
+        {
+            driver.Orientation = ScreenOrientation.Portrait;
+        }
+    }
+
     public AppiumOptions CreateOptions(MobileTestConfiguration configuration)
     {
         var android = configuration.Platform == MobilePlatform.Android;
@@ -204,7 +212,10 @@ public abstract class MobilePlatformAdapter
             // through their native APIs; labels, IDs and geometry remain in XML.
             options.AddAdditionalAppiumOption("settings", new Dictionary<string, object>
             {
-                ["pageSourceExcludedAttributes"] = "visible,accessible"
+                ["pageSourceExcludedAttributes"] = "visible,accessible",
+                // Return each candidate's real visibility and frame in its lookup.
+                ["shouldUseCompactResponses"] = false,
+                ["elementResponseAttributes"] = "rect,displayed"
             });
             // The instrumented e2e build never goes quiescent at launch: the
             // coverage recorder and the search-index warmup keep worker threads
@@ -253,7 +264,7 @@ public sealed class AndroidPlatformAdapter : MobilePlatformAdapter
     {
         driver.TerminateApp(AppId);
         driver.ActivateApp(AppId);
-        driver.Orientation = ScreenOrientation.Portrait;
+        EnsurePortrait(driver);
     }
 
     public override bool IsChecked(AppiumElement element) => element.GetAttribute("checked") == "true";
@@ -326,7 +337,7 @@ public sealed class IosPlatformAdapter : MobilePlatformAdapter
                 ["bundleId"] = AppId
             });
         }
-        driver.Orientation = ScreenOrientation.Portrait;
+        EnsurePortrait(driver);
     }
 
     // XCTDaemon budgets each launch (~30s observed); on a loaded simulator
@@ -380,5 +391,5 @@ public sealed class IosPlatformAdapter : MobilePlatformAdapter
     public override AppiumDriver CreateDriver(Uri server, AppiumOptions options) =>
         // The five-minute client budget fits inside the ten-minute per-test hang
         // guard, together with the scenario.
-        new IOSDriver(server, options, TimeSpan.FromMinutes(5));
+        new IosSnapshotDriver(server, options);
 }
