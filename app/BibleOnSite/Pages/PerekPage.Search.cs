@@ -149,7 +149,9 @@ public partial class PerekPage
         }
 #endif
         NormalNavigationTitle.IsVisible = true;
-        NormalNavigationTitle.Opacity = 0;
+        // The permanent navigation control stays available during loading and
+        // search landing. Animate only the decorative introduction above it.
+        NormalNavigationTitle.Opacity = 1;
         var sourceWidth = NormalNavigationBar.Width - 2 * ReaderNavigationButton.Width - NormalNavigationTitle.Margin.HorizontalThickness;
         var introductionWidth = Math.Min(ReaderToolbar.Width - 8, sourceWidth * 1.06);
         if (sourceWidth <= 0 || introductionWidth <= 0)
@@ -162,12 +164,12 @@ public partial class PerekPage
         {
             var reveal = Math.Min(progress / 0.18, 1);
             var contraction = Easing.CubicInOut.Ease(Math.Clamp((progress - 0.6) / 0.4, 0, 1));
-            SearchIntroduction.Opacity = reveal;
+            SearchIntroduction.Opacity = reveal * (1 - contraction);
             SearchIntroduction.Scale = 0.96 + 0.04 * reveal;
             SearchIntroduction.WidthRequest = introductionWidth + (sourceWidth - introductionWidth) * contraction;
             SearchIntroductionText.Opacity = 1 - contraction;
             SearchIntroductionText.Scale = 1 - 0.2 * contraction;
-            NormalNavigationTitle.Opacity = contraction;
+
         });
         animation.Commit(this, SearchIntroductionAnimation, 16, 1400, Easing.Linear, (_, _) => FinishSearchIntroduction());
     }

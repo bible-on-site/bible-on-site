@@ -46,7 +46,7 @@
                    HeightRequest="40"
                    CornerRadius="14"
                    BorderWidth="0"
-                   IsVisible="False"
+                   IsVisible="True"
                    BackgroundColor="{AppThemeBinding Light=#E4EFFD, Dark=#2C4569}"
                    TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark=#AACBFF}"
                    VerticalOptions="Center"
