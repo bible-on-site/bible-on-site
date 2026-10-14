@@ -275,6 +275,25 @@ This describes existing content; it does not promise rich results or rankings.
 Google's [AI features guidance](https://developers.google.com/search/docs/appearance/ai-features)
 states that no special AI schema is required.
 
+## Incremental timing delivery
+
+Keep eight-hour accumulation pushes in one rolling draft with automatic merge
+turned off. Validate locally and include `[skip ci]` in the final pushed commit
+message, including any interim merge commit. Do not dispatch or rerun cloud CI
+for these accumulation pushes.
+
+At the two-day delivery opportunity, gather all eligible results and preserve the
+complete task history under a pushed recovery tag. At the already included base,
+use normal hooks to create one clean release commit with the identical validated
+tree and no skip directives anywhere in its message or body. Protect any task
+branch history update with an exact remote lease and preserve human changes.
+An empty final commit does not remove historical skip directives: the merge
+queue can copy earlier commit messages into its generated master commit. Inspect
+that generated message before merge, and require fresh current-head checks,
+reviews, queue CI, release and website/native delivery verification. This history
+cleanup does not authorize a base sync; the repository's branch-sync rule still
+applies. Count the next two-day interval only after full production verification.
+
 ## RustFS and checks
 
 Start and initialize the repository's [RustFS mock](../../devops/rustfs/README.md).
