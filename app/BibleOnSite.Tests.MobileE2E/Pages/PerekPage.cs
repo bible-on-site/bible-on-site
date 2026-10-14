@@ -193,14 +193,18 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
             return matches.Where(match => match.Snapshot.IsVisibleIn(window))
                 .Select(match => match.Element);
         }
+        // Android also reads the viewport once per lookup, lazily, so an empty
+        // result does not request it and every new poll observes rotations.
+        Size? viewport = null;
         return driver.FindElements(locator)
-            .Where(element => element.Displayed && HasVisibleCenter(element));
-    }
+            .Where(element => element.Displayed && HasVisibleCenter(
+                element.Location, element.Size, Viewport()));
 
-    private bool HasVisibleCenter(AppiumElement element)
-    {
-        var window = driver.Manage().Window.Size;
-        return HasVisibleCenter(element.Location, element.Size, window);
+        Size Viewport()
+        {
+            viewport ??= driver.Manage().Window.Size;
+            return viewport.Value;
+        }
     }
 
     private static bool HasVisibleCenter(Point location, Size size, Size window)
