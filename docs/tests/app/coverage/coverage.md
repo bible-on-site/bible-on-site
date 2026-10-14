@@ -250,10 +250,12 @@ unit/lcov.info + integration/lcov.info + e2e/{android,ios}/lcov.info
   `FNDA` hit counts take the max), so a line exercised on any layer or
   platform counts exactly once and lines executed nowhere stay uncovered.
 - The E2E inputs merge with `--hits-only`: their OpenCover template
-  enumerates a separately instrumented build's full sequence-point
-  universe, so their zero-hit records are dropped — covered locations
-  still union in, while unexecuted e2e lines and files do not inflate
-  the flag's denominator (#2270).
+  enumerates a separately instrumented build's sequence-point universe,
+  which is not comparable to the unit/integration build's. An e2e hit
+  only confirms a coordinate the canonical layers already enumerate —
+  same file, same DA line, same BRDA arm, same function — so the merged
+  SF set and LF/BRF/FNF denominators stay exactly the canonical layers';
+  e2e-only files and lines never enter the report, hit or not (#2270).
 - `--relocate` canonicalizes absolute runner paths (Linux Android leg, macOS
   iOS leg, local Windows) onto `app/BibleOnSite/`, so the same source line
   never double-counts across runners.

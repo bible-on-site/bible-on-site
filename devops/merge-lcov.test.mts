@@ -98,30 +98,43 @@ describe("mergeLcovTexts", () => {
 		assert.match(out, /^SF:app\/BibleOnSite\/Helpers\/AppLinkHelper\.cs$/m);
 	});
 
-	it("merges hits-only input's covered lines but not its zero-hit enumeration", () => {
-		// #2270: the e2e app build instruments a far larger line universe than
-		// the unit/integration report; its unhit lines must not enter the
-		// merged denominator, while its hits still union in.
+	it("restricts an untrusted input to the canonical line universe (#2270)", () => {
+		// The e2e app build instruments a far larger universe than the
+		// unit/integration report. Only hits on coordinates the canonical
+		// layer already declared may merge — never foreign lines or files.
 		const out = mergeLcovTexts([UNIT, E2E], "web/admin/", [], new Set([1]));
-		const sfs = out.match(/^SF:.+$/gm);
-		assert.deepEqual(sfs, [
-			"SF:web/admin/src/other.ts",
-			"SF:web/admin/src/server.tsx",
-		]);
-		const serverBlock = out.split("end_of_record")[1];
-		assert.ok(serverBlock.includes("DA:1,5\nDA:2,5\nDA:3,2\nDA:9,7\n"), serverBlock);
-		assert.ok(serverBlock.includes("LF:4\nLH:4\n"), serverBlock);
-		assert.ok(serverBlock.includes("BRF:2\nBRH:2\n"), serverBlock);
-		assert.ok(serverBlock.includes("FNDA:3,handler"), serverBlock);
+		assert.deepEqual(out.match(/^SF:.+$/gm), ["SF:web/admin/src/server.tsx"]);
+		// Line 3 was uncovered in unit — the e2e hit confirms it. Line 9 is
+		// e2e-only enumeration and cannot enter.
+		assert.ok(out.includes("DA:1,5\nDA:2,5\nDA:3,2\n"), out);
+		assert.ok(!out.includes("DA:9"), out);
+		assert.ok(out.includes("LF:3\nLH:3\n"), out);
+		// The e2e hit confirms the canonical branch arm its build left unhit.
+		assert.ok(out.includes("BRDA:5,0,0,2\nBRDA:5,0,1,4\n"), out);
+		assert.ok(out.includes("BRF:2\nBRH:2\n"), out);
+		assert.ok(out.includes("FNDA:3,handler"), out);
 	});
 
-	it("drops a hits-only file that covered nothing", () => {
-		const e2eCold =
-			"TN:\nSF:app/BibleOnSite/Pages/ColdPage.xaml.cs\nFN:5,ctor\nFNDA:0,ctor\nDA:5,0\nDA:6,0\nBRDA:7,0,0,-\nFNF:1\nFNH:0\nLF:2\nLH:0\nend_of_record\n";
+	it("keeps the merged universe identical with or without an untrusted input", () => {
+		// The invariant the e2e merge needs: denominators and the file set are
+		// exactly the canonical layers' — an e2e layer can only raise hits.
+		const canonical = mergeLcovTexts([UNIT], "web/admin/");
+		const merged = mergeLcovTexts([UNIT, E2E], "web/admin/", [], new Set([1]));
+		assert.deepEqual(merged.match(/^SF:.+$/gm), canonical.match(/^SF:.+$/gm));
+		const denominators = (s: string) =>
+			s.match(/^(?:LF|BRF|FNF):\d+$/gm) ?? [];
+		assert.deepEqual(denominators(merged), denominators(canonical));
+	});
+
+	it("drops an untrusted file entirely — hits included — when canonical never enumerated it", () => {
+		// Pages/*.xaml.cs-style files exist only in the e2e build's universe:
+		// keeping their hit lines would report a mostly-uncovered file as 100%.
+		const e2eForeign =
+			"TN:\nSF:app/BibleOnSite/Pages/ColdPage.xaml.cs\nFN:5,ctor\nFNDA:1,ctor\nDA:5,3\nDA:6,0\nBRDA:7,0,0,1\nFNF:1\nFNH:1\nLF:2\nLH:1\nBRF:1\nBRH:1\nend_of_record\n";
 		const unitWarm =
 			"TN:\nSF:app/BibleOnSite/Services/Hot.cs\nDA:1,4\nLF:1\nLH:1\nend_of_record\n";
 		const out = mergeLcovTexts(
-			[unitWarm, e2eCold],
+			[unitWarm, e2eForeign],
 			undefined,
 			["app/BibleOnSite/"],
 			new Set([1]),
@@ -129,30 +142,36 @@ describe("mergeLcovTexts", () => {
 		assert.deepEqual(out.match(/^SF:.+$/gm), ["SF:app/BibleOnSite/Services/Hot.cs"]);
 	});
 
-	it("drops a hits-only zero-hit branch even on a line the input executed", () => {
-		// BRDA block/branch indices are emitted by the foreign instrumented
-		// build and need not match the canonical build's coordinates, so an
-		// unhit arm is enumeration, not partial coverage. Only hit arms merge.
+	it("merges an untrusted branch hit only onto a canonical arm, keeping its unhit sibling visible", () => {
+		// BRDA block/branch indices are the foreign build's own coordinates —
+		// a hit merges only when the canonical build emitted the same key, and
+		// the canonical unhit sibling stays in the report as partial coverage.
+		const canonical =
+			"TN:\nSF:app/BibleOnSite/Pages/PerekPage.xaml.cs\nDA:20,1\nBRDA:20,0,0,0\nBRDA:20,0,1,0\nLF:1\nLH:1\nBRF:2\nBRH:0\nend_of_record\n";
 		const e2e =
-			"TN:\nSF:app/BibleOnSite/Pages/PerekPage.xaml.cs\nDA:20,1\nDA:21,0\nBRDA:20,0,0,1\nBRDA:20,0,1,0\nBRDA:30,0,0,0\nBRDA:30,0,1,0\nLF:2\nLH:1\nBRF:4\nBRH:1\nend_of_record\n";
-		const out = mergeLcovTexts([e2e], undefined, ["app/BibleOnSite/"], new Set([0]));
-		assert.ok(out.includes("BRDA:20,0,0,1\n"), out);
-		assert.ok(!out.includes("BRDA:20,0,1"), out);
+			"TN:\nSF:app/BibleOnSite/Pages/PerekPage.xaml.cs\nDA:20,1\nDA:21,0\nBRDA:20,0,0,1\nBRDA:20,0,1,0\nBRDA:30,0,0,9\nLF:2\nLH:1\nBRF:3\nBRH:2\nend_of_record\n";
+		const out = mergeLcovTexts([canonical, e2e], undefined, ["app/BibleOnSite/"], new Set([1]));
+		assert.ok(out.includes("BRDA:20,0,0,1\nBRDA:20,0,1,0\n"), out);
 		assert.ok(!out.includes("BRDA:30"), out);
-		assert.ok(out.includes("BRF:1\nBRH:1\n"), out);
+		assert.ok(!out.includes("DA:21"), out);
+		assert.ok(out.includes("BRF:2\nBRH:1\n"), out);
 	});
 
-	it("keeps a hits-only FN definition only when its function was hit", () => {
+	it("confirms hits only on functions the canonical universe knows", () => {
+		const canonical =
+			"TN:\nSF:app/BibleOnSite/MauiProgram.cs\nFN:10,boot\nFN:20,dormant\nFNDA:0,boot\nFNDA:0,dormant\nDA:11,0\nLF:1\nLH:0\nFNF:2\nFNH:0\nend_of_record\n";
 		const e2e =
-			"TN:\nSF:app/BibleOnSite/MauiProgram.cs\nFN:10,boot\nFN:20,dormant\nFNDA:2,boot\nFNDA:0,dormant\nDA:11,2\nLF:1\nLH:1\nend_of_record\n";
+			"TN:\nSF:app/BibleOnSite/MauiProgram.cs\nFN:10,boot\nFN:99,e2eOnly\nFNDA:2,boot\nFNDA:7,e2eOnly\nDA:11,2\nDA:50,4\nLF:2\nLH:2\nFNF:2\nFNH:2\nend_of_record\n";
 		const out = mergeLcovTexts(
-			[e2e],
+			[canonical, e2e],
 			undefined,
 			["app/BibleOnSite/"],
-			new Set([0]),
+			new Set([1]),
 		);
-		assert.ok(out.includes("FN:10,boot"), out);
-		assert.ok(!out.includes("dormant"), out);
-		assert.ok(out.includes("FNF:1\nFNH:1\n"), out);
+		assert.ok(out.includes("FN:10,boot\nFN:20,dormant\n"), out);
+		assert.ok(out.includes("FNDA:2,boot"), out);
+		assert.ok(!out.includes("e2eOnly"), out);
+		assert.ok(!out.includes("DA:50"), out);
+		assert.ok(out.includes("FNF:2\nFNH:1\n"), out);
 	});
 });
