@@ -64,21 +64,26 @@ partial class Build
             var artifacts = Environment.GetEnvironmentVariable("MOBILE_E2E_ARTIFACTS")
                 ?? throw new ArgumentException("Set MOBILE_E2E_ARTIFACTS (npm test prepares it).");
             var resultsDirectory = Path.Join(artifacts, "results");
-            var prebuilt = Environment.GetEnvironmentVariable("MOBILE_E2E_PREBUILT") == "1"
-                ? " --no-build --no-restore" : "";
-            // The host guard includes Appium session setup and diagnostics. The
-            // delivered index keeps searches within ordinary interaction
-            // deadlines, so corpus construction must never justify extending
-            // the 10-minute hangdump budget.
-            DotNetTestApp($"--project \"{MobileE2ETestProject}\" --configuration Debug -p:RestoreLockedMode=true" +
-                          $" --results-directory \"{resultsDirectory}\"{prebuilt}",
-                $"--filter-query \"/[{MobileE2ESelectionFilter()}]\"" +
-                // Finish a failed pilot's report instead of repeatedly recovering.
-                // All selected scenarios still execute on a successful run.
+            // Prebuilt consumers have complete runnable assembly output, but
+            // no NuGet imports. Project evaluation would change NUKE's output
+            // directory and require test-platform package targets unnecessarily.
+            var appArgs = $"--filter-query \"/[{MobileE2ESelectionFilter()}]\"" +
                 " --stop-on-fail on" +
                 " --hangdump --hangdump-timeout 10m --hangdump-type Mini" +
                 " --report-xunit-trx --report-xunit-trx-filename mobile-e2e.trx" +
-                " --report-xunit-junit --report-xunit-junit-filename mobile-e2e.xml");
+                " --report-xunit-junit --report-xunit-junit-filename mobile-e2e.xml";
+            if (Environment.GetEnvironmentVariable("MOBILE_E2E_PREBUILT") == "1")
+            {
+                var assembly = RootDirectory / "BibleOnSite.Tests.MobileE2E/bin/Debug/net10.0/BibleOnSite.Tests.MobileE2E.dll";
+                ProcessTasks.StartProcess(DotNetPath,
+                    $"\"{assembly}\" --results-directory \"{resultsDirectory}\" {appArgs}", RootDirectory)
+                    .AssertZeroExitCode();
+            }
+            else
+            {
+                DotNetTestApp($"--project \"{MobileE2ETestProject}\" --configuration Debug -p:RestoreLockedMode=true" +
+                              $" --results-directory \"{resultsDirectory}\"", appArgs);
+            }
         });
 
     // When MOBILE_E2E_SELECTION points at an e2e-impact manifest (#2085) the

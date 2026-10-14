@@ -11,8 +11,11 @@ const toolchain = "xcode27-dotnet10.0.401-mauiios10.0.401.1";
 const files = [
   `${appBundle}/BibleOnSite`, `${appBundle}/Info.plist`, `${appBundle}/GoogleService-Info.plist`,
   `${appBundle}/_CodeSignature/CodeResources`,
-  "app/devops/bin/Debug/_build.dll", "app/devops/obj/project.assets.json",
+  "app/devops/bin/Debug/_build.dll", "app/devops/bin/Debug/_build.deps.json",
+  "app/devops/bin/Debug/_build.runtimeconfig.json", "app/devops/obj/project.assets.json",
   "app/BibleOnSite.Tests.MobileE2E/bin/Debug/net10.0/BibleOnSite.Tests.MobileE2E.dll",
+  "app/BibleOnSite.Tests.MobileE2E/bin/Debug/net10.0/BibleOnSite.Tests.MobileE2E.deps.json",
+  "app/BibleOnSite.Tests.MobileE2E/bin/Debug/net10.0/BibleOnSite.Tests.MobileE2E.runtimeconfig.json",
   "app/BibleOnSite.Tests.MobileE2E/obj/project.assets.json",
 ];
 function fixture(t) {
@@ -104,6 +107,18 @@ test("cannot package missing binaries or a coverage template from another build"
   rmSync(join(workspace, "app/devops/bin/Debug/_build.dll"));
   await assert.rejects(packIosBuild(workspace, coverage, output, sha, toolchain), /ENOENT/);
   assert.equal(existsSync(output), false);
+});
+
+test("missing runtime metadata cannot publish or extract a prebuilt consumer", async t => {
+  for (const path of files.filter(file => file.endsWith(".deps.json") || file.endsWith(".runtimeconfig.json"))) {
+    const { workspace, coverage, output } = fixture(t);
+    rmSync(join(workspace, path));
+    await assert.rejects(packIosBuild(workspace, coverage, output, sha, toolchain), /ENOENT/);
+    assert.equal(existsSync(output), false);
+    const entries = [...files.filter(file => file !== path), "coverage-app/template.opencover.xml",
+      "coverage-app/coverage-manifest.json"].join("\n");
+    assert.throws(() => validateArchiveEntries(entries), /Missing build archive entry/);
+  }
 });
 
 test("only declared app/harness/coverage paths may be extracted, with every required file present", () => {

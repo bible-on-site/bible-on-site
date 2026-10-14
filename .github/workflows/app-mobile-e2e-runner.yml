@@ -286,6 +286,16 @@ jobs:
           node app/mobile-e2e/ios-build-artifact.mjs restore "$GITHUB_WORKSPACE" "${{ runner.temp }}/ios-e2e-build" "$MOBILE_E2E_ARTIFACTS" "${{ github.sha }}" "${{ steps.toolchain.outputs.id }}"
           codesign --verify --deep --strict app/BibleOnSite/bin/Debug/net10.0-ios/iossimulator-arm64/BibleOnSite.app
 
+      - name: Validate restored runtimes without NuGet cache
+        if: inputs.mode == 'prebuilt-run'
+        working-directory: app
+        env:
+          NUGET_PACKAGES: ${{ runner.temp }}/ios-prebuilt-empty-nuget
+        run: |
+          dotnet devops/bin/Debug/_build.dll Version
+          dotnet BibleOnSite.Tests.MobileE2E/bin/Debug/net10.0/BibleOnSite.Tests.MobileE2E.dll --filter-query '/[(Category=Unit)]' --progress off
+          echo "NUGET_PACKAGES=$NUGET_PACKAGES" >> "$GITHUB_ENV"
+
       # npm ci is done, so node_modules is frozen. Background cache publication
       # finishes at the wait-all gate before device tests.
       - name: Save node_modules
@@ -595,7 +605,7 @@ jobs:
         if: inputs.mode != 'build' && always() && !cancelled() && (steps.build-app.outcome == 'success' || steps.restore-build.outcome == 'success')
         id: coverage-apply
         working-directory: app
-        run: dotnet run --project devops --no-build --no-restore -- CoverageMobileE2E
+        run: dotnet devops/bin/Debug/_build.dll CoverageMobileE2E
 
       - name: Upload app coverage report
         if: always() && steps.coverage-apply.outcome == 'success'

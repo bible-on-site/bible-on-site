@@ -16,8 +16,11 @@ const roots = [appBundle, ...projectOutputs, "coverage-app"];
 const requiredFiles = [
   `${appBundle}/BibleOnSite`, `${appBundle}/Info.plist`, `${appBundle}/GoogleService-Info.plist`,
   `${appBundle}/_CodeSignature/CodeResources`,
-  "app/devops/bin/Debug/_build.dll", "app/devops/obj/project.assets.json",
+  "app/devops/bin/Debug/_build.dll", "app/devops/bin/Debug/_build.deps.json",
+  "app/devops/bin/Debug/_build.runtimeconfig.json", "app/devops/obj/project.assets.json",
   "app/BibleOnSite.Tests.MobileE2E/bin/Debug/net10.0/BibleOnSite.Tests.MobileE2E.dll",
+  "app/BibleOnSite.Tests.MobileE2E/bin/Debug/net10.0/BibleOnSite.Tests.MobileE2E.deps.json",
+  "app/BibleOnSite.Tests.MobileE2E/bin/Debug/net10.0/BibleOnSite.Tests.MobileE2E.runtimeconfig.json",
   "app/BibleOnSite.Tests.MobileE2E/obj/project.assets.json",
   "coverage-app/template.opencover.xml", "coverage-app/coverage-manifest.json",
 ];
