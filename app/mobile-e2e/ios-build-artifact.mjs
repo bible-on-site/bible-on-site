@@ -29,7 +29,9 @@ async function digest(path) {
 }
 
 function validateIdentity(sourceSha, toolchain) {
-  if (!/^[a-f0-9]{40}$/.test(sourceSha) || !toolchain) throw new Error("Missing exact build source/toolchain identity.");
+  const validSha = typeof sourceSha === "string" && sourceSha.length === 40 &&
+    Array.from(sourceSha).every(character => "0123456789abcdef".includes(character));
+  if (!validSha || !toolchain) throw new Error("Missing exact build source/toolchain identity.");
 }
 
 async function validateFiles(root, coverage) {

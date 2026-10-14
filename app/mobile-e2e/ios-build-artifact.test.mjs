@@ -6,7 +6,7 @@ import { dirname, join, relative, resolve } from "node:path";
 import { test } from "node:test";
 import { appBundle, packIosBuild, restoreIosBuild, validateArchiveEntries } from "./ios-build-artifact.mjs";
 
-const sha = "a".repeat(40);
+const sha = "0123456789abcdef0123456789abcdef01234567";
 const toolchain = "xcode27-dotnet10.0.401-mauiios10.0.401.1";
 const files = [
   `${appBundle}/BibleOnSite`, `${appBundle}/Info.plist`, `${appBundle}/GoogleService-Info.plist`,
@@ -74,6 +74,16 @@ test("rejects another source/toolchain/workspace before overwriting a runner fil
   await assert.rejects(restoreIosBuild(workspace, output, artifacts, sha, "different-Xcode"), /does not match/);
   await assert.rejects(restoreIosBuild(join(workspace, "other"), output, artifacts, sha, toolchain), /does not match/);
   assert.equal(readFileSync(executable, "utf8"), "runner marker");
+  assert.equal(existsSync(artifacts), false);
+});
+
+test("source identity must be an exact lowercase hexadecimal string before reading build files", async t => {
+  const { workspace, coverage, output, artifacts } = fixture(t);
+  for (const invalid of [undefined, null, 123, { toString: () => sha }, sha.slice(1), `${sha}0`, sha.toUpperCase(), `${sha.slice(0, -1)}g`, `${sha}\n`]) {
+    await assert.rejects(packIosBuild(workspace, coverage, output, invalid, toolchain), /Missing exact build source/);
+    await assert.rejects(restoreIosBuild(workspace, output, artifacts, invalid, toolchain), /Missing exact build source/);
+  }
+  assert.equal(existsSync(output), false);
   assert.equal(existsSync(artifacts), false);
 });
 
