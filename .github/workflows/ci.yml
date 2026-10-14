@@ -2945,7 +2945,12 @@ jobs:
 
       # Merge unit + integration + E2E layers by covered locations, never by
       # percentage. --relocate canonicalizes absolute runner paths (Linux and
-      # macOS legs differ) so the same source line counts exactly once.
+      # macOS legs differ) so the same source line counts exactly once. The E2E
+      # layers come from a separately instrumented app build whose OpenCover
+      # template enumerates every sequence point it could hit — far more lines
+      # than the unit/integration report knows about. --hits-only keeps their
+      # covered lines while dropping that foreign zero-hit enumeration, which
+      # otherwise inflates the app flag's denominator (#2270).
       - name: Merge App coverage layers
         if: needs.app_ci.result == 'success'
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
@@ -2956,7 +2961,7 @@ jobs:
           for platform in android ios; do
             LCOV="${{ github.workspace }}/${{ env.APP_E2E_COVERAGE_DIRECTORY }}/$platform/lcov.info"
             if [ -f "$LCOV" ]; then
-              MERGE_ARGS+=(--require "$LCOV")
+              MERGE_ARGS+=(--hits-only "$LCOV")
               FOUND=$((FOUND+1))
             fi
           done
