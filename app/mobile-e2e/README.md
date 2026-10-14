@@ -264,9 +264,12 @@ those bundled files. Keep their alerts visible and follow
 [#1995](https://github.com/bible-on-site/bible-on-site/issues/1995) for patched
 upstream distributions. Verify nested copies after every driver upgrade.
 
-On iOS, an in-session command still pending at the ordinary 45-second
-interaction deadline triggers one native app stack capture before cleanup.
-The pending command is saved in `native-hang-command.txt`; the stack is saved
-in `native-stack-<pid>.txt`. This observes a failure without changing command
-or test deadlines. Native live logs use info level so accessibility debug
-logging does not amplify the workload being measured.
+On iOS, a command pending for 25 seconds records `native-hang-command.txt`
+and requests one CoreSimulator frame in `native-interaction.png`, with the
+existing five-second capture deadline. This is an observation while the
+ordinary interaction deadline remains 45 seconds: a successful 42-second
+lookup must not be treated as a failed test. A failed frame probe retains an
+error artifact without replacing the test result. Process queries and LLDB
+stack capture run only after a failed pilot, never alongside healthy tests.
+Native live logs use info level so accessibility debug logging does not
+amplify the workload being measured. Pilot and interaction limits are unchanged.
