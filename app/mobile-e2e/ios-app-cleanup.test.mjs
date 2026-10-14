@@ -6,7 +6,7 @@ import { ownedIosTestAppProcesses as parseOwned, terminateIosTestApp as terminat
 
 const devicesRoot = "/Users/runner with spaces/Library/Developer/CoreSimulator/Devices";
 const ownedIosTestAppProcesses = (listing, udid) => parseOwned(listing, udid, devicesRoot);
-const terminateIosTestApp = (udid, options = {}) => terminateOwned(udid, { devicesRoot, ...options });
+const terminateIosTestApp = (udid, options = {}) => terminateOwned(udid, { devicesRoot, observedPids: [1234, 2345], ...options });
 
 const udid = "CD85F334-D4C3-44B6-A7B8-EAABB9C6C1B4";
 const otherUdid = "B8D3DB6B-98FB-4E92-9ACE-9BC307F7FDE7";
@@ -36,8 +36,8 @@ test("terminates only owned PIDs and confirms their exit within the original tot
   });
   assert.deepEqual(signals, [[1234, "SIGKILL"]]);
   assert.deepEqual(calls, [
-    ["/bin/ps", ["-axww", "-o", "pid=,stat=,comm="], { timeout: 5000, windowsHide: true }],
-    ["/bin/ps", ["-axww", "-o", "pid=,stat=,comm="], { timeout: 4985, windowsHide: true }],
+    ["/bin/ps", ["-p", "1234,2345", "-ww", "-o", "pid=,stat=,comm="], { timeout: 5000, windowsHide: true }],
+    ["/bin/ps", ["-p", "1234,2345", "-ww", "-o", "pid=,stat=,comm="], { timeout: 4985, windowsHide: true }],
   ]);
   assert.equal(result.status, "terminated");
   assert.deepEqual(result.pids, [1234]);
@@ -74,6 +74,29 @@ test("process-list and permission errors remain failures without retry", async (
     signal: () => { throw denied; } }), e => e === denied);
 });
 
+test("missing or invalid observed PIDs fail before inspecting the host", async () => {
+  for (const observedPids of [[], [0], [1], ["1234"], [-1234], [1.5], null]) {
+    await assert.rejects(terminateIosTestApp(udid, { observedPids,
+      execute: async () => { throw new Error("must not execute"); },
+    }), /PIDs observed/);
+  }
+});
+
+test("confirmed exited selected PIDs are accepted, but ps diagnostics are fatal", async () => {
+  const gone = Object.assign(new Error("ps exited 1"), { code: 1, stdout: "", stderr: "" });
+  assert.equal((await terminateIosTestApp(udid, { execute: async () => { throw gone; } })).status, "already-stopped");
+  for (const error of [Object.assign(new Error("ps failed"), { code: 1, stdout: "", stderr: "permission denied" }),
+    Object.assign(new Error("ps failed"), { code: 1, stdout: "partial output", stderr: "" })]) {
+    await assert.rejects(terminateIosTestApp(udid, { execute: async () => { throw error; } }), e => e === error);
+  }
+});
+
+test("process-inspection diagnostics cannot pass even with exit zero", async () => {
+  await assert.rejects(terminateIosTestApp(udid, {
+    execute: async () => ({ stdout: "", stderr: "Failure calling sysctl" }),
+  }), /process inspection failed/);
+});
+
 test("a process listing that completes after the cleanup deadline cannot pass", async () => {
   let time = 0;
   await assert.rejects(terminateIosTestApp(udid, { now: () => time,
@@ -81,7 +104,7 @@ test("a process listing that completes after the cleanup deadline cannot pass", 
   }), /within five seconds/);
 });
 
-test("a surviving or respawned app fails at five seconds with no second termination", async () => {
+test("a surviving observed app fails at five seconds with no second termination", async () => {
   let time = 0, signals = 0, calls = 0;
   await assert.rejects(terminateIosTestApp(udid, {
     execute: async () => ({ stdout: listing(++calls === 1 ? 1234 : 2345) }),
@@ -100,7 +123,7 @@ test("Darwin process cleanup kills a real owned child and leaves another device 
   try {
     await Promise.all(children.map(child => once(child, "spawn")));
     const ended = once(children[0], "exit");
-    const result = await terminateIosTestApp(udid);
+    const result = await terminateIosTestApp(udid, { observedPids: children.map(child => child.pid) });
     assert.equal(result.status, "terminated");
     assert.deepEqual(result.pids, [children[0].pid]);
     await ended;

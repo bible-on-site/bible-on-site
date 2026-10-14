@@ -11,15 +11,19 @@ the simulator headlessly.
 WDA releases its session without terminating the app through XCTest. That
 termination path can stall `DELETE /session` after all assertions pass and
 trigger recursive Appium teardown. Once the harness exits, `run.mjs` terminates
-only this app on the explicit simulator through `simctl`, within five seconds,
-before exporting logs. Confirmed already-stopped apps are accepted; transport
+only this app on the explicit simulator within five seconds, before exporting
+logs. It reads app PIDs from that device's live stream, inspects only those PIDs,
+and verifies their installed executable paths include the explicit device UDID
+before signaling them. This avoids expensive host-wide process snapshots. Confirmed already-stopped apps are accepted; transport
 and timeout failures fail the run. `MOBILE_KEEP_APP=1` retains the review app.
 The existing 15-second session-delete and 15-minute pilot limits remain intact.
 
 CI runs the complete iOS suite across three independent `xcode-27` runners,
 each with one simulator and one shared Appium session. Each host has 3 CPUs and
-7 GB RAM. `Shard=1|2|3` forms a disjoint 3/4/3 partition: the six shared scenarios
-are balanced across runners 1 and 3, and runner 2 owns the four iOS-only cases. Each pilot keeps its 15-minute deadline. A final merge requires
+7 GB RAM. `Shard=1|2|3` forms a disjoint 3/4/3 partition. The rapid verse-scroll
+storm runs on runner 1 and the long-commentary storm on runner 2; the short
+flyout case occupies the remaining reader-group slot. All ten iOS cases and
+six Android shared cases remain. Each pilot keeps its 15-minute deadline. A final merge requires
 successful evidence for the whole discovered suite, rejects duplicates, and
 combines native line coverage and execution/automation evidence. Only a full
 successful union can replace a trusted iOS baseline.
@@ -29,8 +33,11 @@ booting a simulator. All three device hosts receive the same archive, including 
 prebuilt Debug harness/build tool and the exact OpenCover template. The archive
 preserves executable modes and framework symlinks; its SHA256, source SHA,
 checkout path and toolchain must match before extraction, and each host strictly
-verifies the simulator signature before launch. Device hosts need the .NET SDK
-and NuGet test dependencies, but skip MAUI restoration and app compilation.
+verifies the simulator signature before launch. Device hosts need the .NET SDK and run the delivered tool and test DLLs
+directly, without project evaluation, MAUI restoration or app compilation.
+A preflight discovers the device's exact scenarios through the production
+launch path, then runs all harness unit cases with an empty NuGet cache. That
+cache remains empty during native testing and coverage application.
 Simulator/WDA preparation overlaps archive transfer. Android has no dependency
 on the iOS builder. All pilot, interaction and watchdog budgets stay unchanged.
 
@@ -42,13 +49,12 @@ children in parallel — each with its own `MOBILE_UDID`, Appium port
 (`MOBILE_WDA_PORT`, 8100/8101 — simulators share the host loopback, so
 concurrent WDA instances must not collide), artifacts subdirectory
 (`<platform>/shard<N>/`) and disjoint `Shard` trait group (`MOBILE_E2E_SHARD`,
-added to the `TestMobileE2E` filter by the Nuke target). Every MobileE2E class
-carries `[Trait("Shard", "1")]` or `[Trait("Shard", "2")]` so the union
-reproduces the unsharded suite exactly (shard 1: `PerekPilotTests`, shard 2:
-the iOS-only classes); Android ignores the trait and keeps
-running everything on one emulator. `ShardAssignmentTests` fails the harness
-unit run when an iOS-applicable class lacks exactly one of those values, so a
-new class cannot silently drop out of every shard. `run-sharded.mjs` merges the per-shard
+added to the `TestMobileE2E` filter by the Nuke target). Device one combines
+CI groups 1 and 3; device two runs group 2, retaining the full disjoint suite.
+Each iOS-applicable fact has exactly one CI group, inherited from its class or
+assigned on the method. Android uses no shard filter and runs all six shared
+cases. `ShardAssignmentTests` verifies every assignment, the ten-case union
+and the 3/4/3 balance. `run-sharded.mjs` merges the per-shard
 `coverage-evidence/` back into the top-level artifacts directory for the
 coverage-tree collect step and fails if both shards produced the same test's
 evidence.
@@ -67,7 +73,10 @@ after packaging. Canonical content comes from the existing packaged database.
 The pilot runs under an independent 15-minute wall-clock supervisor, including
 local harness builds and Appium setup. Cancellation stops the owned process
 group and escalates after three seconds, including child processes left behind
-by a terminated wrapper. `pilot-timing.json` records duration and timeout status.
+by a terminated wrapper. Windows requires PowerShell 7 (`pwsh`); its native
+.NET process-tree termination keeps the existing two-second command limit and
+avoids the stalled `taskkill` query. `pilot-timing.json` records duration and
+timeout status.
 The sharded runner builds the harness once; its children use those outputs
 without restoring or rebuilding. Commentary searches use the shipped index and
 the ordinary 45-second deadline, including on a fresh install.

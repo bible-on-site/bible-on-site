@@ -5,9 +5,9 @@ using Xunit;
 namespace BibleOnSite.Tests.MobileE2E;
 
 // One device per matrix runner; scenarios on that device run sequentially.
-// CI balances the six shared scenarios across the first and third runners.
-// The second runner owns the four iOS-only scenarios. Android runs all six shared
-// scenarios without a shard filter.
+// CI keeps the long commentary and rapid verse storms on separate runners.
+// The ten iOS cases remain balanced across three runners. Android runs all six
+// shared scenarios without a shard filter.
 [Collection("Mobile device")]
 [Trait("Category", "MobileE2E")]
 [Trait("Platform", "Shared")]
@@ -314,7 +314,7 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
     });
 
     [Fact]
-    [Trait("Shard", "1")]
+    [Trait("Shard", "2")]
     public void NativeFlyoutOpensPreferencesAndBackReturnsToThePerek() => Scenario(() =>
     {
         var source = Page.Source;

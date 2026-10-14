@@ -38,7 +38,7 @@ export function ownedIosTestAppProcesses(listing, udid, devicesRoot = defaultDev
 
 export async function terminateIosTestApp(udid, {
   keepApp = false, execute = executeFile, signal = (pid, value) => process.kill(pid, value),
-  sleep = delay, now = Date.now, devicesRoot = defaultDevicesRoot,
+  sleep = delay, now = Date.now, devicesRoot = defaultDevicesRoot, observedPids = [],
 } = {}) {
   // Validate ownership even when keeping an app for local review.
   ownedIosTestAppProcesses("", udid, devicesRoot);
@@ -47,11 +47,27 @@ export async function terminateIosTestApp(udid, {
   const list = async () => {
     const remaining = cleanupDeadlineMs - (now() - started);
     if (remaining <= 0) throw new Error("The owned iOS app did not exit within five seconds.");
-    // Darwin's comm column contains argv[0] without arguments. Wide output
-    // preserves the device and bundle-container paths, including spaces.
-    const { stdout } = await execute("/bin/ps", ["-axww", "-o", "pid=,stat=,comm="], {
-      timeout: remaining, windowsHide: true,
-    });
+    const candidates = typeof observedPids === "function" ? observedPids() : observedPids;
+    if (!Array.isArray(candidates) || !candidates.length ||
+        candidates.some(pid => !Number.isSafeInteger(pid) || pid <= 1)) {
+      throw new Error("Require app PIDs observed in this simulator's live log.");
+    }
+    // Broad ps snapshots inspect Mach tasks for every host process, even
+    // with few output columns. Restrict inspection to this device's observed
+    // app PIDs, then verify their complete installed executable paths.
+    let stdout, stderr;
+    try {
+      ({ stdout, stderr = "" } = await execute("/bin/ps", ["-p", [...new Set(candidates)].join(","),
+        "-ww", "-o", "pid=,stat=,comm="], { timeout: remaining, windowsHide: true }));
+    } catch (error) {
+      // Header-free ps exits 1 with no output only when all selected PIDs
+      // have exited. Timeouts and diagnostic/permission errors remain fatal.
+      if (error.code !== 1 || error.killed || typeof error.stdout !== "string" ||
+          typeof error.stderr !== "string" || error.stdout.trim() || error.stderr.trim()) throw error;
+      stdout = "";
+      stderr = "";
+    }
+    if (stderr.trim()) throw new Error(`App process inspection failed: ${stderr.trim()}`);
     if (now() - started >= cleanupDeadlineMs) throw new Error("The owned iOS app did not exit within five seconds.");
     return ownedIosTestAppProcesses(stdout, udid, devicesRoot).filter(record => !record.state.startsWith("Z"));
   };

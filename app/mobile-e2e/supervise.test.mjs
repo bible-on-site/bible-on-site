@@ -91,6 +91,13 @@ test("the production clock expires without waiting for child progress", async ()
   const run = supervise(process.execPath, ["-e", "Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0)"], {
     timeoutMs: 100, graceMs: 100, stdio: "ignore", onDeadline() { expired = true; },
   });
-  assert.equal(await run.result, 124);
-  assert.equal(expired, true);
+  try {
+    assert.equal(await run.result, 124);
+    assert.equal(expired, true);
+    await assertStopped(run.child.pid);
+  } finally {
+    // A failed shutdown must fail the assertion and also release the worker.
+    try { process.kill(run.child.pid, "SIGKILL"); }
+    catch (error) { if (error.code !== "ESRCH") throw error; }
+  }
 });

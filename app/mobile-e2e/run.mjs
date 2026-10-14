@@ -1,5 +1,5 @@
 import { execFile, execFileSync, spawn } from "node:child_process";
-import { appendFileSync, closeSync, copyFileSync, existsSync, mkdirSync, openSync, readdirSync, rmSync, statSync, writeFileSync, writeSync } from "node:fs";
+import { appendFileSync, closeSync, copyFileSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync, writeSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -10,7 +10,7 @@ import { probeAppiumReadiness, waitForAppiumReadiness } from "./appium-readiness
 import { prepareWda } from "./prepare-wda.mjs";
 import { captureNativeFrame, exportNativeLog, startNativeLog } from "./native-logs.mjs";
 import { waitForAndroidDevice } from "./android-readiness.mjs";
-import { iosAppPids } from "./ios-processes.mjs";
+import { iosAppLogPids, iosAppPids } from "./ios-processes.mjs";
 import { terminateIosTestApp } from "./ios-app-cleanup.mjs";
 
 const directory = dirname(fileURLToPath(import.meta.url));
@@ -185,6 +185,7 @@ try {
     try {
       const cleanup = await terminateIosTestApp(process.env.MOBILE_UDID, {
         keepApp: process.env.MOBILE_KEEP_APP === "1",
+        observedPids: () => iosAppLogPids(readFileSync(resolve(artifacts, "device-live.log"), "utf8")),
       });
       writeFileSync(resolve(artifacts, "ios-app-cleanup.json"), JSON.stringify(cleanup, null, 2));
     } catch (error) {
