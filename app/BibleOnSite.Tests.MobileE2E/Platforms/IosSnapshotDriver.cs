@@ -1,5 +1,6 @@
 using System.Drawing;
 using System.Globalization;
+using System.Text.Json;
 using OpenQA.Selenium;
 using OpenQA.Selenium.Appium;
 using OpenQA.Selenium.Appium.iOS;
@@ -9,7 +10,8 @@ using System.Collections.ObjectModel;
 namespace BibleOnSite.Tests.MobileE2E.Platforms;
 
 // Keep the SDK's error handling and command deadlines. Only the lookup's
-// native visibility/frame response is exposed; element properties stay live.
+// native lookup response is exposed. Conditions use that fresh snapshot;
+// elements returned to the scenario keep their live SDK properties.
 internal sealed class IosSnapshotDriver : IOSDriver
 {
     public IosSnapshotDriver(Uri server, AppiumOptions options)
@@ -35,15 +37,34 @@ internal sealed class IosSnapshotDriver : IOSDriver
         {
             throw new WebDriverException("Native snapshot lookup requires a concrete locator strategy.");
         }
+        if (mechanism == "accessibility id")
+        {
+            // Filter before WDA expands response attributes. A reader lookup
+            // otherwise measures frames for every offscreen verse/long-note
+            // section although the page object can only use visible matches.
+            mechanism = "-ios predicate string";
+            criteria = $"name == {JsonSerializer.Serialize(criteria)} AND visible == 1";
+        }
         var response = Execute(DriverCommand.FindElements, new Dictionary<string, object>
         {
             ["using"] = mechanism,
             ["value"] = criteria
         });
         return NativeElementSnapshot.Decode(response.Value)
-            .Select(snapshot => new NativeElementMatch(new AppiumElement(this, snapshot.Id), snapshot))
+            .Select(snapshot => new NativeElementMatch(new AppiumElement(this, snapshot.Id),
+                new NativeConditionElement(this, snapshot), snapshot))
             .ToArray();
     }
+    // This object exists only while evaluating one poll's condition. Returning
+    // the separate SDK element prevents snapshot values leaking into a later
+    // assertion or action, including after navigation or text entry.
+    private sealed class NativeConditionElement(IosSnapshotDriver driver, NativeElementSnapshot snapshot)
+        : AppiumElement(driver, snapshot.Id)
+    {
+        public override string Text => snapshot.Text;
+        public override bool Enabled => snapshot.Enabled;
+    }
+
     private sealed class LocatorCapture : ISearchContext, IFindsByFluentSelector<IWebElement>
     {
         public string Mechanism { get; private set; } = string.Empty;
@@ -61,10 +82,11 @@ internal sealed class IosSnapshotDriver : IOSDriver
     }
 }
 
-internal sealed record NativeElementMatch(AppiumElement Element, NativeElementSnapshot Snapshot);
+internal sealed record NativeElementMatch(
+    AppiumElement Element, AppiumElement ConditionElement, NativeElementSnapshot Snapshot);
 
 internal readonly record struct NativeElementSnapshot(
-    string Id, bool Displayed, double X, double Y, double Width, double Height)
+    string Id, bool Displayed, double X, double Y, double Width, double Height, string Text, bool Enabled)
 {
     internal bool IsVisibleIn(Size window)
     {
@@ -90,12 +112,16 @@ internal readonly record struct NativeElementSnapshot(
                 || !element.TryGetValue("displayed", out var displayed)
                 || displayed is not bool isDisplayed
                 || !element.TryGetValue("rect", out var rawRect)
-                || rawRect is not IDictionary<string, object> rect)
+                || rawRect is not IDictionary<string, object> rect
+                || !element.TryGetValue("text", out var text)
+                || text is not (null or string)
+                || !element.TryGetValue("enabled", out var enabled)
+                || enabled is not bool isEnabled)
                 {
-                    throw new WebDriverException("Native lookup is missing its element ID, displayed state or frame.");
+                    throw new WebDriverException("Native lookup is missing its element ID, displayed state, frame, text or enabled state.");
                 }
             result.Add(new(elementId, isDisplayed, Number(rect, "x"), Number(rect, "y"),
-                Number(rect, "width"), Number(rect, "height")));
+                Number(rect, "width"), Number(rect, "height"), (string?)text ?? string.Empty, isEnabled));
         }
         return result;
     }

@@ -35,10 +35,10 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
         {
             try
             {
-                var element = FindVisible(locator).FirstOrDefault(condition);
+                var element = FindVisible(locator).FirstOrDefault(match => condition(match.ConditionElement));
                 if (element != null)
                 {
-                    return element;
+                    return element.Element;
                 }
             }
             catch (StaleElementReferenceException)
@@ -178,7 +178,9 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
         Assert.InRange(menuCenter, 0.5 - platform.Layout.MenuCenterTolerance, 0.5 + platform.Layout.MenuCenterTolerance);
     }
 
-    private IEnumerable<AppiumElement> FindVisible(By locator)
+    private sealed record VisibleMatch(AppiumElement Element, AppiumElement ConditionElement);
+
+    private IEnumerable<VisibleMatch> FindVisible(By locator)
     {
         if (driver is IosSnapshotDriver snapshots)
         {
@@ -191,14 +193,15 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
             // across polls. Visibility and bounds belong to that same lookup.
             var window = driver.Manage().Window.Size;
             return matches.Where(match => match.Snapshot.IsVisibleIn(window))
-                .Select(match => match.Element);
+                .Select(match => new VisibleMatch(match.Element, match.ConditionElement));
         }
         // Android also reads the viewport once per lookup, lazily, so an empty
         // result does not request it and every new poll observes rotations.
         Size? viewport = null;
         return driver.FindElements(locator)
             .Where(element => element.Displayed && HasVisibleCenter(
-                element.Location, element.Size, Viewport()));
+                element.Location, element.Size, Viewport()))
+            .Select(element => new VisibleMatch(element, element));
 
         Size Viewport()
         {

@@ -1,5 +1,6 @@
 using System.Drawing;
 using BibleOnSite.Tests.MobileE2E.Platforms;
+using BibleOnSite.Tests.MobileE2E.Pages;
 using OpenQA.Selenium;
 using OpenQA.Selenium.Appium;
 using Xunit;
@@ -13,6 +14,8 @@ public sealed class NativeSnapshotTests
     {
         ["element-6066-11e4-a52e-4f735466cecf"] = id,
         ["displayed"] = displayed,
+        ["text"] = id,
+        ["enabled"] = displayed,
         ["rect"] = new Dictionary<string, object>
         {
             ["x"] = x, ["y"] = 0L, ["width"] = 20, ["height"] = 20d
@@ -31,10 +34,48 @@ public sealed class NativeSnapshotTests
         Assert.Equal("first", first.Snapshot.Id);
         Assert.Equal("next", next.Snapshot.Id);
         Assert.Equal(2, executor.Lookups);
-        Assert.Equal("accessibility id", executor.LastParameters!["using"]);
-        Assert.Equal("PerekSource", executor.LastParameters["value"]);
+        Assert.Equal("-ios predicate string", executor.LastParameters!["using"]);
+        Assert.Equal("""name == "PerekSource" AND visible == 1""", executor.LastParameters["value"]);
         Assert.DoesNotContain(DriverCommand.IsElementDisplayed, executor.Commands);
         Assert.DoesNotContain(DriverCommand.GetElementRect, executor.Commands);
+    }
+
+    [Fact]
+    public void PollConditionsUseFreshTextButTheReturnedElementStaysLive()
+    {
+        var executor = new SnapshotExecutor([Entry("ready")]);
+        using var driver = new IosSnapshotDriver(executor, new AppiumOptions { PlatformName = "iOS" });
+        var page = new PerekPage(driver, new IosPlatformAdapter());
+        var element = page.WaitFor("PerekSource", candidate => candidate.Text == "ready" && candidate.Enabled);
+        Assert.DoesNotContain(DriverCommand.GetElementText, executor.Commands);
+        Assert.DoesNotContain(DriverCommand.IsElementEnabled, executor.Commands);
+        Assert.Equal("live text after lookup", element.Text);
+        Assert.False(element.Enabled);
+        Assert.Single(executor.Commands, command => command == DriverCommand.GetElementText);
+        Assert.Single(executor.Commands, command => command == DriverCommand.IsElementEnabled);
+    }
+
+    [Fact]
+    public void ConditionsDoNotRetainValuesAcrossLookups()
+    {
+        var executor = new SnapshotExecutor([Entry("first"), Entry("next", false)]);
+        using var driver = new IosSnapshotDriver(executor, new AppiumOptions { PlatformName = "iOS" });
+        var first = Assert.Single(driver.FindSnapshots(MobileBy.AccessibilityId("PerekSource")));
+        var next = Assert.Single(driver.FindSnapshots(MobileBy.AccessibilityId("PerekSource")));
+        Assert.Equal("first", first.ConditionElement.Text);
+        Assert.True(first.ConditionElement.Enabled);
+        Assert.Equal("next", next.ConditionElement.Text);
+        Assert.False(next.ConditionElement.Enabled);
+    }
+
+    [Fact]
+    public void EmptyNativeTextIsValidButMissingTextIsRejected()
+    {
+        var entry = Entry("empty");
+        entry["text"] = null!;
+        Assert.Equal(string.Empty, Assert.Single(NativeElementSnapshot.Decode(new object[] { entry })).Text);
+        entry.Remove("text");
+        Assert.Throws<WebDriverException>(() => NativeElementSnapshot.Decode(new object[] { entry }));
     }
 
     [Fact]
@@ -62,7 +103,7 @@ public sealed class NativeSnapshotTests
 
     [Fact]
     public void ZeroSizedFramesAreNeverVisible() =>
-        Assert.False(new NativeElementSnapshot("empty", true, 0, 0, 0, 20).IsVisibleIn(new(100, 100)));
+        Assert.False(new NativeElementSnapshot("empty", true, 0, 0, 0, 20, string.Empty, true).IsVisibleIn(new(100, 100)));
 
     [Fact]
     public void FractionalNativeCoordinatesArePreserved()
@@ -77,6 +118,8 @@ public sealed class NativeSnapshotTests
     [InlineData("element-6066-11e4-a52e-4f735466cecf")]
     [InlineData("displayed")]
     [InlineData("rect")]
+    [InlineData("text")]
+    [InlineData("enabled")]
     public void IncompleteMetadataCannotBecomeASuccessfulVisibilityCheck(string missing)
     {
         var entry = Entry("incomplete");
@@ -98,7 +141,7 @@ public sealed class NativeSnapshotTests
     public void RealWireJsonUsesTheSameDecoderAsTheDriver()
     {
         var response = Response.FromJson("""
-            {"value":[{"element-6066-11e4-a52e-4f735466cecf":"wire-id","displayed":true,"rect":{"x":1.25,"y":2,"width":20,"height":30}}]}
+            {"value":[{"element-6066-11e4-a52e-4f735466cecf":"wire-id","displayed":true,"text":"wire text","enabled":true,"rect":{"x":1.25,"y":2,"width":20,"height":30}}]}
             """);
         var snapshot = Assert.Single(NativeElementSnapshot.Decode(response.Value));
         Assert.Equal("wire-id", snapshot.Id);
@@ -149,6 +192,18 @@ public sealed class NativeSnapshotTests
                 {
                     value = new object[] { results[Lookups++] };
                 }
+            }
+            else if (command.Name == DriverCommand.GetWindowRect)
+            {
+                value = new Dictionary<string, object> { ["x"] = 0, ["y"] = 0, ["width"] = 100, ["height"] = 100 };
+            }
+            else if (command.Name == DriverCommand.GetElementText)
+            {
+                value = "live text after lookup";
+            }
+            else if (command.Name == DriverCommand.IsElementEnabled)
+            {
+                value = false;
             }
             else if (command.Name == "getOrientation")
             {
