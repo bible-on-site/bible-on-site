@@ -28,6 +28,16 @@ public abstract class MobilePlatformAdapter
     public virtual bool CanTap(AppiumElement element) => element.Enabled;
     public abstract bool IsChecked(AppiumElement element);
     public virtual void Tap(AppiumDriver driver, AppiumElement element) => element.Click();
+
+    public static (System.Drawing.Point Location, System.Drawing.Size Size) ReadFrame(AppiumElement element)
+    {
+        if (element is NativeLiveElement native)
+        {
+            var frame = native.ReadFrame();
+            return (frame.Location, frame.Size);
+        }
+        return (element.Location, element.Size);
+    }
     public abstract void GoBack(AppiumDriver driver);
     public virtual void GoBackFromFocusedVerse(AppiumDriver driver) => GoBack(driver);
     public virtual void DismissSearchSheet(AppiumDriver driver) => GoBack(driver);
@@ -45,39 +55,6 @@ public abstract class MobilePlatformAdapter
         driver.PerformActions([sequence]);
     }
     public abstract AppiumDriver CreateDriver(Uri server, AppiumOptions options);
-
-    /// <summary>
-    /// Replays the fresh-session app state inside an existing session:
-    /// enforceAppInstall/fullReset reinstall the app on every session today, so
-    /// terminate → reinstall → relaunch gives each scenario the same clean
-    /// start without the ~30-70s WDA session handshake. Launch environment is
-    /// re-applied through the platform's activate command.
-    /// </summary>
-    public void ResetApp(AppiumDriver driver, MobileTestConfiguration configuration,
-        IReadOnlyDictionary<string, string>? appEnvironment)
-    {
-        driver.TerminateApp(AppId);
-        if (!configuration.KeepAppForReview)
-        {
-            driver.RemoveApp(AppId);
-            driver.InstallApp(configuration.AppPath);
-        }
-        ActivateApp(driver, appEnvironment);
-    }
-
-    protected const string AppId = "com.tanah.daily929";
-
-    protected virtual void ActivateApp(AppiumDriver driver, IReadOnlyDictionary<string, string>? appEnvironment)
-    {
-        if (appEnvironment is { Count: > 0 })
-        {
-            // This platform's activateApp cannot carry the session's
-            // processArguments env; the caller rebuilds the session instead.
-            throw new NotSupportedException(
-                "Reusing a session cannot re-apply launch environment on this platform.");
-        }
-        driver.ActivateApp(AppId);
-    }
 
     /// <summary>
     /// RTL navigation drawer gesture: a swipe starting at the right screen edge
@@ -134,11 +111,36 @@ public abstract class MobilePlatformAdapter
         return sequence;
     }
 
-    public AppiumOptions CreateOptions(MobileTestConfiguration configuration) =>
-        CreateOptions(configuration, null);
+    /// <summary>
+    /// Bundle/package id the suite drives.
+    /// </summary>
+    public abstract string AppId { get; }
 
-    public AppiumOptions CreateOptions(MobileTestConfiguration configuration,
-        IReadOnlyDictionary<string, string>? appEnvironment)
+    /// <summary>
+    /// Restore a known app state between scenarios on the shared session:
+    /// restart the process with the scenario's launch environment and put the
+    /// device back in portrait. Data such as the built search index survives,
+    /// which is what lets the suite share one session at all.
+    /// </summary>
+    public abstract void RestartApp(AppiumDriver driver, IReadOnlyDictionary<string, string>? environment);
+
+    /// <summary>
+    /// A replacement Appium session starts fresh device-side state; anything the
+    /// adapter remembered about the previous session's launches is invalid.
+    /// </summary>
+    public virtual void OnSessionRecreated()
+    {
+    }
+
+    internal static void EnsurePortrait(AppiumDriver driver)
+    {
+        if (driver.Orientation != ScreenOrientation.Portrait)
+        {
+            driver.Orientation = ScreenOrientation.Portrait;
+        }
+    }
+
+    public AppiumOptions CreateOptions(MobileTestConfiguration configuration)
     {
         var android = configuration.Platform == MobilePlatform.Android;
         var options = new AppiumOptions
@@ -168,6 +170,12 @@ public abstract class MobilePlatformAdapter
             // the bundled commentary database's disk work on a cold emulator.
             options.AddAdditionalAppiumOption("adbExecTimeout", 60000);
             options.AddAdditionalAppiumOption("disableWindowAnimation", true);
+            // Intents cannot carry process environment like iOS launchApp can,
+            // so the suite marker rides as an extra on the session's launch
+            // intent; MainActivity persists it for the install's later
+            // restarts whose adb activateApp calls drop extras.
+            options.AddAdditionalAppiumOption("optionalIntentArguments",
+                $"--ez BIBLE_E2E true --es BIBLE_E2E_COVERAGE_TOKEN {AppCoverage.Token}");
         }
         else
         {
@@ -188,6 +196,17 @@ public abstract class MobilePlatformAdapter
             // including POST /session. A cold app launch can exceed 90s; keep the
             // server default (240s) inside the five-minute IOSDriver budget.
             options.AddAdditionalAppiumOption("wdaConnectionTimeout", 240000);
+            // A blocked lookup must not spend four minutes inside a 45-second
+            // page-object wait. Session creation keeps its separate cold-start
+            // budget; relaunch scripts retain the two-minute startup gate.
+            options.AddAdditionalAppiumOption("commandTimeouts",
+                "{\"default\":45000,\"createSession\":240000,\"execute\":120000,\"deleteSession\":15000}");
+            if (configuration.WdaLocalPort is { } wdaLocalPort)
+            {
+                // A simulator's WDA binds the host loopback, so two devices on
+                // one runner need distinct listen ports (#2083 shard peers).
+                options.AddAdditionalAppiumOption("wdaLocalPort", wdaLocalPort);
+            }
             // XCTest gates each proxied command on the app main thread going
             // idle for this threshold. The shared-CPU simulator rarely stays
             // quiet for even one second during reader scroll churn (perushim
@@ -197,20 +216,44 @@ public abstract class MobilePlatformAdapter
             // already poll explicit element state instead of relying on WDA's
             // implicit synchronization.
             options.AddAdditionalAppiumOption("waitForIdleTimeout", 0);
-            if (appEnvironment is { Count: > 0 })
+            // Source XML is diagnostic/content evidence. Computing derived
+            // visibility for every offscreen descendant cost 203s in nine
+            // dumps. Live Displayed, viewport and hittable checks still run
+            // through their native APIs; labels, IDs and geometry remain in XML.
+            options.AddAdditionalAppiumOption("settings", new Dictionary<string, object>
             {
-                // XCUITest processArguments.env reaches the app as process
-                // environment variables — e.g. BIBLE_E2E_PERUSHIM turns on the
-                // synthetic commentary data used by the HtmlView stability test.
-                options.AddAdditionalAppiumOption("processArguments",
-                    new Dictionary<string, object>
-                    {
-                        ["env"] = new Dictionary<string, string>(appEnvironment)
-                    });
-            }
+                ["pageSourceExcludedAttributes"] = "visible,accessible",
+                // Return each candidate's real visibility and frame in its lookup.
+                ["shouldUseCompactResponses"] = false,
+                ["elementResponseAttributes"] = "rect,displayed,text,enabled"
+            });
+            // The instrumented e2e build never goes quiescent at launch: the
+            // coverage recorder and the search-index warmup keep worker threads
+            // churning well past XCTest's launch window ("Timed out attempting
+            // to launch app"). The suite's explicit WaitFor polling does the
+            // real synchronization, so skipping the idle gate is safe.
+            options.AddAdditionalAppiumOption("waitForQuiescence", false);
+            // The suite marker reaches the app through processArguments on the
+            // session's own launch; per-scenario restarts pass it through
+            // launchApp because XCUITest does not merge the two.
+            options.AddAdditionalAppiumOption("processArguments",
+                new Dictionary<string, object>
+                {
+                    ["env"] = new Dictionary<string, string>(IosE2eEnvironment)
+                });
         }
         return options;
     }
+
+    // Marks every suite launch so the app can run CI-only startup work such as
+    // warming the search index while other scenarios execute.
+    internal static IReadOnlyDictionary<string, string> IosE2eEnvironment =>
+        new Dictionary<string, string>
+        {
+            ["BIBLE_E2E"] = "1",
+            ["BIBLE_E2E_COVERAGE_PORT"] = AppCoverage.Port.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            ["BIBLE_E2E_COVERAGE_TOKEN"] = AppCoverage.Token
+        };
 
     public static MobilePlatformAdapter For(MobilePlatform platform) => platform switch
     {
@@ -224,6 +267,16 @@ public sealed record LayoutExpectations(double MinimumButtonExtent = 44, double 
 
 public sealed class AndroidPlatformAdapter : MobilePlatformAdapter
 {
+    public override string AppId => "com.tanah.daily929";
+
+    public override void RestartApp(AppiumDriver driver,
+        IReadOnlyDictionary<string, string>? environment)
+    {
+        driver.TerminateApp(AppId);
+        driver.ActivateApp(AppId);
+        EnsurePortrait(driver);
+    }
+
     public override bool IsChecked(AppiumElement element) => element.GetAttribute("checked") == "true";
     // MAUI maps AutomationId to Android resource-id, preserving screen-reader text.
     protected override By LocateAutomationId(string id) => By.Id($"com.tanah.daily929:id/{id}");
@@ -235,6 +288,88 @@ public sealed class AndroidPlatformAdapter : MobilePlatformAdapter
 
 public sealed class IosPlatformAdapter : MobilePlatformAdapter
 {
+    public override string AppId => "com.tanah.daily929";
+
+    // XCTest relaunches a terminated app through the launchEnvironment stored
+    // on WDA's XCUIApplication: /wda/apps/activate inherits whatever the last
+    // launch set — it does not fall back to the session capabilities. Once a
+    // scenario launches with extra variables, an env-free activate would keep
+    // them, so the following restart must launchApp once more to replace the
+    // stored environment (this flag tracks that debt).
+    private bool _launchedWithExtraEnvironment;
+
+    public override void OnSessionRecreated() => _launchedWithExtraEnvironment = false;
+
+    // True when only mobile: launchApp produces the requested environment —
+    // either the scenario asks for variables, or the previous launch stored
+    // extra ones that an activate would silently reuse. Deciding also settles
+    // the stored-environment tracker for the launch that is about to happen.
+    internal bool RequiresLaunchForEnvironment(IReadOnlyDictionary<string, string>? environment)
+    {
+        if (environment?.Count > 0 || _launchedWithExtraEnvironment)
+        {
+            _launchedWithExtraEnvironment = environment?.Count > 0;
+            return true;
+        }
+        return false;
+    }
+
+    public override void RestartApp(AppiumDriver driver,
+        IReadOnlyDictionary<string, string>? environment)
+    {
+        driver.TerminateApp(AppId);
+        if (RequiresLaunchForEnvironment(environment))
+        {
+            // mobile: launchApp replaces the stored launch environment, so it
+            // both applies this scenario's variables and clears any a previous
+            // scenario left behind. The suite marker always rides along because
+            // the session's processArguments are not reapplied on relaunch.
+            var env = new Dictionary<string, string>(IosE2eEnvironment);
+            if (environment != null)
+            {
+                foreach (var (key, value) in environment)
+                {
+                    env[key] = value;
+                }
+            }
+            Relaunch(driver, "mobile: launchApp", new Dictionary<string, object>
+            {
+                ["bundleId"] = AppId,
+                ["environment"] = env
+            });
+        }
+        else
+        {
+            // /wda/apps/activate relaunches through the stored environment,
+            // which is safe only because it still equals the suite baseline.
+            Relaunch(driver, "mobile: activateApp", new Dictionary<string, object>
+            {
+                ["bundleId"] = AppId
+            });
+        }
+        EnsurePortrait(driver);
+    }
+
+    // XCTDaemon budgets each launch (~30s observed); on a loaded simulator
+    // SpringBoard can still be releasing the terminated instance when the
+    // request lands. The error only surfaces after that wait, so one immediate
+    // retry usually lands cleanly — and a persistent launch failure still
+    // propagates on the second attempt rather than being hidden.
+    private static void Relaunch(AppiumDriver driver, string script, Dictionary<string, object> args)
+    {
+        try
+        {
+            driver.ExecuteScript(script, args);
+        }
+        catch (WebDriverException exception) when (IsTransientLaunchError(exception))
+        {
+            driver.ExecuteScript(script, args);
+        }
+    }
+
+    internal static bool IsTransientLaunchError(WebDriverException exception)
+        => exception.Message.Contains("Timed out attempting to launch");
+
     public override void DismissSearchSheet(AppiumDriver driver) => Tap(driver, driver.FindElement(AutomationId("SearchSheetDismissButton")));
     public override bool IsChecked(AppiumElement element) => element.GetAttribute("value") == "1";
     public override void GoBackFromFocusedVerse(AppiumDriver driver) => Tap(driver, driver.FindElement(AutomationId("SelectionBackButton")));
@@ -247,7 +382,8 @@ public sealed class IosPlatformAdapter : MobilePlatformAdapter
         // Use viewport coordinates rather than XCTest's element-relative tap.
         // One down/up pair with a short dwell produces a native touch, not a
         // long press or a second attempt when the expected UI does not appear.
-        driver.PerformActions([CreateTapSequence(element.Location, element.Size)]);
+        var frame = ReadFrame(element);
+        driver.PerformActions([CreateTapSequence(frame.Location, frame.Size)]);
     }
     internal static ActionSequence CreateTapSequence(System.Drawing.Point location, System.Drawing.Size size) =>
         CreateTapAtSequence(location.X + size.Width / 2, location.Y + size.Height / 2);
@@ -263,24 +399,8 @@ public sealed class IosPlatformAdapter : MobilePlatformAdapter
         // Reader jumps keep the hamburger. Use iOS's standard RTL edge-back gesture.
         driver.PerformActions([CreateEdgeSwipeSequence(driver.Manage().Window.Size)]);
     }
-    protected override void ActivateApp(AppiumDriver driver, IReadOnlyDictionary<string, string>? appEnvironment)
-    {
-        if (appEnvironment is { Count: > 0 })
-        {
-            // mobile: activateApp accepts the same processArguments env the
-            // session was created with (e.g. BIBLE_E2E_PERUSHIM), so a reused
-            // session relaunches the app under the scenario's environment.
-            driver.ExecuteScript("mobile: activateApp", new Dictionary<string, object>
-            {
-                ["bundleId"] = AppId,
-                ["environment"] = appEnvironment
-            });
-            return;
-        }
-        base.ActivateApp(driver, appEnvironment);
-    }
     public override AppiumDriver CreateDriver(Uri server, AppiumOptions options) =>
         // The five-minute client budget fits inside the ten-minute per-test hang
         // guard, together with the scenario.
-        new IOSDriver(server, options, TimeSpan.FromMinutes(5));
+        new IosSnapshotDriver(server, options);
 }

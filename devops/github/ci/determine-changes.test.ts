@@ -22,6 +22,11 @@ const changed = (files: string[], ...keys: ModuleKey[]) =>
 	keys.map((key) => detectChanges(files)[key]);
 
 describe("detectChanges", () => {
+	test("playback derivatives release both website and native book packages", () => {
+		assert.deepEqual(changed(["web/bible-on-site/src/data/recitation/opus-playback.json"], "website", "app"), [
+			{ module_changed: true, ci_changed: false }, { module_changed: true, ci_changed: false },
+		]);
+	});
 	test("benchmark comparison changes check the website without releasing a module", () => {
 		const changes = detectChanges(["devops/github/ci/bencher-comparison.mjs"]);
 		assert.deepEqual(changes.website, {
@@ -40,10 +45,29 @@ describe("detectChanges", () => {
 		assert.equal(changes.website.ci_changed, false);
 	});
 
-	test("e2e-impact selector changes require app checks without a release", () => {
+	test("e2e-impact selector changes check every served suite without a release", () => {
+		// The devops selector drives Appium too; web/shared/tests-util feeds
+		// only the Playwright suites, so it does not mark the app.
+		for (const [file, marksApp] of [
+			["devops/github/ci/e2e-impact/select.ts", true],
+			["devops/github/ci/e2e-impact/e2e-impact.test.ts", true],
+			["web/shared/tests-util/e2e-impact.ts", false],
+		] as const) {
+			const changes = detectChanges([file]);
+			for (const key of ["website", "api", "admin"] as const) {
+				assert.deepEqual(
+					changes[key],
+					{ module_changed: false, ci_changed: true },
+					`${file} -> ${key}`,
+				);
+			}
+			assert.deepEqual(
+				changes.app,
+				{ module_changed: false, ci_changed: marksApp },
+				`${file} -> app`,
+			);
+		}
 		for (const file of [
-			"devops/github/ci/e2e-impact/select.ts",
-			"devops/github/ci/e2e-impact/e2e-impact.test.ts",
 			"devops/e2e-coverage-trees/extract.ts",
 			"devops/e2e-coverage-trees/to-selector-tree.ts",
 		]) {
@@ -89,7 +113,7 @@ describe("detectChanges", () => {
 		}
 	});
 
-	test("native release notes include every external packaged timing input", () => {
+	test("native release notes include every external packaged input", () => {
 		const ci = readFileSync(
 			new URL("../../../.github/workflows/ci.yml", import.meta.url),
 			"utf8",
@@ -98,9 +122,10 @@ describe("detectChanges", () => {
 			.split("  release_app:\n")[1]
 			.split("\n  release_bulletin:")[0];
 		const match = release.match(/^      extra_module_paths: '([^']+)'$/m);
-		assert.ok(match, "Native timing inputs must be passed to release notes");
+		assert.ok(match, "Native packaged inputs must be passed to release notes");
 		assert.deepEqual(JSON.parse(match[1]), [
 			"data/recitation/recitation.sqlite",
+			"web/bible-on-site/src/data/recitation/opus-playback.json",
 		]);
 	});
 
@@ -272,6 +297,14 @@ describe("detectChanges", () => {
 		assert.equal(changes.app.module_changed, false);
 	});
 
+	test("bundled scripture changes regenerate the delivered search index", () => {
+		const changes = detectChanges([
+			"app/BibleOnSite/Resources/Raw/sefaria-dump-5784-sivan-4.tanah_view.sqlite",
+		]);
+		assert.equal(changes.perushim_pipeline.module_changed, true);
+		assert.equal(changes.app.module_changed, true);
+	});
+
 	test("the perushim pipeline is also part of the data module", () => {
 		const changes = detectChanges([
 			"data/sefaria/pipelines/perushim-view/src/main.rs",
@@ -384,7 +417,8 @@ describe("main", () => {
 			} else {
 				commit(work, changedPath);
 			}
-			git(directory, "clone", "--quiet", "--bare", work, origin);
+			// Use the Git transport so background maintenance cannot race a loose-object copy.
+			git(directory, "clone", "--quiet", "--no-local", "--bare", work, origin);
 			// A force push leaves the replaced commit unreachable from any ref.
 			git(origin, "branch", "--quiet", "-D", "replaced");
 			// GitHub serves fetches of commits by SHA.

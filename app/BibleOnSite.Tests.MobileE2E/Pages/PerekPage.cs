@@ -12,8 +12,8 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
     // The first native snapshot on a cold simulator can finish after the
     // loading page has been replaced, while returning that earlier empty tree.
     // Allow another snapshot before applying the normal interaction deadlines.
-    public void WaitForStartup() => WaitFor(platform.AutomationId("PerekSource"),
-        element => !string.IsNullOrWhiteSpace(element.Text), TimeSpan.FromMinutes(2));
+    public void WaitForStartup() => WaitFor("PerekSource",
+        element => !string.IsNullOrWhiteSpace(element.Text));
 
     public AppiumElement WaitFor(string automationId) => WaitFor(automationId, _ => true);
 
@@ -31,22 +31,14 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
     private AppiumElement WaitFor(By locator, Func<AppiumElement, bool> condition, TimeSpan timeout)
     {
         var deadline = DateTime.UtcNow.Add(timeout);
-        // Window.Size is a device round-trip; on iOS it costs ~0.4s. One lazy
-        // fetch per poll iteration keeps the per-element filter cheap while
-        // still picking up rotations between polls.
-        Size? window = null;
         while (DateTime.UtcNow < deadline)
         {
-            window = null;
             try
             {
-                var element = driver.FindElements(locator)
-                    .FirstOrDefault(element => element.Displayed
-                        && HasVisibleCenter(element, WindowSize())
-                        && condition(element));
+                var element = FindVisible(locator, condition).FirstOrDefault();
                 if (element != null)
                 {
-                    return element;
+                    return element.Element;
                 }
             }
             catch (StaleElementReferenceException)
@@ -56,15 +48,6 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
             Thread.Sleep(200);
         }
         throw new WebDriverTimeoutException($"No visible element matching {locator} met the condition within {timeout.TotalSeconds} seconds.");
-
-        Size WindowSize()
-        {
-            if (!window.HasValue)
-            {
-                window = driver.Manage().Window.Size;
-            }
-            return window.Value;
-        }
     }
 
     public string Source => WaitFor("PerekSource", element => !string.IsNullOrWhiteSpace(element.Text)).Text;
@@ -81,15 +64,11 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
         var locator = platform.AutomationId(automationId);
         var timeout = TimeSpan.FromSeconds(30);
         var deadline = DateTime.UtcNow.Add(timeout);
-        Size? window = null;
         while (DateTime.UtcNow < deadline)
         {
-            window = null;
             try
             {
-                var visible = driver.FindElements(locator)
-                    .Any(element => element.Displayed
-                        && HasVisibleCenter(element, WindowSize()));
+                var visible = FindVisible(locator).Any();
                 if (!visible)
                 {
                     return;
@@ -102,15 +81,6 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
             Thread.Sleep(200);
         }
         throw new WebDriverTimeoutException($"Element matching {locator} stayed visible for {timeout.TotalSeconds} seconds.");
-
-        Size WindowSize()
-        {
-            if (!window.HasValue)
-            {
-                window = driver.Manage().Window.Size;
-            }
-            return window.Value;
-        }
     }
 
     /// <summary>
@@ -127,7 +97,8 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
         while (DateTime.UtcNow < deadline)
         {
             var element = WaitFor(locator);
-            var current = new Rectangle(element.Location, element.Size);
+            var actual = MobilePlatformAdapter.ReadFrame(element);
+            var current = new Rectangle(actual.Location, actual.Size);
             if (current == frame)
             {
                 return (current.Location, current.Size);
@@ -137,56 +108,6 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
         }
         throw new WebDriverTimeoutException($"The frame of {locator} did not stabilize within {timeout.TotalSeconds} seconds.");
     }
-
-    /// <summary>
-    /// The iOS edge-back gesture races the reader's own recognizers and a
-    /// delivered gesture is sometimes dropped without any page change (#1306):
-    /// re-issue it while the destination element stays absent. Presence — not
-    /// the condition — ends retries, so a slow state restore (search text,
-    /// reader label) waits normally instead of navigating back a second time.
-    /// </summary>
-    public AppiumElement GoBackTo(string automationId, Func<AppiumElement, bool> condition)
-    {
-        var locator = platform.AutomationId(automationId);
-        for (var attempt = 0; attempt < MaxBackAttempts; attempt++)
-        {
-            if (attempt > 0)
-            {
-                DismissCapturedFlyout();
-            }
-            platform.GoBack(driver);
-            try
-            {
-                WaitFor(locator, _ => true, BackResponseWindow);
-                break;
-            }
-            catch (WebDriverTimeoutException)
-            {
-                // The destination stayed absent through a full settle window:
-                // the gesture was dropped rather than a late transition.
-            }
-        }
-        return WaitFor(locator, condition, TimeSpan.FromSeconds(45));
-    }
-
-    /// <summary>
-    /// A right-edge gesture the app captured as a drawer-open leaves the flyout
-    /// up instead of navigating back; close it so the retry reaches the page.
-    /// </summary>
-    private void DismissCapturedFlyout()
-    {
-        var flyout = driver.FindElements(platform.AutomationId("FlyoutPreferences"))
-            .FirstOrDefault(element => element.Displayed);
-        if (flyout == null)
-        {
-            return;
-        }
-        platform.DismissFlyoutViaScrim(driver);
-        WaitForHidden("FlyoutPreferences");
-    }
-
-    private static readonly TimeSpan BackResponseWindow = TimeSpan.FromSeconds(15);
-    private const int MaxBackAttempts = 3;
 
     public void Tap(string automationId) => Tap(platform.AutomationId(automationId));
 
@@ -243,7 +164,11 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
         // Every property access queries the device. Read each dimension once
         // so layout assertions do not repeatedly snapshot the UI.
         var buttons = new[] { menu, text, fullScreen }
-            .Select(button => (Element: button, Location: button.Location, Size: button.Size))
+            .Select(button =>
+            {
+                var frame = MobilePlatformAdapter.ReadFrame(button);
+                return (Element: button, frame.Location, frame.Size);
+            })
             .ToArray();
         foreach (var (button, location, size) in buttons)
         {
@@ -258,8 +183,48 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
         Assert.InRange(menuCenter, 0.5 - platform.Layout.MenuCenterTolerance, 0.5 + platform.Layout.MenuCenterTolerance);
     }
 
-    private bool HasVisibleCenter(AppiumElement element, Size window) =>
-        HasVisibleCenter(element.Location, element.Size, window);
+    private sealed record VisibleMatch(AppiumElement Element, AppiumElement ConditionElement);
+
+    private IEnumerable<VisibleMatch> FindVisible(By locator, Func<AppiumElement, bool>? condition = null)
+    {
+        if (driver is IosSnapshotDriver snapshots)
+        {
+            var matches = snapshots.FindSnapshots(locator);
+            if (matches.Count == 0)
+            {
+                return [];
+            }
+            // Reject wrong text/disabled state before another device request.
+            // The viewport is fresh for this poll, read only when a candidate
+            // can satisfy the condition, and shared by candidates in the poll.
+            Size? window = null;
+            return matches.Where(match => match.Snapshot.Displayed
+                    && match.Snapshot.Width > 0 && match.Snapshot.Height > 0
+                    && (condition == null || condition(match.ConditionElement)))
+                .Where(match => match.Snapshot.IsVisibleIn(Window()))
+                .Select(match => new VisibleMatch(match.Element, match.ConditionElement));
+
+            Size Window()
+            {
+                window ??= driver.Manage().Window.Size;
+                return window.Value;
+            }
+        }
+        // Android also reads the viewport once per lookup, lazily, so an empty
+        // result does not request it and every new poll observes rotations.
+        Size? viewport = null;
+        return driver.FindElements(locator)
+            .Where(element => element.Displayed && HasVisibleCenter(
+                element.Location, element.Size, Viewport()))
+            .Where(element => condition == null || condition(element))
+            .Select(element => new VisibleMatch(element, element));
+
+        Size Viewport()
+        {
+            viewport ??= driver.Manage().Window.Size;
+            return viewport.Value;
+        }
+    }
 
     private static bool HasVisibleCenter(Point location, Size size, Size window)
     {

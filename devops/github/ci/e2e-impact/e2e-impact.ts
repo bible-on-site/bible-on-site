@@ -9,6 +9,9 @@
  *   node e2e-impact.ts collect-appium --suite <dir> --platform <key>
  *       --artifacts <dir> --snapshot-sha <sha> --out <tree.json> [--incomplete]
  *       [--exec-tree <exec-coverage-tree.json>]
+ *   node e2e-impact.ts collect-playwright --suite <dir> --platform <key>
+ *       --artifacts <e2e-impact evidence dir> --snapshot-sha <sha>
+ *       --out <tree.json> [--incomplete]
  *   node e2e-impact.ts baseline-download --repo <owner/name> --name <artifact>
  *       --out <dir> [--file coverage-tree.json]
  *
@@ -28,9 +31,17 @@ import {
 } from "../../../e2e-coverage-trees/to-selector-tree.ts";
 import type { ExecCoverageTree } from "../../../e2e-coverage-trees/model.ts";
 import { collectTree, writeTree } from "./collect-appium.ts";
+import { collectPlaywrightTree } from "./collect-playwright.ts";
 import { fingerprintSource, type SourceFingerprint } from "./fingerprint.ts";
 import { compareRevisions, downloadArtifact, findArtifact } from "./github.ts";
-import { loadBaselineTree, loadRules, type ChangedFile } from "./model.ts";
+import {
+	loadBaselineTree,
+	loadRules,
+	type ChangedFile,
+	type DiscoveredTest,
+	type SuiteRules,
+} from "./model.ts";
+import { discoverPlaywrightTests } from "./playwright-discovery.ts";
 import { applicableTests, repoFileReader, selectTests, type Baseline } from "./select.ts";
 import { discoverSuiteTests } from "./xunit-discovery.ts";
 
@@ -186,6 +197,30 @@ function appendSummary(markdown: string): void {
 	if (summary) appendFileSync(summary, `${markdown}\n`);
 }
 
+/** Framework-dispatched static test discovery for a suite's rules. */
+function discoverFor(rules: SuiteRules): {
+	tests: DiscoveredTest[];
+	dynamicFiles: string[];
+} {
+	if (rules.tests.framework === "playwright") {
+		return discoverPlaywrightTests(
+			REPO_ROOT,
+			rules.tests.root,
+			rules.tests.glob,
+			rules.tests.testDir,
+		);
+	}
+	return {
+		tests: discoverSuiteTests(
+			REPO_ROOT,
+			rules.tests.root,
+			rules.tests.glob,
+			rules.tests.category ?? "",
+		),
+		dynamicFiles: [],
+	};
+}
+
 async function select(flags: Map<string, string>): Promise<void> {
 	const suiteDir = required(flags, "suite");
 	const platform = required(flags, "platform");
@@ -193,12 +228,8 @@ async function select(flags: Map<string, string>): Promise<void> {
 	const out = required(flags, "out");
 	const rules = loadRules(join(REPO_ROOT, suiteDir, "e2e-impact.json"));
 
-	const discovered = discoverSuiteTests(
-		REPO_ROOT,
-		rules.tests.root,
-		rules.tests.glob,
-		rules.tests.category,
-	);
+	const discovery = discoverFor(rules);
+	const discovered = discovery.tests;
 	const candidates = applicableTests(discovered, platform);
 
 	const baselinePath = flags.get("baseline");
@@ -248,6 +279,7 @@ async function select(flags: Map<string, string>): Promise<void> {
 		forceFull: flags.has("force-full") || process.env.FORCE_FULL_SUITE === "true",
 		readFile: repoFileReader(REPO_ROOT),
 		currentFingerprints,
+		dynamicTestFiles: new Set(discovery.dynamicFiles),
 	});
 
 	mkdirSync(dirname(out), { recursive: true });
@@ -376,15 +408,43 @@ async function baselineDownload(flags: Map<string, string>): Promise<void> {
 	}
 }
 
+async function collectPlaywright(flags: Map<string, string>): Promise<void> {
+	const suiteDir = required(flags, "suite");
+	const platform = required(flags, "platform");
+	const artifacts = required(flags, "artifacts");
+	const snapshotSha = required(flags, "snapshot-sha");
+	const out = required(flags, "out");
+	const rules = loadRules(join(REPO_ROOT, suiteDir, "e2e-impact.json"));
+	const tree = collectPlaywrightTree({
+		repoRoot: REPO_ROOT,
+		rules,
+		platform,
+		artifactsDir: artifacts,
+		snapshotSha,
+		complete: !flags.has("incomplete"),
+	});
+	writeTree(tree, out);
+	const count = Object.keys(tree.tests).length;
+	const unattributed = Object.values(tree.tests).filter(
+		(test) => test.unattributed === true,
+	).length;
+	console.log(
+		`[e2e-impact] collected ${count} test evidence entr${count === 1 ? "y" : "ies"} ` +
+			`(${unattributed} unattributed, complete=${tree.complete}) ` +
+			`for ${rules.suite}/${platform} → ${out}`,
+	);
+	writeGithubOutput("coverage-tree", out);
+	writeGithubOutput("evidence-tests", String(count));
+}
+
 async function discover(flags: Map<string, string>): Promise<void> {
 	const suiteDir = required(flags, "suite");
 	const platform = required(flags, "platform");
 	const rules = loadRules(join(REPO_ROOT, suiteDir, "e2e-impact.json"));
-	const tests = applicableTests(
-		discoverSuiteTests(REPO_ROOT, rules.tests.root, rules.tests.glob, rules.tests.category),
-		platform,
-	);
+	const discovery = discoverFor(rules);
+	const tests = applicableTests(discovery.tests, platform);
 	for (const test of tests) console.log(`${test.id}  [${test.platform}]  ${test.file}`);
+	for (const file of discovery.dynamicFiles) console.log(`dynamic: ${file}`);
 	writeGithubOutput("test-count", String(tests.length));
 }
 
@@ -395,13 +455,15 @@ async function main(): Promise<void> {
 			return await select(flags);
 		case "collect-appium":
 			return await collectAppium(flags);
+		case "collect-playwright":
+			return await collectPlaywright(flags);
 		case "baseline-download":
 			return await baselineDownload(flags);
 		case "discover":
 			return await discover(flags);
 		default:
 			throw new Error(
-				`Unknown command "${command}". Expected select | collect-appium | baseline-download | discover`,
+				`Unknown command "${command}". Expected select | collect-appium | collect-playwright | baseline-download | discover`,
 			);
 	}
 }

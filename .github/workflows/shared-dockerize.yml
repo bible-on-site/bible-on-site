@@ -251,7 +251,7 @@ jobs:
             exit 1
           fi
           python data/recitation/deployment.py --origin http://127.0.0.1:3000 \
-            --version "${{ steps.get_module_version.outputs.MODULE_VERSION }}" --attempts 12 --interval 5
+            --version "${{ steps.get_module_version.outputs.MODULE_VERSION }}" --check-playback --attempts 12 --interval 5
           node web/bible-on-site/scripts/verify-public-content.mjs --origin http://127.0.0.1:3000 --database
 
       - name: Publish website dependency cache (not a release image)

@@ -7,19 +7,22 @@
   },
   "scripts": {
     "build:app": "dotnet run --project ../devops -- CompileMobileE2E --configuration Debug",
-    "test": "node run.mjs",
-    "test:unit": "node --test simulator.test.mjs appium-readiness.test.mjs native-logs.test.mjs android-readiness.test.mjs android-snapshot-check.test.mjs ios-sim-state.test.mjs",
+    "test": "node supervise.mjs run.mjs",
+    "test:sharded": "node supervise.mjs run-sharded.mjs",
+    "test:unit": "node --test simulator.test.mjs appium-readiness.test.mjs native-logs.test.mjs native-hang-monitor.test.mjs android-readiness.test.mjs android-snapshot-check.test.mjs shards.test.mjs merge-runner-shards.test.mjs ios-processes.test.mjs supervise.test.mjs configure-avd-display.test.mjs sign-simulator-app.test.mjs ios-sim-state.test.mjs",
     "android:ready": "node android-ready.mjs",
+    "ios:sign": "node sign-simulator-app.mjs",
     "ios:wda": "node prepare-wda.mjs",
     "ios:boot": "node boot-ios.mjs",
     "ios:boot:start": "node boot-ios.mjs start",
     "ios:boot:wait": "node boot-ios.mjs wait",
     "ios:boot:resolve": "node boot-ios.mjs resolve"
   },
+  "_driverSecurityIssue": "https://github.com/bible-on-site/bible-on-site/issues/1995",
   "devDependencies": {
     "appium": "3.8.0",
     "appium-uiautomator2-driver": "8.7.0",
-    "appium-xcuitest-driver": "12.17.1"
+    "appium-xcuitest-driver": "12.17.3"
   },
   "allowScripts": {
     "appium@3.8.0": true

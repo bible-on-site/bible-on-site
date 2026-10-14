@@ -67,6 +67,7 @@ public partial class PerekViewModel : ObservableObject
 
     /// <summary>Available perushim for the current perek (ordered by priority).</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(FilteredPerushim))]
     private List<Perush> _perushim = new();
 
     /// <summary>Perush IDs that are currently checked (shown inline with text).</summary>
@@ -83,6 +84,7 @@ public partial class PerekViewModel : ObservableObject
 
     /// <summary>Message shown when no perushim (empty list or not available).</summary>
     public string PerushimEmptyMessage =>
+        Perushim.Count > 0 && !string.IsNullOrWhiteSpace(PerushNameFilter) ? "לא נמצאו פירושים תואמים" :
         !PerushimCatalogAvailable ? "אין קטלוג פירושים" :
         !PerushimNotesAvailable ? "להוריד פירושים" :
         "אין פרשנות לפרק זה";
@@ -91,6 +93,7 @@ public partial class PerekViewModel : ObservableObject
     public bool ShowDownloadPerushimButton => PerushimCatalogAvailable && !PerushimNotesAvailable;
 
     private List<PerekPerushNote> _perushNotesCache = new();
+    private PerushNoteChapter? _perushChapter;
 
     /// <summary>
     /// Pre-loaded perushim data keyed by perekId.
@@ -199,21 +202,32 @@ public partial class PerekViewModel : ObservableObject
         _fileSystem = fileSystem ?? FileSystem.Current;
         _share = share ?? Share.Default;
         _hasPerekAudio = hasPerekAudio;
+        _perushChapter = null;
 
         // Sync FontFactor from preferences and listen for changes
         _fontFactor = _preferencesService.FontFactor;
-        _preferencesService.PreferencesChanged += (_, _) =>
-        {
-            if (Math.Abs(_fontFactor - _preferencesService.FontFactor) > 0.001)
-            {
-                FontFactor = _preferencesService.FontFactor;
-            }
-        };
+        _divineNameMaskingRevision = DivineNameMasking.Revision;
+        WeakPreferencesSubscription.Subscribe(this, _preferencesService, static model => model.RefreshPreferences());
     }
 
     /// <summary>Font scaling factor from user preferences (0.5–2.0).</summary>
     [ObservableProperty]
     private double _fontFactor = 1.0;
+
+    /// <summary>
+    /// Bumped whenever הסתר שם השם settings change. Bound into the pasukim
+    /// ItemsSource MultiBinding and TikkunFlowView.MaskingRevision so every
+    /// realized or recycled text row re-renders with the new masking.
+    /// </summary>
+    [ObservableProperty]
+    private int _divineNameMaskingRevision;
+
+    /// <summary>הסתר שם השם toggle — persisted through PreferencesService.</summary>
+    public bool DivineNameMaskingEnabled
+    {
+        get => _preferencesService.DivineNameMaskingEnabled;
+        set => _preferencesService.DivineNameMaskingEnabled = value;
+    }
 
     // The default loader returns null — perek content is loaded asynchronously
     // through PerekDataService.LoadByPerekIdAsync() instead.
@@ -265,7 +279,17 @@ public partial class PerekViewModel : ObservableObject
     /// </summary>
     public bool HasArticles => ArticlesCount > 0;
 
-    /// <summary>Count of available perushim for the current perek.</summary>
+    /// <summary>Find commentary names in the selection menu.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(FilteredPerushim))]
+    [NotifyPropertyChangedFor(nameof(PerushimEmptyMessage))]
+    private string _perushNameFilter = string.Empty;
+
+    public List<Perush> FilteredPerushim => string.IsNullOrWhiteSpace(PerushNameFilter)
+        ? Perushim
+        : Perushim.Where(p => SearchText.Normalize(p.Name).Contains(
+            SearchText.Normalize(PerushNameFilter), StringComparison.Ordinal)).ToList();
+
     public int PerushimCount => Perushim.Count;
 
     /// <summary>Whether the current perek has any perushim.</summary>
@@ -302,28 +326,192 @@ public partial class PerekViewModel : ObservableObject
         }
     }
 
+#if MAUI
+    /// <summary>
+    /// Bound for a single perek-load attempt. Several stages await facilities
+    /// that can stall without completing — a queued SQLite call on a starved
+    /// pool, an on-demand resource probe whose daemon never answers — and an
+    /// unbounded await leaves the reader on its loading overlay forever
+    /// (issue #2084). Every attempt is abandoned after this budget instead.
+    /// </summary>
+    internal TimeSpan LoadAttemptTimeout { get; set; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>Attempts before a stubbornly-stalling load surfaces as an error.</summary>
+    internal int LoadMaxAttempts { get; set; } = 2;
+
+    /// <summary>
+    /// Stage reached by the in-flight (or last) load attempt — written into the
+    /// timeout log and exception so a stall reports where it froze.
+    /// </summary>
+    internal string LoadStage { get; private set; } = "not-started";
+
+    /// <summary>
+    /// Currency of the freshest load call or direct navigation. A timed-out
+    /// attempt keeps running detached next to its own retry — and beside newer
+    /// navigations — so before writing observable state (Perek, LoadStage,
+    /// carousel) an attempt proves it is still current; a superseded attempt's
+    /// late writes are dropped instead of replacing the perek now on screen
+    /// (issue #2084).
+    /// </summary>
+    private long _loadGeneration;
+
+    /// <summary>
+    /// Per-call attempt currency: the newest attempt of the newest load call
+    /// owns observable state. Retries bump <see cref="LatestAttempt"/> so the
+    /// attempt abandoned by a timeout loses to its own successor, while
+    /// <see cref="Generation"/> keeps a call superseded by a newer load or
+    /// navigation dead even when it retries.
+    /// </summary>
+    private sealed class LoadGate
+    {
+        public LoadGate(long generation) => Generation = generation;
+
+        public readonly long Generation;
+        public int LatestAttempt;
+    }
+
+    /// <summary>True while the attempt still owns the reader's observable state.</summary>
+    private bool IsCurrentLoad(LoadGate gate, int attemptStamp) =>
+        gate.Generation == Interlocked.Read(ref _loadGeneration) &&
+        attemptStamp == Volatile.Read(ref gate.LatestAttempt);
+
+    /// <summary>
+    /// Orphans every in-flight load attempt. Navigation paths that set the
+    /// perek directly (carousel swipe, prev/next, app link) call this so a
+    /// detached attempt's late writes cannot replace the newer perek.
+    /// </summary>
+    public void InvalidatePendingLoads() => Interlocked.Increment(ref _loadGeneration);
+
+    /// <summary>
+    /// Stamp of the newest reader load/navigation. A caller holding the stamp a
+    /// load returned can compare it after an <c>await</c> boundary — a mismatch
+    /// means a newer navigation owns the reader and the caller's remaining
+    /// continuation must not run.
+    /// </summary>
+    public long ReaderLoadStamp => Interlocked.Read(ref _loadGeneration);
+
     /// <summary>
     /// Asynchronously loads a perek by its ID, including pasukim from the database.
-    /// This method is only available in MAUI builds.
+    /// Each attempt is time-boxed by <see cref="LoadAttemptTimeout"/>; when a
+    /// stage stalls, the load retries up to <see cref="LoadMaxAttempts"/> times,
+    /// then throws TimeoutException so the caller can surface a retryable error
+    /// instead of an endless spinner. A call superseded by a newer load or
+    /// navigation reports nothing — the newer owner decides what the UI shows.
     /// </summary>
-#if MAUI
-    public async Task LoadByPerekIdAsync(int perekId)
+    /// <returns>
+    /// This load's stamp when it still owns the reader at completion, or
+    /// <see langword="null"/> when a newer load/navigation superseded it
+    /// mid-flight — callers must then skip every post-load action (scroll,
+    /// search landing) that would touch the newer owner's reader.
+    /// </returns>
+    public async Task<long?> LoadByPerekIdAsync(int perekId)
+    {
+        var gate = new LoadGate(Interlocked.Increment(ref _loadGeneration));
+        var attempt = 0;
+        while (true)
+        {
+            attempt++;
+            // Each attempt claims the call's currency. The attempt orphaned by
+            // this timeout keeps running detached; every observable write
+            // downstream checks the stamp so it cannot overwrite the retry —
+            // or a newer navigation — once it finally unblocks.
+            var attemptStamp = Interlocked.Increment(ref gate.LatestAttempt);
+            var load = LoadByPerekIdCoreAsync(perekId, gate, attemptStamp);
+            try
+            {
+                await load.WaitAsync(LoadAttemptTimeout);
+                // The core may have returned early on a mid-flight supersede —
+                // surface that instead of reporting a successful load.
+                return IsCurrentLoad(gate, attemptStamp) ? gate.Generation : null;
+            }
+            catch (TimeoutException)
+            {
+                // A stalled attempt keeps running detached — observing its
+                // completion logs the late outcome and avoids unobserved exceptions.
+                _ = ObserveStaleLoadAsync(load, attempt, perekId);
+                Console.Error.WriteLine($"[PerekLoad] attempt {attempt} timed out after " +
+                    $"{LoadAttemptTimeout.TotalSeconds:0.##}s at stage '{LoadStage}' (perekId={perekId})");
+                if (attempt >= LoadMaxAttempts)
+                {
+                    // A newer load or navigation already owns the reader —
+                    // this abandoned call must not resurface an error over it.
+                    if (!IsCurrentLoad(gate, attemptStamp))
+                    {
+                        return null;
+                    }
+                    throw new TimeoutException(
+                        $"Perek {perekId} load timed out after {attempt} attempt(s); last stage: {LoadStage}");
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Follows a detached, timed-out attempt to its eventual end so its late
+    /// completion (or failure) is logged rather than silently dropped.
+    /// </summary>
+    private async Task ObserveStaleLoadAsync(Task stale, int attempt, int perekId)
+    {
+        try
+        {
+            await stale;
+            Console.WriteLine($"[PerekLoad] stale attempt {attempt} eventually completed (perekId={perekId})");
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[PerekLoad] stale attempt {attempt} failed late (perekId={perekId}): {ex.Message}");
+        }
+    }
+
+    private void MarkLoadStage(string stage, int perekId, LoadGate gate, int attemptStamp)
+    {
+        // A superseded attempt still reports progress to the log, but only a
+        // current attempt may move the LoadStage marker that timeouts cite.
+        if (IsCurrentLoad(gate, attemptStamp))
+        {
+            LoadStage = stage;
+        }
+        Console.WriteLine($"[PerekLoad] stage={stage} perekId={perekId}");
+    }
+
+    private async Task LoadByPerekIdCoreAsync(int perekId, LoadGate gate, int attemptStamp)
     {
         // Ensure data service is loaded
+        MarkLoadStage("data-service", perekId, gate, attemptStamp);
         if (!_perekDataService.IsLoaded)
         {
             await _perekDataService.LoadAsync();
         }
 
         var perek = GetReaderPerek(perekId);
-        if (perek != null)
+        if (perek == null)
         {
-            // Load pasukim
-            perek.Pasukim = await _perekDataService.LoadPasukimAsync(perekId);
-            SetPerek(perek);
-            await LoadPerushimAsync(perekId);
-            await InitializeCarouselAsync();
+            MarkLoadStage("missing-perek", perekId, gate, attemptStamp);
+            return;
         }
+
+        MarkLoadStage("pasukim", perekId, gate, attemptStamp);
+        var pasukim = await _perekDataService.LoadPasukimAsync(perekId);
+        // Everything below writes observable state (the perek's Pasukim are
+        // bound once the carousel holds it, then Perek, perushim, carousel),
+        // so it is gated on still being the current attempt — a timed-out
+        // attempt must not resurrect over its own retry or a newer navigation.
+        if (!IsCurrentLoad(gate, attemptStamp))
+        {
+            return;
+        }
+        perek.Pasukim = pasukim;
+        MarkLoadStage("set-perek", perekId, gate, attemptStamp);
+        SetPerek(perek);
+        MarkLoadStage("perushim", perekId, gate, attemptStamp);
+        await LoadPerushimAsync(perekId);
+        if (!IsCurrentLoad(gate, attemptStamp))
+        {
+            return;
+        }
+        MarkLoadStage("carousel", perekId, gate, attemptStamp);
+        await InitializeCarouselCoreAsync(gate, attemptStamp);
+        MarkLoadStage("loaded", perekId, gate, attemptStamp);
     }
 
     /// <summary>
@@ -345,6 +533,12 @@ public partial class PerekViewModel : ObservableObject
 
         if (!PerushimNotesAvailable || !PerushimCatalogAvailable)
         {
+            // A stale load must not wipe the perushim of the perek now on screen.
+            if (IsStalePerushimLoad(perekId))
+            {
+                return;
+            }
+            _perushChapter = null;
             _perushNotesCache = new List<PerekPerushNote>();
             // Set CheckedPerushim BEFORE Perushim so the CollectionView sees correct state
             CheckedPerushim = new List<int>();
@@ -362,19 +556,19 @@ public partial class PerekViewModel : ObservableObject
 
         List<int> perushIds;
         Dictionary<int, Perush> perushById;
-        List<PerekPerushNote> notes;
+        PerushNoteChapter? chapter;
 
         if (cached != null)
         {
             perushIds = cached.PerushIds;
             perushById = cached.PerushById;
-            notes = cached.Notes;
+            chapter = cached.Chapter;
         }
         else
         {
             perushIds = await _notesService.GetPerushIdsForPerekAsync(perekId);
             perushById = perushIds.Count == 0 ? new() : await _catalogService.GetPerushimByIdsAsync(perushIds);
-            notes = perushIds.Count == 0 ? new() : await _notesService.LoadNotesForPerekAsync(perekId, perushById);
+            chapter = perushIds.Count == 0 ? null : await _notesService.LoadChapterAsync(perekId);
         }
 
         if (IsStalePerushimLoad(perekId))
@@ -384,6 +578,7 @@ public partial class PerekViewModel : ObservableObject
 
         if (perushIds.Count == 0)
         {
+            _perushChapter = null;
             _perushNotesCache = new List<PerekPerushNote>();
             CheckedPerushim = new List<int>();
             Perushim = new List<Perush>();
@@ -391,7 +586,8 @@ public partial class PerekViewModel : ObservableObject
             return;
         }
 
-        _perushNotesCache = notes;
+        _perushNotesCache = new();
+        _perushChapter = chapter;
 
         // Order perushim by priority (Targum first, Rashi second, etc.)
         var orderedPerushim = perushIds
@@ -405,7 +601,7 @@ public partial class PerekViewModel : ObservableObject
         // Set CheckedPerushim BEFORE Perushim so the CollectionView binding
         // sees the correct checked state when it re-renders items.
         var availableIds = new HashSet<int>(perushIds);
-        CheckedPerushim = CheckedPerushim.Where(id => availableIds.Contains(id)).ToList();
+        CheckedPerushim = CheckedPerushim.Where(id => availableIds.Contains(id)).Take(_preferencesService.InlineCommentaryLimit).ToList();
         Perushim = orderedPerushim;
 
         FillFilteredPerushContents();
@@ -432,8 +628,11 @@ public partial class PerekViewModel : ObservableObject
             return false;
         }
 
-        _perushNotesCache = SyntheticPerushimProvider.NotesFor(
+        var synthetic = SyntheticPerushimProvider.NotesFor(
             perekId, Perek?.Pasukim?.Select(p => p.PasukNum) ?? []);
+        _perushChapter = new PerushNoteChapter(PerushNoteBlob.Encode(synthetic.Select(n =>
+            new PerushNoteBlob.Note(n.PerushId, n.Pasuk, n.NoteIdx, n.NoteContent)).ToList()));
+        _perushNotesCache = new();
         CheckedPerushim = new List<int>();
         Perushim = SyntheticPerushimProvider.Perushim;
         PerushimCatalogAvailable = true;
@@ -503,6 +702,9 @@ public partial class PerekViewModel : ObservableObject
     /// </summary>
     public async Task NavigateToPerekAsync(int perekId)
     {
+        // A newer navigation supersedes every in-flight load attempt: a
+        // detached timed-out attempt must not overwrite this perek late.
+        InvalidatePendingLoads();
         if (CarouselPerakim != null && CarouselPerakim.Count == 929)
         {
             var targetPerek = GetReaderPerek(perekId);
@@ -528,7 +730,8 @@ public partial class PerekViewModel : ObservableObject
     /// <summary>
     /// All available commentary for focused verse reading, independent of inline filters.
     /// </summary>
-    public List<PerushNoteDisplay> GetPerushimForPasuk(int pasukNum) => _perushNotesCache
+    public List<PerushNoteDisplay> GetPerushimForPasuk(int pasukNum) =>
+        _perushChapter?.GetDisplays(pasukNum, Perushim) ?? _perushNotesCache
         .Where(n => n.Pasuk == pasukNum)
         .GroupBy(n => (n.PerushId, n.PerushName))
         .OrderBy(g => Perushim.FindIndex(p => p.Id == g.Key.PerushId))
@@ -538,6 +741,16 @@ public partial class PerekViewModel : ObservableObject
             PerushId = g.Key.PerushId,
             NoteContents = g.OrderBy(n => n.NoteIdx).Select(n => n.NoteContent).ToList()
         }).ToList();
+
+    public string InlineCommentaryLimitMessage => $"ניתן להציג עד {_preferencesService.InlineCommentaryLimit} פירושים על הפרק. ניתן לשנות בהעדפות.";
+
+    /// <summary>A search result must remain visible even when all inline slots are occupied.</summary>
+    public void ShowPerushForSearch(int perushId)
+    {
+        if (IsPerushChecked(perushId)) { return; }
+        CheckedPerushim = CheckedPerushim.Take(_preferencesService.InlineCommentaryLimit - 1).ToList();
+        ToggleCheckedPerush(perushId);
+    }
 
     /// <summary>Toggles commentary in the inline reader.</summary>
     [RelayCommand]
@@ -550,6 +763,7 @@ public partial class PerekViewModel : ObservableObject
         }
         else
         {
+            if (list.Count >= _preferencesService.InlineCommentaryLimit) { return; }
             list.Add(perushId);
         }
 
@@ -567,7 +781,7 @@ public partial class PerekViewModel : ObservableObject
     /// </summary>
     private void FillFilteredPerushContents()
     {
-        if (Perek?.Pasukim == null)
+        if (Perek?.Pasukim is not { } pasukim)
         {
             return;
         }
@@ -575,12 +789,22 @@ public partial class PerekViewModel : ObservableObject
         var checkedSet = new HashSet<int>(CheckedPerushim);
         if (checkedSet.Count == 0)
         {
-            foreach (var pasuk in Perek.Pasukim)
+            foreach (var pasuk in pasukim)
             {
                 if (pasuk.PerushNotes.Count > 0)
                 {
                     pasuk.PerushNotes = new List<PerushNoteDisplay>();
                 }
+            }
+            return;
+        }
+
+        if (_perushChapter != null)
+        {
+            foreach (var pasuk in Perek.Pasukim)
+            {
+                var displays = _perushChapter.GetDisplays(pasuk.PasukNum, Perushim, checkedSet, pasuk.PerushNotes);
+                if (!displays.SequenceEqual(pasuk.PerushNotes)) { pasuk.PerushNotes = displays; }
             }
             return;
         }
@@ -592,7 +816,7 @@ public partial class PerekViewModel : ObservableObject
 
         var priorityOrder = Perushim.Select((p, i) => (p.Id, i)).ToDictionary(x => x.Id, x => x.i);
 
-        foreach (var pasuk in Perek.Pasukim)
+        foreach (var pasuk in pasukim)
         {
             var notesForPasuk = byPasuk.GetValueOrDefault(pasuk.PasukNum) ?? new List<PerekPerushNote>();
             var groups = notesForPasuk
@@ -644,15 +868,22 @@ public partial class PerekViewModel : ObservableObject
     /// Half-window size for pasukim pre-loading around the current perek.
     /// The carousel always contains all 929 perakim, but only a buffer of pasukim is pre-loaded.
     /// </summary>
-    private const int PasukimBufferHalf = 10;
+    private const int PasukimBufferHalf = 1;
 
     /// <summary>
     /// Initializes the carousel with ALL 929 perakim (lightweight metadata).
-    /// Heavy work (building the list + preloading adjacent pasukim) runs on a
+    /// Building the metadata list runs on a
     /// background thread so the UI stays responsive.  The ObservableCollection
     /// and CarouselView updates happen back on the main thread.
     /// </summary>
-    public async Task InitializeCarouselAsync()
+    public Task InitializeCarouselAsync() => InitializeCarouselCoreAsync(null, 0);
+
+    /// <summary>
+    /// Carousel initialization for the perek-load pipeline: when called with a
+    /// <paramref name="gate"/>, the bound-collection swap is dropped if the
+    /// attempt was superseded while the list was building off-thread.
+    /// </summary>
+    private async Task InitializeCarouselCoreAsync(LoadGate? gate, int attemptStamp)
     {
         if (Perek == null)
         {
@@ -664,8 +895,8 @@ public partial class PerekViewModel : ObservableObject
 
         Console.WriteLine($"[Carousel] InitializeCarouselAsync START perekId={perekId}");
 
-        // Build list + preload buffer on a background thread to avoid blocking UI.
-        var list = await Task.Run(async () =>
+        // Publish the requested reader without waiting for speculative chapter data.
+        var list = await Task.Run(() =>
         {
             var result = new List<Perek>(929);
             for (var id = 1; id <= 929; id++)
@@ -677,20 +908,24 @@ public partial class PerekViewModel : ObservableObject
                 }
             }
 
-            // Pre-load pasukim (and perushim notes) for a small buffer around the current perek
-            var loaded = await LoadMissingPasukimAsync(
-                Math.Max(1, perekId - PasukimBufferHalf), Math.Min(929, perekId + PasukimBufferHalf));
-
-            return (result, loaded);
+            return result;
         });
-        AssignLoadedPasukim(list.loaded);
 
-        Console.WriteLine($"[Carousel] InitializeCarouselAsync built list: {list.result.Count} items");
+        // A superseded attempt must not swap the bound collection or steal
+        // CurrentCarouselPerek — likewise bail if the perek changed under us
+        // for any other reason (e.g. a swipe landed mid-build).
+        if (!ReferenceEquals(Perek, perek) ||
+            (gate != null && !IsCurrentLoad(gate, attemptStamp)))
+        {
+            return;
+        }
+
+        Console.WriteLine($"[Carousel] InitializeCarouselAsync built list: {list.Count} items");
 
         // Assign collection on the main thread.
         // NOTE: CarouselView resets Position to 0 when ItemsSource changes — the
         // code-behind ScrollTo(targetPos, animate:false) corrects this immediately.
-        CarouselPerakim = new System.Collections.ObjectModel.ObservableCollection<Perek>(list.result);
+        CarouselPerakim = new System.Collections.ObjectModel.ObservableCollection<Perek>(list);
         CurrentCarouselPerek = perek;
 
         Console.WriteLine($"[Carousel] InitializeCarouselAsync DONE perekId={perekId}");
@@ -708,7 +943,19 @@ public partial class PerekViewModel : ObservableObject
         }
 
         Console.WriteLine($"[Carousel] EnsurePasukimLoaded perekId={perek.PerekId}");
-        perek.Pasukim = await _perekDataService.LoadPasukimAsync(perek.PerekId);
+        try
+        {
+            // Bounded like the fresh-load path — a stalled query must not hold
+            // the awaiting navigation forever (issue #2084). The cell keeps its
+            // loading view and the next swipe retries the fetch.
+            perek.Pasukim = await _perekDataService.LoadPasukimAsync(perek.PerekId)
+                .WaitAsync(LoadAttemptTimeout);
+        }
+        catch (TimeoutException)
+        {
+            Console.Error.WriteLine($"[PerekLoad] EnsurePasukimLoaded timed out after " +
+                $"{LoadAttemptTimeout.TotalSeconds:0.##}s (perekId={perek.PerekId})");
+        }
     }
 
     /// <summary>
@@ -806,17 +1053,17 @@ public partial class PerekViewModel : ObservableObject
                     lock (_perushimPreloadCache)
                     {
                         _perushimPreloadCache[id] = new PreloadedPerushimData(
-                            new List<int>(), new Dictionary<int, Perush>(), new List<PerekPerushNote>());
+                            new List<int>(), new Dictionary<int, Perush>(), null);
                     }
                     continue;
                 }
 
                 var perushById = await _catalogService.GetPerushimByIdsAsync(perushIds);
-                var notes = await _notesService.LoadNotesForPerekAsync(id, perushById);
+                var chapter = await _notesService.LoadChapterAsync(id);
 
                 lock (_perushimPreloadCache)
                 {
-                    _perushimPreloadCache[id] = new PreloadedPerushimData(perushIds, perushById, notes);
+                    _perushimPreloadCache[id] = new PreloadedPerushimData(perushIds, perushById, chapter);
                 }
             }
             catch (Exception ex)
@@ -977,6 +1224,25 @@ public partial class PerekViewModel : ObservableObject
     }
 
     #endregion
+
+    private void RefreshPreferences()
+    {
+        if (Math.Abs(_fontFactor - _preferencesService.FontFactor) > 0.001)
+        {
+            FontFactor = _preferencesService.FontFactor;
+        }
+        if (_divineNameMaskingRevision != DivineNameMasking.Revision)
+        {
+            DivineNameMaskingRevision = DivineNameMasking.Revision;
+        }
+        OnPropertyChanged(nameof(DivineNameMaskingEnabled));
+        OnPropertyChanged(nameof(InlineCommentaryLimitMessage));
+        if (CheckedPerushim.Count > _preferencesService.InlineCommentaryLimit)
+        {
+            CheckedPerushim = CheckedPerushim.Take(_preferencesService.InlineCommentaryLimit).ToList();
+            FillFilteredPerushContents();
+        }
+    }
 }
 
 /// <summary>
@@ -985,4 +1251,4 @@ public partial class PerekViewModel : ObservableObject
 internal record PreloadedPerushimData(
     List<int> PerushIds,
     Dictionary<int, Perush> PerushById,
-    List<PerekPerushNote> Notes);
+    PerushNoteChapter? Chapter);

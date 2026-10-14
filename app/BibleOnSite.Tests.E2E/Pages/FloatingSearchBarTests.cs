@@ -118,8 +118,8 @@ public sealed class FloatingSearchBarTests(OfflineSearchFixture fixture)
         verse.Should().NotBeNull("unpointed text must match the packaged pointed scripture");
         fixture.Click(verse!);
         await AssertRegularReaderAsync();
-        (await fixture.WaitForElementAsync(window => window.FindAllDescendants(fixture.CF.ByAutomationId("PasukNumber"))
-            .FirstOrDefault(number => !number.IsOffscreen && number.Name == "ז")))
+        (await fixture.WaitForElementAsync(window => window.FindAllDescendants(fixture.CF.ByAutomationId("PasukText"))
+            .FirstOrDefault(verse => !verse.IsOffscreen && verse.Name != null && verse.Name.StartsWith("ז "))))
             .Should().NotBeNull("the ordinary reader scrolls to the selected verse");
         await GoBackToSearchAsync("ויעש אלהים את הרקיע");
 

@@ -14,18 +14,43 @@ namespace BibleOnSite.Tests.MobileE2E;
 [Collection("Mobile device")]
 [Trait("Category", "MobileE2E")]
 [Trait("Platform", "iOS")]
-public sealed class PerushimHtmlScrollStabilityTests(ITestOutputHelper output, MobileDeviceSessionFactory sessions)
-    : MobileDeviceTest(output, sessions)
+[Trait("Shard", "2")]
+public sealed class PerushimHtmlScrollStabilityTests(ITestOutputHelper output, MobileDeviceSession session)
+    : MobileDeviceTest(output, session)
 {
-    protected override IReadOnlyDictionary<string, string> AppEnvironment { get; } =
-        new Dictionary<string, string> { ["BIBLE_E2E_PERUSHIM"] = "1" };
+    // The shared session relaunches the app with this environment so the
+    // synthetic commentary only applies to this scenario — sessions created
+    // for other tests no longer carry the flag in their capabilities.
+    protected override IReadOnlyDictionary<string, string> LaunchEnvironment =>
+        new Dictionary<string, string>
+        {
+            ["BIBLE_E2E_PERUSHIM"] = "1",
+            ["BIBLE_E2E_LONG_PERUSHIM"] = "1"
+        };
 
+    // A 267 KB-scale HTML block matches the largest delivered commentary group
+    // and exercises the 2026-10-12 TextKit watchdog surface through lazy cells.
     [Fact]
     public void PerushimCellsSurviveScrollStorm() => Scenario(() =>
     {
         var checkedCount = CheckAllPerushim();
         Assert.True(checkedCount > 0,
             "Synthetic perushim must render checkboxes — otherwise HtmlView cells are never created");
+
+        // Grouping must retain every paragraph, including text far outside the
+        // visible viewport. This also exercises the formerly blocking AX lookup.
+        Page.WaitFor("CommentaryTextSection");
+        var sections = System.Xml.Linq.XDocument.Parse(Driver!.PageSource).Descendants()
+            .Where(element => (string?)element.Attribute("name") == "CommentaryTextSection")
+            .Select(element => (string?)element.Attribute("label") ?? string.Empty).ToArray();
+        Assert.NotEmpty(sections);
+        Assert.All(sections, text => Assert.InRange(text.Length, 1, 1024));
+        var spokenText = string.Concat(sections);
+        Assert.Equal(2200, System.Text.RegularExpressions.Regex.Matches(spokenText, "פירוש ארוך").Count);
+        Assert.Contains("עם פירוש נוסף על הפסוק.", spokenText);
+        var sourceBeforeStorm = Page.Source;
+        var verseBeforeStorm = Page.FirstPasuk;
+        SaveDiagnostics("LongPerushimBeforeScroll", "passed");
 
         var list = Page.WaitFor("PasukimCollection");
         var centerX = list.Location.X + list.Size.Width / 2;
@@ -60,37 +85,32 @@ public sealed class PerushimHtmlScrollStabilityTests(ITestOutputHelper output, M
         Output.WriteLine($"App state after perushim scroll storm: {appState}");
         // 4 = running in foreground. A crashed app reports 1 (not running).
         Assert.Equal(4L, Convert.ToInt64(appState));
-        Assert.NotEmpty(Page.Source);
-        Assert.NotEmpty(Page.FirstPasuk);
+        Assert.Equal(sourceBeforeStorm, Page.Source);
+        // Opposite flicks need not cancel their inertia. The reader can remain
+        // inside the huge note, with every verse outside the visible viewport.
+        Page.ScrollBackTo("PasukText", element => element.Text == verseBeforeStorm);
+        Assert.Equal(verseBeforeStorm, Page.FirstPasuk);
+        SaveDiagnostics("LongPerushimAfterScroll", "passed");
     });
 
-    // Opens the perushim panel and checks the first two synthetic commentaries
-    // so each pasuk cell renders HtmlView notes; returns how many were checked.
-    // Checking all three triples attributed-text layout cost without covering
-    // any additional code path — one HtmlView per commentary already exercises
-    // the parse/render pipeline that crashed.
+    // Add up to five visible sources sequentially, including the large first commentary.
     private int CheckAllPerushim()
     {
         Page.Tap("PerushimChevronButton");
 
-        // The panel animates up (~250 ms); poll briefly for rendered checkboxes.
-        List<AppiumElement> checkboxes = [];
-        for (var attempt = 0; attempt < 10 && checkboxes.Count == 0; attempt++)
-        {
-            Thread.Sleep(300);
-            checkboxes = Driver!
-                .FindElements(Platform.AutomationId("PerushCheckBox"))
-                .Where(element => element.Displayed)
-                .ToList();
-        }
+        Page.WaitFor("PerushCheckBox", element => element.Displayed);
+        var checkboxes = Driver!
+            .FindElements(Platform.AutomationId("PerushCheckBox"))
+            .Where(element => element.Displayed)
+            .ToList();
 
-        foreach (var checkbox in checkboxes.Take(2))
+        foreach (var checkbox in checkboxes.Take(5))
         {
             Platform.Tap(Driver!, checkbox);
         }
-        Output.WriteLine($"Checked {Math.Min(checkboxes.Count, 2)} synthetic perushim.");
+        Output.WriteLine($"Checked {Math.Min(checkboxes.Count, 5)} synthetic perushim.");
 
         Page.Tap("PerushimChevronButton");
-        return Math.Min(checkboxes.Count, 2);
+        return Math.Min(checkboxes.Count, 5);
     }
 }

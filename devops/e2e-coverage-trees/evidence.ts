@@ -231,7 +231,8 @@ export function loadTrx(path: string): TestRunRecord[] {
 
 /**
  * Parses the xUnit JUnit report (`mobile-e2e.xml`) as a fallback test list:
- * `testcase@className`+`@name` forms the FQN; a `failure`/`error` child marks
+ * `testcase@className`+`@name` forms the FQN unless `@name` is already fully
+ * qualified (as in MTP reports); a `failure`/`error` child marks
  * the outcome.
  */
 export function loadJunit(path: string): TestRunRecord[] {
@@ -244,7 +245,7 @@ export function loadJunit(path: string): TestRunRecord[] {
 		const failed = children(testcase, "failure").length + children(testcase, "error").length > 0;
 		const skipped = children(testcase, "skipped").length > 0;
 		records.push({
-			id: `${className}.${name}`,
+			id: name.startsWith(`${className}.`) ? name : `${className}.${name}`,
 			outcome: failed ? "failed" : skipped ? "skipped" : "passed",
 			sessions: [],
 			cases: [],
