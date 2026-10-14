@@ -1,6 +1,5 @@
 using System.Drawing;
 using System.Globalization;
-using System.Text.Json;
 using OpenQA.Selenium;
 using OpenQA.Selenium.Appium;
 using OpenQA.Selenium.Appium.iOS;
@@ -9,9 +8,9 @@ using System.Collections.ObjectModel;
 
 namespace BibleOnSite.Tests.MobileE2E.Platforms;
 
-// Keep the SDK's error handling and command deadlines. Only the lookup's
-// native lookup response is exposed. Conditions use that fresh snapshot;
-// elements returned to the scenario keep their live SDK properties.
+// Preserve SDK error handling and command deadlines. Poll conditions use the
+// fresh native lookup response; elements returned to the scenario keep their
+// live SDK properties.
 internal sealed class IosSnapshotDriver : IOSDriver
 {
     public IosSnapshotDriver(Uri server, AppiumOptions options)
@@ -37,14 +36,7 @@ internal sealed class IosSnapshotDriver : IOSDriver
         {
             throw new WebDriverException("Native snapshot lookup requires a concrete locator strategy.");
         }
-        if (mechanism == "accessibility id")
-        {
-            // Filter before WDA expands response attributes. A reader lookup
-            // otherwise measures frames for every offscreen verse/long-note
-            // section although the page object can only use visible matches.
-            mechanism = "-ios predicate string";
-            criteria = $"name == {JsonSerializer.Serialize(criteria)} AND visible == 1";
-        }
+
         var response = Execute(DriverCommand.FindElements, new Dictionary<string, object>
         {
             ["using"] = mechanism,
