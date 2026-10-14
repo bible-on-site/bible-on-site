@@ -64,13 +64,24 @@ jobs:
     if: ${{ needs.release.outputs.released == 'true' && needs.release.outputs.cd_payload != '' }}
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout dispatch automation
+        uses: actions/checkout@v7
+      - name: Setup dispatch Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: devops/package.json
+      - name: Prepare dispatch payload
+        id: dispatch_payload
+        env:
+          RELEASE_PAYLOAD: ${{ needs.release.outputs.cd_payload }}
+        run: node devops/github/release/dispatch-payload.mjs
       - name: Trigger CD Workflow
         uses: peter-evans/repository-dispatch@v4
         with:
           repository: ${{ github.repository }}
           token: ${{ secrets.BOT_PAT }}
           event-type: ${{ inputs.cd_event_type }}
-          client-payload: ${{ needs.release.outputs.cd_payload }}
+          client-payload: ${{ steps.dispatch_payload.outputs.client_payload }}
 
   release:
     name: Release
