@@ -420,6 +420,19 @@ jobs:
         id: sdk-key
         run: node devops/github/ci/android-sdk-manifest.mjs
 
+      # Hosted images include root-owned SDK directories. The cache restores
+      # their modes, so the task owner must own them before extraction/install.
+      - name: Make cached Android SDK packages writable by the runner
+        if: inputs.platform == 'Android'
+        run: |
+          sdk_owner="$(id -u):$(id -g)"
+          sudo chown "$sdk_owner" "$ANDROID_HOME"
+          for component in emulator system-images platforms build-tools platform-tools; do
+            if [ -e "$ANDROID_HOME/$component" ]; then
+              sudo chown -R "$sdk_owner" "$ANDROID_HOME/$component"
+            fi
+          done
+
       # Package metadata (package.xml) is cached inside each directory so
       # sdkmanager recognizes installed packages. The narrow restore-key
       # intentionally allows an older emulator revision: sdkmanager updates it
@@ -524,7 +537,9 @@ jobs:
           pre-emulator-launch-script: node app/mobile-e2e/configure-avd-display.mjs
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader -noaudio -no-boot-anim -no-snapshot-save -no-metrics -memory 4096
-          script: npm test --prefix app/mobile-e2e
+          # The wrapper retains the existing supervised pilot, then ends only
+          # this no-snapshot-save QEMU tree before the action can retain its pipes.
+          script: node app/mobile-e2e/android-pilot.mjs
 
       # The SDK save waits for a genuinely booted device (any stage's readiness
       # log) rather than trusting installed packages, and stays disabled for

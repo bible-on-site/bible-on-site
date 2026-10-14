@@ -291,3 +291,12 @@ error artifact without replacing the test result. Process queries and LLDB
 stack capture run only after a failed pilot, never alongside healthy tests.
 Native live logs use info level so accessibility debug logging does not
 amplify the workload being measured. Pilot and interaction limits are unchanged.
+
+The Android CI action runs `android-pilot.mjs`, which retains the same supervised
+pilot and exit code. After app coverage and logs are exported, it ends only the
+explicit AVD/port's `-no-snapshot-save` QEMU process and its descendants, confirming
+exit within five seconds. This disposable test device has no snapshot to flush;
+clean snapshot creation retains its separate graceful shutdown path. Cleanup
+failures fail CI and `android-emulator-cleanup.json` records the process IDs and
+duration. The SDK package directories are assigned to the runner before restoring
+their cached modes, avoiding root-owned directory extraction failures.
