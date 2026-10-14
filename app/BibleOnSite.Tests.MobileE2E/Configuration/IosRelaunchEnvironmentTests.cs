@@ -73,8 +73,10 @@ public sealed class IosRelaunchEnvironmentTests
         public int Terminations { get; private set; }
         public List<Dictionary<string, object>> Launches { get; } = [];
         public bool LaunchTimeout { get; init; }
-        public bool TryAddCommand(string name, CommandInfo? info) => true;
-        public void Dispose() { }
+        private readonly Dictionary<string, CommandInfo> _commands = [];
+        public bool TryAddCommand(string name, CommandInfo? info) =>
+            info != null && _commands.TryAdd(name, info);
+        public void Dispose() => _commands.Clear();
         public Response Execute(Command command) => ExecuteAsync(command).GetAwaiter().GetResult();
         public Task<Response> ExecuteAsync(Command command)
         {
