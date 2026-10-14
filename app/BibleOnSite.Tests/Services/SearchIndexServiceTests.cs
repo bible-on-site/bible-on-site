@@ -579,15 +579,16 @@ public class SearchIndexServiceTests
             NotesDbV2.Statements((7, 1, 1, 0, "בראשית")));
         var notes = PerushimNotesService.CreateForTesting(NullPad().Object, storage.Root);
         await using var index = await CreateFixtureIndexAsync(perakim, notes, storage);
-        var reports = new List<string>();
-        var progress = new Progress<string>(reports.Add);
+        // Verify the synchronous reporting contract. Progress<T> posts callbacks
+        // to a context/thread pool that can run after SearchAsync has returned.
+        var progress = new Mock<IProgress<string>>();
 
         var hits = await index.SearchAsync("בראשית", new HashSet<SearchFilter> { SearchFilter.Perush },
-            new HashSet<int> { 1 }, 10, TestContext.Current.CancellationToken, progress);
+            new HashSet<int> { 1 }, 10, TestContext.Current.CancellationToken, progress.Object);
 
         hits.Should().ContainSingle();
-        reports.Should().Contain(r => r.Contains("מכין"),
-            "commentary initialization reports its status");
+        progress.Verify(p => p.Report(It.Is<string>(message => message.Contains("מכין"))),
+            Times.AtLeastOnce(), "commentary initialization reports its status");
     }
 
     [Fact]
