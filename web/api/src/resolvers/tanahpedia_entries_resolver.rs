@@ -2,10 +2,10 @@ use async_graphql::{Context, ErrorExtensions, Object, Result};
 
 use crate::dtos::tanahpedia_entries::{
     TanahpediaCategoryCount, TanahpediaCategoryHomepage, TanahpediaEntityWithEntries,
-    TanahpediaEntry, TanahpediaEntryDetail, TanahpediaSynonymTarget,
+    TanahpediaEntry, TanahpediaEntryDetail, TanahpediaSearchHit, TanahpediaSynonymTarget,
 };
 use crate::providers::Database;
-use crate::services::tanahpedia_entries_service;
+use crate::services::{tanahpedia_entries_service, tanahpedia_search_service};
 
 const MAX_ENTRIES_LIMIT: i32 = 500;
 const MAX_RECENT_LIMIT: i32 = 50;
@@ -53,6 +53,22 @@ impl TanahpediaEntriesQuery {
         unique_name: String,
     ) -> Result<Option<TanahpediaEntryDetail>> {
         tanahpedia_entries_service::get_entry_detail(ctx.data::<Database>()?, &unique_name)
+            .await
+            .map_err(|e| e.extend())
+    }
+
+    /// Lexical search over published entries — title, unique_name, alias names
+    /// (direct and disambiguation targets) and body content — returning ranked
+    /// hits with a snippet-ready `excerpt`. Shares the website `/search`
+    /// `tanahpedia` provider's matching and relevance conventions: same Hebrew
+    /// normalization, same score tiers, one hit per entry.
+    async fn search_tanahpedia_entries(
+        &self,
+        ctx: &Context<'_>,
+        phrase: String,
+        limit: Option<i32>,
+    ) -> Result<Vec<TanahpediaSearchHit>> {
+        tanahpedia_search_service::search_entries(ctx.data::<Database>()?, &phrase, limit)
             .await
             .map_err(|e| e.extend())
     }

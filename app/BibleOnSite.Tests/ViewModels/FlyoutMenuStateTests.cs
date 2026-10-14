@@ -146,12 +146,12 @@ public class FlyoutMenuStateTests : IDisposable
     }
 
     [Fact]
-    public void PreferencesViewModel_MasoraMenuEnabled_SameValueSet_IsANoOp()
+    public void PerekPreferencesViewModel_MasoraMenuEnabled_SameValueSet_IsANoOp()
     {
-        var viewModel = new PreferencesViewModel(_service);
+        var viewModel = new PerekPreferencesViewModel(_service);
         var notified = false;
         viewModel.PropertyChanged += (_, e) =>
-            notified |= e.PropertyName == nameof(PreferencesViewModel.MasoraMenuEnabled);
+            notified |= e.PropertyName == nameof(PerekPreferencesViewModel.MasoraMenuEnabled);
 
         viewModel.MasoraMenuEnabled = false; // already false by default
 
@@ -160,13 +160,13 @@ public class FlyoutMenuStateTests : IDisposable
     }
 
     [Fact]
-    public void PreferencesViewModel_MasoraMenuEnabled_MirrorsService()
+    public void PerekPreferencesViewModel_MasoraMenuEnabled_MirrorsService()
     {
-        var viewModel = new PreferencesViewModel(_service);
+        var viewModel = new PerekPreferencesViewModel(_service);
         viewModel.MasoraMenuEnabled.Should().BeFalse();
 
         var notified = false;
-        viewModel.PropertyChanged += (_, e) => notified |= e.PropertyName == nameof(PreferencesViewModel.MasoraMenuEnabled);
+        viewModel.PropertyChanged += (_, e) => notified |= e.PropertyName == nameof(PerekPreferencesViewModel.MasoraMenuEnabled);
         viewModel.MasoraMenuEnabled = true;
 
         _service.MasoraMenuEnabled.Should().BeTrue();

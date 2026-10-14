@@ -138,6 +138,17 @@ fn fold_final_form(c: char) -> char {
 /// characters, Hebrew final-letter folding, lowercasing, and whitespace
 /// collapsing.
 pub fn normalize(text: &str) -> String {
+    normalize_impl(text, true)
+}
+
+/// The same normalization minus final-letter folding — the exact semantics of
+/// the app's `SearchText.Normalize` and the website's `normalizeSearchText`,
+/// which the Tanahpedia search scoring shares for cross-platform parity.
+pub fn normalize_strict(text: &str) -> String {
+    normalize_impl(text, false)
+}
+
+fn normalize_impl(text: &str, fold_finals: bool) -> String {
     let mut out = String::with_capacity(text.len());
     for c in text.chars().flat_map(char::nfd) {
         if is_combining_mark(c) {
@@ -155,14 +166,14 @@ pub fn normalize(text: &str) -> String {
         ) {
             continue;
         }
-        let c = fold_final_form(c);
+        let c = if fold_finals { fold_final_form(c) } else { c };
         if c.is_alphanumeric() {
             for lower in c.to_lowercase() {
                 if lower.is_alphanumeric() {
                     out.push(lower);
                 }
             }
-        } else if !out.ends_with(' ') {
+        } else if !out.ends_with(' ') && !out.is_empty() {
             out.push(' ');
         }
     }

@@ -63,7 +63,7 @@
 		"flowbite": "4.0.2",
 		"flowbite-react": "0.12.17",
 		"gematry": "1.0.2",
-		"html-flip-book-react": "0.0.0-alpha.45",
+		"html-flip-book-react": "0.0.0-alpha.46",
 		"isomorphic-dompurify": "4.5.0",
 		"leaflet": "1.9.4",
 		"mapbox-gl": "3.32.0",
@@ -78,7 +78,8 @@
 		"react-phone-number-input": "3.4.18",
 		"sharp": "0.35.5",
 		"sunrise-sunset-js": "3.3.1",
-		"temporal-polyfill": "1.0.5"
+		"temporal-polyfill": "1.0.5",
+		"ogg-opus-decoder": "1.7.5"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.5.15",

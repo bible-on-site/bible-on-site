@@ -13,14 +13,17 @@ export const SCHEMA_VERSION = 1;
 
 /** A test discovered from the tested revision's sources. */
 export interface DiscoveredTest {
-	/** Stable identity: `Namespace.Class.Method` (xUnit FQN). */
+	/**
+	 * Stable identity: `Namespace.Class.Method` (xUnit FQN) or
+	 * `<testDir-relative file> :: <describe/test titles>` (Playwright).
+	 */
 	id: string;
 	/** Repo-relative file declaring the test. */
 	file: string;
 	/** `Shared`, `Android` or `iOS` — which platform jobs may run it. */
 	platform: string;
-	/** Suite category trait, e.g. `MobileE2E`. */
-	category: string;
+	/** Suite category trait, e.g. `MobileE2E` (xUnit only). */
+	category?: string;
 }
 
 /** Per-test evidence recorded for one suite on one platform. */
@@ -29,6 +32,13 @@ export interface CoverageTreeTest {
 	file?: string;
 	/** Sorted repo-relative app files the test provably reached. */
 	files: string[];
+	/**
+	 * The run produced no attributable evidence for this test (no page
+	 * opened, a non-fixture transport, an unresolvable request log). Its
+	 * `files` set is the union of every attributed file plus shared
+	 * coverage, so any covered change runs it — never narrowed (#2085).
+	 */
+	unattributed?: boolean;
 	/** Sorted automation ids the test queried through the driver. */
 	automationIds: string[];
 	/** Automation ids that no source file could claim (evidence gaps). */
@@ -95,13 +105,24 @@ export interface SuiteRules {
 	/** Maps CI artifact keys (`android`) onto test platform traits (`Android`). */
 	platforms: Record<string, string>;
 	tests: {
-		/** Repo-relative root holding the test project. */
+		/**
+		 * Repo-relative root holding the suite's runnable test files.
+		 * Other files under it (helpers, fixtures) are shared harness —
+		 * a change selects every applicable test.
+		 */
 		root: string;
+		/**
+		 * Repo-relative Playwright `testDir`: the file part of a test id is
+		 * relative to it (`tests/e2e/x.test.ts` → `e2e/x.test.ts` when the
+		 * root is `tests/`). Defaults to `root` (suites whose testDir is
+		 * the root itself, e.g. `tests/e2e`).
+		 */
+		testDir?: string;
 		/** Glob (relative to root) matching files that declare runnable tests. */
 		glob: string;
-		framework: "csharp-xunit";
-		/** Tests must carry this `Category` trait to be part of the suite. */
-		category: string;
+		framework: "csharp-xunit" | "playwright";
+		/** xUnit only: tests must carry this `Category` trait to be in the suite. */
+		category?: string;
 	};
 	sources: {
 		/** App source root scanned for automation ids. */
@@ -146,8 +167,10 @@ export function loadRules(path: string): SuiteRules {
 	}
 	if (missing.length > 0)
 		throw new Error(`${path}: missing fields: ${missing.join(", ")}`);
-	if (!raw.tests.root || !raw.tests.glob || !raw.tests.category)
-		throw new Error(`${path}: tests.root, tests.glob and tests.category are required`);
+	if (!raw.tests.root || !raw.tests.glob)
+		throw new Error(`${path}: tests.root and tests.glob are required`);
+	if (raw.tests.framework === "csharp-xunit" && !raw.tests.category)
+		throw new Error(`${path}: tests.category is required for csharp-xunit`);
 	return raw;
 }
 
@@ -174,6 +197,10 @@ export function validateTree(
 	if (tree.platform !== platform) return `platform ${tree.platform}`;
 	if (!isHexSha(tree.snapshotSha)) return `snapshotSha ${tree.snapshotSha}`;
 	if (typeof tree.tests !== "object" || tree.tests === null) return "missing tests";
+	// A partial-evidence tree can never back a narrowing selection — the
+	// publish step gates on `complete` too, so reaching this means an older
+	// or hand-built artifact; treat it as an untrusted baseline.
+	if (tree.complete !== true) return "incomplete tree";
 	return null;
 }
 

@@ -232,3 +232,28 @@ public class TanahpediaCategoryHomepage
     /// <summary>Admin-authored HTML intro rendered above the listing.</summary>
     public string? Content { get; set; }
 }
+
+/// <summary>
+/// One ranked Tanahpedia search hit — the app counterpart of the website's
+/// /search tanahpedia result: matched over title, canonical name,
+/// synonym/alias names and body content, one hit per entry.
+/// </summary>
+public class TanahpediaSearchHit
+{
+    public string Id { get; set; } = string.Empty;
+
+    /// <summary>Canonical entry slug — the navigation key, never a raw alias.</summary>
+    public string UniqueName { get; set; } = string.Empty;
+
+    public string Title { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Plain-text snippet: the body window around a content match, the
+    /// "נקרא גם:" alias list when an alias drove the match, or the body
+    /// lead-in for a title-only match. Empty when the entry has neither.
+    /// </summary>
+    public string Excerpt { get; set; } = string.Empty;
+
+    /// <summary>Relevance score — name fields weighted ×2 over body content.</summary>
+    public int Score { get; set; }
+}

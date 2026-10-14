@@ -1,10 +1,20 @@
 /** @jest-environment jsdom */
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import {
+	act,
+	fireEvent,
+	render,
+	screen,
+	within,
+} from "@testing-library/react";
 import ReaderSettings from "@/app/929/[number]/components/ReaderSettings";
 import {
 	READER_SETTINGS_STORAGE_KEY,
 	READER_SETTINGS_VERSION,
 } from "@/lib/reader-settings";
+import {
+	DIVINE_NAME_MASKING_KEY,
+	getDivineNameMaskingSettings,
+} from "@/lib/divine-name-settings";
 import {
 	getRecitationSettings,
 	openReaderSettings,
@@ -97,7 +107,14 @@ test("Escape closes the modal and cross-tab preferences update its controls", ()
 			READER_SETTINGS_STORAGE_KEY,
 			JSON.stringify({ fontStep: 0, lineStep: 2, wordStep: 1 }),
 		);
-		window.dispatchEvent(new Event("storage"));
+		// Unrelated keys must not refresh the panel; the owned key does.
+		window.dispatchEvent(new StorageEvent("storage", { key: "otherPref" }));
+		// A null key (e.g. localStorage.clear() in another tab) is ignored too.
+		window.dispatchEvent(new StorageEvent("storage"));
+		expect(screen.getByRole("slider", { name: "גודל גופן" })).toHaveValue("2");
+		window.dispatchEvent(
+			new StorageEvent("storage", { key: READER_SETTINGS_STORAGE_KEY }),
+		);
 	});
 	expect(screen.getByRole("slider", { name: "גודל גופן" })).toHaveValue("0");
 	fireEvent(
@@ -106,6 +123,52 @@ test("Escape closes the modal and cross-tab preferences update its controls", ()
 	);
 	expect(screen.queryByRole("dialog")).toBeNull();
 	expect(button).toHaveFocus();
+});
+
+test("display section exposes הסתר שם השם toggle and per-name choices", () => {
+	render(<ReaderSettings />);
+	fireEvent.click(screen.getByRole("button", { name: "הגדרות קריאה" }));
+	const toggle = screen.getByRole("checkbox", { name: "הסתר שם השם" });
+	expect(toggle).not.toBeChecked();
+	fireEvent.click(toggle);
+	expect(toggle).toBeChecked();
+	// The enable flag is independent of the per-name choices, which keep
+	// their own stored values.
+	expect(getDivineNameMaskingSettings()).toEqual(
+		expect.objectContaining({ enabled: true, elohim: "hyphen", yhwh: "heh" }),
+	);
+	fireEvent.click(screen.getByRole("radio", { name: "אלקים" }));
+	expect(getDivineNameMaskingSettings().elohim).toBe("elokim");
+	fireEvent.click(screen.getByRole("radio", { name: "ד'" }));
+	expect(getDivineNameMaskingSettings().yhwh).toBe("dalet");
+	// Custom text stays disabled until אחר is chosen for that name (אל has
+	// no אחר option at all).
+	const custom = screen.getByRole("textbox", {
+		name: "כתיב חלופי עבור שדי",
+	});
+	expect(custom).toBeDisabled();
+	fireEvent.click(
+		within(screen.getByRole("group", { name: "אלהים" })).getByRole("radio", {
+			name: "אחר",
+		}),
+	);
+	expect(getDivineNameMaskingSettings().elohim).toBe("custom");
+	fireEvent.click(
+		within(screen.getByRole("group", { name: "שדי" })).getByRole("radio", {
+			name: "אחר",
+		}),
+	);
+	fireEvent.change(custom, { target: { value: "אל חי" } });
+	expect(getDivineNameMaskingSettings()).toEqual(
+		expect.objectContaining({ shaddai: "custom", shaddaiCustom: "אל חי" }),
+	);
+	fireEvent.click(toggle);
+	expect(getDivineNameMaskingSettings()).toEqual(
+		expect.objectContaining({ enabled: false, elohim: "custom" }),
+	);
+	expect(
+		JSON.parse(localStorage.getItem(DIVINE_NAME_MASKING_KEY) ?? "null"),
+	).toEqual(getDivineNameMaskingSettings());
 });
 
 test.each([

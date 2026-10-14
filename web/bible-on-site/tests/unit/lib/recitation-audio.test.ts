@@ -12,6 +12,7 @@ const sources: {
 	onended: null | (() => void);
 }[] = [];
 const decode = jest.fn();
+const decodeFile = jest.fn();
 const free = jest.fn();
 const pcm = {
 	channelData: [new Float32Array(1000)],
@@ -24,6 +25,11 @@ jest.mock("mpg123-decoder", () => ({
 		.fn()
 		.mockImplementation(() => ({ ready: Promise.resolve(), decode, free })),
 }));
+jest.mock("ogg-opus-decoder", () => ({
+	OggOpusDecoderWebWorker: jest
+		.fn()
+		.mockImplementation(() => ({ ready: Promise.resolve(), decodeFile, free })),
+}));
 const gain = { gain: { value: 1 }, connect: jest.fn(), disconnect: jest.fn() };
 const close = jest.fn();
 const resume = jest.fn();
@@ -34,6 +40,7 @@ beforeEach(() => {
 	sources.length = 0;
 	audioClock = 10;
 	decode.mockResolvedValue(pcm);
+	decodeFile.mockResolvedValue(pcm);
 	free.mockResolvedValue(undefined);
 	close.mockResolvedValue(undefined);
 	resume.mockResolvedValue(undefined);
@@ -76,6 +83,21 @@ beforeEach(() => {
 afterEach(() => {
 	global.AudioContext = originalContext;
 	global.fetch = originalFetch;
+});
+
+test("Opus playback verifies derived bytes and flushes the entire file before exact range scheduling", async () => {
+	const player = new RecitationAudio(
+		"https://example.com/asset.ogg",
+		hash,
+		undefined,
+		"ogg-opus",
+	);
+	const calls = decode.mock.calls.length;
+	await player.play(100, 800, jest.fn());
+	expect(decodeFile).toHaveBeenCalledWith(new Uint8Array(bytes));
+	expect(decode.mock.calls.length).toBe(calls);
+	expect(sources[0].start).toHaveBeenCalledWith(0, 0.1, 0.7);
+	player.dispose();
 });
 
 test("uses original timestamps and audio-clock duration, reuses decoded chapter", async () => {
