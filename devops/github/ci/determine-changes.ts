@@ -70,7 +70,11 @@ export const MODULES = {
 	},
 	app: {
 		directory: "app",
-		extraModulePaths: ["web/bible-on-site/src/data/recitation/opus-playback.json"],
+		// Both approved timings and the Opus inventory ship in the native app.
+		extraModulePaths: [
+			"data/recitation/recitation.sqlite",
+			"web/bible-on-site/src/data/recitation/opus-playback.json",
+		],
 		// The e2e-impact selector/collector and the exec coverage-tree
 		// extractor drive the Appium suite (#2085).
 		ciPaths: [
@@ -79,9 +83,8 @@ export const MODULES = {
 			"devops/github/ci/e2e-impact",
 			"devops/e2e-coverage-trees",
 		],
-		// Shared decoder changes need native checks. Only changes to the packaged
-		// app itself need an app version, package and release. Website timing
-		// batches also change their package version files.
+		// Shared website decoder inputs require native checks without a native
+		// release. Approved timings are packaged inputs through extraModulePaths.
 		extraCiPattern:
 			/^web\/bible-on-site\/(package(-lock)?\.json|src\/lib\/recitation-audio\.ts)$/,
 		// Test projects exercise the app but never change its package, so a
