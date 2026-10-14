@@ -105,6 +105,7 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         Platform.GoBack(Driver);
         Page.WaitFor("PerekSearchInput", element => element.Text == "ויעש אלהים את הרקיע");
         Page.WaitFor("SearchResultTitle", element => element.Text == "בראשית א ז");
+        SaveDiagnostics("FloatingSearchVerseReturn", "passed");
         Page.Tap("SearchNavigationButton");
         AssertRegularReader();
     });
