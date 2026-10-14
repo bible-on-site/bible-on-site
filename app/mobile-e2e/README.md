@@ -14,7 +14,11 @@ trigger recursive Appium teardown. Once the harness exits, `run.mjs` terminates
 only this app on the explicit simulator within five seconds, before exporting
 logs. It reads app PIDs from that device's live stream, inspects only those PIDs,
 and verifies their installed executable paths include the explicit device UDID
-before signaling them. This avoids expensive host-wide process snapshots. Confirmed already-stopped apps are accepted; transport
+before signaling them. A small helper is compiled before testing and reads only
+kernel BSD state and the actual executable path. It does not inspect Mach tasks,
+threads or mutable command arguments; even a PID-limited `ps` stalled past five
+seconds on a loaded Mac. The native ownership regression also rejects an argv
+prefix impersonating the app. This avoids expensive process snapshots. Confirmed already-stopped apps are accepted; transport
 and timeout failures fail the run. `MOBILE_KEEP_APP=1` retains the review app.
 The existing 15-second session-delete and 15-minute pilot limits remain intact.
 
