@@ -292,7 +292,7 @@ jobs:
         env:
           NUGET_PACKAGES: ${{ runner.temp }}/ios-prebuilt-empty-nuget
         run: |
-          dotnet devops/bin/Debug/_build.dll Version
+          dotnet devops/bin/Debug/_build.dll ListMobileE2E --configuration Debug
           dotnet BibleOnSite.Tests.MobileE2E/bin/Debug/net10.0/BibleOnSite.Tests.MobileE2E.dll --filter-query '/[(Category=Unit)]' --progress off
           echo "NUGET_PACKAGES=$NUGET_PACKAGES" >> "$GITHUB_ENV"
 
