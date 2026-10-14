@@ -70,13 +70,13 @@ public sealed class PerushimHtmlScrollStabilityTests(ITestOutputHelper output, M
         // stalling for minutes if the app did crash.
         void Storm(int fromY, int toY)
         {
-            for (var burst = 0; burst < 2; burst++)
+            foreach (var sequence in PerekScrollStabilityTests.CreateFlickBursts(
+                centerX, fromY, centerX, toY, 20))
             {
                 var midState = Convert.ToInt64(Driver!.ExecuteScript("mobile: queryAppState",
                     new Dictionary<string, object> { ["bundleId"] = "com.tanah.daily929" }));
                 Assert.Equal(4L, midState);
-                Driver!.PerformActions([PerekScrollStabilityTests.CreateFlickSequence(
-                    centerX, fromY, centerX, toY, 10)]);
+                Driver!.PerformActions([sequence]);
             }
         }
 

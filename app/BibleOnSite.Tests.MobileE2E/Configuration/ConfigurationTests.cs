@@ -53,6 +53,7 @@ public sealed class ConfigurationTests
             // XCTest's idle threshold, so every proxied WDA command stalled.
             Assert.Equal(0, options["appium:waitForIdleTimeout"]);
             Assert.Equal(true, options["appium:skipLogCapture"]);
+            Assert.Equal(false, options["appium:shouldTerminateApp"]);
             var settings = Assert.IsType<Dictionary<string, object>>(options["appium:settings"]);
             Assert.Equal("visible,accessible", settings["pageSourceExcludedAttributes"]);
             Assert.Equal(false, settings["shouldUseCompactResponses"]);
@@ -63,6 +64,7 @@ public sealed class ConfigurationTests
             Assert.False(options.ContainsKey("appium:prebuiltWDAPath"));
             Assert.False(options.ContainsKey("appium:waitForIdleTimeout"));
             Assert.False(options.ContainsKey("appium:skipLogCapture"));
+            Assert.False(options.ContainsKey("appium:shouldTerminateApp"));
             Assert.False(options.ContainsKey("appium:commandTimeouts"));
             Assert.False(options.ContainsKey("appium:settings"));
         }
