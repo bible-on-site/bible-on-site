@@ -1,0 +1,50 @@
+{
+	"schemaVersion": 1,
+	"suite": "website-e2e",
+	"collector": "playwright-istanbul",
+	"collectorVersion": "1.0.0",
+	"platforms": {
+		"web": "Shared"
+	},
+	"tests": {
+		"root": "web/bible-on-site/tests/e2e",
+		"testDir": "web/bible-on-site/tests",
+		"glob": "**/*.test.ts",
+		"framework": "playwright"
+	},
+	"sources": {
+		"root": "web/bible-on-site",
+		"globs": ["src/**"]
+	},
+	"alwaysRun": [
+		"e2e/health.test.ts :: /api/health :: returns 200 with status ok"
+	],
+	"runAllOnChange": [
+		"web/bible-on-site/package.json",
+		"web/bible-on-site/package-lock.json",
+		"web/bible-on-site/next.config.mjs",
+		"web/bible-on-site/tsconfig.json",
+		"web/bible-on-site/playwright*.ts",
+		"web/bible-on-site/playwright*.js",
+		"web/bible-on-site/launch-e2e-server.mts",
+		"web/bible-on-site/get-debug-port.js",
+		"web/bible-on-site/.test.env",
+		"web/bible-on-site/e2e-impact.json",
+		"web/bible-on-site/tests/util/**",
+		"web/shared/**",
+		".github/**",
+		"devops/**",
+		"data/**"
+	],
+	"noImpact": [
+		"docs/**",
+		"**/*.md",
+		"web/bible-on-site/tests/unit/**",
+		"web/bible-on-site/tests/perf/**",
+		"web/bible-on-site/tests/integration/**",
+		"web/bible-on-site/jest*",
+		"web/bible-on-site/.coverage/**",
+		"web/bible-on-site/.playwright-*/**"
+	],
+	"scope": ["web/bible-on-site/**"]
+}

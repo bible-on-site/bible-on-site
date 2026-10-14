@@ -1,14 +1,20 @@
 using OpenQA.Selenium;
+using OpenQA.Selenium.Appium;
 using Xunit;
 
 namespace BibleOnSite.Tests.MobileE2E;
 
 // One device per matrix runner; scenarios on that device run sequentially.
+// iOS shards the suite across two simulators (#2083): Shard=1 owns the shared
+// pilot while Shard=2 takes the iOS-only classes, keeping the two disjoint
+// groups close in scenario count. Android runs every applicable test and
+// ignores the trait.
 [Collection("Mobile device")]
 [Trait("Category", "MobileE2E")]
 [Trait("Platform", "Shared")]
-public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessionFactory sessions)
-    : MobileDeviceTest(output, sessions)
+[Trait("Shard", "1")]
+public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSession session)
+    : MobileDeviceTest(output, session)
 {
     [Fact]
     public void StartupDisplaysPackagedPesukimAndUsableBottomNavigation() => Scenario(() =>
@@ -56,7 +62,8 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         Assert.True(input.Location.X + input.Size.Width <= navigation.Location.X, "Back belongs at the right edge in RTL.");
         Platform.Tap(Driver, Page.WaitFor("SearchResultTitle", element => element.Text == "בראשית א"));
         AssertRegularReader();
-        Page.GoBackTo("PerekSearchInput", element => element.Text == "בראשיט 1");
+        Platform.GoBack(Driver);
+        Page.WaitFor("PerekSearchInput", element => element.Text == "בראשיט 1");
         Page.Tap("ClearSearchButton");
         Page.WaitFor("RecentSearchPhrase", element => element.Text == "בראשיט 1");
         Platform.Tap(Driver, Page.WaitFor("RecentSearchPhrase", element => element.Text == "בראשיט 1"));
@@ -81,11 +88,10 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         Page.WaitForHidden("SearchSheet");
         SearchFor("בראשיט 1", "בראשית א");
         Platform.Tap(Driver!, Page.WaitFor("SearchResultTitle", element => element.Text == "בראשית א"));
-        // First perek navigation of the session loads the reader on a cold
-        // app — same loaded-runner cold path as WaitForStartup (2 minutes).
-        Page.WaitFor("PerekSource", element => element.Text == "בראשית א", TimeSpan.FromMinutes(3));
+        Page.WaitFor("PerekSource", element => element.Text == "בראשית א");
         AssertRegularReader();
-        Page.GoBackTo("PerekSearchInput", element => element.Text == "בראשיט 1");
+        Platform.GoBack(Driver!);
+        Page.WaitFor("PerekSearchInput", element => element.Text == "בראשיט 1");
         Page.WaitFor("SearchResultTitle", element => element.Text == "בראשית א");
 
         SearchFor("ויעש אלהים את הרקיע", "בראשית א ז");
@@ -95,9 +101,11 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
             .First(element => element.Displayed && element.Text == "בראשית א ז");
         Platform.Tap(Driver, result);
         AssertRegularReader();
-        Page.WaitFor("PasukNumber", element => element.Text == "ז");
-        Page.GoBackTo("PerekSearchInput", element => element.Text == "ויעש אלהים את הרקיע");
+        Page.WaitFor("PasukText", element => element.Text.StartsWith("ז "));
+        Platform.GoBack(Driver);
+        Page.WaitFor("PerekSearchInput", element => element.Text == "ויעש אלהים את הרקיע");
         Page.WaitFor("SearchResultTitle", element => element.Text == "בראשית א ז");
+        SaveDiagnostics("FloatingSearchVerseReturn", "passed");
         Page.Tap("SearchNavigationButton");
         AssertRegularReader();
     });
@@ -117,13 +125,8 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         Page.Tap("SearchSheetApplyButton");
         Page.WaitForHidden("SearchSheet");
         SearchFor("בראשית ברא אלהים", "בראשית א א");
-        // A fresh installation builds the local index for the entire commentary
-        // package, and an interrupted import is discarded rather than resumed —
-        // a scenario boundary can throw away a nearly complete build, so the
-        // deadline must cover a full fresh import (~370s observed on a loaded
-        // macOS runner) plus result rendering and poll lag.
-        // Subsequent result and history assertions use normal deadlines.
-        var commentary = Page.WaitFor("SearchResultTitle", element => element.Text.Contains(" - בראשית א א", StringComparison.Ordinal), TimeSpan.FromMinutes(8));
+        // CI ships the generation-matched index; this must be an ordinary local query.
+        var commentary = Page.WaitFor("SearchResultTitle", element => element.Text.Contains(" - בראשית א א", StringComparison.Ordinal));
         var title = commentary.Text;
         var commentaryName = title.Split(" - ", StringSplitOptions.None)[0];
         var position = commentary.Location;
@@ -137,17 +140,24 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         var readerSource = Page.Source;
         Page.Tap(Platform.FlyoutButton);
         Page.Tap("FlyoutPreferences");
+        Page.WaitFor("SettingsDisplayRow");
+        Page.Tap("SettingsDisplayRow");
         Page.WaitFor("FontFactorSlider");
-        Page.GoBackTo("PerekSource", element => element.Text == readerSource);
+        Platform.GoBack(driver);
+        Page.WaitFor("SettingsDisplayRow");
+        Platform.GoBack(driver);
+        Page.WaitFor("PerekSource", element => element.Text == readerSource);
         Page.WaitFor("InlinePerushName", element => element.Text == commentaryName);
         AssertRegularReader();
-        Page.GoBackTo("PerekSearchInput", element => element.Text == "בראשית ברא אלהים");
+        Platform.GoBack(driver);
+        Page.WaitFor("PerekSearchInput", element => element.Text == "בראשית ברא אלהים");
         var restored = Page.WaitFor("SearchResultTitle", element => element.Text == title);
         Assert.Equal(position, restored.Location);
         var alternative = Page.WaitFor("SearchResultTitle", element => element.Text == "בראשית א א");
         Platform.Tap(driver, alternative);
         AssertRegularReader();
-        Page.GoBackTo("PerekSearchInput", element => element.Text == "בראשית ברא אלהים");
+        Platform.GoBack(driver);
+        Page.WaitFor("PerekSearchInput", element => element.Text == "בראשית ברא אלהים");
         if (Configuration.KeepAppForReview)
         {
             Platform.Tap(driver, Page.WaitFor("SearchResultTitle", element => element.Text == title));
@@ -179,10 +189,61 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
             ? bar : bar.FindElement(By.XPath(".//*[@class='android.widget.EditText' or @class='android.widget.AutoCompleteTextView' or @type='XCUIElementTypeSearchField' or @type='XCUIElementTypeTextField']"));
         input.Clear();
         input.SendKeys(text);
-        // The first query of a session builds the search index on-device —
-        // on a loaded simulator/emulator under coverage instrumentation it can
-        // far outlast the default wait; subsequent searches reuse the warm index.
-        Page.WaitFor("SearchResultTitle", element => element.Text == expectedTitle, TimeSpan.FromMinutes(3));
+        Page.WaitFor("SearchResultTitle", element => element.Text == expectedTitle);
+    }
+
+    // Commentary matches arrive on the slowest results wave, and a later
+    // publish can still move rows between resolving the element and the
+    // coordinate tap dispatching — a stray touch lands on a sibling row and
+    // opens no perush. Settle the row's frame, tap, and if no commentary
+    // reader appeared go back to the retained search page and tap once more.
+    private (string Title, System.Drawing.Point Position) OpenCommentaryResult(string rowSuffix, string searchPhrase)
+    {
+        // The shipped index serves the first search. A missed coordinate tap
+        // gets one retry, within the same ordinary interaction deadline.
+        for (var attempt = 0; attempt < 2; attempt++)
+        {
+            var (commentary, _) = WaitForSettledRow(rowSuffix, TimeSpan.FromSeconds(45));
+            var title = commentary.Text;
+            var position = commentary.Location;
+            Platform.Tap(Driver!, commentary);
+            AssertRegularReader();
+            var commentaryName = title.Split(" - ", StringSplitOptions.None)[0];
+            try
+            {
+                var perushTimeout = attempt == 0 ? TimeSpan.FromSeconds(15) : TimeSpan.FromSeconds(45);
+                Page.WaitFor("InlinePerushName", element => element.Text == commentaryName, perushTimeout);
+                return (title, position);
+            }
+            catch (WebDriverTimeoutException) when (attempt == 0)
+            {
+                Platform.GoBack(Driver!);
+                Page.WaitFor("PerekSearchInput", element => element.Text == searchPhrase);
+            }
+        }
+        throw new InvalidOperationException("The commentary tap retry loop exited without returning a result.");
+    }
+
+    private (AppiumElement Element, System.Drawing.Rectangle Frame) WaitForSettledRow(string suffix, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        var frame = System.Drawing.Rectangle.Empty;
+        while (DateTime.UtcNow < deadline)
+        {
+            var row = Driver!.FindElements(Platform.AutomationId("SearchResultTitle"))
+                .FirstOrDefault(element => element.Displayed && element.Text.Contains(suffix, StringComparison.Ordinal));
+            if (row != null)
+            {
+                var current = new System.Drawing.Rectangle(row.Location, row.Size);
+                if (current == frame)
+                {
+                    return (row, current);
+                }
+                frame = current;
+            }
+            Thread.Sleep(250);
+        }
+        throw new WebDriverTimeoutException($"No settled SearchResultTitle row containing '{suffix}' within {timeout.TotalSeconds} seconds.");
     }
 
     private void AssertBookGroupColumns()
@@ -236,10 +297,15 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         var backward = next.Enabled ? "PrevPerekButton" : "NextPerekButton";
         Page.Tap(forward);
         Page.WaitFor("PerekSource", element => element.Text != source);
+        // The open menu's scrim covers the reader; XCTest marks covered text
+        // invisible, so close the menu before asserting pasuk content.
+        Page.Tap("CircularMenuButton");
         Page.WaitFor("PasukText", element => !string.IsNullOrWhiteSpace(element.Text) && element.Text != pasuk);
+        Page.OpenCircularMenu();
         // Satellite navigation keeps the menu open for further chapter changes.
         Page.Tap(backward);
         Page.WaitFor("PerekSource", element => element.Text == source);
+        Page.Tap("CircularMenuButton");
         Page.WaitFor("PasukText", element => element.Text == pasuk);
         Page.AssertBottomNavigationLayout();
     });
@@ -250,10 +316,21 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         var source = Page.Source;
         Page.Tap(Platform.FlyoutButton);
         Page.Tap("FlyoutPreferences");
+        Assert.True(Page.WaitFor("SettingsDisplayRow").Enabled);
+        Assert.True(Page.WaitFor("SettingsPerekRow").Enabled);
+        Assert.True(Page.WaitFor("SettingsPacksRow").Enabled);
+        Assert.True(Page.WaitFor("RecitationSettingsRow").Enabled);
+        Assert.True(Page.WaitFor("SettingsSoundRow").Enabled);
+        Assert.True(Page.WaitFor("SettingsSupportRow").Enabled);
+        Page.Tap("SettingsDisplayRow");
         Assert.True(Page.WaitFor("FontFactorSlider").Enabled);
-        Assert.True(Page.WaitFor("PerekTodaysRadio").Enabled);
-        Assert.True(Page.WaitFor("PerekLastRadio").Enabled);
-        Page.GoBackTo("PerekSource", element => element.Text == source);
+        Platform.GoBack(Driver!);
+        Page.Tap("SettingsPerekRow");
+        Assert.True(Page.WaitFor("PerekTodaysOption").Enabled);
+        Assert.True(Page.WaitFor("PerekLastLearntOption").Enabled);
+        Platform.GoBack(Driver!);
+        Platform.GoBack(Driver!);
+        Page.WaitFor("PerekSource", element => element.Text == source);
         Page.AssertBottomNavigationLayout();
     });
 }

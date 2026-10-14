@@ -108,6 +108,30 @@ public class ArticleSearchResult : SearchResult
 }
 
 /// <summary>
+/// Search result for a remote Tanahpedia encyclopedia entry match.
+/// Title carries the entry title; SubtitleHtml the API excerpt highlighted
+/// for the search phrase; UniqueName is the canonical slug used for
+/// navigation — never the raw alias the reader typed.
+/// </summary>
+public class TanahpediaSearchResult : SearchResult
+{
+    public string EntryId { get; }
+    public string UniqueName { get; }
+    public string Excerpt { get; }
+
+    public override SearchFilter ResultType => SearchFilter.Tanahpedia;
+
+    public TanahpediaSearchResult(string entryId, string uniqueName, string excerpt, int score, string searchPhrase)
+    {
+        EntryId = entryId;
+        UniqueName = uniqueName;
+        Excerpt = excerpt;
+        SearchPhrase = searchPhrase;
+        Score = score;
+    }
+}
+
+/// <summary>
 /// Search result for a perush/commentary match.
 /// </summary>
 public class PerushSearchResult : SearchResult

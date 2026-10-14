@@ -3,14 +3,38 @@
 The shared C# suite in `../BibleOnSite.Tests.MobileE2E` runs on Android and iOS.
 CI creates one independent runner per matrix entry (`app-mobile-e2e.yml`), with
 `fail-fast: false`, and requires both results through the main CI gate. Tests
-on an individual device run sequentially and start with a freshly reset app.
-Android uses a full app reset. iOS reinstalls the app without erasing the booted
-simulator, and Appium operates the simulator headlessly. One Appium session is
-shared across the collection: the first scenario builds it and later scenarios
-replay the same reset — terminate, reinstall, relaunch — inside it, skipping
-the ~30-70s WDA session handshake per test. Launch environment (e.g.
-`BIBLE_E2E_PERUSHIM`) is re-applied through `activateApp`; a platform that
-cannot replay it falls back to building a new session.
+on an individual device run sequentially. The first session installs and resets
+the app; later scenarios restart its process with their launch environment.
+The install and built search index survive these restarts. Appium operates
+the simulator headlessly.
+
+CI runs the complete iOS suite across two independent `xcode-27` runners, each
+with one simulator and one shared Appium session. Each host has 3 CPUs and
+7 GB RAM. The existing `Shard=1|2` traits form a disjoint partition: all six
+shared scenarios run on the first runner and all four iOS-only scenarios on
+the second. Each pilot keeps its 15-minute deadline. A final merge requires
+successful evidence for the whole discovered suite, rejects duplicates, and
+combines native line coverage and execution/automation evidence. Only a full
+successful union can replace a trusted iOS baseline.
+
+Optional sharding remains available on a host with sufficient resources (#2083):
+`ios:boot` provisions a second same-model clone of the selected device when
+`MOBILE_E2E_SHARD_COUNT=2`, and `npm run test:sharded` runs two `run.mjs`
+children in parallel — each with its own `MOBILE_UDID`, Appium port
+(`MOBILE_APPIUM_PORT`, 4723/4724), WebDriverAgent listen port
+(`MOBILE_WDA_PORT`, 8100/8101 — simulators share the host loopback, so
+concurrent WDA instances must not collide), artifacts subdirectory
+(`<platform>/shard<N>/`) and disjoint `Shard` trait group (`MOBILE_E2E_SHARD`,
+added to the `TestMobileE2E` filter by the Nuke target). Every MobileE2E class
+carries `[Trait("Shard", "1")]` or `[Trait("Shard", "2")]` so the union
+reproduces the unsharded suite exactly (shard 1: `PerekPilotTests`, shard 2:
+the iOS-only classes); Android ignores the trait and keeps
+running everything on one emulator. `ShardAssignmentTests` fails the harness
+unit run when an iOS-applicable class lacks exactly one of those values, so a
+new class cannot silently drop out of every shard. `run-sharded.mjs` merges the per-shard
+`coverage-evidence/` back into the top-level artifacts directory for the
+coverage-tree collect step and fails if both shards produced the same test's
+evidence.
 Before iOS tests, Appium downloads the official simulator WebDriverAgent matching
 the locked driver dependency and launches it directly. This keeps cold Xcode
 compilation outside session startup; `npm test` also prepares the agent locally.
@@ -22,6 +46,14 @@ navigation back to the original perek. The Debug app points to a closed local
 endpoint for this pilot, so startup exercises offline behavior without relying
 on production or an external API. The build restores any local API override
 after packaging. Canonical content comes from the existing packaged database.
+
+The pilot runs under an independent 15-minute wall-clock supervisor, including
+local harness builds and Appium setup. Cancellation stops the owned process
+group and escalates after three seconds, including child processes left behind
+by a terminated wrapper. `pilot-timing.json` records duration and timeout status.
+The sharded runner builds the harness once; its children use those outputs
+without restoring or rebuilding. Commentary searches use the shipped index and
+the ordinary 45-second deadline, including on a fresh install.
 
 ## Adding scenarios and platform differences
 
@@ -36,10 +68,14 @@ branching or skipping an entire shared scenario. Shared classes use
 `[Trait("Platform", "Android")]` or `[Trait("Platform", "iOS")]` alongside
 `[Trait("Category", "MobileE2E")]`; the Nuke target automatically selects shared
 tests plus the current platform, leaving platform-only behavior easy to add.
+Every class runnable on iOS must also carry exactly one
+`[Trait("Shard", "1")]` or `[Trait("Shard", "2")]` for optional sharding.
+`ShardAssignmentTests` fails
+the harness unit run when a class is left out.
 Use `[Collection("Mobile device")]` on every mobile test class to serialize
-scenarios that own the same device. Inject `MobileDeviceSessionFactory`; the
-collection fixture keeps the live session in `sessions.Shared` and quits it
-once at the end. If session startup or cleanup fails in a
+scenarios that own the same device. Inject `MobileDeviceSession`; this collection
+fixture owns one driver and releases it after the last scenario. The session
+factory latches uncertain startup or cleanup failures. If either fails in a
 way that could leave Appium working on the device, subsequent scenarios fail
 without requesting another session on it; the original failure remains in the
 test report. Failures matching `DeviceSessionDeath` mean the session is already
@@ -51,11 +87,9 @@ exercises the real touch target of rounded floating controls while avoiding
 XCTest's automatic hit-point selection. Native device logs record menu press,
 release, click and completed animations to diagnose touch delivery. Android uses
 native element clicks. UI assertions and readiness deadlines remain shared.
-After session creation, allow two minutes for the first reader snapshot: a cold
-iOS lookup can take longer than 45 seconds and return the earlier loading tree
-even though the reader has appeared. This startup gate requires a visible,
-nonempty perek source and captures failure diagnostics. Subsequent scenario
-lookups and navigation retain their 45-second deadlines.
+The startup gate requires a visible, nonempty perek source within the same
+45-second deadline as ordinary scenario lookups and navigation. A failure
+captures device diagnostics.
 iOS disables XCTest idle checks (`waitForIdleTimeout` 0): every proxied WDA
 command otherwise waits for the app main thread to stay quiet for the whole
 threshold, which a reader that keeps re-rendering commentary cells (or a
@@ -65,8 +99,7 @@ poll explicit element state instead of relying on implicit synchronization. See
 the [Appium idle-wait capability](https://appium.github.io/appium-xcuitest-driver/latest/reference/capabilities/).
 A session the device already dropped mid-startup or mid-scenario is recreated
 once; ambiguous startup or cleanup failures still block the device, since stale
-session work could race a replacement. A shared session that fails its app
-reset is torn down through the same latched cleanup and rebuilt once.
+session work could race a replacement.
 
 The pilot matrix deliberately covers Android and iOS. Existing Windows FlaUI
 tests and Android gesture regressions remain separate. Additional device/OS
@@ -171,7 +204,10 @@ step — the baseline REST fetch sees 1s–2m20s transfer variance, so it never
 stalls `npm ci`, the boot or the build; each pilot waits on the manifest
 through `wait`/`wait-all`.
 `MOBILE_APP_PATH` can select another compatible build. Each local
-run owns an Appium server on `127.0.0.1:4723`; keep that port free.
+run owns an Appium server on `127.0.0.1:4723` (override with
+`MOBILE_APPIUM_PORT`); keep that port free. To reproduce the CI shard split
+locally, run `MOBILE_E2E_SHARD_COUNT=2 npm run ios:boot` to provision both
+simulators, then `npm run test:sharded`.
 
 Set `MOBILE_KEEP_APP=1` to keep the installed app and its data for manual review
 after a local run. The runner installs the current build while preserving that
@@ -186,8 +222,12 @@ ESM loading without a device.
 From `app/`, `dotnet run --project devops -- TestMobileE2EUnit` checks platform
 configuration and device capabilities without a device or mobile workload.
 
-Screenshots and native view trees are captured for each scenario, alongside
-timestamped Appium and device logs, TRX and JUnit reports, under `app/.artifacts/mobile-e2e/<platform>`.
+Screenshots are captured for each scenario. Failed scenarios also save native
+view trees; content assertions still inspect the complete native tree.
+These captures are saved alongside
+timestamped Appium and device logs, TRX and JUnit reports, under `app/.artifacts/mobile-e2e/<platform>`
+(`shard<N>/` subdirectories when the iOS suite runs sharded, with merged
+`coverage-evidence/` at the top level).
 iOS also exports app lifecycle logs and fresh app crash reports. Failed runs
 collect a short native stack sample if the app is still running, without
 competing with healthy tests for simulator resources.
@@ -217,9 +257,19 @@ FullyQualifiedName filter for enforce mode and local experiments.
 ## Dependency security
 
 The `shell-quote` override replaces the non-bundled copy pinned by Appium support
-with 1.11.0, which fixes command injection involving a line terminator after a
-comment token. Both published drivers still contain bundled shell-quote 1.10.0;
+with 1.12.0, which fixes command injection involving a line terminator after a
+comment token. The pinned Android 8.7.0 and iOS 12.17.3 drivers still contain bundled shell-quote 1.10.0;
 Android also bundles other vulnerable packages. npm overrides do not replace
 those bundled files. Keep their alerts visible and follow
 [#1995](https://github.com/bible-on-site/bible-on-site/issues/1995) for patched
 upstream distributions. Verify nested copies after every driver upgrade.
+
+On iOS, a command pending for 25 seconds records `native-hang-command.txt`
+and requests one CoreSimulator frame in `native-interaction.png`, with the
+existing five-second capture deadline. This is an observation while the
+ordinary interaction deadline remains 45 seconds: a successful 42-second
+lookup must not be treated as a failed test. A failed frame probe retains an
+error artifact without replacing the test result. Process queries and LLDB
+stack capture run only after a failed pilot, never alongside healthy tests.
+Native live logs use info level so accessibility debug logging does not
+amplify the workload being measured. Pilot and interaction limits are unchanged.
