@@ -1,36 +1,118 @@
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
+import { once } from "node:events";
 import { test } from "node:test";
-import { terminateIosTestApp } from "./ios-app-cleanup.mjs";
+import { ownedIosTestAppProcesses as parseOwned, terminateIosTestApp as terminateOwned } from "./ios-app-cleanup.mjs";
 
-test("terminates only the test app on its explicit simulator without XCTest or retries", async () => {
-  const calls = [];
-  const result = await terminateIosTestApp("owned-simulator", { execute: async (...args) => { calls.push(args); } });
-  assert.deepEqual(calls, [["xcrun", ["simctl", "terminate", "owned-simulator", "com.tanah.daily929"], { timeout: 5000, windowsHide: true }]]);
+const devicesRoot = "/Users/runner with spaces/Library/Developer/CoreSimulator/Devices";
+const ownedIosTestAppProcesses = (listing, udid) => parseOwned(listing, udid, devicesRoot);
+const terminateIosTestApp = (udid, options = {}) => terminateOwned(udid, { devicesRoot, ...options });
+
+const udid = "CD85F334-D4C3-44B6-A7B8-EAABB9C6C1B4";
+const otherUdid = "B8D3DB6B-98FB-4E92-9ACE-9BC307F7FDE7";
+const appPath = device => `/Users/runner with spaces/Library/Developer/CoreSimulator/Devices/${device}/data/Containers/Bundle/Application/51DBBA3D-91A6-4E0F-BE84-D779BCE6C0F3/BibleOnSite.app/BibleOnSite`;
+const listing = (pid = 1234, device = udid, state = "S") => ` ${pid} ${state} ${appPath(device)}\n`;
+
+test("owns only the installed app executable on its explicit simulator", () => {
+  const records = ownedIosTestAppProcesses(listing() + listing(2345, otherUdid) +
+    `3456 S ${appPath(udid)}.other\n4567 S /bin/node ${appPath(udid)}\n` +
+    `5678 S ${appPath(udid).replace("BibleOnSite.app/", "Other.app/")}\n`, udid);
+  assert.deepEqual(records, [{ pid: 1234, state: "S", executable: appPath(udid) }]);
+  for (const invalid of ["", "owned-simulator", `${udid}/../${otherUdid}`]) {
+    assert.throws(() => ownedIosTestAppProcesses("", invalid), /explicit UDID/);
+  }
+  assert.throws(() => ownedIosTestAppProcesses("1 S " + appPath(udid), udid), /process identity/);
+  assert.throws(() => ownedIosTestAppProcesses("1234 S BibleOnSite", udid), /ownership/);
+  assert.throws(() => ownedIosTestAppProcesses(listing().replace("/51DBBA3D-", "/../51DBBA3D-"), udid), /executable path/);
+});
+
+test("terminates only owned PIDs and confirms their exit within the original total deadline", async () => {
+  const calls = [], signals = [];
+  let time = 0;
+  const result = await terminateIosTestApp(udid, {
+    execute: async (...args) => { calls.push(args); time += 15;
+      return { stdout: calls.length === 1 ? listing() + listing(2345, otherUdid) : listing(2345, otherUdid) }; },
+    signal: (...args) => signals.push(args), now: () => time,
+  });
+  assert.deepEqual(signals, [[1234, "SIGKILL"]]);
+  assert.deepEqual(calls, [
+    ["/bin/ps", ["-axww", "-o", "pid=,stat=,comm="], { timeout: 5000, windowsHide: true }],
+    ["/bin/ps", ["-axww", "-o", "pid=,stat=,comm="], { timeout: 4985, windowsHide: true }],
+  ]);
   assert.equal(result.status, "terminated");
-  assert.equal(result.udid, "owned-simulator");
-  assert.ok(result.elapsedMs >= 0);
+  assert.deepEqual(result.pids, [1234]);
+  assert.equal(result.elapsedMs, 30);
 });
 
 test("keep-app review leaves the app running and missing ownership fails before execution", async () => {
   const execute = async () => { throw new Error("must not execute"); };
-  assert.equal((await terminateIosTestApp("owned-simulator", { keepApp: true, execute })).status, "kept");
+  assert.equal((await terminateIosTestApp(udid, { keepApp: true, execute })).status, "kept");
   await assert.rejects(terminateIosTestApp("", { execute }), /explicit UDID/);
 });
 
-test("a confirmed already-stopped app is successful cleanup", async () => {
-  const result = await terminateIosTestApp("owned-simulator", { execute: async () => {
-    throw Object.assign(new Error("Application termination failed"), { stderr:
-      "An error was encountered (domain=NSPOSIXErrorDomain, code=3): found nothing to terminate" });
-  } });
-  assert.equal(result.status, "already-stopped");
+test("an absent or zombie app is already stopped and an exit race is accepted", async () => {
+  for (const stdout of ["", listing(1234, udid, "Z+")]) {
+    const result = await terminateIosTestApp(udid, { execute: async () => ({ stdout }),
+      signal: () => { throw new Error("must not signal"); } });
+    assert.equal(result.status, "already-stopped");
+  }
+  let calls = 0;
+  assert.equal((await terminateIosTestApp(udid, {
+    execute: async () => ({ stdout: ++calls === 1 ? listing() : "" }),
+    signal: () => { throw Object.assign(new Error("exited"), { code: "ESRCH" }); },
+  })).status, "terminated");
 });
 
-test("transport errors and the unchanged command deadline remain failures without retry", async () => {
-  for (const error of [new Error("Simulator device unavailable"),
-    Object.assign(new Error("xcrun timed out"), { killed: true }),
-    Object.assign(new Error("unknown error"), { stderr: "domain=NSPOSIXErrorDomain, code=3" })]) {
+test("process-list and permission errors remain failures without retry", async () => {
+  for (const error of [new Error("ps unavailable"), Object.assign(new Error("ps timed out"), { killed: true })]) {
     let calls = 0;
-    await assert.rejects(terminateIosTestApp("owned-simulator", { execute: async () => { calls++; throw error; } }), e => e === error);
+    await assert.rejects(terminateIosTestApp(udid, { execute: async () => { calls++; throw error; } }), e => e === error);
     assert.equal(calls, 1);
+  }
+  const denied = Object.assign(new Error("denied"), { code: "EPERM" });
+  await assert.rejects(terminateIosTestApp(udid, { execute: async () => ({ stdout: listing() }),
+    signal: () => { throw denied; } }), e => e === denied);
+});
+
+test("a process listing that completes after the cleanup deadline cannot pass", async () => {
+  let time = 0;
+  await assert.rejects(terminateIosTestApp(udid, { now: () => time,
+    execute: async () => { time = 5001; return { stdout: "" }; },
+  }), /within five seconds/);
+});
+
+test("a surviving or respawned app fails at five seconds with no second termination", async () => {
+  let time = 0, signals = 0, calls = 0;
+  await assert.rejects(terminateIosTestApp(udid, {
+    execute: async () => ({ stdout: listing(++calls === 1 ? 1234 : 2345) }),
+    signal: () => { signals++; }, sleep: async ms => { time += ms; }, now: () => time,
+  }), /within five seconds/);
+  assert.equal(signals, 1);
+  assert.equal(time, 5000);
+});
+
+test("Darwin process cleanup kills a real owned child and leaves another device alive", {
+  skip: process.platform !== "darwin",
+}, async () => {
+  const children = [udid, otherUdid].map(device => spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], {
+    argv0: appPath(device), stdio: "ignore",
+  }));
+  try {
+    await Promise.all(children.map(child => once(child, "spawn")));
+    const ended = once(children[0], "exit");
+    const result = await terminateIosTestApp(udid);
+    assert.equal(result.status, "terminated");
+    assert.deepEqual(result.pids, [children[0].pid]);
+    await ended;
+    assert.equal(children[0].signalCode, "SIGKILL");
+    assert.equal(children[1].exitCode, null);
+    assert.equal(children[1].signalCode, null);
+    assert.ok(result.elapsedMs < 5000);
+  } finally {
+    for (const child of children) if (child.exitCode === null && child.signalCode === null) {
+      const ended = once(child, "exit");
+      child.kill("SIGKILL");
+      await ended;
+    }
   }
 });
