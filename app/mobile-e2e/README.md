@@ -2,7 +2,7 @@
 
 The shared C# suite in `../BibleOnSite.Tests.MobileE2E` runs on Android and iOS.
 CI creates one independent runner per matrix entry (`app-mobile-e2e.yml`), with
-`fail-fast: false`, and requires both results through the main CI gate. Tests
+`fail-fast: false`, and requires every applicable result through the main CI gate. Tests
 on an individual device run sequentially. The first session installs and resets
 the app; later scenarios restart its process with their launch environment.
 The install and built search index survive these restarts. Appium operates
@@ -16,17 +16,16 @@ before exporting logs. Confirmed already-stopped apps are accepted; transport
 and timeout failures fail the run. `MOBILE_KEEP_APP=1` retains the review app.
 The existing 15-second session-delete and 15-minute pilot limits remain intact.
 
-CI runs the complete iOS suite across two independent `xcode-27` runners, each
-with one simulator and one shared Appium session. Each host has 3 CPUs and
-7 GB RAM. The existing `Shard=1|2` traits form a disjoint partition: all six
-shared scenarios run on the first runner and all four iOS-only scenarios on
-the second. Each pilot keeps its 15-minute deadline. A final merge requires
+CI runs the complete iOS suite across three independent `xcode-27` runners,
+each with one simulator and one shared Appium session. Each host has 3 CPUs and
+7 GB RAM. `Shard=1|2|3` forms a disjoint 3/4/3 partition: the six shared scenarios
+are balanced across runners 1 and 3, and runner 2 owns the four iOS-only cases. Each pilot keeps its 15-minute deadline. A final merge requires
 successful evidence for the whole discovered suite, rejects duplicates, and
 combines native line coverage and execution/automation evidence. Only a full
 successful union can replace a trusted iOS baseline.
 
 A separate iOS build host restores MAUI and compiles/signs the app once, without
-booting a simulator. Both device hosts receive the same archive, including the
+booting a simulator. All three device hosts receive the same archive, including the
 prebuilt Debug harness/build tool and the exact OpenCover template. The archive
 preserves executable modes and framework symlinks; its SHA256, source SHA,
 checkout path and toolchain must match before extraction, and each host strictly
@@ -300,3 +299,16 @@ clean snapshot creation retains its separate graceful shutdown path. Cleanup
 failures fail CI and `android-emulator-cleanup.json` records the process IDs and
 duration. The SDK package directories are assigned to the runner before restoring
 their cached modes, avoiding root-owned directory extraction failures.
+
+CI runs the shared iOS build on three independent devices: three shared cases on
+shard 1, four iOS-specific cases on shard 2, and three shared cases on shard 3.
+The merge requires all three artifact inputs and the full ten-case disjoint union.
+Each device retains its startup coverage dump (13 dumps for the complete suite).
+Local two-device `test:sharded` combines groups 1 and 3 on its first device; Android
+continues to run all six shared cases. Both scroll storms use at most two flicks
+per request, retaining 80 pasuk flicks and 40 commentary flicks.
+
+Large commentary accessibility frames are measured once per document/width in a
+detached background CoreText layout. Native accessibility snapshots read those
+cached frames and the live viewport transform; rotation and recycled-document
+completions cannot apply stale geometry. Spoken sections and links remain complete.

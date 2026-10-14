@@ -117,7 +117,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: ["1", "2"]
+        shard: ["1", "2", "3"]
     uses: ./.github/workflows/app-mobile-e2e-runner.yml
     with:
       platform: iOS
@@ -153,6 +153,11 @@ jobs:
         with:
           name: app-mobile-e2e-shard.${{ github.run_id }}.ios-shard2
           path: app/.artifacts/mobile-e2e/ios/shard2
+      - name: Download third iOS runner
+        uses: actions/download-artifact@v8
+        with:
+          name: app-mobile-e2e-shard.${{ github.run_id }}.ios-shard3
+          path: app/.artifacts/mobile-e2e/ios/shard3
       - name: Verify full disjoint suite and merge native coverage
         id: merge
         run: node app/mobile-e2e/merge-runner-shards.mjs app/.artifacts/mobile-e2e/ios "${{ github.sha }}" "${{ inputs.e2e_selection_mode }}"

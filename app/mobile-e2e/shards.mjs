@@ -31,7 +31,8 @@ export function shardRuns(env, artifactsDir) {
         MOBILE_WDA_PORT: String(8099 + shard),
         MOBILE_E2E_COVERAGE_PORT: String(4786 + shard),
         MOBILE_E2E_ARTIFACTS: artifacts,
-        MOBILE_E2E_SHARD: String(shard),
+        // Local two-device mode keeps both shared CI groups on device one.
+        MOBILE_E2E_SHARD: shard === 1 ? "1,3" : "2",
       },
     });
   }

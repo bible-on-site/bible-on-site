@@ -1,5 +1,6 @@
 #if IOS || MACCATALYST
 using CoreGraphics;
+using CoreText;
 using Foundation;
 using UIKit;
 using BibleOnSite.Helpers;
@@ -50,6 +51,8 @@ public sealed class ViewportTextView : UIView, IUIAccessibilityContainer
     }
 
     private AccessibleSection[] _accessibleSections = [];
+    private AccessibleTextSections.Section[] _sectionRanges = [];
+    private readonly TextSectionGeometryCache<CGRect> _sectionGeometry = new();
     private bool _sectionedAccessibility;
     private int _accessibilitySerial;
     private bool _disposed;
@@ -62,6 +65,7 @@ public sealed class ViewportTextView : UIView, IUIAccessibilityContainer
     internal void UpdateDocumentAccessibility()
     {
         var serial = ++_accessibilitySerial;
+        _sectionGeometry.Reset();
         var text = TextView.AttributedText;
         var value = text?.Value ?? string.Empty;
         _sectionedAccessibility = value.Length > 16_384 || value.Count(c => c == '\n') > 128;
@@ -70,12 +74,13 @@ public sealed class ViewportTextView : UIView, IUIAccessibilityContainer
         AccessibilityAttributedLabel = null;
         AccessibilityIdentifier = null;
         AccessibilityCustomActions = null;
+        _sectionRanges = _sectionedAccessibility && text is not null ? AccessibleTextSections.Split(value).ToArray() : [];
         _accessibleSections = _sectionedAccessibility && text is not null
-            ? AccessibleTextSections.Split(value).Select(section =>
+            ? _sectionRanges.Select((section, index) =>
             {
                 var range = new NSRange(section.Start, section.Length);
                 using var part = text.Substring(range.Location, range.Length);
-                return new AccessibleSection(this, range, serial)
+                return new AccessibleSection(this, index, serial)
                 {
                     AccessibilityLabel = value.Substring(section.Start, section.Length),
                     AccessibilityIdentifier = "CommentaryTextSection",
@@ -84,6 +89,7 @@ public sealed class ViewportTextView : UIView, IUIAccessibilityContainer
                 };
             }).ToArray()
             : [];
+        EnsureSectionGeometry();
     }
 
     internal Func<string, bool>? ActivateLink { get; set; }
@@ -125,18 +131,105 @@ public sealed class ViewportTextView : UIView, IUIAccessibilityContainer
     [Export("accessibilityElements")]
     public NSObject[] GetAccessibilityElements() => _sectionedAccessibility ? _accessibleSections : [TextView];
 
+    private void EnsureSectionGeometry()
+    {
+        if (_disposed || !_sectionedAccessibility || TextView.AttributedText is not { } currentText) { return; }
+        var width = (double)TextView.Bounds.Width;
+        var request = _sectionGeometry.Begin(width, _accessibleSections.Length);
+        if (request is null) { return; }
+        // CoreText measures the immutable copy off-thread; UIKit snapshots
+        // then read cached frames without asking the live TextKit to lay out.
+        var text = (NSAttributedString)currentText.Copy();
+        var sections = _sectionRanges;
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                using (text)
+                {
+                    NativeReaderTrace.Write($"accessibility-measure:start length={text.Length} width={width} sections={sections.Length}");
+                    var bounds = MeasureSectionBounds(text, width, sections);
+                    NativeReaderTrace.Write("accessibility-measure:end");
+                    MainThread.BeginInvokeOnMainThread(() =>
+                    {
+                        if (!_disposed && _sectionGeometry.Complete(request.Value, bounds) && Window is not null && !TextView.Hidden)
+                        {
+                            UIAccessibility.PostNotification(UIAccessibilityPostNotification.LayoutChanged, null);
+                        }
+                    });
+                }
+            }
+            catch (Exception error)
+            {
+                Console.Error.WriteLine($"Commentary accessibility measurement failed: {error}");
+            }
+        });
+    }
+
+    private static CGRect[] MeasureSectionBounds(NSAttributedString text, double width, AccessibleTextSections.Section[] sections)
+    {
+        using var framesetter = new CTFramesetter(text);
+        var range = new NSRange(0, text.Length);
+        var size = framesetter.SuggestFrameSize(range, null, new CGSize(width, NFloat.MaxValue), out _);
+        var height = Math.Max(1, Math.Ceiling((double)size.Height) + 1);
+        using var path = new CGPath();
+        path.AddRect(new CGRect(0, 0, width, height));
+        using var frame = framesetter.GetFrame(range, path, null)
+            ?? throw new InvalidOperationException("CoreText could not measure commentary accessibility frames.");
+        if (frame.GetVisibleStringRange().Length < text.Length)
+        {
+            throw new InvalidOperationException("Commentary accessibility measurement must cover the complete text.");
+        }
+        var lines = frame.GetLines();
+        var origins = new CGPoint[lines.Length];
+        frame.GetLineOrigins(new NSRange(0, 0), origins);
+        var bounds = new CGRect[sections.Length];
+        var sectionIndex = 0;
+        try
+        {
+            // Both ranges are ordered. Sweep once through lines and sections;
+            // measuring each section independently would repeatedly shape text.
+            for (var lineIndex = 0; lineIndex < lines.Length; lineIndex++)
+            {
+                var line = lines[lineIndex];
+                var lineRange = line.StringRange;
+                var lineStart = (int)lineRange.Location;
+                var lineEnd = lineStart + (int)lineRange.Length;
+                while (sectionIndex < sections.Length && sections[sectionIndex].Start + sections[sectionIndex].Length <= lineStart)
+                {
+                    ++sectionIndex;
+                }
+                line.GetTypographicBounds(out var ascent, out var descent, out _);
+                for (var index = sectionIndex; index < sections.Length && sections[index].Start < lineEnd; index++)
+                {
+                    var start = Math.Max(lineStart, sections[index].Start);
+                    var end = Math.Min(lineEnd, sections[index].Start + sections[index].Length);
+                    var left = (double)line.GetOffsetForStringIndex(start, out _);
+                    var right = (double)line.GetOffsetForStringIndex(end, out _);
+                    var rect = new CGRect((double)origins[lineIndex].X + Math.Min(left, right),
+                        height - (double)origins[lineIndex].Y - (double)ascent,
+                        Math.Max(1, Math.Abs(right - left)), (double)(ascent + descent));
+                    bounds[index] = bounds[index].IsEmpty ? rect : CGRect.Union(bounds[index], rect);
+                }
+            }
+        }
+        finally
+        {
+            foreach (var line in lines) { line.Dispose(); }
+        }
+        return bounds;
+    }
+
     private sealed class AccessibleSection : UIAccessibilityElement
     {
         private readonly WeakReference<ViewportTextView> _owner;
-        private readonly NSRange _range;
+        private readonly int _index;
         private readonly int _serial;
-        private double _measuredWidth = -1;
-        private CGRect _textBounds;
 
-        public AccessibleSection(ViewportTextView owner, NSRange range, int serial) : base(owner)
+        public AccessibleSection(ViewportTextView owner, int index, int serial) : base(owner)
         {
             _owner = new(owner);
-            _range = range;
+            _index = index;
             _serial = serial;
         }
 
@@ -147,17 +240,9 @@ public sealed class ViewportTextView : UIView, IUIAccessibilityContainer
                 if (!_owner.TryGetTarget(out var owner) || owner._disposed || owner.Window is null ||
                     _serial != owner._accessibilitySerial) { return CGRect.Empty; }
                 var view = owner.TextView;
-                if (_range.Location + _range.Length > view.TextStorage.Length) { return CGRect.Empty; }
-                var width = (double)view.TextContainer.Size.Width;
-                if (Math.Abs(width - _measuredWidth) > 0.5)
-                {
-                    var glyphs = view.LayoutManager.GetGlyphRange(_range);
-                    _textBounds = view.LayoutManager.GetBoundingRect(glyphs, view.TextContainer);
-                    _measuredWidth = width;
-                }
-                // TextKit coordinates include the document offset; the text
-                // view's bounds remove it when converted into the wrapper.
-                var rect = view.ConvertRectToView(_textBounds, owner);
+                if (!owner._sectionGeometry.TryGet(_index, (double)view.Bounds.Width, out var bounds)) { return CGRect.Empty; }
+                // Cached glyph coordinates follow the live viewport transform.
+                var rect = view.ConvertRectToView(bounds, owner);
                 return UIAccessibility.ConvertFrameToScreenCoordinates(rect, owner);
             }
             set => base.AccessibilityFrame = value;
@@ -227,6 +312,7 @@ public sealed class ViewportTextView : UIView, IUIAccessibilityContainer
             TextView.SetContentOffset(offset, false);
             NativeReaderTrace.Write("viewport-offset:end");
         }
+        EnsureSectionGeometry();
     }
 
     protected override void Dispose(bool disposing)
@@ -234,6 +320,8 @@ public sealed class ViewportTextView : UIView, IUIAccessibilityContainer
         _disposed = true;
         ++_accessibilitySerial;
         _accessibleSections = [];
+        _sectionRanges = [];
+        _sectionGeometry.Reset();
         ActivateLink = null;
         if (disposing)
         {

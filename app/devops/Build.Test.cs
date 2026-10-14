@@ -95,10 +95,7 @@ partial class Build
         // A shard run (#2083) narrows the platform set to one Shard trait group —
         // the shards' disjoint union reproduces the unsharded suite exactly.
         var shard = Environment.GetEnvironmentVariable("MOBILE_E2E_SHARD");
-        if (!string.IsNullOrEmpty(shard))
-        {
-            baseFilter += $"&(Shard={shard})";
-        }
+        baseFilter += MobileE2EShardFilter.Create(shard);
         var selectionPath = Environment.GetEnvironmentVariable("MOBILE_E2E_SELECTION");
         if (string.IsNullOrEmpty(selectionPath))
         {
