@@ -8,10 +8,14 @@ the app; later scenarios restart its process with their launch environment.
 The install and built search index survive these restarts. Appium operates
 the simulator headlessly.
 
-CI runs the complete iOS suite on one simulator and one shared Appium session.
-The standard `xcode-27` host has only 3 CPUs and 7 GB RAM; two simulators compete
-with workload installation, compilation and the instrumented app. No Shard
-filter is set, so every shared and iOS-only scenario still runs once.
+CI runs the complete iOS suite across two independent `xcode-27` runners, each
+with one simulator and one shared Appium session. Each host has 3 CPUs and
+7 GB RAM. The existing `Shard=1|2` traits form a disjoint partition: all six
+shared scenarios run on the first runner and all four iOS-only scenarios on
+the second. Each pilot keeps its 15-minute deadline. A final merge requires
+successful evidence for the whole discovered suite, rejects duplicates, and
+combines native line coverage and execution/automation evidence. Only a full
+successful union can replace a trusted iOS baseline.
 
 Optional sharding remains available on a host with sufficient resources (#2083):
 `ios:boot` provisions a second same-model clone of the selected device when
