@@ -35,7 +35,7 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
         {
             try
             {
-                var element = FindVisible(locator).FirstOrDefault(match => condition(match.ConditionElement));
+                var element = FindVisible(locator, condition).FirstOrDefault();
                 if (element != null)
                 {
                     return element.Element;
@@ -97,7 +97,8 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
         while (DateTime.UtcNow < deadline)
         {
             var element = WaitFor(locator);
-            var current = new Rectangle(element.Location, element.Size);
+            var actual = MobilePlatformAdapter.ReadFrame(element);
+            var current = new Rectangle(actual.Location, actual.Size);
             if (current == frame)
             {
                 return (current.Location, current.Size);
@@ -163,7 +164,11 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
         // Every property access queries the device. Read each dimension once
         // so layout assertions do not repeatedly snapshot the UI.
         var buttons = new[] { menu, text, fullScreen }
-            .Select(button => (Element: button, Location: button.Location, Size: button.Size))
+            .Select(button =>
+            {
+                var frame = MobilePlatformAdapter.ReadFrame(button);
+                return (Element: button, frame.Location, frame.Size);
+            })
             .ToArray();
         foreach (var (button, location, size) in buttons)
         {
@@ -180,7 +185,7 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
 
     private sealed record VisibleMatch(AppiumElement Element, AppiumElement ConditionElement);
 
-    private IEnumerable<VisibleMatch> FindVisible(By locator)
+    private IEnumerable<VisibleMatch> FindVisible(By locator, Func<AppiumElement, bool>? condition = null)
     {
         if (driver is IosSnapshotDriver snapshots)
         {
@@ -189,11 +194,21 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
             {
                 return [];
             }
-            // One fresh viewport read per lookup; rotation is never cached
-            // across polls. Visibility and bounds belong to that same lookup.
-            var window = driver.Manage().Window.Size;
-            return matches.Where(match => match.Snapshot.IsVisibleIn(window))
+            // Reject wrong text/disabled state before another device request.
+            // The viewport is fresh for this poll, read only when a candidate
+            // can satisfy the condition, and shared by candidates in the poll.
+            Size? window = null;
+            return matches.Where(match => match.Snapshot.Displayed
+                    && match.Snapshot.Width > 0 && match.Snapshot.Height > 0
+                    && (condition == null || condition(match.ConditionElement)))
+                .Where(match => match.Snapshot.IsVisibleIn(Window()))
                 .Select(match => new VisibleMatch(match.Element, match.ConditionElement));
+
+            Size Window()
+            {
+                window ??= driver.Manage().Window.Size;
+                return window.Value;
+            }
         }
         // Android also reads the viewport once per lookup, lazily, so an empty
         // result does not request it and every new poll observes rotations.
@@ -201,6 +216,7 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
         return driver.FindElements(locator)
             .Where(element => element.Displayed && HasVisibleCenter(
                 element.Location, element.Size, Viewport()))
+            .Where(element => condition == null || condition(element))
             .Select(element => new VisibleMatch(element, element));
 
         Size Viewport()

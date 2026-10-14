@@ -56,6 +56,31 @@ public sealed class NativeSnapshotTests
     }
 
     [Fact]
+    public void RejectedTextDoesNotRequestAViewportButTheAcceptedPollDoes()
+    {
+        var executor = new SnapshotExecutor([Entry("loading"), Entry("ready")]);
+        using var driver = new IosSnapshotDriver(executor, new AppiumOptions { PlatformName = "iOS" });
+        var page = new PerekPage(driver, new IosPlatformAdapter());
+        page.WaitFor("PerekSource", candidate => candidate.Text == "ready");
+        Assert.Equal(2, executor.Lookups);
+        Assert.Single(executor.Commands, command => command == DriverCommand.GetWindowRect);
+    }
+
+    [Fact]
+    public void TouchGeometryReadsTheCurrentFrameOnceInsteadOfReusingLookupBounds()
+    {
+        var executor = new SnapshotExecutor([Entry("ready", x: 1)]);
+        using var driver = new IosSnapshotDriver(executor, new AppiumOptions { PlatformName = "iOS" });
+        var match = Assert.Single(driver.FindSnapshots(MobileBy.AccessibilityId("PerekSource")));
+        var first = MobilePlatformAdapter.ReadFrame(match.Element);
+        Assert.Equal(new Point(10, 20), first.Location);
+        Assert.Equal(new Size(30, 40), first.Size);
+        executor.FrameX = 50;
+        Assert.Equal(50, MobilePlatformAdapter.ReadFrame(match.Element).Location.X);
+        Assert.Equal(2, executor.Commands.Count(command => command == DriverCommand.GetElementRect));
+    }
+
+    [Fact]
     public void ConditionsDoNotRetainValuesAcrossLookups()
     {
         var executor = new SnapshotExecutor([Entry("first"), Entry("next", false)]);
@@ -168,6 +193,7 @@ public sealed class NativeSnapshotTests
         public Dictionary<string, object?>? LastParameters { get; private set; }
         public bool Stale { get; init; }
         public string Orientation { get; set; } = "PORTRAIT";
+        public int FrameX { get; set; } = 10;
         public bool TryAddCommand(string name, CommandInfo? info) => true;
         public void Dispose() { }
         public Response Execute(Command command) => ExecuteAsync(command).GetAwaiter().GetResult();
@@ -192,6 +218,10 @@ public sealed class NativeSnapshotTests
                 {
                     value = new object[] { results[Lookups++] };
                 }
+            }
+            else if (command.Name == DriverCommand.GetElementRect)
+            {
+                value = new Dictionary<string, object> { ["x"] = FrameX, ["y"] = 20, ["width"] = 30, ["height"] = 40 };
             }
             else if (command.Name == DriverCommand.GetWindowRect)
             {

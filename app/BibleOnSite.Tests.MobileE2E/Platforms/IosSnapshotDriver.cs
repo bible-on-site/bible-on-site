@@ -43,10 +43,24 @@ internal sealed class IosSnapshotDriver : IOSDriver
             ["value"] = criteria
         });
         return NativeElementSnapshot.Decode(response.Value)
-            .Select(snapshot => new NativeElementMatch(new AppiumElement(this, snapshot.Id),
+            .Select(snapshot => new NativeElementMatch(new NativeLiveElement(this, snapshot.Id),
                 new NativeConditionElement(this, snapshot), snapshot))
             .ToArray();
     }
+    internal Rectangle ReadFrame(string id)
+    {
+        var response = Execute(DriverCommand.GetElementRect,
+            new Dictionary<string, object> { ["id"] = id });
+        if (response.Value is not IDictionary<string, object> rect)
+        {
+            throw new WebDriverException("Native frame request did not return a rectangle.");
+        }
+        return new(Convert.ToInt32(NativeElementSnapshot.Number(rect, "x")),
+            Convert.ToInt32(NativeElementSnapshot.Number(rect, "y")),
+            Convert.ToInt32(NativeElementSnapshot.Number(rect, "width")),
+            Convert.ToInt32(NativeElementSnapshot.Number(rect, "height")));
+    }
+
     // This object exists only while evaluating one poll's condition. Returning
     // the separate SDK element prevents snapshot values leaking into a later
     // assertion or action, including after navigation or text entry.
@@ -72,6 +86,13 @@ internal sealed class IosSnapshotDriver : IOSDriver
         public IWebElement FindElement(By by) => throw new NotSupportedException();
         public IWebElement FindElement(string selector, string value) => throw new NotSupportedException();
     }
+}
+
+// Read a live frame in one SDK command instead of separate Location/Size
+// requests. No geometry from an earlier lookup is reused for a later touch.
+internal sealed class NativeLiveElement(IosSnapshotDriver driver, string id) : AppiumElement(driver, id)
+{
+    internal Rectangle ReadFrame() => driver.ReadFrame(Id);
 }
 
 internal sealed record NativeElementMatch(
@@ -118,7 +139,7 @@ internal readonly record struct NativeElementSnapshot(
         return result;
     }
 
-    private static double Number(IDictionary<string, object> rect, string name)
+    internal static double Number(IDictionary<string, object> rect, string name)
     {
         if (!rect.TryGetValue(name, out var value)
             || value is not (int or long or double or float or decimal))
