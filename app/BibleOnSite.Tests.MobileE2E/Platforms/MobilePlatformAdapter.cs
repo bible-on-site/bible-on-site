@@ -198,6 +198,14 @@ public abstract class MobilePlatformAdapter
             // already poll explicit element state instead of relying on WDA's
             // implicit synchronization.
             options.AddAdditionalAppiumOption("waitForIdleTimeout", 0);
+            // Source XML is diagnostic/content evidence. Computing derived
+            // visibility for every offscreen descendant cost 203s in nine
+            // dumps. Live Displayed, viewport and hittable checks still run
+            // through their native APIs; labels, IDs and geometry remain in XML.
+            options.AddAdditionalAppiumOption("settings", new Dictionary<string, object>
+            {
+                ["pageSourceExcludedAttributes"] = "visible,accessible"
+            });
             // The instrumented e2e build never goes quiescent at launch: the
             // coverage recorder and the search-index warmup keep worker threads
             // churning well past XCTest's launch window ("Timed out attempting
