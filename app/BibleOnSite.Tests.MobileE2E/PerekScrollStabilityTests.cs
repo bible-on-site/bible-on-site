@@ -30,13 +30,17 @@ public sealed class PerekScrollStabilityTests(ITestOutputHelper output, MobileDe
 
         // Fast back-to-back flicks maximize prefetch churn: cells are created,
         // dequeued and recycled while perushim HTML is being imported.
-        // One native sequence per direction avoids a separate XCTest idle wait
-        // and HTTP round trip for every flick. The old 80-command storm reached
-        // the hang guard while the app was still alive and responding normally.
-        Driver!.PerformActions([CreateFlickSequence(centerX, bottomY, centerX, topY, 40)]);
-        Driver.PerformActions([CreateFlickSequence(centerX, topY, centerX, bottomY, 40)]);
+        // WDA resolves every pointer move during event synthesis. A single
+        // 40-flick request took 36.5s and the reverse request exceeded the 45s
+        // command deadline. Ten-flick bursts keep that work bounded while
+        // preserving all 80 lifted touches and continuous churn within a burst.
+        foreach (var sequence in CreateFlickBursts(centerX, bottomY, centerX, topY, 40)
+            .Concat(CreateFlickBursts(centerX, topY, centerX, bottomY, 40)))
+        {
+            Driver!.PerformActions([sequence]);
+        }
 
-        var appState = Driver.ExecuteScript("mobile: queryAppState",
+        var appState = Driver!.ExecuteScript("mobile: queryAppState",
             new Dictionary<string, object> { ["bundleId"] = "com.tanah.daily929" });
         Output.WriteLine($"App state after scroll storm: {appState}");
         // 4 = running in foreground. A crashed app reports 1 (not running).
@@ -72,6 +76,17 @@ public sealed class PerekScrollStabilityTests(ITestOutputHelper output, MobileDe
         Page.Tap("PerushimChevronButton");
     }
 
+    internal static IReadOnlyList<ActionSequence> CreateFlickBursts(int fromX, int fromY, int toX, int toY, int repetitions)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(repetitions);
+        const int maximumFlicksPerCommand = 10;
+        var bursts = new List<ActionSequence>();
+        for (var remaining = repetitions; remaining > 0; remaining -= maximumFlicksPerCommand)
+        {
+            bursts.Add(CreateFlickSequence(fromX, fromY, toX, toY, Math.Min(remaining, maximumFlicksPerCommand)));
+        }
+        return bursts;
+    }
     internal static ActionSequence CreateFlickSequence(int fromX, int fromY, int toX, int toY, int repetitions)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(repetitions);
