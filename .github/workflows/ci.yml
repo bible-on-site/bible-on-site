@@ -3130,7 +3130,7 @@ jobs:
       module_name: app
       module_directory: app
       # Keep in sync with app extraModulePaths in devops/github/ci/determine-changes.ts
-      extra_module_paths: '["web/bible-on-site/src/data/recitation/opus-playback.json"]'
+      extra_module_paths: '["data/recitation/recitation.sqlite", "web/bible-on-site/src/data/recitation/opus-playback.json"]'
       module_version: ${{ needs.package_app.outputs.module_version }}
       artifacts_json: |
         [
