@@ -5,8 +5,8 @@ using Xunit;
 namespace BibleOnSite.Tests.MobileE2E;
 
 // One device per matrix runner; scenarios on that device run sequentially.
-// CI balances the six shared scenarios across Shard=1 and Shard=3;
-// Shard=2 retains the four iOS-only scenarios. Android runs all six shared
+// CI balances the six shared scenarios across the first and third runners.
+// The second runner owns the four iOS-only scenarios. Android runs all six shared
 // scenarios without a shard filter.
 [Collection("Mobile device")]
 [Trait("Category", "MobileE2E")]
