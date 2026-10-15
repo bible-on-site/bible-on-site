@@ -701,7 +701,7 @@ public class TanahpediaEntryViewModelTests
     }
 
     [Fact]
-    public async Task Load_PersonEntry_LoadsFamilySections()
+    public async Task Load_PersonEntry_LoadsFamilyTree()
     {
         _service.Setup(s => s.GetEntryDetailAsync("יעקב", It.IsAny<CancellationToken>()))
             .ReturnsAsync(new TanahpediaEntryDetail
@@ -732,8 +732,8 @@ public class TanahpediaEntryViewModelTests
         await vm.LoadAsync();
 
         vm.HasFamily.Should().BeTrue();
-        vm.FamilySections.Should().ContainSingle().Which.Title.Should().Be("בנות זוג");
-        vm.FamilySections[0].Rows[0].DisplayName.Should().Be("לאה");
+        vm.FamilyTree!.SpousesLabel.Should().Be("בנות זוג");
+        vm.FamilyTree.SpouseUnits.Should().ContainSingle().Which.Spouse.Card.DisplayName.Should().Be("לאה");
         _service.Verify(s => s.GetPlaceMarkersAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 

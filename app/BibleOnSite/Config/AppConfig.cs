@@ -63,19 +63,51 @@ public sealed class AppConfig
             return _apiUrlOverride;
         }
 
+        _apiUrlOverride = await ReadPackagedValueAsync("api-config.txt");
+        _apiUrlOverrideLoaded = true;
+        return _apiUrlOverride;
+    }
+
+    // Cached Mapbox public token from build-time config
+    private string? _mapboxToken;
+    private bool _mapboxTokenLoaded;
+
+    /// <summary>
+    /// The Mapbox public token for the places map - packaged by CI as
+    /// mapbox-token.txt (the public key the website embeds in client bundles).
+    /// Null without a packaged/env token; callers then keep the no-key
+    /// OpenStreetMap fallback, same as the website.
+    /// </summary>
+    public async Task<string?> GetMapboxAccessTokenAsync()
+    {
+        var envToken = Environment.GetEnvironmentVariable("MAPBOX_ACCESS_TOKEN");
+        if (!string.IsNullOrEmpty(envToken))
+        {
+            return envToken;
+        }
+
+        if (!_mapboxTokenLoaded)
+        {
+            _mapboxToken = await ReadPackagedValueAsync("mapbox-token.txt");
+            _mapboxTokenLoaded = true;
+        }
+        return _mapboxToken;
+    }
+
+    /// <summary>Reads a trimmed packaged raw-asset value; null when missing/blank.</summary>
+    private async Task<string?> ReadPackagedValueAsync(string assetName)
+    {
         try
         {
-            using var stream = await _fileSystem.OpenAppPackageFileAsync("api-config.txt");
+            using var stream = await _fileSystem.OpenAppPackageFileAsync(assetName);
             using var reader = new StreamReader(stream);
             var content = await reader.ReadToEndAsync();
-            _apiUrlOverride = string.IsNullOrWhiteSpace(content) ? null : content.Trim();
+            return string.IsNullOrWhiteSpace(content) ? null : content.Trim();
         }
         catch
         {
-            _apiUrlOverride = null;
+            return null;
         }
-        _apiUrlOverrideLoaded = true;
-        return _apiUrlOverride;
     }
 
     /// <summary>
@@ -125,6 +157,7 @@ public sealed class AppConfig
     public async Task InitializeAsync()
     {
         await GetApiUrlOverrideAsync();
+        await GetMapboxAccessTokenAsync();
     }
 
     /// <summary>

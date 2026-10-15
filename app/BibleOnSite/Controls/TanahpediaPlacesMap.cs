@@ -5,10 +5,11 @@ using BibleOnSite.Models;
 namespace BibleOnSite.Controls;
 
 /// <summary>
-/// Renders Tanahpedia place identifications as an interactive map — a Leaflet
-/// + OpenStreetMap page inside a WebView (no API key; the same tiles the
-/// website uses). Marker popups link to the place's entry; taps are routed
-/// in-app through <see cref="EntryTappedCommand"/>.
+/// Renders Tanahpedia place identifications as an interactive map - Mapbox GL
+/// inside a WebView when the packaged public token exists (the same provider
+/// the website uses), else the no-key Leaflet/OpenStreetMap fallback.
+/// Marker popups link to the place's entry; taps are routed in-app through
+/// <see cref="EntryTappedCommand"/>.
 /// </summary>
 public class TanahpediaPlacesMap : ContentView
 {
@@ -26,7 +27,7 @@ public class TanahpediaPlacesMap : ContentView
         nameof(Markers),
         typeof(IReadOnlyList<TanahpediaPlaceMarker>),
         typeof(TanahpediaPlacesMap),
-        propertyChanged: (bindable, _, _) => ((TanahpediaPlacesMap)bindable).ApplyMarkers());
+        propertyChanged: (bindable, _, _) => _ = ((TanahpediaPlacesMap)bindable).ApplyMarkersAsync());
 
     public IReadOnlyList<TanahpediaPlaceMarker>? Markers
     {
@@ -49,12 +50,19 @@ public class TanahpediaPlacesMap : ContentView
         set => SetValue(EntryTappedCommandProperty, value);
     }
 
-    private void ApplyMarkers()
+    private async Task ApplyMarkersAsync()
     {
         var markers = Markers;
-        _webView.Source = markers is { Count: > 0 }
-            ? new HtmlWebViewSource { Html = TanahpediaMapHtml.BuildHtml(markers) }
-            : null;
+        if (markers is not { Count: > 0 })
+        {
+            _webView.Source = null;
+            return;
+        }
+
+        var token = await Config.AppConfig.Instance.GetMapboxAccessTokenAsync();
+        var html = TanahpediaMapHtml.BuildHtml(markers, token);
+        // The continuation may resume off the UI thread - WebView needs it.
+        MainThread.BeginInvokeOnMainThread(() => _webView.Source = new HtmlWebViewSource { Html = html });
     }
 
     /// <summary>
@@ -75,7 +83,7 @@ public class TanahpediaPlacesMap : ContentView
             return;
         }
 
-        // The initial document loads from inline HTML — block any real
+        // The initial document loads from inline HTML - block any real
         // navigation (external links) and hand it to the system browser.
         if (url.StartsWith("http://", StringComparison.Ordinal)
             || url.StartsWith("https://", StringComparison.Ordinal))

@@ -4,7 +4,6 @@
              xmlns:viewmodels="clr-namespace:BibleOnSite.ViewModels"
              xmlns:models="clr-namespace:BibleOnSite.Models"
              xmlns:controls="clr-namespace:BibleOnSite.Controls"
-             xmlns:helpers="clr-namespace:BibleOnSite.Helpers"
              x:Class="BibleOnSite.Pages.TanahpediaEntryPage"
              x:Name="Page"
              x:DataType="viewmodels:TanahpediaEntryViewModel"
@@ -81,66 +80,12 @@
                                                           HeightRequest="300"/>
                         </VerticalStackLayout>
 
-                        <!-- Family sections of the entry's PERSON entity —
-                             source-backed relationships (הורים/בני זוג/ילדים/אחים) -->
-                        <VerticalStackLayout Spacing="12"
-                                             IsVisible="{Binding HasFamily}"
-                                             BindableLayout.ItemsSource="{Binding FamilySections}">
-                            <BindableLayout.ItemTemplate>
-                                <DataTemplate x:DataType="helpers:TanahpediaFamilySection">
-                                    <VerticalStackLayout Spacing="4">
-                                        <Label Text="{Binding Title}"
-                                               FontSize="17"
-                                               FontAttributes="Bold"
-                                               TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
-                                        <VerticalStackLayout Spacing="2"
-                                                             BindableLayout.ItemsSource="{Binding Rows}">
-                                            <BindableLayout.ItemTemplate>
-                                                <DataTemplate x:DataType="helpers:TanahpediaFamilyRow">
-                                                    <VerticalStackLayout Spacing="0">
-                                                        <FlexLayout Wrap="Wrap"
-                                                                    AlignItems="Center">
-                                                            <Label Text="{Binding DisplayName}"
-                                                                   FontSize="15"
-                                                                   FontAttributes="Bold"
-                                                                   TextColor="{StaticResource Primary}"
-                                                                   TextDecorations="Underline"
-                                                                   IsVisible="{Binding IsLink}">
-                                                                <Label.GestureRecognizers>
-                                                                    <TapGestureRecognizer Command="{Binding Source={x:Reference Page}, Path=BindingContext.OpenEntryCommand}"
-                                                                                          CommandParameter="{Binding EntryUniqueName}"/>
-                                                                </Label.GestureRecognizers>
-                                                            </Label>
-                                                            <Label Text="{Binding DisplayName}"
-                                                                   FontSize="15"
-                                                                   FontAttributes="Bold"
-                                                                   IsVisible="{Binding IsLink, Converter={StaticResource InvertedBoolConverter}}"
-                                                                   TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
-                                                            <Label Text="{Binding SexMark, StringFormat=' ({0})'}"
-                                                                   FontSize="13"
-                                                                   IsVisible="{Binding SexMark, Converter={StaticResource StringNotEmptyConverter}}"
-                                                                   TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
-                                                            <Label Text="{Binding Meta, StringFormat=' · {0}'}"
-                                                                   FontSize="13"
-                                                                   IsVisible="{Binding HasMeta}"
-                                                                   TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
-                                                        </FlexLayout>
-                                                        <Label Text="{Binding SourceCitation, StringFormat='מקור: {0}'}"
-                                                               FontSize="12"
-                                                               IsVisible="{Binding HasSource}"
-                                                               TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
-                                                        <Label Text="{Binding PersonSourceCitation, StringFormat='מקור האיש: {0}'}"
-                                                               FontSize="12"
-                                                               IsVisible="{Binding HasPersonSource}"
-                                                               TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
-                                                    </VerticalStackLayout>
-                                                </DataTemplate>
-                                            </BindableLayout.ItemTemplate>
-                                        </VerticalStackLayout>
-                                    </VerticalStackLayout>
-                                </DataTemplate>
-                            </BindableLayout.ItemTemplate>
-                        </VerticalStackLayout>
+                        <!-- Family tree of the entry's PERSON entity - the
+                             source-backed card tree, same layout as the
+                             website's mobile PersonFamilyTree -->
+                        <controls:TanahpediaFamilyTreeView Tree="{Binding FamilyTree}"
+                                                           EntryTappedCommand="{Binding OpenEntryCommand}"
+                                                           IsVisible="{Binding HasFamily}"/>
 
                         <!-- Admin-authored HTML body -->
                         <controls:HtmlView x:Name="EntryHtml"
@@ -151,7 +96,7 @@
                                            IsVisible="{Binding HasContent}"/>
 
                         <!-- No-content notice (website parity: only when there is
-                             nothing else to show — no content, map or occurrences) -->
+                             nothing else to show - no content, map or occurrences) -->
                         <Label Text="אין תוכן עדיין לערך זה."
                                FontSize="14"
                                HorizontalTextAlignment="Center"
@@ -195,7 +140,7 @@
                 </VerticalStackLayout>
             </ScrollView>
 
-            <!-- Disambiguation — the name leads to several entries -->
+            <!-- Disambiguation - the name leads to several entries -->
             <ScrollView IsVisible="{Binding IsDisambiguation}">
                 <VerticalStackLayout Padding="16" Spacing="12">
                     <Label Text="{Binding UniqueName}"

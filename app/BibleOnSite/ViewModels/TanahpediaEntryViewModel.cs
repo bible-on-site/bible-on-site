@@ -8,7 +8,7 @@ using CommunityToolkit.Mvvm.Input;
 namespace BibleOnSite.ViewModels;
 
 /// <summary>
-/// ViewModel for a single Tanahpedia entry — title, entity badges, HTML body
+/// ViewModel for a single Tanahpedia entry - title, entity badges, HTML body
 /// and the entry's Tanah occurrences. When the requested name belongs to a
 /// synonym it resolves like the website: one target navigates straight to the
 /// canonical entry, several render the disambiguation chooser, none show the
@@ -37,7 +37,7 @@ public partial class TanahpediaEntryViewModel : ObservableObject
     }
 
 #pragma warning disable MVVMTK0045
-    /// <summary>The requested name — canonical <c>unique_name</c> or a synonym.</summary>
+    /// <summary>The requested name - canonical <c>unique_name</c> or a synonym.</summary>
     [ObservableProperty]
     private string _uniqueName = string.Empty;
 
@@ -65,15 +65,16 @@ public partial class TanahpediaEntryViewModel : ObservableObject
     [ObservableProperty]
     private ObservableCollection<TanahpediaOccurrenceItem> _occurrences = new();
 
-    /// <summary>Ambiguous-name targets — populated only in the disambiguation state.</summary>
+    /// <summary>Ambiguous-name targets - populated only in the disambiguation state.</summary>
     [ObservableProperty]
     private ObservableCollection<TanahpediaSynonymTarget> _synonymTargets = new();
 
-    /// <summary>Family sections of the entry's PERSON entity — the source-backed
-    /// relationship surface (הורים / בנות זוג / ילדים / אחים).</summary>
+    /// <summary>Family tree of the entry's PERSON entity - the source-backed
+    /// relationship surface (הורים / בנות זוג / ילדים / אחים) rendered as the
+    /// website's vertical card tree.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasFamily))]
-    private ObservableCollection<TanahpediaFamilySection> _familySections = new();
+    private TanahpediaFamilyTree? _familyTree;
 
     /// <summary>Map pins for the entry's PLACE entities.</summary>
     [ObservableProperty]
@@ -95,19 +96,19 @@ public partial class TanahpediaEntryViewModel : ObservableObject
     public bool HasContent => !string.IsNullOrEmpty(Content);
     public bool HasEntities => Entities.Count > 0;
     public bool HasOccurrences => Occurrences.Count > 0;
-    public bool HasFamily => FamilySections.Count > 0;
+    public bool HasFamily => FamilyTree is not null;
     public bool HasMap => PlaceMarkers.Count > 0;
 
-    /// <summary>Empty-entry notice — the website shows it only when neither
+    /// <summary>Empty-entry notice - the website shows it only when neither
     /// content, a map nor occurrences give the page a body.</summary>
     public bool ShowNoContentNotice => !HasContent && !HasMap && !HasOccurrences;
 
-    /// <summary>Entry body is shown — loaded and not a disambiguation/not-found state.</summary>
+    /// <summary>Entry body is shown - loaded and not a disambiguation/not-found state.</summary>
     public bool ShowEntry => IsLoaded && !IsDisambiguation && !IsNotFound;
 
     /// <summary>
     /// Loads the entry by name, then resolves synonyms when no canonical entry
-    /// owns it — mirroring the website's slug resolution (alias → single
+    /// owns it - mirroring the website's slug resolution (alias → single
     /// target, ambiguous → chooser, missing → not-found).
     /// </summary>
     [RelayCommand]
@@ -135,7 +136,7 @@ public partial class TanahpediaEntryViewModel : ObservableObject
             var targets = await _service.GetSynonymTargetsAsync(UniqueName, CancellationToken.None);
             if (targets.Count == 1)
             {
-                // Plain alias — swap to the canonical entry (same UX as the
+                // Plain alias - swap to the canonical entry (same UX as the
                 // website's permanent redirect).
                 var alias = await _service.GetEntryDetailAsync(targets[0].UniqueName, CancellationToken.None);
                 if (alias != null)
@@ -184,8 +185,8 @@ public partial class TanahpediaEntryViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Loads the entity-level extras — the person family tree and the place
-    /// markers — for the entry's linked entities. Both are secondary content:
+    /// Loads the entity-level extras - the person family tree and the place
+    /// markers - for the entry's linked entities. Both are secondary content:
     /// a failure drops the section rather than failing the page (same
     /// tolerance as occurrences and the website's try/catch around these
     /// loads).
@@ -215,8 +216,7 @@ public partial class TanahpediaEntryViewModel : ObservableObject
             var family = await _service.GetPersonFamilyAsync(entityId, CancellationToken.None);
             if (family is not null)
             {
-                FamilySections = new ObservableCollection<TanahpediaFamilySection>(
-                    TanahpediaFamily.BuildSections(family));
+                FamilyTree = TanahpediaFamily.BuildTree(family);
             }
         }
         catch (Exception ex)
@@ -269,7 +269,7 @@ public partial class TanahpediaEntryViewModel : ObservableObject
                     pasukim = [];
                 }
 
-                // One row per pasuk — several source ranges on the same verse
+                // One row per pasuk - several source ranges on the same verse
                 // merge into a single citation, like the website's table.
                 foreach (var (pasukNumber, ranges) in TanahpediaOccurrences.GroupRanges(group))
                 {
@@ -292,7 +292,7 @@ public partial class TanahpediaEntryViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            // Occurrences are secondary — an empty table beats a failed page.
+            // Occurrences are secondary - an empty table beats a failed page.
             Console.Error.WriteLine($"Tanahpedia occurrences mapping failed: {ex}");
         }
     }
@@ -353,7 +353,7 @@ public class TanahpediaOccurrenceItem
     public FormattedString? VerseFormatted { get; init; }
 
     /// <summary>
-    /// The merged 0-based segment ranges cited on this pasuk — preserved for
+    /// The merged 0-based segment ranges cited on this pasuk - preserved for
     /// the reader navigation (pasuk-level anchoring, same as the website's
     /// <c>#pasuk-N</c> anchor).
     /// </summary>

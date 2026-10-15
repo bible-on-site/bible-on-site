@@ -21,7 +21,7 @@ public class TanahpediaMapHtmlTests
             },
         ]);
 
-        // System.Text.Json's encoder unicode-escapes Hebrew — the browser
+        // System.Text.Json's encoder unicode-escapes Hebrew - the browser
         // decodes it back inside the script block.
         html.Should().Contain("\"placeName\":\"\\u05D9\\u05E8\\u05D5\\u05E9\\u05DC\\u05D9\\u05DD\"");
         html.Should().Contain("\"modernName\":\"Jerusalem\"");
@@ -30,6 +30,42 @@ public class TanahpediaMapHtmlTests
         html.Should().Contain("\"entryUniqueName\":\"\\u05D9\\u05E8\\u05D5\\u05E9\\u05DC\\u05D9\\u05DD\"");
         html.Should().Contain("tile.openstreetmap.org");
         html.Should().Contain("leaflet@1.9.4");
+    }
+
+    [Fact]
+    public void BuildHtml_WithMapboxToken_UsesMapboxGl()
+    {
+        var html = TanahpediaMapHtml.BuildHtml(
+        [
+            new TanahpediaPlaceMarker
+            {
+                PlaceId = "pi-1",
+                PlaceName = "ירושלים",
+                Lat = 31.778,
+                Lng = 35.235,
+                EntryUniqueName = "ירושלים",
+            },
+        ], mapboxToken: "pk.test-token");
+
+        html.Should().Contain("mapbox-gl-js/v3.32.0/mapbox-gl.js");
+        html.Should().Contain("mapbox://styles/mapbox/standard");
+        html.Should().Contain("pk.test-token");
+        html.Should().Contain("tanahpedia-place-points");
+        // Entry popups keep routing through the in-app scheme.
+        html.Should().Contain("tanahpedia://entry/");
+        html.Should().NotContain("tile.openstreetmap.org");
+    }
+
+    [Fact]
+    public void BuildHtml_WithoutToken_KeepsLeafletFallback()
+    {
+        var html = TanahpediaMapHtml.BuildHtml(
+        [
+            new TanahpediaPlaceMarker { PlaceId = "p", PlaceName = "מקום", Lat = 1, Lng = 1 },
+        ], mapboxToken: "  ");
+
+        html.Should().Contain("leaflet@1.9.4");
+        html.Should().NotContain("mapbox-gl");
     }
 
     [Fact]

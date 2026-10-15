@@ -193,6 +193,8 @@ jobs:
 
       - name: Package MSIX
         working-directory: ${{ env.APP_DIRECTORY }}
+        env:
+          MAPBOX_PUBLIC_TOKEN: ${{ secrets.MAPBOX_PUBLIC_TOKEN }}
         run: |
           dotnet run --project devops -- Package --platform Windows --configuration Release --certificate-thumbprint "${{ secrets.WINDOWS_SIGNING_CERT_THUMBPRINT }}"
 
@@ -348,6 +350,8 @@ jobs:
 
       - name: Package AAB
         working-directory: ${{ env.APP_DIRECTORY }}
+        env:
+          MAPBOX_PUBLIC_TOKEN: ${{ secrets.MAPBOX_PUBLIC_TOKEN }}
         run: |
           if [ -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
             dotnet run --project devops -- Package --platform Android --configuration Release \
@@ -642,6 +646,8 @@ jobs:
 
       - name: Package IPA
         working-directory: ${{ env.APP_DIRECTORY }}
+        env:
+          MAPBOX_PUBLIC_TOKEN: ${{ secrets.MAPBOX_PUBLIC_TOKEN }}
         run: |
           set -o pipefail
           dotnet run --project devops -- Package --platform iOS --configuration Release \
