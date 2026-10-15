@@ -3,6 +3,11 @@
  */
 import { render, screen } from "@testing-library/react";
 
+let mockPathname = "/";
+jest.mock("next/navigation", () => ({
+	usePathname: () => mockPathname,
+}));
+
 jest.mock("next/image", () => ({
 	__esModule: true,
 	default: (props: Record<string, unknown>) => (
@@ -12,7 +17,13 @@ jest.mock("next/image", () => ({
 
 import { TopNav } from "@/app/components/TopNav";
 
+const searchLink = () => screen.queryByRole("link", { name: "חיפוש" });
+
 describe("TopNav", () => {
+	beforeEach(() => {
+		mockPathname = "/";
+	});
+
 	it("links the logo home and exposes an icon-only labelled search button", () => {
 		render(<TopNav />);
 
@@ -27,11 +38,11 @@ describe("TopNav", () => {
 
 		// Icon-only: the accessible name comes from aria-label, and the
 		// button renders no visible text (#2154).
-		const searchLink = screen.getByRole("link", { name: "חיפוש" });
-		expect(searchLink).toHaveAttribute("href", "/search");
-		expect(searchLink).toHaveAttribute("aria-label", "חיפוש");
-		expect(searchLink).toHaveClass("top-nav-search");
-		expect(searchLink).not.toHaveTextContent(/\S/);
+		const search = screen.getByRole("link", { name: "חיפוש" });
+		expect(search).toHaveAttribute("href", "/search");
+		expect(search).toHaveAttribute("aria-label", "חיפוש");
+		expect(search).toHaveClass("top-nav-search");
+		expect(search).not.toHaveTextContent(/\S/);
 	});
 
 	it("renders exactly the logo and search entries, in that order", () => {
@@ -42,4 +53,27 @@ describe("TopNav", () => {
 		expect(links[0]).toHaveAttribute("href", "/");
 		expect(links[1]).toHaveAttribute("href", "/search");
 	});
+
+	it("shows the search button outside the על הפרק section", () => {
+		for (const pathname of ["/", "/search", "/tos", "/מסורה/1", "/פרשה/1"]) {
+			mockPathname = pathname;
+			const { unmount } = render(<TopNav />);
+			expect(searchLink()).toBeInTheDocument();
+			unmount();
+		}
+	});
+
+	it.each(["/929", "/929/11", "/929/11/2", "/929/authors", "/929/rabbis"])(
+		"omits the search button entirely on the על הפרק reader (%s)",
+		(pathname) => {
+			mockPathname = pathname;
+			render(<TopNav />);
+
+			// #2274: no link, no invisible .top-nav-search hit area and no
+			// keyboard-focusable remnant — nothing is rendered at all.
+			expect(searchLink()).not.toBeInTheDocument();
+			expect(document.querySelector(".top-nav-search")).toBeNull();
+			expect(screen.getAllByRole("link")).toHaveLength(1);
+		},
+	);
 });

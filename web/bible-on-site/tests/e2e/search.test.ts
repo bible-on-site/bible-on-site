@@ -43,6 +43,27 @@ test.describe("Site search", () => {
 		).toBeVisible();
 	});
 
+	test("keeps no search control in the על הפרק reader top bar (#2274)", async ({
+		page,
+	}) => {
+		await page.goto("/929/1");
+
+		// The settings button owns the top-left corner in the reader: no
+		// search link, hit area, or focusable control may remain there.
+		const topNav = page.locator("nav.top-nav");
+		await expect(
+			topNav.getByRole("link", { name: "חיפוש" }),
+		).toHaveCount(0);
+		await expect(page.locator(".top-nav-search")).toHaveCount(0);
+
+		// Navigating to the homepage restores the entry point.
+		await page.locator("nav.top-nav a[href='/']").click();
+		await page.waitForURL("**/");
+		await expect(
+			topNav.getByRole("link", { name: "חיפוש" }),
+		).toBeVisible();
+	});
+
 	test("main menu leads with על הפרק and holds no search row", async ({
 		page,
 	}) => {
