@@ -253,7 +253,7 @@ unit/lcov.info + integration/lcov.info + e2e/{android,ios}/lcov.info
   enumerates a separately instrumented build's full sequence-point
   universe, so their zero-hit records are dropped — covered locations
   still union in, while unexecuted e2e lines and files do not inflate
-  the flag's denominator (#2270).
+  the flag's denominator (#2271).
 - `--relocate` canonicalizes absolute runner paths (Linux Android leg, macOS
   iOS leg, local Windows) onto `app/BibleOnSite/`, so the same source line
   never double-counts across runners.
@@ -275,15 +275,25 @@ In CI ([.github/workflows/ci.yml](../../../../.github/workflows/ci.yml)), the `a
 5. Runs integration tests against the API and merges the coverage reports
 6. Uploads the unit+integration coverage artifact for cross-module merge
 
-The `app_mobile_e2e` job ([app-mobile-e2e.yml](../../../../.github/workflows/app-mobile-e2e.yml)):
+The `app_mobile_e2e` job ([app-mobile-e2e.yml](../../../../.github/workflows/app-mobile-e2e.yml)
++ [app-mobile-e2e-runner.yml](../../../../.github/workflows/app-mobile-e2e-runner.yml)):
 
-1. Builds an instrumented Debug app (`MOBILE_E2E_COVERAGE=1` → `CompileMobileE2E`)
-2. Runs the Appium suite; the harness collects a per-test coverage dump even
-   when the scenario fails
-3. Applies the dumps via `CoverageMobileE2E` (runs even after a failed pilot so
-   partial coverage stays diagnosable) and uploads `app-e2e-coverage.<run>.<platform>`
-4. Publishes `app-e2e-coverage.master.<platform>` only from a completed,
-   successful default-branch run
+1. Builds an instrumented Debug app (`MOBILE_E2E_COVERAGE=1` → `CompileMobileE2E`);
+   on iOS a single shared `build` leg compiles once and the three
+   `prebuilt-run` shards restore that build, while Android builds and runs on
+   one leg.
+2. Each leg runs its Appium slice; the harness collects a per-test coverage
+   dump even when the scenario fails. iOS test classes carry a `Shard` trait
+   assigning every scenario to exactly one of three runners.
+3. Each leg applies the dumps via `CoverageMobileE2E` (runs even after a
+   failed pilot so partial coverage stays diagnosable) and uploads
+   `app-e2e-coverage.<run>.<artifact>` — `android`, or `ios-shard1..3`.
+4. `merge_ios` merges the three shard LCOVs into
+   `app-e2e-coverage.<run>.ios` after union/compatibility validation
+   (`merge-runner-shards.mjs`).
+5. `app-e2e-coverage.master.<platform>` is published only from a completed,
+   successful default-branch run — by the Android leg for `android` and by
+   `merge_ios` (gated on a `complete` merged union) for `ios`.
 
 `cross_module_ci` then merges all layers as described above and publishes the
 authoritative report to Codecov with the `app` flag and to Codacy through the

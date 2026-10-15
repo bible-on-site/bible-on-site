@@ -9,6 +9,7 @@
 | [`app-package.yml`](../../../../.github/workflows/app-package.yml) | App packaging (MSIX, AAB, IPA + asset packs/payloads) |
 | [`shared-release.yml`](../../../../.github/workflows/shared-release.yml) | Release automation (tag, GitHub Release, trigger CD) |
 | [`ci-data-deploy.yml`](../../../../.github/workflows/ci-data-deploy.yml) | Data-deploy tooling tests (path-scoped, independent of `ci.yml`) |
+| [`perek-images.yml`](../../../../.github/workflows/perek-images.yml) | Perek image tooling checks (path-scoped `devops/perek-images`, independent) |
 | [`testflight-distribution.yml`](../../../../.github/workflows/testflight-distribution.yml) | TestFlight group distribution; also dispatchable for recovery |
 | [`testflight-status.yml`](../../../../.github/workflows/testflight-status.yml) | Read-only inspection of the published iOS build (recovery aid) |
 | [`auto-create-pr`](../../../../.github/workflows/auto-create-pr.yml) | Auto-create PRs when publishing a branch |
@@ -273,7 +274,7 @@ release_new_module:
   if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_new_module.result == 'success' && needs.package_new_module.outputs.module_version != '' && needs.determine_changes.outputs.new_module_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
 ```
 
-**Affected Jobs:** `release_website`, `release_api`, `release_app`
+**Affected Jobs:** `release_website`, `release_api`, `release_admin`, `release_bulletin`, `release_app`
 
 ### Draft release lookup and recovery
 
