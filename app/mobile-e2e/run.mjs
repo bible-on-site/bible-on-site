@@ -206,7 +206,7 @@ try {
     try {
       const cleanup = await terminateIosTestApp(process.env.MOBILE_UDID, {
         keepApp: process.env.MOBILE_KEEP_APP === "1", inspectorPath,
-        observedPids: iosAppLogPids(readFileSync(resolve(artifacts, "device-live.log"), "utf8")),
+        observedPids: () => iosAppLogPids(readFileSync(resolve(artifacts, "device-live.log"), "utf8")),
       });
       writeFileSync(resolve(artifacts, "ios-app-cleanup.json"), JSON.stringify(cleanup, null, 2));
     } catch (error) {

@@ -195,3 +195,24 @@ for (const [label, probe, succeeds] of [
     assert.equal(calls[0].options.timeout, 300000);
   });
 }
+
+test("snapshots the stopped log once and counts parsing against the original cleanup deadline", async () => {
+  let time = 0, observations = 0, inspections = 0;
+  const result = await terminateIosTestApp(udid, {
+    now: () => time,
+    observedPids: () => { observations++; time += 20; return [1234]; },
+    execute: async (_command, _args, options) => {
+      assert.equal(options.timeout, 5000 - time);
+      return { stdout: ++inspections === 1 ? listing() : "" };
+    },
+    signal: () => { time += 10; },
+  });
+  assert.equal(observations, 1);
+  assert.equal(inspections, 2);
+  assert.equal(result.elapsedMs, 30);
+  await assert.rejects(terminateIosTestApp(udid, {
+    now: () => time,
+    observedPids: () => { time += 5001; return [1234]; },
+    execute: async () => assert.fail("parsing exhausted the existing deadline"),
+  }), /five seconds/);
+});
