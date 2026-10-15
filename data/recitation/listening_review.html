@@ -28,6 +28,7 @@ button:disabled {opacity:.45;cursor:default}
 .word.heard {border-bottom-color:#4c8d72}
 .word.active {background:#dbeaff;outline:2px solid #8ab5e9}
 .word.changed {border:1px solid #d7ac60}
+.word.pending {outline:2px dashed #285c9d;outline-offset:2px}
 #listening {color:#607086;font-size:14px;min-height:22px}
 textarea {resize:vertical;width:100%;border:1px solid #d5dde7;border-radius:10px;padding:12px;font:inherit;margin:8px 0 20px}
 .actions {display:flex;gap:8px;flex-wrap:wrap}
@@ -50,6 +51,7 @@ footer {font-size:13px;color:#6f7b8c;margin-top:20px;line-height:1.7}
 <div class="controls">
 <button class="primary" id="verse">▶ הפסוק</button>
 <button id="cuts">▶ חיתוכי המילים</button>
+<button id="remaining">▶ חיתוכים שטרם נשמעו</button>
 <button id="context">עם הקשר</button>
 <button id="stop" aria-label="עצירת הנגינה">■ עצירה</button>
 </div>
@@ -72,10 +74,12 @@ footer {font-size:13px;color:#6f7b8c;margin-top:20px;line-height:1.7}
 "use strict";
 const $ = id => document.getElementById(id);
 let cases = [], decisions = {}, token, index = 0, audioContext, currentSource, generation = 0;
-const buffers = new Map(), evidence = new Map();
+const buffers = new Map(), evidence = new Map(), drafts = new Map();
 let saving = false, cancelPlayback;
 const caseNow = () => cases[index];
 const heardNow = () => evidence.get(caseNow().id);
+const remainingWords = () => caseNow().words.filter(word => !heardNow().segments.has(word.segment));
+function rememberDraft() { if (caseNow()) drafts.set(caseNow().id, $("note").value); }
 function stop() {
   generation++;
   if (currentSource) {
@@ -90,7 +94,13 @@ function updateEvidence() {
   const heard = heardNow();
   $("listening").textContent = heard.segments.size + "/" + caseNow().words.length + " חיתוכים נשמעו" + (heard.verse ? " · הפסוק נשמע" : "");
   if (caseNow().reusableHeardSegments?.length) $("listening").textContent += " · " + caseNow().reusableHeardSegments.length + " חיתוכים ללא שינוי מההאזנה הקודמת";
-  $("good").disabled = saving || heard.segments.size !== caseNow().words.length;
+  const remaining = remainingWords();
+  if (remaining.length) $("listening").textContent += " · להשלמה: " + remaining.map(word => word.text).join(", ");
+  $("remaining").disabled = saving || remaining.length === 0;
+  for (const word of caseNow().words) {
+    document.querySelector('[data-segment="' + word.segment + '"]')?.classList.toggle("pending", !heard.segments.has(word.segment));
+  }
+  $("good").disabled = saving || remaining.length !== 0;
 }
 function render() {
   stop();
@@ -123,7 +133,7 @@ function render() {
     button.onclick = () => void play("word", word);
     $("words").append(button);
   }
-  $("note").value = decisions[item.id]?.note ?? item.priorNote ?? "";
+  $("note").value = drafts.get(item.id) ?? decisions[item.id]?.note ?? item.priorNote ?? "";
   $("previous").disabled = index === 0;
   $("next").disabled = index === cases.length - 1;
   $("status").textContent = decisions[item.id] ? "תשובה נשמרה: " + {good:"החיתוכים טובים",problem:"יש בעיה",skip:"דילוג"}[decisions[item.id].verdict] : "";
@@ -182,14 +192,15 @@ async function play(mode, selected) {
     const buffer = await getBuffer(item);
     if (request !== generation) return;
     $("status").textContent = mode === "cuts" ? "מנגנים כל מילה בנפרד..." : "מנגן...";
-    if (mode === "cuts" || mode === "word") {
-      for (const word of mode === "cuts" ? item.words : [selected]) {
+    if (mode === "cuts" || mode === "word" || mode === "remaining") {
+      const words = mode === "remaining" ? remainingWords() : mode === "cuts" ? item.words : [selected];
+      for (const word of words) {
         if (!await playSlice(buffer,item,word.startMs,word.endMs,request,word)) return;
         evidence.get(item.id).segments.add(word.segment);
         evidence.get(item.id).fresh.add(word.segment);
         document.querySelector('[data-segment="' + word.segment + '"]')?.classList.add("heard");
         updateEvidence();
-        if (mode === "cuts") await new Promise(resolve => setTimeout(resolve,160));
+        if (mode !== "word") await new Promise(resolve => setTimeout(resolve,160));
         if (request !== generation) return;
       }
     } else {
@@ -206,6 +217,7 @@ async function play(mode, selected) {
 }
 async function save(verdict) {
   if (saving || !caseNow()) return;
+  rememberDraft();
   stop(); saving = true; updateEvidence();
   document.querySelectorAll(".actions button,.nav button").forEach(button => { button.disabled = true; });
   const item = caseNow(), heard = heardNow();
@@ -233,13 +245,14 @@ async function save(verdict) {
 }
 $("verse").onclick = () => void play("verse");
 $("cuts").onclick = () => void play("cuts");
+$("remaining").onclick = () => void play("remaining");
 $("context").onclick = () => void play("context");
 $("stop").onclick = stop;
 $("good").onclick = () => void save("good");
 $("problem").onclick = () => void save("problem");
 $("skip").onclick = () => void save("skip");
-$("previous").onclick = () => { if (!saving && index > 0) { index--; render(); } };
-$("next").onclick = () => { if (!saving && index < cases.length - 1) { index++; render(); } };
+$("previous").onclick = () => { if (!saving && index > 0) { rememberDraft(); index--; render(); } };
+$("next").onclick = () => { if (!saving && index < cases.length - 1) { rememberDraft(); index++; render(); } };
 async function updateRecovery() {
   try {
     const response = await fetch("/api/recovery");
