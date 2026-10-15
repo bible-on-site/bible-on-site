@@ -50,6 +50,12 @@
                                        FontSize="15"
                                        IsVisible="{Binding HasIntro}"/>
 
+                    <!-- Identification map — the PLACE category only -->
+                    <controls:TanahpediaPlacesMap Markers="{Binding PlaceMarkers}"
+                                                  EntryTappedCommand="{Binding OpenEntryCommand}"
+                                                  HeightRequest="320"
+                                                  IsVisible="{Binding HasMap}"/>
+
                     <VerticalStackLayout Spacing="8"
                                          BindableLayout.ItemsSource="{Binding Entities}">
                         <BindableLayout.ItemTemplate>
