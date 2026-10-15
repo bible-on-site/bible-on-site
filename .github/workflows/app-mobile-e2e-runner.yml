@@ -158,6 +158,11 @@ jobs:
         if: inputs.mode != 'build' && (inputs.platform == 'iOS' && steps.ios-device.outputs.udid != '')
         id: ios-sim-cache
         uses: actions/cache/restore@v6
+        env:
+          # Optional state must not stall device startup on a stuck segment.
+          # A timeout is a cache miss; boot's existing cold path still validates
+          # the explicit simulator and the full native suite still runs.
+          SEGMENT_DOWNLOAD_TIMEOUT_MINS: "1"
         with:
           path: ~/Library/Developer/CoreSimulator/Devices/${{ steps.ios-device.outputs.udid }}
           key: ${{ runner.os }}-ios-sim-${{ steps.ios-device.outputs.udid }}-${{ steps.toolchain.outputs.id }}-${{ env.IOS_SIM_STATE_RECIPE }}
