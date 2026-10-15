@@ -14,8 +14,11 @@ public sealed class ReportingLifecycleProbe
             ?? throw new InvalidOperationException("Launch this probe with verify-reporting.mjs.");
         if (Environment.GetEnvironmentVariable("MOBILE_E2E_REPORTING_LEAK") == "1")
         {
-            var gate = new ManualResetEventSlim();
-            new Thread(() => gate.Wait()) { Name = "Intentional foreground leak regression" }.Start();
+            new Thread(() =>
+            {
+                using var gate = new ManualResetEventSlim();
+                gate.Wait();
+            }) { Name = "Intentional foreground leak regression" }.Start();
             return;
         }
         using var released = new ManualResetEventSlim();
