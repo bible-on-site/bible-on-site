@@ -65,15 +65,15 @@ public class TanahpediaPlacesMap : ContentView
         MainThread.BeginInvokeOnMainThread(() => _webView.Source = new HtmlWebViewSource { Html = html });
     }
 
+    /// <summary>Opens an external link; seam so tests can replace the launcher.</summary>
+    // Internal for unit tests - the test assembly compiles these sources in-place.
+    internal Func<Uri, Task> OpenExternalLink { get; set; } = Launcher.OpenAsync;
+
     /// <summary>
     /// Intercepts in-map navigation: entry links route in-app through the
     /// command; anything else external (e.g. the OSM attribution link) opens
     /// in the browser instead of replacing the map.
     /// </summary>
-    // Internal for unit tests - the test assembly compiles these sources in-place.
-    /// <summary>Opens an external link; seam so tests can replace the launcher.</summary>
-    internal Func<Uri, Task> OpenExternalLink { get; set; } = Launcher.OpenAsync;
-
     internal void OnNavigating(object? sender, WebNavigatingEventArgs e)
     {
         var url = e.Url;
