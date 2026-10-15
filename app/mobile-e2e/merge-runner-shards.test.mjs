@@ -31,7 +31,7 @@ test("requires a disjoint successful union of every expected scenario", () => {
 test("a timed-out runner or failed scenario cannot publish a complete union", () => {
   assert.throws(() => validateRunnerEvidence([{ ...part("a"), timing: { status: "timed-out", exitCode: 124 } }, part("b")], ["a", "b"]), /did not finish/);
   assert.throws(() => validateRunnerEvidence([{ timing, evidence: [{ ...evidence("a"), outcome: "failed" }] }, part("b")], ["a", "b"]), /Unsuccessful/);
-  assert.throws(() => validateRunnerEvidence([part("a")], ["a"]), /both/);
+  assert.throws(() => validateRunnerEvidence([part("a")], ["a"]), /at least two/);
 });
 
 test("retains independent build hashes, startup coverage and both test attributions", () => {
@@ -75,4 +75,13 @@ test("merges LCOV by covered locations and preserves both startup dumps", () => 
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+test("three runners retain every test and startup dump; a missing or failed third group cannot pass", () => {
+  assert.deepEqual([...validateRunnerEvidence([part("a"), part("b"), part("c")], ["a", "b", "c"])], ["a", "b", "c"]);
+  assert.throws(() => validateRunnerEvidence([part("a"), part("b")], ["a", "b", "c"]), /missing=c/);
+  assert.throws(() => validateRunnerEvidence([part("a"), part("b"), { ...part("c"), timing: { status: "timed-out", exitCode: 124 } }], ["a", "b", "c"]), /did not finish/);
+  const merged = mergeExecTrees([tree("a", "h1"), tree("b", "h2"), tree("c", "h3")], sha, true);
+  assert.deepEqual(Object.keys(merged.tests), ["a", "b", "c"]);
+  assert.equal(merged.diagnostics.dumpsApplied, 3);
+  assert.equal(merged.modules.length, 3);
 });

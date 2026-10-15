@@ -2,7 +2,6 @@ using System.Drawing;
 using BibleOnSite.Tests.MobileE2E.Platforms;
 using OpenQA.Selenium;
 using OpenQA.Selenium.Appium;
-using OpenQA.Selenium.Interactions;
 using Xunit;
 
 namespace BibleOnSite.Tests.MobileE2E.Pages;
@@ -120,33 +119,52 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
     public AppiumElement ScrollBackTo(string automationId, Func<AppiumElement, bool> condition)
     {
         var locator = platform.AutomationId(automationId);
-        for (var attempt = 0; attempt < 20; attempt++)
+        var deadline = DateTime.UtcNow.AddSeconds(45);
+        AppiumElement? reader = null;
+        Rectangle? lastHeading = null;
+        for (var attempt = 0; attempt < 20 && DateTime.UtcNow < deadline; attempt++)
         {
             try
             {
-                return WaitFor(locator, condition, TimeSpan.FromSeconds(attempt == 0 ? 8 : 2));
-            }
-            catch (WebDriverTimeoutException)
-            {
                 var window = driver.Manage().Window.Size;
-                var reader = WaitFor("PasukimCollection", element => element.Size.Width >= window.Width / 2);
-                var location = reader.Location;
-                var size = reader.Size;
-                var top = Math.Max(0, location.Y);
-                var bottom = Math.Min(window.Height, location.Y + size.Height);
-                var x = Math.Clamp(location.X + size.Width / 2, 1, window.Width - 1);
-                var finger = new PointerInputDevice(PointerKind.Touch, "reader-scroll");
-                var gesture = new ActionSequence(finger, 0);
-                gesture.AddAction(finger.CreatePointerMove(CoordinateOrigin.Viewport, x,
-                    top + (bottom - top) / 4, TimeSpan.Zero));
-                gesture.AddAction(finger.CreatePointerDown(MouseButton.Left));
-                gesture.AddAction(finger.CreatePointerMove(CoordinateOrigin.Viewport, x,
-                    top + (bottom - top) / 2, TimeSpan.FromMilliseconds(350)));
-                gesture.AddAction(finger.CreatePointerUp(MouseButton.Left));
-                driver.PerformActions([gesture]);
+                var remaining = deadline - DateTime.UtcNow;
+                if (remaining <= TimeSpan.Zero) { break; }
+                reader ??= WaitFor("PasukimCollection", element => element.Size.Width >= window.Width / 2, remaining);
+                NativeElementMatch? target = null;
+                if (driver is IosSnapshotDriver snapshots)
+                {
+                    target = snapshots.FindSnapshots(locator).FirstOrDefault(match =>
+                        match.Snapshot.Width > 0 && match.Snapshot.Height > 0
+                        && match.Snapshot.X + match.Snapshot.Width / 2 >= 0
+                        && match.Snapshot.X + match.Snapshot.Width / 2 < window.Width
+                        && condition(match.ConditionElement));
+                    lastHeading = target is null ? null : new Rectangle(
+                        Convert.ToInt32(target.Snapshot.X), Convert.ToInt32(target.Snapshot.Y),
+                        Convert.ToInt32(target.Snapshot.Width), Convert.ToInt32(target.Snapshot.Height));
+                }
+                else
+                {
+                    var visible = FindVisible(locator, condition).FirstOrDefault();
+                    if (visible != null) { return visible.Element; }
+                }
+                // Keep the container handle, but read its live frame for every
+                // gesture. The heading snapshot only plans direction/distance.
+                var frame = MobilePlatformAdapter.ReadFrame(reader);
+                var bounds = new Rectangle(frame.Location, frame.Size);
+                var viewport = Rectangle.Intersect(bounds, new Rectangle(Point.Empty, window));
+                if (target != null && target.Snapshot.IsVisibleIn(window) && lastHeading is { } heading
+                    && viewport.Contains(heading.X + heading.Width / 2, heading.Y + heading.Height / 2))
+                {
+                    return target.Element;
+                }
+                driver.PerformActions([ReaderScrollActions.ReturnToHeading(bounds, window, lastHeading)]);
+            }
+            catch (StaleElementReferenceException)
+            {
+                reader = null;
             }
         }
-        throw new WebDriverTimeoutException($"The selected heading {automationId} was not found after scrolling back through the reader.");
+        throw new WebDriverTimeoutException($"The selected heading {automationId} was not found within the reader's 45-second return budget; last frame: {lastHeading}.");
     }
 
     public void OpenCircularMenu()

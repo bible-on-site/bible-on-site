@@ -32,6 +32,12 @@ For a dependency upgrade task, refresh every dependency kind within the user's r
 
 Sync a pull request branch with its base only when both conditions hold: the current head has no green CI result, and there is an actual merge conflict. A branch being behind its base is not, by itself, a reason to sync.
 
+# Coverage Gates
+
+Codecov enforces per-module project coverage with `threshold: 0%`: a change may not lower any flag below its target. Targets (`codecov.yml`): website 99%, app 98.5%, api 97%, bulletin 90%, admin 86%, data 84%. The unflagged `codecov/project` check is informational only. Codacy additionally gates pull requests on diff coverage (70%).
+
+Keep every touched module at or above its target: add or extend tests before pushing rather than after CI fails. Do not lower targets, raise thresholds, or misuse `istanbul ignore` comments to bypass a gate.
+
 # Performance Failures
 
 Do not increase timeouts, retries, sleeps, polling budgets, or hang-watchdog limits to make a failing or slow operation pass. Treat a timeout as evidence: reproduce it, measure the critical path, and fix the underlying algorithm, blocking work, contention, or delivery defect. Keep the existing interaction deadline as a regression check. A timeout change is permitted only when the user explicitly requests it after seeing the root cause and measured tradeoff.

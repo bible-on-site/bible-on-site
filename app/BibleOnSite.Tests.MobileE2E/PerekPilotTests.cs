@@ -5,26 +5,27 @@ using Xunit;
 namespace BibleOnSite.Tests.MobileE2E;
 
 // One device per matrix runner; scenarios on that device run sequentially.
-// iOS shards the suite across two simulators (#2083): Shard=1 owns the shared
-// pilot while Shard=2 takes the iOS-only classes, keeping the two disjoint
-// groups close in scenario count. Android runs every applicable test and
-// ignores the trait.
+// CI keeps the long commentary and rapid verse storms on separate runners.
+// The ten iOS cases remain balanced across three runners. Android runs all six
+// shared scenarios without a shard filter.
 [Collection("Mobile device")]
 [Trait("Category", "MobileE2E")]
 [Trait("Platform", "Shared")]
-[Trait("Shard", "1")]
 public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSession session)
     : MobileDeviceTest(output, session)
 {
     [Fact]
+    [Trait("Shard", "1")]
     public void StartupDisplaysPackagedPesukimAndUsableBottomNavigation() => Scenario(() =>
     {
         Assert.NotEmpty(Page.Source);
         Assert.NotEmpty(Page.FirstPasuk);
+        Assert.Empty(Driver!.FindElements(Platform.AutomationId("RecitationDecoder")));
         Page.AssertBottomNavigationLayout();
     });
 
     [Fact]
+    [Trait("Shard", "3")]
     public void SearchReplacesTheSourceAndGroupsBooksInThreeColumns() => Scenario(() =>
     {
         Assert.NotEmpty(Page.FirstPasuk);
@@ -74,6 +75,7 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
     });
 
     [Fact]
+    [Trait("Shard", "1")]
     public void FloatingSearchFindsMisspelledChapterAndUnpointedVerse() => Scenario(() =>
     {
         Assert.NotEmpty(Page.FirstPasuk);
@@ -87,6 +89,7 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         Page.Tap("SearchSheetApplyButton");
         Page.WaitForHidden("SearchSheet");
         SearchFor("בראשיט 1", "בראשית א");
+        SaveDiagnostics("FloatingSearchChapterResults", "passed");
         Platform.Tap(Driver!, Page.WaitFor("SearchResultTitle", element => element.Text == "בראשית א"));
         Page.WaitFor("PerekSource", element => element.Text == "בראשית א");
         AssertRegularReader();
@@ -111,6 +114,7 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
     });
 
     [Fact]
+    [Trait("Shard", "3")]
     public void FloatingSearchCommentaryJumpRestoresPhraseResultsAndPosition() => Scenario(() =>
     {
         var driver = Driver!;
@@ -287,6 +291,7 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
     }
 
     [Fact]
+    [Trait("Shard", "3")]
     public void AdjacentPerekNavigationChangesTheTextAndReturnsToTheOriginal() => Scenario(() =>
     {
         var source = Page.Source;
@@ -311,6 +316,7 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
     });
 
     [Fact]
+    [Trait("Shard", "2")]
     public void NativeFlyoutOpensPreferencesAndBackReturnsToThePerek() => Scenario(() =>
     {
         var source = Page.Source;

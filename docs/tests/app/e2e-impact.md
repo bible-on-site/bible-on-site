@@ -120,33 +120,48 @@ full applicable suite — **a selector failure is never a green run of zero
 tests**. Identical inputs produce an identical manifest (sorted output,
 content fingerprint).
 
-## CI wiring (`app-mobile-e2e.yml`)
+## CI wiring (`app-mobile-e2e-runner.yml` + `app-mobile-e2e.yml`)
 
-1. **baseline-download** — fetches the newest
+1. **baseline-download + select** — a background step (overlapped with
+   device/caches setup) fetches the newest
    `app-mobile-e2e-coverage.master.<platform>` artifact through the REST API
-   (`actions: read`). Absent baselines are reported, not fatal.
-2. **select** — writes `selection-manifest.json` plus a step summary of the
-   selected/unselected tests and their reasons.
-3. **tests** — `MOBILE_E2E_SELECTION` receives the manifest only in `enforce`
-   mode; `TestMobileE2E` intersects its `FullyQualifiedName` list with the
-   existing category/platform filter. A non-`selectAll` manifest without a
-   filter fails rather than running zero tests.
-4. **collect-appium** — runs `always()`; failed runs still collect evidence
-   for their passed tests but mark the tree `complete: false`.
-5. **publish** — only a completed, successful `master` push uploads the
-   `.master` baseline (`overwrite`), so provisional PR/merge-queue evidence
-   can never poison the authoritative tree.
+   (`actions: read`) and writes `selection-manifest.json` plus a step
+   summary of the selected/unselected tests and their reasons. Absent
+   baselines resolve `selectAll`, not a failure.
+2. **tests** — `MOBILE_E2E_SELECTION` receives the manifest only in
+   `enforce` mode; `TestMobileE2E` intersects its `FullyQualifiedName` list
+   with the existing category/platform filter. A non-`selectAll` manifest
+   without a filter fails rather than running zero tests.
+3. **collect-appium** — runs `always()`; failed runs still collect evidence
+   for their passed tests but mark the tree `complete: false`. On iOS every
+   shard's tree is additionally marked `--incomplete` by construction.
+4. **shard merge (iOS)** — `merge_ios` downloads the three
+   `app-mobile-e2e-shard.<run>.ios-shardN` inputs, validates the test union
+   against the expected full-suite set (no drops, no overlap), requires
+   compatible suite/platform/snapshot trees, merges LCOV and manifests —
+   enforce mode additionally requires byte-identical manifests across
+   shards and uses the selected ids unless `selectAll`.
+5. **publish** — Android baselines publish inside the runner leg; the three
+   iOS `*.master.ios` baselines publish only from `merge_ios` when the
+   merged evidence is `complete`, and only on a completed, successful
+   `master` push (`push` on `refs/heads/master` — a `workflow_dispatch`
+   cannot refresh them), so provisional PR/merge-queue evidence can never
+   poison the authoritative tree.
 
 Rollout modes are `workflow_dispatch`/`workflow_call` inputs:
 `e2e_selection_mode` (`shadow` default, `enforce`) and `force_full_suite`
 (bypasses selection entirely). Skipping stays disabled until shadow runs
 demonstrate the selection contract; enforcement is a one-input switch.
+Sharding is orthogonal: `E2eSelection` intersects the `Shard` trait with
+the selection filter, so an enforce run only ever schedules each scenario
+on exactly one runner.
 
 ## Remaining phases
 
 - Evidence-gated switch to `enforce` for the Appium suite.
-- Website/admin/API suites: per-test application-process collectors (the
-  website already records Istanbul coverage per Playwright test).
+- Website/admin/API suites run the same contract in shadow mode on `ci.yml`
+  (#2241): manifest computed per run, suites still execute everything, no
+  enforce runner exists for them yet.
 - Finer-grained structural mapping: the persisted declaration signatures
   currently serve provenance and file-level equivalence; mapping individual
   coverage entries to declarations would let a member-level edit select only

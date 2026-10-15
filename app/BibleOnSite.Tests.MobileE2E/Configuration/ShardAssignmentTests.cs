@@ -1,35 +1,38 @@
+using System.Reflection;
 using Xunit;
 
 namespace BibleOnSite.Tests.MobileE2E.Configuration;
 
-// Optional sharded iOS runs split the suite across two simulators by the Shard
-// trait (#2083). An iOS-applicable class without exactly one Shard=1|2 value
-// matches no shard filter and would silently drop from every iOS run while
-// still running on Android — this guard keeps the partition complete.
+// Every iOS-applicable fact belongs to exactly one of the three CI runners.
+// The local two-device coordinator combines groups 1 and 3 on its first device.
 [Trait("Category", "Unit")]
 public sealed class ShardAssignmentTests
 {
     [Fact]
-    public void IosApplicableClassesCarryOneShardValue()
+    public void EveryIosScenarioHasOneShardAndTheTenCasesRemainBalanced()
     {
-        var offenders = typeof(MobileDeviceTest).Assembly.GetTypes()
+        var scenarios = typeof(MobileDeviceTest).Assembly.GetTypes()
             .Where(type => type is { IsClass: true, IsAbstract: false })
             .Select(type => (type, traits: TraitsOf(type)))
             .Where(entry => entry.traits.Contains(("Category", "MobileE2E")))
             .Where(entry => entry.traits.Contains(("Platform", "Shared"))
                 || entry.traits.Contains(("Platform", "iOS")))
-            .Select(entry => (entry.type, shards: entry.traits
-                .Where(trait => trait.Name == "Shard")
-                .Select(trait => trait.Value)
-                .ToArray()))
-            .Where(entry => entry.shards is not ["1"] and not ["2"])
-            .Select(entry => $"{entry.type.FullName} (Shard: {string.Join(", ", entry.shards)})")
+            .SelectMany(entry => entry.type.GetMethods()
+                .Where(method => method.GetCustomAttributesData().Any(attribute =>
+                    attribute.AttributeType.Name is "FactAttribute" or "TheoryAttribute"))
+                .Select(method => (id: $"{entry.type.FullName}.{method.Name}",
+                    shards: entry.traits.Concat(TraitsOf(method))
+                        .Where(trait => trait.Name == "Shard").Select(trait => trait.Value).ToArray())))
             .ToArray();
-        Assert.Empty(offenders);
+        Assert.Empty(scenarios.Where(entry => entry.shards is not ["1"] and not ["2"] and not ["3"])
+            .Select(entry => $"{entry.id} (Shard: {string.Join(", ", entry.shards)})"));
+        Assert.Equal(10, scenarios.Length);
+        Assert.Equal([3, 4, 3], new[] { "1", "2", "3" }
+            .Select(shard => scenarios.Count(entry => entry.shards.SequenceEqual([shard]))).ToArray());
     }
 
-    private static List<(string Name, string Value)> TraitsOf(Type type) =>
-        type.GetCustomAttributesData()
+    private static List<(string Name, string Value)> TraitsOf(MemberInfo member) =>
+        member.GetCustomAttributesData()
             .Where(attribute => attribute.AttributeType.Name == "TraitAttribute"
                 && attribute.ConstructorArguments.Count == 2)
             .Select(attribute => (

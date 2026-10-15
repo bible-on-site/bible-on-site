@@ -1,5 +1,5 @@
 import { execFile, execFileSync, spawn } from "node:child_process";
-import { appendFileSync, closeSync, copyFileSync, existsSync, mkdirSync, openSync, readdirSync, rmSync, statSync, writeFileSync, writeSync } from "node:fs";
+import { appendFileSync, closeSync, copyFileSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync, writeSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -10,7 +10,10 @@ import { probeAppiumReadiness, waitForAppiumReadiness } from "./appium-readiness
 import { prepareWda } from "./prepare-wda.mjs";
 import { captureNativeFrame, exportNativeLog, startNativeLog } from "./native-logs.mjs";
 import { waitForAndroidDevice } from "./android-readiness.mjs";
-import { iosAppPids } from "./ios-processes.mjs";
+import { iosAppLogPids, iosAppPids } from "./ios-processes.mjs";
+import { terminateIosTestApp } from "./ios-app-cleanup.mjs";
+import { captureTestHostStacks, monitorTestHostShutdown } from "./test-host-diagnostics.mjs";
+import { prepareIosProcessInspector } from "./ios-process-inspector.mjs";
 
 const directory = dirname(fileURLToPath(import.meta.url));
 const runStarted = Date.now();
@@ -44,6 +47,7 @@ if (platform === "android") {
   await waitForAndroidDevice({ adb, udid: process.env.MOBILE_UDID, execute,
     observe: (observation) => appendFileSync(deviceReadinessLog, `${JSON.stringify(observation)}\n`) });
 }
+const inspectorPath = platform === "ios" ? await prepareIosProcessInspector() : undefined;
 const wdaPath = platform === "ios" ? (process.env.MOBILE_WDA_PATH ?? prepareWda()) : undefined;
 // Sharded iOS runs host one Appium server per simulator on the same runner, so
 // the port is configurable; a single run keeps the default 4723.
@@ -94,6 +98,12 @@ const observeReadiness = (observation) => appendFileSync(readinessLog, `${JSON.s
   time: new Date().toISOString(), elapsedMs: Date.now() - readinessStarted, ...observation,
 })}\n`);
 server.on("spawn", () => observeReadiness({ phase: "spawned", pid: server.pid }));
+const hostDiagnostics = resolve(artifacts, "test-host-diagnostics");
+rmSync(hostDiagnostics, { recursive: true, force: true });
+mkdirSync(hostDiagnostics, { recursive: true });
+const shutdownMonitor = process.env.MOBILE_E2E_DOTNET_STACK
+  ? monitorTestHostShutdown(() => captureTestHostStacks(hostDiagnostics,
+    process.env.MOBILE_E2E_DOTNET_STACK, execute)) : undefined;
 let test;
 let diagnosticsFailed = false;
 const nativeStream = platform === "ios" ? startNativeLog("xcrun", ["simctl", "spawn", process.env.MOBILE_UDID,
@@ -149,17 +159,31 @@ try {
   const ready = await waitForAppiumReadiness({ observe: observeReadiness, exited: () => serverExit,
     probe: (options) => probeAppiumReadiness({ ...options, port: Number(appiumPort) }) });
   if (!ready) throw new Error(`Appium did not become ready. See ${artifacts}/appium.log`);
-  const prebuilt = process.env.MOBILE_E2E_PREBUILT === "1" ? ["--no-build", "--no-restore"] : [];
-  test = spawn("dotnet", ["run", "--project", "devops", ...prebuilt, "--", "TestMobileE2E", "--configuration", "Debug"], {
-    cwd: resolve(directory, ".."), windowsHide: true, stdio: "inherit",
-    env: { ...process.env, MOBILE_APP_PATH: appPath, MOBILE_E2E_ARTIFACTS: artifacts,
+  const launch = process.env.MOBILE_E2E_PREBUILT === "1"
+    ? [resolve(directory, "../devops/bin/Debug/_build.dll")]
+    : ["run", "--project", "devops", "--"];
+  test = spawn("dotnet", [...launch, "TestMobileE2E", "--configuration", "Debug"], {
+    cwd: resolve(directory, ".."), windowsHide: true, stdio: ["inherit", "pipe", "pipe"],
+    env: { ...process.env, MOBILE_APP_PATH: appPath, MOBILE_E2E_ARTIFACTS: artifacts, MOBILE_E2E_HOST_DIAGNOSTICS: hostDiagnostics,
       ...(wdaPath ? { MOBILE_WDA_PATH: wdaPath } : {}), APPIUM_SERVER: `http://127.0.0.1:${appiumPort}` },
   });
+  for (const [name, stream, output] of [["stdout", test.stdout, process.stdout], ["stderr", test.stderr, process.stderr]]) {
+    stream.on("data", chunk => {
+      output.write(chunk);
+      shutdownMonitor?.write(chunk, name);
+    });
+  }
   process.exitCode = await new Promise((resolveExit, reject) => {
     test.on("error", reject);
-    test.on("exit", (code) => resolveExit(code ?? 1));
+    test.on("close", (code) => resolveExit(code ?? 1));
   });
 } finally {
+  try {
+    await shutdownMonitor?.stop();
+  } catch (error) {
+    diagnosticsFailed = true;
+    console.error("Could not capture test-host shutdown stacks:", error);
+  }
   try {
     await hangMonitor?.stop();
   } catch (error) {
@@ -178,6 +202,19 @@ try {
     await sampleIosApp("cleanup");
   }
   if (diagnosticsFailed) process.exitCode ||= 1;
+  if (platform === "ios") {
+    try {
+      const cleanup = await terminateIosTestApp(process.env.MOBILE_UDID, {
+        keepApp: process.env.MOBILE_KEEP_APP === "1", inspectorPath,
+        observedPids: () => iosAppLogPids(readFileSync(resolve(artifacts, "device-live.log"), "utf8")),
+      });
+      writeFileSync(resolve(artifacts, "ios-app-cleanup.json"), JSON.stringify(cleanup, null, 2));
+    } catch (error) {
+      writeFileSync(resolve(artifacts, "ios-app-cleanup-error.txt"), String(error));
+      console.error("Could not terminate this run's iOS app:", error);
+      process.exitCode ||= 1;
+    }
+  }
   try {
     const androidSdk = process.env.ANDROID_HOME ?? process.env.ANDROID_SDK_ROOT;
     const adb = androidSdk ? resolve(androidSdk, "platform-tools", process.platform === "win32" ? "adb.exe" : "adb") : "adb";
