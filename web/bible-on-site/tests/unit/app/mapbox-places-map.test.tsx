@@ -1,6 +1,6 @@
 import { act, render, screen, waitFor } from "@testing-library/react";
-import type { PlaceMapMarker } from "../../../src/lib/tanahpedia/types";
 import MapboxPlacesMapClient from "../../../src/app/pedia/components/MapboxPlacesMapClient";
+import type { PlaceMapMarker } from "../../../src/lib/tanahpedia/types";
 
 type MapEvent = { features?: { properties?: { index?: number } }[] };
 type MapHandler = (event: MapEvent) => void;
@@ -24,8 +24,7 @@ const mockPopups: Array<{
 }> = [];
 const mockBounds: Array<{ extend: jest.Mock }> = [];
 const mockSupported = jest.fn(() => true);
-const mockRTLStatus = jest.fn(() => "unavailable");
-const mockSetRTLTextPlugin = jest.fn();
+
 const mockMapConstructor = jest.fn().mockImplementation(() => {
 	const canvas = { style: { cursor: "" } };
 	const map = {
@@ -74,8 +73,6 @@ jest.mock("mapbox-gl", () => ({
 	__esModule: true,
 	default: {
 		supported: mockSupported,
-		getRTLTextPluginStatus: mockRTLStatus,
-		setRTLTextPlugin: mockSetRTLTextPlugin,
 		Map: mockMapConstructor,
 		Popup: mockPopupConstructor,
 		LngLatBounds: mockBoundsConstructor,
@@ -98,7 +95,6 @@ beforeEach(() => {
 	mockPopups.length = 0;
 	mockBounds.length = 0;
 	mockSupported.mockReturnValue(true);
-	mockRTLStatus.mockReturnValue("unavailable");
 	process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN = "test-public-token";
 });
 
@@ -121,7 +117,6 @@ it("shows the mapped place with a Hebrew link and cleans up the map", async () =
 			},
 		}),
 	);
-	expect(mockSetRTLTextPlugin).toHaveBeenCalled();
 	expect(map.setCenter).toHaveBeenCalledWith([jerusalem.lng, jerusalem.lat]);
 	expect(map.setZoom).toHaveBeenCalledWith(12.5);
 
@@ -217,12 +212,10 @@ it("does not initialize Mapbox without a public token", () => {
 	expect(mockMapConstructor).not.toHaveBeenCalled();
 });
 
-it("keeps an empty map at its default view without reloading the RTL plugin", async () => {
-	mockRTLStatus.mockReturnValue("loaded");
+it("keeps an empty map at its default view", async () => {
 	render(<MapboxPlacesMapClient markers={[]} />);
 	await waitFor(() => expect(mockMaps).toHaveLength(1));
 	const map = mockMaps[0];
-	expect(mockSetRTLTextPlugin).not.toHaveBeenCalled();
 	expect(map.setCenter).not.toHaveBeenCalled();
 	expect(map.fitBounds).not.toHaveBeenCalled();
 	act(() => map.handlers.load({}));
