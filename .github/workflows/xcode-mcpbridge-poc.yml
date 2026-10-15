@@ -128,6 +128,14 @@ jobs:
                   time.sleep(0.2)
               return CALL_DEADLINE, {"timeout": True}
 
+          # MCP exposes tools through tools/call — the tool name rides in
+          # params.name, it is NOT the JSON-RPC method. Sending the bare tool
+          # name as `method` gets -32601 "unknown method" even though
+          # tools/list advertises it.
+          def call_tool(name, arguments=None):
+              return call("tools/call",
+                          {"name": name, "arguments": arguments or {}})
+
           def result_payload(msg):
               result = msg.get("result", {})
               if "structuredContent" in result:
@@ -141,12 +149,18 @@ jobs:
               return result or msg
 
           timings = []
-          def timed(label, method, params=None):
-              elapsed, msg = call(method, params)
+          def timed(label, tool, arguments=None):
+              elapsed, msg = call_tool(tool, arguments)
               payload = result_payload(msg)
               summary = payload if isinstance(payload, str) else json.dumps(payload)[:200]
               if "error" in msg:
                   summary = f"ERROR {msg['error']}"
+              elif msg.get("timeout"):
+                  summary = f"TIMEOUT ({summary})"
+              # tools/call reports tool failures as result.isError, not as a
+              # JSON-RPC error — surface them instead of logging the payload.
+              elif isinstance(msg.get("result"), dict) and msg["result"].get("isError"):
+                  summary = f"TOOL-ERROR {summary}"
               print(f"[{elapsed:7.2f}s] {label}: {summary}")
               timings.append((label, elapsed))
               return payload
@@ -165,9 +179,12 @@ jobs:
 
               session_key = None
               for device in (UDID, "iPhone 17"):
+                  # sessionIdentifier: schema asks for a unique Title Case
+                  # human-friendly name used in Xcode's logs/UI.
                   payload = timed(f"StartSession device={device}",
                                   "DeviceInteractionStartSession",
-                                  {"sessionIdentifier": f"poc-{uuid.uuid4()}",
+                                  {"sessionIdentifier":
+                                       f"PoC Session {uuid.uuid4().hex[:8]}",
                                    "deviceIdentifier": device})
                   if isinstance(payload, dict) and payload.get("interactionSessionKey"):
                       session_key = payload["interactionSessionKey"]
