@@ -4,7 +4,7 @@ import test from "node:test";
 import vm from "node:vm";
 import { createHash } from "node:crypto";
 const html = readFileSync(new URL("./listening_review.html", import.meta.url), "utf8");
-const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
+const script = html.match(/<script>([\s\S]*?)<\/script>/i)[1];
 const tick = () => new Promise(resolve => setImmediate(resolve));
 class Element {
   constructor() { this.classes = new Set(); this.children = []; this.dataset = {}; this.disabled = false; this.value = ""; this.textContent = ""; }
