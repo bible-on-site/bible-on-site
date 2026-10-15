@@ -60,11 +60,14 @@ describe('UserService', () => {
 
 Ideally, all modules should have unit tests, E2E tests, and performance tests. The table below shows the current implementation status:
 
-| Module  | Unit Tests | E2E Tests | Performance Tests |
-| ------- | ---------- | --------- | ----------------- |
-| Website | ✅         | ✅        | ✅                |
-| API     | ✅         | ✅        | ❌                |
-| App     | ✅         | ✅        | ❌                |
+| Module   | Unit Tests | E2E Tests | Performance Tests |
+| -------- | ---------- | --------- | ----------------- |
+| Website  | ✅         | ✅        | ✅                |
+| API      | ✅         | ✅        | ❌                |
+| Admin    | ✅         | ✅        | ❌                |
+| Bulletin | ✅         | ❌        | ❌                |
+| App      | ✅         | ✅        | ❌                |
+| Data     | ✅         | ❌ (integration) | ❌         |
 
 ### Unit Tests
 
@@ -80,9 +83,10 @@ Unit tests verify individual functions, components, and modules in isolation. Th
 E2E tests verify complete user flows through the application, testing the integration between components, services, and external systems.
 
 - **Website**: Uses Playwright with Monocart reporter
+- **Admin**: Uses Playwright (tests in `web/admin/tests`)
 - **API**: Uses Playwright with cargo-make orchestration
-- **App**: Uses xUnit with FlaUI for Windows UI Automation (tests in `BibleOnSite.Tests.E2E`)
-- See: [Website Coverage Documentation](../tests/website/coverage/coverage.md), [API Coverage Documentation](../tests/api/coverage/coverage.md), [App Coverage Documentation](../tests/app/coverage/coverage.md)
+- **App**: Windows UI Automation via xUnit + FlaUI (`BibleOnSite.Tests.E2E`), plus the native mobile suite `BibleOnSite.Tests.MobileE2E` driven by Appium on Android emulators and iOS simulators (`app/mobile-e2e/`)
+- See: [Website Coverage Documentation](../tests/website/coverage/coverage.md), [API Coverage Documentation](../tests/api/coverage/coverage.md), [App Coverage Documentation](../tests/app/coverage/coverage.md), [Mobile E2E impact selection](../tests/app/e2e-impact.md)
 
 ### Performance & Benchmarking
 
@@ -121,6 +125,9 @@ Performance tests measure application behavior under load and track metrics over
 | Unit Tests Only | `dotnet run --project devops -- TestUnit` |
 | Integration Tests | `dotnet run --project devops -- TestIntegration` |
 | E2E Tests (Windows) | `dotnet run --project devops -- TestE2E` |
+| Mobile E2E (build) | `MOBILE_PLATFORM=Android MOBILE_E2E_COVERAGE=1 dotnet run --project devops -- CompileMobileE2E` |
+| Mobile E2E (run) | `npm test --prefix mobile-e2e` |
+| Mobile E2E Coverage | `MOBILE_PLATFORM=Android dotnet run --project devops -- CoverageMobileE2E` |
 | Unit Coverage | `dotnet run --project devops -- CoverageUnit` |
 | Integration Coverage | `dotnet run --project devops -- CoverageIntegration` |
 
@@ -174,8 +181,9 @@ Codecov uses flags to separate coverage by module:
 
 - `website` - Coverage from web/bible-on-site
 - `api` - Coverage from web/api
-- `app` - Coverage from app/BibleOnSite (when available)
+- `app` - Coverage from app/BibleOnSite — unit + integration + mobile E2E merged hits-only (see [App coverage](../tests/app/coverage/coverage.md))
 - `admin` - Coverage from web/admin
+- `admin_e2e` - Admin E2E layer reported separately
 - `bulletin` - Coverage from web/bulletin
 - `data` - Coverage from data/
 

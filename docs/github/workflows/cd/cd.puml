@@ -7,7 +7,7 @@ skinparam ActivityFontColor #1565C0
 skinparam ArrowColor #1976D2
 skinparam ActivityBarColor #1976D2
 
-title Continuous Deployment Workflows
+title Continuous Deployment Workflows\nAll triggered via repository_dispatch from shared-release.yml
 
 |#E8F4FD|cd-aws.yml|
 start
@@ -16,6 +16,7 @@ note right
   From shared-release.yml:
   module_name, module_version,
   released_artifact_name, ci_run_id
+  Modules: website, api, admin
 end note
 
 :Setup & AWS Auth (OIDC);
@@ -31,13 +32,33 @@ note right
 end note
 stop
 
+|#FFF8E1|cd-bulletin.yml|
+start
+:repository_dispatch\n(deploy-bulletin);
+note right
+  From shared-release.yml
+  (release_bulletin in ci.yml)
+end note
+:Setup & AWS Auth (OIDC);
+:Download Lambda ZIP artifact;
+:**aws lambda update-function-code**;
+note right
+  bible-on-site-bulletin
+  aarch64-unknown-linux-musl
+end note
+stop
+
 |#E8F5E9|cd-app.yml|
 start
 :repository_dispatch\n(deploy-app);
 note right
   From release_app job in ci.yml:
   module_version, ci_run_id,
-  windows/android artifact names
+  artifacts: msix / aab / ipa /
+  ios_assetpacks / ios_payloads.
+  Each platform job runs only when
+  its artifact name is present —
+  partial payloads still deploy.
 end note
 
 fork
@@ -54,6 +75,25 @@ fork again
     Track: Internal
     Play Console API
   end note
+fork again
+  :**Deploy to App Store**\n(deploy_app_store, macos-15);
+  note right
+    Restore exact .ipa + .aar asset
+    packs from the app-v* release;
+    check TestFlight for the build,
+    fastlane pilot upload if missing,
+    verify Apple processed it,
+    upload asset packs to
+    App Store Connect.
+  end note
+  :**Distribute to TestFlight**\n(testflight-distribution.yml);
+  note right
+    Assign verified build to tester
+    groups; shared app-CD lock held
+    across the handoff. Manual
+    recovery re-runs either workflow
+    by artifact name + ci_run_id.
+  end note
 end fork
 stop
 
@@ -61,11 +101,16 @@ stop
 start
 :repository_dispatch\n(deploy-data);
 note right
-  From release_data job in ci.yml
+  From release_data job in ci.yml.
+  SQL archive bound by immutable
+  artifact id + SHA-256 digest —
+  a skipped perushim job binds the
+  current master's baseline.
 end note
 
 :Setup & AWS Auth (OIDC);
-:**Run Data Migration**;
+:Download & verify pinned SQL archive;
+:**Run Data Migration** (prod RDS);
 stop
 
 @enduml
