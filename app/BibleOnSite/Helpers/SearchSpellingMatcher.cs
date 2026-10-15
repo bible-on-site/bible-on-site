@@ -24,7 +24,7 @@ internal sealed class SearchSpellingMatcher
         if (_term.Length is 0 or > 64) { return SearchText.Distance(candidate, _term, _limit); }
 
         // Myers' bit-vector recurrence evaluates a whole edit-distance row in
-        // word operations. Normalized search terms fit in one 64-bit word;
+        // word operations. Normalized search terms fit in one machine word.
         // longer callers retain the general implementation.
         var positive = ulong.MaxValue;
         ulong negative = 0;
