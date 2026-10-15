@@ -1955,7 +1955,9 @@ jobs:
         run: python3 -m unittest discover -s devops -p test_prepare_perushim_assets.py
 
       - name: Test iOS distribution signing validation
-        run: python3 -m unittest discover -s devops -p test_verify_ios_signing.py
+        run: |
+          python3 -m unittest discover -s devops -p test_verify_ios_signing.py
+          python3 -m unittest discover -s devops -p test_ios_signing_requirements.py
 
       - name: Test downloader extension signing preparation
         run: python3 -m unittest discover -s extensions -p 'test_*.py'

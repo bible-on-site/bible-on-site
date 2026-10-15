@@ -4,7 +4,7 @@
 import argparse
 import datetime as dt
 import plistlib
-import subprocess
+import subprocess  # nosec B404 - used only for the fixed macOS utility below, without a shell.
 from pathlib import Path
 
 
@@ -74,9 +74,11 @@ def main():
     if args.profile:
         if not args.entitlements or not args.output_entitlements:
             parser.error("--profile requires --entitlements and --output-entitlements")
-        decoded = subprocess.run(
-            ["security", "cms", "-D", "-i", str(args.profile)],
-            check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        # The executable and options are fixed. The local profile's absolute path
+        # is a single input-file argument, never interpolated into shell code.
+        decoded = subprocess.run(  # nosec B603 - fixed argv structure, shell explicitly disabled.
+            ["/usr/bin/security", "cms", "-D", "-i", str(args.profile.resolve(strict=True))],
+            check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False,
         ).stdout
         with args.entitlements.open("rb") as source:
             requested = plistlib.load(source)

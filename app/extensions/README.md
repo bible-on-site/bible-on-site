@@ -43,6 +43,21 @@ missing. CI validates both profiles before building and the final IPA's metadata
 signatures, entitlements, and Swift entry point before publishing an artifact.
 Unsigned development and simulator builds can omit the extension.
 
+CI generates its required target and permission list from the app project's
+`ApplicationId`/iOS `CodesignEntitlements` and each extension's resolved Release
+build settings. It displays that list in the job summary and checks all requested
+entitlements against each target's Apple-issued profile. The final IPA is checked
+against the same generated list, including every embedded extension.
+
+Supply distribution profiles through `IOS_PROVISIONING_PROFILES_BASE64`: a JSON
+array of base64-encoded profiles, or an object mapping bundle IDs to those strings.
+CI matches profiles by their signed application identifiers; adding another target
+does not require inventing another secret name or maintaining a permission list.
+The existing `IOS_PROVISIONING_PROFILE_BASE64` and
+`IOS_EXTENSION_PROVISIONING_PROFILE_BASE64` inputs remain optional compatibility
+inputs. Apple must authorize each requested capability before a new profile can
+pass validation.
+
 The portable preparation checks can be run with
 `python -m unittest discover -s app/extensions -p 'test_*.py'`.
 
