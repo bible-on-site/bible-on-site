@@ -4,19 +4,31 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-/** The על הפרק reader section: chapter reading (incl. Sefer/book mode),
- * authors and every nested route under /929. */
-const READER_PATH = "/929";
+/** על הפרק reader section — the whole /929 tree (#2274). */
+const PEREK_READER_ROOT = "/929";
 
-/** על הפרק paths: the section root plus everything nested below it. */
+/** Masora/Parasha unit readers mount the same settings button in this
+ *  corner, so the collision exists below their unit routes too. Both the
+ *  public Hebrew path and the internal ASCII route dir must match — the
+ *  browser URL is the former while prerendering sees the latter. */
+const UNIT_READER_ROOTS = ["/מסורה", "/masora", "/פרשה", "/parasha"];
+
+/** Reader sections whose settings button occupies the top-left corner. */
 export function isReaderPathname(pathname: string): boolean {
-	return pathname === READER_PATH || pathname.startsWith(`${READER_PATH}/`);
+	// The router may hand over a percent-encoded Hebrew path (same decoding
+	// as masora-book-utils.ts).
+	const decoded = decodeURIComponent(pathname);
+	return (
+		decoded === PEREK_READER_ROOT ||
+		decoded.startsWith(`${PEREK_READER_ROOT}/`) ||
+		UNIT_READER_ROOTS.some((root) => decoded.startsWith(`${root}/`))
+	);
 }
 
 /**
  * Icon-only search button pinned to the physical left edge of the top nav.
- * Omitted entirely on the על הפרק reader — its settings button occupies
- * that corner, so no clickable or focusable remnant may stay (#2274).
+ * Omitted entirely on reader pages — their settings button occupies that
+ * corner, so no clickable or focusable remnant may stay (#2274).
  * Route-aware, so it needs hydration; the rest of the bar stays server-only.
  */
 export function TopNavSearch() {

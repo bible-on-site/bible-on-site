@@ -54,8 +54,18 @@ describe("TopNav", () => {
 		expect(links[1]).toHaveAttribute("href", "/search");
 	});
 
-	it("shows the search button outside the על הפרק section", () => {
-		for (const pathname of ["/", "/search", "/tos", "/מסורה/1", "/פרשה/1"]) {
+	it("shows the search button outside reader sections", () => {
+		// The מסורה/פרשה landing roots hold no settings button — the
+		// collision only exists inside their unit routes.
+		for (const pathname of [
+			"/",
+			"/search",
+			"/tos",
+			"/מסורה",
+			"/masora",
+			"/פרשה",
+			"/parasha",
+		]) {
 			mockPathname = pathname;
 			const { unmount } = render(<TopNav />);
 			expect(searchLink()).toBeInTheDocument();
@@ -63,8 +73,23 @@ describe("TopNav", () => {
 		}
 	});
 
-	it.each(["/929", "/929/11", "/929/11/2", "/929/authors", "/929/rabbis"])(
-		"omits the search button entirely on the על הפרק reader (%s)",
+	it.each([
+		// על הפרק — the whole /929 tree (#2274)
+		"/929",
+		"/929/11",
+		"/929/11/2",
+		"/929/authors",
+		"/929/rabbis",
+		// Masora/Parasha unit readers share the settings corner —
+		// public Hebrew paths and internal ASCII route dirs alike.
+		"/מסורה/1",
+		"/masora/1",
+		"/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1",
+		"/פרשה/3",
+		"/parasha/3",
+		"/%D7%A4%D7%A8%D7%A9%D7%94/3",
+	])(
+		"omits the search button entirely on reader pages (%s)",
 		(pathname) => {
 			mockPathname = pathname;
 			render(<TopNav />);
