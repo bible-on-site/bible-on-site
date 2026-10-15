@@ -68,6 +68,25 @@
                             </BindableLayout.ItemTemplate>
                         </FlexLayout>
 
+                        <!-- Map of the entry's linked PLACE entities -->
+                        <VerticalStackLayout Spacing="6"
+                                             IsVisible="{Binding HasMap}">
+                            <Label Text="מפה"
+                                   FontSize="18"
+                                   FontAttributes="Bold"
+                                   TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
+                            <controls:TanahpediaPlacesMap Markers="{Binding PlaceMarkers}"
+                                                          EntryTappedCommand="{Binding OpenEntryCommand}"
+                                                          HeightRequest="300"/>
+                        </VerticalStackLayout>
+
+                        <!-- Family tree of the entry's PERSON entity - the
+                             source-backed card tree, same layout as the
+                             website's mobile PersonFamilyTree -->
+                        <controls:TanahpediaFamilyTreeView Tree="{Binding FamilyTree}"
+                                                           EntryTappedCommand="{Binding OpenEntryCommand}"
+                                                           IsVisible="{Binding HasFamily}"/>
+
                         <!-- Admin-authored HTML body -->
                         <controls:HtmlView x:Name="EntryHtml"
                                            HtmlContent="{Binding Content}"
@@ -77,11 +96,11 @@
                                            IsVisible="{Binding HasContent}"/>
 
                         <!-- No-content notice (website parity: only when there is
-                             nothing else to show) -->
+                             nothing else to show - no content, map or occurrences) -->
                         <Label Text="אין תוכן עדיין לערך זה."
                                FontSize="14"
                                HorizontalTextAlignment="Center"
-                               IsVisible="{Binding HasContent, Converter={StaticResource InvertedBoolConverter}}"
+                               IsVisible="{Binding ShowNoContentNotice}"
                                TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
 
                         <!-- מופעים בתנ"ך -->
@@ -107,9 +126,9 @@
                                                    TextColor="{StaticResource Primary}"
                                                    TextDecorations="Underline"/>
                                             <Label Grid.Column="1"
-                                                   Text="{Binding VerseText}"
+                                                   FormattedText="{Binding VerseFormatted}"
                                                    FontSize="13"
-                                                   MaxLines="2"
+                                                   MaxLines="3"
                                                    LineBreakMode="TailTruncation"
                                                    TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
                                         </Grid>
@@ -121,7 +140,7 @@
                 </VerticalStackLayout>
             </ScrollView>
 
-            <!-- Disambiguation — the name leads to several entries -->
+            <!-- Disambiguation - the name leads to several entries -->
             <ScrollView IsVisible="{Binding IsDisambiguation}">
                 <VerticalStackLayout Padding="16" Spacing="12">
                     <Label Text="{Binding UniqueName}"

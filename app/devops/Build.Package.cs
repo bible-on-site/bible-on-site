@@ -72,11 +72,24 @@ partial class Build
             }
         });
 
+    /// <summary>
+    /// Packages the Mapbox public token (MAPBOX_PUBLIC_TOKEN env) as a raw
+    /// asset - the same public key the website bakes into client bundles.
+    /// An empty file keeps the app's no-key map fallback.
+    /// </summary>
+    void WriteMapboxTokenFile()
+    {
+        var tokenPath = SourceDirectory / "Resources" / "Raw" / "mapbox-token.txt";
+        tokenPath.WriteAllText(Environment.GetEnvironmentVariable("MAPBOX_PUBLIC_TOKEN") ?? "");
+    }
+
     Target PackagePrepare => _ => _
         .Description("Prepare for packaging by restoring the appropriate platform")
         .Unlisted()
         .Executes(() =>
         {
+            WriteMapboxTokenFile();
+
             var platforms = Platform.Equals("All", StringComparison.OrdinalIgnoreCase)
                 ? new[] { "Android", OperatingSystem.IsMacOS() ? "iOS" : "Windows" }
                 : new[] { Platform };
@@ -238,7 +251,7 @@ partial class Build
         }
 
         // Managed asset packs need the ExtensionKit downloader extension embedded
-        // (built by CI via xcodebuild — .NET cannot produce .appex binaries). The
+        // (built by CI via xcodebuild - .NET cannot produce .appex binaries). The
         // csproj _EmbedAssetPackDownloader target copies and re-signs it.
         var appex = (RootDirectory / "extensions" / "AssetPackDownloader")
             .GlobDirectories("build/Build/Products/*/AssetPackDownloader.appex")
