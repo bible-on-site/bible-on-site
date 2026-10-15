@@ -157,6 +157,57 @@ class DiscoveryTests(unittest.TestCase):
             fixture.settings[str(project)].append(other)
             self.assertEqual(len(fixture.discover()), 3)
 
+    def test_release_settings_use_canonical_target_name_with_action_or_alternate_wrappers(self):
+        for wrapper in [{"action": "build"}, {"target": "alltargets", "action": "build"}]:
+            with self.subTest(wrapper=wrapper), tempfile.TemporaryDirectory() as temporary:
+                fixture = ProjectFixture(Path(temporary))
+                project = fixture.extension()
+                record = fixture.settings[str(project)][0]
+                record.pop("target")
+                record.update(wrapper)
+                record["buildSettings"]["TARGET_NAME"] = "Downloader"
+                self.assertEqual(fixture.discover()[1].bundle_id, "org.example.application.Downloader")
+
+    def test_release_mismatch_reports_only_target_identifiers_and_record_counts(self):
+        for count, target_name in [(1, "AnotherTarget"), (2, "Downloader")]:
+            with self.subTest(count=count), tempfile.TemporaryDirectory() as temporary:
+                fixture = ProjectFixture(Path(temporary))
+                project = fixture.extension()
+                record = fixture.settings[str(project)][0]
+                record["target"] = "wrapper-target"
+                record["buildSettings"].update(TARGET_NAME=target_name, PRIVATE_API_KEY="SENSITIVE-ENVIRONMENT-VALUE")
+                fixture.settings[str(project)] = [deepcopy(record) for _ in range(count)]
+                if count > 1:
+                    fixture.settings[str(project)][-1]["buildSettings"]["PRODUCT_BUNDLE_IDENTIFIER"] = "org.example.application.Other"
+                with self.assertRaisesRegex(signing.SigningError, "missing or ambiguous Release settings") as error:
+                    fixture.discover()
+                message = str(error.exception)
+                self.assertIn(f"records={count}", message)
+                self.assertIn(target_name, message)
+                self.assertIn("wrapper-target", message)
+                self.assertNotIn("PRIVATE_API_KEY", message)
+                self.assertNotIn("SENSITIVE-ENVIRONMENT-VALUE", message)
+                self.assertNotIn("PRODUCT_BUNDLE_IDENTIFIER", message)
+
+    def test_device_settings_are_preferred_and_identical_native_records_are_deduplicated(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = ProjectFixture(Path(temporary))
+            project = fixture.extension()
+            device = fixture.settings[str(project)][0]
+            device["buildSettings"].update(TARGET_NAME="Downloader", PLATFORM_NAME="iphoneos")
+            simulator = deepcopy(device)
+            simulator["buildSettings"].update(SDKROOT="iphonesimulator", PLATFORM_NAME="iphonesimulator",
+                                               PRODUCT_BUNDLE_IDENTIFIER="org.example.application.Simulator")
+            fixture.settings[str(project)] = [simulator, device, deepcopy(device)]
+            self.assertEqual(fixture.discover()[1].bundle_id, "org.example.application.Downloader")
+
+    def test_supported_platforms_remain_authoritative_when_sdkroot_is_overridden(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = ProjectFixture(Path(temporary))
+            project = fixture.extension("MacOnly", platform="macosx")
+            fixture.settings[str(project)][0]["buildSettings"]["SDKROOT"] = "iphoneos"
+            self.assertEqual(len(fixture.discover()), 1)
+
     def test_classic_extension_point_is_included_and_boolean_conditions_stay_boolean(self):
         with tempfile.TemporaryDirectory() as temporary:
             fixture = ProjectFixture(Path(temporary))

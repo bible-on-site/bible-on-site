@@ -17,7 +17,7 @@ import re
 import sys
 import tempfile
 
-from defusedxml import ElementTree as ET
+from defusedxml import ElementTree
 from defusedxml.common import DefusedXmlException
 
 from verify_ios_signing import (
@@ -115,8 +115,8 @@ def _bundle_id(value, label):
 def app_requirement(project):
     project = Path(project).resolve()
     try:
-        tree = ET.parse(project, forbid_dtd=True, forbid_entities=True, forbid_external=True).getroot()
-    except (OSError, ET.ParseError, DefusedXmlException) as error:
+        tree = ElementTree.parse(project, forbid_dtd=True, forbid_entities=True, forbid_external=True).getroot()
+    except (OSError, ElementTree.ParseError, DefusedXmlException) as error:
         raise SigningError(f"Cannot read app signing declarations: {project}") from error
     frameworks = {
         framework.strip() for element in tree.iter()
@@ -154,8 +154,10 @@ def app_requirement(project):
 def _extension_requirement(target, settings, project):
     platforms = settings.get("SUPPORTED_PLATFORMS", "").split()
     sdk = settings.get("SDKROOT", "").casefold()
-    if "iphoneos" not in platforms and "iphoneos" not in sdk:
-        if platforms or sdk:
+    if platforms and "iphoneos" not in platforms:
+        return None
+    if not platforms and "iphoneos" not in sdk:
+        if sdk:
             return None
         raise SigningError(f"{target}: Xcode did not identify its supported platforms")
     bundle_id = _bundle_id(expand(settings.get("PRODUCT_BUNDLE_IDENTIFIER"), settings), target)
@@ -169,6 +171,29 @@ def _extension_requirement(target, settings, project):
     if not extension_point and isinstance(classic, dict):
         extension_point = classic.get("NSExtensionPointIdentifier")
     return SigningTarget(target, bundle_id, entitlements, "extension", extension_point)
+
+
+def _release_requirement(records, target, project):
+    matches, observed = [], []
+    for record in records:
+        settings = record.get("buildSettings", {})
+        canonical = settings.get("TARGET_NAME") or record.get("target")
+        if canonical == target:
+            matches.append(settings)
+        # Build settings may contain the runner's environment. Report only these
+        # two public target identifiers, never the complete native command output.
+        observed.append({key: value[:160] if isinstance(value, str) else None for key, value in [
+            ("target", record.get("target")), ("TARGET_NAME", settings.get("TARGET_NAME"))]})
+    ios = [(settings, _extension_requirement(target, settings, project)) for settings in matches]
+    ios = [(settings, requirement) for settings, requirement in ios if requirement is not None]
+    device = [(settings, requirement) for settings, requirement in ios
+              if settings.get("PLATFORM_NAME") == "iphoneos" or "iphoneos" in settings.get("SDKROOT", "").casefold()]
+    preferred = device or ios
+    if not matches or (preferred and any(requirement != preferred[0][1] for _, requirement in preferred[1:])):
+        raise SigningError(f"{project.name}: missing or ambiguous Release settings for {target}; "
+                           f"matches={len(matches)}, records={len(records)}, ios={len(ios)}, device={len(device)}, "
+                           f"observed identifiers={json.dumps(observed[:20], ensure_ascii=True)}")
+    return preferred[0][1] if preferred else None
 
 
 def extension_requirements(directory, runner=run):
@@ -189,10 +214,7 @@ def extension_requirements(directory, runner=run):
         except (KeyError, TypeError, AttributeError, json.JSONDecodeError) as error:
             raise SigningError(f"Cannot discover extension signing declarations: {project}") from error
         for name in names:
-            matches = [item["buildSettings"] for item in resolved if item.get("target") == name]
-            if len(matches) != 1:
-                raise SigningError(f"{project.name}: missing or ambiguous Release settings for {name}")
-            requirement = _extension_requirement(name, matches[0], project)
+            requirement = _release_requirement(resolved, name, project)
             if requirement:
                 targets.append(requirement)
     return targets
