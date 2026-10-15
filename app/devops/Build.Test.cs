@@ -75,6 +75,7 @@ partial class Build
         // directory and require test-platform package targets unnecessarily.
         var appArgs = $"--filter-query \"/[{MobileE2ESelectionFilter()}]\"" +
             " --stop-on-fail on" +
+            $" --diagnostic --diagnostic-verbosity Information --diagnostic-output-directory \"{resultsDirectory}\"" +
             " --hangdump --hangdump-timeout 10m --hangdump-type Mini" +
             " --report-xunit-trx --report-xunit-trx-filename mobile-e2e.trx" +
             " --report-xunit-junit --report-xunit-junit-filename mobile-e2e.xml";

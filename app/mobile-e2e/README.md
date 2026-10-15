@@ -325,3 +325,9 @@ Large commentary accessibility frames are measured once per document/width in a
 detached background CoreText layout. Native accessibility snapshots read those
 cached frames and the live viewport transform; rotation and recycled-document
 completions cannot apply stale geometry. Spoken sections and links remain complete.
+
+If xUnit reports that foreground threads remain after the test summary, the
+runner records live managed stacks from this run's registered harness processes
+under `test-host-diagnostics`. The capture shares five seconds inside xUnit's
+existing ten-second exit guard; it does not alter the process's exit code or
+retry a failed run. MTP lifecycle logs travel with the test results.
