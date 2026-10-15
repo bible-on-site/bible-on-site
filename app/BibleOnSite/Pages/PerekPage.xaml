@@ -953,7 +953,7 @@
                 </CollectionView.ItemTemplate>
             </CollectionView>
         </Grid>
-        <WebView x:Name="RecitationDecoderView" Grid.Row="1" WidthRequest="1" HeightRequest="1" Opacity="0" InputTransparent="True"/>
+        <controls:RecitationDecoderHost x:Name="RecitationDecoder" Grid.Row="1"/>
         <toolkit:MediaElement x:Name="RecitationPlayer" Grid.Row="1" WidthRequest="1" HeightRequest="1" Opacity="0"
                               InputTransparent="True" ShouldAutoPlay="False" ShouldShowPlaybackControls="False"
                               MediaOpened="OnRecitationMediaOpened" MediaEnded="OnRecitationMediaEnded"

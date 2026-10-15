@@ -47,17 +47,19 @@ export async function terminateIosTestApp(udid, {
   ownedIosTestAppProcesses("", udid, devicesRoot);
   const started = now();
   if (keepApp) return { status: "kept", udid, bundleId, elapsedMs: 0 };
+  // The stream has stopped. Snapshot its candidates once, inside the same
+  // total cleanup deadline; each confirmation checks fresh kernel state only.
+  const candidates = typeof observedPids === "function" ? observedPids() : observedPids;
+  if (!Array.isArray(candidates) || !candidates.length ||
+      candidates.some(pid => !Number.isSafeInteger(pid) || pid <= 1)) {
+    throw new Error("Require app PIDs observed in this simulator's live log.");
+  }
+  if (typeof inspectorPath !== "string" || !posix.isAbsolute(inspectorPath)) {
+    throw new Error("Require the prepared native iOS process inspector.");
+  }
   const list = async () => {
     const remaining = cleanupDeadlineMs - (now() - started);
     if (remaining <= 0) throw new Error("The owned iOS app did not exit within five seconds.");
-    const candidates = typeof observedPids === "function" ? observedPids() : observedPids;
-    if (!Array.isArray(candidates) || !candidates.length ||
-        candidates.some(pid => !Number.isSafeInteger(pid) || pid <= 1)) {
-      throw new Error("Require app PIDs observed in this simulator's live log.");
-    }
-    if (typeof inspectorPath !== "string" || !posix.isAbsolute(inspectorPath)) {
-      throw new Error("Require the prepared native iOS process inspector.");
-    }
     // The helper reads kernel BSD state and the actual executable path, without
     // requesting Mach task/thread data or trusting a mutable argv prefix.
     const { stdout, stderr = "" } = await execute(inspectorPath,
