@@ -251,6 +251,7 @@
 		BB0B1E000001000000000072 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CODE_SIGN_ENTITLEMENTS = AssetPackDownloader/AssetPackDownloader.entitlements;
 				CODE_SIGN_STYLE = Manual;
@@ -266,6 +267,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = "$(inherited) -Wl,-u,_main";
 				PRODUCT_BUNDLE_IDENTIFIER = com.tanah.daily929.AssetPackDownloader;
 				PRODUCT_BUNDLE_PACKAGE_TYPE = "XPC!";
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -281,6 +283,7 @@
 		BB0B1E000001000000000073 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CODE_SIGN_ENTITLEMENTS = AssetPackDownloader/AssetPackDownloader.entitlements;
 				CODE_SIGN_STYLE = Manual;
@@ -296,6 +299,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = "$(inherited) -Wl,-u,_main";
 				PRODUCT_BUNDLE_IDENTIFIER = com.tanah.daily929.AssetPackDownloader;
 				PRODUCT_BUNDLE_PACKAGE_TYPE = "XPC!";
 				PRODUCT_NAME = "$(TARGET_NAME)";

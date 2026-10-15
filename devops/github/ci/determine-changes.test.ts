@@ -45,6 +45,31 @@ describe("detectChanges", () => {
 		assert.equal(changes.website.ci_changed, false);
 	});
 
+	test("packaging workflow changes require app signing checks without a release", () => {
+		const changes = detectChanges([".github/workflows/app-package.yml"]);
+		assert.deepEqual(changes.app, { module_changed: false, ci_changed: true });
+		for (const [key, flags] of Object.entries(changes)) {
+			if (key !== "app")
+				assert.deepEqual(flags, { module_changed: false, ci_changed: false });
+		}
+	});
+
+	test("downloader sources and signing declarations require native packaging", () => {
+		for (const file of [
+			"app/extensions/AssetPackDownloader/AssetPackDownloader/DownloaderExtension.swift",
+			"app/extensions/AssetPackDownloader/AssetPackDownloader/Info.plist",
+			"app/extensions/AssetPackDownloader/AssetPackDownloader/AssetPackDownloader.entitlements",
+			"app/BibleOnSite/Platforms/iOS/Entitlements.App.plist",
+			"app/devops/verify_ios_signing.py",
+		]) {
+			assert.deepEqual(
+				detectChanges([file]).app,
+				{ module_changed: true, ci_changed: false },
+				file,
+			);
+		}
+	});
+
 	test("e2e-impact selector changes check every served suite without a release", () => {
 		// The devops selector drives Appium too; web/shared/tests-util feeds
 		// only the Playwright suites, so it does not mark the app.
