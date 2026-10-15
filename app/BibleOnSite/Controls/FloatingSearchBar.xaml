@@ -2,9 +2,11 @@
 <ContentView xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
  xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
  xmlns:viewmodels="clr-namespace:BibleOnSite.ViewModels" xmlns:models="clr-namespace:BibleOnSite.Models"
+ xmlns:converters="clr-namespace:BibleOnSite.Converters"
  xmlns:controls="clr-namespace:BibleOnSite.Controls" xmlns:fonts="clr-namespace:Fonts"
  x:Class="BibleOnSite.Controls.FloatingSearchBar" x:DataType="viewmodels:SearchViewModel" FlowDirection="RightToLeft">
  <ContentView.Resources>
+  <converters:SearchSnippetConverter x:Key="SearchSnippet"/>
   <Style x:Key="SearchIconButton" TargetType="Button">
    <Setter Property="FontFamily" Value="FluentIcons"/><Setter Property="FontSize" Value="24"/>
    <Setter Property="WidthRequest" Value="44"/><Setter Property="HeightRequest" Value="44"/>
@@ -110,7 +112,7 @@
        <VerticalStackLayout Grid.Column="1" Spacing="4">
         <Label Text="{Binding Category}" FontSize="11" TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark=#AACBFF}"/>
         <Label Text="{Binding Title}" AutomationId="SearchResultTitle" FontSize="16" FontAttributes="Bold" TextColor="{AppThemeBinding Light=#26384E, Dark=#E7EEF8}"/>
-        <Label Text="{Binding SubtitleHtml}" TextType="Html" FontSize="14" MaxLines="3" TextColor="{AppThemeBinding Light=#52647C, Dark=#B2C2D8}"/>
+        <Label FormattedText="{Binding SubtitleHtml, Converter={StaticResource SearchSnippet}}" FontSize="14" MaxLines="3" TextColor="{AppThemeBinding Light=#52647C, Dark=#B2C2D8}"/>
         <BoxView HeightRequest="1" Margin="0,8,0,0" Color="{AppThemeBinding Light=#E8F0FA, Dark=#46566D}"/>
        </VerticalStackLayout>
       </Grid>
