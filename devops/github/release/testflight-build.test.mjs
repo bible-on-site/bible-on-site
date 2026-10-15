@@ -1,18 +1,121 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { generateKeyPairSync, verify } from "node:crypto";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 import {
 	apiToken,
 	checkBuild,
+	checkUploadResult,
 	findBuild,
 	findBuildUploads,
 	previousDelivery,
 	readIpa,
 } from "./testflight-build.mjs";
+
+// Apple's actual validation responses from deployment job 116585562778.
+const validationRejections = [
+	"[altool] [ContentDelivery.Uploader] Validation failed (409) Invalid Code Signing Entitlements. The bundle contains a key that is not included in the provisioning profile: 'com.apple.security.application-groups' in 'Payload/BibleOnSite.app/BibleOnSite'.",
+	"[altool] Validation failed (409) Invalid bundle structure. The BibleOnSite.app/Extensions/AssetPackDownloader.appex/AssetPackDownloader binary file is not permitted.",
+	"[altool] Validation failed (409) This bundle is invalid. The bundle at path Payload/BibleOnSite.app/Extensions/AssetPackDownloader.appex has an invalid CFBundleIdentifier ''.",
+	"[altool] Validation failed (409) Missing Info.plist value. A value for the key 'CFBundleExecutable' in bundle BibleOnSite.app/Extensions/AssetPackDownloader.appex is required.",
+	"[altool] Validation failed (409) Invalid Mach-O header. The __swift5_entry section is missing for the Payload/BibleOnSite.app/Extensions/AssetPackDownloader.appex extension bundle.",
+	"[altool] Validation failed (409) Missing Entitlement. The Background Assets extension and/or its parent app bundle are missing the com.apple.security.application-groups entitlement.",
+];
+
+test("Apple signing and extension validation rejections fail without build polling", () => {
+	for (const rejection of validationRejections) {
+		assert.throws(
+			() => checkUploadResult(1, `\u001b[33m${rejection}\u001b[0m`),
+			/Apple rejected the upload/,
+		);
+	}
+	assert.throws(
+		() => checkUploadResult(0, validationRejections.join("\n")),
+		/Apple rejected the upload/,
+	);
+	assert.throws(
+		() =>
+			checkUploadResult(
+				1,
+				'NSUnderlyingError = "Error Domain=IrisAPI UserInfo={status=409, detail=Invalid Code Signing Entitlements., code=STATE_ERROR.VALIDATION_ERROR}";',
+			),
+		/Apple rejected the upload/,
+	);
+	assert.throws(
+		() =>
+			checkUploadResult(
+				1,
+				'ERROR ITMS-90035: "Invalid Signature. A sealed resource is missing or invalid."',
+			),
+		/Apple rejected the upload/,
+	);
+});
+
+test("transport ambiguity and duplicate uploads retain exact-build recovery", () => {
+	const messages = [];
+	for (const log of [
+		"The request timed out. An exception occurred during upload.",
+		"Connection reset by peer after sending the package",
+		"HTTP 503 Service Unavailable",
+		`[altool] Validation failed (409) Redundant Binary Upload. You've already uploaded a build with build number '168'.
+NSUnderlyingError = "Error Domain=IrisAPI UserInfo={status=409, detail=Redundant Binary Upload. You've already uploaded a build., code=STATE_ERROR.VALIDATION_ERROR}";
+"iris-code" = "STATE_ERROR.VALIDATION_ERROR";
+ERROR ITMS-90189: Redundant Binary Upload. This build has already been uploaded.`,
+	]) {
+		assert.doesNotThrow(() =>
+			checkUploadResult(1, log, (message) => messages.push(message)),
+		);
+	}
+	assert.equal(messages.length, 4);
+	assert.ok(messages.every((message) => /without uploading again/.test(message)));
+	assert.throws(
+		() =>
+			checkUploadResult(
+				1,
+				`Redundant Binary Upload. Already uploaded.\n${validationRejections[0]}`,
+			),
+		/Apple rejected the upload/,
+	);
+	assert.doesNotThrow(() =>
+		checkUploadResult(0, "Upload complete", () => assert.fail("no warning")),
+	);
+	assert.throws(() => checkUploadResult(undefined, ""), /exit status/);
+});
+
+test("upload-result command makes the upload step red before requiring API credentials", () => {
+	const directory = mkdtempSync(path.join(tmpdir(), "testflight-rejection-"));
+	try {
+		const log = path.join(directory, "upload.log");
+		const run = (contents, exitCode) => {
+			writeFileSync(log, contents);
+			return spawnSync(
+				process.execPath,
+				[
+					fileURLToPath(new URL("./testflight-build.mjs", import.meta.url)),
+					"upload-result",
+					log,
+					exitCode,
+				],
+				{ encoding: "utf8", env: {} },
+			);
+		};
+		for (const exitCode of ["0", "1"]) {
+			const rejected = run(validationRejections.join("\n"), exitCode);
+			assert.equal(rejected.status, 1, rejected.stderr);
+			assert.match(rejected.stderr, /Apple rejected the upload/);
+			assert.doesNotMatch(rejected.stderr, /credentials|IPA identity/);
+		}
+		const ambiguous = run("Connection reset by peer", "1");
+		assert.equal(ambiguous.status, 0, ambiguous.stderr);
+		assert.match(ambiguous.stdout, /verifying the exact build/);
+	} finally {
+		rmSync(directory, { recursive: true, force: true });
+	}
+});
 
 const { privateKey, publicKey } = generateKeyPairSync("ec", {
 	namedCurve: "prime256v1",
