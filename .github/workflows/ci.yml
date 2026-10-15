@@ -2200,7 +2200,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
-          node-version: "26.11.1"
+          node-version: "26.12.0"
       - name: Test alignment invariants without downloading GPU models
         run: |
           python -m venv data/recitation/.venv
