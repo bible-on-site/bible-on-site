@@ -243,8 +243,11 @@ class ListeningReviewTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             validate_decision(self.case, self.payload)
     def test_browser_listening_and_draft_regressions(self):
-        result = subprocess.run([shutil.which("node") or "node", "--test", str(Path(__file__).with_name("test_listening_review_frontend.mjs"))],
-                                capture_output=True, text=True, encoding="utf-8", check=False)  # nosec B603: fixed local test argv.
+        node = shutil.which("node")
+        self.assertIsNotNone(node, "Node.js is required for the review-page regression tests")
+        script = Path(__file__).resolve().with_name("test_listening_review_frontend.mjs")
+        result = subprocess.run(  # nosec B603: resolved Node and fixed repository test; no user argv.  # nosemgrep
+            [node, "--test", str(script)], capture_output=True, text=True, encoding="utf-8", check=False)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_hebrew_references_have_plain_letters(self):
