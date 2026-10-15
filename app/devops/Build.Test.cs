@@ -10,7 +10,7 @@ partial class Build
     // Note: Test project includes source files directly (not a project reference),
     // so it compiles independently and doesn't need the main MAUI project to be built.
 
-    static void DotNetTestApp(string dotnetArgs, string appArgs = "")
+    static void DotNetTestApp(string dotnetArgs, string appArgs = "", IReadOnlyDictionary<string, string>? environmentVariables = null)
     {
         var arguments = $"test {dotnetArgs}";
         if (appArgs.Length > 0)
@@ -18,7 +18,7 @@ partial class Build
             arguments += $" -- {appArgs}";
         }
 
-        ProcessTasks.StartProcess(DotNetPath, arguments, RootDirectory)
+        ProcessTasks.StartProcess(DotNetPath, arguments, RootDirectory, environmentVariables: environmentVariables)
             .AssertZeroExitCode();
     }
 
@@ -67,6 +67,11 @@ partial class Build
 
     void RunMobileE2E(bool listTests)
     {
+        // Optional platform telemetry registers an SDK process-exit wait. Keep
+        // network reporting outside the sequential device harness's lifetime.
+        var environment = Environment.GetEnvironmentVariables().Cast<System.Collections.DictionaryEntry>()
+            .ToDictionary(entry => (string)entry.Key, entry => (string)entry.Value!);
+        environment["TESTINGPLATFORM_TELEMETRY_OPTOUT"] = "1";
         var artifacts = Environment.GetEnvironmentVariable("MOBILE_E2E_ARTIFACTS")
             ?? throw new ArgumentException("Set MOBILE_E2E_ARTIFACTS (npm test prepares it).");
         var resultsDirectory = Path.Join(artifacts, "results");
@@ -90,13 +95,13 @@ partial class Build
             // Materialize the complete string: NUKE's interpolation handler
             // would otherwise quote the appArgs fragment as one argument.
             var arguments = $"\"{assembly}\" --results-directory \"{resultsDirectory}\" {appArgs}";
-            ProcessTasks.StartProcess(DotNetPath, arguments, RootDirectory)
+            ProcessTasks.StartProcess(DotNetPath, arguments, RootDirectory, environmentVariables: environment)
                 .AssertZeroExitCode();
         }
         else
         {
             DotNetTestApp($"--project \"{MobileE2ETestProject}\" --configuration Debug -p:RestoreLockedMode=true" +
-                          $" --results-directory \"{resultsDirectory}\"", appArgs);
+                          $" --results-directory \"{resultsDirectory}\"", appArgs, environment);
         }
     }
 

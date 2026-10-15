@@ -954,10 +954,7 @@
             </CollectionView>
         </Grid>
         <controls:RecitationDecoderHost x:Name="RecitationDecoder" Grid.Row="1"/>
-        <toolkit:MediaElement x:Name="RecitationPlayer" Grid.Row="1" WidthRequest="1" HeightRequest="1" Opacity="0"
-                              InputTransparent="True" ShouldAutoPlay="False" ShouldShowPlaybackControls="False"
-                              MediaOpened="OnRecitationMediaOpened" MediaEnded="OnRecitationMediaEnded"
-                              MediaFailed="OnRecitationMediaFailed" StateChanged="OnRecitationStateChanged"/>
+        <controls:RecitationPlaybackHost x:Name="RecitationPlayerHost" Grid.Row="1"/>
         <controls:PerekPickerPopup x:Name="PerekPickerPopup" Grid.Row="1"
                                    ZIndex="200"
                                    PerekSelected="OnPerekPickerSelected"/>
