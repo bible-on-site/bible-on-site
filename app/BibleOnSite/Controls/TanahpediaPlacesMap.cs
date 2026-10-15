@@ -70,7 +70,8 @@ public class TanahpediaPlacesMap : ContentView
     /// command; anything else external (e.g. the OSM attribution link) opens
     /// in the browser instead of replacing the map.
     /// </summary>
-    private void OnNavigating(object? sender, WebNavigatingEventArgs e)
+    // Internal for unit tests - the test assembly compiles these sources in-place.
+    internal void OnNavigating(object? sender, WebNavigatingEventArgs e)
     {
         var url = e.Url;
         if (TanahpediaMapHtml.TryGetEntryUniqueName(url, out var uniqueName))
@@ -89,7 +90,15 @@ public class TanahpediaPlacesMap : ContentView
             || url.StartsWith("https://", StringComparison.Ordinal))
         {
             e.Cancel = true;
-            _ = Launcher.OpenAsync(new Uri(url));
+            try
+            {
+                _ = Launcher.OpenAsync(new Uri(url));
+            }
+            catch (Exception ex)
+            {
+                // A launcher failure must not break navigation interception.
+                Console.Error.WriteLine($"Map link open failed for {url}: {ex.Message}");
+            }
         }
     }
 }

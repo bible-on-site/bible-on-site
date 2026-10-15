@@ -104,8 +104,9 @@ public sealed class AppConfig
             var content = await reader.ReadToEndAsync();
             return string.IsNullOrWhiteSpace(content) ? null : content.Trim();
         }
-        catch
+        catch (Exception ex)
         {
+            Console.Error.WriteLine($"Packaged config '{assetName}' unreadable: {ex.Message}");
             return null;
         }
     }
