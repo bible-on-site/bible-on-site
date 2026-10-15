@@ -82,12 +82,14 @@ html[data-sefer-view] {
   opacity: var(--inner-shadow-highlight);
 }
 
-/* pageShadow={false} adds .flipbook--no-page-shadow to the book element —
-   our flicker workaround while upstream issue #167 stays open. Upstream
-   needs !important to beat .page--folded's opacity:1; the extra .he-book
-   class gives this rule higher specificity without it. It suppresses every
-   pseudo-overlay, including the alpha.46 fold crease shading (the library
-   also skips writing --fold-shading then). */
+/* Upstream's shadow opt-out: pageShadow={false} adds .flipbook--no-page-shadow
+   to the book element (the flicker workaround for upstream issue #167). We
+   render with shadows on, so the class never appears — the rule stays for
+   parity with pages.scss and as a ready kill-switch if the flicker returns.
+   Upstream needs !important to beat .page--folded's opacity:1; the extra
+   .he-book class gives this rule higher specificity without it. It suppresses
+   every pseudo-overlay, including the alpha.46 fold crease shading (the
+   library also skips writing --fold-shading then). */
 .he-book.flipbook--no-page-shadow .page::before,
 .he-book.flipbook--no-page-shadow .page::after {
   opacity: 0;

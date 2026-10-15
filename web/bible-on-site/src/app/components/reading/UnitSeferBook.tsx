@@ -233,7 +233,7 @@ export function UnitSeferBook({
 							noShadow: true,
 							coverIndices: "auto",
 						}}
-						pageShadow={false}
+						pageShadow
 						historyMapper={historyMapper}
 						initialTurnedLeaves={initialTurnedLeaves}
 					/>
