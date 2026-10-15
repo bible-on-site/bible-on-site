@@ -44,12 +44,15 @@ class MsbuildProperties(UserDict):
     """Match MSBuild's case-insensitive property names."""
 
     def __getitem__(self, key):
+        """Read a property without regard to its spelling's case."""
         return self.data[key.casefold()]
 
     def __setitem__(self, key, value):
+        """Store a property under its canonical lowercase name."""
         self.data[key.casefold()] = value
 
     def __contains__(self, key):
+        """Check for a property using MSBuild's case-insensitive names."""
         return key.casefold() in self.data
 
 
