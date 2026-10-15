@@ -15,12 +15,14 @@ the executable-coverage tree produced by `devops/e2e-coverage-trees/`.
 | Piece | State | Where |
 | --- | --- | --- |
 | Automation-id coverage tree + selector (shadow/enforce) | Merged (#2092) | `devops/github/ci/e2e-impact/`, `app/mobile-e2e/e2e-impact.json`, `.github/workflows/app-mobile-e2e.yml` |
-| Real app-process coverage collection (AltCover + in-app recorder + per-test dumps) | In flight (#2156, branch `devin/e2e-coverage-merge`) | `app/BibleOnSite.E2eCoverage/`, `app/BibleOnSite.Tests.MobileE2E/AppCoverage.cs`, `app/devops/E2ECoverageApply.cs` |
+| Real app-process coverage collection (AltCover + in-app recorder + per-test dumps) | Merged (#2156) | `app/BibleOnSite.E2eCoverage/`, `app/BibleOnSite.Tests.MobileE2E/AppCoverage.cs`, `app/devops/E2ECoverageApply.cs` |
 | Executable coverage-tree extraction | Merged (#2183) | `devops/e2e-coverage-trees/` |
 | Selector bridge: exec evidence unions into `coverage-tree.json` | Merged (#2195, #2230) | `devops/e2e-coverage-trees/to-selector-tree.ts`, `collect-appium --exec-tree`, `.github/workflows/app-mobile-e2e.yml` |
-| Playwright suites (website, admin, API): evidence, discovery, collectors, shadow CI | This slice | `web/shared/tests-util/e2e-impact.ts`, `*/e2e-impact.json`, `collect-playwright`, `.github/workflows/ci.yml` |
+| Playwright suites (website, admin, API): evidence, discovery, collectors, shadow CI | Merged (#2241) | `web/shared/tests-util/e2e-impact.ts`, `*/e2e-impact.json`, `collect-playwright`, `.github/workflows/ci.yml` |
+| iOS 3-shard split + merged-tree baseline publication | Merged (#2266, #2279) | `.github/workflows/app-mobile-e2e.yml` `merge_ios`, `app/mobile-e2e/merge-runner-shards.mjs` |
 | Member-granularity narrowing (C# member fingerprints ↔ exec member evidence) | This slice | `extractMembers`/`SourceFingerprint.members`, `CoveredNode.member`, `memberGaps`, `covered-members`/`member-widened` reasons |
-| AST-aware change comparison beyond member level, dependency edges | Later slices | — |
+| Selection enforcement beyond the mobile opt-in inputs | Not implemented | `e2e_selection_mode=enforce` / `force_full_suite` exist only on `app-mobile-e2e.yml`; Playwright suites have no enforce runner |
+| AST-aware change comparison beyond member level, dependency edges | Planned, not implemented | — |
 
 Two evidence channels exist today and answer different questions:
 
@@ -36,7 +38,7 @@ Two evidence channels exist today and answer different questions:
   extract` turns it into the per-test `exec-coverage-tree`.
 
 The selector consults both channels; they are complementary evidence about
-the same suite, not replacements. The bridge in this slice unions the exec
+the same suite, not replacements. The merged bridge unions the exec
 channel's per-test file evidence into `coverage-tree.json` at collection
 time (see "Selector bridge" below) — the selector schema and the selection
 order stay unchanged apart from the shared-coverage widening and the
@@ -65,17 +67,32 @@ xUnit suite through `dotnet run --project devops -- TestMobileE2E`
 | `coverage-tree.json` | `e2e-impact.ts collect-appium` | The selector tree (schemaVersion 1): automation-id entries unioned with `--exec-tree` evidence when a compatible exec tree exists |
 | `selection-manifest.json` | `e2e-impact.ts select` | The deterministic selection manifest |
 
-Artifact upload (`app-mobile-e2e.yml`):
+Artifact upload (`app-mobile-e2e-runner.yml` + `app-mobile-e2e.yml`):
 
-- `appium-<platform>-<run_id>-<attempt>` — the whole artifacts directory
-  (diagnostics, evidence, dumps, reports, `exec-coverage-tree.json`).
-- `app-e2e-coverage.<run_id>.<platform>` — `coverage-app/` per run (#2156).
-- `app-e2e-coverage.master.<platform>` — `coverage-app/` baseline, published
-  only from successful master pushes.
+- `appium-<artifact>-<run_id>-<attempt>` — the whole per-leg artifacts
+  directory (diagnostics, evidence, dumps, reports, `exec-coverage-tree.json`);
+  `<artifact>` is `android` or `ios-shard1..3`. The merged iOS result
+  additionally uploads as `appium-ios-<run_id>-<attempt>` from `merge_ios`.
+- `app-e2e-coverage.<run_id>.<artifact>` — `coverage-app/` per leg;
+  `merge_ios` merges the three iOS shard LCOVs into
+  `app-e2e-coverage.<run_id>.ios`.
+- `app-mobile-e2e-build.<run_id>.ios` — the shared iOS build consumed by all
+  three shards.
+- `app-mobile-e2e-shard.<run_id>.ios-shardN` — per-shard merge inputs
+  (trees, manifests, LCOV) consumed by `merge_ios`.
 - `app-mobile-e2e-coverage.master.<platform>` — selector tree baseline
-  (`coverage-tree.json`), same trust rule.
+  (`coverage-tree.json`), published only from a completed, successful
+  default-branch run.
 - `app-mobile-e2e-exec-coverage.master.<platform>` — exec tree baseline,
   same trust rule, skipped when the run produced no exec evidence.
+- `app-e2e-coverage.master.<platform>` — `coverage-app/` baseline, same
+  trust rule.
+
+On iOS all three `*.master.ios` baselines are published by `merge_ios`
+(rather than inside a shard leg) and only when the merged evidence reports
+`complete == true` — a shard whose own tree is marked `--incomplete` can
+still contribute to a complete merged baseline, while a partial union
+cannot poison it.
 
 ## Executable coverage-tree schema
 
@@ -203,14 +220,15 @@ match nothing in the template are *incompatible* — counted, diagnosed, never
 applied. `*.coverage-error.txt` files produce `attribution: "error"` entries
 that do not overwrite measured baseline evidence on merge.
 
-**Shared mode**: when no per-test dumps exist (coverage not split per test —
-the current state on master until #2156 lands), `--report` (an OpenCover
-document with real `vc` values, e.g. `coverage.opencover.xml`) plus the
-executed-test list attributes *all* covered nodes to *every* executed test
+**Shared mode**: when no per-test dumps exist (per-test coverage dumps are
+produced on both platforms since #2156, but a run without `MOBILE_E2E_COVERAGE`
+or a leg whose dump pipeline was skipped still lands here), `--report` (an
+OpenCover document with real `vc` values, e.g. `coverage.opencover.xml`) plus
+the executed-test list attributes *all* covered nodes to *every* executed test
 with `attribution: "shared"`. The tree stays usable and honest; the
 `shared` bucket carries the union and `diagnostics.attribution` records the
 degraded mode. **TODO(issue #2085):** delete the shared-mode fallback only
-once per-test dumps are mandatory on both platforms.
+once per-test dumps are mandatory on every leg.
 
 ## Selector bridge
 
@@ -418,10 +436,11 @@ under-attribution can only over-select.
 
 ## Known gaps (explicit, by design)
 
-- **No per-test split on master yet**: `MOBILE_E2E_COVERAGE` and the dump
-  pipeline land with #2156. Until then the tool runs shared mode and the tree
-  is coarse by construction — wired in code as the `--report` path, flagged
-  `shared` everywhere it matters.
+- **Enforcement is opt-in**: every suite computes and stores its selection
+  manifest, but only `app-mobile-e2e.yml` exposes `e2e_selection_mode=enforce`
+  / `force_full_suite` dispatch inputs; Playwright suites always run the full
+  suite in shadow mode. #2085's AST-aware comparison and dependency edges are
+  still unimplemented.
 - **Theory case attribution**: `fileBase` is the method name, so theory cases
   sharing a method overwrite one dump file — per-case coverage cannot exist
   with this naming. Trees record method-level entries plus `cases` when the
@@ -444,8 +463,13 @@ under-attribution can only over-select.
   and external files remain file-granular.
 - **Coverage of framework code**: only the instrumented app module(s) appear;
   MAUI/framework hits are out of evidence scope.
-- **iOS**: identical schema and code path (`platform: "ios"`), validated by
-  the same tool; per-test dumps depend on the #2156 endpoint on simulator.
+- **iOS sharding**: each shard extracts a per-shard tree marked
+  `--incomplete` (it holds a third of the suite by construction);
+  `merge_ios` validates the union, intersects it with the full-suite
+  expected set, and only then can the merged tree publish baselines. A
+  per-shard `coverage-tree.json` is therefore diagnostic, never baseline
+  input. The split is a static `Shard` trait assignment — dynamic,
+  runtime-driven shard sizing remains open as #2263.
 
 ## Determinism contract
 
