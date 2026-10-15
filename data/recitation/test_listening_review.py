@@ -242,6 +242,14 @@ class ListeningReviewTests(unittest.TestCase):
         self.case["listeningReuseSha256"] = digest_file(proof_path)
         with self.assertRaises(ValueError):
             validate_decision(self.case, self.payload)
+    def test_browser_listening_and_draft_regressions(self):
+        node = shutil.which("node")
+        self.assertIsNotNone(node, "Node.js is required for the review-page regression tests")
+        script = Path(__file__).resolve().with_name("test_listening_review_frontend.mjs")
+        result = subprocess.run(  # nosec B603: resolved Node and fixed repository test; no user argv.  # nosemgrep
+            [node, "--test", str(script)], capture_output=True, text=True, encoding="utf-8", check=False)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_hebrew_references_have_plain_letters(self):
         self.assertEqual(hebrew_number(15), "טו")
         self.assertEqual(hebrew_number(16), "טז")
