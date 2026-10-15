@@ -87,6 +87,16 @@ jobs:
           # Keep aligned with Xcode 27 and the iOS packaging workload; see #1871.
           dotnet-version: ${{ env.DOTNET_SDK_VERSION }}
 
+      - name: Prepare managed test-host stack capture
+        env:
+          # Keep this diagnostic tool outside the empty prebuilt-runtime cache.
+          NUGET_PACKAGES: ${{ runner.temp }}/native-stack-tool-nuget
+        run: |
+          dotnet tool install dotnet-stack --version 10.0.750501 --tool-path "${{ runner.temp }}/native-stack-tools"
+          # Validate and load the report command before the five-second live-capture window.
+          "${{ runner.temp }}/native-stack-tools/dotnet-stack" report --help
+          echo "MOBILE_E2E_DOTNET_STACK=${{ runner.temp }}/native-stack-tools/dotnet-stack" >> "$GITHUB_ENV"
+
       - name: Hash NuGet dependency inputs
         id: nuget-key
         run: node ${{ github.workspace }}/devops/github/ci/nuget-cache-key.mjs
@@ -149,6 +159,11 @@ jobs:
         if: inputs.mode != 'build' && (inputs.platform == 'iOS' && steps.ios-device.outputs.udid != '')
         id: ios-sim-cache
         uses: actions/cache/restore@v6
+        env:
+          # Optional state must not stall device startup on a stuck segment.
+          # A timeout is a cache miss; boot's existing cold path still validates
+          # the explicit simulator and the full native suite still runs.
+          SEGMENT_DOWNLOAD_TIMEOUT_MINS: "1"
         with:
           path: ~/Library/Developer/CoreSimulator/Devices/${{ steps.ios-device.outputs.udid }}
           key: ${{ runner.os }}-ios-sim-${{ steps.ios-device.outputs.udid }}-${{ steps.toolchain.outputs.id }}-${{ env.IOS_SIM_STATE_RECIPE }}
@@ -234,6 +249,12 @@ jobs:
           mkdir -p "$MOBILE_E2E_ARTIFACTS"
           dotnet run --project devops -- TestMobileE2EUnit 2>&1 | tee -a "$MOBILE_E2E_ARTIFACTS/harness-validation.log"
           dotnet test --project devops.Tests/devops.Tests.csproj --configuration Release 2>&1 | tee -a "$MOBILE_E2E_ARTIFACTS/harness-validation.log"
+
+      # Validate once per platform before any device job starts. The iOS
+      # consumers verify the identical delivered runtime and configuration.
+      - name: Verify real test-host reporting and shutdown
+        if: inputs.mode != 'prebuilt-run'
+        run: node app/mobile-e2e/verify-reporting.mjs app/BibleOnSite.Tests.MobileE2E/bin/Debug/net10.0/BibleOnSite.Tests.MobileE2E.dll "$MOBILE_E2E_DOTNET_STACK" "$MOBILE_E2E_ARTIFACTS"
 
       # Validate before booting either device: cold simulator startup competes
       # with cache extraction and subprocess tests. The asynchronous boot still
