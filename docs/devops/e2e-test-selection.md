@@ -19,7 +19,8 @@ the executable-coverage tree produced by `devops/e2e-coverage-trees/`.
 | Executable coverage-tree extraction | Merged (#2183) | `devops/e2e-coverage-trees/` |
 | Selector bridge: exec evidence unions into `coverage-tree.json` | Merged (#2195, #2230) | `devops/e2e-coverage-trees/to-selector-tree.ts`, `collect-appium --exec-tree`, `.github/workflows/app-mobile-e2e.yml` |
 | Playwright suites (website, admin, API): evidence, discovery, collectors, shadow CI | This slice | `web/shared/tests-util/e2e-impact.ts`, `*/e2e-impact.json`, `collect-playwright`, `.github/workflows/ci.yml` |
-| AST-aware change comparison, dependency edges | Later slices | — |
+| Member-granularity narrowing (C# member fingerprints ↔ exec member evidence) | This slice | `extractMembers`/`SourceFingerprint.members`, `CoveredNode.member`, `memberGaps`, `covered-members`/`member-widened` reasons |
+| AST-aware change comparison beyond member level, dependency edges | Later slices | — |
 
 Two evidence channels exist today and answer different questions:
 
@@ -38,7 +39,8 @@ The selector consults both channels; they are complementary evidence about
 the same suite, not replacements. The bridge in this slice unions the exec
 channel's per-test file evidence into `coverage-tree.json` at collection
 time (see "Selector bridge" below) — the selector schema and the selection
-order stay unchanged apart from the shared-coverage widening it adds.
+order stay unchanged apart from the shared-coverage widening and the
+member-granularity narrowing it adds.
 
 ## Where the evidence lands today
 
@@ -106,6 +108,13 @@ except `collectedAtUtc` (provenance only, never a selection input).
 			"file": "app/BibleOnSite/…",     // repo-relative primary file
 			"files": ["app/BibleOnSite/…"],  // every file the decl's points span
 			"span": [42, 61],                // min(sl)..max(el) of its points
+			"member": "Namespace.Type.Name#<sig>",   // source-member identity the
+			                                      // node's span maps into — the
+			                                      // `SourceFingerprint.members`
+			                                      // key space (C# only; absent
+			                                      // when unmapped/unparseable)
+			"memberType": "Namespace.Type",  // the member's enclosing type —
+			                                      // the widening tier above member
 			"parents": ["type:Namespace.Type"],
 			"points": { "sequence": 9, "branch": 2 }
 		},
@@ -230,10 +239,19 @@ identity:
 - `file` (the declaring test file) resolves through the same discovery the
   automation channel uses; exec-only tests join `unmatchedEvidence` when
   discovery cannot claim them — same convention as evidence records.
+- `members`: `file → source-member keys` the test's executed nodes mapped
+  into (`CoverageTreeTest.members`). A file key is present — possibly with
+  an empty list — only when the test's exec coverage for that file is
+  member-qualified; automation-id-only coverage stays unqualified.
+- `memberGaps`: `file → source-level type names` whose covered nodes could
+  not map to a single member (no span, unparsable source, `#if`-twin spans,
+  file-scope code). A changed member inside a gapped type widens to the
+  file's tests — partial member evidence never narrows a type the
+  extractor admitted it could not fully map.
 - Decl-level detail the selector schema cannot express (node ids,
   `parents` containment edges, visit counts, per-entry `evidenceSha`) is
   dropped deliberately — the exec tree stays the rich artifact for the AST
-  slice; `coverage-tree.json` stays file-granular.
+  slice; `coverage-tree.json` keeps only file + member evidence.
 
 **Shared bucket → `sharedFiles`**: the exec tree's `shared.files` land on
 the optional `CoverageTree.sharedFiles` (additive; automation-id-only
@@ -242,6 +260,21 @@ or sharing a logical unit with one — resolves `shared-coverage` and
 selects every applicable test: shared hits can widen but never narrow to a
 per-test claim. The check runs after `noImpact`/`runAllOnChange` and the
 structural-equivalence proof, before per-test file/unit narrowing.
+
+**Member granularity**: when the baseline fingerprint and the tested file
+both carry C# member digests (`SourceFingerprint.members` — member keys
+are `Ns.Type.Name#<sig>` over the declaration signature, position- and
+trivia-independent) *and* at least one covering test is member-qualified
+for the file, `select` diffs the member maps instead of the whole file.
+Tests that executed a changed member resolve `covered-members`; tests
+without member evidence for the file stay selected regardless — evidence
+absence can widen but never narrow. A member diff that maps to no exec
+evidence (added/removed member, `type:`-shape change, member inside a
+`memberGaps` type) widens to the file's covering set, as does a diff
+outside every member (usings, directives, file-scope code); those resolve
+`member-widened`, which is also reported when the member pass ends at the
+file's whole covering set. Baselines or sources without member data
+resolve plain `covered-file` — the pre-member behavior.
 
 **Incompatibility is diagnosed, never applied**: `collect-appium` applies
 the exec tree only when `validateExecTree` passes for the suite+platform
@@ -397,7 +430,18 @@ under-attribution can only over-select.
 - **Dependency edges**: nodes carry `parents` containment only. Call graph,
   XAML↔code-behind bindings, resource/config/data mappings and service/API
   dependencies belong to the AST slice; until then `runAllOnChange` in
-  `e2e-impact.json` keeps non-code changes conservative.
+  `e2e-impact.json` keeps non-code changes conservative. Member narrowing
+  is per-file only: a member in file A that calls into file B is not an
+  edge — a change to B narrows by B's own covering members, so tests that
+  reach B only transitively still select through B's member evidence.
+- **Member mapping is span containment**: exec nodes map to the member
+  whose source span contains the node's point span (constructors fall back
+  to the member containing the span's tail — field initializers execute
+  inside `.ctor`). Nodes outside every member, in unparseable files or
+  under `#if`-twin spans stay unmapped and report `memberGaps`; a changed
+  member in a gapped type widens to the file set. Member evidence exists
+  only for C# sources under the mapped source root — XAML, generated code
+  and external files remain file-granular.
 - **Coverage of framework code**: only the instrumented app module(s) appear;
   MAUI/framework hits are out of evidence scope.
 - **iOS**: identical schema and code path (`platform: "ios"`), validated by
