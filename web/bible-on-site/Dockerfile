@@ -1,4 +1,4 @@
-FROM node:26.11.1-alpine AS base
+FROM node:26.12.0-alpine AS base
 
 # Version-only releases must not invalidate the dependency layer.
 FROM base AS manifests
