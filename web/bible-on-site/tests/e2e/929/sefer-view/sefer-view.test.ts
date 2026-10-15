@@ -15,17 +15,29 @@ import { test } from "../../../util/playwright/test-fixture";
  * Tests use the skipOnMobile fixture to automatically skip on mobile viewports.
  */
 
-function activePageAngle(page: Page, signed = false) {
-	return page.evaluate((signed) => {
-		const turningPage = Array.from(
-			document.querySelectorAll<HTMLElement>(".he-book .page"),
-		).find((page) => page.style.willChange === "transform");
-		const angle = turningPage?.style.transform.match(
-			/rotateY\((-?[\d.]+)deg\)/,
-		);
-		const value = angle ? Number(angle[1]) : 0;
-		return signed ? value : Math.abs(value);
-	}, signed);
+/** Average width in pixels of the smaller visible surface of a held paper fold. */
+function activePageFoldWidth(page: Page) {
+	return page.evaluate(() => {
+		const surfaces = Array.from(
+			document.querySelectorAll<HTMLElement>(".he-book .page.page--folded"),
+		).filter((surface) => surface.style.willChange === "transform");
+		if (surfaces.length === 0) return 0;
+		const visibleWidths = surfaces.map((surface) => {
+			const points = Array.from(
+				surface.style.clipPath.matchAll(/(-?[\d.]+)px\s+(-?[\d.]+)px/g),
+				([, x, y]) => ({ x: Number(x), y: Number(y) }),
+			);
+			const height = Number.parseFloat(surface.style.height);
+			if (points.length < 3 || !height) return 0;
+			let doubledArea = 0;
+			for (let i = 0; i < points.length; i++) {
+				const next = points[(i + 1) % points.length];
+				doubledArea += points[i].x * next.y - next.x * points[i].y;
+			}
+			return Math.abs(doubledArea) / (2 * height);
+		});
+		return Math.min(...visibleWidths);
+	});
 }
 
 async function fastMouseSwipe(page: Page, x: number, y: number, delta: number) {
@@ -55,21 +67,25 @@ async function fastMouseSwipe(page: Page, x: number, y: number, delta: number) {
 	// turn a fast swipe into a slow drag under load or trace recording.
 	const inputs: Promise<unknown>[] = [];
 	for (let step = 2; step <= 6; step++) {
-		inputs.push(client.send("Input.dispatchMouseEvent", {
-			type: "mouseMoved",
-			x: x + (step * delta) / 6,
-			y,
-			buttons: 1,
-		}));
+		inputs.push(
+			client.send("Input.dispatchMouseEvent", {
+				type: "mouseMoved",
+				x: x + (step * delta) / 6,
+				y,
+				buttons: 1,
+			}),
+		);
 	}
-	inputs.push(client.send("Input.dispatchMouseEvent", {
-		type: "mouseReleased",
-		x: x + delta,
-		y,
-		button: "left",
-		buttons: 0,
-		clickCount: 1,
-	}));
+	inputs.push(
+		client.send("Input.dispatchMouseEvent", {
+			type: "mouseReleased",
+			x: x + delta,
+			y,
+			button: "left",
+			buttons: 0,
+			clickCount: 1,
+		}),
+	);
 	await Promise.all(inputs);
 	await client.detach();
 }
@@ -407,34 +423,34 @@ test.describe("Sefer view", () => {
 		).toBe(true);
 		const indicator = page.locator(".flipbook-toolbar-indicator");
 		await expect(indicator).toHaveValue("א / נ");
-		const turningAngle = () => activePageAngle(page);
+		const foldWidth = () => activePageFoldWidth(page);
 
 		await page.mouse.move(x, y);
 		await page.mouse.down();
 		await page.waitForTimeout(550);
 		await page.mouse.move(x + 80, y, { steps: 8 });
-		await expect.poll(turningAngle).toBeGreaterThan(2);
+		await expect.poll(foldWidth).toBeGreaterThan(2);
 		await page.mouse.move(x + 300, y, { steps: 6 });
-		await expect.poll(turningAngle).toBeGreaterThan(10);
-		const heldAt = await turningAngle();
+		await expect.poll(foldWidth).toBeGreaterThan(10);
+		const heldAt = await foldWidth();
 		await page.waitForTimeout(250);
-		expect(await turningAngle()).toBeGreaterThan(10);
+		expect(await foldWidth()).toBeGreaterThan(10);
 		await page.mouse.move(x + 480, y, { steps: 4 });
 		await expect
-			.poll(async () => Math.abs((await turningAngle()) - heldAt))
+			.poll(async () => Math.abs((await foldWidth()) - heldAt))
 			.toBeGreaterThan(10);
-		const fartherAngle = await turningAngle();
+		const fartherFoldWidth = await foldWidth();
 		await page.waitForTimeout(250);
 		await page.mouse.move(x + 200, y, { steps: 8 });
 		await expect
-			.poll(async () => Math.abs((await turningAngle()) - fartherAngle))
+			.poll(async () => Math.abs((await foldWidth()) - fartherFoldWidth))
 			.toBeGreaterThan(10);
 		await expect(indicator).toHaveValue("א / נ");
 		await page.mouse.move(x + 600, y, { steps: 3 });
 		await page.waitForTimeout(250);
 		await page.mouse.up();
 		await expect(indicator).toHaveValue("א / נ");
-		await expect.poll(turningAngle).toBe(0);
+		await expect.poll(foldWidth).toBe(0);
 	});
 
 	test("Mouse selection mode can be toggled back to native page dragging", async ({
@@ -466,7 +482,7 @@ test.describe("Sefer view", () => {
 		await page.mouse.move(x, y);
 		await page.mouse.down();
 		await page.mouse.move(x + 300, y, { steps: 8 });
-		await expect.poll(() => activePageAngle(page)).toBeGreaterThan(10);
+		await expect.poll(() => activePageFoldWidth(page)).toBeGreaterThan(10);
 		await page.mouse.up();
 	});
 
@@ -591,9 +607,7 @@ test.describe("Sefer view", () => {
 		await expect
 			.poll(() => decodeURIComponent(new URL(page.url()).pathname))
 			.toBe("/929/בראשית/תוכן");
-		await expect(page).toHaveTitle(
-			'ספר בראשית - תוכן העניינים | תנ"ך על הפרק',
-		);
+		await expect(page).toHaveTitle('ספר בראשית - תוכן העניינים | תנ"ך על הפרק');
 
 		// Browser history restoration returns the matching title.
 		await page.goBack();
@@ -603,9 +617,7 @@ test.describe("Sefer view", () => {
 		// Leaving Sefer view hands the title back to the flat perek page.
 		const toggler = page.getByTestId("read-mode-toggler");
 		await toggler.click();
-		await expect(
-			page.locator('[class*="seferOverlay"]'),
-		).not.toBeVisible();
+		await expect(page.locator('[class*="seferOverlay"]')).not.toBeVisible();
 		await expect(page).toHaveTitle('בראשית א | תנ"ך על הפרק');
 	});
 
@@ -622,6 +634,15 @@ test.describe("Sefer view", () => {
 				.first()
 				.boundingBox();
 			if (!rect) throw new Error("Verse text is not visible");
+			const pageWidth = await page
+				.locator(".he-book .page.current-page article")
+				.first()
+				.evaluate(
+					(article) =>
+						article.closest<HTMLElement>(".page")?.getBoundingClientRect()
+							.width ?? 0,
+				);
+			expect(pageWidth).toBeGreaterThan(300);
 			const x = Math.round(rect.x + rect.width - 40);
 			const y = Math.round(rect.y + 45);
 			expect(
@@ -639,27 +660,29 @@ test.describe("Sefer view", () => {
 				touchPoints: [{ x, y }],
 			});
 			// Start near the verse's right edge and drag left across the book's
-			// midpoint. A 650px rightward drag from the first chapter never reaches
-			// halfway at this viewport; it only turns if release velocity is high,
-			// which tracing and runner load can change.
-			for (const offset of [20, 40, 300, 500, x - 20]) {
+			// midpoint. Finish at 70% of the fold, using the actual page width,
+			// so it stays visibly held and release does not depend on velocity.
+			// Dragging all the way to the screen edge fully flattens the page.
+			for (const offset of [20, 40, 300, 500, Math.round(pageWidth * 1.4)]) {
 				await client.send("Input.dispatchTouchEvent", {
 					type: "touchMove",
 					touchPoints: [{ x: x - offset, y }],
 				});
 				if (offset === 300) {
-					await expect.poll(() => activePageAngle(page)).toBeGreaterThan(10);
+					await expect
+						.poll(() => activePageFoldWidth(page))
+						.toBeGreaterThan(10);
 					await page.waitForTimeout(150);
-					expect(await activePageAngle(page)).toBeGreaterThan(10);
+					expect(await activePageFoldWidth(page)).toBeGreaterThan(10);
 				}
 			}
 			// Confirm a real drag beyond halfway before releasing, so completion
-			// checks distance rather than a timing-sensitive flick. The library
-			// mirrors the page past halfway, changing this backward drag's rotation
-			// from negative to positive.
-			await expect.poll(() => activePageAngle(page, true)).toBeGreaterThan(10);
+			// checks distance rather than a timing-sensitive flick. The folded
+			// surface must remain visible even after crossing the midpoint.
+			await expect.poll(() => activePageFoldWidth(page)).toBeGreaterThan(10);
 			await page.waitForTimeout(150);
-			expect(await activePageAngle(page, true)).toBeGreaterThan(10);
+			expect(await activePageFoldWidth(page)).toBeGreaterThan(10);
+			await expect(indicator).toHaveValue("ב / נ");
 			await client.send("Input.dispatchTouchEvent", {
 				type: "touchEnd",
 				touchPoints: [],

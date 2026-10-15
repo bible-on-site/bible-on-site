@@ -7,14 +7,15 @@ using Xunit;
 
 namespace BibleOnSite.Tests.MobileE2E;
 
-// Sequential device scenarios each run on a fresh Appium session. The device
-// transport occasionally kills a healthy session mid-run (adb "device offline",
-// instrumentation exiting 255 with the logcat stream, a crashed WebDriverAgent)
-// and every later test recreates the identical session anyway, so a scenario
-// may rebuild it once — after confirmed session death, or after a lost adb
-// transport that DeviceTransportRecovery re-proves healthy and ready. Recovery
-// never gates the confirmed-death retry; it only heals adb when the death rode
-// a dropped transport. Uncertain cleanup stays latched in the factory.
+// Sequential device scenarios share one Appium session held by the collection
+// fixture — per-test isolation comes from restarting the app process rather
+// than recreating the driver. The device transport occasionally kills a
+// healthy session mid-run (adb "device offline", instrumentation exiting 255
+// with the logcat stream, a crashed WebDriverAgent); the session rebuilds it
+// once after confirmed cleanup, or after a lost adb transport that
+// DeviceTransportRecovery re-proves healthy and ready. Recovery never gates
+// the confirmed-death retry; it only heals adb when the death rode a dropped
+// transport. Uncertain cleanup stays latched in the session's factory.
 // Assertion failures are not WebDriverExceptions
 // and never match the classifier, so a retry cannot mask a real regression — a
 // second failure propagates normally.
@@ -24,32 +25,34 @@ public abstract class MobileDeviceTest : IAsyncLifetime
     // Production always probes the device through DeviceTransportRecovery.
     internal static Func<Exception, bool> TransportRecovery { get; set; } = DeviceTransportRecovery.TryReconnect;
 
-    private readonly MobileDeviceSessionFactory _sessions;
+    private readonly IMobileDeviceSession _session;
 
-    protected MobileDeviceTest(ITestOutputHelper output, MobileDeviceSessionFactory sessions)
-        : this(output, sessions, MobileTestConfiguration.FromEnvironment())
+    protected MobileDeviceTest(ITestOutputHelper output, MobileDeviceSession session)
+        : this(output, (IMobileDeviceSession)session)
     {
     }
 
-    private protected MobileDeviceTest(ITestOutputHelper output, MobileDeviceSessionFactory sessions,
-        MobileTestConfiguration configuration)
+    private protected MobileDeviceTest(ITestOutputHelper output, IMobileDeviceSession session)
     {
         Output = output;
-        _sessions = sessions;
-        Configuration = configuration;
+        _session = session;
     }
 
     protected ITestOutputHelper Output { get; }
-    protected MobileTestConfiguration Configuration { get; }
-    protected AppiumDriver? Driver { get; private set; }
-    protected MobilePlatformAdapter Platform { get; private set; } = null!;
+    protected MobileTestConfiguration Configuration => _session.Configuration;
+    protected AppiumDriver? Driver => _session.Driver;
+    protected MobilePlatformAdapter Platform => _session.Adapter;
     protected PerekPage Page { get; private set; } = null!;
+
+    // Scenarios that need extra launch environment (e.g. BIBLE_E2E_PERUSHIM
+    // synthetic commentary data) return it here; the shared session applies it
+    // on the scenario's app restart instead of holding per-test session caps.
+    protected virtual IReadOnlyDictionary<string, string>? LaunchEnvironment => null;
 
     public virtual ValueTask InitializeAsync()
     {
         Assert.SkipWhen(E2eSelection.IsExcluded(TestContext.Current),
             "not selected by the e2e-impact manifest");
-        Platform = MobilePlatformAdapter.For(Configuration.Platform);
         try
         {
             Connect();
@@ -57,11 +60,11 @@ public abstract class MobileDeviceTest : IAsyncLifetime
         }
         catch (WebDriverException exception) when (DeviceSessionDeath.Matches(exception))
         {
-            // The device already dropped this session, so there is nothing
-            // left for a replacement to race; create it once more. Any
-            // other startup failure — and a second death — fails below.
+            // The session's own recovery already ran inside Acquire, so this
+            // retry only fires when it exhausted its one rebuild. Any other
+            // startup failure — and a second death — fails below.
             Output.WriteLine($"{Configuration.Platform}: the session died during startup " +
-                $"({exception.Message}); creating it once more.");
+                $"({exception.Message}); acquiring it once more.");
             if (TransportRecovery(exception))
             {
                 Output.WriteLine($"{Configuration.Platform}: adb transport recovered before the retry.");
@@ -72,13 +75,13 @@ public abstract class MobileDeviceTest : IAsyncLifetime
             // A lost adb transport is ambiguous — the failed creation may still
             // be settling server-side — so the retry runs only after adb
             // confirms a booted device with a responsive package manager, and
-            // Connect() still re-attempts teardown before creating anything.
+            // the session still re-attempts teardown before creating anything.
             if (!TransportRecovery(exception))
             {
                 SaveDiagnostics($"SessionStartup-{Guid.NewGuid():N}", "failed", exception);
                 throw;
             }
-            Output.WriteLine($"{Configuration.Platform}: adb transport recovered; creating the session once more.");
+            Output.WriteLine($"{Configuration.Platform}: adb transport recovered; acquiring the session once more.");
         }
         catch (Exception exception)
         {
@@ -97,22 +100,9 @@ public abstract class MobileDeviceTest : IAsyncLifetime
         return default;
     }
 
-    public virtual ValueTask DisposeAsync()
-    {
-        try
-        {
-            _sessions.Cleanup(CloseDriver);
-        }
-        catch (WebDriverException exception)
-        {
-            Output.WriteLine(DeviceSessionDeath.Matches(exception)
-                ? $"{Configuration.Platform}: session cleanup failed; the device had already dropped it: {exception.Message}"
-                // Uncertain cleanup stays latched in the factory: Appium may
-                // still run the failed session's shutdown against the device.
-                : $"{Configuration.Platform}: session cleanup failed; device reuse blocked: {exception.Message}");
-        }
-        return default;
-    }
+    // The collection fixture owns the driver's lifetime, so a finished test
+    // has nothing to release. The next scenario's acquire restarts the app.
+    public virtual ValueTask DisposeAsync() => default;
 
     protected void Scenario(Action run, [System.Runtime.CompilerServices.CallerMemberName] string name = "")
     {
@@ -134,7 +124,7 @@ public abstract class MobileDeviceTest : IAsyncLifetime
         {
             // The scenario died with the transport; rebuilding blind on a still-
             // lost device is not honest, so the rebuild waits for recovery —
-            // and Connect() re-attempts the teardown before creating anyway.
+            // and the session re-attempts the teardown before creating anyway.
             if (!TransportRecovery(exception))
             {
                 throw;
@@ -149,70 +139,66 @@ public abstract class MobileDeviceTest : IAsyncLifetime
     {
         // The caller-member name is the [Fact]/[Theory] method; combining it
         // with the declaring type reproduces the xUnit FullyQualifiedName the
-        // coverage tree uses as test identity (#2085).
-        CoverageEvidence.Begin($"{GetType().FullName}.{name}", Configuration.Platform,
-            Configuration.ArtifactDirectory, name);
+        // coverage tree uses as test identity (#2085). That identity also names
+        // the per-test artifacts: method names are not unique across classes,
+        // so two tests sharing one would overwrite each other's evidence inside
+        // a run and collide again at the shard merge (#2083).
+        var test = $"{GetType().FullName}.{name}";
+        CoverageEvidence.Begin(test, Configuration.Platform,
+            Configuration.ArtifactDirectory, test);
         try
         {
             body();
             CoverageEvidence.RecordSession(Driver?.SessionId);
             CoverageEvidence.Finish("passed");
-            SaveDiagnostics(name, "passed");
+            CollectAppCoverage(test, "passed");
+            SaveDiagnostics(test, "passed");
         }
         catch
         {
             CoverageEvidence.RecordSession(Driver?.SessionId);
             CoverageEvidence.Finish("failed");
-            SaveDiagnostics(name, "failed");
+            CollectAppCoverage(test, "failed");
+            SaveDiagnostics(test, "failed");
             throw;
         }
     }
 
-    // Quit can race a dropped adb transport: "device offline" then means the
-    // server-side teardown is unconfirmed, not done. On a healed transport the
-    // Quit is re-attempted so a released session is proven before reuse; if the
-    // retry also fails the factory latches the device rather than risk a
-    // zombie teardown colliding with the next session.
-    private void CloseDriver()
+    // No live session means no app process is answering the coverage endpoint; unit-test fakes never create a driver, so this also keeps collection out of host-side unit tests.
+    private void CollectAppCoverage(string name, string outcome)
     {
+        if (Driver == null)
+        {
+            return;
+        }
         try
         {
-            try
-            {
-                Driver?.Quit();
-            }
-            catch (WebDriverException exception) when (DeviceTransportLoss.Matches(exception)
-                && TransportRecovery(exception))
-            {
-                Driver?.Quit();
-            }
+            AppCoverage.Collect(Configuration, name, outcome, Output);
         }
-        finally
+        catch (Exception exception) //NOSONAR
         {
-            Driver?.Dispose();
+            // Coverage collection is diagnostic-only: a failure here must never
+            // decide (or mask) the scenario's own outcome.
+            Output.WriteLine($"{Configuration.Platform}: coverage collection failed: {exception.Message}");
         }
     }
 
     protected virtual void Connect()
     {
-        try
-        {
-            _sessions.Cleanup(CloseDriver);
-        }
-        catch (WebDriverException exception) when (DeviceSessionDeath.Matches(exception))
-        {
-            // The dropped session has nothing left for Appium to clean.
-            Output.WriteLine($"{Configuration.Platform}: dead session rejected cleanup ({exception.Message}); continuing.");
-        }
-        Driver = _sessions.Create(() => Platform.CreateDriver(Configuration.Server, CreateOptions()));
-        Page = new(Driver, Platform);
+        AcquireSession();
+        Page = new(Driver!, Platform);
         Page.WaitForStartup();
+        // Launch code (App.xaml.cs, MauiProgram, startup navigation) only ever
+        // runs before the first reset; attribute it to a startup dump so the
+        // merged report still counts it (#1232). Later connects overwrite it —
+        // the content is identical app-init hits either way.
+        AppCoverage.Collect(Configuration, "_startup", "passed", Output);
+        AppCoverage.Reset(Configuration, Output);
     }
 
-    // Scenarios that need extra launch environment (e.g. BIBLE_E2E_PERUSHIM
-    // synthetic commentary data) override this instead of reimplementing
-    // session management.
-    protected virtual AppiumOptions CreateOptions() => Platform.CreateOptions(Configuration);
+    // Unit coverage substitutes IMobileDeviceSession to observe this path
+    // without a device.
+    protected void AcquireSession() => _session.Acquire(LaunchEnvironment);
 
     protected void SaveDiagnostics(string name, string outcome) =>
         SaveDiagnostics(name, outcome, null);
@@ -235,7 +221,13 @@ public abstract class MobileDeviceTest : IAsyncLifetime
             try
             {
                 Driver.GetScreenshot().SaveAsFile(prefix + ".png");
-                File.WriteAllText(prefix + ".xml", Driver.PageSource);
+                // Passing screenshots record the visual state. Native source
+                // is captured on failure; scenarios that assert its content
+                // still request the complete tree directly.
+                if (outcome == "failed")
+                {
+                    File.WriteAllText(prefix + ".xml", Driver.PageSource);
+                }
             }
             catch (WebDriverException exception)
             {
@@ -253,4 +245,4 @@ public abstract class MobileDeviceTest : IAsyncLifetime
 }
 
 [CollectionDefinition("Mobile device", DisableParallelization = true)]
-public sealed class MobileDeviceCollection : ICollectionFixture<MobileDeviceSessionFactory>;
+public sealed class MobileDeviceCollection : ICollectionFixture<MobileDeviceSession>;

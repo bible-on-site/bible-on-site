@@ -39,7 +39,7 @@ concurrency:
 jobs:
   distribute:
     name: Distribute the verified build to TestFlight testers
-    runs-on: macos-15
+    runs-on: ubuntu-latest
     env:
       MODULE_VERSION: "0.0.0"
       IOS_ARTIFACT_NAME: ${{ inputs.ios_artifact_name }}
@@ -124,7 +124,7 @@ jobs:
 
       - name: Install Fastlane
         if: ${{ steps.guard.outputs.deploy == 'true' }}
-        # macos-15's image ships fastlane; install only when it is missing.
+        # Runner images ship fastlane; install only when it is missing.
         run: command -v fastlane >/dev/null 2>&1 || gem install fastlane -NV
 
       - name: Distribute the exact iOS build to the beta group

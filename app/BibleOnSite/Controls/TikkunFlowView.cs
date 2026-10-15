@@ -34,6 +34,16 @@ public class TikkunFlowView : GraphicsView
         nameof(HideMarks), typeof(bool), typeof(TikkunFlowView), false,
         propertyChanged: OnContentChanged);
 
+    /// <summary>
+    /// הסתר שם השם revision — a change-only input bound to
+    /// PerekViewModel.DivineNameMaskingRevision. Any change bumps the content
+    /// version so EnsureWords rebuilds with the new masking options (the
+    /// options themselves live in the static DivineNameMasking state).
+    /// </summary>
+    public static readonly BindableProperty MaskingRevisionProperty = BindableProperty.Create(
+        nameof(MaskingRevision), typeof(int), typeof(TikkunFlowView), 0,
+        propertyChanged: OnContentChanged);
+
     /// <summary>Base pasuk font size (bound to the app's scaled PasukFontSize resource).</summary>
     public static readonly BindableProperty TextFontSizeProperty = BindableProperty.Create(
         nameof(TextFontSize), typeof(double), typeof(TikkunFlowView), 18.0,
@@ -70,6 +80,12 @@ public class TikkunFlowView : GraphicsView
     {
         get => (bool)GetValue(HideMarksProperty);
         set => SetValue(HideMarksProperty, value);
+    }
+
+    public int MaskingRevision
+    {
+        get => (int)GetValue(MaskingRevisionProperty);
+        set => SetValue(MaskingRevisionProperty, value);
     }
 
     public double TextFontSize

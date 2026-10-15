@@ -9,6 +9,26 @@ public static class AtomicFile
         await source.CopyToAsync(target);
     });
 
+    /// <summary>Adopt an existing payload without copying on the same filesystem.
+    /// Cross-volume moves complete at a temporary destination before publication.</summary>
+    public static void Move(string source, string destination)
+    {
+        var temporary = destination + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        try
+        {
+            File.Move(source, temporary);
+            File.Move(temporary, destination, overwrite: true);
+        }
+        finally
+        {
+            if (File.Exists(temporary))
+            {
+                // Publication failed: retain the complete delivered payload for recovery.
+                File.Move(temporary, source);
+            }
+        }
+    }
+
     public static Task WriteAllTextAsync(string destination, string text) =>
         ReplaceAsync(destination, temporary => File.WriteAllTextAsync(temporary, text));
 

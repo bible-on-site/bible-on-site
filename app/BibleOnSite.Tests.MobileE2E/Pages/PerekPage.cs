@@ -2,7 +2,6 @@ using System.Drawing;
 using BibleOnSite.Tests.MobileE2E.Platforms;
 using OpenQA.Selenium;
 using OpenQA.Selenium.Appium;
-using OpenQA.Selenium.Interactions;
 using Xunit;
 
 namespace BibleOnSite.Tests.MobileE2E.Pages;
@@ -12,8 +11,8 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
     // The first native snapshot on a cold simulator can finish after the
     // loading page has been replaced, while returning that earlier empty tree.
     // Allow another snapshot before applying the normal interaction deadlines.
-    public void WaitForStartup() => WaitFor(platform.AutomationId("PerekSource"),
-        element => !string.IsNullOrWhiteSpace(element.Text), TimeSpan.FromMinutes(2));
+    public void WaitForStartup() => WaitFor("PerekSource",
+        element => !string.IsNullOrWhiteSpace(element.Text));
 
     public AppiumElement WaitFor(string automationId) => WaitFor(automationId, _ => true);
 
@@ -35,12 +34,10 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
         {
             try
             {
-                var element = driver.FindElements(locator)
-                    .FirstOrDefault(element => element.Displayed && HasVisibleCenter(element)
-                        && condition(element));
+                var element = FindVisible(locator, condition).FirstOrDefault();
                 if (element != null)
                 {
-                    return element;
+                    return element.Element;
                 }
             }
             catch (StaleElementReferenceException)
@@ -70,8 +67,7 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
         {
             try
             {
-                var visible = driver.FindElements(locator)
-                    .Any(element => element.Displayed && HasVisibleCenter(element));
+                var visible = FindVisible(locator).Any();
                 if (!visible)
                 {
                     return;
@@ -100,7 +96,8 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
         while (DateTime.UtcNow < deadline)
         {
             var element = WaitFor(locator);
-            var current = new Rectangle(element.Location, element.Size);
+            var actual = MobilePlatformAdapter.ReadFrame(element);
+            var current = new Rectangle(actual.Location, actual.Size);
             if (current == frame)
             {
                 return (current.Location, current.Size);
@@ -122,33 +119,52 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
     public AppiumElement ScrollBackTo(string automationId, Func<AppiumElement, bool> condition)
     {
         var locator = platform.AutomationId(automationId);
-        for (var attempt = 0; attempt < 20; attempt++)
+        var deadline = DateTime.UtcNow.AddSeconds(45);
+        AppiumElement? reader = null;
+        Rectangle? lastHeading = null;
+        for (var attempt = 0; attempt < 20 && DateTime.UtcNow < deadline; attempt++)
         {
             try
             {
-                return WaitFor(locator, condition, TimeSpan.FromSeconds(attempt == 0 ? 8 : 2));
-            }
-            catch (WebDriverTimeoutException)
-            {
                 var window = driver.Manage().Window.Size;
-                var reader = WaitFor("PasukimCollection", element => element.Size.Width >= window.Width / 2);
-                var location = reader.Location;
-                var size = reader.Size;
-                var top = Math.Max(0, location.Y);
-                var bottom = Math.Min(window.Height, location.Y + size.Height);
-                var x = Math.Clamp(location.X + size.Width / 2, 1, window.Width - 1);
-                var finger = new PointerInputDevice(PointerKind.Touch, "reader-scroll");
-                var gesture = new ActionSequence(finger, 0);
-                gesture.AddAction(finger.CreatePointerMove(CoordinateOrigin.Viewport, x,
-                    top + (bottom - top) / 4, TimeSpan.Zero));
-                gesture.AddAction(finger.CreatePointerDown(MouseButton.Left));
-                gesture.AddAction(finger.CreatePointerMove(CoordinateOrigin.Viewport, x,
-                    top + (bottom - top) / 2, TimeSpan.FromMilliseconds(350)));
-                gesture.AddAction(finger.CreatePointerUp(MouseButton.Left));
-                driver.PerformActions([gesture]);
+                var remaining = deadline - DateTime.UtcNow;
+                if (remaining <= TimeSpan.Zero) { break; }
+                reader ??= WaitFor("PasukimCollection", element => element.Size.Width >= window.Width / 2, remaining);
+                NativeElementMatch? target = null;
+                if (driver is IosSnapshotDriver snapshots)
+                {
+                    target = snapshots.FindSnapshots(locator).FirstOrDefault(match =>
+                        match.Snapshot.Width > 0 && match.Snapshot.Height > 0
+                        && match.Snapshot.X + match.Snapshot.Width / 2 >= 0
+                        && match.Snapshot.X + match.Snapshot.Width / 2 < window.Width
+                        && condition(match.ConditionElement));
+                    lastHeading = target is null ? null : new Rectangle(
+                        Convert.ToInt32(target.Snapshot.X), Convert.ToInt32(target.Snapshot.Y),
+                        Convert.ToInt32(target.Snapshot.Width), Convert.ToInt32(target.Snapshot.Height));
+                }
+                else
+                {
+                    var visible = FindVisible(locator, condition).FirstOrDefault();
+                    if (visible != null) { return visible.Element; }
+                }
+                // Keep the container handle, but read its live frame for every
+                // gesture. The heading snapshot only plans direction/distance.
+                var frame = MobilePlatformAdapter.ReadFrame(reader);
+                var bounds = new Rectangle(frame.Location, frame.Size);
+                var viewport = Rectangle.Intersect(bounds, new Rectangle(Point.Empty, window));
+                if (target != null && target.Snapshot.IsVisibleIn(window) && lastHeading is { } heading
+                    && viewport.Contains(heading.X + heading.Width / 2, heading.Y + heading.Height / 2))
+                {
+                    return target.Element;
+                }
+                driver.PerformActions([ReaderScrollActions.ReturnToHeading(bounds, window, lastHeading)]);
+            }
+            catch (StaleElementReferenceException)
+            {
+                reader = null;
             }
         }
-        throw new WebDriverTimeoutException($"The selected heading {automationId} was not found after scrolling back through the reader.");
+        throw new WebDriverTimeoutException($"The selected heading {automationId} was not found within the reader's 45-second return budget; last frame: {lastHeading}.");
     }
 
     public void OpenCircularMenu()
@@ -166,7 +182,11 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
         // Every property access queries the device. Read each dimension once
         // so layout assertions do not repeatedly snapshot the UI.
         var buttons = new[] { menu, text, fullScreen }
-            .Select(button => (Element: button, Location: button.Location, Size: button.Size))
+            .Select(button =>
+            {
+                var frame = MobilePlatformAdapter.ReadFrame(button);
+                return (Element: button, frame.Location, frame.Size);
+            })
             .ToArray();
         foreach (var (button, location, size) in buttons)
         {
@@ -181,10 +201,47 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
         Assert.InRange(menuCenter, 0.5 - platform.Layout.MenuCenterTolerance, 0.5 + platform.Layout.MenuCenterTolerance);
     }
 
-    private bool HasVisibleCenter(AppiumElement element)
+    private sealed record VisibleMatch(AppiumElement Element, AppiumElement ConditionElement);
+
+    private IEnumerable<VisibleMatch> FindVisible(By locator, Func<AppiumElement, bool>? condition = null)
     {
-        var window = driver.Manage().Window.Size;
-        return HasVisibleCenter(element.Location, element.Size, window);
+        if (driver is IosSnapshotDriver snapshots)
+        {
+            var matches = snapshots.FindSnapshots(locator);
+            if (matches.Count == 0)
+            {
+                return [];
+            }
+            // Reject wrong text/disabled state before another device request.
+            // The viewport is fresh for this poll, read only when a candidate
+            // can satisfy the condition, and shared by candidates in the poll.
+            Size? window = null;
+            return matches.Where(match => match.Snapshot.Displayed
+                    && match.Snapshot.Width > 0 && match.Snapshot.Height > 0
+                    && (condition == null || condition(match.ConditionElement)))
+                .Where(match => match.Snapshot.IsVisibleIn(Window()))
+                .Select(match => new VisibleMatch(match.Element, match.ConditionElement));
+
+            Size Window()
+            {
+                window ??= driver.Manage().Window.Size;
+                return window.Value;
+            }
+        }
+        // Android also reads the viewport once per lookup, lazily, so an empty
+        // result does not request it and every new poll observes rotations.
+        Size? viewport = null;
+        return driver.FindElements(locator)
+            .Where(element => element.Displayed && HasVisibleCenter(
+                element.Location, element.Size, Viewport()))
+            .Where(element => condition == null || condition(element))
+            .Select(element => new VisibleMatch(element, element));
+
+        Size Viewport()
+        {
+            viewport ??= driver.Manage().Window.Size;
+            return viewport.Value;
+        }
     }
 
     private static bool HasVisibleCenter(Point location, Size size, Size window)

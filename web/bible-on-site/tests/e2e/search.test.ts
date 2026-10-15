@@ -201,7 +201,10 @@ test.describe("Site search", () => {
 	}) => {
 		await page.goto("/search?q=בראשית");
 		const input = page.getByRole("searchbox", { name: "מונח חיפוש" });
+		// focus() does not wait for the server-rendered input to become interactive.
+		await expect(input).toBeEnabled();
 		await input.focus();
+		await expect(input).toBeFocused();
 		await page.keyboard.press("ArrowDown");
 		const first = page.locator("a[data-result-link]").first();
 		await expect(first).toBeFocused();

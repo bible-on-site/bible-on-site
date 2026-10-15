@@ -57,11 +57,25 @@ env:
   API_TESTS_NODE_CACHE_PATH: web/api/tests/package-lock.json
   API_TESTS_NODE_VERSION_FILE: web/api/tests/package.json
   API_UNIT_JUNIT_REPORT_ARTIFACT_NAME: api-unit-junit-report-${{ github.run_id }}
+  # Deterministic e2e-impact coverage-tree baselines (#2085): published only
+  # by successful default-branch runs; every run downloads them for the
+  # shadow-mode selection manifest. Evidence lives under each suite's
+  # .coverage/e2e-impact/.
+  API_E2E_IMPACT_ARTIFACT_NAME_MASTER: api-e2e-coverage.master
+  ADMIN_E2E_IMPACT_ARTIFACT_NAME_MASTER: admin-e2e-coverage.master
+  WEBSITE_E2E_IMPACT_ARTIFACT_NAME_MASTER: website-e2e-coverage.master
   APP_COVERAGE_ARTIFACT_NAME_MASTER: app-coverage.master
   APP_COVERAGE_ARTIFACT_NAME_WF: app-coverage.${{ github.run_id }}
   APP_COVERAGE_DIRECTORY: app/.coverage
   APP_COVERAGE_REPORT: app/.coverage/merged/lcov.info
   APP_MERGED_COVERAGE_DIRECTORY: app/.coverage/merged
+  # Real app-process coverage collected by the instrumented mobile E2E legs
+  # (#1232). Per-run artifacts merge into the app report; the master artifacts
+  # are trusted baselines reused only when a run produces no fresh layer.
+  APP_E2E_COVERAGE_ARTIFACT_NAME_WF: app-e2e-coverage.${{ github.run_id }}
+  APP_E2E_COVERAGE_ARTIFACT_NAME_MASTER_ANDROID: app-e2e-coverage.master.android
+  APP_E2E_COVERAGE_ARTIFACT_NAME_MASTER_IOS: app-e2e-coverage.master.ios
+  APP_E2E_COVERAGE_DIRECTORY: app/.coverage/e2e
   APP_DIRECTORY: app
   CROSS_MODULE_COVERAGE_REPORT: .coverage/lcov.info
   DATA_COVERAGE_ARTIFACT_NAME_MASTER: data-coverage.master
@@ -110,9 +124,9 @@ env:
   DATA_UNIT_JUNIT_REPORT_ARTIFACT_NAME: data-unit-junit-report-${{ github.run_id }}
   DATA_INTEGRATION_JUNIT_REPORT_ARTIFACT_NAME: data-integration-junit-report-${{ github.run_id }}
   PERUSHIM_DATA_SQL_ARTIFACT_NAME_MASTER: perushim-data-sql.master
-  # v2 carries a catalog/notes pair; old notes-only baselines cannot be reused.
-  PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER: perushim-sqlite-v2.master
-  PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_WF: perushim-sqlite-v2.${{ github.run_id }}
+  # Indexed v2 carries catalog, compressed notes and FTS; never reuse the older pair-only baseline.
+  PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER: perushim-sqlite-v2-indexed.master
+  PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_WF: perushim-sqlite-v2-indexed.${{ github.run_id }}
   PERUSHIM_NOTES_SQLITE_FILENAME: sefaria-dump-5784-sivan-4.perushim_notes.sqlite
   PERUSHIM_CATALOG_SQLITE_FILENAME: sefaria-dump-5784-sivan-4.perushim_catalog.sqlite
   # Prebuilt FTS5 search index riding in the same notes pack (CI artifacts only —
@@ -166,6 +180,8 @@ jobs:
       is_data_master_coverage_available: ${{ steps.check_master_coverage_artifacts.outputs.is_data_master_coverage_available }}
       is_perushim_data_sql_available: ${{ steps.check_master_coverage_artifacts.outputs.is_perushim_data_sql_available }}
       is_perushim_notes_sqlite_available: ${{ steps.check_master_coverage_artifacts.outputs.is_perushim_notes_sqlite_available }}
+      is_app_e2e_android_coverage_available: ${{ steps.check_master_coverage_artifacts.outputs.is_app_e2e_android_coverage_available }}
+      is_app_e2e_ios_coverage_available: ${{ steps.check_master_coverage_artifacts.outputs.is_app_e2e_ios_coverage_available }}
     steps:
       - name: Check and restore master baseline artifacts
         id: check_master_coverage_artifacts
@@ -200,6 +216,8 @@ jobs:
           IS_DATA_MASTER_COVERAGE_AVAILABLE=$(check_and_download_artifact "${{ env.DATA_COVERAGE_ARTIFACT_NAME_MASTER }}")
           IS_PERUSHIM_DATA_SQL_AVAILABLE=$(check_and_download_artifact "${{ env.PERUSHIM_DATA_SQL_ARTIFACT_NAME_MASTER }}")
           IS_PERUSHIM_NOTES_SQLITE_AVAILABLE=$(check_and_download_artifact "${{ env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}")
+          IS_APP_E2E_ANDROID_COVERAGE_AVAILABLE=$(check_and_download_artifact "${{ env.APP_E2E_COVERAGE_ARTIFACT_NAME_MASTER_ANDROID }}")
+          IS_APP_E2E_IOS_COVERAGE_AVAILABLE=$(check_and_download_artifact "${{ env.APP_E2E_COVERAGE_ARTIFACT_NAME_MASTER_IOS }}")
 
           echo "API master coverage available: $IS_API_MASTER_COVERAGE_AVAILABLE"
           echo "App master coverage available: $IS_APP_MASTER_COVERAGE_AVAILABLE"
@@ -209,6 +227,8 @@ jobs:
           echo "Data master coverage available: $IS_DATA_MASTER_COVERAGE_AVAILABLE"
           echo "Perushim data SQL available: $IS_PERUSHIM_DATA_SQL_AVAILABLE"
           echo "Perushim notes SQLite available: $IS_PERUSHIM_NOTES_SQLITE_AVAILABLE"
+          echo "App E2E Android coverage available: $IS_APP_E2E_ANDROID_COVERAGE_AVAILABLE"
+          echo "App E2E iOS coverage available: $IS_APP_E2E_IOS_COVERAGE_AVAILABLE"
 
           echo "is_api_master_coverage_available=$IS_API_MASTER_COVERAGE_AVAILABLE" >> $GITHUB_OUTPUT
           echo "is_app_master_coverage_available=$IS_APP_MASTER_COVERAGE_AVAILABLE" >> $GITHUB_OUTPUT
@@ -218,6 +238,8 @@ jobs:
           echo "is_data_master_coverage_available=$IS_DATA_MASTER_COVERAGE_AVAILABLE" >> $GITHUB_OUTPUT
           echo "is_perushim_data_sql_available=$IS_PERUSHIM_DATA_SQL_AVAILABLE" >> $GITHUB_OUTPUT
           echo "is_perushim_notes_sqlite_available=$IS_PERUSHIM_NOTES_SQLITE_AVAILABLE" >> $GITHUB_OUTPUT
+          echo "is_app_e2e_android_coverage_available=$IS_APP_E2E_ANDROID_COVERAGE_AVAILABLE" >> $GITHUB_OUTPUT
+          echo "is_app_e2e_ios_coverage_available=$IS_APP_E2E_IOS_COVERAGE_AVAILABLE" >> $GITHUB_OUTPUT
 
       # Keep JS action startup sequential: the runner's shared event.json can
       # be truncated while another parallel action reads it.
@@ -288,6 +310,24 @@ jobs:
         with:
           name: ${{ env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
           path: /tmp/${{ env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
+          retention-days: 90
+          overwrite: true
+
+      - name: Re-upload App E2E Android coverage for current workflow
+        if: steps.check_master_coverage_artifacts.outputs.is_app_e2e_android_coverage_available == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.APP_E2E_COVERAGE_ARTIFACT_NAME_MASTER_ANDROID }}
+          path: /tmp/${{ env.APP_E2E_COVERAGE_ARTIFACT_NAME_MASTER_ANDROID }}
+          retention-days: 90
+          overwrite: true
+
+      - name: Re-upload App E2E iOS coverage for current workflow
+        if: steps.check_master_coverage_artifacts.outputs.is_app_e2e_ios_coverage_available == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.APP_E2E_COVERAGE_ARTIFACT_NAME_MASTER_IOS }}
+          path: /tmp/${{ env.APP_E2E_COVERAGE_ARTIFACT_NAME_MASTER_IOS }}
           retention-days: 90
           overwrite: true
 
@@ -431,7 +471,7 @@ jobs:
     uses: ./.github/workflows/app-package.yml
     with:
       platform: All
-      perushim_notes_sqlite_artifact: ${{ needs.perushim_data.result != 'skipped' && format('perushim-sqlite-v2.{0}', github.run_id) || 'perushim-sqlite-v2.master' }}
+      perushim_notes_sqlite_artifact: ${{ needs.perushim_data.result != 'skipped' && format('perushim-sqlite-v2-indexed.{0}', github.run_id) || 'perushim-sqlite-v2-indexed.master' }}
 
   package_bulletin:
     name: Package Bulletin
@@ -895,6 +935,8 @@ jobs:
         working-directory: ${{ env.WEBSITE_DIRECTORY }}
     permissions:
       contents: read
+      # Reads the master coverage-tree baseline artifacts through the REST API.
+      actions: read
 
     steps:
       - name: Checkout
@@ -1056,13 +1098,99 @@ jobs:
           path: ~/.cache/ms-playwright
           key: ${{ steps.playwright-cache.outputs.cache-primary-key }}
 
+      # The e2e-impact coverage tree is published only by successful master
+      # push runs. A missing baseline is not an error — the selector falls
+      # back to the full suite (#2085).
+      - name: Download e2e-impact coverage baseline
+        id: impact-baseline
+        working-directory: ${{ github.workspace }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node devops/github/ci/e2e-impact/e2e-impact.ts baseline-download \
+            --name "${{ env.WEBSITE_E2E_IMPACT_ARTIFACT_NAME_MASTER }}" \
+            --out "$GITHUB_WORKSPACE/web/bible-on-site/.coverage/e2e-impact/baseline"
+
+      # Shadow mode computes the deterministic subset for evidence while the
+      # suite still runs everything. A missing, stale or incompatible baseline,
+      # an undeterminable diff or a discovery problem resolves to selectAll —
+      # never to a silently empty run.
+      - name: Select affected E2E tests (shadow)
+        id: impact-selection
+        working-directory: ${{ github.workspace }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          BASELINE_ARGS=()
+          if [ "${{ steps.impact-baseline.outputs.available }}" == "true" ]; then
+            BASELINE_ARGS=(--baseline "${{ steps.impact-baseline.outputs.baseline-file }}")
+          fi
+          node devops/github/ci/e2e-impact/e2e-impact.ts select \
+            --suite web/bible-on-site \
+            --platform web \
+            --tested-sha "${{ github.sha }}" \
+            --out "$GITHUB_WORKSPACE/web/bible-on-site/.coverage/e2e-impact/selection-manifest.json" \
+            --compare "${BASELINE_ARGS[@]}"
+
       # coverage:e2e starts next dev; the production build and standalone-server
       # checks run in Website Performance, which remains a Cross Module CI gate.
+      # The run also drops e2e-impact evidence under .coverage/e2e-impact/.
       - name: E2E Test
         id: npm-e2e-test
         env:
           DB_URL: mysql://root:test_123@127.0.0.1:3306/tanah_test
         run: npm run coverage:e2e
+
+      # Evidence is collected even after a failed run — passed tests keep
+      # their coverage — but the tree marks incomplete so a partial run can
+      # never shrink the trusted baseline.
+      - name: Collect per-test coverage evidence
+        if: always()
+        id: impact-collect
+        working-directory: ${{ github.workspace }}
+        env:
+          E2E_OUTCOME: ${{ steps.npm-e2e-test.outcome }}
+        run: |
+          INCOMPLETE_ARGS=()
+          if [ "$E2E_OUTCOME" != "success" ]; then
+            INCOMPLETE_ARGS=(--incomplete)
+          fi
+          node devops/github/ci/e2e-impact/e2e-impact.ts collect-playwright \
+            --suite web/bible-on-site \
+            --platform web \
+            --artifacts "$GITHUB_WORKSPACE/web/bible-on-site/.coverage/e2e-impact" \
+            --snapshot-sha "${{ github.sha }}" \
+            --out "$GITHUB_WORKSPACE/web/bible-on-site/.coverage/e2e-impact/coverage-tree.json" "${INCOMPLETE_ARGS[@]}"
+          # Only a complete tree may replace the trusted master baseline.
+          COMPLETE=$(node -e "console.log(JSON.parse(require('node:fs').readFileSync('$GITHUB_WORKSPACE/web/bible-on-site/.coverage/e2e-impact/coverage-tree.json','utf8')).complete === true)")
+          echo "complete=$COMPLETE" >> "$GITHUB_OUTPUT"
+
+      # Selection manifest + collected tree for shadow-mode inspection.
+      - name: Store e2e-impact evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: website-e2e-impact-${{ github.run_id }}
+          path: |
+            web/bible-on-site/.coverage/e2e-impact/selection-manifest.json
+            web/bible-on-site/.coverage/e2e-impact/coverage-tree.json
+            web/bible-on-site/.coverage/e2e-impact/test-results.json
+            web/bible-on-site/.coverage/e2e-impact/discovered.json
+          retention-days: 7
+          overwrite: true
+          if-no-files-found: ignore
+
+      # The authoritative baseline is published only from a completed,
+      # successful default-branch run; PR and merge-queue evidence stays
+      # provisional inside the run's diagnostics artifact.
+      - name: Publish e2e-impact coverage baseline
+        if: always() && github.event_name == 'push' && github.ref == 'refs/heads/master' && steps.npm-e2e-test.outcome == 'success' && steps.impact-collect.outcome == 'success' && steps.impact-collect.outputs.complete == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.WEBSITE_E2E_IMPACT_ARTIFACT_NAME_MASTER }}
+          path: web/bible-on-site/.coverage/e2e-impact/coverage-tree.json
+          retention-days: 90
+          overwrite: true
 
       - name: Store Website E2E HTML Report
         if: ${{ !cancelled() }}
@@ -1145,6 +1273,8 @@ jobs:
         working-directory: ${{ env.ADMIN_DIRECTORY }}
     permissions:
       contents: read
+      # Reads the master coverage-tree baseline artifacts through the REST API.
+      actions: read
 
     steps:
       - name: Checkout
@@ -1288,6 +1418,40 @@ jobs:
       - name: Wait for data crate build
         wait: crates
 
+      # The e2e-impact coverage tree is published only by successful master
+      # push runs. A missing baseline is not an error — the selector falls
+      # back to the full suite (#2085).
+      - name: Download e2e-impact coverage baseline
+        id: impact-baseline
+        working-directory: ${{ github.workspace }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node devops/github/ci/e2e-impact/e2e-impact.ts baseline-download \
+            --name "${{ env.ADMIN_E2E_IMPACT_ARTIFACT_NAME_MASTER }}" \
+            --out "$GITHUB_WORKSPACE/web/admin/.coverage/e2e-impact/baseline"
+
+      # Shadow mode computes the deterministic subset for evidence while the
+      # suite still runs everything. A missing, stale or incompatible baseline,
+      # an undeterminable diff or a discovery problem resolves to selectAll —
+      # never to a silently empty run.
+      - name: Select affected E2E tests (shadow)
+        id: impact-selection
+        working-directory: ${{ github.workspace }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          BASELINE_ARGS=()
+          if [ "${{ steps.impact-baseline.outputs.available }}" == "true" ]; then
+            BASELINE_ARGS=(--baseline "${{ steps.impact-baseline.outputs.baseline-file }}")
+          fi
+          node devops/github/ci/e2e-impact/e2e-impact.ts select \
+            --suite web/admin \
+            --platform web \
+            --tested-sha "${{ github.sha }}" \
+            --out "$GITHUB_WORKSPACE/web/admin/.coverage/e2e-impact/selection-manifest.json" \
+            --compare "${BASELINE_ARGS[@]}"
+
       - name: E2E Test with Coverage
         id: npm-e2e-test
         env:
@@ -1299,6 +1463,57 @@ jobs:
           S3_SECRET_ACCESS_KEY: test_1234
           S3_FORCE_PATH_STYLE: "true"
         run: npm run coverage:e2e
+
+      # Evidence is collected even after a failed run — passed tests keep
+      # their coverage — but the tree marks incomplete so a partial run can
+      # never shrink the trusted baseline.
+      - name: Collect per-test coverage evidence
+        if: always()
+        id: impact-collect
+        working-directory: ${{ github.workspace }}
+        env:
+          E2E_OUTCOME: ${{ steps.npm-e2e-test.outcome }}
+        run: |
+          INCOMPLETE_ARGS=()
+          if [ "$E2E_OUTCOME" != "success" ]; then
+            INCOMPLETE_ARGS=(--incomplete)
+          fi
+          node devops/github/ci/e2e-impact/e2e-impact.ts collect-playwright \
+            --suite web/admin \
+            --platform web \
+            --artifacts "$GITHUB_WORKSPACE/web/admin/.coverage/e2e-impact" \
+            --snapshot-sha "${{ github.sha }}" \
+            --out "$GITHUB_WORKSPACE/web/admin/.coverage/e2e-impact/coverage-tree.json" "${INCOMPLETE_ARGS[@]}"
+          # Only a complete tree may replace the trusted master baseline.
+          COMPLETE=$(node -e "console.log(JSON.parse(require('node:fs').readFileSync('$GITHUB_WORKSPACE/web/admin/.coverage/e2e-impact/coverage-tree.json','utf8')).complete === true)")
+          echo "complete=$COMPLETE" >> "$GITHUB_OUTPUT"
+
+      # Selection manifest + collected tree for shadow-mode inspection.
+      - name: Store e2e-impact evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: admin-e2e-impact-${{ github.run_id }}
+          path: |
+            web/admin/.coverage/e2e-impact/selection-manifest.json
+            web/admin/.coverage/e2e-impact/coverage-tree.json
+            web/admin/.coverage/e2e-impact/test-results.json
+            web/admin/.coverage/e2e-impact/discovered.json
+          retention-days: 7
+          overwrite: true
+          if-no-files-found: ignore
+
+      # The authoritative baseline is published only from a completed,
+      # successful default-branch run; PR and merge-queue evidence stays
+      # provisional inside the run's diagnostics artifact.
+      - name: Publish e2e-impact coverage baseline
+        if: always() && github.event_name == 'push' && github.ref == 'refs/heads/master' && steps.npm-e2e-test.outcome == 'success' && steps.impact-collect.outcome == 'success' && steps.impact-collect.outputs.complete == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.ADMIN_E2E_IMPACT_ARTIFACT_NAME_MASTER }}
+          path: web/admin/.coverage/e2e-impact/coverage-tree.json
+          retention-days: 90
+          overwrite: true
 
       - name: Merge test coverage (unit; E2E lcov when enabled)
         run: npm run coverage:merge
@@ -1352,6 +1567,8 @@ jobs:
     if: ${{ always() && !cancelled() && !failure() && (needs.determine_changes.outputs.api_module_changed == 'true' || needs.determine_changes.outputs.api_ci_changed == 'true' || needs.determine_baseline_availability.outputs.is_api_master_coverage_available == 'false') }}
     permissions:
       contents: read
+      # Reads the master coverage-tree baseline artifacts through the REST API.
+      actions: read
 
     steps:
       - name: Checkout
@@ -1453,8 +1670,41 @@ jobs:
           path: ~/.npm
           key: ${{ steps.tests-npm-cache.outputs.cache-primary-key }}
 
+      # The e2e-impact coverage tree is published only by successful master
+      # push runs. A missing baseline is not an error — the selector falls
+      # back to the full suite (#2085).
+      - name: Download e2e-impact coverage baseline
+        id: impact-baseline
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node devops/github/ci/e2e-impact/e2e-impact.ts baseline-download \
+            --name "${{ env.API_E2E_IMPACT_ARTIFACT_NAME_MASTER }}" \
+            --out "$GITHUB_WORKSPACE/web/api/.coverage/e2e-impact/baseline"
+
+      # Shadow mode computes the deterministic subset for evidence while the
+      # suite still runs everything. A missing, stale or incompatible baseline,
+      # an undeterminable diff or a discovery problem resolves to selectAll —
+      # never to a silently empty run.
+      - name: Select affected E2E tests (shadow)
+        id: impact-selection
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          BASELINE_ARGS=()
+          if [ "${{ steps.impact-baseline.outputs.available }}" == "true" ]; then
+            BASELINE_ARGS=(--baseline "${{ steps.impact-baseline.outputs.baseline-file }}")
+          fi
+          node devops/github/ci/e2e-impact/e2e-impact.ts select \
+            --suite web/api \
+            --platform api \
+            --tested-sha "${{ github.sha }}" \
+            --out "$GITHUB_WORKSPACE/web/api/.coverage/e2e-impact/selection-manifest.json" \
+            --compare "${BASELINE_ARGS[@]}"
+
       # API tests use Playwright's HTTP request fixture and node:http2 only;
       # they do not launch a browser or need browser/system-dependency installs.
+      # The run drops e2e-impact evidence under .coverage/e2e-impact/.
       - name: E2E Test
         id: api-e2e
         working-directory: ${{ env.API_DIRECTORY }}
@@ -1462,6 +1712,56 @@ jobs:
           DB_URL: mysql://root:test_123@127.0.0.1:3306/tanah_test
         run: |
           cargo make coverage-e2e
+
+      # Evidence is collected even after a failed run — passed tests keep
+      # their coverage — but the tree marks incomplete so a partial run can
+      # never shrink the trusted baseline.
+      - name: Collect per-test coverage evidence
+        if: always()
+        id: impact-collect
+        env:
+          E2E_OUTCOME: ${{ steps.api-e2e.outcome }}
+        run: |
+          INCOMPLETE_ARGS=()
+          if [ "$E2E_OUTCOME" != "success" ]; then
+            INCOMPLETE_ARGS=(--incomplete)
+          fi
+          node devops/github/ci/e2e-impact/e2e-impact.ts collect-playwright \
+            --suite web/api \
+            --platform api \
+            --artifacts "$GITHUB_WORKSPACE/web/api/.coverage/e2e-impact" \
+            --snapshot-sha "${{ github.sha }}" \
+            --out "$GITHUB_WORKSPACE/web/api/.coverage/e2e-impact/coverage-tree.json" "${INCOMPLETE_ARGS[@]}"
+          # Only a complete tree may replace the trusted master baseline.
+          COMPLETE=$(node -e "console.log(JSON.parse(require('node:fs').readFileSync('$GITHUB_WORKSPACE/web/api/.coverage/e2e-impact/coverage-tree.json','utf8')).complete === true)")
+          echo "complete=$COMPLETE" >> "$GITHUB_OUTPUT"
+
+      # Selection manifest + collected tree for shadow-mode inspection.
+      - name: Store e2e-impact evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: api-e2e-impact-${{ github.run_id }}
+          path: |
+            web/api/.coverage/e2e-impact/selection-manifest.json
+            web/api/.coverage/e2e-impact/coverage-tree.json
+            web/api/.coverage/e2e-impact/test-results.json
+            web/api/.coverage/e2e-impact/discovered.json
+          retention-days: 7
+          overwrite: true
+          if-no-files-found: ignore
+
+      # The authoritative baseline is published only from a completed,
+      # successful default-branch run; PR and merge-queue evidence stays
+      # provisional inside the run's diagnostics artifact.
+      - name: Publish e2e-impact coverage baseline
+        if: always() && github.event_name == 'push' && github.ref == 'refs/heads/master' && steps.api-e2e.outcome == 'success' && steps.impact-collect.outcome == 'success' && steps.impact-collect.outputs.complete == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.API_E2E_IMPACT_ARTIFACT_NAME_MASTER }}
+          path: web/api/.coverage/e2e-impact/coverage-tree.json
+          retention-days: 90
+          overwrite: true
 
       - name: Show E2E Debug Logs
         if: ${{ always() }}
@@ -1641,6 +1941,10 @@ jobs:
       - name: Run Unit Tests with Coverage
         run: dotnet run --project devops -- CoverageUnit --configuration Release
 
+      # Pure fixture tests for the E2E coverage apply/merge helpers (#1232).
+      - name: Run devops Unit Tests
+        run: dotnet test devops.Tests/devops.Tests.csproj --configuration Release
+
       - name: Save NuGet packages
         if: ${{ github.ref == 'refs/heads/master' && steps.nuget-cache.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@v6
@@ -1727,6 +2031,9 @@ jobs:
       - name: Merge Coverage Reports
         run: dotnet run --project devops -- CoverageMerge --configuration Release
 
+      # Unit+integration layer only. The mobile E2E legs contribute their own
+      # app-process coverage (#1232) and cross_module_ci merges every layer
+      # before publishing the authoritative app report and the master baseline.
       - name: Store App Coverage Report (wf)
         uses: actions/upload-artifact@v7
         with:
@@ -1736,33 +2043,27 @@ jobs:
           overwrite: true
           if-no-files-found: error
 
-      - name: Store App Coverage Report (master)
-        if: ${{ env.IS_MASTER_BRANCH == 'true' }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ env.APP_COVERAGE_ARTIFACT_NAME_MASTER }}
-          path: ${{ env.APP_COVERAGE_REPORT }}
-          retention-days: 90
-          overwrite: true
-
   app_mobile_e2e:
     name: App Mobile E2E
     # Wait for perushim_data so the app under test packages the same catalog/notes
     # pair package_app ships — the run artifact when the pipeline regenerated it,
     # the master baseline otherwise — never a stale committed fixture.
-    needs: [setup_env, determine_changes, perushim_data]
-    if: ${{ always() && !cancelled() && !failure() && (needs.determine_changes.outputs.app_module_changed == 'true' || needs.determine_changes.outputs.app_ci_changed == 'true') }}
+    # determine_baseline_availability: a missing app-coverage.master forces a
+    # full recovery run, and the rebuilt baseline must include the E2E layer
+    # (#1232), not just unit+integration.
+    needs: [setup_env, determine_changes, perushim_data, determine_baseline_availability]
+    if: ${{ always() && !cancelled() && !failure() && (needs.determine_changes.outputs.app_module_changed == 'true' || needs.determine_changes.outputs.app_ci_changed == 'true' || needs.determine_baseline_availability.outputs.is_app_master_coverage_available == 'false') }}
     permissions:
       contents: read
       # Reads the master coverage-tree baseline artifacts through the REST API (#2085).
       actions: read
     uses: ./.github/workflows/app-mobile-e2e.yml
     with:
-      perushim_notes_sqlite_artifact: ${{ needs.perushim_data.result != 'skipped' && format('perushim-sqlite-v2.{0}', github.run_id) || 'perushim-sqlite-v2.master' }}
+      perushim_notes_sqlite_artifact: ${{ needs.perushim_data.result != 'skipped' && format('perushim-sqlite-v2-indexed.{0}', github.run_id) || 'perushim-sqlite-v2-indexed.master' }}
 
   app_ios_ci:
     name: App iOS native audio CI
-    runs-on: macos-26
+    runs-on: ubuntu-latest
     needs: [setup_env, determine_changes]
     # Only on PRs — on master, Package iOS (IPA) already validates the full iOS build.
     if: ${{ github.event_name == 'pull_request' && always() && !cancelled() && !failure() && (needs.determine_changes.outputs.app_module_changed == 'true' || needs.determine_changes.outputs.app_ci_changed == 'true') }}
@@ -1777,29 +2078,33 @@ jobs:
         with:
           node-version-file: web/bible-on-site/package.json
 
-      # Same browser cache the website jobs use, at the macOS path. This job
-      # runs on PRs only, so the entry is PR-scoped by design: a save on miss
+      # Needs webkit on top of chromium, so it cannot share the website jobs'
+      # Linux playwright cache entry. PR-scoped by design: a save on miss
       # speeds up reruns and later pushes of the same pull request.
       - name: Restore playwright binaries
         id: playwright-cache
         uses: actions/cache/restore@v6
         with:
-          path: ~/Library/Caches/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ needs.setup_env.outputs.website_playwright_version }}
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-webkit-${{ needs.setup_env.outputs.website_playwright_version }}
 
       - name: Verify native audio time origin on Chromium and Apple WebKit
         working-directory: web/bible-on-site
         run: |
           npm ci --ignore-scripts --no-audit
-          npx playwright install chromium webkit
+          if [ "${{ steps.playwright-cache.outputs.cache-hit }}" = "true" ]; then
+            npx playwright install-deps chromium webkit
+          else
+            npx playwright install --with-deps chromium webkit
+          fi
           npx playwright test --config playwright.recitation.config.ts
 
       - name: Save playwright binaries
         if: ${{ steps.playwright-cache.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@v6
         with:
-          path: ~/Library/Caches/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ needs.setup_env.outputs.website_playwright_version }}
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-webkit-${{ needs.setup_env.outputs.website_playwright_version }}
 
   bulletin_ci:
     name: Bulletin CI
@@ -1895,7 +2200,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
-          node-version: "26.11.1"
+          node-version: "26.12.0"
       - name: Test alignment invariants without downloading GPU models
         run: |
           python -m venv data/recitation/.venv
@@ -1916,8 +2221,10 @@ jobs:
         run: node --import tsx --test deploy/ecr-deploy/resume-image.test.mts
       - name: Start RustFS
         run: docker compose -f devops/docker-compose.yml up -d --wait --wait-timeout 180 rustfs
-      - name: Verify MP3 byte-range seeking
-        run: node data/recitation/check_storage.mjs
+      - name: Verify MP3 and Opus byte-range seeking
+        run: |
+          node data/recitation/check_storage.mjs
+          node data/recitation/check_storage.mjs data/recitation/fixtures/seek.ogg
 
   data_ci:
     name: Data CI
@@ -2400,7 +2707,7 @@ jobs:
             fi
           fi
 
-          if [ "$APP_MODULE_CHANGED" = "true" ] || [ "$APP_CI_CHANGED" = "true" ]; then
+          if [ "$APP_MODULE_CHANGED" = "true" ] || [ "$APP_CI_CHANGED" = "true" ] || [ "$APP_MASTER_COVERAGE_AVAILABLE" = "false" ]; then
             if [ "${{ needs.app_mobile_e2e.result }}" != "success" ]; then
               echo "Appium mobile E2E matrix failed or did not run"
               exit 1
@@ -2503,15 +2810,6 @@ jobs:
           name: ${{ needs.app_ci.result != 'skipped' && env.APP_COVERAGE_ARTIFACT_NAME_WF || env.APP_COVERAGE_ARTIFACT_NAME_MASTER }}
           path: ${{ env.APP_MERGED_COVERAGE_DIRECTORY }}
 
-      - name: Publish App Coverage To Codecov
-        uses: codecov/codecov-action@v7
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ${{ env.APP_COVERAGE_REPORT }}
-          disable_search: true
-          flags: app
-          fail_ci_if_error: false
-
       - name: Restore Bulletin Coverage Report
         uses: actions/download-artifact@v8
         with:
@@ -2611,7 +2909,100 @@ jobs:
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         run: |
           npm run test:version
-          node --test github/ci/codecov-report-state.test.mjs github/ci/bencher-comparison.test.mjs github/ci/e2e-impact/e2e-impact.test.ts e2e-coverage-trees/e2e-coverage-trees.test.ts
+          node --test github/ci/codecov-report-state.test.mjs github/ci/bencher-comparison.test.mjs github/ci/e2e-impact/e2e-impact.test.ts github/ci/e2e-impact/playwright-impact.test.ts e2e-coverage-trees/e2e-coverage-trees.test.ts
+
+      # Real app-process coverage from the instrumented mobile E2E legs
+      # (#1232). A successful mobile run must contribute both platform reports;
+      # when the suite was not applicable this falls back to the trusted
+      # per-platform baselines re-uploaded by determine_baseline_availability.
+      - name: Restore App E2E coverage (this run, Android)
+        if: needs.app_mobile_e2e.result == 'success'
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ env.APP_E2E_COVERAGE_ARTIFACT_NAME_WF }}.android
+          path: ${{ env.APP_E2E_COVERAGE_DIRECTORY }}/android
+
+      - name: Restore App E2E coverage (this run, iOS)
+        if: needs.app_mobile_e2e.result == 'success'
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ env.APP_E2E_COVERAGE_ARTIFACT_NAME_WF }}.ios
+          path: ${{ env.APP_E2E_COVERAGE_DIRECTORY }}/ios
+
+      - name: Restore App E2E coverage (master baseline, Android)
+        if: needs.app_mobile_e2e.result != 'success' && needs.determine_baseline_availability.outputs.is_app_e2e_android_coverage_available == 'true'
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ env.APP_E2E_COVERAGE_ARTIFACT_NAME_MASTER_ANDROID }}
+          path: ${{ env.APP_E2E_COVERAGE_DIRECTORY }}/android
+
+      - name: Restore App E2E coverage (master baseline, iOS)
+        if: needs.app_mobile_e2e.result != 'success' && needs.determine_baseline_availability.outputs.is_app_e2e_ios_coverage_available == 'true'
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ env.APP_E2E_COVERAGE_ARTIFACT_NAME_MASTER_IOS }}
+          path: ${{ env.APP_E2E_COVERAGE_DIRECTORY }}/ios
+
+      # Merge unit + integration + E2E layers by covered locations, never by
+      # percentage. --relocate canonicalizes absolute runner paths (Linux and
+      # macOS legs differ) so the same source line counts exactly once. The E2E
+      # layers come from a separately instrumented app build whose OpenCover
+      # template enumerates every sequence point it could hit — far more lines
+      # than the unit/integration report knows about. --hits-only keeps their
+      # covered lines while dropping that foreign zero-hit enumeration, which
+      # otherwise inflates the app flag's denominator (#2270).
+      - name: Merge App coverage layers
+        if: needs.app_ci.result == 'success'
+        working-directory: ${{ env.DEVOPS_DIRECTORY }}
+        run: |
+          REPORT="${{ github.workspace }}/${{ env.APP_COVERAGE_REPORT }}"
+          MERGE_ARGS=(--out "$REPORT" --relocate app/BibleOnSite/ --require "$REPORT")
+          FOUND=0
+          for platform in android ios; do
+            LCOV="${{ github.workspace }}/${{ env.APP_E2E_COVERAGE_DIRECTORY }}/$platform/lcov.info"
+            if [ -f "$LCOV" ]; then
+              MERGE_ARGS+=(--hits-only "$LCOV")
+              FOUND=$((FOUND+1))
+            fi
+          done
+          if [ "${{ needs.app_mobile_e2e.result }}" = "success" ] && [ "$FOUND" -lt 2 ]; then
+            echo "::error::Mobile E2E succeeded but its coverage reports are missing (found $FOUND/2)."
+            exit 1
+          fi
+          if [ "$FOUND" -eq 0 ]; then
+            echo "::warning::No mobile E2E coverage layer available; merging unit + integration only."
+          fi
+          node --import tsx merge-lcov.mts "${MERGE_ARGS[@]}"
+
+      # The combined report replaces the unit+integration artifact: the
+      # authoritative app report and the master baseline always contain every
+      # layer, so a partial run can never overwrite a complete baseline.
+      - name: Store App Coverage Report (wf)
+        if: needs.app_ci.result == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.APP_COVERAGE_ARTIFACT_NAME_WF }}
+          path: ${{ env.APP_COVERAGE_REPORT }}
+          retention-days: 90
+          overwrite: true
+
+      - name: Store App Coverage Report (master)
+        if: needs.app_ci.result == 'success' && env.IS_MASTER_BRANCH == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.APP_COVERAGE_ARTIFACT_NAME_MASTER }}
+          path: ${{ env.APP_COVERAGE_REPORT }}
+          retention-days: 90
+          overwrite: true
+
+      - name: Publish App Coverage To Codecov
+        uses: codecov/codecov-action@v7
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ${{ env.APP_COVERAGE_REPORT }}
+          disable_search: true
+          flags: app
+          fail_ci_if_error: false
 
       - name: Merge Test Coverage (Website + API)
         run: npm run coverage:merge
@@ -2747,6 +3138,8 @@ jobs:
     with:
       module_name: app
       module_directory: app
+      # Keep in sync with app extraModulePaths in devops/github/ci/determine-changes.ts
+      extra_module_paths: '["data/recitation/recitation.sqlite", "web/bible-on-site/src/data/recitation/opus-playback.json"]'
       module_version: ${{ needs.package_app.outputs.module_version }}
       artifacts_json: |
         [

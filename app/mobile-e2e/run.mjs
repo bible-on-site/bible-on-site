@@ -1,14 +1,19 @@
 import { execFile, execFileSync, spawn } from "node:child_process";
-import { appendFileSync, closeSync, copyFileSync, existsSync, mkdirSync, openSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { appendFileSync, closeSync, copyFileSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync, writeSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { createServer } from "node:net";
 import { promisify } from "node:util";
-import { waitForAppiumReadiness } from "./appium-readiness.mjs";
+import { monitorNativeInteractions } from "./native-hang-monitor.mjs";
+import { probeAppiumReadiness, waitForAppiumReadiness } from "./appium-readiness.mjs";
 import { prepareWda } from "./prepare-wda.mjs";
-import { exportNativeLog, startNativeLog } from "./native-logs.mjs";
+import { captureNativeFrame, exportNativeLog, startNativeLog } from "./native-logs.mjs";
 import { waitForAndroidDevice } from "./android-readiness.mjs";
+import { iosAppLogPids, iosAppPids } from "./ios-processes.mjs";
+import { terminateIosTestApp } from "./ios-app-cleanup.mjs";
+import { captureTestHostStacks, monitorTestHostShutdown } from "./test-host-diagnostics.mjs";
+import { prepareIosProcessInspector } from "./ios-process-inspector.mjs";
 
 const directory = dirname(fileURLToPath(import.meta.url));
 const runStarted = Date.now();
@@ -20,6 +25,9 @@ mkdirSync(artifacts, { recursive: true });
 // Coverage evidence is per-run state: a stale record from an earlier run must
 // never attribute its automation ids to tests of this run (#2085).
 rmSync(resolve(artifacts, "coverage-evidence"), { recursive: true, force: true });
+// Same for executable coverage dumps pulled from the instrumented app
+// process (#1232): a stale dump would merge another build's hits.
+rmSync(resolve(artifacts, "app-coverage"), { recursive: true, force: true });
 const appPath = process.env.MOBILE_APP_PATH ?? resolve(directory,
   platform === "android"
     ? "../BibleOnSite/bin/Debug/net10.0-android/android-x64/com.tanah.daily929-Signed.apk"
@@ -39,13 +47,18 @@ if (platform === "android") {
   await waitForAndroidDevice({ adb, udid: process.env.MOBILE_UDID, execute,
     observe: (observation) => appendFileSync(deviceReadinessLog, `${JSON.stringify(observation)}\n`) });
 }
+const inspectorPath = platform === "ios" ? await prepareIosProcessInspector() : undefined;
 const wdaPath = platform === "ios" ? (process.env.MOBILE_WDA_PATH ?? prepareWda()) : undefined;
+// Sharded iOS runs host one Appium server per simulator on the same runner, so
+// the port is configurable; a single run keeps the default 4723.
+const appiumPort = process.env.MOBILE_APPIUM_PORT ?? "4723";
+if (!/^[0-9]+$/.test(appiumPort)) throw new Error(`MOBILE_APPIUM_PORT must be a port number, got '${appiumPort}'.`);
 // Refuse an existing listener so a local run cannot accidentally use somebody
 // else's Appium session. CI assigns a whole runner to each matrix entry.
 await new Promise((resolvePort, reject) => {
   const probe = createServer();
   probe.on("error", reject);
-  probe.listen(4723, "127.0.0.1", () => probe.close(resolvePort));
+  probe.listen(Number(appiumPort), "127.0.0.1", () => probe.close(resolvePort));
 });
 if (platform === "android" && process.env.MOBILE_KEEP_APP === "1") {
   // UiAutomator2 skips installation entirely with noReset, even when
@@ -54,12 +67,28 @@ if (platform === "android" && process.env.MOBILE_KEEP_APP === "1") {
     { timeout: 180000 });
   console.log(installation.stdout.trim());
 }
+let serverLogOpen = true;
 const serverLog = openSync(resolve(artifacts, "appium.log"), "w");
+const hangMonitor = platform === "ios" ? monitorNativeInteractions(async (command) => {
+  writeFileSync(resolve(artifacts, "native-hang-command.txt"), command);
+  // Commands can exceed the observation threshold and still finish within
+  // their interaction deadline. Capture through CoreSimulator without app
+  // process queries or debugger attachment; sample stacks only after failure.
+  const error = await captureNativeFrame("xcrun", ["simctl", "io", process.env.MOBILE_UDID, "screenshot"],
+    resolve(artifacts, "native-interaction.png"), execute);
+  if (error) console.error("Could not capture the pending interaction frame:", error.message);
+}) : undefined;
 const server = spawn(process.execPath, [resolve(directory, "node_modules/appium/index.js"),
-  "--address", "127.0.0.1", "--port", "4723", "--log-no-colors", "--log-timestamp",
+  "--address", "127.0.0.1", "--port", appiumPort, "--log-no-colors", "--log-timestamp",
   "--use-drivers", platform === "android" ? "uiautomator2" : "xcuitest"], {
-  cwd: directory, windowsHide: true, stdio: ["ignore", serverLog, serverLog],
+  cwd: directory, windowsHide: true, stdio: ["ignore", hangMonitor ? "pipe" : serverLog, hangMonitor ? "pipe" : serverLog],
 });
+for (const stream of [server.stdout, server.stderr].filter(Boolean)) {
+  stream.on("data", (chunk) => {
+    if (serverLogOpen) writeSync(serverLog, chunk);
+    if (stream === server.stdout) hangMonitor?.write(chunk);
+  });
+}
 let serverExit;
 server.on("exit", (code, signal) => { serverExit = `code ${code}, signal ${signal}`; });
 const readinessLog = resolve(artifacts, "appium-readiness.jsonl");
@@ -69,30 +98,56 @@ const observeReadiness = (observation) => appendFileSync(readinessLog, `${JSON.s
   time: new Date().toISOString(), elapsedMs: Date.now() - readinessStarted, ...observation,
 })}\n`);
 server.on("spawn", () => observeReadiness({ phase: "spawned", pid: server.pid }));
+const hostDiagnostics = resolve(artifacts, "test-host-diagnostics");
+rmSync(hostDiagnostics, { recursive: true, force: true });
+mkdirSync(hostDiagnostics, { recursive: true });
+const shutdownMonitor = process.env.MOBILE_E2E_DOTNET_STACK
+  ? monitorTestHostShutdown(() => captureTestHostStacks(hostDiagnostics,
+    process.env.MOBILE_E2E_DOTNET_STACK, execute)) : undefined;
 let test;
 let diagnosticsFailed = false;
 const nativeStream = platform === "ios" ? startNativeLog("xcrun", ["simctl", "spawn", process.env.MOBILE_UDID,
-  "log", "stream", "--style", "compact", "--level", "debug", "--predicate", 'process == "BibleOnSite"'],
+  "log", "stream", "--style", "compact", "--level", "info", "--predicate", 'process == "BibleOnSite"'],
   resolve(artifacts, "device-live.log")) : undefined;
 
-async function sampleIosApp() {
+async function sampleIosApp(phase) {
+  const captureSignal = AbortSignal.timeout(15000);
   try {
-    // A failed session may already have terminated the app; pgrep returns 1 then.
-    let processes;
+    // Two shard simulators share this host (#2083), so a name-wide pgrep would
+    // also sample the peer's healthy app — writing its stacks into this
+    // shard's failure artifacts and pausing it mid-test. The device's own
+    // launchd table resolves only this run's app; a failed session that
+    // already terminated the app simply leaves no PID row to find.
+    const listing = await execute("xcrun", ["simctl", "spawn", process.env.MOBILE_UDID,
+      "launchctl", "list"], { timeout: 5000, signal: captureSignal });
+    writeFileSync(resolve(artifacts, `native-${phase}-processes.txt`), listing.stdout);
     try {
-      processes = await execute("pgrep", ["-x", "BibleOnSite"], { timeout: 30000 });
+      await execute("xcrun", ["simctl", "io", process.env.MOBILE_UDID, "screenshot",
+        resolve(artifacts, `native-${phase}.png`)], { timeout: 5000, signal: captureSignal });
     } catch (error) {
-      if (error.code === 1) return;
-      throw error;
+      diagnosticsFailed = true;
+      writeFileSync(resolve(artifacts, `native-${phase}-screenshot-error.txt`), String(error));
+      console.error("Could not capture the iOS frame:", error.message);
     }
-    for (const pid of processes.stdout.trim().split("\n")) {
-      if (!pid) continue;
-      await execute("sample", [pid, "2", "1", "-mayDie", "-file", resolve(artifacts, `native-stack-${pid}.txt`)],
-        { timeout: 120000 });
+    for (const pid of iosAppPids(listing.stdout)) {
+      const stats = await execute("ps", ["-p", pid, "-o", "pid,ppid,%cpu,rss,state"], { timeout: 5000, signal: captureSignal });
+      writeFileSync(resolve(artifacts, `native-${phase}-process-${pid}.txt`), stats.stdout);
+      // Sampling a busy process stalled for its entire 120-second budget.
+      // Attach without eager symbol loading, capture a bounded backtrace and
+      // detach. Loss of debugger connection must also leave the app detached.
+      const captured = await execute("sudo", ["-n", "xcrun", "lldb", "--no-lldbinit", "--batch",
+        "--one-line-before-file", "settings set target.preload-symbols false",
+        "--one-line-before-file", "settings set target.detach-on-error true",
+        "--attach-pid", pid, "--one-line", "thread backtrace -c 40 all",
+        "--one-line", "process detach"], { timeout: 10000, signal: captureSignal });
+      writeFileSync(resolve(artifacts, `native-${phase}-stack-${pid}.txt`), captured.stdout + captured.stderr);
     }
   } catch (error) {
     diagnosticsFailed = true;
-    writeFileSync(resolve(artifacts, "native-stack-error.txt"), String(error));
+    writeFileSync(resolve(artifacts, `native-${phase}-stack-error.txt`), JSON.stringify({
+      message: error.message, code: error.code, killed: error.killed, signal: error.signal,
+      stdout: error.stdout, stderr: error.stderr,
+    }, null, 2));
     console.error("Could not sample the iOS app:", error);
   }
 }
@@ -101,18 +156,40 @@ process.on("SIGINT", stop);
 process.on("SIGTERM", stop);
 
 try {
-  const ready = await waitForAppiumReadiness({ observe: observeReadiness, exited: () => serverExit });
+  const ready = await waitForAppiumReadiness({ observe: observeReadiness, exited: () => serverExit,
+    probe: (options) => probeAppiumReadiness({ ...options, port: Number(appiumPort) }) });
   if (!ready) throw new Error(`Appium did not become ready. See ${artifacts}/appium.log`);
-  test = spawn("dotnet", ["run", "--project", "devops", "--", "TestMobileE2E", "--configuration", "Debug"], {
-    cwd: resolve(directory, ".."), windowsHide: true, stdio: "inherit",
-    env: { ...process.env, MOBILE_APP_PATH: appPath, MOBILE_E2E_ARTIFACTS: artifacts,
-      ...(wdaPath ? { MOBILE_WDA_PATH: wdaPath } : {}), APPIUM_SERVER: "http://127.0.0.1:4723" },
+  const launch = process.env.MOBILE_E2E_PREBUILT === "1"
+    ? [resolve(directory, "../devops/bin/Debug/_build.dll")]
+    : ["run", "--project", "devops", "--"];
+  test = spawn("dotnet", [...launch, "TestMobileE2E", "--configuration", "Debug"], {
+    cwd: resolve(directory, ".."), windowsHide: true, stdio: ["inherit", "pipe", "pipe"],
+    env: { ...process.env, MOBILE_APP_PATH: appPath, MOBILE_E2E_ARTIFACTS: artifacts, MOBILE_E2E_HOST_DIAGNOSTICS: hostDiagnostics,
+      ...(wdaPath ? { MOBILE_WDA_PATH: wdaPath } : {}), APPIUM_SERVER: `http://127.0.0.1:${appiumPort}` },
   });
+  for (const [name, stream, output] of [["stdout", test.stdout, process.stdout], ["stderr", test.stderr, process.stderr]]) {
+    stream.on("data", chunk => {
+      output.write(chunk);
+      shutdownMonitor?.write(chunk, name);
+    });
+  }
   process.exitCode = await new Promise((resolveExit, reject) => {
     test.on("error", reject);
-    test.on("exit", (code) => resolveExit(code ?? 1));
+    test.on("close", (code) => resolveExit(code ?? 1));
   });
 } finally {
+  try {
+    await shutdownMonitor?.stop();
+  } catch (error) {
+    diagnosticsFailed = true;
+    console.error("Could not capture test-host shutdown stacks:", error);
+  }
+  try {
+    await hangMonitor?.stop();
+  } catch (error) {
+    diagnosticsFailed = true;
+    console.error("Could not finish native hang capture:", error);
+  }
   try {
     await nativeStream?.stop();
   } catch (error) {
@@ -122,9 +199,22 @@ try {
   if (platform === "ios" && process.exitCode !== 0) {
     // Symbolication can consume substantial resources on simulator runners.
     // Sample surviving failed/hung apps after tests, never alongside healthy runs.
-    await sampleIosApp();
+    await sampleIosApp("cleanup");
   }
   if (diagnosticsFailed) process.exitCode ||= 1;
+  if (platform === "ios") {
+    try {
+      const cleanup = await terminateIosTestApp(process.env.MOBILE_UDID, {
+        keepApp: process.env.MOBILE_KEEP_APP === "1", inspectorPath,
+        observedPids: () => iosAppLogPids(readFileSync(resolve(artifacts, "device-live.log"), "utf8")),
+      });
+      writeFileSync(resolve(artifacts, "ios-app-cleanup.json"), JSON.stringify(cleanup, null, 2));
+    } catch (error) {
+      writeFileSync(resolve(artifacts, "ios-app-cleanup-error.txt"), String(error));
+      console.error("Could not terminate this run's iOS app:", error);
+      process.exitCode ||= 1;
+    }
+  }
   try {
     const androidSdk = process.env.ANDROID_HOME ?? process.env.ANDROID_SDK_ROOT;
     const adb = androidSdk ? resolve(androidSdk, "platform-tools", process.platform === "win32" ? "adb.exe" : "adb") : "adb";
@@ -161,5 +251,6 @@ try {
     process.exitCode ||= 1;
   }
   stop();
+  serverLogOpen = false;
   closeSync(serverLog);
 }

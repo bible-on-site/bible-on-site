@@ -12,6 +12,12 @@ public class TanahpediaService : BaseGraphQLService, ITanahpediaService
 {
     private static readonly Lazy<TanahpediaService> _instance = new(() => new TanahpediaService());
 
+    /// <summary>API's accepted range for `searchTanahpediaEntries(limit:)`.</summary>
+    private const int MaxSearchLimit = 50;
+
+    /// <summary>Remote search budget — matches ArticleService's search deadline.</summary>
+    private static readonly TimeSpan DefaultSearchTimeout = TimeSpan.FromSeconds(8);
+
     /// <summary>Singleton instance of the TanahpediaService.</summary>
     public static TanahpediaService Instance => _instance.Value;
 
@@ -135,6 +141,48 @@ public class TanahpediaService : BaseGraphQLService, ITanahpediaService
     }
 
     /// <inheritdoc />
+    public async Task<List<TanahpediaSearchHit>> SearchEntriesAsync(string phrase, int limit, CancellationToken cancellationToken)
+    {
+        // The API accepts 1-50 and rejects out-of-range values — clamp here so
+        // the documented contract holds for every caller.
+        limit = Math.Clamp(limit, 1, MaxSearchLimit);
+        using var timeoutSource = new CancellationTokenSource(DefaultSearchTimeout);
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutSource.Token);
+        try
+        {
+            var data = await QueryAsync<SearchHitsResponse>(@"
+                query SearchTanahpediaEntries($phrase: String!, $limit: Int) {
+                    searchTanahpediaEntries(phrase: $phrase, limit: $limit) {
+                        id
+                        uniqueName
+                        title
+                        excerpt
+                        score
+                    }
+                }",
+                "SearchTanahpediaEntries",
+                new { phrase, limit },
+                linked.Token);
+
+            return (data?.SearchTanahpediaEntries ?? []).Select(dto => new TanahpediaSearchHit
+            {
+                Id = dto.Id ?? string.Empty,
+                UniqueName = dto.UniqueName ?? string.Empty,
+                Title = dto.Title ?? string.Empty,
+                Excerpt = dto.Excerpt ?? string.Empty,
+                Score = dto.Score,
+            }).ToList();
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            // Timeout source fired — translate to a TimeoutException so the
+            // caller can surface the availability note instead of hanging on
+            // the transport timeout (same contract as article search).
+            throw new TimeoutException("Tanahpedia search timed out");
+        }
+    }
+
+    /// <inheritdoc />
     public async Task<List<TanahpediaSynonymTarget>> GetSynonymTargetsAsync(string name, CancellationToken cancellationToken)
     {
         var data = await QueryAsync<SynonymTargetsResponse>(@"
@@ -255,6 +303,125 @@ public class TanahpediaService : BaseGraphQLService, ITanahpediaService
         };
     }
 
+    /// <inheritdoc />
+    public async Task<TanahpediaPersonFamily?> GetPersonFamilyAsync(string entityId, CancellationToken cancellationToken)
+    {
+        var data = await QueryAsync<PersonFamilyResponse>(@"
+            query TanahpediaPersonFamily($entityId: String!) {
+                tanahpediaPersonFamily(entityId: $entityId) {
+                    focalPersonId
+                    focalEntityId
+                    focalDisplayName
+                    focalSex
+                    focalBirthYyyymmdd
+                    parents { related { personId entityId displayName entryUniqueName entryTitle sex } parentRole relationshipType altGroupId sourceCitation }
+                    children { related { personId entityId displayName entryUniqueName entryTitle sex } parentRole relationshipType altGroupId sourceCitation birthOrder coParentEntityId coParentDisplayName coParentUnionOrder }
+                    spouses { related { personId entityId displayName entryUniqueName entryTitle sex } unionType unionOrder altGroupId sourceCitation personSourceCitation unionEndReason unionStartDate unionEndDate }
+                    siblings { personId entityId displayName entryUniqueName entryTitle sex birthDateYyyymmdd sourceCitation }
+                }
+            }",
+            "TanahpediaPersonFamily",
+            new { entityId },
+            cancellationToken);
+
+        var dto = data?.TanahpediaPersonFamily;
+        if (dto == null)
+        {
+            return null;
+        }
+
+        return new TanahpediaPersonFamily
+        {
+            FocalPersonId = dto.FocalPersonId ?? string.Empty,
+            FocalEntityId = dto.FocalEntityId ?? string.Empty,
+            FocalDisplayName = dto.FocalDisplayName ?? string.Empty,
+            FocalSex = dto.FocalSex,
+            FocalBirthYyyymmdd = dto.FocalBirthYyyymmdd,
+            Parents = (dto.Parents ?? []).Select(e => new TanahpediaFamilyParentEdge
+            {
+                Related = MapRelatedPerson(e.Related),
+                ParentRole = e.ParentRole ?? string.Empty,
+                RelationshipType = e.RelationshipType ?? string.Empty,
+                AltGroupId = e.AltGroupId,
+                SourceCitation = e.SourceCitation,
+            }).ToList(),
+            Children = (dto.Children ?? []).Select(e => new TanahpediaFamilyChildEdge
+            {
+                Related = MapRelatedPerson(e.Related),
+                ParentRole = e.ParentRole ?? string.Empty,
+                RelationshipType = e.RelationshipType ?? string.Empty,
+                AltGroupId = e.AltGroupId,
+                SourceCitation = e.SourceCitation,
+                BirthOrder = e.BirthOrder,
+                CoParentEntityId = e.CoParentEntityId,
+                CoParentDisplayName = e.CoParentDisplayName,
+                CoParentUnionOrder = e.CoParentUnionOrder,
+            }).ToList(),
+            Spouses = (dto.Spouses ?? []).Select(e => new TanahpediaFamilySpouseEdge
+            {
+                Related = MapRelatedPerson(e.Related),
+                UnionType = e.UnionType ?? string.Empty,
+                UnionOrder = e.UnionOrder,
+                AltGroupId = e.AltGroupId,
+                SourceCitation = e.SourceCitation,
+                PersonSourceCitation = e.PersonSourceCitation,
+                UnionEndReason = e.UnionEndReason,
+                UnionStartDate = e.UnionStartDate,
+                UnionEndDate = e.UnionEndDate,
+            }).ToList(),
+            Siblings = (dto.Siblings ?? []).Select(s => new TanahpediaFamilySibling
+            {
+                PersonId = s.PersonId ?? string.Empty,
+                EntityId = s.EntityId ?? string.Empty,
+                DisplayName = s.DisplayName ?? string.Empty,
+                EntryUniqueName = s.EntryUniqueName,
+                EntryTitle = s.EntryTitle,
+                Sex = s.Sex,
+                BirthDateYyyymmdd = s.BirthDateYyyymmdd,
+                SourceCitation = s.SourceCitation,
+            }).ToList(),
+        };
+    }
+
+    /// <inheritdoc />
+    public async Task<List<TanahpediaPlaceMarker>> GetPlaceMarkersAsync(string? entryId, CancellationToken cancellationToken)
+    {
+        var data = await QueryAsync<PlaceMarkersResponse>(@"
+            query TanahpediaPlaceMarkers($entryId: String) {
+                tanahpediaPlaceMarkers(entryId: $entryId) {
+                    placeId
+                    placeName
+                    modernName
+                    lat
+                    lng
+                    entryUniqueName
+                }
+            }",
+            "TanahpediaPlaceMarkers",
+            new { entryId },
+            cancellationToken);
+
+        return (data?.TanahpediaPlaceMarkers ?? []).Select(dto => new TanahpediaPlaceMarker
+        {
+            PlaceId = dto.PlaceId ?? string.Empty,
+            PlaceName = dto.PlaceName ?? string.Empty,
+            ModernName = dto.ModernName,
+            Lat = dto.Lat,
+            Lng = dto.Lng,
+            EntryUniqueName = dto.EntryUniqueName,
+        }).ToList();
+    }
+
+    private static TanahpediaFamilyPerson MapRelatedPerson(RelatedPersonDto? dto) => new()
+    {
+        PersonId = dto?.PersonId ?? string.Empty,
+        EntityId = dto?.EntityId ?? string.Empty,
+        DisplayName = dto?.DisplayName ?? string.Empty,
+        EntryUniqueName = dto?.EntryUniqueName,
+        EntryTitle = dto?.EntryTitle,
+        Sex = dto?.Sex,
+    };
+
     private static TanahpediaEntityWithEntries MapEntityWithEntries(EntityWithEntriesDto dto) => new()
     {
         EntityId = dto.EntityId ?? string.Empty,
@@ -338,6 +505,26 @@ public class TanahpediaService : BaseGraphQLService, ITanahpediaService
         public int? SegmentEnd { get; set; }
     }
 
+    private class SearchHitsResponse
+    {
+        [Newtonsoft.Json.JsonProperty("searchTanahpediaEntries")]
+        public List<SearchHitDto>? SearchTanahpediaEntries { get; set; }
+    }
+
+    private class SearchHitDto
+    {
+        [Newtonsoft.Json.JsonProperty("id")]
+        public string? Id { get; set; }
+        [Newtonsoft.Json.JsonProperty("uniqueName")]
+        public string? UniqueName { get; set; }
+        [Newtonsoft.Json.JsonProperty("title")]
+        public string? Title { get; set; }
+        [Newtonsoft.Json.JsonProperty("excerpt")]
+        public string? Excerpt { get; set; }
+        [Newtonsoft.Json.JsonProperty("score")]
+        public int Score { get; set; }
+    }
+
     private class SynonymTargetsResponse
     {
         [Newtonsoft.Json.JsonProperty("tanahpediaSynonymTargets")]
@@ -418,6 +605,128 @@ public class TanahpediaService : BaseGraphQLService, ITanahpediaService
         public string? LayoutType { get; set; }
         [Newtonsoft.Json.JsonProperty("content")]
         public string? Content { get; set; }
+    }
+
+    private class PersonFamilyResponse
+    {
+        [Newtonsoft.Json.JsonProperty("tanahpediaPersonFamily")]
+        public PersonFamilyDto? TanahpediaPersonFamily { get; set; }
+    }
+
+    private class PersonFamilyDto
+    {
+        [Newtonsoft.Json.JsonProperty("focalPersonId")]
+        public string? FocalPersonId { get; set; }
+        [Newtonsoft.Json.JsonProperty("focalEntityId")]
+        public string? FocalEntityId { get; set; }
+        [Newtonsoft.Json.JsonProperty("focalDisplayName")]
+        public string? FocalDisplayName { get; set; }
+        [Newtonsoft.Json.JsonProperty("focalSex")]
+        public string? FocalSex { get; set; }
+        [Newtonsoft.Json.JsonProperty("focalBirthYyyymmdd")]
+        public int? FocalBirthYyyymmdd { get; set; }
+        [Newtonsoft.Json.JsonProperty("parents")]
+        public List<ParentEdgeDto>? Parents { get; set; }
+        [Newtonsoft.Json.JsonProperty("children")]
+        public List<ChildEdgeDto>? Children { get; set; }
+        [Newtonsoft.Json.JsonProperty("spouses")]
+        public List<SpouseEdgeDto>? Spouses { get; set; }
+        [Newtonsoft.Json.JsonProperty("siblings")]
+        public List<SiblingDto>? Siblings { get; set; }
+    }
+
+    private class RelatedPersonDto
+    {
+        [Newtonsoft.Json.JsonProperty("personId")]
+        public string? PersonId { get; set; }
+        [Newtonsoft.Json.JsonProperty("entityId")]
+        public string? EntityId { get; set; }
+        [Newtonsoft.Json.JsonProperty("displayName")]
+        public string? DisplayName { get; set; }
+        [Newtonsoft.Json.JsonProperty("entryUniqueName")]
+        public string? EntryUniqueName { get; set; }
+        [Newtonsoft.Json.JsonProperty("entryTitle")]
+        public string? EntryTitle { get; set; }
+        [Newtonsoft.Json.JsonProperty("sex")]
+        public string? Sex { get; set; }
+    }
+
+    private class ParentEdgeDto
+    {
+        [Newtonsoft.Json.JsonProperty("related")]
+        public RelatedPersonDto? Related { get; set; }
+        [Newtonsoft.Json.JsonProperty("parentRole")]
+        public string? ParentRole { get; set; }
+        [Newtonsoft.Json.JsonProperty("relationshipType")]
+        public string? RelationshipType { get; set; }
+        [Newtonsoft.Json.JsonProperty("altGroupId")]
+        public string? AltGroupId { get; set; }
+        [Newtonsoft.Json.JsonProperty("sourceCitation")]
+        public string? SourceCitation { get; set; }
+    }
+
+    private class ChildEdgeDto : ParentEdgeDto
+    {
+        [Newtonsoft.Json.JsonProperty("birthOrder")]
+        public int? BirthOrder { get; set; }
+        [Newtonsoft.Json.JsonProperty("coParentEntityId")]
+        public string? CoParentEntityId { get; set; }
+        [Newtonsoft.Json.JsonProperty("coParentDisplayName")]
+        public string? CoParentDisplayName { get; set; }
+        [Newtonsoft.Json.JsonProperty("coParentUnionOrder")]
+        public int? CoParentUnionOrder { get; set; }
+    }
+
+    private class SpouseEdgeDto
+    {
+        [Newtonsoft.Json.JsonProperty("related")]
+        public RelatedPersonDto? Related { get; set; }
+        [Newtonsoft.Json.JsonProperty("unionType")]
+        public string? UnionType { get; set; }
+        [Newtonsoft.Json.JsonProperty("unionOrder")]
+        public int? UnionOrder { get; set; }
+        [Newtonsoft.Json.JsonProperty("altGroupId")]
+        public string? AltGroupId { get; set; }
+        [Newtonsoft.Json.JsonProperty("sourceCitation")]
+        public string? SourceCitation { get; set; }
+        [Newtonsoft.Json.JsonProperty("personSourceCitation")]
+        public string? PersonSourceCitation { get; set; }
+        [Newtonsoft.Json.JsonProperty("unionEndReason")]
+        public string? UnionEndReason { get; set; }
+        [Newtonsoft.Json.JsonProperty("unionStartDate")]
+        public int? UnionStartDate { get; set; }
+        [Newtonsoft.Json.JsonProperty("unionEndDate")]
+        public int? UnionEndDate { get; set; }
+    }
+
+    private class SiblingDto : RelatedPersonDto
+    {
+        [Newtonsoft.Json.JsonProperty("birthDateYyyymmdd")]
+        public int? BirthDateYyyymmdd { get; set; }
+        [Newtonsoft.Json.JsonProperty("sourceCitation")]
+        public string? SourceCitation { get; set; }
+    }
+
+    private class PlaceMarkersResponse
+    {
+        [Newtonsoft.Json.JsonProperty("tanahpediaPlaceMarkers")]
+        public List<PlaceMarkerDto>? TanahpediaPlaceMarkers { get; set; }
+    }
+
+    private class PlaceMarkerDto
+    {
+        [Newtonsoft.Json.JsonProperty("placeId")]
+        public string? PlaceId { get; set; }
+        [Newtonsoft.Json.JsonProperty("placeName")]
+        public string? PlaceName { get; set; }
+        [Newtonsoft.Json.JsonProperty("modernName")]
+        public string? ModernName { get; set; }
+        [Newtonsoft.Json.JsonProperty("lat")]
+        public double Lat { get; set; }
+        [Newtonsoft.Json.JsonProperty("lng")]
+        public double Lng { get; set; }
+        [Newtonsoft.Json.JsonProperty("entryUniqueName")]
+        public string? EntryUniqueName { get; set; }
     }
 
     #endregion

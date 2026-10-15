@@ -71,7 +71,7 @@ permissions:
 
 env:
   APP_DIRECTORY: app
-  PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER: perushim-sqlite-v2.master
+  PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER: perushim-sqlite-v2-indexed.master
   PERUSHIM_NOTES_ANDROID_ASSET_RELDIR: Platforms/Android/AssetPacks/perushim_notes
   PERUSHIM_NOTES_IOS_ASSETPACK_RELDIR: Platforms/iOS/AssetPacks/perushim_notes
 
@@ -193,6 +193,8 @@ jobs:
 
       - name: Package MSIX
         working-directory: ${{ env.APP_DIRECTORY }}
+        env:
+          MAPBOX_PUBLIC_TOKEN: ${{ secrets.MAPBOX_PUBLIC_TOKEN }}
         run: |
           dotnet run --project devops -- Package --platform Windows --configuration Release --certificate-thumbprint "${{ secrets.WINDOWS_SIGNING_CERT_THUMBPRINT }}"
 
@@ -348,6 +350,8 @@ jobs:
 
       - name: Package AAB
         working-directory: ${{ env.APP_DIRECTORY }}
+        env:
+          MAPBOX_PUBLIC_TOKEN: ${{ secrets.MAPBOX_PUBLIC_TOKEN }}
         run: |
           if [ -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
             dotnet run --project devops -- Package --platform Android --configuration Release \
@@ -437,7 +441,7 @@ jobs:
         uses: actions/setup-dotnet@v6
         with:
           # Keep in sync with the maui-ios workload below; see https://github.com/bible-on-site/bible-on-site/issues/1871
-          dotnet-version: "10.0.401"
+          dotnet-version: "10.0.402"
 
       - name: Hash NuGet dependency inputs
         id: nuget-key
@@ -642,6 +646,8 @@ jobs:
 
       - name: Package IPA
         working-directory: ${{ env.APP_DIRECTORY }}
+        env:
+          MAPBOX_PUBLIC_TOKEN: ${{ secrets.MAPBOX_PUBLIC_TOKEN }}
         run: |
           set -o pipefail
           dotnet run --project devops -- Package --platform iOS --configuration Release \

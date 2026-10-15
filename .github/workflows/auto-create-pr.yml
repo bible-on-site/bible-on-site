@@ -25,7 +25,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_HEAD: ${{ github.ref_name }}
         run: |
-          PR_EXISTS=$(gh pr list --base master --head "$PR_HEAD" --json number --jq 'length')
+          # Stacked PRs may target another feature branch. They already own this head.
+          PR_EXISTS=$(gh pr list --state open --head "$PR_HEAD" --json number --jq 'length')
           echo "exists=$PR_EXISTS" >> $GITHUB_OUTPUT
 
       - name: Extract commit message
@@ -64,6 +65,6 @@ jobs:
             --head "$PR_HEAD"; then
             # Another actor can create the PR after the initial existence check.
             # Preserve real creation/API failures unless that exact PR now exists.
-            PR_EXISTS=$(gh pr list --base master --head "$PR_HEAD" --json number --jq 'length')
+            PR_EXISTS=$(gh pr list --state open --head "$PR_HEAD" --json number --jq 'length')
             if [ "$PR_EXISTS" -eq 0 ]; then exit 1; fi
           fi

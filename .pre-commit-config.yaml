@@ -45,7 +45,7 @@ repos:
   # select is explicit so the gate doesn't drift with ruff version defaults;
   # broader docstring coverage (D1xx undocumented-*) stays out of scope.
   - repo: "https://github.com/astral-sh/ruff-pre-commit"
-    rev: v0.15.12
+    rev: v0.17.0
     hooks:
       - id: ruff-check
         args: [--select, "F,D2"]
