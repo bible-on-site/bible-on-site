@@ -7,6 +7,7 @@ import plistlib
 import struct
 import subprocess  # nosec B404: constructs a process-error fixture only; no processes are launched.
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 import zipfile
@@ -60,7 +61,7 @@ def bundle_info(bundle_id, extension=False):
 class ProfileTests(unittest.TestCase):
     def test_profiles_reject_original_app_group_gap_and_missing_extension_profile(self):
         with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
+            root = Path(temporary).resolve()
             app_path, extension_path = root / "app.mobileprovision", root / "extension.mobileprovision"
             app_path.touch()
             app_profile = profile(signing.APP_ID)
@@ -105,7 +106,8 @@ class ProfileTests(unittest.TestCase):
 
     def test_profile_pair_must_share_team(self):
         with tempfile.TemporaryDirectory() as temporary:
-            app, extension = Path(temporary) / "app", Path(temporary) / "extension"
+            root = Path(temporary).resolve()
+            app, extension = root / "app", root / "extension"
             app.touch()
             extension.touch()
 
@@ -114,6 +116,28 @@ class ProfileTests(unittest.TestCase):
                                       else profile(signing.EXTENSION_ID, "OTHERTEAM1"))
             with self.assertRaisesRegex(signing.SigningError, "different teams"):
                 signing.verify_profiles(app, extension, runner=runner)
+
+    def test_profile_decode_resolves_directory_alias_before_invoking_security(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            directory = root / "profiles"
+            directory.mkdir()
+            path = directory / "app.mobileprovision"
+            path.write_bytes(plistlib.dumps(profile(signing.APP_ID)))
+            alias = root / "profiles-alias"
+            try:
+                alias.symlink_to(directory, target_is_directory=True)
+            except OSError as error:
+                self.skipTest(f"Creating directory symlinks is unavailable: {error}")
+            calls = []
+
+            def runner(command):
+                calls.append(command)
+                return Path(command[-1]).read_bytes()
+
+            decoded = signing.decode_profile(alias / path.name, runner=runner)
+            self.assertEqual(decoded["Entitlements"]["application-identifier"], f"TEAM123456.{signing.APP_ID}")
+            self.assertEqual(calls, [[signing.SECURITY, "cms", "-D", "-i", str(path)]])
 
     def test_entitlement_subset_supports_keychain_wildcard_but_not_group_wildcard(self):
         distribution = profile(signing.APP_ID)
@@ -127,6 +151,36 @@ class ProfileTests(unittest.TestCase):
         distribution["Entitlements"]["com.apple.security.application-groups"] = ["group.*"]
         with self.assertRaisesRegex(signing.SigningError, "application-groups"):
             signing.validate_entitlements(requested, distribution, "App")
+
+    def test_apple_profile_wildcards_authorize_concrete_domains_and_icloud_identifiers(self):
+        distribution = profile(signing.APP_ID)
+        domains = "com.apple.developer.associated-domains"
+        kvstore = "com.apple.developer.ubiquity-kvstore-identifier"
+        distribution["Entitlements"].update({domains: ["*"], kvstore: "TEAM123456.com.example.*"})
+        requested = {domains: ["applinks:example.com", "webcredentials:example.com"],
+                     kvstore: "TEAM123456.com.example.reader"}
+        signing.validate_profile(distribution, signing.APP_ID, "App", requested=requested)
+        signed = dict(distribution["Entitlements"], **requested)
+        signing.validate_entitlements(signed, distribution, "App", signed=True, bundle_id=signing.APP_ID)
+        for invalid in ["OTHERTEAM1.com.example.reader", "TEAM123456XcomYexampleZreader"]:
+            with self.subTest(identifier=invalid):
+                with self.assertRaisesRegex(signing.SigningError, kvstore):
+                    signing.validate_entitlements({kvstore: invalid}, distribution, "App")
+
+    def test_profile_wildcard_patterns_are_fully_anchored_and_escape_other_characters(self):
+        self.assertTrue(signing._authorized_value("start.[literal].middle-end", "start.[literal].*-end", wildcard=True))
+        for invalid in ["prefix-start.[literal].middle-end", "start.[literal].middle-end-suffix",
+                        "start.XliteralY.middle-end"]:
+            with self.subTest(value=invalid):
+                self.assertFalse(signing._authorized_value(invalid, "start.[literal].*-end", wildcard=True))
+        self.assertFalse(signing._authorized_value("start.[literal].middle-end", "start.[literal].*-end"))
+        wildcard_identity = profile(signing.APP_ID)
+        wildcard_identity["Entitlements"]["application-identifier"] = "TEAM123456.*"
+        with self.assertRaisesRegex(signing.SigningError, "explicit App ID"):
+            signing.validate_profile(wildcard_identity, signing.APP_ID, "App")
+        with self.assertRaisesRegex(signing.SigningError, "does not match"):
+            signing.validate_entitlements(wildcard_identity["Entitlements"], wildcard_identity, "App",
+                                          signed=True, bundle_id=signing.APP_ID)
 
 
 class PackageTests(unittest.TestCase):
@@ -305,7 +359,7 @@ class PackageTests(unittest.TestCase):
 
 class CommandTests(unittest.TestCase):
     def test_native_command_failure_preserves_rejection_and_cli_returns_failure(self):
-        command = [signing.CODESIGN, "--verify", "--strict", "--verbose=2", "/tmp/extension.appex"]
+        command = [signing.CODESIGN, "--verify", "--strict", "--verbose=2", "/fixture/extension.appex"]
         failure = subprocess.CalledProcessError(1, command, stderr=b"code object is not signed at all")
         with patch.object(signing.subprocess, "run", side_effect=failure):
             with self.assertRaisesRegex(signing.SigningError, "code object is not signed at all"):
@@ -317,12 +371,12 @@ class CommandTests(unittest.TestCase):
 
     def test_native_runner_accepts_only_fixed_tools_options_and_absolute_path_operands(self):
         for command in [
-            ["codesign", "--verify", "--strict", "--verbose=2", "/tmp/app.app"],
+            ["codesign", "--verify", "--strict", "--verbose=2", "/fixture/app.app"],
             ["/bin/sh", "-c", "arbitrary command"],
-            [signing.CODESIGN, "--force", "--sign", "identity", "/tmp/app.app"],
+            [signing.CODESIGN, "--force", "--sign", "identity", "/fixture/app.app"],
             [signing.CODESIGN, "--verify", "--strict", "--verbose=2", "--option-instead-of-path"],
             [signing.SECURITY, "cms", "-D", "-i", "relative.mobileprovision"],
-            [signing.SECURITY, "cms", "-D", "-i", "/tmp/profile\0.mobileprovision"],
+            [signing.SECURITY, "cms", "-D", "-i", "/fixture/profile\0.mobileprovision"],
         ]:
             with self.subTest(command=command), patch.object(signing.subprocess, "run") as process:
                 with self.assertRaises(signing.SigningError):
@@ -330,13 +384,13 @@ class CommandTests(unittest.TestCase):
                 process.assert_not_called()
         for prefix, count in signing.COMMAND_SHAPES:
             # Spaces and shell metacharacters remain literal path bytes in argv.
-            command = [*prefix, *(["/tmp/bundle name;$(literal)"] * count)]
-            result = subprocess.CompletedProcess(command, 0, stdout=b"verified")
+            command = [*prefix, *(["/fixture/bundle name;$(literal)"] * count)]
+            result = SimpleNamespace(stdout=b"verified")
             with self.subTest(command=command), patch.object(signing.subprocess, "run", return_value=result) as process:
                 self.assertEqual(signing.run(command), b"verified")
                 process.assert_called_once_with(tuple(command), check=True, capture_output=True, shell=False)
         for shape in signing.DISCOVERY_COMMANDS:
-            command = ["/tmp/project.xcodeproj" if argument is None else argument for argument in shape]
+            command = ["/fixture/project.xcodeproj" if argument is None else argument for argument in shape]
             self.assertEqual(signing.validate_command(command), tuple(command))
 
 

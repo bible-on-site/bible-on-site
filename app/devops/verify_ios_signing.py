@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 import json
 from pathlib import Path, PurePosixPath
 import plistlib
+import re
 import struct
 import subprocess  # nosec B404: fixed macOS executables and validated argv only, no shell.
 import sys
@@ -140,15 +141,19 @@ def _authorized_value(requested, allowed, wildcard=False):
         return isinstance(allowed, dict) and all(
             key in allowed and _authorized_value(value, allowed[key], wildcard)
             for key, value in requested.items())
-    if wildcard and isinstance(requested, str) and isinstance(allowed, str) and allowed.endswith("*"):
-        return requested.startswith(allowed[:-1])
+    if wildcard and isinstance(requested, str) and isinstance(allowed, str) and "*" in allowed:
+        pattern = re.escape(allowed).replace(r"\*", ".*")
+        return re.fullmatch(pattern, requested) is not None
     return type(requested) is type(allowed) and requested == allowed
 
 
 def validate_entitlements(requested, profile, label, signed=False, bundle_id=None):
     allowed = profile["Entitlements"]
     for key, value in requested.items():
-        wildcard = key in {"application-identifier", "keychain-access-groups"}
+        # Apple profiles use '*' to authorize concrete associated domains,
+        # iCloud identifiers, keychain groups, and other string values. App
+        # Groups remain exact; the profile's App ID is checked independently.
+        wildcard = key != "com.apple.security.application-groups"
         if key not in allowed or not _authorized_value(value, allowed[key], wildcard):
             raise SigningError(f"{label}: entitlement {key} is not authorized by its provisioning profile")
     if signed:

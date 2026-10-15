@@ -26,6 +26,8 @@ def distribution_profile(bundle_id, entitlements=None, team="TEAM123456", prefix
 
 class ProjectFixture:
     def __init__(self, root):
+        """Create canonical source paths, including macOS /var temporary symlinks."""
+        root = root.resolve()
         self.root = root
         self.app = root / "Example.csproj"
         self.extensions = root / "extensions"
@@ -37,7 +39,8 @@ class ProjectFixture:
 <ApplicationId>org.example.application</ApplicationId></PropertyGroup>
 <PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">
 <CodesignEntitlements>mac.entitlements</CodesignEntitlements></PropertyGroup>
-<Target Name="IosSigning" Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' AND '$(_SdkIsSimulator)' != 'true' AND '$(EnableCodeSigning)' != 'false'">
+<Target Name="IosSigning" Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'
+AND '$(_SdkIsSimulator)' != 'true' AND '$(EnableCodeSigning)' != 'false'">
 <PropertyGroup><CodesignEntitlements>ios.entitlements</CodesignEntitlements></PropertyGroup>
 </Target></Project>""", encoding="utf8")
         self.write_plist(root / "ios.entitlements", {GROUP_KEY: ["group.org.example.shared"]})
@@ -79,6 +82,34 @@ class ProjectFixture:
 
 
 class DiscoveryTests(unittest.TestCase):
+    def test_fixture_paths_remain_canonical_through_directory_symlinks(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            actual = root / "source"
+            actual.mkdir()
+            linked = root / "linked"
+            try:
+                linked.symlink_to(actual, target_is_directory=True)
+            except OSError:
+                self.skipTest("Creating directory symlinks requires additional Windows privileges")
+            fixture = ProjectFixture(linked)
+            fixture.extension()
+            self.assertEqual(len(fixture.discover()), 2)
+            self.assertEqual(fixture.root, actual.resolve())
+
+    def test_dtds_and_entities_are_rejected_before_app_identity_discovery(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = ProjectFixture(Path(temporary))
+            project_text = fixture.app.read_text()
+            for declaration in [
+                '<!DOCTYPE Project [<!ENTITY identity "org.injected.application">]>',
+                '<!DOCTYPE Project SYSTEM "https://invalid.example/project.dtd">',
+            ]:
+                with self.subTest(declaration=declaration):
+                    fixture.app.write_text(declaration + project_text)
+                    with self.assertRaisesRegex(signing.SigningError, "Cannot read app signing declarations"):
+                        requirements.app_requirement(fixture.app)
+
     def test_app_uses_declared_device_ios_entitlements_instead_of_mac_or_debug(self):
         with tempfile.TemporaryDirectory() as temporary:
             fixture = ProjectFixture(Path(temporary))

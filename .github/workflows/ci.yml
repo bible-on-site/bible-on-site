@@ -1954,8 +1954,14 @@ jobs:
       - name: Test paired Perushim release assets
         run: python3 -m unittest discover -s devops -p test_prepare_perushim_assets.py
 
+      - name: Setup Python for signing validation tests
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.15"
+
       - name: Test iOS distribution signing validation
         run: |
+          python3 -m pip install --disable-pip-version-check --no-input -r devops/requirements-signing.txt
           python3 -m unittest discover -s devops -p test_verify_ios_signing.py
           python3 -m unittest discover -s devops -p test_ios_signing_requirements.py
 

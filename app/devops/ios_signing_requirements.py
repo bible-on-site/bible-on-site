@@ -16,8 +16,9 @@ from pathlib import Path
 import re
 import sys
 import tempfile
-# Repository build declarations have the same trust boundary as the CI script.
-import xml.etree.ElementTree as ET  # nosec B405  # noqa: S405
+
+from defusedxml import ElementTree as ET
+from defusedxml.common import DefusedXmlException
 
 from verify_ios_signing import (
     PLUTIL, XCODEBUILD, SigningError, decode_profile, read_plist, run,
@@ -114,9 +115,8 @@ def _bundle_id(value, label):
 def app_requirement(project):
     project = Path(project).resolve()
     try:
-        # Checked-out build declarations have the same trust boundary as the CI script.
-        tree = ET.parse(project).getroot()  # nosec B314  # noqa: S314
-    except (OSError, ET.ParseError) as error:
+        tree = ET.parse(project, forbid_dtd=True, forbid_entities=True, forbid_external=True).getroot()
+    except (OSError, ET.ParseError, DefusedXmlException) as error:
         raise SigningError(f"Cannot read app signing declarations: {project}") from error
     frameworks = {
         framework.strip() for element in tree.iter()
@@ -221,8 +221,9 @@ def _write_profile(directory, name, encoded):
     if not decoded:
         raise SigningError(f"Empty provisioning profile in {name}")
     with tempfile.NamedTemporaryFile(dir=directory, prefix=".profile-", delete=False) as stream:
-        temporary = Path(stream.name)
         stream.write(decoded)
+        stream.flush()
+        temporary = Path(stream.name)
     try:
         temporary.chmod(0o600)
         temporary.replace(directory / name)
