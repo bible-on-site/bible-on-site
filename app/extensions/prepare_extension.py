@@ -3,9 +3,17 @@
 
 import argparse
 import datetime as dt
+import importlib
 import plistlib
 import subprocess  # nosec B404 - used only for the fixed macOS utility below, without a shell.
+import sys
 from pathlib import Path
+
+
+# Use the same authorization rules as preflight and final IPA verification.
+# Resolve the trusted sibling tool from this file, independently of the caller's cwd.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "devops"))
+validate_entitlements = importlib.import_module("verify_ios_signing").validate_entitlements
 
 
 def signing_entitlements(profile, requested, bundle_id, now=None):
@@ -28,15 +36,8 @@ def signing_entitlements(profile, requested, bundle_id, now=None):
     if not team or team not in profile.get("TeamIdentifier", []):
         raise ValueError("Extension profile has an inconsistent team identifier")
 
+    validate_entitlements(requested, profile, "Extension")
     result = dict(requested)
-    for key, value in requested.items():
-        authorized = allowed.get(key)
-        if isinstance(value, list):
-            if not isinstance(authorized, list) or any(v not in authorized for v in value):
-                raise ValueError(f"Extension profile does not authorize {key}")
-        elif value != authorized:
-            raise ValueError(f"Extension profile does not authorize {key}")
-
     result[app_id_key] = app_id
     result["com.apple.developer.team-identifier"] = team
     result["get-task-allow"] = allowed.get("get-task-allow", False)

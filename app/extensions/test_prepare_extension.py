@@ -52,6 +52,31 @@ class PrepareExtensionTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "expired"):
             signing_entitlements(self.profile, self.requested, self.bundle_id, self.now)
 
+    def test_profile_wildcards_authorize_domains_and_icloud_without_widening_signed_values(self):
+        domains = "com.apple.developer.associated-domains"
+        kvstore = "com.apple.developer.ubiquity-kvstore-identifier"
+        self.profile["Entitlements"].update({domains: ["*"], kvstore: "APP_PREFIX.*"})
+        requested = {**self.requested, domains: ["applinks:example.com"],
+                     kvstore: f"APP_PREFIX.{self.bundle_id}"}
+        result = signing_entitlements(self.profile, requested, self.bundle_id, self.now)
+        self.assertEqual(result[domains], requested[domains])
+        self.assertEqual(result[kvstore], requested[kvstore])
+        self.assertNotIn("unrequested-capability", result)
+        requested[kvstore] = "OTHER_PREFIX.unrelated"
+        with self.assertRaisesRegex(ValueError, kvstore):
+            signing_entitlements(self.profile, requested, self.bundle_id, self.now)
+
+    def test_shared_authorization_keeps_app_groups_exact(self):
+        self.profile["Entitlements"]["com.apple.security.application-groups"] = ["group.*"]
+        with self.assertRaisesRegex(ValueError, "application-groups"):
+            signing_entitlements(self.profile, self.requested, self.bundle_id, self.now)
+
+    def test_development_profiles_remain_supported_by_the_signing_helper(self):
+        self.profile["Entitlements"]["get-task-allow"] = True
+        self.profile["ProvisionedDevices"] = ["development-device"]
+        result = signing_entitlements(self.profile, self.requested, self.bundle_id, self.now)
+        self.assertTrue(result["get-task-allow"])
+
     def test_cached_extension_versions_are_stamped_before_signing(self):
         with tempfile.TemporaryDirectory() as temporary:
             extension = Path(temporary)
