@@ -74,7 +74,7 @@ public class TanahpediaPlacesMap : ContentView
     /// command; anything else external (e.g. the OSM attribution link) opens
     /// in the browser instead of replacing the map.
     /// </summary>
-    internal void OnNavigating(object? sender, WebNavigatingEventArgs e)
+    internal async void OnNavigating(object? sender, WebNavigatingEventArgs e)
     {
         var url = e.Url;
         if (TanahpediaMapHtml.TryGetEntryUniqueName(url, out var uniqueName))
@@ -95,7 +95,7 @@ public class TanahpediaPlacesMap : ContentView
             e.Cancel = true;
             try
             {
-                _ = OpenExternalLink(new Uri(url));
+                await OpenExternalLink(new Uri(url)).ConfigureAwait(false);
             }
             catch (Exception ex)
             {

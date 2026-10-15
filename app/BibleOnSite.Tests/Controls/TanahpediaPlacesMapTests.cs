@@ -117,6 +117,33 @@ public class TanahpediaPlacesMapTests
     }
 
     [Fact]
+    public void OnNavigating_ExternalUrl_FaultedLauncherTask_IsLogged()
+    {
+        var map = new TanahpediaPlacesMap
+        {
+            OpenExternalLink = _ => Task.FromException(new InvalidOperationException("no launcher")),
+        };
+        var args = new WebNavigatingEventArgs(
+            WebNavigationEvent.NewPage,
+            new HtmlWebViewSource(),
+            "https://www.openstreetmap.org/copyright");
+        var stderr = new StringWriter();
+        var previous = Console.Error;
+        Console.SetError(stderr);
+        try
+        {
+            map.OnNavigating(null, args);
+        }
+        finally
+        {
+            Console.SetError(previous);
+        }
+
+        args.Cancel.Should().BeTrue();
+        stderr.ToString().Should().Contain("no launcher");
+    }
+
+    [Fact]
     public void Markers_Empty_ClearsWebViewSource()
     {
         var map = new TanahpediaPlacesMap();

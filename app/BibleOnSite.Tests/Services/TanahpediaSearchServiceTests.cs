@@ -74,7 +74,7 @@ public class TanahpediaSearchServiceTests
             await Task.Delay(Timeout.InfiniteTimeSpan, token);
             return GraphQLTransport.JsonResponse("{}");
         };
-        var service = new TanahpediaService(http.Client);
+        var service = new TanahpediaService(http.Client, TimeSpan.FromMilliseconds(50));
         await FluentActions.Awaiting(() => service.SearchEntriesAsync("x", 20, CancellationToken.None))
             .Should().ThrowAsync<TimeoutException>();
     }
