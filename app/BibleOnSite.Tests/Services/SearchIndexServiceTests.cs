@@ -12,6 +12,24 @@ public class SearchIndexServiceTests
     private const string NotesDb = "sefaria-dump-5784-sivan-4.perushim_notes.sqlite";
 
     [Fact]
+    public async Task DirectMatchesDoNotWaitForOrIncludeSpellingSuggestions()
+    {
+        await using var storage = new TestStorage();
+        var perakim = await SeedAsync(storage);
+        var source = await storage.CreateDatabaseAsync(BibleDb);
+        await source.ExecuteAsync("INSERT INTO tanah_pasuk_segment VALUES (5,1,2,'qri')");
+        await source.ExecuteAsync("INSERT INTO tanah_pasuk_segment_value VALUES (5,'בראשיט ברא אלהים')");
+        await using var index = new SearchIndexService(perakim, null, Path.Join(storage.Root, "search.sqlite"));
+        var filters = new HashSet<SearchFilter> { SearchFilter.Pasuk };
+        var books = new HashSet<int> { 1 };
+
+        var direct = await index.SearchAsync("בראשית", filters, books, 10, TestContext.Current.CancellationToken);
+        direct.Should().ContainSingle().Which.PasukNum.Should().Be(1);
+        var fallback = await index.SearchAsync("בראשיח", filters, books, 10, TestContext.Current.CancellationToken);
+        fallback.Should().HaveCount(2, "a misspelled query still searches every matching spelling candidate");
+    }
+
+    [Fact]
     public async Task GenerationOrdering_AppliesBeforeLimit_AndKeepsUnknownDatesLast()
     {
         await using var storage = new TestStorage();

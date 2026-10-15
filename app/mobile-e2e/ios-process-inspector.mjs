@@ -15,10 +15,18 @@ export async function prepareIosProcessInspector({
   outputPath = resolve(directory, "../.artifacts/mobile-process/ios-process-inspector"),
   execute = executeFile,
 } = {}) {
+  const preparation = AbortSignal.timeout(300000);
   mkdirSync(dirname(outputPath), { recursive: true });
   await execute("/usr/bin/xcrun", ["clang", "-O2", "-Wall", "-Wextra", "-Werror",
     resolve(directory, "ios-process-inspector.c"), "-lproc", "-o", outputPath],
-  { timeout: 300000, windowsHide: true });
+  { signal: preparation, timeout: 300000, windowsHide: true });
   if (!existsSync(outputPath)) throw new Error("The native iOS process inspector was not produced.");
+  // Exercise the produced executable before tests. First-launch validation
+  // and dynamic-loader work belong to preparation, not app termination.
+  const { stdout, stderr = "" } = await execute(outputPath, [String(process.pid)],
+    { signal: preparation, windowsHide: true });
+  if (stderr.trim() || !stdout.startsWith(`${process.pid} L /`)) {
+    throw new Error("The native iOS process inspector did not inspect its preparer.");
+  }
   return outputPath;
 }

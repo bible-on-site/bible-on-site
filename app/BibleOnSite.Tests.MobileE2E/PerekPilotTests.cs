@@ -20,6 +20,7 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
     {
         Assert.NotEmpty(Page.Source);
         Assert.NotEmpty(Page.FirstPasuk);
+        Assert.Empty(Driver!.FindElements(Platform.AutomationId("RecitationDecoder")));
         Page.AssertBottomNavigationLayout();
     });
 
@@ -88,6 +89,7 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         Page.Tap("SearchSheetApplyButton");
         Page.WaitForHidden("SearchSheet");
         SearchFor("בראשיט 1", "בראשית א");
+        SaveDiagnostics("FloatingSearchChapterResults", "passed");
         Platform.Tap(Driver!, Page.WaitFor("SearchResultTitle", element => element.Text == "בראשית א"));
         Page.WaitFor("PerekSource", element => element.Text == "בראשית א");
         AssertRegularReader();
