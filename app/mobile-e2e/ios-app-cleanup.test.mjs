@@ -134,7 +134,7 @@ test("Darwin kernel inspection kills the owned child and rejects other-device an
   const binary = join(temporary, "child");
   writeFileSync(source, "#include <unistd.h>\nint main(void) { for (;;) pause(); }\n");
   await promisify(execFile)("/usr/bin/xcrun", ["clang", "-Wall", "-Wextra", "-Werror", source, "-o", binary],
-    { timeout: 5000, windowsHide: true });
+    { timeout: 300000, windowsHide: true });
   const paths = [udid, otherUdid].map(device => join(nativeDevicesRoot, device,
     "data/Containers/Bundle/Application/51DBBA3D-91A6-4E0F-BE84-D779BCE6C0F3/BibleOnSite.app/BibleOnSite"));
   for (const path of paths) { mkdirSync(dirname(path), { recursive: true }); copyFileSync(binary, path); }
