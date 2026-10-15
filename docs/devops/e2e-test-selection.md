@@ -424,7 +424,8 @@ under-attribution can only over-select.
   `merge_ios` validates the union, intersects it with the full-suite
   expected set, and only then can the merged tree publish baselines. A
   per-shard `coverage-tree.json` is therefore diagnostic, never baseline
-  input.
+  input. The split is a static `Shard` trait assignment — dynamic,
+  runtime-driven shard sizing remains open as #2263.
 
 ## Determinism contract
 
