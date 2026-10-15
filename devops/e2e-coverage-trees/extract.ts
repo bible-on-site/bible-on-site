@@ -243,6 +243,12 @@ function attachMembers(
 		const span = node.span;
 		if (span === undefined) continue;
 		if (!node.file.startsWith(`${sourceRoot}/`)) continue;
+		// A node whose points span multiple files mixes two line-number
+		// spaces (e.g. `#line`-mapped generated code) — containment against
+		// the primary file's members would be meaningless, so it stays
+		// unmapped and widens via memberGaps instead.
+		const nodeFiles = node.files ?? [node.file];
+		if (nodeFiles.length !== 1 || nodeFiles[0] !== node.file) continue;
 		const members = membersOf(node.file);
 		if (members === null) continue;
 		const sourceMembers = members.filter((member) => member.kind === "member");

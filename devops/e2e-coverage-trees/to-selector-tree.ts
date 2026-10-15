@@ -73,14 +73,17 @@ export function execSelectorView(exec: ExecCoverageTree): ExecSelectorView {
 	const recordGaps = (nodeIds: string[]) => {
 		for (const nodeId of nodeIds) {
 			const node = exec.nodes[nodeId];
-			// Only repo-file method nodes could ever carry a member; external
-			// or file/type nodes have no member identity to miss.
+			// Only repo-file method nodes could ever carry a member; a node
+			// whose points leave its file (multi-file span, external path)
+			// is exactly the evidence that could not map — record the gap.
 			if (
 				node === undefined ||
 				node.kind !== "method" ||
 				node.member !== undefined ||
 				node.file === undefined ||
-				node.external === true
+				node.file.includes("\\") ||
+				node.file.includes(":") ||
+				node.file.startsWith("/")
 			) continue;
 			const type = gapTypeOf(node) ?? node.file;
 			const set = gapSets.get(node.file) ?? new Set<string>();

@@ -999,11 +999,15 @@ describe("member mapping", () => {
 			onStart.member?.startsWith("BibleOnSite.App.OnStart#"),
 			`OnStart member ${onStart.member}`,
 		);
+		// LoadPerek's points span the external /outside file too — a
+		// multi-file span mixes two line spaces, so it stays unmapped and
+		// reports its type as a memberGap rather than guessing a member.
 		const load = tree.nodes["method:BibleOnSite.PerekPage.LoadPerek"];
-		assert.ok(
-			load.member?.startsWith("BibleOnSite.PerekPage.LoadPerek#"),
-			`LoadPerek member ${load.member}`,
-		);
+		assert.equal(load.member, undefined);
+		const view = execSelectorView(tree);
+		assert.deepEqual(view.memberGaps, {
+			"app/BibleOnSite/PerekPage.xaml.cs": ["BibleOnSite.PerekPage"],
+		});
 	});
 
 	test("overloads map to distinct member keys by span", () => {
