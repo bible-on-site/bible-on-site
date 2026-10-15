@@ -543,6 +543,10 @@ jobs:
       - name: Wait for test selection
         wait-all:
 
+      - name: Verify real test-host reporting and shutdown
+        if: inputs.mode != 'build'
+        run: node app/mobile-e2e/verify-reporting.mjs app/BibleOnSite.Tests.MobileE2E/bin/Debug/net10.0/BibleOnSite.Tests.MobileE2E.dll "$MOBILE_E2E_DOTNET_STACK" "$MOBILE_E2E_ARTIFACTS"
+
       - name: Run shared pilot on Android
         if: inputs.platform == 'Android'
         id: pilot
