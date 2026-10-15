@@ -193,9 +193,9 @@ merge_ios (always(), needs all three shards)
   `app-mobile-e2e-coverage.master.ios`,
   `app-mobile-e2e-exec-coverage.master.ios`, and
   `appium-ios-master-<attempt>` only when the merged evidence is
-  `complete` — on a **trusted** event (`push`/`workflow_dispatch` on master).
-  Diagnostic/provisional per-test artifacts are still uploaded from PR runs,
-  but never as baselines.
+  `complete` — and only on a `push` to `master`; a `workflow_dispatch` does
+  not refresh baselines. Diagnostic/provisional per-test artifacts are still
+  uploaded from PR runs, but never as baselines.
 - **Session lifecycle per leg** (#2248/#2253/#2255): resolve/simctl-create the
   device → start async boot + shared state restore in parallel with node/npm
   restore, Appium/WDA agent prep, and (iOS) shared-build download → the pilot
@@ -215,9 +215,13 @@ merge_ios (always(), needs all three shards)
 All caches are owned by the native runner legs (plus `actions/cache` inside
 `ci.yml` for NuGet/npm). Keys are derived on every leg by `hash-native-deps.mjs`
 / `nuget-cache-key.ts` (bounded `hashFiles` — the manifest file is hashed
-directly when the file enumeration budget would be exceeded, #2184); **saves
-only happen on `push`/`workflow_dispatch` on the default branch** — PRs and
-merge-queue runs read caches but never poison them.
+directly when the file enumeration budget would be exceeded, #2184). Save
+policy differs per cache: NuGet, node_modules and iOS `obj` intermediates save
+only on `refs/heads/master`; the AVD snapshot, Android SDK and MAUI workload
+caches are event-gated (`!= pull_request && != merge_group`, so a dispatch on
+any branch may save); the iOS simulator state saves whenever the quiesce step
+succeeds — its key is content-scoped (toolchain id + device recipe), so a PR
+save can only rewrite the state that same key already describes.
 
 | Cache | Key content | Notes |
 |-------|-------------|-------|

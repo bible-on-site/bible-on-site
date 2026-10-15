@@ -144,9 +144,9 @@ content fingerprint).
 5. **publish** — Android baselines publish inside the runner leg; the three
    iOS `*.master.ios` baselines publish only from `merge_ios` when the
    merged evidence is `complete`, and only on a completed, successful
-   `master` push (`workflow_dispatch` included for manual refresh), so
-   provisional PR/merge-queue evidence can never poison the authoritative
-   tree.
+   `master` push (`push` on `refs/heads/master` — a `workflow_dispatch`
+   cannot refresh them), so provisional PR/merge-queue evidence can never
+   poison the authoritative tree.
 
 Rollout modes are `workflow_dispatch`/`workflow_call` inputs:
 `e2e_selection_mode` (`shadow` default, `enforce`) and `force_full_suite`
