@@ -25,6 +25,15 @@ public interface ITanahpediaService
     Task<TanahpediaEntryDetail?> GetEntryDetailAsync(string uniqueName, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Lexical search over published entries — title, canonical name,
+    /// synonym/alias names (direct and disambiguation targets) and body
+    /// content — ranked like the website's /search tanahpedia provider, one
+    /// hit per entry so an ambiguous name surfaces every target rather than
+    /// silently picking one. <paramref name="limit"/> clamps to the API's 50.
+    /// </summary>
+    Task<List<TanahpediaSearchHit>> SearchEntriesAsync(string phrase, int limit, CancellationToken cancellationToken);
+
+    /// <summary>
     /// Entries a synonym name can lead to: 0 results = unknown name, 1 = plain
     /// alias, several = ambiguous — the client renders a chooser.
     /// </summary>

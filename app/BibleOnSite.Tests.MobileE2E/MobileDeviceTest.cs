@@ -221,7 +221,13 @@ public abstract class MobileDeviceTest : IAsyncLifetime
             try
             {
                 Driver.GetScreenshot().SaveAsFile(prefix + ".png");
-                File.WriteAllText(prefix + ".xml", Driver.PageSource);
+                // Passing screenshots record the visual state. Native source
+                // is captured on failure; scenarios that assert its content
+                // still request the complete tree directly.
+                if (outcome == "failed")
+                {
+                    File.WriteAllText(prefix + ".xml", Driver.PageSource);
+                }
             }
             catch (WebDriverException exception)
             {

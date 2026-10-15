@@ -86,6 +86,29 @@ public sealed class SearchIndexService : IAsyncDisposable
 
     [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage(
         Justification = "E2E-only startup hook; the mobile suite launches with BIBLE_E2E.")]
+    // The coverage endpoint's shared secret reaches Android the same way the
+    // launch marker does: an intent extra on the suite's session launch. The
+    // file survives the adb relaunches that drop extras; the endpoint resolves
+    // env first, then this file.
+    private static string E2eCoverageTokenPath => Path.Join(FileSystem.AppDataDirectory, "e2e-coverage-token");
+
+    [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage(
+        Justification = "E2E-only startup hook; the mobile suite launches with BIBLE_E2E_COVERAGE_TOKEN.")]
+    internal static void MarkE2eCoverageToken(string token)
+    {
+        Environment.SetEnvironmentVariable("BIBLE_E2E_COVERAGE_TOKEN", token);
+        try
+        {
+            File.WriteAllText(E2eCoverageTokenPath, token);
+        }
+        catch (IOException exception)
+        {
+            Console.WriteLine($"E2E coverage token persist failed: {exception.Message}");
+        }
+    }
+
+    [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage(
+        Justification = "E2E-only startup hook; the mobile suite launches with BIBLE_E2E.")]
     internal static bool IsE2eMarkedProcess()
     {
         if (Environment.GetEnvironmentVariable(E2eEnvironmentVariable) == "1")
@@ -100,7 +123,17 @@ public sealed class SearchIndexService : IAsyncDisposable
     private static async Task WarmupIndexesAsync()
     {
         var service = Instance;
+        // The notes import dwarfs every other warmup cost. On the iOS leg the
+        // instrumented simulator build cannot absorb it inside suite budgets —
+        // the full build is only needed by searches with real commentary, and
+        // the iOS scenarios fabricate a tiny perushim pack instead. Let the
+        // notes index stay lazy there; the shared build task still dedups a
+        // mid-test build if one is ever requested.
+#if IOS
+        await service.WarmTableAsync("verses");
+#else
         await Task.WhenAll(service.WarmTableAsync("verses"), service.WarmTableAsync("notes"));
+#endif
     }
 
     // Shares the search path's dedup so a warmup build is also the build a
@@ -183,8 +216,9 @@ public sealed class SearchIndexService : IAsyncDisposable
                     var prefixes = string.Join(" AND ", terms.Select(term => $"\"{term}\"*"));
                     rows = rows.Concat(await QueryAsync(table, prefixes, books, limit, ordering)).DistinctBy(row => row.RowId).ToList();
                 }
-                // Expand only if exact/prefix matches have not filled the user's result limit.
-                if (rows.Count < limit)
+                // Spelling tolerance is a fallback. Do not hold direct matches
+                // behind a full vocabulary scan to fill unused result slots.
+                if (rows.Count == 0)
                 {
                     var clauses = new List<string>();
                     foreach (var term in terms)
@@ -194,9 +228,7 @@ public sealed class SearchIndexService : IAsyncDisposable
                         var alternatives = edits == 0 ? [] : await _index.QueryAsync<VocabularyRow>(
                             $"SELECT term FROM {table}_vocab WHERE length(term) BETWEEN ? AND ?",
                             term.Length - edits, term.Length + edits);
-                        var similar = await Task.Run(() => alternatives.Select(row => (row.Term, Distance: SearchText.Distance(row.Term, term, edits)))
-                            .Where(row => row.Distance <= edits).OrderBy(row => row.Distance).ThenBy(row => row.Term, StringComparer.Ordinal)
-                            .Take(24).Select(row => $"\"{row.Term}\"").ToArray(), cancellationToken);
+                        var similar = ExpandTerm(alternatives.Select(row => row.Term), term, edits, cancellationToken);
                         clauses.Add("(" + string.Join(" OR ", similar.Prepend($"\"{term}\"*")) + ")");
                     }
                     var fuzzy = await QueryAsync(table, string.Join(" AND ", clauses), books, limit, ordering);
@@ -211,6 +243,23 @@ public sealed class SearchIndexService : IAsyncDisposable
         return (ordering.Sort == SearchSort.Generation
             ? hits.OrderBy(hit => ordering.YearFor(hit.PerushId)).ThenBy(hit => hit.PerekId).ThenBy(hit => hit.PasukNum)
             : hits.OrderByDescending(hit => hit.Score)).Take(limit).ToList();
+    }
+
+    internal static string[] ExpandTerm(IEnumerable<string> vocabulary, string term, int edits, CancellationToken token)
+    {
+        var matches = new List<(string Term, int Distance)>();
+        var matcher = new SearchSpellingMatcher(term, edits);
+        foreach (var candidate in vocabulary)
+        {
+            // A changed query must release the table gate without finishing
+            // a whole vocabulary scan first. This method already runs on the
+            // search worker, so another Task.Run only adds scheduling work.
+            token.ThrowIfCancellationRequested();
+            var distance = matcher.Distance(candidate);
+            if (distance <= edits) { matches.Add((candidate, distance)); }
+        }
+        return matches.OrderBy(row => row.Distance).ThenBy(row => row.Term, StringComparer.Ordinal)
+            .Take(24).Select(row => $"\"{row.Term}\"").ToArray();
     }
 
     private Task<List<IndexRow>> QueryAsync(string table, string match, IReadOnlySet<int> books, int limit, SearchOrdering ordering)

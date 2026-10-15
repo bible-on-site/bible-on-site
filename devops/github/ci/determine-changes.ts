@@ -33,6 +33,13 @@ const RELEASE_CI_PATHS = [
 	...SHARED_CI_PATHS,
 	".github/workflows/shared-release.yml",
 ];
+// Deterministic E2E test-selection tooling plus the shared Playwright
+// evidence reporter — consumed by the website, admin and API E2E jobs
+// (the Appium suite already lists the selector under `app`, #2085).
+const E2E_IMPACT_CI_PATHS = [
+	"devops/github/ci/e2e-impact",
+	"web/shared",
+];
 
 export const MODULES = {
 	website: {
@@ -42,7 +49,11 @@ export const MODULES = {
 			"data/recitation/recitation.sqlite",
 			"app/BibleOnSite/Resources/Raw/recitation-audio.html",
 		],
-		ciPaths: [...RELEASE_CI_PATHS, "devops/github/ci/bencher-comparison.mjs"],
+		ciPaths: [
+			...RELEASE_CI_PATHS,
+			...E2E_IMPACT_CI_PATHS,
+			"devops/github/ci/bencher-comparison.mjs",
+		],
 		// Test-only changes run website checks but cannot alter the deployed
 		// site, so they must not package, release, or bump the version (#2132):
 		// the tests/ tree, colocated *.test.*/​*.spec.* files (including
@@ -53,10 +64,17 @@ export const MODULES = {
 		ciOnlyPattern:
 			/^web\/bible-on-site\/(tests\/|.*\.(test|spec)\.[^/]+$|jest[^/]*\.[^/]*$|playwright[^/]*\.[^/]*$|\.covignore\.mjs$|shared\/typing\/coverage\.d\.ts$|get-debug-port\.js$|launch-e2e-server\.mts$)/,
 	},
-	api: { directory: "web/api", ciPaths: RELEASE_CI_PATHS },
+	api: {
+		directory: "web/api",
+		ciPaths: [...RELEASE_CI_PATHS, ...E2E_IMPACT_CI_PATHS],
+	},
 	app: {
 		directory: "app",
-		extraModulePaths: ["web/bible-on-site/src/data/recitation/opus-playback.json"],
+		// Both approved timings and the Opus inventory ship in the native app.
+		extraModulePaths: [
+			"data/recitation/recitation.sqlite",
+			"web/bible-on-site/src/data/recitation/opus-playback.json",
+		],
 		// The e2e-impact selector/collector and the exec coverage-tree
 		// extractor drive the Appium suite (#2085).
 		ciPaths: [
@@ -65,9 +83,8 @@ export const MODULES = {
 			"devops/github/ci/e2e-impact",
 			"devops/e2e-coverage-trees",
 		],
-		// Shared decoder changes need native checks. Only changes to the packaged
-		// app itself need an app version, package and release. Website timing
-		// batches also change their package version files.
+		// Shared website decoder inputs require native checks without a native
+		// release. Approved timings are packaged inputs through extraModulePaths.
 		extraCiPattern:
 			/^web\/bible-on-site\/(package(-lock)?\.json|src\/lib\/recitation-audio\.ts)$/,
 		// Test projects exercise the app but never change its package, so a
@@ -78,6 +95,7 @@ export const MODULES = {
 		directory: "web/admin",
 		ciPaths: [
 			...SHARED_CI_PATHS,
+			...E2E_IMPACT_CI_PATHS,
 			"devops/rustfs",
 			"devops/docker-compose.yml",
 			"devops/package.json",

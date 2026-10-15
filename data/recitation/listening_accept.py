@@ -15,7 +15,7 @@ from listening_audio import duration
 from listening_review import (ReviewStore, digest_file, digest_json,
                               read_json, validate_case, validate_decision)
 from listening_round import load_review_evidence
-from listening_tail import verify_corrections
+from listening_tail import INITIAL_SOURCE_METHOD, verify_corrections
 from model_versions import ALIGN_MODEL, ALIGN_REVISION, ASR_MODEL, ASR_REVISION
 from recite import cached_transcript, export_database, write_json
 from trusted import POLICY_VERSION, SOFT_WARNING, TRUSTED_PIPELINE, valid_score, verify_source, verify_warnings
@@ -30,6 +30,7 @@ def verify_review(case, decision, queue_hash):
     checked = validate_decision(case, {
         "candidateSha256": decision["candidateSha256"], "verdict": decision["verdict"],
         "verseHeard": evidence["verseHeard"], "heardSegments": evidence["heardSegments"],
+        **({"freshHeardSegments": evidence["freshHeardSegments"]} if "freshHeardSegments" in evidence else {}),
         "note": decision["note"],
     })
     for key, value in checked.items():
@@ -56,6 +57,11 @@ def verify_diagnostic(case):
                 and round(diagnostic["contextStartSec"] * 1000) == case["clipStartMs"]
                 and round(diagnostic["contextEndSec"] * 1000) == case["clipEndMs"]
                 and rows == case["words"]):
+            if diagnostic.get("boundaryMethod") == INITIAL_SOURCE_METHOD:
+                if (case.get("reviewKind") != "missing" or case.get("listeningReusePath")
+                        or case.get("reusableHeardSegments")
+                        or diagnostic.get("canonicalTextSha256") != case["textSha256"]):
+                    raise ValueError("Initial source candidate requires fresh full-verse cut hearing")
             if diagnostic.get("boundaryMethod"):
                 verify_corrections(diagnostic)
             return

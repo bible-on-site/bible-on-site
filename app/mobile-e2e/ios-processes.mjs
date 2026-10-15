@@ -14,3 +14,14 @@ export function iosAppPids(launchctlList, bundleId = IOS_APP_BUNDLE_ID) {
     .map((line) => line.trim().split(/\s+/)[0])
     .filter((pid) => /^[0-9]+$/.test(pid));
 }
+
+// The stream is restricted to BibleOnSite on the run's explicit simulator.
+// Use its observed host PIDs to avoid inspecting every process on a busy Mac.
+export function iosAppLogPids(log) {
+  const pids = new Set();
+  // Scan once without allocating every line and its whitespace fields.
+  // Accessibility logs can contain megabytes of multiline snapshot text.
+  const header = /^\d{4}-\d{2}-\d{2}[ \t]+\S+[ \t]+\S+[ \t]+BibleOnSite\[(\d+):[0-9a-f]+\](?=\s|$)/gim;
+  for (const match of log.matchAll(header)) pids.add(Number(match[1]));
+  return [...pids];
+}

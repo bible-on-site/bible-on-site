@@ -242,12 +242,18 @@ by the `app` Codecov flag (98.5% gate, 0% threshold):
 
 ```
 unit/lcov.info + integration/lcov.info + e2e/{android,ios}/lcov.info
-        └─ merge-lcov.mts --relocate app/BibleOnSite/  →  .coverage/merged/lcov.info
+        └─ merge-lcov.mts --relocate app/BibleOnSite/ --hits-only <e2e>
+           →  .coverage/merged/lcov.info
 ```
 
 - `merge-lcov.mts` unions records **by covered location** (`DA`, `BRDA`,
   `FNDA` hit counts take the max), so a line exercised on any layer or
   platform counts exactly once and lines executed nowhere stay uncovered.
+- The E2E inputs merge with `--hits-only`: their OpenCover template
+  enumerates a separately instrumented build's full sequence-point
+  universe, so their zero-hit records are dropped — covered locations
+  still union in, while unexecuted e2e lines and files do not inflate
+  the flag's denominator (#2270).
 - `--relocate` canonicalizes absolute runner paths (Linux Android leg, macOS
   iOS leg, local Windows) onto `app/BibleOnSite/`, so the same source line
   never double-counts across runners.

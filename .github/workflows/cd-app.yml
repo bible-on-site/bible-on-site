@@ -28,7 +28,7 @@ concurrency:
 jobs:
   deploy_google_play:
     name: Deploy to Google Play (Internal Track)
-    if: ${{ github.event.client_payload.android_artifact_name != '' }}
+    if: ${{ (github.event.client_payload.artifacts.android_artifact_name || github.event.client_payload.android_artifact_name) != '' }}
     permissions:
       contents: read
       actions: read
@@ -37,7 +37,7 @@ jobs:
 
     env:
       MODULE_VERSION: ${{ github.event.client_payload.module_version }}
-      ANDROID_ARTIFACT_NAME: ${{ github.event.client_payload.android_artifact_name }}
+      ANDROID_ARTIFACT_NAME: ${{ github.event.client_payload.artifacts.android_artifact_name || github.event.client_payload.android_artifact_name }}
       CI_RUN_ID: ${{ github.event.client_payload.ci_run_id }}
       APP_DIRECTORY: app
 
@@ -118,17 +118,17 @@ jobs:
         run: rm -f ${{ runner.temp }}/service-account.json
 
       - name: Deployment Summary
-        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        if: ${{ always() && steps.guard.outputs.deploy == 'true' }}
         run: |
           echo "## Android Deployment Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Version:** ${{ env.MODULE_VERSION }}" >> $GITHUB_STEP_SUMMARY
           echo "**Track:** Internal" >> $GITHUB_STEP_SUMMARY
-          echo "**Status:** Deployed ✅" >> $GITHUB_STEP_SUMMARY
+          echo "**Status:** ${{ job.status == 'success' && 'Deployed ✅' || 'Failed ❌ — see the upload step log for the actionable cause' }}" >> $GITHUB_STEP_SUMMARY
 
   deploy_microsoft_store:
     name: Deploy to Microsoft Store
-    if: ${{ github.event.client_payload.windows_artifact_name != '' }}
+    if: ${{ (github.event.client_payload.artifacts.windows_artifact_name || github.event.client_payload.windows_artifact_name) != '' }}
     permissions:
       contents: read
       actions: read
@@ -137,7 +137,7 @@ jobs:
 
     env:
       MODULE_VERSION: ${{ github.event.client_payload.module_version }}
-      WINDOWS_ARTIFACT_NAME: ${{ github.event.client_payload.windows_artifact_name }}
+      WINDOWS_ARTIFACT_NAME: ${{ github.event.client_payload.artifacts.windows_artifact_name || github.event.client_payload.windows_artifact_name }}
       CI_RUN_ID: ${{ github.event.client_payload.ci_run_id }}
       APP_DIRECTORY: app
 
@@ -192,6 +192,10 @@ jobs:
       - name: Setup Microsoft Store Developer CLI
         if: ${{ steps.guard.outputs.deploy == 'true' }}
         uses: microsoft/setup-msstore-cli@v1
+        with:
+          # Pin the last-validated release instead of tracking 'latest' so an
+          # untested upstream CLI release cannot silently break deployments.
+          version: v0.4.3
 
       - name: Configure Microsoft Store Developer CLI
         if: ${{ steps.guard.outputs.deploy == 'true' }}
@@ -233,18 +237,18 @@ jobs:
         run: node "${{ runner.temp }}/deployment-state.mjs"
 
       - name: Deployment Summary
-        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        if: ${{ always() && steps.guard.outputs.deploy == 'true' }}
         shell: pwsh
         run: |
           "## Windows Deployment Summary" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
           "" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
           "**Version:** ${{ env.MODULE_VERSION }}" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
           "**Target:** Microsoft Store (Internal Flight)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
-          "**Status:** Submitted ✅" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          "**Status:** ${{ job.status == 'success' && 'Submitted ✅' || 'Failed ❌ — see the upload step log for the Partner Center error' }}" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
 
   deploy_app_store:
     name: Deploy to App Store (TestFlight)
-    if: ${{ (github.event.client_payload.ios_artifact_name != '' || inputs.ios_artifact_name != '') && !inputs.inspect_ios_build }}
+    if: ${{ ((github.event.client_payload.artifacts.ios_artifact_name || github.event.client_payload.ios_artifact_name) != '' || inputs.ios_artifact_name != '') && !inputs.inspect_ios_build }}
     permissions:
       contents: read
       actions: read
@@ -253,7 +257,7 @@ jobs:
 
     env:
       MODULE_VERSION: ${{ github.event.client_payload.module_version || '0.0.0' }}
-      IOS_ARTIFACT_NAME: ${{ github.event.client_payload.ios_artifact_name || inputs.ios_artifact_name }}
+      IOS_ARTIFACT_NAME: ${{ github.event.client_payload.artifacts.ios_artifact_name || github.event.client_payload.ios_artifact_name || inputs.ios_artifact_name }}
       CI_RUN_ID: ${{ github.event.client_payload.ci_run_id || inputs.ci_run_id }}
       APP_DIRECTORY: app
 
@@ -339,7 +343,8 @@ jobs:
 
       - name: Install Fastlane
         if: ${{ steps.guard.outputs.deploy == 'true' }}
-        run: gem install fastlane -NV
+        # macos-15's image ships fastlane; install only when it is missing.
+        run: command -v fastlane >/dev/null 2>&1 || gem install fastlane -NV
 
       - name: Check the exact TestFlight build before uploading
         if: ${{ steps.guard.outputs.deploy == 'true' }}
@@ -403,25 +408,25 @@ jobs:
         run: rm -rf $HOME/private_keys
 
       - name: Deployment Summary
-        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        if: ${{ always() && steps.guard.outputs.deploy == 'true' }}
         run: |
           echo "## iOS Deployment Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Version:** ${{ env.MODULE_VERSION }}" >> $GITHUB_STEP_SUMMARY
           echo "**Target:** TestFlight" >> $GITHUB_STEP_SUMMARY
-          echo "**Status:** Uploaded ✅" >> $GITHUB_STEP_SUMMARY
+          echo "**Status:** ${{ job.status == 'success' && 'Uploaded ✅' || 'Failed ❌ — see the failing step log for the actionable cause' }}" >> $GITHUB_STEP_SUMMARY
 
   distribute_app_store:
     name: Distribute to TestFlight
     needs: deploy_app_store
-    if: ${{ always() && needs.deploy_app_store.result == 'success' && (github.event.client_payload.ios_artifact_name != '' || inputs.ios_artifact_name != '') && !inputs.inspect_ios_build }}
+    if: ${{ always() && needs.deploy_app_store.result == 'success' && ((github.event.client_payload.artifacts.ios_artifact_name || github.event.client_payload.ios_artifact_name) != '' || inputs.ios_artifact_name != '') && !inputs.inspect_ios_build }}
     permissions:
       contents: read
       actions: read
       deployments: write
     uses: ./.github/workflows/testflight-distribution.yml
     with:
-      ios_artifact_name: ${{ github.event.client_payload.ios_artifact_name || inputs.ios_artifact_name }}
+      ios_artifact_name: ${{ github.event.client_payload.artifacts.ios_artifact_name || github.event.client_payload.ios_artifact_name || inputs.ios_artifact_name }}
       ci_run_id: ${{ github.event.client_payload.ci_run_id || inputs.ci_run_id }}
       parent_lock_held: true
     secrets: inherit

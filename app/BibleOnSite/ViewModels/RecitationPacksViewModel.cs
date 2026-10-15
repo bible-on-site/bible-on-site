@@ -94,7 +94,12 @@ public partial class RecitationPacksViewModel : ObservableObject
         _recitation = recitation;
         _perakim = perakim;
         _navigator = navigator;
-        _recitation.Changed += OnRecitationChanged;
+        // The service is a singleton: a strong subscription would retain every
+        // opened settings page. The weak subscription self-removes on collect.
+        BibleOnSite.Helpers.WeakEventSubscription.Subscribe(this, _recitation,
+            static (service, handler) => service.Changed += handler,
+            static (service, handler) => service.Changed -= handler,
+            static model => model.OnRecitationChanged(null, EventArgs.Empty));
     }
 
     /// <summary>Catalog metadata is loaded. Audio presence is reported by <see cref="InstallState"/>.</summary>
@@ -170,7 +175,7 @@ public partial class RecitationPacksViewModel : ObservableObject
             var sizeMb = Math.Ceiling(size / 1_000_000d);
             book.Status = !IsInstalled ? "זמינות תיבדק בעת ההורדה"
                 : available == 0 ? "אין הקלטות זמינות"
-                : installed == 0 ? $"לא מותקן — 0 מתוך {available} הקלטות ({sizeMb} MB)"
+                : installed == 0 ? $"לא מותקן - 0 מתוך {available} הקלטות ({sizeMb} MB)"
                 : installed < available ? $"מותקן חלקית — {installed} מתוך {available} הקלטות ({sizeMb} MB)"
                 : $"מותקן — {installed} מתוך {available} הקלטות ({sizeMb} MB)";
         }

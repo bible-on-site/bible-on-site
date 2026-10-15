@@ -33,7 +33,12 @@ public partial class ExtensionPacksViewModel : ObservableObject
         _recitationService = recitationService;
         _navigator = navigator;
         Packs = new RecitationPacksViewModel(recitationService, perekDataService, navigator);
-        _recitationService.Changed += OnRecitationChanged;
+        // The service is a singleton: a strong subscription would retain every
+        // opened settings page. The weak subscription self-removes on collect.
+        BibleOnSite.Helpers.WeakEventSubscription.Subscribe(this, _recitationService,
+            static (service, handler) => service.Changed += handler,
+            static (service, handler) => service.Changed -= handler,
+            static model => model.OnRecitationChanged(null, EventArgs.Empty));
     }
 
     /// <summary>Whether perushim notes are installed and available.</summary>

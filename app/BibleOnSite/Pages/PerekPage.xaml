@@ -46,7 +46,7 @@
                    HeightRequest="40"
                    CornerRadius="14"
                    BorderWidth="0"
-                   IsVisible="False"
+                   IsVisible="True"
                    BackgroundColor="{AppThemeBinding Light=#E4EFFD, Dark=#2C4569}"
                    TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark=#AACBFF}"
                    VerticalOptions="Center"
@@ -307,6 +307,7 @@
                                             AutomationId="PasukimCollection"
                                             IsVisible="{Binding BindingContext.IsTikkunKorimEnabled, Source={x:Reference PerekPageRoot}, Converter={StaticResource InvertedBoolConverter}}"
                                             SelectionMode="None"
+                                            Loaded="OnReaderListLoaded"
                                             Scrolled="OnPasukimScrolled"
                                             Margin="8,0,8,0">
                                 <CollectionView.ItemsSource>
@@ -324,7 +325,7 @@
                                 </CollectionView.Footer>
                                 <CollectionView.ItemTemplate>
                                     <DataTemplate x:DataType="models:PasukDisplayItem">
-                                        <Border Padding="12,8"
+                                        <controls:ReaderCellBorder Padding="12,8"
                                                 Margin="0,4"
                                                 StrokeShape="RoundRectangle 8"
                                                 Stroke="Transparent"
@@ -394,7 +395,7 @@
                                                     </BindableLayout.ItemTemplate>
                                                 </VerticalStackLayout>
                                             </VerticalStackLayout>
-                                        </Border>
+                                        </controls:ReaderCellBorder>
                                     </DataTemplate>
                                 </CollectionView.ItemTemplate>
                                 <CollectionView.EmptyView>
@@ -952,7 +953,7 @@
                 </CollectionView.ItemTemplate>
             </CollectionView>
         </Grid>
-        <WebView x:Name="RecitationDecoderView" Grid.Row="1" WidthRequest="1" HeightRequest="1" Opacity="0" InputTransparent="True"/>
+        <controls:RecitationDecoderHost x:Name="RecitationDecoder" Grid.Row="1"/>
         <toolkit:MediaElement x:Name="RecitationPlayer" Grid.Row="1" WidthRequest="1" HeightRequest="1" Opacity="0"
                               InputTransparent="True" ShouldAutoPlay="False" ShouldShowPlaybackControls="False"
                               MediaOpened="OnRecitationMediaOpened" MediaEnded="OnRecitationMediaEnded"

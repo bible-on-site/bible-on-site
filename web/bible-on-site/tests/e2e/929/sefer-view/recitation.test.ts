@@ -184,16 +184,45 @@ test.describe("Recitation in the book reader", () => {
 				name: `השמעת המילה ${manifest.words[0].text}`,
 				exact: true,
 			});
-			const second = reader.getByRole("button", {
-				name: `השמעת המילה ${manifest.words[1].text}`,
-				exact: true,
-			});
+			const highlightLabels = [0, 1].map(
+				(index) => `השמעת המילה ${manifest.words[index].text}`,
+			);
+			// At 2x speed a real word can be highlighted between Playwright polls.
+			// Observe the rendered transitions and styles without slowing playback.
+			await text.evaluate((element, labels) => {
+				const seen = new Map<string, string>();
+				element.setAttribute("data-observed-highlights", "[]");
+				const observer = new MutationObserver(() => {
+					for (const active of element.querySelectorAll(
+						'[aria-current="true"]',
+					)) {
+						const label = active.getAttribute("aria-label");
+						if (label && labels.includes(label)) {
+							seen.set(label, getComputedStyle(active).backgroundColor);
+						}
+					}
+					element.setAttribute(
+						"data-observed-highlights",
+						JSON.stringify([...seen]),
+					);
+					if (labels.every((label) => seen.has(label))) observer.disconnect();
+				});
+				observer.observe(element, {
+					subtree: true,
+					attributes: true,
+					attributeFilter: ["aria-current"],
+				});
+			}, highlightLabels);
 			await reader
 				.getByRole("button", { name: "השמעת פסוק א", exact: true })
 				.click();
-			await expect(first).toHaveAttribute("aria-current", "true");
-			await expect(first).toHaveCSS("background-color", "rgb(233, 239, 248)");
-			await expect(second).toHaveAttribute("aria-current", "true");
+			await expect
+				.poll(async () =>
+					JSON.parse(
+						(await text.getAttribute("data-observed-highlights")) ?? "[]",
+					),
+				)
+				.toEqual(highlightLabels.map((label) => [label, "rgb(233, 239, 248)"]));
 			await expect(first).not.toHaveAttribute("aria-current", "true");
 			// A pasuk preview bookmarks where continuous playback resumes. Preview
 			// the final pasuk so the continuous tail stays inside the test window —

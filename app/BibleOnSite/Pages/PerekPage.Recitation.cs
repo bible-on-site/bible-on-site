@@ -499,7 +499,7 @@ public partial class PerekPage
             // the user's pause retains its wall-clock length at every speed.
             var pauseMs = ranges is { Count: > 1 } && preferences.RecitationVersePauseMs >= 0
                 ? preferences.RecitationVersePauseMs * preferences.RecitationSpeed : 0;
-            _audioDecoder ??= new MpegRecitationAudioDecoder(RecitationDecoderView);
+            _audioDecoder ??= new MpegRecitationAudioDecoder(RecitationDecoder.GetOrCreateView());
             var path = await RecitationService.Instance.PrepareAudioAsync(perek.PerekId, perek.Pasukim, start, end, request.Token, ranges, _audioDecoder, pauseMs);
             if (request.IsCancellationRequested || _viewModel.Perek != perek || !RecitationAvailable)
             {

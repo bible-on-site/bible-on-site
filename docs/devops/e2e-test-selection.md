@@ -17,7 +17,8 @@ the executable-coverage tree produced by `devops/e2e-coverage-trees/`.
 | Automation-id coverage tree + selector (shadow/enforce) | Merged (#2092) | `devops/github/ci/e2e-impact/`, `app/mobile-e2e/e2e-impact.json`, `.github/workflows/app-mobile-e2e.yml` |
 | Real app-process coverage collection (AltCover + in-app recorder + per-test dumps) | In flight (#2156, branch `devin/e2e-coverage-merge`) | `app/BibleOnSite.E2eCoverage/`, `app/BibleOnSite.Tests.MobileE2E/AppCoverage.cs`, `app/devops/E2ECoverageApply.cs` |
 | Executable coverage-tree extraction | Merged (#2183) | `devops/e2e-coverage-trees/` |
-| Selector bridge: exec evidence unions into `coverage-tree.json` (this slice) | This document + tool | `devops/e2e-coverage-trees/to-selector-tree.ts`, `collect-appium --exec-tree`, `.github/workflows/app-mobile-e2e.yml` |
+| Selector bridge: exec evidence unions into `coverage-tree.json` | Merged (#2195, #2230) | `devops/e2e-coverage-trees/to-selector-tree.ts`, `collect-appium --exec-tree`, `.github/workflows/app-mobile-e2e.yml` |
+| Playwright suites (website, admin, API): evidence, discovery, collectors, shadow CI | This slice | `web/shared/tests-util/e2e-impact.ts`, `*/e2e-impact.json`, `collect-playwright`, `.github/workflows/ci.yml` |
 | AST-aware change comparison, dependency edges | Later slices | — |
 
 Two evidence channels exist today and answer different questions:
@@ -250,6 +251,110 @@ corrupt or mismatched `--exec-tree` logs a warning and the output stays
 byte-identical to the automation-id-only collection. `complete` merges as
 `AND`: an incomplete exec tree keeps the merged tree incomplete so a
 partial run can never publish a baseline.
+
+## Playwright suites (website, admin, API)
+
+The same coverage-tree contract covers the three Playwright suites —
+`website-e2e` (`web/bible-on-site`), `admin-e2e` (`web/admin`) and `api-e2e`
+(`web/api`) — each shipping an `e2e-impact.json` suite contract and a
+`collect-playwright` collection step wired into `ci.yml` in shadow mode.
+
+### Test identity and discovery
+
+Identity is `<testDir-relative file> :: <describe> :: <test title>` — the
+exact string the runtime reporter computes from `test.titlePath()` with the
+project element (`titlePath[1]`) dropped: a selection can never run a test
+on one Playwright project but not another, so Desktop/Mobile evidence for
+the same test unions under one id.
+
+`playwright-discovery.ts` parses test sources with a small tokenizer —
+deliberately *not* `playwright --list`, which would require installed
+`node_modules` and a bootable config. Literal `test`/`test.describe` titles
+resolve to ids; a file whose declarations cannot all be resolved statically
+(non-literal or template title, dynamic describe, parse anomaly, or a
+glob-matched file yielding zero declarations) is recorded in
+`dynamicTestFiles`: a change to it selects the whole suite, and enforce-mode
+runners must execute it wholesale rather than by id.
+
+### Evidence layout and the shared reporter
+
+`web/shared/tests-util/e2e-impact.ts` is the single evidence module every
+suite consumes. It does nothing unless `E2E_IMPACT_DIR` is set — each
+suite's Playwright config sets it to `<package>/.coverage/e2e-impact/` under
+`MEASURE_COV=1` (the `coverage:e2e` scripts) and registers the reporter.
+
+| Path | Producer | Content |
+| --- | --- | --- |
+| `discovered.json` | `E2eImpactReporter.onBegin` | The runtime test list (`e2e-impact-discovery/1`) reconciled against static discovery as diagnostics |
+| `test-results.json` | `E2eImpactReporter.onTestEnd/onEnd` | Per-test `{id, project, retry, status, outcome}` across projects and retries |
+| `coverage/<hash>-<project>-<seq>.json` | `dumpImpactCoverage` (browser fixtures) | One istanbul map per drain, tagged `realm` |
+
+The **realm** tag carries the conservative split:
+
+- `browser` — `window.__coverage__` drained per test by the suite's custom
+  fixture (website `tests/util/playwright/test-fixture.ts`, admin
+  `tests/util/test-fixture.ts`). Per-context counters are exact → per-test
+  `CoverageTreeTest.files` claims.
+- `server` — the dev-server `/api/dev/coverage` drain. The dev server is one
+  shared process across parallel workers, so its counters can mix tests →
+  every server-realm file lands in `CoverageTree.sharedFiles`, never a
+  per-test claim.
+
+Tests bypassing the fixture or producing no dump are marked
+`unattributed: true` and cover the union of every attributed file plus
+shared coverage — they run on any covered change and can never be narrowed
+away. Dumps whose id static discovery cannot claim (dynamic files) widen
+into `sharedFiles` as well; dump filenames carry the worker index and
+retry number so a retried attempt can never overwrite an earlier dump.
+Corrupt evidence files — and missing `test-results.json`/`discovered.json`
+reporter output — mark the tree `complete: false`; incomplete trees can
+neither publish a baseline (the publish step gates on the tree's
+`complete` flag) nor serve as one (`validateTree` rejects them, so
+selection falls back to the full suite).
+
+### The `api-operations` collector
+
+Rust has no per-test coverage channel (`cargo llvm-cov` is suite-level; the
+API process is shared by every test), so `web/api` attributes tests
+*statically* via `api-map.ts`:
+
+- GraphQL operation names in test-file `query:`/`document:`/`mutation:`
+  payload literals resolve to the `#[Object] impl` resolver file declaring
+  them (`#[graphql(name = "…")]` renames honored); a `use`-graph closure
+  over `web/api/src` and `web/api/entities/src` widens each test to the
+  modules its resolvers can reach. `use` trees expand recursively
+  (`crate::{a::b::{C, D}, e}`), `mod child;` declarations add file → child
+  module edges (e.g. `article_search.rs` → `article_search/lsa.rs`), and
+  `self::`/`super::` prefixes resolve relative to the declaring module.
+- Nested selection fields widen attribution further: every field name at
+  any selection depth resolves through a field map covering `#[Object]`,
+  `#[ComplexObject]` and `#[Interface]` impl methods plus
+  `#[derive(SimpleObject)]` members — so `authors { articlesCount }`
+  reaches the DTO impl that computes it, not just the root resolver.
+  Unresolved nested names are scalar fields and are ignored.
+- REST path literals resolve through `web::resource("…").to(handler)`
+  registrations; registrar/dispatch files (`startup/app.rs`,
+  `startup/schema_builder.rs`) are shared, never per-test.
+- The reporter's `discovered.json`/`test-results.json` still provide the
+  outcome and runtime-discovery evidence for the tree.
+
+Unresolved operations land in `unmappedIds` (diagnostics); unresolved
+in-scope source changes resolve `unmapped-in-scope` → full suite, so
+under-attribution can only over-select.
+
+### Selection specifics
+
+- `filter.playwright` replaces `filter.vstest` for these suites: selected
+  tests grouped as `{file, titles}` where each title is the describe path
+  joined by spaces — the string `playwright test --grep` matches. In shadow
+  mode it is diagnostics; an enforce runner would feed it alongside
+  `dynamicTestFiles` (which run wholesale).
+- Structural fingerprints cover `.ts`/`.tsx`/`.js`/`.mjs` sources; `.rs`
+  files fingerprint as `null`, so Rust edits always count as real changes.
+- Baselines publish only from completed, successful `master` pushes as
+  `website-e2e-coverage.master`, `admin-e2e-coverage.master` and
+  `api-e2e-coverage.master`; every run downloads them for the shadow
+  manifest and stores the manifest/tree as run diagnostics.
 
 ## Storage and refresh policy
 

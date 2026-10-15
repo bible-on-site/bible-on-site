@@ -42,6 +42,7 @@
         "DeployMsStore",
         "Dev",
         "Lint",
+        "ListMobileE2E",
         "Package",
         "PackagePrepare",
         "PrepareApiConfig",

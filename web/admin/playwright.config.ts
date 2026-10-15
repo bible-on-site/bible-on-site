@@ -1,4 +1,6 @@
 import * as fs from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
 	defineConfig,
 	devices,
@@ -10,6 +12,18 @@ import { shouldMeasureCov } from "../shared/tests-util/environment.mjs";
 // Use launcher script that handles DB and S3 population then starts the server
 const webServerCommand = "node --import tsx ./tests/util/launch-e2e-server.mts";
 
+// Deterministic e2e-impact evidence (#2085): under coverage runs the shared
+// reporter writes discovered/test-results JSON here and the test fixture
+// drops per-test istanbul dumps alongside it. Nothing is written otherwise.
+const E2E_IMPACT_DIR = join(
+	dirname(fileURLToPath(import.meta.url)),
+	".coverage",
+	"e2e-impact",
+);
+if (shouldMeasureCov) {
+	process.env.E2E_IMPACT_DIR = E2E_IMPACT_DIR;
+}
+
 export default defineConfig({
 	testDir: "./tests/e2e",
 	fullyParallel: true,
@@ -19,6 +33,9 @@ export default defineConfig({
 	reporter: [
 		["html", { outputFolder: ".playwright-report" }],
 		...(shouldMeasureCov ? [getMonocartReporter()] : []),
+		...(shouldMeasureCov
+			? [["../shared/tests-util/e2e-impact"] as ReporterDescription]
+			: []),
 	],
 	outputDir: ".playwright-results",
 	use: {

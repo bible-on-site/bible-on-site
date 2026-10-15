@@ -37,6 +37,21 @@ public sealed class PerushimHtmlScrollStabilityTests(ITestOutputHelper output, M
         Assert.True(checkedCount > 0,
             "Synthetic perushim must render checkboxes — otherwise HtmlView cells are never created");
 
+        // Grouping must retain every paragraph, including text far outside the
+        // visible viewport. This also exercises the formerly blocking AX lookup.
+        Page.WaitFor("CommentaryTextSection");
+        var sections = System.Xml.Linq.XDocument.Parse(Driver!.PageSource).Descendants()
+            .Where(element => (string?)element.Attribute("name") == "CommentaryTextSection")
+            .Select(element => (string?)element.Attribute("label") ?? string.Empty).ToArray();
+        Assert.NotEmpty(sections);
+        Assert.All(sections, text => Assert.InRange(text.Length, 1, 1024));
+        var spokenText = string.Concat(sections);
+        Assert.Equal(2200, System.Text.RegularExpressions.Regex.Matches(spokenText, "פירוש ארוך").Count);
+        Assert.Contains("עם פירוש נוסף על הפסוק.", spokenText);
+        var sourceBeforeStorm = Page.Source;
+        var verseBeforeStorm = Page.FirstPasuk;
+        SaveDiagnostics("LongPerushimBeforeScroll", "passed");
+
         var list = Page.WaitFor("PasukimCollection");
         var centerX = list.Location.X + list.Size.Width / 2;
         var topY = list.Location.Y + list.Size.Height / 5;
@@ -55,13 +70,13 @@ public sealed class PerushimHtmlScrollStabilityTests(ITestOutputHelper output, M
         // stalling for minutes if the app did crash.
         void Storm(int fromY, int toY)
         {
-            for (var burst = 0; burst < 2; burst++)
+            foreach (var sequence in PerekScrollStabilityTests.CreateFlickBursts(
+                centerX, fromY, centerX, toY, 20))
             {
                 var midState = Convert.ToInt64(Driver!.ExecuteScript("mobile: queryAppState",
                     new Dictionary<string, object> { ["bundleId"] = "com.tanah.daily929" }));
                 Assert.Equal(4L, midState);
-                Driver!.PerformActions([PerekScrollStabilityTests.CreateFlickSequence(
-                    centerX, fromY, centerX, toY, 10)]);
+                Driver!.PerformActions([sequence]);
             }
         }
 
@@ -70,8 +85,12 @@ public sealed class PerushimHtmlScrollStabilityTests(ITestOutputHelper output, M
         Output.WriteLine($"App state after perushim scroll storm: {appState}");
         // 4 = running in foreground. A crashed app reports 1 (not running).
         Assert.Equal(4L, Convert.ToInt64(appState));
-        Assert.NotEmpty(Page.Source);
-        Assert.NotEmpty(Page.FirstPasuk);
+        Assert.Equal(sourceBeforeStorm, Page.Source);
+        // Opposite flicks need not cancel their inertia. The reader can remain
+        // inside the huge note, with every verse outside the visible viewport.
+        Page.ScrollBackTo("PasukText", element => element.Text == verseBeforeStorm);
+        Assert.Equal(verseBeforeStorm, Page.FirstPasuk);
+        SaveDiagnostics("LongPerushimAfterScroll", "passed");
     });
 
     // Add up to five visible sources sequentially, including the large first commentary.

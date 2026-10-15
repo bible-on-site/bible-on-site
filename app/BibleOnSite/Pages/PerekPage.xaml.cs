@@ -228,7 +228,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         _carouselInitializing = false;
     }
 
-#if IOS
+#if IOS || MACCATALYST
     private static UIKit.UICollectionView? FindDescendantCollectionView(UIKit.UIView view)
     {
         foreach (var subview in view.Subviews)
@@ -506,6 +506,10 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         RegisterReaderKeyboardBack();
 #endif
         SubscribeRecitation();
+#if IOS
+        // Native history must be ready before asynchronous reader positioning.
+        ConfigureIosReaderHistory();
+#endif
         await InitializeRecitationAsync();
         Console.WriteLine("[Startup] PerekPage recitation initialized");
 #if ANDROID
@@ -577,6 +581,14 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
 #endif
     }
 
+    private void OnReaderListLoaded(object? sender, EventArgs e)
+    {
+#if IOS
+        // Newly realized verse lists must yield the edge gesture to history.
+        ConfigureIosReaderHistory();
+#endif
+    }
+
     /// <summary>
     /// Runs the full first-load sequence for this reader: resolve the perek to
     /// open, wait out the bounded ViewModel load, snap the carousel, then apply
@@ -594,9 +606,16 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         // The CarouselView fires spurious CurrentItemChanged events when it
         // first receives its ItemsSource, which would reset state.
         _carouselInitializing = true;
+        long? loadStamp;
         try
         {
-            await _viewModel.LoadByPerekIdAsync(perekId);
+            loadStamp = await _viewModel.LoadByPerekIdAsync(perekId);
+            if (loadStamp is null)
+            {
+                // A newer load or navigation superseded this one mid-flight —
+                // it owns the reader now, so skip the scroll and landing below.
+                return;
+            }
 
             // CarouselView resets Position to 0 when ItemsSource changes.
             // Force it to the correct position without animation.
@@ -605,6 +624,13 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
 
             // Yield so the CarouselView processes the scroll + layout pass.
             await Task.Delay(50);
+
+            // A navigation during layout owns the reader now. Check before
+            // writing the carousel position as well as the search landing.
+            if (_viewModel.ReaderLoadStamp != loadStamp)
+            {
+                return;
+            }
 
             // Sync the ViewModel position (two-way binding may lag)
             _viewModel.CarouselPosition = targetPos;

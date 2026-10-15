@@ -5,26 +5,27 @@ using Xunit;
 namespace BibleOnSite.Tests.MobileE2E;
 
 // One device per matrix runner; scenarios on that device run sequentially.
-// iOS shards the suite across two simulators (#2083): Shard=1 owns the shared
-// pilot while Shard=2 takes the iOS-only classes, keeping the two disjoint
-// groups close in scenario count. Android runs every applicable test and
-// ignores the trait.
+// CI keeps the long commentary and rapid verse storms on separate runners.
+// The ten iOS cases remain balanced across three runners. Android runs all six
+// shared scenarios without a shard filter.
 [Collection("Mobile device")]
 [Trait("Category", "MobileE2E")]
 [Trait("Platform", "Shared")]
-[Trait("Shard", "1")]
 public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSession session)
     : MobileDeviceTest(output, session)
 {
     [Fact]
+    [Trait("Shard", "1")]
     public void StartupDisplaysPackagedPesukimAndUsableBottomNavigation() => Scenario(() =>
     {
         Assert.NotEmpty(Page.Source);
         Assert.NotEmpty(Page.FirstPasuk);
+        Assert.Empty(Driver!.FindElements(Platform.AutomationId("RecitationDecoder")));
         Page.AssertBottomNavigationLayout();
     });
 
     [Fact]
+    [Trait("Shard", "3")]
     public void SearchReplacesTheSourceAndGroupsBooksInThreeColumns() => Scenario(() =>
     {
         Assert.NotEmpty(Page.FirstPasuk);
@@ -74,6 +75,7 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
     });
 
     [Fact]
+    [Trait("Shard", "1")]
     public void FloatingSearchFindsMisspelledChapterAndUnpointedVerse() => Scenario(() =>
     {
         Assert.NotEmpty(Page.FirstPasuk);
@@ -87,6 +89,7 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         Page.Tap("SearchSheetApplyButton");
         Page.WaitForHidden("SearchSheet");
         SearchFor("בראשיט 1", "בראשית א");
+        SaveDiagnostics("FloatingSearchChapterResults", "passed");
         Platform.Tap(Driver!, Page.WaitFor("SearchResultTitle", element => element.Text == "בראשית א"));
         Page.WaitFor("PerekSource", element => element.Text == "בראשית א");
         AssertRegularReader();
@@ -105,11 +108,13 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         Platform.GoBack(Driver);
         Page.WaitFor("PerekSearchInput", element => element.Text == "ויעש אלהים את הרקיע");
         Page.WaitFor("SearchResultTitle", element => element.Text == "בראשית א ז");
+        SaveDiagnostics("FloatingSearchVerseReturn", "passed");
         Page.Tap("SearchNavigationButton");
         AssertRegularReader();
     });
 
     [Fact]
+    [Trait("Shard", "3")]
     public void FloatingSearchCommentaryJumpRestoresPhraseResultsAndPosition() => Scenario(() =>
     {
         var driver = Driver!;
@@ -131,7 +136,7 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         var position = commentary.Location;
         Platform.Tap(driver, commentary);
         AssertRegularReader();
-        // Preserve the highlighted landing before checking a long note heading.
+        // Capture the highlighted match, then scroll back to the selected heading.
         SaveDiagnostics("FloatingSearchCommentaryLanding", "passed");
         Page.ScrollBackTo("InlinePerushName", element => element.Text == commentaryName);
         SaveDiagnostics("FloatingSearchCommentaryReader", "passed");
@@ -198,17 +203,11 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
     // reader appeared go back to the retained search page and tap once more.
     private (string Title, System.Drawing.Point Position) OpenCommentaryResult(string rowSuffix, string searchPhrase)
     {
-        // One cold-index attempt plus a single retry on the warm index.
+        // The shipped index serves the first search. A missed coordinate tap
+        // gets one retry, within the same ordinary interaction deadline.
         for (var attempt = 0; attempt < 2; attempt++)
         {
-            // A fresh installation builds the local index for the entire
-            // commentary package, and an interrupted import is discarded rather
-            // than resumed — a scenario boundary can throw away a nearly
-            // complete build, so the deadline must cover a full fresh import
-            // (~370s observed on a loaded macOS runner) plus result rendering
-            // and poll lag. The retry lands on the already-warm index.
-            var timeout = attempt == 0 ? TimeSpan.FromMinutes(8) : TimeSpan.FromSeconds(45);
-            var (commentary, _) = WaitForSettledRow(rowSuffix, timeout);
+            var (commentary, _) = WaitForSettledRow(rowSuffix, TimeSpan.FromSeconds(45));
             var title = commentary.Text;
             var position = commentary.Location;
             Platform.Tap(Driver!, commentary);
@@ -292,6 +291,7 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
     }
 
     [Fact]
+    [Trait("Shard", "3")]
     public void AdjacentPerekNavigationChangesTheTextAndReturnsToTheOriginal() => Scenario(() =>
     {
         var source = Page.Source;
@@ -316,6 +316,7 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
     });
 
     [Fact]
+    [Trait("Shard", "2")]
     public void NativeFlyoutOpensPreferencesAndBackReturnsToThePerek() => Scenario(() =>
     {
         var source = Page.Source;

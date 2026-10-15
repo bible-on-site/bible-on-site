@@ -191,7 +191,11 @@ partial class Build
                     // as separate properties, even inside a single argument.
                     // Normalization, reflection-based SQLite mapping and LINQ
                     // also execute in framework assemblies during the import.
-                    properties["MtouchInterpreter"] = "all%2C-BibleOnSite%2C-HtmlAgilityPack%2C-SQLite-net%2C-System.Private.CoreLib%2C-System.Runtime%2C-System.Collections%2C-System.Linq%2C-System.Net.Primitives";
+                    // Reader layout, binding and UIKit callbacks are also hot
+                    // paths during native snapshots and scrolling. Compile the
+                    // UI framework/bindings as in Release instead of crossing
+                    // into the interpreter for every control update.
+                    properties["MtouchInterpreter"] = "all%2C-BibleOnSite%2C-HtmlAgilityPack%2C-SQLite-net%2C-System.Private.CoreLib%2C-System.Runtime%2C-System.Collections%2C-System.Linq%2C-System.Net.Primitives%2C-Microsoft.Maui%2C-Microsoft.Maui.Controls%2C-Microsoft.Maui.Graphics%2C-Microsoft.iOS";
                     // The E2E coverage recorder answers every sequence point in
                     // the app — a single commentary-index import records tens of
                     // millions of visits. Interpreted, each Visit costs
