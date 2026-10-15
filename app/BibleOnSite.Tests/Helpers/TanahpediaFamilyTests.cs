@@ -777,4 +777,89 @@ public class TanahpediaFamilyTests
         tree.ChildGroups.Should().ContainSingle().Which.Labels.Should().BeEmpty();
         tree.SpouseUnits[0].Children.Should().BeEmpty();
     }
+
+    [Fact]
+    public void ParentRoleSortKey_UnknownCode_SortsLast()
+    {
+        TanahpediaFamily.ParentRoleSortKey("GUARDIAN").Should().Be(2);
+        TanahpediaFamily.ParentRoleSortKey(null).Should().Be(2);
+    }
+
+    [Fact]
+    public void BuildTree_SpouseFusion_SkipsAlreadyUsedMiddleUnit()
+    {
+        // Three single-edge units: the first fuses with the third, so the
+        // middle unit's inner scan must skip the used slot.
+        var family = new TanahpediaPersonFamily
+        {
+            Spouses =
+            [
+                new TanahpediaFamilySpouseEdge
+                {
+                    Related = Person("לאה", entityId: "e-leah"),
+                    UnionType = "MARRIAGE",
+                    UnionOrder = 1,
+                },
+                new TanahpediaFamilySpouseEdge
+                {
+                    Related = Person("רחל", entityId: "e-rachel"),
+                    UnionType = "MARRIAGE",
+                    UnionOrder = 1,
+                },
+                new TanahpediaFamilySpouseEdge
+                {
+                    Related = Person("לאה", entityId: "e-leah"),
+                    UnionType = "FORBIDDEN_WITH_GENTILE",
+                    UnionOrder = 1,
+                },
+            ],
+        };
+
+        var tree = TanahpediaFamily.BuildTree(family)!;
+
+        tree.SpouseUnits.Should().HaveCount(2);
+        tree.SpouseUnits.Select(unit => unit.Spouse.Card.DisplayName)
+            .Should().Equal("לאה", "רחל");
+    }
+
+    [Fact]
+    public void BuildTree_ChildAltGroup_GetsAlternativeLabel()
+    {
+        var family = new TanahpediaPersonFamily
+        {
+            Children =
+            [
+                new TanahpediaFamilyChildEdge
+                {
+                    Related = Person("יוסף", entityId: "e-yosef"),
+                    RelationshipType = "BIOLOGICAL",
+                },
+                new TanahpediaFamilyChildEdge
+                {
+                    Related = Person("בנימין", entityId: "e-benjamin"),
+                    RelationshipType = "BIOLOGICAL",
+                    AltGroupId = "alt-1",
+                },
+            ],
+        };
+
+        var tree = TanahpediaFamily.BuildTree(family)!;
+
+        tree.ChildGroups.Should().HaveCount(2);
+        tree.ChildGroups.SelectMany(group => group.Labels).Should().Contain("חלופי");
+    }
+
+    [Fact]
+    public void Card_IsLinkAndCitations_ReflectContent()
+    {
+        var bare = new TanahpediaFamilyCard { DisplayName = "יוסף" };
+        bare.IsLink.Should().BeFalse();
+        bare.HasCitations.Should().BeFalse();
+
+        var linked = new TanahpediaFamilyCard { DisplayName = "יוסף", EntryUniqueName = "יוסף" };
+        linked.IsLink.Should().BeTrue();
+
+        var cited = new TanahpediaFamilyCard { DisplayName = "יוסף", CardCitations = ["בראשית ל ו"] };
+        cited.HasCitations.Should().BeTrue();
+    }
 }

@@ -387,7 +387,7 @@ public class TanahpediaFamilyTreeView : ContentView
 
     /// <summary>Theme color lookup with a hex fallback for non-app hosts.</summary>
     private static Color Res(string key, string fallbackHex) =>
-        Application.Current?.Resources.TryGetValue(key, out var value) == true && value is Color color
+        Application.Current?.Resources.TryGetValue(key, out var value) is true && value is Color color
             ? color
             : Color.FromArgb(fallbackHex);
 }

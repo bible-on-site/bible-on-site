@@ -77,6 +77,16 @@ public class TanahpediaPlacesMapTests
     }
 
     [Fact]
+    public void Markers_Empty_ClearsWebViewSource()
+    {
+        var map = new TanahpediaPlacesMap();
+
+        map.Markers = [];
+
+        map.Content.Should().BeOfType<WebView>().Which.Source.Should().BeNull();
+    }
+
+    [Fact]
     public void OnNavigating_OtherScheme_LetsThrough()
     {
         var map = new TanahpediaPlacesMap();

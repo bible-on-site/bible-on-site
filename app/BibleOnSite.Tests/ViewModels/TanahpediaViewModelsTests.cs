@@ -785,4 +785,45 @@ public class TanahpediaEntryViewModelTests
         vm.HasFamily.Should().BeFalse();
         vm.HasMap.Should().BeFalse();
     }
+
+    [Fact]
+    public async Task Load_PlaceMarkersFailure_StillLoads()
+    {
+        _service.Setup(s => s.GetEntryDetailAsync("ירושלים", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TanahpediaEntryDetail
+            {
+                Id = "entry-1",
+                UniqueName = "ירושלים",
+                Title = "ירושלים",
+                Entities = [new TanahpediaLinkedEntity { EntityType = "PLACE", EntityName = "ירושלים" }],
+            });
+        _service.Setup(s => s.GetPlaceMarkersAsync("entry-1", It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("markers api down"));
+
+        var vm = Create();
+        vm.UniqueName = "ירושלים";
+        await vm.LoadAsync();
+
+        vm.ShowEntry.Should().BeTrue();
+        vm.HasMap.Should().BeFalse();
+        vm.PlaceMarkers.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Load_EmptyEntry_ShowsNoContentNotice()
+    {
+        _service.Setup(s => s.GetEntryDetailAsync("אדם", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TanahpediaEntryDetail
+            {
+                UniqueName = "אדם",
+                Title = "אדם",
+            });
+
+        var vm = Create();
+        vm.UniqueName = "אדם";
+        await vm.LoadAsync();
+
+        vm.ShowEntry.Should().BeTrue();
+        vm.ShowNoContentNotice.Should().BeTrue();
+    }
 }
