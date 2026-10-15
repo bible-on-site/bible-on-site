@@ -1,11 +1,13 @@
 import Image from "next/image";
 import Link from "next/link";
+import { TopNavSearch } from "./TopNavSearch";
 
 /**
  * Site header bar shown on every page: the logo links home from the center
  * and an icon-only search button is pinned to the physical left edge,
  * opposite the hamburger trigger at the right edge.
- * Server-rendered so the entry points stay crawlable and need no hydration.
+ * Server-rendered so the entry points stay crawlable; only the small
+ * route-aware search link hydrates (it is absent on the על הפרק reader).
  */
 export function TopNav() {
 	return (
@@ -20,9 +22,7 @@ export function TopNav() {
 					style={{ width: 72, height: "auto" }}
 				/>
 			</Link>
-			<Link href="/search" className="top-nav-search" aria-label="חיפוש">
-				<Image src="/icons/search.svg" alt="" width={24} height={24} />
-			</Link>
+			<TopNavSearch />
 		</nav>
 	);
 }
