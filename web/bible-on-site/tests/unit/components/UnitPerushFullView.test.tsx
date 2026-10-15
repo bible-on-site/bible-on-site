@@ -48,6 +48,7 @@ function note(perekId: number, pasuk: number, noteIdx = 0): RangedPerushNote {
 		perekId,
 		pasuk,
 		noteIdx,
+		// nosemgrep -- numeric-only fixture values, no user input
 		noteContent: `<p>note ${perekId}-${pasuk}-${noteIdx}</p>`,
 	};
 }
@@ -116,11 +117,7 @@ describe("UnitPerushFullView", () => {
 	});
 
 	it("keeps identical pasuk numbers in different perakim in separate groups", () => {
-		const { container } = renderView([
-			note(1, 1),
-			note(2, 1),
-			note(2, 2),
-		]);
+		const { container } = renderView([note(1, 1), note(2, 1), note(2, 2)]);
 		expect(
 			container.querySelector('[data-unit-perush-pasuk="1-1"]'),
 		).toBeInTheDocument();
