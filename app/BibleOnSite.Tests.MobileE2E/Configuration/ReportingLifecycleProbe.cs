@@ -1,4 +1,6 @@
 using System.Reflection;
+using System.Net;
+using System.Net.Sockets;
 using System.Text.Json;
 using Xunit;
 
@@ -26,6 +28,35 @@ public sealed class ReportingLifecycleProbe(ITestOutputHelper output)
             foregroundReporter = reporter is { IsBackground: false },
             reporterIsAlive = reporter?.IsAlive,
         }));
+        if (Environment.GetEnvironmentVariable("MOBILE_E2E_TELEMETRY_DISABLED_PROBE") == "1")
+        {
+            File.WriteAllText(Path.Join(directory, "telemetry.json"), JsonSerializer.Serialize(new
+            {
+                optedOut = Environment.GetEnvironmentVariable("TESTINGPLATFORM_TELEMETRY_OPTOUT") == "1",
+                sdkLoaded = AppDomain.CurrentDomain.GetAssemblies().Any(assembly => assembly.GetName().Name == "Microsoft.ApplicationInsights"),
+            }));
+        }
+        if (Environment.GetEnvironmentVariable("MOBILE_E2E_SDK_EXIT_PROBE") == "1")
+        {
+            var sdk = Assembly.Load("Microsoft.ApplicationInsights");
+            var initializer = sdk.GetType("Microsoft.ApplicationInsights.Extensibility.Implementation.Tracing.SelfDiagnostics.SelfDiagnosticsInitializer", true)!;
+            initializer.GetMethod("EnsureInitialized")!.Invoke(null, null);
+            var instance = initializer.GetField("Instance", BindingFlags.NonPublic | BindingFlags.Static)!.GetValue(null)!;
+            var refresher = ReadField(instance, "configRefresher");
+            // Model a stalled SDK operation without creating any foreground thread.
+            var release = new TcpListener(IPAddress.Loopback, 0);
+            release.Start();
+            var pending = AwaitReleaseAsync(release);
+            refresher.GetType().GetField("worker", BindingFlags.NonPublic | BindingFlags.Instance)!.SetValue(refresher, pending);
+            File.WriteAllText(Path.Join(directory, "sdk-exit.json"), JsonSerializer.Serialize(new
+            {
+                sdk = sdk.GetName().Name,
+                callback = initializer.FullName,
+                pendingTask = pending.Status.ToString(),
+                applicationForegroundThreadsCreated = 0,
+                releasePort = ((IPEndPoint)release.LocalEndpoint).Port,
+            }));
+        }
         if (Environment.GetEnvironmentVariable("MOBILE_E2E_REPORTING_LEAK") == "1")
         {
             new Thread(() =>
@@ -39,6 +70,14 @@ public sealed class ReportingLifecycleProbe(ITestOutputHelper output)
                 }));
                 gate.Wait();
             }) { Name = "Intentional foreground leak regression" }.Start();
+        }
+    }
+
+    private static async Task AwaitReleaseAsync(TcpListener listener)
+    {
+        using (listener)
+        {
+            using var connection = await listener.AcceptTcpClientAsync();
         }
     }
 

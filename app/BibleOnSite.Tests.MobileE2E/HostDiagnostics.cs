@@ -17,6 +17,10 @@ internal static class HostDiagnostics
         }
         Directory.CreateDirectory(directory);
         File.WriteAllText(Path.Join(directory, $"host-{Environment.ProcessId}.json"),
-            JsonSerializer.Serialize(new { pid = Environment.ProcessId }));
+            JsonSerializer.Serialize(new
+            {
+                pid = Environment.ProcessId,
+                telemetryOptOut = Environment.GetEnvironmentVariable("TESTINGPLATFORM_TELEMETRY_OPTOUT"),
+            }));
     }
 }
