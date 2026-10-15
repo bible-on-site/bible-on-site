@@ -269,8 +269,9 @@ swap is isolated to one file; no caller or DTO changes needed.
   in dark mode too.
 - Entry point: a persistent icon-only search button (`aria-label="חיפוש"`)
   pinned to the physical left edge of the top navigation bar — opposite the
-  hamburger — on every page. The main menu leads with על הפרק and holds no
-  search row.
+  hamburger — on every page except reading-unit pages (על הפרק and the
+  מסורה/פרשה unit readers), where the settings button owns that corner
+  (#2274). The main menu leads with על הפרק and holds no search row.
 
 ## SEO policy (researched and deliberate)
 
