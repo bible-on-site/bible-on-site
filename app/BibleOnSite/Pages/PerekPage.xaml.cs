@@ -1155,8 +1155,8 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         SelectionRecitationButton.IsEnabled = !_recitationBusy && perek != null && RecitationService.Instance.HasAudio(perek.PerekId) &&
             track != null && track.Matches(perek.Pasukim) && (_chapterRecitationSelection || track.AlignmentStatus == "ready");
         SelectionRecitationButton.Opacity = SelectionRecitationButton.IsEnabled ? 1 : 0.4;
-        SelectionRecitationButton.Text = RecitationPlayer.CurrentState == CommunityToolkit.Maui.Core.MediaElementState.Playing
-            ? Fonts.FluentUI.pause_24_regular : RecitationPlayer.CurrentState == CommunityToolkit.Maui.Core.MediaElementState.Paused
+        SelectionRecitationButton.Text = RecitationPlayer?.CurrentState == CommunityToolkit.Maui.Core.MediaElementState.Playing
+            ? Fonts.FluentUI.pause_24_regular : RecitationPlayer?.CurrentState == CommunityToolkit.Maui.Core.MediaElementState.Paused
                 ? Fonts.FluentUI.play_24_regular : Fonts.FluentUI.headphones_24_regular;
         var hint = _recitationBusy ? "טוען את הקלטת הפרק..." : track == null ? "אין הקלטה לפרק זה" :
             !RecitationService.Instance.HasAudio(track.PerekId) ? "הורידו את הקלטות הספר בהעדפות" :
