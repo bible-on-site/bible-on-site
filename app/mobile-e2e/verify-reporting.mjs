@@ -45,7 +45,12 @@ for (const mode of ["default", "synchronous", "leak"]) {
       } finally { await events.return(); }
       const pid = (await readFile(ready, "utf8")).trim();
       assert.match(pid, /^[1-9]\d*$/);
-      const { stdout } = await execute(tool, ["report", "--process-id", pid], { timeout: 5000, windowsHide: true });
+      const { stdout } = await execute(tool, ["report", "--process-id", pid], { timeout: 5000, windowsHide: true })
+        .catch(async error => {
+          await writeFile(join(artifacts, `${mode}-stack-error.txt`),
+            [error.message, error.stdout, error.stderr].filter(Boolean).join("\n"));
+          throw new Error(`${mode}: live reporting stack capture failed`, { cause: error });
+        });
       const foregroundReporter = stdout.includes("Xunit.Internal.MessageBus.ReporterWorker");
       await writeFile(join(artifacts, `${mode}-stack.txt`), stdout);
       assert.equal(foregroundReporter, mode === "default", `${mode}: unexpected result reporter lifetime`);

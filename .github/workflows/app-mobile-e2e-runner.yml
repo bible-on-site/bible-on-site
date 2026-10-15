@@ -94,6 +94,8 @@ jobs:
           NUGET_PACKAGES: ${{ runner.temp }}/native-stack-tool-nuget
         run: |
           dotnet tool install dotnet-stack --version 10.0.750501 --tool-path "${{ runner.temp }}/native-stack-tools"
+          # Validate and load the report command before the five-second live-capture window.
+          "${{ runner.temp }}/native-stack-tools/dotnet-stack" report --help
           echo "MOBILE_E2E_DOTNET_STACK=${{ runner.temp }}/native-stack-tools/dotnet-stack" >> "$GITHUB_ENV"
 
       - name: Hash NuGet dependency inputs
