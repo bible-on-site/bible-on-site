@@ -314,6 +314,62 @@ public class TanahpediaEntityTypeViewModelTests
         vm.EntityType = "ANIMAL";
         vm.Title.Should().Be("טהורים");
     }
+
+    [Fact]
+    public async Task Load_PlaceType_FetchesMarkers()
+    {
+        _service.Setup(s => s.GetCategoryHomepageAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((TanahpediaCategoryHomepage?)null);
+        _service.Setup(s => s.GetEntitiesWithEntriesAsync("PLACE", null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new TanahpediaEntityWithEntries { EntityName = "ירושלים" }]);
+        _service.Setup(s => s.GetPlaceMarkersAsync(null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new TanahpediaPlaceMarker { PlaceId = "p1", PlaceName = "ירושלים", Lat = 31.7, Lng = 35.2 }]);
+
+        var vm = Create();
+        vm.EntityType = "PLACE";
+        await vm.LoadAsync();
+
+        vm.IsLoaded.Should().BeTrue();
+        vm.HasMap.Should().BeTrue();
+        vm.PlaceMarkers.Should().ContainSingle();
+        _service.Verify(s => s.GetPlaceMarkersAsync(null, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task Load_NonPlaceType_SkipsMarkers()
+    {
+        _service.Setup(s => s.GetCategoryHomepageAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((TanahpediaCategoryHomepage?)null);
+        _service.Setup(s => s.GetEntitiesWithEntriesAsync("PERSON", null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+
+        var vm = Create();
+        vm.EntityType = "PERSON";
+        await vm.LoadAsync();
+
+        vm.HasMap.Should().BeFalse();
+        _service.Verify(s => s.GetPlaceMarkersAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Load_PlaceType_SurvivesMarkerFailure()
+    {
+        _service.Setup(s => s.GetCategoryHomepageAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((TanahpediaCategoryHomepage?)null);
+        _service.Setup(s => s.GetEntitiesWithEntriesAsync("PLACE", null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new TanahpediaEntityWithEntries { EntityName = "שילה" }]);
+        _service.Setup(s => s.GetPlaceMarkersAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("map unavailable"));
+
+        var vm = Create();
+        vm.EntityType = "PLACE";
+        await vm.LoadAsync();
+
+        vm.IsLoaded.Should().BeTrue();
+        vm.HasError.Should().BeFalse();
+        vm.HasMap.Should().BeFalse();
+    }
+
 }
 
 public class TanahpediaEntryViewModelTests
@@ -399,6 +455,9 @@ public class TanahpediaEntryViewModelTests
         var occurrence = vm.Occurrences[0];
         occurrence.Citation.Should().Be("שופטים טז ג");
         occurrence.VerseText.Should().Be("וַיָּקׇם שִׁמְשׁוֹן");
+        // Whole-pasuk occurrence — every segment renders bold.
+        occurrence.VerseFormatted!.Spans.Select(span => span.Text)
+            .Should().Equal("וַיָּקׇם ", "שִׁמְשׁוֹן");
     }
 
     [Fact]
@@ -639,5 +698,132 @@ public class TanahpediaEntryViewModelTests
         _navigator.Verify(n => n.GoToAsync(
             It.Is<string>(r => r.StartsWith("tanahpediaCategory") && r.Contains("entityType=PLACE"))),
             Times.Once);
+    }
+
+    [Fact]
+    public async Task Load_PersonEntry_LoadsFamilyTree()
+    {
+        _service.Setup(s => s.GetEntryDetailAsync("יעקב", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TanahpediaEntryDetail
+            {
+                UniqueName = "יעקב",
+                Title = "יעקב",
+                Entities = [new TanahpediaLinkedEntity { EntityType = "PERSON", EntityId = "e-yaakov", EntityName = "יעקב" }],
+            });
+        _service.Setup(s => s.GetPersonFamilyAsync("e-yaakov", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TanahpediaPersonFamily
+            {
+                FocalEntityId = "e-yaakov",
+                FocalDisplayName = "יעקב",
+                FocalSex = "MALE",
+                Spouses =
+                [
+                    new TanahpediaFamilySpouseEdge
+                    {
+                        Related = new TanahpediaFamilyPerson { EntityId = "e-leah", DisplayName = "לאה" },
+                        UnionType = "MARRIAGE",
+                        UnionOrder = 1,
+                    },
+                ],
+            });
+
+        var vm = Create();
+        vm.UniqueName = "יעקב";
+        await vm.LoadAsync();
+
+        vm.HasFamily.Should().BeTrue();
+        vm.FamilyTree!.SpousesLabel.Should().Be("בנות זוג");
+        vm.FamilyTree.SpouseUnits.Should().ContainSingle().Which.Spouse.Card.DisplayName.Should().Be("לאה");
+        _service.Verify(s => s.GetPlaceMarkersAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Load_PlaceEntry_LoadsMapMarkers()
+    {
+        _service.Setup(s => s.GetEntryDetailAsync("ירושלים", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TanahpediaEntryDetail
+            {
+                Id = "entry-1",
+                UniqueName = "ירושלים",
+                Title = "ירושלים",
+                Entities = [new TanahpediaLinkedEntity { EntityType = "PLACE", EntityName = "ירושלים" }],
+            });
+        _service.Setup(s => s.GetPlaceMarkersAsync("entry-1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync([
+                new TanahpediaPlaceMarker { PlaceId = "p1", PlaceName = "ירושלים", Lat = 31.7, Lng = 35.2 },
+            ]);
+
+        var vm = Create();
+        vm.UniqueName = "ירושלים";
+        await vm.LoadAsync();
+
+        vm.HasMap.Should().BeTrue();
+        vm.PlaceMarkers.Should().ContainSingle();
+        vm.HasFamily.Should().BeFalse();
+        _service.Verify(s => s.GetPersonFamilyAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Load_SurvivesOptionalDataFailures()
+    {
+        _service.Setup(s => s.GetEntryDetailAsync("יעקב", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TanahpediaEntryDetail
+            {
+                UniqueName = "יעקב",
+                Title = "יעקב",
+                Entities = [new TanahpediaLinkedEntity { EntityType = "PERSON", EntityId = "e-yaakov", EntityName = "יעקב" }],
+            });
+        _service.Setup(s => s.GetPersonFamilyAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("family api down"));
+
+        var vm = Create();
+        vm.UniqueName = "יעקב";
+        await vm.LoadAsync();
+
+        vm.ShowEntry.Should().BeTrue();
+        vm.HasError.Should().BeFalse();
+        vm.HasFamily.Should().BeFalse();
+        vm.HasMap.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Load_PlaceMarkersFailure_StillLoads()
+    {
+        _service.Setup(s => s.GetEntryDetailAsync("ירושלים", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TanahpediaEntryDetail
+            {
+                Id = "entry-1",
+                UniqueName = "ירושלים",
+                Title = "ירושלים",
+                Entities = [new TanahpediaLinkedEntity { EntityType = "PLACE", EntityName = "ירושלים" }],
+            });
+        _service.Setup(s => s.GetPlaceMarkersAsync("entry-1", It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("markers api down"));
+
+        var vm = Create();
+        vm.UniqueName = "ירושלים";
+        await vm.LoadAsync();
+
+        vm.ShowEntry.Should().BeTrue();
+        vm.HasMap.Should().BeFalse();
+        vm.PlaceMarkers.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Load_EmptyEntry_ShowsNoContentNotice()
+    {
+        _service.Setup(s => s.GetEntryDetailAsync("אדם", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TanahpediaEntryDetail
+            {
+                UniqueName = "אדם",
+                Title = "אדם",
+            });
+
+        var vm = Create();
+        vm.UniqueName = "אדם";
+        await vm.LoadAsync();
+
+        vm.ShowEntry.Should().BeTrue();
+        vm.ShowNoContentNotice.Should().BeTrue();
     }
 }

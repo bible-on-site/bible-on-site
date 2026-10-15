@@ -64,6 +64,12 @@ public partial class TanahpediaEntityTypeViewModel : ObservableObject
     [ObservableProperty]
     private string _layoutType = "LIST";
 
+    /// <summary>Place identification pins — populated only for the PLACE
+    /// category, matching the website's category map.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasMap))]
+    private List<TanahpediaPlaceMarker> _placeMarkers = [];
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsEmpty))]
     [NotifyPropertyChangedFor(nameof(HasEntities))]
@@ -78,6 +84,7 @@ public partial class TanahpediaEntityTypeViewModel : ObservableObject
     public bool HasIntro => !string.IsNullOrEmpty(IntroContent);
     public bool HasEntities => Entities.Count > 0;
     public bool IsEmpty => IsLoaded && Entities.Count == 0;
+    public bool HasMap => PlaceMarkers.Count > 0;
 
     /// <summary>Loads the category homepage config and the entity listing.</summary>
     [RelayCommand]
@@ -108,6 +115,20 @@ public partial class TanahpediaEntityTypeViewModel : ObservableObject
             }
 
             var entities = await entitiesTask;
+
+            // The PLACE category shows the identification map above the list —
+            // like the website. A marker failure drops the map, not the page.
+            if (EntityType == "PLACE")
+            {
+                try
+                {
+                    PlaceMarkers = await _service.GetPlaceMarkersAsync(null, CancellationToken.None) ?? [];
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"Tanahpedia place markers load failed: {ex}");
+                }
+            }
 
             IntroContent = homepage?.Content;
             LayoutType = homepage?.LayoutType ?? "LIST";
