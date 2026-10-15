@@ -1313,6 +1313,44 @@ public class FloatingSearchBar
 		);
 	});
 
+	test("a directive edit beside a member edit still widens", () => {
+		// The member diff explains only the member half — the `using` edit
+		// touches no member key, so its blast radius is invisible to member
+		// evidence and the file's whole covering set must run.
+		const tree = memberTree({
+			searchMembers: { [MEMBER_FILE]: [RENDER] },
+			startupMembers: { [MEMBER_FILE]: [BIND] },
+		});
+		const edited = MEMBER_CS.replace(
+			"namespace App;",
+			"using System.Collections.Generic;\nnamespace App;",
+		).replace("var x = 1;", "var x = 42;");
+		const manifest = memberSelect(tree, edited);
+		assert.equal(resolutionOf(manifest)?.reason, "member-widened");
+		assert.deepEqual(
+			[...(resolutionOf(manifest)?.tests ?? [])].sort(),
+			["Suite.Pilot.Search", "Suite.Pilot.Startup"],
+		);
+	});
+
+	test("a gap on a type no fingerprint knows widens any member diff", () => {
+		// Generated-type names can normalize to nothing the fingerprint
+		// emitted — the gap then proves unmapped coverage exists but cannot
+		// name its type, so every member diff in the file widens.
+		const tree = memberTree({
+			searchMembers: { [MEMBER_FILE]: [RENDER] },
+			startupMembers: { [MEMBER_FILE]: [BIND] },
+			memberGaps: { [MEMBER_FILE]: ["App.CompilerGenerated"] },
+		});
+		const edited = MEMBER_CS.replace("var x = 1;", "var x = 42;");
+		const manifest = memberSelect(tree, edited);
+		assert.equal(resolutionOf(manifest)?.reason, "member-widened");
+		assert.deepEqual(
+			[...(resolutionOf(manifest)?.tests ?? [])].sort(),
+			["Suite.Pilot.Search", "Suite.Pilot.Startup"],
+		);
+	});
+
 	test("a member reorder keeps members identical and widens conservatively", () => {
 		const tree = memberTree({
 			searchMembers: { [MEMBER_FILE]: [RENDER] },

@@ -252,11 +252,15 @@ function attachMembers(
 		const members = membersOf(node.file);
 		if (members === null) continue;
 		const sourceMembers = members.filter((member) => member.kind === "member");
-		// Member spans are disjoint (a member body never emits members), so
-		// at most one member contains the node's whole point span.
-		let target = sourceMembers.find(
+		// Member spans are disjoint for well-formed sources, but same-line
+		// one-liners (`void A() {} void B() {}`) produce identical spans —
+		// containment then matches several members and picking the first
+		// would attribute coverage to the wrong member. Ambiguity must stay
+		// unmapped so the file widens via memberGaps instead.
+		const whole = sourceMembers.filter(
 			(member) => member.span[0] <= span[0] && span[1] <= member.span[1],
 		);
+		let target = whole.length === 1 ? whole[0] : undefined;
 		if (
 			target === undefined &&
 			(node.decl.endsWith(".ctor") || node.decl.endsWith(".cctor"))
@@ -264,10 +268,11 @@ function attachMembers(
 			// Constructor nodes gather field/property initializer points from
 			// earlier member declarations — the span crosses member lines by
 			// construction. The node's tail is the ctor's own body, which
-			// sits inside exactly one member.
-			target = sourceMembers.find(
+			// must sit inside exactly one member.
+			const tail = sourceMembers.filter(
 				(member) => member.span[0] <= span[1] && span[1] <= member.span[1],
 			);
+			if (tail.length === 1) target = tail[0];
 		}
 		if (target === undefined) continue;
 		node.member = target.key;

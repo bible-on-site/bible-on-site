@@ -289,8 +289,10 @@ export function selectTests(input: SelectionInput): SelectionManifest {
 		fileTests: string[],
 	): { ids: string[]; widened: boolean } | null => {
 		if (tree === null) return null;
-		const baselineMembers = tree.sourceFingerprints?.[path]?.members;
-		const currentMembers = input.currentFingerprints?.get(path)?.members;
+		const baselineFp = tree.sourceFingerprints?.[path];
+		const currentFp = input.currentFingerprints?.get(path);
+		const baselineMembers = baselineFp?.members;
+		const currentMembers = currentFp?.members;
 		if (baselineMembers === undefined || currentMembers === undefined) return null;
 		const qualified = memberQualified.get(path);
 		if (qualified === undefined) return null;
@@ -304,11 +306,22 @@ export function selectTests(input: SelectionInput): SelectionManifest {
 			...Object.keys(baselineMembers),
 			...Object.keys(currentMembers),
 		]);
+		// A gap keyed on a type no fingerprint knows (generated `<>c`
+		// remnants, exotic normalized names) can never match a member — the
+		// only safe reading is "this file has unmapped coverage", so any
+		// member diff widens.
+		const knownTypes = new Set([...keys].map(memberTypeKey));
+		const unresolvedGap = [...gaps].some((type) => !knownTypes.has(type));
 		for (const key of keys) {
 			if (baselineMembers[key] === currentMembers[key]) continue;
 			anyMemberDiff = true;
 			const tests = byMember.get(key);
-			if (tests !== undefined && tests.size > 0 && !gaps.has(memberTypeKey(key))) {
+			if (
+				tests !== undefined &&
+				tests.size > 0 &&
+				!unresolvedGap &&
+				!gaps.has(memberTypeKey(key))
+			) {
 				for (const id of tests) selected.add(id);
 				continue;
 			}
@@ -318,9 +331,14 @@ export function selectTests(input: SelectionInput): SelectionManifest {
 			for (const id of fileTests) selected.add(id);
 		}
 		// A diff outside every member (usings, directives, file-scope code)
-		// changes no member key — evidence cannot say who observes it, so
-		// the file's whole covering set runs.
-		if (!anyMemberDiff) {
+		// changes no member key — the `nonMember` digest is the only witness
+		// for it, and an old baseline lacking it cannot prove it absent, so
+		// missing/differing digests keep the whole covering set.
+		const outsideChanged =
+			baselineFp?.nonMember === undefined ||
+			currentFp?.nonMember === undefined ||
+			baselineFp.nonMember !== currentFp.nonMember;
+		if (outsideChanged || !anyMemberDiff) {
 			widened = true;
 			for (const id of fileTests) selected.add(id);
 		}

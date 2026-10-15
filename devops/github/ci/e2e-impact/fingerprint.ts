@@ -33,6 +33,15 @@ export interface SourceFingerprint {
 	 * file-level selection.
 	 */
 	members?: Record<string, string>;
+	/**
+	 * Trivia-insensitive digest over every token OUTSIDE a `member`-kind
+	 * span — directives, usings, namespace/type declaration runs and any
+	 * file-scope text. A diff that touches none of the member digests but
+	 * changes this digest (e.g. a `using` edit) cannot be attributed to a
+	 * member, so the selector widens to the file's whole covering set.
+	 * Absent in older baselines — treated as "unknown outside" → widen.
+	 */
+	nonMember?: string;
 }
 
 /**
@@ -50,6 +59,12 @@ export interface SourceMember {
 	span: [number, number];
 	/** Trivia-insensitive sha256 over the member's token span. */
 	semantic: string;
+	/**
+	 * Token-index `[start, endExclusive)` range the member covers — internal
+	 * to fingerprinting so a "rest of file" digest can exclude member text
+	 * precisely (line spans would also hide tokens sharing a member line).
+	 */
+	tokenRange?: [number, number];
 }
 
 export type SourceKind = "csharp" | "xml" | "script" | "json";
@@ -619,6 +634,7 @@ export function extractMembers(tokens: string[], lines: number[]): SourceMember[
 			typeKey: scope,
 			span: [lines[runStart], lines[endIndex]],
 			semantic: semantic(runStart, endIndex + 1),
+			tokenRange: [runStart, endIndex + 1],
 		};
 		members.push(member);
 		return { member, startIndex: runStart };
@@ -694,6 +710,7 @@ export function extractMembers(tokens: string[], lines: number[]): SourceMember[
 					const pending = closing.pending;
 					pending.member.span = [pending.member.span[0], lines[index]];
 					pending.member.semantic = semantic(pending.startIndex, index + 1);
+					pending.member.tokenRange = [pending.startIndex, index + 1];
 					// `T Prop { get; } = expr;` — the initializer trails the
 					// body; the `;` run below re-attaches it to this member.
 					lastClosed = pending;
@@ -709,6 +726,7 @@ export function extractMembers(tokens: string[], lines: number[]): SourceMember[
 					// the closed member's declaration, not a new member.
 					lastClosed.member.span = [lastClosed.member.span[0], lines[index]];
 					lastClosed.member.semantic = semantic(lastClosed.startIndex, index + 1);
+					lastClosed.member.tokenRange = [lastClosed.startIndex, index + 1];
 				} else if (first === "namespace" && contexts.length === 0) {
 					// File-scoped namespace — prefixes every member below it.
 					const nameIndex = run.findIndex((part) => !part.startsWith("#")) + 1;
@@ -771,11 +789,27 @@ function fingerprintCSharp(text: string): SourceFingerprint | null {
 		regexBailout: false,
 	});
 	if (scanned === null) return null;
+	const members = extractMembers(scanned.tokens, scanned.lines);
+	// Every token outside a `member`-kind token range: directives, usings,
+	// namespace/type declaration runs, file-scope leftovers. A change there
+	// is invisible to the member diff, so the selector widens on it instead
+	// of trusting member evidence alone.
+	const inMember = new Array<boolean>(scanned.tokens.length).fill(false);
+	for (const member of members) {
+		if (member.kind !== "member" || member.tokenRange === undefined) continue;
+		for (let i = member.tokenRange[0]; i < member.tokenRange[1]; i++) {
+			inMember[i] = true;
+		}
+	}
+	const nonMember = sha256(
+		scanned.tokens.filter((_, index) => !inMember[index]).join(""),
+	);
 	return {
 		version: FINGERPRINT_VERSION,
 		semantic: sha256(scanned.tokens.join("")),
 		declarations: extractDeclarations(scanned.tokens),
-		members: memberMapValue(extractMembers(scanned.tokens, scanned.lines)),
+		members: memberMapValue(members),
+		nonMember,
 	};
 }
 

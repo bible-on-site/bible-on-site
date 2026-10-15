@@ -57,12 +57,20 @@ export interface ExecSelectorView {
 	memberGaps: Record<string, string[]>;
 }
 
-/** Strips compiler-generated `<>…` segments so gaps key on source types. */
+/**
+ * Reduces a node's `type:` parent to the source-level type name: `+`/`/`
+ * become `.`, compiler-generated `<>…` segments drop out, and generic
+ * arity suffixes (`Foo\`1`) strip to the source name — the key must match
+ * the `typeKey` member fingerprints emit for the same type.
+ */
 const gapTypeOf = (node: { parents?: string[] }): string | null => {
 	const typeParent = node.parents?.find((parent) => parent.startsWith("type:"));
 	if (typeParent === undefined) return null;
 	const normalized = typeParent.slice("type:".length).replace(/[+/]/g, ".");
-	const kept = normalized.split(".").filter((segment) => !segment.includes("<"));
+	const kept = normalized
+		.split(".")
+		.filter((segment) => !segment.includes("<"))
+		.map((segment) => segment.replace(/`\d+$/, ""));
 	return kept.join(".");
 };
 
@@ -101,6 +109,12 @@ export function execSelectorView(exec: ExecCoverageTree): ExecSelectorView {
 		// file → member keys the test's nodes map into. The file key's
 		// presence marks the test's exec coverage as member-qualified for
 		// that file — even when every node mapped to nothing (empty list).
+		// Node ids come from the merged tree (a carried baseline entry may
+		// resolve through a node attached against the newer source). That is
+		// coherent: member keys are name-anchored (`Ns.Type.M#sig`), so the
+		// decl a baseline test covered maps to the same member name in the
+		// current revision — a renamed/removed decl keeps its baseline node
+		// and its added/removed member keys widen by rule anyway.
 		const members = new Map<string, Set<string>>();
 		for (const nodeId of entry.nodes) {
 			const node = exec.nodes[nodeId];

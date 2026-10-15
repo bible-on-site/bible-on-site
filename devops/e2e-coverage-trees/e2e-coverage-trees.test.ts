@@ -1110,6 +1110,82 @@ describe("member mapping", () => {
 		});
 	});
 
+	test("same-line one-liner members are ambiguous — unmapped, gapped", () => {
+		// `void A() {} void B() {}` on one line gives both members an
+		// identical span; a node whose point span sits on that line could be
+		// either, so claiming the first would risk a wrong-member narrowing.
+		const sameLineXml = `<?xml version="1.0" encoding="utf-8"?>
+<CoverageSession><Modules>
+	<Module hash="BEEF43" skippedDueTo="SkippedDueTo_Declared">
+		<ModulePath>x</ModulePath><ModuleName>BibleOnSite</ModuleName>
+		<Files><File uid="1" fullPath="D:\\a\\bos\\bos\\app\\BibleOnSite\\SameLine.xaml.cs" /></Files>
+		<Classes><Class><FullName>BibleOnSite.SameLine</FullName><Methods>
+			<Method visited="false" isConstructor="false" isStatic="false">
+				<MetadataToken>0x06000001</MetadataToken><Name>B</Name><FileRef uid="1" />
+				<SequencePoints>
+					<SequencePoint vc="0" uspid="1" ordinal="0" sl="4" sc="20" el="4" ec="40" fileid="1" />
+				</SequencePoints>
+			</Method>
+		</Methods></Class></Classes>
+	</Module>
+</Modules></CoverageSession>`;
+		const sameLineCs = [
+			"namespace BibleOnSite;", // 1
+			"public class SameLine", // 2
+			"{", // 3
+			"    void A() { var a = 1; } void B() { var b = 2; }", // 4
+			"}", // 5
+		].join("\n");
+		const tree = extractTree(
+			baseInput({
+				readSource: (path) =>
+					path === "app/BibleOnSite/SameLine.xaml.cs" ? sameLineCs : null,
+				cover: parseOpenCover(parseXml(sameLineXml)),
+				dumps: [dump("Alpha", "passed", { BEEF43: { "1": 1 } })],
+				fqnByMethod: new Map([["Alpha", "Ns.AlphaTests.Alpha"]]),
+			}),
+		);
+		const node = tree.nodes["method:BibleOnSite.SameLine.B"];
+		assert.equal(node.member, undefined);
+		const view = execSelectorView(tree);
+		assert.deepEqual(view.memberGaps, {
+			"app/BibleOnSite/SameLine.xaml.cs": ["BibleOnSite.SameLine"],
+		});
+	});
+
+	test("generic-type gaps normalize arity to the source type name", () => {
+		// IL names a generic type `Gadget`2`; the member fingerprint knows it
+		// as `BibleOnSite.Gadget`. The gap must normalize the same way or a
+		// changed member inside the generic type would narrow wrongly.
+		const genericXml = `<?xml version="1.0" encoding="utf-8"?>
+<CoverageSession><Modules>
+	<Module hash="BEEF44" skippedDueTo="SkippedDueTo_Declared">
+		<ModulePath>x</ModulePath><ModuleName>BibleOnSite</ModuleName>
+		<Files><File uid="1" fullPath="D:\\a\\bos\\bos\\app\\BibleOnSite\\Gadget.xaml.cs" /></Files>
+		<Classes><Class><FullName>BibleOnSite.Gadget\`2</FullName><Methods>
+			<Method visited="false" isConstructor="false" isStatic="false">
+				<MetadataToken>0x06000001</MetadataToken><Name>Hidden</Name><FileRef uid="1" />
+				<SequencePoints>
+					<SequencePoint vc="0" uspid="1" ordinal="0" sl="2" sc="1" el="2" ec="20" fileid="1" />
+				</SequencePoints>
+			</Method>
+		</Methods></Class></Classes>
+	</Module>
+</Modules></CoverageSession>`;
+		const tree = extractTree(
+			baseInput({
+				readSource: () => null,
+				cover: parseOpenCover(parseXml(genericXml)),
+				dumps: [dump("Alpha", "passed", { BEEF44: { "1": 1 } })],
+				fqnByMethod: new Map([["Alpha", "Ns.AlphaTests.Alpha"]]),
+			}),
+		);
+		const view = execSelectorView(tree);
+		assert.deepEqual(view.memberGaps, {
+			"app/BibleOnSite/Gadget.xaml.cs": ["BibleOnSite.Gadget"],
+		});
+	});
+
 	test("member keys flow into the selector view per covered file", () => {
 		const tree = extractTree(
 			baseInput({
