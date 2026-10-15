@@ -88,7 +88,6 @@ jobs:
           dotnet-version: ${{ env.DOTNET_SDK_VERSION }}
 
       - name: Prepare managed test-host stack capture
-        if: inputs.mode != 'build'
         env:
           # Keep this diagnostic tool outside the empty prebuilt-runtime cache.
           NUGET_PACKAGES: ${{ runner.temp }}/native-stack-tool-nuget
@@ -250,6 +249,12 @@ jobs:
           mkdir -p "$MOBILE_E2E_ARTIFACTS"
           dotnet run --project devops -- TestMobileE2EUnit 2>&1 | tee -a "$MOBILE_E2E_ARTIFACTS/harness-validation.log"
           dotnet test --project devops.Tests/devops.Tests.csproj --configuration Release 2>&1 | tee -a "$MOBILE_E2E_ARTIFACTS/harness-validation.log"
+
+      # Validate once per platform before any device job starts. The iOS
+      # consumers verify the identical delivered runtime and configuration.
+      - name: Verify real test-host reporting and shutdown
+        if: inputs.mode != 'prebuilt-run'
+        run: node app/mobile-e2e/verify-reporting.mjs app/BibleOnSite.Tests.MobileE2E/bin/Debug/net10.0/BibleOnSite.Tests.MobileE2E.dll "$MOBILE_E2E_DOTNET_STACK" "$MOBILE_E2E_ARTIFACTS"
 
       # Validate before booting either device: cold simulator startup competes
       # with cache extraction and subprocess tests. The asynchronous boot still
@@ -544,10 +549,6 @@ jobs:
       # reaches the same gate through wait-all below.
       - name: Wait for test selection
         wait-all:
-
-      - name: Verify real test-host reporting and shutdown
-        if: inputs.mode != 'build'
-        run: node app/mobile-e2e/verify-reporting.mjs app/BibleOnSite.Tests.MobileE2E/bin/Debug/net10.0/BibleOnSite.Tests.MobileE2E.dll "$MOBILE_E2E_DOTNET_STACK" "$MOBILE_E2E_ARTIFACTS"
 
       - name: Run shared pilot on Android
         if: inputs.platform == 'Android'

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile, spawn } from "node:child_process";
-import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { promisify } from "node:util";
@@ -20,7 +20,9 @@ for (const mode of ["default", "synchronous", "leak"]) {
   const monitor = monitorTestHostShutdown(() => captureTestHostStacks(directory, tool, execute));
   const child = spawn("dotnet", [assembly, "--config-file", config,
     "--filter-query", "/[(Category=ReportingLifecycleProbe)]", "--explicit", "only",
-    "--progress", "off", "--results-directory", directory], {
+    "--progress", "off", "--results-directory", directory,
+    "--diagnostic", "--diagnostic-verbosity", "Information",
+    "--diagnostic-output-directory", join(artifacts, `${mode}-mtp`)], {
     windowsHide: true, env: { ...process.env, MOBILE_E2E_REPORTING_PROBE: directory,
       MOBILE_E2E_REPORTING_LEAK: mode === "leak" ? "1" : "0", MOBILE_E2E_HOST_DIAGNOSTICS: directory },
   });
@@ -32,7 +34,7 @@ for (const mode of ["default", "synchronous", "leak"]) {
   const deadline = setTimeout(() => child.kill("SIGKILL"), 20000);
   try {
     const exitCode = await closed;
-    assert.notEqual(exitCode, null, "The original xUnit guard must exit before the probe watchdog.");
+    assert.notEqual(exitCode, null, `${mode}: the test host did not finish inside the existing 20-second process budget; inspect its startup diagnostics.`);
     const reporterJson = await readFile(join(directory, "reporter.json"), "utf8");
     const reporter = JSON.parse(reporterJson);
     await writeFile(join(artifacts, `${mode}-reporter.json`), reporterJson);
@@ -69,6 +71,13 @@ for (const mode of ["default", "synchronous", "leak"]) {
     await closed;
     await monitor.stop();
     await writeFile(join(artifacts, `${mode}-output.txt`), output);
+    const registrations = (await readdir(directory)).filter(file => /^host-\d+\.json$/.test(file));
+    await writeFile(join(artifacts, `${mode}-process.json`), JSON.stringify({
+      pid: child.pid, exitCode: child.exitCode, signal: child.signalCode, registrations,
+    }, null, 2));
+    for (const file of (await readdir(directory)).filter(file => /^(?:host-\d+|reporter|leak-thread)\.json$/.test(file))) {
+      await copyFile(join(directory, file), join(artifacts, `${mode}-${file}`));
+    }
     assert.ok(!relative(resolve(tmpdir()), directory).startsWith(".."));
     await rm(directory, { recursive: true, force: true });
   }
