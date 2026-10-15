@@ -238,7 +238,7 @@ When Codecov reports a lower project coverage (e.g. 89.84% vs target 92%) but th
 
 2. **Possible causes**
    - **Non-determinism**: E2E or unit runs may hit different code paths (timing, order), so coverage can vary between runs.
-   - **Merge or inputs**: If the merge step failed in a previous run and the job still passed (e.g. artifact from another source), or unit/e2e LCOV was partial, the uploaded report could be different. CI uses `continue-on-error: true` on the merge step; the following “Store” step fails if the merged file is missing.
+   - **Merge or inputs**: If unit/e2e LCOV inputs were partial, the merged report differs. The “Merge Test Coverage (Unit + E2E)” step runs `npm run coverage:merge` and **fails the job** on error (the earlier `continue-on-error` masking was removed — the LCOV container now runs with the caller's UID/GID so root-owned output stays writable); the following “Store” step additionally fails (`if-no-files-found: error`) if the merged file is missing.
    - **Path/flag mismatch**: Codecov applies the `website` flag path `web/bible-on-site/src/`. If LCOV `SF:` paths differ (e.g. absolute vs repo-relative), more or fewer files can be counted and the percentage can shift.
    - **New files in denominator**: Only files under `src/` are in the project. New test files under `tests/` are not in the flag path and do not affect project coverage.
 
@@ -251,4 +251,4 @@ When Codecov reports a lower project coverage (e.g. 89.84% vs target 92%) but th
      npm run coverage:unit && npm run coverage:e2e && npm run coverage:merge
      # Then e.g. use lcov --summary .coverage/merged/lcov.info if available
      ```
-   - Confirm the **merge step** in the failing run did not hit `continue-on-error` (i.e. it succeeded); if it failed, the job would fail on “Store Website Coverage Report (wf)” when the file is missing.
+   - Confirm the **merge step** in the failing run succeeded; if it failed, the job itself fails — and even a merge that produced no output would fail on “Store Website Coverage Report (wf)” when the file is missing.
