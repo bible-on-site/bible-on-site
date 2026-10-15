@@ -73,8 +73,10 @@ partial class Build
         // Prebuilt consumers have complete runnable assembly output, but
         // no NuGet imports. Project evaluation would change NUKE's output
         // directory and require test-platform package targets unnecessarily.
-        var appArgs = $"--filter-query \"/[{MobileE2ESelectionFilter()}]\"" +
+        var harnessDirectory = RootDirectory / "BibleOnSite.Tests.MobileE2E/bin/Debug/net10.0";
+        var appArgs = $"--config-file \"{harnessDirectory / "testconfig.json"}\" --filter-query \"/[{MobileE2ESelectionFilter()}]\"" +
             " --stop-on-fail on" +
+            $" --diagnostic --diagnostic-verbosity Information --diagnostic-output-directory \"{resultsDirectory}\"" +
             " --hangdump --hangdump-timeout 10m --hangdump-type Mini" +
             " --report-xunit-trx --report-xunit-trx-filename mobile-e2e.trx" +
             " --report-xunit-junit --report-xunit-junit-filename mobile-e2e.xml";
@@ -84,7 +86,7 @@ partial class Build
         }
         if (Environment.GetEnvironmentVariable("MOBILE_E2E_PREBUILT") == "1")
         {
-            var assembly = RootDirectory / "BibleOnSite.Tests.MobileE2E/bin/Debug/net10.0/BibleOnSite.Tests.MobileE2E.dll";
+            var assembly = harnessDirectory / "BibleOnSite.Tests.MobileE2E.dll";
             // Materialize the complete string: NUKE's interpolation handler
             // would otherwise quote the appArgs fragment as one argument.
             var arguments = $"\"{assembly}\" --results-directory \"{resultsDirectory}\" {appArgs}";

@@ -12,6 +12,7 @@ import { captureNativeFrame, exportNativeLog, startNativeLog } from "./native-lo
 import { waitForAndroidDevice } from "./android-readiness.mjs";
 import { iosAppLogPids, iosAppPids } from "./ios-processes.mjs";
 import { terminateIosTestApp } from "./ios-app-cleanup.mjs";
+import { captureTestHostStacks, monitorTestHostShutdown } from "./test-host-diagnostics.mjs";
 import { prepareIosProcessInspector } from "./ios-process-inspector.mjs";
 
 const directory = dirname(fileURLToPath(import.meta.url));
@@ -97,6 +98,12 @@ const observeReadiness = (observation) => appendFileSync(readinessLog, `${JSON.s
   time: new Date().toISOString(), elapsedMs: Date.now() - readinessStarted, ...observation,
 })}\n`);
 server.on("spawn", () => observeReadiness({ phase: "spawned", pid: server.pid }));
+const hostDiagnostics = resolve(artifacts, "test-host-diagnostics");
+rmSync(hostDiagnostics, { recursive: true, force: true });
+mkdirSync(hostDiagnostics, { recursive: true });
+const shutdownMonitor = process.env.MOBILE_E2E_DOTNET_STACK
+  ? monitorTestHostShutdown(() => captureTestHostStacks(hostDiagnostics,
+    process.env.MOBILE_E2E_DOTNET_STACK, execute)) : undefined;
 let test;
 let diagnosticsFailed = false;
 const nativeStream = platform === "ios" ? startNativeLog("xcrun", ["simctl", "spawn", process.env.MOBILE_UDID,
@@ -156,15 +163,27 @@ try {
     ? [resolve(directory, "../devops/bin/Debug/_build.dll")]
     : ["run", "--project", "devops", "--"];
   test = spawn("dotnet", [...launch, "TestMobileE2E", "--configuration", "Debug"], {
-    cwd: resolve(directory, ".."), windowsHide: true, stdio: "inherit",
-    env: { ...process.env, MOBILE_APP_PATH: appPath, MOBILE_E2E_ARTIFACTS: artifacts,
+    cwd: resolve(directory, ".."), windowsHide: true, stdio: ["inherit", "pipe", "pipe"],
+    env: { ...process.env, MOBILE_APP_PATH: appPath, MOBILE_E2E_ARTIFACTS: artifacts, MOBILE_E2E_HOST_DIAGNOSTICS: hostDiagnostics,
       ...(wdaPath ? { MOBILE_WDA_PATH: wdaPath } : {}), APPIUM_SERVER: `http://127.0.0.1:${appiumPort}` },
   });
+  for (const [name, stream, output] of [["stdout", test.stdout, process.stdout], ["stderr", test.stderr, process.stderr]]) {
+    stream.on("data", chunk => {
+      output.write(chunk);
+      shutdownMonitor?.write(chunk, name);
+    });
+  }
   process.exitCode = await new Promise((resolveExit, reject) => {
     test.on("error", reject);
-    test.on("exit", (code) => resolveExit(code ?? 1));
+    test.on("close", (code) => resolveExit(code ?? 1));
   });
 } finally {
+  try {
+    await shutdownMonitor?.stop();
+  } catch (error) {
+    diagnosticsFailed = true;
+    console.error("Could not capture test-host shutdown stacks:", error);
+  }
   try {
     await hangMonitor?.stop();
   } catch (error) {
