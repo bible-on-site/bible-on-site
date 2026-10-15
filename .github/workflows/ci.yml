@@ -473,6 +473,22 @@ jobs:
       platform: All
       perushim_notes_sqlite_artifact: ${{ needs.perushim_data.result != 'skipped' && format('perushim-sqlite-v2-indexed.{0}', github.run_id) || 'perushim-sqlite-v2-indexed.master' }}
 
+  # Compile and inspect the actual signed distribution on relevant PRs too.
+  # Simulator builds cannot detect missing App Groups provisioning or a broken
+  # embedded downloader; publication remains in the master-only job above.
+  package_ios_pr:
+    name: Validate iOS Distribution
+    needs: [setup_env, determine_changes, perushim_data]
+    if: ${{ always() && !cancelled() && !failure() && github.event_name != 'push' && (needs.determine_changes.outputs.app_module_changed == 'true' || needs.determine_changes.outputs.app_ci_changed == 'true') }}
+    permissions:
+      contents: read
+      actions: read
+    secrets: inherit
+    uses: ./.github/workflows/app-package.yml
+    with:
+      platform: iOS
+      perushim_notes_sqlite_artifact: ${{ needs.perushim_data.result != 'skipped' && format('perushim-sqlite-v2-indexed.{0}', github.run_id) || 'perushim-sqlite-v2-indexed.master' }}
+
   package_bulletin:
     name: Package Bulletin
     needs: [setup_env, determine_changes]
@@ -1938,6 +1954,12 @@ jobs:
       - name: Test paired Perushim release assets
         run: python3 -m unittest discover -s devops -p test_prepare_perushim_assets.py
 
+      - name: Test iOS distribution signing validation
+        run: python3 -m unittest discover -s devops -p test_verify_ios_signing.py
+
+      - name: Test downloader extension signing preparation
+        run: python3 -m unittest discover -s extensions -p 'test_*.py'
+
       - name: Run Unit Tests with Coverage
         run: dotnet run --project devops -- CoverageUnit --configuration Release
 
@@ -2630,6 +2652,7 @@ jobs:
         app_ci,
         admin_ci,
         app_ios_ci,
+        package_ios_pr,
         app_mobile_e2e,
         bulletin_ci,
         data_ci,
@@ -2698,6 +2721,12 @@ jobs:
 
           APP_MODULE_CHANGED=$([ "${{ needs.determine_changes.outputs.app_module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
           APP_CI_CHANGED=$([ "${{ needs.determine_changes.outputs.app_ci_changed }}" = "true" ] && echo "true" || echo "false") # Generated
+          if [ "${{ github.event_name }}" != "push" ] && { [ "$APP_MODULE_CHANGED" = "true" ] || [ "$APP_CI_CHANGED" = "true" ]; }; then
+            if [ "${{ needs.package_ios_pr.result }}" != "success" ]; then
+              echo "Signed iOS distribution validation failed or did not run"
+              exit 1
+            fi
+          fi
           APP_MASTER_COVERAGE_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_app_master_coverage_available }}" = "true" ] && echo "true" || echo "false") # Generated
           if [ "$APP_MODULE_CHANGED" = "true" ] || [ "$APP_CI_CHANGED" = "true" ] || [ "$APP_MASTER_COVERAGE_AVAILABLE" = "false" ]; then
             APP_STATUS=$([ "${{ needs.app_ci.result }}" = "success" ] && echo "success" || echo "failure") # Generated

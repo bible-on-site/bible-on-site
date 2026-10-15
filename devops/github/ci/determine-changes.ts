@@ -79,6 +79,7 @@ export const MODULES = {
 		// extractor drive the Appium suite (#2085).
 		ciPaths: [
 			...RELEASE_CI_PATHS,
+			".github/workflows/app-package.yml",
 			".github/workflows/app-mobile-e2e.yml",
 			"devops/github/ci/e2e-impact",
 			"devops/e2e-coverage-trees",

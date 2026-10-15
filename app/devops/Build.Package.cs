@@ -218,6 +218,7 @@ partial class Build
             ["TargetFramework"] = "net10.0-ios",
             ["ArchiveOnBuild"] = "true",
             ["BuildIpa"] = "true",
+            ["RequireAssetPackDownloader"] = "true",
             ["RequireRecitationAssets"] = "true",
             ["IpaPackageDir"] = $"{ArtifactsDirectory}/",
             ["SupportedOSPlatformVersion"] = "17.0",
@@ -240,26 +241,27 @@ partial class Build
         // Managed asset packs need the ExtensionKit downloader extension embedded
         // (built by CI via xcodebuild — .NET cannot produce .appex binaries). The
         // csproj _EmbedAssetPackDownloader target copies and re-signs it.
-        var appex = (RootDirectory / "extensions" / "AssetPackDownloader")
-            .GlobDirectories("build/Build/Products/*/AssetPackDownloader.appex")
-            .FirstOrDefault();
-        if (appex != null)
+        var appex = RootDirectory / "extensions" / "AssetPackDownloader" /
+            "build" / "Build" / "Products" / "Release-iphoneos" / "AssetPackDownloader.appex";
+        if (Directory.Exists(appex) && File.Exists(appex / "Info.plist"))
         {
             msbuildProperties["AssetPackDownloaderAppex"] = $"{appex}/";
             Serilog.Log.Information($"Embedding asset-pack downloader extension: {appex}");
             var extensionProfile = Environment.GetEnvironmentVariable("ASSET_PACK_DOWNLOADER_PROFILE");
-            if (!string.IsNullOrEmpty(extensionProfile))
+            if (!string.IsNullOrEmpty(extensionProfile) && File.Exists(extensionProfile))
             {
                 msbuildProperties["AssetPackDownloaderProfile"] = extensionProfile;
             }
             else
             {
-                Serilog.Log.Warning("ASSET_PACK_DOWNLOADER_PROFILE is unset - the embedded extension has no provisioning profile");
+                throw new InvalidOperationException(
+                    "Signed iOS packaging requires ASSET_PACK_DOWNLOADER_PROFILE to name the extension's App Groups provisioning profile.");
             }
         }
         else
         {
-            Serilog.Log.Warning("No AssetPackDownloader.appex build found - the IPA cannot download managed asset packs");
+            throw new InvalidOperationException(
+                $"Signed iOS packaging requires the device downloader extension at {appex}; build it with xcodebuild first.");
         }
 
         DotNetPublish(s => s
@@ -290,7 +292,7 @@ partial class Build
             var artifactIpas = ArtifactsDirectory.GlobFiles("*.ipa");
             if (artifactIpas.Count == 0)
             {
-                Serilog.Log.Warning($"No IPA files found in {binDir} or {ArtifactsDirectory}");
+                throw new InvalidOperationException($"No IPA files found in {binDir} or {ArtifactsDirectory}");
             }
         }
 
