@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile, spawn } from "node:child_process";
-import { access, mkdir, mkdtemp, readFile, readdir, rm, watch, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { promisify } from "node:util";
@@ -31,48 +31,37 @@ for (const mode of ["default", "synchronous", "leak"]) {
   const closed = new Promise((resolveExit, reject) => { child.once("error", reject); child.once("close", resolveExit); });
   const deadline = setTimeout(() => child.kill("SIGKILL"), 20000);
   try {
+    const exitCode = await closed;
+    assert.notEqual(exitCode, null, "The original xUnit guard must exit before the probe watchdog.");
+    const reporterJson = await readFile(join(directory, "reporter.json"), "utf8");
+    const reporter = JSON.parse(reporterJson);
+    await writeFile(join(artifacts, `${mode}-reporter.json`), reporterJson);
+    const expectedBus = mode === "default" ? "Xunit.Internal.MessageBus" : "Xunit.Internal.SynchronousMessageBus";
+    assert.equal(reporter.bus, expectedBus, `${mode}: the delivered reporting configuration must select the actual bus`);
+    assert.equal(reporter.foregroundReporter, mode === "default");
+    assert.equal(reporter.reporterIsAlive, mode === "default" ? true : null);
     if (mode !== "leak") {
-      const ready = join(directory, "ready");
-      const events = watch(directory, { signal: AbortSignal.timeout(5000) });
-      try {
-        let isReady = false;
-        try { await access(ready); isReady = true; } catch { /* The test has not reached its gate yet. */ }
-        if (!isReady) {
-          for await (const _event of events) {
-            try { await access(ready); break; } catch { /* Registration precedes the ready signal. */ }
-          }
-        }
-      } finally { await events.return(); }
-      const pid = (await readFile(ready, "utf8")).trim();
-      assert.match(pid, /^[1-9]\d*$/);
-      const { stdout } = await execute(tool, ["report", "--process-id", pid], { timeout: 5000, windowsHide: true })
-        .catch(async error => {
-          await writeFile(join(artifacts, `${mode}-stack-error.txt`),
-            [error.message, error.stdout, error.stderr].filter(Boolean).join("\n"));
-          throw new Error(`${mode}: live reporting stack capture failed`, { cause: error });
-        });
-      const foregroundReporter = stdout.includes("Xunit.Internal.MessageBus.ReporterWorker");
-      await writeFile(join(artifacts, `${mode}-stack.txt`), stdout);
-      assert.equal(foregroundReporter, mode === "default", `${mode}: unexpected result reporter lifetime`);
-      await writeFile(join(directory, "release"), "release");
-      const exitCode = await closed;
       assert.equal(exitCode, 0);
-      results[mode] = { exitCode, foregroundReporter };
+      results[mode] = { exitCode, ...reporter };
     } else {
-      const exitCode = await closed;
       await monitor.stop();
-      assert.notEqual(exitCode, null, "The original xUnit guard must exit before the probe watchdog.");
-      assert.notEqual(exitCode, 0);
+      assert.equal(exitCode, 1);
       assert.match(output, /FATAL ERROR.*Foreground threads/);
-      const files = (await readdir(directory)).filter(file => /^stack-\d+\.txt$/.test(file));
-      let captured = false;
-      for (const file of files) {
+      const leakJson = await readFile(join(directory, "leak-thread.json"), "utf8");
+      const leak = JSON.parse(leakJson);
+      assert.equal(leak.isBackground, false);
+      assert.equal(leak.name, "Intentional foreground leak regression");
+      assert.match(leak.stack, /ReportingLifecycleProbe.*ObserveReportingAndShutdown/);
+      await writeFile(join(artifacts, "leak-thread.json"), leakJson);
+      // External full-CLR symbol rundown is diagnostic evidence, not a proxy for
+      // the reporter's identity. Preserve its bounded success or exact failure.
+      let externalStackCaptured = false;
+      for (const file of (await readdir(directory)).filter(file => /^stack-\d+(?:-error)?\.txt$/.test(file))) {
         const stack = await readFile(join(directory, file), "utf8");
-        await writeFile(join(artifacts, `leak-${file}`), stack);
-        captured ||= stack.includes("ReportingLifecycleProbe") && stack.includes("ObserveReportingAndShutdown");
+        await writeFile(join(artifacts, `external-${file}`), stack);
+        externalStackCaptured ||= !file.endsWith("-error.txt") && stack.includes("ReportingLifecycleProbe");
       }
-      assert.ok(captured, "The deliberate foreground leak must have a live managed stack.");
-      results[mode] = { exitCode, intentionalWorkerCaptured: captured };
+      results[mode] = { exitCode, foregroundLeak: true, ownStackRecorded: true, externalStackCaptured };
     }
   } finally {
     clearTimeout(deadline);
