@@ -71,6 +71,9 @@ public class TanahpediaPlacesMap : ContentView
     /// in the browser instead of replacing the map.
     /// </summary>
     // Internal for unit tests - the test assembly compiles these sources in-place.
+    /// <summary>Opens an external link; seam so tests can replace the launcher.</summary>
+    internal Func<Uri, Task> OpenExternalLink { get; set; } = Launcher.OpenAsync;
+
     internal void OnNavigating(object? sender, WebNavigatingEventArgs e)
     {
         var url = e.Url;
@@ -92,7 +95,7 @@ public class TanahpediaPlacesMap : ContentView
             e.Cancel = true;
             try
             {
-                _ = Launcher.OpenAsync(new Uri(url));
+                _ = OpenExternalLink(new Uri(url));
             }
             catch (Exception ex)
             {
