@@ -12,7 +12,6 @@ namespace BibleOnSite.Tests.MobileE2E;
 [Collection("Mobile device")]
 [Trait("Category", "MobileE2E")]
 [Trait("Platform", "iOS")]
-[Trait("Shard", "1")]
 public sealed class PerekScrollStabilityTests(ITestOutputHelper output, MobileDeviceSession session)
     : MobileDeviceTest(output, session)
 {

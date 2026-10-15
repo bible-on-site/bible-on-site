@@ -82,11 +82,13 @@ export async function packIosBuild(root, coverage, output, sourceSha, toolchain)
   // outside the declared output roots; signatures live in the bundle itself.
   // https://github.com/libarchive/libarchive/blob/master/tar/bsdtar.c
   // The coverage template travels with these exact assemblies.
-  await execute("tar", ["-czf", archive, "-C", root, appBundle, ...projectOutputs,
+  // --force-local keeps a drive-letter archive path (C:\…) local under GNU
+  // tar on Windows; bsdtar accepts it identically.
+  await execute("tar", ["--force-local", "-czf", archive, "-C", root, appBundle, ...projectOutputs,
     "-C", dirname(coverage), "coverage-app"], {
     windowsHide: true, env: { ...process.env, COPYFILE_DISABLE: "1" },
   });
-  const { stdout } = await execute("tar", ["-tzf", archive], { maxBuffer: 8 * 1024 * 1024, windowsHide: true });
+  const { stdout } = await execute("tar", ["--force-local", "-tzf", archive], { maxBuffer: 8 * 1024 * 1024, windowsHide: true });
   validateArchiveEntries(stdout);
   const manifest = {
     kind: "ios-mobile-e2e-build/1", sourceSha, toolchain, workspace: root,
@@ -110,11 +112,11 @@ export async function restoreIosBuild(root, input, artifacts, sourceSha, toolcha
   if (manifest.archiveBytes !== (await stat(archive)).size || manifest.archiveSha256 !== await digest(archive)) {
     throw new Error("iOS build archive integrity check failed.");
   }
-  const { stdout } = await execute("tar", ["-tzf", archive], { maxBuffer: 8 * 1024 * 1024, windowsHide: true });
+  const { stdout } = await execute("tar", ["--force-local", "-tzf", archive], { maxBuffer: 8 * 1024 * 1024, windowsHide: true });
   validateArchiveEntries(stdout);
-  await execute("tar", ["-xzf", archive, "-C", root, appBundle, ...projectOutputs], { windowsHide: true });
+  await execute("tar", ["--force-local", "-xzf", archive, "-C", root, appBundle, ...projectOutputs], { windowsHide: true });
   await mkdir(artifacts, { recursive: true });
-  await execute("tar", ["-xzf", archive, "-C", artifacts, "coverage-app"], { windowsHide: true });
+  await execute("tar", ["--force-local", "-xzf", archive, "-C", artifacts, "coverage-app"], { windowsHide: true });
   const coverage = join(artifacts, "coverage-app");
   await validateFiles(root, coverage);
   await validateCoverage(coverage, sourceSha);

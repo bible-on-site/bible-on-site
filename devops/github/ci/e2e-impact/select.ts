@@ -70,6 +70,14 @@ export interface SelectionInput {
 	 * never narrowed by id. Suites without dynamic files omit this.
 	 */
 	dynamicTestFiles?: ReadonlySet<string>;
+	/**
+	 * Permits a genuinely empty selection (#2263): a platform whose diff
+	 * resolves to zero affected tests may schedule nothing rather than
+	 * falling back to the full suite. Only callers that can express "no
+	 * shards at all" — like the iOS dynamic planner — opt in; the runner
+	 * harness still refuses an empty non-selectAll manifest.
+	 */
+	allowEmpty?: boolean;
 }
 
 export interface FileResolution {
@@ -362,7 +370,7 @@ export function selectTests(input: SelectionInput): SelectionManifest {
 	for (const id of newTests) addReason(id, "new-test");
 
 	let selected = candidates.filter((test) => reasons.has(test.id));
-	if (selected.length === 0 && fallbacks.length === 0) {
+	if (selected.length === 0 && fallbacks.length === 0 && !input.allowEmpty) {
 		// Empty selection is a selection bug, never a green light to skip all.
 		selectAll("empty-selection-guard");
 		selected = candidates;

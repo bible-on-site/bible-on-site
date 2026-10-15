@@ -113,9 +113,9 @@ const nativeStream = platform === "ios" ? startNativeLog("xcrun", ["simctl", "sp
 async function sampleIosApp(phase) {
   const captureSignal = AbortSignal.timeout(15000);
   try {
-    // Two shard simulators share this host (#2083), so a name-wide pgrep would
-    // also sample the peer's healthy app — writing its stacks into this
-    // shard's failure artifacts and pausing it mid-test. The device's own
+    // Another simulator may share this host, so a name-wide pgrep could
+    // sample a different device's healthy app — writing its stacks into this
+    // run's failure artifacts and pausing it mid-test. The device's own
     // launchd table resolves only this run's app; a failed session that
     // already terminated the app simply leaves no PID row to find.
     const listing = await execute("xcrun", ["simctl", "spawn", process.env.MOBILE_UDID,

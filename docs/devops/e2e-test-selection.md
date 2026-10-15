@@ -60,11 +60,19 @@ xUnit suite through `dotnet run --project devops -- TestMobileE2E`
 | `coverage-app/coverage-report-manifest.json` | `ApplyE2ECoverageLayer` | `app-e2e-coverage/1`: apply statistics, `incompatibleDumps`, `unknownPointIds`, `complete` |
 | `results/mobile-e2e.trx`, `results/mobile-e2e.xml` | xUnit MTP reporters | Per-test identity (FQN via `TestMethod@className`+`@name`), outcomes, start/finish times |
 | `exec-coverage-tree.json` | `e2e-coverage-trees.ts extract` | The exec tree (schemaVersion 1) — per-test executed files + the `shared` bucket |
-| `coverage-tree.json` | `e2e-impact.ts collect-appium` | The selector tree (schemaVersion 1): automation-id entries unioned with `--exec-tree` evidence when a compatible exec tree exists |
+| `coverage-tree.json` | `e2e-impact.ts collect-appium` | The selector tree (schemaVersion 1): automation-id entries unioned with `--exec-tree` evidence when a compatible exec tree exists; also carries per-case `timing` and `overhead` history (#2263) |
 | `selection-manifest.json` | `e2e-impact.ts select` | The deterministic selection manifest |
+| `ios-shard-plan.json` + `shards/shard-N.json` | `e2e-impact.ts plan` (`plan_ios` job, #2263) | The deterministic shard plan and the per-shard case manifests the iOS legs enforce |
+| `case-manifest.json` | iOS runner leg | The shard manifest this leg actually executed — the merge replays it against the plan's assignment |
+| `case-timings.json` | `merge-runner-shards.mjs` | Merged per-case durations across all shards — the collector's timing-history input |
+| `runner-union.json` | `merge-runner-shards.mjs` | Union report: planned-vs-observed per-shard durations, completeness and pilot timings |
 
 Artifact upload (`app-mobile-e2e.yml`):
 
+- `app-mobile-e2e-plan.<run_id>.ios` — the `plan_ios` output consumed by every
+  iOS leg and by `merge_ios` (#2263).
+- `app-mobile-e2e-shard.<run_id>.ios-shard<N>` — one iOS leg's artifacts for
+  the merge (includes `case-manifest.json`, evidence, dumps, reports).
 - `appium-<platform>-<run_id>-<attempt>` — the whole artifacts directory
   (diagnostics, evidence, dumps, reports, `exec-coverage-tree.json`).
 - `app-e2e-coverage.<run_id>.<platform>` — `coverage-app/` per run (#2156).
