@@ -19,11 +19,9 @@ export function iosAppPids(launchctlList, bundleId = IOS_APP_BUNDLE_ID) {
 // Use its observed host PIDs to avoid inspecting every process on a busy Mac.
 export function iosAppLogPids(log) {
   const pids = new Set();
-  for (const line of log.split("\n")) {
-    const fields = line.trim().split(/\s+/, 4);
-    if (fields.length !== 4 || !/^\d{4}-\d{2}-\d{2}$/.test(fields[0])) continue;
-    const process = fields[3].match(/^BibleOnSite\[(\d+):[0-9a-f]+\]$/i);
-    if (process) pids.add(Number(process[1]));
-  }
+  // Scan once without allocating every line and its whitespace fields.
+  // Accessibility logs can contain megabytes of multiline snapshot text.
+  const header = /^\d{4}-\d{2}-\d{2}[ \t]+\S+[ \t]+\S+[ \t]+BibleOnSite\[(\d+):[0-9a-f]+\](?=\s|$)/gim;
+  for (const match of log.matchAll(header)) pids.add(Number(match[1]));
   return [...pids];
 }

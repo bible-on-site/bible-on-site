@@ -3,7 +3,7 @@ import { execFile, spawn } from "node:child_process";
 import { once } from "node:events";
 import { copyFileSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { promisify } from "node:util";
 import { prepareIosProcessInspector } from "./ios-process-inspector.mjs";
 import { test } from "node:test";
@@ -165,3 +165,33 @@ test("Darwin kernel inspection kills the owned child and rejects other-device an
     rmSync(temporary, { recursive: true, force: true });
   }
 });
+
+// The real Darwin test above also executes the freshly built inspector. These
+// cases prove the preparation contract on every host without running clang.
+for (const [label, probe, succeeds] of [
+  ["valid", () => ({ stdout: `${process.pid} L /current/node\n` }), true],
+  ["wrong identity", () => ({ stdout: "2 L /other/process\n" }), false],
+  ["diagnostic", () => ({ stdout: `${process.pid} L /current/node\n`, stderr: "inspection failed" }), false],
+]) {
+  test(`inspector preparation validates executable readiness: ${label}`, async t => {
+    const temporary = mkdtempSync(join(tmpdir(), "ios-inspector-preflight-"));
+    t.after(() => {
+      assert.ok(!relative(resolve(tmpdir()), temporary).startsWith(".."));
+      rmSync(temporary, { recursive: true, force: true });
+    });
+    const outputPath = join(temporary, "inspector");
+    const calls = [];
+    const preparation = prepareIosProcessInspector({ outputPath, execute: async (command, args, options) => {
+      calls.push({ command, args, options });
+      if (command === "/usr/bin/xcrun") { writeFileSync(outputPath, "prepared"); return {}; }
+      return probe();
+    } });
+    if (succeeds) assert.equal(await preparation, outputPath);
+    else await assert.rejects(preparation, /did not inspect its preparer/);
+    assert.equal(calls.length, 2);
+    assert.equal(calls[1].command, outputPath);
+    assert.deepEqual(calls[1].args, [String(process.pid)]);
+    assert.equal(calls[0].options.signal, calls[1].options.signal);
+    assert.equal(calls[0].options.timeout, 300000);
+  });
+}

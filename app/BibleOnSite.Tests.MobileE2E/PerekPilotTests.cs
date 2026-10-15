@@ -20,6 +20,7 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
     {
         Assert.NotEmpty(Page.Source);
         Assert.NotEmpty(Page.FirstPasuk);
+        Assert.Empty(Driver!.FindElements(Platform.AutomationId("RecitationDecoder")));
         Page.AssertBottomNavigationLayout();
     });
 
