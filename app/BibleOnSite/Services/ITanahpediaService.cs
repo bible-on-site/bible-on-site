@@ -58,4 +58,20 @@ public interface ITanahpediaService
 
     /// <summary>Homepage configuration (layout + intro) for an entity type, when configured.</summary>
     Task<TanahpediaCategoryHomepage?> GetCategoryHomepageAsync(string entityType, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Parents, children, spouses and siblings of a PERSON entity with their
+    /// source citations — the family section on person entries.
+    /// <paramref name="entityId"/> is the entity's <c>tanahpedia_entity.id</c>
+    /// (as returned in <see cref="TanahpediaLinkedEntity.EntityId"/>). Null
+    /// when the entity is not a person or has no family data.
+    /// </summary>
+    Task<TanahpediaPersonFamily?> GetPersonFamilyAsync(string entityId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Place identification pins for the places map. <paramref name="entryId"/>
+    /// null returns every identified place (the PLACE category map); a value
+    /// scopes the pins to the PLACE entities linked to that entry.
+    /// </summary>
+    Task<List<TanahpediaPlaceMarker>> GetPlaceMarkersAsync(string? entryId, CancellationToken cancellationToken);
 }
