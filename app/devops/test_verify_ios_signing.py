@@ -245,10 +245,12 @@ class PackageTests(unittest.TestCase):
                 if problem == "unsigned-extension" and command[-1].endswith(".appex"):
                     raise signing.SigningError("code object is not signed at all")
                 return b""
-            if "--extract-certificates" in command:
+            certificate_options = [arg for arg in command if arg.startswith("--extract-certificates=")]
+            if certificate_options:
                 if problem != "adhoc-signature":
-                    Path(command[-2] + "0").write_bytes(b"wrong-certificate" if problem == "wrong-certificate"
-                                                     else b"distribution-certificate")
+                    prefix = certificate_options[0].split("=", 1)[1]
+                    Path(prefix + "0").write_bytes(b"wrong-certificate" if problem == "wrong-certificate"
+                                                  else b"distribution-certificate")
                 return b""
             if "--entitlements" in command:
                 bundle = Path(command[-1])
@@ -272,6 +274,9 @@ class PackageTests(unittest.TestCase):
         self.assertEqual(len([c for c in self.calls if "--entitlements" in c]), 2)
         self.assertEqual(len([c for c in self.calls if "--verify" in c]), 3)
         self.assertIn("--deep", self.calls[-1])
+        for command in self.calls:
+            if "--entitlements" in command:
+                self.assertEqual(command[1:-1], ["-d", "--entitlements", "-", "--xml"])
 
     def test_ipa_rejects_original_malformed_metadata_missing_profile_and_extension_entry(self):
         for problem, message in [
@@ -358,6 +363,26 @@ class PackageTests(unittest.TestCase):
 
 
 class CommandTests(unittest.TestCase):
+    def test_certificate_extraction_requires_attached_absolute_prefix_and_one_bundle(self):
+        command = [signing.CODESIGN, "-d", "--extract-certificates=/fixture/cert name;$(literal)-",
+                   "/fixture/app bundle.app"]
+        result = SimpleNamespace(stdout=b"extracted")
+        with patch.object(signing.subprocess, "run", return_value=result) as process:
+            self.assertEqual(signing.run(command), b"extracted")
+            process.assert_called_once_with(tuple(command), check=True, capture_output=True, shell=False)
+        for invalid in [
+            [signing.CODESIGN, "-d", "--extract-certificates", "/fixture/cert-", "/fixture/app.app"],
+            [signing.CODESIGN, "-d", "--extract-certificates=", "/fixture/app.app"],
+            [signing.CODESIGN, "-d", "--extract-certificates=relative-", "/fixture/app.app"],
+            [signing.CODESIGN, "-d", "--extract-certificates=/fixture/cert\0-", "/fixture/app.app"],
+            [signing.CODESIGN, "-d", "--extract-certificates=/fixture/cert-", "relative.app"],
+            [signing.CODESIGN, "-d", "--extract-certificates=/fixture/cert-", "/fixture/app.app", "--force"],
+        ]:
+            with self.subTest(command=invalid), patch.object(signing.subprocess, "run") as process:
+                with self.assertRaises(signing.SigningError):
+                    signing.run(invalid)
+                process.assert_not_called()
+
     def test_native_command_failure_preserves_rejection_and_cli_returns_failure(self):
         command = [signing.CODESIGN, "--verify", "--strict", "--verbose=2", "/fixture/extension.appex"]
         failure = subprocess.CalledProcessError(1, command, stderr=b"code object is not signed at all")

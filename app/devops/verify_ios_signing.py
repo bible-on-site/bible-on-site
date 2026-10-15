@@ -33,8 +33,7 @@ COMMAND_SHAPES = (
     ((DITTO, "-x", "-k"), 2),
     ((CODESIGN, "--verify", "--strict", "--verbose=2"), 1),
     ((CODESIGN, "--verify", "--deep", "--strict", "--verbose=2"), 1),
-    ((CODESIGN, "-d", "--extract-certificates"), 2),
-    ((CODESIGN, "-d", "--entitlements", ":-"), 1),
+    ((CODESIGN, "-d", "--entitlements", "-", "--xml"), 1),
 )
 DISCOVERY_COMMANDS = (
     (PLUTIL, "-convert", "json", "-o", "-", None),
@@ -51,6 +50,14 @@ def validate_command(command):
     if not isinstance(command, (list, tuple)) or not all(isinstance(arg, str) for arg in command):
         raise SigningError("macOS verification commands require a string argument vector")
     command = tuple(command)
+    # codesign's optional certificate prefix must be attached with '='. A
+    # separate operand is interpreted as another bundle to inspect.
+    if (len(command) == 4 and command[:2] == (CODESIGN, "-d")
+            and command[2].startswith("--extract-certificates=")):
+        paths = [command[2].split("=", 1)[1], command[3]]
+        if all(PurePosixPath(path).is_absolute() and "\0" not in path for path in paths):
+            return command
+        raise SigningError("macOS verification command paths must be absolute and contain no NUL")
     shapes = [prefix + (None,) * count for prefix, count in COMMAND_SHAPES]
     for shape in [*shapes, *DISCOVERY_COMMANDS]:
         if len(command) != len(shape):
@@ -376,12 +383,12 @@ def _requested_entitlements(info, declaration, group, is_app):
 
 def _verify_bundle_signature(bundle, profile, certificate_prefix, runner):
     runner([CODESIGN, "--verify", "--strict", "--verbose=2", str(bundle)])
-    runner([CODESIGN, "-d", "--extract-certificates", str(certificate_prefix), str(bundle)])
+    runner([CODESIGN, "-d", f"--extract-certificates={certificate_prefix}", str(bundle)])
     certificate = Path(str(certificate_prefix) + "0")
     if not certificate.is_file() or certificate.read_bytes() not in profile.get("DeveloperCertificates", []):
         raise SigningError(f"{bundle.name}: signing certificate is not authorized by its provisioning profile")
     try:
-        entitlements = plistlib.loads(runner([CODESIGN, "-d", "--entitlements", ":-", str(bundle)]))
+        entitlements = plistlib.loads(runner([CODESIGN, "-d", "--entitlements", "-", "--xml", str(bundle)]))
     except (plistlib.InvalidFileException, ValueError) as error:
         raise SigningError(f"{bundle.name}: cannot read signed entitlements: {error}") from error
     if not isinstance(entitlements, dict):

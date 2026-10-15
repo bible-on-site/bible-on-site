@@ -661,7 +661,15 @@ jobs:
             2>&1 | sed -E 's/(Apple (Distribution|Development): )[^(]+(\([^)]*\))/\1[masked] \3/g'
 
       - name: Verify final IPA signing and downloader extension
-        run: python3 app/devops/verify_ios_signing.py --package "$(find app/.artifacts -name '*.ipa' -print -quit)" --requirements "$RUNNER_TEMP/ios-signing-requirements.json"
+        run: |
+          shopt -s nullglob
+          ipas=(app/.artifacts/*.ipa)
+          if [ "${#ipas[@]}" -ne 1 ] || [ ! -f "${ipas[0]}" ]; then
+            echo "::error::Expected exactly one release IPA; found ${#ipas[@]}"
+            exit 1
+          fi
+          python3 app/devops/verify_ios_signing.py --package "${ipas[0]}" --requirements "$RUNNER_TEMP/ios-signing-requirements.json"
+          echo "IOS_VERIFIED_IPA=${ipas[0]}" >> "$GITHUB_ENV"
 
       - name: Save iOS obj intermediates
         if: ${{ github.ref == 'refs/heads/master' && steps.obj-cache.outputs.cache-hit != 'true' }}
@@ -680,7 +688,7 @@ jobs:
           key: ${{ steps.nuget-cache.outputs.cache-primary-key }}
 
       - name: Verify all recitation asset packs and payloads
-        run: python app/devops/verify_recitation_assets.py --platform iOS --catalog app/BibleOnSite/Resources/Raw/recitation-catalog.json --package "$(find app/.artifacts -name '*.ipa' -print -quit)" --asset-pack-dir app/BibleOnSite/Platforms/iOS/AssetPacks --archive-dir app/.artifacts/assetpacks --payload-dir app/.artifacts/payloads
+        run: python app/devops/verify_recitation_assets.py --platform iOS --catalog app/BibleOnSite/Resources/Raw/recitation-catalog.json --package "$IOS_VERIFIED_IPA" --asset-pack-dir app/BibleOnSite/Platforms/iOS/AssetPacks --archive-dir app/.artifacts/assetpacks --payload-dir app/.artifacts/payloads
 
       # Keep one real ba-package result when decoding or payload verification fails.
       - name: Upload failed audio archive diagnostics
@@ -703,7 +711,7 @@ jobs:
         with:
           name: ${{ steps.set_artifact_name.outputs.artifact_name }}
           path: |
-            ${{ env.APP_DIRECTORY }}/.artifacts/*.ipa
+            ${{ env.IOS_VERIFIED_IPA }}
             ${{ env.APP_DIRECTORY }}/.artifacts/assetpacks/*.aar
             ${{ env.APP_DIRECTORY }}/.artifacts/payloads/*
           retention-days: 30

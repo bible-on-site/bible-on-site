@@ -7,6 +7,7 @@
 import argparse
 import ast
 import base64
+from collections import UserDict
 from dataclasses import dataclass
 from datetime import timezone
 import html
@@ -37,6 +38,19 @@ class SigningTarget:
     entitlements: dict
     kind: str
     extension_point: str | None = None
+
+
+class MsbuildProperties(UserDict):
+    """Match MSBuild's case-insensitive property names."""
+
+    def __getitem__(self, key):
+        return self.data[key.casefold()]
+
+    def __setitem__(self, key, value):
+        self.data[key.casefold()] = value
+
+    def __contains__(self, key):
+        return key.casefold() in self.data
 
 
 def expand(value, properties, allow_empty=False):
@@ -80,19 +94,34 @@ def _condition_value(node):
     raise SigningError("Unsupported condition on an iOS signing declaration")
 
 
+def _target_platform(match, properties):
+    framework = expand(match[1], properties)
+    parsed = re.fullmatch(r"net[\d.]+(?:-([a-z]+)[\d.]*)?", framework, flags=re.IGNORECASE)
+    if parsed is None:
+        raise SigningError(f"Unsupported target framework in signing condition: {framework}")
+    return repr((parsed[1] or "").casefold())
+
+
+def _host_platform(match, properties):
+    platform = expand(match[1], properties).casefold()
+    if platform not in {"osx", "macos", "windows", "linux", "freebsd"}:
+        raise SigningError(f"Unsupported host platform in signing condition: {platform}")
+    return str(platform in {"osx", "macos"})
+
+
 def ios_condition(condition, properties):
     if not condition:
         return True
     condition = re.sub(
-        r"\$\(\[MSBuild\]::GetTargetPlatformIdentifier\('[^']*'\)\)",
-        "'ios'", condition, flags=re.IGNORECASE,
+        r"\$\(\[MSBuild\]::GetTargetPlatformIdentifier\('([^']*)'\)\)",
+        lambda match: _target_platform(match, properties), condition, flags=re.IGNORECASE,
     )
     condition = re.sub(
         r"\$\(\[MSBuild\]::IsOSPlatform\('([^']+)'\)\)",
-        lambda match: str(match[1].casefold() in {"osx", "macos"}), condition,
+        lambda match: _host_platform(match, properties), condition,
         flags=re.IGNORECASE,
     )
-    condition = expand(condition, properties, allow_empty=True)
+    condition = expand(condition, properties)
     condition = re.sub(r"\bAND\b", "and", condition, flags=re.IGNORECASE)
     condition = re.sub(r"\bOR\b", "or", condition, flags=re.IGNORECASE)
     try:
@@ -112,12 +141,145 @@ def _bundle_id(value, label):
     return value
 
 
+def _read_build_document(path):
+    try:
+        return ElementTree.parse(path, forbid_dtd=True, forbid_entities=True, forbid_external=True).getroot()
+    except (OSError, ElementTree.ParseError, DefusedXmlException) as error:
+        raise SigningError(f"Cannot read app signing declarations: {path}") from error
+
+
+def _tag(element):
+    return element.tag.split("}")[-1]
+
+
+def _signing_documents(project):
+    inherited = {}
+    for name in ["Directory.Build.props", "Directory.Build.targets"]:
+        for directory in [project.parent, *project.parent.parents]:
+            path = directory / name
+            if path.is_file():
+                inherited[name] = path
+                break
+    paths = [inherited.get("Directory.Build.props"), project, inherited.get("Directory.Build.targets")]
+    documents = [(path, _read_build_document(path)) for path in paths if path is not None]
+    for path, tree in documents:
+        if any(_tag(element) in {"Import", "ImportGroup", "UsingTask"} for element in tree.iter()):
+            raise SigningError(f"Unsupported explicit MSBuild import or task declaration in signing inputs: {path}")
+    return documents
+
+
+def _variables(value):
+    if isinstance(value, dict):
+        return set().union(*(_variables(item) for item in value.values()))
+    if isinstance(value, list):
+        return set().union(*(_variables(item) for item in value))
+    if not isinstance(value, str):
+        return set()
+    return {(match[1] or match[2]).casefold() for match in VARIABLE.finditer(value)}
+
+
+def _property_records(element, conditions=()):
+    condition = element.get("Condition")
+    conditions = conditions + ((condition,) if condition else ())
+    if _tag(element) == "PropertyGroup":
+        return [(_tag(child).casefold(), child, conditions + ((child.get("Condition"),) if child.get("Condition") else ()))
+                for child in element]
+    return [record for child in element for record in _property_records(child, conditions)]
+
+
+def _required_properties(documents, additional):
+    records = [record for _, tree in documents for record in _property_records(tree)]
+    required = {"applicationid", "codesignentitlements", *additional}
+    while True:
+        previous = set(required)
+        for name, element, conditions in records:
+            if name in required:
+                required.update(_variables(element.text))
+                required.update(_variables(list(conditions)))
+        if required == previous:
+            return required, {name for name, _, _ in records}
+
+
+def _relevant(element, required):
+    return any(name in required for name, _, _ in _property_records(element))
+
+
+def _apply_group(group, properties, required, fixed):
+    if not _relevant(group, required) or not ios_condition(group.get("Condition"), properties):
+        return
+    for element in group:
+        name = _tag(element).casefold()
+        if name not in required or name in fixed:
+            continue
+        if list(element):
+            raise SigningError(f"Unsupported nested signing property: {_tag(element)}")
+        if ios_condition(element.get("Condition"), properties):
+            properties[name] = expand((element.text or "").strip(), properties)
+
+
+def _file_properties(properties, path):
+    properties["MSBuildThisFileDirectory"] = str(path.parent) + os.sep
+    properties["MSBuildThisFileFullPath"] = str(path)
+    properties["MSBuildThisFileName"] = path.stem
+
+
+def _apply_document(path, tree, properties, required, fixed):
+    _file_properties(properties, path)
+    targets = []
+    if not ios_condition(tree.get("Condition"), properties):
+        return targets
+    for element in tree:
+        if _tag(element) == "PropertyGroup":
+            _apply_group(element, properties, required, fixed)
+        elif _tag(element) == "Target" and _relevant(element, required):
+            targets.append((path, element))
+        elif _relevant(element, required):
+            raise SigningError(f"Unsupported {_tag(element)} containing signing properties in {path}")
+    return targets
+
+
+def _apply_signing_target(path, target, properties, required, fixed):
+    _file_properties(properties, path)
+    if not ios_condition(target.get("Condition"), properties):
+        return
+    if (target.get("BeforeTargets") != "_DetectSigningIdentity"
+            or any(target.get(key) for key in ["AfterTargets", "DependsOnTargets", "Inputs", "Outputs"])):
+        raise SigningError("Signing-property targets must run directly before _DetectSigningIdentity")
+    if any(_tag(child) not in {"PropertyGroup", "Message", "Warning", "Error"} for child in target):
+        raise SigningError("Tasks in signing-property targets require native MSBuild evaluation")
+    for group in target:
+        if _tag(group) == "PropertyGroup":
+            _apply_group(group, properties, required, fixed)
+
+
+def _evaluate_properties(project, documents, framework, additional=()):
+    required, declared = _required_properties(documents, additional)
+    properties = MsbuildProperties({name: "" for name in required & declared})
+    context = {"TargetFramework": framework, "Configuration": "Release", "RuntimeIdentifier": "ios-arm64",
+               "_SdkIsSimulator": "false", "EnableCodeSigning": "true",
+               "MSBuildProjectDirectory": str(project.parent), "ProjectDir": str(project.parent) + os.sep}
+    properties.update(context)
+    properties.setdefault("ApplicationId", "")
+    properties.setdefault("CodesignEntitlements", "")
+    fixed = {key.casefold() for key in context}
+    targets = []
+    for path, tree in documents:
+        for element in tree.iter():
+            output = element.get("PropertyName") if _tag(element) == "Output" else None
+            if output and output.casefold() in required:
+                raise SigningError(f"Task-produced signing property cannot be resolved statically: {output}")
+        targets.extend(_apply_document(path, tree, properties, required, fixed))
+    if len(targets) > 1:
+        raise SigningError("Multiple signing-property targets require native MSBuild evaluation")
+    for path, target in targets:
+        _apply_signing_target(path, target, properties, required, fixed)
+    return properties
+
+
 def app_requirement(project):
     project = Path(project).resolve()
-    try:
-        tree = ElementTree.parse(project, forbid_dtd=True, forbid_entities=True, forbid_external=True).getroot()
-    except (OSError, ElementTree.ParseError, DefusedXmlException) as error:
-        raise SigningError(f"Cannot read app signing declarations: {project}") from error
+    documents = _signing_documents(project)
+    tree = next(tree for path, tree in documents if path == project)
     frameworks = {
         framework.strip() for element in tree.iter()
         if element.tag.split("}")[-1] in {"TargetFramework", "TargetFrameworks"}
@@ -126,28 +288,15 @@ def app_requirement(project):
     }
     if len(frameworks) != 1:
         raise SigningError(f"{project.name}: expected one explicitly declared iOS target framework")
-    properties = {"TargetFramework": frameworks.pop(), "Configuration": "Release",
-                  "RuntimeIdentifier": "ios-arm64", "_SdkIsSimulator": "false",
-                  "EnableCodeSigning": "true", "MSBuildProjectDirectory": str(project.parent),
-                  "ProjectDir": str(project.parent) + os.sep}
-
-    def visit(element, conditions=()):
-        condition = element.get("Condition")
-        conditions = conditions + ((condition,) if condition else ())
-        name = element.tag.split("}")[-1]
-        if name in {"ApplicationId", "CodesignEntitlements"}:
-            if all(ios_condition(item, properties) for item in conditions):
-                properties[name] = expand((element.text or "").strip(), properties)
-        elif not conditions and element.text and not list(element) and name not in properties:
-            properties[name] = element.text.strip()
-        for child in element:
-            visit(child, conditions)
-
-    visit(tree)
+    framework = frameworks.pop()
+    properties = _evaluate_properties(project, documents, framework)
     bundle_id = _bundle_id(properties.get("ApplicationId"), project.stem)
     properties["CFBundleIdentifier"] = bundle_id
     path = properties.get("CodesignEntitlements")
-    entitlements = expand(read_plist(project.parent / path.replace("\\", "/")), properties) if path else {}
+    entitlements = read_plist(project.parent / path.replace("\\", "/")) if path else {}
+    properties = _evaluate_properties(project, documents, framework, _variables(entitlements))
+    properties["CFBundleIdentifier"] = bundle_id
+    entitlements = expand(entitlements, properties)
     return SigningTarget(project.stem, bundle_id, entitlements, "app")
 
 

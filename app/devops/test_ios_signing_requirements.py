@@ -39,9 +39,10 @@ class ProjectFixture:
 <ApplicationId>org.example.application</ApplicationId></PropertyGroup>
 <PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">
 <CodesignEntitlements>mac.entitlements</CodesignEntitlements></PropertyGroup>
-<Target Name="IosSigning" Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'
+<Target Name="IosSigning" BeforeTargets="_DetectSigningIdentity" Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'
 AND '$(_SdkIsSimulator)' != 'true' AND '$(EnableCodeSigning)' != 'false'">
 <PropertyGroup><CodesignEntitlements>ios.entitlements</CodesignEntitlements></PropertyGroup>
+<Message Importance="low" Text="Resolved $(CodesignEntitlements)" />
 </Target></Project>""", encoding="utf8")
         self.write_plist(root / "ios.entitlements", {GROUP_KEY: ["group.org.example.shared"]})
         self.write_plist(root / "mac.entitlements", {"com.apple.security.app-sandbox": True})
@@ -128,6 +129,84 @@ class DiscoveryTests(unittest.TestCase):
             target = requirements.app_requirement(fixture.app)
             self.assertEqual(target.bundle_id, "org.example.release")
             self.assertEqual(target.entitlements[GROUP_KEY], ["group.org.example.release"])
+
+    def test_release_helpers_override_in_order_and_drive_group_and_property_conditions(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = ProjectFixture(Path(temporary))
+            fixture.app.write_text('''<Project><PropertyGroup>
+<TargetFramework>net10.0-ios</TargetFramework><ApplicationId>org.example.reader</ApplicationId>
+<EnableSharing>false</EnableSharing><SigningFile>unused.entitlements</SigningFile></PropertyGroup>
+<PropertyGroup Condition="'$(Configuration)' == 'Release'">
+<EnableSharing>true</EnableSharing><SigningFile>ios.entitlements</SigningFile></PropertyGroup>
+<PropertyGroup Condition="'$(EnableSharing)' == 'true'">
+<CodesignEntitlements Condition="'$(Configuration)' == 'Release'">$(SigningFile)</CodesignEntitlements>
+</PropertyGroup></Project>''', encoding="utf8")
+            target = requirements.app_requirement(fixture.app)
+            self.assertEqual(target.entitlements, {GROUP_KEY: ["group.org.example.shared"]})
+
+    def test_property_names_are_case_insensitive_and_condition_helpers_in_entitlements_resolve(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = ProjectFixture(Path(temporary))
+            text = fixture.app.read_text().replace("</Project>", '''<PropertyGroup Condition="'$(configuration)' == 'Release'">
+<SharedGroup>group.$(APPLICATIONID)</SharedGroup></PropertyGroup></Project>''')
+            fixture.app.write_text(text, encoding="utf8")
+            fixture.write_plist(fixture.root / "ios.entitlements", {GROUP_KEY: ["$(sharedgroup)"]})
+            self.assertEqual(requirements.app_requirement(fixture.app).entitlements,
+                             {GROUP_KEY: ["group.org.example.application"]})
+
+    def test_signing_target_runs_after_project_property_evaluation(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = ProjectFixture(Path(temporary))
+            text = fixture.app.read_text().replace("'$(EnableCodeSigning)' != 'false'",
+                                                   "'$(EnableCodeSigning)' != 'false' AND '$(EnableSharing)' == 'true'")
+            fixture.app.write_text(text.replace("</Project>", '''<PropertyGroup Condition="'$(Configuration)' == 'Release'">
+<EnableSharing>true</EnableSharing></PropertyGroup></Project>'''), encoding="utf8")
+            self.assertEqual(requirements.app_requirement(fixture.app).entitlements,
+                             {GROUP_KEY: ["group.org.example.shared"]})
+
+    def test_directory_build_declarations_are_included_before_and_after_the_app(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = ProjectFixture(Path(temporary))
+            fixture.app.write_text('''<Project><PropertyGroup><TargetFramework>net10.0-ios</TargetFramework>
+<ApplicationId>org.example.reader</ApplicationId></PropertyGroup></Project>''', encoding="utf8")
+            (fixture.root / "Directory.Build.props").write_text('''<Project>
+<PropertyGroup Condition="'$(Configuration)' == 'Release'"><SigningFile>unused.entitlements</SigningFile></PropertyGroup>
+</Project>''', encoding="utf8")
+            (fixture.root / "Directory.Build.targets").write_text('''<Project><PropertyGroup>
+<SigningFile>ios.entitlements</SigningFile><CodesignEntitlements>$(MSBuildThisFileDirectory)$(SigningFile)</CodesignEntitlements>
+</PropertyGroup></Project>''', encoding="utf8")
+            self.assertEqual(requirements.app_requirement(fixture.app).entitlements,
+                             {GROUP_KEY: ["group.org.example.shared"]})
+
+    def test_unknown_condition_helpers_and_unsupported_imports_or_containers_fail_closed(self):
+        forms = [
+            ('''<PropertyGroup Condition="'$(UnknownPermissionFlag)' == 'true'">
+<CodesignEntitlements>ios.entitlements</CodesignEntitlements></PropertyGroup>''', "Unresolved"),
+            ('''<Import Project="external.props" />''', "Unsupported explicit MSBuild import"),
+            ('''<Choose><When Condition="'$(Configuration)' == 'Release'"><PropertyGroup>
+<CodesignEntitlements>ios.entitlements</CodesignEntitlements></PropertyGroup></When></Choose>''', "Unsupported Choose"),
+            ('''<Target Name="AfterBuild" AfterTargets="Build"><PropertyGroup>
+<CodesignEntitlements>ios.entitlements</CodesignEntitlements></PropertyGroup></Target>''', "directly before"),
+            ('''<Target Name="Resolve"><Task><Output TaskParameter="Value" PropertyName="CodesignEntitlements" />
+</Task></Target>''', "Task-produced"),
+        ]
+        for declaration, message in forms:
+            with self.subTest(declaration=declaration), tempfile.TemporaryDirectory() as temporary:
+                fixture = ProjectFixture(Path(temporary))
+                fixture.app.write_text('''<Project><PropertyGroup><TargetFramework>net10.0-ios</TargetFramework>
+<ApplicationId>org.example.reader</ApplicationId></PropertyGroup>''' + declaration + "</Project>", encoding="utf8")
+                with self.assertRaisesRegex(signing.SigningError, message):
+                    requirements.app_requirement(fixture.app)
+
+    def test_platform_functions_use_their_actual_framework_and_expanded_host_arguments(self):
+        properties = {"TargetFramework": "net10.0-ios", "OtherFramework": "net10.0-android", "Host": "OSX"}
+        self.assertFalse(requirements.ios_condition(
+            "$([MSBuild]::GetTargetPlatformIdentifier('$(OtherFramework)')) == 'ios'", properties))
+        self.assertFalse(requirements.ios_condition(
+            "$([MSBuild]::GetTargetPlatformIdentifier('net10.0-android')) == 'ios'", properties))
+        self.assertTrue(requirements.ios_condition("$([MSBuild]::IsOSPlatform('$(Host)'))", properties))
+        with self.assertRaisesRegex(signing.SigningError, "Unresolved"):
+            requirements.ios_condition("$([MSBuild]::IsOSPlatform('$(UnknownHost)'))", properties)
 
     def test_new_ios_extension_targets_and_capabilities_are_discovered_automatically(self):
         with tempfile.TemporaryDirectory() as temporary:
