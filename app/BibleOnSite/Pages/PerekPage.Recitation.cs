@@ -32,6 +32,22 @@ public partial class PerekPage
     private Pasuk? _recitingPasuk;
     private RecitationWord? _recitingWord;
     private readonly Dictionary<int, Span> _focusedWordSpans = [];
+    private MediaElement? RecitationPlayer => RecitationPlayerHost.Content as MediaElement;
+
+    private MediaElement GetOrCreateRecitationPlayer() => (MediaElement)RecitationPlayerHost.GetOrCreatePlayer(() =>
+    {
+        var player = new MediaElement
+        {
+            AutomationId = "RecitationPlayer",
+            ShouldAutoPlay = false,
+            ShouldShowPlaybackControls = false,
+        };
+        player.MediaOpened += OnRecitationMediaOpened;
+        player.MediaEnded += OnRecitationMediaEnded;
+        player.MediaFailed += OnRecitationMediaFailed;
+        player.StateChanged += OnRecitationStateChanged;
+        return player;
+    });
     /// <summary>
     /// Whether the recitation catalog is available on this device. There is no
     /// global on/off preference — the reader's play controls and the קריינות
@@ -71,8 +87,11 @@ public partial class PerekPage
 
         // The שמע/קריינות sliders update an in-flight playback, not only the next play.
         var preferences = PreferencesService.Instance;
-        RecitationPlayer.Volume = preferences.RecitationVolume;
-        RecitationPlayer.Speed = preferences.RecitationSpeed;
+        if (RecitationPlayer is { } player)
+        {
+            player.Volume = preferences.RecitationVolume;
+            player.Speed = preferences.RecitationSpeed;
+        }
 
         RefreshFocusedRecitation();
         UpdateSelectionBar();
@@ -95,12 +114,11 @@ public partial class PerekPage
         _playingContinuous = false;
         _pendingSeekMs = null;
         _recitationBusy = false;
-        if (RecitationPlayer.Source != null)
+        if (RecitationPlayer is { } player)
         {
-            RecitationPlayer.Stop();
+            if (player.Source != null) { player.Stop(); }
+            player.Source = null;
         }
-
-        RecitationPlayer.Source = null;
     }
 
     private void ClearRecitationHighlight()
@@ -144,14 +162,14 @@ public partial class PerekPage
 
     private void UpdateRecitationHighlight(object? sender, EventArgs e)
     {
-        if (_playingKey == null || RecitationPlayer.CurrentState != MediaElementState.Playing)
+        if (_playingKey == null || RecitationPlayer is not { } player || player.CurrentState != MediaElementState.Playing)
         {
             return;
         }
 
         // Refresh the platform player's reported position before painting the word.
-        RecitationPlayer.Handler?.Invoke("StatusUpdated", null);
-        SetRecitingWord(_recitationTimeline?.WordAt(RecitationPlayer.Position.TotalMilliseconds));
+        player.Handler?.Invoke("StatusUpdated", null);
+        SetRecitingWord(_recitationTimeline?.WordAt(player.Position.TotalMilliseconds));
     }
 
     private void ResetRecitationContext()
@@ -412,15 +430,15 @@ public partial class PerekPage
         // playback, so Play during one starts continuous playback at the
         // tap's bookmark instead.
         var barIssued = _playingContinuous || _playingKey?.StartsWith("verses:", StringComparison.Ordinal) == true;
-        if (_playingKey != null && barIssued && RecitationPlayer.CurrentState is MediaElementState.Playing or MediaElementState.Paused)
+        if (_playingKey != null && barIssued && RecitationPlayer is { } player && player.CurrentState is MediaElementState.Playing or MediaElementState.Paused)
         {
-            if (RecitationPlayer.CurrentState == MediaElementState.Playing)
+            if (player.CurrentState == MediaElementState.Playing)
             {
-                RecitationPlayer.Pause();
+                player.Pause();
             }
             else
             {
-                RecitationPlayer.Play();
+                player.Play();
             }
 
             return;
@@ -468,15 +486,15 @@ public partial class PerekPage
         }
         var continuous = start == null && ranges == null;
 
-        if (_playingKey == key && RecitationPlayer.CurrentState is MediaElementState.Playing or MediaElementState.Paused)
+        if (_playingKey == key && RecitationPlayer is { } existing && existing.CurrentState is MediaElementState.Playing or MediaElementState.Paused)
         {
-            if (RecitationPlayer.CurrentState == MediaElementState.Playing)
+            if (existing.CurrentState == MediaElementState.Playing)
             {
-                RecitationPlayer.Pause();
+                existing.Pause();
             }
             else
             {
-                RecitationPlayer.Play();
+                existing.Play();
             }
 
             return;
@@ -514,10 +532,11 @@ public partial class PerekPage
             _pendingSeekMs = continuous && _resumePosition is { } point && point.PerekId == perek.PerekId
                 ? _recitationTimeline?.PositionOf(point.StartMs)
                 : null;
-            RecitationPlayer.Speed = preferences.RecitationSpeed;
-            RecitationPlayer.Volume = preferences.RecitationVolume;
+            var player = GetOrCreateRecitationPlayer();
+            player.Speed = preferences.RecitationSpeed;
+            player.Volume = preferences.RecitationVolume;
             _playWhenOpened = true;
-            RecitationPlayer.Source = MediaSource.FromFile(path);
+            player.Source = MediaSource.FromFile(path);
         }
         catch (OperationCanceledException) { /* Navigation or another selection cancels the old request. */ }
         catch (Exception ex)
@@ -536,7 +555,7 @@ public partial class PerekPage
 
     private async void OnRecitationMediaOpened(object? sender, EventArgs e)
     {
-        if (!_playWhenOpened || !RecitationAvailable)
+        if (!_playWhenOpened || !RecitationAvailable || sender is not MediaElement player)
         {
             return;
         }
@@ -550,7 +569,7 @@ public partial class PerekPage
             {
                 // Resume continuous playback from the tapped word's position.
                 using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-                await RecitationPlayer.SeekTo(TimeSpan.FromMilliseconds(seekMs), timeout.Token);
+                await player.SeekTo(TimeSpan.FromMilliseconds(seekMs), timeout.Token);
             }
             catch (Exception ex) //NOSONAR — a platform that cannot seek here still plays from the start.
             {
@@ -562,7 +581,7 @@ public partial class PerekPage
             // StopRecitation ran during the seek — do not revive the old source.
             return;
         }
-        RecitationPlayer.Play();
+        player.Play();
     }
     private void OnRecitationMediaEnded(object? sender, EventArgs e)
     {
@@ -579,7 +598,7 @@ public partial class PerekPage
     private void OnRecitationStateChanged(object? sender, MediaStateChangedEventArgs e)
     {
         _recitationFrameTimer?.Stop();
-        if (_playingKey != null && _recitationTimeline != null && RecitationPlayer.CurrentState == MediaElementState.Playing)
+        if (_playingKey != null && _recitationTimeline != null && RecitationPlayer?.CurrentState == MediaElementState.Playing)
         {
             if (_recitationFrameTimer == null)
             {
@@ -590,7 +609,7 @@ public partial class PerekPage
             UpdateRecitationHighlight(this, EventArgs.Empty);
             _recitationFrameTimer.Start();
         }
-        else if (RecitationPlayer.CurrentState is MediaElementState.Stopped or MediaElementState.None or MediaElementState.Failed)
+        else if (RecitationPlayer?.CurrentState is MediaElementState.Stopped or MediaElementState.None or MediaElementState.Failed)
         {
             SetRecitingWord(null);
         }
