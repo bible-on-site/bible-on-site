@@ -19,12 +19,16 @@ public class MasoraViewModelTests
         public MasoraViewModel Model { get; }
         private readonly bool _includeCatalog;
         private readonly bool _includeNotes;
+        private readonly string[] _extraPerushInserts;
+        public PreferencesService Preferences { get; }
 
         public Fixture(List<Article>? articles = null, int? lastLearntPerek = null,
-            bool includeCatalog = true, bool includeNotes = true, bool nullArticlesLoader = false)
+            bool includeCatalog = true, bool includeNotes = true, bool nullArticlesLoader = false,
+            string[]? extraPerushInserts = null)
         {
             _includeCatalog = includeCatalog;
             _includeNotes = includeNotes;
+            _extraPerushInserts = extraPerushInserts ?? [];
             if (lastLearntPerek is int lastLearnt)
             {
                 // PreferencesService caches LastLearntPerek at construction — set first.
@@ -33,6 +37,7 @@ public class MasoraViewModelTests
             var catalog = new PerushimCatalogService(Storage.FileSystem.Object);
             var notes = new PerushimNotesService(NotesDeliveryTests.Pad().Object, Storage.FileSystem.Object);
             var preferences = PreferencesService.CreateForTesting(Prefs);
+            Preferences = preferences;
             preferences.Load();
             MasoraService = new MasoraDataService(new LocalDatabaseService(Storage.FileSystem.Object));
             Model = new MasoraViewModel(
@@ -77,9 +82,9 @@ public class MasoraViewModelTests
             if (_includeCatalog)
             {
                 await Storage.CreateDatabaseAsync("sefaria-dump-5784-sivan-4.perushim_catalog.sqlite",
-                    "CREATE TABLE perush (id INTEGER, name TEXT, priority INTEGER)",
-                    "INSERT INTO perush VALUES (1,'Rashi',1)",
-                    "CREATE TABLE _metadata (key TEXT,value TEXT)", "INSERT INTO _metadata VALUES ('build_timestamp','100')");
+                    ["CREATE TABLE perush (id INTEGER, name TEXT, priority INTEGER)",
+                     "INSERT INTO perush VALUES (1,'Rashi',1)", .._extraPerushInserts,
+                     "CREATE TABLE _metadata (key TEXT,value TEXT)", "INSERT INTO _metadata VALUES ('build_timestamp','100')"]);
             }
             if (_includeNotes)
             {
@@ -534,5 +539,38 @@ public class MasoraViewModelTests
         await fixture.Model.LoadPerushimAsync(unit);
 
         fixture.Model.Perushim.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task PerushNameFilter_NarrowsFilteredPerushim_AndSetsEmptyMessage()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize();
+        await fixture.Model.LoadByUnitIdAsync(1);
+
+        fixture.Model.PerushNameFilter = "rash";
+        fixture.Model.FilteredPerushim.Should().ContainSingle(p => p.Name == "Rashi");
+
+        fixture.Model.PerushNameFilter = "no-such-perush";
+        fixture.Model.FilteredPerushim.Should().BeEmpty();
+        fixture.Model.PerushimEmptyMessage.Should().Be("לא נמצאו פירושים תואמים");
+    }
+
+    [Fact]
+    public async Task PreferencesChange_ClipsCheckedPerushimDownToTheNewLimit()
+    {
+        await using var fixture = new Fixture(extraPerushInserts:
+            ["INSERT INTO perush VALUES (2,'Ibn Ezra',2)", "INSERT INTO perush VALUES (3,'Ramban',3)"]);
+        await fixture.Initialize();
+        await fixture.Model.LoadByUnitIdAsync(1);
+        fixture.Model.ToggleCheckedPerush(1);
+        fixture.Model.ToggleCheckedPerush(2);
+        fixture.Model.ToggleCheckedPerush(3);
+        fixture.Model.CheckedPerushim.Should().HaveCount(3);
+
+        fixture.Preferences.InlineCommentaryLimit = 2;
+
+        fixture.Model.CheckedPerushim.Should().HaveCount(2);
+        fixture.Model.InlineCommentaryLimitMessage.Should().Contain("2");
     }
 }

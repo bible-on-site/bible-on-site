@@ -48,4 +48,17 @@ public sealed class AccessibleTextSectionsTests
     [InlineData(-1)]
     public void InvalidLimitsAreRejected(int limit)
         => Assert.Throws<ArgumentOutOfRangeException>(() => AccessibleTextSections.Split("text", limit));
+
+[Fact]
+    public void GraphemeLongerThanTheLimit_IsKeptIntact()
+    {
+        // "a" + combining acute is one grapheme of two UTF-16 units; a limit of 1
+        // cannot split inside it, so the section expands to the grapheme end.
+        var sections = AccessibleTextSections.Split("ábc", 1);
+
+        sections.Should().Equal(
+            new AccessibleTextSections.Section(0, 2),
+            new AccessibleTextSections.Section(2, 1),
+            new AccessibleTextSections.Section(3, 1));
+    }
 }

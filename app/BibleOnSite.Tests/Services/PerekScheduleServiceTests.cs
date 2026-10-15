@@ -465,4 +465,39 @@ public class PerekScheduleServiceTests
         service.LastConfirmedCycleNumber.Should().Be(0);
         service.GetTodaysPerekId().Should().Be(1);
     }
+
+[Fact]
+    public async Task LastConfirmedCycleNumber_IsZeroBeforeLoad()
+    {
+        var (service, storage) = await CreateServiceAsync(CycleOne);
+        await using var _ = storage;
+
+        service.LastConfirmedCycleNumber.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task GetCycle_WithNoConfirmedRows_Throws()
+    {
+        var (service, storage) = await CreateServiceAsync();
+        await using var _ = storage;
+        await service.LoadAsync();
+
+        var act = () => service.GetCycle(5);
+
+        act.Should().Throw<InvalidOperationException>();
+    }
+
+    [Fact]
+    public async Task GetCycleForDateOrUpcoming_AfterAllConfirmedCycles_ReturnsTheLastCycle()
+    {
+        var (service, storage) = await CreateServiceAsync([..CycleOne,
+            "INSERT INTO tanah_perek_date VALUES (6,2,'57781101','57781101','20:25')"]);
+        await using var _ = storage;
+        await service.LoadAsync();
+
+        var upcoming = service.GetCycleForDateOrUpcoming(58000101);
+
+        upcoming.Projected.Should().BeTrue();
+        upcoming.Number.Should().BeGreaterThan(2);
+    }
 }

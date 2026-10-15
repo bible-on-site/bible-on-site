@@ -544,4 +544,33 @@ public class TanahpediaServiceTests
         homepage.LayoutType.Should().BeEmpty();
         homepage.Content.Should().BeNull();
     }
+
+[Fact]
+    public async Task SearchEntriesAsync_returns_empty_for_null_data()
+    {
+        var transport = new GraphQLTransport("{\"data\":{\"searchTanahpediaEntries\":null}}");
+        var service = CreateService(transport);
+
+        var hits = await service.SearchEntriesAsync("תורה", 10, TestContext.Current.CancellationToken);
+
+        hits.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task SearchEntriesAsync_translates_the_search_deadline_to_timeout()
+    {
+        var transport = new GraphQLTransport
+        {
+            Respond = async cancellationToken =>
+            {
+                await Task.Delay(Timeout.Infinite, cancellationToken);
+                throw new InvalidOperationException("unreachable");
+            }
+        };
+        var service = CreateService(transport);
+
+        var act = () => service.SearchEntriesAsync("תורה", 10, TestContext.Current.CancellationToken);
+
+        await act.Should().ThrowAsync<TimeoutException>().WithMessage("*timed out*");
+    }
 }

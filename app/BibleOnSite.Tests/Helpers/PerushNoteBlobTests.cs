@@ -170,4 +170,36 @@ public class PerushNoteBlobTests
         decoded.Should().HaveCount(1);
         decoded[0].Content.Should().Be("a\uFFFDb");
     }
+
+    [Fact]
+    public void ReadHeaders_BadMagic_Throws()
+    {
+        var blob = RawBlob(writer =>
+        {
+            writer.Write("BAD!"u8.ToArray());
+            writer.Write(0u);
+        });
+
+        var act = () => PerushNoteBlob.ReadHeaders(blob);
+
+        act.Should().Throw<InvalidDataException>().WithMessage("*bad magic*");
+    }
+
+    [Fact]
+    public void ReadHeaders_ImplausiblyLargeRecord_Throws()
+    {
+        var blob = RawBlob(writer =>
+        {
+            writer.Write("PNB1"u8.ToArray());
+            writer.Write(1u);
+            writer.Write(7u);
+            writer.Write(3u);
+            writer.Write(0u);
+            writer.Write(uint.MaxValue); // declared length exceeds MaxContentBytes
+        });
+
+        var act = () => PerushNoteBlob.ReadHeaders(blob);
+
+        act.Should().Throw<InvalidDataException>().WithMessage("*implausibly large*");
+    }
 }
