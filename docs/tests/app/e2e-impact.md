@@ -177,43 +177,58 @@ job downloads every `ios-shard<N>` artifact and the plan, then:
    refreshes history alongside the impact baseline, so provisional PR
    evidence never writes scheduling state either.
 
-## CI wiring (`app-mobile-e2e.yml`)
+## CI wiring (`app-mobile-e2e-runner.yml` + `app-mobile-e2e.yml`)
 
 1. **plan_ios** (#2263) — a single predecessor job: `baseline-download` →
    `select --allow-empty` → `plan` → `appium-matrix.mjs`, publishing the
    `app-mobile-e2e-plan.<run>.ios` artifact (plan, selection manifest and
    one `shards/shard-N.json` per shard) and the `ios-matrix` output the
    runner matrix expands from. The Android leg is untouched — it still
-   resolves selection inside its own runner.
+   resolves selection inside its own runner as a background step overlapped
+   with device/caches setup.
 2. **baseline-download** — fetches the newest
    `app-mobile-e2e-coverage.master.<platform>` artifact through the REST API
-   (`actions: read`). Absent baselines are reported, not fatal.
+   (`actions: read`). Absent baselines are reported, not fatal — the iOS
+   planner falls back to the full suite at the unmeasured weight, and the
+   Android leg resolves `selectAll`.
 3. **select** — writes `selection-manifest.json` plus a step summary of the
    selected/unselected tests and their reasons.
-4. **tests** — an iOS leg enforces its assigned `case-manifest.json`; the
-   Android leg receives `MOBILE_E2E_SELECTION` only in `enforce` mode.
+4. **tests** — an iOS leg enforces its assigned `case-manifest.json` in both
+   modes (the partition is an assignment, not a selection mode); the Android
+   leg receives `MOBILE_E2E_SELECTION` only in `enforce` mode.
    `TestMobileE2E` intersects the manifest's `FullyQualifiedName` list with
    the existing category/platform filter and refuses a non-`selectAll`
    manifest that selects nothing.
 5. **merge_ios** (#2263) — downloads the plan and every shard artifact,
-   validates the complete disjoint run set, merges evidence/coverage/timing
-   and re-downloads the baseline as `collect-appium --history` input.
-6. **collect-appium** — the merge collects the union tree; per-runner
-   collects stay marked incomplete.
-7. **publish** — only a completed, successful `master` push uploads the
-   `.master` baseline (`overwrite`), so provisional PR/merge-queue evidence
-   can never poison the authoritative tree — or its timing history.
+   requires compatible suite/platform/snapshot trees, validates the
+   complete disjoint run set (no drops, no overlap), merges
+   evidence/coverage/timing and re-downloads the baseline as
+   `collect-appium --history` input.
+6. **collect-appium** — runs `always()`: a failed run still collects
+   evidence for its passed tests but marks the tree `complete: false`, and
+   on iOS every shard's tree is additionally marked `--incomplete` by
+   construction. Only the merge's collected union tree can feed a baseline.
+7. **publish** — Android baselines publish inside the runner leg; the iOS
+   `*.master.ios` baselines publish only from `merge_ios` when the merged
+   evidence is `complete`, and only on a completed, successful `master`
+   push (`push` on `refs/heads/master` — a `workflow_dispatch` cannot
+   refresh them), so provisional PR/merge-queue evidence can never poison
+   the authoritative tree — or its timing history.
 
 Rollout modes are `workflow_dispatch`/`workflow_call` inputs:
 `e2e_selection_mode` (`shadow` default, `enforce`) and `force_full_suite`
 (bypasses selection entirely). Skipping stays disabled until shadow runs
 demonstrate the selection contract; enforcement is a one-input switch.
+Sharding is orthogonal: the iOS plan partitions the run set once, and each
+leg executes only its assigned `case-manifest.json`, so a run only ever
+schedules each scenario on exactly one runner.
 
 ## Remaining phases
 
 - Evidence-gated switch to `enforce` for the Appium suite.
-- Website/admin/API suites: per-test application-process collectors (the
-  website already records Istanbul coverage per Playwright test).
+- Website/admin/API suites run the same contract in shadow mode on `ci.yml`
+  (#2241): manifest computed per run, suites still execute everything, no
+  enforce runner exists for them yet.
 - Finer-grained structural mapping: the persisted declaration signatures
   currently serve provenance and file-level equivalence; mapping individual
   coverage entries to declarations would let a member-level edit select only
