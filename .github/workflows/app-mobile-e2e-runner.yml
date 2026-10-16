@@ -21,6 +21,10 @@ on:
       shard:
         type: string
         default: ""
+      ios_plan_artifact:
+        description: "Shard-plan artifact; its shards/shard-N.json assigns this leg's cases (#2263)"
+        type: string
+        default: ""
       mode:
         description: "build, prebuilt-run, or build-and-run"
         type: string
@@ -56,8 +60,6 @@ jobs:
       MOBILE_E2E_COVERAGE: "1"
       # The builder preflight compiles the Debug harness and build tool once.
       MOBILE_E2E_PREBUILT: "1"
-      MOBILE_E2E_SHARD_COUNT: "1"
-      MOBILE_E2E_SHARD: ${{ inputs.shard }}
       # Android emulator coordinates shared by the sdkmanager install, the
       # cache keys and the runner action, so any bump invalidates the caches.
       ANDROID_API_LEVEL: "36"
@@ -189,9 +191,11 @@ jobs:
       # selector falls back to the full applicable suite (#2085). Shadow mode
       # computes the deterministic subset for evidence while the suite still
       # runs everything; a discovery problem resolves to selectAll — never to
-      # a silently empty run.
+      # a silently empty run. iOS shard legs skip this entirely: the plan job
+      # already selected and partitioned the suite once for the whole matrix,
+      # and each leg stages its assigned manifest below (#2263).
       - name: Download baseline and select affected tests
-        if: inputs.mode != 'build'
+        if: inputs.mode != 'build' && inputs.ios_plan_artifact == ''
         id: selection
         background: true
         env:
@@ -271,8 +275,8 @@ jobs:
         run: npm run ios:boot:start --prefix app/mobile-e2e
 
       # The boot kicked above is still in flight; the wait also warms Appium's
-      # CoreSimulator bridge and exports the device UDIDs (MOBILE_UDID, or
-      # MOBILE_UDID_SHARD_N when sharded) plus MOBILE_OS_VERSION. Running
+      # CoreSimulator bridge and exports MOBILE_UDID plus MOBILE_OS_VERSION —
+      # each shard is its own runner with a single simulator (#2263). Running
       # it as a background step overlaps all of that with the shared-build
       # archive transfer; `wait` below is the gate that surfaces the
       # finished boot and the exported variables to the test step.
@@ -291,6 +295,39 @@ jobs:
         if: inputs.mode != 'build' && (inputs.platform == 'iOS')
         background: true
         run: npm run ios:wda --prefix app/mobile-e2e
+
+      # Dynamic iOS shards (#2263): the plan job decided this leg's cases once
+      # for the whole matrix, so the leg stages its assigned manifest verbatim
+      # instead of selecting again. A missing or mismatched manifest fails here
+      # — never widens silently to the full suite.
+      - name: Download iOS shard plan
+        if: inputs.mode != 'build' && inputs.ios_plan_artifact != ''
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ inputs.ios_plan_artifact }}
+          path: ${{ runner.temp }}/ios-plan
+
+      - name: Stage assigned iOS shard manifest
+        if: inputs.mode != 'build' && inputs.ios_plan_artifact != ''
+        id: shard_manifest
+        run: |
+          MANIFEST="${{ runner.temp }}/ios-plan/shards/shard-${{ inputs.shard }}.json"
+          if [ ! -f "$MANIFEST" ]; then
+            echo "::error::No shard manifest for iOS shard ${{ inputs.shard }} in ${{ inputs.ios_plan_artifact }}."
+            exit 1
+          fi
+          node -e '
+            const m = JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8"));
+            const problems = [];
+            if (m.shard !== Number(process.argv[2])) problems.push(`manifest is for shard ${m.shard}`);
+            if (m.testedSha !== process.argv[3]) problems.push(`manifest tested ${m.testedSha}`);
+            if (!Array.isArray(m.selected) || m.selected.length === 0) problems.push("manifest assigns no cases");
+            if (problems.length > 0) throw new Error(`Bad iOS shard manifest: ${problems.join("; ")}.`);
+          ' "$MANIFEST" "${{ inputs.shard }}" "${{ github.sha }}"
+          mkdir -p "$MOBILE_E2E_ARTIFACTS"
+          cp "$MANIFEST" "$MOBILE_E2E_ARTIFACTS/case-manifest.json"
+          cp "${{ runner.temp }}/ios-plan/ios-shard-plan.json" "$MOBILE_E2E_ARTIFACTS/ios-shard-plan.json"
+          echo "manifest=$MOBILE_E2E_ARTIFACTS/case-manifest.json" >> "$GITHUB_OUTPUT"
 
       # The simulator and WDA are already warming while the archive transfers.
       - name: Download shared iOS build
@@ -545,8 +582,9 @@ jobs:
           key: ${{ steps.avd-cache.outputs.cache-primary-key }}
 
       # The Android pilot's env consumes the selection manifest, so its leg
-      # cannot start until the background selection finishes. The iOS leg
-      # reaches the same gate through wait-all below.
+      # cannot start until the background selection finishes. A planned iOS
+      # leg skips that step — its shard manifest is staged synchronously
+      # above — and waits at the simulator gate below instead.
       - name: Wait for test selection
         wait-all:
 
@@ -602,8 +640,9 @@ jobs:
       - name: Wait for iPhone simulator
         wait-all:
 
-      # Each runner owns one simulator/session and its existing Shard trait.
-      # The final merge verifies their union against all discovered iOS tests.
+      # Each runner owns one simulator/session and the case manifest the plan
+      # assigned it (#2263). The final merge verifies the executed union equals
+      # the planned run set exactly once.
       - name: Run iOS runner shard
         if: inputs.mode != 'build' && (inputs.platform == 'iOS')
         id: pilot-ios
@@ -611,8 +650,10 @@ jobs:
         # this outer limit also bounds a blocked supervisor or runner step.
         timeout-minutes: 20
         env:
-          # Empty in shadow mode: the manifest is reported, not enforced.
-          MOBILE_E2E_SELECTION: ${{ inputs.e2e_selection_mode == 'enforce' && steps.selection.outputs.manifest || '' }}
+          # A planned leg always enforces its shard manifest — the partition is
+          # the assignment, not a narrowing hint. Android legs keep shadow-mode
+          # reporting: empty unless enforce passes the selection manifest.
+          MOBILE_E2E_SELECTION: ${{ inputs.ios_plan_artifact != '' && steps.shard_manifest.outputs.manifest || (inputs.e2e_selection_mode == 'enforce' && steps.selection.outputs.manifest || '') }}
         run: npm test --prefix app/mobile-e2e
 
       # Real app-process coverage (#1232): the harness pulled a live hit dump

@@ -5,9 +5,9 @@ using Xunit;
 namespace BibleOnSite.Tests.MobileE2E;
 
 // One device per matrix runner; scenarios on that device run sequentially.
-// CI keeps the long commentary and rapid verse storms on separate runners.
-// The ten iOS cases remain balanced across three runners. Android runs all six
-// shared scenarios without a shard filter.
+// iOS shards the suite across per-shard runners (#2263): each runner executes
+// the case manifest the dynamic planner assigned it. Android runs every
+// applicable scenario on one emulator.
 [Collection("Mobile device")]
 [Trait("Category", "MobileE2E")]
 [Trait("Platform", "Shared")]
@@ -15,7 +15,6 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
     : MobileDeviceTest(output, session)
 {
     [Fact]
-    [Trait("Shard", "1")]
     public void StartupDisplaysPackagedPesukimAndUsableBottomNavigation() => Scenario(() =>
     {
         Assert.NotEmpty(Page.Source);
@@ -25,7 +24,6 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
     });
 
     [Fact]
-    [Trait("Shard", "3")]
     public void SearchReplacesTheSourceAndGroupsBooksInThreeColumns() => Scenario(() =>
     {
         Assert.NotEmpty(Page.FirstPasuk);
@@ -75,7 +73,6 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
     });
 
     [Fact]
-    [Trait("Shard", "1")]
     public void FloatingSearchFindsMisspelledChapterAndUnpointedVerse() => Scenario(() =>
     {
         Assert.NotEmpty(Page.FirstPasuk);
@@ -114,7 +111,6 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
     });
 
     [Fact]
-    [Trait("Shard", "3")]
     public void FloatingSearchCommentaryJumpRestoresPhraseResultsAndPosition() => Scenario(() =>
     {
         var driver = Driver!;
@@ -291,7 +287,6 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
     }
 
     [Fact]
-    [Trait("Shard", "3")]
     public void AdjacentPerekNavigationChangesTheTextAndReturnsToTheOriginal() => Scenario(() =>
     {
         var source = Page.Source;
@@ -316,7 +311,6 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
     });
 
     [Fact]
-    [Trait("Shard", "2")]
     public void NativeFlyoutOpensPreferencesAndBackReturnsToThePerek() => Scenario(() =>
     {
         var source = Page.Source;

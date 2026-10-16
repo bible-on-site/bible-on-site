@@ -191,3 +191,8 @@ Remaining known costs: per-shard coverage-apply (~2–3m of `.coverage` dump
 processing), threefold per-leg setup duplication, and Appium/WDA transport
 latency itself (≈1.1s per `findElements`, ≈3.5s per action — the
 `xcode-mcpbridge-poc` probe exists to measure a possible replacement, #2004).
+
+Since this measurement, #2263 replaced the fixed three-way split with a
+`plan_ios` job that selects the affected cases and packs them into a
+runtime-planned number of shards each leg executes verbatim — leg count and
+setup duplication now scale with the plan instead of staying at three.

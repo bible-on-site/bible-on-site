@@ -19,7 +19,7 @@ the executable-coverage tree produced by `devops/e2e-coverage-trees/`.
 | Executable coverage-tree extraction | Merged (#2183) | `devops/e2e-coverage-trees/` |
 | Selector bridge: exec evidence unions into `coverage-tree.json` | Merged (#2195, #2230) | `devops/e2e-coverage-trees/to-selector-tree.ts`, `collect-appium --exec-tree`, `.github/workflows/app-mobile-e2e.yml` |
 | Playwright suites (website, admin, API): evidence, discovery, collectors, shadow CI | Merged (#2241) | `web/shared/tests-util/e2e-impact.ts`, `*/e2e-impact.json`, `collect-playwright`, `.github/workflows/ci.yml` |
-| iOS 3-shard split + merged-tree baseline publication | Merged (#2266, #2279) | `.github/workflows/app-mobile-e2e.yml` `merge_ios`, `app/mobile-e2e/merge-runner-shards.mjs` |
+| iOS runtime-planned shard split + merged-tree baseline publication | Merged (#2266, #2279, #2263) | `.github/workflows/app-mobile-e2e.yml` `plan_ios`/`merge_ios`, `devops/github/ci/e2e-impact/shard-plan.ts`, `app/mobile-e2e/merge-runner-shards.mjs` |
 | Member-granularity narrowing (C# member fingerprints ↔ exec member evidence) | This slice | `extractMembers`/`SourceFingerprint.members`, `CoveredNode.member`, `memberGaps`, `covered-members`/`member-widened` reasons |
 | Selection enforcement beyond the mobile opt-in inputs | Not implemented | `e2e_selection_mode=enforce` / `force_full_suite` exist only on `app-mobile-e2e.yml`; Playwright suites have no enforce runner |
 | AST-aware change comparison beyond member level, dependency edges | Planned, not implemented | — |
@@ -64,22 +64,29 @@ xUnit suite through `dotnet run --project devops -- TestMobileE2E`
 | `coverage-app/coverage-report-manifest.json` | `ApplyE2ECoverageLayer` | `app-e2e-coverage/1`: apply statistics, `incompatibleDumps`, `unknownPointIds`, `complete` |
 | `results/mobile-e2e.trx`, `results/mobile-e2e.xml` | xUnit MTP reporters | Per-test identity (FQN via `TestMethod@className`+`@name`), outcomes, start/finish times |
 | `exec-coverage-tree.json` | `e2e-coverage-trees.ts extract` | The exec tree (schemaVersion 1) — per-test executed files + the `shared` bucket |
-| `coverage-tree.json` | `e2e-impact.ts collect-appium` | The selector tree (schemaVersion 1): automation-id entries unioned with `--exec-tree` evidence when a compatible exec tree exists |
+| `coverage-tree.json` | `e2e-impact.ts collect-appium` | The selector tree (schemaVersion 1): automation-id entries unioned with `--exec-tree` evidence when a compatible exec tree exists; also carries per-case `timing` and `overhead` history (#2263) |
 | `selection-manifest.json` | `e2e-impact.ts select` | The deterministic selection manifest |
+| `ios-shard-plan.json` + `shards/shard-N.json` | `e2e-impact.ts plan` (`plan_ios` job, #2263) | The deterministic shard plan and the per-shard case manifests the iOS legs enforce |
+| `case-manifest.json` | iOS runner leg | The shard manifest this leg actually executed — the merge replays it against the plan's assignment |
+| `case-timings.json` | `merge-runner-shards.mjs` | Merged per-case durations across all shards — the collector's timing-history input |
+| `runner-union.json` | `merge-runner-shards.mjs` | Union report: planned-vs-observed per-shard durations, completeness and pilot timings |
 
 Artifact upload (`app-mobile-e2e-runner.yml` + `app-mobile-e2e.yml`):
 
+- `app-mobile-e2e-plan.<run_id>.ios` — the `plan_ios` output consumed by every
+  iOS leg and by `merge_ios` (#2263).
+- `app-mobile-e2e-build.<run_id>.ios` — the shared iOS build consumed by all
+  iOS shard legs.
+- `app-mobile-e2e-shard.<run_id>.ios-shard<N>` — one iOS leg's merge inputs
+  (`case-manifest.json`, trees, manifests, evidence, dumps, LCOV) consumed by
+  `merge_ios`.
 - `appium-<artifact>-<run_id>-<attempt>` — the whole per-leg artifacts
   directory (diagnostics, evidence, dumps, reports, `exec-coverage-tree.json`);
-  `<artifact>` is `android` or `ios-shard1..3`. The merged iOS result
-  additionally uploads as `appium-ios-<run_id>-<attempt>` from `merge_ios`.
+  `<artifact>` is `android`, `ios-build` or `ios-shard<N>`. The merged iOS
+  result additionally uploads as `appium-ios-<run_id>-<attempt>` from
+  `merge_ios`.
 - `app-e2e-coverage.<run_id>.<artifact>` — `coverage-app/` per leg;
-  `merge_ios` merges the three iOS shard LCOVs into
-  `app-e2e-coverage.<run_id>.ios`.
-- `app-mobile-e2e-build.<run_id>.ios` — the shared iOS build consumed by all
-  three shards.
-- `app-mobile-e2e-shard.<run_id>.ios-shardN` — per-shard merge inputs
-  (trees, manifests, LCOV) consumed by `merge_ios`.
+  `merge_ios` merges the iOS shard LCOVs into `app-e2e-coverage.<run_id>.ios`.
 - `app-mobile-e2e-coverage.master.<platform>` — selector tree baseline
   (`coverage-tree.json`), published only from a completed, successful
   default-branch run.
@@ -464,12 +471,18 @@ under-attribution can only over-select.
 - **Coverage of framework code**: only the instrumented app module(s) appear;
   MAUI/framework hits are out of evidence scope.
 - **iOS sharding**: each shard extracts a per-shard tree marked
-  `--incomplete` (it holds a third of the suite by construction);
-  `merge_ios` validates the union, intersects it with the full-suite
-  expected set, and only then can the merged tree publish baselines. A
-  per-shard `coverage-tree.json` is therefore diagnostic, never baseline
-  input. The split is a static `Shard` trait assignment — dynamic,
-  runtime-driven shard sizing remains open as #2263.
+  `--incomplete` (it holds only its assigned slice of the plan by
+  construction); `merge_ios` validates the union against the shard plan —
+  every assignment observed exactly once — and only then can the merged
+  tree publish baselines. A per-shard `coverage-tree.json` is therefore
+  diagnostic, never baseline input. The split is `plan_ios`'s
+  runtime-driven assignment (#2263): each leg executes its
+  `case-manifest.json` verbatim rather than a static `Shard` trait.
+  The manifest skip runs in-process, so a leg's TRX/JUnit still
+  enumerates the whole suite — unassigned cases land in the tree as
+  skipped/not-executed `unmeasured` placeholders that claim no
+  execution; the merge deduplicates them freely and requires only the
+  claiming (measured, error or ran-but-undumped) entries to be disjoint.
 
 ## Determinism contract
 
