@@ -12,13 +12,15 @@
  * --require   input must exist; a missing one fails the merge (exit 1)
  * --hits-only like --require, but the input's instrumented universe is
  *             untrusted: it may only confirm hits on coordinates the other
- *             layers already enumerate — file, line, branch arm and function.
- *             Use for inputs built by a different instrumented compilation
- *             (e.g. a separately built e2e app), whose sequence-point set is
- *             not comparable: its unhit lines never enter the report, and its
- *             hits on unknown coordinates are dropped too — a foreign hit
- *             without its unhit siblings would fake a fully covered file,
- *             and a foreign BRDA key could credit a different arm.
+ *             layers already enumerate — file, DA line, and a function
+ *             declared at the same FN line in both builds. Use for inputs
+ *             built by a different instrumented compilation (e.g. a
+ *             separately built e2e app), whose sequence-point set is not
+ *             comparable: its unhit lines never enter the report, its hits
+ *             on unknown coordinates are dropped — a foreign hit without
+ *             its unhit siblings would fake a fully covered file — and
+ *             foreign BRDA arms never merge, since the same tuple can name
+ *             a different branch in another build.
  * --optional  input is skipped with a warning when missing
  * --prefix    module dir relative to repo root (e.g. web/admin/) — rewrites
  *             bare `SF:src/...` records so Codecov flag paths match
@@ -47,12 +49,15 @@ interface FileRecord {
  * `hitsOnly` (indexed like `contents`) marks inputs from an untrusted
  * instrumented universe — a build that enumerates sequence points the
  * canonical layers do not know. Such an input can only CONFIRM coverage on
- * coordinates the canonical inputs already declared: its hits merge onto an
- * existing file's existing DA line, BRDA arm or FNDA function, and nothing
- * else. The merged SF set and LF/BRF/FNF denominators therefore stay exactly
- * the canonical layers' — an untrusted input can raise hit counts, never
- * extend the universe. Canonical inputs merge first regardless of CLI order,
- * so the universe is always complete before untrusted hits apply.
+ * coordinates both builds provably share: its DA hits merge onto an
+ * existing file's existing line, its FNDA hits merge only when the block
+ * declared the function at the canonical FN "line,name", and its BRDA
+ * arms never merge — block/branch indices are per-instrumenter and equal
+ * tuples can denote different arms. The merged SF set and LF/BRF/FNF
+ * denominators stay exactly the canonical layers' — an untrusted input
+ * can raise DA/FNDA hit counts, never extend the universe. Canonical
+ * inputs merge first regardless of CLI order, so the universe is always
+ * complete before untrusted hits apply.
  */
 export function mergeLcovTexts(
 	contents: string[],
@@ -61,18 +66,20 @@ export function mergeLcovTexts(
 	hitsOnly: ReadonlySet<number> = new Set(),
 ): string {
 	const files = new Map<string, FileRecord>();
+	const newRecord = (): FileRecord => ({
+		da: new Map(),
+		brda: new Map(),
+		fnda: new Map(),
+		fn: new Set(),
+	});
 	const recordFor = (path: string): FileRecord => {
 		let rec = files.get(path);
 		if (!rec) {
-			rec = { da: new Map(), brda: new Map(), fnda: new Map(), fn: new Set() };
+			rec = newRecord();
 			files.set(path, rec);
 		}
 		return rec;
 	};
-	// A function the canonical universe knows: declared (FN "line,name") or
-	// already carrying an FNDA row (an unhit function still emits FNDA:0).
-	const knowsFunction = (rec: FileRecord, name: string): boolean =>
-		rec.fnda.has(name) || [...rec.fn].some((fn) => fn.endsWith(`,${name}`));
 
 	const order = [...contents.keys()].sort(
 		(a, b) => Number(hitsOnly.has(a)) - Number(hitsOnly.has(b)),
@@ -80,9 +87,35 @@ export function mergeLcovTexts(
 	for (const index of order) {
 		const coveredOnly = hitsOnly.has(index);
 		let rec: FileRecord | null = null;
+		// Untrusted file blocks parse into their own record first — foreign
+		// coordinates may only confirm canonical ones, so nothing merges
+		// until the whole block (FN defs included) has been inspected.
+		let foreign: FileRecord | null = null;
+		const flushForeign = () => {
+			if (!foreign) return;
+			if (rec) {
+				for (const [n, h] of foreign.da) {
+					if (rec.da.has(n)) rec.da.set(n, Math.max(rec.da.get(n) ?? 0, h));
+				}
+				// BRDA block/branch indices are the instrumenter's own
+				// coordinates — the same tuple can name a different arm in
+				// another build, so untrusted branch hits never merge.
+				for (const [name, h] of foreign.fnda) {
+					// A function is provably the same only when the untrusted
+					// block declared it at the exact FN "line,name" the
+					// canonical build declared.
+					const proven = [...foreign.fn].some(
+						(def) => def.endsWith(`,${name}`) && rec.fn.has(def),
+					);
+					if (proven) rec.fnda.set(name, Math.max(rec.fnda.get(name) ?? 0, h));
+				}
+			}
+			foreign = null;
+		};
 		for (const raw of contents[index].split(/\r?\n/)) {
 			const line = raw.trimEnd();
 			if (line.startsWith("SF:")) {
+				flushForeign();
 				let p = line.slice(3).replace(/\\/g, "/");
 				for (const needle of relocates) {
 					const idx = p.indexOf(needle);
@@ -101,41 +134,33 @@ export function mergeLcovTexts(
 				// hits included — reporting them without their unhit siblings
 				// would fake a fully covered file.
 				rec = coveredOnly ? (files.get(p) ?? null) : recordFor(p);
+				foreign = coveredOnly && rec ? newRecord() : null;
 				continue;
 			}
-			if (!rec || line === "end_of_record") {
-				rec = line === "end_of_record" ? null : rec;
+			if (line === "end_of_record") {
+				flushForeign();
+				rec = null;
 				continue;
 			}
+			const target = coveredOnly ? foreign : rec;
+			if (!target) continue;
 			if (line.startsWith("DA:")) {
 				const [ln, hits] = line.slice(3).split(",");
-				const n = Number(ln);
-				const h = Number(hits);
-				// Untrusted hits confirm canonical lines only — a foreign line
-				// cannot merge without its unhit siblings.
-				if (coveredOnly && !rec.da.has(n)) continue;
-				rec.da.set(n, Math.max(rec.da.get(n) ?? 0, h));
+				target.da.set(Number(ln), Math.max(target.da.get(Number(ln)) ?? 0, Number(hits)));
 			} else if (line.startsWith("BRDA:")) {
 				const [ln, block, branch, hits] = line.slice(5).split(",");
-				const h = Number(hits) || 0;
 				const key = `${ln},${block},${branch}`;
-				// BRDA coordinates are the foreign build's own block/branch
-				// indices — only a key the canonical build also emitted can be
-				// trusted to denote the same arm.
-				if (coveredOnly && !rec.brda.has(key)) continue;
-				rec.brda.set(key, Math.max(rec.brda.get(key) ?? 0, h));
+				target.brda.set(key, Math.max(target.brda.get(key) ?? 0, Number(hits) || 0));
 			} else if (line.startsWith("FNDA:")) {
 				const comma = line.indexOf(",", 5);
 				const hits = Number(line.slice(5, comma));
 				const name = line.slice(comma + 1);
-				if (coveredOnly && !knowsFunction(rec, name)) continue;
-				rec.fnda.set(name, Math.max(rec.fnda.get(name) ?? 0, hits));
+				target.fnda.set(name, Math.max(target.fnda.get(name) ?? 0, hits));
 			} else if (line.startsWith("FN:")) {
-				// Untrusted FN defs are skipped: any function whose FNDA hits
-				// merge is already declared by the canonical layers.
-				if (!coveredOnly) rec.fn.add(line.slice(3));
+				target.fn.add(line.slice(3));
 			}
 		}
+		flushForeign();
 	}
 
 	const chunks: string[] = [];

@@ -252,10 +252,13 @@ unit/lcov.info + integration/lcov.info + e2e/{android,ios}/lcov.info
 - The E2E inputs merge with `--hits-only`: their OpenCover template
   enumerates a separately instrumented build's sequence-point universe,
   which is not comparable to the unit/integration build's. An e2e hit
-  only confirms a coordinate the canonical layers already enumerate —
-  same file, same DA line, same BRDA arm, same function — so the merged
-  SF set and LF/BRF/FNF denominators stay exactly the canonical layers';
-  e2e-only files and lines never enter the report, hit or not (#2270).
+  only confirms a coordinate both builds provably share — same file,
+  same DA line, or a function declared at the same FN line in both —
+  so the merged SF set and LF/BRF/FNF denominators stay exactly the
+  canonical layers'. E2E-only files and lines never enter the report,
+  hit or not; E2E branch arms never merge either, since BRDA
+  block/branch indices are per-instrumenter and an identical tuple can
+  name a different arm (#2270).
 - `--relocate` canonicalizes absolute runner paths (Linux Android leg, macOS
   iOS leg, local Windows) onto `app/BibleOnSite/`, so the same source line
   never double-counts across runners.

@@ -280,16 +280,16 @@ public class NotesDeliveryTests
     {
         await using var storage = new TestStorage();
         await storage.CreateDatabaseAsync(DbName, NotesDbV2.Statements((1, 1, 1, 0, "note")));
-        var padDir = Path.Combine(storage.Root, "padpack");
+        var padDir = Path.Join(storage.Root, "padpack");
         Directory.CreateDirectory(padDir);
-        await File.WriteAllTextAsync(Path.Combine(padDir, PerushimNotesService.SearchIndexDbName), "delivered index");
+        await File.WriteAllTextAsync(Path.Join(padDir, PerushimNotesService.SearchIndexDbName), "delivered index");
         var pad = Pad();
         pad.Setup(p => p.TryGetAssetPathAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync(padDir);
         var service = Create(storage, pad);
 
         var path = await service.RestoreDeliveredIndexPathAsync();
 
-        path.Should().Be(Path.Combine(storage.Root, PerushimNotesService.SearchIndexDbName));
+        path.Should().Be(Path.Join(storage.Root, PerushimNotesService.SearchIndexDbName));
         (await File.ReadAllTextAsync(path!)).Should().Be("delivered index");
     }
 
@@ -304,7 +304,7 @@ public class NotesDeliveryTests
 
         var path = await service.RestoreDeliveredIndexPathAsync();
 
-        path.Should().Be(Path.Combine(storage.Root, PerushimNotesService.SearchIndexDbName));
+        path.Should().Be(Path.Join(storage.Root, PerushimNotesService.SearchIndexDbName));
         File.Exists(path).Should().BeTrue();
     }
 

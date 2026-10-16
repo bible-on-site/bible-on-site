@@ -2988,8 +2988,9 @@ jobs:
       # than the unit/integration report knows about, plus e2e-only files.
       # --hits-only intersects them onto the canonical universe: their hits
       # confirm lines unit/integration already list, while the foreign
-      # enumeration — hit or not — never extends the merged denominator
-      # (#2270).
+      # enumeration — hit or not — never extends the merged denominator.
+      # E2E branch arms never merge: BRDA indices are per-instrumenter and
+      # an identical tuple can name a different arm (#2270).
       - name: Merge App coverage layers
         if: needs.app_ci.result == 'success'
         working-directory: ${{ env.DEVOPS_DIRECTORY }}

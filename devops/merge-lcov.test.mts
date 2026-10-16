@@ -109,9 +109,10 @@ describe("mergeLcovTexts", () => {
 		assert.ok(out.includes("DA:1,5\nDA:2,5\nDA:3,2\n"), out);
 		assert.ok(!out.includes("DA:9"), out);
 		assert.ok(out.includes("LF:3\nLH:3\n"), out);
-		// The e2e hit confirms the canonical branch arm its build left unhit.
-		assert.ok(out.includes("BRDA:5,0,0,2\nBRDA:5,0,1,4\n"), out);
-		assert.ok(out.includes("BRF:2\nBRH:2\n"), out);
+		// BRDA tuples are per-instrumenter coordinates: even an identical key
+		// cannot be trusted to name the same arm, so no e2e arm merges.
+		assert.ok(out.includes("BRDA:5,0,0,2\nBRDA:5,0,1,0\n"), out);
+		assert.ok(out.includes("BRF:2\nBRH:1\n"), out);
 		assert.ok(out.includes("FNDA:3,handler"), out);
 	});
 
@@ -142,22 +143,22 @@ describe("mergeLcovTexts", () => {
 		assert.deepEqual(out.match(/^SF:.+$/gm), ["SF:app/BibleOnSite/Services/Hot.cs"]);
 	});
 
-	it("merges an untrusted branch hit only onto a canonical arm, keeping its unhit sibling visible", () => {
-		// BRDA block/branch indices are the foreign build's own coordinates —
-		// a hit merges only when the canonical build emitted the same key, and
-		// the canonical unhit sibling stays in the report as partial coverage.
+	it("never merges untrusted branch arms — equal tuples can name different arms", () => {
+		// BRDA block/branch indices are per-instrumenter coordinates. The
+		// e2e tuple 20,0,0 may be a different arm than the canonical 20,0,0,
+		// so even a matching key must not credit the canonical arm.
 		const canonical =
 			"TN:\nSF:app/BibleOnSite/Pages/PerekPage.xaml.cs\nDA:20,1\nBRDA:20,0,0,0\nBRDA:20,0,1,0\nLF:1\nLH:1\nBRF:2\nBRH:0\nend_of_record\n";
 		const e2e =
 			"TN:\nSF:app/BibleOnSite/Pages/PerekPage.xaml.cs\nDA:20,1\nDA:21,0\nBRDA:20,0,0,1\nBRDA:20,0,1,0\nBRDA:30,0,0,9\nLF:2\nLH:1\nBRF:3\nBRH:2\nend_of_record\n";
 		const out = mergeLcovTexts([canonical, e2e], undefined, ["app/BibleOnSite/"], new Set([1]));
-		assert.ok(out.includes("BRDA:20,0,0,1\nBRDA:20,0,1,0\n"), out);
+		assert.ok(out.includes("BRDA:20,0,0,0\nBRDA:20,0,1,0\n"), out);
 		assert.ok(!out.includes("BRDA:30"), out);
 		assert.ok(!out.includes("DA:21"), out);
-		assert.ok(out.includes("BRF:2\nBRH:1\n"), out);
+		assert.ok(out.includes("BRF:2\nBRH:0\n"), out);
 	});
 
-	it("confirms hits only on functions the canonical universe knows", () => {
+	it("confirms function hits only when the untrusted def matches canonical line and name", () => {
 		const canonical =
 			"TN:\nSF:app/BibleOnSite/MauiProgram.cs\nFN:10,boot\nFN:20,dormant\nFNDA:0,boot\nFNDA:0,dormant\nDA:11,0\nLF:1\nLH:0\nFNF:2\nFNH:0\nend_of_record\n";
 		const e2e =
@@ -173,5 +174,23 @@ describe("mergeLcovTexts", () => {
 		assert.ok(!out.includes("e2eOnly"), out);
 		assert.ok(!out.includes("DA:50"), out);
 		assert.ok(out.includes("FNF:2\nFNH:1\n"), out);
+	});
+
+	it("drops an untrusted function hit whose foreign def sits on a different line", () => {
+		// Same name, different FN line — the foreign compilation's "boot"
+		// is not provably the canonical "boot", so the hit cannot merge.
+		const canonical =
+			"TN:\nSF:app/BibleOnSite/MauiProgram.cs\nFN:10,boot\nFNDA:0,boot\nDA:11,0\nLF:1\nLH:0\nFNF:1\nFNH:0\nend_of_record\n";
+		const e2e =
+			"TN:\nSF:app/BibleOnSite/MauiProgram.cs\nFN:99,boot\nFNDA:2,boot\nDA:11,2\nLF:1\nLH:1\nFNF:1\nFNH:1\nend_of_record\n";
+		const out = mergeLcovTexts(
+			[canonical, e2e],
+			undefined,
+			["app/BibleOnSite/"],
+			new Set([1]),
+		);
+		assert.ok(out.includes("FNDA:0,boot"), out);
+		assert.ok(out.includes("FNF:1\nFNH:0\n"), out);
+		assert.ok(out.includes("DA:11,2"), out);
 	});
 });
