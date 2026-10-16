@@ -64,7 +64,7 @@
 		"flowbite-react": "0.12.17",
 		"gematry": "1.0.2",
 		"html-flip-book-react": "0.0.0-alpha.46",
-		"isomorphic-dompurify": "4.5.0",
+		"isomorphic-dompurify": "4.6.0",
 		"leaflet": "1.9.4",
 		"mapbox-gl": "3.33.0",
 		"moment-timezone": "0.6.5",
