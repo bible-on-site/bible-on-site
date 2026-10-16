@@ -32,6 +32,13 @@ describe("normalizeWithMap", () => {
 		expect(map).toHaveLength(normalized.length);
 		expect(map).toEqual([0, 1, 1, 3]);
 	});
+
+	it("decomposes precomposed code points", () => {
+		// יִ (yod+hiriq presentation form) decomposes under NFD and the mark is
+		// filtered, leaving 'י' — same for precomposed é → 'e'.
+		expect(normalizeWithMap("יִ")).toEqual({ normalized: "י", map: [0] });
+		expect(normalizeWithMap("é")).toEqual({ normalized: "e", map: [0] });
+	});
 });
 
 describe("collectTextNodes", () => {

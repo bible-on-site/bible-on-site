@@ -36,8 +36,8 @@ import { getPerekByPerekId } from "@/data/perek-dto";
 import { queryText } from "@/lib/api-client";
 import { authorNameToSlug } from "@/lib/authors";
 import type { Scored } from "./corpus";
-import { htmlToPlainText, searchTokens } from "./normalize";
-import { maxEdits, searchScore } from "./score";
+import { htmlToPlainText } from "./normalize";
+import { maxEdits, prepareQuery, scorePreparedText } from "./score";
 
 /**
  * Candidate rows pulled from MySQL before JS re-scoring. Bounded so a
@@ -457,7 +457,8 @@ export async function searchPerushNotes(
 	phrase: string,
 	limit: number,
 ): Promise<Scored<NoteHit>[]> {
-	const terms = searchTokens(phrase);
+	const prepared = prepareQuery(phrase);
+	const { terms } = prepared;
 	if (terms.length === 0) return [];
 	const { where, params } = matchClauses(["n.note_content"], terms);
 	const rank = rankClauses(["n2.note_content"], terms);
@@ -487,7 +488,7 @@ export async function searchPerushNotes(
 	const best = new Map<string, Scored<NoteHit>>();
 	for (const row of rows) {
 		const plain = htmlToPlainText(row.note_content);
-		const score = searchScore(plain, phrase);
+		const score = scorePreparedText(plain, prepared);
 		if (score === 0) continue;
 		const key = `${row.perush_id}:${row.perek_id}:${row.pasuk}`;
 		const hit: Scored<NoteHit> = {
@@ -534,7 +535,8 @@ export async function searchAuthors(
 	phrase: string,
 	limit: number,
 ): Promise<Scored<AuthorHit>[]> {
-	const terms = searchTokens(phrase);
+	const prepared = prepareQuery(phrase);
+	const { terms } = prepared;
 	if (terms.length === 0) return [];
 	const { where, params } = matchClauses(["name", "details"], terms);
 	const rank = rankClauses(["a.name", "a.details"], terms);
@@ -553,18 +555,21 @@ export async function searchAuthors(
 		[...params, ...rank.params],
 	);
 	return rows
-		.map((row) => ({
-			entry: {
-				id: row.id,
-				name: row.name,
-				details: htmlToPlainText(row.details ?? ""),
-				slug: authorNameToSlug(row.name),
-			},
-			score: Math.max(
-				searchScore(row.name, phrase) * 2,
-				searchScore(htmlToPlainText(row.details ?? ""), phrase),
-			),
-		}))
+		.map((row) => {
+			const details = htmlToPlainText(row.details ?? "");
+			return {
+				entry: {
+					id: row.id,
+					name: row.name,
+					details,
+					slug: authorNameToSlug(row.name),
+				},
+				score: Math.max(
+					scorePreparedText(row.name, prepared) * 2,
+					scorePreparedText(details, prepared),
+				),
+			};
+		})
 		.filter((hit) => hit.score > 0)
 		.sort(
 			(left, right) =>
@@ -594,7 +599,8 @@ export async function searchArticles(
 	phrase: string,
 	limit: number,
 ): Promise<Scored<ArticleHit>[]> {
-	const terms = searchTokens(phrase);
+	const prepared = prepareQuery(phrase);
+	const { terms } = prepared;
 	if (terms.length === 0) return [];
 	const { where, params } = matchClauses(
 		["a.name", "a.abstract", "a.content"],
@@ -630,8 +636,8 @@ export async function searchArticles(
 			// back to content alone would score a real match as zero.
 			const contentPlain = htmlToPlainText(row.content ?? "");
 			const abstractPlain = htmlToPlainText(row.abstract ?? "");
-			const contentScore = searchScore(contentPlain, phrase);
-			const abstractScore = searchScore(abstractPlain, phrase);
+			const contentScore = scorePreparedText(contentPlain, prepared);
+			const abstractScore = scorePreparedText(abstractPlain, prepared);
 			return {
 				entry: {
 					id: row.id,
@@ -646,7 +652,7 @@ export async function searchArticles(
 							: contentPlain || abstractPlain,
 				},
 				score: Math.max(
-					searchScore(row.name, phrase) * 2,
+					scorePreparedText(row.name, prepared) * 2,
 					contentScore,
 					abstractScore,
 				),
@@ -701,7 +707,8 @@ export async function searchTanahpediaEntries(
 	phrase: string,
 	limit: number,
 ): Promise<Scored<TanahpediaHit>[]> {
-	const terms = searchTokens(phrase);
+	const prepared = prepareQuery(phrase);
+	const { terms } = prepared;
 	if (terms.length === 0) return [];
 	const { where, params } = matchPredicates(
 		[
@@ -771,15 +778,15 @@ export async function searchTanahpediaEntries(
 		.map((row) => {
 			const synonyms = synonymsByEntry.get(row.id) ?? [];
 			const titleScore = Math.max(
-				searchScore(row.title, phrase),
-				searchScore(row.unique_name, phrase),
+				scorePreparedText(row.title, prepared),
+				scorePreparedText(row.unique_name, prepared),
 			);
 			const synonymScore = synonyms.reduce(
-				(best, name) => Math.max(best, searchScore(name, phrase)),
+				(best, name) => Math.max(best, scorePreparedText(name, prepared)),
 				0,
 			);
 			const contentPlain = htmlToPlainText(row.content ?? "");
-			const contentScore = searchScore(contentPlain, phrase);
+			const contentScore = scorePreparedText(contentPlain, prepared);
 			return {
 				entry: {
 					id: row.id,
