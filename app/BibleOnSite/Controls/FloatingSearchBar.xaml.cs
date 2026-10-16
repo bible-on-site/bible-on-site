@@ -177,7 +177,7 @@ public partial class FloatingSearchBar : ContentView
         {
             await Shell.Current.GoToAsync(AppRoutes.ExtensionPacks);
         }
-        catch (Exception ex)
+        catch (Exception ex) //NOSONAR — failure boundary: a navigation failure must not crash the picker.
         {
             Console.Error.WriteLine($"Navigate to perushim download failed: {ex}");
         }

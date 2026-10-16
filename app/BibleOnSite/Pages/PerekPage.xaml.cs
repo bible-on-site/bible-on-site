@@ -1793,7 +1793,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
             // Unfocus alone can leave the floating keyboard over the list.
             await PerushSearchBar.HideSoftInputAsync(CancellationToken.None);
         }
-        catch (Exception ex)
+        catch (Exception ex) //NOSONAR — failure boundary: keyboard dismissal is best-effort and must not crash the reader.
         {
             Console.Error.WriteLine($"Could not dismiss perushim search keyboard: {ex}");
         }
