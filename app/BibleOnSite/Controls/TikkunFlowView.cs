@@ -178,10 +178,15 @@ public class TikkunFlowView : GraphicsView
 
         private Func<string, float, bool, float> MeasureWord(ICanvas canvas) =>
             (text, fontSize, bold) =>
-                _widthCache.TryGetValue((text, fontSize, bold), out var width)
-                    ? width
-                    : _widthCache[(text, fontSize, bold)] =
-                        canvas.GetStringSize(text, bold ? GraphicsFont.DefaultBold : GraphicsFont.Default,
-                            fontSize).Width;
+            {
+                if (_widthCache.TryGetValue((text, fontSize, bold), out var width))
+                {
+                    return width;
+                }
+                width = canvas.GetStringSize(text,
+                    bold ? GraphicsFont.DefaultBold : GraphicsFont.Default, fontSize).Width;
+                _widthCache[(text, fontSize, bold)] = width;
+                return width;
+            };
     }
 }
