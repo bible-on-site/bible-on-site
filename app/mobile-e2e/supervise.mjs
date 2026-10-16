@@ -35,11 +35,32 @@ export function supervise(command, args, {
     if (!child.pid) return;
     try {
       if (process.platform === "win32") {
-        // The native .NET tree walk avoids taskkill's stalled process query.
-        // Terminate only this supervisor's owned process tree.
-        execFileSync("pwsh", ["-NoProfile", "-NonInteractive", "-Command",
-          `[System.Diagnostics.Process]::GetProcessById(${child.pid}).Kill($true)`],
-          { windowsHide: true, stdio: "ignore", timeout: 2000 });
+        // Windows has no process-group signal. taskkill's /T tree kill is the
+        // fast path (~100ms); when its child enumeration stalls — the reason a
+        // shell walk existed — the powershell CIM walk remains the fallback,
+        // detached so its cold start cannot block this deadline.
+        try {
+          execFileSync("taskkill", ["/PID", String(child.pid), "/T", "/F"],
+            { encoding: "utf8", windowsHide: true, timeout: 2000 });
+          return;
+        } catch (error) {
+          const report = `${error.stderr ?? ""}${error.stdout ?? ""}${error.message ?? ""}`;
+          if (/not found/i.test(report)) return;
+          console.error("taskkill could not stop the mobile process tree:", error);
+        }
+        const walker = spawn("powershell", ["-NoProfile", "-NonInteractive", "-Command",
+          `$queue = New-Object System.Collections.Queue;` +
+          ` $seen = @{}; $queue.Enqueue(${child.pid});` +
+          ` while ($queue.Count -gt 0) { $cur = [int]$queue.Dequeue();` +
+          ` if ($seen.ContainsKey($cur)) { continue } $seen[$cur] = $true;` +
+          ` try { Stop-Process -Id $cur -Force -ErrorAction Stop } catch {};` +
+          ` Get-CimInstance Win32_Process -Filter "ParentProcessId=$cur"` +
+          ` -Property ProcessId | ForEach-Object { $queue.Enqueue($_.ProcessId) } }`],
+          { windowsHide: true, detached: true, stdio: "ignore" });
+        walker.once("error", error => {
+          console.error("Could not stop the mobile process tree:", error);
+        });
+        walker.unref();
       } else {
         process.kill(-child.pid, signal);
       }
