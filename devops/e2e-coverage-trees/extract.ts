@@ -413,9 +413,14 @@ export function extractTree(input: ExtractInput): ExecCoverageTree {
 	if (diagnostics.dumpsApplied === 0) {
 		const covered = coveredByVc(input.cover, index);
 		addShared(shared, covered, "whole-suite-report");
+		// A case the run skipped (selection manifest, filtered shard leg) never
+		// executed — attributing the suite's coverage to it would fake a claim;
+		// it stays `unmeasured` from the pass above instead.
 		const executed: TestRunRecord[] =
 			input.runRecords.length > 0
-				? input.runRecords
+				? input.runRecords.filter(
+						(record) => record.outcome !== "skipped" && record.outcome !== "notexecuted",
+					)
 				: input.discoveredIds.map((id) => ({
 						id,
 						outcome: "unknown",

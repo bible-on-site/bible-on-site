@@ -19,13 +19,30 @@ const caseManifest = (shard, tests, shards) => ({
   schemaVersion: 1, suite: "app-mobile-e2e", platform: "ios", selectAll: false,
   shard, shards, selected: tests.map((id) => ({ id, reasons: [] })),
 });
-function tree(id, hash) {
+// The extractor emits this row for a case the shard's manifest skipped —
+// TRX/JUnit still enumerate it as NotExecuted, so every shard's tree lists
+// the whole suite: its own cases measured, the rest as these placeholders.
+const ghost = (id) => ({
+  id, cases: [], attribution: "unmeasured", measured: false,
+  outcome: "notexecuted", sessions: [], nodes: [], files: [],
+  visits: { sequence: 0, branch: 0, methodEntries: 0 },
+});
+// Ran but left no dump — unmeasured yet still claims execution.
+const ranNoDump = (id) => ({
+  id, cases: [], attribution: "unmeasured", measured: false,
+  outcome: "passed", sessions: ["s-1"], nodes: [], files: [],
+  visits: { sequence: 0, branch: 0, methodEntries: 0 },
+});
+function tree(id, hash, placeholders = []) {
   return {
     kind: "exec-coverage-tree", schemaVersion: 1, suite: "app-mobile-e2e", platform: "ios",
     snapshotSha: sha, configuration: "Debug", collector: "altcover", collectorVersion: "9",
     envFingerprint: hash, collectedAtUtc: "2026-10-14T00:00:00Z", complete: false,
     modules: [{ name: "BibleOnSite", hash }], nodes: { "file:app/BibleOnSite/X.cs": { kind: "file", decl: "app/BibleOnSite/X.cs" } },
-    tests: { [id]: { id, attribution: "per-test", measured: true, outcome: "passed", files: ["app/BibleOnSite/X.cs"] } },
+    tests: Object.fromEntries([
+      [id, { id, attribution: "per-test", measured: true, outcome: "passed", files: ["app/BibleOnSite/X.cs"] }],
+      ...placeholders.map((ghostId) => [ghostId, ghost(ghostId)]),
+    ]),
     shared: { reasons: [hash], nodes: [], files: ["app/BibleOnSite/Startup.cs"] }, unmatchedEvidence: [],
     diagnostics: { attribution: "per-test", dumpsTotal: 1, dumpsApplied: 1, unknownPointIds: 0, errorDumps: [], incompatibleDumps: [], missingDumps: [] },
   };
@@ -75,6 +92,38 @@ test("refuses execution evidence from another commit or an overlapping test", ()
   assert.throws(() => mergeExecTrees([tree("a", "h1"), tree("a", "h2")], sha, true), /overlap/);
 });
 
+// #2263 in-process manifest skips: each shard's report enumerates the whole
+// suite, so the extractor writes unmeasured placeholders for the cases other
+// shards own. Those ghosts must not collide with the shard that ran them.
+test("never-executed placeholders never collide with the executing shard's entry", () => {
+  const merged = mergeExecTrees(
+    [tree("a", "h1", ["b", "c"]), tree("b", "h2", ["a", "c"])], sha, true);
+  assert.equal(merged.tests.a.measured, true);
+  assert.equal(merged.tests.b.measured, true);
+  // A case no shard executed survives as one unmeasured entry.
+  assert.equal(merged.tests.c.attribution, "unmeasured");
+  assert.equal(merged.tests.c.measured, false);
+  // Order is irrelevant: the measured entry wins the ghost either way.
+  const reversed = mergeExecTrees(
+    [tree("b", "h2", ["a"]), tree("a", "h1", ["b"])], sha, true);
+  assert.equal(reversed.tests.a.attribution, "per-test");
+  assert.equal(reversed.tests.b.attribution, "per-test");
+});
+
+test("a case that ran without a dump in one shard still claims it", () => {
+  // Shard 1 executed "b" but its dump pull failed silently; shard 2 skipped
+  // it. The executed entry wins the ghost and the union still lists it
+  // missing — but the ghost rows other shards carried do not.
+  const first = tree("a", "h1", ["c"]);
+  first.tests.b = ranNoDump("b");
+  first.diagnostics.missingDumps = ["b", "c"];
+  const second = tree("d", "h2", ["a", "b", "c"]);
+  second.diagnostics.missingDumps = ["a", "b", "c"];
+  const merged = mergeExecTrees([first, second], sha, true);
+  assert.equal(merged.tests.b.outcome, "passed");
+  assert.deepEqual(merged.diagnostics.missingDumps, ["b"]);
+});
+
 // JUnit case ids are `classname.name` — the same xUnit FQN form the planner
 // and the evidence records use.
 function writeShardInput(input, shard, shards, ids, junitTimes) {
@@ -89,11 +138,12 @@ function writeShardInput(input, shard, shards, ids, junitTimes) {
   }
   if (junitTimes) {
     writeFileSync(join(input, "results", "mobile-e2e.xml"),
+      // nosemgrep -- JUnit fixture markup, never rendered as HTML
       `<testsuite>${Object.entries(junitTimes).map(([name, seconds]) =>
-        `<testcase classname="Suite.Pilot" name="${name}" time="${seconds}"/>`).join("")}</testsuite>`);
+        `<testcase classname="Suite.Pilot" name="${name}" time="${seconds}"/>`).join("")}</testsuite>`); // nosemgrep -- JUnit fixture markup, never rendered as HTML
   }
   writeFileSync(join(input, "app-coverage", "_startup-passed.json"), JSON.stringify({ source: shard }));
-  writeFileSync(join(input, "exec-coverage-tree.json"), JSON.stringify(tree(ids[0], `hash-${shard}`)));
+  writeFileSync(join(input, "exec-coverage-tree.json"), JSON.stringify(tree(ids[0], `hash-${shard}`))); // nosemgrep -- fixture serialization, not a cache/hmac key
   writeFileSync(join(input, "coverage-app", "lcov.info"), `SF:/runner/app/BibleOnSite/X.cs\nDA:1,${shard === 1 ? 1 : 0}\nDA:2,${shard === 2 ? 1 : 0}\nend_of_record\n`);
 }
 

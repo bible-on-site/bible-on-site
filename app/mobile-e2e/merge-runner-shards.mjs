@@ -30,6 +30,15 @@ export function discoverShardInputs(inputsDir, plan) {
   });
 }
 
+// An `unmeasured` entry whose outcome is skipped/NotExecuted records a case
+// the shard's manifest never let run — it claims no execution and may appear
+// in every shard's tree. Any other entry (per-test/shared/error evidence, or
+// an executed-but-unmeasured case) claims the shard ran it and must stay
+// unique across the union.
+const claimsExecution = (test) =>
+  test.attribution !== "unmeasured" ||
+  (test.outcome !== "skipped" && test.outcome !== "notexecuted");
+
 // Independent runners may produce distinct instrumented module hashes.
 // Execution evidence joins by source declaration; retain every module/hash
 // and each shard's diagnostics instead of attaching dumps to another build.
@@ -58,7 +67,17 @@ export function mergeExecTrees(trees, snapshotSha, complete) {
       } : node;
     }
     for (const [id, test] of Object.entries(tree.tests)) {
-      if (result.tests[id]) throw new Error(`Execution coverage overlap: ${id}`);
+      const prior = result.tests[id];
+      if (prior === undefined) {
+        result.tests[id] = test;
+        continue;
+      }
+      // A never-executed placeholder (the in-process manifest skips
+      // unassigned cases, so TRX/JUnit still report them) claims no evidence
+      // and cannot collide; the entry from the shard that ran the test wins.
+      // Two claiming entries still mean a real overlap.
+      if (!claimsExecution(test)) continue;
+      if (claimsExecution(prior)) throw new Error(`Execution coverage overlap: ${id}`);
       result.tests[id] = test;
     }
   }
@@ -80,7 +99,14 @@ export function mergeExecTrees(trees, snapshotSha, complete) {
     unknownPointIds: trees.reduce((sum, tree) => sum + tree.diagnostics.unknownPointIds, 0),
     errorDumps: union(...trees.map((tree) => tree.diagnostics.errorDumps)),
     incompatibleDumps: union(...trees.map((tree) => tree.diagnostics.incompatibleDumps)),
-    missingDumps: union(...trees.map((tree) => tree.diagnostics.missingDumps)),
+    // Only a case that ran somewhere without leaving a dump counts as
+    // missing in the union — a measured entry produced one, and a case every
+    // shard skipped is unmeasured rather than missing.
+    missingDumps: union(...trees.map((tree) => tree.diagnostics.missingDumps))
+      .filter((id) => {
+        const entry = result.tests[id];
+        return entry !== undefined && entry.attribution === "unmeasured" && claimsExecution(entry);
+      }),
   };
   return result;
 }
