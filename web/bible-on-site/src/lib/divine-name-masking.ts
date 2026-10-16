@@ -255,6 +255,7 @@ function marksAt(body: string, letterIndex: number): string {
 		while (j < body.length && isCombiningMark(body[j])) j++;
 		return body.slice(i + 1, j);
 	}
+	// istanbul ignore next: forms guarantee the letter index exists
 	return "";
 }
 
@@ -285,9 +286,7 @@ function matchDivineName(value: string): DivineNameMatch | null {
 		body = body.normalize("NFD");
 		letters = extractLetters(body);
 	}
-	if (letters === null || letters === NEEDS_NORMALIZE || !letters.length) {
-		return null;
-	}
+	if (typeof letters !== "string") return null;
 	const form = FORMS.get(letters);
 	if (!form) return null;
 	if (form.key === "el" && !matchEl(body, form.prefixLength)) return null;

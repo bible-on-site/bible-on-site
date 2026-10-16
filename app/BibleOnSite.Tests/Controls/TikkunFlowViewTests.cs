@@ -166,6 +166,23 @@ public class TikkunFlowViewTests
     }
 
     [Fact]
+    public void relayout_after_invalidation_measures_each_unique_word_once()
+    {
+        WithInlineDispatcher(() =>
+        {
+            var view = new TikkunFlowView { Pasukim = [PasukOf(1, "אא בב אא")] };
+            var canvas = MeasuringCanvas();
+
+            view.Drawable!.Draw(canvas.Object, new RectF(0, 0, 360, 600));
+            view.MaskingRevision = 1;
+            view.Drawable!.Draw(canvas.Object, new RectF(0, 0, 360, 600));
+
+            canvas.Verify(c => c.GetStringSize("אא", It.IsAny<IFont>(), It.IsAny<float>()), Times.Once);
+            canvas.Verify(c => c.GetStringSize("בב", It.IsAny<IFont>(), It.IsAny<float>()), Times.Once);
+        });
+    }
+
+    [Fact]
     public void repeated_draws_at_the_same_width_keep_painting()
     {
         WithInlineDispatcher(() =>

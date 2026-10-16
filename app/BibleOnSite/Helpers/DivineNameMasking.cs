@@ -277,7 +277,7 @@ public static class DivineNameMasking
     }
 
     /// <summary>Combining marks attached to the letter at <paramref name="letterIndex"/>.</summary>
-    private static string MarksAt(ReadOnlySpan<char> body, int letterIndex)
+    internal static string MarksAt(ReadOnlySpan<char> body, int letterIndex)
     {
         var letter = -1;
         for (var i = 0; i < body.Length; i++)

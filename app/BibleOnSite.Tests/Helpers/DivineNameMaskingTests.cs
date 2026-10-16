@@ -157,6 +157,23 @@ public class DivineNameMaskingTests
             DivineNameMasking.MaskValue("בּאל", Enabled()).Should().Be("בא-ל");
         }
 
+        [Fact]
+        public void leaves_a_word_longer_than_any_name_form_alone() =>
+            // Eleven letters — no divine-name form exceeds nine.
+            DivineNameMasking.MaskValue("אָבָגָדָהָוָזָחָטָיָכָ", Enabled())
+                .Should().Be("אָבָגָדָהָוָזָחָטָיָכָ");
+
+        [Theory]
+        [InlineData("־")]
+        [InlineData("׀")]
+        [InlineData("׃")]
+        public void leaves_punctuation_only_values_alone(string value) =>
+            DivineNameMasking.MaskValue(value, Enabled()).Should().Be(value);
+
+        [Fact]
+        public void marks_at_returns_empty_for_a_missing_letter_index() =>
+            DivineNameMasking.MarksAt("אבג", 7).Should().Be("");
+
         [Theory]
         [InlineData("אֶ֖ל")]
         [InlineData("אַ֣ל")]

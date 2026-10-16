@@ -187,6 +187,9 @@ describe("maskDivineNameValue", () => {
 	});
 	it("leaves a word that starts with a combining mark alone", () =>
 		expect(maskDivineNameValue("ְאל", enabled())).toBe("ְאל"));
+	it("leaves a word longer than any name form alone", () =>
+		// Eleven letters — no divine-name form exceeds nine.
+		expect(maskDivineNameValue("אָבָגָדָהָוָזָחָטָיָכָ", enabled())).toBe("אָבָגָדָהָוָזָחָטָיָכָ"));
 	it("leaves אל whose aleph carries qamats qatan alone", () =>
 		expect(maskDivineNameValue("אׇל", enabled())).toBe("אׇל"));
 	it("keeps the word untouched when the אלהים custom text is blank", () =>
