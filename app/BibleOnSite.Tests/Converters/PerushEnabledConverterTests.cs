@@ -59,6 +59,13 @@ public class PerushEnabledConverterTests
     {
         Convert(3L, new List<int> { 1, 2, 3, 4, 5 }, 5).Should().Be(true);
         Convert(6L, new List<int> { 1, 2, 3, 4, 5 }, 5).Should().Be(false);
+        Convert(long.MaxValue, new List<int> { 1, 2, 3, 4, 5 }, 5).Should().Be(true);
+    }
+
+    [Fact]
+    public void single_value_defaults_to_enabled()
+    {
+        Convert(3).Should().Be(true);
     }
 
     [Fact]
