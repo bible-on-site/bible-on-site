@@ -100,9 +100,9 @@ describe("maskDivineNameValue", () => {
 			),
 		);
 		it("keeps the word as-is when אלהים is chosen", () =>
-			expect(
-				maskDivineNameValue("אֱלֹהִ֑ים", enabled({ elohim: "asis" })),
-			).toBe("אֱלֹהִ֑ים"));
+			expect(maskDivineNameValue("אֱלֹהִ֑ים", enabled({ elohim: "asis" }))).toBe(
+				"אֱלֹהִ֑ים",
+			));
 		it("applies custom text to the stem and keeps prefix and suffix", () =>
 			expect(
 				maskDivineNameValue(
@@ -131,6 +131,10 @@ describe("maskDivineNameValue", () => {
 		);
 		it("masks unpointed אל (documented ambiguity)", () =>
 			expect(maskDivineNameValue("אל", s)).toBe("א-ל"));
+		it("masks אל written with presentation-form letters", () =>
+			// U+FB31 is בּ (BET WITH DAGESH) — NFD decomposes it, so the word
+			// still parses as prefix ב + אל just like the pointed form.
+			expect(maskDivineNameValue("בּאל", s)).toBe("בא-ל"));
 		it.each([
 			["אֶ֖ל"],
 			["אַ֣ל"],
@@ -147,9 +151,7 @@ describe("maskDivineNameValue", () => {
 			expect(maskDivineNameValue(value, s)).toBe(value),
 		);
 		it("leaves אל as-is when that option is chosen", () =>
-			expect(maskDivineNameValue("אֵ֑ל", enabled({ el: "asis" }))).toBe(
-				"אֵ֑ל",
-			));
+			expect(maskDivineNameValue("אֵ֑ל", enabled({ el: "asis" }))).toBe("אֵ֑ל"));
 	});
 
 	describe("שדי", () => {
@@ -161,9 +163,8 @@ describe("maskDivineNameValue", () => {
 		])("masks %s as %s", (value, expected) =>
 			expect(maskDivineNameValue(value, s)).toBe(expected),
 		);
-		it.each([["שְׂדֵ֖י"], ["שָׂדַ֖י"], ["בִּשְׂדֵ֖י"], ["שָׁדַ֖י"]])(
-			"leaves %s alone",
-			(value) => expect(maskDivineNameValue(value, s)).toBe(value),
+		it.each([["שְׂדֵ֖י"], ["שָׂדַ֖י"], ["בִּשְׂדֵ֖י"], ["שָׁדַ֖י"]])("leaves %s alone", (value) =>
+			expect(maskDivineNameValue(value, s)).toBe(value),
 		);
 		it("masks with custom text when chosen", () =>
 			expect(
@@ -205,12 +206,7 @@ describe("maskDivineNameValue", () => {
 
 	it("never leaves orphaned combining marks", () => {
 		const s = enabled();
-		for (const value of [
-			"יְהוָ֣ה ׀",
-			"מֵהָאֱלֹהִים֙",
-			"וְהָאֵ֤ל",
-			"לְשַׁדַּ֥י",
-		]) {
+		for (const value of ["יְהוָ֣ה ׀", "מֵהָאֱלֹהִים֙", "וְהָאֵ֤ל", "לְשַׁדַּ֥י"]) {
 			const masked = maskDivineNameValue(value, s);
 			expect(masked.normalize("NFD")).toMatch(/^[^\p{Mn}\p{Mc}]*$/u);
 		}
@@ -225,16 +221,11 @@ describe("maskDivineNameValue", () => {
 
 describe("maskDivineNameText", () => {
 	it("masks every divine-name word in a pasuk string", () =>
-		expect(
-			maskDivineNameText(
-				"וַיִּשְׁמַ֤ע יְהוָה֙ וַיִּתְאַנַּ֥ף בְּיִשְׂרָאֵ֑ל",
-				enabled(),
-			),
-		).toBe("וַיִּשְׁמַ֤ע ה' וַיִּתְאַנַּ֥ף בְּיִשְׂרָאֵ֑ל"));
+		expect(maskDivineNameText("וַיִּשְׁמַ֤ע יְהוָה֙ וַיִּתְאַנַּ֥ף בְּיִשְׂרָאֵ֑ל", enabled())).toBe(
+			"וַיִּשְׁמַ֤ע ה' וַיִּתְאַנַּ֥ף בְּיִשְׂרָאֵ֑ל",
+		));
 	it("handles maqaf-joined compounds word-by-word", () =>
-		expect(
-			maskDivineNameText("יְהוָה־אֱלֹהֵינוּ֙", enabled()),
-		).toBe("ה'־א-להינו"));
+		expect(maskDivineNameText("יְהוָה־אֱלֹהֵינוּ֙", enabled())).toBe("ה'־א-להינו"));
 	it("returns text unchanged when disabled", () =>
 		expect(
 			maskDivineNameText("יְהוָ֑ה אֱלֹהִ֖ים", {

@@ -149,6 +149,14 @@ public class DivineNameMaskingTests
         public void masks_unpointed_el_documented_ambiguity() =>
             DivineNameMasking.MaskValue("אל", Enabled()).Should().Be("א-ל");
 
+        [Fact]
+        public void masks_el_written_with_presentation_form_letters()
+        {
+            // U+FB31 is בּ (BET WITH DAGESH) — it decomposes under NFD, so the
+            // word still parses as prefix ב + אל just like the pointed form.
+            DivineNameMasking.MaskValue("בּאל", Enabled()).Should().Be("בא-ל");
+        }
+
         [Theory]
         [InlineData("אֶ֖ל")]
         [InlineData("אַ֣ל")]

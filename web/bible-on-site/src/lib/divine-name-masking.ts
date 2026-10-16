@@ -133,7 +133,63 @@ const ELOHIM_STEM_SUFFIXES: Readonly<Record<string, readonly string[]>> = {
 	אלה: ["א", "יא", "ה", "הם", "הון", "ין", "ך", "כם", "כון", "ו", "הו", "נא"],
 };
 
-type LetterMarks = { letter: string; marks: string };
+/** Longest divine-name letter form: 2 clitics + 4 stem + 3 suffix letters. */
+const MAX_FORM_LETTERS = 9;
+
+type NameForm = {
+	key: DivineNameKey;
+	/** Clitic prefix length in letters. */
+	prefixLength: number;
+	/** Matched stem length in letters; suffix is the remaining tail letters. */
+	stemLength: number;
+};
+
+/**
+ * Every letter sequence that can be a divine name (~2,178 forms), built once:
+ * the matchable set is closed — prefix × stem × suffix combinations are
+ * enumerable — so matching is one map lookup instead of rescanning ~57
+ * clitic prefixes per name family for every word.
+ */
+const FORMS: ReadonlyMap<string, NameForm> = (() => {
+	const forms = new Map<string, NameForm>();
+	const add = (
+		prefix: string,
+		stem: string,
+		suffix: string,
+		key: DivineNameKey,
+	) => {
+		const letters = prefix + stem + suffix;
+		if (!forms.has(letters))
+			forms.set(letters, {
+				key,
+				prefixLength: prefix.length,
+				stemLength: stem.length,
+			});
+	};
+	for (const prefix of cliticPrefixes(false)) add(prefix, "יהוה", "", "yhwh");
+	// Longest stems first so אלהים parses as אלהי+ם, never אלה+ים.
+	for (const prefix of cliticPrefixes(false))
+		for (const stem of Object.keys(ELOHIM_STEM_SUFFIXES).sort(
+			(a, b) => b.length - a.length,
+		))
+			for (const suffix of ELOHIM_STEM_SUFFIXES[stem])
+				add(prefix, stem, suffix, "elohim");
+	for (const prefix of cliticPrefixes(true)) add(prefix, "אל", "", "el");
+	for (const prefix of cliticPrefixes(false)) add(prefix, "שדי", "", "shaddai");
+	return forms;
+})();
+
+function cliticPrefixes(forEl: boolean): string[] {
+	const singles = forEl ? EL_CLITICS : CLITICS;
+	const prefixes = ["", ...singles];
+	if (forEl) {
+		for (const second of "בכלמה") prefixes.push(`ו${second}`);
+	} else {
+		for (const first of CLITICS)
+			for (const second of CLITICS) prefixes.push(first + second);
+	}
+	return prefixes;
+}
 
 type DivineNameMatch = {
 	key: DivineNameKey;
@@ -146,24 +202,6 @@ type DivineNameMatch = {
 	/** Trailing punctuation re-appended after the replacement. */
 	tail: string;
 };
-
-/**
- * Parses "pointed" text into base letters with their combining marks.
- * Returns null when the body holds anything else (spaces, punctuation,
- * digits) — such words can never be a divine name.
- */
-function parseLetters(text: string): LetterMarks[] | null {
-	const letters: LetterMarks[] = [];
-	for (const ch of text.normalize("NFD")) {
-		if (isHebrewLetter(ch)) letters.push({ letter: ch, marks: "" });
-		else if (isCombiningMark(ch)) {
-			const last = letters.at(-1);
-			if (!last) return null;
-			last.marks += ch;
-		} else return null;
-	}
-	return letters.length ? letters : null;
-}
 
 /** Splits trailing non-Hebrew punctuation (paseq/maqaf/sof pasuk/space). */
 function splitTail(value: string): [string, string] {
@@ -178,85 +216,90 @@ function splitTail(value: string): [string, string] {
 	return [value.slice(0, cut), value.slice(cut)];
 }
 
-function cliticPrefixes(forEl: boolean): string[] {
-	const singles = forEl ? EL_CLITICS : CLITICS;
-	const prefixes = ["", ...singles];
-	if (forEl) {
-		for (const second of "בכלמה") prefixes.push(`ו${second}`);
-	} else {
-		for (const first of CLITICS)
-			for (const second of CLITICS) prefixes.push(first + second);
+const NEEDS_NORMALIZE = -2;
+
+/**
+ * Base Hebrew letters of the word with combining marks skipped. Returns the
+ * letters-only string, null when the body holds a leading mark or any
+ * non-letter, non-mark character (such words can never be a divine name), or
+ * NEEDS_NORMALIZE when it holds a presentation form (U+FB1D–FB4F) the caller
+ * must NFD-normalize first — corpus text never does, so the decompose step
+ * stays off the hot path.
+ */
+function extractLetters(body: string): string | -2 | null {
+	let letters = "";
+	for (let i = 0; i < body.length; i++) {
+		const ch = body[i];
+		if (isHebrewLetter(ch)) {
+			letters += ch;
+			if (letters.length > MAX_FORM_LETTERS) return null;
+		} else if (isCombiningMark(ch)) {
+			if (!letters.length) return null;
+		} else if (ch >= "\uFB1D" && ch <= "\uFB4F") {
+			return NEEDS_NORMALIZE;
+		} else {
+			return null;
+		}
 	}
-	// Longest first so a double clitic wins over a single one.
-	return prefixes.sort((a, b) => b.length - a.length);
+	return letters;
 }
 
-function matchEl(lm: LetterMarks[], restStart: number): boolean {
-	const aleph = lm[restStart];
-	if (aleph.marks.includes(TZEIRE)) return true;
+/** Combining marks attached to the letter at `letterIndex`. */
+function marksAt(body: string, letterIndex: number): string {
+	let letter = -1;
+	for (let i = 0; i < body.length; i++) {
+		if (!isHebrewLetter(body[i])) continue;
+		letter++;
+		if (letter !== letterIndex) continue;
+		let j = i + 1;
+		while (j < body.length && isCombiningMark(body[j])) j++;
+		return body.slice(i + 1, j);
+	}
+	return "";
+}
+
+function matchEl(body: string, stemStart: number): boolean {
+	const aleph = marksAt(body, stemStart);
+	if (aleph.includes(TZEIRE)) return true;
 	// Unpointed אל is treated as the name; any other vowel point
 	// (אֶל/אַל/אֲל) is a different word.
-	return !hasNiqqud(aleph.marks);
+	return !hasNiqqud(aleph);
 }
 
-function matchShaddai(lm: LetterMarks[], restStart: number): boolean {
-	const [shin, dalet, yod] = lm.slice(restStart, restStart + 3);
-	if (shin.marks.includes(SIN_DOT)) return false;
-	if (dalet.marks.includes(DAGESH)) return true;
+function matchShaddai(body: string, stemStart: number): boolean {
+	const shin = marksAt(body, stemStart);
+	const dalet = marksAt(body, stemStart + 1);
+	const yod = marksAt(body, stemStart + 2);
+	if (shin.includes(SIN_DOT)) return false;
+	if (dalet.includes(DAGESH)) return true;
 	// Unpointed שדי is masked; a pointed שדי whose ד lacks dagesh
 	// (שָׂדַי/שָׁדַי "my field") is not.
-	return !hasNiqqud(shin.marks + dalet.marks + yod.marks);
+	return !hasNiqqud(shin + dalet + yod);
 }
 
 function matchDivineName(value: string): DivineNameMatch | null {
-	const [body, tail] = splitTail(value);
-	const lm = parseLetters(body);
-	if (!lm) return null;
-	const letters = lm.map((l) => l.letter).join("");
-
-	for (const prefix of cliticPrefixes(false)) {
-		if (!letters.startsWith(prefix)) continue;
-		const rest = letters.slice(prefix.length);
-		if (rest === "יהוה") {
-			return { key: "yhwh", prefix, stem: rest, suffix: "", tail };
-		}
+	let [body, tail] = splitTail(value);
+	if (!body.length) return null;
+	let letters = extractLetters(body);
+	if (letters === NEEDS_NORMALIZE) {
+		body = body.normalize("NFD");
+		letters = extractLetters(body);
 	}
-	for (const prefix of cliticPrefixes(false)) {
-		if (!letters.startsWith(prefix)) continue;
-		const rest = letters.slice(prefix.length);
-		// Longest stems first so אלהים parses as אלהי+ם, never אלה+ים.
-		for (const stem of Object.keys(ELOHIM_STEM_SUFFIXES).sort(
-			(a, b) => b.length - a.length,
-		)) {
-			if (
-				rest.startsWith(stem) &&
-				ELOHIM_STEM_SUFFIXES[stem].includes(rest.slice(stem.length))
-			) {
-				return {
-					key: "elohim",
-					prefix,
-					stem,
-					suffix: rest.slice(stem.length),
-					tail,
-				};
-			}
-		}
+	if (letters === null || letters === NEEDS_NORMALIZE || !letters.length) {
+		return null;
 	}
-	for (const prefix of cliticPrefixes(true)) {
-		if (!letters.startsWith(prefix)) continue;
-		const rest = letters.slice(prefix.length);
-		if (rest === "אל" && matchEl(lm, prefix.length)) {
-			return { key: "el", prefix, stem: rest, suffix: "", tail };
-		}
-	}
-	for (const prefix of cliticPrefixes(false)) {
-		if (!letters.startsWith(prefix)) continue;
-		const rest = letters.slice(prefix.length);
-		if (rest === "שדי" && matchShaddai(lm, prefix.length)) {
-			return { key: "shaddai", prefix, stem: rest, suffix: "", tail };
-		}
-	}
-	return null;
+	const form = FORMS.get(letters);
+	if (!form) return null;
+	if (form.key === "el" && !matchEl(body, form.prefixLength)) return null;
+	if (form.key === "shaddai" && !matchShaddai(body, form.prefixLength))
+		return null;
+	return {
+		key: form.key,
+		prefix: letters.slice(0, form.prefixLength),
+		stem: letters.slice(form.prefixLength, form.prefixLength + form.stemLength),
+		suffix: letters.slice(form.prefixLength + form.stemLength),
+		tail,
+	};
 }
 
 /** אלוהים→אלקים convention: first ה→ק; a stem-final ה is restored after it. */
@@ -317,13 +360,15 @@ export function maskDivineNameText(
 	settings: DivineNameMaskingSettings,
 ): string {
 	if (!settings.enabled) return text;
-	return text
-		.split(" ")
-		.map((word) =>
-			word
-				.split(MAQAF)
-				.map((piece) => maskDivineNameValue(piece, settings))
-				.join(MAQAF),
-		)
-		.join(" ");
+	// Single boundary scan — pieces between spaces/maqafs mask individually,
+	// separators pass through untouched.
+	let out = "";
+	let start = 0;
+	for (let i = 0; i <= text.length; i++) {
+		if (i < text.length && text[i] !== " " && text[i] !== MAQAF) continue;
+		if (i > start) out += maskDivineNameValue(text.slice(start, i), settings);
+		if (i < text.length) out += text[i];
+		start = i + 1;
+	}
+	return out;
 }

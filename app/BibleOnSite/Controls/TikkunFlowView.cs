@@ -107,6 +107,11 @@ public class TikkunFlowView : GraphicsView
         private int _wordsVersion = -1;
         private TikkunFlowLayout.Result? _layout;
         private float _laidWidth = -1;
+        // Word widths repeat massively across a perek (את, ה׳…) — a layout
+        // re-run (marks/masking toggles, resize) otherwise re-measures every
+        // word through the native text stack. Keyed by the exact inputs so
+        // font-size changes just add entries; bounded by unique word forms.
+        private readonly Dictionary<(string Text, float FontSize, bool Bold), float> _widthCache = new();
 
         public TikkunFlowDrawable(TikkunFlowView view) => _view = view;
 
@@ -171,8 +176,12 @@ public class TikkunFlowView : GraphicsView
             _layout = null;
         }
 
-        private static Func<string, float, bool, float> MeasureWord(ICanvas canvas) =>
+        private Func<string, float, bool, float> MeasureWord(ICanvas canvas) =>
             (text, fontSize, bold) =>
-                canvas.GetStringSize(text, bold ? GraphicsFont.DefaultBold : GraphicsFont.Default, fontSize).Width;
+                _widthCache.TryGetValue((text, fontSize, bold), out var width)
+                    ? width
+                    : _widthCache[(text, fontSize, bold)] =
+                        canvas.GetStringSize(text, bold ? GraphicsFont.DefaultBold : GraphicsFont.Default,
+                            fontSize).Width;
     }
 }
