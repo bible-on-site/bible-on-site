@@ -834,6 +834,116 @@ public class PerekPage
 	});
 });
 
+describe("fingerprintSource csharp members", () => {
+	const SHAPES = `namespace App;
+public class Widget
+{
+    private readonly string title = "pasuk";
+    public int Count { get; set; } = 7;
+    public void Render()
+    {
+        var x = 1;
+    }
+}
+`;
+	const memberKeys = (content: string) => {
+		const fp = fingerprintSource("Widget.cs", content);
+		assert.ok(fp !== null && fp.members !== undefined);
+		return fp.members;
+	};
+
+	test("member keys carry the qualified name plus a signature hash", () => {
+		const members = memberKeys(SHAPES);
+		assert.ok(Object.keys(members).includes("type:App.Widget"));
+		for (const name of ["title", "Count", "Render"]) {
+			assert.ok(
+				Object.keys(members).some((key) =>
+					key.startsWith(`App.Widget.${name}#`),
+				),
+				`member ${name}`,
+			);
+		}
+	});
+
+	test("trivia edits keep members; body edits keep the key, change the digest", () => {
+		const base = memberKeys(SHAPES);
+		const trivia = memberKeys(`// note\n${SHAPES.replace("var x = 1;", "var   x   =   1; // hi")}`);
+		assert.deepEqual(trivia, base);
+		const body = memberKeys(SHAPES.replace("var x = 1;", "var x = 2;"));
+		const renderKey = Object.keys(base).find((key) => key.includes(".Render#"));
+		assert.ok(renderKey !== undefined);
+		assert.notEqual(body[renderKey], base[renderKey]);
+		assert.equal(
+			body[Object.keys(base).find((key) => key.includes(".Count#"))!],
+			base[Object.keys(base).find((key) => key.includes(".Count#"))!],
+		);
+	});
+
+	test("a signature change reads as remove+add, never same-key", () => {
+		const base = memberKeys(SHAPES);
+		const edited = memberKeys(SHAPES.replace("void Render()", "void Render(int depth)"));
+		const baseKeys = Object.keys(base).filter((key) => key.includes(".Render#"));
+		const editedKeys = Object.keys(edited).filter((key) => key.includes(".Render#"));
+		assert.equal(baseKeys.length, 1);
+		assert.equal(editedKeys.length, 1);
+		assert.notEqual(editedKeys[0], baseKeys[0]);
+	});
+
+	test("generic constraints are not type declarations (`where T : class`)", () => {
+		const members = memberKeys(`namespace App;
+public class Repo
+{
+    public static void Subscribe<T, TSource>(T target, TSource source,
+        Action<TSource, EventHandler> add) where T : class
+    {
+        add(source, null!);
+    }
+}
+`);
+		assert.ok(
+			Object.keys(members).some((key) => key.startsWith("App.Repo.Subscribe#")),
+		);
+		assert.equal(Object.keys(members).filter((key) => key.includes("?")).length, 0);
+		assert.deepEqual(
+			Object.keys(members).filter((key) => key.startsWith("type:")),
+			["type:App.Repo"],
+		);
+	});
+
+	test("post-body initializers join the member they belong to", () => {
+		// `Prop { get; } = expr;` and `= new X() { …init… }` — the run after
+		// the body's `}` is part of the same member, not a phantom `?` one.
+		const members = memberKeys(`namespace App;
+public class Vm
+{
+    public int Count { get; } = 7;
+    public UITextView Text { get; } = new UITextView()
+    {
+        Editable = false,
+    };
+}
+`);
+		const keys = Object.keys(members);
+		assert.equal(keys.filter((key) => key.includes("?")).length, 0);
+		assert.ok(keys.some((key) => key.startsWith("App.Vm.Count#")));
+		assert.ok(keys.some((key) => key.startsWith("App.Vm.Text#")));
+		// Editing the initializer is the property's own change.
+		const edited = memberKeys(`namespace App;
+public class Vm
+{
+    public int Count { get; } = 7;
+    public UITextView Text { get; } = new UITextView()
+    {
+        Editable = true,
+    };
+}
+`);
+		const textKey = keys.find((key) => key.includes(".Text#"));
+		assert.ok(textKey !== undefined);
+		assert.notEqual(edited[textKey], members[textKey]);
+	});
+});
+
 describe("fingerprintSource xml", () => {
 	const XAML = `<?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
@@ -1013,6 +1123,263 @@ public class FloatingSearchBar
 			"unchanged-structural",
 		);
 		assert.equal(manifest.selectAll, false);
+	});
+});
+
+describe("selectTests member granularity", () => {
+	// No always-run noise — the assertions below are about the resolution
+	// of the member diff alone.
+	const MEMBER_RULES: SuiteRules = { ...RULES, alwaysRun: [] };
+	const MEMBER_CS = `namespace App;
+public class FloatingSearchBar
+{
+    public void Render()
+    {
+        var x = 1;
+        var y = x;
+    }
+
+    public void Bind()
+    {
+        var z = 2;
+    }
+}
+`;
+	const MEMBER_FILE = "app/BibleOnSite/Controls/FloatingSearchBar.xaml.cs";
+	const memberKeys = (content: string) => {
+		const fp = fingerprintSource(MEMBER_FILE, content);
+		assert.ok(fp !== null && fp.members !== undefined);
+		return Object.keys(fp.members);
+	};
+	const memberKey = (name: string, content = MEMBER_CS) => {
+		const key = memberKeys(content).find((k) => k.includes(`.${name}#`));
+		assert.ok(key !== undefined, `${name} member key in fingerprint`);
+		return key;
+	};
+	const RENDER = memberKey("Render");
+	const BIND = memberKey("Bind");
+
+	const memberTree = (
+		options: {
+			searchMembers?: Record<string, string[]>;
+			startupMembers?: Record<string, string[]>;
+			startupFiles?: string[];
+			fingerprintMembers?: boolean;
+			memberGaps?: Record<string, string[]>;
+		} = {},
+	) => {
+		const fp = fingerprintSource(MEMBER_FILE, MEMBER_CS);
+		assert.ok(fp !== null);
+		if (options.fingerprintMembers === false) delete fp.members;
+		const tree = makeTree({
+			sourceFingerprints: { [MEMBER_FILE]: fp },
+			...(options.memberGaps !== undefined ? { memberGaps: options.memberGaps } : {}),
+		});
+		tree.tests["Suite.Pilot.Search"].files = [MEMBER_FILE];
+		if (options.searchMembers !== undefined) {
+			tree.tests["Suite.Pilot.Search"].members = options.searchMembers;
+		}
+		tree.tests["Suite.Pilot.Startup"].files = options.startupFiles ?? [MEMBER_FILE];
+		if (options.startupMembers !== undefined) {
+			tree.tests["Suite.Pilot.Startup"].members = options.startupMembers;
+		}
+		return tree;
+	};
+	const memberFpMap = (content: string | null) =>
+		new Map([
+			[MEMBER_FILE, content === null ? null : fingerprintSource(MEMBER_FILE, content)],
+		]);
+	const memberSelect = (tree: CoverageTree, content: string | null) =>
+		select({
+			rules: MEMBER_RULES,
+			baseline: { kind: "ok", tree },
+			changedFiles: [{ path: MEMBER_FILE, status: "modified" }],
+			currentFingerprints: memberFpMap(content),
+		});
+	const resolutionOf = (m: ReturnType<typeof selectTests>) =>
+		m.changedFiles.find((f) => f.path === MEMBER_FILE);
+
+	test("a covered member change selects only the tests that executed it", () => {
+		const tree = memberTree({
+			searchMembers: { [MEMBER_FILE]: [RENDER] },
+			startupMembers: { [MEMBER_FILE]: [BIND] },
+		});
+		const edited = MEMBER_CS.replace("var x = 1;", "var x = 42; var w = x;");
+		const manifest = memberSelect(tree, edited);
+		const resolution = resolutionOf(manifest);
+		assert.equal(resolution?.resolution, "tests");
+		assert.equal(resolution?.reason, "covered-members");
+		assert.deepEqual(resolution?.tests, ["Suite.Pilot.Search"]);
+		assert.deepEqual(selectedIds(manifest), ["Suite.Pilot.Search"]);
+	});
+
+	test("member identity survives line shifts — an edit below is still member-level", () => {
+		const tree = memberTree({
+			searchMembers: { [MEMBER_FILE]: [RENDER] },
+			startupMembers: { [MEMBER_FILE]: [BIND] },
+		});
+		// Five comment lines above the class move every member down;
+		// position-independent keys keep the same member diff.
+		const shifted = `// header\n// header\n// header\n// header\n// header\n${MEMBER_CS}`;
+		const edited = shifted.replace("var z = 2;", "var z = 3;");
+		const manifest = memberSelect(tree, edited);
+		assert.equal(resolutionOf(manifest)?.reason, "covered-members");
+		assert.deepEqual(resolutionOf(manifest)?.tests, ["Suite.Pilot.Startup"]);
+	});
+
+	test("a change to both members selects both covering tests", () => {
+		const tree = memberTree({
+			searchMembers: { [MEMBER_FILE]: [RENDER] },
+			startupMembers: { [MEMBER_FILE]: [BIND] },
+		});
+		const edited = MEMBER_CS
+			.replace("var x = 1;", "var x = 9;")
+			.replace("var z = 2;", "var z = 9;");
+		const manifest = memberSelect(tree, edited);
+		// Both covering tests execute changed members — the member pass ran
+		// but could not narrow below the file's set, so it reads widened.
+		assert.equal(resolutionOf(manifest)?.reason, "member-widened");
+		assert.deepEqual(
+			[...(resolutionOf(manifest)?.tests ?? [])].sort(),
+			["Suite.Pilot.Search", "Suite.Pilot.Startup"],
+		);
+	});
+
+	test("an added or removed member widens to the file's covering set", () => {
+		const tree = memberTree({
+			searchMembers: { [MEMBER_FILE]: [RENDER] },
+			startupMembers: { [MEMBER_FILE]: [BIND] },
+		});
+		// Signature churn reads as remove+add — `Render` keeps its tests,
+		// the added overload widens the rest.
+		const edited = MEMBER_CS.replace(
+			"    public void Render()\n",
+			"    public void Render()\n    {\n    }\n\n    public void Render(int depth)\n",
+		);
+		const manifest = memberSelect(tree, edited);
+		assert.equal(resolutionOf(manifest)?.reason, "member-widened");
+		assert.deepEqual(
+			[...(resolutionOf(manifest)?.tests ?? [])].sort(),
+			["Suite.Pilot.Search", "Suite.Pilot.Startup"],
+		);
+	});
+
+	test("tests without member evidence for the file are never narrowed away", () => {
+		// Startup covers the file through the automation-id channel only:
+		// no member-qualified exec evidence, so it stays selected for ANY
+		// member diff there — the union then equals the file set, which the
+		// manifest reports as member-widened rather than narrowed.
+		const tree = memberTree({
+			searchMembers: { [MEMBER_FILE]: [RENDER] },
+		});
+		const edited = MEMBER_CS.replace("var x = 1;", "var x = 42;");
+		const manifest = memberSelect(tree, edited);
+		assert.equal(resolutionOf(manifest)?.reason, "member-widened");
+		assert.deepEqual(
+			[...(resolutionOf(manifest)?.tests ?? [])].sort(),
+			["Suite.Pilot.Search", "Suite.Pilot.Startup"],
+		);
+	});
+
+	test("a member change inside a gapped type widens to the file set", () => {
+		const tree = memberTree({
+			searchMembers: { [MEMBER_FILE]: [RENDER] },
+			startupMembers: { [MEMBER_FILE]: [BIND] },
+			memberGaps: { [MEMBER_FILE]: ["App.FloatingSearchBar"] },
+		});
+		const edited = MEMBER_CS.replace("var x = 1;", "var x = 42;");
+		const manifest = memberSelect(tree, edited);
+		assert.equal(resolutionOf(manifest)?.reason, "member-widened");
+		assert.deepEqual(
+			[...(resolutionOf(manifest)?.tests ?? [])].sort(),
+			["Suite.Pilot.Search", "Suite.Pilot.Startup"],
+		);
+	});
+
+	test("a diff outside every member (using directive) widens to the file set", () => {
+		const tree = memberTree({
+			searchMembers: { [MEMBER_FILE]: [RENDER] },
+			startupMembers: { [MEMBER_FILE]: [BIND] },
+		});
+		const edited = MEMBER_CS.replace(
+			"namespace App;",
+			"using System.Collections.Generic;\nnamespace App;",
+		);
+		const manifest = memberSelect(tree, edited);
+		assert.equal(resolutionOf(manifest)?.reason, "member-widened");
+		assert.deepEqual(
+			[...(resolutionOf(manifest)?.tests ?? [])].sort(),
+			["Suite.Pilot.Search", "Suite.Pilot.Startup"],
+		);
+	});
+
+	test("a directive edit beside a member edit still widens", () => {
+		// The member diff explains only the member half — the `using` edit
+		// touches no member key, so its blast radius is invisible to member
+		// evidence and the file's whole covering set must run.
+		const tree = memberTree({
+			searchMembers: { [MEMBER_FILE]: [RENDER] },
+			startupMembers: { [MEMBER_FILE]: [BIND] },
+		});
+		const edited = MEMBER_CS.replace(
+			"namespace App;",
+			"using System.Collections.Generic;\nnamespace App;",
+		).replace("var x = 1;", "var x = 42;");
+		const manifest = memberSelect(tree, edited);
+		assert.equal(resolutionOf(manifest)?.reason, "member-widened");
+		assert.deepEqual(
+			[...(resolutionOf(manifest)?.tests ?? [])].sort(),
+			["Suite.Pilot.Search", "Suite.Pilot.Startup"],
+		);
+	});
+
+	test("a gap on a type no fingerprint knows widens any member diff", () => {
+		// Generated-type names can normalize to nothing the fingerprint
+		// emitted — the gap then proves unmapped coverage exists but cannot
+		// name its type, so every member diff in the file widens.
+		const tree = memberTree({
+			searchMembers: { [MEMBER_FILE]: [RENDER] },
+			startupMembers: { [MEMBER_FILE]: [BIND] },
+			memberGaps: { [MEMBER_FILE]: ["App.CompilerGenerated"] },
+		});
+		const edited = MEMBER_CS.replace("var x = 1;", "var x = 42;");
+		const manifest = memberSelect(tree, edited);
+		assert.equal(resolutionOf(manifest)?.reason, "member-widened");
+		assert.deepEqual(
+			[...(resolutionOf(manifest)?.tests ?? [])].sort(),
+			["Suite.Pilot.Search", "Suite.Pilot.Startup"],
+		);
+	});
+
+	test("a member reorder keeps members identical and widens conservatively", () => {
+		const tree = memberTree({
+			searchMembers: { [MEMBER_FILE]: [RENDER] },
+			startupMembers: { [MEMBER_FILE]: [BIND] },
+		});
+		// Swapping member order changes the file hash but no member key or
+		// digest — the diff sits between members, so the file set runs.
+		const render = `    public void Render()\n    {\n        var x = 1;\n        var y = x;\n    }`;
+		const bind = `    public void Bind()\n    {\n        var z = 2;\n    }`;
+		const edited = MEMBER_CS.replace(`${render}\n\n${bind}`, `${bind}\n\n${render}`);
+		const manifest = memberSelect(tree, edited);
+		assert.equal(resolutionOf(manifest)?.reason, "member-widened");
+	});
+
+	test("baselines without member data keep file-level selection", () => {
+		// fingerprintMembers: false simulates a baseline collected before
+		// member extraction existed; no members on entries either.
+		const tree = memberTree({ fingerprintMembers: false });
+		const edited = MEMBER_CS.replace("var x = 1;", "var x = 42;");
+		const manifest = memberSelect(tree, edited);
+		assert.equal(resolutionOf(manifest)?.reason, "covered-file");
+	});
+
+	test("uncomputable current source falls back to file-level selection", () => {
+		const tree = memberTree({
+			searchMembers: { [MEMBER_FILE]: [RENDER] },
+		});
+		const manifest = memberSelect(tree, null);
+		assert.equal(resolutionOf(manifest)?.reason, "covered-file");
 	});
 });
 
@@ -1211,6 +1578,54 @@ describe("collectTree exec merge", () => {
 			assert.equal(tree.tests["N.PilotTests.Ghost"], undefined);
 			assert.equal(tree.tests["N.PilotTests.Broken"], undefined);
 			assert.deepEqual(tree.sharedFiles, ["app/BibleOnSite/App.xaml.cs"]);
+		} finally {
+			rmSync(repo, { recursive: true, force: true });
+		}
+	});
+
+	test("exec member evidence unions into the entry and surfaces memberGaps", () => {
+		const { repo, artifacts } = makeCollectRepo();
+		try {
+			const file = "app/BibleOnSite/Pages/PerekPage.xaml.cs";
+			const tree = collect(repo, artifacts, execTree(
+				{
+					"N.PilotTests.Startup": execEntry(
+						"N.PilotTests.Startup",
+						[file],
+						{ nodes: ["method:N.PerekPage.Load", "method:N.PerekPage.Gap"] },
+					),
+				},
+				{
+					nodes: {
+						"method:N.PerekPage.Load": {
+							kind: "method",
+							decl: "N.PerekPage.Load",
+							file,
+							span: [10, 20],
+							member: "N.PerekPage.Load#abc123def456",
+							memberType: "N.PerekPage",
+							parents: ["type:N.PerekPage"],
+						},
+						"method:N.PerekPage.Gap": {
+							kind: "method",
+							decl: "N.PerekPage.Gap",
+							file,
+							span: [1, 2],
+							parents: ["type:N.PerekPage"],
+						},
+						"type:N.PerekPage": {
+							kind: "type",
+							decl: "N.PerekPage",
+							parents: [`file:${file}`],
+						},
+					},
+				},
+			));
+			const entry = tree.tests["N.PilotTests.Startup"];
+			// The member-qualified file key exists even though some nodes
+			// mapped to nothing — and the unmapped node records its type gap.
+			assert.deepEqual(entry.members, { [file]: ["N.PerekPage.Load#abc123def456"] });
+			assert.deepEqual(tree.memberGaps, { [file]: ["N.PerekPage"] });
 		} finally {
 			rmSync(repo, { recursive: true, force: true });
 		}

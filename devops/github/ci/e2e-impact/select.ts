@@ -13,7 +13,10 @@
  *   4. A file in the baseline's shared exec coverage — or sharing a
  *      logical unit with it — selects every applicable test (shared hits
  *      can widen but never narrow to a per-test claim).
- *   5. A file recorded in the baseline tree selects the tests covering it.
+ *   5. A file recorded in the baseline tree selects the tests covering it;
+ *      when C# member fingerprints and exec member evidence both exist,
+ *      only tests covering the changed members select (member granularity —
+ *      added/removed/uncovered/gapped members widen back to the file set).
  *   6. Its logical unit (partial-class/code-behind grouping) does the same.
  *   7. Any other in-scope change conservatively selects every applicable test.
  *   8. Everything else is out of this suite's scope and selects nothing.
@@ -227,6 +230,11 @@ export function selectTests(input: SelectionInput): SelectionManifest {
 	const mappedByUnit = new Map<string, string[]>();
 	const sharedFiles = new Set(tree?.sharedFiles ?? []);
 	const sharedUnits = new Set<string>();
+	// Member granularity (#2085): `file → member key → test ids` and the
+	// set of tests whose exec evidence for a file is member-qualified
+	// (member evidence exists — narrowing is safe there).
+	const memberTests = new Map<string, Map<string, Set<string>>>();
+	const memberQualified = new Map<string, Set<string>>();
 	if (tree) {
 		for (const [id, entry] of Object.entries(tree.tests)) {
 			for (const file of entry.files) {
@@ -236,6 +244,18 @@ export function selectTests(input: SelectionInput): SelectionManifest {
 				const unit = fileToUnit(file, tree, readFile);
 				mappedByUnit.set(unit, [...(mappedByUnit.get(unit) ?? []), id]);
 			}
+			for (const [file, keys] of Object.entries(entry.members ?? {})) {
+				const qualified = memberQualified.get(file) ?? new Set<string>();
+				qualified.add(id);
+				memberQualified.set(file, qualified);
+				for (const key of keys) {
+					const map = memberTests.get(file) ?? new Map<string, Set<string>>();
+					const set = map.get(key) ?? new Set<string>();
+					set.add(id);
+					map.set(key, set);
+					memberTests.set(file, map);
+				}
+			}
 		}
 		// Shared exec coverage widens at unit granularity too: a code-behind
 		// hit cannot be attributed, so a paired XAML change stays widened.
@@ -243,6 +263,92 @@ export function selectTests(input: SelectionInput): SelectionManifest {
 			sharedUnits.add(fileToUnit(file, tree, readFile));
 		}
 	}
+
+	/** `Ns.Type.Member#sig` → `Ns.Type`; `type:Ns.Type` → itself. */
+	const memberTypeKey = (key: string): string => {
+		if (key.startsWith("type:")) return key.slice("type:".length);
+		const hash = key.indexOf("#");
+		const dot = key.lastIndexOf(".", hash === -1 ? key.length : hash);
+		return dot === -1 ? "" : key.slice(0, dot);
+	};
+
+	/**
+	 * Member-level narrowing for a covered C# file (#2085): diffs baseline
+	 * vs tested member fingerprints, then selects the tests that executed
+	 * each changed member — plus every test not member-qualified for the
+	 * file (automation-id-only coverage can never be narrowed away). Any
+	 * diff entry without member evidence — added, removed, uncovered or
+	 * `type:`-shaped change — widens to the file's full test set, as does
+	 * a member inside a `memberGaps` type the extractor could not fully
+	 * map. Returns `null` when member evidence cannot apply: no member
+	 * fingerprint on either side (non-C# kind, unparsable, older baseline)
+	 * or no member-qualified test covers the file.
+	 */
+	const narrowByMembers = (
+		path: string,
+		fileTests: string[],
+	): { ids: string[]; widened: boolean } | null => {
+		if (tree === null) return null;
+		const baselineFp = tree.sourceFingerprints?.[path];
+		const currentFp = input.currentFingerprints?.get(path);
+		const baselineMembers = baselineFp?.members;
+		const currentMembers = currentFp?.members;
+		if (baselineMembers === undefined || currentMembers === undefined) return null;
+		const qualified = memberQualified.get(path);
+		if (qualified === undefined) return null;
+		const byMember = memberTests.get(path) ?? new Map<string, Set<string>>();
+		const gaps = new Set(tree.memberGaps?.[path] ?? []);
+		const unqualified = fileTests.filter((id) => !qualified.has(id));
+		const selected = new Set<string>(unqualified);
+		let widened = false;
+		let anyMemberDiff = false;
+		const keys = new Set([
+			...Object.keys(baselineMembers),
+			...Object.keys(currentMembers),
+		]);
+		// A gap keyed on a type no fingerprint knows (generated `<>c`
+		// remnants, exotic normalized names) can never match a member — the
+		// only safe reading is "this file has unmapped coverage", so any
+		// member diff widens.
+		const knownTypes = new Set([...keys].map(memberTypeKey));
+		const unresolvedGap = [...gaps].some((type) => !knownTypes.has(type));
+		for (const key of keys) {
+			if (baselineMembers[key] === currentMembers[key]) continue;
+			anyMemberDiff = true;
+			const tests = byMember.get(key);
+			if (
+				tests !== undefined &&
+				tests.size > 0 &&
+				!unresolvedGap &&
+				!gaps.has(memberTypeKey(key))
+			) {
+				for (const id of tests) selected.add(id);
+				continue;
+			}
+			// Added, removed, uncovered or gapped member — cannot narrow
+			// below the file's evidence, so it keeps the whole set.
+			widened = true;
+			for (const id of fileTests) selected.add(id);
+		}
+		// A diff outside every member (usings, directives, file-scope code)
+		// changes no member key — the `nonMember` digest is the only witness
+		// for it, and an old baseline lacking it cannot prove it absent, so
+		// missing/differing digests keep the whole covering set.
+		const outsideChanged =
+			baselineFp?.nonMember === undefined ||
+			currentFp?.nonMember === undefined ||
+			baselineFp.nonMember !== currentFp.nonMember;
+		if (outsideChanged || !anyMemberDiff) {
+			widened = true;
+			for (const id of fileTests) selected.add(id);
+		}
+		// member-qualified tests + unqualified tests can already cover the
+		// whole file set — report that as widened rather than narrowed.
+		return {
+			ids: [...selected].sort(),
+			widened: widened || selected.size === new Set(fileTests).size,
+		};
+	};
 
 	const resolveOne = (rawPath: string, status: string): FileResolution => {
 		const path = rawPath.replace(/\\/g, "/");
@@ -297,6 +403,21 @@ export function selectTests(input: SelectionInput): SelectionManifest {
 				return finish("all", "shared-coverage");
 			}
 			const fileTests = mappedByFile.get(path);
+			const coveredFile = (covered: string[]): FileResolution => {
+				// Member granularity (#2085): a covered C# file whose member
+				// fingerprints and exec member evidence both exist narrows to
+				// the members that changed. Any widening tier falls back to
+				// the file's whole covering set.
+				const narrowed = narrowByMembers(path, covered);
+				if (narrowed !== null) {
+					return finish(
+						"tests",
+						narrowed.widened ? "member-widened" : "covered-members",
+						narrowed.ids,
+					);
+				}
+				return finish("tests", "covered-file", [...covered].sort());
+			};
 			// Fast path for trees without shared coverage (automation-id
 			// only): a covered file narrows without a unit lookup.
 			if (
@@ -304,14 +425,14 @@ export function selectTests(input: SelectionInput): SelectionManifest {
 				fileTests !== undefined &&
 				fileTests.length > 0
 			) {
-				return finish("tests", "covered-file", [...fileTests].sort());
+				return coveredFile(fileTests);
 			}
 			const unit = fileToUnit(path, tree, readFile);
 			if (sharedUnits.has(unit)) {
 				return finish("all", "shared-coverage");
 			}
 			if (fileTests !== undefined && fileTests.length > 0) {
-				return finish("tests", "covered-file", [...fileTests].sort());
+				return coveredFile(fileTests);
 			}
 			const unitTests = mappedByUnit.get(unit);
 			if (unitTests !== undefined && unitTests.length > 0) {
