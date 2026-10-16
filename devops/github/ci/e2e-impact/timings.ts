@@ -78,7 +78,9 @@ export function junitDurations(path: string): Map<string, number> | null {
 	for (const testcase of descendants(root, "testcase")) {
 		if (child(testcase, "skipped") !== null) continue;
 		const seconds = Number.parseFloat(testcase.attrs.time ?? "");
-		const className = testcase.attrs.classname ?? "";
+		// JUnit writers disagree on the attribute case — accept both like
+		// `loadJunit` does, or a `className` report silently yields no times.
+		const className = testcase.attrs.classname ?? testcase.attrs.className ?? "";
 		const name = testcase.attrs.name ?? "";
 		if (!Number.isFinite(seconds) || className === "" || name === "") continue;
 		const id = (name.startsWith(`${className}.`) ? name : `${className}.${name}`)

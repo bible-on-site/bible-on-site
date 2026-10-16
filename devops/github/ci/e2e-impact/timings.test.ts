@@ -80,6 +80,20 @@ describe("junitDurations", () => {
 	test("returns null when the report does not exist", () => {
 		assert.equal(junitDurations("/nonexistent/mobile-e2e.xml"), null);
 	});
+
+	test("accepts the className attribute form like loadJunit does", () => {
+		const root = mkdtempSync(join(tmpdir(), "junit-"));
+		try {
+			const path = join(root, "mobile-e2e.xml");
+			writeFileSync(path, `<?xml version="1.0"?>
+<testsuite name="mobile-e2e">
+	<testcase className="Suite.Pilot" name="Startup" time="42.5"/>
+</testsuite>`);
+			assert.equal(junitDurations(path)?.get("Suite.Pilot.Startup"), 42_500);
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
 });
 
 describe("evidenceDurations", () => {

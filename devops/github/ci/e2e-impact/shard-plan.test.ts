@@ -6,7 +6,6 @@ import {
 	DEFAULT_MAX_SHARDS,
 	DEFAULT_SETUP_MS,
 	DEFAULT_TARGET_MS,
-	MIN_SHARD_MS,
 	planShards,
 	shardManifest,
 	type CaseEstimate,

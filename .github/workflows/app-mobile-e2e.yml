@@ -152,6 +152,9 @@ jobs:
           if [ "${{ inputs.force_full_suite }}" == "true" ]; then
             FORCE_ARGS=(--force-full)
           fi
+          # --allow-empty: today's smoke policy always selects ≥1 case, but a
+          # future policy could legitimately empty the set — the ios-shards==0
+          # guards on the ios/merge_ios jobs then skip the whole iOS leg.
           node devops/github/ci/e2e-impact/e2e-impact.ts select \
             --suite app/mobile-e2e \
             --platform ios \
