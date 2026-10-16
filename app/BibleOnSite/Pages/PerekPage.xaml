@@ -22,6 +22,7 @@
             <Color x:Key="SelectedPasukBackgroundDark">#9FB4E0</Color>
             <converters:IntEqualityConverter x:Key="IntEqualityConverter"/>
             <converters:PerushCheckedConverter x:Key="PerushCheckedConverter"/>
+            <converters:PerushEnabledConverter x:Key="PerushEnabledConverter"/>
             <converters:InvertedBoolConverter x:Key="InvertedBoolConverter"/>
             <converters:PasukDisplayItemsConverter x:Key="PasukDisplayItemsConverter"/>
             <converters:PasukMarkerTextConverter x:Key="PasukMarkerTextConverter" MarkerColor="{StaticResource Primary}"/>
@@ -537,8 +538,8 @@
                            HorizontalTextAlignment="Center"
                            TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryLight}}"/>
                     <!-- Divider -->
-                    <SearchBar Placeholder="חיפוש פירוש" Text="{Binding PerushNameFilter}"
-                               AutomationId="PerushNameSearch"/>
+                    <SearchBar x:Name="PerushSearchBar" Placeholder="חיפוש פירוש" Text="{Binding PerushNameFilter}"
+                               AutomationId="PerushNameSearch" SearchButtonPressed="OnPerushSearchSubmitted"/>
                     <Label Text="{Binding InlineCommentaryLimitMessage}" FontSize="12" LineBreakMode="WordWrap"
                            HorizontalTextAlignment="Center" AutomationId="InlineCommentaryLimitMessage"/>
                     <BoxView HeightRequest="1"
@@ -546,14 +547,20 @@
                              Margin="0,4,0,0"/>
                 </VerticalStackLayout>
                 <!-- Scrollable content area for perushim list -->
-                <ScrollView Grid.Row="1" Margin="0,8,0,90">
-                    <CollectionView x:Name="PerushimCollection"
-                                   ItemsSource="{Binding FilteredPerushim}"
-                                   SelectionMode="None"
-                                   VerticalOptions="Start">
+                <CollectionView x:Name="PerushimCollection" Grid.Row="1" Margin="0,8,0,90"
+                                ItemsSource="{Binding Perushim}"
+                                SelectionMode="None"
+                                VerticalOptions="Start">
                         <CollectionView.ItemTemplate>
                             <DataTemplate x:DataType="models:Perush">
                                 <Grid Padding="4,2" ColumnDefinitions="Auto,*" x:Name="PerushRow">
+                                    <Grid.IsEnabled>
+                                        <MultiBinding Converter="{StaticResource PerushEnabledConverter}" Mode="OneWay">
+                                            <Binding Path="Id"/>
+                                            <Binding Path="BindingContext.CheckedPerushim" Source="{x:Reference PerekPageRoot}"/>
+                                            <Binding Path="BindingContext.InlineCommentaryLimit" Source="{x:Reference PerekPageRoot}"/>
+                                        </MultiBinding>
+                                    </Grid.IsEnabled>
                                     <CheckBox Grid.Column="0"
                                               AutomationId="PerushCheckBox"
                                               VerticalOptions="Center"
@@ -570,7 +577,15 @@
                                            Text="{Binding Name}"
                                            FontSize="16"
                                            FlowDirection="RightToLeft"
-                                           VerticalOptions="Center"/>
+                                           VerticalOptions="Center">
+                                        <Label.Triggers>
+                                            <DataTrigger TargetType="Label"
+                                                         Binding="{Binding IsEnabled, Source={x:Reference PerushRow}}"
+                                                         Value="False">
+                                                <Setter Property="Opacity" Value="0.4"/>
+                                            </DataTrigger>
+                                        </Label.Triggers>
+                                    </Label>
                                 </Grid>
                             </DataTemplate>
                         </CollectionView.ItemTemplate>
@@ -598,8 +613,7 @@
                                         TextColor="{AppThemeBinding Light={StaticResource Gray800}, Dark={StaticResource Gray200}}"/>
                             </VerticalStackLayout>
                         </CollectionView.EmptyView>
-                    </CollectionView>
-                </ScrollView>
+                </CollectionView>
             </Grid>
         </Border>
 
