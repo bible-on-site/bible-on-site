@@ -17,11 +17,11 @@ public class TikkunFlowViewTests
         Segments = [new PasukSegment { Type = SegmentType.Ktiv, Value = text }]
     };
 
-    private static Mock<ICanvas> MeasuringCanvas()
+    private static Mock<ICanvas> MeasuringCanvas(double widthFactor = 0.5)
     {
         var canvas = new Mock<ICanvas>();
         canvas.Setup(c => c.GetStringSize(It.IsAny<string>(), It.IsAny<IFont>(), It.IsAny<float>()))
-            .Returns((string text, IFont _, float size) => new SizeF(text.Length * size * 0.5f, size));
+            .Returns((string text, IFont _, float size) => new SizeF((float)(text.Length * size * widthFactor), size));
         return canvas;
     }
 
@@ -179,6 +179,40 @@ public class TikkunFlowViewTests
 
             canvas.Verify(c => c.GetStringSize("אא", It.IsAny<IFont>(), It.IsAny<float>()), Times.Once);
             canvas.Verify(c => c.GetStringSize("בב", It.IsAny<IFont>(), It.IsAny<float>()), Times.Once);
+        });
+    }
+
+    [Fact]
+    public void relayout_on_a_canvas_with_different_metrics_remeasures()
+    {
+        WithInlineDispatcher(() =>
+        {
+            var view = new TikkunFlowView { Pasukim = [PasukOf(1, "אא")] };
+            var narrow = MeasuringCanvas();
+            var wide = MeasuringCanvas(widthFactor: 0.9);
+
+            view.Drawable!.Draw(narrow.Object, new RectF(0, 0, 360, 600));
+            view.MaskingRevision = 1;
+            view.Drawable!.Draw(wide.Object, new RectF(0, 0, 360, 600));
+
+            wide.Verify(c => c.GetStringSize("אא", It.IsAny<IFont>(), It.IsAny<float>()), Times.Once);
+        });
+    }
+
+    [Fact]
+    public void font_size_change_remeasures_instead_of_reusing_stale_widths()
+    {
+        WithInlineDispatcher(() =>
+        {
+            var view = new TikkunFlowView { Pasukim = [PasukOf(1, "אא")] };
+            var canvas = MeasuringCanvas();
+
+            view.Drawable!.Draw(canvas.Object, new RectF(0, 0, 360, 600));
+            view.TextFontSize = 30;
+            view.Drawable!.Draw(canvas.Object, new RectF(0, 0, 360, 600));
+
+            canvas.Verify(c => c.GetStringSize("אא", It.IsAny<IFont>(), 30f), Times.Once);
+            canvas.Verify(c => c.GetStringSize("אא", It.IsAny<IFont>(), 18f), Times.Once);
         });
     }
 
