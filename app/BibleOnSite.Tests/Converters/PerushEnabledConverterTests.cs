@@ -60,12 +60,15 @@ public class PerushEnabledConverterTests
         Convert(3L, new List<int> { 1, 2, 3, 4, 5 }, 5).Should().Be(true);
         Convert(6L, new List<int> { 1, 2, 3, 4, 5 }, 5).Should().Be(false);
         Convert(long.MaxValue, new List<int> { 1, 2, 3, 4, 5 }, 5).Should().Be(true);
+        Convert(long.MinValue, new List<int> { 1, 2, 3, 4, 5 }, 5).Should().Be(true);
     }
 
     [Fact]
-    public void single_value_defaults_to_enabled()
+    public void single_value_and_null_array_default_to_enabled()
     {
         Convert(3).Should().Be(true);
+        new PerushEnabledConverter().Convert(null, typeof(object), null!, CultureInfo.InvariantCulture)
+            .Should().Be(true);
     }
 
     [Fact]
