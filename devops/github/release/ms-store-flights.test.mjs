@@ -28,14 +28,21 @@ test("extractFlightIds pulls the created flight id out of mixed verbose output",
 	assert.deepEqual(extractFlightIds(verboseCreateLog(flightA)), [flightA]);
 });
 
-test("extractFlightIds finds every pattern the deploy step writes", () => {
+test("extractFlightIds finds the patterns that prove CI created the flight", () => {
 	const log = [
 		`Creating new flight: v5.0.169 (attempt 1/3)`,
 		verboseCreateLog(flightA),
 		`[INF] Created flight with ID: ${flightB}`,
-		`Deploying to flight: ${flightC} (internal testing)`,
 	].join("\n");
-	assert.deepEqual(extractFlightIds(log), [flightA, flightB, flightC]);
+	assert.deepEqual(extractFlightIds(log), [flightA, flightB]);
+});
+
+test("extractFlightIds never harvests a caller-supplied flight id", () => {
+	// `Deploying to flight:` fires for --ms-store-flight-id values the run did
+	// not create; deleting one during cap recovery would destroy a flight the
+	// automation does not own.
+	const log = `Deploying to flight: ${flightC} (internal testing)`;
+	assert.deepEqual(extractFlightIds(log), []);
 });
 
 test("extractFlightIds keeps first-appearance order and de-duplicates", () => {
@@ -43,7 +50,7 @@ test("extractFlightIds keeps first-appearance order and de-duplicates", () => {
 		verboseCreateLog(flightB),
 		`Created flight with ID: ${flightB.toUpperCase()}`,
 		verboseCreateLog(flightA),
-		`Deploying to flight: ${flightB}`,
+		`Created flight with ID: ${flightB}`,
 	].join("\n");
 	assert.deepEqual(extractFlightIds(log), [flightB, flightA]);
 });
@@ -82,7 +89,7 @@ test("harvestDeployedFlightIds returns ids oldest first across runs and jobs", a
 		if (endpoint.includes("/jobs/20/logs"))
 			return verboseCreateLog(flightA) + `\nCreated flight with ID: ${flightB}`;
 		if (endpoint.includes("/jobs/30/logs"))
-			return `Deploying to flight: ${flightB}\n` + verboseCreateLog(flightC);
+			return `Created flight with ID: ${flightB}\n` + verboseCreateLog(flightC);
 		throw new Error(`unexpected log call ${endpoint}`);
 	};
 	const result = await harvestDeployedFlightIds({ repo: "o/r", api, apiText });
@@ -108,6 +115,22 @@ test("harvestDeployedFlightIds tolerates job/log fetch failures per run", async 
 	const result = await harvestDeployedFlightIds({ repo: "o/r", api, apiText });
 	assert.deepEqual(result.flightIds, []);
 	assert.equal(result.scannedJobs, 1);
+});
+
+test("harvestDeployedFlightIds pages the run listing until it runs dry", async () => {
+	const pageOne = Array.from({ length: 100 }, (_, i) => i + 400);
+	const api = async (endpoint) => {
+		if (endpoint.includes("&page=1")) return runsResponse(...pageOne);
+		if (endpoint.includes("&page=2")) return runsResponse(300, 200);
+		if (endpoint.includes("/jobs")) return jobsResponse();
+		throw new Error(`unexpected api call ${endpoint}`);
+	};
+	const result = await harvestDeployedFlightIds({
+		repo: "o/r",
+		api,
+		apiText: async () => "",
+	});
+	assert.equal(result.scannedRuns, 102);
 });
 
 test("harvestDeployedFlightIds requires a repo argument", async () => {

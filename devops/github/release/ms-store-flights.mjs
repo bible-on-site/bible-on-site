@@ -24,9 +24,13 @@ import { ghApi } from "./gh-api.mjs";
 const createdFlightPattern =
 	/"FlightId"\s*:\s*"([0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12})"/gi;
 
-/** Our own `Created flight with ID:` / `Deploying to flight:` log lines. */
+/**
+ * Our own `Created flight with ID:` line. `Deploying to flight:` is
+ * deliberately not harvested — it also fires for a caller-supplied
+ * --ms-store-flight-id, which CI did not create and must not delete.
+ */
 const loggedFlightPattern =
-	/(?:Created flight with ID:|Deploying to flight:)\s*([0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12})/gi;
+	/Created flight with ID:\s*([0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12})/gi;
 
 /**
  * Extract every flight ID a Microsoft Store deploy job's log text records, in
@@ -66,16 +70,27 @@ export async function harvestDeployedFlightIds({
 	repo,
 	workflowFile = "cd-app.yml",
 	jobName = "Deploy to Microsoft Store",
-	maxRuns = 40,
+	maxPages = 3,
 	api = ghApi,
 	apiText = fetchLog,
 } = {}) {
 	if (!repo) throw new Error("harvestDeployedFlightIds requires `repo`");
-	const listing = await api(
-		`repos/${repo}/actions/workflows/${workflowFile}/runs?per_page=${maxRuns}&status=completed`,
-	);
-	const runs = (listing?.workflow_runs ?? [])
+	// One page of recent runs is not enough: a flight created before the
+	// window can still occupy a cap slot and its ID survives in the retained
+	// job log. Follow the listing until the pages run dry or the bound hits.
+	const listed = [];
+	for (let page = 1; page <= maxPages; page++) {
+		const listing = await api(
+			`repos/${repo}/actions/workflows/${workflowFile}/runs?per_page=100&status=completed&page=${page}`,
+		);
+		const batch = listing?.workflow_runs ?? [];
+		listed.push(...batch);
+		if (batch.length < 100) break;
+	}
+	const seenRuns = new Set();
+	const runs = listed
 		.filter((run) => Number.isSafeInteger(run?.id))
+		.filter((run) => !seenRuns.has(run.id) && seenRuns.add(run.id))
 		// API returns newest first; scanning oldest first keeps flight IDs in
 		// creation order so the oldest flight is deleted first.
 		.reverse();

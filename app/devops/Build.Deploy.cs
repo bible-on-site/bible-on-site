@@ -185,7 +185,6 @@ partial class Build
         // Loaded lazily — only when Partner Center reports the flight cap and
         // `flights list` cannot enumerate what to delete.
         Queue<string>? harvestQueue = null;
-        var capDeletionsLeft = 12;
         var capHit = false;
         string lastFailure = "";
 
@@ -252,10 +251,13 @@ partial class Build
             {
                 capHit = true;
                 harvestQueue ??= new Queue<string>(HarvestDeployedFlights());
-                if (capDeletionsLeft > 0 && harvestQueue.Count > 0)
+                // The queue bounds recovery: each entry is a flight this
+                // workflow created, deleted oldest-first until Partner Center
+                // accepts a create. Already-deleted ids make their delete
+                // fail fast and cheap — they consume a dequeue, not budget.
+                if (harvestQueue.Count > 0)
                 {
                     var staleFlight = harvestQueue.Dequeue();
-                    capDeletionsLeft--;
                     Serilog.Log.Warning(
                         $"Partner Center reports the flight cap; deleting oldest CI-created flight {staleFlight} and retrying");
                     TryDeleteFlight(staleFlight);
@@ -330,7 +332,7 @@ partial class Build
     {
         var runnerTemp = Environment.GetEnvironmentVariable("RUNNER_TEMP");
         var helper = !string.IsNullOrEmpty(runnerTemp)
-            ? System.IO.Path.Combine(runnerTemp, "ms-store-flights.mjs")
+            ? $"{runnerTemp.Replace('\\', '/')}/ms-store-flights.mjs"
             : null;
         if (helper == null || !File.Exists(helper))
         {
