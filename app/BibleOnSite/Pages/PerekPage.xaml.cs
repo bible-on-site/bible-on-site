@@ -89,6 +89,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         SetupCircularMenuLayout();
         SetupExitButtonDragHandler();
         SubscribeAppLinks();
+        SubscribePerushimSearch();
         Console.WriteLine("[Startup] PerekPage constructed");
     }
 
@@ -106,6 +107,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         SetupCircularMenuLayout();
         SetupExitButtonDragHandler();
         SubscribeAppLinks();
+        SubscribePerushimSearch();
     }
 
     /// <summary>
@@ -1761,6 +1763,25 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         }
     }
 
+    /// <summary>
+    /// Perushim search navigates instead of filtering — the full list stays
+    /// visible and each keystroke scrolls the first matching perush into view.
+    /// </summary>
+    private void SubscribePerushimSearch()
+    {
+        _viewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(PerekViewModel.PerushNameFilter) && _isPerushimOpen)
+            {
+                var match = _viewModel.FilteredPerushim.FirstOrDefault();
+                if (match != null)
+                {
+                    PerushimCollection.ScrollTo(match, position: ScrollToPosition.Start, animate: false);
+                }
+            }
+        };
+    }
+
     private async void OnGoToPerushimSettingsClicked(object? sender, EventArgs e)
     {
         try
@@ -1784,8 +1805,11 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         // Calculate panel heights
         var totalHeight = MainGrid.Height;
         _perushimPanelHeight = (totalHeight * 0.33) + 90; // Default: 33% + bottom bar
-        // TODO: Calculate expanded height based on inner perushim rows occupation
-        _perushimPanelExpandedHeight = totalHeight - 50; // Full screen minus top margin
+        // Cap the drag-up expansion so the sheet's top edge stays under the
+        // status bar/pill: content + toolbar rows already begin below it.
+        var toolbarHeight = ReaderToolbar.IsVisible ? ReaderToolbar.Height : 0;
+        _perushimPanelExpandedHeight = Math.Max(_perushimPanelHeight,
+            ContentArea.Height + toolbarHeight - 8);
 
         // Animate perushim panel slide up/down
         if (_isPerushimOpen)

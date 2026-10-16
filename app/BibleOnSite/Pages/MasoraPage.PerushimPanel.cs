@@ -59,6 +59,25 @@ public partial class MasoraPage //NOSONAR
         }
     }
 
+    /// <summary>
+    /// Perushim search navigates instead of filtering — the full list stays
+    /// visible and each keystroke scrolls the first matching perush into view.
+    /// </summary>
+    private void SubscribePerushimSearch()
+    {
+        _viewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(MasoraViewModel.PerushNameFilter) && _isPerushimOpen)
+            {
+                var match = _viewModel.FilteredPerushim.FirstOrDefault();
+                if (match != null)
+                {
+                    PerushimCollection.ScrollTo(match, position: ScrollToPosition.Start, animate: false);
+                }
+            }
+        };
+    }
+
     private async void OnGoToPerushimSettingsClicked(object? sender, EventArgs e)
     {
         try
@@ -84,7 +103,11 @@ public partial class MasoraPage //NOSONAR
         // Calculate panel heights
         var totalHeight = MainGrid.Height;
         _perushimPanelHeight = (totalHeight * 0.33) + 90; // Default: 33% + bottom bar
-        _perushimPanelExpandedHeight = totalHeight - 50; // Full screen minus top margin
+        // Cap the drag-up expansion so the sheet's top edge stays under the
+        // status bar/pill: content + toolbar rows already begin below it.
+        var toolbarHeight = ReaderToolbar.IsVisible ? ReaderToolbar.Height : 0;
+        _perushimPanelExpandedHeight = Math.Max(_perushimPanelHeight,
+            ContentArea.Height + toolbarHeight - 8);
 
         if (_isPerushimOpen)
         {

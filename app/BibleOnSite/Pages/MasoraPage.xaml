@@ -309,11 +309,10 @@
                              BackgroundColor="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray600}}"
                              Margin="0,4,0,0"/>
                 </VerticalStackLayout>
-                <ScrollView Grid.Row="1" Margin="0,8,0,90">
-                    <CollectionView x:Name="PerushimCollection"
-                                   ItemsSource="{Binding FilteredPerushim}"
-                                   SelectionMode="None"
-                                   VerticalOptions="Start">
+                <CollectionView x:Name="PerushimCollection" Grid.Row="1" Margin="0,8,0,90"
+                                ItemsSource="{Binding Perushim}"
+                                SelectionMode="None"
+                                VerticalOptions="Start">
                         <CollectionView.ItemTemplate>
                             <DataTemplate x:DataType="models:Perush">
                                 <Grid Padding="4,2" ColumnDefinitions="Auto,*" x:Name="PerushRow">
@@ -355,8 +354,7 @@
                                         Clicked="OnGoToPerushimSettingsClicked"/>
                             </VerticalStackLayout>
                         </CollectionView.EmptyView>
-                    </CollectionView>
-                </ScrollView>
+                </CollectionView>
             </Grid>
         </Border>
 
