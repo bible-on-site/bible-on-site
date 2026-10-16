@@ -21,12 +21,19 @@ public class TanahpediaService : BaseGraphQLService, ITanahpediaService
     /// <summary>Singleton instance of the TanahpediaService.</summary>
     public static TanahpediaService Instance => _instance.Value;
 
+    private readonly TimeSpan _searchTimeout = DefaultSearchTimeout;
+
     private TanahpediaService()
     {
     }
 
     public TanahpediaService(GraphQLHttpClient client) : base(client)
     {
+    }
+
+    internal TanahpediaService(GraphQLHttpClient client, TimeSpan searchTimeout) : base(client)
+    {
+        _searchTimeout = searchTimeout;
     }
 
     /// <inheritdoc />
@@ -146,7 +153,7 @@ public class TanahpediaService : BaseGraphQLService, ITanahpediaService
         // The API accepts 1-50 and rejects out-of-range values — clamp here so
         // the documented contract holds for every caller.
         limit = Math.Clamp(limit, 1, MaxSearchLimit);
-        using var timeoutSource = new CancellationTokenSource(DefaultSearchTimeout);
+        using var timeoutSource = new CancellationTokenSource(_searchTimeout);
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutSource.Token);
         try
         {
