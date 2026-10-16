@@ -163,7 +163,20 @@ jobs:
                   summary = f"TOOL-ERROR {summary}"
               print(f"[{elapsed:7.2f}s] {label}: {summary}")
               timings.append((label, elapsed))
-              return payload
+              return payload, msg
+
+          def failure_kind(msg, payload):
+              """Classify a failed tools/call response for assert messages."""
+              if "error" in msg:
+                  err = msg["error"]
+                  return (f"RPC error: {err.get('message', err)}"
+                          if isinstance(err, dict) else f"RPC error: {err}")
+              if msg.get("timeout"):
+                  return "timed out waiting for a response"
+              if isinstance(msg.get("result"), dict) and msg["result"].get("isError"):
+                  text = payload if isinstance(payload, str) else json.dumps(payload)[:200]
+                  return f"tool error: {text}"
+              return f"response lacks the expected key: {json.dumps(payload)[:200]}"
 
           threading.Thread(target=approve_pending, daemon=True).start()
           try:
@@ -173,23 +186,58 @@ jobs:
               print("mcpbridge tools:", *names, sep="\n- ")
               assert names, "mcpbridge returned no tools"
               schemas = {t["name"]: t.get("inputSchema", {})
-                         for t in tools if t["name"].startswith("DeviceInteraction")}
-              print("DeviceInteraction schemas:",
+                         for t in tools if t["name"].startswith("DeviceInteraction")
+                         or t["name"] == "XcodeOpenWorkspace"}
+              print("DeviceInteraction/XcodeOpenWorkspace schemas:",
                     json.dumps(schemas, indent=2)[:6000])
 
+              # Xcode gates every tool behind agent approval: the first
+              # XcodeOpenWorkspace/XcodeNewProject call registers a
+              # project-access attempt, which the approve_pending loop grants
+              # via `xcrun mcp-server approve`. Retry only when a NEW grant
+              # lands — no grant progress means the failure is real, not
+              # pending authorization.
+              project_path = os.path.join(
+                  os.environ["GITHUB_WORKSPACE"],
+                  "app/extensions/AssetPackDownloader",
+                  "AssetPackDownloader.xcodeproj")
+              workspace_id = None
+              open_diag = "not attempted"
+              grants = len(approved)
+              for _ in range(4):
+                  payload, msg = timed("OpenWorkspace", "XcodeOpenWorkspace",
+                                       {"path": project_path})
+                  if isinstance(payload, dict) and payload.get("workspaceIdentifier"):
+                      workspace_id = payload["workspaceIdentifier"]
+                      break
+                  open_diag = failure_kind(msg, payload)
+                  grant_deadline = time.time() + 60
+                  while len(approved) <= grants and time.time() < grant_deadline:
+                      time.sleep(1)
+                  if len(approved) <= grants:
+                      break
+                  grants = len(approved)
+              assert workspace_id, (
+                  "XcodeOpenWorkspace never returned a workspaceIdentifier — "
+                  f"last result: {open_diag}")
+
               session_key = None
+              session_diag = "not attempted"
               for device in (UDID, "iPhone 17"):
                   # sessionIdentifier: schema asks for a unique Title Case
                   # human-friendly name used in Xcode's logs/UI.
-                  payload = timed(f"StartSession device={device}",
-                                  "DeviceInteractionStartSession",
-                                  {"sessionIdentifier":
-                                       f"PoC Session {uuid.uuid4().hex[:8]}",
-                                   "deviceIdentifier": device})
+                  payload, msg = timed(f"StartSession device={device}",
+                                       "DeviceInteractionStartSession",
+                                       {"sessionIdentifier":
+                                            f"PoC Session {uuid.uuid4().hex[:8]}",
+                                        "deviceIdentifier": device})
                   if isinstance(payload, dict) and payload.get("interactionSessionKey"):
                       session_key = payload["interactionSessionKey"]
                       break
-              assert session_key, "DeviceInteractionStartSession produced no key"
+                  session_diag = failure_kind(msg, payload)
+              assert session_key, (
+                  "DeviceInteractionStartSession produced no key — "
+                  f"last result: {session_diag}")
 
               # Bare captures measure transport + AX-tree cost with no action —
               # the per-command latency WDA spends ~1.1s on for findElements.
