@@ -47,6 +47,10 @@ public partial class SearchViewModel : ObservableObject
     [ObservableProperty]
     private string _availabilityMessage = string.Empty;
 
+    /// <summary>Whether the perushim-download hint should render as a link row.</summary>
+    [ObservableProperty]
+    private bool _showPerushimDownloadLink;
+
     [ObservableProperty]
     private string _loadingMessage = "מחפש...";
 
@@ -267,6 +271,7 @@ public partial class SearchViewModel : ObservableObject
         SearchResults.Clear();
         ErrorMessage = string.Empty;
         AvailabilityMessage = string.Empty;
+        ShowPerushimDownloadLink = false;
         if (OptimizedSearchPhrase == SearchPhraseAll)
         {
             return;
@@ -344,6 +349,7 @@ public partial class SearchViewModel : ObservableObject
                 {
                     availability.Add("לחיפוש בפירושים, הורידו את הפירושים בהגדרות");
                     AvailabilityMessage = string.Join('\n', availability);
+                    ShowPerushimDownloadLink = true;
                 }
             }
             // Consume each remote merge as it completes — a stalled request

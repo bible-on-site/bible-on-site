@@ -53,6 +53,7 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
         SetupCarouselNavigation();
         SetupCircularMenuLayout();
         SetupUnitPickerEvents();
+        SubscribePerushimSearch();
     }
 
     public MasoraPage(MasoraViewModel viewModel)
@@ -65,6 +66,7 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
         SetupCarouselNavigation();
         SetupCircularMenuLayout();
         SetupUnitPickerEvents();
+        SubscribePerushimSearch();
     }
 
     /// <summary>
