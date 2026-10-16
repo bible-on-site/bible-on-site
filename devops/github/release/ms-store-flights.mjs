@@ -44,8 +44,10 @@ export function extractFlightIds(logText) {
 	return [...new Set(matches.map(({ id }) => id))];
 }
 
+// Job logs contain the runner's ANSI escape sequences; gh api refuses to
+// print them without --allow-escape-sequences.
 const fetchLog = (endpoint) =>
-	execFileSync("gh", ["api", endpoint], {
+	execFileSync("gh", ["api", endpoint, "--allow-escape-sequences"], {
 		encoding: "utf8",
 		maxBuffer: 64 * 1024 * 1024,
 	});
