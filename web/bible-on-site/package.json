@@ -106,7 +106,7 @@
 		"parse5": "8.0.1",
 		"picomatch": "4.0.7",
 		"postcss": "8.5.30",
-		"sass": "1.105.1",
+		"sass": "1.105.2",
 		"schema-dts": "2.1.0",
 		"swc-plugin-coverage-instrument": "0.0.33",
 		"ts-jest": "29.4.15",
