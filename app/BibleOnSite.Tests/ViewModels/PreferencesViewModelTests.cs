@@ -403,6 +403,21 @@ public class PreferencesViewModelTests : IDisposable
     #region Font-size commands (DisplayPreferencesViewModel)
 
     [Fact]
+    public void DisplayPreferencesViewModel_ParameterlessCtor_UsesTheInitializedSingleton()
+    {
+        // Arrange — the app initializes the singleton once at startup; the
+        // parameterless ctor (shell path) resolves it instead of taking one.
+        PreferencesService.Initialize(_storage);
+
+        // Act
+        var display = new DisplayPreferencesViewModel();
+
+        // Assert
+        display.Should().NotBeNull();
+        display.FontFactor.Should().BeGreaterThan(0);
+    }
+
+    [Fact]
     public void IncreaseFontSizeCommand_IncreasesFontFactor()
     {
         // Arrange

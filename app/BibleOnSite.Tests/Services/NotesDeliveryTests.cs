@@ -251,4 +251,69 @@ public class NotesDeliveryTests
         PadDeliveryService.PayloadFileName("recitation_1").Should().Be("recitation_1.zip");
         PadDeliveryService.PayloadFileName("recitation_39").Should().Be("recitation_39.zip");
     }
+
+[Fact]
+    public async Task TryDownloadNotesAsync_WithProgressOverload_ForwardsToTheDeliveryPath()
+    {
+        await using var storage = new TestStorage();
+        await storage.BundleDatabaseAsync(DbName, NotesDbV2.Statements((1, 1, 1, 0, "progress note")));
+        var service = Create(storage);
+        var progress = new Progress<double>();
+
+        (await service.TryDownloadNotesAsync(progress)).Should().BeTrue();
+        service.IsAvailable.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task LoadChapterAsync_ReturnsNullForAPerekWithoutNotes()
+    {
+        await using var storage = new TestStorage();
+        await storage.CreateDatabaseAsync(DbName, NotesDbV2.Statements((1, 1, 1, 0, "note")));
+        var service = Create(storage);
+
+        (await service.LoadChapterAsync(1)).Should().NotBeNull();
+        (await service.LoadChapterAsync(42)).Should().BeNull();
+    }
+
+    [Fact]
+    public async Task RestoreIndex_CopiesFromPadPack_WhenTheLocalIndexIsMissing()
+    {
+        await using var storage = new TestStorage();
+        await storage.CreateDatabaseAsync(DbName, NotesDbV2.Statements((1, 1, 1, 0, "note")));
+        var padDir = Path.Join(storage.Root, "padpack");
+        Directory.CreateDirectory(padDir);
+        await File.WriteAllTextAsync(Path.Join(padDir, PerushimNotesService.SearchIndexDbName), "delivered index");
+        var pad = Pad();
+        pad.Setup(p => p.TryGetAssetPathAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync(padDir);
+        var service = Create(storage, pad);
+
+        var path = await service.RestoreDeliveredIndexPathAsync();
+
+        path.Should().Be(Path.Join(storage.Root, PerushimNotesService.SearchIndexDbName));
+        (await File.ReadAllTextAsync(path!)).Should().Be("delivered index");
+    }
+
+    [Fact]
+    public async Task RestoreIndex_CopiesFromBundledPackage_WhenNoDeliveryIsAvailable()
+    {
+        await using var storage = new TestStorage();
+        await storage.CreateDatabaseAsync(DbName, NotesDbV2.Statements((1, 1, 1, 0, "note")));
+        await storage.BundleDatabaseAsync(PerushimNotesService.SearchIndexDbName,
+            "CREATE TABLE _marker (x INTEGER)");
+        var service = Create(storage);
+
+        var path = await service.RestoreDeliveredIndexPathAsync();
+
+        path.Should().Be(Path.Join(storage.Root, PerushimNotesService.SearchIndexDbName));
+        File.Exists(path).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task RestoreIndex_ReturnsNull_WhenNotesAreUnavailable()
+    {
+        await using var storage = new TestStorage();
+        var service = Create(storage); // no notes DB → IsAvailable false
+
+        (await service.RestoreDeliveredIndexPathAsync()).Should().BeNull();
+    }
 }

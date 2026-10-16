@@ -95,6 +95,17 @@ public class PasukMarkerTextConverterTests
         MarkerFontSize(Convert(text, "א", -1.0)).Should().BeNaN();
     }
 
+    [Fact]
+    public void convert_back_is_not_supported()
+    {
+        var converter = new PasukMarkerTextConverter();
+
+        var act = () => converter.ConvertBack(
+            new object(), [typeof(object), typeof(object)], null, CultureInfo.InvariantCulture);
+
+        act.Should().Throw<NotSupportedException>();
+    }
+
     private static double MarkerFontSize(object converted) =>
         ((FormattedString)converted).Spans[0].FontSize;
 }
