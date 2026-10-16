@@ -89,6 +89,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         SetupCircularMenuLayout();
         SetupExitButtonDragHandler();
         SubscribeAppLinks();
+        SubscribePerushimSearch();
         Console.WriteLine("[Startup] PerekPage constructed");
     }
 
@@ -106,6 +107,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         SetupCircularMenuLayout();
         SetupExitButtonDragHandler();
         SubscribeAppLinks();
+        SubscribePerushimSearch();
     }
 
     /// <summary>
@@ -1747,6 +1749,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
             return;
         }
 
+        PerushSearchBar.Unfocus();
         _isTogglingPerush = true;
         try
         {
@@ -1757,6 +1760,42 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         {
             _isTogglingPerush = false;
         }
+    }
+
+    /// <summary>
+    /// Perushim search navigates instead of filtering — the full list stays
+    /// visible and each keystroke scrolls the first matching perush into view.
+    /// </summary>
+    private void SubscribePerushimSearch()
+    {
+        _viewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(PerekViewModel.PerushNameFilter) && _isPerushimOpen)
+            {
+                var match = _viewModel.FilteredPerushim.FirstOrDefault();
+                if (match != null)
+                {
+                    PerushimCollection.ScrollTo(match, position: ScrollToPosition.Start, animate: false);
+                }
+            }
+        };
+    }
+
+    private void OnPerushSearchSubmitted(object? sender, EventArgs e) => _ = HidePerushimKeyboardAsync();
+
+    /// <summary>Dismisses the soft keyboard — iOS leaves it over the list otherwise.</summary>
+    private async Task HidePerushimKeyboardAsync()
+    {
+        try
+        {
+            // Unfocus alone can leave the floating keyboard over the list.
+            await PerushSearchBar.HideSoftInputAsync(CancellationToken.None);
+        }
+        catch (Exception ex) //NOSONAR — failure boundary: keyboard dismissal is best-effort and must not crash the reader.
+        {
+            Console.Error.WriteLine($"Could not dismiss perushim search keyboard: {ex}");
+        }
+        PerushSearchBar.Unfocus();
     }
 
     private async void OnGoToPerushimSettingsClicked(object? sender, EventArgs e)
@@ -1782,8 +1821,11 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         // Calculate panel heights
         var totalHeight = MainGrid.Height;
         _perushimPanelHeight = (totalHeight * 0.33) + 90; // Default: 33% + bottom bar
-        // TODO: Calculate expanded height based on inner perushim rows occupation
-        _perushimPanelExpandedHeight = totalHeight - 50; // Full screen minus top margin
+        // Cap the drag-up expansion so the sheet's top edge stays under the
+        // status bar/pill: content + toolbar rows already begin below it.
+        var toolbarHeight = ReaderToolbar.IsVisible ? ReaderToolbar.Height : 0;
+        _perushimPanelExpandedHeight = Math.Max(_perushimPanelHeight,
+            ContentArea.Height + toolbarHeight - 8);
 
         // Animate perushim panel slide up/down
         if (_isPerushimOpen)
@@ -1799,6 +1841,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         else
         {
             // Slide down then hide
+            PerushSearchBar.Unfocus();
             await PerushimPanel.TranslateToAsync(0, _perushimPanelHeight, 250, Easing.CubicIn);
             PerushimPanel.IsVisible = false;
         }
@@ -1903,6 +1946,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
                         if (shouldDismiss)
                         {
                             // Dismiss: complete the slide down
+                            PerushSearchBar.Unfocus();
                             await PerushimPanel.TranslateToAsync(0, _perushimPanelHeight, 200, Easing.CubicIn);
                             PerushimPanel.IsVisible = false;
                             _isPerushimOpen = false;
