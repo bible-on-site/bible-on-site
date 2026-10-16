@@ -240,7 +240,7 @@ public partial class MasoraViewModel : ObservableObject //NOSONAR
     /// </summary>
     public async Task NavigateToUnitAsync(int unitId)
     {
-        var index = IndexOfUnit(unitId);
+        var index = _masoraDataService.GetUnitIndex(unitId);
         if (CarouselUnits.Count > 0 && index >= 0)
         {
             var target = _masoraDataService.GetUnit(unitId);
@@ -341,7 +341,7 @@ public partial class MasoraViewModel : ObservableObject //NOSONAR
         {
             return;
         }
-        var index = IndexOfUnit(centerUnitId);
+        var index = _masoraDataService.GetUnitIndex(centerUnitId);
         if (index < 0)
         {
             return;
@@ -367,13 +367,18 @@ public partial class MasoraViewModel : ObservableObject //NOSONAR
 
         var loaded = await Task.Run(async () =>
         {
+            // Adjacent units share boundary perakim — one task-level cache
+            // serves the whole batch so each perek hits SQLite once. The
+            // awaits stay sequential, so a plain Dictionary suffices.
+            var pasukimCache = new Dictionary<int, Task<List<Pasuk>>>();
+            Task<List<Pasuk>> LoadPasukimCached(int perekId) =>
+                pasukimCache.TryGetValue(perekId, out var pending)
+                    ? pending
+                    : pasukimCache[perekId] = _perekDataService.LoadPasukimAsync(perekId);
             var result = new List<(MasoraUnit Unit, List<MasoraPasukRow> Rows)>();
             foreach (var u in toLoad)
             {
-                var rows = await MasoraUnitText.BuildRowsAsync(
-                    u,
-                    perekId => _perekDataService.LoadPasukimAsync(perekId),
-                    FontFactor);
+                var rows = await MasoraUnitText.BuildRowsAsync(u, LoadPasukimCached, FontFactor);
                 result.Add((u, rows));
             }
             return result;
@@ -386,24 +391,6 @@ public partial class MasoraViewModel : ObservableObject //NOSONAR
                 u.Rows = rows;
             }
         }
-    }
-
-    /// <summary>Index of a unit inside the ordered Units list (-1 when missing).</summary>
-    private int IndexOfUnit(int unitId)
-    {
-        var units = _masoraDataService.Units;
-        if (units == null)
-        {
-            return -1;
-        }
-        for (var i = 0; i < units.Count; i++)
-        {
-            if (units[i].UnitId == unitId)
-            {
-                return i;
-            }
-        }
-        return -1;
     }
 
     /// <summary>
@@ -457,10 +444,12 @@ public partial class MasoraViewModel : ObservableObject //NOSONAR
         }
 
         var perekIds = MasoraUnitText.PerekIdsForUnit(unit);
+        // Per-perek fetches run in parallel; WhenAll preserves input order,
+        // so the dedup sees them exactly as the sequential loop did.
+        var perPerek = await Task.WhenAll(perekIds.Select(perekId => _articlesLoader(perekId)));
         var byId = new Dictionary<int, Article>();
-        foreach (var perekId in perekIds)
+        foreach (var articles in perPerek)
         {
-            var articles = await _articlesLoader(perekId);
             foreach (var article in articles)
             {
                 byId[article.Id] = article;
