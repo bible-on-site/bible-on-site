@@ -478,6 +478,11 @@ under-attribution can only over-select.
   diagnostic, never baseline input. The split is `plan_ios`'s
   runtime-driven assignment (#2263): each leg executes its
   `case-manifest.json` verbatim rather than a static `Shard` trait.
+  The manifest skip runs in-process, so a leg's TRX/JUnit still
+  enumerates the whole suite — unassigned cases land in the tree as
+  skipped/not-executed `unmeasured` placeholders that claim no
+  execution; the merge deduplicates them freely and requires only the
+  claiming (measured, error or ran-but-undumped) entries to be disjoint.
 
 ## Determinism contract
 

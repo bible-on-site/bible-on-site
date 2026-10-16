@@ -201,8 +201,10 @@ job downloads every `ios-shard<N>` artifact and the plan, then:
    manifest that selects nothing.
 5. **merge_ios** (#2263) — downloads the plan and every shard artifact,
    requires compatible suite/platform/snapshot trees, validates the
-   complete disjoint run set (no drops, no overlap), merges
-   evidence/coverage/timing and re-downloads the baseline as
+   complete disjoint run set (no drops, no overlap — each leg's report
+   still enumerates the suite's unassigned cases as skipped/not-executed
+   placeholders, which claim no execution and never count as overlap),
+   merges evidence/coverage/timing and re-downloads the baseline as
    `collect-appium --history` input.
 6. **collect-appium** — runs `always()`: a failed run still collects
    evidence for its passed tests but marks the tree `complete: false`, and
