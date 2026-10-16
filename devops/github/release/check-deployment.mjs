@@ -275,7 +275,11 @@ if (
 		});
 		result = { ...result, ...state };
 		if (state.deploy)
-			for (const helper of ["deployment-state.mjs", "gh-api.mjs"])
+			for (const helper of [
+				"deployment-state.mjs",
+				"gh-api.mjs",
+				"ms-store-flights.mjs",
+			])
 				copyFileSync(
 					new URL(`./${helper}`, import.meta.url),
 					path.join(process.env.RUNNER_TEMP, helper),
