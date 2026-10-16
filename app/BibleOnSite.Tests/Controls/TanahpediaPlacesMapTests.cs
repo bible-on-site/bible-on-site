@@ -127,7 +127,7 @@ public class TanahpediaPlacesMapTests
             WebNavigationEvent.NewPage,
             new HtmlWebViewSource(),
             "https://www.openstreetmap.org/copyright");
-        var stderr = new StringWriter();
+        using var stderr = new StringWriter();
         var previous = Console.Error;
         Console.SetError(stderr);
         try
