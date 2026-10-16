@@ -119,6 +119,35 @@ public class CommentaryMemoryTests
     }
 
     [Fact]
+    public async Task PasukSliceDecodesOncePerVerseAcrossPerushim()
+    {
+        var chapter = new PerushNoteChapter(PerushNoteBlob.Encode([
+            new(1, 1, 0, "a1"), new(2, 1, 0, "b1"), new(1, 2, 0, "a2")]));
+        List<Perush> sources = [new() { Id = 1, Name = "A" }, new() { Id = 2, Name = "B" }];
+        var displays = chapter.GetDisplays(1, sources, new HashSet<int> { 1, 2 });
+        (await displays[0].ContentLoader!()).Should().Equal("a1");
+        (await displays[1].ContentLoader!()).Should().Equal("b1");
+        chapter.DecodeScans.Should().Be(1, "every perush cell of the same pasuk shares one blob scan");
+    }
+
+    [Fact]
+    public async Task PasukSliceCacheEvictsLeastRecentlyUsedVerse()
+    {
+        var chapter = new PerushNoteChapter(PerushNoteBlob.Encode(
+            Enumerable.Range(1, 30).Select(p => new PerushNoteBlob.Note(1, p, 0, $"note {p}")).ToList()));
+        List<Perush> sources = [new() { Id = 1, Name = "A" }];
+        for (var p = 1; p <= 30; p++)
+        {
+            await chapter.GetDisplays(p, sources, new HashSet<int> { 1 })[0].ContentLoader!();
+        }
+        chapter.DecodeScans.Should().Be(30);
+        await chapter.GetDisplays(30, sources, new HashSet<int> { 1 })[0].ContentLoader!();
+        chapter.DecodeScans.Should().Be(30, "the most recent pasuk is still cached");
+        await chapter.GetDisplays(1, sources, new HashSet<int> { 1 })[0].ContentLoader!();
+        chapter.DecodeScans.Should().Be(31, "pasuk 1 fell out of the bounded slice cache");
+    }
+
+    [Fact]
     public void AddingACommentaryPreservesExistingDisplayObjects()
     {
         var chapter = new PerushNoteChapter(PerushNoteBlob.Encode([new(1, 1, 0, "A"), new(2, 1, 0, "B")]));
