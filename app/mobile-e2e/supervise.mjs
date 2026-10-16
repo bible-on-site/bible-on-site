@@ -2,7 +2,6 @@ import { execFileSync, spawn } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { mergeShardAppCoverage, mergeShardEvidence } from "./shards.mjs";
 
 export const PILOT_TIMEOUT_MS = 15 * 60 * 1000;
 
@@ -97,8 +96,7 @@ export function supervise(command, args, {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const entry = process.argv[2];
-  if (!["run.mjs", "run-sharded.mjs"].includes(entry)) throw new Error("Choose run.mjs or run-sharded.mjs.");
+  if (process.argv[2] !== "run.mjs") throw new Error("supervise.mjs runs run.mjs.");
   const directory = dirname(fileURLToPath(import.meta.url));
   const artifacts = process.env.MOBILE_E2E_ARTIFACTS ?? resolve(directory,
     "../.artifacts/mobile-e2e", process.env.MOBILE_PLATFORM?.toLowerCase() ?? "unknown");
@@ -110,17 +108,10 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     deadlineMs: PILOT_TIMEOUT_MS, ...extra,
   }, null, 2));
   save({ status: "running" });
-  const run = supervise(process.execPath, [resolve(directory, entry)], {
+  const run = supervise(process.execPath, [resolve(directory, "run.mjs")], {
     cwd: directory, onDeadline: () => save({ status: "timed-out" }),
   });
   process.exitCode = await run.result;
-  if (entry === "run-sharded.mjs" && [124, 130, 143].includes(process.exitCode)) {
-    // The killed coordinator cannot perform its merge. Preserve partial
-    // per-test evidence and app dumps for the normal CI collection steps.
-    const sources = [resolve(artifacts, "shard1"), resolve(artifacts, "shard2")];
-    mergeShardEvidence(sources, resolve(artifacts, "coverage-evidence"));
-    mergeShardAppCoverage(sources, resolve(artifacts, "app-coverage"));
-  }
   save({ status: process.exitCode === 124 ? "timed-out" : "completed", exitCode: process.exitCode });
   console.log(`Mobile pilot finished in ${Math.round((Date.now() - started) / 1000)}s (exit ${process.exitCode}).`);
 }

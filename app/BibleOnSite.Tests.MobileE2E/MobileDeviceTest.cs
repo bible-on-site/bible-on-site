@@ -142,7 +142,7 @@ public abstract class MobileDeviceTest : IAsyncLifetime
         // coverage tree uses as test identity (#2085). That identity also names
         // the per-test artifacts: method names are not unique across classes,
         // so two tests sharing one would overwrite each other's evidence inside
-        // a run and collide again at the shard merge (#2083).
+        // a run and collide again at the shard merge (#2263).
         var test = $"{GetType().FullName}.{name}";
         CoverageEvidence.Begin(test, Configuration.Platform,
             Configuration.ArtifactDirectory, test);

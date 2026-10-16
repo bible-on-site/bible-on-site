@@ -5,10 +5,15 @@
  *   node e2e-impact.ts select  --suite <dir> --platform <key> --tested-sha <sha>
  *       --out <manifest.json> [--baseline <tree.json>]
  *       [--changed-file <list> | --base <sha> --head <sha> | --compare]
- *       [--force-full] [--ancestor-status <status>]
+ *       [--force-full] [--ancestor-status <status>] [--allow-empty]
+ *   node e2e-impact.ts plan --suite <dir> --platform <key>
+ *       --manifest <manifest.json> --tested-sha <sha> --out <plan.json>
+ *       --shard-dir <dir> --mode <shadow|enforce> [--history <tree.json>]
+ *       [--max-shards <n>] [--target-minutes <m>] [--fallback-seconds <s>]
  *   node e2e-impact.ts collect-appium --suite <dir> --platform <key>
  *       --artifacts <dir> --snapshot-sha <sha> --out <tree.json> [--incomplete]
- *       [--exec-tree <exec-coverage-tree.json>]
+ *       [--exec-tree <exec-coverage-tree.json>] [--history <tree.json>]
+ *       [--overhead-ms <n>]
  *   node e2e-impact.ts collect-playwright --suite <dir> --platform <key>
  *       --artifacts <e2e-impact evidence dir> --snapshot-sha <sha>
  *       --out <tree.json> [--incomplete]
@@ -35,14 +40,31 @@ import { collectPlaywrightTree } from "./collect-playwright.ts";
 import { fingerprintSource, type SourceFingerprint } from "./fingerprint.ts";
 import { compareRevisions, downloadArtifact, findArtifact } from "./github.ts";
 import {
+	canonicalize,
 	loadBaselineTree,
 	loadRules,
+	SCHEMA_VERSION,
 	type ChangedFile,
+	type CoverageTree,
 	type DiscoveredTest,
 	type SuiteRules,
 } from "./model.ts";
 import { discoverPlaywrightTests } from "./playwright-discovery.ts";
-import { applicableTests, repoFileReader, selectTests, type Baseline } from "./select.ts";
+import {
+	applicableTests,
+	repoFileReader,
+	selectTests,
+	type Baseline,
+	type SelectionManifest,
+} from "./select.ts";
+import {
+	buildPlan,
+	DEFAULT_FALLBACK_MS,
+	DEFAULT_MAX_SHARDS,
+	DEFAULT_SETUP_MS,
+	DEFAULT_TARGET_MS,
+	shardManifest,
+} from "./shard-plan.ts";
 import { discoverSuiteTests } from "./xunit-discovery.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -277,6 +299,7 @@ async function select(flags: Map<string, string>): Promise<void> {
 		platform,
 		testedSha,
 		forceFull: flags.has("force-full") || process.env.FORCE_FULL_SUITE === "true",
+		allowEmpty: flags.has("allow-empty"),
 		readFile: repoFileReader(REPO_ROOT),
 		currentFingerprints,
 		dynamicTestFiles: new Set(discovery.dynamicFiles),
@@ -323,6 +346,153 @@ async function select(flags: Map<string, string>): Promise<void> {
 	);
 }
 
+const intFlag = (flags: Map<string, string>, name: string, fallback: number): number => {
+	const raw = flags.get(name);
+	if (raw === undefined) return fallback;
+	const value = Number.parseFloat(raw);
+	if (!Number.isFinite(value) || value <= 0) {
+		throw new Error(`--${name} must be a positive number, got '${raw}'`);
+	}
+	return value;
+};
+
+/**
+ * Turns a selection manifest into a bounded, runtime-balanced shard plan
+ * (#2263). Planning runs once before the matrix expands; every shard then
+ * executes the manifest it was assigned rather than re-selecting. History
+ * is advisory — a missing or corrupt baseline yields fallback weights —
+ * while an inconsistent manifest fails the job outright: planning errors
+ * must never degrade into a silently green run.
+ */
+async function plan(flags: Map<string, string>): Promise<void> {
+	const suiteDir = required(flags, "suite");
+	const platform = required(flags, "platform");
+	const manifestPath = required(flags, "manifest");
+	const out = required(flags, "out");
+	const shardDir = required(flags, "shard-dir");
+	const mode = flags.get("mode") ?? "shadow";
+	if (mode !== "shadow" && mode !== "enforce") {
+		throw new Error(`--mode must be shadow|enforce, got '${mode}'`);
+	}
+	const rules = loadRules(join(REPO_ROOT, suiteDir, "e2e-impact.json"));
+	const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as SelectionManifest;
+	if (manifest.suite !== rules.suite || manifest.platform !== platform) {
+		throw new Error(
+			`Manifest ${manifestPath} is for ${manifest.suite}/${manifest.platform}, ` +
+				`not ${rules.suite}/${platform}.`,
+		);
+	}
+	if (manifest.testedSha !== required(flags, "tested-sha")) {
+		throw new Error(`Manifest tested SHA does not match --tested-sha.`);
+	}
+	// The manifest must enumerate the suite discovered at this revision —
+	// a stale or hand-edited manifest would partition a different run set
+	// than the runner can execute.
+	const discovered = applicableTests(discoverFor(rules).tests, platform)
+		.map((test) => test.id)
+		.sort();
+	const manifestIds = [
+		...manifest.selected.map((entry) => entry.id),
+		...manifest.unselected.map((entry) => entry.id),
+	].sort();
+	if (canonicalize(manifestIds) !== canonicalize(discovered)) {
+		throw new Error(
+			`Manifest does not cover the discovered ${platform} suite ` +
+				`(${manifestIds.length} manifest ids vs ${discovered.length} discovered).`,
+		);
+	}
+	// Timing influences scheduling only: enforce runs the selected set,
+	// shadow always the full applicable suite — never a narrowed membership.
+	const runSet =
+		mode === "enforce" ? manifest.selected.map((entry) => entry.id) : manifestIds;
+
+	const historyPath = flags.get("history");
+	let history: CoverageTree | undefined;
+	if (historyPath !== undefined) {
+		const loaded = loadBaselineTree(historyPath);
+		if (loaded.kind === "ok") {
+			history = loaded.tree;
+		} else {
+			console.warn(`[e2e-impact] timing history ignored: ${loaded.reason}`);
+		}
+	}
+	const fallbackMs = intFlag(flags, "fallback-seconds", DEFAULT_FALLBACK_MS / 1000) * 1000;
+	// A schema-valid baseline could still carry a malformed timing entry;
+	// anything that is not a positive finite mean reads as unmeasured.
+	const estimates = runSet.map((id) => {
+		const meanMs = history?.tests[id]?.timing?.meanMs;
+		const measured = typeof meanMs === "number" && Number.isFinite(meanMs) && meanMs > 0;
+		return { id, estimatedMs: measured ? meanMs : fallbackMs, measured };
+	});
+	const overheadMeanMs = history?.overhead?.meanMs;
+	const config = {
+		maxShards: Math.floor(intFlag(flags, "max-shards", DEFAULT_MAX_SHARDS)),
+		targetMs: intFlag(flags, "target-minutes", DEFAULT_TARGET_MS / 60_000) * 60_000,
+		// Job bring-up (caches, workload, app build, sim boot) plus the measured
+		// in-pilot non-case time — the price of one more shard.
+		setupMs:
+			DEFAULT_SETUP_MS +
+			(typeof overheadMeanMs === "number" && Number.isFinite(overheadMeanMs) && overheadMeanMs > 0
+				? overheadMeanMs
+				: 0),
+		fallbackMs,
+	};
+	const result = buildPlan({
+		suite: rules.suite,
+		platform,
+		mode,
+		testedSha: manifest.testedSha,
+		snapshotSha: manifest.snapshotSha,
+		runSet,
+		estimates,
+		config,
+	});
+	mkdirSync(shardDir, { recursive: true });
+	mkdirSync(dirname(out), { recursive: true });
+	const reasons = new Map(
+		manifest.selected.map((entry) => [entry.id, entry.reasons] as const),
+	);
+	for (const shard of result.shards) {
+		writeFileSync(
+			join(shardDir, `shard-${shard.shard}.json`),
+			`${JSON.stringify(shardManifest(result, shard, reasons), null, 2)}\n`,
+		);
+	}
+	writeFileSync(out, `${JSON.stringify(result, null, 2)}\n`);
+	writeGithubOutput("shards", String(result.shards.length));
+	writeGithubOutput(
+		"estimated-minutes",
+		String(Math.ceil(result.totals.makespanMs / 60_000)),
+	);
+	writeGithubOutput("plan", out);
+	console.log(
+		`[e2e-impact] ${platform} plan (${mode}): ${runSet.length} cases over ` +
+			`${result.shards.length} shard(s), est. makespan ` +
+			`${Math.round(result.totals.makespanMs / 60_000)}min ` +
+			`(${result.totals.unmeasuredIds.length} unmeasured)`,
+	);
+	appendSummary(
+		[
+			`### iOS shard plan — ${mode} mode`,
+			``,
+			`- cases: **${runSet.length}** over **${result.shards.length}** shard(s)`,
+			`- estimated case time: ${(result.totals.caseMs / 60_000).toFixed(1)}min, makespan ~${Math.ceil(result.totals.makespanMs / 60_000)}min`,
+			`- unmeasured cases (fallback ${config.fallbackMs / 1000}s): ${result.totals.unmeasuredIds.length}`,
+			``,
+			...(result.shards.length > 0
+				? [
+						"| shard | cases | estimated |",
+						"| --- | --- | --- |",
+						...result.shards.map(
+							(shard) =>
+								`| ${shard.shard} | ${shard.tests.length} | ${(shard.estimatedMs / 60_000).toFixed(1)}min |`,
+						),
+					]
+				: []),
+		].join("\n"),
+	);
+}
+
 async function collectAppium(flags: Map<string, string>): Promise<void> {
 	const suiteDir = required(flags, "suite");
 	const platform = required(flags, "platform");
@@ -357,6 +527,27 @@ async function collectAppium(flags: Map<string, string>): Promise<void> {
 			}
 		}
 	}
+	// Timing history (#2263): the platform's published baseline carries the
+	// rolling per-case means this run updates. Mismatched/absent history is
+	// ignored — it refines scheduling metadata, never the evidence itself.
+	let history: CoverageTree | undefined;
+	const historyPath = flags.get("history");
+	if (historyPath !== undefined) {
+		const loaded = loadBaselineTree(historyPath);
+		if (
+			loaded.kind === "ok" &&
+			loaded.tree.suite === rules.suite &&
+			loaded.tree.platform === platform &&
+			loaded.tree.schemaVersion === SCHEMA_VERSION
+		) {
+			history = loaded.tree;
+		} else {
+			console.warn(
+				`[e2e-impact] timing history ignored: ` +
+					(loaded.kind === "ok" ? "suite/platform mismatch" : loaded.reason),
+			);
+		}
+	}
 	const tree = collectTree({
 		repoRoot: REPO_ROOT,
 		rules,
@@ -365,6 +556,10 @@ async function collectAppium(flags: Map<string, string>): Promise<void> {
 		snapshotSha,
 		complete: !flags.has("incomplete"),
 		execTree,
+		history,
+		overheadMs: flags.has("overhead-ms")
+			? Number.parseFloat(required(flags, "overhead-ms"))
+			: undefined,
 	});
 	writeTree(tree, out);
 	const count = Object.keys(tree.tests).length;
@@ -453,6 +648,8 @@ async function main(): Promise<void> {
 	switch (command) {
 		case "select":
 			return await select(flags);
+		case "plan":
+			return await plan(flags);
 		case "collect-appium":
 			return await collectAppium(flags);
 		case "collect-playwright":
@@ -463,7 +660,7 @@ async function main(): Promise<void> {
 			return await discover(flags);
 		default:
 			throw new Error(
-				`Unknown command "${command}". Expected select | collect-appium | collect-playwright | baseline-download | discover`,
+				`Unknown command "${command}". Expected select | plan | collect-appium | collect-playwright | baseline-download | discover`,
 			);
 	}
 }
