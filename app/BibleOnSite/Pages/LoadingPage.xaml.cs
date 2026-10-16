@@ -30,25 +30,34 @@ public partial class LoadingPage : ContentPage, IAnalyticsScreenName
 
         _isLoading = true;
 
+        Task? perekLoad = null;
         try
         {
-            // Initialize config (loads API URL override from build config)
+            // The perek catalog load is pure local work (packaged-DB refresh +
+            // SQLite reads) with no dependency on config or the network — start
+            // it first so it overlaps the steps below instead of queuing behind.
+            perekLoad = PerekDataService.Instance.LoadAsync();
+
+            // Initialize config (loads API URL override from build config). Must
+            // finish before StarterService resolves GetApiUrl() for its client.
             await AppConfig.Instance.InitializeAsync();
             Console.WriteLine($"API URL: {AppConfig.Instance.GetApiUrl()}");
 
             // Load preferences (font, last perek, perek-to-load) so PerekPage can use them
             PreferencesService.Instance.Load();
 
-            // Load PerekDataService (tanah) so GetTodaysPerekId works for startup preference
-            if (!PerekDataService.Instance.IsLoaded)
-            {
-                await PerekDataService.Instance.LoadAsync();
-            }
-
-            await LoadStarterDataAsync();
+            // Starter data (GraphQL with cache/offline fallbacks) is independent
+            // of the local catalog — wait for both before opening the reader.
+            await Task.WhenAll(perekLoad, LoadStarterDataAsync());
         }
         catch (Exception ex)
         {
+            if (perekLoad is { IsFaulted: true })
+            {
+                // The catalog load ran in parallel — log its fault too so it is
+                // never left as an unobserved task exception.
+                Console.Error.WriteLine($"Perek data load failed: {perekLoad.Exception}");
+            }
             Console.Error.WriteLine($"Startup error: {ex}");
         }
 
