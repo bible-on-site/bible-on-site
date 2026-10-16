@@ -281,19 +281,17 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
 
 #if IOS
     /// <summary>
-    /// Walks the visual tree and forces re-measurement. For HtmlView controls,
-    /// re-maps FontSize so the handler re-renders if the size changed
-    /// (DynamicResource in deeply nested templates can fail to propagate on iOS).
+    /// Walks the visual tree to re-map FontSize on HtmlView controls so the
+    /// handler re-renders if the size changed (DynamicResource in deeply nested
+    /// templates can fail to propagate on iOS). An actual re-render invalidates
+    /// its own measure in ApplyParsedContent — invalidating every element here
+    /// only bought a whole-tree layout pass per scroll stop and perek swipe.
     /// </summary>
     private static void RefreshDescendantViews(IView root)
     {
         if (root is Controls.HtmlView htmlView)
         {
             htmlView.Handler?.UpdateValue(nameof(Controls.HtmlView.FontSize));
-        }
-        else if (root is Microsoft.Maui.Controls.VisualElement ve)
-        {
-            ve.InvalidateMeasure();
         }
 
         if (root is IVisualTreeElement treeElement)
