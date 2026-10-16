@@ -83,6 +83,7 @@ public class ViewModelDefaultsTests
             masora.HasPerushim.Should().BeFalse();
             masora.PerushimEmptyMessage.Should().Be("אין קטלוג פירושים");
             masora.ShowDownloadPerushimButton.Should().BeFalse();
+            masora.InlineCommentaryLimit.Should().Be(5);
             masora.IsPerushChecked(1).Should().BeFalse();
             masora.GetPerushimForRow(1, 1).Should().BeEmpty();
             masora.GetUnitIdForPerek(1).Should().BeNull();

@@ -97,6 +97,9 @@ public partial class MasoraViewModel //NOSONAR
 
     public string InlineCommentaryLimitMessage => $"ניתן להציג עד {_preferencesService.InlineCommentaryLimit} פירושים על הפרק. ניתן לשנות בהעדפות.";
 
+    /// <summary>Max perushim shown inline — unchecked rows render disabled at the cap.</summary>
+    public int InlineCommentaryLimit => _preferencesService.InlineCommentaryLimit;
+
     /// <summary>Toggles commentary in the inline reader.</summary>
     [RelayCommand]
     public void ToggleCheckedPerush(int perushId)

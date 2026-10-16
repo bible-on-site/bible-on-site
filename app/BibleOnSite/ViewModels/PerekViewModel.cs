@@ -279,12 +279,15 @@ public partial class PerekViewModel : ObservableObject
     /// </summary>
     public bool HasArticles => ArticlesCount > 0;
 
-    /// <summary>Find commentary names in the selection menu.</summary>
+    /// <summary>Find commentary names in the selection menu — scrolls to the
+    /// first match rather than hiding the rest.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(FilteredPerushim))]
     [NotifyPropertyChangedFor(nameof(PerushimEmptyMessage))]
     private string _perushNameFilter = string.Empty;
 
+    /// <summary>Perushim matching <see cref="PerushNameFilter"/> — the list
+    /// shows all of <see cref="Perushim"/>; this drives search scroll-to.</summary>
     public List<Perush> FilteredPerushim => string.IsNullOrWhiteSpace(PerushNameFilter)
         ? Perushim
         : Perushim.Where(p => SearchText.Normalize(p.Name).Contains(
@@ -743,6 +746,9 @@ public partial class PerekViewModel : ObservableObject
         }).ToList();
 
     public string InlineCommentaryLimitMessage => $"ניתן להציג עד {_preferencesService.InlineCommentaryLimit} פירושים על הפרק. ניתן לשנות בהעדפות.";
+
+    /// <summary>Max perushim shown inline — unchecked rows render disabled at the cap.</summary>
+    public int InlineCommentaryLimit => _preferencesService.InlineCommentaryLimit;
 
     /// <summary>A search result must remain visible even when all inline slots are occupied.</summary>
     public void ShowPerushForSearch(int perushId)
@@ -1237,6 +1243,7 @@ public partial class PerekViewModel : ObservableObject
         }
         OnPropertyChanged(nameof(DivineNameMaskingEnabled));
         OnPropertyChanged(nameof(InlineCommentaryLimitMessage));
+        OnPropertyChanged(nameof(InlineCommentaryLimit));
         if (CheckedPerushim.Count > _preferencesService.InlineCommentaryLimit)
         {
             CheckedPerushim = CheckedPerushim.Take(_preferencesService.InlineCommentaryLimit).ToList();

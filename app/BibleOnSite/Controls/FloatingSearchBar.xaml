@@ -91,6 +91,17 @@
     </Grid>
     <Label x:Name="ErrorText" IsVisible="False" Text="{Binding ErrorMessage}" TextColor="{AppThemeBinding Light=#B02020, Dark=#FF9090}" FontSize="13"/>
     <Label x:Name="AvailabilityText" IsVisible="False" Text="{Binding AvailabilityMessage}" FontSize="13"/>
+    <HorizontalStackLayout x:Name="PerushimDownloadLink" IsVisible="False" Spacing="6">
+     <Label Text="{x:Static fonts:FluentUI.info_16_regular}" FontFamily="FluentIcons" FontSize="14"
+      TextColor="{AppThemeBinding Light=#52647C, Dark=#B2C2D8}" VerticalOptions="Center"/>
+     <Label Text="הורדת חבילת הפירושים" FontSize="13" TextDecorations="Underline" AutomationId="DownloadPerushimLink"
+      TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryLight}}"
+      VerticalOptions="Center">
+      <Label.GestureRecognizers>
+       <TapGestureRecognizer Tapped="OnPerushimDownloadLinkTapped"/>
+      </Label.GestureRecognizers>
+     </Label>
+    </HorizontalStackLayout>
    </VerticalStackLayout>
    <CollectionView Grid.Row="3" x:Name="RecentList" AutomationId="RecentSearches" SelectionMode="Single" SelectionChanged="OnRecentSelected">
     <CollectionView.EmptyView><Label Text="עדיין אין חיפושים אחרונים" Margin="16,20" TextColor="{AppThemeBinding Light=#52647C, Dark=#B2C2D8}"/></CollectionView.EmptyView>
