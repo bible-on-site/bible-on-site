@@ -12,9 +12,11 @@ const flightC = "06686ee7-14d3-4350-aa87-e934db6c3ad3";
 /**
  * Mirrors the exact verbose `msstore flights create` output that fooled the
  * JSON parser in app CD run 168: the flight JSON sits between banner and
- * shutdown log lines.
+ * shutdown log lines. Every real job log also carries our own
+ * `Creating new flight:` attempt line before the CLI invocation.
  */
-const verboseCreateLog = (id) => `08:59:04 info: Microsoft.Hosting.Lifetime[14]
+const verboseCreateLog = (id) => `[INF] Creating new flight: v5.0.169-20261018-085904 (attempt 1/3)
+08:59:04 info: Microsoft.Hosting.Lifetime[14]
 Now listening on: http://localhost:1
 ✅ Created Flight
 {
@@ -42,6 +44,19 @@ test("extractFlightIds never harvests a caller-supplied flight id", () => {
 	// not create; deleting one during cap recovery would destroy a flight the
 	// automation does not own.
 	const log = `Deploying to flight: ${flightC} (internal testing)`;
+	assert.deepEqual(extractFlightIds(log), []);
+});
+
+test("extractFlightIds ignores FlightId JSON without a create attempt", () => {
+	// `msstore publish` output can echo the caller-supplied flight as
+	// "FlightId" JSON — without our `Creating new flight:` line the run did
+	// not create it, so harvesting it would mark a foreign flight for
+	// deletion.
+	const log = `Deploying to flight: ${flightC} (internal testing)
+{
+  "FlightId": "${flightC}",
+  "Status": "Published"
+}`;
 	assert.deepEqual(extractFlightIds(log), []);
 });
 

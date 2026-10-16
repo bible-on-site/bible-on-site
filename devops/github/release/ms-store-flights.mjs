@@ -25,6 +25,15 @@ const createdFlightPattern =
 	/"FlightId"\s*:\s*"([0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12})"/gi;
 
 /**
+ * Our own `Creating new flight:` attempt line — proves the run invoked
+ * `flights create`. Without it a `"FlightId"` JSON cannot be trusted as a
+ * created flight: `msstore publish` output can echo a caller-supplied
+ * --ms-store-flight-id, and deleting that flight would destroy one the
+ * automation does not own.
+ */
+const createAttemptPattern = /Creating new flight:/;
+
+/**
  * Our own `Created flight with ID:` line. `Deploying to flight:` is
  * deliberately not harvested — it also fires for a caller-supplied
  * --ms-store-flight-id, which CI did not create and must not delete.
@@ -41,9 +50,12 @@ const loggedFlightPattern =
 export function extractFlightIds(logText) {
 	if (typeof logText !== "string" || logText.length === 0) return [];
 	const matches = [];
-	for (const pattern of [createdFlightPattern, loggedFlightPattern])
-		for (const match of logText.matchAll(pattern))
+	if (createAttemptPattern.test(logText)) {
+		for (const match of logText.matchAll(createdFlightPattern))
 			matches.push({ index: match.index, id: match[1].toLowerCase() });
+	}
+	for (const match of logText.matchAll(loggedFlightPattern))
+		matches.push({ index: match.index, id: match[1].toLowerCase() });
 	matches.sort((a, b) => a.index - b.index);
 	return [...new Set(matches.map(({ id }) => id))];
 }
