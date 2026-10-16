@@ -35,10 +35,17 @@ export function supervise(command, args, {
     if (!child.pid) return;
     try {
       if (process.platform === "win32") {
-        // The native .NET tree walk avoids taskkill's stalled process query.
-        // Terminate only this supervisor's owned process tree.
-        execFileSync("pwsh", ["-NoProfile", "-NonInteractive", "-Command",
-          `[System.Diagnostics.Process]::GetProcessById(${child.pid}).Kill($true)`],
+        // A CIM tree walk avoids taskkill's stalled process query, and the
+        // in-box powershell.exe works where pwsh is absent: .NET Framework's
+        // Process.Kill has no tree overload, so descendants are enumerated
+        // before the parent dies and each is terminated breadth-first.
+        execFileSync("powershell", ["-NoProfile", "-NonInteractive", "-Command",
+          `$queue = @(${child.pid}); $seen = @{};` +
+          ` for ($i = 0; $i -lt $queue.Count; $i++) { $cur = $queue[$i];` +
+          ` if ($seen.ContainsKey($cur)) { continue } $seen[$cur] = $true;` +
+          ` try { Stop-Process -Id $cur -Force -ErrorAction Stop } catch {};` +
+          ` $queue += (Get-CimInstance Win32_Process -Filter "ParentProcessId=$cur"` +
+          ` -Property ProcessId).ProcessId }`],
           { windowsHide: true, stdio: "ignore", timeout: 2000 });
       } else {
         process.kill(-child.pid, signal);
