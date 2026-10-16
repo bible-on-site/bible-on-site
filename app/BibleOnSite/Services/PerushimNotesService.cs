@@ -590,6 +590,17 @@ public class PerushimNotesService
     internal async Task<string?> GetDeliveredIndexPathAsync()
     {
         await InitializeAsync();
+        return PeekDeliveredIndexPath();
+    }
+
+    /// <summary>
+    /// The staged search index file if it is already on disk — a plain file
+    /// probe that never initializes the pack, copies payloads, or blocks, so
+    /// the verses index can check for an adoptable table without waiting on
+    /// notes delivery.
+    /// </summary>
+    internal string? PeekDeliveredIndexPath()
+    {
         var path = Path.Join(DataDirectory, SearchIndexDbName);
         return File.Exists(path) ? path : null;
     }

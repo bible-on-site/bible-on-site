@@ -867,6 +867,185 @@ public class SearchIndexServiceTests
         hits.Select(hit => hit.PerushId).Should().Equal(7, 8, 9);
     }
 
+    [Fact]
+    public async Task DeliveredIndex_WithMismatchedNotesFingerprint_StillAdoptsTheVersesTable()
+    {
+        await using var storage = new TestStorage();
+        var perakim = await SeedAsync(storage);
+        var source = await perakim.GetSearchConnectionAsync();
+        await source.CloseAsync();
+        var bibleFile = new FileInfo(Path.Join(storage.Root, BibleDb));
+        var verseFingerprint = $"v4:{bibleFile.Length}:{bibleFile.LastWriteTimeUtc.Ticks}:n{SearchText.NormalizationVersion}";
+        await storage.CreateDatabaseAsync(NotesDb,
+            [.. NotesDbV2.Statements((7, 1, 1, 0, "בראשית")), "INSERT INTO _metadata VALUES ('build_timestamp','42')"]);
+        var stagedPath = Path.Join(storage.Root, PerushimNotesService.SearchIndexDbName);
+        // The notes side of the staged index belongs to another generation; the
+        // verses side is valid — its fingerprint is generated independently.
+        var delivered = await storage.CreateDatabaseAsync(PerushimNotesService.SearchIndexDbName,
+            [.. DeliveredIndexStatements("v4:999:n1", "סימן מובהק"),
+            $"INSERT INTO search_metadata VALUES ('verses','{verseFingerprint}')",
+            "CREATE TABLE verses_documents (rowid INTEGER PRIMARY KEY, Text TEXT, PerekId INTEGER, PasukNum INTEGER, PerushId INTEGER, SeferId INTEGER)",
+            "INSERT INTO verses_documents VALUES (1,'מְנֻקָּד מִן הַחֶבְרָה',1,1,0,1)",
+            "CREATE VIRTUAL TABLE verses USING fts5(Text, content='verses_documents', content_rowid='rowid')",
+            "INSERT INTO verses(rowid,Text) VALUES (1,'מנקד מן החברה')",
+            "CREATE VIRTUAL TABLE verses_vocab USING fts5vocab(verses, 'row')"]);
+        await delivered.CloseAsync();
+        var notes = PerushimNotesService.CreateForTesting(NullPad().Object, storage.Root);
+        await notes.InitializeAsync();
+        await using var index = new SearchIndexService(perakim, notes, Path.Join(storage.Root, "search.sqlite"));
+
+        var hits = await index.SearchAsync("מנקד מן", new HashSet<SearchFilter> { SearchFilter.Pasuk },
+            new HashSet<int> { 1 }, 10, TestContext.Current.CancellationToken);
+
+        hits.Should().ContainSingle().Which.Text.Should().Be("מְנֻקָּד מִן הַחֶבְרָה");
+        index.CommentaryAvailable.Should().BeFalse();
+        File.Exists(stagedPath).Should().BeFalse("the spent staged index is removed");
+        var inspection = new SQLite.SQLiteAsyncConnection(Path.Join(storage.Root, "search.sqlite"), SQLite.SQLiteOpenFlags.ReadOnly);
+        try
+        {
+            (await inspection.ExecuteScalarAsync<string>(
+                    "SELECT fingerprint FROM search_metadata WHERE name = 'verses'"))
+                .Should().Be(verseFingerprint);
+            (await inspection.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM verses_vocab"))
+                .Should().BeGreaterThan(0);
+        }
+        finally { await inspection.CloseAsync(); }
+        // The mismatched notes half of the staged index is never adopted.
+        (await index.SearchAsync("סימן", new HashSet<SearchFilter> { SearchFilter.Perush },
+            new HashSet<int> { 1 }, 10, TestContext.Current.CancellationToken)).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task DeliveredIndex_WithMismatchedNotesFingerprint_IsMinedForVersesDuringNotesSearch()
+    {
+        await using var storage = new TestStorage();
+        var perakim = await SeedAsync(storage);
+        var source = await perakim.GetSearchConnectionAsync();
+        await source.CloseAsync();
+        var bibleFile = new FileInfo(Path.Join(storage.Root, BibleDb));
+        var verseFingerprint = $"v4:{bibleFile.Length}:{bibleFile.LastWriteTimeUtc.Ticks}:n{SearchText.NormalizationVersion}";
+        await storage.CreateDatabaseAsync(NotesDb,
+            [.. NotesDbV2.Statements((7, 1, 1, 0, "בראשית")), "INSERT INTO _metadata VALUES ('build_timestamp','42')"]);
+        var delivered = await storage.CreateDatabaseAsync(PerushimNotesService.SearchIndexDbName,
+            [.. DeliveredIndexStatements("v4:999:n1", "סימן מובהק"),
+            $"INSERT INTO search_metadata VALUES ('verses','{verseFingerprint}')",
+            "CREATE TABLE verses_documents (rowid INTEGER PRIMARY KEY, Text TEXT, PerekId INTEGER, PasukNum INTEGER, PerushId INTEGER, SeferId INTEGER)",
+            "INSERT INTO verses_documents VALUES (1,'מְנֻקָּד מִן הַחֶבְרָה',1,1,0,1)",
+            "CREATE VIRTUAL TABLE verses USING fts5(Text, content='verses_documents', content_rowid='rowid')",
+            "INSERT INTO verses(rowid,Text) VALUES (1,'מנקד מן החברה')",
+            "CREATE VIRTUAL TABLE verses_vocab USING fts5vocab(verses, 'row')"]);
+        await delivered.CloseAsync();
+        var notes = PerushimNotesService.CreateForTesting(NullPad().Object, storage.Root);
+        await using var index = new SearchIndexService(perakim, notes, Path.Join(storage.Root, "search.sqlite"));
+
+        // A commentary-first search must not discard the still-valid verses
+        // half of the unadoptable staged index.
+        (await index.SearchAsync("סימן", new HashSet<SearchFilter> { SearchFilter.Perush },
+            new HashSet<int> { 1 }, 10, TestContext.Current.CancellationToken)).Should().BeEmpty();
+        index.CommentaryAvailable.Should().BeFalse();
+        File.Exists(Path.Join(storage.Root, PerushimNotesService.SearchIndexDbName))
+            .Should().BeFalse("the staged file is removed once mined");
+
+        (await index.SearchAsync("מנקד", new HashSet<SearchFilter> { SearchFilter.Pasuk },
+            new HashSet<int> { 1 }, 10, TestContext.Current.CancellationToken))
+            .Should().ContainSingle().Which.Text.Should().Be("מְנֻקָּד מִן הַחֶבְרָה");
+    }
+
+    [Fact]
+    public async Task DeliveredIndex_WithoutUsableNotesPack_StillAdoptsTheVersesTable()
+    {
+        await using var storage = new TestStorage();
+        var perakim = await SeedAsync(storage);
+        var source = await perakim.GetSearchConnectionAsync();
+        await source.CloseAsync();
+        var bibleFile = new FileInfo(Path.Join(storage.Root, BibleDb));
+        var verseFingerprint = $"v4:{bibleFile.Length}:{bibleFile.LastWriteTimeUtc.Ticks}:n{SearchText.NormalizationVersion}";
+        var stagedPath = Path.Join(storage.Root, PerushimNotesService.SearchIndexDbName);
+        // No notes DB at all — only a staged index file carrying a verses table.
+        var delivered = await storage.CreateDatabaseAsync(PerushimNotesService.SearchIndexDbName,
+            ["CREATE TABLE search_metadata (name TEXT PRIMARY KEY, fingerprint TEXT)",
+            $"INSERT INTO search_metadata VALUES ('verses','{verseFingerprint}')",
+            "CREATE TABLE verses_documents (rowid INTEGER PRIMARY KEY, Text TEXT, PerekId INTEGER, PasukNum INTEGER, PerushId INTEGER, SeferId INTEGER)",
+            "INSERT INTO verses_documents VALUES (1,'מְנֻקָּד מִן הַחֶבְרָה',1,1,0,1)",
+            "CREATE VIRTUAL TABLE verses USING fts5(Text, content='verses_documents', content_rowid='rowid')",
+            "INSERT INTO verses(rowid,Text) VALUES (1,'מנקד מן החברה')",
+            "CREATE VIRTUAL TABLE verses_vocab USING fts5vocab(verses, 'row')"]);
+        await delivered.CloseAsync();
+        var notes = PerushimNotesService.CreateForTesting(NullPad().Object, storage.Root);
+        await using var index = new SearchIndexService(perakim, notes, Path.Join(storage.Root, "search.sqlite"));
+
+        var hits = await index.SearchAsync("מנקד", new HashSet<SearchFilter> { SearchFilter.Pasuk },
+            new HashSet<int> { 1 }, 10, TestContext.Current.CancellationToken);
+
+        hits.Should().ContainSingle().Which.Text.Should().Be("מְנֻקָּד מִן הַחֶבְרָה");
+        File.Exists(stagedPath).Should().BeFalse("the spent staged index is removed");
+    }
+
+    [Fact]
+    public async Task DeliveredIndex_WithBrokenVersesTable_FallsBackToTheOnDeviceBuild()
+    {
+        await using var storage = new TestStorage();
+        var perakim = await SeedAsync(storage);
+        var source = await perakim.GetSearchConnectionAsync();
+        await source.CloseAsync();
+        var bibleFile = new FileInfo(Path.Join(storage.Root, BibleDb));
+        var verseFingerprint = $"v4:{bibleFile.Length}:{bibleFile.LastWriteTimeUtc.Ticks}:n{SearchText.NormalizationVersion}";
+        var stagedPath = Path.Join(storage.Root, PerushimNotesService.SearchIndexDbName);
+        // The staged 'verses' fingerprint matches but its documents table is
+        // missing — adoption must fail cleanly and the build must run instead.
+        var delivered = await storage.CreateDatabaseAsync(PerushimNotesService.SearchIndexDbName,
+            [.. DeliveredIndexStatements("v4:999:n1", "סימן מובהק"),
+            $"INSERT INTO search_metadata VALUES ('verses','{verseFingerprint}')"]);
+        await delivered.CloseAsync();
+        await storage.CreateDatabaseAsync(NotesDb,
+            [.. NotesDbV2.Statements((7, 1, 1, 0, "בראשית")), "INSERT INTO _metadata VALUES ('build_timestamp','42')"]);
+        var notes = PerushimNotesService.CreateForTesting(NullPad().Object, storage.Root);
+        await using var index = new SearchIndexService(perakim, notes, Path.Join(storage.Root, "search.sqlite"));
+
+        var hits = await index.SearchAsync("בראשית", new HashSet<SearchFilter> { SearchFilter.Pasuk },
+            new HashSet<int> { 1 }, 10, TestContext.Current.CancellationToken);
+
+        hits.Should().ContainSingle().Which.PerekId.Should().Be(1);
+        File.Exists(stagedPath).Should().BeFalse("the unusable staged index is removed");
+        var inspection = new SQLite.SQLiteAsyncConnection(Path.Join(storage.Root, "search.sqlite"), SQLite.SQLiteOpenFlags.ReadOnly);
+        try
+        {
+            (await inspection.ExecuteScalarAsync<string>(
+                    "SELECT fingerprint FROM search_metadata WHERE name = 'verses'"))
+                .Should().Be(verseFingerprint, "the local build still publishes the fingerprint");
+        }
+        finally { await inspection.CloseAsync(); }
+    }
+
+    [Fact]
+    public void VerseImport_ParallelPreparationMatchesTheSerialTransform()
+    {
+        var rows = Enumerable.Range(1, 300)
+            .Select(n => new SearchIndexService.IndexRow
+            {
+                PerekId = n,
+                PasukNum = n,
+                PerushId = 0,
+                Body = n % 5 == 0 ? $"<b>פסוק</b> &amp; {n}" : $"פָּסוּק מְנֻקָּד {n}",
+            })
+            .ToList();
+        int? SeferOf(int perekId) => perekId == 13 ? null : perekId % 4;
+
+        var prepared = SearchIndexService.PrepareVersesForImport(rows, SeferOf);
+
+        prepared.Should().HaveCount(rows.Count);
+        for (var i = 0; i < rows.Count; i++)
+        {
+            var expected = SeferOf(rows[i].PerekId) is { } seferId
+                ? new SearchIndexService.PreparedVerse(
+                    SearchText.PlainText(rows[i].Body),
+                    SearchText.Normalize(SearchText.PlainText(rows[i].Body)),
+                    rows[i].PerekId, rows[i].PasukNum, rows[i].PerushId, seferId)
+                : (SearchIndexService.PreparedVerse?)null;
+            prepared[i].Should().Be(expected, "row {0} must match the serial PlainText + Normalize + sefer resolution", i);
+        }
+    }
+
     private sealed class SourceBlobRow
     {
         public int PerekId { get; set; }
