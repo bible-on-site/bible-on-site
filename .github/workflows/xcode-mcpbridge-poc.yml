@@ -219,6 +219,27 @@ jobs:
                   return f"tool error: {text}"
               return f"response lacks the expected key: {json.dumps(payload)[:200]}"
 
+          # Required measurements: a capture or gesture that returns an RPC
+          # error, a timeout, result.isError, or a payload missing its
+          # expected key is still timed (the table stays useful evidence) but
+          # must fail the workflow — a green check is only meaningful when
+          # every measured interaction actually succeeded.
+          measurement_failures = []
+          def require(label, tool, arguments=None, expect=None):
+              payload, msg = timed(label, tool, arguments)
+              ok = (
+                  "error" not in msg
+                  and not msg.get("timeout")
+                  and not (isinstance(msg.get("result"), dict)
+                           and msg["result"].get("isError"))
+                  and (expect is None
+                       or (isinstance(payload, dict) and expect in payload))
+              )
+              if not ok:
+                  measurement_failures.append(
+                      f"{label}: {failure_kind(msg, payload)}")
+              return payload
+
           threading.Thread(target=approve_pending, daemon=True).start()
           try:
               _, msg = call("tools/list")
@@ -282,26 +303,30 @@ jobs:
 
               # Bare captures measure transport + AX-tree cost with no action —
               # the per-command latency WDA spends ~1.1s on for findElements.
-              timed("Synthesize capture #1", "DeviceInteractionSynthesize",
-                    {"interactSessionKey": session_key})
-              timed("Synthesize capture #2", "DeviceInteractionSynthesize",
-                    {"interactSessionKey": session_key})
-              timed("Synthesize activate Settings", "DeviceInteractionSynthesize",
-                    {"interactSessionKey": session_key,
-                     "activationBundleId": "com.apple.Preferences"})
-              timed("Synthesize capture #3", "DeviceInteractionSynthesize",
-                    {"interactSessionKey": session_key})
-              timed("Synthesize tap t 200 400", "DeviceInteractionSynthesize",
-                    {"interactSessionKey": session_key,
-                     "interactionCommand": "t 200 400"})
-              timed("Synthesize drag 300 600 300 200", "DeviceInteractionSynthesize",
-                    {"interactSessionKey": session_key,
-                     "interactionCommand": "drag 300 600 300 200"})
-              timed("Synthesize wait w 1", "DeviceInteractionSynthesize",
-                    {"interactSessionKey": session_key,
-                     "interactionCommand": "w 1"})
-              timed("EndSession", "DeviceInteractionEndSession",
-                    {"interactionSessionKey": session_key})
+              # Every call is a required measurement: a successful Synthesize
+              # answers {"hierarchyPath": ...}, EndSession {"userMessage": ...}.
+              synth = {"interactSessionKey": session_key}
+              require("Synthesize capture #1", "DeviceInteractionSynthesize",
+                      synth, expect="hierarchyPath")
+              require("Synthesize capture #2", "DeviceInteractionSynthesize",
+                      synth, expect="hierarchyPath")
+              require("Synthesize activate Settings", "DeviceInteractionSynthesize",
+                      {**synth, "activationBundleId": "com.apple.Preferences"},
+                      expect="hierarchyPath")
+              require("Synthesize capture #3", "DeviceInteractionSynthesize",
+                      synth, expect="hierarchyPath")
+              require("Synthesize tap t 200 400", "DeviceInteractionSynthesize",
+                      {**synth, "interactionCommand": "t 200 400"},
+                      expect="hierarchyPath")
+              require("Synthesize drag 300 600 300 200", "DeviceInteractionSynthesize",
+                      {**synth, "interactionCommand": "drag 300 600 300 200"},
+                      expect="hierarchyPath")
+              require("Synthesize wait w 1", "DeviceInteractionSynthesize",
+                      {**synth, "interactionCommand": "w 1"},
+                      expect="hierarchyPath")
+              require("EndSession", "DeviceInteractionEndSession",
+                      {"interactionSessionKey": session_key},
+                      expect="userMessage")
           finally:
               stop_approve.set()
               proc.kill()
@@ -309,4 +334,9 @@ jobs:
           print("\n== timing table (ms) ==")
           for label, elapsed in timings:
               print(f"{elapsed*1000:8.0f}  {label}")
+          if measurement_failures:
+              print("\n== FAILED measurements ==")
+              for failure in measurement_failures:
+                  print(" -", failure)
+              raise SystemExit(1)
           PY
