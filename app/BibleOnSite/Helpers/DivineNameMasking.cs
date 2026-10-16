@@ -164,46 +164,171 @@ public static class DivineNameMasking
         ["אלה"] = ["א", "יא", "ה", "הם", "הון", "ין", "ך", "כם", "כון", "ו", "הו", "נא"],
     };
 
-    private readonly record struct LetterMarks(char Letter, string Marks);
+    /// <summary>Longest divine-name letter form: 2 clitics + 4 stem + 3 suffix letters.</summary>
+    private const int MaxFormLetters = 9;
 
-    private sealed record Match(string Key, string Prefix, string Stem, string Suffix, string Tail);
+    private enum DivineNameKind : byte { Yhwh, Elohim, El, Shaddai }
+
+    /// <summary>Where a matched letter form splits into clitic prefix / stem / suffix.</summary>
+    private readonly record struct NameForm(DivineNameKind Kind, int PrefixLength, int StemLength);
 
     /// <summary>
-    /// Parses "pointed" text into base letters with their combining marks.
-    /// Returns null when the body holds anything else (spaces, punctuation,
-    /// digits) — such words can never be a divine name.
+    /// Every letter sequence that can be a divine name (~2,178 forms), built
+    /// once: the matchable set is closed — prefix × stem × suffix combinations
+    /// are enumerable — so matching is one hash lookup instead of rescanning
+    /// ~57 clitic prefixes per name family for every word. Registration order
+    /// mirrors the previous nested loops (יהוה, אלהים longest-stem-first, אל,
+    /// שדי); TryAdd keeps that precedence, though each letter form decomposes
+    /// uniquely anyway.
     /// </summary>
-    private static List<LetterMarks>? ParseLetters(string text)
+    private static readonly Dictionary<string, NameForm> Forms = BuildForms();
+
+    /// <summary>Zero-allocation span lookup over <see cref="Forms"/> for the per-word hot path.</summary>
+    private static readonly Dictionary<string, NameForm>.AlternateLookup<ReadOnlySpan<char>> FormsLookup =
+        Forms.GetAlternateLookup<ReadOnlySpan<char>>();
+
+    private static Dictionary<string, NameForm> BuildForms()
     {
-        var letters = new List<LetterMarks>();
-        foreach (var ch in text.Normalize(NormalizationForm.FormD))
+        var forms = new Dictionary<string, NameForm>(2300);
+        foreach (var prefix in CliticPrefixes(forEl: false))
         {
-            if (IsHebrewLetter(ch))
+            forms.TryAdd(prefix + "יהוה", new NameForm(DivineNameKind.Yhwh, prefix.Length, 4));
+        }
+        foreach (var prefix in CliticPrefixes(forEl: false))
+        {
+            // Longest stems first so אלהים parses as אלהי+ם, never אלה+ים.
+            foreach (var stem in ElohimStemSuffixes.Keys.OrderByDescending(s => s.Length))
             {
-                letters.Add(new LetterMarks(ch, ""));
-            }
-            else if (IsMark(ch) && letters.Count > 0)
-            {
-                var last = letters[^1];
-                letters[^1] = last with { Marks = last.Marks + ch };
-            }
-            else
-            {
-                return null;
+                foreach (var suffix in ElohimStemSuffixes[stem])
+                {
+                    forms.TryAdd(prefix + stem + suffix,
+                        new NameForm(DivineNameKind.Elohim, prefix.Length, stem.Length));
+                }
             }
         }
-        return letters.Count > 0 ? letters : null;
+        foreach (var prefix in CliticPrefixes(forEl: true))
+        {
+            forms.TryAdd(prefix + "אל", new NameForm(DivineNameKind.El, prefix.Length, 2));
+        }
+        foreach (var prefix in CliticPrefixes(forEl: false))
+        {
+            forms.TryAdd(prefix + "שדי", new NameForm(DivineNameKind.Shaddai, prefix.Length, 3));
+        }
+        return forms;
     }
 
-    /// <summary>Splits trailing non-Hebrew punctuation (paseq/maqaf/sof pasuk/space).</summary>
-    private static (string Body, string Tail) SplitTail(string value)
+    /// <summary>
+    /// Splits trailing non-Hebrew punctuation (paseq/maqaf/sof pasuk/space) —
+    /// re-appended untouched after a match.
+    /// </summary>
+    private static void SplitTail(ReadOnlySpan<char> value,
+        out ReadOnlySpan<char> body, out ReadOnlySpan<char> tail)
     {
         var cut = value.Length;
         while (cut > 0 && !IsHebrewLetter(value[cut - 1]) && !IsMark(value[cut - 1]))
         {
             cut--;
         }
-        return (value[..cut], value[cut..]);
+        body = value[..cut];
+        tail = value[cut..];
+    }
+
+    /// <summary>
+    /// Collects the base Hebrew letters of <paramref name="body"/> into
+    /// <paramref name="dest"/>, skipping combining marks. Returns the letter
+    /// count, <see cref="MaxFormLetters"/> + 1 when the word is too long to be a
+    /// name, -1 when the body holds a leading mark or any non-letter, non-mark
+    /// character (such words can never be a divine name), or -2 when it holds
+    /// a presentation form (U+FB1D-FB4F) the caller must NFD-normalize
+    /// first - corpus text never does, so the decompose step stays off
+    /// the hot path.
+    /// </summary>
+    private static int ExtractLetters(ReadOnlySpan<char> body, Span<char> dest)
+    {
+        var count = 0;
+        for (var i = 0; i < body.Length; i++)
+        {
+            var ch = body[i];
+            if (IsHebrewLetter(ch))
+            {
+                if (count == dest.Length)
+                {
+                    return MaxFormLetters + 1;
+                }
+                dest[count++] = ch;
+            }
+            else if (IsMark(ch))
+            {
+                if (count == 0)
+                {
+                    return -1;
+                }
+            }
+            else if (ch is >= '\uFB1D' and <= '\uFB4F')
+            {
+                return -2;
+            }
+            else
+            {
+                return -1;
+            }
+        }
+        return count;
+    }
+
+    /// <summary>Combining marks attached to the letter at <paramref name="letterIndex"/>.</summary>
+    internal static string MarksAt(ReadOnlySpan<char> body, int letterIndex)
+    {
+        var letter = -1;
+        for (var i = 0; i < body.Length; i++)
+        {
+            if (!IsHebrewLetter(body[i]))
+            {
+                continue;
+            }
+            letter++;
+            if (letter != letterIndex)
+            {
+                continue;
+            }
+            var j = i + 1;
+            while (j < body.Length && IsMark(body[j]))
+            {
+                j++;
+            }
+            return body[(i + 1)..j].ToString();
+        }
+        return "";
+    }
+
+    private static bool MatchesEl(ReadOnlySpan<char> body, int stemStart)
+    {
+        var aleph = MarksAt(body, stemStart);
+        if (aleph.Contains(Tzeire))
+        {
+            return true;
+        }
+        // Unpointed אל is treated as the name; any other vowel point
+        // (אֶל/אַל/אֲל) is a different word.
+        return !aleph.Any(IsNiqqud);
+    }
+
+    private static bool MatchesShaddai(ReadOnlySpan<char> body, int stemStart)
+    {
+        var shin = MarksAt(body, stemStart);
+        var dalet = MarksAt(body, stemStart + 1);
+        var yod = MarksAt(body, stemStart + 2);
+        if (shin.Contains(SinDot))
+        {
+            return false;
+        }
+        if (dalet.Contains(Dagesh))
+        {
+            return true;
+        }
+        // Unpointed שדי is masked; a pointed שדי whose ד lacks dagesh
+        // (שָׂדַי/שָׁדַי "my field") is not.
+        return !(shin + dalet + yod).Any(IsNiqqud);
     }
 
     private static IEnumerable<string> CliticPrefixes(bool forEl)
@@ -233,97 +358,57 @@ public static class DivineNameMasking
         }
     }
 
-    private static bool MatchesEl(List<LetterMarks> letters, int stemStart)
+    /// <summary>
+    /// Returns the masked form of a single word, or null when it is not a
+    /// masked divine name under <paramref name="settings"/>. SplitTail strips
+    /// trailing punctuation first; the match itself is one hash lookup over
+    /// the closed letter-form table, with mark checks (tzeire for אל, sin dot
+    /// /dagesh for שדי) applied only on the rare gated hits.
+    /// </summary>
+    private static string? MaskWord(ReadOnlySpan<char> value, DivineNameMaskingOptions settings)
     {
-        var aleph = letters[stemStart];
-        if (aleph.Marks.Contains(Tzeire))
-        {
-            return true;
-        }
-        // Unpointed אל is treated as the name; any other vowel point
-        // (אֶל/אַל/אֲל) is a different word.
-        return !aleph.Marks.Any(IsNiqqud);
-    }
-
-    private static bool MatchesShaddai(List<LetterMarks> letters, int stemStart)
-    {
-        var shin = letters[stemStart];
-        var dalet = letters[stemStart + 1];
-        var yod = letters[stemStart + 2];
-        if (shin.Marks.Contains(SinDot))
-        {
-            return false;
-        }
-        if (dalet.Marks.Contains(Dagesh))
-        {
-            return true;
-        }
-        // Unpointed שדי is masked; a pointed שדי whose ד lacks dagesh
-        // (שָׂדַי/שָׁדַי "my field") is not.
-        return !(shin.Marks + dalet.Marks + yod.Marks).Any(IsNiqqud);
-    }
-
-    private static Match? MatchWord(string value)
-    {
-        var (body, tail) = SplitTail(value);
-        var letters = ParseLetters(body);
-        if (letters is null)
+        SplitTail(value, out var body, out var tail);
+        if (body.IsEmpty)
         {
             return null;
         }
-        var word = string.Concat(letters.Select(l => l.Letter));
-
-        foreach (var prefix in CliticPrefixes(forEl: false))
+        Span<char> letters = stackalloc char[MaxFormLetters];
+        var count = ExtractLetters(body, letters);
+        if (count == -2)
         {
-            if (!word.StartsWith(prefix, StringComparison.Ordinal))
-            {
-                continue;
-            }
-            if (word[prefix.Length..] == "יהוה")
-            {
-                return new Match("yhwh", prefix, "יהוה", "", tail);
-            }
+            // Rare presentation forms — normalize once, then re-extract so the
+            // letters and later mark checks see the decomposed text.
+            var normalized = body.ToString().Normalize(NormalizationForm.FormD);
+            body = normalized.AsSpan();
+            count = ExtractLetters(body, letters);
         }
-        foreach (var prefix in CliticPrefixes(forEl: false))
+        if (count is < 1 or > MaxFormLetters)
         {
-            if (!word.StartsWith(prefix, StringComparison.Ordinal))
-            {
-                continue;
-            }
-            var rest = word[prefix.Length..];
-            // Longest stems first so אלהים parses as אלהי+ם, never אלה+ים.
-            foreach (var stem in ElohimStemSuffixes.Keys.OrderByDescending(s => s.Length))
-            {
-                if (rest.StartsWith(stem, StringComparison.Ordinal) &&
-                    ElohimStemSuffixes[stem].Contains(rest[stem.Length..]))
-                {
-                    return new Match("elohim", prefix, stem, rest[stem.Length..], tail);
-                }
-            }
+            return null;
         }
-        foreach (var prefix in CliticPrefixes(forEl: true))
+        if (!FormsLookup.TryGetValue(letters[..count], out var form))
         {
-            if (!word.StartsWith(prefix, StringComparison.Ordinal))
-            {
-                continue;
-            }
-            if (word[prefix.Length..] == "אל" && MatchesEl(letters, prefix.Length))
-            {
-                return new Match("el", prefix, "אל", "", tail);
-            }
+            return null;
         }
-        foreach (var prefix in CliticPrefixes(forEl: false))
+        var gated = form.Kind switch
         {
-            if (!word.StartsWith(prefix, StringComparison.Ordinal))
-            {
-                continue;
-            }
-            if (word[prefix.Length..] == "שדי" && MatchesShaddai(letters, prefix.Length))
-            {
-                return new Match("shaddai", prefix, "שדי", "", tail);
-            }
+            DivineNameKind.El => MatchesEl(body, form.PrefixLength),
+            DivineNameKind.Shaddai => MatchesShaddai(body, form.PrefixLength),
+            _ => true,
+        };
+        if (!gated)
+        {
+            return null;
         }
-        return null;
+        var stem = MaskStem(form.Kind,
+            letters.Slice(form.PrefixLength, form.StemLength).ToString(), settings);
+        return stem is null
+            ? null
+            : string.Concat(
+                letters[..form.PrefixLength].ToString(),
+                stem,
+                letters[(form.PrefixLength + form.StemLength)..count].ToString(),
+                tail.ToString());
     }
 
     /// <summary>אלוהים→אלקים convention: first ה→ק; a stem-final ה is restored after it.</summary>
@@ -334,24 +419,24 @@ public static class DivineNameMasking
         return heh == stem.Length - 1 ? $"{replaced}ה" : replaced;
     }
 
-    private static string? MaskStem(Match match, DivineNameMaskingOptions settings) =>
-        match.Key switch
+    private static string? MaskStem(DivineNameKind kind, string stem, DivineNameMaskingOptions settings) =>
+        kind switch
         {
-            "yhwh" => settings.Yhwh switch
+            DivineNameKind.Yhwh => settings.Yhwh switch
             {
                 DivineNameMaskOption.Heh => "ה'",
                 DivineNameMaskOption.Dalet => "ד'",
                 _ => settings.YhwhCustom.Trim() is { Length: > 0 } custom ? custom : null,
             },
-            "elohim" => settings.Elohim switch
+            DivineNameKind.Elohim => settings.Elohim switch
             {
                 DivineNameMaskOption.AsIs => null,
-                DivineNameMaskOption.Elokim => ElokimStem(match.Stem),
-                DivineNameMaskOption.Hyphen => $"{match.Stem[0]}-{match.Stem[1..]}",
+                DivineNameMaskOption.Elokim => ElokimStem(stem),
+                DivineNameMaskOption.Hyphen => $"{stem[0]}-{stem[1..]}",
                 _ => settings.ElohimCustom.Trim() is { Length: > 0 } custom ? custom : null,
             },
-            "el" => settings.El == DivineNameMaskOption.Hyphen ? "א-ל" : null,
-            "shaddai" => settings.Shaddai switch
+            DivineNameKind.El => settings.El == DivineNameMaskOption.Hyphen ? "א-ל" : null,
+            DivineNameKind.Shaddai => settings.Shaddai switch
             {
                 DivineNameMaskOption.AsIs => null,
                 DivineNameMaskOption.Hyphen => "שד-י",
@@ -373,18 +458,11 @@ public static class DivineNameMasking
     /// </summary>
     public static string MaskValue(string? value, DivineNameMaskingOptions options)
     {
-        var settings = options;
-        if (!settings.Enabled || string.IsNullOrEmpty(value))
+        if (!options.Enabled || string.IsNullOrEmpty(value))
         {
             return value ?? "";
         }
-        var match = MatchWord(value);
-        if (match is null)
-        {
-            return value;
-        }
-        var stem = MaskStem(match, settings);
-        return stem is null ? value : match.Prefix + stem + match.Suffix + match.Tail;
+        return MaskWord(value.AsSpan(), options) ?? value;
     }
 
     /// <summary>
@@ -400,40 +478,30 @@ public static class DivineNameMasking
     /// </summary>
     public static string MaskText(string? text, DivineNameMaskingOptions options)
     {
-        var settings = options;
-        if (!settings.Enabled || string.IsNullOrEmpty(text))
+        if (!options.Enabled || string.IsNullOrEmpty(text))
         {
             return text ?? "";
         }
+        var span = text.AsSpan();
         var builder = new StringBuilder(text.Length);
-        foreach (var piece in SplitKeeping(text, ' ', Maqaf))
-        {
-            builder.Append(piece.Length is 1 && (piece[0] is ' ' or Maqaf)
-                ? piece
-                : MaskValue(piece, settings));
-        }
-        return builder.ToString();
-    }
-
-    private static IEnumerable<string> SplitKeeping(string text, params char[] separators)
-    {
         var start = 0;
-        for (var i = 0; i < text.Length; i++)
+        for (var i = 0; i <= span.Length; i++)
         {
-            if (!separators.Contains(text[i]))
+            if (i < span.Length && span[i] is not ' ' and not Maqaf)
             {
                 continue;
             }
             if (i > start)
             {
-                yield return text[start..i];
+                var piece = span[start..i];
+                builder.Append(MaskWord(piece, options) is { } masked ? masked : piece);
             }
-            yield return text[i].ToString();
+            if (i < span.Length)
+            {
+                builder.Append(span[i]);
+            }
             start = i + 1;
         }
-        if (text.Length > start)
-        {
-            yield return text[start..];
-        }
+        return builder.ToString();
     }
 }

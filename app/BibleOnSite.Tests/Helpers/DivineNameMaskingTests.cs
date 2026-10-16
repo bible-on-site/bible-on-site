@@ -149,6 +149,31 @@ public class DivineNameMaskingTests
         public void masks_unpointed_el_documented_ambiguity() =>
             DivineNameMasking.MaskValue("אל", Enabled()).Should().Be("א-ל");
 
+        [Fact]
+        public void masks_el_written_with_presentation_form_letters()
+        {
+            // U+FB31 is בּ (BET WITH DAGESH) — it decomposes under NFD, so the
+            // word still parses as prefix ב + אל just like the pointed form.
+            DivineNameMasking.MaskValue("בּאל", Enabled()).Should().Be("בא-ל");
+        }
+
+        [Fact]
+        public void leaves_a_word_longer_than_any_name_form_alone() =>
+            // Eleven letters — no divine-name form exceeds nine.
+            DivineNameMasking.MaskValue("אָבָגָדָהָוָזָחָטָיָכָ", Enabled())
+                .Should().Be("אָבָגָדָהָוָזָחָטָיָכָ");
+
+        [Theory]
+        [InlineData("־")]
+        [InlineData("׀")]
+        [InlineData("׃")]
+        public void leaves_punctuation_only_values_alone(string value) =>
+            DivineNameMasking.MaskValue(value, Enabled()).Should().Be(value);
+
+        [Fact]
+        public void marks_at_returns_empty_for_a_missing_letter_index() =>
+            DivineNameMasking.MarksAt("אבג", 7).Should().Be("");
+
         [Theory]
         [InlineData("אֶ֖ל")]
         [InlineData("אַ֣ל")]

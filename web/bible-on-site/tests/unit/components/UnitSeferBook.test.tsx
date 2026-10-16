@@ -218,6 +218,13 @@ describe("UnitSeferBook", () => {
 		expect(document.documentElement.dataset.seferView).toBeUndefined();
 	});
 
+	it("renders the book with page shadows enabled", () => {
+		renderBook();
+		// alpha.46 renders the flat-face inner shadow/highlight and the fold
+		// crease gradient only while pageShadow is on (PR #2238 review).
+		expect(capturedFlipBookProps.pageShadow).toBe(true);
+	});
+
 	it("forwards the committed page index to onPageFlipped", () => {
 		const onPageFlipped = jest.fn();
 		mockGetCurrentPageIndex.mockReturnValue(7);
