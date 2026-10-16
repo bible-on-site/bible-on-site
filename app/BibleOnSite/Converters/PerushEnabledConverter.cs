@@ -25,7 +25,7 @@ public class PerushEnabledConverter : IMultiValueConverter
         }
 
         var checkedIds = checkedEnum.OfType<int>().ToList();
-        var limit = values.Length >= 3 && values[2] is int n ? n : 0;
+        var limit = values.Length >= 3 && values[2] is int n ? n : int.MaxValue;
         return checkedIds.Contains(id.Value) || checkedIds.Count < limit;
     }
 

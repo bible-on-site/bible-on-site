@@ -40,4 +40,32 @@ public class PerushEnabledConverterTests
         Convert(null!, null!).Should().Be(true);
         Convert().Should().Be(true);
     }
+
+    [Fact]
+    public void non_numeric_id_and_non_list_inputs_default_to_enabled()
+    {
+        Convert("x", new List<int> { 1 }, 5).Should().Be(true);
+        Convert(3, new object(), 5).Should().Be(true);
+    }
+
+    [Fact]
+    public void missing_limit_defaults_to_enabled()
+    {
+        Convert(6, new List<int> { 1, 2, 3, 4, 5 }, "x").Should().Be(true);
+    }
+
+    [Fact]
+    public void long_ids_match_checked_list()
+    {
+        Convert(3L, new List<int> { 1, 2, 3, 4, 5 }, 5).Should().Be(true);
+        Convert(6L, new List<int> { 1, 2, 3, 4, 5 }, 5).Should().Be(false);
+    }
+
+    [Fact]
+    public void convert_back_throws()
+    {
+        var act = () => new PerushEnabledConverter().ConvertBack(
+            true, [], null!, CultureInfo.InvariantCulture);
+        act.Should().Throw<NotImplementedException>();
+    }
 }
