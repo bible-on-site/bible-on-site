@@ -26,6 +26,32 @@ export interface DiscoveredTest {
 	category?: string;
 }
 
+/**
+ * Rolling runtime statistics for one test case (#2263). `meanMs` is an
+ * exponentially-anchored rolling mean capped at TIMING_SAMPLE_CAP samples'
+ * weight so a permanently slower test overtakes old history instead of
+ * averaging with it forever. `samples` saturates at the cap — it reports
+ * observations seen, not the weight currently applied.
+ */
+export interface CaseTiming {
+	samples: number;
+	meanMs: number;
+	/** Duration of the most recent observation (diagnostics). */
+	lastMs: number;
+	updatedAtUtc: string;
+}
+
+/**
+ * Rolling mean of a run's non-case time: pilot supervision minus the summed
+ * measured case durations (Appium/WDA/harness bring-up and teardown inside
+ * the supervised pilot). Kept separate from case timings so setup is never
+ * charged to an arbitrary test (#2263).
+ */
+export interface OverheadTiming {
+	samples: number;
+	meanMs: number;
+}
+
 /** Per-test evidence recorded for one suite on one platform. */
 export interface CoverageTreeTest {
 	/** Repo-relative test source file, when resolvable. */
@@ -47,6 +73,11 @@ export interface CoverageTreeTest {
 	sessions: string[];
 	/** last recorded outcome: passed | failed | running */
 	outcome: string;
+	/**
+	 * Observed wall-clock runtime for this case on this platform (#2263).
+	 * Scheduling data only — its absence means "unmeasured", never "free".
+	 */
+	timing?: CaseTiming;
 	/**
 	 * Executable evidence at member granularity: covered file → source-member
 	 * keys (`Ns.Type.Member#<sig>` — the `SourceFingerprint.members` key
@@ -102,6 +133,11 @@ export interface CoverageTree {
 	tests: Record<string, CoverageTreeTest>;
 	/** Evidence records that no discovered test claimed (diagnostics). */
 	unmatchedEvidence?: string[];
+	/**
+	 * Rolling mean of the run's non-case pilot time (#2263). The shard
+	 * planner prices a new shard as job setup plus this value.
+	 */
+	overhead?: OverheadTiming;
 }
 
 export type FileStatus = "added" | "modified" | "deleted" | "renamed";

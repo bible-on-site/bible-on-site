@@ -3,34 +3,7 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { mergeShardAppCoverage, mergeShardEvidence, shardRuns, SHARD_COUNT } from "./shards.mjs";
-
-test("builds one run environment per shard with its own device, port, artifacts and filter", () => {
-  const runs = shardRuns({
-    MOBILE_UDID_SHARD_1: "udid-a",
-    MOBILE_UDID_SHARD_2: "udid-b",
-    MOBILE_PLATFORM: "iOS",
-  }, "/artifacts/ios");
-  assert.equal(runs.length, SHARD_COUNT);
-  assert.equal(runs[0].env.MOBILE_UDID, "udid-a");
-  assert.equal(runs[1].env.MOBILE_UDID, "udid-b");
-  assert.equal(runs[0].env.MOBILE_APPIUM_PORT, "4723");
-  assert.equal(runs[1].env.MOBILE_APPIUM_PORT, "4724");
-  assert.equal(runs[0].env.MOBILE_WDA_PORT, "8100");
-  assert.equal(runs[1].env.MOBILE_WDA_PORT, "8101");
-  assert.equal(runs[0].env.MOBILE_E2E_COVERAGE_PORT, "4787");
-  assert.equal(runs[1].env.MOBILE_E2E_COVERAGE_PORT, "4788");
-  assert.equal(runs[0].env.MOBILE_E2E_ARTIFACTS, join("/artifacts/ios", "shard1"));
-  assert.equal(runs[1].env.MOBILE_E2E_ARTIFACTS, join("/artifacts/ios", "shard2"));
-  assert.equal(runs[0].env.MOBILE_E2E_SHARD, "1,3");
-  assert.equal(runs[1].env.MOBILE_E2E_SHARD, "2");
-  assert.equal(runs[0].env.MOBILE_PLATFORM, "iOS");
-});
-
-test("refuses a shard plan without every simulator UDID", () => {
-  assert.throws(() => shardRuns({ MOBILE_UDID_SHARD_1: "udid-a" }, "/artifacts"),
-    /MOBILE_UDID_SHARD_2/);
-});
+import { mergeShardAppCoverage, mergeShardEvidence } from "./shards.mjs";
 
 test("merges disjoint shard evidence into the top-level artifacts dir", () => {
   const root = mkdtempSync(join(tmpdir(), "shards-"));

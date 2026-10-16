@@ -79,7 +79,7 @@ fork again
   note right
     app-mobile-e2e.yml:
     android leg + shared iOS build
-    + 3 iOS shards -> merge_ios
+    + planned iOS shards -> merge_ios
   end note
 fork again
   :App iOS native audio CI;
