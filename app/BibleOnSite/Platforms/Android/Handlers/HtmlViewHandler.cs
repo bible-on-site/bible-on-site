@@ -187,17 +187,11 @@ public class HtmlViewHandler : ViewHandler<HtmlView, TextView>
         var widthSpec = Android.Views.View.MeasureSpec.MakeMeasureSpec(
             widthPx, Android.Views.MeasureSpecMode.Exactly);
 
-        int heightSpec;
-        if (double.IsInfinity(heightConstraint) || heightConstraint <= 0)
-        {
-            heightSpec = Android.Views.View.MeasureSpec.MakeMeasureSpec(
-                0, Android.Views.MeasureSpecMode.Unspecified);
-        }
-        else
-        {
-            heightSpec = Android.Views.View.MeasureSpec.MakeMeasureSpec(
+        var heightSpec = double.IsInfinity(heightConstraint) || heightConstraint <= 0
+            ? Android.Views.View.MeasureSpec.MakeMeasureSpec(
+                0, Android.Views.MeasureSpecMode.Unspecified)
+            : Android.Views.View.MeasureSpec.MakeMeasureSpec(
                 (int)Context.ToPixels(heightConstraint), Android.Views.MeasureSpecMode.AtMost);
-        }
 
         PlatformView.Measure(widthSpec, heightSpec);
         return new Microsoft.Maui.Graphics.Size(
