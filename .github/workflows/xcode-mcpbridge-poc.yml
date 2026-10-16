@@ -15,6 +15,10 @@ jobs:
     runs-on: xcode-27
     timeout-minutes: 20
     steps:
+      # XcodeOpenWorkspace needs the repo on disk: the extension's .xcodeproj
+      # is the only Xcode project in the tree.
+      - uses: actions/checkout@v7
+
       - name: Select compatible Xcode
         run: sudo xcode-select --switch /Applications/Xcode_27.app/Contents/Developer
 
