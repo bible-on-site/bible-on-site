@@ -83,11 +83,6 @@ export function searchScore(text: string, query: string): number {
 	return scorePrepared(normalizeSearchText(text), prepareQuery(query));
 }
 
-/** Score pre-normalized `normalized` text against `query`. */
-export function scoreNormalizedText(normalized: string, query: string): number {
-	return scorePrepared(normalized, prepareQuery(query));
-}
-
 /** Score raw `text` against a prepared query — normalizes the text only. */
 export function scorePreparedText(
 	text: string,
