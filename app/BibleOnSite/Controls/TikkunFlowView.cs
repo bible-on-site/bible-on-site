@@ -107,6 +107,12 @@ public class TikkunFlowView : GraphicsView
         private int _wordsVersion = -1;
         private TikkunFlowLayout.Result? _layout;
         private float _laidWidth = -1;
+        // Word widths repeat massively across a perek (את, ה׳…) — a layout
+        // re-run (marks/masking toggles, resize) otherwise re-measures every
+        // word through the native text stack. Keyed by the exact inputs.
+        private readonly Dictionary<(string Text, float FontSize, bool Bold), float> _widthCache = new();
+        private const string WidthProbeText = "אאא";
+        private float _widthProbe = -1;
 
         public TikkunFlowDrawable(TikkunFlowView view) => _view = view;
 
@@ -171,8 +177,30 @@ public class TikkunFlowView : GraphicsView
             _layout = null;
         }
 
-        private static Func<string, float, bool, float> MeasureWord(ICanvas canvas) =>
-            (text, fontSize, bold) =>
-                canvas.GetStringSize(text, bold ? GraphicsFont.DefaultBold : GraphicsFont.Default, fontSize).Width;
+        private Func<string, float, bool, float> MeasureWord(ICanvas canvas)
+        {
+            // One probe per layout validates the cache context: a canvas with
+            // different font metrics or a font-size change (slider drags)
+            // shifts the probe width, so entries measured under another
+            // context are flushed instead of reused or accumulated.
+            var probe = canvas.GetStringSize(
+                WidthProbeText, GraphicsFont.Default, (float)_view.TextFontSize).Width;
+            if (Math.Abs(probe - _widthProbe) > 0.01f)
+            {
+                _widthCache.Clear();
+                _widthProbe = probe;
+            }
+            return (text, fontSize, bold) =>
+            {
+                if (_widthCache.TryGetValue((text, fontSize, bold), out var width))
+                {
+                    return width;
+                }
+                width = canvas.GetStringSize(text,
+                    bold ? GraphicsFont.DefaultBold : GraphicsFont.Default, fontSize).Width;
+                _widthCache[(text, fontSize, bold)] = width;
+                return width;
+            };
+        }
     }
 }
