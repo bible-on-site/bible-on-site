@@ -105,13 +105,15 @@ public partial class MasoraViewModel : ObservableObject //NOSONAR
     public bool ShowDownloadPerushimButton => PerushimCatalogAvailable && !PerushimNotesAvailable;
 
     /// <summary>
-    /// The production articles loader (GraphQL-backed). Lives on the
+    /// The production articles loader — reads the StarterService startup
+    /// snapshot (all articles + authors already in memory, ordered by
+    /// Priority), so unit swipes issue no GraphQL round-trips. Lives on the
     /// parameterless ctor — not inside the injectable ctor — so tests can
     /// still exercise the loader-free path in LoadArticlesAsync.
     /// </summary>
     private static Func<int, Task<List<Article>>>? DefaultArticlesLoader =>
 #if MAUI
-        ArticleService.Instance.GetArticlesByPerekIdAsync;
+        perekId => Task.FromResult(StarterService.Instance.GetArticlesByPerekId(perekId));
 #else
         null;
 #endif
@@ -457,19 +459,20 @@ public partial class MasoraViewModel : ObservableObject //NOSONAR
         }
 
         var perekIds = MasoraUnitText.PerekIdsForUnit(unit);
-        var byId = new Dictionary<int, Article>();
-        foreach (var perekId in perekIds)
-        {
-            var articles = await _articlesLoader(perekId);
-            foreach (var article in articles)
-            {
-                byId[article.Id] = article;
-            }
-        }
+        // Fan out across the unit's perakim — an injected async loader must
+        // not be serialized into N sequential round-trips per swipe.
+        Func<int, Task<List<Article>>> loader = _articlesLoader;
+        var perPerekArticles = await Task.WhenAll(perekIds.Select(loader));
 
         if (Unit?.UnitId != unit.UnitId)
         {
             return; // Stale load — a newer unit is already on screen.
+        }
+
+        var byId = new Dictionary<int, Article>();
+        foreach (var article in perPerekArticles.SelectMany(articles => articles))
+        {
+            byId[article.Id] = article;
         }
 
         Articles = byId.Values.ToList();
