@@ -266,9 +266,15 @@ jobs:
           test "$(gh api "repos/${{ github.repository }}/actions/runs/$SOURCE_RUN" --jq .run_attempt)" = "$SOURCE_ATTEMPT"
           gh api "repos/${{ github.repository }}/actions/runs/$SOURCE_RUN/artifacts" --paginate --jq '.artifacts[]' > "$RUNNER_TEMP/release-artifacts.jsonl"
 
-          # Several release globs can share one Actions artifact (IPA, Apple packs,
-          # and fallback payloads). Pin and extract it once per destination.
-          echo "$ARTIFACTS" | jq -c 'unique_by([.name, .path])[]' | while read -r artifact; do
+          # Pin each archive before downloading; never follow a replaced artifact name.
+          # Release entries can share one archive under different globs (the iOS
+          # zip feeds the IPA, asset-pack, and payload attachments). Fetch and
+          # verify each artifact once per destination and extract it once —
+          # repeating the pass re-downloads the whole archive and makes unzip
+          # prompt to overwrite, which fails on a non-interactive runner.
+          declare -A FETCHED=()
+          declare -A EXTRACTED=()
+          echo "$ARTIFACTS" | jq -c '.[]' | while read -r artifact; do
             NAME=$(echo "$artifact" | jq -r '.name // empty')
             PATH_DIR=$(echo "$artifact" | jq -r '.path')
 
@@ -281,15 +287,25 @@ jobs:
             echo "Downloading artifact '$NAME' to '$PATH_DIR'"
             mkdir -p "$PATH_DIR"
 
-            SOURCE=$(jq -s -e --arg name "$NAME" --arg run_id "$SOURCE_RUN" --arg ref "${{ github.sha }}" '
-              [.[] | select(.name == $name and .expired == false and (.workflow_run.id | tostring) == $run_id and .workflow_run.head_sha == $ref)]
-              | max_by(.id) | select(. != null and (.digest | test("^sha256:[a-f0-9]{64}$")))' "$RUNNER_TEMP/release-artifacts.jsonl")
-            ID=$(echo "$SOURCE" | jq -r .id)
-            DIGEST=$(echo "$SOURCE" | jq -r .digest)
-            ARCHIVE="$RUNNER_TEMP/release-$ID.zip"
-            gh api "repos/${{ github.repository }}/actions/artifacts/$ID/zip" > "$ARCHIVE"
-            printf '%s  %s\n' "${DIGEST#sha256:}" "$ARCHIVE" | sha256sum --check --status
-            unzip -q -o "$ARCHIVE" -d "$PATH_DIR" < /dev/null
+            KEY="$NAME|$PATH_DIR"
+            if [ -n "${FETCHED[$KEY]:-}" ]; then
+              ARCHIVE="${FETCHED[$KEY]}"
+            else
+              SOURCE=$(jq -s -e --arg name "$NAME" --arg run_id "$SOURCE_RUN" --arg ref "${{ github.sha }}" '
+                [.[] | select(.name == $name and .expired == false and (.workflow_run.id | tostring) == $run_id and .workflow_run.head_sha == $ref)]
+                | max_by(.id) | select(. != null and (.digest | test("^sha256:[a-f0-9]{64}$")))' "$RUNNER_TEMP/release-artifacts.jsonl")
+              ID=$(echo "$SOURCE" | jq -r .id)
+              DIGEST=$(echo "$SOURCE" | jq -r .digest)
+              ARCHIVE="$RUNNER_TEMP/release-$ID.zip"
+              gh api "repos/${{ github.repository }}/actions/artifacts/$ID/zip" > "$ARCHIVE"
+              printf '%s  %s\n' "${DIGEST#sha256:}" "$ARCHIVE" | sha256sum --check --status
+              FETCHED[$KEY]="$ARCHIVE"
+            fi
+
+            if [ -z "${EXTRACTED[$KEY]:-}" ]; then
+              unzip -q -o "$ARCHIVE" -d "$PATH_DIR" < /dev/null
+              EXTRACTED[$KEY]=1
+            fi
             ls -la "$PATH_DIR"
           done
 
