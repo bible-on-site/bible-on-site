@@ -5,6 +5,10 @@ on:
       module_directory:
         required: true
         type: string
+      runner:
+        required: false
+        type: string
+        default: ubuntu-latest
     secrets:
       DEPLOY_KEY:
         required: true
@@ -47,7 +51,7 @@ jobs:
   package:
     needs: setup_env
     name: Package
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner }}
     outputs:
       module_version: ${{ steps.get_module_version.outputs.MODULE_VERSION }}
       docker_artifact_name: ${{ steps.prepare_dockerizing.outputs.DOCKER_ARTIFACT_NAME }}
