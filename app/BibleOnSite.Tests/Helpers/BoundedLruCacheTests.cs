@@ -11,7 +11,9 @@ public class BoundedLruCacheTests
 {
     private static BoundedLruCache<string, string> Create() => Create(3, 100);
 
-    private static BoundedLruCache<string, string> Create(int maxEntries, int maxTotalSize = 100) =>
+    private static BoundedLruCache<string, string> Create(int maxEntries) => Create(maxEntries, 100);
+
+    private static BoundedLruCache<string, string> Create(int maxEntries, int maxTotalSize) =>
         new(maxEntries, maxTotalSize, value => value.Length);
 
     public class Lookup
