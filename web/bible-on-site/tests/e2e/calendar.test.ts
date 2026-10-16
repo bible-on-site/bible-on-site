@@ -1,14 +1,5 @@
 import { expect, test } from "../util/playwright/test-fixture";
-
-const TOP_NAV_BLUE = "rgb(21, 82, 172)"; // #1552ac, the shared site top bar
-
-async function topNavBackground(page: import("@playwright/test").Page) {
-	const topNav = page.locator("nav.top-nav");
-	await expect(topNav).toBeVisible();
-	return topNav.evaluate(
-		(el) => window.getComputedStyle(el).backgroundColor,
-	);
-}
+import { TOP_NAV_BLUE, topNavBackground } from "../util/playwright/top-nav";
 
 test.describe("/לוח learning calendar", () => {
 	test("renders the shared blue top bar on direct load", async ({ page }) => {
