@@ -403,7 +403,6 @@ partial class Build
         var deleteProcess = ProcessTasks.StartProcess(
             "msstore",
             $"flights delete \"{MsStoreAppId}\" \"{flightId}\"",
-            logOutput: false,
             logInvocation: true
         );
         deleteProcess.WaitForExit();
