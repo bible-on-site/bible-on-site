@@ -424,6 +424,11 @@ test.describe("Sefer view", () => {
 		const indicator = page.locator(".flipbook-toolbar-indicator");
 		await expect(indicator).toHaveValue("א / נ");
 		const foldWidth = () => activePageFoldWidth(page);
+		// pageShadow is enabled (alpha.46): the book must not carry the
+		// flipbook--no-page-shadow opt-out class.
+		await expect(page.locator(".he-book")).not.toHaveClass(
+			/flipbook--no-page-shadow/,
+		);
 
 		await page.mouse.move(x, y);
 		await page.mouse.down();
@@ -432,6 +437,17 @@ test.describe("Sefer view", () => {
 		await expect.poll(foldWidth).toBeGreaterThan(2);
 		await page.mouse.move(x + 300, y, { steps: 6 });
 		await expect.poll(foldWidth).toBeGreaterThan(10);
+		// With pageShadow on, the library writes a crease gradient into
+		// --fold-shading on each folded face (skipped entirely when off);
+		// the flat face's --inner-shadow-* vars are driven the same way.
+		await expect
+			.poll(() =>
+				page
+					.locator(".he-book .page--folded")
+					.first()
+					.evaluate((el) => el.style.getPropertyValue("--fold-shading")),
+			)
+			.toContain("gradient");
 		const heldAt = await foldWidth();
 		await page.waitForTimeout(250);
 		expect(await foldWidth()).toBeGreaterThan(10);

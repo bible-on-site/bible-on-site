@@ -595,7 +595,7 @@ const Sefer = (props: {
 							noShadow: true,
 							coverIndices: "auto",
 						}}
-						pageShadow={false}
+						pageShadow
 						historyMapper={historyMapper}
 						initialTurnedLeaves={initialTurnedLeaves}
 						downloadConfig={{
