@@ -21,21 +21,47 @@ function run() {
 	// Resolve source: file: dependency, or optional local path for dev (USE_LOCAL_FLIP_BOOK=1)
 	let reactSrc;
 	let baseSrc;
+	// The sibling html-flip-book repo renamed its package folders after the
+	// alpha.46 layout (react/, base/) to coherent names — resolve whichever
+	// exists next to the react package.
+	function siblingBaseDir(reactDir) {
+		for (const name of ["base", "html-flip-book-base", "vanilla"]) {
+			const candidate = path.resolve(reactDir, "..", name);
+			// nosemgrep -- fixed local directory list, no user input
+			if (fs.existsSync(path.join(candidate, "package.json"))) {
+				return candidate;
+			}
+		}
+		return path.resolve(reactDir, "..", "base");
+	}
+
 	if (dep?.startsWith("file:")) {
 		const rel = dep.slice("file:".length).replace(/^\.\//, "");
 		reactSrc = path.resolve(projectRoot, rel);
-		baseSrc = path.resolve(reactSrc, "..", "base");
+		baseSrc = siblingBaseDir(reactSrc);
 	} else if (process.env.USE_LOCAL_FLIP_BOOK === "1") {
 		// Default location when bible-on-site and html-flip-book are siblings
-		reactSrc = path.resolve(
+		const repoDir = path.resolve(
 			projectRoot,
 			"..",
 			"..",
 			"..",
 			"html-flip-book",
-			"react",
 		);
-		baseSrc = path.resolve(reactSrc, "..", "base");
+		reactSrc = ["react", "html-flip-book-react"]
+			.map((name) => path.join(repoDir, name))
+			.find((candidate) =>
+				// nosemgrep -- fixed local directory list, no user input
+				fs.existsSync(path.join(candidate, "package.json")),
+			);
+		if (!reactSrc) {
+			console.warn(
+				`copy-local-flip-book: no react package found under ${repoDir}`,
+			);
+			process.exit(0);
+			return;
+		}
+		baseSrc = siblingBaseDir(reactSrc);
 	} else {
 		process.exit(0);
 		return;

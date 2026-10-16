@@ -78,6 +78,16 @@ export interface CoverageTreeTest {
 	 * Scheduling data only — its absence means "unmeasured", never "free".
 	 */
 	timing?: CaseTiming;
+	/**
+	 * Executable evidence at member granularity: covered file → source-member
+	 * keys (`Ns.Type.Member#<sig>` — the `SourceFingerprint.members` key
+	 * space) the test's executed nodes mapped into. A file key is present —
+	 * possibly with an empty list — only when the test's executable coverage
+	 * for that file is member-qualified; files covered only by the
+	 * automation-id channel (or older baselines) are absent, and any change
+	 * there still selects the test at file granularity (#2085).
+	 */
+	members?: Record<string, string[]>;
 }
 
 export interface CoverageTree {
@@ -112,6 +122,14 @@ export interface CoverageTree {
 	 * covering claim. Optional: automation-id-only trees predate the merge.
 	 */
 	sharedFiles?: string[];
+	/**
+	 * Exec evidence that could not be mapped to a single source member:
+	 * `file → source-level type names` containing unmapped covered nodes.
+	 * A changed member inside a gapped type widens to the file's tests —
+	 * partial member evidence never narrows a type the extractor admitted
+	 * it could not fully map (#2085).
+	 */
+	memberGaps?: Record<string, string[]>;
 	tests: Record<string, CoverageTreeTest>;
 	/** Evidence records that no discovered test claimed (diagnostics). */
 	unmatchedEvidence?: string[];

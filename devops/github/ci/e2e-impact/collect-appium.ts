@@ -217,7 +217,7 @@ export function collectTree(options: CollectOptions): CoverageTree {
 		repoRoot,
 		rules.tests.root,
 		rules.tests.glob,
-		rules.tests.category,
+		rules.tests.category ?? "",
 	);
 	const fileByTest = new Map(discovered.map((test) => [test.id, test.file]));
 
@@ -264,6 +264,7 @@ export function collectTree(options: CollectOptions): CoverageTree {
 	// tree incomplete. Incompatible input is ignored — the CLI diagnoses
 	// the reason before ever passing it here.
 	let sharedFiles: string[] | undefined;
+	let memberGaps: Record<string, string[]> | undefined;
 	let complete = options.complete;
 	if (
 		options.execTree !== undefined &&
@@ -288,12 +289,23 @@ export function collectTree(options: CollectOptions): CoverageTree {
 				existing.files = unionSorted(existing.files, execTest.files);
 				existing.sessions = unionSorted(existing.sessions, execTest.sessions);
 				existing.outcome = mergeOutcome(existing.outcome, execTest.outcome);
+				// Member evidence unions per file (#2085 member granularity);
+				// a file absent from exec evidence keeps the test unqualified
+				// for member narrowing there — never silently narrowed away.
+				if (execTest.members !== undefined) {
+					const members: Record<string, string[]> = { ...(existing.members ?? {}) };
+					for (const [file, keys] of Object.entries(execTest.members)) {
+						members[file] = unionSorted(members[file] ?? [], keys);
+					}
+					existing.members = members;
+				}
 			}
 		}
 		for (const name of view.unmatchedEvidence) {
 			if (!unmatchedEvidence.includes(name)) unmatchedEvidence.push(name);
 		}
 		if (view.sharedFiles.length > 0) sharedFiles = view.sharedFiles;
+		if (Object.keys(view.memberGaps).length > 0) memberGaps = view.memberGaps;
 		complete = complete && options.execTree.complete;
 	}
 
@@ -325,6 +337,7 @@ export function collectTree(options: CollectOptions): CoverageTree {
 		sourceFiles,
 		sourceFingerprints,
 		...(sharedFiles !== undefined ? { sharedFiles } : {}),
+		...(memberGaps !== undefined ? { memberGaps } : {}),
 		tests: Object.fromEntries(
 			Object.entries(tests).sort(([a], [b]) => a.localeCompare(b)),
 		),

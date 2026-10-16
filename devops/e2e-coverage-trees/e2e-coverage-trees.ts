@@ -182,7 +182,7 @@ async function extract(flags: Map<string, string>, multi: Map<string, string[]>)
 	const platformTrait = rules?.platforms[platform] ?? platform;
 	const discovered = rules === null
 		? []
-		: discoverSuiteTests(REPO_ROOT, rules.tests.root, rules.tests.glob, rules.tests.category)
+		: discoverSuiteTests(REPO_ROOT, rules.tests.root, rules.tests.glob, rules.tests.category ?? "")
 				.filter(
 					(test) =>
 						test.platform.toLowerCase() === "shared" ||
@@ -227,6 +227,17 @@ async function extract(flags: Map<string, string>, multi: Map<string, string[]>)
 		sourceRoot,
 		stripPrefixes: multi.get("strip-prefix") ?? [],
 		discoveredIds: discovered.map((test) => test.id),
+		// Member granularity (#2085): map method nodes onto source members of
+		// the snapshot revision. Missing/unparseable files leave the node
+		// unmapped — the selector widens them rather than guesses.
+		readSource: (repoPath) => {
+			try {
+				return readFileSync(join(REPO_ROOT, repoPath), "utf8");
+			} catch (error) {
+				if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+				throw error;
+			}
+		},
 	});
 
 	const baselinePath = flags.get("baseline");
