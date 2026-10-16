@@ -98,6 +98,7 @@ public partial class FloatingSearchBar : ContentView
         _viewModel.SearchPhrase = string.Empty;
         _viewModel.SearchResults.Clear();
         _viewModel.ErrorMessage = _viewModel.AvailabilityMessage = string.Empty;
+        _viewModel.ShowPerushimDownloadLink = false;
         UpdateStatus();
     }
 
@@ -170,6 +171,18 @@ public partial class FloatingSearchBar : ContentView
         _ = HideKeyboardAsync();
     }
 
+    private async void OnPerushimDownloadLinkTapped(object? sender, TappedEventArgs e)
+    {
+        try
+        {
+            await Shell.Current.GoToAsync(AppRoutes.ExtensionPacks);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Navigate to perushim download failed: {ex}");
+        }
+    }
+
     private async Task HideKeyboardAsync()
     {
         try
@@ -191,6 +204,7 @@ public partial class FloatingSearchBar : ContentView
         ClearButton.IsVisible = !string.IsNullOrEmpty(_viewModel.SearchPhrase);
         ErrorText.IsVisible = !string.IsNullOrWhiteSpace(_viewModel.ErrorMessage);
         AvailabilityText.IsVisible = !string.IsNullOrWhiteSpace(_viewModel.AvailabilityMessage);
+        PerushimDownloadLink.IsVisible = _viewModel.ShowPerushimDownloadLink;
         SearchStatus.Text = _viewModel.IsLoading ? _viewModel.LoadingMessage :
             string.IsNullOrWhiteSpace(_viewModel.SearchPhrase) ? "חיפושים אחרונים" :
             _viewModel.SearchResults.Count == 0 ? "לא נמצאו תוצאות" : $"{_viewModel.SearchResults.Count} תוצאות";

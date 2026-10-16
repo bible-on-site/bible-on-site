@@ -492,6 +492,7 @@ public partial class MasoraViewModel : ObservableObject //NOSONAR
             FontFactor = _preferencesService.FontFactor;
         }
         OnPropertyChanged(nameof(InlineCommentaryLimitMessage));
+        OnPropertyChanged(nameof(InlineCommentaryLimit));
         if (CheckedPerushim.Count > _preferencesService.InlineCommentaryLimit)
         {
             CheckedPerushim = CheckedPerushim.Take(_preferencesService.InlineCommentaryLimit).ToList();

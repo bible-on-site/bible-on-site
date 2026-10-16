@@ -1,4 +1,5 @@
 using BibleOnSite.Models;
+using BibleOnSite.Services;
 using BibleOnSite.ViewModels;
 
 namespace BibleOnSite.Pages;
@@ -48,6 +49,7 @@ public partial class MasoraPage //NOSONAR
             return;
         }
 
+        PerushSearchBar.Unfocus();
         _isTogglingPerush = true;
         try
         {
@@ -79,11 +81,28 @@ public partial class MasoraPage //NOSONAR
         };
     }
 
+    private void OnPerushSearchSubmitted(object? sender, EventArgs e) => _ = HidePerushimKeyboardAsync();
+
+    /// <summary>Dismisses the soft keyboard — iOS leaves it over the list otherwise.</summary>
+    private async Task HidePerushimKeyboardAsync()
+    {
+        try
+        {
+            // Unfocus alone can leave the floating keyboard over the list.
+            await PerushSearchBar.HideSoftInputAsync(CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Could not dismiss perushim search keyboard: {ex}");
+        }
+        PerushSearchBar.Unfocus();
+    }
+
     private async void OnGoToPerushimSettingsClicked(object? sender, EventArgs e)
     {
         try
         {
-            await Shell.Current.GoToAsync("PreferencesPage");
+            await Shell.Current.GoToAsync(AppRoutes.ExtensionPacks);
         }
         catch (Exception ex)
         {
@@ -120,6 +139,7 @@ public partial class MasoraPage //NOSONAR
         }
         else
         {
+            PerushSearchBar.Unfocus();
             await PerushimPanel.TranslateToAsync(0, _perushimPanelHeight, 250, Easing.CubicIn);
             PerushimPanel.IsVisible = false;
         }
@@ -209,6 +229,7 @@ public partial class MasoraPage //NOSONAR
 
                         if (shouldDismiss)
                         {
+                            PerushSearchBar.Unfocus();
                             await PerushimPanel.TranslateToAsync(0, _perushimPanelHeight, 200, Easing.CubicIn);
                             PerushimPanel.IsVisible = false;
                             _isPerushimOpen = false;

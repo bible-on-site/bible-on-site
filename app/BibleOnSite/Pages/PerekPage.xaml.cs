@@ -1751,6 +1751,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
             return;
         }
 
+        PerushSearchBar.Unfocus();
         _isTogglingPerush = true;
         try
         {
@@ -1780,6 +1781,23 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
                 }
             }
         };
+    }
+
+    private void OnPerushSearchSubmitted(object? sender, EventArgs e) => _ = HidePerushimKeyboardAsync();
+
+    /// <summary>Dismisses the soft keyboard — iOS leaves it over the list otherwise.</summary>
+    private async Task HidePerushimKeyboardAsync()
+    {
+        try
+        {
+            // Unfocus alone can leave the floating keyboard over the list.
+            await PerushSearchBar.HideSoftInputAsync(CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Could not dismiss perushim search keyboard: {ex}");
+        }
+        PerushSearchBar.Unfocus();
     }
 
     private async void OnGoToPerushimSettingsClicked(object? sender, EventArgs e)
@@ -1825,6 +1843,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         else
         {
             // Slide down then hide
+            PerushSearchBar.Unfocus();
             await PerushimPanel.TranslateToAsync(0, _perushimPanelHeight, 250, Easing.CubicIn);
             PerushimPanel.IsVisible = false;
         }
@@ -1929,6 +1948,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
                         if (shouldDismiss)
                         {
                             // Dismiss: complete the slide down
+                            PerushSearchBar.Unfocus();
                             await PerushimPanel.TranslateToAsync(0, _perushimPanelHeight, 200, Easing.CubicIn);
                             PerushimPanel.IsVisible = false;
                             _isPerushimOpen = false;

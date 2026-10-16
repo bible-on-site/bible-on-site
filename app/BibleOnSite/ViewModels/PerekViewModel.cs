@@ -747,6 +747,9 @@ public partial class PerekViewModel : ObservableObject
 
     public string InlineCommentaryLimitMessage => $"ניתן להציג עד {_preferencesService.InlineCommentaryLimit} פירושים על הפרק. ניתן לשנות בהעדפות.";
 
+    /// <summary>Max perushim shown inline — unchecked rows render disabled at the cap.</summary>
+    public int InlineCommentaryLimit => _preferencesService.InlineCommentaryLimit;
+
     /// <summary>A search result must remain visible even when all inline slots are occupied.</summary>
     public void ShowPerushForSearch(int perushId)
     {
@@ -1240,6 +1243,7 @@ public partial class PerekViewModel : ObservableObject
         }
         OnPropertyChanged(nameof(DivineNameMaskingEnabled));
         OnPropertyChanged(nameof(InlineCommentaryLimitMessage));
+        OnPropertyChanged(nameof(InlineCommentaryLimit));
         if (CheckedPerushim.Count > _preferencesService.InlineCommentaryLimit)
         {
             CheckedPerushim = CheckedPerushim.Take(_preferencesService.InlineCommentaryLimit).ToList();
