@@ -27,7 +27,11 @@ jobs:
           set -e
 
       - name: Enable Xcode MCP server
-        run: sudo xcrun mcp-server enable
+        # --unsafe-always-allow-all-agents is Apple's documented build-server
+        # bypass: without it the agent gate keys on the signature of the
+        # process that spawned mcpbridge — here python3, unsigned — and every
+        # tool call pends on a GUI/Xcode-menu approval that no one answers.
+        run: sudo xcrun mcp-server enable --unsafe-always-allow-all-agents
 
       - name: Boot simulator
         run: |
@@ -64,16 +68,49 @@ jobs:
                           ["xcrun", "mcp-server", "status", "--format", "json"],
                           capture_output=True, text=True, timeout=20)
                       data = json.loads(status.stdout or "{}")
-                      ids = sorted({e
-                          for att in data.get("permission", {}).get("projectAccessAttempts", [])
-                          for e in att.get("endpoints", [])} - approved)
+                      perm = data.get("permission", {})
+                      # Print the permission section once per change — the
+                      # pending-request field names are undocumented, so keep
+                      # the raw shape visible for future drift.
+                      fingerprint = json.dumps(perm, sort_keys=True)
+                      if perm and fingerprint != getattr(
+                              approve_pending, "_last_perm", None):
+                          approve_pending._last_perm = fingerprint
+                          print("mcp-server permission state:",
+                                json.dumps(perm)[:800])
+                      # Pending requests expose grantable ids under `endpoints`
+                      # (observed) or a bare id/identifier — scrape every
+                      # *Attempts list rather than keying on one field name.
+                      ids = set()
+                      for key, val in perm.items():
+                          if not (key.endswith("Attempts")
+                                  and isinstance(val, list)):
+                              continue
+                          for att in val:
+                              if not isinstance(att, dict):
+                                  continue
+                              eps = att.get("endpoints") or []
+                              if isinstance(eps, str):
+                                  eps = [eps]
+                              ids.update(eps)
+                              extra = att.get("id") or att.get("identifier")
+                              if extra:
+                                  ids.add(extra)
+                      ids = sorted(ids - approved)
                       if ids:
                           print("approving endpoints:", *ids)
-                          subprocess.run(
+                          res = subprocess.run(
                               ["sudo", "xcrun", "mcp-server", "approve", *ids,
                                "--for-24-hours"],
                               capture_output=True, text=True, timeout=30)
-                          approved.update(ids)
+                          # Only mark granted when approve actually succeeded —
+                          # a failed approve must not count as progress.
+                          if res.returncode == 0:
+                              approved.update(ids)
+                          else:
+                              print("approve failed rc=%s: %s %s"
+                                    % (res.returncode,
+                                       res.stdout.strip(), res.stderr.strip()))
                   except Exception as exc:
                       print("approver warning:", exc)
                   time.sleep(2)
