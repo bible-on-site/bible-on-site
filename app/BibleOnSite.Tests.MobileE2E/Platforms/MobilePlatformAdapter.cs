@@ -32,6 +32,11 @@ public abstract class MobilePlatformAdapter
     {
         foreach (var id in ids)
         {
+            // Ids are interpolated into quoted locator strings unescaped.
+            if (id.Length == 0 || !id.All(char.IsAsciiLetterOrDigit))
+            {
+                throw new ArgumentException($"Automation id '{id}' is not a plain identifier.", nameof(ids));
+            }
             CoverageEvidence.RecordAutomationId(id);
         }
         return LocateAnyOfAutomationIds(ids);
@@ -369,10 +374,11 @@ public sealed class IosPlatformAdapter : MobilePlatformAdapter
     public override bool IsChecked(AppiumElement element) => element.GetAttribute("value") == "1";
     public override void GoBackFromFocusedVerse(AppiumDriver driver) => Tap(driver, driver.FindElement(AutomationId("SelectionBackButton")));
     protected override By LocateAutomationId(string id) => MobileBy.AccessibilityId(id);
-    // WDA page-source @name is the accessibility identifier, so one XPath OR
-    // covers the whole negative-check set in a single query.
+    // An NSPredicate on name (the accessibility identifier) runs natively in
+    // XCTest; XPath would make WDA serialize the whole hierarchy first.
+    // Appium.WebDriver 9 has no MobileBy factory for it, only the By type.
     protected override By LocateAnyOfAutomationIds(string[] ids) =>
-        By.XPath($"//*[{string.Join(" or ", ids.Select(id => $"@name='{id}'"))}]");
+        new ByIosNSPredicate($"name IN {{{string.Join(",", ids.Select(id => $"'{id}'"))}}}");
     public override By FlyoutButton => AutomationId("ReaderNavigationButton");
     public override bool CanTap(AppiumElement element) => element.Enabled
         && string.Equals(element.GetAttribute("hittable"), "true", StringComparison.OrdinalIgnoreCase);
