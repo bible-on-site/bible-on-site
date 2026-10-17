@@ -445,10 +445,13 @@ jobs:
     with:
       module_directory: ${{ needs.setup_env.outputs.website_directory }}
 
+  # Master pushes package the release; other events (PR, merge queue) build the
+  # same release Docker configuration as a pre-merge check without uploading it,
+  # so base-image/toolchain breakage blocks the merge (#2292).
   package_api:
     name: Package API
     needs: [setup_env, determine_changes]
-    if: ${{ needs.determine_changes.outputs.api_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    if: ${{ (github.event_name == 'push' && needs.setup_env.outputs.is_master_branch == 'true' && needs.determine_changes.outputs.api_module_changed == 'true') || (github.event_name != 'push' && (needs.determine_changes.outputs.api_module_changed == 'true' || needs.determine_changes.outputs.api_ci_changed == 'true')) }}
     permissions:
       contents: write
       actions: read
@@ -489,10 +492,11 @@ jobs:
       platform: iOS
       perushim_notes_sqlite_artifact: ${{ needs.perushim_data.result != 'skipped' && format('perushim-sqlite-v2-indexed.{0}', github.run_id) || 'perushim-sqlite-v2-indexed.master' }}
 
+  # Same release/pre-merge split as package_api (#2292).
   package_bulletin:
     name: Package Bulletin
     needs: [setup_env, determine_changes]
-    if: ${{ needs.determine_changes.outputs.bulletin_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    if: ${{ (github.event_name == 'push' && needs.setup_env.outputs.is_master_branch == 'true' && needs.determine_changes.outputs.bulletin_module_changed == 'true') || (github.event_name != 'push' && (needs.determine_changes.outputs.bulletin_module_changed == 'true' || needs.determine_changes.outputs.bulletin_ci_changed == 'true')) }}
     permissions:
       contents: read
       actions: read
@@ -540,6 +544,7 @@ jobs:
           rm -rf ./bootstrap fonts/
 
       - name: Store Lambda ZIP
+        if: ${{ github.event_name == 'push' }}
         uses: actions/upload-artifact@v7
         with:
           name: ${{ env.BULLETIN_LAMBDA_ZIP_ARTIFACT_NAME }}
@@ -2661,6 +2666,8 @@ jobs:
         admin_ci,
         app_ios_ci,
         package_ios_pr,
+        package_api,
+        package_bulletin,
         app_mobile_e2e,
         bulletin_ci,
         data_ci,
@@ -2726,6 +2733,12 @@ jobs:
               exit 1
             fi
           fi
+          if [ "${{ github.event_name }}" != "push" ] && { [ "$API_MODULE_CHANGED" = "true" ] || [ "$API_CI_CHANGED" = "true" ]; }; then
+            if [ "${{ needs.package_api.result }}" != "success" ]; then
+              echo "API release Docker build failed or did not run"
+              exit 1
+            fi
+          fi
 
           APP_MODULE_CHANGED=$([ "${{ needs.determine_changes.outputs.app_module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
           APP_CI_CHANGED=$([ "${{ needs.determine_changes.outputs.app_ci_changed }}" = "true" ] && echo "true" || echo "false") # Generated
@@ -2766,6 +2779,12 @@ jobs:
             BULLETIN_STATUS=$([ "${{ needs.bulletin_ci.result }}" = "success" ] && echo "success" || echo "failure") # Generated
             if [ "$BULLETIN_STATUS" = "failure" ]; then
               echo "Overall status: failure"
+              exit 1
+            fi
+          fi
+          if [ "${{ github.event_name }}" != "push" ] && { [ "$BULLETIN_MODULE_CHANGED" = "true" ] || [ "$BULLETIN_CI_CHANGED" = "true" ]; }; then
+            if [ "${{ needs.package_bulletin.result }}" != "success" ]; then
+              echo "Bulletin release Docker build failed or did not run"
               exit 1
             fi
           fi
