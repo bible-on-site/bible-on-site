@@ -173,10 +173,9 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
     {
         Page.WaitFor("PerekSource", element => !string.IsNullOrEmpty(element.Text));
         Assert.True(Page.WaitFor("ReaderNavigationButton").Enabled);
-        Assert.DoesNotContain(Driver!.FindElements(Platform.AutomationId("PerekSearchInput")), element => element.Displayed);
-        Assert.DoesNotContain(Driver!.FindElements(Platform.AutomationId("SearchPanel")), element => element.Displayed);
-        Assert.DoesNotContain(Driver!.FindElements(Platform.AutomationId("SelectionBackButton")), element => element.Displayed);
-        Assert.DoesNotContain(Driver.FindElements(Platform.AutomationId("FocusedPasukText")), element => element.Displayed);
+        Assert.DoesNotContain(Driver!.FindElements(
+            Platform.AnyOfAutomationIds("PerekSearchInput", "SearchPanel", "SelectionBackButton", "FocusedPasukText")),
+            element => element.Displayed);
     }
 
     private void SearchFor(string text, string expectedTitle)
