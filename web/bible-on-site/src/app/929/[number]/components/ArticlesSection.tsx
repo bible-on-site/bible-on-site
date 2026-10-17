@@ -2,6 +2,7 @@ import DOMPurify from "isomorphic-dompurify";
 import Image from "next/image";
 import Link from "next/link";
 import type { ArticleSummary } from "@/lib/articles";
+import { normalizeAbstractHtml } from "@/lib/authors/articles-grid";
 import styles from "./articles-section.module.css";
 import { Carousel } from "./Carousel";
 
@@ -104,7 +105,9 @@ export function ArticlesSection({
 									// nosemgrep -- DOMPurify-sanitized abstract
 									// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify
 									dangerouslySetInnerHTML={{
-										__html: DOMPurify.sanitize(article.abstract),
+										__html: DOMPurify.sanitize(
+											normalizeAbstractHtml(article.abstract),
+										),
 									}}
 								/>
 							)}

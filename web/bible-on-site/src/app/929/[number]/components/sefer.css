@@ -57,6 +57,11 @@ html[data-sefer-view] {
   backface-visibility: hidden;
   transition: opacity 120ms ease;
   will-change: opacity;
+  /* Host-only: every Sefer page child is a positioned, opaque sheet
+     (sefer.module.css .page/.pageContentPage/.pageBlank), which paints over
+     un-indexed overlays and hid all page/fold shading (issue #2331). Keep the
+     overlays above page content layers (carousel, recitation player). */
+  z-index: 10;
 }
 
 /* Inner shadow: simulates shadow cast by lifted page onto the page below.
@@ -142,12 +147,13 @@ html[data-sefer-view] {
   box-sizing: border-box;
 }
 
-/* Hard covers - no page curl effect: the library still writes inner-shadow
-   vars per page during a flip when pageShadow is on, so keep hard covers
-   pinned to zero. */
-.he-book .page--hard {
-  --inner-shadow-shadow: 0;
-  --inner-shadow-highlight: 0;
+/* coverConfig.noShadow: the React wrapper tags cover pages with
+   .page--no-shadow but ships no rule for it, and the library writes the
+   inner-shadow vars inline (beating any stylesheet value), so hide the
+   overlays themselves to keep hard covers flat. */
+.he-book .page--no-shadow::before,
+.he-book .page--no-shadow::after {
+  opacity: 0;
 }
 
 /* Interior cover from library flipbook.scss */
