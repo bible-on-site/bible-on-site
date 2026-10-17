@@ -141,7 +141,7 @@ test("a completed restored old verse is not prepended or counted as a current an
   const latest={...p.item,candidateSha256:"revised",priorNote:saved.note};
   const incoming=Array.from({length:27},(_,i)=>({...p.item,id:"fixture-"+i})).concat(latest);
   const decisions={[oldKey]:saved};
-  for(const item of incoming.slice(0,5)) decisions[p.run("stateKey("+JSON.stringify(item)+")")]=saved;
+  for(const item of incoming.slice(0,5)) decisions[[item.id,item.candidateSha256,item.clipSha256].join(":")]=saved;
   const resumed=await page({}, {storage:p.storage,queue:{cases:incoming,retiredCases:[p.item],decisions,token:"fixture",persistentQueue:true}});
   assert.equal(resumed.run("cases.length"),28);assert.equal(resumed.run("caseNow().candidateSha256"),"revised");
   assert.match(resumed.elements.progress.textContent,/פסוק 28 מתוך 28 · 5 תשובות/);
