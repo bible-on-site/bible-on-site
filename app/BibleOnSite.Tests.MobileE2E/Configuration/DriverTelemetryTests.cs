@@ -109,8 +109,8 @@ public sealed class DriverTelemetryTests
         private int _windowReads;
         public bool TryAddCommand(string name, CommandInfo? _) => name.Length > 0;
         public void Dispose() { /* The fake owns no resources. */ }
-        public Response Execute(Command command) => ExecuteAsync(command).GetAwaiter().GetResult();
-        public Task<Response> ExecuteAsync(Command command)
+        public Task<Response> ExecuteAsync(Command command) => Task.FromResult(Execute(command));
+        public Response Execute(Command command)
         {
             Commands.Add(command.Name);
             object? value = null;
@@ -156,7 +156,7 @@ public sealed class DriverTelemetryTests
             {
                 Orientation = (string)command.Parameters["orientation"]!;
             }
-            return Task.FromResult(new Response("telemetry-session", value, status));
+            return new Response("telemetry-session", value, status);
         }
     }
 }
