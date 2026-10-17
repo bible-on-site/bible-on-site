@@ -36,14 +36,14 @@ const IMAGE_WIDTH = 1000;
 
 /** Downloads an object from the configured image bucket, never another host. */
 async function fetchBucketImage(src: string): Promise<ArrayBuffer> {
-	const bucketOrigin = new URL(perekImageUrl("")).origin;
-	const { origin, pathname } = new URL(src);
-	if (origin !== bucketOrigin) {
-		throw new Error(`unexpected image origin ${origin}`);
+	const allowedOrigins = new Set([new URL(perekImageUrl("")).origin]);
+	const url = new URL(src);
+	if (allowedOrigins.has(url.origin)) {
+		const res = await fetch(url);
+		if (!res.ok) throw new Error(`HTTP ${res.status}`);
+		return res.arrayBuffer();
 	}
-	const res = await fetch(`${bucketOrigin}${pathname}`);
-	if (!res.ok) throw new Error(`HTTP ${res.status}`);
-	return res.arrayBuffer();
+	throw new Error(`unexpected image origin ${url.origin}`);
 }
 
 async function fetchImage(

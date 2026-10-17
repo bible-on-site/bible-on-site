@@ -96,8 +96,12 @@ describe("buildPerakimContent", () => {
 			[1],
 			DEFAULT_DIVINE_NAME_MASKING,
 		);
-		expect(global.fetch).toHaveBeenCalledWith(perekImageUrl("perakim/1.webp"));
-		expect(global.fetch).toHaveBeenCalledWith(perekImageUrl("perakim/2.webp"));
+		expect(global.fetch).toHaveBeenCalledWith(
+			new URL(perekImageUrl("perakim/1.webp")),
+		);
+		expect(global.fetch).toHaveBeenCalledWith(
+			new URL(perekImageUrl("perakim/2.webp")),
+		);
 		expect(content.images).toEqual([
 			{ dataBase64: "anBlZy1ieXRlcw==", ext: "jpg", caption: "בריאה" },
 			{ dataBase64: "anBlZy1ieXRlcw==", ext: "jpg", caption: "" },
