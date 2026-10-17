@@ -450,7 +450,7 @@ mod tests {
         let response = lambda_handler(request(
             "/api/generate-pdf",
             Body::Text(
-                r##"{"seferName":"Genesis","perakimIds":[1],"includeArticles":false,"coverAccentHex":"#123abc"}"##
+                r##"{"seferName":"Genesis","perakimIds":[1],"includeArticles":false,"includeCover":true,"coverAccentHex":"#123abc","cover":{"branding":"תנ\"ך על הפרק","title":"ספר בראשית","subtitle":"מקראות גדולות","edition":"עם מאמרים"}}"##
                     .to_string(),
             ),
         ))
