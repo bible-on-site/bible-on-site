@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 
@@ -22,7 +23,7 @@ namespace AltCover.Recorder
 	/// Reset is authenticated: any loopback process could otherwise erase hits
 	/// mid-scenario and corrupt the merged report. The harness generates a
 	/// per-run token and delivers it as BIBLE_E2E_COVERAGE_TOKEN (iOS launch
-	/// environment; Android intent extra persisted to <Personal>/e2e-coverage-token
+	/// environment; Android intent extra persisted under FileSystem.AppDataDirectory
 	/// for the relaunches that drop extras). Requests must echo it in the
 	/// X-Bible-Coverage-Token header. When no token reaches the app, reset is
 	/// refused rather than left open.
@@ -210,17 +211,28 @@ namespace AltCover.Recorder
 		/// supplies one (iOS, Windows), else the file the app's intent-extra
 		/// handler persisted (Android relaunches drop extras).
 		/// </summary>
-		private static string? RequiredToken()
+		internal static string? RequiredToken()
 		{
 			var configured = Environment.GetEnvironmentVariable(TokenVariable);
 			if (!string.IsNullOrEmpty(configured))
 			{
 				return configured;
 			}
+			return RequiredTokenFromDirectory(PersistedTokenDirectory());
+		}
+
+		// Split from <see cref="RequiredToken"/> so the file lookup is testable
+		// against a scratch directory — the resolved application directory is
+		// device state no desktop test host can reproduce.
+		internal static string? RequiredTokenFromDirectory(string? directory)
+		{
+			if (directory == null)
+			{
+				return null;
+			}
 			try
 			{
-				var path = Path.Combine(
-					Environment.GetFolderPath(Environment.SpecialFolder.Personal), TokenFileName);
+				var path = Path.Combine(directory, TokenFileName);
 				if (File.Exists(path))
 				{
 					var persisted = File.ReadAllText(path).Trim();
@@ -233,6 +245,59 @@ namespace AltCover.Recorder
 				Console.Error.WriteLine($"E2E coverage token file unreadable: {exception.Message}");
 			}
 			return null;
+		}
+
+		/// <summary>
+		/// The directory the app's intent-extra handler persists the token
+		/// under: MAUI FileSystem.AppDataDirectory (see SearchIndexService.
+		/// MarkE2eCoverageToken). This recorder stays netstandard2.0 so it
+		/// loads in every app target, so the same directory is resolved from
+		/// what the runtimes guarantee instead of through a MAUI reference:
+		/// .NET for Android exports the app files dir as HOME, and Apple
+		/// platforms place the app Library at HOME/Library. The pre-fix read
+		/// used SpecialFolder.Personal, which .NET 8 moved under the files
+		/// dir on Android (files/Documents — dotnet/runtime#102110): a
+		/// different directory from the writer's, so every relaunched
+		/// process found no file and reset refused with 403.
+		/// </summary>
+		internal static string? PersistedTokenDirectory()
+		{
+			var home = Environment.GetEnvironmentVariable("HOME");
+			if (RuntimeInformation.IsOSPlatform(OSPlatform.Create("ANDROID")))
+			{
+				return AppDataDirectoryEquivalent("ANDROID", home);
+			}
+			if (RuntimeInformation.IsOSPlatform(OSPlatform.Create("IOS"))
+				|| RuntimeInformation.IsOSPlatform(OSPlatform.Create("MACCATALYST")))
+			{
+				return AppDataDirectoryEquivalent("IOS", home);
+			}
+			return AppDataDirectoryEquivalent("DESKTOP", home);
+		}
+
+		// The per-platform FileSystem.AppDataDirectory equivalent, split out
+		// so unit tests can pin the contract from a desktop host where the
+		// OS probes above always report desktop.
+		internal static string? AppDataDirectoryEquivalent(string osPlatform, string? home)
+		{
+			switch (osPlatform.ToUpperInvariant())
+			{
+				case "ANDROID":
+					// FileSystem.AppDataDirectory is the app files dir; the
+					// .NET for Android runtime exports it as HOME.
+					return string.IsNullOrEmpty(home) ? null : home;
+				case "IOS":
+				case "MACCATALYST":
+				case "TVOS":
+				case "WATCHOS":
+					// FileSystem.AppDataDirectory is the app container's Library.
+					return string.IsNullOrEmpty(home) ? null : Path.Combine(home, "Library");
+				default:
+					// Dead fallback: Windows/desktop suite launches always
+					// supply the token in the process environment.
+					var personal = Environment.GetFolderPath(Environment.SpecialFolder.Personal);
+					return string.IsNullOrEmpty(personal) ? null : personal;
+			}
 		}
 
 		private static void WriteResponse(NetworkStream stream, int status, string contentType, byte[] body)
