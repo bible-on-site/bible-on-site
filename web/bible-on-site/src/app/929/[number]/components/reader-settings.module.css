@@ -254,3 +254,7 @@
 		color: #a8b9ff;
 	}
 }
+
+.panelHeader + .section {
+	margin-top: 16px;
+}
