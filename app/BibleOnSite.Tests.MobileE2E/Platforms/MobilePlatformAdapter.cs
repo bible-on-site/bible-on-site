@@ -62,7 +62,7 @@ public abstract class MobilePlatformAdapter
     /// iOS, so the sequence must begin inside the native edge band (#1306).
     /// </summary>
     public virtual void OpenFlyoutViaRightEdgeSwipe(AppiumDriver driver) =>
-        driver.PerformActions([CreateEdgeSwipeSequence(driver.Manage().Window.Size)]);
+        driver.PerformActions([CreateEdgeSwipeSequence(DriverTelemetry.WindowSize(driver))]);
 
     /// <summary>
     /// Tap the dimmed area beside the open drawer. The RTL drawer slides in from
@@ -71,7 +71,7 @@ public abstract class MobilePlatformAdapter
     /// </summary>
     public virtual void DismissFlyoutViaScrim(AppiumDriver driver)
     {
-        var window = driver.Manage().Window.Size;
+        var window = DriverTelemetry.WindowSize(driver);
         TapAtPoint(driver, Math.Max(8, window.Width / 10), window.Height / 2);
     }
 
@@ -134,7 +134,9 @@ public abstract class MobilePlatformAdapter
 
     internal static void EnsurePortrait(AppiumDriver driver)
     {
-        if (driver.Orientation != ScreenOrientation.Portrait)
+        // The tracked orientation only needs a live read once per driver;
+        // setOrientation commands update it through the Execute funnel.
+        if (DriverTelemetry.Orientation(driver) != ScreenOrientation.Portrait)
         {
             driver.Orientation = ScreenOrientation.Portrait;
         }
@@ -230,7 +232,9 @@ public abstract class MobilePlatformAdapter
                 ["pageSourceExcludedAttributes"] = "visible,accessible",
                 // Return each candidate's real visibility and frame in its lookup.
                 ["shouldUseCompactResponses"] = false,
-                ["elementResponseAttributes"] = "rect,displayed,text,enabled"
+                // hittable rides the same response so CanTap's per-poll read
+                // stays local instead of a second /attribute round-trip.
+                ["elementResponseAttributes"] = "rect,displayed,text,enabled,hittable"
             });
             // The instrumented e2e build never goes quiescent at launch: the
             // coverage recorder and the search-index warmup keep worker threads
@@ -288,7 +292,7 @@ public sealed class AndroidPlatformAdapter : MobilePlatformAdapter
     public override By FlyoutButton => AutomationId("ReaderNavigationButton");
     public override void GoBack(AppiumDriver driver) => driver.Navigate().Back();
     public override AppiumDriver CreateDriver(Uri server, AppiumOptions options) =>
-        new AndroidDriver(server, options, TimeSpan.FromMinutes(4));
+        new AndroidTimedDriver(server, options);
 }
 
 public sealed class IosPlatformAdapter : MobilePlatformAdapter
@@ -366,7 +370,7 @@ public sealed class IosPlatformAdapter : MobilePlatformAdapter
             return;
         }
         // Reader jumps keep the hamburger. Use iOS's standard RTL edge-back gesture.
-        driver.PerformActions([CreateEdgeSwipeSequence(driver.Manage().Window.Size)]);
+        driver.PerformActions([CreateEdgeSwipeSequence(DriverTelemetry.WindowSize(driver))]);
     }
     public override AppiumDriver CreateDriver(Uri server, AppiumOptions options) =>
         // The five-minute client budget fits inside the ten-minute per-test hang

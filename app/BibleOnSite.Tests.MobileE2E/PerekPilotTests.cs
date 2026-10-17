@@ -1,3 +1,4 @@
+using BibleOnSite.Tests.MobileE2E.Platforms;
 using OpenQA.Selenium;
 using OpenQA.Selenium.Appium;
 using Xunit;
@@ -38,7 +39,8 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         Page.WaitFor("RecentSearches");
         Assert.DoesNotContain(Driver!.FindElements(Platform.AutomationId("PerekHeader")), element => element.Displayed);
         var searchPage = Page.WaitFor("SearchPanel");
-        Assert.InRange(searchPage.Size.Width, Driver.Manage().Window.Size.Width - 8, Driver.Manage().Window.Size.Width);
+        var windowWidth = DriverTelemetry.WindowSize(Driver!).Width;
+        Assert.InRange(searchPage.Size.Width, windowWidth - 8, windowWidth);
         SaveDiagnostics("SearchPageRecentSearches", "passed");
         Page.Tap("SearchKindsTab");
         Page.WaitFor("SearchKindPerek");

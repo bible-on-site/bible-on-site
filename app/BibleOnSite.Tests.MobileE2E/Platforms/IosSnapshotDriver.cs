@@ -19,6 +19,10 @@ internal sealed class IosSnapshotDriver : IOSDriver
     internal IosSnapshotDriver(ICommandExecutor executor, AppiumOptions options)
         : base(executor, options) { }
 
+    protected override Response? Execute(string driverCommandToExecute, Dictionary<string, object>? parameters)
+        => DriverTelemetry.Execute(this, driverCommandToExecute, parameters,
+            () => base.Execute(driverCommandToExecute, parameters));
+
     internal IReadOnlyList<NativeElementMatch> FindSnapshots(By locator)
     {
         var mechanism = locator.Mechanism;
@@ -41,7 +45,7 @@ internal sealed class IosSnapshotDriver : IOSDriver
         {
             ["using"] = mechanism,
             ["value"] = criteria
-        });
+        }) ?? throw new WebDriverException("Native lookup returned no response.");
         return NativeElementSnapshot.Decode(response.Value)
             .Select(snapshot => new NativeElementMatch(new NativeLiveElement(this, snapshot.Id),
                 new NativeConditionElement(this, snapshot), snapshot))
@@ -50,7 +54,8 @@ internal sealed class IosSnapshotDriver : IOSDriver
     internal Rectangle ReadFrame(string id)
     {
         var response = Execute(DriverCommand.GetElementRect,
-            new Dictionary<string, object> { ["id"] = id });
+            new Dictionary<string, object> { ["id"] = id })
+            ?? throw new WebDriverException("Native frame request returned no response.");
         if (response.Value is not IDictionary<string, object> rect)
         {
             throw new WebDriverException("Native frame request did not return a rectangle.");
@@ -69,6 +74,12 @@ internal sealed class IosSnapshotDriver : IOSDriver
     {
         public override string Text => snapshot.Text;
         public override bool Enabled => snapshot.Enabled;
+        // Snapshot-backed attributes avoid a second /attribute round-trip per
+        // poll; anything not captured falls through to the live endpoint.
+        public override string? GetAttribute(string attributeName) =>
+            attributeName == "hittable" && snapshot.Hittable is { } hittable
+                ? hittable ? "true" : "false"
+                : base.GetAttribute(attributeName);
     }
 
     private sealed class LocatorCapture : ISearchContext, IFindsByFluentSelector<IWebElement>
@@ -99,7 +110,8 @@ internal sealed record NativeElementMatch(
     AppiumElement Element, AppiumElement ConditionElement, NativeElementSnapshot Snapshot);
 
 internal readonly record struct NativeElementSnapshot(
-    string Id, bool Displayed, double X, double Y, double Width, double Height, string Text, bool Enabled)
+    string Id, bool Displayed, double X, double Y, double Width, double Height, string Text, bool Enabled,
+    bool? Hittable = null)
 {
     internal bool IsVisibleIn(Size window)
     {
@@ -134,7 +146,9 @@ internal readonly record struct NativeElementSnapshot(
                     throw new WebDriverException("Native lookup is missing its element ID, displayed state, frame, text or enabled state.");
                 }
             result.Add(new(elementId, isDisplayed, Number(rect, "x"), Number(rect, "y"),
-                Number(rect, "width"), Number(rect, "height"), (string?)text ?? string.Empty, isEnabled));
+                Number(rect, "width"), Number(rect, "height"), (string?)text ?? string.Empty, isEnabled,
+                element.TryGetValue("hittable", out var hittable) && hittable is bool isHittable
+                    ? isHittable : null));
         }
         return result;
     }

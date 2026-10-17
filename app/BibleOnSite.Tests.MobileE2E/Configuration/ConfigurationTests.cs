@@ -57,7 +57,7 @@ public sealed class ConfigurationTests
             var settings = Assert.IsType<Dictionary<string, object>>(options["appium:settings"]);
             Assert.Equal("visible,accessible", settings["pageSourceExcludedAttributes"]);
             Assert.Equal(false, settings["shouldUseCompactResponses"]);
-            Assert.Equal("rect,displayed,text,enabled", settings["elementResponseAttributes"]);
+            Assert.Equal("rect,displayed,text,enabled,hittable", settings["elementResponseAttributes"]);
         }
         else
         {
