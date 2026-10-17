@@ -49,12 +49,21 @@ public class PerushimNotesService
     /// Raised after initialization, a download or a removal releases the pack,
     /// so work deferred while notes were undetermined can settle.
     /// </summary>
-    internal Action? OperationCompleted { get; set; }
+    internal event Action? OperationCompleted
+    {
+        add { lock (_operationCompletedSync) { _operationCompleted += value; } }
+        remove { lock (_operationCompletedSync) { _operationCompleted -= value; } }
+    }
+
+    private readonly object _operationCompletedSync = new();
+    private Action? _operationCompleted;
 
     private void ReleaseOperation()
     {
         _operationLock.Release();
-        OperationCompleted?.Invoke();
+        Action? handlers;
+        lock (_operationCompletedSync) { handlers = _operationCompleted; }
+        handlers?.Invoke();
     }
 
     public PerushimNotesService(IPadDeliveryService padService)
