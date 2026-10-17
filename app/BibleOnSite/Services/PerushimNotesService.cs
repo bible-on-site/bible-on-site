@@ -49,7 +49,7 @@ public class PerushimNotesService
     /// Raised after initialization, a download or a removal releases the pack,
     /// so work deferred while notes were undetermined can settle.
     /// </summary>
-    internal event Action? OperationCompleted;
+    internal Action? OperationCompleted { get; set; }
 
     private void ReleaseOperation()
     {
