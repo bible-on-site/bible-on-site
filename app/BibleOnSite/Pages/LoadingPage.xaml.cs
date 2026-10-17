@@ -52,11 +52,17 @@ public partial class LoadingPage : ContentPage, IAnalyticsScreenName
         }
         catch (Exception ex)
         {
-            if (perekLoad is { IsFaulted: true })
+            // The catalog load ran in parallel and may still be in flight here
+            // (e.g. AppConfig threw before WhenAll was awaited). Observe its
+            // fault — already faulted or faulting later — so it is never left
+            // as an unobserved task exception.
+            if (perekLoad != null)
             {
-                // The catalog load ran in parallel — log its fault too so it is
-                // never left as an unobserved task exception.
-                Console.Error.WriteLine($"Perek data load failed: {perekLoad.Exception}");
+                _ = perekLoad.ContinueWith(
+                    t => Console.Error.WriteLine($"Perek data load failed: {t.Exception}"),
+                    CancellationToken.None,
+                    TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+                    TaskScheduler.Default);
             }
             Console.Error.WriteLine($"Startup error: {ex}");
         }
