@@ -107,7 +107,8 @@ public sealed class DriverTelemetryTests
         public bool StripHittable { get; set; }
         public bool Hittable { get; set; }
         private int _windowReads;
-        public bool TryAddCommand(string name, CommandInfo? _) => name.Length > 0;
+        public Dictionary<string, CommandInfo?> Registered { get; } = [];
+        public bool TryAddCommand(string name, CommandInfo? info) => Registered.TryAdd(name, info);
         public void Dispose() { /* The fake owns no resources. */ }
         public Task<Response> ExecuteAsync(Command command) => Task.FromResult(Execute(command));
         public Response Execute(Command command)
