@@ -74,15 +74,15 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
 
     public PerekPage()
     {
-        Console.WriteLine("[Startup] PerekPage InitializeComponent");
+        DebugLog.Write("[Startup] PerekPage InitializeComponent");
         InitializeComponent();
 #if IOS
         ConfigureReaderSafeArea();
 #endif
-        Console.WriteLine("[Startup] PerekPage binding context");
+        DebugLog.Write("[Startup] PerekPage binding context");
         _viewModel = new PerekViewModel();
         BindingContext = _viewModel;
-        Console.WriteLine("[Startup] PerekPage resources and navigation");
+        DebugLog.Write("[Startup] PerekPage resources and navigation");
         ForwardSelectedArticleIdChanged();
         SetupFontSizeResources();
         SetupCarouselNavigation();
@@ -90,7 +90,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         SetupExitButtonDragHandler();
         SubscribeAppLinks();
         SubscribePerushimSearch();
-        Console.WriteLine("[Startup] PerekPage constructed");
+        DebugLog.Write("[Startup] PerekPage constructed");
     }
 
     public PerekPage(PerekViewModel viewModel)
@@ -497,7 +497,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
 
     protected override async void OnAppearing()
     {
-        Console.WriteLine("[Startup] PerekPage appearing");
+        DebugLog.Write("[Startup] PerekPage appearing");
         base.OnAppearing();
 #if ANDROID
         RegisterReaderBack();
@@ -511,7 +511,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         ConfigureIosReaderHistory();
 #endif
         await InitializeRecitationAsync();
-        Console.WriteLine("[Startup] PerekPage recitation initialized");
+        DebugLog.Write("[Startup] PerekPage recitation initialized");
 #if ANDROID
         MainActivity.TouchStarted += OnTouchStarted;
         MainActivity.SubscribeTouchDispatched(OnTouchDispatched);
@@ -599,7 +599,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     {
         _initialPerekId ??= GetInitialPerekId();
         var perekId = _initialPerekId.Value;
-        Console.WriteLine($"[PerekLoad] fresh load start perekId={perekId}");
+        DebugLog.Write($"[PerekLoad] fresh load start perekId={perekId}");
         ShowCarouselLoading();
 
         // Guard: ignore OnCarouselItemChanged during initial load.
@@ -1307,10 +1307,10 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     }
 
     private void OnCircularMenuPressed(object? sender, EventArgs e) =>
-        Console.WriteLine($"[CircularMenu] Pressed: open={_isMenuOpen}");
+        DebugLog.Write($"[CircularMenu] Pressed: open={_isMenuOpen}");
 
     private void OnCircularMenuReleased(object? sender, EventArgs e) =>
-        Console.WriteLine($"[CircularMenu] Released: open={_isMenuOpen}");
+        DebugLog.Write($"[CircularMenu] Released: open={_isMenuOpen}");
 
     /// <summary>
     /// Toggles the circular menu open/closed state with animation.
@@ -1318,7 +1318,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     private async void OnCircularMenuClicked(object? sender, EventArgs e)
     {
         _isMenuOpen = !_isMenuOpen;
-        Console.WriteLine($"[CircularMenu] Clicked: open={_isMenuOpen}");
+        DebugLog.Write($"[CircularMenu] Clicked: open={_isMenuOpen}");
 
         if (_isMenuOpen)
         {
@@ -1368,7 +1368,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         }
 
         await Task.WhenAll(animations);
-        Console.WriteLine($"[CircularMenu] Open animation complete: open={_isMenuOpen}");
+        DebugLog.Write($"[CircularMenu] Open animation complete: open={_isMenuOpen}");
     }
 
     /// <summary>
@@ -1409,7 +1409,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         {
             button.InputTransparent = true;
         }
-        Console.WriteLine($"[CircularMenu] Close animation complete: open={_isMenuOpen}");
+        DebugLog.Write($"[CircularMenu] Close animation complete: open={_isMenuOpen}");
     }
 
     /// <summary>
@@ -1565,7 +1565,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     {
         try
         {
-            Console.WriteLine("[Articles] Button clicked, _isShowingArticles=" + _isShowingArticles);
+            DebugLog.Write("[Articles] Button clicked, _isShowingArticles=" + _isShowingArticles);
 
             if (_isShowingArticles)
             {
@@ -1588,26 +1588,26 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     {
         try
         {
-            Console.WriteLine("[Articles] ShowArticlesViewAsync starting...");
+            DebugLog.Write("[Articles] ShowArticlesViewAsync starting...");
             _isShowingArticles = true;
 
             // Load articles for the current perek (header stays the same)
-            Console.WriteLine("[Articles] Loading articles...");
+            DebugLog.Write("[Articles] Loading articles...");
             await LoadArticlesAsync();
-            Console.WriteLine("[Articles] Articles loaded");
+            DebugLog.Write("[Articles] Articles loaded");
 
             // Simple visibility swap instead of animation (animation may crash on Windows)
-            Console.WriteLine("[Articles] Switching visibility...");
+            DebugLog.Write("[Articles] Switching visibility...");
             PerekCarousel.IsVisible = false;
             ArticlesCollection.IsVisible = true;
-            Console.WriteLine("[Articles] Visibility switched");
+            DebugLog.Write("[Articles] Visibility switched");
 
             // Update button states - highlight articles button
-            Console.WriteLine("[Articles] Updating button color...");
+            DebugLog.Write("[Articles] Updating button color...");
             ArticlesButton.TextColor = Microsoft.Maui.Controls.Application.Current?.RequestedTheme == AppTheme.Dark
                 ? Color.FromArgb("#BB86FC")
                 : Color.FromArgb("#512BD4");
-            Console.WriteLine("[Articles] ShowArticlesViewAsync complete");
+            DebugLog.Write("[Articles] ShowArticlesViewAsync complete");
         }
         catch (Exception ex)
         {
@@ -2149,7 +2149,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         // Ignore them — the ViewModel already holds the correct perek.
         if (_carouselInitializing)
         {
-            Console.WriteLine($"[Carousel] OnChanged IGNORED (initializing)");
+            DebugLog.Write($"[Carousel] OnChanged IGNORED (initializing)");
             return;
         }
 
@@ -2158,7 +2158,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
 
         if (e.CurrentItem is not Perek perek || perek.PerekId <= 0 || perek.PerekId == _viewModel.PerekId)
         {
-            Console.WriteLine($"[Carousel] OnChanged SKIPPED incoming={incomingId} vmPerek={_viewModel.PerekId}");
+            DebugLog.Write($"[Carousel] OnChanged SKIPPED incoming={incomingId} vmPerek={_viewModel.PerekId}");
             return;
         }
 
@@ -2169,7 +2169,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         ResetRecitationSession();
 
         var hasPasukim = perek.Pasukim != null && perek.Pasukim.Count > 0;
-        Console.WriteLine($"[Carousel] OnChanged PROCESS incoming={incomingId} prev={previousId} vmPerek={_viewModel.PerekId} pos={_viewModel.CarouselPosition} hasPasukim={hasPasukim}");
+        DebugLog.Write($"[Carousel] OnChanged PROCESS incoming={incomingId} prev={previousId} vmPerek={_viewModel.PerekId} pos={_viewModel.CarouselPosition} hasPasukim={hasPasukim}");
 
         // Lazy-load pasukim if not yet loaded (~5ms from SQLite, non-blocking)
         if (!hasPasukim)
@@ -2197,7 +2197,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
             RefreshNavButtonVisuals();
         }
 
-        Console.WriteLine($"[Carousel] OnChanged DONE vmPerek={_viewModel.PerekId} pos={_viewModel.CarouselPosition}");
+        DebugLog.Write($"[Carousel] OnChanged DONE vmPerek={_viewModel.PerekId} pos={_viewModel.CarouselPosition}");
 
         // Fire async tasks in the background — never block the next swipe
         _ = UpdateArticlesCountAsync();
