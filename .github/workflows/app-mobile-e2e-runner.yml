@@ -656,6 +656,16 @@ jobs:
           MOBILE_E2E_SELECTION: ${{ inputs.ios_plan_artifact != '' && steps.shard_manifest.outputs.manifest || (inputs.e2e_selection_mode == 'enforce' && steps.selection.outputs.manifest || '') }}
         run: npm test --prefix app/mobile-e2e
 
+      # Coverage resets, dump pulls and device-diagnostics captures are
+      # diagnostic-only by design — a failure writes to the trx and never
+      # decides the scenario. That silence let every Android scenario's reset
+      # 403 for months. One occurrence warns as a plausible transient; the
+      # same signature twice is systematic and fails the leg. Artifacts still
+      # upload via the always() steps below.
+      - name: Flag systematic harness diagnostics
+        if: inputs.mode != 'build' && always() && !cancelled()
+        run: node app/mobile-e2e/silent-failures.mjs "$MOBILE_E2E_ARTIFACTS/results"
+
       # Real app-process coverage (#1232): the harness pulled a live hit dump
       # from the instrumented app at the end of every scenario. This applies
       # them onto the build's OpenCover template and emits lcov.info. The step
