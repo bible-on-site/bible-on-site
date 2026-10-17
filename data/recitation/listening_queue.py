@@ -28,13 +28,17 @@ def stamp(row):
 
 class ReviewDatabase:
     def __init__(self, path):
+        """Bind a separate durable review store without touching alignment data."""
         self.path = Path(path).resolve()
         if self.path.name in {"recitation.sqlite", "recitation-working.sqlite"}:
             raise ValueError("Use a separate listening database, never publication or worker data")
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.sync_lock = threading.Lock()
         self.on_saved = None
-        with closing(sqlite3.connect(self.path)) as db, db:
+        with (
+            closing(sqlite3.connect(self.path)) as db,
+            db,
+        ):
             db.execute("PRAGMA journal_mode=WAL")
             db.executescript("""
                 CREATE TABLE IF NOT EXISTS batch (
@@ -71,7 +75,10 @@ class ReviewDatabase:
             raise ValueError("Queue changed during validation")
         file_sha = hashlib.sha256(raw).hexdigest()
         entries = read_json(Path(reviews_path))["entries"] if reviews_path else []
-        with closing(sqlite3.connect(self.path)) as db, db:
+        with (
+            closing(sqlite3.connect(self.path)) as db,
+            db,
+        ):
             db.execute("BEGIN IMMEDIATE")
             old = db.execute("SELECT seq, file_sha FROM batch WHERE path=?", (str(queue_path),)).fetchone()
             if old and old[1] != file_sha:
@@ -110,7 +117,11 @@ class ReviewDatabase:
 
     def sync_histories(self):
         """Import real answers from older still-open pages, preserving every actual row."""
-        with self.sync_lock, closing(sqlite3.connect(self.path)) as db, db:
+        with (
+            self.sync_lock,
+            closing(sqlite3.connect(self.path)) as db,
+            db,
+        ):
             for path, seq, prefix in db.execute("SELECT path,batch_seq,prefix FROM history").fetchall():
                 batch = db.execute("SELECT path,file_sha FROM batch WHERE seq=?", (seq,)).fetchone()
                 if digest_file(Path(batch[0])) != batch[1]:
@@ -133,7 +144,10 @@ class ReviewDatabase:
             if digest_file(path) != source["queueSha256"]:
                 raise ValueError("Source queue differs from its fixed binding")
             self.append(path, Path(source["reviews"]))
-        with closing(sqlite3.connect(self.path)) as db, db:
+        with (
+            closing(sqlite3.connect(self.path)) as db,
+            db,
+        ):
             latest = {entry_key(row): row for row in self._entries(db)}
             for key, row in latest.items():
                 if row["verdict"] != "skip":
@@ -153,7 +167,10 @@ class ReviewDatabase:
         # Re-read the immutable stored version, not a browser-supplied candidate body.
         exact = self.case(case["id"], payload.get("candidateSha256"), payload.get("clipSha256"))
         row = validate_decision(exact, payload)
-        with closing(sqlite3.connect(self.path)) as db, db:
+        with (
+            closing(sqlite3.connect(self.path)) as db,
+            db,
+        ):
             row["queueSha256"] = db.execute("SELECT queue_sha FROM candidate WHERE key=?",
                                             (case_key(exact),)).fetchone()[0]
             self._insert_entries(db, [row])
