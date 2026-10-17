@@ -155,6 +155,25 @@ public class PackagedDatabaseTests
     }
 
     [Fact]
+    public async Task UnreadableMarker_FallsBackToHashVerify()
+    {
+        await using var storage = new TestStorage();
+        var payload = Payload("bundled");
+        storage.PackageFiles[DbName] = payload;
+        await File.WriteAllBytesAsync(Destination(storage), payload, TestContext.Current.CancellationToken);
+        await File.WriteAllTextAsync(Marker(storage), "unreadable",
+            TestContext.Current.CancellationToken);
+        // Mode 000 makes the read throw on non-root runners; as root the file
+        // still reads and merely fails parsing — the outcome is identical.
+        File.SetUnixFileMode(Marker(storage), UnixFileMode.None);
+
+        await PackagedDatabase.RefreshAsync(storage.FileSystem.Object, DbName, AppMock());
+
+        (await File.ReadAllBytesAsync(Destination(storage), TestContext.Current.CancellationToken))
+            .Should().Equal(payload);
+    }
+
+    [Fact]
     public async Task MalformedMarker_FallsBackToHashVerify_AndRewrites()
     {
         await using var storage = new TestStorage();
