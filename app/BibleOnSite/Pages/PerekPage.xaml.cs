@@ -161,7 +161,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
                 RefreshNavButtonVisuals();
             }
 
-            _ = UpdateArticlesCountAsync();
+            UpdateArticlesCount();
             _ = _viewModel.PreloadAdjacentPasukimAsync(perekId);
 #if IOS
             Dispatcher.Dispatch(() => RefreshDescendantViews(PerekCarousel));
@@ -321,10 +321,10 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
             {
                 MainThread.BeginInvokeOnMainThread(() =>
                 {
-                    _ = UpdateArticlesCountAsync();
+                    UpdateArticlesCount();
                     if (_isShowingArticles)
                     {
-                        _ = LoadArticlesAsync();
+                        LoadArticles();
                     }
                     // Force visual refresh of prev/next buttons (workaround for MAUI not updating disabled visual)
                     RefreshNavButtonVisuals();
@@ -648,7 +648,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         StartSearchIntroduction();
 
         // Update articles count badge
-        await UpdateArticlesCountAsync();
+        UpdateArticlesCount();
 
         // A cold-start link may also carry an article to open.
         if (_pendingArticleId is int pendingArticleId)
@@ -832,14 +832,15 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     }
 
     /// <summary>
-    /// Updates the articles count badge for the current perek.
+    /// Updates the articles count badge for the current perek from the
+    /// StarterService startup counters — a swipe never issues a network request
+    /// just to redraw the badge.
     /// </summary>
-    private async Task UpdateArticlesCountAsync()
+    private void UpdateArticlesCount()
     {
         try
         {
-            var articles = await ArticleService.Instance.GetArticlesByPerekIdAsync(_viewModel.PerekId);
-            var count = articles.Count;
+            var count = StarterService.Instance.GetPerekArticlesCount(_viewModel.PerekId);
 
             // Update badge visibility and text
             ArticlesBadge.IsVisible = count > 0;
@@ -850,7 +851,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"Error fetching articles count: {ex.Message}");
+            Console.Error.WriteLine($"Error updating articles count: {ex.Message}");
             ArticlesBadge.IsVisible = false;
         }
     }
@@ -1561,7 +1562,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     /// <summary>
     /// Handles articles button click - shows articles view.
     /// </summary>
-    private async void OnArticlesButtonClicked(object? sender, EventArgs e)
+    private void OnArticlesButtonClicked(object? sender, EventArgs e)
     {
         try
         {
@@ -1573,7 +1574,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
                 return;
             }
 
-            await ShowArticlesViewAsync();
+            ShowArticlesView();
         }
         catch (Exception ex)
         {
@@ -1584,16 +1585,16 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     /// <summary>
     /// Shows the articles view with flip animation.
     /// </summary>
-    private async Task ShowArticlesViewAsync()
+    private void ShowArticlesView()
     {
         try
         {
-            DebugLog.Write("[Articles] ShowArticlesViewAsync starting...");
+            DebugLog.Write("[Articles] ShowArticlesView starting...");
             _isShowingArticles = true;
 
             // Load articles for the current perek (header stays the same)
             DebugLog.Write("[Articles] Loading articles...");
-            await LoadArticlesAsync();
+            LoadArticles();
             DebugLog.Write("[Articles] Articles loaded");
 
             // Simple visibility swap instead of animation (animation may crash on Windows)
@@ -1607,11 +1608,11 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
             ArticlesButton.TextColor = Microsoft.Maui.Controls.Application.Current?.RequestedTheme == AppTheme.Dark
                 ? Color.FromArgb("#BB86FC")
                 : Color.FromArgb("#512BD4");
-            DebugLog.Write("[Articles] ShowArticlesViewAsync complete");
+            DebugLog.Write("[Articles] ShowArticlesView complete");
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"[Articles] Error in ShowArticlesViewAsync: {ex}");
+            Console.Error.WriteLine($"[Articles] Error in ShowArticlesView: {ex}");
         }
     }
 
@@ -1695,14 +1696,14 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     }
 
     /// <summary>
-    /// Loads articles for the current perek.
+    /// Loads articles for the current perek from the StarterService snapshot —
+    /// same Priority ordering and Author wiring the GraphQL query produced.
     /// </summary>
-    private async Task LoadArticlesAsync()
+    private void LoadArticles()
     {
         try
         {
-            var articles = await ArticleService.Instance.GetArticlesByPerekIdAsync(_viewModel.PerekId);
-            ArticlesCollection.ItemsSource = articles;
+            ArticlesCollection.ItemsSource = StarterService.Instance.GetArticlesByPerekId(_viewModel.PerekId);
         }
         catch (Exception ex)
         {
@@ -2200,7 +2201,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         DebugLog.Write($"[Carousel] OnChanged DONE vmPerek={_viewModel.PerekId} pos={_viewModel.CarouselPosition}");
 
         // Fire async tasks in the background — never block the next swipe
-        _ = UpdateArticlesCountAsync();
+        UpdateArticlesCount();
         _ = _viewModel.LoadPerushimAsync(perek.PerekId);
         _ = _viewModel.PreloadAdjacentPasukimAsync(perek.PerekId);
 #if IOS
@@ -2210,7 +2211,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
 #endif
         if (_isShowingArticles)
         {
-            _ = LoadArticlesAsync();
+            LoadArticles();
         }
     }
 
