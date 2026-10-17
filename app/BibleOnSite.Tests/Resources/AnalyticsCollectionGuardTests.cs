@@ -88,6 +88,20 @@ public class AnalyticsCollectionGuardTests
     }
 
     [Fact]
+    public void AndroidStartup_BindsAnalyticsBeforeFirstUse()
+    {
+        // #2247: Plugin.Firebase.Analytics needs an explicit Initialize on
+        // Android. Only Release builds compile the analytics startup path
+        // (Debug/e2e define DISABLE_ANALYTICS), so a missing call crashes
+        // every store build at launch while every test build stays green.
+        var activity = File.ReadAllText(Path.Join(AppRoot, "Platforms", "Android", "MainActivity.cs"));
+        var initialize = activity.IndexOf("FirebaseAnalyticsImplementation.Initialize(", StringComparison.Ordinal);
+        var firstUse = activity.IndexOf("CrossFirebaseAnalytics.Current", StringComparison.Ordinal);
+        Assert.True(initialize >= 0, "MainActivity must call FirebaseAnalyticsImplementation.Initialize");
+        Assert.True(initialize < firstUse, "Analytics must be initialized before CrossFirebaseAnalytics.Current is used");
+    }
+
+    [Fact]
     public void MobileE2eCompile_PropagatesDisableAnalytics()
     {
         // #2120 asks for an explicit, reliably propagated test-build
