@@ -227,6 +227,8 @@
 	flex-direction: column;
 	align-items: center;
 	justify-content: center;
+	/* Size cover text to the cover, not the viewport, so small covers don't clip */
+	container-type: inline-size;
 	/* Inset border to simulate a real hardcover frame */
 	border: 3px solid rgb(255 255 255 / 0.15);
 	border-radius: 2px;
@@ -251,21 +253,21 @@
 	align-items: center;
 	justify-content: center;
 	text-align: center;
-	padding: 2rem;
+	padding: clamp(0.75rem, 7cqi, 2rem);
 	box-sizing: border-box;
 	gap: 0.3em;
 }
 
 .coverOrnament {
 	color: rgb(255 255 255 / 0.5);
-	font-size: clamp(1rem, 2.5vw, 1.5rem);
+	font-size: clamp(0.75rem, 5cqi, 1.5rem);
 	letter-spacing: 0.3em;
 	margin-bottom: 0.5em;
 }
 
 .coverTitle {
 	color: #fff;
-	font-size: clamp(1.5rem, 4vw, 2.5rem);
+	font-size: clamp(1rem, 8cqi, 2.5rem);
 	font-weight: 700;
 	margin: 0;
 	letter-spacing: 0.05em;
@@ -286,7 +288,7 @@
 
 .coverSubtitle {
 	color: rgb(255 255 255 / 0.85);
-	font-size: clamp(0.85rem, 2vw, 1.1rem);
+	font-size: clamp(0.65rem, 4cqi, 1.1rem);
 	font-weight: 400;
 	margin: 0;
 	letter-spacing: 0.08em;
@@ -294,7 +296,7 @@
 
 .coverEdition {
 	color: rgb(255 255 255 / 0.55);
-	font-size: clamp(0.7rem, 1.5vw, 0.85rem);
+	font-size: clamp(0.55rem, 3cqi, 0.85rem);
 	font-weight: 300;
 	margin: 0.3em 0 0;
 	letter-spacing: 0.04em;
