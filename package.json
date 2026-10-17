@@ -10,8 +10,5 @@
 		"images:prepare": "node devops/perek-images/prepare.mjs",
 		"prepare": "node devops/install-git-hooks.mjs",
 		"version": "cross-env-shell echo ${npm_package_version}"
-	},
-	"dependencies": {
-		"mysql2": "^3.24.4"
 	}
 }

@@ -413,7 +413,6 @@ dependencies = [
  "dotenvy",
  "entities",
  "lambda_http",
- "lambda_runtime",
  "lopdf",
  "sea-orm",
  "serde",
@@ -1179,7 +1178,6 @@ name = "entities"
 version = "0.1.0"
 dependencies = [
  "sea-orm",
- "serde",
 ]
 
 [[package]]
