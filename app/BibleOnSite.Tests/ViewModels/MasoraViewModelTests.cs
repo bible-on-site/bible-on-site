@@ -21,7 +21,8 @@ public class MasoraViewModelTests
         private readonly bool _includeNotes;
 
         public Fixture(List<Article>? articles = null, int? lastLearntPerek = null,
-            bool includeCatalog = true, bool includeNotes = true, bool nullArticlesLoader = false)
+            bool includeCatalog = true, bool includeNotes = true, bool nullArticlesLoader = false,
+            Func<LocalDatabaseService, PerekDataService>? perekDataServiceFactory = null)
         {
             _includeCatalog = includeCatalog;
             _includeNotes = includeNotes;
@@ -35,9 +36,10 @@ public class MasoraViewModelTests
             var preferences = PreferencesService.CreateForTesting(Prefs);
             preferences.Load();
             MasoraService = new MasoraDataService(new LocalDatabaseService(Storage.FileSystem.Object));
+            var localDb = new LocalDatabaseService(Storage.FileSystem.Object);
             Model = new MasoraViewModel(
                 MasoraService,
-                new PerekDataService(new LocalDatabaseService(Storage.FileSystem.Object)),
+                perekDataServiceFactory?.Invoke(localDb) ?? new PerekDataService(localDb),
                 preferences,
                 catalog,
                 notes,
@@ -372,6 +374,38 @@ public class MasoraViewModelTests
 
         // Everything already loaded → nothing left to do.
         await fixture.Model.PreloadAdjacentRowsAsync(1);
+    }
+
+    /// <summary>Counts pasukim loads so preload cache behavior is observable.</summary>
+    private sealed class CountingPerekDataService : PerekDataService
+    {
+        public List<int> RequestedPerekIds { get; } = new();
+
+        public CountingPerekDataService(LocalDatabaseService databaseService) : base(databaseService) { }
+
+        public override Task<List<Pasuk>> LoadPasukimAsync(int perekId)
+        {
+            RequestedPerekIds.Add(perekId);
+            return base.LoadPasukimAsync(perekId);
+        }
+    }
+
+    [Fact]
+    public async Task PreloadAdjacentRows_LoadsSharedBoundaryPerekOnce()
+    {
+        CountingPerekDataService? counting = null;
+        await using var fixture = new Fixture(
+            perekDataServiceFactory: db => counting = new CountingPerekDataService(db));
+        await fixture.Initialize();
+        await fixture.MasoraService.LoadAsync();
+
+        // Units 1 and 2 both touch perek 1 — one preload batch, one fetch.
+        await fixture.Model.PreloadAdjacentRowsAsync(2);
+
+        counting!.RequestedPerekIds.Should().Equal(1, 2, 51);
+        fixture.MasoraService.GetUnit(1)!.Rows.Should().NotBeEmpty();
+        fixture.MasoraService.GetUnit(2)!.Rows.Should().NotBeEmpty();
+        fixture.MasoraService.GetUnit(3)!.Rows.Should().NotBeEmpty();
     }
 
     [Fact]
