@@ -106,28 +106,20 @@ public class PerushimCatalogService
     /// </summary>
     public async Task<Dictionary<int, Perush>> GetPerushimByIdsAsync(IEnumerable<int> ids)
     {
-        var result = new Dictionary<int, Perush>();
         var conn = await GetConnectionAsync();
         if (conn == null)
         {
-            return result;
+            return new Dictionary<int, Perush>();
         }
 
         var idList = ids.Distinct().ToList();
         if (idList.Count == 0)
         {
-            return result;
+            return new Dictionary<int, Perush>();
         }
 
-        var catalog = await GetCatalogAsync(conn);
-        foreach (var id in idList)
-        {
-            if (catalog.ById.TryGetValue(id, out var perush))
-            {
-                result[id] = perush;
-            }
-        }
-        return result;
+        var byId = (await GetCatalogAsync(conn)).ById;
+        return idList.Where(byId.ContainsKey).ToDictionary(id => id, id => byId[id]);
     }
 
     /// <summary>
