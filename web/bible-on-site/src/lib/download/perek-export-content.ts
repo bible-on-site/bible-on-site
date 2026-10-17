@@ -34,21 +34,25 @@ export interface BulletinPerekContent {
 /** Print width keeps a full Sefer's request under the Lambda payload limit. */
 const IMAGE_WIDTH = 1000;
 
+/** Downloads an object from the configured image bucket, never another host. */
+async function fetchBucketImage(src: string): Promise<ArrayBuffer> {
+	const bucketOrigin = new URL(perekImageUrl("")).origin;
+	const { origin, pathname } = new URL(src);
+	if (origin !== bucketOrigin) {
+		throw new Error(`unexpected image origin ${origin}`);
+	}
+	const res = await fetch(`${bucketOrigin}${pathname}`);
+	if (!res.ok) throw new Error(`HTTP ${res.status}`);
+	return res.arrayBuffer();
+}
+
 async function fetchImage(
 	src: string,
 	caption: string,
 	where: string,
 ): Promise<BulletinImage> {
 	try {
-		// Only fetch from the configured image bucket, never an arbitrary host.
-		const bucketOrigin = new URL(perekImageUrl("")).origin;
-		const { origin, pathname } = new URL(src);
-		if (origin !== bucketOrigin) {
-			throw new Error(`unexpected image origin ${origin}`);
-		}
-		const res = await fetch(`${bucketOrigin}${pathname}`);
-		if (!res.ok) throw new Error(`HTTP ${res.status}`);
-		const jpeg = await sharp(Buffer.from(await res.arrayBuffer()))
+		const jpeg = await sharp(Buffer.from(await fetchBucketImage(src)))
 			.resize({ width: IMAGE_WIDTH, withoutEnlargement: true })
 			.jpeg({ quality: 80 })
 			.toBuffer();
