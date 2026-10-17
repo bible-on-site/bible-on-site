@@ -357,7 +357,7 @@ public sealed class ViewportTextView : UIView, IUIAccessibilityContainer
         var horizontal = TextViewport.Clip((double)Bounds.Width, left, right);
         // Width is part of the key: it feeds the applied frame but not the clip.
         if (viewport == _appliedViewport && horizontal == _appliedHorizontal &&
-            (double)Bounds.Width == _appliedWidth)
+            Math.Abs((double)Bounds.Width - _appliedWidth) < 0.5)
         {
             return;
         }
