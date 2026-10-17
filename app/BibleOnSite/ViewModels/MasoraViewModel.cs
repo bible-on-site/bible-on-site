@@ -111,6 +111,8 @@ public partial class MasoraViewModel : ObservableObject //NOSONAR
     /// parameterless ctor — not inside the injectable ctor — so tests can
     /// still exercise the loader-free path in LoadArticlesAsync.
     /// </summary>
+    [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage(
+        Justification = "Production-only loader wiring through the StarterService singleton, which requires platform FileSystem — unit tests inject their own loader.")]
     private static Func<int, Task<List<Article>>>? DefaultArticlesLoader =>
 #if MAUI
         perekId => Task.FromResult(StarterService.Instance.GetArticlesByPerekId(perekId));
