@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Runtime.CompilerServices;
 
 namespace BibleOnSite.Converters;
 
@@ -12,6 +13,18 @@ namespace BibleOnSite.Converters;
 /// </summary>
 public class PasukMarkerTextConverter : IMultiValueConverter
 {
+    private const int MaxCachedMergesPerSource = 4;
+
+    // Keyed on the source FormattedString instance: Pasuk.FormattedText keeps
+    // returning the same instance while its weak-ref cache lives and hands out
+    // a new instance only when the content genuinely changed (recitation
+    // segment, הסתר שם השם revision), so instance identity is a complete merge
+    // key — recycled rows and repeat binds reuse the merge instead of cloning
+    // every span again. Entries die with their source FormattedString, so the
+    // table stays bounded on its own as rows and perakim recycle.
+    private readonly ConditionalWeakTable<FormattedString, List<CachedMerge>> _mergedCache = new();
+    private readonly object _mergedCacheGate = new();
+
     /// <summary>Marker color — set in XAML to {StaticResource Primary}.</summary>
     public Color MarkerColor { get; set; } = Colors.Blue;
 
@@ -28,6 +41,40 @@ public class PasukMarkerTextConverter : IMultiValueConverter
             return text;
         }
 
+        // Missing or non-positive sizes leave the marker span at the label
+        // default; they share the 0 ("unset") slot rather than keying on the
+        // raw input value. Sizes key on their bit pattern — an exact match
+        // without tripping the float-equality analyzer.
+        var markerFontSize = values.Length > 2 && values[2] is double size && size > 0 ? size : 0;
+        var markerFontSizeBits = BitConverter.DoubleToInt64Bits(markerFontSize);
+        lock (_mergedCacheGate)
+        {
+            var merges = _mergedCache.GetValue(text, static _ => new List<CachedMerge>(1));
+            foreach (var merge in merges)
+            {
+                if (merge.Marker == marker &&
+                    merge.MarkerFontSizeBits == markerFontSizeBits &&
+                    merge.MarkerColor.Equals(MarkerColor))
+                {
+                    return merge.Merged;
+                }
+            }
+
+            var merged = Merge(text, marker, markerFontSize);
+            if (merges.Count == MaxCachedMergesPerSource)
+            {
+                merges.RemoveAt(0);
+            }
+            merges.Add(new CachedMerge(marker, markerFontSizeBits, MarkerColor, merged));
+            return merged;
+        }
+    }
+
+    public object[] ConvertBack(object value, Type[] targetTypes, object? parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+
+    private FormattedString Merge(FormattedString text, string marker, double markerFontSize)
+    {
         var merged = new FormattedString();
         var markerSpan = new Span
         {
@@ -35,7 +82,7 @@ public class PasukMarkerTextConverter : IMultiValueConverter
             FontAttributes = FontAttributes.Bold,
             TextColor = MarkerColor
         };
-        if (values.Length > 2 && values[2] is double markerFontSize && markerFontSize > 0)
+        if (markerFontSize > 0)
         {
             markerSpan.FontSize = markerFontSize;
         }
@@ -48,9 +95,6 @@ public class PasukMarkerTextConverter : IMultiValueConverter
         }
         return merged;
     }
-
-    public object[] ConvertBack(object value, Type[] targetTypes, object? parameter, CultureInfo culture)
-        => throw new NotSupportedException();
 
     private static Span CloneSpan(Span span) => new()
     {
@@ -65,4 +109,8 @@ public class PasukMarkerTextConverter : IMultiValueConverter
         LineHeight = span.LineHeight,
         TextTransform = span.TextTransform
     };
+
+    // The font size rides the key as raw bits — exact cache-key equality
+    // without tripping S1244's float == rule.
+    private sealed record CachedMerge(string Marker, long MarkerFontSizeBits, Color MarkerColor, FormattedString Merged);
 }
