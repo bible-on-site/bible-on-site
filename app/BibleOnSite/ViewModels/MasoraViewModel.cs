@@ -105,13 +105,15 @@ public partial class MasoraViewModel : ObservableObject //NOSONAR
     public bool ShowDownloadPerushimButton => PerushimCatalogAvailable && !PerushimNotesAvailable;
 
     /// <summary>
-    /// The production articles loader (GraphQL-backed). Lives on the
+    /// The production articles loader — reads the StarterService startup
+    /// snapshot (all articles + authors already in memory, ordered by
+    /// Priority), so unit swipes issue no GraphQL round-trips. Lives on the
     /// parameterless ctor — not inside the injectable ctor — so tests can
     /// still exercise the loader-free path in LoadArticlesAsync.
     /// </summary>
     private static Func<int, Task<List<Article>>>? DefaultArticlesLoader =>
 #if MAUI
-        ArticleService.Instance.GetArticlesByPerekIdAsync;
+        perekId => Task.FromResult(StarterService.Instance.GetArticlesByPerekId(perekId));
 #else
         null;
 #endif
