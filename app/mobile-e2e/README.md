@@ -76,9 +76,10 @@ after packaging. Canonical content comes from the existing packaged database.
 The pilot runs under an independent 15-minute wall-clock supervisor, including
 local harness builds and Appium setup. Cancellation stops the owned process
 group and escalates after three seconds, including child processes left behind
-by a terminated wrapper. Windows requires PowerShell 7 (`pwsh`); its native
-.NET process-tree termination keeps the existing two-second command limit and
-avoids the stalled `taskkill` query. `pilot-timing.json` records duration and
+by a terminated wrapper. Windows uses the in-box `taskkill /T` tree kill as
+the fast path; when it reports a stalled or already-exited root, a detached
+`powershell` CIM walk reaps the descendants (including orphans whose parent
+died first) and reports live survivors on stderr. `pilot-timing.json` records duration and
 timeout status.
 Commentary searches use the shipped index and
 the ordinary 45-second deadline, including on a fresh install.
