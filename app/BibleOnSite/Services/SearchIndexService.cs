@@ -23,6 +23,7 @@ public sealed class SearchIndexService : IAsyncDisposable
     private readonly Task _initialization;
     private bool _disposed;
     private readonly object _buildSync = new();
+    private string? _stagedAwaitingNotes;
 
     private static readonly Lazy<SearchIndexService> _instance = new(() => new(PerekDataService.Instance,
         PerushimNotesService.Instance, Path.Join(FileSystem.Current.CacheDirectory, "hebrew-search.sqlite")));
@@ -35,6 +36,10 @@ public sealed class SearchIndexService : IAsyncDisposable
         _indexPath = indexPath;
         _index = new SQLiteAsyncConnection(indexPath);
         _initialization = Task.Run(InitializeIndexAsync);
+        if (notes != null)
+        {
+            notes.OperationCompleted += OnNotesOperationCompleted;
+        }
     }
 
     public bool CommentaryAvailable { get; private set; }
@@ -394,9 +399,9 @@ public sealed class SearchIndexService : IAsyncDisposable
                     {
                         DeleteStagedIndexFile(stagedIndex);
                     }
-                    else if (!_notes!.RunIfSettledUnavailable(() => DeleteStagedIndexFile(stagedIndex)))
+                    else
                     {
-                        ScheduleStagedIndexCleanup(stagedIndex);
+                        ParkStagedIndex(stagedIndex);
                     }
                 }
                 await BuildVerseIndexAsync(source);
@@ -615,30 +620,45 @@ public sealed class SearchIndexService : IAsyncDisposable
     }
 
     /// <summary>
-    /// Settles a staged index kept while notes were undetermined once their
-    /// initialization finishes, so it never waits for a later search.
-    /// DisposeAsync drains it with the builds.
+    /// Settles a staged index parked while notes were undetermined each time a
+    /// notes operation ends, so it never waits for a later search. Never starts
+    /// notes delivery itself; DisposeAsync drains it with the builds.
     /// </summary>
-    private void ScheduleStagedIndexCleanup(string stagedPath)
+    private void OnNotesOperationCompleted()
     {
         lock (_buildSync)
         {
-            if (!_disposed && (!_buildTasks.TryGetValue("staged", out var cleanup) || cleanup.IsCompleted))
+            var stagedPath = Interlocked.Exchange(ref _stagedAwaitingNotes, null);
+            if (stagedPath != null && !_disposed)
             {
-                _buildTasks["staged"] = DeleteStagedIndexOnceNotesSettleAsync(stagedPath);
+                _buildTasks["staged"] = Task.Run(() => SettleStagedIndexAsync(stagedPath));
             }
         }
     }
 
-    private async Task DeleteStagedIndexOnceNotesSettleAsync(string stagedPath)
+    /// <summary>
+    /// Deletes the staged file if notes are settled unavailable, else parks it
+    /// for the next notes operation end. Parked before the probe so an
+    /// operation ending in between still settles it.
+    /// </summary>
+    private void ParkStagedIndex(string stagedPath)
     {
-        await _notes!.InitializeAsync();
+        Interlocked.Exchange(ref _stagedAwaitingNotes, stagedPath);
+        if (_notes!.RunIfSettledUnavailable(() => DeleteStagedIndexFile(stagedPath)))
+        {
+            Interlocked.CompareExchange(ref _stagedAwaitingNotes, null, stagedPath);
+        }
+    }
+
+    private async Task SettleStagedIndexAsync(string stagedPath)
+    {
         // notes -> verses order: neither path may be reading the file meanwhile.
         await _gates["notes"].WaitAsync();
         try
         {
             await _gates["verses"].WaitAsync();
-            try { _notes.RunIfSettledUnavailable(() => DeleteStagedIndexFile(stagedPath)); }
+            // Another operation may hold the pack again; its end retries.
+            try { ParkStagedIndex(stagedPath); }
             finally { _gates["verses"].Release(); }
         }
         finally { _gates["notes"].Release(); }
@@ -830,6 +850,10 @@ public sealed class SearchIndexService : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         Task[] builds;
+        if (_notes != null)
+        {
+            _notes.OperationCompleted -= OnNotesOperationCompleted;
+        }
         lock (_buildSync)
         {
             _disposed = true;

@@ -1158,6 +1158,58 @@ public class SearchIndexServiceTests
     }
 
     [Fact]
+    public async Task StagedIndex_KeptWhileNotesUninitialized_IsRemovedWhenInitializationFindsNoPack()
+    {
+        await using var storage = new TestStorage();
+        var perakim = await SeedAsync(storage);
+        var verseFingerprint = await VerseFingerprintAsync(perakim, storage);
+        var stagedPath = Path.Join(storage.Root, PerushimNotesService.SearchIndexDbName);
+        var delivered = await storage.CreateDatabaseAsync(PerushimNotesService.SearchIndexDbName,
+            [.. DeliveredIndexStatements("v4:42:n1", "סימן מובהק"), .. StagedVersesStatements(verseFingerprint)]);
+        await delivered.CloseAsync();
+        var notes = PerushimNotesService.CreateForTesting(NullPad().Object, storage.Root);
+        var index = new SearchIndexService(perakim, notes, Path.Join(storage.Root, "search.sqlite"));
+
+        (await index.SearchAsync("מנקד", new HashSet<SearchFilter> { SearchFilter.Pasuk },
+            new HashSet<int> { 1 }, 10, TestContext.Current.CancellationToken)).Should().ContainSingle();
+        File.Exists(stagedPath).Should().BeTrue("notes were never initialized");
+
+        // The app initializes notes on its own schedule; no search follows.
+        await notes.InitializeAsync();
+        await index.DisposeAsync();
+        File.Exists(stagedPath).Should().BeFalse("initialization settled notes as missing");
+    }
+
+    [Fact]
+    public async Task StagedIndex_KeptDuringFailedDownload_IsRemovedWhenTheDownloadEnds()
+    {
+        await using var storage = new TestStorage();
+        var perakim = await SeedAsync(storage);
+        var verseFingerprint = await VerseFingerprintAsync(perakim, storage);
+        var fetch = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var delivery = NullPad();
+        delivery.Setup(service => service.FetchAsync(It.IsAny<string>(), It.IsAny<IProgress<double>?>(),
+            It.IsAny<CancellationToken>())).Returns(fetch.Task);
+        var notes = PerushimNotesService.CreateForTesting(delivery.Object, storage.Root);
+        await notes.InitializeAsync();
+        var downloading = notes.TryDownloadNotesAsync();
+        var stagedPath = Path.Join(storage.Root, PerushimNotesService.SearchIndexDbName);
+        var delivered = await storage.CreateDatabaseAsync(PerushimNotesService.SearchIndexDbName,
+            [.. DeliveredIndexStatements("v4:42:n1", "סימן מובהק"), .. StagedVersesStatements(verseFingerprint)]);
+        await delivered.CloseAsync();
+        var index = new SearchIndexService(perakim, notes, Path.Join(storage.Root, "search.sqlite"));
+
+        (await index.SearchAsync("מנקד", new HashSet<SearchFilter> { SearchFilter.Pasuk },
+            new HashSet<int> { 1 }, 10, TestContext.Current.CancellationToken)).Should().ContainSingle();
+        File.Exists(stagedPath).Should().BeTrue("the download may still install a matching pack");
+
+        fetch.SetResult(false);
+        (await downloading).Should().BeFalse();
+        await index.DisposeAsync();
+        File.Exists(stagedPath).Should().BeFalse("the failed download settled notes as missing");
+    }
+
+    [Fact]
     public async Task StagedIndex_AfterNotesRejection_IsRemovedOnceVersesAreAdopted()
     {
         await using var storage = new TestStorage();

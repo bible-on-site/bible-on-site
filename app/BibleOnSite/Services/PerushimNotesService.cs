@@ -45,6 +45,18 @@ public class PerushimNotesService
     private string _notesValidationStatus = "Notes database unavailable";
     private readonly SemaphoreSlim _operationLock = new(1, 1);
 
+    /// <summary>
+    /// Raised after initialization, a download or a removal releases the pack,
+    /// so work deferred while notes were undetermined can settle.
+    /// </summary>
+    internal event Action? OperationCompleted;
+
+    private void ReleaseOperation()
+    {
+        _operationLock.Release();
+        OperationCompleted?.Invoke();
+    }
+
     public PerushimNotesService(IPadDeliveryService padService)
         : this(padService, null, null, null)
     {
@@ -211,7 +223,7 @@ public class PerushimNotesService
     {
         await _operationLock.WaitAsync();
         try { await InitializeCoreAsync(); }
-        finally { _operationLock.Release(); }
+        finally { ReleaseOperation(); }
     }
 
     private async Task InitializeCoreAsync()
@@ -284,7 +296,7 @@ public class PerushimNotesService
     {
         await _operationLock.WaitAsync(cancellationToken);
         try { return await TryDownloadNotesCoreAsync(progress, cancellationToken); }
-        finally { _operationLock.Release(); }
+        finally { ReleaseOperation(); }
     }
 
     /// <summary>
@@ -311,7 +323,7 @@ public class PerushimNotesService
             _notesValidationStatus = "Removed by user";
             _initialized = true;
         }
-        finally { _operationLock.Release(); }
+        finally { ReleaseOperation(); }
     }
 
     private async Task<bool> TryDownloadNotesCoreAsync(IProgress<double>? progress, CancellationToken cancellationToken)
