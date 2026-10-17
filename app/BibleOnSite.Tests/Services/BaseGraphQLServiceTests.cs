@@ -67,4 +67,6 @@ public class BaseGraphQLServiceTests
 }
 
 [JsonSerializable(typeof(GraphQLResponse<BaseGraphQLServiceTests.Result>))]
+#pragma warning disable S2333 // System.Text.Json source generation supplies this partial implementation.
 internal partial class ResultJsonContext : JsonSerializerContext;
+#pragma warning restore S2333
