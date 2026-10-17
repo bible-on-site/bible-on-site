@@ -41,11 +41,12 @@ async function fetchImage(
 ): Promise<BulletinImage> {
 	try {
 		// Only fetch from the configured image bucket, never an arbitrary host.
-		const url = new URL(src);
-		if (url.origin !== new URL(perekImageUrl("")).origin) {
-			throw new Error(`unexpected image origin ${url.origin}`);
+		const bucketOrigin = new URL(perekImageUrl("")).origin;
+		const { origin, pathname } = new URL(src);
+		if (origin !== bucketOrigin) {
+			throw new Error(`unexpected image origin ${origin}`);
 		}
-		const res = await fetch(url);
+		const res = await fetch(`${bucketOrigin}${pathname}`);
 		if (!res.ok) throw new Error(`HTTP ${res.status}`);
 		const jpeg = await sharp(Buffer.from(await res.arrayBuffer()))
 			.resize({ width: IMAGE_WIDTH, withoutEnlargement: true })
