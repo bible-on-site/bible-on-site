@@ -200,13 +200,13 @@ jobs:
       platform: iOS
       platform_id: ios
       artifact: ios-shard${{ matrix.shard }}
-      runner: xcode-27
       workload: maui-ios
       shard: ${{ matrix.shard }}
       ios_plan_artifact: app-mobile-e2e-plan.${{ github.run_id }}.ios
       mode: prebuilt-run
       e2e_selection_mode: ${{ inputs.e2e_selection_mode }}
       force_full_suite: ${{ inputs.force_full_suite }}
+      runner: namespace-profile-mac-os
 
   merge_ios:
     name: Merge complete iOS suite
