@@ -10,6 +10,7 @@ import {
 	type DivineNameMaskingSettings,
 	maskDivineNameValue,
 } from "@/lib/divine-name-masking";
+import { perekImageUrl } from "@/lib/seo/perek-illustrations";
 import { getPerekImagesByChapter } from "@/lib/seo/perek-images-data";
 import { ExportError } from "./export-error";
 
@@ -39,7 +40,12 @@ async function fetchImage(
 	where: string,
 ): Promise<BulletinImage> {
 	try {
-		const res = await fetch(src);
+		// Only fetch from the configured image bucket, never an arbitrary host.
+		const url = new URL(src);
+		if (url.origin !== new URL(perekImageUrl("")).origin) {
+			throw new Error(`unexpected image origin ${url.origin}`);
+		}
+		const res = await fetch(url);
 		if (!res.ok) throw new Error(`HTTP ${res.status}`);
 		const jpeg = await sharp(Buffer.from(await res.arrayBuffer()))
 			.resize({ width: IMAGE_WIDTH, withoutEnlargement: true })

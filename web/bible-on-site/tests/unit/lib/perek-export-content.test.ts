@@ -39,6 +39,7 @@ import {
 } from "@/lib/divine-name-masking";
 import { ExportError } from "@/lib/download/export-error";
 import { buildPerakimContent } from "@/lib/download/perek-export-content";
+import { perekImageUrl } from "@/lib/seo/perek-illustrations";
 
 const image = (src: string, caption = "") => ({ src, caption });
 const okResponse = { ok: true, arrayBuffer: async () => new ArrayBuffer(4) };
@@ -86,18 +87,39 @@ describe("buildPerakimContent", () => {
 
 	it("embeds every perek illustration as a resized JPEG", async () => {
 		mockImagesByPerek.mockResolvedValue({
-			1: [image("https://a/1.webp", "בריאה"), image("https://a/2.webp")],
+			1: [
+				image(perekImageUrl("perakim/1.webp"), "בריאה"),
+				image(perekImageUrl("perakim/2.webp")),
+			],
 		});
 		const [content] = await buildPerakimContent(
 			[1],
 			DEFAULT_DIVINE_NAME_MASKING,
 		);
-		expect(global.fetch).toHaveBeenCalledWith("https://a/1.webp");
-		expect(global.fetch).toHaveBeenCalledWith("https://a/2.webp");
+		expect(global.fetch).toHaveBeenCalledWith(
+			new URL(perekImageUrl("perakim/1.webp")),
+		);
+		expect(global.fetch).toHaveBeenCalledWith(
+			new URL(perekImageUrl("perakim/2.webp")),
+		);
 		expect(content.images).toEqual([
 			{ dataBase64: "anBlZy1ieXRlcw==", ext: "jpg", caption: "בריאה" },
 			{ dataBase64: "anBlZy1ieXRlcw==", ext: "jpg", caption: "" },
 		]);
+	});
+
+	it("refuses to fetch illustrations from another host", async () => {
+		const consoleSpy = jest
+			.spyOn(console, "error")
+			.mockImplementation(() => {});
+		mockImagesByPerek.mockResolvedValue({
+			1: [image("https://evil.example/x.webp")],
+		});
+		await expect(
+			buildPerakimContent([1], DEFAULT_DIVINE_NAME_MASKING),
+		).rejects.toBeInstanceOf(ExportError);
+		expect(global.fetch).not.toHaveBeenCalled();
+		consoleSpy.mockRestore();
 	});
 
 	it("reports a failing illustration with an actionable error", async () => {
@@ -105,7 +127,7 @@ describe("buildPerakimContent", () => {
 			.spyOn(console, "error")
 			.mockImplementation(() => {});
 		mockImagesByPerek.mockResolvedValue({
-			8: [image("https://a/broken.webp")],
+			8: [image(perekImageUrl("perakim/broken.webp"))],
 		});
 		global.fetch = jest.fn(async () => ({
 			ok: false,
