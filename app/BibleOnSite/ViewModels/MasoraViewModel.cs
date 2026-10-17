@@ -183,10 +183,19 @@ public partial class MasoraViewModel : ObservableObject //NOSONAR
 
     /// <summary>Perushim matching <see cref="PerushNameFilter"/> — the list
     /// shows all of <see cref="Perushim"/>; this drives search scroll-to.</summary>
-    public List<Perush> FilteredPerushim => string.IsNullOrWhiteSpace(PerushNameFilter)
-        ? Perushim
-        : Perushim.Where(p => SearchText.Normalize(p.Name).Contains(
-            SearchText.Normalize(PerushNameFilter), StringComparison.Ordinal)).ToList();
+    public List<Perush> FilteredPerushim
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(PerushNameFilter))
+            {
+                return Perushim;
+            }
+            var filter = SearchText.Normalize(PerushNameFilter);
+            return Perushim.Where(p => SearchText.Normalize(p.Name)
+                .Contains(filter, StringComparison.Ordinal)).ToList();
+        }
+    }
 
     public int PerushimCount => Perushim.Count;
 
