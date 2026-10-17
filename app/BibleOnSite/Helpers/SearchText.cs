@@ -62,10 +62,15 @@ public static class SearchText
 
     public static string[] Tokens(string text) => Normalize(text).Split(' ', StringSplitOptions.RemoveEmptyEntries);
 
-    public static int Score(string text, string query)
+    public static int Score(string text, string query) =>
+        ScoreNormalized(text, Normalize(query));
+
+    /// <summary><see cref="Score"/> with the query already normalized —
+    /// hot loops normalize the query once instead of per candidate.</summary>
+    internal static int ScoreNormalized(string text, string normalizedQuery)
     {
         var normalized = Normalize(text);
-        var phrase = Normalize(query);
+        var phrase = normalizedQuery;
         if (phrase.Length == 0)
         {
             return 0;
@@ -79,7 +84,8 @@ public static class SearchText
             return 100;
         }
         var words = normalized.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        var scores = Tokens(phrase).Select(term => words.Select(word => TokenScore(word, term)).DefaultIfEmpty().Max()).ToArray();
+        var scores = phrase.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Select(term => words.Select(word => TokenScore(word, term)).DefaultIfEmpty().Max()).ToArray();
         return scores.All(score => score > 0) ? scores.Min() : 0;
     }
 

@@ -7,11 +7,11 @@
  */
 
 import { toLetters } from "gematry";
-import { getPerekByPerekId } from "@/data/perek-dto";
 import { sefarim } from "@/data/db/sefarim";
+import { getPerekByPerekId } from "@/data/perek-dto";
 import { pasukPlainText } from "@/lib/tanach/pasuk-plain-text";
 import { normalizeSearchText } from "./normalize";
-import { scoreNormalizedText } from "./score";
+import { prepareQuery, scorePrepared } from "./score";
 
 export const TOTAL_PERAKIM = 929;
 
@@ -112,15 +112,18 @@ export interface Scored<T> {
 }
 
 /** Search perakim by canonical source ("בראשית לב") and header text. */
-export function searchPerakim(query: string, limit: number): Scored<PerekIndexEntry>[] {
-	const ref = referenceQuery(query);
-	const phrase = normalizeSearchText(query);
+export function searchPerakim(
+	query: string,
+	limit: number,
+): Scored<PerekIndexEntry>[] {
+	const ref = prepareQuery(referenceQuery(query));
+	const phrase = prepareQuery(query);
 	return getPerekIndex()
 		.map((entry) => ({
 			entry,
 			score: Math.max(
-				scoreNormalizedText(entry.normalizedSource, ref),
-				scoreNormalizedText(entry.normalizedHeader, phrase),
+				scorePrepared(entry.normalizedSource, ref),
+				scorePrepared(entry.normalizedHeader, phrase),
 			),
 		}))
 		.filter((hit) => hit.score > 0)
@@ -132,11 +135,15 @@ export function searchPerakim(query: string, limit: number): Scored<PerekIndexEn
 }
 
 /** Search all pesukim by (normalized) text. */
-export function searchPesukim(query: string, limit: number): Scored<PasukIndexEntry>[] {
+export function searchPesukim(
+	query: string,
+	limit: number,
+): Scored<PasukIndexEntry>[] {
+	const prepared = prepareQuery(query);
 	return getPasukIndex()
 		.map((entry) => ({
 			entry,
-			score: scoreNormalizedText(entry.normalized, query),
+			score: scorePrepared(entry.normalized, prepared),
 		}))
 		.filter((hit) => hit.score > 0)
 		.sort(

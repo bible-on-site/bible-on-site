@@ -58,11 +58,11 @@
 		<ApplicationId>com.tanah.daily929</ApplicationId>
 
 		<!-- Versions -->
-		<ApplicationDisplayVersion>5.0.172</ApplicationDisplayVersion>
+		<ApplicationDisplayVersion>5.0.176</ApplicationDisplayVersion>
 		<!-- Windows MSIX requires each version component ≤65535, so we use a separate incrementing value -->
 		<!-- Android versionCode can be large, continuing from Play Store's 40000017 -->
-		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">50000172</ApplicationVersion>
-		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) != 'android'">172</ApplicationVersion>
+		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">50000176</ApplicationVersion>
+		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) != 'android'">176</ApplicationVersion>
 
 		<!-- To develop, package, and publish an app to the Microsoft Store, see: https://aka.ms/MauiTemplateUnpackaged -->
 		<!-- WindowsPackageType None = unpackaged (fixes "Class not registered" when running from CLI). MSIX for Store: /p:WindowsPackageType=MSIX -->
@@ -73,6 +73,22 @@
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">23.0</SupportedOSPlatformVersion>
 		<!-- For Release: embed assemblies in APK. For Debug: use Fast Deployment (much faster iteration) -->
 		<EmbedAssembliesIntoApk Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND '$(Configuration)' == 'Release'">true</EmbedAssembliesIntoApk>
+		<!-- Android Release: profiled AOT. The .NET 10 SDK (Microsoft.Android.Sdk 36.x)
+		     already defaults RunAOTCompilation + AndroidEnableProfiledAot to true for
+		     Release on the MonoVM runtime and feeds the bundled dotnet.aotprofile into
+		     the compiler — the pins below keep that behavior explicit and durable:
+		     the SDK default only applies while '$(_AndroidRuntime)' == 'MonoVM', so a
+		     future CoreCLR/PublishAot experiment or SDK default change would otherwise
+		     silently drop AOT back to JIT. The UseMonoRuntime guard keeps the pin
+		     inert if someone explicitly opts out of MonoVM on the command line.
+		     Full AOT (AndroidEnableProfiledAot=false) is not an option: the linker
+		     emits zero-RVA method stubs (e.g. System.Net.Requests.HttpWebRequest
+		     local functions) that abort mono-aot-cross with exit 1.
+		     AndroidStripILAfterAOT is deliberately NOT set: Newtonsoft.Json/GraphQL
+		     and JIT-fallback for non-profiled generic instantiations need the IL
+		     kept in the embedded assemblies. -->
+		<RunAOTCompilation Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND '$(Configuration)' == 'Release' AND '$(UseMonoRuntime)' != 'false'">true</RunAOTCompilation>
+		<AndroidEnableProfiledAot Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND '$(Configuration)' == 'Release' AND '$(UseMonoRuntime)' != 'false'">true</AndroidEnableProfiledAot>
 		<!-- Debug APKs include the large commentary database. Store SQLite assets directly
 		     to avoid recompressing it on every local edit; Release packaging keeps compression. -->
 		<AndroidStoreUncompressedFileExtensions Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND '$(Configuration)' == 'Debug'">$(AndroidStoreUncompressedFileExtensions);.sqlite</AndroidStoreUncompressedFileExtensions>
