@@ -1142,7 +1142,7 @@ public class SearchIndexServiceTests
         var notes = PerushimNotesService.CreateForTesting(delivery.Object, storage.Root);
         // Initialization holds the pack while delivery is still being resolved.
         var installing = notes.InitializeAsync();
-        await using var index = new SearchIndexService(perakim, notes, Path.Join(storage.Root, "search.sqlite"));
+        var index = new SearchIndexService(perakim, notes, Path.Join(storage.Root, "search.sqlite"));
         var books = new HashSet<int> { 1 };
         var verses = new HashSet<SearchFilter> { SearchFilter.Pasuk };
 
@@ -1152,8 +1152,8 @@ public class SearchIndexServiceTests
 
         packLookup.SetResult(null);
         await installing;
-        (await index.SearchAsync("מנקד", verses, books, 10, TestContext.Current.CancellationToken))
-            .Should().ContainSingle();
+        // No further search: the cleanup scheduled by the first one settles the file.
+        await index.DisposeAsync();
         File.Exists(stagedPath).Should().BeFalse("no notes pack arrived, so the staged index is spent");
     }
 

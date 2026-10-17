@@ -610,12 +610,13 @@ public class PerushimNotesService
     /// unavailable (initialized, then missing, rejected or removed). Skips
     /// without blocking while initialization or a download holds the pack, or
     /// before it was ever initialized — a staged index may still be adopted.
+    /// Returns false while notes are still undetermined.
     /// </summary>
-    internal void RunIfSettledUnavailable(Action action)
+    internal bool RunIfSettledUnavailable(Action action)
     {
         if (!_operationLock.Wait(0))
         {
-            return;
+            return false;
         }
         try
         {
@@ -623,6 +624,7 @@ public class PerushimNotesService
             {
                 action();
             }
+            return _initialized;
         }
         finally { _operationLock.Release(); }
     }

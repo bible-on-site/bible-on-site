@@ -394,9 +394,9 @@ public sealed class SearchIndexService : IAsyncDisposable
                     {
                         DeleteStagedIndexFile(stagedIndex);
                     }
-                    else
+                    else if (!_notes!.RunIfSettledUnavailable(() => DeleteStagedIndexFile(stagedIndex)))
                     {
-                        _notes!.RunIfSettledUnavailable(() => DeleteStagedIndexFile(stagedIndex));
+                        ScheduleStagedIndexCleanup(stagedIndex);
                     }
                 }
                 await BuildVerseIndexAsync(source);
@@ -612,6 +612,36 @@ public sealed class SearchIndexService : IAsyncDisposable
             // regular build path runs instead.
             Console.Error.WriteLine($"Staged verses index not adoptable: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// Settles a staged index kept while notes were undetermined once their
+    /// initialization finishes, so it never waits for a later search.
+    /// DisposeAsync drains it with the builds.
+    /// </summary>
+    private void ScheduleStagedIndexCleanup(string stagedPath)
+    {
+        lock (_buildSync)
+        {
+            if (!_disposed && (!_buildTasks.TryGetValue("staged", out var cleanup) || cleanup.IsCompleted))
+            {
+                _buildTasks["staged"] = DeleteStagedIndexOnceNotesSettleAsync(stagedPath);
+            }
+        }
+    }
+
+    private async Task DeleteStagedIndexOnceNotesSettleAsync(string stagedPath)
+    {
+        await _notes!.InitializeAsync();
+        // notes -> verses order: neither path may be reading the file meanwhile.
+        await _gates["notes"].WaitAsync();
+        try
+        {
+            await _gates["verses"].WaitAsync();
+            try { _notes.RunIfSettledUnavailable(() => DeleteStagedIndexFile(stagedPath)); }
+            finally { _gates["verses"].Release(); }
+        }
+        finally { _gates["notes"].Release(); }
     }
 
     /// <summary>
