@@ -34,11 +34,46 @@ export function supervise(command, args, {
     if (!child.pid) return;
     try {
       if (process.platform === "win32") {
-        // The native .NET tree walk avoids taskkill's stalled process query.
-        // Terminate only this supervisor's owned process tree.
-        execFileSync("pwsh", ["-NoProfile", "-NonInteractive", "-Command",
-          `[System.Diagnostics.Process]::GetProcessById(${child.pid}).Kill($true)`],
-          { windowsHide: true, stdio: "ignore", timeout: 2000 });
+        // Windows has no process-group signal. taskkill's /T tree kill is the
+        // fast path (~100ms); when its child enumeration stalls — the reason a
+        // shell walk existed — the powershell CIM walk remains the fallback,
+        // detached so its cold start cannot block this deadline.
+        try {
+          execFileSync("taskkill", ["/PID", String(child.pid), "/T", "/F"],
+            { encoding: "utf8", windowsHide: true, timeout: 2000 });
+          return;
+        } catch (error) {
+          const report = `${error.stderr ?? ""}${error.stdout ?? ""}${error.message ?? ""}`;
+          // A missing root is not proof the tree stopped: an exited harness
+          // leaves orphaned descendants whose ParentProcessId still names it.
+          // The walk below must still enumerate and reap them.
+          if (!/not found/i.test(report))
+            console.error("taskkill could not stop the mobile process tree:", error);
+        }
+        // Stop-Process races with processes exiting between enumeration and
+        // termination; those misses are expected. A still-running target means
+        // a real failure (e.g. access denied) — report it on the walker's
+        // stderr so it surfaces in supervisor output.
+        const walker = spawn("powershell", ["-NoProfile", "-NonInteractive", "-Command",
+          `$queue = New-Object System.Collections.Queue;` +
+          ` $seen = @{}; $queue.Enqueue(${child.pid});` +
+          ` while ($queue.Count -gt 0) { $cur = [int]$queue.Dequeue();` +
+          ` if ($seen.ContainsKey($cur)) { continue } $seen[$cur] = $true;` +
+          ` try { Stop-Process -Id $cur -Force -ErrorAction Stop } catch {` +
+          `   if (Get-Process -Id $cur -ErrorAction SilentlyContinue) {` +
+          `     [Console]::Error.WriteLine("process $cur survived termination: $($_.Exception.Message)")` +
+          `   }` +
+          ` }` +
+          ` Get-CimInstance Win32_Process -Filter "ParentProcessId=$cur"` +
+          ` -Property ProcessId | ForEach-Object { $queue.Enqueue($_.ProcessId) } }`],
+          { windowsHide: true, detached: true, stdio: ["ignore", "ignore", "pipe"] });
+        walker.stderr.on("data", chunk =>
+          console.error(`process-tree walk reported: ${String(chunk).trim()}`));
+        walker.stderr.unref();
+        walker.once("error", error => {
+          console.error("Could not stop the mobile process tree:", error);
+        });
+        walker.unref();
       } else {
         process.kill(-child.pid, signal);
       }
@@ -82,7 +117,10 @@ export function supervise(command, args, {
   child.once("error", error => { console.error("Could not start mobile tests:", error); finish(1); });
   child.once("exit", code => {
     if (!stopping) {
-      if (process.platform !== "win32") signalGroup("SIGKILL");
+      // Reap descendants that outlive the harness on every platform: POSIX
+      // signals the surviving process group, while the Windows CIM walk
+      // enumerates children by their recorded (now-dead) ParentProcessId.
+      signalGroup("SIGKILL");
       finish(code ?? 1);
     }
   });
