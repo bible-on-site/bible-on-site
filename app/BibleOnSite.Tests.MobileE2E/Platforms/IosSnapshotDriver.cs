@@ -82,7 +82,7 @@ internal sealed class IosSnapshotDriver : IOSDriver
                 : base.GetAttribute(attributeName);
     }
 
-    private sealed class LocatorCapture : ISearchContext, IFindsByFluentSelector<IWebElement>
+    internal sealed class LocatorCapture : ISearchContext, IFindsByFluentSelector<IWebElement>
     {
         public string Mechanism { get; private set; } = string.Empty;
         public string Criteria { get; private set; } = string.Empty;

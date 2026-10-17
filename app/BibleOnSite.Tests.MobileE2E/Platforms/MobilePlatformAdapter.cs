@@ -24,6 +24,24 @@ public abstract class MobilePlatformAdapter
         return LocateAutomationId(id);
     }
     protected abstract By LocateAutomationId(string id);
+    /// <summary>
+    /// One locator matching any of several automation ids, so a "none of these
+    /// is visible" check costs a single device query instead of one per id.
+    /// </summary>
+    public By AnyOfAutomationIds(params string[] ids)
+    {
+        foreach (var id in ids)
+        {
+            // Ids are interpolated into quoted locator strings unescaped.
+            if (id.Length == 0 || !id.All(char.IsAsciiLetterOrDigit))
+            {
+                throw new ArgumentException($"Automation id '{id}' is not a plain identifier.", nameof(ids));
+            }
+            CoverageEvidence.RecordAutomationId(id);
+        }
+        return LocateAnyOfAutomationIds(ids);
+    }
+    protected abstract By LocateAnyOfAutomationIds(string[] ids);
     public abstract By FlyoutButton { get; }
     public virtual bool CanTap(AppiumElement element) => element.Enabled;
     public abstract bool IsChecked(AppiumElement element);
@@ -242,6 +260,13 @@ public abstract class MobilePlatformAdapter
             // to launch app"). The suite's explicit WaitFor polling does the
             // real synchronization, so skipping the idle gate is safe.
             options.AddAdditionalAppiumOption("waitForQuiescence", false);
+            // WDA holds every interaction until the app idles for this long
+            // (default 2s). Scroll storms leave the app coasting between flicks,
+            // so each gesture burst absorbed most of that wait — appium logs
+            // showed /actions averaging 2.25s against it. Half a second still
+            // covers routine transitions (~300ms menu/page animations) while
+            // polls and settle loops do the real state verification.
+            options.AddAdditionalAppiumOption("animationCoolOffTimeout", 0.5);
             // The suite marker reaches the app through processArguments on the
             // session's own launch; per-scenario restarts pass it through
             // launchApp because XCUITest does not merge the two.
@@ -289,6 +314,8 @@ public sealed class AndroidPlatformAdapter : MobilePlatformAdapter
     public override bool IsChecked(AppiumElement element) => element.GetAttribute("checked") == "true";
     // MAUI maps AutomationId to Android resource-id, preserving screen-reader text.
     protected override By LocateAutomationId(string id) => By.Id($"com.tanah.daily929:id/{id}");
+    protected override By LocateAnyOfAutomationIds(string[] ids) =>
+        By.XPath($"//*[{string.Join(" or ", ids.Select(id => $"@resource-id='com.tanah.daily929:id/{id}'"))}]");
     public override By FlyoutButton => AutomationId("ReaderNavigationButton");
     public override void GoBack(AppiumDriver driver) => driver.Navigate().Back();
     public override AppiumDriver CreateDriver(Uri server, AppiumOptions options) =>
@@ -347,6 +374,11 @@ public sealed class IosPlatformAdapter : MobilePlatformAdapter
     public override bool IsChecked(AppiumElement element) => element.GetAttribute("value") == "1";
     public override void GoBackFromFocusedVerse(AppiumDriver driver) => Tap(driver, driver.FindElement(AutomationId("SelectionBackButton")));
     protected override By LocateAutomationId(string id) => MobileBy.AccessibilityId(id);
+    // An NSPredicate on name (the accessibility identifier) runs natively in
+    // XCTest; XPath would make WDA serialize the whole hierarchy first.
+    // Appium.WebDriver 9 has no MobileBy factory for it, only the By type.
+    protected override By LocateAnyOfAutomationIds(string[] ids) =>
+        new ByIosNSPredicate($"name IN {{{string.Join(",", ids.Select(id => $"'{id}'"))}}}");
     public override By FlyoutButton => AutomationId("ReaderNavigationButton");
     public override bool CanTap(AppiumElement element) => element.Enabled
         && string.Equals(element.GetAttribute("hittable"), "true", StringComparison.OrdinalIgnoreCase);
