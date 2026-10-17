@@ -346,6 +346,7 @@ public sealed class SearchIndexService : IAsyncDisposable
     {
         await _initialization;
         string? stagedIndex = null;
+        var notesSettled = true;
         if (table == "verses" && _notes != null)
         {
             // The delivered DB includes both indexes. Adopt before building
@@ -372,6 +373,7 @@ public sealed class SearchIndexService : IAsyncDisposable
                 // No notes gate: pack initialization can block on delivery, and
                 // a plain file probe keeps verse search usable meanwhile.
                 stagedIndex = _notes.PeekDeliveredIndexPath();
+                notesSettled = false;
             }
         }
         await _gates[table].WaitAsync();
@@ -384,9 +386,18 @@ public sealed class SearchIndexService : IAsyncDisposable
                 if (stagedIndex != null)
                 {
                     await TryAdoptDeliveredVersesAsync(stagedIndex, source);
-                    // The staged file is spent (adopted or proved unusable for
-                    // this generation) — never leave ~300 MB behind.
-                    DeleteStagedIndexFile(stagedIndex);
+                    // The staged file is spent once both halves are settled —
+                    // never leave ~300 MB behind. While notes are still
+                    // undetermined its notes half may yet be adopted, so the
+                    // notes path removes it instead.
+                    if (notesSettled)
+                    {
+                        DeleteStagedIndexFile(stagedIndex);
+                    }
+                    else
+                    {
+                        _notes!.RunIfSettledUnavailable(() => DeleteStagedIndexFile(stagedIndex));
+                    }
                 }
                 await BuildVerseIndexAsync(source);
             }

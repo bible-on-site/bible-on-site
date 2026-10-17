@@ -605,6 +605,28 @@ public class PerushimNotesService
         return File.Exists(path) ? path : null;
     }
 
+    /// <summary>
+    /// Runs <paramref name="action"/> only when notes are definitively
+    /// unavailable (initialized, then missing, rejected or removed). Skips
+    /// without blocking while initialization or a download holds the pack, or
+    /// before it was ever initialized — a staged index may still be adopted.
+    /// </summary>
+    internal void RunIfSettledUnavailable(Action action)
+    {
+        if (!_operationLock.Wait(0))
+        {
+            return;
+        }
+        try
+        {
+            if (_initialized && !IsAvailable)
+            {
+                action();
+            }
+        }
+        finally { _operationLock.Release(); }
+    }
+
     /// <summary>Restages a delivered index after cache eviction, using only
     /// already available assets. Never initiates a store download.</summary>
     internal async Task<string?> RestoreDeliveredIndexPathAsync()
