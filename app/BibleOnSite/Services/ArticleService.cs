@@ -27,7 +27,12 @@ public class ArticleService : BaseGraphQLService
     }
 
     /// <summary>
-    /// Fetches all articles for a specific perek.
+    /// Fetches all articles for a specific perek from the API.
+    /// Readers use <see cref="StarterService.GetArticlesByPerekId"/> instead —
+    /// the starter snapshot already holds every article, so swiping must not
+    /// pay a network round-trip. This stays as the server-fresh path for
+    /// callers that need data newer than the startup snapshot (e.g. content
+    /// changed server-side after the app launched).
     /// </summary>
     public async Task<List<Article>> GetArticlesByPerekIdAsync(int perekId)
     {

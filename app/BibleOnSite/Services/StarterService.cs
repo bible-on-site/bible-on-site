@@ -193,6 +193,16 @@ public class StarterService : BaseGraphQLService
     }
 
     /// <summary>
+    /// Number of articles attached to a perek, read from the startup counters
+    /// (index = perekId - 1). Returns 0 when starter data is not loaded yet or
+    /// the id is out of range — callers treat that as "no badge".
+    /// </summary>
+    public int GetPerekArticlesCount(int perekId) =>
+        IsLoaded && perekId >= 1 && perekId <= PerekArticlesCounters.Count
+            ? PerekArticlesCounters[perekId - 1]
+            : 0;
+
+    /// <summary>
     /// Primary startup method.  Tries the API once, falls back to local cache,
     /// and if neither is available proceeds with empty data so the app can start.
     /// Never blocks indefinitely.
