@@ -6,7 +6,14 @@ using Xunit;
 
 namespace BibleOnSite.Tests.MobileE2E.Configuration;
 
+// The telemetry buffers are process-wide; dumping in parallel would let one
+// case consume another's entries. Not the device collection — it creates a
+// real session fixture.
+[CollectionDefinition("Telemetry", DisableParallelization = true)]
+public sealed class TelemetryCollection;
+
 [Trait("Category", "Unit")]
+[Collection("Telemetry")]
 public sealed class DriverTelemetryTests
 {
     [Fact]
