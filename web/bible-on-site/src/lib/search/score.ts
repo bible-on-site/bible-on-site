@@ -23,7 +23,11 @@ export function maxEdits(term: string): number {
  * Bounded Levenshtein distance; returns `limit + 1` once the bound is
  * provably exceeded so callers can bail early on long inputs.
  */
-export function editDistance(left: string, right: string, limit: number): number {
+export function editDistance(
+	left: string,
+	right: string,
+	limit: number,
+): number {
 	if (Math.abs(left.length - right.length) > limit) {
 		return limit + 1;
 	}
@@ -58,21 +62,40 @@ export function tokenScore(word: string, term: string): number {
 	return edits > 0 && editDistance(word, term, edits) <= edits ? 60 : 0;
 }
 
+/** A query normalized once for a hot loop of candidates. */
+export interface PreparedQuery {
+	phrase: string;
+	terms: string[];
+}
+
+/** Normalize `query` once so a loop of candidates never re-normalizes it. */
+export function prepareQuery(query: string): PreparedQuery {
+	const phrase = normalizeSearchText(query);
+	return { phrase, terms: phrase.length === 0 ? [] : phrase.split(" ") };
+}
+
 /**
  * Score `text` against `query`. Both are normalized inside; call
- * `scoreNormalizedText` when the candidate text is already normalized
+ * `scorePrepared` when the candidate text and query are already prepared
  * (hot loops over a pre-indexed corpus).
  */
 export function searchScore(text: string, query: string): number {
-	return scoreNormalizedText(normalizeSearchText(text), query);
+	return scorePrepared(normalizeSearchText(text), prepareQuery(query));
 }
 
-/** Score pre-normalized `normalized` text against `query`. */
-export function scoreNormalizedText(
-	normalized: string,
-	query: string,
+/** Score raw `text` against a prepared query — normalizes the text only. */
+export function scorePreparedText(
+	text: string,
+	prepared: PreparedQuery,
 ): number {
-	const phrase = normalizeSearchText(query);
+	return scorePrepared(normalizeSearchText(text), prepared);
+}
+
+/** Score pre-normalized `normalized` text against a prepared query. */
+export function scorePrepared(
+	normalized: string,
+	{ phrase, terms }: PreparedQuery,
+): number {
 	if (phrase.length === 0) {
 		return 0;
 	}
@@ -83,14 +106,11 @@ export function scoreNormalizedText(
 		return 100;
 	}
 	const words = normalized.split(" ").filter((word) => word.length > 0);
-	const scores = phrase
-		.split(" ")
-		.filter((term) => term.length > 0)
-		.map((term) =>
-			words
-				.map((word) => tokenScore(word, term))
-				.reduce((best, score) => Math.max(best, score), 0),
-		);
+	const scores = terms.map((term) =>
+		words
+			.map((word) => tokenScore(word, term))
+			.reduce((best, score) => Math.max(best, score), 0),
+	);
 	return scores.every((score) => score > 0)
 		? scores.reduce((min, score) => Math.min(min, score))
 		: 0;

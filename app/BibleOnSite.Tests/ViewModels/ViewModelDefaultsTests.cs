@@ -82,6 +82,15 @@ public class ViewModelDefaultsTests
             masora.PerushimCount.Should().Be(0);
             masora.HasPerushim.Should().BeFalse();
             masora.PerushimEmptyMessage.Should().Be("אין קטלוג פירושים");
+            masora.Perushim = [new() { Id = 1, Name = "רש\"י" }, new() { Id = 2, Name = "ביאור שטיינזלץ" }];
+            masora.PerushNameFilter = "שטיינזלץ";
+            masora.FilteredPerushim.Should().ContainSingle().Which.Id.Should().Be(2);
+            masora.PerushNameFilter = "רש״י";
+            masora.FilteredPerushim.Should().ContainSingle().Which.Id.Should().Be(1);
+            masora.PerushNameFilter = "missing";
+            masora.FilteredPerushim.Should().BeEmpty();
+            masora.PerushNameFilter = string.Empty;
+            masora.FilteredPerushim.Should().HaveCount(2);
             masora.ShowDownloadPerushimButton.Should().BeFalse();
             masora.InlineCommentaryLimit.Should().Be(5);
             masora.IsPerushChecked(1).Should().BeFalse();
