@@ -448,6 +448,20 @@ test.describe("Sefer view", () => {
 					.evaluate((el) => el.style.getPropertyValue("--fold-shading")),
 			)
 			.toContain("gradient");
+		// The shading overlay must stack above the opaque page content sheet,
+		// otherwise it is painted underneath and the fold looks flat (#2331).
+		expect(
+			await page
+				.locator(".he-book .page--folded")
+				.first()
+				.evaluate((el) => {
+					const overlay = getComputedStyle(el, "::before");
+					return {
+						zIndex: Number(overlay.zIndex),
+						background: overlay.backgroundImage,
+					};
+				}),
+		).toEqual({ zIndex: 10, background: expect.stringContaining("gradient") });
 		const heldAt = await foldWidth();
 		await page.waitForTimeout(250);
 		expect(await foldWidth()).toBeGreaterThan(10);
