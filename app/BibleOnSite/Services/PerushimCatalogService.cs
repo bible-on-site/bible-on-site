@@ -97,7 +97,7 @@ public class PerushimCatalogService
             return new List<Perush>();
         }
 
-        return [.. (await GetCatalogAsync(conn)).ByPriority];
+        return [.. (await GetCatalogAsync(conn)).ByPriority.Select(Copy)];
     }
 
     /// <summary>
@@ -119,7 +119,7 @@ public class PerushimCatalogService
         }
 
         var byId = (await GetCatalogAsync(conn)).ById;
-        return idList.Where(byId.ContainsKey).ToDictionary(id => id, id => byId[id]);
+        return idList.Where(byId.ContainsKey).ToDictionary(id => id, id => Copy(byId[id]));
     }
 
     /// <summary>
@@ -149,6 +149,9 @@ public class PerushimCatalogService
             .ToList();
         return new Catalog(byPriority, byPriority.ToDictionary(p => p.Id));
     }
+
+    // Perush is mutable; hand out copies so callers cannot alter the shared catalog.
+    private static Perush Copy(Perush p) => new() { Id = p.Id, Name = p.Name, Priority = p.Priority };
 
     private sealed record Catalog(List<Perush> ByPriority, Dictionary<int, Perush> ById);
 

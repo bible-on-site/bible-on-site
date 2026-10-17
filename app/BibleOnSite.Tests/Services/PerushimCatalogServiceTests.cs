@@ -185,6 +185,20 @@ public sealed class PerushimCatalogServiceTests : IDisposable
         (await service.GetPerushimByIdsAsync([1]))[1].Name.Should().Be("Targum");
     }
 
+    [Fact]
+    public async Task GetPerushimByIdsAsync_WhenACallerEditsAResult_LaterReadsAreUnaffected()
+    {
+        var connection = await CreateCatalogConnectionAsync((1, "Targum", 10));
+        var service = CreateService(connection: connection);
+
+        (await service.GetPerushimByIdsAsync([1]))[1].Name = "Temporary";
+        (await service.GetAllPerushimAsync()).Single().Priority = 99;
+
+        var perush = (await service.GetPerushimByIdsAsync([1]))[1];
+        perush.Name.Should().Be("Targum");
+        perush.Priority.Should().Be(10);
+    }
+
     private static List<string> TraceQueries(SQLiteAsyncConnection connection)
     {
         var queries = new List<string>();
