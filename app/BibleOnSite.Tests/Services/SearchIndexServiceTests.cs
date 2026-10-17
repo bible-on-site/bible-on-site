@@ -1181,6 +1181,34 @@ public class SearchIndexServiceTests
     }
 
     [Fact]
+    public async Task StagedIndex_KeptWhileNotesUninitialized_IsRemovedWhenNotesAreLaterRemoved()
+    {
+        await using var storage = new TestStorage();
+        var perakim = await SeedAsync(storage);
+        var verseFingerprint = await VerseFingerprintAsync(perakim, storage);
+        await storage.CreateDatabaseAsync(NotesDb,
+            [.. NotesDbV2.Statements((7, 1, 1, 0, "בראשית")), "INSERT INTO _metadata VALUES ('build_timestamp','42')"]);
+        var stagedPath = Path.Join(storage.Root, PerushimNotesService.SearchIndexDbName);
+        var delivered = await storage.CreateDatabaseAsync(PerushimNotesService.SearchIndexDbName,
+            [.. DeliveredIndexStatements($"v4:42:n{SearchText.NormalizationVersion}", "סימן מובהק"),
+            .. StagedVersesStatements(verseFingerprint)]);
+        await delivered.CloseAsync();
+        var notes = PerushimNotesService.CreateForTesting(NullPad().Object, storage.Root);
+        var index = new SearchIndexService(perakim, notes, Path.Join(storage.Root, "search.sqlite"));
+
+        (await index.SearchAsync("מנקד", new HashSet<SearchFilter> { SearchFilter.Pasuk },
+            new HashSet<int> { 1 }, 10, TestContext.Current.CancellationToken)).Should().ContainSingle();
+        await notes.InitializeAsync();
+        notes.IsAvailable.Should().BeTrue();
+        File.Exists(stagedPath).Should().BeTrue("available notes may still adopt the staged index");
+
+        // Removed before any commentary search adopted it.
+        await notes.RemoveNotesAsync();
+        await index.DisposeAsync();
+        File.Exists(stagedPath).Should().BeFalse("removal settles notes, so the staged index is spent");
+    }
+
+    [Fact]
     public async Task StagedIndex_KeptDuringFailedDownload_IsRemovedWhenTheDownloadEnds()
     {
         await using var storage = new TestStorage();

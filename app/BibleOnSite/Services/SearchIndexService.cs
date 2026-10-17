@@ -638,8 +638,9 @@ public sealed class SearchIndexService : IAsyncDisposable
 
     /// <summary>
     /// Deletes the staged file if notes are settled unavailable, else parks it
-    /// for the next notes operation end. Parked before the probe so an
-    /// operation ending in between still settles it.
+    /// for the next notes operation end — even while notes are available, so a
+    /// later removal still settles it. Parked before the probe so an operation
+    /// ending in between still settles it.
     /// </summary>
     private void ParkStagedIndex(string stagedPath)
     {
