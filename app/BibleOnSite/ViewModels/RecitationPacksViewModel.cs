@@ -80,6 +80,7 @@ public partial class RecitationPacksViewModel : ObservableObject
     private readonly RecitationService _recitation;
     private readonly PerekDataService _perakim;
     private readonly IAppNavigator _navigator;
+    private readonly object _statusGate = new();
     private CancellationTokenSource? _download;
 
     public ObservableCollection<RecitationBookChoice> Books { get; } = [];
@@ -314,12 +315,17 @@ public partial class RecitationPacksViewModel : ObservableObject
             Status = "מוריד הקלטות...";
             await _recitation.DownloadAsync(ids, new Progress<double>(p =>
             {
-                // Queued progress must not replace the completed or cancelled status.
-                if (_download != cancellation || !IsDownloading)
+                // Queued progress must not replace the completed or cancelled status:
+                // the check and the write stay inside the gate so a callback that
+                // observed the download as active can still lose to the outcome.
+                lock (_statusGate)
                 {
-                    return;
+                    if (_download != cancellation || !IsDownloading)
+                    {
+                        return;
+                    }
+                    Progress = p; Status = $"מוריד הקלטות... {p:P0}";
                 }
-                Progress = p; Status = $"מוריד הקלטות... {p:P0}";
             }), cancellation.Token);
             outcome = "ההקלטות מותקנות וזמינות גם ללא אינטרנט.";
         }
@@ -329,14 +335,23 @@ public partial class RecitationPacksViewModel : ObservableObject
         catch (Exception ex) when (ex is not OperationCanceledException) { outcome = "לא ניתן להשלים את ההורדה. נסו שוב; הקלטות שהושלמו נשמרו."; }
         finally
         {
-            _download = null;
-            IsDownloading = false;
-            foreach (var book in Books)
+            lock (_statusGate)
             {
-                book.IsDownloading = false;
+                _download = null;
+                IsDownloading = false;
+                foreach (var book in Books)
+                {
+                    book.IsDownloading = false;
+                }
             }
         }
-        Status = outcome;
+        // Under the same gate the callback's guarded write uses: a stale report that
+        // passed its check before the disarm is already written, and one that waits
+        // on the gate finds _download cleared — either way the outcome wins.
+        lock (_statusGate)
+        {
+            Status = outcome;
+        }
         Refresh();
     }
 }

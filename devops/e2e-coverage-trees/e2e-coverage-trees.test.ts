@@ -600,6 +600,30 @@ describe("shared mode", () => {
 		assert.ok(tree.shared.reasons.includes("whole-suite-report"));
 	});
 
+	test("skipped cases never claim the shared coverage", () => {
+		const applied = TEMPLATE_XML
+			.replace('vc="0" uspid="1"', 'vc="3" uspid="1"')
+			.replace('vc="0" uspid="4"', 'vc="7" uspid="4"');
+		const tree = extractTree(
+			baseInput({
+				cover: parseOpenCover(parseXml(applied)),
+				runRecords: [
+					record("Ns.AlphaTests.Alpha", "passed"),
+					record("Ns.BetaTests.Beta", "skipped"),
+					record("Ns.GammaTests.Gamma", "notexecuted"),
+				],
+			}),
+		);
+		assert.equal(tree.tests["Ns.AlphaTests.Alpha"].attribution, "shared");
+		// A case the run skipped (e.g. another iOS shard's assignment, #2263)
+		// keeps the unmeasured placeholder — shared coverage would fake a run.
+		for (const id of ["Ns.BetaTests.Beta", "Ns.GammaTests.Gamma"]) {
+			assert.equal(tree.tests[id].attribution, "unmeasured");
+			assert.equal(tree.tests[id].measured, false);
+			assert.deepEqual(tree.tests[id].nodes, []);
+		}
+	});
+
 	test("discovered tests stand in when no run records exist", () => {
 		const tree = extractTree(
 			baseInput({ discoveredIds: ["Ns.Only.One"] }),
