@@ -104,6 +104,7 @@ export const MODULES = {
 		ciPaths: [
 			...SHARED_CI_PATHS,
 			...E2E_IMPACT_CI_PATHS,
+			...DOCKER_BUILD_CI_PATHS,
 			"devops/rustfs",
 			"devops/docker-compose.yml",
 			"devops/package.json",

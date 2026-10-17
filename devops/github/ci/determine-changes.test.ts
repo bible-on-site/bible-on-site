@@ -303,7 +303,7 @@ describe("detectChanges", () => {
 
 	test("release Docker build inputs validate the packaged Rust images without releasing", () => {
 		for (const [file, keys] of [
-			["web/.dockerignore", ["api", "bulletin"]],
+			["web/.dockerignore", ["api", "bulletin", "admin"]],
 			[".github/workflows/shared-dockerize.yml", ["api"]],
 			["web/api/entities/src/lib.rs", ["bulletin"]],
 		] as const) {
@@ -316,7 +316,7 @@ describe("detectChanges", () => {
 				);
 			}
 		}
-		for (const key of ["api", "bulletin"] as const) {
+		for (const key of ["api", "bulletin", "admin"] as const) {
 			const dockerfile = `web/${key}/Dockerfile`;
 			assert.equal(
 				detectChanges([dockerfile])[key].module_changed,

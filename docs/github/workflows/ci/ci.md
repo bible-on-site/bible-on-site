@@ -112,9 +112,10 @@ Selection **enforcement is opt-in**: only the mobile workflow exposes
     blocks the merge. Only a suite whose trigger did not fire may pass untested.
   - `app_ios_ci` (native audio) is the one exception: it runs on PRs only, so
     `skipped` is accepted on other events.
-  - `package_api` / `package_bulletin` must succeed on every non-`push` event
-    (PR, merge queue, dispatch) where `api_*` / `bulletin_*` `module_changed`
-    or `ci_changed` fired — the release Docker build is a pre-merge check.
+  - `package_api` / `package_bulletin` / `package_admin` must succeed on every
+    non-`push` event (PR, merge queue, dispatch) where that module's
+    `module_changed` or `ci_changed` fired — the release Docker build is a
+    pre-merge check.
   - `recitation_ci` is required when data/website-affecting changes exist;
     `perushim_data` must succeed when the pipeline changed or a perushim
     baseline is missing.
@@ -137,9 +138,9 @@ Selection **enforcement is opt-in**: only the mobile workflow exposes
 - `website_publish_test_results_to_codecov` uploads the website's JUnit
   results as a Codecov `test_results` report.
 
-### 4. Packaging (Master `push`; API + Bulletin also pre-merge)
+### 4. Packaging (Master `push`; API, Bulletin, Admin also pre-merge)
 
-`package_api` and `package_bulletin` also run on PR, merge-queue and dispatch
+`package_api`, `package_bulletin` and `package_admin` also run on PR, merge-queue and dispatch
 events whenever their module's `module_changed` or `ci_changed` fires. Those
 runs execute the exact release Docker build (same Dockerfile, `web` context,
 `DOCKER_BUILDKIT=0`) but skip every artifact upload, so nothing is released
@@ -147,6 +148,9 @@ or deployed; `cross_module_ci` gates them under the same triggers. Any
 Dockerfile under a module dir counts as `module_changed`; the shared
 `web/.dockerignore` context, `shared-dockerize.yml` (API) and
 `web/api/entities` (compiled into the Bulletin image) count as `ci_changed`.
+Package Website stays master-only: its SSG image build reads the production
+DB (SSM + RDS allow-listing), which PR runs must not access; Website
+Performance builds the same Next.js app pre-merge.
 
 | Job | Kind | Output | Purpose |
 |-----|------|--------|---------|

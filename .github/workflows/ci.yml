@@ -554,10 +554,11 @@ jobs:
           # artifact expiring (matches the website/api release artifacts at 90).
           retention-days: 90
 
+  # Same release/pre-merge split as package_api (#2292).
   package_admin:
     name: Package Admin
     needs: [setup_env, determine_changes]
-    if: ${{ needs.determine_changes.outputs.admin_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    if: ${{ (github.event_name == 'push' && needs.setup_env.outputs.is_master_branch == 'true' && needs.determine_changes.outputs.admin_module_changed == 'true') || (github.event_name != 'push' && (needs.determine_changes.outputs.admin_module_changed == 'true' || needs.determine_changes.outputs.admin_ci_changed == 'true')) }}
     permissions:
       contents: read
       actions: read
@@ -604,6 +605,7 @@ jobs:
         run: gzip -c -f ${{ steps.prepare.outputs.DOCKER_IMAGE_TAR_NAME }} > ${{ steps.prepare.outputs.DOCKER_IMAGE_TAR_NAME }}.gz
 
       - name: Store Docker Image
+        if: ${{ github.event_name == 'push' }}
         uses: actions/upload-artifact@v7
         with:
           name: ${{ env.ADMIN_DOCKER_ARTIFACT_NAME }}
@@ -2668,6 +2670,7 @@ jobs:
         package_ios_pr,
         package_api,
         package_bulletin,
+        package_admin,
         app_mobile_e2e,
         bulletin_ci,
         data_ci,
@@ -2796,6 +2799,12 @@ jobs:
             ADMIN_STATUS=$([ "${{ needs.admin_ci.result }}" = "success" ] && echo "success" || echo "failure") # Generated
             if [ "$ADMIN_STATUS" = "failure" ]; then
               echo "Overall status: failure"
+              exit 1
+            fi
+          fi
+          if [ "${{ github.event_name }}" != "push" ] && { [ "$ADMIN_MODULE_CHANGED" = "true" ] || [ "$ADMIN_CI_CHANGED" = "true" ]; }; then
+            if [ "${{ needs.package_admin.result }}" != "success" ]; then
+              echo "Admin release Docker build failed or did not run"
               exit 1
             fi
           fi
