@@ -144,7 +144,8 @@ public sealed class DriverTelemetryTests
             }
             else if (command.Name == DriverCommand.GetWindowRect)
             {
-                var width = ++_windowReads == 1 ? 100 : 200;
+                var width = _windowReads == 0 ? 100 : 200;
+                _windowReads++;
                 value = new Dictionary<string, object> { ["x"] = 0, ["y"] = 0, ["width"] = width, ["height"] = 100 };
             }
             else if (command.Name == "getOrientation")
