@@ -43,6 +43,51 @@ pub struct GeneratePdfRequest {
     /// Accent color for cover ornament (hex without `#`, e.g. `8B0000`).
     #[serde(default)]
     pub cover_accent_hex: Option<String>,
+
+    /// Website-rendered pesukim (קרי/כתיב structure, user's divine-name masking)
+    /// and perek illustrations. Perakim missing here use the embedded text.
+    #[serde(default)]
+    pub perakim_content: Vec<PerekContentInput>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PerekContentInput {
+    pub perek_id: i32,
+    pub pesukim: Vec<Vec<SegmentInput>>,
+    #[serde(default)]
+    pub images: Vec<ImageInput>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SegmentInput {
+    pub kind: SegmentKindInput,
+    pub value: String,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SegmentKindInput {
+    Word,
+    Ktiv,
+    Qri,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImageInput {
+    pub data_base64: String,
+    pub ext: ImageExt,
+    #[serde(default)]
+    pub caption: String,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ImageExt {
+    Jpg,
+    Png,
+    Webp,
 }
 
 fn default_true() -> bool {

@@ -409,3 +409,28 @@
 		border-bottom-color: #7eb0ff;
 	}
 }
+
+.downloadHint {
+	margin: 4px 16px 0;
+	color: rgb(255 255 255 / 75%);
+	font-size: 13px;
+}
+
+.downloadHintLink {
+	padding: 0;
+	border: none;
+	background: none;
+	color: #6ea8fe;
+	font: inherit;
+	text-decoration: underline;
+	cursor: pointer;
+}
+
+.downloadError {
+	margin: 0;
+	padding: 4px 10px;
+	border-radius: 6px;
+	background: #7f1d1d;
+	color: #fff;
+	font-size: 13px;
+}

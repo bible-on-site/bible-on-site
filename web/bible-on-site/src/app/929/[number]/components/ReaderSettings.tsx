@@ -143,6 +143,10 @@ export default function ReaderSettings() {
 		if (!anchor || !dialog.current) return;
 		const panel = dialog.current;
 		panel.showModal();
+		// Using the panel must not count as an outside click for popovers under
+		// it (the download menu keeps its selected range while settings change).
+		const keepUnderlyingOpen = (event: MouseEvent) => event.stopPropagation();
+		panel.addEventListener("mousedown", keepUnderlyingOpen);
 		const position = () => {
 			const box = anchor.getBoundingClientRect();
 			panel.style.left = `${Math.max(12, Math.min(box.left, window.innerWidth - panel.offsetWidth - 12))}px`;
@@ -153,6 +157,7 @@ export default function ReaderSettings() {
 		window.addEventListener("scroll", position, true);
 		return () => {
 			panel.close();
+			panel.removeEventListener("mousedown", keepUnderlyingOpen);
 			window.removeEventListener("resize", position);
 			window.removeEventListener("scroll", position, true);
 		};
