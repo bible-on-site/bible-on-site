@@ -176,6 +176,7 @@ public sealed class SearchIndexService : IAsyncDisposable
             return [];
         }
         limit = Math.Clamp(limit, 1, 50);
+        var normalizedQuery = SearchText.Normalize(query);
         progress?.Report(filters.Contains(SearchFilter.Perush) && !_ready.ContainsKey("notes")
             ? "מכין את החיפוש בפסוקים ובפירושים..." : "מחפש...");
         var hits = new List<SearchHit>();
@@ -235,7 +236,7 @@ public sealed class SearchIndexService : IAsyncDisposable
                     rows = rows.Concat(fuzzy).DistinctBy(row => row.RowId).ToList();
                 }
                 hits.AddRange(rows.Select(row => new SearchHit(type, row.PerekId, row.PasukNum,
-                    row.PerushId, row.Body, SearchText.Score(row.Body, query))));
+                    row.PerushId, row.Body, SearchText.ScoreNormalized(row.Body, normalizedQuery))));
             }
             finally { _gates[table].Release(); }
         }
