@@ -27,6 +27,7 @@ describe("reader-settings", () => {
 		localStorage.clear();
 		document.documentElement.style.removeProperty("--perek-font-scale");
 		document.documentElement.style.removeProperty("--perek-line-height");
+		document.documentElement.style.removeProperty("--perek-word-spacing");
 		delete document.documentElement.dataset.tanakhFont;
 	});
 
@@ -35,6 +36,39 @@ describe("reader-settings", () => {
 	it("returns defaults when nothing is stored", () => {
 		expect(getStoredReaderSettings()).toEqual(DEFAULT_READER_SETTINGS);
 	});
+
+	it("defaults both spacing controls to displayed level 3 and offers 5 levels each", () => {
+		expect(DEFAULT_READER_SETTINGS.wordStep + 1).toBe(3);
+		expect(DEFAULT_READER_SETTINGS.lineStep + 1).toBe(3);
+		expect(PEREK_LINE_HEIGHTS).toHaveLength(5);
+		expect(PEREK_WORD_SPACINGS).toHaveLength(5);
+		runBootstrap();
+		expect(
+			document.documentElement.style.getPropertyValue("--perek-line-height"),
+		).toBe("2");
+		expect(
+			document.documentElement.style.getPropertyValue("--perek-word-spacing"),
+		).toBe("0.28em");
+	});
+
+	it.each([
+		[3, "2.25"],
+		[4, "2.5"],
+	])(
+		"keeps vertical index %i through storage, hydration and the pre-paint bootstrap",
+		(lineStep, lineHeight) => {
+			setStoredReaderSettings({ lineStep });
+			expect(getStoredReaderSettings().lineStep).toBe(lineStep);
+			runBootstrap();
+			expect(
+				document.documentElement.style.getPropertyValue("--perek-line-height"),
+			).toBe(lineHeight);
+			applyReaderSettings(getStoredReaderSettings());
+			expect(
+				document.documentElement.style.getPropertyValue("--perek-line-height"),
+			).toBe(lineHeight);
+		},
+	);
 
 	it("roundtrips settings through localStorage", () => {
 		setStoredReaderSettings({ fontStep: 4, lineStep: 2, wordStep: 0 });
@@ -55,7 +89,7 @@ describe("reader-settings", () => {
 		expect(getStoredReaderSettings()).toEqual({
 			fontStep: 3,
 			lineStep: 1,
-			wordStep: 0,
+			wordStep: DEFAULT_READER_SETTINGS.wordStep,
 			fontId: 0,
 			v: READER_SETTINGS_VERSION,
 		});
@@ -82,7 +116,7 @@ describe("reader-settings", () => {
 		expect(getStoredReaderSettings()).toEqual({
 			fontStep: PEREK_FONT_SCALES.length - 1,
 			lineStep: 0,
-			wordStep: 0,
+			wordStep: DEFAULT_READER_SETTINGS.wordStep,
 			fontId: 0,
 			v: READER_SETTINGS_VERSION,
 		});
@@ -95,7 +129,7 @@ describe("reader-settings", () => {
 		expect(JSON.parse(stored!)).toEqual({
 			fontStep: 0,
 			lineStep: PEREK_LINE_HEIGHTS.length - 1,
-			wordStep: 0,
+			wordStep: DEFAULT_READER_SETTINGS.wordStep,
 			fontId: 0,
 			v: READER_SETTINGS_VERSION,
 		});
@@ -135,10 +169,13 @@ describe("reader-settings", () => {
 			JSON.stringify(PEREK_LINE_HEIGHTS),
 		);
 		expect(READER_SETTINGS_BOOTSTRAP).toContain(
-			`s.fontStep==null?${DEFAULT_READER_SETTINGS.fontStep}`,
+			`c(s.fontStep,f.length-1,${DEFAULT_READER_SETTINGS.fontStep})`,
 		);
 		expect(READER_SETTINGS_BOOTSTRAP).toContain(
-			`s.lineStep==null?${DEFAULT_READER_SETTINGS.lineStep}`,
+			`c(s.lineStep,l.length-1,${DEFAULT_READER_SETTINGS.lineStep})`,
+		);
+		expect(READER_SETTINGS_BOOTSTRAP).toContain(
+			`c(s.wordStep,w.length-1,${DEFAULT_READER_SETTINGS.wordStep})`,
 		);
 		expect(READER_SETTINGS_BOOTSTRAP).toContain(
 			JSON.stringify(PEREK_TANAKH_FONTS),
