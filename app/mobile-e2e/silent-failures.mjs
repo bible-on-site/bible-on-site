@@ -73,20 +73,31 @@ export function report({ tests, findings }, annotate = (level, message) =>
   return findingsList.some(({ severity }) => severity === "error") ? 1 : 0;
 }
 
+export function run(dir, pilotOutcome, annotate = (level, message) =>
+  console.log(`::${level}::${message}`)) {
+  const files = findTrxFiles(dir);
+  if (files.length === 0) {
+    // A green pilot that produced no report left this gate with no evidence
+    // to scan — that absence is itself a systematic failure. A failed pilot
+    // may legitimately exit before writing results and fails loudly elsewhere.
+    const message = `[silent-failures] no .trx files under ${dir}`;
+    if (pilotOutcome === "success") {
+      annotate("error", `${message} — the pilot succeeded without a report.`);
+      return 1;
+    }
+    console.log(`${message} — nothing to scan.`);
+    return 0;
+  }
+  return report(scanTrxFiles(files), annotate);
+}
+
 const isMain = process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
 if (isMain) {
   const dir = process.argv[2];
+  const pilotOutcome = process.argv[3] ?? "";
   if (!dir) {
-    console.error("usage: node silent-failures.mjs <results-dir>");
+    console.error("usage: node silent-failures.mjs <results-dir> [pilot-outcome]");
     process.exit(2);
   }
-  const files = findTrxFiles(dir);
-  if (files.length === 0) {
-    // No trx means an earlier stage failed before producing results; the
-    // result-upload step already fails loudly on missing artifacts, so this
-    // scan only notes the absence rather than masking that failure.
-    console.log(`[silent-failures] no .trx files under ${dir} — nothing to scan.`);
-    process.exit(0);
-  }
-  process.exit(report(scanTrxFiles(files)));
+  process.exit(run(dir, pilotOutcome));
 }

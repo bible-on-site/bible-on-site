@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { classify, findTrxFiles, report, scanTrxFiles } from "./silent-failures.mjs";
+import { classify, findTrxFiles, report, run, scanTrxFiles } from "./silent-failures.mjs";
 import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-const trx = (results, messages) =>
-  `<TestRun><Results>${"<UnitTestResult />".repeat(results)}</Results>`
-  + `<Messages>${messages}</Messages></TestRun>`;
+// The scanner matches substrings, so fixture content needs no document
+// structure — just the counted token and the signature text.
+const trx = (results, messages) => "<UnitTestResult ".repeat(results) + messages;
 
 test("scanTrxFiles counts each signature across files", () => {
   const { tests, findings } = scanTrxFiles(["a.trx", "b.trx"], (path) => path === "a.trx"
@@ -17,6 +17,14 @@ test("scanTrxFiles counts each signature across files", () => {
   assert.equal(findings.get("coverage reset failed:"), 2);
   assert.equal(findings.get("coverage dump failed:"), 1);
   assert.equal(findings.has("coverage collection failed:"), false);
+});
+
+test("scanTrxFiles counts byte-identical Retries mirrors once", () => {
+  const mirrored = trx(6, "coverage dump failed: timeout");
+  const { tests, findings } = scanTrxFiles(["mobile-e2e.trx", "Retries/1/mobile-e2e.trx"],
+    () => mirrored);
+  assert.equal(tests, 6);
+  assert.equal(findings.get("coverage dump failed:"), 1);
 });
 
 test("classify fails a repeated signature and warns on a single occurrence", () => {
@@ -64,4 +72,17 @@ test("findTrxFiles recurses into the Retries layout", () => {
 
 test("findTrxFiles tolerates a missing results directory", () => {
   assert.deepEqual(findTrxFiles(join(tmpdir(), "does-not-exist-silent-failures")), []);
+});
+
+test("run fails a successful pilot that produced no report", () => {
+  const notes = [];
+  const exit = run(join(tmpdir(), "no-trx-here"), "success",
+    (level, message) => notes.push([level, message]));
+  assert.equal(exit, 1);
+  assert.equal(notes[0][0], "error");
+  assert.match(notes[0][1], /succeeded without a report/);
+});
+
+test("run treats a missing report as informational when the pilot failed", () => {
+  assert.equal(run(join(tmpdir(), "no-trx-here"), "failure"), 0);
 });
