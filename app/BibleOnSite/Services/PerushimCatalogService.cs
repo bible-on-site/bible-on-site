@@ -24,10 +24,18 @@ public class PerushimCatalogService
     private readonly SemaphoreSlim _initializeLock = new(1, 1);
 
     private readonly IFileSystem _fileSystem;
+    private readonly IAppInfo? _appInfo;
 
     private PerushimCatalogService() : this(FileSystem.Current) { }
 
-    public PerushimCatalogService(IFileSystem fileSystem) { _fileSystem = fileSystem; }
+    public PerushimCatalogService(IFileSystem fileSystem) : this(fileSystem, null) { }
+
+    /// <param name="appInfo">App identity for the packaged-copy version marker; null resolves <see cref="AppInfo.Current"/>.</param>
+    public PerushimCatalogService(IFileSystem fileSystem, IAppInfo? appInfo)
+    {
+        _fileSystem = fileSystem;
+        _appInfo = appInfo;
+    }
 
     /// <summary>Whether the catalog database is available.</summary>
     public bool IsAvailable => _isInitialized && !_catalogMissing && _connection != null;
@@ -68,7 +76,7 @@ public class PerushimCatalogService
             var dbPath = Path.Combine(_fileSystem.AppDataDirectory, CatalogDbName);
             try
             {
-                await PackagedDatabase.RefreshAsync(_fileSystem, CatalogDbName);
+                await PackagedDatabase.RefreshAsync(_fileSystem, CatalogDbName, _appInfo);
             }
             catch (FileNotFoundException)
             {
