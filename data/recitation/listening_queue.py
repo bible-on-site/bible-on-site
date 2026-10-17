@@ -1,6 +1,6 @@
 """One append-only local review database; immutable source queues remain evidence."""
 import argparse
-from contextlib import closing
+from contextlib import closing, contextmanager
 from datetime import datetime, timezone
 import hashlib
 from http.server import ThreadingHTTPServer
@@ -35,10 +35,7 @@ class ReviewDatabase:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.sync_lock = threading.Lock()
         self.on_saved = None
-        with (
-            closing(sqlite3.connect(self.path)) as db,
-            db,
-        ):
+        with self._transaction() as db:
             db.execute("PRAGMA journal_mode=WAL")
             db.executescript("""
                 CREATE TABLE IF NOT EXISTS batch (
@@ -53,6 +50,13 @@ class ReviewDatabase:
                 CREATE TABLE IF NOT EXISTS entry (
                     digest TEXT PRIMARY KEY, body TEXT NOT NULL, saved_at TEXT NOT NULL);
             """)
+
+    @contextmanager
+    def _transaction(self):
+        """Commit one operation or roll it back, then always close its connection."""
+        with closing(sqlite3.connect(self.path)) as db:
+            with db:
+                yield db
 
     def _insert_entries(self, db, entries):
         for row in entries:
@@ -75,10 +79,7 @@ class ReviewDatabase:
             raise ValueError("Queue changed during validation")
         file_sha = hashlib.sha256(raw).hexdigest()
         entries = read_json(Path(reviews_path))["entries"] if reviews_path else []
-        with (
-            closing(sqlite3.connect(self.path)) as db,
-            db,
-        ):
+        with self._transaction() as db:
             db.execute("BEGIN IMMEDIATE")
             old = db.execute("SELECT seq, file_sha FROM batch WHERE path=?", (str(queue_path),)).fetchone()
             if old and old[1] != file_sha:
@@ -117,11 +118,7 @@ class ReviewDatabase:
 
     def sync_histories(self):
         """Import real answers from older still-open pages, preserving every actual row."""
-        with (
-            self.sync_lock,
-            closing(sqlite3.connect(self.path)) as db,
-            db,
-        ):
+        with self.sync_lock, self._transaction() as db:
             for path, seq, prefix in db.execute("SELECT path,batch_seq,prefix FROM history").fetchall():
                 batch = db.execute("SELECT path,file_sha FROM batch WHERE seq=?", (seq,)).fetchone()
                 if digest_file(Path(batch[0])) != batch[1]:
@@ -144,10 +141,7 @@ class ReviewDatabase:
             if digest_file(path) != source["queueSha256"]:
                 raise ValueError("Source queue differs from its fixed binding")
             self.append(path, Path(source["reviews"]))
-        with (
-            closing(sqlite3.connect(self.path)) as db,
-            db,
-        ):
+        with self._transaction() as db:
             latest = {entry_key(row): row for row in self._entries(db)}
             for key, row in latest.items():
                 if row["verdict"] != "skip":
@@ -167,10 +161,7 @@ class ReviewDatabase:
         # Re-read the immutable stored version, not a browser-supplied candidate body.
         exact = self.case(case["id"], payload.get("candidateSha256"), payload.get("clipSha256"))
         row = validate_decision(exact, payload)
-        with (
-            closing(sqlite3.connect(self.path)) as db,
-            db,
-        ):
+        with self._transaction() as db:
             row["queueSha256"] = db.execute("SELECT queue_sha FROM candidate WHERE key=?",
                                             (case_key(exact),)).fetchone()[0]
             self._insert_entries(db, [row])
