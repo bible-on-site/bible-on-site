@@ -155,6 +155,7 @@ pub fn render(input: &DailyInput, fonts_dir: &Path) -> Result<DailyArtifacts> {
         include_cover: false,
         include_toc: false,
         cover_accent_hex: "48A9C4".into(),
+        cover_text: pdf::PdfCoverText::default(),
     };
     let bytes = pdf::build_daily_pdf(&req, fonts_dir, &hebrew_date, &dedications)?;
     let filename = format!("{}-{}.pdf", input.date, source);

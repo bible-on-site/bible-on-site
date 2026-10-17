@@ -208,6 +208,12 @@ describe("bulletin-client", () => {
 				includeCover: true,
 				includeToc: true,
 				coverAccentHex: "#8B0000",
+				cover: {
+					branding: 'תנ"ך על הפרק',
+					title: "ספר שמות",
+					subtitle: "מקראות גדולות",
+					edition: "",
+				},
 			});
 
 			const invokeInput = mockSend.mock.calls[0][0];
@@ -222,6 +228,12 @@ describe("bulletin-client", () => {
 					includeCover: true,
 					includeToc: true,
 					coverAccentHex: "8B0000",
+					cover: {
+						branding: 'תנ"ך על הפרק',
+						title: "ספר שמות",
+						subtitle: "מקראות גדולות",
+						edition: "",
+					},
 				}),
 			);
 		});

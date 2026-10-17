@@ -43,6 +43,20 @@ pub struct GeneratePdfRequest {
     /// Accent color for cover ornament (hex without `#`, e.g. `8B0000`).
     #[serde(default)]
     pub cover_accent_hex: Option<String>,
+
+    /// Front-cover lines sent by the website so the PDF cover matches its Sefer reader cover.
+    #[serde(default)]
+    pub cover: Option<CoverText>,
+}
+
+/// Front-cover lines, top to bottom; omitted lines are left off the cover.
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct CoverText {
+    pub branding: String,
+    pub title: String,
+    pub subtitle: String,
+    pub edition: String,
 }
 
 fn default_true() -> bool {

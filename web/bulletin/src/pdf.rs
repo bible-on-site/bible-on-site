@@ -18,6 +18,17 @@ pub struct PdfRequest {
     pub include_cover: bool,
     pub include_toc: bool,
     pub cover_accent_hex: String,
+    pub cover_text: PdfCoverText,
+}
+
+/// Front-cover lines mirrored from the website's Sefer reader cover, top to
+/// bottom; empty lines are skipped and an empty title falls back to the sefer name.
+#[derive(Debug, Clone, Default)]
+pub struct PdfCoverText {
+    pub branding: String,
+    pub title: String,
+    pub subtitle: String,
+    pub edition: String,
 }
 
 #[derive(Debug, Clone)]
@@ -305,6 +316,28 @@ fn accent_hex_clean(raw: &str) -> String {
         .collect()
 }
 
+/// Quote text as a Typst string literal: unlike markup, strings keep ASCII
+/// quotes literal (no smart quotes) and need no markup escaping.
+fn typst_str(text: &str) -> String {
+    let mut out = String::with_capacity(text.len() + 2);
+    out.push('"');
+    for c in text.chars() {
+        match c {
+            '\\' | '"' => {
+                out.push('\\');
+                out.push(c);
+            }
+            '\n' => out.push_str("\\n"),
+            _ => out.push(c),
+        }
+    }
+    out.push('"');
+    out
+}
+
+/// Full-bleed cover in the sefer color, mirroring the reader's `.cover`
+/// styles (sefer.module.css): ornament, branding, title, divider, subtitle, edition.
+/// Sizes keep the reader's cover-width ratios (title 2.5rem on a ~460px cover).
 fn append_cover_page(markup: &mut String, req: &PdfRequest) {
     let hex = accent_hex_clean(&req.cover_accent_hex);
     let hex = if hex.is_empty() {
@@ -312,19 +345,49 @@ fn append_cover_page(markup: &mut String, req: &PdfRequest) {
     } else {
         hex
     };
-    let title = typst_escape(&strip_taamim(&req.sefer_name));
+    let cover = &req.cover_text;
+    let title = if cover.title.is_empty() {
+        &req.sefer_name
+    } else {
+        &cover.title
+    };
+    let subtitle_line = |text: &str| {
+        format!(
+            "#text(size: 23pt, fill: white.transparentize(15%), tracking: 0.08em, {})\n\n",
+            typst_str(&strip_taamim(text))
+        )
+    };
+
     markup.push_str(&format!(
-        r#"#align(center + horizon)[
-  #v(1fr)
-  #text(26pt, weight: "bold")[{title}]
-  #v(0.6em)
-  #line(length: 55%, stroke: 2.5pt + rgb("{hex}"))
-  #v(0.4em)
-  #text(11pt)[תנ\"ך]
-  #v(1fr)
-]
+        r#"#page(margin: 0pt, fill: rgb("{hex}"))[
+#place(rect(width: 100%, height: 100%, fill: gradient.radial(white.transparentize(94%), white.transparentize(100%), center: (30%, 20%), radius: 60%)))
+#place(rect(width: 100%, height: 100%, fill: gradient.linear((white.transparentize(96%), 0%), (white.transparentize(100%), 40%), (black.transparentize(88%), 100%), angle: 90deg)))
+#rect(width: 100%, height: 100%, inset: 24pt, stroke: 3pt + white.transparentize(85%))[
+#set align(center + horizon)
+#set par(justify: false, spacing: 10pt)
+#set text(fill: white)
+#polygon(fill: white.transparentize(50%), (12pt, 0pt), (15.5pt, 8.5pt), (24pt, 12pt), (15.5pt, 15.5pt), (12pt, 24pt), (8.5pt, 15.5pt), (0pt, 12pt), (8.5pt, 8.5pt))
+
+#v(10pt)
 "#,
     ));
+    if !cover.branding.is_empty() {
+        markup.push_str(&subtitle_line(&cover.branding));
+    }
+    markup.push_str(&format!(
+        "#text(size: 52pt, weight: \"bold\", tracking: 0.05em, {})\n\n#v(8pt)\n#box(width: 40%, height: 1pt, fill: gradient.linear(white.transparentize(100%), white.transparentize(50%), white.transparentize(100%)))\n\n#v(8pt)\n",
+        typst_str(&strip_taamim(title))
+    ));
+    if !cover.subtitle.is_empty() {
+        markup.push_str(&subtitle_line(&cover.subtitle));
+    }
+    if !cover.edition.is_empty() {
+        markup.push_str(&format!(
+            "#text(size: 18pt, fill: white.transparentize(45%), tracking: 0.04em, {})\n\n",
+            typst_str(&strip_taamim(&cover.edition))
+        ));
+    }
+    markup.push_str("]\n]\n");
 }
 
 fn append_toc_page(markup: &mut String, req: &PdfRequest) {
@@ -359,7 +422,6 @@ fn generate_typst_markup_with_intro(req: &PdfRequest, intro: Option<(&str, &[Str
 
     if req.include_cover {
         append_cover_page(&mut markup, req);
-        markup.push_str("#pagebreak()\n");
     }
 
     if req.include_toc {
@@ -620,6 +682,7 @@ mod tests {
             include_cover: false,
             include_toc: false,
             cover_accent_hex: "333333".to_string(),
+            cover_text: PdfCoverText::default(),
         };
         let markup = generate_typst_markup(&req);
         assert!(markup.contains("Taamey D"));
@@ -641,11 +704,21 @@ mod tests {
             include_cover: true,
             include_toc: true,
             cover_accent_hex: "#8B0000".to_string(),
+            cover_text: PdfCoverText {
+                branding: "תנ\"ך על הפרק".to_string(),
+                title: "ספר בראשית".to_string(),
+                subtitle: "מקראות גדולות".to_string(),
+                edition: "עם מאמרים".to_string(),
+            },
         };
         let markup = generate_typst_markup(&req);
         assert!(markup.contains("תוכן העניינים"));
-        assert!(markup.contains("תנ\\\"ך"));
-        assert!(markup.contains("rgb(\"8B0000\")"));
+        assert!(markup.contains("fill: rgb(\"8B0000\")"));
+        let branding = markup.find("\"תנ\\\"ך על הפרק\"").expect("branding line");
+        let title = markup.find("\"ספר בראשית\"").expect("title line");
+        let subtitle = markup.find("\"מקראות גדולות\"").expect("subtitle line");
+        let edition = markup.find("\"עם מאמרים\"").expect("edition line");
+        assert!(branding < title && title < subtitle && subtitle < edition);
         assert!(markup.contains("בראשית א - כותרת"));
     }
 
@@ -670,15 +743,25 @@ mod tests {
             include_cover: true,
             include_toc: true,
             cover_accent_hex: "###".to_string(),
+            cover_text: PdfCoverText::default(),
         };
         let markup = generate_typst_markup(&req);
 
         assert!(markup.contains("rgb(\"475569\")"));
+        // No cover text: the sefer name is the title and optional lines are skipped.
+        assert!(markup.contains("tracking: 0.05em, \"Genesis\")"));
+        assert!(!markup.contains("tracking: 0.08em"));
         assert!(markup.contains("Genesis 1"));
         assert!(markup.contains(&format!("*{}* First \\/ escaped", to_hebrew_letter(1))));
         assert!(!markup.contains(&format!("*{}*    ", to_hebrew_letter(2))));
         assert!(markup.contains("Article \\/ Name \\/ Author"));
         assert!(markup.contains("#strong[bold]"));
+    }
+
+    #[test]
+    fn test_typst_str() {
+        assert_eq!(typst_str("תנ\"ך"), "\"תנ\\\"ך\"");
+        assert_eq!(typst_str("a\\b\nc"), "\"a\\\\b\\nc\"");
     }
 
     #[test]
