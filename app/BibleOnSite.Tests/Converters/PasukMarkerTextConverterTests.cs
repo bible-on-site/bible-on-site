@@ -144,6 +144,38 @@ public class PasukMarkerTextConverterTests
         MarkerFontSize(Convert(text, "א", -1.0)).Should().BeNaN();
     }
 
+    [Fact]
+    public void a_changed_marker_color_misses_the_cached_merge()
+    {
+        var converter = new PasukMarkerTextConverter { MarkerColor = Colors.Red };
+        var text = PasukText("פסוק");
+
+        var red = converter.Convert([text, "א", 16.0], typeof(object), null, CultureInfo.InvariantCulture);
+        converter.MarkerColor = Colors.Blue;
+        var blue = (FormattedString)converter.Convert([text, "א", 16.0], typeof(object), null, CultureInfo.InvariantCulture);
+
+        blue.Should().NotBeSameAs(red);
+        blue.Spans[0].TextColor.Should().Be(Colors.Blue);
+    }
+
+    [Fact]
+    public void a_fifth_distinct_marker_tuple_evicts_the_oldest_merge()
+    {
+        var converter = new PasukMarkerTextConverter { MarkerColor = Colors.Red };
+        var text = PasukText("פסוק");
+        object MergeMarker(string marker) => converter.Convert(
+            [text, marker, 16.0], typeof(object), null, CultureInfo.InvariantCulture);
+
+        var first = MergeMarker("א");
+        foreach (var marker in new[] { "ב", "ג", "ד", "ה" })
+        {
+            MergeMarker(marker);
+        }
+
+        MergeMarker("א").Should().NotBeSameAs(first,
+            "the 4-entry cap evicts the oldest merge, so it is rebuilt");
+    }
+
     private static double MarkerFontSize(object converted) =>
         ((FormattedString)converted).Spans[0].FontSize;
 }

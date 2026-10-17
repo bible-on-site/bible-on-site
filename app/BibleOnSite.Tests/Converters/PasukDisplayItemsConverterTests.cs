@@ -149,6 +149,32 @@ public class PasukDisplayItemsConverterTests
     }
 
     [Fact]
+    public void an_empty_pesukim_list_produces_no_items()
+    {
+        var items = Convert(new List<Pasuk>()).Should().BeAssignableTo<IReadOnlyList<PasukDisplayItem>>().Subject;
+
+        items.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void a_fifth_distinct_input_tuple_evicts_the_oldest_entry()
+    {
+        var converter = new PasukDisplayItemsConverter();
+        var pesukim = new List<Pasuk> { PasukOf(1) };
+        object ConvertTuple(int revision) => converter.Convert(
+            [pesukim, false, 1.0, revision], typeof(object), null!, CultureInfo.InvariantCulture);
+
+        var first = ConvertTuple(0);
+        for (var revision = 1; revision <= 4; revision++)
+        {
+            ConvertTuple(revision);
+        }
+
+        ConvertTuple(0).Should().NotBeSameAs(first,
+            "the 4-entry cap evicts the oldest tuple, so it rebuilds instead of reusing");
+    }
+
+    [Fact]
     public void convert_back_is_not_supported()
     {
         var converter = new PasukDisplayItemsConverter();
