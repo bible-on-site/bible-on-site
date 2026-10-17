@@ -982,6 +982,63 @@ public class SearchIndexServiceTests
     }
 
     [Fact]
+    public async Task StagedIndex_WhenVersesIndexAlreadyCurrent_IsDroppedUnopened()
+    {
+        await using var storage = new TestStorage();
+        var perakim = await SeedAsync(storage);
+        var indexPath = Path.Join(storage.Root, "search.sqlite");
+        var stagedPath = Path.Join(storage.Root, PerushimNotesService.SearchIndexDbName);
+        var notes = PerushimNotesService.CreateForTesting(NullPad().Object, storage.Root);
+        var filters = new HashSet<SearchFilter> { SearchFilter.Pasuk };
+        var books = new HashSet<int> { 1 };
+
+        // The first service builds the verses index and publishes its fingerprint.
+        await using (var index = new SearchIndexService(perakim, notes, indexPath))
+        {
+            (await index.SearchAsync("בראשית", filters, books, 10, TestContext.Current.CancellationToken))
+                .Should().NotBeEmpty();
+        }
+
+        await using (var index = new SearchIndexService(perakim, notes, indexPath))
+        {
+            // A leftover staged file whose working index is already current is
+            // dropped on the stored-fingerprint check — never opened.
+            await File.WriteAllTextAsync(stagedPath, "not a database");
+            (await index.SearchAsync("בראשית", filters, books, 10, TestContext.Current.CancellationToken))
+                .Should().NotBeEmpty();
+            File.Exists(stagedPath).Should().BeFalse("the unneeded staged index is removed");
+
+            // With the fingerprint ready in memory, a re-staged file exits
+            // before even consulting the stored metadata.
+            await File.WriteAllTextAsync(stagedPath, "not a database");
+            (await index.SearchAsync("בראשית", filters, books, 10, TestContext.Current.CancellationToken))
+                .Should().NotBeEmpty();
+            File.Exists(stagedPath).Should().BeFalse();
+        }
+    }
+
+    [Fact]
+    public async Task StagedIndex_ThatIsTheWorkingIndex_IsSkippedBeforeAttach()
+    {
+        await using var storage = new TestStorage();
+        var perakim = await SeedAsync(storage);
+        var stagedPath = Path.Join(storage.Root, PerushimNotesService.SearchIndexDbName);
+        var notes = PerushimNotesService.CreateForTesting(NullPad().Object, storage.Root);
+        // The staged probe and the working index resolve to the same file —
+        // adoption must bail before ATTACH-ing the database onto itself.
+        var staged = await storage.CreateDatabaseAsync(PerushimNotesService.SearchIndexDbName,
+            ["CREATE TABLE search_metadata (name TEXT PRIMARY KEY, fingerprint TEXT)",
+             "INSERT INTO search_metadata VALUES ('verses','stale')"]);
+        await staged.CloseAsync();
+        await using var index = new SearchIndexService(perakim, notes, stagedPath);
+
+        var hits = await index.SearchAsync("בראשית", new HashSet<SearchFilter> { SearchFilter.Pasuk },
+            new HashSet<int> { 1 }, 10, TestContext.Current.CancellationToken);
+
+        hits.Should().NotBeEmpty();
+    }
+
+    [Fact]
     public async Task DeliveredIndex_WithBrokenVersesTable_FallsBackToTheOnDeviceBuild()
     {
         await using var storage = new TestStorage();
