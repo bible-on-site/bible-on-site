@@ -232,7 +232,7 @@ namespace AltCover.Recorder
 			}
 			try
 			{
-				var path = Path.Combine(directory, TokenFileName);
+				var path = JoinPath(directory, TokenFileName);
 				if (File.Exists(path))
 				{
 					var persisted = File.ReadAllText(path).Trim();
@@ -291,13 +291,30 @@ namespace AltCover.Recorder
 				case "TVOS":
 				case "WATCHOS":
 					// FileSystem.AppDataDirectory is the app container's Library.
-					return string.IsNullOrEmpty(home) ? null : Path.Combine(home, "Library");
+					return home is { Length: > 0 } ? JoinPath(home, "Library") : null;
 				default:
 					// Dead fallback: Windows/desktop suite launches always
 					// supply the token in the process environment.
 					var personal = Environment.GetFolderPath(Environment.SpecialFolder.Personal);
 					return string.IsNullOrEmpty(personal) ? null : personal;
 			}
+		}
+
+		// Path.Join only exists from netstandard2.1; this recorder stays on
+		// netstandard2.0, so this join appends unconditionally rather than
+		// silently discarding the directory when the name is rooted (the
+		// Path.Combine pitfall the code-quality scan flags). Both call sites
+		// join fixed relative names anyway.
+		private static string JoinPath(string directory, string name)
+		{
+			if (directory.Length == 0 || name.Length == 0)
+			{
+				return directory + name;
+			}
+			var last = directory[directory.Length - 1];
+			return last == Path.DirectorySeparatorChar || last == Path.AltDirectorySeparatorChar
+				? directory + name
+				: directory + Path.DirectorySeparatorChar + name;
 		}
 
 		private static void WriteResponse(NetworkStream stream, int status, string contentType, byte[] body)
