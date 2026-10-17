@@ -50,6 +50,26 @@ test("display settings independently change font and both spacing directions, pe
 	await button.click();
 	const dialog = page.getByRole("dialog", { name: "הגדרות קריאה" });
 	await expect(dialog).toBeVisible();
+	await expect(page.getByRole("slider", { name: "ריווח אופקי" })).toHaveValue(
+		"2",
+	);
+	await expect(page.getByRole("slider", { name: "ריווח אנכי" })).toHaveValue(
+		"2",
+	);
+	await page.getByRole("slider", { name: "ריווח אנכי" }).fill("4");
+	await expect
+		.poll(() =>
+			page
+				.getByRole("article")
+				.first()
+				.evaluate((e) => {
+					const s = getComputedStyle(e);
+					return (
+						Number.parseFloat(s.lineHeight) / Number.parseFloat(s.fontSize)
+					);
+				}),
+		)
+		.toBeCloseTo(2.5);
 	await page.getByRole("slider", { name: "גודל גופן" }).fill("3");
 	await page.getByRole("slider", { name: "ריווח אופקי" }).fill("2");
 	await page.getByRole("slider", { name: "ריווח אנכי" }).fill("2");

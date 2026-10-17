@@ -136,6 +136,18 @@
 	grid-column: 2;
 	width: auto;
 }
+.maskingGroup {
+	display: grid;
+	gap: 14px;
+	margin: 0;
+	padding: 6px 14px 14px;
+	border: 1px dashed #9fb0cc;
+	border-radius: 12px;
+	min-inline-size: 0;
+}
+.maskingGroup > legend {
+	padding: 0 6px;
+}
 .nameFieldset {
 	border: 0;
 	margin: 0;
@@ -174,6 +186,16 @@
 }
 .section .customText:disabled {
 	opacity: 0.55;
+}
+.maskingGroup > legend label {
+	gap: 10px;
+}
+.maskingGroup:disabled .nameFieldset {
+	opacity: 0.55;
+	cursor: not-allowed;
+}
+.maskingGroup:disabled .nameFieldset * {
+	cursor: not-allowed;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -222,9 +244,17 @@
 		color: #a8b9ff;
 	}
 
+	.maskingGroup {
+		border-color: #5a6684;
+	}
+
 	.section .customText {
 		border-color: #3b4256;
 		background: #12151c;
 		color: #a8b9ff;
 	}
+}
+
+.panelHeader + .section {
+	margin-top: 16px;
 }
