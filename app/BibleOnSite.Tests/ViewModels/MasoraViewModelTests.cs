@@ -21,7 +21,8 @@ public class MasoraViewModelTests
         private readonly bool _includeNotes;
 
         public Fixture(List<Article>? articles = null, int? lastLearntPerek = null,
-            bool includeCatalog = true, bool includeNotes = true, bool nullArticlesLoader = false)
+            bool includeCatalog = true, bool includeNotes = true, bool nullArticlesLoader = false,
+            Func<int, Task<List<Article>>>? articlesLoader = null)
         {
             _includeCatalog = includeCatalog;
             _includeNotes = includeNotes;
@@ -41,7 +42,8 @@ public class MasoraViewModelTests
                 preferences,
                 catalog,
                 notes,
-                nullArticlesLoader ? null : _ => Task.FromResult(articles ?? new List<Article>()));
+                nullArticlesLoader ? null
+                    : articlesLoader ?? (_ => Task.FromResult(articles ?? new List<Article>())));
         }
 
         public async Task Initialize()
@@ -199,6 +201,34 @@ public class MasoraViewModelTests
         fixture.Model.Articles.Select(a => a.Id).Should().BeEquivalentTo(new[] { 7, 9 });
         fixture.Model.ArticlesCount.Should().Be(2);
         fixture.Model.HasArticles.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task LoadArticles_InvokesPerekLoadersConcurrently()
+    {
+        // The gate releases only once every perek loader has started — a
+        // serialized loop would await the first call forever and hit the
+        // WaitAsync timeout instead of completing.
+        var started = 0;
+        var allStarted = new TaskCompletionSource();
+        Func<int, Task<List<Article>>> gatedLoader = async perekId =>
+        {
+            if (Interlocked.Increment(ref started) == 2)
+            {
+                allStarted.TrySetResult();
+            }
+            await allStarted.Task;
+            return [new Article { Id = perekId, PerekId = perekId, AuthorId = 1, Abstract = string.Empty }];
+        };
+        await using var fixture = new Fixture(articlesLoader: gatedLoader);
+        await fixture.Initialize();
+        await fixture.Model.LoadByUnitIdAsync(2); // unit 2 spans perakim 1-2
+
+        await fixture.Model.LoadArticlesAsync(fixture.Model.Unit!)
+            .WaitAsync(TimeSpan.FromSeconds(10));
+
+        started.Should().Be(2);
+        fixture.Model.Articles.Select(a => a.Id).Should().BeEquivalentTo(new[] { 1, 2 });
     }
 
     [Fact]
