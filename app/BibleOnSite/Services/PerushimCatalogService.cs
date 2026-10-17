@@ -22,6 +22,9 @@ public class PerushimCatalogService
     private bool _isInitialized;
     private bool _catalogMissing;
     private readonly SemaphoreSlim _initializeLock = new(1, 1);
+    private readonly object _catalogLoadLock = new();
+    private SQLiteAsyncConnection? _catalogConnection;
+    private Task<Catalog>? _catalogLoad;
 
     private readonly IFileSystem _fileSystem;
 
@@ -94,35 +97,68 @@ public class PerushimCatalogService
             return new List<Perush>();
         }
 
-        var rows = await conn.QueryAsync<PerushRow>(
-            "SELECT id, name, priority FROM perush ORDER BY priority ASC");
-
-        return rows.Select(r => new Perush { Id = r.Id, Name = r.Name ?? string.Empty, Priority = r.Priority })
-            .ToList();
+        return [.. (await GetCatalogAsync(conn)).ByPriority];
     }
 
     /// <summary>
     /// Gets perush by IDs. Used to resolve names for perushim that have notes in a perek.
+    /// Served from the in-memory catalog, which is read once per connection.
     /// </summary>
     public async Task<Dictionary<int, Perush>> GetPerushimByIdsAsync(IEnumerable<int> ids)
     {
+        var result = new Dictionary<int, Perush>();
         var conn = await GetConnectionAsync();
         if (conn == null)
         {
-            return new Dictionary<int, Perush>();
+            return result;
         }
 
-        var idList = string.Join(",", ids.Distinct());
-        if (string.IsNullOrEmpty(idList))
+        var idList = ids.Distinct().ToList();
+        if (idList.Count == 0)
         {
-            return new Dictionary<int, Perush>();
+            return result;
         }
 
-        var rows = await conn.QueryAsync<PerushRow>(
-            $"SELECT id, name, priority FROM perush WHERE id IN ({idList})");
-
-        return rows.ToDictionary(r => r.Id, r => new Perush { Id = r.Id, Name = r.Name ?? string.Empty, Priority = r.Priority });
+        var catalog = await GetCatalogAsync(conn);
+        foreach (var id in idList)
+        {
+            if (catalog.ById.TryGetValue(id, out var perush))
+            {
+                result[id] = perush;
+            }
+        }
+        return result;
     }
+
+    /// <summary>
+    /// The catalog is small and immutable for the lifetime of a connection, so concurrent
+    /// first callers share one load. Keyed on the connection: a re-opened DB is re-read.
+    /// A failed load is not cached, so the next call retries.
+    /// </summary>
+    private Task<Catalog> GetCatalogAsync(SQLiteAsyncConnection conn)
+    {
+        lock (_catalogLoadLock)
+        {
+            if (_catalogLoad == null || _catalogConnection != conn || _catalogLoad.IsFaulted || _catalogLoad.IsCanceled)
+            {
+                _catalogConnection = conn;
+                _catalogLoad = LoadCatalogAsync(conn);
+            }
+            return _catalogLoad;
+        }
+    }
+
+    private static async Task<Catalog> LoadCatalogAsync(SQLiteAsyncConnection conn)
+    {
+        var rows = await conn.QueryAsync<PerushRow>(
+            "SELECT id, name, priority FROM perush ORDER BY priority ASC");
+        var byPriority = rows
+            .Select(r => new Perush { Id = r.Id, Name = r.Name ?? string.Empty, Priority = r.Priority })
+            .ToList();
+        return new Catalog(byPriority, byPriority.ToDictionary(p => p.Id));
+    }
+
+    private sealed record Catalog(List<Perush> ByPriority, Dictionary<int, Perush> ById);
 
     private class PerushRow
     {
