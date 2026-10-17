@@ -134,8 +134,8 @@ public abstract class MobilePlatformAdapter
 
     internal static void EnsurePortrait(AppiumDriver driver)
     {
-        // The tracked orientation only needs a live read once per driver;
-        // setOrientation commands update it through the Execute funnel.
+        // The tracked orientation only needs a live read once per driver —
+        // rotation writes update it through the telemetry funnel.
         if (DriverTelemetry.Orientation(driver) != ScreenOrientation.Portrait)
         {
             driver.Orientation = ScreenOrientation.Portrait;

@@ -74,7 +74,7 @@ public sealed class DriverTelemetryTests
     [Fact]
     public void HittableFromTheLookupFeedsCanTapWithoutARoundTrip()
     {
-        var executor = new Executor(hittable: true);
+        var executor = new Executor { Hittable = true };
         using var driver = new IosSnapshotDriver(executor, new AppiumOptions { PlatformName = "iOS" });
         var page = new PerekPage(driver, new IosPlatformAdapter());
         var element = page.WaitFor("SearchResultTitle", new IosPlatformAdapter().CanTap);
@@ -85,23 +85,23 @@ public sealed class DriverTelemetryTests
     [Fact]
     public void MissingHittableInTheLookupFallsBackToTheLiveAttributeRead()
     {
-        var executor = new Executor(hittable: false);
         // Strip the key entirely so the poll's CanTap must ask the driver.
-        executor.StripHittable = true;
+        var executor = new Executor { StripHittable = true };
         using var driver = new IosSnapshotDriver(executor, new AppiumOptions { PlatformName = "iOS" });
         var page = new PerekPage(driver, new IosPlatformAdapter());
         page.WaitFor("SearchResultTitle", new IosPlatformAdapter().CanTap);
         Assert.Single(executor.Commands, command => command == DriverCommand.GetElementAttribute);
     }
 
-    private sealed class Executor(bool hittable = false) : ICommandExecutor
+    private sealed class Executor : ICommandExecutor
     {
         public List<string> Commands { get; } = [];
         public string Orientation { get; set; } = "PORTRAIT";
         public bool StripHittable { get; set; }
+        public bool Hittable { get; set; }
         private int _windowReads;
-        public bool TryAddCommand(string name, CommandInfo? info) => true;
-        public void Dispose() { }
+        public bool TryAddCommand(string name, CommandInfo? _) => name.Length > 0;
+        public void Dispose() { /* The fake owns no resources. */ }
         public Response Execute(Command command) => ExecuteAsync(command).GetAwaiter().GetResult();
         public Task<Response> ExecuteAsync(Command command)
         {
@@ -127,7 +127,7 @@ public sealed class DriverTelemetryTests
                 };
                 if (!StripHittable)
                 {
-                    element["hittable"] = hittable;
+                    element["hittable"] = Hittable;
                 }
                 value = new object[] { element };
             }

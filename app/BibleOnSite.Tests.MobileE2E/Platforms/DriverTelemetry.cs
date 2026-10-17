@@ -24,8 +24,8 @@ internal static class DriverTelemetry
 
     private sealed class State
     {
-        public Size? WindowSize;
-        public ScreenOrientation? Orientation;
+        public Size? LastWindowSize;
+        public ScreenOrientation? LastOrientation;
     }
 
     private static readonly Dictionary<string, Slot> s_totals = new(StringComparer.Ordinal);
@@ -44,8 +44,8 @@ internal static class DriverTelemetry
             if (command is "setOrientation")
             {
                 var state = s_states.GetOrCreateValue(driver);
-                state.WindowSize = null;
-                state.Orientation = parameters?.TryGetValue("orientation", out var raw) == true
+                state.LastWindowSize = null;
+                state.LastOrientation = parameters?.TryGetValue("orientation", out var raw) == true
                     && Enum.TryParse(raw as string, true, out ScreenOrientation parsed)
                         ? parsed
                         : null;
@@ -69,10 +69,10 @@ internal static class DriverTelemetry
     }
 
     internal static Size WindowSize(AppiumDriver driver)
-        => s_states.GetOrCreateValue(driver).WindowSize ??= driver.Manage().Window.Size;
+        => s_states.GetOrCreateValue(driver).LastWindowSize ??= driver.Manage().Window.Size;
 
     internal static ScreenOrientation Orientation(AppiumDriver driver)
-        => s_states.GetOrCreateValue(driver).Orientation ??= driver.Orientation;
+        => s_states.GetOrCreateValue(driver).LastOrientation ??= driver.Orientation;
 
     internal static void Reset()
     {
@@ -98,7 +98,7 @@ internal static class DriverTelemetry
             builder.AppendLine($"Driver commands: {calls} calls, {total / 1000.0:F1}s in driver");
             foreach (var (command, slot) in s_totals.OrderByDescending(pair => pair.Value.TotalMs))
             {
-                builder.AppendLine($"  {command,-36} {slot.Count,4}x {slot.TotalMs / 1000.0,7:F1}s avg {slot.TotalMs / slot.Count / 1000.0,5:F2}s max {slot.MaxMs / 1000.0,5:F1}s");
+                builder.AppendLine($"  {command,-36} {slot.Count,4}x {slot.TotalMs / 1000.0,7:F1}s avg {slot.TotalMs / (slot.Count * 1000.0),5:F2}s max {slot.MaxMs / 1000.0,5:F1}s");
             }
             s_totals.Clear();
             return builder.ToString();
