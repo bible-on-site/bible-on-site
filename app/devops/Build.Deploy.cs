@@ -91,8 +91,6 @@ partial class Build
             service.Edits.Tracks.Update(trackUpdate, GooglePlayPackageName, edit.Id, track).Execute();
             Serilog.Log.Information($"Assigned to {track} track");
 
-            SyncStoreListing(service, edit.Id);
-
             // Commit edit
             var commitRequest = service.Edits.Commit(GooglePlayPackageName, edit.Id);
             commitRequest.Execute();

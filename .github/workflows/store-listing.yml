@@ -1,9 +1,9 @@
 name: Store Listing
 
 # Listing copy/screenshots are versioned in app/store-listing. Any change merged
-# to master is pushed straight to the Google Play listing; the same sync also
-# runs inside every app deploy (DeployGooglePlay). App Store fields are
-# version-bound and ship with the next version submission - see the kit README.
+# to master is pushed straight to the Google Play listing. Requires the service
+# account's "Manage store listings" permission - see the kit README. App Store
+# fields are version-bound and ship with the next version submission.
 on:
   push:
     branches: [master]
