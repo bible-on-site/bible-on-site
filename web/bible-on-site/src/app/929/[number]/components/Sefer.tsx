@@ -44,12 +44,14 @@ import type { PerekObj } from "@/data/perek-dto";
 import { getSeferColor } from "@/data/sefer-colors";
 
 import type { ArticleSummary } from "@/lib/articles";
+import { getDivineNameMaskingSettings } from "@/lib/divine-name-settings";
 import type { PerushSummary } from "@/lib/perushim";
 import type { PerekIllustration } from "@/lib/seo/perek-illustrations";
 import { buildEntityRefLookup } from "@/lib/tanahpedia/entity-ref-lookup";
 import type { PerekEntityReference } from "@/lib/tanahpedia/service";
 import { constructTsetAwareHDate } from "@/util/hebdates-util";
 import { BlankPageContent } from "./BlankPageContent";
+import { DownloadMaskingHint } from "./DownloadMaskingHint";
 import { ImageCaption } from "./ImageCaption";
 import { Ptuah } from "./Ptuha";
 import { renderPasukWithEntityRefs } from "./pasuk-renderer";
@@ -79,8 +81,8 @@ import {
 	buildPageSemantics,
 	CONTENT_OFFSET,
 	computeInitialTurnedLeaves,
+	runDownload,
 	toHebrewChapterNumber,
-	wrapDownloadResult,
 } from "./sefer-page-utils";
 import {
 	scrollToPerushPasuk,
@@ -185,6 +187,8 @@ const Sefer = (props: {
 	const bookWrapperRef = useRef<HTMLDivElement>(null);
 	const seferColor = getSeferColor(perekObj.sefer);
 	const [isBookshelfOpen, setIsBookshelfOpen] = useState(false);
+	const toolbarEndRef = useRef<HTMLDivElement>(null);
+	const [downloadError, setDownloadError] = useState<string | null>(null);
 	const contentNavigation = useSeferContentNavigation(
 		perekObj.perekId,
 		initialSlug,
@@ -602,19 +606,28 @@ const Sefer = (props: {
 							entireBookFilename: perekObj.sefer,
 							rangeFilename: perekObj.sefer,
 							downloadContext: { seferName: perekObj.sefer },
-							onDownloadSefer: async () =>
-								wrapDownloadResult(
-									await downloadSefer({
-										seferName: perekObj.sefer,
-										perekIds:
-											perekIds && perekIds.length > 0
-												? perekIds
-												: [perekObj.perekId],
-									}),
+							// Masking is read at click time so a just-changed setting applies.
+							onDownloadSefer: () =>
+								runDownload(
+									() =>
+										downloadSefer({
+											seferName: perekObj.sefer,
+											perekIds:
+												perekIds && perekIds.length > 0
+													? perekIds
+													: [perekObj.perekId],
+											divineNameMasking: getDivineNameMaskingSettings(),
+										}),
+									setDownloadError,
 								),
-							onDownloadPageRange: async (pages, semanticPages, context) =>
-								wrapDownloadResult(
-									await downloadPageRanges(pages, semanticPages, context),
+							onDownloadPageRange: (pages, semanticPages, context) =>
+								runDownload(
+									() =>
+										downloadPageRanges(pages, semanticPages, {
+											...context,
+											divineNameMasking: getDivineNameMaskingSettings(),
+										}),
+									setDownloadError,
 								),
 						}}
 					/>
@@ -640,8 +653,14 @@ const Sefer = (props: {
 						<NextButton />
 						<LastPageButton />
 					</div>
-					<div className="flipbook-toolbar-end">
+					<div className="flipbook-toolbar-end" ref={toolbarEndRef}>
+						{downloadError && (
+							<p role="alert" className={styles.downloadError}>
+								{downloadError}
+							</p>
+						)}
 						<DownloadDropdown ariaLabel="הורדה" />
+						<DownloadMaskingHint toolbarRef={toolbarEndRef} />
 					</div>
 				</Toolbar>
 			</div>

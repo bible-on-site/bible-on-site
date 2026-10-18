@@ -165,10 +165,42 @@ export function computeInitialTurnedLeaves(
 	return Array.from({ length: turnedCount }, (_, i) => i);
 }
 
+type DownloadActionOutcome =
+	| { ext: string; data: string }
+	| { error: string; message?: string };
+
+export const DOWNLOAD_FAILED_MESSAGE =
+	"יצירת קובץ ה-PDF נכשלה. נסו להוריד שוב בעוד רגע.";
+
 export function wrapDownloadResult(
-	r: { ext: string; data: string } | { error: string },
+	r: DownloadActionOutcome,
+	onError?: (message: string) => void,
 ): { ext: string; data: string } | null {
-	return "error" in r ? null : { ext: r.ext, data: r.data };
+	if ("error" in r) {
+		onError?.(r.message ?? DOWNLOAD_FAILED_MESSAGE);
+		return null;
+	}
+	return { ext: r.ext, data: r.data };
+}
+
+/**
+ * Runs a download server action for the flip-book menu: clears the previous
+ * error, reports any failure (including a rejected action) through
+ * `setError`, and resolves to null so the menu resets for a retry.
+ */
+export async function runDownload(
+	action: () => Promise<DownloadActionOutcome>,
+	setError: (message: string | null) => void,
+): Promise<{ ext: string; data: string } | null> {
+	setError(null);
+	let outcome: DownloadActionOutcome;
+	try {
+		outcome = await action();
+	} catch (e) {
+		console.error("Download action failed:", e);
+		outcome = { error: "service_unavailable" };
+	}
+	return wrapDownloadResult(outcome, setError);
 }
 
 export { CONTENT_OFFSET };

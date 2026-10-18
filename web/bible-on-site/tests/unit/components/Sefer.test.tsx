@@ -688,7 +688,12 @@ describe("Sefer component", () => {
 		const config = capturedFlipBookProps.downloadConfig as {
 			onDownloadSefer: () => Promise<unknown>;
 		};
-		expect(await config.onDownloadSefer()).toBeNull();
+		await act(async () => {
+			expect(await config.onDownloadSefer()).toBeNull();
+		});
+		expect(screen.getByRole("alert")).toHaveTextContent(
+			"יצירת קובץ ה-PDF נכשלה",
+		);
 	});
 
 	it.each([undefined, [], [1, 2]])(
@@ -707,17 +712,62 @@ describe("Sefer component", () => {
 			const config = capturedFlipBookProps.downloadConfig as {
 				onDownloadSefer: () => Promise<unknown>;
 			};
-			await act(async () => {});
-			expect(await config.onDownloadSefer()).toEqual({
-				ext: "pdf",
-				data: "chapters",
+			await act(async () => {
+				expect(await config.onDownloadSefer()).toEqual({
+					ext: "pdf",
+					data: "chapters",
+				});
 			});
 			expect(mockDownloadSefer).toHaveBeenCalledWith({
 				seferName: minimalPerek.sefer,
 				perekIds: perekIds?.length ? perekIds : [minimalPerek.perekId],
+				divineNameMasking: expect.objectContaining({ enabled: false }),
 			});
 		},
 	);
+
+	it("shows a visible download error and clears it on a successful retry", async () => {
+		render(<Sefer perekObj={minimalPerek} articles={[]} perushim={[]} />);
+		const config = () =>
+			capturedFlipBookProps.downloadConfig as {
+				onDownloadPageRange: (...args: unknown[]) => Promise<unknown>;
+			};
+		mockDownloadPageRanges.mockResolvedValueOnce({
+			error: "service_unavailable",
+			message: "לא ניתן היה לטעון את האיור של בראשית ב",
+		});
+		await act(async () => {
+			expect(
+				await config().onDownloadPageRange([3], [], { seferName: "בראשית" }),
+			).toBeNull();
+		});
+		expect(screen.getByRole("alert")).toHaveTextContent(
+			"לא ניתן היה לטעון את האיור של בראשית ב",
+		);
+
+		localStorage.setItem(
+			"divineNameMasking",
+			JSON.stringify({ enabled: true, yhwh: "dalet" }),
+		);
+		mockDownloadPageRanges.mockResolvedValueOnce({ ext: "pdf", data: "ok" });
+		await act(async () => {
+			expect(
+				await config().onDownloadPageRange([3], [], { seferName: "בראשית" }),
+			).toEqual({
+				ext: "pdf",
+				data: "ok",
+			});
+		});
+		expect(screen.queryByRole("alert")).toBeNull();
+		expect(mockDownloadPageRanges).toHaveBeenLastCalledWith([3], [], {
+			seferName: "בראשית",
+			divineNameMasking: expect.objectContaining({
+				enabled: true,
+				yhwh: "dalet",
+			}),
+		});
+		localStorage.clear();
+	});
 
 	it("onDownloadPageRange wraps result from server action", async () => {
 		mockDownloadPageRanges.mockResolvedValue({ ext: "zip", data: "zipdata" });

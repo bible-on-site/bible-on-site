@@ -2,12 +2,14 @@
 
 import type { Article, ArticleSummary } from "@/lib/articles";
 import { getArticleById, getArticleSummariesByPerekId } from "@/lib/articles";
+import { ExportError } from "@/lib/download/export-error";
 import type {
+	PageRangesDownloadContext,
 	SeferDownloadContext,
 	SemanticPageInfo,
 } from "@/lib/download/types";
 import type { PerushNote, PerushSummary } from "@/lib/perushim";
-import { getPerushNotes, getPerushimByPerekId } from "@/lib/perushim";
+import { getPerushimByPerekId, getPerushNotes } from "@/lib/perushim";
 
 /**
  * Fetch a single article by ID for in-book display (e.g. flipbook blank page).
@@ -82,6 +84,14 @@ export interface DownloadActionResult {
 /** Result when download cannot be performed */
 export interface DownloadActionError {
 	error: "not_implemented" | "service_unavailable";
+	/** Reader-facing reason, when the failure has an actionable one. */
+	message?: string;
+}
+
+function downloadFailure(e: unknown): DownloadActionError {
+	return e instanceof ExportError
+		? { error: "service_unavailable", message: e.message }
+		: { error: "service_unavailable" };
 }
 
 /**
@@ -101,7 +111,7 @@ export async function downloadSefer(
 		return { ext, data };
 	} catch (e) {
 		console.error("Sefer download failed:", e);
-		return { error: "service_unavailable" };
+		return downloadFailure(e);
 	}
 }
 
@@ -112,7 +122,7 @@ export async function downloadSefer(
 export async function downloadPageRanges(
 	pages: number[],
 	semanticPages: SemanticPageInfo[],
-	context?: { seferName?: string },
+	context?: PageRangesDownloadContext,
 ): Promise<DownloadActionResult | DownloadActionError> {
 	const { getPageRangesDownloadHandler } = await import(
 		"@/lib/download/handlers"
@@ -127,6 +137,6 @@ export async function downloadPageRanges(
 		return { ext, data };
 	} catch (e) {
 		console.error("Page-ranges download failed:", e);
-		return { error: "service_unavailable" };
+		return downloadFailure(e);
 	}
 }

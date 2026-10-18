@@ -31,12 +31,21 @@ jest.mock("@/lib/download/tanach-pdf", () => ({
 	),
 }));
 
-import {
-	generatePdfViaBulletin,
-	createBulletinPageRangesHandler,
-} from "@/lib/download/bulletin-client";
+const mockBuildPerakimContent = jest.fn(async (perekIds: number[]) =>
+	perekIds.map((perekId) => ({ perekId, pesukim: [], images: [] })),
+);
+jest.mock("@/lib/download/perek-export-content", () => ({
+	buildPerakimContent: (...args: [number[]]) =>
+		mockBuildPerakimContent(...args),
+}));
+
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
+import { DEFAULT_DIVINE_NAME_MASKING } from "@/lib/divine-name-masking";
+import {
+	createBulletinPageRangesHandler,
+	generatePdfViaBulletin,
+} from "@/lib/download/bulletin-client";
 
 const mockExecFileSync = execFileSync as jest.Mock;
 const mockExistsSync = existsSync as jest.MockedFunction<typeof existsSync>;
@@ -398,6 +407,40 @@ describe("bulletin-client", () => {
 			expect(ext).toBe("pdf");
 			expect(bin).toBeInstanceOf(Uint8Array);
 			expect(bin.length).toBeGreaterThan(0);
+		});
+
+		it("sends website pesukim/images with the reader's masking settings", async () => {
+			mockExecFileSync.mockReturnValue(makeFakePdf());
+			const masking = {
+				...DEFAULT_DIVINE_NAME_MASKING,
+				enabled: true,
+				yhwh: "dalet" as const,
+			};
+
+			const handler = createBulletinPageRangesHandler();
+			await handler(
+				[0],
+				[{ pageIndex: 0, semanticName: "א", title: "פרק א'" }],
+				{
+					seferName: "בראשית",
+					divineNameMasking: { ...masking, junk: 1 } as typeof masking,
+				},
+			);
+
+			expect(mockBuildPerakimContent).toHaveBeenCalledWith([1], masking);
+			const body = JSON.parse(mockExecFileSync.mock.calls[0][2].input);
+			expect(body.perakimContent).toEqual([
+				{ perekId: 1, pesukim: [], images: [] },
+			]);
+		});
+
+		it("defaults to unmasked output when no settings are sent", async () => {
+			mockExecFileSync.mockReturnValue(makeFakePdf());
+			await generatePdfViaBulletin([2]);
+			expect(mockBuildPerakimContent).toHaveBeenCalledWith(
+				[2],
+				DEFAULT_DIVINE_NAME_MASKING,
+			);
 		});
 	});
 });

@@ -21,7 +21,8 @@ fn main() {
         perakim: vec![pdf::PdfPerekInput {
             perek_heb: tanach::perek_to_hebrew(perek_data.perek_in_sefer),
             header: perek_data.header.clone(),
-            pesukim: perek_data.pesukim.clone(),
+            pesukim: pdf::plain_pesukim(&perek_data.pesukim),
+            images: vec![],
             articles: vec![(
                 "מאמר לדוגמה".to_string(),
                 "הרב ישראל".to_string(),

@@ -2,13 +2,13 @@
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import ReaderSettings from "@/app/929/[number]/components/ReaderSettings";
 import {
-	READER_SETTINGS_STORAGE_KEY,
-	READER_SETTINGS_VERSION,
-} from "@/lib/reader-settings";
-import {
 	DIVINE_NAME_MASKING_KEY,
 	getDivineNameMaskingSettings,
 } from "@/lib/divine-name-settings";
+import {
+	READER_SETTINGS_STORAGE_KEY,
+	READER_SETTINGS_VERSION,
+} from "@/lib/reader-settings";
 import {
 	getRecitationSettings,
 	openReaderSettings,
@@ -57,6 +57,17 @@ test("one settings button opens display controls and preserves existing preferen
 		fontId: 0,
 		v: READER_SETTINGS_VERSION,
 	});
+});
+test("using the open panel does not close popovers underneath it", () => {
+	render(<ReaderSettings />);
+	fireEvent.click(screen.getByRole("button", { name: "הגדרות קריאה" }));
+	const outside = jest.fn();
+	document.addEventListener("mousedown", outside);
+	fireEvent.mouseDown(screen.getByRole("slider", { name: "גודל גופן" }));
+	expect(outside).not.toHaveBeenCalled();
+	fireEvent.mouseDown(document.body);
+	expect(outside).toHaveBeenCalledTimes(1);
+	document.removeEventListener("mousedown", outside);
 });
 test("a fresh reader selects spacing level 3 / 3 and vertical spacing reaches level 5", () => {
 	render(<ReaderSettings />);
