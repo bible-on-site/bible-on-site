@@ -26,12 +26,12 @@ interface EntryFormData {
 	content: string;
 }
 
-type SaveVariables = {
+interface SaveVariables {
 	form: EntryFormData;
 	baseRevisionId: string | null;
 	source: string;
 	notes: string | null;
-};
+}
 
 export const Route = createFileRoute("/tanahpedia/entries/$id")({
 	component: EntryEditPage,
