@@ -128,7 +128,7 @@ public sealed class NativeSnapshotTests
         };
         using var driver = new IosSnapshotDriver(executor, new AppiumOptions { PlatformName = "iOS" });
         var page = new PerekPage(driver, new IosPlatformAdapter());
-        Assert.NotNull(page.ScrollBackTo("PasukText", _ => true));
+        Assert.NotNull(page.ScrollBackTo("PasukText", "heading"));
         Assert.Equal(3, executor.Lookups);
     }
 
