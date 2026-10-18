@@ -467,7 +467,7 @@ public partial class PerekViewModel : ObservableObject
         try
         {
             await stale;
-            Console.WriteLine($"[PerekLoad] stale attempt {attempt} eventually completed (perekId={perekId})");
+            DebugLog.Write($"[PerekLoad] stale attempt {attempt} eventually completed (perekId={perekId})");
         }
         catch (Exception ex)
         {
@@ -483,7 +483,7 @@ public partial class PerekViewModel : ObservableObject
         {
             LoadStage = stage;
         }
-        Console.WriteLine($"[PerekLoad] stage={stage} perekId={perekId}");
+        DebugLog.Write($"[PerekLoad] stage={stage} perekId={perekId}");
     }
 
     private async Task LoadByPerekIdCoreAsync(int perekId, LoadGate gate, int attemptStamp)
@@ -857,7 +857,7 @@ public partial class PerekViewModel : ObservableObject
     /// </summary>
     private void SetPerek(Perek perek)
     {
-        Console.WriteLine($"[Carousel] SetPerek perekId={perek.PerekId}");
+        DebugLog.Write($"[Carousel] SetPerek perekId={perek.PerekId}");
         // Clear selection BEFORE switching — so the old perek's pasuk IsSelected flags are reset
         ClearSelected();
         Perek = perek;
@@ -908,7 +908,7 @@ public partial class PerekViewModel : ObservableObject
         var perekId = PerekId;
         var perek = Perek;
 
-        Console.WriteLine($"[Carousel] InitializeCarouselAsync START perekId={perekId}");
+        DebugLog.Write($"[Carousel] InitializeCarouselAsync START perekId={perekId}");
 
         // Publish the requested reader without waiting for speculative chapter data.
         var list = await Task.Run(() =>
@@ -935,7 +935,7 @@ public partial class PerekViewModel : ObservableObject
             return;
         }
 
-        Console.WriteLine($"[Carousel] InitializeCarouselAsync built list: {list.Count} items");
+        DebugLog.Write($"[Carousel] InitializeCarouselAsync built list: {list.Count} items");
 
         // Assign collection on the main thread.
         // NOTE: CarouselView resets Position to 0 when ItemsSource changes — the
@@ -943,7 +943,7 @@ public partial class PerekViewModel : ObservableObject
         CarouselPerakim = new System.Collections.ObjectModel.ObservableCollection<Perek>(list);
         CurrentCarouselPerek = perek;
 
-        Console.WriteLine($"[Carousel] InitializeCarouselAsync DONE perekId={perekId}");
+        DebugLog.Write($"[Carousel] InitializeCarouselAsync DONE perekId={perekId}");
     }
 
     /// <summary>
@@ -957,7 +957,7 @@ public partial class PerekViewModel : ObservableObject
             return;
         }
 
-        Console.WriteLine($"[Carousel] EnsurePasukimLoaded perekId={perek.PerekId}");
+        DebugLog.Write($"[Carousel] EnsurePasukimLoaded perekId={perek.PerekId}");
         try
         {
             // Bounded like the fresh-load path — a stalled query must not hold
@@ -987,7 +987,7 @@ public partial class PerekViewModel : ObservableObject
         var loaded = await Task.Run(() => LoadMissingPasukimAsync(start, end));
         AssignLoadedPasukim(loaded);
 
-        Console.WriteLine($"[Carousel] PreloadAdjacent [{start}..{end}] center={centerPerekId}");
+        DebugLog.Write($"[Carousel] PreloadAdjacent [{start}..{end}] center={centerPerekId}");
     }
 
     /// <summary>
