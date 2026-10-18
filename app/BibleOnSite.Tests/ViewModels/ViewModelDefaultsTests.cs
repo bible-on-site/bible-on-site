@@ -1,3 +1,4 @@
+using BibleOnSite.Models;
 using BibleOnSite.Services;
 using BibleOnSite.Tests.Support;
 using BibleOnSite.ViewModels;
@@ -82,6 +83,15 @@ public class ViewModelDefaultsTests
             masora.PerushimCount.Should().Be(0);
             masora.HasPerushim.Should().BeFalse();
             masora.PerushimEmptyMessage.Should().Be("אין קטלוג פירושים");
+            masora.Perushim = [new() { Id = 1, Name = "רש\"י" }, new() { Id = 2, Name = "ביאור שטיינזלץ" }];
+            masora.PerushNameFilter = "שטיינזלץ";
+            masora.FilteredPerushim.Should().ContainSingle().Which.Id.Should().Be(2);
+            masora.PerushNameFilter = "רש״י";
+            masora.FilteredPerushim.Should().ContainSingle().Which.Id.Should().Be(1);
+            masora.PerushNameFilter = "missing";
+            masora.FilteredPerushim.Should().BeEmpty();
+            masora.PerushNameFilter = string.Empty;
+            masora.FilteredPerushim.Should().HaveCount(2);
             masora.ShowDownloadPerushimButton.Should().BeFalse();
             masora.InlineCommentaryLimit.Should().Be(5);
             masora.IsPerushChecked(1).Should().BeFalse();
@@ -96,6 +106,36 @@ public class ViewModelDefaultsTests
             vm.FontFactor.Should().Be(1.7);
             changes.Should().Contain(nameof(vm.FontFactor));
             new MauiPreferencesStorage().Should().NotBeNull();
+        }
+        finally { PreferencesService.ResetForTesting(); }
+    }
+
+    [Fact]
+    public async Task MasoraViewModel_DefaultArticlesLoader_ReadsStarterSnapshot()
+    {
+        // The parameterless ctor wires the production loader — a synchronous
+        // read of the StarterService startup snapshot, so unit swipes issue
+        // no GraphQL request. The singleton is not loaded in tests, so the
+        // snapshot yields an empty article list.
+        PreferencesService.ResetForTesting();
+        try
+        {
+            PreferencesService.Initialize(new InMemoryPreferencesStorage());
+            var masora = new MasoraViewModel();
+            var unit = new MasoraUnit
+            {
+                UnitId = 1,
+                Slug = "x",
+                SeferName = "x",
+                Heading = "h",
+                Ranges = { new MasoraUnitRange { StartPerekId = 1, StartPasuk = 1, EndPerekId = 1, EndPasuk = 1 } }
+            };
+            masora.Unit = unit;
+
+            await masora.LoadArticlesAsync(unit);
+
+            masora.Articles.Should().BeEmpty();
+            unit.ArticlesCount.Should().Be(0);
         }
         finally { PreferencesService.ResetForTesting(); }
     }

@@ -165,7 +165,7 @@ public partial class AppShell : Shell
 
 		host.AddGestureRecognizer(SharedFlyoutEdgePan);
 		_flyoutEdgeView = host;
-		Console.WriteLine($"[EdgePan] attached host={host.GetType().Name} frame={host.Frame} platformView={uiView.GetType().Name} inWindow={uiView.Window != null}");
+		DebugLog.Write($"[EdgePan] attached host={host.GetType().Name} frame={host.Frame} platformView={uiView.GetType().Name} inWindow={uiView.Window != null}");
 	}
 
 	private static UIWindow? FindKeyWindow()

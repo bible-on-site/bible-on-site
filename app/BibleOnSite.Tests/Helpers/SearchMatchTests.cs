@@ -435,5 +435,15 @@ public class SearchMatchTests
         SearchText.Normalize(raw).Should().Be("א בג ד");
     }
 
+    [Fact]
+    public void NormalizedMap_decomposes_precomposed_code_points()
+    {
+        // יִ (yod+hiriq presentation form) decomposes under NFD; the mark is
+        // then filtered, leaving 'י' — same for precomposed é → 'e'.
+        SearchMatch.NormalizedMap("יִ").Should().Equal(0);
+        SearchMatch.NormalizedMap("é").Should().Equal(0);
+        SearchText.Normalize("איִבé").Should().Be("איבe");
+    }
+
     #endregion
 }

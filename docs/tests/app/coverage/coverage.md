@@ -284,16 +284,17 @@ The `app_mobile_e2e` job ([app-mobile-e2e.yml](../../../../.github/workflows/app
 + [app-mobile-e2e-runner.yml](../../../../.github/workflows/app-mobile-e2e-runner.yml)):
 
 1. Builds an instrumented Debug app (`MOBILE_E2E_COVERAGE=1` → `CompileMobileE2E`);
-   on iOS a single shared `build` leg compiles once and the three
+   on iOS a single shared `build` leg compiles once and the planned
    `prebuilt-run` shards restore that build, while Android builds and runs on
    one leg.
 2. Each leg runs its Appium slice; the harness collects a per-test coverage
-   dump even when the scenario fails. iOS test classes carry a `Shard` trait
-   assigning every scenario to exactly one of three runners.
+   dump even when the scenario fails. Each iOS leg executes exactly the
+   `case-manifest.json` `plan_ios` assigned to it (#2263), so every planned
+   scenario lands on exactly one runner.
 3. Each leg applies the dumps via `CoverageMobileE2E` (runs even after a
    failed pilot so partial coverage stays diagnosable) and uploads
-   `app-e2e-coverage.<run>.<artifact>` — `android`, or `ios-shard1..3`.
-4. `merge_ios` merges the three shard LCOVs into
+   `app-e2e-coverage.<run>.<artifact>` — `android`, or `ios-shard<N>`.
+4. `merge_ios` merges the iOS shard LCOVs into
    `app-e2e-coverage.<run>.ios` after union/compatibility validation
    (`merge-runner-shards.mjs`).
 5. `app-e2e-coverage.master.<platform>` is published only from a completed,

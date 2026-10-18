@@ -69,6 +69,9 @@ public sealed class ViewportTextView : UIView, IUIAccessibilityContainer
     internal void UpdateDocumentAccessibility()
     {
         var serial = ++_accessibilitySerial;
+        // A rebound text resets the inner scroll offset — force a viewport re-apply.
+        _appliedViewport = new(-1, -1);
+        _appliedHorizontal = new(-1, -1);
         _sectionGeometry.Reset();
         var text = TextView.AttributedText;
         var value = text?.Value ?? string.Empty;
@@ -290,10 +293,20 @@ public sealed class ViewportTextView : UIView, IUIAccessibilityContainer
             set => base.AccessibilityFrame = value;
         }
     }
+
+    // Clipping ancestors are stable while the superview chain holds; the cache is
+    // rebuilt lazily after window moves and reparenting instead of walking the
+    // ancestor chain on every scroll frame.
+    private UIView[]? _clipAncestors;
+    private TextViewport _appliedViewport = new(-1, -1);
+    private TextViewport _appliedHorizontal = new(-1, -1);
+    private double _appliedWidth = -1;
+
     public override void MovedToWindow()
     {
         base.MovedToWindow();
         StopTracking();
+        _clipAncestors = null;
         if (Window is null) { return; }
         for (var ancestor = Superview; ancestor is not null; ancestor = ancestor.Superview)
         {
@@ -304,6 +317,12 @@ public sealed class ViewportTextView : UIView, IUIAccessibilityContainer
             }
         }
         UpdateViewport();
+    }
+
+    public override void MovedToSuperview()
+    {
+        base.MovedToSuperview();
+        _clipAncestors = null;
     }
 
     public override void LayoutSubviews()
@@ -326,9 +345,8 @@ public sealed class ViewportTextView : UIView, IUIAccessibilityContainer
         var right = (double)(visible.X + visible.Width);
         var top = (double)visible.Y;
         var bottom = (double)(visible.Y + visible.Height);
-        for (var ancestor = Superview; ancestor is not null; ancestor = ancestor.Superview)
+        foreach (var ancestor in _clipAncestors ??= CollectClippingAncestors())
         {
-            if (!ancestor.ClipsToBounds) { continue; }
             var clip = ConvertRectFromView(ancestor.Bounds, ancestor);
             left = Math.Max(left, (double)clip.X);
             right = Math.Min(right, (double)(clip.X + clip.Width));
@@ -337,6 +355,15 @@ public sealed class ViewportTextView : UIView, IUIAccessibilityContainer
         }
         var viewport = TextViewport.Clip((double)Bounds.Height, top, bottom);
         var horizontal = TextViewport.Clip((double)Bounds.Width, left, right);
+        // Width is part of the key: it feeds the applied frame but not the clip.
+        if (viewport == _appliedViewport && horizontal == _appliedHorizontal &&
+            Math.Abs((double)Bounds.Width - _appliedWidth) < 0.5)
+        {
+            return;
+        }
+        _appliedViewport = viewport;
+        _appliedHorizontal = horizontal;
+        _appliedWidth = (double)Bounds.Width;
         TextView.Hidden = viewport.Height <= 0 || horizontal.Height <= 0;
         AccessibilityElementsHidden = TextView.Hidden;
         if (TextView.Hidden) { return; }
@@ -355,6 +382,16 @@ public sealed class ViewportTextView : UIView, IUIAccessibilityContainer
             NativeReaderTrace.Write("viewport-offset:end");
         }
         EnsureSectionGeometry();
+    }
+
+    private UIView[] CollectClippingAncestors()
+    {
+        var ancestors = new List<UIView>();
+        for (var ancestor = Superview; ancestor is not null; ancestor = ancestor.Superview)
+        {
+            if (ancestor.ClipsToBounds) { ancestors.Add(ancestor); }
+        }
+        return ancestors.ToArray();
     }
 
     protected override void Dispose(bool disposing)

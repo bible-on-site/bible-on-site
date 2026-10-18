@@ -32,7 +32,11 @@ internal sealed class PerushNoteChapter
         _perushIdsByPasuk = PerushNoteBlob.ReadHeaders(blob)
             .GroupBy(h => h.Pasuk)
             .ToDictionary(g => g.Key, g => g.Select(h => h.PerushId).Distinct().ToList());
+        PerushIds = [.. _perushIdsByPasuk.Values.SelectMany(ids => ids).Distinct().Order()];
     }
+
+    /// <summary>Distinct perush ids with notes anywhere in the perek, ascending.</summary>
+    internal IReadOnlyList<int> PerushIds { get; }
 
     internal IEnumerable<int> AvailablePerushIds(int firstPasuk, int lastPasuk) =>
         _perushIdsByPasuk.Where(p => p.Key >= firstPasuk && p.Key <= lastPasuk)

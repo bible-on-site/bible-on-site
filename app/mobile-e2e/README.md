@@ -22,15 +22,22 @@ prefix impersonating the app. This avoids expensive process snapshots. Confirmed
 and timeout failures fail the run. `MOBILE_KEEP_APP=1` retains the review app.
 The existing 15-second session-delete and 15-minute pilot limits remain intact.
 
-CI runs the complete iOS suite across three independent `xcode-27` runners,
-each with one simulator and one shared Appium session. Each host has 3 CPUs and
-7 GB RAM. `Shard=1|2|3` forms a disjoint 3/4/3 partition. The rapid verse-scroll
-storm runs on runner 1 and the long-commentary storm on runner 2; the short
-flyout case occupies the remaining reader-group slot. All ten iOS cases and
-six Android shared cases remain. Each pilot keeps its 15-minute deadline. A final merge requires
-successful evidence for the whole discovered suite, rejects duplicates, and
-combines native line coverage and execution/automation evidence. Only a full
-successful union can replace a trusted iOS baseline.
+CI runs the iOS suite across a dynamically planned set of independent
+`xcode-27` runners, each with one simulator and one shared Appium session
+(#2263). Before the matrix expands, the `plan_ios` job discovers the suite
+statically, resolves the diff against the published coverage baseline, and
+partitions the selected cases with a deterministic longest-processing-time
+assignment balanced by the baseline's rolling per-case runtimes — unmeasured
+cases take a fixed fallback weight and never narrow membership. The shard
+count follows the selected work (case-time budget, bounded by runner
+capacity), so a small selection stays on one runner and a legitimately empty
+selection starts no simulator at all. Each runner executes exactly the case
+manifest it was assigned — it never re-selects — and each pilot keeps its
+15-minute deadline. A final merge requires each shard's executed manifest to
+match its assignment, requires successful evidence for the whole planned run
+set exactly once, rejects duplicates, and combines native line coverage and
+execution/automation evidence. Only a full successful union can replace a
+trusted iOS baseline.
 
 A separate iOS build host restores MAUI and compiles/signs the app once, without
 booting a simulator. All three device hosts receive the same archive, including the
@@ -45,23 +52,15 @@ cache remains empty during native testing and coverage application.
 Simulator/WDA preparation overlaps archive transfer. Android has no dependency
 on the iOS builder. All pilot, interaction and watchdog budgets stay unchanged.
 
-Optional sharding remains available on a host with sufficient resources (#2083):
-`ios:boot` provisions a second same-model clone of the selected device when
-`MOBILE_E2E_SHARD_COUNT=2`, and `npm run test:sharded` runs two `run.mjs`
-children in parallel — each with its own `MOBILE_UDID`, Appium port
-(`MOBILE_APPIUM_PORT`, 4723/4724), WebDriverAgent listen port
-(`MOBILE_WDA_PORT`, 8100/8101 — simulators share the host loopback, so
-concurrent WDA instances must not collide), artifacts subdirectory
-(`<platform>/shard<N>/`) and disjoint `Shard` trait group (`MOBILE_E2E_SHARD`,
-added to the `TestMobileE2E` filter by the Nuke target). Device one combines
-CI groups 1 and 3; device two runs group 2, retaining the full disjoint suite.
-Each iOS-applicable fact has exactly one CI group, inherited from its class or
-assigned on the method. Android uses no shard filter and runs all six shared
-cases. `ShardAssignmentTests` verifies every assignment, the ten-case union
-and the 3/4/3 balance. `run-sharded.mjs` merges the per-shard
-`coverage-evidence/` back into the top-level artifacts directory for the
-coverage-tree collect step and fails if both shards produced the same test's
-evidence.
+Shard timing history rides the same trusted baseline as the coverage tree
+(#2263): the merge rolls each case's measured duration (JUnit report first,
+evidence spans as fallback) and the mean per-shard non-case pilot overhead
+into the tree, and only a complete successful master run publishes it. A
+missing baseline simply leaves every case unmeasured — planning still runs at
+the deterministic fallback weight and history accrues from normal execution.
+`run-sharded` splitting on one host was removed with the fixed trait groups:
+each shard is its own matrix job, so ports, devices and artifact roots are
+isolated by the runner itself rather than by env offsets.
 Before iOS tests, Appium downloads the official simulator WebDriverAgent matching
 the locked driver dependency and launches it directly. This keeps cold Xcode
 compilation outside session startup; `npm test` also prepares the agent locally.
@@ -77,12 +76,12 @@ after packaging. Canonical content comes from the existing packaged database.
 The pilot runs under an independent 15-minute wall-clock supervisor, including
 local harness builds and Appium setup. Cancellation stops the owned process
 group and escalates after three seconds, including child processes left behind
-by a terminated wrapper. Windows requires PowerShell 7 (`pwsh`); its native
-.NET process-tree termination keeps the existing two-second command limit and
-avoids the stalled `taskkill` query. `pilot-timing.json` records duration and
+by a terminated wrapper. Windows uses the in-box `taskkill /T` tree kill as
+the fast path; when it reports a stalled or already-exited root, a detached
+`powershell` CIM walk reaps the descendants (including orphans whose parent
+died first) and reports live survivors on stderr. `pilot-timing.json` records duration and
 timeout status.
-The sharded runner builds the harness once; its children use those outputs
-without restoring or rebuilding. Commentary searches use the shipped index and
+Commentary searches use the shipped index and
 the ordinary 45-second deadline, including on a fresh install.
 
 ## Adding scenarios and platform differences
@@ -98,10 +97,8 @@ branching or skipping an entire shared scenario. Shared classes use
 `[Trait("Platform", "Android")]` or `[Trait("Platform", "iOS")]` alongside
 `[Trait("Category", "MobileE2E")]`; the Nuke target automatically selects shared
 tests plus the current platform, leaving platform-only behavior easy to add.
-Every class runnable on iOS must also carry exactly one
-`[Trait("Shard", "1")]` or `[Trait("Shard", "2")]` for optional sharding.
-`ShardAssignmentTests` fails
-the harness unit run when a class is left out.
+Cases need no shard traits: the CI planner partitions the discovered iOS suite
+itself and hands each runner its case manifest (#2263).
 Use `[Collection("Mobile device")]` on every mobile test class to serialize
 scenarios that own the same device. Inject `MobileDeviceSession`; this collection
 fixture owns one driver and releases it after the last scenario. The session
@@ -235,9 +232,9 @@ stalls `npm ci`, the boot or the build; each pilot waits on the manifest
 through `wait`/`wait-all`.
 `MOBILE_APP_PATH` can select another compatible build. Each local
 run owns an Appium server on `127.0.0.1:4723` (override with
-`MOBILE_APPIUM_PORT`); keep that port free. To reproduce the CI shard split
-locally, run `MOBILE_E2E_SHARD_COUNT=2 npm run ios:boot` to provision both
-simulators, then `npm run test:sharded`.
+`MOBILE_APPIUM_PORT`); keep that port free. To reproduce one CI shard leg
+locally, download the run's `app-mobile-e2e-plan.<run-id>.ios` artifact and
+set `MOBILE_E2E_SELECTION` to the shard's `shards/shard-N.json`.
 
 Set `MOBILE_KEEP_APP=1` to keep the installed app and its data for manual review
 after a local run. The runner installs the current build while preserving that
@@ -256,8 +253,9 @@ Screenshots are captured for each scenario. Failed scenarios also save native
 view trees; content assertions still inspect the complete native tree.
 These captures are saved alongside
 timestamped Appium and device logs, TRX and JUnit reports, under `app/.artifacts/mobile-e2e/<platform>`
-(`shard<N>/` subdirectories when the iOS suite runs sharded, with merged
-`coverage-evidence/` at the top level).
+(each iOS shard runner uploads its own artifact — including the executed
+`case-manifest.json` — and the merge produces the combined top-level
+`coverage-evidence/`).
 iOS also exports app lifecycle logs and fresh app crash reports. Failed runs
 collect a short native stack sample if the app is still running, without
 competing with healthy tests for simulator resources.
@@ -281,8 +279,8 @@ comment/formatting-only edits resolve as `unchanged-structural` instead of
 invalidating coverage. Selection currently runs in shadow mode — the manifest is
 reported while every test still runs — until evidence supports enforcement;
 see [docs/tests/app/e2e-impact.md](../../docs/tests/app/e2e-impact.md).
-`MOBILE_E2E_SELECTION=<manifest>` narrows `dotnet test` through a
-FullyQualifiedName filter for enforce mode and local experiments.
+`MOBILE_E2E_SELECTION=<manifest>` narrows `dotnet test` for enforce mode, for
+a shard's assigned case manifest (#2263), and for local experiments.
 
 ## Dependency security
 
@@ -313,12 +311,12 @@ failures fail CI and `android-emulator-cleanup.json` records the process IDs and
 duration. The SDK package directories are assigned to the runner before restoring
 their cached modes, avoiding root-owned directory extraction failures.
 
-CI runs the shared iOS build on three independent devices: three shared cases on
-shard 1, four iOS-specific cases on shard 2, and three shared cases on shard 3.
-The merge requires all three artifact inputs and the full ten-case disjoint union.
-Each device retains its startup coverage dump (13 dumps for the complete suite).
-Local two-device `test:sharded` combines groups 1 and 3 on its first device; Android
-continues to run all six shared cases. Both scroll storms use at most two flicks
+CI runs the shared iOS build on the dynamically planned shard legs: each
+runner's cases come from its assigned manifest, so groupings follow measured
+runtimes rather than a fixed partition (#2263). The merge requires one
+artifact per planned shard and a disjoint union covering the whole planned
+run set. Each device retains its startup coverage dump. Android continues to
+run all six shared cases on one leg. Both scroll storms use at most two flicks
 per request, retaining 80 pasuk flicks and 40 commentary flicks.
 
 Large commentary accessibility frames are measured once per document/width in a

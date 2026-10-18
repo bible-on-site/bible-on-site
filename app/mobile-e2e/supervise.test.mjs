@@ -86,6 +86,33 @@ for (const reason of ["deadline", "cancellation", "blocked-wrapper"]) {
   });
 }
 
+// The wrapper can die before any shutdown runs; its orphaned children carry
+// the dead ParentProcessId, which the Windows CIM walk still matches.
+test("an exited wrapper still has its orphaned children reaped", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "mobile-supervisor-"));
+  const ready = join(directory, "pids.json");
+  let run;
+  let pids = [];
+  try {
+    run = supervise(process.execPath, ["-e", stubbornTree, ready, "idle"], {
+      graceMs: 100, stdio: "ignore",
+      scheduleDeadline() {},
+    });
+    pids = await waitForTree(ready);
+    process.kill(pids[0], "SIGKILL");
+    assert.equal(await run.result, 1);
+    for (const pid of pids) await assertStopped(pid);
+  } finally {
+    run?.stop();
+    if (run) await run.result;
+    for (const pid of pids) {
+      try { process.kill(pid, "SIGKILL"); }
+      catch (error) { if (error.code !== "ESRCH") throw error; }
+    }
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("the production clock expires without waiting for child progress", async () => {
   let expired = false;
   const run = supervise(process.execPath, ["-e", "Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0)"], {
