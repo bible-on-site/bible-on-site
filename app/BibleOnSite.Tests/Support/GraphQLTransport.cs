@@ -1,7 +1,8 @@
 using System.Net;
 using System.Text;
 using GraphQL.Client.Http;
-using GraphQL.Client.Serializer.Newtonsoft;
+using System.Text.Json.Serialization.Metadata;
+using BibleOnSite.Services;
 
 namespace BibleOnSite.Tests.Support;
 
@@ -16,13 +17,23 @@ public sealed class GraphQLTransport : HttpMessageHandler
     {
     }
 
-    public GraphQLTransport(string json)
+    public GraphQLTransport(string json) : this(json, [])
+    {
+    }
+
+    /// <summary>Adds source-generated metadata for test-only response types.</summary>
+    public GraphQLTransport(string json, params IJsonTypeInfoResolver[] extraTypes)
     {
         Respond = _ => Task.FromResult(JsonResponse(json));
+        var serializer = BaseGraphQLService.CreateSerializer();
+        foreach (var resolver in extraTypes)
+        {
+            serializer.Options.TypeInfoResolverChain.Add(resolver);
+        }
         Client = new GraphQLHttpClient(new GraphQLHttpClientOptions
         {
             EndPoint = new Uri("https://api.example.test/graphql")
-        }, new NewtonsoftJsonSerializer(), new HttpClient(this));
+        }, serializer, new HttpClient(this));
     }
 
     public static HttpResponseMessage JsonResponse(string json) => new(HttpStatusCode.OK)

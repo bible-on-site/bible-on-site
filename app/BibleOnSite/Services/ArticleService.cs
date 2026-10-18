@@ -1,7 +1,7 @@
+using System.Text.Json.Serialization;
 using BibleOnSite.Models;
 using GraphQL;
 using GraphQL.Client.Http;
-using GraphQL.Client.Serializer.Newtonsoft;
 using BibleOnSite.Config;
 
 namespace BibleOnSite.Services;
@@ -49,7 +49,7 @@ public class ArticleService : BaseGraphQLService
                         priority
                     }
                 }",
-            Variables = new { perekId }
+            Variables = new Dictionary<string, object?> { ["perekId"] = perekId }
         };
 
         try
@@ -106,7 +106,7 @@ public class ArticleService : BaseGraphQLService
                         priority
                     }
                 }",
-            Variables = new { id = articleId }
+            Variables = new Dictionary<string, object?> { ["id"] = articleId }
         };
 
         try
@@ -165,7 +165,7 @@ public class ArticleService : BaseGraphQLService
                         priority
                     }
                 }",
-            Variables = new { authorId }
+            Variables = new Dictionary<string, object?> { ["authorId"] = authorId }
         };
 
         try
@@ -254,7 +254,7 @@ public class ArticleService : BaseGraphQLService
                         }
                     }
                 }",
-            Variables = new { phrase, limit, offset }
+            Variables = new Dictionary<string, object?> { ["phrase"] = phrase, ["limit"] = limit, ["offset"] = offset }
         };
 
         using var timeoutSource = new CancellationTokenSource(timeout ?? DefaultSearchTimeout);
@@ -328,18 +328,18 @@ public class ArticleService : BaseGraphQLService
 
     #region DTOs for GraphQL responses
 
-    private class SearchArticlesResponse
+    internal class SearchArticlesResponse
     {
         public SearchArticlesData? SearchArticles { get; set; }
     }
 
-    private class SearchArticlesData
+    internal class SearchArticlesData
     {
         public int Total { get; set; }
         public List<ArticleSearchHitDto>? Hits { get; set; }
     }
 
-    private class ArticleSearchHitDto
+    internal class ArticleSearchHitDto
     {
         public int ArticleId { get; set; }
         public string? Name { get; set; }
@@ -351,32 +351,31 @@ public class ArticleService : BaseGraphQLService
         public float Score { get; set; }
     }
 
-    private class ArticlesByPerekIdResponse
+    internal class ArticlesByPerekIdResponse
     {
         public List<ArticleDto>? ArticlesByPerekId { get; set; }
     }
 
-    private class ArticlesByAuthorIdResponse
+    internal class ArticlesByAuthorIdResponse
     {
         public List<ArticleDto>? ArticlesByAuthorId { get; set; }
     }
 
-    private class ArticleByIdResponse
+    internal class ArticleByIdResponse
     {
         public ArticleDto? ArticleById { get; set; }
     }
 
-    private class ArticleDto
+    internal class ArticleDto
     {
         public int Id { get; set; }
         public int PerekId { get; set; }
         public int AuthorId { get; set; }
         public string? Abstract { get; set; }
 
-        // JsonProperty required to prevent IL trimming in Release builds.
-        // This property is only accessed via reflection (JSON deserialization + XAML binding),
-        // so the trimmer would remove it without this attribute. See #1142 for details.
-        [Newtonsoft.Json.JsonProperty("articleContent")]
+        // Explicit name keeps the GraphQL field mapping visible; GraphQLJsonContext
+        // references the property statically so the trimmer keeps it (#1142).
+        [JsonPropertyName("articleContent")]
         public string? ArticleContent { get; set; }
 
         public string? Name { get; set; }

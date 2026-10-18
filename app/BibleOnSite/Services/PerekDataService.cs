@@ -2,7 +2,7 @@ using BibleOnSite.Helpers;
 using BibleOnSite.Models;
 using System.Globalization;
 using System.Text;
-using Newtonsoft.Json;
+using System.Text.Json;
 using SQLite;
 
 namespace BibleOnSite.Services;
@@ -93,7 +93,7 @@ public class PerekDataService
             if (row.TanahUsName.Contains('{'))
             {
                 // Handle JSON format for split books
-                var nameDict = JsonConvert.DeserializeObject<Dictionary<string, string>>(row.TanahUsName);
+                var nameDict = JsonSerializer.Deserialize(row.TanahUsName, AppJsonContext.Default.SeferNames);
                 tanahUsName = nameDict?.Values.FirstOrDefault() ?? row.TanahUsName;
             }
             else

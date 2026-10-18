@@ -134,7 +134,7 @@ internal class TestableStarterService : BaseGraphQLService
             return;
         }
 
-        var response = await QueryWithTimeoutAsync<StarterResponse>(
+        var response = await QueryWithTimeoutAsync<StarterService.StarterResponse>(
             GetStarterQuery,
             TimeSpan.FromSeconds(10),
             "GetStarter");
@@ -166,20 +166,4 @@ internal class TestableStarterService : BaseGraphQLService
 
         _isLoaded = true;
     }
-
-    #region DTOs for GraphQL response
-
-    private record StarterResponse(StarterData Starter);
-
-    private record StarterData(
-        List<AuthorData>? Authors,
-        List<int>? PerekArticlesCounters);
-
-    private record AuthorData(
-        int Id,
-        int ArticlesCount,
-        string Details,
-        string Name);
-
-    #endregion
 }
