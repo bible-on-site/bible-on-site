@@ -38,7 +38,7 @@ public sealed class PerushimHtmlScrollStabilityTests(ITestOutputHelper output, M
 
         // Grouping must retain every paragraph, including text far outside the
         // visible viewport. This also exercises the formerly blocking AX lookup.
-        Page.WaitFor("CommentaryTextSection");
+        Page.WaitFor(Platform.DisplayedAutomationId("CommentaryTextSection"));
         var sections = System.Xml.Linq.XDocument.Parse(Driver!.PageSource).Descendants()
             .Where(element => (string?)element.Attribute("name") == "CommentaryTextSection")
             .Select(element => (string?)element.Attribute("label") ?? string.Empty).ToArray();
@@ -87,7 +87,7 @@ public sealed class PerushimHtmlScrollStabilityTests(ITestOutputHelper output, M
         Assert.Equal(sourceBeforeStorm, Page.Source);
         // Opposite flicks need not cancel their inertia. The reader can remain
         // inside the huge note, with every verse outside the visible viewport.
-        Page.ScrollBackTo("PasukText", element => element.Text == verseBeforeStorm);
+        Page.ScrollBackTo("PasukText", verseBeforeStorm);
         Assert.Equal(verseBeforeStorm, Page.FirstPasuk);
         SaveDiagnostics("LongPerushimAfterScroll", "passed");
     });

@@ -134,7 +134,7 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         AssertRegularReader();
         // Capture the highlighted match, then scroll back to the selected heading.
         SaveDiagnostics("FloatingSearchCommentaryLanding", "passed");
-        Page.ScrollBackTo("InlinePerushName", element => element.Text == commentaryName);
+        Page.ScrollBackTo("InlinePerushName", commentaryName);
         SaveDiagnostics("FloatingSearchCommentaryReader", "passed");
         // Menu navigation must keep this reader above the retained search page.
         var readerSource = Page.Source;
@@ -162,7 +162,7 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         {
             Platform.Tap(driver, Page.WaitFor("SearchResultTitle", element => element.Text == title));
             AssertRegularReader();
-            Page.ScrollBackTo("InlinePerushName", element => element.Text == commentaryName);
+            Page.ScrollBackTo("InlinePerushName", commentaryName);
             SaveDiagnostics("FloatingSearchReview", "passed");
         }
     });

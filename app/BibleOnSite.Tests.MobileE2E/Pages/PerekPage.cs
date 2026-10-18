@@ -116,9 +116,10 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
     /// A long commentary hit can land several screens below its heading. Scroll
     /// back to verify the selected commentary before testing reader history.
     /// </summary>
-    public AppiumElement ScrollBackTo(string automationId, Func<AppiumElement, bool> condition)
+    public AppiumElement ScrollBackTo(string automationId, string text)
     {
-        var locator = platform.AutomationId(automationId);
+        var locator = platform.AutomationIdWithText(automationId, text);
+        Func<AppiumElement, bool> condition = element => element.Text == text;
         var deadline = DateTime.UtcNow.AddSeconds(45);
         AppiumElement? reader = null;
         Rectangle? lastHeading = null;
