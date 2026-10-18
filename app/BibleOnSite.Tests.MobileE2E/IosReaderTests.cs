@@ -51,6 +51,8 @@ public sealed class IosReaderTests(ITestOutputHelper output, MobileDeviceSession
         var deadline = DateTime.UtcNow.Add(timeout);
         while (DateTime.UtcNow < deadline)
         {
+            // Deliberately bypasses the DriverTelemetry window cache: this loop
+            // must observe the resize that setOrientation only starts.
             var size = Driver!.Manage().Window.Size;
             if (size.Width > size.Height)
             {
