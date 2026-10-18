@@ -2263,6 +2263,37 @@ jobs:
           node data/recitation/check_storage.mjs
           node data/recitation/check_storage.mjs data/recitation/fixtures/seek.ogg
 
+  deploy_verifier:
+    name: CD verifier dependency contract
+    runs-on: ubuntu-latest
+    needs: [setup_env, determine_changes]
+    # The website's post-deploy verifier resolves its imports through
+    # NODE_PATH -> devops/node_modules (cd-aws.yml). Guard that contract:
+    # verifier or deployment-workflow changes select it via website flags,
+    # devops manifest changes via admin_ci_changed (#2372).
+    if: ${{ always() && !cancelled() && needs.setup_env.result == 'success' && needs.determine_changes.result == 'success' && (needs.determine_changes.outputs.website_module_changed == 'true' || needs.determine_changes.outputs.website_ci_changed == 'true' || needs.determine_changes.outputs.admin_ci_changed == 'true') }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: devops/package.json
+      # Same install layout as the deploy job: only devops deps, no website
+      # node_modules — resolution can only succeed through NODE_PATH.
+      - name: Install deployment dependencies
+        run: npm ci --prefix devops --no-audit
+      - name: Exercise the real deployment verifier entry point
+        run: |
+          node web/bible-on-site/scripts/verify-public-content.fixture.mjs 48123 &
+          FIXTURE_PID=$!
+          trap 'if kill -0 $FIXTURE_PID 2>/dev/null; then kill $FIXTURE_PID; fi' EXIT
+          for attempt in $(seq 50); do
+            curl -fsS http://127.0.0.1:48123/api/health/ready > /dev/null 2>&1 && break
+            sleep 0.2
+          done
+          curl -fsS http://127.0.0.1:48123/api/health/ready > /dev/null
+          NODE_PATH="$GITHUB_WORKSPACE/devops/node_modules" \
+            node web/bible-on-site/scripts/verify-public-content.mjs --origin http://127.0.0.1:48123
+
   data_ci:
     name: Data CI
     runs-on: ubuntu-latest
@@ -2675,6 +2706,7 @@ jobs:
         bulletin_ci,
         data_ci,
         recitation_ci,
+        deploy_verifier,
         perushim_data,
         build_lcov_docker,
         determine_baseline_availability,
@@ -2708,6 +2740,15 @@ jobs:
           if [ "${{ needs.determine_changes.outputs.data_module_changed }}" = "true" ] || [ "${{ needs.determine_changes.outputs.website_module_changed }}" = "true" ] || [ "${{ needs.determine_changes.outputs.data_ci_changed }}" = "true" ]; then
             if [ "${{ needs.recitation_ci.result }}" != "success" ]; then
               echo "Recitation alignment and RustFS validation did not pass."
+              exit 1
+            fi
+          fi
+
+          # Same condition as the deploy_verifier job's `if` — a triggered
+          # guard that failed or could not run blocks the merge (#2372).
+          if [ "${{ needs.determine_changes.outputs.website_module_changed }}" = "true" ] || [ "${{ needs.determine_changes.outputs.website_ci_changed }}" = "true" ] || [ "${{ needs.determine_changes.outputs.admin_ci_changed }}" = "true" ]; then
+            if [ "${{ needs.deploy_verifier.result }}" != "success" ]; then
+              echo "CD verifier dependency contract did not pass."
               exit 1
             fi
           fi
