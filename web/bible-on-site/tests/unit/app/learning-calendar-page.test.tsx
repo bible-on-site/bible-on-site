@@ -57,10 +57,10 @@ describe("LearningCalendar", () => {
 		expect(
 			screen.getByRole("button", { name: /אלול.*בראשית א/ }),
 		).toBeInTheDocument();
-		// 12-13 Elul (Friday/Saturday) review Thursday's perek.
+		// 12-13 Elul (Friday/Saturday) review the whole studied week (#2365).
 		const reviewDays = screen.getAllByRole("button", { name: /חזרה/ });
 		expect(reviewDays.length).toBeGreaterThanOrEqual(2);
-		expect(reviewDays[0]).toHaveAccessibleName(/חזרה: בראשית ה/);
+		expect(reviewDays[0]).toHaveAccessibleName(/חזרה: בראשית א - בראשית ה/);
 	});
 
 	it("navigates to the next month and syncs the ?month= query", () => {
