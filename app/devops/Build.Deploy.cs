@@ -117,10 +117,9 @@ partial class Build
 
     static AndroidPublisherService CreatePlayService(AbsolutePath keyFile)
     {
-#pragma warning disable CS0618 // GoogleCredential.FromFile is obsolete but replacement API is unclear
-        var credential = GoogleCredential.FromFile(keyFile)
+        var credential = CredentialFactory.FromFile<ServiceAccountCredential>(keyFile)
+            .ToGoogleCredential()
             .CreateScoped(AndroidPublisherService.Scope.Androidpublisher);
-#pragma warning restore CS0618
 
         return new AndroidPublisherService(new BaseClientService.Initializer
         {
