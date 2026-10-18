@@ -17,10 +17,10 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
     public AppiumElement WaitFor(string automationId) => WaitFor(automationId, _ => true);
 
     public AppiumElement WaitFor(string automationId, Func<AppiumElement, bool> condition) =>
-        WaitFor(platform.AutomationId(automationId), condition);
+        WaitFor(platform.DisplayedAutomationId(automationId), condition);
 
     public AppiumElement WaitFor(string automationId, Func<AppiumElement, bool> condition, TimeSpan timeout) =>
-        WaitFor(platform.AutomationId(automationId), condition, timeout);
+        WaitFor(platform.DisplayedAutomationId(automationId), condition, timeout);
 
     public AppiumElement WaitFor(By locator) => WaitFor(locator, _ => true);
 
@@ -60,7 +60,7 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
     /// </summary>
     public void WaitForHidden(string automationId)
     {
-        var locator = platform.AutomationId(automationId);
+        var locator = platform.DisplayedAutomationId(automationId);
         var timeout = TimeSpan.FromSeconds(30);
         var deadline = DateTime.UtcNow.Add(timeout);
         while (DateTime.UtcNow < deadline)
@@ -89,7 +89,7 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
     /// </summary>
     public (Point Location, Size Size) WaitForStableFrame(string automationId)
     {
-        var locator = platform.AutomationId(automationId);
+        var locator = platform.DisplayedAutomationId(automationId);
         var timeout = TimeSpan.FromSeconds(45);
         var deadline = DateTime.UtcNow.Add(timeout);
         var frame = Rectangle.Empty;
@@ -108,7 +108,7 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
         throw new WebDriverTimeoutException($"The frame of {locator} did not stabilize within {timeout.TotalSeconds} seconds.");
     }
 
-    public void Tap(string automationId) => Tap(platform.AutomationId(automationId));
+    public void Tap(string automationId) => Tap(platform.DisplayedAutomationId(automationId));
 
     public void Tap(By locator) => platform.Tap(driver, WaitFor(locator, platform.CanTap));
 

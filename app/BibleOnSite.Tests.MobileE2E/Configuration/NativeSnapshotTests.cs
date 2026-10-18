@@ -64,6 +64,16 @@ public sealed class NativeSnapshotTests
     }
 
     [Fact]
+    public void PageLookupsByIdOnlyReturnDisplayedElementsFromTheDevice()
+    {
+        var executor = new SnapshotExecutor([Entry("ready")]);
+        using var driver = new IosSnapshotDriver(executor, new AppiumOptions { PlatformName = "iOS" });
+        new PerekPage(driver, new IosPlatformAdapter()).WaitFor("PerekSource");
+        Assert.Equal("-ios predicate string", executor.LastParameters!["using"]);
+        Assert.Equal("name == 'PerekSource' AND visible == 1", executor.LastParameters["value"]);
+    }
+
+    [Fact]
     public void PollConditionsUseFreshTextButTheReturnedElementStaysLive()
     {
         var executor = new SnapshotExecutor([Entry("ready")]);
