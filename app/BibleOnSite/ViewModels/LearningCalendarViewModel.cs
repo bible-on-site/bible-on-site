@@ -31,6 +31,24 @@ public class CalendarCellViewModel
 
     /// <summary>Full spoken label for assistive technologies.</summary>
     public string AccessibilityText { get; init; } = string.Empty;
+
+    /// <summary>Out-of-range day in a grouped view (e.g. another cycle's days).</summary>
+    public bool IsDimmed { get; init; }
+}
+
+/// <summary>A named month section inside the yearly / full-cycle views (#2364).</summary>
+public class MiniMonthViewModel
+{
+    public required string Title { get; init; }
+    public required ObservableCollection<CalendarCellViewModel> Cells { get; init; }
+}
+
+/// <summary>Which period the learning calendar renders (#2364).</summary>
+public enum CalendarViewMode
+{
+    Month,
+    Year,
+    Cycle,
 }
 
 /// <summary>
@@ -48,6 +66,7 @@ public partial class LearningCalendarViewModel : ObservableObject
 
     private int _year;
     private int _month;
+    private int _cycle;
     private int _todayDateNumber;
     private bool _suppressSelection;
 
@@ -68,6 +87,19 @@ public partial class LearningCalendarViewModel : ObservableObject
 
     [ObservableProperty]
     private ObservableCollection<CalendarCellViewModel> _cells = new();
+
+    [ObservableProperty]
+    private ObservableCollection<MiniMonthViewModel> _monthGroups = new();
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsMonthView))]
+    [NotifyPropertyChangedFor(nameof(IsGroupedView))]
+    private CalendarViewMode _viewMode = CalendarViewMode.Month;
+
+    public bool IsMonthView => ViewMode == CalendarViewMode.Month;
+
+    /// <summary>Yearly and full-cycle views both render grouped mini-months.</summary>
+    public bool IsGroupedView => ViewMode != CalendarViewMode.Month;
 
     [ObservableProperty]
     private ObservableCollection<PickerOption> _monthOptions = new();
@@ -134,6 +166,7 @@ public partial class LearningCalendarViewModel : ObservableObject
         _month = month;
         RebuildPickerOptions();
         RebuildCells();
+        RebuildGroups();
     }
 
     private void RebuildPickerOptions()
@@ -158,9 +191,11 @@ public partial class LearningCalendarViewModel : ObservableObject
             YearOptions = new ObservableCollection<PickerOption>(
                 years.Select(year => new PickerOption(year, $"ה'{GimatryHelper.ToLetters(year % 1000)}")));
 
-            var displayed = _schedule.GetCycleForDate(_year * 10000 + _month * 100 + 1)
-                ?? _schedule.GetCycleForDate(_year * 10000 + _month * 100 +
-                    HebrewDateHelper.GetDaysInMonth(_year, _month));
+            var displayed = ViewMode == CalendarViewMode.Cycle && _cycle > 0
+                ? _schedule.GetCycle(_cycle)
+                : _schedule.GetCycleForDate(_year * 10000 + _month * 100 + 1)
+                    ?? _schedule.GetCycleForDate(_year * 10000 + _month * 100 +
+                        HebrewDateHelper.GetDaysInMonth(_year, _month));
             var maxCycle = Math.Max(lastConfirmedNumber, displayed?.Number ?? 1);
             CycleOptions = new ObservableCollection<PickerOption>(
                 Enumerable.Range(1, maxCycle).Select(number =>
@@ -177,9 +212,17 @@ public partial class LearningCalendarViewModel : ObservableObject
                 ? null
                 : CycleOptions.FirstOrDefault(o => o.Value == displayed.Number);
 
-            MonthLabel =
-                $"{HebrewDateHelper.GetHebrewMonthName(_month, HebrewDateHelper.IsHebrewLeapYear(_year))} " +
-                $"ה'{GimatryHelper.ToLetters(_year % 1000)}";
+            MonthLabel = ViewMode switch
+            {
+                CalendarViewMode.Year => $"שנת ה'{GimatryHelper.ToLetters(_year % 1000)}",
+                CalendarViewMode.Cycle when displayed is not null =>
+                    $"מחזור {displayed.Number}{(displayed.Projected ? " (משוער)" : string.Empty)}: " +
+                        $"{HebrewDateHelper.FormatHebrewDate(displayed.StartDate)} - " +
+                        $"{HebrewDateHelper.FormatHebrewDate(displayed.EndDate)}",
+                _ =>
+                    $"{HebrewDateHelper.GetHebrewMonthName(_month, HebrewDateHelper.IsHebrewLeapYear(_year))} " +
+                    $"ה'{GimatryHelper.ToLetters(_year % 1000)}",
+            };
             CycleLabel = displayed is null
                 ? string.Empty
                 : $"מחזור {displayed.Number}{(displayed.Projected ? " (משוער)" : string.Empty)}: " +
@@ -195,36 +238,110 @@ public partial class LearningCalendarViewModel : ObservableObject
     private void RebuildCells()
     {
         var cells = _schedule.BuildMonth(_year, _month);
-        Cells = new ObservableCollection<CalendarCellViewModel>(cells.Select(cell =>
-        {
-            if (cell.Day is null)
-            {
-                return new CalendarCellViewModel { IsBlank = true };
-            }
+        Cells = new ObservableCollection<CalendarCellViewModel>(
+            cells.Select(cell => ToCellViewModel(cell)));
+    }
 
-            var day = cell.Day;
-            var source = day.PerekId is int perekId
+    private void RebuildGroups()
+    {
+        if (ViewMode == CalendarViewMode.Month)
+        {
+            MonthGroups = new ObservableCollection<MiniMonthViewModel>();
+            return;
+        }
+
+        IEnumerable<(string Title, IReadOnlyList<PerekScheduleService.MonthCell> Cells)> groups;
+        Func<PerekScheduleService.CalendarDay, bool>? dimmed = null;
+        if (ViewMode == CalendarViewMode.Year)
+        {
+            groups = HebrewDateHelper.GetMonthOrder(_year).Select(month =>
+                ($"{HebrewDateHelper.GetHebrewMonthName(month, HebrewDateHelper.IsHebrewLeapYear(_year))}",
+                    (IReadOnlyList<PerekScheduleService.MonthCell>)_schedule.BuildMonth(_year, month)));
+        }
+        else
+        {
+            var cycle = _schedule.GetCycle(_cycle);
+            var (startYear, startMonth, _) = HebrewDateHelper.NumberToHebrewDate(cycle.StartDate);
+            var (endYear, endMonth, _) = HebrewDateHelper.NumberToHebrewDate(cycle.EndDate);
+            // Legacy month numbering is not chronological (Adar I/II are 13/14),
+            // so compare positions inside the year's month order.
+            var endMonthIndex = HebrewDateHelper.GetMonthOrder(endYear).IndexOf(endMonth);
+            var months = new List<(string, IReadOnlyList<PerekScheduleService.MonthCell>)>();
+            var (year, month) = (startYear, startMonth);
+            for (var guard = 0; guard < 50; guard++)
+            {
+                var order = HebrewDateHelper.GetMonthOrder(year);
+                var monthIndex = order.IndexOf(month);
+                if (year > endYear || (year == endYear && monthIndex > endMonthIndex))
+                {
+                    break;
+                }
+                months.Add((
+                    $"{HebrewDateHelper.GetHebrewMonthName(month, HebrewDateHelper.IsHebrewLeapYear(year))} " +
+                        $"ה'{GimatryHelper.ToLetters(year % 1000)}",
+                    _schedule.BuildMonth(year, month)));
+                (year, month) = HebrewDateHelper.NextMonth(year, month);
+            }
+            groups = months;
+            var selectedCycle = _cycle;
+            dimmed = day => day.Cycle != selectedCycle;
+        }
+
+        MonthGroups = new ObservableCollection<MiniMonthViewModel>(groups.Select(group =>
+            new MiniMonthViewModel
+            {
+                Title = group.Title,
+                Cells = new ObservableCollection<CalendarCellViewModel>(
+                    group.Cells.Select(cell => ToCellViewModel(cell, dimmed))),
+            }));
+    }
+
+    private CalendarCellViewModel ToCellViewModel(
+        PerekScheduleService.MonthCell cell,
+        Func<PerekScheduleService.CalendarDay, bool>? dimmed = null)
+    {
+        if (cell.Day is null)
+        {
+            return new CalendarCellViewModel { IsBlank = true };
+        }
+
+        var day = cell.Day;
+        var reviewIds = day.Status == PerekScheduleService.DayStatus.Review
+            ? day.ReviewPerekIds
+            : null;
+        var source = reviewIds is { Count: > 1 }
+            ? $"{_perekData.GetPerekSource(reviewIds[0])} - {_perekData.GetPerekSource(reviewIds[^1])}"
+            : day.PerekId is int perekId
                 ? _perekData.GetPerekSource(perekId) ?? string.Empty
                 : string.Empty;
-            var dateLabel = HebrewDateHelper.FormatHebrewDate(day.DateNumber);
-            var accessibility = day.PerekId is null
-                ? $"{dateLabel} - לא משובץ"
-                : day.Status == PerekScheduleService.DayStatus.Review
-                    ? $"{dateLabel} - חזרה: {source}"
-                    : $"{dateLabel} - {source}";
+        var dateLabel = HebrewDateHelper.FormatHebrewDate(day.DateNumber);
+        var accessibility = day.PerekId is null
+            ? $"{dateLabel} - לא משובץ"
+            : day.Status == PerekScheduleService.DayStatus.Review
+                ? $"{dateLabel} - חזרה: {source}"
+                : $"{dateLabel} - {source}";
 
-            return new CalendarCellViewModel
-            {
-                DateNumber = day.DateNumber,
-                DayText = day.DayOfMonth.ToHebrewLetters(),
-                PerekSource = source,
-                PerekId = day.PerekId,
-                IsReview = day.Status == PerekScheduleService.DayStatus.Review,
-                IsNone = day.Status == PerekScheduleService.DayStatus.None,
-                IsToday = day.DateNumber == _todayDateNumber,
-                AccessibilityText = accessibility,
-            };
-        }));
+        return new CalendarCellViewModel
+        {
+            DateNumber = day.DateNumber,
+            DayText = day.DayOfMonth.ToHebrewLetters(),
+            PerekSource = source,
+            PerekId = day.PerekId,
+            IsReview = day.Status == PerekScheduleService.DayStatus.Review,
+            IsNone = day.Status == PerekScheduleService.DayStatus.None,
+            IsToday = day.DateNumber == _todayDateNumber,
+            AccessibilityText = accessibility,
+            IsDimmed = dimmed?.Invoke(day) == true,
+        };
+    }
+
+    private void SetCycle(int cycleNumber)
+    {
+        _cycle = Math.Max(1, cycleNumber);
+        RebuildPickerOptions();
+        RebuildCells();
+        RebuildGroups();
+        PrevMonthCommand.NotifyCanExecuteChanged();
     }
 
     partial void OnSelectedMonthChanged(PickerOption? value)
@@ -243,16 +360,19 @@ public partial class LearningCalendarViewModel : ObservableObject
         {
             return;
         }
-        // When the viewed month does not exist in the target year
-        // (Adar I/II of a leap year), fall back to plain Adar.
-        var month = HebrewDateHelper.GetMonthOrder(value.Value).Contains(_month) ? _month : 6;
-        SetMonth(value.Value, month);
+        SetYear(value.Value);
     }
 
     partial void OnSelectedCycleChanged(PickerOption? value)
     {
         if (_suppressSelection || value is null)
         {
+            return;
+        }
+
+        if (ViewMode == CalendarViewMode.Cycle)
+        {
+            SetCycle(value.Value);
             return;
         }
 
@@ -264,17 +384,71 @@ public partial class LearningCalendarViewModel : ObservableObject
         }
     }
 
+    /// <summary>Switches between the monthly, yearly and full-cycle views (#2364).</summary>
+    [RelayCommand]
+    private void SetViewMode(CalendarViewMode mode)
+    {
+        if (mode == ViewMode)
+        {
+            return;
+        }
+        ViewMode = mode;
+        if (mode == CalendarViewMode.Cycle && _cycle == 0)
+        {
+            var displayed = _schedule.GetCycleForDate(_year * 10000 + _month * 100 + 1)
+                ?? _schedule.GetCycleForDate(_year * 10000 + _month * 100 +
+                    HebrewDateHelper.GetDaysInMonth(_year, _month));
+            _cycle = displayed?.Number ?? 1;
+        }
+        RebuildPickerOptions();
+        RebuildCells();
+        RebuildGroups();
+        PrevMonthCommand.NotifyCanExecuteChanged();
+    }
+
+    private bool CanNavigatePrev => ViewMode != CalendarViewMode.Cycle || _cycle > 1;
+
     [RelayCommand]
     private void NextMonth()
     {
-        var (year, month) = HebrewDateHelper.NextMonth(_year, _month);
-        SetMonth(year, month);
+        switch (ViewMode)
+        {
+            case CalendarViewMode.Year:
+                SetYear(_year + 1);
+                break;
+            case CalendarViewMode.Cycle:
+                SetCycle(_cycle + 1);
+                break;
+            default:
+                var (year, month) = HebrewDateHelper.NextMonth(_year, _month);
+                SetMonth(year, month);
+                break;
+        }
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanNavigatePrev))]
     private void PrevMonth()
     {
-        var (year, month) = HebrewDateHelper.PrevMonth(_year, _month);
+        switch (ViewMode)
+        {
+            case CalendarViewMode.Year:
+                SetYear(_year - 1);
+                break;
+            case CalendarViewMode.Cycle:
+                SetCycle(_cycle - 1);
+                break;
+            default:
+                var (year, month) = HebrewDateHelper.PrevMonth(_year, _month);
+                SetMonth(year, month);
+                break;
+        }
+    }
+
+    private void SetYear(int year)
+    {
+        // When the viewed month does not exist in the target year
+        // (Adar I/II of a leap year), fall back to plain Adar.
+        var month = HebrewDateHelper.GetMonthOrder(year).Contains(_month) ? _month : 6;
         SetMonth(year, month);
     }
 

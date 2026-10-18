@@ -1,259 +1,362 @@
 .page {
-  max-width: 1100px;
-  margin: 0 auto;
-  padding: 5.5rem 0.75rem 2rem;
-  direction: rtl;
+	max-width: 1100px;
+	margin: 0 auto;
+	padding: 5.5rem 0.75rem 2rem;
+	direction: rtl;
 }
 
 .title {
-  font-size: 1.75rem;
-  font-weight: 700;
-  text-align: center;
-  margin: 0 0 1rem;
+	font-size: 1.75rem;
+	font-weight: 700;
+	text-align: center;
+	margin: 0 0 1rem;
 }
 
 .controls {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 0.75rem;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
+	align-items: center;
+	justify-content: center;
+	margin-bottom: 0.75rem;
 }
 
 .navButton,
 .todayButton {
-  min-width: 2.5rem;
-  height: 2.5rem;
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-  background: var(--surface-elevated);
-  color: var(--foreground);
-  font-size: 1.1rem;
-  cursor: pointer;
+	min-width: 2.5rem;
+	height: 2.5rem;
+	border: 1px solid var(--border-subtle);
+	border-radius: 8px;
+	background: var(--surface-elevated);
+	color: var(--foreground);
+	font-size: 1.1rem;
+	cursor: pointer;
 }
 
 .todayButton {
-  padding: 0 1rem;
-  font-size: 0.95rem;
-  font-weight: 600;
+	padding: 0 1rem;
+	font-size: 0.95rem;
+	font-weight: 600;
 }
 
 .navButton:hover,
 .todayButton:hover,
 .picker:hover {
-  border-color: var(--link-accent);
+	border-color: var(--link-accent);
 }
 
 .navButton:focus-visible,
 .todayButton:focus-visible,
 .picker:focus-visible,
 .cell:focus-visible {
-  outline: 2px solid var(--link-accent);
-  outline-offset: 2px;
+	outline: 2px solid var(--link-accent);
+	outline-offset: 2px;
 }
 
 .pickerLabel {
-  display: inline-flex;
+	display: inline-flex;
 }
 
 .picker {
-  height: 2.5rem;
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-  background: var(--surface-elevated);
-  color: var(--foreground);
-  font-size: 0.95rem;
-  padding: 0 0.5rem;
-  cursor: pointer;
-  max-width: 9rem;
+	height: 2.5rem;
+	border: 1px solid var(--border-subtle);
+	border-radius: 8px;
+	background: var(--surface-elevated);
+	color: var(--foreground);
+	font-size: 0.95rem;
+	padding: 0 0.5rem;
+	cursor: pointer;
+	max-width: 9rem;
 }
 
 .monthTitle {
-  font-size: 1.35rem;
-  font-weight: 600;
-  text-align: center;
-  margin: 0.5rem 0;
+	font-size: 1.35rem;
+	font-weight: 600;
+	text-align: center;
+	margin: 0.5rem 0;
 }
 
 .cycleRow {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem 1rem;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 1rem;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem 1rem;
+	align-items: center;
+	justify-content: center;
+	margin-bottom: 1rem;
 }
 
 .cycleRange {
-  color: var(--muted-text);
-  font-size: 0.9rem;
+	color: var(--muted-text);
+	font-size: 0.9rem;
 }
 
 .weekdays,
 .grid {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 4px;
+	display: grid;
+	grid-template-columns: repeat(7, 1fr);
+	gap: 4px;
 }
 
 .weekday {
-  text-align: center;
-  font-weight: 700;
-  padding: 0.4rem 0;
-  color: var(--muted-text);
-  font-size: 0.95rem;
+	text-align: center;
+	font-weight: 700;
+	padding: 0.4rem 0;
+	color: var(--muted-text);
+	font-size: 0.95rem;
 }
 
 .blankCell {
-  min-height: 4.5rem;
+	min-height: 4.5rem;
 }
 
 .cell {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  min-height: 4.5rem;
-  padding: 0.3rem 0.15rem 0.4rem;
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-  background: var(--surface-muted);
-  color: var(--foreground);
-  font: inherit;
-  overflow: hidden;
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 2px;
+	min-height: 4.5rem;
+	padding: 0.3rem 0.15rem 0.4rem;
+	border: 1px solid var(--border-subtle);
+	border-radius: 8px;
+	background: var(--surface-muted);
+	color: var(--foreground);
+	font: inherit;
+	overflow: hidden;
 }
 
 button.cell {
-  cursor: pointer;
+	cursor: pointer;
 }
 
 button.cell:hover {
-  border-color: var(--link-accent);
-  background: var(--surface-elevated);
+	border-color: var(--link-accent);
+	background: var(--surface-elevated);
 }
 
 .dayNumber {
-  font-weight: 700;
-  font-size: 1rem;
+	font-weight: 700;
+	font-size: 1rem;
 }
 
 .perekRef {
-  font-size: 0.78rem;
-  line-height: 1.2;
-  text-align: center;
-  color: var(--pasuk-num-color);
-  word-break: break-word;
+	font-size: 0.78rem;
+	line-height: 1.2;
+	text-align: center;
+	color: var(--pasuk-num-color);
+	word-break: break-word;
 }
 
 .reviewCell {
-  background: var(--surface-elevated);
-  border-style: dashed;
+	background: var(--surface-elevated);
+	border-style: dashed;
 }
 
 .reviewCell .perekRef {
-  color: var(--muted-text);
+	color: var(--muted-text);
 }
 
 .reviewBadge {
-  font-size: 0.65rem;
-  font-weight: 700;
-  color: var(--muted-text);
-  border: 1px solid var(--border-subtle);
-  border-radius: 999px;
-  padding: 0 0.45rem;
-  line-height: 1.5;
+	font-size: 0.65rem;
+	font-weight: 700;
+	color: var(--muted-text);
+	border: 1px solid var(--border-subtle);
+	border-radius: 999px;
+	padding: 0 0.45rem;
+	line-height: 1.5;
 }
 
 .noneCell {
-  background: transparent;
-  border-color: transparent;
-  color: var(--muted-text);
+	background: transparent;
+	border-color: transparent;
+	color: var(--muted-text);
 }
 
 .todayCell {
-  border: 2px solid var(--link-accent);
+	border: 2px solid var(--link-accent);
 }
 
 .todayCell .dayNumber {
-  color: var(--link-accent);
+	color: var(--link-accent);
 }
 
 .legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem 1.25rem;
-  justify-content: center;
-  list-style: none;
-  margin: 1rem 0 0;
-  padding: 0;
-  font-size: 0.85rem;
-  color: var(--muted-text);
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.4rem 1.25rem;
+	justify-content: center;
+	list-style: none;
+	margin: 1rem 0 0;
+	padding: 0;
+	font-size: 0.85rem;
+	color: var(--muted-text);
 }
 
 .legend li {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35rem;
 }
 
 .legendSwatch {
-  width: 0.9rem;
-  height: 0.9rem;
-  border-radius: 3px;
-  border: 1px solid var(--border-subtle);
-  display: inline-block;
+	width: 0.9rem;
+	height: 0.9rem;
+	border-radius: 3px;
+	border: 1px solid var(--border-subtle);
+	display: inline-block;
 }
 
 .studySwatch {
-  background: var(--surface-muted);
-  border-style: solid;
+	background: var(--surface-muted);
+	border-style: solid;
 }
 
 .reviewSwatch {
-  background: var(--surface-elevated);
-  border-style: dashed;
+	background: var(--surface-elevated);
+	border-style: dashed;
 }
 
 .noneSwatch {
-  background: transparent;
-  border-color: transparent;
+	background: transparent;
+	border-color: transparent;
 }
 
 .srOnly {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	white-space: nowrap;
+	border: 0;
 }
 
 @media (max-width: 480px) {
-  .page {
-    padding: 4.5rem 0.4rem 1.25rem;
-  }
+	.page {
+		padding: 4.5rem 0.4rem 1.25rem;
+	}
 
-  .blankCell,
-  .cell {
-    min-height: 3.6rem;
-  }
+	.blankCell,
+	.cell {
+		min-height: 3.6rem;
+	}
 
-  .perekRef {
-    font-size: 0.68rem;
-  }
+	.perekRef {
+		font-size: 0.68rem;
+	}
 
-  .reviewBadge {
-    font-size: 0.58rem;
-    padding: 0 0.3rem;
-  }
+	.reviewBadge {
+		font-size: 0.58rem;
+		padding: 0 0.3rem;
+	}
 
-  .picker {
-    max-width: 7.5rem;
-    font-size: 0.85rem;
-  }
+	.picker {
+		max-width: 7.5rem;
+		font-size: 0.85rem;
+	}
+}
+
+.viewToggle {
+	display: flex;
+	justify-content: center;
+	gap: 4px;
+	margin-bottom: 0.75rem;
+}
+
+.viewButton {
+	height: 2.4rem;
+	padding: 0 1rem;
+	border: 1px solid var(--border-subtle);
+	border-radius: 8px;
+	background: var(--surface-elevated);
+	color: var(--foreground);
+	font-size: 0.95rem;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.viewButtonActive {
+	background: var(--link-accent);
+	color: #fff;
+	border-color: var(--link-accent);
+}
+
+.yearGrid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+	gap: 0.75rem;
+}
+
+.miniMonth {
+	border: 1px solid var(--border-subtle);
+	border-radius: 10px;
+	padding: 0.5rem;
+	background: var(--surface-muted);
+}
+
+.miniMonthTitle {
+	font-size: 0.95rem;
+	font-weight: 700;
+	text-align: center;
+	margin: 0 0 0.35rem;
+}
+
+.miniWeekdays,
+.miniGrid {
+	display: grid;
+	grid-template-columns: repeat(7, 1fr);
+	gap: 2px;
+}
+
+.miniWeekday {
+	text-align: center;
+	font-size: 0.7rem;
+	font-weight: 700;
+	color: var(--muted-text);
+}
+
+.miniCell {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	min-height: 1.6rem;
+	border-radius: 4px;
+	font: inherit;
+	font-size: 0.75rem;
+	background: var(--surface-elevated);
+	color: var(--foreground);
+	border: 1px solid transparent;
+	padding: 0;
+}
+
+button.miniCell {
+	cursor: pointer;
+}
+
+button.miniCell:hover {
+	border-color: var(--link-accent);
+}
+
+.miniReviewCell {
+	background: color-mix(
+		in srgb,
+		var(--link-accent) 15%,
+		var(--surface-elevated)
+	);
+}
+
+.miniNoneCell {
+	background: transparent;
+	color: var(--muted-text);
+}
+
+.miniDimmed {
+	opacity: 0.3;
+}
+
+.miniTodayCell {
+	border-color: var(--link-accent);
+	font-weight: 700;
 }
