@@ -59,6 +59,9 @@ public class MainActivity : MauiAppCompatActivity
         // before managed code; enable it only outside the e2e suite, and set it
         // explicitly both ways so a flag persisted by an earlier non-suite
         // install on this device cannot leak test traffic either.
+        // The standalone Plugin.Firebase.Analytics package does not bind the
+        // native instance on Android; without this every call NREs (#2247).
+        Plugin.Firebase.Analytics.FirebaseAnalyticsImplementation.Initialize(this);
         var analyticsCollectionEnabled = !Services.SearchIndexService.IsE2eMarkedProcess();
         Plugin.Firebase.Analytics.CrossFirebaseAnalytics.Current.IsAnalyticsCollectionEnabled =
             analyticsCollectionEnabled;
