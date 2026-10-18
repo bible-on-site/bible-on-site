@@ -15,11 +15,22 @@ if (
 	decoderScript !==
 	execFileSync(
 		process.execPath,
-		["scripts/build-native-recitation-decoder.mjs", "--stdout"],
+		[
+			resolve(
+				root,
+				"app/devops/recitation-decoder/build-native-recitation-decoder.mjs",
+			),
+			"--stdout",
+		],
 		{ encoding: "utf8" },
 	)
 )
 	throw new Error("App and website MPEG decoder versions differ");
+// App-side trigger for the duplicated manifest rule (#2391): a decoder bump
+// in the app manifest must land in web/bible-on-site/package.json too.
+execFileSync(process.execPath, [
+	resolve(root, "app/devops/recitation-decoder/check-decoder-pins.mjs"),
+]);
 const html = readFileSync(
 	resolve(root, "app/BibleOnSite/Resources/Raw/recitation-audio.html"),
 	"utf8",
