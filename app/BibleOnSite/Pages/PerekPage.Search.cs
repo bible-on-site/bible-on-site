@@ -209,7 +209,7 @@ public partial class PerekPage
         {
             GiveNativeBackPriority(carousel, back);
         }
-        Console.WriteLine($"[ReaderBack] stack={Navigation.NavigationStack.Count} enabled={back.Enabled} direction={navigation.View.EffectiveUserInterfaceLayoutDirection}");
+        DebugLog.Write($"[ReaderBack] stack={Navigation.NavigationStack.Count} enabled={back.Enabled} direction={navigation.View.EffectiveUserInterfaceLayoutDirection}");
     }
 
     private static void GiveNativeBackPriority(UIKit.UIView view, UIKit.UIGestureRecognizer back)
