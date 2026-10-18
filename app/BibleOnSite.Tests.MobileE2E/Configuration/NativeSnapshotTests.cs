@@ -40,6 +40,39 @@ public sealed class NativeSnapshotTests
         Assert.DoesNotContain(DriverCommand.GetElementRect, executor.Commands);
     }
 
+    [Theory]
+    [InlineData(true, @"name == 'PasukText' AND (value == 'it\'s \\ here' OR label == 'it\'s \\ here')")]
+    [InlineData(false, "name == 'PasukText' AND visible == 1")]
+    public void NarrowedLookupsAreFilteredOnTheDeviceWithEscapedLiterals(bool byText, string predicate)
+    {
+        var executor = new SnapshotExecutor([Entry("target")]);
+        using var driver = new IosSnapshotDriver(executor, new AppiumOptions { PlatformName = "iOS" });
+        var adapter = new IosPlatformAdapter();
+        driver.FindSnapshots(byText
+            ? adapter.AutomationIdWithText("PasukText", @"it's \ here")
+            : adapter.DisplayedAutomationId("PasukText"));
+        Assert.Equal("-ios predicate string", executor.LastParameters!["using"]);
+        Assert.Equal(predicate, executor.LastParameters["value"]);
+    }
+
+    [Fact]
+    public void AndroidNarrowedLookupsKeepTheResourceIdLocator()
+    {
+        var adapter = new AndroidPlatformAdapter();
+        Assert.Equal(adapter.AutomationId("PasukText"), adapter.AutomationIdWithText("PasukText", "text"));
+        Assert.Equal(adapter.AutomationId("PasukText"), adapter.DisplayedAutomationId("PasukText"));
+    }
+
+    [Fact]
+    public void PageLookupsByIdOnlyReturnDisplayedElementsFromTheDevice()
+    {
+        var executor = new SnapshotExecutor([Entry("ready")]);
+        using var driver = new IosSnapshotDriver(executor, new AppiumOptions { PlatformName = "iOS" });
+        new PerekPage(driver, new IosPlatformAdapter()).WaitFor("PerekSource");
+        Assert.Equal("-ios predicate string", executor.LastParameters!["using"]);
+        Assert.Equal("name == 'PerekSource' AND visible == 1", executor.LastParameters["value"]);
+    }
+
     [Fact]
     public void PollConditionsUseFreshTextButTheReturnedElementStaysLive()
     {
