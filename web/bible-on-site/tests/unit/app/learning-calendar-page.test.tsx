@@ -55,12 +55,13 @@ describe("LearningCalendar", () => {
 		).toBeInTheDocument();
 		// Cycle 4 starts ז אלול with בראשית א (perek 1).
 		expect(
-			screen.getByRole("button", { name: /אלול.*בראשית א/ }),
+			screen.getByRole("button", { name: (name) =>
+				/אלול.*בראשית א/.test(name) && !name.includes("חזרה") }),
 		).toBeInTheDocument();
-		// 12-13 Elul (Friday/Saturday) review Thursday's perek.
+		// 12-13 Elul (Friday/Saturday) review the whole studied week (#2365).
 		const reviewDays = screen.getAllByRole("button", { name: /חזרה/ });
 		expect(reviewDays.length).toBeGreaterThanOrEqual(2);
-		expect(reviewDays[0]).toHaveAccessibleName(/חזרה: בראשית ה/);
+		expect(reviewDays[0]).toHaveAccessibleName(/חזרה: בראשית א - בראשית ה/);
 	});
 
 	it("navigates to the next month and syncs the ?month= query", () => {
@@ -114,7 +115,8 @@ describe("LearningCalendar", () => {
 		render(<LearningCalendar {...cycleStartProps} />);
 
 		fireEvent.click(
-			screen.getByRole("button", { name: /אלול.*בראשית א/ }),
+			screen.getByRole("button", { name: (name) =>
+				/אלול.*בראשית א/.test(name) && !name.includes("חזרה") }),
 		);
 		expect(mockPush).toHaveBeenCalledWith("/929/1");
 	});
@@ -123,7 +125,8 @@ describe("LearningCalendar", () => {
 		render(<LearningCalendar {...cycleStartProps} />);
 
 		const todayCell = screen.getByRole("button", {
-			name: /אלול.*בראשית א/,
+			name: (name) =>
+				/אלול.*בראשית א/.test(name) && !name.includes("חזרה"),
 		});
 		expect(todayCell.textContent).toContain("היום");
 	});
