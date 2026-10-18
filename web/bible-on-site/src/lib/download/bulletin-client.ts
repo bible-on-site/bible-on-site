@@ -32,6 +32,15 @@ export interface BulletinRequest {
 	includeToc?: boolean;
 	coverAccentHex?: string;
 	perakimContent: BulletinPerekContent[];
+	cover?: BulletinCoverText;
+}
+
+/** Front-cover lines, rendered top to bottom on the PDF cover. */
+export interface BulletinCoverText {
+	branding: string;
+	title: string;
+	subtitle: string;
+	edition: string;
 }
 
 function getBulletinLambdaName(): string | undefined {
@@ -113,6 +122,7 @@ export interface GeneratePdfViaBulletinOptions {
 	/** Hex without leading # (e.g. 8B0000) */
 	coverAccentHex?: string;
 	divineNameMasking?: DivineNameMaskingSettings;
+	cover?: BulletinCoverText;
 }
 
 /**
@@ -146,6 +156,9 @@ export async function generatePdfViaBulletin(
 	}
 	if (options?.coverAccentHex != null && options.coverAccentHex.length > 0) {
 		request.coverAccentHex = options.coverAccentHex.replace(/^#/, "");
+	}
+	if (options?.cover != null) {
+		request.cover = options.cover;
 	}
 
 	const lambdaName = getBulletinLambdaName();

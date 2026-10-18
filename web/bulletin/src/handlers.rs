@@ -84,6 +84,16 @@ async fn generate_pdf_core(req: GeneratePdfRequest) -> Result<(Vec<u8>, String),
         include_cover: req.include_cover,
         include_toc: req.include_toc,
         cover_accent_hex: cover_hex,
+        cover_text: req
+            .cover
+            .as_ref()
+            .map(|c| pdf::PdfCoverText {
+                branding: c.branding.clone(),
+                title: c.title.clone(),
+                subtitle: c.subtitle.clone(),
+                edition: c.edition.clone(),
+            })
+            .unwrap_or_default(),
     };
 
     let buf = pdf::build_pdf(&pdf_req, &fonts_dir)
@@ -513,7 +523,7 @@ mod tests {
         let response = lambda_handler(request(
             "/api/generate-pdf",
             Body::Text(
-                r##"{"seferName":"Genesis","perakimIds":[1],"includeArticles":false,"coverAccentHex":"#123abc"}"##
+                r##"{"seferName":"Genesis","perakimIds":[1],"includeArticles":false,"includeCover":true,"coverAccentHex":"#123abc","cover":{"branding":"תנ\"ך על הפרק","title":"ספר בראשית","subtitle":"מקראות גדולות","edition":"עם מאמרים"}}"##
                     .to_string(),
             ),
         ))

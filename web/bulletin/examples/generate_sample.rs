@@ -18,6 +18,12 @@ fn main() {
         include_cover: true,
         include_toc: true,
         cover_accent_hex: "8B0000".to_string(),
+        cover_text: pdf::PdfCoverText {
+            branding: "תנ\"ך על הפרק".to_string(),
+            title: format!("ספר {}", perek_data.sefer_name),
+            subtitle: "מקראות גדולות".to_string(),
+            edition: "עם מאמרים מרבנים בני זמנינו".to_string(),
+        },
         perakim: vec![pdf::PdfPerekInput {
             perek_heb: tanach::perek_to_hebrew(perek_data.perek_in_sefer),
             header: perek_data.header.clone(),
