@@ -117,6 +117,11 @@ public partial class Pasuk : ObservableObject
         }
     }
 
+    private static readonly Color QriColor = Color.FromArgb("#637598");
+    private static readonly Color RecitingTextColor = Color.FromArgb("#1c427b");
+    private static readonly Color RecitingBackgroundColor = Color.FromArgb("#e9eff8");
+    private static readonly Color MasoraMarkColor = Color.FromArgb("#9a92d1");
+
     private FormattedString BuildFormattedText()
     {
         var formatted = new FormattedString();
@@ -157,19 +162,19 @@ public partial class Pasuk : ObservableObject
                         formatted.Spans.Add(new Span
                         {
                             Text = "(קְרִי: ",
-                            TextColor = Color.FromArgb("#637598"),
+                            TextColor = QriColor,
                             FontSize = 14
                         });
                         formatted.Spans.Add(new Span
                         {
                             Text = DivineNameMasking.MaskText(segment.Value),
-                            TextColor = Color.FromArgb(RecitingSegment == i + 1 ? "#1c427b" : "#637598"),
-                            BackgroundColor = RecitingSegment == i + 1 ? Color.FromArgb("#e9eff8") : null
+                            TextColor = RecitingSegment == i + 1 ? RecitingTextColor : QriColor,
+                            BackgroundColor = RecitingSegment == i + 1 ? RecitingBackgroundColor : null
                         });
                         formatted.Spans.Add(new Span
                         {
                             Text = ")",
-                            TextColor = Color.FromArgb("#637598"),
+                            TextColor = QriColor,
                             FontSize = 14
                         });
                     }
@@ -184,8 +189,8 @@ public partial class Pasuk : ObservableObject
                                 formatted.Spans.Add(new Span
                                 {
                                     Text = DivineNameMasking.MaskText(segment.Value),
-                                    TextColor = Color.FromArgb("#1c427b"),
-                                    BackgroundColor = Color.FromArgb("#e9eff8")
+                                    TextColor = RecitingTextColor,
+                                    BackgroundColor = RecitingBackgroundColor
                                 });
                             }
                             else
@@ -201,7 +206,7 @@ public partial class Pasuk : ObservableObject
                     formatted.Spans.Add(new Span
                     {
                         Text = " {פ} ",
-                        TextColor = Color.FromArgb("#9a92d1"),
+                        TextColor = MasoraMarkColor,
                         FontAttributes = FontAttributes.Bold
                     });
                     break;
@@ -211,7 +216,7 @@ public partial class Pasuk : ObservableObject
                     formatted.Spans.Add(new Span
                     {
                         Text = " {ס} ",
-                        TextColor = Color.FromArgb("#9a92d1"),
+                        TextColor = MasoraMarkColor,
                         FontAttributes = FontAttributes.Bold
                     });
                     break;
