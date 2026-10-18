@@ -1,4 +1,5 @@
 import { expect, type Page } from "@playwright/test";
+import sharp from "sharp";
 import { SeferPage } from "../../../util/playwright/page-objects/sefer-page";
 import { test } from "../../../util/playwright/test-fixture";
 
@@ -424,6 +425,11 @@ test.describe("Sefer view", () => {
 		const indicator = page.locator(".flipbook-toolbar-indicator");
 		await expect(indicator).toHaveValue("א / נ");
 		const foldWidth = () => activePageFoldWidth(page);
+		// pageShadow is enabled (alpha.46): the book must not carry the
+		// flipbook--no-page-shadow opt-out class.
+		await expect(page.locator(".he-book")).not.toHaveClass(
+			/flipbook--no-page-shadow/,
+		);
 
 		await page.mouse.move(x, y);
 		await page.mouse.down();
@@ -432,6 +438,38 @@ test.describe("Sefer view", () => {
 		await expect.poll(foldWidth).toBeGreaterThan(2);
 		await page.mouse.move(x + 300, y, { steps: 6 });
 		await expect.poll(foldWidth).toBeGreaterThan(10);
+		// With pageShadow on, the library writes a crease gradient into
+		// --fold-shading on each folded face (skipped entirely when off);
+		// the flat face's --inner-shadow-* vars are driven the same way.
+		await expect
+			.poll(() =>
+				page
+					.locator(".he-book .page--folded")
+					.first()
+					.evaluate((el) => el.style.getPropertyValue("--fold-shading")),
+			)
+			.toContain("gradient");
+		// The shading overlays must actually paint: hiding them has to change
+		// the rendered fold (they were once stacked under the opaque page
+		// content sheet, which left the fold flat, #2331).
+		const book = page.locator(".he-book");
+		const shaded = await book.screenshot();
+		const hideOverlays = await page.addStyleTag({
+			content:
+				".he-book .page::before, .he-book .page::after { visibility: hidden !important; }",
+		});
+		const flat = await book.screenshot();
+		await hideOverlays.evaluate((el) => el.parentNode?.removeChild(el));
+		// Buried overlays still nudge a few anti-aliased glyph edges (~2k
+		// channel values); a painted crease darkens a whole band (~13k).
+		const [shadedPixels, flatPixels] = await Promise.all(
+			[shaded, flat].map((png) => sharp(png).raw().toBuffer()),
+		);
+		let shadedChannels = 0;
+		for (let i = 0; i < shadedPixels.length; i++) {
+			if (Math.abs(shadedPixels[i] - flatPixels[i]) > 40) shadedChannels++;
+		}
+		expect(shadedChannels).toBeGreaterThan(6000);
 		const heldAt = await foldWidth();
 		await page.waitForTimeout(250);
 		expect(await foldWidth()).toBeGreaterThan(10);

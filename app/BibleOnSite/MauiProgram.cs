@@ -73,7 +73,7 @@ public static class MauiProgram
 		Microsoft.Maui.Controls.Handlers.Items2.CarouselViewHandler2.Mapper.AppendToMapping("SwipeSensitivity", (handler, _) =>
 		{
 			var collectionView = FindDescendant<UIKit.UICollectionView>(handler.PlatformView);
-			Console.WriteLine($"[EdgePan] carousel mapper platformView={handler.PlatformView?.GetType().Name ?? "null"} collectionView={collectionView?.GetType().Name ?? "null"}");
+			Helpers.DebugLog.Write($"[EdgePan] carousel mapper platformView={handler.PlatformView?.GetType().Name ?? "null"} collectionView={collectionView?.GetType().Name ?? "null"}");
 			if (collectionView is null)
 			{
 				return;
@@ -85,7 +85,7 @@ public static class MauiProgram
 			// Give the drawer gesture priority so a swipe starting at the
 			// right screen edge opens the drawer instead of switching perek.
 			collectionView.PanGestureRecognizer.RequireGestureRecognizerToFail(AppShell.SharedFlyoutEdgePan);
-			Console.WriteLine("[EdgePan] carousel pan wired");
+			Helpers.DebugLog.Write("[EdgePan] carousel pan wired");
 		});
 #endif
 

@@ -403,3 +403,31 @@ Reported clipped starts, clipped endings and overlong cuts can also be proposed 
 A later review round can reuse a cut directly heard in a round that also reused other cuts. The importer revalidates that round and every original source/history binding, then uses only its saved `freshHeardSegments`. Inherited cuts never become fresh hearing. Changed cuts still require genuine listening and a new answer.
 
 Unchanged cuts directly heard in different completed rounds may share one `listeningReusePath` proof with a `sources` list. Each source retains its immutable queue/history hashes and exact saved answer. The verifier independently revalidates each source and pools only identical cuts listed in that round's actual direct hearing. Inherited hearing never becomes direct hearing, and every changed cut still requires fresh listening and a new answer.
+
+### One accumulated listening application
+
+Use one permanent review server and append prepared batches to its separate
+listening database. Do not start another app/port for each eight-hour batch.
+The browser polls the queue and adds new passages without reloading the document,
+interrupting playback, moving the current passage, or replacing an unsaved note.
+Drafts and completed listening are stored by exact candidate and clip hashes;
+changed cuts never inherit old hearing.
+
+Create the store once from the existing fixed queue/history bindings using
+`ReviewDatabase.seed(sources)`. Keep every older page and its drafts intact.
+The store imports later answers from those still-open pages; it never rewrites
+their queues or histories. Completed answers are not offered again during migration.
+
+```powershell
+python listening_queue.py --store R/review-app/reviews.sqlite serve --port 8792 --session-token-file R/review-app/session.json
+python listening_queue.py --store R/review-app/reviews.sqlite append --queue R/review-app/batches/NEW/queue.json
+python listening_queue.py --store R/review-app/reviews.sqlite snapshot --output E/actual-review-import --database E/current-durable-preview.sqlite
+```
+
+Each appended queue remains immutable source evidence. Use new candidate hashes
+for revised cuts and fresh human hearing as before. Snapshot output preserves
+all actual decision fields, repeated edits and original queue bindings, and feeds
+the existing guarded importer. Always copy CURRENT durable publication data to
+a separate preview first. The listening database is not the alignment worker
+checkpoint or the approved publication database. No append or review save publishes
+timings or changes the original alignment process.

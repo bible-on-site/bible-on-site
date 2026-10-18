@@ -47,6 +47,10 @@ public partial class SearchViewModel : ObservableObject
     [ObservableProperty]
     private string _availabilityMessage = string.Empty;
 
+    /// <summary>Whether the perushim-download hint should render as a link row.</summary>
+    [ObservableProperty]
+    private bool _showPerushimDownloadLink;
+
     [ObservableProperty]
     private string _loadingMessage = "מחפש...";
 
@@ -236,15 +240,19 @@ public partial class SearchViewModel : ObservableObject
         }
 
         var searchTerm = OptimizedSearchPhrase;
+        var normalizedTerm = SearchText.Normalize(searchTerm);
 
+        // Score on the short name first: building the subtitle runs an HTML
+        // parse plus normalization over the bio — only matching authors pay it.
         return _authors
-            .Select(author => new AuthorSearchResult(author, searchTerm)
+            .Select(author => (author, Score: SearchText.ScoreNormalized(author.Name, normalizedTerm)))
+            .Where(row => row.Score > 0)
+            .Select(row => new AuthorSearchResult(row.author, searchTerm)
             {
-                Title = author.Name,
-                SubtitleHtml = SearchText.Snippet(author.Details, searchTerm),
-                Score = SearchText.Score(author.Name, searchTerm)
+                Title = row.author.Name,
+                SubtitleHtml = SearchText.Snippet(row.author.Details, searchTerm),
+                Score = row.Score
             })
-            .Where(result => result.Score > 0)
             .OrderByDescending(result => result.Score)
             .Take(Math.Clamp(ResultsLimit, 1, 50))
             .ToList();
@@ -267,6 +275,7 @@ public partial class SearchViewModel : ObservableObject
         SearchResults.Clear();
         ErrorMessage = string.Empty;
         AvailabilityMessage = string.Empty;
+        ShowPerushimDownloadLink = false;
         if (OptimizedSearchPhrase == SearchPhraseAll)
         {
             return;
@@ -344,6 +353,7 @@ public partial class SearchViewModel : ObservableObject
                 {
                     availability.Add("לחיפוש בפירושים, הורידו את הפירושים בהגדרות");
                     AvailabilityMessage = string.Join('\n', availability);
+                    ShowPerushimDownloadLink = true;
                 }
             }
             // Consume each remote merge as it completes — a stalled request
@@ -547,11 +557,14 @@ public partial class SearchViewModel : ObservableObject
     {
         var referenceQuery = string.Join(" ", phrase.Split(' ').Select(word => int.TryParse(word, out var number) && number is > 0 and <= 929
             ? number.ToHebrewLetters() : word));
+        var normalizedReference = SearchText.Normalize(referenceQuery);
+        var normalizedPhrase = SearchText.Normalize(phrase);
         return _perekDataService.Perakim!.Values
             .Where(perek => books.Contains(perek.SeferId))
             .Select(perek => (Perek: perek, Source: _perekDataService.GetPerekSource(perek.PerekId) ?? string.Empty))
             .Select(row => (row.Perek, row.Source,
-                Score: Math.Max(SearchText.Score(row.Source, referenceQuery), SearchText.Score(row.Perek.Header, phrase))))
+                Score: Math.Max(SearchText.ScoreNormalized(row.Source, normalizedReference),
+                    SearchText.ScoreNormalized(row.Perek.Header, normalizedPhrase))))
             .Where(row => row.Score > 0)
             .OrderByDescending(row => row.Score).ThenBy(row => row.Perek.PerekId)
             .Select(row => new PerekSearchResult(row.Perek, phrase)

@@ -1,4 +1,5 @@
 import { expect, test } from "../util/playwright/test-fixture";
+import { TOP_NAV_BLUE, topNavBackground } from "../util/playwright/top-nav";
 
 const MASORA_ROOT = `/${encodeURIComponent("מסורה")}`;
 
@@ -28,6 +29,34 @@ test.describe("מסורה reading root", () => {
 		await expect(
 			page.getByRole("heading", { level: 1, name: "בראשית פרשה א" }),
 		).toBeVisible();
+	});
+
+	test("renders the shared blue top bar on direct load", async ({ page }) => {
+		await page.goto(MASORA_ROOT);
+		await expect(
+			page.getByRole("heading", { name: "מסורה על הפרק" }),
+		).toBeVisible();
+
+		expect(await topNavBackground(page)).toBe(TOP_NAV_BLUE);
+	});
+
+	test("keeps the shared blue top bar when navigating from another page", async ({
+		page,
+	}) => {
+		await page.goto("/");
+		await page.getByRole("button", { name: "תפריט ראשי" }).click();
+		await page
+			.locator("#main-menu")
+			.getByRole("link", { name: "מסורה על הפרק", exact: true })
+			.click();
+		await page.waitForURL(
+			(url) => decodeURIComponent(url.pathname) === "/מסורה",
+		);
+		await expect(
+			page.getByRole("heading", { name: "מסורה על הפרק" }),
+		).toBeVisible();
+
+		expect(await topNavBackground(page)).toBe(TOP_NAV_BLUE);
 	});
 
 	test("unit page renders text, closing break, nav, and sections", async ({

@@ -39,17 +39,21 @@ import {
 	type PerekSummaries,
 } from "@/app/929/[number]/actions";
 import { BookshelfModal } from "@/app/components/Bookshelf";
+import { SeferCoverContent } from "@/app/components/reading/SeferCoverContent";
 import type { SefarimItem } from "@/data/db/tanah-view-types";
 import type { PerekObj } from "@/data/perek-dto";
 import { getSeferColor } from "@/data/sefer-colors";
+import { SEFER_COVER_EDITION, SEFER_COVER_SUBTITLE } from "@/data/sefer-cover";
 
 import type { ArticleSummary } from "@/lib/articles";
+import { getDivineNameMaskingSettings } from "@/lib/divine-name-settings";
 import type { PerushSummary } from "@/lib/perushim";
 import type { PerekIllustration } from "@/lib/seo/perek-illustrations";
 import { buildEntityRefLookup } from "@/lib/tanahpedia/entity-ref-lookup";
 import type { PerekEntityReference } from "@/lib/tanahpedia/service";
 import { constructTsetAwareHDate } from "@/util/hebdates-util";
 import { BlankPageContent } from "./BlankPageContent";
+import { DownloadMaskingHint } from "./DownloadMaskingHint";
 import { ImageCaption } from "./ImageCaption";
 import { Ptuah } from "./Ptuha";
 import { renderPasukWithEntityRefs } from "./pasuk-renderer";
@@ -79,8 +83,8 @@ import {
 	buildPageSemantics,
 	CONTENT_OFFSET,
 	computeInitialTurnedLeaves,
+	runDownload,
 	toHebrewChapterNumber,
-	wrapDownloadResult,
 } from "./sefer-page-utils";
 import {
 	scrollToPerushPasuk,
@@ -185,6 +189,8 @@ const Sefer = (props: {
 	const bookWrapperRef = useRef<HTMLDivElement>(null);
 	const seferColor = getSeferColor(perekObj.sefer);
 	const [isBookshelfOpen, setIsBookshelfOpen] = useState(false);
+	const toolbarEndRef = useRef<HTMLDivElement>(null);
+	const [downloadError, setDownloadError] = useState<string | null>(null);
 	const contentNavigation = useSeferContentNavigation(
 		perekObj.perekId,
 		initialSlug,
@@ -343,15 +349,11 @@ const Sefer = (props: {
 			aria-label="עטיפה קדמית"
 			style={{ "--cover-color": seferColor } as React.CSSProperties}
 		>
-			<div className={styles.coverInner}>
-				<div className={styles.coverContent}>
-					<div className={styles.coverOrnament}>✦</div>
-					<h1 className={styles.coverTitle}>ספר {perekObj.sefer}</h1>
-					<div className={styles.coverDivider} />
-					<p className={styles.coverSubtitle}>מקראות גדולות</p>
-					<p className={styles.coverEdition}>עם מאמרים מרבנים בני זמנינו</p>
-				</div>
-			</div>
+			<SeferCoverContent
+				seferName={perekObj.sefer}
+				subtitle={SEFER_COVER_SUBTITLE}
+				edition={SEFER_COVER_EDITION}
+			/>
 		</section>
 	);
 	const backCover = (
@@ -595,26 +597,35 @@ const Sefer = (props: {
 							noShadow: true,
 							coverIndices: "auto",
 						}}
-						pageShadow={false}
+						pageShadow
 						historyMapper={historyMapper}
 						initialTurnedLeaves={initialTurnedLeaves}
 						downloadConfig={{
 							entireBookFilename: perekObj.sefer,
 							rangeFilename: perekObj.sefer,
 							downloadContext: { seferName: perekObj.sefer },
-							onDownloadSefer: async () =>
-								wrapDownloadResult(
-									await downloadSefer({
-										seferName: perekObj.sefer,
-										perekIds:
-											perekIds && perekIds.length > 0
-												? perekIds
-												: [perekObj.perekId],
-									}),
+							// Masking is read at click time so a just-changed setting applies.
+							onDownloadSefer: () =>
+								runDownload(
+									() =>
+										downloadSefer({
+											seferName: perekObj.sefer,
+											perekIds:
+												perekIds && perekIds.length > 0
+													? perekIds
+													: [perekObj.perekId],
+											divineNameMasking: getDivineNameMaskingSettings(),
+										}),
+									setDownloadError,
 								),
-							onDownloadPageRange: async (pages, semanticPages, context) =>
-								wrapDownloadResult(
-									await downloadPageRanges(pages, semanticPages, context),
+							onDownloadPageRange: (pages, semanticPages, context) =>
+								runDownload(
+									() =>
+										downloadPageRanges(pages, semanticPages, {
+											...context,
+											divineNameMasking: getDivineNameMaskingSettings(),
+										}),
+									setDownloadError,
 								),
 						}}
 					/>
@@ -640,8 +651,14 @@ const Sefer = (props: {
 						<NextButton />
 						<LastPageButton />
 					</div>
-					<div className="flipbook-toolbar-end">
+					<div className="flipbook-toolbar-end" ref={toolbarEndRef}>
+						{downloadError && (
+							<p role="alert" className={styles.downloadError}>
+								{downloadError}
+							</p>
+						)}
 						<DownloadDropdown ariaLabel="הורדה" />
+						<DownloadMaskingHint toolbarRef={toolbarEndRef} />
 					</div>
 				</Toolbar>
 			</div>

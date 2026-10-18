@@ -220,6 +220,10 @@ jobs:
           PARTNER_CENTER_TENANT_ID: ${{ secrets.MS_STORE_TENANT_ID }}
           PARTNER_CENTER_CLIENT_ID: ${{ secrets.MS_STORE_CLIENT_ID }}
           PARTNER_CENTER_CLIENT_SECRET: ${{ secrets.MS_STORE_CLIENT_SECRET }}
+          # Lets the deploy read this workflow's own job logs to recover the
+          # 25-flight cap when Partner Center's listflights endpoint cannot
+          # enumerate the flights it must delete. See ms-store-flights.mjs.
+          GH_TOKEN: ${{ github.token }}
         run: |
           # Create a new flight for each deployment (avoids issues with Partner Center-created submissions)
           # MaxFlightsToKeep=15 ensures we stay well under the 25 flight limit
@@ -364,11 +368,14 @@ jobs:
         run: |
           set +e
           fastlane pilot upload --ipa "$IPA_FILE" --api_key_path "$API_KEY_PATH" \
-            --skip_submission true --skip_waiting_for_build_processing true
-          EXIT_CODE=$?
+            --skip_submission true --skip_waiting_for_build_processing true 2>&1 | tee "$RUNNER_TEMP/testflight-upload.log"
+          EXIT_CODE=${PIPESTATUS[0]}
+          set -e
           echo "exit_code=$EXIT_CODE" >> "$GITHUB_OUTPUT"
-          # Apple's API check below decides whether the exact build was accepted.
-          exit 0
+          # Fail immediately for Apple's definitive signing/package rejections.
+          # Transport failures and duplicate uploads still require the exact-build
+          # API verification below; neither permits another upload.
+          node "$RUNNER_TEMP/testflight-build.mjs" upload-result "$RUNNER_TEMP/testflight-upload.log" "$EXIT_CODE"
 
       - name: Verify Apple accepted and processed the exact build
         if: ${{ steps.guard.outputs.deploy == 'true' }}

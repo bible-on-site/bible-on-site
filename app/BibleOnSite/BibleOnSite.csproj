@@ -58,11 +58,11 @@
 		<ApplicationId>com.tanah.daily929</ApplicationId>
 
 		<!-- Versions -->
-		<ApplicationDisplayVersion>5.0.169</ApplicationDisplayVersion>
+		<ApplicationDisplayVersion>5.0.181</ApplicationDisplayVersion>
 		<!-- Windows MSIX requires each version component ≤65535, so we use a separate incrementing value -->
 		<!-- Android versionCode can be large, continuing from Play Store's 40000017 -->
-		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">50000169</ApplicationVersion>
-		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) != 'android'">169</ApplicationVersion>
+		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">50000181</ApplicationVersion>
+		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) != 'android'">181</ApplicationVersion>
 
 		<!-- To develop, package, and publish an app to the Microsoft Store, see: https://aka.ms/MauiTemplateUnpackaged -->
 		<!-- WindowsPackageType None = unpackaged (fixes "Class not registered" when running from CLI). MSIX for Store: /p:WindowsPackageType=MSIX -->
@@ -73,6 +73,34 @@
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">23.0</SupportedOSPlatformVersion>
 		<!-- For Release: embed assemblies in APK. For Debug: use Fast Deployment (much faster iteration) -->
 		<EmbedAssembliesIntoApk Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND '$(Configuration)' == 'Release'">true</EmbedAssembliesIntoApk>
+		<!-- Android Release: profiled AOT. The .NET 10 SDK (Microsoft.Android.Sdk 36.x)
+		     already defaults RunAOTCompilation + AndroidEnableProfiledAot to true for
+		     Release on the MonoVM runtime and feeds the bundled dotnet.aotprofile into
+		     the compiler — the pins below keep that behavior explicit and durable:
+		     the SDK default only applies while '$(_AndroidRuntime)' == 'MonoVM', so a
+		     future CoreCLR/PublishAot experiment or SDK default change would otherwise
+		     silently drop AOT back to JIT. The UseMonoRuntime guard keeps the pin
+		     inert if someone explicitly opts out of MonoVM on the command line.
+		     Full AOT (AndroidEnableProfiledAot=false) is not an option: the linker
+		     emits zero-RVA method stubs (e.g. System.Net.Requests.HttpWebRequest
+		     local functions) that abort mono-aot-cross with exit 1.
+		     AndroidStripILAfterAOT is deliberately NOT set: profiled AOT only
+		     precompiles profiled methods, so JIT fallback for everything else
+		     (including non-profiled generic instantiations) needs the IL kept
+		     in the embedded assemblies. -->
+		<RunAOTCompilation Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND '$(Configuration)' == 'Release' AND '$(UseMonoRuntime)' != 'false'">true</RunAOTCompilation>
+		<AndroidEnableProfiledAot Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND '$(Configuration)' == 'Release' AND '$(UseMonoRuntime)' != 'false'">true</AndroidEnableProfiledAot>
+		<!-- Android Release: R8 shrinks the Java/Kotlin DEX (AndroidX, Firebase, Media3,
+		     Glide, Play Asset Delivery bindings) instead of plain D8 dexing (#2355):
+		     uncompressed DEX 25.4 -> 14.0 MB, arm64 install download -3.8 MB, installed
+		     size -15 MB, with unchanged cold/warm startup and build time. The SDK's
+		     generated proguard_xamarin.cfg plus each AAR's consumer rules keep the JNI
+		     peers, so no project keep rules are needed. Obfuscation stays off (the SDK
+		     default), so Java stack traces remain readable; the SDK embeds mapping.txt as
+		     BUNDLE-METADATA/com.android.tools.build.obfuscation/proguard.map in the AAB,
+		     which Play ingests with that exact versionCode (#1161).
+		     Rollback: delete this line to return to D8. -->
+		<AndroidLinkTool Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND '$(Configuration)' == 'Release'">r8</AndroidLinkTool>
 		<!-- Debug APKs include the large commentary database. Store SQLite assets directly
 		     to avoid recompressing it on every local edit; Release packaging keeps compression. -->
 		<AndroidStoreUncompressedFileExtensions Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND '$(Configuration)' == 'Debug'">$(AndroidStoreUncompressedFileExtensions);.sqlite</AndroidStoreUncompressedFileExtensions>
@@ -157,12 +185,12 @@
 	       provisioning profile + signing key, which unsigned iossimulator CI/e2e
 	       builds do not have. RuntimeIdentifier defaults are only resolved after
 	       csproj evaluation (a RID-less Debug build lands on iossimulator), so the
-	       assignment runs in a target where the SDK-computed SdkIsSimulator flag —
+	       assignment runs in a target where the SDK-computed _SdkIsSimulator flag —
 	       the same flag DetectSigningIdentity consumes — is already known. -->
 	<PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">
 		<CodesignEntitlements>Platforms\MacCatalyst\Entitlements.plist</CodesignEntitlements>
 	</PropertyGroup>
-	<Target Name="_SetIosCodesignEntitlements" BeforeTargets="_DetectSigningIdentity" Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' AND '$(SdkIsSimulator)' != 'true'">
+	<Target Name="_SetIosCodesignEntitlements" BeforeTargets="_DetectSigningIdentity" Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' AND '$(_SdkIsSimulator)' != 'true' AND '$(EnableCodeSigning)' != 'false'">
 		<PropertyGroup>
 			<CodesignEntitlements>Platforms\iOS\Entitlements.App.plist</CodesignEntitlements>
 		</PropertyGroup>
@@ -223,21 +251,33 @@
 	<!-- Managed Background Assets need an ExtensionKit downloader extension embedded at
 	     <app>/Extensions — a binary .NET cannot produce (Swift-only entry point), so the
 	     packaging pipeline builds app/extensions/AssetPackDownloader via xcodebuild and
-	     passes the .appex path plus its provisioning profile. Skipped when unset, which
-	     leaves pack downloads unavailable but never breaks the build (Debug/simulator
-	     builds already rely on the bundled MauiAsset fallback below). -->
+	     passes the .appex path plus its provisioning profile. Distribution packaging
+	     requires both; unsigned development/simulator builds can omit the extension. -->
+	<Target Name="_RequireAssetPackDownloader" BeforeTargets="PrepareForBuild" Condition="($([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst')">
+		<PropertyGroup>
+			<RequireAssetPackDownloader Condition="'$(RequireAssetPackDownloader)' == '' AND ('$(BuildIpa)' == 'true' OR '$(ArchiveOnBuild)' == 'true') AND '$(EnableCodeSigning)' != 'false'">true</RequireAssetPackDownloader>
+		</PropertyGroup>
+		<Error Condition="'$(RequireAssetPackDownloader)' == 'true' AND ('$(AssetPackDownloaderAppex)' == '' OR (!Exists('$(AssetPackDownloaderAppex)/Info.plist') AND !Exists('$(AssetPackDownloaderAppex)/Contents/Info.plist')))" Text="Signed distribution requires a built AssetPackDownloader.appex; set AssetPackDownloaderAppex to its device build directory." />
+		<Error Condition="'$(RequireAssetPackDownloader)' == 'true' AND ('$(AssetPackDownloaderProfile)' == '' OR !Exists('$(AssetPackDownloaderProfile)'))" Text="Signed distribution requires the downloader provisioning profile with App Groups; set AssetPackDownloaderProfile." />
+		<Error Condition="'$(AssetPackDownloaderAppex)' != '' AND !Exists('$(AssetPackDownloaderAppex)')" Text="AssetPackDownloaderAppex does not exist: $(AssetPackDownloaderAppex)" />
+	</Target>
 	<Target Name="_EmbedAssetPackDownloader" BeforeTargets="_CodesignAppBundle" Condition="'$(AssetPackDownloaderAppex)' != '' AND&#xD;&#xA;			Exists('$(AssetPackDownloaderAppex)') AND&#xD;&#xA;			($([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst')">
 		<PropertyGroup>
 			<_AssetPackExtensionDir Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">$(AppBundleDir)/Extensions</_AssetPackExtensionDir>
 			<_AssetPackExtensionDir Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">$(AppBundleDir)/Contents/Extensions</_AssetPackExtensionDir>
 			<_AssetPackExtensionProfile Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">embedded.mobileprovision</_AssetPackExtensionProfile>
 			<_AssetPackExtensionProfile Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">embedded.provisionprofile</_AssetPackExtensionProfile>
+			<_AssetPackSigningEntitlements>$(IntermediateOutputPath)asset-pack-downloader.entitlements</_AssetPackSigningEntitlements>
+			<_AssetPackProfileArguments Condition="'$(AssetPackDownloaderProfile)' != ''">--profile &quot;$(AssetPackDownloaderProfile)&quot; --entitlements &quot;$(MSBuildProjectDirectory)/../extensions/AssetPackDownloader/AssetPackDownloader/AssetPackDownloader.entitlements&quot; --output-entitlements &quot;$(_AssetPackSigningEntitlements)&quot;</_AssetPackProfileArguments>
 		</PropertyGroup>
+		<Error Condition="'$(EnableCodeSigning)' == 'true' AND ('$(AssetPackDownloaderProfile)' == '' OR !Exists('$(AssetPackDownloaderProfile)'))" Text="Signing the downloader requires its own provisioning profile with the shared App Group." />
+		<Error Condition="'$(EnableCodeSigning)' == 'true' AND '$(_CodeSigningKey)' == ''" Text="The app signing identity was not resolved before embedding the downloader." />
 		<MakeDir Directories="$(_AssetPackExtensionDir)" />
 		<Exec Command="ditto '$(AssetPackDownloaderAppex)' '$(_AssetPackExtensionDir)/AssetPackDownloader.appex'" />
+		<Exec Command="python3 &quot;$(MSBuildProjectDirectory)/../extensions/prepare_extension.py&quot; --extension &quot;$(_AssetPackExtensionDir)/AssetPackDownloader.appex&quot; --version &quot;$(ApplicationDisplayVersion)&quot; --build &quot;$(ApplicationVersion)&quot; $(_AssetPackProfileArguments)" />
 		<Exec Command="cp '$(AssetPackDownloaderProfile)' '$(_AssetPackExtensionDir)/AssetPackDownloader.appex/$(_AssetPackExtensionProfile)'" Condition="'$(AssetPackDownloaderProfile)' != '' AND Exists('$(AssetPackDownloaderProfile)')" />
-		<Exec Command="codesign --force --sign '$(CodesignKey)' --entitlements '$(MSBuildProjectDirectory)/../extensions/AssetPackDownloader/AssetPackDownloader/AssetPackDownloader.entitlements' --timestamp=none '$(_AssetPackExtensionDir)/AssetPackDownloader.appex'" Condition="'$(CodesignKey)' != ''" />
-		<Exec Command="codesign --verify --strict '$(_AssetPackExtensionDir)/AssetPackDownloader.appex'" Condition="'$(CodesignKey)' != ''" />
+		<Exec Command="codesign --force --sign '$(_CodeSigningKey)' --entitlements '$(_AssetPackSigningEntitlements)' --timestamp=none '$(_AssetPackExtensionDir)/AssetPackDownloader.appex'" Condition="'$(EnableCodeSigning)' == 'true'" />
+		<Exec Command="codesign --verify --strict '$(_AssetPackExtensionDir)/AssetPackDownloader.appex'" Condition="'$(EnableCodeSigning)' == 'true'" />
 		<Message Importance="high" Text="=== Embedded AssetPackDownloader.appex into $(AppBundleDir) ===" />
 	</Target>
 
@@ -270,7 +310,7 @@
 		<PackageReference Include="CommunityToolkit.Maui.MediaElement" Version="10.0.0" />
 		<PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
 		<PackageReference Include="GraphQL.Client" Version="6.1.0" />
-		<PackageReference Include="GraphQL.Client.Serializer.Newtonsoft" Version="6.1.0" />
+		<PackageReference Include="GraphQL.Client.Serializer.SystemTextJson" Version="6.1.0" />
 		<PackageReference Include="HtmlAgilityPack" Version="1.13.1" />
 		<PackageReference Include="Microsoft.Maui.Controls" Version="10.0.110" />
 		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.13" />

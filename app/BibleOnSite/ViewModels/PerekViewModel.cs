@@ -279,16 +279,28 @@ public partial class PerekViewModel : ObservableObject
     /// </summary>
     public bool HasArticles => ArticlesCount > 0;
 
-    /// <summary>Find commentary names in the selection menu.</summary>
+    /// <summary>Find commentary names in the selection menu — scrolls to the
+    /// first match rather than hiding the rest.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(FilteredPerushim))]
     [NotifyPropertyChangedFor(nameof(PerushimEmptyMessage))]
     private string _perushNameFilter = string.Empty;
 
-    public List<Perush> FilteredPerushim => string.IsNullOrWhiteSpace(PerushNameFilter)
-        ? Perushim
-        : Perushim.Where(p => SearchText.Normalize(p.Name).Contains(
-            SearchText.Normalize(PerushNameFilter), StringComparison.Ordinal)).ToList();
+    /// <summary>Perushim matching <see cref="PerushNameFilter"/> — the list
+    /// shows all of <see cref="Perushim"/>; this drives search scroll-to.</summary>
+    public List<Perush> FilteredPerushim
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(PerushNameFilter))
+            {
+                return Perushim;
+            }
+            var filter = SearchText.Normalize(PerushNameFilter);
+            return Perushim.Where(p => SearchText.Normalize(p.Name)
+                .Contains(filter, StringComparison.Ordinal)).ToList();
+        }
+    }
 
     public int PerushimCount => Perushim.Count;
 
@@ -455,7 +467,7 @@ public partial class PerekViewModel : ObservableObject
         try
         {
             await stale;
-            Console.WriteLine($"[PerekLoad] stale attempt {attempt} eventually completed (perekId={perekId})");
+            DebugLog.Write($"[PerekLoad] stale attempt {attempt} eventually completed (perekId={perekId})");
         }
         catch (Exception ex)
         {
@@ -471,7 +483,7 @@ public partial class PerekViewModel : ObservableObject
         {
             LoadStage = stage;
         }
-        Console.WriteLine($"[PerekLoad] stage={stage} perekId={perekId}");
+        DebugLog.Write($"[PerekLoad] stage={stage} perekId={perekId}");
     }
 
     private async Task LoadByPerekIdCoreAsync(int perekId, LoadGate gate, int attemptStamp)
@@ -554,7 +566,7 @@ public partial class PerekViewModel : ObservableObject
             _perushimPreloadCache.TryGetValue(perekId, out cached);
         }
 
-        List<int> perushIds;
+        IReadOnlyList<int> perushIds;
         Dictionary<int, Perush> perushById;
         PerushNoteChapter? chapter;
 
@@ -566,9 +578,9 @@ public partial class PerekViewModel : ObservableObject
         }
         else
         {
-            perushIds = await _notesService.GetPerushIdsForPerekAsync(perekId);
+            chapter = await _notesService.LoadChapterAsync(perekId);
+            perushIds = chapter?.PerushIds ?? [];
             perushById = perushIds.Count == 0 ? new() : await _catalogService.GetPerushimByIdsAsync(perushIds);
-            chapter = perushIds.Count == 0 ? null : await _notesService.LoadChapterAsync(perekId);
         }
 
         if (IsStalePerushimLoad(perekId))
@@ -744,6 +756,9 @@ public partial class PerekViewModel : ObservableObject
 
     public string InlineCommentaryLimitMessage => $"ניתן להציג עד {_preferencesService.InlineCommentaryLimit} פירושים על הפרק. ניתן לשנות בהעדפות.";
 
+    /// <summary>Max perushim shown inline — unchecked rows render disabled at the cap.</summary>
+    public int InlineCommentaryLimit => _preferencesService.InlineCommentaryLimit;
+
     /// <summary>A search result must remain visible even when all inline slots are occupied.</summary>
     public void ShowPerushForSearch(int perushId)
     {
@@ -842,7 +857,7 @@ public partial class PerekViewModel : ObservableObject
     /// </summary>
     private void SetPerek(Perek perek)
     {
-        Console.WriteLine($"[Carousel] SetPerek perekId={perek.PerekId}");
+        DebugLog.Write($"[Carousel] SetPerek perekId={perek.PerekId}");
         // Clear selection BEFORE switching — so the old perek's pasuk IsSelected flags are reset
         ClearSelected();
         Perek = perek;
@@ -893,7 +908,7 @@ public partial class PerekViewModel : ObservableObject
         var perekId = PerekId;
         var perek = Perek;
 
-        Console.WriteLine($"[Carousel] InitializeCarouselAsync START perekId={perekId}");
+        DebugLog.Write($"[Carousel] InitializeCarouselAsync START perekId={perekId}");
 
         // Publish the requested reader without waiting for speculative chapter data.
         var list = await Task.Run(() =>
@@ -920,7 +935,7 @@ public partial class PerekViewModel : ObservableObject
             return;
         }
 
-        Console.WriteLine($"[Carousel] InitializeCarouselAsync built list: {list.Count} items");
+        DebugLog.Write($"[Carousel] InitializeCarouselAsync built list: {list.Count} items");
 
         // Assign collection on the main thread.
         // NOTE: CarouselView resets Position to 0 when ItemsSource changes — the
@@ -928,7 +943,7 @@ public partial class PerekViewModel : ObservableObject
         CarouselPerakim = new System.Collections.ObjectModel.ObservableCollection<Perek>(list);
         CurrentCarouselPerek = perek;
 
-        Console.WriteLine($"[Carousel] InitializeCarouselAsync DONE perekId={perekId}");
+        DebugLog.Write($"[Carousel] InitializeCarouselAsync DONE perekId={perekId}");
     }
 
     /// <summary>
@@ -942,7 +957,7 @@ public partial class PerekViewModel : ObservableObject
             return;
         }
 
-        Console.WriteLine($"[Carousel] EnsurePasukimLoaded perekId={perek.PerekId}");
+        DebugLog.Write($"[Carousel] EnsurePasukimLoaded perekId={perek.PerekId}");
         try
         {
             // Bounded like the fresh-load path — a stalled query must not hold
@@ -972,7 +987,7 @@ public partial class PerekViewModel : ObservableObject
         var loaded = await Task.Run(() => LoadMissingPasukimAsync(start, end));
         AssignLoadedPasukim(loaded);
 
-        Console.WriteLine($"[Carousel] PreloadAdjacent [{start}..{end}] center={centerPerekId}");
+        DebugLog.Write($"[Carousel] PreloadAdjacent [{start}..{end}] center={centerPerekId}");
     }
 
     /// <summary>
@@ -1047,19 +1062,19 @@ public partial class PerekViewModel : ObservableObject
 
             try
             {
-                var perushIds = await _notesService.GetPerushIdsForPerekAsync(id);
+                var chapter = await _notesService.LoadChapterAsync(id);
+                var perushIds = chapter?.PerushIds ?? [];
                 if (perushIds.Count == 0)
                 {
                     lock (_perushimPreloadCache)
                     {
                         _perushimPreloadCache[id] = new PreloadedPerushimData(
-                            new List<int>(), new Dictionary<int, Perush>(), null);
+                            [], new Dictionary<int, Perush>(), null);
                     }
                     continue;
                 }
 
                 var perushById = await _catalogService.GetPerushimByIdsAsync(perushIds);
-                var chapter = await _notesService.LoadChapterAsync(id);
 
                 lock (_perushimPreloadCache)
                 {
@@ -1237,6 +1252,7 @@ public partial class PerekViewModel : ObservableObject
         }
         OnPropertyChanged(nameof(DivineNameMaskingEnabled));
         OnPropertyChanged(nameof(InlineCommentaryLimitMessage));
+        OnPropertyChanged(nameof(InlineCommentaryLimit));
         if (CheckedPerushim.Count > _preferencesService.InlineCommentaryLimit)
         {
             CheckedPerushim = CheckedPerushim.Take(_preferencesService.InlineCommentaryLimit).ToList();
@@ -1249,6 +1265,6 @@ public partial class PerekViewModel : ObservableObject
 /// Cached perushim data for a single perek, used by the preload buffer.
 /// </summary>
 internal record PreloadedPerushimData(
-    List<int> PerushIds,
+    IReadOnlyList<int> PerushIds,
     Dictionary<int, Perush> PerushById,
     PerushNoteChapter? Chapter);

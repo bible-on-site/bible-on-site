@@ -445,10 +445,13 @@ jobs:
     with:
       module_directory: ${{ needs.setup_env.outputs.website_directory }}
 
+  # Master pushes package the release; other events (PR, merge queue) build the
+  # same release Docker configuration as a pre-merge check without uploading it,
+  # so base-image/toolchain breakage blocks the merge (#2292).
   package_api:
     name: Package API
     needs: [setup_env, determine_changes]
-    if: ${{ needs.determine_changes.outputs.api_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    if: ${{ (github.event_name == 'push' && needs.setup_env.outputs.is_master_branch == 'true' && needs.determine_changes.outputs.api_module_changed == 'true') || (github.event_name != 'push' && (needs.determine_changes.outputs.api_module_changed == 'true' || needs.determine_changes.outputs.api_ci_changed == 'true')) }}
     permissions:
       contents: write
       actions: read
@@ -473,10 +476,27 @@ jobs:
       platform: All
       perushim_notes_sqlite_artifact: ${{ needs.perushim_data.result != 'skipped' && format('perushim-sqlite-v2-indexed.{0}', github.run_id) || 'perushim-sqlite-v2-indexed.master' }}
 
+  # Compile and inspect the actual signed distribution on relevant PRs too.
+  # Simulator builds cannot detect missing App Groups provisioning or a broken
+  # embedded downloader; publication remains in the master-only job above.
+  package_ios_pr:
+    name: Validate iOS Distribution
+    needs: [setup_env, determine_changes, perushim_data]
+    if: ${{ always() && !cancelled() && !failure() && github.event_name != 'push' && (needs.determine_changes.outputs.app_module_changed == 'true' || needs.determine_changes.outputs.app_ci_changed == 'true') }}
+    permissions:
+      contents: read
+      actions: read
+    secrets: inherit
+    uses: ./.github/workflows/app-package.yml
+    with:
+      platform: iOS
+      perushim_notes_sqlite_artifact: ${{ needs.perushim_data.result != 'skipped' && format('perushim-sqlite-v2-indexed.{0}', github.run_id) || 'perushim-sqlite-v2-indexed.master' }}
+
+  # Same release/pre-merge split as package_api (#2292).
   package_bulletin:
     name: Package Bulletin
     needs: [setup_env, determine_changes]
-    if: ${{ needs.determine_changes.outputs.bulletin_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    if: ${{ (github.event_name == 'push' && needs.setup_env.outputs.is_master_branch == 'true' && needs.determine_changes.outputs.bulletin_module_changed == 'true') || (github.event_name != 'push' && (needs.determine_changes.outputs.bulletin_module_changed == 'true' || needs.determine_changes.outputs.bulletin_ci_changed == 'true')) }}
     permissions:
       contents: read
       actions: read
@@ -524,6 +544,7 @@ jobs:
           rm -rf ./bootstrap fonts/
 
       - name: Store Lambda ZIP
+        if: ${{ github.event_name == 'push' }}
         uses: actions/upload-artifact@v7
         with:
           name: ${{ env.BULLETIN_LAMBDA_ZIP_ARTIFACT_NAME }}
@@ -533,10 +554,11 @@ jobs:
           # artifact expiring (matches the website/api release artifacts at 90).
           retention-days: 90
 
+  # Same release/pre-merge split as package_api (#2292).
   package_admin:
     name: Package Admin
     needs: [setup_env, determine_changes]
-    if: ${{ needs.determine_changes.outputs.admin_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    if: ${{ (github.event_name == 'push' && needs.setup_env.outputs.is_master_branch == 'true' && needs.determine_changes.outputs.admin_module_changed == 'true') || (github.event_name != 'push' && (needs.determine_changes.outputs.admin_module_changed == 'true' || needs.determine_changes.outputs.admin_ci_changed == 'true')) }}
     permissions:
       contents: read
       actions: read
@@ -583,6 +605,7 @@ jobs:
         run: gzip -c -f ${{ steps.prepare.outputs.DOCKER_IMAGE_TAR_NAME }} > ${{ steps.prepare.outputs.DOCKER_IMAGE_TAR_NAME }}.gz
 
       - name: Store Docker Image
+        if: ${{ github.event_name == 'push' }}
         uses: actions/upload-artifact@v7
         with:
           name: ${{ env.ADMIN_DOCKER_ARTIFACT_NAME }}
@@ -1938,6 +1961,20 @@ jobs:
       - name: Test paired Perushim release assets
         run: python3 -m unittest discover -s devops -p test_prepare_perushim_assets.py
 
+      - name: Setup Python for signing validation tests
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.15"
+
+      - name: Test iOS distribution signing validation
+        run: |
+          python3 -m pip install --disable-pip-version-check --no-input -r devops/requirements-signing.txt
+          python3 -m unittest discover -s devops -p test_verify_ios_signing.py
+          python3 -m unittest discover -s devops -p test_ios_signing_requirements.py
+
+      - name: Test downloader extension signing preparation
+        run: python3 -m unittest discover -s extensions -p 'test_*.py'
+
       - name: Run Unit Tests with Coverage
         run: dotnet run --project devops -- CoverageUnit --configuration Release
 
@@ -2225,6 +2262,40 @@ jobs:
         run: |
           node data/recitation/check_storage.mjs
           node data/recitation/check_storage.mjs data/recitation/fixtures/seek.ogg
+
+  deploy_verifier:
+    name: CD verifier dependency contract
+    runs-on: ubuntu-latest
+    needs: [setup_env, determine_changes]
+    # The website's post-deploy verifier resolves its imports through
+    # NODE_PATH -> devops/node_modules (cd-aws.yml). Guard that contract:
+    # verifier or deployment-workflow changes select it via website flags,
+    # devops manifest changes via admin_ci_changed (#2372).
+    if: ${{ always() && !cancelled() && needs.setup_env.result == 'success' && needs.determine_changes.result == 'success' && (needs.determine_changes.outputs.website_module_changed == 'true' || needs.determine_changes.outputs.website_ci_changed == 'true' || needs.determine_changes.outputs.admin_ci_changed == 'true') }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: devops/package.json
+      # Same install layout as the deploy job: only devops deps, no website
+      # node_modules — resolution can only succeed through NODE_PATH.
+      - name: Install deployment dependencies
+        run: npm ci --prefix devops --no-audit
+      # The nginx guard reads docs/ outside the website's Docker build context.
+      - name: Verify canonical hosts and nginx configuration
+        run: node --test web/bible-on-site/scripts/verify-canonical-hosts.test.mjs
+      - name: Exercise the real deployment verifier entry point
+        run: |
+          node web/bible-on-site/scripts/verify-public-content.fixture.mjs 48123 &
+          FIXTURE_PID=$!
+          trap 'if kill -0 $FIXTURE_PID 2>/dev/null; then kill $FIXTURE_PID; fi' EXIT
+          for attempt in $(seq 50); do
+            curl -fsS http://127.0.0.1:48123/api/health/ready > /dev/null 2>&1 && break
+            sleep 0.2
+          done
+          curl -fsS http://127.0.0.1:48123/api/health/ready > /dev/null
+          NODE_PATH="$GITHUB_WORKSPACE/devops/node_modules" \
+            node web/bible-on-site/scripts/verify-public-content.mjs --origin http://127.0.0.1:48123
 
   data_ci:
     name: Data CI
@@ -2630,10 +2701,15 @@ jobs:
         app_ci,
         admin_ci,
         app_ios_ci,
+        package_ios_pr,
+        package_api,
+        package_bulletin,
+        package_admin,
         app_mobile_e2e,
         bulletin_ci,
         data_ci,
         recitation_ci,
+        deploy_verifier,
         perushim_data,
         build_lcov_docker,
         determine_baseline_availability,
@@ -2671,6 +2747,15 @@ jobs:
             fi
           fi
 
+          # Same condition as the deploy_verifier job's `if` — a triggered
+          # guard that failed or could not run blocks the merge (#2372).
+          if [ "${{ needs.determine_changes.outputs.website_module_changed }}" = "true" ] || [ "${{ needs.determine_changes.outputs.website_ci_changed }}" = "true" ] || [ "${{ needs.determine_changes.outputs.admin_ci_changed }}" = "true" ]; then
+            if [ "${{ needs.deploy_verifier.result }}" != "success" ]; then
+              echo "CD verifier dependency contract did not pass."
+              exit 1
+            fi
+          fi
+
           WEBSITE_MODULE_CHANGED=$([ "${{ needs.determine_changes.outputs.website_module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
           WEBSITE_CI_CHANGED=$([ "${{ needs.determine_changes.outputs.website_ci_changed }}" = "true" ] && echo "true" || echo "false") # Generated
           WEBSITE_MASTER_COVERAGE_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_website_master_coverage_available }}" = "true" ] && echo "true" || echo "false") # Generated
@@ -2695,9 +2780,21 @@ jobs:
               exit 1
             fi
           fi
+          if [ "${{ github.event_name }}" != "push" ] && { [ "$API_MODULE_CHANGED" = "true" ] || [ "$API_CI_CHANGED" = "true" ]; }; then
+            if [ "${{ needs.package_api.result }}" != "success" ]; then
+              echo "API release Docker build failed or did not run"
+              exit 1
+            fi
+          fi
 
           APP_MODULE_CHANGED=$([ "${{ needs.determine_changes.outputs.app_module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
           APP_CI_CHANGED=$([ "${{ needs.determine_changes.outputs.app_ci_changed }}" = "true" ] && echo "true" || echo "false") # Generated
+          if [ "${{ github.event_name }}" != "push" ] && { [ "$APP_MODULE_CHANGED" = "true" ] || [ "$APP_CI_CHANGED" = "true" ]; }; then
+            if [ "${{ needs.package_ios_pr.result }}" != "success" ]; then
+              echo "Signed iOS distribution validation failed or did not run"
+              exit 1
+            fi
+          fi
           APP_MASTER_COVERAGE_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_app_master_coverage_available }}" = "true" ] && echo "true" || echo "false") # Generated
           if [ "$APP_MODULE_CHANGED" = "true" ] || [ "$APP_CI_CHANGED" = "true" ] || [ "$APP_MASTER_COVERAGE_AVAILABLE" = "false" ]; then
             APP_STATUS=$([ "${{ needs.app_ci.result }}" = "success" ] && echo "success" || echo "failure") # Generated
@@ -2732,6 +2829,12 @@ jobs:
               exit 1
             fi
           fi
+          if [ "${{ github.event_name }}" != "push" ] && { [ "$BULLETIN_MODULE_CHANGED" = "true" ] || [ "$BULLETIN_CI_CHANGED" = "true" ]; }; then
+            if [ "${{ needs.package_bulletin.result }}" != "success" ]; then
+              echo "Bulletin release Docker build failed or did not run"
+              exit 1
+            fi
+          fi
 
           ADMIN_MODULE_CHANGED=$([ "${{ needs.determine_changes.outputs.admin_module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
           ADMIN_CI_CHANGED=$([ "${{ needs.determine_changes.outputs.admin_ci_changed }}" = "true" ] && echo "true" || echo "false") # Generated
@@ -2740,6 +2843,12 @@ jobs:
             ADMIN_STATUS=$([ "${{ needs.admin_ci.result }}" = "success" ] && echo "success" || echo "failure") # Generated
             if [ "$ADMIN_STATUS" = "failure" ]; then
               echo "Overall status: failure"
+              exit 1
+            fi
+          fi
+          if [ "${{ github.event_name }}" != "push" ] && { [ "$ADMIN_MODULE_CHANGED" = "true" ] || [ "$ADMIN_CI_CHANGED" = "true" ]; }; then
+            if [ "${{ needs.package_admin.result }}" != "success" ]; then
+              echo "Admin release Docker build failed or did not run"
               exit 1
             fi
           fi
@@ -2909,7 +3018,7 @@ jobs:
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         run: |
           npm run test:version
-          node --test github/ci/codecov-report-state.test.mjs github/ci/bencher-comparison.test.mjs github/ci/e2e-impact/e2e-impact.test.ts github/ci/e2e-impact/playwright-impact.test.ts e2e-coverage-trees/e2e-coverage-trees.test.ts
+          node --test github/ci/codecov-report-state.test.mjs github/ci/bencher-comparison.test.mjs github/ci/e2e-impact/e2e-impact.test.ts github/ci/e2e-impact/playwright-impact.test.ts github/ci/e2e-impact/shard-plan.test.ts github/ci/e2e-impact/timings.test.ts e2e-coverage-trees/e2e-coverage-trees.test.ts
 
       # Real app-process coverage from the instrumented mobile E2E legs
       # (#1232). A successful mobile run must contribute both platform reports;

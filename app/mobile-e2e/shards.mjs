@@ -1,43 +1,10 @@
 import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 
-// The iOS suite splits across two simulators on the one xcode-27 runner
-// (#2083): each shard owns a device UDID, an Appium port, an artifacts
-// directory and a `Shard` trait filter, so every scenario still runs exactly
-// once — the two groups are disjoint by trait construction.
-export const SHARD_COUNT = 2;
-
-// Builds the per-shard run environments from the parent process env. Shard N
-// takes MOBILE_UDID_SHARD_N (exported by ios:boot when MOBILE_E2E_SHARD_COUNT=2)
-// and the Appium port 4722+N, and its MOBILE_E2E_SHARD index narrows the
-// dotnet test filter in TestMobileE2E.
-export function shardRuns(env, artifactsDir) {
-  const runs = [];
-  for (let shard = 1; shard <= SHARD_COUNT; shard++) {
-    const udid = env[`MOBILE_UDID_SHARD_${shard}`];
-    if (!udid) {
-      throw new Error(`Set MOBILE_UDID_SHARD_${shard} (ios:boot exports it when MOBILE_E2E_SHARD_COUNT=2).`);
-    }
-    const artifacts = join(artifactsDir, `shard${shard}`);
-    runs.push({
-      shard,
-      artifacts,
-      env: {
-        ...env,
-        MOBILE_UDID: udid,
-        MOBILE_APPIUM_PORT: String(4722 + shard),
-        // WDA listens on the host-shared loopback inside each simulator, so it
-        // needs a per-device port just like the Appium server.
-        MOBILE_WDA_PORT: String(8099 + shard),
-        MOBILE_E2E_COVERAGE_PORT: String(4786 + shard),
-        MOBILE_E2E_ARTIFACTS: artifacts,
-        // Local two-device mode combines CI groups one and three on device one.
-        MOBILE_E2E_SHARD: shard === 1 ? "1,3" : "2",
-      },
-    });
-  }
-  return runs;
-}
+// The iOS suite splits across dynamically planned single-simulator runners
+// (#2263): each shard is its own matrix job with its own device, Appium
+// server and artifacts directory, assigned an explicit case manifest so
+// every scenario still runs exactly once.
 
 // Merges per-shard coverage evidence into the run's top-level artifacts dir,
 // which is where the e2e-impact collect step looks. Every scenario must run on

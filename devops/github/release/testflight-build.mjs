@@ -166,6 +166,33 @@ function uploadDetails(details) {
 	return details.map(({ code, description }) => ({ code, description }));
 }
 
+/** Definitive Apple validation failures cannot become a successful upload step. */
+export function checkUploadResult(exitCode, log, report = console.log) {
+	if (!/^\d+$/.test(String(exitCode)))
+		throw new Error("Uploader exit status is missing or invalid");
+	const rejection = log
+		.replace(/\u001b\[[0-?]*[ -/]*[@-~]/g, "")
+		.split(/\r?\n/)
+		.find(
+			(line) =>
+				// A duplicate may be the accepted result of an earlier interrupted
+				// upload. Only the exact-build API check may recover that case.
+				!/redundant binary upload|already (?:been )?uploaded/i.test(line) &&
+				(/\bValidation failed(?:\s+\(\d+\))?\s+(?!["';),{])[A-Za-z]/i.test(
+					line,
+				) ||
+					/\bERROR\s*:?\s*ITMS-\d+\b/i.test(line) ||
+					(/STATE_ERROR\.VALIDATION_ERROR/.test(line) &&
+						/\b(?:detail|NSLocalizedFailureReason)\s*[=:]/.test(line))),
+		);
+	if (rejection)
+		throw new Error(`Apple rejected the upload: ${rejection.trim()}`);
+	if (Number(exitCode) !== 0)
+		report(
+			"::warning::Uploader failed without a definitive Apple validation rejection; verifying the exact build without uploading again",
+		);
+}
+
 export function previousDelivery(
 	{ repo, ref, version, deploymentId },
 	api = githubRequest,
@@ -216,11 +243,15 @@ export async function checkBuild({
 	);
 }
 
-if (
-	process.argv[1] &&
-	import.meta.url === pathToFileURL(process.argv[1]).href
-) {
+async function main() {
 	const phase = process.argv[2];
+	if (phase === "upload-result") {
+		checkUploadResult(
+			process.argv[4],
+			readFileSync(process.argv[3], "utf8"),
+		);
+		return;
+	}
 	const metadata = readIpa(process.env.IPA_FILE, process.env.MODULE_VERSION);
 	const credentials = process.env.API_KEY_PATH
 		? JSON.parse(readFileSync(process.env.API_KEY_PATH, "utf8"))
@@ -274,3 +305,9 @@ if (
 			"::warning::Uploader failed, but Apple's API confirms this exact build is VALID; resuming without another upload",
 		);
 }
+
+if (
+	process.argv[1] &&
+	import.meta.url === pathToFileURL(process.argv[1]).href
+)
+	await main();

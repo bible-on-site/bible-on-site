@@ -142,13 +142,26 @@ public abstract class MobileDeviceTest : IAsyncLifetime
         // coverage tree uses as test identity (#2085). That identity also names
         // the per-test artifacts: method names are not unique across classes,
         // so two tests sharing one would overwrite each other's evidence inside
-        // a run and collide again at the shard merge (#2083).
+        // a run and collide again at the shard merge (#2263).
         var test = $"{GetType().FullName}.{name}";
         CoverageEvidence.Begin(test, Configuration.Platform,
             Configuration.ArtifactDirectory, test);
         try
         {
-            body();
+            try
+            {
+                body();
+            }
+            finally
+            {
+                // The per-command driver profile (counts/totals/max) rides the
+                // test's captured output into the trx artifact.
+                var profile = DriverTelemetry.Dump();
+                if (profile.Length > 0)
+                {
+                    Output.WriteLine(profile);
+                }
+            }
             CoverageEvidence.RecordSession(Driver?.SessionId);
             CoverageEvidence.Finish("passed");
             CollectAppCoverage(test, "passed");
@@ -185,6 +198,9 @@ public abstract class MobileDeviceTest : IAsyncLifetime
 
     protected virtual void Connect()
     {
+        // Attribute session creation, app restart, startup wait and coverage
+        // collection to the scenario that follows them.
+        DriverTelemetry.Reset();
         AcquireSession();
         Page = new(Driver!, Platform);
         Page.WaitForStartup();

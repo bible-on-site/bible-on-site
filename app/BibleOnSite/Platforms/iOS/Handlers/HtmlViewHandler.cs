@@ -32,7 +32,11 @@ public class HtmlViewHandler : ViewHandler<HtmlView, ViewportTextView>
 
     // Managed parsing avoids WebKit's nested main-thread run loop. The serial
     // discards stale completions after a cell is rebound or disconnected.
+    // The html and its style are compared separately — a joined render key
+    // would copy the whole commentary string on every no-change re-render
+    // check (each handler connect re-maps every style property).
     private string? _renderedHtml;
+    private RenderStyle _renderedStyle;
     private int _renderSerial;
     // Highlighted raw range applied by the search match — removed when the
     // match moves or clears without repainting unrelated backgrounds.
@@ -115,6 +119,10 @@ public class HtmlViewHandler : ViewHandler<HtmlView, ViewportTextView>
         base.DisconnectHandler(platformView);
     }
 
+    private readonly record struct RenderStyle(
+        HtmlTextAlignment Alignment, HtmlTextDirection Direction,
+        double FontSize, double LineHeight, double H1, double H2, double H3);
+
     private void OnHtmlContentChanged(object? sender, EventArgs e) => UpdateContent();
     private void OnStyleChanged(object? sender, EventArgs e) => UpdateContent();
 
@@ -155,15 +163,21 @@ public class HtmlViewHandler : ViewHandler<HtmlView, ViewportTextView>
         var h1Scale = virtualView.H1FontSizeMultiplier;
         var h2Scale = virtualView.H2FontSizeMultiplier;
         var h3Scale = virtualView.H3FontSizeMultiplier;
-        var renderKey = $"{virtualView.TextAlignment}|{virtualView.TextDirection}|{fontSize}|{virtualView.LineHeight}|{h1Scale}|{h2Scale}|{h3Scale}|{html}";
-        if (renderKey == _renderedHtml)
+        var style = new RenderStyle(virtualView.TextAlignment, virtualView.TextDirection,
+            fontSize, virtualView.LineHeight, h1Scale, h2Scale, h3Scale);
+        if (style == _renderedStyle && string.Equals(html, _renderedHtml, StringComparison.Ordinal))
         {
             return;
         }
-        _renderedHtml = renderKey;
+        _renderedStyle = style;
+        _renderedHtml = html;
         var serial = Interlocked.Increment(ref _renderSerial);
         _appliedText = null;
         ResetMeasurement();
+        // Width hint for the parse pass: a recycled cell already knows its
+        // width, so the bounding can ride along and the apply needs only one
+        // measure invalidation instead of estimate-then-remeasure.
+        var widthHint = virtualView.Width;
 
         var paragraphStyle = new NSMutableParagraphStyle
         {
@@ -204,20 +218,30 @@ public class HtmlViewHandler : ViewHandler<HtmlView, ViewportTextView>
                 return;
             }
             var attributedString = HtmlAttributedStringFactory.FromHtml(html, fontSize, h1Scale, h2Scale, h3Scale);
+            var measuredHeight = -1.0;
             if (attributedString != null)
             {
                 var range = new NSRange(0, attributedString.Length);
                 attributedString.AddAttribute(UIStringAttributeKey.ParagraphStyle, paragraphStyle, range);
                 attributedString.AddAttribute(UIStringAttributeKey.ForegroundColor, textColor, range);
+                if (widthHint > 0)
+                {
+                    var rect = attributedString.GetBoundingRect(new CGSize(widthHint, NFloat.MaxValue),
+                        NSStringDrawingOptions.UsesLineFragmentOrigin | NSStringDrawingOptions.UsesFontLeading,
+                        null);
+                    measuredHeight = Math.Ceiling(rect.Height);
+                }
             }
 
             MainThread.BeginInvokeOnMainThread(() => ApplyParsedContent(
-                platformView, virtualView, serial, html, attributedString, paragraphStyle, textColor));
+                platformView, virtualView, serial, html, attributedString, paragraphStyle, textColor,
+                widthHint, measuredHeight));
         });
     }
 
     private void ApplyParsedContent(UITextView platformView, HtmlView virtualView, int serial, string html,
-        NSMutableAttributedString? attributedString, NSMutableParagraphStyle paragraphStyle, UIColor textColor)
+        NSMutableAttributedString? attributedString, NSMutableParagraphStyle paragraphStyle, UIColor textColor,
+        double measuredWidth, double measuredHeight)
     {
         try
         {
@@ -237,6 +261,11 @@ public class HtmlViewHandler : ViewHandler<HtmlView, ViewportTextView>
                 // Snapshot before the mutable instance is disposed: measure
                 // boundings run on this immutable copy off the main thread.
                 _appliedText = (NSAttributedString)attributedString.Copy();
+                if (measuredHeight >= 0)
+                {
+                    _measuredWidth = measuredWidth;
+                    _measuredHeight = measuredHeight;
+                }
                 NativeReaderTrace.Write($"text-apply:start length={attributedString.Length}");
                 platformView.AttributedText = attributedString;
                 NativeReaderTrace.Write("text-apply:end");

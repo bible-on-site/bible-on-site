@@ -47,11 +47,58 @@ export interface ExecSelectorView {
 	sharedFiles: string[];
 	/** Evidence names the exec extraction resolved to no known test. */
 	unmatchedEvidence: string[];
+	/**
+	 * Member-granularity uncertainty: `file → source-level type names` whose
+	 * covered nodes could not be mapped to one member (no span, unparsable
+	 * file, `#if`-twin spans, file-scope code). A changed member inside a
+	 * gapped type widens to the file's tests rather than trusting partial
+	 * member evidence.
+	 */
+	memberGaps: Record<string, string[]>;
 }
+
+/**
+ * Reduces a node's `type:` parent to the source-level type name: `+`/`/`
+ * become `.`, compiler-generated `<>…` segments drop out, and generic
+ * arity suffixes (`Foo\`1`) strip to the source name — the key must match
+ * the `typeKey` member fingerprints emit for the same type.
+ */
+const gapTypeOf = (node: { parents?: string[] }): string | null => {
+	const typeParent = node.parents?.find((parent) => parent.startsWith("type:"));
+	if (typeParent === undefined) return null;
+	const normalized = typeParent.slice("type:".length).replace(/[+/]/g, ".");
+	const kept = normalized
+		.split(".")
+		.filter((segment) => !segment.includes("<"))
+		.map((segment) => segment.replace(/`\d+$/, ""));
+	return kept.join(".");
+};
 
 /** Maps an exec tree onto selector-tree evidence — pure, no I/O. */
 export function execSelectorView(exec: ExecCoverageTree): ExecSelectorView {
 	const tests: Record<string, CoverageTreeTest> = {};
+	const gapSets = new Map<string, Set<string>>();
+	const recordGaps = (nodeIds: string[]) => {
+		for (const nodeId of nodeIds) {
+			const node = exec.nodes[nodeId];
+			// Only repo-file method nodes could ever carry a member; a node
+			// whose points leave its file (multi-file span, external path)
+			// is exactly the evidence that could not map — record the gap.
+			if (
+				node === undefined ||
+				node.kind !== "method" ||
+				node.member !== undefined ||
+				node.file === undefined ||
+				node.file.includes("\\") ||
+				node.file.includes(":") ||
+				node.file.startsWith("/")
+			) continue;
+			const type = gapTypeOf(node) ?? node.file;
+			const set = gapSets.get(node.file) ?? new Set<string>();
+			set.add(type);
+			gapSets.set(node.file, set);
+		}
+	};
 	for (const [id, entry] of Object.entries(exec.tests)) {
 		// Only per-test evidence can be claimed by one test. `shared`
 		// entries stay in the shared bucket below; `unmeasured`/`error`
@@ -59,20 +106,53 @@ export function execSelectorView(exec: ExecCoverageTree): ExecSelectorView {
 		// a test the current revision no longer runs — a file covered only
 		// by one would select nothing real, so they map nowhere either.
 		if (entry.attribution !== "per-test" || entry.stale === true) continue;
+		// file → member keys the test's nodes map into. The file key's
+		// presence marks the test's exec coverage as member-qualified for
+		// that file — even when every node mapped to nothing (empty list).
+		// Node ids come from the merged tree (a carried baseline entry may
+		// resolve through a node attached against the newer source). That is
+		// coherent: member keys are name-anchored (`Ns.Type.M#sig`), so the
+		// decl a baseline test covered maps to the same member name in the
+		// current revision — a renamed/removed decl keeps its baseline node
+		// and its added/removed member keys widen by rule anyway.
+		const members = new Map<string, Set<string>>();
+		for (const nodeId of entry.nodes) {
+			const node = exec.nodes[nodeId];
+			if (node === undefined || node.kind !== "method" || node.file === undefined) continue;
+			const keys = members.get(node.file) ?? new Set<string>();
+			if (node.member !== undefined) keys.add(node.member);
+			members.set(node.file, keys);
+		}
+		recordGaps(entry.nodes);
 		tests[id] = {
 			files: [...new Set(entry.files)].sort(),
 			automationIds: [],
 			unmappedIds: [],
 			sessions: [...new Set(entry.sessions)].sort(),
 			outcome: entry.outcome,
+			...(members.size > 0
+				? {
+						members: Object.fromEntries(
+							[...members.entries()]
+								.sort(([a], [b]) => a.localeCompare(b))
+								.map(([file, keys]) => [file, [...keys].sort()]),
+						),
+					}
+				: {}),
 		};
 	}
+	recordGaps(exec.shared.nodes);
 	return {
 		tests: Object.fromEntries(
 			Object.entries(tests).sort(([a], [b]) => a.localeCompare(b)),
 		),
 		sharedFiles: [...new Set(exec.shared.files)].sort(),
 		unmatchedEvidence: [...new Set(exec.unmatchedEvidence)].sort(),
+		memberGaps: Object.fromEntries(
+			[...gapSets.entries()]
+				.sort(([a], [b]) => a.localeCompare(b))
+				.map(([file, types]) => [file, [...types].sort()]),
+		),
 	};
 }
 

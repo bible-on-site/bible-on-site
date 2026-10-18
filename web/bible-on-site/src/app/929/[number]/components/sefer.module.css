@@ -227,6 +227,8 @@
 	flex-direction: column;
 	align-items: center;
 	justify-content: center;
+	/* Size cover text to the cover, not the viewport, so small covers don't clip */
+	container-type: inline-size;
 	/* Inset border to simulate a real hardcover frame */
 	border: 3px solid rgb(255 255 255 / 0.15);
 	border-radius: 2px;
@@ -251,21 +253,21 @@
 	align-items: center;
 	justify-content: center;
 	text-align: center;
-	padding: 2rem;
+	padding: clamp(0.75rem, 7cqi, 2rem);
 	box-sizing: border-box;
 	gap: 0.3em;
 }
 
 .coverOrnament {
 	color: rgb(255 255 255 / 0.5);
-	font-size: clamp(1rem, 2.5vw, 1.5rem);
+	font-size: clamp(0.75rem, 5cqi, 1.5rem);
 	letter-spacing: 0.3em;
 	margin-bottom: 0.5em;
 }
 
 .coverTitle {
 	color: #fff;
-	font-size: clamp(1.5rem, 4vw, 2.5rem);
+	font-size: clamp(1rem, 8cqi, 2.5rem);
 	font-weight: 700;
 	margin: 0;
 	letter-spacing: 0.05em;
@@ -286,7 +288,7 @@
 
 .coverSubtitle {
 	color: rgb(255 255 255 / 0.85);
-	font-size: clamp(0.85rem, 2vw, 1.1rem);
+	font-size: clamp(0.65rem, 4cqi, 1.1rem);
 	font-weight: 400;
 	margin: 0;
 	letter-spacing: 0.08em;
@@ -294,7 +296,7 @@
 
 .coverEdition {
 	color: rgb(255 255 255 / 0.55);
-	font-size: clamp(0.7rem, 1.5vw, 0.85rem);
+	font-size: clamp(0.55rem, 3cqi, 0.85rem);
 	font-weight: 300;
 	margin: 0.3em 0 0;
 	letter-spacing: 0.04em;
@@ -308,8 +310,8 @@
 		var(--font-tanakh-taamey), var(--font-tanakh), "Times New Roman", serif;
 	font-size: calc(1em * var(--perek-font-scale, 1));
 	letter-spacing: 0.04em;
-	word-spacing: var(--perek-word-spacing, 0.12em);
-	line-height: var(--perek-line-height, 1.5);
+	word-spacing: var(--perek-word-spacing, 0.28em);
+	line-height: var(--perek-line-height, 2);
 	padding: 8px 10px 10px;
 	text-align: justify;
 	-moz-text-align-last: right;
@@ -408,4 +410,29 @@
 	.tanahpediaLink:hover {
 		border-bottom-color: #7eb0ff;
 	}
+}
+
+.downloadHint {
+	margin: 4px 16px 0;
+	color: rgb(255 255 255 / 75%);
+	font-size: 13px;
+}
+
+.downloadHintLink {
+	padding: 0;
+	border: none;
+	background: none;
+	color: #6ea8fe;
+	font: inherit;
+	text-decoration: underline;
+	cursor: pointer;
+}
+
+.downloadError {
+	margin: 0;
+	padding: 4px 10px;
+	border-radius: 6px;
+	background: #7f1d1d;
+	color: #fff;
+	font-size: 13px;
 }

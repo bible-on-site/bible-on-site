@@ -30,25 +30,40 @@ public partial class LoadingPage : ContentPage, IAnalyticsScreenName
 
         _isLoading = true;
 
+        Task? perekLoad = null;
         try
         {
-            // Initialize config (loads API URL override from build config)
+            // The perek catalog load is pure local work (packaged-DB refresh +
+            // SQLite reads) with no dependency on config or the network — start
+            // it first so it overlaps the steps below instead of queuing behind.
+            perekLoad = PerekDataService.Instance.LoadAsync();
+
+            // Initialize config (loads API URL override from build config). Must
+            // finish before StarterService resolves GetApiUrl() for its client.
             await AppConfig.Instance.InitializeAsync();
             Console.WriteLine($"API URL: {AppConfig.Instance.GetApiUrl()}");
 
             // Load preferences (font, last perek, perek-to-load) so PerekPage can use them
             PreferencesService.Instance.Load();
 
-            // Load PerekDataService (tanah) so GetTodaysPerekId works for startup preference
-            if (!PerekDataService.Instance.IsLoaded)
-            {
-                await PerekDataService.Instance.LoadAsync();
-            }
-
-            await LoadStarterDataAsync();
+            // Starter data (GraphQL with cache/offline fallbacks) is independent
+            // of the local catalog — wait for both before opening the reader.
+            await Task.WhenAll(perekLoad, LoadStarterDataAsync());
         }
         catch (Exception ex)
         {
+            // The catalog load ran in parallel and may still be in flight here
+            // (e.g. AppConfig threw before WhenAll was awaited). Observe its
+            // fault — already faulted or faulting later — so it is never left
+            // as an unobserved task exception.
+            if (perekLoad != null)
+            {
+                _ = perekLoad.ContinueWith(
+                    t => Console.Error.WriteLine($"Perek data load failed: {t.Exception}"),
+                    CancellationToken.None,
+                    TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+                    TaskScheduler.Default);
+            }
             Console.Error.WriteLine($"Startup error: {ex}");
         }
 
