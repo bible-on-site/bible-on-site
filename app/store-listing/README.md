@@ -6,9 +6,11 @@ Canonical store-listing content for the תנ"ך על הפרק app. Hebrew copy l
 
 ## Google Play
 
-`DeployGooglePlay` and `SyncGooglePlayListing` (both in `app/devops/Build.Deploy.cs`)
-push the listing through the Play Edits API, so every app deploy keeps the
-listing in sync. The fields applied to the `iw` listing:
+`SyncGooglePlayListing` (in `app/devops/Build.Deploy.cs`) pushes the listing
+through the Play Edits API. The service account needs the Play Console
+"Store presence > Manage store listings" permission for `com.tanah.daily929`;
+without it the edit stages fine but `edits.commit` returns 403. The fields
+applied to the `iw` listing:
 
 | Play field | Source |
 | ---------- | ------ |
