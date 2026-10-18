@@ -9,7 +9,6 @@ namespace BibleOnSite.Services;
 /// <summary>Disposable derived FTS5 indexes; the installed content databases remain read-only.</summary>
 public sealed class SearchIndexService : IAsyncDisposable
 {
-    private const int ImportBatchSize = 4096;
     private readonly PerekDataService _perakim;
     private readonly PerushimNotesService? _notes;
     private readonly string _indexPath;
@@ -24,6 +23,7 @@ public sealed class SearchIndexService : IAsyncDisposable
     private readonly Task _initialization;
     private bool _disposed;
     private readonly object _buildSync = new();
+    private string? _stagedAwaitingNotes;
 
     private static readonly Lazy<SearchIndexService> _instance = new(() => new(PerekDataService.Instance,
         PerushimNotesService.Instance, Path.Join(FileSystem.Current.CacheDirectory, "hebrew-search.sqlite")));
@@ -36,6 +36,10 @@ public sealed class SearchIndexService : IAsyncDisposable
         _indexPath = indexPath;
         _index = new SQLiteAsyncConnection(indexPath);
         _initialization = Task.Run(InitializeIndexAsync);
+        if (notes != null)
+        {
+            notes.OperationCompleted += OnNotesOperationCompleted;
+        }
     }
 
     public bool CommentaryAvailable { get; private set; }
@@ -346,20 +350,36 @@ public sealed class SearchIndexService : IAsyncDisposable
     private async Task EnsureIndexAsync(string table)
     {
         await _initialization;
-        if (table == "verses" && _notes?.IsAvailable == true)
+        string? stagedIndex = null;
+        var notesSettled = true;
+        if (table == "verses" && _notes != null)
         {
             // The delivered DB includes both indexes. Adopt before building
             // verses, preserving the notes -> verses lock order used below.
-            await _gates["notes"].WaitAsync();
-            try
+            // A staged file whose notes fingerprint mismatches (or that is left
+            // behind while notes are unavailable) can still supply the verses
+            // table — the fingerprints are generated independently.
+            if (_notes.IsAvailable)
             {
-                var source = await _notes.GetSearchConnectionAsync();
-                if (source != null)
+                await _gates["notes"].WaitAsync();
+                try
                 {
-                    await TryAdoptDeliveredIndexAsync(source);
+                    var source = await _notes.GetSearchConnectionAsync();
+                    if (source != null)
+                    {
+                        stagedIndex = await TryAdoptDeliveredIndexAsync(source);
+                    }
+                    stagedIndex ??= _notes.PeekDeliveredIndexPath();
                 }
+                finally { _gates["notes"].Release(); }
             }
-            finally { _gates["notes"].Release(); }
+            else
+            {
+                // No notes gate: pack initialization can block on delivery, and
+                // a plain file probe keeps verse search usable meanwhile.
+                stagedIndex = _notes.PeekDeliveredIndexPath();
+                notesSettled = false;
+            }
         }
         await _gates[table].WaitAsync();
         try
@@ -367,15 +387,33 @@ public sealed class SearchIndexService : IAsyncDisposable
             await _perakim.LoadAsync();
             if (table == "verses")
             {
-                await BuildVerseIndexAsync(await _perakim.GetSearchConnectionAsync());
+                var source = await _perakim.GetSearchConnectionAsync();
+                if (stagedIndex != null)
+                {
+                    await TryAdoptDeliveredVersesAsync(stagedIndex, source);
+                    // The staged file is spent once both halves are settled —
+                    // never leave ~300 MB behind. While notes are still
+                    // undetermined its notes half may yet be adopted, so the
+                    // notes path removes it instead.
+                    if (notesSettled)
+                    {
+                        DeleteStagedIndexFile(stagedIndex);
+                    }
+                    else
+                    {
+                        ParkStagedIndex(stagedIndex);
+                    }
+                }
+                await BuildVerseIndexAsync(source);
             }
             else if (_notes != null)
             {
                 var connection = await _notes.GetSearchConnectionAsync();
                 CommentaryAvailable = false;
+                string? leftover;
                 if (connection != null)
                 {
-                    await TryAdoptDeliveredIndexAsync(connection);
+                    leftover = await TryAdoptDeliveredIndexAsync(connection);
                     var expected = await FingerprintAsync(connection, "build_timestamp");
                     CommentaryAvailable = await _index.ExecuteScalarAsync<string>(
                         "SELECT fingerprint FROM search_metadata WHERE name = 'notes'") == expected;
@@ -385,8 +423,27 @@ public sealed class SearchIndexService : IAsyncDisposable
                 else
                 {
                     // The notes pack was rejected or never arrived — drop the
-                    // stale table so the obsolete index does not linger.
+                    // stale table so the obsolete index does not linger. The
+                    // staged index file can outlive its pack (rejection races,
+                    // partial cleanup) — its verses half may still adopt.
                     await ClearTableAsync("notes");
+                    leftover = _notes.PeekDeliveredIndexPath();
+                }
+                if (leftover != null)
+                {
+                    // A staged file the notes generation cannot adopt can
+                    // still carry the matching verses table — adopt it
+                    // before the file is removed. The notes gate is already
+                    // held; taking the verses gate keeps the documented
+                    // notes -> verses order.
+                    await _gates["verses"].WaitAsync();
+                    try
+                    {
+                        await TryAdoptDeliveredVersesAsync(leftover,
+                            await _perakim.GetSearchConnectionAsync());
+                    }
+                    finally { _gates["verses"].Release(); }
+                    DeleteStagedIndexFile(leftover);
                 }
             }
         }
@@ -423,8 +480,11 @@ public sealed class SearchIndexService : IAsyncDisposable
     /// Adopts the prebuilt index staged with the notes pack when its stored
     /// fingerprint matches the installed notes generation — replacing the
     /// working index by atomic rename instead of re-importing ~363K notes.
+    /// Returns the staged path when the file was left behind (already-current
+    /// or mismatched notes index) so the caller can still mine its verses
+    /// table before removal; null when nothing is staged or the file moved.
     /// </summary>
-    private async Task TryAdoptDeliveredIndexAsync(SQLiteAsyncConnection notesConnection)
+    private async Task<string?> TryAdoptDeliveredIndexAsync(SQLiteAsyncConnection notesConnection)
     {
         var expected = await FingerprintAsync(notesConnection, "build_timestamp");
         var stored = await _index.ExecuteScalarAsync<string>(
@@ -432,14 +492,14 @@ public sealed class SearchIndexService : IAsyncDisposable
         if (stored == expected)
         {
             _ready["notes"] = expected;
-            // Working index already matches — the staged copy is dead weight.
-            await DeleteStagedIndexAsync();
-            return;
+            // Working index already matches — the staged copy can only still
+            // serve the independently fingerprinted verses table.
+            return _notes!.PeekDeliveredIndexPath();
         }
         var deliveredPath = await _notes!.RestoreDeliveredIndexPathAsync();
         if (deliveredPath == null || string.Equals(deliveredPath, _indexPath, StringComparison.Ordinal))
         {
-            return;
+            return null;
         }
         // Read the staged file's fingerprint without disturbing _index.
         string? deliveredFp = null;
@@ -463,10 +523,9 @@ public sealed class SearchIndexService : IAsyncDisposable
         }
         if (deliveredFp != expected)
         {
-            // Index generated for another notes generation — it can never be
-            // adopted, so the staged file must not linger (~300 MB of dead data).
-            await DeleteStagedIndexAsync();
-            return;
+            // Index generated for another notes generation — never adoptable
+            // as a whole, but its verses table can still match this device.
+            return deliveredPath;
         }
 
         // Swap under both gates: a concurrent verses build/query may hold _index.
@@ -485,22 +544,143 @@ public sealed class SearchIndexService : IAsyncDisposable
         {
             _gates["verses"].Release();
         }
-        await DeleteStagedIndexAsync();
+        return null;
+    }
+
+    /// <summary>
+    /// Adopts only the verses tables out of the staged delivered index when its
+    /// 'verses' fingerprint matches the installed tanah generation — the
+    /// fallback when the notes fingerprint mismatched or no notes pack is
+    /// usable. All writes land in one transaction under the verses gate; any
+    /// absence, mismatch or unreadable file falls back to the regular build.
+    /// </summary>
+    private async Task TryAdoptDeliveredVersesAsync(string stagedPath, SQLiteAsyncConnection source)
+    {
+        const string table = "verses";
+        try
+        {
+            var fingerprint = await FingerprintAsync(source, "generated_at");
+            if (_ready.GetValueOrDefault(table) == fingerprint)
+            {
+                return;
+            }
+            var stored = await _index.ExecuteScalarAsync<string>(
+                "SELECT fingerprint FROM search_metadata WHERE name = ?", table);
+            if (stored == fingerprint)
+            {
+                _ready[table] = fingerprint;
+                return;
+            }
+            if (string.Equals(stagedPath, _indexPath, StringComparison.Ordinal))
+            {
+                return;
+            }
+            var timer = Stopwatch.StartNew();
+            await _index.ExecuteAsync("ATTACH DATABASE ? AS staged", stagedPath);
+            try
+            {
+                var stagedFingerprint = await _index.ExecuteScalarAsync<string>(
+                    $"SELECT fingerprint FROM staged.search_metadata WHERE name = '{table}'");
+                if (stagedFingerprint != fingerprint)
+                {
+                    return;
+                }
+                // Documents hold the plain text; the FTS rows index its
+                // normalized form, so adopted rows are indistinguishable from a
+                // fresh build. A 'rebuild' would wrongly index the voweled text.
+                var docs = await _index.QueryAsync<DocumentRow>(
+                    $"SELECT rowid AS RowId, Text FROM staged.{table}_documents ORDER BY rowid");
+                var tokens = await Task.Run(() => NormalizeTokens(docs));
+                await RunImportTransactionAsync(connection =>
+                {
+                    ResetIndexTable(connection, table);
+                    connection.Execute(
+                        $"INSERT INTO main.{table}_documents (rowid, Text, PerekId, PasukNum, PerushId, SeferId) " +
+                        $"SELECT rowid, Text, PerekId, PasukNum, PerushId, SeferId FROM staged.{table}_documents");
+                    for (var i = 0; i < docs.Count; i++)
+                    {
+                        connection.Insert(new VerseTokenEntry { RowId = docs[i].RowId, Text = tokens[i] });
+                    }
+                    PublishIndexTable(connection, table, fingerprint);
+                });
+                _ready[table] = fingerprint;
+                Console.WriteLine($"Search index '{table}' adopted in {timer.Elapsed.TotalSeconds:F1}s.");
+            }
+            finally
+            {
+                await _index.ExecuteAsync("DETACH DATABASE staged");
+            }
+        }
+        catch (Exception ex) when (ex is SQLiteException or IOException or UnauthorizedAccessException)
+        {
+            // A missing, unreadable or corrupt staged file simply means the
+            // regular build path runs instead.
+            Console.Error.WriteLine($"Staged verses index not adoptable: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Settles a staged index parked while notes were undetermined each time a
+    /// notes operation ends, so it never waits for a later search. Never starts
+    /// notes delivery itself; DisposeAsync drains it with the builds.
+    /// </summary>
+    private void OnNotesOperationCompleted()
+    {
+        lock (_buildSync)
+        {
+            var stagedPath = Interlocked.Exchange(ref _stagedAwaitingNotes, null);
+            if (stagedPath != null && !_disposed)
+            {
+                _buildTasks["staged"] = Task.Run(() => SettleStagedIndexAsync(stagedPath));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Deletes the staged file if notes are settled unavailable, else parks it
+    /// for the next notes operation end — even while notes are available, so a
+    /// later removal still settles it. Parked before the probe so an operation
+    /// ending in between still settles it.
+    /// </summary>
+    private void ParkStagedIndex(string stagedPath)
+    {
+        Interlocked.Exchange(ref _stagedAwaitingNotes, stagedPath);
+        if (_notes!.RunIfSettledUnavailable(() => DeleteStagedIndexFile(stagedPath)))
+        {
+            Interlocked.CompareExchange(ref _stagedAwaitingNotes, null, stagedPath);
+        }
+    }
+
+    private async Task SettleStagedIndexAsync(string stagedPath)
+    {
+        // notes -> verses order: neither path may be reading the file meanwhile.
+        await _gates["notes"].WaitAsync();
+        try
+        {
+            await _gates["verses"].WaitAsync();
+            // Another operation may hold the pack again; its end retries.
+            try { ParkStagedIndex(stagedPath); }
+            finally { _gates["verses"].Release(); }
+        }
+        finally { _gates["notes"].Release(); }
     }
 
     /// <summary>
     /// Removes the staged delivered index once it can serve no purpose: either
-    /// the working index already covers this content generation, or the staged
-    /// file was built for a different one and would sit unadopted forever.
+    /// its usable tables were adopted, or it was built for a different content
+    /// generation and would sit unadopted forever (~300 MB of dead data).
     /// </summary>
-    private async Task DeleteStagedIndexAsync()
+    private void DeleteStagedIndexFile(string stagedPath)
     {
         try
         {
-            var path = await _notes!.GetDeliveredIndexPathAsync();
-            if (path != null && !string.Equals(path, _indexPath, StringComparison.Ordinal))
+            if (!string.Equals(stagedPath, _indexPath, StringComparison.Ordinal))
             {
-                File.Delete(path);
+                // A staged copy can be a WAL-mode file: ATTACHing it for reads
+                // leaves -wal/-shm sidecars that would otherwise linger.
+                File.Delete(stagedPath);
+                File.Delete(stagedPath + "-wal");
+                File.Delete(stagedPath + "-shm");
             }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -519,11 +699,11 @@ public sealed class SearchIndexService : IAsyncDisposable
         {
             return;
         }
-        await _index.ExecuteAsync("DELETE FROM search_metadata WHERE name = ?", table);
-        await _index.ExecuteAsync($"DROP TABLE IF EXISTS {table}_vocab");
-        await _index.ExecuteAsync($"DROP TABLE IF EXISTS {table}");
-        await _index.ExecuteAsync($"DROP TABLE IF EXISTS {table}_content");
-        await _index.ExecuteAsync($"DROP TABLE IF EXISTS {table}_documents");
+        await _index.ExecuteAsync("DELETE FROM main.search_metadata WHERE name = ?", table);
+        await _index.ExecuteAsync($"DROP TABLE IF EXISTS main.{table}_vocab");
+        await _index.ExecuteAsync($"DROP TABLE IF EXISTS main.{table}");
+        await _index.ExecuteAsync($"DROP TABLE IF EXISTS main.{table}_content");
+        await _index.ExecuteAsync($"DROP TABLE IF EXISTS main.{table}_documents");
     }
 
     private async Task BuildVerseIndexAsync(SQLiteAsyncConnection source)
@@ -538,64 +718,143 @@ public sealed class SearchIndexService : IAsyncDisposable
         if (stored != fingerprint)
         {
             var timer = Stopwatch.StartNew();
-            await _index.ExecuteAsync("DELETE FROM search_metadata WHERE name = ?", table);
-            await _index.ExecuteAsync($"DROP TABLE IF EXISTS {table}_vocab");
-            await _index.ExecuteAsync($"DROP TABLE IF EXISTS {table}");
-            await _index.ExecuteAsync($"DROP TABLE IF EXISTS {table}_content");
-            await _index.ExecuteAsync($"DROP TABLE IF EXISTS {table}_documents");
-            // Keep one original text copy. An external-content FTS table stores
-            // only tokens and positions instead of duplicating every note.
-            // _content is a reserved FTS shadow-table name. Apple's defensive
-            // SQLite mode rejects writes to it even with external content.
-            await _index.ExecuteAsync($"CREATE TABLE {table}_documents (rowid INTEGER PRIMARY KEY, Text TEXT, " +
-                "PerekId INTEGER, PasukNum INTEGER, PerushId INTEGER, SeferId INTEGER)");
-            await _index.ExecuteAsync($"CREATE VIRTUAL TABLE {table} USING fts5(Text, content='{table}_documents', content_rowid='rowid')");
             var verses = await source.QueryAsync<IndexRow>("SELECT perek_id AS PerekId, pasuk_id AS PasukNum, " +
                 "group_concat(value, ' ') AS Body FROM (SELECT s.perek_id, s.pasuk_id, v.value " +
                 "FROM tanah_pasuk_segment s JOIN tanah_pasuk_segment_value v ON v.id = s.id " +
                 "WHERE s.segment_type IN ('qri','ktiv') ORDER BY s.perek_id, s.pasuk_id, s.id) GROUP BY perek_id, pasuk_id");
-            foreach (var batch in verses.Chunk(ImportBatchSize))
+            // PlainText + Normalize are pure per-row transforms — spread them
+            // over every core while the INSERTs stay serialized on the single
+            // sqlite-net write connection. Row order is preserved, so the
+            // parallelized index is identical to a serial build.
+            var prepared = await Task.Run(() => PrepareVersesForImport(verses,
+                perekId => _perakim.GetPerek(perekId)?.SeferId));
+            await RunImportTransactionAsync(connection =>
             {
-                await InsertVersesAsync(batch);
-            }
-            await _index.ExecuteAsync($"CREATE VIRTUAL TABLE {table}_vocab USING fts5vocab({table}, 'row')");
-            await _index.ExecuteAsync($"INSERT INTO {table}({table}) VALUES ('optimize')");
-            // Publish only a complete import; an interrupted build is rebuilt on next launch.
-            await _index.ExecuteAsync("INSERT OR REPLACE INTO search_metadata VALUES (?, ?)", table, fingerprint);
+                ResetIndexTable(connection, table);
+                foreach (var verse in prepared)
+                {
+                    if (verse is not { } row)
+                    {
+                        continue;
+                    }
+                    var entry = new VerseIndexEntry
+                    {
+                        Text = row.Text,
+                        PerekId = row.PerekId,
+                        PasukNum = row.PasukNum,
+                        PerushId = row.PerushId,
+                        SeferId = row.SeferId,
+                    };
+                    // Insert caches a prepared statement for each mapped table.
+                    // Execute would prepare the same SQL again for every verse.
+                    connection.Insert(entry);
+                    connection.Insert(new VerseTokenEntry { RowId = entry.RowId, Text = row.Tokens });
+                }
+                PublishIndexTable(connection, table, fingerprint);
+            });
             Console.WriteLine($"Search index '{table}' complete in {timer.Elapsed.TotalSeconds:F1}s.");
         }
         _ready[table] = fingerprint;
     }
 
-    private Task InsertVersesAsync(IEnumerable<IndexRow> rows) => _index.RunInTransactionAsync(connection =>
+    /// <summary>
+    /// Runs a whole table import in one transaction. The delivered-index
+    /// pipeline builds this same file with synchronous=OFF and
+    /// temp_store=MEMORY; mirror those for the import window only — the
+    /// journal stays WAL and NORMAL durability is restored afterwards. The
+    /// interrupted-build contract (fingerprint publishes last) already covers
+    /// a lost commit. locking_mode=EXCLUSIVE is deliberately not mirrored:
+    /// searches share this database through the connection pool, and the
+    /// pipeline's 1M-page cache_size is a batch-build setting a device does
+    /// not need for ~23K rows.
+    /// </summary>
+    private async Task RunImportTransactionAsync(Action<SQLiteConnection> import)
     {
-        foreach (var row in rows)
+        await _index.ExecuteAsync("PRAGMA synchronous=OFF");
+        await _index.ExecuteAsync("PRAGMA temp_store=MEMORY");
+        try
         {
-            var perek = _perakim.GetPerek(row.PerekId);
-            if (perek == null)
-            {
-                continue;
-            }
-            var body = SearchText.PlainText(row.Body);
-            var entry = new VerseIndexEntry();
-            entry.Text = body;
-            entry.PerekId = row.PerekId;
-            entry.PasukNum = row.PasukNum;
-            entry.PerushId = row.PerushId;
-            entry.SeferId = perek.SeferId;
-            // Insert caches a prepared statement for each mapped table. Execute
-            // would prepare the same SQL again for every verse.
-            connection.Insert(entry);
-            var tokens = new VerseTokenEntry();
-            tokens.RowId = entry.RowId;
-            tokens.Text = SearchText.Normalize(body);
-            connection.Insert(tokens);
+            await _index.RunInTransactionAsync(import);
         }
-    });
+        finally
+        {
+            await _index.ExecuteAsync("PRAGMA temp_store=DEFAULT");
+            await _index.ExecuteAsync("PRAGMA synchronous=NORMAL");
+        }
+    }
+
+    /// <summary>
+    /// Precomputes each verse's plain text, normalized tokens and sefer in
+    /// parallel — the transforms are pure and the pre-sized array keeps row
+    /// order identical to a serial pass for the single-connection inserts.
+    /// </summary>
+    internal static PreparedVerse?[] PrepareVersesForImport(IReadOnlyList<IndexRow> rows, Func<int, int?> seferOf)
+    {
+        var prepared = new PreparedVerse?[rows.Count];
+        Parallel.For(0, rows.Count, i =>
+        {
+            var row = rows[i];
+            if (seferOf(row.PerekId) is not { } seferId)
+            {
+                return;
+            }
+            var text = SearchText.PlainText(row.Body);
+            prepared[i] = new PreparedVerse(text, SearchText.Normalize(text),
+                row.PerekId, row.PasukNum, row.PerushId, seferId);
+        });
+        return prepared;
+    }
+
+    /// <summary>Normalizes copied document text across cores, preserving row order.</summary>
+    private static string[] NormalizeTokens(IReadOnlyList<DocumentRow> docs)
+    {
+        var tokens = new string[docs.Count];
+        Parallel.For(0, docs.Count, i => tokens[i] = SearchText.Normalize(docs[i].Text));
+        return tokens;
+    }
+
+    /// <summary>
+    /// Drops and recreates the FTS + document pair for a table inside the
+    /// import transaction. Keep one original text copy: an external-content
+    /// FTS table stores only tokens and positions instead of duplicating every
+    /// note. _content is a reserved FTS shadow-table name — Apple's defensive
+    /// SQLite mode rejects writes to it even with external content.
+    /// Every statement is qualified with `main.`: while a delivered index is
+    /// ATTACHed, SQLite resolves an unqualified name across all schemas and
+    /// would drop the staged table when main has none.
+    /// </summary>
+    private static void ResetIndexTable(SQLiteConnection connection, string table)
+    {
+        connection.Execute("DELETE FROM main.search_metadata WHERE name = ?", table);
+        connection.Execute($"DROP TABLE IF EXISTS main.{table}_vocab");
+        connection.Execute($"DROP TABLE IF EXISTS main.{table}");
+        connection.Execute($"DROP TABLE IF EXISTS main.{table}_content");
+        connection.Execute($"DROP TABLE IF EXISTS main.{table}_documents");
+        connection.Execute($"CREATE TABLE main.{table}_documents (rowid INTEGER PRIMARY KEY, Text TEXT, " +
+            "PerekId INTEGER, PasukNum INTEGER, PerushId INTEGER, SeferId INTEGER)");
+        connection.Execute($"CREATE VIRTUAL TABLE main.{table} USING fts5(Text, content='{table}_documents', content_rowid='rowid')");
+    }
+
+    /// <summary>
+    /// Vocabulary, FTS merge and fingerprint — published only after a complete
+    /// import; an interrupted build is rebuilt on next launch. `main.` keeps
+    /// the publish targeting the working index while a delivered copy is
+    /// attached.
+    /// </summary>
+    private static void PublishIndexTable(SQLiteConnection connection, string table, string fingerprint)
+    {
+        connection.Execute($"CREATE VIRTUAL TABLE main.{table}_vocab USING fts5vocab({table}, 'row')");
+        connection.Execute($"INSERT INTO main.{table}({table}) VALUES ('optimize')");
+        connection.Execute("INSERT OR REPLACE INTO main.search_metadata VALUES (?, ?)", table, fingerprint);
+    }
 
     public async ValueTask DisposeAsync()
     {
         Task[] builds;
+        if (_notes != null)
+        {
+            _notes.OperationCompleted -= OnNotesOperationCompleted;
+        }
         lock (_buildSync)
         {
             _disposed = true;
@@ -643,13 +902,24 @@ public sealed class SearchIndexService : IAsyncDisposable
     [Table("verses")]
     private sealed class VerseTokenEntry : TokenIndexEntry;
 
-    private sealed class IndexRow
+    /// <summary>One verse's precomputed index payload: document text plus the
+    /// normalized token string the FTS table indexes.</summary>
+    internal readonly record struct PreparedVerse(string Text, string Tokens,
+        int PerekId, int PasukNum, int PerushId, int SeferId);
+
+    internal sealed class IndexRow
     {
         public long RowId { get; set; }
         public int PerekId { get; set; }
         public int PasukNum { get; set; }
         public int PerushId { get; set; }
         public string Body { get; set; } = string.Empty;
+    }
+
+    private sealed class DocumentRow
+    {
+        public long RowId { get; set; }
+        public string Text { get; set; } = string.Empty;
     }
 
     private sealed class VocabularyRow
