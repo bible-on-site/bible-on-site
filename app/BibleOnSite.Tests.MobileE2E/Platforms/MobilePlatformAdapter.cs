@@ -24,6 +24,28 @@ public abstract class MobilePlatformAdapter
         return LocateAutomationId(id);
     }
     protected abstract By LocateAutomationId(string id);
+
+    /// <summary>
+    /// Like <see cref="AutomationId"/>, narrowed on the device to elements whose
+    /// text equals <paramref name="text"/>. Callers still check the text.
+    /// </summary>
+    public By AutomationIdWithText(string id, string text)
+    {
+        CoverageEvidence.RecordAutomationId(id);
+        return LocateAutomationIdWithText(id, text);
+    }
+    protected virtual By LocateAutomationIdWithText(string id, string text) => LocateAutomationId(id);
+
+    /// <summary>
+    /// Like <see cref="AutomationId"/>, narrowed on the device to displayed
+    /// elements. Callers still check the viewport.
+    /// </summary>
+    public By DisplayedAutomationId(string id)
+    {
+        CoverageEvidence.RecordAutomationId(id);
+        return LocateDisplayedAutomationId(id);
+    }
+    protected virtual By LocateDisplayedAutomationId(string id) => LocateAutomationId(id);
     /// <summary>
     /// One locator matching any of several automation ids, so a "none of these
     /// is visible" check costs a single device query instead of one per id.
@@ -376,6 +398,14 @@ public sealed class IosPlatformAdapter : MobilePlatformAdapter
     public override bool IsChecked(AppiumElement element) => element.GetAttribute("value") == "1";
     public override void GoBackFromFocusedVerse(AppiumDriver driver) => Tap(driver, driver.FindElement(AutomationId("SelectionBackButton")));
     protected override By LocateAutomationId(string id) => MobileBy.AccessibilityId(id);
+    // WDA re-snapshots every match to build a findElements response, so a
+    // lookup costs matches x tree size; filter natively to return only targets.
+    protected override By LocateAutomationIdWithText(string id, string text) => new ByIosNSPredicate(
+        $"name == {PredicateLiteral(id)} AND (value == {PredicateLiteral(text)} OR label == {PredicateLiteral(text)})");
+    protected override By LocateDisplayedAutomationId(string id) =>
+        new ByIosNSPredicate($"name == {PredicateLiteral(id)} AND visible == 1");
+    internal static string PredicateLiteral(string value) =>
+        $"'{value.Replace(@"\", @"\\").Replace("'", @"\'")}'";
     // An NSPredicate on name (the accessibility identifier) runs natively in
     // XCTest; XPath would make WDA serialize the whole hierarchy first.
     // Appium.WebDriver 9 has no MobileBy factory for it, only the By type.
