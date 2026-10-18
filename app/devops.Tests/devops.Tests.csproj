@@ -14,6 +14,11 @@
   <ItemGroup>
     <!-- Exercise the recorder counter implementation without starting its native endpoint. -->
     <Compile Include="../BibleOnSite.E2eCoverage/VisitCounters.cs" Link="VisitCounters.cs" />
+    <!-- RequiredToken token-source resolution: Recorder.cs comes along because
+         CoverageEndpoint references AltCover.Recorder.Instance. Instance is
+         never touched, so its static constructor never starts the listener. -->
+    <Compile Include="../BibleOnSite.E2eCoverage/CoverageEndpoint.cs" Link="CoverageEndpoint.cs" />
+    <Compile Include="../BibleOnSite.E2eCoverage/Recorder.cs" Link="Recorder.cs" />
     <ProjectReference Include="../devops/_build.csproj" />
     <PackageReference Include="xunit.v3" Version="4.0.2" />
   </ItemGroup>
