@@ -19,8 +19,10 @@ import { cycles } from "./db/cycles";
  * days between one cycle's end and the next cycle's start.
  *
  * Review days are dates inside a cycle with no scheduled perek (weekend or
- * shifted study days in the schedule data). They review the most recently
- * scheduled perek of the same cycle — never a newly assigned chapter.
+ * shifted study days in the schedule data). They review all perakim studied
+ * in the same calendar week (Sunday through the review day) — never a newly
+ * assigned chapter. When a gap leaves a week without any study day, the
+ * review falls back to the most recently scheduled perek.
  *
  * Cycles beyond the confirmed data follow the established scheduling rules:
  * every cycle starts on Sunday exactly 1302 days after the previous one, with
@@ -55,8 +57,10 @@ export interface CalendarDay {
 	/** Day of week: 0=Sunday … 6=Saturday. */
 	dayOfWeek: number;
 	status: CalendarDayStatus;
-	/** Scheduled (or reviewed) perek, when status is study/review. */
+	/** Scheduled perek on study days; last perek of the review set on review days. */
 	perekId?: number;
+	/** Every perek the review covers — the week's studied perakim (#2365). */
+	reviewPerekIds?: number[];
 	/** Owning cycle number, when the date falls inside a cycle. */
 	cycle?: number;
 	/** True when the owning cycle is projected beyond confirmed data. */
@@ -232,7 +236,26 @@ function resolveInCycle(
 			return { ...base, status: "study", perekId: entry.perekId, cycle: cycleNumber };
 		}
 	}
-	// In-cycle day without its own chapter: review the previous scheduled one.
+	// In-cycle day without its own chapter: review the whole studied week
+	// (Sunday of this week through yesterday), not just the last perek (#2365).
+	const weekStart = date.add(-base.dayOfWeek);
+	const weekPerekIds = cycle.entries
+		.filter(
+			(entry) =>
+				entry.date.deltaDays(weekStart) >= 0 &&
+				entry.date.deltaDays(date) < 0,
+		)
+		.map((entry) => entry.perekId);
+	if (weekPerekIds.length > 0) {
+		return {
+			...base,
+			status: "review",
+			perekId: weekPerekIds[weekPerekIds.length - 1],
+			reviewPerekIds: weekPerekIds,
+			cycle: cycleNumber,
+		};
+	}
+	// A gap that left no study day this week: fall back to the last perek.
 	for (let i = cycle.entries.length - 1; i >= 0; i -= 1) {
 		const entry = cycle.entries[i];
 		if (date.deltaDays(entry.date) > 0) {
@@ -240,6 +263,7 @@ function resolveInCycle(
 				...base,
 				status: "review",
 				perekId: entry.perekId,
+				reviewPerekIds: [entry.perekId],
 				cycle: cycleNumber,
 			};
 		}
@@ -263,10 +287,22 @@ function resolveProjectedDay(
 	if (perekIndex >= PERAKIM_PER_CYCLE) {
 		return { ...base, status: "none", cycle: cycleNumber, projected: true };
 	}
+	const reviewPerekIds = isStudyDay
+		? undefined
+		: Array.from(
+				{
+					length: Math.min(
+						STUDY_DAYS_PER_WEEK,
+						PERAKIM_PER_CYCLE - week * STUDY_DAYS_PER_WEEK,
+					),
+				},
+				(_, i) => week * STUDY_DAYS_PER_WEEK + i + 1,
+			);
 	return {
 		...base,
 		status: isStudyDay ? "study" : "review",
 		perekId: perekIndex + 1,
+		reviewPerekIds,
 		cycle: cycleNumber,
 		projected: true,
 	};
