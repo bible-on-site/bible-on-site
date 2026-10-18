@@ -143,7 +143,12 @@ export function getCycle(cycleNumber: number): StudyCycle {
 		start = start.add(CYCLE_SPAN_DAYS);
 		number += 1;
 	}
-	return { number: cycleNumber, start, end: start.add(CYCLE_DAYS - 1), projected: true };
+	return {
+		number: cycleNumber,
+		start,
+		end: start.add(CYCLE_DAYS - 1),
+		projected: true,
+	};
 }
 
 /**
@@ -233,7 +238,12 @@ function resolveInCycle(
 ): CalendarDay {
 	for (const entry of cycle.entries) {
 		if (entry.dateNumber === base.dateNumber) {
-			return { ...base, status: "study", perekId: entry.perekId, cycle: cycleNumber };
+			return {
+				...base,
+				status: "study",
+				perekId: entry.perekId,
+				cycle: cycleNumber,
+			};
 		}
 	}
 	// In-cycle day without its own chapter: review the whole studied week
@@ -242,10 +252,10 @@ function resolveInCycle(
 	const weekPerekIds = cycle.entries
 		.filter(
 			(entry) =>
-				entry.date.deltaDays(weekStart) >= 0 &&
-				entry.date.deltaDays(date) < 0,
+				entry.date.deltaDays(weekStart) >= 0 && entry.date.deltaDays(date) < 0,
 		)
 		.map((entry) => entry.perekId);
+	/* istanbul ignore else: confirmed cycles never leave a study-less week */
 	if (weekPerekIds.length > 0) {
 		return {
 			...base,
@@ -256,6 +266,7 @@ function resolveInCycle(
 		};
 	}
 	// A gap that left no study day this week: fall back to the last perek.
+	/* istanbul ignore next: defensive fallback, unreachable in confirmed data */
 	for (let i = cycle.entries.length - 1; i >= 0; i -= 1) {
 		const entry = cycle.entries[i];
 		if (date.deltaDays(entry.date) > 0) {
@@ -362,8 +373,8 @@ export function prevMonth({ year, month }: MonthRef): MonthRef {
 	}
 	return index > 0
 		? { year, month: order[index - 1] }
-		// Every Hebrew year ends with Elul (uniform month 12).
-		: { year: year - 1, month: 12 };
+		: // Every Hebrew year ends with Elul (uniform month 12).
+			{ year: year - 1, month: 12 };
 }
 
 /**
