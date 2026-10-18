@@ -320,6 +320,14 @@ export function LearningCalendar({
 				))}
 			</div>
 
+			<a
+				className={styles.downloadLink}
+				href={`/api/calendar-pdf?month=${formatMonthParam(viewed)}&view=${viewMode}&cycle=${resolvedCycle}`}
+				download
+			>
+				הורדת PDF
+			</a>
+
 			<div className={styles.controls}>
 				<button
 					type="button"

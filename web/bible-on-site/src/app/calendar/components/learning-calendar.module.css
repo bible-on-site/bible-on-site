@@ -360,3 +360,11 @@ button.miniCell:hover {
 	border-color: var(--link-accent);
 	font-weight: 700;
 }
+
+.downloadLink {
+	display: inline-block;
+	align-self: center;
+	font-size: 0.9rem;
+	color: var(--primary-color, #1668dc);
+	text-decoration: underline;
+}
