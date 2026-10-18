@@ -39,9 +39,11 @@ import {
 	type PerekSummaries,
 } from "@/app/929/[number]/actions";
 import { BookshelfModal } from "@/app/components/Bookshelf";
+import { SeferCoverContent } from "@/app/components/reading/SeferCoverContent";
 import type { SefarimItem } from "@/data/db/tanah-view-types";
 import type { PerekObj } from "@/data/perek-dto";
 import { getSeferColor } from "@/data/sefer-colors";
+import { SEFER_COVER_EDITION, SEFER_COVER_SUBTITLE } from "@/data/sefer-cover";
 
 import type { ArticleSummary } from "@/lib/articles";
 import { getDivineNameMaskingSettings } from "@/lib/divine-name-settings";
@@ -347,15 +349,11 @@ const Sefer = (props: {
 			aria-label="עטיפה קדמית"
 			style={{ "--cover-color": seferColor } as React.CSSProperties}
 		>
-			<div className={styles.coverInner}>
-				<div className={styles.coverContent}>
-					<div className={styles.coverOrnament}>✦</div>
-					<h1 className={styles.coverTitle}>ספר {perekObj.sefer}</h1>
-					<div className={styles.coverDivider} />
-					<p className={styles.coverSubtitle}>מקראות גדולות</p>
-					<p className={styles.coverEdition}>עם מאמרים מרבנים בני זמנינו</p>
-				</div>
-			</div>
+			<SeferCoverContent
+				seferName={perekObj.sefer}
+				subtitle={SEFER_COVER_SUBTITLE}
+				edition={SEFER_COVER_EDITION}
+			/>
 		</section>
 	);
 	const backCover = (

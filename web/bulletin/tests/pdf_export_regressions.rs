@@ -30,6 +30,7 @@ fn full_sefer(sefer: &str, perakim: Vec<pdf::PdfPerekInput>) -> pdf::PdfRequest 
         include_cover: true,
         include_toc: true,
         cover_accent_hex: "8B0000".to_string(),
+        cover_text: pdf::PdfCoverText::default(),
     }
 }
 
@@ -128,6 +129,7 @@ fn image_free_and_single_image_ranges_render() {
             include_cover: false,
             include_toc: false,
             cover_accent_hex: String::new(),
+            cover_text: pdf::PdfCoverText::default(),
         };
         let buf = pdf::build_pdf(&req, &fonts_dir()).unwrap();
         assert_eq!(&buf[0..5], b"%PDF-");
@@ -148,6 +150,7 @@ fn corrupt_image_is_reported_not_dropped() {
         include_cover: false,
         include_toc: false,
         cover_accent_hex: String::new(),
+        cover_text: pdf::PdfCoverText::default(),
     };
     let err = pdf::build_pdf(&req, &fonts_dir()).unwrap_err().to_string();
     assert!(err.contains("Typst compilation failed"), "{err}");
@@ -163,6 +166,7 @@ fn bold_quote_followed_by_parenthesized_source_compiles() {
         include_cover: false,
         include_toc: false,
         cover_accent_hex: String::new(),
+        cover_text: pdf::PdfCoverText::default(),
     };
     assert!(pdf::build_pdf(&req, &fonts_dir()).is_ok());
 }

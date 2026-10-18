@@ -44,10 +44,24 @@ pub struct GeneratePdfRequest {
     #[serde(default)]
     pub cover_accent_hex: Option<String>,
 
+    /// Front-cover lines sent by the website so the PDF cover matches its Sefer reader cover.
+    #[serde(default)]
+    pub cover: Option<CoverText>,
+
     /// Website-rendered pesukim (קרי/כתיב structure, user's divine-name masking)
     /// and perek illustrations. Perakim missing here use the embedded text.
     #[serde(default)]
     pub perakim_content: Vec<PerekContentInput>,
+}
+
+/// Front-cover lines, top to bottom; omitted lines are left off the cover.
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct CoverText {
+    pub branding: String,
+    pub title: String,
+    pub subtitle: String,
+    pub edition: String,
 }
 
 #[derive(Debug, Deserialize)]

@@ -59,6 +59,12 @@ describe("register tanach downloads", () => {
 			includeToc: true,
 			coverAccentHex: "123abc",
 			divineNameMasking: masking,
+			cover: {
+				branding: 'תנ"ך על הפרק',
+				title: "ספר Bereshit",
+				subtitle: "מקראות גדולות",
+				edition: "עם מאמרים מרבנים בני זמנינו",
+			},
 		});
 	});
 });
