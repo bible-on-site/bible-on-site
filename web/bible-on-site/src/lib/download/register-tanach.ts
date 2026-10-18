@@ -6,12 +6,18 @@
  */
 import { getSeferColor } from "@/data/sefer-colors";
 
-import { createBulletinPageRangesHandler, generatePdfViaBulletin } from "./bulletin-client";
-import { setPageRangesDownloadHandler, setSeferDownloadHandler } from "./handlers";
+import {
+	createBulletinPageRangesHandler,
+	generatePdfViaBulletin,
+} from "./bulletin-client";
+import {
+	setPageRangesDownloadHandler,
+	setSeferDownloadHandler,
+} from "./handlers";
 
 setPageRangesDownloadHandler(createBulletinPageRangesHandler());
 
-setSeferDownloadHandler(async ({ seferName, perekIds }) => {
+setSeferDownloadHandler(async ({ seferName, perekIds, divineNameMasking }) => {
 	if (perekIds.length === 0) {
 		throw new Error("Full sefer download requires at least one perek id");
 	}
@@ -21,6 +27,7 @@ setSeferDownloadHandler(async ({ seferName, perekIds }) => {
 		includeCover: true,
 		includeToc: true,
 		coverAccentHex: accent,
+		divineNameMasking,
 	});
 	return ["pdf", bin];
 });
