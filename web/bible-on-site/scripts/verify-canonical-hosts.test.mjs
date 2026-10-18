@@ -156,16 +156,15 @@ test("router.conf redirects www to the bare host on 80 and 443", () => {
 		for (const port of ["80", "443"]) {
 			const block = blocks.find(
 				(candidate) =>
-					new RegExp(`listen ${port}`).test(candidate) &&
+					candidate.includes(`listen ${port}`) &&
 					candidate.includes(`server_name www.${host}`),
 			);
 			assert.ok(
 				block,
 				`router.conf has no :${port} server block for www.${host}`,
 			);
-			assert.match(
-				block,
-				new RegExp(`return 301 https://${host.replaceAll(".", "\\.")}`),
+			assert.ok(
+				block.includes(`return 301 https://${host}`),
 				`www.${host} on :${port} does not redirect to the bare host`,
 			);
 		}
