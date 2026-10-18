@@ -155,8 +155,12 @@ export async function getStoreMetadata(
 	platform: StoreMetadata["platform"],
 ): Promise<StoreMetadata> {
 	const cached = cache.get(platform);
-	if (cached && Date.now() - Date.parse(cached.fetchedAt ?? "") < STALE_MS)
-		return cached;
+	if (cached) {
+		const ageMs =
+			Date.now() -
+			Date.parse(cached.fetchedAt ?? /* istanbul ignore next */ "");
+		if (ageMs < STALE_MS) return cached;
+	}
 	try {
 		const fresh: StoreMetadata = { ...(await collect(platform)), stale: false };
 		cache.set(platform, fresh);

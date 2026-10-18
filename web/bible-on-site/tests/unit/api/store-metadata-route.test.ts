@@ -14,9 +14,9 @@ describe("GET /api/store-metadata/[platform]", () => {
 	});
 
 	it("returns metadata JSON with cache headers for a platform", async () => {
-		jest.spyOn(globalThis, "fetch").mockResolvedValue(
-			new Response('"141":[[["5.0.139"]]]'),
-		);
+		jest
+			.spyOn(globalThis, "fetch")
+			.mockResolvedValue(new Response('"141":[[["5.0.139"]]]'));
 		const response = await GET(new Request("http://x"), {
 			params: Promise.resolve({ platform: "android" }),
 		});

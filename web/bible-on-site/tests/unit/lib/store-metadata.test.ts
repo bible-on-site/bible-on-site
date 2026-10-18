@@ -52,6 +52,25 @@ describe("parseItunesLookup", () => {
 describe("getStoreMetadata", () => {
 	afterEach(() => jest.restoreAllMocks());
 
+	it.each([
+		["android", "play.google.com"],
+		["windows", "displaycatalog"],
+		["ios", "itunes.apple.com"],
+	] as const)(
+		"returns stale nulls for %s when the store answers !ok",
+		async (platform, sourceFragment) => {
+			jest
+				.spyOn(globalThis, "fetch")
+				.mockResolvedValue(new Response("upstream", { status: 503 }));
+			const meta = await getStoreMetadata(platform);
+			expect(meta.platform).toBe(platform);
+			expect(meta.fetchedAt).toBeNull();
+			expect(meta.stale).toBe(true);
+			expect(meta.version).toBeNull();
+			expect(meta.source).toContain(sourceFragment);
+		},
+	);
+
 	it("reports the android version and a non-stale fresh fetch", async () => {
 		jest
 			.spyOn(globalThis, "fetch")
@@ -66,15 +85,13 @@ describe("getStoreMetadata", () => {
 
 	it("never fabricates: failed upstream yields nulls marked stale", async () => {
 		jest.spyOn(globalThis, "fetch").mockRejectedValue(new Error("down"));
-		// Fresh key not yet cached in this module instance run.
 		const meta = await getStoreMetadata("windows");
-		if (meta.fetchedAt === null) {
-			expect(meta.stale).toBe(true);
-			expect(meta.version).toBeNull();
-			expect(meta.rating).toBeNull();
-		} else {
-			expect(meta.stale).toBe(true);
-		}
+		expect(meta.fetchedAt).toBeNull();
+		expect(meta.stale).toBe(true);
+		expect(meta.version).toBeNull();
+		expect(meta.rating).toBeNull();
+		expect(meta.ratingCount).toBeNull();
+		expect(meta.source).toContain("displaycatalog");
 	});
 
 	it("serves the last good value stale when a refresh fails", async () => {
@@ -133,9 +150,9 @@ describe("store-metadata route and remaining platforms", () => {
 	});
 
 	it("windows without a product timestamp stamps the fetch time", async () => {
-		jest.spyOn(globalThis, "fetch").mockResolvedValue(
-			new Response(JSON.stringify({ Product: {} })),
-		);
+		jest
+			.spyOn(globalThis, "fetch")
+			.mockResolvedValue(new Response(JSON.stringify({ Product: {} })));
 		const meta = await getStoreMetadata("windows");
 		expect(meta.fetchedAt).toBeTruthy();
 	});
