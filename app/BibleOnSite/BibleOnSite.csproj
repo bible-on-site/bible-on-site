@@ -84,9 +84,10 @@
 		     Full AOT (AndroidEnableProfiledAot=false) is not an option: the linker
 		     emits zero-RVA method stubs (e.g. System.Net.Requests.HttpWebRequest
 		     local functions) that abort mono-aot-cross with exit 1.
-		     AndroidStripILAfterAOT is deliberately NOT set: Newtonsoft.Json/GraphQL
-		     and JIT-fallback for non-profiled generic instantiations need the IL
-		     kept in the embedded assemblies. -->
+		     AndroidStripILAfterAOT is deliberately NOT set: profiled AOT only
+		     precompiles profiled methods, so JIT fallback for everything else
+		     (including non-profiled generic instantiations) needs the IL kept
+		     in the embedded assemblies. -->
 		<RunAOTCompilation Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND '$(Configuration)' == 'Release' AND '$(UseMonoRuntime)' != 'false'">true</RunAOTCompilation>
 		<AndroidEnableProfiledAot Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND '$(Configuration)' == 'Release' AND '$(UseMonoRuntime)' != 'false'">true</AndroidEnableProfiledAot>
 		<!-- Debug APKs include the large commentary database. Store SQLite assets directly
@@ -298,7 +299,7 @@
 		<PackageReference Include="CommunityToolkit.Maui.MediaElement" Version="10.0.0" />
 		<PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
 		<PackageReference Include="GraphQL.Client" Version="6.1.0" />
-		<PackageReference Include="GraphQL.Client.Serializer.Newtonsoft" Version="6.1.0" />
+		<PackageReference Include="GraphQL.Client.Serializer.SystemTextJson" Version="6.1.0" />
 		<PackageReference Include="HtmlAgilityPack" Version="1.13.1" />
 		<PackageReference Include="Microsoft.Maui.Controls" Version="10.0.110" />
 		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.13" />
