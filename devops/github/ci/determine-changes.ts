@@ -33,6 +33,8 @@ const RELEASE_CI_PATHS = [
 	...SHARED_CI_PATHS,
 	".github/workflows/shared-release.yml",
 ];
+// Shared build context of every web/ release Docker image (#2292).
+const DOCKER_BUILD_CI_PATHS = ["web/.dockerignore"];
 // Deterministic E2E test-selection tooling plus the shared Playwright
 // evidence reporter — consumed by the website, admin and API E2E jobs
 // (the Appium suite already lists the selector under `app`, #2085).
@@ -66,7 +68,12 @@ export const MODULES = {
 	},
 	api: {
 		directory: "web/api",
-		ciPaths: [...RELEASE_CI_PATHS, ...E2E_IMPACT_CI_PATHS],
+		ciPaths: [
+			...RELEASE_CI_PATHS,
+			...E2E_IMPACT_CI_PATHS,
+			...DOCKER_BUILD_CI_PATHS,
+			".github/workflows/shared-dockerize.yml",
+		],
 	},
 	app: {
 		directory: "app",
@@ -97,13 +104,22 @@ export const MODULES = {
 		ciPaths: [
 			...SHARED_CI_PATHS,
 			...E2E_IMPACT_CI_PATHS,
+			...DOCKER_BUILD_CI_PATHS,
 			"devops/rustfs",
 			"devops/docker-compose.yml",
 			"devops/package.json",
 			"devops/package-lock.json",
 		],
 	},
-	bulletin: { directory: "web/bulletin", ciPaths: RELEASE_CI_PATHS },
+	bulletin: {
+		directory: "web/bulletin",
+		// The release image also compiles the API's shared entities crate.
+		ciPaths: [
+			...RELEASE_CI_PATHS,
+			...DOCKER_BUILD_CI_PATHS,
+			"web/api/entities",
+		],
+	},
 	data: {
 		directory: "data",
 		// Data-deploy tooling changes (e.g. its SQL_FILES manifest) must re-run

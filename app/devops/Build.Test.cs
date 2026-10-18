@@ -79,8 +79,10 @@ partial class Build
         // no NuGet imports. Project evaluation would change NUKE's output
         // directory and require test-platform package targets unnecessarily.
         var harnessDirectory = RootDirectory / "BibleOnSite.Tests.MobileE2E/bin/Debug/net10.0";
+        // No --stop-on-fail: MTP reports never-run tests as skipped rather than
+        // failed, so aborting on the first failure would hide the rest of the
+        // shard's results. Every selected test runs once.
         var appArgs = $"--config-file \"{harnessDirectory / "testconfig.json"}\" --filter-query \"/[{MobileE2ESelectionFilter()}]\"" +
-            " --stop-on-fail on" +
             $" --diagnostic --diagnostic-verbosity Information --diagnostic-output-directory \"{resultsDirectory}\"" +
             " --hangdump --hangdump-timeout 10m --hangdump-type Mini" +
             " --report-xunit-trx --report-xunit-trx-filename mobile-e2e.trx" +

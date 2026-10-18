@@ -1,4 +1,5 @@
 using BibleOnSite.Models;
+using System.Text.Json.Serialization;
 using GraphQL.Client.Http;
 
 namespace BibleOnSite.Services;
@@ -42,7 +43,7 @@ public class TanahpediaService : BaseGraphQLService, ITanahpediaService
                 }
             }",
             "TanahpediaEntries",
-            new { limit, offset },
+            new Dictionary<string, object?> { ["limit"] = limit, ["offset"] = offset },
             cancellationToken);
 
         return (data?.TanahpediaEntries ?? []).Select(dto => new TanahpediaEntry
@@ -68,7 +69,7 @@ public class TanahpediaService : BaseGraphQLService, ITanahpediaService
                 }
             }",
             "TanahpediaRecentEntries",
-            new { limit },
+            new Dictionary<string, object?> { ["limit"] = limit },
             cancellationToken);
 
         return (data?.TanahpediaEntries ?? []).Select(dto => new TanahpediaEntry
@@ -107,7 +108,7 @@ public class TanahpediaService : BaseGraphQLService, ITanahpediaService
                 }
             }",
             "TanahpediaEntry",
-            new { uniqueName },
+            new Dictionary<string, object?> { ["uniqueName"] = uniqueName },
             cancellationToken);
 
         var dto = data?.TanahpediaEntry;
@@ -161,7 +162,7 @@ public class TanahpediaService : BaseGraphQLService, ITanahpediaService
                     }
                 }",
                 "SearchTanahpediaEntries",
-                new { phrase, limit },
+                new Dictionary<string, object?> { ["phrase"] = phrase, ["limit"] = limit },
                 linked.Token);
 
             return (data?.SearchTanahpediaEntries ?? []).Select(dto => new TanahpediaSearchHit
@@ -195,7 +196,7 @@ public class TanahpediaService : BaseGraphQLService, ITanahpediaService
                 }
             }",
             "TanahpediaSynonymTargets",
-            new { name },
+            new Dictionary<string, object?> { ["name"] = name },
             cancellationToken);
 
         return (data?.TanahpediaSynonymTargets ?? []).Select(dto => new TanahpediaSynonymTarget
@@ -245,7 +246,7 @@ public class TanahpediaService : BaseGraphQLService, ITanahpediaService
                 }
             }",
             "TanahpediaEntities",
-            new { entityType, sub },
+            new Dictionary<string, object?> { ["entityType"] = entityType, ["sub"] = sub },
             cancellationToken);
 
         return (data?.TanahpediaEntities ?? []).Select(MapEntityWithEntries).ToList();
@@ -268,7 +269,7 @@ public class TanahpediaService : BaseGraphQLService, ITanahpediaService
                 }
             }",
             "TanahpediaTodayEntities",
-            new { hebrewMonth, hebrewDay },
+            new Dictionary<string, object?> { ["hebrewMonth"] = hebrewMonth, ["hebrewDay"] = hebrewDay },
             cancellationToken);
 
         return (data?.TanahpediaTodayEntities ?? []).Select(MapEntityWithEntries).ToList();
@@ -286,7 +287,7 @@ public class TanahpediaService : BaseGraphQLService, ITanahpediaService
                 }
             }",
             "TanahpediaCategoryHomepage",
-            new { entityType },
+            new Dictionary<string, object?> { ["entityType"] = entityType },
             cancellationToken);
 
         var dto = data?.TanahpediaCategoryHomepage;
@@ -321,7 +322,7 @@ public class TanahpediaService : BaseGraphQLService, ITanahpediaService
                 }
             }",
             "TanahpediaPersonFamily",
-            new { entityId },
+            new Dictionary<string, object?> { ["entityId"] = entityId },
             cancellationToken);
 
         var dto = data?.TanahpediaPersonFamily;
@@ -398,7 +399,7 @@ public class TanahpediaService : BaseGraphQLService, ITanahpediaService
                 }
             }",
             "TanahpediaPlaceMarkers",
-            new { entryId },
+            new Dictionary<string, object?> { ["entryId"] = entryId },
             cancellationToken);
 
         return (data?.TanahpediaPlaceMarkers ?? []).Select(dto => new TanahpediaPlaceMarker
@@ -437,295 +438,294 @@ public class TanahpediaService : BaseGraphQLService, ITanahpediaService
 
     #region DTOs for GraphQL responses
 
-    // JsonProperty attributes are required to prevent IL trimming in Release
-    // builds — these members are only accessed via JSON deserialization
-    // reflection, so the trimmer would strip them. See #1142 for details.
+    // GraphQLJsonContext (source-generated) references these members statically,
+    // so the trimmer keeps them in Release builds (#1142).
 
-    private class EntriesResponse
+    internal class EntriesResponse
     {
-        [Newtonsoft.Json.JsonProperty("tanahpediaEntries")]
+        [JsonPropertyName("tanahpediaEntries")]
         public List<EntryDto>? TanahpediaEntries { get; set; }
     }
 
-    private class RecentEntriesResponse
+    internal class RecentEntriesResponse
     {
-        [Newtonsoft.Json.JsonProperty("tanahpediaRecentEntries")]
+        [JsonPropertyName("tanahpediaRecentEntries")]
         public List<EntryDto>? TanahpediaEntries { get; set; }
     }
 
-    private class EntryDto
+    internal class EntryDto
     {
-        [Newtonsoft.Json.JsonProperty("id")]
+        [JsonPropertyName("id")]
         public string? Id { get; set; }
-        [Newtonsoft.Json.JsonProperty("uniqueName")]
+        [JsonPropertyName("uniqueName")]
         public string? UniqueName { get; set; }
-        [Newtonsoft.Json.JsonProperty("title")]
+        [JsonPropertyName("title")]
         public string? Title { get; set; }
-        [Newtonsoft.Json.JsonProperty("content")]
+        [JsonPropertyName("content")]
         public string? Content { get; set; }
-        [Newtonsoft.Json.JsonProperty("updatedAt")]
+        [JsonPropertyName("updatedAt")]
         public string? UpdatedAt { get; set; }
     }
 
-    private class EntryDetailResponse
+    internal class EntryDetailResponse
     {
-        [Newtonsoft.Json.JsonProperty("tanahpediaEntry")]
+        [JsonPropertyName("tanahpediaEntry")]
         public EntryDetailDto? TanahpediaEntry { get; set; }
     }
 
-    private class EntryDetailDto : EntryDto
+    internal class EntryDetailDto : EntryDto
     {
-        [Newtonsoft.Json.JsonProperty("entities")]
+        [JsonPropertyName("entities")]
         public List<LinkedEntityDto>? Entities { get; set; }
-        [Newtonsoft.Json.JsonProperty("occurrences")]
+        [JsonPropertyName("occurrences")]
         public List<OccurrenceDto>? Occurrences { get; set; }
     }
 
-    private class LinkedEntityDto
+    internal class LinkedEntityDto
     {
-        [Newtonsoft.Json.JsonProperty("id")]
+        [JsonPropertyName("id")]
         public string? Id { get; set; }
-        [Newtonsoft.Json.JsonProperty("entityId")]
+        [JsonPropertyName("entityId")]
         public string? EntityId { get; set; }
-        [Newtonsoft.Json.JsonProperty("entityType")]
+        [JsonPropertyName("entityType")]
         public string? EntityType { get; set; }
-        [Newtonsoft.Json.JsonProperty("entityName")]
+        [JsonPropertyName("entityName")]
         public string? EntityName { get; set; }
     }
 
-    private class OccurrenceDto
+    internal class OccurrenceDto
     {
-        [Newtonsoft.Json.JsonProperty("perekId")]
+        [JsonPropertyName("perekId")]
         public int PerekId { get; set; }
-        [Newtonsoft.Json.JsonProperty("pasukNumber")]
+        [JsonPropertyName("pasukNumber")]
         public int PasukNumber { get; set; }
-        [Newtonsoft.Json.JsonProperty("segmentStart")]
+        [JsonPropertyName("segmentStart")]
         public int? SegmentStart { get; set; }
-        [Newtonsoft.Json.JsonProperty("segmentEnd")]
+        [JsonPropertyName("segmentEnd")]
         public int? SegmentEnd { get; set; }
     }
 
-    private class SearchHitsResponse
+    internal class SearchHitsResponse
     {
-        [Newtonsoft.Json.JsonProperty("searchTanahpediaEntries")]
+        [JsonPropertyName("searchTanahpediaEntries")]
         public List<SearchHitDto>? SearchTanahpediaEntries { get; set; }
     }
 
-    private class SearchHitDto
+    internal class SearchHitDto
     {
-        [Newtonsoft.Json.JsonProperty("id")]
+        [JsonPropertyName("id")]
         public string? Id { get; set; }
-        [Newtonsoft.Json.JsonProperty("uniqueName")]
+        [JsonPropertyName("uniqueName")]
         public string? UniqueName { get; set; }
-        [Newtonsoft.Json.JsonProperty("title")]
+        [JsonPropertyName("title")]
         public string? Title { get; set; }
-        [Newtonsoft.Json.JsonProperty("excerpt")]
+        [JsonPropertyName("excerpt")]
         public string? Excerpt { get; set; }
-        [Newtonsoft.Json.JsonProperty("score")]
+        [JsonPropertyName("score")]
         public int Score { get; set; }
     }
 
-    private class SynonymTargetsResponse
+    internal class SynonymTargetsResponse
     {
-        [Newtonsoft.Json.JsonProperty("tanahpediaSynonymTargets")]
+        [JsonPropertyName("tanahpediaSynonymTargets")]
         public List<SynonymTargetDto>? TanahpediaSynonymTargets { get; set; }
     }
 
-    private class SynonymTargetDto
+    internal class SynonymTargetDto
     {
-        [Newtonsoft.Json.JsonProperty("entryId")]
+        [JsonPropertyName("entryId")]
         public string? EntryId { get; set; }
-        [Newtonsoft.Json.JsonProperty("uniqueName")]
+        [JsonPropertyName("uniqueName")]
         public string? UniqueName { get; set; }
-        [Newtonsoft.Json.JsonProperty("title")]
+        [JsonPropertyName("title")]
         public string? Title { get; set; }
-        [Newtonsoft.Json.JsonProperty("label")]
+        [JsonPropertyName("label")]
         public string? Label { get; set; }
     }
 
-    private class CategoryCountsResponse
+    internal class CategoryCountsResponse
     {
-        [Newtonsoft.Json.JsonProperty("tanahpediaCategoryCounts")]
+        [JsonPropertyName("tanahpediaCategoryCounts")]
         public List<CategoryCountDto>? TanahpediaCategoryCounts { get; set; }
     }
 
-    private class CategoryCountDto
+    internal class CategoryCountDto
     {
-        [Newtonsoft.Json.JsonProperty("category")]
+        [JsonPropertyName("category")]
         public string? Category { get; set; }
-        [Newtonsoft.Json.JsonProperty("count")]
+        [JsonPropertyName("count")]
         public int Count { get; set; }
     }
 
-    private class EntitiesResponse
+    internal class EntitiesResponse
     {
-        [Newtonsoft.Json.JsonProperty("tanahpediaEntities")]
+        [JsonPropertyName("tanahpediaEntities")]
         public List<EntityWithEntriesDto>? TanahpediaEntities { get; set; }
     }
 
-    private class TodayEntitiesResponse
+    internal class TodayEntitiesResponse
     {
-        [Newtonsoft.Json.JsonProperty("tanahpediaTodayEntities")]
+        [JsonPropertyName("tanahpediaTodayEntities")]
         public List<EntityWithEntriesDto>? TanahpediaTodayEntities { get; set; }
     }
 
-    private class EntityWithEntriesDto
+    internal class EntityWithEntriesDto
     {
-        [Newtonsoft.Json.JsonProperty("entityId")]
+        [JsonPropertyName("entityId")]
         public string? EntityId { get; set; }
-        [Newtonsoft.Json.JsonProperty("entityType")]
+        [JsonPropertyName("entityType")]
         public string? EntityType { get; set; }
-        [Newtonsoft.Json.JsonProperty("entityName")]
+        [JsonPropertyName("entityName")]
         public string? EntityName { get; set; }
-        [Newtonsoft.Json.JsonProperty("linkedEntries")]
+        [JsonPropertyName("linkedEntries")]
         public List<EntryStubDto>? LinkedEntries { get; set; }
     }
 
-    private class EntryStubDto
+    internal class EntryStubDto
     {
-        [Newtonsoft.Json.JsonProperty("id")]
+        [JsonPropertyName("id")]
         public string? Id { get; set; }
-        [Newtonsoft.Json.JsonProperty("uniqueName")]
+        [JsonPropertyName("uniqueName")]
         public string? UniqueName { get; set; }
-        [Newtonsoft.Json.JsonProperty("title")]
+        [JsonPropertyName("title")]
         public string? Title { get; set; }
     }
 
-    private class CategoryHomepageResponse
+    internal class CategoryHomepageResponse
     {
-        [Newtonsoft.Json.JsonProperty("tanahpediaCategoryHomepage")]
+        [JsonPropertyName("tanahpediaCategoryHomepage")]
         public CategoryHomepageDto? TanahpediaCategoryHomepage { get; set; }
     }
 
-    private class CategoryHomepageDto
+    internal class CategoryHomepageDto
     {
-        [Newtonsoft.Json.JsonProperty("entityType")]
+        [JsonPropertyName("entityType")]
         public string? EntityType { get; set; }
-        [Newtonsoft.Json.JsonProperty("layoutType")]
+        [JsonPropertyName("layoutType")]
         public string? LayoutType { get; set; }
-        [Newtonsoft.Json.JsonProperty("content")]
+        [JsonPropertyName("content")]
         public string? Content { get; set; }
     }
 
-    private class PersonFamilyResponse
+    internal class PersonFamilyResponse
     {
-        [Newtonsoft.Json.JsonProperty("tanahpediaPersonFamily")]
+        [JsonPropertyName("tanahpediaPersonFamily")]
         public PersonFamilyDto? TanahpediaPersonFamily { get; set; }
     }
 
-    private class PersonFamilyDto
+    internal class PersonFamilyDto
     {
-        [Newtonsoft.Json.JsonProperty("focalPersonId")]
+        [JsonPropertyName("focalPersonId")]
         public string? FocalPersonId { get; set; }
-        [Newtonsoft.Json.JsonProperty("focalEntityId")]
+        [JsonPropertyName("focalEntityId")]
         public string? FocalEntityId { get; set; }
-        [Newtonsoft.Json.JsonProperty("focalDisplayName")]
+        [JsonPropertyName("focalDisplayName")]
         public string? FocalDisplayName { get; set; }
-        [Newtonsoft.Json.JsonProperty("focalSex")]
+        [JsonPropertyName("focalSex")]
         public string? FocalSex { get; set; }
-        [Newtonsoft.Json.JsonProperty("focalBirthYyyymmdd")]
+        [JsonPropertyName("focalBirthYyyymmdd")]
         public int? FocalBirthYyyymmdd { get; set; }
-        [Newtonsoft.Json.JsonProperty("parents")]
+        [JsonPropertyName("parents")]
         public List<ParentEdgeDto>? Parents { get; set; }
-        [Newtonsoft.Json.JsonProperty("children")]
+        [JsonPropertyName("children")]
         public List<ChildEdgeDto>? Children { get; set; }
-        [Newtonsoft.Json.JsonProperty("spouses")]
+        [JsonPropertyName("spouses")]
         public List<SpouseEdgeDto>? Spouses { get; set; }
-        [Newtonsoft.Json.JsonProperty("siblings")]
+        [JsonPropertyName("siblings")]
         public List<SiblingDto>? Siblings { get; set; }
     }
 
-    private class RelatedPersonDto
+    internal class RelatedPersonDto
     {
-        [Newtonsoft.Json.JsonProperty("personId")]
+        [JsonPropertyName("personId")]
         public string? PersonId { get; set; }
-        [Newtonsoft.Json.JsonProperty("entityId")]
+        [JsonPropertyName("entityId")]
         public string? EntityId { get; set; }
-        [Newtonsoft.Json.JsonProperty("displayName")]
+        [JsonPropertyName("displayName")]
         public string? DisplayName { get; set; }
-        [Newtonsoft.Json.JsonProperty("entryUniqueName")]
+        [JsonPropertyName("entryUniqueName")]
         public string? EntryUniqueName { get; set; }
-        [Newtonsoft.Json.JsonProperty("entryTitle")]
+        [JsonPropertyName("entryTitle")]
         public string? EntryTitle { get; set; }
-        [Newtonsoft.Json.JsonProperty("sex")]
+        [JsonPropertyName("sex")]
         public string? Sex { get; set; }
     }
 
-    private class ParentEdgeDto
+    internal class ParentEdgeDto
     {
-        [Newtonsoft.Json.JsonProperty("related")]
+        [JsonPropertyName("related")]
         public RelatedPersonDto? Related { get; set; }
-        [Newtonsoft.Json.JsonProperty("parentRole")]
+        [JsonPropertyName("parentRole")]
         public string? ParentRole { get; set; }
-        [Newtonsoft.Json.JsonProperty("relationshipType")]
+        [JsonPropertyName("relationshipType")]
         public string? RelationshipType { get; set; }
-        [Newtonsoft.Json.JsonProperty("altGroupId")]
+        [JsonPropertyName("altGroupId")]
         public string? AltGroupId { get; set; }
-        [Newtonsoft.Json.JsonProperty("sourceCitation")]
+        [JsonPropertyName("sourceCitation")]
         public string? SourceCitation { get; set; }
     }
 
-    private class ChildEdgeDto : ParentEdgeDto
+    internal class ChildEdgeDto : ParentEdgeDto
     {
-        [Newtonsoft.Json.JsonProperty("birthOrder")]
+        [JsonPropertyName("birthOrder")]
         public int? BirthOrder { get; set; }
-        [Newtonsoft.Json.JsonProperty("coParentEntityId")]
+        [JsonPropertyName("coParentEntityId")]
         public string? CoParentEntityId { get; set; }
-        [Newtonsoft.Json.JsonProperty("coParentDisplayName")]
+        [JsonPropertyName("coParentDisplayName")]
         public string? CoParentDisplayName { get; set; }
-        [Newtonsoft.Json.JsonProperty("coParentUnionOrder")]
+        [JsonPropertyName("coParentUnionOrder")]
         public int? CoParentUnionOrder { get; set; }
     }
 
-    private class SpouseEdgeDto
+    internal class SpouseEdgeDto
     {
-        [Newtonsoft.Json.JsonProperty("related")]
+        [JsonPropertyName("related")]
         public RelatedPersonDto? Related { get; set; }
-        [Newtonsoft.Json.JsonProperty("unionType")]
+        [JsonPropertyName("unionType")]
         public string? UnionType { get; set; }
-        [Newtonsoft.Json.JsonProperty("unionOrder")]
+        [JsonPropertyName("unionOrder")]
         public int? UnionOrder { get; set; }
-        [Newtonsoft.Json.JsonProperty("altGroupId")]
+        [JsonPropertyName("altGroupId")]
         public string? AltGroupId { get; set; }
-        [Newtonsoft.Json.JsonProperty("sourceCitation")]
+        [JsonPropertyName("sourceCitation")]
         public string? SourceCitation { get; set; }
-        [Newtonsoft.Json.JsonProperty("personSourceCitation")]
+        [JsonPropertyName("personSourceCitation")]
         public string? PersonSourceCitation { get; set; }
-        [Newtonsoft.Json.JsonProperty("unionEndReason")]
+        [JsonPropertyName("unionEndReason")]
         public string? UnionEndReason { get; set; }
-        [Newtonsoft.Json.JsonProperty("unionStartDate")]
+        [JsonPropertyName("unionStartDate")]
         public int? UnionStartDate { get; set; }
-        [Newtonsoft.Json.JsonProperty("unionEndDate")]
+        [JsonPropertyName("unionEndDate")]
         public int? UnionEndDate { get; set; }
     }
 
-    private class SiblingDto : RelatedPersonDto
+    internal class SiblingDto : RelatedPersonDto
     {
-        [Newtonsoft.Json.JsonProperty("birthDateYyyymmdd")]
+        [JsonPropertyName("birthDateYyyymmdd")]
         public int? BirthDateYyyymmdd { get; set; }
-        [Newtonsoft.Json.JsonProperty("sourceCitation")]
+        [JsonPropertyName("sourceCitation")]
         public string? SourceCitation { get; set; }
     }
 
-    private class PlaceMarkersResponse
+    internal class PlaceMarkersResponse
     {
-        [Newtonsoft.Json.JsonProperty("tanahpediaPlaceMarkers")]
+        [JsonPropertyName("tanahpediaPlaceMarkers")]
         public List<PlaceMarkerDto>? TanahpediaPlaceMarkers { get; set; }
     }
 
-    private class PlaceMarkerDto
+    internal class PlaceMarkerDto
     {
-        [Newtonsoft.Json.JsonProperty("placeId")]
+        [JsonPropertyName("placeId")]
         public string? PlaceId { get; set; }
-        [Newtonsoft.Json.JsonProperty("placeName")]
+        [JsonPropertyName("placeName")]
         public string? PlaceName { get; set; }
-        [Newtonsoft.Json.JsonProperty("modernName")]
+        [JsonPropertyName("modernName")]
         public string? ModernName { get; set; }
-        [Newtonsoft.Json.JsonProperty("lat")]
+        [JsonPropertyName("lat")]
         public double Lat { get; set; }
-        [Newtonsoft.Json.JsonProperty("lng")]
+        [JsonPropertyName("lng")]
         public double Lng { get; set; }
-        [Newtonsoft.Json.JsonProperty("entryUniqueName")]
+        [JsonPropertyName("entryUniqueName")]
         public string? EntryUniqueName { get; set; }
     }
 

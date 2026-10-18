@@ -127,7 +127,7 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
         {
             try
             {
-                var window = driver.Manage().Window.Size;
+                var window = DriverTelemetry.WindowSize(driver);
                 var remaining = deadline - DateTime.UtcNow;
                 if (remaining <= TimeSpan.Zero) { break; }
                 reader ??= WaitFor("PasukimCollection", element => element.Size.Width >= window.Width / 2, remaining);
@@ -179,7 +179,7 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
         var menu = WaitFor("CircularMenuButton");
         var text = WaitFor("TextButton");
         var fullScreen = WaitFor("FullScreenButton");
-        var window = driver.Manage().Window.Size;
+        var window = DriverTelemetry.WindowSize(driver);
         // Every property access queries the device. Read each dimension once
         // so layout assertions do not repeatedly snapshot the UI.
         var buttons = new[] { menu, text, fullScreen }
@@ -225,7 +225,7 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
 
             Size Window()
             {
-                window ??= driver.Manage().Window.Size;
+                window ??= DriverTelemetry.WindowSize(driver);
                 return window.Value;
             }
         }
@@ -240,7 +240,7 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
 
         Size Viewport()
         {
-            viewport ??= driver.Manage().Window.Size;
+            viewport ??= DriverTelemetry.WindowSize(driver);
             return viewport.Value;
         }
     }

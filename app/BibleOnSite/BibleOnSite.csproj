@@ -58,11 +58,11 @@
 		<ApplicationId>com.tanah.daily929</ApplicationId>
 
 		<!-- Versions -->
-		<ApplicationDisplayVersion>5.0.179</ApplicationDisplayVersion>
+		<ApplicationDisplayVersion>5.0.180</ApplicationDisplayVersion>
 		<!-- Windows MSIX requires each version component ≤65535, so we use a separate incrementing value -->
 		<!-- Android versionCode can be large, continuing from Play Store's 40000017 -->
-		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">50000179</ApplicationVersion>
-		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) != 'android'">179</ApplicationVersion>
+		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">50000180</ApplicationVersion>
+		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) != 'android'">180</ApplicationVersion>
 
 		<!-- To develop, package, and publish an app to the Microsoft Store, see: https://aka.ms/MauiTemplateUnpackaged -->
 		<!-- WindowsPackageType None = unpackaged (fixes "Class not registered" when running from CLI). MSIX for Store: /p:WindowsPackageType=MSIX -->
@@ -84,9 +84,10 @@
 		     Full AOT (AndroidEnableProfiledAot=false) is not an option: the linker
 		     emits zero-RVA method stubs (e.g. System.Net.Requests.HttpWebRequest
 		     local functions) that abort mono-aot-cross with exit 1.
-		     AndroidStripILAfterAOT is deliberately NOT set: Newtonsoft.Json/GraphQL
-		     and JIT-fallback for non-profiled generic instantiations need the IL
-		     kept in the embedded assemblies. -->
+		     AndroidStripILAfterAOT is deliberately NOT set: profiled AOT only
+		     precompiles profiled methods, so JIT fallback for everything else
+		     (including non-profiled generic instantiations) needs the IL kept
+		     in the embedded assemblies. -->
 		<RunAOTCompilation Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND '$(Configuration)' == 'Release' AND '$(UseMonoRuntime)' != 'false'">true</RunAOTCompilation>
 		<AndroidEnableProfiledAot Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND '$(Configuration)' == 'Release' AND '$(UseMonoRuntime)' != 'false'">true</AndroidEnableProfiledAot>
 		<!-- Debug APKs include the large commentary database. Store SQLite assets directly
@@ -298,7 +299,7 @@
 		<PackageReference Include="CommunityToolkit.Maui.MediaElement" Version="10.0.0" />
 		<PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
 		<PackageReference Include="GraphQL.Client" Version="6.1.0" />
-		<PackageReference Include="GraphQL.Client.Serializer.Newtonsoft" Version="6.1.0" />
+		<PackageReference Include="GraphQL.Client.Serializer.SystemTextJson" Version="6.1.0" />
 		<PackageReference Include="HtmlAgilityPack" Version="1.13.1" />
 		<PackageReference Include="Microsoft.Maui.Controls" Version="10.0.110" />
 		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.13" />

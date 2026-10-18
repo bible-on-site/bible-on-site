@@ -313,8 +313,8 @@ public class StarterService : BaseGraphQLService
     #region DTOs for GraphQL response
 
     // Records used for both GraphQL deserialization and local JSON cache.
-    // The System.Text.Json source generator (StarterJsonContext) handles
-    // the local cache; Newtonsoft handles the GraphQL client.
+    // Source-generated System.Text.Json metadata handles both: StarterJsonContext
+    // for the local cache and GraphQLJsonContext for the GraphQL client.
     internal record StarterResponse(StarterData Starter);
 
     internal record StarterData(
