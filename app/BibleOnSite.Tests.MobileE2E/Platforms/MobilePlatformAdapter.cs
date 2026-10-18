@@ -221,11 +221,13 @@ public abstract class MobilePlatformAdapter
             // including POST /session. A cold app launch can exceed 90s; keep the
             // server default (240s) inside the five-minute IOSDriver budget.
             options.AddAdditionalAppiumOption("wdaConnectionTimeout", 240000);
-            // A blocked lookup must not spend four minutes inside a 45-second
-            // page-object wait. Session creation keeps its separate cold-start
-            // budget; relaunch scripts retain the two-minute startup gate.
+            // Scroll-storm drain keeps the app main thread busy well past 45s
+            // (inertia scroll + cell recycle + HtmlView relayout), so snapshot
+            // lookups were cut mid-drain and the session died on a healthy app.
+            // 120s matches the execute budget; a genuinely wedged command still
+            // fails inside the shard's hangdump bound, just ~75s later.
             options.AddAdditionalAppiumOption("commandTimeouts",
-                "{\"default\":45000,\"createSession\":240000,\"execute\":120000,\"deleteSession\":15000}");
+                "{\"default\":120000,\"createSession\":240000,\"execute\":120000,\"deleteSession\":15000}");
             if (configuration.WdaLocalPort is { } wdaLocalPort)
             {
                 // A simulator's WDA binds the host loopback, so two devices on

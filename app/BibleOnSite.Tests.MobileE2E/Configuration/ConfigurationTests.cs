@@ -45,7 +45,7 @@ public sealed class ConfigurationTests
             Assert.Equal(1, options["appium:wdaStartupRetries"]);
             Assert.Equal(240000, options["appium:wdaConnectionTimeout"]);
             using var deadlines = System.Text.Json.JsonDocument.Parse((string)options["appium:commandTimeouts"]);
-            Assert.Equal(45000, deadlines.RootElement.GetProperty("default").GetInt32());
+            Assert.Equal(120000, deadlines.RootElement.GetProperty("default").GetInt32());
             Assert.Equal(240000, deadlines.RootElement.GetProperty("createSession").GetInt32());
             Assert.Equal(120000, deadlines.RootElement.GetProperty("execute").GetInt32());
             Assert.Equal(15000, deadlines.RootElement.GetProperty("deleteSession").GetInt32());
