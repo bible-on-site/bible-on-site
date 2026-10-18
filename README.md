@@ -1,5 +1,5 @@
 ## Project Overview
-Bible on Site is a digital educational initiative aimed at Bible learners, featuring a website and mobile app that provide complete access to the Bible, enhanced by extensive commentaries and articles.
+Bible on Site is a digital educational initiative aimed at Bible learners, featuring a [website](https://xn--febl3a.co.il/) and app ([Android](https://play.google.com/store/apps/details?id=com.tanah.daily929), [iOS](https://apps.apple.com/il/app/%D7%AA-%D7%A0-%D7%9A-%D7%A2-%D7%9C-%D7%94-%D7%A4-%D7%A8-%D7%A7-929/id1045128150?l=he), [Windows](https://apps.microsoft.com/detail/9nblggh6b55k)) that provide complete access to the Bible, enhanced by extensive commentaries and articles.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) <br>
 ## Project Status
