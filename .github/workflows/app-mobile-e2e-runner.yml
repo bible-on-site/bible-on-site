@@ -656,6 +656,23 @@ jobs:
           MOBILE_E2E_SELECTION: ${{ inputs.ios_plan_artifact != '' && steps.shard_manifest.outputs.manifest || (inputs.e2e_selection_mode == 'enforce' && steps.selection.outputs.manifest || '') }}
         run: npm test --prefix app/mobile-e2e
 
+      # Coverage resets, dump pulls and device-diagnostics captures are
+      # diagnostic-only by design — a failure writes to the trx and never
+      # decides the scenario. That silence let every Android scenario's reset
+      # 403 for months. One occurrence warns as a plausible transient; the
+      # same signature twice is systematic and fails the leg. Artifacts still
+      # upload via the always() steps below.
+      - name: Flag systematic harness diagnostics
+        if: inputs.mode != 'build' && always() && !cancelled()
+        id: silent-failures
+        env:
+          # A green pilot that produced no trx left this gate with nothing to
+          # scan — that absence is itself a systematic failure, so the outcome
+          # decides whether an empty results dir is an error or just expected
+          # fallout of a pilot that already failed loudly.
+          PILOT_OUTCOME: ${{ inputs.platform == 'iOS' && steps['pilot-ios'].outcome || steps.pilot.outcome }}
+        run: node app/mobile-e2e/silent-failures.mjs "$MOBILE_E2E_ARTIFACTS/results" "$PILOT_OUTCOME"
+
       # Real app-process coverage (#1232): the harness pulled a live hit dump
       # from the instrumented app at the end of every scenario. This applies
       # them onto the build's OpenCover template and emits lcov.info. The step
@@ -758,7 +775,7 @@ jobs:
       # successful default-branch run; PR and merge-queue evidence stays
       # provisional inside the run's appium artifact.
       - name: Publish coverage-tree baseline
-        if: inputs.platform == 'Android' && always() && github.event_name == 'push' && github.ref == 'refs/heads/master' && (steps.pilot.outcome == 'success' || steps['pilot-ios'].outcome == 'success') && steps.collect.outcome == 'success'
+        if: inputs.platform == 'Android' && always() && github.event_name == 'push' && github.ref == 'refs/heads/master' && (steps.pilot.outcome == 'success' || steps['pilot-ios'].outcome == 'success') && steps.collect.outcome == 'success' && steps['silent-failures'].outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
           name: app-mobile-e2e-coverage.master.${{ inputs.platform_id }}
@@ -771,7 +788,7 @@ jobs:
       # default-branch run refreshes it, so a partial or selected run can
       # never overwrite a complete baseline.
       - name: Publish app coverage baseline
-        if: inputs.platform == 'Android' && always() && github.event_name == 'push' && github.ref == 'refs/heads/master' && (steps.pilot.outcome == 'success' || steps['pilot-ios'].outcome == 'success') && steps.coverage-apply.outcome == 'success'
+        if: inputs.platform == 'Android' && always() && github.event_name == 'push' && github.ref == 'refs/heads/master' && (steps.pilot.outcome == 'success' || steps['pilot-ios'].outcome == 'success') && steps.coverage-apply.outcome == 'success' && steps['silent-failures'].outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
           name: app-e2e-coverage.master.${{ inputs.artifact }}
@@ -784,7 +801,7 @@ jobs:
       # automation-id baseline above. Runs without exec coverage (no
       # template → no extracted tree) skip the publish.
       - name: Publish exec coverage-tree baseline
-        if: inputs.platform == 'Android' && always() && github.event_name == 'push' && github.ref == 'refs/heads/master' && (steps.pilot.outcome == 'success' || steps['pilot-ios'].outcome == 'success') && steps['exec-tree'].outcome == 'success' && steps['exec-tree'].outputs.exec-coverage-tree != ''
+        if: inputs.platform == 'Android' && always() && github.event_name == 'push' && github.ref == 'refs/heads/master' && (steps.pilot.outcome == 'success' || steps['pilot-ios'].outcome == 'success') && steps['exec-tree'].outcome == 'success' && steps['exec-tree'].outputs.exec-coverage-tree != '' && steps['silent-failures'].outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
           name: app-mobile-e2e-exec-coverage.master.${{ inputs.artifact }}
