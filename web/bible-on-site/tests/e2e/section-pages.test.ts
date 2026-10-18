@@ -8,6 +8,23 @@ import { expect, test } from "../util/playwright/test-fixture";
  */
 
 test.describe("Section pages", () => {
+	test("homepage has a descriptive title and one primary heading", async ({
+		page,
+	}) => {
+		await page.goto("/");
+		await expect
+			.soft(page)
+			.toHaveTitle('תנ"ך על הפרק - קריאה ולימוד תנ"ך יומי');
+		const primaryHeading = page.getByRole("heading", { level: 1 });
+		await expect(primaryHeading).toHaveCount(1);
+		await expect(primaryHeading).toHaveText('תנ"ך על הפרק');
+		for (const name of ['ספרי התנ"ך', "תנאי שימוש", "יצירת קשר"]) {
+			await expect(
+				page.getByRole("heading", { name, exact: true, level: 2 }),
+			).toBeAttached();
+		}
+	});
+
 	test("homepage publishes its canonical root without tracking parameters", async ({
 		page,
 	}) => {
