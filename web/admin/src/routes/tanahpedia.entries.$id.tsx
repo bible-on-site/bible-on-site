@@ -26,13 +26,6 @@ interface EntryFormData {
 	content: string;
 }
 
-interface SaveVariables {
-	form: EntryFormData;
-	baseRevisionId: string | null;
-	source: string;
-	notes: string | null;
-}
-
 export const Route = createFileRoute("/tanahpedia/entries/$id")({
 	component: EntryEditPage,
 });
@@ -89,7 +82,12 @@ function EntryEditPage() {
 			baseRevisionId,
 			source,
 			notes,
-		}: SaveVariables) => {
+		}: {
+			form: EntryFormData;
+			baseRevisionId: string | null;
+			source: string;
+			notes: string | null;
+		}) => {
 			if (isNew) {
 				return createEntry({
 					data: {
