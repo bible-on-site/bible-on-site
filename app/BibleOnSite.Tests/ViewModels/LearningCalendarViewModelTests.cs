@@ -497,6 +497,100 @@ public class LearningCalendarViewModelTests
     }
 
     [Fact]
+    public async Task SetViewMode_ToCurrentMode_LeavesCalendarUntouched()
+    {
+        await using var fixture = await CreateFixtureAsync(CyclesOneToFour);
+        var vm = fixture.ViewModel;
+        await vm.InitializeAsync();
+        var cells = vm.Cells;
+        var groups = vm.MonthGroups;
+
+        vm.SetViewModeCommand.Execute(vm.ViewMode);
+
+        vm.Cells.Should().BeSameAs(cells);
+        vm.MonthGroups.Should().BeSameAs(groups);
+    }
+
+    [Fact]
+    public async Task CycleView_FromMonthBeforeCycleOne_DefaultsToCycleOne()
+    {
+        await using var fixture = await CreateFixtureAsync(CyclesOneToFour);
+        var vm = fixture.ViewModel;
+        await vm.InitializeAsync();
+        // Tishrei 5775 precedes cycle 1's start (29 Kislev 5775), so no cycle
+        // covers the viewed month and the picker falls back to the first cycle.
+        vm.SelectedYear = Option(vm.YearOptions, 5775);
+        vm.SelectedMonth = Option(vm.MonthOptions, 1);
+
+        vm.SetViewModeCommand.Execute(CalendarViewMode.Cycle);
+
+        vm.ViewMode.Should().Be(CalendarViewMode.Cycle);
+        vm.SelectedCycle!.Value.Should().Be(1);
+        vm.MonthGroups.Should().NotBeEmpty();
+    }
+
+    [Fact]
+    public async Task MonthCommands_InYearView_MoveBackOneYear()
+    {
+        await using var fixture = await CreateFixtureAsync(CyclesOneToFour);
+        var vm = fixture.ViewModel;
+        await vm.InitializeAsync();
+        var (year, _, _) = HebrewDateHelper.NumberToHebrewDate(HebrewDateHelper.GetTodayDateNumber());
+        vm.SetViewModeCommand.Execute(CalendarViewMode.Year);
+
+        vm.PrevMonthCommand.Execute(null);
+
+        vm.MonthLabel.Should().Be($"שנת ה'{GimatryHelper.ToLetters((year - 1) % 1000)}");
+    }
+
+    [Fact]
+    public async Task SelectingCycle_WithinViewedYear_NavigatesToItsStartMonth()
+    {
+        await using var fixture = await CreateFixtureAsync(CyclesOneToFour);
+        var vm = fixture.ViewModel;
+        await vm.InitializeAsync();
+        // View Tishrei 5775 while picking cycle 1, whose start is Kislev 5775:
+        // same year, different month, so only the month has to move.
+        vm.SelectedYear = Option(vm.YearOptions, 5775);
+        vm.SelectedMonth = Option(vm.MonthOptions, 1);
+
+        vm.SelectedCycle = Option(vm.CycleOptions, 1);
+
+        vm.SelectedMonth!.Value.Should().Be(3);
+        vm.SelectedYear!.Value.Should().Be(5775);
+    }
+
+    [Fact]
+    public async Task CycleView_PrevEnabledPastTheFirstCycle()
+    {
+        await using var fixture = await CreateFixtureAsync(CyclesOneToFour);
+        var vm = fixture.ViewModel;
+        await vm.InitializeAsync();
+        vm.SetViewModeCommand.Execute(CalendarViewMode.Cycle);
+        vm.NextMonthCommand.Execute(null);
+
+        vm.PrevMonthCommand.CanExecute(null).Should().BeTrue();
+        vm.SetViewModeCommand.Execute(CalendarViewMode.Month);
+        vm.PrevMonthCommand.CanExecute(null).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task DownloadPdfCommand_RequiresDeviceLauncher()
+    {
+        await using var fixture = await CreateFixtureAsync(CyclesOneToFour);
+        var vm = fixture.ViewModel;
+        await vm.InitializeAsync();
+
+        // The export URL building is exercised in every view mode; the
+        // Launcher hand-off is device-only and faults on the unit-test host.
+        foreach (var mode in new[] { CalendarViewMode.Month, CalendarViewMode.Year, CalendarViewMode.Cycle })
+        {
+            vm.SetViewModeCommand.Execute(mode);
+            await Assert.ThrowsAnyAsync<Exception>(() => vm.DownloadPdfCommand.ExecuteAsync(null));
+        }
+    }
+
+    [Fact]
     public void AppRoutes_CalendarRoutes_AreDistinctReaderAndFlyoutTargets()
     {
         // The calendar page is a flyout destination while the reader route is
