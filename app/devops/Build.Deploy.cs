@@ -111,7 +111,9 @@ partial class Build
             var edit = service.Edits.Insert(new AppEdit(), GooglePlayPackageName).Execute();
             Serilog.Log.Information($"Created edit: {edit.Id}");
             SyncStoreListing(service, edit.Id);
-            service.Edits.Commit(GooglePlayPackageName, edit.Id).Execute();
+            var commitRequest = service.Edits.Commit(GooglePlayPackageName, edit.Id);
+            commitRequest.ChangesNotSentForReview = true;
+            commitRequest.Execute();
             Serilog.Log.Information("Google Play listing sync complete");
         });
 
