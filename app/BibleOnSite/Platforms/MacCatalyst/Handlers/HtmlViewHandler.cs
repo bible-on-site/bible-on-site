@@ -34,7 +34,7 @@ public class HtmlViewHandler : ViewHandler<HtmlView, ViewportTextView>
     // discards stale completions after a cell is rebound or disconnected.
     // The html and its style are compared separately — a joined render key
     // would copy the whole commentary string on every no-change re-render
-    // check (each RefreshDescendantViews walk hits every realized cell).
+    // check (each handler connect re-maps every style property).
     private string? _renderedHtml;
     private RenderStyle _renderedStyle;
     private int _renderSerial;

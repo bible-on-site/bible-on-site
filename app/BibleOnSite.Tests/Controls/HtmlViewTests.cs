@@ -297,4 +297,72 @@ public class HtmlViewTests
     }
 
     #endregion
+
+    #region DynamicResource Propagation Tests
+
+    // The reader binds HtmlView.FontSize with {DynamicResource PerushContentFontSize}
+    // and the platform handlers re-render on StyleChanged, so a font change
+    // reaches every commentary without walking the carousel.
+    private const string FontKey = "PerushContentFontSize";
+
+    private static (ContentPage Page, VerticalStackLayout Cells) CreateReader(double fontSize)
+    {
+        var cells = new VerticalStackLayout();
+        var page = new ContentPage { Content = new Grid { Children = { new ContentView { Content = cells } } } };
+        page.Resources[FontKey] = fontSize;
+        return (page, cells);
+    }
+
+    private static HtmlView CreateCommentary()
+    {
+        var htmlView = new HtmlView();
+        htmlView.SetDynamicResource(HtmlView.FontSizeProperty, FontKey);
+        return htmlView;
+    }
+
+    [Fact]
+    public void DynamicFontSize_WhenResourceChanges_UpdatesNestedViewAndRaisesStyleChanged()
+    {
+        var (page, cells) = CreateReader(16);
+        var htmlView = CreateCommentary();
+        cells.Children.Add(new VerticalStackLayout { Children = { new Label(), htmlView } });
+        var styleChanges = 0;
+        htmlView.StyleChanged += (_, _) => styleChanges++;
+
+        page.Resources[FontKey] = 24.0;
+
+        htmlView.FontSize.Should().Be(24);
+        styleChanges.Should().Be(1);
+    }
+
+    [Fact]
+    public void DynamicFontSize_WhenViewRealizedAfterChange_UsesCurrentSize()
+    {
+        var (page, cells) = CreateReader(16);
+        page.Resources[FontKey] = 20.0;
+
+        var htmlView = CreateCommentary();
+        cells.Children.Add(htmlView);
+
+        htmlView.FontSize.Should().Be(20);
+    }
+
+    [Fact]
+    public void DynamicFontSize_WhenRecycledViewReattachedAfterChange_UpdatesAndRaisesStyleChanged()
+    {
+        var (page, cells) = CreateReader(16);
+        var htmlView = CreateCommentary();
+        cells.Children.Add(htmlView);
+        cells.Children.Remove(htmlView);
+        var styleChanges = 0;
+        htmlView.StyleChanged += (_, _) => styleChanges++;
+
+        page.Resources[FontKey] = 12.0;
+        cells.Children.Add(htmlView);
+
+        htmlView.FontSize.Should().Be(12);
+        styleChanges.Should().Be(1);
+    }
+
+    #endregion
 }
