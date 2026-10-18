@@ -112,6 +112,10 @@ Selection **enforcement is opt-in**: only the mobile workflow exposes
     blocks the merge. Only a suite whose trigger did not fire may pass untested.
   - `app_ios_ci` (native audio) is the one exception: it runs on PRs only, so
     `skipped` is accepted on other events.
+  - `package_api` / `package_bulletin` / `package_admin` must succeed on every
+    non-`push` event (PR, merge queue, dispatch) where that module's
+    `module_changed` or `ci_changed` fired — the release Docker build is a
+    pre-merge check.
   - `recitation_ci` is required when data/website-affecting changes exist;
     `perushim_data` must succeed when the pipeline changed or a perushim
     baseline is missing.
@@ -134,7 +138,19 @@ Selection **enforcement is opt-in**: only the mobile workflow exposes
 - `website_publish_test_results_to_codecov` uploads the website's JUnit
   results as a Codecov `test_results` report.
 
-### 4. Packaging (Master `push` only)
+### 4. Packaging (Master `push`; API, Bulletin, Admin also pre-merge)
+
+`package_api`, `package_bulletin` and `package_admin` also run on PR, merge-queue and dispatch
+events whenever their module's `module_changed` or `ci_changed` fires. Those
+runs execute the exact release Docker build (same Dockerfile, `web` context,
+`DOCKER_BUILDKIT=0`) but skip every artifact upload, so nothing is released
+or deployed; `cross_module_ci` gates them under the same triggers. Any
+Dockerfile under a module dir counts as `module_changed`; the shared
+`web/.dockerignore` context, `shared-dockerize.yml` (API) and
+`web/api/entities` (compiled into the Bulletin image) count as `ci_changed`.
+Package Website stays master-only: its SSG image build reads the production
+DB (SSM + RDS allow-listing), which PR runs must not access; Website
+Performance builds the same Next.js app pre-merge.
 
 | Job | Kind | Output | Purpose |
 |-----|------|--------|---------|
@@ -283,6 +299,24 @@ release_new_module:
 ```
 
 **Affected Jobs:** `release_website`, `release_api`, `release_admin`, `release_bulletin`, `release_app`
+
+### Release Docker builds must run before merge (#2292)
+
+**Incident:** [#2291](https://github.com/bible-on-site/bible-on-site/pull/2291)
+bumped both Rust Dockerfiles to `rust:1.99.1-alpine` while that tag's manifest
+list only had a `linux/arm64` image. Master run
+[38809061508](https://github.com/bible-on-site/bible-on-site/actions/runs/38809061508)
+failed both Package API and Package Bulletin at `FROM`: `no matching manifest
+for linux/amd64 in the manifest list entries`. The PR
+([38806417211](https://github.com/bible-on-site/bible-on-site/actions/runs/38806417211))
+and merge-queue ([38807727130](https://github.com/bible-on-site/bible-on-site/actions/runs/38807727130))
+runs were green because `package_*` only ran on master `push`, and the module
+CI jobs build natively with `cargo`, never pulling the Dockerfile base image.
+
+**Rule:** a release build path (Dockerfile, base image, build context) must
+be exercised before merge. A packaging job that only runs on master `push`
+needs a non-`push` validation run that skips publication, gated in
+`cross_module_ci` under the job's own module/CI triggers.
 
 ### Draft release lookup and recovery
 
