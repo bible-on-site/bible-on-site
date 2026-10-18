@@ -54,6 +54,16 @@ describe("detectChanges", () => {
 		});
 	});
 
+	test("nginx redirects select the deploy verifier guard without a website release", () => {
+		const changes = detectChanges([
+			"docs/aws/cloudformation/ec2-nginx/router/router.conf",
+		]);
+		assert.deepEqual(changes.website, {
+			module_changed: false,
+			ci_changed: true,
+		});
+	});
+
 	test("devops manifest changes select the deploy verifier guard", () => {
 		for (const file of ["devops/package.json", "devops/package-lock.json"]) {
 			assert.equal(
