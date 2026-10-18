@@ -83,7 +83,7 @@ public class PerushimNotesService
         _fileSystem = fileSystem ?? FileSystem.Current;
         _deviceInfo = deviceInfo ?? DeviceInfo.Current;
         _appInfo = appInfo ?? AppInfo.Current;
-        _catalog = new PerushimCatalogService(_fileSystem);
+        _catalog = new PerushimCatalogService(_fileSystem, _appInfo);
     }
 
     /// <summary>
