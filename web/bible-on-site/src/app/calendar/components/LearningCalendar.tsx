@@ -166,8 +166,15 @@ export function LearningCalendar({
 			return `${dateLabel} - לא משובץ`;
 		}
 		const perekLabel = getPerekSource(day.perekId);
+		const first = day.reviewPerekIds?.[0];
+		const reviewLabel =
+			day.status === "review" &&
+			first !== undefined &&
+			first !== day.perekId
+				? `${getPerekSource(first)} - ${perekLabel}`
+				: perekLabel;
 		return day.status === "review"
-			? `${dateLabel} - חזרה: ${perekLabel}`
+			? `${dateLabel} - חזרה: ${reviewLabel}`
 			: `${dateLabel} - ${perekLabel}`;
 	};
 

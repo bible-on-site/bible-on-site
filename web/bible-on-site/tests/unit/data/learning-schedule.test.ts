@@ -97,27 +97,24 @@ describe("resolveCalendarDay", () => {
 			expect(result).toMatchObject({ status: "study", perekId: 268, cycle: 4 });
 		});
 
-		it("marks Fridays as review of Thursday's perek in confirmed cycles", () => {
+		it("marks Fridays as review of the whole studied week in confirmed cycles", () => {
 			// Cycle 4 starts on ז אלול תשפ"ה (Sunday). Its first Friday
-			// is 4 days later and reviews Thursday's perek.
+			// reviews all five perakim studied Sunday–Thursday, not only
+			// Thursday's perek (#2365).
 			const thursday = day(57851211);
 			const friday = day(57851212);
 			expect(thursday.status).toBe("study");
-			expect(friday).toMatchObject({
-				status: "review",
-				perekId: thursday.perekId,
-				cycle: 4,
-			});
+			expect(friday.status).toBe("review");
+			expect(friday.perekId).toBe(thursday.perekId);
+			expect(friday.reviewPerekIds).toEqual([1, 2, 3, 4, 5]);
 		});
 
-		it("marks Saturdays as review of Thursday's perek where the schedule has none", () => {
+		it("marks Saturdays as review of the same week where the schedule has none", () => {
 			const thursday = day(57851211);
 			const saturday = day(57851213);
-			expect(saturday).toMatchObject({
-				status: "review",
-				perekId: thursday.perekId,
-				cycle: 4,
-			});
+			expect(saturday.status).toBe("review");
+			expect(saturday.perekId).toBe(thursday.perekId);
+			expect(saturday.reviewPerekIds).toEqual([1, 2, 3, 4, 5]);
 		});
 	});
 
@@ -198,17 +195,19 @@ describe("resolveCalendarDay", () => {
 			});
 		});
 
-		it("marks projected Fridays and Saturdays as review", () => {
+		it("marks projected Fridays and Saturdays as review of the studied week", () => {
 			const cycle11 = getCycle(11);
 			// Cycle starts on Sunday: offsets 5/6 are Friday/Saturday of week 1.
 			const thursdayPerek = resolveCalendarDay(cycle11.start.add(4)).perekId;
 			expect(resolveCalendarDay(cycle11.start.add(5))).toMatchObject({
 				status: "review",
 				perekId: thursdayPerek,
+				reviewPerekIds: [1, 2, 3, 4, 5],
 			});
 			expect(resolveCalendarDay(cycle11.start.add(6))).toMatchObject({
 				status: "review",
 				perekId: thursdayPerek,
+				reviewPerekIds: [1, 2, 3, 4, 5],
 			});
 		});
 
