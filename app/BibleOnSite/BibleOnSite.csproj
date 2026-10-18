@@ -90,6 +90,17 @@
 		     in the embedded assemblies. -->
 		<RunAOTCompilation Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND '$(Configuration)' == 'Release' AND '$(UseMonoRuntime)' != 'false'">true</RunAOTCompilation>
 		<AndroidEnableProfiledAot Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND '$(Configuration)' == 'Release' AND '$(UseMonoRuntime)' != 'false'">true</AndroidEnableProfiledAot>
+		<!-- Android Release: R8 shrinks the Java/Kotlin DEX (AndroidX, Firebase, Media3,
+		     Glide, Play Asset Delivery bindings) instead of plain D8 dexing (#2355):
+		     uncompressed DEX 25.4 -> 14.0 MB, arm64 install download -3.8 MB, installed
+		     size -15 MB, with unchanged cold/warm startup and build time. The SDK's
+		     generated proguard_xamarin.cfg plus each AAR's consumer rules keep the JNI
+		     peers, so no project keep rules are needed. Obfuscation stays off (the SDK
+		     default), so Java stack traces remain readable; the SDK embeds mapping.txt as
+		     BUNDLE-METADATA/com.android.tools.build.obfuscation/proguard.map in the AAB,
+		     which Play ingests with that exact versionCode (#1161).
+		     Rollback: delete this line to return to D8. -->
+		<AndroidLinkTool Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND '$(Configuration)' == 'Release'">r8</AndroidLinkTool>
 		<!-- Debug APKs include the large commentary database. Store SQLite assets directly
 		     to avoid recompressing it on every local edit; Release packaging keeps compression. -->
 		<AndroidStoreUncompressedFileExtensions Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND '$(Configuration)' == 'Debug'">$(AndroidStoreUncompressedFileExtensions);.sqlite</AndroidStoreUncompressedFileExtensions>
