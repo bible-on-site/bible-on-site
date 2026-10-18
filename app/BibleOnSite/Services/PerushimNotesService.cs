@@ -45,6 +45,27 @@ public class PerushimNotesService
     private string _notesValidationStatus = "Notes database unavailable";
     private readonly SemaphoreSlim _operationLock = new(1, 1);
 
+    /// <summary>
+    /// Raised after initialization, a download or a removal releases the pack,
+    /// so work deferred while notes were undetermined can settle.
+    /// </summary>
+    internal event Action? OperationCompleted
+    {
+        add { lock (_operationCompletedSync) { _operationCompleted += value; } }
+        remove { lock (_operationCompletedSync) { _operationCompleted -= value; } }
+    }
+
+    private readonly object _operationCompletedSync = new();
+    private Action? _operationCompleted;
+
+    private void ReleaseOperation()
+    {
+        _operationLock.Release();
+        Action? handlers;
+        lock (_operationCompletedSync) { handlers = _operationCompleted; }
+        handlers?.Invoke();
+    }
+
     public PerushimNotesService(IPadDeliveryService padService)
         : this(padService, null, null, null)
     {
@@ -211,7 +232,7 @@ public class PerushimNotesService
     {
         await _operationLock.WaitAsync();
         try { await InitializeCoreAsync(); }
-        finally { _operationLock.Release(); }
+        finally { ReleaseOperation(); }
     }
 
     private async Task InitializeCoreAsync()
@@ -284,7 +305,7 @@ public class PerushimNotesService
     {
         await _operationLock.WaitAsync(cancellationToken);
         try { return await TryDownloadNotesCoreAsync(progress, cancellationToken); }
-        finally { _operationLock.Release(); }
+        finally { ReleaseOperation(); }
     }
 
     /// <summary>
@@ -311,7 +332,7 @@ public class PerushimNotesService
             _notesValidationStatus = "Removed by user";
             _initialized = true;
         }
-        finally { _operationLock.Release(); }
+        finally { ReleaseOperation(); }
     }
 
     private async Task<bool> TryDownloadNotesCoreAsync(IProgress<double>? progress, CancellationToken cancellationToken)
@@ -590,8 +611,44 @@ public class PerushimNotesService
     internal async Task<string?> GetDeliveredIndexPathAsync()
     {
         await InitializeAsync();
+        return PeekDeliveredIndexPath();
+    }
+
+    /// <summary>
+    /// The staged search index file if it is already on disk — a plain file
+    /// probe that never initializes the pack, copies payloads, or blocks, so
+    /// the verses index can check for an adoptable table without waiting on
+    /// notes delivery.
+    /// </summary>
+    internal string? PeekDeliveredIndexPath()
+    {
         var path = Path.Join(DataDirectory, SearchIndexDbName);
         return File.Exists(path) ? path : null;
+    }
+
+    /// <summary>
+    /// Runs <paramref name="action"/> only when notes are definitively
+    /// unavailable (initialized, then missing, rejected or removed). Skips
+    /// without blocking while initialization or a download holds the pack, or
+    /// before it was ever initialized — a staged index may still be adopted.
+    /// Returns whether it ran.
+    /// </summary>
+    internal bool RunIfSettledUnavailable(Action action)
+    {
+        if (!_operationLock.Wait(0))
+        {
+            return false;
+        }
+        try
+        {
+            if (_initialized && !IsAvailable)
+            {
+                action();
+                return true;
+            }
+            return false;
+        }
+        finally { _operationLock.Release(); }
     }
 
     /// <summary>Restages a delivered index after cache eviction, using only
