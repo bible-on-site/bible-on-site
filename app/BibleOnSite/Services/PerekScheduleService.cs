@@ -55,7 +55,14 @@ public class PerekScheduleService
         DayStatus Status,
         int? PerekId,
         int? Cycle,
-        bool Projected);
+        bool Projected)
+    {
+        /// <summary>
+        /// Perakim reviewed on this day: every perek studied in the same calendar
+        /// week (Sunday through this day). Null on study and unscheduled days (#2365).
+        /// </summary>
+        public IReadOnlyList<int>? ReviewPerekIds { get; init; }
+    }
 
     /// <summary>A month-grid cell: null Day marks a leading blank before the 1st.</summary>
     public record MonthCell(CalendarDay? Day);
@@ -341,11 +348,31 @@ public class PerekScheduleService
 
         if (!cycle.Projected)
         {
-            // In-cycle day without its own chapter: review the previous scheduled one.
-            // Entries are sorted chronologically, so the last earlier one wins.
-            // A confirmed cycle starts on its first entry's date and exact-match
-            // days returned above, so an earlier entry always exists here.
+            // In-cycle day without its own chapter: review the whole studied week
+            // (Sunday of this week through yesterday), not just the last perek (#2365).
             var dayGregorian = HebrewDateHelper.ToGregorianDate(dateNum);
+            var weekStartGregorian = HebrewDateHelper.ToGregorianDate(
+                HebrewDateHelper.AddDays(dateNum, -dayOfWeek));
+            var weekPerekIds = _entriesByCycle[cycle.Number]
+                .Where(e => e.Gregorian >= weekStartGregorian && e.Gregorian < dayGregorian)
+                .Select(e => e.PerekId)
+                .ToArray();
+            if (weekPerekIds.Length > 0)
+            {
+                return new CalendarDay(
+                    dateNum,
+                    day,
+                    dayOfWeek,
+                    DayStatus.Review,
+                    weekPerekIds[^1],
+                    cycle.Number,
+                    false)
+                {
+                    ReviewPerekIds = weekPerekIds,
+                };
+            }
+            // A gap that left no study day this week: fall back to the last perek.
+            // Entries are sorted chronologically, so the last earlier one wins.
             var previous = _entriesByCycle[cycle.Number]
                 .Last(e => e.Gregorian < dayGregorian);
             return new CalendarDay(
@@ -355,7 +382,10 @@ public class PerekScheduleService
                 DayStatus.Review,
                 previous.PerekId,
                 cycle.Number,
-                false);
+                false)
+            {
+                ReviewPerekIds = [previous.PerekId],
+            };
         }
 
         var projectedOffset = HebrewDateHelper.DaysBetween(cycle.StartDate, dateNum);
@@ -367,6 +397,12 @@ public class PerekScheduleService
         var perekIndex = isStudyDay
             ? week * StudyDaysPerWeek + dayIndex
             : week * StudyDaysPerWeek + (StudyDaysPerWeek - 1);
+        IReadOnlyList<int>? reviewPerekIds = isStudyDay
+            ? null
+            : Enumerable.Range(
+                    week * StudyDaysPerWeek + 1,
+                    Math.Min(StudyDaysPerWeek, PerakimPerCycle - week * StudyDaysPerWeek))
+                .ToArray();
         return new CalendarDay(
             dateNum,
             day,
@@ -374,7 +410,10 @@ public class PerekScheduleService
             isStudyDay ? DayStatus.Study : DayStatus.Review,
             perekIndex + 1,
             cycle.Number,
-            true);
+            true)
+        {
+            ReviewPerekIds = reviewPerekIds,
+        };
     }
 
     /// <summary>

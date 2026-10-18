@@ -55,10 +55,68 @@
         </Style>
     </ContentPage.Resources>
 
-    <Grid RowDefinitions="Auto,Auto,Auto,Auto,*,Auto" Padding="8">
+    <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,*,Auto" Padding="8">
 
-        <!-- Month navigation: previous/today/next + month and year pickers -->
-        <Grid Grid.Row="0" ColumnDefinitions="Auto,Auto,Auto,*,*" ColumnSpacing="4">
+        <!-- View toggle: monthly / yearly / full cycle (#2364) -->
+        <Grid Grid.Row="0" ColumnDefinitions="*,*,*" ColumnSpacing="4" Margin="0,0,0,4">
+            <Button Grid.Column="0"
+                    Text="חודשי"
+                    FontSize="14"
+                    HeightRequest="38"
+                    Padding="8,0"
+                    AutomationId="CalendarViewMonth"
+                    SemanticProperties.Description="תצוגה חודשית"
+                    Command="{Binding SetViewModeCommand}"
+                    CommandParameter="{x:Static viewmodels:CalendarViewMode.Month}">
+                <Button.Triggers>
+                    <DataTrigger TargetType="Button"
+                                 Binding="{Binding ViewMode}"
+                                 Value="{x:Static viewmodels:CalendarViewMode.Month}">
+                        <Setter Property="BackgroundColor" Value="{StaticResource Primary}"/>
+                        <Setter Property="TextColor" Value="White"/>
+                    </DataTrigger>
+                </Button.Triggers>
+            </Button>
+            <Button Grid.Column="1"
+                    Text="שנתי"
+                    FontSize="14"
+                    HeightRequest="38"
+                    Padding="8,0"
+                    AutomationId="CalendarViewYear"
+                    SemanticProperties.Description="תצוגה שנתית"
+                    Command="{Binding SetViewModeCommand}"
+                    CommandParameter="{x:Static viewmodels:CalendarViewMode.Year}">
+                <Button.Triggers>
+                    <DataTrigger TargetType="Button"
+                                 Binding="{Binding ViewMode}"
+                                 Value="{x:Static viewmodels:CalendarViewMode.Year}">
+                        <Setter Property="BackgroundColor" Value="{StaticResource Primary}"/>
+                        <Setter Property="TextColor" Value="White"/>
+                    </DataTrigger>
+                </Button.Triggers>
+            </Button>
+            <Button Grid.Column="2"
+                    Text="מחזור מלא"
+                    FontSize="14"
+                    HeightRequest="38"
+                    Padding="8,0"
+                    AutomationId="CalendarViewCycle"
+                    SemanticProperties.Description="תצוגת מחזור מלא"
+                    Command="{Binding SetViewModeCommand}"
+                    CommandParameter="{x:Static viewmodels:CalendarViewMode.Cycle}">
+                <Button.Triggers>
+                    <DataTrigger TargetType="Button"
+                                 Binding="{Binding ViewMode}"
+                                 Value="{x:Static viewmodels:CalendarViewMode.Cycle}">
+                        <Setter Property="BackgroundColor" Value="{StaticResource Primary}"/>
+                        <Setter Property="TextColor" Value="White"/>
+                    </DataTrigger>
+                </Button.Triggers>
+            </Button>
+        </Grid>
+
+        <!-- Period navigation: previous/today/next + month and year pickers + PDF export -->
+        <Grid Grid.Row="1" ColumnDefinitions="Auto,Auto,Auto,*,*,Auto" ColumnSpacing="4">
             <Button Grid.Column="0"
                     Text="{x:Static fonts:FluentUI.chevron_right_24_regular}"
                     Style="{StaticResource CalendarNavButton}"
@@ -94,10 +152,16 @@
                     Title="שנה"
                     Style="{StaticResource CalendarPicker}"
                     AutomationId="CalendarYearPicker"/>
+            <Button Grid.Column="5"
+                    Text="{x:Static fonts:FluentUI.arrow_download_24_regular}"
+                    Style="{StaticResource CalendarNavButton}"
+                    SemanticProperties.Description="הורדת לוח הלימוד כ-PDF"
+                    AutomationId="CalendarDownloadPdf"
+                    Command="{Binding DownloadPdfCommand}"/>
         </Grid>
 
-        <!-- Month title -->
-        <Label Grid.Row="1"
+        <!-- Period title -->
+        <Label Grid.Row="2"
                Text="{Binding MonthLabel}"
                FontSize="22"
                FontAttributes="Bold"
@@ -106,7 +170,7 @@
                TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
 
         <!-- Cycle picker + range -->
-        <Grid Grid.Row="2" ColumnDefinitions="Auto,*" ColumnSpacing="8">
+        <Grid Grid.Row="3" ColumnDefinitions="Auto,*" ColumnSpacing="8">
             <Picker Grid.Column="0"
                     ItemsSource="{Binding CycleOptions}"
                     SelectedItem="{Binding SelectedCycle}"
@@ -123,7 +187,8 @@
         </Grid>
 
         <!-- Weekday headers (RTL: first column is Sunday) -->
-        <Grid Grid.Row="3" ColumnDefinitions="*,*,*,*,*,*,*" Margin="0,4,0,0">
+        <Grid Grid.Row="4" ColumnDefinitions="*,*,*,*,*,*,*" Margin="0,4,0,0"
+              IsVisible="{Binding IsMonthView}">
             <Label Grid.Column="0" Text="א" FontAttributes="Bold" HorizontalTextAlignment="Center" SemanticProperties.Description="ראשון" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
             <Label Grid.Column="1" Text="ב" FontAttributes="Bold" HorizontalTextAlignment="Center" SemanticProperties.Description="שני" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
             <Label Grid.Column="2" Text="ג" FontAttributes="Bold" HorizontalTextAlignment="Center" SemanticProperties.Description="שלישי" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
@@ -134,10 +199,11 @@
         </Grid>
 
         <!-- Month grid -->
-        <CollectionView Grid.Row="4"
+        <CollectionView Grid.Row="5"
                         ItemsSource="{Binding Cells}"
                         ItemsLayout="VerticalGrid, 7"
                         SelectionMode="None"
+                        IsVisible="{Binding IsMonthView}"
                         AutomationId="CalendarGrid">
             <CollectionView.ItemTemplate>
                 <DataTemplate x:DataType="viewmodels:CalendarCellViewModel">
@@ -206,8 +272,92 @@
             </CollectionView.ItemTemplate>
         </CollectionView>
 
+        <!-- Yearly / full-cycle views: grouped mini-months (#2364) -->
+        <CollectionView Grid.Row="5"
+                        ItemsSource="{Binding MonthGroups}"
+                        SelectionMode="None"
+                        IsVisible="{Binding IsGroupedView}"
+                        AutomationId="CalendarGroups">
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="viewmodels:MiniMonthViewModel">
+                    <VerticalStackLayout Margin="0,6" Spacing="2">
+                        <Label Text="{Binding Title}"
+                               FontSize="14"
+                               FontAttributes="Bold"
+                               HorizontalTextAlignment="Center"
+                               TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
+                        <Grid ColumnDefinitions="*,*,*,*,*,*,*">
+                            <Label Grid.Column="0" Text="א" FontSize="9" FontAttributes="Bold" HorizontalTextAlignment="Center" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                            <Label Grid.Column="1" Text="ב" FontSize="9" FontAttributes="Bold" HorizontalTextAlignment="Center" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                            <Label Grid.Column="2" Text="ג" FontSize="9" FontAttributes="Bold" HorizontalTextAlignment="Center" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                            <Label Grid.Column="3" Text="ד" FontSize="9" FontAttributes="Bold" HorizontalTextAlignment="Center" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                            <Label Grid.Column="4" Text="ה" FontSize="9" FontAttributes="Bold" HorizontalTextAlignment="Center" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                            <Label Grid.Column="5" Text="ו" FontSize="9" FontAttributes="Bold" HorizontalTextAlignment="Center" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                            <Label Grid.Column="6" Text="ש" FontSize="9" FontAttributes="Bold" HorizontalTextAlignment="Center" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                        </Grid>
+                        <CollectionView ItemsSource="{Binding Cells}"
+                                        ItemsLayout="VerticalGrid, 7"
+                                        SelectionMode="None">
+                            <CollectionView.ItemTemplate>
+                                <DataTemplate x:DataType="viewmodels:CalendarCellViewModel">
+                                    <Border Margin="1"
+                                            Padding="0"
+                                            HeightRequest="24"
+                                            StrokeShape="RoundRectangle 4"
+                                            Stroke="Transparent"
+                                            StrokeThickness="1"
+                                            BackgroundColor="{AppThemeBinding Light=#F8FAFC, Dark=#1A1F2E}">
+                                        <Border.GestureRecognizers>
+                                            <TapGestureRecognizer Tapped="OnCellTapped"
+                                                                  CommandParameter="{Binding .}"/>
+                                        </Border.GestureRecognizers>
+                                        <Border.Triggers>
+                                            <DataTrigger TargetType="Border"
+                                                         Binding="{Binding IsToday}"
+                                                         Value="True">
+                                                <Setter Property="Stroke" Value="{StaticResource Primary}"/>
+                                                <Setter Property="StrokeThickness" Value="2"/>
+                                            </DataTrigger>
+                                            <DataTrigger TargetType="Border"
+                                                         Binding="{Binding IsReview}"
+                                                         Value="True">
+                                                <Setter Property="StrokeDashArray" Value="3,3"/>
+                                                <Setter Property="BackgroundColor" Value="Transparent"/>
+                                            </DataTrigger>
+                                            <DataTrigger TargetType="Border"
+                                                         Binding="{Binding IsNone}"
+                                                         Value="True">
+                                                <Setter Property="BackgroundColor" Value="Transparent"/>
+                                            </DataTrigger>
+                                            <DataTrigger TargetType="Border"
+                                                         Binding="{Binding IsBlank}"
+                                                         Value="True">
+                                                <Setter Property="BackgroundColor" Value="Transparent"/>
+                                            </DataTrigger>
+                                            <DataTrigger TargetType="Border"
+                                                         Binding="{Binding IsDimmed}"
+                                                         Value="True">
+                                                <Setter Property="Opacity" Value="0.3"/>
+                                            </DataTrigger>
+                                        </Border.Triggers>
+                                        <Label Text="{Binding DayText}"
+                                               FontSize="11"
+                                               IsVisible="{Binding IsBlank, Converter={StaticResource InvertedBoolConverter}}"
+                                               HorizontalTextAlignment="Center"
+                                               VerticalTextAlignment="Center"
+                                               SemanticProperties.Description="{Binding AccessibilityText}"
+                                               TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
+                                    </Border>
+                                </DataTemplate>
+                            </CollectionView.ItemTemplate>
+                        </CollectionView>
+                    </VerticalStackLayout>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+
         <!-- Legend -->
-        <HorizontalStackLayout Grid.Row="5"
+        <HorizontalStackLayout Grid.Row="6"
                                HorizontalOptions="Center"
                                Spacing="14"
                                Margin="0,6,0,0">
@@ -226,14 +376,14 @@
         </HorizontalStackLayout>
 
         <!-- Loading / error overlay -->
-        <Grid Grid.RowSpan="6"
+        <Grid Grid.RowSpan="7"
               IsVisible="{Binding IsLoading}">
             <ActivityIndicator IsRunning="True"
                                VerticalOptions="Center"
                                HorizontalOptions="Center"
                                Color="{StaticResource Primary}"/>
         </Grid>
-        <Label Grid.RowSpan="6"
+        <Label Grid.RowSpan="7"
                Text="{Binding ErrorMessage}"
                IsVisible="{Binding ErrorMessage, Converter={StaticResource StringNotEmptyConverter}}"
                TextColor="Red"
