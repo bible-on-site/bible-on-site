@@ -19,12 +19,23 @@ import {
 const mockReplace = jest.fn();
 const mockPush = jest.fn();
 
-function setSearchParam(value: string | null) {
+function setSearchParam(value: string | null, extra?: Record<string, string>) {
 	const params = new URLSearchParams();
 	if (value !== null) {
 		params.set("month", value);
 	}
+	for (const [key, val] of Object.entries(extra ?? {})) {
+		params.set(key, val);
+	}
 	(useSearchParams as jest.Mock).mockReturnValue(params);
+}
+
+function q(container: HTMLElement, selector: string): Element {
+	const el = container.querySelector(selector);
+	if (el === null) {
+		throw new Error(`Missing element: ${selector}`);
+	}
+	return el;
 }
 
 const cycleStartProps = {
@@ -55,8 +66,9 @@ describe("LearningCalendar", () => {
 		).toBeInTheDocument();
 		// Cycle 4 starts ז אלול with בראשית א (perek 1).
 		expect(
-			screen.getByRole("button", { name: (name) =>
-				/אלול.*בראשית א/.test(name) && !name.includes("חזרה") }),
+			screen.getByRole("button", {
+				name: (name) => /אלול.*בראשית א/.test(name) && !name.includes("חזרה"),
+			}),
 		).toBeInTheDocument();
 		// 12-13 Elul (Friday/Saturday) review the whole studied week (#2365).
 		const reviewDays = screen.getAllByRole("button", { name: /חזרה/ });
@@ -115,8 +127,9 @@ describe("LearningCalendar", () => {
 		render(<LearningCalendar {...cycleStartProps} />);
 
 		fireEvent.click(
-			screen.getByRole("button", { name: (name) =>
-				/אלול.*בראשית א/.test(name) && !name.includes("חזרה") }),
+			screen.getByRole("button", {
+				name: (name) => /אלול.*בראשית א/.test(name) && !name.includes("חזרה"),
+			}),
 		);
 		expect(mockPush).toHaveBeenCalledWith("/929/1");
 	});
@@ -125,8 +138,7 @@ describe("LearningCalendar", () => {
 		render(<LearningCalendar {...cycleStartProps} />);
 
 		const todayCell = screen.getByRole("button", {
-			name: (name) =>
-				/אלול.*בראשית א/.test(name) && !name.includes("חזרה"),
+			name: (name) => /אלול.*בראשית א/.test(name) && !name.includes("חזרה"),
 		});
 		expect(todayCell.textContent).toContain("היום");
 	});
@@ -235,5 +247,133 @@ describe("LearningCalendar", () => {
 		).toBeInTheDocument();
 		// The projected cycle's label is shown next to the picker.
 		expect(screen.getByText(/מחזור 11 \(משוער\):/)).toBeInTheDocument();
+	});
+
+	describe("view modes", () => {
+		it("renders a view toggle with monthly/yearly/full-cycle options", () => {
+			render(<LearningCalendar {...cycleStartProps} />);
+
+			expect(screen.getByRole("button", { name: "חודשי" })).toHaveAttribute(
+				"aria-pressed",
+				"true",
+			);
+			expect(screen.getByRole("button", { name: "שנתי" })).toHaveAttribute(
+				"aria-pressed",
+				"false",
+			);
+			expect(screen.getByRole("button", { name: "מחזור מלא" })).toHaveAttribute(
+				"aria-pressed",
+				"false",
+			);
+		});
+
+		it("switches to the yearly view and syncs the ?view= query", () => {
+			const { container } = render(<LearningCalendar {...cycleStartProps} />);
+
+			fireEvent.click(screen.getByRole("button", { name: "שנתי" }));
+
+			expect(mockReplace).toHaveBeenCalledWith(
+				expect.stringContaining("view=year"),
+				{ scroll: false },
+			);
+			// Every month of תשפ"ה appears as a mini-month section.
+			const headings = [...container.querySelectorAll("h3")].map(
+				(h) => h.textContent,
+			);
+			for (const name of ["תשרי", "חשוון", "אלול"]) {
+				expect(headings).toContain(name);
+			}
+		});
+
+		it("renders the yearly view from the ?view=year query", () => {
+			setSearchParam("578512", { view: "year" });
+			const { container } = render(<LearningCalendar {...cycleStartProps} />);
+
+			expect(
+				container.querySelector('button[aria-pressed="true"]')?.textContent,
+			).toBe("שנתי");
+			expect(container.querySelector("h2")?.textContent).toMatch(/שנת ה'תשפ/);
+			// Study days stay navigable inside mini-months.
+			expect(
+				container.querySelectorAll('button[aria-label*="חזרה"]').length,
+			).toBeGreaterThanOrEqual(2);
+		});
+
+		it("switches to the full-cycle view and renders its months", () => {
+			const { container } = render(<LearningCalendar {...cycleStartProps} />);
+
+			fireEvent.click(screen.getByRole("button", { name: "מחזור מלא" }));
+
+			expect(mockReplace).toHaveBeenCalledWith(
+				expect.stringContaining("view=cycle"),
+				{ scroll: false },
+			);
+			// אלול 5785 belongs to cycle 4; the heading shows the full range.
+			expect(container.querySelector("h2")?.textContent).toMatch(/מחזור 4/);
+			expect(container.querySelectorAll("h3").length).toBeGreaterThan(30);
+		});
+
+		it("navigates to the next cycle in full-cycle view", () => {
+			setSearchParam("578512", { view: "cycle", cycle: "4" });
+			const { container } = render(<LearningCalendar {...cycleStartProps} />);
+
+			fireEvent.click(q(container, 'button[aria-label="מחזור הבא"]'));
+
+			expect(mockReplace).toHaveBeenCalledWith(
+				expect.stringContaining("cycle=5"),
+				{ scroll: false },
+			);
+			expect(container.querySelector("h2")?.textContent).toMatch(/מחזור 5/);
+		});
+
+		it("navigates to the next year in yearly view", () => {
+			setSearchParam("578512", { view: "year" });
+			const { container } = render(<LearningCalendar {...cycleStartProps} />);
+
+			fireEvent.click(q(container, 'button[aria-label="שנה הבאה"]'));
+
+			// אלול exists in every year, so the month is preserved.
+			expect(mockReplace).toHaveBeenCalledWith(
+				expect.stringContaining("month=578612"),
+				{ scroll: false },
+			);
+		});
+
+		it("jumps between cycles via the cycle picker in full-cycle view", () => {
+			setSearchParam("578512", { view: "cycle", cycle: "4" });
+			const { container } = render(<LearningCalendar {...cycleStartProps} />);
+
+			fireEvent.change(q(container, 'select[aria-label="בחירת מחזור לימוד"]'), {
+				target: { value: "2" },
+			});
+
+			expect(mockReplace).toHaveBeenCalledWith(
+				expect.stringContaining("cycle=2"),
+				{ scroll: false },
+			);
+			expect(container.querySelector("h2")?.textContent).toMatch(/מחזור 2/);
+		});
+
+		it("disables previous-cycle navigation on the first cycle", () => {
+			setSearchParam("578512", { view: "cycle", cycle: "1" });
+			const { container } = render(<LearningCalendar {...cycleStartProps} />);
+
+			expect(
+				container.querySelector('button[aria-label="מחזור קודם"]'),
+			).toBeDisabled();
+		});
+
+		it("keeps scheduled perakim navigable in yearly view", () => {
+			setSearchParam("578512", { view: "year" });
+			const { container } = render(<LearningCalendar {...cycleStartProps} />);
+
+			const studyDay = [
+				...container.querySelectorAll('button[aria-label*="בראשית א"]'),
+			].find((b) => !b.getAttribute("aria-label")?.includes("חזרה"));
+			expect(studyDay).toBeDefined();
+			fireEvent.click(studyDay as Element);
+
+			expect(mockPush).toHaveBeenCalledWith("/929/1");
+		});
 	});
 });

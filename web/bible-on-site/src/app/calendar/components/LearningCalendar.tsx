@@ -9,6 +9,7 @@ import {
 	compareMonths,
 	getConfirmedCycleCount,
 	getCycle,
+	getCycleForDate,
 	getCycleLabel,
 	getCycleStartMonth,
 	getDateLabel,
@@ -17,6 +18,7 @@ import {
 	getMonthOrder,
 	getPerekSource,
 	getYearLabel,
+	type MonthCell,
 	type MonthRef,
 	nextMonth,
 	prevMonth,
@@ -35,6 +37,30 @@ const WEEKDAY_NAMES = [
 ] as const;
 
 const MONTH_QUERY_PARAM = "month";
+const VIEW_QUERY_PARAM = "view";
+const CYCLE_QUERY_PARAM = "cycle";
+
+const VIEW_MODES = [
+	{ key: "month", label: "חודשי" },
+	{ key: "year", label: "שנתי" },
+	{ key: "cycle", label: "מחזור מלא" },
+] as const;
+
+type ViewMode = (typeof VIEW_MODES)[number]["key"];
+
+function parseViewParam(raw: string | null): ViewMode {
+	return VIEW_MODES.some((mode) => mode.key === raw)
+		? (raw as ViewMode)
+		: "month";
+}
+
+function parseCycleParam(raw: string | null): number | null {
+	if (raw === null || !/^\d+$/.test(raw)) {
+		return null;
+	}
+	const cycle = Number.parseInt(raw, 10);
+	return cycle >= 1 ? cycle : null;
+}
 
 /**
  * Parses the `?month=YYYYMM` query value into a MonthRef.
@@ -71,10 +97,14 @@ export function LearningCalendar({
 	const router = useRouter();
 	const searchParams = useSearchParams();
 	const monthParam = parseMonthParam(searchParams.get(MONTH_QUERY_PARAM));
+	const viewParam = parseViewParam(searchParams.get(VIEW_QUERY_PARAM));
+	const cycleParam = parseCycleParam(searchParams.get(CYCLE_QUERY_PARAM));
 
 	const [viewed, setViewed] = useState<MonthRef>(
 		() => monthParam ?? { year: initialYear, month: initialMonth },
 	);
+	const [viewMode, setViewMode] = useState<ViewMode>(viewParam);
+	const [viewedCycle, setViewedCycle] = useState<number | null>(cycleParam);
 
 	// Keep the viewed month in sync with the URL (back/forward, shared links).
 	useEffect(() => {
@@ -83,14 +113,45 @@ export function LearningCalendar({
 		}
 	}, [monthParam, viewed]);
 
-	const navigateMonth = useCallback(
-		(target: MonthRef) => {
-			setViewed(target);
+	const pushParams = useCallback(
+		(updates: { month?: MonthRef; view?: ViewMode; cycle?: number }) => {
 			const params = new URLSearchParams(searchParams.toString());
-			params.set(MONTH_QUERY_PARAM, formatMonthParam(target));
+			if (updates.month) {
+				params.set(MONTH_QUERY_PARAM, formatMonthParam(updates.month));
+			}
+			if (updates.view) {
+				params.set(VIEW_QUERY_PARAM, updates.view);
+			}
+			if (updates.cycle !== undefined) {
+				params.set(CYCLE_QUERY_PARAM, String(updates.cycle));
+			}
 			router.replace(`?${params.toString()}`, { scroll: false });
 		},
 		[router, searchParams],
+	);
+
+	const navigateMonth = useCallback(
+		(target: MonthRef) => {
+			setViewed(target);
+			pushParams({ month: target });
+		},
+		[pushParams],
+	);
+
+	const selectView = useCallback(
+		(mode: ViewMode) => {
+			setViewMode(mode);
+			pushParams({ view: mode });
+		},
+		[pushParams],
+	);
+
+	const selectCycle = useCallback(
+		(cycleNumber: number) => {
+			setViewedCycle(cycleNumber);
+			pushParams({ cycle: cycleNumber });
+		},
+		[pushParams],
 	);
 
 	const cells = useMemo(() => buildMonth(viewed.year, viewed.month), [viewed]);
@@ -131,9 +192,13 @@ export function LearningCalendar({
 
 	const onCycleSelected = useCallback(
 		(cycleNumber: number) => {
-			navigateMonth(getCycleStartMonth(getCycle(cycleNumber)));
+			if (viewMode === "cycle") {
+				selectCycle(cycleNumber);
+			} else {
+				navigateMonth(getCycleStartMonth(getCycle(cycleNumber)));
+			}
 		},
-		[navigateMonth],
+		[navigateMonth, selectCycle, viewMode],
 	);
 
 	const onYearSelected = useCallback(
@@ -160,6 +225,65 @@ export function LearningCalendar({
 		[router],
 	);
 
+	// The cycle owning most scheduled days in the viewed month; falls back to
+	// today's cycle when the month lies in an inter-cycle gap.
+	const contextualCycle = useMemo(() => {
+		const counts = new Map<number, number>();
+		for (const cell of cells) {
+			if (cell.day?.cycle !== undefined) {
+				counts.set(cell.day.cycle, (counts.get(cell.day.cycle) ?? 0) + 1);
+			}
+		}
+		let best: number | undefined;
+		let bestCount = 0;
+		for (const [cycle, count] of counts) {
+			if (count > bestCount) {
+				best = cycle;
+				bestCount = count;
+			}
+		}
+		return (
+			best ??
+			getCycleForDate(parseNumericalDateToHebcalDate(todayDateNumber))
+				?.number ??
+			1
+		);
+	}, [cells, todayDateNumber]);
+
+	const resolvedCycle = viewedCycle ?? contextualCycle;
+
+	const yearMonths = useMemo(
+		() =>
+			viewMode === "year"
+				? getMonthOrder(viewed.year).map((month) =>
+						buildMonth(viewed.year, month),
+					)
+				: [],
+		[viewMode, viewed.year],
+	);
+
+	const cycleMonths = useMemo(() => {
+		if (viewMode !== "cycle") {
+			return [] as MonthCell[][];
+		}
+		const cycle = getCycle(resolvedCycle);
+		const months: MonthCell[][] = [];
+		let ref: MonthRef = getCycleStartMonth(cycle);
+		const endRef: MonthRef = {
+			year: cycle.end.year,
+			month: cycle.end.getUniformMonth(),
+		};
+		for (
+			let guard = 0;
+			guard < 50 && compareMonths(ref, endRef) <= 0;
+			guard += 1
+		) {
+			months.push(buildMonth(ref.year, ref.month));
+			ref = nextMonth(ref);
+		}
+		return months;
+	}, [viewMode, resolvedCycle]);
+
 	const dayAriaLabel = (day: CalendarDay): string => {
 		const dateLabel = getDateLabel(day.date);
 		if (day.perekId === undefined) {
@@ -168,9 +292,7 @@ export function LearningCalendar({
 		const perekLabel = getPerekSource(day.perekId);
 		const first = day.reviewPerekIds?.[0];
 		const reviewLabel =
-			day.status === "review" &&
-			first !== undefined &&
-			first !== day.perekId
+			day.status === "review" && first !== undefined && first !== day.perekId
 				? `${getPerekSource(first)} - ${perekLabel}`
 				: perekLabel;
 		return day.status === "review"
@@ -182,12 +304,49 @@ export function LearningCalendar({
 		<main className={styles.page}>
 			<h1 className={styles.title}>לוח לימוד יומי</h1>
 
+			<div className={styles.viewToggle}>
+				{VIEW_MODES.map((mode) => (
+					<button
+						key={mode.key}
+						type="button"
+						className={`${styles.viewButton} ${
+							viewMode === mode.key ? styles.viewButtonActive : ""
+						}`}
+						aria-pressed={viewMode === mode.key}
+						onClick={() => selectView(mode.key)}
+					>
+						{mode.label}
+					</button>
+				))}
+			</div>
+
+			<a
+				className={styles.downloadLink}
+				href={`/api/calendar-pdf?month=${formatMonthParam(viewed)}&view=${viewMode}&cycle=${resolvedCycle}`}
+				download
+			>
+				הורדת PDF
+			</a>
+
 			<div className={styles.controls}>
 				<button
 					type="button"
 					className={styles.navButton}
-					onClick={() => navigateMonth(prevMonth(viewed))}
-					aria-label="חודש קודם"
+					onClick={() =>
+						viewMode === "cycle"
+							? selectCycle(resolvedCycle - 1)
+							: viewMode === "year"
+								? onYearSelected(viewed.year - 1)
+								: navigateMonth(prevMonth(viewed))
+					}
+					aria-label={
+						viewMode === "cycle"
+							? "מחזור קודם"
+							: viewMode === "year"
+								? "שנה קודמת"
+								: "חודש קודם"
+					}
+					disabled={viewMode === "cycle" && resolvedCycle <= 1}
 				>
 					‹
 				</button>
@@ -201,56 +360,80 @@ export function LearningCalendar({
 				<button
 					type="button"
 					className={styles.navButton}
-					onClick={() => navigateMonth(nextMonth(viewed))}
-					aria-label="חודש הבא"
+					onClick={() =>
+						viewMode === "cycle"
+							? selectCycle(resolvedCycle + 1)
+							: viewMode === "year"
+								? onYearSelected(viewed.year + 1)
+								: navigateMonth(nextMonth(viewed))
+					}
+					aria-label={
+						viewMode === "cycle"
+							? "מחזור הבא"
+							: viewMode === "year"
+								? "שנה הבאה"
+								: "חודש הבא"
+					}
 				>
 					›
 				</button>
-				<label className={styles.pickerLabel}>
-					<span className={styles.srOnly}>חודש</span>
-					<select
-						className={styles.picker}
-						value={viewed.month}
-						onChange={(event) =>
-							navigateMonth({
-								year: viewed.year,
-								month: Number.parseInt(event.target.value, 10),
-							})
-						}
-					>
-						{getMonthOrder(viewed.year).map((month) => (
-							<option key={month} value={month}>
-								{getMonthName(viewed.year, month)}
-							</option>
-						))}
-					</select>
-				</label>
-				<label className={styles.pickerLabel}>
-					<span className={styles.srOnly}>שנה</span>
-					<select
-						className={styles.picker}
-						value={viewed.year}
-						onChange={(event) =>
-							onYearSelected(Number.parseInt(event.target.value, 10))
-						}
-					>
-						{yearOptions.map((year) => (
-							<option key={year} value={year}>
-								{getYearLabel(year)}
-							</option>
-						))}
-					</select>
-				</label>
+				{viewMode === "month" && (
+					<label className={styles.pickerLabel}>
+						<span className={styles.srOnly}>חודש</span>
+						<select
+							className={styles.picker}
+							value={viewed.month}
+							onChange={(event) =>
+								navigateMonth({
+									year: viewed.year,
+									month: Number.parseInt(event.target.value, 10),
+								})
+							}
+						>
+							{getMonthOrder(viewed.year).map((month) => (
+								<option key={month} value={month}>
+									{getMonthName(viewed.year, month)}
+								</option>
+							))}
+						</select>
+					</label>
+				)}
+				{viewMode !== "cycle" && (
+					<label className={styles.pickerLabel}>
+						<span className={styles.srOnly}>שנה</span>
+						<select
+							className={styles.picker}
+							value={viewed.year}
+							onChange={(event) =>
+								onYearSelected(Number.parseInt(event.target.value, 10))
+							}
+						>
+							{yearOptions.map((year) => (
+								<option key={year} value={year}>
+									{getYearLabel(year)}
+								</option>
+							))}
+						</select>
+					</label>
+				)}
 			</div>
 
-			<h2 className={styles.monthTitle}>{getMonthLabel(viewed)}</h2>
+			<h2 className={styles.monthTitle}>
+				{viewMode === "month" && getMonthLabel(viewed)}
+				{viewMode === "year" && `שנת ${getYearLabel(viewed.year)}`}
+				{viewMode === "cycle" && getCycleLabel(getCycle(resolvedCycle))}
+			</h2>
 
 			<div className={styles.cycleRow}>
 				<label className={styles.pickerLabel}>
 					<span className={styles.srOnly}>מחזור לימוד</span>
 					<select
 						className={styles.picker}
-						value={displayedCycle?.number ?? ""}
+						value={
+							viewMode === "cycle"
+								? resolvedCycle
+								: (displayedCycle?.number ?? "")
+						}
 						onChange={(event) =>
 							onCycleSelected(Number.parseInt(event.target.value, 10))
 						}
@@ -272,34 +455,72 @@ export function LearningCalendar({
 				)}
 			</div>
 
-			<div className={styles.weekdays}>
-				{WEEKDAY_NAMES.map((name) => (
-					<div key={name.full} className={styles.weekday}>
-						<span aria-hidden="true">{name.short}</span>
-						<span className={styles.srOnly}>{name.full}</span>
-					</div>
-				))}
-			</div>
-
-			<div className={styles.grid}>
-				{cells.map((cell) =>
-					cell.day === undefined ? (
-						<div
-							key={`blank-${cell.blankColumn}`}
-							className={styles.blankCell}
-							aria-hidden="true"
-						/>
-					) : (
-						<CalendarCell
-							key={cell.day.dateNumber}
-							day={cell.day}
-							isToday={cell.day.dateNumber === todayDateNumber}
+			{viewMode === "year" && (
+				<div className={styles.yearGrid}>
+					{getMonthOrder(viewed.year).map((month, index) => (
+						<MiniMonth
+							key={month}
+							title={getMonthName(viewed.year, month)}
+							cells={yearMonths[index]}
+							todayDateNumber={todayDateNumber}
 							onOpen={openPerek}
-							ariaLabel={dayAriaLabel(cell.day)}
+							dayAriaLabel={dayAriaLabel}
 						/>
-					),
-				)}
-			</div>
+					))}
+				</div>
+			)}
+
+			{viewMode === "cycle" && (
+				<div className={styles.yearGrid}>
+					{cycleMonths.map((cellsForMonth) => (
+						<MiniMonth
+							key={
+								cellsForMonth.find((cell) => cell.day !== undefined)?.day
+									?.dateNumber
+							}
+							title={getMonthLabelForCells(cellsForMonth)}
+							cells={cellsForMonth}
+							todayDateNumber={todayDateNumber}
+							onOpen={openPerek}
+							dayAriaLabel={dayAriaLabel}
+							dimmed={(day) => day.cycle !== resolvedCycle}
+						/>
+					))}
+				</div>
+			)}
+
+			{viewMode === "month" && (
+				<>
+					<div className={styles.weekdays}>
+						{WEEKDAY_NAMES.map((name) => (
+							<div key={name.full} className={styles.weekday}>
+								<span aria-hidden="true">{name.short}</span>
+								<span className={styles.srOnly}>{name.full}</span>
+							</div>
+						))}
+					</div>
+
+					<div className={styles.grid}>
+						{cells.map((cell) =>
+							cell.day === undefined ? (
+								<div
+									key={`blank-${cell.blankColumn}`}
+									className={styles.blankCell}
+									aria-hidden="true"
+								/>
+							) : (
+								<CalendarCell
+									key={cell.day.dateNumber}
+									day={cell.day}
+									isToday={cell.day.dateNumber === todayDateNumber}
+									onOpen={openPerek}
+									ariaLabel={dayAriaLabel(cell.day)}
+								/>
+							),
+						)}
+					</div>
+				</>
+			)}
 
 			<ul className={styles.legend} aria-label="מקרא">
 				<li>
@@ -378,6 +599,107 @@ function CalendarCell({
 			{day.status === "review" && (
 				<span className={styles.reviewBadge}>חזרה</span>
 			)}
+		</button>
+	);
+}
+
+function getMonthLabelForCells(cells: MonthCell[]): string {
+	const day = cells.find((cell) => cell.day !== undefined)?.day;
+	return day === undefined
+		? ""
+		: getMonthLabel({ year: day.date.year, month: day.date.getUniformMonth() });
+}
+
+function MiniMonth({
+	title,
+	cells,
+	todayDateNumber,
+	onOpen,
+	dayAriaLabel,
+	dimmed,
+}: {
+	title: string;
+	cells: MonthCell[];
+	todayDateNumber: number;
+	onOpen: (perekId: number) => void;
+	dayAriaLabel: (day: CalendarDay) => string;
+	dimmed?: (day: CalendarDay) => boolean;
+}) {
+	return (
+		<section className={styles.miniMonth}>
+			<h3 className={styles.miniMonthTitle}>{title}</h3>
+			<div className={styles.miniWeekdays} aria-hidden="true">
+				{WEEKDAY_NAMES.map((name) => (
+					<span key={name.full} className={styles.miniWeekday}>
+						{name.short}
+					</span>
+				))}
+			</div>
+			<div className={styles.miniGrid}>
+				{cells.map((cell) =>
+					cell.day === undefined ? (
+						<span
+							key={`blank-${cell.blankColumn}`}
+							className={styles.miniCell}
+							aria-hidden="true"
+						/>
+					) : (
+						<MiniCell
+							key={cell.day.dateNumber}
+							day={cell.day}
+							isToday={cell.day.dateNumber === todayDateNumber}
+							dimmed={dimmed?.(cell.day) === true}
+							onOpen={onOpen}
+							ariaLabel={dayAriaLabel(cell.day)}
+						/>
+					),
+				)}
+			</div>
+		</section>
+	);
+}
+
+function MiniCell({
+	day,
+	isToday,
+	dimmed,
+	onOpen,
+	ariaLabel,
+}: {
+	day: CalendarDay;
+	isToday: boolean;
+	dimmed: boolean;
+	onOpen: (perekId: number) => void;
+	ariaLabel: string;
+}) {
+	const classNames = [
+		styles.miniCell,
+		day.status === "review" ? styles.miniReviewCell : "",
+		day.status === "none" ? styles.miniNoneCell : "",
+		dimmed ? styles.miniDimmed : "",
+		isToday ? styles.miniTodayCell : "",
+	]
+		.filter(Boolean)
+		.join(" ");
+	const content = toLetters(day.day, { addQuotes: true });
+
+	if (day.perekId === undefined || dimmed) {
+		return (
+			<span className={classNames}>
+				{content}
+				<span className={styles.srOnly}>{ariaLabel}</span>
+			</span>
+		);
+	}
+	const perekId = day.perekId;
+	return (
+		<button
+			type="button"
+			className={classNames}
+			aria-label={ariaLabel}
+			onClick={() => onOpen(perekId)}
+		>
+			{content}
 		</button>
 	);
 }
