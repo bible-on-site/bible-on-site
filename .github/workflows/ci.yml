@@ -444,7 +444,6 @@ jobs:
     uses: ./.github/workflows/shared-dockerize.yml
     with:
       module_directory: ${{ needs.setup_env.outputs.website_directory }}
-      runner: namespace-profile-mac-os
 
   package_api:
     name: Package API
