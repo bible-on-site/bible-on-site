@@ -70,6 +70,16 @@ jobs:
         run: |
           npm ci --no-audit
 
+      # Preflight the post-rollout verifier's imports through the same
+      # NODE_PATH contract used below, before any deployment side effects
+      # or the long recitation wait (#2372).
+      - name: Verify deployment verifier dependencies resolve
+        if: ${{ steps.guard.outputs.deploy == 'true' && env.MODULE_NAME == 'website' }}
+        run: |
+          NODE_PATH="$GITHUB_WORKSPACE/devops/node_modules" \
+            node --input-type=module -e \
+            "await import('$GITHUB_WORKSPACE/web/bible-on-site/scripts/verify-public-content.mjs'); console.log('verifier imports resolve')"
+
       - name: Configure AWS Credentials (OIDC)
         if: ${{ steps.guard.outputs.deploy == 'true' }}
         uses: aws-actions/configure-aws-credentials@v6
