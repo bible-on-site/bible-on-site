@@ -90,3 +90,53 @@ describe("getStoreMetadata", () => {
 		expect(meta.stale).toBe(true);
 	});
 });
+
+describe("store-metadata route and remaining platforms", () => {
+	afterEach(() => jest.restoreAllMocks());
+
+	it("ios maps itunes fields with scale and source", async () => {
+		jest.spyOn(globalThis, "fetch").mockResolvedValue(
+			new Response(
+				JSON.stringify({
+					results: [
+						{
+							version: "5.0.180",
+							averageUserRating: 4.8,
+							userRatingCount: 123,
+						},
+					],
+				}),
+			),
+		);
+		const meta = await getStoreMetadata("ios");
+		expect(meta.platform).toBe("ios");
+		expect(meta.version).toBe("5.0.180");
+		expect(meta.rating).toBe(4.8);
+		expect(meta.ratingCount).toBe(123);
+		expect(meta.stale).toBe(false);
+	});
+
+	it("windows reports catalog reachability with honest nulls", async () => {
+		jest.spyOn(globalThis, "fetch").mockResolvedValue(
+			new Response(
+				JSON.stringify({
+					Product: { LastModifiedDate: "2026-10-15T00:00:00Z" },
+				}),
+			),
+		);
+		const meta = await getStoreMetadata("windows");
+		expect(meta.platform).toBe("windows");
+		expect(meta.version).toBeNull();
+		expect(meta.rating).toBeNull();
+		expect(meta.fetchedAt).toBe("2026-10-15T00:00:00Z");
+		expect(meta.stale).toBe(false);
+	});
+
+	it("windows without a product timestamp stamps the fetch time", async () => {
+		jest.spyOn(globalThis, "fetch").mockResolvedValue(
+			new Response(JSON.stringify({ Product: {} })),
+		);
+		const meta = await getStoreMetadata("windows");
+		expect(meta.fetchedAt).toBeTruthy();
+	});
+});
