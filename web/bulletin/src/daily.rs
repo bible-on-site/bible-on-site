@@ -149,7 +149,8 @@ pub fn render(input: &DailyInput, fonts_dir: &Path) -> Result<DailyArtifacts> {
         perakim: vec![pdf::PdfPerekInput {
             perek_heb: tanach::perek_to_hebrew(chapter.perek_in_sefer),
             header: normalize_authored(&chapter.header),
-            pesukim: chapter.pesukim.clone(),
+            pesukim: pdf::plain_pesukim(&chapter.pesukim),
+            images: vec![],
             articles,
         }],
         include_cover: false,

@@ -7,6 +7,7 @@
 
 use std::path::Path;
 
+use base64::{Engine, engine::general_purpose::STANDARD};
 use typst_as_lib::TypstEngine;
 
 /// Lightweight request types for PDF generation — decoupled from HTTP models.
@@ -31,14 +32,58 @@ pub struct PdfCoverText {
     pub edition: String,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct PdfPerekInput {
     pub perek_heb: String,
     pub header: String,
-    pub pesukim: Vec<String>,
+    /// One entry per pasuk; each pasuk keeps its קרי/כתיב word segments.
+    pub pesukim: Vec<Vec<PdfSegment>>,
+    /// Perek illustrations, already encoded as JPEG/PNG/WebP bytes.
+    pub images: Vec<PdfImage>,
     /// Articles that belong to this perek: (name, author_name, content_html)
     pub articles: Vec<(String, String, String)>,
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SegmentKind {
+    /// Regular word (or a whole pre-joined pasuk string).
+    #[default]
+    Word,
+    /// כתיב that differs from its קרי — printed plain, like the website.
+    Ktiv,
+    /// קרי that differs from its כתיב — printed as `(קְרִי: …)`, like the website.
+    Qri,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct PdfSegment {
+    pub kind: SegmentKind,
+    pub text: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct PdfImage {
+    pub bytes: Vec<u8>,
+    /// File extension Typst uses to pick the decoder (`jpg`, `png`, `webp`, ...).
+    pub ext: String,
+    pub caption: String,
+}
+
+/// Wrap pre-joined pasuk strings (embedded Tanach data) as single-word pesukim.
+pub fn plain_pesukim(pesukim: &[String]) -> Vec<Vec<PdfSegment>> {
+    pesukim
+        .iter()
+        .map(|text| {
+            vec![PdfSegment {
+                kind: SegmentKind::Word,
+                text: text.clone(),
+            }]
+        })
+        .collect()
+}
+
+/// Virtual files (images) referenced by the generated markup.
+type TypstFiles = Vec<(String, Vec<u8>)>;
 
 /// Strip Hebrew cantillation marks (taamim, U+0591–U+05AF) while keeping
 /// nikud (U+05B0–U+05BD, U+05BF, U+05C1–U+05C2, U+05C4–U+05C5, U+05C7).
@@ -52,6 +97,120 @@ pub fn strip_taamim(text: &str) -> String {
 /// hyphenated pairs stay visually connected.
 fn collapse_maqaf_spaces(text: &str) -> String {
     text.replace("־ ", "־")
+}
+
+/// Dashes that no bundled font has a glyph for are printed as ASCII hyphens.
+/// En/em dash and minus render via the Frank Ruhl Libre fallback font, and the
+/// biblical maqaf (U+05BE) is never touched.
+fn normalize_unsupported_dash(c: char) -> char {
+    match c {
+        '\u{2010}' | '\u{2011}' | '\u{2012}' | '\u{2015}' => '-',
+        _ => c,
+    }
+}
+
+/// Plain text of an inline HTML fragment (tags dropped, entities decoded).
+/// `<br>` and block tags become spaces so words never merge.
+fn html_inline_text(html: &str) -> String {
+    let mut out = String::with_capacity(html.len());
+    let mut chars = html.chars();
+    while let Some(c) = chars.next() {
+        match c {
+            '<' => {
+                let tag: String = chars.by_ref().take_while(|&tc| tc != '>').collect();
+                let name = tag
+                    .trim_start_matches('/')
+                    .split(|ch: char| ch.is_whitespace() || ch == '/')
+                    .next()
+                    .unwrap_or("")
+                    .to_ascii_lowercase();
+                if matches!(name.as_str(), "br" | "p" | "div" | "li") {
+                    out.push(' ');
+                }
+            }
+            '&' => out.push_str(&consume_html_entity(&mut chars)),
+            _ => out.push(c),
+        }
+    }
+    out.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// Split off the article's first `<h1>`: returns its plain text (if any) and
+/// the remaining HTML with that heading removed, so it is printed once.
+fn split_first_h1(html: &str) -> (Option<String>, String) {
+    let lower = html.to_ascii_lowercase();
+    let Some(open) = lower.match_indices("<h1").map(|(i, _)| i).find(|&i| {
+        matches!(
+            lower.as_bytes().get(i + 3),
+            Some(b'>' | b' ' | b'\t' | b'\n' | b'\r' | b'/')
+        )
+    }) else {
+        return (None, html.to_string());
+    };
+    let Some(content_start) = lower[open..].find('>').map(|i| open + i + 1) else {
+        return (None, html.to_string());
+    };
+    let (content_end, rest_start) = match lower[content_start..].find("</h1") {
+        Some(i) => {
+            let end = content_start + i;
+            let after = lower[end..].find('>').map_or(html.len(), |j| end + j + 1);
+            (end, after)
+        }
+        None => (html.len(), html.len()),
+    };
+    let text = html_inline_text(&html[content_start..content_end]);
+    if text.is_empty() {
+        return (None, html.to_string());
+    }
+    (
+        Some(text),
+        format!("{}{}", &html[..open], &html[rest_start..]),
+    )
+}
+
+/// Decode a `data:image/...;base64,` URI into (extension, bytes).
+fn decode_data_image(src: &str) -> Option<(String, Vec<u8>)> {
+    let rest = src.trim().strip_prefix("data:image/")?;
+    let (mime, data) = rest.split_once(";base64,")?;
+    let ext = match mime.to_ascii_lowercase().as_str() {
+        "png" => "png",
+        "jpeg" | "jpg" => "jpg",
+        "gif" => "gif",
+        "webp" => "webp",
+        "svg+xml" => "svg",
+        _ => return None,
+    };
+    let cleaned: String = data.chars().filter(|c| !c.is_whitespace()).collect();
+    STANDARD
+        .decode(cleaned)
+        .ok()
+        .map(|bytes| (ext.to_string(), bytes))
+}
+
+/// Value of an HTML attribute inside a raw tag body (`img src="..." alt=x`).
+fn html_attr(tag: &str, name: &str) -> Option<String> {
+    let lower = tag.to_ascii_lowercase();
+    let mut from = 0;
+    while let Some(i) = lower[from..].find(name) {
+        let start = from + i;
+        from = start + name.len();
+        let before_ok = start == 0 || lower.as_bytes()[start - 1].is_ascii_whitespace();
+        let after = lower[from..].trim_start();
+        if !before_ok || !after.starts_with('=') {
+            continue;
+        }
+        let value_start = tag.len() - after.len() + 1;
+        let raw = tag[value_start..].trim_start();
+        return Some(match raw.chars().next() {
+            Some(q @ ('"' | '\'')) => raw[1..].split(q).next().unwrap_or("").to_string(),
+            _ => raw.split_whitespace().next().unwrap_or("").to_string(),
+        });
+    }
+    None
+}
+
+fn typst_string(text: &str) -> String {
+    format!("\"{}\"", text.replace('\\', "\\\\").replace('"', "\\\""))
 }
 
 /// Decode an HTML entity (the part between `&` and `;`) to a character or string.
@@ -104,7 +263,7 @@ fn consume_html_entity(chars: &mut impl Iterator<Item = char>) -> String {
 ///   blockquote → indented block
 ///   li       → bullet item
 ///   Other tags are silently consumed (content preserved).
-fn html_to_typst(html: &str) -> String {
+fn html_to_typst(html: &str, files: &mut TypstFiles) -> String {
     let mut out = String::with_capacity(html.len());
     let mut chars = html.chars().peekable();
     let mut bold_open = false;
@@ -155,7 +314,20 @@ fn html_to_typst(html: &str) -> String {
                     if !is_closing {
                         out.push_str("\n#text(weight: \"bold\")[");
                     } else {
-                        out.push_str("]\n");
+                        out.push_str("];\n");
+                    }
+                }
+                "img" => {
+                    let src = html_attr(&tag_content, "src").unwrap_or_default();
+                    if let Some((ext, bytes)) = decode_data_image(&src) {
+                        let name = format!("article-image-{}.{}", files.len(), ext);
+                        out.push_str(&format!(
+                            "\n#align(center, image({}, width: 70%))\n",
+                            typst_string(&name)
+                        ));
+                        files.push((name, bytes));
+                    } else if src.starts_with("http://") || src.starts_with("https://") {
+                        out.push_str(&format!("#link({})[תמונה];", typst_string(&src)));
                     }
                 }
                 "b" | "strong" => {
@@ -163,7 +335,7 @@ fn html_to_typst(html: &str) -> String {
                         out.push_str("#strong[");
                         bold_open = true;
                     } else if is_closing && bold_open {
-                        out.push(']');
+                        out.push_str("];");
                         bold_open = false;
                     }
                 }
@@ -172,7 +344,7 @@ fn html_to_typst(html: &str) -> String {
                         out.push_str("#emph[");
                         italic_open = true;
                     } else if is_closing && italic_open {
-                        out.push(']');
+                        out.push_str("];");
                         italic_open = false;
                     }
                 }
@@ -181,7 +353,7 @@ fn html_to_typst(html: &str) -> String {
                         out.push_str("#underline[");
                         underline_open = true;
                     } else if is_closing && underline_open {
-                        out.push(']');
+                        out.push_str("];");
                         underline_open = false;
                     }
                 }
@@ -189,7 +361,7 @@ fn html_to_typst(html: &str) -> String {
                     if !is_closing {
                         out.push_str("\n#pad(right: 2em)[");
                     } else {
-                        out.push_str("]\n");
+                        out.push_str("];\n");
                     }
                 }
                 "li" => {
@@ -225,18 +397,18 @@ fn html_to_typst(html: &str) -> String {
                 out.push('\\');
                 out.push(c);
             }
-            _ => out.push(c),
+            _ => out.push(normalize_unsupported_dash(c)),
         }
     }
 
     if bold_open {
-        out.push(']');
+        out.push_str("];");
     }
     if italic_open {
-        out.push(']');
+        out.push_str("];");
     }
     if underline_open {
-        out.push(']');
+        out.push_str("];");
     }
 
     // Collapse excessive blank lines
@@ -298,11 +470,11 @@ fn typst_escape(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     for c in text.chars() {
         match c {
-            '#' | '*' | '_' | '`' | '<' | '>' | '@' | '$' | '\\' | '~' | '/' => {
+            '#' | '*' | '_' | '`' | '<' | '>' | '@' | '$' | '\\' | '~' | '/' | '[' | ']' => {
                 out.push('\\');
                 out.push(c);
             }
-            _ => out.push(c),
+            _ => out.push(normalize_unsupported_dash(c)),
         }
     }
     out
@@ -392,33 +564,77 @@ fn append_cover_page(markup: &mut String, req: &PdfRequest) {
 
 fn append_toc_page(markup: &mut String, req: &PdfRequest) {
     markup.push_str("#align(center)[#text(17pt, weight: \"bold\")[תוכן העניינים]]\n#v(1.2em)\n");
-    for p in &req.perakim {
+    for (idx, p) in req.perakim.iter().enumerate() {
         let mut line = format!("{} {}", req.sefer_name, p.perek_heb);
         if !p.header.is_empty() {
             line.push_str(" - ");
             line.push_str(&p.header);
         }
-        markup.push_str("#block(inset: (right: 0.2em))[#align(right)[");
-        markup.push_str(&typst_escape(&strip_taamim(&line)));
-        markup.push_str("]]\n#v(0.28em)\n");
+        // Link + page number both resolve the perek's label after final layout.
+        let label = perek_label(idx);
+        markup.push_str(&format!(
+            "#block(inset: (right: 0.2em))[#link({label})[{} #box(width: 1fr, repeat[.]) #context counter(page).at({label}).first()]]\n#v(0.28em)\n",
+            typst_escape(&strip_taamim(&line))
+        ));
     }
 }
 
+fn perek_label(idx: usize) -> String {
+    format!("<perek-{}>", idx + 1)
+}
+
+/// Pasuk markup from its segments, mirroring the website reader: a differing
+/// כתיב prints plain and its קרי follows as `(קְרִי: …)` in the reader's label color.
+fn pasuk_markup(segments: &[PdfSegment]) -> String {
+    let mut out = String::new();
+    let mut joins_next = true;
+    for seg in segments {
+        let text = seg.text.trim();
+        if text.is_empty() {
+            continue;
+        }
+        if !joins_next {
+            out.push(' ');
+        }
+        joins_next = text.ends_with('־');
+        let escaped = typst_escape(&collapse_maqaf_spaces(text));
+        if seg.kind == SegmentKind::Qri {
+            out.push_str(&format!(
+                "(#text(size: 0.75em, fill: rgb(\"#637598\"))[קְרִי:]#h(0.25em);{escaped})"
+            ));
+        } else {
+            out.push_str(&escaped);
+        }
+    }
+    out
+}
+
 /// Generate Typst markup string from the request data.
-fn generate_typst_markup(req: &PdfRequest) -> String {
+fn generate_typst_markup(req: &PdfRequest) -> (String, TypstFiles) {
     generate_typst_markup_with_intro(req, None)
 }
 
-fn generate_typst_markup_with_intro(req: &PdfRequest, intro: Option<(&str, &[String])>) -> String {
+fn generate_typst_markup_with_intro(
+    req: &PdfRequest,
+    intro: Option<(&str, &[String])>,
+) -> (String, TypstFiles) {
     let mut markup = String::with_capacity(16 * 1024);
+    let mut files: TypstFiles = Vec::new();
 
-    // Page and text settings
+    // Page and text settings. Frank Ruhl Libre supplies glyphs Taamey D lacks
+    // (en/em dash, minus) so they don't vanish from article text.
     markup.push_str(
         r#"#set page(paper: "a4", margin: (top: 20mm, bottom: 20mm, left: 15mm, right: 15mm))
-#set text(font: "Taamey D", size: 11pt, dir: rtl, lang: "he")
+#set text(font: ("Taamey D", "Frank Ruhl Libre"), size: 11pt, dir: rtl, lang: "he")
 #set par(justify: true)
 "#,
     );
+    if req.include_toc {
+        // Printed numbers match the TOC (both are the physical page counter).
+        markup.push_str(
+            "#set page(footer: context { let n = counter(page).get().first(); if n > 1 { align(center, text(9pt)[#n]) } })\n",
+        );
+    }
 
     if req.include_cover {
         append_cover_page(&mut markup, req);
@@ -443,6 +659,7 @@ fn generate_typst_markup_with_intro(req: &PdfRequest, intro: Option<(&str, &[Str
         if idx > 0 {
             markup.push_str("#pagebreak()\n");
         }
+        markup.push_str(&format!("#metadata(none) {}\n", perek_label(idx)));
 
         // Title
         let title_text = if perek.header.is_empty() {
@@ -456,22 +673,34 @@ fn generate_typst_markup_with_intro(req: &PdfRequest, intro: Option<(&str, &[Str
         ));
         markup.push_str("#v(0.5em)\n");
 
+        for (img_idx, image) in perek.images.iter().enumerate() {
+            let name = format!("perek-{}-image-{}.{}", idx + 1, img_idx, image.ext);
+            markup.push_str(&format!(
+                "#align(center, image({}, width: 75%))\n",
+                typst_string(&name)
+            ));
+            if !image.caption.trim().is_empty() {
+                markup.push_str(&format!(
+                    "#align(center, text(size: 9pt)[{}])\n",
+                    typst_escape(image.caption.trim())
+                ));
+            }
+            markup.push_str("#v(0.4em)\n");
+            files.push((name, image.bytes.clone()));
+        }
+
         // Section header
         markup.push_str("#align(right, text(size: 12pt, weight: \"bold\")[הפרק])\n");
         markup.push_str("#v(0.3em)\n");
 
         // Pesukim
-        for (i, pasuk_text) in perek.pesukim.iter().enumerate() {
-            if pasuk_text.trim().is_empty() {
+        for (i, segments) in perek.pesukim.iter().enumerate() {
+            let text = pasuk_markup(segments);
+            if text.is_empty() {
                 continue;
             }
             let prefix = to_hebrew_letter(i + 1);
-            let cleaned = collapse_maqaf_spaces(pasuk_text);
-            markup.push_str(&format!(
-                "*{}* {}\n\n",
-                typst_escape(&prefix),
-                typst_escape(&cleaned)
-            ));
+            markup.push_str(&format!("*{}* {}\n\n", typst_escape(&prefix), text));
         }
 
         // Articles
@@ -479,13 +708,22 @@ fn generate_typst_markup_with_intro(req: &PdfRequest, intro: Option<(&str, &[Str
             markup.push_str("#v(1em)\n");
             for (name, author_name, content_html) in &perek.articles {
                 markup.push_str("#v(0.6em)\n");
+                // Header is the article's first h1 only (#2336, interim for #1186);
+                // the article name is the fallback, never the abstract.
+                let (h1, body_html) = split_first_h1(content_html);
+                let header = h1.unwrap_or_else(|| name.trim().to_string());
                 markup.push_str(&format!(
-                    "#text(weight: \"bold\")[{} \\/ {}]\n\n",
-                    typst_escape(name),
-                    typst_escape(author_name)
+                    "#text(size: 12pt, weight: \"bold\")[{}]\n\n",
+                    typst_escape(&header)
                 ));
+                if !author_name.trim().is_empty() {
+                    markup.push_str(&format!(
+                        "#text(size: 9pt)[{}]\n\n",
+                        typst_escape(author_name.trim())
+                    ));
+                }
 
-                let typst_content = html_to_typst(content_html);
+                let typst_content = html_to_typst(&body_html, &mut files);
                 let trimmed = typst_content.trim();
                 if !trimmed.is_empty() {
                     markup.push_str("#{\nset text(size: 10pt)\n[\n");
@@ -496,14 +734,14 @@ fn generate_typst_markup_with_intro(req: &PdfRequest, intro: Option<(&str, &[Str
         }
     }
 
-    markup
+    (markup, files)
 }
 
 /// Build a PDF document from the request payload.
 /// Uses Typst for proper Hebrew text shaping (taamim, nikud via GPOS).
 pub fn build_pdf(req: &PdfRequest, fonts_dir: &Path) -> anyhow::Result<Vec<u8>> {
-    let markup = generate_typst_markup(req);
-    compile_pdf(markup, fonts_dir)
+    let (markup, files) = generate_typst_markup(req);
+    compile_pdf(markup, files, fonts_dir)
 }
 
 pub fn build_daily_pdf(
@@ -512,21 +750,30 @@ pub fn build_daily_pdf(
     date: &str,
     dedications: &[String],
 ) -> anyhow::Result<Vec<u8>> {
-    compile_pdf(
-        generate_typst_markup_with_intro(req, Some((date, dedications))),
-        fonts_dir,
-    )
+    let (markup, files) = generate_typst_markup_with_intro(req, Some((date, dedications)));
+    compile_pdf(markup, files, fonts_dir)
 }
 
-fn compile_pdf(markup: String, fonts_dir: &Path) -> anyhow::Result<Vec<u8>> {
-    let font_path = fonts_dir.join("TaameyD-Regular.ttf");
-    let font_bytes = std::fs::read(&font_path)
-        .map_err(|e| anyhow::anyhow!("Failed to read font {}: {}", font_path.display(), e))?;
+fn compile_pdf(markup: String, files: TypstFiles, fonts_dir: &Path) -> anyhow::Result<Vec<u8>> {
+    let read_font = |name: &str| {
+        let font_path = fonts_dir.join(name);
+        std::fs::read(&font_path)
+            .map_err(|e| anyhow::anyhow!("Failed to read font {}: {}", font_path.display(), e))
+    };
+    let fonts = [
+        read_font("TaameyD-Regular.ttf")?,
+        read_font("FrankRuhlLibre-Regular.ttf")?,
+    ];
 
-    let font_refs: [&[u8]; 1] = [font_bytes.as_slice()];
+    let font_refs: Vec<&[u8]> = fonts.iter().map(Vec::as_slice).collect();
     let engine = TypstEngine::builder()
         .main_file(markup)
         .fonts(font_refs)
+        .with_static_file_resolver(
+            files
+                .iter()
+                .map(|(name, bytes)| (name.as_str(), bytes.as_slice())),
+        )
         .build();
 
     let compiled = engine.compile();
@@ -544,6 +791,10 @@ fn compile_pdf(markup: String, fonts_dir: &Path) -> anyhow::Result<Vec<u8>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn to_typst(html: &str) -> String {
+        html_to_typst(html, &mut Vec::new())
+    }
 
     #[test]
     fn test_strip_taamim() {
@@ -568,7 +819,7 @@ mod tests {
     #[test]
     fn test_html_to_typst_paragraphs() {
         let html = "<p>שלום</p><p>עולם</p>";
-        let typst = html_to_typst(html);
+        let typst = to_typst(html);
         assert!(typst.contains("שלום"));
         assert!(typst.contains("עולם"));
         assert!(
@@ -580,14 +831,14 @@ mod tests {
     #[test]
     fn test_html_to_typst_br() {
         let html = "שורה ראשונה<br>שורה שנייה";
-        let typst = html_to_typst(html);
+        let typst = to_typst(html);
         assert!(typst.contains("שורה ראשונה \\\n"));
     }
 
     #[test]
     fn test_html_to_typst_entities() {
         let html = "a &amp; b &lt; c &gt; d";
-        let typst = html_to_typst(html);
+        let typst = to_typst(html);
         assert!(typst.contains("\\<"), "< should be escaped");
         assert!(typst.contains("\\>"), "> should be escaped");
         assert!(typst.contains("& b"), "& decoded from &amp;");
@@ -596,7 +847,7 @@ mod tests {
     #[test]
     fn test_html_to_typst_bold_italic() {
         let html = "<b>bold</b> and <i>italic</i> text";
-        let typst = html_to_typst(html);
+        let typst = to_typst(html);
         assert!(typst.contains("#strong[bold]"));
         assert!(typst.contains("#emph[italic]"));
     }
@@ -611,7 +862,7 @@ mod tests {
             "<ul><li>One</li><li>Two</li></ul>",
             "<p><u>under</u> &#35; &unknown;</p>"
         );
-        let typst = html_to_typst(html);
+        let typst = to_typst(html);
 
         assert!(typst.contains("== Top"));
         assert!(typst.contains("==== Sub"));
@@ -626,29 +877,29 @@ mod tests {
 
     #[test]
     fn test_html_to_typst_closes_unbalanced_inline_marks() {
-        let typst = html_to_typst("<p><strong>bold <em>italic <u>under");
+        let typst = to_typst("<p><strong>bold <em>italic <u>under");
 
-        assert!(typst.contains("#strong[bold #emph[italic #underline[under]]]"));
+        assert!(typst.contains("#strong[bold #emph[italic #underline[under];];];"));
     }
 
     #[test]
     fn test_html_to_typst_headings() {
         let html = "<h2>כותרת</h2><p>תוכן</p>";
-        let typst = html_to_typst(html);
+        let typst = to_typst(html);
         assert!(typst.contains("=== כותרת"));
     }
 
     #[test]
     fn test_html_to_typst_nested_bold_in_p() {
         let html = "<p>regular <strong>bold text</strong> regular</p>";
-        let typst = html_to_typst(html);
+        let typst = to_typst(html);
         assert!(typst.contains("#strong[bold text]"));
     }
 
     #[test]
     fn test_html_to_typst_adjacent_to_hebrew() {
         let html = "ו<i>טקסט נטוי</i> בתוכה";
-        let typst = html_to_typst(html);
+        let typst = to_typst(html);
         assert!(
             typst.contains("ו#emph[טקסט נטוי]"),
             "emph works adjacent to Hebrew: {}",
@@ -676,7 +927,8 @@ mod tests {
             perakim: vec![PdfPerekInput {
                 perek_heb: "א".to_string(),
                 header: "בריאת העולם".to_string(),
-                pesukim: vec!["בְּרֵאשִׁ֖ית בָּרָ֣א אֱלֹהִ֑ים".to_string()],
+                pesukim: plain_pesukim(&["בְּרֵאשִׁ֖ית בָּרָ֣א אֱלֹהִ֑ים".to_string()]),
+                images: vec![],
                 articles: vec![],
             }],
             include_cover: false,
@@ -684,7 +936,7 @@ mod tests {
             cover_accent_hex: "333333".to_string(),
             cover_text: PdfCoverText::default(),
         };
-        let markup = generate_typst_markup(&req);
+        let (markup, _) = generate_typst_markup(&req);
         assert!(markup.contains("Taamey D"));
         assert!(markup.contains("rtl"));
         assert!(markup.contains("בראשית א - בריאת העולם"));
@@ -698,7 +950,8 @@ mod tests {
             perakim: vec![PdfPerekInput {
                 perek_heb: "א".to_string(),
                 header: "כותרת".to_string(),
-                pesukim: vec!["פסוק".to_string()],
+                pesukim: plain_pesukim(&["פסוק".to_string()]),
+                images: vec![],
                 articles: vec![],
             }],
             include_cover: true,
@@ -711,7 +964,7 @@ mod tests {
                 edition: "עם מאמרים".to_string(),
             },
         };
-        let markup = generate_typst_markup(&req);
+        let (markup, _) = generate_typst_markup(&req);
         assert!(markup.contains("תוכן העניינים"));
         assert!(markup.contains("fill: rgb(\"8B0000\")"));
         let branding = markup.find("\"תנ\\\"ך על הפרק\"").expect("branding line");
@@ -729,11 +982,12 @@ mod tests {
             perakim: vec![PdfPerekInput {
                 perek_heb: "1".to_string(),
                 header: String::new(),
-                pesukim: vec![
+                pesukim: plain_pesukim(&[
                     "First / escaped".to_string(),
                     "   ".to_string(),
                     "Third".to_string(),
-                ],
+                ]),
+                images: vec![],
                 articles: vec![(
                     "Article / Name".to_string(),
                     "Author".to_string(),
@@ -745,7 +999,7 @@ mod tests {
             cover_accent_hex: "###".to_string(),
             cover_text: PdfCoverText::default(),
         };
-        let markup = generate_typst_markup(&req);
+        let (markup, _) = generate_typst_markup(&req);
 
         assert!(markup.contains("rgb(\"475569\")"));
         // No cover text: the sefer name is the title and optional lines are skipped.
@@ -754,7 +1008,8 @@ mod tests {
         assert!(markup.contains("Genesis 1"));
         assert!(markup.contains(&format!("*{}* First \\/ escaped", to_hebrew_letter(1))));
         assert!(!markup.contains(&format!("*{}*    ", to_hebrew_letter(2))));
-        assert!(markup.contains("Article \\/ Name \\/ Author"));
+        assert!(markup.contains("[Article \\/ Name]"));
+        assert!(markup.contains("#text(size: 9pt)[Author]"));
         assert!(markup.contains("#strong[bold]"));
     }
 
@@ -768,5 +1023,176 @@ mod tests {
     fn test_accent_hex_clean() {
         assert_eq!(accent_hex_clean("#8B0000"), "8B0000");
         assert_eq!(accent_hex_clean("  abcZZ  "), "abc");
+    }
+
+    #[test]
+    fn test_inline_closers_do_not_swallow_following_parentheses() {
+        // Production article 3068 (בראשית ב): `</b>(בראשית א כז)` used to become
+        // `#strong[...](...)`, which Typst parses as call arguments.
+        let typst = to_typst("<b>אֹתָֽם׃<br></b>(בראשית א כז) <i>x</i>.y <u>z</u>[w]");
+        assert!(typst.contains("];(בראשית א כז)"));
+        assert!(typst.contains("#emph[x];.y"));
+        assert!(typst.contains("#underline[z];\\[w\\]"));
+    }
+
+    #[test]
+    fn test_article_data_uri_image_is_embedded() {
+        let mut files = Vec::new();
+        let typst = html_to_typst(
+            "<p>לפני</p><img alt=x src=\"data:image/png;base64,iVBO Rw0K\"><img src='https://example.com/a.png'><img src=\"data:image/tiff;base64,AAAA\">",
+            &mut files,
+        );
+        assert_eq!(files.len(), 1);
+        assert_eq!(files[0].0, "article-image-0.png");
+        assert_eq!(files[0].1, vec![0x89, b'P', b'N', b'G', 0x0d, 0x0a]);
+        assert!(typst.contains("image(\"article-image-0.png\", width: 70%)"));
+        assert!(typst.contains("#link(\"https://example.com/a.png\")[תמונה];"));
+    }
+
+    #[test]
+    fn test_split_first_h1() {
+        let (h1, rest) = split_first_h1(
+            "<p>תקציר</p><H1 class=\"t\">ויברא <b>אלהים</b><br>את&nbsp;האדם</h1><p>גוף</p><h1>שנייה</h1>",
+        );
+        assert_eq!(h1.as_deref(), Some("ויברא אלהים את האדם"));
+        assert_eq!(rest, "<p>תקציר</p><p>גוף</p><h1>שנייה</h1>");
+
+        assert_eq!(split_first_h1("<h2>a</h2>").0, None);
+        assert_eq!(split_first_h1("<h1x>a</h1x>").0, None);
+        assert_eq!(split_first_h1("<h1>  </h1><p>b</p>").0, None);
+        assert_eq!(split_first_h1("<h1>open").0.as_deref(), Some("open"));
+        assert_eq!(split_first_h1("<h1").0, None);
+    }
+
+    #[test]
+    fn test_article_header_uses_first_h1_or_name() {
+        let req = PdfRequest {
+            sefer_name: "בראשית".to_string(),
+            perakim: vec![PdfPerekInput {
+                perek_heb: "א".to_string(),
+                articles: vec![
+                    (
+                        "שם המאמר".to_string(),
+                        "הרב".to_string(),
+                        "<h1>כותרת <i>ראשונה</i></h1><p>גוף</p><h1>כותרת שנייה</h1>".to_string(),
+                    ),
+                    (
+                        "שם בלבד".to_string(),
+                        String::new(),
+                        "<p>תקציר וגוף</p>".to_string(),
+                    ),
+                ],
+                ..Default::default()
+            }],
+            include_cover: false,
+            include_toc: false,
+            cover_accent_hex: String::new(),
+            cover_text: PdfCoverText::default(),
+        };
+        let (markup, _) = generate_typst_markup(&req);
+        assert!(markup.contains("#text(size: 12pt, weight: \"bold\")[כותרת ראשונה]"));
+        assert_eq!(markup.matches("כותרת ראשונה").count(), 1);
+        assert!(markup.contains("== כותרת שנייה"));
+        assert!(!markup.contains("שם המאמר"));
+        assert!(markup.contains("#text(size: 12pt, weight: \"bold\")[שם בלבד]"));
+        assert_eq!(markup.matches("#text(size: 9pt)[").count(), 1);
+    }
+
+    #[test]
+    fn test_qri_ktiv_segments_match_reader_convention() {
+        let segments = vec![
+            PdfSegment {
+                kind: SegmentKind::Word,
+                text: "עַל־".to_string(),
+            },
+            PdfSegment {
+                kind: SegmentKind::Ktiv,
+                text: "ויצא".to_string(),
+            },
+            PdfSegment {
+                kind: SegmentKind::Qri,
+                text: "וַיֵּצֵ֖א".to_string(),
+            },
+            PdfSegment {
+                kind: SegmentKind::Word,
+                text: " ".to_string(),
+            },
+            PdfSegment {
+                kind: SegmentKind::Word,
+                text: "נֹחַ".to_string(),
+            },
+        ];
+        assert_eq!(
+            pasuk_markup(&segments),
+            "עַל־ויצא (#text(size: 0.75em, fill: rgb(\"#637598\"))[קְרִי:]#h(0.25em);וַיֵּצֵ֖א) נֹחַ"
+        );
+    }
+
+    #[test]
+    fn test_unsupported_dashes_normalized_but_maqaf_kept() {
+        assert_eq!(
+            typst_escape("a\u{2010}b\u{2011}c\u{2012}d\u{2015}e"),
+            "a-b-c-d-e"
+        );
+        assert_eq!(
+            typst_escape("a\u{2013}b\u{2014}c\u{2212}d־ה"),
+            "a\u{2013}b\u{2014}c\u{2212}d־ה"
+        );
+        assert!(to_typst("<p>א\u{2015}ב</p>").contains("א-ב"));
+    }
+
+    #[test]
+    fn test_toc_links_and_page_numbers_resolve_labels() {
+        let req = PdfRequest {
+            sefer_name: "מלאכי".to_string(),
+            perakim: vec![
+                PdfPerekInput {
+                    perek_heb: "א".to_string(),
+                    ..Default::default()
+                },
+                PdfPerekInput {
+                    perek_heb: "ב".to_string(),
+                    ..Default::default()
+                },
+            ],
+            include_cover: true,
+            include_toc: true,
+            cover_accent_hex: String::new(),
+            cover_text: PdfCoverText::default(),
+        };
+        let (markup, _) = generate_typst_markup(&req);
+        for label in ["<perek-1>", "<perek-2>"] {
+            assert!(markup.contains(&format!("#metadata(none) {label}")));
+            assert!(markup.contains(&format!("#link({label})[")));
+            assert!(markup.contains(&format!("counter(page).at({label})")));
+        }
+        assert!(markup.contains("#set page(footer:"));
+    }
+
+    #[test]
+    fn test_perek_images_become_typst_files() {
+        let req = PdfRequest {
+            sefer_name: "בראשית".to_string(),
+            perakim: vec![PdfPerekInput {
+                perek_heb: "ב".to_string(),
+                images: vec![PdfImage {
+                    bytes: vec![1, 2, 3],
+                    ext: "jpg".to_string(),
+                    caption: "ארבעת הנהרות".to_string(),
+                }],
+                ..Default::default()
+            }],
+            include_cover: false,
+            include_toc: false,
+            cover_accent_hex: String::new(),
+            cover_text: PdfCoverText::default(),
+        };
+        let (markup, files) = generate_typst_markup(&req);
+        assert!(markup.contains("image(\"perek-1-image-0.jpg\", width: 75%)"));
+        assert!(markup.contains("[ארבעת הנהרות]"));
+        assert_eq!(
+            files,
+            vec![("perek-1-image-0.jpg".to_string(), vec![1, 2, 3])]
+        );
     }
 }

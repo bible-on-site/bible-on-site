@@ -10,7 +10,9 @@ use bulletin::pdf;
 use bulletin::tanach;
 
 use crate::db::Database;
-use crate::models::GeneratePdfRequest;
+use base64::{Engine, engine::general_purpose::STANDARD};
+
+use crate::models::{GeneratePdfRequest, ImageExt, PerekContentInput, SegmentKindInput};
 use crate::services;
 
 // ──────────────────── Shared core logic ────────────────────────
@@ -45,10 +47,17 @@ async fn generate_pdf_core(req: GeneratePdfRequest) -> Result<(Vec<u8>, String),
             vec![]
         };
 
+        let content = req.perakim_content.iter().find(|c| c.perek_id == id);
+        let (pesukim, images) = match content {
+            Some(c) => (content_pesukim(c), content_images(c)?),
+            None => (pdf::plain_pesukim(&data.pesukim), vec![]),
+        };
+
         perakim.push(pdf::PdfPerekInput {
             perek_heb: tanach::perek_to_hebrew(data.perek_in_sefer),
             header: data.header.clone(),
-            pesukim: data.pesukim.clone(),
+            pesukim,
+            images,
             articles,
         });
     }
@@ -99,6 +108,48 @@ async fn generate_pdf_core(req: GeneratePdfRequest) -> Result<(Vec<u8>, String),
     );
 
     Ok((buf, filename))
+}
+
+fn content_pesukim(content: &PerekContentInput) -> Vec<Vec<pdf::PdfSegment>> {
+    content
+        .pesukim
+        .iter()
+        .map(|pasuk| {
+            pasuk
+                .iter()
+                .map(|seg| pdf::PdfSegment {
+                    kind: match seg.kind {
+                        SegmentKindInput::Word => pdf::SegmentKind::Word,
+                        SegmentKindInput::Ktiv => pdf::SegmentKind::Ktiv,
+                        SegmentKindInput::Qri => pdf::SegmentKind::Qri,
+                    },
+                    text: seg.value.clone(),
+                })
+                .collect()
+        })
+        .collect()
+}
+
+fn content_images(content: &PerekContentInput) -> Result<Vec<pdf::PdfImage>, String> {
+    content
+        .images
+        .iter()
+        .map(|img| {
+            let bytes = STANDARD.decode(&img.data_base64).map_err(|e| {
+                format!("Invalid image data for perekId {}: {}", content.perek_id, e)
+            })?;
+            let ext = match img.ext {
+                ImageExt::Jpg => "jpg",
+                ImageExt::Png => "png",
+                ImageExt::Webp => "webp",
+            };
+            Ok(pdf::PdfImage {
+                bytes,
+                ext: ext.to_string(),
+                caption: img.caption.clone(),
+            })
+        })
+        .collect()
 }
 
 /// Fetch articles for a single perek, applying optional filters.
@@ -369,6 +420,28 @@ mod tests {
         .expect("invalid JSON should become a response");
         assert_eq!(invalid.status().as_u16(), 400);
         assert!(text_body(invalid.body()).starts_with(r#"{"error":"#));
+    }
+
+    #[tokio::test]
+    async fn lambda_generate_pdf_uses_website_content_and_reports_bad_images() {
+        let png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+        let ok = format!(
+            r#"{{"perakimIds":[8],"includeArticles":false,"perakimContent":[{{"perekId":8,"pesukim":[[{{"kind":"word","value":"וַיְדַבֵּ֥ר"}},{{"kind":"ktiv","value":"הוצא"}},{{"kind":"qri","value":"הַיְצֵ֣א"}}]],"images":[{{"dataBase64":"{png}","ext":"png","caption":"x"}},{{"dataBase64":"{png}","ext":"jpg"}},{{"dataBase64":"{png}","ext":"webp"}}]}}]}}"#
+        );
+        let (content, _) = {
+            let req: GeneratePdfRequest = serde_json::from_str(&ok).unwrap();
+            let c = &req.perakim_content[0];
+            (content_pesukim(c), content_images(c).unwrap())
+        };
+        assert_eq!(content[0][1].kind, pdf::SegmentKind::Ktiv);
+        assert_eq!(content[0][2].kind, pdf::SegmentKind::Qri);
+        assert_eq!(content[0][0].kind, pdf::SegmentKind::Word);
+
+        let bad = r#"{"perakimIds":[8],"includeArticles":false,"perakimContent":[{"perekId":8,"pesukim":[],"images":[{"dataBase64":"%%%","ext":"png"}]}]}"#;
+        let err = generate_pdf_core(serde_json::from_str(bad).unwrap())
+            .await
+            .unwrap_err();
+        assert!(err.starts_with("Invalid image data for perekId 8"), "{err}");
     }
 
     #[tokio::test]

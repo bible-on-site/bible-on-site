@@ -566,7 +566,7 @@ public partial class PerekViewModel : ObservableObject
             _perushimPreloadCache.TryGetValue(perekId, out cached);
         }
 
-        List<int> perushIds;
+        IReadOnlyList<int> perushIds;
         Dictionary<int, Perush> perushById;
         PerushNoteChapter? chapter;
 
@@ -578,9 +578,9 @@ public partial class PerekViewModel : ObservableObject
         }
         else
         {
-            perushIds = await _notesService.GetPerushIdsForPerekAsync(perekId);
+            chapter = await _notesService.LoadChapterAsync(perekId);
+            perushIds = chapter?.PerushIds ?? [];
             perushById = perushIds.Count == 0 ? new() : await _catalogService.GetPerushimByIdsAsync(perushIds);
-            chapter = perushIds.Count == 0 ? null : await _notesService.LoadChapterAsync(perekId);
         }
 
         if (IsStalePerushimLoad(perekId))
@@ -1062,19 +1062,19 @@ public partial class PerekViewModel : ObservableObject
 
             try
             {
-                var perushIds = await _notesService.GetPerushIdsForPerekAsync(id);
+                var chapter = await _notesService.LoadChapterAsync(id);
+                var perushIds = chapter?.PerushIds ?? [];
                 if (perushIds.Count == 0)
                 {
                     lock (_perushimPreloadCache)
                     {
                         _perushimPreloadCache[id] = new PreloadedPerushimData(
-                            new List<int>(), new Dictionary<int, Perush>(), null);
+                            [], new Dictionary<int, Perush>(), null);
                     }
                     continue;
                 }
 
                 var perushById = await _catalogService.GetPerushimByIdsAsync(perushIds);
-                var chapter = await _notesService.LoadChapterAsync(id);
 
                 lock (_perushimPreloadCache)
                 {
@@ -1265,6 +1265,6 @@ public partial class PerekViewModel : ObservableObject
 /// Cached perushim data for a single perek, used by the preload buffer.
 /// </summary>
 internal record PreloadedPerushimData(
-    List<int> PerushIds,
+    IReadOnlyList<int> PerushIds,
     Dictionary<int, Perush> PerushById,
     PerushNoteChapter? Chapter);

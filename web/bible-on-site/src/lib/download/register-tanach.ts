@@ -12,12 +12,18 @@ import {
 	SEFER_COVER_SUBTITLE,
 } from "@/data/sefer-cover";
 
-import { createBulletinPageRangesHandler, generatePdfViaBulletin } from "./bulletin-client";
-import { setPageRangesDownloadHandler, setSeferDownloadHandler } from "./handlers";
+import {
+	createBulletinPageRangesHandler,
+	generatePdfViaBulletin,
+} from "./bulletin-client";
+import {
+	setPageRangesDownloadHandler,
+	setSeferDownloadHandler,
+} from "./handlers";
 
 setPageRangesDownloadHandler(createBulletinPageRangesHandler());
 
-setSeferDownloadHandler(async ({ seferName, perekIds }) => {
+setSeferDownloadHandler(async ({ seferName, perekIds, divineNameMasking }) => {
 	if (perekIds.length === 0) {
 		throw new Error("Full sefer download requires at least one perek id");
 	}
@@ -27,6 +33,7 @@ setSeferDownloadHandler(async ({ seferName, perekIds }) => {
 		includeCover: true,
 		includeToc: true,
 		coverAccentHex: accent,
+		divineNameMasking,
 		cover: {
 			branding: SEFER_COVER_BRANDING,
 			title: getSeferCoverTitle(seferName),

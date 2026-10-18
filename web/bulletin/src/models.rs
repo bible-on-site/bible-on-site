@@ -47,6 +47,11 @@ pub struct GeneratePdfRequest {
     /// Front-cover lines sent by the website so the PDF cover matches its Sefer reader cover.
     #[serde(default)]
     pub cover: Option<CoverText>,
+
+    /// Website-rendered pesukim (קרי/כתיב structure, user's divine-name masking)
+    /// and perek illustrations. Perakim missing here use the embedded text.
+    #[serde(default)]
+    pub perakim_content: Vec<PerekContentInput>,
 }
 
 /// Front-cover lines, top to bottom; omitted lines are left off the cover.
@@ -57,6 +62,46 @@ pub struct CoverText {
     pub title: String,
     pub subtitle: String,
     pub edition: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PerekContentInput {
+    pub perek_id: i32,
+    pub pesukim: Vec<Vec<SegmentInput>>,
+    #[serde(default)]
+    pub images: Vec<ImageInput>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SegmentInput {
+    pub kind: SegmentKindInput,
+    pub value: String,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SegmentKindInput {
+    Word,
+    Ktiv,
+    Qri,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImageInput {
+    pub data_base64: String,
+    pub ext: ImageExt,
+    #[serde(default)]
+    pub caption: String,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ImageExt {
+    Jpg,
+    Png,
+    Webp,
 }
 
 fn default_true() -> bool {

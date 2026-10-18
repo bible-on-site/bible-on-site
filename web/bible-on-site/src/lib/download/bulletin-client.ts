@@ -7,12 +7,18 @@
  * The binary reads JSON from stdin and writes PDF bytes to stdout.
  * Each invocation is independent — no persistent server.
  *
- * Request is just perek IDs — the Lambda resolves all data
- * (text, headers, sefer name) from its embedded Tanach data.
+ * Request carries perek IDs plus website-rendered pesukim (קרי/כתיב, masking)
+ * and illustrations; the Lambda resolves headers and articles itself.
  */
 
-import type { SemanticPageInfo } from "./types";
+import type { DivineNameMaskingSettings } from "@/lib/divine-name-masking";
+import { normalizeDivineNameMasking } from "@/lib/divine-name-settings";
+import {
+	type BulletinPerekContent,
+	buildPerakimContent,
+} from "./perek-export-content";
 import { semanticPagesToPerekIds } from "./tanach-pdf";
+import type { PageRangesDownloadContext, SemanticPageInfo } from "./types";
 
 /** Shape expected by the bulletin service (camelCase — matches Rust serde config). */
 export interface BulletinRequest {
@@ -25,6 +31,7 @@ export interface BulletinRequest {
 	includeCover?: boolean;
 	includeToc?: boolean;
 	coverAccentHex?: string;
+	perakimContent: BulletinPerekContent[];
 	cover?: BulletinCoverText;
 }
 
@@ -87,9 +94,7 @@ async function invokeBulletinLambda(
 		throw new Error("Bulletin Lambda returned empty payload");
 	}
 
-	const response = JSON.parse(
-		Buffer.from(result.Payload).toString("utf-8"),
-	);
+	const response = JSON.parse(Buffer.from(result.Payload).toString("utf-8"));
 
 	if (response.statusCode !== 200) {
 		throw new Error(
@@ -116,6 +121,7 @@ export interface GeneratePdfViaBulletinOptions {
 	includeToc?: boolean;
 	/** Hex without leading # (e.g. 8B0000) */
 	coverAccentHex?: string;
+	divineNameMasking?: DivineNameMaskingSettings;
 	cover?: BulletinCoverText;
 }
 
@@ -133,6 +139,10 @@ export async function generatePdfViaBulletin(
 		includeArticles: true,
 		articleIds: [],
 		authorIds: [],
+		perakimContent: await buildPerakimContent(
+			perekIds,
+			normalizeDivineNameMasking(options?.divineNameMasking),
+		),
 	};
 
 	if (options?.seferName != null) {
@@ -171,7 +181,7 @@ export async function generatePdfViaBulletin(
 export function createBulletinPageRangesHandler(): (
 	pages: number[],
 	semanticPages: SemanticPageInfo[],
-	context?: { seferName?: string },
+	context?: PageRangesDownloadContext,
 ) => Promise<[ext: string, bin: Uint8Array]> {
 	return async (_pages, semanticPages, context) => {
 		const seferName = context?.seferName;
@@ -184,7 +194,9 @@ export function createBulletinPageRangesHandler(): (
 			throw new Error("No content pages in selected range");
 		}
 
-		const bin = await generatePdfViaBulletin(perekIds);
+		const bin = await generatePdfViaBulletin(perekIds, {
+			divineNameMasking: context?.divineNameMasking,
+		});
 		return ["pdf", bin];
 	};
 }

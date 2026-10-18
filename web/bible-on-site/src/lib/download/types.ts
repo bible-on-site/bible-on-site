@@ -2,6 +2,7 @@
  * Download interfaces for sefer and page-ranges.
  * Consumers implement these; actions call them when provided.
  */
+import type { DivineNameMaskingSettings } from "@/lib/divine-name-masking";
 
 /** Describes one page in a range for the page-ranges download handler */
 export interface SemanticPageInfo {
@@ -19,12 +20,16 @@ export type DownloadResult = [ext: string, bin: Uint8Array];
 /** Optional context for page-ranges download (e.g. sefer name for Tanach) */
 export interface PageRangesDownloadContext {
 	seferName?: string;
+	/** Reader's הסתר שם השם settings at click time (untrusted client input). */
+	divineNameMasking?: DivineNameMaskingSettings;
 }
 
 /** Context for full-sefer PDF download (#1494). */
 export interface SeferDownloadContext {
 	seferName: string;
 	perekIds: number[];
+	/** Reader's הסתר שם השם settings at click time (untrusted client input). */
+	divineNameMasking?: DivineNameMaskingSettings;
 }
 
 /**

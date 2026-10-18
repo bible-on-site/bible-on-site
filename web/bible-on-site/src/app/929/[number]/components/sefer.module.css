@@ -310,8 +310,8 @@
 		var(--font-tanakh-taamey), var(--font-tanakh), "Times New Roman", serif;
 	font-size: calc(1em * var(--perek-font-scale, 1));
 	letter-spacing: 0.04em;
-	word-spacing: var(--perek-word-spacing, 0.12em);
-	line-height: var(--perek-line-height, 1.5);
+	word-spacing: var(--perek-word-spacing, 0.28em);
+	line-height: var(--perek-line-height, 2);
 	padding: 8px 10px 10px;
 	text-align: justify;
 	-moz-text-align-last: right;
@@ -410,4 +410,29 @@
 	.tanahpediaLink:hover {
 		border-bottom-color: #7eb0ff;
 	}
+}
+
+.downloadHint {
+	margin: 4px 16px 0;
+	color: rgb(255 255 255 / 75%);
+	font-size: 13px;
+}
+
+.downloadHintLink {
+	padding: 0;
+	border: none;
+	background: none;
+	color: #6ea8fe;
+	font: inherit;
+	text-decoration: underline;
+	cursor: pointer;
+}
+
+.downloadError {
+	margin: 0;
+	padding: 4px 10px;
+	border-radius: 6px;
+	background: #7f1d1d;
+	color: #fff;
+	font-size: 13px;
 }
