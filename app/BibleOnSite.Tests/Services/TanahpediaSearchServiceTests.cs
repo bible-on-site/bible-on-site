@@ -66,6 +66,36 @@ public class TanahpediaSearchServiceTests
     }
 
     [Fact]
+    public async Task SearchEntries_TransportTimeout_ThrowsTimeoutException()
+    {
+        using var http = new GraphQLTransport();
+        http.Respond = async token =>
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, token);
+            return GraphQLTransport.JsonResponse("{}");
+        };
+        var service = new TanahpediaService(http.Client, TimeSpan.FromMilliseconds(50));
+        await FluentActions.Awaiting(() => service.SearchEntriesAsync("x", 20, CancellationToken.None))
+            .Should().ThrowAsync<TimeoutException>();
+    }
+
+    [Fact]
+    public async Task SearchEntries_CallerCancellation_ThrowsOperationCanceled()
+    {
+        using var http = new GraphQLTransport();
+        http.Respond = async token =>
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, token);
+            return GraphQLTransport.JsonResponse("{}");
+        };
+        var service = new TanahpediaService(http.Client);
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
+        await FluentActions.Awaiting(() => service.SearchEntriesAsync("x", 20, cts.Token))
+            .Should().ThrowAsync<OperationCanceledException>();
+    }
+
+    [Fact]
     public async Task SearchViewModel_AddsRemoteTanahpediaResults_WhenFilterEnabled()
     {
         using var http = new GraphQLTransport(SearchResponse);
