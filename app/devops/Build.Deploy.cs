@@ -57,16 +57,7 @@ partial class Build
                 Serilog.Log.Warning("Deploying to PRODUCTION - will require Google review for new apps");
             }
 
-#pragma warning disable CS0618 // GoogleCredential.FromFile is obsolete but replacement API is unclear
-            var credential = GoogleCredential.FromFile(keyFile)
-                .CreateScoped(AndroidPublisherService.Scope.Androidpublisher);
-#pragma warning restore CS0618
-
-            using var service = new AndroidPublisherService(new BaseClientService.Initializer
-            {
-                HttpClientInitializer = credential,
-                ApplicationName = "NUKE Build"
-            });
+            using var service = CreatePlayService(keyFile);
 
             // Create edit
             var edit = service.Edits.Insert(new AppEdit(), GooglePlayPackageName).Execute();
@@ -100,11 +91,104 @@ partial class Build
             service.Edits.Tracks.Update(trackUpdate, GooglePlayPackageName, edit.Id, track).Execute();
             Serilog.Log.Information($"Assigned to {track} track");
 
+            SyncStoreListing(service, edit.Id);
+
             // Commit edit
             var commitRequest = service.Edits.Commit(GooglePlayPackageName, edit.Id);
             commitRequest.Execute();
             Serilog.Log.Information("Google Play upload complete");
         });
+
+    Target SyncGooglePlayListing => _ => _
+        .Description("Sync app/store-listing text and screenshots to Google Play without shipping a build")
+        .Requires(() => GooglePlayKeyFile)
+        .Executes(() =>
+        {
+            var keyFile = (AbsolutePath)GooglePlayKeyFile!;
+            Assert.FileExists(keyFile, $"Service account key file not found: {keyFile}");
+
+            using var service = CreatePlayService(keyFile);
+            var edit = service.Edits.Insert(new AppEdit(), GooglePlayPackageName).Execute();
+            Serilog.Log.Information($"Created edit: {edit.Id}");
+            SyncStoreListing(service, edit.Id);
+            service.Edits.Commit(GooglePlayPackageName, edit.Id).Execute();
+            Serilog.Log.Information("Google Play listing sync complete");
+        });
+
+    static AndroidPublisherService CreatePlayService(AbsolutePath keyFile)
+    {
+#pragma warning disable CS0618 // GoogleCredential.FromFile is obsolete but replacement API is unclear
+        var credential = GoogleCredential.FromFile(keyFile)
+            .CreateScoped(AndroidPublisherService.Scope.Androidpublisher);
+#pragma warning restore CS0618
+
+        return new AndroidPublisherService(new BaseClientService.Initializer
+        {
+            HttpClientInitializer = credential,
+            ApplicationName = "NUKE Build"
+        });
+    }
+
+    // Pushes app/store-listing onto the app's own Hebrew listing inside an open
+    // edit. Play resolves Hebrew under the legacy "iw" tag, so the tag is read
+    // back from the edit rather than hardcoded.
+    void SyncStoreListing(AndroidPublisherService service, string editId)
+    {
+        var listingDir = RootDirectory / "store-listing";
+        var description = ReadListingFile(listingDir / "he" / "description.txt", 4000);
+        var shortDescription = ReadListingFile(listingDir / "he" / "short-description.txt", 80);
+        var screenshotsDir = listingDir / "screenshots" / "android";
+        var screenshots = screenshotsDir.DirectoryExists()
+            ? screenshotsDir.GlobFiles("*.png").OrderBy(p => p.Name).ToList()
+            : [];
+        if (description is null && shortDescription is null && screenshots.Count == 0)
+        {
+            Serilog.Log.Information("No store-listing content found under app/store-listing - skipping listing sync");
+            return;
+        }
+
+        var listings = service.Edits.Listings.List(GooglePlayPackageName, editId).Execute().Listings ?? [];
+        var language = listings.FirstOrDefault(l => l.Language.StartsWith("iw") || l.Language.StartsWith("he"))?.Language ?? "iw";
+
+        if (description is not null || shortDescription is not null)
+        {
+            var listing = listings.FirstOrDefault(l => l.Language == language) ?? new Listing { Language = language };
+            listing.ShortDescription = shortDescription ?? listing.ShortDescription;
+            listing.FullDescription = description ?? listing.FullDescription;
+            service.Edits.Listings.Update(listing, GooglePlayPackageName, editId, language).Execute();
+            Serilog.Log.Information($"Updated {language} listing text");
+        }
+
+        if (screenshots.Count > 0)
+        {
+            service.Edits.Images.Deleteall(GooglePlayPackageName, editId, language,
+                EditsResource.ImagesResource.DeleteallRequest.ImageTypeEnum.PhoneScreenshots).Execute();
+            foreach (var screenshot in screenshots)
+            {
+                using var stream = File.OpenRead(screenshot);
+                var uploadProgress = service.Edits.Images.Upload(GooglePlayPackageName, editId, language,
+                    EditsResource.ImagesResource.UploadMediaUpload.ImageTypeEnum.PhoneScreenshots, stream, "image/png").Upload();
+                if (uploadProgress.Status != UploadStatus.Completed)
+                {
+                    Assert.Fail($"Screenshot upload failed for {screenshot.Name}: {uploadProgress.Exception?.Message}");
+                }
+            }
+
+            Serilog.Log.Information($"Replaced {language} phone screenshots ({screenshots.Count} files)");
+        }
+    }
+
+    static string? ReadListingFile(AbsolutePath path, int maxChars)
+    {
+        if (!path.FileExists())
+        {
+            return null;
+        }
+
+        var text = File.ReadAllText(path).Trim();
+        Assert.True(text.Length <= maxChars, $"{path.Name} is {text.Length} chars, over the {maxChars} store limit");
+        return text;
+    }
 
     Target DeployMsStore => _ => _
         .Description("Deploy MSIX to Microsoft Store")
