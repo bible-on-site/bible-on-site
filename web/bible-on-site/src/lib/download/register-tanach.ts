@@ -5,6 +5,12 @@
  * Uses the Rust-based bulletin service for high-quality Hebrew PDF rendering.
  */
 import { getSeferColor } from "@/data/sefer-colors";
+import {
+	getSeferCoverTitle,
+	SEFER_COVER_BRANDING,
+	SEFER_COVER_EDITION,
+	SEFER_COVER_SUBTITLE,
+} from "@/data/sefer-cover";
 
 import {
 	createBulletinPageRangesHandler,
@@ -28,6 +34,12 @@ setSeferDownloadHandler(async ({ seferName, perekIds, divineNameMasking }) => {
 		includeToc: true,
 		coverAccentHex: accent,
 		divineNameMasking,
+		cover: {
+			branding: SEFER_COVER_BRANDING,
+			title: getSeferCoverTitle(seferName),
+			subtitle: SEFER_COVER_SUBTITLE,
+			edition: SEFER_COVER_EDITION,
+		},
 	});
 	return ["pdf", bin];
 });

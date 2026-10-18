@@ -46,6 +46,7 @@ mod pdf_generation {
             include_cover: false,
             include_toc: false,
             cover_accent_hex: "333333".to_string(),
+            cover_text: pdf::PdfCoverText::default(),
         };
 
         let buf = pdf::build_pdf(&req, &fonts_dir()).unwrap();
@@ -105,6 +106,7 @@ mod pdf_generation {
             include_cover: false,
             include_toc: false,
             cover_accent_hex: "333333".to_string(),
+            cover_text: pdf::PdfCoverText::default(),
         };
 
         let buf = pdf::build_pdf(&req, &fonts_dir()).unwrap();
