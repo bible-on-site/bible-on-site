@@ -58,6 +58,8 @@ export const MODULES = {
 			// cd-aws.yml owns the post-deploy verifier invocation contract
 			// (NODE_PATH → devops deps) that the deploy_verifier guard replays.
 			".github/workflows/cd-aws.yml",
+			// The deploy_verifier job also guards canonical nginx redirects.
+			"docs/aws/cloudformation/ec2-nginx/router/router.conf",
 		],
 		// Test-only changes run website checks but cannot alter the deployed
 		// site, so they must not package, release, or bump the version (#2132):

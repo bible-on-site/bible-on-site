@@ -2281,6 +2281,9 @@ jobs:
       # node_modules — resolution can only succeed through NODE_PATH.
       - name: Install deployment dependencies
         run: npm ci --prefix devops --no-audit
+      # The nginx guard reads docs/ outside the website's Docker build context.
+      - name: Verify canonical hosts and nginx configuration
+        run: node --test web/bible-on-site/scripts/verify-canonical-hosts.test.mjs
       - name: Exercise the real deployment verifier entry point
         run: |
           node web/bible-on-site/scripts/verify-public-content.fixture.mjs 48123 &
