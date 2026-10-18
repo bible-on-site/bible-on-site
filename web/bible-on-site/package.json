@@ -17,7 +17,7 @@
 		"predev": "node scripts/kill-port.mjs 3001 && node scripts/ensure-docker-desktop.mjs && node --import tsx ../../devops/ensure-dev-db.mts --sync-from-prod --tables tanah_sefer,tanahpedia_entry && docker compose -f ../../devops/docker-compose.yml up -d --wait rustfs && docker compose -f ../../devops/docker-compose.yml run --build --rm rustfs-init && node scripts/toggle-flip-book-dep.mjs local && npm install --prefer-offline",
 		"dev": "dotenv -e .dev.env -- next dev -p 3001",
 		"dev-webpack": "dotenv -e .dev.env -- next dev --webpack -p 3001",
-		"prebuild": "node scripts/generate-client-catalog.mjs && node --test scripts/verify-public-content.test.mjs",
+		"prebuild": "node scripts/generate-client-catalog.mjs && node --test scripts/verify-public-content.test.mjs scripts/verify-canonical-hosts.test.mjs",
 		"build": "next build",
 		"postinstall": "node scripts/generate-client-catalog.mjs && node scripts/copy-local-flip-book.mjs",
 		"flip-book:local": "node scripts/toggle-flip-book-dep.mjs local && npm install",
