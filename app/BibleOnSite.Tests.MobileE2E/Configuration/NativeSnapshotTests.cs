@@ -10,7 +10,7 @@ namespace BibleOnSite.Tests.MobileE2E.Configuration;
 [Trait("Category", "Unit")]
 public sealed class NativeSnapshotTests
 {
-    private static Dictionary<string, object> Entry(string id, bool displayed = true, double x = 0) => new()
+    private static Dictionary<string, object> Entry(string id, bool displayed = true, double x = 0, double y = 0) => new()
     {
         ["element-6066-11e4-a52e-4f735466cecf"] = id,
         ["displayed"] = displayed,
@@ -18,7 +18,7 @@ public sealed class NativeSnapshotTests
         ["enabled"] = displayed,
         ["rect"] = new Dictionary<string, object>
         {
-            ["x"] = x, ["y"] = 0L, ["width"] = 20, ["height"] = 20d
+            ["x"] = x, ["y"] = y, ["width"] = 20, ["height"] = 20d
         }
     };
 
@@ -64,6 +64,16 @@ public sealed class NativeSnapshotTests
     }
 
     [Fact]
+    public void PageLookupsByIdOnlyReturnDisplayedElementsFromTheDevice()
+    {
+        var executor = new SnapshotExecutor([Entry("ready")]);
+        using var driver = new IosSnapshotDriver(executor, new AppiumOptions { PlatformName = "iOS" });
+        new PerekPage(driver, new IosPlatformAdapter()).WaitFor("PerekSource");
+        Assert.Equal("-ios predicate string", executor.LastParameters!["using"]);
+        Assert.Equal("name == 'PerekSource' AND visible == 1", executor.LastParameters["value"]);
+    }
+
+    [Fact]
     public void PollConditionsUseFreshTextButTheReturnedElementStaysLive()
     {
         var executor = new SnapshotExecutor([Entry("ready")]);
@@ -87,6 +97,39 @@ public sealed class NativeSnapshotTests
         page.WaitFor("PerekSource", candidate => candidate.Text == "ready");
         Assert.Equal(2, executor.Lookups);
         Assert.Single(executor.Commands, command => command == DriverCommand.GetWindowRect);
+    }
+
+    [Fact]
+    public void TimedOutLookupRetriesWithinThePollDeadline()
+    {
+        var executor = new SnapshotExecutor([Entry("ready")]) { TimeoutOnLookup = 1 };
+        using var driver = new IosSnapshotDriver(executor, new AppiumOptions { PlatformName = "iOS" });
+        var page = new PerekPage(driver, new IosPlatformAdapter());
+        Assert.NotNull(page.WaitFor("PerekSource"));
+        Assert.Equal(2, executor.Lookups);
+    }
+
+    [Fact]
+    public void HiddenWaitRetriesAfterACommandTimeout()
+    {
+        var executor = new SnapshotExecutor([]) { TimeoutOnLookup = 1 };
+        using var driver = new IosSnapshotDriver(executor, new AppiumOptions { PlatformName = "iOS" });
+        var page = new PerekPage(driver, new IosPlatformAdapter());
+        page.WaitForHidden("FlyoutPreferences");
+        Assert.Equal(2, executor.Lookups);
+    }
+
+    [Fact]
+    public void ScrollReturnRetriesAHeadingLookupStraggler()
+    {
+        var executor = new SnapshotExecutor([Entry("collection"), Entry("collection"), Entry("heading", y: 40)])
+        {
+            TimeoutOnLookup = 2, FrameWidth = 100
+        };
+        using var driver = new IosSnapshotDriver(executor, new AppiumOptions { PlatformName = "iOS" });
+        var page = new PerekPage(driver, new IosPlatformAdapter());
+        Assert.NotNull(page.ScrollBackTo("PasukText", _ => true));
+        Assert.Equal(3, executor.Lookups);
     }
 
     [Fact]
@@ -215,8 +258,10 @@ public sealed class NativeSnapshotTests
         public int Lookups { get; private set; }
         public Dictionary<string, object?>? LastParameters { get; private set; }
         public bool Stale { get; init; }
+        public int TimeoutOnLookup { get; init; }
         public string Orientation { get; set; } = "PORTRAIT";
         public int FrameX { get; set; } = 10;
+        public int FrameWidth { get; set; } = 30;
         public bool TryAddCommand(string name, CommandInfo? info) => true;
         public void Dispose() { }
         public Response Execute(Command command) => ExecuteAsync(command).GetAwaiter().GetResult();
@@ -232,19 +277,30 @@ public sealed class NativeSnapshotTests
             else if (command.Name == DriverCommand.FindElements)
             {
                 LastParameters = command.Parameters;
-                if (Stale)
+                Lookups++;
+                if (Lookups == TimeoutOnLookup)
+                {
+                    status = WebDriverResult.Timeout;
+                    value = new Dictionary<string, object>
+                    {
+                        ["message"] = "The driver did not receive any response from the 'findElements' command within 45000 ms"
+                    };
+                }
+                else if (Stale)
                 {
                     status = WebDriverResult.ObsoleteElement;
                     value = new Dictionary<string, object> { ["message"] = "The native element changed." };
                 }
                 else
                 {
-                    value = new object[] { results[Lookups++] };
+                    value = results.Length == 0
+                        ? Array.Empty<object>()
+                        : new object[] { results[(Lookups - 1) % results.Length] };
                 }
             }
             else if (command.Name == DriverCommand.GetElementRect)
             {
-                value = new Dictionary<string, object> { ["x"] = FrameX, ["y"] = 20, ["width"] = 30, ["height"] = 40 };
+                value = new Dictionary<string, object> { ["x"] = FrameX, ["y"] = 20, ["width"] = FrameWidth, ["height"] = 40 };
             }
             else if (command.Name == DriverCommand.GetWindowRect)
             {

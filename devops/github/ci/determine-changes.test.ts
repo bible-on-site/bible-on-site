@@ -45,6 +45,25 @@ describe("detectChanges", () => {
 		assert.equal(changes.website.ci_changed, false);
 	});
 
+	test("deployment workflow changes require website checks without a release", () => {
+		// cd-aws.yml owns the verifier's NODE_PATH contract (#2372).
+		const changes = detectChanges([".github/workflows/cd-aws.yml"]);
+		assert.deepEqual(changes.website, {
+			module_changed: false,
+			ci_changed: true,
+		});
+	});
+
+	test("devops manifest changes select the deploy verifier guard", () => {
+		for (const file of ["devops/package.json", "devops/package-lock.json"]) {
+			assert.equal(
+				detectChanges([file]).admin.ci_changed,
+				true,
+				file,
+			);
+		}
+	});
+
 	test("packaging workflow changes require app signing checks without a release", () => {
 		const changes = detectChanges([".github/workflows/app-package.yml"]);
 		assert.deepEqual(changes.app, { module_changed: false, ci_changed: true });
