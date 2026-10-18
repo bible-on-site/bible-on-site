@@ -45,6 +45,35 @@ describe("detectChanges", () => {
 		assert.equal(changes.website.ci_changed, false);
 	});
 
+	test("deployment workflow changes require website checks without a release", () => {
+		// cd-aws.yml owns the verifier's NODE_PATH contract (#2372).
+		const changes = detectChanges([".github/workflows/cd-aws.yml"]);
+		assert.deepEqual(changes.website, {
+			module_changed: false,
+			ci_changed: true,
+		});
+	});
+
+	test("nginx redirects select the deploy verifier guard without a website release", () => {
+		const changes = detectChanges([
+			"docs/aws/cloudformation/ec2-nginx/router/router.conf",
+		]);
+		assert.deepEqual(changes.website, {
+			module_changed: false,
+			ci_changed: true,
+		});
+	});
+
+	test("devops manifest changes select the deploy verifier guard", () => {
+		for (const file of ["devops/package.json", "devops/package-lock.json"]) {
+			assert.equal(
+				detectChanges([file]).admin.ci_changed,
+				true,
+				file,
+			);
+		}
+	});
+
 	test("packaging workflow changes require app signing checks without a release", () => {
 		const changes = detectChanges([".github/workflows/app-package.yml"]);
 		assert.deepEqual(changes.app, { module_changed: false, ci_changed: true });
@@ -298,6 +327,31 @@ describe("detectChanges", () => {
 		}
 		for (const key of ["admin", "data", "perushim_pipeline"] as const) {
 			assert.equal(changes[key].ci_changed, false, key);
+		}
+	});
+
+	test("release Docker build inputs validate the packaged Rust images without releasing", () => {
+		for (const [file, keys] of [
+			["web/.dockerignore", ["api", "bulletin", "admin"]],
+			[".github/workflows/shared-dockerize.yml", ["api"]],
+			["web/api/entities/src/lib.rs", ["bulletin"]],
+		] as const) {
+			const changes = detectChanges([file]);
+			for (const key of keys) {
+				assert.deepEqual(
+					changes[key],
+					{ module_changed: false, ci_changed: true },
+					`${file} -> ${key}`,
+				);
+			}
+		}
+		for (const key of ["api", "bulletin", "admin"] as const) {
+			const dockerfile = `web/${key}/Dockerfile`;
+			assert.equal(
+				detectChanges([dockerfile])[key].module_changed,
+				true,
+				dockerfile,
+			);
 		}
 	});
 

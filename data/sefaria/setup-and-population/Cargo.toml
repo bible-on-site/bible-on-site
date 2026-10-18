@@ -6,7 +6,6 @@ license.workspace = true
 authors.workspace = true
 
 [dependencies]
-tokio.workspace = true
 anyhow.workspace = true
 clap.workspace = true
 dotenvy.workspace = true

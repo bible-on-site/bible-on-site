@@ -1,3 +1,4 @@
+using BibleOnSite.Tests.MobileE2E.Platforms;
 using OpenQA.Selenium;
 using OpenQA.Selenium.Appium;
 using Xunit;
@@ -36,9 +37,10 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         Assert.InRange(headerInput.Location.Y + headerInput.Size.Height / 2, sourceTop, sourceBottom);
         Page.WaitFor("SearchStatus", element => element.Text == "חיפושים אחרונים");
         Page.WaitFor("RecentSearches");
-        Assert.DoesNotContain(Driver!.FindElements(Platform.AutomationId("PerekHeader")), element => element.Displayed);
+        Assert.DoesNotContain(Driver!.FindElements(Platform.DisplayedAutomationId("PerekHeader")), element => element.Displayed);
         var searchPage = Page.WaitFor("SearchPanel");
-        Assert.InRange(searchPage.Size.Width, Driver.Manage().Window.Size.Width - 8, Driver.Manage().Window.Size.Width);
+        var windowWidth = DriverTelemetry.WindowSize(Driver!).Width;
+        Assert.InRange(searchPage.Size.Width, windowWidth - 8, windowWidth);
         SaveDiagnostics("SearchPageRecentSearches", "passed");
         Page.Tap("SearchKindsTab");
         Page.WaitFor("SearchKindPerek");
@@ -97,7 +99,7 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         SearchFor("ויעש אלהים את הרקיע", "בראשית א ז");
         Page.WaitFor("SearchStatus", element => System.Text.RegularExpressions.Regex.IsMatch(element.Text, @"^\d+ תוצאות$"));
         SaveDiagnostics("FloatingSearchVerseResults", "passed");
-        var result = Driver!.FindElements(Platform.AutomationId("SearchResultTitle"))
+        var result = Driver!.FindElements(Platform.DisplayedAutomationId("SearchResultTitle"))
             .First(element => element.Displayed && element.Text == "בראשית א ז");
         Platform.Tap(Driver, result);
         AssertRegularReader();
@@ -134,7 +136,7 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         AssertRegularReader();
         // Capture the highlighted match, then scroll back to the selected heading.
         SaveDiagnostics("FloatingSearchCommentaryLanding", "passed");
-        Page.ScrollBackTo("InlinePerushName", element => element.Text == commentaryName);
+        Page.ScrollBackTo("InlinePerushName", commentaryName);
         SaveDiagnostics("FloatingSearchCommentaryReader", "passed");
         // Menu navigation must keep this reader above the retained search page.
         var readerSource = Page.Source;
@@ -162,7 +164,7 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         {
             Platform.Tap(driver, Page.WaitFor("SearchResultTitle", element => element.Text == title));
             AssertRegularReader();
-            Page.ScrollBackTo("InlinePerushName", element => element.Text == commentaryName);
+            Page.ScrollBackTo("InlinePerushName", commentaryName);
             SaveDiagnostics("FloatingSearchReview", "passed");
         }
     });
@@ -171,15 +173,14 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
     {
         Page.WaitFor("PerekSource", element => !string.IsNullOrEmpty(element.Text));
         Assert.True(Page.WaitFor("ReaderNavigationButton").Enabled);
-        Assert.DoesNotContain(Driver!.FindElements(Platform.AutomationId("PerekSearchInput")), element => element.Displayed);
-        Assert.DoesNotContain(Driver!.FindElements(Platform.AutomationId("SearchPanel")), element => element.Displayed);
-        Assert.DoesNotContain(Driver!.FindElements(Platform.AutomationId("SelectionBackButton")), element => element.Displayed);
-        Assert.DoesNotContain(Driver.FindElements(Platform.AutomationId("FocusedPasukText")), element => element.Displayed);
+        Assert.DoesNotContain(Driver!.FindElements(
+            Platform.AnyOfAutomationIds("PerekSearchInput", "SearchPanel", "SelectionBackButton", "FocusedPasukText")),
+            element => element.Displayed);
     }
 
     private void SearchFor(string text, string expectedTitle)
     {
-        if (!Driver!.FindElements(Platform.AutomationId("PerekSearchInput")).Any(element => element.Displayed))
+        if (!Driver!.FindElements(Platform.DisplayedAutomationId("PerekSearchInput")).Any(element => element.Displayed))
         {
             Page.Tap("PerekSource");
         }
@@ -230,7 +231,7 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         var frame = System.Drawing.Rectangle.Empty;
         while (DateTime.UtcNow < deadline)
         {
-            var row = Driver!.FindElements(Platform.AutomationId("SearchResultTitle"))
+            var row = Driver!.FindElements(Platform.DisplayedAutomationId("SearchResultTitle"))
                 .FirstOrDefault(element => element.Displayed && element.Text.Contains(suffix, StringComparison.Ordinal));
             if (row != null)
             {

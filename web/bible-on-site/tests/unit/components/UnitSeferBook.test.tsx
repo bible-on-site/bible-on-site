@@ -171,6 +171,18 @@ describe("UnitSeferBook", () => {
 		).toBeInTheDocument();
 	});
 
+	it("brands the front cover with תנ\"ך על הפרק above the sefer title", () => {
+		renderBook();
+		const cover = screen.getByLabelText("עטיפה קדמית");
+		const branding = screen.getByText('תנ"ך על הפרק');
+		const title = screen.getByRole("heading", { name: "ספר בראשית" });
+		expect(cover).toContainElement(branding);
+		expect(
+			branding.compareDocumentPosition(title) &
+				Node.DOCUMENT_POSITION_FOLLOWING,
+		).toBeTruthy();
+	});
+
 	it("shows the optional cover edition line only when provided", () => {
 		const first = renderBook();
 		expect(

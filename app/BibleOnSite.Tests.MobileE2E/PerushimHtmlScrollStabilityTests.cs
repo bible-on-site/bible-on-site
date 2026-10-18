@@ -38,7 +38,7 @@ public sealed class PerushimHtmlScrollStabilityTests(ITestOutputHelper output, M
 
         // Grouping must retain every paragraph, including text far outside the
         // visible viewport. This also exercises the formerly blocking AX lookup.
-        Page.WaitFor("CommentaryTextSection");
+        Page.WaitFor(Platform.DisplayedAutomationId("CommentaryTextSection"));
         var sections = System.Xml.Linq.XDocument.Parse(Driver!.PageSource).Descendants()
             .Where(element => (string?)element.Attribute("name") == "CommentaryTextSection")
             .Select(element => (string?)element.Attribute("label") ?? string.Empty).ToArray();
@@ -69,12 +69,21 @@ public sealed class PerushimHtmlScrollStabilityTests(ITestOutputHelper output, M
         // stalling for minutes if the app did crash.
         void Storm(int fromY, int toY)
         {
+            var burst = 0;
             foreach (var sequence in PerekScrollStabilityTests.CreateFlickBursts(
                 centerX, fromY, centerX, toY, 20))
             {
-                var midState = Convert.ToInt64(Driver!.ExecuteScript("mobile: queryAppState",
-                    new Dictionary<string, object> { ["bundleId"] = "com.tanah.daily929" }));
-                Assert.Equal(4L, midState);
+                // Every health probe is a queued XCTest command; on a churning
+                // app it costs more than the burst it precedes. Every fourth
+                // burst still bounds a crash's stall to a handful of seconds
+                // while the final state assert below catches anything later.
+                if (burst % 4 == 0)
+                {
+                    var midState = Convert.ToInt64(Driver!.ExecuteScript("mobile: queryAppState",
+                        new Dictionary<string, object> { ["bundleId"] = "com.tanah.daily929" }));
+                    Assert.Equal(4L, midState);
+                }
+                burst++;
                 Driver!.PerformActions([sequence]);
             }
         }
@@ -87,7 +96,7 @@ public sealed class PerushimHtmlScrollStabilityTests(ITestOutputHelper output, M
         Assert.Equal(sourceBeforeStorm, Page.Source);
         // Opposite flicks need not cancel their inertia. The reader can remain
         // inside the huge note, with every verse outside the visible viewport.
-        Page.ScrollBackTo("PasukText", element => element.Text == verseBeforeStorm);
+        Page.ScrollBackTo("PasukText", verseBeforeStorm);
         Assert.Equal(verseBeforeStorm, Page.FirstPasuk);
         SaveDiagnostics("LongPerushimAfterScroll", "passed");
     });

@@ -6,6 +6,7 @@ namespace BibleOnSite.Models;
 [JsonSerializable(typeof(Dictionary<int, string>), TypeInfoPropertyName = "PerushCatalog")]
 [JsonSerializable(typeof(int[]), TypeInfoPropertyName = "BookmarkedPerakim")]
 [JsonSerializable(typeof(List<string>), TypeInfoPropertyName = "RecentSearches")]
+[JsonSerializable(typeof(Dictionary<string, string>), TypeInfoPropertyName = "SeferNames")]
 #pragma warning disable S2333 // System.Text.Json source generation supplies this partial implementation.
 public partial class AppJsonContext : JsonSerializerContext;
 #pragma warning restore S2333
