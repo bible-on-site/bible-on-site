@@ -35,6 +35,18 @@ const WINDOWS_URL =
 	"https://displaycatalog.mp.microsoft.com/v7.0/products/9NBLGGH6B55K?fieldsTemplate=Details&market=IL&languages=en-us";
 const IOS_URL = "https://itunes.apple.com/lookup?id=1045128150&country=il";
 
+function isDottedNumber(value: string): boolean {
+	const parts = value.split(".");
+	return (
+		parts.length > 1 &&
+		parts.every(
+			(part) =>
+				part.length > 0 &&
+				[...part].every((char) => char >= "0" && char <= "9"),
+		)
+	);
+}
+
 const REVALIDATE_SECONDS = 6 * 60 * 60;
 const STALE_MS = 24 * 60 * 60 * 1000;
 
@@ -49,7 +61,7 @@ export function parsePlayStoreHtml(html: string): {
 		html.match(/"aggregateRating"\s*:\s*([0-5](?:\.[0-9])?)/)?.[1] ??
 		null;
 	return {
-		version: version && /^\d+(\.\d+)+$/.test(version) ? version : null,
+		version: version && isDottedNumber(version) ? version : null,
 		rating: ratingText === null ? null : Number(ratingText),
 	};
 }
