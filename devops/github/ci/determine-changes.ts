@@ -55,6 +55,9 @@ export const MODULES = {
 			...RELEASE_CI_PATHS,
 			...E2E_IMPACT_CI_PATHS,
 			"devops/github/ci/bencher-comparison.mjs",
+			// cd-aws.yml owns the post-deploy verifier invocation contract
+			// (NODE_PATH → devops deps) that the deploy_verifier guard replays.
+			".github/workflows/cd-aws.yml",
 		],
 		// Test-only changes run website checks but cannot alter the deployed
 		// site, so they must not package, release, or bump the version (#2132):
