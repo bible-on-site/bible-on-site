@@ -5,6 +5,8 @@ import {
 	buildPageSemantics,
 	CONTENT_OFFSET,
 	computeInitialTurnedLeaves,
+	DOWNLOAD_FAILED_MESSAGE,
+	runDownload,
 	seferBookExitPath,
 	toHebrewChapterNumber,
 	wrapDownloadResult,
@@ -245,9 +247,7 @@ describe("sefer-page-utils", () => {
 	describe("seferBookExitPath", () => {
 		it("returns the perek the flipbook's history wrote to the location", () => {
 			expect(seferBookExitPath("/929/30", "בראשית", 10)).toBe("/929/30");
-			expect(
-				seferBookExitPath("/929/30?book", "בראשית", 10),
-			).toBe("/929/30");
+			expect(seferBookExitPath("/929/30?book", "בראשית", 10)).toBe("/929/30");
 		});
 
 		it("falls back to the entry perek on book-chrome exits", () => {
@@ -257,9 +257,7 @@ describe("sefer-page-utils", () => {
 			expect(seferBookExitPath("/929/בראשית/תוכן", "בראשית", 10)).toBe(
 				"/929/10",
 			);
-			expect(seferBookExitPath("/929/בראשית/גב", "בראשית", 10)).toBe(
-				"/929/10",
-			);
+			expect(seferBookExitPath("/929/בראשית/גב", "בראשית", 10)).toBe("/929/10");
 		});
 
 		it("falls back to the entry perek on non-perek paths", () => {
@@ -276,6 +274,44 @@ describe("sefer-page-utils", () => {
 		it("returns ext and data for success results", () => {
 			const result = wrapDownloadResult({ ext: "pdf", data: "base64content" });
 			expect(result).toEqual({ ext: "pdf", data: "base64content" });
+		});
+
+		it("reports the action's message, or a generic one, through onError", () => {
+			const onError = jest.fn();
+			wrapDownloadResult(
+				{ error: "service_unavailable", message: "האיור" },
+				onError,
+			);
+			wrapDownloadResult({ error: "not_implemented" }, onError);
+			expect(onError.mock.calls).toEqual([
+				["האיור"],
+				[DOWNLOAD_FAILED_MESSAGE],
+			]);
+		});
+	});
+
+	describe("runDownload", () => {
+		it("clears the previous error and returns the file on success", async () => {
+			const setError = jest.fn();
+			const result = await runDownload(
+				async () => ({ ext: "pdf", data: "x" }),
+				setError,
+			);
+			expect(result).toEqual({ ext: "pdf", data: "x" });
+			expect(setError.mock.calls).toEqual([[null]]);
+		});
+
+		it("reports a rejected action and resolves to null so the menu can retry", async () => {
+			const consoleSpy = jest
+				.spyOn(console, "error")
+				.mockImplementation(() => {});
+			const setError = jest.fn();
+			const result = await runDownload(async () => {
+				throw new Error("network");
+			}, setError);
+			expect(result).toBeNull();
+			expect(setError.mock.calls).toEqual([[null], [DOWNLOAD_FAILED_MESSAGE]]);
+			consoleSpy.mockRestore();
 		});
 	});
 });
