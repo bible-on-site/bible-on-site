@@ -5,12 +5,12 @@ export function TosSection() {
 		<section id="tos" className={styles.tosSection}>
 			<div className={styles.topDivider} />
 			<header className={styles.tosHeader}>
-				<h1>תנאי שימוש</h1>
+				<h2>תנאי שימוש</h2>
 			</header>
 			<article className={styles.tosBody}>
 				<ul className={styles.tosList}>
 					<li id="privacyPolicy">
-						<h2>מדיניות פרטיות</h2>
+						<h3>מדיניות פרטיות</h3>
 						<p>
 							בעת שימוש באתר ו/או בישומון תנ&quot;ך על הפרק אתה מצהיר שהינך מאשר
 							למערכת תנ&quot;ך על הפרק לאסוף נתונים שסופקו על ידיך באופן ידני או
@@ -24,10 +24,10 @@ export function TosSection() {
 						</p>
 					</li>
 					<li>
-						<h2>תנכפדיה</h2>
+						<h3>תנכפדיה</h3>
 						<ul className={styles.tosSubList}>
 							<li>
-								<h3>שימוש</h3>
+								<h4>שימוש</h4>
 								<ul>
 									<li>
 										השימוש בתנכפדיה הוא על אחריות המשתמש, אין בעלי האתר והעורכים
@@ -43,7 +43,7 @@ export function TosSection() {
 								</ul>
 							</li>
 							<li>
-								<h3>שימוש חוזר</h3>
+								<h4>שימוש חוזר</h4>
 								<ul>
 									<li>
 										תנכפדיה <strong>אינה</strong> אנציקלופדיה חופשית כמו
@@ -63,17 +63,17 @@ export function TosSection() {
 						</ul>
 					</li>
 					<li>
-						<h2>תנ&quot;ך על הפרק</h2>
+						<h3>תנ&quot;ך על הפרק</h3>
 						<ul className={styles.tosSubList}>
 							<li>
-								<h3>שימוש</h3>
+								<h4>שימוש</h4>
 								<ul>
 									<li>ניתן להשתמש לכל צורך אישי או לימודי שאינם מסחריים.</li>
 									<li>כמו כן ניתן להפנות אלינו שאלות ונעביר לרבנים הכותבים.</li>
 								</ul>
 							</li>
 							<li>
-								<h3>שימוש חוזר</h3>
+								<h4>שימוש חוזר</h4>
 								<ul>
 									<li>
 										מצווה להפיץ הפניות למאמרים אל מכריכם, אך אין להעתיק את
