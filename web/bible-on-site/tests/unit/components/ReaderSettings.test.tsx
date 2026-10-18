@@ -69,6 +69,75 @@ test("using the open panel does not close popovers underneath it", () => {
 	expect(outside).toHaveBeenCalledTimes(1);
 	document.removeEventListener("mousedown", outside);
 });
+test("a fresh reader selects spacing level 3 / 3 and vertical spacing reaches level 5", () => {
+	render(<ReaderSettings />);
+	fireEvent.click(screen.getByRole("button", { name: "הגדרות קריאה" }));
+	const horizontal = screen.getByRole("slider", { name: "ריווח אופקי" });
+	const vertical = screen.getByRole("slider", { name: "ריווח אנכי" });
+	expect(horizontal).toHaveValue("2");
+	expect(vertical).toHaveValue("2");
+	expect(
+		horizontal.closest("label")?.querySelector("output"),
+	).toHaveTextContent("3");
+	expect(vertical.closest("label")?.querySelector("output")).toHaveTextContent(
+		"3",
+	);
+	expect(vertical).toHaveAttribute("max", "4");
+	fireEvent.change(vertical, { target: { value: "4" } });
+	expect(vertical.closest("label")?.querySelector("output")).toHaveTextContent(
+		"5",
+	);
+	expect(
+		document.documentElement.style.getPropertyValue("--perek-line-height"),
+	).toBe("2.5");
+	expect(
+		JSON.parse(localStorage.getItem(READER_SETTINGS_STORAGE_KEY) ?? "null"),
+	).toEqual(expect.objectContaining({ lineStep: 4, wordStep: 2 }));
+});
+test("recitation entry point shows only קריינות without tabs and never leaks into general preferences", () => {
+	render(<ReaderSettings />);
+	const general = screen.getByRole("button", { name: "הגדרות קריאה" });
+	const opener = document.createElement("button");
+	document.body.append(opener);
+	const expectScoped = () => {
+		expect(
+			screen.getByRole("dialog", { name: "הגדרות קריינות" }),
+		).toBeVisible();
+		expect(screen.getByRole("slider", { name: "מהירות" })).toHaveFocus();
+		expect(
+			screen.queryByRole("navigation", { name: "קטגוריות הגדרות" }),
+		).toBeNull();
+		expect(screen.queryByRole("button", { name: "תצוגה" })).toBeNull();
+		expect(screen.queryByRole("slider", { name: "גודל גופן" })).toBeNull();
+		expect(screen.queryByRole("checkbox", { name: "הסתר שם השם" })).toBeNull();
+	};
+	const expectFull = () => {
+		expect(screen.getByRole("dialog", { name: "הגדרות קריאה" })).toBeVisible();
+		expect(
+			screen.getByRole("navigation", { name: "קטגוריות הגדרות" }),
+		).toBeVisible();
+		expect(screen.getByRole("slider", { name: "גודל גופן" })).toHaveFocus();
+		fireEvent.click(screen.getByRole("button", { name: "קריינות" }));
+		expect(screen.getByRole("slider", { name: "מהירות" })).toBeVisible();
+	};
+	act(() => openReaderSettings("recitation", opener, true));
+	expectScoped();
+	fireEvent.change(screen.getByRole("slider", { name: "מהירות" }), {
+		target: { value: "1.25" },
+	});
+	expect(getRecitationSettings().speed).toBe(1.25);
+	fireEvent.click(screen.getByRole("button", { name: "סגירת הגדרות" }));
+	expect(screen.queryByRole("dialog")).toBeNull();
+	expect(opener).toHaveFocus();
+	fireEvent.click(general);
+	expectFull();
+	fireEvent.click(screen.getByRole("button", { name: "סגירת הגדרות" }));
+	expect(general).toHaveFocus();
+	act(() => openReaderSettings("recitation", opener, true));
+	expectScoped();
+	expect(screen.getByRole("slider", { name: "מהירות" })).toHaveValue("1.25");
+	opener.remove();
+});
 test("chapter shortcut opens the same modal focused on narration and returns focus on close", () => {
 	render(<ReaderSettings />);
 	const opener = document.createElement("button");
@@ -206,3 +275,60 @@ test.each([
 		expect(button).toHaveFocus();
 	},
 );
+
+test("הסתר שם השם is one group whose sub-options are disabled while it is off", () => {
+	localStorage.setItem(
+		DIVINE_NAME_MASKING_KEY,
+		JSON.stringify({
+			enabled: false,
+			elohim: "custom",
+			elohimCustom: "אלוקים",
+			shaddai: "asis",
+		}),
+	);
+	render(<ReaderSettings />);
+	fireEvent.click(screen.getByRole("button", { name: "הגדרות קריאה" }));
+	const group = screen.getByRole("group", { name: "הסתר שם השם" });
+	const toggle = within(group).getByRole("checkbox", { name: "הסתר שם השם" });
+	const radios = within(group).getAllByRole("radio");
+	const elohimCustom = within(group).getByRole("textbox", {
+		name: "כתיב חלופי עבור אלהים",
+	});
+	const shaddaiCustom = within(group).getByRole("textbox", {
+		name: "כתיב חלופי עבור שדי",
+	});
+	expect(toggle).toBeEnabled();
+	expect(toggle).not.toBeChecked();
+	for (const radio of radios) expect(radio).toBeDisabled();
+	expect(elohimCustom).toBeDisabled();
+	expect(shaddaiCustom).toBeDisabled();
+	const before = getDivineNameMaskingSettings();
+	fireEvent.click(within(group).getByRole("radio", { name: "ד'" }));
+	expect(getDivineNameMaskingSettings()).toEqual(before);
+
+	fireEvent.click(toggle);
+	expect(toggle).toBeChecked();
+	for (const radio of radios) expect(radio).toBeEnabled();
+	expect(
+		within(screen.getByRole("group", { name: "אלהים" })).getByRole("radio", {
+			name: "אחר",
+		}),
+	).toBeChecked();
+	expect(elohimCustom).toBeEnabled();
+	expect(elohimCustom).toHaveValue("אלוקים");
+	expect(shaddaiCustom).toBeDisabled();
+	fireEvent.click(within(group).getByRole("radio", { name: "ד'" }));
+	expect(getDivineNameMaskingSettings().yhwh).toBe("dalet");
+
+	fireEvent.click(toggle);
+	for (const radio of radios) expect(radio).toBeDisabled();
+	expect(elohimCustom).toBeDisabled();
+	expect(getDivineNameMaskingSettings()).toEqual(
+		expect.objectContaining({
+			enabled: false,
+			elohim: "custom",
+			elohimCustom: "אלוקים",
+			yhwh: "dalet",
+		}),
+	);
+});

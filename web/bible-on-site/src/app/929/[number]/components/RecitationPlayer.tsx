@@ -543,7 +543,7 @@ export default function RecitationPlayer({
 					aria-label="הגדרות קריינות"
 					aria-haspopup="dialog"
 					onClick={(event) =>
-						openReaderSettings("recitation", event.currentTarget)
+						openReaderSettings("recitation", event.currentTarget, true)
 					}
 				>
 					<SettingsIcon />

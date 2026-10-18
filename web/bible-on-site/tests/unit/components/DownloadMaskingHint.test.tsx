@@ -39,6 +39,7 @@ describe("DownloadMaskingHint", () => {
 		expect((opened.mock.calls[0][0] as CustomEvent).detail).toEqual({
 			section: "display",
 			opener: link,
+			scoped: false,
 		});
 
 		await act(async () => rerender(<Harness open={false} />));
