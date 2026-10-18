@@ -473,4 +473,24 @@ public partial class LearningCalendarViewModel : ObservableObject
 
         await _navigator.GoToAsync($"{AppRoutes.CalendarReader}?perekId={perekId}");
     }
+
+    /// <summary>
+    /// Opens the website's PDF export of the currently viewed period (#2366)
+    /// in the device browser, which handles download/save/share. The export is
+    /// generated on the website API, so this requires connectivity; browsing
+    /// the calendar itself stays offline.
+    /// </summary>
+    [RelayCommand]
+    private async Task DownloadPdfAsync()
+    {
+        var view = ViewMode switch
+        {
+            CalendarViewMode.Year => "year",
+            CalendarViewMode.Cycle => "cycle",
+            _ => "month",
+        };
+        var url = $"{Config.AppConfig.Instance.GetWebsiteUrl()}/api/calendar-pdf" +
+            $"?month={_year * 100 + _month}&view={view}&cycle={Math.Max(1, _cycle)}";
+        await Launcher.OpenAsync(new Uri(url));
+    }
 }

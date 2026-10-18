@@ -115,8 +115,8 @@
             </Button>
         </Grid>
 
-        <!-- Period navigation: previous/today/next + month and year pickers -->
-        <Grid Grid.Row="1" ColumnDefinitions="Auto,Auto,Auto,*,*" ColumnSpacing="4">
+        <!-- Period navigation: previous/today/next + month and year pickers + PDF export -->
+        <Grid Grid.Row="1" ColumnDefinitions="Auto,Auto,Auto,*,*,Auto" ColumnSpacing="4">
             <Button Grid.Column="0"
                     Text="{x:Static fonts:FluentUI.chevron_right_24_regular}"
                     Style="{StaticResource CalendarNavButton}"
@@ -152,6 +152,12 @@
                     Title="שנה"
                     Style="{StaticResource CalendarPicker}"
                     AutomationId="CalendarYearPicker"/>
+            <Button Grid.Column="5"
+                    Text="{x:Static fonts:FluentUI.arrow_download_24_regular}"
+                    Style="{StaticResource CalendarNavButton}"
+                    SemanticProperties.Description="הורדת לוח הלימוד כ-PDF"
+                    AutomationId="CalendarDownloadPdf"
+                    Command="{Binding DownloadPdfCommand}"/>
         </Grid>
 
         <!-- Period title -->
