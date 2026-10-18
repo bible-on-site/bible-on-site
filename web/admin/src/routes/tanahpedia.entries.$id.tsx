@@ -77,28 +77,38 @@ function EntryEditPage() {
 	}, [entry]);
 
 	const saveMutation = useMutation({
-		mutationFn: async (data: EntryFormData) => {
+		mutationFn: async ({
+			form,
+			baseRevisionId,
+			source,
+			notes,
+		}: {
+			form: EntryFormData;
+			baseRevisionId: string | null;
+			source: string;
+			notes: string | null;
+		}) => {
 			if (isNew) {
 				return createEntry({
 					data: {
 						id: crypto.randomUUID(),
-						unique_name: data.unique_name,
-						title: data.title,
-						content: data.content,
-						source: saveSource,
-						notes: pendingNotes,
+						unique_name: form.unique_name,
+						title: form.title,
+						content: form.content,
+						source,
+						notes,
 					},
 				});
 			}
 			return updateEntry({
 				data: {
 					id,
-					unique_name: data.unique_name,
-					title: data.title,
-					content: data.content,
+					unique_name: form.unique_name,
+					title: form.title,
+					content: form.content,
 					baseRevisionId,
-					source: saveSource,
-					notes: pendingNotes,
+					source,
+					notes,
 				},
 			});
 		},
@@ -156,10 +166,25 @@ function EntryEditPage() {
 	useEffect(() => {
 		if (!hasChanges || saveMutation.isPending) return;
 		const timer = setTimeout(() => {
-			if (formData.title.trim()) saveMutation.mutate(formData);
+			if (formData.title.trim()) {
+				saveMutation.mutate({
+					form: formData,
+					baseRevisionId,
+					source: saveSource,
+					notes: pendingNotes,
+				});
+			}
 		}, 2000);
 		return () => clearTimeout(timer);
-	}, [formData, hasChanges, saveMutation.isPending, saveMutation]);
+	}, [
+		formData,
+		hasChanges,
+		saveMutation.isPending,
+		saveMutation,
+		baseRevisionId,
+		saveSource,
+		pendingNotes,
+	]);
 
 	if (isLoading) {
 		return (
@@ -356,7 +381,14 @@ function EntryEditPage() {
 					</Link>
 					<button
 						type="button"
-						onClick={() => saveMutation.mutate(formData)}
+						onClick={() =>
+							saveMutation.mutate({
+								form: formData,
+								baseRevisionId,
+								source: saveSource,
+								notes: pendingNotes,
+							})
+						}
 						disabled={saveMutation.isPending || !formData.title.trim()}
 						className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-medium shadow-sm hover:shadow-md"
 					>
