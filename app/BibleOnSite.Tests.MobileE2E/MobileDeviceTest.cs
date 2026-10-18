@@ -148,7 +148,20 @@ public abstract class MobileDeviceTest : IAsyncLifetime
             Configuration.ArtifactDirectory, test);
         try
         {
-            body();
+            try
+            {
+                body();
+            }
+            finally
+            {
+                // The per-command driver profile (counts/totals/max) rides the
+                // test's captured output into the trx artifact.
+                var profile = DriverTelemetry.Dump();
+                if (profile.Length > 0)
+                {
+                    Output.WriteLine(profile);
+                }
+            }
             CoverageEvidence.RecordSession(Driver?.SessionId);
             CoverageEvidence.Finish("passed");
             CollectAppCoverage(test, "passed");
@@ -185,6 +198,9 @@ public abstract class MobileDeviceTest : IAsyncLifetime
 
     protected virtual void Connect()
     {
+        // Attribute session creation, app restart, startup wait and coverage
+        // collection to the scenario that follows them.
+        DriverTelemetry.Reset();
         AcquireSession();
         Page = new(Driver!, Platform);
         Page.WaitForStartup();

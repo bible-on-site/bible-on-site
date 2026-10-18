@@ -22,6 +22,12 @@
           "Microsoft.Testing.Platform": "[2.5.1, 3.0.0)"
         }
       },
+      "Selenium.WebDriver": {
+        "type": "Direct",
+        "requested": "[4.51.0, )",
+        "resolved": "4.51.0",
+        "contentHash": "pKs73tJtvaBaJPnroew0DQ+k2ZucsenFjIh2RIXSWnA4RJb7lUq7Ygx560EsJodEyfB5s9SWz/dJT5bx+LAN2g=="
+      },
       "SonarAnalyzer.CSharp": {
         "type": "Direct",
         "requested": "[10.35.0.4138, )",
@@ -99,11 +105,6 @@
         "type": "Transitive",
         "resolved": "10.0.12",
         "contentHash": "kdj5cqOwgZCMltEhQ4+WVUoFkMHG08EJfy1MDyS9H+FBg66vTTFyX8YcNl8IQh5wRQv79P+iduQgDGY8ucBR+w=="
-      },
-      "Selenium.WebDriver": {
-        "type": "Transitive",
-        "resolved": "4.46.0",
-        "contentHash": "7bXGxmHD9mZEYflnUDVdE5IV/O9tat0DgFBnPYSrDv+W+0HrpFR8qMON4tTFNMe1fJHPS5HUIQLQdTKX8744bw=="
       },
       "System.Drawing.Common": {
         "type": "Transitive",
