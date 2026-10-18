@@ -301,6 +301,31 @@ describe("detectChanges", () => {
 		}
 	});
 
+	test("release Docker build inputs validate the packaged Rust images without releasing", () => {
+		for (const [file, keys] of [
+			["web/.dockerignore", ["api", "bulletin", "admin"]],
+			[".github/workflows/shared-dockerize.yml", ["api"]],
+			["web/api/entities/src/lib.rs", ["bulletin"]],
+		] as const) {
+			const changes = detectChanges([file]);
+			for (const key of keys) {
+				assert.deepEqual(
+					changes[key],
+					{ module_changed: false, ci_changed: true },
+					`${file} -> ${key}`,
+				);
+			}
+		}
+		for (const key of ["api", "bulletin", "admin"] as const) {
+			const dockerfile = `web/${key}/Dockerfile`;
+			assert.equal(
+				detectChanges([dockerfile])[key].module_changed,
+				true,
+				dockerfile,
+			);
+		}
+	});
+
 	test("directory CI paths match nested files only", () => {
 		assert.equal(
 			detectChanges(["devops/rustfs/policy.json"]).admin.ci_changed,
