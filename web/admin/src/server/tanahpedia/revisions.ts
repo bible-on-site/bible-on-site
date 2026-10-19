@@ -8,6 +8,7 @@ import {
 	shouldSquashIntoHead,
 } from "~/lib/tanahpedia/revisions-shared";
 import { execute, query, transaction, txExecute, txQueryOne } from "../db";
+import { PEDIA_INVALIDATION, revalidateWebsite } from "../website-revalidate";
 
 const REVISION_COLUMNS =
 	"id, entry_id, proposed_unique_name, proposed_title, proposed_content, source, notes, status, base_revision_id, created_at, updated_at";
@@ -76,6 +77,8 @@ export interface SaveEntryRevisionedInput {
 export interface SavedEntryRevisionResult {
 	entry: EntryRow;
 	headRevisionId: string | null;
+	/** True when the save was a no-op, meaning no public content changed. */
+	unchanged?: boolean;
 }
 
 /**
@@ -106,9 +109,9 @@ export const saveEntryRevisioned = createServerOnlyFn(
 			entry.title === input.title &&
 			entry.content === nextContent;
 
-		// A no-op save keeps the same head — no history spam for untouched content.
+		// A no-op save keeps the same head; no history spam for untouched content.
 		if (unchanged) {
-			return { entry, headRevisionId: head?.id ?? null };
+			return { entry, headRevisionId: head?.id ?? null, unchanged: true };
 		}
 
 		const source = normalizeRevisionSource(input.source);
@@ -195,7 +198,7 @@ export const listEntryRevisions = createServerFn({ method: "GET" })
 export const approveEntryRevision = createServerFn({ method: "POST" })
 	.validator((data: { id: string }) => data)
 	.handler(async ({ data }) => {
-		return transaction(async (conn) => {
+		const applied = await transaction(async (conn) => {
 			const revision = await txQueryOne<EntryRevisionRow>(
 				conn,
 				`SELECT ${REVISION_COLUMNS} FROM tanahpedia_entry_revision WHERE id = ? FOR UPDATE`,
@@ -269,6 +272,9 @@ export const approveEntryRevision = createServerFn({ method: "POST" })
 				headRevisionId: revision.id,
 			};
 		});
+		// Post-commit: the proposal is now live content, so pedia caches expire.
+		await revalidateWebsite(PEDIA_INVALIDATION);
+		return applied;
 	});
 
 /** Marks a PENDING external proposal as rejected. */
@@ -292,7 +298,7 @@ export const rejectEntryRevision = createServerFn({ method: "POST" })
 export const restoreEntryRevision = createServerFn({ method: "POST" })
 	.validator((data: { id: string; baseRevisionId?: string | null }) => data)
 	.handler(async ({ data }) => {
-		return transaction(async (conn) => {
+		const restored = await transaction(async (conn) => {
 			const revision = await txQueryOne<EntryRevisionRow>(
 				conn,
 				`SELECT ${REVISION_COLUMNS} FROM tanahpedia_entry_revision WHERE id = ?`,
@@ -346,4 +352,6 @@ export const restoreEntryRevision = createServerFn({ method: "POST" })
 			);
 			return { entry: saved, headRevisionId: headId };
 		});
+		await revalidateWebsite(PEDIA_INVALIDATION);
+		return restored;
 	});

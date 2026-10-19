@@ -20,8 +20,6 @@ import {
 	createArticle,
 	deleteArticle,
 	getArticle,
-	invalidateArticleCache,
-	invalidatePerekCache,
 	updateArticle,
 } from "~/server/articles";
 import { type Author, getAuthors } from "~/server/authors";
@@ -132,10 +130,6 @@ function ArticleEditPage() {
 			setLastSaved(new Date());
 			setHasChanges(false);
 
-			// Invalidate website cache
-			await invalidateArticleCache({ data: savedArticle.id });
-			await invalidatePerekCache({ data: savedArticle.perek_id });
-
 			if (isNew) {
 				navigate({
 					to: "/articles/$id",
@@ -153,9 +147,6 @@ function ArticleEditPage() {
 			return deleteArticle({ data: articleId });
 		},
 		onSuccess: async () => {
-			if (article) {
-				await invalidatePerekCache({ data: article.perek_id });
-			}
 			navigate({
 				to: "/articles/perek/$perekId",
 				params: { perekId: String(article?.perek_id ?? 1) },

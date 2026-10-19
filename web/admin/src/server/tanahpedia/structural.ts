@@ -3,6 +3,7 @@ import { createServerFn } from "@tanstack/react-start";
 import type { EntityType } from "~/lib/tanahpedia/labels";
 import { ADMIN_CREATABLE_ENTITY_TYPES } from "~/lib/tanahpedia/schema-registry";
 import { execute, query, queryOne } from "../db";
+import { PEDIA_INVALIDATION, revalidateWebsite } from "../website-revalidate";
 import {
 	type EntryStructuralContext,
 	type LinkedEntityStructural,
@@ -48,6 +49,7 @@ export const updateEntityDisplayName = createServerFn({ method: "POST" })
 			name,
 			data.entityId,
 		]);
+		await revalidateWebsite(PEDIA_INVALIDATION);
 		return { success: true };
 	});
 
@@ -72,6 +74,7 @@ export const updateSayingDate = createServerFn({ method: "POST" })
 			data.sayingDate,
 			data.sayingId,
 		]);
+		await revalidateWebsite(PEDIA_INVALIDATION);
 		return { success: true };
 	});
 
@@ -110,6 +113,7 @@ export const updatePersonMainName = createServerFn({ method: "POST" })
 			]);
 		}
 
+		await revalidateWebsite(PEDIA_INVALIDATION);
 		return { success: true };
 	});
 
@@ -135,6 +139,7 @@ export const updatePersonSex = createServerFn({ method: "POST" })
 				[randomUUID(), data.personId, data.sex],
 			);
 		}
+		await revalidateWebsite(PEDIA_INVALIDATION);
 		return { success: true };
 	});
 
@@ -181,6 +186,7 @@ export const replacePlaceIdentifications = createServerFn({ method: "POST" })
 				);
 			}
 		}
+		await revalidateWebsite(PEDIA_INVALIDATION);
 		return { success: true };
 	});
 
@@ -291,6 +297,7 @@ export const createEntityAndLinkToEntry = createServerFn({ method: "POST" })
 			[linkId, data.entryId, entityId],
 		);
 
+		await revalidateWebsite(PEDIA_INVALIDATION);
 		return { entityId, linkId };
 	});
 
@@ -333,6 +340,7 @@ export const linkExistingEntityToEntry = createServerFn({ method: "POST" })
 			`SELECT id FROM tanahpedia_entry_entity WHERE entry_id = ? AND entity_id = ?`,
 			[data.entryId, data.entityId],
 		);
+		// Already linked: no public change, nothing expires.
 		if (existing) return { linkId: existing.id };
 
 		const linkId = randomUUID();
@@ -340,5 +348,6 @@ export const linkExistingEntityToEntry = createServerFn({ method: "POST" })
 			`INSERT INTO tanahpedia_entry_entity (id, entry_id, entity_id) VALUES (?, ?, ?)`,
 			[linkId, data.entryId, data.entityId],
 		);
+		await revalidateWebsite(PEDIA_INVALIDATION);
 		return { linkId };
 	});
