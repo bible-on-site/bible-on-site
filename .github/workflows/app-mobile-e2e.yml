@@ -95,6 +95,26 @@ jobs:
       force_full_suite: ${{ inputs.force_full_suite }}
       perushim_notes_sqlite_artifact: ${{ inputs.perushim_notes_sqlite_artifact }}
 
+  # Release-configuration startup guard (#2373): the Debug suite above can
+  # never execute the analytics initialization that crashed #2247 store
+  # launches — Debug compiles it out under DISABLE_ANALYTICS. This leg builds
+  # the Release pipeline for the emulator ABI and cold-starts it, so the same
+  # class of startup regression fails the workflow before merge and — through
+  # the release job's cross_module_ci need — before an AAB can be promoted.
+  # It needs no perushim/test-harness inputs, so it starts without the resolve
+  # job and runs beside the Debug leg.
+  android_release_smoke:
+    name: Android Release startup smoke
+    if: ${{ always() && !cancelled() && !failure() }}
+    uses: ./.github/workflows/app-mobile-e2e-runner.yml
+    with:
+      platform: Android
+      platform_id: android
+      artifact: android-release-smoke
+      runner: ubuntu-latest
+      workload: maui-android
+      mode: release-smoke
+
   # Build exactly once without a simulator competing for CPU and memory.
   build_ios:
     name: Build shared iOS app
