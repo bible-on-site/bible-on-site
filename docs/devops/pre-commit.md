@@ -1,16 +1,19 @@
 # Pre-Commit Hooks
 
-This repository uses [pre-commit](https://pre-commit.com/) hooks to ensure code quality before commits are made.
+This repository runs its git hooks with [prek](https://prek.j178.dev/), a Rust
+drop-in for [pre-commit](https://pre-commit.com/) that reads the same
+`.pre-commit-config.yaml` — hooks stay compatible with pre-commit.ci and with
+`pre-commit` for anyone who has not switched.
 
 ## Architecture
 
-pre-commit owns the git hooks directly — there is no Husky/npm layer:
+prek owns the git hooks directly — there is no Husky/npm layer:
 
 ```
-.git/hooks/pre-commit     (installed by `pre-commit install`)
-├── Cross-module checks (pre-commit framework)
+.git/hooks/pre-commit     (installed by `prek install`)
+├── Cross-module checks (prek framework)
 └── Module checks (local hooks, gated by `files:` patterns)
-.git/hooks/post-commit    (installed by `pre-commit install --hook-type post-commit`)
+.git/hooks/post-commit    (installed by `prek install --hook-type post-commit`)
 └── flip-book-local-restore
 ```
 
@@ -21,10 +24,21 @@ The hooks are installed automatically by:
 - `npm install` / `npm ci` at the repo root — the `prepare` script runs `devops/install-git-hooks.mjs`.
 - `devops/setup-dev-env.mts` — calls the same script after creating `devops/.venv`.
 
-The installer prefers the `devops/.venv` pre-commit so the hooks keep working
-without activating the venv, falls back to a `pre-commit` on `PATH`, detaches a
-stale Husky `core.hooksPath` (`.husky/_`) when present, and skips silently
-outside a git worktree (e.g. `npm pack`, Docker builds).
+The installer prefers the `devops/.venv` prek so the hooks keep working
+without activating the venv, falls back to `prek` on `PATH`, then to
+`pre-commit`, detaches a stale Husky `core.hooksPath` (`.husky/_`) when
+present, and skips silently outside a git worktree (e.g. `npm pack`, Docker
+builds).
+
+## Parallel Execution
+
+Hooks carry an optional `priority` field (prek-only): hooks sharing a
+priority run concurrently, lower priorities run first. The config uses three
+tiers — mutating fixers first (`sync-pre-commit-deps` 0, `trailing-whitespace`
+1, `mixed-line-ending` 2), then `flip-book-npm-dep` alone (5, it rewrites and
+stages `package.json`/`package-lock`), then every read-only check in parallel
+(10). pre-commit parses but ignores the field, so pre-commit.ci keeps its
+sequential order.
 
 ## Workflow Execution
 
@@ -47,7 +61,7 @@ When you commit, the `pre-commit` git hook runs the framework, which:
 
 **Location:** [.pre-commit-config.yaml](../../.pre-commit-config.yaml)
 
-**Prerequisite:** `pre-commit` installed (Python), typically via `devops/.venv`
+**Prerequisite:** `prek` installed, typically via `devops/.venv` (or `pre-commit` — the config stays compatible)
 
 These checks run on all staged files regardless of module:
 
@@ -56,6 +70,8 @@ These checks run on all staged files regardless of module:
 | `sync-pre-commit-deps` | Synchronizes pre-commit dependencies |
 | `trailing-whitespace` | Removes trailing whitespace |
 | `check-yaml` | Validates YAML syntax (excludes CloudFormation templates) |
+| `check-toml` | Validates TOML syntax (Cargo.toml, pyproject.toml, Makefile.toml, fly.toml) |
+| `check-json` | Validates JSON syntax |
 | `check-ast` | Validates Python AST |
 | `check-added-large-files` | Prevents large files from being committed |
 | `check-xml` | Validates XML syntax |
@@ -70,6 +86,7 @@ These checks run on all staged files regardless of module:
 | `hadolint` | Lints Dockerfiles ([hadolint-py](https://github.com/AleksaC/hadolint-py) ships the binary as a wheel — no Docker daemon or system install needed, so it also runs on pre-commit.ci) |
 | `md-dead-link-check` | Detects broken links in Markdown files |
 | `ruff-check` | Python lint scoped to Codacy-parity rules (`F` pyflakes + `D2` docstring structure) |
+| `gitleaks` | Scans staged files for committed secrets/keys (automates the staged-PII review in git-practices) |
 
 The workflow linter uses a pinned [Astral actionlint revision](https://github.com/astral-sh/actionlint/commit/9e5dcb067e7cdcfe44d3f015ba9f2be4583466cb)
 that validates GitHub's native `parallel`, `background` and `wait` steps, including
@@ -92,7 +109,8 @@ while the module CI jobs remain the authoritative remote gate. The post-commit
 | `biome-lint` | `web/bible-on-site`, `web/admin` code files | per-module `biome lint` on staged files | Lint via [devops/precommit-biome.mjs](../../devops/precommit-biome.mjs) |
 | `flip-book-npm-dep` | `web/bible-on-site` | `npm run flip-book:check` → `flip-book:npm` + stage | Keeps `html-flip-book-react` on the npm version in commits ([devops/flip-book-dep.mjs](../../devops/flip-book-dep.mjs)) |
 | `web-unit-tests` | `web/bible-on-site` | `npm run test:unit` | Website unit tests (Jest) |
-| `web-rust-checks` | `web/api`, `web/bulletin` | `cargo make lint` (+ `fmt-check` for bulletin) | Rust lint/format via [devops/precommit-rust.mjs](../../devops/precommit-rust.mjs) |
+| `admin-unit-tests` | `web/admin` | `npm run test:unit` | Admin unit tests (vitest) |
+| `rust-checks` | `web/api`, `web/bulletin`, `data` | `cargo make lint` (+ `fmt-check` for bulletin and data) | Rust lint/format via [devops/precommit-rust.mjs](../../devops/precommit-rust.mjs) |
 | `codacy-gate` | `*.rs`, JS/TS files | `node devops/codacy-gate.mjs` | Codacy parity checks with no analyzer equivalent ([devops/codacy-gate.mjs](../../devops/codacy-gate.mjs)) |
 | `flip-book-local-restore` | post-commit | `npm run flip-book:local` | Restores local flip-book dep when the guard switched it |
 
