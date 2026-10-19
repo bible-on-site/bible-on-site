@@ -66,7 +66,7 @@ repos:
   # select is explicit so the gate doesn't drift with ruff version defaults;
   # broader docstring coverage (D1xx undocumented-*) stays out of scope.
   - repo: "https://github.com/astral-sh/ruff-pre-commit"
-    rev: v0.17.0
+    rev: v0.17.1
     hooks:
       - id: ruff-check
         args: [--select, "F,D2"]
@@ -74,7 +74,7 @@ repos:
   # Local gate for the staged-file secret/PII review required by
   # git-practices — catches keys/tokens before they reach the commit.
   - repo: "https://github.com/gitleaks/gitleaks"
-    rev: v8.30.1
+    rev: v8.30.0
     hooks:
       - id: gitleaks
         priority: 10
