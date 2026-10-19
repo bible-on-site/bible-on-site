@@ -20,7 +20,12 @@ public sealed class ViewportTextView : UIView, IUIAccessibilityContainer
         ScrollEnabled = true,
         Bounces = false,
         BackgroundColor = UIColor.Clear,
-        TextContainerInset = UIEdgeInsets.Zero
+        TextContainerInset = UIEdgeInsets.Zero,
+        // This view is not a scroll surface: the outer reader owns scrolling and
+        // every programmatic offset/content-size change would otherwise flash an
+        // indicator inside the cell — over the text and beside the page's own.
+        ShowsVerticalScrollIndicator = false,
+        ShowsHorizontalScrollIndicator = false
     };
 
     private readonly List<IDisposable> _scrollObservers = [];
