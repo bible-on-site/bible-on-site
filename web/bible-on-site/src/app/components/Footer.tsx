@@ -27,6 +27,10 @@ export function Footer() {
 				<Link href="/rabbis-blessing" className={styles.footerLink}>
 					רבנים מברכים
 				</Link>
+				<span className={styles.separator}>|</span>
+				<Link href="/accessibility" className={styles.footerLink}>
+					הצהרת נגישות
+				</Link>
 			</nav>
 			<div className={styles.footerBottom}>
 				<span className={styles.copyright}>
