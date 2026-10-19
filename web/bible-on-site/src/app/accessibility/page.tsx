@@ -3,6 +3,9 @@ import Link from "next/link";
 import { SITE_NAME } from "@/lib/seo/jsonld";
 import styles from "./page.module.css";
 
+// Data, not copy — kept out of JSX so it isn't flagged for translation.
+const CONTACT_EMAIL = "tanah.site@gmail.com";
+
 export const metadata: Metadata = {
 	title: `הצהרת נגישות | ${SITE_NAME}`,
 	description:
@@ -104,7 +107,7 @@ export default function AccessibilityPage() {
 					<ul className={styles.contactList}>
 						<li>
 							דוא&quot;ל:{" "}
-							<a href="mailto:tanah.site@gmail.com">tanah.site@gmail.com</a>
+							<a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
 						</li>
 						<li>
 							<a
