@@ -1136,7 +1136,9 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
 
     private void ClearAllSelections()
     {
-        ResetRecitationContext();
+        // Closing the focused pasuk keeps playback going (the bar is still
+        // visible); leaving selection or chapter mode stops it.
+        ResetRecitationContext(stopPlayback: _focusedPasuk == null);
         _viewModel.ClearSelected();
         UpdateSelectionBar();
     }
