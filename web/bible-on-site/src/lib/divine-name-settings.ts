@@ -48,7 +48,12 @@ export function normalizeDivineNameMasking(
 ): DivineNameMaskingSettings {
 	const s = (raw ?? {}) as Partial<DivineNameMaskingSettings>;
 	return {
-		enabled: s.enabled === true,
+		// Only a stored boolean is honored; missing/invalid falls back to the
+		// default (enabled per #2404), same convention as pick() below.
+		enabled:
+			typeof s.enabled === "boolean"
+				? s.enabled
+				: DEFAULT_DIVINE_NAME_MASKING.enabled,
 		elohim: pick(s.elohim, ELOHIM_OPTIONS, DEFAULT_DIVINE_NAME_MASKING.elohim),
 		elohimCustom: custom(s.elohimCustom),
 		yhwh: pick(s.yhwh, YHWH_OPTIONS, DEFAULT_DIVINE_NAME_MASKING.yhwh),
@@ -100,7 +105,8 @@ export function getDivineNameMaskingSnapshot(): DivineNameMaskingSettings {
 	return snapshot;
 }
 
-/* istanbul ignore next: SSR renders the canonical text. */
+/* istanbul ignore next: SSR renders the default masking — the same output a
+   fresh client produces, so hydration agrees without a settings read. */
 export function getDivineNameMaskingServerSnapshot(): DivineNameMaskingSettings {
 	return DEFAULT_DIVINE_NAME_MASKING;
 }

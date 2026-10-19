@@ -127,6 +127,20 @@ public class PreferencesServiceTests : IDisposable
     }
 
     [Fact]
+    public void FontFactor_TwoHundredPercent_PersistsAndReloads()
+    {
+        // #2405: the גודל גופן slider tops out at 200% — the stored factor must
+        // round-trip through preferences without clamping.
+        _service.FontFactor = 2.0;
+        _storage.Get("fontFactor", 0.0).Should().Be(2.0);
+
+        var restored = PreferencesService.CreateForTesting(_storage);
+        restored.Load();
+
+        restored.FontFactor.Should().Be(2.0);
+    }
+
+    [Fact]
     public void LastLearntPerek_WhenSet_PersistsToStorage()
     {
         // Arrange & Act
