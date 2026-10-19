@@ -488,13 +488,13 @@ public class DivineNameMaskingTests
             service.Load();
             var viewModel = new PerekViewModel(service, null, null, null, null, null, null, null);
             var revision = viewModel.DivineNameMaskingRevision;
-            viewModel.DivineNameMaskingEnabled.Should().BeFalse();
-
-            viewModel.DivineNameMaskingEnabled = true;
-
             viewModel.DivineNameMaskingEnabled.Should().BeTrue();
+
+            viewModel.DivineNameMaskingEnabled = false;
+
+            viewModel.DivineNameMaskingEnabled.Should().BeFalse();
             viewModel.DivineNameMaskingRevision.Should().Be(revision + 1);
-            storage.Get("divineNameMaskingEnabled", false).Should().BeTrue();
+            storage.Get("divineNameMaskingEnabled", true).Should().BeFalse();
         }
 
         [Fact]
@@ -532,23 +532,41 @@ public class DivineNameMaskingTests
         }
 
         [Fact]
-        public void defaults_to_disabled_with_the_documented_per_name_defaults()
+        public void defaults_to_enabled_with_the_documented_per_name_defaults()
         {
             _service.Load();
 
-            _service.DivineNameMaskingEnabled.Should().BeFalse();
+            _service.DivineNameMaskingEnabled.Should().BeTrue();
             _service.DivineNameMaskElohim.Should().Be(DivineNameMaskOption.Hyphen);
             _service.DivineNameMaskYhwh.Should().Be(DivineNameMaskOption.Heh);
-            _service.DivineNameMaskEl.Should().Be(DivineNameMaskOption.AsIs);
+            _service.DivineNameMaskEl.Should().Be(DivineNameMaskOption.Hyphen);
             _service.DivineNameMaskShaddai.Should().Be(DivineNameMaskOption.AsIs);
-            _service.GetDivineNameMaskingOptions().Enabled.Should().BeFalse();
+            _service.GetDivineNameMaskingOptions().Enabled.Should().BeTrue();
+            // Fresh-install ambient state renders אֵל as א-ל before any
+            // preference is opened or stored.
+            DivineNameMasking.MaskValue("אֵ֑ל").Should().Be("א-ל");
+        }
+
+        [Fact]
+        public void a_stored_disabled_state_and_explicit_as_is_choices_survive_load()
+        {
+            _storage.Set("divineNameMaskingEnabled", false);
+            _storage.Set("divineNameMaskEl", "asis");
+            _storage.Set("divineNameMaskShaddai", "hyphen");
+
+            _service.Load();
+
+            _service.DivineNameMaskingEnabled.Should().BeFalse();
+            _service.DivineNameMaskEl.Should().Be(DivineNameMaskOption.AsIs);
+            _service.DivineNameMaskShaddai.Should().Be(DivineNameMaskOption.Hyphen);
+            DivineNameMasking.MaskValue("אֵ֑ל").Should().Be("אֵ֑ל");
         }
 
         [Fact]
         public void choices_persist_across_service_reloads()
         {
             _service.Load();
-            _service.DivineNameMaskingEnabled = true;
+            _service.DivineNameMaskingEnabled = false;
             _service.DivineNameMaskElohim = DivineNameMaskOption.Elokim;
             _service.DivineNameMaskElohimCustom = "אלופו";
             _service.DivineNameMaskYhwh = DivineNameMaskOption.Dalet;
@@ -560,7 +578,7 @@ public class DivineNameMaskingTests
             var restored = PreferencesService.CreateForTesting(_storage);
             restored.Load();
 
-            restored.DivineNameMaskingEnabled.Should().BeTrue();
+            restored.DivineNameMaskingEnabled.Should().BeFalse();
             restored.DivineNameMaskElohim.Should().Be(DivineNameMaskOption.Elokim);
             restored.DivineNameMaskElohimCustom.Should().Be("אלופו");
             restored.DivineNameMaskYhwh.Should().Be(DivineNameMaskOption.Dalet);
@@ -581,7 +599,7 @@ public class DivineNameMaskingTests
             _service.Load();
 
             _service.DivineNameMaskYhwh.Should().Be(DivineNameMaskOption.Heh);
-            _service.DivineNameMaskEl.Should().Be(DivineNameMaskOption.AsIs);
+            _service.DivineNameMaskEl.Should().Be(DivineNameMaskOption.Hyphen);
             _service.DivineNameMaskElohim.Should().Be(DivineNameMaskOption.Hyphen);
         }
 
@@ -614,9 +632,15 @@ public class DivineNameMaskingTests
             var eventCount = 0;
             _service.PreferencesChanged += (_, _) => eventCount++;
 
-            _service.DivineNameMaskingEnabled = true;
+            _service.DivineNameMaskingEnabled = false;
 
             eventCount.Should().Be(1);
+            DivineNameMasking.Current.Enabled.Should().BeFalse();
+            DivineNameMasking.MaskValue("יְהוָ֑ה").Should().Be("יְהוָ֑ה");
+
+            _service.DivineNameMaskingEnabled = true;
+
+            eventCount.Should().Be(2);
             DivineNameMasking.Current.Enabled.Should().BeTrue();
             DivineNameMasking.MaskValue("יְהוָ֑ה").Should().Be("ה'");
         }
@@ -628,8 +652,9 @@ public class DivineNameMaskingTests
             var eventCount = 0;
             _service.PreferencesChanged += (_, _) => eventCount++;
 
-            _service.DivineNameMaskingEnabled = false; // already default
+            _service.DivineNameMaskingEnabled = true; // already default
             _service.DivineNameMaskElohim = DivineNameMaskOption.Hyphen; // already default
+            _service.DivineNameMaskEl = DivineNameMaskOption.Hyphen; // already default (#2404)
 
             eventCount.Should().Be(0);
         }

@@ -9,8 +9,12 @@
 
 export const READER_SETTINGS_STORAGE_KEY = "perekReaderSettings" as const;
 
-/** Font-size scale steps applied to the perek text (5 levels, default = 1). */
-export const PEREK_FONT_SCALES = [0.85, 0.92, 1, 1.15, 1.3] as const;
+/**
+ * Font-size scale steps applied to the perek text (default = 1).
+ * #2405: extended to 200% — new steps are appended so stored indices keep
+ * meaning the same scale (index 4 is still 130%).
+ */
+export const PEREK_FONT_SCALES = [0.85, 0.92, 1, 1.15, 1.3, 1.5, 1.7, 2] as const;
 
 /**
  * Line-height and word-spacing steps applied to the perek text (5 levels
@@ -159,4 +163,4 @@ export function applyReaderSettings(
  * storage key, arrays and default indices are duplicated here verbatim. The
  * reader-settings unit test asserts they stay in sync.
  */
-export const READER_SETTINGS_BOOTSTRAP = `(function(){try{var s=JSON.parse(localStorage.getItem("perekReaderSettings")||"null")||{};var f=[0.85,0.92,1,1.15,1.3],l=[1.5,1.75,2,2.25,2.5],w=[0.12,0.2,0.28,0.36,0.44],tf=["","noto"];function c(v,m,d){return typeof v==="number"&&isFinite(v)?Math.min(Math.max(Math.round(v),0),m):d}var e=document.documentElement;e.style.setProperty("--perek-font-scale",String(f[c(s.fontStep,f.length-1,2)]));e.style.setProperty("--perek-line-height",String(l[c(s.lineStep,l.length-1,2)]));e.style.setProperty("--perek-word-spacing",String(w[c(s.wordStep,w.length-1,2)])+"em");var t=tf[s.v===2&&s.fontId!=null?c(s.fontId,tf.length-1,0):0];if(t){e.dataset.tanakhFont=t}else{delete e.dataset.tanakhFont}}catch(e){}})();`;
+export const READER_SETTINGS_BOOTSTRAP = `(function(){try{var s=JSON.parse(localStorage.getItem("perekReaderSettings")||"null")||{};var f=[0.85,0.92,1,1.15,1.3,1.5,1.7,2],l=[1.5,1.75,2,2.25,2.5],w=[0.12,0.2,0.28,0.36,0.44],tf=["","noto"];function c(v,m,d){return typeof v==="number"&&isFinite(v)?Math.min(Math.max(Math.round(v),0),m):d}var e=document.documentElement;e.style.setProperty("--perek-font-scale",String(f[c(s.fontStep,f.length-1,2)]));e.style.setProperty("--perek-line-height",String(l[c(s.lineStep,l.length-1,2)]));e.style.setProperty("--perek-word-spacing",String(w[c(s.wordStep,w.length-1,2)])+"em");var t=tf[s.v===2&&s.fontId!=null?c(s.fontId,tf.length-1,0):0];if(t){e.dataset.tanakhFont=t}else{delete e.dataset.tanakhFont}}catch(e){}})();`;
