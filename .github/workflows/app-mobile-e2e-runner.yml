@@ -108,7 +108,7 @@ jobs:
       # hashFiles() in step templates dies on a hard 120s budget on loaded
       # runners (#2184); a run step computes the same input without the clock.
       - name: Hash npm dependency inputs
-        if: inputs.mode != 'build' && inputs.mode != 'release-smoke'
+        if: inputs.mode != 'build'
         id: npm-key
         # package.json is hashed too: a manifest edit (e.g. an install script)
         # without a lockfile change must still rotate the node_modules key.
@@ -177,7 +177,7 @@ jobs:
       # a hit lets npm ci skip entirely. The ~/.npm cacache this replaces kept
       # every tarball under a rolling prefix and took ~4.5 min to restore.
       - name: Restore node_modules
-        if: inputs.mode != 'build' && inputs.mode != 'release-smoke'
+        if: inputs.mode != 'build'
         id: node-modules-cache
         uses: actions/cache/restore@v6
         with:
@@ -221,11 +221,16 @@ jobs:
             --out "$MOBILE_E2E_ARTIFACTS/selection-manifest.json" \
             --compare "${BASELINE_ARGS[@]}" "${FORCE_ARGS[@]}"
 
+      # The smoke leg builds the app too: devops/node_modules carries the tsx
+      # the csproj's perushim decompress target runs. Its own scripts are
+      # dependency-free, so the Appium/mobile-e2e install stays out of it.
       - name: Install build and Appium dependencies
-        if: inputs.mode != 'build' && inputs.mode != 'release-smoke' && (steps.node-modules-cache.outputs.cache-hit != 'true')
+        if: inputs.mode != 'build' && (steps.node-modules-cache.outputs.cache-hit != 'true')
         run: |
           npm ci --prefix devops --no-audit
-          npm ci --prefix app/mobile-e2e --no-audit
+          if [ "${{ inputs.mode }}" != "release-smoke" ]; then
+            npm ci --prefix app/mobile-e2e --no-audit
+          fi
 
       # .NET's DerivedData equivalent: obj intermediates from the last master
       # build turn the harness compile incremental. Restored before the
