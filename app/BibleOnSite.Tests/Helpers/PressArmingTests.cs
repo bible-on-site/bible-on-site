@@ -54,7 +54,7 @@ public class PressArmingTests
         // through their own native Touch handler and must not arm here.
         var pasuk = PasukOf(1);
         var perek = CreatePerek(1, pasuk);
-        var row = new PasukDisplayItem(pasuk, isRepeatedCopy: false, fontSize: 18, markerFontSize: 16);
+        var row = new PasukDisplayItem(pasuk, isRepeatedCopy: false, isLastCopy: true, fontSize: 18, markerFontSize: 16);
 
         PressArming.IsCandidate(row, perek).Should().BeFalse();
     }
