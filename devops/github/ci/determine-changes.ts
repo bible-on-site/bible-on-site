@@ -88,11 +88,15 @@ export const MODULES = {
 			"web/bible-on-site/src/data/recitation/opus-playback.json",
 		],
 		// The e2e-impact selector/collector and the exec coverage-tree
-		// extractor drive the Appium suite (#2085).
+		// extractor drive the Appium suite (#2085). The runner workflow defines
+		// the device legs themselves — install logic, emulator settings and the
+		// Release startup smoke (#2373) — so a runner-only edit must trigger
+		// the same app checks as a parent-workflow edit.
 		ciPaths: [
 			...RELEASE_CI_PATHS,
 			".github/workflows/app-package.yml",
 			".github/workflows/app-mobile-e2e.yml",
+			".github/workflows/app-mobile-e2e-runner.yml",
 			"devops/github/ci/e2e-impact",
 			"devops/e2e-coverage-trees",
 		],
