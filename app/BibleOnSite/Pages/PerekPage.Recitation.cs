@@ -295,24 +295,26 @@ public partial class PerekPage
         var track = RecitationService.Instance.GetTrack(perek.PerekId);
         if (track?.AlignmentStatus != "ready")
         {
+            // The reader asked for one pasuk — say why it cannot play instead of
+            // ignoring the tap: either nothing was recorded or word timings are
+            // still being validated (the full recording stays on the header).
+            await DisplayAlertAsync("הקראה", track == null
+                ? "אין הקלטה לפרק זה"
+                : "הקראת מילים ופסוקים לפרק זה עדיין בהכנה. ההקלטה המלאה זמינה בלחיצה ארוכה על כותרת הפרק.", "אישור");
             return;
         }
 
         var words = track.Words.Where(w => w.Pasuk == pasuk.PasukNum).ToList();
         if (words.Count == 0 || words[0].StartMs == null || words[^1].EndMs == null)
         {
+            await DisplayAlertAsync("הקראה", "הקראת מילים ופסוקים לפרק זה עדיין בהכנה.", "אישור");
             return;
         }
 
-        var key = $"pasuk:{perek.PerekId}:{pasuk.PasukNum}";
-        if (_recitationCursor.PlayingKey == key)
-        {
-            // The second tap of a double-tap opens the focused pasuk — let the
-            // pasuk keep playing rather than toggling pause.
-            return;
-        }
-
-        await PlayRecitationAsync(key, ranges: [(words[0].StartMs!.Value, words[^1].EndMs!.Value)],
+        // Tapping the playing pasuk again goes through the shared toggle; the
+        // second tap of a double-tap opens the focused pasuk and keeps it.
+        await PlayRecitationAsync($"pasuk:{perek.PerekId}:{pasuk.PasukNum}",
+            ranges: [(words[0].StartMs!.Value, words[^1].EndMs!.Value)],
             resumeFromMs: words[0].StartMs!.Value);
     }
 
