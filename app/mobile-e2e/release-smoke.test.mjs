@@ -142,6 +142,7 @@ describe("launchPlan", () => {
     assert.equal(plan[1].name, "relaunch-retained");
     assert.equal(plan[1].e2eMarker, false, "relaunch exercises the persisted marker file, not the extra");
     assert.equal(plan[1].install, "none");
+    assert.equal(plan[1].stopFirst, true, "relaunch force-stops the prior instance first");
     assert.equal(plan[2].name, "upgrade-retained");
     assert.equal(plan[2].install, "upgrade", "the upgrade phase reinstalls over retained data");
   });

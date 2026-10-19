@@ -110,7 +110,7 @@ export function appComponentFocused(dumpsysWindow, pkg) {
 export function launchPlan() {
   return [
     { name: "cold-start", e2eMarker: true, install: "fresh" },
-    { name: "relaunch-retained", e2eMarker: false, install: "none" },
+    { name: "relaunch-retained", e2eMarker: false, install: "none", stopFirst: true },
     { name: "upgrade-retained", e2eMarker: false, install: "upgrade" },
   ];
 }
@@ -280,9 +280,18 @@ async function main() {
   };
 
   for (const step of launchPlan()) {
-    if (step.name === "relaunch-retained") {
+    if (step.stopFirst) {
       await shell("am", "force-stop", APP_PACKAGE);
-      log("relaunch-retained: force-stopped the app; the marker file persists for this install");
+      // WMS posts the killed window's WIN DEATH on the system_server thread,
+      // so it lands after force-stop returns — a logcat clear that wins the
+      // race still records it as a crash of the new launch. Wait for the
+      // process and its window teardown to finish first.
+      const goneDeadline = Date.now() + 10000;
+      while ((await shell("pidof", APP_PACKAGE).catch(() => "")).trim() && Date.now() < goneDeadline) {
+        await delay(POLL_MS);
+      }
+      await delay(POLL_MS);
+      log(`${step.name}: force-stopped the app; the marker file persists for this install`);
     }
     await runPhase(step);
     if (failures > 0) break;
