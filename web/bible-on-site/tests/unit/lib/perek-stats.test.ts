@@ -51,8 +51,19 @@ describe("getPerekStats", () => {
 		expect(stats).toEqual({ rabbis: 0, articles: 0, pediaEntries: 0 });
 	});
 
+	it("returns zeros when a count query resolves with no rows", async () => {
+		mockQuery.mockResolvedValue([] as never);
+		const stats = await getPerekStats();
+		expect(stats).toEqual({ rabbis: 0, articles: 0, pediaEntries: 0 });
+	});
+
 	it("rejects on database failure instead of presenting a false zero", async () => {
 		mockQuery.mockRejectedValue(new Error("db down"));
 		await expect(getPerekStats()).rejects.toThrow("db down");
+	});
+
+	it("rejects and logs a non-Error failure as-is", async () => {
+		mockQuery.mockRejectedValue("plain failure" as never);
+		await expect(getPerekStats()).rejects.toBe("plain failure");
 	});
 });
