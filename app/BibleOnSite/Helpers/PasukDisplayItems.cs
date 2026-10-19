@@ -42,10 +42,14 @@ public static class PasukDisplayItems
         var items = new List<PasukDisplayItem>(pesukim.Count * (repeatEachPasuk ? 2 : 1));
         foreach (var pasuk in pesukim)
         {
-            items.Add(new PasukDisplayItem(pasuk, isRepeatedCopy: false, fontSize, markerFontSize));
+            // The perushim ride the last copy of each pasuk so שניים מקרא reads
+            // מקרא, מקרא, פירוש rather than מקרא, פירוש, מקרא (#2403).
+            items.Add(new PasukDisplayItem(pasuk, isRepeatedCopy: false,
+                isLastCopy: !repeatEachPasuk, fontSize, markerFontSize));
             if (repeatEachPasuk)
             {
-                items.Add(new PasukDisplayItem(pasuk, isRepeatedCopy: true, fontSize, markerFontSize));
+                items.Add(new PasukDisplayItem(pasuk, isRepeatedCopy: true,
+                    isLastCopy: true, fontSize, markerFontSize));
             }
         }
         return items;
