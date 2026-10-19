@@ -1,0 +1,72 @@
+.banner {
+	position: fixed;
+	inset-inline: 0;
+	bottom: 0;
+	z-index: 1200;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: center;
+	gap: 0.6em 1.2em;
+	padding: 0.75em 1em;
+	background: #fff;
+	border-top: 1px solid #d0d7de;
+	box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.12);
+}
+
+.text {
+	margin: 0;
+	font-size: 0.95em;
+	line-height: 1.5;
+	color: #333;
+	text-align: right;
+}
+
+.link {
+	color: #1552ac;
+	text-decoration: underline;
+}
+
+.actions {
+	display: flex;
+	gap: 0.5em;
+}
+
+.actions button {
+	cursor: pointer;
+	font-size: 0.95em;
+	padding: 0.5em 1.4em;
+	border-radius: 8px;
+}
+
+.accept {
+	background: #1552ac;
+	color: #fff;
+	border: 1px solid #1552ac;
+}
+
+.deny {
+	background: transparent;
+	color: #333;
+	border: 1px solid #99a8bb;
+}
+
+@media (prefers-color-scheme: dark) {
+	.banner {
+		background: #16283f;
+		border-top-color: #3a4a63;
+	}
+
+	.text {
+		color: #e8eaed;
+	}
+
+	.link {
+		color: #7eb0ff;
+	}
+
+	.deny {
+		color: #e8eaed;
+		border-color: #5a6b85;
+	}
+}

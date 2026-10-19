@@ -11,6 +11,7 @@ import {
 	websiteNode,
 } from "@/lib/seo/jsonld";
 import { AhrefsAnalytics } from "./components/AhrefsAnalytics";
+import { AnalyticsConsentBanner } from "./components/AnalyticsConsentBanner";
 import { GoogleAnalytics } from "./components/GoogleAnalytics";
 import { JsonLd } from "./components/JsonLd";
 import { NavBar } from "./components/NavBar";
@@ -69,6 +70,7 @@ export default function RootLayout({
 
 				<NavBar />
 				{children}
+				<AnalyticsConsentBanner />
 			</body>
 		</html>
 	);
