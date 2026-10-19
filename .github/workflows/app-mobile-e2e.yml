@@ -267,6 +267,16 @@ jobs:
             --exec-tree app/.artifacts/mobile-e2e/ios/exec-coverage-tree.json \
             --out app/.artifacts/mobile-e2e/ios/coverage-tree.json \
             "${INCOMPLETE_ARGS[@]}" "${HISTORY_ARGS[@]}" "${OVERHEAD_ARGS[@]}"
+      # Shadow-mode parity (#2085): score the plan's suite-level selection
+      # manifest against the merged full-suite outcomes — an unselected
+      # failure is the parity miss the rollout gate counts before
+      # enforcement. Pure diagnostics; a missing manifest reports a problem.
+      - name: Verify shadow selection parity
+        run: |
+          node devops/github/ci/e2e-impact/e2e-impact.ts verify \
+            --manifest app/.artifacts/mobile-e2e/ios-plan/selection-manifest.json \
+            --tree app/.artifacts/mobile-e2e/ios/coverage-tree.json \
+            --out app/.artifacts/mobile-e2e/ios/selection-verify.json
       - name: Upload combined iOS app coverage
         uses: actions/upload-artifact@v7
         with:
