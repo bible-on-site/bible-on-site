@@ -133,6 +133,24 @@ public partial class PreferencesViewModel : DivineNamePreferencesViewModel
         }
     }
 
+    /// <summary>
+    /// Analytics opt-in for the אנליטיקה row (#2400). Toggling persists the
+    /// choice and applies it to the Firebase collection flag mid-session.
+    /// </summary>
+    public bool AnalyticsConsentEnabled
+    {
+        get => _preferencesService.AnalyticsConsentEnabled;
+        set
+        {
+            if (_preferencesService.AnalyticsConsentEnabled == value)
+            {
+                return;
+            }
+            _preferencesService.SetAnalyticsConsent(value);
+            OnPropertyChanged();
+        }
+    }
+
     /// <summary>Current startup-perek choice for the על הפרק row.</summary>
     public string PerekToLoadSummary => PerekToLoad == PerekToLoad.Todays ? "הפרק של היום" : "האחרון שלמדתי";
 
@@ -238,6 +256,7 @@ public partial class PreferencesViewModel : DivineNamePreferencesViewModel
         OnPropertyChanged(nameof(IsPerekToLoadTodays));
         OnPropertyChanged(nameof(IsPerekToLoadLastLearnt));
         OnPropertyChanged(nameof(PerekToLoadSummary));
+        OnPropertyChanged(nameof(AnalyticsConsentEnabled));
         OnPropertyChanged(nameof(RecitationPlaybackSummary));
         OnPropertyChanged(nameof(SoundSummaryText));
     }

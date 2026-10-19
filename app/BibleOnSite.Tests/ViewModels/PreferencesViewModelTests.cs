@@ -725,6 +725,37 @@ public class PreferencesViewModelTests : IDisposable
 
     #endregion
 
+    #region AnalyticsConsentEnabled Tests
+
+    [Fact]
+    public void AnalyticsConsentEnabled_DefaultsOff_AndPersistsThroughService()
+    {
+        _viewModel.AnalyticsConsentEnabled.Should().BeFalse("collection defaults off before an explicit opt-in");
+
+        _viewModel.AnalyticsConsentEnabled = true;
+
+        _service.AnalyticsConsentEnabled.Should().BeTrue();
+        _storage.Get(AnalyticsConsent.StorageKey, "").Should().Be("granted");
+
+        _viewModel.AnalyticsConsentEnabled = false;
+        _service.AnalyticsConsentEnabled.Should().BeFalse();
+        _storage.Get(AnalyticsConsent.StorageKey, "").Should().Be("denied");
+    }
+
+    [Fact]
+    public void AnalyticsConsentEnabled_WhenSameValue_DoesNotUpdate()
+    {
+        _viewModel.AnalyticsConsentEnabled = true;
+        var eventCount = 0;
+        _viewModel.PropertyChanged += (_, _) => eventCount++;
+
+        _viewModel.AnalyticsConsentEnabled = true;
+
+        eventCount.Should().Be(0, "Setting the same value should not raise PropertyChanged");
+    }
+
+    #endregion
+
     /// <summary>
     /// Extension-pack install/remove paths on <see cref="ExtensionPacksViewModel"/> using
     /// <see cref="PerushimNotesService.CreateForTesting"/> and a fake PAD service.
