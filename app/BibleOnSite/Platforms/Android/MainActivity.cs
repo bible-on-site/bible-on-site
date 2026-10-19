@@ -56,13 +56,17 @@ public class MainActivity : MauiAppCompatActivity
         Console.WriteLine("[Analytics] collection deactivated at build time (DISABLE_ANALYTICS)");
 #else
         // The manifest keeps collection off because FirebaseInitProvider runs
-        // before managed code; enable it only outside the e2e suite, and set it
-        // explicitly both ways so a flag persisted by an earlier non-suite
-        // install on this device cannot leak test traffic either.
+        // before managed code; enable it only when the user stored an explicit
+        // opt-in outside the e2e suite (#2400), and set it explicitly both ways
+        // so a flag persisted by an earlier install on this device cannot leak
+        // suite or pre-consent traffic either. PreferencesService.Load runs
+        // later on the loading page, so the consent read goes straight to
+        // storage; MauiPreferencesStorage wraps the same MAUI prefs.
         // The standalone Plugin.Firebase.Analytics package does not bind the
         // native instance on Android; without this every call NREs (#2247).
         Plugin.Firebase.Analytics.FirebaseAnalyticsImplementation.Initialize(this);
-        var analyticsCollectionEnabled = !Services.SearchIndexService.IsE2eMarkedProcess();
+        var analyticsCollectionEnabled =
+            Services.AnalyticsConsent.IsCollectionEnabled(new Services.MauiPreferencesStorage());
         Plugin.Firebase.Analytics.CrossFirebaseAnalytics.Current.IsAnalyticsCollectionEnabled =
             analyticsCollectionEnabled;
         Console.WriteLine($"[Analytics] collection enabled={analyticsCollectionEnabled}");
