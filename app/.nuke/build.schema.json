@@ -56,6 +56,7 @@
         "RunMac",
         "RunWindows",
         "StartApi",
+        "SyncGooglePlayListing",
         "Test",
         "TestE2E",
         "TestIntegration",
