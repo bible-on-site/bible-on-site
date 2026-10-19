@@ -771,6 +771,19 @@ jobs:
             --snapshot-sha "${{ github.sha }}" \
             --out "$MOBILE_E2E_ARTIFACTS/coverage-tree.json" "${INCOMPLETE_ARGS[@]}" "${EXEC_ARGS[@]}"
 
+      # Shadow-mode parity (#2085): score this leg's selection manifest
+      # against the outcomes the full run observed — an unselected failure is
+      # the parity miss the rollout gate counts before enforcement. Android
+      # only: iOS legs execute a shard assignment, and suite-level parity is
+      # scored by merge_ios against the merged tree. Pure diagnostics.
+      - name: Verify shadow selection parity
+        if: inputs.mode != 'build' && inputs.platform == 'Android' && (always() && !cancelled())
+        run: |
+          node devops/github/ci/e2e-impact/e2e-impact.ts verify \
+            --manifest "$MOBILE_E2E_ARTIFACTS/selection-manifest.json" \
+            --tree "$MOBILE_E2E_ARTIFACTS/coverage-tree.json" \
+            --out "$MOBILE_E2E_ARTIFACTS/selection-verify.json"
+
       # The authoritative baseline is published only from a completed,
       # successful default-branch run; PR and merge-queue evidence stays
       # provisional inside the run's appium artifact.
