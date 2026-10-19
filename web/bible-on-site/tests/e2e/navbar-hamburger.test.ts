@@ -10,6 +10,7 @@ const MENU_ITEMS = [
 	["עלון יומי", "/dailyBulletin"],
 	["קבוצת ווטסאפ", "/whatsappGroup"],
 	["תנאי שימוש", "/tos"],
+	["הצהרת נגישות", "/accessibility"],
 	["יישומון", "/app"],
 	["צור קשר", "/contact"],
 	["תרומות", "/donation"],
