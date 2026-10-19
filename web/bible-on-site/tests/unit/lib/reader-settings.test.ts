@@ -70,6 +70,25 @@ describe("reader-settings", () => {
 		},
 	);
 
+	it("extends the scale to 200% while stored indices keep their meaning (#2405)", () => {
+		// The five original indices resolve to the same scales they always did.
+		expect([...PEREK_FONT_SCALES.slice(0, 5)]).toEqual([
+			0.85, 0.92, 1, 1.15, 1.3,
+		]);
+		const top = PEREK_FONT_SCALES.length - 1;
+		expect(PEREK_FONT_SCALES[top]).toBe(2);
+		setStoredReaderSettings({ fontStep: top });
+		expect(getStoredReaderSettings().fontStep).toBe(top);
+		runBootstrap();
+		expect(
+			document.documentElement.style.getPropertyValue("--perek-font-scale"),
+		).toBe("2");
+		applyReaderSettings(getStoredReaderSettings());
+		expect(
+			document.documentElement.style.getPropertyValue("--perek-font-scale"),
+		).toBe("2");
+	});
+
 	it("roundtrips settings through localStorage", () => {
 		setStoredReaderSettings({ fontStep: 4, lineStep: 2, wordStep: 0 });
 		expect(getStoredReaderSettings()).toEqual({

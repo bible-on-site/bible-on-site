@@ -134,27 +134,27 @@ public class PreferencesViewModelTests : IDisposable
     [Fact]
     public void DivineNameMaskingEnabled_Get_ReturnsServiceValue()
     {
-        _service.DivineNameMaskingEnabled = true;
+        _service.DivineNameMaskingEnabled = false;
 
-        _viewModel.DivineNameMaskingEnabled.Should().BeTrue();
+        _viewModel.DivineNameMaskingEnabled.Should().BeFalse();
     }
 
     [Fact]
     public void DivineNameMaskingEnabled_Set_UpdatesServiceValue()
     {
-        _viewModel.DivineNameMaskingEnabled = true;
+        _viewModel.DivineNameMaskingEnabled = false;
 
-        _service.DivineNameMaskingEnabled.Should().BeTrue();
+        _service.DivineNameMaskingEnabled.Should().BeFalse();
     }
 
     [Fact]
     public void DivineNameMaskingEnabled_WhenSameValue_DoesNotFirePropertyChanged()
     {
-        _viewModel.DivineNameMaskingEnabled = true;
+        _viewModel.DivineNameMaskingEnabled = false;
         var eventCount = 0;
         _viewModel.PropertyChanged += (_, _) => eventCount++;
 
-        _viewModel.DivineNameMaskingEnabled = true;
+        _viewModel.DivineNameMaskingEnabled = false;
 
         eventCount.Should().Be(0);
     }
