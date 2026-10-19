@@ -55,6 +55,8 @@ public class PasukDisplayItemsConverterTests
         items.Should().HaveCount(4);
         items.Select(i => i.Pasuk.PasukNum).Should().Equal(1, 1, 2, 2);
         items.Select(i => i.IsRepeatedCopy).Should().Equal(false, true, false, true);
+        // The perush host rides the second copy: מקרא, מקרא, פירוש (#2403).
+        items.Select(i => i.IsLastCopy).Should().Equal(false, true, false, true);
     }
 
     [Fact]
