@@ -102,10 +102,10 @@ activity alive past the original crash window, and print
 ran `Initialize` + `set_IsAnalyticsCollectionEnabled` — the exact member that
 NRE'd — while keeping suite traffic out of production analytics (#2120); a
 missing marker, `enabled=true`, or the `DISABLE_ANALYTICS` build line each
-fail the leg. Phases: cold start with the `BIBLE_E2E` intent extra, a
-force-stop relaunch over retained data (the persisted marker file holds
-isolation — adb relaunches drop extras), and an `install -r` reinstall
-followed by another verified launch. Scoped logcat, UI dumps, screenshots,
+fail the leg. Phases: install plus `pm clear` for a true cold start with the
+`BIBLE_E2E` intent extra, a force-stop relaunch over retained data (the
+persisted marker file holds isolation — adb relaunches drop extras), and an
+`install -r` reinstall followed by another verified launch. Scoped logcat, UI dumps, screenshots,
 `build-manifest.json` (SHA256, source SHA, config) and
 `release-smoke-summary.json` land in the run artifacts on failure and success.
 

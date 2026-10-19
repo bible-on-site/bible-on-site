@@ -103,12 +103,14 @@ export function appComponentFocused(dumpsysWindow, pkg) {
 
 // Required coverage from #2373: a fresh cold start, a retained-data relaunch
 // (extras are dropped — the persisted marker file must hold isolation), and
-// an install-over-existing upgrade startup.
+// an install-over-existing upgrade startup. "fresh" also clears data: the AVD
+// may be a cached snapshot that already carries the app, and a cold start on
+// someone else's retained state is not a cold start.
 export function launchPlan() {
   return [
-    { name: "cold-start", e2eMarker: true, reinstall: false },
-    { name: "relaunch-retained", e2eMarker: false, reinstall: false },
-    { name: "upgrade-retained", e2eMarker: false, reinstall: true },
+    { name: "cold-start", e2eMarker: true, install: "fresh" },
+    { name: "relaunch-retained", e2eMarker: false, install: "none" },
+    { name: "upgrade-retained", e2eMarker: false, install: "upgrade" },
   ];
 }
 
@@ -199,8 +201,8 @@ async function main() {
   };
 
   let failures = 0;
-  const runPhase = async ({ name, e2eMarker, reinstall }) => {
-    const phase = { name, e2eMarker, reinstall, ok: false, startedUtc: new Date().toISOString() };
+  const runPhase = async ({ name, e2eMarker, install }) => {
+    const phase = { name, e2eMarker, install, ok: false, startedUtc: new Date().toISOString() };
     const fail = (detail) => {
       phase.error = detail;
       summary.phases.push(phase);
@@ -208,10 +210,11 @@ async function main() {
       log(`${name}: FAIL — ${detail}`);
     };
     try {
-      if (reinstall) {
+      if (install !== "none") {
         const out = await device("install", "-r", apk);
-        log(`${name}: reinstall says ${out.trim().split("\n").pop()}`);
-        if (!/Success/.test(out)) return fail(`upgrade reinstall failed: ${out.trim()}`);
+        log(`${name}: install says ${out.trim().split("\n").pop()}`);
+        if (!/Success/.test(out)) return fail(`install failed: ${out.trim()}`);
+        if (install === "fresh") await shell("pm", "clear", APP_PACKAGE);
       }
       await device("logcat", "-c");
       const component = launcherComponent(

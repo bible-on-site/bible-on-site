@@ -132,11 +132,11 @@ describe("launchPlan", () => {
     assert.equal(plan.length, 3);
     assert.equal(plan[0].name, "cold-start");
     assert.equal(plan[0].e2eMarker, true, "first launch carries the isolation marker");
-    assert.equal(plan[0].reinstall, false);
+    assert.equal(plan[0].install, "fresh", "cold start installs the packaged APK and clears data");
     assert.equal(plan[1].name, "relaunch-retained");
     assert.equal(plan[1].e2eMarker, false, "relaunch exercises the persisted marker file, not the extra");
-    assert.equal(plan[1].reinstall, false);
+    assert.equal(plan[1].install, "none");
     assert.equal(plan[2].name, "upgrade-retained");
-    assert.equal(plan[2].reinstall, true, "the upgrade phase reinstalls over retained data");
+    assert.equal(plan[2].install, "upgrade", "the upgrade phase reinstalls over retained data");
   });
 });
