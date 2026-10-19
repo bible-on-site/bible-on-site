@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { RevisionConflictError } from "~/lib/tanahpedia/revisions-shared";
 
 const {
@@ -490,5 +490,78 @@ describe("listEntryRevisions", () => {
 			["entry-1"],
 		);
 		expect(rows).toEqual([HEAD]);
+	});
+});
+
+describe("website cache invalidation", () => {
+	const ENV_KEYS = ["VITE_WEBSITE_URL", "REVALIDATE_SECRET"] as const;
+	let savedEnv: Record<string, string | undefined>;
+	let fetchSpy: ReturnType<typeof vi.spyOn>;
+
+	beforeEach(() => {
+		transactionMock.mockReset().mockImplementation((cb) => cb(fakeConn));
+		txExecuteMock.mockReset();
+		txQueryOneMock.mockReset();
+		savedEnv = {};
+		for (const key of ENV_KEYS) savedEnv[key] = process.env[key];
+		process.env.VITE_WEBSITE_URL = "https://site.test";
+		process.env.REVALIDATE_SECRET = "s3cr3t";
+		fetchSpy = vi
+			.spyOn(globalThis, "fetch")
+			.mockResolvedValue(new Response("{}", { status: 200 }));
+	});
+
+	afterEach(() => {
+		for (const key of ENV_KEYS) {
+			if (savedEnv[key] === undefined) delete process.env[key];
+			else process.env[key] = savedEnv[key];
+		}
+		fetchSpy.mockRestore();
+	});
+
+	function calledUrls(): URL[] {
+		return fetchSpy.mock.calls.map((call: unknown[]) => new URL(String(call[0])));
+	}
+
+	it("expires pedia surfaces when a proposal goes live", async () => {
+		txQueryOneMock
+			.mockResolvedValueOnce({
+				...HEAD,
+				id: "r1",
+				status: "PENDING",
+				base_revision_id: null,
+			})
+			.mockResolvedValueOnce(ENTRY)
+			.mockResolvedValueOnce(HEAD);
+
+		await approveEntryRevision({ data: { id: "r1" } });
+
+		const urls = calledUrls();
+		expect(urls.length).toBeGreaterThan(0);
+		expect(urls.map((u) => u.searchParams.get("tag"))).toContain(
+			"tanahpedia-entity-refs",
+		);
+	});
+
+	it("expires pedia surfaces when a revision is restored", async () => {
+		txQueryOneMock
+			.mockResolvedValueOnce({ ...HEAD, id: "old-rev" })
+			.mockResolvedValueOnce(ENTRY)
+			.mockResolvedValueOnce(HEAD)
+			.mockResolvedValueOnce(ENTRY);
+
+		await restoreEntryRevision({
+			data: { id: "old-rev", baseRevisionId: "rev-head" },
+		});
+
+		expect(calledUrls().length).toBeGreaterThan(0);
+	});
+
+	it("does not invalidate when a proposal is rejected", async () => {
+		executeMock.mockReset().mockResolvedValue(undefined);
+
+		await rejectEntryRevision({ data: { id: "r1" } });
+
+		expect(fetchSpy).not.toHaveBeenCalled();
 	});
 });

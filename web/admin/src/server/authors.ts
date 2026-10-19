@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { execute, query, queryOne } from "./db";
 import { getAuthorImageUrl } from "./s3";
+import { AUTHOR_INVALIDATION, revalidateWebsite } from "./website-revalidate";
 
 // imageUrl is computed at runtime from the author ID (S3 key: authors/high-res/{id}.jpg).
 // There is NO image_url column in tanah_author — do not add one.
@@ -79,7 +80,11 @@ export const createAuthor = createServerFn({ method: "POST" })
 			throw new Error("Failed to retrieve created author");
 		}
 
-		return toAuthor(row);
+		const author = toAuthor(row);
+		// Post-commit: expire the website's author/article caches so the new
+		// author becomes public without a redeploy (see server/website-revalidate.ts).
+		await revalidateWebsite(AUTHOR_INVALIDATION);
+		return author;
 	});
 
 // Update author
@@ -104,7 +109,9 @@ export const updateAuthor = createServerFn({ method: "POST" })
 			throw new Error("Failed to retrieve updated author");
 		}
 
-		return toAuthor(row);
+		const author = toAuthor(row);
+		await revalidateWebsite(AUTHOR_INVALIDATION);
+		return author;
 	});
 
 // Delete author
@@ -112,5 +119,7 @@ export const deleteAuthor = createServerFn({ method: "POST" })
 	.validator((data: number) => data)
 	.handler(async ({ data: id }) => {
 		await execute("DELETE FROM tanah_author WHERE id = ?", [id]);
+		// Orphaned articles lose their author link; both surfaces expire.
+		await revalidateWebsite(AUTHOR_INVALIDATION);
 		return { success: true };
 	});
