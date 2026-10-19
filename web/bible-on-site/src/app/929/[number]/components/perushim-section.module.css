@@ -209,11 +209,15 @@
   text-decoration: underline;
 }
 
+/* Body text justified like the perek pesukim (.perekText); the last line of
+   each paragraph keeps the natural right edge (RTL). */
 .noteContent {
   font-size: 0.95rem;
   line-height: 1.7;
   color: #333;
   direction: rtl;
+  text-align: justify;
+  text-align-last: right;
 }
 
 .noteContent + .noteContent {
