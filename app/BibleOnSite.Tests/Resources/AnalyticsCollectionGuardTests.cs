@@ -110,6 +110,22 @@ public class AnalyticsCollectionGuardTests
     }
 
     [Fact]
+    public void Startup_GatesCollectionOnStoredConsentAndE2eMarker()
+    {
+        // #2400: both launch paths must resolve collection through the consent
+        // gate (a stored opt-in plus the e2e marker) so neither platform can
+        // re-enable tracking unconditionally and no Release build can emit
+        // before the user answers. The gate itself must keep consulting the
+        // e2e marker so suite launches stay silent even on a granted device.
+        var consent = File.ReadAllText(Path.Join(AppRoot, "Services", "AnalyticsConsent.cs"));
+        Assert.Contains("IsE2eMarkedProcess()", consent);
+        var activity = File.ReadAllText(Path.Join(AppRoot, "Platforms", "Android", "MainActivity.cs"));
+        Assert.Contains("AnalyticsConsent.IsCollectionEnabled(", activity);
+        var mauiProgram = File.ReadAllText(Path.Join(AppRoot, "MauiProgram.cs"));
+        Assert.Contains("AnalyticsConsent.IsCollectionEnabled(", mauiProgram);
+    }
+
+    [Fact]
     public void MobileE2eCompile_PropagatesDisableAnalytics()
     {
         // #2120 asks for an explicit, reliably propagated test-build

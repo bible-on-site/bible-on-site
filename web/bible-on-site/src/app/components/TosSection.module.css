@@ -102,6 +102,17 @@
   text-decoration: underline;
 }
 
+/* Link-styled button for the analytics consent reset (#2400) */
+.consentReset {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: #1552ac;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
 /* Responsive header margin */
 @media screen and (min-width: 1280px) and (max-width: 1920px) {
   .tosHeader h1 {
@@ -142,6 +153,10 @@
 
   .tosList a,
   .tosList a:visited {
+    color: #7eb0ff;
+  }
+
+  .consentReset {
     color: #7eb0ff;
   }
 }
