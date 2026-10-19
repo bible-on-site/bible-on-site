@@ -16,6 +16,10 @@ const MODULES = {
 		["cargo", "make", "lint"],
 		["cargo", "make", "fmt-check"],
 	],
+	data: [
+		["cargo", "make", "lint"],
+		["cargo", "make", "fmt-check"],
+	],
 };
 
 // cargo resolves to a real .exe on every platform — no shell needed.
