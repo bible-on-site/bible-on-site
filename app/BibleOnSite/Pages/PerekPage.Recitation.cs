@@ -168,9 +168,14 @@ public partial class PerekPage
         SetRecitingWord(_recitationTimeline?.WordAt(player.Position.TotalMilliseconds));
     }
 
-    private void ResetRecitationContext()
+    private void ResetRecitationContext() => ResetRecitationContext(stopPlayback: true);
+
+    private void ResetRecitationContext(bool stopPlayback)
     {
-        StopRecitation();
+        if (stopPlayback)
+        {
+            StopRecitation();
+        }
         _doubleTap.Reset();
         _headerPress?.Cancel();
         _chapterRecitationSelection = false;
@@ -338,7 +343,9 @@ public partial class PerekPage
             return;
         }
 
-        ResetRecitationContext();
+        // A pasuk preview that is still playing keeps playing into the focused
+        // view — its words highlight there live and the bar can pause it.
+        ResetRecitationContext(stopPlayback: false);
         _focusedPasuk = pasuk;
         FocusedSourceLabel.Text = $"{_viewModel.Source} {pasuk.PasukNumHeb}";
         FocusedPasukOverlay.IsVisible = true;

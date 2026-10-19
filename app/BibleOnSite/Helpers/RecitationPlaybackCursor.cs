@@ -1,5 +1,3 @@
-using BibleOnSite.Models;
-
 namespace BibleOnSite.Helpers;
 
 /// <summary>
