@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { createServerFn } from "@tanstack/react-start";
 import { execute, query, queryOne } from "../db";
+import { PEDIA_INVALIDATION, revalidateWebsite } from "../website-revalidate";
 
 export interface TanahpediaPlace {
 	id: string;
@@ -81,6 +82,7 @@ export const createPlace = createServerFn({ method: "POST" })
 			`INSERT INTO tanahpedia_place (id, entity_id) VALUES (?, ?)`,
 			[placeId, entityId],
 		);
+		await revalidateWebsite(PEDIA_INVALIDATION);
 		return { id: placeId, entity_id: entityId };
 	});
 
@@ -95,5 +97,6 @@ export const deletePlace = createServerFn({ method: "POST" })
 		await execute("DELETE FROM tanahpedia_entity WHERE id = ?", [
 			row.entity_id,
 		]);
+		await revalidateWebsite(PEDIA_INVALIDATION);
 		return { success: true };
 	});

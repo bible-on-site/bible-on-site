@@ -17,6 +17,7 @@ import {
 	txQuery,
 	txQueryOne,
 } from "./db";
+import { ARTICLE_INVALIDATION, revalidateWebsite } from "./website-revalidate";
 
 /**
  * Derived article-search index sync. Every article write enqueues the article
@@ -261,7 +262,7 @@ export const createArticle = createServerFn({ method: "POST" })
 				: normalizeCoveringSources(data.coveringSources);
 
 		await ensureArticleSearchQueue();
-		return await transaction(async (conn) => {
+		const created = await transaction(async (conn) => {
 			if (coveringRows !== undefined) {
 				await assertCoveringSourcesExist(conn, coveringRows);
 			}
@@ -310,6 +311,10 @@ export const createArticle = createServerFn({ method: "POST" })
 				coveringSources: await txLoadCoveringSources(conn, newArticle.id),
 			};
 		});
+		// Post-commit: expire the website's article caches so the new article
+		// becomes public without a redeploy (see server/website-revalidate.ts).
+		await revalidateWebsite(ARTICLE_INVALIDATION);
+		return created;
 	});
 
 // Update article
@@ -325,7 +330,7 @@ export const updateArticle = createServerFn({ method: "POST" })
 				: normalizeCoveringSources(data.coveringSources);
 
 		await ensureArticleSearchQueue();
-		return await transaction(async (conn) => {
+		const updatedArticle = await transaction(async (conn) => {
 			if (coveringRows !== undefined) {
 				await assertCoveringSourcesExist(conn, coveringRows);
 			}
@@ -369,6 +374,8 @@ export const updateArticle = createServerFn({ method: "POST" })
 				coveringSources: await txLoadCoveringSources(conn, data.id),
 			};
 		});
+		await revalidateWebsite(ARTICLE_INVALIDATION);
+		return updatedArticle;
 	});
 
 // Delete article
@@ -395,22 +402,8 @@ export const deleteArticle = createServerFn({ method: "POST" })
 			// purges it from the index — deleted articles must stop matching.
 			await txExecute(conn, ENQUEUE_SEARCH_SQL, [data]);
 		});
-		return { success: true };
-	});
-
-// Cache invalidation - call CloudFront or your caching layer
-export const invalidateArticleCache = createServerFn({ method: "POST" })
-	.validator((data: number) => data)
-	.handler(async ({ data: articleId }) => {
-		// TODO: Implement CloudFront invalidation when ready
-		console.log(`Invalidating cache for article ${articleId}`);
-		return { success: true };
-	});
-
-export const invalidatePerekCache = createServerFn({ method: "POST" })
-	.validator((data: number) => data)
-	.handler(async ({ data: perekId }) => {
-		// TODO: Implement CloudFront invalidation when ready
-		console.log(`Invalidating cache for perek ${perekId}`);
+		// The article tag covers the deleted row's perek page and every other
+		// article surface; paths no longer exist so tags do the work.
+		await revalidateWebsite(ARTICLE_INVALIDATION);
 		return { success: true };
 	});

@@ -107,6 +107,34 @@ The website uses Next.js Static Site Generation (SSG) with the following pattern
 - **Dynamic Data**: Articles are fetched at request time (ISR) with caching
 - **Graceful Degradation**: If database is unavailable during SSG build, pages render without articles
 
+## Content Freshness (On-Demand Revalidation)
+
+DB-backed reads are cached indefinitely (`unstable_cache` with
+`revalidate: false`) under the tags `articles`, `authors`, `perushim` and
+`tanahpedia-entity-refs`, and content pages are pre-rendered. A content
+change therefore becomes public only when the admin app calls
+`POST /api/revalidate` on the website after its DB commit:
+
+- `?tag=<tag>` expires a cache tag with `{ expire: 0 }` so the next request
+  re-renders instead of being served stale output.
+- `?path=<route>` invalidates a prerendered route; dynamic route patterns
+  (e.g. `/pedia/[slug]`) also take `&type=page`.
+- In production the call must carry `?secret=<REVALIDATE_SECRET>`; an unset
+  secret rejects every call.
+
+The admin side lives in `web/admin/src/server/website-revalidate.ts`
+(`VITE_WEBSITE_URL` + `VITE_REVALIDATION_SECRET`; both unset = no-op for
+tests/tooling). Covered mutations: article and author CRUD, Tanahpedia
+entry CRUD and entity links, entry-revision approval/restore, and entity /
+person / place / family structural edits.
+
+**Limits**: invalidation is local to the website instance that receives the
+call — the service normally runs a single task (`DesiredCount: 1`), but
+during a rolling deploy a second task serves briefly and can hold stale
+content until the next invalidation or task replacement. A failed or
+unconfigured call only logs; the stale entry persists until a later edit or
+an operator `POST`s `/api/revalidate` directly.
+
 ## Database Configuration
 
 Environment variables for database connection (supports both formats):

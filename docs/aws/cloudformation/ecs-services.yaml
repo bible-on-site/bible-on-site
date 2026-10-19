@@ -172,6 +172,7 @@ Resources:
                   - logs:PutLogEvents
                 Resource: "*"
         # Permissions to read SSM parameters for database credentials
+        # and the shared website revalidation secret.
         - PolicyName: SSMParameterReadAccess
           PolicyDocument:
             Version: "2012-10-17"
@@ -180,7 +181,9 @@ Resources:
                 Action:
                   - ssm:GetParameters
                   - ssm:GetParameter
-                Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-tanah-db-*"
+                Resource:
+                  - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-tanah-db-*"
+                  - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-revalidate-secret"
       Tags:
         - Key: Project
           Value: bible-on-site
@@ -314,6 +317,10 @@ Resources:
           Secrets:
             - Name: DB_URL
               ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-tanah-db-url"
+            # Guards POST /api/revalidate; must match the admin task's
+            # VITE_REVALIDATION_SECRET (same SSM parameter).
+            - Name: REVALIDATE_SECRET
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-revalidate-secret"
       Tags:
         - Key: Project
           Value: bible-on-site
@@ -486,9 +493,16 @@ Resources:
               Value: il-central-1
             - Name: S3_BUCKET
               Value: bible-on-site-assets
+            # Admin reaches the website task over Cloud Map service discovery
+            # (MULTIVALUE A records) to expire its content caches post-commit.
+            - Name: VITE_WEBSITE_URL
+              Value: http://website.bible-on-site.local:3000
           Secrets:
             - Name: DB_URL
               ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-tanah-db-url"
+            # Shared with the website task's REVALIDATE_SECRET (same parameter).
+            - Name: VITE_REVALIDATION_SECRET
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-revalidate-secret"
       Tags:
         - Key: Project
           Value: bible-on-site

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => {
 	const conn = { marker: "tx-conn" };
@@ -370,6 +370,129 @@ describe("tanahpedia entry server functions", () => {
 				"DELETE FROM tanahpedia_entry_entity WHERE id = ?",
 				["link-1"],
 			);
+		});
+	});
+
+	describe("website cache invalidation", () => {
+		const ENV_KEYS = [
+			"VITE_WEBSITE_URL",
+			"VITE_REVALIDATION_SECRET",
+		] as const;
+		let savedEnv: Record<string, string | undefined>;
+		let fetchSpy: ReturnType<typeof vi.spyOn>;
+
+		beforeEach(() => {
+			savedEnv = {};
+			for (const key of ENV_KEYS) savedEnv[key] = process.env[key];
+			process.env.VITE_WEBSITE_URL = "https://site.test";
+			process.env.VITE_REVALIDATION_SECRET = "s3cr3t";
+			fetchSpy = vi
+				.spyOn(globalThis, "fetch")
+				.mockResolvedValue(new Response("{}", { status: 200 }));
+		});
+
+		afterEach(() => {
+			for (const key of ENV_KEYS) {
+				if (savedEnv[key] === undefined) delete process.env[key];
+				else process.env[key] = savedEnv[key];
+			}
+			fetchSpy.mockRestore();
+		});
+
+		function revalidateCalls() {
+			return fetchSpy.mock.calls.map(([input]) => {
+				const url = new URL(String(input));
+				return {
+					tag: url.searchParams.get("tag"),
+					path: url.searchParams.get("path"),
+					type: url.searchParams.get("type"),
+				};
+			});
+		}
+
+		// The pedia surface set: entity refs feeding perek pages, every
+		// entry/category/disambiguation route, and the index.
+		const PEDIA_CALLS = [
+			{ tag: "tanahpedia-entity-refs", path: null, type: null },
+			{ tag: null, path: "/pedia/[slug]", type: "page" },
+			{ tag: null, path: "/pedia", type: null },
+		];
+
+		it("expires pedia surfaces after an entry create", async () => {
+			mocks.txExecute.mockResolvedValue({ insertId: 1 });
+			mocks.txQueryOne.mockResolvedValue({
+				id: "entry-new",
+				unique_name: "שם",
+				title: "כותרת",
+				content: "",
+				created_at: "2026-01-01",
+				updated_at: "2026-01-01",
+			});
+
+			await createEntry({
+				data: {
+					id: "entry-new",
+					unique_name: "שם",
+					title: "כותרת",
+					content: "",
+				},
+			});
+
+			expect(revalidateCalls()).toEqual(PEDIA_CALLS);
+		});
+
+		it("expires pedia surfaces after a changed update", async () => {
+			mocks.saveRevisionedMock.mockResolvedValue({
+				entry: { id: "entry-1" },
+				headRevisionId: "rev-2",
+			});
+
+			await updateEntry({
+				data: {
+					id: "entry-1",
+					unique_name: "שם",
+					title: "כותרת",
+					content: "<p>גוף</p>",
+				},
+			});
+
+			expect(revalidateCalls()).toEqual(PEDIA_CALLS);
+		});
+
+		it("skips invalidation when the save was a no-op", async () => {
+			mocks.saveRevisionedMock.mockResolvedValue({
+				entry: { id: "entry-1" },
+				headRevisionId: "rev-1",
+				unchanged: true,
+			});
+
+			await updateEntry({
+				data: {
+					id: "entry-1",
+					unique_name: "שם",
+					title: "כותרת",
+					content: "<p>גוף</p>",
+				},
+			});
+
+			expect(fetchSpy).not.toHaveBeenCalled();
+		});
+
+		it("expires pedia surfaces after delete and entity link changes", async () => {
+			mocks.execute.mockResolvedValue({ affectedRows: 1 });
+
+			await deleteEntry({ data: "entry-1" });
+			expect(revalidateCalls()).toEqual(PEDIA_CALLS);
+
+			fetchSpy.mockClear();
+			await assignEntity({
+				data: { id: "link-1", entry_id: "entry-1", entity_id: "e-1" },
+			});
+			expect(revalidateCalls()).toEqual(PEDIA_CALLS);
+
+			fetchSpy.mockClear();
+			await removeEntity({ data: "link-1" });
+			expect(revalidateCalls()).toEqual(PEDIA_CALLS);
 		});
 	});
 });

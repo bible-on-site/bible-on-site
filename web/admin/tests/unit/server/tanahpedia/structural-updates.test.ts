@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { executeMock, queryMock, queryOneMock } = vi.hoisted(() => ({
 	executeMock: vi.fn(),
@@ -277,5 +277,71 @@ describe("replacePlaceIdentifications", () => {
 		expect(executedStatements()).toEqual([
 			expect.stringContaining("UPDATE tanahpedia_place_identification"),
 		]);
+	});
+});
+
+describe("structural saves invalidate the website", () => {
+	const ENV_KEYS = ["VITE_WEBSITE_URL", "VITE_REVALIDATION_SECRET"] as const;
+	let savedEnv: Record<string, string | undefined>;
+	let fetchSpy: ReturnType<typeof vi.spyOn>;
+
+	beforeEach(() => {
+		executeMock.mockReset().mockResolvedValue(undefined);
+		queryMock.mockReset();
+		queryOneMock.mockReset();
+		savedEnv = {};
+		for (const key of ENV_KEYS) savedEnv[key] = process.env[key];
+		process.env.VITE_WEBSITE_URL = "https://site.test";
+		process.env.VITE_REVALIDATION_SECRET = "s3cr3t";
+		fetchSpy = vi
+			.spyOn(globalThis, "fetch")
+			.mockResolvedValue(new Response("{}", { status: 200 }));
+	});
+
+	afterEach(() => {
+		for (const key of ENV_KEYS) {
+			if (savedEnv[key] === undefined) delete process.env[key];
+			else process.env[key] = savedEnv[key];
+		}
+		fetchSpy.mockRestore();
+	});
+
+	function revalidateCalls() {
+		return fetchSpy.mock.calls.map(([input]) => {
+			const url = new URL(String(input));
+			return {
+				tag: url.searchParams.get("tag"),
+				path: url.searchParams.get("path"),
+			};
+		});
+	}
+
+	it("expires pedia surfaces after an entity rename", async () => {
+		await updateEntityDisplayName({
+			data: { entityId: "entity-1", name: "משה רבנו" },
+		});
+
+		expect(revalidateCalls()).toEqual([
+			{ tag: "tanahpedia-entity-refs", path: null },
+			{ tag: null, path: "/pedia/[slug]" },
+			{ tag: null, path: "/pedia" },
+		]);
+	});
+
+	it("does not call the website before the entity row is written", async () => {
+		let fetchedBeforeWrite = false;
+		fetchSpy.mockImplementation(async () => {
+			fetchedBeforeWrite = !executedStatements().some((s) =>
+				s.includes("UPDATE tanahpedia_entity"),
+			);
+			return new Response("{}", { status: 200 });
+		});
+
+		await updateEntityDisplayName({
+			data: { entityId: "entity-1", name: "משה רבנו" },
+		});
+
+		expect(fetchedBeforeWrite).toBe(false);
+		expect(fetchSpy).toHaveBeenCalled();
 	});
 });

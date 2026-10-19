@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { executeMock, queryMock, queryOneMock } = vi.hoisted(() => ({
 	executeMock: vi.fn(),
@@ -138,5 +138,40 @@ describe("authors api", () => {
 			"DELETE FROM tanah_author WHERE id = ?",
 			[4],
 		);
+	});
+});
+
+describe("author saves invalidate the website", () => {
+	const ENV_KEYS = ["VITE_WEBSITE_URL", "VITE_REVALIDATION_SECRET"] as const;
+	let savedEnv: Record<string, string | undefined>;
+	let fetchSpy: ReturnType<typeof vi.spyOn>;
+
+	beforeEach(() => {
+		savedEnv = {};
+		for (const key of ENV_KEYS) savedEnv[key] = process.env[key];
+		process.env.VITE_WEBSITE_URL = "https://site.test";
+		process.env.VITE_REVALIDATION_SECRET = "s3cr3t";
+		fetchSpy = vi
+			.spyOn(globalThis, "fetch")
+			.mockResolvedValue(new Response("{}", { status: 200 }));
+	});
+
+	afterEach(() => {
+		for (const key of ENV_KEYS) {
+			if (savedEnv[key] === undefined) delete process.env[key];
+			else process.env[key] = savedEnv[key];
+		}
+		fetchSpy.mockRestore();
+	});
+
+	it("expires authors and articles tags after a commit", async () => {
+		queryOneMock.mockResolvedValue({ id: 3, name: 'רד"ק', details: "ד" });
+
+		await updateAuthor({ data: { id: 3, name: 'רד"ק', details: "ד" } });
+
+		const tags = fetchSpy.mock.calls.map(([input]) =>
+			new URL(String(input)).searchParams.get("tag"),
+		);
+		expect(tags).toEqual(["authors", "articles"]);
 	});
 });

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { createServerFn } from "@tanstack/react-start";
 import { execute, query, queryOne } from "../db";
+import { PEDIA_INVALIDATION, revalidateWebsite } from "../website-revalidate";
 import {
 	type CreateFamilyPersonInput,
 	type CreateParentChildLinkInput,
@@ -244,6 +245,7 @@ export const createFamilyPersonNode = createServerFn({ method: "POST" })
 			);
 		}
 
+		await revalidateWebsite(PEDIA_INVALIDATION);
 		return { entityId, personId, linkId };
 	});
 
@@ -385,6 +387,7 @@ export const updateFamilyPersonNode = createServerFn({ method: "POST" })
 			}
 		}
 
+		await revalidateWebsite(PEDIA_INVALIDATION);
 		return { entityId };
 	});
 
@@ -421,6 +424,7 @@ export const deleteFamilyPersonNode = createServerFn({ method: "POST" })
 		]);
 		assertAffected(result, `Person entity not found: ${entityId}`);
 
+		await revalidateWebsite(PEDIA_INVALIDATION);
 		return { entityId };
 	});
 
@@ -467,6 +471,7 @@ export const createParentChildLink = createServerFn({ method: "POST" })
 			],
 		);
 
+		await revalidateWebsite(PEDIA_INVALIDATION);
 		return { id };
 	});
 
@@ -525,6 +530,7 @@ export const updateParentChildLink = createServerFn({ method: "POST" })
 		);
 		assertAffected(result, `Parent-child link not found: ${id}`);
 
+		await revalidateWebsite(PEDIA_INVALIDATION);
 		return { id };
 	});
 
@@ -538,6 +544,7 @@ export const deleteParentChildLink = createServerFn({ method: "POST" })
 		);
 		assertAffected(result, `Parent-child link not found: ${id}`);
 
+		await revalidateWebsite(PEDIA_INVALIDATION);
 		return { id };
 	});
 
@@ -590,6 +597,7 @@ export const createUnionLink = createServerFn({ method: "POST" })
 			],
 		);
 
+		await revalidateWebsite(PEDIA_INVALIDATION);
 		return { id };
 	});
 
@@ -666,6 +674,7 @@ export const updateUnionLink = createServerFn({ method: "POST" })
 		);
 		assertAffected(result, `Union link not found: ${id}`);
 
+		await revalidateWebsite(PEDIA_INVALIDATION);
 		return { id };
 	});
 
@@ -679,6 +688,7 @@ export const deleteUnionLink = createServerFn({ method: "POST" })
 		);
 		assertAffected(result, `Union link not found: ${id}`);
 
+		await revalidateWebsite(PEDIA_INVALIDATION);
 		return { id };
 	});
 
@@ -726,6 +736,7 @@ export const createPersonName = createServerFn({ method: "POST" })
 			);
 		}
 
+		await revalidateWebsite(PEDIA_INVALIDATION);
 		return { id };
 	});
 
@@ -837,6 +848,7 @@ export const updatePersonName = createServerFn({ method: "POST" })
 			}
 		}
 
+		await revalidateWebsite(PEDIA_INVALIDATION);
 		return { id };
 	});
 
@@ -850,6 +862,7 @@ export const deletePersonName = createServerFn({ method: "POST" })
 		);
 		assertAffected(result, `Person name not found: ${id}`);
 
+		await revalidateWebsite(PEDIA_INVALIDATION);
 		return { id };
 	});
 
