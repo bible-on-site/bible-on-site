@@ -59,7 +59,7 @@ public partial class SupportPreferencesViewModel : ObservableObject
                 File = new ShareFile(path),
             });
         }
-        catch (Exception ex)
+        catch (Exception ex) //NOSONAR — export spans IO/share platform errors; failure is reported to the user.
         {
             System.Diagnostics.Debug.WriteLine($"Export logs failed: {ex.Message}");
             await _navigator.DisplayAlertAsync("שגיאה", $"לא ניתן לייצא לוגים: {ex.Message}", "אישור");
@@ -76,7 +76,7 @@ public partial class SupportPreferencesViewModel : ObservableObject
         {
             await _launcher.OpenAsync(new Uri(AppConfig.Instance.AccessibilityUrl));
         }
-        catch (Exception ex)
+        catch (Exception ex) //NOSONAR — launcher failures are platform-specific; the user gets an alert.
         {
             System.Diagnostics.Debug.WriteLine($"Open accessibility statement failed: {ex.Message}");
             await _navigator.DisplayAlertAsync("שגיאה", "לא ניתן לפתוח את הצהרת הנגישות", "אישור");
