@@ -13,11 +13,12 @@ jest.mock("next/link", () => ({
 	__esModule: true,
 	default: ({
 		children,
-		href,
+		...rest
 	}: {
 		children: React.ReactNode;
 		href: string;
-	}) => <a href={href}>{children}</a>,
+		className?: string;
+	}) => <a {...rest}>{children}</a>,
 }));
 
 jest.mock("@/lib/authors/url-utils", () => ({
@@ -101,5 +102,44 @@ describe("ArticleFullView", () => {
 		// The root div should have the combined class
 		const root = container.firstElementChild;
 		expect(root?.className).toBeTruthy();
+	});
+
+	it("compacts header metadata and footer in book mode to enlarge the body (#2406)", () => {
+		const { container } = render(
+			<ArticleFullView article={baseArticle} onBack={jest.fn()} fullPage />,
+		);
+
+		const header = container.querySelector("header");
+		expect(header?.className).toContain("articleHeaderInBook");
+
+		const authorLink = screen.getByRole("link", { name: "הרב לדוגמא" });
+		expect(authorLink.className).toContain("authorLinkInBook");
+		expect(
+			authorLink.querySelector("[class*='authorImageInBook']"),
+		).not.toBeNull();
+
+		expect(
+			screen.getByRole("heading", { name: "מאמר לדוגמא" }).className,
+		).toContain("articleTitleInBook");
+
+		const backRow = screen.getByText("חזרה למאמרים →").parentElement;
+		expect(backRow?.className).toContain("backToPerekInBook");
+
+		// The body keeps its inner-scroll wrapper in book mode.
+		expect(
+			container.querySelector("[class*='articleBodyWrapper']"),
+		).not.toBeNull();
+	});
+
+	it("keeps the standalone article layout unmodified", () => {
+		const { container } = render(
+			<ArticleFullView article={baseArticle} onBack={jest.fn()} />,
+		);
+
+		const header = container.querySelector("header");
+		expect(header?.className).not.toContain("InBook");
+		const authorLink = screen.getByRole("link", { name: "הרב לדוגמא" });
+		expect(authorLink.className).not.toContain("InBook");
+		expect(container.querySelector("[class*='InBook']")).toBeNull();
 	});
 });
