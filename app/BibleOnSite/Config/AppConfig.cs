@@ -197,4 +197,10 @@ public sealed class AppConfig
     /// Gets the Terms of Service URL.
     /// </summary>
     public string TosUrl => $"{GetWebsiteUrl()}/tos";
+
+    /// <summary>
+    /// Gets the accessibility statement URL. The statement itself is
+    /// maintained on the website so app and site never drift apart.
+    /// </summary>
+    public string AccessibilityUrl => $"{GetWebsiteUrl()}/accessibility";
 }

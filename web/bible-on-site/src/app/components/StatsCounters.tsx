@@ -1,0 +1,109 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import styles from "./NumbersSection.module.css";
+
+/**
+ * Shared count-up duration (seconds) for every counter in
+ * "מספרים על הפרק" (#2397): all counters start and finish together,
+ * whatever their totals.
+ */
+export const STATS_ANIMATION_DURATION_SECONDS = 1.8;
+const ANIMATION_DURATION_MS = STATS_ANIMATION_DURATION_SECONDS * 1000;
+
+/** Ease-out cubic: fast start, settles precisely on the target. */
+const easeOutCubic = (progress: number) => 1 - (1 - progress) ** 3;
+
+export interface StatItem {
+	label: string;
+	value: number;
+}
+
+const formatNumber = (value: number) => value.toLocaleString("he-IL");
+
+/**
+ * Scroll-triggered count-up group. The final totals are rendered
+ * server-side and stay in the DOM for assistive technology and no-JS
+ * rendering; the visible digits are aria-hidden so increments are never
+ * announced. Respects prefers-reduced-motion and browsers without
+ * IntersectionObserver by keeping the final values, and animates once
+ * per page visit.
+ */
+export function StatsCounters({ stats }: { stats: StatItem[] }) {
+	const ref = useRef<HTMLDListElement>(null);
+	const [displayed, setDisplayed] = useState<number[]>(() =>
+		stats.map((stat) => stat.value),
+	);
+
+	useEffect(() => {
+		const element = ref.current;
+		const reduceMotion =
+			window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+		if (
+			!element ||
+			reduceMotion ||
+			typeof IntersectionObserver === "undefined"
+		) {
+			return;
+		}
+
+		// The reset happens while the section is still off-screen, so the
+		// count-up always starts at the viewport trigger.
+		const targets = stats.map((stat) => stat.value);
+		setDisplayed(targets.map(() => 0));
+
+		let frame = 0;
+		// One observer + one elapsed-time loop drive all counters together:
+		// identical duration, identical easing, same start and finish.
+		const observer = new IntersectionObserver(
+			(entries) => {
+				if (!entries.some((entry) => entry.isIntersecting)) return;
+				observer.disconnect(); // animate once per page visit
+				const start = performance.now();
+				const tick = (tickNow: number) => {
+					const progress = Math.min(
+						1,
+						(tickNow - start) / ANIMATION_DURATION_MS,
+					);
+					const eased = easeOutCubic(progress);
+					setDisplayed(
+						targets.map((target) =>
+							Math.min(target, Math.round(target * eased)),
+						),
+					);
+					if (progress < 1) frame = requestAnimationFrame(tick);
+				};
+				frame = requestAnimationFrame(tick);
+			},
+			{ threshold: 0.35 },
+		);
+		observer.observe(element);
+		return () => {
+			observer.disconnect();
+			cancelAnimationFrame(frame);
+		};
+	}, [stats]);
+
+	return (
+		<dl ref={ref} className={styles.stats}>
+			{stats.map((stat, index) => {
+				const final = formatNumber(stat.value);
+				return (
+					<div key={stat.label} className={styles.stat}>
+						<dt className={styles.label}>{stat.label}</dt>
+						<dd className={styles.value}>
+							<span className={styles.srOnly}>{final}</span>
+							<span
+								aria-hidden="true"
+								className={styles.number}
+								style={{ minWidth: `${final.length}ch` }}
+							>
+								{formatNumber(displayed[index])}
+							</span>
+						</dd>
+					</div>
+				);
+			})}
+		</dl>
+	);
+}
