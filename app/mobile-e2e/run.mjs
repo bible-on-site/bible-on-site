@@ -246,9 +246,9 @@ try {
       }
     }
   } catch (error) {
+    // Diagnostic-only: a failed log export must not fail a passing run.
     writeFileSync(resolve(artifacts, "device-log-error.txt"), String(error));
     console.error("Could not export native device logs:", error);
-    process.exitCode ||= 1;
   }
   stop();
   serverLogOpen = false;
