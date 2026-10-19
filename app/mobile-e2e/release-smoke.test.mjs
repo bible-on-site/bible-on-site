@@ -65,6 +65,12 @@ describe("analyticsStatus", () => {
     assert.deepEqual(status, { state: "isolated" });
   });
 
+  test("accepts the managed bool casing the app actually prints", () => {
+    // MainActivity interpolates a C# bool: enabled=False, not enabled=false.
+    const status = analyticsStatus("I mono-stdout: [Analytics] collection enabled=False", pkg);
+    assert.deepEqual(status, { state: "isolated" });
+  });
+
   test("rejects a live production collection", () => {
     const status = analyticsStatus("I mono-stdout: [Analytics] collection enabled=true", pkg);
     assert.equal(status.state, "live");
