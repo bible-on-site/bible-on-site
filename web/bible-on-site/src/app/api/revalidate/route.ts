@@ -15,7 +15,12 @@ import { type NextRequest, NextResponse } from "next/server";
  * - `type`: `page` | `layout`, forwarded to `revalidatePath`.
  * - `tag`: a cache tag to expire (e.g. `articles`, `authors`, `perushim`,
  *   `tanahpedia-entity-refs`). `path` and `tag` may be combined in one call.
- * - `secret`: required in production (`REVALIDATE_SECRET`).
+ *
+ * The secret is required in production (`REVALIDATE_SECRET`). Send it in the
+ * `x-revalidate-secret` header — the admin caller does this so the secret
+ * stays out of URLs (and therefore out of access logs on the cluster's
+ * plaintext hop). A `?secret=` query parameter is still accepted for
+ * operator/manual calls.
  *
  * Tags are expired with `{ expire: 0 }` rather than the "max" profile: the
  * next request blocks on a fresh render instead of being served stale content
@@ -30,7 +35,10 @@ export async function POST(request: NextRequest) {
 	const path = searchParams.get("path");
 	const type = searchParams.get("type");
 	const tag = searchParams.get("tag");
-	const secret = searchParams.get("secret");
+	// Header first — callers should never put the secret in the URL; the
+	// query parameter remains for operator/manual calls.
+	const secret =
+		request.headers.get("x-revalidate-secret") ?? searchParams.get("secret");
 
 	// Validate secret in production
 	if (process.env.NODE_ENV === "production") {

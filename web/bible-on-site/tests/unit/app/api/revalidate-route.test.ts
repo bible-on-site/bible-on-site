@@ -26,8 +26,11 @@ const mockRevalidatePath = revalidatePath as jest.MockedFunction<
 	typeof revalidatePath
 >;
 
-function req(url: string) {
-	return new NextRequest(new URL(url, "http://localhost:3001"));
+function req(url: string, headers?: Record<string, string>) {
+	return new NextRequest(new URL(url, "http://localhost:3001"), {
+		method: "POST",
+		headers,
+	});
 }
 
 describe("POST /api/revalidate", () => {
@@ -138,6 +141,49 @@ describe("POST /api/revalidate", () => {
 		expect(mockRevalidateTag).toHaveBeenCalledWith("articles", {
 			expire: 0,
 		});
+	});
+
+	it("accepts the secret via the x-revalidate-secret header in production", async () => {
+		jest.replaceProperty(process.env, "NODE_ENV", "production");
+		process.env.REVALIDATE_SECRET = "expected";
+
+		const res = await POST(
+			req("/api/revalidate?tag=articles", {
+				"x-revalidate-secret": "expected",
+			}),
+		);
+
+		expect(res.status).toBe(200);
+		expect(mockRevalidateTag).toHaveBeenCalledWith("articles", {
+			expire: 0,
+		});
+	});
+
+	it("prefers the header over a query secret in production", async () => {
+		jest.replaceProperty(process.env, "NODE_ENV", "production");
+		process.env.REVALIDATE_SECRET = "expected";
+
+		const res = await POST(
+			req("/api/revalidate?tag=articles&secret=stale", {
+				"x-revalidate-secret": "expected",
+			}),
+		);
+
+		expect(res.status).toBe(200);
+	});
+
+	it("rejects a wrong header secret in production", async () => {
+		jest.replaceProperty(process.env, "NODE_ENV", "production");
+		process.env.REVALIDATE_SECRET = "expected";
+
+		const res = await POST(
+			req("/api/revalidate?tag=articles", {
+				"x-revalidate-secret": "no",
+			}),
+		);
+
+		expect(res.status).toBe(401);
+		expect(mockRevalidateTag).not.toHaveBeenCalled();
 	});
 
 	it("returns 500 when invalidation throws", async () => {

@@ -314,11 +314,13 @@ Resources:
               Value: bible-on-site-bulletin
           # Database credentials injected from SSM Parameter Store
           # Required for runtime database queries (dynamic pages, ISR, etc.)
+          # Each parameter must exist before the task starts — see the
+          # one-time prerequisites block at the bottom of this file.
           Secrets:
             - Name: DB_URL
               ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-tanah-db-url"
             # Guards POST /api/revalidate; must match the admin task's
-            # VITE_REVALIDATION_SECRET (same SSM parameter).
+            # REVALIDATE_SECRET (same SSM parameter).
             - Name: REVALIDATE_SECRET
               ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-revalidate-secret"
       Tags:
@@ -501,7 +503,9 @@ Resources:
             - Name: DB_URL
               ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-tanah-db-url"
             # Shared with the website task's REVALIDATE_SECRET (same parameter).
-            - Name: VITE_REVALIDATION_SECRET
+            # Server-side only — never VITE_*, which Vite would inline into
+            # the admin browser bundle and expose the secret.
+            - Name: REVALIDATE_SECRET
               ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-revalidate-secret"
       Tags:
         - Key: Project
@@ -628,6 +632,31 @@ Outputs:
     Value: !GetAtt ECSTaskExecutionRole.Arn
     Export:
       Name: !Sub "${AWS::StackName}-TaskExecutionRoleArn"
+# =============================================================================
+# One-time prerequisites (SecureString SSM parameters)
+# =============================================================================
+#
+# ECS resolves every `Secrets:` ValueFrom at task start, so a missing
+# parameter prevents the task (website AND admin) from starting. Create
+# these parameters before deploying a stack that references them.
+# CloudFormation cannot create SecureString parameters — they are provisioned
+# once per account/region via CLI (same mechanism as the DB_URL parameter,
+# see rds-mysql.yaml):
+#
+#   # Shared admin <-> website revalidation credential
+#   aws ssm put-parameter --name bible-on-site-revalidate-secret \
+#     --type SecureString --value "$(openssl rand -hex 32)" \
+#     --region il-central-1
+#
+#   # Database URL (mysql://admin:<password>@<host>:3306/tanah)
+#   aws ssm put-parameter --name bible-on-site-tanah-db-url \
+#     --type SecureString --value "<db-url>" \
+#     --region il-central-1
+#
+# Verify:
+#   aws ssm get-parameter --name bible-on-site-revalidate-secret \
+#     --region il-central-1 --query 'Parameter.Name' --output text
+#
 # =============================================================================
 # CLI Commands to Verify/Update
 # =============================================================================

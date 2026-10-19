@@ -1290,7 +1290,7 @@ describe("tanahpedia family api", () => {
 });
 
 describe("family saves invalidate the website", () => {
-	const ENV_KEYS = ["VITE_WEBSITE_URL", "VITE_REVALIDATION_SECRET"] as const;
+	const ENV_KEYS = ["VITE_WEBSITE_URL", "REVALIDATE_SECRET"] as const;
 	let savedEnv: Record<string, string | undefined>;
 	let fetchSpy: ReturnType<typeof vi.spyOn>;
 
@@ -1301,7 +1301,7 @@ describe("family saves invalidate the website", () => {
 		savedEnv = {};
 		for (const key of ENV_KEYS) savedEnv[key] = process.env[key];
 		process.env.VITE_WEBSITE_URL = "https://site.test";
-		process.env.VITE_REVALIDATION_SECRET = "s3cr3t";
+		process.env.REVALIDATE_SECRET = "s3cr3t";
 		fetchSpy = vi
 			.spyOn(globalThis, "fetch")
 			.mockResolvedValue(new Response("{}", { status: 200 }));

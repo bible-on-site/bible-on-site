@@ -1,25 +1,44 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+// Same createServerFn passthrough as the sibling server tests: the wrapped
+// status function is invoked directly instead of over RPC.
+vi.mock("@tanstack/react-start", () => ({
+	createServerFn: () => ({
+		validator: (validate: (data: unknown) => unknown) => ({
+			handler:
+				(fn: (args: { data: unknown }) => unknown) =>
+				(args: { data: unknown }) =>
+					fn({ data: validate(args.data) }),
+		}),
+		handler: (fn: unknown) => fn,
+	}),
+}));
+
 import {
 	ARTICLE_INVALIDATION,
 	AUTHOR_INVALIDATION,
+	getWebsiteRevalidationStatus,
+	lastRevalidationFailure,
 	PEDIA_INVALIDATION,
 	revalidateWebsite,
 } from "~/server/website-revalidate";
 
-const ENV_KEYS = ["VITE_WEBSITE_URL", "VITE_REVALIDATION_SECRET"] as const;
+const ENV_KEYS = ["VITE_WEBSITE_URL", "REVALIDATE_SECRET"] as const;
 
 describe("revalidateWebsite", () => {
 	let savedEnv: Record<string, string | undefined>;
 	let fetchSpy: ReturnType<typeof vi.spyOn>;
 
-	beforeEach(() => {
+	beforeEach(async () => {
 		savedEnv = {};
 		for (const key of ENV_KEYS) savedEnv[key] = process.env[key];
 		process.env.VITE_WEBSITE_URL = "https://site.test/";
-		process.env.VITE_REVALIDATION_SECRET = "s3cr3t";
+		process.env.REVALIDATE_SECRET = "s3cr3t";
 		fetchSpy = vi
 			.spyOn(globalThis, "fetch")
 			.mockResolvedValue(new Response("{}", { status: 200 }));
+		// Clear the recorded failure so tests start from a clean slate.
+		await revalidateWebsite([]);
 	});
 
 	afterEach(() => {
@@ -34,7 +53,7 @@ describe("revalidateWebsite", () => {
 		return fetchSpy.mock.calls.map((call: unknown[]) => new URL(String(call[0])));
 	}
 
-	it("POSTs the tag with the configured secret", async () => {
+	it("POSTs the tag with the secret in a header, never the URL", async () => {
 		await expect(revalidateWebsite([{ tag: "articles" }])).resolves.toBe(true);
 
 		expect(fetchSpy).toHaveBeenCalledTimes(1);
@@ -43,7 +62,12 @@ describe("revalidateWebsite", () => {
 		expect(url.origin).toBe("https://site.test");
 		expect(url.pathname).toBe("/api/revalidate");
 		expect(url.searchParams.get("tag")).toBe("articles");
-		expect(url.searchParams.get("secret")).toBe("s3cr3t");
+		// The secret must not ride the URL on the cluster's plaintext hop —
+		// URLs end up in access logs, headers do not.
+		expect(url.search).not.toContain("secret");
+		expect(new Headers(init?.headers).get("x-revalidate-secret")).toBe(
+			"s3cr3t",
+		);
 		expect(init?.method).toBe("POST");
 	});
 
@@ -57,7 +81,7 @@ describe("revalidateWebsite", () => {
 
 	it("skips the call when the website is not configured", async () => {
 		delete process.env.VITE_WEBSITE_URL;
-		delete process.env.VITE_REVALIDATION_SECRET;
+		delete process.env.REVALIDATE_SECRET;
 		const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
 		await expect(revalidateWebsite([{ tag: "articles" }])).resolves.toBe(
@@ -65,6 +89,8 @@ describe("revalidateWebsite", () => {
 		);
 		expect(fetchSpy).not.toHaveBeenCalled();
 		expect(warnSpy).toHaveBeenCalled();
+		// Unconfigured is the documented no-op, not a surfaced failure.
+		expect(lastRevalidationFailure()).toBeNull();
 		warnSpy.mockRestore();
 	});
 
@@ -132,5 +158,39 @@ describe("revalidateWebsite", () => {
 		);
 		expect(paths).toContain("/pedia/[slug]:page");
 		expect(paths).toContain("/pedia:");
+	});
+
+	describe("failure surfacing", () => {
+		it("records the unapplied subset so the editor can see stale content", async () => {
+			fetchSpy
+				.mockResolvedValueOnce(new Response("{}", { status: 200 }))
+				.mockResolvedValueOnce(new Response("no", { status: 500 }));
+			vi.spyOn(console, "error").mockImplementation(() => {});
+
+			await revalidateWebsite([{ tag: "authors" }, { path: "/929/3" }]);
+
+			const failure = lastRevalidationFailure();
+			expect(failure?.requests).toEqual([{ path: "/929/3" }]);
+			expect(Number.isNaN(Date.parse(failure?.failedAt ?? ""))).toBe(false);
+		});
+
+		it("clears the recorded failure once a batch fully applies", async () => {
+			fetchSpy.mockResolvedValueOnce(new Response("no", { status: 500 }));
+			vi.spyOn(console, "error").mockImplementation(() => {});
+			await revalidateWebsite([{ tag: "articles" }]);
+			expect(lastRevalidationFailure()).not.toBeNull();
+
+			await revalidateWebsite([{ tag: "articles" }]);
+			expect(lastRevalidationFailure()).toBeNull();
+		});
+
+		it("exposes the failure through the status server function", async () => {
+			fetchSpy.mockResolvedValue(new Response("no", { status: 500 }));
+			vi.spyOn(console, "error").mockImplementation(() => {});
+			await revalidateWebsite([{ tag: "articles" }]);
+
+			const status = await getWebsiteRevalidationStatus();
+			expect(status.lastFailure?.requests).toEqual([{ tag: "articles" }]);
+		});
 	});
 });
