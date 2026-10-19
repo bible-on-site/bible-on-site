@@ -135,35 +135,64 @@ fn html_inline_text(html: &str) -> String {
     out.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
-/// Split off the article's first `<h1>`: returns its plain text (if any) and
-/// the remaining HTML with that heading removed, so it is printed once.
-fn split_first_h1(html: &str) -> (Option<String>, String) {
-    let lower = html.to_ascii_lowercase();
-    let Some(open) = lower.match_indices("<h1").map(|(i, _)| i).find(|&i| {
-        matches!(
+/// True when `lower` has an `<h1` opening tag at byte index `i`.
+fn h1_open_at(lower: &str, i: usize) -> bool {
+    lower[i..].starts_with("<h1")
+        && matches!(
             lower.as_bytes().get(i + 3),
             Some(b'>' | b' ' | b'\t' | b'\n' | b'\r' | b'/')
         )
-    }) else {
+}
+
+/// Split off the article's complete header: its first `<h1>` plus every `<h1>`
+/// that immediately follows it (separated only by whitespace) — a multi-line
+/// title is stored as consecutive h1s, and the author must follow the whole
+/// header rather than sit between its lines (#2336, #2409).
+/// Returns the joined plain text (if any) and the remaining HTML with those
+/// headings removed, so each is printed once.
+fn split_article_header(html: &str) -> (Option<String>, String) {
+    let lower = html.to_ascii_lowercase();
+    let Some(open) = lower
+        .match_indices("<h1")
+        .map(|(i, _)| i)
+        .find(|&i| h1_open_at(&lower, i))
+    else {
         return (None, html.to_string());
     };
-    let Some(content_start) = lower[open..].find('>').map(|i| open + i + 1) else {
-        return (None, html.to_string());
-    };
-    let (content_end, rest_start) = match lower[content_start..].find("</h1") {
-        Some(i) => {
-            let end = content_start + i;
-            let after = lower[end..].find('>').map_or(html.len(), |j| end + j + 1);
-            (end, after)
+    let mut parts: Vec<String> = Vec::new();
+    let mut cursor = open;
+    // End of the consumed header run; body resumes here.
+    let mut rest_start = open;
+    while let Some(content_start) = lower[cursor..].find('>').map(|i| cursor + i + 1) {
+        let (content_end, after) = match lower[content_start..].find("</h1") {
+            Some(i) => {
+                let end = content_start + i;
+                let after = lower[end..].find('>').map_or(html.len(), |j| end + j + 1);
+                (end, after)
+            }
+            None => (html.len(), html.len()),
+        };
+        let text = html_inline_text(&html[content_start..content_end]);
+        if text.is_empty() {
+            break;
         }
-        None => (html.len(), html.len()),
-    };
-    let text = html_inline_text(&html[content_start..content_end]);
-    if text.is_empty() {
+        parts.push(text);
+        rest_start = after;
+        // The header continues only when another h1 opens right after this
+        // one (whitespace between is fine); anything else is body content.
+        let skipped = lower[rest_start..].len() - lower[rest_start..].trim_start().len();
+        let next = rest_start + skipped;
+        if h1_open_at(&lower, next) {
+            cursor = next;
+        } else {
+            break;
+        }
+    }
+    if parts.is_empty() {
         return (None, html.to_string());
     }
     (
-        Some(text),
+        Some(parts.join(" ")),
         format!("{}{}", &html[..open], &html[rest_start..]),
     )
 }
@@ -708,20 +737,21 @@ fn generate_typst_markup_with_intro(
             markup.push_str("#v(1em)\n");
             for (name, author_name, content_html) in &perek.articles {
                 markup.push_str("#v(0.6em)\n");
-                // Header is the article's first h1 only (#2336, interim for #1186);
-                // the article name is the fallback, never the abstract.
-                let (h1, body_html) = split_first_h1(content_html);
+                // Header is the article's complete leading-h1 run (#2336,
+                // interim for #1186); the article name is the fallback, never
+                // the abstract. The author follows the complete header after
+                // " / " in the same typography (#2409) — not a byline between
+                // title lines.
+                let (h1, body_html) = split_article_header(content_html);
                 let header = h1.unwrap_or_else(|| name.trim().to_string());
+                let header_text = match author_name.trim() {
+                    "" => header,
+                    author => format!("{} / {}", header, author),
+                };
                 markup.push_str(&format!(
                     "#text(size: 12pt, weight: \"bold\")[{}]\n\n",
-                    typst_escape(&header)
+                    typst_escape(&header_text)
                 ));
-                if !author_name.trim().is_empty() {
-                    markup.push_str(&format!(
-                        "#text(size: 9pt)[{}]\n\n",
-                        typst_escape(author_name.trim())
-                    ));
-                }
 
                 let typst_content = html_to_typst(&body_html, &mut files);
                 let trimmed = typst_content.trim();
@@ -1008,8 +1038,7 @@ mod tests {
         assert!(markup.contains("Genesis 1"));
         assert!(markup.contains(&format!("*{}* First \\/ escaped", to_hebrew_letter(1))));
         assert!(!markup.contains(&format!("*{}*    ", to_hebrew_letter(2))));
-        assert!(markup.contains("[Article \\/ Name]"));
-        assert!(markup.contains("#text(size: 9pt)[Author]"));
+        assert!(markup.contains("[Article \\/ Name \\/ Author]"));
         assert!(markup.contains("#strong[bold]"));
     }
 
@@ -1050,22 +1079,30 @@ mod tests {
     }
 
     #[test]
-    fn test_split_first_h1() {
-        let (h1, rest) = split_first_h1(
+    fn test_split_article_header() {
+        let (h1, rest) = split_article_header(
             "<p>תקציר</p><H1 class=\"t\">ויברא <b>אלהים</b><br>את&nbsp;האדם</h1><p>גוף</p><h1>שנייה</h1>",
         );
         assert_eq!(h1.as_deref(), Some("ויברא אלהים את האדם"));
         assert_eq!(rest, "<p>תקציר</p><p>גוף</p><h1>שנייה</h1>");
 
-        assert_eq!(split_first_h1("<h2>a</h2>").0, None);
-        assert_eq!(split_first_h1("<h1x>a</h1x>").0, None);
-        assert_eq!(split_first_h1("<h1>  </h1><p>b</p>").0, None);
-        assert_eq!(split_first_h1("<h1>open").0.as_deref(), Some("open"));
-        assert_eq!(split_first_h1("<h1").0, None);
+        // Consecutive h1s are one multi-line header; a later h1 behind body
+        // content stays a section heading.
+        let (h1, rest) = split_article_header(
+            "<h1>שורה א</h1><h1>שורה ב</h1> \n<h1>שורה ג</h1><p>גוף</p><h1>מאוחרת</h1>",
+        );
+        assert_eq!(h1.as_deref(), Some("שורה א שורה ב שורה ג"));
+        assert_eq!(rest, "<p>גוף</p><h1>מאוחרת</h1>");
+
+        assert_eq!(split_article_header("<h2>a</h2>").0, None);
+        assert_eq!(split_article_header("<h1x>a</h1x>").0, None);
+        assert_eq!(split_article_header("<h1>  </h1><p>b</p>").0, None);
+        assert_eq!(split_article_header("<h1>open").0.as_deref(), Some("open"));
+        assert_eq!(split_article_header("<h1").0, None);
     }
 
     #[test]
-    fn test_article_header_uses_first_h1_or_name() {
+    fn test_article_header_uses_leading_h1_run_or_name() {
         let req = PdfRequest {
             sefer_name: "בראשית".to_string(),
             perakim: vec![PdfPerekInput {
@@ -1090,12 +1127,52 @@ mod tests {
             cover_text: PdfCoverText::default(),
         };
         let (markup, _) = generate_typst_markup(&req);
-        assert!(markup.contains("#text(size: 12pt, weight: \"bold\")[כותרת ראשונה]"));
+        // Author follows the complete header after " / " in the same style.
+        assert!(
+            markup.contains("#text(size: 12pt, weight: \"bold\")[כותרת ראשונה \\/ הרב]"),
+            "{markup}"
+        );
         assert_eq!(markup.matches("כותרת ראשונה").count(), 1);
+        // The h1 behind body content stays a genuine section heading.
         assert!(markup.contains("== כותרת שנייה"));
         assert!(!markup.contains("שם המאמר"));
         assert!(markup.contains("#text(size: 12pt, weight: \"bold\")[שם בלבד]"));
-        assert_eq!(markup.matches("#text(size: 9pt)[").count(), 1);
+        // No separate smaller byline remains anywhere in the export.
+        assert_eq!(markup.matches("#text(size: 9pt)[").count(), 0);
+    }
+
+    #[test]
+    fn test_article_author_follows_complete_multiline_header() {
+        // The issue #2409 fixture: a two-line h1 title with the author placed
+        // between its lines in a smaller style.
+        let req = PdfRequest {
+            sefer_name: "בראשית".to_string(),
+            perakim: vec![PdfPerekInput {
+                perek_heb: "יב".to_string(),
+                articles: vec![(
+                    "מדוע התורה לא כתבה על צדקותו של אברהם אבינו ומה ניתן ללמוד על כך לדורות".to_string(),
+                    "הרב איתן שנדורפי שליט\"א".to_string(),
+                    "<h1>מדוע התורה לא כתבה על צדקותו של אברהם אבינו&nbsp;</h1><h1>ומה ניתן ללמוד על כך לדורות?</h1><p>בתחילת פרק י\"ב נאמר</p>"
+                        .to_string(),
+                )],
+                ..Default::default()
+            }],
+            include_cover: false,
+            include_toc: false,
+            cover_accent_hex: String::new(),
+            cover_text: PdfCoverText::default(),
+        };
+        let (markup, _) = generate_typst_markup(&req);
+        assert!(
+            markup.contains(
+                "#text(size: 12pt, weight: \"bold\")[מדוע התורה לא כתבה על צדקותו של אברהם אבינו ומה ניתן ללמוד על כך לדורות? \\/ הרב איתן שנדורפי שליט\"א]"
+            ),
+            "{markup}"
+        );
+        // The second title line is consumed by the header, not re-rendered as
+        // a body heading after the author.
+        assert!(!markup.contains("== ומה ניתן ללמוד"));
+        assert_eq!(markup.matches("#text(size: 9pt)[").count(), 0);
     }
 
     #[test]
