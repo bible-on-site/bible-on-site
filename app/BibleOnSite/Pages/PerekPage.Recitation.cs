@@ -18,12 +18,9 @@ public partial class PerekPage
     private CancellationTokenSource? _headerPress;
     private bool _recitationBusy;
     private bool _playWhenOpened;
-    private string? _playingKey;
-    private bool _playingContinuous;
-    // The last tapped word or pasuk marks where continuous playback resumes, in
-    // recording milliseconds. Keyed by perek so a stale position can never leak
-    // into another perek's recording.
-    private (int PerekId, double StartMs)? _resumePosition;
+    // Playback identity, chapter-vs-preview distinction and the perek-scoped
+    // resume bookmark live together so pause/stop/end stay consistent.
+    private readonly RecitationPlaybackCursor _recitationCursor = new();
     private double? _pendingSeekMs;
     private int _recitationGeneration;
     private MpegRecitationAudioDecoder? _audioDecoder;
@@ -110,8 +107,7 @@ public partial class PerekPage
         _recitationGeneration++;
         _recitationRequest?.Cancel();
         _playWhenOpened = false;
-        _playingKey = null;
-        _playingContinuous = false;
+        _recitationCursor.Stop();
         _pendingSeekMs = null;
         _recitationBusy = false;
         if (RecitationPlayer is { } player)
@@ -162,7 +158,7 @@ public partial class PerekPage
 
     private void UpdateRecitationHighlight(object? sender, EventArgs e)
     {
-        if (_playingKey == null || RecitationPlayer is not { } player || player.CurrentState != MediaElementState.Playing)
+        if (_recitationCursor.PlayingKey == null || RecitationPlayer is not { } player || player.CurrentState != MediaElementState.Playing)
         {
             return;
         }
@@ -197,7 +193,7 @@ public partial class PerekPage
     private void ResetRecitationSession()
     {
         ResetRecitationContext();
-        _resumePosition = null;
+        _recitationCursor.Reset();
     }
 
     private void OnHeaderLongPressed(object? sender, EventArgs e)
@@ -309,7 +305,7 @@ public partial class PerekPage
         }
 
         var key = $"pasuk:{perek.PerekId}:{pasuk.PasukNum}";
-        if (_playingKey == key)
+        if (_recitationCursor.PlayingKey == key)
         {
             // The second tap of a double-tap opens the focused pasuk — let the
             // pasuk keep playing rather than toggling pause.
@@ -425,12 +421,11 @@ public partial class PerekPage
 
     private async void OnSelectionRecitationClicked(object? sender, EventArgs e)
     {
-        // Only playback this button itself started (continuous or a verses range)
-        // toggles pause — a tapped word or pasuk preview is not the bar's
-        // playback, so Play during one starts continuous playback at the
-        // tap's bookmark instead.
-        var barIssued = _playingContinuous || _playingKey?.StartsWith("verses:", StringComparison.Ordinal) == true;
-        if (_playingKey != null && barIssued && RecitationPlayer is { } player && player.CurrentState is MediaElementState.Playing or MediaElementState.Paused)
+        // Playback the recitation controls themselves issued (the chapter, a
+        // verses range, or a pasuk preview) toggles pause and resume — a tapped
+        // word preview is a bookmark, not the bar's playback (#2157), so Play
+        // during one starts continuous playback at that word instead.
+        if (_recitationCursor.BarIssued && RecitationPlayer is { } player && player.CurrentState is MediaElementState.Playing or MediaElementState.Paused)
         {
             if (player.CurrentState == MediaElementState.Playing)
             {
@@ -449,13 +444,15 @@ public partial class PerekPage
         }
 
         var track = RecitationService.Instance.GetTrack(perek.PerekId);
-        if (_chapterRecitationSelection || _playingKey != null)
+        var numbers = _focusedPasuk != null ? new[] { _focusedPasuk.PasukNum } : _viewModel.SelectedPasukNums.Order().ToArray();
+        // With nothing selected the Play button means the chapter — a bookmarked
+        // word or pasuk resumes there instead of restarting the perek (#2157).
+        if (_chapterRecitationSelection || _recitationCursor.PlayingKey != null || numbers.Length == 0)
         {
             await PlayRecitationAsync($"chapter:{perek.PerekId}");
             return;
         }
-        var numbers = _focusedPasuk != null ? new[] { _focusedPasuk.PasukNum } : _viewModel.SelectedPasukNums.Order().ToArray();
-        if (track?.AlignmentStatus != "ready" || numbers.Length == 0)
+        if (track?.AlignmentStatus != "ready")
         {
             return;
         }
@@ -482,11 +479,11 @@ public partial class PerekPage
         // resumes there, and it outlives the preview's own stop/reset.
         if (resumeFromMs is double resume)
         {
-            _resumePosition = (perek.PerekId, resume);
+            _recitationCursor.MarkResume(perek.PerekId, resume);
         }
         var continuous = start == null && ranges == null;
 
-        if (_playingKey == key && RecitationPlayer is { } existing && existing.CurrentState is MediaElementState.Playing or MediaElementState.Paused)
+        if (_recitationCursor.PlayingKey == key && RecitationPlayer is { } existing && existing.CurrentState is MediaElementState.Playing or MediaElementState.Paused)
         {
             if (existing.CurrentState == MediaElementState.Playing)
             {
@@ -524,14 +521,11 @@ public partial class PerekPage
                 return;
             }
 
-            _playingKey = key;
-            _playingContinuous = continuous;
+            _recitationCursor.Begin(key, continuous);
             _recitationTimeline = track?.AlignmentStatus == "ready"
                 ? new RecitationTimeline(track, ranges ?? (start.HasValue && end.HasValue ? [(start.Value, end.Value)] : null), pauseMs) : null;
             // The timeline maps the tapped-word resume point into this clip's position.
-            _pendingSeekMs = continuous && _resumePosition is { } point && point.PerekId == perek.PerekId
-                ? _recitationTimeline?.PositionOf(point.StartMs)
-                : null;
+            _pendingSeekMs = _recitationCursor.PendingSeekFor(perek.PerekId, continuous, _recitationTimeline);
             var player = GetOrCreateRecitationPlayer();
             player.Speed = preferences.RecitationSpeed;
             player.Volume = preferences.RecitationVolume;
@@ -585,20 +579,15 @@ public partial class PerekPage
     }
     private void OnRecitationMediaEnded(object? sender, EventArgs e)
     {
-        if (_playingContinuous)
-        {
-            // The resumed playback ran to the end of the perek; the next Play starts over.
-            _resumePosition = null;
-        }
-        _playingKey = null;
-        _playingContinuous = false;
+        // A completed chapter consumes the resume bookmark; a finished preview keeps it.
+        _recitationCursor.End();
         ClearRecitationHighlight();
         UpdateSelectionBar();
     }
     private void OnRecitationStateChanged(object? sender, MediaStateChangedEventArgs e)
     {
         _recitationFrameTimer?.Stop();
-        if (_playingKey != null && _recitationTimeline != null && RecitationPlayer?.CurrentState == MediaElementState.Playing)
+        if (_recitationCursor.PlayingKey != null && _recitationTimeline != null && RecitationPlayer?.CurrentState == MediaElementState.Playing)
         {
             if (_recitationFrameTimer == null)
             {
@@ -617,7 +606,7 @@ public partial class PerekPage
     }
     private async void OnRecitationMediaFailed(object? sender, MediaFailedEventArgs e)
     {
-        if (_playingKey == null)
+        if (_recitationCursor.PlayingKey == null)
         {
             return;
         }
