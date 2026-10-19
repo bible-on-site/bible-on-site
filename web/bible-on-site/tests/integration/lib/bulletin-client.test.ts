@@ -446,7 +446,7 @@ describe("bulletin-client", () => {
 			]);
 		});
 
-		it("defaults to unmasked output when no settings are sent", async () => {
+		it("falls back to the shared default masking when no settings are sent", async () => {
 			mockExecFileSync.mockReturnValue(makeFakePdf());
 			await generatePdfViaBulletin([2]);
 			expect(mockBuildPerakimContent).toHaveBeenCalledWith(

@@ -14,7 +14,14 @@ beforeEach(() => {
 });
 
 describe("DivineNameText", () => {
+	it("masks names out of the box for a fresh install (#2404)", () => {
+		render(<DivineNameText value="יְהוָ֑ה אֵ֑ל" />);
+		expect(screen.getByText("ה' א-ל")).toBeTruthy();
+	});
 	it("renders the canonical value while masking is off", () => {
+		saveDivineNameMaskingSettings(
+			normalizeDivineNameMasking({ enabled: false }),
+		);
 		render(<DivineNameText value="יְהוָ֑ה" />);
 		expect(screen.getByText("יְהוָ֑ה")).toBeTruthy();
 	});
@@ -43,6 +50,7 @@ describe("DivineNameText", () => {
 	});
 	it("re-renders when preferences change and restores canonical text when off", () => {
 		render(<DivineNameText value="אֱלֹהִ֑ים" />);
+		expect(screen.getByText("א-להים")).toBeTruthy();
 		act(() =>
 			saveDivineNameMaskingSettings(
 				normalizeDivineNameMasking({ enabled: true, elohim: "elokim" }),
@@ -50,7 +58,9 @@ describe("DivineNameText", () => {
 		);
 		expect(screen.getByText("אלקים")).toBeTruthy();
 		act(() =>
-			saveDivineNameMaskingSettings(DEFAULT_DIVINE_NAME_MASKING),
+			saveDivineNameMaskingSettings(
+				normalizeDivineNameMasking({ enabled: false }),
+			),
 		);
 		expect(screen.getByText("אֱלֹהִ֑ים")).toBeTruthy();
 	});
@@ -59,23 +69,24 @@ describe("DivineNameText", () => {
 		act(() => {
 			localStorage.setItem(
 				DIVINE_NAME_MASKING_KEY,
-				JSON.stringify({ enabled: true, el: "hyphen" }),
+				JSON.stringify({ enabled: false }),
 			);
 			window.dispatchEvent(
 				new StorageEvent("storage", { key: DIVINE_NAME_MASKING_KEY }),
 			);
 		});
-		expect(screen.getByText("א-ל")).toBeTruthy();
+		expect(screen.getByText("אֵ֑ל")).toBeTruthy();
 	});
 	it("ignores storage events for unrelated keys", () => {
 		render(<DivineNameText value="אֵ֑ל" />);
 		act(() => {
 			localStorage.setItem(
 				DIVINE_NAME_MASKING_KEY,
-				JSON.stringify({ enabled: true, el: "hyphen" }),
+				JSON.stringify({ enabled: false }),
 			);
 			window.dispatchEvent(new StorageEvent("storage", { key: "otherPref" }));
 		});
-		expect(screen.getByText("אֵ֑ל")).toBeTruthy();
+		// The stored opt-out was not re-read, so the masked default stays.
+		expect(screen.getByText("א-ל")).toBeTruthy();
 	});
 });

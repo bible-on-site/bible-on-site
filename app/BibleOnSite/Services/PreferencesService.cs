@@ -181,12 +181,14 @@ public class PreferencesService
 
     #region הסתר שם השם
 
-    private bool _divineNameMaskingEnabled;
+    // #2404: masking ships enabled with אל → א-ל; explicit stored false/asis
+    // choices are still honored on Load.
+    private bool _divineNameMaskingEnabled = true;
     private DivineNameMaskOption _divineNameMaskElohim = DivineNameMaskOption.Hyphen;
     private string _divineNameMaskElohimCustom = "";
     private DivineNameMaskOption _divineNameMaskYhwh = DivineNameMaskOption.Heh;
     private string _divineNameMaskYhwhCustom = "";
-    private DivineNameMaskOption _divineNameMaskEl = DivineNameMaskOption.AsIs;
+    private DivineNameMaskOption _divineNameMaskEl = DivineNameMaskOption.Hyphen;
     private DivineNameMaskOption _divineNameMaskShaddai = DivineNameMaskOption.AsIs;
     private string _divineNameMaskShaddaiCustom = "";
 
@@ -244,7 +246,7 @@ public class PreferencesService
     {
         get => _divineNameMaskEl;
         set => SetMaskOption(ref _divineNameMaskEl, value, ElOptions,
-            DivineNameMaskOption.AsIs, DivineNameMaskElKey);
+            DivineNameMaskOption.Hyphen, DivineNameMaskElKey);
     }
 
     /// <summary>שדי display option (asis/hyphen/custom).</summary>
@@ -444,15 +446,15 @@ public class PreferencesService
 
         _perekToLoad = (PerekToLoad)_storage.Get(PerekToLoadKey, (int)PerekToLoad.Todays);
 
-        _divineNameMaskingEnabled = _storage.Get(DivineNameMaskingEnabledKey, false);
+        _divineNameMaskingEnabled = _storage.Get(DivineNameMaskingEnabledKey, true);
         _divineNameMaskElohim = ParseMaskOption(_storage.Get(DivineNameMaskElohimKey, "hyphen"),
             ElohimOptions, DivineNameMaskOption.Hyphen);
         _divineNameMaskElohimCustom = _storage.Get(DivineNameMaskElohimCustomKey, "");
         _divineNameMaskYhwh = ParseMaskOption(_storage.Get(DivineNameMaskYhwhKey, "heh"),
             YhwhOptions, DivineNameMaskOption.Heh);
         _divineNameMaskYhwhCustom = _storage.Get(DivineNameMaskYhwhCustomKey, "");
-        _divineNameMaskEl = ParseMaskOption(_storage.Get(DivineNameMaskElKey, "asis"),
-            ElOptions, DivineNameMaskOption.AsIs);
+        _divineNameMaskEl = ParseMaskOption(_storage.Get(DivineNameMaskElKey, "hyphen"),
+            ElOptions, DivineNameMaskOption.Hyphen);
         _divineNameMaskShaddai = ParseMaskOption(_storage.Get(DivineNameMaskShaddaiKey, "asis"),
             ShaddaiOptions, DivineNameMaskOption.AsIs);
         _divineNameMaskShaddaiCustom = _storage.Get(DivineNameMaskShaddaiCustomKey, "");

@@ -721,7 +721,7 @@ describe("Sefer component", () => {
 			expect(mockDownloadSefer).toHaveBeenCalledWith({
 				seferName: minimalPerek.sefer,
 				perekIds: perekIds?.length ? perekIds : [minimalPerek.perekId],
-				divineNameMasking: expect.objectContaining({ enabled: false }),
+				divineNameMasking: expect.objectContaining({ enabled: true }),
 			});
 		},
 	);
