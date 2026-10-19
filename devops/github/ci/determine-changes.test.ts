@@ -45,6 +45,14 @@ describe("detectChanges", () => {
 		assert.equal(changes.website.ci_changed, false);
 	});
 
+	test("device runner workflow changes require app checks without a release", () => {
+		// #2373: the runner owns emulator/install logic and the Release startup
+		// smoke leg — a runner-only edit must not skip the checks it hosts.
+		const changes = detectChanges([".github/workflows/app-mobile-e2e-runner.yml"]);
+		assert.deepEqual(changes.app, { module_changed: false, ci_changed: true });
+		assert.equal(changes.website.ci_changed, false);
+	});
+
 	test("deployment workflow changes require website checks without a release", () => {
 		// cd-aws.yml owns the verifier's NODE_PATH contract (#2372).
 		const changes = detectChanges([".github/workflows/cd-aws.yml"]);
