@@ -307,8 +307,8 @@ describe("structural saves invalidate the website", () => {
 	});
 
 	function revalidateCalls() {
-		return fetchSpy.mock.calls.map(([input]) => {
-			const url = new URL(String(input));
+		return fetchSpy.mock.calls.map((call: unknown[]) => {
+			const url = new URL(String(call[0]));
 			return {
 				tag: url.searchParams.get("tag"),
 				path: url.searchParams.get("path"),

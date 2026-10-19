@@ -169,8 +169,8 @@ describe("author saves invalidate the website", () => {
 
 		await updateAuthor({ data: { id: 3, name: 'רד"ק', details: "ד" } });
 
-		const tags = fetchSpy.mock.calls.map(([input]) =>
-			new URL(String(input)).searchParams.get("tag"),
+		const tags = fetchSpy.mock.calls.map((call: unknown[]) =>
+			new URL(String(call[0])).searchParams.get("tag"),
 		);
 		expect(tags).toEqual(["authors", "articles"]);
 	});

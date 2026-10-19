@@ -31,13 +31,12 @@ function req(url: string) {
 }
 
 describe("POST /api/revalidate", () => {
-	const nodeEnv = process.env.NODE_ENV;
 	beforeEach(() => {
 		jest.clearAllMocks();
-		process.env.NODE_ENV = "development";
+		jest.replaceProperty(process.env, "NODE_ENV", "development");
 	});
 	afterEach(() => {
-		process.env.NODE_ENV = nodeEnv;
+		jest.restoreAllMocks();
 		delete process.env.REVALIDATE_SECRET;
 	});
 
@@ -108,7 +107,7 @@ describe("POST /api/revalidate", () => {
 	});
 
 	it("rejects every call in production without a configured secret", async () => {
-		process.env.NODE_ENV = "production";
+		jest.replaceProperty(process.env, "NODE_ENV", "production");
 		delete process.env.REVALIDATE_SECRET;
 
 		const res = await POST(req("/api/revalidate?tag=articles&secret=x"));
@@ -118,7 +117,7 @@ describe("POST /api/revalidate", () => {
 	});
 
 	it("rejects a wrong secret in production", async () => {
-		process.env.NODE_ENV = "production";
+		jest.replaceProperty(process.env, "NODE_ENV", "production");
 		process.env.REVALIDATE_SECRET = "expected";
 
 		const res = await POST(req("/api/revalidate?tag=articles&secret=no"));
@@ -128,7 +127,7 @@ describe("POST /api/revalidate", () => {
 	});
 
 	it("accepts the configured secret in production", async () => {
-		process.env.NODE_ENV = "production";
+		jest.replaceProperty(process.env, "NODE_ENV", "production");
 		process.env.REVALIDATE_SECRET = "expected";
 
 		const res = await POST(

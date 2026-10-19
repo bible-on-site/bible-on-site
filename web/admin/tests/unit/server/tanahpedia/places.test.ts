@@ -92,8 +92,8 @@ describe("place saves invalidate the website", () => {
 	it("expires pedia surfaces after a place create", async () => {
 		await createPlace({ data: { name: "ירושלים" } });
 
-		const calls = fetchSpy.mock.calls.map(([input]) =>
-			new URL(String(input)).searchParams.get("tag"),
+		const calls = fetchSpy.mock.calls.map((call: unknown[]) =>
+			new URL(String(call[0])).searchParams.get("tag"),
 		);
 		expect(calls).toContain("tanahpedia-entity-refs");
 	});

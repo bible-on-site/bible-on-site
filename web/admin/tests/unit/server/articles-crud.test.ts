@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => {
 	const conn = { marker: "tx-conn" };
@@ -813,8 +813,8 @@ describe("website cache invalidation", () => {
 	});
 
 	function revalidatedTags(): string[] {
-		return fetchSpy.mock.calls.map(([input]) =>
-			new URL(String(input)).searchParams.get("tag"),
+		return fetchSpy.mock.calls.map((call: unknown[]) =>
+			new URL(String(call[0])).searchParams.get("tag"),
 		) as string[];
 	}
 

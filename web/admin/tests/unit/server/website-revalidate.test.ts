@@ -31,7 +31,7 @@ describe("revalidateWebsite", () => {
 	});
 
 	function calledUrls(): URL[] {
-		return fetchSpy.mock.calls.map(([input]) => new URL(String(input)));
+		return fetchSpy.mock.calls.map((call: unknown[]) => new URL(String(call[0])));
 	}
 
 	it("POSTs the tag with the configured secret", async () => {
