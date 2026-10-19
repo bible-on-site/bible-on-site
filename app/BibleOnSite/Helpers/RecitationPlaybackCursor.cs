@@ -31,6 +31,15 @@ public sealed class RecitationPlaybackCursor
     public bool HasBookmarkFor(int perekId) =>
         ResumePosition is { } point && point.PerekId == perekId;
 
+    /// <summary>
+    /// Opening a pasuk's focused view resumes its paused tap preview — a double
+    /// tap's first press pauses it through the shared toggle, and the open must
+    /// not leave that clip silent. An already-playing clip is left alone, and
+    /// only this pasuk's own preview qualifies (a paused chapter stays paused).
+    /// </summary>
+    public bool ResumesOnPasukFocus(int perekId, int pasukNum, bool alreadyPlaying) =>
+        !alreadyPlaying && PlayingKey == $"pasuk:{perekId}:{pasukNum}";
+
     /// <summary>Marks the new playback identity once its clip is prepared.</summary>
     public void Begin(string key, bool continuous)
     {

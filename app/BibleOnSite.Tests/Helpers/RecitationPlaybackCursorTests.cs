@@ -91,6 +91,28 @@ public class RecitationPlaybackCursorTests
         cursor.HasBookmarkFor(1).Should().BeFalse();
     }
 
+    [Theory]
+    [InlineData("pasuk:1:3", false, true)]  // the first tap paused it — opening resumes it
+    [InlineData("pasuk:1:3", true, false)]  // already playing — left alone
+    [InlineData("pasuk:1:4", false, false)] // a different pasuk's preview
+    [InlineData("chapter:1", false, false)] // a deliberately paused chapter stays paused
+    [InlineData("word:1:3:2", false, false)]// a word preview is not the pasuk's clip
+    public void opening_a_pasuk_resumes_only_its_own_paused_preview(string key, bool alreadyPlaying, bool resumes)
+    {
+        var cursor = new RecitationPlaybackCursor();
+        cursor.Begin(key, continuous: key.StartsWith("chapter:", StringComparison.Ordinal));
+        cursor.ResumesOnPasukFocus(1, 3, alreadyPlaying).Should().Be(resumes);
+    }
+
+    [Fact]
+    public void a_finished_preview_does_not_resume_on_focus()
+    {
+        var cursor = new RecitationPlaybackCursor();
+        cursor.Begin("pasuk:1:3", continuous: false);
+        cursor.End();
+        cursor.ResumesOnPasukFocus(1, 3, alreadyPlaying: false).Should().BeFalse();
+    }
+
     [Fact]
     public void the_bookmark_never_leaks_into_another_perek()
     {

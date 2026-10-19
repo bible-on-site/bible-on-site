@@ -1082,9 +1082,11 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         var count = _viewModel.SelectedPasukNums.Count;
         // The recitation bar is also the pause/resume control surface: it must
         // stay reachable for the whole life of a playback — a pasuk tap, a word
-        // preview, or a chapter started from the header all count (#2370).
-        var isSelectionMode = count > 0 || _chapterRecitationSelection || _focusedPasuk != null ||
-            _recitationCursor.PlayingKey != null;
+        // preview, or a chapter started from the header all count (#2370). The
+        // same set owns the Android Back press (TryHandleReaderBack), so both
+        // read it from one place.
+        var isSelectionMode = ReaderSurfaceState.IsActive(count, _chapterRecitationSelection,
+            _focusedPasuk != null, _recitationCursor.PlayingKey != null);
         var ordinarySelection = count > 0 && !_chapterRecitationSelection && _focusedPasuk == null;
         SelectionCountBadge.IsVisible = ordinarySelection;
         SelectionShareButton.IsVisible = ordinarySelection;

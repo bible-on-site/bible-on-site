@@ -347,6 +347,15 @@ public partial class PerekPage
         // view — its words highlight there live and the bar can pause it.
         ResetRecitationContext(stopPlayback: false);
         _focusedPasuk = pasuk;
+        // A double tap's first press paused this pasuk's preview through the
+        // shared toggle — opening its focused view resumes it so the clip does
+        // not sit silently paused.
+        if (RecitationPlayer is { } focusedPlayer &&
+            _recitationCursor.ResumesOnPasukFocus(_viewModel.PerekId, pasuk.PasukNum,
+                focusedPlayer.CurrentState == MediaElementState.Playing))
+        {
+            focusedPlayer.Play();
+        }
         FocusedSourceLabel.Text = $"{_viewModel.Source} {pasuk.PasukNumHeb}";
         FocusedPasukOverlay.IsVisible = true;
         PerekCarousel.InputTransparent = true;
@@ -636,7 +645,10 @@ public partial class PerekPage
         if (ReaderMenuOverlay.IsVisible)
         { ReaderMenuOverlay.IsVisible = false; return true; }
         if (ChapterSearch.IsSearchOpen) { ChapterSearch.HandleBack(); return true; }
-        if (_focusedPasuk != null || _chapterRecitationSelection || _viewModel.SelectedPasukNums.Count > 0)
+        // Whatever keeps the selection bar up also owns Back — including a clip
+        // playing with nothing selected, which stops instead of navigating.
+        if (ReaderSurfaceState.IsActive(_viewModel.SelectedPasukNums.Count, _chapterRecitationSelection,
+                _focusedPasuk != null, _recitationCursor.PlayingKey != null))
         { ClearAllSelections(); return true; }
         return false;
     }
