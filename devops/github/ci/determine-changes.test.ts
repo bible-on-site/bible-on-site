@@ -140,9 +140,36 @@ describe("detectChanges", () => {
 		"web/bible-on-site/package-lock.json",
 		"web/bible-on-site/src/lib/recitation-audio.ts",
 	]) {
-		test(`${path} checks the decoder without releasing the app`, () => {
+		test(`${path} no longer selects native checks`, () => {
+			// The decoder manifest is app-owned (#2391): website manifests and the
+			// browser player must not fan out to the Android/iOS matrix.
 			assert.deepEqual(changed([path], "app"), [
-				{ module_changed: false, ci_changed: true },
+				{ module_changed: false, ci_changed: false },
+			]);
+		});
+	}
+
+	test("a website-only version bump runs no app check", () => {
+		const changes = detectChanges([
+			"web/bible-on-site/package.json",
+			"web/bible-on-site/package-lock.json",
+		]);
+		assert.deepEqual(changes.app, {
+			module_changed: false,
+			ci_changed: false,
+		});
+	});
+
+	for (const path of [
+		"app/devops/recitation-decoder/package.json",
+		"app/devops/recitation-decoder/package-lock.json",
+		"app/devops/recitation-decoder/build-native-recitation-decoder.mjs",
+		"app/devops/recitation-decoder/disabled-opus-ml.mjs",
+		"app/devops/recitation-decoder/check-decoder-pins.mjs",
+	]) {
+		test(`${path} releases the app with its regenerated decoder`, () => {
+			assert.deepEqual(changed([path], "app"), [
+				{ module_changed: true, ci_changed: false },
 			]);
 		});
 	}
