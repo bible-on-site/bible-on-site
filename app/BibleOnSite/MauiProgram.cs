@@ -40,6 +40,7 @@ public static class MauiProgram
             .ConfigureMauiHandlers(handlers =>
             {
                 handlers.AddHandler<HtmlView, HtmlViewHandler>();
+                handlers.AddHandler<PasukTextLabel, PasukTextLabelHandler>();
 #if IOS || MACCATALYST
                 handlers.AddHandler<ReaderCellBorder, ReaderCellBorderHandler>();
 				// Use optimized CollectionView handler for iOS/Mac (default in .NET 10)
@@ -118,11 +119,14 @@ public static class MauiProgram
 					CrossFirebase.Initialize();
 					IsFirebaseInitialized = true;
 					// Info.plist keeps collection off so nothing can emit before
-					// this point; e2e-marked processes keep it off so automatic
-					// and custom suite events never reach the production
-					// property, and the explicit value also overrides a flag a
-					// previous non-suite install persisted on this device.
-					var analyticsCollectionEnabled = !SearchIndexService.IsE2eMarkedProcess();
+					// this point; collection then enables only for a stored
+					// user opt-in (#2400), never in e2e-marked processes so
+					// automatic and custom suite events never reach the
+					// production property, and the explicit value also
+					// overrides a flag a previous non-suite install persisted
+					// on this device.
+					var analyticsCollectionEnabled =
+						AnalyticsConsent.IsCollectionEnabled(new MauiPreferencesStorage());
 					CrossFirebaseAnalytics.Current.IsAnalyticsCollectionEnabled = analyticsCollectionEnabled;
 					Console.WriteLine($"[Analytics] collection enabled={analyticsCollectionEnabled}");
 				}

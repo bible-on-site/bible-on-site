@@ -26,7 +26,9 @@ on:
         type: string
         default: ""
       mode:
-        description: "build, prebuilt-run, or build-and-run"
+        # release-smoke (#2373): build the Release APK and launch it on the
+        # emulator — the only leg that executes the production startup path.
+        description: "build, prebuilt-run, build-and-run, or release-smoke"
         type: string
         required: true
       e2e_selection_mode:
@@ -195,7 +197,7 @@ jobs:
       # already selected and partitioned the suite once for the whole matrix,
       # and each leg stages its assigned manifest below (#2263).
       - name: Download baseline and select affected tests
-        if: inputs.mode != 'build' && inputs.ios_plan_artifact == ''
+        if: inputs.mode != 'build' && inputs.mode != 'release-smoke' && inputs.ios_plan_artifact == ''
         id: selection
         background: true
         env:
@@ -219,11 +221,16 @@ jobs:
             --out "$MOBILE_E2E_ARTIFACTS/selection-manifest.json" \
             --compare "${BASELINE_ARGS[@]}" "${FORCE_ARGS[@]}"
 
+      # The smoke leg builds the app too: devops/node_modules carries the tsx
+      # the csproj's perushim decompress target runs. Its own scripts are
+      # dependency-free, so the Appium/mobile-e2e install stays out of it.
       - name: Install build and Appium dependencies
         if: inputs.mode != 'build' && (steps.node-modules-cache.outputs.cache-hit != 'true')
         run: |
           npm ci --prefix devops --no-audit
-          npm ci --prefix app/mobile-e2e --no-audit
+          if [ "${{ inputs.mode }}" != "release-smoke" ]; then
+            npm ci --prefix app/mobile-e2e --no-audit
+          fi
 
       # .NET's DerivedData equivalent: obj intermediates from the last master
       # build turn the harness compile incremental. Restored before the
@@ -246,7 +253,7 @@ jobs:
             ios-e2e-obj-${{ steps.toolchain.outputs.id }}-
 
       - name: Validate the test harness
-        if: inputs.mode != 'prebuilt-run'
+        if: inputs.mode != 'prebuilt-run' && inputs.mode != 'release-smoke'
         working-directory: app
         shell: bash
         run: |
@@ -257,18 +264,27 @@ jobs:
       # Validate once per platform before any device job starts. The iOS
       # consumers verify the identical delivered runtime and configuration.
       - name: Verify real test-host reporting and shutdown
-        if: inputs.mode != 'prebuilt-run'
+        if: inputs.mode != 'prebuilt-run' && inputs.mode != 'release-smoke'
         run: node app/mobile-e2e/verify-reporting.mjs app/BibleOnSite.Tests.MobileE2E/bin/Debug/net10.0/BibleOnSite.Tests.MobileE2E.dll "$MOBILE_E2E_DOTNET_STACK" "$MOBILE_E2E_ARTIFACTS"
 
       # Validate before booting either device: cold simulator startup competes
       # with cache extraction and subprocess tests. The asynchronous boot still
       # overlaps shared-build transfer or Android-independent setup.
       - name: Validate mobile helper scripts
-        if: inputs.mode != 'build'
+        if: inputs.mode != 'build' && inputs.mode != 'release-smoke'
         shell: bash
         run: |
           mkdir -p "$MOBILE_E2E_ARTIFACTS"
           npm run test:unit --prefix app/mobile-e2e 2>&1 | tee -a "$MOBILE_E2E_ARTIFACTS/harness-validation.log"
+
+      # The full helper suite needs npm ci (Appium driver resolution); the
+      # smoke leg is dependency-free, so it validates only its own script.
+      - name: Validate Release smoke script
+        if: inputs.mode == 'release-smoke'
+        shell: bash
+        run: |
+          mkdir -p "$MOBILE_E2E_ARTIFACTS"
+          node --test app/mobile-e2e/release-smoke.test.mjs 2>&1 | tee -a "$MOBILE_E2E_ARTIFACTS/harness-validation.log"
 
       - name: Start iPhone simulator boot
         if: inputs.mode != 'build' && (inputs.platform == 'iOS')
@@ -357,7 +373,7 @@ jobs:
       # npm ci is done, so node_modules is frozen. Background cache publication
       # finishes at the wait-all gate before device tests.
       - name: Save node_modules
-        if: inputs.mode != 'build' && (github.ref == 'refs/heads/master' && steps.node-modules-cache.outputs.cache-hit != 'true')
+        if: inputs.mode != 'build' && inputs.mode != 'release-smoke' && (github.ref == 'refs/heads/master' && steps.node-modules-cache.outputs.cache-hit != 'true')
         background: true
         uses: actions/cache/save@v6
         with:
@@ -415,24 +431,37 @@ jobs:
       # Shared commentary-search pilot builds the notes FTS index, so a missing
       # or mismatched pair must fail here — before the build, not mid-suite.
       - name: Download perushim SQLite pair
-        if: inputs.mode != 'prebuilt-run'
+        if: inputs.mode != 'prebuilt-run' && inputs.mode != 'release-smoke'
         uses: actions/download-artifact@v8
         with:
           name: ${{ inputs.perushim_notes_sqlite_artifact || env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
           path: ${{ runner.temp }}/perushim-sqlite
 
       - name: Install matching perushim catalog and notes
-        if: inputs.mode != 'prebuilt-run'
+        if: inputs.mode != 'prebuilt-run' && inputs.mode != 'release-smoke'
         run: python3 app/devops/prepare_perushim_assets.py --source "${{ runner.temp }}/perushim-sqlite" --app-directory app/BibleOnSite --platform ${{ inputs.platform }}
 
       - name: Build complete simulator app
-        if: inputs.mode != 'prebuilt-run'
+        if: inputs.mode != 'prebuilt-run' && inputs.mode != 'release-smoke'
         id: build-app
         # Explicit bash enables pipefail, preserving npm failures through tee.
         shell: bash
         run: |
           mkdir -p "$MOBILE_E2E_ARTIFACTS"
           npm run build:app --prefix app/mobile-e2e 2>&1 | tee "$MOBILE_E2E_ARTIFACTS/build.log"
+
+      # Release-configuration startup guard (#2373): only a packaged Release
+      # build executes the analytics initialization that killed #2247 store
+      # launches — every Debug/e2e artifact compiles that branch out under
+      # DISABLE_ANALYTICS, so the Appium suite can never see this class of
+      # failure. The target deliberately keeps DisableAnalytics unset.
+      - name: Build Android Release smoke APK
+        if: inputs.platform == 'Android' && inputs.mode == 'release-smoke'
+        id: build-release-smoke
+        shell: bash
+        run: |
+          mkdir -p "$MOBILE_E2E_ARTIFACTS"
+          npm run build:release-smoke --prefix app/mobile-e2e 2>&1 | tee "$MOBILE_E2E_ARTIFACTS/build-release-smoke.log"
 
       # Cached native outputs can retain stale code-signing pages. Sign the
       # final simulator payload inside out and verify it before any launch.
@@ -589,7 +618,7 @@ jobs:
         wait-all:
 
       - name: Run shared pilot on Android
-        if: inputs.platform == 'Android'
+        if: inputs.platform == 'Android' && inputs.mode != 'release-smoke'
         id: pilot
         uses: reactivecircus/android-emulator-runner@v2.38.0
         env:
@@ -609,6 +638,30 @@ jobs:
           # The wrapper retains the existing supervised pilot, then ends only
           # this no-snapshot-save QEMU tree before the action can retain its pipes.
           script: node app/mobile-e2e/android-pilot.mjs
+
+      # Release startup guard (#2373): install the packaged Release APK and
+      # cold-start it with the suite's analytics-isolation marker, then again
+      # over retained data and after a reinstall. The leg fails on any app
+      # crash, ANR or startup hang — the exact failure class #2247 shipped
+      # while every Debug-configured check stayed green. The staged APK next
+      # to its build-manifest.json is the artifact this leg attests.
+      - name: Run Android Release startup smoke
+        if: inputs.platform == 'Android' && inputs.mode == 'release-smoke'
+        uses: reactivecircus/android-emulator-runner@v2.38.0
+        env:
+          MOBILE_UDID: emulator-5554
+          MOBILE_RELEASE_APK: ${{ github.workspace }}/app/.artifacts/mobile-e2e/${{ inputs.artifact }}/release-smoke/app-release-smoke.apk
+        with:
+          api-level: ${{ env.ANDROID_API_LEVEL }}
+          arch: ${{ env.ANDROID_ABI }}
+          target: ${{ env.ANDROID_TARGET }}
+          profile: ${{ env.AVD_PROFILE }}
+          avd-name: ${{ env.AVD_NAME }}
+          force-avd-creation: false
+          pre-emulator-launch-script: node app/mobile-e2e/configure-avd-display.mjs
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader -noaudio -no-boot-anim -no-snapshot-save -no-metrics -memory 4096
+          script: npm run release-smoke --prefix app/mobile-e2e
 
       # The SDK save waits for a genuinely booted device (any stage's readiness
       # log) rather than trusting installed packages, and stays disabled for
@@ -656,6 +709,23 @@ jobs:
           MOBILE_E2E_SELECTION: ${{ inputs.ios_plan_artifact != '' && steps.shard_manifest.outputs.manifest || (inputs.e2e_selection_mode == 'enforce' && steps.selection.outputs.manifest || '') }}
         run: npm test --prefix app/mobile-e2e
 
+      # Coverage resets, dump pulls and device-diagnostics captures are
+      # diagnostic-only by design — a failure writes to the trx and never
+      # decides the scenario. That silence let every Android scenario's reset
+      # 403 for months. One occurrence warns as a plausible transient; the
+      # same signature twice is systematic and fails the leg. Artifacts still
+      # upload via the always() steps below.
+      - name: Flag systematic harness diagnostics
+        if: inputs.mode != 'build' && inputs.mode != 'release-smoke' && always() && !cancelled()
+        id: silent-failures
+        env:
+          # A green pilot that produced no trx left this gate with nothing to
+          # scan — that absence is itself a systematic failure, so the outcome
+          # decides whether an empty results dir is an error or just expected
+          # fallout of a pilot that already failed loudly.
+          PILOT_OUTCOME: ${{ inputs.platform == 'iOS' && steps['pilot-ios'].outcome || steps.pilot.outcome }}
+        run: node app/mobile-e2e/silent-failures.mjs "$MOBILE_E2E_ARTIFACTS/results" "$PILOT_OUTCOME"
+
       # Real app-process coverage (#1232): the harness pulled a live hit dump
       # from the instrumented app at the end of every scenario. This applies
       # them onto the build's OpenCover template and emits lcov.info. The step
@@ -700,7 +770,7 @@ jobs:
       # instrumented-coverage artifacts (pre-#2156 layout) skip extraction —
       # the automation-id channel stands alone.
       - name: Extract executable coverage tree
-        if: inputs.mode != 'build' && (always() && !cancelled())
+        if: inputs.mode != 'build' && inputs.mode != 'release-smoke' && (always() && !cancelled())
         id: exec-tree
         env:
           # Each device host runs exactly one pilot; the other's outcome is
@@ -731,7 +801,7 @@ jobs:
       # coverage — but the tree is marked incomplete so a partial run can never
       # shrink the trusted baseline.
       - name: Collect per-test coverage evidence
-        if: inputs.mode != 'build' && (always() && !cancelled())
+        if: inputs.mode != 'build' && inputs.mode != 'release-smoke' && (always() && !cancelled())
         id: collect
         env:
           # Each device host runs exactly one pilot; the other's outcome is
@@ -754,11 +824,24 @@ jobs:
             --snapshot-sha "${{ github.sha }}" \
             --out "$MOBILE_E2E_ARTIFACTS/coverage-tree.json" "${INCOMPLETE_ARGS[@]}" "${EXEC_ARGS[@]}"
 
+      # Shadow-mode parity (#2085): score this leg's selection manifest
+      # against the outcomes the full run observed — an unselected failure is
+      # the parity miss the rollout gate counts before enforcement. Android
+      # only: iOS legs execute a shard assignment, and suite-level parity is
+      # scored by merge_ios against the merged tree. Pure diagnostics.
+      - name: Verify shadow selection parity
+        if: inputs.mode != 'build' && inputs.platform == 'Android' && (always() && !cancelled())
+        run: |
+          node devops/github/ci/e2e-impact/e2e-impact.ts verify \
+            --manifest "$MOBILE_E2E_ARTIFACTS/selection-manifest.json" \
+            --tree "$MOBILE_E2E_ARTIFACTS/coverage-tree.json" \
+            --out "$MOBILE_E2E_ARTIFACTS/selection-verify.json"
+
       # The authoritative baseline is published only from a completed,
       # successful default-branch run; PR and merge-queue evidence stays
       # provisional inside the run's appium artifact.
       - name: Publish coverage-tree baseline
-        if: inputs.platform == 'Android' && always() && github.event_name == 'push' && github.ref == 'refs/heads/master' && (steps.pilot.outcome == 'success' || steps['pilot-ios'].outcome == 'success') && steps.collect.outcome == 'success'
+        if: inputs.platform == 'Android' && always() && github.event_name == 'push' && github.ref == 'refs/heads/master' && (steps.pilot.outcome == 'success' || steps['pilot-ios'].outcome == 'success') && steps.collect.outcome == 'success' && steps['silent-failures'].outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
           name: app-mobile-e2e-coverage.master.${{ inputs.platform_id }}
@@ -771,7 +854,7 @@ jobs:
       # default-branch run refreshes it, so a partial or selected run can
       # never overwrite a complete baseline.
       - name: Publish app coverage baseline
-        if: inputs.platform == 'Android' && always() && github.event_name == 'push' && github.ref == 'refs/heads/master' && (steps.pilot.outcome == 'success' || steps['pilot-ios'].outcome == 'success') && steps.coverage-apply.outcome == 'success'
+        if: inputs.platform == 'Android' && always() && github.event_name == 'push' && github.ref == 'refs/heads/master' && (steps.pilot.outcome == 'success' || steps['pilot-ios'].outcome == 'success') && steps.coverage-apply.outcome == 'success' && steps['silent-failures'].outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
           name: app-e2e-coverage.master.${{ inputs.artifact }}
@@ -784,7 +867,7 @@ jobs:
       # automation-id baseline above. Runs without exec coverage (no
       # template → no extracted tree) skip the publish.
       - name: Publish exec coverage-tree baseline
-        if: inputs.platform == 'Android' && always() && github.event_name == 'push' && github.ref == 'refs/heads/master' && (steps.pilot.outcome == 'success' || steps['pilot-ios'].outcome == 'success') && steps['exec-tree'].outcome == 'success' && steps['exec-tree'].outputs.exec-coverage-tree != ''
+        if: inputs.platform == 'Android' && always() && github.event_name == 'push' && github.ref == 'refs/heads/master' && (steps.pilot.outcome == 'success' || steps['pilot-ios'].outcome == 'success') && steps['exec-tree'].outcome == 'success' && steps['exec-tree'].outputs.exec-coverage-tree != '' && steps['silent-failures'].outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
           name: app-mobile-e2e-exec-coverage.master.${{ inputs.artifact }}

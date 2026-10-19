@@ -44,3 +44,4 @@ playwright-report
 .playwright-report
 .playwright-results
 monocart-report/
+.vitest

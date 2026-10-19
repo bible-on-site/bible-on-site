@@ -348,8 +348,11 @@ public partial class PerekPage
         for (var attempt = 0; attempt < 120; attempt++)
         {
             var list = FindReaderPasukList();
+            // A perush hit anchors the copy that hosts the notes — the last copy
+            // in שניים מקרא (#2403); a pasuk hit keeps the first/marked copy.
             var item = list?.ItemsSource?.Cast<object>().OfType<PasukDisplayItem>()
-                .FirstOrDefault(display => display.IsFirstCopy && display.PasukNum == pasukNum);
+                .FirstOrDefault(display => display.PasukNum == pasukNum &&
+                    (matchTarget == null ? display.IsFirstCopy : display.IsLastCopy));
             if (list != null && item != null)
             {
                 bool landed;

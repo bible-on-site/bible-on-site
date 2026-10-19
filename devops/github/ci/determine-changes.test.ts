@@ -45,6 +45,14 @@ describe("detectChanges", () => {
 		assert.equal(changes.website.ci_changed, false);
 	});
 
+	test("device runner workflow changes require app checks without a release", () => {
+		// #2373: the runner owns emulator/install logic and the Release startup
+		// smoke leg — a runner-only edit must not skip the checks it hosts.
+		const changes = detectChanges([".github/workflows/app-mobile-e2e-runner.yml"]);
+		assert.deepEqual(changes.app, { module_changed: false, ci_changed: true });
+		assert.equal(changes.website.ci_changed, false);
+	});
+
 	test("deployment workflow changes require website checks without a release", () => {
 		// cd-aws.yml owns the verifier's NODE_PATH contract (#2372).
 		const changes = detectChanges([".github/workflows/cd-aws.yml"]);
@@ -140,9 +148,36 @@ describe("detectChanges", () => {
 		"web/bible-on-site/package-lock.json",
 		"web/bible-on-site/src/lib/recitation-audio.ts",
 	]) {
-		test(`${path} checks the decoder without releasing the app`, () => {
+		test(`${path} no longer selects native checks`, () => {
+			// The decoder manifest is app-owned (#2391): website manifests and the
+			// browser player must not fan out to the Android/iOS matrix.
 			assert.deepEqual(changed([path], "app"), [
-				{ module_changed: false, ci_changed: true },
+				{ module_changed: false, ci_changed: false },
+			]);
+		});
+	}
+
+	test("a website-only version bump runs no app check", () => {
+		const changes = detectChanges([
+			"web/bible-on-site/package.json",
+			"web/bible-on-site/package-lock.json",
+		]);
+		assert.deepEqual(changes.app, {
+			module_changed: false,
+			ci_changed: false,
+		});
+	});
+
+	for (const path of [
+		"app/devops/recitation-decoder/package.json",
+		"app/devops/recitation-decoder/package-lock.json",
+		"app/devops/recitation-decoder/build-native-recitation-decoder.mjs",
+		"app/devops/recitation-decoder/disabled-opus-ml.mjs",
+		"app/devops/recitation-decoder/check-decoder-pins.mjs",
+	]) {
+		test(`${path} releases the app with its regenerated decoder`, () => {
+			assert.deepEqual(changed([path], "app"), [
+				{ module_changed: true, ci_changed: false },
 			]);
 		});
 	}

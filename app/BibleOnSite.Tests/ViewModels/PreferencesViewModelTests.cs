@@ -134,27 +134,27 @@ public class PreferencesViewModelTests : IDisposable
     [Fact]
     public void DivineNameMaskingEnabled_Get_ReturnsServiceValue()
     {
-        _service.DivineNameMaskingEnabled = true;
+        _service.DivineNameMaskingEnabled = false;
 
-        _viewModel.DivineNameMaskingEnabled.Should().BeTrue();
+        _viewModel.DivineNameMaskingEnabled.Should().BeFalse();
     }
 
     [Fact]
     public void DivineNameMaskingEnabled_Set_UpdatesServiceValue()
     {
-        _viewModel.DivineNameMaskingEnabled = true;
+        _viewModel.DivineNameMaskingEnabled = false;
 
-        _service.DivineNameMaskingEnabled.Should().BeTrue();
+        _service.DivineNameMaskingEnabled.Should().BeFalse();
     }
 
     [Fact]
     public void DivineNameMaskingEnabled_WhenSameValue_DoesNotFirePropertyChanged()
     {
-        _viewModel.DivineNameMaskingEnabled = true;
+        _viewModel.DivineNameMaskingEnabled = false;
         var eventCount = 0;
         _viewModel.PropertyChanged += (_, _) => eventCount++;
 
-        _viewModel.DivineNameMaskingEnabled = true;
+        _viewModel.DivineNameMaskingEnabled = false;
 
         eventCount.Should().Be(0);
     }
@@ -736,6 +736,37 @@ public class PreferencesViewModelTests : IDisposable
 
         // Assert
         fontPropertyChanged.Should().BeTrue("PropertyChanged should fire when service preferences change");
+    }
+
+    #endregion
+
+    #region AnalyticsConsentEnabled Tests
+
+    [Fact]
+    public void AnalyticsConsentEnabled_DefaultsOff_AndPersistsThroughService()
+    {
+        _viewModel.AnalyticsConsentEnabled.Should().BeFalse("collection defaults off before an explicit opt-in");
+
+        _viewModel.AnalyticsConsentEnabled = true;
+
+        _service.AnalyticsConsentEnabled.Should().BeTrue();
+        _storage.Get(AnalyticsConsent.StorageKey, "").Should().Be("granted");
+
+        _viewModel.AnalyticsConsentEnabled = false;
+        _service.AnalyticsConsentEnabled.Should().BeFalse();
+        _storage.Get(AnalyticsConsent.StorageKey, "").Should().Be("denied");
+    }
+
+    [Fact]
+    public void AnalyticsConsentEnabled_WhenSameValue_DoesNotUpdate()
+    {
+        _viewModel.AnalyticsConsentEnabled = true;
+        var eventCount = 0;
+        _viewModel.PropertyChanged += (_, _) => eventCount++;
+
+        _viewModel.AnalyticsConsentEnabled = true;
+
+        eventCount.Should().Be(0, "Setting the same value should not raise PropertyChanged");
     }
 
     #endregion

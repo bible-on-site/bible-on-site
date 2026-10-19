@@ -84,6 +84,44 @@ timeout status.
 Commentary searches use the shipped index and
 the ordinary 45-second deadline, including on a fresh install.
 
+## Android Release startup smoke (#2373)
+
+The Appium legs build Debug, which defines `DISABLE_ANALYTICS` — so the suite
+can never execute the `MainActivity.OnCreate` analytics initialization whose
+missing `FirebaseAnalyticsImplementation.Initialize` crashed every #2247
+store launch while all tests stayed green. The `android_release_smoke` leg
+closes that gap: `npm run build:release-smoke` builds the **Release** pipeline
+(profiled AOT, R8, embedded assemblies, merged manifest, analytics branch
+compiled in) as an x86_64 APK — the ABI the CI emulator can run — and
+`npm run release-smoke` installs and launches it on the same cached AVD.
+
+Each launch must reach a genuinely usable reader (the same `PerekSource`
+readiness the Appium `WaitForStartup` uses), keep the process and foreground
+activity alive past the original crash window, and print
+`[Analytics] collection enabled=false`. That line proves the Release branch
+ran `Initialize` + `set_IsAnalyticsCollectionEnabled` — the exact member that
+NRE'd — while keeping suite traffic out of production analytics (#2120); a
+missing marker, `enabled=true`, or the `DISABLE_ANALYTICS` build line each
+fail the leg. Phases: install plus `pm clear` for a true cold start with the
+`BIBLE_E2E` intent extra, a force-stop relaunch over retained data (the
+persisted marker file holds isolation — adb relaunches drop extras), and an
+`install -r` reinstall followed by another verified launch. Scoped logcat, UI dumps, screenshots,
+`build-manifest.json` (SHA256, source SHA, config) and
+`release-smoke-summary.json` land in the run artifacts on failure and success.
+
+Known differences from the store-delivered artifact: APK/x86_64/debug-key
+signature here vs AAB/arm64/Play signing there — the compiled startup code
+path, AOT profile, R8 output and manifest merge are the same. The leg runs on
+API 36 `google_apis` x86_64 like the Debug Android leg; arm64 physical-device
+coverage remains open in #2371.
+
+Run it locally against a booted emulator with `MOBILE_UDID=emulator-5554`:
+
+```bash
+npm run build:release-smoke --prefix app/mobile-e2e
+MOBILE_RELEASE_APK=<staged-apk> npm run release-smoke --prefix app/mobile-e2e
+```
+
 ## Adding scenarios and platform differences
 
 Keep user flows and business assertions shared in the C# tests and page objects.

@@ -181,12 +181,14 @@ public class PreferencesService
 
     #region הסתר שם השם
 
-    private bool _divineNameMaskingEnabled;
+    // #2404: masking ships enabled with אל → א-ל; explicit stored false/asis
+    // choices are still honored on Load.
+    private bool _divineNameMaskingEnabled = true;
     private DivineNameMaskOption _divineNameMaskElohim = DivineNameMaskOption.Hyphen;
     private string _divineNameMaskElohimCustom = "";
     private DivineNameMaskOption _divineNameMaskYhwh = DivineNameMaskOption.Heh;
     private string _divineNameMaskYhwhCustom = "";
-    private DivineNameMaskOption _divineNameMaskEl = DivineNameMaskOption.AsIs;
+    private DivineNameMaskOption _divineNameMaskEl = DivineNameMaskOption.Hyphen;
     private DivineNameMaskOption _divineNameMaskShaddai = DivineNameMaskOption.AsIs;
     private string _divineNameMaskShaddaiCustom = "";
 
@@ -244,7 +246,7 @@ public class PreferencesService
     {
         get => _divineNameMaskEl;
         set => SetMaskOption(ref _divineNameMaskEl, value, ElOptions,
-            DivineNameMaskOption.AsIs, DivineNameMaskElKey);
+            DivineNameMaskOption.Hyphen, DivineNameMaskElKey);
     }
 
     /// <summary>שדי display option (asis/hyphen/custom).</summary>
@@ -320,6 +322,37 @@ public class PreferencesService
     }
 
     #endregion
+
+    private string _analyticsConsent = "";
+
+    /// <summary>
+    /// Analytics collection opt-in (#2400, Amendment 13). Defaults off until
+    /// the user explicitly grants; readable pre-Load via
+    /// <see cref="AnalyticsConsent.IsGranted"/> for the platform launch paths
+    /// that run before preferences load.
+    /// </summary>
+    public bool AnalyticsConsentEnabled => _analyticsConsent == AnalyticsConsent.GrantedValue;
+
+    /// <summary>True once the user answered the consent prompt (either way).</summary>
+    public bool AnalyticsConsentAsked =>
+        _analyticsConsent is AnalyticsConsent.GrantedValue or AnalyticsConsent.DeniedValue;
+
+    /// <summary>
+    /// Records the consent answer and applies it to the Firebase collection
+    /// flag immediately, so a mid-session grant/revoke takes effect live.
+    /// </summary>
+    public void SetAnalyticsConsent(bool granted)
+    {
+        var next = granted ? AnalyticsConsent.GrantedValue : AnalyticsConsent.DeniedValue;
+        if (_analyticsConsent == next)
+        {
+            return;
+        }
+
+        _analyticsConsent = next;
+        AnalyticsConsent.Save(_storage, granted);
+        OnPreferencesChanged();
+    }
 
     private bool _masoraMenuEnabled;
 
@@ -431,6 +464,11 @@ public class PreferencesService
     public void Load()
     {
         _masoraMenuEnabled = _storage.Get(MasoraMenuEnabledKey, false);
+        var storedConsent = _storage.Get(AnalyticsConsent.StorageKey, "");
+        // Garbage keeps the "never asked" state so the prompt can still run.
+        _analyticsConsent = storedConsent is AnalyticsConsent.GrantedValue or AnalyticsConsent.DeniedValue
+            ? storedConsent
+            : "";
         _recitationSpeed = Normalize(_storage.Get("recitationSpeed", 1.0), 1, 0.5, 2);
         _recitationVolume = Normalize(_storage.Get("recitationVolume", 1.0), 1, 0, 1);
         _lessonsVolume = Normalize(_storage.Get("lessonsVolume", 1.0), 1, 0, 1);
@@ -444,15 +482,15 @@ public class PreferencesService
 
         _perekToLoad = (PerekToLoad)_storage.Get(PerekToLoadKey, (int)PerekToLoad.Todays);
 
-        _divineNameMaskingEnabled = _storage.Get(DivineNameMaskingEnabledKey, false);
+        _divineNameMaskingEnabled = _storage.Get(DivineNameMaskingEnabledKey, true);
         _divineNameMaskElohim = ParseMaskOption(_storage.Get(DivineNameMaskElohimKey, "hyphen"),
             ElohimOptions, DivineNameMaskOption.Hyphen);
         _divineNameMaskElohimCustom = _storage.Get(DivineNameMaskElohimCustomKey, "");
         _divineNameMaskYhwh = ParseMaskOption(_storage.Get(DivineNameMaskYhwhKey, "heh"),
             YhwhOptions, DivineNameMaskOption.Heh);
         _divineNameMaskYhwhCustom = _storage.Get(DivineNameMaskYhwhCustomKey, "");
-        _divineNameMaskEl = ParseMaskOption(_storage.Get(DivineNameMaskElKey, "asis"),
-            ElOptions, DivineNameMaskOption.AsIs);
+        _divineNameMaskEl = ParseMaskOption(_storage.Get(DivineNameMaskElKey, "hyphen"),
+            ElOptions, DivineNameMaskOption.Hyphen);
         _divineNameMaskShaddai = ParseMaskOption(_storage.Get(DivineNameMaskShaddaiKey, "asis"),
             ShaddaiOptions, DivineNameMaskOption.AsIs);
         _divineNameMaskShaddaiCustom = _storage.Get(DivineNameMaskShaddaiCustomKey, "");

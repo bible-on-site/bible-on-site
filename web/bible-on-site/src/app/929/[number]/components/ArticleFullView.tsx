@@ -28,16 +28,25 @@ export function ArticleFullView({
 		? `${articleStyles.expandedArticle} ${styles.articleFullViewInBook}`
 		: articleStyles.expandedArticle;
 
+	// Book-mode modifiers compact the metadata so the body gets more of the
+	// limited page height (#2406); the standalone article route keeps its
+	// spacious presentation.
+	const compact = (bookClass: string) => (fullPage ? ` ${bookClass}` : "");
+
 	const canonicalPath = `/929/${article.perekId}/${article.id}`;
 
 	return (
 		<div className={rootClass}>
-			<header className={articleStyles.articleHeader}>
+			<header
+				className={`${articleStyles.articleHeader}${compact(styles.articleHeaderInBook)}`}
+			>
 				<Link
 					href={`/929/authors/${authorNameToSlug(article.authorName)}`}
-					className={articleStyles.authorLink}
+					className={`${articleStyles.authorLink}${compact(styles.authorLinkInBook)}`}
 				>
-					<div className={articleStyles.authorImage}>
+					<div
+						className={`${articleStyles.authorImage}${compact(styles.authorImageInBook)}`}
+					>
 						<Image
 							src={article.authorImageUrl}
 							alt={article.authorName}
@@ -48,7 +57,11 @@ export function ArticleFullView({
 					</div>
 					<span className={articleStyles.authorName}>{article.authorName}</span>
 				</Link>
-				<h2 className={articleStyles.articleTitle}>{article.name}</h2>
+				<h2
+					className={`${articleStyles.articleTitle}${compact(styles.articleTitleInBook)}`}
+				>
+					{article.name}
+				</h2>
 				<ShareButton
 					canonicalPath={canonicalPath}
 					title={`${article.name} - ${article.authorName}`}
@@ -65,7 +78,9 @@ export function ArticleFullView({
 				</div>
 			)}
 
-			<div className={articleStyles.backToPerek}>
+			<div
+				className={`${articleStyles.backToPerek}${compact(styles.backToPerekInBook)}`}
+			>
 				<button
 					type="button"
 					onClick={onBack}

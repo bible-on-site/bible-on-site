@@ -30,6 +30,7 @@ import { getPerekByPerekId } from "@/data/perek-dto";
 import { getPerekIdsForSefer, getSeferByName } from "@/data/sefer-dto";
 import { getArticlesByPerekId } from "@/lib/articles/service";
 import { getPerushimByPerekId } from "@/lib/perushim";
+import { ExportError } from "./export-error";
 import type { SemanticPageInfo } from "./types";
 
 /* ──────────────────────────── Font loading ─────────────────────────── */
@@ -157,10 +158,19 @@ export function wrapText(
 /* ─────────────────────── Mapping helpers ───────────────────────────── */
 
 /**
+ * Export boundary rejection message for a reversed perek range (issue #2407).
+ * ExportError messages are safe to surface to the reader.
+ */
+export const REVERSED_RANGE_MESSAGE =
+	"טווח לא תקין: פרק ההתחלה מאוחר מפרק הסיום.";
+
+/**
  * Convert semantic page info to perek IDs using the sefer's perek range.
  *
  * semanticPages contains entries like { semanticName: "א'", pageIndex: 3 }.
  * We parse the Hebrew number and map to the sefer's perek ID array.
+ * The entries must arrive in reading order (selection from → to); a start
+ * after the end is rejected so a UI bypass cannot export a reversed range.
  */
 export function semanticPagesToPerekIds(
 	semanticPages: SemanticPageInfo[],
@@ -171,10 +181,15 @@ export function semanticPagesToPerekIds(
 
 	const perekIds: number[] = [];
 	const seen = new Set<number>();
+	let lastPerekNum = 0;
 
 	for (const sp of semanticPages) {
 		const perekNum = toNumber(sp.semanticName);
 		if (perekNum <= 0 || perekNum > allPerekIds.length) continue;
+		if (perekNum < lastPerekNum) {
+			throw new ExportError(REVERSED_RANGE_MESSAGE);
+		}
+		lastPerekNum = perekNum;
 		const perekId = allPerekIds[perekNum - 1];
 		if (perekId !== undefined && !seen.has(perekId)) {
 			seen.add(perekId);

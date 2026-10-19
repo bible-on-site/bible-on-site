@@ -88,18 +88,25 @@ export const MODULES = {
 			"web/bible-on-site/src/data/recitation/opus-playback.json",
 		],
 		// The e2e-impact selector/collector and the exec coverage-tree
-		// extractor drive the Appium suite (#2085).
+		// extractor drive the Appium suite (#2085). The runner workflow defines
+		// the device legs themselves — install logic, emulator settings and the
+		// Release startup smoke (#2373) — so a runner-only edit must trigger
+		// the same app checks as a parent-workflow edit.
 		ciPaths: [
 			...RELEASE_CI_PATHS,
 			".github/workflows/app-package.yml",
 			".github/workflows/app-mobile-e2e.yml",
+			".github/workflows/app-mobile-e2e-runner.yml",
 			"devops/github/ci/e2e-impact",
 			"devops/e2e-coverage-trees",
 		],
-		// Shared website decoder inputs require native checks without a native
-		// release. Approved timings are packaged inputs through extraModulePaths.
-		extraCiPattern:
-			/^web\/bible-on-site\/(package(-lock)?\.json|src\/lib\/recitation-audio\.ts)$/,
+		// The native decoder inputs are app-owned (#2391): the generator and its
+		// manifest live under app/devops/recitation-decoder, inside this module,
+		// and the generated asset ships under app/BibleOnSite. Website manifests
+		// and the browser player no longer select native checks; decoder-version
+		// parity with web/bible-on-site/package.json is enforced by
+		// check-decoder-pins.mjs in the decoder verification suites.
+		// Approved timings are packaged inputs through extraModulePaths.
 		// Test projects exercise the app but never change its package, so a
 		// test-only change must not ship a store release or bump the version.
 		ciOnlyPattern: /^app\/(BibleOnSite\.Tests[^/]*|mobile-e2e)\//,

@@ -373,9 +373,10 @@
                                                         </MultiBinding>
                                                     </controls:PasukTextLabel.FormattedText>
                                                 </controls:PasukTextLabel>
-                                                <!-- Perushim render once per pair in שניים מקרא mode -->
-                                                <VerticalStackLayout BindableLayout.ItemsSource="{Binding Pasuk.VisiblePerushNotes}"
-                                                                     IsVisible="{Binding IsFirstCopy}"
+                                                <!-- Perushim render once per pasuk on its last copy so
+                                                     שניים מקרא reads מקרא, מקרא, פירוש (#2403) -->
+                                                <VerticalStackLayout BindableLayout.ItemsSource="{Binding PerushNotes}"
+                                                                     IsVisible="{Binding IsLastCopy}"
                                                                      Spacing="2"
                                                                      Margin="0,4,0,0">
                                                     <BindableLayout.ItemTemplate>

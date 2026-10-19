@@ -236,24 +236,40 @@ function resolveInCycle(
 	cycle: ConfirmedCycle,
 	cycleNumber: number,
 ): CalendarDay {
-	for (const entry of cycle.entries) {
-		if (entry.dateNumber === base.dateNumber) {
-			return {
-				...base,
-				status: "study",
-				perekId: entry.perekId,
-				cycle: cycleNumber,
-			};
+	// Index of the first entry dated on/after the bound. Entries are sorted
+	// chronologically; the numeric date format is NOT chronological in leap
+	// years (Adar II's uniform month 14 sorts above Nisan 7), so bounds must be
+	// computed on the HebrewDate values, not the numbers.
+	const lowerBound = (bound: HebrewDate): number => {
+		let lo = 0;
+		let hi = cycle.entries.length;
+		while (lo < hi) {
+			const mid = (lo + hi) >> 1;
+			if (cycle.entries[mid].date.deltaDays(bound) < 0) {
+				lo = mid + 1;
+			} else {
+				hi = mid;
+			}
 		}
+		return lo;
+	};
+
+	const dayIndex = lowerBound(date);
+	const dayEntry = cycle.entries[dayIndex];
+	if (dayEntry?.dateNumber === base.dateNumber) {
+		return {
+			...base,
+			status: "study",
+			perekId: dayEntry.perekId,
+			cycle: cycleNumber,
+		};
 	}
 	// In-cycle day without its own chapter: review the whole studied week
 	// (Sunday of this week through yesterday), not just the last perek (#2365).
 	const weekStart = date.add(-base.dayOfWeek);
+	const weekStartIndex = lowerBound(weekStart);
 	const weekPerekIds = cycle.entries
-		.filter(
-			(entry) =>
-				entry.date.deltaDays(weekStart) >= 0 && entry.date.deltaDays(date) < 0,
-		)
+		.slice(weekStartIndex, dayIndex)
 		.map((entry) => entry.perekId);
 	/* istanbul ignore else: confirmed cycles never leave a study-less week */
 	if (weekPerekIds.length > 0) {
@@ -267,17 +283,16 @@ function resolveInCycle(
 	}
 	// A gap that left no study day this week: fall back to the last perek.
 	/* istanbul ignore next: defensive fallback, unreachable in confirmed data */
-	for (let i = cycle.entries.length - 1; i >= 0; i -= 1) {
-		const entry = cycle.entries[i];
-		if (date.deltaDays(entry.date) > 0) {
-			return {
-				...base,
-				status: "review",
-				perekId: entry.perekId,
-				reviewPerekIds: [entry.perekId],
-				cycle: cycleNumber,
-			};
-		}
+	const previousEntry = cycle.entries[dayIndex - 1];
+	/* istanbul ignore next: defensive fallback, unreachable in confirmed data */
+	if (previousEntry !== undefined) {
+		return {
+			...base,
+			status: "review",
+			perekId: previousEntry.perekId,
+			reviewPerekIds: [previousEntry.perekId],
+			cycle: cycleNumber,
+		};
 	}
 	/* istanbul ignore next: every cycle starts with perek 1 on day 0 */
 	return { ...base, status: "none" };

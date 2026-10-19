@@ -1,0 +1,13 @@
+{
+	"name": "bible-on-site-recitation-decoder",
+	"private": true,
+	"description": "Offline recitation decoder build inputs owned by the native app. The decoder versions must stay identical to the website's runtime dependencies in web/bible-on-site/package.json (mpg123-decoder, ogg-opus-decoder); check-decoder-pins.mjs enforces the alignment. See web/bible-on-site/src/lib/recitation-audio.ts for the browser counterpart.",
+	"dependencies": {
+		"esbuild": "0.28.2",
+		"mpg123-decoder": "1.0.3",
+		"ogg-opus-decoder": "1.7.5"
+	},
+	"allowScripts": {
+		"esbuild@0.28.2": true
+	}
+}

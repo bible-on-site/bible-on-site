@@ -185,6 +185,37 @@
 	scrollbar-color: #c4b896 transparent;
 }
 
+/* Compact article metadata in book mode (#2406) so the body gets more of the
+   page height. Doubled class selectors outrank the standalone article-page
+   rules in [slug]/page.module.css regardless of bundle order. */
+.articleHeaderInBook.articleHeaderInBook {
+	margin-bottom: 8px;
+	padding-bottom: 8px;
+}
+
+.authorLinkInBook.authorLinkInBook {
+	flex-direction: row;
+	gap: 8px;
+	margin-bottom: 6px;
+}
+
+.authorImageInBook.authorImageInBook {
+	width: 40px;
+	height: 40px;
+	border-width: 1px;
+}
+
+/* A long title still wraps, but at a smaller size it stops eating the page. */
+.articleTitleInBook.articleTitleInBook {
+	font-size: 1.15rem;
+	line-height: 1.3;
+}
+
+.backToPerekInBook.backToPerekInBook {
+	margin-top: 8px;
+	padding-top: 8px;
+}
+
 /* Perush full view in book: fill container, header fixed, notes scroll.
    Doubled selector for specificity over .perushimSection from perushim-section.module.css */
 .perushFullViewInBook.perushFullViewInBook {
@@ -211,6 +242,10 @@
 	max-height: none;
 	scrollbar-width: thin;
 	scrollbar-color: #c4b896 transparent;
+	/* Justified like .perekText even if the notes' own module style has not
+	   applied yet (inherited by .noteContent descendants). */
+	text-align: justify;
+	text-align-last: right;
 }
 
 /* Cover: genuine book cover look using the sefer spectrum color */

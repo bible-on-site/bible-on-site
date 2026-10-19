@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => {
 	const conn = { marker: "tx-conn" };
@@ -33,8 +33,6 @@ import {
 	getArticle,
 	getArticles,
 	getArticlesByPerek,
-	invalidateArticleCache,
-	invalidatePerekCache,
 	updateArticle,
 } from "~/server/articles";
 
@@ -778,18 +776,95 @@ describe("article covering sources", () => {
 	});
 });
 
-describe("cache invalidation hooks", () => {
-	it("acknowledges article and perek invalidation requests", async () => {
-		const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+describe("website cache invalidation", () => {
+	const ENV_KEYS = ["VITE_WEBSITE_URL", "REVALIDATE_SECRET"] as const;
+	let savedEnv: Record<string, string | undefined>;
+	let fetchSpy: ReturnType<typeof vi.spyOn>;
 
-		await expect(invalidateArticleCache({ data: 5 })).resolves.toEqual({
-			success: true,
-		});
-		await expect(invalidatePerekCache({ data: 9 })).resolves.toEqual({
-			success: true,
-		});
-		expect(logSpy).toHaveBeenCalledWith("Invalidating cache for article 5");
-		expect(logSpy).toHaveBeenCalledWith("Invalidating cache for perek 9");
-		logSpy.mockRestore();
+	beforeEach(() => {
+		for (const mock of [
+			mocks.execute,
+			mocks.queryOne,
+			mocks.query,
+			mocks.txExecute,
+			mocks.txQuery,
+			mocks.txQueryOne,
+		])
+			mock.mockReset();
+		mocks.transaction.mockClear();
+		_resetArticleSearchQueueCache();
+		mocks.execute.mockResolvedValue({});
+
+		savedEnv = {};
+		for (const key of ENV_KEYS) savedEnv[key] = process.env[key];
+		process.env.VITE_WEBSITE_URL = "https://site.test";
+		process.env.REVALIDATE_SECRET = "s3cr3t";
+		fetchSpy = vi
+			.spyOn(globalThis, "fetch")
+			.mockResolvedValue(new Response("{}", { status: 200 }));
+	});
+
+	afterEach(() => {
+		for (const key of ENV_KEYS) {
+			if (savedEnv[key] === undefined) delete process.env[key];
+			else process.env[key] = savedEnv[key];
+		}
+		fetchSpy.mockRestore();
+	});
+
+	function revalidatedTags(): string[] {
+		return fetchSpy.mock.calls.map((call: unknown[]) =>
+			new URL(String(call[0])).searchParams.get("tag"),
+		) as string[];
+	}
+
+	it("expires the website's articles tag after a committed create", async () => {
+		mocks.txExecute.mockResolvedValue({ insertId: 7 });
+		mocks.txQueryOne.mockResolvedValue({ id: 7, name: "מאמר" });
+
+		await createArticle({ data: article });
+
+		expect(revalidatedTags()).toEqual(["articles"]);
+		const [, init] = fetchSpy.mock.calls[0];
+		expect(init?.method).toBe("POST");
+	});
+
+	it("expires the website's articles tag after a committed update", async () => {
+		mocks.txExecute.mockResolvedValue({});
+		mocks.txQueryOne.mockResolvedValue({ id: 7, name: "מאמר" });
+
+		await updateArticle({ data: { ...article, id: 7 } });
+
+		expect(revalidatedTags()).toEqual(["articles"]);
+	});
+
+	it("expires the website's articles tag after a committed delete", async () => {
+		mocks.txExecute.mockResolvedValue({});
+
+		await deleteArticle({ data: 7 });
+
+		expect(revalidatedTags()).toEqual(["articles"]);
+	});
+
+	it("still resolves the save when the website is unreachable", async () => {
+		fetchSpy.mockRejectedValue(new Error("connect refused"));
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		mocks.txExecute.mockResolvedValue({ insertId: 7 });
+		mocks.txQueryOne.mockResolvedValue({ id: 7, name: "מאמר" });
+
+		const saved = await createArticle({ data: article });
+		expect(saved.id).toBe(7);
+	});
+
+	it("does not call the website at all when revalidation is not configured", async () => {
+		delete process.env.VITE_WEBSITE_URL;
+		delete process.env.REVALIDATE_SECRET;
+		vi.spyOn(console, "warn").mockImplementation(() => {});
+		mocks.txExecute.mockResolvedValue({ insertId: 7 });
+		mocks.txQueryOne.mockResolvedValue({ id: 7, name: "מאמר" });
+
+		const saved = await createArticle({ data: article });
+		expect(saved.id).toBe(7);
+		expect(fetchSpy).not.toHaveBeenCalled();
 	});
 });

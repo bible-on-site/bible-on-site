@@ -86,7 +86,10 @@ export class RecitationAudio {
 				if (hash !== this.sha256)
 					throw new Error("Recording differs from expected playback asset");
 				if (this.disposed) throw new Error("Player disposed");
-				// The same pinned decoder runs in the app. Platform MP3 decoders
+				// The same pinned decoder runs in the app; its duplicate
+				// manifest lives in app/devops/recitation-decoder/package.json
+				// and must stay version-aligned with this file's imports (#2391).
+				// Platform MP3 decoders
 				// disagree about the sample origin even when their lengths agree.
 				const decoder =
 					this.format === "ogg-opus"
