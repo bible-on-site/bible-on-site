@@ -83,7 +83,7 @@ silently green a suite.
 | Admin CI | `admin_ci` | `web/admin` | Lint, typecheck, unit, E2E (coverage), local S3/RustFS checks |
 | App CI | `app_ci` | `app` | Lint, unit, integration (coverage) |
 | App Mobile E2E | `app_mobile_e2e` | `app` | Reusable → [`app-mobile-e2e.yml`](../../../../.github/workflows/app-mobile-e2e.yml) — Appium suite on Android + iOS (see below) |
-| App iOS native audio CI | `app_ios_ci` | `app`+`web` shared decoder | **PR only** — Playwright WebKit/Chromium recitation checks; `skipped` accepted elsewhere |
+| App iOS native audio CI | `app_ios_ci` | `app` decoder (app-owned manifest verified by the website suite) | **PR only** — Playwright WebKit/Chromium recitation checks; `skipped` accepted elsewhere |
 | Bulletin CI | `bulletin_ci` | `web/bulletin` | Lint, fmt, unit (coverage) |
 | Data CI | `data_ci` | `data` | Lint, unit, integration (Sefaria MongoDB image) |
 | Recitation alignment and RustFS | `recitation_ci` | `data`/`website` decoder | Alignment invariants, preprocessor, deploy-routing and RustFS storage tests |

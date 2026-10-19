@@ -96,10 +96,13 @@ export const MODULES = {
 			"devops/github/ci/e2e-impact",
 			"devops/e2e-coverage-trees",
 		],
-		// Shared website decoder inputs require native checks without a native
-		// release. Approved timings are packaged inputs through extraModulePaths.
-		extraCiPattern:
-			/^web\/bible-on-site\/(package(-lock)?\.json|src\/lib\/recitation-audio\.ts)$/,
+		// The native decoder inputs are app-owned (#2391): the generator and its
+		// manifest live under app/devops/recitation-decoder, inside this module,
+		// and the generated asset ships under app/BibleOnSite. Website manifests
+		// and the browser player no longer select native checks; decoder-version
+		// parity with web/bible-on-site/package.json is enforced by
+		// check-decoder-pins.mjs in the decoder verification suites.
+		// Approved timings are packaged inputs through extraModulePaths.
 		// Test projects exercise the app but never change its package, so a
 		// test-only change must not ship a store release or bump the version.
 		ciOnlyPattern: /^app\/(BibleOnSite\.Tests[^/]*|mobile-e2e)\//,
