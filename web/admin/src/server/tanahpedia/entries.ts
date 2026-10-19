@@ -14,6 +14,7 @@ import {
 	txExecute,
 	txQueryOne,
 } from "../db";
+import { PEDIA_INVALIDATION, revalidateWebsite } from "../website-revalidate";
 import { loadTanahpediaEntryById } from "./entry-loader.server";
 import { saveEntryRevisioned } from "./revisions";
 
@@ -248,7 +249,7 @@ export const createEntry = createServerFn({ method: "POST" })
 		}) => data,
 	)
 	.handler(async ({ data }) => {
-		return await transaction(async (conn) => {
+		const created = await transaction(async (conn) => {
 			await txExecute(
 				conn,
 				"INSERT INTO tanahpedia_entry (id, unique_name, title, content) VALUES (?, ?, ?, ?)",
@@ -279,6 +280,8 @@ export const createEntry = createServerFn({ method: "POST" })
 			if (!entry) throw new Error("Entry not found");
 			return { ...entry, headRevisionId: headId };
 		});
+		await revalidateWebsite(PEDIA_INVALIDATION);
+		return created;
 	});
 
 export const updateEntry = createServerFn({ method: "POST" })
@@ -294,16 +297,25 @@ export const updateEntry = createServerFn({ method: "POST" })
 		}) => data,
 	)
 	.handler(async ({ data }) => {
-		return await transaction(async (conn) => {
-			const { entry, headRevisionId } = await saveEntryRevisioned(conn, data);
-			return { ...entry, headRevisionId };
+		const updated = await transaction(async (conn) => {
+			const { entry, headRevisionId, unchanged } = await saveEntryRevisioned(
+				conn,
+				data,
+			);
+			return { ...entry, headRevisionId, unchanged };
 		});
+		// A no-op save changes no public content, so nothing expires.
+		if (!updated.unchanged) {
+			await revalidateWebsite(PEDIA_INVALIDATION);
+		}
+		return updated;
 	});
 
 export const deleteEntry = createServerFn({ method: "POST" })
 	.validator((data: string) => data)
 	.handler(async ({ data: id }) => {
 		await execute("DELETE FROM tanahpedia_entry WHERE id = ?", [id]);
+		await revalidateWebsite(PEDIA_INVALIDATION);
 		return { success: true };
 	});
 
@@ -328,6 +340,7 @@ export const assignEntity = createServerFn({ method: "POST" })
 			"INSERT INTO tanahpedia_entry_entity (id, entry_id, entity_id) VALUES (?, ?, ?)",
 			[data.id, data.entry_id, data.entity_id],
 		);
+		await revalidateWebsite(PEDIA_INVALIDATION);
 		return { success: true };
 	});
 
@@ -335,5 +348,6 @@ export const removeEntity = createServerFn({ method: "POST" })
 	.validator((data: string) => data)
 	.handler(async ({ data: id }) => {
 		await execute("DELETE FROM tanahpedia_entry_entity WHERE id = ?", [id]);
+		await revalidateWebsite(PEDIA_INVALIDATION);
 		return { success: true };
 	});
