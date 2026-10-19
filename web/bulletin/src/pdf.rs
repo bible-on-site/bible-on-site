@@ -163,10 +163,7 @@ fn split_article_header(html: &str) -> (Option<String>, String) {
     let mut cursor = open;
     // End of the consumed header run; body resumes here.
     let mut rest_start = open;
-    loop {
-        let Some(content_start) = lower[cursor..].find('>').map(|i| cursor + i + 1) else {
-            break;
-        };
+    while let Some(content_start) = lower[cursor..].find('>').map(|i| cursor + i + 1) {
         let (content_end, after) = match lower[content_start..].find("</h1") {
             Some(i) => {
                 let end = content_start + i;
