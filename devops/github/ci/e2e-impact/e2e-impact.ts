@@ -19,7 +19,15 @@
  *       --out <tree.json> [--incomplete]
  *   node e2e-impact.ts baseline-download --repo <owner/name> --name <artifact>
  *       --out <dir> [--file coverage-tree.json]
+ *   node e2e-impact.ts verify --manifest <selection-manifest.json>
+ *       --tree <coverage-tree.json> --out <verify.json>
  *
+ * `verify` scores a shadow-mode selection against the outcomes the same run
+ * actually observed: an unselected test that failed is a parity miss — the
+ * evidence the rollout gate needs before enforcement (#2085). Inputs that
+ * cannot be joined produce a problem report rather than a verdict, so the
+ * diagnostics step never gates a run.
+
  * `select` emits a deterministic manifest (same inputs → same output) and, in
  * CI, also appends a markdown summary. Selection is advisory: the workflow
  * decides whether the manifest is consumed (enforcement) or only reported
@@ -65,6 +73,7 @@ import {
 	DEFAULT_TARGET_MS,
 	shardManifest,
 } from "./shard-plan.ts";
+import { loadVerifyJson, verifyProblem, verifySelection } from "./verify.ts";
 import { discoverSuiteTests } from "./xunit-discovery.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -643,6 +652,86 @@ async function discover(flags: Map<string, string>): Promise<void> {
 	writeGithubOutput("test-count", String(tests.length));
 }
 
+/**
+ * `verify` joins a selection manifest against the coverage tree the same run
+ * collected — the shadow-mode parity score the rollout gate consumes (#2085).
+ * Load or shape problems produce a `problem` report, never a thrown error:
+ * this step is pure diagnostics and must not gate the job.
+ */
+async function verify(flags: Map<string, string>): Promise<void> {
+	const manifestPath = required(flags, "manifest");
+	const treePath = required(flags, "tree");
+	const out = required(flags, "out");
+
+	const loadedManifest = loadVerifyJson(manifestPath);
+	const loadedTree = loadVerifyJson(treePath);
+	const manifest =
+		loadedManifest.kind === "ok"
+			? (loadedManifest.value as SelectionManifest)
+			: null;
+	const tree =
+		loadedTree.kind === "ok" ? (loadedTree.value as CoverageTree) : null;
+
+	let problem: string | null = null;
+	if (loadedManifest.kind !== "ok") {
+		problem = `manifest-${loadedManifest.kind}: ${loadedManifest.reason}`;
+	} else if (
+		!Array.isArray(manifest?.selected) ||
+		!Array.isArray(manifest?.unselected)
+	) {
+		problem = "manifest-shape: selected/unselected lists are absent";
+	}
+	if (problem === null && loadedTree.kind !== "ok") {
+		problem = `tree-${loadedTree.kind}: ${loadedTree.reason}`;
+	} else if (
+		problem === null &&
+		(tree === null || typeof tree.tests !== "object" || tree.tests === null)
+	) {
+		problem = "tree-shape: tests map is absent";
+	}
+
+	const report =
+		problem !== null
+			? verifyProblem(problem, manifest, tree)
+			: verifySelection(manifest as SelectionManifest, tree as CoverageTree);
+
+	mkdirSync(dirname(out), { recursive: true });
+	writeFileSync(out, `${JSON.stringify(report, null, 2)}\n`);
+
+	if (report.problem !== null) {
+		console.log(`[e2e-impact] verify ${report.suite}/${report.platform}: ${report.problem}`);
+	} else {
+		const { counts } = report;
+		console.log(
+			`[e2e-impact] verify ${report.suite}/${report.platform}: ` +
+				`${counts.selected} selected (${counts.caught} caught), ` +
+				`${counts.unselected} unselected — ${counts.missed} missed, ` +
+				`${counts.flakyMissed} flaky-missed, ${counts.unobserved} unobserved`,
+		);
+		if (counts.missed > 0) {
+			console.log(
+				`::warning::e2e-impact parity: ${counts.missed} unselected test(s) ` +
+					`failed — ${report.missed.join(", ")}`,
+			);
+		}
+	}
+	writeGithubOutput("verify-report", out);
+	writeGithubOutput("missed-count", String(report.counts.missed));
+	appendSummary(
+		[
+			`### E2E impact shadow parity — ${report.suite} (${report.platform})`,
+			``,
+			...(report.problem !== null
+				? [`- problem: \`${report.problem}\``]
+				: [
+						`- mode: **${report.mode}** — ${report.counts.selected} selected, ${report.counts.unselected} unselected`,
+						`- missed failures: **${report.counts.missed}**${report.missed.length > 0 ? ` — ${report.missed.map((id) => `\`${id}\``).join(", ")}` : ""}`,
+						`- caught failures: ${report.counts.caught}, flaky-missed: ${report.counts.flakyMissed}, unobserved: ${report.counts.unobserved}`,
+					]),
+		].join("\n"),
+	);
+}
+
 async function main(): Promise<void> {
 	const { command, flags } = parseArgs(process.argv.slice(2));
 	switch (command) {
@@ -658,9 +747,11 @@ async function main(): Promise<void> {
 			return await baselineDownload(flags);
 		case "discover":
 			return await discover(flags);
+		case "verify":
+			return await verify(flags);
 		default:
 			throw new Error(
-				`Unknown command "${command}". Expected select | plan | collect-appium | collect-playwright | baseline-download | discover`,
+				`Unknown command "${command}". Expected select | plan | collect-appium | collect-playwright | baseline-download | discover | verify`,
 			);
 	}
 }

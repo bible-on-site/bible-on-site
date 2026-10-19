@@ -20,7 +20,8 @@ the executable-coverage tree produced by `devops/e2e-coverage-trees/`.
 | Selector bridge: exec evidence unions into `coverage-tree.json` | Merged (#2195, #2230) | `devops/e2e-coverage-trees/to-selector-tree.ts`, `collect-appium --exec-tree`, `.github/workflows/app-mobile-e2e.yml` |
 | Playwright suites (website, admin, API): evidence, discovery, collectors, shadow CI | Merged (#2241) | `web/shared/tests-util/e2e-impact.ts`, `*/e2e-impact.json`, `collect-playwright`, `.github/workflows/ci.yml` |
 | iOS runtime-planned shard split + merged-tree baseline publication | Merged (#2266, #2279, #2263) | `.github/workflows/app-mobile-e2e.yml` `plan_ios`/`merge_ios`, `devops/github/ci/e2e-impact/shard-plan.ts`, `app/mobile-e2e/merge-runner-shards.mjs` |
-| Member-granularity narrowing (C# member fingerprints ↔ exec member evidence) | This slice | `extractMembers`/`SourceFingerprint.members`, `CoveredNode.member`, `memberGaps`, `covered-members`/`member-widened` reasons |
+| Member-granularity narrowing (C# member fingerprints ↔ exec member evidence) | Merged (#2297) | `extractMembers`/`SourceFingerprint.members`, `CoveredNode.member`, `memberGaps`, `covered-members`/`member-widened` reasons |
+| Shadow-mode parity verification (manifest ↔ observed outcomes) | This slice | `e2e-impact.ts verify`, `devops/github/ci/e2e-impact/verify.ts`, `selection-verify.json` in every suite's run diagnostics |
 | Selection enforcement beyond the mobile opt-in inputs | Not implemented | `e2e_selection_mode=enforce` / `force_full_suite` exist only on `app-mobile-e2e.yml`; Playwright suites have no enforce runner |
 | AST-aware change comparison beyond member level, dependency edges | Planned, not implemented | — |
 
@@ -440,6 +441,41 @@ under-attribution can only over-select.
   not come from this tree's run), and are flagged `stale` when their test id
   is no longer discovered. `shared` unions across runs. A tree with
   `complete: false` must never be published as a baseline.
+
+## Shadow-mode parity verification
+
+`e2e-impact.ts verify` is the rollout gate's measurement. Shadow mode runs
+every test while the manifest proposes a subset, so each run can score the
+selection against observed reality: `verify --manifest <selection-manifest>
+--tree <coverage-tree> --out <verify.json>` joins the manifest's
+`selected`/`unselected` lists onto the same run's `CoverageTreeTest.outcome`
+values and emits `kind: "e2e-impact-verify"` (schemaVersion 1).
+
+- **`missed`** — an unselected test whose run outcome was a failure: the
+  subset would have hidden a real failure. The metric that must stay at zero
+  before enforcement is considered; any non-pass outcome string (`failed`,
+  `timedOut`, unknown future states) counts. A `::warning::` annotates the
+  run when misses exist.
+- **`flakyMissed`** — unselected tests that flaked (failed then passed): a
+  weaker signal, reported separately.
+- **`unobserved`** — unselected tests with no verdict (skipped, `unknown`,
+  absent from the tree): nothing proven either way.
+- **`caught` / `selectedUnobserved`** — selected tests that failed (the
+  selection worked) and selected tests the run never observed (a
+  runner-fidelity anomaly, meaningful once enforce mode runs subsets).
+- **`passedUnselected`** — the correctly-skipped count: the win metric.
+
+Inputs that cannot be joined — missing/corrupt files, suite or platform
+mismatch, or a tree collected from a different revision than
+`manifest.testedSha` — emit a report carrying `problem` instead of a
+verdict, with empty buckets. Verify is pure diagnostics: it never throws on
+evidence gaps and never gates the job. Reports ship per run inside each
+suite's diagnostics artifact: `selection-verify.json` under
+`.coverage/e2e-impact/` for the three Playwright suites (ci.yml), inside
+`$MOBILE_E2E_ARTIFACTS` for the Android leg, and under
+`app/.artifacts/mobile-e2e/ios/` for iOS — where `merge_ios` joins the
+plan's suite-level manifest against the merged tree, since per-shard
+manifests are execution assignments, not suite selections.
 
 ## Known gaps (explicit, by design)
 
