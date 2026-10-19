@@ -6,6 +6,7 @@ import { SITE_NAME } from "@/lib/seo/jsonld";
 import { AppSection } from "../components/AppSection";
 import { ContactSection } from "../components/ContactSection";
 import { Footer } from "../components/Footer";
+import { NumbersSection } from "../components/NumbersSection";
 import { ScrollToSection } from "../components/ScrollToSection";
 import { TanahSefarimSection } from "../components/TanahSefarimSection";
 import { TosSection } from "../components/TosSection";
@@ -141,6 +142,7 @@ export default async function Home({ params }: Props) {
 				<div className={styles.alHaperekDivider} />
 			</section>
 			<TanahSefarimSection />
+			<NumbersSection />
 			<AppSection />
 			<TosSection />
 			<ContactSection />
