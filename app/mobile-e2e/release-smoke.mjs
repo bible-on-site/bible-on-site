@@ -31,7 +31,8 @@ const ADB_CALL_TIMEOUT_MS = 30000;
 const UI_DUMP_PATH = "/data/local/tmp/release-smoke-ui.xml";
 // The app interpolates a C# bool — enabled=False — so accept either casing.
 const ANALYTICS_LINE = /\[Analytics\] collection enabled=(true|false)/i;
-const ANALYTICS_COMPILED_OUT = /\[Analytics\] collection deactivated at build time \(DISABLE_ANALYTICS\)/;
+const ANALYTICS_COMPILED_OUT =
+  "[Analytics] collection deactivated at build time (DISABLE_ANALYTICS)";
 
 const FATAL_SIGNAL = /Fatal signal \d+ \(SIG/;
 const DIED_PID = /\(pid \d+\) has died/;
@@ -70,7 +71,7 @@ export function crashSignatures(logcat, pkg) {
 // "compiled-out" means a DISABLE_ANALYTICS build slipped into the guard and
 // the startup path never ran; "absent" means the marker never printed.
 export function analyticsStatus(logcat, _pkg) {
-  if (ANALYTICS_COMPILED_OUT.test(logcat)) return { state: "compiled-out" };
+  if (logcat.includes(ANALYTICS_COMPILED_OUT)) return { state: "compiled-out" };
   const match = logcat.match(ANALYTICS_LINE);
   if (!match) return { state: "absent" };
   return { state: match[1].toLowerCase() === "false" ? "isolated" : "live" };

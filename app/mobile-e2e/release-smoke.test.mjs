@@ -89,12 +89,15 @@ describe("analyticsStatus", () => {
 
 describe("readerReady", () => {
   const node = (id, text) =>
-    `<node index="0" text="${text}" resource-id="com.tanah.daily929:id/${id}" class="android.widget.TextView" package="com.tanah.daily929" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" password="false" selected="false" bounds="[0,0][1080,100]" />`;
+    `<node index="0" text="${text}" resource-id="com.tanah.daily929:id/${id}" class="android.widget.TextView" package="com.tanah.daily929" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" password="false" selected="false" bounds="[0,0][1080,100]" />`; // nosemgrep -- uiautomator dump fixture, never rendered as HTML
   test("requires the PerekSource label with real text", () => {
+    // nosemgrep -- uiautomator dump fixture, never rendered as HTML
     assert.equal(readerReady(`<hierarchy>${node("PerekSource", "בראשית א")}</hierarchy>`), true);
   });
   test("rejects an empty source label and a missing reader", () => {
+    // nosemgrep -- uiautomator dump fixture, never rendered as HTML
     assert.equal(readerReady(`<hierarchy>${node("PerekSource", "   ")}</hierarchy>`), false);
+    // nosemgrep -- uiautomator dump fixture, never rendered as HTML
     assert.equal(readerReady(`<hierarchy>${node("OtherView", "בראשית א")}</hierarchy>`), false);
     assert.equal(readerReady("UI hierchary dumped to: /dev/tty"), false);
   });
