@@ -55,6 +55,26 @@ public class AnalyticsConsentTests
     }
 
     [Fact]
+    public void Consent_E2eEnvironmentVariable_ForcesCollectionOff_EvenWhenGranted()
+    {
+        // Same override through the launch-time public overload, whose e2e
+        // probe short-circuits on BIBLE_E2E without touching the filesystem
+        // (the plain test host has no FileSystem.AppDataDirectory).
+        var storage = new InMemoryPreferencesStorage();
+        AnalyticsConsent.Save(storage, true);
+        var previous = Environment.GetEnvironmentVariable(SearchIndexService.E2eEnvironmentVariable);
+        Environment.SetEnvironmentVariable(SearchIndexService.E2eEnvironmentVariable, "1");
+        try
+        {
+            AnalyticsConsent.IsCollectionEnabled(storage).Should().BeFalse();
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(SearchIndexService.E2eEnvironmentVariable, previous);
+        }
+    }
+
+    [Fact]
     public void Consent_UnsetOrGarbageStorage_CountsAsNeverAsked()
     {
         var storage = new InMemoryPreferencesStorage();
@@ -83,5 +103,20 @@ public class AnalyticsConsentTests
 
         restored.SetAnalyticsConsent(false);
         restored.AnalyticsConsentEnabled.Should().BeFalse();
+    }
+
+    [Fact]
+    public void PreferencesService_SetAnalyticsConsent_SameValue_IsANoOp()
+    {
+        var storage = new InMemoryPreferencesStorage();
+        var service = PreferencesService.CreateForTesting(storage);
+        service.Load();
+        service.SetAnalyticsConsent(true);
+        var changes = 0;
+        service.PreferencesChanged += (_, _) => changes++;
+
+        service.SetAnalyticsConsent(true);
+
+        changes.Should().Be(0, "re-applying the stored answer must not re-notify");
     }
 }
