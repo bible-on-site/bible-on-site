@@ -226,7 +226,7 @@ test.describe("Sefer commentary navigation", () => {
 		);
 		const perekAlignment = await alignmentOf(
 			page
-				.locator('.he-book .page[data-page-index="3"] [class*="perekText"]')
+				.locator('.he-book .page[data-page-index="3"] article[class*="perekText"]')
 				.first(),
 		);
 		await test.info().attach("commentary-justified-like-pesukim", {
