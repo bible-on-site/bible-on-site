@@ -198,6 +198,42 @@ test.describe("Sefer commentary navigation", () => {
 			.toBe(position);
 	});
 
+	test("justifies the open commentary body like the perek pesukim", async ({
+		page,
+	}) => {
+		test.setTimeout(90_000);
+		const seferPage = new SeferPage(page);
+		await seferPage.openSeferViewForPerek(1);
+		const blank = page.locator('.he-book .page[data-page-index="4"]');
+		await blank.getByRole("link", { name: /רש"י/ }).click();
+		await expect(
+			blank.getByRole("button", { name: "→ חזרה לפרשנים" }),
+		).toBeVisible({ timeout: 30_000 });
+
+		const alignmentOf = (locator: import("@playwright/test").Locator) =>
+			locator.evaluate((el) => {
+				const style = getComputedStyle(el);
+				return {
+					textAlign: style.textAlign,
+					textAlignLast: style.textAlignLast,
+				};
+			});
+
+		const noteAlignment = await alignmentOf(
+			blank.locator('[class*="noteContent"]').first(),
+		);
+		const perekAlignment = await alignmentOf(
+			page
+				.locator('.he-book .page[data-page-index="3"] [class*="perekText"]')
+				.first(),
+		);
+		await test.info().attach("commentary-justified-like-pesukim", {
+			body: await blank.screenshot(),
+			contentType: "image/png",
+		});
+		expect(noteAlignment).toEqual(perekAlignment);
+	});
+
 	test.describe("Bidirectional pasuk navigation", () => {
 		test("jumps between scripture pasuk numbers and the open perush in both directions", async ({
 			page,
