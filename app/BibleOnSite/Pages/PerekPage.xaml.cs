@@ -1080,7 +1080,13 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         }
 
         var count = _viewModel.SelectedPasukNums.Count;
-        var isSelectionMode = count > 0 || _chapterRecitationSelection || _focusedPasuk != null;
+        // The recitation bar is also the pause/resume control surface: it must
+        // stay reachable for the whole life of a playback — a pasuk tap, a word
+        // preview, or a chapter started from the header all count (#2370). The
+        // same set owns the Android Back press (TryHandleReaderBack), so both
+        // read it from one place.
+        var isSelectionMode = ReaderSurfaceState.IsActive(count, _chapterRecitationSelection,
+            _focusedPasuk != null, _recitationCursor.PlayingKey != null);
         var ordinarySelection = count > 0 && !_chapterRecitationSelection && _focusedPasuk == null;
         SelectionCountBadge.IsVisible = ordinarySelection;
         SelectionShareButton.IsVisible = ordinarySelection;
@@ -1088,15 +1094,23 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         SelectionRecitationButton.IsVisible = RecitationAvailable;
         var perek = _viewModel.Perek;
         var track = perek == null ? null : RecitationService.Instance.GetTrack(perek.PerekId);
+        // An active playback can always be paused — even for a perek whose word
+        // timings are still pending (chapter playback needs no alignment).
         SelectionRecitationButton.IsEnabled = !_recitationBusy && perek != null && RecitationService.Instance.HasAudio(perek.PerekId) &&
-            track != null && track.Matches(perek.Pasukim) && (_chapterRecitationSelection || track.AlignmentStatus == "ready");
+            track != null && (_recitationCursor.PlayingKey != null ||
+                (track.Matches(perek.Pasukim) && (_chapterRecitationSelection || track.AlignmentStatus == "ready")));
         SelectionRecitationButton.Opacity = SelectionRecitationButton.IsEnabled ? 1 : 0.4;
-        SelectionRecitationButton.Text = RecitationPlayer?.CurrentState == CommunityToolkit.Maui.Core.MediaElementState.Playing
-            ? Fonts.FluentUI.pause_24_regular : RecitationPlayer?.CurrentState == CommunityToolkit.Maui.Core.MediaElementState.Paused
-                ? Fonts.FluentUI.play_24_regular : Fonts.FluentUI.headphones_24_regular;
+        // The glyph must match what the button does: only bar-issued playback
+        // pauses, so a word preview still playing shows Play (it starts the
+        // chapter at the bookmark), like the website's preview state.
+        SelectionRecitationButton.Text =
+            RecitationPlayer?.CurrentState == CommunityToolkit.Maui.Core.MediaElementState.Playing && _recitationCursor.BarIssued
+                ? Fonts.FluentUI.pause_24_regular
+                : RecitationPlayer?.CurrentState is CommunityToolkit.Maui.Core.MediaElementState.Playing or CommunityToolkit.Maui.Core.MediaElementState.Paused
+                    ? Fonts.FluentUI.play_24_regular : Fonts.FluentUI.headphones_24_regular;
         var hint = _recitationBusy ? "טוען את הקלטת הפרק..." : track == null ? "אין הקלטה לפרק זה" :
             !RecitationService.Instance.HasAudio(track.PerekId) ? "הורידו את הקלטות הספר בהעדפות" :
-            !_chapterRecitationSelection && track.AlignmentStatus != "ready" ? "הקראת מילים ופסוקים עדיין בהכנה" :
+            !_chapterRecitationSelection && track.AlignmentStatus != "ready" && _recitationCursor.PlayingKey == null ? "הקראת מילים ופסוקים עדיין בהכנה" :
             SelectionRecitationButton.IsEnabled ? "הקראה" : "ההקלטה אינה תואמת לטקסט המותקן";
         ToolTipProperties.SetText(SelectionRecitationButton, hint);
         SemanticProperties.SetDescription(SelectionRecitationButton, hint);
@@ -1124,7 +1138,9 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
 
     private void ClearAllSelections()
     {
-        ResetRecitationContext();
+        // Closing the focused pasuk keeps playback going (the bar is still
+        // visible); leaving selection or chapter mode stops it.
+        ResetRecitationContext(stopPlayback: _focusedPasuk == null);
         _viewModel.ClearSelected();
         UpdateSelectionBar();
     }
