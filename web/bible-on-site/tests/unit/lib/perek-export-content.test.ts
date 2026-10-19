@@ -52,10 +52,10 @@ describe("buildPerakimContent", () => {
 	});
 
 	it("keeps קרי/כתיב structure and drops ptuha/stuma markers", async () => {
-		const [content] = await buildPerakimContent(
-			[8],
-			DEFAULT_DIVINE_NAME_MASKING,
-		);
+		const [content] = await buildPerakimContent([8], {
+			...DEFAULT_DIVINE_NAME_MASKING,
+			enabled: false,
+		});
 		expect(content).toEqual({
 			perekId: 8,
 			pesukim: [

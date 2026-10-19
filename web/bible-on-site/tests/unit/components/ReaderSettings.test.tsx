@@ -203,13 +203,18 @@ test("display section exposes הסתר שם השם toggle and per-name choices",
 	render(<ReaderSettings />);
 	fireEvent.click(screen.getByRole("button", { name: "הגדרות קריאה" }));
 	const toggle = screen.getByRole("checkbox", { name: "הסתר שם השם" });
-	expect(toggle).not.toBeChecked();
-	fireEvent.click(toggle);
+	// #2404: masking is on by default and אל defaults to א-ל.
 	expect(toggle).toBeChecked();
+	expect(screen.getByRole("radio", { name: "א-ל" })).toBeChecked();
 	// The enable flag is independent of the per-name choices, which keep
 	// their own stored values.
 	expect(getDivineNameMaskingSettings()).toEqual(
-		expect.objectContaining({ enabled: true, elohim: "hyphen", yhwh: "heh" }),
+		expect.objectContaining({
+			enabled: true,
+			elohim: "hyphen",
+			yhwh: "heh",
+			el: "hyphen",
+		}),
 	);
 	fireEvent.click(screen.getByRole("radio", { name: "אלקים" }));
 	expect(getDivineNameMaskingSettings().elohim).toBe("elokim");
