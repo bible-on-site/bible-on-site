@@ -118,21 +118,29 @@ export function launchPlan() {
 async function main() {
   const directory = dirname(fileURLToPath(import.meta.url));
   const udid = process.env.MOBILE_UDID;
-  if (!udid) throw new Error("Set MOBILE_UDID to the emulator identifier.");
+  if (!udid || !/^[\w.-]+$/.test(udid)) {
+    throw new Error("Set MOBILE_UDID to the emulator identifier (word chars, dash, dot).");
+  }
   const androidSdk = process.env.ANDROID_HOME ?? process.env.ANDROID_SDK_ROOT;
   const adb = androidSdk
     ? resolve(androidSdk, "platform-tools", process.platform === "win32" ? "adb.exe" : "adb")
     : "adb";
-  const artifacts = process.env.MOBILE_E2E_ARTIFACTS
-    ?? resolve(directory, "../.artifacts/mobile-e2e/android-release-smoke");
+  if (androidSdk && !existsSync(adb)) {
+    throw new Error(`adb not found under the configured SDK: ${adb}`);
+  }
+  const artifacts = resolve(process.env.MOBILE_E2E_ARTIFACTS
+    ?? resolve(directory, "../.artifacts/mobile-e2e/android-release-smoke"));
   const smokeArtifacts = resolve(artifacts, "release-smoke");
   mkdirSync(smokeArtifacts, { recursive: true });
   const log = (line) => {
     console.log(`[release-smoke] ${line}`);
     appendFileSync(resolve(smokeArtifacts, "release-smoke.log"), `${new Date().toISOString()} ${line}\n`);
   };
-  const apk = process.env.MOBILE_RELEASE_APK ?? resolve(directory,
-    "../BibleOnSite/bin/Release/net10.0-android/android-x64/com.tanah.daily929-Signed.apk");
+  const apk = resolve(process.env.MOBILE_RELEASE_APK ?? resolve(directory,
+    "../BibleOnSite/bin/Release/net10.0-android/android-x64/com.tanah.daily929-Signed.apk"));
+  if (!apk.endsWith(".apk")) {
+    throw new Error(`Release smoke APK must be an .apk file: ${apk}`);
+  }
   if (!existsSync(apk)) {
     throw new Error(`Release smoke APK missing — run 'npm run build:release-smoke' first: ${apk}`);
   }
@@ -303,7 +311,9 @@ async function main() {
       versionName: /versionName=([^\s]+)/.exec(pkgDump)?.[1] ?? null,
       versionCode: /versionCode=([^\s]+)/.exec(pkgDump)?.[1] ?? null,
     };
-  } catch { /* identity is best-effort evidence, not a gate */ }
+  } catch (error) {
+    log(`package identity capture skipped: ${error.message}`);
+  }
   summary.result = failures === 0 ? "pass" : "fail";
   summary.finishedUtc = new Date().toISOString();
   writeFileSync(resolve(smokeArtifacts, "release-smoke-summary.json"), `${JSON.stringify(summary, null, 2)}\n`);
