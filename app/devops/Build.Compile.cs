@@ -237,6 +237,90 @@ partial class Build
         });
 
     /// <summary>
+    /// Builds the Release-configuration APK the startup smoke installs and
+    /// launches (#2373). Debug/e2e builds define DISABLE_ANALYTICS, so this
+    /// target deliberately does not: only the Release pipeline compiles the
+    /// MainActivity analytics initialization that crashed #2247 store builds.
+    /// The store ships an arm64 AAB; the emulator image is x86_64, so the
+    /// guard builds the same Release pipeline (profiled AOT, R8, embedded
+    /// assemblies, merged manifest) for the ABI the device can run — the APK
+    /// format and ABI are the documented differences, not the compiled code.
+    /// </summary>
+    Target CompileAndroidReleaseSmoke => _ => _
+        .Description("Build the Release Android APK exercised by the startup smoke guard (#2373)")
+        .Executes(() =>
+        {
+            // Same offline-startup stub as CompileMobileE2E: the smoke must
+            // never reach the production API, and the packaged SQLite keeps
+            // the reader usable without it.
+            var configPath = SourceDirectory / "Resources" / "Raw" / "api-config.txt";
+            var originalConfig = File.Exists(configPath) ? File.ReadAllBytes(configPath) : null;
+            try
+            {
+                File.WriteAllText(configPath, "http://127.0.0.1:1");
+                DotNetBuild(s => s
+                    .SetProjectFile(MainProject)
+                    .SetConfiguration("Release")
+                    .SetProperties(new Dictionary<string, object>
+                    {
+                        ["TargetFrameworks"] = "net10.0-android",
+                        ["RuntimeIdentifier"] = "android-x64",
+                        ["RuntimeIdentifiers"] = "android-x64",
+                        ["AndroidPackageFormat"] = "apk",
+                        ["EmbedAssembliesIntoApk"] = "true",
+                    }));
+
+                // Stage the checked artifact beside its provenance so a later
+                // clean/bin sweep cannot detach what was validated from what
+                // was built. release-smoke.mjs installs this exact file.
+                var apk = (SourceDirectory / "bin" / "Release" / "net10.0-android")
+                    .GlobFiles("**/*-Signed.apk")
+                    .OrderByDescending(f => File.GetLastWriteTimeUtc(f))
+                    .FirstOrDefault()
+                    ?? throw new InvalidOperationException(
+                        "The Release smoke build produced no signed APK under bin/Release/net10.0-android.");
+                var smokeDirectory = MobileE2EArtifactsDirectory / "release-smoke";
+                smokeDirectory.CreateOrCleanDirectory();
+                var staged = smokeDirectory / "app-release-smoke.apk";
+                apk.Copy(staged, ExistsPolicy.FileOverwrite);
+
+                var manifest = new Dictionary<string, object?>
+                {
+                    ["kind"] = "android-release-smoke-build/1",
+                    ["sourceSha"] = Nuke.Common.Tools.Git.GitTasks.GitCurrentCommit(),
+                    ["configuration"] = "Release",
+                    ["runtimeIdentifier"] = "android-x64",
+                    ["packageFormat"] = "apk",
+                    ["analyticsCompiledIn"] = true,
+                    ["apkSha256"] = Convert.ToHexString(
+                        System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(staged))).ToLowerInvariant(),
+                    ["builtUtc"] = DateTime.UtcNow.ToString("o"),
+                    // Remaining deltas vs the store-delivered arm64 AAB (#2371):
+                    // package format, ABI and the debug-key signature.
+                    ["knownDifferences"] = new[]
+                    {
+                        "apk-x86_64 emulator build; store ships an arm64 AAB",
+                        "debug-keystore signature; Play re-signs the store artifact",
+                    },
+                };
+                File.WriteAllText(smokeDirectory / "build-manifest.json",
+                    System.Text.Json.JsonSerializer.Serialize(manifest, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+                Serilog.Log.Information($"Release smoke APK staged at {staged}");
+            }
+            finally
+            {
+                if (originalConfig == null)
+                {
+                    File.Delete(configPath);
+                }
+                else
+                {
+                    File.WriteAllBytes(configPath, originalConfig);
+                }
+            }
+        });
+
+    /// <summary>
     /// Builds the AltCover.Recorder.g substitute the instrumented app
     /// references by path (#1232). Kept out of the app's restore graph so the
     /// app build's global TargetFrameworks cannot retarget it.
