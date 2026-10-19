@@ -220,7 +220,9 @@ test.describe("Sefer commentary navigation", () => {
 			});
 
 		const noteAlignment = await alignmentOf(
-			blank.locator('[class*="noteContent"]').first(),
+			blank
+				.locator('[data-sefer-perush] [class*="noteContent"]')
+				.first(),
 		);
 		const perekAlignment = await alignmentOf(
 			page
