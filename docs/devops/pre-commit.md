@@ -97,12 +97,17 @@ workflow lint remains enabled without ignored syntax errors.
 ## Module Checks
 
 These run only when staged files fall under the module (`files:` pattern), and
-each executes in the module directory. Hooks self-skip (exit 0) when the
-toolchain they need isn't installed — `web-unit-tests` without
-`web/bible-on-site/node_modules`, `web-rust-checks` without `cargo-make` or a
-module `target/` dir — so they no-op safely on pre-commit.ci and fresh clones
-while the module CI jobs remain the authoritative remote gate. The post-commit
-`flip-book-local-restore` never runs on pre-commit.ci by design.
+each executes in the module directory. Every local hook declares
+`language: node`, so prek (or pre-commit) provisions a managed Node toolchain
+per hook — no system `node` on `PATH` required. Each hook lists
+`@types/node` as its `additional_dependencies` bootstrap package because
+pre-commit >=4.6 requires node hooks to declare at least one dependency; the
+wrapper scripts themselves are stdlib-only. Hooks still self-skip (exit 0)
+when the module toolchain they need isn't installed — `web-unit-tests`
+without `web/bible-on-site/node_modules`, `rust-checks` without `cargo-make`
+or a module `target/` dir — so they no-op safely on pre-commit.ci and fresh
+clones while the module CI jobs remain the authoritative remote gate. The
+post-commit `flip-book-local-restore` never runs on pre-commit.ci by design.
 
 | Hook | Trigger | Command | Description |
 |------|---------|---------|-------------|
