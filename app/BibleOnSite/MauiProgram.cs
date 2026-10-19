@@ -40,6 +40,7 @@ public static class MauiProgram
             .ConfigureMauiHandlers(handlers =>
             {
                 handlers.AddHandler<HtmlView, HtmlViewHandler>();
+                handlers.AddHandler<PasukTextLabel, PasukTextLabelHandler>();
 #if IOS || MACCATALYST
                 handlers.AddHandler<ReaderCellBorder, ReaderCellBorderHandler>();
 				// Use optimized CollectionView handler for iOS/Mac (default in .NET 10)
