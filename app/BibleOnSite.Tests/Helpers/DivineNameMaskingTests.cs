@@ -488,13 +488,13 @@ public class DivineNameMaskingTests
             service.Load();
             var viewModel = new PerekViewModel(service, null, null, null, null, null, null, null);
             var revision = viewModel.DivineNameMaskingRevision;
-            viewModel.DivineNameMaskingEnabled.Should().BeFalse();
-
-            viewModel.DivineNameMaskingEnabled = true;
-
             viewModel.DivineNameMaskingEnabled.Should().BeTrue();
+
+            viewModel.DivineNameMaskingEnabled = false;
+
+            viewModel.DivineNameMaskingEnabled.Should().BeFalse();
             viewModel.DivineNameMaskingRevision.Should().Be(revision + 1);
-            storage.Get("divineNameMaskingEnabled", false).Should().BeTrue();
+            storage.Get("divineNameMaskingEnabled", true).Should().BeFalse();
         }
 
         [Fact]
