@@ -211,6 +211,10 @@
 	max-height: none;
 	scrollbar-width: thin;
 	scrollbar-color: #c4b896 transparent;
+	/* Justified like .perekText even if the notes' own module style has not
+	   applied yet (inherited by .noteContent descendants). */
+	text-align: justify;
+	text-align-last: right;
 }
 
 /* Cover: genuine book cover look using the sefer spectrum color */
