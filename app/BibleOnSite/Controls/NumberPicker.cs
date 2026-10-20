@@ -63,7 +63,9 @@ public sealed class NumberPicker : ContentView
     }
 
     /// <summary>Raised whenever the effective (clamped, snapped) value changes.</summary>
+#pragma warning disable S3264 // Subscribed from XAML (ValueChanged="OnLimitChanged") and tests.
     public event EventHandler? ValueChanged;
+#pragma warning restore S3264
 
     /// <summary>The editable value field, exposed for tests and styling hooks.</summary>
     public Entry ValueEntry { get; }
@@ -154,7 +156,7 @@ public sealed class NumberPicker : ContentView
     private void OnRangeChanged()
     {
         // Re-coerce so a range change cannot leave a stale out-of-range value.
-        Value = Value;
+        SetValue(ValueProperty, Coerce(Value));
         RefreshEntryText();
         RefreshButtonStates();
     }
