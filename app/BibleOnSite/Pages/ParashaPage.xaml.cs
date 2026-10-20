@@ -99,7 +99,7 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
         ParashaCarousel.SizeChanged += OnCarouselSizeChanged;
         ChapterSearch.SetSource(_viewModel.Source);
         ChapterSearch.SearchOpenChanged += OnChapterSearchOpenChanged;
-        _viewModel.PropertyChanged += (sender, e) =>
+        _viewModel.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(ParashaViewModel.Source))
             {
@@ -110,10 +110,14 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
             {
                 // A display-mode change rebuilds the loaded rows — the same
                 // contract the perek reader's ItemsSource converter applies.
-                _ = _viewModel.RebuildLoadedRowsAsync();
+                RebuildLoadedRows();
             }
         };
     }
+
+    /// <summary>Fire-and-forget row rebuild — the discard keeps it off the
+    /// PropertyChanged path while still routing errors to the async context.</summary>
+    private void RebuildLoadedRows() => _ = _viewModel.RebuildLoadedRowsAsync();
 
     /// <summary>
     /// Wires the unit picker's confirm event in code (rather than XAML event
