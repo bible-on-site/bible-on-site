@@ -46,6 +46,19 @@ public partial class AppShell : Shell
 		Routing.RegisterRoute(AppRoutes.Masora, typeof(MasoraPage));
 
 		Navigated += OnNavigated;
+
+		// Re-apply the Back/Up visibility policy to the open page when the
+		// Android override changes, not only to pages navigated to later (#2467).
+		WeakPreferencesSubscription.Subscribe(this, PreferencesService.Instance,
+			static shell => shell.ApplyBackChrome());
+	}
+
+	private void ApplyBackChrome()
+	{
+		if (CurrentPage is ContentPage page)
+		{
+			BackChrome.Apply(page);
+		}
 	}
 
 	internal void CompleteStartup()
@@ -207,6 +220,8 @@ public partial class AppShell : Shell
 
 	private void OnNavigated(object? sender, ShellNavigatedEventArgs e)
 	{
+		ApplyBackChrome();
+
 		var analytics = Application.Current?.Handler?.MauiContext?.Services.GetService<IAnalyticsService>();
 		if (analytics == null)
 		{

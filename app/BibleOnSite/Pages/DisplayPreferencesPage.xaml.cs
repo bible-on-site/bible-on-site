@@ -27,6 +27,23 @@ public partial class DisplayPreferencesPage : ContentPage
     /// e.Value == true applies a selection (a deselected sibling fires the same
     /// event with false and must not overwrite the choice).
     /// </summary>
+    /// <summary>Android-only in-app Back/Up override (#2467) — same
+    /// CheckedChanged contract as the masking radio handlers.</summary>
+    private void OnBackButtonRadioChanged(object? sender, CheckedChangedEventArgs e)
+    {
+        if (!e.Value || sender is not RadioButton rb)
+        {
+            return;
+        }
+
+        ((DisplayPreferencesViewModel)BindingContext).InAppBackButton = rb.AutomationId switch
+        {
+            "BackButtonShow" => InAppBackButtonPreference.Show,
+            "BackButtonHide" => InAppBackButtonPreference.Hide,
+            _ => InAppBackButtonPreference.PlatformDefault,
+        };
+    }
+
     private void OnMaskElohimRadioChanged(object? sender, CheckedChangedEventArgs e)
     {
         if (!e.Value || sender is not RadioButton rb)
