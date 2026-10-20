@@ -54,6 +54,25 @@ describe("parseWindowsCatalog", () => {
 		expect(parsed.version).toBe("5.0.34.70");
 		expect(parsed.sourceUpdatedAt).toBe("2026-10-15T19:35:42.8391303Z");
 	});
+	it("picks the highest package version regardless of order", () => {
+		const parsed = parseWindowsCatalog({
+			Product: {
+				DisplaySkuAvailabilities: [
+					{
+						Sku: {
+							Properties: {
+								Packages: [
+									{ Version: "1407374885781574" },
+									{ Version: "1407374885781504" },
+								],
+							},
+						},
+					},
+				],
+			},
+		});
+		expect(parsed.version).toBe("5.0.34.70");
+	});
 	it("returns nulls when the catalog omits packages", () => {
 		const parsed = parseWindowsCatalog({ Product: {} });
 		expect(parsed.version).toBeNull();
