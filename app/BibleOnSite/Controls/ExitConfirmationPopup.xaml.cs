@@ -10,7 +10,7 @@ namespace BibleOnSite.Controls;
 /// in red — text colors, not colored button backgrounds. Tapping outside or
 /// dismissing the popup resolves to "stay" (#2460).
 /// </summary>
-public partial class ExitConfirmationPopup : Popup<bool>
+public partial class ExitConfirmationPopup : Popup<bool> //NOSONAR partial is required by XAML codegen
 {
 	public ExitConfirmationPopup()
 	{
