@@ -43,7 +43,7 @@ import {
 describe("tanahpedia family api", () => {
 	beforeEach(() => {
 		executeMock.mockReset();
-		queryMock.mockReset();
+		queryMock.mockReset().mockResolvedValue([]);
 		queryOneMock.mockReset();
 	});
 
@@ -1296,7 +1296,7 @@ describe("family saves invalidate the website", () => {
 
 	beforeEach(() => {
 		executeMock.mockReset().mockResolvedValue(undefined);
-		queryMock.mockReset();
+		queryMock.mockReset().mockResolvedValue([]);
 		queryOneMock.mockReset();
 		savedEnv = {};
 		for (const key of ENV_KEYS) savedEnv[key] = process.env[key];

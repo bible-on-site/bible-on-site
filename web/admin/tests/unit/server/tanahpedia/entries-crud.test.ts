@@ -70,6 +70,7 @@ describe("tanahpedia entry server functions", () => {
 			mocks.saveRevisionedMock,
 		])
 			mock.mockReset();
+		mocks.query.mockResolvedValue([]);
 		mocks.transaction.mockImplementation(async (fn) => fn(mocks.conn));
 	});
 

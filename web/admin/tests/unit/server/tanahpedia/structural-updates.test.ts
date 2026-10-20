@@ -38,7 +38,7 @@ function executedStatements(): string[] {
 describe("updateEntityDisplayName", () => {
 	beforeEach(() => {
 		executeMock.mockReset().mockResolvedValue(undefined);
-		queryMock.mockReset();
+		queryMock.mockReset().mockResolvedValue([]);
 		queryOneMock.mockReset();
 	});
 
@@ -68,7 +68,7 @@ describe("updateEntityDisplayName", () => {
 describe("updatePersonMainName", () => {
 	beforeEach(() => {
 		executeMock.mockReset().mockResolvedValue(undefined);
-		queryMock.mockReset();
+		queryMock.mockReset().mockResolvedValue([]);
 		queryOneMock.mockReset();
 	});
 
@@ -152,7 +152,7 @@ describe("updatePersonMainName", () => {
 describe("updatePersonSex", () => {
 	beforeEach(() => {
 		executeMock.mockReset().mockResolvedValue(undefined);
-		queryMock.mockReset();
+		queryMock.mockReset().mockResolvedValue([]);
 		queryOneMock.mockReset();
 	});
 
@@ -287,7 +287,7 @@ describe("structural saves invalidate the website", () => {
 
 	beforeEach(() => {
 		executeMock.mockReset().mockResolvedValue(undefined);
-		queryMock.mockReset();
+		queryMock.mockReset().mockResolvedValue([]);
 		queryOneMock.mockReset();
 		savedEnv = {};
 		for (const key of ENV_KEYS) savedEnv[key] = process.env[key];
