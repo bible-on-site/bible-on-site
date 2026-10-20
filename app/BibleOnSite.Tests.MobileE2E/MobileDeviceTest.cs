@@ -219,6 +219,19 @@ public abstract class MobileDeviceTest : IAsyncLifetime
     protected void SaveDiagnostics(string name, string outcome) =>
         SaveDiagnostics(name, outcome, null);
 
+    private string AppiumLogTail()
+    {
+        try
+        {
+            var tail = AppiumLog.Tail(Configuration.ArtifactDirectory);
+            return tail.Length == 0 ? string.Empty : $"\n--- appium.log tail ---\n{tail}";
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or NotSupportedException)
+        {
+            return $"\n--- appium.log tail unavailable: {exception.Message} ---";
+        }
+    }
+
     private void SaveDiagnostics(string name, string outcome, Exception? error)
     {
         var prefix = Path.Join(Configuration.ArtifactDirectory, $"{name}-{outcome}");
@@ -226,10 +239,11 @@ public abstract class MobileDeviceTest : IAsyncLifetime
         if (Driver == null)
         {
             // A session-creation failure leaves no device state to capture; keep
-            // the startup exception and the adb device listing for forensics.
+            // the startup exception, the adb device listing, and the Appium
+            // server log tail (the WDA/install handshake only exists there).
             var details = error is null
                 ? "The session was never created."
-                : $"The session was never created.\n{error}{DeviceTransportRecovery.DeviceListing()}";
+                : $"The session was never created.\n{error}{DeviceTransportRecovery.DeviceListing()}{AppiumLogTail()}";
             File.WriteAllText(prefix + "-diagnostics-error.txt", details);
         }
         else
