@@ -27,6 +27,7 @@ public sealed class SearchIndexService : IAsyncDisposable
 
     // The e2e warmup gate: stays closed until the reader's first load settles.
     private static int _startupSettleSignaled;
+    private static bool IsStartupSettleSignaled => Volatile.Read(ref _startupSettleSignaled) == 1;
     private readonly TaskCompletionSource _startupSettled = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     private static readonly Lazy<SearchIndexService> _instance = new(() => new(PerekDataService.Instance,
@@ -39,7 +40,7 @@ public sealed class SearchIndexService : IAsyncDisposable
         _notes = notes;
         _indexPath = indexPath;
         _index = new SQLiteAsyncConnection(indexPath);
-        if (Volatile.Read(ref _startupSettleSignaled) == 1)
+        if (IsStartupSettleSignaled)
         {
             _startupSettled.TrySetResult();
         }
@@ -158,7 +159,7 @@ public sealed class SearchIndexService : IAsyncDisposable
     // then build one table at a time so the main looper keeps a core.
     internal async Task WarmupAfterStartupSettlesAsync()
     {
-        if (Volatile.Read(ref _startupSettleSignaled) != 1)
+        if (!IsStartupSettleSignaled)
         {
             await _startupSettled.Task;
         }
