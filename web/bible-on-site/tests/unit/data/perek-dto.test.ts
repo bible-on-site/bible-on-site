@@ -3,6 +3,7 @@ jest.mock("../../../src/util/date", () => ({
 }));
 
 import {
+	countRecordedPerakim,
 	getPerekByPerekId,
 	getPerekIdByDate,
 	getTodaysPerekId,
@@ -218,5 +219,92 @@ describe("getTodaysPerekId", () => {
 	it("returns correct perek for mocked date (27/June/24 = perek 625)", () => {
 		const actual = getTodaysPerekId();
 		expect(actual).toBe(625);
+	});
+});
+
+describe("countRecordedPerakim", () => {
+	const recitation = (audioUrl: string | undefined) =>
+		({
+			version: 1,
+			audioUrl,
+			audioSha256: "a".repeat(64),
+			textSha256: "b".repeat(64),
+			durationMs: 1000,
+			alignmentStatus: "pending",
+		}) as const;
+
+	const perek = (audioUrl?: string) => ({
+		header: "",
+		date: [],
+		star_rise: [],
+		pesukim: [],
+		...(audioUrl === undefined ? {} : { recitation: recitation(audioUrl) }),
+	});
+
+	const baseSefer = {
+		name: "בראשית",
+		helek: "תורה",
+		pesukimCount: 0,
+		perekFrom: 1,
+		perekTo: 50,
+		tanachUsName: "Genesis",
+	};
+
+	it("counts perakim with a published recording, once each", () => {
+		const data = [
+			{
+				...baseSefer,
+				perakim: [
+					perek("https://x/1.mp3"),
+					perek("https://x/2.mp3"),
+					perek(),
+					perek(""),
+				],
+			},
+		];
+		expect(countRecordedPerakim(data as never)).toBe(2);
+	});
+
+	it("counts additionals perakim and pending-alignment recordings", () => {
+		const additionals = [
+			{
+				helek: "תורה",
+				letter: "א",
+				name: "שמואל א",
+				tanachUsName: "1 Samuel",
+				pesukimCount: 0,
+				perakim: [
+					perek("https://x/3.mp3"),
+					{ ...perek("https://x/4.mp3") },
+				],
+				perekFrom: 1,
+				perekTo: 2,
+			},
+			{
+				helek: "תורה",
+				letter: "ב",
+				name: "שמואל ב",
+				tanachUsName: "2 Samuel",
+				pesukimCount: 0,
+				perakim: [perek()],
+				perekFrom: 3,
+				perekTo: 3,
+			},
+		];
+		const data = [
+			{
+				name: "שמואל",
+				helek: "תורה",
+				pesukimCount: 0,
+				perekFrom: 1,
+				perekTo: 3,
+				additionals,
+			},
+		];
+		expect(countRecordedPerakim(data as never)).toBe(2);
+	});
+
+	it("counts the canonical data's published recordings", () => {
+		expect(countRecordedPerakim()).toBeGreaterThan(400);
 	});
 });
