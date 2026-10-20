@@ -340,6 +340,14 @@
   font-size: 1.1rem;
 }
 
+/* DB-authored HTML headings are demoted one level (h1→h2…); keep the former UA sizes. */
+.homepageContent {}
+.entryContent h2, .homepageContent h2 { font-size: 2em; margin-block: 0.67em; }
+.entryContent h3, .homepageContent h3 { font-size: 1.5em; margin-block: 0.83em; }
+.entryContent h4, .homepageContent h4 { font-size: 1.17em; margin-block: 1em; }
+.entryContent h5, .homepageContent h5 { font-size: 1em; margin-block: 1.33em; }
+.entryContent h6, .homepageContent h6 { font-size: 0.83em; margin-block: 1.67em; }
+
 .entryContent sup {
   font-size: 11px;
   vertical-align: super;

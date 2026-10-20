@@ -8,14 +8,14 @@ describe("TosSection", () => {
 	it("renders main heading", () => {
 		render(<TosSection />);
 		expect(
-			screen.getByRole("heading", { level: 1, name: "תנאי שימוש" }),
+			screen.getByRole("heading", { level: 2, name: "תנאי שימוש" }),
 		).toBeInTheDocument();
 	});
 
 	it("renders privacy policy section", () => {
 		render(<TosSection />);
 		expect(
-			screen.getByRole("heading", { level: 2, name: "מדיניות פרטיות" }),
+			screen.getByRole("heading", { level: 3, name: "מדיניות פרטיות" }),
 		).toBeInTheDocument();
 	});
 

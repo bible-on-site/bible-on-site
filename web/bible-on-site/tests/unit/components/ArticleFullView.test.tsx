@@ -49,6 +49,17 @@ describe("ArticleFullView", () => {
 		expect(screen.getByText("הרב לדוגמא")).toBeTruthy();
 	});
 
+	it("demotes embedded content headings so the page keeps a single h1 (#2393)", () => {
+		const { container } = render(
+			<ArticleFullView
+				article={{ ...baseArticle, content: "<h1>כותרת</h1><p>תוכן</p>" }}
+				onBack={jest.fn()}
+			/>,
+		);
+		expect(container.querySelector("h1")).toBeNull();
+		expect(screen.getByRole("heading", { level: 2, name: "כותרת" })).toBeTruthy();
+	});
+
 	it("renders article content via dangerouslySetInnerHTML", () => {
 		const { container } = render(
 			<ArticleFullView article={baseArticle} onBack={jest.fn()} />,
