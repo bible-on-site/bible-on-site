@@ -109,6 +109,26 @@ public class SwipeNavigationTrackerTests
     }
 
     [Fact]
+    public void HorizontalLock_ThenFingerReturnsInsideSlop_StillSnapsBack()
+    {
+        var swipe = new SwipeNavigationTracker();
+        swipe.Begin(new(850, 1000, 1000), 19);
+        swipe.Move(new(600, 1010, 1600), 24);
+        // The finger slid back to (almost) its origin before lifting: the
+        // carousel may still sit mid-offset, so the settle must return the
+        // current page rather than null.
+        swipe.End(new(855, 1005, 3000), 1080, 24, 150, true, 929).Should().Be(19);
+    }
+
+    [Fact]
+    public void MoveWithoutBegin_IsIgnored()
+    {
+        var swipe = new SwipeNavigationTracker();
+        swipe.Move(new(600, 1010, 1600), 24);
+        swipe.End(new(200, 1000, 1100), 1080, 24, 150, true, 929).Should().BeNull();
+    }
+
+    [Fact]
     public void VerticalScrollWithoutHorizontalLock_StillDoesNotNavigate()
     {
         var swipe = new SwipeNavigationTracker();
