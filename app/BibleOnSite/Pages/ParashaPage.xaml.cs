@@ -99,7 +99,7 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
         ParashaCarousel.SizeChanged += OnCarouselSizeChanged;
         ChapterSearch.SetSource(_viewModel.Source);
         ChapterSearch.SearchOpenChanged += OnChapterSearchOpenChanged;
-        _viewModel.PropertyChanged += (_, e) =>
+        _viewModel.PropertyChanged += (sender, e) =>
         {
             if (e.PropertyName == nameof(ParashaViewModel.Source))
             {

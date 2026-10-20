@@ -733,11 +733,9 @@ public partial class ParashaViewModel : ObservableObject //NOSONAR
             if (Unit != null) { FillFilteredPerushContents(Unit); }
 #endif
         }
-#if MAUI
         if (rebuild)
         {
             _ = RebuildLoadedRowsAsync();
         }
-#endif
     }
 }

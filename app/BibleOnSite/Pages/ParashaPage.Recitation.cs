@@ -525,7 +525,7 @@ public partial class ParashaPage
 
             return;
         }
-        if (_viewModel.Unit is not { } unit)
+        if (_viewModel.Unit is null)
         {
             return;
         }

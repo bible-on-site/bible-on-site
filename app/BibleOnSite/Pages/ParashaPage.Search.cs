@@ -267,7 +267,7 @@ public partial class ParashaPage
                 // (Ketuvim, perakim no parasha covers) opens the regular
                 // perek reader.
                 var unitId = await _viewModel.GetUnitIdForPerekAsync(perekId);
-                if (unitId is int unit)
+                if (unitId is not null)
                 {
                     await Shell.Current.GoToAsync("ParashaPage", false, new ShellNavigationQueryParameters
                     {
@@ -370,7 +370,7 @@ public partial class ParashaPage
                 }
                 else
                 {
-                    landed = SearchMatchLanding.LandOnPasukRow(list, item, ref pasukScrolls);
+                    (landed, pasukScrolls) = SearchMatchLanding.LandOnPasukRow(list, item, pasukScrolls);
                 }
                 stableFrames = landed ? stableFrames + 1 : 0;
                 if (stableFrames >= 4)

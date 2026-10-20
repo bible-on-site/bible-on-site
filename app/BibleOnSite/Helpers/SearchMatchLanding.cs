@@ -28,7 +28,7 @@ public static class SearchMatchLanding
     /// once the row is confirmed anchored (or, on platforms without a native
     /// position check, after enough scrolls were issued to trust the jump).
     /// </summary>
-    public static bool LandOnPasukRow(CollectionView list, object item, ref int pasukScrolls)
+    public static (bool Landed, int PasukScrolls) LandOnPasukRow(CollectionView list, object item, int pasukScrolls)
     {
         // Scroll to the display item, not the logical Pasuk: the list's
         // ItemsSource holds display rows (שניים מקרא can duplicate
@@ -38,7 +38,7 @@ public static class SearchMatchLanding
         pasukScrolls = AnchorPasukRow(list, item, pasukScrolls, anchored);
         // Platforms without a native position check accept the jump after a
         // few scroll issues instead of confirming the offset.
-        return anchored ?? pasukScrolls >= 4;
+        return (anchored ?? pasukScrolls >= 4, pasukScrolls);
     }
 
     public static int AnchorPasukRow(CollectionView list, object item, int pasukScrolls) =>

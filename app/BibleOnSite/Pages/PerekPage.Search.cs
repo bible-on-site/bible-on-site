@@ -361,7 +361,7 @@ public partial class PerekPage
                 }
                 else
                 {
-                    landed = SearchMatchLanding.LandOnPasukRow(list, item, ref pasukScrolls);
+                    (landed, pasukScrolls) = SearchMatchLanding.LandOnPasukRow(list, item, pasukScrolls);
                 }
                 stableFrames = landed ? stableFrames + 1 : 0;
                 if (stableFrames >= 4)
