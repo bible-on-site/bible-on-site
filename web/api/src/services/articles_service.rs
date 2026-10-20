@@ -301,24 +301,19 @@ async fn article_ids_by_author(
     db: &Database,
     author_id: i32,
 ) -> Result<std::collections::HashSet<i32>, ServiceError> {
-    use sea_orm::{FromQueryResult, QuerySelect};
+    use sea_orm::QuerySelect;
 
-    #[derive(FromQueryResult)]
-    struct IdRow {
-        id: i32,
-    }
-
-    let rows = Entity::find()
+    Entity::find()
         .select_only()
         .column(Column::Id)
         .filter(Column::AuthorId.eq(author_id as i16))
-        .into_model::<IdRow>()
+        .into_tuple::<i32>()
         .all(db.get_connection())
         .await
         .map_err(|db_err| {
             ServiceError::internal_server_error(INTERNAL_SERVER_ERROR, Some(db_err))
-        })?;
-    Ok(rows.into_iter().map(|row| row.id).collect())
+        })
+        .map(|ids| ids.into_iter().collect())
 }
 
 /// Returns a map of author_id → article count for all authors with articles

@@ -252,6 +252,59 @@ public class ArticlesViewModelTests
     }
 
     [Fact]
+    public async Task ApplySearch_HitAuthorInStarter_ReusesLoadedAuthor()
+    {
+        var storage = new TestStorage();
+        var starterHttp = new GraphQLTransport("""
+            {"data":{"starter":{"authors":[
+            {"id":5,"articlesCount":1,"details":"פרטי הרב","name":"הרב משה"}
+            ],"articles":[],"perekArticlesCounters":[0]}}}
+            """);
+        var starter = new StarterService(starterHttp.Client, storage.FileSystem.Object);
+        await starter.LoadAsync(forceReload: true);
+        using var http = new GraphQLTransport(SearchResponse);
+        var data = new PerekDataService(new LocalDatabaseService(storage.FileSystem.Object));
+        var vm = new ArticlesViewModel(starter, data, new Mock<IAppNavigator>().Object,
+            new ArticleService(http.Client)) { AuthorId = 5 };
+
+        await vm.ApplySearchAsync("הביטוי");
+
+        // The starter-owned Author instance wins over the hit-name fallback.
+        vm.Articles[0].Author!.Details.Should().Be("פרטי הרב");
+    }
+
+    [Fact]
+    public async Task ApplySearch_HitWithoutSource_FallsBackToPerekSource()
+    {
+        const string noSource = """
+            {"data":{"searchArticles":{"total":1,"hits":[
+            {"articleId":42,"name":"מאמר","authorName":"הרב","authorId":5,"perekId":3,"source":null,"excerpt":"x","score":0.9}]}}}
+            """;
+        var (vm, _) = CreateAuthorViewModel(noSource);
+
+        await vm.ApplySearchAsync("x");
+
+        vm.Articles[0].PerekDisplayName.Should().NotBe("בראשית ז");
+    }
+
+    [Fact]
+    public async Task ApplySearch_AuthorChangesMidSearch_DiscardsResponse()
+    {
+        var (vm, http) = CreateAuthorViewModel(SearchResponse);
+        http.Respond = _ =>
+        {
+            vm.AuthorId = 9;
+            return Task.FromResult(GraphQLTransport.JsonResponse(SearchResponse));
+        };
+
+        await vm.ApplySearchAsync("הביטוי");
+
+        // The response belonged to the previous author's scope — list stays.
+        vm.Articles.Select(a => a.Id).Should().BeEquivalentTo(new[] { 1, 2 });
+        vm.SearchMessage.Should().BeEmpty();
+    }
+
+    [Fact]
     public void AuthorIdChange_ClearsSearchContext()
     {
         var (vm, _) = CreateAuthorViewModel(SearchResponse);
