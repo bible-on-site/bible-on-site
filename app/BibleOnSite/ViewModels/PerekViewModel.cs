@@ -150,6 +150,12 @@ public partial class PerekViewModel : ObservableObject
 
     partial void OnPerekChanged(Perek? value) => RefreshRecitationAvailability(value);
 
+    partial void OnCurrentCarouselPerekChanged(Perek? oldValue, Perek? newValue)
+    {
+        if (oldValue is not null) { oldValue.IsOffscreenCarouselPage = true; }
+        if (newValue is not null) { newValue.IsOffscreenCarouselPage = false; }
+    }
+
     /// <summary>
     /// Re-evaluates whether the currently displayed perek has a downloaded
     /// recitation — controls the קריינות menu item and header play button.
