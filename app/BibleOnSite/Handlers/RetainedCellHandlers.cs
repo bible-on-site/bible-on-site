@@ -20,13 +20,31 @@ namespace BibleOnSite.Handlers;
 /// </summary>
 internal sealed class RetainedCellPool
 {
+    // Bounds the retention so obsolete cells stop accumulating for the
+    // controller's lifetime. Cells must stay pinned only while UIKit can
+    // still reach them — the live reuse queue plus the visible/covered view
+    // hierarchy — and UIKit caps that set at roughly the simultaneously
+    // realized cells (visible + prefetch spares) per reuse identifier, far
+    // below this bound. Allocations beyond the bound therefore mean UIKit
+    // already dropped earlier cells, so evicting the oldest first cannot
+    // unpin a cell that is still reusable.
+    // shortcut: UIKit does not expose reuse-queue membership, so eviction is
+    // by allocation order rather than true removal; if a future layout keeps
+    // more than Capacity live cells, raise it instead of unpinning them.
+    private const int Capacity = 256;
+    private readonly Queue<UICollectionReusableView> _order = new();
     private readonly HashSet<UICollectionReusableView> _retained = new();
 
     internal void Keep(UICollectionReusableView? view)
     {
-        if (view is not null)
+        if (view is null || !_retained.Add(view))
         {
-            _retained.Add(view);
+            return;
+        }
+        _order.Enqueue(view);
+        while (_retained.Count > Capacity)
+        {
+            _retained.Remove(_order.Dequeue());
         }
     }
 }
