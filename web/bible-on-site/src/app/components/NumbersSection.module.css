@@ -3,7 +3,10 @@
 	text-align: center;
 	width: 100%;
 	z-index: 2;
-	background-color: var(--surface-muted, #f8fafc);
+	/* White like AppSection: the ספרי התנך wave divider above this section is
+	   drawn in white, and the TOS top divider below AppSection rises out of
+	   white — a colored band here would break both boundaries (#2397). */
+	background-color: var(--surface-elevated, #fff);
 	padding: 2em 1em;
 	scroll-margin-top: 1em;
 }
@@ -15,7 +18,7 @@
 	color: var(--link-accent, #1552ac);
 }
 
-.header h1 {
+.header h2 {
 	font-size: 1.8em;
 	margin: 0.5em 0;
 }
@@ -53,6 +56,28 @@
 .number {
 	display: inline-block;
 	font-variant-numeric: tabular-nums;
+}
+
+/* Fixed-word counter (עשרות): restrained fade-and-rise entrance on the
+   shared 1.8s viewport trigger, so it lands with the numeric counters. */
+.word {
+	display: inline-block;
+	opacity: 1;
+	transform: none;
+	transition:
+		opacity 1.8s ease-out,
+		transform 1.8s ease-out;
+}
+
+.wordHidden {
+	opacity: 0;
+	transform: translateY(0.4em);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.word {
+		transition: none;
+	}
 }
 
 .srOnly {

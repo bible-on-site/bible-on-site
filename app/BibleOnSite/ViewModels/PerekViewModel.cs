@@ -72,11 +72,23 @@ public partial class PerekViewModel : ObservableObject
 
     /// <summary>Perush IDs that are currently checked (shown inline with text).</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PerushimSelectionStatus))]
+    [NotifyPropertyChangedFor(nameof(PerushimLimitReached))]
     private List<int> _checkedPerushim = new();
 
     /// <summary>Whether the perushim notes database is available (PAD or HTTP downloaded).</summary>
     [ObservableProperty]
     private bool _perushimNotesAvailable;
+
+    /// <summary>
+    /// Whether the notes pack is materializing in the background — the reader
+    /// opened before the first-launch copy landed and perushim will appear
+    /// without user action once it finishes.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PerushimEmptyMessage))]
+    [NotifyPropertyChangedFor(nameof(ShowDownloadPerushimButton))]
+    private bool _perushimNotesPending;
 
     /// <summary>Whether the perushim catalog is available (bundled).</summary>
     [ObservableProperty]
@@ -86,11 +98,12 @@ public partial class PerekViewModel : ObservableObject
     public string PerushimEmptyMessage =>
         Perushim.Count > 0 && !string.IsNullOrWhiteSpace(PerushNameFilter) ? "לא נמצאו פירושים תואמים" :
         !PerushimCatalogAvailable ? "אין קטלוג פירושים" :
+        PerushimNotesPending ? "טוען פירושים..." :
         !PerushimNotesAvailable ? "להוריד פירושים" :
         "אין פרשנות לפרק זה";
 
     /// <summary>Whether to show the download perushim button (notes not yet available).</summary>
-    public bool ShowDownloadPerushimButton => PerushimCatalogAvailable && !PerushimNotesAvailable;
+    public bool ShowDownloadPerushimButton => PerushimCatalogAvailable && !PerushimNotesAvailable && !PerushimNotesPending;
 
     private List<PerekPerushNote> _perushNotesCache = new();
     private PerushNoteChapter? _perushChapter;
@@ -559,10 +572,25 @@ public partial class PerekViewModel : ObservableObject
         if (TryApplySyntheticPerushimForE2e(perekId)) { return; }
 
         await _catalogService.InitializeAsync();
-        await _notesService.InitializeAsync();
+
+        // With no local notes DB, InitializeAsync materializes the delivered
+        // pack first — a copy of hundreds of MB inside the service lock.
+        // Awaiting it on the reader path starved the UI thread past the e2e
+        // startup deadline (#2430), so kick it instead; the page's
+        // operation-completed hook reloads perushim once the copy lands.
+        var notesMaterializing = !_notesService.IsInitialized && !_notesService.HasLocalNotesFile;
+        if (notesMaterializing)
+        {
+            _notesService.BeginInitialize();
+        }
+        else
+        {
+            await _notesService.InitializeAsync();
+        }
 
         PerushimCatalogAvailable = _catalogService.IsAvailable;
         PerushimNotesAvailable = _notesService.IsAvailable;
+        PerushimNotesPending = notesMaterializing && !PerushimNotesAvailable;
         OnPropertyChanged(nameof(PerushimEmptyMessage));
         OnPropertyChanged(nameof(ShowDownloadPerushimButton));
 
@@ -672,6 +700,7 @@ public partial class PerekViewModel : ObservableObject
         Perushim = SyntheticPerushimProvider.Perushim;
         PerushimCatalogAvailable = true;
         PerushimNotesAvailable = true;
+        PerushimNotesPending = false;
         OnPropertyChanged(nameof(PerushimEmptyMessage));
         OnPropertyChanged(nameof(ShowDownloadPerushimButton));
         FillFilteredPerushContents();
@@ -781,6 +810,12 @@ public partial class PerekViewModel : ObservableObject
 
     /// <summary>Max perushim shown inline — unchecked rows render disabled at the cap.</summary>
     public int InlineCommentaryLimit => _preferencesService.InlineCommentaryLimit;
+
+    /// <summary>Live "נבחרו N מתוך M" counter for the perushim selector header.</summary>
+    public string PerushimSelectionStatus => $"נבחרו {CheckedPerushim.Count} מתוך {InlineCommentaryLimit}";
+
+    /// <summary>Whether the configured perushim limit is fully used (drives subtle max-reached emphasis).</summary>
+    public bool PerushimLimitReached => CheckedPerushim.Count >= InlineCommentaryLimit;
 
     /// <summary>A search result must remain visible even when all inline slots are occupied.</summary>
     public void ShowPerushForSearch(int perushId)
@@ -1278,6 +1313,8 @@ public partial class PerekViewModel : ObservableObject
         OnPropertyChanged(nameof(ShowHeaderPlayButton));
         OnPropertyChanged(nameof(InlineCommentaryLimitMessage));
         OnPropertyChanged(nameof(InlineCommentaryLimit));
+        OnPropertyChanged(nameof(PerushimSelectionStatus));
+        OnPropertyChanged(nameof(PerushimLimitReached));
         if (CheckedPerushim.Count > _preferencesService.InlineCommentaryLimit)
         {
             CheckedPerushim = CheckedPerushim.Take(_preferencesService.InlineCommentaryLimit).ToList();
