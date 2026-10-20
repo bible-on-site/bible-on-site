@@ -33,28 +33,54 @@ public partial class TanahpediaSearchViewModel : ObservableObject
         _selectedCategories = AllCategoryKeys().ToHashSet();
     }
 
-#pragma warning disable MVVMTK0045
-#pragma warning disable S2333 // ObservableProperty-generated setters assign these fields.
-    [ObservableProperty]
     private string _searchPhrase = string.Empty;
+    public string SearchPhrase
+    {
+        get => _searchPhrase;
+        set => SetProperty(ref _searchPhrase, value);
+    }
 
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasResults))]
     private ObservableCollection<TanahpediaSearchHit> _results = new();
+    public ObservableCollection<TanahpediaSearchHit> Results
+    {
+        get => _results;
+        set
+        {
+            if (SetProperty(ref _results, value))
+            {
+                OnPropertyChanged(nameof(HasResults));
+            }
+        }
+    }
 
-    [ObservableProperty]
     private bool _isLoading;
+    public bool IsLoading
+    {
+        get => _isLoading;
+        set => SetProperty(ref _isLoading, value);
+    }
 
     /// <summary>Availability/error note — offline, timeout or API failure.</summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasError))]
     private string _errorMessage = string.Empty;
+    public string ErrorMessage
+    {
+        get => _errorMessage;
+        set
+        {
+            if (SetProperty(ref _errorMessage, value))
+            {
+                OnPropertyChanged(nameof(HasError));
+            }
+        }
+    }
 
     /// <summary>Summary text for the מה לחפש chip.</summary>
-    [ObservableProperty]
     private string _categorySummary = "הכל";
-#pragma warning restore S2333
-#pragma warning restore MVVMTK0045
+    public string CategorySummary
+    {
+        get => _categorySummary;
+        set => SetProperty(ref _categorySummary, value);
+    }
 
     public bool HasResults => Results.Count > 0;
     public bool HasError => !string.IsNullOrEmpty(ErrorMessage);
