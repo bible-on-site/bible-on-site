@@ -1080,13 +1080,14 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         }
 
         var count = _viewModel.SelectedPasukNums.Count;
-        // The recitation bar is also the pause/resume control surface: it must
-        // stay reachable for the whole life of a playback — a pasuk tap, a word
-        // preview, or a chapter started from the header all count (#2370). The
-        // same set owns the Android Back press (TryHandleReaderBack), so both
-        // read it from one place.
-        var isSelectionMode = ReaderSurfaceState.IsActive(count, _chapterRecitationSelection,
-            _focusedPasuk != null, _recitationCursor.PlayingKey != null);
+        var focused = _focusedPasuk != null;
+        // The focused pasuk keeps the shared reader toolbar (full pasuk source,
+        // scoped search, #2466); the Back-only selection bar is for the other
+        // transient surfaces — a pesukim selection, the chapter recitation
+        // mode, or an in-flight clip with no focused pasuk (#2370).
+        var selectionBarMode = ReaderSurfaceState.ShowsSelectionBar(count, _chapterRecitationSelection,
+            focused, _recitationCursor.PlayingKey != null);
+        ChapterSearch.SetFocusedPasukScope(focused);
         var ordinarySelection = count > 0 && !_chapterRecitationSelection && _focusedPasuk == null;
         SelectionCountBadge.IsVisible = ordinarySelection;
         SelectionShareButton.IsVisible = ordinarySelection;
@@ -1114,25 +1115,47 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
             SelectionRecitationButton.IsEnabled ? "הקראה" : "ההקלטה אינה תואמת לטקסט המותקן";
         ToolTipProperties.SetText(SelectionRecitationButton, hint);
         SemanticProperties.SetDescription(SelectionRecitationButton, hint);
+        // The focused pasuk's own playback control sits beside the verse and
+        // mirrors the bar's pause/resume state (#2466, #2472).
+        FocusedRecitationButton.IsVisible = focused && RecitationAvailable;
+        FocusedRecitationButton.IsEnabled = SelectionRecitationButton.IsEnabled;
+        FocusedRecitationButton.Opacity = SelectionRecitationButton.Opacity;
+        FocusedRecitationButton.Text = SelectionRecitationButton.Text;
+        ToolTipProperties.SetText(FocusedRecitationButton, hint);
+        SemanticProperties.SetDescription(FocusedRecitationButton, hint);
 
         var searching = ChapterSearch.IsSearchOpen;
         Shell.SetNavBarIsVisible(this, false);
         ReaderToolbar.IsVisible = !ExitFullScreenButton.IsVisible;
-        Shell.SetFlyoutBehavior(this, isSelectionMode || searching ? FlyoutBehavior.Disabled : FlyoutBehavior.Flyout);
+        Shell.SetFlyoutBehavior(this, selectionBarMode || searching ? FlyoutBehavior.Disabled : FlyoutBehavior.Flyout);
         Shell.SetBackButtonBehavior(this, new BackButtonBehavior { IsVisible = !searching });
-        var shellBackground = isSelectionMode
+        var shellBackground = selectionBarMode
             ? (Color)Microsoft.Maui.Controls.Application.Current!.Resources["Primary"]
             : Microsoft.Maui.Controls.Application.Current!.RequestedTheme == AppTheme.Dark
                 ? Color.FromArgb("#20304A")
                 : Color.FromArgb("#F2F7FE");
         Shell.SetBackgroundColor(this, shellBackground);
         ReaderToolbar.BackgroundColor = shellBackground;
-        NormalNavigationBar.IsVisible = !isSelectionMode && !searching;
+        NormalNavigationBar.IsVisible = !selectionBarMode && !searching;
+        // The header names the focused pasuk — sefer, perek and pasuk together —
+        // instead of the plain perek source (#2466).
+        NormalNavigationTitle.Text = focused && _viewModel.Source != null
+            ? $"{_viewModel.Source} {_focusedPasuk!.PasukNumHeb}"
+            : _viewModel.Source;
+        // iOS has no system Back for the overlay, so the navigation slot turns
+        // into the close control there; platforms with system Back keep the
+        // shared hamburger (#2467).
+        var focusedNavIsBack = focused && (OperatingSystem.IsIOS() || OperatingSystem.IsMacCatalyst());
+        ReaderNavigationButton.Text = focusedNavIsBack
+            ? Fonts.FluentUI.arrow_right_24_regular
+            : Fonts.FluentUI.navigation_24_regular;
+        SemanticProperties.SetDescription(ReaderNavigationButton,
+            focusedNavIsBack ? "סגירת הפסוק הממוקד" : "פתיחת תפריט הניווט");
         SearchTitleHost.IsVisible = searching;
         SearchTitleHost.Content = searching ? _searchHeader : null;
         ChapterSearch.IsVisible = searching;
         ContentArea.IsVisible = !searching;
-        SelectionBar.IsVisible = isSelectionMode && !searching;
+        SelectionBar.IsVisible = selectionBarMode && !searching;
         SelectionCountLabel.Text = count.ToString();
     }
 

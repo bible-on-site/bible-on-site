@@ -225,7 +225,17 @@ public partial class PerekPage
     }
 #endif
 
-    private void OnReaderMenuClicked(object? sender, EventArgs e) => Shell.Current.FlyoutIsPresented = true;
+    private void OnReaderMenuClicked(object? sender, EventArgs e)
+    {
+        // iOS has no system Back for the focused-pasuk overlay — the toolbar's
+        // navigation slot acts as its close control there (#2466).
+        if (_focusedPasuk != null && (OperatingSystem.IsIOS() || OperatingSystem.IsMacCatalyst()))
+        {
+            ClearAllSelections();
+            return;
+        }
+        Shell.Current.FlyoutIsPresented = true;
+    }
 
     public void ApplyQueryAttributes(IDictionary<string, object> query)
     {

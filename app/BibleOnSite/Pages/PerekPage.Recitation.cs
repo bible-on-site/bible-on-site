@@ -183,6 +183,7 @@ public partial class PerekPage
         _focusedWordSpans.Clear();
         FocusedPasukOverlay.IsVisible = false;
         FocusedPerushim.ItemsSource = null;
+        FocusedRecitationButton.IsVisible = false;
         PerekCarousel.InputTransparent = false;
         AutomationProperties.SetExcludedWithChildren(PerekCarousel, false);
         if (_audioDecoder != null)
@@ -356,7 +357,8 @@ public partial class PerekPage
         {
             focusedPlayer.Play();
         }
-        FocusedSourceLabel.Text = $"{_viewModel.Source} {pasuk.PasukNumHeb}";
+        // The full pasuk source lives in the shared toolbar title, set by
+        // UpdateSelectionBar below (#2466).
         FocusedPasukOverlay.IsVisible = true;
         PerekCarousel.InputTransparent = true;
         AutomationProperties.SetExcludedWithChildren(PerekCarousel, true);

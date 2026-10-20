@@ -950,9 +950,15 @@
                             AutomationId="FocusedPerushimCollection">
                 <CollectionView.Header>
                     <VerticalStackLayout Spacing="16">
-                        <Label x:Name="FocusedSourceLabel" FontSize="18" FontAttributes="Bold" TextColor="{StaticResource Primary}"/>
-                        <Label x:Name="FocusedPasukText" AutomationId="FocusedPasukText"
-                               FontSize="{DynamicResource PasukFontSize}" FlowDirection="RightToLeft" LineHeight="1.4"/>
+                        <Grid ColumnDefinitions="*,Auto">
+                            <Label x:Name="FocusedPasukText" AutomationId="FocusedPasukText"
+                                   FontSize="{DynamicResource PasukFontSize}" FlowDirection="RightToLeft" LineHeight="1.4"/>
+                            <Button Grid.Column="1" x:Name="FocusedRecitationButton" AutomationId="FocusedRecitationButton"
+                                    Text="{x:Static fonts:FluentUI.headphones_24_regular}" FontFamily="FluentIcons" FontSize="20"
+                                    WidthRequest="40" HeightRequest="40" Padding="0" BackgroundColor="Transparent"
+                                    TextColor="{StaticResource Primary}" VerticalOptions="Start" IsVisible="False"
+                                    SemanticProperties.Description="הקראה" Clicked="OnSelectionRecitationClicked"/>
+                        </Grid>
                         <Label x:Name="FocusedRecitationHint" FontSize="14" TextColor="{StaticResource Gray500}"/>
                     </VerticalStackLayout>
                 </CollectionView.Header>
