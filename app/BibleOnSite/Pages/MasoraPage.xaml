@@ -302,7 +302,7 @@
                            FontAttributes="Bold"
                            HorizontalTextAlignment="Center"
                            TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryLight}}"/>
-                    <SearchBar x:Name="PerushSearchBar" Placeholder="חיפוש פירוש" Text="{Binding PerushNameFilter}"
+                    <controls:RtlSearchBar x:Name="PerushSearchBar" Placeholder="חיפוש פירוש" Text="{Binding PerushNameFilter}"
                                AutomationId="PerushNameSearch" SearchButtonPressed="OnPerushSearchSubmitted"/>
                     <Label Text="{Binding InlineCommentaryLimitMessage}" FontSize="12" LineBreakMode="WordWrap"
                            HorizontalTextAlignment="Center" AutomationId="InlineCommentaryLimitMessage"/>
