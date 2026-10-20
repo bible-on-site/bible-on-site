@@ -145,6 +145,17 @@ public class PasukMarkerTextConverterTests
     }
 
     [Fact]
+    public void convert_back_is_not_supported()
+    {
+        var converter = new PasukMarkerTextConverter();
+
+        var act = () => converter.ConvertBack(
+            new object(), [typeof(object), typeof(object)], null, CultureInfo.InvariantCulture);
+
+        act.Should().Throw<NotSupportedException>();
+    }
+
+    [Fact]
     public void a_changed_marker_color_misses_the_cached_merge()
     {
         var converter = new PasukMarkerTextConverter { MarkerColor = Colors.Red };

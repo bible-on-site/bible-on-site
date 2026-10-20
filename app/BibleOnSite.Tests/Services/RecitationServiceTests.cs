@@ -1034,4 +1034,61 @@ public class RecitationServiceTests
         service.HasAudio(1).Should().BeTrue();
     }
 
+[Fact]
+    public async Task OrphanSweep_ToleratesUndeletableFiles_AndStillUpdates()
+    {
+        await using var storage = new TestStorage(); var extension = new Extension(storage);
+        extension.Package = new(1, [Track(1, "audio"u8.ToArray())]);
+        extension.Audio["/recordings/1_record.mp3"] = "audio"u8.ToArray();
+        extension.Bundle(); var service = extension.Service;
+
+        var dir = Path.Join(storage.Root, "extensions", "recitation");
+        Directory.CreateDirectory(dir);
+        var lockedPath = Path.Join(dir, "stale-locked.mp3");
+        var readonlyPath = Path.Join(dir, "stale-readonly.mp3");
+        File.WriteAllText(lockedPath, "stale");
+        File.WriteAllText(readonlyPath, "stale");
+        File.SetAttributes(readonlyPath, FileAttributes.ReadOnly);
+        await using var lockHandle = new FileStream(lockedPath, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+        // On Unix a read-only file deletes freely; a non-writable directory does not.
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(dir, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+        }
+        try
+        {
+            await service.UpdateAsync(TestContext.Current.CancellationToken);
+        }
+        finally
+        {
+            if (!OperatingSystem.IsWindows())
+            {
+                File.SetUnixFileMode(dir, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            }
+        }
+
+        File.Exists(readonlyPath).Should().BeTrue("the sweep swallows delete failures instead of failing the update");
+        File.SetAttributes(readonlyPath, FileAttributes.Normal);
+    }
+
+    [Fact]
+    public async Task DecodedChapter_ThatIsNotACompleteWav_IsRejected()
+    {
+        await using var storage = new TestStorage(); var extension = new Extension(storage);
+        var source = "original alignment MP3"u8.ToArray();
+        var opus = "OggS derived playback"u8.ToArray();
+        var track = Track(1, source) with { Playback = new("ogg-opus", Hash(opus), opus.Length, 24000, Hash(source)) };
+        extension.Package = new(1, [track]);
+        extension.Audio["/recordings/1_record.mp3"] = opus;
+        extension.Bundle(); var service = extension.Service;
+        await service.DownloadAsync([1]);
+        var decoder = new Mock<IRecitationAudioDecoder>();
+        decoder.Setup(d => d.CreateChapterAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([1, 2, 3]);
+
+        var act = () => service.PrepareAudioAsync(1, Canonical(), null, null,
+            TestContext.Current.CancellationToken, null, decoder.Object);
+
+        await act.Should().ThrowAsync<InvalidDataException>().WithMessage("*Truncated*");
+    }
 }

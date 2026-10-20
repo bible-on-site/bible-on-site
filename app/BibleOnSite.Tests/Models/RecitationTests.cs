@@ -23,6 +23,16 @@ public class RecitationTests
             validate.Should().Throw<InvalidDataException>();
         }
     }
+    [Fact]
+    public void PlainHttpAudioUrl_IsAccepted()
+    {
+        // The manifest validator permits http alongside https — only non-web
+        // schemes are rejected.
+        var track = Valid() with { AudioUrl = "http://example.com/recordings/1_record.mp3" };
+
+        track.Invoking(t => t.Validate()).Should().NotThrow();
+    }
+
     private static RecitationTrack Valid() => new(1, "https://example.com/recordings/1_record.mp3", new string('a', 64),
         Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes("1:1:ברא\n1:2:אור"))),
         3000, "ready", [new(1, 1, "ברא", 100, 800), new(1, 2, "אור", 900, 1800)]);
