@@ -66,7 +66,10 @@
   min-height: 0;
   overflow-y: auto;
   margin: 0;
-  padding: 0;
+  /* Left room for the ribbon ::after overhang (left: -10px plus its -18deg
+     rotation reach): inside the padding box it creates no horizontal
+     overflow, so no horizontal scrollbar and no clipped sticker. */
+  padding: 0 0 0 16px;
   list-style: none;
 }
 
