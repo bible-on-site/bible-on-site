@@ -289,6 +289,9 @@
 	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">
 		<MauiAsset Include="Platforms\Windows\Recitation\*.zip" LogicalName="%(Filename)%(Extension)" />
 	</ItemGroup>
+	<ItemGroup Condition="($([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst') AND '$(Configuration)' == 'Debug'">
+		<MauiAsset Include="Platforms\iOS\AssetPacks\recitation_*\*.zip" LogicalName="%(Filename)%(Extension)" />
+	</ItemGroup>
 	<Target Name="RequireRecitationExtensionAssets" BeforeTargets="Build" Condition="'$(RequireRecitationAssets)' == 'true'">
 		<Error Condition="!Exists('Resources/Raw/recitation-catalog.json')" Text="Generate the recitation catalog and book packs before packaging this release." />
 	</Target>
