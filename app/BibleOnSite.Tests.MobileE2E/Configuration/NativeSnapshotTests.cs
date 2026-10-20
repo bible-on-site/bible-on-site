@@ -64,13 +64,13 @@ public sealed class NativeSnapshotTests
     }
 
     [Fact]
-    public void PageLookupsByIdOnlyReturnDisplayedElementsFromTheDevice()
+    public void PageLookupsByIdUseThePlainAccessibilityId()
     {
         var executor = new SnapshotExecutor([Entry("ready")]);
         using var driver = new IosSnapshotDriver(executor, new AppiumOptions { PlatformName = "iOS" });
         new PerekPage(driver, new IosPlatformAdapter()).WaitFor("PerekSource");
-        Assert.Equal("-ios predicate string", executor.LastParameters!["using"]);
-        Assert.Equal("name == 'PerekSource' AND visible == 1", executor.LastParameters["value"]);
+        Assert.Equal("accessibility id", executor.LastParameters!["using"]);
+        Assert.Equal("PerekSource", executor.LastParameters["value"]);
     }
 
     [Fact]
