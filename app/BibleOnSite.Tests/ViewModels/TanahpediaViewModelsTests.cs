@@ -922,6 +922,81 @@ public class TanahpediaEntryViewModelTests
     }
 
     [Fact]
+    public async Task OpenPersonEntry_StaleSynonymLookupDoesNotOverwriteLatest()
+    {
+        var targetsGate = new TaskCompletionSource<List<TanahpediaSynonymTarget>>();
+        _service.Setup(s => s.GetEntryDetailAsync("דלילה", It.IsAny<CancellationToken>()))
+            .ReturnsAsync((TanahpediaEntryDetail?)null);
+        _service.Setup(s => s.GetSynonymTargetsAsync("דלילה", It.IsAny<CancellationToken>()))
+            .Returns(targetsGate.Task);
+        SetupPersonEntries("שמשון", "מנוח");
+
+        var vm = Create();
+        vm.UniqueName = "שמשון";
+        await vm.LoadAsync();
+
+        var stale = vm.OpenPersonEntryAsync("דלילה");
+        await vm.OpenPersonEntryAsync("מנוח");
+
+        targetsGate.SetResult([new TanahpediaSynonymTarget { UniqueName = "דלילה", Title = "דלילה" }]);
+        await stale;
+
+        vm.Title.Should().Be("מנוח");
+        vm.IsDisambiguation.Should().BeFalse();
+        _service.Verify(s => s.GetEntryDetailAsync("מנוח", It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task OpenPersonEntry_StaleAliasLookupDoesNotOverwriteLatest()
+    {
+        var aliasGate = new TaskCompletionSource<TanahpediaEntryDetail?>();
+        _service.Setup(s => s.GetEntryDetailAsync("דתן", It.IsAny<CancellationToken>()))
+            .ReturnsAsync((TanahpediaEntryDetail?)null);
+        _service.Setup(s => s.GetSynonymTargetsAsync("דתן", It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new TanahpediaSynonymTarget { UniqueName = "דתן-ואבירם", Title = "דתן ואבירם" }]);
+        _service.Setup(s => s.GetEntryDetailAsync("דתן-ואבירם", It.IsAny<CancellationToken>()))
+            .Returns(aliasGate.Task);
+        SetupPersonEntries("שמשון", "מנוח");
+
+        var vm = Create();
+        vm.UniqueName = "שמשון";
+        await vm.LoadAsync();
+
+        var stale = vm.OpenPersonEntryAsync("דתן");
+        await vm.OpenPersonEntryAsync("מנוח");
+
+        aliasGate.SetResult(new TanahpediaEntryDetail { UniqueName = "דתן-ואבירם", Title = "דתן ואבירם" });
+        await stale;
+
+        vm.Title.Should().Be("מנוח");
+        _service.Verify(s => s.GetEntryDetailAsync("מנוח", It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task OpenPersonEntry_CancelledStaleLoadIsDiscarded()
+    {
+        _service.Setup(s => s.GetEntryDetailAsync("דלילה", It.IsAny<CancellationToken>()))
+            .Returns<string, CancellationToken>(async (_, ct) =>
+            {
+                await Task.Delay(Timeout.Infinite, ct);
+                return null;
+            });
+        SetupPersonEntries("שמשון", "מנוח");
+
+        var vm = Create();
+        vm.UniqueName = "שמשון";
+        await vm.LoadAsync();
+
+        var stale = vm.OpenPersonEntryAsync("דלילה");
+        await vm.OpenPersonEntryAsync("מנוח");
+        await stale;
+
+        vm.Title.Should().Be("מנוח");
+        vm.HasError.Should().BeFalse();
+        vm.IsLoading.Should().BeFalse();
+    }
+
+    [Fact]
     public async Task OpenPersonEntry_ClearsPreviousFamilyTree()
     {
         SetupPersonEntries("שמשון", "דלילה");

@@ -192,7 +192,7 @@ public partial class TanahpediaEntryViewModel : ObservableObject
             }
             IsLoaded = true;
         }
-        catch (OperationCanceledException) when (version != _loadVersion)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
             // Superseded by a newer in-place switch - the newer load owns state.
         }
