@@ -8,8 +8,8 @@ export function ContactSection() {
 			<article className={styles.contactContent}>
 				<section className={styles.contactInfo}>
 					<header className={styles.contactHeader}>
-						<h1>יצירת קשר</h1>
-						<h2>נשמח לשמוע מכם</h2>
+						<h2>יצירת קשר</h2>
+						<h3>נשמח לשמוע מכם</h3>
 					</header>
 					<ul className={styles.contactList}>
 						<li>

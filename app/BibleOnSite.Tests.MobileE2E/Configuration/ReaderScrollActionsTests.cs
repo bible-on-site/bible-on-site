@@ -43,6 +43,30 @@ public sealed class ReaderScrollActionsTests
     }
 
     [Fact]
+    public void BrakeStopsMomentumInsideTheReaderGutter()
+    {
+        var reader = new Rectangle(9, 202, 384, 672);
+        var actions = Actions(ReaderScrollActions.Brake(reader, new Size(402, 874)));
+        Assert.Equal(new[] { "pointerMove", "pointerDown", "pointerMove", "pointerUp" }, actions.Select(a => a["type"]));
+        // The brake must stay in the gutter (x=9..21) so the touch cannot reach
+        // selectable commentary text or links.
+        Assert.InRange(Convert.ToInt32(actions[0]["x"]), reader.Left + 1, 21);
+        Assert.Equal(actions[0]["x"], actions[2]["x"]);
+        // A short, slow drag takes scroll tracking to halt inertia; too far a
+        // drag would act as another flick and too fast as a tap.
+        var travel = Math.Abs(Convert.ToInt32(actions[2]["y"]) - Convert.ToInt32(actions[0]["y"]));
+        Assert.InRange(travel, 8, 32);
+        Assert.Equal(120, Convert.ToInt32(actions[2]["duration"]));
+    }
+
+    [Fact]
+    public void BrakeRejectsAnOffscreenCarouselPage()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => ReaderScrollActions.Brake(
+            new Rectangle(422, 202, 384, 672), new Size(402, 874)));
+    }
+
+    [Fact]
     public void ReturnRejectsAnOffscreenCarouselPage()
     {
         Assert.Throws<ArgumentOutOfRangeException>(() => ReaderScrollActions.ReturnToHeading(

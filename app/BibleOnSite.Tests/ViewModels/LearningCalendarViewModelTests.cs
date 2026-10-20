@@ -512,6 +512,50 @@ public class LearningCalendarViewModelTests
     }
 
     [Fact]
+    public async Task SetViewMode_ToGroupedView_DoesNotRebuildHiddenMonthGrid()
+    {
+        // #2455: building the hidden month grid's cells in year/cycle mode only
+        // flooded the invisible CollectionView with redundant work.
+        await using var fixture = await CreateFixtureAsync(CyclesOneToFour);
+        var vm = fixture.ViewModel;
+        await vm.InitializeAsync();
+        var cells = vm.Cells;
+
+        vm.SetViewModeCommand.Execute(CalendarViewMode.Year);
+
+        vm.Cells.Should().BeSameAs(cells);
+        vm.MonthGroups.Should().NotBeEmpty();
+
+        vm.SetViewModeCommand.Execute(CalendarViewMode.Cycle);
+        vm.Cells.Should().BeSameAs(cells);
+
+        vm.SetViewModeCommand.Execute(CalendarViewMode.Month);
+        vm.Cells.Should().NotBeNullOrEmpty();
+    }
+
+    [Fact]
+    public async Task YearView_NavigateBeyondListedYears_AddsYearOption()
+    {
+        // #2455: option lists rebuild only when their inputs change; a year
+        // outside the confirmed-cycle range is appended to the picker.
+        await using var fixture = await CreateFixtureAsync(CyclesOneToFour);
+        var vm = fixture.ViewModel;
+        await vm.InitializeAsync();
+        vm.SetViewModeCommand.Execute(CalendarViewMode.Year);
+        var maxListed = vm.YearOptions.Max(o => o.Value);
+
+        while (vm.SelectedYear?.Value <= maxListed)
+        {
+            vm.NextMonthCommand.Execute(null);
+        }
+
+        vm.SelectedYear.Should().NotBeNull();
+        vm.SelectedYear!.Value.Should().BeGreaterThan(maxListed);
+        vm.YearOptions.Select(o => o.Value).Should().Contain(vm.SelectedYear.Value);
+        vm.MonthGroups.Should().NotBeEmpty();
+    }
+
+    [Fact]
     public async Task CycleView_FromMonthBeforeCycleOne_DefaultsToCycleOne()
     {
         await using var fixture = await CreateFixtureAsync(CyclesOneToFour);

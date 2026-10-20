@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { executeMock, queryOneMock } = vi.hoisted(() => ({
+const { executeMock, queryMock, queryOneMock } = vi.hoisted(() => ({
 	executeMock: vi.fn(),
+	queryMock: vi.fn(),
 	queryOneMock: vi.fn(),
 }));
 
@@ -19,7 +20,7 @@ vi.mock("@tanstack/react-start", () => ({
 
 vi.mock("~/server/db", () => ({
 	execute: executeMock,
-	query: vi.fn(),
+	query: queryMock,
 	queryOne: queryOneMock,
 }));
 
@@ -28,6 +29,7 @@ import { createPerson, deletePerson } from "~/server/tanahpedia/persons";
 describe("tanahpedia persons api", () => {
 	beforeEach(() => {
 		executeMock.mockReset().mockResolvedValue(undefined);
+		queryMock.mockReset().mockResolvedValue([]);
 		queryOneMock.mockReset();
 	});
 

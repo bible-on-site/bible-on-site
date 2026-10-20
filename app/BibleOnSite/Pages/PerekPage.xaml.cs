@@ -86,6 +86,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         SetupExitButtonDragHandler();
         SubscribeAppLinks();
         SubscribePerushimSearch();
+        SubscribeNotesMaterialization();
         DebugLog.Write("[Startup] PerekPage constructed");
     }
 
@@ -104,6 +105,41 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         SetupExitButtonDragHandler();
         SubscribeAppLinks();
         SubscribePerushimSearch();
+        SubscribeNotesMaterialization();
+        NormalNavigationBar.NavigationInterceptor = OnFocusedPasukNavigationIntercepted;
+    }
+
+    /// <summary>
+    /// A reader opened while the first-launch notes pack still materializes
+    /// skips awaiting it (#2430) — when the copy completes the service raises
+    /// OperationCompleted off the UI thread, so re-check availability here.
+    /// </summary>
+    private void SubscribeNotesMaterialization()
+    {
+        PerushimNotesService.Instance.OperationCompleted += OnNotesOperationCompleted;
+        Unloaded += (_, _) => PerushimNotesService.Instance.OperationCompleted -= OnNotesOperationCompleted;
+    }
+
+    private bool _notesRefreshQueued;
+
+    private void OnNotesOperationCompleted()
+    {
+        // InitializeAsync releases the operation lock, which re-fires this
+        // event — and the refresh calls InitializeAsync itself. Without this
+        // guard every refresh queues another dispatcher turn forever, the UI
+        // thread never idles, and accessibility queries starve (#2430).
+        if (_notesRefreshQueued ||
+            (PerushimNotesService.Instance.IsAvailable == _viewModel.PerushimNotesAvailable
+                && !_viewModel.PerushimNotesPending))
+        {
+            return;
+        }
+        _notesRefreshQueued = true;
+        _ = Dispatcher.DispatchAsync(async () =>
+        {
+            try { await RefreshPerushimIfAvailabilityChangedAsync(); }
+            finally { _notesRefreshQueued = false; }
+        });
     }
 
     /// <summary>
@@ -511,6 +547,9 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
             await RefreshPerushimIfAvailabilityChangedAsync();
             StartSearchIntroduction();
         }
+        // Cold-start main-thread work is done — release the deferred e2e
+        // search-index warmup so it cannot starve the accessibility snapshot.
+        Services.SearchIndexService.NotifyStartupSettled();
 #if IOS
         Dispatcher.Dispatch(ConfigureIosReaderHistory);
 #endif
@@ -657,7 +696,8 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         try
         {
             await PerushimNotesService.Instance.InitializeAsync();
-            if (PerushimNotesService.Instance.IsAvailable != _viewModel.PerushimNotesAvailable)
+            if (PerushimNotesService.Instance.IsAvailable != _viewModel.PerushimNotesAvailable
+                || _viewModel.PerushimNotesPending)
             {
                 await _viewModel.LoadPerushimAsync(_viewModel.PerekId);
             }
@@ -948,7 +988,9 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         if (e.Parameter is int pasukNum)
         {
             // Don't set _lastLongPressTime - right-click doesn't need debounce
-            ResetRecitationContext();
+            // Entering selection must not kill in-flight playback or its moving
+            // word marker (#2473).
+            ResetRecitationContext(stopPlayback: false);
             var wasEmpty = _viewModel.SelectedPasukNums.Count == 0;
             _viewModel.ToggleSelectedPasuk(pasukNum);
             UpdatePasukSelection();
@@ -1014,7 +1056,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
             {
                 _lastLongPressTime = DateTime.Now;
 
-                ResetRecitationContext();
+                ResetRecitationContext(stopPlayback: false);
                 var wasEmpty = _viewModel.SelectedPasukNums.Count == 0;
                 _viewModel.ToggleSelectedPasuk(pasukNum);
 
@@ -1048,7 +1090,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         if (sender is LongPressBehavior behavior &&
             ResolvePasuk(behavior.AssociatedView?.BindingContext) is { } pasuk)
         {
-            ResetRecitationContext();
+            ResetRecitationContext(stopPlayback: false);
             var wasEmpty = _viewModel.SelectedPasukNums.Count == 0;
             _viewModel.ToggleSelectedPasuk(pasuk.PasukNum);
             UpdateSelectionBar();
@@ -1136,7 +1178,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
                 : Color.FromArgb("#F2F7FE");
         Shell.SetBackgroundColor(this, shellBackground);
         ReaderToolbar.BackgroundColor = shellBackground;
-        NormalNavigationBar.IsVisible = !selectionBarMode && !searching;
+        NormalNavigationBar.BarVisible = !selectionBarMode && !searching;
         // The header names the focused pasuk — sefer, perek and pasuk together —
         // instead of the plain perek source (#2466).
         NormalNavigationTitle.Text = focused && _viewModel.Source != null
@@ -1146,10 +1188,10 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         // into the close control there; platforms with system Back keep the
         // shared hamburger (#2467).
         var focusedNavIsBack = focused && (OperatingSystem.IsIOS() || OperatingSystem.IsMacCatalyst());
-        ReaderNavigationButton.Text = focusedNavIsBack
+        NormalNavigationBar.NavigationButton.Text = focusedNavIsBack
             ? Fonts.FluentUI.arrow_right_24_regular
             : Fonts.FluentUI.navigation_24_regular;
-        SemanticProperties.SetDescription(ReaderNavigationButton,
+        SemanticProperties.SetDescription(NormalNavigationBar.NavigationButton,
             focusedNavIsBack ? "סגירת הפסוק הממוקד" : "פתיחת תפריט הניווט");
         SearchTitleHost.IsVisible = searching;
         SearchTitleHost.Content = searching ? _searchHeader : null;
@@ -1406,6 +1448,20 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     {
         // Menu stays open - user can click multiple satellites
         // Menu closes only when clicking the hamburger button again
+    }
+
+    /// <summary>
+    /// iOS has no system Back for the focused-pasuk overlay — the toolbar's
+    /// navigation slot acts as its close control there (#2466).
+    /// </summary>
+    private bool OnFocusedPasukNavigationIntercepted()
+    {
+        if (_focusedPasuk == null || !(OperatingSystem.IsIOS() || OperatingSystem.IsMacCatalyst()))
+        {
+            return false;
+        }
+        ClearAllSelections();
+        return true;
     }
 
     /// <summary>

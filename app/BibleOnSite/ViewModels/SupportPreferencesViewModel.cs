@@ -1,4 +1,3 @@
-using BibleOnSite.Config;
 using BibleOnSite.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -18,27 +17,19 @@ public partial class SupportPreferencesViewModel : ObservableObject
     private readonly IFileSystem _fileSystem;
     private readonly IShare _share;
     private readonly IAppNavigator _navigator;
-    private readonly ILauncher _launcher;
 
     public SupportPreferencesViewModel()
-        : this(PerushimNotesService.Instance, FileSystem.Current, Share.Default, ShellAppNavigator.Instance, Launcher.Default)
+        : this(PerushimNotesService.Instance, FileSystem.Current, Share.Default, ShellAppNavigator.Instance)
     {
     }
 
     public SupportPreferencesViewModel(PerushimNotesService perushimNotesService,
         IFileSystem fileSystem, IShare share, IAppNavigator navigator)
-        : this(perushimNotesService, fileSystem, share, navigator, Launcher.Default)
-    {
-    }
-
-    public SupportPreferencesViewModel(PerushimNotesService perushimNotesService,
-        IFileSystem fileSystem, IShare share, IAppNavigator navigator, ILauncher launcher)
     {
         _perushimNotesService = perushimNotesService;
         _fileSystem = fileSystem;
         _share = share;
         _navigator = navigator;
-        _launcher = launcher;
     }
 
     /// <summary>
@@ -63,23 +54,6 @@ public partial class SupportPreferencesViewModel : ObservableObject
         {
             System.Diagnostics.Debug.WriteLine($"Export logs failed: {ex.Message}");
             await _navigator.DisplayAlertAsync("שגיאה", $"לא ניתן לייצא לוגים: {ex.Message}", "אישור");
-        }
-    }
-
-    /// <summary>
-    /// Opens the accessibility statement maintained on the website in the system browser.
-    /// </summary>
-    [RelayCommand]
-    public async Task OpenAccessibilityStatementAsync()
-    {
-        try
-        {
-            await _launcher.OpenAsync(new Uri(AppConfig.Instance.AccessibilityUrl));
-        }
-        catch (Exception ex) //NOSONAR — launcher failures are platform-specific; the user gets an alert.
-        {
-            System.Diagnostics.Debug.WriteLine($"Open accessibility statement failed: {ex.Message}");
-            await _navigator.DisplayAlertAsync("שגיאה", "לא ניתן לפתוח את הצהרת הנגישות", "אישור");
         }
     }
 }
