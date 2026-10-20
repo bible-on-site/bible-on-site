@@ -469,9 +469,6 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
 
     #region Navigation & Picker
 
-    private void OnReaderMenuClicked(object? sender, EventArgs e) =>
-        Shell.Current.FlyoutIsPresented = true;
-
     /// <summary>Title tap — opens the unit picker.</summary>
     private void OnUnitSourceClicked(object? sender, EventArgs e)
     {
