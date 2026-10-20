@@ -113,6 +113,25 @@ test("an exited wrapper still has its orphaned children reaped", async () => {
   }
 });
 
+// #2423: the harness must know the supervisor's deadline so post-test cleanup
+// can bound itself instead of consuming the remaining budget silently.
+test("injects the pilot deadline into the harness environment", async () => {
+	const run = supervise(
+		process.execPath,
+		["-e", "process.stdout.write(process.env.MOBILE_E2E_PILOT_DEADLINE_MS ?? 'unset')"],
+		{ timeoutMs: 60_000, stdio: ["ignore", "pipe", "ignore"] },
+	);
+	let output = "";
+	run.child.stdout.on("data", (chunk) => (output += chunk));
+	assert.equal(await run.result, 0);
+	const deadline = Number(output);
+	const now = Date.now();
+	assert.ok(
+		Number.isFinite(deadline) && deadline > now - 60_000 && deadline <= now + 60_000,
+		`deadline ${output} should be roughly now+timeout`,
+	);
+});
+
 test("the production clock expires without waiting for child progress", async () => {
   let expired = false;
   const run = supervise(process.execPath, ["-e", "Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0)"], {
