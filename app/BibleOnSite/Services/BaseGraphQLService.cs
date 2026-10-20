@@ -107,6 +107,7 @@ public class GraphQLException : Exception
 [JsonSerializable(typeof(GraphQLRequest))]
 [JsonSerializable(typeof(Dictionary<string, object>))]
 [JsonSerializable(typeof(string))]
+[JsonSerializable(typeof(string[]))]
 [JsonSerializable(typeof(int))]
 [JsonSerializable(typeof(GraphQLResponse<StarterService.StarterResponse>))]
 [JsonSerializable(typeof(GraphQLResponse<ArticleService.ArticlesByPerekIdResponse>))]
