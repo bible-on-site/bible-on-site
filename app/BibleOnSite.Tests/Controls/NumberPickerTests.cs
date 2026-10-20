@@ -104,6 +104,47 @@ public class NumberPickerTests
     }
 
     [Fact]
+    public void NonFiniteValue_FallsBackToMinimum()
+    {
+        var picker = new NumberPicker { Minimum = 5, Maximum = 50 };
+        picker.Value = double.NaN;
+        picker.Value.Should().Be(5);
+        picker.Value = double.PositiveInfinity;
+        picker.Value.Should().Be(5);
+    }
+
+    [Fact]
+    public void InvalidIncrementBoundDirectly_FallsBackToOne()
+    {
+        var picker = new NumberPicker { Minimum = 0, Maximum = 10 };
+        // Bindable sets (XAML, bindings) bypass the CLR setter, so Coerce guards again.
+        picker.SetValue(NumberPicker.IncrementProperty, 0.0);
+        picker.Value = 3.6;
+        picker.Value.Should().Be(4);
+        picker.SetValue(NumberPicker.IncrementProperty, -2.0);
+        picker.Value = 3.9;
+        picker.Value.Should().Be(4);
+    }
+
+    [Fact]
+    public void IncrementSetter_RejectsZero()
+    {
+        var picker = new NumberPicker();
+        picker.Increment = 0;
+        picker.Increment.Should().Be(1);
+    }
+
+    [Fact]
+    public void FractionalDigits_ClampsToSupportedRange()
+    {
+        var picker = new NumberPicker();
+        picker.FractionalDigits = 9;
+        picker.FractionalDigits.Should().Be(3);
+        picker.FractionalDigits = -2;
+        picker.FractionalDigits.Should().Be(0);
+    }
+
+    [Fact]
     public void FractionalDigits_PreservesDecimals()
     {
         var picker = new NumberPicker { Minimum = 0, Maximum = 10, Increment = 0.25, FractionalDigits = 2 };

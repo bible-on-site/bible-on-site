@@ -107,7 +107,6 @@ public sealed class NumberPicker : ContentView
         SemanticProperties.SetDescription(ValueEntry, "ערך מספרי");
         ValueEntry.Completed += (_, _) => CommitEntry();
         ValueEntry.Unfocused += (_, _) => CommitEntry();
-        ValueEntry.Focused += (_, _) => ValueEntry.CursorPosition = ValueEntry.Text?.Length ?? 0;
 
         IncrementButton = CreateStepButton(FluentUI.add_20_regular, "הגדלת הערך");
         IncrementButton.Clicked += (_, _) => Step(1);
@@ -142,8 +141,7 @@ public sealed class NumberPicker : ContentView
     {
         var text = ValueEntry.Text?.Trim();
         if (string.IsNullOrEmpty(text)
-            || !double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed)
-            && !double.TryParse(text, NumberStyles.Float, CultureInfo.CurrentUICulture, out parsed))
+            || !double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed))
         {
             RefreshEntryText();
             return;
@@ -171,10 +169,7 @@ public sealed class NumberPicker : ContentView
             SetValue(ValueProperty, coerced);
             return;
         }
-        if (!ValueEntry.IsFocused)
-        {
-            RefreshEntryText();
-        }
+        RefreshEntryText();
         RefreshButtonStates();
         ValueChanged?.Invoke(this, EventArgs.Empty);
     }
