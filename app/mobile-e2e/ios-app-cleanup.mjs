@@ -59,7 +59,7 @@ export async function terminateIosTestApp(udid, {
   }
   const list = async () => {
     const remaining = cleanupDeadlineMs - (now() - started);
-    if (remaining <= 0) throw new Error("The owned iOS app did not exit within five seconds.");
+    if (remaining <= 0) throw new Error("iOS app cleanup spent its five seconds before a process check; no kill was sent.");
     // The helper reads kernel BSD state and the actual executable path, without
     // requesting Mach task/thread data or trusting a mutable argv prefix.
     const { stdout, stderr = "" } = await execute(inspectorPath,
