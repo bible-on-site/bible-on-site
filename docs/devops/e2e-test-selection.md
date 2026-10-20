@@ -22,7 +22,7 @@ the executable-coverage tree produced by `devops/e2e-coverage-trees/`.
 | iOS runtime-planned shard split + merged-tree baseline publication | Merged (#2266, #2279, #2263) | `.github/workflows/app-mobile-e2e.yml` `plan_ios`/`merge_ios`, `devops/github/ci/e2e-impact/shard-plan.ts`, `app/mobile-e2e/merge-runner-shards.mjs` |
 | Member-granularity narrowing (C# member fingerprints ↔ exec member evidence) | Merged (#2297) | `extractMembers`/`SourceFingerprint.members`, `CoveredNode.member`, `memberGaps`, `covered-members`/`member-widened` reasons |
 | Shadow-mode parity verification (manifest ↔ observed outcomes) | This slice | `e2e-impact.ts verify`, `devops/github/ci/e2e-impact/verify.ts`, `selection-verify.json` in every suite's run diagnostics |
-| Selection enforcement beyond the mobile opt-in inputs | Not implemented | `e2e_selection_mode=enforce` / `force_full_suite` exist only on `app-mobile-e2e.yml`; Playwright suites have no enforce runner |
+| Selection enforcement beyond the mobile opt-in inputs | Opt-in (#2085) | `e2e-impact.ts playwright-args` renders the manifest into `playwright test` args; `ci.yml` honors `e2e_selection_mode`/`force_full_suite` dispatch inputs and the `E2E_SELECTION_MODE`/`E2E_FORCE_FULL_SUITE` repo variables for all three Playwright suites. Shadow stays the default. |
 | AST-aware change comparison beyond member level, dependency edges | Planned, not implemented | — |
 
 Two evidence channels exist today and answer different questions:
@@ -406,8 +406,12 @@ under-attribution can only over-select.
 - `filter.playwright` replaces `filter.vstest` for these suites: selected
   tests grouped as `{file, titles}` where each title is the describe path
   joined by spaces — the string `playwright test --grep` matches. In shadow
-  mode it is diagnostics; an enforce runner would feed it alongside
-  `dynamicTestFiles` (which run wholesale).
+  mode it is diagnostics; enforce mode feeds it through
+  `e2e-impact.ts playwright-args`, which emits the package-relative spec
+  list plus an anchored `--grep` alternation covering every selected title
+  and every runtime-discovered title inside `dynamicTestFiles` (a `--list`
+  enumeration supplies them; without discovery the args degrade to
+  `selectAll`).
 - Structural fingerprints cover `.ts`/`.tsx`/`.js`/`.mjs` sources; `.rs`
   files fingerprint as `null`, so Rust edits always count as real changes.
 - Baselines publish only from completed, successful `master` pushes as
@@ -480,9 +484,11 @@ manifests are execution assignments, not suite selections.
 ## Known gaps (explicit, by design)
 
 - **Enforcement is opt-in**: every suite computes and stores its selection
-  manifest, but only `app-mobile-e2e.yml` exposes `e2e_selection_mode=enforce`
-  / `force_full_suite` dispatch inputs; Playwright suites always run the full
-  suite in shadow mode. #2085's AST-aware comparison and dependency edges are
+  manifest; `app-mobile-e2e.yml` and `ci.yml` now both expose
+  `e2e_selection_mode=enforce` / `force_full_suite` (dispatch inputs, or the
+  `E2E_SELECTION_MODE` / `E2E_FORCE_FULL_SUITE` repository variables).
+  Default remains shadow everywhere until parity evidence supports
+  narrowing. #2085's AST-aware comparison and dependency edges are
   still unimplemented.
 - **Theory case attribution**: `fileBase` is the method name, so theory cases
   sharing a method overwrite one dump file — per-case coverage cannot exist

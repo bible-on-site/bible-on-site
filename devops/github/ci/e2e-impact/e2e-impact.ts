@@ -21,6 +21,9 @@
  *       --out <dir> [--file coverage-tree.json]
  *   node e2e-impact.ts verify --manifest <selection-manifest.json>
  *       --tree <coverage-tree.json> --out <verify.json>
+ *   node e2e-impact.ts playwright-args --suite <dir> --package-dir <dir>
+ *       --manifest <manifest.json> --out <args.json>
+ *       [--discovered <discovered.json>]
  *
  * `verify` scores a shadow-mode selection against the outcomes the same run
  * actually observed: an unselected test that failed is a parity miss — the
@@ -58,6 +61,7 @@ import {
 	type SuiteRules,
 } from "./model.ts";
 import { discoverPlaywrightTests } from "./playwright-discovery.ts";
+import { loadDiscovered, playwrightArgs } from "./playwright-args.ts";
 import {
 	applicableTests,
 	repoFileReader,
@@ -658,6 +662,40 @@ async function discover(flags: Map<string, string>): Promise<void> {
  * Load or shape problems produce a `problem` report, never a thrown error:
  * this step is pure diagnostics and must not gate the job.
  */
+/**
+ * `playwright-args` turns a selection manifest into the concrete
+ * `playwright test` arguments an enforce-mode runner invokes (#2085): the
+ * package-relative spec list plus the anchored `--grep` title alternation.
+ * Dynamic test files need runtime discovery (`--discovered`) for their
+ * titles; without it the args degrade to `selectAll` — a partial selection
+ * is never emitted on incomplete information.
+ */
+async function playwrightArgsCommand(flags: Map<string, string>): Promise<void> {
+	const suiteDir = required(flags, "suite");
+	const packageDir = required(flags, "package-dir");
+	const manifestPath = required(flags, "manifest");
+	const out = required(flags, "out");
+	const rules = loadRules(join(REPO_ROOT, suiteDir, "e2e-impact.json"));
+	const manifest = JSON.parse(
+		readFileSync(manifestPath, "utf8"),
+	) as SelectionManifest;
+	if (manifest.suite !== rules.suite) {
+		throw new Error(
+			`Manifest suite "${manifest.suite}" does not match ${suiteDir} rules "${rules.suite}"`,
+		);
+	}
+	const discoveredPath = flags.get("discovered");
+	const args = playwrightArgs(manifest, {
+		packageDir,
+		testDir: rules.tests.testDir ?? rules.tests.root,
+		discovered:
+			discoveredPath === undefined ? undefined : loadDiscovered(discoveredPath),
+	});
+	mkdirSync(dirname(out), { recursive: true });
+	writeFileSync(out, `${JSON.stringify(args, null, 2)}\n`);
+	writeGithubOutput("select-all", String(args.selectAll));
+}
+
 async function verify(flags: Map<string, string>): Promise<void> {
 	const manifestPath = required(flags, "manifest");
 	const treePath = required(flags, "tree");
@@ -749,9 +787,11 @@ async function main(): Promise<void> {
 			return await discover(flags);
 		case "verify":
 			return await verify(flags);
+		case "playwright-args":
+			return await playwrightArgsCommand(flags);
 		default:
 			throw new Error(
-				`Unknown command "${command}". Expected select | plan | collect-appium | collect-playwright | baseline-download | discover | verify`,
+				`Unknown command "${command}". Expected select | plan | collect-appium | collect-playwright | baseline-download | discover | verify | playwright-args`,
 			);
 	}
 }
