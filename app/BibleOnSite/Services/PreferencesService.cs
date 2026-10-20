@@ -99,6 +99,9 @@ public class PreferencesService
     }
 
     private const string FontFactorKey = "fontFactor";
+    private const string PasukFontPercentKey = "pasukFontPercent";
+    private const string PerushFontPercentKey = "perushFontPercent";
+    private const string ArticleFontPercentKey = "articleFontPercent";
     private const string LastLearntPerekKey = "lastLearntPerek";
     private const string PerekToLoadKey = "perekToLoad";
     private const string BookmarkedPerakimKey = "bookmarkedPerakim";
@@ -419,6 +422,9 @@ public class PreferencesService
 
     private readonly IPreferencesStorage _storage;
     private double _fontFactor = 1.0;
+    private double _pasukFontPercent = DefaultFontPercent;
+    private double _perushFontPercent = DefaultFontPercent;
+    private double _articleFontPercent = DefaultFontPercent;
     private int? _lastLearntPerek;
     private PerekToLoad _perekToLoad = PerekToLoad.Todays;
     private HashSet<int> _bookmarkedPerakim = new();
@@ -431,7 +437,7 @@ public class PreferencesService
     }
 
     /// <summary>
-    /// Font size multiplier for text display.
+    /// Master font size multiplier for text display.
     /// </summary>
     public double FontFactor
     {
@@ -448,6 +454,63 @@ public class PreferencesService
             OnPreferencesChanged();
         }
     }
+
+    #region Font category percentages (#2461)
+
+    // Per-reading-category size relative to the master FontFactor:
+    // effective factor = FontFactor × percent / 100. 100% means "follow the
+    // master"; there is deliberately no perush→pasuk coupling.
+    public static double MinFontPercent => 50;
+    public static double MaxFontPercent => 200;
+    public static double DefaultFontPercent => 100;
+
+    /// <summary>פסוקים body size relative to the master (covers pasuk text
+    /// and pasuk-number markers in every reader, including שניים מקרא and
+    /// תיקון קוראים).</summary>
+    public double PasukFontPercent
+    {
+        get => _pasukFontPercent;
+        set => SetFontPercent(ref _pasukFontPercent, value, PasukFontPercentKey);
+    }
+
+    /// <summary>פירושים size relative to the master (perush name and content
+    /// in inline and focused-pasuk commentary).</summary>
+    public double PerushFontPercent
+    {
+        get => _perushFontPercent;
+        set => SetFontPercent(ref _perushFontPercent, value, PerushFontPercentKey);
+    }
+
+    /// <summary>מאמרים body size relative to the master (article detail and
+    /// תנ"ךפדיה entry/entity-type pages).</summary>
+    public double ArticleFontPercent
+    {
+        get => _articleFontPercent;
+        set => SetFontPercent(ref _articleFontPercent, value, ArticleFontPercentKey);
+    }
+
+    /// <summary>Effective pasuk scaling factor: master × pasuk percent.</summary>
+    public double PasukFontFactor => FontFactor * PasukFontPercent / 100.0;
+
+    /// <summary>Effective perush scaling factor: master × perush percent.</summary>
+    public double PerushFontFactor => FontFactor * PerushFontPercent / 100.0;
+
+    /// <summary>Effective article scaling factor: master × article percent.</summary>
+    public double ArticleFontFactor => FontFactor * ArticleFontPercent / 100.0;
+
+    private void SetFontPercent(ref double field, double value, string key)
+    {
+        var normalized = Normalize(value, DefaultFontPercent, MinFontPercent, MaxFontPercent);
+        if (Math.Abs(field - normalized) < 0.000001)
+        {
+            return;
+        }
+        field = normalized;
+        _storage.Set(key, normalized);
+        OnPreferencesChanged();
+    }
+
+    #endregion
 
     /// <summary>
     /// The last perek the user was learning (perek ID).
@@ -521,6 +584,12 @@ public class PreferencesService
         _recitationVersePauseMs = Normalize(_storage.Get("recitationVersePauseMs", -1.0), -1, -1, 5000);
         _inlineCommentaryLimit = Math.Clamp(_storage.Get(InlineCommentaryLimitKey, 5), 1, 100);
         _fontFactor = _storage.Get(FontFactorKey, 1.0);
+        _pasukFontPercent = Normalize(_storage.Get(PasukFontPercentKey, DefaultFontPercent),
+            DefaultFontPercent, MinFontPercent, MaxFontPercent);
+        _perushFontPercent = Normalize(_storage.Get(PerushFontPercentKey, DefaultFontPercent),
+            DefaultFontPercent, MinFontPercent, MaxFontPercent);
+        _articleFontPercent = Normalize(_storage.Get(ArticleFontPercentKey, DefaultFontPercent),
+            DefaultFontPercent, MinFontPercent, MaxFontPercent);
 
         var lastLearnt = _storage.Get(LastLearntPerekKey, -1);
         _lastLearntPerek = lastLearnt >= 0 ? lastLearnt : null;

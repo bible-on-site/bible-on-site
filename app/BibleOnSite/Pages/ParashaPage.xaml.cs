@@ -27,7 +27,7 @@ public partial class ParashaPage : ContentPage, IQueryAttributable //NOSONAR
     protected override void OnAppearing()
     {
         base.OnAppearing();
-        UpdateFontSizeResources(PreferencesService.Instance.FontFactor);
+        UpdateFontSizeResources(PreferencesService.Instance.PasukFontFactor);
     }
 
     private void UpdateFontSizeResources(double factor)

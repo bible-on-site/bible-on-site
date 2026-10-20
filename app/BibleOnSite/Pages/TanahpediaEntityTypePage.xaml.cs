@@ -34,10 +34,10 @@ public partial class TanahpediaEntityTypePage : ContentPage
     private void SetupFontSizeResources()
     {
         var prefs = PreferencesService.Instance;
-        UpdateFontSizeResources(prefs.FontFactor);
+        UpdateFontSizeResources(prefs.ArticleFontFactor);
         prefs.PreferencesChanged += (_, _) =>
             MainThread.BeginInvokeOnMainThread(() =>
-                UpdateFontSizeResources(prefs.FontFactor));
+                UpdateFontSizeResources(prefs.ArticleFontFactor));
     }
 
     private void UpdateFontSizeResources(double factor)

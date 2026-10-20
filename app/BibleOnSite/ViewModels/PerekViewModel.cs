@@ -224,12 +224,12 @@ public partial class PerekViewModel : ObservableObject
         _perushChapter = null;
 
         // Sync FontFactor from preferences and listen for changes
-        _fontFactor = _preferencesService.FontFactor;
+        _fontFactor = _preferencesService.PasukFontFactor;
         _divineNameMaskingRevision = DivineNameMasking.Revision;
         WeakPreferencesSubscription.Subscribe(this, _preferencesService, static model => model.RefreshPreferences());
     }
 
-    /// <summary>Font scaling factor from user preferences (0.5–2.0).</summary>
+    /// <summary>Effective pasuk scaling factor: master × pasuk percent (#2461).</summary>
     [ObservableProperty]
     private double _fontFactor = 1.0;
 
@@ -1283,9 +1283,9 @@ public partial class PerekViewModel : ObservableObject
 
     private void RefreshPreferences()
     {
-        if (Math.Abs(_fontFactor - _preferencesService.FontFactor) > 0.001)
+        if (Math.Abs(_fontFactor - _preferencesService.PasukFontFactor) > 0.001)
         {
-            FontFactor = _preferencesService.FontFactor;
+            FontFactor = _preferencesService.PasukFontFactor;
         }
         if (_divineNameMaskingRevision != DivineNameMasking.Revision)
         {
