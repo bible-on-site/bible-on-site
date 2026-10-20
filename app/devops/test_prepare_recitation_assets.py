@@ -194,7 +194,27 @@ class RecitationAssetsTests(unittest.TestCase):
             self.assertEqual(packed.namelist(), [opus_sha + ".ogg"])
             self.assertEqual(packed.read(opus_sha + ".ogg"), opus)
         self.assertNotIn("playback", catalogs[2]["package"]["tracks"][0])
+        # A cold local mobile build uses the configured original MP3s without
+        # needing the store playback manifest, derived files or network access.
+        for platform in ["Android", "iOS"]:
+            app = self.root / (platform + "-local")
+            cache = self.root / (platform + "-local-cache")
+            with patch("prepare_recitation_assets.load_playback", side_effect=AssertionError("store manifest")), \
+                    patch("prepare_recitation_assets.open_https", side_effect=AssertionError("network")):
+                local = prepare_assets(app, platform, cache, self.recordings, intermediate, database, native,
+                                       local_originals=True)
+            self.assertNotIn("playback", local["package"]["tracks"][0])
+            self.assertEqual(local["package"]["tracks"][0]["words"], catalogs[0]["package"]["tracks"][0]["words"])
+            with zipfile.ZipFile(app / f"Platforms/{platform}/AssetPacks/recitation_1/recitation_1.zip") as packed:
+                self.assertEqual(packed.namelist(), [self.sha + ".mp3"])
+                self.assertEqual(packed.read(self.sha + ".mp3"), self.audio)
+            self.assertEqual(local["books"][0]["sha256"], hashlib.sha256(
+                (app / f"Platforms/{platform}/AssetPacks/recitation_1/recitation_1.zip").read_bytes()).hexdigest())
         self.assertEqual(database.read_bytes(), source_bytes)
+
+    def test_local_originals_requires_source_directory(self):
+        with self.assertRaisesRegex(ValueError, "recordings directory"):
+            prepare_assets(self.root / "app", "Android", self.cache, local_originals=True)
 
 
 if __name__ == "__main__":
