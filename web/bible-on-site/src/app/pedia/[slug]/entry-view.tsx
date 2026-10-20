@@ -196,6 +196,7 @@ export async function EntryView({ slug }: { slug: string }) {
 
 			{entry.content ? (
 				<article
+					// nosemgrep -- trusted database content; heading levels demoted for SEO
 					// biome-ignore lint/security/noDangerouslySetInnerHtml: admin-authored content
 					dangerouslySetInnerHTML={{ __html: demoteHeadings(entry.content) }}
 					className={styles.entryContent}

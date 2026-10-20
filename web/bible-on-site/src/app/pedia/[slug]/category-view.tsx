@@ -157,6 +157,7 @@ export async function CategoryView({
 
 			{homepage?.content && !sub && (
 				<div
+					// nosemgrep -- trusted database content; heading levels demoted for SEO
 					// biome-ignore lint/security/noDangerouslySetInnerHtml: admin-authored content
 					dangerouslySetInnerHTML={{ __html: demoteHeadings(homepage.content) }}
 				/>

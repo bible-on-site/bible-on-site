@@ -288,6 +288,7 @@ export default async function ArticlePage({
 					{article.content && (
 						<div
 							className={styles.articleBody}
+							// nosemgrep -- trusted database content; heading levels demoted for SEO
 							// biome-ignore lint/security/noDangerouslySetInnerHtml: Content is from trusted database
 							dangerouslySetInnerHTML={{ __html: demoteHeadings(article.content) }}
 						/>
