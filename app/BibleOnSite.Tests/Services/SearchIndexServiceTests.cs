@@ -30,6 +30,25 @@ public class SearchIndexServiceTests
     }
 
     [Fact]
+    public async Task E2eIndexWarmup_WaitsForStartupToSettleBeforeBuilding()
+    {
+        await using var storage = new TestStorage();
+        var perakim = await SeedAsync(storage);
+        await using var index = new SearchIndexService(perakim, null, Path.Join(storage.Root, "search.sqlite"));
+
+        var warmup = index.WarmupAfterStartupSettlesAsync();
+        warmup.IsCompleted.Should().BeFalse(
+            "a warmup that starts during cold start starves the main thread past UiAutomator's AccessibilityNodeInfo deadline (#2430)");
+
+        index.MarkStartupSettled();
+        await warmup;
+
+        var hits = await index.SearchAsync("בראשית", new HashSet<SearchFilter> { SearchFilter.Pasuk },
+            new HashSet<int> { 1 }, 10, TestContext.Current.CancellationToken);
+        hits.Should().NotBeEmpty("the warmed verses index answers searches");
+    }
+
+    [Fact]
     public async Task GenerationOrdering_AppliesBeforeLimit_AndKeepsUnknownDatesLast()
     {
         await using var storage = new TestStorage();
