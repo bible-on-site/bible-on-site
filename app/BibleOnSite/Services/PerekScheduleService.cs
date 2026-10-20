@@ -447,7 +447,7 @@ public class PerekScheduleService
             }
             // A gap that left no study day this week: fall back to the last
             // perek scheduled before this day in the cycle.
-            var previous = upper > 0 ? perekIds[upper - 1] : perekIds[^1];
+            var previous = perekIds[Math.Max(0, upper - 1)];
             return new CalendarDay(
                 dateNum,
                 day,
