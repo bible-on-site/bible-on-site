@@ -637,4 +637,20 @@ public class MasoraViewModelTests
         fixture.Model.CheckedPerushim.Should().HaveCount(2);
         fixture.Model.InlineCommentaryLimitMessage.Should().Contain("2");
     }
+
+    [Fact]
+    public async Task PerushimSelectionStatus_ReflectsCheckedCountOutOfConfiguredLimit()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize();
+        await fixture.Model.LoadByUnitIdAsync(1);
+
+        fixture.Model.PerushimSelectionStatus.Should().Be("נבחרו 0 מתוך 5");
+        fixture.Model.PerushimLimitReached.Should().BeFalse();
+
+        fixture.Model.ToggleCheckedPerush(1);
+
+        fixture.Model.PerushimSelectionStatus.Should().Be("נבחרו 1 מתוך 5");
+        fixture.Model.PerushimLimitReached.Should().BeFalse();
+    }
 }
