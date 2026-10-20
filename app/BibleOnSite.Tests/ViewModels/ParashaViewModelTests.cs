@@ -172,9 +172,9 @@ public class ParashaViewModelTests
     }
 
     [Fact]
-    public void Selection_WithoutUnit_StaysEmpty()
+    public async Task Selection_WithoutUnit_StaysEmpty()
     {
-        var fixture = new Fixture();
+        await using var fixture = new Fixture();
         fixture.Model.ToggleSelectedPasuk(1, 1);
         fixture.Model.SelectedPasukCount.Should().Be(1);
         fixture.Model.GetSelectedPesukim().Should().BeEmpty();
@@ -334,7 +334,8 @@ public class ParashaViewModelTests
         await fixture.Model.NavigateToUnitAsync(2);
         fixture.Model.IsPerushChecked(1).Should().BeTrue();
         fixture.Model.GetPerushimForRow(3, 5).Should().ContainSingle();
-        new Fixture().Model.GetPerushimForRow(1, 1).Should().BeEmpty();
+        await using var bare = new Fixture();
+        bare.Model.GetPerushimForRow(1, 1).Should().BeEmpty();
     }
 
     [Fact]
@@ -614,7 +615,8 @@ public class ParashaViewModelTests
 
         // Unknown center ids and a catalog that never loaded are both no-ops.
         await fixture.Model.PreloadAdjacentRowsAsync(999);
-        await new Fixture().Model.PreloadAdjacentRowsAsync(1); // service not loaded
+        await using var unloaded = new Fixture();
+        await unloaded.Model.PreloadAdjacentRowsAsync(1); // service not loaded
     }
 
     [Fact]
