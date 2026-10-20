@@ -45,8 +45,22 @@ public partial class AppShell : Shell
 		Routing.RegisterRoute(AppRoutes.SearchReader, typeof(PerekPage));
 		Routing.RegisterRoute(AppRoutes.Masora, typeof(MasoraPage));
 
+		// Styled exit/stay prompt — theme-blue "stay" and red "exit" text (#2460).
+		ExitConfirmation.UsePlatformPrompt(Controls.ExitConfirmationPopup.ShowAsync);
+
+		Navigating += OnShellNavigating;
 		Navigated += OnNavigated;
 	}
+
+	/// <summary>
+	/// True while a Shell navigation transition is still settling. Back presses
+	/// that land inside that window are consumed rather than fed back into the
+	/// base pipeline — a second pass can pop the page beneath the one already
+	/// transitioning out and leave an empty surface after "stay" (#2460).
+	/// </summary>
+	private bool _navigationInFlight;
+
+	private void OnShellNavigating(object? sender, ShellNavigatingEventArgs e) => _navigationInFlight = true;
 
 	internal void CompleteStartup()
 	{
@@ -197,7 +211,7 @@ public partial class AppShell : Shell
 			return true;
 		}
 
-		return BackExitPlan.Evaluate(base.OnBackButtonPressed(), FlyoutIsPresented) switch
+		return BackExitPlan.Evaluate(_navigationInFlight, base.OnBackButtonPressed, FlyoutIsPresented) switch
 		{
 			BackExitAction.Consume => true,
 			BackExitAction.ConfirmExit => ExitConfirmation.Shared.Request(),
@@ -207,6 +221,7 @@ public partial class AppShell : Shell
 
 	private void OnNavigated(object? sender, ShellNavigatedEventArgs e)
 	{
+		_navigationInFlight = false;
 		var analytics = Application.Current?.Handler?.MauiContext?.Services.GetService<IAnalyticsService>();
 		if (analytics == null)
 		{
