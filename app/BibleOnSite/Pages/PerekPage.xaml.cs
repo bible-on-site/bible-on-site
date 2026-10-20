@@ -371,16 +371,11 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         _swipe.Move(position, slop);
     }
 
-    private void OnTouchReleased(object? sender, TouchPosition position) => SettleSwipe(position);
-
-    private void OnTouchCancelled(object? sender, TouchPosition position)
-    {
-        // A native cancel/interruption mid-swipe can strand the carousel
-        // mid-offset just like a release — settle it too, on the freshest
-        // finger position we tracked (#2469).
+    // Releases and native cancels/interruptions both arrive here: a cancel
+    // mid-swipe can strand the carousel mid-offset just like a release, so
+    // it settles the same way (#2469).
+    private void OnTouchReleased(object? sender, TouchPosition position) =>
         SettleSwipe(_swipe.Last ?? position);
-        _swipe.Cancel();
-    }
 
     private void SettleSwipe(TouchPosition position)
     {
@@ -424,7 +419,6 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         MainActivity.UnsubscribeTouchDispatched(OnTouchDispatched);
         MainActivity.TouchMoved -= OnTouchMoved;
         MainActivity.TouchReleased -= OnTouchReleased;
-        MainActivity.TouchCancelled -= OnTouchCancelled;
         _swipe.Cancel();
         LongPressBehavior.CancelAllPending();
 #endif
@@ -470,7 +464,6 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         MainActivity.SubscribeTouchDispatched(OnTouchDispatched);
         MainActivity.TouchMoved += OnTouchMoved;
         MainActivity.TouchReleased += OnTouchReleased;
-        MainActivity.TouchCancelled += OnTouchCancelled;
 #endif
 #if IOS
         ApplyBottomBarSafeArea();

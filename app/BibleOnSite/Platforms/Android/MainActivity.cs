@@ -120,7 +120,6 @@ public class MainActivity : MauiAppCompatActivity
         _touchDispatched -= handler;
     public static event EventHandler<TouchPosition>? TouchReleased;
     public static event EventHandler<TouchPosition>? TouchMoved;
-    public static event EventHandler<TouchPosition>? TouchCancelled;
 
     public override bool DispatchTouchEvent(MotionEvent? e)
     {
@@ -173,7 +172,9 @@ public class MainActivity : MauiAppCompatActivity
                 _singleTouchActive = false;
                 _touch.Abort();
                 LongPressBehavior.CancelAllPending();
-                TouchCancelled?.Invoke(this, new TouchPosition(e.RawX, e.RawY, e.EventTime));
+                // Cancel/interruption ends the gesture too — deliver it as a
+                // release so subscribers can settle any in-flight swipe.
+                TouchReleased?.Invoke(this, new TouchPosition(e.RawX, e.RawY, e.EventTime));
                 break;
 
             default:
