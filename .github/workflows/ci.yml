@@ -3105,10 +3105,13 @@ jobs:
       # percentage. --relocate canonicalizes absolute runner paths (Linux and
       # macOS legs differ) so the same source line counts exactly once. The E2E
       # layers come from a separately instrumented app build whose OpenCover
-      # template enumerates every sequence point it could hit — far more lines
-      # than the unit/integration report knows about. --hits-only keeps their
-      # covered lines while dropping that foreign zero-hit enumeration, which
-      # otherwise inflates the app flag's denominator (#2270).
+      # template enumerates a different sequence-point universe — more lines
+      # than the unit/integration report knows about, plus e2e-only files.
+      # --hits-only intersects them onto the canonical universe: their hits
+      # confirm lines unit/integration already list, while the foreign
+      # enumeration — hit or not — never extends the merged denominator.
+      # E2E branch arms never merge: BRDA indices are per-instrumenter and
+      # an identical tuple can name a different arm (#2270).
       - name: Merge App coverage layers
         if: needs.app_ci.result == 'success'
         working-directory: ${{ env.DEVOPS_DIRECTORY }}

@@ -115,4 +115,13 @@ public class ExitConfirmationTests
 		ExitConfirmation.ExitLabel.Should().Be("צא מהישומון");
 		ExitConfirmation.StayLabel.Should().Be("המשך ללמוד");
 	}
+
+[Fact]
+	public async Task Shared_Request_RunsTheShellPromptStub_AndStays()
+	{
+		// No Shell exists in unit tests: the default prompt resolves to false.
+		ExitConfirmation.Shared.Request().Should().BeTrue();
+		await ExitConfirmation.Shared.ActivePrompt!;
+		ExitConfirmation.Shared.IsPromptShowing.Should().BeFalse();
+	}
 }

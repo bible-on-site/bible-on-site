@@ -263,6 +263,63 @@ public class SearchMatchTests
 
     #endregion
 
+    #region ResolvePerushTargetAsync
+
+    [Fact]
+    public async Task ResolvePerushTargetAsync_uses_note_contents_when_no_loader()
+    {
+        var display = new PerushNoteDisplay { PerushName = "רש\"י", PerushId = 3,
+            NoteContents = ["הערה של בראשית"] };
+        var hit = new PerushSearchResult("3", "הערה של בראשית", 1, 5, "בראשית");
+
+        var target = await SearchMatch.ResolvePerushTargetAsync(hit, [display]);
+
+        target.Should().NotBeNull();
+        target!.Value.Display.Should().BeSameAs(display);
+        target!.Value.Span.Should().Be(new SearchMatchSpan(8, 6));
+    }
+
+    [Fact]
+    public async Task ResolvePerushTargetAsync_searches_all_displays_for_unparseable_perush_id()
+    {
+        var hit = new PerushSearchResult("not-a-number", "הערה של בראשית", 1, 5, "בראשית");
+        var displays = new List<PerushNoteDisplay>
+        {
+            new() { PerushName = "רש\"י", PerushId = 1, NoteContents = ["הערה של בראשית"] },
+        };
+
+        var target = await SearchMatch.ResolvePerushTargetAsync(hit, displays);
+
+        target.Should().NotBeNull();
+        target!.Value.Display.PerushId.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task ResolvePerushTargetAsync_returns_null_when_no_display_carries_the_match()
+    {
+        var hit = new PerushSearchResult("1", "אין התאמה", 1, 5, "נדיר");
+        var displays = new List<PerushNoteDisplay>
+        {
+            new() { PerushName = "רש\"י", PerushId = 1, NoteContents = ["הערה אחרת"] },
+            new() { PerushName = "אבן עזרא", PerushId = 2, NoteContents = ["גם לא"] },
+        };
+
+        (await SearchMatch.ResolvePerushTargetAsync(hit, displays)).Should().BeNull();
+    }
+
+    [Fact]
+    public void Locate_skips_unscored_words_before_the_token_match()
+    {
+        // Token fallback: early words score 0 against every query term, so the
+        // scan resets until the later word wins.
+        var span = SearchMatch.Locate("משהו אחר בראשית", "נדיר בראשית");
+
+        span.Should().Be(new SearchMatchSpan(9, 6));
+    }
+
+
+    #endregion
+
     #region ResolveArticleTarget
 
     [Fact]
