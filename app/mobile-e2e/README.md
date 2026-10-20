@@ -22,7 +22,8 @@ prefix impersonating the app. This avoids expensive process snapshots. Confirmed
 and timeout failures fail the run. `MOBILE_KEEP_APP=1` retains the review app.
 The existing 15-second session-delete and 15-minute pilot limits remain intact.
 
-CI runs the complete iOS suite across three independent `xcode-27` runners,
+CI runs the complete iOS suite across three independent
+`namespace-profile-mac-os` runners (the shared build stays on `xcode-27`),
 each with one simulator and one shared Appium session. Each host has 3 CPUs and
 7 GB RAM. `Shard=1|2|3` forms a disjoint 3/4/3 partition. The rapid verse-scroll
 storm runs on runner 1 and the long-commentary storm on runner 2; the short
