@@ -167,6 +167,25 @@ public partial class SearchViewModel : ObservableObject
         filter.UnavailableReason(NetworkProbe(), CommentaryPackProbe());
 
     /// <summary>
+    /// Selected kinds the latest search skipped because their prerequisite
+    /// was missing. When one becomes available again the open search re-runs
+    /// so its results stop missing the regained kind (#2454).
+    /// </summary>
+    private HashSet<SearchFilter> _skippedUnavailableKinds = new();
+
+    /// <summary>True when a kind the last search skipped can serve a search now.</summary>
+    public bool HasRegainedAvailableKind()
+    {
+        if (_skippedUnavailableKinds.Count == 0)
+        {
+            return false;
+        }
+        var online = NetworkProbe();
+        var packAvailable = CommentaryPackProbe();
+        return _skippedUnavailableKinds.Any(filter => filter.IsAvailable(online, packAvailable));
+    }
+
+    /// <summary>
     /// בחר הכל for the kinds sheet: toggles every currently-available kind and
     /// leaves unavailable ones with their stored intent (#2454).
     /// </summary>
@@ -366,6 +385,9 @@ public partial class SearchViewModel : ObservableObject
         var online = NetworkProbe();
         var packAvailable = CommentaryPackProbe();
         var filters = _enabledFilters.Where(filter => filter.IsAvailable(online, packAvailable)).ToHashSet();
+        // Remember which selected kinds this query skipped — when one becomes
+        // available again the caller re-runs so results stop missing it (#2454).
+        _skippedUnavailableKinds = _enabledFilters.Where(filter => !filter.IsAvailable(online, packAvailable)).ToHashSet();
         var books = _enabledSefarim.ToHashSet();
         var limit = Math.Clamp(ResultsLimit, 1, 50);
         var ordering = new SearchOrdering(Sorting, _perushim.ToDictionary(pair => pair.Key, pair => pair.Value.Priority));

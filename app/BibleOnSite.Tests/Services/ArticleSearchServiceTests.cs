@@ -143,6 +143,35 @@ public class ArticleSearchServiceTests
     }
 
     [Fact]
+    public async Task HasRegainedAvailableKind_ReflectsSkippedKindsAcrossReconnect()
+    {
+        var online = false;
+        await using var storage = new TestStorage();
+        var vm = new SearchViewModel(
+            new PerekDataService(new LocalDatabaseService(storage.FileSystem.Object)),
+            null,
+            null)
+        {
+            SearchPhrase = "בראשית",
+            NetworkProbe = () => online,
+            CommentaryPackProbe = () => true,
+        };
+        // Only remote kinds stay selected — offline they are skipped (#2454).
+        foreach (var filter in new[] { SearchFilter.Author, SearchFilter.Pasuk, SearchFilter.Perush, SearchFilter.Perek })
+        {
+            vm.SetFilterEnabled(filter, false);
+        }
+
+        vm.HasRegainedAvailableKind().Should().BeFalse("nothing skipped before the first search");
+        await vm.SearchAsync(TestContext.Current.CancellationToken);
+        vm.HasRegainedAvailableKind().Should().BeFalse("still offline");
+
+        online = true;
+
+        vm.HasRegainedAvailableKind().Should().BeTrue("the skipped remote kinds can serve now");
+    }
+
+    [Fact]
     public async Task SearchViewModel_DisabledArticleFilter_SkipsRemoteCall()
     {
         using var http = new GraphQLTransport(SearchResponse);

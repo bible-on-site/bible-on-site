@@ -31,9 +31,10 @@ public class HtmlView : View
     /// <see cref="HtmlContent"/>. Perush rows gate their name label on this so
     /// the name and contents surface as one update instead of a name-only
     /// flash followed by a layout jump (#2451), and a recycled cell can never
-    /// pair a new perush name with the previous contents.
+    /// pair a new perush name with the previous contents. A lazy display's
+    /// empty-string binding is not readiness — whitespace still waits (#2451).
     /// </summary>
-    public bool IsContentReady => ContentLoader == null || HtmlContent != null;
+    public bool IsContentReady => ContentLoader == null || !string.IsNullOrWhiteSpace(HtmlContent);
 
     private int _contentLoadSerial;
 

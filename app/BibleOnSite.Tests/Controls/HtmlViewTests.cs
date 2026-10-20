@@ -353,6 +353,22 @@ public class HtmlViewTests
         changes.Count(name => name == nameof(HtmlView.IsContentReady)).Should().BeGreaterThanOrEqualTo(2);
     }
 
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void IsContentReady_WithLoader_EmptyBindingIsNotReady(string bound)
+    {
+        // A lazy display's DisplayContent binds string.Empty before the
+        // loader publishes — the name must wait for real content (#2451).
+        var htmlView = new HtmlView
+        {
+            ContentLoader = () => Task.FromResult(new List<string> { "a" }),
+            HtmlContent = bound
+        };
+
+        htmlView.IsContentReady.Should().BeFalse();
+    }
+
     [Fact]
     public void IsContentReady_ErrorContentStillMarksReady()
     {

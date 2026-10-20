@@ -29,20 +29,75 @@ public partial class FloatingSearchBar : ContentView
         _viewModel.PropertyChanged += (_, _) => UpdateStatus();
         SearchPanel.SizeChanged += (_, _) => ResizeFilterSheet();
         // Kind availability follows live prerequisites: connectivity and the
-        // installed commentary pack (#2454).
-        Connectivity.Current.ConnectivityChanged += (_, _) => Dispatcher.Dispatch(RefreshKindAvailability);
+        // installed commentary pack (#2454). The subscriptions stay detached
+        // while this control is unloaded so a popped reader is never kept
+        // alive by the singleton services.
+        AttachAvailabilityWatchers();
+        Loaded += (_, _) =>
+        {
+            AttachAvailabilityWatchers();
+            if (_filtersBuilt)
+            {
+                RefreshKindAvailability();
+            }
+        };
+        Unloaded += (_, _) =>
+        {
+            DetachAvailabilityWatchers();
+            _debounce?.Cancel();
+            _viewModel.CancelSearch();
+        };
+        RefreshRecentHistory();
+        _buildingFilters = false;
+    }
+
+    /// <summary>
+    /// Kind-availability watchers on the singleton services. Named handlers +
+    /// an idempotent attach/detach pair keep a popped reader from staying
+    /// subscribed (and alive) for the process lifetime.
+    /// </summary>
+    private bool _watchingAvailability;
+    private PerushimNotesService? _notesService;
+
+    private void AttachAvailabilityWatchers()
+    {
+        if (_watchingAvailability)
+        {
+            return;
+        }
+        Connectivity.Current.ConnectivityChanged += OnConnectivityChanged;
         try
         {
-            PerushimNotesService.Instance.OperationCompleted += () => Dispatcher.Dispatch(RefreshKindAvailability);
+            _notesService ??= PerushimNotesService.Instance;
+            _notesService.OperationCompleted += OnNotesOperationCompleted;
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             // A host without the pack service simply keeps static availability.
             Console.Error.WriteLine($"Commentary-pack watcher unavailable: {ex}");
         }
-        RefreshRecentHistory();
-        _buildingFilters = false;
+        _watchingAvailability = true;
     }
+
+    private void DetachAvailabilityWatchers()
+    {
+        if (!_watchingAvailability)
+        {
+            return;
+        }
+        Connectivity.Current.ConnectivityChanged -= OnConnectivityChanged;
+        if (_notesService != null)
+        {
+            _notesService.OperationCompleted -= OnNotesOperationCompleted;
+        }
+        _watchingAvailability = false;
+    }
+
+    private void OnConnectivityChanged(object? sender, ConnectivityChangedEventArgs e)
+        => Dispatcher.Dispatch(RefreshKindAvailability);
+
+    private void OnNotesOperationCompleted()
+        => Dispatcher.Dispatch(RefreshKindAvailability);
 
     public void SetSource(string source) => SearchInput.Placeholder = source;
 
@@ -426,6 +481,15 @@ public partial class FloatingSearchBar : ContentView
             SemanticProperties.SetDescription(row.Check, available ? row.Title.Text : $"{row.Title.Text}, {reason}");
         }
         UpdateKindsSelectAll();
+        // Availability that returns after a search snapshotted its kinds (or
+        // mid-flight) leaves results missing until a retype — re-run the open
+        // query once the regained kinds can actually serve it (#2454).
+        if (IsSearchOpen
+            && !string.IsNullOrWhiteSpace(_viewModel.SearchPhrase)
+            && _viewModel.HasRegainedAvailableKind())
+        {
+            ScheduleSearch();
+        }
     }
 
     /// <summary>Mirrors the kinds set's all/partial/none selection onto its בחר הכל box.</summary>
