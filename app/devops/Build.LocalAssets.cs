@@ -1,7 +1,9 @@
 using System.Diagnostics;
 using Nuke.Common;
 
+#pragma warning disable S2333 // NUKE targets are split across Build partial declarations.
 partial class Build
+#pragma warning restore S2333
 {
     // These targets are selected only by local run commands. Their ordering
     // prepares generated assets before restore/project evaluation, including watch.
@@ -37,7 +39,8 @@ partial class Build
         start.ArgumentList.Add(platform);
         start.ArgumentList.Add("--app-directory");
         start.ArgumentList.Add(SourceDirectory.ToString());
-        using var process = Process.Start(start)
+        // Fixed Node entry point; ArgumentList preserves paths as data and no shell is used.
+        using var process = Process.Start(start) // nosemgrep
             ?? throw new InvalidOperationException("Could not start recitation asset preparation.");
         process.WaitForExit();
         if (process.ExitCode != 0)
