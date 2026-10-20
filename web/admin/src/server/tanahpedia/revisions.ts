@@ -8,7 +8,11 @@ import {
 	shouldSquashIntoHead,
 } from "~/lib/tanahpedia/revisions-shared";
 import { execute, query, transaction, txExecute, txQueryOne } from "../db";
-import { PEDIA_INVALIDATION, revalidateWebsite } from "../website-revalidate";
+import {
+	pediaEntryPath,
+	pediaInvalidation,
+	revalidateWebsite,
+} from "../website-revalidate";
 
 const REVISION_COLUMNS =
 	"id, entry_id, proposed_unique_name, proposed_title, proposed_content, source, notes, status, base_revision_id, created_at, updated_at";
@@ -79,6 +83,8 @@ export interface SavedEntryRevisionResult {
 	headRevisionId: string | null;
 	/** True when the save was a no-op, meaning no public content changed. */
 	unchanged?: boolean;
+	/** The unique_name the entry had before this save (undefined if unchanged). */
+	previousUniqueName?: string;
 }
 
 /**
@@ -173,7 +179,11 @@ export const saveEntryRevisioned = createServerOnlyFn(
 			"SELECT id, unique_name, title, content, created_at, updated_at FROM tanahpedia_entry WHERE id = ?",
 			[input.id],
 		);
-		return { entry: saved as EntryRow, headRevisionId: headId };
+		return {
+			entry: saved as EntryRow,
+			headRevisionId: headId,
+			previousUniqueName: entry.unique_name,
+		};
 	},
 );
 
@@ -211,6 +221,7 @@ export const approveEntryRevision = createServerFn({ method: "POST" })
 
 			let headId: string | null = null;
 			let targetEntryId = revision.entry_id;
+			let previousUniqueName: string | null = null;
 
 			if (revision.entry_id) {
 				const entry = await lockEntry(conn, revision.entry_id);
@@ -219,6 +230,7 @@ export const approveEntryRevision = createServerFn({ method: "POST" })
 						"the entry targeted by this revision no longer exists",
 					);
 				}
+				previousUniqueName = entry.unique_name;
 				const head = await headRevision(conn, revision.entry_id);
 				headId = head?.id ?? null;
 				if (revision.base_revision_id && revision.base_revision_id !== headId) {
@@ -270,11 +282,23 @@ export const approveEntryRevision = createServerFn({ method: "POST" })
 				revisionId: revision.id,
 				entryId: targetEntryId,
 				headRevisionId: revision.id,
+				uniqueName:
+					revision.proposed_unique_name ?? previousUniqueName,
+				previousUniqueName,
 			};
 		});
-		// Post-commit: the proposal is now live content, so pedia caches expire.
-		await revalidateWebsite(PEDIA_INVALIDATION);
-		return applied;
+		// Post-commit: the proposal is now live content, so pedia caches
+		// expire. Old and new URLs are both notified after a rename.
+		const urls = new Set<string>();
+		if (applied.uniqueName) urls.add(pediaEntryPath(applied.uniqueName));
+		if (applied.previousUniqueName) {
+			urls.add(pediaEntryPath(applied.previousUniqueName));
+		}
+		await revalidateWebsite(pediaInvalidation(...urls));
+		// uniqueName/previousUniqueName are notification bookkeeping, not part
+		// of the handler's public result.
+		const { uniqueName, previousUniqueName, ...result } = applied;
+		return result;
 	});
 
 /** Marks a PENDING external proposal as rejected. */
@@ -350,8 +374,21 @@ export const restoreEntryRevision = createServerFn({ method: "POST" })
 				"SELECT id, unique_name, title, content, created_at, updated_at FROM tanahpedia_entry WHERE id = ?",
 				[revision.entry_id],
 			);
-			return { entry: saved, headRevisionId: headId };
+			return {
+				entry: saved,
+				headRevisionId: headId,
+				previousUniqueName: entry.unique_name,
+			};
 		});
-		await revalidateWebsite(PEDIA_INVALIDATION);
-		return restored;
+		// Notify the restored URL and the pre-restore one if the rename moved it.
+		const urls = new Set<string>();
+		if (restored.entry?.unique_name) {
+			urls.add(pediaEntryPath(restored.entry.unique_name));
+		}
+		if (restored.previousUniqueName) {
+			urls.add(pediaEntryPath(restored.previousUniqueName));
+		}
+		await revalidateWebsite(pediaInvalidation(...urls));
+		const { previousUniqueName, ...result } = restored;
+		return result;
 	});

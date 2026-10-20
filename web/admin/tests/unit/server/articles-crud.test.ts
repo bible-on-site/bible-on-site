@@ -846,6 +846,60 @@ describe("website cache invalidation", () => {
 		expect(revalidatedTags()).toEqual(["articles"]);
 	});
 
+	function notifiedUrls(callIndex = 0): string[] {
+		const url = new URL(String(fetchSpy.mock.calls[callIndex][0]));
+		return url.searchParams.getAll("url");
+	}
+
+	it("reports the new article url after a committed create", async () => {
+		mocks.txExecute.mockResolvedValue({ insertId: 7 });
+		mocks.txQueryOne.mockResolvedValue({ id: 7, name: "מאמר", perek_id: 5 });
+
+		await createArticle({ data: article });
+
+		expect(notifiedUrls()).toEqual(["/929/5/7"]);
+	});
+
+	it("reports the new url plus the stale one after a perek move", async () => {
+		mocks.txExecute.mockResolvedValue({});
+		mocks.txQueryOne
+			.mockResolvedValueOnce({ perek_id: 5 })
+			.mockResolvedValue({ id: 7, name: "מאמר", perek_id: 9 });
+
+		await updateArticle({ data: { ...article, id: 7, perek_id: 9 } });
+
+		expect(notifiedUrls()).toEqual(["/929/9/7", "/929/5/7"]);
+	});
+
+	it("reports only the new url when the article row was already gone", async () => {
+		mocks.txExecute.mockResolvedValue({});
+		mocks.txQueryOne
+			.mockResolvedValueOnce(null)
+			.mockResolvedValue({ id: 7, name: "מאמר", perek_id: 9 });
+
+		await updateArticle({ data: { ...article, id: 7, perek_id: 9 } });
+
+		expect(notifiedUrls()).toEqual(["/929/9/7"]);
+	});
+
+	it("reports the removed article url after a delete", async () => {
+		mocks.queryOne.mockResolvedValue({ perek_id: 5 });
+		mocks.txExecute.mockResolvedValue({});
+
+		await deleteArticle({ data: 7 });
+
+		expect(notifiedUrls()).toEqual(["/929/5/7"]);
+	});
+
+	it("sends no url when the deleted article row was already gone", async () => {
+		mocks.queryOne.mockResolvedValue(null);
+		mocks.txExecute.mockResolvedValue({});
+
+		await deleteArticle({ data: 7 });
+
+		expect(notifiedUrls()).toEqual([]);
+	});
+
 	it("still resolves the save when the website is unreachable", async () => {
 		fetchSpy.mockRejectedValue(new Error("connect refused"));
 		vi.spyOn(console, "error").mockImplementation(() => {});
