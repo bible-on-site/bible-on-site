@@ -1402,16 +1402,6 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     }
 
     /// <summary>
-    /// קריינות menu item - toggles single-tap pasuk playback and the header
-    /// play button. The item only renders when the current perek has a
-    /// downloaded recitation.
-    /// </summary>
-    private void OnQriynotTapped(object? sender, TappedEventArgs e)
-    {
-        _viewModel.IsQriynotEnabled = !_viewModel.IsQriynotEnabled;
-    }
-
-    /// <summary>
     /// קריינות header play button - plays the whole perek's recording.
     /// </summary>
     private async void OnHeaderPlayClicked(object? sender, EventArgs e)

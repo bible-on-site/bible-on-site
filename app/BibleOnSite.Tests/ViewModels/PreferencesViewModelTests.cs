@@ -852,6 +852,17 @@ public class PreferencesViewModelTests : IDisposable
         }
 
         [Fact]
+        public void QriynotEnabled_MirrorsTheService_AndWritesBack()
+        {
+            _service.Load();
+            var viewModel = new PerekPreferencesViewModel(_service);
+
+            viewModel.QriynotEnabled.Should().BeTrue("the global קריינות switch defaults on");
+            viewModel.QriynotEnabled = false;
+            _service.QriynotEnabled.Should().BeFalse();
+        }
+
+        [Fact]
         public void IsPerekToLoadLastLearnt_ReturnsTrue_WhenPerekToLoadIsLastLearnt()
         {
             _service.PerekToLoad = PerekToLoad.LastLearnt;

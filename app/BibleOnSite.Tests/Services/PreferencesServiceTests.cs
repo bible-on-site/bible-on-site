@@ -396,5 +396,35 @@ public class PreferencesServiceTests : IDisposable
         storage.Get("key3", false).Should().BeFalse();
     }
 
+    [Fact]
+    public void QriynotEnabled_DefaultsOn_ForNewAndUpgradedInstallations()
+    {
+        _service.Load();
+        _service.QriynotEnabled.Should().BeTrue("קריינות ships enabled; an unset preference resolves to on");
+    }
+
+    [Fact]
+    public void QriynotEnabled_SurvivesRestart_AndHonorsStoredOff()
+    {
+        _service.Load();
+        _service.QriynotEnabled = false;
+
+        var restored = PreferencesService.CreateForTesting(_storage);
+        restored.Load();
+        restored.QriynotEnabled.Should().BeFalse("an explicit off choice persists across restarts");
+
+        restored.QriynotEnabled = true;
+        _service.Load();
+        _service.QriynotEnabled.Should().BeTrue();
+    }
+
+    [Fact]
+    public void QriynotEnabled_StoredOffBeforeUpgrade_StaysOff()
+    {
+        _storage.Set("qriynotEnabled", false);
+        _service.Load();
+        _service.QriynotEnabled.Should().BeFalse();
+    }
+
     #endregion
 }

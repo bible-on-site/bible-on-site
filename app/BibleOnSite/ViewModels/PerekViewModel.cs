@@ -125,10 +125,27 @@ public partial class PerekViewModel : ObservableObject
     [ObservableProperty]
     private bool _tikkunMarksHidden;
 
-    /// <summary>קריינות reading mode — header play button plus single-tap pasuk playback.</summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ShowHeaderPlayButton))]
-    private bool _isQriynotEnabled;
+    /// <summary>
+    /// קריינות — mirrors the global preference (העדפות → על הפרק, default on).
+    /// Setting it writes through to <see cref="PreferencesService.QriynotEnabled"/>.
+    /// </summary>
+    public bool IsQriynotEnabled
+    {
+        get => _preferencesService.QriynotEnabled;
+        set
+        {
+            if (_preferencesService.QriynotEnabled == value)
+            {
+                return;
+            }
+
+            _preferencesService.QriynotEnabled = value;
+            // The PreferencesChanged subscriber raises the property-changed
+            // notifications; raise them here too for the unsaved toggle path.
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(ShowHeaderPlayButton));
+        }
+    }
 
     /// <summary>Whether a recitation is downloaded for the currently displayed perek.</summary>
     [ObservableProperty]
@@ -1257,6 +1274,8 @@ public partial class PerekViewModel : ObservableObject
             DivineNameMaskingRevision = DivineNameMasking.Revision;
         }
         OnPropertyChanged(nameof(DivineNameMaskingEnabled));
+        OnPropertyChanged(nameof(IsQriynotEnabled));
+        OnPropertyChanged(nameof(ShowHeaderPlayButton));
         OnPropertyChanged(nameof(InlineCommentaryLimitMessage));
         OnPropertyChanged(nameof(InlineCommentaryLimit));
         if (CheckedPerushim.Count > _preferencesService.InlineCommentaryLimit)

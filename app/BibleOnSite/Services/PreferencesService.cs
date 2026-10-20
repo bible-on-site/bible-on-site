@@ -136,6 +136,30 @@ public class PreferencesService
         [DivineNameMaskOption.AsIs, DivineNameMaskOption.Hyphen, DivineNameMaskOption.Custom];
 
 
+    private const string QriynotEnabledKey = "qriynotEnabled";
+    private bool _qriynotEnabled = true;
+
+    /// <summary>
+    /// Global קריינות switch (העדפות → על הפרק). Default on for new and upgraded
+    /// installations — an unset preference resolves to enabled, while a stored
+    /// explicit choice (including off) is honored (#2472).
+    /// </summary>
+    public bool QriynotEnabled
+    {
+        get => _qriynotEnabled;
+        set
+        {
+            if (_qriynotEnabled == value)
+            {
+                return;
+            }
+
+            _qriynotEnabled = value;
+            _storage.Set(QriynotEnabledKey, value);
+            OnPreferencesChanged();
+        }
+    }
+
     private double _recitationSpeed = 1;
     private double _recitationVolume = 1;
     private double _lessonsVolume = 1;
@@ -464,6 +488,7 @@ public class PreferencesService
     public void Load()
     {
         _masoraMenuEnabled = _storage.Get(MasoraMenuEnabledKey, false);
+        _qriynotEnabled = _storage.Get(QriynotEnabledKey, true);
         var storedConsent = _storage.Get(AnalyticsConsent.StorageKey, "");
         // Garbage keeps the "never asked" state so the prompt can still run.
         _analyticsConsent = storedConsent is AnalyticsConsent.GrantedValue or AnalyticsConsent.DeniedValue
