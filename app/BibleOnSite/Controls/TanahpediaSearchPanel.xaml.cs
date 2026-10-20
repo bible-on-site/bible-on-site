@@ -115,13 +115,16 @@ public partial class TanahpediaSearchPanel : ContentView
                         _viewModel.SetCategoryEnabled(parent.Key, enabled));
                 ((Label)parentRow.Children[1]).FontAttributes = FontAttributes.Bold;
                 KindsFilters.Add(parentRow);
-                foreach (var child in parent.Children)
+                foreach (var childRow in parent.Children.Select(child =>
                 {
-                    var childRow = FilterRow(child.Label, $"TanahpediaKind{child.Key}",
+                    var row = FilterRow(child.Label, $"TanahpediaKind{child.Key}",
                         _viewModel.IsCategoryEnabled(child.Key), enabled =>
                             _viewModel.SetCategoryEnabled(child.Key, enabled));
-                    childRow.Margin = new Thickness(28, 0, 0, 0);
-                    ((Label)childRow.Children[1]).FontSize = 13;
+                    row.Margin = new Thickness(28, 0, 0, 0);
+                    ((Label)row.Children[1]).FontSize = 13;
+                    return row;
+                }))
+                {
                     KindsFilters.Add(childRow);
                 }
             }
@@ -209,14 +212,9 @@ public partial class TanahpediaSearchPanel : ContentView
         }
         else if (e.StatusType is GestureStatus.Completed or GestureStatus.Canceled)
         {
-            if (FilterSheet.TranslationY > 70)
-            {
-                _ = CloseFilterSheetAsync();
-            }
-            else
-            {
-                _ = FilterSheet.TranslateToAsync(0, 0, 150, Easing.CubicOut);
-            }
+            _ = FilterSheet.TranslationY > 70
+                ? CloseFilterSheetAsync()
+                : FilterSheet.TranslateToAsync(0, 0, 150, Easing.CubicOut);
         }
     }
 
@@ -269,7 +267,7 @@ public partial class TanahpediaSearchPanel : ContentView
         {
             // Replaced queries and closing the panel intentionally cancel this search.
         }
-        catch (Exception ex)
+        catch (Exception ex) //NOSONAR — failure boundary: a failed search must not crash the overlay.
         {
             Console.Error.WriteLine($"Tanahpedia search failed: {ex}");
         }
@@ -296,7 +294,7 @@ public partial class TanahpediaSearchPanel : ContentView
         {
             await SearchInput.HideSoftInputAsync(CancellationToken.None);
         }
-        catch (Exception ex)
+        catch (Exception ex) //NOSONAR — keyboard dismissal is best-effort and must not crash the panel.
         {
             Console.Error.WriteLine($"Could not dismiss search keyboard: {ex}");
         }

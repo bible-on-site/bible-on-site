@@ -34,6 +34,7 @@ public partial class TanahpediaSearchViewModel : ObservableObject
     }
 
 #pragma warning disable MVVMTK0045
+#pragma warning disable S2333 // ObservableProperty-generated setters assign these fields.
     [ObservableProperty]
     private string _searchPhrase = string.Empty;
 
@@ -52,6 +53,7 @@ public partial class TanahpediaSearchViewModel : ObservableObject
     /// <summary>Summary text for the מה לחפש chip.</summary>
     [ObservableProperty]
     private string _categorySummary = "הכל";
+#pragma warning restore S2333
 #pragma warning restore MVVMTK0045
 
     public bool HasResults => Results.Count > 0;
@@ -100,12 +102,10 @@ public partial class TanahpediaSearchViewModel : ObservableObject
                 _selectedCategories.Remove(child.Key);
             }
             // A child being removed also unchecks its parent.
-            foreach (var parent in TanahpediaTaxonomy.Hierarchy)
+            foreach (var parent in TanahpediaTaxonomy.Hierarchy.Where(
+                parent => parent.Children.Any(child => child.Key == key)))
             {
-                if (parent.Children.Any(child => child.Key == key))
-                {
-                    _selectedCategories.Remove(parent.Key);
-                }
+                _selectedCategories.Remove(parent.Key);
             }
         }
         RefreshCategorySummary();
@@ -203,7 +203,7 @@ public partial class TanahpediaSearchViewModel : ObservableObject
         {
             // A newer search or a closed panel cancelled this one.
         }
-        catch (Exception ex)
+        catch (Exception ex) //NOSONAR — failure boundary: a failed search must land on the availability note, not crash the panel.
         {
             Console.Error.WriteLine($"Tanahpedia scoped search failed: {ex}");
             if (version == _searchVersion)
