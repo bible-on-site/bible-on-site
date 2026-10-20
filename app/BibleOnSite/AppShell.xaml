@@ -221,7 +221,7 @@
                             <Label Text="תנאי שימוש"
                                    FontSize="16"
                                    TextColor="{StaticResource Gray900}"/>
-                            <Label Text="והצהרת פרטיות"
+                            <Label Text="הצהרות פרטיות ונגישות"
                                    FontSize="12"
                                    TextColor="{StaticResource Gray500}"/>
                         </VerticalStackLayout>
