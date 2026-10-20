@@ -29,6 +29,8 @@ public partial class TanahpediaEntityTypePage : ContentPage
         BindingContext = _viewModel;
         SetupFontSizeResources();
         IntroHtml.LinkTapped += OnIntroLinkTapped;
+        TanahpediaSearch.OnEntrySelected = async uniqueName =>
+            await _viewModel.OpenEntryCommand.ExecuteAsync(uniqueName);
     }
 
     private void SetupFontSizeResources()
@@ -77,10 +79,6 @@ public partial class TanahpediaEntityTypePage : ContentPage
         await TanahpediaSearch.OpenAsync();
     }
 
-    private async void OnSearchEntrySelected(object? sender, string uniqueName) //NOSONAR
-    {
-        await _viewModel.OpenEntryCommand.ExecuteAsync(uniqueName);
-    }
 
     protected override bool OnBackButtonPressed()
     {

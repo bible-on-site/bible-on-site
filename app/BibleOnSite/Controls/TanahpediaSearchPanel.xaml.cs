@@ -22,8 +22,8 @@ public partial class TanahpediaSearchPanel : ContentView
     private string? _presetKey;
     private int _sheetVersion;
 
-    /// <summary>Raised when the user taps a result — the page navigates to the entry.</summary>
-    public event EventHandler<string>? EntrySelected; //NOSONAR — raised on result selection; subscribed in XAML.
+    /// <summary>Invoked when the user taps a result — the page navigates to the entry.</summary>
+    public Action<string>? OnEntrySelected { get; set; }
 
     public bool IsSearchOpen => IsVisible;
 
@@ -246,7 +246,7 @@ public partial class TanahpediaSearchPanel : ContentView
             return;
         }
         ResultsList.SelectedItem = null;
-        EntrySelected?.Invoke(this, hit.UniqueName);
+        OnEntrySelected?.Invoke(hit.UniqueName);
     }
 
     private void ScheduleSearch(int delay = 500) => _ = RunSearchAsync(delay);

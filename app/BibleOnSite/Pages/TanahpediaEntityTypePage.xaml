@@ -213,7 +213,6 @@
 
         <!-- Scoped Tanahpedia search overlay — same provider and sheet as the
              landing page, preset to this category on fresh navigation. -->
-        <controls:TanahpediaSearchPanel x:Name="TanahpediaSearch"
-                                        EntrySelected="OnSearchEntrySelected"/>
+        <controls:TanahpediaSearchPanel x:Name="TanahpediaSearch" />
     </Grid>
 </ContentPage>

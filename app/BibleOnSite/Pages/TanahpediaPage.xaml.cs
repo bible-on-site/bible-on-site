@@ -17,6 +17,8 @@ public partial class TanahpediaPage : ContentPage
     {
         InitializeComponent();
         BindingContext = _viewModel;
+        TanahpediaSearch.OnEntrySelected = async uniqueName =>
+            await _viewModel.OpenEntryCommand.ExecuteAsync(uniqueName);
     }
 
     protected override async void OnAppearing()
@@ -40,11 +42,6 @@ public partial class TanahpediaPage : ContentPage
     private async void OnSearchTitleClicked(object sender, EventArgs e) //NOSONAR
     {
         await TanahpediaSearch.OpenAsync();
-    }
-
-    private async void OnSearchEntrySelected(object? sender, string uniqueName) //NOSONAR
-    {
-        await _viewModel.OpenEntryCommand.ExecuteAsync(uniqueName);
     }
 
     protected override bool OnBackButtonPressed()

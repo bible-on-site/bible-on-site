@@ -283,7 +283,6 @@
         <!-- Scoped Tanahpedia search overlay — same interaction as the
              reader's floating search, Tanahpedia provider only, all
              categories selected by default on the landing page. -->
-        <controls:TanahpediaSearchPanel x:Name="TanahpediaSearch"
-                                        EntrySelected="OnSearchEntrySelected"/>
+        <controls:TanahpediaSearchPanel x:Name="TanahpediaSearch" />
     </Grid>
 </ContentPage>
