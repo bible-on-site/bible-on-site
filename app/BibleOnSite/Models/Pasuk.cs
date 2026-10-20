@@ -21,6 +21,14 @@ public partial class Pasuk : ObservableObject
     [ObservableProperty]
     private bool _isSelected;
 
+    // Selection changes the recitation word's styling, so the cached
+    // FormattedString must rebuild on every toggle.
+    partial void OnIsSelectedChanged(bool value)
+    {
+        _formattedText = null;
+        OnPropertyChanged(nameof(FormattedText));
+    }
+
     private int? _recitingSegment;
 
     public int? RecitingSegment
@@ -120,6 +128,9 @@ public partial class Pasuk : ObservableObject
     private static readonly Color QriColor = Color.FromArgb("#637598");
     private static readonly Color RecitingTextColor = Color.FromArgb("#1c427b");
     private static readonly Color RecitingBackgroundColor = Color.FromArgb("#e9eff8");
+    // On a selected row the plain recitation tint drowns in the selection
+    // background, so the recited word gets a stronger tint and weight (#2473).
+    private static readonly Color RecitingSelectedBackgroundColor = Color.FromArgb("#a8cbf4");
     private static readonly Color MasoraMarkColor = Color.FromArgb("#9a92d1");
 
     private FormattedString BuildFormattedText()
@@ -165,11 +176,13 @@ public partial class Pasuk : ObservableObject
                             TextColor = QriColor,
                             FontSize = 14
                         });
+                        var variantReciting = RecitingSegment == i + 1;
                         formatted.Spans.Add(new Span
                         {
                             Text = DivineNameMasking.MaskText(segment.Value),
-                            TextColor = RecitingSegment == i + 1 ? RecitingTextColor : QriColor,
-                            BackgroundColor = RecitingSegment == i + 1 ? RecitingBackgroundColor : null
+                            TextColor = variantReciting ? RecitingTextColor : QriColor,
+                            BackgroundColor = variantReciting ? RecitingBackground() : null,
+                            FontAttributes = variantReciting && IsSelected ? FontAttributes.Bold : FontAttributes.None
                         });
                         formatted.Spans.Add(new Span
                         {
@@ -190,7 +203,8 @@ public partial class Pasuk : ObservableObject
                                 {
                                     Text = DivineNameMasking.MaskText(segment.Value),
                                     TextColor = RecitingTextColor,
-                                    BackgroundColor = RecitingBackgroundColor
+                                    BackgroundColor = RecitingBackground(),
+                                    FontAttributes = IsSelected ? FontAttributes.Bold : FontAttributes.None
                                 });
                             }
                             else
@@ -243,6 +257,8 @@ public partial class Pasuk : ObservableObject
         FlushPlain();
         return formatted;
     }
+
+    private Color RecitingBackground() => IsSelected ? RecitingSelectedBackgroundColor : RecitingBackgroundColor;
 }
 
 /// <summary>

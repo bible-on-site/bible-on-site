@@ -948,7 +948,9 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         if (e.Parameter is int pasukNum)
         {
             // Don't set _lastLongPressTime - right-click doesn't need debounce
-            ResetRecitationContext();
+            // Entering selection must not kill in-flight playback or its moving
+            // word marker (#2473).
+            ResetRecitationContext(stopPlayback: false);
             var wasEmpty = _viewModel.SelectedPasukNums.Count == 0;
             _viewModel.ToggleSelectedPasuk(pasukNum);
             UpdatePasukSelection();
@@ -1014,7 +1016,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
             {
                 _lastLongPressTime = DateTime.Now;
 
-                ResetRecitationContext();
+                ResetRecitationContext(stopPlayback: false);
                 var wasEmpty = _viewModel.SelectedPasukNums.Count == 0;
                 _viewModel.ToggleSelectedPasuk(pasukNum);
 
@@ -1048,7 +1050,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         if (sender is LongPressBehavior behavior &&
             ResolvePasuk(behavior.AssociatedView?.BindingContext) is { } pasuk)
         {
-            ResetRecitationContext();
+            ResetRecitationContext(stopPlayback: false);
             var wasEmpty = _viewModel.SelectedPasukNums.Count == 0;
             _viewModel.ToggleSelectedPasuk(pasuk.PasukNum);
             UpdateSelectionBar();

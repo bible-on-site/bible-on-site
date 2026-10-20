@@ -257,7 +257,8 @@ public partial class PerekPage
     {
         if (_viewModel.SelectedPasukNums.Count > 0)
         {
-            StopRecitation();
+            // Toggling a pasuk in selection mode must not stop playback or the
+            // moving word marker (#2473); the selection bar stays the pause surface.
             _doubleTap.Reset();
             _viewModel.ToggleSelectedPasuk(pasuk.PasukNum);
             UpdatePasukSelection();
