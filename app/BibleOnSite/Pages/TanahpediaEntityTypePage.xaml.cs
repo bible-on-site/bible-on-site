@@ -72,12 +72,12 @@ public partial class TanahpediaEntityTypePage : ContentPage
         }
     }
 
-    private async void OnSearchTitleClicked(object sender, EventArgs e)
+    private async void OnSearchTitleClicked(object sender, EventArgs e) //NOSONAR
     {
         await TanahpediaSearch.OpenAsync();
     }
 
-    private async void OnSearchEntrySelected(object? sender, string uniqueName)
+    private async void OnSearchEntrySelected(object? sender, string uniqueName) //NOSONAR
     {
         await _viewModel.OpenEntryCommand.ExecuteAsync(uniqueName);
     }

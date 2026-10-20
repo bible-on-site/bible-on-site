@@ -23,7 +23,7 @@ public partial class TanahpediaSearchPanel : ContentView
     private int _sheetVersion;
 
     /// <summary>Raised when the user taps a result — the page navigates to the entry.</summary>
-    public event EventHandler<string>? EntrySelected;
+    public event EventHandler<string>? EntrySelected; //NOSONAR — raised on result selection; subscribed in XAML.
 
     public bool IsSearchOpen => IsVisible;
 
