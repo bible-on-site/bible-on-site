@@ -54,15 +54,41 @@ public partial class TanahpediaEntityTypePage : ContentPage
         _viewModel.EntityType = EntityType;
         _viewModel.Sub = Sub;
 
+        // Fresh navigation presets מה לחפש to this category (or the exact
+        // subcategory); a re-appearing page keeps the deliberate choices.
+        TanahpediaSearch.SetCategoryPreset(string.IsNullOrEmpty(CategoryKey) ? EntityType : CategoryKey);
+
         if (!_viewModel.IsLoaded && !_viewModel.IsLoading)
         {
             await _viewModel.LoadAsync();
         }
     }
 
-    private async void OnBackClicked(object? sender, EventArgs e)
+    private void OnMenuButtonClicked(object sender, EventArgs e)
     {
-        await Shell.Current.GoToAsync("..");
+        if (Shell.Current is AppShell shell)
+        {
+            shell.FlyoutIsPresented = true;
+        }
+    }
+
+    private async void OnSearchTitleClicked(object sender, EventArgs e)
+    {
+        await TanahpediaSearch.OpenAsync();
+    }
+
+    private async void OnSearchEntrySelected(object? sender, string uniqueName)
+    {
+        await _viewModel.OpenEntryCommand.ExecuteAsync(uniqueName);
+    }
+
+    protected override bool OnBackButtonPressed()
+    {
+        if (TanahpediaSearch.HandleBack())
+        {
+            return true;
+        }
+        return base.OnBackButtonPressed();
     }
 
     /// <summary>

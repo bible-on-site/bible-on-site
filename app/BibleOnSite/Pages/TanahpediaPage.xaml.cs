@@ -36,4 +36,23 @@ public partial class TanahpediaPage : ContentPage
             shell.FlyoutIsPresented = true;
         }
     }
+
+    private async void OnSearchTitleClicked(object sender, EventArgs e)
+    {
+        await TanahpediaSearch.OpenAsync();
+    }
+
+    private async void OnSearchEntrySelected(object? sender, string uniqueName)
+    {
+        await _viewModel.OpenEntryCommand.ExecuteAsync(uniqueName);
+    }
+
+    protected override bool OnBackButtonPressed()
+    {
+        if (TanahpediaSearch.HandleBack())
+        {
+            return true;
+        }
+        return base.OnBackButtonPressed();
+    }
 }

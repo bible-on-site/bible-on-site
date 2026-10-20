@@ -283,3 +283,37 @@ public class TanahpediaSearchServiceTests
         result.UniqueName.Should().Be("דתן-ואבירם");
     }
 }
+
+public class TanahpediaScopedSearchTests
+{
+    private const string SearchResponse = """
+        {"data":{"searchTanahpediaEntries":[
+        {"id":"e1","uniqueName":"משה-רבנו","title":"משה רבנו","excerpt":"","score":220}]}}
+        """;
+
+    [Fact]
+    public async Task SearchEntries_SendsCategoryKeysVariable()
+    {
+        using var http = new GraphQLTransport(SearchResponse);
+        var service = new TanahpediaService(http.Client);
+
+        var hits = await service.SearchEntriesAsync("משה", 10, ["PERSON", "PROPHET"], TestContext.Current.CancellationToken);
+
+        hits.Should().ContainSingle().Which.UniqueName.Should().Be("משה-רבנו");
+        http.Requests.Single().Should().Contain("categories");
+        http.Requests.Single().Should().Contain("PERSON").And.Contain("PROPHET");
+    }
+
+    [Fact]
+    public async Task SearchEntries_EmptyOrNullCategories_SendNoScope()
+    {
+        using var http = new GraphQLTransport(SearchResponse);
+        var service = new TanahpediaService(http.Client);
+
+        await service.SearchEntriesAsync("משה", 10, [], TestContext.Current.CancellationToken);
+        await service.SearchEntriesAsync("משה", 10, (IReadOnlyCollection<string>?)null, TestContext.Current.CancellationToken);
+
+        http.Requests.Should().HaveCount(2);
+        http.Requests.Should().OnlyContain(request => !request.Contains("\"categories\""));
+    }
+}

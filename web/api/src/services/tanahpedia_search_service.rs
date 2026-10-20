@@ -24,6 +24,7 @@ use crate::{
     providers::Database,
     services::article_search::text,
     services::articles_service::{MAX_SEARCH_PHRASE_CHARS, SEARCH_MAX_LIMIT},
+    services::tanahpedia_entries_service,
 };
 
 /// Rows pulled from MySQL before scoring. Bounded so a query for a very common
@@ -192,14 +193,96 @@ const SYNONYM_MATCH: &str = "EXISTS (
          WHERE (syn.entry_id = e.id OR dis.entry_id = e.id)
            AND REGEXP_LIKE(syn.name, ?, 'i'))";
 
+/// The entity predicate a single taxonomy category key contributes to a
+/// scoped search — evaluated against `en`, the linked `tanahpedia_entity`
+/// row inside `CATEGORY_SCOPE`. Person roles and animal classifications are
+/// sub-filters of their parent entity type, not entity types of their own,
+/// exactly like the listing resolver (`get_entities_with_entries`).
+fn category_key_predicate(key: &str) -> (String, Vec<sea_orm::Value>) {
+    if tanahpedia_entries_service::PERSON_ROLE_CATEGORIES.contains(&key) {
+        let role_table = if key == "PROPHET" {
+            "tanahpedia_person_role_prophet"
+        } else {
+            debug_assert_eq!(key, "KING", "role keys are validated by the caller");
+            "tanahpedia_person_role_king"
+        };
+        (
+            format!(
+                "EXISTS (SELECT 1 FROM tanahpedia_person tp \
+                 JOIN {role_table} r ON r.person_id = tp.id \
+                 WHERE tp.entity_id = en.id)"
+            ),
+            Vec::new(),
+        )
+    } else if tanahpedia_entries_service::is_animal_kind_category(key)
+        || tanahpedia_entries_service::is_animal_purity_category(key)
+    {
+        let (table, column) = if tanahpedia_entries_service::is_animal_kind_category(key) {
+            ("tanahpedia_animal_kind", "kind")
+        } else {
+            ("tanahpedia_animal_purity", "purity")
+        };
+        (
+            format!(
+                "EXISTS (SELECT 1 FROM tanahpedia_animal ta \
+                 JOIN {table} ac ON ac.animal_id = ta.id \
+                 WHERE ta.entity_id = en.id AND ac.{column} = ?)"
+            ),
+            vec![key.into()],
+        )
+    } else {
+        ("en.entity_type = ?".to_string(), vec![key.into()])
+    }
+}
+
+/// Category-scope predicate appended to the candidate WHERE when
+/// `categories` is non-empty: an entry qualifies when at least one of its
+/// linked entities matches any selected category (a union — overlapping
+/// selections never duplicate a hit because the match lives inside a single
+/// EXISTS). Returning `(clause, params)` keeps the bound values ordered with
+/// the statement's other placeholders.
+fn category_scope(
+    categories: &[String],
+) -> Result<Option<(String, Vec<sea_orm::Value>)>, ServiceError> {
+    if categories.is_empty() {
+        return Ok(None);
+    }
+    let mut predicates: Vec<String> = Vec::with_capacity(categories.len());
+    let mut params: Vec<sea_orm::Value> = Vec::new();
+    for key in categories {
+        if !tanahpedia_entries_service::is_category_key(key) {
+            return Err(ServiceError::bad_request(&format!(
+                "Unknown Tanahpedia category: {key}"
+            )));
+        }
+        let (predicate, mut values) = category_key_predicate(key);
+        predicates.push(predicate);
+        params.append(&mut values);
+    }
+    Ok(Some((
+        format!(
+            "EXISTS (SELECT 1 FROM tanahpedia_entry_entity ee \
+             JOIN tanahpedia_entity en ON en.id = ee.entity_id \
+             WHERE ee.entry_id = e.id AND ({}))",
+            predicates.join(" OR ")
+        ),
+        params,
+    )))
+}
+
 /// Lexical Tanahpedia entry search over title, unique_name, synonym names and
 /// body content — one hit per entry, so an entry reached through several
 /// aliases still returns a single result. Scoring keeps the website's weights:
 /// name fields (title, unique_name, aliases) at ×2, body content at ×1.
+/// `categories` optionally restricts hits to entries linked to entities of
+/// the given taxonomy category keys (entity types, person roles, animal
+/// kind/purity); the restriction is applied in the candidate query itself,
+/// before limiting, so a narrowed search never sheds valid matches.
 pub async fn search_entries(
     db: &Database,
     phrase: &str,
     limit: Option<i32>,
+    categories: Option<Vec<String>>,
 ) -> Result<Vec<TanahpediaSearchHit>, ServiceError> {
     tracing::info_span!("tanahpedia_search_service::search_entries");
     if phrase.chars().count() > MAX_SEARCH_PHRASE_CHARS {
@@ -238,11 +321,19 @@ pub async fn search_entries(
             params.push(gate.clone().into());
         }
     }
+    let scope = category_scope(categories.as_deref().unwrap_or_default())?;
+    let scoped_clause = match &scope {
+        Some((clause, _)) => format!("{where_clause} AND {clause}"),
+        None => where_clause.clone(),
+    };
+    if let Some((_, values)) = scope {
+        params.extend(values);
+    }
     let candidates_sql = format!(
         "SELECT /*+ MAX_EXECUTION_TIME({QUERY_TIME_BUDGET_MS}) */ \
                 e.id, e.unique_name, e.title, e.content \
            FROM tanahpedia_entry e \
-          WHERE {where_clause} \
+          WHERE {scoped_clause} \
           ORDER BY e.id \
           LIMIT {CANDIDATE_LIMIT}"
     );
@@ -448,9 +539,9 @@ mod tests {
             MockDatabase::new(DatabaseBackend::MySql).into_connection(),
         );
         let long = "א".repeat(MAX_SEARCH_PHRASE_CHARS + 1);
-        assert!(search_entries(&db, &long, None).await.is_err());
-        assert!(search_entries(&db, "משה", Some(0)).await.is_err());
-        assert!(search_entries(&db, "משה", Some(51)).await.is_err());
+        assert!(search_entries(&db, &long, None, None).await.is_err());
+        assert!(search_entries(&db, "משה", Some(0), None).await.is_err());
+        assert!(search_entries(&db, "משה", Some(51), None).await.is_err());
     }
 
     #[tokio::test]
@@ -460,11 +551,11 @@ mod tests {
         let db = Database::from_connection(
             MockDatabase::new(DatabaseBackend::MySql).into_connection(),
         );
-        assert!(search_entries(&db, "   ", None).await.unwrap().is_empty());
+        assert!(search_entries(&db, "   ", None, None).await.unwrap().is_empty());
         let many_terms = (0..17).map(|i| format!("מ{i}")).collect::<Vec<_>>().join(" ");
-        assert!(search_entries(&db, &many_terms, None).await.unwrap().is_empty());
+        assert!(search_entries(&db, &many_terms, None, None).await.unwrap().is_empty());
         let long_term = "א".repeat(MAX_TERM_CHARS + 1);
-        assert!(search_entries(&db, &long_term, None).await.unwrap().is_empty());
+        assert!(search_entries(&db, &long_term, None, None).await.unwrap().is_empty());
     }
 
     #[tokio::test]
@@ -473,7 +564,7 @@ mod tests {
             vec![candidate("e1", "משה-רבנו", "משה רבנו", None)],
             vec![],
         );
-        let hits = search_entries(&db, "משה רבנו", Some(10)).await.unwrap();
+        let hits = search_entries(&db, "משה רבנו", Some(10), None).await.unwrap();
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].unique_name, "משה-רבנו");
         assert_eq!(hits[0].score, 220, "title equality is name-weighted ×2");
@@ -488,7 +579,7 @@ mod tests {
             vec![candidate("e1", "יהושע-בן-נון", "יהושע בן נון", Some("<p>מושלם</p>"))],
             vec![alias("e1", "בינ נון")],
         );
-        let hits = search_entries(&db, "בינ נון", None).await.unwrap();
+        let hits = search_entries(&db, "בינ נון", None, None).await.unwrap();
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].score, 220);
         assert!(hits[0].excerpt.contains("נקרא גם:"));
@@ -504,7 +595,7 @@ mod tests {
             vec![candidate("e1", "דתן-ואבירם", "דתן ואבירם", None)],
             vec![alias("e1", "בני קרח")],
         );
-        let hits = search_entries(&db, "בני קרח", None).await.unwrap();
+        let hits = search_entries(&db, "בני קרח", None, None).await.unwrap();
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].unique_name, "דתן-ואבירם");
         assert!(hits[0].excerpt.contains("בני קרח"));
@@ -517,7 +608,7 @@ mod tests {
             vec![candidate("e1", "הר-סיני", "הר סיני", Some(body))],
             vec![],
         );
-        let hits = search_entries(&db, "ענן הכבוד", None).await.unwrap();
+        let hits = search_entries(&db, "ענן הכבוד", None, None).await.unwrap();
         assert_eq!(hits.len(), 1);
         // Content matches score at the weak weight — the whole-word phrase
         // tier (100) stays under any name hit.
@@ -535,7 +626,7 @@ mod tests {
             ],
             vec![],
         );
-        let hits = search_entries(&db, "דוד", Some(1)).await.unwrap();
+        let hits = search_entries(&db, "דוד", Some(1), None).await.unwrap();
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].unique_name, "דוד", "exact title beats prefix hit");
     }
@@ -548,7 +639,7 @@ mod tests {
             vec![candidate("e1", "שלמה", "שלמה המלך", Some("<p>בנה את הבית</p>"))],
             vec![],
         );
-        let hits = search_entries(&db, "אברם", None).await.unwrap();
+        let hits = search_entries(&db, "אברם", None, None).await.unwrap();
         assert!(hits.is_empty());
     }
 
@@ -560,8 +651,85 @@ mod tests {
                 .into_connection(),
         );
         assert!(matches!(
-            search_entries(&db, "משה", None).await,
+            search_entries(&db, "משה", None, None).await,
             Err(ServiceError::InternalServerError(_))
         ));
+    }
+
+    #[tokio::test]
+    async fn search_entries_rejects_unknown_category() {
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql).into_connection(),
+        );
+        assert!(matches!(
+            search_entries(&db, "משה", None, Some(vec!["WIZARD".to_string()])).await,
+            Err(ServiceError::BadRequest(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn search_entries_categories_scope_the_candidate_query() {
+        // Person role + base type + animal kind in one union: the statement
+        // must carry the entity EXISTS before the limit and bind the scoped
+        // keys, and must still return the hit (mock candidates pass through).
+        let conn = MockDatabase::new(DatabaseBackend::MySql)
+            .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                vec![candidate("e1", "משה-רבנו", "משה רבנו", None)],
+            ])
+            .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                vec![],
+            ])
+            .into_connection();
+        let db = Database::from_connection(conn.clone());
+
+        let hits = search_entries(
+            &db,
+            "משה רבנו",
+            Some(10),
+            Some(vec![
+                "PERSON".to_string(),
+                "PROPHET".to_string(),
+                "BEHEMA".to_string(),
+            ]),
+        )
+        .await
+        .unwrap();
+        assert_eq!(hits.len(), 1);
+
+        let log = conn.into_transaction_log();
+        let sql = format!("{:?}", log[0]);
+        assert!(sql.contains("tanahpedia_entry_entity ee"), "scope joins linked entities: {sql}");
+        assert!(sql.contains("en.entity_type"), "base type predicate: {sql}");
+        assert!(
+            sql.contains("tanahpedia_person_role_prophet"),
+            "PROPHET narrows to the role table: {sql}"
+        );
+        assert!(
+            sql.contains("tanahpedia_animal_kind") && sql.contains("ac.kind"),
+            "BEHEMA narrows to the animal-kind classification: {sql}"
+        );
+        assert!(sql.contains("PERSON") && sql.contains("BEHEMA"), "keys bind: {sql}");
+    }
+
+    #[tokio::test]
+    async fn search_entries_no_categories_keeps_plain_query() {
+        let conn = MockDatabase::new(DatabaseBackend::MySql)
+            .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                vec![candidate("e1", "משה-רבנו", "משה רבנו", None)],
+            ])
+            .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                vec![],
+            ])
+            .into_connection();
+        let db = Database::from_connection(conn.clone());
+
+        search_entries(&db, "משה רבנו", None, Some(vec![])).await.unwrap();
+
+        let log = conn.into_transaction_log();
+        let sql = format!("{:?}", log[0]);
+        assert!(
+            !sql.contains("tanahpedia_entry_entity"),
+            "an empty selection must not scope the query: {sql}"
+        );
     }
 }
