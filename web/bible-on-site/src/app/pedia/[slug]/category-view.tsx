@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { JsonLd } from "@/app/components/JsonLd";
+import DOMPurify from "isomorphic-dompurify";
+import { demoteHeadings } from "@/lib/html-headings";
 import { buildCategoryGraph } from "@/lib/seo/tanahpedia-jsonld";
 import {
 	CATEGORY_HIERARCHY,
@@ -156,8 +158,11 @@ export async function CategoryView({
 
 			{homepage?.content && !sub && (
 				<div
-					// biome-ignore lint/security/noDangerouslySetInnerHtml: admin-authored content
-					dangerouslySetInnerHTML={{ __html: homepage.content }}
+					className={styles.homepageContent}
+					// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify
+					dangerouslySetInnerHTML={{
+						__html: DOMPurify.sanitize(demoteHeadings(homepage.content)),
+					}}
 				/>
 			)}
 

@@ -6,6 +6,7 @@ import { useMemo } from "react";
 import styles from "@/app/929/[number]/components/perushim-section.module.css";
 import { ShareButton } from "@/app/929/[number]/components/ShareButton";
 import seferStyles from "@/app/929/[number]/components/sefer.module.css";
+import { demoteHeadings } from "@/lib/html-headings";
 import type { RangedPerushNote } from "@/lib/perushim";
 import unitStyles from "./unit-book.module.css";
 import { scrollToUnitTextPasuk } from "./unit-book-navigation";
@@ -141,7 +142,7 @@ export function UnitPerushFullView({
 										// nosemgrep -- DOMPurify-sanitized perush note
 										// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify
 										dangerouslySetInnerHTML={{
-											__html: DOMPurify.sanitize(note.noteContent),
+											__html: DOMPurify.sanitize(demoteHeadings(note.noteContent)),
 										}}
 									/>
 								))}
