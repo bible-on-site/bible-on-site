@@ -30,6 +30,13 @@ export interface RevalidateRequest {
 	path?: string;
 	/** `page` | `layout`, required when `path` is a dynamic route pattern. */
 	type?: "page" | "layout";
+	/**
+	 * Site-relative public paths whose content changed (e.g. `/929/5/12`,
+	 * `/pedia/משה`). The website submits them to IndexNow once the
+	 * invalidation succeeds — include the old paths of renames/moves and the
+	 * removed paths of deletes so search engines recrawl the stale URLs too.
+	 */
+	urls?: string[];
 }
 
 const TIMEOUT_MS = 5000;
@@ -55,6 +62,7 @@ async function postRevalidate(
 	if (request.tag) query.set("tag", request.tag);
 	if (request.path) query.set("path", request.path);
 	if (request.type) query.set("type", request.type);
+	for (const url of request.urls ?? []) query.append("url", url);
 	const url = `${base}/api/revalidate?${query}`;
 	try {
 		const response = await fetch(url, {
@@ -129,27 +137,57 @@ export async function revalidateWebsite(
 	return settled.every((s) => s.outcome === "applied");
 }
 
-/** Every page that renders article data carries the `articles` tag. */
-export const ARTICLE_INVALIDATION: RevalidateRequest[] = [
-	{ tag: "articles" },
-];
+/** Public path of an article page (`/929/<perek>/<article>`). */
+export function articlePath(perekId: number, articleId: number): string {
+	return `/929/${perekId}/${articleId}`;
+}
+
+/**
+ * Public path of an author page. Keep the slug rule in sync with the
+ * website's `authorNameToSlug` (web/bible-on-site/src/util/slug.ts):
+ * strip geresh/gershayim/quote characters, trim, then percent-encode.
+ */
+export function authorPath(name: string): string {
+	return `/929/authors/${encodeURIComponent(name.replace(/["׳']/g, "").trim())}`;
+}
+
+/** Public path of a pedia entry page (`/pedia/<unique_name>`). */
+export function pediaEntryPath(uniqueName: string): string {
+	return `/pedia/${uniqueName}`;
+}
+
+/**
+ * Every page that renders article data carries the `articles` tag; `urls`
+ * lists the article pages (and their old locations after a move) whose
+ * content changed.
+ */
+export function articleInvalidation(...urls: string[]): RevalidateRequest[] {
+	return [{ tag: "articles", ...(urls.length ? { urls } : {}) }];
+}
 
 /**
  * Author names and details render on author pages and inside article
- * pages/lists, so both tags must expire on an author change.
+ * pages/lists, so both tags must expire on an author change. `urls` lists
+ * the changed author pages (old slug included after a rename).
  */
-export const AUTHOR_INVALIDATION: RevalidateRequest[] = [
-	{ tag: "authors" },
-	{ tag: "articles" },
-];
+export function authorInvalidation(...urls: string[]): RevalidateRequest[] {
+	return [
+		{ tag: "authors" },
+		{ tag: "articles", ...(urls.length ? { urls } : {}) },
+	];
+}
 
 /**
  * Pedia entry/category/disambiguation pages are prerendered under the
  * `/pedia/[slug]` route file, the index at `/pedia`, and per-perek entity
- * references on `tanahpedia-entity-refs`-tagged caches.
+ * references on `tanahpedia-entity-refs`-tagged caches. `urls` lists the
+ * entry pages whose content changed (old unique names included after a
+ * rename).
  */
-export const PEDIA_INVALIDATION: RevalidateRequest[] = [
-	{ tag: "tanahpedia-entity-refs" },
-	{ path: "/pedia/[slug]", type: "page" },
-	{ path: "/pedia" },
-];
+export function pediaInvalidation(...urls: string[]): RevalidateRequest[] {
+	return [
+		{ tag: "tanahpedia-entity-refs" },
+		{ path: "/pedia/[slug]", type: "page" },
+		{ path: "/pedia", ...(urls.length ? { urls } : {}) },
+	];
+}
