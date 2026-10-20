@@ -100,6 +100,12 @@ public partial class MasoraViewModel //NOSONAR
     /// <summary>Max perushim shown inline — unchecked rows render disabled at the cap.</summary>
     public int InlineCommentaryLimit => _preferencesService.InlineCommentaryLimit;
 
+    /// <summary>Live "נבחרו N מתוך M" counter for the perushim selector header.</summary>
+    public string PerushimSelectionStatus => $"נבחרו {CheckedPerushim.Count} מתוך {InlineCommentaryLimit}";
+
+    /// <summary>Whether the configured perushim limit is fully used (drives subtle max-reached emphasis).</summary>
+    public bool PerushimLimitReached => CheckedPerushim.Count >= InlineCommentaryLimit;
+
     /// <summary>Toggles commentary in the inline reader.</summary>
     [RelayCommand]
     public void ToggleCheckedPerush(int perushId)
