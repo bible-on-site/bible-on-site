@@ -426,5 +426,18 @@ public class PreferencesServiceTests : IDisposable
         _service.QriynotEnabled.Should().BeFalse();
     }
 
+    [Fact]
+    public void QriynotEnabled_SameValue_IsNoOp()
+    {
+        _service.Load();
+        var eventCount = 0;
+        _service.PreferencesChanged += (_, _) => eventCount++;
+
+        _service.QriynotEnabled = true;
+
+        eventCount.Should().Be(0);
+        _storage.Get("qriynotEnabled", false).Should().BeFalse("a no-op write never touches storage");
+    }
+
     #endregion
 }

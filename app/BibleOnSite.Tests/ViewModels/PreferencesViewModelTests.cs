@@ -863,6 +863,20 @@ public class PreferencesViewModelTests : IDisposable
         }
 
         [Fact]
+        public void QriynotEnabled_SameValue_SkipsNotification()
+        {
+            _service.Load();
+            var viewModel = new PerekPreferencesViewModel(_service);
+            var eventCount = 0;
+            viewModel.PropertyChanged += (_, _) => eventCount++;
+
+            viewModel.QriynotEnabled = true;
+
+            eventCount.Should().Be(0);
+            viewModel.QriynotEnabled.Should().BeTrue();
+        }
+
+        [Fact]
         public void IsPerekToLoadLastLearnt_ReturnsTrue_WhenPerekToLoadIsLastLearnt()
         {
             _service.PerekToLoad = PerekToLoad.LastLearnt;
