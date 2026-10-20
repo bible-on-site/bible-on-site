@@ -30,9 +30,17 @@ public enum BackExitAction
 /// </summary>
 public static class BackExitPlan
 {
-	public static BackExitAction Evaluate(bool shellHandled, bool flyoutPresented)
+	/// <param name="navigationInFlight">
+	/// A Shell navigation (push/pop) is still settling. The press is consumed
+	/// without re-entering the Shell pipeline: a second pass can pop the page
+	/// beneath the one already transitioning out, leaving an empty surface.
+	/// </param>
+	/// <param name="shellBack">Runs the base Shell back pipeline; invoked lazily
+	/// so an in-flight navigation never triggers a second navigation.</param>
+	/// <param name="flyoutPresented">The flyout drawer is open.</param>
+	public static BackExitAction Evaluate(bool navigationInFlight, Func<bool> shellBack, bool flyoutPresented)
 	{
-		if (shellHandled)
+		if (navigationInFlight || shellBack())
 		{
 			return BackExitAction.Consume;
 		}

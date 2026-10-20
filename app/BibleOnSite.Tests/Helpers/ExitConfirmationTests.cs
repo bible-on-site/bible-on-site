@@ -124,4 +124,28 @@ public class ExitConfirmationTests
 		await ExitConfirmation.Shared.ActivePrompt!;
 		ExitConfirmation.Shared.IsPromptShowing.Should().BeFalse();
 	}
+
+	[Fact]
+	public async Task Shared_WhenPlatformPromptInstalled_UsesItInsteadOfTheFallback()
+	{
+		var providerCalls = 0;
+		try
+		{
+			ExitConfirmation.UsePlatformPrompt(() =>
+			{
+				providerCalls++;
+				return Task.FromResult(false);
+			});
+
+			ExitConfirmation.Shared.Request().Should().BeTrue();
+			await ExitConfirmation.Shared.ActivePrompt!;
+
+			providerCalls.Should().Be(1, "the styled app popup replaces the framework alert once installed");
+			ExitConfirmation.Shared.IsPromptShowing.Should().BeFalse();
+		}
+		finally
+		{
+			ExitConfirmation.UsePlatformPrompt(null);
+		}
+	}
 }
