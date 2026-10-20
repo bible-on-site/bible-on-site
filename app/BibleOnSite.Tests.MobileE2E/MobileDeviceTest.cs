@@ -226,7 +226,7 @@ public abstract class MobileDeviceTest : IAsyncLifetime
             var tail = AppiumLog.Tail(Configuration.ArtifactDirectory);
             return tail.Length == 0 ? string.Empty : $"\n--- appium.log tail ---\n{tail}";
         }
-        catch (Exception exception)
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or NotSupportedException)
         {
             return $"\n--- appium.log tail unavailable: {exception.Message} ---";
         }
