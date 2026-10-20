@@ -28,6 +28,18 @@ public partial class FloatingSearchBar : ContentView
         LimitPicker.SelectedItem = _viewModel.ResultsLimit;
         _viewModel.PropertyChanged += (_, _) => UpdateStatus();
         SearchPanel.SizeChanged += (_, _) => ResizeFilterSheet();
+        // Kind availability follows live prerequisites: connectivity and the
+        // installed commentary pack (#2454).
+        Connectivity.Current.ConnectivityChanged += (_, _) => Dispatcher.Dispatch(RefreshKindAvailability);
+        try
+        {
+            PerushimNotesService.Instance.OperationCompleted += () => Dispatcher.Dispatch(RefreshKindAvailability);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            // A host without the pack service simply keeps static availability.
+            Console.Error.WriteLine($"Commentary-pack watcher unavailable: {ex}");
+        }
         RefreshRecentHistory();
         _buildingFilters = false;
     }
@@ -222,16 +234,52 @@ public partial class FloatingSearchBar : ContentView
         {
             KindsFilters.Clear();
             BookFilters.Clear();
+            var (kindsSelectAllRow, kindsSelectAll) = SelectAllRow("SearchKindsSelectAll", state =>
+            {
+                var select = state == TriCheckState.Checked;
+                _buildingFilters = true;
+                try
+                {
+                    _viewModel.SetAvailableFiltersEnabled(select);
+                    foreach (var filter in _kindRows.Keys.Where(_viewModel.IsKindAvailable))
+                    {
+                        _kindRows[filter].Check.IsChecked = select;
+                    }
+                    _kindsExplicit = true;
+                }
+                finally { _buildingFilters = false; }
+                UpdateKindsSelectAll();
+                UpdateFilterSummaries();
+                ScheduleSearch();
+            });
+            _kindsSelectAll = kindsSelectAll;
+            KindsFilters.Add(kindsSelectAllRow);
             foreach (var filter in Enum.GetValues<SearchFilter>())
             {
-                KindsFilters.Add(FilterRow(filter.GetHebrewName(), $"SearchKind{filter}", _viewModel.IsFilterEnabled(filter), enabled =>
-                {
-                    _viewModel.SetFilterEnabled(filter, enabled);
-                    _kindsExplicit = true;
-                    UpdateFilterSummaries();
-                    ScheduleSearch();
-                }));
+                KindsFilters.Add(KindFilterRow(filter));
             }
+            RefreshKindAvailability();
+            var (booksSelectAllRow, booksSelectAll) = SelectAllRow("SearchBooksSelectAll", state =>
+            {
+                var select = state == TriCheckState.Checked;
+                _buildingFilters = true;
+                try
+                {
+                    _viewModel.SetAllSefarimEnabled(select);
+                    foreach (var pair in _filterChecks.Where(pair => !pair.Key.StartsWith("SearchKind", StringComparison.Ordinal)))
+                    {
+                        pair.Value.IsChecked = select;
+                    }
+                    _booksExplicit = true;
+                }
+                finally { _buildingFilters = false; }
+                UpdateBooksSelectAll();
+                UpdateFilterSummaries();
+                ScheduleSearch();
+            });
+            _booksSelectAll = booksSelectAll;
+            Grid.SetColumnSpan(booksSelectAllRow, 3);
+            BookFilters.Add(booksSelectAllRow, 0, 0);
             foreach (var (key, group) in SefarimData.SefarimGroups)
             {
                 var groupIndex = key - 1;
@@ -248,11 +296,12 @@ public partial class FloatingSearchBar : ContentView
                         ((CheckBox)row.Children[0]).IsChecked = enabled;
                     }
                     _buildingFilters = false;
+                    UpdateBooksSelectAll();
                     ScheduleSearch();
                 });
                 ((Label)groupRow.Children[1]).FontAttributes = FontAttributes.Bold;
                 column.Add(groupRow);
-                BookFilters.Add(column, groupIndex);
+                BookFilters.Add(column, groupIndex, 1);
                 var books = PerekDataService.Instance.Perakim!.Values.Where(perek => perek.SeferId >= group.From && perek.SeferId <= group.To)
                     .DistinctBy(perek => perek.SeferId).OrderBy(perek => perek.SeferId);
                 foreach (var book in books)
@@ -265,6 +314,7 @@ public partial class FloatingSearchBar : ContentView
                         _buildingFilters = true;
                         ((CheckBox)groupRow.Children[0]).IsChecked = _viewModel.IsSeferGroupFilterEnabled(groupIndex);
                         _buildingFilters = false;
+                        UpdateBooksSelectAll();
                         ScheduleSearch();
                     });
                     ((Label)row.Children[1]).FontSize = 12;
@@ -272,9 +322,134 @@ public partial class FloatingSearchBar : ContentView
                     column.Add(row);
                 }
             }
+            UpdateBooksSelectAll();
             _filtersBuilt = true;
         }
         finally { _buildingFilters = false; }
+    }
+
+    /// <summary>One row in the kinds sheet: the checkbox plus an availability reason under the name (#2454).</summary>
+    private sealed class KindRow(CheckBox check, Label title, Label reason, Grid grid)
+    {
+        public CheckBox Check { get; } = check;
+        public Label Title { get; } = title;
+        public Label Reason { get; } = reason;
+        public Grid Grid { get; } = grid;
+    }
+
+    private readonly Dictionary<SearchFilter, KindRow> _kindRows = new();
+    private TriStateCheckBox? _kindsSelectAll;
+    private TriStateCheckBox? _booksSelectAll;
+
+    /// <summary>
+    /// A בחר הכל row above an option set: the tri-state box mirrors the set's
+    /// all/partial/none selection and a tap selects or clears everything (#2454).
+    /// </summary>
+    private static (Grid Row, TriStateCheckBox Box) SelectAllRow(string automationId, Action<TriCheckState> toggled)
+    {
+        var box = new TriStateCheckBox { AutomationId = automationId };
+        SemanticProperties.SetDescription(box, "בחר הכל");
+        box.Toggled = () => toggled(box.State);
+        var label = new Label { Text = "בחר הכל", FontAttributes = FontAttributes.Bold, VerticalOptions = LayoutOptions.Center };
+        var row = new Grid { ColumnDefinitions = [new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Star)] };
+        row.Add(box);
+        row.Add(label, 1);
+        var tap = new TapGestureRecognizer();
+        tap.Tapped += (_, _) => box.Toggle();
+        label.GestureRecognizers.Add(tap);
+        return (row, box);
+    }
+
+    /// <summary>A kind row whose checkbox is disabled with a reason while its prerequisite is missing.</summary>
+    private Grid KindFilterRow(SearchFilter filter)
+    {
+        var title = new Label { Text = filter.GetHebrewName(), VerticalOptions = LayoutOptions.Center };
+        var reason = new Label
+        {
+            FontSize = 12,
+            IsVisible = false,
+            TextColor = Color.FromArgb("#52647C"),
+            VerticalOptions = LayoutOptions.Center
+        };
+        reason.SetAppThemeColor(Label.TextColorProperty, Color.FromArgb("#52647C"), Color.FromArgb("#B2C2D8"));
+        var checkBox = new CheckBox { IsChecked = _viewModel.IsFilterEnabled(filter), AutomationId = $"SearchKind{filter}", WidthRequest = 32, HeightRequest = 44 };
+        _filterChecks[$"SearchKind{filter}"] = checkBox;
+        checkBox.CheckedChanged += (_, e) =>
+        {
+            if (_buildingFilters)
+            {
+                return;
+            }
+            _viewModel.SetFilterEnabled(filter, e.Value);
+            _kindsExplicit = true;
+            UpdateKindsSelectAll();
+            UpdateFilterSummaries();
+            ScheduleSearch();
+        };
+        var labels = new VerticalStackLayout { title, reason };
+        var row = new Grid { ColumnDefinitions = [new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Star)] };
+        row.Add(checkBox);
+        row.Add(labels, 1);
+        var tap = new TapGestureRecognizer();
+        tap.Tapped += (_, _) =>
+        {
+            if (row.IsEnabled)
+            {
+                checkBox.IsChecked = !checkBox.IsChecked;
+            }
+        };
+        labels.GestureRecognizers.Add(tap);
+        _kindRows[filter] = new KindRow(checkBox, title, reason, row);
+        return row;
+    }
+
+    /// <summary>
+    /// Re-evaluates every kind against current connectivity and the installed
+    /// commentary pack, disabling the row and showing the missing prerequisite
+    /// while keeping the stored selection intent (#2454). Called when the
+    /// sheet opens, when connectivity changes, and when the pack changes.
+    /// </summary>
+    private void RefreshKindAvailability()
+    {
+        foreach (var (filter, row) in _kindRows)
+        {
+            var reason = _viewModel.KindUnavailableReason(filter);
+            var available = reason == null;
+            row.Grid.IsEnabled = available;
+            row.Reason.IsVisible = !available;
+            row.Title.Opacity = available ? 1 : 0.55;
+            row.Check.Opacity = available ? 1 : 0.55;
+            if (reason != null)
+            {
+                row.Reason.Text = reason;
+            }
+            SemanticProperties.SetDescription(row.Check, available ? row.Title.Text : $"{row.Title.Text}, {reason}");
+        }
+        UpdateKindsSelectAll();
+    }
+
+    /// <summary>Mirrors the kinds set's all/partial/none selection onto its בחר הכל box.</summary>
+    private void UpdateKindsSelectAll()
+    {
+        if (_kindsSelectAll == null)
+        {
+            return;
+        }
+        var available = _kindRows.Keys.Where(_viewModel.IsKindAvailable).ToList();
+        _kindsSelectAll.State = TriStateCheckBox.DeriveState(available.Count(_viewModel.IsFilterEnabled), available.Count);
+        _kindsSelectAll.IsEnabled = available.Count > 0;
+    }
+
+    /// <summary>Mirrors the sefarim set's all/partial/none selection onto its בחר הכל box.</summary>
+    private void UpdateBooksSelectAll()
+    {
+        if (_booksSelectAll == null)
+        {
+            return;
+        }
+        var total = SefarimData.SefarimGroups.Values.Sum(group => group.To - group.From + 1);
+        var selected = Enumerable.Range(1, total).Count(_viewModel.IsSeferFilterEnabled);
+        _booksSelectAll.State = TriStateCheckBox.DeriveState(selected, total);
     }
 
     private Grid FilterRow(string title, string automationId, bool enabled, Action<bool> changed)

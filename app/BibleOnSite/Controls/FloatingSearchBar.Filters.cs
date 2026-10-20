@@ -52,6 +52,12 @@ public partial class FloatingSearchBar
         {
             return;
         }
+        if (panel == KindsFilters)
+        {
+            // Availability follows live prerequisites; the pack check may need
+            // a first-pass initialization, so it stays async (#2454).
+            _ = RefreshKindAvailabilityAsync();
+        }
         KindsFilters.IsVisible = panel == KindsFilters;
         BookFilters.IsVisible = panel == BookFilters;
         MoreFilters.IsVisible = panel == MoreFilters;
@@ -128,20 +134,33 @@ public partial class FloatingSearchBar
         await CloseFilterSheetAsync();
     }
 
+    /// <summary>Rechecks kind availability after the commentary pack finishes initializing.</summary>
+    private async Task RefreshKindAvailabilityAsync()
+    {
+        try
+        {
+            await PerushimNotesService.Instance.InitializeAsync();
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            Console.Error.WriteLine($"Commentary-pack check failed: {ex}");
+        }
+        RefreshKindAvailability();
+    }
+
     private void OnClearAllClicked(object? sender, EventArgs e)
     {
         _buildingFilters = true;
         try
         {
-            // Reset restores the defaults: local kinds on, remote kinds off —
-            // enabling a network-backed kind stays an explicit user choice.
+            // Reset restores the defaults: every kind on (#2454). A kind that
+            // cannot serve searches is skipped by availability instead.
             foreach (var filter in Enum.GetValues<SearchFilter>())
             {
-                var enabled = !filter.RequiresNetwork();
-                _viewModel.SetFilterEnabled(filter, enabled);
+                _viewModel.SetFilterEnabled(filter, true);
                 if (_filterChecks.TryGetValue($"SearchKind{filter}", out var kindCheck))
                 {
-                    kindCheck.IsChecked = enabled;
+                    kindCheck.IsChecked = true;
                 }
             }
             foreach (var group in Enumerable.Range(0, 3))
@@ -165,6 +184,8 @@ public partial class FloatingSearchBar
         {
             _buildingFilters = false;
         }
+        RefreshKindAvailability();
+        UpdateBooksSelectAll();
         UpdateStatus();
         ScheduleSearch(0);
     }

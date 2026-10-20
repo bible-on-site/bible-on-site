@@ -164,6 +164,13 @@ public class PerushimNotesService
             TaskContinuationOptions.OnlyOnFaulted);
     }
 
+    /// <summary>
+    /// True only after initialization determined the notes pack is actually
+    /// missing. An unchecked pack is assumed present so search availability
+    /// never hides commentary merely because nobody asked yet (#2454).
+    /// </summary>
+    internal bool IsDeterminedMissing => _initialized && !IsAvailable;
+
     internal async Task<SQLiteAsyncConnection?> GetSearchConnectionAsync()
     {
         await InitializeAsync();
