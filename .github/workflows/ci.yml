@@ -651,7 +651,7 @@ jobs:
     name: Build Sefaria MongoDB Docker Image
     needs: [setup_env, determine_changes, determine_docker_image_availability]
     if: ${{ needs.determine_docker_image_availability.outputs.is_sefaria_mongo_available != 'true' && (needs.determine_changes.outputs.data_module_changed == 'true' || needs.determine_changes.outputs.data_ci_changed == 'true') }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     permissions:
       contents: read
       # GitHub caps fork PR tokens to read-only, so only trusted runs can publish.
@@ -2348,7 +2348,7 @@ jobs:
 
   data_ci:
     name: Data CI
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs:
       [
         setup_env,
@@ -2552,7 +2552,7 @@ jobs:
   # ====================================================================================
   perushim_data:
     name: Perushim Data
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs:
       [
         setup_env,
