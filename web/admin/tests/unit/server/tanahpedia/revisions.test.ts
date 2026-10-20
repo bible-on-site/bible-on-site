@@ -557,6 +557,99 @@ describe("website cache invalidation", () => {
 		expect(calledUrls().length).toBeGreaterThan(0);
 	});
 
+	function notifiedUrls(): string[] {
+		// The urls ride on the third (/pedia index) invalidation call.
+		const url = new URL(String(fetchSpy.mock.calls[2]?.[0] ?? ""));
+		return url.searchParams.getAll("url");
+	}
+
+	it("reports the old and new entry urls when approval renames the entry", async () => {
+		txQueryOneMock
+			.mockResolvedValueOnce({
+				...HEAD,
+				id: "r1",
+				status: "PENDING",
+				base_revision_id: null,
+				proposed_unique_name: "yaakov-avenu",
+			})
+			.mockResolvedValueOnce(ENTRY)
+			.mockResolvedValueOnce(HEAD);
+
+		await approveEntryRevision({ data: { id: "r1" } });
+
+		expect(notifiedUrls()).toEqual(["/pedia/yaakov-avenu", "/pedia/yaakov"]);
+	});
+
+	it("keeps the entry's url when approval does not rename it", async () => {
+		txQueryOneMock
+			.mockResolvedValueOnce({
+				...HEAD,
+				id: "r1",
+				status: "PENDING",
+				base_revision_id: null,
+				proposed_unique_name: null,
+			})
+			.mockResolvedValueOnce(ENTRY)
+			.mockResolvedValueOnce(HEAD);
+
+		await approveEntryRevision({ data: { id: "r1" } });
+
+		expect(notifiedUrls()).toEqual(["/pedia/yaakov"]);
+	});
+
+	it("submits no urls when the approved entry has no name to notify", async () => {
+		// Defensive: unique_name is NOT NULL, but a missing row value must not
+		// produce a bogus /pedia/null submission.
+		txQueryOneMock
+			.mockResolvedValueOnce({
+				...HEAD,
+				id: "r1",
+				status: "PENDING",
+				base_revision_id: null,
+				proposed_unique_name: null,
+			})
+			.mockResolvedValueOnce({ ...ENTRY, unique_name: null })
+			.mockResolvedValueOnce(HEAD);
+
+		await approveEntryRevision({ data: { id: "r1" } });
+
+		expect(fetchSpy).toHaveBeenCalled();
+		expect(notifiedUrls()).toEqual([]);
+	});
+
+	it("reports the old and new entry urls when a restore renames the entry", async () => {
+		txQueryOneMock
+			.mockResolvedValueOnce({
+				...HEAD,
+				id: "old-rev",
+				proposed_unique_name: "yaakov-old",
+			})
+			.mockResolvedValueOnce(ENTRY)
+			.mockResolvedValueOnce(HEAD)
+			.mockResolvedValueOnce({ ...ENTRY, unique_name: "yaakov-old" });
+
+		await restoreEntryRevision({
+			data: { id: "old-rev", baseRevisionId: "rev-head" },
+		});
+
+		expect(notifiedUrls()).toEqual(["/pedia/yaakov-old", "/pedia/yaakov"]);
+	});
+
+	it("submits no urls when the restored row is gone and the entry had no name", async () => {
+		txQueryOneMock
+			.mockResolvedValueOnce({ ...HEAD, id: "old-rev" })
+			.mockResolvedValueOnce({ ...ENTRY, unique_name: null })
+			.mockResolvedValueOnce(HEAD)
+			.mockResolvedValueOnce(null); // post-restore reload finds nothing
+
+		await restoreEntryRevision({
+			data: { id: "old-rev", baseRevisionId: "rev-head" },
+		});
+
+		expect(fetchSpy).toHaveBeenCalled();
+		expect(notifiedUrls()).toEqual([]);
+	});
+
 	it("does not invalidate when a proposal is rejected", async () => {
 		executeMock.mockReset().mockResolvedValue(undefined);
 

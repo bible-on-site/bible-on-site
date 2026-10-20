@@ -29,6 +29,7 @@ import {
 	updateEntityDisplayName,
 	updatePersonMainName,
 	updatePersonSex,
+	updateSayingDate,
 } from "~/server/tanahpedia/structural";
 
 function executedStatements(): string[] {
@@ -343,5 +344,55 @@ describe("structural saves invalidate the website", () => {
 
 		expect(fetchedBeforeWrite).toBe(false);
 		expect(fetchSpy).toHaveBeenCalled();
+	});
+
+	function notifiedUrls(): string[] {
+		// The urls ride on the third (/pedia index) invalidation call.
+		const url = new URL(String(fetchSpy.mock.calls[2][0]));
+		return url.searchParams.getAll("url");
+	}
+
+	it("reports the entry pages linked to a saying's entity after a date change", async () => {
+		queryOneMock.mockResolvedValue({ entity_id: "entity-9" });
+		queryMock.mockResolvedValue([{ unique_name: "משה" }]);
+
+		await updateSayingDate({
+			data: { sayingId: "s1", sayingDate: 1200 },
+		});
+
+		expect(notifiedUrls()).toEqual(["/pedia/משה"]);
+	});
+
+	it("expires the surfaces without urls when the saying row is gone", async () => {
+		queryOneMock.mockResolvedValue(null);
+
+		await updateSayingDate({
+			data: { sayingId: "s1", sayingDate: 1200 },
+		});
+
+		expect(revalidateCalls()).toHaveLength(3);
+		expect(notifiedUrls()).toEqual([]);
+	});
+
+	it("reports the entry pages linked to a place after identifications change", async () => {
+		queryOneMock.mockResolvedValue({ entity_id: "entity-9" });
+		queryMock.mockResolvedValue([{ unique_name: "ירושלים" }]);
+
+		await replacePlaceIdentifications({
+			data: { placeId: "p1", rows: [] },
+		});
+
+		expect(notifiedUrls()).toEqual(["/pedia/ירושלים"]);
+	});
+
+	it("expires the surfaces without urls when the place row is gone", async () => {
+		queryOneMock.mockResolvedValue(null);
+
+		await replacePlaceIdentifications({
+			data: { placeId: "p1", rows: [] },
+		});
+
+		expect(revalidateCalls()).toHaveLength(3);
+		expect(notifiedUrls()).toEqual([]);
 	});
 });

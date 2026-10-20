@@ -1354,4 +1354,128 @@ describe("family saves invalidate the website", () => {
 		expect(fetchSpy).toHaveBeenCalled();
 		expect(revalidateCalls()[0]?.tag).toBe("tanahpedia-entity-refs");
 	});
+
+	function notifiedUrls(): string[] {
+		// The urls ride on the third (/pedia index) invalidation call.
+		const url = new URL(String(fetchSpy.mock.calls[2][0]));
+		return url.searchParams.getAll("url");
+	}
+
+	it("reports the linked entry's url when a new person is linked to it", async () => {
+		queryOneMock.mockResolvedValue({ id: "type-1" });
+		queryMock.mockResolvedValue([{ unique_name: "משה" }]);
+
+		await createFamilyPersonNode({
+			data: { displayName: "דוד", linkToEntryId: "entry-1" },
+		});
+
+		expect(notifiedUrls()).toEqual(["/pedia/משה"]);
+	});
+
+	it("reports the linked persons' entry urls after a parent-child update", async () => {
+		executeMock.mockResolvedValue({ affectedRows: 1 });
+		queryOneMock.mockResolvedValue({
+			parent_id: "parent-1",
+			child_id: "child-1",
+		});
+		queryMock
+			.mockResolvedValueOnce([{ entity_id: "e1" }, { entity_id: "e2" }])
+			.mockResolvedValueOnce([{ unique_name: "אברהם" }]);
+
+		await updateParentChildLink({
+			data: { id: "link-1", sourceCitation: "מקור" },
+		});
+
+		expect(notifiedUrls()).toEqual(["/pedia/אברהם"]);
+	});
+
+	it("reports the linked persons' entry urls after a parent-child delete", async () => {
+		executeMock.mockResolvedValue({ affectedRows: 1 });
+		queryOneMock.mockResolvedValue({
+			parent_id: "parent-1",
+			child_id: "child-1",
+		});
+		queryMock
+			.mockResolvedValueOnce([{ entity_id: "e1" }])
+			.mockResolvedValueOnce([{ unique_name: "אברהם" }]);
+
+		await deleteParentChildLink({ data: { id: "link-1" } });
+
+		expect(notifiedUrls()).toEqual(["/pedia/אברהם"]);
+	});
+
+	it("reports the members' entry urls after a union update", async () => {
+		executeMock.mockResolvedValue({ affectedRows: 1 });
+		queryOneMock.mockResolvedValue({
+			person1_id: "p1",
+			person2_id: "p2",
+		});
+		queryMock
+			.mockResolvedValueOnce([{ entity_id: "e1" }])
+			.mockResolvedValueOnce([{ unique_name: "שרה" }]);
+
+		await updateUnionLink({ data: { id: "u1", unionOrder: 2 } });
+
+		expect(notifiedUrls()).toEqual(["/pedia/שרה"]);
+	});
+
+	it("reports the members' entry urls after a union delete", async () => {
+		executeMock.mockResolvedValue({ affectedRows: 1 });
+		queryOneMock.mockResolvedValue({
+			person1_id: "p1",
+			person2_id: "p2",
+		});
+		queryMock
+			.mockResolvedValueOnce([{ entity_id: "e1" }])
+			.mockResolvedValueOnce([{ unique_name: "שרה" }]);
+
+		await deleteUnionLink({ data: { id: "u1" } });
+
+		expect(notifiedUrls()).toEqual(["/pedia/שרה"]);
+	});
+
+	it("reports the named person's and giver's entry urls after a name create", async () => {
+		queryOneMock.mockResolvedValue({ id: "type-1" });
+		queryMock
+			.mockResolvedValueOnce([{ entity_id: "e1" }, { entity_id: "e2" }])
+			.mockResolvedValueOnce([
+				{ unique_name: "יעקב" },
+				{ unique_name: "ישמעאל" },
+			]);
+
+		await createPersonName({
+			data: {
+				personId: "p1",
+				name: "ישראל",
+				nameType: "ADDITIONAL",
+				giverPersonId: "p2",
+			},
+		});
+
+		expect(notifiedUrls()).toEqual(["/pedia/יעקב", "/pedia/ישמעאל"]);
+	});
+
+	it("reports the owning person's entry urls after a name update", async () => {
+		executeMock.mockResolvedValue({ affectedRows: 1 });
+		queryOneMock.mockResolvedValue({ person_id: "p1" });
+		queryMock
+			.mockResolvedValueOnce([{ entity_id: "e1" }])
+			.mockResolvedValueOnce([{ unique_name: "יעקב" }]);
+
+		await updatePersonName({ data: { id: "name-1", name: "ישראל" } });
+
+		expect(notifiedUrls()).toEqual(["/pedia/יעקב"]);
+	});
+
+	it("reports the owning person's entry urls after a name delete", async () => {
+		executeMock.mockResolvedValue({ affectedRows: 1 });
+		queryOneMock.mockResolvedValue({ person_id: "p1" });
+		queryMock
+			.mockResolvedValueOnce([{ entity_id: "e1" }])
+			.mockResolvedValueOnce([{ unique_name: "יעקב" }]);
+
+		await deletePersonName({ data: { id: "name-1" } });
+
+		expect(notifiedUrls()).toEqual(["/pedia/יעקב"]);
+	});
 });
