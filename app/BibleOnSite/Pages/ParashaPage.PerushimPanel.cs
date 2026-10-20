@@ -104,7 +104,7 @@ public partial class ParashaPage //NOSONAR
         {
             await Shell.Current.GoToAsync(AppRoutes.ExtensionPacks);
         }
-        catch (Exception ex)
+        catch (Exception ex) //NOSONAR — failure boundary: settings navigation is best-effort and must not crash the reader.
         {
             Console.Error.WriteLine($"Navigate to perushim settings failed: {ex}");
         }
