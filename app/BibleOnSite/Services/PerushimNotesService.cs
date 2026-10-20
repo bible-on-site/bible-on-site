@@ -137,6 +137,33 @@ public class PerushimNotesService
     /// <summary>Whether compatible notes are available from store delivery or a bundled asset.</summary>
     public bool IsAvailable => _initialized && !_notesMissing && _connection != null;
 
+    /// <summary>Whether <see cref="InitializeAsync"/> already settled once (successfully or not).</summary>
+    public bool IsInitialized => _initialized;
+
+    /// <summary>
+    /// Whether the local notes DB file is on disk. When it is absent and the
+    /// service is uninitialized, <see cref="InitializeAsync"/> will first
+    /// materialize the delivered pack — a copy of hundreds of MB inside the
+    /// operation lock — so UI-critical callers should kick it instead of
+    /// awaiting it.
+    /// </summary>
+    internal bool HasLocalNotesFile => File.Exists(Path.Join(DataDirectory, NotesDbName));
+
+    /// <summary>
+    /// Starts initialization without awaiting it; a faulted init logs here
+    /// instead of surfacing as an unobserved task exception. Callers that
+    /// cannot block on first-launch pack materialization use this and rely on
+    /// <see cref="OperationCompleted"/> to re-check availability.
+    /// </summary>
+    public void BeginInitialize()
+    {
+        // Task.Run keeps the file probes and pack-copy prefix off the
+        // caller's thread — BeginInitialize exists for UI-critical callers.
+        _ = Task.Run(InitializeAsync).ContinueWith(
+            task => Console.WriteLine($"Perushim notes init failed: {task.Exception}"),
+            TaskContinuationOptions.OnlyOnFaulted);
+    }
+
     internal async Task<SQLiteAsyncConnection?> GetSearchConnectionAsync()
     {
         await InitializeAsync();
