@@ -48,7 +48,7 @@
     <Compile Include="..\BibleOnSite\ViewModels\SupportPreferencesViewModel.cs" Link="ViewModels\SupportPreferencesViewModel.cs" />
     <!-- Exclude XAML code-behind files as they require MAUI XAML compilation -->
     <Compile Include="..\BibleOnSite\Controls\*.cs" Exclude="..\BibleOnSite\Controls\*.xaml.cs;..\BibleOnSite\Controls\FloatingSearchBar.Filters.cs;..\BibleOnSite\Controls\MasoraUnitPickerPopup.Columns.cs" Link="Controls\%(Filename)%(Extension)" />
-    <Compile Include="..\BibleOnSite\Resources\Fonts\FluentUI.cs" Link="Resources\Fonts\FluentUI.cs" />
+    <Compile Include="..\BibleOnSite\Resources\Fonts\FluentUI.cs" Link="Resources\FluentUI.cs" />
     <Compile Include="..\BibleOnSite\Data\*.cs" Link="Data\%(Filename)%(Extension)" />
     <Compile Include="..\BibleOnSite\Helpers\*.cs" Link="Helpers\%(Filename)%(Extension)" />
     <Compile Include="..\BibleOnSite\Models\*.cs" Link="Models\%(Filename)%(Extension)" />

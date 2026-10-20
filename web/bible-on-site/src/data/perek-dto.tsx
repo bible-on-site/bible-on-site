@@ -5,10 +5,32 @@ import type {
 	AdditionalsItem,
 	Pasuk,
 	RecitationRecording,
+	Sefarim,
 	SefarimItemWithPerakim,
 } from "./db/tanah-view-types";
 
 export { getPerekIdByDate, getTodaysPerekId } from "./perek-calendar";
+
+/**
+ * Distinct canonical perakim with a published recording: a perek carries a
+ * `recitation` record only once its audio asset is actually published, so
+ * counting `recitation.audioUrl` counts each recorded perek exactly once.
+ * Alignment approval is unrelated to availability — a playable recording
+ * counts even while its word timings await review (#2397).
+ */
+export function countRecordedPerakim(data: Sefarim = sefarim): number {
+	let count = 0;
+	for (const sefer of data) {
+		const groups: { perakim: { recitation?: RecitationRecording }[] }[] =
+			"additionals" in sefer ? sefer.additionals : [sefer];
+		for (const group of groups) {
+			for (const perek of group.perakim) {
+				if (perek.recitation?.audioUrl) count += 1;
+			}
+		}
+	}
+	return count;
+}
 export interface PerekObj {
 	recitation?: RecitationRecording;
 	perekId: number;
