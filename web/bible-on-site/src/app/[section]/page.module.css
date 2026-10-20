@@ -210,7 +210,8 @@
 .headlineTitle {
   font-size: 1.25rem;
   font-weight: bold;
-  margin-block: 0.67em;
+  /* match the UA margin the h1 had at this sectioning depth (article in nested sections) */
+  margin-block: 1.33em;
 }
 
 /* AlHaperek bottom divider */
