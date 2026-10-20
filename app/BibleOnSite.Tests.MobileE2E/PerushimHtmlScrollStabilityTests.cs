@@ -36,17 +36,16 @@ public sealed class PerushimHtmlScrollStabilityTests(ITestOutputHelper output, M
         Assert.True(checkedCount > 0,
             "Synthetic perushim must render checkboxes — otherwise HtmlView cells are never created");
 
-        // Grouping must retain every paragraph, including text far outside the
-        // visible viewport. This also exercises the formerly blocking AX lookup.
+        // Only sections near the viewport are exposed (AccessibleTextSectionsTests
+        // proves the split keeps every paragraph); the 2,200-line document must
+        // not put its ~147 sections into every WDA snapshot.
         Page.WaitFor(Platform.DisplayedAutomationId("CommentaryTextSection"));
         var sections = System.Xml.Linq.XDocument.Parse(Driver!.PageSource).Descendants()
             .Where(element => (string?)element.Attribute("name") == "CommentaryTextSection")
             .Select(element => (string?)element.Attribute("label") ?? string.Empty).ToArray();
-        Assert.NotEmpty(sections);
+        Assert.InRange(sections.Length, 1, 20);
         Assert.All(sections, text => Assert.InRange(text.Length, 1, 1024));
-        var spokenText = string.Concat(sections);
-        Assert.Equal(2200, System.Text.RegularExpressions.Regex.Matches(spokenText, "פירוש ארוך").Count);
-        Assert.Contains("עם פירוש נוסף על הפסוק.", spokenText);
+        Assert.Contains("פירוש ארוך", string.Concat(sections));
         var sourceBeforeStorm = Page.Source;
         var verseBeforeStorm = Page.FirstPasuk;
         SaveDiagnostics("LongPerushimBeforeScroll", "passed");
