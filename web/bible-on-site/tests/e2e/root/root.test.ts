@@ -35,11 +35,15 @@ test.describe("Root page", () => {
 			section.getByRole("heading", { name: "מספרים על הפרק" }),
 		).toBeVisible();
 		// Scroll trigger starts the shared count-up; fixture data (4 public
-		// articles by 3 authors) must settle at the exact totals.
+		// articles) must settle at the exact totals. רבנים is the fixed word
+		// עשרות by design, never a number (#2397).
 		await section.scrollIntoViewIfNeeded();
-		const expected: [string, string][] = [
-			["רבנים כותבים על הפרק", "3"],
-			["מאמרים על הפרק", "4"],
+		const expected: [string, RegExp][] = [
+			["רבנים כותבים על הפרק", /^עשרות$/],
+			["מאמרים על הפרק", /^4$/],
+			["ערכים על הפרק בתנכפדיה", /^\d[\d,]*$/],
+			["פרקים מוקלטים", /^\d[\d,]*$/],
+			["שנים שהתוכנית רצה", /^\d+$/],
 		];
 		for (const [label, value] of expected) {
 			const stat = section.locator("dl > div", { hasText: label });
@@ -47,15 +51,6 @@ test.describe("Root page", () => {
 				timeout: 10_000,
 			});
 		}
-		const pedia = section.locator("dl > div", {
-			hasText: "ערכים על הפרק בתנכפדיה",
-		});
-		await expect(pedia.locator('[aria-hidden="true"]')).toHaveText(
-			/^\d[\d,]*$/,
-			{
-				timeout: 10_000,
-			},
-		);
 	});
 
 	test("Footer links to the accessibility statement", async ({ page }) => {
