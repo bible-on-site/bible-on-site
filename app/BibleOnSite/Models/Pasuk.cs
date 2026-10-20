@@ -25,6 +25,7 @@ public partial class Pasuk : ObservableObject
     // FormattedString must rebuild on every toggle.
     partial void OnIsSelectedChanged(bool value)
     {
+        _ = value;
         _formattedText = null;
         OnPropertyChanged(nameof(FormattedText));
     }
