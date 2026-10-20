@@ -13,7 +13,13 @@ export function supervise(command, args, {
   scheduleDeadline = callback => setTimeout(callback, timeoutMs), cancelDeadline = clearTimeout,
 } = {}) {
   const child = spawn(command, args, {
-    cwd, env, stdio, windowsHide: true, detached: process.platform !== "win32",
+    cwd, stdio, windowsHide: true, detached: process.platform !== "win32",
+    // Post-test cleanup in run.mjs budgets itself against this shared deadline
+    // instead of consuming the remaining pilot time after green tests (#2423).
+    env: {
+      ...env,
+      MOBILE_E2E_PILOT_DEADLINE_MS: String(Date.now() + timeoutMs),
+    },
   });
   let timer;
   let escalation;

@@ -14,6 +14,7 @@ import { iosAppLogPids, iosAppPids } from "./ios-processes.mjs";
 import { terminateIosTestApp } from "./ios-app-cleanup.mjs";
 import { captureTestHostStacks, monitorTestHostShutdown } from "./test-host-diagnostics.mjs";
 import { prepareIosProcessInspector } from "./ios-process-inspector.mjs";
+import { exitCode, phaseRecorder, remainingBudget } from "./shutdown-budget.mjs";
 
 const directory = dirname(fileURLToPath(import.meta.url));
 const runStarted = Date.now();
@@ -173,25 +174,30 @@ try {
       shutdownMonitor?.write(chunk, name);
     });
   }
-  process.exitCode = await new Promise((resolveExit, reject) => {
-    test.on("error", reject);
-    test.on("close", (code) => resolveExit(code ?? 1));
-  });
+  // 'close' waits for stdio, and a grandchild inheriting the pipes can hold it
+  // past the pilot deadline after the test process already exited (#2423).
+  process.exitCode = await exitCode(test);
 } finally {
+  // Cleanup shares the supervisor's wall-clock deadline: each phase is timed
+  // into pilot-phases.jsonl and log exports are capped by the remaining budget
+  // so diagnostics cannot consume it after a green run (#2423).
+  const deadlineMs = Number(process.env.MOBILE_E2E_PILOT_DEADLINE_MS);
+  const phase = phaseRecorder(resolve(artifacts, "pilot-phases.jsonl"));
+  const budget = (capMs) => Math.min(capMs, remainingBudget(deadlineMs, 3000));
   try {
-    await shutdownMonitor?.stop();
+    await phase("test-host-shutdown", () => shutdownMonitor?.stop());
   } catch (error) {
     diagnosticsFailed = true;
     console.error("Could not capture test-host shutdown stacks:", error);
   }
   try {
-    await hangMonitor?.stop();
+    await phase("native-hang-monitor", () => hangMonitor?.stop());
   } catch (error) {
     diagnosticsFailed = true;
     console.error("Could not finish native hang capture:", error);
   }
   try {
-    await nativeStream?.stop();
+    await phase("native-log-stream", () => nativeStream?.stop());
   } catch (error) {
     diagnosticsFailed = true;
     console.error("Could not finish native log stream:", error);
@@ -199,15 +205,16 @@ try {
   if (platform === "ios" && process.exitCode !== 0) {
     // Symbolication can consume substantial resources on simulator runners.
     // Sample surviving failed/hung apps after tests, never alongside healthy runs.
-    await sampleIosApp("cleanup");
+    await phase("ios-app-sampling", () => sampleIosApp("cleanup"));
   }
   if (diagnosticsFailed) process.exitCode ||= 1;
   if (platform === "ios") {
     try {
-      const cleanup = await terminateIosTestApp(process.env.MOBILE_UDID, {
-        keepApp: process.env.MOBILE_KEEP_APP === "1", inspectorPath,
-        observedPids: () => iosAppLogPids(readFileSync(resolve(artifacts, "device-live.log"), "utf8")),
-      });
+      const cleanup = await phase("ios-app-terminate", () =>
+        terminateIosTestApp(process.env.MOBILE_UDID, {
+          keepApp: process.env.MOBILE_KEEP_APP === "1", inspectorPath,
+          observedPids: () => iosAppLogPids(readFileSync(resolve(artifacts, "device-live.log"), "utf8")),
+        }));
       writeFileSync(resolve(artifacts, "ios-app-cleanup.json"), JSON.stringify(cleanup, null, 2));
     } catch (error) {
       writeFileSync(resolve(artifacts, "ios-app-cleanup-error.txt"), String(error));
@@ -220,30 +227,45 @@ try {
     const adb = androidSdk ? resolve(androidSdk, "platform-tools", process.platform === "win32" ? "adb.exe" : "adb") : "adb";
     // Log export duration scales with how long the suite ran; a 30s budget
     // intermittently times out after a full test pass and fails the job.
+    // Each export is further capped by the remaining pilot deadline (#2423).
     const logExportTimeout = 120000;
     const command = platform === "android" ? adb : "xcrun";
     const args = platform === "android"
       ? ["-s", process.env.MOBILE_UDID, "logcat", "-d"]
       : ["simctl", "spawn", process.env.MOBILE_UDID, "log", "show", "--style", "compact", "--last", `${Math.ceil((Date.now() - runStarted) / 1000)}s`, "--predicate", 'process == "BibleOnSite"'];
-    exportNativeLog(command, args, resolve(artifacts, "device.log"), logExportTimeout);
+    const deviceLogBudget = budget(logExportTimeout);
+    if (deviceLogBudget > 0)
+      await phase("device-log-export", () =>
+        exportNativeLog(command, args, resolve(artifacts, "device.log"), deviceLogBudget));
+    else
+      writeFileSync(resolve(artifacts, "device-log-skipped.txt"),
+        "Skipped: the pilot deadline left no remaining budget for log export.");
     if (platform === "ios") {
-      exportNativeLog("xcrun", ["simctl", "spawn", process.env.MOBILE_UDID,
-        "log", "show", "--style", "compact", "--last", "10m", "--predicate",
-        '(process == "SpringBoard" OR process == "runningboardd" OR process == "ReportCrash" OR process == "testmanagerd") AND (eventMessage CONTAINS[c] "daily929" OR eventMessage CONTAINS[c] "BibleOnSite" OR eventMessage CONTAINS[c] "WebDriverAgent" OR eventMessage CONTAINS[c] "xctrunner")'],
-      resolve(artifacts, "app-lifecycle.log"), logExportTimeout);
-      const reportDirectories = [resolve(homedir(), "Library/Logs/DiagnosticReports"),
-        resolve(homedir(), "Library/Developer/CoreSimulator/Devices", process.env.MOBILE_UDID,
-          "data/Library/Logs/CrashReporter")];
-      for (const [index, reports] of reportDirectories.entries()) {
-        if (!existsSync(reports)) continue;
-        for (const report of readdirSync(reports)) {
-          const source = resolve(reports, report);
-          const metadata = statSync(source);
-          if ((report.startsWith("BibleOnSite") || report.startsWith("WebDriverAgent")) && metadata.isFile() && metadata.mtimeMs >= runStarted) {
-            copyFileSync(source, resolve(artifacts, `crash-${index}-${report}`));
+      const lifecycleBudget = budget(logExportTimeout);
+      if (lifecycleBudget > 0)
+        await phase("app-lifecycle-export", () =>
+          exportNativeLog("xcrun", ["simctl", "spawn", process.env.MOBILE_UDID,
+            "log", "show", "--style", "compact", "--last", "10m", "--predicate",
+            '(process == "SpringBoard" OR process == "runningboardd" OR process == "ReportCrash" OR process == "testmanagerd") AND (eventMessage CONTAINS[c] "daily929" OR eventMessage CONTAINS[c] "BibleOnSite" OR eventMessage CONTAINS[c] "WebDriverAgent" OR eventMessage CONTAINS[c] "xctrunner")'],
+          resolve(artifacts, "app-lifecycle.log"), lifecycleBudget));
+      else
+        writeFileSync(resolve(artifacts, "app-lifecycle-skipped.txt"),
+          "Skipped: the pilot deadline left no remaining budget for log export.");
+      await phase("crash-report-copy", () => {
+        const reportDirectories = [resolve(homedir(), "Library/Logs/DiagnosticReports"),
+          resolve(homedir(), "Library/Developer/CoreSimulator/Devices", process.env.MOBILE_UDID,
+            "data/Library/Logs/CrashReporter")];
+        for (const [index, reports] of reportDirectories.entries()) {
+          if (!existsSync(reports)) continue;
+          for (const report of readdirSync(reports)) {
+            const source = resolve(reports, report);
+            const metadata = statSync(source);
+            if ((report.startsWith("BibleOnSite") || report.startsWith("WebDriverAgent")) && metadata.isFile() && metadata.mtimeMs >= runStarted) {
+              copyFileSync(source, resolve(artifacts, `crash-${index}-${report}`));
+            }
           }
         }
-      }
+      });
     }
   } catch (error) {
     // Diagnostic-only: a failed log export must not fail a passing run.
