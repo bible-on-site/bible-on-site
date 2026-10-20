@@ -25,7 +25,7 @@ public class ParashaViewModelTests
         private readonly bool _includeNotes;
 
         public Fixture(List<Article>? articles = null, int? lastLearntPerek = null,
-            bool includeCatalog = true, bool includeNotes = true,
+            bool includeCatalog = true, bool includeNotes = true, bool nullArticlesLoader = false,
             Func<int, Task<List<Article>>>? articlesLoader = null,
             Func<int, bool>? hasPerekAudio = null)
         {
@@ -48,7 +48,8 @@ public class ParashaViewModelTests
                 Preferences,
                 catalog,
                 notes,
-                articlesLoader ?? (_ => Task.FromResult(articles ?? new List<Article>())),
+                nullArticlesLoader ? null
+                    : articlesLoader ?? (_ => Task.FromResult(articles ?? new List<Article>())),
                 // Never touch RecitationService.Instance — its lazy filesystem
                 // singleton has no host in a unit-test process.
                 hasPerekAudio ?? (_ => false));
@@ -120,6 +121,10 @@ public class ParashaViewModelTests
     {
         await using var fixture = new Fixture();
         await fixture.Initialize();
+
+        // With no unit on screen the carousel initializer is a no-op.
+        await fixture.Model.InitializeCarouselAsync();
+        fixture.Model.CarouselUnits.Should().BeEmpty();
 
         await fixture.Model.NavigateToUnitAsync(2);
 
@@ -333,6 +338,82 @@ public class ParashaViewModelTests
     }
 
     [Fact]
+    public async Task ToggleCheckedPerush_UncheckClearsInlineNotes()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize();
+        await fixture.Model.LoadByUnitIdAsync(1);
+
+        fixture.Model.InlineCommentaryLimit.Should().Be(5);
+        fixture.Model.ToggleCheckedPerush(1);
+        fixture.Model.ToggleCheckedPerush(2);
+        fixture.Model.Unit!.Rows
+            .Single(r => r.Display != null && r.PerekId == 1 && r.PasukNum == 2)
+            .Display!.Pasuk.PerushNotes.Should().HaveCount(2);
+
+        // Unchecking the last perush clears every row's notes entirely.
+        fixture.Model.ToggleCheckedPerush(1);
+        fixture.Model.ToggleCheckedPerush(2);
+        fixture.Model.Unit!.Rows.Should().OnlyContain(r =>
+            r.Display == null || r.Display.Pasuk.PerushNotes.Count == 0);
+
+        // Toggling an id outside the catalog still registers — the picker
+        // only ever sends catalog ids, but the API itself does not gate.
+        fixture.Model.ToggleCheckedPerush(9);
+        fixture.Model.IsPerushChecked(9).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task InlineCommentaryLimitShrink_TrimsCheckedPerushim()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize();
+        await fixture.Model.LoadByUnitIdAsync(1);
+        fixture.Model.ToggleCheckedPerush(1);
+        fixture.Model.ToggleCheckedPerush(2);
+
+        fixture.Preferences.InlineCommentaryLimit = 1;
+
+        fixture.Model.CheckedPerushim.Should().BeEquivalentTo(new[] { 1 });
+    }
+
+    [Fact]
+    public async Task LoadPerushim_UnitWithoutNotes_EmptiesTheCatalog()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize();
+        await fixture.Model.LoadByUnitIdAsync(1);
+
+        // A unit whose covered perakim carry no notes at all clears the
+        // catalog rather than keeping the previous unit's list.
+        var empty = new ParashaUnit
+        {
+            UnitId = 9, Slug = "9", SeferId = 1, SeferName = "בראשית",
+            Order = 9, Heading = "ריקה",
+            TorahRange = new ScriptureRange { StartPerekId = 9, StartPasuk = 1, EndPerekId = 9, EndPasuk = 5 }
+        };
+        fixture.Model.Unit = empty;
+        await fixture.Model.LoadPerushimAsync(empty);
+
+        fixture.Model.Perushim.Should().BeEmpty();
+        fixture.Model.HasPerushim.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task LoadPerushim_StaleUnit_IsDropped()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize();
+        await fixture.Model.LoadByUnitIdAsync(1);
+
+        // A load resolving for a unit that is no longer current is dropped.
+        var stale = fixture.Model.CarouselUnits[1];
+        await fixture.Model.LoadPerushimAsync(stale);
+
+        fixture.Model.Perushim.Select(p => p.Name).Should().BeEquivalentTo("Rashi", "Ramban");
+    }
+
+    [Fact]
     public async Task ShowPerushForSearch_KeepsSearchedPerushWithinLimit()
     {
         await using var fixture = new Fixture();
@@ -406,7 +487,7 @@ public class ParashaViewModelTests
     [Fact]
     public async Task LoadArticles_NullLoaderClearsArticles()
     {
-        await using var fixture = new Fixture(articlesLoader: null);
+        await using var fixture = new Fixture(nullArticlesLoader: true);
         await fixture.Initialize();
         await fixture.Model.LoadByUnitIdAsync(1);
 
@@ -527,6 +608,9 @@ public class ParashaViewModelTests
 
         await fixture.Model.PreloadAdjacentRowsAsync(1);
         other.Rows.Should().NotBeEmpty();
+
+        // A second pass finds everything already loaded — nothing to do.
+        await fixture.Model.PreloadAdjacentRowsAsync(1);
 
         // Unknown center ids and a catalog that never loaded are both no-ops.
         await fixture.Model.PreloadAdjacentRowsAsync(999);

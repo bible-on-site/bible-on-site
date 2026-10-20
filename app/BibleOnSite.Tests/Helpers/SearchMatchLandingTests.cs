@@ -1,3 +1,4 @@
+using BibleOnSite.Controls;
 using BibleOnSite.Helpers;
 using BibleOnSite.Models;
 using Microsoft.Maui.Controls;
@@ -61,6 +62,27 @@ public class SearchMatchLandingTests
 
         SearchMatchLanding.TryLandOnPerushMatch(list, display, new SearchMatchSpan(0, 4))
             .Should().Be(SearchMatchLanding.PerushLanding.NotReady);
+    }
+
+    [Fact]
+    public void TryLandOnPerushMatch_RealizedNoteView_TrustsTheIssuedScroll()
+    {
+        var list = new CollectionView { ItemsSource = new List<object>() };
+        var display = new PerushNoteDisplay { PerushId = 1, PerushName = "רשי" };
+        // The note's native cell is realized and bound to the display item,
+        // but this platform cannot measure match-line visibility.
+        var htmlView = new HtmlView { BindingContext = display };
+        list.AddLogicalChild(htmlView);
+        // The perush-name label realizes with the note row — on a platform
+        // without measurement its visibility stays unverifiable (null).
+        list.AddLogicalChild(new Label { AutomationId = "InlinePerushName", BindingContext = display });
+
+        var verdict = SearchMatchLanding.TryLandOnPerushMatch(list, display, new SearchMatchSpan(3, 7));
+
+        verdict.Should().Be(SearchMatchLanding.PerushLanding.Landed);
+        htmlView.HasSearchMatch.Should().BeTrue();
+        htmlView.SearchMatchStart.Should().Be(3);
+        htmlView.SearchMatchLength.Should().Be(7);
     }
 
     [Fact]
