@@ -524,6 +524,33 @@ public class PreferencesViewModelTests : IDisposable
     }
 
     [Fact]
+    public void FontCategoryPercents_NonFiniteInput_FallsBackToDefault()
+    {
+        var display = new DisplayPreferencesViewModel(_service);
+        display.ArticleFontPercent = 150;
+
+        display.ArticleFontPercent = double.NaN;
+
+        display.ArticleFontPercent.Should().Be(PreferencesService.DefaultFontPercent);
+    }
+
+    [Fact]
+    public void ResetPasukAndArticleFontPercentCommands_RestoreFollowMaster()
+    {
+        var display = new DisplayPreferencesViewModel(_service);
+        display.PasukFontPercent = 150;
+        display.ArticleFontPercent = 60;
+
+        display.ResetPasukFontPercentCommand.Execute(null);
+        display.ResetArticleFontPercentCommand.Execute(null);
+
+        display.PasukFontPercent.Should().Be(100);
+        display.ArticleFontPercent.Should().Be(100);
+        display.PasukEffectiveSize.Should().BeApproximately(display.FontFactor * 18, 1e-9);
+        display.ArticleEffectiveSize.Should().BeApproximately(display.FontFactor * 16, 1e-9);
+    }
+
+    [Fact]
     public void ResetPerushFontPercentCommand_RestoresFollowMaster()
     {
         var display = new DisplayPreferencesViewModel(_service);
