@@ -1165,7 +1165,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
                 : Color.FromArgb("#F2F7FE");
         Shell.SetBackgroundColor(this, shellBackground);
         ReaderToolbar.BackgroundColor = shellBackground;
-        NormalNavigationBar.IsVisible = !isSelectionMode && !searching;
+        NormalNavigationBar.BarVisible = !isSelectionMode && !searching;
         SearchTitleHost.IsVisible = searching;
         SearchTitleHost.Content = searching ? _searchHeader : null;
         ChapterSearch.IsVisible = searching;
