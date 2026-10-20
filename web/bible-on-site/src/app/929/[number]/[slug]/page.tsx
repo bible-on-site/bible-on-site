@@ -16,6 +16,7 @@ import {
 	getArticleSummariesByPerekId,
 } from "../../../../lib/articles";
 import { authorNameToSlug } from "../../../../lib/authors";
+import { demoteHeadings } from "../../../../lib/html-headings";
 import {
 	getAllPerushPerekNamePairs,
 	getPerushDetail,
@@ -288,7 +289,7 @@ export default async function ArticlePage({
 						<div
 							className={styles.articleBody}
 							// biome-ignore lint/security/noDangerouslySetInnerHtml: Content is from trusted database
-							dangerouslySetInnerHTML={{ __html: article.content }}
+							dangerouslySetInnerHTML={{ __html: demoteHeadings(article.content) }}
 						/>
 					)}
 
@@ -311,7 +312,7 @@ export default async function ArticlePage({
 				</Suspense>
 				<div className={styles.articlePerekContainer}>
 					<Breadcrumb perekObj={perekObj} />
-					<PerekHeading perekObj={perekObj} />
+					<PerekHeading perekObj={perekObj} level={2} />
 
 					<PerekText
 						perekObj={perekObj}
@@ -389,7 +390,7 @@ export default async function ArticlePage({
 									className={styles.noteContent}
 									// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify
 									dangerouslySetInnerHTML={{
-										__html: DOMPurify.sanitize(note.noteContent),
+										__html: DOMPurify.sanitize(demoteHeadings(note.noteContent)),
 									}}
 								/>
 							</div>
@@ -416,7 +417,7 @@ export default async function ArticlePage({
 			</Suspense>
 			<div className={styles.articlePerekContainer}>
 				<Breadcrumb perekObj={perekObj} />
-				<PerekHeading perekObj={perekObj} />
+				<PerekHeading perekObj={perekObj} level={2} />
 
 				<PerekText
 					perekObj={perekObj}

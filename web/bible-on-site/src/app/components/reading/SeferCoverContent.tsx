@@ -18,9 +18,9 @@ export function SeferCoverContent({
 			<div className={seferStyles.coverContent}>
 				<div className={seferStyles.coverOrnament}>✦</div>
 				<p className={seferStyles.coverSubtitle}>{SEFER_COVER_BRANDING}</p>
-				<h1 className={seferStyles.coverTitle}>
+				<h2 className={seferStyles.coverTitle}>
 					{getSeferCoverTitle(seferName)}
-				</h1>
+				</h2>
 				<div className={seferStyles.coverDivider} />
 				<p className={seferStyles.coverSubtitle}>{subtitle}</p>
 				{edition && <p className={seferStyles.coverEdition}>{edition}</p>}

@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import type { Article } from "@/lib/articles";
 import { authorNameToSlug } from "@/lib/authors/url-utils";
+import { demoteHeadings } from "@/lib/html-headings";
 import articleStyles from "../[slug]/page.module.css";
 import { ShareButton } from "./ShareButton";
 import styles from "./sefer.module.css";
@@ -73,7 +74,7 @@ export function ArticleFullView({
 					<div
 						className={articleStyles.articleBody}
 						// biome-ignore lint/security/noDangerouslySetInnerHtml: Content is from trusted database
-						dangerouslySetInnerHTML={{ __html: article.content }}
+						dangerouslySetInnerHTML={{ __html: demoteHeadings(article.content) }}
 					/>
 				</div>
 			)}

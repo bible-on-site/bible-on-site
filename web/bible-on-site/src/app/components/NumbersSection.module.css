@@ -15,7 +15,7 @@
 	color: var(--link-accent, #1552ac);
 }
 
-.header h1 {
+.header h2 {
 	font-size: 1.8em;
 	margin: 0.5em 0;
 }

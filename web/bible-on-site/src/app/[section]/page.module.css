@@ -22,7 +22,7 @@
   width: 100%;
   z-index: 2;
 }
-.alHaperekHeadlines h1 {
+.alHaperekHeadlines h2 {
   display: grid;
   letter-spacing: 0.25em;
   justify-items: center;
@@ -142,13 +142,13 @@
   max-width: 1em;
 }
 
-.alHaperekHeadlines h1 a {
+.alHaperekHeadlines h2 a {
   color: white;
   display: contents;
   line-height: 1.875em;
   text-decoration: none;
 }
-.alHaperekHeadlines h1 i {
+.alHaperekHeadlines h2 i {
   font-size: 2em;
 }
 .alHaperekHeadlines p {

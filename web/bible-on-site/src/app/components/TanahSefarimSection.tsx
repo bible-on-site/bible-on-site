@@ -35,8 +35,8 @@ export function TanahSefarimSection() {
 	return (
 		<section id="tanah-sefarim" className={styles.section}>
 			<header className={styles.header}>
-				<h1>ספרי התנ&quot;ך</h1>
-				<h2>בחרו ספר כדי להתחיל ללמוד</h2>
+				<h2>ספרי התנ&quot;ך</h2>
+				<h3>בחרו ספר כדי להתחיל ללמוד</h3>
 			</header>
 			<div className={styles.bookshelfContainer}>
 				<Bookshelf onSeferClick={handleSeferClick} />
