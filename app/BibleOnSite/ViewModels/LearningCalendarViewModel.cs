@@ -36,11 +36,23 @@ public class CalendarCellViewModel
     public bool IsDimmed { get; init; }
 }
 
+/// <summary>One 7-column week row inside a <see cref="MiniMonthViewModel"/> (#2455).</summary>
+public class MiniMonthWeekViewModel
+{
+    public required IReadOnlyList<CalendarCellViewModel> Cells { get; init; }
+}
+
 /// <summary>A named month section inside the yearly / full-cycle views (#2364).</summary>
 public class MiniMonthViewModel
 {
     public required string Title { get; init; }
     public required ObservableCollection<CalendarCellViewModel> Cells { get; init; }
+
+    /// <summary>
+    /// Cells chunked into 7-column weeks; the grouped XAML renders each week
+    /// as a plain Grid row instead of a nested CollectionView (#2455).
+    /// </summary>
+    public required IReadOnlyList<MiniMonthWeekViewModel> Weeks { get; init; }
 }
 
 /// <summary>Which period the learning calendar renders (#2364).</summary>
@@ -69,6 +81,8 @@ public partial class LearningCalendarViewModel : ObservableObject
     private int _cycle;
     private int _todayDateNumber;
     private bool _suppressSelection;
+    private int _monthOptionsYear = -1;
+    private int _cycleOptionsCount = -1;
 
     public LearningCalendarViewModel()
         : this(PerekScheduleService.Instance, PerekDataService.Instance, ShellAppNavigator.Instance)
@@ -165,7 +179,12 @@ public partial class LearningCalendarViewModel : ObservableObject
         _year = year;
         _month = month;
         RebuildPickerOptions();
-        RebuildCells();
+        // The month grid is hidden in the grouped views; building its cells
+        // there only floods the hidden CollectionView with change churn (#2455).
+        if (ViewMode == CalendarViewMode.Month)
+        {
+            RebuildCells();
+        }
         RebuildGroups();
     }
 
@@ -174,22 +193,42 @@ public partial class LearningCalendarViewModel : ObservableObject
         _suppressSelection = true;
         try
         {
-            MonthOptions = new ObservableCollection<PickerOption>(
-                HebrewDateHelper.GetMonthOrder(_year).Select(month =>
-                    new PickerOption(month, HebrewDateHelper.GetHebrewMonthName(
-                        month, HebrewDateHelper.IsHebrewLeapYear(_year)))));
+            // Picker option lists are rebuilt only when their inputs change:
+            // MonthOptions depend on the viewed year, YearOptions on schedule
+            // data, and CycleOptions grow only past the last confirmed cycle
+            // (#2455 — every navigation used to re-allocate all three lists and
+            // re-bind the pickers).
+            if (_monthOptionsYear != _year)
+            {
+                _monthOptionsYear = _year;
+                MonthOptions = new ObservableCollection<PickerOption>(
+                    HebrewDateHelper.GetMonthOrder(_year).Select(month =>
+                        new PickerOption(month, HebrewDateHelper.GetHebrewMonthName(
+                            month, HebrewDateHelper.IsHebrewLeapYear(_year)))));
+            }
 
             var firstCycleYear = HebrewDateHelper.NumberToHebrewDate(_schedule.GetCycle(1).StartDate).Year;
             var lastConfirmedNumber = Math.Max(1, _schedule.LastConfirmedCycleNumber);
             var lastConfirmedYear = HebrewDateHelper.NumberToHebrewDate(
                 _schedule.GetCycle(lastConfirmedNumber).EndDate).Year;
-            var years = new SortedSet<int> { _year };
-            for (var year = firstCycleYear; year <= lastConfirmedYear; year++)
+            if (YearOptions.Count == 0)
             {
-                years.Add(year);
+                var years = new SortedSet<int> { _year };
+                for (var year = firstCycleYear; year <= lastConfirmedYear; year++)
+                {
+                    years.Add(year);
+                }
+                YearOptions = new ObservableCollection<PickerOption>(
+                    years.Select(year => new PickerOption(year, $"ה'{GimatryHelper.ToLetters(year % 1000)}")));
             }
-            YearOptions = new ObservableCollection<PickerOption>(
-                years.Select(year => new PickerOption(year, $"ה'{GimatryHelper.ToLetters(year % 1000)}")));
+            else if (!YearOptions.Any(o => o.Value == _year))
+            {
+                // A manually picked year outside the listed range still has to
+                // appear in the picker.
+                var years = YearOptions.Select(o => o.Value).Append(_year).OrderBy(y => y);
+                YearOptions = new ObservableCollection<PickerOption>(
+                    years.Select(year => new PickerOption(year, $"ה'{GimatryHelper.ToLetters(year % 1000)}")));
+            }
 
             var displayed = ViewMode == CalendarViewMode.Cycle && _cycle > 0
                 ? _schedule.GetCycle(_cycle)
@@ -197,14 +236,18 @@ public partial class LearningCalendarViewModel : ObservableObject
                     ?? _schedule.GetCycleForDate(_year * 10000 + _month * 100 +
                         HebrewDateHelper.GetDaysInMonth(_year, _month));
             var maxCycle = Math.Max(lastConfirmedNumber, displayed?.Number ?? 1);
-            CycleOptions = new ObservableCollection<PickerOption>(
-                Enumerable.Range(1, maxCycle).Select(number =>
-                {
-                    var cycle = _schedule.GetCycle(number);
-                    return new PickerOption(
-                        number,
-                        $"מחזור {number}{(cycle.Projected ? " (משוער)" : string.Empty)}");
-                }));
+            if (_cycleOptionsCount != maxCycle)
+            {
+                _cycleOptionsCount = maxCycle;
+                CycleOptions = new ObservableCollection<PickerOption>(
+                    Enumerable.Range(1, maxCycle).Select(number =>
+                    {
+                        var cycle = _schedule.GetCycle(number);
+                        return new PickerOption(
+                            number,
+                            $"מחזור {number}{(cycle.Projected ? " (משוער)" : string.Empty)}");
+                    }));
+            }
 
             SelectedMonth = MonthOptions.FirstOrDefault(o => o.Value == _month);
             SelectedYear = YearOptions.FirstOrDefault(o => o.Value == _year);
@@ -288,12 +331,18 @@ public partial class LearningCalendarViewModel : ObservableObject
         }
 
         MonthGroups = new ObservableCollection<MiniMonthViewModel>(groups.Select(group =>
-            new MiniMonthViewModel
+        {
+            var cells = group.Cells.Select(cell => ToCellViewModel(cell, dimmed)).ToList();
+            return new MiniMonthViewModel
             {
                 Title = group.Title,
-                Cells = new ObservableCollection<CalendarCellViewModel>(
-                    group.Cells.Select(cell => ToCellViewModel(cell, dimmed))),
-            }));
+                Cells = new ObservableCollection<CalendarCellViewModel>(cells),
+                Weeks = cells
+                    .Chunk(7)
+                    .Select(row => new MiniMonthWeekViewModel { Cells = row })
+                    .ToList(),
+            };
+        }));
     }
 
     private CalendarCellViewModel ToCellViewModel(
@@ -339,7 +388,10 @@ public partial class LearningCalendarViewModel : ObservableObject
     {
         _cycle = Math.Max(1, cycleNumber);
         RebuildPickerOptions();
-        RebuildCells();
+        if (ViewMode == CalendarViewMode.Month)
+        {
+            RebuildCells();
+        }
         RebuildGroups();
         PrevMonthCommand.NotifyCanExecuteChanged();
     }
@@ -401,7 +453,10 @@ public partial class LearningCalendarViewModel : ObservableObject
             _cycle = displayed?.Number ?? 1;
         }
         RebuildPickerOptions();
-        RebuildCells();
+        if (mode == CalendarViewMode.Month)
+        {
+            RebuildCells();
+        }
         RebuildGroups();
         PrevMonthCommand.NotifyCanExecuteChanged();
     }

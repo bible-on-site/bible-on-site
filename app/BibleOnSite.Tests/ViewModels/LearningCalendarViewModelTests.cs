@@ -512,6 +512,28 @@ public class LearningCalendarViewModelTests
     }
 
     [Fact]
+    public async Task SetViewMode_ToGroupedView_DoesNotRebuildHiddenMonthGrid()
+    {
+        // #2455: building the hidden month grid's cells in year/cycle mode only
+        // flooded the invisible CollectionView with redundant work.
+        await using var fixture = await CreateFixtureAsync(CyclesOneToFour);
+        var vm = fixture.ViewModel;
+        await vm.InitializeAsync();
+        var cells = vm.Cells;
+
+        vm.SetViewModeCommand.Execute(CalendarViewMode.Year);
+
+        vm.Cells.Should().BeSameAs(cells);
+        vm.MonthGroups.Should().NotBeEmpty();
+
+        vm.SetViewModeCommand.Execute(CalendarViewMode.Cycle);
+        vm.Cells.Should().BeSameAs(cells);
+
+        vm.SetViewModeCommand.Execute(CalendarViewMode.Month);
+        vm.Cells.Should().NotBeNullOrEmpty();
+    }
+
+    [Fact]
     public async Task CycleView_FromMonthBeforeCycleOne_DefaultsToCycleOne()
     {
         await using var fixture = await CreateFixtureAsync(CyclesOneToFour);
