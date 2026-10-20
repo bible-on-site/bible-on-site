@@ -460,8 +460,8 @@ public class ParashaViewModelTests
         await fixture.Initialize();
         await fixture.Model.LoadByUnitIdAsync(1);
 
-        // Every covered perek (Torah + Haftarah) returns the same list;
-        // dedup by id keeps each article once.
+        // Every covered perek (Torah + Haftarah) returns the same list
+        // so dedup by id keeps each article once.
         await fixture.Model.LoadArticlesAsync(fixture.Model.Unit!);
 
         fixture.Model.Articles.Select(a => a.Id).Should().BeEquivalentTo(new[] { 7, 9 });
