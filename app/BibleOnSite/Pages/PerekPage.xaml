@@ -946,10 +946,12 @@
         <!-- Perek Picker Popup Overlay -->
         <Grid x:Name="FocusedPasukOverlay" Grid.Row="1" IsVisible="False" ZIndex="150"
               AutomationId="FocusedPasukOverlay" BackgroundColor="{AppThemeBinding Light=White, Dark=#1C1C1E}">
-            <CollectionView x:Name="FocusedPerushim" SelectionMode="None" Margin="20,16"
+            <!-- Scrollbar gutter: keep the indicator near the edge (margin 6)
+                 while the text keeps its 20 inset via content padding (#2474) -->
+            <CollectionView x:Name="FocusedPerushim" SelectionMode="None" Margin="6,16"
                             AutomationId="FocusedPerushimCollection">
                 <CollectionView.Header>
-                    <VerticalStackLayout Spacing="16">
+                    <VerticalStackLayout Spacing="16" Padding="14,0">
                         <Label x:Name="FocusedSourceLabel" FontSize="18" FontAttributes="Bold" TextColor="{StaticResource Primary}"/>
                         <Label x:Name="FocusedPasukText" AutomationId="FocusedPasukText"
                                FontSize="{DynamicResource PasukFontSize}" FlowDirection="RightToLeft" LineHeight="1.4"/>
@@ -958,7 +960,7 @@
                 </CollectionView.Header>
                 <CollectionView.ItemTemplate>
                     <DataTemplate x:DataType="models:PerushNoteDisplay">
-                        <VerticalStackLayout Spacing="4" Padding="0,8">
+                        <VerticalStackLayout Spacing="4" Padding="14,8">
                             <Label Text="{Binding PerushName}" FontSize="{DynamicResource PerushNameFontSize}"
                                    FontAttributes="Bold" TextColor="{StaticResource Primary}" AutomationId="FocusedPerushName"/>
                             <controls:HtmlView ContentLoader="{Binding ContentLoader}" HtmlContent="{Binding DisplayContent}"
