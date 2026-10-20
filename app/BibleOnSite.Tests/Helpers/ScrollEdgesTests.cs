@@ -1,70 +1,37 @@
 using BibleOnSite.Helpers;
-using FluentAssertions;
 
 namespace BibleOnSite.Tests.Helpers;
 
 public class ScrollEdgesTests
 {
     [Fact]
-    public void AtTop_UpIsBoundary()
+    public void HasAbove_AtTop_IsBoundary() => Assert.False(ScrollEdges.HasAbove(0));
+
+    [Fact]
+    public void HasAbove_ScrolledDown_IsAvailable() => Assert.True(ScrollEdges.HasAbove(1));
+
+    [Fact]
+    public void HasBelow_LastItemVisible_IsBoundary()
     {
-        ScrollEdges.CanScrollUp(0).Should().BeFalse();
-        ScrollEdges.CanScrollUp(0.4).Should().BeFalse();
+        // תהלים has 150 perakim; index 149 visible → bottom reached
+        Assert.False(ScrollEdges.HasBelow(149, 150));
     }
 
     [Fact]
-    public void ScrolledDown_UpIsAvailable()
-    {
-        ScrollEdges.CanScrollUp(40).Should().BeTrue();
-    }
+    public void HasBelow_BeforeEnd_IsAvailable() => Assert.True(ScrollEdges.HasBelow(10, 150));
 
     [Fact]
-    public void AllContentFits_DownIsBoundary()
-    {
-        // 3 items of ~44px in a 300px viewport: nothing to scroll to.
-        ScrollEdges.CanScrollDown(0, viewportHeight: 300, contentHeight: 132).Should().BeFalse();
-    }
+    public void HasBelow_EmptyList_IsBoundary() => Assert.False(ScrollEdges.HasBelow(0, 0));
 
     [Fact]
-    public void MoreContentBelow_DownIsAvailable()
-    {
-        // תהלים: 150 chapters never fit the viewport.
-        ScrollEdges.CanScrollDown(0, viewportHeight: 300, contentHeight: 6600).Should().BeTrue();
-    }
+    public void HasBelow_NoScrollInfoYet_IsBoundary() => Assert.False(ScrollEdges.HasBelow(-1, 47));
 
     [Fact]
-    public void AtBottom_DownIsBoundary()
-    {
-        ScrollEdges.CanScrollDown(6300, viewportHeight: 300, contentHeight: 6600).Should().BeFalse();
-        // Overshoot past the end (bounce) still counts as the boundary.
-        ScrollEdges.CanScrollDown(6350, viewportHeight: 300, contentHeight: 6600).Should().BeFalse();
-    }
+    public void HasBelowEstimate_ContentFits_IsBoundary() => Assert.False(ScrollEdges.HasBelowEstimate(300, 240));
 
     [Fact]
-    public void InMiddle_BothDirectionsAvailable()
-    {
-        ScrollEdges.CanScrollUp(200).Should().BeTrue();
-        ScrollEdges.CanScrollDown(200, viewportHeight: 300, contentHeight: 6600).Should().BeTrue();
-    }
+    public void HasBelowEstimate_ContentOverflows_IsAvailable() => Assert.True(ScrollEdges.HasBelowEstimate(300, 47 * 40));
 
     [Fact]
-    public void EmptyList_BothDirectionsAreBoundary()
-    {
-        ScrollEdges.CanScrollUp(0).Should().BeFalse();
-        ScrollEdges.CanScrollDown(0, viewportHeight: 300, contentHeight: 0).Should().BeFalse();
-    }
-
-    [Fact]
-    public void UnmeasuredViewport_DownIsBoundary()
-    {
-        // Height 0 before first layout must not flash a false "more below" arrow.
-        ScrollEdges.CanScrollDown(0, viewportHeight: 0, contentHeight: 6600).Should().BeFalse();
-    }
-
-    [Fact]
-    public void SubPixelRemainder_DownIsBoundary()
-    {
-        // A fraction of a pixel of hidden content reads as fully reached.
-        ScrollEdges.CanScrollDown(0, viewportHeight: 299.4, contentHeight: 300).Should().BeFalse();
-    }
+    public void HasBelowEstimate_UnmeasuredViewport_IsBoundary() => Assert.False(ScrollEdges.HasBelowEstimate(0, 1000));
 }

@@ -16,16 +16,18 @@ public partial class PerekPickerPopup : ContentView
     private SeferItem? _selectedSefer;
     private PerekItem? _selectedPerek;
 
-    // Per-column scroll-arrow state: the last reported vertical offset plus the
-    // arrow labels and the zero-opacity sizer whose arranged height equals one
-    // item's height (items are uniform via MeasureAllItems).
+    // Per-column scroll-arrow state: the last reported visible-item indices
+    // (-1 until the first Scrolled event) plus the arrow labels and the
+    // zero-opacity sizer whose arranged height equals one item's height
+    // (items are uniform via MeasureAllItems).
     private sealed class ScrollColumn(CollectionView list, Label up, Label down, Label sizer)
     {
         public CollectionView List { get; } = list;
         public Label Up { get; } = up;
         public Label Down { get; } = down;
         public Label Sizer { get; } = sizer;
-        public double Offset { get; set; }
+        public int FirstVisibleIndex { get; set; } = -1;
+        public int LastVisibleIndex { get; set; } = -1;
     }
 
     private readonly List<ScrollColumn> _scrollColumns;
@@ -400,17 +402,24 @@ public partial class PerekPickerPopup : ContentView
             return;
         }
 
-        column.Offset = e.VerticalOffset;
+        column.FirstVisibleIndex = e.FirstVisibleItemIndex;
+        column.LastVisibleIndex = e.LastVisibleItemIndex;
         RefreshArrows(column);
     }
 
     private void OnColumnSizeChanged(object? sender, EventArgs e)
     {
         var column = ColumnFor(sender);
-        if (column != null)
+        if (column == null)
         {
-            RefreshArrows(column);
+            return;
         }
+
+        // Resizing can make all items visible without a scroll event; fall
+        // back to the size estimate until the next Scrolled event.
+        column.FirstVisibleIndex = -1;
+        column.LastVisibleIndex = -1;
+        RefreshArrows(column);
     }
 
     private ScrollColumn? ColumnFor(object? sender) =>
@@ -436,17 +445,32 @@ public partial class PerekPickerPopup : ContentView
             return;
         }
 
-        column.Offset = 0;
+        column.FirstVisibleIndex = -1;
+        column.LastVisibleIndex = -1;
         Dispatcher.Dispatch(() => RefreshArrows(column));
     }
 
     private void RefreshArrows(ScrollColumn column)
     {
         var count = (column.List.ItemsSource as System.Collections.ICollection)?.Count ?? 0;
-        var contentHeight = count * column.Sizer.Height;
 
-        SetArrow(column.Up, ScrollEdges.CanScrollUp(column.Offset), "יש עוד פריטים למעלה", "תחילת הרשימה");
-        SetArrow(column.Down, ScrollEdges.CanScrollDown(column.Offset, column.List.Height, contentHeight), "יש עוד פריטים למטה", "סוף הרשימה");
+        bool canUp, canDown;
+        if (column.LastVisibleIndex >= 0)
+        {
+            // Exact: a scroll event told us which items are visible.
+            canUp = ScrollEdges.HasAbove(column.FirstVisibleIndex);
+            canDown = ScrollEdges.HasBelow(column.LastVisibleIndex, count);
+        }
+        else
+        {
+            // No scroll event yet: the list sits at the top, so "more below"
+            // comes down to whether the items overflow the viewport.
+            canUp = false;
+            canDown = ScrollEdges.HasBelowEstimate(column.List.Height, count * column.Sizer.Height);
+        }
+
+        SetArrow(column.Up, canUp, "יש עוד פריטים למעלה", "תחילת הרשימה");
+        SetArrow(column.Down, canDown, "יש עוד פריטים למטה", "סוף הרשימה");
     }
 
     private static void SetArrow(Label arrow, bool canScroll, string availableText, string boundaryText)

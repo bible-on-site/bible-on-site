@@ -6,24 +6,19 @@ namespace BibleOnSite.Helpers;
 /// </summary>
 public static class ScrollEdges
 {
-    // A fraction of a pixel of hidden content reads as fully reached.
     private const double Epsilon = 1.0;
 
-    /// <summary>True when content exists above the current scroll offset.</summary>
-    public static bool CanScrollUp(double scrollOffset) => scrollOffset > Epsilon;
+    /// <summary>More items exist above when the first item isn't visible.</summary>
+    public static bool HasAbove(int firstVisibleIndex) => firstVisibleIndex > 0;
+
+    /// <summary>More items exist below when the last item isn't visible.</summary>
+    public static bool HasBelow(int lastVisibleIndex, int itemCount) =>
+        itemCount > 0 && lastVisibleIndex >= 0 && lastVisibleIndex < itemCount - 1;
 
     /// <summary>
-    /// True when content extends below the viewport. An unmeasured viewport
-    /// (height 0 before first layout) reports false rather than flashing a
-    /// false "more below" arrow.
+    /// Estimate for when no scroll event has fired yet: content taller than
+    /// the viewport means more exists below (list starts at the top).
     /// </summary>
-    public static bool CanScrollDown(double scrollOffset, double viewportHeight, double contentHeight)
-    {
-        if (viewportHeight <= 0 || contentHeight <= viewportHeight)
-        {
-            return false;
-        }
-
-        return contentHeight - viewportHeight - scrollOffset > Epsilon;
-    }
+    public static bool HasBelowEstimate(double viewportHeight, double contentHeight) =>
+        viewportHeight > 0 && contentHeight > viewportHeight + Epsilon;
 }
