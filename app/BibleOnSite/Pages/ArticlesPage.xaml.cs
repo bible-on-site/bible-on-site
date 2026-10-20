@@ -44,8 +44,12 @@ public partial class ArticlesPage : ContentPage
             _viewModel.PerekTitle = PerekTitle;
         }
 
-        // Load articles from API
-        await _viewModel.LoadArticlesCommand.ExecuteAsync(null);
+        // Load on first show only — returning from an article keeps the
+        // query, results and scroll position intact.
+        if (_viewModel.Articles.Count == 0 && !_viewModel.IsLoading)
+        {
+            await _viewModel.LoadArticlesCommand.ExecuteAsync(null);
+        }
     }
 
     private async void OnArticleTapped(object? sender, TappedEventArgs e)
@@ -56,8 +60,23 @@ public partial class ArticlesPage : ContentPage
         }
     }
 
-    private async void OnBackClicked(object? sender, EventArgs e)
+    private void OnMenuButtonClicked(object? sender, EventArgs e)
     {
-        await Shell.Current.GoToAsync("..");
+        if (Shell.Current is AppShell shell)
+        {
+            shell.FlyoutIsPresented = true;
+        }
+    }
+
+    private void OnClearSearchClicked(object? sender, EventArgs e)
+    {
+        ArticlesSearchInput.Text = string.Empty;
+        ArticlesSearchInput.Focus();
+    }
+
+    private async void OnSearchTextChanged(object? sender, TextChangedEventArgs e)
+    {
+        ClearSearchButton.IsVisible = !string.IsNullOrEmpty(e.NewTextValue);
+        await _viewModel.ApplySearchAsync(e.NewTextValue);
     }
 }
