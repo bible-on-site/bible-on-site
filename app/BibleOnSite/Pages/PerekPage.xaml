@@ -33,13 +33,10 @@
     <Grid x:Name="MainGrid" RowDefinitions="Auto,*">
         <Grid x:Name="ReaderToolbar" Grid.Row="0" MinimumHeightRequest="56"
               BackgroundColor="{AppThemeBinding Light=#F2F7FE, Dark=#20304A}">
-            <Grid x:Name="NormalNavigationBar" ColumnDefinitions="48,*,48" HeightRequest="56">
-                <Button x:Name="ReaderNavigationButton" Grid.Column="0" Text="{x:Static fonts:FluentUI.navigation_24_regular}"
-                        FontFamily="FluentIcons" FontSize="24" WidthRequest="48" Padding="0"
-                        BackgroundColor="Transparent" TextColor="{AppThemeBinding Light=Black, Dark=White}"
-                        AutomationId="ReaderNavigationButton" SemanticProperties.Description="פתיחת תפריט הניווט"
-                        Clicked="OnReaderMenuClicked"/>
-                <Button Grid.Column="1" x:Name="NormalNavigationTitle"
+            <controls:SharedTopBar x:Name="NormalNavigationBar" NavigationAutomationId="ReaderNavigationButton">
+                <controls:SharedTopBar.CenterContent>
+                    <Grid>
+                <Button x:Name="NormalNavigationTitle"
                    AutomationId="PerekSource"
                    Text="{Binding Source}"
                    FontSize="20"
@@ -55,7 +52,7 @@
                    Margin="4,0"
                    SemanticProperties.Hint="הקישו לפתיחת החיפוש"
                    Clicked="OnPerekSourceClicked"/>
-                <Border x:Name="SearchIntroduction" Grid.Column="1" HorizontalOptions="Fill" VerticalOptions="Center"
+                <Border x:Name="SearchIntroduction" HorizontalOptions="Fill" VerticalOptions="Center"
                         HeightRequest="40" Margin="4,0" Padding="12,0" StrokeThickness="0" StrokeShape="RoundRectangle 14"
                         BackgroundColor="{AppThemeBinding Light=#E4EFFD, Dark=#2C4569}">
                     <Border.GestureRecognizers>
@@ -64,13 +61,17 @@
                     <Label x:Name="SearchIntroductionText" Text="חיפוש בתנ&quot;ך..." FontSize="20" VerticalOptions="Center"
                            HorizontalTextAlignment="Center" TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark=#AACBFF}"/>
                 </Border>
-                <Button x:Name="ReaderMenuButton" Grid.Column="2" AutomationId="ReaderMenuButton"
+                    </Grid>
+                </controls:SharedTopBar.CenterContent>
+                <controls:SharedTopBar.TrailingContent>
+                <Button x:Name="ReaderMenuButton" AutomationId="ReaderMenuButton"
                         Text="{x:Static fonts:FluentUI.more_vertical_24_regular}" FontFamily="FluentIcons" FontSize="20"
                         WidthRequest="48" HeightRequest="44" Padding="0" BackgroundColor="Transparent"
                         TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark=#AACBFF}"
                         VerticalOptions="Center" SemanticProperties.Description="אפשרויות הקריאה"
                         Clicked="OnReaderMenuButtonClicked"/>
-            </Grid>
+                </controls:SharedTopBar.TrailingContent>
+            </controls:SharedTopBar>
             <ContentView x:Name="SearchTitleHost" IsVisible="False" Margin="0" VerticalOptions="Center"/>
             <Grid
                   x:Name="SelectionBar"
@@ -154,8 +155,6 @@
                         TextColor="White"
                         Clicked="OnSelectionCopyClicked"/>
             </Grid>
-            <BoxView HeightRequest="1" VerticalOptions="End" InputTransparent="True" ZIndex="10"
-                     Color="{AppThemeBinding Light=#DBE8F8, Dark=#47658E}"/>
         </Grid>
 
         <controls:FloatingSearchBar x:Name="ChapterSearch" Grid.Row="1" ZIndex="300"
