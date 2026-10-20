@@ -67,7 +67,9 @@ public sealed class SearchIndexService : IAsyncDisposable
         }
         // Fire-and-forget: a faulted build logs here instead of throwing into
         // startup; a concurrent search still awaits the shared build task.
-        _ = WarmupIndexesAsync().ContinueWith(
+        // Task.Run keeps the file probes, pack opens and import continuations
+        // off the startup UI thread — the same reason SearchAsync hops.
+        _ = Task.Run(WarmupIndexesAsync).ContinueWith(
             task => Console.WriteLine($"E2E search-index warmup failed: {task.Exception}"),
             TaskContinuationOptions.OnlyOnFaulted);
     }

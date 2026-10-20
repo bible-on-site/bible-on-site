@@ -15,15 +15,17 @@ public class PerekLoadingTests
         public TestStorage Storage { get; } = new();
         public Mock<IAppNavigator> Navigator { get; } = new();
         public PerekDataService Data { get; }
+        public PerushimNotesService Notes { get; }
         public PerekViewModel Model { get; }
         public SQLite.SQLiteAsyncConnection Bible { get; private set; } = null!;
 
         public Fixture()
         {
             Data = new PerekDataService(new LocalDatabaseService(Storage.FileSystem.Object));
+            Notes = new PerushimNotesService(NotesDeliveryTests.Pad().Object, Storage.FileSystem.Object);
             Model = new PerekViewModel(PreferencesService.CreateForTesting(new InMemoryPreferencesStorage()), null,
                 Data, new PerushimCatalogService(Storage.FileSystem.Object),
-                new PerushimNotesService(NotesDeliveryTests.Pad().Object, Storage.FileSystem.Object), Navigator.Object,
+                Notes, Navigator.Object,
                 Storage.FileSystem.Object, null);
         }
 
@@ -52,7 +54,14 @@ public class PerekLoadingTests
             }
         }
 
-        public ValueTask DisposeAsync() => Storage.DisposeAsync();
+        public async ValueTask DisposeAsync()
+        {
+            // LoadPerushimAsync may leave a kicked notes init in flight — let
+            // it settle before the temp storage is deleted underneath it.
+            try { await Notes.InitializeAsync(); }
+            catch (Exception ex) { Console.WriteLine($"Notes init during teardown: {ex}"); }
+            await Storage.DisposeAsync();
+        }
     }
 
     [Fact]
@@ -222,12 +231,50 @@ public class PerekLoadingTests
         await fixture.Initialize(notes: false);
         await fixture.Model.LoadByPerekIdAsync(1);
         fixture.Model.PerushimEmptyMessage.Should().Be("אין קטלוג פירושים");
+        // The reader kicked notes init instead of awaiting it — let it settle
+        // (nothing is deliverable), then re-check like the page's hook does.
+        await fixture.Notes.InitializeAsync();
+        await fixture.Model.LoadPerushimAsync(1);
+        fixture.Model.PerushimNotesPending.Should().BeFalse();
         fixture.Model.PerushimCatalogAvailable = true;
         fixture.Model.PerushimEmptyMessage.Should().Be("להוריד פירושים");
         fixture.Model.ShowDownloadPerushimButton.Should().BeTrue();
         fixture.Model.Perushim.Should().BeEmpty();
         fixture.Model.Perek!.Pasukim.Single().PerushNotes.Should().BeEmpty();
         await fixture.Model.PreloadAdjacentPasukimAsync(2);
+    }
+
+    [Fact]
+    public async Task ChapterLoad_WhileNotesPackMaterializes_ShowsPendingAndLoadsWhenItLands()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize(notes: false);
+        await fixture.Storage.CreateDatabaseAsync("sefaria-dump-5784-sivan-4.perushim_catalog.sqlite",
+            "CREATE TABLE perush (id INTEGER, name TEXT, priority INTEGER)", "INSERT INTO perush VALUES (1,'Rashi',2),(2,'Targum',1)",
+            "CREATE TABLE _metadata (key TEXT,value TEXT)", "INSERT INTO _metadata VALUES ('build_timestamp','100')");
+        // The delivered pack is bundled but not copied locally yet — awaiting
+        // its materialization on the reader path was the #2430 startup stall.
+        await fixture.Storage.BundleDatabaseAsync("sefaria-dump-5784-sivan-4.perushim_notes.sqlite",
+            [.. NotesDbV2.Statements((1, 1, 1, 0, "first"), (2, 1, 1, 0, "second")),
+            "INSERT INTO _metadata VALUES ('build_timestamp','100')"]);
+
+        await fixture.Model.LoadByPerekIdAsync(1);
+
+        fixture.Model.PerushimNotesPending.Should().BeTrue();
+        fixture.Model.PerushimNotesAvailable.Should().BeFalse();
+        fixture.Model.Perushim.Should().BeEmpty();
+        fixture.Model.ShowDownloadPerushimButton.Should().BeFalse();
+        fixture.Model.PerushimEmptyMessage.Should().Be("טוען פירושים...");
+        fixture.Model.Perek!.Pasukim.Single().PerushNotes.Should().BeEmpty();
+
+        // The kicked materialization settles; the availability re-check (the
+        // page's OperationCompleted hook) then loads the landed perushim.
+        await fixture.Notes.InitializeAsync();
+        await fixture.Model.LoadPerushimAsync(1);
+
+        fixture.Model.PerushimNotesPending.Should().BeFalse();
+        fixture.Model.PerushimNotesAvailable.Should().BeTrue();
+        fixture.Model.Perushim.Select(p => p.Name).Should().Equal("Targum", "Rashi");
     }
 
     [Fact]
