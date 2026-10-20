@@ -1,3 +1,4 @@
+using BibleOnSite.Tests.MobileE2E.Platforms;
 using OpenQA.Selenium.Appium;
 using OpenQA.Selenium.Interactions;
 using Xunit;
@@ -39,6 +40,14 @@ public sealed class PerekScrollStabilityTests(ITestOutputHelper output, MobileDe
         {
             Driver!.PerformActions([sequence]);
         }
+
+        // The last flick's inertia keeps the collection decelerating and
+        // recycling cells on the main thread, starving the WDA lookups that
+        // follow. A short gutter drag takes scroll tracking and stops it.
+        var readerFrame = MobilePlatformAdapter.ReadFrame(list);
+        Driver!.PerformActions([ReaderScrollActions.Brake(
+            new System.Drawing.Rectangle(readerFrame.Location, readerFrame.Size),
+            DriverTelemetry.WindowSize(Driver))]);
 
         var appState = Driver!.ExecuteScript("mobile: queryAppState",
             new Dictionary<string, object> { ["bundleId"] = "com.tanah.daily929" });
