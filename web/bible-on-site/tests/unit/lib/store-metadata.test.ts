@@ -5,6 +5,7 @@ import {
 	getStoreMetadata,
 	parseItunesLookup,
 	parsePlayStoreHtml,
+	parseWindowsCatalog,
 } from "@/lib/store-metadata";
 
 const PLAY_SNIPPET =
@@ -22,7 +23,51 @@ describe("parsePlayStoreHtml", () => {
 		expect(
 			parsePlayStoreHtml(PLAY_SNIPPET + 'aria-label="Rated 4.7 stars"').rating,
 		).toBe(4.7);
+		expect(
+			parsePlayStoreHtml(
+				PLAY_SNIPPET + 'aria-label="Rated 4.9 stars out of five stars"',
+			).rating,
+		).toBe(4.9);
 		expect(parsePlayStoreHtml(PLAY_SNIPPET).rating).toBeNull();
+	});
+});
+
+describe("parseWindowsCatalog", () => {
+	const SKU_WITH_PACKAGES = {
+		Sku: {
+			Properties: {
+				Packages: [
+					{ Version: "1407374885781504" }, // 5.0.34.0 packed
+					{ Version: "1407374885781574" }, // 5.0.34.70 packed
+				],
+			},
+		},
+	};
+
+	it("decodes the published package version from packed integers", () => {
+		const parsed = parseWindowsCatalog({
+			Product: {
+				LastModifiedDate: "2026-10-15T19:35:42.8391303Z",
+				DisplaySkuAvailabilities: [SKU_WITH_PACKAGES],
+			},
+		});
+		expect(parsed.version).toBe("5.0.34.70");
+		expect(parsed.sourceUpdatedAt).toBe("2026-10-15T19:35:42.8391303Z");
+	});
+	it("returns nulls when the catalog omits packages", () => {
+		const parsed = parseWindowsCatalog({ Product: {} });
+		expect(parsed.version).toBeNull();
+		expect(parsed.sourceUpdatedAt).toBeNull();
+	});
+	it("ignores malformed package versions", () => {
+		const parsed = parseWindowsCatalog({
+			Product: {
+				DisplaySkuAvailabilities: [
+					{ Sku: { Properties: { Packages: [{ Version: "abc" }] } } },
+				],
+			},
+		});
+		expect(parsed.version).toBeNull();
 	});
 });
 
@@ -72,7 +117,7 @@ describe("getStoreMetadata", () => {
 	);
 
 	it("reports the android version and a non-stale fresh fetch", async () => {
-		jest
+		const spy = jest
 			.spyOn(globalThis, "fetch")
 			.mockResolvedValue(new Response(PLAY_SNIPPET));
 		const meta = await getStoreMetadata("android");
@@ -81,6 +126,8 @@ describe("getStoreMetadata", () => {
 		expect(meta.ratingScale).toBe(5);
 		expect(meta.stale).toBe(false);
 		expect(meta.fetchedAt).toBeTruthy();
+		// The rating is only published for the IL market listing.
+		expect(String(spy.mock.calls[0][0])).toContain("gl=IL");
 	});
 
 	it("never fabricates: failed upstream yields nulls marked stale", async () => {
@@ -133,27 +180,49 @@ describe("store-metadata route and remaining platforms", () => {
 		expect(meta.stale).toBe(false);
 	});
 
-	it("windows reports catalog reachability with honest nulls", async () => {
+	it("windows reports the published version and keeps fetchedAt as fetch time", async () => {
 		jest.spyOn(globalThis, "fetch").mockResolvedValue(
 			new Response(
 				JSON.stringify({
-					Product: { LastModifiedDate: "2026-10-15T00:00:00Z" },
+					Product: {
+						LastModifiedDate: "2026-10-15T19:35:42.8391303Z",
+						DisplaySkuAvailabilities: [
+							{
+								Sku: {
+									Properties: {
+										Packages: [
+											{ Version: "1407374885781504" },
+											{ Version: "1407374885781574" },
+										],
+									},
+								},
+							},
+						],
+					},
 				}),
 			),
 		);
 		const meta = await getStoreMetadata("windows");
 		expect(meta.platform).toBe("windows");
-		expect(meta.version).toBeNull();
+		expect(meta.version).toBe("5.0.34.70");
 		expect(meta.rating).toBeNull();
-		expect(meta.fetchedAt).toBe("2026-10-15T00:00:00Z");
+		expect(meta.sourceUpdatedAt).toBe("2026-10-15T19:35:42.8391303Z");
+		// fetchedAt is the observation time, not the catalog timestamp.
+		expect(Date.parse(meta.fetchedAt ?? "")).toBeGreaterThan(
+			Date.parse("2026-10-19T00:00:00Z"),
+		);
 		expect(meta.stale).toBe(false);
 	});
 
 	it("windows without a product timestamp stamps the fetch time", async () => {
+		// Bypass the module cache populated by the previous windows test.
+		jest.useFakeTimers().setSystemTime(Date.now() + 25 * 60 * 60 * 1000);
 		jest
 			.spyOn(globalThis, "fetch")
 			.mockResolvedValue(new Response(JSON.stringify({ Product: {} })));
 		const meta = await getStoreMetadata("windows");
+		jest.useRealTimers();
 		expect(meta.fetchedAt).toBeTruthy();
+		expect(meta.sourceUpdatedAt).toBeNull();
 	});
 });
