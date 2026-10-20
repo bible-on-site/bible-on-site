@@ -33,7 +33,7 @@ public class ParashaDataServiceTests
     /// א ב - ג ד with an ordered אשכנזים two-range Haftarah (a perek
     /// jump) and a תימנים variant; unit 2 follows it.
     /// </summary>
-    private static async Task<TestStorage> SeedAsync(TestStorage storage)
+    internal static async Task<TestStorage> SeedAsync(TestStorage storage)
     {
         var db = await storage.CreateDatabaseAsync(DbName, Schema);
         await db.ExecuteAsync("INSERT INTO tanah_sefer VALUES (1,'בראשית','Genesis',1,3),(16,'ישעיהו','Isaiah',4,5)");
@@ -528,5 +528,77 @@ public class ParashaDataServiceTests
         var unnamed = viewModel.Groups.Where(group => group.SeferName == string.Empty).ToList();
         unnamed[0].Select(unit => unit.UnitId).Should().Equal(4);
         unnamed[1].Select(unit => unit.UnitId).Should().Equal(6, 7);
+    }
+
+    [Fact]
+    public void BeforeLoad_NavigationSurfaceStaysInert()
+    {
+        var parasha = new ParashaDataService(new LocalDatabaseService(new TestStorage().FileSystem.Object));
+
+        parasha.IsLoaded.Should().BeFalse();
+        parasha.IsAvailable.Should().BeFalse();
+        parasha.UnitCount.Should().Be(0);
+        parasha.GetUnitIndex(1).Should().Be(-1);
+        parasha.GetAdjacentUnits(1).Should().Be((null, null));
+        parasha.GetParashaContainingPasuk(1, 1).Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Load_AvailabilityCountersAndAdjacency_FollowTheCatalog()
+    {
+        await using var storage = new TestStorage();
+        await SeedAsync(storage);
+        var (parasha, _) = Services(storage);
+
+        await parasha.LoadAsync();
+
+        parasha.IsAvailable.Should().BeTrue();
+        parasha.UnitCount.Should().Be(2);
+        var (prev, next) = parasha.GetAdjacentUnits(1);
+        prev.Should().BeNull();
+        next!.UnitId.Should().Be(2);
+        parasha.GetAdjacentUnits(2).Prev!.UnitId.Should().Be(1);
+        parasha.GetAdjacentUnits(2).Next.Should().BeNull();
+        // A unit id outside the catalog resolves to no adjacency at all.
+        parasha.GetAdjacentUnits(99).Should().Be((null, null));
+        parasha.GetUnitIndex(99).Should().Be(-1);
+    }
+
+    [Fact]
+    public async Task Load_DatabaseWithoutReadingUnitTables_ReportsUnavailable()
+    {
+        await using var storage = new TestStorage();
+        // A pre-export database carries perek content but no contract tables.
+        await storage.CreateDatabaseAsync(DbName,
+            "CREATE TABLE tanah_sefer (id INTEGER, name TEXT, tanach_us_name TEXT, perek_id_from INTEGER, perek_id_to INTEGER)");
+        var (parasha, _) = Services(storage);
+
+        await parasha.LoadAsync();
+
+        parasha.IsLoaded.Should().BeTrue();
+        parasha.IsAvailable.Should().BeFalse();
+        parasha.Parashiot.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void RangeContainsPasuk_IncludesOnlyInclusiveWholePasukBounds()
+    {
+        var range = new ScriptureRange { StartPerekId = 1, StartPasuk = 2, EndPerekId = 3, EndPasuk = 4 };
+
+        ParashaDataService.RangeContainsPasuk(range, 1, 1).Should().BeFalse();
+        ParashaDataService.RangeContainsPasuk(range, 1, 2).Should().BeTrue();
+        ParashaDataService.RangeContainsPasuk(range, 2, 1).Should().BeTrue();
+        ParashaDataService.RangeContainsPasuk(range, 3, 4).Should().BeTrue();
+        ParashaDataService.RangeContainsPasuk(range, 3, 5).Should().BeFalse();
+        ParashaDataService.RangeContainsPasuk(range, 0, 9).Should().BeFalse();
+        ParashaDataService.RangeContainsPasuk(range, 4, 1).Should().BeFalse();
+    }
+
+    [Fact]
+    public void PerekIdsForRange_EnumeratesEveryCoveredPerekInOrder()
+    {
+        var range = new ScriptureRange { StartPerekId = 4, EndPerekId = 6 };
+
+        ParashaDataService.PerekIdsForRange(range).Should().Equal(4, 5, 6);
     }
 }
