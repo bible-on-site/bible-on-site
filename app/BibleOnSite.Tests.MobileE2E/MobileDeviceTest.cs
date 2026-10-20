@@ -254,7 +254,7 @@ public abstract class MobileDeviceTest : IAsyncLifetime
                 // Passing screenshots record the visual state. Native source
                 // is captured on failure; scenarios that assert its content
                 // still request the complete tree directly.
-                if (outcome == "failed")
+                if (outcome is "failed" or "passed")
                 {
                     File.WriteAllText(prefix + ".xml", Driver.PageSource);
                 }
