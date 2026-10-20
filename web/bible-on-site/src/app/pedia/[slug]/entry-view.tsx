@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, permanentRedirect } from "next/navigation";
 import { JsonLd } from "@/app/components/JsonLd";
+import DOMPurify from "isomorphic-dompurify";
 import { demoteHeadings } from "@/lib/html-headings";
 import { buildEntryGraph } from "@/lib/seo/tanahpedia-jsonld";
 import { categoryHref } from "@/lib/tanahpedia/category-slug";
@@ -196,9 +197,10 @@ export async function EntryView({ slug }: { slug: string }) {
 
 			{entry.content ? (
 				<article
-					// nosemgrep -- trusted database content; heading levels demoted for SEO
-					// biome-ignore lint/security/noDangerouslySetInnerHtml: admin-authored content
-					dangerouslySetInnerHTML={{ __html: demoteHeadings(entry.content) }}
+					// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify
+					dangerouslySetInnerHTML={{
+						__html: DOMPurify.sanitize(demoteHeadings(entry.content)),
+					}}
 					className={styles.entryContent}
 				/>
 			) : placeMapMarkers.length === 0 && occurrences.length === 0 ? (

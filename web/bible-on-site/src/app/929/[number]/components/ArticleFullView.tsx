@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import type { Article } from "@/lib/articles";
 import { authorNameToSlug } from "@/lib/authors/url-utils";
+import DOMPurify from "isomorphic-dompurify";
 import { demoteHeadings } from "@/lib/html-headings";
 import articleStyles from "../[slug]/page.module.css";
 import { ShareButton } from "./ShareButton";
@@ -73,9 +74,10 @@ export function ArticleFullView({
 				<div className={fullPage ? styles.articleBodyWrapper : undefined}>
 					<div
 						className={articleStyles.articleBody}
-						// nosemgrep -- trusted database content; heading levels demoted for SEO
-						// biome-ignore lint/security/noDangerouslySetInnerHtml: Content is from trusted database
-						dangerouslySetInnerHTML={{ __html: demoteHeadings(article.content) }}
+						// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify
+						dangerouslySetInnerHTML={{
+							__html: DOMPurify.sanitize(demoteHeadings(article.content)),
+						}}
 					/>
 				</div>
 			)}
