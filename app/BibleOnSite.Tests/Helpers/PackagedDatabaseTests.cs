@@ -147,6 +147,8 @@ public class PackagedDatabaseTests
         await WriteMarkerAsync(storage, Version);
         await File.WriteAllBytesAsync(Destination(storage), Payload("BUNDLED"),
             TestContext.Current.CancellationToken);
+        // Linux stamps mtime from a coarse clock; back-to-back writes can share it.
+        File.SetLastWriteTimeUtc(Destination(storage), File.GetLastWriteTimeUtc(Destination(storage)).AddSeconds(1));
 
         await PackagedDatabase.RefreshAsync(storage.FileSystem.Object, DbName, AppMock());
 
