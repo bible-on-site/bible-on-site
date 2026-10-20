@@ -59,6 +59,23 @@ describe("parseWindowsCatalog", () => {
 		expect(parsed.version).toBeNull();
 		expect(parsed.sourceUpdatedAt).toBeNull();
 	});
+	it("returns nulls when skus or the product itself are absent", () => {
+		expect(
+			parseWindowsCatalog({
+				Product: { DisplaySkuAvailabilities: [{}, { Sku: {} }] },
+			}).version,
+		).toBeNull();
+		expect(parseWindowsCatalog({}).version).toBeNull();
+		expect(
+			parseWindowsCatalog({
+				Product: {
+					DisplaySkuAvailabilities: [
+						{ Sku: { Properties: { Packages: [{ Version: 12 }] } } },
+					],
+				},
+			}).version,
+		).toBeNull();
+	});
 	it("ignores malformed package versions", () => {
 		const parsed = parseWindowsCatalog({
 			Product: {
