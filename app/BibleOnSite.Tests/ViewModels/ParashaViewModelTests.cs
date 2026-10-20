@@ -781,7 +781,7 @@ public class ParashaViewModelTests
     }
 
     [Fact]
-    public void DefaultArticlesLoader_ReadsTheStarterSnapshot()
+    public async Task DefaultArticlesLoader_ReadsTheStarterSnapshot()
     {
         // The production loader reads StarterService's in-memory snapshot —
         // an unloaded snapshot just yields an empty list.
@@ -789,6 +789,6 @@ public class ParashaViewModelTests
             .GetProperty("DefaultArticlesLoader", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!
             .GetValue(null)!;
 
-        loader(1).Result.Should().BeEmpty();
+        (await loader(1)).Should().BeEmpty();
     }
 }
