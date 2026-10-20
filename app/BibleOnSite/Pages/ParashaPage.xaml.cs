@@ -1153,7 +1153,7 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
     #region Android Touch / Swipe
 
 #if ANDROID
-    private readonly Helpers.SwipeNavigationTracker _swipe = new();
+    private readonly SwipeNavigationTracker _swipe = new();
 
     private void OnTouchStarted(object? sender, TouchPosition position)
     {
@@ -1177,7 +1177,7 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
             return;
         }
 
-        Behaviors.LongPressBehavior.BeginUnreceivedPress(position.X, position.Y, _viewModel.Unit);
+        LongPressBehavior.BeginUnreceivedPress(position.X, position.Y, _viewModel.Unit);
     }
 
     private static bool ContainsTouch(VisualElement element, TouchPosition position)
