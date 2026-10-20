@@ -174,4 +174,53 @@ describe("author saves invalidate the website", () => {
 		);
 		expect(tags).toEqual(["authors", "articles"]);
 	});
+
+	function notifiedUrls(callIndex: number): string[] {
+		const url = new URL(String(fetchSpy.mock.calls[callIndex][0]));
+		return url.searchParams.getAll("url");
+	}
+
+	it("reports both the old and new public urls after a rename", async () => {
+		queryOneMock
+			.mockResolvedValueOnce({ name: "ישן" })
+			.mockResolvedValueOnce({ id: 3, name: "חדש", details: "ד" });
+
+		await updateAuthor({ data: { id: 3, name: "חדש", details: "ד" } });
+
+		// The urls ride on the second (articles-tag) invalidation call.
+		expect(notifiedUrls(1)).toEqual([
+			`/929/authors/${encodeURIComponent("חדש")}`,
+			`/929/authors/${encodeURIComponent("ישן")}`,
+		]);
+	});
+
+	it("reports only the new url when the previous row is missing", async () => {
+		queryOneMock
+			.mockResolvedValueOnce(null)
+			.mockResolvedValueOnce({ id: 3, name: "חדש", details: "ד" });
+
+		await updateAuthor({ data: { id: 3, name: "חדש", details: "ד" } });
+
+		expect(notifiedUrls(1)).toEqual([
+			`/929/authors/${encodeURIComponent("חדש")}`,
+		]);
+	});
+
+	it("reports the removed author url after a delete", async () => {
+		queryOneMock.mockResolvedValue({ name: "נמחק" });
+
+		await deleteAuthor({ data: 3 });
+
+		expect(notifiedUrls(1)).toEqual([
+			`/929/authors/${encodeURIComponent("נמחק")}`,
+		]);
+	});
+
+	it("sends no url when the deleted author row was already gone", async () => {
+		queryOneMock.mockResolvedValue(null);
+
+		await deleteAuthor({ data: 3 });
+
+		expect(notifiedUrls(1)).toEqual([]);
+	});
 });

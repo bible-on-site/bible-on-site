@@ -14,7 +14,12 @@ import {
 	txExecute,
 	txQueryOne,
 } from "../db";
-import { PEDIA_INVALIDATION, revalidateWebsite } from "../website-revalidate";
+import {
+	pediaEntryPath,
+	pediaInvalidation,
+	revalidateWebsite,
+} from "../website-revalidate";
+import { pediaInvalidationForEntryIds } from "./paths";
 import { loadTanahpediaEntryById } from "./entry-loader.server";
 import { saveEntryRevisioned } from "./revisions";
 
@@ -280,7 +285,9 @@ export const createEntry = createServerFn({ method: "POST" })
 			if (!entry) throw new Error("Entry not found");
 			return { ...entry, headRevisionId: headId };
 		});
-		await revalidateWebsite(PEDIA_INVALIDATION);
+		await revalidateWebsite(
+			pediaInvalidation(pediaEntryPath(created.unique_name)),
+		);
 		return created;
 	});
 
@@ -298,24 +305,43 @@ export const updateEntry = createServerFn({ method: "POST" })
 	)
 	.handler(async ({ data }) => {
 		const updated = await transaction(async (conn) => {
-			const { entry, headRevisionId, unchanged } = await saveEntryRevisioned(
-				conn,
-				data,
-			);
-			return { ...entry, headRevisionId, unchanged };
+			const {
+				entry,
+				headRevisionId,
+				unchanged,
+				previousUniqueName,
+			} = await saveEntryRevisioned(conn, data);
+			return { ...entry, headRevisionId, unchanged, previousUniqueName };
 		});
 		// A no-op save changes no public content, so nothing expires.
 		if (!updated.unchanged) {
-			await revalidateWebsite(PEDIA_INVALIDATION);
+			// A rename leaves the old URL stale — notify both.
+			const urls = new Set([pediaEntryPath(updated.unique_name)]);
+			if (updated.previousUniqueName) {
+				urls.add(pediaEntryPath(updated.previousUniqueName));
+			}
+			await revalidateWebsite(pediaInvalidation(...urls));
 		}
-		return updated;
+		// previousUniqueName is notification bookkeeping, not part of the
+		// handler's public result.
+		const { previousUniqueName, ...result } = updated;
+		return result;
 	});
 
 export const deleteEntry = createServerFn({ method: "POST" })
 	.validator((data: string) => data)
 	.handler(async ({ data: id }) => {
+		// Resolve the public URL before the delete — the row is gone after.
+		const previous = await queryOne<{ unique_name: string }>(
+			"SELECT unique_name FROM tanahpedia_entry WHERE id = ?",
+			[id],
+		);
 		await execute("DELETE FROM tanahpedia_entry WHERE id = ?", [id]);
-		await revalidateWebsite(PEDIA_INVALIDATION);
+		await revalidateWebsite(
+			pediaInvalidation(
+				...(previous ? [pediaEntryPath(previous.unique_name)] : []),
+			),
+		);
 		return { success: true };
 	});
 
@@ -340,14 +366,25 @@ export const assignEntity = createServerFn({ method: "POST" })
 			"INSERT INTO tanahpedia_entry_entity (id, entry_id, entity_id) VALUES (?, ?, ?)",
 			[data.id, data.entry_id, data.entity_id],
 		);
-		await revalidateWebsite(PEDIA_INVALIDATION);
+		await revalidateWebsite(
+			await pediaInvalidationForEntryIds([data.entry_id]),
+		);
 		return { success: true };
 	});
 
 export const removeEntity = createServerFn({ method: "POST" })
 	.validator((data: string) => data)
 	.handler(async ({ data: id }) => {
+		// The link row is deleted below — find the affected entry first.
+		const link = await queryOne<{ entry_id: string }>(
+			"SELECT entry_id FROM tanahpedia_entry_entity WHERE id = ?",
+			[id],
+		);
 		await execute("DELETE FROM tanahpedia_entry_entity WHERE id = ?", [id]);
-		await revalidateWebsite(PEDIA_INVALIDATION);
+		await revalidateWebsite(
+			await pediaInvalidationForEntryIds(
+				link ? [link.entry_id] : [],
+			),
+		);
 		return { success: true };
 	});
