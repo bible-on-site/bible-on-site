@@ -363,7 +363,26 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
             position.Y >= location[1] && position.Y < location[1] + view.Height;
     }
 
-    private void OnTouchReleased(object? sender, TouchPosition position)
+    private void OnTouchMoved(object? sender, TouchPosition position)
+    {
+        var slop = PerekCarousel.Handler?.PlatformView is Android.Views.View view
+            ? Android.Views.ViewConfiguration.Get(view.Context!)?.ScaledTouchSlop ?? 12
+            : 12;
+        _swipe.Move(position, slop);
+    }
+
+    private void OnTouchReleased(object? sender, TouchPosition position) => SettleSwipe(position);
+
+    private void OnTouchCancelled(object? sender, TouchPosition position)
+    {
+        // A native cancel/interruption mid-swipe can strand the carousel
+        // mid-offset just like a release — settle it too, on the freshest
+        // finger position we tracked (#2469).
+        SettleSwipe(_swipe.Last ?? position);
+        _swipe.Cancel();
+    }
+
+    private void SettleSwipe(TouchPosition position)
     {
         if (PerekCarousel.Handler?.PlatformView is not Android.Views.View view)
         {
@@ -381,8 +400,6 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
             PerekCarousel.ScrollTo(index, position: ScrollToPosition.Center, animate: true);
         }
     }
-
-    private void OnTouchCancelled(object? sender, EventArgs e) => _swipe.Cancel();
 #endif
 
     protected override void OnDisappearing()
@@ -405,6 +422,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
 #if ANDROID
         MainActivity.TouchStarted -= OnTouchStarted;
         MainActivity.UnsubscribeTouchDispatched(OnTouchDispatched);
+        MainActivity.TouchMoved -= OnTouchMoved;
         MainActivity.TouchReleased -= OnTouchReleased;
         MainActivity.TouchCancelled -= OnTouchCancelled;
         _swipe.Cancel();
@@ -450,6 +468,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
 #if ANDROID
         MainActivity.TouchStarted += OnTouchStarted;
         MainActivity.SubscribeTouchDispatched(OnTouchDispatched);
+        MainActivity.TouchMoved += OnTouchMoved;
         MainActivity.TouchReleased += OnTouchReleased;
         MainActivity.TouchCancelled += OnTouchCancelled;
 #endif

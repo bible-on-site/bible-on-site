@@ -119,7 +119,8 @@ public class MainActivity : MauiAppCompatActivity
     public static void UnsubscribeTouchDispatched(EventHandler<TouchPosition> handler) =>
         _touchDispatched -= handler;
     public static event EventHandler<TouchPosition>? TouchReleased;
-    public static event EventHandler? TouchCancelled;
+    public static event EventHandler<TouchPosition>? TouchMoved;
+    public static event EventHandler<TouchPosition>? TouchCancelled;
 
     public override bool DispatchTouchEvent(MotionEvent? e)
     {
@@ -141,11 +142,20 @@ public class MainActivity : MauiAppCompatActivity
                 var wasActive = _touch.TouchActive;
                 // History matters when a busy UI receives batched input: a finger
                 // may already have moved out of slop and returned to its origin.
+                // Historical coords are view-space like GetX/GetY; shift them
+                // into the raw space Begin/End positions are recorded in.
+                var historyOffsetX = e.RawX - e.GetX();
+                var historyOffsetY = e.RawY - e.GetY();
                 for (var i = 0; i < e.HistorySize; i++)
                 {
                     _touch.Move(e.GetHistoricalX(i), e.GetHistoricalY(i), isScrolling: false);
+                    TouchMoved?.Invoke(this, new TouchPosition(
+                        e.GetHistoricalX(i) + historyOffsetX,
+                        e.GetHistoricalY(i) + historyOffsetY,
+                        e.GetHistoricalEventTime(i)));
                 }
                 _touch.Move(e.GetX(), e.GetY(), isScrolling: false);
+                TouchMoved?.Invoke(this, new TouchPosition(e.RawX, e.RawY, e.EventTime));
                 if (wasActive && !_touch.TouchActive)
                 {
                     LongPressBehavior.CancelAllPending();
@@ -163,7 +173,7 @@ public class MainActivity : MauiAppCompatActivity
                 _singleTouchActive = false;
                 _touch.Abort();
                 LongPressBehavior.CancelAllPending();
-                TouchCancelled?.Invoke(this, EventArgs.Empty);
+                TouchCancelled?.Invoke(this, new TouchPosition(e.RawX, e.RawY, e.EventTime));
                 break;
 
             default:
