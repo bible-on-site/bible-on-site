@@ -24,6 +24,14 @@ public class SearchMatchLandingTests
     }
 
     [Fact]
+    public void IndexOfItem_ReturnsMinusOne_WhenTheListHasNoSource()
+    {
+        // A list whose ItemsSource was never assigned resolves to an empty
+        // scan rather than throwing.
+        SearchMatchLanding.IndexOfItem(new CollectionView(), new object()).Should().Be(-1);
+    }
+
+    [Fact]
     public void AnchorPasukRow_IssuesAScrollUntilTheAttemptCap()
     {
         var item = new object();
@@ -83,6 +91,38 @@ public class SearchMatchLandingTests
         htmlView.HasSearchMatch.Should().BeTrue();
         htmlView.SearchMatchStart.Should().Be(3);
         htmlView.SearchMatchLength.Should().Be(7);
+    }
+
+    [Fact]
+    public void TryLandOnPerushMatch_RealizedNoteViewWithoutNameLabel_StillLands()
+    {
+        var list = new CollectionView { ItemsSource = new List<object>() };
+        var display = new PerushNoteDisplay { PerushId = 1, PerushName = "רשי" };
+        // The name label is still virtualized away while the note view is
+        // realized — the header lookup yields null and the landing stays
+        // on the issued-scroll trust path.
+        var htmlView = new HtmlView { BindingContext = display };
+        list.AddLogicalChild(htmlView);
+
+        SearchMatchLanding.TryLandOnPerushMatch(list, display, new SearchMatchSpan(0, 2))
+            .Should().Be(SearchMatchLanding.PerushLanding.Landed);
+    }
+
+    [Fact]
+    public void TryLandOnPerushMatch_KeepsAnAlreadyAppliedMatchSpan()
+    {
+        var list = new CollectionView { ItemsSource = new List<object>() };
+        var display = new PerushNoteDisplay { PerushId = 1, PerushName = "רשי" };
+        // A span already set by a previous frame is not reassigned — the
+        // setter would restart the platform highlight.
+        var htmlView = new HtmlView { BindingContext = display, SearchMatchStart = 4, SearchMatchLength = 6 };
+        list.AddLogicalChild(htmlView);
+
+        SearchMatchLanding.TryLandOnPerushMatch(list, display, new SearchMatchSpan(0, 9))
+            .Should().Be(SearchMatchLanding.PerushLanding.Landed);
+
+        htmlView.SearchMatchStart.Should().Be(4);
+        htmlView.SearchMatchLength.Should().Be(6);
     }
 
     [Fact]

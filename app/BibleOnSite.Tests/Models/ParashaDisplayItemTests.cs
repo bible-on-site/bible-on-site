@@ -55,4 +55,17 @@ public class ParashaDisplayItemTests
         row.IsSectionHeader.Should().BeFalse();
         row.IsPerekHeader.Should().BeFalse();
     }
+
+    [Fact]
+    public void PasukItem_WithoutAPasuk_KeepsPassthroughsNull()
+    {
+        // The defensive ?. chain tolerates a display item whose Pasuk is
+        // unset — rows must not throw while a row is still materializing.
+        var display = new PasukDisplayItem(null!, isRepeatedCopy: false, isLastCopy: true, fontSize: 18, markerFontSize: 16);
+
+        var row = ParashaDisplayItem.PasukItem(display, perekId: 7);
+
+        row.Pasuk.Should().BeNull();
+        row.PasukFormattedText.Should().BeNull();
+    }
 }

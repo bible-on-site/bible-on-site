@@ -581,6 +581,25 @@ public class ParashaDataServiceTests
     }
 
     [Fact]
+    public async Task Load_UnitWhoseSeferIsUnmatched_FallsBackToEmptyName()
+    {
+        await using var storage = new TestStorage();
+        var db = await storage.CreateDatabaseAsync(DbName, Schema);
+        await db.ExecuteAsync("INSERT INTO tanah_reading_division VALUES ('parasha',1,'/פרשה','פרשה על הפרק')");
+        // sefer_id 99 has no tanah_sefer row — the LEFT JOIN yields NULL.
+        await db.ExecuteAsync("INSERT INTO tanah_reading_unit VALUES ('parasha',1,'1',99,1,'יתומה',NULL)");
+        await db.ExecuteAsync("INSERT INTO tanah_reading_unit_range " +
+            "(division_id,unit_id,range_index,auxiliary_ordinal,auxiliary_id,auxiliary_label," +
+            "start_perek_id,start_pasuk,start_segment_index,end_perek_id,end_pasuk,end_segment_index) VALUES " +
+            "('parasha',1,0,NULL,NULL,NULL,1,1,NULL,1,1,NULL)");
+        var (parasha, _) = Services(storage);
+
+        await parasha.LoadAsync();
+
+        parasha.GetParasha(1)!.SeferName.Should().BeEmpty();
+    }
+
+    [Fact]
     public void RangeContainsPasuk_IncludesOnlyInclusiveWholePasukBounds()
     {
         var range = new ScriptureRange { StartPerekId = 1, StartPasuk = 2, EndPerekId = 3, EndPasuk = 4 };

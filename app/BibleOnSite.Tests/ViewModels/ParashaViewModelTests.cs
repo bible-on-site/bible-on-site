@@ -310,6 +310,7 @@ public class ParashaViewModelTests
         // The selection-menu search narrows the list without hiding entries.
         fixture.Model.PerushNameFilter = "Ramb";
         fixture.Model.FilteredPerushim.Select(p => p.Name).Should().Equal("Ramban");
+        fixture.Model.PerushimEmptyMessage.Should().Be("לא נמצאו פירושים תואמים");
         fixture.Model.PerushNameFilter = string.Empty;
 
         fixture.Model.ToggleCheckedPerush(1);
@@ -508,6 +509,8 @@ public class ParashaViewModelTests
         await fixture.Model.LoadByUnitIdAsync(1);
 
         fixture.Model.HasCurrentUnitRecitation.Should().BeTrue();
+        // Audio exists but the button stays hidden until קריינות is checked.
+        fixture.Model.ShowHeaderPlayButton.Should().BeFalse();
         fixture.Model.IsQriynotEnabled = true;
         fixture.Model.ShowHeaderPlayButton.Should().BeTrue();
 
@@ -646,5 +649,146 @@ public class ParashaViewModelTests
         await fixture.Model.LoadByUnitIdAsync(1);
         await fixture.Model.LoadByUnitIdAsync(999);
         fixture.Model.UnitId.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task UnloadedModel_ExposesEmptyUnitSurface()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize();
+
+        fixture.Model.UnitId.Should().Be(0);
+        fixture.Model.Heading.Should().BeEmpty();
+        fixture.Model.Title.Should().BeEmpty();
+        fixture.Model.SeferId.Should().Be(0);
+        fixture.Model.UnitOrder.Should().Be(0);
+        fixture.Model.UnitPositionText.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task LoadPerushim_WithoutACurrentUnit_IsDropped()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize();
+        // Services are available but no unit is on screen — the stale-load
+        // guard treats the resolved catalog as belonging to no one.
+        var orphan = new ParashaUnit
+        {
+            UnitId = 1, Slug = "1", SeferId = 1, SeferName = "בראשית",
+            Order = 1, Heading = "בראשית",
+            TorahRange = new ScriptureRange { StartPerekId = 1, StartPasuk = 2, EndPerekId = 3, EndPasuk = 4 }
+        };
+
+        await fixture.Model.LoadPerushimAsync(orphan);
+
+        fixture.Model.Perushim.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task ShowPerushForSearch_AlreadyChecked_IsANoOp()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize();
+        await fixture.Model.LoadByUnitIdAsync(1);
+        fixture.Model.ToggleCheckedPerush(2);
+
+        // Re-showing the same perush must not evict it from the list.
+        fixture.Model.ShowPerushForSearch(2);
+
+        fixture.Model.CheckedPerushim.Should().Equal(2);
+    }
+
+    [Fact]
+    public async Task ToggleCheckedPerush_AtTheLimit_RejectsNewPerushim()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize();
+        await fixture.Model.LoadByUnitIdAsync(1);
+        fixture.Preferences.InlineCommentaryLimit = 1;
+
+        fixture.Model.ToggleCheckedPerush(1);
+        fixture.Model.ToggleCheckedPerush(2);
+
+        fixture.Model.CheckedPerushim.Should().Equal(1);
+    }
+
+    [Fact]
+    public async Task ToggleCheckedPerush_WithoutUnit_StillTracksChecks()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize();
+
+        // With no unit on screen the toggle updates the checked list and
+        // skips the per-row refill entirely.
+        fixture.Model.ToggleCheckedPerush(1);
+
+        fixture.Model.CheckedPerushim.Should().Equal(1);
+    }
+
+    [Fact]
+    public async Task GetPerushimForRow_CoveredPerekWithoutChapter_YieldsEmpty()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize();
+        await fixture.Model.LoadByUnitIdAsync(1);
+
+        // Perek 4 is rendered by the Haftarah section but its chapter never
+        // loaded — the lookup falls back to an empty list.
+        fixture.Model.GetPerushimForRow(4, 1).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task RecitationAvailability_NoUnit_StaysDisabled()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize();
+
+        // No unit on screen — nothing can have audio.
+        fixture.Model.RefreshRecitationAvailability();
+        fixture.Model.HasCurrentUnitRecitation.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task LoadArticles_WithoutACurrentUnit_IsDropped()
+    {
+        var articles = new List<Article> { new() { Id = 7, Abstract = "a", AuthorId = 1, PerekId = 1 } };
+        await using var fixture = new Fixture(articles);
+        await fixture.Initialize();
+        var orphan = new ParashaUnit
+        {
+            UnitId = 1, Slug = "1", SeferId = 1, SeferName = "בראשית",
+            Order = 1, Heading = "בראשית",
+            TorahRange = new ScriptureRange { StartPerekId = 1, StartPasuk = 2, EndPerekId = 3, EndPasuk = 4 }
+        };
+
+        await fixture.Model.LoadArticlesAsync(orphan);
+
+        fixture.Model.Articles.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task CommentaryLimitShrink_WithoutUnit_SkipsTheRowRefill()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize();
+        fixture.Model.CheckedPerushim = [1, 2];
+
+        // The preference listener trims the checked list even while no unit
+        // is loaded — the per-row refill is skipped instead of crashing.
+        fixture.Preferences.InlineCommentaryLimit = 1;
+
+        fixture.Model.CheckedPerushim.Should().Equal(1);
+    }
+
+    [Fact]
+    public void DefaultArticlesLoader_ReadsTheStarterSnapshot()
+    {
+        // The production loader reads StarterService's in-memory snapshot —
+        // an unloaded snapshot just yields an empty list.
+        var loader = (Func<int, Task<List<Article>>>)typeof(ParashaViewModel)
+            .GetProperty("DefaultArticlesLoader", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!
+            .GetValue(null)!;
+
+        loader(1).Result.Should().BeEmpty();
     }
 }
