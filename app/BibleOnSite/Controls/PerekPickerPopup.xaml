@@ -108,7 +108,7 @@
                             </CollectionView.ItemsLayout>
                             <CollectionView.ItemTemplate>
                                 <DataTemplate>
-                                    <Grid Padding="8,12" AutomationId="PickerGroupItem">
+                                    <Grid Padding="8,12">
                                         <VisualStateManager.VisualStateGroups>
                                             <VisualStateGroup Name="CommonStates">
                                                 <VisualState Name="Normal"/>
@@ -121,6 +121,7 @@
                                         </VisualStateManager.VisualStateGroups>
                                         <Label Text="{Binding Name}"
                                                FontSize="16"
+                                               AutomationId="PickerGroupItem"
                                                HorizontalTextAlignment="Center"
                                                VerticalTextAlignment="Center"/>
                                     </Grid>
@@ -176,7 +177,7 @@
                             </CollectionView.ItemsLayout>
                             <CollectionView.ItemTemplate>
                                 <DataTemplate>
-                                    <Grid Padding="8,12" AutomationId="PickerSeferItem">
+                                    <Grid Padding="8,12">
                                         <VisualStateManager.VisualStateGroups>
                                             <VisualStateGroup Name="CommonStates">
                                                 <VisualState Name="Normal"/>
@@ -189,6 +190,7 @@
                                         </VisualStateManager.VisualStateGroups>
                                         <Label Text="{Binding DisplayName}"
                                                FontSize="14"
+                                               AutomationId="PickerSeferItem"
                                                HorizontalTextAlignment="Center"
                                                VerticalTextAlignment="Center"/>
                                     </Grid>
@@ -244,7 +246,7 @@
                             </CollectionView.ItemsLayout>
                             <CollectionView.ItemTemplate>
                                 <DataTemplate>
-                                    <Grid Padding="8,10" AutomationId="PickerPerekItem">
+                                    <Grid Padding="8,10">
                                         <VisualStateManager.VisualStateGroups>
                                             <VisualStateGroup Name="CommonStates">
                                                 <VisualState Name="Normal"/>
@@ -257,6 +259,7 @@
                                         </VisualStateManager.VisualStateGroups>
                                         <Label Text="{Binding DisplayText}"
                                                FontSize="14"
+                                               AutomationId="PickerPerekItem"
                                                HorizontalTextAlignment="Center"
                                                VerticalTextAlignment="Center"/>
                                     </Grid>
