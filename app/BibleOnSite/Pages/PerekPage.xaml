@@ -544,6 +544,19 @@
                                AutomationId="PerushNameSearch" SearchButtonPressed="OnPerushSearchSubmitted"/>
                     <Label Text="{Binding InlineCommentaryLimitMessage}" FontSize="12" LineBreakMode="WordWrap"
                            HorizontalTextAlignment="Center" AutomationId="InlineCommentaryLimitMessage"/>
+                    <!-- Live selected count; turns Primary and bold at the configured limit (#2471) -->
+                    <Label Text="{Binding PerushimSelectionStatus}"
+                           SemanticProperties.Description="{Binding PerushimSelectionStatus}"
+                           FontSize="13" FontAttributes="Bold"
+                           HorizontalTextAlignment="Center"
+                           AutomationId="PerushimSelectionStatus"
+                           TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray400}}">
+                        <Label.Triggers>
+                            <DataTrigger TargetType="Label" Binding="{Binding PerushimLimitReached}" Value="True">
+                                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryLight}}"/>
+                            </DataTrigger>
+                        </Label.Triggers>
+                    </Label>
                     <BoxView HeightRequest="1"
                              BackgroundColor="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray600}}"
                              Margin="0,4,0,0"/>

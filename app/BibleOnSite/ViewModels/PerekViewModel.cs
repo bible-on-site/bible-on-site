@@ -72,6 +72,8 @@ public partial class PerekViewModel : ObservableObject
 
     /// <summary>Perush IDs that are currently checked (shown inline with text).</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PerushimSelectionStatus))]
+    [NotifyPropertyChangedFor(nameof(PerushimLimitReached))]
     private List<int> _checkedPerushim = new();
 
     /// <summary>Whether the perushim notes database is available (PAD or HTTP downloaded).</summary>
@@ -792,6 +794,12 @@ public partial class PerekViewModel : ObservableObject
     /// <summary>Max perushim shown inline — unchecked rows render disabled at the cap.</summary>
     public int InlineCommentaryLimit => _preferencesService.InlineCommentaryLimit;
 
+    /// <summary>Live "נבחרו N מתוך M" counter for the perushim selector header.</summary>
+    public string PerushimSelectionStatus => $"נבחרו {CheckedPerushim.Count} מתוך {InlineCommentaryLimit}";
+
+    /// <summary>Whether the configured perushim limit is fully used (drives subtle max-reached emphasis).</summary>
+    public bool PerushimLimitReached => CheckedPerushim.Count >= InlineCommentaryLimit;
+
     /// <summary>A search result must remain visible even when all inline slots are occupied.</summary>
     public void ShowPerushForSearch(int perushId)
     {
@@ -1286,6 +1294,8 @@ public partial class PerekViewModel : ObservableObject
         OnPropertyChanged(nameof(DivineNameMaskingEnabled));
         OnPropertyChanged(nameof(InlineCommentaryLimitMessage));
         OnPropertyChanged(nameof(InlineCommentaryLimit));
+        OnPropertyChanged(nameof(PerushimSelectionStatus));
+        OnPropertyChanged(nameof(PerushimLimitReached));
         if (CheckedPerushim.Count > _preferencesService.InlineCommentaryLimit)
         {
             CheckedPerushim = CheckedPerushim.Take(_preferencesService.InlineCommentaryLimit).ToList();
