@@ -10,7 +10,9 @@ namespace BibleOnSite.Controls;
 /// in red — text colors, not colored button backgrounds. Tapping outside or
 /// dismissing the popup resolves to "stay" (#2460).
 /// </summary>
-public partial class ExitConfirmationPopup : Popup<bool> //NOSONAR
+#pragma warning disable S2333 // MAUI XAML supplies the other partial declaration.
+public partial class ExitConfirmationPopup : Popup<bool>
+#pragma warning restore S2333
 {
 	public ExitConfirmationPopup()
 	{
