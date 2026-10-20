@@ -32,6 +32,15 @@
   margin: 0.5em 0;
 }
 .page section > header > h2 {
+  font-size: 1.8em;
+  margin: 0.5em 0;
+}
+.page section > header > h3 {
+  font-size: 1.4em;
+  margin: 0.3em 0;
+}
+/* Hero subtitle stays an h2 (not demoted); keep its former size. */
+.page .sectionHeader > h2 {
   font-size: 1.4em;
   margin: 0.3em 0;
 }
@@ -201,6 +210,7 @@
 .headlineTitle {
   font-size: 1.25rem;
   font-weight: bold;
+  margin-block: 0.67em;
 }
 
 /* AlHaperek bottom divider */

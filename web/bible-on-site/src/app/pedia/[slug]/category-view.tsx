@@ -158,6 +158,7 @@ export async function CategoryView({
 
 			{homepage?.content && !sub && (
 				<div
+					className={styles.homepageContent}
 					// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify
 					dangerouslySetInnerHTML={{
 						__html: DOMPurify.sanitize(demoteHeadings(homepage.content)),
