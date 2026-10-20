@@ -38,35 +38,6 @@
                     </VerticalStackLayout>
                 </Border>
             </VerticalStackLayout>
-
-            <!-- ═══ מידע ═══ -->
-            <VerticalStackLayout Spacing="8">
-                <Label Text="מידע"
-                       FontSize="14"
-                       FontAttributes="Bold"
-                       TextColor="{StaticResource Primary}"
-                       Padding="4,0,0,0"/>
-
-                <Border Padding="16"
-                        StrokeShape="RoundRectangle 12"
-                        Stroke="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray700}}"
-                        StrokeThickness="1"
-                        BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Gray900}}">
-                    <VerticalStackLayout Spacing="12">
-                        <Label Text="הצהרת הנגישות של התכנית מתוחזקת באתר ומכסה את האתר ואת היישומון."
-                               FontSize="15"
-                               LineBreakMode="WordWrap"
-                               TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
-                        <Button Text="הצהרת נגישות"
-                                Command="{Binding OpenAccessibilityStatementCommand}"
-                                AutomationId="AccessibilityStatementButton"
-                                SemanticProperties.Description="פתיחת הצהרת הנגישות באתר התכנית"
-                                BackgroundColor="{StaticResource Primary}"
-                                TextColor="White"
-                                CornerRadius="8"/>
-                    </VerticalStackLayout>
-                </Border>
-            </VerticalStackLayout>
         </VerticalStackLayout>
     </ScrollView>
 </ContentPage>

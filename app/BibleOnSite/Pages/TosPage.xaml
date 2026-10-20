@@ -36,6 +36,28 @@
                        TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
             </VerticalStackLayout>
 
+            <!-- Accessibility Statement Section -->
+            <VerticalStackLayout Spacing="8">
+                <Label Text="הצהרת נגישות"
+                       FontSize="18"
+                       FontAttributes="Bold"
+                       TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
+                <Label Text="הצהרת הנגישות של התכנית מתוחזקת באתר ומכסה את האתר ואת היישומון."
+                       FontSize="14"
+                       LineHeight="1.4"
+                       TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                <Label Text="לצפייה בהצהרת הנגישות"
+                       FontSize="14"
+                       TextColor="{StaticResource Primary}"
+                       TextDecorations="Underline"
+                       SemanticProperties.Description="פתיחת הצהרת הנגישות באתר התכנית"
+                       AutomationId="AccessibilityStatementLink">
+                    <Label.GestureRecognizers>
+                        <TapGestureRecognizer Tapped="OnAccessibilityStatementTapped"/>
+                    </Label.GestureRecognizers>
+                </Label>
+            </VerticalStackLayout>
+
             <!-- Divider -->
             <BoxView HeightRequest="1" Color="{StaticResource Gray300}" Margin="0,8"/>
 
