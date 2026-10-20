@@ -18,7 +18,10 @@ public class ParashaDataService
     public static ParashaDataService Instance => _instance.Value;
 
     private List<ParashaUnit>? _parashiot;
+    private Dictionary<int, int>? _unitIndexById;
+    private Dictionary<int, List<ParashaUnit>>? _unitsByPerekId;
     private bool _isLoaded;
+    private bool _isAvailable;
     private readonly SemaphoreSlim _loadLock = new(1, 1);
 
     private readonly LocalDatabaseService _databaseService;
@@ -30,8 +33,14 @@ public class ParashaDataService
     /// <summary>Whether parasha data has been loaded.</summary>
     public bool IsLoaded => _isLoaded;
 
+    /// <summary>Whether the packaged database actually ships parasha reading units.</summary>
+    public bool IsAvailable => _isLoaded && _isAvailable;
+
     /// <summary>All 54 parasha units ordered by unit id, or null before load.</summary>
     public IReadOnlyList<ParashaUnit>? Parashiot => _parashiot;
+
+    /// <summary>Loaded unit count — drives the "מתוך" position text.</summary>
+    public int UnitCount => _parashiot?.Count ?? 0;
 
     /// <summary>
     /// Loads every parasha unit with its primary Torah range and ordered
@@ -53,13 +62,24 @@ public class ParashaDataService
                 return;
             }
             var db = await _databaseService.GetDatabaseAsync();
+            await LoadUnitsAsync(db);
+            _isLoaded = true;
+        }
+        finally { _loadLock.Release(); }
+    }
 
+    private async Task LoadUnitsAsync(SQLiteAsyncConnection db)
+    {
+        List<ReadingUnitRangeRow> rows;
+        try
+        {
             // Primary ranges carry NULL auxiliary_ordinal; ordering them
             // first keeps each unit's Torah range ahead of its ordered
             // Haftarah variants.
-            var rows = await db.QueryAsync<ReadingUnitRangeRow>(
+            rows = await db.QueryAsync<ReadingUnitRangeRow>(
                 "SELECT u.unit_id AS unit_id, u.slug AS slug, u.sefer_id AS sefer_id, " +
                 "u.unit_order AS unit_order, u.heading AS heading, " +
+                "s.name AS sefer_name, " +
                 "r.range_index AS range_index, r.auxiliary_ordinal AS auxiliary_ordinal, " +
                 "r.auxiliary_id AS auxiliary_id, r.auxiliary_label AS auxiliary_label, " +
                 "r.start_perek_id AS start_perek_id, r.start_pasuk AS start_pasuk, " +
@@ -69,74 +89,152 @@ public class ParashaDataService
                 "FROM tanah_reading_unit u " +
                 "LEFT JOIN tanah_reading_unit_range r " +
                 "  ON r.division_id = u.division_id AND r.unit_id = u.unit_id " +
+                "LEFT JOIN tanah_sefer s ON s.id = u.sefer_id " +
                 "WHERE u.division_id = 'parasha' " +
                 "ORDER BY u.unit_id, " +
                 "  CASE WHEN r.auxiliary_ordinal IS NULL THEN -1 ELSE r.auxiliary_ordinal END, " +
                 "  r.range_index");
+        }
+        catch (SQLiteException ex)
+        {
+            // A packaged database predating the reading-unit tables (or a
+            // corrupt install) must not crash the reader — the page shows
+            // its unavailable empty state instead.
+            Console.Error.WriteLine($"[Parasha] reading-unit tables unavailable: {ex.Message}");
+            _parashiot = new List<ParashaUnit>();
+            _unitIndexById = new Dictionary<int, int>();
+            _unitsByPerekId = new Dictionary<int, List<ParashaUnit>>();
+            _isAvailable = false;
+            return;
+        }
 
-            var units = new List<ParashaUnit>();
-            foreach (var row in rows)
+        var units = new List<ParashaUnit>();
+        foreach (var row in rows)
+        {
+            if (units.Count == 0 || units[^1].UnitId != row.UnitId)
             {
-                if (units.Count == 0 || units[^1].UnitId != row.UnitId)
+                units.Add(new ParashaUnit
                 {
-                    units.Add(new ParashaUnit
-                    {
-                        UnitId = row.UnitId,
-                        Slug = row.Slug,
-                        SeferId = row.SeferId,
-                        Order = row.UnitOrder,
-                        Heading = row.Heading,
-                        TorahRange = new ScriptureRange()
-                    });
-                }
-
-                // A unit without any range row (impossible in the export —
-                // every parasha maps scripture) still yields one LEFT JOIN
-                // row whose start columns are NULL.
-                if (row.StartPerekId == 0 && row.RangeIndex == 0 && row.AuxiliaryId == null)
-                {
-                    continue;
-                }
-
-                var unit = units[^1];
-                var range = new ScriptureRange
-                {
-                    StartPerekId = row.StartPerekId,
-                    StartPasuk = row.StartPasuk,
-                    StartSegmentIndex = row.StartSegmentIndex,
-                    EndPerekId = row.EndPerekId,
-                    EndPasuk = row.EndPasuk,
-                    EndSegmentIndex = row.EndSegmentIndex
-                };
-
-                if (row.AuxiliaryOrdinal is not int ordinal)
-                {
-                    unit.TorahRange = range;
-                    continue;
-                }
-
-                var haftarot = unit.Haftarot;
-                if (haftarot.Count <= ordinal)
-                {
-                    haftarot.Add(new AuxiliaryReading
-                    {
-                        Id = row.AuxiliaryId ?? string.Empty,
-                        Label = row.AuxiliaryLabel ?? string.Empty
-                    });
-                }
-
-                haftarot[ordinal].Ranges.Add(range);
+                    UnitId = row.UnitId,
+                    Slug = row.Slug,
+                    SeferId = row.SeferId,
+                    SeferName = row.SeferName ?? string.Empty,
+                    Order = row.UnitOrder,
+                    Heading = row.Heading,
+                    TorahRange = new ScriptureRange()
+                });
             }
 
-            _parashiot = units;
-            _isLoaded = true;
+            // A unit without any range row (impossible in the export —
+            // every parasha maps scripture) still yields one LEFT JOIN
+            // row whose start columns are NULL.
+            if (row.StartPerekId == 0 && row.RangeIndex == 0 && row.AuxiliaryId == null)
+            {
+                continue;
+            }
+
+            var unit = units[^1];
+            var range = new ScriptureRange
+            {
+                StartPerekId = row.StartPerekId,
+                StartPasuk = row.StartPasuk,
+                StartSegmentIndex = row.StartSegmentIndex,
+                EndPerekId = row.EndPerekId,
+                EndPasuk = row.EndPasuk,
+                EndSegmentIndex = row.EndSegmentIndex
+            };
+
+            if (row.AuxiliaryOrdinal is not int ordinal)
+            {
+                unit.TorahRange = range;
+                continue;
+            }
+
+            var haftarot = unit.Haftarot;
+            if (haftarot.Count <= ordinal)
+            {
+                haftarot.Add(new AuxiliaryReading
+                {
+                    Id = row.AuxiliaryId ?? string.Empty,
+                    Label = row.AuxiliaryLabel ?? string.Empty
+                });
+            }
+
+            haftarot[ordinal].Ranges.Add(range);
         }
-        finally { _loadLock.Release(); }
+
+        var unitIndexById = new Dictionary<int, int>(units.Count);
+        var unitsByPerekId = new Dictionary<int, List<ParashaUnit>>();
+        for (var index = 0; index < units.Count; index++)
+        {
+            var unit = units[index];
+            unitIndexById.TryAdd(unit.UnitId, index);
+            // Containment lookups ride the primary Torah range — a pasuk
+            // belongs to exactly one parasha there (Haftarah variants only
+            // repeat Neviim readings inside their own parasha).
+            for (var perekId = unit.TorahRange.StartPerekId; perekId <= unit.TorahRange.EndPerekId; perekId++)
+            {
+                if (!unitsByPerekId.TryGetValue(perekId, out var bucket))
+                {
+                    bucket = new List<ParashaUnit>();
+                    unitsByPerekId[perekId] = bucket;
+                }
+                bucket.Add(unit);
+            }
+        }
+
+        _parashiot = units;
+        _unitIndexById = unitIndexById;
+        _unitsByPerekId = unitsByPerekId;
+        _isAvailable = units.Count > 0;
     }
 
     /// <summary>Gets a parasha unit by its stable unit id, or null.</summary>
     public ParashaUnit? GetParasha(int unitId) =>
         _parashiot?.FirstOrDefault(unit => unit.UnitId == unitId);
+
+    /// <summary>The unit's position in canonical order (-1 when missing).</summary>
+    public int GetUnitIndex(int unitId) =>
+        _unitIndexById != null && _unitIndexById.TryGetValue(unitId, out var index) ? index : -1;
+
+    /// <summary>Adjacent units by canonical order, for prev/next navigation.</summary>
+    public (ParashaUnit? Prev, ParashaUnit? Next) GetAdjacentUnits(int unitId)
+    {
+        var index = GetUnitIndex(unitId);
+        if (_parashiot == null || index < 0)
+        {
+            return (null, null);
+        }
+        var prev = index > 0 ? _parashiot[index - 1] : null;
+        var next = index < _parashiot.Count - 1 ? _parashiot[index + 1] : null;
+        return (prev, next);
+    }
+
+    /// <summary>
+    /// The parasha whose Torah range contains the given canonical pasuk —
+    /// resolves perek-level deep links and the reader's resume point to the
+    /// selected reading instance.
+    /// </summary>
+    public ParashaUnit? GetParashaContainingPasuk(int perekId, int pasuk)
+    {
+        if (_unitsByPerekId == null
+            || !_unitsByPerekId.TryGetValue(perekId, out var candidates))
+        {
+            return null;
+        }
+        return candidates.FirstOrDefault(unit =>
+            RangeContainsPasuk(unit.TorahRange, perekId, pasuk));
+    }
+
+    /// <summary>Whole-pasuk containment inside an inclusive range.</summary>
+    internal static bool RangeContainsPasuk(ScriptureRange range, int perekId, int pasuk)
+    {
+        var afterStart = perekId > range.StartPerekId
+            || (perekId == range.StartPerekId && pasuk >= range.StartPasuk);
+        var beforeEnd = perekId < range.EndPerekId
+            || (perekId == range.EndPerekId && pasuk <= range.EndPasuk);
+        return afterStart && beforeEnd;
+    }
 
     /// <summary>
     /// The pasuk bounds a range contributes inside one perek, or null
@@ -187,6 +285,9 @@ public class ParashaDataService
 
         [Column("heading")]
         public string Heading { get; set; } = string.Empty;
+
+        [Column("sefer_name")]
+        public string? SeferName { get; set; }
 
         [Column("range_index")]
         public int RangeIndex { get; set; }

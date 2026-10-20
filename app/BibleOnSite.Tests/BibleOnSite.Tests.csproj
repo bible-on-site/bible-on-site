@@ -82,6 +82,7 @@
     <Compile Include="..\BibleOnSite\ViewModels\PerekViewModel.cs" Link="ViewModels\PerekViewModel.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\ParashaListViewModel.cs" Link="ViewModels\ParashaListViewModel.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\ParashaViewModel.cs" Link="ViewModels\ParashaViewModel.cs" />
+    <Compile Include="..\BibleOnSite\ViewModels\ParashaViewModel.Perushim.cs" Link="ViewModels\ParashaViewModel.Perushim.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\PreferencesViewModel.cs" Link="ViewModels\PreferencesViewModel.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\AuthorsViewModel.cs" Link="ViewModels\AuthorsViewModel.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\SearchViewModel.cs" Link="ViewModels\SearchViewModel.cs" />

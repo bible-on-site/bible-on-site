@@ -205,22 +205,39 @@ public class ParashaDataServiceTests
         parasha.GetParasha(99).Should().BeNull();
     }
 
+    /// <summary>
+    /// Builds a reader view-model against the seeded storage — injects the
+    /// perush services so the singletons never touch a real filesystem.
+    /// </summary>
+    private static BibleOnSite.ViewModels.ParashaViewModel Reader(
+        ParashaDataService parasha, PerekDataService perakim, TestStorage storage)
+    {
+        var preferences = PreferencesService.CreateForTesting(new InMemoryPreferencesStorage());
+        preferences.Load();
+        return new BibleOnSite.ViewModels.ParashaViewModel(
+            parasha, perakim, preferences,
+            new PerushimCatalogService(storage.FileSystem.Object),
+            new PerushimNotesService(NotesDeliveryTests.Pad().Object, storage.FileSystem.Object),
+            _ => Task.FromResult(new List<Article>()));
+    }
+
     [Fact]
     public async Task ViewModel_BuildsTorahAndHaftarahSections_WithClippedPesukim()
     {
         await using var storage = new TestStorage();
         await SeedAsync(storage);
         var (parasha, perakim) = Services(storage);
-        var viewModel = new BibleOnSite.ViewModels.ParashaViewModel(parasha, perakim);
+        var viewModel = Reader(parasha, perakim, storage);
 
-        await viewModel.LoadAsync(1);
+        await viewModel.LoadByUnitIdAsync(1);
 
         viewModel.Title.Should().Be("פרשת בראשית");
         viewModel.Source.Should().Be("בראשית א ב - ג ד"); // same-sefer span: end keeps perek letters only
-        viewModel.CanGoToNext.Should().BeTrue();
-        viewModel.CanGoToPrevious.Should().BeFalse();
+        viewModel.CanGoToNextUnit.Should().BeTrue();
+        viewModel.CanGoToPreviousUnit.Should().BeFalse();
+        viewModel.CarouselUnits.Should().HaveCount(2);
 
-        var items = viewModel.Items.ToList();
+        var items = viewModel.Unit!.Rows;
         items[0].IsSectionHeader.Should().BeTrue();
         items[0].Text.Should().Be("תורה");
 
@@ -236,6 +253,12 @@ public class ParashaDataServiceTests
             .Select(item => item.Pasuk!.PasukNum)
             .ToList();
         torahPesukim.Should().Equal(2, 3, 4, 5, 1, 2, 3, 4, 5, 1, 2, 3, 4);
+
+        // Canonical perek ids stay on every row — the reader keys selection,
+        // perushim and recitation by (perekId, pasukNum).
+        items.Where(item => item.Pasuk is not null).Select(item => item.PerekId)
+            .Should().Equal(1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3,
+                4, 4, 4, 5, 4, 4, 4, 4, 5, 5);
 
         // Haftarah variants appear after the Torah section, each labeled
         // and rendering its own ordered ranges — the אשכנזים jump from
@@ -262,17 +285,18 @@ public class ParashaDataServiceTests
         await using var storage = new TestStorage();
         await SeedAsync(storage);
         var (parasha, perakim) = Services(storage);
-        var viewModel = new BibleOnSite.ViewModels.ParashaViewModel(parasha, perakim);
+        var viewModel = Reader(parasha, perakim, storage);
 
-        await viewModel.LoadAsync(1);
-        await viewModel.NextCommand.ExecuteAsync(null);
+        await viewModel.LoadByUnitIdAsync(1);
+        await viewModel.LoadNextCommand.ExecuteAsync(null);
 
         viewModel.Title.Should().Be("פרשת נח");
         viewModel.UnitId.Should().Be(2);
-        viewModel.CanGoToNext.Should().BeFalse();
-        viewModel.CanGoToPrevious.Should().BeTrue();
+        viewModel.CanGoToNextUnit.Should().BeFalse();
+        viewModel.CanGoToPreviousUnit.Should().BeTrue();
+        viewModel.Unit!.Rows.Should().NotBeEmpty();
 
-        await viewModel.PreviousCommand.ExecuteAsync(null);
+        await viewModel.LoadPreviousCommand.ExecuteAsync(null);
         viewModel.Title.Should().Be("פרשת בראשית");
         viewModel.UnitId.Should().Be(1);
     }
@@ -357,27 +381,38 @@ public class ParashaDataServiceTests
     [Fact]
     public void ViewModels_ParameterlessCtors_ResolveSingletons()
     {
+        // The parameterless ctor resolves the singletons — preferences must
+        // be initialized the way app startup does.
+        PreferencesService.Initialize(new InMemoryPreferencesStorage());
         new BibleOnSite.ViewModels.ParashaViewModel().Should().NotBeNull();
         new BibleOnSite.ViewModels.ParashaListViewModel().Should().NotBeNull();
         ParashaDataService.Instance.Should().BeSameAs(ParashaDataService.Instance);
     }
 
     [Fact]
-    public async Task ViewModel_UnknownUnit_ResetsReaderState()
+    public async Task ViewModel_UnknownUnit_KeepsReaderState()
     {
         await using var storage = new TestStorage();
         await SeedAsync(storage);
         var (parasha, perakim) = Services(storage);
-        var viewModel = new BibleOnSite.ViewModels.ParashaViewModel(parasha, perakim);
+        var viewModel = Reader(parasha, perakim, storage);
 
-        await viewModel.LoadAsync(1);
-        await viewModel.LoadAsync(999);
-
+        // An unknown unit id is a navigation no-op — the reader keeps the
+        // unit on screen instead of blanking it.
+        await viewModel.LoadByUnitIdAsync(999);
+        viewModel.Unit.Should().BeNull();
         viewModel.Title.Should().BeEmpty();
         viewModel.Source.Should().BeEmpty();
-        viewModel.Items.Should().BeEmpty();
-        viewModel.CanGoToNext.Should().BeFalse();
-        viewModel.CanGoToPrevious.Should().BeFalse();
+
+        await viewModel.LoadByUnitIdAsync(1);
+        await viewModel.LoadByUnitIdAsync(999);
+
+        viewModel.UnitId.Should().Be(1);
+        viewModel.Title.Should().Be("פרשת בראשית");
+        viewModel.Source.Should().Be("בראשית א ב - ג ד");
+        viewModel.Unit!.Rows.Should().NotBeEmpty();
+        viewModel.CanGoToNextUnit.Should().BeTrue();
+        viewModel.CanGoToPreviousUnit.Should().BeFalse();
     }
 
     [Fact]
@@ -451,28 +486,28 @@ public class ParashaDataServiceTests
         await using var storage = new TestStorage();
         await SeedEdgeAsync(storage);
         var (parasha, perakim) = Services(storage);
-        var viewModel = new BibleOnSite.ViewModels.ParashaViewModel(parasha, perakim);
+        var viewModel = Reader(parasha, perakim, storage);
 
         // Same perek, several pesukim.
-        await viewModel.LoadAsync(1);
+        await viewModel.LoadByUnitIdAsync(1);
         viewModel.Source.Should().Be("בראשית ב ב-ד");
 
         // Sefer jump — the end keeps its full source.
-        await viewModel.LoadAsync(2);
+        await viewModel.LoadByUnitIdAsync(2);
         viewModel.Source.Should().Be("בראשית ג א - ישעיהו א ב");
 
         // End perek missing from the catalog — the end ref stays empty.
-        await viewModel.LoadAsync(3);
+        await viewModel.LoadByUnitIdAsync(3);
         viewModel.Source.Should().Be("בראשית ג א -  ב");
-        viewModel.Items.Where(item => item.IsPerekHeader).Select(item => item.Text)
+        viewModel.Unit!.Rows.Where(item => item.IsPerekHeader).Select(item => item.Text)
             .Should().Contain(string.Empty);
 
         // Start perek missing — the start ref stays empty while the end resolves.
-        await viewModel.LoadAsync(4);
+        await viewModel.LoadByUnitIdAsync(4);
         viewModel.Source.Should().Be(" א - שמואל א א א");
 
         // Same sefer but different additionals — שמואל א to שמואל ב.
-        await viewModel.LoadAsync(5);
+        await viewModel.LoadByUnitIdAsync(5);
         viewModel.Source.Should().Be("שמואל א א א - שמואל ב א א");
     }
 
