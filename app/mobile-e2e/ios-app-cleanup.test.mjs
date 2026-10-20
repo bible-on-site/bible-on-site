@@ -214,5 +214,5 @@ test("snapshots the stopped log once and counts parsing against the original cle
     now: () => time,
     observedPids: () => { time += 5001; return [1234]; },
     execute: async () => assert.fail("parsing exhausted the existing deadline"),
-  }), /five seconds/);
+  }), /five seconds before a process check; no kill was sent/);
 });
