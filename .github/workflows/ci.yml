@@ -662,7 +662,7 @@ jobs:
     name: Build Sefaria MongoDB Docker Image
     needs: [setup_env, determine_data_changes, determine_docker_image_availability]
     if: ${{ needs.determine_docker_image_availability.outputs.is_sefaria_mongo_available != 'true' && (needs.determine_data_changes.outputs.module_changed == 'true' || needs.determine_data_changes.outputs.ci_changed == 'true') }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       # Free disk space for the MongoDB Docker image build (~10GB+ needed for mongorestore)
       # Enable large-packages and docker-images to maximize available space
@@ -1776,7 +1776,7 @@ jobs:
 
   data_ci:
     name: Data CI
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs:
       [
         setup_env,
@@ -1999,7 +1999,7 @@ jobs:
   # ====================================================================================
   perushim_data:
     name: Perushim Data
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs:
       [
         setup_env,
