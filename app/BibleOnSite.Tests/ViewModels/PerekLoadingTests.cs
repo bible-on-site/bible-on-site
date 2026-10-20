@@ -27,7 +27,7 @@ public class PerekLoadingTests
                 Storage.FileSystem.Object, null);
         }
 
-        public async Task Initialize(bool notes = true, bool allChapters = false)
+        public async Task Initialize(bool notes = true, bool allChapters = false, bool corruptAdjacentBlob = false)
         {
             Bible = await Storage.CreateDatabaseAsync("sefaria-dump-5784-sivan-4.tanah_view.sqlite", PerekDataServiceTests.Schema);
             await Bible.ExecuteAsync("INSERT INTO tanah_sefer VALUES (1,'בראשית','Genesis',1,929)");
@@ -42,6 +42,12 @@ public class PerekLoadingTests
                 await Storage.CreateDatabaseAsync("sefaria-dump-5784-sivan-4.perushim_notes.sqlite",
                     [.. NotesDbV2.Statements(
                         (1, 1, 1, 0, "first"), (2, 1, 1, 0, "second"), (1, 2, 1, 0, "next"), (99, 2, 1, 0, "unknown")),
+                    // Perek 2 keeps its perush index rows but its chapter blob is
+                    // not PNB1 — init only checks schema, so the parse throws the
+                    // first time the adjacent-perek preload touches it.
+                    .. (corruptAdjacentBlob
+                        ? new[] { "UPDATE note_blob SET data = X'DEADBEEF' WHERE perek_id = 2" }
+                        : Array.Empty<string>()),
                     "INSERT INTO _metadata VALUES ('build_timestamp','100')"]);
             }
         }
@@ -159,6 +165,38 @@ public class PerekLoadingTests
         await vm.PreloadAdjacentPasukimAsync(929);
         await vm.EnsurePasukimLoadedAsync(fixture.Data.GetPerek(3)!);
         fixture.Data.GetPerek(3)!.Pasukim.Single().Text.Should().Be("שלישי");
+    }
+
+    [Fact]
+    public async Task Carousel_WhenAdjacentChapterBlobIsCorrupt_SwallowsPreloadFailure()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize(allChapters: true, corruptAdjacentBlob: true);
+        var vm = fixture.Model;
+        await vm.LoadByPerekIdAsync(1);
+
+        // The per-perek preload wraps each neighbor in its own try — a corrupt
+        // chapter blob for perek 2 must be logged away, never fail the sweep.
+        await vm.PreloadAdjacentPasukimAsync(1);
+
+        vm.PerekId.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task ShowPerushForSearch_WhenPerushAlreadyChecked_KeepsTheSelection()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize();
+        var vm = fixture.Model;
+        await vm.LoadByPerekIdAsync(1);
+        vm.ToggleCheckedPerush(1);
+
+        vm.ShowPerushForSearch(1);
+
+        // A perush that is already on screen must not be re-added or disturb
+        // the existing inline selection.
+        vm.CheckedPerushim.Should().Equal(1);
+        vm.InlineCommentaryLimitMessage.Should().Contain("פירושים");
     }
 
     [Fact]
@@ -623,5 +661,21 @@ public class PerekLoadingTests
 
         perek.Pasukim.Should().BeEmpty();
         data.PasukimCalls.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task LoadPerushim_ReusesTheCacheWarmedByAdjacentPreload()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize();
+
+        await fixture.Model.LoadByPerekIdAsync(2);
+        // Warms _perushimPreloadCache for the neighboring perakim, then loads
+        // the current perek's perushim from that cache instead of re-querying.
+        await fixture.Model.PreloadAdjacentPasukimAsync(2);
+        await fixture.Model.PreloadAdjacentPasukimAsync(2); // alreadyCached arm
+        await fixture.Model.LoadPerushimAsync(2);
+
+        fixture.Model.Perushim.Select(p => p.Name).Should().Contain("Rashi");
     }
 }

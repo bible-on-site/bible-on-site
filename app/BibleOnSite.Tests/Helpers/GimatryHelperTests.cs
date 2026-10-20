@@ -298,4 +298,12 @@ public class GimatryHelperTests
     }
 
     #endregion
+
+    [Fact]
+    public void ToLetters_WithThousands_WhenAlafimRollsPastNine_SkipsPrefix()
+    {
+        // (10201 / 1000) % 10 == 0, so no thousands letter is emitted and the
+        // remaining 10200 hundreds collapse into 25 tafim plus the remainder.
+        GimatryHelper.ToLetters(10201, true, "'").Should().Be(new string('ת', 25) + "רא");
+    }
 }
