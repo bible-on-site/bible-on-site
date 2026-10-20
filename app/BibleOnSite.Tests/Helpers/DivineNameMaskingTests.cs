@@ -221,6 +221,15 @@ public class DivineNameMaskingTests
                 .Should().Be("שַׁדַּ֥י");
 
         [Fact]
+        public void masks_el_when_its_only_mark_is_not_niqqud()
+        {
+            // רפה (U+05BF) is not a vowel point — like unpointed אל it still
+            // reads as the name.
+            DivineNameMasking.MaskValue("אֿל", Enabled())
+                .Should().Be("א-ל");
+        }
+
+        [Fact]
         public void never_leaves_orphaned_combining_marks()
         {
             var s = Enabled();
