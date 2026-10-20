@@ -2,9 +2,11 @@
 <ContentView xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:controls="clr-namespace:BibleOnSite.Controls"
+             xmlns:fonts="clr-namespace:Fonts"
              x:Class="BibleOnSite.Controls.PerekPickerPopup"
              x:Name="PickerPopup"
              IsVisible="False"
+             AutomationId="PerekPickerPopup"
              FlowDirection="RightToLeft">
 
     <!-- Popup container -->
@@ -74,10 +76,31 @@
                         <Border.StrokeShape>
                             <RoundRectangle CornerRadius="8"/>
                         </Border.StrokeShape>
-                        <CollectionView x:Name="SeferGroupList"
+                        <Grid RowDefinitions="Auto,*,Auto">
+                            <Label x:Name="SeferGroupUpArrow"
+                                   Text="{x:Static fonts:FluentUI.chevron_up_20_regular}"
+                                   FontFamily="FluentIcons" FontSize="14"
+                                   TextColor="{StaticResource Gray400}"
+                                   HeightRequest="22"
+                                   HorizontalTextAlignment="Center"
+                                   VerticalTextAlignment="Center"
+                                   AutomationId="PerekPickerGroupUp"
+                                   SemanticProperties.Description="תחילת הרשימה"/>
+                            <Grid Grid.Row="1">
+                                <!-- invisible probe with the item template's metrics: its
+                                     arranged height equals one item's height (items are
+                                     uniform via MeasureAllItems) -->
+                                <Label x:Name="SeferGroupItemSizer"
+                                       Text="א" FontSize="16" Padding="8,12"
+                                       Opacity="0" IsClippedToBounds="True"
+                                       InputTransparent="True"
+                                       VerticalOptions="Start"/>
+                                <CollectionView x:Name="SeferGroupList"
                                         SelectionMode="Single"
                                         SelectionChanged="OnSeferGroupSelected"
-                                        HeightRequest="300"
+                                        Scrolled="OnColumnScrolled"
+                                        SizeChanged="OnColumnSizeChanged"
+                                        AutomationId="PerekPickerGroupList"
                                         ItemSizingStrategy="MeasureAllItems"
                                         InputTransparent="False">
                             <CollectionView.ItemsLayout>
@@ -85,7 +108,7 @@
                             </CollectionView.ItemsLayout>
                             <CollectionView.ItemTemplate>
                                 <DataTemplate>
-                                    <Grid Padding="8,12">
+                                    <Grid Padding="8,12" AutomationId="PickerGroupItem">
                                         <VisualStateManager.VisualStateGroups>
                                             <VisualStateGroup Name="CommonStates">
                                                 <VisualState Name="Normal"/>
@@ -103,7 +126,18 @@
                                     </Grid>
                                 </DataTemplate>
                             </CollectionView.ItemTemplate>
-                        </CollectionView>
+                                </CollectionView>
+                            </Grid>
+                            <Label x:Name="SeferGroupDownArrow"
+                                   Text="{x:Static fonts:FluentUI.chevron_down_20_regular}"
+                                   FontFamily="FluentIcons" FontSize="14"
+                                   TextColor="{StaticResource Gray400}"
+                                   HeightRequest="22"
+                                   HorizontalTextAlignment="Center"
+                                   VerticalTextAlignment="Center"
+                                   AutomationId="PerekPickerGroupDown"
+                                   SemanticProperties.Description="סוף הרשימה"/>
+                        </Grid>
                     </Border>
 
                     <!-- Column 2: Sefarim within group -->
@@ -113,10 +147,28 @@
                         <Border.StrokeShape>
                             <RoundRectangle CornerRadius="8"/>
                         </Border.StrokeShape>
-                        <CollectionView x:Name="SeferList"
+                        <Grid RowDefinitions="Auto,*,Auto">
+                            <Label x:Name="SeferUpArrow"
+                                   Text="{x:Static fonts:FluentUI.chevron_up_20_regular}"
+                                   FontFamily="FluentIcons" FontSize="14"
+                                   TextColor="{StaticResource Gray400}"
+                                   HeightRequest="22"
+                                   HorizontalTextAlignment="Center"
+                                   VerticalTextAlignment="Center"
+                                   AutomationId="PerekPickerSeferUp"
+                                   SemanticProperties.Description="תחילת הרשימה"/>
+                            <Grid Grid.Row="1">
+                                <Label x:Name="SeferItemSizer"
+                                       Text="א" FontSize="14" Padding="8,12"
+                                       Opacity="0" IsClippedToBounds="True"
+                                       InputTransparent="True"
+                                       VerticalOptions="Start"/>
+                                <CollectionView x:Name="SeferList"
                                         SelectionMode="Single"
                                         SelectionChanged="OnSeferSelected"
-                                        HeightRequest="300"
+                                        Scrolled="OnColumnScrolled"
+                                        SizeChanged="OnColumnSizeChanged"
+                                        AutomationId="PerekPickerSeferList"
                                         ItemSizingStrategy="MeasureAllItems"
                                         InputTransparent="False">
                             <CollectionView.ItemsLayout>
@@ -124,7 +176,7 @@
                             </CollectionView.ItemsLayout>
                             <CollectionView.ItemTemplate>
                                 <DataTemplate>
-                                    <Grid Padding="8,12">
+                                    <Grid Padding="8,12" AutomationId="PickerSeferItem">
                                         <VisualStateManager.VisualStateGroups>
                                             <VisualStateGroup Name="CommonStates">
                                                 <VisualState Name="Normal"/>
@@ -142,7 +194,18 @@
                                     </Grid>
                                 </DataTemplate>
                             </CollectionView.ItemTemplate>
-                        </CollectionView>
+                                </CollectionView>
+                            </Grid>
+                            <Label x:Name="SeferDownArrow"
+                                   Text="{x:Static fonts:FluentUI.chevron_down_20_regular}"
+                                   FontFamily="FluentIcons" FontSize="14"
+                                   TextColor="{StaticResource Gray400}"
+                                   HeightRequest="22"
+                                   HorizontalTextAlignment="Center"
+                                   VerticalTextAlignment="Center"
+                                   AutomationId="PerekPickerSeferDown"
+                                   SemanticProperties.Description="סוף הרשימה"/>
+                        </Grid>
                     </Border>
 
                     <!-- Column 3: Perakim within sefer -->
@@ -152,10 +215,28 @@
                         <Border.StrokeShape>
                             <RoundRectangle CornerRadius="8"/>
                         </Border.StrokeShape>
-                        <CollectionView x:Name="PerekList"
+                        <Grid RowDefinitions="Auto,*,Auto">
+                            <Label x:Name="PerekUpArrow"
+                                   Text="{x:Static fonts:FluentUI.chevron_up_20_regular}"
+                                   FontFamily="FluentIcons" FontSize="14"
+                                   TextColor="{StaticResource Gray400}"
+                                   HeightRequest="22"
+                                   HorizontalTextAlignment="Center"
+                                   VerticalTextAlignment="Center"
+                                   AutomationId="PerekPickerPerekUp"
+                                   SemanticProperties.Description="תחילת הרשימה"/>
+                            <Grid Grid.Row="1">
+                                <Label x:Name="PerekItemSizer"
+                                       Text="א" FontSize="14" Padding="8,10"
+                                       Opacity="0" IsClippedToBounds="True"
+                                       InputTransparent="True"
+                                       VerticalOptions="Start"/>
+                                <CollectionView x:Name="PerekList"
                                         SelectionMode="Single"
                                         SelectionChanged="OnPerekSelected"
-                                        HeightRequest="300"
+                                        Scrolled="OnColumnScrolled"
+                                        SizeChanged="OnColumnSizeChanged"
+                                        AutomationId="PerekPickerPerekList"
                                         ItemSizingStrategy="MeasureAllItems"
                                         InputTransparent="False">
                             <CollectionView.ItemsLayout>
@@ -163,7 +244,7 @@
                             </CollectionView.ItemsLayout>
                             <CollectionView.ItemTemplate>
                                 <DataTemplate>
-                                    <Grid Padding="8,10">
+                                    <Grid Padding="8,10" AutomationId="PickerPerekItem">
                                         <VisualStateManager.VisualStateGroups>
                                             <VisualStateGroup Name="CommonStates">
                                                 <VisualState Name="Normal"/>
@@ -181,7 +262,18 @@
                                     </Grid>
                                 </DataTemplate>
                             </CollectionView.ItemTemplate>
-                        </CollectionView>
+                                </CollectionView>
+                            </Grid>
+                            <Label x:Name="PerekDownArrow"
+                                   Text="{x:Static fonts:FluentUI.chevron_down_20_regular}"
+                                   FontFamily="FluentIcons" FontSize="14"
+                                   TextColor="{StaticResource Gray400}"
+                                   HeightRequest="22"
+                                   HorizontalTextAlignment="Center"
+                                   VerticalTextAlignment="Center"
+                                   AutomationId="PerekPickerPerekDown"
+                                   SemanticProperties.Description="סוף הרשימה"/>
+                        </Grid>
                     </Border>
                 </Grid>
 
@@ -192,6 +284,7 @@
                       ColumnSpacing="12">
                     <Button Grid.Column="0"
                             Text="בטל"
+                            AutomationId="PerekPickerCancel"
                             BackgroundColor="Transparent"
                             TextColor="{StaticResource Gray600}"
                             BorderColor="{StaticResource Gray400}"
@@ -201,6 +294,7 @@
                     <Button Grid.Column="1"
                             x:Name="ConfirmButton"
                             Text="בחר"
+                            AutomationId="PerekPickerConfirm"
                             BackgroundColor="{StaticResource Primary}"
                             TextColor="White"
                             CornerRadius="8"

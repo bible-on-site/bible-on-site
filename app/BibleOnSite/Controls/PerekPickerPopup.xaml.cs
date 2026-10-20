@@ -16,6 +16,26 @@ public partial class PerekPickerPopup : ContentView
     private SeferItem? _selectedSefer;
     private PerekItem? _selectedPerek;
 
+    // Per-column scroll-arrow state: the last reported vertical offset plus the
+    // arrow labels and the zero-opacity sizer whose arranged height equals one
+    // item's height (items are uniform via MeasureAllItems).
+    private sealed class ScrollColumn(CollectionView list, Label up, Label down, Label sizer)
+    {
+        public CollectionView List { get; } = list;
+        public Label Up { get; } = up;
+        public Label Down { get; } = down;
+        public Label Sizer { get; } = sizer;
+        public double Offset { get; set; }
+    }
+
+    private readonly List<ScrollColumn> _scrollColumns;
+
+    // Arrow colors per the spec: black while more content exists in that
+    // direction, gray at the boundary. On dark theme white reads as "black".
+    private static readonly Color ArrowActiveLight = Colors.Black;
+    private static readonly Color ArrowActiveDark = Colors.White;
+    private static readonly Color ArrowInactive = Color.FromArgb("#919191"); // Gray400
+
     /// <summary>
     /// Event raised when a perek is selected and confirmed.
     /// </summary>
@@ -29,6 +49,12 @@ public partial class PerekPickerPopup : ContentView
     public PerekPickerPopup()
     {
         InitializeComponent();
+        _scrollColumns =
+        [
+            new ScrollColumn(SeferGroupList, SeferGroupUpArrow, SeferGroupDownArrow, SeferGroupItemSizer),
+            new ScrollColumn(SeferList, SeferUpArrow, SeferDownArrow, SeferItemSizer),
+            new ScrollColumn(PerekList, PerekUpArrow, PerekDownArrow, PerekItemSizer),
+        ];
         LoadSeferGroups();
     }
 
@@ -38,6 +64,7 @@ public partial class PerekPickerPopup : ContentView
     public void Show()
     {
         IsVisible = true;
+        RefreshAllArrowsDeferred();
     }
 
     /// <summary>
@@ -48,6 +75,7 @@ public partial class PerekPickerPopup : ContentView
     {
         IsVisible = true;
         PreSelectPerek(currentPerekId);
+        RefreshAllArrowsDeferred();
     }
 
     /// <summary>
@@ -69,6 +97,7 @@ public partial class PerekPickerPopup : ContentView
         };
 
         SeferGroupList.ItemsSource = groups;
+        RefreshArrowsDeferred(SeferGroupList);
     }
 
     private void PreSelectPerek(int perekId)
@@ -143,6 +172,8 @@ public partial class PerekPickerPopup : ContentView
         // Load sefarim for this group
         LoadSefarimForGroup(_selectedGroup.Id);
         PerekList.ItemsSource = null;
+        RefreshArrowsDeferred(SeferList);
+        RefreshArrowsDeferred(PerekList);
 
         // Auto-select first sefer
         var sefarim = SeferList.ItemsSource as List<SeferItem>;
@@ -219,6 +250,7 @@ public partial class PerekPickerPopup : ContentView
         }
 
         SeferList.ItemsSource = sefarim;
+        RefreshArrowsDeferred(SeferList);
     }
 
     private static int GetTotalPerakimForSefer(int seferId)
@@ -323,6 +355,7 @@ public partial class PerekPickerPopup : ContentView
         }
 
         PerekList.ItemsSource = perakim;
+        RefreshArrowsDeferred(PerekList);
     }
 
     private static string GetAdditionalPrefix(int additional)
@@ -356,6 +389,81 @@ public partial class PerekPickerPopup : ContentView
     {
         ConfirmButton.IsEnabled = _selectedPerek != null;
     }
+
+    #region Scroll edge arrows
+
+    private void OnColumnScrolled(object? sender, ItemsViewScrolledEventArgs e)
+    {
+        var column = ColumnFor(sender);
+        if (column == null)
+        {
+            return;
+        }
+
+        column.Offset = e.VerticalOffset;
+        RefreshArrows(column);
+    }
+
+    private void OnColumnSizeChanged(object? sender, EventArgs e)
+    {
+        var column = ColumnFor(sender);
+        if (column != null)
+        {
+            RefreshArrows(column);
+        }
+    }
+
+    private ScrollColumn? ColumnFor(object? sender) =>
+        _scrollColumns.FirstOrDefault(c => ReferenceEquals(c.List, sender));
+
+    private void RefreshAllArrowsDeferred()
+    {
+        foreach (var column in _scrollColumns)
+        {
+            RefreshArrowsDeferred(column.List);
+        }
+    }
+
+    /// <summary>
+    /// Recomputes arrows after the next layout pass: item sources reset the
+    /// scroll position, and the sizer needs an arrange before its height is real.
+    /// </summary>
+    private void RefreshArrowsDeferred(CollectionView list)
+    {
+        var column = ColumnFor(list);
+        if (column == null)
+        {
+            return;
+        }
+
+        column.Offset = 0;
+        Dispatcher.Dispatch(() => RefreshArrows(column));
+    }
+
+    private void RefreshArrows(ScrollColumn column)
+    {
+        var count = (column.List.ItemsSource as System.Collections.ICollection)?.Count ?? 0;
+        var contentHeight = count * column.Sizer.Height;
+
+        SetArrow(column.Up, ScrollEdges.CanScrollUp(column.Offset), "יש עוד פריטים למעלה", "תחילת הרשימה");
+        SetArrow(column.Down, ScrollEdges.CanScrollDown(column.Offset, column.List.Height, contentHeight), "יש עוד פריטים למטה", "סוף הרשימה");
+    }
+
+    private static void SetArrow(Label arrow, bool canScroll, string availableText, string boundaryText)
+    {
+        if (canScroll)
+        {
+            arrow.SetAppThemeColor(Label.TextColorProperty, ArrowActiveLight, ArrowActiveDark);
+        }
+        else
+        {
+            arrow.SetAppThemeColor(Label.TextColorProperty, ArrowInactive, ArrowInactive);
+        }
+
+        SemanticProperties.SetDescription(arrow, canScroll ? availableText : boundaryText);
+    }
+
+    #endregion
 
     private void OnBackgroundTapped(object? sender, TappedEventArgs e)
     {

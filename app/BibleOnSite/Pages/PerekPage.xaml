@@ -839,6 +839,7 @@
               ZIndex="140"
               IsVisible="False"
               Opacity="0"
+              AutomationId="CircularMenuScrim"
               BackgroundColor="#66000000">
             <Grid.GestureRecognizers>
                 <TapGestureRecognizer Tapped="OnOverlayTapped"/>
