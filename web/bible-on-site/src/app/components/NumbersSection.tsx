@@ -21,7 +21,7 @@ export async function NumbersSection() {
 	return (
 		<section id="numbers" className={styles.section}>
 			<header className={styles.header}>
-				<h1>מספרים על הפרק</h1>
+				<h2>מספרים על הפרק</h2>
 			</header>
 			<StatsCounters stats={items} />
 		</section>
