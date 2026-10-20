@@ -546,6 +546,9 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
             await RefreshPerushimIfAvailabilityChangedAsync();
             StartSearchIntroduction();
         }
+        // Cold-start main-thread work is done — release the deferred e2e
+        // search-index warmup so it cannot starve the accessibility snapshot.
+        Services.SearchIndexService.NotifyStartupSettled();
 #if IOS
         Dispatcher.Dispatch(ConfigureIosReaderHistory);
 #endif
