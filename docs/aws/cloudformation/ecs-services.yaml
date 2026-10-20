@@ -184,6 +184,7 @@ Resources:
                 Resource:
                   - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-tanah-db-*"
                   - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-revalidate-secret"
+                  - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-indexnow-key"
       Tags:
         - Key: Project
           Value: bible-on-site
@@ -323,6 +324,12 @@ Resources:
             # REVALIDATE_SECRET (same SSM parameter).
             - Name: REVALIDATE_SECRET
               ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-revalidate-secret"
+            # IndexNow ownership key: also served at /<key>.txt and used to
+            # sign URL submissions. A value that fails the protocol key
+            # format (8-128 [a-zA-Z0-9-]) disables the feature with a
+            # warning, so a placeholder can stand in until enrollment.
+            - Name: INDEXNOW_KEY
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-indexnow-key"
       Tags:
         - Key: Project
           Value: bible-on-site
@@ -646,6 +653,13 @@ Outputs:
 #   # Shared admin <-> website revalidation credential
 #   aws ssm put-parameter --name bible-on-site-revalidate-secret \
 #     --type SecureString --value "$(openssl rand -hex 32)" \
+#     --region il-central-1
+#
+#   # IndexNow ownership key for the website's search-engine notifications.
+#   # Generate the value in Bing Webmaster Tools (or any 8-128 char
+#   # [a-zA-Z0-9-] string); a non-matching value disables the feature.
+#   aws ssm put-parameter --name bible-on-site-indexnow-key \
+#     --type SecureString --value "$(openssl rand -hex 16)" \
 #     --region il-central-1
 #
 #   # Database URL (mysql://admin:<password>@<host>:3306/tanah)
