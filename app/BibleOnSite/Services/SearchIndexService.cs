@@ -25,6 +25,11 @@ public sealed class SearchIndexService : IAsyncDisposable
     private readonly object _buildSync = new();
     private string? _stagedAwaitingNotes;
 
+    // The e2e warmup gate: stays closed until the reader's first load settles.
+    private static int _startupSettleSignaled;
+    private static bool IsStartupSettleSignaled => Volatile.Read(ref _startupSettleSignaled) == 1;
+    private readonly TaskCompletionSource _startupSettled = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
     private static readonly Lazy<SearchIndexService> _instance = new(() => new(PerekDataService.Instance,
         PerushimNotesService.Instance, Path.Join(FileSystem.Current.CacheDirectory, "hebrew-search.sqlite")));
     public static SearchIndexService Instance => _instance.Value;
@@ -35,6 +40,10 @@ public sealed class SearchIndexService : IAsyncDisposable
         _notes = notes;
         _indexPath = indexPath;
         _index = new SQLiteAsyncConnection(indexPath);
+        if (IsStartupSettleSignaled)
+        {
+            _startupSettled.TrySetResult();
+        }
         _initialization = Task.Run(InitializeIndexAsync);
         if (notes != null)
         {
@@ -69,10 +78,27 @@ public sealed class SearchIndexService : IAsyncDisposable
         // startup; a concurrent search still awaits the shared build task.
         // Task.Run keeps the file probes, pack opens and import continuations
         // off the startup UI thread — the same reason SearchAsync hops.
-        _ = Task.Run(WarmupIndexesAsync).ContinueWith(
+        _ = Task.Run(Instance.WarmupAfterStartupSettlesAsync).ContinueWith(
             task => Console.WriteLine($"E2E search-index warmup failed: {task.Exception}"),
             TaskContinuationOptions.OnlyOnFaulted);
     }
+
+    /// <summary>
+    /// Releases the deferred e2e warmup. Called once the reader's first load
+    /// settled — the point where cold-start main-thread work is done.
+    /// </summary>
+    [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage(
+        Justification = "App-lifecycle hook; the PerekPage signal only fires on a device.")]
+    internal static void NotifyStartupSettled()
+    {
+        Volatile.Write(ref _startupSettleSignaled, 1);
+        if (_instance.IsValueCreated)
+        {
+            _instance.Value.MarkStartupSettled();
+        }
+    }
+
+    internal void MarkStartupSettled() => _startupSettled.TrySetResult();
 
     // MainActivity calls this when the launch intent carries the e2e extra.
     [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage(
@@ -126,9 +152,17 @@ public sealed class SearchIndexService : IAsyncDisposable
 
     [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage(
         Justification = "E2E-only startup hook; the mobile suite launches with BIBLE_E2E.")]
-    private static async Task WarmupIndexesAsync()
+    // The e2e emulator shares ~2 vCPUs between the app, the OS and UiAutomator:
+    // a warmup starting inside CreateWindow burned the whole cold-start window
+    // on index builds and the accessibility manager could not snapshot the
+    // tree for over 10s (#2430). Wait for the reader's first load to settle,
+    // then build one table at a time so the main looper keeps a core.
+    internal async Task WarmupAfterStartupSettlesAsync()
     {
-        var service = Instance;
+        if (!IsStartupSettleSignaled)
+        {
+            await _startupSettled.Task;
+        }
         // The notes import dwarfs every other warmup cost. On the iOS leg the
         // instrumented simulator build cannot absorb it inside suite budgets —
         // the full build is only needed by searches with real commentary, and
@@ -136,9 +170,10 @@ public sealed class SearchIndexService : IAsyncDisposable
         // notes index stay lazy there; the shared build task still dedups a
         // mid-test build if one is ever requested.
 #if IOS
-        await service.WarmTableAsync("verses");
+        await WarmTableAsync("verses");
 #else
-        await Task.WhenAll(service.WarmTableAsync("verses"), service.WarmTableAsync("notes"));
+        await WarmTableAsync("verses");
+        await WarmTableAsync("notes");
 #endif
     }
 
