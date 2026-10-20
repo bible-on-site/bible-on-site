@@ -29,7 +29,7 @@ import { createPlace, deletePlace } from "~/server/tanahpedia/places";
 describe("tanahpedia places api", () => {
 	beforeEach(() => {
 		executeMock.mockReset().mockResolvedValue(undefined);
-		queryMock.mockReset();
+		queryMock.mockReset().mockResolvedValue([]);
 		queryOneMock.mockReset();
 	});
 
@@ -70,7 +70,7 @@ describe("place saves invalidate the website", () => {
 
 	beforeEach(() => {
 		executeMock.mockReset().mockResolvedValue(undefined);
-		queryMock.mockReset();
+		queryMock.mockReset().mockResolvedValue([]);
 		queryOneMock.mockReset();
 		savedEnv = {};
 		for (const key of ENV_KEYS) savedEnv[key] = process.env[key];
