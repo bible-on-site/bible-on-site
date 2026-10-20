@@ -9,6 +9,7 @@ import {
 	RevokeSecurityGroupIngressCommand,
 } from "@aws-sdk/client-ec2";
 import * as dotenv from "dotenv";
+import { configureRecordings, prepareRecitation } from "./local-recitation.mjs";
 
 const __filename = fileURLToPath(import.meta.url); // get the resolved path to the file
 const __dirname = path.dirname(__filename); // get the name of the directory
@@ -73,9 +74,12 @@ async function main() {
 				if (!npmInstall(path.resolve(dir, "tests")))
 					throw new Error("Failed to install npm packages for API tests");
 				break;
-			case "app":
+			case "app": {
 				decompressPerushimNotes();
+				const recordings = await configureRecordings();
+				prepareRecitation({ platform: "Android", recordings });
 				break;
+			}
 		}
 		console.info(
 			`Development environment for module "${moduleName}" is set up.`,
