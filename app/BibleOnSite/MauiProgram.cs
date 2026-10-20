@@ -43,8 +43,12 @@ public static class MauiProgram
                 handlers.AddHandler<PasukTextLabel, PasukTextLabelHandler>();
 #if IOS || MACCATALYST
                 handlers.AddHandler<ReaderCellBorder, ReaderCellBorderHandler>();
-				// Use optimized CollectionView handler for iOS/Mac (default in .NET 10)
-				handlers.AddHandler<CollectionView, Microsoft.Maui.Controls.Handlers.Items2.CollectionViewHandler2>();
+				// Keep the Items2 handlers (.NET 10 default) but pin every native
+				// cell's managed peer: Items2 cells are only weakly anchored, and a
+				// covered page's retained cells crash the app with MissingCtor when
+				// a later layout pass marshals them back (#2433).
+				handlers.AddHandler<CollectionView, RetainedCellCollectionViewHandler>();
+				handlers.AddHandler<CarouselView, RetainedCellCarouselViewHandler>();
 #endif
             });
 

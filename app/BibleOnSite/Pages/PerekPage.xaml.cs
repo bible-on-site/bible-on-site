@@ -410,6 +410,10 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         _swipe.Cancel();
         LongPressBehavior.CancelAllPending();
 #endif
+#if IOS
+        // A page pushed above gets its native edge-back back (#2432).
+        RestoreIosInteractiveBack();
+#endif
         base.OnDisappearing();
     }
 
