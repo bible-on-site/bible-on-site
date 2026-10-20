@@ -258,7 +258,8 @@
                 <CarouselView.ItemTemplate>
                     <DataTemplate x:DataType="models:Perek">
                         <!-- Full perek page: header + CollectionView of pasukim -->
-                        <Grid RowDefinitions="Auto,*">
+                        <Grid RowDefinitions="Auto,*"
+                              AutomationProperties.ExcludedWithChildren="{Binding IsOffscreenCarouselPage}">
                             <!-- Perek Header (Row 0) with קריינות play button -->
                             <Grid Grid.Row="0">
                                 <Label AutomationId="PerekHeader"
