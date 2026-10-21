@@ -2,7 +2,7 @@
  * @jest-environment jsdom
  */
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import { useLayoutEffect, useState } from "react";
+import { type ReactNode, useLayoutEffect, useState } from "react";
 
 jest.mock("@/app/929/[number]/components/sefer-composite.module.css", () => ({
 	seferOverlay: "seferOverlay",
@@ -73,6 +73,15 @@ jest.mock("next/dynamic", () => {
 
 import { MasoraSeferComposite } from "@/app/masora/[unit]/components/MasoraSeferComposite";
 
+// Clicks the view toggle during the layout-effect phase: hydration can
+// replay a user's click before the URL initialization effect runs.
+function OpenDuringHydration({ children }: { children: ReactNode }) {
+	useLayoutEffect(() => {
+		screen.getByRole("checkbox").click();
+	}, []);
+	return children;
+}
+
 describe("MasoraSeferComposite (wide screen)", () => {
 	const props = {
 		units: [],
@@ -142,17 +151,12 @@ describe("MasoraSeferComposite (wide screen)", () => {
 	});
 
 	it("keeps a book opened before the initial passive effects visible", async () => {
-		function OpenDuringHydration() {
-			useLayoutEffect(() => {
-				// Hydration can replay a user's click before the URL
-				// initialization effect runs.
-				screen.getByRole("checkbox").click();
-			}, []);
-			return <MasoraSeferComposite {...props} />;
-		}
-
 		await act(async () => {
-			render(<OpenDuringHydration />);
+			render(
+				<OpenDuringHydration>
+					<MasoraSeferComposite {...props} />
+				</OpenDuringHydration>,
+			);
 		});
 
 		expect(mockReplace).toHaveBeenCalledWith("/מסורה/5?book=", {
