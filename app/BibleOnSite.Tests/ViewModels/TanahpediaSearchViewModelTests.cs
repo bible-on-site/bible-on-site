@@ -253,8 +253,9 @@ public class TanahpediaSearchViewModelTests
         vm.PropertyChanged += (_, _) => propertyChangedCount++;
 
         // Assigning the current values is a no-op — no change notifications.
+        var currentResults = vm.Results;
         vm.SearchPhrase = string.Empty;
-        vm.Results = vm.Results;
+        vm.Results = currentResults;
         vm.ErrorMessage = string.Empty;
         vm.IsLoading = false;
         vm.CategorySummary = "הכל";
