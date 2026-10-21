@@ -14,7 +14,7 @@ public partial class ArticlesViewModel : ObservableObject
     private readonly Services.StarterService _starterService;
     private readonly Services.PerekDataService _perekDataService;
     private readonly Services.IAppNavigator _navigator;
-    private readonly Services.ArticleService? _articleService;
+    private readonly Services.ArticleService _articleService;
     private CancellationTokenSource? _searchCancellation;
     /// <summary>The unfiltered listing, restored when the search field clears.</summary>
     private List<Article> _allArticles = new();
@@ -132,12 +132,12 @@ public partial class ArticlesViewModel : ObservableObject
     }
 
     public ArticlesViewModel(Services.StarterService starterService, Services.PerekDataService perekDataService,
-        Services.IAppNavigator navigator) : this(starterService, perekDataService, navigator, null)
+        Services.IAppNavigator navigator) : this(starterService, perekDataService, navigator, Services.ArticleService.Instance)
     {
     }
 
     public ArticlesViewModel(Services.StarterService starterService, Services.PerekDataService perekDataService,
-        Services.IAppNavigator navigator, Services.ArticleService? articleService)
+        Services.IAppNavigator navigator, Services.ArticleService articleService)
     {
         _starterService = starterService;
         _perekDataService = perekDataService;
@@ -224,12 +224,9 @@ public partial class ArticlesViewModel : ObservableObject
             IsSearching = true;
             SearchMessage = string.Empty;
             await Task.Delay(SearchDebounce, token);
-            var service = _articleService ?? Services.ArticleService.Instance;
-            var page = await service.SearchArticlesAsync(phrase, AuthorSearchLimit, authorId, token);
-            if (token.IsCancellationRequested)
-            {
-                return;
-            }
+            // ArticleService honours the linked token itself: a superseded
+            // search surfaces as OperationCanceledException, handled below.
+            var page = await _articleService.SearchArticlesAsync(phrase, AuthorSearchLimit, authorId, token);
             if (page == null)
             {
                 SearchMessage = "חיפוש תוכן מאמרים זמין רק עם חיבור רשת";

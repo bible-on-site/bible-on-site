@@ -166,6 +166,7 @@ public class ArticlesViewModelTests
         article.ShortAbstract.Should().Contain("הביטוי");
         vm.SearchMessage.Should().BeEmpty();
         vm.IsSearching.Should().BeFalse();
+        vm.ShowSearchStatus.Should().BeFalse();
     }
 
     [Fact]
@@ -192,6 +193,21 @@ public class ArticlesViewModelTests
         vm.Articles.Should().BeEmpty();
         vm.SearchMessage.Should().Contain("לא נמצאו");
         vm.EmptyStateText.Should().Be(vm.SearchMessage);
+        vm.ShowSearchStatus.Should().BeTrue();
+    }
+
+    [Fact]
+    public void EmptyStateText_WithoutSearchContext_ShowsPlainCaption()
+    {
+        var (vm, _) = CreateAuthorViewModel(SearchResponse);
+
+        // No articles yet, no search message: the plain caption wins.
+        vm.SetArticles(new List<Article>());
+        vm.EmptyStateText.Should().Be("אין מאמרים");
+
+        // A non-empty list also yields the plain caption.
+        vm.SetArticles(new List<Article> { CreateTestArticle(1) });
+        vm.EmptyStateText.Should().Be("אין מאמרים");
     }
 
     [Fact]
