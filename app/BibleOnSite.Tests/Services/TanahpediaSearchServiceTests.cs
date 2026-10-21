@@ -110,7 +110,7 @@ public class TanahpediaSearchServiceTests
         {
             vm.SetFilterEnabled(filter, false);
         }
-        // The remote kind is opt-in: enable it explicitly for this search.
+        // Remote kinds are on by default (#2454); enabling stays explicit here.
         vm.SetFilterEnabled(SearchFilter.Tanahpedia, true);
 
         await vm.SearchAsync(TestContext.Current.CancellationToken);
@@ -120,7 +120,7 @@ public class TanahpediaSearchServiceTests
         entries[0].UniqueName.Should().Be("משה-רבנו");
         entries[0].Title.Should().Be("משה רבנו");
         entries[0].ResultType.Should().Be(SearchFilter.Tanahpedia);
-        entries[0].Category.Should().Be("תנכפדיה (חיבור רשת נדרש)");
+        entries[0].Category.Should().Be("תנכפדיה");
         entries[0].Score.Should().Be(220);
         entries[0].SubtitleHtml.Should().Contain("<b>משה</b>");
         vm.IsLoading.Should().BeFalse();
@@ -179,8 +179,9 @@ public class TanahpediaSearchServiceTests
     }
 
     [Fact]
-    public async Task SearchViewModel_TanahpediaFilter_IsOptIn_NotEnabledByDefault()
+    public async Task SearchViewModel_TanahpediaFilter_EnabledByDefault_MergesRemoteResults()
     {
+        // #2454: every kind starts selected; offline, not a flag, skips remote.
         using var http = new GraphQLTransport(SearchResponse);
         await using var storage = new TestStorage();
         var vm = new SearchViewModel(
@@ -190,7 +191,7 @@ public class TanahpediaSearchServiceTests
             new TanahpediaService(http.Client))
         { SearchPhrase = "משה" };
 
-        vm.IsFilterEnabled(SearchFilter.Tanahpedia).Should().BeFalse();
+        vm.IsFilterEnabled(SearchFilter.Tanahpedia).Should().BeTrue();
         foreach (var filter in new[] { SearchFilter.Author, SearchFilter.Pasuk, SearchFilter.Perush, SearchFilter.Perek })
         {
             vm.SetFilterEnabled(filter, false);
@@ -198,8 +199,8 @@ public class TanahpediaSearchServiceTests
 
         await vm.SearchAsync(TestContext.Current.CancellationToken);
 
-        http.Requests.Should().BeEmpty();
-        vm.SearchResults.Should().NotContain(result => result is TanahpediaSearchResult);
+        http.Requests.Should().NotBeEmpty();
+        vm.SearchResults.Should().Contain(result => result is TanahpediaSearchResult);
     }
 
     [Fact]
@@ -269,9 +270,9 @@ public class TanahpediaSearchServiceTests
     }
 
     [Fact]
-    public void TanahpediaFilter_HasNetworkLabel_AndResultMapsToCanonicalName()
+    public void TanahpediaFilter_HasCleanLabel_AndResultMapsToCanonicalName()
     {
-        SearchFilter.Tanahpedia.GetHebrewName().Should().Be("תנכפדיה (חיבור רשת נדרש)");
+        SearchFilter.Tanahpedia.GetHebrewName().Should().Be("תנכפדיה");
         SearchFilter.Tanahpedia.RequiresNetwork().Should().BeTrue();
         var result = new TanahpediaSearchResult("e1", "דתן-ואבירם", "נקרא גם: בני קרח", 220, "בני קרח")
         {
