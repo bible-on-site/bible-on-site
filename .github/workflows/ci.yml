@@ -672,7 +672,10 @@ jobs:
     name: Build Sefaria MongoDB Docker Image
     needs: [setup_env, determine_changes, determine_docker_image_availability]
     if: ${{ needs.determine_docker_image_availability.outputs.is_sefaria_mongo_available != 'true' && (needs.determine_changes.outputs.data_module_changed == 'true' || needs.determine_changes.outputs.data_ci_changed == 'true') }}
-    runs-on: ubuntu-22.04
+    # MongoDB jobs pin the runner image: ubuntu-26.04's kernel (7.0.0-1017-azure)
+    # cannot start MongoDB 8+/9 (SERVER-121912 — no MongoDB version runs on kernels
+    # 6.19-7.0.13). Re-check the image's kernel before bumping past 26 — see #2532.
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       # GitHub caps fork PR tokens to read-only, so only trusted runs can publish.
@@ -2462,7 +2465,10 @@ jobs:
 
   data_ci:
     name: Data CI
-    runs-on: ubuntu-22.04
+    # MongoDB jobs pin the runner image: ubuntu-26.04's kernel (7.0.0-1017-azure)
+    # cannot start MongoDB 8+/9 (SERVER-121912 — no MongoDB version runs on kernels
+    # 6.19-7.0.13). Re-check the image's kernel before bumping past 26 — see #2532.
+    runs-on: ubuntu-24.04
     needs:
       [
         setup_env,
@@ -2666,7 +2672,10 @@ jobs:
   # ====================================================================================
   perushim_data:
     name: Perushim Data
-    runs-on: ubuntu-22.04
+    # MongoDB jobs pin the runner image: ubuntu-26.04's kernel (7.0.0-1017-azure)
+    # cannot start MongoDB 8+/9 (SERVER-121912 — no MongoDB version runs on kernels
+    # 6.19-7.0.13). Re-check the image's kernel before bumping past 26 — see #2532.
+    runs-on: ubuntu-24.04
     needs:
       [
         setup_env,

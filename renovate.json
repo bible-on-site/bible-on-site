@@ -48,6 +48,12 @@
 			"allowedVersions": "<26"
 		},
 		{
+			"description": "ubuntu-26.04 runner kernel (7.0.0-1017-azure) cannot start MongoDB 8+/9: kernels 6.19-7.0.13 break TCMalloc rseq (SERVER-121912/SERVER-125742) and no MongoDB version runs on them. Allow once the image ships kernel >= 7.0.14; see https://github.com/bible-on-site/bible-on-site/issues/2532",
+			"matchManagers": ["github-actions"],
+			"matchPackageNames": ["ubuntu"],
+			"allowedVersions": "<26"
+		},
+		{
 			"description": "requirements.txt is hashed into the preserved golden baseline (benchmark.py BASELINE_FILES); any bump fails data/recitation tests with 'The original fallback pipeline changed'. Upgrade only together with a golden re-baseline; see https://github.com/bible-on-site/bible-on-site/issues/2057",
 			"matchManagers": ["pip_requirements"],
 			"matchFileNames": ["data/recitation/requirements.txt"],
