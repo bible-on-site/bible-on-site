@@ -17,6 +17,7 @@
               ColumnDefinitions="Auto,*,Auto"
               BackgroundColor="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}">
             <Button Grid.Column="0"
+                    x:Name="BackButton"
                     Text="→"
                     FontSize="24"
                     BackgroundColor="Transparent"

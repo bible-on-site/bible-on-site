@@ -367,6 +367,28 @@ public class PreferencesServiceTests : IDisposable
         PreferencesService.Instance.Should().NotBeNull();
     }
 
+    [Fact]
+    public void InAppBackButton_DefaultsToPlatformDefault_AndSurvivesRestart()
+    {
+        // #2467: the Android override is a persisted tri-state; an unset key
+        // and a stale value both resolve to PlatformDefault.
+        _service.Load();
+        _service.InAppBackButton.Should().Be(InAppBackButtonPreference.PlatformDefault);
+
+        _service.InAppBackButton = InAppBackButtonPreference.Hide;
+        var restored = PreferencesService.CreateForTesting(_storage);
+        restored.Load();
+        restored.InAppBackButton.Should().Be(InAppBackButtonPreference.Hide);
+    }
+
+    [Fact]
+    public void InAppBackButton_StaleStoredValue_FallsBackToPlatformDefault()
+    {
+        _storage.Set("inAppBackButton", 99);
+        _service.Load();
+        _service.InAppBackButton.Should().Be(InAppBackButtonPreference.PlatformDefault);
+    }
+
     #region InMemoryPreferencesStorage Tests
 
     [Fact]
