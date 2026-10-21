@@ -85,12 +85,12 @@ public static class SearchMatchLanding
             htmlView.SearchMatchStart = span.Start;
             htmlView.SearchMatchLength = span.Length;
         }
-        var visible = IsMatchLineVisible(list, htmlView);
+        var visible = MatchVisibilityProbe(list, htmlView);
         // The landing is only complete when the perush-name header shares the
         // viewport with the match — visibility of the match line alone can
         // leave the header scrolled offscreen (#2205).
         var nameLabel = FindPerushNameLabel(list, display);
-        var nameVisible = nameLabel == null ? null : IsElementVisible(list, nameLabel);
+        var nameVisible = nameLabel == null ? null : ElementVisibilityProbe(list, nameLabel);
         if (visible == true && nameVisible != false)
         {
             return PerushLanding.Landed;
@@ -103,17 +103,17 @@ public static class SearchMatchLanding
         // engaged one more frame instead of accepting a headerless landing.
         if (visible == true && nameVisible == false)
         {
-            var fits = NameAndMatchFit(list, htmlView, nameLabel!);
+            var fits = NameFitProbe(list, htmlView, nameLabel!);
             if (fits == true)
             {
-                ScrollNameToMargin(list, nameLabel!);
+                NameScroller(list, nameLabel!);
             }
             // Fit the header in and re-verify next frame; an unmeasurable fit
             // (platform view still attaching) also stays engaged. Only a
             // proven non-fit accepts the match-only landing.
             return fits == false ? PerushLanding.Landed : PerushLanding.Engaged;
         }
-        if (!ScrollListToMatch(list, htmlView))
+        if (!ListScroller(list, htmlView))
         {
             // The scroll primitives are not ready (no layout yet). When the
             // platform cannot verify visibility we still report Engaged so
@@ -124,6 +124,15 @@ public static class SearchMatchLanding
         // platforms trust the issued scroll.
         return visible == null ? PerushLanding.Landed : PerushLanding.Engaged;
     }
+
+    // Platform measurement and scroll seams. Off-device builds always measure
+    // null, so tests substitute these to drive the verified-visibility verdict
+    // paths; production keeps the platform implementations.
+    internal static Func<CollectionView, HtmlView, bool?> MatchVisibilityProbe = IsMatchLineVisible;
+    internal static Func<CollectionView, VisualElement, bool?> ElementVisibilityProbe = IsElementVisible;
+    internal static Func<CollectionView, HtmlView, Label, bool?> NameFitProbe = NameAndMatchFit;
+    internal static Func<CollectionView, Label, bool> NameScroller = ScrollNameToMargin;
+    internal static Func<CollectionView, HtmlView, bool> ListScroller = ScrollListToMatch;
 
     /// <summary>
     /// Finds the <see cref="Label"/> carrying the perush name bound to the same
