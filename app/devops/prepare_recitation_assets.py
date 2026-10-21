@@ -189,10 +189,18 @@ def prepare_assets(app, platform, cache, recordings=None, intermediate=None, dat
         except BaseException:
             pool.shutdown(wait=True, cancel_futures=True)
             raise
+    if platform == "iOS":
+        # Regenerate cleanly: leftover recitation pack dirs (e.g. the legacy
+        # underscore IDs) carry manifests PackageIosAssetPacks would archive.
+        for stale in list((app / "Platforms/iOS/AssetPacks").glob("recitation*")):
+            if stale.is_dir():
+                shutil.rmtree(stale)
     books = []
     for sid in sorted({mapping[t["perekId"]] for t in tracks}):
         selected = [t for t in tracks if mapping[t["perekId"]] == sid]
-        pack = f"recitation_{sid}"
+        # App Store Connect accepts only alphanumerics and hyphens in asset-pack
+        # IDs; Play asset-pack names take underscores (hyphens are rejected).
+        pack = f"recitation-{sid}" if platform == "iOS" else f"recitation_{sid}"
         path = cache / (pack + ".zip")
         book_archive(path, selected, cache)
         books.append({"seferId": sid, "sha256": digest(path), "sizeBytes": path.stat().st_size,

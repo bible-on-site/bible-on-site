@@ -41,10 +41,10 @@ function withArchives(names, fn) {
 }
 
 test("listArchives returns sorted .aar files only", () =>
-	withArchives(["recitation_2.aar", "perushim_notes.aar", "notes.txt"], (dir) => {
+	withArchives(["recitation-2.aar", "perushim-notes.aar", "notes.txt"], (dir) => {
 		assert.deepEqual(listArchives(dir), [
-			path.join(dir, "perushim_notes.aar"),
-			path.join(dir, "recitation_2.aar"),
+			path.join(dir, "perushim-notes.aar"),
+			path.join(dir, "recitation-2.aar"),
 		]);
 	}));
 
@@ -105,7 +105,7 @@ test("uploadAssetPacks fails fast when no archives exist", async () =>
 
 // #2420: altool reports upload failures yet exits 0; the job must still fail.
 test("uploadAssetPacks fails when altool prints a failure and exits 0", async () =>
-	withArchives(["perushim_notes.aar"], async (dir) => {
+	withArchives(["perushim-notes.aar"], async (dir) => {
 		await assert.rejects(
 			uploadAssetPacks(
 				{
@@ -114,12 +114,12 @@ test("uploadAssetPacks fails when altool prints a failure and exits 0", async ()
 					credentials,
 					exec: () => ({
 						status: 0,
-						stdout: "2026-10-19 ERROR: [altool] Failed to upload asset pack at 'perushim_notes.aar' with 2 errors, 0 warnings, 0 info messages.\nFailed to get the list of asset packs for Apple ID '1045128150'. (-19243)",
+						stdout: "2026-10-19 ERROR: [altool] Failed to upload asset pack at 'perushim-notes.aar' with 2 errors, 0 warnings, 0 info messages.\nFailed to get the list of asset packs for Apple ID '1045128150'. (-19243)",
 					}),
 				},
-				read(["perushim_notes"]),
+				read(["perushim-notes"]),
 			),
-			/perushim_notes/,
+			/perushim-notes/,
 		);
 	}));
 
@@ -164,7 +164,7 @@ test("uploadAssetPacks fails when a non-zero altool exit reports nothing", async
 	}));
 
 test("uploadAssetPacks verifies every uploaded pack exists on App Store Connect", async () =>
-	withArchives(["recitation_1.aar", "recitation_2.aar"], async (dir) => {
+	withArchives(["recitation-1.aar", "recitation-2.aar"], async (dir) => {
 		await assert.rejects(
 			uploadAssetPacks(
 				{
@@ -173,8 +173,8 @@ test("uploadAssetPacks verifies every uploaded pack exists on App Store Connect"
 					credentials,
 					exec: () => ({ status: 0, stdout: "Asset pack uploaded" }),
 				},
-				read(["recitation_1"]),
+				read(["recitation-1"]),
 			),
-			/recitation_2/,
+			/recitation-2/,
 		);
 	}));

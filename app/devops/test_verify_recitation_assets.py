@@ -83,32 +83,57 @@ class ReleaseArtifactTests(unittest.TestCase):
             if "odr-manifest" in problems:
                 archive.writestr("Payload/Bible.app/OnDemandResources.plist", b"metadata")
             if "base-audio" in problems:
-                archive.writestr("Payload/Bible.app/recitation_1.zip", audio)
-        pack_dir = root / "AssetPacks" / "recitation_1"
+                archive.writestr("Payload/Bible.app/recitation-1.zip", audio)
+        pack_dir = root / "AssetPacks" / "recitation-1"
         pack_dir.mkdir(parents=True)
         archive_dir = root / "aar"
         archive_dir.mkdir()
         payload_dir = root / "payloads"
         payload_dir.mkdir()
         if "no-manifest" not in problems:
-            manifest = {"assetPackID": "recitation_1", "downloadPolicy": {"onDemand": {}},
-                        "fileSelectors": [{"file": "recitation_1.zip"}],
+            manifest = {"assetPackID": "recitation-1", "downloadPolicy": {"onDemand": {}},
+                        "fileSelectors": [{"file": "recitation-1.zip"}],
                         "platforms": ["macOS"] if "missing-ios-platform" in problems else ["iOS", "macOS"]}
             (pack_dir / "Manifest.json").write_text(json.dumps(manifest))
-            (pack_dir / "recitation_1.zip").write_bytes(
+            (pack_dir / "recitation-1.zip").write_bytes(
                 b"corrupt" if "stale-payload" in problems else audio)
         if "no-aar" not in problems:
-            (archive_dir / "recitation_1.aar").write_bytes(b"aar bytes")
+            (archive_dir / "recitation-1.aar").write_bytes(b"aar bytes")
         if "no-payload" not in problems:
-            (payload_dir / "recitation_1.zip").write_bytes(
+            (payload_dir / "recitation-1.zip").write_bytes(
                 b"corrupt" if "staged-mismatch" in problems else audio)
+        perushim_dir = root / "AssetPacks" / "perushim-notes"
+        perushim_dir.mkdir(parents=True, exist_ok=True)
+        notes = "sefaria-dump-5784-sivan-4.perushim_notes.sqlite"
+        index = "sefaria-dump-5784-sivan-4.hebrew_search.sqlite"
+        perushim_payloads = {notes: b"notes bytes", index: b"index bytes"}
+        if "no-perushim-manifest" not in problems:
+            selectors = [{"file": notes}] + ([] if "perushim-missing-index" in problems else [{"file": index}])
+            if "nested-perushim-selector" in problems:
+                selectors.append({"file": f"nested/{index}"})
+            manifest = {"assetPackID": "perushim-notes", "downloadPolicy": {"onDemand": {}},
+                        "fileSelectors": selectors, "platforms": ["iOS", "macOS"]}
+            (perushim_dir / "Manifest.json").write_text(json.dumps(manifest))
+        for name, data in perushim_payloads.items():
+            if "no-perushim-payload" in problems and name == index:
+                continue
+            if "perushim-staged-mismatch" in problems and name == index:
+                data = b"stale index"
+            (perushim_dir / name).write_bytes(
+                b"notes bytes" if name == notes else b"index bytes")
+            (payload_dir / name).write_bytes(data)
+        if "no-perushim-aar" not in problems:
+            (archive_dir / "perushim-notes.aar").write_bytes(b"aar bytes")
 
         # Stands in for `aa` extraction: serves the bytes the archive carried.
         archived = b"corrupt" if "corrupt-archive" in problems else audio
+        archived_perushim = dict(perushim_payloads)
+        if "perushim-archive-mismatch" in problems:
+            archived_perushim[index] = b"corrupt"
 
         def fake_extract(archive_path, payload_name, work_dir):
             payload = work_dir / payload_name
-            payload.write_bytes(archived)
+            payload.write_bytes(archived_perushim.get(payload_name, archived))
             return payload
 
         return package, pack_dir.parent, archive_dir, payload_dir, fake_extract
@@ -117,7 +142,11 @@ class ReleaseArtifactTests(unittest.TestCase):
         audio, catalog = self.book(opus=True)
         for problem in [None, "odr-manifest", "base-audio", "no-extension",
                         "no-manifest", "stale-payload", "no-aar", "missing-ios-platform",
-                        "corrupt-archive", "no-payload", "staged-mismatch"]:
+                        "corrupt-archive", "no-payload", "staged-mismatch",
+                        "no-perushim-manifest", "perushim-missing-index",
+                        "nested-perushim-selector", "no-perushim-payload",
+                        "perushim-staged-mismatch", "perushim-archive-mismatch",
+                        "no-perushim-aar"]:
             with self.subTest(problem=problem), tempfile.TemporaryDirectory() as temporary:
                 root = Path(temporary)
                 package, packs, aars, payloads, extract = self._write_ios_fixture(
@@ -134,12 +163,12 @@ class ReleaseArtifactTests(unittest.TestCase):
                     unittest.mock.patch.object(verify_module.shutil, "which", return_value="/usr/bin/aa"), \
                     unittest.mock.patch.object(verify_module.subprocess, "run") as decoder:
                 root = Path(temporary)
-                archive = root / "recitation_1.aar"
+                archive = root / "recitation-1.aar"
                 archive.write_bytes(encoded)
                 decoder.return_value = verify_module.subprocess.CompletedProcess(
                     [], 1, stdout="", stderr="invalid or truncated archive")
                 with self.assertRaisesRegex(ValueError, "aa extract failed.*invalid or truncated archive"):
-                    verify_module.aa_payload(archive, "recitation_1.zip", root)
+                    verify_module.aa_payload(archive, "recitation-1.zip", root)
                 decoder.assert_called_once()
 
     def test_aa_payload_delegates_compressed_archive_decoding_to_apple(self):
@@ -147,9 +176,9 @@ class ReleaseArtifactTests(unittest.TestCase):
                 unittest.mock.patch.object(verify_module.shutil, "which", return_value="/usr/bin/aa"), \
                 unittest.mock.patch.object(verify_module.subprocess, "run") as decoder:
             root = Path(temporary)
-            archive = root / "recitation_1.aar"
+            archive = root / "recitation-1.aar"
             archive.write_bytes(b"pbze compressed archive fixture")
-            payload = root / "recitation_1.zip"
+            payload = root / "recitation-1.zip"
             payload.write_bytes(b"decoded payload")
             decoder.return_value = verify_module.subprocess.CompletedProcess([], 0, stdout="", stderr="")
             self.assertEqual(verify_module.aa_payload(archive, payload.name, root), payload)
@@ -161,10 +190,10 @@ class ReleaseArtifactTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary, \
                 unittest.mock.patch.object(verify_module.shutil, "which", return_value=None):
             root = Path(temporary)
-            archive = root / "recitation_1.aar"
+            archive = root / "recitation-1.aar"
             archive.write_bytes(b"AA01fake")
             with self.assertRaisesRegex(ValueError, "'aa' is required"):
-                verify_module.aa_payload(archive, "recitation_1.zip", root)
+                verify_module.aa_payload(archive, "recitation-1.zip", root)
 
     def test_ios_matching_outer_hash_cannot_hide_corrupt_audio(self):
         with tempfile.TemporaryDirectory() as temporary:
