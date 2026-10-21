@@ -28,13 +28,15 @@ public sealed class PerekPickerTests(ITestOutputHelper output, MobileDeviceSessi
         // כתובים's first sefer is תהלים — a long chapter list that must overflow.
         TapItem("PickerGroupItem", "כתובים");
         var perekList = Page.WaitFor("PerekPickerPerekList");
-        var popup = Page.WaitFor("PerekPickerPopup");
+        // PerekPickerPopup is the full-screen overlay (scrim included); the card
+        // is the bordered panel whose columns the lists must fill.
+        var card = Page.WaitFor("PerekPickerCard");
 
         // #2475: the list uses the available column height, not a fixed band.
         var listFrame = MobilePlatformAdapter.ReadFrame(perekList);
-        var popupFrame = MobilePlatformAdapter.ReadFrame(popup);
-        Assert.True(listFrame.Size.Height > popupFrame.Size.Height * 0.5,
-            $"list height {listFrame.Size.Height} should fill most of the popup height {popupFrame.Size.Height}");
+        var cardFrame = MobilePlatformAdapter.ReadFrame(card);
+        Assert.True(listFrame.Size.Height > cardFrame.Size.Height * 0.5,
+            $"list height {listFrame.Size.Height} should fill most of the card height {cardFrame.Size.Height}");
 
         // At the top of a long list: up is a boundary, down reports more content.
         Assert.Equal(TopBoundary, EdgeState(Page.WaitFor("PerekPickerPerekUp")));

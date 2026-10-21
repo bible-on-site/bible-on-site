@@ -25,6 +25,7 @@
                 BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource OffBlack}}"
                 Padding="0"
                 Margin="16,55,16,130"
+                AutomationId="PerekPickerCard"
                 VerticalOptions="Fill"
                 HorizontalOptions="Fill"
                 InputTransparent="False">
