@@ -553,6 +553,85 @@ public class PreferencesViewModelTests : IDisposable
 
     #endregion
 
+    #region InAppBackButton (DisplayPreferencesViewModel)
+
+    [Fact]
+    public void InAppBackButton_GetSet_MirrorsService_AndNotifiesRadioWrappers()
+    {
+        var display = new DisplayPreferencesViewModel(_service);
+        var notified = new List<string>();
+        display.PropertyChanged += (_, args) => notified.Add(args.PropertyName!);
+
+        display.InAppBackButton = InAppBackButtonPreference.Hide;
+
+        _service.InAppBackButton.Should().Be(InAppBackButtonPreference.Hide);
+        notified.Should().Contain([
+            nameof(DisplayPreferencesViewModel.InAppBackButton),
+            nameof(DisplayPreferencesViewModel.IsBackButtonPlatformDefault),
+            nameof(DisplayPreferencesViewModel.IsBackButtonShow),
+            nameof(DisplayPreferencesViewModel.IsBackButtonHide)]);
+    }
+
+    [Theory]
+    [InlineData(nameof(DisplayPreferencesViewModel.IsBackButtonPlatformDefault), InAppBackButtonPreference.PlatformDefault)]
+    [InlineData(nameof(DisplayPreferencesViewModel.IsBackButtonShow), InAppBackButtonPreference.Show)]
+    [InlineData(nameof(DisplayPreferencesViewModel.IsBackButtonHide), InAppBackButtonPreference.Hide)]
+    public void IsBackButton_SetTrue_SelectsThePreference(string property, InAppBackButtonPreference option)
+    {
+        var display = new DisplayPreferencesViewModel(_service);
+        var prop = typeof(DisplayPreferencesViewModel).GetProperty(property)!;
+
+        prop.SetValue(display, true);
+
+        display.InAppBackButton.Should().Be(option);
+        prop.GetValue(display).Should().Be(true);
+    }
+
+    [Fact]
+    public void IsBackButton_SetFalse_IsANoOpWriteBack()
+    {
+        _service.InAppBackButton = InAppBackButtonPreference.Show;
+        var display = new DisplayPreferencesViewModel(_service);
+
+        display.IsBackButtonHide = false;
+
+        display.InAppBackButton.Should().Be(InAppBackButtonPreference.Show);
+        display.IsBackButtonHide.Should().BeFalse();
+        display.IsBackButtonShow.Should().BeTrue();
+        display.IsBackButtonPlatformDefault.Should().BeFalse();
+    }
+
+    [Fact]
+    public void InAppBackButton_SameValue_SkipsNotification()
+    {
+        _service.InAppBackButton = InAppBackButtonPreference.Show;
+        var display = new DisplayPreferencesViewModel(_service);
+        var eventCount = 0;
+        display.PropertyChanged += (_, _) => eventCount++;
+
+        display.InAppBackButton = InAppBackButtonPreference.Show;
+
+        eventCount.Should().Be(0);
+    }
+
+    [Fact]
+    public void InAppBackButton_ServiceChange_RaisesAllBackButtonNotifications()
+    {
+        var display = new DisplayPreferencesViewModel(_service);
+        var notified = new List<string>();
+        display.PropertyChanged += (_, args) => notified.Add(args.PropertyName!);
+
+        _service.InAppBackButton = InAppBackButtonPreference.Hide;
+
+        notified.Should().Contain([
+            nameof(DisplayPreferencesViewModel.InAppBackButton),
+            nameof(DisplayPreferencesViewModel.IsBackButtonPlatformDefault),
+            nameof(DisplayPreferencesViewModel.IsBackButtonShow),
+            nameof(DisplayPreferencesViewModel.IsBackButtonHide)]);
+    }
+
+    #endregion
+
     #region Category navigation (settings overview)
 
     [Fact]

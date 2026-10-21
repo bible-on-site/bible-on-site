@@ -389,6 +389,23 @@ public class PreferencesServiceTests : IDisposable
         _service.InAppBackButton.Should().Be(InAppBackButtonPreference.PlatformDefault);
     }
 
+    [Fact]
+    public void InAppBackButton_UndefinedWrite_Normalizes_AndSameValueIsNoOp()
+    {
+        _service.Load();
+        _service.InAppBackButton = (InAppBackButtonPreference)99;
+
+        _service.InAppBackButton.Should().Be(InAppBackButtonPreference.PlatformDefault,
+            "an out-of-range write normalizes to PlatformDefault");
+
+        _service.InAppBackButton = InAppBackButtonPreference.Show;
+        var eventCount = 0;
+        _service.PreferencesChanged += (_, _) => eventCount++;
+        _service.InAppBackButton = InAppBackButtonPreference.Show;
+
+        eventCount.Should().Be(0, "writing the current value is a no-op");
+    }
+
     #region InMemoryPreferencesStorage Tests
 
     [Fact]
