@@ -23,7 +23,8 @@ import {
 	parsePlaywrightSource,
 	playwrightTestId,
 } from "./playwright-discovery.ts";
-import { selectTests } from "./select.ts";
+import { playwrightArgs } from "./playwright-args.ts";
+import { selectTests, type SelectionManifest } from "./select.ts";
 
 // ── Fixtures ────────────────────────────────────────────────────────────
 
@@ -1028,5 +1029,105 @@ describe("selectTests playwright", () => {
 			manifest.selected.map((s) => s.id),
 			["e2e/a.test.ts :: d :: t", "e2e/mystery.test.ts :: m"],
 		);
+	});
+});
+
+// ── Enforce-mode argument resolution (#2085) ───────────────────────────
+
+describe("playwrightArgs", () => {
+	const OPTIONS = {
+		packageDir: "web/site",
+		testDir: "web/site/tests",
+	};
+
+	const subsetManifest = (
+		overrides: Partial<SelectionManifest> = {},
+	): SelectionManifest => ({
+		schemaVersion: SCHEMA_VERSION,
+		suite: "website-e2e",
+		platform: "web",
+		mode: "subset",
+		selectAll: false,
+		snapshotSha: SNAPSHOT,
+		testedSha: TESTED,
+		fingerprint: "fp",
+		forced: false,
+		fallbacks: [],
+		changedFiles: [],
+		selected: [{ id: "e2e/a.test.ts :: d :: t", reasons: ["covered-file"] }],
+		unselected: [{ id: "e2e/b.test.ts :: d :: u", reasons: [] }],
+		newTests: [],
+		staleTreeTests: [],
+		unchangedStructural: [],
+		nonApplicableTestChanges: [],
+		dynamicTestFiles: [],
+		filter: {
+			vstest: null,
+			playwright: [
+				{
+					file: "web/site/tests/e2e/a.test.ts",
+					titles: ["d t"],
+				},
+			],
+		},
+		...overrides,
+	});
+
+	test("a selectAll manifest resolves to an unfiltered run", () => {
+		const args = playwrightArgs(
+			subsetManifest({ selectAll: true, mode: "full", filter: { vstest: null, playwright: null } }),
+			OPTIONS,
+		);
+		assert.equal(args.selectAll, true);
+		assert.deepEqual(args.files, []);
+		assert.equal(args.grep, null);
+	});
+
+	test("a subset manifest emits package-relative files and an anchored title filter", () => {
+		const args = playwrightArgs(subsetManifest(), OPTIONS);
+		assert.equal(args.selectAll, false);
+		assert.deepEqual(args.files, ["tests/e2e/a.test.ts"]);
+		assert.equal(args.grep, "^(?:d t)$");
+	});
+
+	test("titles are regex-escaped and sorted into one alternation", () => {
+		const args = playwrightArgs(
+			subsetManifest({
+				filter: {
+					vstest: null,
+					playwright: [
+						{ file: "web/site/tests/e2e/a.test.ts", titles: ["d (x+y)", "d t[0]"] },
+						{ file: "web/site/tests/e2e/b.test.ts", titles: ["z $"] },
+					],
+				},
+			}),
+			OPTIONS,
+		);
+		assert.equal(args.grep, "^(?:d \\(x\\+y\\)|d t\\[0\\]|z \\$)$");
+		assert.deepEqual(args.files, ["tests/e2e/a.test.ts", "tests/e2e/b.test.ts"]);
+	});
+
+	test("a dynamic file without runtime discovery degrades to selectAll", () => {
+		const args = playwrightArgs(
+			subsetManifest({ dynamicTestFiles: ["web/site/tests/e2e/dyn.test.ts"] }),
+			OPTIONS,
+		);
+		assert.equal(args.selectAll, true);
+	});
+
+	test("dynamic files run wholesale and contribute discovered titles", () => {
+		const args = playwrightArgs(
+			subsetManifest({ dynamicTestFiles: ["web/site/tests/e2e/dyn.test.ts"] }),
+			{
+				...OPTIONS,
+				discovered: [
+					{ file: "e2e/dyn.test.ts", titlePath: ["dyn", "runs wholesale"] },
+					{ file: "e2e/other.test.ts", titlePath: ["other", "ignored"] },
+				],
+			},
+		);
+		assert.equal(args.selectAll, false);
+		assert.deepEqual(args.files, ["tests/e2e/a.test.ts", "tests/e2e/dyn.test.ts"]);
+		assert.equal(args.grep, "^(?:d t|dyn runs wholesale)$");
 	});
 });
