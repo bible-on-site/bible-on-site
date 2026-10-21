@@ -224,7 +224,8 @@ public partial class AppShell : Shell
 			return true;
 		}
 
-		return BackExitPlan.Evaluate(_navigationInFlight, base.OnBackButtonPressed, FlyoutIsPresented) switch
+		return BackExitPlan.Evaluate(_navigationInFlight, base.OnBackButtonPressed, FlyoutIsPresented,
+			Navigation.NavigationStack.Count > 1) switch
 		{
 			BackExitAction.Consume => true,
 			BackExitAction.ConfirmExit => ExitConfirmation.Shared.Request(),
