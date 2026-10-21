@@ -206,4 +206,60 @@ public class TanahpediaSearchViewModelTests
         vm.HasError.Should().BeFalse("a cancelled request is not an availability failure");
         vm.Results.Should().BeEmpty();
     }
+
+    [Fact]
+    public async Task Search_CancelledToken_DiscardsLateHits()
+    {
+        SetupHits();
+        using var cts = new CancellationTokenSource();
+        var vm = Create();
+        vm.SearchPhrase = "משה";
+        await cts.CancelAsync();
+
+        // The request still returns hits, but a cancelled token means the
+        // panel is gone — the response must be dropped, not rendered.
+        await vm.SearchAsync(cts.Token);
+
+        vm.Results.Should().BeEmpty();
+        vm.HasResults.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Search_StaleFailure_DoesNotSurfaceAnError()
+    {
+        var gate = new TaskCompletionSource<List<TanahpediaSearchHit>>();
+        _service.Setup(s => s.SearchEntriesAsync(
+                It.IsAny<string>(), It.IsAny<int>(), It.IsAny<IReadOnlyCollection<string>?>(), It.IsAny<CancellationToken>()))
+            .Returns(gate.Task);
+
+        var vm = Create();
+        vm.SearchPhrase = "משה";
+        var pending = vm.SearchAsync(TestContext.Current.CancellationToken);
+
+        // A failure that belongs to an obsolete search must not surface.
+        vm.CancelSearch();
+        gate.SetException(new TimeoutException("offline"));
+        await pending;
+
+        vm.HasError.Should().BeFalse();
+        vm.Results.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Setters_SameValue_DoNotNotify()
+    {
+        var vm = Create();
+        var propertyChangedCount = 0;
+        vm.PropertyChanged += (_, _) => propertyChangedCount++;
+
+        // Assigning the current values is a no-op — no change notifications.
+        vm.SearchPhrase = string.Empty;
+        vm.Results = vm.Results;
+        vm.ErrorMessage = string.Empty;
+        vm.IsLoading = false;
+        vm.CategorySummary = "הכל";
+
+        propertyChangedCount.Should().Be(0);
+        vm.HasError.Should().BeFalse();
+    }
 }

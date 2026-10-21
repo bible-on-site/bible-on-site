@@ -19,7 +19,6 @@ public partial class TanahpediaSearchViewModel : ObservableObject
 {
     private readonly ITanahpediaService _service;
     private readonly HashSet<string> _selectedCategories;
-    private CancellationTokenSource? _searchCancellation;
     private int _searchVersion;
     private bool _presetApplied;
 
@@ -251,9 +250,6 @@ public partial class TanahpediaSearchViewModel : ObservableObject
     public void CancelSearch()
     {
         _searchVersion++;
-        _searchCancellation?.Cancel();
-        _searchCancellation?.Dispose();
-        _searchCancellation = null;
         IsLoading = false;
     }
 }
