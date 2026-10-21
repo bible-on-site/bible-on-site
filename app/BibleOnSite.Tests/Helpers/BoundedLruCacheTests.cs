@@ -36,6 +36,17 @@ public class BoundedLruCacheTests
         }
 
         [Fact]
+        public void a_factory_that_populates_the_key_first_returns_the_cached_winner()
+        {
+            // The factory runs outside the lock: a nested add of the same key
+            // completes first and wins; the outer call returns that entry.
+            var cache = Create();
+            var value = cache.GetOrAdd("k", () => cache.GetOrAdd("k", () => "inner"));
+            value.Should().Be("inner");
+            cache.GetOrAdd("k", () => "again").Should().Be("inner");
+        }
+
+        [Fact]
         public void distinct_keys_cache_independently()
         {
             var cache = Create();
@@ -99,6 +110,13 @@ public class BoundedLruCacheTests
         {
             var act = () => new BoundedLruCache<string, string>(0, 100, v => v.Length);
             act.Should().Throw<ArgumentOutOfRangeException>();
+        }
+
+        [Fact]
+        public void rejects_a_null_measure()
+        {
+            var act = () => new BoundedLruCache<string, string>(1, 100, null!);
+            act.Should().Throw<ArgumentNullException>();
         }
     }
 }

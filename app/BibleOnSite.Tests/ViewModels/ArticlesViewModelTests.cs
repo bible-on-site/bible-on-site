@@ -254,6 +254,21 @@ public class ArticlesViewModelTests
     }
 
     [Fact]
+    public async Task ApplySearch_InFlight_ShowsSearchStatus()
+    {
+        var (vm, _) = CreateAuthorViewModel(SearchResponse);
+
+        var pending = vm.ApplySearchAsync("הביטוי");
+
+        // Debounce keeps the call in-flight: the spinner row is up already.
+        vm.IsSearching.Should().BeTrue();
+        vm.ShowSearchStatus.Should().BeTrue();
+
+        await pending;
+        vm.ShowSearchStatus.Should().BeFalse();
+    }
+
+    [Fact]
     public async Task ApplySearch_RapidQueries_OnlyLatestResponseApplies()
     {
         var (vm, http) = CreateAuthorViewModel(SearchResponse);
