@@ -91,6 +91,7 @@
     <Compile Include="..\BibleOnSite\ViewModels\ArticleDetailViewModel.cs" Link="ViewModels\ArticleDetailViewModel.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\TanahpediaViewModel.cs" Link="ViewModels\TanahpediaViewModel.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\TanahpediaEntityTypeViewModel.cs" Link="ViewModels\TanahpediaEntityTypeViewModel.cs" />
+    <Compile Include="..\BibleOnSite\ViewModels\TanahpediaSearchViewModel.cs" Link="ViewModels\TanahpediaSearchViewModel.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\TanahpediaEntryViewModel.cs" Link="ViewModels\TanahpediaEntryViewModel.cs" />
   </ItemGroup>
 
