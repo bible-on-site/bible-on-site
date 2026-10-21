@@ -101,7 +101,7 @@
 		"monocart-reporter": "2.15.1",
 		"parse5": "8.0.1",
 		"picomatch": "4.0.7",
-		"sass": "1.105.2",
+		"sass": "1.106.0",
 		"schema-dts": "2.1.0",
 		"swc-plugin-coverage-instrument": "0.0.33",
 		"ts-jest": "29.4.15",
