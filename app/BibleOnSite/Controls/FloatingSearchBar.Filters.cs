@@ -39,7 +39,13 @@ public partial class FloatingSearchBar
         ClearAllChip.IsVisible = _kindsExplicit || _booksExplicit || _optionsExplicit || _viewModel.Sorting != SearchSort.Relevance;
     }
 
-    private async void OnKindsTabClicked(object? sender, EventArgs e) => await ShowFilterSheetAsync(KindsFilters, "מה לחפש");
+    private async void OnKindsTabClicked(object? sender, EventArgs e)
+    {
+        // Rebuild on open so the scope's kind list and extension-pack
+        // availability are always current.
+        BuildKindFilters();
+        await ShowFilterSheetAsync(KindsFilters, "מה לחפש");
+    }
     private async void OnBooksTabClicked(object? sender, EventArgs e) => await ShowFilterSheetAsync(BookFilters, "היכן לחפש");
     private async void OnOptionsTabClicked(object? sender, EventArgs e) => await ShowFilterSheetAsync(MoreFilters, "הגדרות נוספות");
     private async void OnSortClicked(object? sender, EventArgs e) => await ShowFilterSheetAsync(SortFilters, "סדר התוצאות");
@@ -133,15 +139,15 @@ public partial class FloatingSearchBar
         _buildingFilters = true;
         try
         {
-            // Reset restores the defaults: local kinds on, remote kinds off —
-            // enabling a network-backed kind stays an explicit user choice.
-            foreach (var filter in Enum.GetValues<SearchFilter>())
+            // Reset restores the defaults of the active context: local kinds
+            // on (the scope's kinds while scoped), remote kinds off — enabling
+            // a network-backed kind stays an explicit user choice.
+            _viewModel.ResetFiltersToDefaults();
+            foreach (var filter in _viewModel.KindOptions)
             {
-                var enabled = !filter.RequiresNetwork();
-                _viewModel.SetFilterEnabled(filter, enabled);
                 if (_filterChecks.TryGetValue($"SearchKind{filter}", out var kindCheck))
                 {
-                    kindCheck.IsChecked = enabled;
+                    kindCheck.IsChecked = _viewModel.IsFilterEnabled(filter);
                 }
             }
             foreach (var group in Enumerable.Range(0, 3))

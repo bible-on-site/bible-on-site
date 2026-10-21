@@ -33,6 +33,34 @@ public partial class FloatingSearchBar : ContentView
 
     public void SetSource(string source) => SearchInput.Placeholder = source;
 
+    /// <summary>
+    /// The focused-pasuk reader narrows "מה לחפש" to תוכן פסוק and תוכן פירוש
+    /// with their own selection; the reader's saved kinds are restored on exit
+    /// (#2466). The sheet applies every change immediately, so its הצגת תוצאות
+    /// button has no job in this context (#2454).
+    /// </summary>
+    public void SetFocusedPasukScope(bool scoped)
+    {
+        if (scoped == _viewModel.KindsScoped)
+        {
+            return;
+        }
+        if (scoped)
+        {
+            _viewModel.EnterKindsScope([SearchFilter.Pasuk, SearchFilter.Perush]);
+        }
+        else
+        {
+            _viewModel.ExitKindsScope();
+        }
+        SearchSheetApplyButton.IsVisible = !scoped;
+        if (_filtersBuilt)
+        {
+            BuildKindFilters();
+        }
+        UpdateFilterSummaries();
+    }
+
     public View DetachHeader()
     {
         SearchLayout.Remove(SearchHeader);
@@ -221,16 +249,7 @@ public partial class FloatingSearchBar : ContentView
         {
             KindsFilters.Clear();
             BookFilters.Clear();
-            foreach (var filter in Enum.GetValues<SearchFilter>())
-            {
-                KindsFilters.Add(FilterRow(filter.GetHebrewName(), $"SearchKind{filter}", _viewModel.IsFilterEnabled(filter), enabled =>
-                {
-                    _viewModel.SetFilterEnabled(filter, enabled);
-                    _kindsExplicit = true;
-                    UpdateFilterSummaries();
-                    ScheduleSearch();
-                }));
-            }
+            BuildKindFilters();
             foreach (var (key, group) in SefarimData.SefarimGroups)
             {
                 var groupIndex = key - 1;
@@ -276,7 +295,34 @@ public partial class FloatingSearchBar : ContentView
         finally { _buildingFilters = false; }
     }
 
-    private Grid FilterRow(string title, string automationId, bool enabled, Action<bool> changed)
+    /// <summary>
+    /// Rebuilds the kinds rows so the sheet always reflects the active scope
+    /// and current content availability: in the focused-pasuk scope only its
+    /// kinds are listed, and a kind whose content needs an extension pack the
+    /// device lacks is shown disabled with its requirement (#2466).
+    /// </summary>
+    private void BuildKindFilters()
+    {
+        KindsFilters.Clear();
+        foreach (var key in _filterChecks.Keys.Where(key => key.StartsWith("SearchKind", StringComparison.Ordinal)).ToList())
+        {
+            _filterChecks.Remove(key);
+        }
+        foreach (var filter in _viewModel.KindOptions)
+        {
+            var unavailable = _viewModel.KindsScoped && filter == SearchFilter.Perush &&
+                !SearchIndexService.Instance.CommentaryAvailable ? "נדרשת חבילת פירושים" : null;
+            KindsFilters.Add(FilterRow(filter.GetHebrewName(), $"SearchKind{filter}", _viewModel.IsFilterEnabled(filter), enabled =>
+            {
+                _viewModel.SetFilterEnabled(filter, enabled);
+                _kindsExplicit = true;
+                UpdateFilterSummaries();
+                ScheduleSearch();
+            }, unavailable));
+        }
+    }
+
+    private Grid FilterRow(string title, string automationId, bool enabled, Action<bool> changed, string? disabledNote = null)
     {
         var checkBox = new CheckBox { IsChecked = enabled, AutomationId = automationId, WidthRequest = 32, HeightRequest = 44 };
         _filterChecks[automationId] = checkBox;
@@ -289,12 +335,21 @@ public partial class FloatingSearchBar : ContentView
             }
         };
         var label = new Label { Text = title, VerticalOptions = LayoutOptions.Center };
+        if (disabledNote != null)
+        {
+            checkBox.IsEnabled = false;
+            label.Opacity = 0.6;
+            label.Text = $"{title} ({disabledNote})";
+        }
         var row = new Grid { ColumnDefinitions = [new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Star)] };
         row.Add(checkBox);
         row.Add(label, 1);
-        var tap = new TapGestureRecognizer();
-        tap.Tapped += (_, _) => checkBox.IsChecked = !checkBox.IsChecked;
-        label.GestureRecognizers.Add(tap);
+        if (disabledNote == null)
+        {
+            var tap = new TapGestureRecognizer();
+            tap.Tapped += (_, _) => checkBox.IsChecked = !checkBox.IsChecked;
+            label.GestureRecognizers.Add(tap);
+        }
         return row;
     }
 
