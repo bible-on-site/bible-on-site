@@ -562,7 +562,7 @@ public class PreferencesViewModelTests : IDisposable
         var changed = new List<string?>();
         display.PropertyChanged += (_, args) => changed.Add(args.PropertyName);
 
-        display.InAppBackButton = display.InAppBackButton;
+        display.InAppBackButton = InAppBackButtonPreference.PlatformDefault;
 
         changed.Should().BeEmpty();
     }
