@@ -276,20 +276,14 @@ public class TanahpediaSearchViewModelTests
     public void Toggle_LeafChild_UnchecksItsParent()
     {
         var vm = Create();
-        var leaf = TanahpediaTaxonomy.All
-            .SelectMany(category => category.Children)
-            .Select(child => child.Key)
-            .FirstOrDefault();
-        if (leaf is null)
-        {
-            // Flat taxonomy — toggle a top-level leaf instead.
-            leaf = TanahpediaTaxonomy.All
-                .First(category => category.Children.Count == 0).Key;
-        }
+        // KING is PERSON's second child — toggling it makes the parent
+        // lookup evaluate a non-matching sibling before the match.
+        const string leaf = "KING";
 
         vm.SetCategoryEnabled(leaf, false);
 
         vm.IsCategoryEnabled(leaf).Should().BeFalse();
+        vm.IsCategoryEnabled("PERSON").Should().BeFalse("a child leaving unchecks its parent");
         vm.AllSelected.Should().BeFalse();
     }
 }

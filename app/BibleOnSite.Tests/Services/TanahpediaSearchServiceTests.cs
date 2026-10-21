@@ -305,6 +305,17 @@ public class TanahpediaScopedSearchTests
     }
 
     [Fact]
+    public async Task SearchEntries_NullEntries_ReturnsEmpty()
+    {
+        using var http = new GraphQLTransport("{\"data\":{\"searchTanahpediaEntries\":null}}");
+        var service = new TanahpediaService(http.Client);
+
+        var hits = await service.SearchEntriesAsync("משה", 10, TestContext.Current.CancellationToken);
+
+        hits.Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task SearchEntries_EmptyOrNullCategories_SendNoScope()
     {
         using var http = new GraphQLTransport(SearchResponse);
