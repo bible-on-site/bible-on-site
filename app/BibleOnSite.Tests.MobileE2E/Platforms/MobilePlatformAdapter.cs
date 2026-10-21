@@ -67,6 +67,10 @@ public abstract class MobilePlatformAdapter
     public abstract By FlyoutButton { get; }
     public virtual bool CanTap(AppiumElement element) => element.Enabled;
     public abstract bool IsChecked(AppiumElement element);
+    // SemanticProperties.Description surfaces as content-desc on Android and
+    // label on iOS; drivers reject an unknown attribute instead of returning
+    // null, so each platform asks for only its own name.
+    public abstract string? SemanticDescription(AppiumElement element);
     public virtual void Tap(AppiumDriver driver, AppiumElement element) => element.Click();
 
     public static (System.Drawing.Point Location, System.Drawing.Size Size) ReadFrame(AppiumElement element)
@@ -336,6 +340,7 @@ public sealed class AndroidPlatformAdapter : MobilePlatformAdapter
     }
 
     public override bool IsChecked(AppiumElement element) => element.GetAttribute("checked") == "true";
+    public override string? SemanticDescription(AppiumElement element) => element.GetAttribute("content-desc");
     // MAUI maps AutomationId to Android resource-id, preserving screen-reader text.
     protected override By LocateAutomationId(string id) => By.Id($"com.tanah.daily929:id/{id}");
     protected override By LocateAnyOfAutomationIds(string[] ids) =>
@@ -396,6 +401,7 @@ public sealed class IosPlatformAdapter : MobilePlatformAdapter
 
     public override void DismissSearchSheet(AppiumDriver driver) => Tap(driver, driver.FindElement(AutomationId("SearchSheetDismissButton")));
     public override bool IsChecked(AppiumElement element) => element.GetAttribute("value") == "1";
+    public override string? SemanticDescription(AppiumElement element) => element.GetAttribute("label");
     public override void GoBackFromFocusedVerse(AppiumDriver driver) => Tap(driver, driver.FindElement(AutomationId("SelectionBackButton")));
     protected override By LocateAutomationId(string id) => MobileBy.AccessibilityId(id);
     // WDA re-snapshots every match to build a findElements response, so a
