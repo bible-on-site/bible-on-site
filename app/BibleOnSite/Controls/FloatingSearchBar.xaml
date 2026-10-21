@@ -157,7 +157,7 @@
         <RadioButton Content="לפי סדר הדורות" GroupName="SearchSort" Value="Generation" AutomationId="SearchSortGeneration" CheckedChanged="OnSortChanged"/>
        </VerticalStackLayout>
       </Grid></ScrollView>
-      <Button Grid.Row="3" Text="הצגת תוצאות" AutomationId="SearchSheetApplyButton" Clicked="OnSheetDismissed"/>
+      <Button Grid.Row="3" x:Name="SearchSheetApplyButton" Text="הצגת תוצאות" AutomationId="SearchSheetApplyButton" Clicked="OnSheetDismissed"/>
      </Grid>
     </Border>
    </Grid>
