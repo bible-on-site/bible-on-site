@@ -60,14 +60,6 @@ public partial class ArticlesPage : ContentPage
         }
     }
 
-    private void OnMenuButtonClicked(object? sender, EventArgs e)
-    {
-        if (Shell.Current is AppShell shell)
-        {
-            shell.FlyoutIsPresented = true;
-        }
-    }
-
     private void OnClearSearchClicked(object? sender, EventArgs e)
     {
         ArticlesSearchInput.Text = string.Empty;

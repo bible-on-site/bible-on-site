@@ -148,13 +148,18 @@ public class TikkunFlowView : GraphicsView
                 canvas.Font = word.IsBold ? GraphicsFont.DefaultBold : GraphicsFont.Default;
                 canvas.FontSize = word.FontSize;
                 canvas.FontColor = word.TextColor ?? defaultColor;
-                // The draw box must be exactly the measured word width (plus a
-                // hair of slack): Android builds a StaticLayout per call whose
-                // paragraph alignment follows the text's own direction — a box
-                // wider than the word lets Hebrew text re-align or wrap inside
-                // it, which is what produced the overlapping pileup in #2069.
+                // The draw box must never be tighter than the word's drawn
+                // width: Android truncates it to int and hands it to a
+                // StaticLayout as the wrap constraint, so a snug box fragments
+                // the word into narrow vertical pieces that pile over the
+                // surrounding lines (#2069). Current MAUI forces an LTR text
+                // direction inside DrawString, so HorizontalAlignment.Left
+                // anchors the text at word.X no matter how wide the box is —
+                // give every word the whole column, and an overlong word its
+                // measured width plus slack.
+                var drawWidth = MathF.Max(word.Width + 1f, textWidth);
                 canvas.DrawString(word.Text, padLeft + word.X, padTop + word.Y,
-                    word.Width + 0.5f, lineHeight,
+                    drawWidth, lineHeight,
                     HorizontalAlignment.Left, VerticalAlignment.Center, TextFlow.OverflowBounds);
             }
 

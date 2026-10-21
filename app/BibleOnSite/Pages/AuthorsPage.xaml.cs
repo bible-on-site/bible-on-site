@@ -23,13 +23,6 @@ public partial class AuthorsPage : ContentPage
         }
     }
 
-    private void OnMenuButtonClicked(object sender, EventArgs e)
-    {
-        if (Shell.Current is AppShell shell)
-        {
-            shell.FlyoutIsPresented = true;
-        }
-    }
 
     private void OnClearSearchClicked(object sender, EventArgs e)
     {

@@ -8,81 +8,60 @@
              x:Class="BibleOnSite.Pages.ArticlesPage"
              x:DataType="viewmodels:ArticlesViewModel"
              Title="{Binding DisplayTitle}"
-             FlowDirection="RightToLeft">
+             FlowDirection="RightToLeft"
+             Shell.NavBarIsVisible="False">
 
        <!-- Regular page presentation: no popup chrome or on-screen Back
             arrow. The page stays on the navigation stack, so the
             device/system Back still returns to the previous page. -->
-       <Shell.BackButtonBehavior>
-              <BackButtonBehavior IsVisible="False"/>
-       </Shell.BackButtonBehavior>
-
-       <!-- Shared top bar: hamburger that opens the flyout, like every
-            other page in the app. -->
-       <Shell.TitleView>
-              <Grid ColumnDefinitions="Auto,Auto" ColumnSpacing="4">
-                     <Button Text="{x:Static fonts:FluentUI.line_horizontal_3_20_regular}"
-                             FontFamily="FluentIcons"
-                             FontSize="20"
-                             WidthRequest="40"
-                             HeightRequest="40"
-                             Padding="0"
-                             BackgroundColor="Transparent"
-                             TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"
-                             SemanticProperties.Description="תפריט"
-                             AutomationId="ArticlesMenuButton"
-                             VerticalOptions="Center"
-                             HorizontalOptions="Start"
-                             Clicked="OnMenuButtonClicked"/>
-                     <Label Grid.Column="1"
-                            Text="{Binding DisplayTitle}"
-                            FontSize="20"
-                            VerticalOptions="Center"
-                            HorizontalOptions="Start"
-                            TextColor="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource SecondaryDarkText}}"/>
-              </Grid>
-       </Shell.TitleView>
-
        <Grid RowDefinitions="Auto,Auto,*">
-              <!-- Article-content search scoped to the current author, styled
-                   like the reader's shared floating search header. Only the
-                   author page exposes it — perek listings keep their own
-                   context. -->
-              <Border Grid.Row="0"
-                      StrokeShape="RoundRectangle 0"
-                      Padding="8,0"
-                      StrokeThickness="0"
-                      HeightRequest="56"
-                      IsVisible="{Binding IsFilterByAuthor}"
-                      BackgroundColor="{AppThemeBinding Light=#F2F7FE, Dark=#20304A}">
-                     <Grid ColumnDefinitions="*,Auto">
-                            <controls:SearchEntry x:Name="ArticlesSearchInput"
-                                                  AutomationId="ArticlesSearchInput"
-                                                  Text="{Binding SearchPhrase, Mode=TwoWay}"
-                                                  Placeholder="חיפוש תוכן מאמרים..."
-                                                  FontSize="17"
-                                                  VerticalOptions="Center"
-                                                  HeightRequest="48"
-                                                  TextColor="{AppThemeBinding Light=#26384E, Dark=#E7EEF8}"
-                                                  PlaceholderColor="{AppThemeBinding Light=#52647C, Dark=#B2C2D8}"
-                                                  TextChanged="OnSearchTextChanged"/>
-                            <Button Grid.Column="1"
-                                    x:Name="ClearSearchButton"
+              <!-- The same shared top bar as the על הפרק reader and רבנים:
+                   flyout hamburger, a pill in the center slot and a clear
+                   action in the trailing slot. Author mode puts the
+                   author-scoped article-content search in the pill; perek
+                   mode shows the listing title there instead. -->
+              <controls:SharedTopBar Grid.Row="0" NavigationAutomationId="ArticlesNavigationButton">
+                     <controls:SharedTopBar.CenterContent>
+                            <controls:ToolbarPill AutomationId="ArticlesToolbarPill">
+                                   <Grid>
+                                          <Label Text="{Binding DisplayTitle}"
+                                                 FontSize="17"
+                                                 VerticalOptions="Center"
+                                                 HorizontalTextAlignment="Center"
+                                                 IsVisible="{Binding IsFilterByAuthor, Converter={StaticResource InvertedBoolConverter}}"
+                                                 TextColor="{AppThemeBinding Light=#26384E, Dark=#E7EEF8}"/>
+                                          <controls:SearchEntry x:Name="ArticlesSearchInput"
+                                                                AutomationId="ArticlesSearchInput"
+                                                                Text="{Binding SearchPhrase, Mode=TwoWay}"
+                                                                Placeholder="חיפוש תוכן מאמרים..."
+                                                                FontSize="17"
+                                                                VerticalOptions="Center"
+                                                                HeightRequest="40"
+                                                                IsVisible="{Binding IsFilterByAuthor}"
+                                                                TextColor="{AppThemeBinding Light=#26384E, Dark=#E7EEF8}"
+                                                                PlaceholderColor="{AppThemeBinding Light=#52647C, Dark=#B2C2D8}"
+                                                                TextChanged="OnSearchTextChanged"/>
+                                   </Grid>
+                            </controls:ToolbarPill>
+                     </controls:SharedTopBar.CenterContent>
+                     <controls:SharedTopBar.TrailingContent>
+                            <Button x:Name="ClearSearchButton"
                                     IsVisible="False"
                                     Text="{x:Static fonts:FluentUI.dismiss_24_regular}"
                                     FontFamily="FluentIcons"
                                     FontSize="24"
-                                    WidthRequest="44"
+                                    WidthRequest="48"
                                     HeightRequest="44"
-                                    Padding="10"
+                                    Padding="0"
                                     BorderWidth="0"
                                     BackgroundColor="Transparent"
                                     TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark=#AACBFF}"
+                                    VerticalOptions="Center"
                                     SemanticProperties.Description="ניקוי החיפוש"
                                     AutomationId="ClearArticlesSearchButton"
                                     Clicked="OnClearSearchClicked"/>
-                     </Grid>
-              </Border>
+                     </controls:SharedTopBar.TrailingContent>
+              </controls:SharedTopBar>
 
               <!-- Search status: spinner while the request is in flight, and
                    the availability/error line when search cannot run — kept

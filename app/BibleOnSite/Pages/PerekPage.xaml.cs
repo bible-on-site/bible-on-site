@@ -86,6 +86,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         SetupExitButtonDragHandler();
         SubscribeAppLinks();
         SubscribePerushimSearch();
+        SubscribeNotesMaterialization();
         DebugLog.Write("[Startup] PerekPage constructed");
     }
 
@@ -104,6 +105,40 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         SetupExitButtonDragHandler();
         SubscribeAppLinks();
         SubscribePerushimSearch();
+        SubscribeNotesMaterialization();
+    }
+
+    /// <summary>
+    /// A reader opened while the first-launch notes pack still materializes
+    /// skips awaiting it (#2430) — when the copy completes the service raises
+    /// OperationCompleted off the UI thread, so re-check availability here.
+    /// </summary>
+    private void SubscribeNotesMaterialization()
+    {
+        PerushimNotesService.Instance.OperationCompleted += OnNotesOperationCompleted;
+        Unloaded += (_, _) => PerushimNotesService.Instance.OperationCompleted -= OnNotesOperationCompleted;
+    }
+
+    private bool _notesRefreshQueued;
+
+    private void OnNotesOperationCompleted()
+    {
+        // InitializeAsync releases the operation lock, which re-fires this
+        // event — and the refresh calls InitializeAsync itself. Without this
+        // guard every refresh queues another dispatcher turn forever, the UI
+        // thread never idles, and accessibility queries starve (#2430).
+        if (_notesRefreshQueued ||
+            (PerushimNotesService.Instance.IsAvailable == _viewModel.PerushimNotesAvailable
+                && !_viewModel.PerushimNotesPending))
+        {
+            return;
+        }
+        _notesRefreshQueued = true;
+        _ = Dispatcher.DispatchAsync(async () =>
+        {
+            try { await RefreshPerushimIfAvailabilityChangedAsync(); }
+            finally { _notesRefreshQueued = false; }
+        });
     }
 
     /// <summary>
@@ -511,6 +546,9 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
             await RefreshPerushimIfAvailabilityChangedAsync();
             StartSearchIntroduction();
         }
+        // Cold-start main-thread work is done — release the deferred e2e
+        // search-index warmup so it cannot starve the accessibility snapshot.
+        Services.SearchIndexService.NotifyStartupSettled();
 #if IOS
         Dispatcher.Dispatch(ConfigureIosReaderHistory);
 #endif
@@ -657,7 +695,8 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         try
         {
             await PerushimNotesService.Instance.InitializeAsync();
-            if (PerushimNotesService.Instance.IsAvailable != _viewModel.PerushimNotesAvailable)
+            if (PerushimNotesService.Instance.IsAvailable != _viewModel.PerushimNotesAvailable
+                || _viewModel.PerushimNotesPending)
             {
                 await _viewModel.LoadPerushimAsync(_viewModel.PerekId);
             }
@@ -948,7 +987,9 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         if (e.Parameter is int pasukNum)
         {
             // Don't set _lastLongPressTime - right-click doesn't need debounce
-            ResetRecitationContext();
+            // Entering selection must not kill in-flight playback or its moving
+            // word marker (#2473).
+            ResetRecitationContext(stopPlayback: false);
             var wasEmpty = _viewModel.SelectedPasukNums.Count == 0;
             _viewModel.ToggleSelectedPasuk(pasukNum);
             UpdatePasukSelection();
@@ -1014,7 +1055,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
             {
                 _lastLongPressTime = DateTime.Now;
 
-                ResetRecitationContext();
+                ResetRecitationContext(stopPlayback: false);
                 var wasEmpty = _viewModel.SelectedPasukNums.Count == 0;
                 _viewModel.ToggleSelectedPasuk(pasukNum);
 
@@ -1048,7 +1089,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         if (sender is LongPressBehavior behavior &&
             ResolvePasuk(behavior.AssociatedView?.BindingContext) is { } pasuk)
         {
-            ResetRecitationContext();
+            ResetRecitationContext(stopPlayback: false);
             var wasEmpty = _viewModel.SelectedPasukNums.Count == 0;
             _viewModel.ToggleSelectedPasuk(pasuk.PasukNum);
             UpdateSelectionBar();
@@ -1127,7 +1168,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
                 : Color.FromArgb("#F2F7FE");
         Shell.SetBackgroundColor(this, shellBackground);
         ReaderToolbar.BackgroundColor = shellBackground;
-        NormalNavigationBar.IsVisible = !isSelectionMode && !searching;
+        NormalNavigationBar.BarVisible = !isSelectionMode && !searching;
         SearchTitleHost.IsVisible = searching;
         SearchTitleHost.Content = searching ? _searchHeader : null;
         ChapterSearch.IsVisible = searching;
