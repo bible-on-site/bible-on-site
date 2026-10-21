@@ -112,8 +112,6 @@ public sealed class PerekPickerTests(ITestOutputHelper output, MobileDeviceSessi
         Driver!.PerformActions([sequence]);
     }
 
-    // SemanticProperties.Description surfaces as content-desc on Android and
-    // label on iOS; it carries the arrow's boundary/available state.
-    private static string? EdgeState(AppiumElement element) =>
-        element.GetAttribute("content-desc") ?? element.GetAttribute("label") ?? element.GetAttribute("name");
+    // SemanticProperties.Description carries the arrow's boundary/available state.
+    private string? EdgeState(AppiumElement element) => Platform.SemanticDescription(element);
 }
