@@ -1555,10 +1555,18 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     }
 
     /// <summary>
-    /// Handles perek selection from the picker popup.
+    /// Handles perek selection from the picker popup. A confirmed selection
+    /// completes the navigation: the picker closes itself and the radial menu
+    /// that opened it closes too, leaving the reader undimmed and interactive.
     /// </summary>
     private async void OnPerekPickerSelected(int perekId)
     {
+        if (_isMenuOpen)
+        {
+            _isMenuOpen = false;
+            await CloseCircularMenuAsync();
+        }
+
         if (perekId >= 1 && perekId <= 929 && perekId != _viewModel.PerekId)
         {
             await _viewModel.NavigateToPerekAsync(perekId);
