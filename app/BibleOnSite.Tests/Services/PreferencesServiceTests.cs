@@ -389,6 +389,17 @@ public class PreferencesServiceTests : IDisposable
         _service.InAppBackButton.Should().Be(InAppBackButtonPreference.PlatformDefault);
     }
 
+    [Fact]
+    public void InAppBackButton_InvalidSetValue_FallsBackToPlatformDefault()
+    {
+        _service.Load();
+
+        _service.InAppBackButton = (InAppBackButtonPreference)99;
+
+        _service.InAppBackButton.Should().Be(InAppBackButtonPreference.PlatformDefault);
+        _storage.Get("inAppBackButton", -1).Should().Be(-1);
+    }
+
     #region InMemoryPreferencesStorage Tests
 
     [Fact]

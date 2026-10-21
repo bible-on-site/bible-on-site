@@ -596,6 +596,21 @@ public class PreferencesViewModelTests : IDisposable
 
         display.IsBackButtonPlatformDefault = true;
         display.InAppBackButton.Should().Be(InAppBackButtonPreference.PlatformDefault);
+
+        display.IsBackButtonPlatformDefault.Should().BeTrue();
+        display.IsBackButtonHide.Should().BeFalse();
+    }
+
+    [Fact]
+    public void DivineNameMasking_ReadsThroughMaskingPreferences()
+    {
+        var display = new DisplayPreferencesViewModel(_service);
+        _service.DivineNameMaskingEnabled = false;
+
+        display.DivineNameMaskingEnabled.Should().BeFalse();
+
+        display.DivineNameMaskingEnabled = true;
+        _service.DivineNameMaskingEnabled.Should().BeTrue();
     }
 
     #endregion
