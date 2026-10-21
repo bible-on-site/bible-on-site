@@ -42,4 +42,26 @@ public class ReaderSurfaceStateTests
         ReaderSurfaceState.IsActive(selectedPasukCount: 0, chapterRecitation: false,
             focusedPasuk: true, playing: true).Should().BeTrue();
     }
+
+    [Fact]
+    public void focused_pasuk_shows_the_shared_toolbar_not_the_selection_bar()
+    {
+        // #2466: the focused pasuk dropped its Back-only bar for the shared
+        // reader toolbar, even while its clip keeps playing.
+        ReaderSurfaceState.ShowsSelectionBar(selectedPasukCount: 0, chapterRecitation: false,
+            focusedPasuk: true, playing: true).Should().BeFalse();
+        ReaderSurfaceState.ShowsSelectionBar(selectedPasukCount: 0, chapterRecitation: false,
+            focusedPasuk: true, playing: false).Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(2, false, false)]
+    [InlineData(0, true, false)]
+    [InlineData(0, false, true)]
+    public void other_surfaces_still_show_the_selection_bar(int selectedPasukCount,
+        bool chapterRecitation, bool playing)
+    {
+        ReaderSurfaceState.ShowsSelectionBar(selectedPasukCount, chapterRecitation,
+            focusedPasuk: false, playing).Should().BeTrue();
+    }
 }

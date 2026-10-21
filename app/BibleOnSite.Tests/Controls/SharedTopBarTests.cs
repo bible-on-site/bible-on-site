@@ -82,6 +82,34 @@ public class SharedTopBarTests
     }
 
     [Fact]
+    public void SharedTopBar_NavigationInterceptor_RunsBeforeFlyout()
+    {
+        var bar = new SharedTopBar();
+        var calls = 0;
+        bar.NavigationInterceptor = () => { calls++; return true; };
+
+        // An interceptor that handles the tap suppresses the flyout entirely,
+        // so it is the only side effect the click can have here.
+        bar.NavigationButton.SendClicked();
+
+        calls.Should().Be(1);
+    }
+
+    [Fact]
+    public void SharedTopBar_NavigationInterceptor_PassThroughStillConsulted()
+    {
+        var bar = new SharedTopBar();
+        var calls = 0;
+        bar.NavigationInterceptor = () => { calls++; return false; };
+
+        // Outside a Shell (unit test context) the flyout open is a no-op, but
+        // the interceptor must still be consulted for every tap.
+        bar.NavigationButton.SendClicked();
+
+        calls.Should().Be(1);
+    }
+
+    [Fact]
     public void ToolbarPill_MatchesReaderPillChrome()
     {
         var pill = new ToolbarPill();
