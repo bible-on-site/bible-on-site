@@ -37,6 +37,21 @@ on:
   merge_group:
   # Use the dispatch's native branch/tag selector so execution and cache scope match.
   workflow_dispatch:
+    inputs:
+      # e2e-impact (#2085): shadow computes selections for evidence; enforce
+      # actually runs the selected subset in the Playwright suites. The mobile
+      # suite has its own dispatch inputs on app-mobile-e2e.yml.
+      e2e_selection_mode:
+        description: "E2E impact selection mode (mobile suite uses its own workflow inputs)"
+        required: false
+        type: choice
+        options: ["shadow", "enforce"]
+        default: "shadow"
+      force_full_suite:
+        description: "Force the full E2E suite regardless of the selection manifest"
+        required: false
+        type: boolean
+        default: false
 
 # Only the latest commit of a PR needs validation. Keep master, dispatched and
 # merge-queue runs independent so publication and queue validation are preserved.
@@ -87,6 +102,12 @@ env:
   DEVOPS_DIRECTORY: devops
   DEVOPS_NODE_CACHE_PATH: devops/package-lock.json
   DEVOPS_NODE_VERSION_FILE: devops/package.json
+  # e2e-impact (#2085): the dispatch input or the E2E_SELECTION_MODE repo
+  # variable opt the Playwright suites into running the selected subset;
+  # every other run stays in shadow mode (diagnostics only). The selector
+  # itself honors FORCE_FULL_SUITE.
+  E2E_SELECTION_MODE: ${{ inputs.e2e_selection_mode || vars.E2E_SELECTION_MODE || 'shadow' }}
+  FORCE_FULL_SUITE: ${{ inputs.force_full_suite || vars.E2E_FORCE_FULL_SUITE || '' }}
   IS_MASTER_BRANCH: ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
   TMP_WEBSITE_JUNIT_REPORTS_DIRECTORY: tmp-website-junit-reports
   WEBSITE_COVERAGE_ARTIFACT_NAME_MASTER: website-coverage.master
@@ -651,7 +672,7 @@ jobs:
     name: Build Sefaria MongoDB Docker Image
     needs: [setup_env, determine_changes, determine_docker_image_availability]
     if: ${{ needs.determine_docker_image_availability.outputs.is_sefaria_mongo_available != 'true' && (needs.determine_changes.outputs.data_module_changed == 'true' || needs.determine_changes.outputs.data_ci_changed == 'true') }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     permissions:
       contents: read
       # GitHub caps fork PR tokens to read-only, so only trusted runs can publish.
@@ -1161,12 +1182,44 @@ jobs:
 
       # coverage:e2e starts next dev; the production build and standalone-server
       # checks run in Website Performance, which remains a Cross Module CI gate.
+      # Enforce mode (#2085) consumes the manifest into concrete Playwright
+      # args. Dynamic test files cannot be filtered by title, so a `--list`
+      # enumeration (which still emits discovered.json under coverage)
+      # supplies their titles first.
+      - name: Resolve selection args (enforce)
+        if: env.E2E_SELECTION_MODE == 'enforce'
+        id: impact-args
+        working-directory: ${{ github.workspace }}
+        run: |
+          DISCOVERED_ARGS=()
+          DYNAMIC=$(node -e "console.log(JSON.parse(require('node:fs').readFileSync('$GITHUB_WORKSPACE/web/bible-on-site/.coverage/e2e-impact/selection-manifest.json','utf8')).dynamicTestFiles.length)")
+          if [ "$DYNAMIC" != "0" ]; then
+            (cd web/bible-on-site && npm run coverage:e2e -- --list)
+            DISCOVERED_ARGS=(--discovered "$GITHUB_WORKSPACE/web/bible-on-site/.coverage/e2e-impact/discovered.json")
+          fi
+          node devops/github/ci/e2e-impact/e2e-impact.ts playwright-args \
+            --suite web/bible-on-site \
+            --package-dir web/bible-on-site \
+            --manifest "$GITHUB_WORKSPACE/web/bible-on-site/.coverage/e2e-impact/selection-manifest.json" \
+            --out "$GITHUB_WORKSPACE/web/bible-on-site/.coverage/e2e-impact/playwright-args.json" "${DISCOVERED_ARGS[@]}"
+
       # The run also drops e2e-impact evidence under .coverage/e2e-impact/.
       - name: E2E Test
         id: npm-e2e-test
         env:
           DB_URL: mysql://root:test_123@127.0.0.1:3306/tanah_test
-        run: npm run coverage:e2e
+        run: |
+          if [ "${{ env.E2E_SELECTION_MODE }}" == "enforce" ] && [ "${{ steps.impact-args.outputs.select-all }}" != "true" ]; then
+            FILES=$(node -e "console.log(JSON.parse(require('node:fs').readFileSync('.coverage/e2e-impact/playwright-args.json','utf8')).files.join(' '))")
+            GREP=$(node -e "console.log(JSON.parse(require('node:fs').readFileSync('.coverage/e2e-impact/playwright-args.json','utf8')).grep ?? '')")
+            if [ -n "$GREP" ]; then
+              npm run coverage:e2e -- $FILES --grep "$GREP"
+            else
+              npm run coverage:e2e -- $FILES
+            fi
+          else
+            npm run coverage:e2e
+          fi
 
       # Evidence is collected even after a failed run — passed tests keep
       # their coverage — but the tree marks incomplete so a partial run can
@@ -1493,6 +1546,25 @@ jobs:
             --out "$GITHUB_WORKSPACE/web/admin/.coverage/e2e-impact/selection-manifest.json" \
             --compare "${BASELINE_ARGS[@]}"
 
+      # Enforce mode (#2085) consumes the manifest into concrete Playwright
+      # args; a `--list` enumeration supplies dynamic files' titles first.
+      - name: Resolve selection args (enforce)
+        if: env.E2E_SELECTION_MODE == 'enforce'
+        id: impact-args
+        working-directory: ${{ github.workspace }}
+        run: |
+          DISCOVERED_ARGS=()
+          DYNAMIC=$(node -e "console.log(JSON.parse(require('node:fs').readFileSync('$GITHUB_WORKSPACE/web/admin/.coverage/e2e-impact/selection-manifest.json','utf8')).dynamicTestFiles.length)")
+          if [ "$DYNAMIC" != "0" ]; then
+            (cd web/admin && npm run coverage:e2e -- --list)
+            DISCOVERED_ARGS=(--discovered "$GITHUB_WORKSPACE/web/admin/.coverage/e2e-impact/discovered.json")
+          fi
+          node devops/github/ci/e2e-impact/e2e-impact.ts playwright-args \
+            --suite web/admin \
+            --package-dir web/admin \
+            --manifest "$GITHUB_WORKSPACE/web/admin/.coverage/e2e-impact/selection-manifest.json" \
+            --out "$GITHUB_WORKSPACE/web/admin/.coverage/e2e-impact/playwright-args.json" "${DISCOVERED_ARGS[@]}"
+
       - name: E2E Test with Coverage
         id: npm-e2e-test
         env:
@@ -1503,7 +1575,18 @@ jobs:
           S3_ACCESS_KEY_ID: test
           S3_SECRET_ACCESS_KEY: test_1234
           S3_FORCE_PATH_STYLE: "true"
-        run: npm run coverage:e2e
+        run: |
+          if [ "${{ env.E2E_SELECTION_MODE }}" == "enforce" ] && [ "${{ steps.impact-args.outputs.select-all }}" != "true" ]; then
+            FILES=$(node -e "console.log(JSON.parse(require('node:fs').readFileSync('.coverage/e2e-impact/playwright-args.json','utf8')).files.join(' '))")
+            GREP=$(node -e "console.log(JSON.parse(require('node:fs').readFileSync('.coverage/e2e-impact/playwright-args.json','utf8')).grep ?? '')")
+            if [ -n "$GREP" ]; then
+              npm run coverage:e2e -- $FILES --grep "$GREP"
+            else
+              npm run coverage:e2e -- $FILES
+            fi
+          else
+            npm run coverage:e2e
+          fi
 
       # Evidence is collected even after a failed run — passed tests keep
       # their coverage — but the tree marks incomplete so a partial run can
@@ -1757,16 +1840,47 @@ jobs:
             --out "$GITHUB_WORKSPACE/web/api/.coverage/e2e-impact/selection-manifest.json" \
             --compare "${BASELINE_ARGS[@]}"
 
+      # Enforce mode (#2085) consumes the manifest into concrete Playwright
+      # args; a `--list` enumeration supplies dynamic files' titles first.
+      - name: Resolve selection args (enforce)
+        if: env.E2E_SELECTION_MODE == 'enforce'
+        id: impact-args
+        working-directory: ${{ github.workspace }}
+        run: |
+          DISCOVERED_ARGS=()
+          DYNAMIC=$(node -e "console.log(JSON.parse(require('node:fs').readFileSync('$GITHUB_WORKSPACE/web/api/.coverage/e2e-impact/selection-manifest.json','utf8')).dynamicTestFiles.length)")
+          if [ "$DYNAMIC" != "0" ]; then
+            (cd web/api && npm run --prefix tests coverage:e2e -- --list)
+            DISCOVERED_ARGS=(--discovered "$GITHUB_WORKSPACE/web/api/.coverage/e2e-impact/discovered.json")
+          fi
+          node devops/github/ci/e2e-impact/e2e-impact.ts playwright-args \
+            --suite web/api \
+            --package-dir web/api/tests \
+            --manifest "$GITHUB_WORKSPACE/web/api/.coverage/e2e-impact/selection-manifest.json" \
+            --out "$GITHUB_WORKSPACE/web/api/.coverage/e2e-impact/playwright-args.json" "${DISCOVERED_ARGS[@]}"
+
       # API tests use Playwright's HTTP request fixture and node:http2 only;
       # they do not launch a browser or need browser/system-dependency installs.
       # The run drops e2e-impact evidence under .coverage/e2e-impact/.
+      # Enforce passes the manifest args straight to the same npm script
+      # `cargo make coverage-e2e` wraps (`--prefix tests coverage:e2e`).
       - name: E2E Test
         id: api-e2e
         working-directory: ${{ env.API_DIRECTORY }}
         env:
           DB_URL: mysql://root:test_123@127.0.0.1:3306/tanah_test
         run: |
-          cargo make coverage-e2e
+          if [ "${{ env.E2E_SELECTION_MODE }}" == "enforce" ] && [ "${{ steps.impact-args.outputs.select-all }}" != "true" ]; then
+            FILES=$(node -e "console.log(JSON.parse(require('node:fs').readFileSync('.coverage/e2e-impact/playwright-args.json','utf8')).files.join(' '))")
+            GREP=$(node -e "console.log(JSON.parse(require('node:fs').readFileSync('.coverage/e2e-impact/playwright-args.json','utf8')).grep ?? '')")
+            if [ -n "$GREP" ]; then
+              npm run --prefix tests coverage:e2e -- $FILES --grep "$GREP"
+            else
+              npm run --prefix tests coverage:e2e -- $FILES
+            fi
+          else
+            cargo make coverage-e2e
+          fi
 
       # Evidence is collected even after a failed run — passed tests keep
       # their coverage — but the tree marks incomplete so a partial run can
@@ -2348,7 +2462,7 @@ jobs:
 
   data_ci:
     name: Data CI
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs:
       [
         setup_env,
@@ -2552,7 +2666,7 @@ jobs:
   # ====================================================================================
   perushim_data:
     name: Perushim Data
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs:
       [
         setup_env,

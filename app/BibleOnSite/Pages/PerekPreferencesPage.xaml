@@ -2,6 +2,7 @@
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:viewmodels="clr-namespace:BibleOnSite.ViewModels"
+             xmlns:controls="clr-namespace:BibleOnSite.Controls"
              xmlns:fonts="clr-namespace:Fonts"
              x:Class="BibleOnSite.Pages.PerekPreferencesPage"
              x:DataType="viewmodels:PerekPreferencesViewModel"
@@ -120,6 +121,37 @@
                 </VerticalStackLayout>
             </VerticalStackLayout>
 
+            <!-- ═══ קריינות ═══ -->
+            <VerticalStackLayout Spacing="8">
+                <Label Text="קריינות"
+                       FontSize="14"
+                       FontAttributes="Bold"
+                       TextColor="{StaticResource Primary}"
+                       Padding="4,0,0,0"/>
+
+                <Border Padding="16"
+                        StrokeShape="RoundRectangle 12"
+                        Stroke="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray700}}"
+                        StrokeThickness="1"
+                        BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Gray900}}">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <VerticalStackLayout Spacing="2" VerticalOptions="Center">
+                            <Label Text="השמעת קריינות"
+                                   FontSize="15"
+                                   TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
+                            <Label Text="לחיצה על פסוק או על סמל האוזניות משמיעה את ההקלטה"
+                                   FontSize="12"
+                                   LineBreakMode="WordWrap"
+                                   TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
+                        </VerticalStackLayout>
+                        <Switch Grid.Column="1"
+                                IsToggled="{Binding QriynotEnabled}"
+                                AutomationId="QriynotEnabledSwitch"
+                                SemanticProperties.Description="השמעת קריינות"/>
+                    </Grid>
+                </Border>
+            </VerticalStackLayout>
+
             <!-- ═══ מסורה על הפרק ═══ -->
             <VerticalStackLayout Spacing="8">
                 <Label Text="מסורה על הפרק"
@@ -161,8 +193,8 @@
                             <Label Text="מספר פירושים בו זמנית על הפרק" VerticalOptions="Center"/>
                             <Label Grid.Column="1" Text="{Binding InlineCommentaryLimit}" FontAttributes="Bold" VerticalOptions="Center"/>
                         </Grid>
-                        <Stepper Minimum="1" Maximum="100" Increment="1" Value="{Binding InlineCommentaryLimit}"
-                                 AutomationId="InlineCommentaryLimitStepper" HorizontalOptions="Start"/>
+                        <controls:NumberPicker Minimum="1" Maximum="100" Increment="1" Value="{Binding InlineCommentaryLimit}"
+                                               AutomationId="InlineCommentaryLimitPicker" HorizontalOptions="Start"/>
                         <Label Text="ברירת המחדל היא 5. הגדלת המספר עלולה להאט את הקריאה ולהגדיל את השימוש בזיכרון, במיוחד בפרקים ארוכים."
                                FontSize="13" LineBreakMode="WordWrap"
                                TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>

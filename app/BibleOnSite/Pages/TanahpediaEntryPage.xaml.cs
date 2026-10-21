@@ -27,6 +27,15 @@ public partial class TanahpediaEntryPage : ContentPage
         BindingContext = _viewModel;
         SetupFontSizeResources();
         EntryHtml.LinkTapped += OnEntryLinkTapped;
+        // Person hops rebind this page in place - return to the top of the
+        // destination entry instead of keeping the scrolled family section.
+        _viewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(TanahpediaEntryViewModel.UniqueName))
+            {
+                MainThread.BeginInvokeOnMainThread(() => EntryScroll.ScrollToAsync(0, 0, false));
+            }
+        };
     }
 
     private void SetupFontSizeResources()
@@ -42,6 +51,21 @@ public partial class TanahpediaEntryPage : ContentPage
     {
         Resources["TanahpediaFontSize"] = factor * 16;
         EntryHtml.SetDynamicResource(HtmlView.FontSizeProperty, "TanahpediaFontSize");
+    }
+
+    /// <summary>
+    /// Hardware/system Back steps through the in-place person trail first
+    /// (the same logical history pushed pages used to give), then leaves.
+    /// </summary>
+    protected override bool OnBackButtonPressed()
+    {
+        if (_viewModel.HasEntryHistory)
+        {
+            _viewModel.GoBackCommand.Execute(null);
+            return true;
+        }
+
+        return base.OnBackButtonPressed();
     }
 
     protected override async void OnAppearing()
