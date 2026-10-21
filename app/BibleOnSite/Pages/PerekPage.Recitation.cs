@@ -358,6 +358,8 @@ public partial class PerekPage
         {
             focusedPlayer.Play();
         }
+        // The full pasuk source lives in the shared toolbar title, set by
+        // UpdateSelectionBar below (#2466).
         // Opening the focused pasuk plays it (#2472). An in-flight clip for
         // this same pasuk continues/resumes untouched — one deliberate open
         // issues at most one playback request.

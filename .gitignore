@@ -33,7 +33,7 @@ app/BibleOnSite/Resources/Raw/*
 .artifacts/
 app/.artifacts/
 app/BibleOnSite/Platforms/Android/AssetPacks/recitation_*/
-app/BibleOnSite/Platforms/iOS/AssetPacks/recitation_*/
+app/BibleOnSite/Platforms/iOS/AssetPacks/recitation-*/
 app/BibleOnSite/Platforms/Windows/Recitation/
 data/mysql/tanah_full_dump.sql
 data/mysql/perushim_data.sql
