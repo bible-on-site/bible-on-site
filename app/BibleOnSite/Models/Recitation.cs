@@ -106,7 +106,13 @@ public sealed record RecitationClipRange(double Start, double End);
 // The small catalog ships with the app. Audio travels exclusively in store-delivered book packs.
 public sealed record RecitationBookPack(int SeferId, string Sha256, long SizeBytes, List<int> PerekIds)
 {
+#if IOS || MACCATALYST
+    // App Store Connect accepts only alphanumerics and hyphens in asset-pack IDs.
+    public string PackName => $"recitation-{SeferId}";
+#else
+    // Play asset-pack names take underscores (hyphens are rejected).
     public string PackName => $"recitation_{SeferId}";
+#endif
     public string FileName => PackName + ".zip";
 }
 
