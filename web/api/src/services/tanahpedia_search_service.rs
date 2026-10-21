@@ -689,7 +689,9 @@ mod tests {
             Some(vec![
                 "PERSON".to_string(),
                 "PROPHET".to_string(),
+                "KING".to_string(),
                 "BEHEMA".to_string(),
+                "TAHOR".to_string(),
             ]),
         )
         .await
@@ -701,12 +703,16 @@ mod tests {
         assert!(sql.contains("tanahpedia_entry_entity ee"), "scope joins linked entities: {sql}");
         assert!(sql.contains("en.entity_type"), "base type predicate: {sql}");
         assert!(
-            sql.contains("tanahpedia_person_role_prophet"),
-            "PROPHET narrows to the role table: {sql}"
+            sql.contains("tanahpedia_person_role_prophet") && sql.contains("tanahpedia_person_role_king"),
+            "role keys narrow to the person role tables: {sql}"
         );
         assert!(
             sql.contains("tanahpedia_animal_kind") && sql.contains("ac.kind"),
             "BEHEMA narrows to the animal-kind classification: {sql}"
+        );
+        assert!(
+            sql.contains("tanahpedia_animal_purity") && sql.contains("ac.purity"),
+            "TAHOR narrows to the animal-purity classification: {sql}"
         );
         assert!(sql.contains("PERSON") && sql.contains("BEHEMA"), "keys bind: {sql}");
     }

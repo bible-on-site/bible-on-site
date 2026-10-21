@@ -139,4 +139,71 @@ public class TanahpediaSearchViewModelTests
         vm.ErrorMessage.Should().Contain("אינו זמין");
         vm.IsLoading.Should().BeFalse();
     }
+
+    [Fact]
+    public void Toggle_UnknownKey_IsIgnored()
+    {
+        var vm = Create();
+
+        vm.SetCategoryEnabled("WIZARD", false);
+        vm.SetCategoryEnabled("WIZARD", true);
+
+        vm.AllSelected.Should().BeTrue("an unknown key cannot touch the selection");
+        vm.CategorySummary.Should().Be("הכל");
+    }
+
+    [Fact]
+    public void CategoryPreset_EmptyOrUnknown_KeepsTheFullTaxonomy()
+    {
+        var vm = Create();
+
+        vm.ApplyCategoryPreset(null);
+        vm.AllSelected.Should().BeTrue();
+
+        // The preset flag is consumed even by a no-op call — deliberate
+        // choices stay authoritative afterwards either way.
+        var unknown = Create();
+        unknown.ApplyCategoryPreset("WIZARD");
+        unknown.AllSelected.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Search_ObsoleteResponse_IsDiscarded()
+    {
+        var gate = new TaskCompletionSource<List<TanahpediaSearchHit>>();
+        _service.Setup(s => s.SearchEntriesAsync(
+                It.IsAny<string>(), It.IsAny<int>(), It.IsAny<IReadOnlyCollection<string>?>(), It.IsAny<CancellationToken>()))
+            .Returns(gate.Task);
+
+        var vm = Create();
+        vm.SearchPhrase = "משה";
+        var pending = vm.SearchAsync(TestContext.Current.CancellationToken);
+
+        // A newer version (CancelSearch) must discard the late response.
+        vm.CancelSearch();
+        gate.SetResult([new TanahpediaSearchHit { Id = "e1", UniqueName = "משה-רבנו", Title = "משה רבנו", Excerpt = "", Score = 220 }]);
+        await pending;
+
+        vm.Results.Should().BeEmpty();
+        vm.IsLoading.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Search_Cancellation_IsSwallowed()
+    {
+        var cts = new CancellationTokenSource();
+        _service.Setup(s => s.SearchEntriesAsync(
+                It.IsAny<string>(), It.IsAny<int>(), It.IsAny<IReadOnlyCollection<string>?>(), It.IsAny<CancellationToken>()))
+            .Returns<string, int, IReadOnlyCollection<string>?, CancellationToken>((_, _, _, ct) =>
+                Task.FromException<List<TanahpediaSearchHit>>(new OperationCanceledException(ct)));
+
+        var vm = Create();
+        vm.SearchPhrase = "משה";
+        await cts.CancelAsync();
+
+        await vm.SearchAsync(cts.Token);
+
+        vm.HasError.Should().BeFalse("a cancelled request is not an availability failure");
+        vm.Results.Should().BeEmpty();
+    }
 }
