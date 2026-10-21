@@ -128,11 +128,11 @@ public static class SearchMatchLanding
     // Platform measurement and scroll seams. Off-device builds always measure
     // null, so tests substitute these to drive the verified-visibility verdict
     // paths; production keeps the platform implementations.
-    internal static Func<CollectionView, HtmlView, bool?> MatchVisibilityProbe = IsMatchLineVisible;
-    internal static Func<CollectionView, VisualElement, bool?> ElementVisibilityProbe = IsElementVisible;
-    internal static Func<CollectionView, HtmlView, Label, bool?> NameFitProbe = NameAndMatchFit;
-    internal static Func<CollectionView, Label, bool> NameScroller = ScrollNameToMargin;
-    internal static Func<CollectionView, HtmlView, bool> ListScroller = ScrollListToMatch;
+    internal static Func<CollectionView, HtmlView, bool?> MatchVisibilityProbe { get; set; } = IsMatchLineVisible;
+    internal static Func<CollectionView, VisualElement, bool?> ElementVisibilityProbe { get; set; } = IsElementVisible;
+    internal static Func<CollectionView, HtmlView, Label, bool?> NameFitProbe { get; set; } = NameAndMatchFit;
+    internal static Func<CollectionView, Label, bool> NameScroller { get; set; } = ScrollNameToMargin;
+    internal static Func<CollectionView, HtmlView, bool> ListScroller { get; set; } = ScrollListToMatch;
 
     /// <summary>
     /// Finds the <see cref="Label"/> carrying the perush name bound to the same

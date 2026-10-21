@@ -196,7 +196,7 @@ public class SearchMatchLandingTests
     {
         var display = new PerushNoteDisplay { PerushId = 1, PerushName = "רשי" };
         using var _ = RealizedNote(display, withNameLabel: false,
-            matchVisible: false, scrollList: true);
+            matchVisible: false);
 
         // A verified platform measured the line outside the viewport: the
         // issued scroll is not trusted — the next frame must re-check.
