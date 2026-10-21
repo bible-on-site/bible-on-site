@@ -1,5 +1,6 @@
 import { revalidatePath, revalidateTag } from "next/cache";
-import { type NextRequest, NextResponse } from "next/server";
+import { after, type NextRequest, NextResponse } from "next/server";
+import { collectSubmissionPaths, submitIndexNow } from "@/lib/seo/indexnow";
 
 /**
  * On-demand invalidation for public content caches.
@@ -15,6 +16,11 @@ import { type NextRequest, NextResponse } from "next/server";
  * - `type`: `page` | `layout`, forwarded to `revalidatePath`.
  * - `tag`: a cache tag to expire (e.g. `articles`, `authors`, `perushim`,
  *   `tanahpedia-entity-refs`). `path` and `tag` may be combined in one call.
+ * - `url` (repeatable): a site-relative public path whose content changed
+ *   (e.g. `/929/5/12`, `/pedia/משה`). After successful invalidation the
+ *   collected URLs — a literal `path` included — are submitted to IndexNow
+ *   once the response completes. A call carrying only `url` params performs
+ *   no invalidation and serves as the operator path for bulk/data changes.
  *
  * The secret is required in production (`REVALIDATE_SECRET`). Send it in the
  * `x-revalidate-secret` header — the admin caller does this so the secret
@@ -35,6 +41,7 @@ export async function POST(request: NextRequest) {
 	const path = searchParams.get("path");
 	const type = searchParams.get("type");
 	const tag = searchParams.get("tag");
+	const urls = searchParams.getAll("url");
 	// Header first — callers should never put the secret in the URL; the
 	// query parameter remains for operator/manual calls.
 	const secret =
@@ -48,7 +55,7 @@ export async function POST(request: NextRequest) {
 		}
 	}
 
-	if (!path && !tag) {
+	if (!path && !tag && urls.length === 0) {
 		return NextResponse.json(
 			{ error: "Either path or tag parameter is required" },
 			{ status: 400 },
@@ -60,6 +67,9 @@ export async function POST(request: NextRequest) {
 	if (type !== null && type !== "page" && type !== "layout") {
 		return NextResponse.json({ error: "Invalid type" }, { status: 400 });
 	}
+	if (urls.some((url) => !url.startsWith("/") || url.startsWith("//"))) {
+		return NextResponse.json({ error: "Invalid url" }, { status: 400 });
+	}
 
 	try {
 		if (tag) {
@@ -69,6 +79,15 @@ export async function POST(request: NextRequest) {
 		if (path) {
 			revalidatePath(path, type ?? undefined);
 		}
+
+		// Notify IndexNow only after invalidation succeeded: a literal
+		// `path` is itself a changed public URL; dynamic patterns cannot be
+		// enumerated and are left to `collectSubmissionPaths` to drop.
+		const notifyPaths = [
+			...(path !== null && !path.includes("[") ? [path] : []),
+			...urls,
+		];
+		after(() => submitIndexNow(collectSubmissionPaths(notifyPaths)));
 
 		return NextResponse.json({
 			revalidated: true,

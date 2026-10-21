@@ -6,11 +6,11 @@ export function AppSection() {
 	return (
 		<section id="app" className={styles.appSection}>
 			<header className={styles.appHeader}>
-				<h1>יישֹוּמוֹן תנ&quot;ך על הפרק</h1>
-				<h2>
+				<h2>יישֹוּמוֹן תנ&quot;ך על הפרק</h2>
+				<h3>
 					הורידו את האפליקציה של תנ&quot;ך על הפרק מחנות האפליקציות המתאימה
 					למכשירכם
-				</h2>
+				</h3>
 			</header>
 			<section className={styles.appLinks}>
 				{appPlatforms.map((platform) => {

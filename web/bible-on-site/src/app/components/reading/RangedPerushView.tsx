@@ -3,6 +3,7 @@
 import { toLetters } from "gematry";
 import DOMPurify from "isomorphic-dompurify";
 import { useMemo } from "react";
+import { demoteHeadings } from "@/lib/html-headings";
 import type { RangedPerushNote } from "@/lib/perushim";
 import { ShareButton } from "@/app/929/[number]/components/ShareButton";
 import styles from "@/app/929/[number]/components/perushim-section.module.css";
@@ -130,7 +131,7 @@ export function RangedPerushView({
 										className={styles.noteContent}
 										// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify
 										dangerouslySetInnerHTML={{
-											__html: DOMPurify.sanitize(note.noteContent),
+											__html: DOMPurify.sanitize(demoteHeadings(note.noteContent)),
 										}}
 									/>
 								))}

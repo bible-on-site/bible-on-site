@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<toolkit:Popup xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+               xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+               xmlns:system="clr-namespace:System;assembly=mscorlib"
+               xmlns:toolkit="http://schemas.microsoft.com/dotnet/2022/maui/toolkit"
+               xmlns:helpers="clr-namespace:BibleOnSite.Helpers"
+               x:Class="BibleOnSite.Controls.ExitConfirmationPopup"
+               x:TypeArguments="system:Boolean"
+               Padding="0">
+    <Border BackgroundColor="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}"
+            Stroke="Transparent"
+            StrokeShape="RoundRectangle 12"
+            Padding="24">
+        <VerticalStackLayout Spacing="16" WidthRequest="300" FlowDirection="RightToLeft">
+            <Label Text="{x:Static helpers:ExitConfirmation.Title}"
+                   FontSize="20"
+                   FontAttributes="Bold"
+                   TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource White}}"/>
+            <Label Text="{x:Static helpers:ExitConfirmation.Message}"
+                   FontSize="16"
+                   TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+            <HorizontalStackLayout FlowDirection="LeftToRight"
+                                   HorizontalOptions="End"
+                                   Spacing="8">
+                <Button Text="{x:Static helpers:ExitConfirmation.StayLabel}"
+                        AutomationId="ExitConfirmationStay"
+                        SemanticProperties.Description="{x:Static helpers:ExitConfirmation.StayLabel}"
+                        TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryLight}}"
+                        BackgroundColor="Transparent"
+                        Clicked="OnStayClicked"/>
+                <Button Text="{x:Static helpers:ExitConfirmation.ExitLabel}"
+                        AutomationId="ExitConfirmationExit"
+                        SemanticProperties.Description="{x:Static helpers:ExitConfirmation.ExitLabel}"
+                        TextColor="{AppThemeBinding Light={StaticResource Error}, Dark={StaticResource ErrorDark}}"
+                        BackgroundColor="Transparent"
+                        Clicked="OnExitClicked"/>
+            </HorizontalStackLayout>
+        </VerticalStackLayout>
+    </Border>
+</toolkit:Popup>

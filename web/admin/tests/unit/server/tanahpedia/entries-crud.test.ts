@@ -70,6 +70,7 @@ describe("tanahpedia entry server functions", () => {
 			mocks.saveRevisionedMock,
 		])
 			mock.mockReset();
+		mocks.query.mockResolvedValue([]);
 		mocks.transaction.mockImplementation(async (fn) => fn(mocks.conn));
 	});
 
@@ -493,6 +494,50 @@ describe("tanahpedia entry server functions", () => {
 			fetchSpy.mockClear();
 			await removeEntity({ data: "link-1" });
 			expect(revalidateCalls()).toEqual(PEDIA_CALLS);
+		});
+
+		function notifiedUrls(): string[] {
+			// The urls ride on the third (/pedia index) invalidation call.
+			const url = new URL(String(fetchSpy.mock.calls[2][0]));
+			return url.searchParams.getAll("url");
+		}
+
+		it("reports both the old and new entry urls after a rename", async () => {
+			mocks.saveRevisionedMock.mockResolvedValue({
+				entry: { id: "entry-1", unique_name: "חדש" },
+				headRevisionId: "rev-2",
+				previousUniqueName: "ישן",
+			});
+
+			await updateEntry({
+				data: {
+					id: "entry-1",
+					unique_name: "חדש",
+					title: "כותרת",
+					content: "<p>גוף</p>",
+				},
+			});
+
+			expect(notifiedUrls()).toEqual(["/pedia/חדש", "/pedia/ישן"]);
+		});
+
+		it("reports the removed entry url after a delete", async () => {
+			mocks.queryOne.mockResolvedValue({ unique_name: "נמחק" });
+			mocks.execute.mockResolvedValue({ affectedRows: 1 });
+
+			await deleteEntry({ data: "entry-1" });
+
+			expect(notifiedUrls()).toEqual(["/pedia/נמחק"]);
+		});
+
+		it("reports the linked entry's url when an entity link is removed", async () => {
+			mocks.queryOne.mockResolvedValue({ entry_id: "entry-1" });
+			mocks.query.mockResolvedValue([{ unique_name: "ערך" }]);
+			mocks.execute.mockResolvedValue({ affectedRows: 1 });
+
+			await removeEntity({ data: "link-1" });
+
+			expect(notifiedUrls()).toEqual(["/pedia/ערך"]);
 		});
 	});
 });
