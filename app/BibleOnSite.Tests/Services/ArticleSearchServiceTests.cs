@@ -36,6 +36,31 @@ public class ArticleSearchServiceTests
     }
 
     [Fact]
+    public async Task SearchArticles_WithAuthorId_SendsAuthorScopeVariable()
+    {
+        using var http = new GraphQLTransport(SearchResponse);
+        var service = new ArticleService(http.Client);
+
+        var page = await service.SearchArticlesAsync("בראשית", 20, authorId: 3,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        page.Should().NotBeNull();
+        http.Requests.Single().Should().Contain("\"authorId\":3");
+        http.Requests.Single().Should().Contain("authorId: $authorId");
+    }
+
+    [Fact]
+    public async Task SearchArticles_WithoutAuthorId_SendsNullScope()
+    {
+        using var http = new GraphQLTransport(SearchResponse);
+        var service = new ArticleService(http.Client);
+
+        await service.SearchArticlesAsync("בראשית", 20, cancellationToken: TestContext.Current.CancellationToken);
+
+        http.Requests.Single().Should().Contain("\"authorId\":null");
+    }
+
+    [Fact]
     public async Task SearchArticles_GraphQlErrors_Throw()
     {
         using var http = new GraphQLTransport("{\"errors\":[{\"message\":\"phrase too long\"}]}");

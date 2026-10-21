@@ -210,37 +210,48 @@ public class ArticleService : BaseGraphQLService
     /// <param name="phrase">Raw user phrase; normalized server-side.</param>
     /// <param name="limit">Maximum hits (server clamps to 1-50).</param>
     public Task<ArticleSearchPage?> SearchArticlesAsync(string phrase, int limit) =>
-        SearchArticlesAsync(phrase, limit, 0, null, CancellationToken.None);
+        SearchArticlesAsync(phrase, limit, 0, null, null, CancellationToken.None);
 
     /// <param name="phrase">Raw user phrase; normalized server-side.</param>
     /// <param name="limit">Maximum hits (server clamps to 1-50).</param>
     /// <param name="cancellationToken">Caller cancellation.</param>
     public Task<ArticleSearchPage?> SearchArticlesAsync(string phrase, int limit, CancellationToken cancellationToken) =>
-        SearchArticlesAsync(phrase, limit, 0, null, cancellationToken);
+        SearchArticlesAsync(phrase, limit, 0, null, null, cancellationToken);
+
+    /// <param name="phrase">Raw user phrase; normalized server-side.</param>
+    /// <param name="limit">Maximum hits (server clamps to 1-50).</param>
+    /// <param name="authorId">Restricts hits to this author's articles.</param>
+    /// <param name="cancellationToken">Caller cancellation.</param>
+    public Task<ArticleSearchPage?> SearchArticlesAsync(string phrase, int limit, int? authorId, CancellationToken cancellationToken) =>
+        SearchArticlesAsync(phrase, limit, 0, authorId, null, cancellationToken);
 
     /// <param name="phrase">Raw user phrase; normalized server-side.</param>
     /// <param name="limit">Maximum hits (server clamps to 1-50).</param>
     /// <param name="timeout">Total request budget.</param>
     public Task<ArticleSearchPage?> SearchArticlesAsync(string phrase, int limit, TimeSpan timeout) =>
-        SearchArticlesAsync(phrase, limit, 0, timeout, CancellationToken.None);
+        SearchArticlesAsync(phrase, limit, 0, null, timeout, CancellationToken.None);
 
     /// <param name="phrase">Raw user phrase; normalized server-side.</param>
     /// <param name="limit">Maximum hits (server clamps to 1-50).</param>
     /// <param name="offset">Pagination offset (server clamps to 0-1000).</param>
+    /// <param name="authorId">Restricts hits to this author's articles; the
+    /// scope applies server-side before limit/offset so author matches are
+    /// never dropped by a globally ranked page.</param>
     /// <param name="timeout">Total request budget.</param>
     /// <param name="cancellationToken">Caller cancellation.</param>
     public async Task<ArticleSearchPage?> SearchArticlesAsync(
         string phrase,
         int limit,
         int offset,
+        int? authorId,
         TimeSpan? timeout,
         CancellationToken cancellationToken)
     {
         var query = new GraphQLRequest
         {
             Query = @"
-                query SearchArticles($phrase: String!, $limit: Int, $offset: Int) {
-                    searchArticles(phrase: $phrase, limit: $limit, offset: $offset) {
+                query SearchArticles($phrase: String!, $limit: Int, $offset: Int, $authorId: Int) {
+                    searchArticles(phrase: $phrase, limit: $limit, offset: $offset, authorId: $authorId) {
                         total
                         hits {
                             articleId
@@ -254,7 +265,7 @@ public class ArticleService : BaseGraphQLService
                         }
                     }
                 }",
-            Variables = new Dictionary<string, object?> { ["phrase"] = phrase, ["limit"] = limit, ["offset"] = offset }
+            Variables = new Dictionary<string, object?> { ["phrase"] = phrase, ["limit"] = limit, ["offset"] = offset, ["authorId"] = authorId }
         };
 
         using var timeoutSource = new CancellationTokenSource(timeout ?? DefaultSearchTimeout);

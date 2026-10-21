@@ -554,6 +554,68 @@ public class PreferencesViewModelTests : IDisposable
 
     #endregion
 
+    #region In-app Back button preference (DisplayPreferencesViewModel)
+
+    [Fact]
+    public void InAppBackButton_SetSameValue_DoesNotNotify()
+    {
+        var display = new DisplayPreferencesViewModel(_service);
+        var changed = new List<string?>();
+        display.PropertyChanged += (_, args) => changed.Add(args.PropertyName);
+
+        display.InAppBackButton = InAppBackButtonPreference.PlatformDefault;
+
+        changed.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void InAppBackButton_SetNewValue_PersistsAndNotifies()
+    {
+        var display = new DisplayPreferencesViewModel(_service);
+        var changed = new List<string?>();
+        display.PropertyChanged += (_, args) => changed.Add(args.PropertyName);
+
+        display.InAppBackButton = InAppBackButtonPreference.Show;
+
+        display.InAppBackButton.Should().Be(InAppBackButtonPreference.Show);
+        _service.InAppBackButton.Should().Be(InAppBackButtonPreference.Show);
+        changed.Should().Contain(nameof(display.InAppBackButton));
+        changed.Should().Contain(nameof(display.IsBackButtonShow));
+    }
+
+    [Fact]
+    public void IsBackButtonSetters_ToggleTheStoredPreference()
+    {
+        var display = new DisplayPreferencesViewModel(_service);
+
+        display.IsBackButtonShow = true;
+        display.InAppBackButton.Should().Be(InAppBackButtonPreference.Show);
+
+        display.IsBackButtonHide = true;
+        display.InAppBackButton.Should().Be(InAppBackButtonPreference.Hide);
+        display.IsBackButtonShow.Should().BeFalse();
+
+        display.IsBackButtonPlatformDefault = true;
+        display.InAppBackButton.Should().Be(InAppBackButtonPreference.PlatformDefault);
+
+        display.IsBackButtonPlatformDefault.Should().BeTrue();
+        display.IsBackButtonHide.Should().BeFalse();
+    }
+
+    [Fact]
+    public void DivineNameMasking_ReadsThroughMaskingPreferences()
+    {
+        var display = new DisplayPreferencesViewModel(_service);
+        _service.DivineNameMaskingEnabled = false;
+
+        display.DivineNameMaskingEnabled.Should().BeFalse();
+
+        display.DivineNameMaskingEnabled = true;
+        _service.DivineNameMaskingEnabled.Should().BeTrue();
+    }
+
+    #endregion
+
     #region InAppBackButton (DisplayPreferencesViewModel)
 
     [Fact]
