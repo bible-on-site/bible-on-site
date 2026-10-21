@@ -124,7 +124,7 @@ public class ArticleSearchServiceTests
         {
             vm.SetFilterEnabled(filter, false);
         }
-        // The remote kind is opt-in: enable it explicitly for this search.
+        // Remote kinds are on by default (#2454); enabling stays explicit here.
         vm.SetFilterEnabled(SearchFilter.Articles, true);
 
         await vm.SearchAsync(TestContext.Current.CancellationToken);
@@ -135,7 +135,7 @@ public class ArticleSearchServiceTests
         articles[0].Title.Should().Be("מאמר ראשון");
         articles[0].Source.Should().Be("בראשית א");
         articles[0].ResultType.Should().Be(SearchFilter.Articles);
-        articles[0].Category.Should().Be("תוכן מאמרים (חיבור רשת נדרש)");
+        articles[0].Category.Should().Be("תוכן מאמרים");
         vm.IsLoading.Should().BeFalse();
         vm.AvailabilityMessage.Should().BeEmpty();
     }
@@ -168,6 +168,35 @@ public class ArticleSearchServiceTests
     }
 
     [Fact]
+    public async Task HasRegainedAvailableKind_ReflectsSkippedKindsAcrossReconnect()
+    {
+        var online = false;
+        await using var storage = new TestStorage();
+        var vm = new SearchViewModel(
+            new PerekDataService(new LocalDatabaseService(storage.FileSystem.Object)),
+            null,
+            null)
+        {
+            SearchPhrase = "בראשית",
+            NetworkProbe = () => online,
+            CommentaryPackProbe = () => true,
+        };
+        // Only remote kinds stay selected — offline they are skipped (#2454).
+        foreach (var filter in new[] { SearchFilter.Author, SearchFilter.Pasuk, SearchFilter.Perush, SearchFilter.Perek })
+        {
+            vm.SetFilterEnabled(filter, false);
+        }
+
+        vm.HasRegainedAvailableKind().Should().BeFalse("nothing skipped before the first search");
+        await vm.SearchAsync(TestContext.Current.CancellationToken);
+        vm.HasRegainedAvailableKind().Should().BeFalse("still offline");
+
+        online = true;
+
+        vm.HasRegainedAvailableKind().Should().BeTrue("the skipped remote kinds can serve now");
+    }
+
+    [Fact]
     public async Task SearchViewModel_DisabledArticleFilter_SkipsRemoteCall()
     {
         using var http = new GraphQLTransport(SearchResponse);
@@ -191,8 +220,10 @@ public class ArticleSearchServiceTests
     }
 
     [Fact]
-    public async Task SearchViewModel_ArticlesFilter_IsOptIn_NotEnabledByDefault()
+    public async Task SearchViewModel_ArticlesFilter_EnabledByDefault_MergesRemoteResults()
     {
+        // #2454: every kind starts selected; a network-backed kind is skipped
+        // only while actually offline, not by default.
         using var http = new GraphQLTransport(SearchResponse);
         var service = new ArticleService(http.Client);
         await using var storage = new TestStorage();
@@ -202,7 +233,7 @@ public class ArticleSearchServiceTests
             service)
         { SearchPhrase = "בראשית" };
 
-        vm.IsFilterEnabled(SearchFilter.Articles).Should().BeFalse();
+        vm.IsFilterEnabled(SearchFilter.Articles).Should().BeTrue();
         foreach (var filter in new[] { SearchFilter.Author, SearchFilter.Pasuk, SearchFilter.Perush, SearchFilter.Perek })
         {
             vm.SetFilterEnabled(filter, false);
@@ -210,8 +241,34 @@ public class ArticleSearchServiceTests
 
         await vm.SearchAsync(TestContext.Current.CancellationToken);
 
+        http.Requests.Should().NotBeEmpty();
+        vm.SearchResults.Should().Contain(r => r is ArticleSearchResult);
+    }
+
+    [Fact]
+    public async Task SearchViewModel_OfflineArticlesFilter_IsSkippedWithoutLosingIntent()
+    {
+        // #2454: offline skips the remote request but keeps the selection.
+        using var http = new GraphQLTransport(SearchResponse);
+        var service = new ArticleService(http.Client);
+        await using var storage = new TestStorage();
+        var vm = new SearchViewModel(
+            new PerekDataService(new LocalDatabaseService(storage.FileSystem.Object)),
+            null,
+            service)
+        { SearchPhrase = "בראשית", NetworkProbe = () => false };
+        vm.SetAuthors([new Author { Id = 1, Name = "בראשית בוטנר", Details = "" }]);
+        foreach (var filter in new[] { SearchFilter.Pasuk, SearchFilter.Perush, SearchFilter.Perek })
+        {
+            vm.SetFilterEnabled(filter, false);
+        }
+
+        await vm.SearchAsync(TestContext.Current.CancellationToken);
+
         http.Requests.Should().BeEmpty();
-        vm.SearchResults.Should().NotContain(r => r is ArticleSearchResult);
+        vm.IsFilterEnabled(SearchFilter.Articles).Should().BeTrue();
+        vm.AvailabilityMessage.Should().Contain("חיבור רשת");
+        vm.SearchResults.Should().ContainSingle().Which.Should().BeOfType<AuthorSearchResult>();
     }
 
     [Fact]
@@ -254,9 +311,9 @@ public class ArticleSearchServiceTests
     }
 
     [Fact]
-    public void ArticlesFilter_HasExactNetworkLabel()
+    public void ArticlesFilter_HasCleanLabel()
     {
-        SearchFilter.Articles.GetHebrewName().Should().Be("תוכן מאמרים (חיבור רשת נדרש)");
+        SearchFilter.Articles.GetHebrewName().Should().Be("תוכן מאמרים");
         new ArticleSearchResult(1, 2, "author", "בראשית א", "קטע", "q")
         {
             Title = "t",

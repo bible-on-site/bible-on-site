@@ -58,6 +58,12 @@ public partial class FloatingSearchBar
         {
             return;
         }
+        if (panel == KindsFilters)
+        {
+            // Availability follows live prerequisites; the pack check may need
+            // a first-pass initialization, so it stays async (#2454).
+            _ = RefreshKindAvailabilityAsync();
+        }
         KindsFilters.IsVisible = panel == KindsFilters;
         BookFilters.IsVisible = panel == BookFilters;
         MoreFilters.IsVisible = panel == MoreFilters;
@@ -134,6 +140,20 @@ public partial class FloatingSearchBar
         await CloseFilterSheetAsync();
     }
 
+    /// <summary>Rechecks kind availability after the commentary pack finishes initializing.</summary>
+    private async Task RefreshKindAvailabilityAsync()
+    {
+        try
+        {
+            await PerushimNotesService.Instance.InitializeAsync();
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            Console.Error.WriteLine($"Commentary-pack check failed: {ex}");
+        }
+        RefreshKindAvailability();
+    }
+
     private void OnClearAllClicked(object? sender, EventArgs e)
     {
         _buildingFilters = true;
@@ -171,6 +191,8 @@ public partial class FloatingSearchBar
         {
             _buildingFilters = false;
         }
+        RefreshKindAvailability();
+        UpdateBooksSelectAll();
         UpdateStatus();
         ScheduleSearch(0);
     }
