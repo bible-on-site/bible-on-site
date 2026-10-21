@@ -105,7 +105,7 @@ export default async function Home({ params }: Props) {
 					className={`${styles.alHaperekHeadlines} ${styles.headlinesGrid}`}
 				>
 					<article className={styles.headlineArticle}>
-						<h1 className={styles.headlineTitle}>
+						<h2 className={styles.headlineTitle}>
 							<Link href="/929/">
 								<Image
 									className="icon-white"
@@ -116,14 +116,14 @@ export default async function Home({ params }: Props) {
 								/>
 								<span>לימוד יומי על הפרק</span>
 							</Link>
-						</h1>
+						</h2>
 						<p>
 							בתנ&quot;ך על הפרק לומדים במקביל ללימוד של 929 - פרק ליום. הלימוד
 							נעים, מעמיק ומחכים.
 						</p>
 					</article>
 					<article className={styles.headlineArticle}>
-						<h1 className={styles.headlineTitle}>
+						<h2 className={styles.headlineTitle}>
 							<Image
 								className="icon-white"
 								src="/icons/smartphone.svg"
@@ -132,7 +132,7 @@ export default async function Home({ params }: Props) {
 								height={34}
 							/>
 							<span>ישומון תנ&quot;ך על הפרק</span>
-						</h1>
+						</h2>
 						<p>
 							לתנ&quot;ך על הפרק ישנה אפליקציה לכל סוגי הסמארטפונים העיקריים.
 							באפליקציה תוכלו ללמוד תנ&quot;ך בנוחות.

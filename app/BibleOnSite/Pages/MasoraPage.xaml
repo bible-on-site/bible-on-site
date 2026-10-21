@@ -26,13 +26,9 @@
     <Grid x:Name="MainGrid" RowDefinitions="Auto,*">
         <Grid x:Name="ReaderToolbar" Grid.Row="0" MinimumHeightRequest="56"
               BackgroundColor="{AppThemeBinding Light=#F2F7FE, Dark=#20304A}">
-            <Grid x:Name="NormalNavigationBar" ColumnDefinitions="48,*,48" HeightRequest="56">
-                <Button x:Name="ReaderNavigationButton" Grid.Column="0" Text="{x:Static fonts:FluentUI.navigation_24_regular}"
-                        FontFamily="FluentIcons" FontSize="24" WidthRequest="48" Padding="0"
-                        BackgroundColor="Transparent" TextColor="{AppThemeBinding Light=Black, Dark=White}"
-                        AutomationId="ReaderNavigationButton" SemanticProperties.Description="פתיחת תפריט הניווט"
-                        Clicked="OnReaderMenuClicked"/>
-                <Button Grid.Column="1" x:Name="NormalNavigationTitle"
+            <controls:SharedTopBar x:Name="NormalNavigationBar" NavigationAutomationId="ReaderNavigationButton">
+                <controls:SharedTopBar.CenterContent>
+                <Button x:Name="NormalNavigationTitle"
                    AutomationId="MasoraSource"
                    Text="{Binding Heading}"
                    FontSize="20"
@@ -47,10 +43,8 @@
                    Margin="4,0"
                    SemanticProperties.Hint="הקישו לפתיחת בחירת פרשה"
                    Clicked="OnUnitSourceClicked"/>
-                <ContentView Grid.Column="2"/>
-            </Grid>
-            <BoxView HeightRequest="1" VerticalOptions="End" InputTransparent="True" ZIndex="10"
-                     Color="{AppThemeBinding Light=#DBE8F8, Dark=#47658E}"/>
+                </controls:SharedTopBar.CenterContent>
+            </controls:SharedTopBar>
         </Grid>
 
         <!-- Exit Full Screen Button (floating, hidden by default) -->
@@ -306,6 +300,19 @@
                                AutomationId="PerushNameSearch" SearchButtonPressed="OnPerushSearchSubmitted"/>
                     <Label Text="{Binding InlineCommentaryLimitMessage}" FontSize="12" LineBreakMode="WordWrap"
                            HorizontalTextAlignment="Center" AutomationId="InlineCommentaryLimitMessage"/>
+                    <!-- Live selected count; turns Primary and bold at the configured limit (#2471) -->
+                    <Label Text="{Binding PerushimSelectionStatus}"
+                           SemanticProperties.Description="{Binding PerushimSelectionStatus}"
+                           FontSize="13" FontAttributes="Bold"
+                           HorizontalTextAlignment="Center"
+                           AutomationId="PerushimSelectionStatus"
+                           TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray400}}">
+                        <Label.Triggers>
+                            <DataTrigger TargetType="Label" Binding="{Binding PerushimLimitReached}" Value="True">
+                                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryLight}}"/>
+                            </DataTrigger>
+                        </Label.Triggers>
+                    </Label>
                     <BoxView HeightRequest="1"
                              BackgroundColor="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray600}}"
                              Margin="0,4,0,0"/>

@@ -59,32 +59,22 @@ public class DiagnosticsExportTests
     [Fact]
     public async Task AccessibilityStatement_OpensTheMaintainedWebsiteUrl()
     {
-        await using var storage = new TestStorage();
-        var notes = new PerushimNotesService(NotesDeliveryTests.Pad().Object, storage.FileSystem.Object,
-            new Mock<IDeviceInfo>().Object, new Mock<IAppInfo>().Object);
         var launcher = new Mock<ILauncher>();
         Uri? opened = null;
         launcher.Setup(l => l.OpenAsync(It.IsAny<Uri>()))
             .Callback<Uri>(u => opened = u)
             .ReturnsAsync(true);
-        var support = new SupportPreferencesViewModel(notes, storage.FileSystem.Object,
-            new Mock<IShare>().Object, new Mock<IAppNavigator>().Object, launcher.Object);
-        await support.OpenAccessibilityStatementCommand.ExecuteAsync(null);
+        await AccessibilityStatement.OpenAsync(launcher.Object, new Mock<IAppNavigator>().Object);
         opened.Should().Be(new Uri(AppConfig.Instance.AccessibilityUrl));
     }
 
     [Fact]
     public async Task AccessibilityStatement_WhenLaunchFails_ShowsError()
     {
-        await using var storage = new TestStorage();
-        var notes = new PerushimNotesService(NotesDeliveryTests.Pad().Object, storage.FileSystem.Object,
-            new Mock<IDeviceInfo>().Object, new Mock<IAppInfo>().Object);
         var launcher = new Mock<ILauncher>();
         launcher.Setup(l => l.OpenAsync(It.IsAny<Uri>())).ThrowsAsync(new InvalidOperationException("no browser"));
         var navigator = new Mock<IAppNavigator>();
-        var support = new SupportPreferencesViewModel(notes, storage.FileSystem.Object,
-            new Mock<IShare>().Object, navigator.Object, launcher.Object);
-        await support.OpenAccessibilityStatementAsync();
+        await AccessibilityStatement.OpenAsync(launcher.Object, navigator.Object);
         navigator.Verify(n => n.DisplayAlertAsync("שגיאה", "לא ניתן לפתוח את הצהרת הנגישות", "אישור"), Times.Once);
     }
 

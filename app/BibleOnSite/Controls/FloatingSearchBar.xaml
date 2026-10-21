@@ -149,14 +149,15 @@
        <Grid x:Name="BookFilters" IsVisible="False" ColumnDefinitions="*,*,*" ColumnSpacing="6"/>
        <VerticalStackLayout x:Name="MoreFilters" IsVisible="False" Padding="8" Spacing="8">
         <Label Text="מספר תוצאות מרבי"/>
-        <Picker x:Name="LimitPicker" AutomationId="SearchLimitPicker" Title="מספר תוצאות" SelectedIndexChanged="OnLimitChanged"/>
+        <controls:NumberPicker x:Name="LimitPicker" AutomationId="SearchLimitPicker" Minimum="5" Maximum="50" Increment="5"
+                               HorizontalOptions="Start" ValueChanged="OnLimitChanged"/>
        </VerticalStackLayout>
        <VerticalStackLayout x:Name="SortFilters" IsVisible="False">
         <RadioButton x:Name="SortRelevanceRadio" Content="הכי רלוונטי" GroupName="SearchSort" Value="Relevance" IsChecked="True" AutomationId="SearchSortRelevance" CheckedChanged="OnSortChanged"/>
         <RadioButton Content="לפי סדר הדורות" GroupName="SearchSort" Value="Generation" AutomationId="SearchSortGeneration" CheckedChanged="OnSortChanged"/>
        </VerticalStackLayout>
       </Grid></ScrollView>
-      <Button Grid.Row="3" Text="הצגת תוצאות" AutomationId="SearchSheetApplyButton" Clicked="OnSheetDismissed"/>
+      <Button Grid.Row="3" x:Name="SearchSheetApplyButton" Text="הצגת תוצאות" AutomationId="SearchSheetApplyButton" Clicked="OnSheetDismissed"/>
      </Grid>
     </Border>
    </Grid>

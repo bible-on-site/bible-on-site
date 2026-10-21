@@ -17,12 +17,17 @@ namespace BibleOnSite.Services;
 public class PerushimNotesService
 {
     private const string NotesDbName = "sefaria-dump-5784-sivan-4.perushim_notes.sqlite";
+#if IOS || MACCATALYST
+    // App Store Connect accepts only alphanumerics and hyphens in asset-pack IDs.
+    private const string PerushimNotesPackName = "perushim-notes";
+#else
     private const string PerushimNotesPackName = "perushim_notes";
+#endif
     private const string RemovedMarkerName = NotesDbName + ".removed";
 
     /// <summary>
     /// Ready-to-query FTS5 search index generated with the notes content — the
-    /// second payload file of the perushim_notes pack. It is staged here before
+    /// second payload file of the notes asset pack. It is staged here before
     /// <see cref="SearchIndexService"/> adopts it into its cache.
     /// </summary>
     internal const string SearchIndexDbName = "sefaria-dump-5784-sivan-4.hebrew_search.sqlite";
@@ -136,6 +141,33 @@ public class PerushimNotesService
 
     /// <summary>Whether compatible notes are available from store delivery or a bundled asset.</summary>
     public bool IsAvailable => _initialized && !_notesMissing && _connection != null;
+
+    /// <summary>Whether <see cref="InitializeAsync"/> already settled once (successfully or not).</summary>
+    public bool IsInitialized => _initialized;
+
+    /// <summary>
+    /// Whether the local notes DB file is on disk. When it is absent and the
+    /// service is uninitialized, <see cref="InitializeAsync"/> will first
+    /// materialize the delivered pack — a copy of hundreds of MB inside the
+    /// operation lock — so UI-critical callers should kick it instead of
+    /// awaiting it.
+    /// </summary>
+    internal bool HasLocalNotesFile => File.Exists(Path.Join(DataDirectory, NotesDbName));
+
+    /// <summary>
+    /// Starts initialization without awaiting it; a faulted init logs here
+    /// instead of surfacing as an unobserved task exception. Callers that
+    /// cannot block on first-launch pack materialization use this and rely on
+    /// <see cref="OperationCompleted"/> to re-check availability.
+    /// </summary>
+    public void BeginInitialize()
+    {
+        // Task.Run keeps the file probes and pack-copy prefix off the
+        // caller's thread — BeginInitialize exists for UI-critical callers.
+        _ = Task.Run(InitializeAsync).ContinueWith(
+            task => Console.WriteLine($"Perushim notes init failed: {task.Exception}"),
+            TaskContinuationOptions.OnlyOnFaulted);
+    }
 
     internal async Task<SQLiteAsyncConnection?> GetSearchConnectionAsync()
     {
@@ -394,7 +426,7 @@ public class PerushimNotesService
             }
         }
 
-        Console.Error.WriteLine("Perushim notes not available via on-demand delivery. Ensure the perushim_notes on-demand pack (Android PAD / iOS asset pack) is included in the build.");
+        Console.Error.WriteLine($"Perushim notes not available via on-demand delivery. Ensure the {PerushimNotesPackName} on-demand pack (Android PAD / iOS asset pack) is included in the build.");
         return false;
     }
 

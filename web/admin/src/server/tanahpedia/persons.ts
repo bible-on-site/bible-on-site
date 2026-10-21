@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { execute, query, queryOne } from "../db";
-import { PEDIA_INVALIDATION, revalidateWebsite } from "../website-revalidate";
+import { revalidateWebsite } from "../website-revalidate";
+import { pediaInvalidationForPersons } from "./paths";
 
 export interface TanahpediaPerson {
 	id: string;
@@ -66,14 +67,19 @@ export const createPerson = createServerFn({ method: "POST" })
 				[data.sex_id, data.id, data.sex],
 			);
 		}
-		await revalidateWebsite(PEDIA_INVALIDATION);
+		await revalidateWebsite(
+			await pediaInvalidationForPersons([data.id]),
+		);
 		return { id: data.id };
 	});
 
 export const deletePerson = createServerFn({ method: "POST" })
 	.validator((data: string) => data)
 	.handler(async ({ data: id }) => {
+		// Resolve affected entry pages before the delete — the person row and
+		// its entity links are gone after.
+		const invalidation = await pediaInvalidationForPersons([id]);
 		await execute("DELETE FROM tanahpedia_person WHERE id = ?", [id]);
-		await revalidateWebsite(PEDIA_INVALIDATION);
+		await revalidateWebsite(invalidation);
 		return { success: true };
 	});

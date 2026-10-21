@@ -295,62 +295,74 @@
                             <Label Grid.Column="5" Text="ו" FontSize="9" FontAttributes="Bold" HorizontalTextAlignment="Center" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
                             <Label Grid.Column="6" Text="ש" FontSize="9" FontAttributes="Bold" HorizontalTextAlignment="Center" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
                         </Grid>
-                        <CollectionView ItemsSource="{Binding Cells}"
-                                        ItemsLayout="VerticalGrid, 7"
-                                        SelectionMode="None">
-                            <CollectionView.ItemTemplate>
-                                <DataTemplate x:DataType="viewmodels:CalendarCellViewModel">
-                                    <Border Margin="1"
-                                            Padding="0"
-                                            HeightRequest="24"
-                                            StrokeShape="RoundRectangle 4"
-                                            Stroke="Transparent"
-                                            StrokeThickness="1"
-                                            BackgroundColor="{AppThemeBinding Light=#F8FAFC, Dark=#1A1F2E}">
-                                        <Border.GestureRecognizers>
-                                            <TapGestureRecognizer Tapped="OnCellTapped"
-                                                                  CommandParameter="{Binding .}"/>
-                                        </Border.GestureRecognizers>
-                                        <Border.Triggers>
-                                            <DataTrigger TargetType="Border"
-                                                         Binding="{Binding IsToday}"
-                                                         Value="True">
-                                                <Setter Property="Stroke" Value="{StaticResource Primary}"/>
-                                                <Setter Property="StrokeThickness" Value="2"/>
-                                            </DataTrigger>
-                                            <DataTrigger TargetType="Border"
-                                                         Binding="{Binding IsReview}"
-                                                         Value="True">
-                                                <Setter Property="StrokeDashArray" Value="3,3"/>
-                                                <Setter Property="BackgroundColor" Value="Transparent"/>
-                                            </DataTrigger>
-                                            <DataTrigger TargetType="Border"
-                                                         Binding="{Binding IsNone}"
-                                                         Value="True">
-                                                <Setter Property="BackgroundColor" Value="Transparent"/>
-                                            </DataTrigger>
-                                            <DataTrigger TargetType="Border"
-                                                         Binding="{Binding IsBlank}"
-                                                         Value="True">
-                                                <Setter Property="BackgroundColor" Value="Transparent"/>
-                                            </DataTrigger>
-                                            <DataTrigger TargetType="Border"
-                                                         Binding="{Binding IsDimmed}"
-                                                         Value="True">
-                                                <Setter Property="Opacity" Value="0.3"/>
-                                            </DataTrigger>
-                                        </Border.Triggers>
-                                        <Label Text="{Binding DayText}"
-                                               FontSize="11"
-                                               IsVisible="{Binding IsBlank, Converter={StaticResource InvertedBoolConverter}}"
-                                               HorizontalTextAlignment="Center"
-                                               VerticalTextAlignment="Center"
-                                               SemanticProperties.Description="{Binding AccessibilityText}"
-                                               TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
-                                    </Border>
+                        <!-- Week rows of plain layout cells: a nested CollectionView per
+                             mini-month spun up a whole adapter/recycler per section and
+                             was the dominant grouped-view realization cost (#2455).
+                             HorizontalStackLayout honors the RTL flow direction like the
+                             CollectionView did, and FillAndExpand keeps 7 equal columns. -->
+                        <VerticalStackLayout Spacing="0"
+                                             BindableLayout.ItemsSource="{Binding Weeks}">
+                            <BindableLayout.ItemTemplate>
+                                <DataTemplate x:DataType="viewmodels:MiniMonthWeekViewModel">
+                                    <HorizontalStackLayout Spacing="0"
+                                                          BindableLayout.ItemsSource="{Binding Cells}">
+                                        <BindableLayout.ItemTemplate>
+                                            <DataTemplate x:DataType="viewmodels:CalendarCellViewModel">
+                                            <Border Margin="1"
+                                                    Padding="0"
+                                                    HeightRequest="24"
+                                                    HorizontalOptions="FillAndExpand"
+                                                    StrokeShape="RoundRectangle 4"
+                                                    Stroke="Transparent"
+                                                    StrokeThickness="1"
+                                                    BackgroundColor="{AppThemeBinding Light=#F8FAFC, Dark=#1A1F2E}">
+                                                <Border.GestureRecognizers>
+                                                    <TapGestureRecognizer Tapped="OnCellTapped"
+                                                                          CommandParameter="{Binding .}"/>
+                                                </Border.GestureRecognizers>
+                                                <Border.Triggers>
+                                                    <DataTrigger TargetType="Border"
+                                                                 Binding="{Binding IsToday}"
+                                                                 Value="True">
+                                                        <Setter Property="Stroke" Value="{StaticResource Primary}"/>
+                                                        <Setter Property="StrokeThickness" Value="2"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger TargetType="Border"
+                                                                 Binding="{Binding IsReview}"
+                                                                 Value="True">
+                                                        <Setter Property="StrokeDashArray" Value="3,3"/>
+                                                        <Setter Property="BackgroundColor" Value="Transparent"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger TargetType="Border"
+                                                                 Binding="{Binding IsNone}"
+                                                                 Value="True">
+                                                        <Setter Property="BackgroundColor" Value="Transparent"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger TargetType="Border"
+                                                                 Binding="{Binding IsBlank}"
+                                                                 Value="True">
+                                                        <Setter Property="BackgroundColor" Value="Transparent"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger TargetType="Border"
+                                                                 Binding="{Binding IsDimmed}"
+                                                                 Value="True">
+                                                        <Setter Property="Opacity" Value="0.3"/>
+                                                    </DataTrigger>
+                                                </Border.Triggers>
+                                                <Label Text="{Binding DayText}"
+                                                       FontSize="11"
+                                                       IsVisible="{Binding IsBlank, Converter={StaticResource InvertedBoolConverter}}"
+                                                       HorizontalTextAlignment="Center"
+                                                       VerticalTextAlignment="Center"
+                                                       SemanticProperties.Description="{Binding AccessibilityText}"
+                                                       TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
+                                            </Border>
+                                            </DataTemplate>
+                                        </BindableLayout.ItemTemplate>
+                                    </HorizontalStackLayout>
                                 </DataTemplate>
-                            </CollectionView.ItemTemplate>
-                        </CollectionView>
+                            </BindableLayout.ItemTemplate>
+                        </VerticalStackLayout>
                     </VerticalStackLayout>
                 </DataTemplate>
             </CollectionView.ItemTemplate>

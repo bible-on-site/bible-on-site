@@ -11,4 +11,13 @@ public static class ReaderSurfaceState
 {
     public static bool IsActive(int selectedPasukCount, bool chapterRecitation, bool focusedPasuk, bool playing) =>
         selectedPasukCount > 0 || chapterRecitation || focusedPasuk || playing;
+
+    /// <summary>
+    /// Whether the transient surface presents the selection bar rather than the
+    /// shared reader toolbar. The focused pasuk uses the shared toolbar — its
+    /// playback control sits beside the verse — so only a real selection, the
+    /// chapter recitation mode, or an unfocused in-flight clip shows the bar.
+    /// </summary>
+    public static bool ShowsSelectionBar(int selectedPasukCount, bool chapterRecitation, bool focusedPasuk, bool playing) =>
+        (selectedPasukCount > 0 || chapterRecitation || playing) && !focusedPasuk;
 }

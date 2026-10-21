@@ -33,13 +33,10 @@
     <Grid x:Name="MainGrid" RowDefinitions="Auto,*">
         <Grid x:Name="ReaderToolbar" Grid.Row="0" MinimumHeightRequest="56"
               BackgroundColor="{AppThemeBinding Light=#F2F7FE, Dark=#20304A}">
-            <Grid x:Name="NormalNavigationBar" ColumnDefinitions="48,*,48" HeightRequest="56">
-                <Button x:Name="ReaderNavigationButton" Grid.Column="0" Text="{x:Static fonts:FluentUI.navigation_24_regular}"
-                        FontFamily="FluentIcons" FontSize="24" WidthRequest="48" Padding="0"
-                        BackgroundColor="Transparent" TextColor="{AppThemeBinding Light=Black, Dark=White}"
-                        AutomationId="ReaderNavigationButton" SemanticProperties.Description="פתיחת תפריט הניווט"
-                        Clicked="OnReaderMenuClicked"/>
-                <Button Grid.Column="1" x:Name="NormalNavigationTitle"
+            <controls:SharedTopBar x:Name="NormalNavigationBar" NavigationAutomationId="ReaderNavigationButton">
+                <controls:SharedTopBar.CenterContent>
+                    <Grid>
+                <Button x:Name="NormalNavigationTitle"
                    AutomationId="PerekSource"
                    Text="{Binding Source}"
                    FontSize="20"
@@ -55,7 +52,7 @@
                    Margin="4,0"
                    SemanticProperties.Hint="הקישו לפתיחת החיפוש"
                    Clicked="OnPerekSourceClicked"/>
-                <Border x:Name="SearchIntroduction" Grid.Column="1" HorizontalOptions="Fill" VerticalOptions="Center"
+                <Border x:Name="SearchIntroduction" HorizontalOptions="Fill" VerticalOptions="Center"
                         HeightRequest="40" Margin="4,0" Padding="12,0" StrokeThickness="0" StrokeShape="RoundRectangle 14"
                         BackgroundColor="{AppThemeBinding Light=#E4EFFD, Dark=#2C4569}">
                     <Border.GestureRecognizers>
@@ -64,13 +61,17 @@
                     <Label x:Name="SearchIntroductionText" Text="חיפוש בתנ&quot;ך..." FontSize="20" VerticalOptions="Center"
                            HorizontalTextAlignment="Center" TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark=#AACBFF}"/>
                 </Border>
-                <Button x:Name="ReaderMenuButton" Grid.Column="2" AutomationId="ReaderMenuButton"
+                    </Grid>
+                </controls:SharedTopBar.CenterContent>
+                <controls:SharedTopBar.TrailingContent>
+                <Button x:Name="ReaderMenuButton" AutomationId="ReaderMenuButton"
                         Text="{x:Static fonts:FluentUI.more_vertical_24_regular}" FontFamily="FluentIcons" FontSize="20"
                         WidthRequest="48" HeightRequest="44" Padding="0" BackgroundColor="Transparent"
                         TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark=#AACBFF}"
                         VerticalOptions="Center" SemanticProperties.Description="אפשרויות הקריאה"
                         Clicked="OnReaderMenuButtonClicked"/>
-            </Grid>
+                </controls:SharedTopBar.TrailingContent>
+            </controls:SharedTopBar>
             <ContentView x:Name="SearchTitleHost" IsVisible="False" Margin="0" VerticalOptions="Center"/>
             <Grid
                   x:Name="SelectionBar"
@@ -154,8 +155,6 @@
                         TextColor="White"
                         Clicked="OnSelectionCopyClicked"/>
             </Grid>
-            <BoxView HeightRequest="1" VerticalOptions="End" InputTransparent="True" ZIndex="10"
-                     Color="{AppThemeBinding Light=#DBE8F8, Dark=#47658E}"/>
         </Grid>
 
         <controls:FloatingSearchBar x:Name="ChapterSearch" Grid.Row="1" ZIndex="300"
@@ -284,11 +283,11 @@
                                         <behaviors:LongPressBehavior LongPressDuration="600" LongPressed="OnHeaderLongPressed"/>
                                     </Label.Behaviors>
                                 </Label>
-                                <!-- קריינות: plays the whole perek; shown only when the
-                                     menu checkbox is checked for this perek -->
+                                <!-- קריינות: plays the whole perek; shown when the global
+                                     קריינות preference is on and this perek has audio -->
                                 <Button x:Name="HeaderPlayButton"
                                         AutomationId="HeaderPlayButton"
-                                        Text="{x:Static fonts:FluentUI.play_24_regular}"
+                                        Text="{x:Static fonts:FluentUI.headphones_24_regular}"
                                         FontFamily="FluentIcons"
                                         FontSize="20"
                                         WidthRequest="40"
@@ -299,6 +298,8 @@
                                         HorizontalOptions="Start"
                                         VerticalOptions="Center"
                                         Margin="8,0"
+                                        SemanticProperties.Description="השמעת קריאת הפרק"
+                                        ToolTipProperties.Text="השמעת קריאת הפרק"
                                         IsVisible="{Binding BindingContext.ShowHeaderPlayButton, Source={x:Reference PerekPageRoot}}"
                                         Clicked="OnHeaderPlayClicked"/>
                             </Grid>
@@ -544,6 +545,19 @@
                                AutomationId="PerushNameSearch" SearchButtonPressed="OnPerushSearchSubmitted"/>
                     <Label Text="{Binding InlineCommentaryLimitMessage}" FontSize="12" LineBreakMode="WordWrap"
                            HorizontalTextAlignment="Center" AutomationId="InlineCommentaryLimitMessage"/>
+                    <!-- Live selected count; turns Primary and bold at the configured limit (#2471) -->
+                    <Label Text="{Binding PerushimSelectionStatus}"
+                           SemanticProperties.Description="{Binding PerushimSelectionStatus}"
+                           FontSize="13" FontAttributes="Bold"
+                           HorizontalTextAlignment="Center"
+                           AutomationId="PerushimSelectionStatus"
+                           TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray400}}">
+                        <Label.Triggers>
+                            <DataTrigger TargetType="Label" Binding="{Binding PerushimLimitReached}" Value="True">
+                                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryLight}}"/>
+                            </DataTrigger>
+                        </Label.Triggers>
+                    </Label>
                     <BoxView HeightRequest="1"
                              BackgroundColor="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray600}}"
                              Margin="0,4,0,0"/>
@@ -645,35 +659,8 @@
                             Opacity="0.25"/>
                 </Border.Shadow>
                 <VerticalStackLayout Spacing="0">
-                    <!-- קריינות - checkbox toggle; only offered when the current perek
-                         has a downloaded recitation -->
-                    <VerticalStackLayout Spacing="0"
-                                         IsVisible="{Binding HasCurrentPerekRecitation}">
-                        <Grid Padding="10,6">
-                            <Grid.GestureRecognizers>
-                                <TapGestureRecognizer Tapped="OnQriynotTapped"/>
-                            </Grid.GestureRecognizers>
-                            <Grid ColumnDefinitions="Auto,*,Auto">
-                                <CheckBox AutomationId="QriynotCheckBox"
-                                          IsChecked="{Binding IsQriynotEnabled}"
-                                          InputTransparent="True"
-                                          VerticalOptions="Center"/>
-                                <Label Grid.Column="1"
-                                       Text="קריינות"
-                                       FontSize="16"
-                                       VerticalOptions="Center"
-                                       Margin="10,0,0,0"/>
-                                <Label Grid.Column="2"
-                                       Text="{x:Static fonts:FluentUI.headphones_24_regular}"
-                                       FontFamily="FluentIcons"
-                                       FontSize="18"
-                                       TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"
-                                       VerticalOptions="Center"/>
-                            </Grid>
-                        </Grid>
-                        <BoxView HeightRequest="1"
-                                 BackgroundColor="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray600}}"/>
-                    </VerticalStackLayout>
+                    <!-- קריינות is a global setting under העדפות → על הפרק (#2472),
+                         not a per-page menu mode. -->
                     <!-- שניים מקרא - checkbox toggle -->
                     <Grid Padding="10,6">
                         <Grid.GestureRecognizers>
@@ -839,6 +826,7 @@
               ZIndex="140"
               IsVisible="False"
               Opacity="0"
+              AutomationId="CircularMenuScrim"
               BackgroundColor="#66000000">
             <Grid.GestureRecognizers>
                 <TapGestureRecognizer Tapped="OnOverlayTapped"/>
@@ -946,11 +934,32 @@
         <!-- Perek Picker Popup Overlay -->
         <Grid x:Name="FocusedPasukOverlay" Grid.Row="1" IsVisible="False" ZIndex="150"
               AutomationId="FocusedPasukOverlay" BackgroundColor="{AppThemeBinding Light=White, Dark=#1C1C1E}">
-            <CollectionView x:Name="FocusedPerushim" SelectionMode="None" Margin="20,16"
+            <!-- Scrollbar gutter: keep the indicator near the edge (margin 6)
+                 while the text keeps its 20 inset via content padding (#2474) -->
+            <CollectionView x:Name="FocusedPerushim" SelectionMode="None" Margin="6,16"
                             AutomationId="FocusedPerushimCollection">
                 <CollectionView.Header>
-                    <VerticalStackLayout Spacing="16">
-                        <Label x:Name="FocusedSourceLabel" FontSize="18" FontAttributes="Bold" TextColor="{StaticResource Primary}"/>
+                    <VerticalStackLayout Spacing="16" Padding="14,0">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <Label x:Name="FocusedSourceLabel" FontSize="18" FontAttributes="Bold"
+                                   TextColor="{StaticResource Primary}" VerticalOptions="Center"/>
+                            <!-- קריינות: plays the whole focused pasuk (#2472) -->
+                            <Button Grid.Column="1"
+                                    x:Name="FocusedPlayButton"
+                                    AutomationId="FocusedPlayButton"
+                                    Text="{x:Static fonts:FluentUI.headphones_24_regular}"
+                                    FontFamily="FluentIcons"
+                                    FontSize="20"
+                                    WidthRequest="40"
+                                    HeightRequest="40"
+                                    Padding="0"
+                                    BackgroundColor="Transparent"
+                                    TextColor="{StaticResource Primary}"
+                                    SemanticProperties.Description="השמעת הפסוק"
+                                    ToolTipProperties.Text="השמעת הפסוק"
+                                    IsVisible="False"
+                                    Clicked="OnFocusedPlayClicked"/>
+                        </Grid>
                         <Label x:Name="FocusedPasukText" AutomationId="FocusedPasukText"
                                FontSize="{DynamicResource PasukFontSize}" FlowDirection="RightToLeft" LineHeight="1.4"/>
                         <Label x:Name="FocusedRecitationHint" FontSize="14" TextColor="{StaticResource Gray500}"/>
@@ -958,7 +967,7 @@
                 </CollectionView.Header>
                 <CollectionView.ItemTemplate>
                     <DataTemplate x:DataType="models:PerushNoteDisplay">
-                        <VerticalStackLayout Spacing="4" Padding="0,8">
+                        <VerticalStackLayout Spacing="4" Padding="14,8">
                             <Label Text="{Binding PerushName}" FontSize="{DynamicResource PerushNameFontSize}"
                                    FontAttributes="Bold" TextColor="{StaticResource Primary}" AutomationId="FocusedPerushName"/>
                             <controls:HtmlView ContentLoader="{Binding ContentLoader}" HtmlContent="{Binding DisplayContent}"

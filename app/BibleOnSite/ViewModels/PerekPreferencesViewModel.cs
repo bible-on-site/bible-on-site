@@ -100,6 +100,25 @@ public partial class PerekPreferencesViewModel : ObservableObject
         }
     }
 
+    /// <summary>
+    /// Global קריינות switch (default on, #2472). Off suppresses tap and
+    /// automatic recitation and hides the headphones actions in the reader.
+    /// </summary>
+    public bool QriynotEnabled
+    {
+        get => _preferencesService.QriynotEnabled;
+        set
+        {
+            if (_preferencesService.QriynotEnabled == value)
+            {
+                return;
+            }
+
+            _preferencesService.QriynotEnabled = value;
+            OnPropertyChanged();
+        }
+    }
+
     /// <summary>Maximum commentary sources shown across a whole chapter.</summary>
     public double InlineCommentaryLimit
     {
@@ -117,6 +136,7 @@ public partial class PerekPreferencesViewModel : ObservableObject
         OnPropertyChanged(nameof(IsPerekToLoadTodays));
         OnPropertyChanged(nameof(IsPerekToLoadLastLearnt));
         OnPropertyChanged(nameof(MasoraMenuEnabled));
+        OnPropertyChanged(nameof(QriynotEnabled));
         OnPropertyChanged(nameof(InlineCommentaryLimit));
     }
 }

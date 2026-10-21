@@ -13,6 +13,19 @@ public enum PerekToLoad
 }
 
 /// <summary>
+/// Android-only override for the visible in-app Back/Up control (#2467).
+/// PlatformDefault and Hide both rely on system Back on Android; Show
+/// duplicates it in the app chrome. Other platforms ignore the value —
+/// the Android choice must not leak into iOS/Windows behavior.
+/// </summary>
+public enum InAppBackButtonPreference
+{
+    PlatformDefault = 0,
+    Show = 1,
+    Hide = 2
+}
+
+/// <summary>
 /// Service for managing user preferences.
 /// Uses IPreferencesStorage abstraction for testability.
 /// </summary>
@@ -90,6 +103,7 @@ public class PreferencesService
     private const string PerekToLoadKey = "perekToLoad";
     private const string BookmarkedPerakimKey = "bookmarkedPerakim";
     private const string MasoraMenuEnabledKey = "masoraMenuEnabled";
+    private const string InAppBackButtonKey = "inAppBackButton";
 
     // הסתר שם השם — stored values mirror the website's divineNameMasking
     // settings (same option spellings), so the policy stays portable.
@@ -135,6 +149,30 @@ public class PreferencesService
     private static readonly DivineNameMaskOption[] ShaddaiOptions =
         [DivineNameMaskOption.AsIs, DivineNameMaskOption.Hyphen, DivineNameMaskOption.Custom];
 
+
+    private const string QriynotEnabledKey = "qriynotEnabled";
+    private bool _qriynotEnabled = true;
+
+    /// <summary>
+    /// Global קריינות switch (העדפות → על הפרק). Default on for new and upgraded
+    /// installations — an unset preference resolves to enabled, while a stored
+    /// explicit choice (including off) is honored (#2472).
+    /// </summary>
+    public bool QriynotEnabled
+    {
+        get => _qriynotEnabled;
+        set
+        {
+            if (_qriynotEnabled == value)
+            {
+                return;
+            }
+
+            _qriynotEnabled = value;
+            _storage.Set(QriynotEnabledKey, value);
+            OnPreferencesChanged();
+        }
+    }
 
     private double _recitationSpeed = 1;
     private double _recitationVolume = 1;
@@ -354,6 +392,33 @@ public class PreferencesService
         OnPreferencesChanged();
     }
 
+    private InAppBackButtonPreference _inAppBackButton = InAppBackButtonPreference.PlatformDefault;
+
+    /// <summary>
+    /// Visible in-app Back/Up chrome preference (#2467). Persisted tri-state;
+    /// applied only by the Android chrome policy — iOS/Windows always follow
+    /// their platform default. Unset/stale values resolve to PlatformDefault.
+    /// </summary>
+    public InAppBackButtonPreference InAppBackButton
+    {
+        get => _inAppBackButton;
+        set
+        {
+            if (!Enum.IsDefined(value))
+            {
+                value = InAppBackButtonPreference.PlatformDefault;
+            }
+            if (_inAppBackButton == value)
+            {
+                return;
+            }
+
+            _inAppBackButton = value;
+            _storage.Set(InAppBackButtonKey, (int)value);
+            OnPreferencesChanged();
+        }
+    }
+
     private bool _masoraMenuEnabled;
 
     /// <summary>
@@ -464,6 +529,11 @@ public class PreferencesService
     public void Load()
     {
         _masoraMenuEnabled = _storage.Get(MasoraMenuEnabledKey, false);
+        _qriynotEnabled = _storage.Get(QriynotEnabledKey, true);
+        var storedBackButton = _storage.Get(InAppBackButtonKey, (int)InAppBackButtonPreference.PlatformDefault);
+        _inAppBackButton = Enum.IsDefined((InAppBackButtonPreference)storedBackButton)
+            ? (InAppBackButtonPreference)storedBackButton
+            : InAppBackButtonPreference.PlatformDefault;
         var storedConsent = _storage.Get(AnalyticsConsent.StorageKey, "");
         // Garbage keeps the "never asked" state so the prompt can still run.
         _analyticsConsent = storedConsent is AnalyticsConsent.GrantedValue or AnalyticsConsent.DeniedValue
