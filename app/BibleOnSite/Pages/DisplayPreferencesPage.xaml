@@ -188,6 +188,43 @@
                 </Border>
             </VerticalStackLayout>
 
+            <!-- ═══ כפתור חזרה (Android only) ═══ -->
+            <VerticalStackLayout Spacing="8"
+                                 IsVisible="{OnPlatform Android=true, Default=false}">
+                <Label Text="כפתור חזרה ביישומון"
+                       FontSize="14"
+                       FontAttributes="Bold"
+                       TextColor="{StaticResource Primary}"
+                       Padding="4,0,0,0"/>
+
+                <Border Padding="16"
+                        StrokeShape="RoundRectangle 12"
+                        Stroke="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray700}}"
+                        StrokeThickness="1"
+                        BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Gray900}}">
+                    <VerticalStackLayout Spacing="10">
+                        <Label Text="במכשירי אנדרויד אפשר להסתמך על כפתור החזרה של המערכת או להציג כפתור גם בתוך היישומון"
+                               FontSize="13"
+                               TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray350}}"/>
+                        <RadioButton AutomationId="BackButtonPlatformDefault"
+                                     Content="ברירת מחדל — ללא כפתור ביישומון"
+                                     GroupName="InAppBackButton"
+                                     IsChecked="{Binding IsBackButtonPlatformDefault}"
+                                     CheckedChanged="OnBackButtonRadioChanged"/>
+                        <RadioButton AutomationId="BackButtonShow"
+                                     Content="הצג תמיד"
+                                     GroupName="InAppBackButton"
+                                     IsChecked="{Binding IsBackButtonShow}"
+                                     CheckedChanged="OnBackButtonRadioChanged"/>
+                        <RadioButton AutomationId="BackButtonHide"
+                                     Content="הסתר תמיד"
+                                     GroupName="InAppBackButton"
+                                     IsChecked="{Binding IsBackButtonHide}"
+                                     CheckedChanged="OnBackButtonRadioChanged"/>
+                    </VerticalStackLayout>
+                </Border>
+            </VerticalStackLayout>
+
         </VerticalStackLayout>
     </ScrollView>
 </ContentPage>
