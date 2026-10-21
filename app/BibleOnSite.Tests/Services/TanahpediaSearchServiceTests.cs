@@ -328,3 +328,17 @@ public class TanahpediaScopedSearchTests
         http.Requests.Should().OnlyContain(request => !request.Contains("\"categories\""));
     }
 }
+
+public class TanahpediaNullDataTests
+{
+    [Fact]
+    public async Task SearchEntries_NullDataPayload_ReturnsEmpty()
+    {
+        using var http = new GraphQLTransport("{\"data\":null}");
+        var service = new TanahpediaService(http.Client);
+
+        var hits = await service.SearchEntriesAsync("משה", 10, TestContext.Current.CancellationToken);
+
+        hits.Should().BeEmpty();
+    }
+}
