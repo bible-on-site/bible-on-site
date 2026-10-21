@@ -398,7 +398,21 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
             position.Y >= location[1] && position.Y < location[1] + view.Height;
     }
 
-    private void OnTouchReleased(object? sender, TouchPosition position)
+    private void OnTouchMoved(object? sender, TouchPosition position)
+    {
+        var slop = PerekCarousel.Handler?.PlatformView is Android.Views.View view
+            ? Android.Views.ViewConfiguration.Get(view.Context!)?.ScaledTouchSlop ?? 12
+            : 12;
+        _swipe.Move(position, slop);
+    }
+
+    // Releases and native cancels/interruptions both arrive here: a cancel
+    // mid-swipe can strand the carousel mid-offset just like a release, so
+    // it settles the same way (#2469).
+    private void OnTouchReleased(object? sender, TouchPosition position) =>
+        SettleSwipe(_swipe.Last ?? position);
+
+    private void SettleSwipe(TouchPosition position)
     {
         if (PerekCarousel.Handler?.PlatformView is not Android.Views.View view)
         {
@@ -416,8 +430,6 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
             PerekCarousel.ScrollTo(index, position: ScrollToPosition.Center, animate: true);
         }
     }
-
-    private void OnTouchCancelled(object? sender, EventArgs e) => _swipe.Cancel();
 #endif
 
     protected override void OnDisappearing()
@@ -440,8 +452,8 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
 #if ANDROID
         MainActivity.TouchStarted -= OnTouchStarted;
         MainActivity.UnsubscribeTouchDispatched(OnTouchDispatched);
+        MainActivity.TouchMoved -= OnTouchMoved;
         MainActivity.TouchReleased -= OnTouchReleased;
-        MainActivity.TouchCancelled -= OnTouchCancelled;
         _swipe.Cancel();
         LongPressBehavior.CancelAllPending();
 #endif
@@ -485,8 +497,8 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
 #if ANDROID
         MainActivity.TouchStarted += OnTouchStarted;
         MainActivity.SubscribeTouchDispatched(OnTouchDispatched);
+        MainActivity.TouchMoved += OnTouchMoved;
         MainActivity.TouchReleased += OnTouchReleased;
-        MainActivity.TouchCancelled += OnTouchCancelled;
 #endif
 #if IOS
         ApplyBottomBarSafeArea();
