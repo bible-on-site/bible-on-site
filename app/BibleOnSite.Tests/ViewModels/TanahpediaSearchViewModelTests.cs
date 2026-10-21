@@ -191,7 +191,7 @@ public class TanahpediaSearchViewModelTests
     [Fact]
     public async Task Search_Cancellation_IsSwallowed()
     {
-        var cts = new CancellationTokenSource();
+        using var cts = new CancellationTokenSource();
         _service.Setup(s => s.SearchEntriesAsync(
                 It.IsAny<string>(), It.IsAny<int>(), It.IsAny<IReadOnlyCollection<string>?>(), It.IsAny<CancellationToken>()))
             .Returns<string, int, IReadOnlyCollection<string>?, CancellationToken>((_, _, _, ct) =>
