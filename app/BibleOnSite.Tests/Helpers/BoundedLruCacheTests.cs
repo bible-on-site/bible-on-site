@@ -150,10 +150,10 @@ public class BoundedLruCacheGuardTests
     [Fact]
     public void rejects_nonpositive_total_size_and_null_measure()
     {
-        (() => new BoundedLruCache<string, string>(1, 0, v => v.Length))
-            .Should().Throw<ArgumentOutOfRangeException>();
-        (() => new BoundedLruCache<string, string>(1, 1, null!))
-            .Should().Throw<ArgumentNullException>();
+        var badSize = () => new BoundedLruCache<string, string>(1, 0, v => v.Length);
+        badSize.Should().Throw<ArgumentOutOfRangeException>();
+        var nullMeasure = () => new BoundedLruCache<string, string>(1, 1, null!);
+        nullMeasure.Should().Throw<ArgumentNullException>();
     }
 
     [Fact]

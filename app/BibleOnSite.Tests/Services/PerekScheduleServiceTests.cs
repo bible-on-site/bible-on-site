@@ -520,9 +520,12 @@ public class PerekScheduleServiceNotLoadedTests
 
         service.ConfirmedCycleCount.Should().Be(0);
         service.LastConfirmedCycleNumber.Should().Be(0);
-        (() => service.GetCycle(1)).Should().Throw<InvalidOperationException>();
-        (() => service.GetCycleForDate(57750330)).Should().Throw<InvalidOperationException>();
-        (() => service.GetCycleForDateOrUpcoming(57750330)).Should().Throw<InvalidOperationException>();
+        var getCycle = () => service.GetCycle(1);
+        getCycle.Should().Throw<InvalidOperationException>();
+        var forDate = () => service.GetCycleForDate(57750330);
+        forDate.Should().Throw<InvalidOperationException>();
+        var upcoming = () => service.GetCycleForDateOrUpcoming(57750330);
+        upcoming.Should().Throw<InvalidOperationException>();
     }
 
     [Fact]
