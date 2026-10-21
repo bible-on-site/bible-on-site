@@ -15,12 +15,12 @@
   color: #333;
 }
 
-.header h1 {
+.header h2 {
   font-size: 1.6em;
   margin: 0.3em 0;
 }
 
-.header h2 {
+.header h3 {
   font-size: 1em;
   margin: 0.2em 0;
   color: #555;
@@ -110,11 +110,11 @@
   }
 
   .header,
-  .header h1 {
+  .header h2 {
     color: #e8eaed;
   }
 
-  .header h2 {
+  .header h3 {
     color: #9aa0a6;
   }
 

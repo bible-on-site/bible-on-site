@@ -24,8 +24,7 @@ public partial class FloatingSearchBar : ContentView
     {
         InitializeComponent();
         BindingContext = _viewModel;
-        LimitPicker.ItemsSource = Enumerable.Range(1, 10).Select(value => value * 5).ToList();
-        LimitPicker.SelectedItem = _viewModel.ResultsLimit;
+        LimitPicker.Value = _viewModel.ResultsLimit;
         _viewModel.PropertyChanged += (_, _) => UpdateStatus();
         SearchPanel.SizeChanged += (_, _) => ResizeFilterSheet();
         RefreshRecentHistory();
@@ -301,7 +300,8 @@ public partial class FloatingSearchBar : ContentView
 
     private void OnLimitChanged(object? sender, EventArgs e)
     {
-        if (LimitPicker.SelectedItem is not int limit)
+        var limit = (int)LimitPicker.Value;
+        if (limit == _viewModel.ResultsLimit)
         {
             return;
         }

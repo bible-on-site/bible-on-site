@@ -1,3 +1,4 @@
+using BibleOnSite.Tests.MobileE2E.Platforms;
 using OpenQA.Selenium.Appium;
 using Xunit;
 
@@ -60,6 +61,15 @@ public sealed class PerushimHtmlScrollStabilityTests(ITestOutputHelper output, M
         // to finish well inside the 10-minute blame-hang budget.
         Storm(bottomY, topY);
         Storm(topY, bottomY);
+
+        // The last flick's inertia keeps the collection decelerating and
+        // recycling cells on the main thread — that is the starvation that
+        // stretched every later WDA command past the 45s return budget. A
+        // short gutter drag takes scroll tracking and stops the momentum.
+        var readerFrame = MobilePlatformAdapter.ReadFrame(list);
+        Driver!.PerformActions([ReaderScrollActions.Brake(
+            new System.Drawing.Rectangle(readerFrame.Location, readerFrame.Size),
+            DriverTelemetry.WindowSize(Driver))]);
 
         // WDA resolves every pointerMove against the app element's AX snapshot
         // during synthesis, so keep each request short. queryAppState asks the

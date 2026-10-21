@@ -263,6 +263,63 @@ public class SearchMatchTests
 
     #endregion
 
+    #region ResolvePerushTargetAsync
+
+    [Fact]
+    public async Task ResolvePerushTargetAsync_uses_note_contents_when_no_loader()
+    {
+        var display = new PerushNoteDisplay { PerushName = "רש\"י", PerushId = 3,
+            NoteContents = ["הערה של בראשית"] };
+        var hit = new PerushSearchResult("3", "הערה של בראשית", 1, 5, "בראשית");
+
+        var target = await SearchMatch.ResolvePerushTargetAsync(hit, [display]);
+
+        target.Should().NotBeNull();
+        target!.Value.Display.Should().BeSameAs(display);
+        target!.Value.Span.Should().Be(new SearchMatchSpan(8, 6));
+    }
+
+    [Fact]
+    public async Task ResolvePerushTargetAsync_searches_all_displays_for_unparseable_perush_id()
+    {
+        var hit = new PerushSearchResult("not-a-number", "הערה של בראשית", 1, 5, "בראשית");
+        var displays = new List<PerushNoteDisplay>
+        {
+            new() { PerushName = "רש\"י", PerushId = 1, NoteContents = ["הערה של בראשית"] },
+        };
+
+        var target = await SearchMatch.ResolvePerushTargetAsync(hit, displays);
+
+        target.Should().NotBeNull();
+        target!.Value.Display.PerushId.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task ResolvePerushTargetAsync_returns_null_when_no_display_carries_the_match()
+    {
+        var hit = new PerushSearchResult("1", "אין התאמה", 1, 5, "נדיר");
+        var displays = new List<PerushNoteDisplay>
+        {
+            new() { PerushName = "רש\"י", PerushId = 1, NoteContents = ["הערה אחרת"] },
+            new() { PerushName = "אבן עזרא", PerushId = 2, NoteContents = ["גם לא"] },
+        };
+
+        (await SearchMatch.ResolvePerushTargetAsync(hit, displays)).Should().BeNull();
+    }
+
+    [Fact]
+    public void Locate_skips_unscored_words_before_the_token_match()
+    {
+        // Token fallback: early words score 0 against every query term, so the
+        // scan resets until the later word wins.
+        var span = SearchMatch.Locate("משהו אחר בראשית", "נדיר בראשית");
+
+        span.Should().Be(new SearchMatchSpan(9, 6));
+    }
+
+
+    #endregion
+
     #region ResolveArticleTarget
 
     [Fact]
@@ -386,6 +443,42 @@ public class SearchMatchTests
         SearchMatch.NormalizedMap("יִ").Should().Equal(0);
         SearchMatch.NormalizedMap("é").Should().Equal(0);
         SearchText.Normalize("איִבé").Should().Be("איבe");
+    }
+
+    #endregion
+
+    #region ResolveArticleTarget
+
+    [Fact]
+    public void ResolveArticleTarget_maps_the_hit_to_its_segment_and_span()
+    {
+        var segments = new List<string> { "קטע ראשון", "טקסט עם בראשית בפנים" };
+
+        var target = SearchMatch.ResolveArticleTarget(segments, "בראשית", "בראשית");
+
+        target.Should().NotBeNull();
+        target!.Value.Segment.Should().Be(1);
+        target!.Value.Span.Length.Should().Be(6);
+    }
+
+    [Fact]
+    public void ResolveArticleTarget_clips_a_span_running_past_the_segment()
+    {
+        var segments = new List<string> { "בראשית ברא", "קטע שני" };
+
+        var target = SearchMatch.ResolveArticleTarget(segments, "בראשית ברא", "בראשית ברא");
+
+        target.Should().NotBeNull();
+        target!.Value.Segment.Should().Be(0);
+        target!.Value.Span.Length.Should().BeLessThanOrEqualTo(10);
+    }
+
+    [Fact]
+    public void ResolveArticleTarget_returns_null_when_nothing_matches()
+    {
+        var segments = new List<string> { "טקסט אחר" };
+
+        SearchMatch.ResolveArticleTarget(segments, "נדיר", "נדיר").Should().BeNull();
     }
 
     #endregion

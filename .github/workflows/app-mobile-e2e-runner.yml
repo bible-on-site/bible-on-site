@@ -145,8 +145,10 @@ jobs:
         if: inputs.platform == 'iOS'
         run: |
           XCODE_VER=$(xcodebuild -version | tr '\n' '-' | tr -d ' ')
-          DOTNET_VER=$(dotnet --version)
-          echo "id=xcode${XCODE_VER}-dotnet${DOTNET_VER}-mauiios${{ env.MAUI_WORKLOAD_SET }}" >> "$GITHUB_OUTPUT"
+          # `dotnet --version` rolls forward to the newest SDK baked into the
+          # image, which can differ between jobs on the same runner label; the
+          # pinned SDK above is the version actually installed and used.
+          echo "id=xcode${XCODE_VER}-dotnet${{ env.DOTNET_SDK_VERSION }}-mauiios${{ env.MAUI_WORKLOAD_SET }}" >> "$GITHUB_OUTPUT"
 
       # Resolve-before-restore: the same selection boot uses, without the
       # runtime download — a miss leaves boot's download fallback untouched.

@@ -122,7 +122,7 @@ public partial class PerekPage
 
     private void StartSearchIntroduction()
     {
-        if (ChapterSearch.IsSearchOpen || !NormalNavigationBar.IsVisible)
+        if (ChapterSearch.IsSearchOpen || !NormalNavigationBar.BarVisible)
         {
             return;
         }
@@ -144,7 +144,7 @@ public partial class PerekPage
         // The permanent navigation control stays available during loading and
         // search landing. Animate only the decorative introduction above it.
         NormalNavigationTitle.Opacity = 1;
-        var sourceWidth = NormalNavigationBar.Width - 2 * ReaderNavigationButton.Width - NormalNavigationTitle.Margin.HorizontalThickness;
+        var sourceWidth = NormalNavigationBar.Width - 2 * NormalNavigationBar.NavigationButton.Width - NormalNavigationTitle.Margin.HorizontalThickness;
         var introductionWidth = Math.Min(ReaderToolbar.Width - 8, sourceWidth * 1.06);
         if (sourceWidth <= 0 || introductionWidth <= 0)
         {
@@ -216,8 +216,6 @@ public partial class PerekPage
         }
     }
 #endif
-
-    private void OnReaderMenuClicked(object? sender, EventArgs e) => Shell.Current.FlyoutIsPresented = true;
 
     public void ApplyQueryAttributes(IDictionary<string, object> query)
     {

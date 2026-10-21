@@ -6,7 +6,8 @@ import styles from "./NumbersSection.module.css";
 /**
  * Shared count-up duration (seconds) for every counter in
  * "מספרים על הפרק" (#2397): all counters start and finish together,
- * whatever their totals.
+ * whatever their totals — and the fixed-word item's entrance animation
+ * runs on the same clock.
  */
 export const STATS_ANIMATION_DURATION_SECONDS = 1.8;
 const ANIMATION_DURATION_MS = STATS_ANIMATION_DURATION_SECONDS * 1000;
@@ -14,10 +15,22 @@ const ANIMATION_DURATION_MS = STATS_ANIMATION_DURATION_SECONDS * 1000;
 /** Ease-out cubic: fast start, settles precisely on the target. */
 const easeOutCubic = (progress: number) => 1 - (1 - progress) ** 3;
 
-export interface StatItem {
+export interface NumericStatItem {
 	label: string;
 	value: number;
 }
+
+/**
+ * A fixed-word item (e.g. רבנים כותבים על הפרק → עשרות): never a computed
+ * count, never animated through numeric values — the word itself gets a
+ * restrained entrance animation synchronized with the numeric counters.
+ */
+export interface TextStatItem {
+	label: string;
+	text: string;
+}
+
+export type StatItem = NumericStatItem | TextStatItem;
 
 const formatNumber = (value: number) => value.toLocaleString("he-IL");
 
@@ -32,8 +45,9 @@ const formatNumber = (value: number) => value.toLocaleString("he-IL");
 export function StatsCounters({ stats }: { stats: StatItem[] }) {
 	const ref = useRef<HTMLDListElement>(null);
 	const [displayed, setDisplayed] = useState<number[]>(() =>
-		stats.map((stat) => stat.value),
+		stats.map((stat) => ("value" in stat ? stat.value : 0)),
 	);
+	const [textRevealed, setTextRevealed] = useState(true);
 
 	useEffect(() => {
 		const element = ref.current;
@@ -49,8 +63,9 @@ export function StatsCounters({ stats }: { stats: StatItem[] }) {
 
 		// The reset happens while the section is still off-screen, so the
 		// count-up always starts at the viewport trigger.
-		const targets = stats.map((stat) => stat.value);
+		const targets = stats.map((stat) => ("value" in stat ? stat.value : 0));
 		setDisplayed(targets.map(() => 0));
+		setTextRevealed(false);
 
 		let frame = 0;
 		// One observer + one elapsed-time loop drive all counters together:
@@ -59,6 +74,9 @@ export function StatsCounters({ stats }: { stats: StatItem[] }) {
 			(entries) => {
 				if (!entries.some((entry) => entry.isIntersecting)) return;
 				observer.disconnect(); // animate once per page visit
+				// The word's CSS transition shares the group's duration, so it
+				// finishes its entrance exactly when the counters settle.
+				setTextRevealed(true);
 				const start = performance.now();
 				const tick = (tickNow: number) => {
 					const progress = Math.min(
@@ -86,24 +104,37 @@ export function StatsCounters({ stats }: { stats: StatItem[] }) {
 
 	return (
 		<dl ref={ref} className={styles.stats}>
-			{stats.map((stat, index) => {
-				const final = formatNumber(stat.value);
-				return (
-					<div key={stat.label} className={styles.stat}>
-						<dt className={styles.label}>{stat.label}</dt>
+			{stats.map((stat, index) => (
+				<div key={stat.label} className={styles.stat}>
+					<dt className={styles.label}>{stat.label}</dt>
+					{"text" in stat ? (
 						<dd className={styles.value}>
-							<span className={styles.srOnly}>{final}</span>
+							<span className={styles.srOnly}>{stat.text}</span>
+							<span
+								aria-hidden="true"
+								className={`${styles.word} ${textRevealed ? "" : styles.wordHidden}`}
+							>
+								{stat.text}
+							</span>
+						</dd>
+					) : (
+						<dd className={styles.value}>
+							<span className={styles.srOnly}>
+								{formatNumber(stat.value)}
+							</span>
 							<span
 								aria-hidden="true"
 								className={styles.number}
-								style={{ minWidth: `${final.length}ch` }}
+								style={{
+									minWidth: `${formatNumber(stat.value).length}ch`,
+								}}
 							>
-								{formatNumber(displayed[index])}
+								{formatNumber(displayed[index] ?? stat.value)}
 							</span>
 						</dd>
-					</div>
-				);
-			})}
+					)}
+				</div>
+			))}
 		</dl>
 	);
 }

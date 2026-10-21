@@ -15,11 +15,14 @@ vi.mock("@tanstack/react-start", () => ({
 }));
 
 import {
-	ARTICLE_INVALIDATION,
-	AUTHOR_INVALIDATION,
+	articleInvalidation,
+	articlePath,
+	authorInvalidation,
+	authorPath,
 	getWebsiteRevalidationStatus,
 	lastRevalidationFailure,
-	PEDIA_INVALIDATION,
+	pediaEntryPath,
+	pediaInvalidation,
 	revalidateWebsite,
 } from "~/server/website-revalidate";
 
@@ -128,25 +131,56 @@ describe("revalidateWebsite", () => {
 		expect(fetchSpy).toHaveBeenCalledTimes(2);
 	});
 
+	it("forwards each changed public url as a repeated url parameter", async () => {
+		await revalidateWebsite([
+			{ tag: "articles", urls: ["/929/5/12", "/929/7/3"] },
+		]);
+
+		const url = calledUrls()[0];
+		expect(url.searchParams.getAll("url")).toEqual([
+			"/929/5/12",
+			"/929/7/3",
+		]);
+	});
+
+	it("sends no url parameter when the change reports none", async () => {
+		await revalidateWebsite([{ tag: "articles" }]);
+
+		expect(calledUrls()[0].searchParams.getAll("url")).toEqual([]);
+	});
+
 	it("article saves expire the shared articles tag", async () => {
-		await revalidateWebsite(ARTICLE_INVALIDATION);
+		await revalidateWebsite(articleInvalidation());
 
 		expect(calledUrls().map((u) => u.searchParams.get("tag"))).toEqual([
 			"articles",
+		]);
+	});
+
+	it("article saves carry the changed article urls", async () => {
+		await revalidateWebsite(articleInvalidation("/929/5/12", "/929/7/12"));
+
+		const url = calledUrls()[0];
+		expect(url.searchParams.get("tag")).toBe("articles");
+		expect(url.searchParams.getAll("url")).toEqual([
+			"/929/5/12",
+			"/929/7/12",
 		]);
 	});
 
 	it("author saves expire authors and articles (names render inside articles)", async () => {
-		await revalidateWebsite(AUTHOR_INVALIDATION);
+		await revalidateWebsite(authorInvalidation("/929/authors/x"));
 
-		expect(calledUrls().map((u) => u.searchParams.get("tag"))).toEqual([
+		const urls = calledUrls();
+		expect(urls.map((u) => u.searchParams.get("tag"))).toEqual([
 			"authors",
 			"articles",
 		]);
+		expect(urls[1].searchParams.getAll("url")).toEqual(["/929/authors/x"]);
 	});
 
 	it("pedia saves expire entity refs, every entry route, and the index", async () => {
-		await revalidateWebsite(PEDIA_INVALIDATION);
+		await revalidateWebsite(pediaInvalidation("/pedia/משה"));
 
 		const urls = calledUrls();
 		expect(urls.map((u) => u.searchParams.get("tag"))).toContain(
@@ -158,6 +192,8 @@ describe("revalidateWebsite", () => {
 		);
 		expect(paths).toContain("/pedia/[slug]:page");
 		expect(paths).toContain("/pedia:");
+		// The changed entry urls ride the /pedia index invalidation call.
+		expect(urls[2].searchParams.getAll("url")).toEqual(["/pedia/משה"]);
 	});
 
 	describe("failure surfacing", () => {
@@ -192,5 +228,22 @@ describe("revalidateWebsite", () => {
 			const status = await getWebsiteRevalidationStatus();
 			expect(status.lastFailure?.requests).toEqual([{ tag: "articles" }]);
 		});
+	});
+});
+
+describe("public path helpers", () => {
+	it("builds the article page path", () => {
+		expect(articlePath(5, 12)).toBe("/929/5/12");
+	});
+
+	it("percent-encodes author names and strips quote characters", () => {
+		expect(authorPath(`רש"י`)).toBe(`/929/authors/${encodeURIComponent("רשי")}`);
+		expect(authorPath("  דוד  ")).toBe(
+			`/929/authors/${encodeURIComponent("דוד")}`,
+		);
+	});
+
+	it("builds the pedia entry path", () => {
+		expect(pediaEntryPath("משה")).toBe("/pedia/משה");
 	});
 });

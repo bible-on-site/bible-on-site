@@ -107,6 +107,49 @@ public class PasukFormattedTextTests
         }
 
         [Fact]
+        public void selected_pasuk_renders_a_distinct_spoken_word_marker()
+        {
+            var pasuk = new Pasuk
+            {
+                PasukNum = 1, Text = "", IsSelected = true,
+                Segments = [new() { Type = SegmentType.Qri, Value = "אור" },
+                    new() { Type = SegmentType.Qri, Value = "חֹשֶׁךְ" }]
+            };
+
+            pasuk.RecitingSegment = 2;
+
+            var active = pasuk.FormattedText.Spans.Single(s => s.BackgroundColor != null);
+            active.Text.Should().Be("חֹשֶׁךְ");
+            // The selection row background (#E3F2FD light / #9FB4E0 dark) swallows
+            // the plain recitation background #e9eff8 — a selected pasuk keeps the
+            // word marked with a stronger background and weight.
+            active.BackgroundColor.Should().NotBe(Color.FromArgb("#e9eff8"));
+            active.FontAttributes.Should().Be(FontAttributes.Bold);
+        }
+
+        [Fact]
+        public void toggling_selection_refreshes_the_spoken_word_marker()
+        {
+            var pasuk = new Pasuk
+            {
+                PasukNum = 1, Text = "",
+                Segments = [new() { Type = SegmentType.Qri, Value = "אור" }]
+            };
+            pasuk.RecitingSegment = 1;
+            var unselected = pasuk.FormattedText;
+            var notifications = new List<string?>();
+            pasuk.PropertyChanged += (_, e) => notifications.Add(e.PropertyName);
+
+            pasuk.IsSelected = true;
+            var selected = pasuk.FormattedText;
+
+            selected.Should().NotBeSameAs(unselected);
+            selected.Spans.Single(s => s.BackgroundColor != null)
+                .BackgroundColor.Should().NotBe(unselected.Spans.Single(s => s.BackgroundColor != null).BackgroundColor);
+            notifications.Should().Contain(nameof(Pasuk.FormattedText));
+        }
+
+        [Fact]
         public void does_not_root_an_unused_formatted_string_for_the_lifetime_of_a_perek()
         {
             var pasuk = new Pasuk
