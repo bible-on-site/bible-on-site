@@ -890,6 +890,10 @@ mod tests {
         assert!(search_articles(&db, &index, "alpha", None, None, Some(-3))
             .await
             .is_err());
+        let db_err = create_mock_db_with_query_error("author ids query failed");
+        assert!(search_articles(&db_err, &index, "alpha", None, None, Some(9))
+            .await
+            .is_err());
     }
 
     fn covering_source_model(article_id: i32, perek_id: i32, pasuk: i16) -> CoveringSourceModel {

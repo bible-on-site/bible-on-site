@@ -15,7 +15,6 @@ public partial class ArticlesViewModel : ObservableObject
     private readonly Services.PerekDataService _perekDataService;
     private readonly Services.IAppNavigator _navigator;
     private readonly Services.ArticleService? _articleService;
-    private readonly bool _useDefaultArticleService;
     private CancellationTokenSource? _searchCancellation;
     /// <summary>The unfiltered listing, restored when the search field clears.</summary>
     private List<Article> _allArticles = new();
@@ -130,7 +129,6 @@ public partial class ArticlesViewModel : ObservableObject
     public ArticlesViewModel() : this(Services.StarterService.Instance, Services.PerekDataService.Instance,
         Services.ShellAppNavigator.Instance)
     {
-        _useDefaultArticleService = true;
     }
 
     public ArticlesViewModel(Services.StarterService starterService, Services.PerekDataService perekDataService,
@@ -145,7 +143,6 @@ public partial class ArticlesViewModel : ObservableObject
         _perekDataService = perekDataService;
         _navigator = navigator;
         _articleService = articleService;
-        _useDefaultArticleService = articleService == null;
     }
 
     /// <summary>
@@ -227,10 +224,8 @@ public partial class ArticlesViewModel : ObservableObject
             IsSearching = true;
             SearchMessage = string.Empty;
             await Task.Delay(SearchDebounce, token);
-            var service = _useDefaultArticleService ? Services.ArticleService.Instance : _articleService;
-            var page = service == null
-                ? null
-                : await service.SearchArticlesAsync(phrase, AuthorSearchLimit, authorId, token);
+            var service = _articleService ?? Services.ArticleService.Instance;
+            var page = await service.SearchArticlesAsync(phrase, AuthorSearchLimit, authorId, token);
             if (token.IsCancellationRequested)
             {
                 return;
