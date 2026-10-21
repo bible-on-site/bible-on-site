@@ -1,3 +1,4 @@
+using BibleOnSite.Helpers;
 using BibleOnSite.Services;
 using BibleOnSite.Tests.Support;
 using BibleOnSite.ViewModels;
@@ -1146,5 +1147,60 @@ public class PreferencesViewModelTests : IDisposable
 
         public Task<List<string>> GetDeliveryDiagnosticsAsync(string packName) =>
             Task.FromResult(new List<string>());
+    }
+}
+
+/// <summary>
+/// The IsMask* convenience toggles on <see cref="DivineNamePreferencesViewModel"/>
+/// map true onto their option; exercised here via PreferencesViewModel.
+/// </summary>
+[Collection(PreferencesServiceCollection.Name)]
+public class DivineNameOptionToggleTests : IDisposable
+{
+    private readonly InMemoryPreferencesStorage _storage = new();
+    private readonly PreferencesService _service;
+    private readonly PreferencesViewModel _viewModel;
+
+    public DivineNameOptionToggleTests()
+    {
+        _service = PreferencesService.CreateForTesting(_storage);
+        _viewModel = new PreferencesViewModel(_service);
+    }
+
+    public void Dispose()
+    {
+        PreferencesService.ResetForTesting();
+        BibleOnSite.Helpers.DivineNameMasking.Apply(BibleOnSite.Helpers.DivineNameMaskingOptions.Disabled);
+    }
+
+    [Fact]
+    public void elohim_toggles_select_their_option()
+    {
+        _viewModel.IsMaskElohimElokim = true;
+        _service.DivineNameMaskElohim.Should().Be(DivineNameMaskOption.Elokim);
+        _viewModel.IsMaskElohimHyphen = true;
+        _service.DivineNameMaskElohim.Should().Be(DivineNameMaskOption.Hyphen);
+        _viewModel.IsMaskElohimCustom = true;
+        _service.DivineNameMaskElohim.Should().Be(DivineNameMaskOption.Custom);
+    }
+
+    [Fact]
+    public void yhwh_toggles_select_their_option()
+    {
+        _viewModel.IsMaskYhwhDalet = true;
+        _service.DivineNameMaskYhwh.Should().Be(DivineNameMaskOption.Dalet);
+        _viewModel.IsMaskYhwhCustom = true;
+        _service.DivineNameMaskYhwh.Should().Be(DivineNameMaskOption.Custom);
+    }
+
+    [Fact]
+    public void el_and_shaddai_toggles_select_their_option()
+    {
+        _viewModel.IsMaskElHyphen = true;
+        _service.DivineNameMaskEl.Should().Be(DivineNameMaskOption.Hyphen);
+        _viewModel.IsMaskShaddaiHyphen = true;
+        _service.DivineNameMaskShaddai.Should().Be(DivineNameMaskOption.Hyphen);
+        _viewModel.IsMaskShaddaiCustom = true;
+        _service.DivineNameMaskShaddai.Should().Be(DivineNameMaskOption.Custom);
     }
 }

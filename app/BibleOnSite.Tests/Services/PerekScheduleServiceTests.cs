@@ -501,3 +501,41 @@ public class PerekScheduleServiceTests
         upcoming.Number.Should().BeGreaterThan(2);
     }
 }
+
+public class PerekScheduleServiceNotLoadedTests
+{
+    private const string DbName = "sefaria-dump-5784-sivan-4.tanah_view.sqlite";
+    private static readonly string[] Schema =
+    [
+        "CREATE TABLE tanah_perek_date (perek_id INTEGER, cycle INTEGER, date TEXT, hebdate TEXT, star_rise TEXT)"
+    ];
+
+    [Fact]
+    public async Task BeforeLoad_PropertiesFallBack_AndQueriesThrow()
+    {
+        var storage = new TestStorage();
+        await storage.CreateDatabaseAsync(DbName, Schema);
+        var service = new PerekScheduleService(new LocalDatabaseService(storage.FileSystem.Object));
+        await using var _ = storage;
+
+        service.ConfirmedCycleCount.Should().Be(0);
+        service.LastConfirmedCycleNumber.Should().Be(0);
+        (() => service.GetCycle(1)).Should().Throw<InvalidOperationException>();
+        (() => service.GetCycleForDate(57750330)).Should().Throw<InvalidOperationException>();
+        (() => service.GetCycleForDateOrUpcoming(57750330)).Should().Throw<InvalidOperationException>();
+    }
+
+    [Fact]
+    public async Task EmptySchedule_GetCycleForDateOrUpcoming_ReportsFirstProjectedCycle()
+    {
+        var storage = new TestStorage();
+        await storage.CreateDatabaseAsync(DbName, Schema);
+        var service = new PerekScheduleService(new LocalDatabaseService(storage.FileSystem.Object));
+        await using var _ = storage;
+        await service.LoadAsync();
+
+        service.GetCycleForDate(57750330).Should().BeNull();
+        service.GetCycleForDateOrUpcoming(57750330)
+            .Should().Be(new PerekScheduleService.StudyCycle(1, 0, 0, true));
+    }
+}

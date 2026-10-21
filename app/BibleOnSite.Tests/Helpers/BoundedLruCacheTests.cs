@@ -144,3 +144,29 @@ public class BoundedLruCacheTests
         }
     }
 }
+
+public class BoundedLruCacheGuardTests
+{
+    [Fact]
+    public void rejects_nonpositive_total_size_and_null_measure()
+    {
+        (() => new BoundedLruCache<string, string>(1, 0, v => v.Length))
+            .Should().Throw<ArgumentOutOfRangeException>();
+        (() => new BoundedLruCache<string, string>(1, 1, null!))
+            .Should().Throw<ArgumentNullException>();
+    }
+
+    [Fact]
+    public void a_factory_that_reenters_the_cache_returns_the_raced_entry()
+    {
+        // Monitor is reentrant: the factory runs outside the lock and may call
+        // back into GetOrAdd for the same key. The inner call inserts first;
+        // the outer call then takes the raced-hit path.
+        var cache = new BoundedLruCache<string, string>(3, 100, v => v.Length);
+
+        var result = cache.GetOrAdd("k", () => cache.GetOrAdd("k", () => "inner"));
+
+        result.Should().Be("inner");
+        cache.Count.Should().Be(1);
+    }
+}
