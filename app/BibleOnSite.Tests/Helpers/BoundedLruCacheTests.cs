@@ -144,3 +144,26 @@ public class BoundedLruCacheTests
         }
     }
 }
+
+public class BoundedLruCacheGuardTests
+{
+    [Fact]
+    public void rejects_nonpositive_total_size_and_null_measure()
+    {
+        var badSize = () => new BoundedLruCache<string, string>(1, 0, v => v.Length);
+        badSize.Should().Throw<ArgumentOutOfRangeException>();
+        var nullMeasure = () => new BoundedLruCache<string, string>(1, 1, null!);
+        nullMeasure.Should().Throw<ArgumentNullException>();
+    }
+
+    [Fact]
+    public void a_factory_that_reenters_the_cache_returns_the_raced_entry()
+    {
+        var cache = new BoundedLruCache<string, string>(3, 100, v => v.Length);
+
+        var result = cache.GetOrAdd("k", () => cache.GetOrAdd("k", () => "inner"));
+
+        result.Should().Be("inner");
+        cache.Count.Should().Be(1);
+    }
+}
