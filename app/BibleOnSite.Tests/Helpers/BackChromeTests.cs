@@ -42,4 +42,20 @@ public class BackChromeTests : IDisposable
         behavior!.IsVisible.Should().BeFalse(
             "an unattached page has no navigation stack, so Up never shows");
     }
+
+    [Fact]
+    public void Apply_TogglesANamedBackButtonOnNonAndroid()
+    {
+        // The test host is not Android, so the in-app chrome always shows.
+        var backButton = new Button { IsVisible = false };
+        var page = new ContentPage();
+        page.Content = backButton;
+        var scope = new Microsoft.Maui.Controls.Internals.NameScope();
+        Microsoft.Maui.Controls.Internals.NameScope.SetNameScope(page, scope);
+        ((Microsoft.Maui.Controls.Internals.INameScope)scope).RegisterName("BackButton", backButton);
+
+        BackChrome.Apply(page);
+
+        backButton.IsVisible.Should().BeTrue();
+    }
 }
