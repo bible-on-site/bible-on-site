@@ -389,6 +389,23 @@ public class PreferencesServiceTests : IDisposable
         _service.InAppBackButton.Should().Be(InAppBackButtonPreference.PlatformDefault);
     }
 
+    [Fact]
+    public void InAppBackButton_UndefinedWrite_Normalizes_AndSameValueIsNoOp()
+    {
+        _service.Load();
+        _service.InAppBackButton = (InAppBackButtonPreference)99;
+
+        _service.InAppBackButton.Should().Be(InAppBackButtonPreference.PlatformDefault,
+            "an out-of-range write normalizes to PlatformDefault");
+
+        _service.InAppBackButton = InAppBackButtonPreference.Show;
+        var eventCount = 0;
+        _service.PreferencesChanged += (_, _) => eventCount++;
+        _service.InAppBackButton = InAppBackButtonPreference.Show;
+
+        eventCount.Should().Be(0, "writing the current value is a no-op");
+    }
+
     #region InMemoryPreferencesStorage Tests
 
     [Fact]
@@ -416,6 +433,49 @@ public class PreferencesServiceTests : IDisposable
         storage.Get("key1", "gone").Should().Be("gone");
         storage.Get("key2", -1).Should().Be(-1);
         storage.Get("key3", false).Should().BeFalse();
+    }
+
+    [Fact]
+    public void QriynotEnabled_DefaultsOn_ForNewAndUpgradedInstallations()
+    {
+        _service.Load();
+        _service.QriynotEnabled.Should().BeTrue("קריינות ships enabled; an unset preference resolves to on");
+    }
+
+    [Fact]
+    public void QriynotEnabled_SurvivesRestart_AndHonorsStoredOff()
+    {
+        _service.Load();
+        _service.QriynotEnabled = false;
+
+        var restored = PreferencesService.CreateForTesting(_storage);
+        restored.Load();
+        restored.QriynotEnabled.Should().BeFalse("an explicit off choice persists across restarts");
+
+        restored.QriynotEnabled = true;
+        _service.Load();
+        _service.QriynotEnabled.Should().BeTrue();
+    }
+
+    [Fact]
+    public void QriynotEnabled_StoredOffBeforeUpgrade_StaysOff()
+    {
+        _storage.Set("qriynotEnabled", false);
+        _service.Load();
+        _service.QriynotEnabled.Should().BeFalse();
+    }
+
+    [Fact]
+    public void QriynotEnabled_SameValue_IsNoOp()
+    {
+        _service.Load();
+        var eventCount = 0;
+        _service.PreferencesChanged += (_, _) => eventCount++;
+
+        _service.QriynotEnabled = true;
+
+        eventCount.Should().Be(0);
+        _storage.Get("qriynotEnabled", false).Should().BeFalse("a no-op write never touches storage");
     }
 
     #endregion
