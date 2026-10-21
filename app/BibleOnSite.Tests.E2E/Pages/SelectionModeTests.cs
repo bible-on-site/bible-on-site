@@ -51,6 +51,8 @@ public class SelectionModeTests
 
     /// <summary>
     /// Helper to exit selection mode by clicking back button.
+    /// The focused pasuk shows the shared toolbar instead of the selection bar,
+    /// so its close path is the window's Alt+Left reader back (#2466).
     /// </summary>
     private async Task ExitSelectionModeAsync()
     {
@@ -59,6 +61,16 @@ public class SelectionModeTests
         {
             backButton.AsButton()?.Invoke();
             await Task.Delay(300, TestContext.Current.CancellationToken);
+            return;
+        }
+        if (_fixture.FindByAutomationId("FocusedPasukText") != null)
+        {
+            _fixture.MainWindow.Focus();
+            Keyboard.Press(VirtualKeyShort.LMENU);
+            Keyboard.Press(VirtualKeyShort.LEFT);
+            Keyboard.Release(VirtualKeyShort.LEFT);
+            Keyboard.Release(VirtualKeyShort.LMENU);
+            await Task.Delay(500, TestContext.Current.CancellationToken);
         }
     }
 
@@ -91,6 +103,9 @@ public class SelectionModeTests
         _fixture.FindByAutomationId("SelectionCountLabel").Should().BeNull();
         _fixture.FindByAutomationId("SelectionCopyButton").Should().BeNull();
         _fixture.FindByAutomationId("SelectionShareButton").Should().BeNull();
+        // The focused pasuk keeps the shared reader toolbar with the full
+        // pasuk source as its title instead of a Back-only bar (#2466).
+        _fixture.FindByAutomationId("PerekSource").Should().NotBeNull();
         await ExitSelectionModeAsync();
         _fixture.FindByAutomationId("FocusedPasukText").Should().BeNull();
         GetPasukElements().Should().NotBeEmpty();
