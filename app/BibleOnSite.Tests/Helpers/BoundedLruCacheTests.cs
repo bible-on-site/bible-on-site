@@ -98,8 +98,8 @@ public class BoundedLruCacheTests
         public void a_racing_insert_returns_the_winners_entry()
         {
             var cache = Create();
-            var factoryEntered = new ManualResetEventSlim();
-            var rivalInserted = new ManualResetEventSlim();
+            using var factoryEntered = new ManualResetEventSlim();
+            using var rivalInserted = new ManualResetEventSlim();
 
             // The factory runs outside the lock: let a second caller insert
             // the same key while the first factory is still building.
