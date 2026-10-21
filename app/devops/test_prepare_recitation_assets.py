@@ -174,13 +174,13 @@ class RecitationAssetsTests(unittest.TestCase):
             self.assertEqual(result["package"]["tracks"][0]["words"][0]["startMs"], 123)
             self.assertEqual(result["package"]["tracks"][1]["words"], [])
             if platform == "iOS":
-                pack_dir = app / "Platforms/iOS/AssetPacks/recitation_1"
+                pack_dir = app / "Platforms/iOS/AssetPacks/recitation-1"
                 manifest = json.loads((pack_dir / "Manifest.json").read_text())
-                self.assertEqual(manifest["assetPackID"], "recitation_1")
+                self.assertEqual(manifest["assetPackID"], "recitation-1")
                 self.assertEqual(manifest["downloadPolicy"], {"onDemand": {}})
-                self.assertEqual(manifest["fileSelectors"], [{"file": "recitation_1.zip"}])
+                self.assertEqual(manifest["fileSelectors"], [{"file": "recitation-1.zip"}])
                 self.assertEqual(manifest["platforms"], ["iOS", "macOS"])
-                self.assertTrue((pack_dir / "recitation_1.zip").is_file())
+                self.assertTrue((pack_dir / "recitation-1.zip").is_file())
         android = catalogs[0]["package"]["tracks"][0]
         self.assertEqual(android["audioSha256"], self.sha)
         self.assertEqual(android["playback"]["sha256"], opus_sha)
@@ -190,7 +190,7 @@ class RecitationAssetsTests(unittest.TestCase):
             self.assertEqual(packed.read(opus_sha + ".ogg"), opus)
         # Apple asset packs carry the identical Opus bytes as the Android modules.
         self.assertEqual(catalogs[0], catalogs[1])
-        with zipfile.ZipFile(self.root / "iOS/Platforms/iOS/AssetPacks/recitation_1/recitation_1.zip") as packed:
+        with zipfile.ZipFile(self.root / "iOS/Platforms/iOS/AssetPacks/recitation-1/recitation-1.zip") as packed:
             self.assertEqual(packed.namelist(), [opus_sha + ".ogg"])
             self.assertEqual(packed.read(opus_sha + ".ogg"), opus)
         self.assertNotIn("playback", catalogs[2]["package"]["tracks"][0])
@@ -205,11 +205,12 @@ class RecitationAssetsTests(unittest.TestCase):
                                        local_originals=True)
             self.assertNotIn("playback", local["package"]["tracks"][0])
             self.assertEqual(local["package"]["tracks"][0]["words"], catalogs[0]["package"]["tracks"][0]["words"])
-            with zipfile.ZipFile(app / f"Platforms/{platform}/AssetPacks/recitation_1/recitation_1.zip") as packed:
+            pack = "recitation-1" if platform == "iOS" else "recitation_1"
+            with zipfile.ZipFile(app / f"Platforms/{platform}/AssetPacks/{pack}/{pack}.zip") as packed:
                 self.assertEqual(packed.namelist(), [self.sha + ".mp3"])
                 self.assertEqual(packed.read(self.sha + ".mp3"), self.audio)
             self.assertEqual(local["books"][0]["sha256"], hashlib.sha256(
-                (app / f"Platforms/{platform}/AssetPacks/recitation_1/recitation_1.zip").read_bytes()).hexdigest())
+                (app / f"Platforms/{platform}/AssetPacks/{pack}/{pack}.zip").read_bytes()).hexdigest())
         self.assertEqual(database.read_bytes(), source_bytes)
 
     def test_local_originals_requires_source_directory(self):

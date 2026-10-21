@@ -192,7 +192,9 @@ def prepare_assets(app, platform, cache, recordings=None, intermediate=None, dat
     books = []
     for sid in sorted({mapping[t["perekId"]] for t in tracks}):
         selected = [t for t in tracks if mapping[t["perekId"]] == sid]
-        pack = f"recitation_{sid}"
+        # App Store Connect accepts only alphanumerics and hyphens in asset-pack
+        # IDs; Play asset-pack names take underscores (hyphens are rejected).
+        pack = f"recitation-{sid}" if platform == "iOS" else f"recitation_{sid}"
         path = cache / (pack + ".zip")
         book_archive(path, selected, cache)
         books.append({"seferId": sid, "sha256": digest(path), "sizeBytes": path.stat().st_size,

@@ -19,7 +19,12 @@ namespace BibleOnSite.Services;
 /// </summary>
 public sealed partial class PadDeliveryService : IPadDeliveryService
 {
+#if IOS || MACCATALYST
+    // App Store Connect accepts only alphanumerics and hyphens in asset-pack IDs.
+    private const string PerushimNotesPackName = "perushim-notes";
+#else
     private const string PerushimNotesPackName = "perushim_notes";
+#endif
 
     internal static string PayloadFileName(string packName) => packName == PerushimNotesPackName
         ? "sefaria-dump-5784-sivan-4.perushim_notes.sqlite" : packName + ".zip";

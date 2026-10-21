@@ -14,12 +14,13 @@ TANAH = "sefaria-dump-5784-sivan-4.tanah_view.sqlite"
 SEARCH_INDEX = "sefaria-dump-5784-sivan-4.hebrew_search.sqlite"
 NOTES_DIRECTORIES = {
     "Android": "Platforms/Android/AssetPacks/perushim_notes",
-    "iOS": "Platforms/iOS/AssetPacks/perushim_notes",
+    # App Store Connect accepts only alphanumerics and hyphens in asset-pack IDs.
+    "iOS": "Platforms/iOS/AssetPacks/perushim-notes",
 }
 # The prebuilt search index rides in the same asset pack as the notes payload.
 SEARCH_INDEX_DIRECTORIES = {
     "Android": "Platforms/Android/AssetPacks/perushim_notes",
-    "iOS": "Platforms/iOS/AssetPacks/perushim_notes",
+    "iOS": "Platforms/iOS/AssetPacks/perushim-notes",
 }
 
 
