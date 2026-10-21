@@ -551,6 +551,45 @@ public class PreferencesViewModelTests : IDisposable
     }
 
     [Fact]
+    public void InAppBackButton_Set_UpdatesServiceAndRadioProperties()
+    {
+        var display = new DisplayPreferencesViewModel(_service);
+
+        display.IsBackButtonShow = true;
+        display.InAppBackButton.Should().Be(InAppBackButtonPreference.Show);
+        _service.InAppBackButton.Should().Be(InAppBackButtonPreference.Show);
+        display.IsBackButtonShow.Should().BeTrue();
+        display.IsBackButtonHide.Should().BeFalse();
+        display.IsBackButtonPlatformDefault.Should().BeFalse();
+
+        display.IsBackButtonHide = true;
+        display.InAppBackButton.Should().Be(InAppBackButtonPreference.Hide);
+
+        display.IsBackButtonPlatformDefault = true;
+        display.InAppBackButton.Should().Be(InAppBackButtonPreference.PlatformDefault);
+
+        // Setting a radio property to false must not change the preference.
+        display.IsBackButtonShow = false;
+        display.InAppBackButton.Should().Be(InAppBackButtonPreference.PlatformDefault);
+    }
+
+    [Fact]
+    public void InAppBackButton_SetSameValue_DoesNotNotify()
+    {
+        var display = new DisplayPreferencesViewModel(_service);
+        display.InAppBackButton = InAppBackButtonPreference.Show;
+        var notified = new List<string?>();
+        display.PropertyChanged += (_, e) => notified.Add(e.PropertyName);
+
+        display.InAppBackButton = InAppBackButtonPreference.Show;
+        notified.Should().BeEmpty();
+
+        display.InAppBackButton = InAppBackButtonPreference.Hide;
+        notified.Should().Contain(nameof(DisplayPreferencesViewModel.IsBackButtonShow));
+        notified.Should().Contain(nameof(DisplayPreferencesViewModel.IsBackButtonHide));
+    }
+
+    [Fact]
     public void ResetPerushFontPercentCommand_RestoresFollowMaster()
     {
         var display = new DisplayPreferencesViewModel(_service);
