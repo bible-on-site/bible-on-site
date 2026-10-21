@@ -156,7 +156,7 @@ public partial class FloatingSearchBar
                 }
             }
             _viewModel.ResultsLimit = 10;
-            LimitPicker.SelectedItem = 10;
+            LimitPicker.Value = 10;
             _viewModel.Sorting = SearchSort.Relevance;
             SortRelevanceRadio.IsChecked = true;
             _kindsExplicit = _booksExplicit = _optionsExplicit = false;
