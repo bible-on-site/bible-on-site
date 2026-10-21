@@ -67,10 +67,16 @@ impl TanahpediaEntriesQuery {
         ctx: &Context<'_>,
         phrase: String,
         limit: Option<i32>,
+        categories: Option<Vec<String>>,
     ) -> Result<Vec<TanahpediaSearchHit>> {
-        tanahpedia_search_service::search_entries(ctx.data::<Database>()?, &phrase, limit)
-            .await
-            .map_err(|e| e.extend())
+        tanahpedia_search_service::search_entries(
+            ctx.data::<Database>()?,
+            &phrase,
+            limit,
+            categories,
+        )
+        .await
+        .map_err(|e| e.extend())
     }
 
     /// Entries a synonym name can lead to: 0 results = unknown name, 1 = plain

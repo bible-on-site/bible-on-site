@@ -3,6 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:viewmodels="clr-namespace:BibleOnSite.ViewModels"
              xmlns:models="clr-namespace:BibleOnSite.Models"
+             xmlns:controls="clr-namespace:BibleOnSite.Controls"
              xmlns:fonts="clr-namespace:Fonts"
              x:Class="BibleOnSite.Pages.TanahpediaPage"
              x:Name="Page"
@@ -33,12 +34,22 @@
                     VerticalOptions="Center"
                     HorizontalOptions="Start"
                     Clicked="OnMenuButtonClicked"/>
-            <Label Grid.Column="1"
-                   Text="תנכפדיה"
-                   FontSize="20"
-                   VerticalOptions="Center"
-                   HorizontalOptions="Start"
-                   TextColor="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource SecondaryDarkText}}"/>
+            <!-- Title pill like the reader's source pill: opens the scoped
+                 Tanahpedia search overlay. -->
+            <Button Grid.Column="1"
+                    Text="תנכפדיה"
+                    FontSize="20"
+                    Padding="12,0"
+                    HeightRequest="40"
+                    CornerRadius="14"
+                    BorderWidth="0"
+                    BackgroundColor="{AppThemeBinding Light=#E4EFFD, Dark=#2C4569}"
+                    TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark=#AACBFF}"
+                    VerticalOptions="Center"
+                    HorizontalOptions="Start"
+                    SemanticProperties.Hint="הקישו לפתיחת החיפוש"
+                    AutomationId="TanahpediaSearchTitle"
+                    Clicked="OnSearchTitleClicked"/>
         </Grid>
     </Shell.TitleView>
 
@@ -268,5 +279,10 @@
                     TextColor="White"
                     HorizontalOptions="Center"/>
         </VerticalStackLayout>
+
+        <!-- Scoped Tanahpedia search overlay — same interaction as the
+             reader's floating search, Tanahpedia provider only, all
+             categories selected by default on the landing page. -->
+        <controls:TanahpediaSearchPanel x:Name="TanahpediaSearch" />
     </Grid>
 </ContentPage>

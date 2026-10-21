@@ -150,6 +150,10 @@ public class TanahpediaService : BaseGraphQLService, ITanahpediaService
 
     /// <inheritdoc />
     public async Task<List<TanahpediaSearchHit>> SearchEntriesAsync(string phrase, int limit, CancellationToken cancellationToken)
+        => await SearchEntriesAsync(phrase, limit, null, cancellationToken);
+
+    /// <inheritdoc />
+    public async Task<List<TanahpediaSearchHit>> SearchEntriesAsync(string phrase, int limit, IReadOnlyCollection<string>? categories, CancellationToken cancellationToken)
     {
         // The API accepts 1-50 and rejects out-of-range values — clamp here so
         // the documented contract holds for every caller.
@@ -158,9 +162,16 @@ public class TanahpediaService : BaseGraphQLService, ITanahpediaService
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutSource.Token);
         try
         {
+            var variables = new Dictionary<string, object?> { ["phrase"] = phrase, ["limit"] = limit };
+            // An empty selection is no scope at all — only send the argument
+            // when the caller actually narrowed the categories.
+            if (categories is { Count: > 0 })
+            {
+                variables["categories"] = categories.ToArray();
+            }
             var data = await QueryAsync<SearchHitsResponse>(@"
-                query SearchTanahpediaEntries($phrase: String!, $limit: Int) {
-                    searchTanahpediaEntries(phrase: $phrase, limit: $limit) {
+                query SearchTanahpediaEntries($phrase: String!, $limit: Int, $categories: [String!]) {
+                    searchTanahpediaEntries(phrase: $phrase, limit: $limit, categories: $categories) {
                         id
                         uniqueName
                         title
@@ -169,7 +180,7 @@ public class TanahpediaService : BaseGraphQLService, ITanahpediaService
                     }
                 }",
                 "SearchTanahpediaEntries",
-                new Dictionary<string, object?> { ["phrase"] = phrase, ["limit"] = limit },
+                variables,
                 linked.Token);
 
             return (data?.SearchTanahpediaEntries ?? []).Select(dto => new TanahpediaSearchHit
