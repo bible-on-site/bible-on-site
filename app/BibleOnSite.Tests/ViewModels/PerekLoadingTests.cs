@@ -1,3 +1,4 @@
+using System.Runtime.ExceptionServices;
 using BibleOnSite.Helpers;
 using BibleOnSite.Models;
 using BibleOnSite.Services;
@@ -13,6 +14,7 @@ public class PerekLoadingTests
     private sealed class Fixture : IAsyncDisposable
     {
         public TestStorage Storage { get; } = new();
+        public Mock<IPadDeliveryService> Pad { get; } = NotesDeliveryTests.Pad();
         public Mock<IAppNavigator> Navigator { get; } = new();
         public PerekDataService Data { get; }
         public PerushimNotesService Notes { get; }
@@ -22,7 +24,7 @@ public class PerekLoadingTests
         public Fixture()
         {
             Data = new PerekDataService(new LocalDatabaseService(Storage.FileSystem.Object));
-            Notes = new PerushimNotesService(NotesDeliveryTests.Pad().Object, Storage.FileSystem.Object);
+            Notes = new PerushimNotesService(Pad.Object, Storage.FileSystem.Object);
             Model = new PerekViewModel(PreferencesService.CreateForTesting(new InMemoryPreferencesStorage()), null,
                 Data, new PerushimCatalogService(Storage.FileSystem.Object),
                 Notes, Navigator.Object,
@@ -57,11 +59,55 @@ public class PerekLoadingTests
         public async ValueTask DisposeAsync()
         {
             // LoadPerushimAsync may leave a kicked notes init in flight — let
-            // it settle before the temp storage is deleted underneath it.
-            try { await Notes.InitializeAsync(); }
-            catch (Exception ex) { Console.WriteLine($"Notes init during teardown: {ex}"); }
-            await Storage.DisposeAsync();
+            // it settle before the temp storage is deleted underneath it. A
+            // faulted init is a defect, not teardown noise: record it, still
+            // clean the storage, then surface it as a test failure. When both
+            // legs fault, keep both diagnostics.
+            var initError = await Notes.InitializeAsync().ContinueWith(task => task.Exception);
+            var storageError = await Storage.DisposeAsync().AsTask().ContinueWith(task => task.Exception);
+            var failures = new[] { initError, storageError }
+                .Where(error => error is not null)
+                .SelectMany(error => error!.InnerExceptions)
+                .ToList();
+            if (failures.Count == 1)
+            {
+                ExceptionDispatchInfo.Capture(failures[0]).Throw();
+            }
+            else if (failures.Count > 1)
+            {
+                throw new AggregateException("Fixture teardown failed.", failures);
+            }
         }
+    }
+
+    [Fact]
+    public async Task Teardown_WhenNotesInitFaults_StillDeletesStorage_AndSurfacesTheFailure()
+    {
+        var fixture = new Fixture();
+        await fixture.Initialize(notes: false);
+        fixture.Pad.Setup(p => p.TryGetAssetPathAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("delivery probe exploded"));
+        await fixture.Model.LoadByPerekIdAsync(1); // kicks the notes init that now faults
+
+        var dispose = () => fixture.DisposeAsync().AsTask();
+        await dispose.Should().ThrowAsync<InvalidOperationException>();
+        Directory.Exists(fixture.Storage.Root).Should().BeFalse("storage cleanup must still run when init fails");
+    }
+
+    [Fact]
+    public async Task Teardown_WhenInitAndStorageBothFault_KeepsBothFailures()
+    {
+        var fixture = new Fixture();
+        await fixture.Initialize(notes: false);
+        fixture.Pad.Setup(p => p.TryGetAssetPathAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("delivery probe exploded"));
+        await fixture.Model.LoadByPerekIdAsync(1);
+        Directory.Delete(fixture.Storage.Root, true);
+
+        var dispose = () => fixture.DisposeAsync().AsTask();
+        var thrown = await dispose.Should().ThrowAsync<AggregateException>();
+        thrown.Which.InnerExceptions.Select(e => e.GetType())
+            .Should().BeEquivalentTo([typeof(InvalidOperationException), typeof(DirectoryNotFoundException)]);
     }
 
     [Fact]
