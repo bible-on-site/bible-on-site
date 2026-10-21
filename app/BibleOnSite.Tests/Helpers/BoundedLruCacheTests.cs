@@ -100,5 +100,19 @@ public class BoundedLruCacheTests
             var act = () => new BoundedLruCache<string, string>(0, 100, v => v.Length);
             act.Should().Throw<ArgumentOutOfRangeException>();
         }
+
+        [Fact]
+        public void rejects_nonpositive_size_budget()
+        {
+            var act = () => new BoundedLruCache<string, string>(3, 0, v => v.Length);
+            act.Should().Throw<ArgumentOutOfRangeException>();
+        }
+
+        [Fact]
+        public void rejects_a_null_measure()
+        {
+            var act = () => new BoundedLruCache<string, string>(3, 100, null!);
+            act.Should().Throw<ArgumentNullException>();
+        }
     }
 }
