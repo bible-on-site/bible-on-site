@@ -185,6 +185,7 @@ public class TanahpediaEntityTypeViewModelTests
         vm.IsEmpty.Should().BeFalse();
         vm.Entities.Should().ContainSingle()
             .Which.IsSingleLink.Should().BeTrue();
+        vm.EntityCountText.Should().Be("1 פריטים");
     }
 
     [Fact]

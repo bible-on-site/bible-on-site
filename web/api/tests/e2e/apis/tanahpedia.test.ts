@@ -167,6 +167,36 @@ test.describe("TanahpediaEntriesService", () => {
 			);
 			expect(badLimit.errors).toBeDefined();
 		});
+
+		test("scopes hits to selected categories before limiting", async ({
+			request,
+		}) => {
+			// The same phrase scoped to unrelated categories must return no
+			// hits while the matching category keeps them — the filter runs
+			// inside the candidate query, not on the truncated result set.
+			const scopedOut = await queryApi(
+				request,
+				'{ searchTanahpediaEntries(phrase: "משה", categories: ["PLANT"]) { uniqueName } }',
+			);
+			expect(scopedOut.errors).toBeUndefined();
+			expect(scopedOut.data.searchTanahpediaEntries).toEqual([]);
+
+			const scopedIn = await queryApi(
+				request,
+				'{ searchTanahpediaEntries(phrase: "משה", categories: ["PERSON", "PROPHET"]) { uniqueName } }',
+			);
+			expect(scopedIn.errors).toBeUndefined();
+			const names = scopedIn.data.searchTanahpediaEntries.map(
+				(hit: { uniqueName: string }) => hit.uniqueName,
+			);
+			expect(names).toContain("משה-רבנו");
+
+			const unknown = await queryApi(
+				request,
+				'{ searchTanahpediaEntries(phrase: "משה", categories: ["WIZARD"]) { uniqueName } }',
+			);
+			expect(unknown.errors).toBeDefined();
+		});
 	});
 
 	test.describe("tanahpediaSynonymTargets", () => {
