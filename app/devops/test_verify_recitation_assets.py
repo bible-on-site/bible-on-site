@@ -106,25 +106,34 @@ class ReleaseArtifactTests(unittest.TestCase):
         perushim_dir.mkdir(parents=True, exist_ok=True)
         notes = "sefaria-dump-5784-sivan-4.perushim_notes.sqlite"
         index = "sefaria-dump-5784-sivan-4.hebrew_search.sqlite"
+        perushim_payloads = {notes: b"notes bytes", index: b"index bytes"}
         if "no-perushim-manifest" not in problems:
             selectors = [{"file": notes}] + ([] if "perushim-missing-index" in problems else [{"file": index}])
+            if "nested-perushim-selector" in problems:
+                selectors.append({"file": f"nested/{index}"})
             manifest = {"assetPackID": "perushim-notes", "downloadPolicy": {"onDemand": {}},
                         "fileSelectors": selectors, "platforms": ["iOS", "macOS"]}
             (perushim_dir / "Manifest.json").write_text(json.dumps(manifest))
-        for name in (notes, index):
+        for name, data in perushim_payloads.items():
             if "no-perushim-payload" in problems and name == index:
                 continue
-            (perushim_dir / name).write_bytes(b"notes bytes" if name == notes else b"index bytes")
-            (payload_dir / name).write_bytes(b"notes bytes" if name == notes else b"index bytes")
+            if "perushim-staged-mismatch" in problems and name == index:
+                data = b"stale index"
+            (perushim_dir / name).write_bytes(
+                b"notes bytes" if name == notes else b"index bytes")
+            (payload_dir / name).write_bytes(data)
         if "no-perushim-aar" not in problems:
             (archive_dir / "perushim-notes.aar").write_bytes(b"aar bytes")
 
         # Stands in for `aa` extraction: serves the bytes the archive carried.
         archived = b"corrupt" if "corrupt-archive" in problems else audio
+        archived_perushim = dict(perushim_payloads)
+        if "perushim-archive-mismatch" in problems:
+            archived_perushim[index] = b"corrupt"
 
         def fake_extract(archive_path, payload_name, work_dir):
             payload = work_dir / payload_name
-            payload.write_bytes(archived)
+            payload.write_bytes(archived_perushim.get(payload_name, archived))
             return payload
 
         return package, pack_dir.parent, archive_dir, payload_dir, fake_extract
@@ -135,7 +144,9 @@ class ReleaseArtifactTests(unittest.TestCase):
                         "no-manifest", "stale-payload", "no-aar", "missing-ios-platform",
                         "corrupt-archive", "no-payload", "staged-mismatch",
                         "no-perushim-manifest", "perushim-missing-index",
-                        "no-perushim-payload", "no-perushim-aar"]:
+                        "nested-perushim-selector", "no-perushim-payload",
+                        "perushim-staged-mismatch", "perushim-archive-mismatch",
+                        "no-perushim-aar"]:
             with self.subTest(problem=problem), tempfile.TemporaryDirectory() as temporary:
                 root = Path(temporary)
                 package, packs, aars, payloads, extract = self._write_ios_fixture(

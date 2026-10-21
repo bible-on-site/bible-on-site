@@ -167,6 +167,11 @@ class RecitationAssetsTests(unittest.TestCase):
         catalogs = []
         for platform in ["Android", "iOS", "Windows"]:
             app = self.root / platform
+            if platform == "iOS":
+                # A legacy underscore pack dir must not survive into the archive glob.
+                stale = app / "Platforms/iOS/AssetPacks/recitation_9"
+                stale.mkdir(parents=True)
+                (stale / "Manifest.json").write_text("{}")
             with patch("prepare_recitation_assets.load_playback", return_value=playback):
                 result = prepare_assets(app, platform, self.cache, self.recordings, intermediate, database, native)
             catalogs.append(result)
@@ -174,6 +179,7 @@ class RecitationAssetsTests(unittest.TestCase):
             self.assertEqual(result["package"]["tracks"][0]["words"][0]["startMs"], 123)
             self.assertEqual(result["package"]["tracks"][1]["words"], [])
             if platform == "iOS":
+                self.assertFalse(stale.exists())
                 pack_dir = app / "Platforms/iOS/AssetPacks/recitation-1"
                 manifest = json.loads((pack_dir / "Manifest.json").read_text())
                 self.assertEqual(manifest["assetPackID"], "recitation-1")

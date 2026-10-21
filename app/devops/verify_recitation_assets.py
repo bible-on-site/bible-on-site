@@ -116,10 +116,10 @@ def verify_apple(archive, catalog, names, asset_pack_dir, archive_dir, payload_d
         staged = payload_dir / payload_name
         if not staged.is_file() or digest(staged) != book["sha256"]:
             raise ValueError(f"Missing or mismatched release payload: {staged}")
-    verify_perushim_pack(asset_pack_dir, archive_dir, payload_dir)
+    verify_perushim_pack(asset_pack_dir, archive_dir, payload_dir, extract)
 
 
-def verify_perushim_pack(asset_pack_dir, archive_dir, payload_dir):
+def verify_perushim_pack(asset_pack_dir, archive_dir, payload_dir, extract):
     """The notes pack carries both payloads the managed-delivery contract requires."""
     pack = "perushim-notes"
     manifest_path = asset_pack_dir / pack / "Manifest.json"
@@ -130,21 +130,27 @@ def verify_perushim_pack(asset_pack_dir, archive_dir, payload_dir):
         raise ValueError(f"Malformed asset-pack manifest: {pack}")
     if not {"iOS", "macOS"}.issubset(manifest.get("platforms", [])):
         raise ValueError(f"Asset-pack manifest does not target iOS+macOS: {pack}")
+    # Selectors must name the root-level files SavePackFileAsync requests.
     expected = {"sefaria-dump-5784-sivan-4.perushim_notes.sqlite",
                 "sefaria-dump-5784-sivan-4.hebrew_search.sqlite"}
-    selector_names = {Path(selector.get("file", "")).name
-                      for selector in manifest.get("fileSelectors", [])}
-    if selector_names != expected:
+    selected = {selector.get("file") for selector in manifest.get("fileSelectors", [])}
+    if selected != expected:
         raise ValueError(
-            f"Asset-pack manifest must select the notes and search-index payloads: {sorted(selector_names)}")
-    for name in sorted(selector_names):
-        if not (manifest_path.parent / name).is_file():
-            raise ValueError(f"Missing asset-pack payload: {pack}/{name}")
-        if not (payload_dir / name).is_file():
-            raise ValueError(f"Missing release payload: {name}")
+            f"Asset-pack manifest must select the notes and search-index payloads: {sorted(selected)}")
     archive_path = archive_dir / f"{pack}.aar"
     if not archive_path.is_file() or archive_path.stat().st_size == 0:
         raise ValueError(f"Missing asset-pack archive: {archive_path}")
+    for name in sorted(expected):
+        source = manifest_path.parent / name
+        if not source.is_file():
+            raise ValueError(f"Missing asset-pack payload: {pack}/{name}")
+        staged = payload_dir / name
+        if not staged.is_file() or digest(staged) != digest(source):
+            raise ValueError(f"Missing or mismatched release payload: {staged}")
+        with tempfile.TemporaryDirectory() as work:
+            archived = extract(archive_path, name, Path(work))
+            if digest(archived) != digest(source):
+                raise ValueError(f"Missing or mismatched archived payload in {archive_path}")
 
 
 

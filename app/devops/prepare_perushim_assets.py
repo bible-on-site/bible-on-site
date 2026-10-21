@@ -99,6 +99,10 @@ def validate_search_index(index_path: Path, notes_timestamp: int, tanah_view: Pa
 
 def prepare_assets(source: Path, app_directory: Path, platform: str) -> int:
     destination = NOTES_DIRECTORIES[platform]
+    if platform == "iOS":
+        # A legacy perushim_notes dir lingers on checkouts that generated the
+        # underscore pack — PackageIosAssetPacks archives any dir with a manifest.
+        shutil.rmtree(app_directory / "Platforms/iOS/AssetPacks/perushim_notes", ignore_errors=True)
     count = validate_pair(source, app_directory / "Resources/Raw" / TANAH)
     catalog_directory = app_directory / "Resources/Raw"
     notes_directory = app_directory / destination
