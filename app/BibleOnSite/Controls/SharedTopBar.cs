@@ -25,6 +25,13 @@ public class SharedTopBar : ContentView
     /// <summary>The hamburger button at the start edge; opens the Shell flyout.</summary>
     public Button NavigationButton { get; }
 
+    /// <summary>
+    /// Runs before the flyout opens; returning true marks the tap handled so the
+    /// bar can repurpose the slot (e.g. the focused pasuk's close control on
+    /// platforms without a system Back).
+    /// </summary>
+    public Func<bool>? NavigationInterceptor { get; set; }
+
     public static readonly BindableProperty CenterContentProperty =
         BindableProperty.Create(nameof(CenterContent), typeof(View), typeof(SharedTopBar),
             propertyChanged: (bindable, _, value) => ((SharedTopBar)bindable)._centerHost.Content = (View?)value);
@@ -76,7 +83,7 @@ public class SharedTopBar : ContentView
         };
         NavigationButton.SetAppThemeColor(Button.TextColorProperty, Colors.Black, Colors.White);
         SemanticProperties.SetDescription(NavigationButton, "פתיחת תפריט הניווט");
-        NavigationButton.Clicked += OnNavigationClicked;
+        NavigationButton.Clicked += OnBarNavigationClicked;
 
         _band = new Grid
         {
@@ -118,8 +125,12 @@ public class SharedTopBar : ContentView
         set => _band.IsVisible = value;
     }
 
-    private static void OnNavigationClicked(object? sender, EventArgs e)
+    private void OnBarNavigationClicked(object? sender, EventArgs e)
     {
+        if (NavigationInterceptor?.Invoke() == true)
+        {
+            return;
+        }
         if (Shell.Current is not null)
         {
             Shell.Current.FlyoutIsPresented = true;
