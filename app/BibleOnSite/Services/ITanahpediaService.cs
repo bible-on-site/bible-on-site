@@ -34,6 +34,16 @@ public interface ITanahpediaService
     Task<List<TanahpediaSearchHit>> SearchEntriesAsync(string phrase, int limit, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Category-scoped <see cref="SearchEntriesAsync(string, int, CancellationToken)"/>:
+    /// <paramref name="categories"/> restricts hits to entries linked to
+    /// entities of the given taxonomy category keys
+    /// (<see cref="TanahpediaCategory.Key"/> — base entity types, person roles
+    /// and animal kind/purity), applied server-side before the result limit.
+    /// Null or empty means the whole corpus.
+    /// </summary>
+    Task<List<TanahpediaSearchHit>> SearchEntriesAsync(string phrase, int limit, IReadOnlyCollection<string>? categories, CancellationToken cancellationToken);
+
+    /// <summary>
     /// Entries a synonym name can lead to: 0 results = unknown name, 1 = plain
     /// alias, several = ambiguous — the client renders a chooser.
     /// </summary>
