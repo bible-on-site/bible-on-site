@@ -72,6 +72,8 @@ public partial class PerekViewModel : ObservableObject
 
     /// <summary>Perush IDs that are currently checked (shown inline with text).</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PerushimSelectionStatus))]
+    [NotifyPropertyChangedFor(nameof(PerushimLimitReached))]
     private List<int> _checkedPerushim = new();
 
     /// <summary>Whether the perushim notes database is available (PAD or HTTP downloaded).</summary>
@@ -136,10 +138,27 @@ public partial class PerekViewModel : ObservableObject
     [ObservableProperty]
     private bool _tikkunMarksHidden;
 
-    /// <summary>קריינות reading mode — header play button plus single-tap pasuk playback.</summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ShowHeaderPlayButton))]
-    private bool _isQriynotEnabled;
+    /// <summary>
+    /// קריינות — mirrors the global preference (העדפות → על הפרק, default on).
+    /// Setting it writes through to <see cref="PreferencesService.QriynotEnabled"/>.
+    /// </summary>
+    public bool IsQriynotEnabled
+    {
+        get => _preferencesService.QriynotEnabled;
+        set
+        {
+            if (_preferencesService.QriynotEnabled == value)
+            {
+                return;
+            }
+
+            _preferencesService.QriynotEnabled = value;
+            // The PreferencesChanged subscriber raises the property-changed
+            // notifications; raise them here too for the unsaved toggle path.
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(ShowHeaderPlayButton));
+        }
+    }
 
     /// <summary>Whether a recitation is downloaded for the currently displayed perek.</summary>
     [ObservableProperty]
@@ -792,6 +811,12 @@ public partial class PerekViewModel : ObservableObject
     /// <summary>Max perushim shown inline — unchecked rows render disabled at the cap.</summary>
     public int InlineCommentaryLimit => _preferencesService.InlineCommentaryLimit;
 
+    /// <summary>Live "נבחרו N מתוך M" counter for the perushim selector header.</summary>
+    public string PerushimSelectionStatus => $"נבחרו {CheckedPerushim.Count} מתוך {InlineCommentaryLimit}";
+
+    /// <summary>Whether the configured perushim limit is fully used (drives subtle max-reached emphasis).</summary>
+    public bool PerushimLimitReached => CheckedPerushim.Count >= InlineCommentaryLimit;
+
     /// <summary>A search result must remain visible even when all inline slots are occupied.</summary>
     public void ShowPerushForSearch(int perushId)
     {
@@ -1284,8 +1309,12 @@ public partial class PerekViewModel : ObservableObject
             DivineNameMaskingRevision = DivineNameMasking.Revision;
         }
         OnPropertyChanged(nameof(DivineNameMaskingEnabled));
+        OnPropertyChanged(nameof(IsQriynotEnabled));
+        OnPropertyChanged(nameof(ShowHeaderPlayButton));
         OnPropertyChanged(nameof(InlineCommentaryLimitMessage));
         OnPropertyChanged(nameof(InlineCommentaryLimit));
+        OnPropertyChanged(nameof(PerushimSelectionStatus));
+        OnPropertyChanged(nameof(PerushimLimitReached));
         if (CheckedPerushim.Count > _preferencesService.InlineCommentaryLimit)
         {
             CheckedPerushim = CheckedPerushim.Take(_preferencesService.InlineCommentaryLimit).ToList();

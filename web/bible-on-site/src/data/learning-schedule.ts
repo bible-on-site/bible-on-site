@@ -189,6 +189,26 @@ export function getCycleForDate(date: HebrewDate): StudyCycle | null {
 }
 
 /**
+ * Completed Hebrew years since the program's first study day — the day perek 1
+ * of cycle 1 was scheduled (the canonical first entry in cycles.json, not a
+ * launch date or the current cycle's start). A year counts only once the
+ * Hebrew-calendar anniversary (same month code and day, evaluated inside that
+ * Hebrew year) has arrived, so the value turns over on the anniversary and is
+ * never rounded up (#2397).
+ */
+export function getProgrammeYearsElapsed(today: HebrewDate): number {
+	const start = getCycle(1).start;
+	const years = today.year - start.year;
+	if (years <= 0) return 0;
+	const anniversary = HebrewDate.fromHebrewComponents(
+		today.year,
+		start.monthCode,
+		start.day,
+	);
+	return today.deltaDays(anniversary) < 0 ? years - 1 : years;
+}
+
+/**
  * Resolves the daily-learning state of a single Hebrew date without any
  * clamping: dates outside the program resolve to "none" instead of silently
  * acquiring a perek.

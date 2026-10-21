@@ -106,6 +106,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         SubscribeAppLinks();
         SubscribePerushimSearch();
         SubscribeNotesMaterialization();
+        NormalNavigationBar.NavigationInterceptor = OnFocusedPasukNavigationIntercepted;
     }
 
     /// <summary>
@@ -398,7 +399,21 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
             position.Y >= location[1] && position.Y < location[1] + view.Height;
     }
 
-    private void OnTouchReleased(object? sender, TouchPosition position)
+    private void OnTouchMoved(object? sender, TouchPosition position)
+    {
+        var slop = PerekCarousel.Handler?.PlatformView is Android.Views.View view
+            ? Android.Views.ViewConfiguration.Get(view.Context!)?.ScaledTouchSlop ?? 12
+            : 12;
+        _swipe.Move(position, slop);
+    }
+
+    // Releases and native cancels/interruptions both arrive here: a cancel
+    // mid-swipe can strand the carousel mid-offset just like a release, so
+    // it settles the same way (#2469).
+    private void OnTouchReleased(object? sender, TouchPosition position) =>
+        SettleSwipe(_swipe.Last ?? position);
+
+    private void SettleSwipe(TouchPosition position)
     {
         if (PerekCarousel.Handler?.PlatformView is not Android.Views.View view)
         {
@@ -416,8 +431,6 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
             PerekCarousel.ScrollTo(index, position: ScrollToPosition.Center, animate: true);
         }
     }
-
-    private void OnTouchCancelled(object? sender, EventArgs e) => _swipe.Cancel();
 #endif
 
     protected override void OnDisappearing()
@@ -440,8 +453,8 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
 #if ANDROID
         MainActivity.TouchStarted -= OnTouchStarted;
         MainActivity.UnsubscribeTouchDispatched(OnTouchDispatched);
+        MainActivity.TouchMoved -= OnTouchMoved;
         MainActivity.TouchReleased -= OnTouchReleased;
-        MainActivity.TouchCancelled -= OnTouchCancelled;
         _swipe.Cancel();
         LongPressBehavior.CancelAllPending();
 #endif
@@ -485,8 +498,8 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
 #if ANDROID
         MainActivity.TouchStarted += OnTouchStarted;
         MainActivity.SubscribeTouchDispatched(OnTouchDispatched);
+        MainActivity.TouchMoved += OnTouchMoved;
         MainActivity.TouchReleased += OnTouchReleased;
-        MainActivity.TouchCancelled += OnTouchCancelled;
 #endif
 #if IOS
         ApplyBottomBarSafeArea();
@@ -546,6 +559,9 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
             await RefreshPerushimIfAvailabilityChangedAsync();
             StartSearchIntroduction();
         }
+        // Cold-start main-thread work is done — release the deferred e2e
+        // search-index warmup so it cannot starve the accessibility snapshot.
+        Services.SearchIndexService.NotifyStartupSettled();
 #if IOS
         Dispatcher.Dispatch(ConfigureIosReaderHistory);
 #endif
@@ -984,7 +1000,9 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         if (e.Parameter is int pasukNum)
         {
             // Don't set _lastLongPressTime - right-click doesn't need debounce
-            ResetRecitationContext();
+            // Entering selection must not kill in-flight playback or its moving
+            // word marker (#2473).
+            ResetRecitationContext(stopPlayback: false);
             var wasEmpty = _viewModel.SelectedPasukNums.Count == 0;
             _viewModel.ToggleSelectedPasuk(pasukNum);
             UpdatePasukSelection();
@@ -1050,7 +1068,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
             {
                 _lastLongPressTime = DateTime.Now;
 
-                ResetRecitationContext();
+                ResetRecitationContext(stopPlayback: false);
                 var wasEmpty = _viewModel.SelectedPasukNums.Count == 0;
                 _viewModel.ToggleSelectedPasuk(pasukNum);
 
@@ -1084,7 +1102,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         if (sender is LongPressBehavior behavior &&
             ResolvePasuk(behavior.AssociatedView?.BindingContext) is { } pasuk)
         {
-            ResetRecitationContext();
+            ResetRecitationContext(stopPlayback: false);
             var wasEmpty = _viewModel.SelectedPasukNums.Count == 0;
             _viewModel.ToggleSelectedPasuk(pasuk.PasukNum);
             UpdateSelectionBar();
@@ -1116,13 +1134,14 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         }
 
         var count = _viewModel.SelectedPasukNums.Count;
-        // The recitation bar is also the pause/resume control surface: it must
-        // stay reachable for the whole life of a playback — a pasuk tap, a word
-        // preview, or a chapter started from the header all count (#2370). The
-        // same set owns the Android Back press (TryHandleReaderBack), so both
-        // read it from one place.
-        var isSelectionMode = ReaderSurfaceState.IsActive(count, _chapterRecitationSelection,
-            _focusedPasuk != null, _recitationCursor.PlayingKey != null);
+        var focused = _focusedPasuk != null;
+        // The focused pasuk keeps the shared reader toolbar (full pasuk source,
+        // scoped search, #2466); the Back-only selection bar is for the other
+        // transient surfaces — a pesukim selection, the chapter recitation
+        // mode, or an in-flight clip with no focused pasuk (#2370).
+        var selectionBarMode = ReaderSurfaceState.ShowsSelectionBar(count, _chapterRecitationSelection,
+            focused, _recitationCursor.PlayingKey != null);
+        ChapterSearch.SetFocusedPasukScope(focused);
         var ordinarySelection = count > 0 && !_chapterRecitationSelection && _focusedPasuk == null;
         SelectionCountBadge.IsVisible = ordinarySelection;
         SelectionShareButton.IsVisible = ordinarySelection;
@@ -1154,21 +1173,35 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         var searching = ChapterSearch.IsSearchOpen;
         Shell.SetNavBarIsVisible(this, false);
         ReaderToolbar.IsVisible = !ExitFullScreenButton.IsVisible;
-        Shell.SetFlyoutBehavior(this, isSelectionMode || searching ? FlyoutBehavior.Disabled : FlyoutBehavior.Flyout);
+        Shell.SetFlyoutBehavior(this, selectionBarMode || searching ? FlyoutBehavior.Disabled : FlyoutBehavior.Flyout);
         Shell.SetBackButtonBehavior(this, new BackButtonBehavior { IsVisible = !searching });
-        var shellBackground = isSelectionMode
+        var shellBackground = selectionBarMode
             ? (Color)Microsoft.Maui.Controls.Application.Current!.Resources["Primary"]
             : Microsoft.Maui.Controls.Application.Current!.RequestedTheme == AppTheme.Dark
                 ? Color.FromArgb("#20304A")
                 : Color.FromArgb("#F2F7FE");
         Shell.SetBackgroundColor(this, shellBackground);
         ReaderToolbar.BackgroundColor = shellBackground;
-        NormalNavigationBar.IsVisible = !isSelectionMode && !searching;
+        NormalNavigationBar.BarVisible = !selectionBarMode && !searching;
+        // The header names the focused pasuk — sefer, perek and pasuk together —
+        // instead of the plain perek source (#2466).
+        NormalNavigationTitle.Text = focused && _viewModel.Source != null
+            ? $"{_viewModel.Source} {_focusedPasuk!.PasukNumHeb}"
+            : _viewModel.Source;
+        // iOS has no system Back for the overlay, so the navigation slot turns
+        // into the close control there; platforms with system Back keep the
+        // shared hamburger (#2467).
+        var focusedNavIsBack = focused && (OperatingSystem.IsIOS() || OperatingSystem.IsMacCatalyst());
+        NormalNavigationBar.NavigationButton.Text = focusedNavIsBack
+            ? Fonts.FluentUI.arrow_right_24_regular
+            : Fonts.FluentUI.navigation_24_regular;
+        SemanticProperties.SetDescription(NormalNavigationBar.NavigationButton,
+            focusedNavIsBack ? "סגירת הפסוק הממוקד" : "פתיחת תפריט הניווט");
         SearchTitleHost.IsVisible = searching;
         SearchTitleHost.Content = searching ? _searchHeader : null;
         ChapterSearch.IsVisible = searching;
         ContentArea.IsVisible = !searching;
-        SelectionBar.IsVisible = isSelectionMode && !searching;
+        SelectionBar.IsVisible = selectionBarMode && !searching;
         SelectionCountLabel.Text = count.ToString();
     }
 
@@ -1422,6 +1455,20 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     }
 
     /// <summary>
+    /// iOS has no system Back for the focused-pasuk overlay — the toolbar's
+    /// navigation slot acts as its close control there (#2466).
+    /// </summary>
+    private bool OnFocusedPasukNavigationIntercepted()
+    {
+        if (_focusedPasuk == null || !(OperatingSystem.IsIOS() || OperatingSystem.IsMacCatalyst()))
+        {
+            return false;
+        }
+        ClearAllSelections();
+        return true;
+    }
+
+    /// <summary>
     /// Opens/closes the reader options menu (הקראות, שניים מקרא, תיקון קוראים).
     /// </summary>
     private void OnReaderMenuButtonClicked(object? sender, EventArgs e)
@@ -1435,16 +1482,6 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     private void OnReaderMenuDismissed(object? sender, TappedEventArgs e)
     {
         ReaderMenuOverlay.IsVisible = false;
-    }
-
-    /// <summary>
-    /// קריינות menu item - toggles single-tap pasuk playback and the header
-    /// play button. The item only renders when the current perek has a
-    /// downloaded recitation.
-    /// </summary>
-    private void OnQriynotTapped(object? sender, TappedEventArgs e)
-    {
-        _viewModel.IsQriynotEnabled = !_viewModel.IsQriynotEnabled;
     }
 
     /// <summary>

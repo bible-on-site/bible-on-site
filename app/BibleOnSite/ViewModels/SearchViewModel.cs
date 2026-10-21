@@ -27,6 +27,12 @@ public partial class SearchViewModel : ObservableObject
 
     private readonly HashSet<SearchFilter> _enabledFilters;
     private readonly HashSet<int> _enabledSefarim;
+    // A scoped surface (e.g. the focused-pasuk reader) narrows "מה לחפש" to its
+    // own kind list. The reader's selection is parked in _readerKinds while the
+    // scope keeps its own selection in _scopedKinds across re-entries (#2466).
+    private HashSet<SearchFilter>? _allowedKinds;
+    private HashSet<SearchFilter>? _readerKinds;
+    private readonly HashSet<SearchFilter> _scopedKinds = new();
     private readonly List<Author> _authors = new();
     public SearchSort Sorting { get; set; } = SearchSort.Relevance;
 
@@ -228,12 +234,18 @@ public partial class SearchViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Enables or disables a search filter.
+    /// Enables or disables a search filter. A kind outside the active scope
+    /// can only be turned off — scoped surfaces must never reach a provider
+    /// they do not list.
     /// </summary>
     public void SetFilterEnabled(SearchFilter filter, bool enabled)
     {
         if (enabled)
         {
+            if (!IsKindAllowed(filter))
+            {
+                return;
+            }
             _enabledFilters.Add(filter);
         }
         else
@@ -241,6 +253,65 @@ public partial class SearchViewModel : ObservableObject
             _enabledFilters.Remove(filter);
         }
 
+        OnPropertyChanged(nameof(IsFilterEnabled));
+    }
+
+    /// <summary>Whether a kinds scope is currently narrowing the search.</summary>
+    public bool KindsScoped => _allowedKinds != null;
+
+    /// <summary>Whether this kind may appear and be selected right now.</summary>
+    public bool IsKindAllowed(SearchFilter filter) => _allowedKinds?.Contains(filter) ?? true;
+
+    /// <summary>The kinds the kinds sheet lists — the scope's list while scoped.</summary>
+    public IReadOnlyCollection<SearchFilter> KindOptions =>
+        _allowedKinds ?? (IReadOnlyCollection<SearchFilter>)Enum.GetValues<SearchFilter>();
+
+    /// <summary>
+    /// Narrows the search to a surface's own kind list, parking the caller's
+    /// selection. First entry defaults to every allowed kind on; later entries
+    /// restore the selection the surface had when it was left.
+    /// </summary>
+    public void EnterKindsScope(IReadOnlyCollection<SearchFilter> allowedKinds)
+    {
+        if (_allowedKinds != null)
+        {
+            return;
+        }
+        _allowedKinds = allowedKinds.ToHashSet();
+        _readerKinds = _enabledFilters.ToHashSet();
+        if (_scopedKinds.Count == 0)
+        {
+            _scopedKinds.UnionWith(allowedKinds.Where(filter => !filter.RequiresNetwork()));
+        }
+        _enabledFilters.Clear();
+        _enabledFilters.UnionWith(_scopedKinds);
+        OnPropertyChanged(nameof(IsFilterEnabled));
+    }
+
+    /// <summary>Leaves the kinds scope and restores the parked selection.</summary>
+    public void ExitKindsScope()
+    {
+        if (_allowedKinds == null)
+        {
+            return;
+        }
+        _scopedKinds.Clear();
+        _scopedKinds.UnionWith(_enabledFilters);
+        _enabledFilters.Clear();
+        _enabledFilters.UnionWith(_readerKinds!);
+        _readerKinds = null;
+        _allowedKinds = null;
+        OnPropertyChanged(nameof(IsFilterEnabled));
+    }
+
+    /// <summary>
+    /// Restores the default enabled kinds: every local kind, or every allowed
+    /// local kind while scoped. Remote kinds always stay opt-in.
+    /// </summary>
+    public void ResetFiltersToDefaults()
+    {
+        _enabledFilters.Clear();
+        _enabledFilters.UnionWith(KindOptions.Where(filter => !filter.RequiresNetwork()));
         OnPropertyChanged(nameof(IsFilterEnabled));
     }
 

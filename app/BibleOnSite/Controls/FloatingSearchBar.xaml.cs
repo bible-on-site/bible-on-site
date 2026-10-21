@@ -24,8 +24,7 @@ public partial class FloatingSearchBar : ContentView
     {
         InitializeComponent();
         BindingContext = _viewModel;
-        LimitPicker.ItemsSource = Enumerable.Range(1, 10).Select(value => value * 5).ToList();
-        LimitPicker.SelectedItem = _viewModel.ResultsLimit;
+        LimitPicker.Value = _viewModel.ResultsLimit;
         _viewModel.PropertyChanged += (_, _) => UpdateStatus();
         SearchPanel.SizeChanged += (_, _) => ResizeFilterSheet();
         // Kind availability follows live prerequisites: connectivity and the
@@ -100,6 +99,33 @@ public partial class FloatingSearchBar : ContentView
         => Dispatcher.Dispatch(RefreshKindAvailability);
 
     public void SetSource(string source) => SearchInput.Placeholder = source;
+
+    /// <summary>
+    /// The focused-pasuk reader narrows "מה לחפש" to תוכן פסוק and תוכן פירוש
+    /// with their own selection; the reader's saved kinds are restored on exit
+    /// (#2466). The sheet applies every change immediately, so it has no
+    /// הצגת תוצאות button (#2454).
+    /// </summary>
+    public void SetFocusedPasukScope(bool scoped)
+    {
+        if (scoped == _viewModel.KindsScoped)
+        {
+            return;
+        }
+        if (scoped)
+        {
+            _viewModel.EnterKindsScope([SearchFilter.Pasuk, SearchFilter.Perush]);
+        }
+        else
+        {
+            _viewModel.ExitKindsScope();
+        }
+        if (_filtersBuilt)
+        {
+            BuildKindFilters();
+        }
+        UpdateFilterSummaries();
+    }
 
     public View DetachHeader()
     {
@@ -289,31 +315,7 @@ public partial class FloatingSearchBar : ContentView
         {
             KindsFilters.Clear();
             BookFilters.Clear();
-            var (kindsSelectAllRow, kindsSelectAll) = SelectAllRow("SearchKindsSelectAll", state =>
-            {
-                var select = state == TriCheckState.Checked;
-                _buildingFilters = true;
-                try
-                {
-                    _viewModel.SetAvailableFiltersEnabled(select);
-                    foreach (var filter in _kindRows.Keys.Where(_viewModel.IsKindAvailable))
-                    {
-                        _kindRows[filter].Check.IsChecked = select;
-                    }
-                    _kindsExplicit = true;
-                }
-                finally { _buildingFilters = false; }
-                UpdateKindsSelectAll();
-                UpdateFilterSummaries();
-                ScheduleSearch();
-            });
-            _kindsSelectAll = kindsSelectAll;
-            KindsFilters.Add(kindsSelectAllRow);
-            foreach (var filter in Enum.GetValues<SearchFilter>())
-            {
-                KindsFilters.Add(KindFilterRow(filter));
-            }
-            RefreshKindAvailability();
+            BuildKindFilters();
             var (booksSelectAllRow, booksSelectAll) = SelectAllRow("SearchBooksSelectAll", state =>
             {
                 var select = state == TriCheckState.Checked;
@@ -516,6 +518,47 @@ public partial class FloatingSearchBar : ContentView
         _booksSelectAll.State = TriStateCheckBox.DeriveState(selected, total);
     }
 
+    /// <summary>
+    /// Rebuilds the kinds rows so the sheet always reflects the active scope
+    /// and current content availability (#2466, #2454): in the focused-pasuk
+    /// scope only its kinds are listed, and a kind whose prerequisite is
+    /// missing is shown disabled with its reason.
+    /// </summary>
+    private void BuildKindFilters()
+    {
+        KindsFilters.Clear();
+        foreach (var key in _filterChecks.Keys.Where(key => key.StartsWith("SearchKind", StringComparison.Ordinal)).ToList())
+        {
+            _filterChecks.Remove(key);
+        }
+        _kindRows.Clear();
+        var (kindsSelectAllRow, kindsSelectAll) = SelectAllRow("SearchKindsSelectAll", state =>
+        {
+            var select = state == TriCheckState.Checked;
+            _buildingFilters = true;
+            try
+            {
+                _viewModel.SetAvailableFiltersEnabled(select);
+                foreach (var filter in _kindRows.Keys.Where(_viewModel.IsKindAvailable))
+                {
+                    _kindRows[filter].Check.IsChecked = select;
+                }
+                _kindsExplicit = true;
+            }
+            finally { _buildingFilters = false; }
+            UpdateKindsSelectAll();
+            UpdateFilterSummaries();
+            ScheduleSearch();
+        });
+        _kindsSelectAll = kindsSelectAll;
+        KindsFilters.Add(kindsSelectAllRow);
+        foreach (var filter in _viewModel.KindOptions)
+        {
+            KindsFilters.Add(KindFilterRow(filter));
+        }
+        RefreshKindAvailability();
+    }
+
     private Grid FilterRow(string title, string automationId, bool enabled, Action<bool> changed)
     {
         var checkBox = new CheckBox { IsChecked = enabled, AutomationId = automationId, WidthRequest = 32, HeightRequest = 44 };
@@ -540,7 +583,8 @@ public partial class FloatingSearchBar : ContentView
 
     private void OnLimitChanged(object? sender, EventArgs e)
     {
-        if (LimitPicker.SelectedItem is not int limit)
+        var limit = (int)LimitPicker.Value;
+        if (limit == _viewModel.ResultsLimit)
         {
             return;
         }

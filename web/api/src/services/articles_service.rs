@@ -179,6 +179,7 @@ pub async fn search_articles(
     phrase: &str,
     limit: Option<i32>,
     offset: Option<i32>,
+    author_id: Option<i32>,
 ) -> Result<ArticleSearchResults, ServiceError> {
     tracing::info_span!("articles_service::search_articles");
     if phrase.chars().count() > MAX_SEARCH_PHRASE_CHARS {
@@ -196,8 +197,23 @@ pub async fn search_articles(
             "offset must be between 0 and 1000",
         ));
     }
+    if author_id.is_some_and(|id| id <= 0) {
+        return Err(ServiceError::bad_request("authorId must be positive"));
+    }
+    // An author scope resolves to the author's article ids and applies inside
+    // the index before offset/limit, so a globally ranked page can never drop
+    // valid author matches.
+    let author_ids = match author_id {
+        Some(id) => Some(article_ids_by_author(db, id).await?),
+        None => None,
+    };
     let page = index
-        .search(phrase, limit as usize, offset as usize)
+        .search(
+            phrase,
+            limit as usize,
+            offset as usize,
+            author_ids.as_ref(),
+        )
         .await
         .map_err(|db_err| {
             ServiceError::internal_server_error(INTERNAL_SERVER_ERROR, Some(db_err))
@@ -277,6 +293,27 @@ pub async fn search_articles(
         total: page.total as i32,
         hits,
     })
+}
+
+/// Every article id owned by `author_id` — the eligibility set an
+/// author-scoped search is confined to.
+async fn article_ids_by_author(
+    db: &Database,
+    author_id: i32,
+) -> Result<std::collections::HashSet<i32>, ServiceError> {
+    use sea_orm::QuerySelect;
+
+    Entity::find()
+        .select_only()
+        .column(Column::Id)
+        .filter(Column::AuthorId.eq(author_id as i16))
+        .into_tuple::<i32>()
+        .all(db.get_connection())
+        .await
+        .map_err(|db_err| {
+            ServiceError::internal_server_error(INTERNAL_SERVER_ERROR, Some(db_err))
+        })
+        .map(|ids| ids.into_iter().collect())
 }
 
 /// Returns a map of author_id → article count for all authors with articles
@@ -650,27 +687,27 @@ mod tests {
 
         let long = "א".repeat(300);
         assert!(
-            search_articles(&db, &index, &long, None, None)
+            search_articles(&db, &index, &long, None, None, None)
                 .await
                 .is_err()
         );
         assert!(
-            search_articles(&db, &index, "alpha", Some(0), None)
+            search_articles(&db, &index, "alpha", Some(0), None, None)
                 .await
                 .is_err()
         );
         assert!(
-            search_articles(&db, &index, "alpha", Some(51), None)
+            search_articles(&db, &index, "alpha", Some(51), None, None)
                 .await
                 .is_err()
         );
         assert!(
-            search_articles(&db, &index, "alpha", None, Some(-1))
+            search_articles(&db, &index, "alpha", None, Some(-1), None)
                 .await
                 .is_err()
         );
         assert!(
-            search_articles(&db, &index, "alpha", None, Some(1001))
+            search_articles(&db, &index, "alpha", None, Some(1001), None)
                 .await
                 .is_err()
         );
@@ -732,7 +769,7 @@ mod tests {
                 .into_connection(),
         );
 
-        let results = search_articles(&db, &index, "alpha", None, None)
+        let results = search_articles(&db, &index, "alpha", None, None, None)
             .await
             .expect("search");
         assert_eq!(results.total, 1);
@@ -746,11 +783,117 @@ mod tests {
         assert!(!hit.excerpt.is_empty());
 
         // An empty phrase never reaches hydration.
-        let results = search_articles(&db, &index, "", None, None)
+        let results = search_articles(&db, &index, "", None, None, None)
             .await
             .expect("empty phrase");
         assert_eq!(results.total, 0);
         assert!(results.hits.is_empty());
+    }
+
+    #[tokio::test]
+    async fn search_articles_scopes_to_author_before_pagination() {
+        use article_search::lsa::{LsaModel, serialize_model, serialize_terms, serialize_vector};
+
+        let model = LsaModel {
+            dims: 1,
+            vocab: vec!["alpha".into()],
+            index: std::collections::HashMap::from([("alpha".into(), 0_u32)]),
+            idf: vec![1.0],
+            basis: vec![1.0],
+        };
+        // Two matching docs; doc 43 ranks above doc 42 (higher tf), so a
+        // global limit-1 page would return 43 and drop the author's match —
+        // the scope must apply before pagination.
+        let index = article_search::ArticleSearchIndex::new(Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![mock_row([
+                        (
+                            "schema_version",
+                            article_search::store::SCHEMA_VERSION.into(),
+                        ),
+                        ("model_epoch", 4_i32.into()),
+                        ("model", serialize_model(&model).into()),
+                    ])],
+                    vec![
+                        mock_row([
+                            ("article_id", 42_i32.into()),
+                            ("plain_len", 10_i32.into()),
+                            ("vector", serialize_vector(&[1.0]).into()),
+                            ("terms", serialize_terms(&[(0, 2)]).into()),
+                        ]),
+                        mock_row([
+                            ("article_id", 43_i32.into()),
+                            ("plain_len", 10_i32.into()),
+                            ("vector", serialize_vector(&[1.0]).into()),
+                            ("terms", serialize_terms(&[(0, 40)]).into()),
+                        ]),
+                    ],
+                    vec![], // probe → same epoch, keep the snapshot
+                ])
+                .into_connection(),
+        ));
+        index.load().await.expect("load");
+
+        // Main connection: author's article ids first, then hydration rows.
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![mock_row([("id", 42_i32.into())])],
+                    vec![mock_row([
+                        ("id", 42_i32.into()),
+                        ("perek_id", 3_i16.into()),
+                        ("author_id", 4_i16.into()),
+                        ("author_name", "רש\"י".into()),
+                        ("name", "מאמר".into()),
+                        ("abstract", Value::String(None)),
+                        ("content", "<p>alpha בפסקה</p>".into()),
+                        ("sefer_name", "בראשית".into()),
+                        ("additional_letter", Value::String(None)),
+                        ("perek_in_context", 7_i32.into()),
+                    ])],
+                ])
+                .into_connection(),
+        );
+
+        // Even with limit 1 — which globally would return doc 43 — the scoped
+        // page returns the author's doc 42 and counts only author hits.
+        let results = search_articles(&db, &index, "alpha", Some(1), None, Some(4))
+            .await
+            .expect("scoped search");
+        assert_eq!(results.total, 1);
+        assert_eq!(results.hits.len(), 1);
+        assert_eq!(results.hits[0].article_id, 42);
+        assert_eq!(results.hits[0].author_id, 4);
+    }
+
+    #[tokio::test]
+    async fn search_articles_author_without_articles_returns_empty_page() {
+        let index = article_search::ArticleSearchIndex::new(Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql).into_connection(),
+        ));
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![],
+                ])
+                .into_connection(),
+        );
+        let results = search_articles(&db, &index, "alpha", None, None, Some(9))
+            .await
+            .expect("search");
+        assert_eq!(results.total, 0);
+        assert!(results.hits.is_empty());
+        assert!(search_articles(&db, &index, "alpha", None, None, Some(0))
+            .await
+            .is_err());
+        assert!(search_articles(&db, &index, "alpha", None, None, Some(-3))
+            .await
+            .is_err());
+        let db_err = create_mock_db_with_query_error("author ids query failed");
+        assert!(search_articles(&db_err, &index, "alpha", None, None, Some(9))
+            .await
+            .is_err());
     }
 
     fn covering_source_model(article_id: i32, perek_id: i32, pasuk: i16) -> CoveringSourceModel {

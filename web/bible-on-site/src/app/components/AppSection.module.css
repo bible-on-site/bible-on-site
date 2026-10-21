@@ -17,12 +17,12 @@
   color: var(--link-accent, #1552ac);
 }
 
-.appHeader h1 {
+.appHeader h2 {
   font-size: 1.8em;
   margin: 0.5em 0;
 }
 
-.appHeader h2 {
+.appHeader h3 {
   font-size: 1.1em;
   margin: 0.3em 0;
   color: var(--muted-text, #666);

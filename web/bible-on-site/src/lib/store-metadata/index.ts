@@ -2,11 +2,15 @@
  * Store metadata for README badges and machine-readable lookups (#2371).
  *
  * Sources (all public, no credentials):
- * - android: play.google.com listing HTML; version anchored at the "141"
- *   details key. Play does not ship the star rating in initial HTML, so
- *   rating stays null rather than fabricated.
- * - windows: Microsoft displaycatalog v7.0 product API. The public catalog
- *   does not expose package version or star rating — both stay null.
+ * - android: play.google.com listing HTML for the IL market (gl=IL); version
+ *   anchored at the "141" details key, star rating from the "Rated X.X stars"
+ *   aria-label Play only renders for the Israeli market. If Play stops
+ *   publishing it, rating stays null rather than fabricated.
+ * - windows: Microsoft displaycatalog v7.0 product API. The published package
+ *   version is decoded from the packed integers in
+ *   Sku.Properties.Packages[].Version (four uint16 components). Star rating
+ *   is not published — it stays null. sourceUpdatedAt carries the catalog
+ *   LastModifiedDate; fetchedAt stays the actual fetch time.
  * - ios: itunes.apple.com lookup (same source the existing README badge uses).
  *
  * Upstream responses are cached per process (24 h) and Next revalidates the
@@ -25,12 +29,14 @@ export interface StoreMetadata {
 	source: string;
 	/** ISO time the upstream source last answered successfully. */
 	fetchedAt: string | null;
+	/** ISO time the source catalog reports its data last modified (windows). */
+	sourceUpdatedAt: string | null;
 	/** True when serving a cached value or no upstream answer ever landed. */
 	stale: boolean;
 }
 
 const ANDROID_URL =
-	"https://play.google.com/store/apps/details?id=com.tanah.daily929&hl=en&gl=US";
+	"https://play.google.com/store/apps/details?id=com.tanah.daily929&hl=en&gl=IL";
 const WINDOWS_URL =
 	"https://displaycatalog.mp.microsoft.com/v7.0/products/9NBLGGH6B55K?fieldsTemplate=Details&market=IL&languages=en-us";
 const IOS_URL = "https://itunes.apple.com/lookup?id=1045128150&country=il";
@@ -107,10 +113,54 @@ async function fetchText(url: string): Promise<string> {
 	return response.text();
 }
 
+const WINDOWS_PACKAGE_COMPONENTS = 4;
+const WINDOWS_PACKAGE_SHIFT = 16;
+
+/** Packed MS package version → "major.minor.build.revision". */
+function decodeWindowsPackageVersion(packed: bigint): string {
+	const parts: string[] = [];
+	for (let i = 0; i < WINDOWS_PACKAGE_COMPONENTS; i++) {
+		const shift = BigInt(
+			(WINDOWS_PACKAGE_COMPONENTS - 1 - i) * WINDOWS_PACKAGE_SHIFT,
+		);
+		parts.push(((packed >> shift) & 0xffffn).toString());
+	}
+	return parts.join(".");
+}
+
+export function parseWindowsCatalog(json: unknown): {
+	version: string | null;
+	sourceUpdatedAt: string | null;
+} {
+	const product = (json as { Product?: Record<string, unknown> })?.Product;
+	const packed = (
+		(product?.DisplaySkuAvailabilities ?? []) as Array<{
+			Sku?: { Properties?: { Packages?: Array<{ Version?: string }> } };
+		}>
+	).flatMap((sku) => sku.Sku?.Properties?.Packages ?? [])
+		.map((pkg) => pkg.Version)
+		.filter(
+			(v): v is string => typeof v === "string" && /^[0-9]+$/.test(v),
+		)
+		.map((v) => BigInt(v));
+	const max = packed.length
+		? packed.reduce((a, b) => (b > a ? b : a))
+		: null;
+	const modified = product?.LastModifiedDate;
+	return {
+		version: max === null ? null : decodeWindowsPackageVersion(max),
+		sourceUpdatedAt: typeof modified === "string" ? modified : null,
+	};
+}
+
 async function collect(
 	platform: StoreMetadata["platform"],
 ): Promise<Omit<StoreMetadata, "stale">> {
-	const base = { platform, ratingScale: 5 as const };
+	const base = {
+		platform,
+		ratingScale: 5 as const,
+		sourceUpdatedAt: null as string | null,
+	};
 	switch (platform) {
 		case "android": {
 			const { version, rating } = parsePlayStoreHtml(
@@ -126,17 +176,15 @@ async function collect(
 			};
 		}
 		case "windows": {
-			const json = await fetchJson(WINDOWS_URL);
-			const modified = (json as { Product?: { LastModifiedDate?: string } })
-				.Product?.LastModifiedDate;
+			const parsed = parseWindowsCatalog(await fetchJson(WINDOWS_URL));
 			return {
 				...base,
-				version: null,
+				version: parsed.version,
 				rating: null,
 				ratingCount: null,
+				sourceUpdatedAt: parsed.sourceUpdatedAt,
 				source: WINDOWS_URL,
-				fetchedAt:
-					typeof modified === "string" ? modified : new Date().toISOString(),
+				fetchedAt: new Date().toISOString(),
 			};
 		}
 		case "ios": {
@@ -181,6 +229,7 @@ export async function getStoreMetadata(
 						? WINDOWS_URL
 						: IOS_URL,
 			fetchedAt: null,
+			sourceUpdatedAt: null,
 			stale: true,
 		};
 	}

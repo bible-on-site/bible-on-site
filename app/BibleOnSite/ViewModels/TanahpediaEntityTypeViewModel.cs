@@ -73,6 +73,7 @@ public partial class TanahpediaEntityTypeViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsEmpty))]
     [NotifyPropertyChangedFor(nameof(HasEntities))]
+    [NotifyPropertyChangedFor(nameof(EntityCountText))]
     private ObservableCollection<TanahpediaEntityItem> _entities = new();
 #pragma warning restore MVVMTK0045
 
@@ -83,6 +84,11 @@ public partial class TanahpediaEntityTypeViewModel : ObservableObject
     public bool HasError => !string.IsNullOrEmpty(ErrorMessage);
     public bool HasIntro => !string.IsNullOrEmpty(IntroContent);
     public bool HasEntities => Entities.Count > 0;
+
+    /// <summary>Entity count labeled as פריטים — the list holds entities, and
+    /// not every entity has an entry (some have several), so ערכים would
+    /// misstate the count.</summary>
+    public string EntityCountText => $"{Entities.Count} פריטים";
     public bool IsEmpty => IsLoaded && Entities.Count == 0;
     public bool HasMap => PlaceMarkers.Count > 0;
 

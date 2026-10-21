@@ -36,6 +36,17 @@ public class BoundedLruCacheTests
         }
 
         [Fact]
+        public void a_factory_that_populates_the_key_first_returns_the_cached_winner()
+        {
+            // The factory runs outside the lock: a nested add of the same key
+            // completes first and wins; the outer call returns that entry.
+            var cache = Create();
+            var value = cache.GetOrAdd("k", () => cache.GetOrAdd("k", () => "inner"));
+            value.Should().Be("inner");
+            cache.GetOrAdd("k", () => "again").Should().Be("inner");
+        }
+
+        [Fact]
         public void distinct_keys_cache_independently()
         {
             var cache = Create();
@@ -92,6 +103,34 @@ public class BoundedLruCacheTests
         }
     }
 
+    public class Concurrency
+    {
+        [Fact]
+        public void a_racing_insert_returns_the_winners_entry()
+        {
+            var cache = Create();
+            using var factoryEntered = new ManualResetEventSlim();
+            using var rivalInserted = new ManualResetEventSlim();
+
+            // The factory runs outside the lock: let a second caller insert
+            // the same key while the first factory is still building.
+            var task = Task.Run(() => cache.GetOrAdd("k", () =>
+            {
+                factoryEntered.Set();
+                rivalInserted.Wait(TimeSpan.FromSeconds(10));
+                return "loser";
+            }));
+            factoryEntered.Wait(TimeSpan.FromSeconds(10));
+
+            cache.GetOrAdd("k", () => "winner");
+            rivalInserted.Set();
+
+            task.Wait(TimeSpan.FromSeconds(10)).Should().BeTrue();
+            task.Result.Should().Be("winner");
+            cache.GetOrAdd("k", () => "x").Should().Be("winner");
+        }
+    }
+
     public class Validation
     {
         [Fact]
@@ -100,5 +139,42 @@ public class BoundedLruCacheTests
             var act = () => new BoundedLruCache<string, string>(0, 100, v => v.Length);
             act.Should().Throw<ArgumentOutOfRangeException>();
         }
+
+        [Fact]
+        public void rejects_nonpositive_size_budget()
+        {
+            var act = () => new BoundedLruCache<string, string>(3, 0, v => v.Length);
+            act.Should().Throw<ArgumentOutOfRangeException>();
+        }
+
+        [Fact]
+        public void rejects_a_null_measure()
+        {
+            var act = () => new BoundedLruCache<string, string>(3, 100, null!);
+            act.Should().Throw<ArgumentNullException>();
+        }
+    }
+}
+
+public class BoundedLruCacheGuardTests
+{
+    [Fact]
+    public void rejects_nonpositive_total_size_and_null_measure()
+    {
+        var badSize = () => new BoundedLruCache<string, string>(1, 0, v => v.Length);
+        badSize.Should().Throw<ArgumentOutOfRangeException>();
+        var nullMeasure = () => new BoundedLruCache<string, string>(1, 1, null!);
+        nullMeasure.Should().Throw<ArgumentNullException>();
+    }
+
+    [Fact]
+    public void a_factory_that_reenters_the_cache_returns_the_raced_entry()
+    {
+        var cache = new BoundedLruCache<string, string>(3, 100, v => v.Length);
+
+        var result = cache.GetOrAdd("k", () => cache.GetOrAdd("k", () => "inner"));
+
+        result.Should().Be("inner");
+        cache.Count.Should().Be(1);
     }
 }

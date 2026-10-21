@@ -19,10 +19,10 @@ public class PerekLoadingTests
         public PerekViewModel Model { get; }
         public SQLite.SQLiteAsyncConnection Bible { get; private set; } = null!;
 
-        public Fixture()
+        public Fixture(IPadDeliveryService? pad = null)
         {
             Data = new PerekDataService(new LocalDatabaseService(Storage.FileSystem.Object));
-            Notes = new PerushimNotesService(NotesDeliveryTests.Pad().Object, Storage.FileSystem.Object);
+            Notes = new PerushimNotesService(pad ?? NotesDeliveryTests.Pad().Object, Storage.FileSystem.Object);
             Model = new PerekViewModel(PreferencesService.CreateForTesting(new InMemoryPreferencesStorage()), null,
                 Data, new PerushimCatalogService(Storage.FileSystem.Object),
                 Notes, Navigator.Object,
@@ -54,14 +54,84 @@ public class PerekLoadingTests
             }
         }
 
+        /// <summary>Observes a teardown operation's fault without throwing or swallowing it.</summary>
+        private static async Task<Exception?> ObserveFaultAsync(Task operation) =>
+            await operation.ContinueWith(
+                task => task.Exception?.InnerExceptions.Count == 1
+                    ? task.Exception.InnerException
+                    : task.Exception,
+                CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+
+        /// <summary>Picks the teardown failure to surface: both when init and cleanup each failed.</summary>
+        internal static Exception? CombineTeardownFailures(Exception? initFailure, Exception? cleanupFailure) =>
+            (initFailure, cleanupFailure) switch
+            {
+                (null, null) => null,
+                (not null, not null) => new AggregateException(
+                    "Notes init and storage cleanup both failed during teardown.", initFailure, cleanupFailure),
+                _ => initFailure ?? cleanupFailure,
+            };
+
         public async ValueTask DisposeAsync()
         {
             // LoadPerushimAsync may leave a kicked notes init in flight — let
-            // it settle before the temp storage is deleted underneath it.
-            try { await Notes.InitializeAsync(); }
-            catch (Exception ex) { Console.WriteLine($"Notes init during teardown: {ex}"); }
-            await Storage.DisposeAsync();
+            // it settle before the temp storage is deleted underneath it. A
+            // missing or rejected pack settles as service state, never as a
+            // fault, so an init failure here is a defect: observe it, still
+            // free the storage, then surface it so the test fails instead of
+            // sinking the error to console output.
+            var initFailure = await ObserveFaultAsync(Notes.InitializeAsync());
+            var cleanupFailure = await ObserveFaultAsync(Storage.DisposeAsync().AsTask());
+            if (CombineTeardownFailures(initFailure, cleanupFailure) is { } failure)
+            {
+                throw failure;
+            }
         }
+    }
+
+    [Fact]
+    public async Task Teardown_WhenNotesInitFaults_StillDisposesStorageAndSurfacesTheFailure()
+    {
+        // A delivery probe that throws is a defect, not a tolerated "no pack"
+        // outcome — teardown must let it fail the test instead of logging it away.
+        var pad = NotesDeliveryTests.Pad();
+        pad.Setup(p => p.TryGetAssetPathAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("delivery probe down"));
+        var fixture = new Fixture(pad.Object);
+        await fixture.Initialize(notes: false);
+        var root = fixture.Storage.Root;
+
+        var thrown = await fixture.Awaiting(f => f.DisposeAsync().AsTask())
+            .Should().ThrowAsync<InvalidOperationException>();
+
+        thrown.WithMessage("*delivery probe down*");
+        Directory.Exists(root).Should().BeFalse("storage cleanup must still run on the failure path");
+    }
+
+    [Fact]
+    public async Task Teardown_WhenNotesInitSettles_RemovesTempStorage()
+    {
+        var fixture = new Fixture();
+        await fixture.Initialize();
+        await fixture.Model.LoadByPerekIdAsync(1);
+        var root = fixture.Storage.Root;
+
+        await fixture.DisposeAsync();
+
+        Directory.Exists(root).Should().BeFalse();
+    }
+
+    [Fact]
+    public void TeardownFailures_WhenInitAndCleanupBothFail_AggregateBothForDiagnostics()
+    {
+        var init = new InvalidOperationException("notes init failed");
+        var cleanup = new IOException("storage cleanup failed");
+
+        Fixture.CombineTeardownFailures(init, cleanup).Should().BeOfType<AggregateException>()
+            .Which.InnerExceptions.Should().Equal([init, cleanup]);
+        Fixture.CombineTeardownFailures(init, null).Should().BeSameAs(init);
+        Fixture.CombineTeardownFailures(null, cleanup).Should().BeSameAs(cleanup);
+        Fixture.CombineTeardownFailures(null, null).Should().BeNull();
     }
 
     [Fact]
