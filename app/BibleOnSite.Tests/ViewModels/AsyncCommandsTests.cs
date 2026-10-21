@@ -118,6 +118,10 @@ public class AsyncCommandsTests
         vm.SetFilterEnabled(SearchFilter.Perek, false);
         vm.SetFilterEnabled(SearchFilter.Pasuk, false);
         vm.SetFilterEnabled(SearchFilter.Perush, false);
+        // This test covers local author results; remote kinds stay out (#2454
+        // enables them by default).
+        vm.SetFilterEnabled(SearchFilter.Articles, false);
+        vm.SetFilterEnabled(SearchFilter.Tanahpedia, false);
         vm.SearchPhrase = "משה";
         await vm.SearchAsync(TestContext.Current.CancellationToken);
         vm.SearchResults.Should().ContainSingle().Which.Should().BeOfType<AuthorSearchResult>();

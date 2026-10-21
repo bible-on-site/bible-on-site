@@ -67,7 +67,7 @@ public sealed class FloatingSearchBarTests(OfflineSearchFixture fixture)
         fixture.Click(settings);
         (await fixture.WaitForElementAsync(window => window.FindFirstDescendant(fixture.CF.ByAutomationId("SearchKindPerek"))))
             .Should().NotBeNull("settings are accessible before typing a query");
-        fixture.Click(fixture.FindByAutomationId("SearchSheetApplyButton")!);
+        fixture.Click(fixture.FindByAutomationId("SearchSheetDismissButton")!);
         fixture.Click(fixture.FindByAutomationId("SearchBooksTab")!);
         var torah = (await fixture.WaitForElementAsync(window => window.FindFirstDescendant(fixture.CF.ByAutomationId("SearchGroup1"))))!;
         var neviim = fixture.FindByAutomationId("SearchGroup2")!;
@@ -81,7 +81,7 @@ public sealed class FloatingSearchBarTests(OfflineSearchFixture fixture)
         torah.AsCheckBox().IsChecked = true;
         fixture.FindByAutomationId("SearchBook2")!.AsCheckBox().IsChecked.Should().BeTrue();
         CapturePreview("floating-search-book-columns.png");
-        fixture.Click(fixture.FindByAutomationId("SearchSheetApplyButton")!);
+        fixture.Click(fixture.FindByAutomationId("SearchSheetDismissButton")!);
         fixture.Click(navigation);
         await OpenSearchAsync();
         input = fixture.FindByAutomationId("PerekSearchInput")!;
@@ -110,7 +110,7 @@ public sealed class FloatingSearchBarTests(OfflineSearchFixture fixture)
         var chapterFilter = await fixture.WaitForElementAsync(window => window.FindFirstDescendant(fixture.CF.ByAutomationId("SearchKindPerek")));
         chapterFilter.Should().NotBeNull("the settings panel opens after the verse query finishes");
         chapterFilter!.AsCheckBox().IsChecked = false;
-        fixture.Click(fixture.FindByAutomationId("SearchSheetApplyButton")!);
+        fixture.Click(fixture.FindByAutomationId("SearchSheetDismissButton")!);
         await WaitForFinishedSearchAsync();
         var verse = await fixture.WaitForElementAsync(window => window.FindFirstDescendant(fixture.CF.ByAutomationId("SearchResults"))
             ?.FindFirstDescendant(fixture.CF.ByName("בראשית א ז")), TimeSpan.FromSeconds(45));
