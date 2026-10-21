@@ -121,6 +121,37 @@
                 </VerticalStackLayout>
             </VerticalStackLayout>
 
+            <!-- ═══ קריינות ═══ -->
+            <VerticalStackLayout Spacing="8">
+                <Label Text="קריינות"
+                       FontSize="14"
+                       FontAttributes="Bold"
+                       TextColor="{StaticResource Primary}"
+                       Padding="4,0,0,0"/>
+
+                <Border Padding="16"
+                        StrokeShape="RoundRectangle 12"
+                        Stroke="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray700}}"
+                        StrokeThickness="1"
+                        BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Gray900}}">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <VerticalStackLayout Spacing="2" VerticalOptions="Center">
+                            <Label Text="השמעת קריינות"
+                                   FontSize="15"
+                                   TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
+                            <Label Text="לחיצה על פסוק או על סמל האוזניות משמיעה את ההקלטה"
+                                   FontSize="12"
+                                   LineBreakMode="WordWrap"
+                                   TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
+                        </VerticalStackLayout>
+                        <Switch Grid.Column="1"
+                                IsToggled="{Binding QriynotEnabled}"
+                                AutomationId="QriynotEnabledSwitch"
+                                SemanticProperties.Description="השמעת קריינות"/>
+                    </Grid>
+                </Border>
+            </VerticalStackLayout>
+
             <!-- ═══ מסורה על הפרק ═══ -->
             <VerticalStackLayout Spacing="8">
                 <Label Text="מסורה על הפרק"

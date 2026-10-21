@@ -92,6 +92,34 @@ public class BoundedLruCacheTests
         }
     }
 
+    public class Concurrency
+    {
+        [Fact]
+        public void a_racing_insert_returns_the_winners_entry()
+        {
+            var cache = Create();
+            using var factoryEntered = new ManualResetEventSlim();
+            using var rivalInserted = new ManualResetEventSlim();
+
+            // The factory runs outside the lock: let a second caller insert
+            // the same key while the first factory is still building.
+            var task = Task.Run(() => cache.GetOrAdd("k", () =>
+            {
+                factoryEntered.Set();
+                rivalInserted.Wait(TimeSpan.FromSeconds(10));
+                return "loser";
+            }));
+            factoryEntered.Wait(TimeSpan.FromSeconds(10));
+
+            cache.GetOrAdd("k", () => "winner");
+            rivalInserted.Set();
+
+            task.Wait(TimeSpan.FromSeconds(10)).Should().BeTrue();
+            task.Result.Should().Be("winner");
+            cache.GetOrAdd("k", () => "x").Should().Be("winner");
+        }
+    }
+
     public class Validation
     {
         [Fact]
@@ -99,6 +127,20 @@ public class BoundedLruCacheTests
         {
             var act = () => new BoundedLruCache<string, string>(0, 100, v => v.Length);
             act.Should().Throw<ArgumentOutOfRangeException>();
+        }
+
+        [Fact]
+        public void rejects_nonpositive_size_budget()
+        {
+            var act = () => new BoundedLruCache<string, string>(3, 0, v => v.Length);
+            act.Should().Throw<ArgumentOutOfRangeException>();
+        }
+
+        [Fact]
+        public void rejects_a_null_measure()
+        {
+            var act = () => new BoundedLruCache<string, string>(3, 100, null!);
+            act.Should().Throw<ArgumentNullException>();
         }
     }
 }
