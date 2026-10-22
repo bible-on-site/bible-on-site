@@ -14,6 +14,8 @@ h1 {font-size:19px;margin:0}
 a {color:#315b9a;font-size:14px}
 .card {background:#fff;border:1px solid #e1e7ed;border-radius:20px;padding:32px;box-shadow:0 8px 30px #17283c06}
 #progress {font-size:14px;color:#607086}
+#queue-updates:not(:empty) {background:#fff4dc;border:1px solid #d9b460;border-radius:10px;padding:12px;line-height:1.5}
+#prior {white-space:pre-line}
 h2 {font-size:28px;margin:8px 0 16px}
 .instructions {color:#607086;line-height:1.7;margin:0 0 22px}
 button {font:inherit;border:1px solid #d5dde7;border-radius:10px;background:white;color:#263951;padding:12px 18px;cursor:pointer}
@@ -27,6 +29,8 @@ button:disabled {opacity:.45;cursor:default}
 .word {font-family:"Times New Roman",serif;font-size:28px;padding:5px 12px;border-color:transparent;background:#f5f7fa}
 .word.heard {border-bottom-color:#4c8d72}
 .word.active {background:#dbeaff;outline:2px solid #8ab5e9}
+.word.changed {border:1px solid #d7ac60}
+.word.pending {outline:2px dashed #285c9d;outline-offset:2px}
 #listening {color:#607086;font-size:14px;min-height:22px}
 textarea {resize:vertical;width:100%;border:1px solid #d5dde7;border-radius:10px;padding:12px;font:inherit;margin:8px 0 20px}
 .actions {display:flex;gap:8px;flex-wrap:wrap}
@@ -43,12 +47,15 @@ footer {font-size:13px;color:#6f7b8c;margin-top:20px;line-height:1.7}
 <header><h1>בדיקת הקלטות</h1><a href="/archive">ארכיון התשובות</a><a href="/api/export" download="listening-reviews.json">הורדת התשובות</a></header>
 <section class="card" aria-labelledby="reference">
 <div id="progress">טוען...</div>
+<p id="queue-updates" role="status" aria-live="polite"></p>
+<div class="controls"><button class="primary" id="updated-version" hidden>פתיחת החיתוכים המעודכנים</button><button id="previous-version" hidden>הגרסה הקודמת וההערה</button></div>
 <h2 id="reference">הקלטות לבדיקה</h2>
 <p class="instructions">האזינו לחיתוכי המילים. אפשר גם ללחוץ על מילה בנפרד, או להשמיע את הפסוק וההקשר. אם מילה חסרה, נחתכת או כוללת מילה אחרת - סמנו בעיה.</p>
 <p id="prior" class="instructions" hidden></p>
 <div class="controls">
 <button class="primary" id="verse">▶ הפסוק</button>
 <button id="cuts">▶ חיתוכי המילים</button>
+<button id="remaining">▶ חיתוכים שטרם נשמעו</button>
 <button id="context">עם הקשר</button>
 <button id="stop" aria-label="עצירת הנגינה">■ עצירה</button>
 </div>
@@ -71,12 +78,81 @@ footer {font-size:13px;color:#6f7b8c;margin-top:20px;line-height:1.7}
 "use strict";
 const $ = id => document.getElementById(id);
 let cases = [], decisions = {}, token, index = 0, audioContext, currentSource, generation = 0;
-const buffers = new Map(), evidence = new Map();
-let saving = false, cancelPlayback;
-const caseNow = () => cases[index];
-const heardNow = () => evidence.get(caseNow().id);
+const buffers = new Map(), evidence = new Map(), drafts = new Map(), pastCases = new Map();
+let historicalCase = null, keepPreviousVersion = false, playbackActive = false;
+let saving = false, cancelPlayback, liveQueue = false, refreshing = false, restoredActive;
+const progressStorageKey = "listening-progress-v2";
+const stateKey = item => item.id + ":" + item.candidateSha256 + ":" + item.clipSha256;
+const decisionFor = item => decisions[stateKey(item)] ?? (!liveQueue ? decisions[item.id] : undefined);
+const caseNow = () => historicalCase ?? cases[index];
+const heardNow = () => evidence.get(stateKey(caseNow()));
+const remainingWords = () => caseNow().words.filter(word => !heardNow().segments.has(word.segment));
+function persistProgress() {
+  if (typeof localStorage === "undefined") return;
+  try {
+    localStorage.setItem(progressStorageKey, JSON.stringify({active: caseNow() ? stateKey(caseNow()) : restoredActive,
+      previousVersionSelected: keepPreviousVersion, drafts: [...drafts], evidence: [...evidence].map(([key, value]) => [key,
+        {verse: value.verse, segments: [...value.segments], fresh: [...value.fresh]}])}));
+  } catch { $("queue-updates").textContent = "שמירת הטיוטה בדפדפן אינה זמינה. הדף הנוכחי נשאר פתוח."; }
+}
+function restoreProgress() {
+  if (typeof localStorage === "undefined") return;
+  try {
+    const saved = JSON.parse(localStorage.getItem(progressStorageKey) ?? "null");
+    if (!saved) return;
+    restoredActive = saved.active;
+    keepPreviousVersion = saved.previousVersionSelected === true;
+    for (const [key, value] of saved.drafts ?? []) if (typeof value === "string") drafts.set(key, value);
+    for (const [key, value] of saved.evidence ?? []) evidence.set(key,
+      {verse: value.verse === true, segments: new Set(value.segments), fresh: new Set(value.fresh)});
+  } catch { $("queue-updates").textContent = "לא ניתן לשחזר טיוטה מהדפדפן. התשובות השמורות לא השתנו."; }
+}
+function rememberDraft() { if (caseNow()) { drafts.set(stateKey(caseNow()), $("note").value); persistProgress(); } }
+function updateProgress() {
+  $("progress").textContent = (historicalCase ? "גרסה קודמת · " : "") + "פסוק " + (index + 1) + " מתוך " + cases.length + " · " +
+    cases.filter(item => decisionFor(item)).length + " תשובות נשמרו";
+  $("previous").disabled = saving || index === 0;
+  $("next").disabled = saving || index === cases.length - 1;
+  updateVersionControls();
+}
+function previousVersion(item) {
+  return [...pastCases.values()].reverse().find(prior => prior.id === item?.id && stateKey(prior) !== stateKey(item));
+}
+function updateVersionControls() {
+  $("updated-version").hidden = !historicalCase;
+  $("updated-version").disabled = saving;
+  $("previous-version").hidden = !!historicalCase || !previousVersion(caseNow());
+  $("previous-version").disabled = saving;
+}
+function openUpdatedVersion() {
+  if (!historicalCase || saving) return;
+  rememberDraft();
+  historicalCase = null;
+  keepPreviousVersion = false;
+  render();
+  $("queue-updates").textContent = "מוצגים החיתוכים המעודכנים. הטיוטה לגרסה הקודמת נשמרה בנפרד.";
+}
+function openPreviousVersion() {
+  if (saving) return;
+  const previous = previousVersion(caseNow());
+  if (!previous) return;
+  rememberDraft();
+  historicalCase = previous;
+  keepPreviousVersion = true;
+  render();
+  $("queue-updates").textContent = "מוצגת גרסה קודמת. התשובה עליה אינה מאשרת את החיתוכים המעודכנים.";
+}
+function canOpenUpdatedVersion(item, rendered) {
+  if (saving || playbackActive || currentSource || cancelPlayback || document.activeElement === $("note")) return false;
+  const saved = decisionFor(item);
+  const note = rendered ? $("note").value : drafts.get(stateKey(item)) ?? saved?.note ?? "";
+  if (note !== (saved?.note ?? "")) return false;
+  const heard = evidence.get(stateKey(item));
+  return !!saved || (!heard?.verse && !heard?.fresh.size);
+}
 function stop() {
   generation++;
+  playbackActive = false;
   if (currentSource) {
     currentSource.onended = null;
     try { currentSource.stop(); } catch {}
@@ -88,7 +164,15 @@ function stop() {
 function updateEvidence() {
   const heard = heardNow();
   $("listening").textContent = heard.segments.size + "/" + caseNow().words.length + " חיתוכים נשמעו" + (heard.verse ? " · הפסוק נשמע" : "");
-  $("good").disabled = saving || heard.segments.size !== caseNow().words.length;
+  if (caseNow().reusableHeardSegments?.length) $("listening").textContent += " · " + caseNow().reusableHeardSegments.length + " חיתוכים ללא שינוי מההאזנה הקודמת";
+  const remaining = remainingWords();
+  if (remaining.length) $("listening").textContent += " · להשלמה: " + remaining.map(word => word.text).join(", ");
+  $("remaining").disabled = saving || remaining.length === 0;
+  for (const word of caseNow().words) {
+    document.querySelector('[data-segment="' + word.segment + '"]')?.classList.toggle("pending", !heard.segments.has(word.segment));
+  }
+  $("good").disabled = saving || remaining.length !== 0;
+  persistProgress();
 }
 function render() {
   stop();
@@ -98,49 +182,54 @@ function render() {
     document.querySelectorAll("button").forEach(button => { button.disabled = true; });
     return;
   }
-  if (!evidence.has(item.id)) {
-    const saved = decisions[item.id]?.listenEvidenceReportedByBrowser;
-    evidence.set(item.id, {verse: saved?.verseHeard === true, segments: new Set(saved?.heardSegments ?? [])});
+  for (const id of ["verse", "cuts", "context", "stop", "problem", "skip"]) $(id).disabled = false;
+  if (!evidence.has(stateKey(item))) {
+    const saved = decisionFor(item)?.listenEvidenceReportedByBrowser;
+    evidence.set(stateKey(item), {verse: saved?.verseHeard === true,
+      segments: new Set(saved?.heardSegments ?? item.reusableHeardSegments ?? []),
+      fresh: new Set(saved?.freshHeardSegments ?? (item.reusableHeardSegments ? [] : saved?.heardSegments ?? []))});
   }
-  $("progress").textContent = "פסוק " + (index + 1) + " מתוך " + cases.length + " · " + Object.keys(decisions).length + " תשובות נשמרו";
+  updateProgress();
   $("reference").textContent = item.label;
   $("prior").hidden = !item.reviewKind;
-  const reviewDescription = item.reviewKind === "corrected" ? "חיתוכים מתוקנים לבדיקה חוזרת."
-    : decisions[item.id] ? "נשמרה תשובה לפסוק. אפשר לשנות אותה." : "פסוק שעדיין לא נבדק.";
+  const reviewDescription = historicalCase ? "מוצגת גרסה קודמת. לבדיקה החדשה פתחו את החיתוכים המעודכנים."
+    : item.changedSegments?.length ? "חיתוכים מעודכנים לבדיקה חוזרת."
+    : decisionFor(item) ? "נשמרה תשובה לפסוק. אפשר לשנות אותה." : "פסוק שעדיין לא נבדק.";
   $("prior").textContent = reviewDescription + (item.correctionNote ? " " + item.correctionNote : "") + (item.priorNote ? " ההערה הקודמת נשמרה: " + item.priorNote : "");
   $("words").replaceChildren();
   for (const word of item.words) {
     const button = document.createElement("button");
     button.className = "word" + (heardNow().segments.has(word.segment) ? " heard" : "");
+    if (item.changedSegments?.includes(word.segment)) button.classList.add("changed");
     button.textContent = word.text;
     button.dataset.segment = word.segment;
     button.setAttribute("aria-label", "האזנה לחיתוך " + word.text);
     button.onclick = () => void play("word", word);
     $("words").append(button);
   }
-  $("note").value = decisions[item.id]?.note ?? "";
+  $("note").value = drafts.get(stateKey(item)) ?? decisionFor(item)?.note ?? "";
   $("previous").disabled = index === 0;
   $("next").disabled = index === cases.length - 1;
-  $("status").textContent = decisions[item.id] ? "תשובה נשמרה: " + {good:"החיתוכים טובים",problem:"יש בעיה",skip:"דילוג"}[decisions[item.id].verdict] : "";
+  $("status").textContent = decisionFor(item) ? "תשובה נשמרה: " + {good:"החיתוכים טובים",problem:"יש בעיה",skip:"דילוג"}[decisionFor(item).verdict] : "";
   updateEvidence();
 }
 async function getBuffer(item) {
-  if (!buffers.has(item.id)) {
-    buffers.set(item.id, (async () => {
-      const response = await fetch("/clips/" + item.id);
+  if (!buffers.has(stateKey(item))) {
+    buffers.set(stateKey(item), (async () => {
+      const response = await fetch("/clips/" + item.id + (liveQueue ? "?candidate=" + encodeURIComponent(item.candidateSha256) + "&clip=" + encodeURIComponent(item.clipSha256) : ""));
       if (!response.ok) throw new Error("לא ניתן לטעון את ההקלטה");
       const bytes = await response.arrayBuffer();
       const digest = await crypto.subtle.digest("SHA-256", bytes);
       const hash = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2,"0")).join("");
       if (hash !== item.clipSha256) throw new Error("ההקלטה השתנתה");
       return audioContext.decodeAudioData(bytes);
-    })().catch(error => { buffers.delete(item.id); throw error; }));
+    })().catch(error => { buffers.delete(stateKey(item)); throw error; }));
   }
   if (buffers.size > 4) {
     const oldest = buffers.keys().next().value;
-    if (oldest !== item.id) buffers.delete(oldest);
+    if (oldest !== stateKey(item)) buffers.delete(oldest);
   }
-  return buffers.get(item.id);
+  return buffers.get(stateKey(item));
 }
 function playSlice(buffer, item, start, end, request, word) {
   return new Promise(resolve => {
@@ -170,6 +259,7 @@ function playSlice(buffer, item, start, end, request, word) {
 async function play(mode, selected) {
   stop();
   const request = generation, item = caseNow();
+  playbackActive = true;
   $("status").textContent = "טוען הקלטה...";
   try {
     audioContext ??= new AudioContext();
@@ -177,46 +267,56 @@ async function play(mode, selected) {
     const buffer = await getBuffer(item);
     if (request !== generation) return;
     $("status").textContent = mode === "cuts" ? "מנגנים כל מילה בנפרד..." : "מנגן...";
-    if (mode === "cuts" || mode === "word") {
-      for (const word of mode === "cuts" ? item.words : [selected]) {
+    if (mode === "cuts" || mode === "word" || mode === "remaining") {
+      const words = mode === "remaining" ? remainingWords() : mode === "cuts" ? item.words : [selected];
+      for (const word of words) {
         if (!await playSlice(buffer,item,word.startMs,word.endMs,request,word)) return;
-        evidence.get(item.id).segments.add(word.segment);
+        evidence.get(stateKey(item)).segments.add(word.segment);
+        evidence.get(stateKey(item)).fresh.add(word.segment);
         document.querySelector('[data-segment="' + word.segment + '"]')?.classList.add("heard");
         updateEvidence();
-        if (mode === "cuts") await new Promise(resolve => setTimeout(resolve,160));
+        if (mode !== "word") await new Promise(resolve => setTimeout(resolve,160));
         if (request !== generation) return;
       }
     } else {
       const start = mode === "context" ? item.clipStartMs : item.words[0].startMs;
       const end = mode === "context" ? item.clipEndMs : item.words.at(-1).endMs;
       if (!await playSlice(buffer,item,start,end,request)) return;
-      if (mode === "verse") evidence.get(item.id).verse = true;
+      if (mode === "verse") evidence.get(stateKey(item)).verse = true;
       updateEvidence();
     }
     if (request === generation) $("status").textContent = "אפשר להשמיע שוב או לשמור תשובה.";
   } catch (error) {
     if (request === generation) $("status").textContent = error.message;
+  } finally {
+    if (request === generation) playbackActive = false;
   }
 }
 async function save(verdict) {
   if (saving || !caseNow()) return;
+  rememberDraft();
   stop(); saving = true; updateEvidence();
   document.querySelectorAll(".actions button,.nav button").forEach(button => { button.disabled = true; });
   const item = caseNow(), heard = heardNow();
   try {
     const response = await fetch("/api/reviews", {
       method:"POST", headers:{"Content-Type":"application/json","X-Review-Token":token},
-      body:JSON.stringify({caseId:item.id,candidateSha256:item.candidateSha256,verdict,
-        verseHeard:heard.verse,heardSegments:[...heard.segments],note:$("note").value})
+      body:JSON.stringify({caseId:item.id,candidateSha256:item.candidateSha256,clipSha256:item.clipSha256,verdict,
+        verseHeard:heard.verse,heardSegments:[...heard.segments],freshHeardSegments:[...heard.fresh],note:$("note").value})
     });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error);
-    decisions[item.id] = result;
+    decisions[stateKey(item)] = result;
     saving = false;
-    if (index < cases.length - 1) index++;
-    render();
-    $("status").textContent = index === cases.length - 1 && Object.keys(decisions).length === cases.length
-      ? "כל התשובות נשמרו. תודה! אפשר לחזור ולשנות תשובה." : "התשובה נשמרה.";
+    if (historicalCase) {
+      render();
+      $("status").textContent = "התשובה נשמרה לגרסה הקודמת. החיתוכים המעודכנים עדיין דורשים בדיקה.";
+    } else {
+      if (index < cases.length - 1) index++;
+      render();
+      $("status").textContent = index === cases.length - 1 && cases.every(item => decisionFor(item))
+        ? "כל התשובות נשמרו. תודה! אפשר לחזור ולשנות תשובה." : "התשובה נשמרה.";
+    }
   } catch (error) {
     $("status").textContent = "השמירה לא הצליחה: " + error.message;
     saving = false; updateEvidence();
@@ -225,15 +325,18 @@ async function save(verdict) {
     $("previous").disabled = index === 0; $("next").disabled = index === cases.length - 1;
   }
 }
+$("updated-version").onclick = openUpdatedVersion;
+$("previous-version").onclick = openPreviousVersion;
 $("verse").onclick = () => void play("verse");
 $("cuts").onclick = () => void play("cuts");
+$("remaining").onclick = () => void play("remaining");
 $("context").onclick = () => void play("context");
 $("stop").onclick = stop;
 $("good").onclick = () => void save("good");
 $("problem").onclick = () => void save("problem");
 $("skip").onclick = () => void save("skip");
-$("previous").onclick = () => { if (!saving && index > 0) { index--; render(); } };
-$("next").onclick = () => { if (!saving && index < cases.length - 1) { index++; render(); } };
+$("previous").onclick = () => { if (!saving && index > 0) { rememberDraft(); historicalCase = null; keepPreviousVersion = false; index--; render(); } };
+$("next").onclick = () => { if (!saving && index < cases.length - 1) { rememberDraft(); historicalCase = null; keepPreviousVersion = false; index++; render(); } };
 async function updateRecovery() {
   try {
     const response = await fetch("/api/recovery");
@@ -243,19 +346,65 @@ async function updateRecovery() {
     else if (state.state === "error") $("recovery").textContent = "התשובות נשמרו. בדיקת ההשלמה דורשת טיפול.";
   } catch {}
 }
+async function refreshQueue(initial = false) {
+  if (refreshing) return;
+  refreshing = true;
+  try {
+    const response = await fetch("/api/queue", {cache:"no-store"});
+    if (!response.ok) throw new Error("לא ניתן לעדכן את רשימת הבדיקה. הטיוטה הנוכחית נשארה.");
+    const result = await response.json();
+    const rendered = caseNow();
+    const active = rendered ? stateKey(rendered) : restoredActive;
+    if (rendered) rememberDraft();
+    liveQueue = result.persistentQueue === true;
+    token = result.token;
+    decisions = {...decisions, ...result.decisions};
+    const old = new Map(cases.map(item => [stateKey(item), item]));
+    for (const item of [...cases, ...(result.retiredCases ?? [])]) pastCases.set(stateKey(item), item);
+    const incoming = result.cases.map(item => old.get(stateKey(item)) ?? item);
+    const additions = incoming.filter(item => !old.has(stateKey(item)));
+    const previous = rendered ?? pastCases.get(active);
+    const currentIndex = incoming.findIndex(item => stateKey(item) === active);
+    const replacementIndex = incoming.findIndex(item => item.id === previous?.id);
+    const wasEmpty = cases.length === 0;
+    let changedVersion = false;
+    if (currentIndex >= 0) {
+      index = currentIndex;
+      historicalCase = null;
+      keepPreviousVersion = false;
+    } else if (previous && replacementIndex >= 0) {
+      index = replacementIndex;
+      changedVersion = !keepPreviousVersion && canOpenUpdatedVersion(previous, !!rendered);
+      historicalCase = changedVersion ? null : previous;
+    } else {
+      historicalCase = null;
+      keepPreviousVersion = false;
+      index = Math.max(0, incoming.findIndex(item => !decisionFor(item)));
+    }
+    // Only current candidates belong to navigation and saved-answer totals.
+    // Older drafts remain addressable by their exact candidate key, not as extra work.
+    cases = incoming;
+    if (initial || wasEmpty || changedVersion) render();
+    else updateProgress(); // Preserve active playback and the note while polling.
+    if (changedVersion) $("queue-updates").textContent =
+      "מוצגים החיתוכים המעודכנים. הטיוטה וההאזנה לגרסה הקודמת נשמרו בנפרד.";
+    else if (historicalCase) $("queue-updates").textContent =
+      "מוצגת גרסה קודמת. הטיוטה נשמרה. פתחו את החיתוכים המעודכנים לבדיקה החדשה.";
+    else if (!initial && additions.length) $("queue-updates").textContent =
+      (additions.length === 1 ? "נוסף פסוק לרשימה." : "נוספו " + additions.length + " פסוקים לרשימה.") +
+      " אפשר להמשיך בבדיקה הנוכחית.";
+    persistProgress();
+  } catch (error) { $("queue-updates").textContent = error.message; }
+  finally { refreshing = false; }
+}
+$("note").oninput = rememberDraft;
+setInterval(() => void refreshQueue(), 5000);
 setInterval(() => void updateRecovery(), 5000);
 void updateRecovery();
 document.addEventListener("visibilitychange", () => { if (document.hidden) stop(); });
 window.addEventListener("pagehide", stop);
-(async () => {
-  try {
-    const response = await fetch("/api/queue");
-    if (!response.ok) throw new Error("לא ניתן לטעון את התור");
-    ({cases, decisions, token} = await response.json());
-    index = Math.max(0, cases.findIndex(item => !decisions[item.id]));
-    render();
-  } catch (error) { $("status").textContent = error.message; }
-})();
+restoreProgress();
+void refreshQueue(true);
 </script>
 </body>
 </html>

@@ -1,3 +1,4 @@
+using BibleOnSite.Models;
 using BibleOnSite.Services;
 using BibleOnSite.Tests.Support;
 using BibleOnSite.ViewModels;
@@ -17,9 +18,23 @@ public class ViewModelDefaultsTests
             var vm = new PerekViewModel();
             var settings = new PreferencesViewModel();
             var recitation = new RecitationPreferencesViewModel();
-            recitation.Enabled.Should().BeFalse();
-            recitation.IsDownloading.Should().BeFalse();
-            recitation.Books.Should().BeEmpty();
+            recitation.Speed.Should().Be(1);
+            recitation.Volume.Should().Be(1);
+            recitation.OriginalPauses.Should().BeTrue();
+            var recitationPacks = new RecitationPacksViewModel();
+            recitationPacks.IsDownloading.Should().BeFalse();
+            recitationPacks.Books.Should().BeEmpty();
+            var packs = new ExtensionPacksViewModel();
+            var display = new DisplayPreferencesViewModel();
+            display.FontFactor.Should().Be(1);
+            var perekPrefs = new PerekPreferencesViewModel();
+            perekPrefs.IsPerekToLoadTodays.Should().BeTrue();
+            var sound = new SoundPreferencesViewModel();
+            sound.RecitationVolume.Should().Be(1);
+            sound.LessonsVolume.Should().Be(1);
+            sound.EffectsVolume.Should().Be(1);
+            var support = new SupportPreferencesViewModel();
+            support.ExportLogsCommand.Should().NotBeNull();
             vm.Source.Should().BeEmpty();
             vm.SeferTanahUsName.Should().BeEmpty();
             vm.Additional.Should().BeNull();
@@ -34,10 +49,10 @@ public class ViewModelDefaultsTests
             vm.CanGoToNextPerek.Should().BeFalse();
             vm.ShowDownloadPerushimButton.Should().BeFalse();
             vm.SaveLastLearntPerek();
-            settings.IsPerushimDownloading = true;
-            settings.ShowPerushimDownloadButton.Should().BeFalse();
-            settings.PerushimDownloadProgress = 0.42;
-            settings.PerushimDownloadStatusText.Should().Be("מוריד… 42%");
+            packs.IsPerushimDownloading = true;
+            packs.ShowPerushimDownloadButton.Should().BeFalse();
+            packs.PerushimDownloadProgress = 0.42;
+            packs.PerushimDownloadStatusText.Should().Be("מוריד… 42%");
             vm.SeferId.Should().Be(0);
             vm.SeferName.Should().BeEmpty();
             vm.ToggleBookmark();
@@ -68,7 +83,17 @@ public class ViewModelDefaultsTests
             masora.PerushimCount.Should().Be(0);
             masora.HasPerushim.Should().BeFalse();
             masora.PerushimEmptyMessage.Should().Be("אין קטלוג פירושים");
+            masora.Perushim = [new() { Id = 1, Name = "רש\"י" }, new() { Id = 2, Name = "ביאור שטיינזלץ" }];
+            masora.PerushNameFilter = "שטיינזלץ";
+            masora.FilteredPerushim.Should().ContainSingle().Which.Id.Should().Be(2);
+            masora.PerushNameFilter = "רש״י";
+            masora.FilteredPerushim.Should().ContainSingle().Which.Id.Should().Be(1);
+            masora.PerushNameFilter = "missing";
+            masora.FilteredPerushim.Should().BeEmpty();
+            masora.PerushNameFilter = string.Empty;
+            masora.FilteredPerushim.Should().HaveCount(2);
             masora.ShowDownloadPerushimButton.Should().BeFalse();
+            masora.InlineCommentaryLimit.Should().Be(5);
             masora.IsPerushChecked(1).Should().BeFalse();
             masora.GetPerushimForRow(1, 1).Should().BeEmpty();
             masora.GetUnitIdForPerek(1).Should().BeNull();
@@ -83,5 +108,67 @@ public class ViewModelDefaultsTests
             new MauiPreferencesStorage().Should().NotBeNull();
         }
         finally { PreferencesService.ResetForTesting(); }
+    }
+
+    [Fact]
+    public async Task MasoraViewModel_DefaultArticlesLoader_ReadsStarterSnapshot()
+    {
+        // The parameterless ctor wires the production loader — a synchronous
+        // read of the StarterService startup snapshot, so unit swipes issue
+        // no GraphQL request. The singleton is not loaded in tests, so the
+        // snapshot yields an empty article list.
+        PreferencesService.ResetForTesting();
+        try
+        {
+            PreferencesService.Initialize(new InMemoryPreferencesStorage());
+            var masora = new MasoraViewModel();
+            var unit = new MasoraUnit
+            {
+                UnitId = 1,
+                Slug = "x",
+                SeferName = "x",
+                Heading = "h",
+                Ranges = { new MasoraUnitRange { StartPerekId = 1, StartPasuk = 1, EndPerekId = 1, EndPasuk = 1 } }
+            };
+            masora.Unit = unit;
+
+            await masora.LoadArticlesAsync(unit);
+
+            masora.Articles.Should().BeEmpty();
+            unit.ArticlesCount.Should().Be(0);
+        }
+        finally { PreferencesService.ResetForTesting(); }
+    }
+
+    [Fact]
+    public void TanahpediaViewModels_HaveUsableDefaults()
+    {
+        var landing = new TanahpediaViewModel();
+        landing.IsLoading.Should().BeFalse();
+        landing.IsLoaded.Should().BeFalse();
+        landing.HasToday.Should().BeFalse();
+        landing.HasRecent.Should().BeFalse();
+        landing.CategoryGroups.Should().BeEmpty();
+        landing.TodayEntities.Should().BeEmpty();
+        landing.RecentEntries.Should().BeEmpty();
+        landing.LoadCommand.Should().NotBeNull();
+        landing.OpenEntryCommand.Should().NotBeNull();
+
+        var entityType = new TanahpediaEntityTypeViewModel();
+        entityType.EntityType.Should().BeEmpty();
+        entityType.CategoryKey.Should().BeEmpty();
+        entityType.HasError.Should().BeFalse();
+        entityType.HasIntro.Should().BeFalse();
+        entityType.Entities.Should().BeEmpty();
+
+        var entry = new TanahpediaEntryViewModel();
+        entry.UniqueName.Should().BeEmpty();
+        entry.ShowEntry.Should().BeFalse();
+        entry.IsDisambiguation.Should().BeFalse();
+        entry.IsNotFound.Should().BeFalse();
+        entry.HasOccurrences.Should().BeFalse();
+        entry.Occurrences.Should().BeEmpty();
+        entry.Entities.Should().BeEmpty();
+        entry.SynonymTargets.Should().BeEmpty();
     }
 }

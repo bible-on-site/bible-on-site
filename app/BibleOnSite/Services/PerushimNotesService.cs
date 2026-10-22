@@ -8,7 +8,7 @@ namespace BibleOnSite.Services;
 /// <summary>
 /// Service for loading perushim notes (commentary text per pasuk).
 /// Android: delivered via Play Asset Delivery (PAD) as an on-demand asset pack in the AAB.
-/// iOS: delivered via Apple On-Demand Resources (ODR) tagged in an asset catalog.
+/// iOS: delivered via Apple Background Assets as a managed on-demand asset pack.
 /// Data updates are coupled to app releases — updating perushim data requires a new app version.
 /// On app update the client compares build_timestamp in the local DB vs the store-delivered
 /// version and auto-upgrades if the store copy is newer.
@@ -17,11 +17,17 @@ namespace BibleOnSite.Services;
 public class PerushimNotesService
 {
     private const string NotesDbName = "sefaria-dump-5784-sivan-4.perushim_notes.sqlite";
+#if IOS || MACCATALYST
+    // App Store Connect accepts only alphanumerics and hyphens in asset-pack IDs.
+    private const string PerushimNotesPackName = "perushim-notes";
+#else
     private const string PerushimNotesPackName = "perushim_notes";
+#endif
+    private const string RemovedMarkerName = NotesDbName + ".removed";
 
     /// <summary>
     /// Ready-to-query FTS5 search index generated with the notes content — the
-    /// second payload file of the perushim_notes pack. It is staged here before
+    /// second payload file of the notes asset pack. It is staged here before
     /// <see cref="SearchIndexService"/> adopts it into its cache.
     /// </summary>
     internal const string SearchIndexDbName = "sefaria-dump-5784-sivan-4.hebrew_search.sqlite";
@@ -44,6 +50,27 @@ public class PerushimNotesService
     private string _notesValidationStatus = "Notes database unavailable";
     private readonly SemaphoreSlim _operationLock = new(1, 1);
 
+    /// <summary>
+    /// Raised after initialization, a download or a removal releases the pack,
+    /// so work deferred while notes were undetermined can settle.
+    /// </summary>
+    internal event Action? OperationCompleted
+    {
+        add { lock (_operationCompletedSync) { _operationCompleted += value; } }
+        remove { lock (_operationCompletedSync) { _operationCompleted -= value; } }
+    }
+
+    private readonly object _operationCompletedSync = new();
+    private Action? _operationCompleted;
+
+    private void ReleaseOperation()
+    {
+        _operationLock.Release();
+        Action? handlers;
+        lock (_operationCompletedSync) { handlers = _operationCompleted; }
+        handlers?.Invoke();
+    }
+
     public PerushimNotesService(IPadDeliveryService padService)
         : this(padService, null, null, null)
     {
@@ -61,7 +88,7 @@ public class PerushimNotesService
         _fileSystem = fileSystem ?? FileSystem.Current;
         _deviceInfo = deviceInfo ?? DeviceInfo.Current;
         _appInfo = appInfo ?? AppInfo.Current;
-        _catalog = new PerushimCatalogService(_fileSystem);
+        _catalog = new PerushimCatalogService(_fileSystem, _appInfo);
     }
 
     /// <summary>
@@ -101,8 +128,53 @@ public class PerushimNotesService
 
     private string DataDirectory => _dataDirectoryOverride ?? _fileSystem.AppDataDirectory;
 
-    /// <summary>Whether compatible notes are available from PAD/ODR or a bundled asset.</summary>
+    /// <summary>
+    /// Tombstone recording a deliberate user removal. Neither delivery platform offers
+    /// a per-pack uninstall, so while the store copy stays delivered init would
+    /// silently re-copy the DB — this marker makes the removal persist until an
+    /// explicit install clears it.
+    /// </summary>
+    private string RemovedMarkerPath => Path.Join(DataDirectory, RemovedMarkerName);
+
+    /// <summary>True after the user deliberately removed the notes pack (until reinstalled).</summary>
+    public bool IsRemovedByUser => File.Exists(RemovedMarkerPath);
+
+    /// <summary>Whether compatible notes are available from store delivery or a bundled asset.</summary>
     public bool IsAvailable => _initialized && !_notesMissing && _connection != null;
+
+    /// <summary>Whether <see cref="InitializeAsync"/> already settled once (successfully or not).</summary>
+    public bool IsInitialized => _initialized;
+
+    /// <summary>
+    /// Whether the local notes DB file is on disk. When it is absent and the
+    /// service is uninitialized, <see cref="InitializeAsync"/> will first
+    /// materialize the delivered pack — a copy of hundreds of MB inside the
+    /// operation lock — so UI-critical callers should kick it instead of
+    /// awaiting it.
+    /// </summary>
+    internal bool HasLocalNotesFile => File.Exists(Path.Join(DataDirectory, NotesDbName));
+
+    /// <summary>
+    /// Starts initialization without awaiting it; a faulted init logs here
+    /// instead of surfacing as an unobserved task exception. Callers that
+    /// cannot block on first-launch pack materialization use this and rely on
+    /// <see cref="OperationCompleted"/> to re-check availability.
+    /// </summary>
+    public void BeginInitialize()
+    {
+        // Task.Run keeps the file probes and pack-copy prefix off the
+        // caller's thread — BeginInitialize exists for UI-critical callers.
+        _ = Task.Run(InitializeAsync).ContinueWith(
+            task => Console.WriteLine($"Perushim notes init failed: {task.Exception}"),
+            TaskContinuationOptions.OnlyOnFaulted);
+    }
+
+    /// <summary>
+    /// True only after initialization determined the notes pack is actually
+    /// missing. An unchecked pack is assumed present so search availability
+    /// never hides commentary merely because nobody asked yet (#2454).
+    /// </summary>
+    internal bool IsDeterminedMissing => _initialized && !IsAvailable;
 
     internal async Task<SQLiteAsyncConnection?> GetSearchConnectionAsync()
     {
@@ -111,7 +183,7 @@ public class PerushimNotesService
     }
 
     /// <summary>
-    /// Builds a diagnostic report for support (platform, state, PAD/ODR path, app package).
+    /// Builds a diagnostic report for support (platform, state, delivery path, app package).
     /// Call when Perushim don't show so the user can export and share the file.
     /// </summary>
     public async Task<string> GetDiagnosticsAsync()
@@ -127,7 +199,7 @@ public class PerushimNotesService
         try { padPath = await _padService.TryGetAssetPathAsync(PerushimNotesPackName, CancellationToken.None); }
         catch (Exception ex)
         {
-            diagnosticErrors.Add($"PAD/ODR path error: {ex.GetType().Name}: {ex.Message}");
+            diagnosticErrors.Add($"Delivery path error: {ex.GetType().Name}: {ex.Message}");
         }
         var appPackageHasFile = await AppPackageHasNotesAsync();
 
@@ -141,12 +213,13 @@ public class PerushimNotesService
             $"IsAvailable: {IsAvailable}",
             $"Initialized: {_initialized}",
             $"NotesMissing: {_notesMissing}",
+            $"RemovedByUser: {IsRemovedByUser}",
             $"Notes validation: {_notesValidationStatus}",
             $"JSON reflection enabled by default: {JsonSerializer.IsReflectionEnabledByDefault}",
             $"Local DB path: {dbPath}",
             $"Local DB exists: {File.Exists(dbPath)}",
             $"Delivered search index exists: {File.Exists(Path.Join(DataDirectory, SearchIndexDbName))}",
-            $"PAD/ODR path: {(padPath ?? "(null)")}",
+            $"Delivery path: {(padPath ?? "(null)")}",
             $"App package has notes file: {appPackageHasFile}",
         };
         lines.AddRange(diagnosticErrors);
@@ -160,7 +233,7 @@ public class PerushimNotesService
         var localTs = await GetBuildTimestampAsync(dbPath);
         lines.Add($"Local DB build_timestamp: {localTs}");
 
-        // Platform-specific delivery diagnostics (ODR on iOS, PAD on Android)
+        // Platform-specific delivery diagnostics (Background Assets on iOS, PAD on Android)
         try
         {
             var deliveryDiag = await _padService.GetDeliveryDiagnosticsAsync(PerushimNotesPackName);
@@ -191,14 +264,14 @@ public class PerushimNotesService
 
     /// <summary>
     /// Initializes the notes connection. Does not download — only opens if file exists.
-    /// Also copies from the on-demand delivery cache (PAD on Android, ODR on iOS) if
+    /// Also copies from the on-demand delivery cache (PAD on Android, Background Assets on iOS) if
     /// the pack is already available or has a newer build.
     /// </summary>
     public async Task InitializeAsync()
     {
         await _operationLock.WaitAsync();
         try { await InitializeCoreAsync(); }
-        finally { _operationLock.Release(); }
+        finally { ReleaseOperation(); }
     }
 
     private async Task InitializeCoreAsync()
@@ -211,9 +284,22 @@ public class PerushimNotesService
         SweepStaleTempFiles();
         var dbPath = Path.Join(DataDirectory, NotesDbName);
 
+        // A deliberate removal is never undone by initialization, a metadata
+        // refresh, or a still-delivered store pack. Only an explicit install
+        // (TryDownloadNotesAsync) lifts the tombstone. This branch runs only
+        // while !_initialized, and _connection is never set before _initialized.
+        if (File.Exists(RemovedMarkerPath))
+        {
+            File.Delete(dbPath);
+            _notesMissing = true;
+            _notesValidationStatus = "Removed by user";
+            _initialized = true;
+            return;
+        }
+
         if (!File.Exists(dbPath))
         {
-            // No local DB → try PAD/ODR first, then fallback to app package (e.g. Android Debug APK)
+            // No local DB → try the delivered pack first, then fallback to app package (e.g. Android Debug APK)
             var padPath = await _padService.TryGetAssetPathAsync(PerushimNotesPackName, CancellationToken.None);
             if (padPath != null && await TryCopyFromPadAsync(padPath, dbPath))
             {
@@ -244,18 +330,51 @@ public class PerushimNotesService
 
     /// <summary>
     /// Attempts to download the notes database via the platform's on-demand delivery
-    /// mechanism (PAD on Android, ODR on iOS). Call when IsAvailable is false.
+    /// mechanism (PAD on Android, Background Assets on iOS). Call when IsAvailable is false.
     /// </summary>
-    public Task<bool> TryDownloadNotesAsync() => TryDownloadNotesAsync(null);
+    public Task<bool> TryDownloadNotesAsync() => TryDownloadNotesAsync(null, CancellationToken.None);
 
-    public async Task<bool> TryDownloadNotesAsync(IProgress<double>? progress)
+    public Task<bool> TryDownloadNotesAsync(IProgress<double>? progress) =>
+        TryDownloadNotesAsync(progress, CancellationToken.None);
+
+    public Task<bool> TryDownloadNotesAsync(CancellationToken cancellationToken) =>
+        TryDownloadNotesAsync(null, cancellationToken);
+
+    public async Task<bool> TryDownloadNotesAsync(IProgress<double>? progress, CancellationToken cancellationToken)
     {
-        await _operationLock.WaitAsync();
-        try { return await TryDownloadNotesCoreAsync(progress); }
-        finally { _operationLock.Release(); }
+        await _operationLock.WaitAsync(cancellationToken);
+        try { return await TryDownloadNotesCoreAsync(progress, cancellationToken); }
+        finally { ReleaseOperation(); }
     }
 
-    private async Task<bool> TryDownloadNotesCoreAsync(IProgress<double>? progress)
+    /// <summary>
+    /// Removes the app-owned notes copy so the pack reads as not installed.
+    /// The store-managed pack itself cannot be uninstalled (PAD/ODR expose no
+    /// removal), so a tombstone records the intent and init will not resurrect it.
+    /// </summary>
+    public async Task RemoveNotesAsync()
+    {
+        await _operationLock.WaitAsync();
+        try
+        {
+            // The tombstone is written before the delete so even a mid-removal
+            // crash cannot leave the pack half-restored without a record.
+            Directory.CreateDirectory(DataDirectory);
+            await File.WriteAllTextAsync(RemovedMarkerPath, DateTime.UtcNow.ToString("O"));
+            if (_connection != null)
+            {
+                await _connection.CloseAsync();
+                _connection = null;
+            }
+            File.Delete(Path.Join(DataDirectory, NotesDbName));
+            _notesMissing = true;
+            _notesValidationStatus = "Removed by user";
+            _initialized = true;
+        }
+        finally { ReleaseOperation(); }
+    }
+
+    private async Task<bool> TryDownloadNotesCoreAsync(IProgress<double>? progress, CancellationToken cancellationToken)
     {
         var dbPath = Path.Join(DataDirectory, NotesDbName);
         if (File.Exists(dbPath))
@@ -263,11 +382,12 @@ public class PerushimNotesService
             await InitializeCoreAsync();
             if (IsAvailable)
             {
+                File.Delete(RemovedMarkerPath);
                 return true;
             }
         }
 
-        // Try PAD/ODR path if already available. An explicit download retries a
+        // Try the delivered pack path if already available. An explicit download retries a
         // rejected generation on purpose — the marker only gates automatic copies.
         var padPath = await _padService.TryGetAssetPathAsync(PerushimNotesPackName, CancellationToken.None);
         if (padPath != null && await TryCopyFromPadAsync(padPath, dbPath, respectRejectionMarker: false))
@@ -277,12 +397,14 @@ public class PerushimNotesService
             _initialized = true;
             if (await ValidateLocalNotesAsync())
             {
+                // A successful explicit install is the only action that lifts a removal.
+                File.Delete(RemovedMarkerPath);
                 return true;
             }
         }
 
         // Try on-demand fetch (downloads from store)
-        if (await _padService.FetchAsync(PerushimNotesPackName, progress, CancellationToken.None))
+        if (await _padService.FetchAsync(PerushimNotesPackName, progress, cancellationToken))
         {
             padPath = await _padService.TryGetAssetPathAsync(PerushimNotesPackName, CancellationToken.None);
             if (padPath != null && await TryCopyFromPadAsync(padPath, dbPath, respectRejectionMarker: false))
@@ -292,6 +414,7 @@ public class PerushimNotesService
                 _initialized = true;
                 if (await ValidateLocalNotesAsync())
                 {
+                    File.Delete(RemovedMarkerPath);
                     return true;
                 }
             }
@@ -305,11 +428,12 @@ public class PerushimNotesService
             _initialized = true;
             if (await ValidateLocalNotesAsync())
             {
+                File.Delete(RemovedMarkerPath);
                 return true;
             }
         }
 
-        Console.Error.WriteLine("Perushim notes not available via on-demand delivery. Ensure the perushim_notes asset pack (Android) or ODR tag (iOS) is included in the build.");
+        Console.Error.WriteLine($"Perushim notes not available via on-demand delivery. Ensure the {PerushimNotesPackName} on-demand pack (Android PAD / iOS asset pack) is included in the build.");
         return false;
     }
 
@@ -526,8 +650,75 @@ public class PerushimNotesService
     internal async Task<string?> GetDeliveredIndexPathAsync()
     {
         await InitializeAsync();
+        return PeekDeliveredIndexPath();
+    }
+
+    /// <summary>
+    /// The staged search index file if it is already on disk — a plain file
+    /// probe that never initializes the pack, copies payloads, or blocks, so
+    /// the verses index can check for an adoptable table without waiting on
+    /// notes delivery.
+    /// </summary>
+    internal string? PeekDeliveredIndexPath()
+    {
         var path = Path.Join(DataDirectory, SearchIndexDbName);
         return File.Exists(path) ? path : null;
+    }
+
+    /// <summary>
+    /// Runs <paramref name="action"/> only when notes are definitively
+    /// unavailable (initialized, then missing, rejected or removed). Skips
+    /// without blocking while initialization or a download holds the pack, or
+    /// before it was ever initialized — a staged index may still be adopted.
+    /// Returns whether it ran.
+    /// </summary>
+    internal bool RunIfSettledUnavailable(Action action)
+    {
+        if (!_operationLock.Wait(0))
+        {
+            return false;
+        }
+        try
+        {
+            if (_initialized && !IsAvailable)
+            {
+                action();
+                return true;
+            }
+            return false;
+        }
+        finally { _operationLock.Release(); }
+    }
+
+    /// <summary>Restages a delivered index after cache eviction, using only
+    /// already available assets. Never initiates a store download.</summary>
+    internal async Task<string?> RestoreDeliveredIndexPathAsync()
+    {
+        await _operationLock.WaitAsync();
+        try
+        {
+            await InitializeCoreAsync();
+            if (!IsAvailable)
+            {
+                return null;
+            }
+            var path = Path.Join(DataDirectory, SearchIndexDbName);
+            if (!File.Exists(path))
+            {
+                var padPath = await _padService.TryGetAssetPathAsync(PerushimNotesPackName, CancellationToken.None);
+                if (padPath != null)
+                {
+                    await TryCopyPadIndexAsync(padPath);
+                }
+                // Raw-note test instances isolate their directory from platform packages.
+                if (!File.Exists(path) && _dataDirectoryOverride == null)
+                {
+                    await TryCopyPackageIndexAsync();
+                }
+            }
+            return File.Exists(path) ? path : null;
+        }
+        finally { _operationLock.Release(); }
     }
 
     private async Task<string?> ReadSchemaVersionAsync()
@@ -788,6 +979,16 @@ public class PerushimNotesService
             perekId);
 
         return rows.Select(r => r.Id).ToList();
+    }
+
+    /// <summary>Retains the compressed chapter and lightweight identities, with no note strings.</summary>
+    internal async Task<PerushNoteChapter?> LoadChapterAsync(int perekId)
+    {
+        await InitializeAsync();
+        if (_connection == null) { return null; }
+        var rows = await _connection.QueryAsync<BlobRow>(
+            "SELECT data AS Data FROM note_blob WHERE perek_id = ?", perekId);
+        return rows.Count == 0 ? null : await Task.Run(() => new PerushNoteChapter(rows[0].Data));
     }
 
     /// <summary>

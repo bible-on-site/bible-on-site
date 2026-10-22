@@ -1,6 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { createServerFn } from "@tanstack/react-start";
 import { execute, query, queryOne } from "../db";
+import { revalidateWebsite } from "../website-revalidate";
+import {
+	pediaInvalidationForEntities,
+	pediaInvalidationForEntryIds,
+	pediaInvalidationForPersons,
+} from "./paths";
 import {
 	type CreateFamilyPersonInput,
 	type CreateParentChildLinkInput,
@@ -244,6 +250,11 @@ export const createFamilyPersonNode = createServerFn({ method: "POST" })
 			);
 		}
 
+		await revalidateWebsite(
+			await pediaInvalidationForEntryIds(
+				data.linkToEntryId?.trim() ? [data.linkToEntryId.trim()] : [],
+			),
+		);
 		return { entityId, personId, linkId };
 	});
 
@@ -385,6 +396,7 @@ export const updateFamilyPersonNode = createServerFn({ method: "POST" })
 			}
 		}
 
+		await revalidateWebsite(await pediaInvalidationForEntities([entityId]));
 		return { entityId };
 	});
 
@@ -398,6 +410,9 @@ export const deleteFamilyPersonNode = createServerFn({ method: "POST" })
 		);
 		if (!person) throw new Error(`Person not found for entity: ${entityId}`);
 
+		// Resolve affected entry pages before the entity and its entry links
+		// are deleted.
+		const invalidation = await pediaInvalidationForEntities([entityId]);
 		await execute(
 			`DELETE FROM tanahpedia_person_union WHERE person1_id = ? OR person2_id = ?`,
 			[person.id, person.id],
@@ -421,6 +436,7 @@ export const deleteFamilyPersonNode = createServerFn({ method: "POST" })
 		]);
 		assertAffected(result, `Person entity not found: ${entityId}`);
 
+		await revalidateWebsite(invalidation);
 		return { entityId };
 	});
 
@@ -467,6 +483,9 @@ export const createParentChildLink = createServerFn({ method: "POST" })
 			],
 		);
 
+		await revalidateWebsite(
+			await pediaInvalidationForPersons([parentPersonId, childPersonId]),
+		);
 		return { id };
 	});
 
@@ -525,6 +544,16 @@ export const updateParentChildLink = createServerFn({ method: "POST" })
 		);
 		assertAffected(result, `Parent-child link not found: ${id}`);
 
+		// The link's endpoints cannot change on update — resolve the affected
+		// entry pages post-write.
+		const link = await queryOne<{ parent_id: string; child_id: string }>(
+			`SELECT parent_id, child_id FROM tanahpedia_person_parent_child WHERE id = ?`,
+			[id],
+		);
+		const invalidation = await pediaInvalidationForPersons(
+			link ? [link.parent_id, link.child_id] : [],
+		);
+		await revalidateWebsite(invalidation);
 		return { id };
 	});
 
@@ -532,12 +561,21 @@ export const deleteParentChildLink = createServerFn({ method: "POST" })
 	.validator((data: DeleteParentChildLinkInput) => data)
 	.handler(async ({ data }) => {
 		const id = requiredNonEmpty(data.id, "id");
+		// Resolve endpoints before the link row is gone.
+		const link = await queryOne<{ parent_id: string; child_id: string }>(
+			`SELECT parent_id, child_id FROM tanahpedia_person_parent_child WHERE id = ?`,
+			[id],
+		);
+		const invalidation = await pediaInvalidationForPersons(
+			link ? [link.parent_id, link.child_id] : [],
+		);
 		const result = await execute(
 			`DELETE FROM tanahpedia_person_parent_child WHERE id = ?`,
 			[id],
 		);
 		assertAffected(result, `Parent-child link not found: ${id}`);
 
+		await revalidateWebsite(invalidation);
 		return { id };
 	});
 
@@ -590,6 +628,9 @@ export const createUnionLink = createServerFn({ method: "POST" })
 			],
 		);
 
+		await revalidateWebsite(
+			await pediaInvalidationForPersons([person1Id, person2Id]),
+		);
 		return { id };
 	});
 
@@ -666,6 +707,16 @@ export const updateUnionLink = createServerFn({ method: "POST" })
 		);
 		assertAffected(result, `Union link not found: ${id}`);
 
+		// The union's members cannot change on update — resolve the affected
+		// entry pages post-write.
+		const link = await queryOne<{ person1_id: string; person2_id: string }>(
+			`SELECT person1_id, person2_id FROM tanahpedia_person_union WHERE id = ?`,
+			[id],
+		);
+		const invalidation = await pediaInvalidationForPersons(
+			link ? [link.person1_id, link.person2_id] : [],
+		);
+		await revalidateWebsite(invalidation);
 		return { id };
 	});
 
@@ -673,12 +724,21 @@ export const deleteUnionLink = createServerFn({ method: "POST" })
 	.validator((data: DeleteUnionLinkInput) => data)
 	.handler(async ({ data }) => {
 		const id = requiredNonEmpty(data.id, "id");
+		// Resolve members before the link row is gone.
+		const link = await queryOne<{ person1_id: string; person2_id: string }>(
+			`SELECT person1_id, person2_id FROM tanahpedia_person_union WHERE id = ?`,
+			[id],
+		);
+		const invalidation = await pediaInvalidationForPersons(
+			link ? [link.person1_id, link.person2_id] : [],
+		);
 		const result = await execute(
 			`DELETE FROM tanahpedia_person_union WHERE id = ?`,
 			[id],
 		);
 		assertAffected(result, `Union link not found: ${id}`);
 
+		await revalidateWebsite(invalidation);
 		return { id };
 	});
 
@@ -726,6 +786,12 @@ export const createPersonName = createServerFn({ method: "POST" })
 			);
 		}
 
+		// Both the named person's and giver's entry pages may render the name.
+		await revalidateWebsite(
+			await pediaInvalidationForPersons(
+				giverPersonId ? [personId, giverPersonId] : [personId],
+			),
+		);
 		return { id };
 	});
 
@@ -837,6 +903,16 @@ export const updatePersonName = createServerFn({ method: "POST" })
 			}
 		}
 
+		// The name's owning person cannot change on update — resolve the
+		// affected entry pages post-write.
+		const name = await queryOne<{ person_id: string }>(
+			`SELECT person_id FROM tanahpedia_person_name WHERE id = ?`,
+			[id],
+		);
+		const invalidation = await pediaInvalidationForPersons(
+			name ? [name.person_id] : [],
+		);
+		await revalidateWebsite(invalidation);
 		return { id };
 	});
 
@@ -844,12 +920,21 @@ export const deletePersonName = createServerFn({ method: "POST" })
 	.validator((data: DeletePersonNameInput) => data)
 	.handler(async ({ data }) => {
 		const id = requiredNonEmpty(data.id, "id");
+		// Resolve the owning person before the name row is gone.
+		const name = await queryOne<{ person_id: string }>(
+			`SELECT person_id FROM tanahpedia_person_name WHERE id = ?`,
+			[id],
+		);
+		const invalidation = await pediaInvalidationForPersons(
+			name ? [name.person_id] : [],
+		);
 		const result = await execute(
 			`DELETE FROM tanahpedia_person_name WHERE id = ?`,
 			[id],
 		);
 		assertAffected(result, `Person name not found: ${id}`);
 
+		await revalidateWebsite(invalidation);
 		return { id };
 	});
 

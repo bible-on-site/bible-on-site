@@ -19,11 +19,15 @@ export function selectSimulator(devices, sdkVersion) {
       const runtimeVersion = parts.join(".");
       if (compare(version(runtimeVersion), sdk) > 0) return [];
       return entries.filter((device) => device.isAvailable && device.name.startsWith("iPhone"))
-        .map((device) => ({ ...device, version: runtimeVersion }));
+        .map((device) => ({ ...device, version: runtimeVersion, runtime }));
     })
+    // UDID tie-break: identical name+runtime entries must resolve to one device
+    // across the resolve/boot/save steps or the simulator-state cache would key
+    // and capture different directories.
     .sort((left, right) => compare(version(right.version), version(left.version))
-      || left.name.localeCompare(right.name))[0];
+      || left.name.localeCompare(right.name) || left.udid.localeCompare(right.udid))[0];
 }
+
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";

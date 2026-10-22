@@ -28,16 +28,21 @@ public class PreferencesServiceTests : IDisposable
         _service.Load();
         _service.RecitationSpeed.Should().Be(1);
         _service.RecitationVolume.Should().Be(1);
+        _service.LessonsVolume.Should().Be(1);
+        _service.EffectsVolume.Should().Be(1);
         _service.RecitationVersePauseMs.Should().Be(-1);
         _service.RecitationSpeed = 1.5;
         _service.RecitationVolume = 0.4;
+        _service.LessonsVolume = 0.3;
+        _service.EffectsVolume = 0.6;
         _service.RecitationVersePauseMs = 1500;
         var restored = PreferencesService.CreateForTesting(_storage);
         restored.Load();
         restored.RecitationSpeed.Should().Be(1.5);
         restored.RecitationVolume.Should().Be(0.4);
+        restored.LessonsVolume.Should().Be(0.3);
+        restored.EffectsVolume.Should().Be(0.6);
         restored.RecitationVersePauseMs.Should().Be(1500);
-        restored.RecitationEnabled.Should().BeFalse();
         restored.FontFactor.Should().Be(1);
         restored.RecitationVersePauseMs = -1;
         _service.Load();
@@ -60,6 +65,23 @@ public class PreferencesServiceTests : IDisposable
         _service.RecitationSpeed.Should().Be(0.5);
         _service.RecitationVolume.Should().Be(1);
         _service.RecitationVersePauseMs.Should().Be(-1);
+    }
+
+    [Fact]
+    public void AudioChannels_PersistIndependently_AndClampSeparately()
+    {
+        _service.Load();
+        _service.LessonsVolume = 0.25;
+        _service.EffectsVolume = 0;
+        _service.RecitationVolume = 0.75;
+        _service.LessonsVolume = double.NaN;
+        _service.EffectsVolume = 3;
+
+        var restored = PreferencesService.CreateForTesting(_storage);
+        restored.Load();
+        restored.RecitationVolume.Should().Be(0.75);
+        restored.LessonsVolume.Should().Be(1, "a NaN write falls back to the channel default");
+        restored.EffectsVolume.Should().Be(1, "out-of-range writes clamp into the channel's 0..1 range");
     }
 
     [Fact]
@@ -102,6 +124,20 @@ public class PreferencesServiceTests : IDisposable
 
         // Assert
         eventCount.Should().Be(0);
+    }
+
+    [Fact]
+    public void FontFactor_TwoHundredPercent_PersistsAndReloads()
+    {
+        // #2405: the גודל גופן slider tops out at 200% — the stored factor must
+        // round-trip through preferences without clamping.
+        _service.FontFactor = 2.0;
+        _storage.Get("fontFactor", 0.0).Should().Be(2.0);
+
+        var restored = PreferencesService.CreateForTesting(_storage);
+        restored.Load();
+
+        restored.FontFactor.Should().Be(2.0);
     }
 
     [Fact]
@@ -331,6 +367,56 @@ public class PreferencesServiceTests : IDisposable
         PreferencesService.Instance.Should().NotBeNull();
     }
 
+    [Fact]
+    public void InAppBackButton_DefaultsToPlatformDefault_AndSurvivesRestart()
+    {
+        // #2467: the Android override is a persisted tri-state; an unset key
+        // and a stale value both resolve to PlatformDefault.
+        _service.Load();
+        _service.InAppBackButton.Should().Be(InAppBackButtonPreference.PlatformDefault);
+
+        _service.InAppBackButton = InAppBackButtonPreference.Hide;
+        var restored = PreferencesService.CreateForTesting(_storage);
+        restored.Load();
+        restored.InAppBackButton.Should().Be(InAppBackButtonPreference.Hide);
+    }
+
+    [Fact]
+    public void InAppBackButton_StaleStoredValue_FallsBackToPlatformDefault()
+    {
+        _storage.Set("inAppBackButton", 99);
+        _service.Load();
+        _service.InAppBackButton.Should().Be(InAppBackButtonPreference.PlatformDefault);
+    }
+
+    [Fact]
+    public void InAppBackButton_InvalidSetValue_FallsBackToPlatformDefault()
+    {
+        _service.Load();
+
+        _service.InAppBackButton = (InAppBackButtonPreference)99;
+
+        _service.InAppBackButton.Should().Be(InAppBackButtonPreference.PlatformDefault);
+        _storage.Get("inAppBackButton", -1).Should().Be(-1);
+    }
+
+    [Fact]
+    public void InAppBackButton_UndefinedWrite_Normalizes_AndSameValueIsNoOp()
+    {
+        _service.Load();
+        _service.InAppBackButton = (InAppBackButtonPreference)99;
+
+        _service.InAppBackButton.Should().Be(InAppBackButtonPreference.PlatformDefault,
+            "an out-of-range write normalizes to PlatformDefault");
+
+        _service.InAppBackButton = InAppBackButtonPreference.Show;
+        var eventCount = 0;
+        _service.PreferencesChanged += (_, _) => eventCount++;
+        _service.InAppBackButton = InAppBackButtonPreference.Show;
+
+        eventCount.Should().Be(0, "writing the current value is a no-op");
+    }
+
     #region InMemoryPreferencesStorage Tests
 
     [Fact]
@@ -358,6 +444,49 @@ public class PreferencesServiceTests : IDisposable
         storage.Get("key1", "gone").Should().Be("gone");
         storage.Get("key2", -1).Should().Be(-1);
         storage.Get("key3", false).Should().BeFalse();
+    }
+
+    [Fact]
+    public void QriynotEnabled_DefaultsOn_ForNewAndUpgradedInstallations()
+    {
+        _service.Load();
+        _service.QriynotEnabled.Should().BeTrue("קריינות ships enabled; an unset preference resolves to on");
+    }
+
+    [Fact]
+    public void QriynotEnabled_SurvivesRestart_AndHonorsStoredOff()
+    {
+        _service.Load();
+        _service.QriynotEnabled = false;
+
+        var restored = PreferencesService.CreateForTesting(_storage);
+        restored.Load();
+        restored.QriynotEnabled.Should().BeFalse("an explicit off choice persists across restarts");
+
+        restored.QriynotEnabled = true;
+        _service.Load();
+        _service.QriynotEnabled.Should().BeTrue();
+    }
+
+    [Fact]
+    public void QriynotEnabled_StoredOffBeforeUpgrade_StaysOff()
+    {
+        _storage.Set("qriynotEnabled", false);
+        _service.Load();
+        _service.QriynotEnabled.Should().BeFalse();
+    }
+
+    [Fact]
+    public void QriynotEnabled_SameValue_IsNoOp()
+    {
+        _service.Load();
+        var eventCount = 0;
+        _service.PreferencesChanged += (_, _) => eventCount++;
+
+        _service.QriynotEnabled = true;
+
+        eventCount.Should().Be(0);
+        _storage.Get("qriynotEnabled", false).Should().BeFalse("a no-op write never touches storage");
     }
 
     #endregion

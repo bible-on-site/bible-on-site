@@ -449,20 +449,23 @@ describe("EntryEditPage", () => {
 			).not.toBeInTheDocument();
 		});
 
-		it("skips the autosave while the title is blank", async () => {
+		it("skips the autosave when an existing entry's title is cleared", async () => {
 			renderPage();
 			fireEvent.click(await screen.findByRole("tab", { name: "מטא-דאטה" }));
-			fireEvent.change(screen.getByLabelText(/כותרת/), {
-				target: { value: "   " },
-			});
-			fireEvent.click(await screen.findByRole("tab", { name: "תוכן" }));
-			fireEvent.click(await screen.findByTestId("wysiwyg-editor"));
+			vi.useFakeTimers({ toFake: ["setTimeout"] });
+			try {
+				fireEvent.change(screen.getByLabelText(/כותרת/), {
+					target: { value: "" },
+				});
 
-			expect(
-				await screen.findByText("יש שינויים שלא נשמרו"),
-			).toBeInTheDocument();
-			await new Promise((resolve) => setTimeout(resolve, 2300));
-			expect(updateEntryMock).not.toHaveBeenCalled();
+				expect(screen.getByText("יש שינויים שלא נשמרו")).toBeInTheDocument();
+				await act(async () => {
+					await vi.advanceTimersByTimeAsync(2000);
+				});
+				expect(updateEntryMock).not.toHaveBeenCalled();
+			} finally {
+				vi.useRealTimers();
+			}
 		});
 
 		it("renders an empty title and falls back to the draft content when the entry query has no entry", async () => {

@@ -1,7 +1,7 @@
+using System.Text.Json.Serialization;
 using BibleOnSite.Models;
 using GraphQL;
 using GraphQL.Client.Http;
-using GraphQL.Client.Serializer.Newtonsoft;
 using BibleOnSite.Config;
 
 namespace BibleOnSite.Services;
@@ -27,7 +27,12 @@ public class ArticleService : BaseGraphQLService
     }
 
     /// <summary>
-    /// Fetches all articles for a specific perek.
+    /// Fetches all articles for a specific perek from the API.
+    /// Readers use <see cref="StarterService.GetArticlesByPerekId"/> instead —
+    /// the starter snapshot already holds every article, so swiping must not
+    /// pay a network round-trip. This stays as the server-fresh path for
+    /// callers that need data newer than the startup snapshot (e.g. content
+    /// changed server-side after the app launched).
     /// </summary>
     public async Task<List<Article>> GetArticlesByPerekIdAsync(int perekId)
     {
@@ -44,7 +49,7 @@ public class ArticleService : BaseGraphQLService
                         priority
                     }
                 }",
-            Variables = new { perekId }
+            Variables = new Dictionary<string, object?> { ["perekId"] = perekId }
         };
 
         try
@@ -101,7 +106,7 @@ public class ArticleService : BaseGraphQLService
                         priority
                     }
                 }",
-            Variables = new { id = articleId }
+            Variables = new Dictionary<string, object?> { ["id"] = articleId }
         };
 
         try
@@ -160,7 +165,7 @@ public class ArticleService : BaseGraphQLService
                         priority
                     }
                 }",
-            Variables = new { authorId }
+            Variables = new Dictionary<string, object?> { ["authorId"] = authorId }
         };
 
         try
@@ -205,37 +210,48 @@ public class ArticleService : BaseGraphQLService
     /// <param name="phrase">Raw user phrase; normalized server-side.</param>
     /// <param name="limit">Maximum hits (server clamps to 1-50).</param>
     public Task<ArticleSearchPage?> SearchArticlesAsync(string phrase, int limit) =>
-        SearchArticlesAsync(phrase, limit, 0, null, CancellationToken.None);
+        SearchArticlesAsync(phrase, limit, 0, null, null, CancellationToken.None);
 
     /// <param name="phrase">Raw user phrase; normalized server-side.</param>
     /// <param name="limit">Maximum hits (server clamps to 1-50).</param>
     /// <param name="cancellationToken">Caller cancellation.</param>
     public Task<ArticleSearchPage?> SearchArticlesAsync(string phrase, int limit, CancellationToken cancellationToken) =>
-        SearchArticlesAsync(phrase, limit, 0, null, cancellationToken);
+        SearchArticlesAsync(phrase, limit, 0, null, null, cancellationToken);
+
+    /// <param name="phrase">Raw user phrase; normalized server-side.</param>
+    /// <param name="limit">Maximum hits (server clamps to 1-50).</param>
+    /// <param name="authorId">Restricts hits to this author's articles.</param>
+    /// <param name="cancellationToken">Caller cancellation.</param>
+    public Task<ArticleSearchPage?> SearchArticlesAsync(string phrase, int limit, int? authorId, CancellationToken cancellationToken) =>
+        SearchArticlesAsync(phrase, limit, 0, authorId, null, cancellationToken);
 
     /// <param name="phrase">Raw user phrase; normalized server-side.</param>
     /// <param name="limit">Maximum hits (server clamps to 1-50).</param>
     /// <param name="timeout">Total request budget.</param>
     public Task<ArticleSearchPage?> SearchArticlesAsync(string phrase, int limit, TimeSpan timeout) =>
-        SearchArticlesAsync(phrase, limit, 0, timeout, CancellationToken.None);
+        SearchArticlesAsync(phrase, limit, 0, null, timeout, CancellationToken.None);
 
     /// <param name="phrase">Raw user phrase; normalized server-side.</param>
     /// <param name="limit">Maximum hits (server clamps to 1-50).</param>
     /// <param name="offset">Pagination offset (server clamps to 0-1000).</param>
+    /// <param name="authorId">Restricts hits to this author's articles; the
+    /// scope applies server-side before limit/offset so author matches are
+    /// never dropped by a globally ranked page.</param>
     /// <param name="timeout">Total request budget.</param>
     /// <param name="cancellationToken">Caller cancellation.</param>
     public async Task<ArticleSearchPage?> SearchArticlesAsync(
         string phrase,
         int limit,
         int offset,
+        int? authorId,
         TimeSpan? timeout,
         CancellationToken cancellationToken)
     {
         var query = new GraphQLRequest
         {
             Query = @"
-                query SearchArticles($phrase: String!, $limit: Int, $offset: Int) {
-                    searchArticles(phrase: $phrase, limit: $limit, offset: $offset) {
+                query SearchArticles($phrase: String!, $limit: Int, $offset: Int, $authorId: Int) {
+                    searchArticles(phrase: $phrase, limit: $limit, offset: $offset, authorId: $authorId) {
                         total
                         hits {
                             articleId
@@ -249,7 +265,7 @@ public class ArticleService : BaseGraphQLService
                         }
                     }
                 }",
-            Variables = new { phrase, limit, offset }
+            Variables = new Dictionary<string, object?> { ["phrase"] = phrase, ["limit"] = limit, ["offset"] = offset, ["authorId"] = authorId }
         };
 
         using var timeoutSource = new CancellationTokenSource(timeout ?? DefaultSearchTimeout);
@@ -323,18 +339,18 @@ public class ArticleService : BaseGraphQLService
 
     #region DTOs for GraphQL responses
 
-    private class SearchArticlesResponse
+    internal class SearchArticlesResponse
     {
         public SearchArticlesData? SearchArticles { get; set; }
     }
 
-    private class SearchArticlesData
+    internal class SearchArticlesData
     {
         public int Total { get; set; }
         public List<ArticleSearchHitDto>? Hits { get; set; }
     }
 
-    private class ArticleSearchHitDto
+    internal class ArticleSearchHitDto
     {
         public int ArticleId { get; set; }
         public string? Name { get; set; }
@@ -346,32 +362,31 @@ public class ArticleService : BaseGraphQLService
         public float Score { get; set; }
     }
 
-    private class ArticlesByPerekIdResponse
+    internal class ArticlesByPerekIdResponse
     {
         public List<ArticleDto>? ArticlesByPerekId { get; set; }
     }
 
-    private class ArticlesByAuthorIdResponse
+    internal class ArticlesByAuthorIdResponse
     {
         public List<ArticleDto>? ArticlesByAuthorId { get; set; }
     }
 
-    private class ArticleByIdResponse
+    internal class ArticleByIdResponse
     {
         public ArticleDto? ArticleById { get; set; }
     }
 
-    private class ArticleDto
+    internal class ArticleDto
     {
         public int Id { get; set; }
         public int PerekId { get; set; }
         public int AuthorId { get; set; }
         public string? Abstract { get; set; }
 
-        // JsonProperty required to prevent IL trimming in Release builds.
-        // This property is only accessed via reflection (JSON deserialization + XAML binding),
-        // so the trimmer would remove it without this attribute. See #1142 for details.
-        [Newtonsoft.Json.JsonProperty("articleContent")]
+        // Explicit name keeps the GraphQL field mapping visible; GraphQLJsonContext
+        // references the property statically so the trimmer keeps it (#1142).
+        [JsonPropertyName("articleContent")]
         public string? ArticleContent { get; set; }
 
         public string? Name { get; set; }

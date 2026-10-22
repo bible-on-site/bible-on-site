@@ -100,6 +100,24 @@ public class AppConfigTests
 #endif
     }
 
+    public class AccessibilityUrl
+    {
+        [Fact]
+        public void appends_accessibility_path_to_get_website_url()
+        {
+            var config = AppConfig.Instance;
+            config.AccessibilityUrl.Should().Be($"{config.GetWebsiteUrl()}/accessibility");
+        }
+
+#if DEBUG
+        [Fact]
+        public void resolves_to_localhost_accessibility_url()
+        {
+            AppConfig.Instance.AccessibilityUrl.Should().Be("http://localhost:3001/accessibility");
+        }
+#endif
+    }
+
     [Collection("App configuration")]
     public class GetApiUrl
     {

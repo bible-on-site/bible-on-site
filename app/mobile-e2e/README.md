@@ -2,10 +2,65 @@
 
 The shared C# suite in `../BibleOnSite.Tests.MobileE2E` runs on Android and iOS.
 CI creates one independent runner per matrix entry (`app-mobile-e2e.yml`), with
-`fail-fast: false`, and requires both results through the main CI gate. Tests
-on an individual device run sequentially and start with a freshly reset app.
-Android uses a full app reset. iOS reinstalls the app without erasing the booted
-simulator, and Appium operates the simulator headlessly.
+`fail-fast: false`, and requires every applicable result through the main CI gate. Tests
+on an individual device run sequentially. The first session installs and resets
+the app; later scenarios restart its process with their launch environment.
+The install and built search index survive these restarts. Appium operates
+the simulator headlessly.
+
+WDA releases its session without terminating the app through XCTest. That
+termination path can stall `DELETE /session` after all assertions pass and
+trigger recursive Appium teardown. Once the harness exits, `run.mjs` terminates
+only this app on the explicit simulator within five seconds, before exporting
+logs. It reads app PIDs from that device's live stream, inspects only those PIDs,
+and verifies their installed executable paths include the explicit device UDID
+before signaling them. A small helper is compiled before testing and reads only
+kernel BSD state and the actual executable path. It does not inspect Mach tasks,
+threads or mutable command arguments; even a PID-limited `ps` stalled past five
+seconds on a loaded Mac. The native ownership regression also rejects an argv
+prefix impersonating the app. This avoids expensive process snapshots. Confirmed already-stopped apps are accepted; transport
+and timeout failures fail the run. `MOBILE_KEEP_APP=1` retains the review app.
+The existing 15-second session-delete and 15-minute pilot limits remain intact.
+
+CI runs the iOS suite across a dynamically planned set of independent
+`xcode-27` runners, each with one simulator and one shared Appium session
+(#2263). Before the matrix expands, the `plan_ios` job discovers the suite
+statically, resolves the diff against the published coverage baseline, and
+partitions the selected cases with a deterministic longest-processing-time
+assignment balanced by the baseline's rolling per-case runtimes — unmeasured
+cases take a fixed fallback weight and never narrow membership. The shard
+count follows the selected work (case-time budget, bounded by runner
+capacity), so a small selection stays on one runner and a legitimately empty
+selection starts no simulator at all. Each runner executes exactly the case
+manifest it was assigned — it never re-selects — and each pilot keeps its
+15-minute deadline. A final merge requires each shard's executed manifest to
+match its assignment, requires successful evidence for the whole planned run
+set exactly once, rejects duplicates, and combines native line coverage and
+execution/automation evidence. Only a full successful union can replace a
+trusted iOS baseline.
+
+A separate iOS build host restores MAUI and compiles/signs the app once, without
+booting a simulator. All three device hosts receive the same archive, including the
+prebuilt Debug harness/build tool and the exact OpenCover template. The archive
+preserves executable modes and framework symlinks; its SHA256, source SHA,
+checkout path and toolchain must match before extraction, and each host strictly
+verifies the simulator signature before launch. Device hosts need the .NET SDK and run the delivered tool and test DLLs
+directly, without project evaluation, MAUI restoration or app compilation.
+A preflight discovers the device's exact scenarios through the production
+launch path, then runs all harness unit cases with an empty NuGet cache. That
+cache remains empty during native testing and coverage application.
+Simulator/WDA preparation overlaps archive transfer. Android has no dependency
+on the iOS builder. All pilot, interaction and watchdog budgets stay unchanged.
+
+Shard timing history rides the same trusted baseline as the coverage tree
+(#2263): the merge rolls each case's measured duration (JUnit report first,
+evidence spans as fallback) and the mean per-shard non-case pilot overhead
+into the tree, and only a complete successful master run publishes it. A
+missing baseline simply leaves every case unmeasured — planning still runs at
+the deterministic fallback weight and history accrues from normal execution.
+`run-sharded` splitting on one host was removed with the fixed trait groups:
+each shard is its own matrix job, so ports, devices and artifact roots are
+isolated by the runner itself rather than by env offsets.
 Before iOS tests, Appium downloads the official simulator WebDriverAgent matching
 the locked driver dependency and launches it directly. This keeps cold Xcode
 compilation outside session startup; `npm test` also prepares the agent locally.
@@ -17,6 +72,55 @@ navigation back to the original perek. The Debug app points to a closed local
 endpoint for this pilot, so startup exercises offline behavior without relying
 on production or an external API. The build restores any local API override
 after packaging. Canonical content comes from the existing packaged database.
+
+The pilot runs under an independent 15-minute wall-clock supervisor, including
+local harness builds and Appium setup. Cancellation stops the owned process
+group and escalates after three seconds, including child processes left behind
+by a terminated wrapper. Windows uses the in-box `taskkill /T` tree kill as
+the fast path; when it reports a stalled or already-exited root, a detached
+`powershell` CIM walk reaps the descendants (including orphans whose parent
+died first) and reports live survivors on stderr. `pilot-timing.json` records duration and
+timeout status.
+Commentary searches use the shipped index and
+the ordinary 45-second deadline, including on a fresh install.
+
+## Android Release startup smoke (#2373)
+
+The Appium legs build Debug, which defines `DISABLE_ANALYTICS` — so the suite
+can never execute the `MainActivity.OnCreate` analytics initialization whose
+missing `FirebaseAnalyticsImplementation.Initialize` crashed every #2247
+store launch while all tests stayed green. The `android_release_smoke` leg
+closes that gap: `npm run build:release-smoke` builds the **Release** pipeline
+(profiled AOT, R8, embedded assemblies, merged manifest, analytics branch
+compiled in) as an x86_64 APK — the ABI the CI emulator can run — and
+`npm run release-smoke` installs and launches it on the same cached AVD.
+
+Each launch must reach a genuinely usable reader (the same `PerekSource`
+readiness the Appium `WaitForStartup` uses), keep the process and foreground
+activity alive past the original crash window, and print
+`[Analytics] collection enabled=false`. That line proves the Release branch
+ran `Initialize` + `set_IsAnalyticsCollectionEnabled` — the exact member that
+NRE'd — while keeping suite traffic out of production analytics (#2120); a
+missing marker, `enabled=true`, or the `DISABLE_ANALYTICS` build line each
+fail the leg. Phases: install plus `pm clear` for a true cold start with the
+`BIBLE_E2E` intent extra, a force-stop relaunch over retained data (the
+persisted marker file holds isolation — adb relaunches drop extras), and an
+`install -r` reinstall followed by another verified launch. Scoped logcat, UI dumps, screenshots,
+`build-manifest.json` (SHA256, source SHA, config) and
+`release-smoke-summary.json` land in the run artifacts on failure and success.
+
+Known differences from the store-delivered artifact: APK/x86_64/debug-key
+signature here vs AAB/arm64/Play signing there — the compiled startup code
+path, AOT profile, R8 output and manifest merge are the same. The leg runs on
+API 36 `google_apis` x86_64 like the Debug Android leg; arm64 physical-device
+coverage remains open in #2371.
+
+Run it locally against a booted emulator with `MOBILE_UDID=emulator-5554`:
+
+```bash
+npm run build:release-smoke --prefix app/mobile-e2e
+MOBILE_RELEASE_APK=<staged-apk> npm run release-smoke --prefix app/mobile-e2e
+```
 
 ## Adding scenarios and platform differences
 
@@ -31,9 +135,12 @@ branching or skipping an entire shared scenario. Shared classes use
 `[Trait("Platform", "Android")]` or `[Trait("Platform", "iOS")]` alongside
 `[Trait("Category", "MobileE2E")]`; the Nuke target automatically selects shared
 tests plus the current platform, leaving platform-only behavior easy to add.
+Cases need no shard traits: the CI planner partitions the discovered iOS suite
+itself and hands each runner its case manifest (#2263).
 Use `[Collection("Mobile device")]` on every mobile test class to serialize
-scenarios that own the same device. Inject `MobileDeviceSessionFactory` and create
-drivers through `sessions.Create(...)`. If session startup or cleanup fails in a
+scenarios that own the same device. Inject `MobileDeviceSession`; this collection
+fixture owns one driver and releases it after the last scenario. The session
+factory latches uncertain startup or cleanup failures. If either fails in a
 way that could leave Appium working on the device, subsequent scenarios fail
 without requesting another session on it; the original failure remains in the
 test report. Failures matching `DeviceSessionDeath` mean the session is already
@@ -45,11 +152,9 @@ exercises the real touch target of rounded floating controls while avoiding
 XCTest's automatic hit-point selection. Native device logs record menu press,
 release, click and completed animations to diagnose touch delivery. Android uses
 native element clicks. UI assertions and readiness deadlines remain shared.
-After session creation, allow two minutes for the first reader snapshot: a cold
-iOS lookup can take longer than 45 seconds and return the earlier loading tree
-even though the reader has appeared. This startup gate requires a visible,
-nonempty perek source and captures failure diagnostics. Subsequent scenario
-lookups and navigation retain their 45-second deadlines.
+The startup gate requires a visible, nonempty perek source within the same
+45-second deadline as ordinary scenario lookups and navigation. A failure
+captures device diagnostics.
 iOS disables XCTest idle checks (`waitForIdleTimeout` 0): every proxied WDA
 command otherwise waits for the app main thread to stay quiet for the whole
 threshold, which a reader that keeps re-rendering commentary cells (or a
@@ -107,6 +212,41 @@ options, device profile, readiness flow or the runner-action version change;
 bump nothing else by hand — emulator and system-image updates rotate keys on
 their own.
 
+## MAUI workload caching
+
+Both legs cache the workload payload under `$DOTNET_ROOT` (`packs`,
+`metadata`, `sdk-manifests`, `template-packs`) under
+`<os>-<arch>-dotnet-<sdk>-<workload>-<set>` — the `dotnet workload install`
+download is a multi-GB silent NuGet fetch (~6 min cold), and restored packs
+turn the install into a verify no-op. Exact key only: a partial restore is
+worse than downloading. `DOTNET_SDK_VERSION`/`MAUI_WORKLOAD_SET` are the single
+source for the pins shared by setup-dotnet, the toolchain id and the install.
+Saves run in the background on `push`/`workflow_dispatch` misses.
+
+## iOS simulator state caching
+
+The iOS leg caches `~/Library/Developer/CoreSimulator/Devices/<udid>` under
+`macOS-ios-sim-<udid>-<toolchain>-<recipe>`. The runner image bakes a fixed
+device UDID per image version, so the key self-invalidates on every image
+update, and the toolchain stamp covers updates that keep the UDID; there are
+no restore-keys, since another device's state must never load over this one.
+`ios:boot:resolve` runs the same selection as the boot path — without the
+runtime download — and emits the UDID before restore, and `selectSimulator`
+breaks name+runtime ties on UDID so resolve, boot and capture always agree.
+
+Restoring a previously booted device skips the multi-minute first-boot
+provisioning inside `simctl boot`. Capture runs post-test through
+`ios-sim-state.mjs quiesce`: it removes the test app and WebDriverAgent so the
+saved state stays clean (a leftover app could make Appium skip reinstalling the
+fresh build), then shuts the device down so the directory is a consistent
+Shutdown image rather than a mid-write Booted one. Only a fully Booted device
+whose UDID matches the resolved key is captured — a runtime download, a
+deregistered device or an unfinished boot all degrade to `saved=false` and the
+run simply falls back to a cold boot next time. Saves follow the same
+push/`workflow_dispatch` publishing rule as the Android caches; pull requests
+only restore. Bump `IOS_SIM_STATE_RECIPE` when the capture or restore semantics
+change.
+
 ## Running locally
 
 Install the platform's .NET MAUI workload, Android SDK/JDK or compatible Xcode,
@@ -123,9 +263,16 @@ it touches no `node_modules`, so it can run before `npm ci` — and
 `ios:boot:wait` then runs as a `background: true` step once dependencies are
 installed, overlapping the readiness monitor and Appium bridge preflight with
 the MAUI workload install and the app build. A `wait` step before the tests is
-the gate that surfaces the finished boot and the exported variables.
+the gate that surfaces the finished boot and the exported variables. The
+coverage-tree baseline download and test selection also run as one background
+step — the baseline REST fetch sees 1s–2m20s transfer variance, so it never
+stalls `npm ci`, the boot or the build; each pilot waits on the manifest
+through `wait`/`wait-all`.
 `MOBILE_APP_PATH` can select another compatible build. Each local
-run owns an Appium server on `127.0.0.1:4723`; keep that port free.
+run owns an Appium server on `127.0.0.1:4723` (override with
+`MOBILE_APPIUM_PORT`); keep that port free. To reproduce one CI shard leg
+locally, download the run's `app-mobile-e2e-plan.<run-id>.ios` artifact and
+set `MOBILE_E2E_SELECTION` to the shard's `shards/shard-N.json`.
 
 Set `MOBILE_KEEP_APP=1` to keep the installed app and its data for manual review
 after a local run. The runner installs the current build while preserving that
@@ -140,8 +287,13 @@ ESM loading without a device.
 From `app/`, `dotnet run --project devops -- TestMobileE2EUnit` checks platform
 configuration and device capabilities without a device or mobile workload.
 
-Screenshots and native view trees are captured for each scenario, alongside
-timestamped Appium and device logs, TRX and JUnit reports, under `app/.artifacts/mobile-e2e/<platform>`.
+Screenshots are captured for each scenario. Failed scenarios also save native
+view trees; content assertions still inspect the complete native tree.
+These captures are saved alongside
+timestamped Appium and device logs, TRX and JUnit reports, under `app/.artifacts/mobile-e2e/<platform>`
+(each iOS shard runner uploads its own artifact — including the executed
+`case-manifest.json` — and the merge produces the combined top-level
+`coverage-evidence/`).
 iOS also exports app lifecycle logs and fresh app crash reports. Failed runs
 collect a short native stack sample if the app is still running, without
 competing with healthy tests for simulator resources.
@@ -165,15 +317,60 @@ comment/formatting-only edits resolve as `unchanged-structural` instead of
 invalidating coverage. Selection currently runs in shadow mode — the manifest is
 reported while every test still runs — until evidence supports enforcement;
 see [docs/tests/app/e2e-impact.md](../../docs/tests/app/e2e-impact.md).
-`MOBILE_E2E_SELECTION=<manifest>` narrows `dotnet test` through a
-FullyQualifiedName filter for enforce mode and local experiments.
+`MOBILE_E2E_SELECTION=<manifest>` narrows `dotnet test` for enforce mode, for
+a shard's assigned case manifest (#2263), and for local experiments.
 
 ## Dependency security
 
 The `shell-quote` override replaces the non-bundled copy pinned by Appium support
-with 1.11.0, which fixes command injection involving a line terminator after a
-comment token. Both published drivers still contain bundled shell-quote 1.10.0;
+with 1.12.0, which fixes command injection involving a line terminator after a
+comment token. The pinned Android 8.7.0 and iOS 12.17.3 drivers still contain bundled shell-quote 1.10.0;
 Android also bundles other vulnerable packages. npm overrides do not replace
 those bundled files. Keep their alerts visible and follow
 [#1995](https://github.com/bible-on-site/bible-on-site/issues/1995) for patched
 upstream distributions. Verify nested copies after every driver upgrade.
+
+On iOS, a command pending for 25 seconds records `native-hang-command.txt`
+and requests one CoreSimulator frame in `native-interaction.png`, with the
+existing five-second capture deadline. This is an observation while the
+ordinary interaction deadline remains 45 seconds: a successful 42-second
+lookup must not be treated as a failed test. A failed frame probe retains an
+error artifact without replacing the test result. Process queries and LLDB
+stack capture run only after a failed pilot, never alongside healthy tests.
+Native live logs use info level so accessibility debug logging does not
+amplify the workload being measured. Pilot and interaction limits are unchanged.
+
+The Android CI action runs `android-pilot.mjs`, which retains the same supervised
+pilot and exit code. After app coverage and logs are exported, it ends only the
+explicit AVD/port's `-no-snapshot-save` QEMU process and its descendants, confirming
+exit within five seconds. This disposable test device has no snapshot to flush;
+clean snapshot creation retains its separate graceful shutdown path. Cleanup
+failures fail CI and `android-emulator-cleanup.json` records the process IDs and
+duration. The SDK package directories are assigned to the runner before restoring
+their cached modes, avoiding root-owned directory extraction failures.
+
+CI runs the shared iOS build on the dynamically planned shard legs: each
+runner's cases come from its assigned manifest, so groupings follow measured
+runtimes rather than a fixed partition (#2263). The merge requires one
+artifact per planned shard and a disjoint union covering the whole planned
+run set. Each device retains its startup coverage dump. Android continues to
+run all six shared cases on one leg. Both scroll storms use at most two flicks
+per request, retaining 80 pasuk flicks and 40 commentary flicks.
+
+Large commentary accessibility frames are measured once per document/width in a
+detached background CoreText layout. Native accessibility snapshots read those
+cached frames and the live viewport transform; rotation and recycled-document
+completions cannot apply stale geometry. Spoken sections and links remain complete.
+
+If xUnit reports that foreground threads remain after the test summary, the
+runner records live managed stacks from this run's registered harness processes
+under `test-host-diagnostics`. The capture shares five seconds inside xUnit's
+existing ten-second exit guard; it does not alter the process's exit code or
+retry a failed run. MTP lifecycle logs travel with the test results.
+
+The device harness delivers xUnit results synchronously, so its reporting worker
+cannot outlive the sequential device collection. The required prebuilt
+`testconfig.json` travels with the runtime. Before native scenarios, each host
+verifies real managed stacks with default and synchronous reporting, then proves
+that a deliberate foreground leak still triggers xUnit's original fatal guard
+and is captured. This explicit probe does not enter the native or unit selections.

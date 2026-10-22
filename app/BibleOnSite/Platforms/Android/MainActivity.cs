@@ -23,6 +23,22 @@ public class MainActivity : MauiAppCompatActivity
 {
     protected override void OnCreate(Bundle? savedInstanceState)
     {
+        // The mobile e2e suite launches with a BIBLE_E2E intent extra — Android
+        // intents cannot carry process environment like iOS launches can. The
+        // marker must be read before base.OnCreate reaches App.CreateWindow so
+        // the search-index warmup sees it on this launch, and MarkE2eLaunch's
+        // file covers the relaunched processes whose extras adb drops.
+        if (Intent?.GetBooleanExtra(Services.SearchIndexService.E2eEnvironmentVariable, false) ?? false)
+        {
+            Services.SearchIndexService.MarkE2eLaunchFromIntent();
+        }
+        // The coverage reset token rides the same launch intent; persisting it
+        // covers later relaunches whose extras adb drops.
+        var e2eCoverageToken = Intent?.GetStringExtra("BIBLE_E2E_COVERAGE_TOKEN");
+        if (!string.IsNullOrEmpty(e2eCoverageToken))
+        {
+            Services.SearchIndexService.MarkE2eCoverageToken(e2eCoverageToken);
+        }
         base.OnCreate(savedInstanceState);
         // MAUI's own MauiOnBackPressedCallback is only enabled while
         // Window.CanConsumeBackNavigation reports in-app history, so at the
@@ -33,6 +49,28 @@ public class MainActivity : MauiAppCompatActivity
         // require intercepting exactly those presses. Registered after base
         // OnCreate so it is consulted ahead of MAUI's callback.
         OnBackPressedDispatcher.AddCallback(this, new AppBackPressedCallback(this));
+#if DISABLE_ANALYTICS
+        // Test builds bake firebase_analytics_collection_deactivated into the
+        // merged manifest — the SDK ignores runtime opt-in and nothing can
+        // emit, so the launch log records the build-level gate instead (#2120).
+        Console.WriteLine("[Analytics] collection deactivated at build time (DISABLE_ANALYTICS)");
+#else
+        // The manifest keeps collection off because FirebaseInitProvider runs
+        // before managed code; enable it only when the user stored an explicit
+        // opt-in outside the e2e suite (#2400), and set it explicitly both ways
+        // so a flag persisted by an earlier install on this device cannot leak
+        // suite or pre-consent traffic either. PreferencesService.Load runs
+        // later on the loading page, so the consent read goes straight to
+        // storage; MauiPreferencesStorage wraps the same MAUI prefs.
+        // The standalone Plugin.Firebase.Analytics package does not bind the
+        // native instance on Android; without this every call NREs (#2247).
+        Plugin.Firebase.Analytics.FirebaseAnalyticsImplementation.Initialize(this);
+        var analyticsCollectionEnabled =
+            Services.AnalyticsConsent.IsCollectionEnabled(new Services.MauiPreferencesStorage());
+        Plugin.Firebase.Analytics.CrossFirebaseAnalytics.Current.IsAnalyticsCollectionEnabled =
+            analyticsCollectionEnabled;
+        Console.WriteLine($"[Analytics] collection enabled={analyticsCollectionEnabled}");
+#endif
         HandleAppLinkIntent(Intent);
         // Firebase initialized from google-services.json (Plugin.Firebase / Xamarin.Firebase.Analytics process it at build).
         // For explicit init use Plugin.Firebase.Core CrossFirebase.Initialize(activity, settings) when needed.
@@ -41,6 +79,18 @@ public class MainActivity : MauiAppCompatActivity
     protected override void OnNewIntent(Intent? intent)
     {
         base.OnNewIntent(intent);
+#if !DISABLE_ANALYTICS
+        // singleTop relaunches deliver a marked suite intent here without
+        // OnCreate running — honor it so a reused activity stops emitting
+        // instead of leaking suite events under the previous launch's
+        // enabled collection (#2120).
+        if (intent?.GetBooleanExtra(Services.SearchIndexService.E2eEnvironmentVariable, false) ?? false)
+        {
+            Services.SearchIndexService.MarkE2eLaunchFromIntent();
+            Plugin.Firebase.Analytics.CrossFirebaseAnalytics.Current.IsAnalyticsCollectionEnabled = false;
+            Console.WriteLine("[Analytics] collection enabled=false (e2e relaunch)");
+        }
+#endif
         HandleAppLinkIntent(intent);
     }
 
@@ -69,7 +119,7 @@ public class MainActivity : MauiAppCompatActivity
     public static void UnsubscribeTouchDispatched(EventHandler<TouchPosition> handler) =>
         _touchDispatched -= handler;
     public static event EventHandler<TouchPosition>? TouchReleased;
-    public static event EventHandler? TouchCancelled;
+    public static event EventHandler<TouchPosition>? TouchMoved;
 
     public override bool DispatchTouchEvent(MotionEvent? e)
     {
@@ -91,11 +141,20 @@ public class MainActivity : MauiAppCompatActivity
                 var wasActive = _touch.TouchActive;
                 // History matters when a busy UI receives batched input: a finger
                 // may already have moved out of slop and returned to its origin.
+                // Historical coords are view-space like GetX/GetY; shift them
+                // into the raw space Begin/End positions are recorded in.
+                var historyOffsetX = e.RawX - e.GetX();
+                var historyOffsetY = e.RawY - e.GetY();
                 for (var i = 0; i < e.HistorySize; i++)
                 {
                     _touch.Move(e.GetHistoricalX(i), e.GetHistoricalY(i), isScrolling: false);
+                    TouchMoved?.Invoke(this, new TouchPosition(
+                        e.GetHistoricalX(i) + historyOffsetX,
+                        e.GetHistoricalY(i) + historyOffsetY,
+                        e.GetHistoricalEventTime(i)));
                 }
                 _touch.Move(e.GetX(), e.GetY(), isScrolling: false);
+                TouchMoved?.Invoke(this, new TouchPosition(e.RawX, e.RawY, e.EventTime));
                 if (wasActive && !_touch.TouchActive)
                 {
                     LongPressBehavior.CancelAllPending();
@@ -113,7 +172,9 @@ public class MainActivity : MauiAppCompatActivity
                 _singleTouchActive = false;
                 _touch.Abort();
                 LongPressBehavior.CancelAllPending();
-                TouchCancelled?.Invoke(this, EventArgs.Empty);
+                // Cancel/interruption ends the gesture too — deliver it as a
+                // release so subscribers can settle any in-flight swipe.
+                TouchReleased?.Invoke(this, new TouchPosition(e.RawX, e.RawY, e.EventTime));
                 break;
 
             default:

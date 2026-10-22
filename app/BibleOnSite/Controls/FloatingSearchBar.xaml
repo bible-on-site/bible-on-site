@@ -2,9 +2,11 @@
 <ContentView xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
  xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
  xmlns:viewmodels="clr-namespace:BibleOnSite.ViewModels" xmlns:models="clr-namespace:BibleOnSite.Models"
+ xmlns:converters="clr-namespace:BibleOnSite.Converters"
  xmlns:controls="clr-namespace:BibleOnSite.Controls" xmlns:fonts="clr-namespace:Fonts"
  x:Class="BibleOnSite.Controls.FloatingSearchBar" x:DataType="viewmodels:SearchViewModel" FlowDirection="RightToLeft">
  <ContentView.Resources>
+  <converters:SearchSnippetConverter x:Key="SearchSnippet"/>
   <Style x:Key="SearchIconButton" TargetType="Button">
    <Setter Property="FontFamily" Value="FluentIcons"/><Setter Property="FontSize" Value="24"/>
    <Setter Property="WidthRequest" Value="44"/><Setter Property="HeightRequest" Value="44"/>
@@ -89,6 +91,17 @@
     </Grid>
     <Label x:Name="ErrorText" IsVisible="False" Text="{Binding ErrorMessage}" TextColor="{AppThemeBinding Light=#B02020, Dark=#FF9090}" FontSize="13"/>
     <Label x:Name="AvailabilityText" IsVisible="False" Text="{Binding AvailabilityMessage}" FontSize="13"/>
+    <HorizontalStackLayout x:Name="PerushimDownloadLink" IsVisible="False" Spacing="6">
+     <Label Text="{x:Static fonts:FluentUI.info_16_regular}" FontFamily="FluentIcons" FontSize="14"
+      TextColor="{AppThemeBinding Light=#52647C, Dark=#B2C2D8}" VerticalOptions="Center"/>
+     <Label Text="הורדת חבילת הפירושים" FontSize="13" TextDecorations="Underline" AutomationId="DownloadPerushimLink"
+      TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryLight}}"
+      VerticalOptions="Center">
+      <Label.GestureRecognizers>
+       <TapGestureRecognizer Tapped="OnPerushimDownloadLinkTapped"/>
+      </Label.GestureRecognizers>
+     </Label>
+    </HorizontalStackLayout>
    </VerticalStackLayout>
    <CollectionView Grid.Row="3" x:Name="RecentList" AutomationId="RecentSearches" SelectionMode="Single" SelectionChanged="OnRecentSelected">
     <CollectionView.EmptyView><Label Text="עדיין אין חיפושים אחרונים" Margin="16,20" TextColor="{AppThemeBinding Light=#52647C, Dark=#B2C2D8}"/></CollectionView.EmptyView>
@@ -110,7 +123,7 @@
        <VerticalStackLayout Grid.Column="1" Spacing="4">
         <Label Text="{Binding Category}" FontSize="11" TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark=#AACBFF}"/>
         <Label Text="{Binding Title}" AutomationId="SearchResultTitle" FontSize="16" FontAttributes="Bold" TextColor="{AppThemeBinding Light=#26384E, Dark=#E7EEF8}"/>
-        <Label Text="{Binding SubtitleHtml}" TextType="Html" FontSize="14" MaxLines="3" TextColor="{AppThemeBinding Light=#52647C, Dark=#B2C2D8}"/>
+        <Label FormattedText="{Binding SubtitleHtml, Converter={StaticResource SearchSnippet}}" FontSize="14" MaxLines="3" TextColor="{AppThemeBinding Light=#52647C, Dark=#B2C2D8}"/>
         <BoxView HeightRequest="1" Margin="0,8,0,0" Color="{AppThemeBinding Light=#E8F0FA, Dark=#46566D}"/>
        </VerticalStackLayout>
       </Grid>
@@ -121,7 +134,7 @@
     <Grid BackgroundColor="#66000000"><Grid.GestureRecognizers><TapGestureRecognizer Tapped="OnSheetDismissed"/></Grid.GestureRecognizers></Grid>
     <Border x:Name="FilterSheet" AutomationId="SearchSheet" VerticalOptions="End" HeightRequest="420"
      StrokeShape="RoundRectangle 24,24,0,0" StrokeThickness="0" Padding="16,8,16,16" BackgroundColor="{AppThemeBinding Light=White, Dark=#1C2635}">
-     <Grid RowDefinitions="Auto,Auto,*,Auto" RowSpacing="8">
+     <Grid RowDefinitions="Auto,Auto,*" RowSpacing="8">
       <Grid HeightRequest="20">
        <Grid.GestureRecognizers><PanGestureRecognizer PanUpdated="OnSheetPanUpdated"/></Grid.GestureRecognizers>
        <BoxView WidthRequest="36" HeightRequest="4" CornerRadius="2" HorizontalOptions="Center" VerticalOptions="Center" Color="#D8E4F4"/>
@@ -133,17 +146,17 @@
       </Grid>
       <ScrollView Grid.Row="2"><Grid>
        <VerticalStackLayout x:Name="KindsFilters" IsVisible="False"/>
-       <Grid x:Name="BookFilters" IsVisible="False" ColumnDefinitions="*,*,*" ColumnSpacing="6"/>
+       <Grid x:Name="BookFilters" IsVisible="False" ColumnDefinitions="*,*,*" RowDefinitions="Auto,*" ColumnSpacing="6"/>
        <VerticalStackLayout x:Name="MoreFilters" IsVisible="False" Padding="8" Spacing="8">
         <Label Text="מספר תוצאות מרבי"/>
-        <Picker x:Name="LimitPicker" AutomationId="SearchLimitPicker" Title="מספר תוצאות" SelectedIndexChanged="OnLimitChanged"/>
+        <controls:NumberPicker x:Name="LimitPicker" AutomationId="SearchLimitPicker" Minimum="5" Maximum="50" Increment="5"
+                               HorizontalOptions="Start" ValueChanged="OnLimitChanged"/>
        </VerticalStackLayout>
        <VerticalStackLayout x:Name="SortFilters" IsVisible="False">
         <RadioButton x:Name="SortRelevanceRadio" Content="הכי רלוונטי" GroupName="SearchSort" Value="Relevance" IsChecked="True" AutomationId="SearchSortRelevance" CheckedChanged="OnSortChanged"/>
         <RadioButton Content="לפי סדר הדורות" GroupName="SearchSort" Value="Generation" AutomationId="SearchSortGeneration" CheckedChanged="OnSortChanged"/>
        </VerticalStackLayout>
       </Grid></ScrollView>
-      <Button Grid.Row="3" Text="הצגת תוצאות" AutomationId="SearchSheetApplyButton" Clicked="OnSheetDismissed"/>
      </Grid>
     </Border>
    </Grid>

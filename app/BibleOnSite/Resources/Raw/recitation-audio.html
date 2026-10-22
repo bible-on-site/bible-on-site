@@ -20,10 +20,13 @@ globalThis.recitation = (() => {
         status = { state: "loading" };
         const binary = atob(base64);
         const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
-        const decoder = new globalThis.recitationMpeg.MPEGDecoder();
-        decoder.ready.then(() => {
+        const opus = bytes[0] === 79 && bytes[1] === 103 && bytes[2] === 103 && bytes[3] === 83;
+        const decoder = opus ? new globalThis.recitationMpeg.OggOpusDecoder() : new globalThis.recitationMpeg.MPEGDecoder();
+        decoder.ready.then(async () => {
             if (current !== generation) return;
-            const decoded = decoder.decode(bytes);
+            // decodeFile flushes the final Ogg page and applies pre-skip/end trimming.
+            const decoded = opus ? await decoder.decodeFile(bytes) : decoder.decode(bytes);
+            if (current !== generation) return;
             if (decoded.errors.length || !decoded.samplesDecoded) throw new Error("Invalid decoded recording");
             buffer = decoded;
             status = { state: "ready", sampleRate: buffer.sampleRate, frames: buffer.samplesDecoded };
@@ -42,7 +45,14 @@ globalThis.recitation = (() => {
             return { from, to };
         });
         if (!Number.isFinite(pauseMs) || pauseMs < 0 || pauseMs > 10000) throw new Error("Invalid verse pause");
-        const pauseFrames = Math.round(pauseMs * buffer.sampleRate / 1000);
+        return encode(cuts, Math.round(pauseMs * buffer.sampleRate / 1000));
+    }
+    // Players without an Ogg demuxer (AVPlayer) take the entire decoded chapter.
+    function chapter() {
+        if (!buffer) throw new Error("Audio is not decoded");
+        return encode([{ from: 0, to: buffer.samplesDecoded }], 0);
+    }
+    function encode(cuts, pauseFrames) {
         const channels = buffer.channelData.length;
         const frames = cuts.reduce((n, c) => n + c.to - c.from, 0) + (cuts.length - 1) * pauseFrames;
         const bytes = new Uint8Array(44 + frames * channels * 2);
@@ -68,7 +78,7 @@ globalThis.recitation = (() => {
         return result({ length: bytes.length });
     }
     function chunk(offset, size) {
-        if (!wave || !Number.isInteger(offset) || offset < 0 || !Number.isInteger(size) || size <= 0 || size > 49152)
+        if (!wave || !Number.isInteger(offset) || offset < 0 || !Number.isInteger(size) || size <= 0 || size > 262144)
             throw new Error("Invalid audio chunk");
         const part = wave.subarray(offset, offset + size);
         let binary = "";
@@ -77,7 +87,7 @@ globalThis.recitation = (() => {
         if (offset + size >= wave.length) wave = null;
         return result({ data });
     }
-    return { load, clip, chunk, reset, status: () => result(status),
+    return { load, clip, chapter, chunk, reset, status: () => result(status),
         begin: () => { reset(); return result(status); },
         append: part => { upload.push(part); return result(status); },
         finish: () => load(upload.join("")) };

@@ -33,6 +33,15 @@ const RELEASE_CI_PATHS = [
 	...SHARED_CI_PATHS,
 	".github/workflows/shared-release.yml",
 ];
+// Shared build context of every web/ release Docker image (#2292).
+const DOCKER_BUILD_CI_PATHS = ["web/.dockerignore"];
+// Deterministic E2E test-selection tooling plus the shared Playwright
+// evidence reporter — consumed by the website, admin and API E2E jobs
+// (the Appium suite already lists the selector under `app`, #2085).
+const E2E_IMPACT_CI_PATHS = [
+	"devops/github/ci/e2e-impact",
+	"web/shared",
+];
 
 export const MODULES = {
 	website: {
@@ -42,7 +51,16 @@ export const MODULES = {
 			"data/recitation/recitation.sqlite",
 			"app/BibleOnSite/Resources/Raw/recitation-audio.html",
 		],
-		ciPaths: [...RELEASE_CI_PATHS, "devops/github/ci/bencher-comparison.mjs"],
+		ciPaths: [
+			...RELEASE_CI_PATHS,
+			...E2E_IMPACT_CI_PATHS,
+			"devops/github/ci/bencher-comparison.mjs",
+			// cd-aws.yml owns the post-deploy verifier invocation contract
+			// (NODE_PATH → devops deps) that the deploy_verifier guard replays.
+			".github/workflows/cd-aws.yml",
+			// The deploy_verifier job also guards canonical nginx redirects.
+			"docs/aws/cloudformation/ec2-nginx/router/router.conf",
+		],
 		// Test-only changes run website checks but cannot alter the deployed
 		// site, so they must not package, release, or bump the version (#2132):
 		// the tests/ tree, colocated *.test.*/​*.spec.* files (including
@@ -53,22 +71,42 @@ export const MODULES = {
 		ciOnlyPattern:
 			/^web\/bible-on-site\/(tests\/|.*\.(test|spec)\.[^/]+$|jest[^/]*\.[^/]*$|playwright[^/]*\.[^/]*$|\.covignore\.mjs$|shared\/typing\/coverage\.d\.ts$|get-debug-port\.js$|launch-e2e-server\.mts$)/,
 	},
-	api: { directory: "web/api", ciPaths: RELEASE_CI_PATHS },
-	app: {
-		directory: "app",
-		// The e2e-impact selector/collector and the exec coverage-tree
-		// extractor drive the Appium suite (#2085).
+	api: {
+		directory: "web/api",
 		ciPaths: [
 			...RELEASE_CI_PATHS,
+			...E2E_IMPACT_CI_PATHS,
+			...DOCKER_BUILD_CI_PATHS,
+			".github/workflows/shared-dockerize.yml",
+		],
+	},
+	app: {
+		directory: "app",
+		// Both approved timings and the Opus inventory ship in the native app.
+		extraModulePaths: [
+			"data/recitation/recitation.sqlite",
+			"web/bible-on-site/src/data/recitation/opus-playback.json",
+		],
+		// The e2e-impact selector/collector and the exec coverage-tree
+		// extractor drive the Appium suite (#2085). The runner workflow defines
+		// the device legs themselves — install logic, emulator settings and the
+		// Release startup smoke (#2373) — so a runner-only edit must trigger
+		// the same app checks as a parent-workflow edit.
+		ciPaths: [
+			...RELEASE_CI_PATHS,
+			".github/workflows/app-package.yml",
 			".github/workflows/app-mobile-e2e.yml",
+			".github/workflows/app-mobile-e2e-runner.yml",
 			"devops/github/ci/e2e-impact",
 			"devops/e2e-coverage-trees",
 		],
-		// Shared decoder changes need native checks. Only changes to the packaged
-		// app itself need an app version, package and release. Website timing
-		// batches also change their package version files.
-		extraCiPattern:
-			/^web\/bible-on-site\/(package(-lock)?\.json|src\/lib\/recitation-audio\.ts)$/,
+		// The native decoder inputs are app-owned (#2391): the generator and its
+		// manifest live under app/devops/recitation-decoder, inside this module,
+		// and the generated asset ships under app/BibleOnSite. Website manifests
+		// and the browser player no longer select native checks; decoder-version
+		// parity with web/bible-on-site/package.json is enforced by
+		// check-decoder-pins.mjs in the decoder verification suites.
+		// Approved timings are packaged inputs through extraModulePaths.
 		// Test projects exercise the app but never change its package, so a
 		// test-only change must not ship a store release or bump the version.
 		ciOnlyPattern: /^app\/(BibleOnSite\.Tests[^/]*|mobile-e2e)\//,
@@ -77,13 +115,23 @@ export const MODULES = {
 		directory: "web/admin",
 		ciPaths: [
 			...SHARED_CI_PATHS,
+			...E2E_IMPACT_CI_PATHS,
+			...DOCKER_BUILD_CI_PATHS,
 			"devops/rustfs",
 			"devops/docker-compose.yml",
 			"devops/package.json",
 			"devops/package-lock.json",
 		],
 	},
-	bulletin: { directory: "web/bulletin", ciPaths: RELEASE_CI_PATHS },
+	bulletin: {
+		directory: "web/bulletin",
+		// The release image also compiles the API's shared entities crate.
+		ciPaths: [
+			...RELEASE_CI_PATHS,
+			...DOCKER_BUILD_CI_PATHS,
+			"web/api/entities",
+		],
+	},
 	data: {
 		directory: "data",
 		// Data-deploy tooling changes (e.g. its SQL_FILES manifest) must re-run
@@ -92,6 +140,10 @@ export const MODULES = {
 	},
 	perushim_pipeline: {
 		directory: "data/sefaria/pipelines/perushim-view",
+		// The delivered FTS index also includes the app's bundled scripture.
+		extraModulePaths: [
+			"app/BibleOnSite/Resources/Raw/sefaria-dump-5784-sivan-4.tanah_view.sqlite",
+		],
 		ciPaths: SHARED_CI_PATHS,
 	},
 } satisfies Record<string, ModuleRule>;

@@ -1,4 +1,5 @@
 import { expect, test } from "../util/playwright/test-fixture";
+import { TOP_NAV_BLUE, topNavBackground } from "../util/playwright/top-nav";
 
 const MASORA_ROOT = `/${encodeURIComponent("מסורה")}`;
 
@@ -28,6 +29,34 @@ test.describe("מסורה reading root", () => {
 		await expect(
 			page.getByRole("heading", { level: 1, name: "בראשית פרשה א" }),
 		).toBeVisible();
+	});
+
+	test("renders the shared blue top bar on direct load", async ({ page }) => {
+		await page.goto(MASORA_ROOT);
+		await expect(
+			page.getByRole("heading", { name: "מסורה על הפרק" }),
+		).toBeVisible();
+
+		expect(await topNavBackground(page)).toBe(TOP_NAV_BLUE);
+	});
+
+	test("keeps the shared blue top bar when navigating from another page", async ({
+		page,
+	}) => {
+		await page.goto("/");
+		await page.getByRole("button", { name: "תפריט ראשי" }).click();
+		await page
+			.locator("#main-menu")
+			.getByRole("link", { name: "מסורה על הפרק", exact: true })
+			.click();
+		await page.waitForURL(
+			(url) => decodeURIComponent(url.pathname) === "/מסורה",
+		);
+		await expect(
+			page.getByRole("heading", { name: "מסורה על הפרק" }),
+		).toBeVisible();
+
+		expect(await topNavBackground(page)).toBe(TOP_NAV_BLUE);
 	});
 
 	test("unit page renders text, closing break, nav, and sections", async ({
@@ -109,6 +138,27 @@ test.describe("מסורה reading root", () => {
 			"href",
 			/\/929\/153$/,
 		);
+	});
+
+	test("book view opens on ?book and shows the sefer book", async ({
+		page,
+	}) => {
+		await page.goto(`${MASORA_ROOT}/1?book`);
+		const overlay = page.locator('[class*="seferOverlay"]');
+		await expect(overlay).toBeVisible({ timeout: 15_000 });
+	});
+
+	test("book-chrome routes land on the sefer's first unit", async ({
+		page,
+	}) => {
+		// /מסורה/{firstUnitId}/{slug}?book rewrites to the unit in book
+		// mode with the chrome page in its bookPage query.
+		const response = await page.goto(
+			`${MASORA_ROOT}/1/${encodeURIComponent("כריכה")}?book`,
+		);
+		expect(response?.status()).toBe(200);
+		const overlay = page.locator('[class*="seferOverlay"]');
+		await expect(overlay).toBeVisible({ timeout: 15_000 });
 	});
 
 	test("unknown unit ids return 404", async ({ page }) => {

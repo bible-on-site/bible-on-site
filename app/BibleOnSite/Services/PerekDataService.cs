@@ -2,7 +2,7 @@ using BibleOnSite.Helpers;
 using BibleOnSite.Models;
 using System.Globalization;
 using System.Text;
-using Newtonsoft.Json;
+using System.Text.Json;
 using SQLite;
 
 namespace BibleOnSite.Services;
@@ -53,7 +53,7 @@ public class PerekDataService
     /// <summary>
     /// Loads all sefarim and perakim from the database.
     /// </summary>
-    public async Task LoadAsync()
+    public virtual async Task LoadAsync()
     {
         if (_isLoaded)
         {
@@ -93,7 +93,7 @@ public class PerekDataService
             if (row.TanahUsName.Contains('{'))
             {
                 // Handle JSON format for split books
-                var nameDict = JsonConvert.DeserializeObject<Dictionary<string, string>>(row.TanahUsName);
+                var nameDict = JsonSerializer.Deserialize(row.TanahUsName, AppJsonContext.Default.SeferNames);
                 tanahUsName = nameDict?.Values.FirstOrDefault() ?? row.TanahUsName;
             }
             else
@@ -227,7 +227,7 @@ public class PerekDataService
     /// <summary>
     /// Loads the pasukim text for a given perek.
     /// </summary>
-    public async Task<List<Pasuk>> LoadPasukimAsync(int perekId)
+    public virtual async Task<List<Pasuk>> LoadPasukimAsync(int perekId)
     {
         var db = await _databaseService.GetDatabaseAsync();
 

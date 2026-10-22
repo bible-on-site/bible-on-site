@@ -77,4 +77,120 @@ describe("mergeLcovTexts", () => {
 	it("emits nothing for no inputs", () => {
 		assert.equal(mergeLcovTexts([]), "");
 	});
+
+	it("relocates absolute SF paths from different runners onto the needle", () => {
+		// #1232: mobile E2E coverage is produced on Linux (Android) and macOS
+		// (iOS) runners, so the same source file arrives under different roots.
+		const linux =
+			"TN:\nSF:/home/runner/work/bible-on-site/bible-on-site/app/BibleOnSite/Helpers/AppLinkHelper.cs\nDA:1,3\nDA:2,0\nLF:2\nLH:1\nend_of_record\n";
+		const macos =
+			"TN:\nSF:/Users/runner/work/bible-on-site/bible-on-site/app/BibleOnSite/Helpers/AppLinkHelper.cs\nDA:1,0\nDA:2,7\nLF:2\nLH:1\nend_of_record\n";
+		const out = mergeLcovTexts([linux, macos], undefined, ["app/BibleOnSite/"]);
+		const sfs = out.match(/^SF:.+$/gm);
+		assert.deepEqual(sfs, ["SF:app/BibleOnSite/Helpers/AppLinkHelper.cs"]);
+		assert.ok(out.includes("DA:1,3\nDA:2,7\n"), out);
+	});
+
+	it("leaves already-relative SF paths untouched by relocate", () => {
+		const rel =
+			"TN:\nSF:app/BibleOnSite/Helpers/AppLinkHelper.cs\nDA:1,1\nLF:1\nLH:1\nend_of_record\n";
+		const out = mergeLcovTexts([rel], undefined, ["app/BibleOnSite/"]);
+		assert.match(out, /^SF:app\/BibleOnSite\/Helpers\/AppLinkHelper\.cs$/m);
+	});
+
+	it("restricts an untrusted input to the canonical line universe (#2270)", () => {
+		// The e2e app build instruments a far larger universe than the
+		// unit/integration report. Only hits on coordinates the canonical
+		// layer already declared may merge — never foreign lines or files.
+		const out = mergeLcovTexts([UNIT, E2E], "web/admin/", [], new Set([1]));
+		assert.deepEqual(out.match(/^SF:.+$/gm), ["SF:web/admin/src/server.tsx"]);
+		// Line 3 was uncovered in unit — the e2e hit confirms it. Line 9 is
+		// e2e-only enumeration and cannot enter.
+		assert.ok(out.includes("DA:1,5\nDA:2,5\nDA:3,2\n"), out);
+		assert.ok(!out.includes("DA:9"), out);
+		assert.ok(out.includes("LF:3\nLH:3\n"), out);
+		// BRDA tuples are per-instrumenter coordinates: even an identical key
+		// cannot be trusted to name the same arm, so no e2e arm merges.
+		assert.ok(out.includes("BRDA:5,0,0,2\nBRDA:5,0,1,0\n"), out);
+		assert.ok(out.includes("BRF:2\nBRH:1\n"), out);
+		assert.ok(out.includes("FNDA:3,handler"), out);
+	});
+
+	it("keeps the merged universe identical with or without an untrusted input", () => {
+		// The invariant the e2e merge needs: denominators and the file set are
+		// exactly the canonical layers' — an e2e layer can only raise hits.
+		const canonical = mergeLcovTexts([UNIT], "web/admin/");
+		const merged = mergeLcovTexts([UNIT, E2E], "web/admin/", [], new Set([1]));
+		assert.deepEqual(merged.match(/^SF:.+$/gm), canonical.match(/^SF:.+$/gm));
+		const denominators = (s: string) =>
+			s.match(/^(?:LF|BRF|FNF):\d+$/gm) ?? [];
+		assert.deepEqual(denominators(merged), denominators(canonical));
+	});
+
+	it("drops an untrusted file entirely — hits included — when canonical never enumerated it", () => {
+		// Pages/*.xaml.cs-style files exist only in the e2e build's universe:
+		// keeping their hit lines would report a mostly-uncovered file as 100%.
+		const e2eForeign =
+			"TN:\nSF:app/BibleOnSite/Pages/ColdPage.xaml.cs\nFN:5,ctor\nFNDA:1,ctor\nDA:5,3\nDA:6,0\nBRDA:7,0,0,1\nFNF:1\nFNH:1\nLF:2\nLH:1\nBRF:1\nBRH:1\nend_of_record\n";
+		const unitWarm =
+			"TN:\nSF:app/BibleOnSite/Services/Hot.cs\nDA:1,4\nLF:1\nLH:1\nend_of_record\n";
+		const out = mergeLcovTexts(
+			[unitWarm, e2eForeign],
+			undefined,
+			["app/BibleOnSite/"],
+			new Set([1]),
+		);
+		assert.deepEqual(out.match(/^SF:.+$/gm), ["SF:app/BibleOnSite/Services/Hot.cs"]);
+	});
+
+	it("never merges untrusted branch arms — equal tuples can name different arms", () => {
+		// BRDA block/branch indices are per-instrumenter coordinates. The
+		// e2e tuple 20,0,0 may be a different arm than the canonical 20,0,0,
+		// so even a matching key must not credit the canonical arm.
+		const canonical =
+			"TN:\nSF:app/BibleOnSite/Pages/PerekPage.xaml.cs\nDA:20,1\nBRDA:20,0,0,0\nBRDA:20,0,1,0\nLF:1\nLH:1\nBRF:2\nBRH:0\nend_of_record\n";
+		const e2e =
+			"TN:\nSF:app/BibleOnSite/Pages/PerekPage.xaml.cs\nDA:20,1\nDA:21,0\nBRDA:20,0,0,1\nBRDA:20,0,1,0\nBRDA:30,0,0,9\nLF:2\nLH:1\nBRF:3\nBRH:2\nend_of_record\n";
+		const out = mergeLcovTexts([canonical, e2e], undefined, ["app/BibleOnSite/"], new Set([1]));
+		assert.ok(out.includes("BRDA:20,0,0,0\nBRDA:20,0,1,0\n"), out);
+		assert.ok(!out.includes("BRDA:30"), out);
+		assert.ok(!out.includes("DA:21"), out);
+		assert.ok(out.includes("BRF:2\nBRH:0\n"), out);
+	});
+
+	it("confirms function hits only when the untrusted def matches canonical line and name", () => {
+		const canonical =
+			"TN:\nSF:app/BibleOnSite/MauiProgram.cs\nFN:10,boot\nFN:20,dormant\nFNDA:0,boot\nFNDA:0,dormant\nDA:11,0\nLF:1\nLH:0\nFNF:2\nFNH:0\nend_of_record\n";
+		const e2e =
+			"TN:\nSF:app/BibleOnSite/MauiProgram.cs\nFN:10,boot\nFN:99,e2eOnly\nFNDA:2,boot\nFNDA:7,e2eOnly\nDA:11,2\nDA:50,4\nLF:2\nLH:2\nFNF:2\nFNH:2\nend_of_record\n";
+		const out = mergeLcovTexts(
+			[canonical, e2e],
+			undefined,
+			["app/BibleOnSite/"],
+			new Set([1]),
+		);
+		assert.ok(out.includes("FN:10,boot\nFN:20,dormant\n"), out);
+		assert.ok(out.includes("FNDA:2,boot"), out);
+		assert.ok(!out.includes("e2eOnly"), out);
+		assert.ok(!out.includes("DA:50"), out);
+		assert.ok(out.includes("FNF:2\nFNH:1\n"), out);
+	});
+
+	it("drops an untrusted function hit whose foreign def sits on a different line", () => {
+		// Same name, different FN line — the foreign compilation's "boot"
+		// is not provably the canonical "boot", so the hit cannot merge.
+		const canonical =
+			"TN:\nSF:app/BibleOnSite/MauiProgram.cs\nFN:10,boot\nFNDA:0,boot\nDA:11,0\nLF:1\nLH:0\nFNF:1\nFNH:0\nend_of_record\n";
+		const e2e =
+			"TN:\nSF:app/BibleOnSite/MauiProgram.cs\nFN:99,boot\nFNDA:2,boot\nDA:11,2\nLF:1\nLH:1\nFNF:1\nFNH:1\nend_of_record\n";
+		const out = mergeLcovTexts(
+			[canonical, e2e],
+			undefined,
+			["app/BibleOnSite/"],
+			new Set([1]),
+		);
+		assert.ok(out.includes("FNDA:0,boot"), out);
+		assert.ok(out.includes("FNF:1\nFNH:0\n"), out);
+		assert.ok(out.includes("DA:11,2"), out);
+	});
 });

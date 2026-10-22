@@ -1,3 +1,4 @@
+using BibleOnSite.Tests.MobileE2E.Platforms;
 using OpenQA.Selenium.Appium;
 using OpenQA.Selenium.Interactions;
 using Xunit;
@@ -12,8 +13,8 @@ namespace BibleOnSite.Tests.MobileE2E;
 [Collection("Mobile device")]
 [Trait("Category", "MobileE2E")]
 [Trait("Platform", "iOS")]
-public sealed class PerekScrollStabilityTests(ITestOutputHelper output, MobileDeviceSessionFactory sessions)
-    : MobileDeviceTest(output, sessions)
+public sealed class PerekScrollStabilityTests(ITestOutputHelper output, MobileDeviceSession session)
+    : MobileDeviceTest(output, session)
 {
     [Fact]
     public void RapidPasukScrollingKeepsTheAppAlive() => Scenario(() =>
@@ -29,13 +30,26 @@ public sealed class PerekScrollStabilityTests(ITestOutputHelper output, MobileDe
 
         // Fast back-to-back flicks maximize prefetch churn: cells are created,
         // dequeued and recycled while perushim HTML is being imported.
-        // One native sequence per direction avoids a separate XCTest idle wait
-        // and HTTP round trip for every flick. The old 80-command storm reached
-        // the hang guard while the app was still alive and responding normally.
-        Driver!.PerformActions([CreateFlickSequence(centerX, bottomY, centerX, topY, 40)]);
-        Driver.PerformActions([CreateFlickSequence(centerX, topY, centerX, bottomY, 40)]);
+        // WDA resolves every pointer move through XCTest's app coordinates.
+        // A ten-flick burst normally took 9-12s, but repeated AX frame queries
+        // grew to several seconds each on a loaded host and exceeded 45s.
+        // Two-flick bursts bound that synthesis work without changing any of
+        // the 80 lifted touches, their travel time or the gap within a burst.
+        foreach (var sequence in CreateFlickBursts(centerX, bottomY, centerX, topY, 40)
+            .Concat(CreateFlickBursts(centerX, topY, centerX, bottomY, 40)))
+        {
+            Driver!.PerformActions([sequence]);
+        }
 
-        var appState = Driver.ExecuteScript("mobile: queryAppState",
+        // The last flick's inertia keeps the collection decelerating and
+        // recycling cells on the main thread, starving the WDA lookups that
+        // follow. A short gutter drag takes scroll tracking and stops it.
+        var readerFrame = MobilePlatformAdapter.ReadFrame(list);
+        Driver!.PerformActions([ReaderScrollActions.Brake(
+            new System.Drawing.Rectangle(readerFrame.Location, readerFrame.Size),
+            DriverTelemetry.WindowSize(Driver))]);
+
+        var appState = Driver!.ExecuteScript("mobile: queryAppState",
             new Dictionary<string, object> { ["bundleId"] = "com.tanah.daily929" });
         Output.WriteLine($"App state after scroll storm: {appState}");
         // 4 = running in foreground. A crashed app reports 1 (not running).
@@ -71,6 +85,17 @@ public sealed class PerekScrollStabilityTests(ITestOutputHelper output, MobileDe
         Page.Tap("PerushimChevronButton");
     }
 
+    internal static IReadOnlyList<ActionSequence> CreateFlickBursts(int fromX, int fromY, int toX, int toY, int repetitions)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(repetitions);
+        const int maximumFlicksPerCommand = 2;
+        var bursts = new List<ActionSequence>();
+        for (var remaining = repetitions; remaining > 0; remaining -= maximumFlicksPerCommand)
+        {
+            bursts.Add(CreateFlickSequence(fromX, fromY, toX, toY, Math.Min(remaining, maximumFlicksPerCommand)));
+        }
+        return bursts;
+    }
     internal static ActionSequence CreateFlickSequence(int fromX, int fromY, int toX, int toY, int repetitions)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(repetitions);

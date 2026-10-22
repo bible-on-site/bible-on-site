@@ -5,17 +5,19 @@ using BibleOnSite.Services;
 namespace BibleOnSite.ViewModels;
 
 /// <summary>
-/// ViewModel for user preferences management.
+/// ViewModel for the settings overview: six category rows with current-state
+/// summaries, each navigating to a focused detail page.
 /// Uses local storage (MAUI Preferences); Firebase sync can be added later as enhancement.
 /// </summary>
-public partial class PreferencesViewModel : ObservableObject
+#pragma warning disable S2333 // RelayCommand generates partial implementations.
+public partial class PreferencesViewModel : DivineNamePreferencesViewModel
+#pragma warning restore S2333
 {
     private readonly PreferencesService _preferencesService;
+    protected override PreferencesService MaskingPreferences => _preferencesService;
     private readonly PerushimNotesService _perushimNotesService;
-    private readonly IFileSystem _fileSystem;
-    private readonly IShare _share;
+    private readonly RecitationService _recitationService;
     private readonly IAppNavigator _navigator;
-    public RecitationPreferencesViewModel Recitation { get; }
 
     public PreferencesViewModel() : this(PreferencesService.Instance, PerushimNotesService.Instance)
     {
@@ -27,26 +29,28 @@ public partial class PreferencesViewModel : ObservableObject
     }
 
     public PreferencesViewModel(PreferencesService preferencesService, PerushimNotesService perushimNotesService)
-        : this(preferencesService, perushimNotesService, FileSystem.Current, Share.Default)
+        : this(preferencesService, perushimNotesService, RecitationService.Instance)
     {
     }
 
     public PreferencesViewModel(PreferencesService preferencesService, PerushimNotesService perushimNotesService,
-        IFileSystem fileSystem, IShare share)
-        : this(preferencesService, perushimNotesService, fileSystem, share, ShellAppNavigator.Instance)
+        RecitationService recitationService)
+        : this(preferencesService, perushimNotesService, recitationService, ShellAppNavigator.Instance)
     {
     }
 
     public PreferencesViewModel(PreferencesService preferencesService, PerushimNotesService perushimNotesService,
-        IFileSystem fileSystem, IShare share, IAppNavigator navigator)
+        RecitationService recitationService, IAppNavigator navigator)
     {
         _preferencesService = preferencesService;
         _perushimNotesService = perushimNotesService;
-        _fileSystem = fileSystem;
-        _share = share;
+        _recitationService = recitationService;
         _navigator = navigator;
-        Recitation = new RecitationPreferencesViewModel(RecitationService.Instance, preferencesService, PerekDataService.Instance);
-        _preferencesService.PreferencesChanged += OnPreferencesChanged;
+        BibleOnSite.Helpers.WeakPreferencesSubscription.Subscribe(this, _preferencesService, static model => model.OnPreferencesChanged(null, EventArgs.Empty));
+        BibleOnSite.Helpers.WeakEventSubscription.Subscribe(this, _recitationService,
+            static (service, handler) => service.Changed += handler,
+            static (service, handler) => service.Changed -= handler,
+            static model => model.OnRecitationChanged(null, EventArgs.Empty));
     }
 
     /// <summary>
@@ -61,7 +65,6 @@ public partial class PreferencesViewModel : ObservableObject
             {
                 return;
             }
-
             _preferencesService.FontFactor = value;
             OnPropertyChanged();
         }
@@ -79,7 +82,6 @@ public partial class PreferencesViewModel : ObservableObject
             {
                 return;
             }
-
             _preferencesService.LastLearntPerek = value;
             OnPropertyChanged();
         }
@@ -97,11 +99,11 @@ public partial class PreferencesViewModel : ObservableObject
             {
                 return;
             }
-
             _preferencesService.PerekToLoad = value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(IsPerekToLoadTodays));
             OnPropertyChanged(nameof(IsPerekToLoadLastLearnt));
+            OnPropertyChanged(nameof(PerekToLoadSummary));
         }
     }
 
@@ -132,57 +134,48 @@ public partial class PreferencesViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Whether the מסורה על הפרק flyout menu entry is shown (opt-in, #2181).
+    /// Analytics opt-in for the אנליטיקה row (#2400). Toggling persists the
+    /// choice and applies it to the Firebase collection flag mid-session.
     /// </summary>
-    public bool MasoraMenuEnabled
+    public bool AnalyticsConsentEnabled
     {
-        get => _preferencesService.MasoraMenuEnabled;
+        get => _preferencesService.AnalyticsConsentEnabled;
         set
         {
-            if (_preferencesService.MasoraMenuEnabled == value)
+            if (_preferencesService.AnalyticsConsentEnabled == value)
             {
                 return;
             }
-
-            _preferencesService.MasoraMenuEnabled = value;
+            _preferencesService.SetAnalyticsConsent(value);
             OnPropertyChanged();
         }
     }
 
-    /// <summary>Always show the perushim section — with different content based on install state.</summary>
-    public bool ShowPerushimSection => true;
+    /// <summary>Current startup-perek choice for the על הפרק row.</summary>
+    public string PerekToLoadSummary => PerekToLoad == PerekToLoad.Todays ? "הפרק של היום" : "האחרון שלמדתי";
 
     /// <summary>Whether perushim notes are installed and available.</summary>
     public bool IsPerushimInstalled => _perushimNotesService.IsAvailable;
 
-    /// <summary>Whether to show the download controls (when NOT installed).</summary>
-    public bool ShowPerushimDownload => !_perushimNotesService.IsAvailable;
+    /// <summary>Short install-state word for the commentary pack.</summary>
+    public string PerushimInstallStateText => IsPerushimInstalled ? "מותקנת" : "לא מותקנת";
 
-    /// <summary>Status text for perushim notes.</summary>
-    public string PerushimNotesStatusText =>
-        _perushimNotesService.IsAvailable
-            ? "חבילת הפירושים מותקנת ✓"
-            : "חבילת הפירושים לא הותקנה. הורידו כדי להפעיל פירושים.";
+    /// <summary>
+    /// Three-state קריינות summary computed from locally usable audio files,
+    /// not from the bundled catalog or a playback preference.
+    /// </summary>
+    public string RecitationStateText => RecitationInstallStateText.Of(_recitationService.InstallState);
 
-    /// <summary>True while the perushim package is downloading.</summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ShowPerushimDownloadButton))]
-    [NotifyPropertyChangedFor(nameof(PerushimDownloadStatusText))]
-    private bool _isPerushimDownloading;
+    /// <summary>Combined pack states for the חבילות הרחבה row.</summary>
+    public string PacksSummaryText => $"פירושים: {PerushimInstallStateText} · קריינות: {RecitationStateText}";
 
-    /// <summary>Download progress in the range 0..1 (stays 0 until the first report).</summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(PerushimDownloadStatusText))]
-    private double _perushimDownloadProgress;
+    /// <summary>Current playback configuration for the קריינות row.</summary>
+    public string RecitationPlaybackSummary =>
+        $"מהירות {_preferencesService.RecitationSpeed:0.##}× · עוצמה {_preferencesService.RecitationVolume:P0}";
 
-    /// <summary>Idle download button: shown only when not installed and not currently downloading.</summary>
-    public bool ShowPerushimDownloadButton => ShowPerushimDownload && !IsPerushimDownloading;
-
-    /// <summary>Label shown on the progress overlay (percentage when reported, else a generic message).</summary>
-    public string PerushimDownloadStatusText =>
-        PerushimDownloadProgress > 0
-            ? $"מוריד… {(int)Math.Round(PerushimDownloadProgress * 100)}%"
-            : "מוריד…";
+    /// <summary>Current channel levels for the שמע row.</summary>
+    public string SoundSummaryText =>
+        $"קריינות {_preferencesService.RecitationVolume:P0} · שיעורים {_preferencesService.LessonsVolume:P0} · אפקטים {_preferencesService.EffectsVolume:P0}";
 
     /// <summary>
     /// Loads preferences from device storage.
@@ -192,111 +185,91 @@ public partial class PreferencesViewModel : ObservableObject
     {
         _preferencesService.Load();
         _ = _perushimNotesService.InitializeAsync();
+        _ = _recitationService.InitializeAsync();
+        NotifyPreferenceState();
+        NotifyPackStates();
+    }
+
+    /// <summary>
+    /// Loads preferences and waits for pack state so every row summary is accurate
+    /// before the page first renders. A missing or corrupt pack catalog must not
+    /// break the settings page.
+    /// </summary>
+    public async Task LoadAsync()
+    {
+        Load();
+        try { await _perushimNotesService.InitializeAsync(); }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Perushim init: {ex.Message}"); } //NOSONAR
+        try { await _recitationService.InitializeAsync(); }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Recitation init: {ex.Message}"); } //NOSONAR
+        NotifyPackStates();
+    }
+
+    /// <summary>Opens תצוגה settings.</summary>
+    [RelayCommand]
+    public async Task OpenDisplayAsync()
+    {
+        await _navigator.GoToAsync(AppRoutes.DisplayPreferences);
+    }
+
+    /// <summary>Opens על הפרק settings.</summary>
+    [RelayCommand]
+    public async Task OpenPerekAsync()
+    {
+        await _navigator.GoToAsync(AppRoutes.PerekPreferences);
+    }
+
+    /// <summary>Opens חבילות הרחבה management.</summary>
+    [RelayCommand]
+    public async Task OpenExtensionPacksAsync()
+    {
+        await _navigator.GoToAsync(AppRoutes.ExtensionPacks);
+    }
+
+    /// <summary>Opens קריינות playback settings.</summary>
+    [RelayCommand]
+    public async Task OpenRecitationAsync()
+    {
+        await _navigator.GoToAsync(AppRoutes.RecitationPreferences);
+    }
+
+    /// <summary>Opens שמע volume settings.</summary>
+    [RelayCommand]
+    public async Task OpenSoundAsync()
+    {
+        await _navigator.GoToAsync(AppRoutes.SoundPreferences);
+    }
+
+    /// <summary>Opens תמיכה settings.</summary>
+    [RelayCommand]
+    public async Task OpenSupportAsync()
+    {
+        await _navigator.GoToAsync(AppRoutes.SupportPreferences);
+    }
+
+    private void NotifyPreferenceState()
+    {
+        NotifyDivineNameMaskingChanged();
         OnPropertyChanged(nameof(FontFactor));
         OnPropertyChanged(nameof(LastLearntPerek));
         OnPropertyChanged(nameof(PerekToLoad));
         OnPropertyChanged(nameof(IsPerekToLoadTodays));
         OnPropertyChanged(nameof(IsPerekToLoadLastLearnt));
-        OnPropertyChanged(nameof(MasoraMenuEnabled));
-        OnPropertyChanged(nameof(ShowPerushimSection));
+        OnPropertyChanged(nameof(PerekToLoadSummary));
+        OnPropertyChanged(nameof(AnalyticsConsentEnabled));
+        OnPropertyChanged(nameof(RecitationPlaybackSummary));
+        OnPropertyChanged(nameof(SoundSummaryText));
+    }
+
+    private void NotifyPackStates()
+    {
         OnPropertyChanged(nameof(IsPerushimInstalled));
-        OnPropertyChanged(nameof(ShowPerushimDownload));
-        OnPropertyChanged(nameof(ShowPerushimDownloadButton));
-        OnPropertyChanged(nameof(PerushimNotesStatusText));
+        OnPropertyChanged(nameof(PerushimInstallStateText));
+        OnPropertyChanged(nameof(RecitationStateText));
+        OnPropertyChanged(nameof(PacksSummaryText));
     }
 
-    /// <summary>
-    /// Downloads perushim notes (PAD or HTTP) on demand.
-    /// </summary>
-    [RelayCommand]
-    public async Task DownloadPerushimAsync()
-    {
-        if (IsPerushimDownloading)
-        {
-            return;
-        }
+    private void OnPreferencesChanged(object? sender, EventArgs e) => NotifyPreferenceState();
 
-        IsPerushimDownloading = true;
-        PerushimDownloadProgress = 0;
-        try
-        {
-            var progress = new Progress<double>(p => PerushimDownloadProgress = Math.Clamp(p, 0, 1));
-            var ok = await _perushimNotesService.TryDownloadNotesAsync(progress);
-            if (!ok)
-            {
-                await _navigator.DisplayAlertAsync("שגיאה", "לא ניתן להוריד את חבילת הפירושים. נסו שוב מאוחר יותר.", "אישור");
-            }
-        }
-        finally
-        {
-            IsPerushimDownloading = false;
-            OnPropertyChanged(nameof(ShowPerushimSection));
-            OnPropertyChanged(nameof(IsPerushimInstalled));
-            OnPropertyChanged(nameof(ShowPerushimDownload));
-            OnPropertyChanged(nameof(ShowPerushimDownloadButton));
-            OnPropertyChanged(nameof(PerushimNotesStatusText));
-        }
-    }
-
-    /// <summary>
-    /// Exports perushim diagnostics to a file and opens the share sheet so the user can save or send for support.
-    /// </summary>
-    [RelayCommand]
-    public async Task ExportPerushimLogsAsync()
-    {
-        try
-        {
-            var report = await _perushimNotesService.GetDiagnosticsAsync();
-            var fileName = $"perushim_diagnostics_{DateTime.UtcNow:yyyyMMdd_HHmmss}.txt";
-            var path = Path.Combine(_fileSystem.CacheDirectory, fileName);
-            await File.WriteAllTextAsync(path, report);
-            await _share.RequestAsync(new ShareFileRequest
-            {
-                Title = "ייצוא לוגים - פירושים",
-                File = new ShareFile(path),
-            });
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"Export perushim logs failed: {ex.Message}");
-            await _navigator.DisplayAlertAsync("שגיאה", $"לא ניתן לייצא לוגים: {ex.Message}", "אישור");
-        }
-    }
-
-    /// <summary>
-    /// Increases font size.
-    /// </summary>
-    [RelayCommand]
-    public void IncreaseFontSize()
-    {
-        FontFactor = Math.Min(2.0, FontFactor + 0.1);
-    }
-
-    /// <summary>
-    /// Decreases font size.
-    /// </summary>
-    [RelayCommand]
-    public void DecreaseFontSize()
-    {
-        FontFactor = Math.Max(0.5, FontFactor - 0.1);
-    }
-
-    /// <summary>
-    /// Resets font size to default.
-    /// </summary>
-    [RelayCommand]
-    public void ResetFontSize()
-    {
-        FontFactor = 1.0;
-    }
-
-    private void OnPreferencesChanged(object? sender, EventArgs e)
-    {
-        OnPropertyChanged(nameof(FontFactor));
-        OnPropertyChanged(nameof(LastLearntPerek));
-        OnPropertyChanged(nameof(PerekToLoad));
-        OnPropertyChanged(nameof(IsPerekToLoadTodays));
-        OnPropertyChanged(nameof(IsPerekToLoadLastLearnt));
-        OnPropertyChanged(nameof(MasoraMenuEnabled));
-    }
+    private void OnRecitationChanged(object? sender, EventArgs e) => NotifyPackStates();
 }

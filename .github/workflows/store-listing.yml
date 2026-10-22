@@ -1,0 +1,48 @@
+name: Store Listing
+
+# Listing copy/screenshots are versioned in app/store-listing. Any change merged
+# to master is pushed straight to the Google Play listing. Requires the service
+# account's "Manage store listings" permission - see the kit README. App Store
+# fields are version-bound and ship with the next version submission.
+on:
+  push:
+    branches: [master]
+    paths:
+      - "app/store-listing/**"
+      - "app/devops/Build.Deploy.cs"
+      - ".github/workflows/store-listing.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sync_google_play:
+    name: Sync Google Play listing
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Write service account key
+        run: |
+          echo '${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}' > ${{ runner.temp }}/service-account.json
+
+      - name: Restore dotnet tools
+        working-directory: app
+        run: dotnet tool restore
+
+      - name: Sync listing to Google Play
+        working-directory: app
+        run: |
+          dotnet run --project devops -- SyncGooglePlayListing \
+            --google-play-key-file "${{ runner.temp }}/service-account.json"
+
+      - name: Cleanup
+        if: ${{ always() }}
+        run: rm -f ${{ runner.temp }}/service-account.json

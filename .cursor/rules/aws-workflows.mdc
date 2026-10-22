@@ -33,6 +33,10 @@ Before editing `.github/workflows/`:
   still block; only a suite whose own trigger did not fire may pass untested.
 - When adding or removing CI jobs or changing a job's `if`, update the
   `cross_module_ci` gate in the same change so triggers and gating stay in sync.
+- Release build paths (Dockerfiles, base images, build contexts) must run
+  before merge: a master-only packaging job needs a non-`push` validation run
+  with publication skipped, gated in `cross_module_ci` (#2292). Only builds
+  that need production data or secrets (the website SSG image) are exempt.
 - Never enable GitHub's managed "Automatic dependency submission" (Settings ->
   Code security -> Dependency graph). It bare-restores every csproj on Ubuntu,
   always fails on the MAUI project, and double-reports `submit-nuget`, racing

@@ -1,3 +1,4 @@
+import { SITE_ORIGIN } from "../../src/lib/seo/jsonld";
 import { expect, test } from "../util/playwright/test-fixture";
 
 /**
@@ -7,6 +8,16 @@ import { expect, test } from "../util/playwright/test-fixture";
  */
 
 test.describe("Section pages", () => {
+	test("homepage publishes its canonical root without tracking parameters", async ({
+		page,
+	}) => {
+		await page.goto("/?utm_source=canonical-check");
+		const canonical = page.locator('link[rel="canonical"]');
+		await expect(canonical).toHaveCount(1);
+		const href = await canonical.getAttribute("href");
+		expect(new URL(href ?? "").href).toBe(new URL("/", SITE_ORIGIN).href);
+	});
+
 	test("contact section page loads and shows contact content", async ({
 		page,
 	}) => {

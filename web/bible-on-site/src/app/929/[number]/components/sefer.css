@@ -1,7 +1,8 @@
 /* ===================================================================
- * Base flipbook styles — replicated from html-flip-book-vanilla/pages.scss
- * & flipbook.scss because the vanilla CSS is not importable from this
- * Next.js project (transitive dep; no direct import path).
+ * Base flipbook styles — replicated from html-flip-book-vanilla pages.scss
+ * & flipbook.scss (v0.0.0-alpha.46) because the vanilla CSS is not
+ * importable from this Next.js project (transitive dep; the package's
+ * "./style.css" export points at a file the tarball does not ship).
  * IMPORTANT: keep in sync with the library version.
  * =================================================================== */
 
@@ -18,7 +19,9 @@ html[data-sefer-view] {
   scrollbar-gutter: stable;
 }
 
-/* Container — the library adds .flipbook to this element. */
+/* Container — the library adds .flipbook to this element.
+   position:relative is host-only: it anchors the absolutely-positioned
+   .page elements the library lays out with inline top/left/right. */
 .he-book {
   height: 100%;
   width: 100%;
@@ -32,18 +35,19 @@ html[data-sefer-view] {
   position: absolute;
   backface-visibility: hidden;
   transform-style: preserve-3d;
+  /* Every page is opaque by default (like paper). Without this, blank pages
+     (e.g. cover interiors) would be transparent and the other side of the
+     leaf would bleed through mirrored via the 3D transform. */
   background: #fff;
-  box-shadow: none; /* shadows disabled – known flip-book flickering */
   /* Performance: isolate each page so the browser can skip re-layout/repaint
-     of page internals during 3D flip transforms (matches library pages.scss). */
+     of page internals during 3D flip transforms. */
   contain: layout style paint;
   --inner-shadow-shadow: 0;
   --inner-shadow-highlight: 0;
-  --inner-shadow-lift: 0px;
   --inner-shadow-edge: right;
 }
 
-/* Inner shadow / highlight pseudo-elements (from library pages.scss) */
+/* Inner shadow / highlight pseudo-elements (from library pages.scss). */
 .he-book .page::before,
 .he-book .page::after {
   content: "";
@@ -51,10 +55,18 @@ html[data-sefer-view] {
   inset: 0;
   pointer-events: none;
   backface-visibility: hidden;
-  transform-style: preserve-3d;
-  transition: opacity 120ms ease, transform 120ms ease;
-  will-change: opacity, transform;
+  transition: opacity 120ms ease;
+  will-change: opacity;
+  /* Host-only: every Sefer page child is a positioned, opaque sheet
+     (sefer.module.css .page/.pageContentPage/.pageBlank), which paints over
+     un-indexed overlays and hid all page/fold shading (issue #2331). Keep the
+     overlays above page content layers (carousel, recitation player). */
+  z-index: 10;
 }
+
+/* Inner shadow: simulates shadow cast by lifted page onto the page below.
+   (Upstream dropped the translateZ lift — `contain: layout style paint` on
+   .page flattens preserve-3d, making translateZ a no-op.) */
 .he-book .page::before {
   background: linear-gradient(
     to var(--inner-shadow-edge),
@@ -63,8 +75,9 @@ html[data-sefer-view] {
   );
   opacity: var(--inner-shadow-shadow);
   mix-blend-mode: multiply;
-  transform: translateZ(var(--inner-shadow-lift));
 }
+
+/* Edge highlight: simulates light catching the lifted page edge. */
 .he-book .page::after {
   background: linear-gradient(
     to var(--inner-shadow-edge),
@@ -72,11 +85,57 @@ html[data-sefer-view] {
     rgba(255, 255, 255, 0) 45%
   );
   opacity: var(--inner-shadow-highlight);
-  transform: translateZ(calc(var(--inner-shadow-lift) * 0.6));
 }
 
-.he-book .page.current-page {
-  box-shadow: none;
+/* Upstream's shadow opt-out: pageShadow={false} adds .flipbook--no-page-shadow
+   to the book element (the flicker workaround for upstream issue #167). We
+   render with shadows on, so the class never appears — the rule stays for
+   parity with pages.scss and as a ready kill-switch if the flicker returns.
+   Upstream needs !important to beat .page--folded's opacity:1; the extra
+   .he-book class gives this rule higher specificity without it. It suppresses
+   every pseudo-overlay, including the alpha.46 fold crease shading (the
+   library also skips writing --fold-shading then). */
+.he-book.flipbook--no-page-shadow .page::before,
+.he-book.flipbook--no-page-shadow .page::after {
+  opacity: 0;
+}
+
+/* alpha.46 paper folds: both faces of the lifted leaf carry .page--folded.
+   The crease shading rides ::before in page coordinates so it follows the
+   clipped fold without moving or cloning page content; the flat-face
+   shadow/highlight gradients are muted while the fold geometry applies. */
+.he-book .page--folded::before {
+  background: var(--fold-shading, none);
+  opacity: 1;
+  transition: none;
+  mix-blend-mode: normal;
+}
+.he-book .page--folded::after {
+  opacity: 0;
+  transition: none;
+}
+
+/* Applied during flip animation while snapshotDuringFlip is enabled. The
+   browser freezes the page rendering as a GPU texture; scrollbar chrome
+   and text selection are hidden so the snapshot looks clean. overflow is
+   NOT changed — scroll position is fully preserved. scrollbar-color keeps
+   the gutter allocated so content doesn't reflow; the webkit rule is only
+   needed for engines where overlay scrollbars occupy no space. */
+.he-book .page--flipping {
+  contain: strict;
+  user-select: none;
+  scrollbar-color: transparent transparent;
+}
+.he-book .page--flipping::-webkit-scrollbar {
+  display: none;
+}
+/* Descendant rules stay effective without upstream's !important — the
+   .he-book scope outranks the page content's own scrollbar styling. */
+.he-book .page--flipping * {
+  scrollbar-color: transparent transparent;
+}
+.he-book .page--flipping *::-webkit-scrollbar {
+  display: none;
 }
 
 /* Enforce page children fill page */
@@ -88,21 +147,16 @@ html[data-sefer-view] {
   box-sizing: border-box;
 }
 
-/* Hard covers - no page curl effect */
-.he-book .page--hard {
-  --inner-shadow-shadow: 0;
-  --inner-shadow-highlight: 0;
+/* coverConfig.noShadow: the React wrapper tags cover pages with
+   .page--no-shadow but ships no rule for it, and the library writes the
+   inner-shadow vars inline (beating any stylesheet value), so hide the
+   overlays themselves to keep hard covers flat. */
+.he-book .page--no-shadow::before,
+.he-book .page--no-shadow::after {
+  opacity: 0;
 }
 
-/* No shadow on covers */
-.he-book .page--no-shadow {
-  box-shadow: none;
-}
-.he-book .page--no-shadow.current-page {
-  box-shadow: none;
-}
-
-/* Interior cover from library */
+/* Interior cover from library flipbook.scss */
 .page--cover-interior {
   overflow: hidden;
 }

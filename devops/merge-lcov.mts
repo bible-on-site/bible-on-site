@@ -7,12 +7,28 @@
  * record overwrite a rich unit record and silently dropping coverage.
  *
  * Usage:
- *   node --import tsx merge-lcov.mts --out <file> --prefix <dir> [--require <file>]... [--optional <file>]... [--rm-input-dirs]
+ *   node --import tsx merge-lcov.mts --out <file> --prefix <dir> [--require <file>]... [--hits-only <file>]... [--optional <file>]... [--rm-input-dirs] [--relocate <needle>]...
  *
  * --require   input must exist; a missing one fails the merge (exit 1)
+ * --hits-only like --require, but the input's instrumented universe is
+ *             untrusted: it may only confirm hits on coordinates the other
+ *             layers already enumerate — file, DA line, and a function
+ *             declared at the same FN line in both builds. Use for inputs
+ *             built by a different instrumented compilation (e.g. a
+ *             separately built e2e app), whose sequence-point set is not
+ *             comparable: its unhit lines never enter the report, its hits
+ *             on unknown coordinates are dropped — a foreign hit without
+ *             its unhit siblings would fake a fully covered file — and
+ *             foreign BRDA arms never merge, since the same tuple can name
+ *             a different branch in another build.
  * --optional  input is skipped with a warning when missing
  * --prefix    module dir relative to repo root (e.g. web/admin/) — rewrites
  *             bare `SF:src/...` records so Codecov flag paths match
+ * --relocate  canonicalize SF paths by cutting everything before the given
+ *             needle (e.g. --relocate app/ rewrites
+ *             /home/runner/work/repo/repo/app/X.cs and
+ *             /Users/runner/work/repo/repo/app/X.cs to app/X.cs, so reports
+ *             collected on different runners deduplicate correctly)
  * --rm-input-dirs  delete the parent directory of every consumed input afterwards
  *
  * Paths are resolved against the caller's working directory.
@@ -28,58 +44,129 @@ interface FileRecord {
 	fn: Set<string>; // function definitions "line,name"
 }
 
-/** Merge lcov contents into a single report body, one SF block per file. */
-export function mergeLcovTexts(contents: string[], prefix?: string): string {
+/**
+ * Merge lcov contents into a single report body, one SF block per file.
+ * `hitsOnly` (indexed like `contents`) marks inputs from an untrusted
+ * instrumented universe — a build that enumerates sequence points the
+ * canonical layers do not know. Such an input can only CONFIRM coverage on
+ * coordinates both builds provably share: its DA hits merge onto an
+ * existing file's existing line, its FNDA hits merge only when the block
+ * declared the function at the canonical FN "line,name", and its BRDA
+ * arms never merge — block/branch indices are per-instrumenter and equal
+ * tuples can denote different arms. The merged SF set and LF/BRF/FNF
+ * denominators stay exactly the canonical layers' — an untrusted input
+ * can raise DA/FNDA hit counts, never extend the universe. Canonical
+ * inputs merge first regardless of CLI order, so the universe is always
+ * complete before untrusted hits apply.
+ */
+export function mergeLcovTexts(
+	contents: string[],
+	prefix?: string,
+	relocates: string[] = [],
+	hitsOnly: ReadonlySet<number> = new Set(),
+): string {
 	const files = new Map<string, FileRecord>();
+	const newRecord = (): FileRecord => ({
+		da: new Map(),
+		brda: new Map(),
+		fnda: new Map(),
+		fn: new Set(),
+	});
 	const recordFor = (path: string): FileRecord => {
 		let rec = files.get(path);
 		if (!rec) {
-			rec = { da: new Map(), brda: new Map(), fnda: new Map(), fn: new Set() };
+			rec = newRecord();
 			files.set(path, rec);
 		}
 		return rec;
 	};
 
-	for (const content of contents) {
+	const order = [...contents.keys()].sort(
+		(a, b) => Number(hitsOnly.has(a)) - Number(hitsOnly.has(b)),
+	);
+	for (const index of order) {
+		const coveredOnly = hitsOnly.has(index);
 		let rec: FileRecord | null = null;
-		for (const raw of content.split(/\r?\n/)) {
+		// Untrusted file blocks parse into their own record first — foreign
+		// coordinates may only confirm canonical ones, so nothing merges
+		// until the whole block (FN defs included) has been inspected.
+		let foreign: FileRecord | null = null;
+		const flushForeign = () => {
+			if (!foreign) return;
+			if (rec) {
+				for (const [n, h] of foreign.da) {
+					if (rec.da.has(n)) rec.da.set(n, Math.max(rec.da.get(n) ?? 0, h));
+				}
+				// BRDA block/branch indices are the instrumenter's own
+				// coordinates — the same tuple can name a different arm in
+				// another build, so untrusted branch hits never merge.
+				for (const [name, h] of foreign.fnda) {
+					// A function is provably the same only when the untrusted
+					// block declared it at the exact FN "line,name" the
+					// canonical build declared.
+					const proven = [...foreign.fn].some(
+						(def) => def.endsWith(`,${name}`) && rec.fn.has(def),
+					);
+					if (proven) rec.fnda.set(name, Math.max(rec.fnda.get(name) ?? 0, h));
+				}
+			}
+			foreign = null;
+		};
+		for (const raw of contents[index].split(/\r?\n/)) {
 			const line = raw.trimEnd();
 			if (line.startsWith("SF:")) {
+				flushForeign();
 				let p = line.slice(3).replace(/\\/g, "/");
+				for (const needle of relocates) {
+					const idx = p.indexOf(needle);
+					if (idx > 0) {
+						p = p.slice(idx);
+						break;
+					}
+				}
 				const prefixIdx = prefix ? p.indexOf(`${prefix}src/`) : -1;
 				if (prefixIdx > 0) {
 					p = p.slice(prefixIdx);
 				} else if (prefix && p.startsWith("src/")) {
 					p = `${prefix}${p}`;
 				}
-				rec = recordFor(p);
+				// An untrusted file is foreign code: the whole block drops,
+				// hits included — reporting them without their unhit siblings
+				// would fake a fully covered file.
+				rec = coveredOnly ? (files.get(p) ?? null) : recordFor(p);
+				foreign = coveredOnly && rec ? newRecord() : null;
 				continue;
 			}
-			if (!rec || line === "end_of_record") {
-				rec = line === "end_of_record" ? null : rec;
+			if (line === "end_of_record") {
+				flushForeign();
+				rec = null;
 				continue;
 			}
+			const target = coveredOnly ? foreign : rec;
+			if (!target) continue;
 			if (line.startsWith("DA:")) {
 				const [ln, hits] = line.slice(3).split(",");
-				const n = Number(ln);
-				rec.da.set(n, Math.max(rec.da.get(n) ?? 0, Number(hits)));
+				target.da.set(Number(ln), Math.max(target.da.get(Number(ln)) ?? 0, Number(hits)));
 			} else if (line.startsWith("BRDA:")) {
 				const [ln, block, branch, hits] = line.slice(5).split(",");
 				const key = `${ln},${block},${branch}`;
-				rec.brda.set(key, Math.max(rec.brda.get(key) ?? 0, Number(hits) || 0));
+				target.brda.set(key, Math.max(target.brda.get(key) ?? 0, Number(hits) || 0));
 			} else if (line.startsWith("FNDA:")) {
 				const comma = line.indexOf(",", 5);
 				const hits = Number(line.slice(5, comma));
 				const name = line.slice(comma + 1);
-				rec.fnda.set(name, Math.max(rec.fnda.get(name) ?? 0, hits));
+				target.fnda.set(name, Math.max(target.fnda.get(name) ?? 0, hits));
 			} else if (line.startsWith("FN:")) {
-				rec.fn.add(line.slice(3));
+				target.fn.add(line.slice(3));
 			}
 		}
+		flushForeign();
 	}
 
 	const chunks: string[] = [];
 	for (const [path, rec] of [...files.entries()].sort()) {
+		// A file block with no records at all has nothing to report.
+		if (!rec.da.size && !rec.brda.size && !rec.fnda.size && !rec.fn.size) continue;
 		const lines: string[] = [`TN:`, `SF:${path}`];
 		for (const fn of [...rec.fn].sort()) lines.push(`FN:${fn}`);
 		for (const [name, hits] of [...rec.fnda.entries()].sort()) lines.push(`FNDA:${hits},${name}`);
@@ -125,19 +212,22 @@ function main(): void {
 		process.exit(1);
 	}
 
-	const required = flags.get("require") ?? [];
+	const required = [...(flags.get("require") ?? []), ...(flags.get("hits-only") ?? [])];
 	const missing = required.filter((p) => !existsSync(resolve(p)));
 	if (missing.length > 0) {
 		console.error(`✗ Required coverage input(s) missing:\n  ${missing.join("\n  ")}`);
 		process.exit(1);
 	}
 
+	const hitsOnlySet = new Set(flags.get("hits-only") ?? []);
 	const inputs = [...required, ...(flags.get("optional") ?? [])];
 	const prefix = flags.get("prefix")?.[0];
+	const relocates = flags.get("relocate") ?? [];
 	const rmInputDirs = flags.has("rm-input-dirs");
 
 	const consumedDirs = new Set<string>();
 	const contents: string[] = [];
+	const hitsOnly = new Set<number>();
 	for (const input of inputs) {
 		const inputPath = resolve(input);
 		if (!existsSync(inputPath)) {
@@ -145,11 +235,12 @@ function main(): void {
 			continue;
 		}
 		contents.push(readFileSync(inputPath, "utf8"));
+		if (hitsOnlySet.has(input)) hitsOnly.add(contents.length - 1);
 		consumedDirs.add(dirname(inputPath));
 		console.log(`✓ Added coverage from ${inputPath}`);
 	}
 
-	const merged = mergeLcovTexts(contents, prefix);
+	const merged = mergeLcovTexts(contents, prefix, relocates, hitsOnly);
 	const outPath = resolve(out);
 	mkdirSync(dirname(outPath), { recursive: true });
 	writeFileSync(outPath, merged);

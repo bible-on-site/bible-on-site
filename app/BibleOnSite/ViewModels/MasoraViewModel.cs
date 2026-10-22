@@ -66,10 +66,13 @@ public partial class MasoraViewModel : ObservableObject //NOSONAR
 
     /// <summary>Available perushim for the current unit (union over its perakim, priority order).</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(FilteredPerushim))]
     private List<Perush> _perushim = new();
 
     /// <summary>Perush IDs that are currently checked (shown inline with text).</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PerushimSelectionStatus))]
+    [NotifyPropertyChangedFor(nameof(PerushimLimitReached))]
     private List<int> _checkedPerushim = new();
 
     /// <summary>Whether the perushim notes database is available (PAD or HTTP downloaded).</summary>
@@ -95,6 +98,7 @@ public partial class MasoraViewModel : ObservableObject //NOSONAR
 
     /// <summary>Message shown when no perushim (empty list or not available).</summary>
     public string PerushimEmptyMessage =>
+        Perushim.Count > 0 && !string.IsNullOrWhiteSpace(PerushNameFilter) ? "לא נמצאו פירושים תואמים" :
         !PerushimCatalogAvailable ? "אין קטלוג פירושים" :
         !PerushimNotesAvailable ? "להוריד פירושים" :
         "אין פרשנות לפרשה זו";
@@ -103,13 +107,15 @@ public partial class MasoraViewModel : ObservableObject //NOSONAR
     public bool ShowDownloadPerushimButton => PerushimCatalogAvailable && !PerushimNotesAvailable;
 
     /// <summary>
-    /// The production articles loader (GraphQL-backed). Lives on the
+    /// The production articles loader — reads the StarterService startup
+    /// snapshot (all articles + authors already in memory, ordered by
+    /// Priority), so unit swipes issue no GraphQL round-trips. Lives on the
     /// parameterless ctor — not inside the injectable ctor — so tests can
     /// still exercise the loader-free path in LoadArticlesAsync.
     /// </summary>
     private static Func<int, Task<List<Article>>>? DefaultArticlesLoader =>
 #if MAUI
-        ArticleService.Instance.GetArticlesByPerekIdAsync;
+        perekId => Task.FromResult(StarterService.Instance.GetArticlesByPerekId(perekId));
 #else
         null;
 #endif
@@ -132,13 +138,7 @@ public partial class MasoraViewModel : ObservableObject //NOSONAR
 
         // Sync FontFactor from preferences and listen for changes
         _fontFactor = _preferencesService.FontFactor;
-        _preferencesService.PreferencesChanged += (_, _) =>
-        {
-            if (Math.Abs(_fontFactor - _preferencesService.FontFactor) > 0.001)
-            {
-                FontFactor = _preferencesService.FontFactor;
-            }
-        };
+        WeakPreferencesSubscription.Subscribe(this, _preferencesService, static model => model.RefreshPreferences());
     }
 
     #region Unit Properties
@@ -178,7 +178,29 @@ public partial class MasoraViewModel : ObservableObject //NOSONAR
     /// <summary>Whether the current unit has any overlapping articles.</summary>
     public bool HasArticles => ArticlesCount > 0;
 
-    /// <summary>Count of available perushim for the current unit.</summary>
+    /// <summary>Find commentary names in the selection menu — scrolls to the
+    /// first match rather than hiding the rest.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(FilteredPerushim))]
+    [NotifyPropertyChangedFor(nameof(PerushimEmptyMessage))]
+    private string _perushNameFilter = string.Empty;
+
+    /// <summary>Perushim matching <see cref="PerushNameFilter"/> — the list
+    /// shows all of <see cref="Perushim"/>; this drives search scroll-to.</summary>
+    public List<Perush> FilteredPerushim
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(PerushNameFilter))
+            {
+                return Perushim;
+            }
+            var filter = SearchText.Normalize(PerushNameFilter);
+            return Perushim.Where(p => SearchText.Normalize(p.Name)
+                .Contains(filter, StringComparison.Ordinal)).ToList();
+        }
+    }
+
     public int PerushimCount => Perushim.Count;
 
     /// <summary>Whether the current unit has any perushim.</summary>
@@ -231,7 +253,7 @@ public partial class MasoraViewModel : ObservableObject //NOSONAR
     /// </summary>
     public async Task NavigateToUnitAsync(int unitId)
     {
-        var index = IndexOfUnit(unitId);
+        var index = _masoraDataService.GetUnitIndex(unitId);
         if (CarouselUnits.Count > 0 && index >= 0)
         {
             var target = _masoraDataService.GetUnit(unitId);
@@ -332,7 +354,7 @@ public partial class MasoraViewModel : ObservableObject //NOSONAR
         {
             return;
         }
-        var index = IndexOfUnit(centerUnitId);
+        var index = _masoraDataService.GetUnitIndex(centerUnitId);
         if (index < 0)
         {
             return;
@@ -358,13 +380,18 @@ public partial class MasoraViewModel : ObservableObject //NOSONAR
 
         var loaded = await Task.Run(async () =>
         {
+            // Adjacent units share boundary perakim — one task-level cache
+            // serves the whole batch so each perek hits SQLite once. The
+            // awaits stay sequential, so a plain Dictionary suffices.
+            var pasukimCache = new Dictionary<int, Task<List<Pasuk>>>();
+            Task<List<Pasuk>> LoadPasukimCached(int perekId) =>
+                pasukimCache.TryGetValue(perekId, out var pending)
+                    ? pending
+                    : pasukimCache[perekId] = _perekDataService.LoadPasukimAsync(perekId);
             var result = new List<(MasoraUnit Unit, List<MasoraPasukRow> Rows)>();
             foreach (var u in toLoad)
             {
-                var rows = await MasoraUnitText.BuildRowsAsync(
-                    u,
-                    perekId => _perekDataService.LoadPasukimAsync(perekId),
-                    FontFactor);
+                var rows = await MasoraUnitText.BuildRowsAsync(u, LoadPasukimCached, FontFactor);
                 result.Add((u, rows));
             }
             return result;
@@ -377,24 +404,6 @@ public partial class MasoraViewModel : ObservableObject //NOSONAR
                 u.Rows = rows;
             }
         }
-    }
-
-    /// <summary>Index of a unit inside the ordered Units list (-1 when missing).</summary>
-    private int IndexOfUnit(int unitId)
-    {
-        var units = _masoraDataService.Units;
-        if (units == null)
-        {
-            return -1;
-        }
-        for (var i = 0; i < units.Count; i++)
-        {
-            if (units[i].UnitId == unitId)
-            {
-                return i;
-            }
-        }
-        return -1;
     }
 
     /// <summary>
@@ -448,10 +457,12 @@ public partial class MasoraViewModel : ObservableObject //NOSONAR
         }
 
         var perekIds = MasoraUnitText.PerekIdsForUnit(unit);
+        // Per-perek fetches run in parallel; WhenAll preserves input order,
+        // so the dedup sees them exactly as the sequential loop did.
+        var perPerek = await Task.WhenAll(perekIds.Select(perekId => _articlesLoader(perekId)));
         var byId = new Dictionary<int, Article>();
-        foreach (var perekId in perekIds)
+        foreach (var articles in perPerek)
         {
-            var articles = await _articlesLoader(perekId);
             foreach (var article in articles)
             {
                 byId[article.Id] = article;
@@ -474,5 +485,22 @@ public partial class MasoraViewModel : ObservableObject //NOSONAR
     private void SetUnit(MasoraUnit unit)
     {
         Unit = unit;
+    }
+
+    private void RefreshPreferences()
+    {
+        if (Math.Abs(_fontFactor - _preferencesService.FontFactor) > 0.001)
+        {
+            FontFactor = _preferencesService.FontFactor;
+        }
+        OnPropertyChanged(nameof(InlineCommentaryLimitMessage));
+        OnPropertyChanged(nameof(InlineCommentaryLimit));
+        OnPropertyChanged(nameof(PerushimSelectionStatus));
+        OnPropertyChanged(nameof(PerushimLimitReached));
+        if (CheckedPerushim.Count > _preferencesService.InlineCommentaryLimit)
+        {
+            CheckedPerushim = CheckedPerushim.Take(_preferencesService.InlineCommentaryLimit).ToList();
+            if (Unit != null) { FillFilteredPerushContents(Unit); }
+        }
     }
 }

@@ -43,6 +43,31 @@ test.describe("Site search", () => {
 		).toBeVisible();
 	});
 
+	test("keeps no search control in reader top bars (#2274)", async ({
+		page,
+	}) => {
+		const topNav = page.locator("nav.top-nav");
+		const searchEntry = topNav.getByRole("link", { name: "חיפוש" });
+
+		// The settings button owns the top-left corner on every reading-unit
+		// page: no search link, hit area, or focusable control may remain —
+		// on the על הפרק reader and the מסורה/פרשה unit readers alike.
+		for (const readerPath of [
+			"/929/1",
+			`/${encodeURIComponent("מסורה")}/1`,
+			`/${encodeURIComponent("פרשה")}/1`,
+		]) {
+			await page.goto(readerPath);
+			await expect(searchEntry).toHaveCount(0);
+			await expect(page.locator(".top-nav-search")).toHaveCount(0);
+		}
+
+		// Navigating to the homepage restores the entry point.
+		await page.locator("nav.top-nav a[href='/']").click();
+		await page.waitForURL("**/");
+		await expect(searchEntry).toBeVisible();
+	});
+
 	test("main menu leads with על הפרק and holds no search row", async ({
 		page,
 	}) => {
@@ -201,7 +226,10 @@ test.describe("Site search", () => {
 	}) => {
 		await page.goto("/search?q=בראשית");
 		const input = page.getByRole("searchbox", { name: "מונח חיפוש" });
+		// focus() does not wait for the server-rendered input to become interactive.
+		await expect(input).toBeEnabled();
 		await input.focus();
+		await expect(input).toBeFocused();
 		await page.keyboard.press("ArrowDown");
 		const first = page.locator("a[data-result-link]").first();
 		await expect(first).toBeFocused();

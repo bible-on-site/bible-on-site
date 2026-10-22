@@ -10,7 +10,7 @@ partial class Build
     // Note: Test project includes source files directly (not a project reference),
     // so it compiles independently and doesn't need the main MAUI project to be built.
 
-    static void DotNetTestApp(string dotnetArgs, string appArgs = "")
+    static void DotNetTestApp(string dotnetArgs, string appArgs = "", IReadOnlyDictionary<string, string>? environmentVariables = null)
     {
         var arguments = $"test {dotnetArgs}";
         if (appArgs.Length > 0)
@@ -18,7 +18,7 @@ partial class Build
             arguments += $" -- {appArgs}";
         }
 
-        ProcessTasks.StartProcess(DotNetPath, arguments, RootDirectory)
+        ProcessTasks.StartProcess(DotNetPath, arguments, RootDirectory, environmentVariables: environmentVariables)
             .AssertZeroExitCode();
     }
 
@@ -59,24 +59,53 @@ partial class Build
 
     Target TestMobileE2E => _ => _
         .Description("Run Appium mobile E2E tests against the explicit device and app")
-        .Executes(() =>
+        .Executes(() => RunMobileE2E(listTests: false));
+
+    Target ListMobileE2E => _ => _
+        .Description("Discover mobile scenarios through the same launch path without starting a device session")
+        .Executes(() => RunMobileE2E(listTests: true));
+
+    void RunMobileE2E(bool listTests)
+    {
+        // Optional platform telemetry registers an SDK process-exit wait. Keep
+        // network reporting outside the sequential device harness's lifetime.
+        var environment = Environment.GetEnvironmentVariables().Cast<System.Collections.DictionaryEntry>()
+            .ToDictionary(entry => (string)entry.Key, entry => (string)entry.Value!);
+        environment["TESTINGPLATFORM_TELEMETRY_OPTOUT"] = "1";
+        var artifacts = Environment.GetEnvironmentVariable("MOBILE_E2E_ARTIFACTS")
+            ?? throw new ArgumentException("Set MOBILE_E2E_ARTIFACTS (npm test prepares it).");
+        var resultsDirectory = Path.Join(artifacts, "results");
+        // Prebuilt consumers have complete runnable assembly output, but
+        // no NuGet imports. Project evaluation would change NUKE's output
+        // directory and require test-platform package targets unnecessarily.
+        var harnessDirectory = RootDirectory / "BibleOnSite.Tests.MobileE2E/bin/Debug/net10.0";
+        // No --stop-on-fail: MTP reports never-run tests as skipped rather than
+        // failed, so aborting on the first failure would hide the rest of the
+        // shard's results. Every selected test runs once.
+        var appArgs = $"--config-file \"{harnessDirectory / "testconfig.json"}\" --filter-query \"/[{MobileE2ESelectionFilter()}]\"" +
+            $" --diagnostic --diagnostic-verbosity Information --diagnostic-output-directory \"{resultsDirectory}\"" +
+            " --hangdump --hangdump-timeout 10m --hangdump-type Mini" +
+            " --report-xunit-trx --report-xunit-trx-filename mobile-e2e.trx" +
+            " --report-xunit-junit --report-xunit-junit-filename mobile-e2e.xml";
+        if (listTests)
         {
-            var artifacts = Environment.GetEnvironmentVariable("MOBILE_E2E_ARTIFACTS")
-                ?? throw new ArgumentException("Set MOBILE_E2E_ARTIFACTS (npm test prepares it).");
-            var resultsDirectory = Path.Join(artifacts, "results");
+            appArgs += " --list-tests";
+        }
+        if (Environment.GetEnvironmentVariable("MOBILE_E2E_PREBUILT") == "1")
+        {
+            var assembly = harnessDirectory / "BibleOnSite.Tests.MobileE2E.dll";
+            // Materialize the complete string: NUKE's interpolation handler
+            // would otherwise quote the appArgs fragment as one argument.
+            var arguments = $"\"{assembly}\" --results-directory \"{resultsDirectory}\" {appArgs}";
+            ProcessTasks.StartProcess(DotNetPath, arguments, RootDirectory, environmentVariables: environment)
+                .AssertZeroExitCode();
+        }
+        else
+        {
             DotNetTestApp($"--project \"{MobileE2ETestProject}\" --configuration Debug -p:RestoreLockedMode=true" +
-                          $" --results-directory \"{resultsDirectory}\"",
-                $"--filter-query \"/[{MobileE2ESelectionFilter()}]\"" +
-                // Per test: up to 5 min Appium session setup (IOSDriver budget), plus the
-                // first commentary search's one-time FTS import of the whole notes pack —
-                // ~7m on a loaded macOS runner, and every fresh session reinstalls the app
-                // so no prior build progress survives — plus scenario and diagnostics.
-                // A test that exceeds its own waits fails normally well before this guard.
-                // The guard exists only for a genuinely dead test host.
-                " --hangdump --hangdump-timeout 18m --hangdump-type Mini" +
-                " --report-xunit-trx --report-xunit-trx-filename mobile-e2e.trx" +
-                " --report-xunit-junit --report-xunit-junit-filename mobile-e2e.xml");
-        });
+                          $" --results-directory \"{resultsDirectory}\"", appArgs, environment);
+        }
+    }
 
     // When MOBILE_E2E_SELECTION points at an e2e-impact manifest (#2085) the
     // manifest's selected list narrows the run inside the test process —
@@ -87,7 +116,7 @@ partial class Build
     string MobileE2ESelectionFilter()
     {
         // Every predicate stays parenthesized — the filter-query grammar treats
-        // a bare `A=B|C=D` group as one malformed predicate and runs zero tests.
+        // a bare "A=B|C=D" group as one malformed predicate and runs zero tests.
         var baseFilter = $"(Category=MobileE2E)&((Platform=Shared)|(Platform={(MobileIsAndroid ? "Android" : "iOS")}))";
         var selectionPath = Environment.GetEnvironmentVariable("MOBILE_E2E_SELECTION");
         if (string.IsNullOrEmpty(selectionPath))

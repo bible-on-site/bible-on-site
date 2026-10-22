@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { createServerFn } from "@tanstack/react-start";
 import { execute, query, queryOne } from "../db";
+import { revalidateWebsite } from "../website-revalidate";
+import { pediaInvalidationForEntities } from "./paths";
 
 export interface TanahpediaPlace {
 	id: string;
@@ -81,6 +83,9 @@ export const createPlace = createServerFn({ method: "POST" })
 			`INSERT INTO tanahpedia_place (id, entity_id) VALUES (?, ?)`,
 			[placeId, entityId],
 		);
+		await revalidateWebsite(
+			await pediaInvalidationForEntities([entityId]),
+		);
 		return { id: placeId, entity_id: entityId };
 	});
 
@@ -92,8 +97,12 @@ export const deletePlace = createServerFn({ method: "POST" })
 			[id],
 		);
 		if (!row) throw new Error("Place not found");
+		// Resolve affected entry pages before the delete — the entity and its
+		// entry links are gone after.
+		const invalidation = await pediaInvalidationForEntities([row.entity_id]);
 		await execute("DELETE FROM tanahpedia_entity WHERE id = ?", [
 			row.entity_id,
 		]);
+		await revalidateWebsite(invalidation);
 		return { success: true };
 	});

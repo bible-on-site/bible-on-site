@@ -17,11 +17,11 @@ public class TikkunFlowViewTests
         Segments = [new PasukSegment { Type = SegmentType.Ktiv, Value = text }]
     };
 
-    private static Mock<ICanvas> MeasuringCanvas()
+    private static Mock<ICanvas> MeasuringCanvas(double widthFactor = 0.5)
     {
         var canvas = new Mock<ICanvas>();
         canvas.Setup(c => c.GetStringSize(It.IsAny<string>(), It.IsAny<IFont>(), It.IsAny<float>()))
-            .Returns((string text, IFont _, float size) => new SizeF(text.Length * size * 0.5f, size));
+            .Returns((string text, IFont _, float size) => new SizeF((float)(text.Length * size * widthFactor), size));
         return canvas;
     }
 
@@ -67,11 +67,13 @@ public class TikkunFlowViewTests
         view.Pasukim = pesukim;
         view.RepeatEachPasuk = true;
         view.HideMarks = true;
+        view.MaskingRevision = 7;
         view.TextFontSize = 24;
 
         view.Pasukim.Should().BeSameAs(pesukim);
         view.RepeatEachPasuk.Should().BeTrue();
         view.HideMarks.Should().BeTrue();
+        view.MaskingRevision.Should().Be(7);
         view.TextFontSize.Should().Be(24);
     }
 
@@ -130,7 +132,7 @@ public class TikkunFlowViewTests
     }
 
     [Fact]
-    public void draw_boxes_each_word_to_its_measured_width_not_the_column()
+    public void draw_gives_each_word_a_box_it_cannot_wrap_inside()
     {
         WithInlineDispatcher(() =>
         {
@@ -139,11 +141,37 @@ public class TikkunFlowViewTests
 
             view.Drawable!.Draw(canvas.Object, new RectF(0, 0, 360, 600));
 
-            // The four-letter word measures 4 × 18 × 0.5 = 36 — the draw box must
-            // be that width (plus slack), never the runaway "rest of line" width
-            // that let Android's StaticLayout re-wrap and pile words together.
+            // Android turns the DrawString width into an int and hands it to a
+            // StaticLayout as the wrap constraint: a box snugger than the word's
+            // drawn width fragments it into narrow vertical pieces (#2069).
+            // Every word must therefore get at least the whole text column as
+            // its box — text direction is forced LTR inside DrawString, so a
+            // wide box stays left-anchored at the computed x and cannot
+            // re-align. Text column here is 360 − 12 − 12 = 336.
             canvas.Verify(c => c.DrawString("אאאא", It.IsAny<float>(), It.IsAny<float>(),
-                It.Is<float>(w => w < 60), It.IsAny<float>(), It.IsAny<HorizontalAlignment>(),
+                It.Is<float>(w => w >= 336), It.IsAny<float>(), It.IsAny<HorizontalAlignment>(),
+                It.IsAny<VerticalAlignment>(), It.IsAny<TextFlow>()));
+            canvas.Verify(c => c.DrawString("בב", It.IsAny<float>(), It.IsAny<float>(),
+                It.Is<float>(w => w >= 336), It.IsAny<float>(), It.IsAny<HorizontalAlignment>(),
+                It.IsAny<VerticalAlignment>(), It.IsAny<TextFlow>()));
+        });
+    }
+
+    [Fact]
+    public void draw_box_covers_an_overlong_word_that_exceeds_the_column()
+    {
+        WithInlineDispatcher(() =>
+        {
+            // A word wider than the whole column must still not wrap: its box is
+            // its own measured width plus slack. 30 letters × 18 × 1.5 = 810
+            // measured, wider than the 336-wide column.
+            var view = new TikkunFlowView { Pasukim = [PasukOf(1, "אאאאאאאאאאאאאאאאאאאאאאאאאאאאאא")] };
+            var canvas = MeasuringCanvas(widthFactor: 1.5);
+
+            view.Drawable!.Draw(canvas.Object, new RectF(0, 0, 360, 600));
+
+            canvas.Verify(c => c.DrawString(It.IsAny<string>(), It.IsAny<float>(), It.IsAny<float>(),
+                It.Is<float>(w => w > 810), It.IsAny<float>(), It.IsAny<HorizontalAlignment>(),
                 It.IsAny<VerticalAlignment>(), It.IsAny<TextFlow>()));
         });
     }
@@ -160,6 +188,57 @@ public class TikkunFlowViewTests
 
             canvas.Verify(DrawStringCall(), Times.Never);
             view.HeightRequest.Should().BeLessThan(9);
+        });
+    }
+
+    [Fact]
+    public void relayout_after_invalidation_measures_each_unique_word_once()
+    {
+        WithInlineDispatcher(() =>
+        {
+            var view = new TikkunFlowView { Pasukim = [PasukOf(1, "אא בב אא")] };
+            var canvas = MeasuringCanvas();
+
+            view.Drawable!.Draw(canvas.Object, new RectF(0, 0, 360, 600));
+            view.MaskingRevision = 1;
+            view.Drawable!.Draw(canvas.Object, new RectF(0, 0, 360, 600));
+
+            canvas.Verify(c => c.GetStringSize("אא", It.IsAny<IFont>(), It.IsAny<float>()), Times.Once);
+            canvas.Verify(c => c.GetStringSize("בב", It.IsAny<IFont>(), It.IsAny<float>()), Times.Once);
+        });
+    }
+
+    [Fact]
+    public void relayout_on_a_canvas_with_different_metrics_remeasures()
+    {
+        WithInlineDispatcher(() =>
+        {
+            var view = new TikkunFlowView { Pasukim = [PasukOf(1, "אא")] };
+            var narrow = MeasuringCanvas();
+            var wide = MeasuringCanvas(widthFactor: 0.9);
+
+            view.Drawable!.Draw(narrow.Object, new RectF(0, 0, 360, 600));
+            view.MaskingRevision = 1;
+            view.Drawable!.Draw(wide.Object, new RectF(0, 0, 360, 600));
+
+            wide.Verify(c => c.GetStringSize("אא", It.IsAny<IFont>(), It.IsAny<float>()), Times.Once);
+        });
+    }
+
+    [Fact]
+    public void font_size_change_remeasures_instead_of_reusing_stale_widths()
+    {
+        WithInlineDispatcher(() =>
+        {
+            var view = new TikkunFlowView { Pasukim = [PasukOf(1, "אא")] };
+            var canvas = MeasuringCanvas();
+
+            view.Drawable!.Draw(canvas.Object, new RectF(0, 0, 360, 600));
+            view.TextFontSize = 30;
+            view.Drawable!.Draw(canvas.Object, new RectF(0, 0, 360, 600));
+
+            canvas.Verify(c => c.GetStringSize("אא", It.IsAny<IFont>(), 30f), Times.Once);
+            canvas.Verify(c => c.GetStringSize("אא", It.IsAny<IFont>(), 18f), Times.Once);
         });
     }
 

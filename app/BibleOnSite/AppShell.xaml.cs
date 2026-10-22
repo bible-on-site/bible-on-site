@@ -29,6 +29,15 @@ public partial class AppShell : Shell
 		Routing.RegisterRoute("DonationsPage", typeof(DonationsPage));
 		Routing.RegisterRoute("TosPage", typeof(TosPage));
 		Routing.RegisterRoute("PreferencesPage", typeof(PreferencesPage));
+		Routing.RegisterRoute("TanahpediaPage", typeof(TanahpediaPage));
+		Routing.RegisterRoute("tanahpediaCategory", typeof(TanahpediaEntityTypePage));
+		Routing.RegisterRoute("tanahpediaEntry", typeof(TanahpediaEntryPage));
+		Routing.RegisterRoute(AppRoutes.RecitationPreferences, typeof(RecitationPreferencesPage));
+		Routing.RegisterRoute(AppRoutes.DisplayPreferences, typeof(DisplayPreferencesPage));
+		Routing.RegisterRoute(AppRoutes.PerekPreferences, typeof(PerekPreferencesPage));
+		Routing.RegisterRoute(AppRoutes.ExtensionPacks, typeof(ExtensionPacksPage));
+		Routing.RegisterRoute(AppRoutes.SoundPreferences, typeof(SoundPreferencesPage));
+		Routing.RegisterRoute(AppRoutes.SupportPreferences, typeof(SupportPreferencesPage));
 		Routing.RegisterRoute("ParashaListPage", typeof(ParashaListPage));
 		Routing.RegisterRoute("ParashaPage", typeof(ParashaPage));
 		Routing.RegisterRoute(AppRoutes.LearningCalendar, typeof(LearningCalendarPage));
@@ -36,8 +45,35 @@ public partial class AppShell : Shell
 		Routing.RegisterRoute(AppRoutes.SearchReader, typeof(PerekPage));
 		Routing.RegisterRoute(AppRoutes.Masora, typeof(MasoraPage));
 
+		// Styled exit/stay prompt — theme-blue "stay" and red "exit" text (#2460).
+		ExitConfirmation.UsePlatformPrompt(Controls.ExitConfirmationPopup.ShowAsync);
+
+		Navigating += OnShellNavigating;
 		Navigated += OnNavigated;
+
+		// Re-apply the Back/Up visibility policy to the open page when the
+		// Android override changes, not only to pages navigated to later (#2467).
+		WeakPreferencesSubscription.Subscribe(this, PreferencesService.Instance,
+			static shell => shell.ApplyBackChrome());
 	}
+
+	private void ApplyBackChrome()
+	{
+		if (CurrentPage is ContentPage page)
+		{
+			BackChrome.Apply(page);
+		}
+	}
+
+	/// <summary>
+	/// True while a Shell navigation transition is still settling. Back presses
+	/// that land inside that window are consumed rather than fed back into the
+	/// base pipeline — a second pass can pop the page beneath the one already
+	/// transitioning out and leave an empty surface after "stay" (#2460).
+	/// </summary>
+	private bool _navigationInFlight;
+
+	private void OnShellNavigating(object? sender, ShellNavigatingEventArgs e) => _navigationInFlight = true;
 
 	internal void CompleteStartup()
 	{
@@ -156,7 +192,7 @@ public partial class AppShell : Shell
 
 		host.AddGestureRecognizer(SharedFlyoutEdgePan);
 		_flyoutEdgeView = host;
-		Console.WriteLine($"[EdgePan] attached host={host.GetType().Name} frame={host.Frame} platformView={uiView.GetType().Name} inWindow={uiView.Window != null}");
+		DebugLog.Write($"[EdgePan] attached host={host.GetType().Name} frame={host.Frame} platformView={uiView.GetType().Name} inWindow={uiView.Window != null}");
 	}
 
 	private static UIWindow? FindKeyWindow()
@@ -188,7 +224,8 @@ public partial class AppShell : Shell
 			return true;
 		}
 
-		return BackExitPlan.Evaluate(base.OnBackButtonPressed(), FlyoutIsPresented) switch
+		return BackExitPlan.Evaluate(_navigationInFlight, base.OnBackButtonPressed, FlyoutIsPresented,
+			Navigation.NavigationStack.Count > 1) switch
 		{
 			BackExitAction.Consume => true,
 			BackExitAction.ConfirmExit => ExitConfirmation.Shared.Request(),
@@ -198,23 +235,60 @@ public partial class AppShell : Shell
 
 	private void OnNavigated(object? sender, ShellNavigatedEventArgs e)
 	{
+		ApplyBackChrome();
+		_navigationInFlight = false;
+#if IOS || MACCATALYST
+		GateIosInteractiveBack();
+		// The pushed page's native controller can lag the Navigated event.
+		Dispatcher.Dispatch(GateIosInteractiveBack);
+#endif
 		var analytics = Application.Current?.Handler?.MauiContext?.Services.GetService<IAnalyticsService>();
 		if (analytics == null)
 		{
 			return;
 		}
-		// Populate analytics with route (legacy-style: clear screen names for GA)
-		var loc = e.Current?.Location?.ToString();
-		if (!string.IsNullOrEmpty(loc))
+		// Logical screen names for GA (#2119): the route URI embeds Shell
+		// container segments and query strings, and Firebase's automatic
+		// tracking only saw MainActivity/renderer classes before it was
+		// disabled in the manifests — the page's logical name replaces both.
+		var name = AnalyticsScreens.ScreenNameFor(CurrentPage);
+		if (name is not null)
 		{
-			analytics.SetScreen(loc.TrimStart('/'), "Shell");
+			analytics.SetScreen(name, name);
 		}
 	}
+
+#if IOS || MACCATALYST
+	/// <summary>
+	/// UIKit keeps InteractivePopGestureRecognizer enabled at the navigation
+	/// root even though nothing can pop, and screen-edge recognizers claim
+	/// edge touches before the shared flyout pan — every root destination
+	/// (calendar, Masora, Tanahpedia, ...) would lose the right-edge drawer
+	/// swipe to a dead history gesture (#2432). Gate it on real history for
+	/// every Shell page; the reader additionally wires carousel priority in
+	/// ConfigureIosReaderHistory.
+	/// </summary>
+	private void GateIosInteractiveBack()
+	{
+		if (CurrentPage is { } page &&
+			(page.Handler as IPlatformViewHandler)?.ViewController?.NavigationController
+				?.InteractivePopGestureRecognizer is { } back)
+		{
+			back.Enabled = page.Navigation.NavigationStack.Count > 1;
+		}
+	}
+#endif
 
 	private async void OnAlHaperekTapped(object? sender, TappedEventArgs e)
 	{
 		FlyoutIsPresented = false;
 		await GoToAsync(AppRoutes.FlyoutPage("PerekPage", CurrentState.Location.OriginalString));
+	}
+
+	private async void OnTanahpediaTapped(object? sender, TappedEventArgs e)
+	{
+		FlyoutIsPresented = false;
+		await GoToAsync(AppRoutes.FlyoutPage("TanahpediaPage", CurrentState.Location.OriginalString));
 	}
 
 	private async void OnLearningCalendarTapped(object? sender, TappedEventArgs e)

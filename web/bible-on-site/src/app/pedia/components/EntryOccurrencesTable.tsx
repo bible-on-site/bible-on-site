@@ -1,6 +1,7 @@
 import { toLetters } from "gematry";
 import Link from "next/link";
 import { Fragment } from "react";
+import { DivineNameText } from "@/app/929/[number]/components/DivineNameText";
 import type { Segment } from "@/data/db/tanah-view-types";
 import { isQriDifferentThanKtiv } from "@/data/db/tanah-view-types";
 import { getPerekByPerekId } from "@/data/perek-dto";
@@ -24,9 +25,13 @@ function OccurrenceCitation({
 				(index >= range.segmentStart && index <= range.segmentEnd),
 		);
 		const text =
-			segment.type === "qri" && isQriDifferentThanKtiv(segment)
-				? `(${segment.value})`
-				: segment.value;
+			segment.type === "qri" && isQriDifferentThanKtiv(segment) ? (
+				<>
+					(<DivineNameText value={segment.value} />)
+				</>
+			) : (
+				<DivineNameText value={segment.value} />
+			);
 		return (
 			// biome-ignore lint/suspicious/noArrayIndexKey: references address immutable canonical segment positions
 			<Fragment key={index}>

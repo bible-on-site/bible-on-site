@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { executeMock, queryMock, queryOneMock } = vi.hoisted(() => ({
 	executeMock: vi.fn(),
@@ -138,5 +138,89 @@ describe("authors api", () => {
 			"DELETE FROM tanah_author WHERE id = ?",
 			[4],
 		);
+	});
+});
+
+describe("author saves invalidate the website", () => {
+	const ENV_KEYS = ["VITE_WEBSITE_URL", "REVALIDATE_SECRET"] as const;
+	let savedEnv: Record<string, string | undefined>;
+	let fetchSpy: ReturnType<typeof vi.spyOn>;
+
+	beforeEach(() => {
+		savedEnv = {};
+		for (const key of ENV_KEYS) savedEnv[key] = process.env[key];
+		process.env.VITE_WEBSITE_URL = "https://site.test";
+		process.env.REVALIDATE_SECRET = "s3cr3t";
+		fetchSpy = vi
+			.spyOn(globalThis, "fetch")
+			.mockResolvedValue(new Response("{}", { status: 200 }));
+	});
+
+	afterEach(() => {
+		for (const key of ENV_KEYS) {
+			if (savedEnv[key] === undefined) delete process.env[key];
+			else process.env[key] = savedEnv[key];
+		}
+		fetchSpy.mockRestore();
+	});
+
+	it("expires authors and articles tags after a commit", async () => {
+		queryOneMock.mockResolvedValue({ id: 3, name: 'רד"ק', details: "ד" });
+
+		await updateAuthor({ data: { id: 3, name: 'רד"ק', details: "ד" } });
+
+		const tags = fetchSpy.mock.calls.map((call: unknown[]) =>
+			new URL(String(call[0])).searchParams.get("tag"),
+		);
+		expect(tags).toEqual(["authors", "articles"]);
+	});
+
+	function notifiedUrls(callIndex: number): string[] {
+		const url = new URL(String(fetchSpy.mock.calls[callIndex][0]));
+		return url.searchParams.getAll("url");
+	}
+
+	it("reports both the old and new public urls after a rename", async () => {
+		queryOneMock
+			.mockResolvedValueOnce({ name: "ישן" })
+			.mockResolvedValueOnce({ id: 3, name: "חדש", details: "ד" });
+
+		await updateAuthor({ data: { id: 3, name: "חדש", details: "ד" } });
+
+		// The urls ride on the second (articles-tag) invalidation call.
+		expect(notifiedUrls(1)).toEqual([
+			`/929/authors/${encodeURIComponent("חדש")}`,
+			`/929/authors/${encodeURIComponent("ישן")}`,
+		]);
+	});
+
+	it("reports only the new url when the previous row is missing", async () => {
+		queryOneMock
+			.mockResolvedValueOnce(null)
+			.mockResolvedValueOnce({ id: 3, name: "חדש", details: "ד" });
+
+		await updateAuthor({ data: { id: 3, name: "חדש", details: "ד" } });
+
+		expect(notifiedUrls(1)).toEqual([
+			`/929/authors/${encodeURIComponent("חדש")}`,
+		]);
+	});
+
+	it("reports the removed author url after a delete", async () => {
+		queryOneMock.mockResolvedValue({ name: "נמחק" });
+
+		await deleteAuthor({ data: 3 });
+
+		expect(notifiedUrls(1)).toEqual([
+			`/929/authors/${encodeURIComponent("נמחק")}`,
+		]);
+	});
+
+	it("sends no url when the deleted author row was already gone", async () => {
+		queryOneMock.mockResolvedValue(null);
+
+		await deleteAuthor({ data: 3 });
+
+		expect(notifiedUrls(1)).toEqual([]);
 	});
 });

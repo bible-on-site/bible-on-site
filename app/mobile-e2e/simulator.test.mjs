@@ -18,6 +18,14 @@ test("chooses the newest available iPhone runtime compatible with Xcode, not a n
   assert.equal(selected.version, "26.5");
 });
 
+test("picks one deterministic UDID among identical devices so resolve and boot agree", () => {
+  const device = (udid) => ({ name: "iPhone 17", udid, isAvailable: true });
+  const selected = selectSimulator({
+    "com.apple.CoreSimulator.SimRuntime.iOS-27-0": [device("BBBB-0000"), device("AAAA-0000")],
+  }, "27.0");
+  assert.equal(selected.udid, "AAAA-0000");
+});
+
 test("reports no compatible device rather than silently choosing an unsupported OS", () => {
   assert.equal(selectSimulator({ "com.apple.CoreSimulator.SimRuntime.iOS-27-0": [
     { name: "iPhone 18", udid: "too-new", isAvailable: true },
@@ -31,4 +39,11 @@ test("ignores malformed runtime identifiers and other Apple platforms", () => {
     "com.apple.CoreSimulator.SimRuntime.iOS-26-5-invalid": devices,
     "com.apple.CoreSimulator.SimRuntime.tvOS-26-5": devices,
   }, "26.5"), undefined);
+});
+
+test("keeps the selected device's runtime identifier", () => {
+  const selected = selectSimulator({
+    "com.apple.CoreSimulator.SimRuntime.iOS-26-5": [{ name: "iPhone 17 Pro", udid: "device", isAvailable: true }],
+  }, "26.5");
+  assert.equal(selected.runtime, "com.apple.CoreSimulator.SimRuntime.iOS-26-5");
 });

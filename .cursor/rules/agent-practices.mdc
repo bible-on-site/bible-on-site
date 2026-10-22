@@ -61,3 +61,7 @@ continue-on-error: true
 - Never dismiss a failure with "this is a known framework bug" or "not caused by our changes." The user sees a broken experience — diagnose it and provide a working solution (workaround, fallback, config change).
 - If you add a component to a page and the page crashes, you own making that page work — whether that means fixing your code, adding a workaround, or switching to a different approach.
 - "Works on my diff" is not acceptable. The agent delivers working software, not explanations of why someone else's code broke.
+
+# Performance Failures
+
+Do not increase timeouts, retries, sleeps, polling budgets, or hang-watchdog limits to make a failing or slow operation pass. Treat a timeout as evidence: reproduce it, measure the critical path, and fix the underlying algorithm, blocking work, contention, or delivery defect. Keep the existing interaction deadline as a regression check. A timeout change is permitted only when the user explicitly requests it after seeing the root cause and measured tradeoff.

@@ -73,6 +73,7 @@ import {
 import { getPerushimByPerekId } from "../../../src/lib/perushim";
 import { getArticlesByPerekId } from "../../../src/lib/articles/service";
 import type { QriSegment } from "../../../src/data/db/tanah-view-types";
+import { ExportError } from "../../../src/lib/download/export-error";
 import {
 	buildTanachPdfForPerekRange,
 	createTanachPageRangesHandler,
@@ -352,6 +353,58 @@ describe("semanticPagesToPerekIds", () => {
 		const result = semanticPagesToPerekIds(semanticPages, "בראשית");
 
 		expect(result).toEqual([1]);
+	});
+
+	it("rejects a reversed range with a Hebrew explanation (issue #2407)", () => {
+		const mockSefer = { name: "בראשית" };
+		mockGetSeferByName.mockReturnValue(
+			mockSefer as ReturnType<typeof getSeferByName>,
+		);
+		mockGetPerekIdsForSefer.mockReturnValue(
+			Array.from({ length: 50 }, (_, i) => i + 1),
+		);
+
+		// Start יד (14) after end יב (12): the numeric chapter order is what
+		// matters, not the lexicographic order of the Hebrew labels.
+		const semanticPages = [
+			{ pageIndex: 29, semanticName: "יד", title: "" },
+			{ pageIndex: 31, semanticName: "יג", title: "" },
+			{ pageIndex: 33, semanticName: "יב", title: "" },
+		];
+
+		expect(() => semanticPagesToPerekIds(semanticPages, "בראשית")).toThrow(
+			ExportError,
+		);
+		expect(() => semanticPagesToPerekIds(semanticPages, "בראשית")).toThrow(
+			"טווח לא תקין: פרק ההתחלה מאוחר מפרק הסיום.",
+		);
+	});
+
+	it("accepts an ascending range and a single chapter", () => {
+		const mockSefer = { name: "בראשית" };
+		mockGetSeferByName.mockReturnValue(
+			mockSefer as ReturnType<typeof getSeferByName>,
+		);
+		mockGetPerekIdsForSefer.mockReturnValue(
+			Array.from({ length: 50 }, (_, i) => i + 1),
+		);
+
+		expect(
+			semanticPagesToPerekIds(
+				[
+					{ pageIndex: 25, semanticName: "יב", title: "" },
+					{ pageIndex: 27, semanticName: "יג", title: "" },
+					{ pageIndex: 29, semanticName: "יד", title: "" },
+				],
+				"בראשית",
+			),
+		).toEqual([12, 13, 14]);
+		expect(
+			semanticPagesToPerekIds(
+				[{ pageIndex: 29, semanticName: "יד", title: "" }],
+				"בראשית",
+			),
+		).toEqual([14]);
 	});
 });
 
