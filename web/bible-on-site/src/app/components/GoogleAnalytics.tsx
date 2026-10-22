@@ -1,34 +1,11 @@
-"use client";
-
 import Script from "next/script";
-import { useEffect, useSyncExternalStore } from "react";
-import {
-	getAnalyticsStatus,
-	getAnalyticsStatusServerSnapshot,
-	subscribeAnalyticsConsent,
-} from "@/lib/analytics-consent";
 import { isProduction } from "@/util/environment";
 
 const GA_MEASUREMENT_ID = "G-2CHER7MM85";
 
-/** Service measurement starts after the entry notice and continued use. */
+/** Ordinary service statistics. Advertising features remain disabled. */
 export function GoogleAnalytics() {
-	const consent = useSyncExternalStore(
-		subscribeAnalyticsConsent,
-		getAnalyticsStatus,
-		getAnalyticsStatusServerSnapshot,
-	);
-	// A deny after a grant cannot unmount the loaded gtag script; the
-	// documented ga-disable-<id> flag suppresses its hits for the rest of
-	// the session, and clears again if the user re-grants.
-	useEffect(() => {
-		(window as unknown as Record<string, boolean>)[
-			`ga-disable-${GA_MEASUREMENT_ID}`
-		] = consent !== "enabled";
-	}, [consent]);
-	if (!isProduction() || consent !== "enabled") {
-		return null;
-	}
+	if (!isProduction()) return null;
 
 	return (
 		<>

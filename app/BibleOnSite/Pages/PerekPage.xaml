@@ -33,10 +33,6 @@
     <Grid x:Name="MainGrid" RowDefinitions="Auto,*">
         <Grid x:Name="ReaderToolbar" Grid.Row="0" MinimumHeightRequest="56"
               BackgroundColor="{AppThemeBinding Light=#F2F7FE, Dark=#20304A}">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="Auto"/>
-            </Grid.RowDefinitions>
             <controls:SharedTopBar x:Name="NormalNavigationBar" NavigationAutomationId="ReaderNavigationButton">
                 <controls:SharedTopBar.CenterContent>
                     <Grid>
@@ -159,27 +155,6 @@
                         TextColor="White"
                         Clicked="OnSelectionCopyClicked"/>
             </Grid>
-            <VerticalStackLayout x:Name="AnalyticsNotice" Grid.Row="1" IsVisible="False"
-                                 AutomationId="AnalyticsNotice" Padding="16,8" Spacing="4"
-                                 SizeChanged="OnAnalyticsNoticeSizeChanged">
-                <Grid ColumnDefinitions="*,Auto">
-                    <Label Text="נתוני שימוש נמסרים לשירותי מדידה כדי לשפר את הלימוד. המשך השימוש מאפשר מדידה."
-                           FontSize="13" LineHeight="1.2"
-                           TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
-                    <Button Grid.Column="1" Text="×" BackgroundColor="Transparent" Padding="0"
-                            WidthRequest="40" HeightRequest="40" FontSize="22" VerticalOptions="Start"
-                            SemanticProperties.Description="סגירת ההודעה"
-                            Clicked="OnAnalyticsDismissClicked" AutomationId="AnalyticsDismissButton"/>
-                </Grid>
-                <HorizontalStackLayout Spacing="12">
-                    <Button Text="מדיניות פרטיות" BackgroundColor="Transparent" Padding="0"
-                            FontSize="13" MinimumHeightRequest="40"
-                            Clicked="OnAnalyticsPrivacyClicked" AutomationId="AnalyticsPrivacyButton"/>
-                    <Button Text="כיבוי מדידה" BackgroundColor="Transparent" Padding="0"
-                            FontSize="13" MinimumHeightRequest="40"
-                            Clicked="OnAnalyticsOptOutClicked" AutomationId="AnalyticsOptOutButton"/>
-                </HorizontalStackLayout>
-            </VerticalStackLayout>
         </Grid>
 
         <controls:FloatingSearchBar x:Name="ChapterSearch" Grid.Row="1" ZIndex="300"

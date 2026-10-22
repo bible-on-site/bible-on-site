@@ -364,45 +364,6 @@ public class PreferencesService
 
     #endregion
 
-    private string _analyticsConsent = "";
-
-    /// <summary>
-    /// Collection follows informed continued use or the explicit settings
-    /// choice. Platform startup reads storage through AnalyticsConsent.
-    /// </summary>
-    public bool AnalyticsConsentEnabled =>
-        _analyticsConsent is AnalyticsConsent.GrantedValue or AnalyticsConsent.ContinuedUseValue;
-
-    /// <summary>True once the entry disclosure or a settings choice was completed.</summary>
-    public bool AnalyticsConsentAsked =>
-        _analyticsConsent is AnalyticsConsent.GrantedValue or AnalyticsConsent.DeniedValue or AnalyticsConsent.ContinuedUseValue;
-
-    public void RecordAnalyticsContinuedUse(bool noticeShown)
-    {
-        if (AnalyticsConsent.RecordContinuedUse(_storage, noticeShown))
-        {
-            _analyticsConsent = AnalyticsConsent.ContinuedUseValue;
-            OnPreferencesChanged();
-        }
-    }
-
-    /// <summary>
-    /// Records the consent answer and applies it to the Firebase collection
-    /// flag immediately, so a mid-session grant/revoke takes effect live.
-    /// </summary>
-    public void SetAnalyticsConsent(bool granted)
-    {
-        var next = granted ? AnalyticsConsent.GrantedValue : AnalyticsConsent.DeniedValue;
-        if (_analyticsConsent == next)
-        {
-            return;
-        }
-
-        _analyticsConsent = next;
-        AnalyticsConsent.Save(_storage, granted);
-        OnPreferencesChanged();
-    }
-
     private InAppBackButtonPreference _inAppBackButton = InAppBackButtonPreference.PlatformDefault;
 
     /// <summary>
@@ -605,11 +566,6 @@ public class PreferencesService
         _inAppBackButton = Enum.IsDefined((InAppBackButtonPreference)storedBackButton)
             ? (InAppBackButtonPreference)storedBackButton
             : InAppBackButtonPreference.PlatformDefault;
-        var storedConsent = _storage.Get(AnalyticsConsent.StorageKey, "");
-        // Garbage keeps the entry disclosure due.
-        _analyticsConsent = storedConsent is AnalyticsConsent.GrantedValue or AnalyticsConsent.DeniedValue or AnalyticsConsent.ContinuedUseValue
-            ? storedConsent
-            : "";
         _recitationSpeed = Normalize(_storage.Get("recitationSpeed", 1.0), 1, 0.5, 2);
         _recitationVolume = Normalize(_storage.Get("recitationVolume", 1.0), 1, 0, 1);
         _lessonsVolume = Normalize(_storage.Get("lessonsVolume", 1.0), 1, 0, 1);

@@ -64,6 +64,8 @@ describe("TosSection", () => {
 			"Ahrefs",
 			"BotD",
 			"Fingerprint",
+			"Mapbox",
+			"OpenStreetMap",
 		]) {
 			expect(policyText()).toContain(provider);
 		}
@@ -76,24 +78,26 @@ describe("TosSection", () => {
 			"https://policies.google.com/technologies/partner-sites",
 		);
 		expect(
-			screen.getByRole("link", { name: "פירוט המדידה של Ahrefs" }),
+			screen.getByRole("link", { name: "פרטים על Ahrefs" }),
 		).toHaveAttribute(
 			"href",
 			"https://help.ahrefs.com/en/articles/10247870-about-ahrefs-web-analytics",
 		);
 		expect(policyText()).toContain("מזהה יומי");
 		expect(policyText()).toContain("ניטור השימוש של BotD כבוי");
+		expect(policyText()).toContain("אין בקשה למיקום המכשיר");
 	});
 
-	it("describes the short disclosure and direct opt-out without an approval requirement", () => {
+	it("keeps ordinary statistics in the existing policy without approval or preference controls", () => {
 		render(<TosSection />);
 		const policy = policyText();
-		expect(policy).toContain("המשך שימוש");
-		expect(policy).toContain("ללא חלון אישור");
-		expect(policy).toContain("ניתן לכבות או להפעיל");
-		expect(policy).toContain("העדפות הישומון");
-		expect(policy).toContain("בקרה זו אינה מכבה את Ahrefs");
+		expect(policy).toContain("ללא מטרת רווח ואינו מציג פרסומות");
+		expect(policy).toContain("סטטיסטיקת שימוש ושיפור הלימוד");
+		expect(policy).not.toContain("בכניסה מוצגת הודעה");
+		expect(policy).not.toContain("העדפות הישומון");
 		expect(policy).not.toContain("הסכמה מפורשת");
+		expect(screen.queryByRole("button")).not.toBeInTheDocument();
+		expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 	});
 
 	it("distinguishes Israeli service hosting from external provider processing and configurable retention", () => {

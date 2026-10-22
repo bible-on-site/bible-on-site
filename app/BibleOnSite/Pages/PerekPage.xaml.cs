@@ -471,21 +471,6 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     /// </summary>
     private void OnPasukimScrolled(object? sender, ItemsViewScrolledEventArgs e)
     {
-        if (!_isLoading && !_carouselInitializing && e.VerticalDelta != 0)
-        {
-#if ANDROID
-            if (sender is CollectionView { Handler.PlatformView: AndroidX.RecyclerView.Widget.RecyclerView nativeList }
-                && nativeList.ScrollState == AndroidX.RecyclerView.Widget.RecyclerView.ScrollStateDragging)
-            {
-                RecordReaderContinuedUse();
-            }
-#elif IOS
-            if (sender is CollectionView { Handler.PlatformView: UIKit.UIScrollView { Dragging: true } })
-            {
-                RecordReaderContinuedUse();
-            }
-#endif
-        }
         _doubleTap.Reset();
         _lastScrollTime = DateTime.Now;
         _longPressTokenSource?.Cancel();
@@ -502,7 +487,6 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     {
         DebugLog.Write("[Startup] PerekPage appearing");
         base.OnAppearing();
-        ShowAnalyticsNotice();
 #if ANDROID
         RegisterReaderBack();
 #endif
@@ -941,7 +925,6 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     /// </summary>
     private async void OnPasukTapped(object? sender, TappedEventArgs e)
     {
-        RecordReaderContinuedUse();
         if (ChapterSearch.IsSearchOpen)
         {
             ChapterSearch.Close();
@@ -983,7 +966,6 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     /// </summary>
     private async void OnPasukNativeTapped(object? sender, EventArgs e)
     {
-        RecordReaderContinuedUse();
         if (ChapterSearch.IsSearchOpen)
         {
             ChapterSearch.Close();
@@ -1118,7 +1100,6 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     /// </summary>
     private void OnPasukLongPressed(object? sender, EventArgs e)
     {
-        RecordReaderContinuedUse();
 #if ANDROID || IOS || MACCATALYST
         _lastLongPressTime = DateTime.Now;
 
@@ -1362,7 +1343,6 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     /// </summary>
     private async void OnCircularMenuClicked(object? sender, EventArgs e)
     {
-        RecordReaderContinuedUse();
         _isMenuOpen = !_isMenuOpen;
         DebugLog.Write($"[CircularMenu] Clicked: open={_isMenuOpen}");
 
@@ -1498,7 +1478,6 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     /// </summary>
     private void OnReaderMenuButtonClicked(object? sender, EventArgs e)
     {
-        RecordReaderContinuedUse();
         ReaderMenuOverlay.IsVisible = !ReaderMenuOverlay.IsVisible;
     }
 
@@ -1515,7 +1494,6 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     /// </summary>
     private async void OnHeaderPlayClicked(object? sender, EventArgs e)
     {
-        RecordReaderContinuedUse();
         if (_viewModel.Perek is { } perek)
         {
             await PlayRecitationAsync($"chapter:{perek.PerekId}");
@@ -2227,8 +2205,6 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         _pressedPasukNum = -1;
 
         ResetRecitationSession();
-
-        RecordReaderContinuedUse();
 
         var hasPasukim = perek.Pasukim != null && perek.Pasukim.Count > 0;
         DebugLog.Write($"[Carousel] OnChanged PROCESS incoming={incomingId} prev={previousId} vmPerek={_viewModel.PerekId} pos={_viewModel.CarouselPosition} hasPasukim={hasPasukim}");

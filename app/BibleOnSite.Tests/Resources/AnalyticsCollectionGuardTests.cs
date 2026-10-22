@@ -96,23 +96,17 @@ public class AnalyticsCollectionGuardTests
     }
 
     [Fact]
-    public void Reader_UsesAnInlineDisclosureWithPrivacyAndOptOutInsteadOfALaunchModal()
+    public void Reader_HasNoAnalyticsPromptOrInlineNotice_AndPrivacyRemainsInTerms()
     {
         var loadingPage = File.ReadAllText(Path.Join(AppRoot, "Pages", "LoadingPage.xaml.cs"));
         Assert.DoesNotContain("DisplayAlert", loadingPage);
 
         var reader = XDocument.Load(Path.Join(AppRoot, "Pages", "PerekPage.xaml"));
-        var notice = Assert.Single(reader.Descendants()
-            .Where(e => e.Attribute("AutomationId")?.Value == "AnalyticsNotice"));
-        Assert.Equal("False", notice.Attribute("IsVisible")?.Value);
-        Assert.Equal("VerticalStackLayout", notice.Name.LocalName);
-        var buttons = notice.Descendants().Where(e => e.Name.LocalName == "Button").ToList();
-        Assert.Equal(3, buttons.Count);
-        Assert.Contains(buttons, b => b.Attribute("Clicked")?.Value == "OnAnalyticsPrivacyClicked");
-        Assert.Contains(buttons, b => b.Attribute("Clicked")?.Value == "OnAnalyticsOptOutClicked");
-        Assert.Contains(buttons, b => b.Attribute("Clicked")?.Value == "OnAnalyticsDismissClicked");
-        Assert.Contains(notice.Descendants(), e => e.Attribute("Text")?.Value ==
-            "נתוני שימוש נמסרים לשירותי מדידה כדי לשפר את הלימוד. המשך השימוש מאפשר מדידה.");
+        Assert.DoesNotContain(reader.Descendants(), e =>
+            e.Attribute("AutomationId")?.Value == "AnalyticsNotice");
+        var preferences = XDocument.Load(Path.Join(AppRoot, "Pages", "PreferencesPage.xaml"));
+        Assert.DoesNotContain(preferences.Descendants(), e =>
+            e.Attribute("AutomationId")?.Value is "AnalyticsConsentSwitch" or "SettingsAnalyticsRow");
 
         var policy = XDocument.Load(Path.Join(AppRoot, "Pages", "TosPage.xaml"));
         var policyLink = Assert.Single(policy.Descendants()
@@ -159,19 +153,20 @@ public class AnalyticsCollectionGuardTests
     }
 
     [Fact]
-    public void Startup_GatesCollectionOnStoredConsentAndE2eMarker()
+    public void Startup_EnablesOrdinaryCollectionAndKeepsE2eTrafficIsolated()
     {
-        // #2400: both launch paths must resolve collection through the consent
-        // gate (a stored choice plus the e2e marker) so neither platform can
-        // re-enable tracking unconditionally and no Release build can emit
-        // before the entry disclosure and continued use. The gate keeps consulting the
-        // e2e marker so suite launches stay silent even on a granted device.
-        var consent = File.ReadAllText(Path.Join(AppRoot, "Services", "AnalyticsConsent.cs"));
-        Assert.Contains("IsE2eMarkedProcess()", consent);
+        // A persisted SDK flag must never let test traffic reach production.
+        // Ordinary launches collect without consulting user-preference state.
         var activity = File.ReadAllText(Path.Join(AppRoot, "Platforms", "Android", "MainActivity.cs"));
-        Assert.Contains("AnalyticsConsent.IsCollectionEnabled(", activity);
+        Assert.Contains("var analyticsCollectionEnabled = !Services.SearchIndexService.IsE2eMarkedProcess();", activity);
         var mauiProgram = File.ReadAllText(Path.Join(AppRoot, "MauiProgram.cs"));
-        Assert.Contains("AnalyticsConsent.IsCollectionEnabled(", mauiProgram);
+        Assert.Contains("var analyticsCollectionEnabled = !SearchIndexService.IsE2eMarkedProcess();", mauiProgram);
+        var service = File.ReadAllText(Path.Join(AppRoot, "Services", "AnalyticsService.cs"));
+        Assert.Contains("MauiProgram.IsFirebaseInitialized && !SearchIndexService.IsE2eMarkedProcess()", service);
+        Assert.Contains("#elif ANDROID\n\t\t!SearchIndexService.IsE2eMarkedProcess();", service.Replace("\r\n", "\n"));
+        Assert.Contains("#if DISABLE_ANALYTICS", service);
+        Assert.DoesNotContain("PreferencesStorage", service);
+        Assert.False(File.Exists(Path.Join(AppRoot, "Services", "AnalyticsConsent.cs")));
     }
 
     [Fact]

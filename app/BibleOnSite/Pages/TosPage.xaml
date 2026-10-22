@@ -26,11 +26,11 @@
                        FontSize="14"
                        LineHeight="1.4"
                        TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
-                <Label Text="לצורכי סטטיסטיקת שימוש ושיפור חוויית הלימוד היומי אנו משתמשים בשירותי אנליטיקה חיצוניים: Google Analytics באתר ו-Firebase Analytics בישומון (שניהם מסופקים על ידי Google), וכן Ahrefs באתר (מדידה ללא עוגיות). שירותים אלה עשויים לקבל מזהים טכניים ונתוני שימוש בהתאם למדיניות הפרטיות שלהם."
+                <Label Text="לצורכי סטטיסטיקת שימוש ושיפור חוויית הלימוד היומי אנו משתמשים בשירותי אנליטיקה חיצוניים: Google Analytics באתר ו-Firebase Analytics בישומון (שניהם מסופקים על ידי Google), וכן Ahrefs באתר (מדידה ללא עוגיות). שירותים אלה עשויים לקבל מזהים טכניים ונתוני שימוש בהתאם למדיניות הפרטיות שלהם. המפות עשויות לטעון תוכן של Mapbox או OpenStreetMap; מוצגים בהן מקומות מקראיים ולא נאסף מיקום המכשיר."
                        FontSize="14"
                        LineHeight="1.4"
                        TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
-                <Label Text="השירות מיועד לציבור בישראל. בכניסה מוצגת הודעה על המדידה, והמשך שימוש לאחר הצגתה מאפשר אותה ללא מסך אישור. מסירת המידע למדידה היא מרצון ואין חובה חוקית למסור אותו. ניתן לכבות מדידה בהודעה או בכל עת בהעדפות הישומון ובהגדרות הפרטיות באתר. הכיבוי חל על Firebase בישומון ועל Google Analytics באתר; הוא אינו מפסיק את המדידה ללא עוגיות של Ahrefs באתר. בחירת המדידה והעדפות הלימוד נשמרות במכשיר. המדידה אינה תנאי ללימוד."
+                <Label Text="השירות מיועד לציבור בישראל. השירות פועל ללא מטרת רווח ואינו מציג פרסומות. נתוני שימוש נמדדים לשיפור הלימוד כחלק מפעילות השירות. העדפות הלימוד נשמרות במכשיר. פרטי יצירת קשר לבקשות הנוגעות לפרטיות מופיעים במדיניות הפרטיות המלאה."
                        FontSize="14"
                        LineHeight="1.4"
                        TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
@@ -38,7 +38,7 @@
                        FontSize="14"
                        LineHeight="1.4"
                        TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
-                <Label Text="למדיניות הפרטיות המלאה: יצירת קשר, זכויות עיון ותיקון, תקופות שמירה וקישורים למדיניות ספקי המדידה"
+                <Label Text="למדיניות הפרטיות המלאה: יצירת קשר, זכויות עיון ותיקון, תקופות שמירה וקישורים למדיניות ספקי השירותים"
                        FontSize="14" TextColor="{StaticResource Primary}" TextDecorations="Underline"
                        SemanticProperties.Description="פתיחת מדיניות הפרטיות המלאה באתר התכנית"
                        AutomationId="PrivacyPolicyLink">
