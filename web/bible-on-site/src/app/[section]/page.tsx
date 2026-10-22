@@ -128,8 +128,9 @@ export default async function Home({ params }: Props) {
 								className="icon-white"
 								src="/icons/smartphone.svg"
 								alt="עלון יומי"
-								width={34}
-								height={34}
+								width={320}
+								height={512}
+								style={{ width: 34, height: "auto" }}
 							/>
 							<span>ישומון תנ&quot;ך על הפרק</span>
 						</h2>

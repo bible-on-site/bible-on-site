@@ -40,6 +40,10 @@
 	     MauiProgram enables it only for launches outside the e2e suite. -->
 	<key>FIREBASE_ANALYTICS_COLLECTION_ENABLED</key>
 	<false/>
+	<key>GOOGLE_ANALYTICS_IDFA_COLLECTION_ENABLED</key>
+	<false/>
+	<key>GOOGLE_ANALYTICS_DEFAULT_ALLOW_AD_PERSONALIZATION_SIGNALS</key>
+	<false/>
 	<!-- #2119: screens are reported manually with logical page names
 	     (AnalyticsScreens/AppShell, PerekPage). Automatic tracking swizzles
 	     UIViewControllers and reports MAUI renderer classes

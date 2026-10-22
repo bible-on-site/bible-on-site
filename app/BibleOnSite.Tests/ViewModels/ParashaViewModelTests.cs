@@ -286,12 +286,38 @@ public class ParashaViewModelTests
         await fixture.Initialize();
         await fixture.Model.LoadByUnitIdAsync(1);
 
+        async Task ApplyPreferenceAsync(Action change)
+        {
+            var rowsUpdated = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var unit = fixture.Model.Unit!;
+            void OnRowsChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs args)
+            {
+                if (args.PropertyName == nameof(ParashaUnit.Rows))
+                {
+                    rowsUpdated.TrySetResult();
+                }
+            }
+
+            unit.PropertyChanged += OnRowsChanged;
+            try
+            {
+                change();
+                // Preference refreshes read SQLite asynchronously. Let the
+                // resulting rows arrive before the next change or teardown.
+                await rowsUpdated.Task.WaitAsync(TestContext.Current.CancellationToken);
+            }
+            finally
+            {
+                unit.PropertyChanged -= OnRowsChanged;
+            }
+        }
+
         // A preference change reaches the view-model through the weak
         // subscription and refreshes reader state.
-        fixture.Preferences.FontFactor = 1.5;
+        await ApplyPreferenceAsync(() => fixture.Preferences.FontFactor = 1.5);
         fixture.Model.FontFactor.Should().Be(1.5);
 
-        fixture.Model.DivineNameMaskingEnabled = false;
+        await ApplyPreferenceAsync(() => fixture.Model.DivineNameMaskingEnabled = false);
         fixture.Model.DivineNameMaskingEnabled.Should().BeFalse();
         fixture.Prefs.Get("divineNameMaskingEnabled", true).Should().BeFalse();
     }
