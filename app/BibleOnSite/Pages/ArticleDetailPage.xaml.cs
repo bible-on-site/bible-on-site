@@ -45,11 +45,11 @@ public partial class ArticleDetailPage : ContentPage, IAnalyticsScreenName
     private void SetupFontSizeResources()
     {
         var prefs = PreferencesService.Instance;
-        UpdateFontSizeResources(prefs.FontFactor);
+        UpdateFontSizeResources(prefs.ArticleFontFactor);
         prefs.PreferencesChanged += (_, _) =>
             MainThread.BeginInvokeOnMainThread(() =>
             {
-                UpdateFontSizeResources(prefs.FontFactor);
+                UpdateFontSizeResources(prefs.ArticleFontFactor);
                 ApplyLessonsVolume();
             });
     }
