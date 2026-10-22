@@ -33,8 +33,10 @@ test.describe("/929/authors page", () => {
 		// Open the hamburger menu
 		await page.getByRole("button", { name: "תפריט ראשי" }).click();
 
-		// Find the authors link in the menu
-		const authorsLink = page.locator('a[href="/929/authors"]');
+		// Find the authors link in the menu (the homepage counters link to
+		// /929/authors too — scope to the opened nav).
+		const menu = page.getByRole("navigation", { name: "תפריט ראשי" });
+		const authorsLink = menu.locator('a[href="/929/authors"]');
 		await expect(authorsLink).toBeVisible();
 		await expect(authorsLink).toContainText("הרבנים");
 	});
@@ -45,8 +47,11 @@ test.describe("/929/authors page", () => {
 		// Open the hamburger menu
 		await page.getByRole("button", { name: "תפריט ראשי" }).click();
 
-		// Click the authors link
-		await page.click('a[href="/929/authors"]');
+		// Click the authors link (scoped — the counters link there too)
+		await page
+			.getByRole("navigation", { name: "תפריט ראשי" })
+			.locator('a[href="/929/authors"]')
+			.click();
 
 		// Should navigate to authors page
 		await page.waitForURL("**/929/authors");

@@ -115,34 +115,31 @@ export function StatsCounters({ stats }: { stats: StatItem[] }) {
 	return (
 		<dl ref={ref} className={styles.stats}>
 			{stats.map((stat, index) => {
-				const finalValue =
-					"text" in stat ? stat.text : formatNumber(stat.value);
-				const body = "text" in stat ? (
-					<>
-						<span className={styles.srOnly}>{stat.text}</span>
-						<span
-							aria-hidden="true"
-							className={`${styles.word} ${textRevealed ? "" : styles.wordHidden}`}
-						>
-							{stat.text}
-						</span>
-					</>
-				) : (
-					<>
-						<span className={styles.srOnly}>
-							{formatNumber(stat.value)}
-						</span>
-						<span
-							aria-hidden="true"
-							className={styles.number}
-							style={{
-								minWidth: `${formatNumber(stat.value).length}ch`,
-							}}
-						>
-							{formatNumber(displayed[index] ?? stat.value)}
-						</span>
-					</>
-				);
+				const body =
+					"text" in stat ? (
+						<>
+							<span className={styles.srOnly}>{stat.text}</span>
+							<span
+								aria-hidden="true"
+								className={`${styles.word} ${textRevealed ? "" : styles.wordHidden}`}
+							>
+								{stat.text}
+							</span>
+						</>
+					) : (
+						<>
+							<span className={styles.srOnly}>{formatNumber(stat.value)}</span>
+							<span
+								aria-hidden="true"
+								className={styles.number}
+								style={{
+									minWidth: `${formatNumber(stat.value).length}ch`,
+								}}
+							>
+								{formatNumber(displayed[index] ?? stat.value)}
+							</span>
+						</>
+					);
 				return (
 					<div key={stat.label} className={styles.stat}>
 						<dt className={styles.label}>{stat.label}</dt>
@@ -150,13 +147,38 @@ export function StatsCounters({ stats }: { stats: StatItem[] }) {
 							{stat.href ? (
 								/* One understandable link target per counter: the anchor
 								   covers the whole stat tile via ::after, so the label and
-								   value read as a single destination without nested links. */
+								   value read as a single destination without nested links.
+								   The accessible name tracks the currently displayed value so
+								   the link's visible text always stays inside its name —
+								   required while the count-up paints intermediate digits. */
 								<Link
 									className={styles.statLink}
 									href={stat.href}
-									aria-label={`${stat.label}: ${finalValue}`}
+									aria-label={`${stat.label}: ${
+										"text" in stat
+											? stat.text
+											: formatNumber(displayed[index] ?? stat.value)
+									}`}
 								>
-									{body}
+									<span
+										aria-hidden="true"
+										className={
+											"text" in stat
+												? `${styles.word} ${textRevealed ? "" : styles.wordHidden}`
+												: styles.number
+										}
+										style={
+											"text" in stat
+												? undefined
+												: {
+														minWidth: `${formatNumber(stat.value).length}ch`,
+													}
+										}
+									>
+										{"text" in stat
+											? stat.text
+											: formatNumber(displayed[index] ?? stat.value)}
+									</span>
 								</Link>
 							) : (
 								body
