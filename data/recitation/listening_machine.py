@@ -5,12 +5,15 @@
 # whole-chapter acceptance gates.
 
 from copy import deepcopy
+from collections import OrderedDict
 from functools import lru_cache
 import hashlib
+import json
 import subprocess  # nosec B404: fixed, resolved FFmpeg argv without a shell.
 from pathlib import Path
+import threading
 
-from alignment import load_chapters, text_hash, words_for
+from alignment import text_hash, words_for
 from listening_audio import duration, hidden_audio_options
 from listening_review import digest_file, read_json, validate_case
 from model_versions import ALIGN_MODEL, ALIGN_REVISION
@@ -18,6 +21,30 @@ from recite import executable
 
 MACHINE_METHOD = "machine-diagnostic-initial-candidate-v1"
 RATE = 16000
+_CANONICAL_CACHE = OrderedDict()
+_CANONICAL_LOCK = threading.Lock()
+
+
+def canonical_words(path, expected_sha, perek_id):
+    """Hash actual bytes on every read; cache only immutable parsed word tuples."""
+    path = Path(path).resolve()
+    raw = path.read_bytes()
+    if hashlib.sha256(raw).hexdigest() != expected_sha:
+        raise ValueError("Canonical source changed after its immutable binding")
+    key = str(path), expected_sha
+    with _CANONICAL_LOCK:
+        chapters = _CANONICAL_CACHE.get(key)
+        if chapters is None:
+            books = json.loads(raw)
+            chapters = {part["perekFrom"] + index: tuple(words_for(chapter))
+                        for book in books for part in book.get("additionals", [book])
+                        for index, chapter in enumerate(part["perakim"])}
+            _CANONICAL_CACHE[key] = chapters
+            while len(_CANONICAL_CACHE) > 4:
+                _CANONICAL_CACHE.popitem(last=False)
+        else:
+            _CANONICAL_CACHE.move_to_end(key)
+        return chapters[perek_id]
 
 
 def _checked(path, expected):
@@ -124,8 +151,7 @@ def _validate(raw, evidence, decoded_pcm=None):
     source = Path(evidence["sourceRoot"])
     originals = {name: _checked(source / name, sha) for name, sha in raw["sourceEvidenceHashes"].items()}
     canonical = Path(evidence["canonicalPath"])
-    _checked(canonical, evidence["canonicalSha256"])
-    words = words_for(load_chapters(canonical)[pid])
+    words = canonical_words(canonical, evidence["canonicalSha256"], pid)
     if raw["canonicalTextSha256"] != text_hash(words):
         raise ValueError("Machine canonical chapter changed")
     recording = Path(evidence["recordingPath"])

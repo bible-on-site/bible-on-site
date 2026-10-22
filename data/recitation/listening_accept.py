@@ -4,7 +4,6 @@ import argparse
 from collections import defaultdict
 from contextlib import closing
 from copy import deepcopy
-from datetime import datetime
 import json
 from pathlib import Path
 import sqlite3
@@ -13,6 +12,8 @@ import tempfile
 
 from alignment import load_chapters, reconcile, validate_timings, words_for
 from listening_audio import duration
+from listening_context import CONTEXT_METHOD
+from listening_decisions import merge_typed_reviews, review_instant
 from listening_edits import verify_word_review
 from listening_review import (ReviewStore, digest_file, digest_json,
                               read_json, validate_case, validate_decision)
@@ -26,45 +27,11 @@ POLICY = "targeted-human-listening-v1"
 RESOLVABLE = {"insufficient ASR agreement", "verse boundary words lack reliable ASR anchors", SOFT_WARNING}
 
 
-def review_instant(row):
-    """Compare separately stored actual answers without rewriting either history."""
-    try:
-        stamp = datetime.fromisoformat(row["savedAt"].replace("Z", "+00:00"))
-        if stamp.utcoffset() is None:
-            raise ValueError("Listening answer timestamp requires a timezone")
-        return stamp
-    except (AttributeError, KeyError, TypeError, ValueError) as error:
-        raise ValueError("Listening answer has an invalid saved timestamp") from error
-
-
 def current_review_decisions(queue, reviews_path):
-    """Keep typed manual coordinates separate, choosing the latest genuine answer."""
+    """Keep original file selection intact and share pure typed-coordinate semantics."""
     decisions = ReviewStore(reviews_path, queue).snapshot()
     saved = read_json(reviews_path) if reviews_path.exists() else {}
-    typed = saved.get("wordReviews", [])
-    if not isinstance(typed, list) or any(not isinstance(row, dict) for row in typed):
-        raise ValueError("Manual word review history must contain saved review objects")
-    cases = {case["id"]: case for case in queue["cases"]}
-    latest = {}
-    for row in typed:
-        case = cases.get(row.get("caseId"))
-        # Historical manual coordinates belong only to their immutable parent.
-        if (case and row.get("candidateSha256") == case["candidateSha256"]
-                and row.get("clipSha256") == case["clipSha256"]):
-            latest[case["id"]] = row
-    for case_id, row in latest.items():
-        legacy = decisions.get(case_id)
-        # A legacy tab still plays the original proposal. Its later answer does
-        # not concern a separately edited coordinate version of those words.
-        # Compare ordering across stores only for byte-identical word rows.
-        same_coordinates = (legacy is not None
-            and legacy.get("candidateWords") == row.get("candidateWords")
-            and all(legacy.get(key) == row.get(key) for key in
-                    ("caseId", "perekId", "pasuk", "audioSha256", "textSha256",
-                     "candidateSha256", "clipSha256", "diagnosticSha256")))
-        if not same_coordinates or review_instant(row) >= review_instant(legacy):
-            decisions[case_id] = deepcopy(row)
-    return decisions
+    return merge_typed_reviews(queue["cases"], decisions, saved.get("wordReviews", []))
 
 
 def verify_manual_review(case, decision, queue_hash):
@@ -111,15 +78,18 @@ def verify_diagnostic(case):
                 and round(diagnostic["contextStartSec"] * 1000) == case["clipStartMs"]
                 and round(diagnostic["contextEndSec"] * 1000) == case["clipEndMs"]
                 and rows == case["words"]):
-            if (diagnostic.get("boundaryMethod") == MACHINE_METHOD
+            if (diagnostic.get("boundaryMethod") in (MACHINE_METHOD, CONTEXT_METHOD)
                     and (study.get("device") != "cuda" or study.get("threads") != 2)):
                 raise ValueError("Machine proposal cannot relabel actual CUDA inference")
-            if diagnostic.get("boundaryMethod") in (INITIAL_SOURCE_METHOD, MACHINE_METHOD):
+            if diagnostic.get("boundaryMethod") in (INITIAL_SOURCE_METHOD, MACHINE_METHOD, CONTEXT_METHOD):
                 if (case.get("reviewKind") != "missing" or case.get("listeningReusePath")
                         or case.get("reusableHeardSegments") or case.get("listeningReuseSha256")
                         or diagnostic.get("canonicalTextSha256") != case["textSha256"]):
                     raise ValueError("Initial source candidate requires fresh full-verse cut hearing")
-            if diagnostic.get("boundaryMethod"):
+            if diagnostic.get("boundaryMethod") == CONTEXT_METHOD:
+                from listening_context import verify_context_proposals
+                verify_context_proposals(diagnostic)
+            elif diagnostic.get("boundaryMethod"):
                 verify_corrections(diagnostic)
             return
     raise ValueError("Listening candidate differs from actual acoustic result")
