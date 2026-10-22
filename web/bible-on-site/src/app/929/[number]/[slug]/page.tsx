@@ -185,7 +185,6 @@ export async function generateMetadata({
 	}
 
 	const perekObj = getPerekByPerekId(perekId);
-	const sefer = getSeferByName(perekObj.sefer);
 	const perushDetail = await getCachedPerushDetail(perush.id, perekId);
 	const notesExcerpt = perushDetail
 		? plainText(
@@ -194,10 +193,10 @@ export async function generateMetadata({
 			)
 		: "";
 
-	const title = `${perush.name} על ${sefer.name} ${perekObj.perekHeb} | ${SITE_NAME}`;
+	const title = `${perush.name} על ${perekObj.source} | ${SITE_NAME}`;
 	const description =
 		notesExcerpt ||
-		`פירוש ${perush.name} מאת ${perush.parshanName} על ${sefer.name} פרק ${perekObj.perekHeb}`;
+		`פירוש ${perush.name} מאת ${perush.parshanName} על ${perekObj.source}`;
 	const url = perushPath(perekId, perush.name);
 	return {
 		title,
