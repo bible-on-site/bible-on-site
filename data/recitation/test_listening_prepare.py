@@ -375,9 +375,11 @@ class LocalPreparationTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "already owns"):
                 with WorkerLock(lock):
                     self.fail("A second worker entered the same preparation job")
-        with self.assertRaisesRegex(ValueError, "test failure"):
+        def fail_owned_job():
+            """Exercise a real exception while the worker owns its lease."""
             with WorkerLock(lock):
                 raise ValueError("test failure")
+        self.assertRaisesRegex(ValueError, "test failure", fail_owned_job)
         with WorkerLock(lock):
             self.assertTrue(lock.exists())
 

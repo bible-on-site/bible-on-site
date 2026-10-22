@@ -99,16 +99,18 @@ class AccumulatedQueueTests(unittest.TestCase):
                   "remainingToPrepare": 370, "machinePreparedVerses": 30,
                   "holdReasons": {"known_original_source_hold": 1, "source_or_full_chapter_guard": 176},
                   "visibleVerses": 11, "visibleWordCuts": 78, "updatedAt": "2026-10-22T12:00:00+00:00"}
+        write_json(status_path, public)
         private_values = [uuid.uuid4().hex, uuid.uuid4().hex]
-        write_json(status_path, {**public, "token": private_values[0], "proofPath": str(self.root / "proof.json"),
-                                 "error": "private failure in " + str(status_path),
-                                 "unknown": {"token": private_values[1]}})
+        private_payload = {**public, "token": private_values[0], "proofPath": str(self.root / "proof.json"),
+                           "error": "private failure in " + str(status_path),
+                           "unknown": {"token": private_values[1]}}
         server = self.status_server(status_path)
-        code, response = self.get_status(server)
+        with patch("listening_queue.read_json", return_value=private_payload):
+            code, response = self.get_status(server)
+            self.assertEqual(self.get_status(server, headers={"Host": "localhost.invalid"})[0], 403)
         self.assertEqual((code, response), (200, public))
         for value in private_values:
             self.assertNotIn(value, json.dumps(response))
-        self.assertEqual(self.get_status(server, headers={"Host": "localhost.invalid"})[0], 403)
         write_json(status_path, {"state": "complete", "updatedAt": "2026-10-22T12:05:00Z"})
         self.assertEqual(self.get_status(server), (200, {"state": "complete", "updatedAt": "2026-10-22T12:05:00Z"}))
 
