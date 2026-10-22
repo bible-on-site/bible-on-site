@@ -7,7 +7,7 @@ import { test } from "node:test";
 import { appBundle, packIosBuild, restoreIosBuild, validateArchiveEntries } from "./ios-build-artifact.mjs";
 
 const sha = "0123456789abcdef0123456789abcdef01234567";
-const toolchain = "xcode27-dotnet10.0.401-mauiios10.0.401.1";
+const toolchain = "xcode27-dotnet10.0.402-mauiios10.0.402.1";
 const files = [
   `${appBundle}/BibleOnSite`, `${appBundle}/Info.plist`, `${appBundle}/GoogleService-Info.plist`,
   `${appBundle}/_CodeSignature/CodeResources`,

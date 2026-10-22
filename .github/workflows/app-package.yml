@@ -496,7 +496,7 @@ jobs:
           # Show .NET SDK info to debug
           dotnet --info
           # Pin the iOS 27 workload set for Xcode 27; see https://github.com/bible-on-site/bible-on-site/issues/1871
-          dotnet workload install maui-ios --version 10.0.401.1
+          dotnet workload install maui-ios --version 10.0.402.1
           # Show installed workloads
           dotnet workload list
 
@@ -538,7 +538,7 @@ jobs:
         run: |
           XCODE_VER=$(xcodebuild -version | tr '\n' '-' | tr -d ' ')
           DOTNET_VER=$(dotnet --version)
-          echo "id=xcode${XCODE_VER}-dotnet${DOTNET_VER}-mauiios10.0.401.1" >> "$GITHUB_OUTPUT"
+          echo "id=xcode${XCODE_VER}-dotnet${DOTNET_VER}-mauiios10.0.402.1" >> "$GITHUB_OUTPUT"
 
       # .NET's DerivedData equivalent: the obj tree holds the mtouch/AOT output
       # that dominates the publish step. Restoring the last master build turns

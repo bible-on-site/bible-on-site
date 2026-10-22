@@ -80,8 +80,8 @@ jobs:
       # the toolchain cache id and the workload install read from here, and the
       # Verify step asserts the resolved SDK matches. SDK installation itself
       # is pinned by the root global.json, which must stay identical to this.
-      DOTNET_SDK_VERSION: "10.0.401"
-      MAUI_WORKLOAD_SET: "10.0.401.1"
+      DOTNET_SDK_VERSION: "10.0.402"
+      MAUI_WORKLOAD_SET: "10.0.402.1"
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -419,7 +419,7 @@ jobs:
 
       - name: Install MAUI workload
         if: inputs.mode != 'prebuilt-run'
-        # 10.0.401.1 selects the iOS 27 SDK, which requires Xcode 27; see #1871.
+        # 10.0.402.1 selects the iOS 27 SDK, which requires Xcode 27; see #1871.
         run: dotnet workload install ${{ inputs.workload }} --version ${{ env.MAUI_WORKLOAD_SET }}
 
       # Background like the other cache saves: compression and upload stay off
