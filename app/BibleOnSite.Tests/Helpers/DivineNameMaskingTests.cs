@@ -328,6 +328,13 @@ public class DivineNameMaskingTests
     [Collection(PreferencesServiceCollection.Name)]
     public class AmbientState
     {
+        public AmbientState()
+        {
+            // Sibling suites in this collection call Load(), which publishes
+            // ambient options; start from a known disabled baseline.
+            DivineNameMasking.Apply(DivineNameMaskingOptions.Disabled);
+        }
+
         [Fact]
         public void apply_bumps_revision_only_on_change()
         {

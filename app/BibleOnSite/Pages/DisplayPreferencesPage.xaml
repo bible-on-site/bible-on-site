@@ -52,6 +52,132 @@
                     </VerticalStackLayout>
                 </Border>
             </VerticalStackLayout>
+
+            <!-- ═══ גודל יחסי לקטגוריות טקסט (#2461) ═══ -->
+            <VerticalStackLayout Spacing="8">
+                <Label Text="גודל יחסי (אחוז מהגודל הכללי)"
+                       FontSize="14"
+                       FontAttributes="Bold"
+                       TextColor="{StaticResource Primary}"
+                       Padding="4,0,0,0"/>
+
+                <!-- פסוקים -->
+                <Border Padding="16"
+                        StrokeShape="RoundRectangle 12"
+                        Stroke="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray700}}"
+                        StrokeThickness="1"
+                        BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Gray900}}">
+                    <VerticalStackLayout Spacing="12">
+                        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="12">
+                            <Label Text="פסוקים"
+                                   FontSize="16"
+                                   TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"
+                                   VerticalOptions="Center"/>
+                            <Entry Grid.Column="1"
+                                   Text="{Binding PasukFontPercent}"
+                                   Keyboard="Numeric"
+                                   WidthRequest="72"
+                                   FontSize="15"
+                                   HorizontalTextAlignment="Center"
+                                   AutomationId="PasukFontPercentEntry"/>
+                            <Button Grid.Column="2"
+                                    Text="איפוס"
+                                    FontSize="13"
+                                    Padding="10,4"
+                                    Command="{Binding ResetPasukFontPercentCommand}"
+                                    AutomationId="ResetPasukFontPercentButton"/>
+                        </Grid>
+                        <Label Text="{Binding PasukEffectiveSize, StringFormat='גודל בפועל: {0:0.#}'}"
+                               FontSize="13"
+                               TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray350}}"
+                               AutomationId="PasukEffectiveSizeLabel"/>
+                        <Slider Minimum="{Binding FontPercentMinimum}"
+                                Maximum="{Binding FontPercentMaximum}"
+                                Value="{Binding PasukFontPercent}"
+                                AutomationId="PasukFontPercentSlider"
+                                MinimumTrackColor="{StaticResource Primary}"
+                                MaximumTrackColor="{AppThemeBinding Light={StaticResource Gray250}, Dark={StaticResource Gray600}}"/>
+                    </VerticalStackLayout>
+                </Border>
+
+                <!-- פירושים -->
+                <Border Padding="16"
+                        StrokeShape="RoundRectangle 12"
+                        Stroke="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray700}}"
+                        StrokeThickness="1"
+                        BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Gray900}}">
+                    <VerticalStackLayout Spacing="12">
+                        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="12">
+                            <Label Text="פירושים"
+                                   FontSize="16"
+                                   TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"
+                                   VerticalOptions="Center"/>
+                            <Entry Grid.Column="1"
+                                   Text="{Binding PerushFontPercent}"
+                                   Keyboard="Numeric"
+                                   WidthRequest="72"
+                                   FontSize="15"
+                                   HorizontalTextAlignment="Center"
+                                   AutomationId="PerushFontPercentEntry"/>
+                            <Button Grid.Column="2"
+                                    Text="איפוס"
+                                    FontSize="13"
+                                    Padding="10,4"
+                                    Command="{Binding ResetPerushFontPercentCommand}"
+                                    AutomationId="ResetPerushFontPercentButton"/>
+                        </Grid>
+                        <Label Text="{Binding PerushEffectiveSize, StringFormat='גודל בפועל: {0:0.#}'}"
+                               FontSize="13"
+                               TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray350}}"
+                               AutomationId="PerushEffectiveSizeLabel"/>
+                        <Slider Minimum="{Binding FontPercentMinimum}"
+                                Maximum="{Binding FontPercentMaximum}"
+                                Value="{Binding PerushFontPercent}"
+                                AutomationId="PerushFontPercentSlider"
+                                MinimumTrackColor="{StaticResource Primary}"
+                                MaximumTrackColor="{AppThemeBinding Light={StaticResource Gray250}, Dark={StaticResource Gray600}}"/>
+                    </VerticalStackLayout>
+                </Border>
+
+                <!-- מאמרים -->
+                <Border Padding="16"
+                        StrokeShape="RoundRectangle 12"
+                        Stroke="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray700}}"
+                        StrokeThickness="1"
+                        BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Gray900}}">
+                    <VerticalStackLayout Spacing="12">
+                        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="12">
+                            <Label Text="מאמרים ותנ&quot;ךפדיה"
+                                   FontSize="16"
+                                   TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"
+                                   VerticalOptions="Center"/>
+                            <Entry Grid.Column="1"
+                                   Text="{Binding ArticleFontPercent}"
+                                   Keyboard="Numeric"
+                                   WidthRequest="72"
+                                   FontSize="15"
+                                   HorizontalTextAlignment="Center"
+                                   AutomationId="ArticleFontPercentEntry"/>
+                            <Button Grid.Column="2"
+                                    Text="איפוס"
+                                    FontSize="13"
+                                    Padding="10,4"
+                                    Command="{Binding ResetArticleFontPercentCommand}"
+                                    AutomationId="ResetArticleFontPercentButton"/>
+                        </Grid>
+                        <Label Text="{Binding ArticleEffectiveSize, StringFormat='גודל בפועל: {0:0.#}'}"
+                               FontSize="13"
+                               TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray350}}"
+                               AutomationId="ArticleEffectiveSizeLabel"/>
+                        <Slider Minimum="{Binding FontPercentMinimum}"
+                                Maximum="{Binding FontPercentMaximum}"
+                                Value="{Binding ArticleFontPercent}"
+                                AutomationId="ArticleFontPercentSlider"
+                                MinimumTrackColor="{StaticResource Primary}"
+                                MaximumTrackColor="{AppThemeBinding Light={StaticResource Gray250}, Dark={StaticResource Gray600}}"/>
+                    </VerticalStackLayout>
+                </Border>
+            </VerticalStackLayout>
             <!-- ═══ הסתרת שם השם ═══ -->
             <VerticalStackLayout Spacing="8">
                 <Label Text="הסתרת שם השם"
