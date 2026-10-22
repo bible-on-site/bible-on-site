@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import vm from "node:vm";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 const html = readFileSync(new URL("./listening_review.html", import.meta.url), "utf8");
 const script = html.match(/<script>([\s\S]*?)<\/script>/i)[1];
 const tick = () => new Promise(resolve => setImmediate(resolve));
@@ -20,18 +20,21 @@ async function page(saved = {}, options = {}) {
   const elements = Object.fromEntries([...html.matchAll(/id="([^"]+)"/g)].map(m => [m[1], new Element()]));
   const clip = new Uint8Array([1, 2, 3]);
   const item = {id:"case",candidateSha256:"candidate",label:"פסוק לבדיקה",clipStartMs:0,clipEndMs:2000,
-    clipSha256:createHash("sha256").update(clip).digest("hex"),changedSegments:[2],reusableHeardSegments:[1],
-    freshListeningRequiredSegments:[2,3],words:[{segment:1,text:"ישן",startMs:100,endMs:300},
+    clipSha256:createHash("sha256").update(clip).digest("hex"),changedSegments:[2],reusableHeardSegments:options.reusableHeardSegments??[1],
+    freshListeningRequiredSegments:options.reusableHeardSegments?[2]:[2,3],words:[{segment:1,text:"ישן",startMs:100,endMs:300},
       {segment:2,text:"מתוקן",startMs:400,endMs:600},{segment:3,text:"אחרון",startMs:700,endMs:900}]};
   const document = {getElementById:id=>elements[id],createElement:()=>new Element(),addEventListener(){},
     querySelector:selector=>elements.words.children.find(e=>String(e.dataset.segment)===selector.match(/"(\d+)"/)[1]),
     querySelectorAll:selector=>selector===".word.active"?elements.words.children.filter(e=>e.classes.has("active")):[]};
-  let clock,playing;const starts=[],playbackSlices=[],posts=[],editPosts=[];
+  let clock,playing;const starts=[],playbackSlices=[],posts=[],legacyPosts=[],editPosts=[],wordRequests=[];
   const gaps=[];
+  let releaseWordSave;
+  const wordSaveGate=options.pauseWordSave?new Promise(resolve=>{releaseWordSave=resolve;}):null;
+  let wordSaveFails=options.wordSaveFails===true;
   let releaseEditSave;
   const editSaveGate=options.pauseEditSave?new Promise(resolve=>{releaseEditSave=resolve;}):null;
   let queue=options.queue, queueFails=false, editSaveFails=options.editSaveFails===true; const storage = options.storage ?? new Map();
-  const localStorage = {getItem:key=>storage.get(key)??null,setItem:(key,value)=>storage.set(key,value)};
+  const localStorage = {getItem:key=>storage.get(key)??null,setItem:(key,value)=>storage.set(key,value),removeItem:key=>storage.delete(key)};
   class AudioContext {
     constructor(){this.currentTime=0;clock=this;}
     resume(){return Promise.resolve();}
@@ -40,12 +43,19 @@ async function page(saved = {}, options = {}) {
       starts.push(offset);playbackSlices.push({offset,duration});playing={source:this,duration};
     }};}
   }
-  const context=vm.createContext({document,window:{addEventListener(){}},AudioContext,crypto:{subtle:{digest:async()=>new Uint8Array(createHash("sha256").update(clip).digest()).buffer}},
+  const context=vm.createContext({document,window:{addEventListener(){}},AudioContext,crypto:{randomUUID,subtle:{digest:async()=>new Uint8Array(createHash("sha256").update(clip).digest()).buffer}},
     localStorage,encodeURIComponent,
     setInterval(){},setTimeout:fn=>{if(options.pauseGaps) gaps.push(fn); else queueMicrotask(fn);},Map,Set,
     fetch:async(url,request)=>url==="/api/queue"?{ok:!queueFails,json:async()=>{await options.beforeQueueJson?.();return queue??({cases:[item,{...item,id:"other"}],decisions:saved,token:"fixture"});}}
       :url.startsWith("/clips/")?{ok:true,arrayBuffer:async()=>clip.buffer}
-      :url==="/api/reviews"?{ok:true,json:async()=>{const body=JSON.parse(request.body);posts.push(body);return {note:body.note,verdict:body.verdict,
+      :url==="/api/word-reviews"?{ok:!wordSaveFails,json:async()=>{
+        const body=JSON.parse(request.body);posts.push(body);wordRequests.push({body,headers:request.headers});
+        if(wordSaveGate)await wordSaveGate;
+        return wordSaveFails?{error:"fixture word save failure"}:{...body,note:body.verdict==="problem"?body.note:"",
+          kind:"word_review",savedAt:"2026-10-22T16:00:00Z",editedCandidateSha256:"edited-fixture",
+          candidateWords:item.words.map(word=>({...word,...body.timingEdits.find(edit=>edit.segment===word.segment)})),
+          listenEvidenceReportedByBrowser:{heardSegments:body.heardSegments,freshHeardSegments:body.freshHeardSegments,heardEditedSegments:body.heardEditedSegments,verseHeard:body.verseHeard}};}}
+      :url==="/api/reviews"?{ok:true,json:async()=>{const body=JSON.parse(request.body);legacyPosts.push(body);return {note:body.note,verdict:body.verdict,
         listenEvidenceReportedByBrowser:{heardSegments:body.heardSegments,freshHeardSegments:body.freshHeardSegments}};}}
       :url==="/api/cut-edits"&&request?.method==="POST"?{ok:!editSaveFails,json:async()=>{
         const body=JSON.parse(request.body);editPosts.push({body,headers:request.headers});if(editSaveGate)await editSaveGate;
@@ -53,7 +63,7 @@ async function page(saved = {}, options = {}) {
       :url==="/api/cut-edits"?{ok:true,json:async()=>({entries:options.cutProposals??[]})}
       :{json:async()=>({state:"complete",humanRecoveredChapters:0})}});
   vm.runInContext(script,context);await tick();
-  return {elements,starts,playbackSlices,posts,editPosts,item,storage,releaseEditSave:()=>releaseEditSave?.(),failEditSave:()=>{editSaveFails=true;},setQueue:value=>{queue=value;},failQueue:()=>{queueFails=true;},run:code=>vm.runInContext(code,context),async flush(){await tick();},async resumeGap(){assert.ok(gaps.length);gaps.shift()();await tick();},
+  return {elements,starts,playbackSlices,posts,wordPosts:posts,wordRequests,legacyPosts,editPosts,item,storage,releaseWordSave:()=>releaseWordSave?.(),setWordSaveFailure:value=>{wordSaveFails=value;},releaseEditSave:()=>releaseEditSave?.(),failEditSave:()=>{editSaveFails=true;},setQueue:value=>{queue=value;},failQueue:()=>{queueFails=true;},run:code=>vm.runInContext(code,context),async flush(){await tick();},async resumeGap(){assert.ok(gaps.length);gaps.shift()();await tick();},
     async finish(fraction=1){assert.ok(playing,"a real fixture slice must be playing");const current=playing;playing=null;
       clock.currentTime+=current.duration*fraction;current.source.onended?.();await tick();}};
 }
@@ -140,30 +150,12 @@ test("failed queue refresh preserves active state",async()=>{
 });
 
 
-test("a completed restored old verse is not prepended or counted as a current answer",async()=>{
-  const p=await page();const oldKey=p.run("stateKey(caseNow())");
-  const saved={note:"הערה שנשמרה לגרסה קודמת",verdict:"problem",listenEvidenceReportedByBrowser:{heardSegments:[1,2,3],freshHeardSegments:[2,3]}};
-  p.elements.note.value=saved.note;p.elements.note.oninput();
-  const latest={...p.item,candidateSha256:"revised",priorNote:saved.note};
-  const incoming=Array.from({length:27},(_,i)=>({...p.item,id:"fixture-"+i})).concat(latest);
-  const decisions={[oldKey]:saved};
-  for(const item of incoming.slice(0,5)) decisions[[item.id,item.candidateSha256,item.clipSha256].join(":")]=saved;
-  const resumed=await page({}, {storage:p.storage,queue:{cases:incoming,retiredCases:[p.item],decisions,token:"fixture",persistentQueue:true}});
-  assert.equal(resumed.run("cases.length"),28);assert.equal(resumed.run("caseNow().candidateSha256"),"revised");
-  assert.match(resumed.elements.progress.textContent,/פסוק 28 מתוך 28 · 5 תשובות/);
-  assert.equal(resumed.elements.note.value,"");assert.match(resumed.elements.prior.textContent,/הערה שנשמרה/);
-  assert.match(resumed.elements.listening.textContent,/1\/3/);assert.equal(resumed.elements.good.disabled,true);
-  resumed.elements["previous-version"].onclick();assert.equal(resumed.elements.note.value,saved.note);
-  assert.match(resumed.elements.progress.textContent,/גרסה קודמת/);
-  assert.match(resumed.elements.progress.textContent,/מתוך 28 · 5 תשובות/);
-});
-
 test("an old unsaved draft is visibly historical and can switch to new cuts without losing it",async()=>{
   const p=await page();p.elements.note.value="טיוטה פרטית לגרסה הישנה";p.elements.note.oninput();
   p.setQueue({cases:[{...p.item,candidateSha256:"revised",priorNote:"הערה קודמת לקריאה בלבד"}],retiredCases:[p.item],decisions:{},token:"fixture",persistentQueue:true});
   await p.run("refreshQueue()");
   assert.equal(p.run("cases.length"),1);assert.equal(p.run("caseNow().candidateSha256"),"candidate");
-  assert.match(p.elements.progress.textContent,/גרסה קודמת · פסוק 1 מתוך 1 · 0/);
+  assert.equal(p.elements.progress.textContent,"גרסה קודמת · פסוק 1 מתוך 1 לטיפול");
   assert.equal(p.elements["updated-version"].hidden,false);
   p.elements["updated-version"].onclick();
   assert.equal(p.run("caseNow().candidateSha256"),"revised");assert.equal(p.elements.note.value,"");
@@ -189,15 +181,6 @@ test("a focused note prevents an automatic version switch even after a saved ver
   assert.equal(p.elements["updated-version"].hidden,false);
 });
 
-test("saving a historical answer never approves or counts the revised candidate",async()=>{
-  const p=await page();p.elements.note.value="בעיה בחיתוך הקודם";p.elements.note.oninput();
-  p.setQueue({cases:[{...p.item,candidateSha256:"revised"}],retiredCases:[p.item],decisions:{},token:"fixture",persistentQueue:true});
-  await p.run("refreshQueue()");await p.run("save('problem')");
-  assert.equal(p.posts[0].candidateSha256,"candidate");assert.match(p.elements.progress.textContent,/0 תשובות/);
-  assert.match(p.elements.status.textContent,/לגרסה הקודמת/);p.elements["updated-version"].onclick();
-  assert.equal(p.elements.note.value,"");assert.equal(p.elements.good.disabled,true);
-});
-
 test("restoring an unsaved old draft keeps it separate from the latest worklist",async()=>{
   const p=await page();p.elements.note.value="טיוטה שלא נשלחה";p.elements.note.oninput();
   const resumed=await page({}, {storage:p.storage,queue:{cases:[{...p.item,candidateSha256:"revised"}],retiredCases:[p.item],decisions:{},token:"fixture",persistentQueue:true}});
@@ -207,16 +190,6 @@ test("restoring an unsaved old draft keeps it separate from the latest worklist"
   resumed.elements["previous-version"].onclick();assert.equal(resumed.elements.note.value,"טיוטה שלא נשלחה");
 });
 
-
-test("deliberately opening a previous version is not undone by polling",async()=>{
-  const p=await page();const key=p.run("stateKey(caseNow())");const saved={note:"הערה שמורה",verdict:"problem"};
-  p.elements.note.value=saved.note;
-  p.setQueue({cases:[{...p.item,candidateSha256:"revised"}],retiredCases:[p.item],decisions:{[key]:saved},token:"fixture",persistentQueue:true});
-  await p.run("refreshQueue()");assert.equal(p.run("caseNow().candidateSha256"),"revised");
-  p.elements["previous-version"].onclick();await p.run("refreshQueue()");
-  assert.equal(p.run("caseNow().candidateSha256"),"candidate");assert.equal(p.elements.note.value,saved.note);
-  p.elements["updated-version"].onclick();assert.equal(p.run("caseNow().candidateSha256"),"revised");
-});
 
 test("polling cannot interrupt a cut sequence between two audio slices",async()=>{
   const p=await page({}, {pauseGaps:true});const key=p.run("stateKey(caseNow())");
@@ -253,28 +226,17 @@ test("editing a previously heard word separates edited hearing and disables GOOD
   assert.equal(p.run("cutHeard(caseNow(),caseNow().words[1])"),false);
   assert.equal(p.elements.words.children[1].classList.contains("pending"),true);
   assert.equal(p.elements.words.children[1].classList.contains("heard"),false);
-  assert.equal(p.elements.good.disabled,true);assert.equal(p.elements["save-cut-edits"].disabled,true);
+  assert.equal(p.elements.good.disabled,true);assert.equal(p.elements.good.disabled,true);
   await p.run("save('good')");assert.equal(p.posts.length,0);
 });
 
-test("edited audio must finish before its exact proposal becomes saveable",async()=>{
-  const p=await page();p.run("setCutBoundary(2,'endMs',650)");
-  await p.run("saveCutEdits()");assert.equal(p.editPosts.length,0);
-  const playback=p.run("play('edits')");await p.flush();
-  assert.deepEqual(p.starts,[0.4]);assert.equal(p.elements["save-cut-edits"].disabled,true);
-  await p.finish();await playback;
-  assert.equal(p.run("cutHeard(caseNow(),caseNow().words[1])"),true);
-  assert.equal(p.run("heardNow().segments.has(2)"),false);
-  assert.equal(p.elements.good.disabled,true);assert.equal(p.elements["save-cut-edits"].disabled,false);
-});
-
 test("changing the boundary after playback invalidates hearing of the newly edited coordinates",async()=>{
-  const p=await page();p.run("setCutBoundary(2,'endMs',650)");
+  const p=await page({}, {reusableHeardSegments:[1,3]});p.run("setCutBoundary(2,'endMs',650)");
   const playback=p.run("play('edits')");await p.flush();await p.finish();await playback;
-  assert.equal(p.elements["save-cut-edits"].disabled,false);
+  assert.equal(p.elements.good.disabled,false);
   p.run("setCutBoundary(2,'endMs',660)");
   assert.equal(p.run("cutHeard(caseNow(),caseNow().words[1])"),false);
-  assert.equal(p.elements["save-cut-edits"].disabled,true);
+  assert.equal(p.elements.good.disabled,true);
 });
 
 test("stopping or prematurely ending edited audio does not report fresh edited hearing",async()=>{
@@ -282,7 +244,7 @@ test("stopping or prematurely ending edited audio does not report fresh edited h
   const stopped=p.run("play('edits')");await p.flush();p.run("stop()");await stopped;
   assert.equal(p.run("cutHeard(caseNow(),caseNow().words[1])"),false);
   const early=p.run("play('edits')");await p.flush();await p.finish(0.5);await early;
-  assert.equal(p.elements["save-cut-edits"].disabled,true);
+  assert.equal(p.elements.good.disabled,true);
   assert.equal(p.run("cutHearing.size"),0);assert.equal(p.editPosts.length,0);
 });
 
@@ -291,18 +253,18 @@ test("overlapping, outside-source, empty and too-short numeric edits reject save
     const p=await page();p.run(`cutRows.get(2).endMs.number.value=${JSON.stringify(value)};cutRows.get(2).endMs.number.oninput()`);
     if(expected===null) assert.equal(p.run("Number.isNaN(workingWord(caseNow(),caseNow().words[1]).endMs)"),true);
     else assert.equal(p.run("workingWord(caseNow(),caseNow().words[1]).endMs"),expected);
-    assert.ok(p.run("cutErrors(caseNow()).size")>0);assert.equal(p.elements["save-cut-edits"].disabled,true);
-    const before=p.starts.length;await p.run("play('edits')");await p.run("saveCutEdits()");
+    assert.ok(p.run("cutErrors(caseNow()).size")>0);assert.equal(p.elements.good.disabled,true);
+    const before=p.starts.length;await p.run("play('edits')");await p.run("save('good')");
     assert.equal(p.starts.length,before);assert.equal(p.editPosts.length,0);
   }
 });
 
 test("cut drafts and exact edited hearing survive restart only for the same immutable candidate",async()=>{
-  const p=await page();p.run("setCutBoundary(2,'endMs',650)");
+  const p=await page({}, {reusableHeardSegments:[1,3]});p.run("setCutBoundary(2,'endMs',650)");
   const playback=p.run("play('edits')");await p.flush();await p.finish();await playback;
-  const same=await page({}, {storage:p.storage});
+  const same=await page({}, {storage:p.storage,reusableHeardSegments:[1,3]});
   assert.equal(same.run("workingWord(caseNow(),caseNow().words[1]).endMs"),650);
-  assert.equal(same.elements["save-cut-edits"].disabled,false);
+  assert.equal(same.elements.good.disabled,false);
   const next=await page({}, {storage:p.storage,queue:{cases:[{...p.item,candidateSha256:"replacement"}],decisions:{},token:"fixture",persistentQueue:true}});
   assert.equal(next.run("caseNow().candidateSha256"),"replacement");
   assert.equal(next.run("changedCuts(caseNow()).length"),0);
@@ -343,32 +305,12 @@ test("an editor control with focus prevents a replacement version from appearing
   assert.equal(p.run("cutRows.get(2).endMs.number"),control);
 });
 
-test("proposal POST carries exact edited coordinates and candidate bindings without creating GOOD",async()=>{
-  const p=await page();p.run("setCutBoundary(2,'endMs',650)");p.elements.note.value="דיוק סוף המילה";p.elements.note.oninput();
-  const playback=p.run("play('edits')");await p.flush();await p.finish();await playback;
-  await p.run("saveCutEdits()");
-  assert.equal(p.posts.length,0);assert.equal(p.editPosts.length,1);
-  assert.deepEqual(p.editPosts[0].body,{caseId:"case",candidateSha256:"candidate",clipSha256:p.item.clipSha256,
-    timingEdits:[{segment:2,startMs:400,endMs:650}],heardEditedSegments:[2],heardSegments:[1],note:"דיוק סוף המילה"});
-  assert.equal(p.editPosts[0].headers["X-Review-Token"],"fixture");
-  assert.equal(p.run("decisionFor(cases[0])"),undefined);assert.equal(p.run("caseNow().id"),"other");
-});
-
 test("resetting an edited word restores genuine original hearing without carrying edited approval",async()=>{
   const p=await page();const playback=p.run("play('word',caseNow().words[1])");await p.flush();await p.finish();await playback;
   p.run("setCutBoundary(2,'endMs',650)");assert.equal(p.run("cutHeard(caseNow(),caseNow().words[1])"),false);
   p.run("resetCut(2)");assert.equal(p.run("workingWord(caseNow(),caseNow().words[1]).endMs"),600);
   assert.equal(p.run("cutHeard(caseNow(),caseNow().words[1])"),true);assert.equal(p.run("changedCuts(caseNow()).length"),0);
   assert.equal(p.run("heardNow().fresh.has(2)"),true);assert.equal(p.editPosts.length,0);
-});
-
-test("failed proposal save keeps the exact editable draft, note and completed edited hearing",async()=>{
-  const p=await page({}, {editSaveFails:true});p.run("setCutBoundary(2,'endMs',650)");
-  p.elements.note.value="לא לאבד את ההערה";p.elements.note.oninput();
-  const playback=p.run("play('edits')");await p.flush();await p.finish();await playback;await p.run("saveCutEdits()");
-  assert.equal(p.run("caseNow().id"),"case");assert.equal(p.run("workingWord(caseNow(),caseNow().words[1]).endMs"),650);
-  assert.equal(p.elements.note.value,"לא לאבד את ההערה");assert.equal(p.elements["save-cut-edits"].disabled,false);
-  assert.match(p.elements.status.textContent,/fixture save failure/);assert.equal(p.posts.length,0);
 });
 
 test("saved proposals restore exact edited hearing without approving the immutable original cuts",async()=>{
@@ -379,7 +321,7 @@ test("saved proposals restore exact edited hearing without approving the immutab
   assert.equal(restored.run("workingWord(caseNow(),caseNow().words[1]).endMs"),650);
   assert.equal(restored.run("cutHeard(caseNow(),caseNow().words[1])"),true);
   assert.equal(restored.run("heardNow().segments.has(2)"),false);assert.equal(restored.elements.good.disabled,true);
-  assert.equal(restored.elements["save-cut-edits"].disabled,true);
+  assert.equal(restored.elements.good.disabled,true);
   restored.run("setCutBoundary(2,'endMs',660)");assert.equal(restored.run("cutHeard(caseNow(),caseNow().words[1])"),false);
   const changed=await page({}, {cutProposals:[{...proposal,candidateSha256:"older-candidate"}]});
   assert.equal(changed.run("changedCuts(caseNow()).length"),0);assert.equal(changed.run("cutHeard(caseNow(),caseNow().words[1])"),false);
@@ -397,18 +339,6 @@ test("Shift arrows move exactly ten milliseconds and update a focused numeric in
   assert.equal(p.run("cutRows.get(2).endMs.number.value"),"0.600");
 });
 
-test("only the latest saved proposal coordinates, hearing and note restore for each candidate",async()=>{
-  const base=await page();
-  const old={caseId:"case",candidateSha256:"candidate",clipSha256:base.item.clipSha256,
-    timingEdits:[{segment:2,startMs:400,endMs:640}],note:"תיקון קודם",listenEvidenceReportedByBrowser:{heardEditedSegments:[2]}};
-  const latest={...old,timingEdits:[{segment:2,startMs:400,endMs:650}],note:"התיקון האחרון"};
-  const p=await page({}, {cutProposals:[old,latest]});
-  assert.equal(p.run("workingWord(caseNow(),caseNow().words[1]).endMs"),650);
-  assert.equal(p.elements.note.value,"התיקון האחרון");assert.equal(p.elements["save-cut-edits"].disabled,true);
-  p.run("setCutBoundary(2,'endMs',640)");
-  assert.equal(p.run("cutHeard(caseNow(),caseNow().words[1])"),false);
-});
-
 test("a saved proposal cannot overwrite a newer unsent local coordinate or note draft",async()=>{
   const original=await page();original.run("setCutBoundary(2,'endMs',660)");
   original.elements.note.value="טיוטה חדשה מקומית";original.elements.note.oninput();
@@ -418,31 +348,6 @@ test("a saved proposal cannot overwrite a newer unsent local coordinate or note 
   assert.equal(p.run("workingWord(caseNow(),caseNow().words[1]).endMs"),660);
   assert.equal(p.elements.note.value,"טיוטה חדשה מקומית");
   assert.equal(p.run("cutHeard(caseNow(),caseNow().words[1])"),false);
-});
-
-test("polling during an edit save cannot remove the selected candidate before its acknowledgement",async()=>{
-  const p=await page({}, {pauseEditSave:true});p.run("setCutBoundary(2,'endMs',650)");
-  const playback=p.run("play('edits')");await p.flush();await p.finish();await playback;
-  const save=p.run("saveCutEdits()");await p.flush();assert.equal(p.run("savingCuts"),true);
-  p.setQueue({cases:[{...p.item,id:"other"}],decisions:{},token:"fixture",persistentQueue:true});
-  await p.run("refreshQueue()");assert.equal(p.run("caseNow().id"),"case");
-  p.releaseEditSave();await save;await p.flush();
-  assert.equal(p.editPosts[0].body.caseId,"case");assert.equal(p.run("savedCutProposals.has(stateKey(cases[0]))"),false);
-  assert.equal(p.run("caseNow().id"),"other");assert.equal(p.run("savingCuts"),false);
-});
-
-test("an already requested queue response cannot change the candidate after an edit save starts",async()=>{
-  let reads=0,releaseQueue;
-  const queueGate=new Promise(resolve=>{releaseQueue=resolve;});
-  const p=await page({}, {pauseEditSave:true,beforeQueueJson:()=>++reads===2?queueGate:undefined});
-  p.run("setCutBoundary(2,'endMs',650)");
-  const playback=p.run("play('edits')");await p.flush();await p.finish();await playback;
-  p.setQueue({cases:[{...p.item,id:"other"}],decisions:{},token:"fixture",persistentQueue:true});
-  const refresh=p.run("refreshQueue()");await p.flush();
-  const save=p.run("saveCutEdits()");await p.flush();assert.equal(p.run("savingCuts"),true);
-  releaseQueue();await refresh;assert.equal(p.run("caseNow().id"),"case");
-  p.releaseEditSave();await save;await p.flush();
-  assert.equal(p.editPosts[0].body.caseId,"case");assert.equal(p.run("caseNow().id"),"other");
 });
 
 test("removing the last active case clears the editor and old audio without losing stored drafts",async()=>{
@@ -459,13 +364,13 @@ test("removing the last active case clears the editor and old audio without losi
 
 
 test("the edited-cut button plays the exact numeric start and end currently being edited",async()=>{
-  const p=await page();p.run("setCutBoundary(2,'startMs',450);setCutBoundary(2,'endMs',650)");
+  const p=await page({}, {reusableHeardSegments:[1,3]});p.run("setCutBoundary(2,'startMs',450);setCutBoundary(2,'endMs',650)");
   assert.equal(p.run("cutRows.get(2).play.textContent"),"▶ החיתוך בעריכה");
   p.run("cutRows.get(2).play.onclick()");await p.flush();
   assert.deepEqual(p.playbackSlices,[{offset:0.45,duration:0.2}]);
-  assert.equal(p.elements["save-cut-edits"].disabled,true);
+  assert.equal(p.elements.good.disabled,true);
   await p.finish();assert.equal(p.run("cutHeard(caseNow(),caseNow().words[1])"),true);
-  assert.equal(p.elements["save-cut-edits"].disabled,false);
+  assert.equal(p.elements.good.disabled,false);
 });
 
 test("middle-word context includes one complete actual word before and after the edited cut",async()=>{
@@ -476,14 +381,14 @@ test("middle-word context includes one complete actual word before and after the
   await p.finish();
   assert.equal(p.run("cutHearing.size"),0);assert.equal(p.run("heardNow().fresh.size"),0);
   assert.equal(p.run("cutHeard(caseNow(),caseNow().words[1])"),false);
-  assert.equal(p.elements["save-cut-edits"].disabled,true);assert.equal(p.elements.good.disabled,true);
+  assert.equal(p.elements.good.disabled,true);assert.equal(p.elements.good.disabled,true);
 });
 
 test("context uses current neighboring word edits rather than their old candidate coordinates",async()=>{
   const p=await page();p.run("setCutBoundary(1,'startMs',80);setCutBoundary(2,'endMs',650);setCutBoundary(3,'endMs',1000)");
   p.run("cutRows.get(2).context.onclick()");await p.flush();
   assert.deepEqual(p.playbackSlices,[{offset:0.08,duration:0.92}]);
-  await p.finish();assert.equal(p.run("cutHearing.size"),0);assert.equal(p.elements["save-cut-edits"].disabled,true);
+  await p.finish();assert.equal(p.run("cutHearing.size"),0);assert.equal(p.elements.good.disabled,true);
 });
 
 test("first-word context uses only the actual next word without inventing a previous boundary",async()=>{
@@ -492,7 +397,7 @@ test("first-word context uses only the actual next word without inventing a prev
   p.run("cutRows.get(1).context.onclick()");await p.flush();
   assert.deepEqual(p.playbackSlices,[{offset:0.08,duration:0.52}]);
   await p.finish();assert.equal(p.run("cutHeard(caseNow(),caseNow().words[0])"),false);
-  assert.equal(p.elements["save-cut-edits"].disabled,true);
+  assert.equal(p.elements.good.disabled,true);
 });
 
 test("last-word context uses only the actual previous word without inventing a next boundary",async()=>{
@@ -501,5 +406,220 @@ test("last-word context uses only the actual previous word without inventing a n
   p.run("cutRows.get(3).context.onclick()");await p.flush();
   assert.deepEqual(p.playbackSlices,[{offset:0.4,duration:0.55}]);
   await p.finish();assert.equal(p.run("cutHeard(caseNow(),caseNow().words[2])"),false);
-  assert.equal(p.run("heardNow().fresh.size"),0);assert.equal(p.elements["save-cut-edits"].disabled,true);
+  assert.equal(p.run("heardNow().fresh.size"),0);assert.equal(p.elements.good.disabled,true);
+});
+
+test("unified GOOD submits every changed word together with exact source and fresh hearing bindings",async()=>{
+  const p=await page();p.run("setCutBoundary(2,'endMs',650);setCutBoundary(3,'startMs',720);setCutBoundary(3,'endMs',950)");
+  assert.equal(p.elements.good.disabled,true);await p.run("save('good')");assert.equal(p.wordPosts.length,0);
+  const playback=p.run("play('remaining')");await p.flush();await p.finish();await p.finish();await playback;
+  assert.equal(p.elements.good.disabled,false);await p.run("save('good')");await p.flush();
+  assert.equal(p.wordPosts.length,1);const body=p.wordPosts[0];
+  assert.equal(body.caseId,"case");assert.equal(body.candidateSha256,"candidate");assert.equal(body.clipSha256,p.item.clipSha256);
+  assert.equal(body.verdict,"good");assert.equal(body.note,"");assert.match(body.submissionId,/^[A-Za-z0-9_-]{16,128}$/);
+  assert.deepEqual(body.timingEdits,[{segment:2,startMs:400,endMs:650},{segment:3,startMs:720,endMs:950}]);
+  assert.deepEqual(body.heardSegments,[1]);assert.deepEqual(body.heardEditedSegments,[2,3]);
+  assert.deepEqual(body.freshHeardSegments,[]);assert.equal(body.verseHeard,false);
+  assert.equal(p.wordRequests[0].headers["X-Review-Token"],"fixture");assert.equal(p.run("caseNow().id"),"other");
+  assert.equal(p.editPosts.length,0);assert.equal(p.legacyPosts.length,0);assert.equal(p.elements["save-cut-edits"],undefined);
+});
+
+test("one edited word being heard cannot approve another unedited but unheard word",async()=>{
+  const p=await page();p.run("setCutBoundary(2,'endMs',650)");
+  const playback=p.run("play('edits')");await p.flush();await p.finish();await playback;
+  assert.equal(p.run("cutHeard(caseNow(),caseNow().words[1])"),true);
+  assert.equal(p.elements.good.disabled,true);await p.run("save('good')");assert.equal(p.wordPosts.length,0);
+});
+
+test("the first problem click opens a fresh note and the second saves all current word edits",async()=>{
+  const p=await page();p.run("setCutBoundary(2,'endMs',650);setCutBoundary(3,'endMs',950)");
+  assert.equal(p.elements.note.hidden,true);await p.elements.problem.onclick();await p.flush();
+  assert.equal(p.wordPosts.length,0);assert.equal(p.elements.note.hidden,false);assert.equal(p.elements.note.value,"");
+  p.elements.note.value="יש שגיאה בהקלטה";p.elements.note.oninput();
+  await p.elements.problem.onclick();await p.flush();
+  assert.equal(p.wordPosts.length,1);const body=p.wordPosts[0];assert.equal(body.verdict,"problem");
+  assert.equal(body.note,"יש שגיאה בהקלטה");assert.deepEqual(body.timingEdits,[{segment:2,startMs:400,endMs:650},{segment:3,startMs:700,endMs:950}]);
+  assert.deepEqual(body.heardEditedSegments,[]);assert.equal(p.run("caseNow().id"),"other");
+  assert.equal(p.elements.note.value,"");assert.equal(p.elements.note.hidden,true);
+});
+
+test("skip saves exact current edits but never copies a problem note into a skip",async()=>{
+  const p=await page();p.run("setCutBoundary(2,'endMs',650)");await p.elements.problem.onclick();
+  p.elements.note.value="הערה שלא שולחים בדילוג";p.elements.note.oninput();await p.run("save('skip')");await p.flush();
+  const body=p.wordPosts[0];assert.equal(body.verdict,"skip");assert.equal(body.note,"");
+  assert.equal(body.caseId,"case");assert.equal(body.candidateSha256,"candidate");assert.equal(body.clipSha256,p.item.clipSha256);
+  assert.deepEqual(body.timingEdits,[{segment:2,startMs:400,endMs:650}]);assert.deepEqual(body.heardEditedSegments,[]);
+  assert.equal(p.elements.note.value,"");assert.equal(p.elements.note.hidden,true);
+});
+
+test("the last saved verse completes the flow and cannot return on the next stale queue poll",async()=>{
+  const p=await page();p.setQueue({cases:[p.item],decisions:{},token:"fixture",persistentQueue:true});await p.run("refreshQueue()");
+  await p.run("save('skip')");await p.flush();assert.equal(p.wordPosts.length,1);
+  assert.equal(p.run("caseNow()"),undefined);assert.equal(p.elements["timing-editor"].hidden,true);
+  assert.match(p.elements.reference.textContent,/אין|הושלמ|סיימ/);assert.equal(p.elements.note.value,"");
+  await p.run("refreshQueue()");assert.equal(p.run("caseNow()"),undefined);
+});
+
+test("a saved review note remains collapsed history and never prefills the next fresh note",async()=>{
+  const base=await page();const key=base.run("stateKey(caseNow())");
+  const old={verdict:"problem",note:"הערה ישנה שאינה תשובה חדשה"};
+  const p=await page({[key]:old},{queue:{cases:[{...base.item,reviewKind:"reported",priorNote:old.note}],decisions:{[key]:old},token:"fixture",persistentQueue:true}});
+  assert.equal(p.elements.note.value,"");assert.equal(p.elements.note.hidden,true);
+  assert.equal(p.elements.status.textContent,"");assert.equal(p.elements.progress.textContent,"פסוק 1 מתוך 1 לטיפול");
+  assert.equal(p.elements["prior-history"].open,false);assert.match(p.elements.prior.textContent,/הערה ישנה/);assert.match(html,/<details[^>]*>[\s\S]*?id="prior"/);
+  await p.elements.problem.onclick();assert.equal(p.elements.note.value,"");
+});
+
+test("failed unified save keeps coordinates, note and exact hearing and retries the same submission id",async()=>{
+  const p=await page({}, {wordSaveFails:true,reusableHeardSegments:[1,3]});p.run("setCutBoundary(2,'endMs',650)");
+  const playback=p.run("play('edits')");await p.flush();await p.finish();await playback;
+  await p.elements.problem.onclick();p.elements.note.value="לשמור את ההערה";p.elements.note.oninput();
+  await p.run("save('problem')");await p.flush();assert.equal(p.wordPosts.length,1);
+  assert.equal(p.run("caseNow().id"),"case");assert.equal(p.run("workingWord(caseNow(),caseNow().words[1]).endMs"),650);
+  assert.equal(p.elements.note.value,"לשמור את ההערה");assert.equal(p.run("cutHeard(caseNow(),caseNow().words[1])"),true);
+  assert.match(p.elements.status.textContent,/fixture word save failure/);
+  p.setWordSaveFailure(false);await p.run("save('problem')");await p.flush();assert.equal(p.wordPosts.length,2);
+  assert.deepEqual(p.wordPosts[1],p.wordPosts[0]);assert.equal(p.run("caseNow().id"),"other");
+});
+
+test("changing a failed submission creates a distinct id rather than reusing it for different coordinates",async()=>{
+  const p=await page({}, {wordSaveFails:true});p.run("setCutBoundary(2,'endMs',650)");
+  await p.run("save('skip')");await p.flush();p.run("setCutBoundary(2,'endMs',660)");
+  await p.run("save('skip')");await p.flush();assert.equal(p.wordPosts.length,2);
+  assert.notEqual(p.wordPosts[0].submissionId,p.wordPosts[1].submissionId);
+  assert.equal(p.wordPosts[0].timingEdits[0].endMs,650);assert.equal(p.wordPosts[1].timingEdits[0].endMs,660);
+});
+
+test("pending unified save protects the active candidate from queue replacement",async()=>{
+  const p=await page({}, {pauseWordSave:true});p.run("setCutBoundary(2,'endMs',650)");
+  const save=p.run("save('skip')");await p.flush();assert.equal(p.run("saving"),true);
+  for(const control of ["startMs.number","startMs.range","endMs.number","endMs.range","reset","play","context"])
+    assert.equal(p.run(`cutRows.get(2).${control}.disabled`),true);
+  p.run("resetCut(2)");assert.equal(p.run("workingWord(caseNow(),caseNow().words[1]).endMs"),650);
+  p.setQueue({cases:[{...p.item,id:"other"}],decisions:{},token:"fixture",persistentQueue:true});
+  await p.run("refreshQueue()");assert.equal(p.run("caseNow().id"),"case");
+  p.releaseWordSave();await save;await p.flush();assert.equal(p.wordPosts[0].caseId,"case");
+  assert.equal(p.run("caseNow().id"),"other");assert.equal(p.run("saving"),false);
+});
+
+test("a queue response begun before unified save cannot switch the candidate while saving",async()=>{
+  let reads=0,releaseQueue;const queueGate=new Promise(resolve=>{releaseQueue=resolve;});
+  const p=await page({}, {pauseWordSave:true,beforeQueueJson:()=>++reads===2?queueGate:undefined});
+  p.run("setCutBoundary(2,'endMs',650)");p.setQueue({cases:[{...p.item,id:"other"}],decisions:{},token:"fixture",persistentQueue:true});
+  const refresh=p.run("refreshQueue()");await p.flush();const save=p.run("save('skip')");await p.flush();
+  releaseQueue();await refresh;assert.equal(p.run("caseNow().id"),"case");
+  p.releaseWordSave();await save;await p.flush();assert.equal(p.wordPosts[0].caseId,"case");
+  assert.equal(p.run("caseNow().id"),"other");
+});
+
+test("prior saved timing proposals restore coordinates and hearing but never their old note",async()=>{
+  const base=await page();const old={caseId:"case",candidateSha256:"candidate",clipSha256:base.item.clipSha256,
+    timingEdits:[{segment:2,startMs:400,endMs:640}],note:"הערת תיקון ישנה",listenEvidenceReportedByBrowser:{heardEditedSegments:[2]}};
+  const latest={...old,timingEdits:[{segment:2,startMs:400,endMs:650}],note:"הערת תיקון אחרונה"};
+  const p=await page({}, {cutProposals:[old,latest]});assert.equal(p.run("workingWord(caseNow(),caseNow().words[1]).endMs"),650);
+  assert.equal(p.run("cutHeard(caseNow(),caseNow().words[1])"),true);assert.equal(p.elements.note.value,"");assert.equal(p.elements.note.hidden,true);
+  p.run("setCutBoundary(2,'endMs',640)");assert.equal(p.run("cutHeard(caseNow(),caseNow().words[1])"),false);
+});
+
+
+test("saved unified queue decisions exclude only their exact completed parent candidate",async()=>{
+  const base=await page();const key=base.run("stateKey(caseNow())");
+  const finished={caseId:"case",candidateSha256:"candidate",clipSha256:base.item.clipSha256,verdict:"skip",kind:"word_review",note:""};
+  const p=await page({}, {queue:{cases:[base.item,{...base.item,id:"other"}],decisions:{},wordReviewDecisions:{[key]:finished},token:"fixture",persistentQueue:true}});
+  assert.equal(p.run("caseNow().id"),"other");assert.equal(p.run("cases.length"),1);
+});
+
+test("a previous unified answer cannot hide a newly revised candidate with the same verse id",async()=>{
+  const base=await page();const key=base.run("stateKey(caseNow())");
+  const finished={caseId:"case",candidateSha256:"candidate",clipSha256:base.item.clipSha256,verdict:"good",kind:"word_review",note:""};
+  const p=await page({}, {queue:{cases:[{...base.item,candidateSha256:"revised"}],decisions:{},wordReviewDecisions:{[key]:finished},token:"fixture",persistentQueue:true}});
+  assert.equal(p.run("caseNow().candidateSha256"),"revised");assert.equal(p.run("cases.length"),1);
+  assert.equal(p.elements.good.disabled,true);
+});
+
+
+test("an exact failed GOOD submission retains its id and genuine hearing across a browser restart",async()=>{
+  const p=await page({}, {wordSaveFails:true,reusableHeardSegments:[1,3]});p.run("setCutBoundary(2,'endMs',650)");
+  const playback=p.run("play('edits')");await p.flush();await p.finish();await playback;
+  await p.run("save('good')");await p.flush();assert.equal(p.wordPosts.length,1);
+  const resumed=await page({}, {storage:p.storage,reusableHeardSegments:[1,3]});
+  assert.equal(resumed.elements.good.disabled,false);assert.equal(resumed.run("workingWord(caseNow(),caseNow().words[1]).endMs"),650);
+  await resumed.run("save('good')");await resumed.flush();assert.equal(resumed.wordPosts.length,1);
+  assert.deepEqual(resumed.wordPosts[0],p.wordPosts[0]);assert.equal(resumed.run("caseNow().id"),"other");
+});
+
+
+test("GOOD after opening a problem draft sends no note and opens the next verse with a fresh hidden note",async()=>{
+  const p=await page();const playback=p.run("play('remaining')");await p.flush();await p.finish();await p.finish();await playback;
+  await p.elements.problem.onclick();p.elements.note.value="טיוטה שלא נשלחת כתקין";p.elements.note.oninput();
+  await p.run("save('good')");await p.flush();assert.equal(p.wordPosts.length,1);
+  assert.equal(p.wordPosts[0].verdict,"good");assert.equal(p.wordPosts[0].note,"");
+  assert.equal(p.run("caseNow().id"),"other");assert.equal(p.elements.note.hidden,true);assert.equal(p.elements.note.value,"");
+  assert.equal(p.elements["prior-history"].hidden,true);
+});
+
+
+test("historical timing drafts cannot silently become legacy answers for any verdict and remain recoverable",async()=>{
+  for(const verdict of ["good","problem","skip"]) {
+    const p=await page({}, {reusableHeardSegments:[1,3]});p.run("setCutBoundary(2,'endMs',650)");
+    p.elements.note.value="טיוטת תיקון לגרסה הקודמת";p.elements.note.oninput();
+    const playback=p.run("play('edits')");await p.flush();await p.finish();await playback;
+    assert.equal(p.elements.good.disabled,false);
+    p.setQueue({cases:[{...p.item,candidateSha256:"revised"}],retiredCases:[p.item],decisions:{},token:"fixture",persistentQueue:true});
+    await p.run("refreshQueue()");assert.equal(p.run("caseNow().candidateSha256"),"candidate");
+    assert.notEqual(p.run("historicalCase"),null);await p.run(`save(${JSON.stringify(verdict)})`);
+    assert.equal(p.wordPosts.length,0);assert.equal(p.legacyPosts.length,0);assert.equal(p.editPosts.length,0);
+    assert.equal(p.run("saving"),false);assert.equal(p.run("workingWord(caseNow(),caseNow().words[1]).endMs"),650);
+    assert.equal(p.elements.note.value,"טיוטת תיקון לגרסה הקודמת");
+    assert.match(p.elements.status.textContent,/טיוטה/);assert.match(p.elements.status.textContent,/המעודכנים/);
+    assert.match(p.elements.status.textContent,/לא נשמרה תשובה/);
+    p.elements["updated-version"].onclick();assert.equal(p.run("changedCuts(caseNow()).length"),0);
+    p.elements["previous-version"].onclick();assert.equal(p.run("workingWord(caseNow(),caseNow().words[1]).endMs"),650);
+    assert.equal(p.elements.note.value,"טיוטת תיקון לגרסה הקודמת");
+    assert.equal(p.run("cutHeard(caseNow(),caseNow().words[1])"),true);
+  }
+});
+
+
+test("a deliberately typed problem draft identical to a saved note survives navigation, polling and restart",async()=>{
+  const base=await page();const key=base.run("stateKey(caseNow())");
+  const old={verdict:"problem",note:"הסוף ארוך מדי"};
+  const p=await page({[key]:old});p.run("index=0;render()");await p.elements.problem.onclick();
+  assert.equal(p.elements.note.value,"");p.elements.note.value=old.note;p.elements.note.oninput();
+  p.elements.next.onclick();p.elements.previous.onclick();assert.equal(p.elements.note.value,old.note);
+  await p.run("refreshQueue()");assert.equal(p.elements.note.value,old.note);
+  const resumed=await page({[key]:old},{storage:p.storage});
+  assert.equal(resumed.run("caseNow().id"),"case");assert.equal(resumed.elements.note.value,old.note);
+  assert.equal(resumed.elements.note.hidden,true);await resumed.elements.problem.onclick();assert.equal(resumed.elements.note.value,old.note);
+});
+
+test("legacy stored prefills without user-typed provenance remain blank and only appear in collapsed history",async()=>{
+  const base=await page();const key=base.run("stateKey(caseNow())");
+  const old={verdict:"problem",note:"הערה ישנה שהועתקה בעבר"};
+  const storage=new Map([["listening-progress-v2",JSON.stringify({active:key,drafts:[[key,old.note]],evidence:[]})]]);
+  const p=await page({[key]:old},{storage});
+  assert.equal(p.elements.note.value,"");assert.equal(p.elements.note.hidden,true);
+  assert.equal(p.elements["prior-history"].open,false);assert.equal(p.elements.prior.textContent,old.note);
+  await p.elements.problem.onclick();assert.equal(p.elements.note.value,"");
+});
+
+test("explicit new typing identical to an old timing proposal note is preserved as a fresh draft",async()=>{
+  const base=await page();const proposal={caseId:"case",candidateSha256:"candidate",clipSha256:base.item.clipSha256,
+    timingEdits:[{segment:2,startMs:400,endMs:650}],note:"סיום המילה קצר מדי",listenEvidenceReportedByBrowser:{heardEditedSegments:[2]}};
+  const p=await page({}, {cutProposals:[proposal]});await p.elements.problem.onclick();assert.equal(p.elements.note.value,"");
+  p.elements.note.value=proposal.note;p.elements.note.oninput();p.elements.next.onclick();p.elements.previous.onclick();
+  assert.equal(p.elements.note.value,proposal.note);
+  const resumed=await page({}, {storage:p.storage,cutProposals:[proposal]});assert.equal(resumed.elements.note.value,proposal.note);
+});
+
+test("a pending problem save freezes its textarea and re-enables the exact draft after failure or success",async()=>{
+  const p=await page({}, {pauseWordSave:true,wordSaveFails:true});await p.elements.problem.onclick();
+  p.elements.note.value="הערה לפני שליחה";p.elements.note.oninput();
+  const pending=p.run("save('problem')");await p.flush();assert.equal(p.elements.note.disabled,true);
+  p.releaseWordSave();await pending;await p.flush();assert.equal(p.elements.note.disabled,false);
+  assert.equal(p.elements.note.value,"הערה לפני שליחה");assert.equal(p.elements.note.hidden,false);
+  p.elements.note.value="הערה שנערכה אחרי הכישלון";p.elements.note.oninput();p.setWordSaveFailure(false);
+  await p.run("save('problem')");await p.flush();assert.equal(p.wordPosts[1].note,"הערה שנערכה אחרי הכישלון");
+  assert.equal(p.run("caseNow().id"),"other");assert.equal(p.elements.note.disabled,false);
+  assert.equal(p.elements.note.hidden,true);assert.equal(p.elements.note.value,"");
 });

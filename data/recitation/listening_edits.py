@@ -1,9 +1,12 @@
-"""Validate human timing proposals without changing a listening candidate or approval."""
+"""Validate source-bound human proposals and explicit whole-verse timing reviews."""
 from copy import deepcopy
 import hashlib
 import io
 from pathlib import Path
+import re
 import wave
+
+from listening_review import digest_json, validate_decision
 
 
 def _integer(value):
@@ -46,14 +49,15 @@ def verify_clip(case):
             "pcmSha256": hashlib.sha256(pcm).hexdigest()}
 
 
-def validate_cut_edit(case, payload):
-    """Return a held, source-bound proposal; fresh hearing never approves old coordinates."""
+def edited_words(case, payload, *, require_edits=True, require_hearing=True):
+    """Apply only named timing changes, retaining every source identity and score."""
     if any(payload.get(key) != case[key] for key in ("candidateSha256", "clipSha256")):
         raise ValueError("Timing edit refers to a different exact candidate")
     if payload.get("caseId") != case["id"]:
         raise ValueError("Timing edit refers to a different verse")
     edits = payload.get("timingEdits")
-    if not isinstance(edits, list) or not edits or len(edits) > len(case["words"]):
+    if (not isinstance(edits, list) or (require_edits and not edits)
+            or len(edits) > len(case["words"])):
         raise ValueError("Provide changed word timing edits")
     words = deepcopy(case["words"])
     by_segment = {word["segment"]: word for word in words}
@@ -76,7 +80,7 @@ def validate_cut_edit(case, payload):
         checked_edits.append(dict(edit))
     heard = _segments(payload.get("heardSegments", []), set(by_segment), "Original listening")
     heard_edited = _segments(payload.get("heardEditedSegments", []), changed, "Edited listening")
-    if set(heard_edited) != changed:
+    if require_hearing and set(heard_edited) != changed:
         raise ValueError("Listen to every exact edited cut before saving")
     previous_end = case["clipStartMs"]
     for word in words:
@@ -86,6 +90,12 @@ def validate_cut_edit(case, payload):
                 or not 40 <= end - start <= 3000 or start < previous_end):
             raise ValueError("Edited cuts require ordered non-overlapping geometry inside the listening clip")
         previous_end = end
+    return words, checked_edits, changed, heard, heard_edited
+
+
+def validate_cut_edit(case, payload):
+    """Return a held, source-bound proposal; fresh hearing never approves old coordinates."""
+    words, checked_edits, changed, heard, heard_edited = edited_words(case, payload)
     note = payload.get("note", "")
     if not isinstance(note, str) or len(note) > 2000:
         raise ValueError("Note must be text of at most 2000 characters")
@@ -100,3 +110,56 @@ def validate_cut_edit(case, payload):
                                                   "heardEditedSegments": heard_edited},
             "clipEvidence": clip_evidence, "note": note,
             "publicationStatus": "held", "automaticApproval": False}
+
+
+def validate_word_review(case, payload):
+    """Bind one actual verdict to every current slider coordinate in the verse."""
+    submission = payload.get("submissionId")
+    if not isinstance(submission, str) or not re.fullmatch(r"[A-Za-z0-9_-]{16,128}", submission):
+        raise ValueError("A unique review submission identity is required")
+    verdict = payload.get("verdict")
+    if verdict not in ("good", "problem", "skip"):
+        raise ValueError("Unknown listening decision")
+    words, checked_edits, changed, heard, heard_edited = edited_words(
+        case, payload, require_edits=False, require_hearing=verdict == "good")
+    # Revalidate immutable direct/reused original hearing, but never approve the
+    # original coordinates merely because the edited coordinates were heard.
+    original = validate_decision(case, {**payload, "verdict": "problem", "note": ""})
+    evidence = original["listenEvidenceReportedByBrowser"]
+    allowed = {word["segment"] for word in case["words"]}
+    if verdict == "good" and not allowed - changed <= set(heard):
+        raise ValueError("Listen to every unchanged exact word cut before confirming")
+    note = payload.get("note", "")
+    if not isinstance(note, str) or len(note) > 2000:
+        raise ValueError("Note must be text of at most 2000 characters")
+    evidence["heardEditedSegments"] = heard_edited
+    edited_sha = digest_json({"candidateSha256": case["candidateSha256"],
+                              "clipSha256": case["clipSha256"], "words": words})
+    row = {"kind": "manual-word-review", "scope": "one-verse-manual-timing-review",
+            "submissionId": submission, "caseId": case["id"],
+            "perekId": case["perekId"], "pasuk": case["pasuk"],
+            **{key: case[key] for key in ("audioSha256", "textSha256", "candidateSha256",
+                                           "clipSha256", "diagnosticSha256")},
+            "editedCandidateSha256": edited_sha,
+            "timingEdits": sorted(checked_edits, key=lambda edit: edit["segment"]),
+            "candidateWords": words, "changedSegments": sorted(changed),
+            "listenEvidenceReportedByBrowser": evidence, "clipEvidence": verify_clip(case),
+            "verdict": verdict, "note": note.strip() if verdict == "problem" else "",
+            "reviewMethod": "human-listening-manual-timing-review",
+            "publicationStatus": "held", "automaticApproval": False}
+    return {**row, "reviewSha256": digest_json(row)}
+
+
+def verify_word_review(case, row, queue_sha):
+    """Revalidate a saved typed review without converting it into an old-cut verdict."""
+    evidence = row.get("listenEvidenceReportedByBrowser", {})
+    checked = validate_word_review(case, {**row,
+        "heardSegments": evidence.get("heardSegments", []),
+        "heardEditedSegments": evidence.get("heardEditedSegments", []),
+        "freshHeardSegments": evidence.get("freshHeardSegments", []),
+        "verseHeard": evidence.get("verseHeard", False)})
+    if (any(row.get(key) != value for key, value in checked.items())
+            or row.get("queueSha256") != queue_sha or not isinstance(row.get("savedAt"), str)
+            or not row["savedAt"]):
+        raise ValueError("Manual timing review differs from its exact saved source or hearing")
+    return row
