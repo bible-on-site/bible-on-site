@@ -35,9 +35,10 @@ public static class MasoraUnitText
     /// <summary>
     /// Decomposes a range into ordered per-perek slices in canonical order.
     /// Interior perakim are sliced whole ([1 .. perek end]); segment bounds
-    /// attach only to the range's own start/end coordinates.
+    /// attach only to the range's own start/end coordinates. Shared by every
+    /// division whose units carry the contract's inclusive range shape.
     /// </summary>
-    public static List<PerekSlice> PerekSlicesForRange(MasoraUnitRange range)
+    public static List<PerekSlice> PerekSlicesForRange(IScriptureRange range)
     {
         var slices = new List<PerekSlice>();
         for (var perekId = range.StartPerekId; perekId <= range.EndPerekId; perekId++)
