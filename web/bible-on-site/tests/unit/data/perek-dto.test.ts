@@ -4,6 +4,7 @@ jest.mock("../../../src/util/date", () => ({
 
 import {
 	countRecordedPerakim,
+	getAdjacentPereks,
 	getPerekByPerekId,
 	getPerekIdByDate,
 	getTodaysPerekId,
@@ -306,5 +307,33 @@ describe("countRecordedPerakim", () => {
 
 	it("counts the canonical data's published recordings", () => {
 		expect(countRecordedPerakim()).toBeGreaterThan(400);
+	});
+});
+
+describe("getAdjacentPereks", () => {
+	it("returns canonical neighbors for a mid-sequence perek", () => {
+		const { prev, next } = getAdjacentPereks(500);
+		expect(prev?.perekId).toBe(499);
+		expect(next?.perekId).toBe(501);
+		expect(prev?.source).toBe(getPerekByPerekId(499).source);
+		expect(next?.source).toBe(getPerekByPerekId(501).source);
+	});
+
+	it("returns null prev at the corpus start", () => {
+		const { prev, next } = getAdjacentPereks(1);
+		expect(prev).toBeNull();
+		expect(next?.perekId).toBe(2);
+	});
+
+	it("returns null next at the corpus end", () => {
+		const { prev, next } = getAdjacentPereks(929);
+		expect(next).toBeNull();
+		expect(prev?.perekId).toBe(928);
+	});
+
+	it("crosses the עזרא ע/עזרא נ additional boundary by canonical id", () => {
+		const { prev, next } = getAdjacentPereks(852);
+		expect(prev?.source).toBe("עזרא ע י");
+		expect(next?.source).toBe("עזרא נ ב");
 	});
 });
