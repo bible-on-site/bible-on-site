@@ -15,6 +15,9 @@ a {color:#315b9a;font-size:14px}
 .card {background:#fff;border:1px solid #e1e7ed;border-radius:20px;padding:32px;box-shadow:0 8px 30px #17283c06}
 #progress {font-size:14px;color:#607086}
 #queue-updates:not(:empty) {background:#fff4dc;border:1px solid #d9b460;border-radius:10px;padding:12px;line-height:1.5}
+#preparation-progress {margin-bottom:20px;padding:16px 20px;border:1px solid #dce5ef;border-radius:12px;background:#edf3f9;line-height:1.7;color:#405770}
+#preparation-progress p {margin:4px 0 0;font-size:14px}
+#proposal-kind {color:#607086;font-size:14px;line-height:1.6}
 #prior {white-space:pre-line}
 h2 {font-size:28px;margin:8px 0 16px}
 .instructions {color:#607086;line-height:1.7;margin:0 0 22px}
@@ -69,11 +72,13 @@ input:focus-visible {outline:3px solid #6698e0;outline-offset:3px}
 <body>
 <main>
 <header><h1>בדיקת הקלטות</h1><a href="/archive">ארכיון התשובות</a><a href="/api/export" download="listening-reviews.json">הורדת התשובות</a></header>
+<section id="preparation-progress" role="status" hidden><strong id="preparation-state"></strong><p id="preparation-counts"></p></section>
 <section class="card" aria-labelledby="reference">
 <div id="progress">טוען...</div>
 <p id="queue-updates" role="status" aria-live="polite"></p>
 <div class="controls"><button class="primary" id="updated-version" hidden>פתיחת החיתוכים המעודכנים</button><button id="previous-version" hidden>הגרסה הקודמת וההערה</button></div>
 <h2 id="reference">הקלטות לבדיקה</h2>
+<p id="proposal-kind" hidden></p>
 <p class="instructions">האזינו לחיתוכי המילים. אפשר גם ללחוץ על מילה בנפרד, או להשמיע את הפסוק וההקשר. אם מילה חסרה, נחתכת או כוללת מילה אחרת - סמנו בעיה.</p>
 <details id="prior-history"><summary>הערות וגרסאות קודמות</summary><p id="prior" class="instructions" hidden></p></details>
 <div class="controls">
@@ -444,6 +449,7 @@ function render() {
   stop();
   const item = caseNow();
   if (!item) {
+    $("proposal-kind").hidden = true;
     $("reference").textContent = "סיימת את הפסוקים המוכנים כרגע";
     $("progress").textContent = "כל התשובות נשמרו";
     $("words").replaceChildren(); $("editor-rows").replaceChildren(); cutRows.clear(); $("timing-editor").hidden = true;
@@ -461,6 +467,9 @@ function render() {
   }
   updateProgress();
   $("reference").textContent = item.label;
+  $("proposal-kind").hidden = item.preparationKind !== "machine-suspect";
+  $("proposal-kind").textContent = item.preparationKind === "machine-suspect"
+    ? "הצעה אוטומטית שעדיין לא נבדקה בהאזנה. אפשר לתקן את החיתוכים ולשמור כתקין לאחר ההאזנה." : "";
   $("prior").hidden = !item.reviewKind;
   const reviewDescription = historicalCase ? "מוצגת גרסה קודמת. לבדיקה החדשה פתחו את החיתוכים המעודכנים."
     : item.changedSegments?.length ? "חיתוכים מעודכנים לבדיקה חוזרת."
@@ -710,6 +719,29 @@ async function refreshQueue(initial = false) {
 $("note").oninput = () => { if (caseNow()) typedProblemDraftKeys.add(stateKey(caseNow())); rememberDraft(); updateCutEditorStatus(); };
 setInterval(() => void refreshQueue(), 5000);
 setInterval(() => void updateRecovery(), 5000);
+async function updatePreparation() {
+  try {
+    const response = await fetch("/api/preparation-status", {cache:"no-store"});
+    if (!response.ok) { $("preparation-progress").hidden = true; return; }
+    const progress = await response.json();
+    const labels = {starting:"העיבוד המקומי מתחיל",preparing:"המחשב מכין פסוקים נוספים לבדיקה",
+      prepared:"הפסוקים ממוינים להמשך הבדיקה",waiting_for_review_capacity:"פסוקים נוספים יתווספו כשיתפנה מקום ברשימה",
+      completed:"המיון המקומי הסתיים",failed:"העיבוד המקומי נעצר ודורש טיפול"};
+    if (!Number.isSafeInteger(progress.targetVerses) || progress.targetVerses < 0
+        || !Number.isSafeInteger(progress.remainingToPrepare) || progress.remainingToPrepare < 0
+        || !Number.isSafeInteger(progress.machinePreparedVerses) || progress.machinePreparedVerses < 0
+        || !Number.isSafeInteger(progress.counts?.held ?? 0) || (progress.counts?.held ?? 0) < 0) return;
+    $("preparation-state").textContent = labels[progress.state] ?? "עיבוד מקומי";
+    $("preparation-counts").textContent = "במאגר העיבוד: " + progress.targetVerses + " פסוקים שסומנו. "
+      + "הוכנו אוטומטית לבדיקה: " + progress.machinePreparedVerses
+      + " · ממתינים להכנה: " + progress.remainingToPrepare
+      + " · דורשים טיפול נוסף: " + (progress.counts?.held ?? 0)
+      + ". הרשימה למטה מציגה רק את הפסוקים הזמינים כרגע להאזנה.";
+    $("preparation-progress").hidden = false;
+  } catch { /* A preparation status outage must never alter the active review or draft. */ }
+}
+setInterval(() => void updatePreparation(), 5000);
+void updatePreparation();
 void updateRecovery();
 document.addEventListener("visibilitychange", () => { if (document.hidden) stop(); });
 window.addEventListener("pagehide", stop);
