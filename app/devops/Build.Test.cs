@@ -79,8 +79,10 @@ partial class Build
         // no NuGet imports. Project evaluation would change NUKE's output
         // directory and require test-platform package targets unnecessarily.
         var harnessDirectory = RootDirectory / "BibleOnSite.Tests.MobileE2E/bin/Debug/net10.0";
+        // No --stop-on-fail: MTP reports never-run tests as skipped rather than
+        // failed, so aborting on the first failure would hide the rest of the
+        // shard's results. Every selected test runs once.
         var appArgs = $"--config-file \"{harnessDirectory / "testconfig.json"}\" --filter-query \"/[{MobileE2ESelectionFilter()}]\"" +
-            " --stop-on-fail on" +
             $" --diagnostic --diagnostic-verbosity Information --diagnostic-output-directory \"{resultsDirectory}\"" +
             " --hangdump --hangdump-timeout 10m --hangdump-type Mini" +
             " --report-xunit-trx --report-xunit-trx-filename mobile-e2e.trx" +
@@ -116,10 +118,6 @@ partial class Build
         // Every predicate stays parenthesized — the filter-query grammar treats
         // a bare "A=B|C=D" group as one malformed predicate and runs zero tests.
         var baseFilter = $"(Category=MobileE2E)&((Platform=Shared)|(Platform={(MobileIsAndroid ? "Android" : "iOS")}))";
-        // A shard run (#2083) narrows the platform set to one Shard trait group —
-        // the shards' disjoint union reproduces the unsharded suite exactly.
-        var shard = Environment.GetEnvironmentVariable("MOBILE_E2E_SHARD");
-        baseFilter += MobileE2EShardFilter.Create(shard);
         var selectionPath = Environment.GetEnvironmentVariable("MOBILE_E2E_SELECTION");
         if (string.IsNullOrEmpty(selectionPath))
         {

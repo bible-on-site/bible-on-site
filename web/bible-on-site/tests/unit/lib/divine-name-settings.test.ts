@@ -64,8 +64,44 @@ describe("normalizeDivineNameMasking", () => {
 		expect(
 			normalizeDivineNameMasking({ yhwhCustom: "א".repeat(200) }).yhwhCustom,
 		).toHaveLength(40));
-	it("treats a non-true enabled flag as disabled", () =>
-		expect(normalizeDivineNameMasking({ enabled: "yes" }).enabled).toBe(false));
+	it("falls back to the default for a non-boolean enabled flag", () =>
+		expect(normalizeDivineNameMasking({ enabled: "yes" }).enabled).toBe(true));
+});
+
+describe("fresh-install defaults (#2404)", () => {
+	it("defaults to enabled masking with אל -> א-ל when nothing was stored", () => {
+		expect(DEFAULT_DIVINE_NAME_MASKING).toEqual(
+			expect.objectContaining({ enabled: true, el: "hyphen" }),
+		);
+		localStorage.clear();
+		expect(getDivineNameMaskingSettings()).toEqual(
+			DEFAULT_DIVINE_NAME_MASKING,
+		);
+	});
+	it("masks אֵל as א-ל on the first read with no stored settings", () => {
+		localStorage.clear();
+		expect(
+			maskDivineNameValue("אֵ֑ל", getDivineNameMaskingSettings()),
+		).toBe("א-ל");
+	});
+	it("keeps a stored disabled toggle and an explicit אל כמות שהוא choice", () => {
+		localStorage.setItem(
+			DIVINE_NAME_MASKING_KEY,
+			JSON.stringify({ enabled: false, el: "asis" }),
+		);
+		expect(getDivineNameMaskingSettings()).toEqual(
+			expect.objectContaining({ enabled: false, el: "asis" }),
+		);
+	});
+	it("does not confuse a stored false with a missing value for the other defaults", () => {
+		localStorage.setItem(
+			DIVINE_NAME_MASKING_KEY,
+			JSON.stringify({ enabled: false }),
+		);
+		const s = getDivineNameMaskingSettings();
+		expect(s.enabled).toBe(false);
+		expect(s.el).toBe("hyphen");
+	});
 });
 
 describe("persistence and change notifications", () => {
@@ -103,7 +139,7 @@ describe("persistence and change notifications", () => {
 	});
 	it("re-reads localStorage on cross-tab storage events", () => {
 		subscribeDivineNameMasking(() => {});
-		expect(getDivineNameMaskingSnapshot().enabled).toBe(false);
+		expect(getDivineNameMaskingSnapshot().enabled).toBe(true);
 		localStorage.setItem(
 			DIVINE_NAME_MASKING_KEY,
 			JSON.stringify({ enabled: true, yhwh: "dalet" }),

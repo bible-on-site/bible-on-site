@@ -30,6 +30,15 @@ public class LearningCalendarViewModelTests
         "INSERT INTO tanah_perek_date VALUES (1,4,'57851207','57851207','17:16')"
     ];
 
+    // Cycle 1 with three study days inside one calendar week (Sunday-Wednesday)
+    // so Friday/Saturday resolve to a whole-week review (#2365).
+    private static readonly string[] WeekReviewCycle =
+    [
+        "INSERT INTO tanah_perek_date VALUES (1,1,'57750329','57750329','17:16')",
+        "INSERT INTO tanah_perek_date VALUES (2,1,'57750401','57750401','17:16')",
+        "INSERT INTO tanah_perek_date VALUES (3,1,'57750402','57750402','17:16')"
+    ];
+
     private sealed class Fixture : IAsyncDisposable
     {
         public required TestStorage Storage { get; init; }
@@ -381,6 +390,248 @@ public class LearningCalendarViewModelTests
         missing.PerekId.Should().Be(999);
         missing.PerekSource.Should().BeEmpty();
         missing.IsTappable.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task ReviewDays_CoverTheWholeStudiedWeek()
+    {
+        await using var fixture = await CreateFixtureAsync(WeekReviewCycle);
+        var vm = fixture.ViewModel;
+        await vm.InitializeAsync();
+
+        fixture.Schedule.ResolveDay(57750404).ReviewPerekIds.Should().Equal(1, 2, 3);
+        fixture.Schedule.ResolveDay(57750405).ReviewPerekIds.Should().Equal(1, 2, 3);
+
+        vm.SelectedYear = Option(vm.YearOptions, 5775);
+        vm.SelectedMonth = Option(vm.MonthOptions, 4); // Tevet
+
+        var friday = vm.Cells.First(c => c.DateNumber == 57750404);
+        var saturday = vm.Cells.First(c => c.DateNumber == 57750405);
+        friday.IsReview.Should().BeTrue();
+        friday.PerekSource.Should().Be("בראשית א - בראשית ג");
+        friday.AccessibilityText.Should().Contain("חזרה: בראשית א - בראשית ג");
+        saturday.IsReview.Should().BeTrue();
+        saturday.PerekSource.Should().Be("בראשית א - בראשית ג");
+    }
+
+    [Fact]
+    public async Task YearView_GroupsEveryMonthOfTheYear()
+    {
+        await using var fixture = await CreateFixtureAsync(CyclesOneToFour);
+        var vm = fixture.ViewModel;
+        await vm.InitializeAsync();
+        var today = HebrewDateHelper.GetTodayDateNumber();
+        var (year, _, _) = HebrewDateHelper.NumberToHebrewDate(today);
+
+        vm.SetViewModeCommand.Execute(CalendarViewMode.Year);
+
+        vm.ViewMode.Should().Be(CalendarViewMode.Year);
+        vm.IsGroupedView.Should().BeTrue();
+        vm.IsMonthView.Should().BeFalse();
+        vm.MonthLabel.Should().Be($"שנת ה'{GimatryHelper.ToLetters(year % 1000)}");
+        vm.MonthGroups.Should().HaveCount(HebrewDateHelper.GetMonthOrder(year).Length);
+        vm.MonthGroups.SelectMany(g => g.Cells)
+            .Should().Contain(c => c.PerekId != null);
+    }
+
+    [Fact]
+    public async Task CycleView_GroupsTheWholeCycle_AndDimsOutsideDays()
+    {
+        await using var fixture = await CreateFixtureAsync(CyclesOneToFour);
+        var vm = fixture.ViewModel;
+        await vm.InitializeAsync();
+
+        vm.SetViewModeCommand.Execute(CalendarViewMode.Cycle);
+
+        vm.ViewMode.Should().Be(CalendarViewMode.Cycle);
+        var displayed = fixture.Schedule.GetCycleForDate(HebrewDateHelper.GetTodayDateNumber());
+        var expected = displayed?.Number ?? 1;
+        vm.SelectedCycle!.Value.Should().Be(expected);
+        vm.MonthLabel.Should().StartWith($"מחזור {expected}");
+
+        vm.MonthGroups.Should().HaveCountGreaterThan(1);
+
+        var cells = vm.MonthGroups.SelectMany(g => g.Cells).Where(c => !c.IsBlank).ToList();
+        cells.Should().Contain(c => !c.IsDimmed);
+        cells.Should().Contain(c => c.IsDimmed);
+        // Scheduled in-cycle days remain navigable.
+        cells.Where(c => !c.IsDimmed && c.PerekId != null).Should().NotBeEmpty();
+    }
+
+    [Fact]
+    public async Task CycleView_NavigationMovesBetweenCycles()
+    {
+        await using var fixture = await CreateFixtureAsync(CyclesOneToFour);
+        var vm = fixture.ViewModel;
+        await vm.InitializeAsync();
+        vm.SetViewModeCommand.Execute(CalendarViewMode.Cycle);
+        var before = vm.SelectedCycle!.Value;
+
+        vm.NextMonthCommand.Execute(null);
+        vm.SelectedCycle!.Value.Should().Be(before + 1);
+        vm.MonthLabel.Should().StartWith($"מחזור {before + 1}");
+
+        vm.PrevMonthCommand.Execute(null);
+        vm.SelectedCycle!.Value.Should().Be(before);
+
+        // Previous is disabled on the first cycle.
+        vm.SelectedCycle = Option(vm.CycleOptions, 1);
+        vm.PrevMonthCommand.CanExecute(null).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task MonthCommands_InYearView_MoveBetweenYears()
+    {
+        await using var fixture = await CreateFixtureAsync(CyclesOneToFour);
+        var vm = fixture.ViewModel;
+        await vm.InitializeAsync();
+        var today = HebrewDateHelper.GetTodayDateNumber();
+        var (year, month, _) = HebrewDateHelper.NumberToHebrewDate(today);
+        vm.SetViewModeCommand.Execute(CalendarViewMode.Year);
+
+        vm.NextMonthCommand.Execute(null);
+        vm.MonthLabel.Should().Be($"שנת ה'{GimatryHelper.ToLetters((year + 1) % 1000)}");
+        // The viewed month is preserved across the year jump when it exists.
+        vm.SelectedMonth!.Value.Should().Be(
+            HebrewDateHelper.GetMonthOrder(year + 1).Contains(month) ? month : 6);
+    }
+
+    [Fact]
+    public async Task SetViewMode_ToCurrentMode_LeavesCalendarUntouched()
+    {
+        await using var fixture = await CreateFixtureAsync(CyclesOneToFour);
+        var vm = fixture.ViewModel;
+        await vm.InitializeAsync();
+        var cells = vm.Cells;
+        var groups = vm.MonthGroups;
+
+        vm.SetViewModeCommand.Execute(vm.ViewMode);
+
+        vm.Cells.Should().BeSameAs(cells);
+        vm.MonthGroups.Should().BeSameAs(groups);
+    }
+
+    [Fact]
+    public async Task SetViewMode_ToGroupedView_DoesNotRebuildHiddenMonthGrid()
+    {
+        // #2455: building the hidden month grid's cells in year/cycle mode only
+        // flooded the invisible CollectionView with redundant work.
+        await using var fixture = await CreateFixtureAsync(CyclesOneToFour);
+        var vm = fixture.ViewModel;
+        await vm.InitializeAsync();
+        var cells = vm.Cells;
+
+        vm.SetViewModeCommand.Execute(CalendarViewMode.Year);
+
+        vm.Cells.Should().BeSameAs(cells);
+        vm.MonthGroups.Should().NotBeEmpty();
+
+        vm.SetViewModeCommand.Execute(CalendarViewMode.Cycle);
+        vm.Cells.Should().BeSameAs(cells);
+
+        vm.SetViewModeCommand.Execute(CalendarViewMode.Month);
+        vm.Cells.Should().NotBeNullOrEmpty();
+    }
+
+    [Fact]
+    public async Task YearView_NavigateBeyondListedYears_AddsYearOption()
+    {
+        // #2455: option lists rebuild only when their inputs change; a year
+        // outside the confirmed-cycle range is appended to the picker.
+        await using var fixture = await CreateFixtureAsync(CyclesOneToFour);
+        var vm = fixture.ViewModel;
+        await vm.InitializeAsync();
+        vm.SetViewModeCommand.Execute(CalendarViewMode.Year);
+        var maxListed = vm.YearOptions.Max(o => o.Value);
+
+        while (vm.SelectedYear?.Value <= maxListed)
+        {
+            vm.NextMonthCommand.Execute(null);
+        }
+
+        vm.SelectedYear.Should().NotBeNull();
+        vm.SelectedYear!.Value.Should().BeGreaterThan(maxListed);
+        vm.YearOptions.Select(o => o.Value).Should().Contain(vm.SelectedYear.Value);
+        vm.MonthGroups.Should().NotBeEmpty();
+    }
+
+    [Fact]
+    public async Task CycleView_FromMonthBeforeCycleOne_DefaultsToCycleOne()
+    {
+        await using var fixture = await CreateFixtureAsync(CyclesOneToFour);
+        var vm = fixture.ViewModel;
+        await vm.InitializeAsync();
+        // Tishrei 5775 precedes cycle 1's start (29 Kislev 5775), so no cycle
+        // covers the viewed month and the picker falls back to the first cycle.
+        vm.SelectedYear = Option(vm.YearOptions, 5775);
+        vm.SelectedMonth = Option(vm.MonthOptions, 1);
+
+        vm.SetViewModeCommand.Execute(CalendarViewMode.Cycle);
+
+        vm.ViewMode.Should().Be(CalendarViewMode.Cycle);
+        vm.SelectedCycle!.Value.Should().Be(1);
+        vm.MonthGroups.Should().NotBeEmpty();
+    }
+
+    [Fact]
+    public async Task MonthCommands_InYearView_MoveBackOneYear()
+    {
+        await using var fixture = await CreateFixtureAsync(CyclesOneToFour);
+        var vm = fixture.ViewModel;
+        await vm.InitializeAsync();
+        var (year, _, _) = HebrewDateHelper.NumberToHebrewDate(HebrewDateHelper.GetTodayDateNumber());
+        vm.SetViewModeCommand.Execute(CalendarViewMode.Year);
+
+        vm.PrevMonthCommand.Execute(null);
+
+        vm.MonthLabel.Should().Be($"שנת ה'{GimatryHelper.ToLetters((year - 1) % 1000)}");
+    }
+
+    [Fact]
+    public async Task SelectingCycle_WithinViewedYear_NavigatesToItsStartMonth()
+    {
+        await using var fixture = await CreateFixtureAsync(CyclesOneToFour);
+        var vm = fixture.ViewModel;
+        await vm.InitializeAsync();
+        // View Tishrei 5775 while picking cycle 1, whose start is Kislev 5775:
+        // same year, different month, so only the month has to move.
+        vm.SelectedYear = Option(vm.YearOptions, 5775);
+        vm.SelectedMonth = Option(vm.MonthOptions, 1);
+
+        vm.SelectedCycle = Option(vm.CycleOptions, 1);
+
+        vm.SelectedMonth!.Value.Should().Be(3);
+        vm.SelectedYear!.Value.Should().Be(5775);
+    }
+
+    [Fact]
+    public async Task CycleView_PrevEnabledPastTheFirstCycle()
+    {
+        await using var fixture = await CreateFixtureAsync(CyclesOneToFour);
+        var vm = fixture.ViewModel;
+        await vm.InitializeAsync();
+        vm.SetViewModeCommand.Execute(CalendarViewMode.Cycle);
+        vm.NextMonthCommand.Execute(null);
+
+        vm.PrevMonthCommand.CanExecute(null).Should().BeTrue();
+        vm.SetViewModeCommand.Execute(CalendarViewMode.Month);
+        vm.PrevMonthCommand.CanExecute(null).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task DownloadPdfCommand_RequiresDeviceLauncher()
+    {
+        await using var fixture = await CreateFixtureAsync(CyclesOneToFour);
+        var vm = fixture.ViewModel;
+        await vm.InitializeAsync();
+
+        // The export URL building is exercised in every view mode; the
+        // Launcher hand-off is device-only and faults on the unit-test host.
+        foreach (var mode in new[] { CalendarViewMode.Month, CalendarViewMode.Year, CalendarViewMode.Cycle })
+        {
+            vm.SetViewModeCommand.Execute(mode);
+            await Assert.ThrowsAnyAsync<Exception>(() => vm.DownloadPdfCommand.ExecuteAsync(null));
+        }
     }
 
     [Fact]

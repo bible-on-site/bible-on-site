@@ -1,4 +1,4 @@
-FROM node:26.12.0-alpine@sha256:6f08a523443ddedf52941874c203475b0ad503e859ad70cb26ab8be9a517dbd5
+FROM node:26.12.1-alpine@sha256:40cd011b55415bc894e45b02fdd5a5dfde056921b7d23a64c74f80497af48797
 WORKDIR /opt/s3-init
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev

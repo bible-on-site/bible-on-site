@@ -692,4 +692,14 @@ public class HebrewDateHelperTests
     }
 
     #endregion
+
+[Fact]
+    public void GetTzeitTimeOfDay_PolarLatitudeWithoutDusk_ShouldReturnFallback()
+    {
+        // At 80°N near the solstice the sun never reaches the 96° zenith —
+        // cosHourAngle falls outside [-1,1] and the fixed Jerusalem fallback applies.
+        var tzeit = HebrewDateHelper.GetTzeitTimeOfDay(new DateTime(2026, 6, 21), 80.0, 35.0);
+
+        tzeit.Should().Be(new TimeSpan(19, 30, 0));
+    }
 }

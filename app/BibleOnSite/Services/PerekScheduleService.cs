@@ -55,7 +55,14 @@ public class PerekScheduleService
         DayStatus Status,
         int? PerekId,
         int? Cycle,
-        bool Projected);
+        bool Projected)
+    {
+        /// <summary>
+        /// Perakim reviewed on this day: every perek studied in the same calendar
+        /// week (Sunday through this day). Null on study and unscheduled days (#2365).
+        /// </summary>
+        public IReadOnlyList<int>? ReviewPerekIds { get; init; }
+    }
 
     /// <summary>A month-grid cell: null Day marks a leading blank before the 1st.</summary>
     public record MonthCell(CalendarDay? Day);
@@ -67,6 +74,16 @@ public class PerekScheduleService
     private Dictionary<int, List<ScheduleEntry>>? _entriesByCycle;
     /// <summary>(Cycle number, start date) pairs ordered by cycle number.</summary>
     private List<(int Number, int StartDate)>? _confirmedStarts;
+    /// <summary>
+    /// Per confirmed cycle: start/end as absolute Gregorian day indexes plus the
+    /// cycle's entries ordered by Gregorian date, so day resolution is integer
+    /// math instead of repeated Hebrew-calendar conversions (#2455).
+    /// </summary>
+    private List<(int Number, int StartDate, long StartDay, long EndDay)>? _confirmedSpans;
+    private Dictionary<int, (long[] Days, int[] PerekIds)>? _cycleTimelines;
+    /// <summary>Resolved days and built months are immutable once loaded (#2455).</summary>
+    private readonly Dictionary<int, CalendarDay> _dayCache = new();
+    private readonly Dictionary<int, IReadOnlyList<MonthCell>> _monthCache = new();
     /// <summary>Volatile for the double-checked lock in <see cref="LoadAsync"/>.</summary>
     private volatile bool _isLoaded;
 
@@ -163,6 +180,22 @@ public class PerekScheduleService
                     ?? pair.Value[0].DateNumber))
                 .ToList();
 
+            _confirmedSpans = _confirmedStarts
+                .Select(pair =>
+                {
+                    var startDay = DayIndex(pair.StartDate);
+                    return (pair.Number, pair.StartDate, startDay, startDay + (CycleDays - 1) * DayTicks);
+                })
+                .ToList();
+            _cycleTimelines = byCycle.ToDictionary(
+                pair => pair.Key,
+                pair =>
+                {
+                    var ordered = pair.Value.OrderBy(e => e.Gregorian).ToArray();
+                    return (ordered.Select(e => e.Gregorian.Ticks).ToArray(),
+                        ordered.Select(e => e.PerekId).ToArray());
+                });
+
             _entriesByDate = byDate;
             _entriesByCycle = byCycle;
             _isLoaded = true;
@@ -215,55 +248,77 @@ public class PerekScheduleService
             true);
     }
 
+    private const long DayTicks = 864_000_000_000; // TimeSpan.TicksPerDay
+
+    /// <summary>Absolute day index (Gregorian ticks) of a numeric Hebrew date.</summary>
+    private static long DayIndex(int dateNum) =>
+        HebrewDateHelper.ToGregorianDate(dateNum).Ticks;
+
+    /// <summary>Numeric Hebrew date of an absolute Gregorian day index.</summary>
+    private static int DateNumFromDayIndex(long dayIndex)
+    {
+        var gregorian = new DateTime(dayIndex);
+        var calendar = new System.Globalization.HebrewCalendar();
+        return HebrewDateHelper.HebrewDateToNumber((
+            calendar.GetYear(gregorian),
+            calendar.GetMonth(gregorian),
+            calendar.GetDayOfMonth(gregorian)));
+    }
+
+    /// <summary>
+    /// The projected cycle spanning an absolute day index past the confirmed
+    /// data, or null when the day falls in a projected inter-cycle gap.
+    /// Arithmetic on the 1302-day cadence replaces the old per-cycle walk.
+    /// </summary>
+    private StudyCycle? ProjectedCycleForDay(long dayIndex)
+    {
+        var last = _confirmedSpans![^1];
+        var cyclesAhead = (dayIndex - last.StartDay) / (CycleSpanDays * DayTicks);
+        var startDay = last.StartDay + cyclesAhead * CycleSpanDays * DayTicks;
+        if (dayIndex >= startDay + CycleDays * DayTicks)
+        {
+            return null;
+        }
+        return new StudyCycle(
+            last.Number + (int)cyclesAhead,
+            DateNumFromDayIndex(startDay),
+            DateNumFromDayIndex(startDay + (CycleDays - 1) * DayTicks),
+            true);
+    }
+
     /// <summary>
     /// Returns the cycle containing a numeric Hebrew date, or null when the date
     /// is outside every cycle (before the program or in an inter-cycle gap).
     /// </summary>
     public StudyCycle? GetCycleForDate(int dateNum)
     {
-        var starts = _confirmedStarts ?? throw new InvalidOperationException("Schedule not loaded");
-
-        foreach (var (number, start) in starts)
+        var spans = _confirmedSpans ?? throw new InvalidOperationException("Schedule not loaded");
+        if (spans.Count == 0)
         {
-            var offset = HebrewDateHelper.DaysBetween(start, dateNum);
-            if (offset < 0)
-            {
-                return null;
-            }
+            return null;
+        }
 
-            if (offset < CycleDays)
+        var dayIndex = DayIndex(dateNum);
+        if (dayIndex < spans[0].StartDay)
+        {
+            return null;
+        }
+
+        foreach (var (number, _, startDay, endDay) in spans)
+        {
+            if (dayIndex >= startDay && dayIndex <= endDay)
             {
                 return GetCycle(number);
             }
         }
 
-        if (starts.Count == 0)
+        if (dayIndex <= spans[^1].EndDay)
         {
+            // Inside a gap between confirmed cycles.
             return null;
         }
 
-        var projectedStart = starts[^1].StartDate;
-        var cycleNumber = starts[^1].Number + 1;
-        while (true)
-        {
-            projectedStart = HebrewDateHelper.AddDays(projectedStart, CycleSpanDays);
-            var offset = HebrewDateHelper.DaysBetween(projectedStart, dateNum);
-            if (offset < 0)
-            {
-                return null;
-            }
-
-            if (offset < CycleDays)
-            {
-                return new StudyCycle(
-                    cycleNumber,
-                    projectedStart,
-                    HebrewDateHelper.AddDays(projectedStart, CycleDays - 1),
-                    true);
-            }
-
-            cycleNumber++;
-        }
+        return ProjectedCycleForDay(dayIndex);
     }
 
     /// <summary>
@@ -279,38 +334,33 @@ public class PerekScheduleService
             return cycle;
         }
 
-        var starts = _confirmedStarts ?? throw new InvalidOperationException("Schedule not loaded");
-        foreach (var (number, start) in starts)
-        {
-            if (HebrewDateHelper.DaysBetween(dateNum, start) > 0)
-            {
-                return GetCycle(number);
-            }
-        }
-
-        if (starts.Count == 0)
+        var spans = _confirmedSpans ?? throw new InvalidOperationException("Schedule not loaded");
+        if (spans.Count == 0)
         {
             // No schedule data at all: callers only need a cycle number to
             // join against, so report the program's first cycle.
             return new StudyCycle(1, 0, 0, true);
         }
 
-        var projectedStart = starts[^1].StartDate;
-        var cycleNumber = starts[^1].Number + 1;
-        while (true)
+        var dayIndex = DayIndex(dateNum);
+        foreach (var (number, _, startDay, _) in spans)
         {
-            projectedStart = HebrewDateHelper.AddDays(projectedStart, CycleSpanDays);
-            if (HebrewDateHelper.DaysBetween(dateNum, projectedStart) > 0)
+            if (startDay > dayIndex)
             {
-                return new StudyCycle(
-                    cycleNumber,
-                    projectedStart,
-                    HebrewDateHelper.AddDays(projectedStart, CycleDays - 1),
-                    true);
+                return GetCycle(number);
             }
-
-            cycleNumber++;
         }
+
+        // Past the confirmed data: the next projected cycle begins within one
+        // 1302-day span of the last confirmed start.
+        var last = spans[^1];
+        var cyclesAhead = (dayIndex - last.StartDay) / (CycleSpanDays * DayTicks) + 1;
+        var projectedStartDay = last.StartDay + cyclesAhead * CycleSpanDays * DayTicks;
+        return new StudyCycle(
+            last.Number + (int)cyclesAhead,
+            DateNumFromDayIndex(projectedStartDay),
+            DateNumFromDayIndex(projectedStartDay + (CycleDays - 1) * DayTicks),
+            true);
     }
 
     /// <summary>
@@ -320,15 +370,35 @@ public class PerekScheduleService
     /// </summary>
     public CalendarDay ResolveDay(int dateNum)
     {
-        var (year, month, day) = HebrewDateHelper.NumberToHebrewDate(dateNum);
-        var dayOfWeek = HebrewDateHelper.GetDayOfWeek(year, month, day);
-
         if (_entriesByDate is null || _entriesByCycle is null)
         {
             throw new InvalidOperationException("Schedule not loaded");
         }
 
-        if (_entriesByDate.TryGetValue(dateNum, out var exact))
+        // Days are immutable once the schedule is loaded; the calendar rebuilds
+        // the same months on every navigation, so resolution is cached (#2455).
+        lock (_dayCache)
+        {
+            if (_dayCache.TryGetValue(dateNum, out var cached))
+            {
+                return cached;
+            }
+        }
+
+        var resolved = ResolveDayCore(dateNum);
+        lock (_dayCache)
+        {
+            _dayCache[dateNum] = resolved;
+        }
+        return resolved;
+    }
+
+    private CalendarDay ResolveDayCore(int dateNum)
+    {
+        var (year, month, day) = HebrewDateHelper.NumberToHebrewDate(dateNum);
+        var dayOfWeek = HebrewDateHelper.GetDayOfWeek(year, month, day);
+
+        if (_entriesByDate!.TryGetValue(dateNum, out var exact))
         {
             return new CalendarDay(dateNum, day, dayOfWeek, DayStatus.Study, exact.PerekId, exact.Cycle, false);
         }
@@ -341,21 +411,54 @@ public class PerekScheduleService
 
         if (!cycle.Projected)
         {
-            // In-cycle day without its own chapter: review the previous scheduled one.
-            // Entries are sorted chronologically, so the last earlier one wins.
-            // A confirmed cycle starts on its first entry's date and exact-match
-            // days returned above, so an earlier entry always exists here.
-            var dayGregorian = HebrewDateHelper.ToGregorianDate(dateNum);
-            var previous = _entriesByCycle[cycle.Number]
-                .Last(e => e.Gregorian < dayGregorian);
+            // In-cycle day without its own chapter: review the whole studied week
+            // (Sunday of this week through yesterday), not just the last perek
+            // (#2365). The cycle timeline is Gregorian-sorted, so the week's
+            // perakim are a binary search plus a short backward walk instead of
+            // a full scan of 929 entries (#2455).
+            var (ticks, perekIds) = _cycleTimelines![cycle.Number];
+            var dayTicks = HebrewDateHelper.ToGregorianDate(dateNum).Ticks;
+            var weekStartTicks = HebrewDateHelper.ToGregorianDate(
+                HebrewDateHelper.AddDays(dateNum, -dayOfWeek)).Ticks;
+            // First index with ticks >= dayTicks.
+            var upper = Array.BinarySearch(ticks, dayTicks);
+            if (upper < 0)
+            {
+                upper = ~upper;
+            }
+            var firstInWeek = upper;
+            while (firstInWeek > 0 && ticks[firstInWeek - 1] >= weekStartTicks)
+            {
+                firstInWeek--;
+            }
+            if (firstInWeek < upper)
+            {
+                return new CalendarDay(
+                    dateNum,
+                    day,
+                    dayOfWeek,
+                    DayStatus.Review,
+                    perekIds[upper - 1],
+                    cycle.Number,
+                    false)
+                {
+                    ReviewPerekIds = perekIds[firstInWeek..upper],
+                };
+            }
+            // A gap that left no study day this week: fall back to the last
+            // perek scheduled before this day in the cycle.
+            var previous = perekIds[Math.Max(0, upper - 1)];
             return new CalendarDay(
                 dateNum,
                 day,
                 dayOfWeek,
                 DayStatus.Review,
-                previous.PerekId,
+                previous,
                 cycle.Number,
-                false);
+                false)
+            {
+                ReviewPerekIds = [previous],
+            };
         }
 
         var projectedOffset = HebrewDateHelper.DaysBetween(cycle.StartDate, dateNum);
@@ -367,6 +470,12 @@ public class PerekScheduleService
         var perekIndex = isStudyDay
             ? week * StudyDaysPerWeek + dayIndex
             : week * StudyDaysPerWeek + (StudyDaysPerWeek - 1);
+        IReadOnlyList<int>? reviewPerekIds = isStudyDay
+            ? null
+            : Enumerable.Range(
+                    week * StudyDaysPerWeek + 1,
+                    Math.Min(StudyDaysPerWeek, PerakimPerCycle - week * StudyDaysPerWeek))
+                .ToArray();
         return new CalendarDay(
             dateNum,
             day,
@@ -374,7 +483,10 @@ public class PerekScheduleService
             isStudyDay ? DayStatus.Study : DayStatus.Review,
             perekIndex + 1,
             cycle.Number,
-            true);
+            true)
+        {
+            ReviewPerekIds = reviewPerekIds,
+        };
     }
 
     /// <summary>
@@ -392,6 +504,25 @@ public class PerekScheduleService
     /// leading blanks up to the first weekday, then one cell per month day.
     /// </summary>
     public IReadOnlyList<MonthCell> BuildMonth(int year, int legacyMonth)
+    {
+        var key = year * 100 + legacyMonth;
+        lock (_monthCache)
+        {
+            if (_monthCache.TryGetValue(key, out var cached))
+            {
+                return cached;
+            }
+        }
+
+        var built = BuildMonthCore(year, legacyMonth);
+        lock (_monthCache)
+        {
+            _monthCache[key] = built;
+        }
+        return built;
+    }
+
+    private IReadOnlyList<MonthCell> BuildMonthCore(int year, int legacyMonth)
     {
         var daysInMonth = HebrewDateHelper.GetDaysInMonth(year, legacyMonth);
         var firstDayOfWeek = HebrewDateHelper.GetDayOfWeek(year, legacyMonth, 1);

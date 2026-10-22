@@ -17,12 +17,17 @@ namespace BibleOnSite.Services;
 public class PerushimNotesService
 {
     private const string NotesDbName = "sefaria-dump-5784-sivan-4.perushim_notes.sqlite";
+#if IOS || MACCATALYST
+    // App Store Connect accepts only alphanumerics and hyphens in asset-pack IDs.
+    private const string PerushimNotesPackName = "perushim-notes";
+#else
     private const string PerushimNotesPackName = "perushim_notes";
+#endif
     private const string RemovedMarkerName = NotesDbName + ".removed";
 
     /// <summary>
     /// Ready-to-query FTS5 search index generated with the notes content — the
-    /// second payload file of the perushim_notes pack. It is staged here before
+    /// second payload file of the notes asset pack. It is staged here before
     /// <see cref="SearchIndexService"/> adopts it into its cache.
     /// </summary>
     internal const string SearchIndexDbName = "sefaria-dump-5784-sivan-4.hebrew_search.sqlite";
@@ -45,6 +50,27 @@ public class PerushimNotesService
     private string _notesValidationStatus = "Notes database unavailable";
     private readonly SemaphoreSlim _operationLock = new(1, 1);
 
+    /// <summary>
+    /// Raised after initialization, a download or a removal releases the pack,
+    /// so work deferred while notes were undetermined can settle.
+    /// </summary>
+    internal event Action? OperationCompleted
+    {
+        add { lock (_operationCompletedSync) { _operationCompleted += value; } }
+        remove { lock (_operationCompletedSync) { _operationCompleted -= value; } }
+    }
+
+    private readonly object _operationCompletedSync = new();
+    private Action? _operationCompleted;
+
+    private void ReleaseOperation()
+    {
+        _operationLock.Release();
+        Action? handlers;
+        lock (_operationCompletedSync) { handlers = _operationCompleted; }
+        handlers?.Invoke();
+    }
+
     public PerushimNotesService(IPadDeliveryService padService)
         : this(padService, null, null, null)
     {
@@ -62,7 +88,7 @@ public class PerushimNotesService
         _fileSystem = fileSystem ?? FileSystem.Current;
         _deviceInfo = deviceInfo ?? DeviceInfo.Current;
         _appInfo = appInfo ?? AppInfo.Current;
-        _catalog = new PerushimCatalogService(_fileSystem);
+        _catalog = new PerushimCatalogService(_fileSystem, _appInfo);
     }
 
     /// <summary>
@@ -115,6 +141,40 @@ public class PerushimNotesService
 
     /// <summary>Whether compatible notes are available from store delivery or a bundled asset.</summary>
     public bool IsAvailable => _initialized && !_notesMissing && _connection != null;
+
+    /// <summary>Whether <see cref="InitializeAsync"/> already settled once (successfully or not).</summary>
+    public bool IsInitialized => _initialized;
+
+    /// <summary>
+    /// Whether the local notes DB file is on disk. When it is absent and the
+    /// service is uninitialized, <see cref="InitializeAsync"/> will first
+    /// materialize the delivered pack — a copy of hundreds of MB inside the
+    /// operation lock — so UI-critical callers should kick it instead of
+    /// awaiting it.
+    /// </summary>
+    internal bool HasLocalNotesFile => File.Exists(Path.Join(DataDirectory, NotesDbName));
+
+    /// <summary>
+    /// Starts initialization without awaiting it; a faulted init logs here
+    /// instead of surfacing as an unobserved task exception. Callers that
+    /// cannot block on first-launch pack materialization use this and rely on
+    /// <see cref="OperationCompleted"/> to re-check availability.
+    /// </summary>
+    public void BeginInitialize()
+    {
+        // Task.Run keeps the file probes and pack-copy prefix off the
+        // caller's thread — BeginInitialize exists for UI-critical callers.
+        _ = Task.Run(InitializeAsync).ContinueWith(
+            task => Console.WriteLine($"Perushim notes init failed: {task.Exception}"),
+            TaskContinuationOptions.OnlyOnFaulted);
+    }
+
+    /// <summary>
+    /// True only after initialization determined the notes pack is actually
+    /// missing. An unchecked pack is assumed present so search availability
+    /// never hides commentary merely because nobody asked yet (#2454).
+    /// </summary>
+    internal bool IsDeterminedMissing => _initialized && !IsAvailable;
 
     internal async Task<SQLiteAsyncConnection?> GetSearchConnectionAsync()
     {
@@ -211,7 +271,7 @@ public class PerushimNotesService
     {
         await _operationLock.WaitAsync();
         try { await InitializeCoreAsync(); }
-        finally { _operationLock.Release(); }
+        finally { ReleaseOperation(); }
     }
 
     private async Task InitializeCoreAsync()
@@ -284,7 +344,7 @@ public class PerushimNotesService
     {
         await _operationLock.WaitAsync(cancellationToken);
         try { return await TryDownloadNotesCoreAsync(progress, cancellationToken); }
-        finally { _operationLock.Release(); }
+        finally { ReleaseOperation(); }
     }
 
     /// <summary>
@@ -311,7 +371,7 @@ public class PerushimNotesService
             _notesValidationStatus = "Removed by user";
             _initialized = true;
         }
-        finally { _operationLock.Release(); }
+        finally { ReleaseOperation(); }
     }
 
     private async Task<bool> TryDownloadNotesCoreAsync(IProgress<double>? progress, CancellationToken cancellationToken)
@@ -373,7 +433,7 @@ public class PerushimNotesService
             }
         }
 
-        Console.Error.WriteLine("Perushim notes not available via on-demand delivery. Ensure the perushim_notes on-demand pack (Android PAD / iOS asset pack) is included in the build.");
+        Console.Error.WriteLine($"Perushim notes not available via on-demand delivery. Ensure the {PerushimNotesPackName} on-demand pack (Android PAD / iOS asset pack) is included in the build.");
         return false;
     }
 
@@ -590,8 +650,44 @@ public class PerushimNotesService
     internal async Task<string?> GetDeliveredIndexPathAsync()
     {
         await InitializeAsync();
+        return PeekDeliveredIndexPath();
+    }
+
+    /// <summary>
+    /// The staged search index file if it is already on disk — a plain file
+    /// probe that never initializes the pack, copies payloads, or blocks, so
+    /// the verses index can check for an adoptable table without waiting on
+    /// notes delivery.
+    /// </summary>
+    internal string? PeekDeliveredIndexPath()
+    {
         var path = Path.Join(DataDirectory, SearchIndexDbName);
         return File.Exists(path) ? path : null;
+    }
+
+    /// <summary>
+    /// Runs <paramref name="action"/> only when notes are definitively
+    /// unavailable (initialized, then missing, rejected or removed). Skips
+    /// without blocking while initialization or a download holds the pack, or
+    /// before it was ever initialized — a staged index may still be adopted.
+    /// Returns whether it ran.
+    /// </summary>
+    internal bool RunIfSettledUnavailable(Action action)
+    {
+        if (!_operationLock.Wait(0))
+        {
+            return false;
+        }
+        try
+        {
+            if (_initialized && !IsAvailable)
+            {
+                action();
+                return true;
+            }
+            return false;
+        }
+        finally { _operationLock.Release(); }
     }
 
     /// <summary>Restages a delivered index after cache eviction, using only

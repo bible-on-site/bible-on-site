@@ -39,7 +39,13 @@ public partial class FloatingSearchBar
         ClearAllChip.IsVisible = _kindsExplicit || _booksExplicit || _optionsExplicit || _viewModel.Sorting != SearchSort.Relevance;
     }
 
-    private async void OnKindsTabClicked(object? sender, EventArgs e) => await ShowFilterSheetAsync(KindsFilters, "מה לחפש");
+    private async void OnKindsTabClicked(object? sender, EventArgs e)
+    {
+        // Rebuild on open so the scope's kind list and extension-pack
+        // availability are always current.
+        BuildKindFilters();
+        await ShowFilterSheetAsync(KindsFilters, "מה לחפש");
+    }
     private async void OnBooksTabClicked(object? sender, EventArgs e) => await ShowFilterSheetAsync(BookFilters, "היכן לחפש");
     private async void OnOptionsTabClicked(object? sender, EventArgs e) => await ShowFilterSheetAsync(MoreFilters, "הגדרות נוספות");
     private async void OnSortClicked(object? sender, EventArgs e) => await ShowFilterSheetAsync(SortFilters, "סדר התוצאות");
@@ -51,6 +57,12 @@ public partial class FloatingSearchBar
         if (!IsSearchOpen || version != _sheetVersion)
         {
             return;
+        }
+        if (panel == KindsFilters)
+        {
+            // Availability follows live prerequisites; the pack check may need
+            // a first-pass initialization, so it stays async (#2454).
+            _ = RefreshKindAvailabilityAsync();
         }
         KindsFilters.IsVisible = panel == KindsFilters;
         BookFilters.IsVisible = panel == BookFilters;
@@ -128,20 +140,34 @@ public partial class FloatingSearchBar
         await CloseFilterSheetAsync();
     }
 
+    /// <summary>Rechecks kind availability after the commentary pack finishes initializing.</summary>
+    private async Task RefreshKindAvailabilityAsync()
+    {
+        try
+        {
+            await PerushimNotesService.Instance.InitializeAsync();
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            Console.Error.WriteLine($"Commentary-pack check failed: {ex}");
+        }
+        RefreshKindAvailability();
+    }
+
     private void OnClearAllClicked(object? sender, EventArgs e)
     {
         _buildingFilters = true;
         try
         {
-            // Reset restores the defaults: local kinds on, remote kinds off —
-            // enabling a network-backed kind stays an explicit user choice.
-            foreach (var filter in Enum.GetValues<SearchFilter>())
+            // Reset restores the defaults of the active context: local kinds
+            // on (the scope's kinds while scoped), remote kinds off — enabling
+            // a network-backed kind stays an explicit user choice.
+            _viewModel.ResetFiltersToDefaults();
+            foreach (var filter in _viewModel.KindOptions)
             {
-                var enabled = !filter.RequiresNetwork();
-                _viewModel.SetFilterEnabled(filter, enabled);
                 if (_filterChecks.TryGetValue($"SearchKind{filter}", out var kindCheck))
                 {
-                    kindCheck.IsChecked = enabled;
+                    kindCheck.IsChecked = _viewModel.IsFilterEnabled(filter);
                 }
             }
             foreach (var group in Enumerable.Range(0, 3))
@@ -156,7 +182,7 @@ public partial class FloatingSearchBar
                 }
             }
             _viewModel.ResultsLimit = 10;
-            LimitPicker.SelectedItem = 10;
+            LimitPicker.Value = 10;
             _viewModel.Sorting = SearchSort.Relevance;
             SortRelevanceRadio.IsChecked = true;
             _kindsExplicit = _booksExplicit = _optionsExplicit = false;
@@ -165,6 +191,8 @@ public partial class FloatingSearchBar
         {
             _buildingFilters = false;
         }
+        RefreshKindAvailability();
+        UpdateBooksSelectAll();
         UpdateStatus();
         ScheduleSearch(0);
     }

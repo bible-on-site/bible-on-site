@@ -250,10 +250,15 @@ unit/lcov.info + integration/lcov.info + e2e/{android,ios}/lcov.info
   `FNDA` hit counts take the max), so a line exercised on any layer or
   platform counts exactly once and lines executed nowhere stay uncovered.
 - The E2E inputs merge with `--hits-only`: their OpenCover template
-  enumerates a separately instrumented build's full sequence-point
-  universe, so their zero-hit records are dropped — covered locations
-  still union in, while unexecuted e2e lines and files do not inflate
-  the flag's denominator (#2271).
+  enumerates a separately instrumented build's sequence-point universe,
+  which is not comparable to the unit/integration build's. An e2e hit
+  only confirms a coordinate both builds provably share — same file,
+  same DA line, or a function declared at the same FN line in both —
+  so the merged SF set and LF/BRF/FNF denominators stay exactly the
+  canonical layers'. E2E-only files and lines never enter the report,
+  hit or not; E2E branch arms never merge either, since BRDA
+  block/branch indices are per-instrumenter and an identical tuple can
+  name a different arm (#2270).
 - `--relocate` canonicalizes absolute runner paths (Linux Android leg, macOS
   iOS leg, local Windows) onto `app/BibleOnSite/`, so the same source line
   never double-counts across runners.
@@ -279,16 +284,17 @@ The `app_mobile_e2e` job ([app-mobile-e2e.yml](../../../../.github/workflows/app
 + [app-mobile-e2e-runner.yml](../../../../.github/workflows/app-mobile-e2e-runner.yml)):
 
 1. Builds an instrumented Debug app (`MOBILE_E2E_COVERAGE=1` → `CompileMobileE2E`);
-   on iOS a single shared `build` leg compiles once and the three
+   on iOS a single shared `build` leg compiles once and the planned
    `prebuilt-run` shards restore that build, while Android builds and runs on
    one leg.
 2. Each leg runs its Appium slice; the harness collects a per-test coverage
-   dump even when the scenario fails. iOS test classes carry a `Shard` trait
-   assigning every scenario to exactly one of three runners.
+   dump even when the scenario fails. Each iOS leg executes exactly the
+   `case-manifest.json` `plan_ios` assigned to it (#2263), so every planned
+   scenario lands on exactly one runner.
 3. Each leg applies the dumps via `CoverageMobileE2E` (runs even after a
    failed pilot so partial coverage stays diagnosable) and uploads
-   `app-e2e-coverage.<run>.<artifact>` — `android`, or `ios-shard1..3`.
-4. `merge_ios` merges the three shard LCOVs into
+   `app-e2e-coverage.<run>.<artifact>` — `android`, or `ios-shard<N>`.
+4. `merge_ios` merges the iOS shard LCOVs into
    `app-e2e-coverage.<run>.ios` after union/compatibility validation
    (`merge-runner-shards.mjs`).
 5. `app-e2e-coverage.master.<platform>` is published only from a completed,

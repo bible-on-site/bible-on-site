@@ -151,7 +151,10 @@ def book_archive(destination, tracks, cache):
         temporary.unlink(missing_ok=True)
 
 
-def prepare_assets(app, platform, cache, recordings=None, intermediate=None, database=DATABASE, native=NATIVE):
+def prepare_assets(app, platform, cache, recordings=None, intermediate=None, database=DATABASE, native=NATIVE,
+                   local_originals=False):
+    if local_originals and recordings is None:
+        raise ValueError("Local original playback requires a recordings directory")
     cache.mkdir(parents=True, exist_ok=True)
     # Never mutate the canonical file or a live GPU checkpoint to make app assets.
     with tempfile.TemporaryDirectory() as temporary:
@@ -170,7 +173,8 @@ def prepare_assets(app, platform, cache, recordings=None, intermediate=None, dat
                    for pid in range(first, last + 1)}
     if not tracks or any(t["perekId"] not in mapping for t in tracks):
         raise ValueError("Recitation inventory does not match the native books")
-    if platform in ("Android", "iOS"):
+    use_opus = platform in ("Android", "iOS") and not local_originals
+    if use_opus:
         for track in tracks:
             select_playback(track, load_playback(track["perekId"], track["audioSha256"]))
     # Duplicate audio identities share a cache file; never race its temporary
@@ -178,16 +182,25 @@ def prepare_assets(app, platform, cache, recordings=None, intermediate=None, dat
     recordings_by_name = {audio_filename(track): track for track in tracks}
     with ThreadPoolExecutor(max_workers=4) as pool:
         try:
-            # Windows desktop packages keep original MP3 playback for now.
-            fetch = playback_recording if platform in ("Android", "iOS") else recording
+            # Local development can use its original MP3 checkout entirely offline.
+            # Store mobile packages retain the immutable derived playback format.
+            fetch = playback_recording if use_opus else recording
             list(pool.map(lambda track: fetch(track, cache, recordings), recordings_by_name.values()))
         except BaseException:
             pool.shutdown(wait=True, cancel_futures=True)
             raise
+    if platform == "iOS":
+        # Regenerate cleanly: leftover recitation pack dirs (e.g. the legacy
+        # underscore IDs) carry manifests PackageIosAssetPacks would archive.
+        for stale in list((app / "Platforms/iOS/AssetPacks").glob("recitation*")):
+            if stale.is_dir():
+                shutil.rmtree(stale)
     books = []
     for sid in sorted({mapping[t["perekId"]] for t in tracks}):
         selected = [t for t in tracks if mapping[t["perekId"]] == sid]
-        pack = f"recitation_{sid}"
+        # App Store Connect accepts only alphanumerics and hyphens in asset-pack
+        # IDs; Play asset-pack names take underscores (hyphens are rejected).
+        pack = f"recitation-{sid}" if platform == "iOS" else f"recitation_{sid}"
         path = cache / (pack + ".zip")
         book_archive(path, selected, cache)
         books.append({"seferId": sid, "sha256": digest(path), "sizeBytes": path.stat().st_size,
@@ -219,8 +232,11 @@ def main():
     parser.add_argument("--platform", choices=["Android", "iOS", "Windows"], required=True)
     parser.add_argument("--cache", type=Path, default=ROOT / ".cache/recitation-assets")
     parser.add_argument("--recordings", type=Path)
+    parser.add_argument("--local-originals", action="store_true",
+                        help="Use verified original MP3s from --recordings for local development")
     args = parser.parse_args()
-    prepare_assets(args.app_directory, args.platform, args.cache, args.recordings)
+    prepare_assets(args.app_directory, args.platform, args.cache, args.recordings,
+                   local_originals=args.local_originals)
 
 
 if __name__ == "__main__":

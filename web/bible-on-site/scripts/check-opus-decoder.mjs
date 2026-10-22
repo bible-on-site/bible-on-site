@@ -3,7 +3,8 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { runInThisContext } from "node:vm";
 import { gunzipSync } from "node:zlib";
-import { nativeRecitationDecoder } from "./build-native-recitation-decoder.mjs";
+import { nativeRecitationDecoder } from "../../../app/devops/recitation-decoder/build-native-recitation-decoder.mjs";
+import { assertDecoderPinsAligned } from "../../../app/devops/recitation-decoder/check-decoder-pins.mjs";
 
 const root = resolve(import.meta.dirname, "../../..");
 const shipped = readFileSync(
@@ -11,6 +12,9 @@ const shipped = readFileSync(
 	"utf8",
 );
 assert.equal(shipped, nativeRecitationDecoder());
+// Website-side trigger for the duplicated manifest rule (#2391): a decoder
+// bump in web/bible-on-site/package.json must land in the app manifest too.
+assertDecoderPinsAligned();
 // Native WebViews have Worker globally, although this bridge uses no workers.
 globalThis.Worker = class {
 	constructor() {

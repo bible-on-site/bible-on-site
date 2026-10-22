@@ -86,6 +86,52 @@ for (const reason of ["deadline", "cancellation", "blocked-wrapper"]) {
   });
 }
 
+// The wrapper can die before any shutdown runs; its orphaned children carry
+// the dead ParentProcessId, which the Windows CIM walk still matches.
+test("an exited wrapper still has its orphaned children reaped", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "mobile-supervisor-"));
+  const ready = join(directory, "pids.json");
+  let run;
+  let pids = [];
+  try {
+    run = supervise(process.execPath, ["-e", stubbornTree, ready, "idle"], {
+      graceMs: 100, stdio: "ignore",
+      scheduleDeadline() {},
+    });
+    pids = await waitForTree(ready);
+    process.kill(pids[0], "SIGKILL");
+    assert.equal(await run.result, 1);
+    for (const pid of pids) await assertStopped(pid);
+  } finally {
+    run?.stop();
+    if (run) await run.result;
+    for (const pid of pids) {
+      try { process.kill(pid, "SIGKILL"); }
+      catch (error) { if (error.code !== "ESRCH") throw error; }
+    }
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+// #2423: the harness must know the supervisor's deadline so post-test cleanup
+// can bound itself instead of consuming the remaining budget silently.
+test("injects the pilot deadline into the harness environment", async () => {
+	const run = supervise(
+		process.execPath,
+		["-e", "process.stdout.write(process.env.MOBILE_E2E_PILOT_DEADLINE_MS ?? 'unset')"],
+		{ timeoutMs: 60_000, stdio: ["ignore", "pipe", "ignore"] },
+	);
+	let output = "";
+	run.child.stdout.on("data", (chunk) => (output += chunk));
+	assert.equal(await run.result, 0);
+	const deadline = Number(output);
+	const now = Date.now();
+	assert.ok(
+		Number.isFinite(deadline) && deadline > now - 60_000 && deadline <= now + 60_000,
+		`deadline ${output} should be roughly now+timeout`,
+	);
+});
+
 test("the production clock expires without waiting for child progress", async () => {
   let expired = false;
   const run = supervise(process.execPath, ["-e", "Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0)"], {

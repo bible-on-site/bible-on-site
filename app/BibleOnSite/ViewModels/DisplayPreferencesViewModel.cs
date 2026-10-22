@@ -25,6 +25,45 @@ public partial class DisplayPreferencesViewModel : DivineNamePreferencesViewMode
     }
 
     /// <summary>
+    /// Android-only in-app Back/Up override (#2467). Non-Android platforms
+    /// ignore the stored value entirely.
+    /// </summary>
+    public InAppBackButtonPreference InAppBackButton
+    {
+        get => _preferencesService.InAppBackButton;
+        set
+        {
+            if (_preferencesService.InAppBackButton == value)
+            {
+                return;
+            }
+            _preferencesService.InAppBackButton = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(IsBackButtonPlatformDefault));
+            OnPropertyChanged(nameof(IsBackButtonShow));
+            OnPropertyChanged(nameof(IsBackButtonHide));
+        }
+    }
+
+    public bool IsBackButtonPlatformDefault
+    {
+        get => InAppBackButton == InAppBackButtonPreference.PlatformDefault;
+        set { if (value) { InAppBackButton = InAppBackButtonPreference.PlatformDefault; } }
+    }
+
+    public bool IsBackButtonShow
+    {
+        get => InAppBackButton == InAppBackButtonPreference.Show;
+        set { if (value) { InAppBackButton = InAppBackButtonPreference.Show; } }
+    }
+
+    public bool IsBackButtonHide
+    {
+        get => InAppBackButton == InAppBackButtonPreference.Hide;
+        set { if (value) { InAppBackButton = InAppBackButtonPreference.Hide; } }
+    }
+
+    /// <summary>
     /// Font size multiplier for text display.
     /// </summary>
     public double FontFactor
@@ -71,6 +110,10 @@ public partial class DisplayPreferencesViewModel : DivineNamePreferencesViewMode
     private void OnPreferencesChanged(object? sender, EventArgs e)
     {
         OnPropertyChanged(nameof(FontFactor));
+        OnPropertyChanged(nameof(InAppBackButton));
+        OnPropertyChanged(nameof(IsBackButtonPlatformDefault));
+        OnPropertyChanged(nameof(IsBackButtonShow));
+        OnPropertyChanged(nameof(IsBackButtonHide));
         NotifyDivineNameMaskingChanged();
     }
 }

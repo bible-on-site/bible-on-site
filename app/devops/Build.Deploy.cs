@@ -57,16 +57,7 @@ partial class Build
                 Serilog.Log.Warning("Deploying to PRODUCTION - will require Google review for new apps");
             }
 
-#pragma warning disable CS0618 // GoogleCredential.FromFile is obsolete but replacement API is unclear
-            var credential = GoogleCredential.FromFile(keyFile)
-                .CreateScoped(AndroidPublisherService.Scope.Androidpublisher);
-#pragma warning restore CS0618
-
-            using var service = new AndroidPublisherService(new BaseClientService.Initializer
-            {
-                HttpClientInitializer = credential,
-                ApplicationName = "NUKE Build"
-            });
+            using var service = CreatePlayService(keyFile);
 
             // Create edit
             var edit = service.Edits.Insert(new AppEdit(), GooglePlayPackageName).Execute();
@@ -105,6 +96,96 @@ partial class Build
             commitRequest.Execute();
             Serilog.Log.Information("Google Play upload complete");
         });
+
+    Target SyncGooglePlayListing => _ => _
+        .Description("Sync app/store-listing text and screenshots to Google Play without shipping a build")
+        .Requires(() => GooglePlayKeyFile)
+        .Executes(() =>
+        {
+            var keyFile = (AbsolutePath)GooglePlayKeyFile!;
+            Assert.FileExists(keyFile, $"Service account key file not found: {keyFile}");
+
+            using var service = CreatePlayService(keyFile);
+            var edit = service.Edits.Insert(new AppEdit(), GooglePlayPackageName).Execute();
+            Serilog.Log.Information($"Created edit: {edit.Id}");
+            SyncStoreListing(service, edit.Id);
+            service.Edits.Commit(GooglePlayPackageName, edit.Id).Execute();
+            Serilog.Log.Information("Google Play listing sync complete");
+        });
+
+    static AndroidPublisherService CreatePlayService(AbsolutePath keyFile)
+    {
+        var credential = CredentialFactory.FromFile<ServiceAccountCredential>(keyFile)
+            .ToGoogleCredential()
+            .CreateScoped(AndroidPublisherService.Scope.Androidpublisher);
+
+        return new AndroidPublisherService(new BaseClientService.Initializer
+        {
+            HttpClientInitializer = credential,
+            ApplicationName = "NUKE Build"
+        });
+    }
+
+    // Pushes app/store-listing onto the app's own Hebrew listing inside an open
+    // edit. Play resolves Hebrew under the legacy "iw" tag, so the tag is read
+    // back from the edit rather than hardcoded.
+    void SyncStoreListing(AndroidPublisherService service, string editId)
+    {
+        var listingDir = RootDirectory / "store-listing";
+        var description = ReadListingFile(listingDir / "he" / "description.txt", 4000);
+        var shortDescription = ReadListingFile(listingDir / "he" / "short-description.txt", 80);
+        var screenshotsDir = listingDir / "screenshots" / "android";
+        var screenshots = screenshotsDir.DirectoryExists()
+            ? screenshotsDir.GlobFiles("*.png").OrderBy(p => p.Name).ToList()
+            : [];
+        if (description is null && shortDescription is null && screenshots.Count == 0)
+        {
+            Serilog.Log.Information("No store-listing content found under app/store-listing - skipping listing sync");
+            return;
+        }
+
+        var listings = service.Edits.Listings.List(GooglePlayPackageName, editId).Execute().Listings ?? [];
+        var language = listings.FirstOrDefault(l => l.Language.StartsWith("iw") || l.Language.StartsWith("he"))?.Language ?? "iw";
+
+        if (description is not null || shortDescription is not null)
+        {
+            var listing = listings.FirstOrDefault(l => l.Language == language) ?? new Listing { Language = language };
+            listing.ShortDescription = shortDescription ?? listing.ShortDescription;
+            listing.FullDescription = description ?? listing.FullDescription;
+            service.Edits.Listings.Update(listing, GooglePlayPackageName, editId, language).Execute();
+            Serilog.Log.Information($"Updated {language} listing text");
+        }
+
+        if (screenshots.Count > 0)
+        {
+            service.Edits.Images.Deleteall(GooglePlayPackageName, editId, language,
+                EditsResource.ImagesResource.DeleteallRequest.ImageTypeEnum.PhoneScreenshots).Execute();
+            foreach (var screenshot in screenshots)
+            {
+                using var stream = File.OpenRead(screenshot);
+                var uploadProgress = service.Edits.Images.Upload(GooglePlayPackageName, editId, language,
+                    EditsResource.ImagesResource.UploadMediaUpload.ImageTypeEnum.PhoneScreenshots, stream, "image/png").Upload();
+                if (uploadProgress.Status != UploadStatus.Completed)
+                {
+                    Assert.Fail($"Screenshot upload failed for {screenshot.Name}: {uploadProgress.Exception?.Message}");
+                }
+            }
+
+            Serilog.Log.Information($"Replaced {language} phone screenshots ({screenshots.Count} files)");
+        }
+    }
+
+    static string? ReadListingFile(AbsolutePath path, int maxChars)
+    {
+        if (!path.FileExists())
+        {
+            return null;
+        }
+
+        var text = File.ReadAllText(path).Trim();
+        Assert.True(text.Length <= maxChars, $"{path.Name} is {text.Length} chars, over the {maxChars} store limit");
+        return text;
+    }
 
     Target DeployMsStore => _ => _
         .Description("Deploy MSIX to Microsoft Store")
@@ -181,10 +262,17 @@ partial class Build
         var version = GetCurrentVersion();
         var flightName = $"v{version}-{DateTime.UtcNow:yyyyMMdd-HHmmss}";
         var baselineKnown = TryListMsStoreFlights(out var baselineFlights);
+        // CI-created flight IDs harvested from this workflow's own job logs.
+        // Loaded lazily — only when Partner Center reports the flight cap and
+        // `flights list` cannot enumerate what to delete.
+        Queue<string>? harvestQueue = null;
+        var capHit = false;
         string lastFailure = "";
 
-        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        var attempt = 0;
+        while (attempt < maxAttempts)
         {
+            attempt++;
             Serilog.Log.Information(
                 $"Creating new flight: {flightName} (attempt {attempt}/{maxAttempts})");
 
@@ -200,10 +288,17 @@ partial class Build
             process.WaitForExit();
             var output = string.Join("\n", process.Output.Select(o => o.Text));
 
-            if (process.ExitCode == 0 && TryParseFlightId(output, out var flightId))
+            if (TryParseFlightId(output, out var flightId))
             {
-                Serilog.Log.Information($"Created flight with ID: {flightId}");
-                return flightId;
+                // A printed FlightId means Partner Center committed the create
+                // even if the process exited non-zero afterwards; verify the
+                // anomaly and reuse the flight instead of stacking duplicates
+                // (CD run 168 created three real flights through this path).
+                if (process.ExitCode == 0 || ConfirmFlightExists(flightId))
+                {
+                    Serilog.Log.Information($"Created flight with ID: {flightId}");
+                    return flightId;
+                }
             }
 
             // The flight may exist even though the command reported failure
@@ -225,12 +320,52 @@ partial class Build
             lastFailure = TrimForLog(output);
             Serilog.Log.Warning(
                 $"Flight creation attempt {attempt}/{maxAttempts} failed (exit {process.ExitCode}): {lastFailure}");
+
+            // The 25-flight cap is a persistent account state, not a
+            // transient error — retrying frees nothing until old flights are
+            // deleted. `flights list` (the listflights endpoint) has answered
+            // "no Flights" while flights existed since 2026-10-08, so the
+            // cleanup in this target cannot see them; delete the CI-created
+            // flight IDs still recorded in this workflow's own job logs
+            // instead (#2221).
+            if (IsFlightCapError(output))
+            {
+                capHit = true;
+                harvestQueue ??= new Queue<string>(HarvestDeployedFlights());
+                // The queue bounds recovery: each entry is a flight this
+                // workflow created, deleted oldest-first until Partner Center
+                // accepts a create. Already-deleted ids make their delete
+                // fail fast and cheap — they consume a dequeue, not budget.
+                if (harvestQueue.Count > 0)
+                {
+                    var staleFlight = harvestQueue.Dequeue();
+                    Serilog.Log.Warning(
+                        $"Partner Center reports the flight cap; deleting oldest CI-created flight {staleFlight} and retrying");
+                    TryDeleteFlight(staleFlight);
+                    attempt--; // freed a slot — replay the attempt budget
+                    continue;
+                }
+                break;
+            }
+
             if (attempt < maxAttempts)
             {
                 Thread.Sleep(TimeSpan.FromSeconds(15));
             }
         }
 
+        if (capHit)
+        {
+            Serilog.Log.Error(
+                "Partner Center still reports the 25-flight cap after deleting " +
+                "every recoverable CI-created flight. The remaining flights were " +
+                "created outside this workflow (Partner Center UI or runs whose " +
+                "logs expired) — delete a package flight for app " +
+                $"{MsStoreAppId} under https://partner.microsoft.com/dashboard " +
+                "(Apps and games → select the app → Package flights) and " +
+                "re-dispatch the deploy. See " +
+                "https://github.com/bible-on-site/bible-on-site/issues/2221");
+        }
         Serilog.Log.Error(
             "Partner Center rejected flight creation after every attempt. This is a " +
             "store-side blocker, not a build problem. Verify the flight group " +
@@ -241,27 +376,123 @@ partial class Build
         return null!;
     }
 
+    /// <summary>
+    /// Partner Center's definitive "no room for another flight" answer —
+    /// observed as HTTP 400 `InvalidOperation` in CD run 116585562753.
+    /// Persistent account state, never retried blindly.
+    /// </summary>
+    static bool IsFlightCapError(string output) =>
+        FlightCapPattern.IsMatch(output);
+
+    static readonly System.Text.RegularExpressions.Regex FlightCapPattern =
+        new(@"maximum number of (?:package )?flights",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
     static bool TryParseFlightId(string output, out string flightId)
     {
-        flightId = "";
-        var startIndex = output.IndexOf('{');
-        if (startIndex < 0)
+        // `flights create --verbose` prints the created flight as a JSON
+        // object framed by log lines before and after it, so JSON-parsing the
+        // text from the first '{' to the end throws on the trailing log text
+        // and misreports a successful create as failure (CD run 168 leaked
+        // three real flights that way). Extract the id directly instead.
+        var match = FlightIdPattern.Match(output);
+        flightId = match.Success ? match.Groups[1].Value : "";
+        return match.Success;
+    }
+
+    static readonly System.Text.RegularExpressions.Regex FlightIdPattern =
+        new(@"""FlightId""\s*:\s*""([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})""");
+
+    /// <summary>
+    /// Reads the flight IDs this workflow created in earlier runs, oldest
+    /// first, from devops/github/release/ms-store-flights.mjs. check-deployment
+    /// copies the helper beside the runner temp dir before the artifact-source
+    /// checkout replaces the tree; fall back to the repo copy for local runs.
+    /// </summary>
+    List<string> HarvestDeployedFlights()
+    {
+        var runnerTemp = Environment.GetEnvironmentVariable("RUNNER_TEMP");
+        var helper = !string.IsNullOrEmpty(runnerTemp)
+            ? $"{runnerTemp.Replace('\\', '/')}/ms-store-flights.mjs"
+            : null;
+        if (helper == null || !File.Exists(helper))
         {
-            return false;
+            helper = (RootDirectory.Parent / "devops" / "github" / "release" / "ms-store-flights.mjs").ToString();
         }
+        if (!File.Exists(helper))
+        {
+            Serilog.Log.Warning("Flight history harvest helper is missing; cannot free flights automatically");
+            return [];
+        }
+        if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("GH_TOKEN")) &&
+            string.IsNullOrEmpty(Environment.GetEnvironmentVariable("GITHUB_TOKEN")))
+        {
+            Serilog.Log.Warning("GH_TOKEN is not set; cannot read CD job logs to recover flight IDs");
+            return [];
+        }
+        var harvest = ProcessTasks.StartProcess(
+            "node",
+            $"\"{helper}\"",
+            logOutput: false,
+            logInvocation: true
+        );
+        harvest.WaitForExit();
+        if (harvest.ExitCode != 0)
+        {
+            Serilog.Log.Warning(
+                $"Flight history harvest failed: {TrimForLog(string.Join("\n", harvest.Output.Select(o => o.Text)))}");
+            return [];
+        }
+        var stdout = string.Join(
+            "\n",
+            harvest.Output.Where(o => o.Type == Nuke.Common.Tooling.OutputType.Std).Select(o => o.Text));
         try
         {
-            using var doc = JsonDocument.Parse(output.Substring(startIndex));
-            if (doc.RootElement.TryGetProperty("FlightId", out var flightIdProp))
-            {
-                flightId = flightIdProp.GetString() ?? "";
-            }
+            var ids = JsonDocument.Parse(stdout).RootElement.GetProperty("flightIds");
+            return ids.EnumerateArray()
+                .Select(e => e.GetString() ?? "")
+                .Where(s => s.Length > 0)
+                .ToList();
         }
-        catch (JsonException)
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException or KeyNotFoundException)
         {
+            Serilog.Log.Warning($"Flight history harvest returned unexpected output: {TrimForLog(stdout)}");
+            return [];
+        }
+    }
+
+    bool ConfirmFlightExists(string flightId)
+    {
+        var verify = ProcessTasks.StartProcess(
+            "msstore",
+            $"flights get \"{MsStoreAppId}\" \"{flightId}\"",
+            logOutput: false,
+            logInvocation: true
+        );
+        verify.WaitForExit();
+        if (verify.ExitCode != 0)
+        {
+            Serilog.Log.Warning(
+                $"Flight {flightId} was reported created but cannot be retrieved; treating as failed creation");
             return false;
         }
-        return !string.IsNullOrEmpty(flightId);
+        return true;
+    }
+
+    bool TryDeleteFlight(string flightId)
+    {
+        var deleteProcess = ProcessTasks.StartProcess(
+            "msstore",
+            $"flights delete \"{MsStoreAppId}\" \"{flightId}\"",
+            logInvocation: true
+        );
+        deleteProcess.WaitForExit();
+        if (deleteProcess.ExitCode != 0)
+        {
+            Serilog.Log.Warning($"Could not delete flight {flightId}");
+            return false;
+        }
+        return true;
     }
 
     static string TrimForLog(string text, int maxLength = 2000)
@@ -296,9 +527,12 @@ partial class Build
     bool TryListMsStoreFlights(out List<string> flightIds)
     {
         flightIds = [];
+        // --verbose surfaces the real Dev Center answer when listing fails —
+        // since 2026-10-08 the listflights endpoint has answered empty while
+        // flights still existed, which hid the 25-flight-cap blocker (#2221).
         var listProcess = ProcessTasks.StartProcess(
             "msstore",
-            $"flights list \"{MsStoreAppId}\"",
+            $"flights list \"{MsStoreAppId}\" --verbose",
             logOutput: false,
             logInvocation: true
         );
@@ -386,12 +620,7 @@ partial class Build
         foreach (var flightId in flightsToDelete)
         {
             Serilog.Log.Information($"Deleting flight: {flightId}");
-            var deleteProcess = ProcessTasks.StartProcess("msstore", $"flights delete \"{MsStoreAppId}\" \"{flightId}\"");
-            deleteProcess.WaitForExit();
-            if (deleteProcess.ExitCode != 0)
-            {
-                Serilog.Log.Warning($"Could not delete flight {flightId}");
-            }
+            TryDeleteFlight(flightId);
         }
 
         if (flightsToDelete.Count > 0)

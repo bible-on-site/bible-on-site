@@ -19,9 +19,10 @@ the executable-coverage tree produced by `devops/e2e-coverage-trees/`.
 | Executable coverage-tree extraction | Merged (#2183) | `devops/e2e-coverage-trees/` |
 | Selector bridge: exec evidence unions into `coverage-tree.json` | Merged (#2195, #2230) | `devops/e2e-coverage-trees/to-selector-tree.ts`, `collect-appium --exec-tree`, `.github/workflows/app-mobile-e2e.yml` |
 | Playwright suites (website, admin, API): evidence, discovery, collectors, shadow CI | Merged (#2241) | `web/shared/tests-util/e2e-impact.ts`, `*/e2e-impact.json`, `collect-playwright`, `.github/workflows/ci.yml` |
-| iOS 3-shard split + merged-tree baseline publication | Merged (#2266, #2279) | `.github/workflows/app-mobile-e2e.yml` `merge_ios`, `app/mobile-e2e/merge-runner-shards.mjs` |
-| Member-granularity narrowing (C# member fingerprints ↔ exec member evidence) | This slice | `extractMembers`/`SourceFingerprint.members`, `CoveredNode.member`, `memberGaps`, `covered-members`/`member-widened` reasons |
-| Selection enforcement beyond the mobile opt-in inputs | Not implemented | `e2e_selection_mode=enforce` / `force_full_suite` exist only on `app-mobile-e2e.yml`; Playwright suites have no enforce runner |
+| iOS runtime-planned shard split + merged-tree baseline publication | Merged (#2266, #2279, #2263) | `.github/workflows/app-mobile-e2e.yml` `plan_ios`/`merge_ios`, `devops/github/ci/e2e-impact/shard-plan.ts`, `app/mobile-e2e/merge-runner-shards.mjs` |
+| Member-granularity narrowing (C# member fingerprints ↔ exec member evidence) | Merged (#2297) | `extractMembers`/`SourceFingerprint.members`, `CoveredNode.member`, `memberGaps`, `covered-members`/`member-widened` reasons |
+| Shadow-mode parity verification (manifest ↔ observed outcomes) | This slice | `e2e-impact.ts verify`, `devops/github/ci/e2e-impact/verify.ts`, `selection-verify.json` in every suite's run diagnostics |
+| Selection enforcement beyond the mobile opt-in inputs | Opt-in (#2085) | `e2e-impact.ts playwright-args` renders the manifest into `playwright test` args; `ci.yml` honors `e2e_selection_mode`/`force_full_suite` dispatch inputs and the `E2E_SELECTION_MODE`/`E2E_FORCE_FULL_SUITE` repo variables for all three Playwright suites. Shadow stays the default. |
 | AST-aware change comparison beyond member level, dependency edges | Planned, not implemented | — |
 
 Two evidence channels exist today and answer different questions:
@@ -64,22 +65,29 @@ xUnit suite through `dotnet run --project devops -- TestMobileE2E`
 | `coverage-app/coverage-report-manifest.json` | `ApplyE2ECoverageLayer` | `app-e2e-coverage/1`: apply statistics, `incompatibleDumps`, `unknownPointIds`, `complete` |
 | `results/mobile-e2e.trx`, `results/mobile-e2e.xml` | xUnit MTP reporters | Per-test identity (FQN via `TestMethod@className`+`@name`), outcomes, start/finish times |
 | `exec-coverage-tree.json` | `e2e-coverage-trees.ts extract` | The exec tree (schemaVersion 1) — per-test executed files + the `shared` bucket |
-| `coverage-tree.json` | `e2e-impact.ts collect-appium` | The selector tree (schemaVersion 1): automation-id entries unioned with `--exec-tree` evidence when a compatible exec tree exists |
+| `coverage-tree.json` | `e2e-impact.ts collect-appium` | The selector tree (schemaVersion 1): automation-id entries unioned with `--exec-tree` evidence when a compatible exec tree exists; also carries per-case `timing` and `overhead` history (#2263) |
 | `selection-manifest.json` | `e2e-impact.ts select` | The deterministic selection manifest |
+| `ios-shard-plan.json` + `shards/shard-N.json` | `e2e-impact.ts plan` (`plan_ios` job, #2263) | The deterministic shard plan and the per-shard case manifests the iOS legs enforce |
+| `case-manifest.json` | iOS runner leg | The shard manifest this leg actually executed — the merge replays it against the plan's assignment |
+| `case-timings.json` | `merge-runner-shards.mjs` | Merged per-case durations across all shards — the collector's timing-history input |
+| `runner-union.json` | `merge-runner-shards.mjs` | Union report: planned-vs-observed per-shard durations, completeness and pilot timings |
 
 Artifact upload (`app-mobile-e2e-runner.yml` + `app-mobile-e2e.yml`):
 
+- `app-mobile-e2e-plan.<run_id>.ios` — the `plan_ios` output consumed by every
+  iOS leg and by `merge_ios` (#2263).
+- `app-mobile-e2e-build.<run_id>.ios` — the shared iOS build consumed by all
+  iOS shard legs.
+- `app-mobile-e2e-shard.<run_id>.ios-shard<N>` — one iOS leg's merge inputs
+  (`case-manifest.json`, trees, manifests, evidence, dumps, LCOV) consumed by
+  `merge_ios`.
 - `appium-<artifact>-<run_id>-<attempt>` — the whole per-leg artifacts
   directory (diagnostics, evidence, dumps, reports, `exec-coverage-tree.json`);
-  `<artifact>` is `android` or `ios-shard1..3`. The merged iOS result
-  additionally uploads as `appium-ios-<run_id>-<attempt>` from `merge_ios`.
+  `<artifact>` is `android`, `ios-build` or `ios-shard<N>`. The merged iOS
+  result additionally uploads as `appium-ios-<run_id>-<attempt>` from
+  `merge_ios`.
 - `app-e2e-coverage.<run_id>.<artifact>` — `coverage-app/` per leg;
-  `merge_ios` merges the three iOS shard LCOVs into
-  `app-e2e-coverage.<run_id>.ios`.
-- `app-mobile-e2e-build.<run_id>.ios` — the shared iOS build consumed by all
-  three shards.
-- `app-mobile-e2e-shard.<run_id>.ios-shardN` — per-shard merge inputs
-  (trees, manifests, LCOV) consumed by `merge_ios`.
+  `merge_ios` merges the iOS shard LCOVs into `app-e2e-coverage.<run_id>.ios`.
 - `app-mobile-e2e-coverage.master.<platform>` — selector tree baseline
   (`coverage-tree.json`), published only from a completed, successful
   default-branch run.
@@ -398,8 +406,12 @@ under-attribution can only over-select.
 - `filter.playwright` replaces `filter.vstest` for these suites: selected
   tests grouped as `{file, titles}` where each title is the describe path
   joined by spaces — the string `playwright test --grep` matches. In shadow
-  mode it is diagnostics; an enforce runner would feed it alongside
-  `dynamicTestFiles` (which run wholesale).
+  mode it is diagnostics; enforce mode feeds it through
+  `e2e-impact.ts playwright-args`, which emits the package-relative spec
+  list plus an anchored `--grep` alternation covering every selected title
+  and every runtime-discovered title inside `dynamicTestFiles` (a `--list`
+  enumeration supplies them; without discovery the args degrade to
+  `selectAll`).
 - Structural fingerprints cover `.ts`/`.tsx`/`.js`/`.mjs` sources; `.rs`
   files fingerprint as `null`, so Rust edits always count as real changes.
 - Baselines publish only from completed, successful `master` pushes as
@@ -434,12 +446,49 @@ under-attribution can only over-select.
   is no longer discovered. `shared` unions across runs. A tree with
   `complete: false` must never be published as a baseline.
 
+## Shadow-mode parity verification
+
+`e2e-impact.ts verify` is the rollout gate's measurement. Shadow mode runs
+every test while the manifest proposes a subset, so each run can score the
+selection against observed reality: `verify --manifest <selection-manifest>
+--tree <coverage-tree> --out <verify.json>` joins the manifest's
+`selected`/`unselected` lists onto the same run's `CoverageTreeTest.outcome`
+values and emits `kind: "e2e-impact-verify"` (schemaVersion 1).
+
+- **`missed`** — an unselected test whose run outcome was a failure: the
+  subset would have hidden a real failure. The metric that must stay at zero
+  before enforcement is considered; any non-pass outcome string (`failed`,
+  `timedOut`, unknown future states) counts. A `::warning::` annotates the
+  run when misses exist.
+- **`flakyMissed`** — unselected tests that flaked (failed then passed): a
+  weaker signal, reported separately.
+- **`unobserved`** — unselected tests with no verdict (skipped, `unknown`,
+  absent from the tree): nothing proven either way.
+- **`caught` / `selectedUnobserved`** — selected tests that failed (the
+  selection worked) and selected tests the run never observed (a
+  runner-fidelity anomaly, meaningful once enforce mode runs subsets).
+- **`passedUnselected`** — the correctly-skipped count: the win metric.
+
+Inputs that cannot be joined — missing/corrupt files, suite or platform
+mismatch, or a tree collected from a different revision than
+`manifest.testedSha` — emit a report carrying `problem` instead of a
+verdict, with empty buckets. Verify is pure diagnostics: it never throws on
+evidence gaps and never gates the job. Reports ship per run inside each
+suite's diagnostics artifact: `selection-verify.json` under
+`.coverage/e2e-impact/` for the three Playwright suites (ci.yml), inside
+`$MOBILE_E2E_ARTIFACTS` for the Android leg, and under
+`app/.artifacts/mobile-e2e/ios/` for iOS — where `merge_ios` joins the
+plan's suite-level manifest against the merged tree, since per-shard
+manifests are execution assignments, not suite selections.
+
 ## Known gaps (explicit, by design)
 
 - **Enforcement is opt-in**: every suite computes and stores its selection
-  manifest, but only `app-mobile-e2e.yml` exposes `e2e_selection_mode=enforce`
-  / `force_full_suite` dispatch inputs; Playwright suites always run the full
-  suite in shadow mode. #2085's AST-aware comparison and dependency edges are
+  manifest; `app-mobile-e2e.yml` and `ci.yml` now both expose
+  `e2e_selection_mode=enforce` / `force_full_suite` (dispatch inputs, or the
+  `E2E_SELECTION_MODE` / `E2E_FORCE_FULL_SUITE` repository variables).
+  Default remains shadow everywhere until parity evidence supports
+  narrowing. #2085's AST-aware comparison and dependency edges are
   still unimplemented.
 - **Theory case attribution**: `fileBase` is the method name, so theory cases
   sharing a method overwrite one dump file — per-case coverage cannot exist
@@ -464,12 +513,18 @@ under-attribution can only over-select.
 - **Coverage of framework code**: only the instrumented app module(s) appear;
   MAUI/framework hits are out of evidence scope.
 - **iOS sharding**: each shard extracts a per-shard tree marked
-  `--incomplete` (it holds a third of the suite by construction);
-  `merge_ios` validates the union, intersects it with the full-suite
-  expected set, and only then can the merged tree publish baselines. A
-  per-shard `coverage-tree.json` is therefore diagnostic, never baseline
-  input. The split is a static `Shard` trait assignment — dynamic,
-  runtime-driven shard sizing remains open as #2263.
+  `--incomplete` (it holds only its assigned slice of the plan by
+  construction); `merge_ios` validates the union against the shard plan —
+  every assignment observed exactly once — and only then can the merged
+  tree publish baselines. A per-shard `coverage-tree.json` is therefore
+  diagnostic, never baseline input. The split is `plan_ios`'s
+  runtime-driven assignment (#2263): each leg executes its
+  `case-manifest.json` verbatim rather than a static `Shard` trait.
+  The manifest skip runs in-process, so a leg's TRX/JUnit still
+  enumerates the whole suite — unassigned cases land in the tree as
+  skipped/not-executed `unmeasured` placeholders that claim no
+  execution; the merge deduplicates them freely and requires only the
+  claiming (measured, error or ran-but-undumped) entries to be disjoint.
 
 ## Determinism contract
 

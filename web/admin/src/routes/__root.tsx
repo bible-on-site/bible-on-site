@@ -9,6 +9,7 @@ import {
 	Scripts,
 } from "@tanstack/react-router";
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
+import { RevalidationWarning } from "~/components/RevalidationWarning";
 import appCss from "../styles/app.css?url";
 
 const queryClient = new QueryClient({
@@ -36,11 +37,11 @@ export const Route = createRootRoute({
 
 function RootComponent() {
 	return (
-		<RootDocument>
-			<QueryClientProvider client={queryClient}>
+		<QueryClientProvider client={queryClient}>
+			<RootDocument>
 				<Outlet />
-			</QueryClientProvider>
-		</RootDocument>
+			</RootDocument>
+		</QueryClientProvider>
 	);
 }
 
@@ -116,6 +117,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
 						</div>
 					</div>
 				</nav>
+				<RevalidationWarning />
 				<main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 					{children}
 				</main>

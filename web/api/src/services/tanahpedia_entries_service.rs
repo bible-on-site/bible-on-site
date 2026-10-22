@@ -224,7 +224,7 @@ struct PlaceCountRow {
 
 /// Base entity types mirrored from the website taxonomy (`TANAH_SEFER` is a
 /// website-level grouping that shares `SEFER` rows in the database today).
-const ENTITY_TYPES: &[&str] = &[
+pub(crate) const ENTITY_TYPES: &[&str] = &[
     "PERSON",
     "PLACE",
     "EVENT",
@@ -240,15 +240,24 @@ const ENTITY_TYPES: &[&str] = &[
     "PROPHECY",
     "NATION",
 ];
-const PERSON_ROLE_CATEGORIES: &[&str] = &["PROPHET", "KING"];
-const ANIMAL_KIND_CATEGORIES: &[&str] = &["BEHEMA", "CHAYA", "OF", "SHERETZ"];
-const ANIMAL_PURITY_CATEGORIES: &[&str] = &["TAHOR", "TAMEH"];
+pub(crate) const PERSON_ROLE_CATEGORIES: &[&str] = &["PROPHET", "KING"];
+pub(crate) const ANIMAL_KIND_CATEGORIES: &[&str] = &["BEHEMA", "CHAYA", "OF", "SHERETZ"];
+pub(crate) const ANIMAL_PURITY_CATEGORIES: &[&str] = &["TAHOR", "TAMEH"];
 
-fn is_animal_kind_category(key: &str) -> bool {
+/// Every taxonomy category key a client may scope by — base entity types,
+/// person roles and animal classifications.
+pub(crate) fn is_category_key(key: &str) -> bool {
+    ENTITY_TYPES.contains(&key)
+        || PERSON_ROLE_CATEGORIES.contains(&key)
+        || is_animal_kind_category(key)
+        || is_animal_purity_category(key)
+}
+
+pub(crate) fn is_animal_kind_category(key: &str) -> bool {
     ANIMAL_KIND_CATEGORIES.contains(&key)
 }
 
-fn is_animal_purity_category(key: &str) -> bool {
+pub(crate) fn is_animal_purity_category(key: &str) -> bool {
     ANIMAL_PURITY_CATEGORIES.contains(&key)
 }
 

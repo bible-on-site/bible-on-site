@@ -82,6 +82,13 @@ class PreparePerushimAssetsTests(unittest.TestCase):
                                  (self.source / CATALOG).read_bytes())
                 self.assertEqual((self.app / directory / NOTES).read_bytes(), (self.source / NOTES).read_bytes())
 
+    def test_removes_the_legacy_underscore_pack_dir(self):
+        stale = self.app / "Platforms/iOS/AssetPacks/perushim_notes"
+        stale.mkdir(parents=True)
+        (stale / NOTES).write_bytes(b"stale")
+        self.assertEqual(prepare_assets(self.source, self.app, "iOS"), 2)
+        self.assertFalse(stale.exists())
+
     def test_legacy_artifact_is_rejected_without_changing_existing_assets(self):
         self.metadata("perush_catalog", None)
         existing = self.app / "Resources/Raw" / CATALOG

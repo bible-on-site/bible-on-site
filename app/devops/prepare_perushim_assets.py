@@ -14,12 +14,13 @@ TANAH = "sefaria-dump-5784-sivan-4.tanah_view.sqlite"
 SEARCH_INDEX = "sefaria-dump-5784-sivan-4.hebrew_search.sqlite"
 NOTES_DIRECTORIES = {
     "Android": "Platforms/Android/AssetPacks/perushim_notes",
-    "iOS": "Platforms/iOS/AssetPacks/perushim_notes",
+    # App Store Connect accepts only alphanumerics and hyphens in asset-pack IDs.
+    "iOS": "Platforms/iOS/AssetPacks/perushim-notes",
 }
 # The prebuilt search index rides in the same asset pack as the notes payload.
 SEARCH_INDEX_DIRECTORIES = {
     "Android": "Platforms/Android/AssetPacks/perushim_notes",
-    "iOS": "Platforms/iOS/AssetPacks/perushim_notes",
+    "iOS": "Platforms/iOS/AssetPacks/perushim-notes",
 }
 
 
@@ -98,6 +99,10 @@ def validate_search_index(index_path: Path, notes_timestamp: int, tanah_view: Pa
 
 def prepare_assets(source: Path, app_directory: Path, platform: str) -> int:
     destination = NOTES_DIRECTORIES[platform]
+    if platform == "iOS":
+        # A legacy perushim_notes dir lingers on checkouts that generated the
+        # underscore pack — PackageIosAssetPacks archives any dir with a manifest.
+        shutil.rmtree(app_directory / "Platforms/iOS/AssetPacks/perushim_notes", ignore_errors=True)
     count = validate_pair(source, app_directory / "Resources/Raw" / TANAH)
     catalog_directory = app_directory / "Resources/Raw"
     notes_directory = app_directory / destination

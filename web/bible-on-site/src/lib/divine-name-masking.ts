@@ -70,13 +70,17 @@ export type DivineNameMaskingSettings = {
 	shaddaiCustom: string;
 };
 
+/**
+ * #2404: masking ships enabled with אל → א-ל; stored explicit choices
+ * (enabled:false, el:"asis", custom text) are preserved by normalize.
+ */
 export const DEFAULT_DIVINE_NAME_MASKING: DivineNameMaskingSettings = {
-	enabled: false,
+	enabled: true,
 	elohim: "hyphen",
 	elohimCustom: "",
 	yhwh: "heh",
 	yhwhCustom: "",
-	el: "asis",
+	el: "hyphen",
 	shaddai: "asis",
 	shaddaiCustom: "",
 };

@@ -77,6 +77,73 @@ public class TanahpediaPlacesMapTests
     }
 
     [Fact]
+    public void OnNavigating_ExternalUrl_OpensLinkUriInLauncher()
+    {
+        var captured = new List<Uri>();
+        var map = new TanahpediaPlacesMap
+        {
+            OpenExternalLink = uri =>
+            {
+                captured.Add(uri);
+                return Task.CompletedTask;
+            },
+        };
+        var args = new WebNavigatingEventArgs(
+            WebNavigationEvent.NewPage,
+            new HtmlWebViewSource(),
+            "https://www.openstreetmap.org/copyright");
+
+        map.OnNavigating(null, args);
+
+        args.Cancel.Should().BeTrue();
+        captured.Should().Equal(new Uri("https://www.openstreetmap.org/copyright"));
+    }
+
+    [Fact]
+    public void OnNavigating_ExternalUrl_LauncherFailure_StillIntercepts()
+    {
+        var map = new TanahpediaPlacesMap
+        {
+            OpenExternalLink = _ => throw new InvalidOperationException("no launcher"),
+        };
+        var args = new WebNavigatingEventArgs(
+            WebNavigationEvent.NewPage,
+            new HtmlWebViewSource(),
+            "https://www.openstreetmap.org/copyright");
+
+        map.OnNavigating(null, args);
+
+        args.Cancel.Should().BeTrue();
+    }
+
+    [Fact]
+    public void OnNavigating_ExternalUrl_FaultedLauncherTask_IsLogged()
+    {
+        var map = new TanahpediaPlacesMap
+        {
+            OpenExternalLink = _ => Task.FromException(new InvalidOperationException("no launcher")),
+        };
+        var args = new WebNavigatingEventArgs(
+            WebNavigationEvent.NewPage,
+            new HtmlWebViewSource(),
+            "https://www.openstreetmap.org/copyright");
+        using var stderr = new StringWriter();
+        var previous = Console.Error;
+        Console.SetError(stderr);
+        try
+        {
+            map.OnNavigating(null, args);
+        }
+        finally
+        {
+            Console.SetError(previous);
+        }
+
+        args.Cancel.Should().BeTrue();
+        stderr.ToString().Should().Contain("no launcher");
+    }
+
+    [Fact]
     public void Markers_Empty_ClearsWebViewSource()
     {
         var map = new TanahpediaPlacesMap();

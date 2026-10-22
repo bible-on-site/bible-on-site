@@ -1,3 +1,4 @@
+using BibleOnSite.Config;
 using BibleOnSite.Models;
 using BibleOnSite.Services;
 using BibleOnSite.Tests.Services;
@@ -53,6 +54,28 @@ public class DiagnosticsExportTests
             storage.FileSystem.Object, share.Object);
         await chapter.ExportPerushimLogsAsync();
         navigator.Verify(n => n.DisplayAlertAsync("שגיאה", It.Is<string>(m => m.Contains("share unavailable")), "אישור"), Times.Exactly(2));
+    }
+
+    [Fact]
+    public async Task AccessibilityStatement_OpensTheMaintainedWebsiteUrl()
+    {
+        var launcher = new Mock<ILauncher>();
+        Uri? opened = null;
+        launcher.Setup(l => l.OpenAsync(It.IsAny<Uri>()))
+            .Callback<Uri>(u => opened = u)
+            .ReturnsAsync(true);
+        await AccessibilityStatement.OpenAsync(launcher.Object, new Mock<IAppNavigator>().Object);
+        opened.Should().Be(new Uri(AppConfig.Instance.AccessibilityUrl));
+    }
+
+    [Fact]
+    public async Task AccessibilityStatement_WhenLaunchFails_ShowsError()
+    {
+        var launcher = new Mock<ILauncher>();
+        launcher.Setup(l => l.OpenAsync(It.IsAny<Uri>())).ThrowsAsync(new InvalidOperationException("no browser"));
+        var navigator = new Mock<IAppNavigator>();
+        await AccessibilityStatement.OpenAsync(launcher.Object, navigator.Object);
+        navigator.Verify(n => n.DisplayAlertAsync("שגיאה", "לא ניתן לפתוח את הצהרת הנגישות", "אישור"), Times.Once);
     }
 
     private static ExtensionPacksViewModel Packs(TestStorage storage, PerushimNotesService notes, IAppNavigator navigator)
