@@ -219,6 +219,7 @@ function renderCutEditor() {
   const item = caseNow();
   $("timing-editor").hidden = !item;
   if (!item) return;
+  $("editor-title").textContent = "דיוק החיתוכים · " + item.label;
   cutRows.clear(); $("editor-rows").replaceChildren();
   $("all-cut-words").textContent = showAllCutWords ? "רק מילים לטיפול" : "כל המילים";
   $("all-cut-words").setAttribute("aria-pressed", String(showAllCutWords));
@@ -231,10 +232,14 @@ function renderCutEditor() {
     const title = makeElement("div", "cut-heading");
     const name = makeElement("strong", "cut-word", word.text);
     const heard = makeElement("span", "cut-heard");
-    const playButton = makeElement("button", "cut-play", "▶ השמעה");
-    playButton.setAttribute("aria-label", "השמעת החיתוך של " + word.text);
+    const playButton = makeElement("button", "cut-play", "▶ החיתוך בעריכה");
+    playButton.setAttribute("aria-label", "השמעת החיתוך בעריכה של " + word.text);
     playButton.onclick = () => { activeCutSegment = word.segment; void play("word", original); };
-    const context = makeElement("button", "cut-context", "עם הסביבה");
+    const wordIndex = item.words.findIndex(row => row.segment === word.segment);
+    const contextLabel = wordIndex > 0 && wordIndex < item.words.length - 1 ? "מילה לפני ואחרי"
+      : wordIndex === 0 && item.words.length > 1 ? "גם המילה הבאה" : wordIndex > 0 ? "גם המילה הקודמת" : "המילה בלבד";
+    const context = makeElement("button", "cut-context", contextLabel);
+    context.title = "השמעה רציפה של " + item.words.slice(Math.max(0, wordIndex - 1), wordIndex + 2).map(row => row.text).join(" ");
     context.onclick = () => { activeCutSegment = word.segment; void play("word-context", original); };
     for (const child of [name, heard, playButton, context]) title.append(child);
     row.append(title);
@@ -330,7 +335,7 @@ async function saveCutEdits() {
     const result = await response.json(); if (!response.ok) throw new Error(result.error ?? "לא ניתן לשמור את התיקון");
     savedCutProposals.set(stateKey(item), result); persistCutProgress();
     $("status").textContent = "התיקון נשמר לבדיקת תקינות לפני הפרסום.";
-    if (index < cases.length - 1) { historicalCase = null; keepPreviousVersion = false; index++; render(); }
+    if (index < cases.length - 1) { historicalCase = null; keepPreviousVersion = false; index++; render(); activeCutSegment = null; nextCutWord(); }
   } catch (error) { $("status").textContent = "התיקון לא נשמר: " + error.message; }
   finally { savingCuts = false; updateEvidence(); void refreshQueue(); }
 }
@@ -543,9 +548,11 @@ async function play(mode, selected) {
         if (request !== generation) return;
       }
     } else {
-      const selectedCut = selected ? workingWord(item, selected) : null;
-      const start = mode === "word-context" ? Math.max(item.clipStartMs, selectedCut.startMs - 120) : mode === "context" ? item.clipStartMs : workingWord(item, item.words[0]).startMs;
-      const end = mode === "word-context" ? Math.min(item.clipEndMs, selectedCut.endMs + 120) : mode === "context" ? item.clipEndMs : workingWord(item, item.words.at(-1)).endMs;
+      const selectedIndex = selected ? item.words.findIndex(word => word.segment === selected.segment) : -1;
+      const before = item.words[Math.max(0, selectedIndex - 1)];
+      const after = item.words[Math.min(item.words.length - 1, selectedIndex + 1)];
+      const start = mode === "word-context" ? workingWord(item, before).startMs : mode === "context" ? item.clipStartMs : workingWord(item, item.words[0]).startMs;
+      const end = mode === "word-context" ? workingWord(item, after).endMs : mode === "context" ? item.clipEndMs : workingWord(item, item.words.at(-1)).endMs;
       if (!await playSlice(buffer,item,start,end,request)) return;
       if (mode === "verse" && !changedCuts(item).length) evidence.get(stateKey(item)).verse = true;
       updateEvidence();

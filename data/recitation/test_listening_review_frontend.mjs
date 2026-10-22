@@ -26,7 +26,7 @@ async function page(saved = {}, options = {}) {
   const document = {getElementById:id=>elements[id],createElement:()=>new Element(),addEventListener(){},
     querySelector:selector=>elements.words.children.find(e=>String(e.dataset.segment)===selector.match(/"(\d+)"/)[1]),
     querySelectorAll:selector=>selector===".word.active"?elements.words.children.filter(e=>e.classes.has("active")):[]};
-  let clock,playing;const starts=[],posts=[],editPosts=[];
+  let clock,playing;const starts=[],playbackSlices=[],posts=[],editPosts=[];
   const gaps=[];
   let releaseEditSave;
   const editSaveGate=options.pauseEditSave?new Promise(resolve=>{releaseEditSave=resolve;}):null;
@@ -37,7 +37,7 @@ async function page(saved = {}, options = {}) {
     resume(){return Promise.resolve();}
     decodeAudioData(){return Promise.resolve({duration:2});}
     createBufferSource(){return {connect(){},disconnect(){},stop(){},start(_when,offset,duration){
-      starts.push(offset);playing={source:this,duration};
+      starts.push(offset);playbackSlices.push({offset,duration});playing={source:this,duration};
     }};}
   }
   const context=vm.createContext({document,window:{addEventListener(){}},AudioContext,crypto:{subtle:{digest:async()=>new Uint8Array(createHash("sha256").update(clip).digest()).buffer}},
@@ -53,7 +53,7 @@ async function page(saved = {}, options = {}) {
       :url==="/api/cut-edits"?{ok:true,json:async()=>({entries:options.cutProposals??[]})}
       :{json:async()=>({state:"complete",humanRecoveredChapters:0})}});
   vm.runInContext(script,context);await tick();
-  return {elements,starts,posts,editPosts,item,storage,releaseEditSave:()=>releaseEditSave?.(),failEditSave:()=>{editSaveFails=true;},setQueue:value=>{queue=value;},failQueue:()=>{queueFails=true;},run:code=>vm.runInContext(code,context),async flush(){await tick();},async resumeGap(){assert.ok(gaps.length);gaps.shift()();await tick();},
+  return {elements,starts,playbackSlices,posts,editPosts,item,storage,releaseEditSave:()=>releaseEditSave?.(),failEditSave:()=>{editSaveFails=true;},setQueue:value=>{queue=value;},failQueue:()=>{queueFails=true;},run:code=>vm.runInContext(code,context),async flush(){await tick();},async resumeGap(){assert.ok(gaps.length);gaps.shift()();await tick();},
     async finish(fraction=1){assert.ok(playing,"a real fixture slice must be playing");const current=playing;playing=null;
       clock.currentTime+=current.duration*fraction;current.source.onended?.();await tick();}};
 }
@@ -455,4 +455,51 @@ test("removing the last active case clears the editor and old audio without losi
   p.setQueue({cases:[p.item],decisions:{},token:"fixture",persistentQueue:true});await p.run("refreshQueue()");
   assert.equal(p.elements["timing-editor"].hidden,false);
   assert.equal(p.run("workingWord(caseNow(),caseNow().words[1]).endMs"),650);
+});
+
+
+test("the edited-cut button plays the exact numeric start and end currently being edited",async()=>{
+  const p=await page();p.run("setCutBoundary(2,'startMs',450);setCutBoundary(2,'endMs',650)");
+  assert.equal(p.run("cutRows.get(2).play.textContent"),"▶ החיתוך בעריכה");
+  p.run("cutRows.get(2).play.onclick()");await p.flush();
+  assert.deepEqual(p.playbackSlices,[{offset:0.45,duration:0.2}]);
+  assert.equal(p.elements["save-cut-edits"].disabled,true);
+  await p.finish();assert.equal(p.run("cutHeard(caseNow(),caseNow().words[1])"),true);
+  assert.equal(p.elements["save-cut-edits"].disabled,false);
+});
+
+test("middle-word context includes one complete actual word before and after the edited cut",async()=>{
+  const p=await page();p.run("setCutBoundary(2,'startMs',450);setCutBoundary(2,'endMs',650)");
+  assert.equal(p.run("cutRows.get(2).context.textContent"),"מילה לפני ואחרי");
+  p.run("cutRows.get(2).context.onclick()");await p.flush();
+  assert.deepEqual(p.playbackSlices,[{offset:0.1,duration:0.8}]);
+  await p.finish();
+  assert.equal(p.run("cutHearing.size"),0);assert.equal(p.run("heardNow().fresh.size"),0);
+  assert.equal(p.run("cutHeard(caseNow(),caseNow().words[1])"),false);
+  assert.equal(p.elements["save-cut-edits"].disabled,true);assert.equal(p.elements.good.disabled,true);
+});
+
+test("context uses current neighboring word edits rather than their old candidate coordinates",async()=>{
+  const p=await page();p.run("setCutBoundary(1,'startMs',80);setCutBoundary(2,'endMs',650);setCutBoundary(3,'endMs',1000)");
+  p.run("cutRows.get(2).context.onclick()");await p.flush();
+  assert.deepEqual(p.playbackSlices,[{offset:0.08,duration:0.92}]);
+  await p.finish();assert.equal(p.run("cutHearing.size"),0);assert.equal(p.elements["save-cut-edits"].disabled,true);
+});
+
+test("first-word context uses only the actual next word without inventing a previous boundary",async()=>{
+  const p=await page();p.run("showAllCutWords=true;renderCutEditor();setCutBoundary(1,'startMs',80)");
+  assert.equal(p.run("cutRows.get(1).context.textContent"),"גם המילה הבאה");
+  p.run("cutRows.get(1).context.onclick()");await p.flush();
+  assert.deepEqual(p.playbackSlices,[{offset:0.08,duration:0.52}]);
+  await p.finish();assert.equal(p.run("cutHeard(caseNow(),caseNow().words[0])"),false);
+  assert.equal(p.elements["save-cut-edits"].disabled,true);
+});
+
+test("last-word context uses only the actual previous word without inventing a next boundary",async()=>{
+  const p=await page();p.run("setCutBoundary(3,'endMs',950)");
+  assert.equal(p.run("cutRows.get(3).context.textContent"),"גם המילה הקודמת");
+  p.run("cutRows.get(3).context.onclick()");await p.flush();
+  assert.deepEqual(p.playbackSlices,[{offset:0.4,duration:0.55}]);
+  await p.finish();assert.equal(p.run("cutHeard(caseNow(),caseNow().words[2])"),false);
+  assert.equal(p.run("heardNow().fresh.size"),0);assert.equal(p.elements["save-cut-edits"].disabled,true);
 });

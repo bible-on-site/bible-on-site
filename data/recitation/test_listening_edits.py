@@ -62,8 +62,13 @@ class CutEditTests(unittest.TestCase):
 
     def unchanged_state(self):
         with closing(sqlite3.connect(self.db.path)) as db:
-            return {table: db.execute(f"SELECT * FROM {table} ORDER BY rowid").fetchall()
-                    for table in ("batch", "candidate", "current_candidate", "history", "entry")}
+            return {
+                "batch": db.execute("SELECT * FROM batch ORDER BY rowid").fetchall(),
+                "candidate": db.execute("SELECT * FROM candidate ORDER BY rowid").fetchall(),
+                "current_candidate": db.execute("SELECT * FROM current_candidate ORDER BY rowid").fetchall(),
+                "history": db.execute("SELECT * FROM history ORDER BY rowid").fetchall(),
+                "entry": db.execute("SELECT * FROM entry ORDER BY rowid").fetchall(),
+            }
 
     def test_saving_preserves_source_scores_candidate_and_all_real_reviews(self):
         real = self.db.save(self.case, {"candidateSha256": self.case["candidateSha256"],
