@@ -1,4 +1,4 @@
-"""Build lossless, release-coupled recitation book packs for PAD / ODR / desktop."""
+"""Build release-coupled playback packs; original MP3 identities stay canonical."""
 
 import argparse
 from concurrent.futures import ThreadPoolExecutor
@@ -24,6 +24,7 @@ sys.path.insert(0, str(ROOT / "data/recitation"))
 from audit import audit
 from audit_native import audit_native, NATIVE
 from publish import DATABASE, chapters_in, extract, publish
+from playback import load_playback
 
 CATALOG = "recitation-catalog.json"
 DOWNLOAD_ATTEMPTS = 4
@@ -98,24 +99,62 @@ def recording(track, cache, recordings=None):
         temporary.unlink(missing_ok=True)
 
 
+def playback_recording(track, cache, recordings=None):
+    """Store playback comes from immutable derived S3 assets, never runtime HTTP."""
+    metadata = load_playback(track["perekId"], track["audioSha256"])
+    destination = cache / (metadata["sha256"] + ".ogg")
+    if not destination.exists() or digest(destination) != metadata["sha256"]:
+        temporary = destination.with_suffix(".download")
+        try:
+            local = recordings / destination.name if recordings is not None else None
+            if local is not None and local.exists():
+                shutil.copyfile(local, temporary)
+            else:
+                origin = urlsplit(track["audioUrl"])
+                if origin.scheme != "https" or origin.username or origin.password:
+                    raise ValueError("Build recording URLs must be HTTPS chapter assets")
+                download_original(f"{origin.scheme}://{origin.netloc}/{metadata['key']}", temporary, track["perekId"])
+            if temporary.stat().st_size != metadata["sizeBytes"] or digest(temporary) != metadata["sha256"]:
+                raise ValueError("Derived playback checksum mismatch")
+            temporary.replace(destination)
+        finally:
+            temporary.unlink(missing_ok=True)
+    select_playback(track, metadata)
+    return destination
+
+
+def select_playback(track, metadata):
+    track["playback"] = {"format": "ogg-opus", "sha256": metadata["sha256"],
+                         "sizeBytes": metadata["sizeBytes"], "bitrate": 24000,
+                         "sourceSha256": track["audioSha256"]}
+
+
+def audio_filename(track):
+    playback = track.get("playback")
+    return (playback["sha256"] + ".ogg") if playback else (track["audioSha256"] + ".mp3")
+
+
 def book_archive(destination, tracks, cache):
     temporary = destination.with_suffix(".download")
     try:
         with zipfile.ZipFile(temporary, "w", compression=zipfile.ZIP_STORED) as archive:
-            for sha in sorted({track["audioSha256"] for track in tracks}):
-                # Fixed timestamps make a repeated build byte-identical, without re-encoding MP3.
-                entry = zipfile.ZipInfo(sha + ".mp3", (1980, 1, 1, 0, 0, 0))
+            for filename in sorted({audio_filename(track) for track in tracks}):
+                # Archives are reproducible; CI never re-encodes playback assets.
+                entry = zipfile.ZipInfo(filename, (1980, 1, 1, 0, 0, 0))
                 entry.external_attr = 0o100644 << 16
-                with archive.open(entry, "w") as target, (cache / (sha + ".mp3")).open("rb") as source:
+                with archive.open(entry, "w") as target, (cache / filename).open("rb") as source:
                     shutil.copyfileobj(source, target)
         if temporary.stat().st_size > 512_000_000:
-            raise ValueError(f"{destination.name}: book exceeds the supported ODR tag limit")
+            raise ValueError(f"{destination.name}: book exceeds the supported asset-pack size limit")
         temporary.replace(destination)
     finally:
         temporary.unlink(missing_ok=True)
 
 
-def prepare_assets(app, platform, cache, recordings=None, intermediate=None, database=DATABASE, native=NATIVE):
+def prepare_assets(app, platform, cache, recordings=None, intermediate=None, database=DATABASE, native=NATIVE,
+                   local_originals=False):
+    if local_originals and recordings is None:
+        raise ValueError("Local original playback requires a recordings directory")
     cache.mkdir(parents=True, exist_ok=True)
     # Never mutate the canonical file or a live GPU checkpoint to make app assets.
     with tempfile.TemporaryDirectory() as temporary:
@@ -134,17 +173,34 @@ def prepare_assets(app, platform, cache, recordings=None, intermediate=None, dat
                    for pid in range(first, last + 1)}
     if not tracks or any(t["perekId"] not in mapping for t in tracks):
         raise ValueError("Recitation inventory does not match the native books")
+    use_opus = platform in ("Android", "iOS") and not local_originals
+    if use_opus:
+        for track in tracks:
+            select_playback(track, load_playback(track["perekId"], track["audioSha256"]))
+    # Duplicate audio identities share a cache file; never race its temporary
+    # write. Every chapter still carries its own source-bound descriptor.
+    recordings_by_name = {audio_filename(track): track for track in tracks}
     with ThreadPoolExecutor(max_workers=4) as pool:
-        unique_audio = {track["audioSha256"]: track for track in tracks}
         try:
-            list(pool.map(lambda track: recording(track, cache, recordings), unique_audio.values()))
+            # Local development can use its original MP3 checkout entirely offline.
+            # Store mobile packages retain the immutable derived playback format.
+            fetch = playback_recording if use_opus else recording
+            list(pool.map(lambda track: fetch(track, cache, recordings), recordings_by_name.values()))
         except BaseException:
             pool.shutdown(wait=True, cancel_futures=True)
             raise
+    if platform == "iOS":
+        # Regenerate cleanly: leftover recitation pack dirs (e.g. the legacy
+        # underscore IDs) carry manifests PackageIosAssetPacks would archive.
+        for stale in list((app / "Platforms/iOS/AssetPacks").glob("recitation*")):
+            if stale.is_dir():
+                shutil.rmtree(stale)
     books = []
     for sid in sorted({mapping[t["perekId"]] for t in tracks}):
         selected = [t for t in tracks if mapping[t["perekId"]] == sid]
-        pack = f"recitation_{sid}"
+        # App Store Connect accepts only alphanumerics and hyphens in asset-pack
+        # IDs; Play asset-pack names take underscores (hyphens are rejected).
+        pack = f"recitation-{sid}" if platform == "iOS" else f"recitation_{sid}"
         path = cache / (pack + ".zip")
         book_archive(path, selected, cache)
         books.append({"seferId": sid, "sha256": digest(path), "sizeBytes": path.stat().st_size,
@@ -152,23 +208,21 @@ def prepare_assets(app, platform, cache, recordings=None, intermediate=None, dat
         if platform == "Android":
             directory = app / "Platforms/Android/AssetPacks" / pack
         elif platform == "iOS":
-            catalog = app / "Platforms/iOS/Assets/Recitation.xcassets"
-            catalog.mkdir(parents=True, exist_ok=True)
-            (catalog / "Contents.json").write_text(json.dumps({"info": {"author": "xcode", "version": 1}}), encoding="utf-8")
-            directory = catalog / (pack + ".dataset")
+            directory = app / "Platforms/iOS/AssetPacks" / pack
         else:
             directory = app / "Platforms/Windows/Recitation"
         directory.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(path, directory / path.name)
         if platform == "iOS":
-            contents = {"data": [{"filename": path.name, "universal-type-identifier": "public.zip-archive"}],
-                        "info": {"author": "xcode", "version": 1}, "properties": {"on-demand-resource-tags": [pack]}}
-            (directory / "Contents.json").write_text(json.dumps(contents, indent=2) + "\n", encoding="utf-8")
+            # xcrun ba-package turns each folder + manifest into an Apple-hosted .aar.
+            manifest = {"assetPackID": pack, "downloadPolicy": {"onDemand": {}},
+                        "fileSelectors": [{"file": path.name}], "platforms": ["iOS", "macOS"]}
+            (directory / "Manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     raw = app / "Resources/Raw"
     raw.mkdir(parents=True, exist_ok=True)
     catalog = {"version": 1, "package": {"version": 1, "tracks": tracks}, "books": books}
     (raw / CATALOG).write_text(json.dumps(catalog, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    print(f"Prepared {len(tracks)} original recordings in {len(books)} {platform} book packs")
+    print(f"Prepared {len(tracks)} playback recordings in {len(books)} {platform} book packs")
     return catalog
 
 
@@ -178,8 +232,11 @@ def main():
     parser.add_argument("--platform", choices=["Android", "iOS", "Windows"], required=True)
     parser.add_argument("--cache", type=Path, default=ROOT / ".cache/recitation-assets")
     parser.add_argument("--recordings", type=Path)
+    parser.add_argument("--local-originals", action="store_true",
+                        help="Use verified original MP3s from --recordings for local development")
     args = parser.parse_args()
-    prepare_assets(args.app_directory, args.platform, args.cache, args.recordings)
+    prepare_assets(args.app_directory, args.platform, args.cache, args.recordings,
+                   local_originals=args.local_originals)
 
 
 if __name__ == "__main__":

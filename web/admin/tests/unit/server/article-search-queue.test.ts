@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => {
 		queryOne: vi.fn(),
 		query: vi.fn(),
 		txExecute: vi.fn(),
+		txQuery: vi.fn(),
 		txQueryOne: vi.fn(),
 		transaction: vi.fn(async (fn: (c: typeof conn) => unknown) => fn(conn)),
 	};
@@ -59,6 +60,7 @@ describe("article search reindex enqueue", () => {
 			mocks.queryOne,
 			mocks.query,
 			mocks.txExecute,
+			mocks.txQuery,
 			mocks.txQueryOne,
 			mocks.transaction,
 		])

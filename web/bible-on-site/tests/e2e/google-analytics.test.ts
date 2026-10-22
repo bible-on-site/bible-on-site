@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "../util/playwright/test-fixture";
 
 const GA_ENDPOINT = "https://www.googletagmanager.com/gtag/js";
 

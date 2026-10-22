@@ -7,6 +7,8 @@ from acoustic import ctc_spans
 METHOD = "ctc-following-separator-start-v1"
 END_METHOD = "ctc-following-separator-end-v1"
 PATH_METHOD = "ctc-delimiter-word-boundaries-v1"
+SOURCE_METHOD = "source-inspected-word-boundaries-v1"
+INITIAL_SOURCE_METHOD = "source-inspected-initial-candidate-v1"
 
 
 def separator_candidates(aligner, audio, words, start_seconds):
@@ -70,6 +72,14 @@ def correct_ends(rows, evidence, identities, boundary="start"):
 
 def verify_corrections(diagnostic):
     """Every changed end must be the recorded pinned-path separator, never a pad."""
+    if diagnostic.get("boundaryMethod") == INITIAL_SOURCE_METHOD:
+        from listening_signal import verify_initial_source_proposals
+        verify_initial_source_proposals(diagnostic)
+        return
+    if diagnostic.get("boundaryMethod") == SOURCE_METHOD:
+        from listening_signal import verify_source_proposals
+        verify_source_proposals(diagnostic)
+        return
     if diagnostic.get("boundaryMethod") == PATH_METHOD:
         verify_path_corrections(diagnostic)
         return None

@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "../util/playwright/test-fixture";
 
 test("bulletin-unapproved content remains public across website surfaces", async ({
 	page,

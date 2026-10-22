@@ -7,6 +7,7 @@ import {
 	getConfirmedCycleCount,
 	getCycle,
 	getCycleForDate,
+	getProgrammeYearsElapsed,
 	getCycleLabel,
 	getCycleStartMonth,
 	getMonthLabel,
@@ -20,7 +21,10 @@ import {
 } from "../../../src/data/learning-schedule";
 import catalog from "../../../src/data/db/client-catalog.generated.json";
 import { cycles } from "../../../src/data/db/cycles";
-import { parseNumericalDateToHebcalDate } from "../../../src/util/hebdates-util";
+import {
+	HebrewDate,
+	parseNumericalDateToHebcalDate,
+} from "../../../src/util/hebdates-util";
 
 const day = (dateNumber: number) =>
 	resolveCalendarDay(parseNumericalDateToHebcalDate(dateNumber));
@@ -97,27 +101,24 @@ describe("resolveCalendarDay", () => {
 			expect(result).toMatchObject({ status: "study", perekId: 268, cycle: 4 });
 		});
 
-		it("marks Fridays as review of Thursday's perek in confirmed cycles", () => {
+		it("marks Fridays as review of the whole studied week in confirmed cycles", () => {
 			// Cycle 4 starts on ז אלול תשפ"ה (Sunday). Its first Friday
-			// is 4 days later and reviews Thursday's perek.
+			// reviews all five perakim studied Sunday–Thursday, not only
+			// Thursday's perek (#2365).
 			const thursday = day(57851211);
 			const friday = day(57851212);
 			expect(thursday.status).toBe("study");
-			expect(friday).toMatchObject({
-				status: "review",
-				perekId: thursday.perekId,
-				cycle: 4,
-			});
+			expect(friday.status).toBe("review");
+			expect(friday.perekId).toBe(thursday.perekId);
+			expect(friday.reviewPerekIds).toEqual([1, 2, 3, 4, 5]);
 		});
 
-		it("marks Saturdays as review of Thursday's perek where the schedule has none", () => {
+		it("marks Saturdays as review of the same week where the schedule has none", () => {
 			const thursday = day(57851211);
 			const saturday = day(57851213);
-			expect(saturday).toMatchObject({
-				status: "review",
-				perekId: thursday.perekId,
-				cycle: 4,
-			});
+			expect(saturday.status).toBe("review");
+			expect(saturday.perekId).toBe(thursday.perekId);
+			expect(saturday.reviewPerekIds).toEqual([1, 2, 3, 4, 5]);
 		});
 	});
 
@@ -198,17 +199,19 @@ describe("resolveCalendarDay", () => {
 			});
 		});
 
-		it("marks projected Fridays and Saturdays as review", () => {
+		it("marks projected Fridays and Saturdays as review of the studied week", () => {
 			const cycle11 = getCycle(11);
 			// Cycle starts on Sunday: offsets 5/6 are Friday/Saturday of week 1.
 			const thursdayPerek = resolveCalendarDay(cycle11.start.add(4)).perekId;
 			expect(resolveCalendarDay(cycle11.start.add(5))).toMatchObject({
 				status: "review",
 				perekId: thursdayPerek,
+				reviewPerekIds: [1, 2, 3, 4, 5],
 			});
 			expect(resolveCalendarDay(cycle11.start.add(6))).toMatchObject({
 				status: "review",
 				perekId: thursdayPerek,
+				reviewPerekIds: [1, 2, 3, 4, 5],
 			});
 		});
 
@@ -405,6 +408,44 @@ describe("labels", () => {
 		expect(getCycleLabel(getCycle(4))).toContain("מחזור 4:");
 		expect(getCycleLabel(getCycle(4))).not.toContain("משוער");
 		expect(getCycleLabel(getCycle(11))).toContain("מחזור 11 (משוער):");
+	});
+});
+
+describe("getProgrammeYearsElapsed", () => {
+	// The program's first study day is 29 Kislev 5775 (cycles[0]).
+	const hdate = (year: number, monthCode: string, day: number) =>
+		HebrewDate.fromHebrewComponents(year, monthCode, day);
+
+	it("returns 0 before the program and during its first year", () => {
+		expect(getProgrammeYearsElapsed(hdate(5774, "M12", 20))).toBe(0);
+		expect(getProgrammeYearsElapsed(hdate(5775, "M01", 15))).toBe(0);
+		// Same Hebrew year as the start, a month after it — still no full year.
+		expect(getProgrammeYearsElapsed(hdate(5775, "M04", 29))).toBe(0);
+	});
+
+	it("returns 0 the day before the first anniversary", () => {
+		expect(getProgrammeYearsElapsed(hdate(5776, "M03", 28))).toBe(0);
+	});
+
+	it("turns over exactly on the Hebrew anniversary", () => {
+		expect(getProgrammeYearsElapsed(hdate(5776, "M03", 29))).toBe(1);
+		expect(getProgrammeYearsElapsed(hdate(5776, "M03", 30))).toBe(1);
+		expect(getProgrammeYearsElapsed(hdate(5776, "M04", 1))).toBe(1);
+	});
+
+	it("counts completed years, never rounding up before the anniversary", () => {
+		// Tishrei 5787 precedes 29 Kislev 5787 → 11 completed years, not 12.
+		expect(getProgrammeYearsElapsed(hdate(5787, "M01", 10))).toBe(11);
+		expect(getProgrammeYearsElapsed(hdate(5787, "M03", 29))).toBe(12);
+	});
+
+	it("handles leap-year dates on both sides of the anniversary", () => {
+		// 5784 is a leap year — Adar I and Adar II dates must still compare
+		// correctly against a Kislev anniversary (both follow it), while
+		// Cheshvan still precedes it.
+		expect(getProgrammeYearsElapsed(hdate(5784, "M02", 20))).toBe(8);
+		expect(getProgrammeYearsElapsed(hdate(5784, "M05L", 15))).toBe(9);
+		expect(getProgrammeYearsElapsed(hdate(5784, "M06", 1))).toBe(9);
 	});
 });
 

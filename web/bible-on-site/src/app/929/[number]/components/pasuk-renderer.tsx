@@ -3,11 +3,12 @@ import type { Segment } from "@/data/db/tanah-view-types";
 import { isQriDifferentThanKtiv } from "@/data/db/tanah-view-types";
 import type { EntityRefLookup } from "@/lib/tanahpedia/entity-ref-lookup";
 import { getSegmentRuns } from "@/lib/tanahpedia/entity-ref-lookup";
+import { DivineNameText } from "./DivineNameText";
 
 type WordWrapper = (
 	pasuk: number,
 	segment: number,
-	text: string,
+	text: React.ReactNode,
 ) => React.ReactNode;
 
 interface SegmentRangeResult {
@@ -31,24 +32,29 @@ export function renderSegmentRange(
 		const segmentKey = `${pasukIdx + 1}-${i + 1}`;
 		const isQriWithDifferentKtiv =
 			segment.type === "qri" && isQriDifferentThanKtiv(segment);
+		// הסתר שם השם is display-only: the wrapped element reads the stored
+		// preference and renders the masked form, while segment identity —
+		// keys, word indices, recitation alignment — stays canonical.
+		const value =
+			segment.type === "ktiv" || segment.type === "qri" ? (
+				<DivineNameText value={segment.value} />
+			) : null;
 		content.push(
 			<span
 				key={segmentKey}
 				className={isQriWithDifferentKtiv ? qriClassName : ""}
 			>
 				{segment.type === "ktiv" ? (
-					segment.value
+					value
 				) : segment.type === "qri" ? (
 					isQriWithDifferentKtiv ? (
 						<>
 							{/* biome-ignore lint/a11y/noLabelWithoutControl: It'll take some time to validate this fix altogether with css rules */}
 							(<label />
-							{wordWrapper?.(pasukIdx + 1, i + 1, segment.value) ??
-								segment.value}
-							)
+							{wordWrapper?.(pasukIdx + 1, i + 1, value) ?? value})
 						</>
 					) : (
-						(wordWrapper?.(pasukIdx + 1, i + 1, segment.value) ?? segment.value)
+						(wordWrapper?.(pasukIdx + 1, i + 1, value) ?? value)
 					)
 				) : segment.type === "ptuha" ? (
 					ptuha()

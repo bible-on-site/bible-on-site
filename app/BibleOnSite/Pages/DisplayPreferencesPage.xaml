@@ -1,0 +1,230 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:viewmodels="clr-namespace:BibleOnSite.ViewModels"
+             x:Class="BibleOnSite.Pages.DisplayPreferencesPage"
+             x:DataType="viewmodels:DisplayPreferencesViewModel"
+             Title="תצוגה"
+             FlowDirection="RightToLeft"
+             BackgroundColor="{AppThemeBinding Light={StaticResource Gray50}, Dark={StaticResource SurfaceDark}}">
+
+    <ScrollView Padding="16,12">
+        <VerticalStackLayout Spacing="24">
+
+            <!-- ═══ גודל גופן ═══ -->
+            <VerticalStackLayout Spacing="8">
+                <Label Text="גודל גופן"
+                       FontSize="14"
+                       FontAttributes="Bold"
+                       TextColor="{StaticResource Primary}"
+                       Padding="4,0,0,0"/>
+
+                <Border Padding="16"
+                        StrokeShape="RoundRectangle 12"
+                        Stroke="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray700}}"
+                        StrokeThickness="1"
+                        BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Gray900}}">
+                    <VerticalStackLayout Spacing="12">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <Label Text="גודל גופן"
+                                   FontSize="16"
+                                   TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"
+                                   VerticalOptions="Center"/>
+                            <Label Grid.Column="1"
+                                   Text="{Binding FontFactor, StringFormat='{0:P0}'}"
+                                   FontSize="15"
+                                   TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray350}}"
+                                   VerticalOptions="Center"/>
+                        </Grid>
+                        <!-- Live preview: wraps and grows freely so the text stays
+                             readable at the largest supported factor. -->
+                        <Label Text="וּמָתוֹק הָאוֹר וְטוֹב לַעֵינַיִם לִרְאוֹת אֶת־הַשָּׁמֶשׁ׃"
+                               FontSize="{Binding FontFactor, Converter={StaticResource FontFactorToSizeConverter}}"
+                               TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray350}}"
+                               LineBreakMode="WordWrap"
+                               AutomationId="FontPreviewText"/>
+                        <Slider Minimum="0.5"
+                                AutomationId="FontFactorSlider"
+                                Maximum="2.0"
+                                Value="{Binding FontFactor}"
+                                MinimumTrackColor="{StaticResource Primary}"
+                                MaximumTrackColor="{AppThemeBinding Light={StaticResource Gray250}, Dark={StaticResource Gray600}}"/>
+                    </VerticalStackLayout>
+                </Border>
+            </VerticalStackLayout>
+            <!-- ═══ הסתרת שם השם ═══ -->
+            <VerticalStackLayout Spacing="8">
+                <Label Text="הסתרת שם השם"
+                       FontSize="14"
+                       FontAttributes="Bold"
+                       TextColor="{StaticResource Primary}"
+                       Padding="4,0,0,0"/>
+
+                <Border Padding="16"
+                        StrokeShape="RoundRectangle 12"
+                        Stroke="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray700}}"
+                        StrokeThickness="1"
+                        BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Gray900}}">
+                    <VerticalStackLayout Spacing="12">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <Label Text="הסתר שם השם"
+                                   FontSize="16"
+                                   VerticalOptions="Center"
+                                   TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
+                            <Switch Grid.Column="1"
+                                    IsToggled="{Binding DivineNameMaskingEnabled}"
+                                    AutomationId="DivineNameMaskingSwitch"/>
+                        </Grid>
+
+                        <VerticalStackLayout Spacing="10"
+                                             IsVisible="{Binding DivineNameMaskingEnabled}"
+                                             AutomationId="DivineNameMaskingOptions">
+                            <!-- אלהים -->
+                            <Label Text="אלהים"
+                                   FontSize="14"
+                                   FontAttributes="Bold"
+                                   TextColor="{AppThemeBinding Light={StaticResource Gray700}, Dark={StaticResource Gray300}}"/>
+                            <RadioButton AutomationId="MaskElohimAsIs"
+                                         Content="כמות שהוא"
+                                         GroupName="MaskElohim"
+                                         IsChecked="{Binding IsMaskElohimAsIs}"
+                                         CheckedChanged="OnMaskElohimRadioChanged"/>
+                            <RadioButton AutomationId="MaskElohimElokim"
+                                         Content="אלקים"
+                                         GroupName="MaskElohim"
+                                         IsChecked="{Binding IsMaskElohimElokim}"
+                                         CheckedChanged="OnMaskElohimRadioChanged"/>
+                            <RadioButton AutomationId="MaskElohimHyphen"
+                                         Content="א-להים"
+                                         GroupName="MaskElohim"
+                                         IsChecked="{Binding IsMaskElohimHyphen}"
+                                         CheckedChanged="OnMaskElohimRadioChanged"/>
+                            <HorizontalStackLayout Spacing="8">
+                                <RadioButton AutomationId="MaskElohimCustomRadio"
+                                             Content="אחר:"
+                                             GroupName="MaskElohim"
+                                             IsChecked="{Binding IsMaskElohimCustom}"
+                                             CheckedChanged="OnMaskElohimRadioChanged"/>
+                                <Entry Text="{Binding DivineNameMaskElohimCustom}"
+                                       IsEnabled="{Binding IsMaskElohimCustom}"
+                                       AutomationId="MaskElohimCustomEntry"
+                                       WidthRequest="160"
+                                       FontSize="14"/>
+                            </HorizontalStackLayout>
+
+                            <!-- יהוה -->
+                            <Label Text="יהוה"
+                                   FontSize="14"
+                                   FontAttributes="Bold"
+                                   TextColor="{AppThemeBinding Light={StaticResource Gray700}, Dark={StaticResource Gray300}}"/>
+                            <RadioButton AutomationId="MaskYhwhHeh"
+                                         Content="ה'"
+                                         GroupName="MaskYhwh"
+                                         IsChecked="{Binding IsMaskYhwhHeh}"
+                                         CheckedChanged="OnMaskYhwhRadioChanged"/>
+                            <RadioButton AutomationId="MaskYhwhDalet"
+                                         Content="ד'"
+                                         GroupName="MaskYhwh"
+                                         IsChecked="{Binding IsMaskYhwhDalet}"
+                                         CheckedChanged="OnMaskYhwhRadioChanged"/>
+                            <HorizontalStackLayout Spacing="8">
+                                <RadioButton AutomationId="MaskYhwhCustomRadio"
+                                             Content="אחר:"
+                                             GroupName="MaskYhwh"
+                                             IsChecked="{Binding IsMaskYhwhCustom}"
+                                             CheckedChanged="OnMaskYhwhRadioChanged"/>
+                                <Entry Text="{Binding DivineNameMaskYhwhCustom}"
+                                       IsEnabled="{Binding IsMaskYhwhCustom}"
+                                       AutomationId="MaskYhwhCustomEntry"
+                                       WidthRequest="160"
+                                       FontSize="14"/>
+                            </HorizontalStackLayout>
+
+                            <!-- אל -->
+                            <Label Text="אל"
+                                   FontSize="14"
+                                   FontAttributes="Bold"
+                                   TextColor="{AppThemeBinding Light={StaticResource Gray700}, Dark={StaticResource Gray300}}"/>
+                            <RadioButton AutomationId="MaskElAsIs"
+                                         Content="כמות שהוא"
+                                         GroupName="MaskEl"
+                                         IsChecked="{Binding IsMaskElAsIs}"
+                                         CheckedChanged="OnMaskElRadioChanged"/>
+                            <RadioButton AutomationId="MaskElHyphen"
+                                         Content="א-ל"
+                                         GroupName="MaskEl"
+                                         IsChecked="{Binding IsMaskElHyphen}"
+                                         CheckedChanged="OnMaskElRadioChanged"/>
+
+                            <!-- שדי -->
+                            <Label Text="שדי"
+                                   FontSize="14"
+                                   FontAttributes="Bold"
+                                   TextColor="{AppThemeBinding Light={StaticResource Gray700}, Dark={StaticResource Gray300}}"/>
+                            <RadioButton AutomationId="MaskShaddaiAsIs"
+                                         Content="כמות שהוא"
+                                         GroupName="MaskShaddai"
+                                         IsChecked="{Binding IsMaskShaddaiAsIs}"
+                                         CheckedChanged="OnMaskShaddaiRadioChanged"/>
+                            <RadioButton AutomationId="MaskShaddaiHyphen"
+                                         Content="שד-י"
+                                         GroupName="MaskShaddai"
+                                         IsChecked="{Binding IsMaskShaddaiHyphen}"
+                                         CheckedChanged="OnMaskShaddaiRadioChanged"/>
+                            <HorizontalStackLayout Spacing="8">
+                                <RadioButton AutomationId="MaskShaddaiCustomRadio"
+                                             Content="אחר:"
+                                             GroupName="MaskShaddai"
+                                             IsChecked="{Binding IsMaskShaddaiCustom}"
+                                             CheckedChanged="OnMaskShaddaiRadioChanged"/>
+                                <Entry Text="{Binding DivineNameMaskShaddaiCustom}"
+                                       IsEnabled="{Binding IsMaskShaddaiCustom}"
+                                       AutomationId="MaskShaddaiCustomEntry"
+                                       WidthRequest="160"
+                                       FontSize="14"/>
+                            </HorizontalStackLayout>
+                        </VerticalStackLayout>
+                    </VerticalStackLayout>
+                </Border>
+            </VerticalStackLayout>
+
+            <!-- ═══ כפתור חזרה (Android only) ═══ -->
+            <VerticalStackLayout Spacing="8"
+                                 IsVisible="{OnPlatform Android=true, Default=false}">
+                <Label Text="כפתור חזרה ביישומון"
+                       FontSize="14"
+                       FontAttributes="Bold"
+                       TextColor="{StaticResource Primary}"
+                       Padding="4,0,0,0"/>
+
+                <Border Padding="16"
+                        StrokeShape="RoundRectangle 12"
+                        Stroke="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray700}}"
+                        StrokeThickness="1"
+                        BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Gray900}}">
+                    <VerticalStackLayout Spacing="10">
+                        <Label Text="במכשירי אנדרויד אפשר להסתמך על כפתור החזרה של המערכת או להציג כפתור גם בתוך היישומון"
+                               FontSize="13"
+                               TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray350}}"/>
+                        <RadioButton AutomationId="BackButtonPlatformDefault"
+                                     Content="ברירת מחדל — ללא כפתור ביישומון"
+                                     GroupName="InAppBackButton"
+                                     IsChecked="{Binding IsBackButtonPlatformDefault}"
+                                     CheckedChanged="OnBackButtonRadioChanged"/>
+                        <RadioButton AutomationId="BackButtonShow"
+                                     Content="הצג תמיד"
+                                     GroupName="InAppBackButton"
+                                     IsChecked="{Binding IsBackButtonShow}"
+                                     CheckedChanged="OnBackButtonRadioChanged"/>
+                        <RadioButton AutomationId="BackButtonHide"
+                                     Content="הסתר תמיד"
+                                     GroupName="InAppBackButton"
+                                     IsChecked="{Binding IsBackButtonHide}"
+                                     CheckedChanged="OnBackButtonRadioChanged"/>
+                    </VerticalStackLayout>
+                </Border>
+            </VerticalStackLayout>
+
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

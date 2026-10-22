@@ -11,12 +11,12 @@ differ. Both newer SQLite artifacts have build timestamp `1786342208`, proving
 they were generated together. The web JSON catalog still contained the older mapping.
 
 The app copied its bundled catalog only when no local copy existed. In contrast,
-the notes service updated its database from PAD/ODR. An existing installation could
+the notes service updated its database from the store-delivered pack. An existing installation could
 therefore join new notes to the original catalog indefinitely. The same copy-once
 behavior prevented corrections to the bundled Bible text from reaching existing
 installations.
 
-The iOS ODR extraction cache also reused an unversioned directory across app
+The iOS store-pack extraction cache also reused an unversioned directory across app
 updates, hiding newer store resources behind its existing notes file. It now uses
 the app version and build as its cache generation, including the diagnostic path.
 Tests reject both prior-build files and the legacy unversioned cache, while
@@ -29,7 +29,7 @@ notes can be displayed, the app compares this mapping with its current catalog.
 Independent generations with the same mapping remain compatible. Legacy notes
 must have the same nonzero build timestamp as the catalog. Incompatible notes are
 unavailable, and the existing download action can replace them even when a local
-file already exists. Both Android PAD and iOS ODR use this service.
+file already exists. Both Android PAD and iOS managed asset packs use this service.
 
 All web and app artifacts were regenerated from the Sefaria database. The names
 projection used to recognize web citations is now generated with the JSON catalog.

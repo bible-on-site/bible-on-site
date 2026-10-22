@@ -2,6 +2,7 @@
 
 import { toLetters } from "gematry";
 import DOMPurify from "isomorphic-dompurify";
+import { demoteHeadings } from "@/lib/html-headings";
 import type { PerushDetail, PerushNote } from "@/lib/perushim";
 import styles from "./perushim-section.module.css";
 import { scrollToSeferPasuk } from "./sefer-pasuk-navigation";
@@ -101,7 +102,7 @@ export function PerushFullView({
 								className={styles.noteContent}
 								// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify
 								dangerouslySetInnerHTML={{
-									__html: DOMPurify.sanitize(note.noteContent),
+									__html: DOMPurify.sanitize(demoteHeadings(note.noteContent)),
 								}}
 							/>
 						))}

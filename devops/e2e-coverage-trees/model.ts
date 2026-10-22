@@ -69,6 +69,17 @@ export interface CoveredNode {
 	files?: string[];
 	/** `[minSl, maxEl]` of the declaration's sequence points. */
 	span?: [number, number];
+	/**
+	 * Source-member identity this node maps into — `Ns.Type.Member#<sig>`,
+	 * the same key space `SourceFingerprint.members` uses. Present only on
+	 * `method` nodes whose point span falls inside exactly one member of the
+	 * node's file parse (and that file sits under the mapped source root).
+	 * Unmapped/ambiguous nodes carry no member so the selector widens to the
+	 * enclosing type or file instead of guessing. Absent in older trees.
+	 */
+	member?: string;
+	/** `Ns.Type` chain the member lives in — the widening tier above member. */
+	memberType?: string;
 	/** Containment edges — the only edge kind this slice emits. */
 	parents?: string[];
 	/** Instrumented points the decl carries in the template. */

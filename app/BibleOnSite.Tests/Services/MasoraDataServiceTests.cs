@@ -58,6 +58,7 @@ public class MasoraDataServiceTests
         service.UnitCount.Should().Be(0);
         service.GetUnit(1).Should().BeNull();
         service.GetFirstUnitsBySefer().Should().BeEmpty();
+        service.GetUnitIndex(1).Should().Be(-1);
         service.GetAdjacentUnits(1).Should().Be((null, null));
         service.GetUnitContainingPasuk(1).Should().BeNull();
         service.GetUnitContainingPasuk(1, 1).Should().BeNull();
@@ -180,6 +181,22 @@ public class MasoraDataServiceTests
         service.UnitCount.Should().Be(0);
         service.GetUnit(1).Should().BeNull();
         service.GetFirstUnitsBySefer().Should().BeEmpty();
+        service.GetUnitIndex(1).Should().Be(-1);
+        service.GetAdjacentUnits(1).Should().Be((null, null));
+        service.GetUnitContainingPasuk(1, 1).Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetUnitIndex_ReturnsCanonicalPositionInUnitsList()
+    {
+        await using var storage = new TestStorage();
+        var service = await LoadedServiceAsync(storage, Seed);
+
+        // Seed order is unit_id order: 1, 2, 3, 9 — gaps don't shift indexes.
+        service.GetUnitIndex(1).Should().Be(0);
+        service.GetUnitIndex(3).Should().Be(2);
+        service.GetUnitIndex(9).Should().Be(3);
+        service.GetUnitIndex(77).Should().Be(-1);
     }
 
     [Fact]
@@ -221,6 +238,23 @@ public class MasoraDataServiceTests
         // Unit 3 starts at perek 2 pasuk 4.
         service.GetUnitContainingPasuk(2, 4)!.UnitId.Should().Be(3);
         service.GetUnitContainingPasuk(9, 1).Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetUnitContainingPasuk_OverlappingRanges_FirstCanonicalUnitWins()
+    {
+        await using var storage = new TestStorage();
+        var service = await LoadedServiceAsync(storage, Seed + """
+            INSERT INTO tanah_reading_unit VALUES ('masora',10,'10',8,2,'overlap',NULL);
+            INSERT INTO tanah_reading_unit_range VALUES ('masora',10,0,NULL,51,5,NULL,51,8,NULL);
+            """);
+
+        // Unit 9 covers (51,1)-(51,10); overlapping unit 10 sits later in
+        // canonical order, so unit 9 keeps the shared pesukim — identical
+        // precedence to the previous linear FirstOrDefault over Units.
+        service.GetUnitContainingPasuk(51, 6)!.UnitId.Should().Be(9);
+        service.GetUnitContainingPasuk(51, 5)!.UnitId.Should().Be(9);
+        service.GetUnitContainingPasuk(51, 9)!.UnitId.Should().Be(9);
     }
 
     [Fact]

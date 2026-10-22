@@ -106,6 +106,32 @@ jest.mock("@/app/929/[number]/components/ReaderSettings", () => ({
 }));
 jest.mock("@/lib/download/register-tanach", () => ({}));
 
+/**
+ * Collects `fallback` props off every Suspense element in an awaited
+ * server-component tree. Suspense fallbacks never mount under jsdom,
+ * so coverage of their props requires reaching into the JSX directly.
+ */
+function collectSuspenseFallbackProps(
+	node: unknown,
+	found: Array<Record<string, unknown>> = [],
+): Array<Record<string, unknown>> {
+	if (Array.isArray(node)) {
+		for (const child of node) collectSuspenseFallbackProps(child, found);
+		return found;
+	}
+	if (node == null || typeof node !== "object" || !("props" in node)) {
+		return found;
+	}
+	const props = (node as { props: Record<string, unknown> }).props;
+	if (props == null || typeof props !== "object") return found;
+	const fallback = props.fallback;
+	if (fallback != null && typeof fallback === "object" && "props" in fallback) {
+		found.push((fallback as { props: Record<string, unknown> }).props);
+	}
+	collectSuspenseFallbackProps(props.children, found);
+	return found;
+}
+
 import { sefarim } from "../../../src/data/db/sefarim";
 import { HaftaraSection } from "@/app/parasha/[unit]/components/HaftaraSection";
 import { UnitBreadcrumb } from "@/app/parasha/[unit]/components/UnitBreadcrumb";
@@ -334,6 +360,33 @@ describe("ParashaUnitPage", () => {
 		expect(screen.getByTestId("perushim-פרשנים על ההפטרה")).toBeInTheDocument();
 		expect(screen.getByTestId("articles-מאמרים על ההפטרה")).toBeInTheDocument();
 		expect(screen.getByTestId("parasha-book")).toBeInTheDocument();
+	});
+
+	it("keeps the Suspense fallbacks' perush hrefs inside the division", async () => {
+		const jsx = await ParashaUnitPage({
+			params: Promise.resolve({ unit: "1" }),
+		});
+		// jsdom mounts the live children, never the fallback elements —
+		// reach into the tree and invoke their href builders directly.
+		const fallbacks = collectSuspenseFallbackProps(jsx);
+		const hrefOf = (props: Record<string, unknown>) =>
+			(props.hrefForPerush as (p: { name: string }) => string)({
+				name: 'רש"י',
+			});
+		const torah = fallbacks.filter(
+			(props) => props.title === "פרשנים על הפרשה",
+		);
+		const haftara = fallbacks.filter(
+			(props) => props.title === "פרשנים על ההפטרה",
+		);
+		expect(torah).toHaveLength(1);
+		expect(haftara).toHaveLength(1);
+		expect(decodeURIComponent(hrefOf(torah[0]))).toBe(
+			'/פרשה/1?perush=רש"י',
+		);
+		expect(decodeURIComponent(hrefOf(haftara[0]))).toBe(
+			'/פרשה/1?haftaraPerush=רש"י',
+		);
 	});
 
 	it("keeps Torah and Haftarah perushim inside the division page (issue #2190)", async () => {

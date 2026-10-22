@@ -6,8 +6,6 @@ on:
         required: true
         type: string
     secrets:
-      DEPLOY_KEY:
-        required: true
       # AWS credentials for SSG builds (website only) - used to fetch DB_URL from SSM
       # and dynamically whitelist runner IP in RDS security group
       AWS_DEPLOY_ROLE_ARN:
@@ -251,7 +249,7 @@ jobs:
             exit 1
           fi
           python data/recitation/deployment.py --origin http://127.0.0.1:3000 \
-            --version "${{ steps.get_module_version.outputs.MODULE_VERSION }}" --attempts 12 --interval 5
+            --version "${{ steps.get_module_version.outputs.MODULE_VERSION }}" --check-playback --attempts 12 --interval 5
           node web/bible-on-site/scripts/verify-public-content.mjs --origin http://127.0.0.1:3000 --database
 
       - name: Publish website dependency cache (not a release image)
@@ -280,7 +278,9 @@ jobs:
         run: |
           gzip -c -f ${{ steps.prepare_dockerizing.outputs.DOCKER_IMAGE_TAR_NAME }} > ${{ steps.prepare_dockerizing.outputs.DOCKER_IMAGE_TAR_GZ_NAME }}
 
+      # Pre-merge (non-push) runs validate the build only; release consumes master artifacts.
       - name: Store Docker Image
+        if: ${{ github.event_name == 'push' }}
         uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.prepare_dockerizing.outputs.DOCKER_ARTIFACT_NAME }}

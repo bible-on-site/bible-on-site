@@ -44,6 +44,30 @@ public class NavigationTests
         viewModel.PerekId.Should().Be(123);
     }
 
+    [Fact]
+    public void PerekViewModel_CurrentCarouselPerek_ExposesOnlyTheCurrentPageToAccessibility()
+    {
+        static Perek Page(int id) => new()
+        {
+            PerekId = id, Date = "2026-01-20", HebDate = "תשרי",
+            SeferName = "בראשית", SeferTanahUsName = "Genesis", Tseit = "18:00"
+        };
+        var first = Page(1);
+        var second = Page(2);
+        var viewModel = new PerekViewModel(PreferencesService.CreateForTesting(new InMemoryPreferencesStorage()), _ => first);
+        first.IsOffscreenCarouselPage.Should().BeTrue();
+
+        viewModel.CurrentCarouselPerek = first;
+        first.IsOffscreenCarouselPage.Should().BeFalse();
+
+        viewModel.CurrentCarouselPerek = second;
+        first.IsOffscreenCarouselPage.Should().BeTrue();
+        second.IsOffscreenCarouselPage.Should().BeFalse();
+
+        viewModel.CurrentCarouselPerek = null;
+        second.IsOffscreenCarouselPage.Should().BeTrue();
+    }
+
     #endregion
 
     #region ArticlesViewModel Navigation Tests
@@ -167,6 +191,31 @@ public class NavigationTests
         viewModel.PerekId.Should().Be(123);
         viewModel.HasArticles.Should().BeTrue();
         viewModel.Articles.Count.Should().Be(1);
+    }
+
+    #endregion
+
+    #region Flyout Routes
+
+    [Fact]
+    public void FlyoutPage_WithoutLocation_StacksAboveDefaultReader()
+    {
+        AppRoutes.FlyoutPage(AppRoutes.SoundPreferences)
+            .Should().Be($"//{AppRoutes.Perek}/{AppRoutes.SoundPreferences}");
+    }
+
+    [Fact]
+    public void FlyoutPage_AboveReader_KeepsTheReaderInTheBackStack()
+    {
+        AppRoutes.FlyoutPage(AppRoutes.SupportPreferences, "//searchReader?perekId=5")
+            .Should().Be("//searchReader/SupportPreferencesPage");
+    }
+
+    [Fact]
+    public void FlyoutPage_ToReader_ReturnsTheReaderPath()
+    {
+        AppRoutes.FlyoutPage(AppRoutes.Perek, "//PerekPage?perekId=5")
+            .Should().Be("//PerekPage");
     }
 
     #endregion

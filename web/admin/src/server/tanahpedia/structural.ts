@@ -3,6 +3,12 @@ import { createServerFn } from "@tanstack/react-start";
 import type { EntityType } from "~/lib/tanahpedia/labels";
 import { ADMIN_CREATABLE_ENTITY_TYPES } from "~/lib/tanahpedia/schema-registry";
 import { execute, query, queryOne } from "../db";
+import { revalidateWebsite } from "../website-revalidate";
+import {
+	pediaInvalidationForEntities,
+	pediaInvalidationForEntryIds,
+	pediaInvalidationForPersons,
+} from "./paths";
 import {
 	type EntryStructuralContext,
 	type LinkedEntityStructural,
@@ -48,6 +54,9 @@ export const updateEntityDisplayName = createServerFn({ method: "POST" })
 			name,
 			data.entityId,
 		]);
+		await revalidateWebsite(
+			await pediaInvalidationForEntities([data.entityId]),
+		);
 		return { success: true };
 	});
 
@@ -68,10 +77,21 @@ export const updateSayingDate = createServerFn({ method: "POST" })
 		return data;
 	})
 	.handler(async ({ data }) => {
+		// A saying is an entity subtype — its date renders on the entries
+		// linked to that entity.
+		const saying = await queryOne<{ entity_id: string | null }>(
+			"SELECT entity_id FROM tanahpedia_saying WHERE id = ?",
+			[data.sayingId],
+		);
 		await execute("UPDATE tanahpedia_saying SET saying_date = ? WHERE id = ?", [
 			data.sayingDate,
 			data.sayingId,
 		]);
+		await revalidateWebsite(
+			await pediaInvalidationForEntities(
+				saying?.entity_id ? [saying.entity_id] : [],
+			),
+		);
 		return { success: true };
 	});
 
@@ -110,6 +130,9 @@ export const updatePersonMainName = createServerFn({ method: "POST" })
 			]);
 		}
 
+		await revalidateWebsite(
+			await pediaInvalidationForPersons([data.personId]),
+		);
 		return { success: true };
 	});
 
@@ -135,6 +158,9 @@ export const updatePersonSex = createServerFn({ method: "POST" })
 				[randomUUID(), data.personId, data.sex],
 			);
 		}
+		await revalidateWebsite(
+			await pediaInvalidationForPersons([data.personId]),
+		);
 		return { success: true };
 	});
 
@@ -181,6 +207,15 @@ export const replacePlaceIdentifications = createServerFn({ method: "POST" })
 				);
 			}
 		}
+		const place = await queryOne<{ entity_id: string | null }>(
+			"SELECT entity_id FROM tanahpedia_place WHERE id = ?",
+			[data.placeId],
+		);
+		await revalidateWebsite(
+			await pediaInvalidationForEntities(
+				place?.entity_id ? [place.entity_id] : [],
+			),
+		);
 		return { success: true };
 	});
 
@@ -291,6 +326,9 @@ export const createEntityAndLinkToEntry = createServerFn({ method: "POST" })
 			[linkId, data.entryId, entityId],
 		);
 
+		await revalidateWebsite(
+			await pediaInvalidationForEntryIds([data.entryId]),
+		);
 		return { entityId, linkId };
 	});
 
@@ -333,12 +371,16 @@ export const linkExistingEntityToEntry = createServerFn({ method: "POST" })
 			`SELECT id FROM tanahpedia_entry_entity WHERE entry_id = ? AND entity_id = ?`,
 			[data.entryId, data.entityId],
 		);
+		// Already linked: no public change, nothing expires.
 		if (existing) return { linkId: existing.id };
 
 		const linkId = randomUUID();
 		await execute(
 			`INSERT INTO tanahpedia_entry_entity (id, entry_id, entity_id) VALUES (?, ?, ?)`,
 			[linkId, data.entryId, data.entityId],
+		);
+		await revalidateWebsite(
+			await pediaInvalidationForEntryIds([data.entryId]),
 		);
 		return { linkId };
 	});

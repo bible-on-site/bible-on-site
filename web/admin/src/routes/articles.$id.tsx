@@ -7,28 +7,23 @@ import {
 } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import { AutoSaveIndicator } from "~/components/AutoSaveIndicator";
+import { CoveringSourcesEditor } from "~/components/CoveringSourcesEditor";
 import { searchEntriesForLink } from "~/components/editor/entryLinkSearch";
 import { WysiwygEditor } from "~/components/WysiwygEditor";
 import {
+	coverageFieldsForSave,
+	perekSourceLabel,
+} from "~/lib/covering-sources";
+import {
 	type Article,
+	type ArticleFormData,
 	createArticle,
 	deleteArticle,
 	getArticle,
-	invalidateArticleCache,
-	invalidatePerekCache,
 	updateArticle,
 } from "~/server/articles";
 import { type Author, getAuthors } from "~/server/authors";
-
-interface ArticleFormData {
-	perek_id: number;
-	author_id: number;
-	abstract: string;
-	name: string;
-	priority: number;
-	distributable: boolean;
-	content: string;
-}
+import { getPerakim } from "~/server/perakim";
 
 type ArticleSearch = {
 	perekId?: number;
@@ -53,6 +48,11 @@ function ArticleEditPage() {
 	const articleId = isNew ? null : Number.parseInt(id, 10);
 	const defaultPerekId = searchPerekId ?? 1;
 
+	// New articles start with an explicit empty covering set (coverage
+	// unknown). For existing articles the state is populated from the
+	// loaded article; coveringSources stays undefined when the
+	// covering-source schema is not deployed, and the save then omits the
+	// coverage fields so nothing is wiped.
 	const [formData, setFormData] = useState<ArticleFormData>({
 		perek_id: defaultPerekId,
 		author_id: 1,
@@ -61,6 +61,8 @@ function ArticleEditPage() {
 		priority: 1,
 		distributable: false,
 		content: "",
+		coveringSources: isNew ? [] : undefined,
+		coverageVerified: false,
 	});
 
 	const [hasChanges, setHasChanges] = useState(false);
@@ -80,6 +82,15 @@ function ArticleEditPage() {
 		queryFn: () => getAuthors(),
 	});
 
+	const { data: perakim } = useQuery({
+		queryKey: ["perakim"],
+		queryFn: () => getPerakim(),
+	});
+
+	const selectedPerek = perakim?.find(
+		(perek) => perek.id === formData.perek_id,
+	);
+
 	// Initialize form with article data
 	useEffect(() => {
 		if (article) {
@@ -91,16 +102,25 @@ function ArticleEditPage() {
 				priority: article.priority,
 				distributable: Boolean(article.distributable),
 				content: article.content ?? "",
+				coveringSources: article.coveringSources,
+				coverageVerified: article.coverage_verified,
 			});
 		}
 	}, [article]);
 
 	const saveMutation = useMutation({
 		mutationFn: async (data: ArticleFormData) => {
+			const payload: ArticleFormData = {
+				...data,
+				...coverageFieldsForSave(
+					data.coveringSources,
+					data.coverageVerified === true,
+				),
+			};
 			if (isNew || articleId === null) {
-				return createArticle({ data });
+				return createArticle({ data: payload });
 			}
-			return updateArticle({ data: { id: articleId, ...data } });
+			return updateArticle({ data: { id: articleId, ...payload } });
 		},
 		onSuccess: async (savedArticle: Article) => {
 			queryClient.invalidateQueries({ queryKey: ["article", savedArticle.id] });
@@ -109,10 +129,6 @@ function ArticleEditPage() {
 			});
 			setLastSaved(new Date());
 			setHasChanges(false);
-
-			// Invalidate website cache
-			await invalidateArticleCache({ data: savedArticle.id });
-			await invalidatePerekCache({ data: savedArticle.perek_id });
 
 			if (isNew) {
 				navigate({
@@ -131,9 +147,6 @@ function ArticleEditPage() {
 			return deleteArticle({ data: articleId });
 		},
 		onSuccess: async () => {
-			if (article) {
-				await invalidatePerekCache({ data: article.perek_id });
-			}
 			navigate({
 				to: "/articles/perek/$perekId",
 				params: { perekId: String(article?.perek_id ?? 1) },
@@ -285,6 +298,11 @@ function ArticleEditPage() {
 								}
 								className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
 							/>
+							{selectedPerek && (
+								<p className="mt-1 text-xs text-gray-500">
+									{perekSourceLabel(selectedPerek)}
+								</p>
+							)}
 						</div>
 
 						<div>
@@ -338,6 +356,23 @@ function ArticleEditPage() {
 						/>
 					</div>
 
+					{formData.coveringSources !== undefined && (
+						<div className="border-t border-gray-100 pt-6">
+							<CoveringSourcesEditor
+								sources={formData.coveringSources}
+								verified={formData.coverageVerified === true}
+								perakim={perakim ?? []}
+								defaultPerekId={formData.perek_id}
+								onChange={(sources) =>
+									handleFieldChange("coveringSources", sources)
+								}
+								onVerifiedChange={(coverageVerified) =>
+									handleFieldChange("coverageVerified", coverageVerified)
+								}
+							/>
+						</div>
+					)}
+
 					<div>
 						{/* biome-ignore lint/a11y/noLabelWithoutControl: WysiwygEditor is a custom component */}
 						<label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -351,6 +386,12 @@ function ArticleEditPage() {
 						/>
 					</div>
 				</div>
+
+				{saveMutation.isError && (
+					<div className="px-8 py-3 bg-red-50 border-t border-red-100 text-sm text-red-700">
+						שמירה נכשלה: {saveMutation.error.message}
+					</div>
+				)}
 
 				{/* Action Buttons */}
 				<div className="flex justify-end gap-4 px-8 py-5 bg-gray-50 border-t border-gray-200">

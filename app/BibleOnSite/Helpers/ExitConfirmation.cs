@@ -73,10 +73,20 @@ public sealed class ExitConfirmation
 		}
 	}
 
+	private static Func<Task<bool>>? _platformPrompt;
+
+	/// <summary>
+	/// Installs the app's styled prompt (ExitConfirmationPopup) — called by the
+	/// shell at startup. Kept out of <see cref="CreateDefault"/> because the
+	/// unit-test host compiles this helper without the popup type.
+	/// </summary>
+	public static void UsePlatformPrompt(Func<Task<bool>>? prompt) => _platformPrompt = prompt;
+
 	private static ExitConfirmation CreateDefault()
 	{
 		return new ExitConfirmation(
-			prompt: () => Shell.Current?.DisplayAlertAsync(Title, Message, ExitLabel, StayLabel)
+			prompt: () => _platformPrompt?.Invoke()
+				?? Shell.Current?.DisplayAlertAsync(Title, Message, ExitLabel, StayLabel)
 				?? Task.FromResult(false),
 			exit: ExitApp);
 	}

@@ -6,6 +6,7 @@ from pathlib import Path
 import tempfile
 from threading import Thread
 import unittest
+from unittest.mock import patch
 
 from deployment import http_response, verify
 from publish import extract
@@ -18,6 +19,7 @@ class DeploymentTests(unittest.TestCase):
         self.audio = b"original fixture recording"
         self.cors = "*"
         self.mime = "audio/mpeg"
+        self.opus = b"OggS source-bound playback fixture"
         self.version = "0.2.433"
         self.chapter = {"pesukim": [{"segments": [{"type": "qri", "value": "ברא",
             "recordingTimeFrame": {"from": "00:00:00.101", "to": "00:00:00.599"}}]}],
@@ -52,10 +54,11 @@ class DeploymentTests(unittest.TestCase):
                     data = {**fixture.records[pid], "audioUrl": f"{fixture.origin}/recordings/{pid}_record.mp3"}
                     body = json.dumps(data).encode()
                 else:
-                    self.send_header("Content-Type", fixture.mime)
+                    is_opus = "/opus-24k/" in self.path
+                    self.send_header("Content-Type", "audio/ogg" if is_opus else fixture.mime)
                     if fixture.cors:
                         self.send_header("Access-Control-Allow-Origin", fixture.cors)
-                    body = fixture.audio
+                    body = fixture.opus if is_opus else fixture.audio
                 self.send_header("Content-Length", str(len(body)))
                 self.end_headers()
                 self.wfile.write(body)
@@ -76,6 +79,33 @@ class DeploymentTests(unittest.TestCase):
         for _ in range(2):
             verify(self.origin, "0.2.433", self.database, check_audio=True)
         self.assertEqual(self.database.read_bytes(), before)
+
+    def test_source_bound_opus_is_required_for_pending_and_approved_chapters(self):
+        sha = hashlib.sha256(self.opus).hexdigest()
+        asset = {"sha256": sha, "sizeBytes": len(self.opus), "key": f"recordings/opus-24k/{sha}.ogg"}
+        for record in self.records.values():
+            record["playback"] = {"format": "ogg-opus", "bitrate": 24000, "audioSha256": sha,
+                                  "audioUrl": f"{self.origin}/{asset['key']}"}
+        with patch("deployment.load_playback", return_value=asset) as inventory:
+            verify(self.origin, self.version, self.database, check_audio=True, check_playback=True)
+            self.assertEqual(inventory.call_count, 2)
+            del self.records[2]["playback"]
+            with self.assertRaisesRegex(ValueError, "source-bound inventory"):
+                verify(self.origin, self.version, self.database, check_playback=True)
+        self.records[1]["playback"]["audioSha256"] = "0" * 64
+        with patch("deployment.load_playback", return_value=asset):
+            with self.assertRaisesRegex(ValueError, "source-bound inventory"):
+                verify(self.origin, self.version, self.database)
+
+    def test_replaced_opus_bytes_fail_even_when_original_mp3_is_correct(self):
+        sha = hashlib.sha256(self.opus).hexdigest()
+        asset = {"sha256": sha, "sizeBytes": len(self.opus), "key": f"recordings/opus-24k/{sha}.ogg"}
+        self.records[1]["playback"] = {"format": "ogg-opus", "bitrate": 24000, "audioSha256": sha,
+                                      "audioUrl": f"{self.origin}/{asset['key']}"}
+        self.opus = b"OggS replaced playback fixture"
+        with patch("deployment.load_playback", return_value=asset):
+            with self.assertRaisesRegex(ValueError, "Opus bytes"):
+                verify(self.origin, self.version, self.database, check_audio=True)
 
     def test_file_custom_and_credential_urls_cannot_read_files_or_connect(self):
         for url in (self.database.as_uri(), "ftp://127.0.0.1/recording.mp3", "http://user:password@127.0.0.1/"):

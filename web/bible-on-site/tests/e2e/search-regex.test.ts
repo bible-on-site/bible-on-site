@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "../util/playwright/test-fixture";
 import mysql, { type RowDataPacket } from "mysql2/promise";
 import {
 	searchArticles,

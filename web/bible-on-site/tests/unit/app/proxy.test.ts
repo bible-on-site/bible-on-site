@@ -135,6 +135,42 @@ describe("proxy", () => {
 		});
 	});
 
+	describe("IndexNow key file", () => {
+		// Low-entropy placeholder that secret scanners ignore.
+		const KEY = "indexnow-test-key-0001";
+
+		afterEach(() => {
+			delete process.env.INDEXNOW_KEY;
+		});
+
+		it("serves the key verbatim at /<key>.txt on any host", async () => {
+			process.env.INDEXNOW_KEY = KEY;
+			const result = await proxy(makeRequest(`/${KEY}.txt`));
+
+			expect(result?.status).toBe(200);
+			expect(result?.headers.get("content-type")).toContain("text/plain");
+			expect(await result?.text()).toBe(KEY);
+		});
+
+		it("passes through when no key is configured", async () => {
+			delete process.env.INDEXNOW_KEY;
+			const result = await proxy(makeRequest(`/${KEY}.txt`));
+			expect(result).toBeUndefined();
+		});
+
+		it("passes through for a different .txt path", async () => {
+			process.env.INDEXNOW_KEY = KEY;
+			const result = await proxy(makeRequest("/other.txt"));
+			expect(result).toBeUndefined();
+		});
+
+		it("does not serve the key under a nested path", async () => {
+			process.env.INDEXNOW_KEY = KEY;
+			const result = await proxy(makeRequest(`/sub/${KEY}.txt`));
+			expect(result).toBeUndefined();
+		});
+	});
+
 	describe("config", () => {
 		it("exports a matcher that excludes _next/static, _next/image, and favicon.ico", () => {
 			expect(config.matcher).toEqual([

@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmdirSync, statSync, unlinkSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, rmdirSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { exportNativeLog, startNativeLog } from "./native-logs.mjs";
+import { monitorNativeInteractions } from "./native-hang-monitor.mjs";
+import { captureNativeFrame, exportNativeLog, startNativeLog } from "./native-logs.mjs";
 
 function withArtifact(run) {
   const directory = mkdtempSync(join(tmpdir(), "mobile-native-log-test-"));
@@ -70,3 +71,41 @@ for (const code of [0, 7]) {
     });
   });
 }
+
+test("pending interaction captures only a bounded simulator frame without attaching to the app", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "mobile-native-frame-test-"));
+  const artifact = join(directory, "native-interaction.png");
+  const calls = [];
+  try {
+    const error = await captureNativeFrame("xcrun", ["simctl", "io", "device-1", "screenshot"], artifact,
+      async (command, args, options) => {
+        calls.push({ command, args, options });
+        writeFileSync(artifact, "captured frame");
+      });
+    assert.equal(error, null);
+    assert.equal(readFileSync(artifact, "utf8"), "captured frame");
+    assert.deepEqual(calls, [{ command: "xcrun",
+      args: ["simctl", "io", "device-1", "screenshot", artifact],
+      options: { timeout: 5000, windowsHide: true } }]);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("a failed observation retains diagnostics without failing a successfully completed interaction", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "mobile-native-frame-test-"));
+  const artifact = join(directory, "native-interaction.png");
+  const error = Object.assign(new Error("simulator probe failed"), { code: 143, killed: true });
+  let trigger;
+  const monitor = monitorNativeInteractions(() => captureNativeFrame("xcrun",
+    ["simctl", "io", "device-1", "screenshot"], artifact, async () => { throw error; }), {
+      schedule(callback) { trigger = callback; }, cancel() {},
+    });
+  try {
+    monitor.write("[HTTP] --> POST /session/id/elements {}\n");
+    trigger();
+    monitor.write("[HTTP] <-- POST /session/id/elements 200 35000 ms\n");
+    await monitor.stop();
+    assert.deepEqual(JSON.parse(readFileSync(`${artifact}-error.json`, "utf8")), {
+      message: "simulator probe failed", code: 143, killed: true,
+    });
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});

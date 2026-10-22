@@ -1,11 +1,38 @@
 using System.Reflection;
 using BibleOnSite.Services;
+using BibleOnSite.Tests.Support;
 using FluentAssertions;
 
 namespace BibleOnSite.Tests.Services;
 
 public class StarterServiceTests
 {
+    private const string CountersResponse = """
+        {"data":{"starter":{"authors":[],"articles":[],
+        "perekArticlesCounters":[3,0,1]}}}
+        """;
+
+    [Fact]
+    public async Task GetPerekArticlesCount_ReadsStartupCountersWithBoundsGuard()
+    {
+        await using var storage = new TestStorage();
+        using var http = new GraphQLTransport(CountersResponse);
+        var service = new StarterService(http.Client, storage.FileSystem.Object);
+
+        // Badge path before startup finishes: 0 instead of a network fetch.
+        service.GetPerekArticlesCount(1).Should().Be(0);
+
+        await service.LoadAsync();
+
+        service.IsLoaded.Should().BeTrue();
+        service.GetPerekArticlesCount(1).Should().Be(3);
+        service.GetPerekArticlesCount(2).Should().Be(0);
+        service.GetPerekArticlesCount(3).Should().Be(1);
+        service.GetPerekArticlesCount(0).Should().Be(0, "perekId below 1 is out of range");
+        service.GetPerekArticlesCount(4).Should().Be(0, "perekId beyond the counters length is out of range");
+        http.Requests.Should().ContainSingle("the badge read never issues a second request");
+    }
+
     [Fact]
     public void ApplyResponse_ShouldSortAuthorsAndLinkArticles()
     {

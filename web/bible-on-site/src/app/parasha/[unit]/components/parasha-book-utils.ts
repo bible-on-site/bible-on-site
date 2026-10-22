@@ -3,10 +3,16 @@ import type { HistoryMapper, PageSemantics } from "html-flip-book-react";
 import bookPageSlugs from "@/data/book-page-slugs.json";
 import divisionData from "@/data/parasha/parasha-division.json";
 import type { AuxiliaryReading, ScriptureRange } from "@/lib/reading/contract";
+import { SITE_NAME } from "@/lib/seo/jsonld";
 
 // The division root comes from the shared JSON so this module stays
 // client-safe (the data module resolves the server-only corpus).
 const PARASHA_ROOT = divisionData.rootPath;
+const PARASHA_MENU_LABEL = divisionData.menuLabel;
+
+/** Public Hebrew root + its ASCII route dir (popstate resolves both). */
+export const PARASHA_ROOT_ALIASES = ["/פרשה", "/parasha"] as const;
+export { PARASHA_ROOT };
 
 /**
  * The parasha unit data a sefer book needs. Everything is plain
@@ -34,6 +40,14 @@ export const PARASHA_CONTENT_OFFSET = 3;
 const TOC_PAGE_INDEX = PARASHA_CONTENT_OFFSET - 1;
 const TOC_SPREAD_INDEX = TOC_PAGE_INDEX - 1;
 const FRONT_COVER_INDEX = 0;
+/**
+ * Pages one parasha contributes: Torah text + its commentary blank,
+ * then Haftarah text + its commentary blank — each spread mirroring
+ * the perek book's text/blank pairing so commentary stays bounded to
+ * the reading it faces.
+ */
+const PAGES_PER_UNIT = 4;
+const HAFTARA_TEXT_OFFSET = 2;
 
 export type BookPage = keyof typeof bookPageSlugs;
 
@@ -78,9 +92,10 @@ export function parashaBookPageFromPath(pathname: string): BookPage | null {
 
 /**
  * Page semantics for the פרשה sefer book: each parasha contributes a
- * Torah page (named by its order numeral) followed by a Haftarah page.
- * Titles feed the table of contents — every parasha and every Haftarah
- * is directly reachable.
+ * Torah page (named by its order numeral) and a Haftarah page, each
+ * followed by a commentary blank that shares its route and stays out
+ * of the TOC. Titles feed the table of contents — every parasha and
+ * every Haftarah is directly reachable.
  */
 export function buildParashaPageSemantics(
 	units: ParashaBookUnit[],
@@ -89,8 +104,8 @@ export function buildParashaPageSemantics(
 		indexToSemanticName(pageIndex: number): string {
 			if (pageIndex < PARASHA_CONTENT_OFFSET) return "";
 			const adjusted = pageIndex - PARASHA_CONTENT_OFFSET;
-			if (adjusted % 2 !== 0) return "";
-			const unitIdx = adjusted / 2;
+			if (adjusted % PAGES_PER_UNIT !== 0) return "";
+			const unitIdx = adjusted / PAGES_PER_UNIT;
 			if (unitIdx >= units.length) return "";
 			return toLetters(units[unitIdx].order);
 		},
@@ -99,30 +114,36 @@ export function buildParashaPageSemantics(
 			if (num === 0) return null;
 			const idx = units.findIndex((unit) => unit.order === num);
 			if (idx < 0) return null;
-			return idx * 2 + PARASHA_CONTENT_OFFSET;
+			return idx * PAGES_PER_UNIT + PARASHA_CONTENT_OFFSET;
 		},
 		indexToTitle(pageIndex: number): string {
 			if (pageIndex < PARASHA_CONTENT_OFFSET) return "";
 			const adjusted = pageIndex - PARASHA_CONTENT_OFFSET;
-			const unitIdx = Math.floor(adjusted / 2);
+			const unitIdx = Math.floor(adjusted / PAGES_PER_UNIT);
 			if (unitIdx >= units.length) return "";
 			const unit = units[unitIdx];
-			return adjusted % 2 === 0 ? `פרשת ${unit.name}` : `הפטרת ${unit.name}`;
+			if (adjusted % PAGES_PER_UNIT === 0) return `פרשת ${unit.name}`;
+			if (adjusted % PAGES_PER_UNIT === HAFTARA_TEXT_OFFSET) {
+				return `הפטרת ${unit.name}`;
+			}
+			return "";
 		},
 	};
 }
 
 /**
- * URL <-> leaf mapping for the פרשה book. Torah pages live at
- * `/פרשה/{unitId}?book`; Haftarah pages at `/פרשה/{unitId}?book&haftara`;
- * book chrome reuses the shared cover/contents/back slugs under
- * `/פרשה/{sefer}/{slug}?book`.
+ * URL <-> leaf mapping for the פרשה book. A parasha's Torah spread —
+ * its text page and the facing commentary blank — shares
+ * `/פרשה/{unitId}?book`; the Haftarah spread shares
+ * `/פרשה/{unitId}?book&haftara`. Book chrome reuses the shared
+ * cover/contents/back slugs under `/פרשה/{sefer}/{slug}?book`.
  */
 export function buildParashaHistoryMapper(
 	units: ParashaBookUnit[],
 	seferName: string,
 ): HistoryMapper {
-	const backCoverIndex = PARASHA_CONTENT_OFFSET + units.length * 2;
+	const backCoverIndex =
+		PARASHA_CONTENT_OFFSET + units.length * PAGES_PER_UNIT;
 	return {
 		pageToRoute: (pageIndex) => {
 			if (!units.length) return null;
@@ -137,10 +158,10 @@ export function buildParashaHistoryMapper(
 			}
 			if (pageIndex < PARASHA_CONTENT_OFFSET) return null;
 			const adjusted = pageIndex - PARASHA_CONTENT_OFFSET;
-			const unitIdx = Math.floor(adjusted / 2);
+			const unitIdx = Math.floor(adjusted / PAGES_PER_UNIT);
 			const unit = units[Math.min(unitIdx, units.length - 1)];
 			return `${PARASHA_ROOT}/${unit.unitId}?book${
-				adjusted % 2 !== 0 ? "&haftara" : ""
+				adjusted % PAGES_PER_UNIT >= HAFTARA_TEXT_OFFSET ? "&haftara" : ""
 			}`;
 		},
 		routeToPage: (route) => {
@@ -160,7 +181,9 @@ export function buildParashaHistoryMapper(
 				const idx = units.findIndex((unit) => unit.unitId === unitId);
 				if (idx >= 0) {
 					return (
-						idx * 2 + PARASHA_CONTENT_OFFSET + (params.has("haftara") ? 1 : 0)
+						idx * PAGES_PER_UNIT +
+						PARASHA_CONTENT_OFFSET +
+						(params.has("haftara") ? HAFTARA_TEXT_OFFSET : 0)
 					);
 				}
 			}
@@ -176,7 +199,10 @@ export function computeParashaInitialTurnedLeaves(
 ): number[] | undefined {
 	const idx = units.findIndex((unit) => unit.unitId === unitId);
 	if (idx < 0) return undefined;
-	const pageIndex = idx * 2 + PARASHA_CONTENT_OFFSET + (haftara ? 1 : 0);
+	const pageIndex =
+		idx * PAGES_PER_UNIT +
+		PARASHA_CONTENT_OFFSET +
+		(haftara ? HAFTARA_TEXT_OFFSET : 0);
 	const turnedCount = Math.ceil(pageIndex / 2);
 	return Array.from({ length: turnedCount }, (_, i) => i);
 }
@@ -204,4 +230,81 @@ export function pathnameWithParashaBookQuery(
 	}
 	const q = params.toString();
 	return q.length > 0 ? `${pathname}?${q}` : pathname;
+}
+
+/**
+ * Flat route to land on when the user leaves the פרשה book. While the
+ * book is open the flipbook owns browser history — window.location
+ * names the unit the user actually reached, which the router's stale
+ * pathname cannot see. Book-chrome exits and paths without a unit id
+ * fall back to the unit the book was opened from (the /929 reader's
+ * behaviour).
+ */
+export function parashaBookExitPath(
+	pathname: string,
+	fallbackUnitId: number,
+): string {
+	if (parashaBookPageFromPath(pathname)) {
+		return `${PARASHA_ROOT}/${fallbackUnitId}`;
+	}
+	const match = decodeURIComponent(pathname).match(
+		/\/(?:פרשה|parasha)\/(\d+)/,
+	);
+	return match
+		? `${PARASHA_ROOT}/${match[1]}`
+		: `${PARASHA_ROOT}/${fallbackUnitId}`;
+}
+
+/** Title of a flat parasha unit page, matching generateMetadata. */
+export function parashaUnitDocumentTitle(name: string): string {
+	return `פרשת ${name} | ${PARASHA_MENU_LABEL} | ${SITE_NAME}`;
+}
+
+/** Title of a parasha's Haftarah spread inside the book. */
+export function parashaHaftaraDocumentTitle(name: string): string {
+	return `הפטרת ${name} | ${PARASHA_MENU_LABEL} | ${SITE_NAME}`;
+}
+
+/** Title of a perush open inside the פרשה book. */
+export function parashaPerushDocumentTitle(
+	perushName: string,
+	unitName: string,
+	haftara: boolean,
+): string {
+	const reading = haftara
+		? `הפטרת ${unitName}`
+		: `פרשת ${unitName}`;
+	return `${perushName} על ${reading} | ${PARASHA_MENU_LABEL} | ${SITE_NAME}`;
+}
+
+/**
+ * Resolve the committed book page index to a document title, agreeing
+ * with the history mapping: the front cover names the sefer, the
+ * contents spread names the TOC, the back cover is marked, and each
+ * spread's commentary blank carries the same title as its text page
+ * (they share one route). Returns null for indices outside the book.
+ */
+export function buildParashaDocumentTitleResolver(
+	seferName: string,
+	units: ParashaBookUnit[],
+	backCoverPageIndex: number,
+): (pageIndex: number) => string | null {
+	return (pageIndex) => {
+		if (!Number.isInteger(pageIndex) || pageIndex < 0) return null;
+		if (pageIndex === FRONT_COVER_INDEX) {
+			return `ספר ${seferName} | ${PARASHA_MENU_LABEL} | ${SITE_NAME}`;
+		}
+		if (pageIndex < PARASHA_CONTENT_OFFSET) {
+			return `ספר ${seferName} - תוכן העניינים | ${PARASHA_MENU_LABEL} | ${SITE_NAME}`;
+		}
+		if (pageIndex === backCoverPageIndex) {
+			return `ספר ${seferName} - גב הספר | ${PARASHA_MENU_LABEL} | ${SITE_NAME}`;
+		}
+		const adjusted = pageIndex - PARASHA_CONTENT_OFFSET;
+		const unit = units[Math.floor(adjusted / PAGES_PER_UNIT)];
+		if (!unit) return null;
+		return adjusted % PAGES_PER_UNIT >= HAFTARA_TEXT_OFFSET
+			? parashaHaftaraDocumentTitle(unit.name)
+			: parashaUnitDocumentTitle(unit.name);
+	};
 }

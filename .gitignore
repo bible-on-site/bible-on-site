@@ -30,12 +30,15 @@ app/BibleOnSite/Resources/Raw/*
 !app/BibleOnSite/Resources/Raw/recitation-audio.html
 **/.raw/
 **/.outputs/
+.artifacts/
 app/.artifacts/
 app/BibleOnSite/Platforms/Android/AssetPacks/recitation_*/
-app/BibleOnSite/Platforms/iOS/Assets/Recitation.xcassets/
+app/BibleOnSite/Platforms/iOS/AssetPacks/recitation-*/
 app/BibleOnSite/Platforms/Windows/Recitation/
 data/mysql/tanah_full_dump.sql
 data/mysql/perushim_data.sql
 nul
 
-
+# QA service (present on qa-bot branch; ignore when untracked on other branches)
+web/qa-service/
+/app/.dev.env.local

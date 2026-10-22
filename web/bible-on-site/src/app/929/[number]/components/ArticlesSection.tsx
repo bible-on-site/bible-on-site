@@ -2,6 +2,7 @@ import DOMPurify from "isomorphic-dompurify";
 import Image from "next/image";
 import Link from "next/link";
 import type { ArticleSummary } from "@/lib/articles";
+import { normalizeAbstractHtml } from "@/lib/authors/articles-grid";
 import styles from "./articles-section.module.css";
 import { Carousel } from "./Carousel";
 
@@ -13,6 +14,8 @@ interface ArticlesSectionProps {
 	emptyMessage?: string;
 	/** When set, clicking an article calls this instead of navigating (e.g. open in-place in flipbook). */
 	onArticleClick?: (article: ArticleSummary) => void;
+	/** Overrides the canonical /929 href on each card (modifier-key/new-tab target) — e.g. an alternative-division book deep link. */
+	hrefForArticle?: (article: ArticleSummary) => string;
 	/** When true, show loading state (e.g. fetching article for in-place view). */
 	loading?: boolean;
 	/** Session-scoped key so the carousel keeps its position across unmounts. */
@@ -29,6 +32,7 @@ export function ArticlesSection({
 	title = "מאמרים על הפרק",
 	emptyMessage = "אין מאמרים לפרק זה",
 	onArticleClick,
+	hrefForArticle,
 	loading = false,
 	scrollStorageKey,
 }: ArticlesSectionProps) {
@@ -65,7 +69,10 @@ export function ArticlesSection({
 					safeArticles.map((article) => (
 						<Link
 							key={article.id}
-							href={`/929/${article.perekId}/${article.id}`}
+							href={
+								hrefForArticle?.(article) ??
+								`/929/${article.perekId}/${article.id}`
+							}
 							id={`article-${article.id}`}
 							className={styles.carouselItem}
 							onClick={
@@ -98,7 +105,9 @@ export function ArticlesSection({
 									// nosemgrep -- DOMPurify-sanitized abstract
 									// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify
 									dangerouslySetInnerHTML={{
-										__html: DOMPurify.sanitize(article.abstract),
+										__html: DOMPurify.sanitize(
+											normalizeAbstractHtml(article.abstract),
+										),
 									}}
 								/>
 							)}

@@ -56,6 +56,20 @@ export function searchTokens(text: string): string[] {
  * text (DOM text nodes) for highlighting and scrolling (#2078). Decomposition
  * runs per code point so surrogate pairs keep their raw position.
  */
+// Canonical (NFD) decomposition is a fixed per-code-point mapping — the
+// verdict is computed once per distinct char through the real normalize, so
+// corpus chars never re-enter it. Astral units take the slow path always.
+const decomposes = new Map<number, boolean>();
+
+function needsDecompose(unit: string, code: number): boolean {
+	let flag = decomposes.get(code);
+	if (flag === undefined) {
+		flag = unit.normalize("NFD") !== unit;
+		decomposes.set(code, flag);
+	}
+	return flag;
+}
+
 export function normalizeWithMap(text: string): {
 	normalized: string;
 	map: number[];
@@ -65,7 +79,11 @@ export function normalizeWithMap(text: string): {
 	for (let i = 0; i < text.length; i++) {
 		const code = text.charCodeAt(i);
 		const unitLength = code >= 0xd800 && code <= 0xdbff ? 2 : 1;
-		for (const char of text.slice(i, i + unitLength).normalize("NFD")) {
+		const decomposed =
+			unitLength === 1 && !needsDecompose(text.slice(i, i + 1), code)
+				? text[i]
+				: text.slice(i, i + unitLength).normalize("NFD");
+		for (const char of decomposed) {
 			if (MARKS.test(char) || QUOTES.has(char)) {
 				continue;
 			}
@@ -104,7 +122,8 @@ const HTML_ENTITIES: Record<string, string> = {
 	hellip: "...",
 };
 
-const BLOCK_TAGS = /<(br|p|div|li|tr|td|h[1-6]|ul|ol|table|blockquote|section|article|header|footer|hr)\b[^>]*>/gi;
+const BLOCK_TAGS =
+	/<(br|p|div|li|tr|td|h[1-6]|ul|ol|table|blockquote|section|article|header|footer|hr)\b[^>]*>/gi;
 const SCRIPT_STYLE = /<(script|style)\b[^>]*>[\s\S]*?<\/\1>/gi;
 const ALL_TAGS = /<[^>]+>/g;
 const ENTITY = /&(#[xX]?[0-9a-fA-F]+|\w+);/g;

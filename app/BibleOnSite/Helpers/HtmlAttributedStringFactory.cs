@@ -1,4 +1,5 @@
 #if IOS || MACCATALYST
+using System.Runtime.InteropServices;
 using Foundation;
 using UIKit;
 
@@ -33,7 +34,7 @@ internal static class HtmlAttributedStringFactory
                     >= 3 => h3Scale,
                     _ => 1.0
                 };
-                var size = (nfloat)(fontSize * run.FontScale * headingScale);
+                var size = (NFloat)(fontSize * run.FontScale * headingScale);
                 var font = ResolveFont(size, run.Bold, run.Italic);
 
                 var keys = new List<NSString> { UIStringAttributeKey.Font };
@@ -79,7 +80,7 @@ internal static class HtmlAttributedStringFactory
         }
     }
 
-    private static UIFont ResolveFont(nfloat size, bool bold, bool italic)
+    private static UIFont ResolveFont(NFloat size, bool bold, bool italic)
     {
         // SystemFontOfSize is annotated nullable but only fails on bad input.
         var font = UIFont.SystemFontOfSize(size)!;

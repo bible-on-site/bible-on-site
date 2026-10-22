@@ -115,8 +115,12 @@ public class LocalDatabaseServiceTests
             .OrderBy(f => f)
             .ToList();
 
-        sqliteFiles.Should().HaveCount(ExpectedSqliteFiles.Length,
-            "The set of SQLite files in Resources/Raw should match the expected databases.");
+        // Developer builds may stage the downloaded notes and prebuilt search index here.
+        // Require the bundled databases and reject unknown files while accepting those two known assets.
+        sqliteFiles.Should().BeSubsetOf(ExpectedSqliteFiles.Concat([
+            "sefaria-dump-5784-sivan-4.perushim_notes.sqlite",
+            "sefaria-dump-5784-sivan-4.hebrew_search.sqlite"]),
+            "Resources/Raw may contain the known generated commentary assets after a device build.");
 
         foreach (var expected in ExpectedSqliteFiles)
         {

@@ -1,14 +1,15 @@
 #!/usr/bin/env node
 /**
- * Installs the repository's pre-commit git hooks (pre-commit + post-commit
- * stages). Runs from the root package.json `prepare` script — which fires on
- * `npm install`/`npm ci` — and from devops/setup-dev-env.mts.
+ * Installs the repository's git hooks (pre-commit + post-commit stages). Runs
+ * from the root package.json `prepare` script — which fires on `npm install`/
+ * `npm ci` — and from devops/setup-dev-env.mts.
  *
- * Prefers the devops venv's pre-commit so the installed hook keeps working
- * without activating the venv; falls back to a pre-commit on PATH. Exits 0
- * with a notice when either git or pre-commit is unavailable (e.g. npm ci in
- * a Docker layer): hook installation is a local-dev convenience, never a
- * build blocker.
+ * Prefers prek (the repo's hook runner — parallel execution, Rust fast paths)
+ * from the devops venv so the installed hook keeps working without activating
+ * the venv; falls back to prek on PATH, then to pre-commit for clones that
+ * have not re-run setup yet. Exits 0 with a notice when either git or a hook
+ * runner is unavailable (e.g. npm ci in a Docker layer): hook installation is
+ * a local-dev convenience, never a build blocker.
  */
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
@@ -42,32 +43,36 @@ if (hooksPath?.includes(".husky")) {
 	);
 }
 
+const venvBin = join(
+	projectDir,
+	"devops",
+	".venv",
+	isWin ? "Scripts" : "bin",
+);
 const candidates = [
-	join(
-		projectDir,
-		"devops",
-		".venv",
-		isWin ? "Scripts" : "bin",
-		isWin ? "pre-commit.exe" : "pre-commit",
-	),
+	join(venvBin, isWin ? "prek.exe" : "prek"),
+	"prek",
+	join(venvBin, isWin ? "pre-commit.exe" : "pre-commit"),
 	"pre-commit",
 ];
-// git and pre-commit resolve to real .exe files on every platform — no shell.
-const preCommit = candidates.find((candidate) =>
-	candidate === "pre-commit"
-		? spawnSync("pre-commit", ["--version"]).status === 0
+// Bare names resolve through PATH; absolute candidates exist as real files.
+// git, prek and pre-commit all resolve to real .exe files on Windows — no shell.
+const isBareName = (candidate) => !candidate.includes("/") && !candidate.includes("\\");
+const runner = candidates.find((candidate) =>
+	isBareName(candidate)
+		? spawnSync(candidate, ["--version"]).status === 0
 		: existsSync(candidate),
 );
-if (!preCommit) {
+if (!runner) {
 	console.info(
-		"[install-git-hooks] pre-commit not found — skipping " +
+		"[install-git-hooks] neither prek nor pre-commit found — skipping " +
 			"(run `npm run setup_dev_env --prefix devops` to enable git hooks).",
 	);
 	process.exit(0);
 }
 
 const result = spawnSync(
-	preCommit,
+	runner,
 	["install", "--hook-type", "pre-commit", "--hook-type", "post-commit"],
 	{ cwd: projectDir, stdio: "inherit" },
 );

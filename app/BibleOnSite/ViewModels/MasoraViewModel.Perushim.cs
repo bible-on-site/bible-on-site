@@ -17,7 +17,7 @@ public partial class MasoraViewModel //NOSONAR
 {
 #if MAUI
     /// <summary>Loaded notes for the current unit, keyed on read — never re-created.</summary>
-    private readonly List<PerekPerushNote> _perushNotesCache = new();
+    private readonly Dictionary<int, PerushNoteChapter> _perushChapters = new();
 
     /// <summary>
     /// Loads perushim (commentaries) for the current unit — the union of the
@@ -37,7 +37,7 @@ public partial class MasoraViewModel //NOSONAR
 
         if (!PerushimNotesAvailable || !PerushimCatalogAvailable)
         {
-            _perushNotesCache.Clear();
+            _perushChapters.Clear();
             // Set CheckedPerushim BEFORE Perushim so the CollectionView sees correct state
             CheckedPerushim = new List<int>();
             Perushim = new List<Perush>();
@@ -48,25 +48,15 @@ public partial class MasoraViewModel //NOSONAR
         var slices = MasoraUnitText.PerekSlicesForUnit(unit);
         var allPerushIds = new List<int>();
         var seenIds = new HashSet<int>();
-        var notes = new List<PerekPerushNote>();
+        var chapters = new Dictionary<int, PerushNoteChapter>();
         foreach (var slice in slices)
         {
-            var perushIds = await _notesService.GetPerushIdsForPerekAsync(slice.PerekId);
-            foreach (var id in perushIds)
+            var chapter = await _notesService.LoadChapterAsync(slice.PerekId);
+            if (chapter == null) { continue; }
+            chapters[slice.PerekId] = chapter;
+            foreach (var id in chapter.AvailablePerushIds(slice.StartPasuk, slice.EndPasuk))
             {
-                if (seenIds.Add(id))
-                {
-                    allPerushIds.Add(id);
-                }
-            }
-            if (perushIds.Count > 0)
-            {
-                var perushById = await _catalogService.GetPerushimByIdsAsync(perushIds);
-                var sliceNotes = await _notesService.LoadNotesForPerekAsync(slice.PerekId, perushById);
-                // Verse-addressed notes attach to whole pesukim — keep only the
-                // notes inside the unit's covered pasuk bounds for this perek.
-                notes.AddRange(sliceNotes.Where(n =>
-                    n.Pasuk >= slice.StartPasuk && n.Pasuk <= slice.EndPasuk));
+                if (seenIds.Add(id)) { allPerushIds.Add(id); }
             }
         }
 
@@ -77,17 +67,17 @@ public partial class MasoraViewModel //NOSONAR
 
         if (allPerushIds.Count == 0)
         {
-            _perushNotesCache.Clear();
+            _perushChapters.Clear();
             CheckedPerushim = new List<int>();
             Perushim = new List<Perush>();
             FillFilteredPerushContents(unit);
             return;
         }
 
-        _perushNotesCache.Clear();
-        _perushNotesCache.AddRange(notes);
-
         var allPerushById = await _catalogService.GetPerushimByIdsAsync(allPerushIds);
+        if (Unit?.UnitId != unit.UnitId) { return; }
+        _perushChapters.Clear();
+        foreach (var (id, chapter) in chapters) { _perushChapters[id] = chapter; }
         var orderedPerushim = allPerushIds
             .Select(id => allPerushById.GetValueOrDefault(id))
             .Where(p => p != null)
@@ -97,13 +87,24 @@ public partial class MasoraViewModel //NOSONAR
 
         // Preserve checked perushim that are also available in the new unit.
         var availableIds = new HashSet<int>(allPerushIds);
-        CheckedPerushim = CheckedPerushim.Where(id => availableIds.Contains(id)).ToList();
+        CheckedPerushim = CheckedPerushim.Where(id => availableIds.Contains(id)).Take(_preferencesService.InlineCommentaryLimit).ToList();
         Perushim = orderedPerushim;
 
         FillFilteredPerushContents(unit);
         OnPropertyChanged(nameof(PerushimEmptyMessage));
         OnPropertyChanged(nameof(ShowDownloadPerushimButton));
     }
+
+    public string InlineCommentaryLimitMessage => $"ניתן להציג עד {_preferencesService.InlineCommentaryLimit} פירושים על הפרק. ניתן לשנות בהעדפות.";
+
+    /// <summary>Max perushim shown inline — unchecked rows render disabled at the cap.</summary>
+    public int InlineCommentaryLimit => _preferencesService.InlineCommentaryLimit;
+
+    /// <summary>Live "נבחרו N מתוך M" counter for the perushim selector header.</summary>
+    public string PerushimSelectionStatus => $"נבחרו {CheckedPerushim.Count} מתוך {InlineCommentaryLimit}";
+
+    /// <summary>Whether the configured perushim limit is fully used (drives subtle max-reached emphasis).</summary>
+    public bool PerushimLimitReached => CheckedPerushim.Count >= InlineCommentaryLimit;
 
     /// <summary>Toggles commentary in the inline reader.</summary>
     [RelayCommand]
@@ -116,6 +117,7 @@ public partial class MasoraViewModel //NOSONAR
         }
         else
         {
+            if (list.Count >= _preferencesService.InlineCommentaryLimit) { return; }
             list.Add(perushId);
         }
         CheckedPerushim = list;
@@ -132,15 +134,10 @@ public partial class MasoraViewModel //NOSONAR
     /// All available commentary for a row, independent of inline filters —
     /// notes attach by (perekId, pasuk) so multi-perek units stay precise.
     /// </summary>
-    public List<PerushNoteDisplay> GetPerushimForRow(int perekId, int pasukNum) => _perushNotesCache
-        .Where(n => n.PerekId == perekId && n.Pasuk == pasukNum)
-        .GroupBy(n => (n.PerushId, n.PerushName))
-        .OrderBy(g => Perushim.FindIndex(p => p.Id == g.Key.PerushId))
-        .Select(g => new PerushNoteDisplay
-        {
-            PerushName = g.Key.PerushName,
-            NoteContents = g.OrderBy(n => n.NoteIdx).Select(n => n.NoteContent).ToList()
-        }).ToList();
+    public List<PerushNoteDisplay> GetPerushimForRow(int perekId, int pasukNum) =>
+        Unit?.Rows.Any(row => row.PerekId == perekId && row.PasukNum == pasukNum) == true
+            ? _perushChapters.GetValueOrDefault(perekId)?.GetDisplays(pasukNum, Perushim) ?? new()
+            : new();
 
     /// <summary>
     /// Fills each row's PerushNotes based on checked perushim — keyed by
@@ -167,30 +164,11 @@ public partial class MasoraViewModel //NOSONAR
             return;
         }
 
-        var byKey = _perushNotesCache
-            .Where(n => checkedSet.Contains(n.PerushId))
-            .GroupBy(n => (n.PerekId, n.Pasuk))
-            .ToDictionary(g => g.Key, g => g.ToList());
-
-        var priorityOrder = Perushim.Select((p, i) => (p.Id, i)).ToDictionary(x => x.Id, x => x.i);
-
         foreach (var row in unit.Rows)
         {
-            var notesForPasuk = byKey.GetValueOrDefault((row.PerekId, row.PasukNum))
-                ?? new List<PerekPerushNote>();
-            var groups = notesForPasuk
-                .GroupBy(n => (n.PerushId, n.PerushName))
-                .OrderBy(g => priorityOrder.GetValueOrDefault(g.Key.PerushId, 999))
-                .Select(g => new PerushNoteDisplay
-                {
-                    PerushName = g.Key.PerushName,
-                    NoteContents = g.OrderBy(n => n.NoteIdx).Select(n => n.NoteContent).ToList()
-                })
-                .ToList();
-            if (groups.Count > 0 || row.Pasuk.PerushNotes.Count > 0)
-            {
-                row.Pasuk.PerushNotes = groups;
-            }
+            var displays = _perushChapters.GetValueOrDefault(row.PerekId)?.GetDisplays(
+                row.PasukNum, Perushim, checkedSet, row.Pasuk.PerushNotes) ?? new();
+            if (!displays.SequenceEqual(row.Pasuk.PerushNotes)) { row.Pasuk.PerushNotes = displays; }
         }
     }
 #endif

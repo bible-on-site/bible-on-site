@@ -1,6 +1,6 @@
 {
 	"name": "bible-on-site",
-	"version": "0.2.500",
+	"version": "0.2.535",
 	"private": true,
 	"license": "MIT",
 	"browserslist": [
@@ -50,39 +50,37 @@
 	"overrides": {
 		"brace-expansion": "5.0.12",
 		"deepmerge-ts": "8.0.2",
-		"postcss": "8.5.29",
+		"postcss": "8.5.31",
 		"sharp": "0.35.5",
 		"@istanbuljs/load-nyc-config": {
 			"js-yaml": "^5.4.3"
 		}
 	},
 	"dependencies": {
-		"@aws-sdk/client-lambda": "3.1149.0",
-		"@hebcal/core": "6.14.2",
+		"@aws-sdk/client-lambda": "3.1155.0",
 		"@pdf-lib/fontkit": "1.1.1",
-		"flowbite": "4.0.2",
-		"flowbite-react": "0.12.17",
 		"gematry": "1.0.2",
-		"html-flip-book-react": "0.0.0-alpha.45",
-		"isomorphic-dompurify": "4.5.0",
+		"html-flip-book-react": "0.0.0-alpha.48",
+		"isomorphic-dompurify": "4.6.0",
 		"leaflet": "1.9.4",
-		"mapbox-gl": "3.32.0",
+		"mapbox-gl": "3.33.0",
 		"moment-timezone": "0.6.5",
 		"mpg123-decoder": "1.0.3",
-		"mysql2": "3.24.5",
-		"next": "16.4.0",
-		"nuqs": "2.10.2",
+		"monocart-coverage-reports": "3.0.0",
+		"mysql2": "3.24.6",
+		"next": "16.4.2",
 		"pdf-lib": "1.17.1",
-		"react": "19.3.0",
-		"react-dom": "19.3.0",
-		"react-phone-number-input": "3.4.18",
+		"react": "19.3.1",
+		"react-dom": "19.3.1",
+		"server-only": "0.0.1",
 		"sharp": "0.35.5",
 		"sunrise-sunset-js": "3.3.1",
-		"temporal-polyfill": "1.0.5"
+		"temporal-polyfill": "1.0.6",
+		"ogg-opus-decoder": "1.7.5"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "2.5.15",
-		"@playwright/test": "1.64.0",
+		"@biomejs/biome": "2.6.2",
+		"@playwright/test": "1.64.1",
 		"@swc/core": "1.16.18",
 		"@swc/jest": "0.2.39",
 		"@testing-library/dom": "10.4.2",
@@ -95,21 +93,18 @@
 		"@types/react-dom": "19.3.0",
 		"cross-env": "10.1.0",
 		"dotenv-cli": "11.0.0",
-		"esbuild": "0.28.2",
 		"get-port": "7.2.0",
 		"jest": "30.5.2",
 		"jest-environment-jsdom": "30.5.2",
 		"jest-junit": "17.0.0",
 		"lighthouse": "13.5.0",
-		"monocart-reporter": "2.14.1",
+		"monocart-reporter": "2.15.1",
 		"parse5": "8.0.1",
 		"picomatch": "4.0.7",
-		"postcss": "8.5.29",
-		"sass": "1.105.1",
+		"sass": "1.106.1",
 		"schema-dts": "2.1.0",
 		"swc-plugin-coverage-instrument": "0.0.33",
-		"ts-jest": "29.4.14",
-		"ts-node": "10.9.2",
+		"ts-jest": "29.4.15",
 		"tsx": "4.23.15",
 		"typescript": "7.0.2",
 		"web-vitals": "6.2.3"
@@ -124,7 +119,6 @@
 	"allowScripts": {
 		"@parcel/watcher@2.6.0": true,
 		"@swc/core@1.16.13": true,
-		"esbuild@0.28.2": true,
 		"unrs-resolver@1.12.2": true
 	}
 }

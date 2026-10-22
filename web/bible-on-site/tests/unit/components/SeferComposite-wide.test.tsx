@@ -2,7 +2,7 @@
  * @jest-environment jsdom
  */
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import { useLayoutEffect, useState } from "react";
+import { type ReactNode, useLayoutEffect, useState } from "react";
 
 jest.mock("@/app/929/[number]/components/sefer-composite.module.css", () => ({
 	seferOverlay: "seferOverlay",
@@ -71,6 +71,15 @@ jest.mock("next/dynamic", () => {
 
 import SeferComposite from "@/app/929/[number]/components/SeferComposite";
 
+// Clicks the view toggle during the layout-effect phase: hydration can
+// replay a user's click before the URL initialization effect runs.
+function OpenDuringHydration({ children }: { children: ReactNode }) {
+	useLayoutEffect(() => {
+		screen.getByRole("checkbox").click();
+	}, []);
+	return children;
+}
+
 describe("SeferComposite (wide screen)", () => {
 	const minimalPerek = {
 		perekId: 5,
@@ -123,18 +132,12 @@ describe("SeferComposite (wide screen)", () => {
 	});
 
 	it("keeps a book opened before the initial passive effects visible", async () => {
-		function OpenDuringHydration() {
-			useLayoutEffect(() => {
-				// Hydration can replay a user's click before the URL initialization effect.
-				screen.getByRole("checkbox").click();
-			}, []);
-			return (
-				<SeferComposite perekObj={minimalPerek} articles={[]} perushim={[]} />
-			);
-		}
-
 		await act(async () => {
-			render(<OpenDuringHydration />);
+			render(
+				<OpenDuringHydration>
+					<SeferComposite perekObj={minimalPerek} articles={[]} perushim={[]} />
+				</OpenDuringHydration>,
+			);
 		});
 
 		expect(mockReplace).toHaveBeenCalledWith("/929/5?book=", { scroll: false });

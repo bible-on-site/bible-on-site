@@ -35,6 +35,20 @@ struct Cli {
     /// already inside the export).
     #[arg(long)]
     from_json: Option<std::path::PathBuf>,
+
+    /// Verify the מסורה division against the Tanach Yomi sedarim reference
+    /// fixture and write a markdown report + expected snapshot instead of
+    /// exporting. Requires --format sedarim-report.
+    #[arg(long)]
+    sedarim_reference: Option<std::path::PathBuf>,
+
+    /// Override the markdown report output path (with --format sedarim-report).
+    #[arg(long)]
+    report_out: Option<std::path::PathBuf>,
+
+    /// Override the expected-snapshot output path (with --format sedarim-report).
+    #[arg(long)]
+    expected_out: Option<std::path::PathBuf>,
 }
 
 #[derive(Clone, ValueEnum)]
@@ -43,6 +57,9 @@ enum OutputFormat {
     Mysql,
     Sqlite,
     CompassStages,
+    /// Verify the מסורה division against the sedarim reference fixture;
+    /// writes a markdown report and the expected verification snapshot.
+    SedarimReport,
 }
 
 #[tokio::main]
@@ -55,6 +72,10 @@ async fn main() -> Result<()> {
     }
 
     let format = require_format(cli.format)?;
+
+    if matches!(format, OutputFormat::SedarimReport) && cli.sedarim_reference.is_none() {
+        anyhow::bail!("--format sedarim-report requires --sedarim-reference <fixture.json>");
+    }
 
     let sefarim = match &cli.from_json {
         Some(path) => load_from_json(path)?,
@@ -86,6 +107,13 @@ async fn main() -> Result<()> {
             commands::sqlite::generate(&sefarim, &cli.dump_name, cli.output_to_dependant_modules)?
         }
         OutputFormat::CompassStages => unreachable!("Handled above"),
+        OutputFormat::SedarimReport => commands::sedarim_report::generate(
+            &sefarim,
+            &cli.dump_name,
+            cli.sedarim_reference.as_deref().expect("checked above"),
+            cli.report_out.as_deref(),
+            cli.expected_out.as_deref(),
+        )?,
     }
 
     Ok(())

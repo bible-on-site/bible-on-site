@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentView xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+ xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+ xmlns:viewmodels="clr-namespace:BibleOnSite.ViewModels"
+ xmlns:models="clr-namespace:BibleOnSite.Models"
+ xmlns:controls="clr-namespace:BibleOnSite.Controls"
+ xmlns:fonts="clr-namespace:Fonts"
+ x:Class="BibleOnSite.Controls.TanahpediaSearchPanel"
+ x:DataType="viewmodels:TanahpediaSearchViewModel"
+ FlowDirection="RightToLeft"
+ IsVisible="False">
+ <ContentView.Resources>
+  <Style x:Key="SearchIconButton" TargetType="Button">
+   <Setter Property="FontFamily" Value="FluentIcons"/><Setter Property="FontSize" Value="24"/>
+   <Setter Property="WidthRequest" Value="44"/><Setter Property="HeightRequest" Value="44"/>
+   <Setter Property="Padding" Value="10"/><Setter Property="BorderWidth" Value="0"/>
+   <Setter Property="BackgroundColor" Value="Transparent"/>
+   <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Primary}, Dark=#AACBFF}"/>
+  </Style>
+  <Style x:Key="FilterChip" TargetType="Border">
+   <Setter Property="StrokeShape" Value="RoundRectangle 10"/><Setter Property="Padding" Value="10,6"/>
+   <Setter Property="MinimumHeightRequest" Value="36"/>
+   <Setter Property="Stroke" Value="{AppThemeBinding Light=#D8E4F4, Dark=#46566D}"/>
+   <Setter Property="BackgroundColor" Value="{AppThemeBinding Light=White, Dark=#1C2635}"/>
+  </Style>
+  <Style x:Key="ChipText" TargetType="Label">
+   <Setter Property="FontSize" Value="13"/><Setter Property="VerticalOptions" Value="Center"/>
+   <Setter Property="TextColor" Value="{AppThemeBinding Light=#26384E, Dark=#E7EEF8}"/>
+  </Style>
+  <Style x:Key="ChipChevron" TargetType="Label">
+   <Setter Property="FontFamily" Value="FluentIcons"/>
+   <Setter Property="Text" Value="{x:Static fonts:FluentUI.chevron_down_20_regular}"/>
+   <Setter Property="FontSize" Value="16"/><Setter Property="VerticalOptions" Value="Center"/>
+   <Setter Property="TextColor" Value="{AppThemeBinding Light=#52647C, Dark=#B2C2D8}"/>
+  </Style>
+ </ContentView.Resources>
+ <Grid x:Name="SearchLayout" RowDefinitions="Auto,Auto,Auto,*"
+   BackgroundColor="{AppThemeBinding Light=White, Dark=#1C2635}">
+  <Border x:Name="SearchHeader" StrokeShape="RoundRectangle 0" Padding="8,0" StrokeThickness="0"
+   HeightRequest="56" BackgroundColor="{AppThemeBinding Light=#F2F7FE, Dark=#20304A}">
+   <Grid ColumnDefinitions="Auto,*,Auto">
+    <Button x:Name="NavigationButton" Style="{StaticResource SearchIconButton}"
+     Text="{x:Static fonts:FluentUI.arrow_right_24_regular}" AutomationId="TanahpediaSearchNavigationButton"
+     SemanticProperties.Description="סגירת החיפוש" Clicked="OnNavigationClicked"/>
+    <controls:SearchEntry Grid.Column="1" x:Name="SearchInput" AutomationId="TanahpediaSearchInput"
+     Text="{Binding SearchPhrase, Mode=TwoWay}" Placeholder="חיפוש בתנכפדיה..." FontSize="17" VerticalOptions="Center" HeightRequest="48"
+     TextColor="{AppThemeBinding Light=#26384E, Dark=#E7EEF8}" PlaceholderColor="{AppThemeBinding Light=#52647C, Dark=#B2C2D8}"
+     TextChanged="OnSearchTextChanged" Completed="OnSearchSubmitted"/>
+    <Button Grid.Column="2" x:Name="ClearButton" Style="{StaticResource SearchIconButton}" IsVisible="False"
+     Text="{x:Static fonts:FluentUI.dismiss_24_regular}" AutomationId="ClearTanahpediaSearchButton"
+     SemanticProperties.Description="ניקוי החיפוש" Clicked="OnClearClicked"/>
+   </Grid>
+  </Border>
+  <ScrollView Grid.Row="1" Orientation="Horizontal" HorizontalScrollBarVisibility="Never" AutomationId="TanahpediaSearchFilterChips">
+   <HorizontalStackLayout Padding="16,8" Spacing="8">
+    <Border Style="{StaticResource FilterChip}" AutomationId="TanahpediaSearchKindsTab">
+     <Border.GestureRecognizers><TapGestureRecognizer Tapped="OnKindsTabClicked"/></Border.GestureRecognizers>
+     <Grid ColumnDefinitions="Auto,Auto" ColumnSpacing="6">
+      <Label x:Name="KindsChipText" AutomationId="TanahpediaSearchKindsSummary" Style="{StaticResource ChipText}"/>
+      <Label Grid.Column="1" Style="{StaticResource ChipChevron}"/>
+     </Grid>
+    </Border>
+   </HorizontalStackLayout>
+  </ScrollView>
+  <VerticalStackLayout Grid.Row="2" Padding="16,4" Spacing="4">
+   <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+    <ActivityIndicator IsRunning="{Binding IsLoading}" IsVisible="{Binding IsLoading}" WidthRequest="22" HeightRequest="22"/>
+    <Label Grid.Column="1" x:Name="SearchStatus" AutomationId="TanahpediaSearchStatus" FontSize="13"
+     TextColor="{AppThemeBinding Light=#52647C, Dark=#B2C2D8}" VerticalOptions="Center"/>
+   </Grid>
+   <Label x:Name="ErrorText" IsVisible="False" Text="{Binding ErrorMessage}"
+    TextColor="{AppThemeBinding Light=#B02020, Dark=#FF9090}" FontSize="13"/>
+  </VerticalStackLayout>
+  <CollectionView Grid.Row="3" x:Name="ResultsList" AutomationId="TanahpediaSearchResults" ItemsSource="{Binding Results}"
+   SelectionMode="Single" SelectionChanged="OnResultSelected" IsVisible="False">
+   <CollectionView.ItemTemplate>
+    <DataTemplate x:DataType="models:TanahpediaSearchHit">
+     <Grid ColumnDefinitions="*" ColumnSpacing="12" Padding="16,12">
+      <VerticalStackLayout Spacing="4">
+       <Label Text="{Binding Title}" AutomationId="TanahpediaSearchResultTitle" FontSize="16" FontAttributes="Bold"
+        TextColor="{AppThemeBinding Light=#26384E, Dark=#E7EEF8}"/>
+       <Label Text="{Binding Excerpt}" FontSize="14" MaxLines="3"
+        TextColor="{AppThemeBinding Light=#52647C, Dark=#B2C2D8}"/>
+       <BoxView HeightRequest="1" Margin="0,8,0,0" Color="{AppThemeBinding Light=#E8F0FA, Dark=#46566D}"/>
+      </VerticalStackLayout>
+     </Grid>
+    </DataTemplate>
+   </CollectionView.ItemTemplate>
+  </CollectionView>
+  <Label Grid.Row="3" x:Name="HintText" Margin="16,20" FontSize="15" IsVisible="False"
+   Text="חיפוש ערכים בתנכפדיה - אישים, מקומות, אירועים ועוד"
+   TextColor="{AppThemeBinding Light=#52647C, Dark=#B2C2D8}"/>
+  <Grid x:Name="FilterSheetOverlay" Grid.RowSpan="4" IsVisible="False" ZIndex="20">
+   <Grid BackgroundColor="#66000000"><Grid.GestureRecognizers><TapGestureRecognizer Tapped="OnSheetDismissed"/></Grid.GestureRecognizers></Grid>
+   <Border x:Name="FilterSheet" AutomationId="TanahpediaSearchSheet" VerticalOptions="End" HeightRequest="420"
+    StrokeShape="RoundRectangle 24,24,0,0" StrokeThickness="0" Padding="16,8,16,16"
+    BackgroundColor="{AppThemeBinding Light=White, Dark=#1C2635}">
+    <Grid RowDefinitions="Auto,Auto,*" RowSpacing="8">
+     <Grid HeightRequest="20">
+      <Grid.GestureRecognizers><PanGestureRecognizer PanUpdated="OnSheetPanUpdated"/></Grid.GestureRecognizers>
+      <BoxView WidthRequest="36" HeightRequest="4" CornerRadius="2" HorizontalOptions="Center" VerticalOptions="Center" Color="#D8E4F4"/>
+     </Grid>
+     <Label x:Name="SheetTitle" Text="מה לחפש" FontSize="17" FontAttributes="Bold"
+      TextColor="{AppThemeBinding Light=#26384E, Dark=#E7EEF8}"/>
+     <ScrollView Grid.Row="2">
+      <VerticalStackLayout x:Name="KindsFilters" Spacing="2"/>
+     </ScrollView>
+    </Grid>
+   </Border>
+  </Grid>
+ </Grid>
+</ContentView>

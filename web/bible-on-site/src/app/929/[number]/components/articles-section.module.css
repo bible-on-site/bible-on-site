@@ -145,17 +145,16 @@ button.carouselItem {
   vertical-align: middle;
 }
 
-/* Style headings inside abstract */
-.articleAbstract h1,
-.articleAbstract h2,
-.articleAbstract h3,
-.articleAbstract h4,
-.articleAbstract h5,
-.articleAbstract h6 {
+/* Abstract headings arrive as .abstractHeading paragraphs
+   (normalizeAbstractHtml): block-level, so consecutive headings keep their
+   line boundary instead of running together (issue #2290). */
+.articleAbstract p {
+  margin: 0;
+}
+
+.articleAbstract :global(.abstractHeading) {
   font-size: 1.1rem;
   font-weight: 600;
-  margin: 0;
-  display: inline;
 }
 
 /* Responsive: smaller items on mobile */

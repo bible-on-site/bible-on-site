@@ -10,6 +10,10 @@
  * the pre-#2156 artifact shape), the shared path attributes every covered
  * node to every executed test as `shared` evidence.
  */
+import {
+	extractCSharpMembers,
+	type SourceMember,
+} from "../github/ci/e2e-impact/fingerprint.ts";
 import type {
 	CoverageDump,
 	DumpError,
@@ -54,6 +58,13 @@ export interface ExtractInput {
 	/** Ids discovered at this revision — the staleness oracle for merge. */
 	discoveredIds: string[];
 	collectedAtUtc?: string;
+	/**
+	 * Reads repo-relative source at the snapshot revision so method nodes
+	 * can be mapped onto source members (#2085 member granularity). When
+	 * absent — or a file is missing/unparseable — nodes simply carry no
+	 * `member` and the selector widens them to file level; never guessed.
+	 */
+	readSource?: (repoPath: string) => string | null;
 }
 
 /** A file path in normalized repo-relative shape; `external` when unmappable. */
@@ -204,6 +215,71 @@ export function buildIndex(
 const firstFileId = (method: MethodModel): string =>
 	method.sequencePoints[0]?.fileId ?? method.branchPoints[0]?.fileId ?? "";
 
+/**
+ * Attaches `member`/`memberType` to method nodes whose point span is
+ * contained by exactly one innermost source member in the node's primary
+ * file (#2085 member granularity). Nodes that cannot map — no span, no
+ * repo-normalized file, unparsable or missing source, or members with
+ * identical spans (`#if` twins) — are left unmapped: the selector records
+ * their type in `memberGaps` and widens rather than guesses.
+ */
+function attachMembers(
+	index: BuiltIndex,
+	sourceRoot: string,
+	readSource: (repoPath: string) => string | null,
+): void {
+	const membersByFile = new Map<string, SourceMember[] | null>();
+	const membersOf = (file: string): SourceMember[] | null => {
+		let members = membersByFile.get(file);
+		if (members === undefined) {
+			const content = readSource(file);
+			members = content === null ? null : extractCSharpMembers(file, content);
+			membersByFile.set(file, members);
+		}
+		return members;
+	};
+	for (const node of index.nodes.values()) {
+		if (node.kind !== "method" || node.file === undefined) continue;
+		const span = node.span;
+		if (span === undefined) continue;
+		if (!node.file.startsWith(`${sourceRoot}/`)) continue;
+		// A node whose points span multiple files mixes two line-number
+		// spaces (e.g. `#line`-mapped generated code) — containment against
+		// the primary file's members would be meaningless, so it stays
+		// unmapped and widens via memberGaps instead.
+		const nodeFiles = node.files ?? [node.file];
+		if (nodeFiles.length !== 1 || nodeFiles[0] !== node.file) continue;
+		const members = membersOf(node.file);
+		if (members === null) continue;
+		const sourceMembers = members.filter((member) => member.kind === "member");
+		// Member spans are disjoint for well-formed sources, but same-line
+		// one-liners (`void A() {} void B() {}`) produce identical spans —
+		// containment then matches several members and picking the first
+		// would attribute coverage to the wrong member. Ambiguity must stay
+		// unmapped so the file widens via memberGaps instead.
+		const whole = sourceMembers.filter(
+			(member) => member.span[0] <= span[0] && span[1] <= member.span[1],
+		);
+		let target = whole.length === 1 ? whole[0] : undefined;
+		if (
+			target === undefined &&
+			(node.decl.endsWith(".ctor") || node.decl.endsWith(".cctor"))
+		) {
+			// Constructor nodes gather field/property initializer points from
+			// earlier member declarations — the span crosses member lines by
+			// construction. The node's tail is the ctor's own body, which
+			// must sit inside exactly one member.
+			const tail = sourceMembers.filter(
+				(member) => member.span[0] <= span[1] && span[1] <= member.span[1],
+			);
+			if (tail.length === 1) target = tail[0];
+		}
+		if (target === undefined) continue;
+		node.member = target.key;
+		node.memberType = target.typeKey;
+	}
+}
+
 function methodNodeId(method: MethodModel, declCounts: Map<string, number>): string {
 	const decl = `${method.className}.${method.name}`;
 	const duplicated = (declCounts.get(decl) ?? 0) > 1;
@@ -283,6 +359,9 @@ const zeroVisits = () => ({ sequence: 0, branch: 0, methodEntries: 0 });
  */
 export function extractTree(input: ExtractInput): ExecCoverageTree {
 	const index = buildIndex(input.cover, input.sourceRoot, input.stripPrefixes);
+	if (input.readSource !== undefined) {
+		attachMembers(index, input.sourceRoot, input.readSource);
+	}
 	const shared: Shared = { reasons: new Set(), nodeIds: new Set(), files: new Set() };
 	const tests = new Map<string, ExecCoverageTest>();
 	const unmatchedEvidence: string[] = [];
@@ -413,9 +492,14 @@ export function extractTree(input: ExtractInput): ExecCoverageTree {
 	if (diagnostics.dumpsApplied === 0) {
 		const covered = coveredByVc(input.cover, index);
 		addShared(shared, covered, "whole-suite-report");
+		// A case the run skipped (selection manifest, filtered shard leg) never
+		// executed — attributing the suite's coverage to it would fake a claim;
+		// it stays `unmeasured` from the pass above instead.
 		const executed: TestRunRecord[] =
 			input.runRecords.length > 0
-				? input.runRecords
+				? input.runRecords.filter(
+						(record) => record.outcome !== "skipped" && record.outcome !== "notexecuted",
+					)
 				: input.discoveredIds.map((id) => ({
 						id,
 						outcome: "unknown",
