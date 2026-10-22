@@ -13,6 +13,11 @@ Description: |
   This Lambda runs in the VPC and can access the RDS MySQL instance.
   It is invoked by GitHub Actions CD workflow to populate the database.
 
+  Database credentials arrive via the DB_URL environment variable, which the
+  CD deployer (devops/deploy/data-deploy) refreshes from SSM Parameter Store
+  on every deployment. The Lambda itself never calls SSM, so no SSM
+  interface VPC endpoint is required.
+
   Lambda code: See data-deploy-lambda.py in this directory.
 
   Sensitive Information Restoration:
@@ -70,12 +75,12 @@ Resources:
       GroupDescription: Security group for data deploy Lambda function
       VpcId: !Ref VpcId
       SecurityGroupEgress:
-        # Allow HTTPS outbound (for SSM, S3)
+        # Allow HTTPS outbound (for S3 via the gateway endpoint)
         - IpProtocol: tcp
           FromPort: 443
           ToPort: 443
           CidrIp: 0.0.0.0/0
-          Description: HTTPS for AWS APIs (SSM, S3)
+          Description: HTTPS for AWS APIs (S3)
         # Allow MySQL outbound (for RDS)
         - IpProtocol: tcp
           FromPort: 3306
@@ -110,14 +115,6 @@ Resources:
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
-              # SSM Parameter Store - read database credentials
-              - Sid: SSMParameterStoreRead
-                Effect: Allow
-                Action:
-                  - ssm:GetParameter
-                  - ssm:GetParameters
-                Resource:
-                  - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-tanah-db-*"
               # S3 - read SQL files
               - Sid: S3Read
                 Effect: Allow
@@ -153,7 +150,9 @@ Resources:
       Environment:
         Variables:
           S3_BUCKET: !Ref DataDeployBucket
-          SSM_PREFIX: bible-on-site-tanah-db
+          # DB_URL (mysql://user:pass@host:3306/db) is injected/rotated by the
+          # data-deploy CD step — it is NOT created by this stack and must not
+          # be written here. See devops/deploy/data-deploy/lambda-env.mts.
       Code:
         # Deploy using: See data-deploy-lambda.py docstring for instructions
         S3Bucket: bible-on-site-data-deploy
@@ -180,10 +179,20 @@ Resources:
       Description: Allow MySQL access from data deploy Lambda
 
   # =============================================================================
-  # VPC Endpoints (Required for Lambda in VPC to access AWS services)
+  # VPC Endpoint (Required for Lambda in VPC to reach S3)
   # =============================================================================
-  # Lambda runs in a private VPC with no NAT Gateway. These endpoints
-  # allow the Lambda to reach S3 and SSM without internet access.
+  # Lambda runs in a private VPC with no NAT Gateway. The S3 gateway endpoint
+  # (free, route-table based) lets the Lambda download the uploaded SQL files.
+  #
+  # The SSM interface endpoint that previously existed only for the Lambda's
+  # runtime credential lookup was removed (~$7/month per endpoint ENI): the
+  # deployer now injects DB_URL into the function environment at deploy time.
+  # One-time deletion of the legacy endpoint (deployed id vpce-0dd7903d30e03208c):
+  #   aws ec2 delete-vpc-endpoints --vpc-endpoint-ids vpce-0dd7903d30e03208c --region il-central-1
+  # Verify nothing else resolves ssm.il-central-1.amazonaws.com via this
+  # endpoint first (it had PrivateDnsEnabled). ECS tasks use public IPs and
+  # do not traverse it; a cross-check is still recommended before deleting:
+  #   aws ec2 describe-network-interfaces --filters "Name=vpc-endpoint-id,Values=vpce-0dd7903d30e03208c" --region il-central-1
 
   # S3 Gateway Endpoint (free, uses route tables)
   S3GatewayEndpoint:
@@ -204,46 +213,6 @@ Resources:
               - s3:PutObject
             Resource:
               - !Sub "arn:aws:s3:::${DataDeployBucket}/*"
-
-  # SSM Interface Endpoint (has hourly cost)
-  SSMInterfaceEndpoint:
-    Type: AWS::EC2::VPCEndpoint
-    Properties:
-      VpcId: !Ref VpcId
-      ServiceName: !Sub "com.amazonaws.${AWS::Region}.ssm"
-      VpcEndpointType: Interface
-      SubnetIds: !Ref SubnetIds
-      SecurityGroupIds:
-        - !Ref VPCEndpointSecurityGroup
-      PrivateDnsEnabled: true
-
-  # Security group for VPC Interface Endpoints
-  VPCEndpointSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupName: vpc-endpoint-sg
-      GroupDescription: Security group for VPC interface endpoints
-      VpcId: !Ref VpcId
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
-          CidrIp: 172.31.0.0/16
-          Description: HTTPS from VPC CIDR for interface endpoints
-      Tags:
-        - Key: Project
-          Value: bible-on-site
-
-  # Add HTTPS ingress to Lambda SG for VPC endpoint communication
-  LambdaSecurityGroupHTTPSIngress:
-    Type: AWS::EC2::SecurityGroupIngress
-    Properties:
-      GroupId: !Ref LambdaSecurityGroup
-      IpProtocol: tcp
-      FromPort: 443
-      ToPort: 443
-      CidrIp: 172.31.0.0/16
-      Description: HTTPS for VPC endpoint communication
 
 Outputs:
   LambdaFunctionArn:
@@ -287,7 +256,7 @@ Outputs:
 #
 # 4. Add ingress rule to RDS SG to allow Lambda SG
 #
-# 5. Create IAM role for Lambda with SSM and S3 read permissions
+# 5. Create IAM role for Lambda with S3 read permission
 #
 # 6. Create Lambda function with pymysql bundled:
 #    a. Create deployment package:
@@ -307,30 +276,18 @@ Outputs:
 #         --vpc-config SubnetIds=...,SecurityGroupIds=... \
 #         --region il-central-1
 #
-# 7. Create VPC Endpoints (REQUIRED - Lambda in VPC has no internet access):
-#    a. S3 Gateway Endpoint (free):
-#       aws ec2 create-vpc-endpoint \
-#         --vpc-id vpc-0d6af72e472db138c \
-#         --service-name com.amazonaws.il-central-1.s3 \
-#         --vpc-endpoint-type Gateway \
-#         --route-table-ids <ROUTE_TABLE_ID> \
-#         --region il-central-1
-#
-#    b. SSM Interface Endpoint (has hourly cost ~$7/month):
-#       aws ec2 create-vpc-endpoint \
-#         --vpc-id vpc-0d6af72e472db138c \
-#         --service-name com.amazonaws.il-central-1.ssm \
-#         --vpc-endpoint-type Interface \
-#         --subnet-ids subnet-056e95f1b766e6b0d subnet-02c538ecab687f8bd \
-#         --security-group-ids <VPC_ENDPOINT_SG_ID> \
-#         --private-dns-enabled \
-#         --region il-central-1
-#
-#    c. Add HTTPS ingress to Lambda SG from VPC CIDR (for endpoint communication)
+# 7. Create the S3 Gateway Endpoint (REQUIRED - Lambda in VPC has no internet access):
+#    aws ec2 create-vpc-endpoint \
+#      --vpc-id vpc-0d6af72e472db138c \
+#      --service-name com.amazonaws.il-central-1.s3 \
+#      --vpc-endpoint-type Gateway \
+#      --route-table-ids <ROUTE_TABLE_ID> \
+#      --region il-central-1
 #
 # 8. Update GitHub Actions IAM role to allow:
-#    - s3:PutObject on the bucket
-#    - lambda:InvokeFunction on the Lambda
+#    - s3:PutObject / s3:DeleteObject on the bucket
+#    - lambda:InvokeFunction, lambda:GetFunction, lambda:UpdateFunctionConfiguration
+#      on the Lambda (see github-oidc.yaml)
 #
 # =============================================================================
 # DEPLOYED RESOURCES (as of January 2026)
@@ -339,5 +296,7 @@ Outputs:
 # - Lambda: bible-on-site-db-populator
 # - Lambda SG: sg-0cdca171d4f33dd34 (data-deploy-lambda-sg)
 # - S3 Gateway Endpoint: vpce-0388b3ea36b6a3214
-# - SSM Interface Endpoint: vpce-0dd7903d30e03208c
+# - REMOVED: SSM Interface Endpoint vpce-0dd7903d30e03208c — no longer needed
+#   once DB_URL is injected via the function environment (see VPC Endpoint
+#   section above for the deletion command and pre-check).
 # =============================================================================
