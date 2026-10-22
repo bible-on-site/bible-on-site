@@ -42,8 +42,12 @@ class MachineProposalTests(unittest.TestCase):
                       "textScore": 1., "acousticScore": .9},
                      {"pasuk": 3, "segment": 1, "text": "אור", "startMs": 1400, "endMs": 1500,
                       "textScore": 1., "acousticScore": .9}]
+        public_pipeline = {"version": 3, "asrModel": ASR_MODEL, "asrRevision": ASR_REVISION,
+                           "alignModel": ALIGN_MODEL, "alignRevision": ALIGN_REVISION,
+                           "minTextScore": .6, "minAcousticScore": .5, "minCoverage": .85}
+        self.assertEqual(public_pipeline, TRUSTED_PIPELINE)
         self.manifest = {"version": 1, "perekId": 1, "alignmentStatus": "needs_review",
-                         "pipeline": deepcopy(TRUSTED_PIPELINE), "durationMs": 2000,
+                         "pipeline": public_pipeline, "durationMs": 2000,
                          "audioUrl": f"{AUDIO_BASE}/1_record.mp3", "audioSha256": digest_file(self.recording),
                          "textSha256": text_hash(self.words), "words": [self.auto[0]] + [
                              {**row, "startMs": None, "endMs": None, "textScore": 0.} for row in self.rows
