@@ -73,8 +73,8 @@ async function page(saved = {}, options = {}) {
       :url.startsWith("/api/action-case/")?{ok:!options.actionCaseFails,json:async()=>options.actionCase??{case:item}}
       :url==="/api/action-responses"?{ok:!actionSaveFails,json:async()=>{const body=JSON.parse(request.body);actionPosts.push({body,headers:request.headers});return actionSaveFails?{error:"fixture action save failure"}:body;}}
       :url==="/api/workflow-status"?{ok:options.workflow!==undefined,status:options.workflow===undefined?404:200,json:async()=>options.workflow}
-      :url==="/api/preparation-status"?{ok:options.preparation!==undefined,json:async()=>options.preparation}
-      :url==="/api/preparation-inventory"?(()=>{inventoryRequests++;return {ok:inventory!==undefined&&!inventoryFails,status:inventory===undefined?404:409,json:async()=>inventory};})()
+      :url==="/api/preparation-status"?{ok:options.preparation!==undefined,json:async()=>{await options.beforePreparationJson?.();return options.preparation;}}
+      :url==="/api/preparation-inventory"?(()=>{inventoryRequests++;return {ok:inventory!==undefined&&!inventoryFails,status:inventory===undefined?404:409,json:async()=>{await options.beforeInventoryJson?.();return inventory;}};})()
       :{json:async()=>({state:"complete",humanRecoveredChapters:0})}});
   vm.runInContext(script,context);await tick();
   return {elements,starts,playbackSlices,posts,actionPosts,actionAudioRequests,offlineDecodes,setActions:value=>{actionTasks=value;},setActionSaveFailure:value=>{actionSaveFails=value;},wordPosts:posts,wordRequests,legacyPosts,editPosts,item,storage,releaseWordSave:()=>releaseWordSave?.(),setWordSaveFailure:value=>{wordSaveFails=value;},releaseEditSave:()=>releaseEditSave?.(),failEditSave:()=>{editSaveFails=true;},setInventory:value=>{inventory=value;},failInventory:()=>{inventoryFails=true;},inventoryRequests:()=>inventoryRequests,setQueue:value=>{queue=value;},failQueue:()=>{queueFails=true;},run:code=>vm.runInContext(code,context),async flush(){await tick();},async resumeGap(){assert.ok(gaps.length);gaps.shift()();await tick();},
@@ -853,6 +853,71 @@ const locateFixture=(overrides={})=>({id:"locate",taskId:"locate",perekId:1,pasu
   state:"pending",taskSha256:"exact-task",audioSha256:"immutable-original-source",textSha256:"canonical-text",
   playbackSha256:actionPlaybackSha,sourceFrames:32000,sourceSampleRate:16000,sourceDurationMs:2000,
   canonicalWords:[{pasuk:1,segment:1,text:"בראשית"},{pasuk:1,segment:2,text:"ברא"}],...overrides});
+const legacyPreparationFixture=()=>({state:"completed",targetVerses:579,remainingToPrepare:0,
+  machinePreparedVerses:241,counts:{held:328}});
+
+test("a verified action inventory replaces legacy classifications without changing the live cut draft",async()=>{
+  const p=await page({}, {preparation:legacyPreparationFixture(),inventory:inventoryFixture(),reusableHeardSegments:[1,3]});
+  assert.equal(p.elements["preparation-progress"].hidden,false);
+  assert.equal(p.elements["preparation-inventory"].hidden,false);
+  p.run("setCutBoundary(2,'endMs',650);document.activeElement=cutRows.get(2).endMs.number");
+  p.elements.note.value="טיוטה שנשמרת עם הרשימה המלאה";p.elements.note.oninput();
+  const control=p.run("cutRows.get(2).endMs.number"),word=p.elements.words.children[1];
+  const playback=p.run("play('edits')");await p.flush();
+  p.setActions([locateFixture()]);await p.run("updateActions()");
+  assert.equal(p.elements["action-workspace"].hidden,false);
+  assert.equal(p.elements["preparation-progress"].hidden,true);
+  assert.equal(p.elements["preparation-inventory"].hidden,true);
+  assert.equal(p.run("caseNow().id"),"case");assert.equal(p.run("playbackActive"),true);
+  assert.equal(p.run("document.activeElement"),control);assert.equal(p.elements.words.children[1],word);
+  assert.equal(p.elements.note.value,"טיוטה שנשמרת עם הרשימה המלאה");
+  assert.equal(p.run("workingWord(caseNow(),caseNow().words[1]).endMs"),650);
+  assert.equal(p.run("cutHeard(caseNow(),caseNow().words[1])"),false);
+  await p.finish();await playback;
+  assert.equal(p.run("cutHeard(caseNow(),caseNow().words[1])"),true);
+});
+
+test("late legacy responses cannot restore obsolete banners after valid actions arrive",async()=>{
+  let releasePreparation,releaseInventory;
+  const preparationGate=new Promise(resolve=>{releasePreparation=resolve;});
+  const inventoryGate=new Promise(resolve=>{releaseInventory=resolve;});
+  const p=await page({}, {actions:[locateFixture()],preparation:legacyPreparationFixture(),inventory:inventoryFixture(),
+    beforePreparationJson:()=>preparationGate,beforeInventoryJson:()=>inventoryGate});
+  assert.equal(p.elements["preparation-progress"].hidden,true);
+  assert.equal(p.elements["preparation-inventory"].hidden,true);
+  releasePreparation();releaseInventory();await p.flush();await p.flush();
+  assert.equal(p.elements["preparation-progress"].hidden,true);
+  assert.equal(p.elements["preparation-inventory"].hidden,true);
+  p.setActions(undefined);await p.run("updateActions()");
+  p.failInventory();await p.run("updateInventory()");await p.run("updatePreparation()");
+  assert.equal(p.elements["action-workspace"].hidden,false);
+  assert.equal(p.elements["preparation-progress"].hidden,true);
+  assert.equal(p.elements["preparation-inventory"].hidden,true);
+  assert.equal(p.wordPosts.length,0);assert.equal(p.actionPosts.length,0);
+});
+
+test("late failed legacy inventory cannot restore its panel after valid actions arrive",async()=>{
+  let releaseInventory;
+  const inventoryGate=new Promise(resolve=>{releaseInventory=resolve;});
+  const p=await page({}, {actions:[locateFixture()],inventory:inventoryFixture(),
+    beforeInventoryJson:async()=>{await inventoryGate;throw new Error("fixture legacy inventory failure");}});
+  releaseInventory();await p.flush();await p.flush();
+  assert.equal(p.elements["action-workspace"].hidden,false);
+  assert.equal(p.elements["preparation-inventory"].hidden,true);
+  assert.equal(p.run("caseNow().id"),"case");assert.equal(p.wordPosts.length,0);
+});
+
+test("absent empty or malformed actions keep the existing legacy status and inventory fallback",async()=>{
+  for(const actions of [undefined,[],[{id:"invalid-action"}]]) {
+    const p=await page({}, {actions,preparation:legacyPreparationFixture(),inventory:inventoryFixture()});
+    assert.equal(p.elements["preparation-progress"].hidden,false);
+    assert.equal(p.elements["preparation-inventory"].hidden,false);
+    assert.match(p.elements["preparation-counts"].textContent,/579.*241.*328/);
+    assert.equal(p.elements["inventory-list"].children.length,5);
+    assert.equal(p.run("caseNow().id"),"case");assert.equal(p.wordPosts.length,0);
+  }
+});
+
 function setLocatedRange(p,start="0.200",end="0.700") {
   for(const [field,value]of [["start",start],["end",end]]) {
     const input=p.elements["action-"+field+"-number"];input.value=value;

@@ -199,6 +199,7 @@ let historicalCase = null, keepPreviousVersion = false, playbackActive = false;
 let saving = false, cancelPlayback, liveQueue = false, refreshing = false, restoredActive;
 let lastQueuePollingFailure = null;
 let inventoryCases = null, inventoryRefreshing = false;
+let unifiedActionsAvailable = false;
 let actionTasks = [], selectedActionId = null, actionsRefreshing = false, actionSaving = false, actionPlayback = null;
 const actionDrafts = new Map(), actionHearing = new Set(), actionSubmissions = new Map(), actionBuffers = new Map(), actionOpenReviews = new Map();
 const actionStorageKey = "listening-action-editor-v1";
@@ -835,6 +836,7 @@ $("note").oninput = () => { if (caseNow()) typedProblemDraftKeys.add(stateKey(ca
 setInterval(() => void refreshQueue(), 5000);
 setInterval(() => void updateRecovery(), 5000);
 async function updatePreparation() {
+  if (unifiedActionsAvailable) { $("preparation-progress").hidden = true; return; }
   try {
     const response = await fetch("/api/preparation-status", {cache:"no-store"});
     if (!response.ok) { $("preparation-progress").hidden = true; return; }
@@ -852,7 +854,7 @@ async function updatePreparation() {
       + " · ממתינים להכנה: " + progress.remainingToPrepare
       + " · דורשים טיפול נוסף: " + (progress.counts?.held ?? 0)
       + ". מאגר כל הפסוקים מופיע בנפרד מרשימת ההאזנה.";
-    $("preparation-progress").hidden = false;
+    $("preparation-progress").hidden = unifiedActionsAvailable;
   } catch { /* A preparation status outage must never alter the active review or draft. */ }
 }
 const actionKinds = {"locate-source-range":"איתור הפסוק בהקלטה","review-cuts":"בדיקת החיתוכים","source-remediation":"טיפול בהקלטת המקור"};
@@ -1122,6 +1124,11 @@ async function updateActions() {
     if(!Array.isArray(result.tasks)||result.tasks.some(task=>!validAction(task))||new Set(result.tasks.map(task=>task.id)).size!==result.tasks.length)throw new Error("רשימת הנושאים אינה זמינה כרגע.");
     const previous=actionNow(),previousKey=previous? actionKey(previous):null;
     actionTasks=result.tasks;
+    if(actionTasks.length) {
+      unifiedActionsAvailable=true;
+      $("preparation-progress").hidden=true;
+      $("preparation-inventory").hidden=true;
+    }
     if(!actionTasks.some(task=>task.id===selectedActionId))selectedActionId=actionTasks.find(task=>!["resolved","validated","segmented"].includes(task.state))?.id??actionTasks[0]?.id??null;
     renderActionList();$("action-workspace").hidden=false;
     const current=actionNow();
@@ -1236,7 +1243,7 @@ function renderInventory() {
   }
 }
 async function updateInventory() {
-  if (inventoryRefreshing) return;
+  if (unifiedActionsAvailable || inventoryRefreshing) return;
   inventoryRefreshing = true;
   $("inventory-refresh").disabled = true;
   $("preparation-inventory").setAttribute("aria-busy", "true");
@@ -1258,10 +1265,10 @@ async function updateInventory() {
     inventoryCases = [...inventory.cases].sort((a,b) => a.perekId-b.perekId || a.pasuk-b.pasuk);
     renderInventory();
     $("inventory-message").textContent = "";
-    $("preparation-inventory").hidden = false;
+    $("preparation-inventory").hidden = unifiedActionsAvailable;
   } catch (error) {
     $("inventory-message").textContent = error.message;
-    $("preparation-inventory").hidden = false;
+    $("preparation-inventory").hidden = unifiedActionsAvailable;
   } finally {
     inventoryRefreshing = false;
     $("inventory-refresh").disabled = false;
