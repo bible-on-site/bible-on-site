@@ -10,6 +10,7 @@ import sqlite3
 import threading
 from urllib.parse import parse_qs, urlsplit
 
+from listening_edits import validate_cut_edit
 from listening_review import (ListeningHandler, digest_file, digest_json,
                               load_queue, read_json, session_token, validate_decision, write_json)
 
@@ -49,6 +50,8 @@ class ReviewDatabase:
                     path TEXT PRIMARY KEY, batch_seq INTEGER NOT NULL, prefix TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS entry (
                     digest TEXT PRIMARY KEY, body TEXT NOT NULL, saved_at TEXT NOT NULL);
+                CREATE TABLE IF NOT EXISTS cut_edit (
+                    proposal_sha TEXT PRIMARY KEY, body TEXT NOT NULL, saved_at TEXT NOT NULL);
             """)
 
     @contextmanager
@@ -169,6 +172,35 @@ class ReviewDatabase:
             self.on_saved()
         return row
 
+    def save_cut_edits(self, payload):
+        """Append a held proposal for the current immutable candidate, never a verdict."""
+        with self._transaction() as db:
+            db.execute("BEGIN IMMEDIATE")
+            stored = db.execute("SELECT c.key,c.body,c.queue_sha FROM current_candidate current "
+                                "JOIN candidate c ON c.key=current.key WHERE current.case_id=?",
+                                (payload.get("caseId"),)).fetchone()
+            if stored is None:
+                raise ValueError("Unknown current listening candidate")
+            case = json.loads(stored[1])
+            if stored[0] != ":".join((str(payload.get("caseId")),
+                                      str(payload.get("candidateSha256")), str(payload.get("clipSha256")))):
+                raise ValueError("This listening candidate was replaced; open the current version before editing")
+            row = validate_cut_edit(case, payload)
+            row["queueSha256"] = stored[2]
+            proposal_sha = digest_json(row)
+            previous = db.execute("SELECT body FROM cut_edit WHERE proposal_sha=?", (proposal_sha,)).fetchone()
+            if previous:
+                return json.loads(previous[0])
+            row.update(proposalSha256=proposal_sha, savedAt=datetime.now(timezone.utc).isoformat())
+            db.execute("INSERT INTO cut_edit VALUES (?,?,?)",
+                       (proposal_sha, json.dumps(row, ensure_ascii=False), row["savedAt"]))
+        return row
+
+    def all_cut_edits(self):
+        with closing(sqlite3.connect(self.path)) as db:
+            return [json.loads(row[0]) for row in db.execute(
+                "SELECT body FROM cut_edit ORDER BY saved_at, proposal_sha")]
+
     def all_entries(self):
         with closing(sqlite3.connect(self.path)) as db:
             return self._entries(db)
@@ -252,9 +284,12 @@ class QueueHandler(ListeningHandler):
                 return self.send(200, raw, "audio/wav")
             except (ValueError, OSError):
                 return self.json_response(409, {"error": "Exact listening audio unavailable"})
+        if self.path == "/api/cut-edits":
+            return self.json_response(200, {"entries": self.server.review_store.all_cut_edits()})
         if self.path == "/api/export":
             return self.json_response(200, {"version": 1,
                 "entries": self.server.review_store.all_entries(),
+                "timingEdits": self.server.review_store.all_cut_edits(),
                 "publicationStatus": "held"})
         if self.path == "/api/archive":
             return self.json_response(200, [{"caseCount": len(self.server.review_store.all_entries()),
@@ -262,6 +297,18 @@ class QueueHandler(ListeningHandler):
                                                        "decision": row}
                                                       for row in self.server.review_store.all_entries()]}])
         return super().do_GET()
+
+    def do_POST(self):
+        if self.path != "/api/cut-edits" or not self.review_session_valid():
+            return super().do_POST()
+        try:
+            _case, payload = self.review_payload()
+            row = self.server.review_store.save_cut_edits(payload)
+            return self.json_response(200, row)
+        except (ValueError, KeyError, TypeError) as error:
+            return self.json_response(400, {"error": str(error)})
+        except (OSError, sqlite3.Error):
+            return self.json_response(500, {"error": "Could not save timing proposal; please retry"})
 
     def review_payload(self):
         size = int(self.headers.get("Content-Length", "0"))

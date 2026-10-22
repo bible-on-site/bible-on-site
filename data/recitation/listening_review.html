@@ -8,7 +8,7 @@
 :root {color-scheme:light;font-family:system-ui,sans-serif;color:#17283c;background:#f3f5f7}
 * {box-sizing:border-box}
 body {margin:0}
-main {max-width:760px;margin:40px auto;padding:24px}
+main {max-width:980px;margin:40px auto;padding:24px}
 header {display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:28px}
 h1 {font-size:19px;margin:0}
 a {color:#315b9a;font-size:14px}
@@ -39,6 +39,30 @@ textarea {resize:vertical;width:100%;border:1px solid #d5dde7;border-radius:10px
 .nav {display:flex;justify-content:space-between;gap:12px;margin-top:20px}
 #status {min-height:24px;line-height:1.6;font-size:14px;color:#365579}
 footer {font-size:13px;color:#6f7b8c;margin-top:20px;line-height:1.7}
+#timing-editor {margin:24px 0;border-top:1px solid #e1e7ed;padding-top:20px}
+.editor-heading {display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.editor-heading h3 {margin:0;font-size:19px}
+#editor-count,.editor-help {font-size:13px;color:#607086}
+.editor-help {line-height:1.6;margin:8px 0 16px}
+#editor-rows {display:grid;gap:12px;margin:16px 0;max-height:600px;overflow:auto;padding:3px}
+.cut-row {border:1px solid #dae2ec;border-radius:12px;padding:16px;background:#fafbfd}
+.cut-row.edited {border-color:#6c9acd;background:#f3f8ff}
+.cut-row.invalid {border-color:#c45c43}
+.cut-heading,.cut-foot {display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.cut-word {font-family:"Times New Roman",serif;font-size:26px;margin-inline-end:auto}
+.cut-heard,.cut-duration {font-size:12px;color:#607086}
+.cut-heading button,.cut-reset {padding:7px 10px;font-size:13px}
+.cut-boundary {display:grid;grid-template-columns:48px minmax(100px,1fr) 106px 70px;align-items:center;gap:12px;margin:14px 0}
+.boundary-label {font-size:14px}
+.cut-range {width:100%;accent-color:#285c9d;cursor:pointer;min-height:32px}
+.cut-number {width:100%;font:inherit;font-variant-numeric:tabular-nums;border:1px solid #bccbdc;border-radius:7px;padding:8px;background:#fff;text-align:center}
+.cut-delta {font-size:12px;font-variant-numeric:tabular-nums;color:#426487;text-align:center}
+.cut-foot {justify-content:space-between}
+.cut-error {color:#a43d29;font-size:13px;margin:8px 0 0}
+.cut-error:empty {display:none}
+#editor-status {font-size:13px;line-height:1.6;color:#365579;min-height:22px}
+input:focus-visible {outline:3px solid #6698e0;outline-offset:3px}
+@media(max-width:550px) {.cut-boundary {grid-template-columns:38px minmax(70px,1fr) 86px;gap:8px}.cut-delta {grid-column:3}.cut-row {padding:12px}}
 @media(max-width:550px) {main {margin:12px auto;padding:16px}.card {padding:22px}h2 {font-size:24px}.controls button {flex:1}.word {font-size:26px}}
 </style>
 </head>
@@ -61,6 +85,14 @@ footer {font-size:13px;color:#6f7b8c;margin-top:20px;line-height:1.7}
 </div>
 <div id="words" aria-label="מילים להאזנה"></div>
 <div id="listening" role="status"></div>
+<section id="timing-editor" aria-labelledby="editor-title" hidden>
+<div class="editor-heading"><h3 id="editor-title">דיוק החיתוכים</h3><span id="editor-count"></span></div>
+<p class="editor-help">הזמנים בשניות, בדיוק של אלפית שנייה. הסליידרים קרובים לחיתוך הנוכחי; אפשר להזין מספר גם מחוץ לטווח שלהם. חיצים: אלפית שנייה. Shift וחץ: 10 אלפיות שנייה.</p>
+<div class="controls"><button id="all-cut-words" aria-pressed="false">כל המילים</button><button id="next-cut-word">המילה הבאה לטיפול</button><button id="play-cut-edits">▶ תיקונים שטרם נשמעו</button></div>
+<div id="editor-rows"></div>
+<div class="controls"><button class="primary" id="save-cut-edits" disabled>שמירת התיקון והמשך</button></div>
+<p id="editor-status" role="status" aria-live="polite"></p>
+</section>
 <label for="note">הערה (רשות)</label>
 <textarea id="note" rows="2" maxlength="2000" placeholder="למשל: המילה השנייה נחתכת בתחילתה"></textarea>
 <div class="actions">
@@ -86,7 +118,223 @@ const stateKey = item => item.id + ":" + item.candidateSha256 + ":" + item.clipS
 const decisionFor = item => decisions[stateKey(item)] ?? (!liveQueue ? decisions[item.id] : undefined);
 const caseNow = () => historicalCase ?? cases[index];
 const heardNow = () => evidence.get(stateKey(caseNow()));
-const remainingWords = () => caseNow().words.filter(word => !heardNow().segments.has(word.segment));
+const remainingWords = () => caseNow().words.filter(word => !cutHeard(caseNow(), word));
+// Timing drafts are separate from immutable candidates and their listening evidence.
+const cutDrafts = new Map(), cutHearing = new Set(), cutRows = new Map(), savedCutProposals = new Map();
+const cutStorageKey = "listening-cut-editor-v1";
+let showAllCutWords = false, activeCutSegment = null, savingCuts = false;
+const cutKey = (item, word) => stateKey(item) + ":" + word.segment + ":" + word.startMs + ":" + word.endMs;
+const cutEditsFor = item => cutDrafts.get(stateKey(item)) ?? {};
+const workingWord = (item, word) => ({...word, ...cutEditsFor(item)[word.segment]});
+const cutChanged = (item, word) => {
+  const current = workingWord(item, word);
+  return current.startMs !== word.startMs || current.endMs !== word.endMs;
+};
+const changedCuts = item => item.words.filter(word => cutChanged(item, word)).map(word => workingWord(item, word));
+const cutHeard = (item, word) => cutChanged(item, word)
+  ? cutHearing.has(cutKey(item, workingWord(item, word)))
+  : evidence.get(stateKey(item))?.segments.has(word.segment);
+const timingEdits = item => changedCuts(item).map(({segment, startMs, endMs}) => ({segment, startMs, endMs}));
+const cutSignature = item => JSON.stringify(timingEdits(item));
+function persistCutProgress() {
+  if (typeof localStorage === "undefined") return;
+  try { localStorage.setItem(cutStorageKey, JSON.stringify({drafts:[...cutDrafts], heard:[...cutHearing]})); }
+  catch { $("editor-status").textContent = "שמירת הטיוטה בדפדפן אינה זמינה. אפשר לשמור את התיקון במחשב."; }
+}
+function restoreCutProgress() {
+  if (typeof localStorage === "undefined") return;
+  try {
+    const saved = JSON.parse(localStorage.getItem(cutStorageKey) ?? "null");
+    for (const [key, value] of saved?.drafts ?? []) if (value && typeof value === "object") cutDrafts.set(key, value);
+    for (const key of saved?.heard ?? []) if (typeof key === "string") cutHearing.add(key);
+  } catch { $("editor-status").textContent = "לא ניתן לשחזר את טיוטת החיתוכים. התשובות השמורות לא השתנו."; }
+}
+function cutErrors(item) {
+  const errors = new Map();
+  const rows = item.words.map(word => workingWord(item, word));
+  rows.forEach((word, i) => {
+    let message = "";
+    if (!Number.isSafeInteger(word.startMs) || !Number.isSafeInteger(word.endMs)) message = "יש להזין זמן תקין בשניות.";
+    else if (word.startMs < item.clipStartMs || word.endMs > item.clipEndMs) message = "החיתוך חייב להיות בתוך קטע המקור הזמין.";
+    else if (word.endMs - word.startMs < 40 || word.endMs - word.startMs > 3000) message = "משך המילה חייב להיות בין 0.040 ל-3.000 שניות.";
+    else if (i > 0 && word.startMs < rows[i - 1].endMs) message = "ההתחלה חופפת לסוף המילה הקודמת.";
+    else if (i + 1 < rows.length && word.endMs > rows[i + 1].startMs) message = "הסוף חופף להתחלת המילה הבאה.";
+    if (message) errors.set(word.segment, message);
+  });
+  return errors;
+}
+function makeElement(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+function signedMs(value) { return (value > 0 ? "+" : "") + value + " ms"; }
+function setCutBoundary(segment, field, value) {
+  if (!caseNow() || saving || savingCuts || historicalCase) return;
+  stop();
+  const item = caseNow(), original = item.words.find(word => word.segment === segment);
+  if (!original) return;
+  const drafts = {...cutEditsFor(item)};
+  const current = workingWord(item, original);
+  const milliseconds = typeof value === "number" ? value : value.trim() === "" ? NaN : Math.round(Number(value) * 1000);
+  drafts[segment] = {startMs:current.startMs, endMs:current.endMs, [field]:milliseconds};
+  if (drafts[segment].startMs === original.startMs && drafts[segment].endMs === original.endMs) delete drafts[segment];
+  cutDrafts.set(stateKey(item), drafts);
+  activeCutSegment = segment;
+  updateCutRow(original);
+  updateEvidence();
+  persistCutProgress();
+}
+function resetCut(segment) {
+  if (savingCuts || historicalCase) return;
+  stop();
+  const drafts = {...cutEditsFor(caseNow())}; delete drafts[segment];
+  cutDrafts.set(stateKey(caseNow()), drafts);
+  renderCutEditor(); updateEvidence(); persistCutProgress();
+}
+function updateCutRow(original) {
+  const refs = cutRows.get(original.segment);
+  if (!refs) return;
+  const item = caseNow(), word = workingWord(item, original), errors = cutErrors(item);
+  refs.row.classList.toggle("edited", cutChanged(item, original));
+  refs.row.classList.toggle("invalid", errors.has(original.segment));
+  for (const field of ["startMs", "endMs"]) {
+    const value = word[field], ref = refs[field];
+    if (document.activeElement !== ref.number) ref.number.value = Number.isFinite(value) ? (value / 1000).toFixed(3) : "";
+    if (Number.isFinite(value)) ref.range.value = String(value);
+    ref.delta.textContent = Number.isFinite(value) ? signedMs(value - original[field]) : "";
+    ref.number.setAttribute("aria-invalid", String(errors.has(original.segment)));
+    ref.range.disabled = savingCuts || !!historicalCase;
+    ref.number.disabled = savingCuts || !!historicalCase;
+  }
+  refs.duration.textContent = Number.isFinite(word.endMs - word.startMs) ? "משך " + ((word.endMs - word.startMs) / 1000).toFixed(3) + " שניות" : "";
+  refs.error.textContent = errors.get(original.segment) ?? "";
+  refs.play.disabled = savingCuts || errors.size !== 0;
+  refs.context.disabled = savingCuts || errors.size !== 0;
+  refs.reset.disabled = savingCuts || !cutChanged(item, original) || !!historicalCase;
+  refs.heard.textContent = cutHeard(item, original) ? "נשמע" : cutChanged(item, original) ? "להאזנה לאחר השינוי" : "להאזנה";
+}
+function renderCutEditor() {
+  const item = caseNow();
+  $("timing-editor").hidden = !item;
+  if (!item) return;
+  cutRows.clear(); $("editor-rows").replaceChildren();
+  $("all-cut-words").textContent = showAllCutWords ? "רק מילים לטיפול" : "כל המילים";
+  $("all-cut-words").setAttribute("aria-pressed", String(showAllCutWords));
+  const targetSegments = new Set([...(item.changedSegments ?? []), ...item.words.filter(word => !cutHeard(item, word)).map(word => word.segment), ...changedCuts(item).map(word => word.segment)]);
+  const shown = item.words.filter(word => showAllCutWords || targetSegments.has(word.segment));
+  $("editor-count").textContent = "לטיפול: " + targetSegments.size + " מתוך " + item.words.length + " מילים";
+  for (const original of shown) {
+    const word = workingWord(item, original);
+    const row = makeElement("article", "cut-row"); row.dataset.cutSegment = String(word.segment);
+    const title = makeElement("div", "cut-heading");
+    const name = makeElement("strong", "cut-word", word.text);
+    const heard = makeElement("span", "cut-heard");
+    const playButton = makeElement("button", "cut-play", "▶ השמעה");
+    playButton.setAttribute("aria-label", "השמעת החיתוך של " + word.text);
+    playButton.onclick = () => { activeCutSegment = word.segment; void play("word", original); };
+    const context = makeElement("button", "cut-context", "עם הסביבה");
+    context.onclick = () => { activeCutSegment = word.segment; void play("word-context", original); };
+    for (const child of [name, heard, playButton, context]) title.append(child);
+    row.append(title);
+    const refs = {row, heard, play:playButton, context};
+    for (const [field, label] of [["startMs", "התחלה"], ["endMs", "סוף"]]) {
+      const group = makeElement("div", "cut-boundary");
+      const fieldLabel = makeElement("label", "boundary-label", label);
+      const fieldId = "cut-" + word.segment + "-" + field;
+      fieldLabel.setAttribute("for", fieldId);
+      const range = makeElement("input", "cut-range"); range.type = "range";
+      range.min = String(Math.max(item.clipStartMs, word[field] - 150));
+      range.max = String(Math.min(item.clipEndMs, word[field] + 150)); range.step = "1";
+      range.value = String(word[field]); range.dir = "ltr"; range.dataset.cutControl = "true";
+      range.setAttribute("aria-label", label + " " + word.text + " באלפיות שנייה");
+      range.oninput = () => setCutBoundary(word.segment, field, Number(range.value));
+      const number = makeElement("input", "cut-number"); number.type = "number"; number.id = fieldId;
+      number.dataset.cutControl = "true"; number.step = "0.001"; number.inputMode = "decimal"; number.dir = "ltr";
+      number.setAttribute("aria-label", label + " " + word.text + " בשניות");
+      number.oninput = () => setCutBoundary(word.segment, field, number.value);
+      number.onchange = () => {
+        const value = workingWord(item, original)[field];
+        if (Number.isFinite(value)) {
+          range.min = String(Math.max(item.clipStartMs, value - 150)); range.max = String(Math.min(item.clipEndMs, value + 150)); range.value = String(value);
+        }
+      };
+      for (const control of [range, number]) control.onkeydown = event => {
+        if (event.shiftKey && ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) {
+          event.preventDefault();
+          const direction = ["ArrowLeft", "ArrowDown"].includes(event.key) ? -1 : 1;
+          setCutBoundary(word.segment, field, workingWord(item, original)[field] + direction * 10);
+          number.value = (workingWord(item, original)[field] / 1000).toFixed(3);
+        }
+      };
+      const delta = makeElement("span", "cut-delta"); delta.dir = "ltr";
+      for (const child of [fieldLabel, range, number, delta]) group.append(child);
+      row.append(group); refs[field] = {range, number, delta};
+    }
+    const foot = makeElement("div", "cut-foot");
+    refs.duration = makeElement("span", "cut-duration");
+    refs.reset = makeElement("button", "cut-reset", "איפוס המילה");
+    refs.reset.onclick = () => resetCut(word.segment);
+    foot.append(refs.duration); foot.append(refs.reset); row.append(foot);
+    refs.error = makeElement("p", "cut-error"); refs.error.setAttribute("role", "status"); row.append(refs.error);
+    cutRows.set(word.segment, refs); $("editor-rows").append(row); updateCutRow(original);
+  }
+  updateCutEditorStatus();
+}
+function updateCutEditorStatus() {
+  const item = caseNow(); if (!item) return;
+  const changed = changedCuts(item), errors = cutErrors(item);
+  for (const word of item.words) updateCutRow(word);
+  const unheard = changed.filter(word => !cutHearing.has(cutKey(item, word)));
+  const saved = savedCutProposals.get(stateKey(item));
+  const unchangedSinceSave = saved && JSON.stringify(saved.timingEdits) === cutSignature(item) && saved.note === $("note").value;
+  $("save-cut-edits").disabled = saving || savingCuts || !!historicalCase || !changed.length || errors.size !== 0 || unheard.length !== 0 || !!unchangedSinceSave;
+  $("play-cut-edits").disabled = savingCuts || !unheard.length || errors.size !== 0;
+  $("next-cut-word").disabled = savingCuts || cutRows.size === 0;
+  $("editor-status").textContent = savingCuts ? "שומר את התיקון..." : errors.size ? "יש לתקן את הזמנים המסומנים לפני השמעה ושמירה." : unchangedSinceSave ? "התיקון נשמר לבדיקת תקינות לפני הפרסום." : unheard.length ? "לפני השמירה יש להאזין ל-" + unheard.length + " חיתוכים ששונו." : changed.length ? changed.length + " חיתוכים מוכנים לשמירה." : "סליידרים: ±0.150 שניות. המספר ניתן לעריכה גם מעבר לטווח הסליידר.";
+}
+function nextCutWord() {
+  const segments = [...cutRows.keys()];
+  if (!segments.length) return;
+  const next = (segments.indexOf(activeCutSegment) + 1) % segments.length;
+  activeCutSegment = segments[next];
+  const row = cutRows.get(activeCutSegment);
+  row.row.scrollIntoView?.({block:"nearest", behavior:"smooth"}); row.play.focus?.();
+}
+async function loadCutProposals() {
+  try {
+    const response = await fetch("/api/cut-edits", {cache:"no-store"}); if (!response.ok) return;
+    const result = await response.json();
+    for (const entry of result.entries ?? []) {
+      const key = entry.caseId + ":" + entry.candidateSha256 + ":" + entry.clipSha256;
+      savedCutProposals.set(key, entry);
+    }
+    for (const [key, entry] of savedCutProposals) {
+      if (!cutDrafts.has(key)) {
+        if (!drafts.has(key)) drafts.set(key, entry.note ?? "");
+        cutDrafts.set(key, Object.fromEntries(entry.timingEdits.map(word => [word.segment, {startMs:word.startMs, endMs:word.endMs}])));
+        for (const word of entry.timingEdits) if (entry.listenEvidenceReportedByBrowser?.heardEditedSegments.includes(word.segment)) cutHearing.add(key + ":" + word.segment + ":" + word.startMs + ":" + word.endMs);
+      }
+    }
+  } catch { /* Local drafts remain usable when fetching saved proposals fails. */ }
+}
+async function saveCutEdits() {
+  const item = caseNow(); if (!item || savingCuts || $("save-cut-edits").disabled) return;
+  rememberDraft(); stop(); savingCuts = true; updateCutEditorStatus();
+  try {
+    const response = await fetch("/api/cut-edits", {method:"POST", headers:{"Content-Type":"application/json", "X-Review-Token":token},
+      body:JSON.stringify({caseId:item.id, candidateSha256:item.candidateSha256, clipSha256:item.clipSha256,
+        timingEdits:timingEdits(item), heardEditedSegments:changedCuts(item).filter(word => cutHearing.has(cutKey(item, word))).map(word => word.segment),
+        heardSegments:[...heardNow().segments], note:$("note").value})});
+    const result = await response.json(); if (!response.ok) throw new Error(result.error ?? "לא ניתן לשמור את התיקון");
+    savedCutProposals.set(stateKey(item), result); persistCutProgress();
+    $("status").textContent = "התיקון נשמר לבדיקת תקינות לפני הפרסום.";
+    if (index < cases.length - 1) { historicalCase = null; keepPreviousVersion = false; index++; render(); }
+  } catch (error) { $("status").textContent = "התיקון לא נשמר: " + error.message; }
+  finally { savingCuts = false; updateEvidence(); void refreshQueue(); }
+}
+
 function persistProgress() {
   if (typeof localStorage === "undefined") return;
   try {
@@ -125,7 +373,7 @@ function updateVersionControls() {
   $("previous-version").disabled = saving;
 }
 function openUpdatedVersion() {
-  if (!historicalCase || saving) return;
+  if (!historicalCase || saving || savingCuts) return;
   rememberDraft();
   historicalCase = null;
   keepPreviousVersion = false;
@@ -133,7 +381,7 @@ function openUpdatedVersion() {
   $("queue-updates").textContent = "מוצגים החיתוכים המעודכנים. הטיוטה לגרסה הקודמת נשמרה בנפרד.";
 }
 function openPreviousVersion() {
-  if (saving) return;
+  if (saving || savingCuts) return;
   const previous = previousVersion(caseNow());
   if (!previous) return;
   rememberDraft();
@@ -143,7 +391,7 @@ function openPreviousVersion() {
   $("queue-updates").textContent = "מוצגת גרסה קודמת. התשובה עליה אינה מאשרת את החיתוכים המעודכנים.";
 }
 function canOpenUpdatedVersion(item, rendered) {
-  if (saving || playbackActive || currentSource || cancelPlayback || document.activeElement === $("note")) return false;
+  if (saving || savingCuts || changedCuts(item).length || document.activeElement?.dataset?.cutControl === "true" || playbackActive || currentSource || cancelPlayback || document.activeElement === $("note")) return false;
   const saved = decisionFor(item);
   const note = rendered ? $("note").value : drafts.get(stateKey(item)) ?? saved?.note ?? "";
   if (note !== (saved?.note ?? "")) return false;
@@ -162,23 +410,28 @@ function stop() {
   document.querySelectorAll(".word.active").forEach(el => el.classList.remove("active"));
 }
 function updateEvidence() {
+  if (!caseNow()) return;
   const heard = heardNow();
-  $("listening").textContent = heard.segments.size + "/" + caseNow().words.length + " חיתוכים נשמעו" + (heard.verse ? " · הפסוק נשמע" : "");
+  $("listening").textContent = caseNow().words.filter(word => cutHeard(caseNow(), word)).length + "/" + caseNow().words.length + " חיתוכים נשמעו" + (heard.verse ? " · הפסוק נשמע" : "");
   if (caseNow().reusableHeardSegments?.length) $("listening").textContent += " · " + caseNow().reusableHeardSegments.length + " חיתוכים ללא שינוי מההאזנה הקודמת";
   const remaining = remainingWords();
   if (remaining.length) $("listening").textContent += " · להשלמה: " + remaining.map(word => word.text).join(", ");
   $("remaining").disabled = saving || remaining.length === 0;
   for (const word of caseNow().words) {
-    document.querySelector('[data-segment="' + word.segment + '"]')?.classList.toggle("pending", !heard.segments.has(word.segment));
+    document.querySelector('[data-segment="' + word.segment + '"]')?.classList.toggle("pending", !cutHeard(caseNow(), word));
+    document.querySelector('[data-segment="' + word.segment + '"]')?.classList.toggle("heard", !!cutHeard(caseNow(), word));
   }
-  $("good").disabled = saving || remaining.length !== 0;
+  $("good").disabled = saving || savingCuts || changedCuts(caseNow()).length !== 0 || remaining.length !== 0;
+  updateCutEditorStatus();
   persistProgress();
 }
 function render() {
   stop();
   const item = caseNow();
   if (!item) {
-    $("reference").textContent = "אין עדיין פסוקים מוכנים";
+    $("reference").textContent = "אין כרגע פסוקים לטיפול";
+    $("progress").textContent = "כל התשובות נשמרו";
+    $("words").replaceChildren(); $("editor-rows").replaceChildren(); cutRows.clear(); $("timing-editor").hidden = true;
     document.querySelectorAll("button").forEach(button => { button.disabled = true; });
     return;
   }
@@ -211,6 +464,7 @@ function render() {
   $("previous").disabled = index === 0;
   $("next").disabled = index === cases.length - 1;
   $("status").textContent = decisionFor(item) ? "תשובה נשמרה: " + {good:"החיתוכים טובים",problem:"יש בעיה",skip:"דילוג"}[decisionFor(item).verdict] : "";
+  renderCutEditor();
   updateEvidence();
 }
 async function getBuffer(item) {
@@ -259,6 +513,9 @@ function playSlice(buffer, item, start, end, request, word) {
 async function play(mode, selected) {
   stop();
   const request = generation, item = caseNow();
+  if (["cuts","word","remaining","edits","word-context"].includes(mode) && cutErrors(item).size) {
+    $("status").textContent = "יש לתקן את הזמנים המסומנים לפני השמעה."; return;
+  }
   playbackActive = true;
   $("status").textContent = "טוען הקלטה...";
   try {
@@ -267,22 +524,30 @@ async function play(mode, selected) {
     const buffer = await getBuffer(item);
     if (request !== generation) return;
     $("status").textContent = mode === "cuts" ? "מנגנים כל מילה בנפרד..." : "מנגן...";
-    if (mode === "cuts" || mode === "word" || mode === "remaining") {
-      const words = mode === "remaining" ? remainingWords() : mode === "cuts" ? item.words : [selected];
+    if (["cuts", "word", "remaining", "edits"].includes(mode)) {
+      const originals = mode === "edits" ? item.words.filter(word => cutChanged(item, word) && !cutHeard(item, word))
+        : mode === "remaining" ? remainingWords() : mode === "cuts" ? item.words : [selected];
+      const words = originals.map(word => workingWord(item, word));
       for (const word of words) {
         if (!await playSlice(buffer,item,word.startMs,word.endMs,request,word)) return;
-        evidence.get(stateKey(item)).segments.add(word.segment);
-        evidence.get(stateKey(item)).fresh.add(word.segment);
+        const original = item.words.find(row => row.segment === word.segment);
+        if (cutChanged(item, original)) cutHearing.add(cutKey(item, word));
+        else {
+          evidence.get(stateKey(item)).segments.add(word.segment);
+          evidence.get(stateKey(item)).fresh.add(word.segment);
+        }
+        persistCutProgress();
         document.querySelector('[data-segment="' + word.segment + '"]')?.classList.add("heard");
         updateEvidence();
         if (mode !== "word") await new Promise(resolve => setTimeout(resolve,160));
         if (request !== generation) return;
       }
     } else {
-      const start = mode === "context" ? item.clipStartMs : item.words[0].startMs;
-      const end = mode === "context" ? item.clipEndMs : item.words.at(-1).endMs;
+      const selectedCut = selected ? workingWord(item, selected) : null;
+      const start = mode === "word-context" ? Math.max(item.clipStartMs, selectedCut.startMs - 120) : mode === "context" ? item.clipStartMs : workingWord(item, item.words[0]).startMs;
+      const end = mode === "word-context" ? Math.min(item.clipEndMs, selectedCut.endMs + 120) : mode === "context" ? item.clipEndMs : workingWord(item, item.words.at(-1)).endMs;
       if (!await playSlice(buffer,item,start,end,request)) return;
-      if (mode === "verse") evidence.get(stateKey(item)).verse = true;
+      if (mode === "verse" && !changedCuts(item).length) evidence.get(stateKey(item)).verse = true;
       updateEvidence();
     }
     if (request === generation) $("status").textContent = "אפשר להשמיע שוב או לשמור תשובה.";
@@ -293,7 +558,8 @@ async function play(mode, selected) {
   }
 }
 async function save(verdict) {
-  if (saving || !caseNow()) return;
+  if (saving || savingCuts || !caseNow()) return;
+  if (verdict === "good" && changedCuts(caseNow()).length) { $("status").textContent = "יש לשמור את התיקון באמצעות כפתור שמירת התיקון."; return; }
   rememberDraft();
   stop(); saving = true; updateEvidence();
   document.querySelectorAll(".actions button,.nav button").forEach(button => { button.disabled = true; });
@@ -325,6 +591,10 @@ async function save(verdict) {
     $("previous").disabled = index === 0; $("next").disabled = index === cases.length - 1;
   }
 }
+$("all-cut-words").onclick = () => { showAllCutWords = !showAllCutWords; renderCutEditor(); };
+$("next-cut-word").onclick = nextCutWord;
+$("play-cut-edits").onclick = () => void play("edits");
+$("save-cut-edits").onclick = () => void saveCutEdits();
 $("updated-version").onclick = openUpdatedVersion;
 $("previous-version").onclick = openPreviousVersion;
 $("verse").onclick = () => void play("verse");
@@ -335,8 +605,8 @@ $("stop").onclick = stop;
 $("good").onclick = () => void save("good");
 $("problem").onclick = () => void save("problem");
 $("skip").onclick = () => void save("skip");
-$("previous").onclick = () => { if (!saving && index > 0) { rememberDraft(); historicalCase = null; keepPreviousVersion = false; index--; render(); } };
-$("next").onclick = () => { if (!saving && index < cases.length - 1) { rememberDraft(); historicalCase = null; keepPreviousVersion = false; index++; render(); } };
+$("previous").onclick = () => { if (!saving && !savingCuts && index > 0) { rememberDraft(); historicalCase = null; keepPreviousVersion = false; index--; render(); } };
+$("next").onclick = () => { if (!saving && !savingCuts && index < cases.length - 1) { rememberDraft(); historicalCase = null; keepPreviousVersion = false; index++; render(); } };
 async function updateRecovery() {
   try {
     const response = await fetch("/api/recovery");
@@ -347,12 +617,13 @@ async function updateRecovery() {
   } catch {}
 }
 async function refreshQueue(initial = false) {
-  if (refreshing) return;
+  if (refreshing || saving || savingCuts) return;
   refreshing = true;
   try {
     const response = await fetch("/api/queue", {cache:"no-store"});
     if (!response.ok) throw new Error("לא ניתן לעדכן את רשימת הבדיקה. הטיוטה הנוכחית נשארה.");
     const result = await response.json();
+    if (saving || savingCuts) return; // Never move the selected case while a save is pending.
     const rendered = caseNow();
     const active = rendered ? stateKey(rendered) : restoredActive;
     if (rendered) rememberDraft();
@@ -367,6 +638,7 @@ async function refreshQueue(initial = false) {
     const currentIndex = incoming.findIndex(item => stateKey(item) === active);
     const replacementIndex = incoming.findIndex(item => item.id === previous?.id);
     const wasEmpty = cases.length === 0;
+    const removedActive = !!rendered && currentIndex < 0 && replacementIndex < 0;
     let changedVersion = false;
     if (currentIndex >= 0) {
       index = currentIndex;
@@ -384,7 +656,7 @@ async function refreshQueue(initial = false) {
     // Only current candidates belong to navigation and saved-answer totals.
     // Older drafts remain addressable by their exact candidate key, not as extra work.
     cases = incoming;
-    if (initial || wasEmpty || changedVersion) render();
+    if (initial || wasEmpty || changedVersion || removedActive) render();
     else updateProgress(); // Preserve active playback and the note while polling.
     if (changedVersion) $("queue-updates").textContent =
       "מוצגים החיתוכים המעודכנים. הטיוטה וההאזנה לגרסה הקודמת נשמרו בנפרד.";
@@ -397,14 +669,15 @@ async function refreshQueue(initial = false) {
   } catch (error) { $("queue-updates").textContent = error.message; }
   finally { refreshing = false; }
 }
-$("note").oninput = rememberDraft;
+$("note").oninput = () => { rememberDraft(); updateCutEditorStatus(); };
 setInterval(() => void refreshQueue(), 5000);
 setInterval(() => void updateRecovery(), 5000);
 void updateRecovery();
 document.addEventListener("visibilitychange", () => { if (document.hidden) stop(); });
 window.addEventListener("pagehide", stop);
+restoreCutProgress();
 restoreProgress();
-void refreshQueue(true);
+void loadCutProposals().then(() => refreshQueue(true));
 </script>
 </body>
 </html>
