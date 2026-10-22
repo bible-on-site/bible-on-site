@@ -30,12 +30,10 @@ class ConcernWorkflowTests(unittest.TestCase):
         write_json(self.plan, {"targets": []})
         self.audio.write_bytes(b"original immutable source fixture")
         self.publication = self.root / "publication.sqlite"
-        with (
-            closing(sqlite3.connect(self.publication)) as db,
-            db,
-        ):
-            db.execute("CREATE TABLE recitation_track (perek_id INTEGER, alignment_status TEXT)")
-            db.executemany("INSERT INTO recitation_track VALUES (?,?)", [(1, "needs_review"), (2, "ready")])
+        with closing(sqlite3.connect(self.publication)) as db:
+            with db:
+                db.execute("CREATE TABLE recitation_track (perek_id INTEGER, alignment_status TEXT)")
+                db.executemany("INSERT INTO recitation_track VALUES (?,?)", [(1, "needs_review"), (2, "ready")])
         self.review = ReviewDatabase(self.root / "review.sqlite")
         self.snapshot = self.root / "queue-snapshot.json"
         write_json(self.snapshot, {"version": 1, "publicationStatus": "held",
@@ -149,12 +147,10 @@ class ConcernWorkflowTests(unittest.TestCase):
             self.assertEqual(digest_file(Path(packet["path"])), packet["sha256"])
         latest = feedback["wordReviews"][-1]
         verdict = latest["verdict"]
-        with (
-            closing(sqlite3.connect(preview)) as db,
-            db,
-        ):
-            db.execute("UPDATE recitation_track SET alignment_status=? WHERE perek_id=1",
-                       ("ready" if verdict == "good" else "needs_review",))
+        with closing(sqlite3.connect(preview)) as db:
+            with db:
+                db.execute("UPDATE recitation_track SET alignment_status=? WHERE perek_id=1",
+                           ("ready" if verdict == "good" else "needs_review",))
         return {"accepted": [1] if verdict == "good" else [], "updatedReviews": [],
                 "withdrawn": [] if verdict == "good" else [1], "held": [], "alreadyAccepted": [], "words": 1}
 
@@ -414,11 +410,9 @@ class ConcernWorkflowTests(unittest.TestCase):
         def import_with_transient_failure(*arguments):
             attempts.append(arguments)
             if len(attempts) == 1:
-                with (
-                    closing(sqlite3.connect(arguments[-1])) as preview,
-                    preview,
-                ):
-                    preview.execute("UPDATE recitation_track SET alignment_status='ready' WHERE perek_id=1")
+                with closing(sqlite3.connect(arguments[-1])) as preview:
+                    with preview:
+                        preview.execute("UPDATE recitation_track SET alignment_status='ready' WHERE perek_id=1")
                 raise OSError("transient local result copy failure")
             self.assertEqual(Path(arguments[-1]).read_bytes(), before)
             return self.import_results(*arguments)

@@ -230,20 +230,18 @@ class ActionDatabase:
             if tables - {"action_definition", "action_response", "action_outcome", "sqlite_sequence"}:
                 raise ValueError("An action store cannot modify an existing review or publication database")
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        with (
-            closing(sqlite3.connect(self.path)) as db,
-            db,
-        ):
-            db.executescript("""
-                CREATE TABLE IF NOT EXISTS action_definition (
-                    task_id TEXT PRIMARY KEY, task_sha TEXT UNIQUE NOT NULL, body TEXT NOT NULL, created_at TEXT NOT NULL);
-                CREATE TABLE IF NOT EXISTS action_response (
-                    submission_id TEXT PRIMARY KEY, request_sha TEXT NOT NULL, task_id TEXT NOT NULL,
-                    body TEXT NOT NULL, saved_at TEXT NOT NULL);
-                CREATE TABLE IF NOT EXISTS action_outcome (
-                    seq INTEGER PRIMARY KEY AUTOINCREMENT, submission_id TEXT NOT NULL, task_id TEXT NOT NULL,
-                    state TEXT NOT NULL, outcome_sha TEXT UNIQUE NOT NULL, body TEXT NOT NULL, recorded_at TEXT NOT NULL);
-            """)
+        with closing(sqlite3.connect(self.path)) as db:
+            with db:
+                db.executescript("""
+                    CREATE TABLE IF NOT EXISTS action_definition (
+                        task_id TEXT PRIMARY KEY, task_sha TEXT UNIQUE NOT NULL, body TEXT NOT NULL, created_at TEXT NOT NULL);
+                    CREATE TABLE IF NOT EXISTS action_response (
+                        submission_id TEXT PRIMARY KEY, request_sha TEXT NOT NULL, task_id TEXT NOT NULL,
+                        body TEXT NOT NULL, saved_at TEXT NOT NULL);
+                    CREATE TABLE IF NOT EXISTS action_outcome (
+                        seq INTEGER PRIMARY KEY AUTOINCREMENT, submission_id TEXT NOT NULL, task_id TEXT NOT NULL,
+                        state TEXT NOT NULL, outcome_sha TEXT UNIQUE NOT NULL, body TEXT NOT NULL, recorded_at TEXT NOT NULL);
+                """)
 
     def seed(self, definitions):
         """Append immutable task definitions, checking each allowlisted original exactly once."""
@@ -273,21 +271,19 @@ class ActionDatabase:
                     playback_bytes(task)
                     playbacks.add(key)
         inserted = 0
-        with (
-            closing(sqlite3.connect(self.path)) as db,
-            db,
-        ):
-            db.execute("BEGIN IMMEDIATE")
-            for task in checked:
-                previous = db.execute("SELECT body FROM action_definition WHERE task_id=?", (task["taskId"],)).fetchone()
-                body = json.dumps(task, ensure_ascii=False)
-                if previous:
-                    if json.loads(previous[0]) != task:
-                        raise ValueError("An immutable action definition was changed")
-                    continue
-                db.execute("INSERT INTO action_definition VALUES (?,?,?,?)",
-                           (task["taskId"], task["taskSha256"], body, _now()))
-                inserted += 1
+        with closing(sqlite3.connect(self.path)) as db:
+            with db:
+                db.execute("BEGIN IMMEDIATE")
+                for task in checked:
+                    previous = db.execute("SELECT body FROM action_definition WHERE task_id=?", (task["taskId"],)).fetchone()
+                    body = json.dumps(task, ensure_ascii=False)
+                    if previous:
+                        if json.loads(previous[0]) != task:
+                            raise ValueError("An immutable action definition was changed")
+                        continue
+                    db.execute("INSERT INTO action_definition VALUES (?,?,?,?)",
+                               (task["taskId"], task["taskSha256"], body, _now()))
+                    inserted += 1
         return inserted
 
     def task(self, task_id):
@@ -316,29 +312,27 @@ class ActionDatabase:
                 or not re.fullmatch(IDENTIFIER, payload["taskId"])):
             raise ValueError("Exact action and submission identities are required")
         request_sha = digest_json(payload)
-        with (
-            closing(sqlite3.connect(self.path)) as db,
-            db,
-        ):
-            db.execute("BEGIN IMMEDIATE")
-            old = db.execute("SELECT request_sha,body FROM action_response WHERE submission_id=?",
-                             (payload.get("submissionId"),)).fetchone()
-            if old:
-                if old[0] != request_sha:
-                    raise ValueError("Submission identity already belongs to another action response")
-                return json.loads(old[1])
-            found = db.execute("SELECT body FROM action_definition WHERE task_id=?",
-                               (payload.get("taskId"),)).fetchone()
-            if not found:
-                raise ValueError("Unknown source action")
-            task = json.loads(found[0])
-            if payload.get("kind") == "locate-source-range" and next(
-                    row["state"] for row in self.public_view()["tasks"] if row["taskId"] == task["taskId"]) == "resolved":
-                raise ValueError("This action already has a validated genuine GOOD chapter")
-            row = validate_response(task, payload)
-            db.execute("INSERT INTO action_response VALUES (?,?,?,?,?)",
-                       (row["submissionId"], request_sha, row["taskId"],
-                        json.dumps(row, ensure_ascii=False), row["savedAt"]))
+        with closing(sqlite3.connect(self.path)) as db:
+            with db:
+                db.execute("BEGIN IMMEDIATE")
+                old = db.execute("SELECT request_sha,body FROM action_response WHERE submission_id=?",
+                                 (payload.get("submissionId"),)).fetchone()
+                if old:
+                    if old[0] != request_sha:
+                        raise ValueError("Submission identity already belongs to another action response")
+                    return json.loads(old[1])
+                found = db.execute("SELECT body FROM action_definition WHERE task_id=?",
+                                   (payload.get("taskId"),)).fetchone()
+                if not found:
+                    raise ValueError("Unknown source action")
+                task = json.loads(found[0])
+                if payload.get("kind") == "locate-source-range" and next(
+                        row["state"] for row in self.public_view()["tasks"] if row["taskId"] == task["taskId"]) == "resolved":
+                    raise ValueError("This action already has a validated genuine GOOD chapter")
+                row = validate_response(task, payload)
+                db.execute("INSERT INTO action_response VALUES (?,?,?,?,?)",
+                           (row["submissionId"], request_sha, row["taskId"],
+                            json.dumps(row, ensure_ascii=False), row["savedAt"]))
         return row
 
     def responses(self):
@@ -372,18 +366,16 @@ class ActionDatabase:
         event = {"submissionId": submission_id, "taskId": task_id, "state": state,
                  "details": deepcopy(details), "actor": actor}
         sha = digest_json(event)
-        with (
-            closing(sqlite3.connect(self.path)) as db,
-            db,
-        ):
-            db.execute("BEGIN IMMEDIATE")
-            old = db.execute("SELECT body FROM action_outcome WHERE outcome_sha=?", (sha,)).fetchone()
-            if old:
-                return json.loads(old[0])
-            event.update(outcomeSha256=sha, recordedAt=_now())
-            db.execute("INSERT INTO action_outcome(submission_id,task_id,state,outcome_sha,body,recorded_at) "
-                       "VALUES (?,?,?,?,?,?)",
-                       (submission_id, task_id, state, sha, json.dumps(event, ensure_ascii=False), event["recordedAt"]))
+        with closing(sqlite3.connect(self.path)) as db:
+            with db:
+                db.execute("BEGIN IMMEDIATE")
+                old = db.execute("SELECT body FROM action_outcome WHERE outcome_sha=?", (sha,)).fetchone()
+                if old:
+                    return json.loads(old[0])
+                event.update(outcomeSha256=sha, recordedAt=_now())
+                db.execute("INSERT INTO action_outcome(submission_id,task_id,state,outcome_sha,body,recorded_at) "
+                           "VALUES (?,?,?,?,?,?)",
+                           (submission_id, task_id, state, sha, json.dumps(event, ensure_ascii=False), event["recordedAt"]))
         return event
 
     def record_outcome(self, submissionId, state, details):

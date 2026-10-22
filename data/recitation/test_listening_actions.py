@@ -263,12 +263,10 @@ class ActionStoreTests(unittest.TestCase):
 
     def test_action_store_refuses_original_review_schema_without_changing_bytes(self):
         original = self.root / "original-listening.sqlite"
-        with (
-            closing(sqlite3.connect(original)) as db,
-            db,
-        ):
-            db.execute("CREATE TABLE candidate (body TEXT)")
-            db.execute("INSERT INTO candidate VALUES ('original actual row')")
+        with closing(sqlite3.connect(original)) as db:
+            with db:
+                db.execute("CREATE TABLE candidate (body TEXT)")
+                db.execute("INSERT INTO candidate VALUES ('original actual row')")
         before = original.read_bytes()
         with self.assertRaisesRegex(ValueError, "existing review"):
             ActionDatabase(original)

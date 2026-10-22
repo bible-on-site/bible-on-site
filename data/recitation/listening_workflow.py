@@ -288,15 +288,16 @@ class ConcernWorkflow:
             if row["kind"] != "source-remediation" or holds.get(task_id) == row["responseSha256"]:
                 continue
             task = self.actions.task(task_id)
-            with (closing(sqlite3.connect(self.result)) as database, database):
-                found = database.execute("SELECT alignment_status FROM recitation_track WHERE perek_id=?",
-                                         (task["perekId"],)).fetchone()
-                if found is None:
-                    raise ValueError("Source action refers to an unrecorded chapter")
-                if found[0] == "ready":
-                    database.execute("UPDATE recitation_track SET alignment_status='needs_review' WHERE perek_id=?",
-                                     (task["perekId"],))
-                    changed = True
+            with closing(sqlite3.connect(self.result)) as database:
+                with database:
+                    found = database.execute("SELECT alignment_status FROM recitation_track WHERE perek_id=?",
+                                             (task["perekId"],)).fetchone()
+                    if found is None:
+                        raise ValueError("Source action refers to an unrecorded chapter")
+                    if found[0] == "ready":
+                        database.execute("UPDATE recitation_track SET alignment_status='needs_review' WHERE perek_id=?",
+                                         (task["perekId"],))
+                        changed = True
             holds[task_id] = row["responseSha256"]
         if changed:
             self.ledger["resultSha256"] = digest_file(self.result)
