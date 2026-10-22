@@ -27,8 +27,8 @@ export function AppSection() {
 								<Image
 									src={platform.icon}
 									alt={platform.description}
-									width={24}
-									height={24}
+									width={platform.iconWidth ?? 24}
+									height={platform.iconHeight ?? 24}
 								/>
 								<span>{platform.name}</span>
 							</a>
@@ -44,8 +44,8 @@ export function AppSection() {
 							<Image
 								src={platform.icon}
 								alt={platform.description}
-								width={24}
-								height={24}
+								width={platform.iconWidth ?? 24}
+								height={platform.iconHeight ?? 24}
 							/>
 							<span>{platform.name}</span>
 						</span>

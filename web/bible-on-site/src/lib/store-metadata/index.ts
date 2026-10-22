@@ -137,14 +137,16 @@ export function parseWindowsCatalog(json: unknown): {
 		(product?.DisplaySkuAvailabilities ?? []) as Array<{
 			Sku?: { Properties?: { Packages?: Array<{ Version?: string }> } };
 		}>
-	).flatMap((sku) => sku.Sku?.Properties?.Packages ?? [])
+	)
+		.flatMap((sku) => sku.Sku?.Properties?.Packages ?? [])
 		.map((pkg) => pkg.Version)
-		.filter(
-			(v): v is string => typeof v === "string" && /^[0-9]+$/.test(v),
-		)
+		.filter((v): v is string => typeof v === "string" && /^[0-9]+$/.test(v))
 		.map((v) => BigInt(v));
 	const max = packed.length
-		? packed.reduce((a, b) => (b > a ? b : a))
+		? packed.reduce((a, b) =>
+				// biome-ignore lint: Math.max rejects bigint and Number conversion loses packed version precision.
+				b > a ? b : a,
+			)
 		: null;
 	const modified = product?.LastModifiedDate;
 	return {

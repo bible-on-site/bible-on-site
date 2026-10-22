@@ -21,11 +21,11 @@ describe("parsePlayStoreHtml", () => {
 	});
 	it("extracts a rating only when one is published", () => {
 		expect(
-			parsePlayStoreHtml(PLAY_SNIPPET + 'aria-label="Rated 4.7 stars"').rating,
+			parsePlayStoreHtml(`${PLAY_SNIPPET}aria-label="Rated 4.7 stars"`).rating,
 		).toBe(4.7);
 		expect(
 			parsePlayStoreHtml(
-				PLAY_SNIPPET + 'aria-label="Rated 4.9 stars out of five stars"',
+				`${PLAY_SNIPPET}aria-label="Rated 4.9 stars out of five stars"`,
 			).rating,
 		).toBe(4.9);
 		expect(parsePlayStoreHtml(PLAY_SNIPPET).rating).toBeNull();
