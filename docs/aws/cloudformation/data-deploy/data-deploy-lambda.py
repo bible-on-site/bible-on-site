@@ -18,8 +18,29 @@ Deployment:
 import json
 import os
 import re
+from urllib.parse import unquote, urlparse
 import boto3
 import pymysql
+
+
+def db_credentials():
+    """Parse host/port/user/password/database from the DB_URL env var.
+
+    DB_URL (mysql://user:pass@host:port/db) is injected into the Lambda
+    environment by the data deploy CD step, so the function never calls
+    SSM from inside the VPC.
+    """
+    db_url = os.environ.get("DB_URL", "")
+    parts = urlparse(db_url)
+    if parts.scheme != "mysql" or not parts.hostname or not parts.username:
+        raise ValueError("DB_URL must be a mysql://user:pass@host:port/db URL")
+    return {
+        "host": parts.hostname,
+        "port": parts.port or 3306,
+        "user": unquote(parts.username),
+        "password": unquote(parts.password or ""),
+        "database": parts.path.lstrip("/"),
+    }
 
 
 def handler(event, context):
@@ -32,43 +53,20 @@ def handler(event, context):
     }
 
     The handler:
-    1. Retrieves DB credentials from SSM Parameter Store
+    1. Reads DB credentials from the DB_URL environment variable
     2. Downloads SQL files from S3
     3. Preprocesses SQL to add DROP TABLE/VIEW IF EXISTS
     4. Filters out MySQL dump artifacts
     5. Executes statements against RDS MySQL
     """
-    ssm = boto3.client("ssm")
     s3 = boto3.client("s3")
 
     bucket = os.environ.get("S3_BUCKET", "bible-on-site-data-deploy")
-    ssm_prefix = os.environ.get("SSM_PREFIX", "bible-on-site-tanah-db")
-
-    # Get database credentials from SSM
-    params = ssm.get_parameters(
-        Names=[
-            f"{ssm_prefix}-host",
-            f"{ssm_prefix}-port",
-            f"{ssm_prefix}-name",
-            f"{ssm_prefix}-username",
-            f"{ssm_prefix}-url",
-        ],
-        WithDecryption=True,
-    )
-
-    param_dict = {p["Name"].split("-")[-1]: p["Value"] for p in params["Parameters"]}
-
-    # Extract password from URL (format: mysql://user:pass@host:port/db)
-    db_url = param_dict.get("url", "")
-    password = db_url.split(":")[2].split("@")[0] if "://" in db_url else ""
+    credentials = db_credentials()
 
     # Connect to database
     connection = pymysql.connect(
-        host=param_dict["host"],
-        port=int(param_dict.get("port", 3306)),
-        user=param_dict["username"],
-        password=password,
-        database=param_dict["name"],
+        **credentials,
         connect_timeout=30,
         autocommit=True,
     )

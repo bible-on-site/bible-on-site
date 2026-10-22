@@ -1,0 +1,254 @@
+# ============================================================================
+# ⚠️ DISCLAIMER: This CloudFormation template has NEVER been tested or deployed.
+# It is maintained as Infrastructure as Code DOCUMENTATION ONLY to reflect the
+# intended AWS configuration. Do not assume it will work without thorough testing.
+# ============================================================================
+
+AWSTemplateFormatVersion: "2010-09-09"
+Description: |
+  CloudFront distribution (with OAC) in front of the bible-on-site-assets
+  S3 bucket, plus the ACM certificate and bucket policy needed to take the
+  bucket private.
+
+  ⚠️ WARNING: This template is DOCUMENTATION ONLY and has never been deployed.
+
+  Why: CloudFront egress (~$0.085/GB) is cheaper than direct S3 egress from
+  il-central-1 (~$0.117/GB), cached hits stop paying S3 request charges, and
+  the bucket can be locked to OAC-only reads. All assets are immutable or
+  near-immutable: recordings/opus-24k are sha256-keyed, illustrations and
+  media are fixed files; only authors/high-res/{id}.jpg is overwritten in
+  place, so it gets a dedicated short-TTL cache behavior.
+
+  Rollout order (details in the CLI section at the bottom):
+    1. Deploy this stack (certificate needs DNS validation in Route53).
+    2. Replace the bucket's public-read policy with AssetsBucketPolicy.
+    3. Point assets.xn--febl3a.co.il at the distribution (Route53 A/AAAA
+       alias — an explicit record overrides the existing wildcard CNAME).
+    4. Set ASSETS_BASE_URL=https://assets.xn--febl3a.co.il on the website
+       and admin ECS tasks (see ecs-services.yaml) and redeploy.
+    5. Verify deployment audio checks still pass — the distribution forwards
+       Origin so S3 CORS headers (Access-Control-Allow-Origin, audio/mpeg,
+       audio/ogg) reach clients unchanged.
+
+  Sensitive Information Restoration:
+  | Placeholder | Description | Restoration Command |
+  |---|---|---|
+  | `<AWS_ACCOUNT_ID>` | AWS Account ID | `aws sts get-caller-identity --query Account --output text` |
+  | `<HOSTED_ZONE_ID_COIL>` | Hosted zone ID for xn--febl3a.co.il | `aws route53 list-hosted-zones-by-name --dns-name xn--febl3a.co.il --query "HostedZones[0].Id" --output text` |
+
+Parameters:
+  AssetsBucketName:
+    Type: String
+    Default: bible-on-site-assets
+    Description: Existing S3 bucket holding public assets
+
+  AssetsDomain:
+    Type: String
+    Default: assets.xn--febl3a.co.il
+    Description: Custom domain alias for the distribution (assets.תנך.co.il)
+
+  HostedZoneIdCoIl:
+    Type: String
+    Default: <HOSTED_ZONE_ID_COIL>
+    Description: Route53 hosted zone for xn--febl3a.co.il
+
+Resources:
+  # =============================================================================
+  # ACM Certificate (MUST be in us-east-1 for CloudFront)
+  # Deploy this resource in a us-east-1 stack; CloudFront rejects certs in
+  # other regions.
+  # =============================================================================
+  AssetsCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: !Ref AssetsDomain
+      ValidationMethod: DNS
+      DomainValidationOptions:
+        - DomainName: !Ref AssetsDomain
+          HostedZoneId: !Ref HostedZoneIdCoIl
+      Tags:
+        - Key: Project
+          Value: bible-on-site
+
+  # =============================================================================
+  # Origin Access Control — the only reader once the bucket goes private
+  # =============================================================================
+  AssetsOAC:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: bible-on-site-assets-oac
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  # =============================================================================
+  # Short-TTL cache policy for authors/high-res/* (overwritten in place on
+  # admin upload; up to ~5 minutes of staleness is acceptable)
+  # =============================================================================
+  AuthorsCachePolicy:
+    Type: AWS::CloudFront::CachePolicy
+    Properties:
+      CachePolicyConfig:
+        Name: bible-on-site-assets-authors
+        DefaultTTL: 300
+        MaxTTL: 3600
+        MinTTL: 0
+        ParametersInCacheKeyAndForwardedToOrigin:
+          EnableAcceptEncodingGzip: true
+          EnableAcceptEncodingBrotli: true
+          HeadersConfig:
+            HeaderBehavior: none
+          CookiesConfig:
+            CookieBehavior: none
+          QueryStringsConfig:
+            QueryStringBehavior: none
+
+  # =============================================================================
+  # CloudFront Distribution
+  # =============================================================================
+  AssetsDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: Public assets CDN for bible-on-site (recordings, illustrations, images)
+        # PriceClass_All keeps the Tel Aviv edge location — the audience is
+        # mostly Israeli. Downgrading to PriceClass_100 would route Israeli
+        # users through Europe for marginal savings.
+        PriceClass: PriceClass_All
+        HttpVersion: http2
+        IPV6Enabled: true
+        Aliases:
+          - !Ref AssetsDomain
+        ViewerCertificate:
+          AcmCertificateArn: !Ref AssetsCertificate
+          SslSupportMethod: sni-only
+          MinimumProtocolVersion: TLSv1.2_2021
+        Origins:
+          - Id: s3-assets
+            DomainName: !Sub "${AssetsBucketName}.s3.il-central-1.amazonaws.com"
+            S3OriginConfig:
+              OriginAccessIdentity: "" # unused with OAC
+            OriginAccessControlId: !GetAtt AssetsOAC.Id
+        DefaultCacheBehavior:
+          TargetOriginId: s3-assets
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: [GET, HEAD, OPTIONS]
+          CachedMethods: [GET, HEAD, OPTIONS]
+          Compress: true
+          # Managed-CachingOptimized (24h default TTL; immutable assets)
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+          # Managed-CORS-S3Origin: forwards Origin + preflight headers so S3's
+          # CORS response (required by deployment audio verification) is
+          # returned to browsers.
+          OriginRequestPolicyId: 88a5eaf4-2fd4-4709-b370-b4c650ea3fcf
+        CacheBehaviors:
+          - PathPattern: authors/*
+            TargetOriginId: s3-assets
+            ViewerProtocolPolicy: redirect-to-https
+            AllowedMethods: [GET, HEAD, OPTIONS]
+            CachedMethods: [GET, HEAD, OPTIONS]
+            Compress: true
+            CachePolicyId: !Ref AuthorsCachePolicy
+        Tags:
+          - Key: Project
+            Value: bible-on-site
+
+  # =============================================================================
+  # Bucket policy: read access only through this distribution
+  # =============================================================================
+  # Authenticated SigV4 callers (admin ECS task PutObject/DeleteObject,
+  # presigned browser uploads, deployment tooling GetObject) are unaffected —
+  # they are IAM-authorized, not anonymous. What this removes is anonymous
+  # public read.
+  # Apply with:
+  #   aws s3api put-bucket-policy --bucket bible-on-site-assets \
+  #     --policy file://assets-bucket-policy.json --region il-central-1
+  # and remove any pre-existing "Allow public s3:GetObject" statement.
+  # (Policy JSON below is for reference; attach it as an AWS::S3::BucketPolicy
+  # resource only if this stack owns the bucket policy end-to-end.)
+  AssetsBucketPolicyDocument:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref AssetsBucketName
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowCloudFrontServicePrincipalReadOnly
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub "arn:aws:s3:::${AssetsBucketName}/*"
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub "arn:aws:cloudfront::<AWS_ACCOUNT_ID>:distribution/${AssetsDistribution}"
+
+  # =============================================================================
+  # Route53 alias records (explicit records override the wildcard CNAME
+  # *.xn--febl3a.co.il that currently points subdomains at the nginx box)
+  # =============================================================================
+  AssetsAliasA:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneIdCoIl
+      Name: !Ref AssetsDomain
+      Type: A
+      AliasTarget:
+        HostedZoneId: Z2FDTNDATAQYW2 # CloudFront's fixed hosted zone ID
+        DNSName: !GetAtt AssetsDistribution.DomainName
+
+  AssetsAliasAAAA:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneIdCoIl
+      Name: !Ref AssetsDomain
+      Type: AAAA
+      AliasTarget:
+        HostedZoneId: Z2FDTNDATAQYW2
+        DNSName: !GetAtt AssetsDistribution.DomainName
+
+Outputs:
+  DistributionId:
+    Description: CloudFront distribution ID (needed in the bucket policy SourceArn)
+    Value: !Ref AssetsDistribution
+
+  DistributionDomain:
+    Description: Raw CloudFront domain (usable as ASSETS_BASE_URL before DNS cutover)
+    Value: !GetAtt AssetsDistribution.DomainName
+
+  AssetsUrl:
+    Description: Public base URL to set as ASSETS_BASE_URL on the ECS tasks
+    Value: !Sub "https://${AssetsDomain}"
+
+# =============================================================================
+# CLI Commands
+# =============================================================================
+#
+# Create the OAC:
+#   aws cloudfront create-origin-access-control --origin-access-control-config \
+#     Name=bible-on-site-assets-oac,OriginAccessControlOriginType=s3,SigningBehavior=always,SigningProtocol=sigv4
+#
+# Request the certificate (us-east-1, DNS-validated):
+#   aws acm request-certificate --domain-name assets.xn--febl3a.co.il \
+#     --validation-method DNS --region us-east-1
+#   # then create the shown CNAME validation record in the xn--febl3a.co.il zone
+#
+# Create the distribution (or via this template in us-east-1):
+#   aws cloudfront create-distribution --distribution-config file://dist-config.json
+#
+# Lock the bucket to OAC-only reads:
+#   aws s3api put-bucket-policy --bucket bible-on-site-assets \
+#     --policy file://assets-bucket-policy.json --region il-central-1
+#
+# Point DNS at the distribution:
+#   aws route53 change-resource-record-sets --hosted-zone-id <HOSTED_ZONE_ID_COIL> \
+#     --change-batch file://assets-alias.json --region il-central-1
+#
+# Invalidate author portraits after an admin upload (rarely needed — the
+# authors/* behavior already caps staleness at 5 minutes):
+#   aws cloudfront create-invalidation --distribution-id <DIST_ID> \
+#     --paths "/authors/high-res/<id>.jpg"
+#
+# =============================================================================

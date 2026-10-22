@@ -27,7 +27,7 @@ Description: |
   │  EC2: nginx Reverse Proxy                                               │
   │  ─────────────────────────                                              │
   │  Instance: <INSTANCE_ID>                                                │
-  │  Type: t3.small                                                         │
+  │  Type: t3.micro                                                         │
   │  Public IP: <MASKED - see retrieval command>                            │
   │  Private IP: <PRIVATE_IP>                                               │
   │  Security Group: launch-wizard-1 (<SECURITY_GROUP_ID>)                  │
@@ -71,7 +71,7 @@ Description: |
 Parameters:
   InstanceType:
     Type: String
-    Default: t3.small
+    Default: t3.micro # Cost reduction: nginx + certbot for 3 upstreams needs a fraction of t3.small
     AllowedValues:
       - t3.micro
       - t3.small
@@ -107,7 +107,7 @@ Metadata:
   # HARDWARE REQUIREMENTS
   # =========================================================================
   HardwareRequirements:
-    RAM: 2 GB
+    RAM: 1 GB
     CPU: 1 CPU (Premium Intel)
     Storage: 8 GB gp3 EBS
     Connection: SSH key & passkey only
@@ -117,7 +117,7 @@ Metadata:
   # =========================================================================
   CurrentInstance:
     InstanceId: <INSTANCE_ID>
-    InstanceType: t3.small
+    InstanceType: t3.micro
     AMI: <AMI_ID>
     AvailabilityZone: il-central-1c
     SubnetId: <SUBNET_ID>
@@ -389,6 +389,13 @@ Outputs:
 # Start/Stop instance:
 #   aws ec2 start-instances --instance-ids <INSTANCE_ID> --region il-central-1
 #   aws ec2 stop-instances --instance-ids <INSTANCE_ID> --region il-central-1
+#
+# Resize to t3.micro (instance must be stopped; brief site downtime):
+#   aws ec2 stop-instances --instance-ids <INSTANCE_ID> --region il-central-1
+#   aws ec2 wait instance-stopped --instance-ids <INSTANCE_ID> --region il-central-1
+#   aws ec2 modify-instance-attribute --instance-id <INSTANCE_ID> \
+#     --instance-type '{"Value": "t3.micro"}' --region il-central-1
+#   aws ec2 start-instances --instance-ids <INSTANCE_ID> --region il-central-1
 #
 # =============================================================================
 
