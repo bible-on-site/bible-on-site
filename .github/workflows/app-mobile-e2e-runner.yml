@@ -77,8 +77,9 @@ jobs:
       # or restore semantics change so a differently-captured dir cannot load.
       IOS_SIM_STATE_RECIPE: r1
       # Single source for the .NET SDK and workload-set pins (see #1871):
-      # setup-dotnet, the toolchain cache id and the workload install all read
-      # from here so a bump cannot skew the cache keys.
+      # the toolchain cache id and the workload install read from here, and the
+      # Verify step asserts the resolved SDK matches. SDK installation itself
+      # is pinned by the root global.json, which must stay identical to this.
       DOTNET_SDK_VERSION: "10.0.401"
       MAUI_WORKLOAD_SET: "10.0.401.1"
     steps:
@@ -89,7 +90,17 @@ jobs:
         uses: actions/setup-dotnet@v6
         with:
           # Keep aligned with Xcode 27 and the iOS packaging workload; see #1871.
-          dotnet-version: ${{ env.DOTNET_SDK_VERSION }}
+          global-json-file: global.json
+
+      # Regression check (#2542): the muxer must resolve the pinned SDK, not a
+      # newer image-baked one. global.json (rollForward: disable) enforces this
+      # at resolution time; this assertion makes a selection skew fail loudly
+      # here instead of surfacing as an ios-build manifest mismatch on a retry.
+      - name: Verify .NET SDK selection
+        run: |
+          resolved=$(dotnet --version)
+          echo "Resolved .NET SDK: $resolved (pinned: $DOTNET_SDK_VERSION)"
+          test "$resolved" = "$DOTNET_SDK_VERSION"
 
       - name: Prepare managed test-host stack capture
         env:
