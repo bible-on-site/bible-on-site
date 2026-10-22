@@ -15,6 +15,7 @@ import uuid
 
 from alignment import load_chapters, words_for
 from listening_accept import merged_words
+from listening_files import read_state_json, write_state_json
 from listening_machine import build_machine_study
 from listening_queue import ReviewDatabase
 from listening_review import (candidate_digest, chapter_labels, digest_file, digest_json,
@@ -116,10 +117,12 @@ class PreparationWorker:
         self.fingerprint = digest_json({"policy": POLICY, "plan": config["planSha256"],
                                        "canonical": self.canonical_sha})
         self.ledger_path = self.state / "ledger.json"
-        self.ledger = read_json(self.ledger_path) if self.ledger_path.exists() else {
+        ledger_exists = self.ledger_path.exists()
+        self.ledger = read_state_json(self.ledger_path) if ledger_exists else {
             "version": 1, "fingerprint": self.fingerprint, "cases": {}}
         if self.ledger.get("fingerprint") != self.fingerprint:
             raise ValueError("Use a distinct job state for changed source inputs or preparation policy")
+        self._persisted_ledger = self._ledger_body() if ledger_exists else None
         targets = self.plan.get("targets", [])
         keys = [(row["perekId"], row["pasuk"]) for row in targets]
         if len(keys) != len(set(keys)):
@@ -144,8 +147,15 @@ class PreparationWorker:
         self.status["manualSourceInspection"] = False
         self.status["holdReasons"] = dict(Counter(row["reason"] for row in self.ledger["cases"].values()
                                                    if row["state"] == "held"))
-        write_json(self.ledger_path, self.ledger)
-        write_json(self.state / "status.json", self.status)
+        ledger_body = self._ledger_body()
+        if ledger_body != self._persisted_ledger:
+            write_state_json(self.ledger_path, self.ledger)
+            self._persisted_ledger = ledger_body
+        write_state_json(self.state / "status.json", self.status)
+
+    def _ledger_body(self):
+        """Compare ledger content without replacing unchanged durable evidence."""
+        return json.dumps(self.ledger, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
     def _workload(self):
         """Read one atomic workload from the fixed local review endpoint."""
@@ -381,9 +391,19 @@ def main():
     """Run the configured local preparation job and report its durable status."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, required=True)
-    parser.add_argument("--once", action="store_true")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--once", action="store_true")
+    mode.add_argument("--status-only", action="store_true",
+                      help="Read the current status with replacement-safe sharing; never start a worker")
     args = parser.parse_args()
-    worker = PreparationWorker(read_json(args.config))
+    config = read_state_json(args.config)
+    if args.status_only:
+        state = Path(config["stateDirectory"])
+        if not state.is_absolute():
+            raise ValueError("The local preparation status path must be absolute")
+        print(json.dumps(read_state_json(state.resolve() / "status.json"), ensure_ascii=False), flush=True)
+        return
+    worker = PreparationWorker(config)
     print(json.dumps(worker.run(once=args.once), ensure_ascii=False), flush=True)
 
 

@@ -238,7 +238,21 @@ refilling. `--once` prepares and refills once, then returns instead of waiting f
 more capacity. A normal run exits when no prepared cases remain to be queued;
 this does not mean the queued cases are approved or published.
 
-Inspect `stateDirectory/status.json` for counts and reasons, not GPU utilization.
+Inspect counts and reasons through the existing app's
+`GET /api/preparation-status`, or read them without starting a worker:
+
+```powershell
+C:/recitation-preparation/runtime/python.exe -X utf8 C:/recitation-preparation/runtime/listening_prepare.py --config C:/recitation-preparation/config.json --status-only
+```
+
+These readers preserve Windows file-replacement sharing. Do not poll active
+state files with `Get-Content`, `Path.read_text` or an ordinary file handle.
+The task-state writer atomically replaces each flushed JSON generation; an open
+supported reader retains its old generation while subsequent readers see the
+new one. Unchanged ledger content is not rewritten on each status heartbeat.
+This protocol is limited to preparation progress and its resume ledger;
+publication and immutable review-queue writers retain their existing behavior.
+
 The ledger distinguishes `prepared`, `queued`, `excluded` and `held`. Explicit
 holds include `known_original_source_hold`, `chapter_requires_supported_context`,
 `source_or_full_chapter_guard` (with the actual guard detail) and

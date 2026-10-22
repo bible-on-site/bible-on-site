@@ -1,6 +1,6 @@
 """Persistent accumulated review queue and immutable provenance regressions."""
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import closing
+from contextlib import closing, contextmanager
 from copy import deepcopy
 from http.client import HTTPConnection
 import json
@@ -14,6 +14,7 @@ import uuid
 import wave
 
 from listening_accept import verify_review
+from listening_files import open_state_text, write_state_json
 from listening_queue import ReviewDatabase, case_key, main, make_queue_server
 from listening_review import digest_file, digest_json, read_json, validate_decision, write_json
 
@@ -105,7 +106,7 @@ class AccumulatedQueueTests(unittest.TestCase):
                            "error": "private failure in " + str(status_path),
                            "unknown": {"token": private_values[1]}}
         server = self.status_server(status_path)
-        with patch("listening_queue.read_json", return_value=private_payload):
+        with patch("listening_queue.read_state_json", return_value=private_payload):
             code, response = self.get_status(server)
             self.assertEqual(self.get_status(server, headers={"Host": "localhost.invalid"})[0], 403)
         self.assertEqual((code, response), (200, public))
@@ -138,6 +139,33 @@ class AccumulatedQueueTests(unittest.TestCase):
                 self.assertEqual(code, 200)
                 self.assertEqual([case["id"] for case in queue["cases"]], ["1-1"])
         self.assertEqual(self.stored_state(), before)
+
+    def test_status_http_reader_allows_atomic_replacement_while_its_handle_is_open(self):
+        path = self.root / "preparer-status.json"
+        old = {"state": "preparing", "remainingToPrepare": 2}
+        new = {"state": "completed", "remainingToPrepare": 0}
+        write_json(path, old)
+        server = self.status_server(path)
+        read_finished, replaced = threading.Event(), threading.Event()
+
+        @contextmanager
+        def hold_reader(source):
+            with open_state_text(source) as stream:
+                yield stream
+                read_finished.set()
+                if not replaced.wait(timeout=5):
+                    raise AssertionError("The writer could not replace the status while its reader remained open")
+
+        with patch("listening_files.open_state_text", side_effect=hold_reader):
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                response = pool.submit(self.get_status, server)
+                try:
+                    self.assertTrue(read_finished.wait(timeout=5))
+                    write_state_json(path, new)
+                finally:
+                    replaced.set()
+                self.assertEqual(response.result(timeout=5), (200, old))
+        self.assertEqual(self.get_status(server), (200, new))
 
     def test_only_unseen_cannot_replace_an_active_draft_or_hidden_review(self):
         payload = self.typed_case()
