@@ -8,7 +8,7 @@ from pathlib import Path
 
 def _open_windows_state_text(path):
     import ctypes
-    from ctypes import wintypes
+    import ctypes.wintypes as wintypes
     import msvcrt
 
     kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
@@ -57,7 +57,7 @@ def read_state_json(path):
 
 def _replace_windows_state_file(source, target):
     import ctypes
-    from ctypes import wintypes
+    import ctypes.wintypes as wintypes
 
     class RenameInfo(ctypes.Structure):
         _fields_ = [("Flags", wintypes.DWORD), ("RootDirectory", wintypes.HANDLE),

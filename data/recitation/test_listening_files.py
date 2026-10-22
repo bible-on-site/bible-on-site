@@ -65,14 +65,19 @@ class StateFileTests(unittest.TestCase):
 
     def test_context_closes_the_native_descriptor_after_an_exception(self):
         write_state_json(self.path, {"state": "preparing"})
-        with self.assertRaisesRegex(RuntimeError, "reader interrupted"):
+        opened = {}
+
+        def interrupted_read():
             with open_state_text(self.path) as stream:
-                descriptor = stream.fileno()
+                opened.update(stream=stream, descriptor=stream.fileno())
                 self.assertEqual(json.load(stream), {"state": "preparing"})
                 raise RuntimeError("reader interrupted")
-        self.assertTrue(stream.closed)
+
+        with self.assertRaisesRegex(RuntimeError, "reader interrupted"):
+            interrupted_read()
+        self.assertTrue(opened["stream"].closed)
         with self.assertRaises(OSError):
-            os.fstat(descriptor)
+            os.fstat(opened["descriptor"])
         write_state_json(self.path, {"state": "prepared"})
         self.assertEqual(read_state_json(self.path), {"state": "prepared"})
 
