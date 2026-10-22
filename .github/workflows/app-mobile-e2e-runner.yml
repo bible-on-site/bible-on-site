@@ -81,7 +81,11 @@ jobs:
       # Verify step asserts the resolved SDK matches. SDK installation itself
       # is pinned by the root global.json, which must stay identical to this.
       DOTNET_SDK_VERSION: "10.0.402"
-      MAUI_WORKLOAD_SET: "10.0.402.1"
+      # Workload sets are band-scoped (10.0.4xx), not SDK-locked: 10.0.401.1 is
+      # the last set selecting iOS 27.0, which the xcode-27 image's Xcode 27.0
+      # supports. 10.0.402.1 selects iOS 27.1 requiring Xcode 27.1 — deferred
+      # until the runner image ships it; see #2566.
+      MAUI_WORKLOAD_SET: "10.0.401.1"
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -419,7 +423,8 @@ jobs:
 
       - name: Install MAUI workload
         if: inputs.mode != 'prebuilt-run'
-        # 10.0.402.1 selects the iOS 27 SDK, which requires Xcode 27; see #1871.
+        # 10.0.401.1 selects the iOS 27.0 SDK, which requires Xcode 27.0; see #1871.
+        # 10.0.402.1 would pull iOS 27.1 needing Xcode 27.1 — deferred, see #2566.
         run: dotnet workload install ${{ inputs.workload }} --version ${{ env.MAUI_WORKLOAD_SET }}
 
       # Background like the other cache saves: compression and upload stay off
