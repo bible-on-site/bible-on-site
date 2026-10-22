@@ -1,6 +1,8 @@
 import { AnalyticsConsentReset } from "./AnalyticsConsentReset";
 import styles from "./TosSection.module.css";
 
+const PRIVACY_EMAIL = "tanah.site@gmail.com";
+
 export function TosSection() {
 	return (
 		<section id="tos" className={styles.tosSection} data-nosnippet>
@@ -64,7 +66,7 @@ export function TosSection() {
 						<p>
 							צוות תנ&quot;ך על הפרק אחראי למידע הנאסף לצורכי השירות. לפניות בנושא פרטיות, למימוש זכויות עיון ותיקון לפי הדין או לבקשות
 							מחיקת מידע, ניתן לפנות אלינו בכתובת{" "}
-							<a href="mailto:tanah.site@gmail.com">tanah.site@gmail.com</a>.
+							<a href={`mailto:${PRIVACY_EMAIL}`}>{PRIVACY_EMAIL}</a>.
 							נבחן כל בקשה בהתאם לדין ולמידע שניתן לקשר לפונה.
 						</p>
 					</li>

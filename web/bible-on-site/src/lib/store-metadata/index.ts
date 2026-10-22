@@ -144,7 +144,7 @@ export function parseWindowsCatalog(json: unknown): {
 		.map((v) => BigInt(v));
 	const max = packed.length
 		? packed.reduce((a, b) =>
-				// biome-ignore lint/complexity/useMathMinMax: Math.max rejects bigint and Number conversion loses packed version precision.
+				// biome-ignore lint: Math.max rejects bigint and Number conversion loses packed version precision.
 				b > a ? b : a,
 			)
 		: null;
