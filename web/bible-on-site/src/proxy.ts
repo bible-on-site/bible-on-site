@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { indexNowKey } from "@/lib/seo/indexnow";
 import {
 	pediaPathFromLegacy,
 	resolveCategoryRoute,
@@ -52,6 +53,16 @@ export async function proxy(
 		/\.(css|js|png|jpg|svg|ico|woff2?)$/.test(pathname)
 	) {
 		return undefined;
+	}
+
+	// IndexNow ownership proof: serve `/<INDEXNOW_KEY>.txt` at the site root
+	// on whichever host the request arrived on (.co.il and .com alike). The
+	// body is the bare key, as the protocol's file verification expects.
+	const key = indexNowKey();
+	if (key !== null && pathname === `/${key}.txt`) {
+		return new NextResponse(key, {
+			headers: { "content-type": "text/plain; charset=utf-8" },
+		});
 	}
 
 	if (BOT_BLOCKING_ENABLED) {

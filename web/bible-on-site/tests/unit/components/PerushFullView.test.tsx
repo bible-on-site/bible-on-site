@@ -46,6 +46,20 @@ describe("PerushFullView", () => {
 		expect(screen.getAllByText('רש"י').length).toBeGreaterThanOrEqual(1);
 	});
 
+	it("demotes h1 headings inside note content (#2393)", () => {
+		const { container } = render(
+			<PerushFullView
+				perush={{
+					...samplePerush,
+					notes: [{ pasuk: 1, noteIdx: 0, noteContent: "<h1>כותרת</h1>" }],
+				}}
+				onBack={jest.fn()}
+			/>,
+		);
+		expect(container.querySelector("h1")).toBeNull();
+		expect(screen.getByRole("heading", { level: 2, name: "כותרת" })).toBeTruthy();
+	});
+
 	it("renders back button that calls onBack", () => {
 		const onBack = jest.fn();
 		render(<PerushFullView perush={samplePerush} onBack={onBack} />);

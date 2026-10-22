@@ -17,6 +17,28 @@ public sealed class AccessibleTextSectionsTests
     }
 
     [Theory]
+    [InlineData(0, 100, 0, 2)]
+    [InlineData(1000, 100, 9, 3)]
+    [InlineData(1950, 100, 18, 2)]
+    [InlineData(5000, 100, 20, 0)]
+    public void NearViewportExposesOnlySectionsWithinOneViewportOfTheVisibleSlice(
+        double top, double height, int start, int count)
+    {
+        var frames = Enumerable.Range(0, 20).Select(i => (Top: i * 100.0, Bottom: i * 100.0 + 100)).ToArray();
+        Assert.Equal((start, count), AccessibleTextSections.NearViewport(frames, top, height));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    [InlineData(double.NaN)]
+    public void NearViewportExposesNothingWithoutAVisibleSlice(double height)
+    {
+        Assert.Equal((0, 0), AccessibleTextSections.NearViewport([(0, 100)], 0, height));
+        Assert.Equal((0, 0), AccessibleTextSections.NearViewport([], 0, 100));
+    }
+
+    [Theory]
     [InlineData("א\u05b7", 7)]
     [InlineData("👨‍👩‍👧‍👦", 15)]
     [InlineData("\r\n", 3)]
@@ -48,4 +70,17 @@ public sealed class AccessibleTextSectionsTests
     [InlineData(-1)]
     public void InvalidLimitsAreRejected(int limit)
         => Assert.Throws<ArgumentOutOfRangeException>(() => AccessibleTextSections.Split("text", limit));
+
+[Fact]
+    public void GraphemeLongerThanTheLimit_IsKeptIntact()
+    {
+        // "a" + combining acute is one grapheme of two UTF-16 units; a limit of 1
+        // cannot split inside it, so the section expands to the grapheme end.
+        var sections = AccessibleTextSections.Split("ábc", 1);
+
+        sections.Should().Equal(
+            new AccessibleTextSections.Section(0, 2),
+            new AccessibleTextSections.Section(2, 1),
+            new AccessibleTextSections.Section(3, 1));
+    }
 }

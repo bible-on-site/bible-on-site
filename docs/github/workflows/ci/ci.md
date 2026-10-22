@@ -3,7 +3,7 @@
 | Workflow | Purpose |
 |----------|---------|
 | [`ci.yml`](../../../../.github/workflows/ci.yml) | Main CI pipeline (detect, test, package, release, dispatch CD) |
-| [`app-mobile-e2e.yml`](../../../../.github/workflows/app-mobile-e2e.yml) | Native E2E orchestrator — resolves perushim input, fans out Android and shared-build + 3-shard iOS legs, merges iOS results |
+| [`app-mobile-e2e.yml`](../../../../.github/workflows/app-mobile-e2e.yml) | Native E2E orchestrator — resolves perushim input, plans runtime-balanced iOS shards, fans out Android and shared-build + planned iOS legs, merges iOS results |
 | [`app-mobile-e2e-runner.yml`](../../../../.github/workflows/app-mobile-e2e-runner.yml) | Reusable native leg — one Android `build-and-run`, one iOS `build`, or one iOS `prebuilt-run` shard |
 | [`shared-dockerize.yml`](../../../../.github/workflows/shared-dockerize.yml) | Docker image packaging |
 | [`app-package.yml`](../../../../.github/workflows/app-package.yml) | App packaging (MSIX, AAB, IPA + asset packs/payloads) |
@@ -83,7 +83,7 @@ silently green a suite.
 | Admin CI | `admin_ci` | `web/admin` | Lint, typecheck, unit, E2E (coverage), local S3/RustFS checks |
 | App CI | `app_ci` | `app` | Lint, unit, integration (coverage) |
 | App Mobile E2E | `app_mobile_e2e` | `app` | Reusable → [`app-mobile-e2e.yml`](../../../../.github/workflows/app-mobile-e2e.yml) — Appium suite on Android + iOS (see below) |
-| App iOS native audio CI | `app_ios_ci` | `app`+`web` shared decoder | **PR only** — Playwright WebKit/Chromium recitation checks; `skipped` accepted elsewhere |
+| App iOS native audio CI | `app_ios_ci` | `app` decoder (app-owned manifest verified by the website suite) | **PR only** — Playwright WebKit/Chromium recitation checks; `skipped` accepted elsewhere |
 | Bulletin CI | `bulletin_ci` | `web/bulletin` | Lint, fmt, unit (coverage) |
 | Data CI | `data_ci` | `data` | Lint, unit, integration (Sefaria MongoDB image) |
 | Recitation alignment and RustFS | `recitation_ci` | `data`/`website` decoder | Alignment invariants, preprocessor, deploy-routing and RustFS storage tests |
@@ -112,6 +112,10 @@ Selection **enforcement is opt-in**: only the mobile workflow exposes
     blocks the merge. Only a suite whose trigger did not fire may pass untested.
   - `app_ios_ci` (native audio) is the one exception: it runs on PRs only, so
     `skipped` is accepted on other events.
+  - `package_api` / `package_bulletin` / `package_admin` must succeed on every
+    non-`push` event (PR, merge queue, dispatch) where that module's
+    `module_changed` or `ci_changed` fired — the release Docker build is a
+    pre-merge check.
   - `recitation_ci` is required when data/website-affecting changes exist;
     `perushim_data` must succeed when the pipeline changed or a perushim
     baseline is missing.
@@ -134,7 +138,19 @@ Selection **enforcement is opt-in**: only the mobile workflow exposes
 - `website_publish_test_results_to_codecov` uploads the website's JUnit
   results as a Codecov `test_results` report.
 
-### 4. Packaging (Master `push` only)
+### 4. Packaging (Master `push`; API, Bulletin, Admin also pre-merge)
+
+`package_api`, `package_bulletin` and `package_admin` also run on PR, merge-queue and dispatch
+events whenever their module's `module_changed` or `ci_changed` fires. Those
+runs execute the exact release Docker build (same Dockerfile, `web` context,
+`DOCKER_BUILDKIT=0`) but skip every artifact upload, so nothing is released
+or deployed; `cross_module_ci` gates them under the same triggers. Any
+Dockerfile under a module dir counts as `module_changed`; the shared
+`web/.dockerignore` context, `shared-dockerize.yml` (API) and
+`web/api/entities` (compiled into the Bulletin image) count as `ci_changed`.
+Package Website stays master-only: its SSG image build reads the production
+DB (SSM + RDS allow-listing), which PR runs must not access; Website
+Performance builds the same Next.js app pre-merge.
 
 | Job | Kind | Output | Purpose |
 |-----|------|--------|---------|
@@ -165,8 +181,10 @@ The reusable orchestrator composes one orchestration layer over reusable legs:
 ```
 resolve_perushim_input  →  appium_android (runner: build-and-run)
                         →  build_ios      (runner: build)
-                        →  ios_shard_1/2/3(runner: prebuilt-run, needs build_ios)
-merge_ios (always(), needs all three shards)
+                        →  plan_ios       (select -> runtime plan -> ios-matrix)
+                        →  ios_shard_<N>  (runner: prebuilt-run, needs
+                                         build_ios + plan_ios)
+merge_ios (always(), needs every planned shard)
 ```
 
 - **Leg contract** ([`app-mobile-e2e-runner.yml`](../../../../.github/workflows/app-mobile-e2e-runner.yml)):
@@ -174,8 +192,8 @@ merge_ios (always(), needs all three shards)
   (booted emulator + state, keyed by the config recipe +
   `KVM-EMU-PACKAGE`/`SDK-PACKAGE`, saved only on trusted pushes);
   `ios_build` / `ios_prebuilt_run` run on `xcode-27` (arm64, Xcode 27).
-  iOS is split into a single shared build plus three independent
-  `prebuilt-run` shards; each leg lives inside its own slice of
+  iOS is split into a single shared build plus a `plan_ios`-decided number
+  of independent `prebuilt-run` shards (#2263); each leg lives inside its own slice of
   `app/.artifacts/mobile-e2e/<platform|ios-shardN>/`, so per-leg caches,
   diagnostics and merge artifacts never collide.
 - **Shared iOS build** (#2266): `ios_build` compiles the app once, uploads
@@ -183,12 +201,14 @@ merge_ios (always(), needs all three shards)
   rewrites embedded `artifact_upload_base_url`/`artifact_key`/`run` markers
   (`rewrite-shared-app-runtime-markers.mjs`) before validating the runtime
   directories against the build's checksum manifest.
-- **Sharding** (#2083): iOS test classes carry a `Shard` trait; each shard
-  runs `run-sharded` with its id; expected-union validation in
-  `merge-runner-shards.mjs` proves no scenario is dropped or duplicated
-  before any merge output is trusted.
-- **Merge leg** (`merge_ios`): requires all three shard pilots `success`,
-  intersects shard execution trees with the full-suite expected set,
+- **Sharding** (#2263): `plan_ios` selects the affected iOS cases once and
+  assigns them to runtime-balanced shards; each leg executes exactly its
+  assigned `case-manifest.json`, and union validation in
+  `merge-runner-shards.mjs` proves no planned scenario is dropped or
+  duplicated before any merge output is trusted.
+- **Merge leg** (`merge_ios`): requires every planned shard's pilot
+  `success`, verifies each shard's manifest equals its plan assignment and
+  the disjoint union covers the planned run set,
   merges per-shard LCOV into `app-e2e-coverage.<run>.ios`, then publishes
   `app-mobile-e2e-coverage.master.ios`,
   `app-mobile-e2e-exec-coverage.master.ios`, and
@@ -279,6 +299,24 @@ release_new_module:
 ```
 
 **Affected Jobs:** `release_website`, `release_api`, `release_admin`, `release_bulletin`, `release_app`
+
+### Release Docker builds must run before merge (#2292)
+
+**Incident:** [#2291](https://github.com/bible-on-site/bible-on-site/pull/2291)
+bumped both Rust Dockerfiles to `rust:1.99.1-alpine` while that tag's manifest
+list only had a `linux/arm64` image. Master run
+[38809061508](https://github.com/bible-on-site/bible-on-site/actions/runs/38809061508)
+failed both Package API and Package Bulletin at `FROM`: `no matching manifest
+for linux/amd64 in the manifest list entries`. The PR
+([38806417211](https://github.com/bible-on-site/bible-on-site/actions/runs/38806417211))
+and merge-queue ([38807727130](https://github.com/bible-on-site/bible-on-site/actions/runs/38807727130))
+runs were green because `package_*` only ran on master `push`, and the module
+CI jobs build natively with `cargo`, never pulling the Dockerfile base image.
+
+**Rule:** a release build path (Dockerfile, base image, build context) must
+be exercised before merge. A packaging job that only runs on master `push`
+needs a non-`push` validation run that skips publication, gated in
+`cross_module_ci` under the job's own module/CI triggers.
 
 ### Draft release lookup and recovery
 

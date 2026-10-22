@@ -5,7 +5,6 @@ using System.Text;
 using BibleOnSite.Models;
 using BibleOnSite.Services;
 using GraphQL.Client.Http;
-using GraphQL.Client.Serializer.Newtonsoft;
 
 namespace BibleOnSite.Tests.Services;
 
@@ -188,7 +187,7 @@ public class ArticleServiceTests
         clientField!.SetValue(
             service,
             new Lazy<GraphQLHttpClient>(() =>
-                new GraphQLHttpClient(url, new NewtonsoftJsonSerializer())));
+                new GraphQLHttpClient(url, BaseGraphQLService.CreateSerializer())));
 
         return service;
     }
@@ -297,5 +296,20 @@ public class ArticleServiceTests
 
             return string.Empty;
         }
+    }
+
+[Fact]
+    public async Task SearchArticlesAsync_returns_null_when_the_data_envelope_is_null()
+    {
+        await using var server = new GraphQLStubServer(_ => """
+            {
+              "data": null
+            }
+            """);
+        var service = CreateService(server.Url);
+
+        var page = await service.SearchArticlesAsync("בראשית", 10, TestContext.Current.CancellationToken);
+
+        page.Should().BeNull();
     }
 }

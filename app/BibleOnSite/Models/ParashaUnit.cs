@@ -1,3 +1,5 @@
+using System.ComponentModel;
+
 namespace BibleOnSite.Models;
 
 /// <summary>
@@ -7,7 +9,7 @@ namespace BibleOnSite.Models;
 /// optional 0-based intra-pasuk bounds (Masoretic breaks only — the
 /// parasha table never sets them).
 /// </summary>
-public sealed class ScriptureRange
+public sealed class ScriptureRange : IScriptureRange
 {
     public int StartPerekId { get; set; }
     public int StartPasuk { get; set; }
@@ -39,10 +41,19 @@ public sealed class AuxiliaryReading
 /// parasha name (unit identity, not a ref span); joined pairs keep
 /// separate unit identities. <see cref="TorahRange"/> is the single
 /// contiguous primary range; <see cref="Haftarot"/> are the ordered
-/// auxiliary readings.
+/// auxiliary readings. Implements INotifyPropertyChanged for
+/// <see cref="Rows"/> so the carousel rebinds when rows lazy-load.
 /// </summary>
-public sealed class ParashaUnit
+public sealed class ParashaUnit : INotifyPropertyChanged
 {
+    // Codacy: S3264 false positive — event IS invoked via OnPropertyChanged() below.
+#pragma warning disable S3264 // Events should be invoked
+    public event PropertyChangedEventHandler? PropertyChanged;
+#pragma warning restore S3264
+
+    private void OnPropertyChanged(string propertyName) =>
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+
     /// <summary>Stable contiguous id within the division; the slug is its decimal form.</summary>
     public int UnitId { get; set; }
 
@@ -50,6 +61,9 @@ public sealed class ParashaUnit
 
     /// <summary>Id of one of the five Torah sefarim.</summary>
     public int SeferId { get; set; }
+
+    /// <summary>Parent sefer canonical name (e.g. "בראשית").</summary>
+    public required string SeferName { get; set; }
 
     /// <summary>1-based order inside the parent sefer.</summary>
     public int Order { get; set; }
@@ -62,4 +76,82 @@ public sealed class ParashaUnit
 
     /// <summary>Ordered Haftarah custom variants.</summary>
     public List<AuxiliaryReading> Haftarot { get; set; } = [];
+
+    /// <summary>Every reading range this unit renders, in display order (Torah first).</summary>
+    public IEnumerable<ScriptureRange> AllRanges()
+    {
+        yield return TorahRange;
+        foreach (var haftara in Haftarot)
+        {
+            foreach (var range in haftara.Ranges)
+            {
+                yield return range;
+            }
+        }
+    }
+
+    /// <summary>The count of articles fetched for this unit (populated lazily by the page).</summary>
+    public int ArticlesCount { get; set; }
+
+    /// <summary>
+    /// Neighbour carousel pages stay out of the accessibility tree: they are off
+    /// screen, and every XCTest snapshot would otherwise serialize them too.
+    /// </summary>
+    private bool _isOffscreenCarouselPage = true;
+    public bool IsOffscreenCarouselPage
+    {
+        get => _isOffscreenCarouselPage;
+        set
+        {
+            if (_isOffscreenCarouselPage == value) { return; }
+            _isOffscreenCarouselPage = value;
+            OnPropertyChanged(nameof(IsOffscreenCarouselPage));
+        }
+    }
+
+    /// <summary>
+    /// The Torah range in original references (e.g. "בראשית א א - ו ח"),
+    /// resolved by the reading pipeline once perek metadata is available.
+    /// </summary>
+    private string _rangeLabel = string.Empty;
+    public string RangeLabel
+    {
+        get => _rangeLabel;
+        set
+        {
+            _rangeLabel = value;
+            OnPropertyChanged(nameof(RangeLabel));
+        }
+    }
+
+    /// <summary>
+    /// Display rows for this unit — section/perek headers plus pesukim
+    /// clipped to the unit's canonical bounds — lazy-loaded by the reading
+    /// pipeline. Setter raises PropertyChanged so the UI rebinds.
+    /// </summary>
+    private List<ParashaDisplayItem> _rows = new();
+    public List<ParashaDisplayItem> Rows
+    {
+        get => _rows;
+        set
+        {
+            _rows = value;
+            OnPropertyChanged(nameof(Rows));
+        }
+    }
+
+    /// <summary>
+    /// The unit's logical pesukim (no headers, no שניים מקרא copies) for
+    /// the תיקון קוראים continuous flow — assigned together with Rows.
+    /// </summary>
+    private List<Pasuk> _tikkunPasukim = new();
+    public List<Pasuk> TikkunPasukim
+    {
+        get => _tikkunPasukim;
+        set
+        {
+            _tikkunPasukim = value;
+            OnPropertyChanged(nameof(TikkunPasukim));
+        }
+    }
 }

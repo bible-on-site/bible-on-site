@@ -142,13 +142,26 @@ public abstract class MobileDeviceTest : IAsyncLifetime
         // coverage tree uses as test identity (#2085). That identity also names
         // the per-test artifacts: method names are not unique across classes,
         // so two tests sharing one would overwrite each other's evidence inside
-        // a run and collide again at the shard merge (#2083).
+        // a run and collide again at the shard merge (#2263).
         var test = $"{GetType().FullName}.{name}";
         CoverageEvidence.Begin(test, Configuration.Platform,
             Configuration.ArtifactDirectory, test);
         try
         {
-            body();
+            try
+            {
+                body();
+            }
+            finally
+            {
+                // The per-command driver profile (counts/totals/max) rides the
+                // test's captured output into the trx artifact.
+                var profile = DriverTelemetry.Dump();
+                if (profile.Length > 0)
+                {
+                    Output.WriteLine(profile);
+                }
+            }
             CoverageEvidence.RecordSession(Driver?.SessionId);
             CoverageEvidence.Finish("passed");
             CollectAppCoverage(test, "passed");
@@ -185,6 +198,9 @@ public abstract class MobileDeviceTest : IAsyncLifetime
 
     protected virtual void Connect()
     {
+        // Attribute session creation, app restart, startup wait and coverage
+        // collection to the scenario that follows them.
+        DriverTelemetry.Reset();
         AcquireSession();
         Page = new(Driver!, Platform);
         Page.WaitForStartup();
@@ -203,6 +219,19 @@ public abstract class MobileDeviceTest : IAsyncLifetime
     protected void SaveDiagnostics(string name, string outcome) =>
         SaveDiagnostics(name, outcome, null);
 
+    private string AppiumLogTail()
+    {
+        try
+        {
+            var tail = AppiumLog.Tail(Configuration.ArtifactDirectory);
+            return tail.Length == 0 ? string.Empty : $"\n--- appium.log tail ---\n{tail}";
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or NotSupportedException)
+        {
+            return $"\n--- appium.log tail unavailable: {exception.Message} ---";
+        }
+    }
+
     private void SaveDiagnostics(string name, string outcome, Exception? error)
     {
         var prefix = Path.Join(Configuration.ArtifactDirectory, $"{name}-{outcome}");
@@ -210,10 +239,11 @@ public abstract class MobileDeviceTest : IAsyncLifetime
         if (Driver == null)
         {
             // A session-creation failure leaves no device state to capture; keep
-            // the startup exception and the adb device listing for forensics.
+            // the startup exception, the adb device listing, and the Appium
+            // server log tail (the WDA/install handshake only exists there).
             var details = error is null
                 ? "The session was never created."
-                : $"The session was never created.\n{error}{DeviceTransportRecovery.DeviceListing()}";
+                : $"The session was never created.\n{error}{DeviceTransportRecovery.DeviceListing()}{AppiumLogTail()}";
             File.WriteAllText(prefix + "-diagnostics-error.txt", details);
         }
         else

@@ -9,11 +9,19 @@
 
 export const READER_SETTINGS_STORAGE_KEY = "perekReaderSettings" as const;
 
-/** Font-size scale steps applied to the perek text (5 levels, default = 1). */
-export const PEREK_FONT_SCALES = [0.85, 0.92, 1, 1.15, 1.3] as const;
+/**
+ * Font-size scale steps applied to the perek text (default = 1).
+ * #2405: extended to 200% — new steps are appended so stored indices keep
+ * meaning the same scale (index 4 is still 130%).
+ */
+export const PEREK_FONT_SCALES = [0.85, 0.92, 1, 1.15, 1.3, 1.5, 1.7, 2] as const;
 
-/** Line-height steps applied to the perek text (3 levels, default = 1.5). */
-export const PEREK_LINE_HEIGHTS = [1.5, 1.75, 2] as const;
+/**
+ * Line-height and word-spacing steps applied to the perek text (5 levels
+ * each). The controls display `step + 1`, so the default index 2 is shown as
+ * level 3. Appending steps keeps stored indices meaning the same spacing.
+ */
+export const PEREK_LINE_HEIGHTS = [1.5, 1.75, 2, 2.25, 2.5] as const;
 export const PEREK_WORD_SPACINGS = [0.12, 0.2, 0.28, 0.36, 0.44] as const;
 
 /**
@@ -45,14 +53,16 @@ export type ReaderSettings = {
 
 export const DEFAULT_READER_SETTINGS: ReaderSettings = {
 	fontStep: PEREK_FONT_SCALES.indexOf(1),
-	lineStep: 0,
-	wordStep: 0,
+	lineStep: 2,
+	wordStep: 2,
 	fontId: 0,
 	v: READER_SETTINGS_VERSION,
 };
 
-const clampStep = (value: number, max: number) =>
-	Number.isFinite(value) ? Math.min(Math.max(Math.round(value), 0), max) : 0;
+const clampStep = (value: number, max: number, fallback = 0) =>
+	Number.isFinite(value)
+		? Math.min(Math.max(Math.round(value), 0), max)
+		: fallback;
 
 function normalizeSettings(raw: unknown): ReaderSettings {
 	const candidate = (raw ?? {}) as Partial<ReaderSettings>;
@@ -60,15 +70,27 @@ function normalizeSettings(raw: unknown): ReaderSettings {
 		fontStep:
 			candidate.fontStep == null
 				? DEFAULT_READER_SETTINGS.fontStep
-				: clampStep(candidate.fontStep, PEREK_FONT_SCALES.length - 1),
+				: clampStep(
+						candidate.fontStep,
+						PEREK_FONT_SCALES.length - 1,
+						DEFAULT_READER_SETTINGS.fontStep,
+					),
 		lineStep:
 			candidate.lineStep == null
 				? DEFAULT_READER_SETTINGS.lineStep
-				: clampStep(candidate.lineStep, PEREK_LINE_HEIGHTS.length - 1),
+				: clampStep(
+						candidate.lineStep,
+						PEREK_LINE_HEIGHTS.length - 1,
+						DEFAULT_READER_SETTINGS.lineStep,
+					),
 		wordStep:
 			candidate.wordStep == null
-				? 0
-				: clampStep(candidate.wordStep, PEREK_WORD_SPACINGS.length - 1),
+				? DEFAULT_READER_SETTINGS.wordStep
+				: clampStep(
+						candidate.wordStep,
+						PEREK_WORD_SPACINGS.length - 1,
+						DEFAULT_READER_SETTINGS.wordStep,
+					),
 		fontId:
 			candidate.fontId == null
 				? DEFAULT_READER_SETTINGS.fontId
@@ -141,4 +163,4 @@ export function applyReaderSettings(
  * storage key, arrays and default indices are duplicated here verbatim. The
  * reader-settings unit test asserts they stay in sync.
  */
-export const READER_SETTINGS_BOOTSTRAP = `(function(){try{var s=JSON.parse(localStorage.getItem("perekReaderSettings")||"null")||{};var f=[0.85,0.92,1,1.15,1.3],l=[1.5,1.75,2],w=[0.12,0.2,0.28,0.36,0.44],tf=["","noto"];function c(v,m){return typeof v==="number"&&isFinite(v)?Math.min(Math.max(Math.round(v),0),m):0}var e=document.documentElement;e.style.setProperty("--perek-font-scale",String(f[s.fontStep==null?2:c(s.fontStep,f.length-1)]));e.style.setProperty("--perek-line-height",String(l[s.lineStep==null?0:c(s.lineStep,l.length-1)]));e.style.setProperty("--perek-word-spacing",String(w[s.wordStep==null?0:c(s.wordStep,w.length-1)])+"em");var t=tf[s.v===2&&s.fontId!=null?c(s.fontId,tf.length-1):0];if(t){e.dataset.tanakhFont=t}else{delete e.dataset.tanakhFont}}catch(e){}})();`;
+export const READER_SETTINGS_BOOTSTRAP = `(function(){try{var s=JSON.parse(localStorage.getItem("perekReaderSettings")||"null")||{};var f=[0.85,0.92,1,1.15,1.3,1.5,1.7,2],l=[1.5,1.75,2,2.25,2.5],w=[0.12,0.2,0.28,0.36,0.44],tf=["","noto"];function c(v,m,d){return typeof v==="number"&&isFinite(v)?Math.min(Math.max(Math.round(v),0),m):d}var e=document.documentElement;e.style.setProperty("--perek-font-scale",String(f[c(s.fontStep,f.length-1,2)]));e.style.setProperty("--perek-line-height",String(l[c(s.lineStep,l.length-1,2)]));e.style.setProperty("--perek-word-spacing",String(w[c(s.wordStep,w.length-1,2)])+"em");var t=tf[s.v===2&&s.fontId!=null?c(s.fontId,tf.length-1,0):0];if(t){e.dataset.tanakhFont=t}else{delete e.dataset.tanakhFont}}catch(e){}})();`;

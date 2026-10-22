@@ -41,4 +41,13 @@ public class DoubleTapTrackerTests
         restored.RecitationVolume = 1;
         preferences.Load(); preferences.RecitationVolume.Should().Be(1);
     }
+
+[Fact]
+    public void Tap_AfterDoubleTapWindow_IsNotARapidTap()
+    {
+        var tracker = new DoubleTapTracker();
+
+        tracker.Tap(203, 1, 0).Should().BeFalse();
+        tracker.Tap(203, 1, 351).Should().BeFalse("351ms exceeds the rapid-tap window");
+    }
 }

@@ -20,7 +20,12 @@ public sealed class ViewportTextView : UIView, IUIAccessibilityContainer
         ScrollEnabled = true,
         Bounces = false,
         BackgroundColor = UIColor.Clear,
-        TextContainerInset = UIEdgeInsets.Zero
+        TextContainerInset = UIEdgeInsets.Zero,
+        // This view is not a scroll surface: the outer reader owns scrolling and
+        // every programmatic offset/content-size change would otherwise flash an
+        // indicator inside the cell — over the text and beside the page's own.
+        ShowsVerticalScrollIndicator = false,
+        ShowsHorizontalScrollIndicator = false
     };
 
     private readonly List<IDisposable> _scrollObservers = [];
@@ -54,6 +59,9 @@ public sealed class ViewportTextView : UIView, IUIAccessibilityContainer
     private AccessibleSection[] _accessibleSections = [];
     private AccessibleTextSections.Section[] _sectionRanges = [];
     private readonly TextSectionGeometryCache<CGRect> _sectionGeometry = new();
+    private (double Top, double Bottom)[] _sectionFrames = [];
+    private AccessibleSection[] _exposedSections = [];
+    private (int Start, int Count) _exposedRange;
     private bool _sectionedAccessibility;
     private int _accessibilitySerial;
     private bool _disposed;
@@ -61,7 +69,8 @@ public sealed class ViewportTextView : UIView, IUIAccessibilityContainer
     /// <summary>
     /// Bound both the number of accessibility objects and each spoken label.
     /// One label for a whole large document still makes XCTest snapshots costly.
-    /// Text remains complete, ordered, and available with its link actions.
+    /// Text remains complete, ordered, and available with its link actions;
+    /// only sections near the viewport are exposed, and scrolling moves them.
     /// Section splitting and link scanning run off the main thread — a 70 KB+
     /// commentary would otherwise typeset-adjacent string work inside the cell
     /// apply path while the reader scrolls.
@@ -69,6 +78,9 @@ public sealed class ViewportTextView : UIView, IUIAccessibilityContainer
     internal void UpdateDocumentAccessibility()
     {
         var serial = ++_accessibilitySerial;
+        // A rebound text resets the inner scroll offset — force a viewport re-apply.
+        _appliedViewport = new(-1, -1);
+        _appliedHorizontal = new(-1, -1);
         _sectionGeometry.Reset();
         var text = TextView.AttributedText;
         var value = text?.Value ?? string.Empty;
@@ -83,6 +95,9 @@ public sealed class ViewportTextView : UIView, IUIAccessibilityContainer
         AccessibilityCustomActions = null;
         _sectionRanges = [];
         _accessibleSections = [];
+        _sectionFrames = [];
+        _exposedSections = [];
+        _exposedRange = default;
         if (!_sectionedAccessibility || text is null)
         {
             EnsureSectionGeometry();
@@ -154,24 +169,35 @@ public sealed class ViewportTextView : UIView, IUIAccessibilityContainer
             new Func<UIAccessibilityCustomAction, bool>(_ => activateLink?.Invoke(link.Url) == true))).ToArray();
 
     [Export("accessibilityElementCount")]
-    public nint AccessibilityElementCount() => _sectionedAccessibility ? _accessibleSections.Length : 1;
+    public nint AccessibilityElementCount() => _sectionedAccessibility ? _exposedSections.Length : 1;
 
     [Export("accessibilityElementAtIndex:")]
     public NSObject GetAccessibilityElementAt(nint index)
         => index < 0 || index >= AccessibilityElementCount() ? null!
-            : _sectionedAccessibility ? _accessibleSections[(int)index] : TextView;
+            : _sectionedAccessibility ? _exposedSections[(int)index] : TextView;
 
     [Export("indexOfAccessibilityElement:")]
     public nint GetIndexOfAccessibilityElement(NSObject element)
     {
         var index = _sectionedAccessibility
-            ? Array.FindIndex(_accessibleSections, section => section.Handle == element.Handle)
+            ? Array.FindIndex(_exposedSections, section => section.Handle == element.Handle)
             : element.Handle == TextView.Handle ? 0 : -1;
         return index < 0 ? nint.MaxValue : index;
     }
 
     [Export("accessibilityElements")]
-    public NSObject[] GetAccessibilityElements() => _sectionedAccessibility ? _accessibleSections : [TextView];
+    public NSObject[] GetAccessibilityElements() => _sectionedAccessibility ? _exposedSections : [TextView];
+
+    private bool UpdateExposedSections()
+    {
+        var range = _sectionFrames.Length == _accessibleSections.Length
+            ? AccessibleTextSections.NearViewport(_sectionFrames, _appliedViewport.Offset, _appliedViewport.Height)
+            : default;
+        if (range == _exposedRange) { return false; }
+        _exposedRange = range;
+        _exposedSections = _accessibleSections[range.Start..(range.Start + range.Count)];
+        return true;
+    }
 
     private void EnsureSectionGeometry()
     {
@@ -194,7 +220,10 @@ public sealed class ViewportTextView : UIView, IUIAccessibilityContainer
                     NativeReaderTrace.Write("accessibility-measure:end");
                     MainThread.BeginInvokeOnMainThread(() =>
                     {
-                        if (!_disposed && _sectionGeometry.Complete(request.Value, bounds) && Window is not null && !TextView.Hidden)
+                        if (_disposed || !_sectionGeometry.Complete(request.Value, bounds)) { return; }
+                        _sectionFrames = bounds.Select(b => ((double)b.Y, (double)b.Bottom)).ToArray();
+                        UpdateExposedSections();
+                        if (Window is not null && !TextView.Hidden)
                         {
                             UIAccessibility.PostNotification(UIAccessibilityPostNotification.LayoutChanged, null);
                         }
@@ -290,10 +319,20 @@ public sealed class ViewportTextView : UIView, IUIAccessibilityContainer
             set => base.AccessibilityFrame = value;
         }
     }
+
+    // Clipping ancestors are stable while the superview chain holds; the cache is
+    // rebuilt lazily after window moves and reparenting instead of walking the
+    // ancestor chain on every scroll frame.
+    private UIView[]? _clipAncestors;
+    private TextViewport _appliedViewport = new(-1, -1);
+    private TextViewport _appliedHorizontal = new(-1, -1);
+    private double _appliedWidth = -1;
+
     public override void MovedToWindow()
     {
         base.MovedToWindow();
         StopTracking();
+        _clipAncestors = null;
         if (Window is null) { return; }
         for (var ancestor = Superview; ancestor is not null; ancestor = ancestor.Superview)
         {
@@ -304,6 +343,12 @@ public sealed class ViewportTextView : UIView, IUIAccessibilityContainer
             }
         }
         UpdateViewport();
+    }
+
+    public override void MovedToSuperview()
+    {
+        base.MovedToSuperview();
+        _clipAncestors = null;
     }
 
     public override void LayoutSubviews()
@@ -326,9 +371,8 @@ public sealed class ViewportTextView : UIView, IUIAccessibilityContainer
         var right = (double)(visible.X + visible.Width);
         var top = (double)visible.Y;
         var bottom = (double)(visible.Y + visible.Height);
-        for (var ancestor = Superview; ancestor is not null; ancestor = ancestor.Superview)
+        foreach (var ancestor in _clipAncestors ??= CollectClippingAncestors())
         {
-            if (!ancestor.ClipsToBounds) { continue; }
             var clip = ConvertRectFromView(ancestor.Bounds, ancestor);
             left = Math.Max(left, (double)clip.X);
             right = Math.Min(right, (double)(clip.X + clip.Width));
@@ -337,6 +381,15 @@ public sealed class ViewportTextView : UIView, IUIAccessibilityContainer
         }
         var viewport = TextViewport.Clip((double)Bounds.Height, top, bottom);
         var horizontal = TextViewport.Clip((double)Bounds.Width, left, right);
+        // Width is part of the key: it feeds the applied frame but not the clip.
+        if (viewport == _appliedViewport && horizontal == _appliedHorizontal &&
+            Math.Abs((double)Bounds.Width - _appliedWidth) < 0.5)
+        {
+            return;
+        }
+        _appliedViewport = viewport;
+        _appliedHorizontal = horizontal;
+        _appliedWidth = (double)Bounds.Width;
         TextView.Hidden = viewport.Height <= 0 || horizontal.Height <= 0;
         AccessibilityElementsHidden = TextView.Hidden;
         if (TextView.Hidden) { return; }
@@ -355,6 +408,20 @@ public sealed class ViewportTextView : UIView, IUIAccessibilityContainer
             NativeReaderTrace.Write("viewport-offset:end");
         }
         EnsureSectionGeometry();
+        if (UpdateExposedSections())
+        {
+            UIAccessibility.PostNotification(UIAccessibilityPostNotification.LayoutChanged, null);
+        }
+    }
+
+    private UIView[] CollectClippingAncestors()
+    {
+        var ancestors = new List<UIView>();
+        for (var ancestor = Superview; ancestor is not null; ancestor = ancestor.Superview)
+        {
+            if (ancestor.ClipsToBounds) { ancestors.Add(ancestor); }
+        }
+        return ancestors.ToArray();
     }
 
     protected override void Dispose(bool disposing)
@@ -362,6 +429,8 @@ public sealed class ViewportTextView : UIView, IUIAccessibilityContainer
         _disposed = true;
         ++_accessibilitySerial;
         _accessibleSections = [];
+        _exposedSections = [];
+        _sectionFrames = [];
         _sectionRanges = [];
         _sectionGeometry.Reset();
         ActivateLink = null;

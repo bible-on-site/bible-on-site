@@ -66,6 +66,36 @@ public class TanahpediaSearchServiceTests
     }
 
     [Fact]
+    public async Task SearchEntries_TransportTimeout_ThrowsTimeoutException()
+    {
+        using var http = new GraphQLTransport();
+        http.Respond = async token =>
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, token);
+            return GraphQLTransport.JsonResponse("{}");
+        };
+        var service = new TanahpediaService(http.Client, TimeSpan.FromMilliseconds(50));
+        await FluentActions.Awaiting(() => service.SearchEntriesAsync("x", 20, CancellationToken.None))
+            .Should().ThrowAsync<TimeoutException>();
+    }
+
+    [Fact]
+    public async Task SearchEntries_CallerCancellation_ThrowsOperationCanceled()
+    {
+        using var http = new GraphQLTransport();
+        http.Respond = async token =>
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, token);
+            return GraphQLTransport.JsonResponse("{}");
+        };
+        var service = new TanahpediaService(http.Client);
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
+        await FluentActions.Awaiting(() => service.SearchEntriesAsync("x", 20, cts.Token))
+            .Should().ThrowAsync<OperationCanceledException>();
+    }
+
+    [Fact]
     public async Task SearchViewModel_AddsRemoteTanahpediaResults_WhenFilterEnabled()
     {
         using var http = new GraphQLTransport(SearchResponse);
@@ -80,7 +110,7 @@ public class TanahpediaSearchServiceTests
         {
             vm.SetFilterEnabled(filter, false);
         }
-        // The remote kind is opt-in: enable it explicitly for this search.
+        // Remote kinds are on by default (#2454); enabling stays explicit here.
         vm.SetFilterEnabled(SearchFilter.Tanahpedia, true);
 
         await vm.SearchAsync(TestContext.Current.CancellationToken);
@@ -90,7 +120,7 @@ public class TanahpediaSearchServiceTests
         entries[0].UniqueName.Should().Be("משה-רבנו");
         entries[0].Title.Should().Be("משה רבנו");
         entries[0].ResultType.Should().Be(SearchFilter.Tanahpedia);
-        entries[0].Category.Should().Be("תנכפדיה (חיבור רשת נדרש)");
+        entries[0].Category.Should().Be("תנכפדיה");
         entries[0].Score.Should().Be(220);
         entries[0].SubtitleHtml.Should().Contain("<b>משה</b>");
         vm.IsLoading.Should().BeFalse();
@@ -149,8 +179,9 @@ public class TanahpediaSearchServiceTests
     }
 
     [Fact]
-    public async Task SearchViewModel_TanahpediaFilter_IsOptIn_NotEnabledByDefault()
+    public async Task SearchViewModel_TanahpediaFilter_EnabledByDefault_MergesRemoteResults()
     {
+        // #2454: every kind starts selected; offline, not a flag, skips remote.
         using var http = new GraphQLTransport(SearchResponse);
         await using var storage = new TestStorage();
         var vm = new SearchViewModel(
@@ -160,7 +191,7 @@ public class TanahpediaSearchServiceTests
             new TanahpediaService(http.Client))
         { SearchPhrase = "משה" };
 
-        vm.IsFilterEnabled(SearchFilter.Tanahpedia).Should().BeFalse();
+        vm.IsFilterEnabled(SearchFilter.Tanahpedia).Should().BeTrue();
         foreach (var filter in new[] { SearchFilter.Author, SearchFilter.Pasuk, SearchFilter.Perush, SearchFilter.Perek })
         {
             vm.SetFilterEnabled(filter, false);
@@ -168,8 +199,8 @@ public class TanahpediaSearchServiceTests
 
         await vm.SearchAsync(TestContext.Current.CancellationToken);
 
-        http.Requests.Should().BeEmpty();
-        vm.SearchResults.Should().NotContain(result => result is TanahpediaSearchResult);
+        http.Requests.Should().NotBeEmpty();
+        vm.SearchResults.Should().Contain(result => result is TanahpediaSearchResult);
     }
 
     [Fact]
@@ -239,9 +270,9 @@ public class TanahpediaSearchServiceTests
     }
 
     [Fact]
-    public void TanahpediaFilter_HasNetworkLabel_AndResultMapsToCanonicalName()
+    public void TanahpediaFilter_HasCleanLabel_AndResultMapsToCanonicalName()
     {
-        SearchFilter.Tanahpedia.GetHebrewName().Should().Be("תנכפדיה (חיבור רשת נדרש)");
+        SearchFilter.Tanahpedia.GetHebrewName().Should().Be("תנכפדיה");
         SearchFilter.Tanahpedia.RequiresNetwork().Should().BeTrue();
         var result = new TanahpediaSearchResult("e1", "דתן-ואבירם", "נקרא גם: בני קרח", 220, "בני קרח")
         {
@@ -251,5 +282,64 @@ public class TanahpediaSearchServiceTests
         result.ResultType.Should().Be(SearchFilter.Tanahpedia);
         result.Category.Should().Contain("תנכפדיה");
         result.UniqueName.Should().Be("דתן-ואבירם");
+    }
+}
+
+public class TanahpediaScopedSearchTests
+{
+    private const string SearchResponse = """
+        {"data":{"searchTanahpediaEntries":[
+        {"id":"e1","uniqueName":"משה-רבנו","title":"משה רבנו","excerpt":"","score":220}]}}
+        """;
+
+    [Fact]
+    public async Task SearchEntries_SendsCategoryKeysVariable()
+    {
+        using var http = new GraphQLTransport(SearchResponse);
+        var service = new TanahpediaService(http.Client);
+
+        var hits = await service.SearchEntriesAsync("משה", 10, ["PERSON", "PROPHET"], TestContext.Current.CancellationToken);
+
+        hits.Should().ContainSingle().Which.UniqueName.Should().Be("משה-רבנו");
+        http.Requests.Single().Should().Contain("categories");
+        http.Requests.Single().Should().Contain("PERSON").And.Contain("PROPHET");
+    }
+
+    [Fact]
+    public async Task SearchEntries_NullEntries_ReturnsEmpty()
+    {
+        using var http = new GraphQLTransport("{\"data\":{\"searchTanahpediaEntries\":null}}");
+        var service = new TanahpediaService(http.Client);
+
+        var hits = await service.SearchEntriesAsync("משה", 10, TestContext.Current.CancellationToken);
+
+        hits.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task SearchEntries_EmptyOrNullCategories_SendNoScope()
+    {
+        using var http = new GraphQLTransport(SearchResponse);
+        var service = new TanahpediaService(http.Client);
+
+        await service.SearchEntriesAsync("משה", 10, [], TestContext.Current.CancellationToken);
+        await service.SearchEntriesAsync("משה", 10, (IReadOnlyCollection<string>?)null, TestContext.Current.CancellationToken);
+
+        http.Requests.Should().HaveCount(2);
+        http.Requests.Should().OnlyContain(request => !request.Contains("\"categories\""));
+    }
+}
+
+public class TanahpediaNullDataTests
+{
+    [Fact]
+    public async Task SearchEntries_NullDataPayload_ReturnsEmpty()
+    {
+        using var http = new GraphQLTransport("{\"data\":null}");
+        var service = new TanahpediaService(http.Client);
+
+        var hits = await service.SearchEntriesAsync("משה", 10, TestContext.Current.CancellationToken);
+
+        hits.Should().BeEmpty();
     }
 }

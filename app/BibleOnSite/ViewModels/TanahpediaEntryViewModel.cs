@@ -22,6 +22,19 @@ public partial class TanahpediaEntryViewModel : ObservableObject
     private readonly IAppNavigator _navigator;
     private readonly PerekDataService _perekData;
 
+    /// <summary>Person-to-person trail for in-place family-tree switches, so
+    /// Back steps through prior people before leaving the page.</summary>
+    private readonly Stack<string> _entryHistory = new();
+
+    /// <summary>Cancels superseded in-place loads; combined with <see
+    /// cref="_loadVersion"/> the latest requested entry always wins.</summary>
+    private CancellationTokenSource? _loadCts;
+    private int _loadVersion;
+
+    /// <summary>True while a family-tree trail is pending above the entry
+    /// the page was opened with.</summary>
+    public bool HasEntryHistory => _entryHistory.Count > 0;
+
     public TanahpediaEntryViewModel() : this(
         TanahpediaService.Instance,
         ShellAppNavigator.Instance,
@@ -119,6 +132,16 @@ public partial class TanahpediaEntryViewModel : ObservableObject
             return;
         }
 
+        await LoadCoreAsync(CancellationToken.None);
+    }
+
+    /// <summary>
+    /// Shared load body. A newer load supersedes an in-flight one: stale
+    /// responses are discarded by version and cancelled via <paramref name="ct"/>.
+    /// </summary>
+    private async Task LoadCoreAsync(CancellationToken ct)
+    {
+        var version = ++_loadVersion;
         IsLoading = true;
         ErrorMessage = null;
         IsNotFound = false;
@@ -126,19 +149,31 @@ public partial class TanahpediaEntryViewModel : ObservableObject
 
         try
         {
-            var detail = await _service.GetEntryDetailAsync(UniqueName, CancellationToken.None);
+            var detail = await _service.GetEntryDetailAsync(UniqueName, ct);
+            if (version != _loadVersion)
+            {
+                return;
+            }
             if (detail != null)
             {
                 await SetEntryAsync(detail);
                 return;
             }
 
-            var targets = await _service.GetSynonymTargetsAsync(UniqueName, CancellationToken.None);
+            var targets = await _service.GetSynonymTargetsAsync(UniqueName, ct);
+            if (version != _loadVersion)
+            {
+                return;
+            }
             if (targets.Count == 1)
             {
                 // Plain alias - swap to the canonical entry (same UX as the
                 // website's permanent redirect).
-                var alias = await _service.GetEntryDetailAsync(targets[0].UniqueName, CancellationToken.None);
+                var alias = await _service.GetEntryDetailAsync(targets[0].UniqueName, ct);
+                if (version != _loadVersion)
+                {
+                    return;
+                }
                 if (alias != null)
                 {
                     await SetEntryAsync(alias);
@@ -157,6 +192,10 @@ public partial class TanahpediaEntryViewModel : ObservableObject
             }
             IsLoaded = true;
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            // Superseded by a newer in-place switch - the newer load owns state.
+        }
         catch (Exception ex)
         {
             Console.Error.WriteLine($"Tanahpedia entry load failed for {UniqueName}: {ex}");
@@ -164,12 +203,35 @@ public partial class TanahpediaEntryViewModel : ObservableObject
         }
         finally
         {
-            IsLoading = false;
+            if (version == _loadVersion)
+            {
+                IsLoading = false;
+            }
         }
+    }
+
+    /// <summary>
+    /// Rebinds this same view model to another entry in place (family-tree
+    /// person hops): the previous entry's content stays under the loading
+    /// overlay until the destination detail arrives, then everything swaps
+    /// atomically - no page close/open transition.
+    /// </summary>
+    private async Task SwitchToCurrentEntryAsync()
+    {
+        _loadCts?.Cancel();
+        var cts = _loadCts = new CancellationTokenSource();
+        await LoadCoreAsync(cts.Token);
     }
 
     private async Task SetEntryAsync(TanahpediaEntryDetail detail)
     {
+        // The destination may lack the previous entry's deferred sections -
+        // reset them with the swap so no stale tree, map or rows linger.
+        FamilyTree = null;
+        PlaceMarkers = [];
+        Occurrences = new ObservableCollection<TanahpediaOccurrenceItem>();
+        SynonymTargets = new ObservableCollection<TanahpediaSynonymTarget>();
+
         Title = detail.Title;
         Content = detail.Content;
         Entities = new ObservableCollection<TanahpediaLinkedEntity>(detail.Entities);
@@ -309,6 +371,24 @@ public partial class TanahpediaEntryViewModel : ObservableObject
         await _navigator.GoToAsync($"tanahpediaEntry?uniqueName={Uri.EscapeDataString(uniqueName)}");
     }
 
+    /// <summary>
+    /// Family-tree person hop: pushes the current name onto the entry trail
+    /// and reloads this view model in place instead of pushing another page,
+    /// which is what made person-to-person navigation visibly flicker.
+    /// </summary>
+    [RelayCommand]
+    public async Task OpenPersonEntryAsync(string? uniqueName)
+    {
+        if (string.IsNullOrEmpty(uniqueName) || uniqueName == UniqueName)
+        {
+            return;
+        }
+
+        _entryHistory.Push(UniqueName);
+        UniqueName = uniqueName;
+        await SwitchToCurrentEntryAsync();
+    }
+
     /// <summary>Opens the category listing a linked entity belongs to.</summary>
     [RelayCommand]
     public async Task OpenEntityCategoryAsync(TanahpediaLinkedEntity? entity)
@@ -328,10 +408,20 @@ public partial class TanahpediaEntryViewModel : ObservableObject
         await _navigator.GoToAsync(route);
     }
 
-    /// <summary>Navigates back.</summary>
+    /// <summary>
+    /// Navigates back: pops the in-place person trail first (same logical
+    /// history the pushed pages used to give), then leaves the page.
+    /// </summary>
     [RelayCommand]
     public async Task GoBackAsync()
     {
+        if (_entryHistory.Count > 0)
+        {
+            UniqueName = _entryHistory.Pop();
+            await SwitchToCurrentEntryAsync();
+            return;
+        }
+
         await _navigator.GoToAsync("..");
     }
 }

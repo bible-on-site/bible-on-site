@@ -16,7 +16,7 @@ class Element {
   replaceChildren() { this.children = []; }
   append(child) { this.children.push(child); }
 }
-async function page(saved = {}) {
+async function page(saved = {}, options = {}) {
   const elements = Object.fromEntries([...html.matchAll(/id="([^"]+)"/g)].map(m => [m[1], new Element()]));
   const clip = new Uint8Array([1, 2, 3]);
   const item = {id:"case",candidateSha256:"candidate",label:"פסוק לבדיקה",clipStartMs:0,clipEndMs:2000,
@@ -27,6 +27,9 @@ async function page(saved = {}) {
     querySelector:selector=>elements.words.children.find(e=>String(e.dataset.segment)===selector.match(/"(\d+)"/)[1]),
     querySelectorAll:selector=>selector===".word.active"?elements.words.children.filter(e=>e.classes.has("active")):[]};
   let clock,playing;const starts=[],posts=[];
+  const gaps=[];
+  let queue=options.queue, queueFails=false; const storage = options.storage ?? new Map();
+  const localStorage = {getItem:key=>storage.get(key)??null,setItem:(key,value)=>storage.set(key,value)};
   class AudioContext {
     constructor(){this.currentTime=0;clock=this;}
     resume(){return Promise.resolve();}
@@ -36,14 +39,15 @@ async function page(saved = {}) {
     }};}
   }
   const context=vm.createContext({document,window:{addEventListener(){}},AudioContext,crypto:{subtle:{digest:async()=>new Uint8Array(createHash("sha256").update(clip).digest()).buffer}},
-    setInterval(){},setTimeout:fn=>{queueMicrotask(fn);},Map,Set,
-    fetch:async(url,options)=>url==="/api/queue"?{ok:true,json:async()=>({cases:[item,{...item,id:"other"}],decisions:saved,token:"fixture"})}
+    localStorage,encodeURIComponent,
+    setInterval(){},setTimeout:fn=>{if(options.pauseGaps) gaps.push(fn); else queueMicrotask(fn);},Map,Set,
+    fetch:async(url,options)=>url==="/api/queue"?{ok:!queueFails,json:async()=>queue??({cases:[item,{...item,id:"other"}],decisions:saved,token:"fixture"})}
       :url.startsWith("/clips/")?{ok:true,arrayBuffer:async()=>clip.buffer}
       :url==="/api/reviews"?{ok:true,json:async()=>{const body=JSON.parse(options.body);posts.push(body);return {note:body.note,verdict:body.verdict,
         listenEvidenceReportedByBrowser:{heardSegments:body.heardSegments,freshHeardSegments:body.freshHeardSegments}};}}
       :{json:async()=>({state:"complete",humanRecoveredChapters:0})}});
   vm.runInContext(script,context);await tick();
-  return {elements,starts,posts,run:code=>vm.runInContext(code,context),async flush(){await tick();},
+  return {elements,starts,posts,item,storage,setQueue:value=>{queue=value;},failQueue:()=>{queueFails=true;},run:code=>vm.runInContext(code,context),async flush(){await tick();},async resumeGap(){assert.ok(gaps.length);gaps.shift()();await tick();},
     async finish(){assert.ok(playing,"a real fixture slice must be playing");const current=playing;playing=null;
       clock.currentTime+=current.duration;current.source.onended?.();await tick();}};
 }
@@ -78,4 +82,143 @@ test("all-cuts playback still plays every cut and saves truthful fresh hearing",
   await p.finish();await p.finish();await p.finish();await playback;
   assert.deepEqual(p.starts,[0.1,0.4,0.7]);assert.equal(p.elements.good.disabled,false);
   await p.run("save('good')");assert.deepEqual(p.posts[0].freshHeardSegments,[1,2,3]);
+});
+
+
+test("live append preserves active audio, unsaved note and completed hearing",async()=>{
+  const p=await page();const playback=p.run("play('word',caseNow().words[1])");await p.flush();
+  p.elements.note.value="טיוטה פעילה";p.elements.note.oninput();
+  const before=p.elements.words.children[1];
+  p.setQueue({cases:[p.item,{...p.item,id:"other"},{...p.item,id:"new"}],decisions:{},token:"fixture",persistentQueue:true});
+  await p.run("refreshQueue()");
+  assert.equal(p.run("cases.length"),3);assert.equal(p.run("caseNow().id"),"case");
+  assert.equal(p.elements.note.value,"טיוטה פעילה");assert.equal(p.elements.words.children[1],before);
+  assert.ok(before.classList.contains("active"));assert.match(p.elements.listening.textContent,/1\/3/);
+  await p.finish();await playback;assert.match(p.elements.listening.textContent,/2\/3/);
+});
+
+test("browser restart restores only genuine candidate-bound hearing and drafts",async()=>{
+  const p=await page();const playback=p.run("play('word',caseNow().words[1])");await p.flush();await p.finish();await playback;
+  p.elements.note.value="טיוטה שנשמרה בדפדפן";p.elements.note.oninput();
+  const resumed=await page({}, {storage:p.storage});
+  assert.equal(resumed.elements.note.value,"טיוטה שנשמרה בדפדפן");
+  assert.match(resumed.elements.listening.textContent,/2\/3/);assert.equal(resumed.elements.good.disabled,true);
+});
+
+test("a changed cut does not inherit old hearing or discard the old draft",async()=>{
+  const p=await page();const playback=p.run("play('word',caseNow().words[1])");await p.flush();await p.finish();await playback;
+  p.elements.note.value="הערה לחיתוך המקורי";p.elements.note.oninput();
+  const changed={...p.item,candidateSha256:"changed"};
+  p.setQueue({cases:[changed],decisions:{},retiredCases:[p.item],token:"fixture",persistentQueue:true});
+  await p.run("refreshQueue()");
+  assert.equal(p.run("caseNow().candidateSha256"),"candidate");assert.equal(p.elements.note.value,"הערה לחיתוך המקורי");
+  p.elements["updated-version"].onclick();
+  assert.match(p.elements.listening.textContent,/1\/3/);assert.equal(p.elements.good.disabled,true);
+  assert.notEqual(p.elements.note.value,"הערה לחיתוך המקורי");
+});
+
+test("an empty accumulated queue can receive its first batch without reloading",async()=>{
+  const p=await page();
+  p.run("cases=[];evidence.clear();drafts.clear();render()");
+  p.setQueue({cases:[p.item],decisions:{},token:"fixture",persistentQueue:true});
+  await p.run("refreshQueue()");
+  assert.equal(p.elements.verse.disabled,false);assert.equal(p.elements.problem.disabled,false);
+  assert.equal(p.run("caseNow().id"),"case");
+});
+
+test("failed queue refresh preserves active state",async()=>{
+  const p=await page();p.elements.note.value="טיוטה";
+  p.failQueue();await p.run("refreshQueue()");
+  assert.match(p.elements["queue-updates"].textContent,/לא ניתן/);
+  assert.equal(p.elements.note.value,"טיוטה");assert.equal(p.run("caseNow().id"),"case");
+});
+
+
+test("a completed restored old verse is not prepended or counted as a current answer",async()=>{
+  const p=await page();const oldKey=p.run("stateKey(caseNow())");
+  const saved={note:"הערה שנשמרה לגרסה קודמת",verdict:"problem",listenEvidenceReportedByBrowser:{heardSegments:[1,2,3],freshHeardSegments:[2,3]}};
+  p.elements.note.value=saved.note;p.elements.note.oninput();
+  const latest={...p.item,candidateSha256:"revised",priorNote:saved.note};
+  const incoming=Array.from({length:27},(_,i)=>({...p.item,id:"fixture-"+i})).concat(latest);
+  const decisions={[oldKey]:saved};
+  for(const item of incoming.slice(0,5)) decisions[[item.id,item.candidateSha256,item.clipSha256].join(":")]=saved;
+  const resumed=await page({}, {storage:p.storage,queue:{cases:incoming,retiredCases:[p.item],decisions,token:"fixture",persistentQueue:true}});
+  assert.equal(resumed.run("cases.length"),28);assert.equal(resumed.run("caseNow().candidateSha256"),"revised");
+  assert.match(resumed.elements.progress.textContent,/פסוק 28 מתוך 28 · 5 תשובות/);
+  assert.equal(resumed.elements.note.value,"");assert.match(resumed.elements.prior.textContent,/הערה שנשמרה/);
+  assert.match(resumed.elements.listening.textContent,/1\/3/);assert.equal(resumed.elements.good.disabled,true);
+  resumed.elements["previous-version"].onclick();assert.equal(resumed.elements.note.value,saved.note);
+  assert.match(resumed.elements.progress.textContent,/גרסה קודמת/);
+  assert.match(resumed.elements.progress.textContent,/מתוך 28 · 5 תשובות/);
+});
+
+test("an old unsaved draft is visibly historical and can switch to new cuts without losing it",async()=>{
+  const p=await page();p.elements.note.value="טיוטה פרטית לגרסה הישנה";p.elements.note.oninput();
+  p.setQueue({cases:[{...p.item,candidateSha256:"revised",priorNote:"הערה קודמת לקריאה בלבד"}],retiredCases:[p.item],decisions:{},token:"fixture",persistentQueue:true});
+  await p.run("refreshQueue()");
+  assert.equal(p.run("cases.length"),1);assert.equal(p.run("caseNow().candidateSha256"),"candidate");
+  assert.match(p.elements.progress.textContent,/גרסה קודמת · פסוק 1 מתוך 1 · 0/);
+  assert.equal(p.elements["updated-version"].hidden,false);
+  p.elements["updated-version"].onclick();
+  assert.equal(p.run("caseNow().candidateSha256"),"revised");assert.equal(p.elements.note.value,"");
+  assert.match(p.elements.listening.textContent,/1\/3/);
+  p.elements["previous-version"].onclick();assert.equal(p.elements.note.value,"טיוטה פרטית לגרסה הישנה");
+});
+
+test("a changed version waits for active playback and keeps exact old hearing",async()=>{
+  const p=await page();const playback=p.run("play('word',caseNow().words[1])");await p.flush();
+  const button=p.elements.words.children[1];
+  p.setQueue({cases:[{...p.item,candidateSha256:"revised"}],retiredCases:[p.item],decisions:{},token:"fixture",persistentQueue:true});
+  await p.run("refreshQueue()");assert.equal(p.run("caseNow().candidateSha256"),"candidate");
+  assert.equal(p.elements.words.children[1],button);assert.ok(button.classList.contains("active"));
+  await p.finish();await playback;assert.match(p.elements.listening.textContent,/2\/3/);
+  p.elements["updated-version"].onclick();assert.match(p.elements.listening.textContent,/1\/3/);
+});
+
+test("a focused note prevents an automatic version switch even after a saved verdict",async()=>{
+  const p=await page();const key=p.run("stateKey(caseNow())");const saved={note:"הערה",verdict:"problem"};
+  p.elements.note.value=saved.note;p.run("document.activeElement=$('note')");
+  p.setQueue({cases:[{...p.item,candidateSha256:"revised"}],retiredCases:[p.item],decisions:{[key]:saved},token:"fixture",persistentQueue:true});
+  await p.run("refreshQueue()");assert.equal(p.run("caseNow().candidateSha256"),"candidate");assert.equal(p.elements.note.value,"הערה");
+  assert.equal(p.elements["updated-version"].hidden,false);
+});
+
+test("saving a historical answer never approves or counts the revised candidate",async()=>{
+  const p=await page();p.elements.note.value="בעיה בחיתוך הקודם";p.elements.note.oninput();
+  p.setQueue({cases:[{...p.item,candidateSha256:"revised"}],retiredCases:[p.item],decisions:{},token:"fixture",persistentQueue:true});
+  await p.run("refreshQueue()");await p.run("save('problem')");
+  assert.equal(p.posts[0].candidateSha256,"candidate");assert.match(p.elements.progress.textContent,/0 תשובות/);
+  assert.match(p.elements.status.textContent,/לגרסה הקודמת/);p.elements["updated-version"].onclick();
+  assert.equal(p.elements.note.value,"");assert.equal(p.elements.good.disabled,true);
+});
+
+test("restoring an unsaved old draft keeps it separate from the latest worklist",async()=>{
+  const p=await page();p.elements.note.value="טיוטה שלא נשלחה";p.elements.note.oninput();
+  const resumed=await page({}, {storage:p.storage,queue:{cases:[{...p.item,candidateSha256:"revised"}],retiredCases:[p.item],decisions:{},token:"fixture",persistentQueue:true}});
+  assert.equal(resumed.run("cases.length"),1);assert.match(resumed.elements.progress.textContent,/גרסה קודמת/);
+  assert.equal(resumed.elements.note.value,"טיוטה שלא נשלחה");resumed.elements["updated-version"].onclick();
+  assert.equal(resumed.run("caseNow().candidateSha256"),"revised");assert.equal(resumed.elements.note.value,"");
+  resumed.elements["previous-version"].onclick();assert.equal(resumed.elements.note.value,"טיוטה שלא נשלחה");
+});
+
+
+test("deliberately opening a previous version is not undone by polling",async()=>{
+  const p=await page();const key=p.run("stateKey(caseNow())");const saved={note:"הערה שמורה",verdict:"problem"};
+  p.elements.note.value=saved.note;
+  p.setQueue({cases:[{...p.item,candidateSha256:"revised"}],retiredCases:[p.item],decisions:{[key]:saved},token:"fixture",persistentQueue:true});
+  await p.run("refreshQueue()");assert.equal(p.run("caseNow().candidateSha256"),"revised");
+  p.elements["previous-version"].onclick();await p.run("refreshQueue()");
+  assert.equal(p.run("caseNow().candidateSha256"),"candidate");assert.equal(p.elements.note.value,saved.note);
+  p.elements["updated-version"].onclick();assert.equal(p.run("caseNow().candidateSha256"),"revised");
+});
+
+test("polling cannot interrupt a cut sequence between two audio slices",async()=>{
+  const p=await page({}, {pauseGaps:true});const key=p.run("stateKey(caseNow())");
+  const saved={note:"",verdict:"problem"};
+  const playback=p.run("play('cuts')");await p.flush();await p.finish();
+  assert.equal(p.run("currentSource"),null);assert.equal(p.run("playbackActive"),true);
+  p.setQueue({cases:[{...p.item,candidateSha256:"revised"}],retiredCases:[p.item],decisions:{[key]:saved},token:"fixture",persistentQueue:true});
+  await p.run("refreshQueue()");assert.equal(p.run("caseNow().candidateSha256"),"candidate");
+  assert.equal(p.run("playbackActive"),true);p.run("stop()");await p.resumeGap();await playback;
+  assert.equal(p.run("playbackActive"),false);
 });

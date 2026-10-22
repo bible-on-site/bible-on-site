@@ -25,6 +25,7 @@ import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { BookshelfModal } from "@/app/components/Bookshelf";
 import { getSeferColor } from "@/data/sefer-colors";
+import { SeferCoverContent } from "./SeferCoverContent";
 import seferStyles from "@/app/929/[number]/components/sefer.module.css";
 import "html-flip-book-react/styles.css";
 import "@/app/929/[number]/components/sefer.css";
@@ -155,17 +156,11 @@ export function UnitSeferBook({
 			aria-label="עטיפה קדמית"
 			style={{ "--cover-color": seferColor } as React.CSSProperties}
 		>
-			<div className={seferStyles.coverInner}>
-				<div className={seferStyles.coverContent}>
-					<div className={seferStyles.coverOrnament}>✦</div>
-					<h1 className={seferStyles.coverTitle}>ספר {seferName}</h1>
-					<div className={seferStyles.coverDivider} />
-					<p className={seferStyles.coverSubtitle}>{coverSubtitle}</p>
-					{coverEdition && (
-						<p className={seferStyles.coverEdition}>{coverEdition}</p>
-					)}
-				</div>
-			</div>
+			<SeferCoverContent
+				seferName={seferName}
+				subtitle={coverSubtitle}
+				edition={coverEdition}
+			/>
 		</section>
 	);
 	const backCover = (

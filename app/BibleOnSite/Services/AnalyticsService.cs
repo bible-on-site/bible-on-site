@@ -16,13 +16,15 @@ public sealed class AnalyticsService : IAnalyticsService
 	// the SDK layer for marked launches, but this keeps custom events no-ops
 	// even if a persisted flag ever let the SDK stay enabled. DISABLE_ANALYTICS
 	// builds (Debug/e2e — see DisableAnalytics in the csproj) never emit at all.
+	// The same consent gate as the launch paths applies per call (#2400) so a
+	// mid-session revoke stops custom events, not just the next launch.
 	private static bool IsAvailable =>
 #if DISABLE_ANALYTICS
 		false;
 #elif ANDROID
-		!SearchIndexService.IsE2eMarkedProcess();
+		AnalyticsConsent.IsCollectionEnabled(new MauiPreferencesStorage());
 #elif IOS
-		MauiProgram.IsFirebaseInitialized && !SearchIndexService.IsE2eMarkedProcess();
+		MauiProgram.IsFirebaseInitialized && AnalyticsConsent.IsCollectionEnabled(new MauiPreferencesStorage());
 #else
 		false;
 #endif

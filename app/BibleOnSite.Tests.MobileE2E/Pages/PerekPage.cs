@@ -44,6 +44,11 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
             {
                 // The carousel can replace its native views between lookup and inspection.
             }
+            catch (WebDriverTimeoutException)
+            {
+                // A proxied command cut at the driver timeout is one failed
+                // poll, not a dead session — the next lookup retries fresh.
+            }
             Thread.Sleep(200);
         }
         throw new WebDriverTimeoutException($"No visible element matching {locator} met the condition within {timeout.TotalSeconds} seconds.");
@@ -77,6 +82,11 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
             {
                 // The carousel can replace its native views between lookup and inspection.
             }
+            catch (WebDriverTimeoutException)
+            {
+                // A proxied command cut at the driver timeout is one failed
+                // poll, not a dead session — the next lookup retries fresh.
+            }
             Thread.Sleep(200);
         }
         throw new WebDriverTimeoutException($"Element matching {locator} stayed visible for {timeout.TotalSeconds} seconds.");
@@ -95,14 +105,21 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
         var frame = Rectangle.Empty;
         while (DateTime.UtcNow < deadline)
         {
-            var element = WaitFor(locator);
-            var actual = MobilePlatformAdapter.ReadFrame(element);
-            var current = new Rectangle(actual.Location, actual.Size);
-            if (current == frame)
+            try
             {
-                return (current.Location, current.Size);
+                var element = WaitFor(locator);
+                var actual = MobilePlatformAdapter.ReadFrame(element);
+                var current = new Rectangle(actual.Location, actual.Size);
+                if (current == frame)
+                {
+                    return (current.Location, current.Size);
+                }
+                frame = current;
             }
-            frame = current;
+            catch (WebDriverTimeoutException)
+            {
+                // A straggler lookup or frame read retries within the budget.
+            }
             Thread.Sleep(250);
         }
         throw new WebDriverTimeoutException($"The frame of {locator} did not stabilize within {timeout.TotalSeconds} seconds.");
@@ -116,9 +133,10 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
     /// A long commentary hit can land several screens below its heading. Scroll
     /// back to verify the selected commentary before testing reader history.
     /// </summary>
-    public AppiumElement ScrollBackTo(string automationId, Func<AppiumElement, bool> condition)
+    public AppiumElement ScrollBackTo(string automationId, string text)
     {
-        var locator = platform.AutomationId(automationId);
+        var locator = platform.AutomationIdWithText(automationId, text);
+        Func<AppiumElement, bool> condition = element => element.Text == text;
         var deadline = DateTime.UtcNow.AddSeconds(45);
         AppiumElement? reader = null;
         Rectangle? lastHeading = null;
@@ -126,7 +144,7 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
         {
             try
             {
-                var window = driver.Manage().Window.Size;
+                var window = DriverTelemetry.WindowSize(driver);
                 var remaining = deadline - DateTime.UtcNow;
                 if (remaining <= TimeSpan.Zero) { break; }
                 reader ??= WaitFor("PasukimCollection", element => element.Size.Width >= window.Width / 2, remaining);
@@ -163,6 +181,11 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
             {
                 reader = null;
             }
+            catch (WebDriverTimeoutException)
+            {
+                // A straggler command during scroll churn retries the whole
+                // iteration instead of ending the return budget early.
+            }
         }
         throw new WebDriverTimeoutException($"The selected heading {automationId} was not found within the reader's 45-second return budget; last frame: {lastHeading}.");
     }
@@ -178,7 +201,7 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
         var menu = WaitFor("CircularMenuButton");
         var text = WaitFor("TextButton");
         var fullScreen = WaitFor("FullScreenButton");
-        var window = driver.Manage().Window.Size;
+        var window = DriverTelemetry.WindowSize(driver);
         // Every property access queries the device. Read each dimension once
         // so layout assertions do not repeatedly snapshot the UI.
         var buttons = new[] { menu, text, fullScreen }
@@ -224,7 +247,7 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
 
             Size Window()
             {
-                window ??= driver.Manage().Window.Size;
+                window ??= DriverTelemetry.WindowSize(driver);
                 return window.Value;
             }
         }
@@ -239,7 +262,7 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
 
         Size Viewport()
         {
-            viewport ??= driver.Manage().Window.Size;
+            viewport ??= DriverTelemetry.WindowSize(driver);
             return viewport.Value;
         }
     }

@@ -1,3 +1,4 @@
+using BibleOnSite.Tests.MobileE2E.Platforms;
 using OpenQA.Selenium.Appium;
 using Xunit;
 
@@ -14,7 +15,6 @@ namespace BibleOnSite.Tests.MobileE2E;
 [Collection("Mobile device")]
 [Trait("Category", "MobileE2E")]
 [Trait("Platform", "iOS")]
-[Trait("Shard", "2")]
 public sealed class PerushimHtmlScrollStabilityTests(ITestOutputHelper output, MobileDeviceSession session)
     : MobileDeviceTest(output, session)
 {
@@ -37,17 +37,16 @@ public sealed class PerushimHtmlScrollStabilityTests(ITestOutputHelper output, M
         Assert.True(checkedCount > 0,
             "Synthetic perushim must render checkboxes — otherwise HtmlView cells are never created");
 
-        // Grouping must retain every paragraph, including text far outside the
-        // visible viewport. This also exercises the formerly blocking AX lookup.
-        Page.WaitFor("CommentaryTextSection");
+        // Only sections near the viewport are exposed (AccessibleTextSectionsTests
+        // proves the split keeps every paragraph); the 2,200-line document must
+        // not put its ~147 sections into every WDA snapshot.
+        Page.WaitFor(Platform.DisplayedAutomationId("CommentaryTextSection"));
         var sections = System.Xml.Linq.XDocument.Parse(Driver!.PageSource).Descendants()
             .Where(element => (string?)element.Attribute("name") == "CommentaryTextSection")
             .Select(element => (string?)element.Attribute("label") ?? string.Empty).ToArray();
-        Assert.NotEmpty(sections);
+        Assert.InRange(sections.Length, 1, 20);
         Assert.All(sections, text => Assert.InRange(text.Length, 1, 1024));
-        var spokenText = string.Concat(sections);
-        Assert.Equal(2200, System.Text.RegularExpressions.Regex.Matches(spokenText, "פירוש ארוך").Count);
-        Assert.Contains("עם פירוש נוסף על הפסוק.", spokenText);
+        Assert.Contains("פירוש ארוך", string.Concat(sections));
         var sourceBeforeStorm = Page.Source;
         var verseBeforeStorm = Page.FirstPasuk;
         SaveDiagnostics("LongPerushimBeforeScroll", "passed");
@@ -63,6 +62,15 @@ public sealed class PerushimHtmlScrollStabilityTests(ITestOutputHelper output, M
         Storm(bottomY, topY);
         Storm(topY, bottomY);
 
+        // The last flick's inertia keeps the collection decelerating and
+        // recycling cells on the main thread — that is the starvation that
+        // stretched every later WDA command past the 45s return budget. A
+        // short gutter drag takes scroll tracking and stops the momentum.
+        var readerFrame = MobilePlatformAdapter.ReadFrame(list);
+        Driver!.PerformActions([ReaderScrollActions.Brake(
+            new System.Drawing.Rectangle(readerFrame.Location, readerFrame.Size),
+            DriverTelemetry.WindowSize(Driver))]);
+
         // WDA resolves every pointerMove against the app element's AX snapshot
         // during synthesis, so keep each request short. queryAppState asks the
         // driver for the app lifecycle state without walking the view tree —
@@ -70,12 +78,21 @@ public sealed class PerushimHtmlScrollStabilityTests(ITestOutputHelper output, M
         // stalling for minutes if the app did crash.
         void Storm(int fromY, int toY)
         {
+            var burst = 0;
             foreach (var sequence in PerekScrollStabilityTests.CreateFlickBursts(
                 centerX, fromY, centerX, toY, 20))
             {
-                var midState = Convert.ToInt64(Driver!.ExecuteScript("mobile: queryAppState",
-                    new Dictionary<string, object> { ["bundleId"] = "com.tanah.daily929" }));
-                Assert.Equal(4L, midState);
+                // Every health probe is a queued XCTest command; on a churning
+                // app it costs more than the burst it precedes. Every fourth
+                // burst still bounds a crash's stall to a handful of seconds
+                // while the final state assert below catches anything later.
+                if (burst % 4 == 0)
+                {
+                    var midState = Convert.ToInt64(Driver!.ExecuteScript("mobile: queryAppState",
+                        new Dictionary<string, object> { ["bundleId"] = "com.tanah.daily929" }));
+                    Assert.Equal(4L, midState);
+                }
+                burst++;
                 Driver!.PerformActions([sequence]);
             }
         }
@@ -88,7 +105,7 @@ public sealed class PerushimHtmlScrollStabilityTests(ITestOutputHelper output, M
         Assert.Equal(sourceBeforeStorm, Page.Source);
         // Opposite flicks need not cancel their inertia. The reader can remain
         // inside the huge note, with every verse outside the visible viewport.
-        Page.ScrollBackTo("PasukText", element => element.Text == verseBeforeStorm);
+        Page.ScrollBackTo("PasukText", verseBeforeStorm);
         Assert.Equal(verseBeforeStorm, Page.FirstPasuk);
         SaveDiagnostics("LongPerushimAfterScroll", "passed");
     });

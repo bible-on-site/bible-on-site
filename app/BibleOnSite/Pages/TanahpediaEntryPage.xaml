@@ -18,6 +18,7 @@
               ColumnDefinitions="Auto,*,Auto"
               BackgroundColor="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}">
             <Button Grid.Column="0"
+                    x:Name="BackButton"
                     Text="→"
                     FontSize="24"
                     BackgroundColor="Transparent"
@@ -36,7 +37,8 @@
 
         <Grid Grid.Row="1">
             <!-- Entry content -->
-            <ScrollView IsVisible="{Binding ShowEntry}">
+            <ScrollView x:Name="EntryScroll"
+                        IsVisible="{Binding ShowEntry}">
                 <VerticalStackLayout Padding="16" Spacing="14">
                     <VerticalStackLayout IsVisible="{Binding IsDisambiguation, Converter={StaticResource InvertedBoolConverter}}"
                                          Spacing="14">
@@ -84,7 +86,7 @@
                              source-backed card tree, same layout as the
                              website's mobile PersonFamilyTree -->
                         <controls:TanahpediaFamilyTreeView Tree="{Binding FamilyTree}"
-                                                           EntryTappedCommand="{Binding OpenEntryCommand}"
+                                                           EntryTappedCommand="{Binding OpenPersonEntryCommand}"
                                                            IsVisible="{Binding HasFamily}"/>
 
                         <!-- Admin-authored HTML body -->

@@ -1,3 +1,4 @@
+using BibleOnSite.Tests.MobileE2E.Platforms;
 using OpenQA.Selenium;
 using OpenQA.Selenium.Appium;
 using Xunit;
@@ -5,9 +6,9 @@ using Xunit;
 namespace BibleOnSite.Tests.MobileE2E;
 
 // One device per matrix runner; scenarios on that device run sequentially.
-// CI keeps the long commentary and rapid verse storms on separate runners.
-// The ten iOS cases remain balanced across three runners. Android runs all six
-// shared scenarios without a shard filter.
+// iOS shards the suite across per-shard runners (#2263): each runner executes
+// the case manifest the dynamic planner assigned it. Android runs every
+// applicable scenario on one emulator.
 [Collection("Mobile device")]
 [Trait("Category", "MobileE2E")]
 [Trait("Platform", "Shared")]
@@ -15,7 +16,6 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
     : MobileDeviceTest(output, session)
 {
     [Fact]
-    [Trait("Shard", "1")]
     public void StartupDisplaysPackagedPesukimAndUsableBottomNavigation() => Scenario(() =>
     {
         Assert.NotEmpty(Page.Source);
@@ -25,7 +25,6 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
     });
 
     [Fact]
-    [Trait("Shard", "3")]
     public void SearchReplacesTheSourceAndGroupsBooksInThreeColumns() => Scenario(() =>
     {
         Assert.NotEmpty(Page.FirstPasuk);
@@ -40,11 +39,12 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         Page.WaitFor("RecentSearches");
         Assert.DoesNotContain(Driver!.FindElements(Platform.AutomationId("PerekHeader")), element => element.Displayed);
         var searchPage = Page.WaitFor("SearchPanel");
-        Assert.InRange(searchPage.Size.Width, Driver.Manage().Window.Size.Width - 8, Driver.Manage().Window.Size.Width);
+        var windowWidth = DriverTelemetry.WindowSize(Driver!).Width;
+        Assert.InRange(searchPage.Size.Width, windowWidth - 8, windowWidth);
         SaveDiagnostics("SearchPageRecentSearches", "passed");
         Page.Tap("SearchKindsTab");
         Page.WaitFor("SearchKindPerek");
-        Platform.DismissSearchSheet(Driver);
+        Platform.DismissSearchSheet(Driver!);
         Page.WaitForHidden("SearchSheet");
         AssertBookGroupColumns();
         Platform.RevealTrailingSearchChips(Driver);
@@ -75,7 +75,6 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
     });
 
     [Fact]
-    [Trait("Shard", "1")]
     public void FloatingSearchFindsMisspelledChapterAndUnpointedVerse() => Scenario(() =>
     {
         Assert.NotEmpty(Page.FirstPasuk);
@@ -86,7 +85,7 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         {
             Page.Tap("SearchKindPerush");
         }
-        Page.Tap("SearchSheetApplyButton");
+        Platform.DismissSearchSheet(Driver!);
         Page.WaitForHidden("SearchSheet");
         SearchFor("בראשיט 1", "בראשית א");
         SaveDiagnostics("FloatingSearchChapterResults", "passed");
@@ -114,7 +113,6 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
     });
 
     [Fact]
-    [Trait("Shard", "3")]
     public void FloatingSearchCommentaryJumpRestoresPhraseResultsAndPosition() => Scenario(() =>
     {
         var driver = Driver!;
@@ -126,7 +124,7 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         {
             Page.Tap("SearchKindPerush");
         }
-        Page.Tap("SearchSheetApplyButton");
+        Platform.DismissSearchSheet(Driver!);
         Page.WaitForHidden("SearchSheet");
         SearchFor("בראשית ברא אלהים", "בראשית א א");
         // CI ships the generation-matched index; this must be an ordinary local query.
@@ -138,7 +136,7 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         AssertRegularReader();
         // Capture the highlighted match, then scroll back to the selected heading.
         SaveDiagnostics("FloatingSearchCommentaryLanding", "passed");
-        Page.ScrollBackTo("InlinePerushName", element => element.Text == commentaryName);
+        Page.ScrollBackTo("InlinePerushName", commentaryName);
         SaveDiagnostics("FloatingSearchCommentaryReader", "passed");
         // Menu navigation must keep this reader above the retained search page.
         var readerSource = Page.Source;
@@ -166,7 +164,7 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         {
             Platform.Tap(driver, Page.WaitFor("SearchResultTitle", element => element.Text == title));
             AssertRegularReader();
-            Page.ScrollBackTo("InlinePerushName", element => element.Text == commentaryName);
+            Page.ScrollBackTo("InlinePerushName", commentaryName);
             SaveDiagnostics("FloatingSearchReview", "passed");
         }
     });
@@ -175,10 +173,9 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
     {
         Page.WaitFor("PerekSource", element => !string.IsNullOrEmpty(element.Text));
         Assert.True(Page.WaitFor("ReaderNavigationButton").Enabled);
-        Assert.DoesNotContain(Driver!.FindElements(Platform.AutomationId("PerekSearchInput")), element => element.Displayed);
-        Assert.DoesNotContain(Driver!.FindElements(Platform.AutomationId("SearchPanel")), element => element.Displayed);
-        Assert.DoesNotContain(Driver!.FindElements(Platform.AutomationId("SelectionBackButton")), element => element.Displayed);
-        Assert.DoesNotContain(Driver.FindElements(Platform.AutomationId("FocusedPasukText")), element => element.Displayed);
+        Assert.DoesNotContain(Driver!.FindElements(
+            Platform.AnyOfAutomationIds("PerekSearchInput", "SearchPanel", "SelectionBackButton", "FocusedPasukText")),
+            element => element.Displayed);
     }
 
     private void SearchFor(string text, string expectedTitle)
@@ -272,26 +269,25 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         Page.WaitFor("SearchBook2", element => Platform.IsChecked(element));
         Page.Tap("SearchGroup2");
         Page.Tap("SearchGroup3");
-        Page.Tap("SearchSheetApplyButton");
+        Platform.DismissSearchSheet(Driver!);
         Page.WaitForHidden("SearchSheet");
         // XCTest correctly marks background chips as covered by the sheet.
         // Assert each summary after applying the selection, as a user reads it.
         Page.WaitFor("SearchBooksSummary", element => element.Text == "תורה");
         Page.Tap("SearchBooksTab");
         Page.Tap("SearchBook1");
-        Page.Tap("SearchSheetApplyButton");
+        Platform.DismissSearchSheet(Driver!);
         Page.WaitForHidden("SearchSheet");
         Page.WaitFor("SearchBooksSummary", element => element.Text == "שמות +3");
         Page.Tap("SearchBooksTab");
         Page.Tap("SearchBook1");
         SaveDiagnostics("FloatingSearchBookColumns", "passed");
-        Page.Tap("SearchSheetApplyButton");
+        Platform.DismissSearchSheet(Driver!);
         Page.WaitForHidden("SearchSheet");
         Page.WaitFor("SearchBooksSummary", element => element.Text == "תורה");
     }
 
     [Fact]
-    [Trait("Shard", "3")]
     public void AdjacentPerekNavigationChangesTheTextAndReturnsToTheOriginal() => Scenario(() =>
     {
         var source = Page.Source;
@@ -316,7 +312,6 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
     });
 
     [Fact]
-    [Trait("Shard", "2")]
     public void NativeFlyoutOpensPreferencesAndBackReturnsToThePerek() => Scenario(() =>
     {
         var source = Page.Source;

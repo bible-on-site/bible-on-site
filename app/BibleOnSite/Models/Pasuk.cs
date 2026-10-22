@@ -21,6 +21,15 @@ public partial class Pasuk : ObservableObject
     [ObservableProperty]
     private bool _isSelected;
 
+    // Selection changes the recitation word's styling, so the cached
+    // FormattedString must rebuild on every toggle.
+    partial void OnIsSelectedChanged(bool value)
+    {
+        _ = value;
+        _formattedText = null;
+        OnPropertyChanged(nameof(FormattedText));
+    }
+
     private int? _recitingSegment;
 
     public int? RecitingSegment
@@ -117,6 +126,14 @@ public partial class Pasuk : ObservableObject
         }
     }
 
+    private static readonly Color QriColor = Color.FromArgb("#637598");
+    private static readonly Color RecitingTextColor = Color.FromArgb("#1c427b");
+    private static readonly Color RecitingBackgroundColor = Color.FromArgb("#e9eff8");
+    // On a selected row the plain recitation tint drowns in the selection
+    // background, so the recited word gets a stronger tint and weight (#2473).
+    private static readonly Color RecitingSelectedBackgroundColor = Color.FromArgb("#a8cbf4");
+    private static readonly Color MasoraMarkColor = Color.FromArgb("#9a92d1");
+
     private FormattedString BuildFormattedText()
     {
         var formatted = new FormattedString();
@@ -157,19 +174,21 @@ public partial class Pasuk : ObservableObject
                         formatted.Spans.Add(new Span
                         {
                             Text = "(קְרִי: ",
-                            TextColor = Color.FromArgb("#637598"),
+                            TextColor = QriColor,
                             FontSize = 14
                         });
+                        var variantReciting = RecitingSegment == i + 1;
                         formatted.Spans.Add(new Span
                         {
                             Text = DivineNameMasking.MaskText(segment.Value),
-                            TextColor = Color.FromArgb(RecitingSegment == i + 1 ? "#1c427b" : "#637598"),
-                            BackgroundColor = RecitingSegment == i + 1 ? Color.FromArgb("#e9eff8") : null
+                            TextColor = variantReciting ? RecitingTextColor : QriColor,
+                            BackgroundColor = variantReciting ? RecitingBackground() : null,
+                            FontAttributes = variantReciting && IsSelected ? FontAttributes.Bold : FontAttributes.None
                         });
                         formatted.Spans.Add(new Span
                         {
                             Text = ")",
-                            TextColor = Color.FromArgb("#637598"),
+                            TextColor = QriColor,
                             FontSize = 14
                         });
                     }
@@ -184,8 +203,9 @@ public partial class Pasuk : ObservableObject
                                 formatted.Spans.Add(new Span
                                 {
                                     Text = DivineNameMasking.MaskText(segment.Value),
-                                    TextColor = Color.FromArgb("#1c427b"),
-                                    BackgroundColor = Color.FromArgb("#e9eff8")
+                                    TextColor = RecitingTextColor,
+                                    BackgroundColor = RecitingBackground(),
+                                    FontAttributes = IsSelected ? FontAttributes.Bold : FontAttributes.None
                                 });
                             }
                             else
@@ -201,7 +221,7 @@ public partial class Pasuk : ObservableObject
                     formatted.Spans.Add(new Span
                     {
                         Text = " {פ} ",
-                        TextColor = Color.FromArgb("#9a92d1"),
+                        TextColor = MasoraMarkColor,
                         FontAttributes = FontAttributes.Bold
                     });
                     break;
@@ -211,7 +231,7 @@ public partial class Pasuk : ObservableObject
                     formatted.Spans.Add(new Span
                     {
                         Text = " {ס} ",
-                        TextColor = Color.FromArgb("#9a92d1"),
+                        TextColor = MasoraMarkColor,
                         FontAttributes = FontAttributes.Bold
                     });
                     break;
@@ -238,6 +258,8 @@ public partial class Pasuk : ObservableObject
         FlushPlain();
         return formatted;
     }
+
+    private Color RecitingBackground() => IsSelected ? RecitingSelectedBackgroundColor : RecitingBackgroundColor;
 }
 
 /// <summary>

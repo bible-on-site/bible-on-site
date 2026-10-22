@@ -35,9 +35,10 @@ describe("NavBar", () => {
 			"href",
 			"/929",
 		);
-		expect(
-			screen.getByRole("link", { name: "מסורה על הפרק" }),
-		).toHaveAttribute("href", "/מסורה");
+		expect(screen.getByRole("link", { name: "מסורה על הפרק" })).toHaveAttribute(
+			"href",
+			"/מסורה",
+		);
 		expect(screen.getByRole("link", { name: /הרבנים/ })).toHaveAttribute(
 			"href",
 			"/929/authors",
@@ -77,6 +78,14 @@ describe("NavBar", () => {
 		expect(screen.getByRole("link", { name: /קבוצת ווטסאפ/ })).toHaveAttribute(
 			"href",
 			"/whatsappGroup",
+		);
+	});
+
+	it("renders the accessibility statement link", () => {
+		render(<NavBar />);
+		expect(screen.getByRole("link", { name: /הצהרת נגישות/ })).toHaveAttribute(
+			"href",
+			"/accessibility",
 		);
 	});
 

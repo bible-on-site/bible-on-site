@@ -13,6 +13,19 @@ public enum PerekToLoad
 }
 
 /// <summary>
+/// Android-only override for the visible in-app Back/Up control (#2467).
+/// PlatformDefault and Hide both rely on system Back on Android; Show
+/// duplicates it in the app chrome. Other platforms ignore the value —
+/// the Android choice must not leak into iOS/Windows behavior.
+/// </summary>
+public enum InAppBackButtonPreference
+{
+    PlatformDefault = 0,
+    Show = 1,
+    Hide = 2
+}
+
+/// <summary>
 /// Service for managing user preferences.
 /// Uses IPreferencesStorage abstraction for testability.
 /// </summary>
@@ -90,6 +103,7 @@ public class PreferencesService
     private const string PerekToLoadKey = "perekToLoad";
     private const string BookmarkedPerakimKey = "bookmarkedPerakim";
     private const string MasoraMenuEnabledKey = "masoraMenuEnabled";
+    private const string InAppBackButtonKey = "inAppBackButton";
 
     // הסתר שם השם — stored values mirror the website's divineNameMasking
     // settings (same option spellings), so the policy stays portable.
@@ -136,6 +150,30 @@ public class PreferencesService
         [DivineNameMaskOption.AsIs, DivineNameMaskOption.Hyphen, DivineNameMaskOption.Custom];
 
 
+    private const string QriynotEnabledKey = "qriynotEnabled";
+    private bool _qriynotEnabled = true;
+
+    /// <summary>
+    /// Global קריינות switch (העדפות → על הפרק). Default on for new and upgraded
+    /// installations — an unset preference resolves to enabled, while a stored
+    /// explicit choice (including off) is honored (#2472).
+    /// </summary>
+    public bool QriynotEnabled
+    {
+        get => _qriynotEnabled;
+        set
+        {
+            if (_qriynotEnabled == value)
+            {
+                return;
+            }
+
+            _qriynotEnabled = value;
+            _storage.Set(QriynotEnabledKey, value);
+            OnPreferencesChanged();
+        }
+    }
+
     private double _recitationSpeed = 1;
     private double _recitationVolume = 1;
     private double _lessonsVolume = 1;
@@ -181,12 +219,14 @@ public class PreferencesService
 
     #region הסתר שם השם
 
-    private bool _divineNameMaskingEnabled;
+    // #2404: masking ships enabled with אל → א-ל; explicit stored false/asis
+    // choices are still honored on Load.
+    private bool _divineNameMaskingEnabled = true;
     private DivineNameMaskOption _divineNameMaskElohim = DivineNameMaskOption.Hyphen;
     private string _divineNameMaskElohimCustom = "";
     private DivineNameMaskOption _divineNameMaskYhwh = DivineNameMaskOption.Heh;
     private string _divineNameMaskYhwhCustom = "";
-    private DivineNameMaskOption _divineNameMaskEl = DivineNameMaskOption.AsIs;
+    private DivineNameMaskOption _divineNameMaskEl = DivineNameMaskOption.Hyphen;
     private DivineNameMaskOption _divineNameMaskShaddai = DivineNameMaskOption.AsIs;
     private string _divineNameMaskShaddaiCustom = "";
 
@@ -244,7 +284,7 @@ public class PreferencesService
     {
         get => _divineNameMaskEl;
         set => SetMaskOption(ref _divineNameMaskEl, value, ElOptions,
-            DivineNameMaskOption.AsIs, DivineNameMaskElKey);
+            DivineNameMaskOption.Hyphen, DivineNameMaskElKey);
     }
 
     /// <summary>שדי display option (asis/hyphen/custom).</summary>
@@ -320,6 +360,64 @@ public class PreferencesService
     }
 
     #endregion
+
+    private string _analyticsConsent = "";
+
+    /// <summary>
+    /// Analytics collection opt-in (#2400, Amendment 13). Defaults off until
+    /// the user explicitly grants; readable pre-Load via
+    /// <see cref="AnalyticsConsent.IsGranted"/> for the platform launch paths
+    /// that run before preferences load.
+    /// </summary>
+    public bool AnalyticsConsentEnabled => _analyticsConsent == AnalyticsConsent.GrantedValue;
+
+    /// <summary>True once the user answered the consent prompt (either way).</summary>
+    public bool AnalyticsConsentAsked =>
+        _analyticsConsent is AnalyticsConsent.GrantedValue or AnalyticsConsent.DeniedValue;
+
+    /// <summary>
+    /// Records the consent answer and applies it to the Firebase collection
+    /// flag immediately, so a mid-session grant/revoke takes effect live.
+    /// </summary>
+    public void SetAnalyticsConsent(bool granted)
+    {
+        var next = granted ? AnalyticsConsent.GrantedValue : AnalyticsConsent.DeniedValue;
+        if (_analyticsConsent == next)
+        {
+            return;
+        }
+
+        _analyticsConsent = next;
+        AnalyticsConsent.Save(_storage, granted);
+        OnPreferencesChanged();
+    }
+
+    private InAppBackButtonPreference _inAppBackButton = InAppBackButtonPreference.PlatformDefault;
+
+    /// <summary>
+    /// Visible in-app Back/Up chrome preference (#2467). Persisted tri-state;
+    /// applied only by the Android chrome policy — iOS/Windows always follow
+    /// their platform default. Unset/stale values resolve to PlatformDefault.
+    /// </summary>
+    public InAppBackButtonPreference InAppBackButton
+    {
+        get => _inAppBackButton;
+        set
+        {
+            if (!Enum.IsDefined(value))
+            {
+                value = InAppBackButtonPreference.PlatformDefault;
+            }
+            if (_inAppBackButton == value)
+            {
+                return;
+            }
+
+            _inAppBackButton = value;
+            _storage.Set(InAppBackButtonKey, (int)value);
+            OnPreferencesChanged();
+        }
+    }
 
     private bool _masoraMenuEnabled;
 
@@ -431,6 +529,16 @@ public class PreferencesService
     public void Load()
     {
         _masoraMenuEnabled = _storage.Get(MasoraMenuEnabledKey, false);
+        _qriynotEnabled = _storage.Get(QriynotEnabledKey, true);
+        var storedBackButton = _storage.Get(InAppBackButtonKey, (int)InAppBackButtonPreference.PlatformDefault);
+        _inAppBackButton = Enum.IsDefined((InAppBackButtonPreference)storedBackButton)
+            ? (InAppBackButtonPreference)storedBackButton
+            : InAppBackButtonPreference.PlatformDefault;
+        var storedConsent = _storage.Get(AnalyticsConsent.StorageKey, "");
+        // Garbage keeps the "never asked" state so the prompt can still run.
+        _analyticsConsent = storedConsent is AnalyticsConsent.GrantedValue or AnalyticsConsent.DeniedValue
+            ? storedConsent
+            : "";
         _recitationSpeed = Normalize(_storage.Get("recitationSpeed", 1.0), 1, 0.5, 2);
         _recitationVolume = Normalize(_storage.Get("recitationVolume", 1.0), 1, 0, 1);
         _lessonsVolume = Normalize(_storage.Get("lessonsVolume", 1.0), 1, 0, 1);
@@ -444,15 +552,15 @@ public class PreferencesService
 
         _perekToLoad = (PerekToLoad)_storage.Get(PerekToLoadKey, (int)PerekToLoad.Todays);
 
-        _divineNameMaskingEnabled = _storage.Get(DivineNameMaskingEnabledKey, false);
+        _divineNameMaskingEnabled = _storage.Get(DivineNameMaskingEnabledKey, true);
         _divineNameMaskElohim = ParseMaskOption(_storage.Get(DivineNameMaskElohimKey, "hyphen"),
             ElohimOptions, DivineNameMaskOption.Hyphen);
         _divineNameMaskElohimCustom = _storage.Get(DivineNameMaskElohimCustomKey, "");
         _divineNameMaskYhwh = ParseMaskOption(_storage.Get(DivineNameMaskYhwhKey, "heh"),
             YhwhOptions, DivineNameMaskOption.Heh);
         _divineNameMaskYhwhCustom = _storage.Get(DivineNameMaskYhwhCustomKey, "");
-        _divineNameMaskEl = ParseMaskOption(_storage.Get(DivineNameMaskElKey, "asis"),
-            ElOptions, DivineNameMaskOption.AsIs);
+        _divineNameMaskEl = ParseMaskOption(_storage.Get(DivineNameMaskElKey, "hyphen"),
+            ElOptions, DivineNameMaskOption.Hyphen);
         _divineNameMaskShaddai = ParseMaskOption(_storage.Get(DivineNameMaskShaddaiKey, "asis"),
             ShaddaiOptions, DivineNameMaskOption.AsIs);
         _divineNameMaskShaddaiCustom = _storage.Get(DivineNameMaskShaddaiCustomKey, "");

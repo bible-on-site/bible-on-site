@@ -193,6 +193,36 @@
                          Margin="0,0,52,0"
                          BackgroundColor="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray700}}"/>
 
+                <!-- אנליטיקה -->
+                <Grid ColumnDefinitions="Auto,*,Auto"
+                      Padding="16,14"
+                      AutomationId="SettingsAnalyticsRow"
+                      SemanticProperties.Description="אנליטיקה">
+                    <Label Text="{x:Static fonts:FluentUI.chart_multiple_24_regular}"
+                           FontFamily="FluentIcons"
+                           FontSize="24"
+                           TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray350}}"
+                           VerticalOptions="Center"
+                           Margin="0,0,12,0"/>
+                    <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                        <Label Text="אנליטיקה"
+                               FontSize="16"
+                               TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
+                        <Label Text="שיתוף נתוני שימוש לשיפור הישומון"
+                               FontSize="13"
+                               LineBreakMode="WordWrap"
+                               TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
+                    </VerticalStackLayout>
+                    <Switch Grid.Column="2"
+                            IsToggled="{Binding AnalyticsConsentEnabled}"
+                            AutomationId="AnalyticsConsentSwitch"
+                            VerticalOptions="Center"/>
+                </Grid>
+
+                <BoxView HeightRequest="1"
+                         Margin="0,0,52,0"
+                         BackgroundColor="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray700}}"/>
+
                 <!-- תמיכה -->
                 <Grid ColumnDefinitions="Auto,*,Auto"
                       Padding="16,14"

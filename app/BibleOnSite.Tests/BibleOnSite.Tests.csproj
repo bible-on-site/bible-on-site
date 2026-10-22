@@ -22,9 +22,9 @@
     <PackageReference Include="FluentAssertions" Version="8.11.0" />
     <PackageReference Include="Moq" Version="4.21.0" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
-    <PackageReference Include="Microsoft.Maui.Controls" Version="10.0.110" />
+    <PackageReference Include="Microsoft.Maui.Controls" Version="10.0.120" />
     <PackageReference Include="GraphQL.Client" Version="6.1.0" />
-    <PackageReference Include="GraphQL.Client.Serializer.Newtonsoft" Version="6.1.0" />
+    <PackageReference Include="GraphQL.Client.Serializer.SystemTextJson" Version="6.1.0" />
     <PackageReference Include="sqlite-net-pcl" Version="1.11.285" />
   </ItemGroup>
 
@@ -35,6 +35,7 @@
     -->
     <Compile Include="..\BibleOnSite\Config\*.cs" Link="Config\%(Filename)%(Extension)" />
     <Compile Include="..\BibleOnSite\Converters\*.cs" Link="Converters\%(Filename)%(Extension)" />
+    <Compile Include="..\BibleOnSite\Services\AccessibilityStatement.cs" Link="Services\AccessibilityStatement.cs" />
     <Compile Include="..\BibleOnSite\Services\IRecitationAudioDecoder.cs" Link="Services\IRecitationAudioDecoder.cs" />
     <Compile Include="..\BibleOnSite\Services\RecitationService.cs" Link="Services\RecitationService.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\RecitationPreferencesViewModel.cs" Link="ViewModels\RecitationPreferencesViewModel.cs" />
@@ -47,6 +48,7 @@
     <Compile Include="..\BibleOnSite\ViewModels\SupportPreferencesViewModel.cs" Link="ViewModels\SupportPreferencesViewModel.cs" />
     <!-- Exclude XAML code-behind files as they require MAUI XAML compilation -->
     <Compile Include="..\BibleOnSite\Controls\*.cs" Exclude="..\BibleOnSite\Controls\*.xaml.cs;..\BibleOnSite\Controls\FloatingSearchBar.Filters.cs;..\BibleOnSite\Controls\MasoraUnitPickerPopup.Columns.cs" Link="Controls\%(Filename)%(Extension)" />
+    <Compile Include="..\BibleOnSite\Resources\Fonts\FluentUI.cs" Link="Resources\FluentUI.cs" />
     <Compile Include="..\BibleOnSite\Data\*.cs" Link="Data\%(Filename)%(Extension)" />
     <Compile Include="..\BibleOnSite\Helpers\*.cs" Link="Helpers\%(Filename)%(Extension)" />
     <Compile Include="..\BibleOnSite\Models\*.cs" Link="Models\%(Filename)%(Extension)" />
@@ -63,6 +65,7 @@
     <Compile Include="..\BibleOnSite\Services\SearchHistoryService.cs" Link="Services\SearchHistoryService.cs" />
     <Compile Include="..\BibleOnSite\Services\NetworkService.cs" Link="Services\NetworkService.cs" />
     <Compile Include="..\BibleOnSite\Services\IAnalyticsService.cs" Link="Services\IAnalyticsService.cs" />
+    <Compile Include="..\BibleOnSite\Services\AnalyticsConsent.cs" Link="Services\AnalyticsConsent.cs" />
     <Compile Include="..\BibleOnSite\Services\AnalyticsService.cs" Link="Services\AnalyticsService.cs" />
     <Compile Include="..\BibleOnSite\Services\AnalyticsScreens.cs" Link="Services\AnalyticsScreens.cs" />
     <Compile Include="..\BibleOnSite\Services\IPreferencesStorage.cs" Link="Services\IPreferencesStorage.cs" />
@@ -81,6 +84,7 @@
     <Compile Include="..\BibleOnSite\ViewModels\PerekViewModel.cs" Link="ViewModels\PerekViewModel.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\ParashaListViewModel.cs" Link="ViewModels\ParashaListViewModel.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\ParashaViewModel.cs" Link="ViewModels\ParashaViewModel.cs" />
+    <Compile Include="..\BibleOnSite\ViewModels\ParashaViewModel.Perushim.cs" Link="ViewModels\ParashaViewModel.Perushim.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\PreferencesViewModel.cs" Link="ViewModels\PreferencesViewModel.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\AuthorsViewModel.cs" Link="ViewModels\AuthorsViewModel.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\SearchViewModel.cs" Link="ViewModels\SearchViewModel.cs" />
@@ -88,6 +92,7 @@
     <Compile Include="..\BibleOnSite\ViewModels\ArticleDetailViewModel.cs" Link="ViewModels\ArticleDetailViewModel.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\TanahpediaViewModel.cs" Link="ViewModels\TanahpediaViewModel.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\TanahpediaEntityTypeViewModel.cs" Link="ViewModels\TanahpediaEntityTypeViewModel.cs" />
+    <Compile Include="..\BibleOnSite\ViewModels\TanahpediaSearchViewModel.cs" Link="ViewModels\TanahpediaSearchViewModel.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\TanahpediaEntryViewModel.cs" Link="ViewModels\TanahpediaEntryViewModel.cs" />
   </ItemGroup>
 

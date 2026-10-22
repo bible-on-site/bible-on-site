@@ -38,11 +38,13 @@ public sealed record DivineNameMaskingOptions(
     DivineNameMaskOption Shaddai,
     string ShaddaiCustom)
 {
+    // Per-name fields mirror the #2404 defaults (אל → א-ל) so this stays the
+    // "defaults with masking off" snapshot.
     public static readonly DivineNameMaskingOptions Disabled = new(
         Enabled: false,
         Elohim: DivineNameMaskOption.Hyphen, ElohimCustom: "",
         Yhwh: DivineNameMaskOption.Heh, YhwhCustom: "",
-        El: DivineNameMaskOption.AsIs,
+        El: DivineNameMaskOption.Hyphen,
         Shaddai: DivineNameMaskOption.AsIs, ShaddaiCustom: "");
 }
 

@@ -46,6 +46,37 @@ public class PasukDisplayItemsTests
     }
 
     [Fact]
+    public void Create_marks_the_only_copy_as_the_last_copy_in_normal_mode()
+    {
+        var items = PasukDisplayItems.Create(
+            [PasukOf(1, "אחד"), PasukOf(2, "שניים")], repeatEachPasuk: false);
+
+        // A single rendered copy is both first and last: it hosts the perushim.
+        items.Should().OnlyContain(i => i.IsLastCopy);
+    }
+
+    [Fact]
+    public void Create_puts_the_perush_host_after_both_copies_in_shnayim_mikra_mode()
+    {
+        // #2403: the rendered sequence per pasuk is מקרא, מקרא, פירוש — the
+        // last copy carries the commentary, never the row between the copies.
+        var pasuk1 = PasukOf(1, "אחד");
+        pasuk1.VisiblePerushNotes.Add(new PerushNoteDisplay { PerushName = "רש\"י" });
+        var pasuk2 = PasukOf(2, "שניים");
+        pasuk2.VisiblePerushNotes.Add(new PerushNoteDisplay { PerushName = "רמב\"ן" });
+
+        var items = PasukDisplayItems.Create([pasuk1, pasuk2], repeatEachPasuk: true);
+
+        items.Select(i => i.IsLastCopy).Should().Equal(false, true, false, true);
+        items.Select(i => i.PasukNum).Should().Equal(1, 1, 2, 2);
+        // Only the last copy of each pair binds notes: the row between the
+        // scripture copies stays empty rather than hiding dead duplicates.
+        items.Select(i => i.PerushNotes.Count).Should().Equal(0, 1, 0, 1);
+        items[1].PerushNotes[0].PerushName.Should().Be("רש\"י");
+        items[3].PerushNotes[0].PerushName.Should().Be("רמב\"ן");
+    }
+
+    [Fact]
     public void Create_shares_one_marker_per_pair_on_the_first_copy_only()
     {
         var pesukim = new List<Pasuk> { PasukOf(1, "אחד") };

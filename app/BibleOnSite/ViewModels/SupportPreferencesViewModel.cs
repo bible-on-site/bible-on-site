@@ -1,6 +1,7 @@
 using BibleOnSite.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Maui.ApplicationModel;
 
 namespace BibleOnSite.ViewModels;
 
@@ -49,7 +50,7 @@ public partial class SupportPreferencesViewModel : ObservableObject
                 File = new ShareFile(path),
             });
         }
-        catch (Exception ex)
+        catch (Exception ex) //NOSONAR — export spans IO/share platform errors; failure is reported to the user.
         {
             System.Diagnostics.Debug.WriteLine($"Export logs failed: {ex.Message}");
             await _navigator.DisplayAlertAsync("שגיאה", $"לא ניתן לייצא לוגים: {ex.Message}", "אישור");

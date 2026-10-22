@@ -91,11 +91,11 @@ public class PerekViewModelReadingModesTests
     public class Qriynot
     {
         [Fact]
-        public void qriynot_mode_defaults_to_off_with_no_header_button()
+        public void qriynot_defaults_on_but_the_header_button_still_needs_audio()
         {
             var viewModel = CreateViewModel();
 
-            viewModel.IsQriynotEnabled.Should().BeFalse();
+            viewModel.IsQriynotEnabled.Should().BeTrue();
             viewModel.HasCurrentPerekRecitation.Should().BeFalse();
             viewModel.ShowHeaderPlayButton.Should().BeFalse();
         }
@@ -121,7 +121,7 @@ public class PerekViewModelReadingModesTests
         }
 
         [Fact]
-        public void header_play_button_requires_both_the_checkbox_and_downloaded_audio()
+        public void header_play_button_requires_the_global_setting_and_downloaded_audio()
         {
             var viewModel = CreateViewModel(_ => true);
             viewModel.Perek = MakePerek(1);
@@ -130,6 +130,18 @@ public class PerekViewModelReadingModesTests
             viewModel.ShowHeaderPlayButton.Should().BeTrue();
 
             viewModel.IsQriynotEnabled = false;
+            viewModel.ShowHeaderPlayButton.Should().BeFalse();
+        }
+
+        [Fact]
+        public void isQriynotEnabled_mirrors_the_global_preference()
+        {
+            var viewModel = CreateViewModel(_ => true);
+            viewModel.Perek = MakePerek(1);
+
+            viewModel.IsQriynotEnabled = false;
+
+            viewModel.IsQriynotEnabled.Should().BeFalse();
             viewModel.ShowHeaderPlayButton.Should().BeFalse();
         }
 

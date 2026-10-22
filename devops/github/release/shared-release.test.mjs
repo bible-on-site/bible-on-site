@@ -211,7 +211,7 @@ for (const state of ["complete", "truncated", "unavailable", "invalid-id"]) {
 // One real Actions ZIP contains every iOS release output type. Re-extracting
 // it reproduces the production overwrite prompt without mocking unzip itself.
 const iosArtifactZip = Buffer.from(
-	"UEsDBBQAAAAAAAAAIQCgsmEUEgAAABIAAAAPAAAAQmlibGVPblNpdGUuaXBhc2lnbmVkIGlwYSBmaXh0dXJlUEsDBBQAAAAAAAAAIQBdhNurFQAAABUAAAAbAAAAYXNzZXRwYWNrcy9yZWNpdGF0aW9uXzEuYWFyYXBwbGUgYXJjaGl2ZSBmaXh0dXJlUEsDBBQAAAAAAAAAIQAWPgX8FQAAABUAAAAZAAAAcGF5bG9hZHMvcmVjaXRhdGlvbl8xLnppcGF1ZGlvIHBheWxvYWQgZml4dHVyZVBLAQIUABQAAAAAAAAAIQCgsmEUEgAAABIAAAAPAAAAAAAAAAAAAACAAQAAAABCaWJsZU9uU2l0ZS5pcGFQSwECFAAUAAAAAAAAACEAXYTbqxUAAAAVAAAAGwAAAAAAAAAAAAAAgAE/AAAAYXNzZXRwYWNrcy9yZWNpdGF0aW9uXzEuYWFyUEsBAhQAFAAAAAAAAAAhABY+BfwVAAAAFQAAABkAAAAAAAAAAAAAAIABjQAAAHBheWxvYWRzL3JlY2l0YXRpb25fMS56aXBQSwUGAAAAAAMAAwDNAAAA2QAAAAAA",
+	"UEsDBBQAAAAAAASsVV2gsmEUEgAAABIAAAAPAAAAQmlibGVPblNpdGUuaXBhc2lnbmVkIGlwYSBmaXh0dXJlUEsDBBQAAAAAAASsVV1dhNurFQAAABUAAAAbAAAAYXNzZXRwYWNrcy9yZWNpdGF0aW9uLTEuYWFyYXBwbGUgYXJjaGl2ZSBmaXh0dXJlUEsDBBQAAAAAAASsVV0WPgX8FQAAABUAAAAZAAAAcGF5bG9hZHMvcmVjaXRhdGlvbi0xLnppcGF1ZGlvIHBheWxvYWQgZml4dHVyZVBLAQIUABQAAAAAAASsVV2gsmEUEgAAABIAAAAPAAAAAAAAAAAAAACAAQAAAABCaWJsZU9uU2l0ZS5pcGFQSwECFAAUAAAAAAAErFVdXYTbqxUAAAAVAAAAGwAAAAAAAAAAAAAAgAE/AAAAYXNzZXRwYWNrcy9yZWNpdGF0aW9uLTEuYWFyUEsBAhQAFAAAAAAABKxVXRY+BfwVAAAAFQAAABkAAAAAAAAAAAAAAIABjQAAAHBheWxvYWRzL3JlY2l0YXRpb24tMS56aXBQSwUGAAAAAAMAAwDNAAAA2QAAAAAA",
 	"base64",
 );
 for (const scenario of [
@@ -310,11 +310,11 @@ for (const scenario of [
 				"signed ipa fixture",
 			);
 			assert.equal(
-				readFileSync(join(root, target, "assetpacks/recitation_1.aar"), "utf8"),
+				readFileSync(join(root, target, "assetpacks/recitation-1.aar"), "utf8"),
 				"apple archive fixture",
 			);
 			assert.equal(
-				readFileSync(join(root, target, "payloads/recitation_1.zip"), "utf8"),
+				readFileSync(join(root, target, "payloads/recitation-1.zip"), "utf8"),
 				"audio payload fixture",
 			);
 		}

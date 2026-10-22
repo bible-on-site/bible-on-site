@@ -17,6 +17,11 @@ import {
 	txQuery,
 	txQueryOne,
 } from "./db";
+import {
+	articleInvalidation,
+	articlePath,
+	revalidateWebsite,
+} from "./website-revalidate";
 
 /**
  * Derived article-search index sync. Every article write enqueues the article
@@ -261,7 +266,7 @@ export const createArticle = createServerFn({ method: "POST" })
 				: normalizeCoveringSources(data.coveringSources);
 
 		await ensureArticleSearchQueue();
-		return await transaction(async (conn) => {
+		const created = await transaction(async (conn) => {
 			if (coveringRows !== undefined) {
 				await assertCoveringSourcesExist(conn, coveringRows);
 			}
@@ -310,6 +315,12 @@ export const createArticle = createServerFn({ method: "POST" })
 				coveringSources: await txLoadCoveringSources(conn, newArticle.id),
 			};
 		});
+		// Post-commit: expire the website's article caches so the new article
+		// becomes public without a redeploy (see server/website-revalidate.ts).
+		await revalidateWebsite(
+			articleInvalidation(articlePath(created.perek_id, created.id)),
+		);
+		return created;
 	});
 
 // Update article
@@ -325,10 +336,19 @@ export const updateArticle = createServerFn({ method: "POST" })
 				: normalizeCoveringSources(data.coveringSources);
 
 		await ensureArticleSearchQueue();
-		return await transaction(async (conn) => {
+		let previousPerekId: number | null = null;
+		const updatedArticle = await transaction(async (conn) => {
 			if (coveringRows !== undefined) {
 				await assertCoveringSourcesExist(conn, coveringRows);
 			}
+			// A perek move changes which chapter page lists the article — the
+			// old chapter/article URL must be notified too.
+			const prev = await txQueryOne<{ perek_id: number }>(
+				conn,
+				"SELECT perek_id FROM tanah_article WHERE id = ?",
+				[data.id],
+			);
+			previousPerekId = prev?.perek_id ?? null;
 			await txExecute(
 				conn,
 				"UPDATE tanah_article SET perek_id = ?, author_id = ?, abstract = ?, name = ?, priority = ?, distributable = ?, content = ? WHERE id = ?",
@@ -369,6 +389,16 @@ export const updateArticle = createServerFn({ method: "POST" })
 				coveringSources: await txLoadCoveringSources(conn, data.id),
 			};
 		});
+		const urls = [articlePath(updatedArticle.perek_id, updatedArticle.id)];
+		// A perek move leaves the old chapter URL stale — notify it too.
+		if (
+			previousPerekId !== null &&
+			previousPerekId !== updatedArticle.perek_id
+		) {
+			urls.push(articlePath(previousPerekId, updatedArticle.id));
+		}
+		await revalidateWebsite(articleInvalidation(...urls));
+		return updatedArticle;
 	});
 
 // Delete article
@@ -376,6 +406,12 @@ export const deleteArticle = createServerFn({ method: "POST" })
 	.validator((data: number) => data)
 	.handler(async ({ data }) => {
 		await ensureArticleSearchQueue();
+		// Resolve the public URL before the delete — afterwards the row (and
+		// its perek) can no longer be enumerated.
+		const deleted = await queryOne<{ perek_id: number }>(
+			"SELECT perek_id FROM tanah_article WHERE id = ?",
+			[data],
+		);
 		await transaction(async (conn) => {
 			// Coverage rows are removed with the article — explicitly (the FK
 			// ON DELETE CASCADE is the backstop) so cleanup does not depend on
@@ -395,22 +431,13 @@ export const deleteArticle = createServerFn({ method: "POST" })
 			// purges it from the index — deleted articles must stop matching.
 			await txExecute(conn, ENQUEUE_SEARCH_SQL, [data]);
 		});
-		return { success: true };
-	});
-
-// Cache invalidation - call CloudFront or your caching layer
-export const invalidateArticleCache = createServerFn({ method: "POST" })
-	.validator((data: number) => data)
-	.handler(async ({ data: articleId }) => {
-		// TODO: Implement CloudFront invalidation when ready
-		console.log(`Invalidating cache for article ${articleId}`);
-		return { success: true };
-	});
-
-export const invalidatePerekCache = createServerFn({ method: "POST" })
-	.validator((data: number) => data)
-	.handler(async ({ data: perekId }) => {
-		// TODO: Implement CloudFront invalidation when ready
-		console.log(`Invalidating cache for perek ${perekId}`);
+		// The article tag covers the deleted row's perek page and every other
+		// article surface; the deleted URL is still notified so search engines
+		// recrawl and drop it.
+		await revalidateWebsite(
+			articleInvalidation(
+				...(deleted ? [articlePath(deleted.perek_id, data)] : []),
+			),
+		);
 		return { success: true };
 	});

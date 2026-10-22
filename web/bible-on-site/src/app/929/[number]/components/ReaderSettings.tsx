@@ -28,6 +28,7 @@ import {
 	DEFAULT_RECITATION_SETTINGS,
 	getRecitationSettings,
 	OPEN_READER_SETTINGS_EVENT,
+	type OpenReaderSettingsDetail,
 	RECITATION_SETTINGS_EVENT,
 	RECITATION_SETTINGS_KEY,
 	type RecitationSettings,
@@ -80,6 +81,7 @@ export default function ReaderSettings() {
 		DEFAULT_DIVINE_NAME_MASKING,
 	);
 	const [section, setSection] = useState<SettingsSection>("display");
+	const [scoped, setScoped] = useState(false);
 	const [anchor, setAnchor] = useState<HTMLElement | null>(null);
 	const dialog = useRef<HTMLDialogElement>(null);
 	const titleId = useId();
@@ -93,6 +95,10 @@ export default function ReaderSettings() {
 		saveRecitationSettings({ ...recitation, ...patch });
 	const updateMasking = (patch: Partial<DivineNameMaskingSettings>) =>
 		saveDivineNameMaskingSettings({ ...masking, ...patch });
+	// Backs up the disabled fieldset: per-name choices only change while on.
+	const updateMaskingChoice = (patch: Partial<DivineNameMaskingSettings>) => {
+		if (masking.enabled) updateMasking(patch);
+	};
 	const close = useCallback(() => {
 		dialog.current?.close();
 		setAnchor(null);
@@ -122,10 +128,9 @@ export default function ReaderSettings() {
 			applyReaderSettings(getStoredReaderSettings());
 		};
 		const opened = (event: Event) => {
-			const detail = (
-				event as CustomEvent<{ section: SettingsSection; opener: HTMLElement }>
-			).detail;
+			const detail = (event as CustomEvent<OpenReaderSettingsDetail>).detail;
 			setSection(detail.section);
+			setScoped(detail.scoped);
 			setAnchor(detail.opener);
 		};
 		window.addEventListener(OPEN_READER_SETTINGS_EVENT, opened);
@@ -143,6 +148,10 @@ export default function ReaderSettings() {
 		if (!anchor || !dialog.current) return;
 		const panel = dialog.current;
 		panel.showModal();
+		// Using the panel must not count as an outside click for popovers under
+		// it (the download menu keeps its selected range while settings change).
+		const keepUnderlyingOpen = (event: MouseEvent) => event.stopPropagation();
+		panel.addEventListener("mousedown", keepUnderlyingOpen);
 		const position = () => {
 			const box = anchor.getBoundingClientRect();
 			panel.style.left = `${Math.max(12, Math.min(box.left, window.innerWidth - panel.offsetWidth - 12))}px`;
@@ -153,6 +162,7 @@ export default function ReaderSettings() {
 		window.addEventListener("scroll", position, true);
 		return () => {
 			panel.close();
+			panel.removeEventListener("mousedown", keepUnderlyingOpen);
 			window.removeEventListener("resize", position);
 			window.removeEventListener("scroll", position, true);
 		};
@@ -178,6 +188,7 @@ export default function ReaderSettings() {
 					aria-expanded={Boolean(anchor)}
 					onClick={(event) => {
 						setSection("display");
+						setScoped(false);
 						setAnchor(event.currentTarget);
 					}}
 				>
@@ -215,27 +226,33 @@ export default function ReaderSettings() {
 						}}
 					>
 						<header className={styles.panelHeader}>
-							<strong id={titleId}>הגדרות קריאה</strong>
+							<strong id={titleId}>
+								{scoped && section === "recitation"
+									? "הגדרות קריינות"
+									: "הגדרות קריאה"}
+							</strong>
 							<button type="button" aria-label="סגירת הגדרות" onClick={close}>
 								×
 							</button>
 						</header>
-						<nav className={styles.categories} aria-label="קטגוריות הגדרות">
-							<button
-								type="button"
-								aria-pressed={section === "display"}
-								onClick={() => setSection("display")}
-							>
-								תצוגה
-							</button>
-							<button
-								type="button"
-								aria-pressed={section === "recitation"}
-								onClick={() => setSection("recitation")}
-							>
-								קריינות
-							</button>
-						</nav>
+						{!scoped && (
+							<nav className={styles.categories} aria-label="קטגוריות הגדרות">
+								<button
+									type="button"
+									aria-pressed={section === "display"}
+									onClick={() => setSection("display")}
+								>
+									תצוגה
+								</button>
+								<button
+									type="button"
+									aria-pressed={section === "recitation"}
+									onClick={() => setSection("recitation")}
+								>
+									קריינות
+								</button>
+							</nav>
+						)}
 						{section === "display" ? (
 							<section aria-label="תצוגה" className={styles.section}>
 								<label>
@@ -302,65 +319,73 @@ export default function ReaderSettings() {
 									</select>
 									<small>גופן טעמים מסורתי</small>
 								</label>
-								<label>
-									הסתר שם השם
-									<input
-										aria-label="הסתר שם השם"
-										className={styles.maskingToggle}
-										type="checkbox"
-										checked={masking.enabled}
-										onChange={(e) =>
-											updateMasking({ enabled: e.target.checked })
-										}
-									/>
+								<fieldset
+									className={styles.maskingGroup}
+									disabled={!masking.enabled}
+								>
+									<legend>
+										<label>
+											הסתר שם השם
+											<input
+												className={styles.maskingToggle}
+												type="checkbox"
+												checked={masking.enabled}
+												onChange={(e) =>
+													updateMasking({ enabled: e.target.checked })
+												}
+											/>
+										</label>
+									</legend>
 									<small>
 										הצגת שמות ה' בכתיב מקוצר (למשל ה' וא-להים). ההגדרה חלה על
 										התצוגה בלבד
 									</small>
-								</label>
-								{(Object.keys(MASK_OPTIONS) as DivineNameKey[]).map((name) => (
-									<fieldset key={name} className={styles.nameFieldset}>
-										<legend>{MASK_NAMES[name]}</legend>
-										<div className={styles.nameOptions}>
-											{MASK_OPTIONS[name].map(({ option, label }) => (
-												<label key={option}>
+									{(Object.keys(MASK_OPTIONS) as DivineNameKey[]).map(
+										(name) => (
+											<fieldset key={name} className={styles.nameFieldset}>
+												<legend>{MASK_NAMES[name]}</legend>
+												<div className={styles.nameOptions}>
+													{MASK_OPTIONS[name].map(({ option, label }) => (
+														<label key={option}>
+															<input
+																type="radio"
+																name={`mask-${name}`}
+																value={option}
+																checked={masking[name] === option}
+																onChange={() =>
+																	updateMaskingChoice({
+																		[name]: option,
+																	} as Partial<DivineNameMaskingSettings>)
+																}
+															/>
+															{label}
+														</label>
+													))}
+												</div>
+												{MASK_OPTIONS[name].some((o) => o.custom) && (
 													<input
-														type="radio"
-														name={`mask-${name}`}
-														value={option}
-														checked={masking[name] === option}
-														onChange={() =>
-															updateMasking({
-																[name]: option,
+														aria-label={`כתיב חלופי עבור ${MASK_NAMES[name]}`}
+														className={styles.customText}
+														type="text"
+														dir="rtl"
+														placeholder="כתיב חלופי"
+														value={
+															masking[
+																`${name}Custom` as keyof DivineNameMaskingSettings
+															] as string
+														}
+														disabled={masking[name] !== "custom"}
+														onChange={(e) =>
+															updateMaskingChoice({
+																[`${name}Custom`]: e.target.value,
 															} as Partial<DivineNameMaskingSettings>)
 														}
 													/>
-													{label}
-												</label>
-											))}
-										</div>
-										{MASK_OPTIONS[name].some((o) => o.custom) && (
-											<input
-												aria-label={`כתיב חלופי עבור ${MASK_NAMES[name]}`}
-												className={styles.customText}
-												type="text"
-												dir="rtl"
-												placeholder="כתיב חלופי"
-												value={
-													masking[
-														`${name}Custom` as keyof DivineNameMaskingSettings
-													] as string
-												}
-												disabled={masking[name] !== "custom"}
-												onChange={(e) =>
-													updateMasking({
-														[`${name}Custom`]: e.target.value,
-													} as Partial<DivineNameMaskingSettings>)
-												}
-											/>
-										)}
-									</fieldset>
-								))}
+												)}
+											</fieldset>
+										),
+									)}
+								</fieldset>
 							</section>
 						) : (
 							<section aria-label="קריינות" className={styles.section}>

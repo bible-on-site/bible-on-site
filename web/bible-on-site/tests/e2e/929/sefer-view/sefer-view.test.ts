@@ -1,4 +1,5 @@
 import { expect, type Page } from "@playwright/test";
+import sharp from "sharp";
 import { SeferPage } from "../../../util/playwright/page-objects/sefer-page";
 import { test } from "../../../util/playwright/test-fixture";
 
@@ -448,6 +449,27 @@ test.describe("Sefer view", () => {
 					.evaluate((el) => el.style.getPropertyValue("--fold-shading")),
 			)
 			.toContain("gradient");
+		// The shading overlays must actually paint: hiding them has to change
+		// the rendered fold (they were once stacked under the opaque page
+		// content sheet, which left the fold flat, #2331).
+		const book = page.locator(".he-book");
+		const shaded = await book.screenshot();
+		const hideOverlays = await page.addStyleTag({
+			content:
+				".he-book .page::before, .he-book .page::after { visibility: hidden !important; }",
+		});
+		const flat = await book.screenshot();
+		await hideOverlays.evaluate((el) => el.parentNode?.removeChild(el));
+		// Buried overlays still nudge a few anti-aliased glyph edges (~2k
+		// channel values); a painted crease darkens a whole band (~13k).
+		const [shadedPixels, flatPixels] = await Promise.all(
+			[shaded, flat].map((png) => sharp(png).raw().toBuffer()),
+		);
+		let shadedChannels = 0;
+		for (let i = 0; i < shadedPixels.length; i++) {
+			if (Math.abs(shadedPixels[i] - flatPixels[i]) > 40) shadedChannels++;
+		}
+		expect(shadedChannels).toBeGreaterThan(6000);
 		const heldAt = await foldWidth();
 		await page.waitForTimeout(250);
 		expect(await foldWidth()).toBeGreaterThan(10);

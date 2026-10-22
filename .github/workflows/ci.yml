@@ -37,6 +37,21 @@ on:
   merge_group:
   # Use the dispatch's native branch/tag selector so execution and cache scope match.
   workflow_dispatch:
+    inputs:
+      # e2e-impact (#2085): shadow computes selections for evidence; enforce
+      # actually runs the selected subset in the Playwright suites. The mobile
+      # suite has its own dispatch inputs on app-mobile-e2e.yml.
+      e2e_selection_mode:
+        description: "E2E impact selection mode (mobile suite uses its own workflow inputs)"
+        required: false
+        type: choice
+        options: ["shadow", "enforce"]
+        default: "shadow"
+      force_full_suite:
+        description: "Force the full E2E suite regardless of the selection manifest"
+        required: false
+        type: boolean
+        default: false
 
 # Only the latest commit of a PR needs validation. Keep master, dispatched and
 # merge-queue runs independent so publication and queue validation are preserved.
@@ -87,6 +102,12 @@ env:
   DEVOPS_DIRECTORY: devops
   DEVOPS_NODE_CACHE_PATH: devops/package-lock.json
   DEVOPS_NODE_VERSION_FILE: devops/package.json
+  # e2e-impact (#2085): the dispatch input or the E2E_SELECTION_MODE repo
+  # variable opt the Playwright suites into running the selected subset;
+  # every other run stays in shadow mode (diagnostics only). The selector
+  # itself honors FORCE_FULL_SUITE.
+  E2E_SELECTION_MODE: ${{ inputs.e2e_selection_mode || vars.E2E_SELECTION_MODE || 'shadow' }}
+  FORCE_FULL_SUITE: ${{ inputs.force_full_suite || vars.E2E_FORCE_FULL_SUITE || '' }}
   IS_MASTER_BRANCH: ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
   TMP_WEBSITE_JUNIT_REPORTS_DIRECTORY: tmp-website-junit-reports
   WEBSITE_COVERAGE_ARTIFACT_NAME_MASTER: website-coverage.master
@@ -133,7 +154,7 @@ env:
   # its .gz exceeds GitHub's 100 MB push limit).
   PERUSHIM_SEARCH_SQLITE_FILENAME: sefaria-dump-5784-sivan-4.hebrew_search.sqlite
   PERUSHIM_NOTES_ANDROID_ASSET_RELDIR: Platforms/Android/AssetPacks/perushim_notes
-  PERUSHIM_NOTES_IOS_ASSETPACK_RELDIR: Platforms/iOS/AssetPacks/perushim_notes
+  PERUSHIM_NOTES_IOS_ASSETPACK_RELDIR: Platforms/iOS/AssetPacks/perushim-notes
   PERUSHIM_PIPELINE_DIRECTORY: data/sefaria/pipelines/perushim-view
   LCOV_DOCKER_IMAGE_ARTIFACT_NAME: lcov-docker-image
   SEFARIA_MONGO_IMAGE_ARTIFACT_NAME: sefaria-mongo-image
@@ -445,10 +466,13 @@ jobs:
     with:
       module_directory: ${{ needs.setup_env.outputs.website_directory }}
 
+  # Master pushes package the release; other events (PR, merge queue) build the
+  # same release Docker configuration as a pre-merge check without uploading it,
+  # so base-image/toolchain breakage blocks the merge (#2292).
   package_api:
     name: Package API
     needs: [setup_env, determine_changes]
-    if: ${{ needs.determine_changes.outputs.api_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    if: ${{ (github.event_name == 'push' && needs.setup_env.outputs.is_master_branch == 'true' && needs.determine_changes.outputs.api_module_changed == 'true') || (github.event_name != 'push' && (needs.determine_changes.outputs.api_module_changed == 'true' || needs.determine_changes.outputs.api_ci_changed == 'true')) }}
     permissions:
       contents: write
       actions: read
@@ -489,10 +513,11 @@ jobs:
       platform: iOS
       perushim_notes_sqlite_artifact: ${{ needs.perushim_data.result != 'skipped' && format('perushim-sqlite-v2-indexed.{0}', github.run_id) || 'perushim-sqlite-v2-indexed.master' }}
 
+  # Same release/pre-merge split as package_api (#2292).
   package_bulletin:
     name: Package Bulletin
     needs: [setup_env, determine_changes]
-    if: ${{ needs.determine_changes.outputs.bulletin_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    if: ${{ (github.event_name == 'push' && needs.setup_env.outputs.is_master_branch == 'true' && needs.determine_changes.outputs.bulletin_module_changed == 'true') || (github.event_name != 'push' && (needs.determine_changes.outputs.bulletin_module_changed == 'true' || needs.determine_changes.outputs.bulletin_ci_changed == 'true')) }}
     permissions:
       contents: read
       actions: read
@@ -540,6 +565,7 @@ jobs:
           rm -rf ./bootstrap fonts/
 
       - name: Store Lambda ZIP
+        if: ${{ github.event_name == 'push' }}
         uses: actions/upload-artifact@v7
         with:
           name: ${{ env.BULLETIN_LAMBDA_ZIP_ARTIFACT_NAME }}
@@ -549,10 +575,11 @@ jobs:
           # artifact expiring (matches the website/api release artifacts at 90).
           retention-days: 90
 
+  # Same release/pre-merge split as package_api (#2292).
   package_admin:
     name: Package Admin
     needs: [setup_env, determine_changes]
-    if: ${{ needs.determine_changes.outputs.admin_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    if: ${{ (github.event_name == 'push' && needs.setup_env.outputs.is_master_branch == 'true' && needs.determine_changes.outputs.admin_module_changed == 'true') || (github.event_name != 'push' && (needs.determine_changes.outputs.admin_module_changed == 'true' || needs.determine_changes.outputs.admin_ci_changed == 'true')) }}
     permissions:
       contents: read
       actions: read
@@ -599,6 +626,7 @@ jobs:
         run: gzip -c -f ${{ steps.prepare.outputs.DOCKER_IMAGE_TAR_NAME }} > ${{ steps.prepare.outputs.DOCKER_IMAGE_TAR_NAME }}.gz
 
       - name: Store Docker Image
+        if: ${{ github.event_name == 'push' }}
         uses: actions/upload-artifact@v7
         with:
           name: ${{ env.ADMIN_DOCKER_ARTIFACT_NAME }}
@@ -644,7 +672,7 @@ jobs:
     name: Build Sefaria MongoDB Docker Image
     needs: [setup_env, determine_changes, determine_docker_image_availability]
     if: ${{ needs.determine_docker_image_availability.outputs.is_sefaria_mongo_available != 'true' && (needs.determine_changes.outputs.data_module_changed == 'true' || needs.determine_changes.outputs.data_ci_changed == 'true') }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     permissions:
       contents: read
       # GitHub caps fork PR tokens to read-only, so only trusted runs can publish.
@@ -993,6 +1021,10 @@ jobs:
         run: |
           node --version && npm --version
           npm ci --no-audit
+          # Unit tests verify the shipped native decoder through its app-owned
+          # generator (scripts/check-opus-decoder.mjs), which resolves esbuild
+          # and the decoder packages from this manifest (#2391).
+          npm ci --no-audit --prefix ../../app/devops/recitation-decoder
 
       # npm ci is done here, so ~/.npm is frozen — the tar+upload can run in
       # the background; the implicit wait-all before job cleanup completes it.
@@ -1150,12 +1182,44 @@ jobs:
 
       # coverage:e2e starts next dev; the production build and standalone-server
       # checks run in Website Performance, which remains a Cross Module CI gate.
+      # Enforce mode (#2085) consumes the manifest into concrete Playwright
+      # args. Dynamic test files cannot be filtered by title, so a `--list`
+      # enumeration (which still emits discovered.json under coverage)
+      # supplies their titles first.
+      - name: Resolve selection args (enforce)
+        if: env.E2E_SELECTION_MODE == 'enforce'
+        id: impact-args
+        working-directory: ${{ github.workspace }}
+        run: |
+          DISCOVERED_ARGS=()
+          DYNAMIC=$(node -e "console.log(JSON.parse(require('node:fs').readFileSync('$GITHUB_WORKSPACE/web/bible-on-site/.coverage/e2e-impact/selection-manifest.json','utf8')).dynamicTestFiles.length)")
+          if [ "$DYNAMIC" != "0" ]; then
+            (cd web/bible-on-site && npm run coverage:e2e -- --list)
+            DISCOVERED_ARGS=(--discovered "$GITHUB_WORKSPACE/web/bible-on-site/.coverage/e2e-impact/discovered.json")
+          fi
+          node devops/github/ci/e2e-impact/e2e-impact.ts playwright-args \
+            --suite web/bible-on-site \
+            --package-dir web/bible-on-site \
+            --manifest "$GITHUB_WORKSPACE/web/bible-on-site/.coverage/e2e-impact/selection-manifest.json" \
+            --out "$GITHUB_WORKSPACE/web/bible-on-site/.coverage/e2e-impact/playwright-args.json" "${DISCOVERED_ARGS[@]}"
+
       # The run also drops e2e-impact evidence under .coverage/e2e-impact/.
       - name: E2E Test
         id: npm-e2e-test
         env:
           DB_URL: mysql://root:test_123@127.0.0.1:3306/tanah_test
-        run: npm run coverage:e2e
+        run: |
+          if [ "${{ env.E2E_SELECTION_MODE }}" == "enforce" ] && [ "${{ steps.impact-args.outputs.select-all }}" != "true" ]; then
+            FILES=$(node -e "console.log(JSON.parse(require('node:fs').readFileSync('.coverage/e2e-impact/playwright-args.json','utf8')).files.join(' '))")
+            GREP=$(node -e "console.log(JSON.parse(require('node:fs').readFileSync('.coverage/e2e-impact/playwright-args.json','utf8')).grep ?? '')")
+            if [ -n "$GREP" ]; then
+              npm run coverage:e2e -- $FILES --grep "$GREP"
+            else
+              npm run coverage:e2e -- $FILES
+            fi
+          else
+            npm run coverage:e2e
+          fi
 
       # Evidence is collected even after a failed run — passed tests keep
       # their coverage — but the tree marks incomplete so a partial run can
@@ -1181,6 +1245,19 @@ jobs:
           COMPLETE=$(node -e "console.log(JSON.parse(require('node:fs').readFileSync('$GITHUB_WORKSPACE/web/bible-on-site/.coverage/e2e-impact/coverage-tree.json','utf8')).complete === true)")
           echo "complete=$COMPLETE" >> "$GITHUB_OUTPUT"
 
+      # Shadow-mode parity (#2085): score the pre-run selection against the
+      # outcomes this full run observed — an unselected failure is the parity
+      # miss the rollout gate counts before enforcement. Pure diagnostics:
+      # missing or mismatched inputs produce a problem report, never a red job.
+      - name: Verify shadow selection parity
+        if: always()
+        working-directory: ${{ github.workspace }}
+        run: |
+          node devops/github/ci/e2e-impact/e2e-impact.ts verify \
+            --manifest "$GITHUB_WORKSPACE/web/bible-on-site/.coverage/e2e-impact/selection-manifest.json" \
+            --tree "$GITHUB_WORKSPACE/web/bible-on-site/.coverage/e2e-impact/coverage-tree.json" \
+            --out "$GITHUB_WORKSPACE/web/bible-on-site/.coverage/e2e-impact/selection-verify.json"
+
       # Selection manifest + collected tree for shadow-mode inspection.
       - name: Store e2e-impact evidence
         if: always()
@@ -1189,6 +1266,7 @@ jobs:
           name: website-e2e-impact-${{ github.run_id }}
           path: |
             web/bible-on-site/.coverage/e2e-impact/selection-manifest.json
+            web/bible-on-site/.coverage/e2e-impact/selection-verify.json
             web/bible-on-site/.coverage/e2e-impact/coverage-tree.json
             web/bible-on-site/.coverage/e2e-impact/test-results.json
             web/bible-on-site/.coverage/e2e-impact/discovered.json
@@ -1468,6 +1546,25 @@ jobs:
             --out "$GITHUB_WORKSPACE/web/admin/.coverage/e2e-impact/selection-manifest.json" \
             --compare "${BASELINE_ARGS[@]}"
 
+      # Enforce mode (#2085) consumes the manifest into concrete Playwright
+      # args; a `--list` enumeration supplies dynamic files' titles first.
+      - name: Resolve selection args (enforce)
+        if: env.E2E_SELECTION_MODE == 'enforce'
+        id: impact-args
+        working-directory: ${{ github.workspace }}
+        run: |
+          DISCOVERED_ARGS=()
+          DYNAMIC=$(node -e "console.log(JSON.parse(require('node:fs').readFileSync('$GITHUB_WORKSPACE/web/admin/.coverage/e2e-impact/selection-manifest.json','utf8')).dynamicTestFiles.length)")
+          if [ "$DYNAMIC" != "0" ]; then
+            (cd web/admin && npm run coverage:e2e -- --list)
+            DISCOVERED_ARGS=(--discovered "$GITHUB_WORKSPACE/web/admin/.coverage/e2e-impact/discovered.json")
+          fi
+          node devops/github/ci/e2e-impact/e2e-impact.ts playwright-args \
+            --suite web/admin \
+            --package-dir web/admin \
+            --manifest "$GITHUB_WORKSPACE/web/admin/.coverage/e2e-impact/selection-manifest.json" \
+            --out "$GITHUB_WORKSPACE/web/admin/.coverage/e2e-impact/playwright-args.json" "${DISCOVERED_ARGS[@]}"
+
       - name: E2E Test with Coverage
         id: npm-e2e-test
         env:
@@ -1478,7 +1575,18 @@ jobs:
           S3_ACCESS_KEY_ID: test
           S3_SECRET_ACCESS_KEY: test_1234
           S3_FORCE_PATH_STYLE: "true"
-        run: npm run coverage:e2e
+        run: |
+          if [ "${{ env.E2E_SELECTION_MODE }}" == "enforce" ] && [ "${{ steps.impact-args.outputs.select-all }}" != "true" ]; then
+            FILES=$(node -e "console.log(JSON.parse(require('node:fs').readFileSync('.coverage/e2e-impact/playwright-args.json','utf8')).files.join(' '))")
+            GREP=$(node -e "console.log(JSON.parse(require('node:fs').readFileSync('.coverage/e2e-impact/playwright-args.json','utf8')).grep ?? '')")
+            if [ -n "$GREP" ]; then
+              npm run coverage:e2e -- $FILES --grep "$GREP"
+            else
+              npm run coverage:e2e -- $FILES
+            fi
+          else
+            npm run coverage:e2e
+          fi
 
       # Evidence is collected even after a failed run — passed tests keep
       # their coverage — but the tree marks incomplete so a partial run can
@@ -1504,6 +1612,19 @@ jobs:
           COMPLETE=$(node -e "console.log(JSON.parse(require('node:fs').readFileSync('$GITHUB_WORKSPACE/web/admin/.coverage/e2e-impact/coverage-tree.json','utf8')).complete === true)")
           echo "complete=$COMPLETE" >> "$GITHUB_OUTPUT"
 
+      # Shadow-mode parity (#2085): score the pre-run selection against the
+      # outcomes this full run observed — an unselected failure is the parity
+      # miss the rollout gate counts before enforcement. Pure diagnostics:
+      # missing or mismatched inputs produce a problem report, never a red job.
+      - name: Verify shadow selection parity
+        if: always()
+        working-directory: ${{ github.workspace }}
+        run: |
+          node devops/github/ci/e2e-impact/e2e-impact.ts verify \
+            --manifest "$GITHUB_WORKSPACE/web/admin/.coverage/e2e-impact/selection-manifest.json" \
+            --tree "$GITHUB_WORKSPACE/web/admin/.coverage/e2e-impact/coverage-tree.json" \
+            --out "$GITHUB_WORKSPACE/web/admin/.coverage/e2e-impact/selection-verify.json"
+
       # Selection manifest + collected tree for shadow-mode inspection.
       - name: Store e2e-impact evidence
         if: always()
@@ -1512,6 +1633,7 @@ jobs:
           name: admin-e2e-impact-${{ github.run_id }}
           path: |
             web/admin/.coverage/e2e-impact/selection-manifest.json
+            web/admin/.coverage/e2e-impact/selection-verify.json
             web/admin/.coverage/e2e-impact/coverage-tree.json
             web/admin/.coverage/e2e-impact/test-results.json
             web/admin/.coverage/e2e-impact/discovered.json
@@ -1718,16 +1840,47 @@ jobs:
             --out "$GITHUB_WORKSPACE/web/api/.coverage/e2e-impact/selection-manifest.json" \
             --compare "${BASELINE_ARGS[@]}"
 
+      # Enforce mode (#2085) consumes the manifest into concrete Playwright
+      # args; a `--list` enumeration supplies dynamic files' titles first.
+      - name: Resolve selection args (enforce)
+        if: env.E2E_SELECTION_MODE == 'enforce'
+        id: impact-args
+        working-directory: ${{ github.workspace }}
+        run: |
+          DISCOVERED_ARGS=()
+          DYNAMIC=$(node -e "console.log(JSON.parse(require('node:fs').readFileSync('$GITHUB_WORKSPACE/web/api/.coverage/e2e-impact/selection-manifest.json','utf8')).dynamicTestFiles.length)")
+          if [ "$DYNAMIC" != "0" ]; then
+            (cd web/api && npm run --prefix tests coverage:e2e -- --list)
+            DISCOVERED_ARGS=(--discovered "$GITHUB_WORKSPACE/web/api/.coverage/e2e-impact/discovered.json")
+          fi
+          node devops/github/ci/e2e-impact/e2e-impact.ts playwright-args \
+            --suite web/api \
+            --package-dir web/api/tests \
+            --manifest "$GITHUB_WORKSPACE/web/api/.coverage/e2e-impact/selection-manifest.json" \
+            --out "$GITHUB_WORKSPACE/web/api/.coverage/e2e-impact/playwright-args.json" "${DISCOVERED_ARGS[@]}"
+
       # API tests use Playwright's HTTP request fixture and node:http2 only;
       # they do not launch a browser or need browser/system-dependency installs.
       # The run drops e2e-impact evidence under .coverage/e2e-impact/.
+      # Enforce passes the manifest args straight to the same npm script
+      # `cargo make coverage-e2e` wraps (`--prefix tests coverage:e2e`).
       - name: E2E Test
         id: api-e2e
         working-directory: ${{ env.API_DIRECTORY }}
         env:
           DB_URL: mysql://root:test_123@127.0.0.1:3306/tanah_test
         run: |
-          cargo make coverage-e2e
+          if [ "${{ env.E2E_SELECTION_MODE }}" == "enforce" ] && [ "${{ steps.impact-args.outputs.select-all }}" != "true" ]; then
+            FILES=$(node -e "console.log(JSON.parse(require('node:fs').readFileSync('.coverage/e2e-impact/playwright-args.json','utf8')).files.join(' '))")
+            GREP=$(node -e "console.log(JSON.parse(require('node:fs').readFileSync('.coverage/e2e-impact/playwright-args.json','utf8')).grep ?? '')")
+            if [ -n "$GREP" ]; then
+              npm run --prefix tests coverage:e2e -- $FILES --grep "$GREP"
+            else
+              npm run --prefix tests coverage:e2e -- $FILES
+            fi
+          else
+            cargo make coverage-e2e
+          fi
 
       # Evidence is collected even after a failed run — passed tests keep
       # their coverage — but the tree marks incomplete so a partial run can
@@ -1752,6 +1905,19 @@ jobs:
           COMPLETE=$(node -e "console.log(JSON.parse(require('node:fs').readFileSync('$GITHUB_WORKSPACE/web/api/.coverage/e2e-impact/coverage-tree.json','utf8')).complete === true)")
           echo "complete=$COMPLETE" >> "$GITHUB_OUTPUT"
 
+      # Shadow-mode parity (#2085): score the pre-run selection against the
+      # outcomes this full run observed — an unselected failure is the parity
+      # miss the rollout gate counts before enforcement. Pure diagnostics:
+      # missing or mismatched inputs produce a problem report, never a red job.
+      - name: Verify shadow selection parity
+        if: always()
+        working-directory: ${{ github.workspace }}
+        run: |
+          node devops/github/ci/e2e-impact/e2e-impact.ts verify \
+            --manifest "$GITHUB_WORKSPACE/web/api/.coverage/e2e-impact/selection-manifest.json" \
+            --tree "$GITHUB_WORKSPACE/web/api/.coverage/e2e-impact/coverage-tree.json" \
+            --out "$GITHUB_WORKSPACE/web/api/.coverage/e2e-impact/selection-verify.json"
+
       # Selection manifest + collected tree for shadow-mode inspection.
       - name: Store e2e-impact evidence
         if: always()
@@ -1760,6 +1926,7 @@ jobs:
           name: api-e2e-impact-${{ github.run_id }}
           path: |
             web/api/.coverage/e2e-impact/selection-manifest.json
+            web/api/.coverage/e2e-impact/selection-verify.json
             web/api/.coverage/e2e-impact/coverage-tree.json
             web/api/.coverage/e2e-impact/test-results.json
             web/api/.coverage/e2e-impact/discovered.json
@@ -2122,6 +2289,9 @@ jobs:
         working-directory: web/bible-on-site
         run: |
           npm ci --ignore-scripts --no-audit
+          # The native decoder check rebuilds the shipped asset through the
+          # app-owned manifest's esbuild (#2391).
+          npm ci --no-audit --prefix ../../app/devops/recitation-decoder
           if [ "${{ steps.playwright-cache.outputs.cache-hit }}" = "true" ]; then
             npx playwright install-deps chromium webkit
           else
@@ -2230,7 +2400,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
-          node-version: "26.12.0"
+          node-version: "26.12.1"
       - name: Test alignment invariants without downloading GPU models
         run: |
           python -m venv data/recitation/.venv
@@ -2256,9 +2426,43 @@ jobs:
           node data/recitation/check_storage.mjs
           node data/recitation/check_storage.mjs data/recitation/fixtures/seek.ogg
 
+  deploy_verifier:
+    name: CD verifier dependency contract
+    runs-on: ubuntu-latest
+    needs: [setup_env, determine_changes]
+    # The website's post-deploy verifier resolves its imports through
+    # NODE_PATH -> devops/node_modules (cd-aws.yml). Guard that contract:
+    # verifier or deployment-workflow changes select it via website flags,
+    # devops manifest changes via admin_ci_changed (#2372).
+    if: ${{ always() && !cancelled() && needs.setup_env.result == 'success' && needs.determine_changes.result == 'success' && (needs.determine_changes.outputs.website_module_changed == 'true' || needs.determine_changes.outputs.website_ci_changed == 'true' || needs.determine_changes.outputs.admin_ci_changed == 'true') }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: devops/package.json
+      # Same install layout as the deploy job: only devops deps, no website
+      # node_modules — resolution can only succeed through NODE_PATH.
+      - name: Install deployment dependencies
+        run: npm ci --prefix devops --no-audit
+      # The nginx guard reads docs/ outside the website's Docker build context.
+      - name: Verify canonical hosts and nginx configuration
+        run: node --test web/bible-on-site/scripts/verify-canonical-hosts.test.mjs
+      - name: Exercise the real deployment verifier entry point
+        run: |
+          node web/bible-on-site/scripts/verify-public-content.fixture.mjs 48123 &
+          FIXTURE_PID=$!
+          trap 'if kill -0 $FIXTURE_PID 2>/dev/null; then kill $FIXTURE_PID; fi' EXIT
+          for attempt in $(seq 50); do
+            curl -fsS http://127.0.0.1:48123/api/health/ready > /dev/null 2>&1 && break
+            sleep 0.2
+          done
+          curl -fsS http://127.0.0.1:48123/api/health/ready > /dev/null
+          NODE_PATH="$GITHUB_WORKSPACE/devops/node_modules" \
+            node web/bible-on-site/scripts/verify-public-content.mjs --origin http://127.0.0.1:48123
+
   data_ci:
     name: Data CI
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs:
       [
         setup_env,
@@ -2462,7 +2666,7 @@ jobs:
   # ====================================================================================
   perushim_data:
     name: Perushim Data
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs:
       [
         setup_env,
@@ -2661,10 +2865,14 @@ jobs:
         admin_ci,
         app_ios_ci,
         package_ios_pr,
+        package_api,
+        package_bulletin,
+        package_admin,
         app_mobile_e2e,
         bulletin_ci,
         data_ci,
         recitation_ci,
+        deploy_verifier,
         perushim_data,
         build_lcov_docker,
         determine_baseline_availability,
@@ -2702,6 +2910,15 @@ jobs:
             fi
           fi
 
+          # Same condition as the deploy_verifier job's `if` — a triggered
+          # guard that failed or could not run blocks the merge (#2372).
+          if [ "${{ needs.determine_changes.outputs.website_module_changed }}" = "true" ] || [ "${{ needs.determine_changes.outputs.website_ci_changed }}" = "true" ] || [ "${{ needs.determine_changes.outputs.admin_ci_changed }}" = "true" ]; then
+            if [ "${{ needs.deploy_verifier.result }}" != "success" ]; then
+              echo "CD verifier dependency contract did not pass."
+              exit 1
+            fi
+          fi
+
           WEBSITE_MODULE_CHANGED=$([ "${{ needs.determine_changes.outputs.website_module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
           WEBSITE_CI_CHANGED=$([ "${{ needs.determine_changes.outputs.website_ci_changed }}" = "true" ] && echo "true" || echo "false") # Generated
           WEBSITE_MASTER_COVERAGE_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_website_master_coverage_available }}" = "true" ] && echo "true" || echo "false") # Generated
@@ -2723,6 +2940,12 @@ jobs:
             API_STATUS=$([ "${{ needs.api_e2e.result }}" = "success" ] && echo "success" || echo "failure") # Generated
             if [ "$API_STATUS" = "failure" ]; then
               echo "Overall status: failure"
+              exit 1
+            fi
+          fi
+          if [ "${{ github.event_name }}" != "push" ] && { [ "$API_MODULE_CHANGED" = "true" ] || [ "$API_CI_CHANGED" = "true" ]; }; then
+            if [ "${{ needs.package_api.result }}" != "success" ]; then
+              echo "API release Docker build failed or did not run"
               exit 1
             fi
           fi
@@ -2769,6 +2992,12 @@ jobs:
               exit 1
             fi
           fi
+          if [ "${{ github.event_name }}" != "push" ] && { [ "$BULLETIN_MODULE_CHANGED" = "true" ] || [ "$BULLETIN_CI_CHANGED" = "true" ]; }; then
+            if [ "${{ needs.package_bulletin.result }}" != "success" ]; then
+              echo "Bulletin release Docker build failed or did not run"
+              exit 1
+            fi
+          fi
 
           ADMIN_MODULE_CHANGED=$([ "${{ needs.determine_changes.outputs.admin_module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
           ADMIN_CI_CHANGED=$([ "${{ needs.determine_changes.outputs.admin_ci_changed }}" = "true" ] && echo "true" || echo "false") # Generated
@@ -2777,6 +3006,12 @@ jobs:
             ADMIN_STATUS=$([ "${{ needs.admin_ci.result }}" = "success" ] && echo "success" || echo "failure") # Generated
             if [ "$ADMIN_STATUS" = "failure" ]; then
               echo "Overall status: failure"
+              exit 1
+            fi
+          fi
+          if [ "${{ github.event_name }}" != "push" ] && { [ "$ADMIN_MODULE_CHANGED" = "true" ] || [ "$ADMIN_CI_CHANGED" = "true" ]; }; then
+            if [ "${{ needs.package_admin.result }}" != "success" ]; then
+              echo "Admin release Docker build failed or did not run"
               exit 1
             fi
           fi
@@ -2946,7 +3181,7 @@ jobs:
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         run: |
           npm run test:version
-          node --test github/ci/codecov-report-state.test.mjs github/ci/bencher-comparison.test.mjs github/ci/e2e-impact/e2e-impact.test.ts github/ci/e2e-impact/playwright-impact.test.ts e2e-coverage-trees/e2e-coverage-trees.test.ts
+          node --test github/ci/codecov-report-state.test.mjs github/ci/bencher-comparison.test.mjs github/ci/e2e-impact/e2e-impact.test.ts github/ci/e2e-impact/playwright-impact.test.ts github/ci/e2e-impact/shard-plan.test.ts github/ci/e2e-impact/timings.test.ts github/ci/e2e-impact/verify.test.ts e2e-coverage-trees/e2e-coverage-trees.test.ts
 
       # Real app-process coverage from the instrumented mobile E2E legs
       # (#1232). A successful mobile run must contribute both platform reports;
@@ -2984,10 +3219,13 @@ jobs:
       # percentage. --relocate canonicalizes absolute runner paths (Linux and
       # macOS legs differ) so the same source line counts exactly once. The E2E
       # layers come from a separately instrumented app build whose OpenCover
-      # template enumerates every sequence point it could hit — far more lines
-      # than the unit/integration report knows about. --hits-only keeps their
-      # covered lines while dropping that foreign zero-hit enumeration, which
-      # otherwise inflates the app flag's denominator (#2270).
+      # template enumerates a different sequence-point universe — more lines
+      # than the unit/integration report knows about, plus e2e-only files.
+      # --hits-only intersects them onto the canonical universe: their hits
+      # confirm lines unit/integration already list, while the foreign
+      # enumeration — hit or not — never extends the merged denominator.
+      # E2E branch arms never merge: BRDA indices are per-instrumenter and
+      # an identical tuple can name a different arm (#2270).
       - name: Merge App coverage layers
         if: needs.app_ci.result == 'success'
         working-directory: ${{ env.DEVOPS_DIRECTORY }}

@@ -8,14 +8,14 @@ describe("TosSection", () => {
 	it("renders main heading", () => {
 		render(<TosSection />);
 		expect(
-			screen.getByRole("heading", { level: 1, name: "תנאי שימוש" }),
+			screen.getByRole("heading", { level: 2, name: "תנאי שימוש" }),
 		).toBeInTheDocument();
 	});
 
 	it("renders privacy policy section", () => {
 		render(<TosSection />);
 		expect(
-			screen.getByRole("heading", { level: 2, name: "מדיניות פרטיות" }),
+			screen.getByRole("heading", { level: 3, name: "מדיניות פרטיות" }),
 		).toBeInTheDocument();
 	});
 
@@ -33,5 +33,30 @@ describe("TosSection", () => {
 	it("renders section with id tos", () => {
 		render(<TosSection />);
 		expect(document.getElementById("tos")).toBeInTheDocument();
+	});
+
+	describe("privacy policy accuracy (#2400)", () => {
+		// The manifest strips the AD_ID permission, and analytics providers do
+		// receive usage data, so the notice must not claim either otherwise.
+		it("does not claim the app collects Android Advertising ID", () => {
+			render(<TosSection />);
+			const policy = document.getElementById("privacyPolicy");
+			expect(policy?.textContent).not.toContain("לרבות מזהה");
+		});
+
+		it("names the third-party analytics providers", () => {
+			render(<TosSection />);
+			const policy = document.getElementById("privacyPolicy");
+			expect(policy?.textContent).toContain("Google Analytics");
+			expect(policy?.textContent).toContain("Firebase");
+			expect(policy?.textContent).toContain("Ahrefs");
+			expect(policy?.textContent).not.toContain("לשום גורם צד ג'");
+		});
+
+		it("describes the analytics consent and opt-out path", () => {
+			render(<TosSection />);
+			const policy = document.getElementById("privacyPolicy");
+			expect(policy?.textContent).toContain("הסכמה");
+		});
 	});
 });

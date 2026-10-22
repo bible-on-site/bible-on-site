@@ -40,10 +40,15 @@ public static class MauiProgram
             .ConfigureMauiHandlers(handlers =>
             {
                 handlers.AddHandler<HtmlView, HtmlViewHandler>();
+                handlers.AddHandler<PasukTextLabel, PasukTextLabelHandler>();
 #if IOS || MACCATALYST
                 handlers.AddHandler<ReaderCellBorder, ReaderCellBorderHandler>();
-				// Use optimized CollectionView handler for iOS/Mac (default in .NET 10)
-				handlers.AddHandler<CollectionView, Microsoft.Maui.Controls.Handlers.Items2.CollectionViewHandler2>();
+				// Keep the Items2 handlers (.NET 10 default) but pin every native
+				// cell's managed peer: Items2 cells are only weakly anchored, and a
+				// covered page's retained cells crash the app with MissingCtor when
+				// a later layout pass marshals them back (#2433).
+				handlers.AddHandler<CollectionView, RetainedCellCollectionViewHandler>();
+				handlers.AddHandler<CarouselView, RetainedCellCarouselViewHandler>();
 #endif
             });
 
@@ -73,7 +78,7 @@ public static class MauiProgram
 		Microsoft.Maui.Controls.Handlers.Items2.CarouselViewHandler2.Mapper.AppendToMapping("SwipeSensitivity", (handler, _) =>
 		{
 			var collectionView = FindDescendant<UIKit.UICollectionView>(handler.PlatformView);
-			Console.WriteLine($"[EdgePan] carousel mapper platformView={handler.PlatformView?.GetType().Name ?? "null"} collectionView={collectionView?.GetType().Name ?? "null"}");
+			Helpers.DebugLog.Write($"[EdgePan] carousel mapper platformView={handler.PlatformView?.GetType().Name ?? "null"} collectionView={collectionView?.GetType().Name ?? "null"}");
 			if (collectionView is null)
 			{
 				return;
@@ -85,7 +90,7 @@ public static class MauiProgram
 			// Give the drawer gesture priority so a swipe starting at the
 			// right screen edge opens the drawer instead of switching perek.
 			collectionView.PanGestureRecognizer.RequireGestureRecognizerToFail(AppShell.SharedFlyoutEdgePan);
-			Console.WriteLine("[EdgePan] carousel pan wired");
+			Helpers.DebugLog.Write("[EdgePan] carousel pan wired");
 		});
 #endif
 
@@ -118,11 +123,14 @@ public static class MauiProgram
 					CrossFirebase.Initialize();
 					IsFirebaseInitialized = true;
 					// Info.plist keeps collection off so nothing can emit before
-					// this point; e2e-marked processes keep it off so automatic
-					// and custom suite events never reach the production
-					// property, and the explicit value also overrides a flag a
-					// previous non-suite install persisted on this device.
-					var analyticsCollectionEnabled = !SearchIndexService.IsE2eMarkedProcess();
+					// this point; collection then enables only for a stored
+					// user opt-in (#2400), never in e2e-marked processes so
+					// automatic and custom suite events never reach the
+					// production property, and the explicit value also
+					// overrides a flag a previous non-suite install persisted
+					// on this device.
+					var analyticsCollectionEnabled =
+						AnalyticsConsent.IsCollectionEnabled(new MauiPreferencesStorage());
 					CrossFirebaseAnalytics.Current.IsAnalyticsCollectionEnabled = analyticsCollectionEnabled;
 					Console.WriteLine($"[Analytics] collection enabled={analyticsCollectionEnabled}");
 				}
