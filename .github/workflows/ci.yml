@@ -2880,6 +2880,7 @@ jobs:
         admin_ci,
         app_ios_ci,
         package_ios_pr,
+        package_windows_pr,
         package_api,
         package_bulletin,
         package_admin,
@@ -2970,6 +2971,10 @@ jobs:
           if [ "${{ github.event_name }}" != "push" ] && { [ "$APP_MODULE_CHANGED" = "true" ] || [ "$APP_CI_CHANGED" = "true" ]; }; then
             if [ "${{ needs.package_ios_pr.result }}" != "success" ]; then
               echo "Signed iOS distribution validation failed or did not run"
+              exit 1
+            fi
+            if [ "${{ needs.package_windows_pr.result }}" != "success" ]; then
+              echo "Windows compile validation failed or did not run"
               exit 1
             fi
           fi

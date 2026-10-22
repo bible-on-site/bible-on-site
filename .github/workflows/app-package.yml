@@ -90,7 +90,7 @@ jobs:
   # so that download-artifact can find it in the current run.
   resolve_perushim_artifact:
     name: Resolve Perushim Notes Artifact
-    if: ${{ inputs.perushim_notes_sqlite_artifact == '' }}
+    if: ${{ inputs.perushim_notes_sqlite_artifact == '' && !inputs.compile_only }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
