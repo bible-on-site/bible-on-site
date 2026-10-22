@@ -107,6 +107,67 @@ public partial class DisplayPreferencesViewModel : DivineNamePreferencesViewMode
         FontFactor = 1.0;
     }
 
+    #region Per-category relative sizes (#2461)
+
+    // Each category stores a percentage of the master FontFactor; the numeric
+    // input and the slider both bind the same property, so they stay in sync.
+
+    /// <summary>פסוקים size as a percentage of the master font size (50–200).</summary>
+    public double PasukFontPercent
+    {
+        get => _preferencesService.PasukFontPercent;
+        set => SetFontPercent(value, v => _preferencesService.PasukFontPercent = v, nameof(PasukFontPercent));
+    }
+
+    /// <summary>פירושים size as a percentage of the master font size (50–200).</summary>
+    public double PerushFontPercent
+    {
+        get => _preferencesService.PerushFontPercent;
+        set => SetFontPercent(value, v => _preferencesService.PerushFontPercent = v, nameof(PerushFontPercent));
+    }
+
+    /// <summary>מאמרים size as a percentage of the master font size (50–200).</summary>
+    public double ArticleFontPercent
+    {
+        get => _preferencesService.ArticleFontPercent;
+        set => SetFontPercent(value, v => _preferencesService.ArticleFontPercent = v, nameof(ArticleFontPercent));
+    }
+
+    /// <summary>Effective pasuk body size in points, for the live preview.</summary>
+    public double PasukEffectiveSize => _preferencesService.PasukFontFactor * 18;
+
+    /// <summary>Effective perush body size in points, for the live preview.</summary>
+    public double PerushEffectiveSize => _preferencesService.PerushFontFactor * 18;
+
+    /// <summary>Effective article body size in points, for the live preview.</summary>
+    public double ArticleEffectiveSize => _preferencesService.ArticleFontFactor * 16;
+
+    public double FontPercentMinimum => PreferencesService.MinFontPercent;
+    public double FontPercentMaximum => PreferencesService.MaxFontPercent;
+
+    private void SetFontPercent(double value, Action<double> apply, string propertyName)
+    {
+        var normalized = double.IsFinite(value)
+            ? Math.Clamp(value, PreferencesService.MinFontPercent, PreferencesService.MaxFontPercent)
+            : PreferencesService.DefaultFontPercent;
+        apply(normalized);
+        // Notify unconditionally: an out-of-range input snaps back onto the
+        // clamped value, and the effective-size previews move with the master.
+        OnPropertyChanged(propertyName);
+        OnPropertyChanged(propertyName.Replace("FontPercent", "EffectiveSize"));
+    }
+
+    [RelayCommand]
+    public void ResetPasukFontPercent() => PasukFontPercent = PreferencesService.DefaultFontPercent;
+
+    [RelayCommand]
+    public void ResetPerushFontPercent() => PerushFontPercent = PreferencesService.DefaultFontPercent;
+
+    [RelayCommand]
+    public void ResetArticleFontPercent() => ArticleFontPercent = PreferencesService.DefaultFontPercent;
+
+    #endregion
+
     private void OnPreferencesChanged(object? sender, EventArgs e)
     {
         OnPropertyChanged(nameof(FontFactor));
@@ -114,6 +175,12 @@ public partial class DisplayPreferencesViewModel : DivineNamePreferencesViewMode
         OnPropertyChanged(nameof(IsBackButtonPlatformDefault));
         OnPropertyChanged(nameof(IsBackButtonShow));
         OnPropertyChanged(nameof(IsBackButtonHide));
+        OnPropertyChanged(nameof(PasukFontPercent));
+        OnPropertyChanged(nameof(PerushFontPercent));
+        OnPropertyChanged(nameof(ArticleFontPercent));
+        OnPropertyChanged(nameof(PasukEffectiveSize));
+        OnPropertyChanged(nameof(PerushEffectiveSize));
+        OnPropertyChanged(nameof(ArticleEffectiveSize));
         NotifyDivineNameMaskingChanged();
     }
 }

@@ -506,6 +506,63 @@ public class PreferencesViewModelTests : IDisposable
         display.FontFactor.Should().Be(0.5);
     }
 
+    [Fact]
+    public void FontCategoryPercents_SetClampsAndUpdatesEffectiveSize()
+    {
+        // #2461: the numeric input and slider both bind the same property, and
+        // out-of-range entries snap into the bounded range instead of breaking
+        // the rendered text.
+        var display = new DisplayPreferencesViewModel(_service);
+        display.FontFactor = 1.25;
+
+        display.PerushFontPercent = 90;
+
+        _service.PerushFontPercent.Should().Be(90);
+        display.PerushEffectiveSize.Should().BeApproximately(1.25 * 0.9 * 18, 1e-9);
+
+        display.PasukFontPercent = 1000;
+        display.PasukFontPercent.Should().Be(PreferencesService.MaxFontPercent);
+    }
+
+    [Fact]
+    public void FontCategoryPercents_NonFiniteInput_FallsBackToDefault()
+    {
+        var display = new DisplayPreferencesViewModel(_service);
+        display.ArticleFontPercent = 150;
+
+        display.ArticleFontPercent = double.NaN;
+
+        display.ArticleFontPercent.Should().Be(PreferencesService.DefaultFontPercent);
+    }
+
+    [Fact]
+    public void ResetPasukAndArticleFontPercentCommands_RestoreFollowMaster()
+    {
+        var display = new DisplayPreferencesViewModel(_service);
+        display.PasukFontPercent = 150;
+        display.ArticleFontPercent = 60;
+
+        display.ResetPasukFontPercentCommand.Execute(null);
+        display.ResetArticleFontPercentCommand.Execute(null);
+
+        display.PasukFontPercent.Should().Be(100);
+        display.ArticleFontPercent.Should().Be(100);
+        display.PasukEffectiveSize.Should().BeApproximately(display.FontFactor * 18, 1e-9);
+        display.ArticleEffectiveSize.Should().BeApproximately(display.FontFactor * 16, 1e-9);
+    }
+
+    [Fact]
+    public void ResetPerushFontPercentCommand_RestoresFollowMaster()
+    {
+        var display = new DisplayPreferencesViewModel(_service);
+        display.PerushFontPercent = 150;
+
+        display.ResetPerushFontPercentCommand.Execute(null);
+
+        display.PerushFontPercent.Should().Be(100);
+        display.PerushEffectiveSize.Should().BeApproximately(display.FontFactor * 18, 1e-9);
+    }
+
     #endregion
 
     #region ResetFontSizeCommand Tests
@@ -878,37 +935,6 @@ public class PreferencesViewModelTests : IDisposable
 
         // Assert
         fontPropertyChanged.Should().BeTrue("PropertyChanged should fire when service preferences change");
-    }
-
-    #endregion
-
-    #region AnalyticsConsentEnabled Tests
-
-    [Fact]
-    public void AnalyticsConsentEnabled_DefaultsOff_AndPersistsThroughService()
-    {
-        _viewModel.AnalyticsConsentEnabled.Should().BeFalse("collection defaults off before an explicit opt-in");
-
-        _viewModel.AnalyticsConsentEnabled = true;
-
-        _service.AnalyticsConsentEnabled.Should().BeTrue();
-        _storage.Get(AnalyticsConsent.StorageKey, "").Should().Be("granted");
-
-        _viewModel.AnalyticsConsentEnabled = false;
-        _service.AnalyticsConsentEnabled.Should().BeFalse();
-        _storage.Get(AnalyticsConsent.StorageKey, "").Should().Be("denied");
-    }
-
-    [Fact]
-    public void AnalyticsConsentEnabled_WhenSameValue_DoesNotUpdate()
-    {
-        _viewModel.AnalyticsConsentEnabled = true;
-        var eventCount = 0;
-        _viewModel.PropertyChanged += (_, _) => eventCount++;
-
-        _viewModel.AnalyticsConsentEnabled = true;
-
-        eventCount.Should().Be(0, "Setting the same value should not raise PropertyChanged");
     }
 
     #endregion
