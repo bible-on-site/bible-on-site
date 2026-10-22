@@ -21,6 +21,13 @@ Description: |
   | Log Group Name | Retention | Purpose |
   |----------------|-----------|---------|
   | /ecs/bible-on-site-website | 180 days | ECS Website container logs |
+  | /ecs/bible-on-site-api | 90 days | ECS API container logs |
+  | /ecs/bible-on-site-admin | 90 days | ECS Admin container logs |
+
+  Note: the api/admin log groups were auto-created by `awslogs-create-group`
+  with no retention (never expire). Apply retention to the live groups:
+    aws logs put-retention-policy --log-group-name /ecs/bible-on-site-api --retention-in-days 90 --region il-central-1
+    aws logs put-retention-policy --log-group-name /ecs/bible-on-site-admin --retention-in-days 90 --region il-central-1
 
   Log streams are created automatically by ECS with the pattern:
   ecs/<container-name>/<task-id>
@@ -65,19 +72,34 @@ Resources:
           Value: website
 
   # =============================================================================
-  # ECS API Log Group (for future use)
+  # ECS API Log Group
   # =============================================================================
-  # ECSAPILogGroup:
-  #   Type: AWS::Logs::LogGroup
-  #   Properties:
-  #     LogGroupName: /ecs/bible-on-site-api
-  #     RetentionInDays: 180
-  #     LogGroupClass: STANDARD
-  #     Tags:
-  #       - Key: Project
-  #         Value: bible-on-site
-  #       - Key: Service
-  #         Value: api
+  ECSAPILogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /ecs/bible-on-site-api
+      RetentionInDays: 90
+      LogGroupClass: STANDARD
+      Tags:
+        - Key: Project
+          Value: bible-on-site
+        - Key: Service
+          Value: api
+
+  # =============================================================================
+  # ECS Admin Log Group
+  # =============================================================================
+  ECSAdminLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /ecs/bible-on-site-admin
+      RetentionInDays: 90
+      LogGroupClass: STANDARD
+      Tags:
+        - Key: Project
+          Value: bible-on-site
+        - Key: Service
+          Value: admin
 
   # =============================================================================
   # Application Auto Scaling - Scalable Target
