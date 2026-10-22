@@ -296,7 +296,7 @@ a correction. A genuinely newer GOOD closes the earlier concern editor.
 task completion. Saving an action or a word review does not itself mean that a
 chapter is validated, segmented or published.
 
-Inspect progress through the existing app's `GET /api/preparation-status`, or
+Inspect progress, counts and reasons through the existing app's `GET /api/preparation-status`, or
 read it without starting a worker:
 
 ```powershell

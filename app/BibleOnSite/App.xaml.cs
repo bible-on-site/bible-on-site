@@ -58,10 +58,12 @@ public partial class App : Application
             HeightRequest = 32,
             Padding = 0,
             BackgroundColor = Colors.Transparent,
-            SemanticProperties.Description = "חזור",
             AutomationId = "TitleBarBackButton",
             IsEnabled = false,
         };
+        // SemanticProperties.Description is an attached property; it cannot be
+        // assigned inside an object initializer.
+        SemanticProperties.SetDescription(back, "חזור");
         shell.Navigated += (_, _) =>
             back.IsEnabled = shell.Navigation.NavigationStack.Count > 1;
         back.Clicked += (_, _) => _ = ((Microsoft.Maui.IWindow)window).BackButtonClicked();
