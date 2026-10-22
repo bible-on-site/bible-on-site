@@ -150,6 +150,19 @@ test.describe("Perushim Section", () => {
 		);
 	});
 
+	test("document title matches the visible source including the book additional (#2512)", async ({
+		page,
+	}) => {
+		// The reported case: מלכים ב ו — browser title must carry the same
+		// parent + additional + chapter the heading renders.
+		await page.goto("/929/315/" + encodeURIComponent('רש"י'));
+
+		await expect(page).toHaveTitle('רש"י על מלכים ב ו | תנ"ך על הפרק');
+		await expect(
+			page.locator("#perush-view").getByRole("heading", { level: 1 }),
+		).toContainText("מלכים ב ו");
+	});
+
 	test("dedicated page back link returns to the perek carousel", async ({
 		page,
 	}) => {
