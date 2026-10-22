@@ -22,7 +22,7 @@
                        FontSize="18"
                        FontAttributes="Bold"
                        TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
-                <Label Text="בעת שימוש באתר ו/או בישומון תנ&quot;ך על הפרק אנו עשויים לאסוף נתונים שסופקו על ידיכם באופן ידני (כגון פניות ששלחתם אלינו) ונתוני שימוש טכניים המתקבלים מהמכשיר דרכו התחברתם. הישומון אינו אוסף מזהי פרסום כגון Android Advertising ID."
+                <Label Text="בתנ&quot;ך על הפרק אין הרשמה או חשבונות משתמשים. עם זאת, שימוש באתר או בישומון עשוי למסור נתונים טכניים, ובהם כתובת IP, פרטי מכשיר ומזהי מדידה, וכן מידע שתשלחו בפנייה אלינו. היעדר חשבון אינו הופך את כל הנתונים לאנונימיים. בישומון איסוף מזהי פרסום והתאמה אישית של פרסום מושבתים."
                        FontSize="14"
                        LineHeight="1.4"
                        TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
@@ -30,10 +30,22 @@
                        FontSize="14"
                        LineHeight="1.4"
                        TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
-                <Label Text="המדידה של Google Analytics ו-Firebase Analytics פועלת רק לאחר הסכמה מפורשת: באתר ניתן לאשר או לדחות בבאנר ההסכמה, ובישומון במסך ההסכמה שמופיע בהפעלה הראשונה או בהעדפות, וניתן לשנות את הבחירה בכל עת. בחירתכם נשמרת במכשיר ואינה נדרשת לשימוש באתר או בישומון. יתר הנתונים נשמרים באופן מאובטח בשרתי תנ&quot;ך על הפרק ואינם מועברים לגורמים נוספים."
+                <Label Text="השירות מיועד לציבור בישראל. בכניסה מוצגת הודעה על המדידה, והמשך שימוש לאחר הצגתה מאפשר אותה ללא מסך אישור. מסירת המידע למדידה היא מרצון ואין חובה חוקית למסור אותו. ניתן לכבות מדידה בהודעה או בכל עת בהעדפות הישומון ובהגדרות הפרטיות באתר. הכיבוי חל על Firebase בישומון ועל Google Analytics באתר; הוא אינו מפסיק את המדידה ללא עוגיות של Ahrefs באתר. בחירת המדידה והעדפות הלימוד נשמרות במכשיר. המדידה אינה תנאי ללימוד."
                        FontSize="14"
                        LineHeight="1.4"
                        TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                <Label Text="תשתית AWS של הפרויקט נמצאת באזור ישראל. שירותים חיצוניים, ובהם Google ו-Ahrefs, עשויים לעבד נתונים גם מחוץ לישראל בהתאם למדיניות שלהם. אין התחייבות שכל נתוני המדידה נשמרים בישראל."
+                       FontSize="14"
+                       LineHeight="1.4"
+                       TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                <Label Text="למדיניות הפרטיות המלאה: יצירת קשר, זכויות עיון ותיקון, תקופות שמירה וקישורים למדיניות ספקי המדידה"
+                       FontSize="14" TextColor="{StaticResource Primary}" TextDecorations="Underline"
+                       SemanticProperties.Description="פתיחת מדיניות הפרטיות המלאה באתר התכנית"
+                       AutomationId="PrivacyPolicyLink">
+                    <Label.GestureRecognizers>
+                        <TapGestureRecognizer Tapped="OnPrivacyPolicyTapped"/>
+                    </Label.GestureRecognizers>
+                </Label>
             </VerticalStackLayout>
 
             <!-- Accessibility Statement Section -->

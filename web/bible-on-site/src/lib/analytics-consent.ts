@@ -1,23 +1,22 @@
-/**
- * Analytics opt-in consent (#2400, Israeli Privacy Protection Law
- * Amendment 13). Persisted in localStorage like the other user settings;
- * Google Analytics loads only after an explicit "granted". Ahrefs analytics
- * is cookieless and stays unconditional.
- */
-
-export const ANALYTICS_CONSENT_KEY = "analyticsConsent" as const;
+/** Optional service analytics: informed continued use, with a local opt-out. */
+// Deliberately start a fresh preference for the revised rollout (#2400).
+// The retired analyticsConsent key is no longer read.
+export const ANALYTICS_CONSENT_KEY = "analyticsPreference" as const;
+export const ANALYTICS_NOTICE_KEY = "analyticsNoticeSeen" as const;
 export const ANALYTICS_CONSENT_EVENT = "analytics-consent-changed" as const;
+const NOTICE_VERSION = "2026-10";
 
 export type AnalyticsConsent = "granted" | "denied";
+export type AnalyticsStatus = "pending" | "enabled" | "disabled";
+let volatileChoice: AnalyticsConsent | null | undefined;
+let volatileNoticeSeen = false;
 
-/** Undecided users get null; anything else stored is treated as never asked. */
 export function getAnalyticsConsent(): AnalyticsConsent | null {
-	/* istanbul ignore next: SSR */
 	if (typeof window === "undefined") return null;
+	if (volatileChoice !== undefined) return volatileChoice;
 	try {
 		const raw = localStorage.getItem(ANALYTICS_CONSENT_KEY);
-		if (raw === "granted" || raw === "denied") return raw;
-		return null;
+		return raw === "granted" || raw === "denied" ? raw : null;
 	} catch {
 		return null;
 	}
@@ -26,35 +25,69 @@ export function getAnalyticsConsent(): AnalyticsConsent | null {
 export function setAnalyticsConsent(consent: AnalyticsConsent): void {
 	try {
 		localStorage.setItem(ANALYTICS_CONSENT_KEY, consent);
+		volatileChoice = undefined;
 	} catch {
-		/* quota / private mode */
+		volatileChoice = consent;
 	}
 	window.dispatchEvent(new CustomEvent(ANALYTICS_CONSENT_EVENT));
 }
 
-/** Forgets the stored answer so the banner asks again (#2400 privacy control). */
 export function clearAnalyticsConsent(): void {
+	volatileNoticeSeen = false;
 	try {
 		localStorage.removeItem(ANALYTICS_CONSENT_KEY);
+		volatileChoice = undefined;
 	} catch {
-		/* quota / private mode */
+		volatileChoice = null;
 	}
 	window.dispatchEvent(new CustomEvent(ANALYTICS_CONSENT_EVENT));
 }
 
-/**
- * Server snapshot for useSyncExternalStore: a distinct "unset" sentinel so
- * SSR and hydration render no consent-gated markup at all (no banner flash
- * for returning users, no GA scripts before a client-side grant).
- */
+/** Record continued use separately from an explicit permission. */
+export function markAnalyticsNoticeSeen(): void {
+	try {
+		localStorage.setItem(ANALYTICS_NOTICE_KEY, NOTICE_VERSION);
+		volatileNoticeSeen = false;
+	} catch {
+		volatileNoticeSeen = true;
+	}
+	window.dispatchEvent(new CustomEvent(ANALYTICS_CONSENT_EVENT));
+}
+
+export function getAnalyticsStatus(): AnalyticsStatus {
+	const choice = getAnalyticsConsent();
+	if (choice === "denied") return "disabled";
+	if (choice === "granted" || volatileNoticeSeen) return "enabled";
+	try {
+		return localStorage.getItem(ANALYTICS_NOTICE_KEY) === NOTICE_VERSION
+			? "enabled"
+			: "pending";
+	} catch {
+		return "pending";
+	}
+}
+
+/** Render the entry disclosure on the initial HTML; never start GA in SSR. */
+export function getAnalyticsStatusServerSnapshot(): AnalyticsStatus {
+	return "pending";
+}
+
 export function getAnalyticsConsentServerSnapshot(): "unset" {
 	return "unset";
 }
 
 export function subscribeAnalyticsConsent(onChange: () => void): () => void {
-	// Cross-tab storage events fire for every key; only ours is relevant.
 	const onStorage = (event: StorageEvent) => {
-		if (event.key === ANALYTICS_CONSENT_KEY) onChange();
+		if (event.key === null || event.key === ANALYTICS_CONSENT_KEY)
+			volatileChoice = undefined;
+		if (event.key === null || event.key === ANALYTICS_NOTICE_KEY)
+			volatileNoticeSeen = false;
+		if (
+			event.key === null ||
+			event.key === ANALYTICS_CONSENT_KEY ||
+			event.key === ANALYTICS_NOTICE_KEY
+		)
+			onChange();
 	};
 	window.addEventListener(ANALYTICS_CONSENT_EVENT, onChange);
 	window.addEventListener("storage", onStorage);

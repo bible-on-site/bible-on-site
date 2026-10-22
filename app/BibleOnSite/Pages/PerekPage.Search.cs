@@ -38,6 +38,7 @@ public partial class PerekPage
 
     private async void OnPerekSourceClicked(object? sender, EventArgs e)
     {
+        RecordReaderContinuedUse();
         ReaderMenuOverlay.IsVisible = false;
         var sourceBounds = SearchIntroduction.IsVisible ? SearchIntroduction.Bounds : NormalNavigationTitle.Bounds;
         FinishSearchIntroduction();

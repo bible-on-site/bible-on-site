@@ -1,0 +1,54 @@
+[
+  {
+    "viewport": "desktop",
+    "initialNoApproval": true,
+    "disclosureInInitialHTML": true,
+    "dismissed": true,
+    "analyticsAfterUse": {
+      "choice": null,
+      "disable": false,
+      "config": [
+        [
+          "config",
+          "G-2CHER7MM85",
+          {
+            "allow_google_signals": false,
+            "allow_ad_personalization_signals": false
+          }
+        ]
+      ]
+    },
+    "liveOptOut": true,
+    "optOutAfterReload": true,
+    "reenable": true,
+    "analyticsRequestsIntercepted": 9
+  },
+  {
+    "viewport": "mobile",
+    "initialNoApproval": true,
+    "disclosureInInitialHTML": true,
+    "dismissed": true,
+    "analyticsAfterUse": {
+      "choice": null,
+      "disable": false,
+      "config": [
+        [
+          "config",
+          "G-2CHER7MM85",
+          {
+            "allow_google_signals": false,
+            "allow_ad_personalization_signals": false
+          }
+        ]
+      ]
+    },
+    "liveOptOut": true,
+    "optOutAfterReload": true,
+    "reenable": true,
+    "analyticsRequestsIntercepted": 9
+  },
+  {
+    "legacyChoiceIgnored": true,
+    "ordinaryScrollDismisses": true
+  }
+]

@@ -24,6 +24,18 @@ public class AnalyticsCollectionGuardTests
         Assert.Equal("false", entry!.Attribute(android + "value")?.Value);
     }
 
+    [Theory]
+    [InlineData("google_analytics_adid_collection_enabled")]
+    [InlineData("google_analytics_default_allow_ad_personalization_signals")]
+    public void AndroidManifest_DisablesAdvertisingFeatures(string key)
+    {
+        var manifest = XDocument.Load(Path.Join(AppRoot, "Platforms", "Android", "AndroidManifest.xml"));
+        XNamespace android = "http://schemas.android.com/apk/res/android";
+        var entry = Assert.Single(manifest.Descendants("meta-data")
+            .Where(e => e.Attribute(android + "name")?.Value == key));
+        Assert.Equal("false", entry.Attribute(android + "value")?.Value);
+    }
+
     [Fact]
     public void AndroidManifest_DeactivatesCollectionForDisableAnalyticsBuilds()
     {
@@ -71,6 +83,43 @@ public class AnalyticsCollectionGuardTests
         Assert.Equal("false", elements[index + 1].Name.LocalName);
     }
 
+    [Theory]
+    [InlineData("GOOGLE_ANALYTICS_IDFA_COLLECTION_ENABLED")]
+    [InlineData("GOOGLE_ANALYTICS_DEFAULT_ALLOW_AD_PERSONALIZATION_SIGNALS")]
+    public void IosInfoPlist_DisablesAdvertisingFeatures(string key)
+    {
+        var plist = XDocument.Load(Path.Join(AppRoot, "Platforms", "iOS", "Info.plist"));
+        var elements = plist.Root!.Element("dict")!.Elements().ToList();
+        var index = elements.FindIndex(e => e.Name == "key" && e.Value == key);
+        Assert.True(index >= 0, $"{key} missing from Info.plist");
+        Assert.Equal("false", elements[index + 1].Name.LocalName);
+    }
+
+    [Fact]
+    public void Reader_UsesAnInlineDisclosureWithPrivacyAndOptOutInsteadOfALaunchModal()
+    {
+        var loadingPage = File.ReadAllText(Path.Join(AppRoot, "Pages", "LoadingPage.xaml.cs"));
+        Assert.DoesNotContain("DisplayAlert", loadingPage);
+
+        var reader = XDocument.Load(Path.Join(AppRoot, "Pages", "PerekPage.xaml"));
+        var notice = Assert.Single(reader.Descendants()
+            .Where(e => e.Attribute("AutomationId")?.Value == "AnalyticsNotice"));
+        Assert.Equal("False", notice.Attribute("IsVisible")?.Value);
+        Assert.Equal("VerticalStackLayout", notice.Name.LocalName);
+        var buttons = notice.Descendants().Where(e => e.Name.LocalName == "Button").ToList();
+        Assert.Equal(3, buttons.Count);
+        Assert.Contains(buttons, b => b.Attribute("Clicked")?.Value == "OnAnalyticsPrivacyClicked");
+        Assert.Contains(buttons, b => b.Attribute("Clicked")?.Value == "OnAnalyticsOptOutClicked");
+        Assert.Contains(buttons, b => b.Attribute("Clicked")?.Value == "OnAnalyticsDismissClicked");
+        Assert.Contains(notice.Descendants(), e => e.Attribute("Text")?.Value ==
+            "נתוני שימוש נמסרים לשירותי מדידה כדי לשפר את הלימוד. המשך השימוש מאפשר מדידה.");
+
+        var policy = XDocument.Load(Path.Join(AppRoot, "Pages", "TosPage.xaml"));
+        var policyLink = Assert.Single(policy.Descendants()
+            .Where(e => e.Attribute("AutomationId")?.Value == "PrivacyPolicyLink"));
+        Assert.Contains(policyLink.Descendants(), e => e.Attribute("Tapped")?.Value == "OnPrivacyPolicyTapped");
+    }
+
     [Fact]
     public void IosInfoPlist_DisablesAutomaticScreenReporting()
     {
@@ -113,9 +162,9 @@ public class AnalyticsCollectionGuardTests
     public void Startup_GatesCollectionOnStoredConsentAndE2eMarker()
     {
         // #2400: both launch paths must resolve collection through the consent
-        // gate (a stored opt-in plus the e2e marker) so neither platform can
+        // gate (a stored choice plus the e2e marker) so neither platform can
         // re-enable tracking unconditionally and no Release build can emit
-        // before the user answers. The gate itself must keep consulting the
+        // before the entry disclosure and continued use. The gate keeps consulting the
         // e2e marker so suite launches stay silent even on a granted device.
         var consent = File.ReadAllText(Path.Join(AppRoot, "Services", "AnalyticsConsent.cs"));
         Assert.Contains("IsE2eMarkedProcess()", consent);

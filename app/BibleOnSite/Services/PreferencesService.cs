@@ -364,16 +364,24 @@ public class PreferencesService
     private string _analyticsConsent = "";
 
     /// <summary>
-    /// Analytics collection opt-in (#2400, Amendment 13). Defaults off until
-    /// the user explicitly grants; readable pre-Load via
-    /// <see cref="AnalyticsConsent.IsGranted"/> for the platform launch paths
-    /// that run before preferences load.
+    /// Collection follows informed continued use or the explicit settings
+    /// choice. Platform startup reads storage through AnalyticsConsent.
     /// </summary>
-    public bool AnalyticsConsentEnabled => _analyticsConsent == AnalyticsConsent.GrantedValue;
+    public bool AnalyticsConsentEnabled =>
+        _analyticsConsent is AnalyticsConsent.GrantedValue or AnalyticsConsent.ContinuedUseValue;
 
-    /// <summary>True once the user answered the consent prompt (either way).</summary>
+    /// <summary>True once the entry disclosure or a settings choice was completed.</summary>
     public bool AnalyticsConsentAsked =>
-        _analyticsConsent is AnalyticsConsent.GrantedValue or AnalyticsConsent.DeniedValue;
+        _analyticsConsent is AnalyticsConsent.GrantedValue or AnalyticsConsent.DeniedValue or AnalyticsConsent.ContinuedUseValue;
+
+    public void RecordAnalyticsContinuedUse(bool noticeShown)
+    {
+        if (AnalyticsConsent.RecordContinuedUse(_storage, noticeShown))
+        {
+            _analyticsConsent = AnalyticsConsent.ContinuedUseValue;
+            OnPreferencesChanged();
+        }
+    }
 
     /// <summary>
     /// Records the consent answer and applies it to the Firebase collection
@@ -535,8 +543,8 @@ public class PreferencesService
             ? (InAppBackButtonPreference)storedBackButton
             : InAppBackButtonPreference.PlatformDefault;
         var storedConsent = _storage.Get(AnalyticsConsent.StorageKey, "");
-        // Garbage keeps the "never asked" state so the prompt can still run.
-        _analyticsConsent = storedConsent is AnalyticsConsent.GrantedValue or AnalyticsConsent.DeniedValue
+        // Garbage keeps the entry disclosure due.
+        _analyticsConsent = storedConsent is AnalyticsConsent.GrantedValue or AnalyticsConsent.DeniedValue or AnalyticsConsent.ContinuedUseValue
             ? storedConsent
             : "";
         _recitationSpeed = Normalize(_storage.Get("recitationSpeed", 1.0), 1, 0.5, 2);

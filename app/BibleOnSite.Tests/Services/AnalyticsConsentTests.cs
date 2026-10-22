@@ -5,10 +5,8 @@ using Xunit;
 namespace BibleOnSite.Tests.Services;
 
 /// <summary>
-/// Analytics opt-in consent (#2400, Amendment 13). Firebase collection must
-/// stay off until the user explicitly grants it, and the e2e marker always
-/// overrides a stored grant so suite traffic never reaches the production
-/// property (the release smoke contract logs enabled=false there).
+/// Collection follows informed continued use or a settings grant. The e2e
+/// marker always overrides either state, keeping production reports clean.
 /// </summary>
 public class AnalyticsConsentTests
 {
@@ -89,8 +87,8 @@ public class AnalyticsConsentTests
         var storage = new InMemoryPreferencesStorage();
         var service = PreferencesService.CreateForTesting(storage);
         service.Load();
-        service.AnalyticsConsentAsked.Should().BeFalse("the first-launch prompt still owes the user an answer");
-        service.AnalyticsConsentEnabled.Should().BeFalse("collection defaults off before an explicit opt-in");
+        service.AnalyticsConsentAsked.Should().BeFalse("the entry disclosure is still due");
+        service.AnalyticsConsentEnabled.Should().BeFalse("collection waits for informed continued use or a settings grant");
 
         service.SetAnalyticsConsent(true);
         service.AnalyticsConsentAsked.Should().BeTrue();
@@ -118,5 +116,90 @@ public class AnalyticsConsentTests
         service.SetAnalyticsConsent(true);
 
         changes.Should().Be(0, "re-applying the stored answer must not re-notify");
+    }
+
+    [Fact]
+    public void ContinuedUse_RequiresTheNoticeToHaveBeenShown()
+    {
+        var storage = new InMemoryPreferencesStorage();
+
+        AnalyticsConsent.RecordContinuedUse(storage, noticeShown: false).Should().BeFalse();
+
+        AnalyticsConsent.WasAsked(storage).Should().BeFalse();
+        AnalyticsConsent.IsCollectionEnabled(storage, e2eMarked: false).Should().BeFalse();
+    }
+
+    [Fact]
+    public void ContinuedUse_EnablesMeasurementWithoutRecordingAnExplicitGrant()
+    {
+        var storage = new InMemoryPreferencesStorage();
+
+        AnalyticsConsent.RecordContinuedUse(storage, noticeShown: true).Should().BeTrue();
+
+        storage.Get(AnalyticsConsent.StorageKey, "").Should().Be(AnalyticsConsent.ContinuedUseValue);
+        AnalyticsConsent.IsGranted(storage).Should().BeFalse();
+        AnalyticsConsent.WasAsked(storage).Should().BeTrue();
+        AnalyticsConsent.IsCollectionEnabled(storage, e2eMarked: false).Should().BeTrue();
+        AnalyticsConsent.IsCollectionEnabled(storage, e2eMarked: true).Should().BeFalse();
+        AnalyticsConsent.RecordContinuedUse(storage, noticeShown: true).Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void ContinuedUse_PreservesChoicesMadeUnderTheNewScheme(bool granted)
+    {
+        var storage = new InMemoryPreferencesStorage();
+        AnalyticsConsent.Save(storage, granted);
+
+        AnalyticsConsent.RecordContinuedUse(storage, noticeShown: true).Should().BeFalse();
+
+        AnalyticsConsent.IsCollectionEnabled(storage, e2eMarked: false).Should().Be(granted);
+        storage.Get(AnalyticsConsent.StorageKey, "").Should().Be(granted ? "granted" : "denied");
+    }
+
+    [Theory]
+    [InlineData("granted")]
+    [InlineData("denied")]
+    public void RetiredLaunchDialogPreference_IsIgnored(string oldChoice)
+    {
+        var storage = new InMemoryPreferencesStorage();
+        storage.Set("analyticsConsent", oldChoice);
+        var service = PreferencesService.CreateForTesting(storage);
+        service.Load();
+
+        service.AnalyticsConsentAsked.Should().BeFalse();
+        service.AnalyticsConsentEnabled.Should().BeFalse();
+        AnalyticsConsent.IsCollectionEnabled(storage, e2eMarked: false).Should().BeFalse();
+
+        service.RecordAnalyticsContinuedUse(noticeShown: true);
+        service.AnalyticsConsentEnabled.Should().BeTrue();
+    }
+
+    [Fact]
+    public void PreferencesService_ContinuedUse_NotifiesOnceAndSurvivesRestart()
+    {
+        var storage = new InMemoryPreferencesStorage();
+        var service = PreferencesService.CreateForTesting(storage);
+        service.Load();
+        var changes = 0;
+        service.PreferencesChanged += (_, _) => changes++;
+
+        service.RecordAnalyticsContinuedUse(noticeShown: false);
+        changes.Should().Be(0);
+        service.RecordAnalyticsContinuedUse(noticeShown: true);
+        service.AnalyticsConsentAsked.Should().BeTrue();
+        service.AnalyticsConsentEnabled.Should().BeTrue();
+        changes.Should().Be(1);
+        service.RecordAnalyticsContinuedUse(noticeShown: true);
+        changes.Should().Be(1);
+
+        var restored = PreferencesService.CreateForTesting(storage);
+        restored.Load();
+        restored.AnalyticsConsentAsked.Should().BeTrue();
+        restored.AnalyticsConsentEnabled.Should().BeTrue();
+        restored.SetAnalyticsConsent(false);
+        restored.RecordAnalyticsContinuedUse(noticeShown: true);
+        restored.AnalyticsConsentEnabled.Should().BeFalse();
     }
 }

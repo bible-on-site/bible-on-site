@@ -58,6 +58,7 @@ export default function RootLayout({
 			suppressHydrationWarning
 		>
 			<head>
+				<link rel="privacy-policy" href="/#privacyPolicy" />
 				{/* Run on the initial document so client-side chapter navigation
 				    inherits saved settings too, before the reader's first paint. */}
 				<script>{READER_SETTINGS_BOOTSTRAP}</script>

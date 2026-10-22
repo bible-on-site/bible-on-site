@@ -2,38 +2,34 @@
 
 import { useSyncExternalStore } from "react";
 import {
-	clearAnalyticsConsent,
-	getAnalyticsConsent,
-	getAnalyticsConsentServerSnapshot,
+	getAnalyticsStatus,
+	getAnalyticsStatusServerSnapshot,
+	setAnalyticsConsent,
 	subscribeAnalyticsConsent,
 } from "@/lib/analytics-consent";
 import { isProduction } from "@/util/environment";
 import styles from "./TosSection.module.css";
 
-/**
- * Discoverable way to change the analytics answer after the banner is gone
- * (#2400): shows the stored choice inside the privacy policy and forgets it
- * on click, which makes the consent banner ask again.
- */
+/** A direct, persistent measurement control; never reopens an approval dialog. */
 export function AnalyticsConsentReset() {
-	const consent = useSyncExternalStore(
+	const status = useSyncExternalStore(
 		subscribeAnalyticsConsent,
-		getAnalyticsConsent,
-		getAnalyticsConsentServerSnapshot,
+		getAnalyticsStatus,
+		getAnalyticsStatusServerSnapshot,
 	);
-	if (!isProduction() || (consent !== "granted" && consent !== "denied")) {
-		return null;
-	}
+	if (!isProduction()) return null;
 	return (
 		<p>
-			בחירת האנליטיקה הנוכחית באתר זה:{" "}
-			{consent === "granted" ? "מאושרת" : "נדחתה"}.{" "}
+			מדידת שימוש ב-Google Analytics באתר:{" "}
+			{status === "enabled" ? "פעילה" : "כבויה"}.{" "}
 			<button
 				type="button"
 				className={styles.consentReset}
-				onClick={() => clearAnalyticsConsent()}
+				onClick={() =>
+					setAnalyticsConsent(status === "enabled" ? "denied" : "granted")
+				}
 			>
-				לחצו כאן לשינוי הבחירה
+				{status === "enabled" ? "כיבוי מדידה" : "הפעלת מדידה"}
 			</button>
 		</p>
 	);

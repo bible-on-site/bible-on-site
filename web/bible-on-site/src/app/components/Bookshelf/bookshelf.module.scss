@@ -132,26 +132,6 @@ button.block {
   transform: rotateX(-90deg) translateZ($sqSize);
 }
 
-.blockInner > div {
-  display: flex;
-  flex-wrap: wrap;
-  align-content: flex-start;
-  position: absolute;
-  width: $sqSize;
-  height: $sqSize;
-
-  // Shadow overlay for 3D effect
-  &::before {
-    content: "";
-    position: absolute;
-    width: 100%;
-    height: 100%;
-    background-color: #000;
-    opacity: 0.2;
-    pointer-events: none;
-  }
-}
-
 .back {
   transform: translateZ(-$sqSize) rotateY(180deg);
 
@@ -272,6 +252,26 @@ button.block {
     inset: 0;
     background: linear-gradient(180deg, #c0392b 85%, #a93226 100%);
     clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 70%, 0 100%);
+  }
+}
+
+.blockInner > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  position: absolute;
+  width: $sqSize;
+  height: $sqSize;
+
+  // Shadow overlay for 3D effect
+  &::before {
+    content: "";
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background-color: #000;
+    opacity: 0.2;
+    pointer-events: none;
   }
 }
 

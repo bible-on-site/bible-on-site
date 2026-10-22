@@ -1,17 +1,16 @@
-/**
- * @jest-environment jsdom
- */
+/** @jest-environment jsdom */
 import { fireEvent, render, screen } from "@testing-library/react";
 
-jest.mock("@/util/environment", () => ({
-	isProduction: jest.fn(),
-}));
+jest.mock("@/util/environment", () => ({ isProduction: jest.fn() }));
 
 import {
 	ANALYTICS_CONSENT_KEY,
 	getAnalyticsConsent,
+	getAnalyticsStatus,
+	markAnalyticsNoticeSeen,
 } from "@/lib/analytics-consent";
 import { isProduction } from "@/util/environment";
+import { AnalyticsConsentBanner } from "../../../src/app/components/AnalyticsConsentBanner";
 import { AnalyticsConsentReset } from "../../../src/app/components/AnalyticsConsentReset";
 
 const mockIsProduction = isProduction as jest.MockedFunction<
@@ -24,47 +23,53 @@ describe("AnalyticsConsentReset", () => {
 		mockIsProduction.mockReturnValue(true);
 	});
 
-	describe("when in production", () => {
-		it("shows the stored grant and a change button", () => {
-			localStorage.setItem(ANALYTICS_CONSENT_KEY, "granted");
-			render(<AnalyticsConsentReset />);
-			expect(screen.getByText(/מאושרת/)).toBeInTheDocument();
-			expect(
-				screen.getByRole("button", { name: "לחצו כאן לשינוי הבחירה" }),
-			).toBeInTheDocument();
-		});
-
-		it("shows the stored denial", () => {
-			localStorage.setItem(ANALYTICS_CONSENT_KEY, "denied");
-			render(<AnalyticsConsentReset />);
-			expect(screen.getByText(/נדחתה/)).toBeInTheDocument();
-		});
-
-		it("forgetting the answer re-arms the consent banner", () => {
-			localStorage.setItem(ANALYTICS_CONSENT_KEY, "granted");
-			render(<AnalyticsConsentReset />);
-			fireEvent.click(
-				screen.getByRole("button", { name: "לחצו כאן לשינוי הבחירה" }),
-			);
-			expect(getAnalyticsConsent()).toBeNull();
-			// Undecided again, so the control hides while the banner re-asks.
-			expect(
-				screen.queryByRole("button", { name: "לחצו כאן לשינוי הבחירה" }),
-			).not.toBeInTheDocument();
-		});
-
-		it("renders nothing before the user decides", () => {
-			const { container } = render(<AnalyticsConsentReset />);
-			expect(container).toBeEmptyDOMElement();
-		});
+	it("offers a direct enable control while measurement is pending", () => {
+		render(<AnalyticsConsentReset />);
+		expect(screen.getByText(/כבויה/)).toBeInTheDocument();
+		fireEvent.click(screen.getByRole("button", { name: "הפעלת מדידה" }));
+		expect(getAnalyticsConsent()).toBe("granted");
+		expect(getAnalyticsStatus()).toBe("enabled");
+		expect(
+			screen.getByRole("button", { name: "כיבוי מדידה" }),
+		).toBeInTheDocument();
 	});
 
-	describe("when not in production", () => {
-		it("renders nothing even with a stored answer", () => {
-			mockIsProduction.mockReturnValue(false);
-			localStorage.setItem(ANALYTICS_CONSENT_KEY, "granted");
-			const { container } = render(<AnalyticsConsentReset />);
-			expect(container).toBeEmptyDOMElement();
-		});
+	it("disables continued-use measurement directly and never reopens an approval prompt", () => {
+		markAnalyticsNoticeSeen();
+		render(
+			<>
+				<AnalyticsConsentReset />
+				<AnalyticsConsentBanner />
+			</>,
+		);
+		expect(screen.getByText(/פעילה/)).toBeInTheDocument();
+		fireEvent.click(screen.getByRole("button", { name: "כיבוי מדידה" }));
+		expect(getAnalyticsConsent()).toBe("denied");
+		expect(getAnalyticsStatus()).toBe("disabled");
+		expect(screen.queryByRole("region")).not.toBeInTheDocument();
+		expect(
+			screen.getByRole("button", { name: "הפעלת מדידה" }),
+		).toBeInTheDocument();
+	});
+
+	it("reenables a saved opt-out in one action", () => {
+		localStorage.setItem(ANALYTICS_CONSENT_KEY, "denied");
+		render(<AnalyticsConsentReset />);
+		fireEvent.click(screen.getByRole("button", { name: "הפעלת מדידה" }));
+		expect(localStorage.getItem(ANALYTICS_CONSENT_KEY)).toBe("granted");
+		expect(screen.getByText(/פעילה/)).toBeInTheDocument();
+	});
+
+	it("disables an explicitly enabled preference", () => {
+		localStorage.setItem(ANALYTICS_CONSENT_KEY, "granted");
+		render(<AnalyticsConsentReset />);
+		fireEvent.click(screen.getByRole("button", { name: "כיבוי מדידה" }));
+		expect(localStorage.getItem(ANALYTICS_CONSENT_KEY)).toBe("denied");
+	});
+
+	it("renders nothing outside production", () => {
+		mockIsProduction.mockReturnValue(false);
+		const { container } = render(<AnalyticsConsentReset />);
+		expect(container).toBeEmptyDOMElement();
 	});
 });

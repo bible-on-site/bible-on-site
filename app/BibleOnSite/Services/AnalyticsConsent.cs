@@ -1,29 +1,30 @@
 namespace BibleOnSite.Services;
 
 /// <summary>
-/// Analytics opt-in consent (#2400, Israeli Privacy Protection Law
-/// Amendment 13): Firebase collection stays off until the user explicitly
-/// grants it, and e2e-marked processes always resolve off so suite traffic
-/// never reaches the production property.
+/// Analytics choices for the Israeli service (#2400). Collection starts after
+/// informed continued use or a settings grant. A refusal always wins, and
+/// e2e-marked processes never reach the production property.
 /// </summary>
 public static class AnalyticsConsent
 {
-    internal const string StorageKey = "analyticsConsent";
+    // The short-lived launch-dialog choices used analyticsConsent. The new
+    // notice scheme starts fresh and ignores that retired preference.
+    internal const string StorageKey = "analyticsPreferenceV2";
     internal const string GrantedValue = "granted";
     internal const string DeniedValue = "denied";
+    internal const string ContinuedUseValue = "notice-v1";
 
     public static bool IsGranted(IPreferencesStorage storage) =>
         storage.Get(StorageKey, "") == GrantedValue;
 
     /// <summary>
-    /// True once the user answered the prompt or flipped the settings toggle.
-    /// An unset or malformed key counts as never asked so the first-launch
-    /// prompt still gets its answer.
+    /// True after informed continued use or an explicit settings choice.
+    /// An unset or malformed key still requires the entry disclosure.
     /// </summary>
     public static bool WasAsked(IPreferencesStorage storage)
     {
         var stored = storage.Get(StorageKey, "");
-        return stored is GrantedValue or DeniedValue;
+        return stored is GrantedValue or DeniedValue or ContinuedUseValue;
     }
 
     /// <summary>
@@ -36,7 +37,23 @@ public static class AnalyticsConsent
         IsCollectionEnabled(storage, SearchIndexService.IsE2eMarkedProcess());
 
     internal static bool IsCollectionEnabled(IPreferencesStorage storage, bool e2eMarked) =>
-        !e2eMarked && IsGranted(storage);
+        !e2eMarked && storage.Get(StorageKey, "") is GrantedValue or ContinuedUseValue;
+
+    /// <summary>
+    /// Records a subsequent reader interaction only after the disclosure was
+    /// shown. It cannot replace a previous explicit grant or refusal.
+    /// </summary>
+    public static bool RecordContinuedUse(IPreferencesStorage storage, bool noticeShown)
+    {
+        if (!noticeShown || WasAsked(storage))
+        {
+            return false;
+        }
+
+        storage.Set(StorageKey, ContinuedUseValue);
+        ApplySdkCollection(storage);
+        return true;
+    }
 
     /// <summary>Persist the consent choice and push it to the SDK collection flag.</summary>
     public static void Save(IPreferencesStorage storage, bool granted)
@@ -47,7 +64,7 @@ public static class AnalyticsConsent
 
     /// <summary>
     /// Applies the stored choice to the Firebase collection flag mid-session
-    /// (first-launch prompt, settings toggle). No-op off the mobile targets and
+    /// (informed continued use, settings toggle). No-op off the mobile targets and
     /// under DISABLE_ANALYTICS, where collection is deactivated at build level;
     /// the stored value still decides the next launch.
     /// </summary>
