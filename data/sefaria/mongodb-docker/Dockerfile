@@ -21,7 +21,7 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 # Install curl for downloading the dump
 # Use --no-install-recommends per Codacy guidelines
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl=8.5.* \
+    && apt-get install -y --no-install-recommends curl=8.18.* \
     && rm -rf /var/lib/apt/lists/*
 
 # Download and extract Sefaria dump
