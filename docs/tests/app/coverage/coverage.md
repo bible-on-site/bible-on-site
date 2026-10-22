@@ -2,7 +2,7 @@
 
 ## Overview
 
-The App module (`app/`) uses Coverlet for .NET coverage instrumentation. Coverage is collected during unit and integration test runs using the `XPlat Code Coverage` data collector, then converted to LCOV format using ReportGenerator.
+The App module (`app/`) uses Coverlet for .NET coverage instrumentation. Coverage is collected during unit and integration test runs by the `coverlet.console` dotnet tool, which instruments the test assembly on disk before spawning the xunit.v3 Microsoft Testing Platform runner, then converted to LCOV format using ReportGenerator.
 
 The test project defines `MAUI`, just as the app does, so chapter loading,
 carousel preloading, commentary selection, search, navigation commands, and
@@ -32,13 +32,13 @@ Each coverage target runs tests and generates LCOV internally:
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │                      Coverlet Instrumentation                       │
-│              (coverlet.collector NuGet package)                     │
+│            (coverlet.console dotnet tool, out-of-proc)              │
 └─────────────────────────────────────────────────────────────────────┘
                               │
                               ▼
               ┌───────────────────────────────────────┐
-              │   dotnet test --collect:"XPlat       │
-              │       Code Coverage"                  │
+              │   dotnet tool run coverlet <dll>      │
+              │   --target dotnet (xunit.v3 MTP app)  │
               └───────────────────────────────────────┘
                               │
                               ▼
@@ -66,7 +66,7 @@ Each coverage target runs tests and generates LCOV internally:
 
 ## NUKE Build Targets
 
-The app uses [NUKE Build](https://nuke.build/) ([devops/Build.cs](../../../../app/devops/Build.cs)) to orchestrate coverage:
+The app uses [NUKE Build](https://github.com/nuke-build/nuke) ([devops/Build.cs](../../../../app/devops/Build.cs)) to orchestrate coverage:
 
 ### Coverage Targets
 
@@ -88,43 +88,38 @@ CoverageAll         → Runs Unit + Integration, then triggers Merge
 
 ## Configuration
 
-### RunSettings File ([coverlet.runsettings](../../../../app/coverlet.runsettings))
+### Coverlet Arguments ([Build.Coverage.cs](../../../../app/devops/Build.Coverage.cs))
 
-Coverage collection is configured via a runsettings file:
+The test projects run on the native Microsoft Testing Platform, so there is no VSTest data collector or runsettings file. `RunTestsWithCoverage` passes the same rules as coverlet.console command-line options:
 
-```xml
-<RunSettings>
-  <DataCollectionRunSettings>
-    <DataCollectors>
-      <DataCollector friendlyName="XPlat Code Coverage">
-        <Configuration>
-          <Format>cobertura</Format>
-          <ExcludeByFile>**/obj/**,**/bin/**,**/.nuget/**</ExcludeByFile>
-          <Include>[BibleOnSite.Tests]*</Include>
-          <Exclude>[xunit.*]*,[FluentAssertions]*,[Moq]*,[coverlet.*]*,[Microsoft.*]*</Exclude>
-          <ExcludeByAttribute>Obsolete,GeneratedCodeAttribute,CompilerGeneratedAttribute,ExcludeFromCodeCoverageAttribute</ExcludeByAttribute>
-          <IncludeTestAssembly>true</IncludeTestAssembly>
-          <SkipAutoProps>true</SkipAutoProps>
-        </Configuration>
-      </DataCollector>
-    </DataCollectors>
-  </DataCollectionRunSettings>
-</RunSettings>
+```text
+coverlet <test-bin-dir> --target dotnet
+  --targetargs "<test-dll> <trait-filter> --results-directory <dir>
+                --report-xunit-junit --report-xunit-junit-filename test-results.xml"
+  --output <dir>/coverage.cobertura.xml --format cobertura
+  --include "[BibleOnSite.Tests]*"
+  --exclude "[xunit.*]*,[FluentAssertions]*,[Moq]*,[coverlet.*]*,[Microsoft.*]*"
+  --exclude-by-attribute "Obsolete,GeneratedCodeAttribute,CompilerGeneratedAttribute,ExcludeFromCodeCoverageAttribute"
+  --exclude-by-file "**/obj/**,**/bin/**,**/.nuget/**"
+  --include-test-assembly --skipautoprops
 ```
 
 Key configuration:
 - **Include**: Coverage is collected on `BibleOnSite.Tests` assembly (which includes linked source files from BibleOnSite)
-- **IncludeTestAssembly**: Set to `true` because source files are linked into the test project
+- **IncludeTestAssembly**: Set to `true` because source files are linked into the test project. This works with coverlet.console because it instruments the assembly before spawning the runner; the in-process `coverlet.MTP` extension cannot instrument an assembly that is itself the test controller (coverlet#1911)
 - **Exclude**: Skip test frameworks and third-party libraries
 - **ExcludeByFile**: Skip build artifacts and NuGet cache
 - **ExcludeByAttribute**: Skip generated code and explicitly excluded code
 - **SkipAutoProps**: Don't count auto-properties in coverage
+
+The trait filter selects the suite (`--filter-not-trait Category=Integration` for unit, `--filter-trait Category=Integration` for integration), and xUnit's built-in `--report-xunit-junit` writes the JUnit report consumed by CI.
 
 ### dotnet Tools ([.config/dotnet-tools.json](../../../../app/.config/dotnet-tools.json))
 
 The following tools are used for coverage:
 
 - `nuke.globaltool` - Build automation
+- `coverlet.console` - Coverage instrumentation and Cobertura collection
 - `dotnet-reportgenerator-globaltool` - Coverage report generation and merging
 
 ## Running Coverage Locally
@@ -182,6 +177,98 @@ npm run coverage:merge
 
 This produces a combined LCOV file at `.coverage/lcov.info` that includes TypeScript (website), Rust (API), and C# (app) coverage, which is then uploaded to Codacy.
 
+## Real App-Process E2E Coverage
+
+Unit and integration coverage measure the portable test build. The mobile E2E
+suites additionally measure the **running application itself** (#1232): the
+device build is IL-instrumented so every executed sequence and branch point is
+counted inside the app process, exactly like unit coverage — never inferred
+from automation ids or selection fingerprints.
+
+### Instrumentation (`E2ECoverage`)
+
+`BibleOnSite.csproj` defines an `E2ECoverage` switch used only by instrumented
+test builds. When enabled:
+
+- `AltCover` rewrites `BibleOnSite.dll` after `XamlC` so every sequence point
+  calls `AltCover.Recorder.Instance.Visit(moduleHash, pointId)` (branch points
+  pass `int.MinValue | uspid`), emitting an OpenCover **template** keyed by the
+  build's module hash.
+- The `app/BibleOnSite.E2eCoverage` project supplies a substitute
+  `AltCover.Recorder.g` assembly (same name, version and public key token as
+  AltCover's generated recorder) that accumulates hits in memory and serves the
+  live snapshot from a loopback HTTP endpoint on `127.0.0.1:4787`:
+  `GET /coverage`, `GET /coverage/health`, `POST /coverage/reset`.
+- The endpoint starts with the first instrumented visit, listens only on
+  loopback, and a plain build afterwards restores the untouched assembly, so
+  instrumentation can never leak into store or production builds.
+
+### Collection (test harness)
+
+`MobileDeviceTest` pulls the snapshot after every scenario — while the app is
+still running, because Appium may kill the process at session teardown — and
+drops one `app-e2e-coverage-dump/1` JSON per test under
+`<artifacts>/app-coverage/`. A `_startup` dump captures app-launch hits before
+the per-test reset. Android tunnels the device loopback through `adb forward`;
+the iOS simulator shares the host loopback. Failed pulls leave
+`*.coverage-error.txt` diagnostics instead of failing the test.
+
+Enable locally with `MOBILE_E2E_COVERAGE=1`; the Windows FlaUI fixture uses
+`E2E_COVERAGE=1` and writes the same dump shape under `E2E_ARTIFACTS`.
+
+### Applying dumps → LCOV
+
+`CoverageMobileE2E` (and `CoverageE2EWindows` for the local Windows suite)
+replays dump hit counts onto the build's OpenCover template — matched by
+module hash, so dumps from a different build are reported `incompatible`
+rather than misapplied — then ReportGenerator converts it to `lcov.info`:
+
+```bash
+cd app
+MOBILE_PLATFORM=Android MOBILE_E2E_COVERAGE=1 dotnet run --project devops -- CompileMobileE2E
+npm test --prefix mobile-e2e          # runs the suite, collecting dumps
+MOBILE_PLATFORM=Android dotnet run --project devops -- CoverageMobileE2E
+# → .artifacts/mobile-e2e/android/coverage-app/lcov.info
+```
+
+The per-platform output directory keeps the applied OpenCover, per-test dumps
+and a `coverage-report-manifest.json` (`complete`, `dumpErrors`,
+`incompatibleDumps`, `unknownPointIds`) for diagnostics.
+
+### Authoritative merge
+
+`cross_module_ci` merges the three layers into the single app report consumed
+by the `app` Codecov flag (98.5% gate, 0% threshold):
+
+```
+unit/lcov.info + integration/lcov.info + e2e/{android,ios}/lcov.info
+        └─ merge-lcov.mts --relocate app/BibleOnSite/ --hits-only <e2e>
+           →  .coverage/merged/lcov.info
+```
+
+- `merge-lcov.mts` unions records **by covered location** (`DA`, `BRDA`,
+  `FNDA` hit counts take the max), so a line exercised on any layer or
+  platform counts exactly once and lines executed nowhere stay uncovered.
+- The E2E inputs merge with `--hits-only`: their OpenCover template
+  enumerates a separately instrumented build's sequence-point universe,
+  which is not comparable to the unit/integration build's. An e2e hit
+  only confirms a coordinate both builds provably share — same file,
+  same DA line, or a function declared at the same FN line in both —
+  so the merged SF set and LF/BRF/FNF denominators stay exactly the
+  canonical layers'. E2E-only files and lines never enter the report,
+  hit or not; E2E branch arms never merge either, since BRDA
+  block/branch indices are per-instrumenter and an identical tuple can
+  name a different arm (#2270).
+- `--relocate` canonicalizes absolute runner paths (Linux Android leg, macOS
+  iOS leg, local Windows) onto `app/BibleOnSite/`, so the same source line
+  never double-counts across runners.
+- When the mobile suite did not run, the trusted per-platform master baselines
+  (`app-e2e-coverage.master.{android,ios}`) fill the E2E layer; a successful
+  run must produce both platform reports or the merge fails.
+- The combined report is stored as `app-coverage.<run>` and, on master,
+  `app-coverage.master` — the baseline always contains every layer, so a
+  partial run can never overwrite a complete one.
+
 ## CI Integration
 
 In CI ([.github/workflows/ci.yml](../../../../.github/workflows/ci.yml)), the `app_ci` job:
@@ -191,8 +278,29 @@ In CI ([.github/workflows/ci.yml](../../../../.github/workflows/ci.yml)), the `a
 3. Restores dotnet tools and dependencies
 4. Runs unit tests with coverage via `CoverageUnit` target (generates LCOV directly)
 5. Runs integration tests against the API and merges the coverage reports
-6. Uploads the merged coverage artifact for cross-module merge and Codecov
+6. Uploads the unit+integration coverage artifact for cross-module merge
 
-The coverage is then:
-- Uploaded to Codecov with the `app` flag
-- Merged with other modules' coverage for Codacy reporting
+The `app_mobile_e2e` job ([app-mobile-e2e.yml](../../../../.github/workflows/app-mobile-e2e.yml)
++ [app-mobile-e2e-runner.yml](../../../../.github/workflows/app-mobile-e2e-runner.yml)):
+
+1. Builds an instrumented Debug app (`MOBILE_E2E_COVERAGE=1` → `CompileMobileE2E`);
+   on iOS a single shared `build` leg compiles once and the planned
+   `prebuilt-run` shards restore that build, while Android builds and runs on
+   one leg.
+2. Each leg runs its Appium slice; the harness collects a per-test coverage
+   dump even when the scenario fails. Each iOS leg executes exactly the
+   `case-manifest.json` `plan_ios` assigned to it (#2263), so every planned
+   scenario lands on exactly one runner.
+3. Each leg applies the dumps via `CoverageMobileE2E` (runs even after a
+   failed pilot so partial coverage stays diagnosable) and uploads
+   `app-e2e-coverage.<run>.<artifact>` — `android`, or `ios-shard<N>`.
+4. `merge_ios` merges the iOS shard LCOVs into
+   `app-e2e-coverage.<run>.ios` after union/compatibility validation
+   (`merge-runner-shards.mjs`).
+5. `app-e2e-coverage.master.<platform>` is published only from a completed,
+   successful default-branch run — by the Android leg for `android` and by
+   `merge_ios` (gated on a `complete` merged union) for `ios`.
+
+`cross_module_ci` then merges all layers as described above and publishes the
+authoritative report to Codecov with the `app` flag and to Codacy through the
+cross-module merge.

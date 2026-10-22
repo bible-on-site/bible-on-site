@@ -13,6 +13,53 @@ public class PasukFormattedTextTests
 
     public class Pasuk_FormattedText
     {
+        [Theory]
+        [InlineData(null)]
+        [InlineData(1)]
+        public void repeated_playback_position_preserves_spans_and_does_not_notify_again(int? segment)
+        {
+            var pasuk = new Pasuk
+            {
+                PasukNum = 1, Text = "אור",
+                Segments = [new() { Type = SegmentType.Qri, Value = "אור" }],
+                RecitingSegment = segment
+            };
+            var formatted = pasuk.FormattedText;
+            var changed = new List<string?>();
+            var changing = new List<string?>();
+            pasuk.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+            pasuk.PropertyChanging += (_, e) => changing.Add(e.PropertyName);
+
+            pasuk.RecitingSegment = segment;
+
+            pasuk.FormattedText.Should().BeSameAs(formatted);
+            changed.Should().BeEmpty();
+            changing.Should().BeEmpty();
+        }
+
+        [Fact]
+        public void repeated_spoken_word_updates_keep_the_highlight_without_rebuilding_or_notifying()
+        {
+            var pasuk = new Pasuk
+            {
+                PasukNum = 1, Text = "", Segments = [
+                    new() { Type = SegmentType.Qri, Value = "וַיַּעַן" },
+                    new() { Type = SegmentType.Qri, Value = "בִּלְדַּד" }]
+            };
+            pasuk.RecitingSegment = 1;
+            var highlighted = pasuk.FormattedText;
+            var notifications = new List<string?>();
+            pasuk.PropertyChanged += (_, e) => notifications.Add(e.PropertyName);
+            pasuk.PropertyChanging += (_, e) => notifications.Add(e.PropertyName);
+
+            pasuk.RecitingSegment = 1;
+
+            pasuk.RecitingSegment.Should().Be(1);
+            pasuk.FormattedText.Should().BeSameAs(highlighted);
+            highlighted.Spans.Single(s => s.BackgroundColor != null).Text.Should().Be("וַיַּעַן");
+            notifications.Should().BeEmpty();
+        }
+
         [Fact]
         public void spoken_word_highlighting_preserves_text_and_clears_without_stale_spans()
         {
@@ -57,6 +104,49 @@ public class PasukFormattedTextTests
             Flatten(pasuk.FormattedText).Should().Be(original);
             pasuk.FormattedText.Spans.Single(s => s.BackgroundColor != null).Text.Should().Be("קרי");
             pasuk.FormattedText.Spans.Single(s => s.Text == "(קְרִי: ").FontSize.Should().Be(14);
+        }
+
+        [Fact]
+        public void selected_pasuk_renders_a_distinct_spoken_word_marker()
+        {
+            var pasuk = new Pasuk
+            {
+                PasukNum = 1, Text = "", IsSelected = true,
+                Segments = [new() { Type = SegmentType.Qri, Value = "אור" },
+                    new() { Type = SegmentType.Qri, Value = "חֹשֶׁךְ" }]
+            };
+
+            pasuk.RecitingSegment = 2;
+
+            var active = pasuk.FormattedText.Spans.Single(s => s.BackgroundColor != null);
+            active.Text.Should().Be("חֹשֶׁךְ");
+            // The selection row background (#E3F2FD light / #9FB4E0 dark) swallows
+            // the plain recitation background #e9eff8 — a selected pasuk keeps the
+            // word marked with a stronger background and weight.
+            active.BackgroundColor.Should().NotBe(Color.FromArgb("#e9eff8"));
+            active.FontAttributes.Should().Be(FontAttributes.Bold);
+        }
+
+        [Fact]
+        public void toggling_selection_refreshes_the_spoken_word_marker()
+        {
+            var pasuk = new Pasuk
+            {
+                PasukNum = 1, Text = "",
+                Segments = [new() { Type = SegmentType.Qri, Value = "אור" }]
+            };
+            pasuk.RecitingSegment = 1;
+            var unselected = pasuk.FormattedText;
+            var notifications = new List<string?>();
+            pasuk.PropertyChanged += (_, e) => notifications.Add(e.PropertyName);
+
+            pasuk.IsSelected = true;
+            var selected = pasuk.FormattedText;
+
+            selected.Should().NotBeSameAs(unselected);
+            selected.Spans.Single(s => s.BackgroundColor != null)
+                .BackgroundColor.Should().NotBe(unselected.Spans.Single(s => s.BackgroundColor != null).BackgroundColor);
+            notifications.Should().Contain(nameof(Pasuk.FormattedText));
         }
 
         [Fact]

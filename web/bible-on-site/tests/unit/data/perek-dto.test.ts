@@ -3,6 +3,7 @@ jest.mock("../../../src/util/date", () => ({
 }));
 
 import {
+	countRecordedPerakim,
 	getPerekByPerekId,
 	getPerekIdByDate,
 	getTodaysPerekId,
@@ -30,11 +31,26 @@ describe("getPerekIdByDate", () => {
 			expect(actual).toBe(1);
 		});
 	});
-	describe("after last cycle (I.E. year 5811)", () => {
-		it("returns last perek (929)", () => {
+	describe("inside the inter-cycle gap (1 Av 5778)", () => {
+		it("returns the upcoming cycle's first perek", () => {
+			const actual = getPerekIdByDate(parseKosherChristianDate("13/July/18"));
+			expect(actual).toBe(1);
+		});
+	});
+	describe("after last confirmed cycle (projected cycle 11)", () => {
+		it("returns the projected perek for the date", () => {
+			// 15 March 2051 falls 213 days into projected cycle 11
+			// (starts Sunday 14 August 2050): week 30 day 3 -> perek 154.
 			const actual = getPerekIdByDate(
 				parseKosherChristianDate("15/March/51"),
 			);
+			expect(actual).toBe(154);
+		});
+	});
+	describe("last day of a cycle", () => {
+		it("returns perek 929 instead of the next cycle's first perek", () => {
+			// כח תמוז תשע"ח (11 July 2018) is the last study day of cycle 1.
+			const actual = getPerekIdByDate(parseKosherChristianDate("11/July/18"));
 			expect(actual).toBe(929);
 		});
 	});
@@ -203,5 +219,92 @@ describe("getTodaysPerekId", () => {
 	it("returns correct perek for mocked date (27/June/24 = perek 625)", () => {
 		const actual = getTodaysPerekId();
 		expect(actual).toBe(625);
+	});
+});
+
+describe("countRecordedPerakim", () => {
+	const recitation = (audioUrl: string | undefined) =>
+		({
+			version: 1,
+			audioUrl,
+			audioSha256: "a".repeat(64),
+			textSha256: "b".repeat(64),
+			durationMs: 1000,
+			alignmentStatus: "pending",
+		}) as const;
+
+	const perek = (audioUrl?: string) => ({
+		header: "",
+		date: [],
+		star_rise: [],
+		pesukim: [],
+		...(audioUrl === undefined ? {} : { recitation: recitation(audioUrl) }),
+	});
+
+	const baseSefer = {
+		name: "בראשית",
+		helek: "תורה",
+		pesukimCount: 0,
+		perekFrom: 1,
+		perekTo: 50,
+		tanachUsName: "Genesis",
+	};
+
+	it("counts perakim with a published recording, once each", () => {
+		const data = [
+			{
+				...baseSefer,
+				perakim: [
+					perek("https://x/1.mp3"),
+					perek("https://x/2.mp3"),
+					perek(),
+					perek(""),
+				],
+			},
+		];
+		expect(countRecordedPerakim(data as never)).toBe(2);
+	});
+
+	it("counts additionals perakim and pending-alignment recordings", () => {
+		const additionals = [
+			{
+				helek: "תורה",
+				letter: "א",
+				name: "שמואל א",
+				tanachUsName: "1 Samuel",
+				pesukimCount: 0,
+				perakim: [
+					perek("https://x/3.mp3"),
+					{ ...perek("https://x/4.mp3") },
+				],
+				perekFrom: 1,
+				perekTo: 2,
+			},
+			{
+				helek: "תורה",
+				letter: "ב",
+				name: "שמואל ב",
+				tanachUsName: "2 Samuel",
+				pesukimCount: 0,
+				perakim: [perek()],
+				perekFrom: 3,
+				perekTo: 3,
+			},
+		];
+		const data = [
+			{
+				name: "שמואל",
+				helek: "תורה",
+				pesukimCount: 0,
+				perekFrom: 1,
+				perekTo: 3,
+				additionals,
+			},
+		];
+		expect(countRecordedPerakim(data as never)).toBe(2);
+	});
+
+	it("counts the canonical data's published recordings", () => {
+		expect(countRecordedPerakim()).toBeGreaterThan(400);
 	});
 });

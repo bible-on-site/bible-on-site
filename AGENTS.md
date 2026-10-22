@@ -10,6 +10,10 @@ For changes limited to README files, local test suites and CI are not required f
 
 For a task the user assigns, you may grant the local tool, Docker file-sharing, and workspace access permissions needed to complete and validate that task. Keep each grant scoped to the task and follow platform security prompts and repository policy. Do not ask the user to repeat this authorization.
 
+# Worktree Isolation
+
+Use a dedicated Git worktree for every task unless the entire task can be completed using API calls alone. Create or reuse a worktree belonging to the current task before changing repository files or running builds. Do not switch branches or modify files in another task's checkout. After delivery, archive the task's managed worktree or remove its unmanaged worktree.
+
 # Data Ownership
 
 Application content belongs in the database. Treat the Rust db-populator and local population scripts as temporary bootstrap and test tooling, not as a source of production content. Populate the local database from production with `sync-from-prod`; make lasting content changes through the database deployment or admin editing path. Do not add production place or article content to the Rust populator just to make it appear locally.
@@ -27,3 +31,17 @@ For a dependency upgrade task, refresh every dependency kind within the user's r
 # Pull Request Branch Sync
 
 Sync a pull request branch with its base only when both conditions hold: the current head has no green CI result, and there is an actual merge conflict. A branch being behind its base is not, by itself, a reason to sync.
+
+# Coverage Gates
+
+Codecov enforces per-module project coverage with `threshold: 0%`: a change may not lower any flag below its target. Targets (`codecov.yml`): website 99%, app 98.5%, api 97%, bulletin 90%, admin 86%, data 84%. The unflagged `codecov/project` check is informational only. Codacy additionally gates pull requests on diff coverage (70%).
+
+Keep every touched module at or above its target: add or extend tests before pushing rather than after CI fails. Do not lower targets, raise thresholds, or misuse `istanbul ignore` comments to bypass a gate.
+
+# Performance Failures
+
+Do not increase timeouts, retries, sleeps, polling budgets, or hang-watchdog limits to make a failing or slow operation pass. Treat a timeout as evidence: reproduce it, measure the critical path, and fix the underlying algorithm, blocking work, contention, or delivery defect. Keep the existing interaction deadline as a regression check. A timeout change is permitted only when the user explicitly requests it after seeing the root cause and measured tradeoff.
+
+# Visual Change Evidence
+
+When a change affects user-visible UI, show before/after evidence in the pull request description and when reporting the result to the user: screenshots, screen recordings, or captured device/emulator frames. Prefer real captures from the app's own e2e artifacts over mockups.

@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 using Nuke.Common;
 using Nuke.Common.IO;
+using Nuke.Common.Tooling;
 using Nuke.Common.Tools.DotNet;
 using static Nuke.Common.Tools.DotNet.DotNetTasks;
 
@@ -45,7 +46,7 @@ partial class Build
             {
                 if (OperatingSystem.IsWindows())
                 {
-                    PackageWindows(version);
+                    PackageWindows();
                 }
                 else
                 {
@@ -55,14 +56,14 @@ partial class Build
 
             if (Platform.Equals("Android", StringComparison.OrdinalIgnoreCase) || Platform.Equals("All", StringComparison.OrdinalIgnoreCase))
             {
-                PackageAndroid(version);
+                PackageAndroid();
             }
 
             if (Platform.Equals("iOS", StringComparison.OrdinalIgnoreCase) || Platform.Equals("All", StringComparison.OrdinalIgnoreCase))
             {
                 if (OperatingSystem.IsMacOS())
                 {
-                    PackageIos(version);
+                    PackageIos();
                 }
                 else
                 {
@@ -71,12 +72,35 @@ partial class Build
             }
         });
 
+    /// <summary>
+    /// Packages the Mapbox public token (MAPBOX_PUBLIC_TOKEN env) as a raw
+    /// asset - the same public key the website bakes into client bundles.
+    /// An empty file keeps the app's no-key map fallback.
+    /// </summary>
+    void WriteMapboxTokenFile()
+    {
+        var tokenPath = SourceDirectory / "Resources" / "Raw" / "mapbox-token.txt";
+        tokenPath.WriteAllText(Environment.GetEnvironmentVariable("MAPBOX_PUBLIC_TOKEN") ?? "");
+    }
+
     Target PackagePrepare => _ => _
         .Description("Prepare for packaging by restoring the appropriate platform")
         .Unlisted()
         .Executes(() =>
         {
-            // This target only restores the appropriate platform - build happens in publish
+            WriteMapboxTokenFile();
+
+            var platforms = Platform.Equals("All", StringComparison.OrdinalIgnoreCase)
+                ? new[] { "Android", OperatingSystem.IsMacOS() ? "iOS" : "Windows" }
+                : new[] { Platform };
+            foreach (var platform in platforms)
+            {
+                ProcessTasks.StartProcess(OperatingSystem.IsWindows() ? "python" : "python3",
+                    $"\"{RootDirectory / "devops/prepare_recitation_assets.py"}\" --platform {platform}", RootDirectory)
+                    .AssertZeroExitCode();
+            }
+
+            // Generate extension assets before project evaluation, then restore the target platform.
             if (Platform.Equals("Windows", StringComparison.OrdinalIgnoreCase))
             {
                 if (OperatingSystem.IsWindows())
@@ -111,7 +135,7 @@ partial class Build
             }
         });
 
-    void PackageWindows(string version)
+    void PackageWindows()
     {
         Serilog.Log.Information("Packaging for Windows (MSIX)...");
 
@@ -122,6 +146,7 @@ partial class Build
             ["AppxPackageDir"] = $"{ArtifactsDirectory}/",
             ["AppxPackageSigningEnabled"] = "true",
             ["TargetFramework"] = "net10.0-windows10.0.19041.0",
+            ["RequireRecitationAssets"] = "true",
             // Microsoft Store requires revision (4th component) to be 0
             // Override ApplicationVersion to 0 to produce X.Y.Z.0 version format
             ["ApplicationVersion"] = "0"
@@ -144,13 +169,14 @@ partial class Build
         Serilog.Log.Information($"Windows MSIX package created in {ArtifactsDirectory}");
     }
 
-    void PackageAndroid(string version)
+    void PackageAndroid()
     {
         Serilog.Log.Information("Packaging for Android (AAB)...");
 
         var msbuildProperties = new Dictionary<string, object>
         {
             ["AndroidPackageFormat"] = "aab",
+            ["RequireRecitationAssets"] = "true",
             ["RuntimeIdentifiers"] = "android-arm64"
         };
 
@@ -196,7 +222,7 @@ partial class Build
         Serilog.Log.Information($"Android AAB package created in {ArtifactsDirectory}");
     }
 
-    void PackageIos(string version)
+    void PackageIos()
     {
         Serilog.Log.Information("Packaging for iOS (IPA)...");
 
@@ -205,6 +231,8 @@ partial class Build
             ["TargetFramework"] = "net10.0-ios",
             ["ArchiveOnBuild"] = "true",
             ["BuildIpa"] = "true",
+            ["RequireAssetPackDownloader"] = "true",
+            ["RequireRecitationAssets"] = "true",
             ["IpaPackageDir"] = $"{ArtifactsDirectory}/",
             ["SupportedOSPlatformVersion"] = "17.0",
             ["_ExcludeSimulatorArchitectures"] = "true"
@@ -223,6 +251,32 @@ partial class Build
             Serilog.Log.Warning("No iOS Team ID provided - building without specific signing");
         }
 
+        // Managed asset packs need the ExtensionKit downloader extension embedded
+        // (built by CI via xcodebuild - .NET cannot produce .appex binaries). The
+        // csproj _EmbedAssetPackDownloader target copies and re-signs it.
+        var appex = RootDirectory / "extensions" / "AssetPackDownloader" /
+            "build" / "Build" / "Products" / "Release-iphoneos" / "AssetPackDownloader.appex";
+        if (Directory.Exists(appex) && File.Exists(appex / "Info.plist"))
+        {
+            msbuildProperties["AssetPackDownloaderAppex"] = $"{appex}/";
+            Serilog.Log.Information($"Embedding asset-pack downloader extension: {appex}");
+            var extensionProfile = Environment.GetEnvironmentVariable("ASSET_PACK_DOWNLOADER_PROFILE");
+            if (!string.IsNullOrEmpty(extensionProfile) && File.Exists(extensionProfile))
+            {
+                msbuildProperties["AssetPackDownloaderProfile"] = extensionProfile;
+            }
+            else
+            {
+                throw new InvalidOperationException(
+                    "Signed iOS packaging requires ASSET_PACK_DOWNLOADER_PROFILE to name the extension's App Groups provisioning profile.");
+            }
+        }
+        else
+        {
+            throw new InvalidOperationException(
+                $"Signed iOS packaging requires the device downloader extension at {appex}; build it with xcodebuild first.");
+        }
+
         DotNetPublish(s => s
             .SetProject(MainProject)
             .SetConfiguration(Configuration)
@@ -230,6 +284,8 @@ partial class Build
             .SetRuntime("ios-arm64")
             .SetProperties(msbuildProperties)
             .EnableNoRestore());
+
+        PackageIosAssetPacks();
 
         // Find and copy IPA to artifacts directory
         var binDir = MainProject.Parent / "bin" / Configuration / "net10.0-ios" / "ios-arm64";
@@ -249,11 +305,46 @@ partial class Build
             var artifactIpas = ArtifactsDirectory.GlobFiles("*.ipa");
             if (artifactIpas.Count == 0)
             {
-                Serilog.Log.Warning($"No IPA files found in {binDir} or {ArtifactsDirectory}");
+                throw new InvalidOperationException($"No IPA files found in {binDir} or {ArtifactsDirectory}");
             }
         }
 
         Serilog.Log.Information($"iOS IPA package created in {ArtifactsDirectory}");
+    }
+
+    /// <summary>
+    /// Archives every iOS asset pack (perushim-notes + recitation-*) into an Apple
+    /// Archive (.aar) via `xcrun ba-package`. The archives upload to App Store
+    /// Connect separately from the IPA (Transporter); on device they resolve
+    /// through BAAssetPackManager managed asset packs.
+    /// The raw payloads are also staged flat under .artifacts/payloads: releases
+    /// publish them as plain assets so runtimes without managed delivery
+    /// (iOS/MacCatalyst below 26, unsigned builds) can download the same bytes
+    /// over HTTPS into their extraction cache.
+    /// </summary>
+    void PackageIosAssetPacks()
+    {
+        var assetPacksDirectory = MainProject.Parent / "Platforms" / "iOS" / "AssetPacks";
+        var archivesDirectory = ArtifactsDirectory / "assetpacks";
+        archivesDirectory.CreateDirectory();
+        foreach (var manifest in assetPacksDirectory.GlobFiles("*/Manifest.json").OrderBy(p => (string)p.Parent.Name, StringComparer.Ordinal))
+        {
+            var archivePath = archivesDirectory / $"{manifest.Parent.Name}.aar";
+            Serilog.Log.Information($"ba-package {manifest.Parent.Name} -> {archivePath}");
+            ProcessTasks.StartProcess("xcrun", $"ba-package \"{manifest}\" -o \"{archivePath}\"", manifest.Parent)
+                .AssertZeroExitCode();
+        }
+
+        var payloadsDirectory = ArtifactsDirectory / "payloads";
+        payloadsDirectory.CreateDirectory();
+        foreach (var packDirectory in assetPacksDirectory.GlobDirectories("*").OrderBy(p => (string)p.Name, StringComparer.Ordinal))
+        {
+            foreach (var payload in packDirectory.GlobFiles("*").Where(f => f.Name != "Manifest.json"))
+            {
+                Serilog.Log.Information($"payload {packDirectory.Name}/{payload.Name} -> {payloadsDirectory}");
+                payload.CopyToDirectory(payloadsDirectory, ExistsPolicy.FileOverwrite);
+            }
+        }
     }
 
     Target Version => _ => _

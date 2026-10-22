@@ -2,7 +2,7 @@
  * @jest-environment jsdom
  */
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import { useLayoutEffect, useState } from "react";
+import { type ReactNode, useLayoutEffect, useState } from "react";
 
 jest.mock("@/app/929/[number]/components/sefer-composite.module.css", () => ({
 	seferOverlay: "seferOverlay",
@@ -52,13 +52,17 @@ jest.mock("next/dynamic", () => {
 	) => {
 		(globalThis as Record<string, unknown>).__capturedDynamicLoading =
 			opts?.loading ?? null;
-		return function MockSefer(props: { initialBookPage?: string | null }) {
+		return function MockSefer(props: {
+			initialBookPage?: string | null;
+			isVisible?: boolean;
+		}) {
 			const [mount] = useState(() => ++mockSeferMountCount);
 			return (
 				<div
 					data-testid="sefer"
 					data-book-page={props.initialBookPage ?? "chapter"}
 					data-mount={mount}
+					data-visible={String(props.isVisible)}
 				/>
 			);
 		};
@@ -66,6 +70,15 @@ jest.mock("next/dynamic", () => {
 });
 
 import SeferComposite from "@/app/929/[number]/components/SeferComposite";
+
+// Clicks the view toggle during the layout-effect phase: hydration can
+// replay a user's click before the URL initialization effect runs.
+function OpenDuringHydration({ children }: { children: ReactNode }) {
+	useLayoutEffect(() => {
+		screen.getByRole("checkbox").click();
+	}, []);
+	return children;
+}
 
 describe("SeferComposite (wide screen)", () => {
 	const minimalPerek = {
@@ -119,18 +132,12 @@ describe("SeferComposite (wide screen)", () => {
 	});
 
 	it("keeps a book opened before the initial passive effects visible", async () => {
-		function OpenDuringHydration() {
-			useLayoutEffect(() => {
-				// Hydration can replay a user's click before the URL initialization effect.
-				screen.getByRole("checkbox").click();
-			}, []);
-			return (
-				<SeferComposite perekObj={minimalPerek} articles={[]} perushim={[]} />
-			);
-		}
-
 		await act(async () => {
-			render(<OpenDuringHydration />);
+			render(
+				<OpenDuringHydration>
+					<SeferComposite perekObj={minimalPerek} articles={[]} perushim={[]} />
+				</OpenDuringHydration>,
+			);
 		});
 
 		expect(mockReplace).toHaveBeenCalledWith("/929/5?book=", { scroll: false });
@@ -171,6 +178,26 @@ describe("SeferComposite (wide screen)", () => {
 		} finally {
 			jest.useRealTimers();
 		}
+	});
+
+	it("marks the mounted reader hidden while the overlay closes", async () => {
+		render(
+			<SeferComposite perekObj={minimalPerek} articles={[]} perushim={[]} />,
+		);
+		const toggle = screen.getByRole("checkbox");
+		await act(async () => {
+			fireEvent.click(toggle);
+		});
+		const book = await screen.findByTestId("sefer");
+		expect(book.getAttribute("data-visible")).toBe("true");
+		// The overlay keeps the reader mounted while it animates out; the
+		// reader must already treat itself as hidden (title + scroll release).
+		await act(async () => {
+			fireEvent.click(toggle);
+		});
+		expect(screen.getByTestId("sefer").getAttribute("data-visible")).toBe(
+			"false",
+		);
 	});
 
 	it("leaves a semantic book route through its chapter page", async () => {

@@ -1,0 +1,11 @@
+.perekBreakLabel {
+	display: inline-block;
+	margin: 0 4px;
+	padding: 0 8px;
+	border-radius: 4px;
+	background: rgba(21, 82, 172, 0.1);
+	color: var(--pasuk-num-color, #1c2c5d);
+	font-family: inherit;
+	font-size: 0.75em;
+	font-weight: 600;
+}

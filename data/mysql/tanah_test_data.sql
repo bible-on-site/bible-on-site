@@ -7,6 +7,7 @@
 --
 -- Tables covered:
 --   tanah_author, tanah_article          (articles feature)
+--   tanah_article_covering_source        (verse-level article coverage)
 --   parshan, perush, note                (perushim / commentaries feature)
 -- --------------------------------------------------------------------------
 
@@ -26,7 +27,8 @@ INSERT INTO tanah_article (
         ABSTRACT,
         NAME,
         PRIORITY,
-        CONTENT
+        CONTENT,
+        DISTRIBUTABLE
     )
 VALUES (
         1,
@@ -50,7 +52,8 @@ VALUES (
 <p>המילה "את" באה לרבות, כדברי חז"ל: "את השמים" - לרבות חמה ולבנה וכוכבים ומזלות. "ואת הארץ" - לרבות אילנות ודשאים וגן עדן. יש כאן רמז לכל הנברא בששת ימי הבריאה.</p>
 
 <h2>סיכום</h2>
-<p>הפסוק הראשון בתורה מלמד אותנו יסודות עיקריים באמונה: א) יש בורא לעולם. ב) הבריאה היא יש מאין. ג) הקב"ה ברא הכל - שמים וארץ וכל צבאם. ד) לבריאה יש התחלה בזמן. הבנת פסוק זה היא הבסיס להבנת כל התורה כולה, ולכן התורה פותחת דווקא בו.</p>'
+<p>הפסוק הראשון בתורה מלמד אותנו יסודות עיקריים באמונה: א) יש בורא לעולם. ב) הבריאה היא יש מאין. ג) הקב"ה ברא הכל - שמים וארץ וכל צבאם. ד) לבריאה יש התחלה בזמן. הבנת פסוק זה היא הבסיס להבנת כל התורה כולה, ולכן התורה פותחת דווקא בו.</p>',
+        TRUE
     ),
     (
         1,
@@ -74,7 +77,8 @@ VALUES (
 <p>המילה "את" באה לרבות, כדברי חז"ל: "את השמים" - לרבות חמה ולבנה וכוכבים ומזלות. "ואת הארץ" - לרבות אילנות ודשאים וגן עדן. יש כאן רמז לכל הנברא בששת ימי הבריאה.</p>
 
 <h2>סיכום</h2>
-<p>הפסוק הראשון בתורה מלמד אותנו יסודות עיקריים באמונה: א) יש בורא לעולם. ב) הבריאה היא יש מאין. ג) הקב"ה ברא הכל - שמים וארץ וכל צבאם. ד) לבריאה יש התחלה בזמן. הבנת פסוק זה היא הבסיס להבנת כל התורה כולה, ולכן התורה פותחת דווקא בו.</p>'
+<p>הפסוק הראשון בתורה מלמד אותנו יסודות עיקריים באמונה: א) יש בורא לעולם. ב) הבריאה היא יש מאין. ג) הקב"ה ברא הכל - שמים וארץ וכל צבאם. ד) לבריאה יש התחלה בזמן. הבנת פסוק זה היא הבסיס להבנת כל התורה כולה, ולכן התורה פותחת דווקא בו.</p>',
+        TRUE
     ),
     (
         1,
@@ -82,7 +86,8 @@ VALUES (
         '<h1>מאמר שני של הרב לדוגמא ז"ל על בראשית א</h1>',
         'מאמר שני של הרב לדוגמא ז"ל על בראשית א',
         1,
-        NULL
+        NULL,
+        TRUE
     ),
     (
         1,
@@ -93,8 +98,32 @@ VALUES (
         '<h2>פרק עם תמונה</h2>
 <p>זהו מאמר לדוגמא עם תמונה מ-S3:</p>
 <img src="https://bible-on-site-assets-test.s3.amazonaws.com/rabbis/test-rabbi.jpg" alt="תמונת רב לדוגמא" />
-<p>התמונה לעיל היא לצורכי בדיקה בלבד.</p>'
+<p>התמונה לעיל היא לצורכי בדיקה בלבד.</p>',
+        -- Bulletin approval is not website visibility. This author's only
+        -- valid article must still appear on the website and in public search.
+        FALSE
+    ),
+    -- Invalid chapter row: public article routes and search must exclude it.
+    -- perek_id 5000 is outside the 929 range so article counters stay unchanged.
+    (
+        5000,
+        4,
+        N'<h1>מאמר נסתר - אינו להפצה</h1>',
+        N'מאמר נסתר - אינו להפצה',
+        1,
+        N'<p>מאמר זה אינו מיועד להפצה ומכיל את הביטוי הייחודי רזאדשבתא הנסתרת.</p>',
+        FALSE
     );
+
+-- Representative test data for tanah_article_covering_source. Article 1 gets
+-- verified coverage of its two opening pesukim. Every other fixture article
+-- keeps coverage_verified = FALSE (coverage unknown -> primary-perek
+-- fallback), so range lookups exercise both matching branches.
+-- The perek FK needs tanah_perek populated, so the db-populator loads this
+-- file only after tanah_sefarim_and_perakim_data.sql.
+INSERT INTO tanah_article_covering_source (article_id, perek_id, pasuk)
+VALUES (1, 1, 1), (1, 1, 2);
+UPDATE tanah_article SET coverage_verified = TRUE WHERE id = 1;
 
 -- ---------------------------------------------------------------------------
 -- Representative test data for perushim (commentaries)

@@ -58,6 +58,20 @@ ECS cluster, task definitions, services, and Cloud Map service discovery.
 - Task Execution Role: `ecsTaskExecutionRole`
 - Website Task Role: `bible-on-site-website-task-role` (allows `lambda:InvokeFunction` on bulletin Lambda)
 
+**Prerequisites — SecureString SSM parameters:**
+
+ECS injects task `Secrets:` from SSM Parameter Store at container start, so
+every referenced parameter must already exist or the task fails to start.
+CloudFormation cannot create `SecureString` parameters — create them once per
+account/region (the same manual mechanism as `bible-on-site-tanah-db-url`):
+
+```bash
+# Shared admin <-> website revalidation credential (POST /api/revalidate)
+aws ssm put-parameter --name bible-on-site-revalidate-secret \
+  --type SecureString --value "$(openssl rand -hex 32)" \
+  --region il-central-1
+```
+
 **Deploy:**
 ```bash
 aws cloudformation deploy \

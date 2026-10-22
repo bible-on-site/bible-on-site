@@ -17,15 +17,21 @@ import {
 	getArticleForBook,
 	getArticleSummariesForPerek,
 	getPerekSummariesBatch,
-	getPerushNotesForPage,
 	getPerushimSummariesForPerek,
+	getPerushNotesForPage,
 } from "../../../src/app/929/[number]/actions";
-import { getArticleById, getArticleSummariesByPerekId } from "../../../src/lib/articles";
+import {
+	getArticleById,
+	getArticleSummariesByPerekId,
+} from "../../../src/lib/articles";
 import {
 	getPageRangesDownloadHandler,
 	getSeferDownloadHandler,
 } from "../../../src/lib/download/handlers";
-import { getPerushNotes, getPerushimByPerekId } from "../../../src/lib/perushim";
+import {
+	getPerushimByPerekId,
+	getPerushNotes,
+} from "../../../src/lib/perushim";
 
 const mockGetArticleById = getArticleById as jest.MockedFunction<
 	typeof getArticleById
@@ -36,9 +42,10 @@ const mockGetPerushNotes = getPerushNotes as jest.MockedFunction<
 const mockGetPerushimByPerekId = getPerushimByPerekId as jest.MockedFunction<
 	typeof getPerushimByPerekId
 >;
-const mockGetArticleSummariesByPerekId = getArticleSummariesByPerekId as jest.MockedFunction<
-	typeof getArticleSummariesByPerekId
->;
+const mockGetArticleSummariesByPerekId =
+	getArticleSummariesByPerekId as jest.MockedFunction<
+		typeof getArticleSummariesByPerekId
+	>;
 const mockGetSeferDownloadHandler =
 	getSeferDownloadHandler as jest.MockedFunction<
 		typeof getSeferDownloadHandler
@@ -113,7 +120,16 @@ describe("getArticleSummariesForPerek", () => {
 
 	it("delegates to getArticleSummariesByPerekId", async () => {
 		const summaries = [
-			{ id: 1, perekId: 5, authorId: 1, abstract: "abs", name: "art", priority: 1, authorName: "rav", authorImageUrl: "url" },
+			{
+				id: 1,
+				perekId: 5,
+				authorId: 1,
+				abstract: "abs",
+				name: "art",
+				priority: 1,
+				authorName: "rav",
+				authorImageUrl: "url",
+			},
 		];
 		mockGetArticleSummariesByPerekId.mockResolvedValue(summaries);
 
@@ -131,7 +147,7 @@ describe("getPerushimSummariesForPerek", () => {
 
 	it("delegates to getPerushimByPerekId", async () => {
 		const perushim = [
-			{ id: 1, name: "רש\"י", parshanName: "רש\"י", noteCount: 10 },
+			{ id: 1, name: 'רש"י', parshanName: 'רש"י', noteCount: 10 },
 		];
 		mockGetPerushimByPerekId.mockResolvedValue(perushim);
 
@@ -184,11 +200,11 @@ describe("getPerekSummariesBatch", () => {
 			[5, [{ id: 10, name: "Rashi 5", parshanName: "Rashi", noteCount: 3 }]],
 			[6, [{ id: 11, name: "Rashi 6", parshanName: "Rashi", noteCount: 4 }]],
 		]);
-		mockGetArticleSummariesByPerekId.mockImplementation(async (id) =>
-			articleSummaries.get(id) ?? [],
+		mockGetArticleSummariesByPerekId.mockImplementation(
+			async (id) => articleSummaries.get(id) ?? [],
 		);
-		mockGetPerushimByPerekId.mockImplementation(async (id) =>
-			perushSummaries.get(id) ?? [],
+		mockGetPerushimByPerekId.mockImplementation(
+			async (id) => perushSummaries.get(id) ?? [],
 		);
 
 		const result = await getPerekSummariesBatch([5, 6]);
@@ -227,10 +243,9 @@ describe("downloadSefer", () => {
 	it("returns { ext, data } with base64 data when handler returns [ext, Uint8Array]", async () => {
 		const bin = new Uint8Array([1, 2, 3]);
 		const ctx = { seferName: "בראשית", perekIds: [1, 2] };
-		const handler = jest.fn(async (): Promise<[string, Uint8Array]> => [
-			"pdf",
-			bin,
-		]);
+		const handler = jest.fn(
+			async (): Promise<[string, Uint8Array]> => ["pdf", bin],
+		);
 		mockGetSeferDownloadHandler.mockReturnValue(handler);
 
 		const result = await downloadSefer(ctx);
@@ -259,6 +274,31 @@ describe("downloadSefer", () => {
 		expect(consoleSpy).toHaveBeenCalledWith(
 			"Sefer download failed:",
 			expect.any(Error),
+		);
+		consoleSpy.mockRestore();
+	});
+});
+
+describe("download failures with an actionable reason", () => {
+	it("passes an ExportError message to the reader for both download modes", async () => {
+		const { ExportError } = await import("@/lib/download/export-error");
+		const consoleSpy = jest
+			.spyOn(console, "error")
+			.mockImplementation(() => {});
+		const failing = (async () => {
+			throw new ExportError("לא ניתן היה לטעון את האיור");
+		}) as never;
+		mockGetSeferDownloadHandler.mockReturnValue(failing);
+		mockGetPageRangesDownloadHandler.mockReturnValue(failing);
+		const expected = {
+			error: "service_unavailable",
+			message: "לא ניתן היה לטעון את האיור",
+		};
+		expect(await downloadSefer({ seferName: "בראשית", perekIds: [1] })).toEqual(
+			expected,
+		);
+		expect(await downloadPageRanges([1], [], { seferName: "בראשית" })).toEqual(
+			expected,
 		);
 		consoleSpy.mockRestore();
 	});

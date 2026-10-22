@@ -38,3 +38,7 @@ gh run view <run-id> --json workflowName,event,conclusion
 # Get commit details
 gh api repos/<owner>/<repo>/commits/<sha>
 ```
+
+# Performance Failures
+
+Do not increase timeouts, retries, sleeps, polling budgets, or hang-watchdog limits to make a failing or slow operation pass. Treat a timeout as evidence: reproduce it, measure the critical path, and fix the underlying algorithm, blocking work, contention, or delivery defect. Keep the existing interaction deadline as a regression check. A timeout change is permitted only when the user explicitly requests it after seeing the root cause and measured tradeoff.

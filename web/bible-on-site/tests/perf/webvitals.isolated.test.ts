@@ -1,8 +1,8 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import type { Page, TestInfo } from "@playwright/test"; // import { test, expect } from "@playwright/test";
-import { errors } from "@playwright/test"; // import { test, expect } from "@playwright/test";
 import { type BencherMeasure, reportBenchmark } from "../util/benchmark";
+import { SeferPage } from "../util/playwright/page-objects/sefer-page";
 import { expect, test as testBase } from "../util/playwright/test-fixture";
 
 const test = testBase.extend({
@@ -88,28 +88,20 @@ const testWebVitals = async ({ page }: { page: Page }, testInfo: TestInfo) => {
 		webVitals.onTTFB(handleMetric("TTFB"));
 	});
 
-	// TODO: refactor into test-utils into something like `simulateRandomUserInteraction(page, tags = ["button, "label", "input"], maxElements = 10)`
-
-	let wasAnyElementClicked = false;
-	do {
-		const elements = page.locator("button, label, input");
-		const elementsFlat = (await elements.all()).flat();
-		const SAMPLE_SIZE = 10;
-		for (const element of elementsFlat.slice(
-			0,
-			Math.min(elementsFlat.length, SAMPLE_SIZE),
-		)) {
-			try {
-				await element.click({ timeout: 100 }); // Try to click the element with a timeout
-				wasAnyElementClicked = true;
-			} catch (error) {
-				// timout error is not an error
-				if (!(error instanceof errors.TimeoutError)) {
-					console.log(error);
-				}
-			}
-		}
-	} while (!wasAnyElementClicked); // repeat until at least one element was clicked
+	// Exercise real controls with their normal actionability checks. Sampling
+	// hidden elements with 100ms clicks can perform an action and still time out,
+	// leaving an unbounded retry loop while the menu blocks later controls.
+	const menu = page.getByRole("button", { name: "תפריט ראשי", exact: true });
+	await menu.click();
+	await expect(menu).toHaveAttribute("aria-expanded", "true");
+	await page.keyboard.press("Escape");
+	await expect(menu).toHaveAttribute("aria-expanded", "false");
+	if (testInfo.title !== "/") {
+		const reader = new SeferPage(page);
+		await reader.openSeferView();
+		await reader.verifyPesukimAreVisible();
+		await reader.closeSeferView();
+	}
 
 	await page.locator("body").dispatchEvent("onbeforeunload");
 

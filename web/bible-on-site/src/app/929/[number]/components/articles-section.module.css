@@ -145,17 +145,16 @@ button.carouselItem {
   vertical-align: middle;
 }
 
-/* Style headings inside abstract */
-.articleAbstract h1,
-.articleAbstract h2,
-.articleAbstract h3,
-.articleAbstract h4,
-.articleAbstract h5,
-.articleAbstract h6 {
+/* Abstract headings arrive as .abstractHeading paragraphs
+   (normalizeAbstractHtml): block-level, so consecutive headings keep their
+   line boundary instead of running together (issue #2290). */
+.articleAbstract p {
+  margin: 0;
+}
+
+.articleAbstract :global(.abstractHeading) {
   font-size: 1.1rem;
   font-weight: 600;
-  margin: 0;
-  display: inline;
 }
 
 /* Responsive: smaller items on mobile */
@@ -172,5 +171,46 @@ button.carouselItem {
 
   .authorName {
     font-size: 0.85rem;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .articlesSection {
+    background: linear-gradient(to bottom, #161b2a, #12151c);
+    border-color: #2d3548;
+  }
+
+  .sectionTitle,
+  .authorName {
+    color: #a8b9ff;
+  }
+
+  .emptyMessage {
+    color: #9aa0a6;
+  }
+
+  .carousel {
+    scrollbar-color: #3b4256 transparent;
+  }
+
+  .carousel::-webkit-scrollbar-thumb {
+    background: #3b4256;
+  }
+
+  .carouselItem {
+    background: #1a1f2e;
+    border-color: #2d3548;
+  }
+
+  .carouselItem:hover {
+    border-color: #a8b9ff;
+  }
+
+  .authorImage {
+    background: #2d3548;
+  }
+
+  .articleAbstract {
+    color: #d7dae0;
   }
 }

@@ -7,6 +7,31 @@ namespace BibleOnSite.Tests.Models;
 public class PerekTests
 {
     [Fact]
+    public void SeparateReadersPreserveMetadataWithoutSharingVersesOrSubscriptions()
+    {
+        var original = new Perek
+        {
+            PerekId = 2, Additional = 1, Date = "2026-10-08", HasRecording = true,
+            Header = "כותרת", HebDate = "תשרי", HebDateNumeric = 57870101,
+            PerekNumber = 2, SeferId = 1, SeferName = "בראשית", SeferTanahUsName = "Genesis",
+            Tseit = "18:00", ArticlesCount = 4,
+            Pasukim = [new Pasuk { PasukNum = 1, Text = "original", IsSelected = true }]
+        };
+        var originalChanged = false;
+        original.PropertyChanged += (_, _) => originalChanged = true;
+        var first = original.CreateReaderCopy();
+        var second = original.CreateReaderCopy();
+
+        first.Should().BeEquivalentTo(original, options => options.Excluding(perek => perek.Pasukim));
+        first.Pasukim.Should().BeEmpty();
+        first.Pasukim = [new Pasuk { PasukNum = 1, Text = "independent" }];
+        original.Pasukim[0].Text.Should().Be("original");
+        original.Pasukim[0].IsSelected.Should().BeTrue();
+        second.Pasukim.Should().BeEmpty();
+        originalChanged.Should().BeFalse("navigation must not replace the previous reader's bound verse list");
+    }
+
+    [Fact]
     public void Perek_ShouldHaveCorrectDefaults()
     {
         var perek = new Perek

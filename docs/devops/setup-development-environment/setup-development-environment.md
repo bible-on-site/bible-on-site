@@ -33,6 +33,7 @@ For App development, you'll also need:
     - Android Emulator - 35.3.11
     - Android Emulator hypervisor driver (installer) - 2.2.0
     - Android SDK Platform-Tools - 35.0.2
+  - Headless alternative (no Android Studio): install the `cmdline-tools` zip under `%LOCALAPPDATA%\Android\Sdk\cmdline-tools\latest`, then use `sdkmanager` for `platform-tools`, `emulator`, `platforms;android-36`, `build-tools;36.0.0`, `system-images;android-36;google_apis;x86_64` and `extras;google;Android_Emulator_Hypervisor_Driver`. Acceleration: when a Hyper-V hypervisor is active (`Get-CimInstance Win32_ComputerSystem` → `HypervisorPresent=True`), the emulator accelerates via WHPX and no driver is needed; otherwise install AEHD once elevated via `extras\google\Android_Emulator_Hypervisor_Driver\silent_install.bat`. Verify with `emulator -accel-check`. Create and boot an AVD: `avdmanager create avd -n <name> -k "system-images;android-36;google_apis;x86_64" -d pixel_7`, then `emulator -avd <name> -no-snapshot -no-metrics -noaudio`. See `.github/tool-registry.md` ("Android emulator (local Windows)") for the full recipe.
 - MAUI Toolset
   - `dotnet workload install maui`
 
@@ -48,6 +49,25 @@ For website E2E/performance tests and API testing, you'll also need:
 3. From the project's root, execute `npm i`
 4. From `./devops`, execute `npm i`
 5. From `./devops`, execute `npm run setup_dev_env`
+
+### Local backend and emulator
+
+From the repository root, run `npm run backend`. It reuses a healthy API already
+on port 3003, or starts Docker Desktop and builds the API and RustFS with Compose.
+The API uses the existing MySQL development database from `web/api/.dev.env`;
+MySQL must accept connections from Docker's host gateway. Set `DB_URL` to choose
+another existing database. Populate local application content with `sync-from-prod`
+as described below.
+
+If Docker Desktop cannot start, `npm run backend -- --native` runs the same API
+with Cargo and the installed MySQL service. Leave that terminal running; Ctrl+C
+stops the API process tree. No database population or Docker reset occurs during
+startup. Docker services can be stopped with
+`docker compose -f devops/docker-compose.yml --profile backend stop api rustfs`.
+
+The Android emulator reaches the backend at `http://10.0.2.2:3003`. Debug emulator
+builds choose this address automatically. The Windows app uses the configured API
+or production by default; set `API_URL=http://localhost:3003` to preview local data.
 
 ### Data and MySQL dev database
 
@@ -95,5 +115,3 @@ Install recommended extensions:
 4. Check the following configs:
 
    ![Playwright configs selection](images/playwright-configs-selection.png)
-
-

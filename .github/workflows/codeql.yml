@@ -2,16 +2,16 @@
 # CodeQL (advanced setup)
 # ====================================================================================
 # Migrated from CodeQL "default setup" to an advanced workflow so that `[skip ci]` in a
-# commit message is honored (default setup ignores it). The release bot tags every
-# version-bump commit with "[skip ci]" (e.g. "chore(release): Bump versions ... [skip ci]"),
-# so those pushes no longer trigger a CodeQL run. See
+# commit message is honored (default setup ignores it). Post-release version-bump commits
+# use "[skip ci]" (e.g. "chore(release): Bump versions ... [skip ci]"), while retry bumps
+# intentionally trigger CI and CodeQL. See
 # https://stackoverflow.com/questions/74030852.
 #
 # NOTE: We deliberately do NOT add a `paths-ignore` guard for version/lockfile paths.
-# `[skip ci]` already skips every bump commit regardless of which files it touches, and
-# a version bump also rewrites lockfiles (e.g. package-lock.json). Ignoring lockfile
-# paths would be unsafe — a dependency-only push (e.g. from Renovate) must still be
-# scanned for newly introduced vulnerabilities.
+# Skipping post-release bumps already avoids scanning their files, and a version bump
+# also rewrites lockfiles (e.g. package-lock.json). Ignoring lockfile paths would be
+# unsafe — a dependency-only push (e.g. from Renovate) must still be scanned for newly
+# introduced vulnerabilities.
 #
 # Languages mirror the previous default setup: actions, csharp, javascript-typescript
 # (covers both JS and TS), and python. All use build-mode `none` (buildless analysis),

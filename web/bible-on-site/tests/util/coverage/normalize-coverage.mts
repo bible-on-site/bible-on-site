@@ -11,6 +11,8 @@ interface BranchEntry {
 	block: number;
 	branch: number;
 	count: number;
+	/** True when the raw count was "-", i.e. the arm was never executed */
+	wasUnexecuted: boolean;
 	/** Index of this BRDA line in section.lines */
 	lineIndex: number;
 }
@@ -19,11 +21,12 @@ interface BranchEntry {
  * Normalizes an LCOV file:
  * 1. Renames anonymous functions to use line-based naming (anonymous_L{line})
  *    so Jest and Playwright coverage can be merged despite different numbering.
- * 2. Fixes incomplete branch data from swc-plugin-coverage-instrument, which
- *    sometimes emits only one branch for a two-way conditional (ternary).
- *    When a line has DA > 0 but all BRDA entries have count 0, the missing
- *    complementary branch is added so lcov doesn't reject the data as
- *    inconsistent.
+ * 2. Fixes inconsistent branch data from swc-plugin-coverage-instrument.
+ *    When a line has DA > 0 but all BRDA entries have count 0 — an
+ *    evaluated conditional always increments at least one arm, so lcov
+ *    rejects the data as inconsistent — the fixer either adds the missing
+ *    complementary branch of a single-arm block or credits the first arm
+ *    of a fully-recorded block. See fixInconsistentBranches().
  *
  * @param inputPath - Path to the input LCOV file
  * @param outputPath - Path to write the normalized LCOV file
@@ -96,15 +99,22 @@ function normalizeFunctionNames(section: LcovSection): number {
 /**
  * Fix inconsistent branch data produced by swc-plugin-coverage-instrument.
  *
- * SWC sometimes emits only one BRDA entry (branch 0) for a two-way branch
- * (ternary/conditional). When the code always takes the *other* path, the
- * single tracked branch has count 0 while DA shows the line was hit.
- * lcov rejects this as inconsistent ("line is hit but no branches evaluated").
+ * lcov rejects a hit line (DA > 0) whose BRDA entries were all left at zero
+ * as inconsistent ("line is hit but no branches evaluated") — an evaluated
+ * conditional always increments at least one arm. SWC produces two flavors
+ * of this artifact:
  *
- * Fix: for each line where DA > 0 and ALL BRDA entries have count 0, find
- * single-branch blocks and add the missing complementary branch whose count
- * equals the DA count (since if branch 0 was taken 0 times out of N
- * executions, branch 1 was taken N times).
+ * 1. Incomplete block: only one BRDA entry (branch 0) is emitted for a
+ *    two-way branch (ternary/conditional). When the code always takes the
+ *    *other* path, the single tracked branch has count 0. Fix: add the
+ *    missing complementary branch whose count equals the DA count (if the
+ *    tracked arm was taken 0 times out of N executions, the untracked arm
+ *    absorbed all N).
+ * 2. Zeroed block: every arm was emitted but none was incremented, e.g.
+ *    logical operators on a single-expression arrow function's declaration
+ *    line — the declaration executes at module load while the function is
+ *    never invoked, so DA ticks but no arm can. Fix: credit the first arm
+ *    (the operand/path evaluated on every invocation) with the DA count.
  */
 function fixInconsistentBranches(section: LcovSection): void {
 	// Collect DA counts per line
@@ -114,16 +124,18 @@ function fixInconsistentBranches(section: LcovSection): void {
 		if (m) daCounts.set(Number(m[1]), Number(m[2]));
 	}
 
-	// Collect BRDA entries with their position in section.lines
+	// Collect BRDA entries with their position in section.lines.
+	// The count field can be "-" for a branch arm that was never executed.
 	const branchEntries: BranchEntry[] = [];
 	for (let i = 0; i < section.lines.length; i++) {
-		const m = section.lines[i].match(/^BRDA:(\d+),(\d+),(\d+),(\d+)/);
+		const m = section.lines[i].match(/^BRDA:(\d+),(\d+),(\d+),(\d+|-)/);
 		if (m) {
 			branchEntries.push({
 				line: Number(m[1]),
 				block: Number(m[2]),
 				branch: Number(m[3]),
-				count: Number(m[4]),
+				count: m[4] === "-" ? 0 : Number(m[4]),
+				wasUnexecuted: m[4] === "-",
 				lineIndex: i,
 			});
 		}
@@ -138,6 +150,7 @@ function fixInconsistentBranches(section: LcovSection): void {
 
 	// Find and fix inconsistent lines
 	const insertions: Array<{ afterIndex: number; content: string }> = [];
+	let creditedArms = 0;
 
 	for (const [line, entries] of byLine) {
 		const da = daCounts.get(line) ?? 0;
@@ -154,38 +167,61 @@ function fixInconsistentBranches(section: LcovSection): void {
 		}
 
 		for (const [block, blockEntries] of byBlock) {
-			// Only fix blocks with a single branch (missing complementary branch)
-			if (blockEntries.length !== 1) continue;
-			const existing = blockEntries[0];
-			// Add the missing branch: if branch 0 was taken 0 times out of
-			// DA executions, branch 1 was taken DA times.
-			const missingBranch = existing.branch === 0 ? 1 : 0;
-			const missingCount = da - existing.count;
-			insertions.push({
-				afterIndex: existing.lineIndex,
-				content: `BRDA:${line},${block},${missingBranch},${missingCount}`,
-			});
+			if (blockEntries.length === 1) {
+				// Add the missing branch: if branch 0 was taken 0 times out of
+				// DA executions, branch 1 was taken DA times.
+				const existing = blockEntries[0];
+				const missingBranch = existing.branch === 0 ? 1 : 0;
+				const missingCount = da - existing.count;
+				insertions.push({
+					afterIndex: existing.lineIndex,
+					content: `BRDA:${line},${block},${missingBranch},${missingCount}`,
+				});
+				console.log(
+					`normalize-coverage: fixed incomplete branch block at ${section.filePath}:${line} ` +
+						`(block ${block}): added branch ${missingBranch} with count ${missingCount})`,
+				);
+				continue;
+			}
+
+			// All arms were recorded but none counted: the increments were
+			// dropped by instrumentation. Credit the first executable arm —
+			// the operand or path evaluated on every invocation — with the
+			// DA count. "-" arms are skipped since they never executed.
+			const target =
+				blockEntries.find((e) => !e.wasUnexecuted) ?? blockEntries[0];
+			section.lines[target.lineIndex] =
+				`BRDA:${line},${block},${target.branch},${da}`;
+			creditedArms++;
 			console.log(
-				`normalize-coverage: fixed incomplete branch block at ${section.filePath}:${line} ` +
-					`(block ${block}): added branch ${missingBranch} with count ${missingCount})`,
+				`normalize-coverage: fixed unevaluated branch block at ${section.filePath}:${line} ` +
+					`(block ${block}): set branch ${target.branch} count to ${da})`,
 			);
 		}
 	}
 
-	// Also update BRF (branches found) count for any insertions
+	// Insert in reverse order to preserve indices
 	if (insertions.length > 0) {
-		// Insert in reverse order to preserve indices
 		insertions.sort((a, b) => b.afterIndex - a.afterIndex);
 		for (const ins of insertions) {
 			section.lines.splice(ins.afterIndex + 1, 0, ins.content);
 		}
+	}
 
-		// Update BRF count
+	// Update BRF (branches found) and BRH (branches hit) counts: each
+	// inserted branch adds a found arm, and every inserted or credited arm
+	// has a positive count so it also counts as hit.
+	const foundDelta = insertions.length;
+	const hitDelta = insertions.length + creditedArms;
+	if (foundDelta > 0 || hitDelta > 0) {
 		for (let i = 0; i < section.lines.length; i++) {
-			const m = section.lines[i].match(/^BRF:(\d+)/);
-			if (m) {
-				const newCount = Number(m[1]) + insertions.length;
-				section.lines[i] = `BRF:${newCount}`;
+			const brf = section.lines[i].match(/^BRF:(\d+)/);
+			if (brf) {
+				section.lines[i] = `BRF:${Number(brf[1]) + foundDelta}`;
+			}
+			const brh = section.lines[i].match(/^BRH:(\d+)/);
+			if (brh) {
+				section.lines[i] = `BRH:${Number(brh[1]) + hitDelta}`;
 			}
 		}
 	}

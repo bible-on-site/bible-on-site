@@ -1,0 +1,2787 @@
+{
+ "provenance": {
+  "title": "חלוקת ה\"סדרים\" של המסורה",
+  "source_url": "https://www.tanachyomi.co.il/PDFFiles/prakim.pdf",
+  "retrieved": "2026-10-11",
+  "sha256": "c958940c28ea85bd41ed0ea3484f1ca0af5346b4e13edf204e1270994482d7dd",
+  "bytes": 136704,
+  "pages": 1,
+  "notes": [
+   "Each entry lists the first pasuk of a seder: seder number, perek, pasuk. Numbering follows תנ\"ך קורן (מספור הסדרים ע\"פ תנ\"ך קורן).",
+   "Parenthesized seder numbers mark boundaries found only in some ancient manuscripts; they are not part of the numbered sequence.",
+   "Sefarim split into additionals (שמואל, מלכים, דברי הימים, עזרא נחמיה) print the sub-sefer name before the perek.",
+   "The PDF covers Neviim and Ketuvim only - it lists no Torah sedarim. That is a source limitation, not evidence that the Torah has no seder division.",
+   "Extraction: positional reconstruction of the PDF Hebrew text objects (right-to-left columns, split glyphs, merged header fragments), cross-checked entry-by-entry against the rendered page. Manual curation verified all 297 rows."
+  ]
+ },
+ "groups": [
+  {
+   "book": "יהושע",
+   "sedarim": [
+    {
+     "seder": "א",
+     "paren": false,
+     "sub_book": null,
+     "perek": "א",
+     "pasuk": "א",
+     "perek_n": 1,
+     "pasuk_n": 1
+    },
+    {
+     "seder": "ב",
+     "paren": false,
+     "sub_book": null,
+     "perek": "ג",
+     "pasuk": "ז",
+     "perek_n": 3,
+     "pasuk_n": 7
+    },
+    {
+     "seder": "ג",
+     "paren": false,
+     "sub_book": null,
+     "perek": "ד",
+     "pasuk": "כד",
+     "perek_n": 4,
+     "pasuk_n": 24
+    },
+    {
+     "seder": "ד",
+     "paren": false,
+     "sub_book": null,
+     "perek": "ו",
+     "pasuk": "כז",
+     "perek_n": 6,
+     "pasuk_n": 27
+    },
+    {
+     "seder": "ד",
+     "paren": true,
+     "sub_book": null,
+     "perek": "ח",
+     "pasuk": "א",
+     "perek_n": 8,
+     "pasuk_n": 1
+    },
+    {
+     "seder": "ה",
+     "paren": false,
+     "sub_book": null,
+     "perek": "ח",
+     "pasuk": "לג",
+     "perek_n": 8,
+     "pasuk_n": 33
+    },
+    {
+     "seder": "ו",
+     "paren": false,
+     "sub_book": null,
+     "perek": "י",
+     "pasuk": "ח",
+     "perek_n": 10,
+     "pasuk_n": 8
+    },
+    {
+     "seder": "ז",
+     "paren": false,
+     "sub_book": null,
+     "perek": "י",
+     "pasuk": "מב",
+     "perek_n": 10,
+     "pasuk_n": 42
+    },
+    {
+     "seder": "ח",
+     "paren": false,
+     "sub_book": null,
+     "perek": "יג",
+     "pasuk": "א",
+     "perek_n": 13,
+     "pasuk_n": 1
+    },
+    {
+     "seder": "ט",
+     "paren": false,
+     "sub_book": null,
+     "perek": "יד",
+     "pasuk": "טו",
+     "perek_n": 14,
+     "pasuk_n": 15
+    },
+    {
+     "seder": "י",
+     "paren": false,
+     "sub_book": null,
+     "perek": "יז",
+     "pasuk": "ד",
+     "perek_n": 17,
+     "pasuk_n": 4
+    },
+    {
+     "seder": "יא",
+     "paren": false,
+     "sub_book": null,
+     "perek": "יח",
+     "pasuk": "כח",
+     "perek_n": 18,
+     "pasuk_n": 28
+    },
+    {
+     "seder": "יב",
+     "paren": false,
+     "sub_book": null,
+     "perek": "יט",
+     "pasuk": "נא",
+     "perek_n": 19,
+     "pasuk_n": 51
+    },
+    {
+     "seder": "יג",
+     "paren": false,
+     "sub_book": null,
+     "perek": "כא",
+     "pasuk": "מא",
+     "perek_n": 21,
+     "pasuk_n": 41
+    },
+    {
+     "seder": "יד",
+     "paren": false,
+     "sub_book": null,
+     "perek": "כב",
+     "pasuk": "לד",
+     "perek_n": 22,
+     "pasuk_n": 34
+    }
+   ]
+  },
+  {
+   "book": "שופטים",
+   "sedarim": [
+    {
+     "seder": "א",
+     "paren": false,
+     "sub_book": null,
+     "perek": "א",
+     "pasuk": "א",
+     "perek_n": 1,
+     "pasuk_n": 1
+    },
+    {
+     "seder": "ב",
+     "paren": false,
+     "sub_book": null,
+     "perek": "ב",
+     "pasuk": "ז",
+     "perek_n": 2,
+     "pasuk_n": 7
+    },
+    {
+     "seder": "ג",
+     "paren": false,
+     "sub_book": null,
+     "perek": "ג",
+     "pasuk": "לא",
+     "perek_n": 3,
+     "pasuk_n": 31
+    },
+    {
+     "seder": "ד",
+     "paren": false,
+     "sub_book": null,
+     "perek": "ה",
+     "pasuk": "לא",
+     "perek_n": 5,
+     "pasuk_n": 31
+    },
+    {
+     "seder": "ה",
+     "paren": false,
+     "sub_book": null,
+     "perek": "ו",
+     "pasuk": "מ",
+     "perek_n": 6,
+     "pasuk_n": 40
+    },
+    {
+     "seder": "ו",
+     "paren": false,
+     "sub_book": null,
+     "perek": "ח",
+     "pasuk": "ג",
+     "perek_n": 8,
+     "pasuk_n": 3
+    },
+    {
+     "seder": "ז",
+     "paren": false,
+     "sub_book": null,
+     "perek": "ט",
+     "pasuk": "ז",
+     "perek_n": 9,
+     "pasuk_n": 7
+    },
+    {
+     "seder": "ח",
+     "paren": false,
+     "sub_book": null,
+     "perek": "י",
+     "pasuk": "א",
+     "perek_n": 10,
+     "pasuk_n": 1
+    },
+    {
+     "seder": "ט",
+     "paren": false,
+     "sub_book": null,
+     "perek": "יא",
+     "pasuk": "לב",
+     "perek_n": 11,
+     "pasuk_n": 32
+    },
+    {
+     "seder": "י",
+     "paren": false,
+     "sub_book": null,
+     "perek": "יג",
+     "pasuk": "כד",
+     "perek_n": 13,
+     "pasuk_n": 24
+    },
+    {
+     "seder": "יא",
+     "paren": false,
+     "sub_book": null,
+     "perek": "טז",
+     "pasuk": "ג",
+     "perek_n": 16,
+     "pasuk_n": 3
+    },
+    {
+     "seder": "יב",
+     "paren": false,
+     "sub_book": null,
+     "perek": "יח",
+     "pasuk": "ו",
+     "perek_n": 18,
+     "pasuk_n": 6
+    },
+    {
+     "seder": "יג",
+     "paren": false,
+     "sub_book": null,
+     "perek": "יט",
+     "pasuk": "כ",
+     "perek_n": 19,
+     "pasuk_n": 20
+    },
+    {
+     "seder": "יד",
+     "paren": false,
+     "sub_book": null,
+     "perek": "כ",
+     "pasuk": "כז",
+     "perek_n": 20,
+     "pasuk_n": 27
+    }
+   ]
+  },
+  {
+   "book": "שמואל",
+   "sedarim": [
+    {
+     "seder": "א",
+     "paren": false,
+     "sub_book": "א",
+     "perek": "א",
+     "pasuk": "א",
+     "perek_n": 1,
+     "pasuk_n": 1
+    },
+    {
+     "seder": "ב",
+     "paren": false,
+     "sub_book": "א",
+     "perek": "ב",
+     "pasuk": "י",
+     "perek_n": 2,
+     "pasuk_n": 10
+    },
+    {
+     "seder": "ג",
+     "paren": false,
+     "sub_book": "א",
+     "perek": "ג",
+     "pasuk": "כ",
+     "perek_n": 3,
+     "pasuk_n": 20
+    },
+    {
+     "seder": "ד",
+     "paren": false,
+     "sub_book": "א",
+     "perek": "ו",
+     "pasuk": "יד",
+     "perek_n": 6,
+     "pasuk_n": 14
+    },
+    {
+     "seder": "ה",
+     "paren": false,
+     "sub_book": "א",
+     "perek": "ט",
+     "pasuk": "ב",
+     "perek_n": 9,
+     "pasuk_n": 2
+    },
+    {
+     "seder": "ו",
+     "paren": false,
+     "sub_book": "א",
+     "perek": "י",
+     "pasuk": "כד",
+     "perek_n": 10,
+     "pasuk_n": 24
+    },
+    {
+     "seder": "ז",
+     "paren": false,
+     "sub_book": "א",
+     "perek": "יב",
+     "pasuk": "כב",
+     "perek_n": 12,
+     "pasuk_n": 22
+    },
+    {
+     "seder": "ח",
+     "paren": false,
+     "sub_book": "א",
+     "perek": "יד",
+     "pasuk": "כג",
+     "perek_n": 14,
+     "pasuk_n": 23
+    },
+    {
+     "seder": "ט",
+     "paren": false,
+     "sub_book": "א",
+     "perek": "טו",
+     "pasuk": "יז",
+     "perek_n": 15,
+     "pasuk_n": 17
+    },
+    {
+     "seder": "י",
+     "paren": false,
+     "sub_book": "א",
+     "perek": "טז",
+     "pasuk": "יח",
+     "perek_n": 16,
+     "pasuk_n": 18
+    },
+    {
+     "seder": "יא",
+     "paren": false,
+     "sub_book": "א",
+     "perek": "יז",
+     "pasuk": "לז",
+     "perek_n": 17,
+     "pasuk_n": 37
+    },
+    {
+     "seder": "יב",
+     "paren": false,
+     "sub_book": "א",
+     "perek": "יח",
+     "pasuk": "יד",
+     "perek_n": 18,
+     "pasuk_n": 14
+    },
+    {
+     "seder": "יג",
+     "paren": false,
+     "sub_book": "א",
+     "perek": "כ",
+     "pasuk": "ד",
+     "perek_n": 20,
+     "pasuk_n": 4
+    },
+    {
+     "seder": "יד",
+     "paren": false,
+     "sub_book": "א",
+     "perek": "כ",
+     "pasuk": "מב",
+     "perek_n": 20,
+     "pasuk_n": 42
+    },
+    {
+     "seder": "טו",
+     "paren": false,
+     "sub_book": "א",
+     "perek": "כג",
+     "pasuk": "ד",
+     "perek_n": 23,
+     "pasuk_n": 4
+    },
+    {
+     "seder": "טז",
+     "paren": false,
+     "sub_book": "א",
+     "perek": "כד",
+     "pasuk": "כ",
+     "perek_n": 24,
+     "pasuk_n": 20
+    },
+    {
+     "seder": "יז",
+     "paren": false,
+     "sub_book": "א",
+     "perek": "כה",
+     "pasuk": "לג",
+     "perek_n": 25,
+     "pasuk_n": 33
+    },
+    {
+     "seder": "יח",
+     "paren": false,
+     "sub_book": "א",
+     "perek": "כו",
+     "pasuk": "כה",
+     "perek_n": 26,
+     "pasuk_n": 25
+    },
+    {
+     "seder": "יט",
+     "paren": false,
+     "sub_book": "א",
+     "perek": "כח",
+     "pasuk": "כד",
+     "perek_n": 28,
+     "pasuk_n": 24
+    },
+    {
+     "seder": "כ",
+     "paren": false,
+     "sub_book": "א",
+     "perek": "ל",
+     "pasuk": "כה",
+     "perek_n": 30,
+     "pasuk_n": 25
+    },
+    {
+     "seder": "כא",
+     "paren": false,
+     "sub_book": "ב",
+     "perek": "ב",
+     "pasuk": "ז",
+     "perek_n": 2,
+     "pasuk_n": 7
+    },
+    {
+     "seder": "כב",
+     "paren": false,
+     "sub_book": "ב",
+     "perek": "ג",
+     "pasuk": "כא",
+     "perek_n": 3,
+     "pasuk_n": 21
+    },
+    {
+     "seder": "כג",
+     "paren": false,
+     "sub_book": "ב",
+     "perek": "ה",
+     "pasuk": "י",
+     "perek_n": 5,
+     "pasuk_n": 10
+    },
+    {
+     "seder": "כד",
+     "paren": false,
+     "sub_book": "ב",
+     "perek": "ז",
+     "pasuk": "טז",
+     "perek_n": 7,
+     "pasuk_n": 16
+    },
+    {
+     "seder": "כה",
+     "paren": false,
+     "sub_book": "ב",
+     "perek": "י",
+     "pasuk": "יב",
+     "perek_n": 10,
+     "pasuk_n": 12
+    },
+    {
+     "seder": "כו",
+     "paren": false,
+     "sub_book": "ב",
+     "perek": "יב",
+     "pasuk": "יג",
+     "perek_n": 12,
+     "pasuk_n": 13
+    },
+    {
+     "seder": "כז",
+     "paren": false,
+     "sub_book": "ב",
+     "perek": "יג",
+     "pasuk": "כה",
+     "perek_n": 13,
+     "pasuk_n": 25
+    },
+    {
+     "seder": "כח",
+     "paren": false,
+     "sub_book": "ב",
+     "perek": "יד",
+     "pasuk": "לג",
+     "perek_n": 14,
+     "pasuk_n": 33
+    },
+    {
+     "seder": "כט",
+     "paren": false,
+     "sub_book": "ב",
+     "perek": "טו",
+     "pasuk": "לז",
+     "perek_n": 15,
+     "pasuk_n": 37
+    },
+    {
+     "seder": "ל",
+     "paren": false,
+     "sub_book": "ב",
+     "perek": "יז",
+     "pasuk": "כ",
+     "perek_n": 17,
+     "pasuk_n": 20
+    },
+    {
+     "seder": "לא",
+     "paren": false,
+     "sub_book": "ב",
+     "perek": "יח",
+     "pasuk": "כז",
+     "perek_n": 18,
+     "pasuk_n": 27
+    },
+    {
+     "seder": "לב",
+     "paren": false,
+     "sub_book": "ב",
+     "perek": "יט",
+     "pasuk": "מ",
+     "perek_n": 19,
+     "pasuk_n": 40
+    },
+    {
+     "seder": "לג",
+     "paren": false,
+     "sub_book": "ב",
+     "perek": "כא",
+     "pasuk": "ז",
+     "perek_n": 21,
+     "pasuk_n": 7
+    },
+    {
+     "seder": "לד",
+     "paren": false,
+     "sub_book": "ב",
+     "perek": "כב",
+     "pasuk": "נא",
+     "perek_n": 22,
+     "pasuk_n": 51
+    }
+   ]
+  },
+  {
+   "book": "מלכים",
+   "sedarim": [
+    {
+     "seder": "א",
+     "paren": false,
+     "sub_book": "א",
+     "perek": "א",
+     "pasuk": "א",
+     "perek_n": 1,
+     "pasuk_n": 1
+    },
+    {
+     "seder": "ב",
+     "paren": false,
+     "sub_book": "א",
+     "perek": "א",
+     "pasuk": "מח",
+     "perek_n": 1,
+     "pasuk_n": 48
+    },
+    {
+     "seder": "ג",
+     "paren": false,
+     "sub_book": "א",
+     "perek": "ב",
+     "pasuk": "מה",
+     "perek_n": 2,
+     "pasuk_n": 45
+    },
+    {
+     "seder": "ד",
+     "paren": false,
+     "sub_book": "א",
+     "perek": "ד",
+     "pasuk": "כ",
+     "perek_n": 4,
+     "pasuk_n": 20
+    },
+    {
+     "seder": "ה",
+     "paren": false,
+     "sub_book": "א",
+     "perek": "ו",
+     "pasuk": "יג",
+     "perek_n": 6,
+     "pasuk_n": 13
+    },
+    {
+     "seder": "ו",
+     "paren": false,
+     "sub_book": "א",
+     "perek": "ז",
+     "pasuk": "כא",
+     "perek_n": 7,
+     "pasuk_n": 21
+    },
+    {
+     "seder": "ז",
+     "paren": false,
+     "sub_book": "א",
+     "perek": "ח",
+     "pasuk": "יא",
+     "perek_n": 8,
+     "pasuk_n": 11
+    },
+    {
+     "seder": "ח",
+     "paren": false,
+     "sub_book": "א",
+     "perek": "ח",
+     "pasuk": "נח",
+     "perek_n": 8,
+     "pasuk_n": 58
+    },
+    {
+     "seder": "ט",
+     "paren": false,
+     "sub_book": "א",
+     "perek": "י",
+     "pasuk": "ט",
+     "perek_n": 10,
+     "pasuk_n": 9
+    },
+    {
+     "seder": "י",
+     "paren": false,
+     "sub_book": "א",
+     "perek": "יא",
+     "pasuk": "כח",
+     "perek_n": 11,
+     "pasuk_n": 28
+    },
+    {
+     "seder": "יא",
+     "paren": false,
+     "sub_book": "א",
+     "perek": "יב",
+     "pasuk": "כד",
+     "perek_n": 12,
+     "pasuk_n": 24
+    },
+    {
+     "seder": "יב",
+     "paren": false,
+     "sub_book": "א",
+     "perek": "יג",
+     "pasuk": "לא",
+     "perek_n": 13,
+     "pasuk_n": 31
+    },
+    {
+     "seder": "יג",
+     "paren": false,
+     "sub_book": "א",
+     "perek": "טו",
+     "pasuk": "ח",
+     "perek_n": 15,
+     "pasuk_n": 8
+    },
+    {
+     "seder": "יד",
+     "paren": false,
+     "sub_book": "א",
+     "perek": "טז",
+     "pasuk": "טו",
+     "perek_n": 16,
+     "pasuk_n": 15
+    },
+    {
+     "seder": "טו",
+     "paren": false,
+     "sub_book": "א",
+     "perek": "יז",
+     "pasuk": "כד",
+     "perek_n": 17,
+     "pasuk_n": 24
+    },
+    {
+     "seder": "טז",
+     "paren": false,
+     "sub_book": "א",
+     "perek": "יח",
+     "pasuk": "לט",
+     "perek_n": 18,
+     "pasuk_n": 39
+    },
+    {
+     "seder": "יז",
+     "paren": false,
+     "sub_book": "א",
+     "perek": "כ",
+     "pasuk": "יג",
+     "perek_n": 20,
+     "pasuk_n": 13
+    },
+    {
+     "seder": "יח",
+     "paren": false,
+     "sub_book": "א",
+     "perek": "כא",
+     "pasuk": "יז",
+     "perek_n": 21,
+     "pasuk_n": 17
+    },
+    {
+     "seder": "יט",
+     "paren": false,
+     "sub_book": "א",
+     "perek": "כב",
+     "pasuk": "מג",
+     "perek_n": 22,
+     "pasuk_n": 43
+    },
+    {
+     "seder": "כ",
+     "paren": false,
+     "sub_book": "ב",
+     "perek": "ב",
+     "pasuk": "טו",
+     "perek_n": 2,
+     "pasuk_n": 15
+    },
+    {
+     "seder": "כא",
+     "paren": false,
+     "sub_book": "ב",
+     "perek": "ד",
+     "pasuk": "כו",
+     "perek_n": 4,
+     "pasuk_n": 26
+    },
+    {
+     "seder": "כב",
+     "paren": false,
+     "sub_book": "ב",
+     "perek": "ו",
+     "pasuk": "כג",
+     "perek_n": 6,
+     "pasuk_n": 23
+    },
+    {
+     "seder": "כג",
+     "paren": false,
+     "sub_book": "ב",
+     "perek": "ז",
+     "pasuk": "טז",
+     "perek_n": 7,
+     "pasuk_n": 16
+    },
+    {
+     "seder": "כד",
+     "paren": false,
+     "sub_book": "ב",
+     "perek": "ט",
+     "pasuk": "יג",
+     "perek_n": 9,
+     "pasuk_n": 13
+    },
+    {
+     "seder": "כה",
+     "paren": false,
+     "sub_book": "ב",
+     "perek": "י",
+     "pasuk": "טו",
+     "perek_n": 10,
+     "pasuk_n": 15
+    },
+    {
+     "seder": "כו",
+     "paren": false,
+     "sub_book": "ב",
+     "perek": "יב",
+     "pasuk": "ג",
+     "perek_n": 12,
+     "pasuk_n": 3
+    },
+    {
+     "seder": "כז",
+     "paren": false,
+     "sub_book": "ב",
+     "perek": "יג",
+     "pasuk": "כג",
+     "perek_n": 13,
+     "pasuk_n": 23
+    },
+    {
+     "seder": "כח",
+     "paren": false,
+     "sub_book": "ב",
+     "perek": "טו",
+     "pasuk": "ז",
+     "perek_n": 15,
+     "pasuk_n": 7
+    },
+    {
+     "seder": "כט",
+     "paren": false,
+     "sub_book": "ב",
+     "perek": "טז",
+     "pasuk": "כ",
+     "perek_n": 16,
+     "pasuk_n": 20
+    },
+    {
+     "seder": "ל",
+     "paren": false,
+     "sub_book": "ב",
+     "perek": "יח",
+     "pasuk": "ו",
+     "perek_n": 18,
+     "pasuk_n": 6
+    },
+    {
+     "seder": "לא",
+     "paren": false,
+     "sub_book": "ב",
+     "perek": "יט",
+     "pasuk": "יט",
+     "perek_n": 19,
+     "pasuk_n": 19
+    },
+    {
+     "seder": "לב",
+     "paren": false,
+     "sub_book": "ב",
+     "perek": "כ",
+     "pasuk": "ח",
+     "perek_n": 20,
+     "pasuk_n": 8
+    },
+    {
+     "seder": "לג",
+     "paren": false,
+     "sub_book": "ב",
+     "perek": "כב",
+     "pasuk": "ב",
+     "perek_n": 22,
+     "pasuk_n": 2
+    },
+    {
+     "seder": "לד",
+     "paren": false,
+     "sub_book": "ב",
+     "perek": "כג",
+     "pasuk": "כה",
+     "perek_n": 23,
+     "pasuk_n": 25
+    },
+    {
+     "seder": "לה",
+     "paren": false,
+     "sub_book": "ב",
+     "perek": "כד",
+     "pasuk": "יח",
+     "perek_n": 24,
+     "pasuk_n": 18
+    }
+   ]
+  },
+  {
+   "book": "ישעיהו",
+   "sedarim": [
+    {
+     "seder": "א",
+     "paren": false,
+     "sub_book": null,
+     "perek": "א",
+     "pasuk": "א",
+     "perek_n": 1,
+     "pasuk_n": 1
+    },
+    {
+     "seder": "ב",
+     "paren": false,
+     "sub_book": null,
+     "perek": "ד",
+     "pasuk": "ג",
+     "perek_n": 4,
+     "pasuk_n": 3
+    },
+    {
+     "seder": "ג",
+     "paren": false,
+     "sub_book": null,
+     "perek": "ו",
+     "pasuk": "ג",
+     "perek_n": 6,
+     "pasuk_n": 3
+    },
+    {
+     "seder": "ד",
+     "paren": false,
+     "sub_book": null,
+     "perek": "ט",
+     "pasuk": "ו",
+     "perek_n": 9,
+     "pasuk_n": 6
+    },
+    {
+     "seder": "ה",
+     "paren": false,
+     "sub_book": null,
+     "perek": "יא",
+     "pasuk": "ב",
+     "perek_n": 11,
+     "pasuk_n": 2
+    },
+    {
+     "seder": "ו",
+     "paren": false,
+     "sub_book": null,
+     "perek": "יד",
+     "pasuk": "ב",
+     "perek_n": 14,
+     "pasuk_n": 2
+    },
+    {
+     "seder": "ז",
+     "paren": false,
+     "sub_book": null,
+     "perek": "טז",
+     "pasuk": "ה",
+     "perek_n": 16,
+     "pasuk_n": 5
+    },
+    {
+     "seder": "ח",
+     "paren": false,
+     "sub_book": null,
+     "perek": "יט",
+     "pasuk": "כה",
+     "perek_n": 19,
+     "pasuk_n": 25
+    },
+    {
+     "seder": "ט",
+     "paren": false,
+     "sub_book": null,
+     "perek": "כב",
+     "pasuk": "כג",
+     "perek_n": 22,
+     "pasuk_n": 23
+    },
+    {
+     "seder": "י",
+     "paren": false,
+     "sub_book": null,
+     "perek": "כד",
+     "pasuk": "כג",
+     "perek_n": 24,
+     "pasuk_n": 23
+    },
+    {
+     "seder": "יא",
+     "paren": false,
+     "sub_book": null,
+     "perek": "כז",
+     "pasuk": "יב",
+     "perek_n": 27,
+     "pasuk_n": 12
+    },
+    {
+     "seder": "יב",
+     "paren": false,
+     "sub_book": null,
+     "perek": "כט",
+     "pasuk": "כג",
+     "perek_n": 29,
+     "pasuk_n": 23
+    },
+    {
+     "seder": "יג",
+     "paren": false,
+     "sub_book": null,
+     "perek": "לב",
+     "pasuk": "יח",
+     "perek_n": 32,
+     "pasuk_n": 18
+    },
+    {
+     "seder": "יד",
+     "paren": false,
+     "sub_book": null,
+     "perek": "לה",
+     "pasuk": "י",
+     "perek_n": 35,
+     "pasuk_n": 10
+    },
+    {
+     "seder": "טו",
+     "paren": false,
+     "sub_book": null,
+     "perek": "לז",
+     "pasuk": "כ",
+     "perek_n": 37,
+     "pasuk_n": 20
+    },
+    {
+     "seder": "טז",
+     "paren": false,
+     "sub_book": null,
+     "perek": "מ",
+     "pasuk": "א",
+     "perek_n": 40,
+     "pasuk_n": 1
+    },
+    {
+     "seder": "יז",
+     "paren": false,
+     "sub_book": null,
+     "perek": "מא",
+     "pasuk": "כז",
+     "perek_n": 41,
+     "pasuk_n": 27
+    },
+    {
+     "seder": "יח",
+     "paren": false,
+     "sub_book": null,
+     "perek": "מד",
+     "pasuk": "ו",
+     "perek_n": 44,
+     "pasuk_n": 6
+    },
+    {
+     "seder": "יט",
+     "paren": false,
+     "sub_book": null,
+     "perek": "מה",
+     "pasuk": "יז",
+     "perek_n": 45,
+     "pasuk_n": 17
+    },
+    {
+     "seder": "כ",
+     "paren": false,
+     "sub_book": null,
+     "perek": "מח",
+     "pasuk": "ב",
+     "perek_n": 48,
+     "pasuk_n": 2
+    },
+    {
+     "seder": "כא",
+     "paren": false,
+     "sub_book": null,
+     "perek": "מט",
+     "pasuk": "כו",
+     "perek_n": 49,
+     "pasuk_n": 26
+    },
+    {
+     "seder": "כב",
+     "paren": false,
+     "sub_book": null,
+     "perek": "נב",
+     "pasuk": "ז",
+     "perek_n": 52,
+     "pasuk_n": 7
+    },
+    {
+     "seder": "כג",
+     "paren": false,
+     "sub_book": null,
+     "perek": "נה",
+     "pasuk": "יג",
+     "perek_n": 55,
+     "pasuk_n": 13
+    },
+    {
+     "seder": "כד",
+     "paren": false,
+     "sub_book": null,
+     "perek": "נח",
+     "pasuk": "יד",
+     "perek_n": 58,
+     "pasuk_n": 14
+    },
+    {
+     "seder": "כה",
+     "paren": false,
+     "sub_book": null,
+     "perek": "סא",
+     "pasuk": "ט",
+     "perek_n": 61,
+     "pasuk_n": 9
+    },
+    {
+     "seder": "כו",
+     "paren": false,
+     "sub_book": null,
+     "perek": "סה",
+     "pasuk": "ט",
+     "perek_n": 65,
+     "pasuk_n": 9
+    }
+   ]
+  },
+  {
+   "book": "ירמיהו",
+   "sedarim": [
+    {
+     "seder": "א",
+     "paren": false,
+     "sub_book": null,
+     "perek": "א",
+     "pasuk": "א",
+     "perek_n": 1,
+     "pasuk_n": 1
+    },
+    {
+     "seder": "ב",
+     "paren": false,
+     "sub_book": null,
+     "perek": "ג",
+     "pasuk": "ד",
+     "perek_n": 3,
+     "pasuk_n": 4
+    },
+    {
+     "seder": "ג",
+     "paren": false,
+     "sub_book": null,
+     "perek": "ה",
+     "pasuk": "א",
+     "perek_n": 5,
+     "pasuk_n": 1
+    },
+    {
+     "seder": "ד",
+     "paren": false,
+     "sub_book": null,
+     "perek": "ו",
+     "pasuk": "ג",
+     "perek_n": 6,
+     "pasuk_n": 3
+    },
+    {
+     "seder": "ה",
+     "paren": false,
+     "sub_book": null,
+     "perek": "ז",
+     "pasuk": "כג",
+     "perek_n": 7,
+     "pasuk_n": 23
+    },
+    {
+     "seder": "ו",
+     "paren": false,
+     "sub_book": null,
+     "perek": "ט",
+     "pasuk": "כג",
+     "perek_n": 9,
+     "pasuk_n": 23
+    },
+    {
+     "seder": "ז",
+     "paren": false,
+     "sub_book": null,
+     "perek": "יב",
+     "pasuk": "טו",
+     "perek_n": 12,
+     "pasuk_n": 15
+    },
+    {
+     "seder": "ח",
+     "paren": false,
+     "sub_book": null,
+     "perek": "יד",
+     "pasuk": "כב",
+     "perek_n": 14,
+     "pasuk_n": 22
+    },
+    {
+     "seder": "ט",
+     "paren": false,
+     "sub_book": null,
+     "perek": "יז",
+     "pasuk": "ז",
+     "perek_n": 17,
+     "pasuk_n": 7
+    },
+    {
+     "seder": "ט",
+     "paren": true,
+     "sub_book": null,
+     "perek": "יז",
+     "pasuk": "כו",
+     "perek_n": 17,
+     "pasuk_n": 26
+    },
+    {
+     "seder": "י",
+     "paren": false,
+     "sub_book": null,
+     "perek": "יח",
+     "pasuk": "יט",
+     "perek_n": 18,
+     "pasuk_n": 19
+    },
+    {
+     "seder": "יא",
+     "paren": false,
+     "sub_book": null,
+     "perek": "כ",
+     "pasuk": "יג",
+     "perek_n": 20,
+     "pasuk_n": 13
+    },
+    {
+     "seder": "יב",
+     "paren": false,
+     "sub_book": null,
+     "perek": "כג",
+     "pasuk": "ו",
+     "perek_n": 23,
+     "pasuk_n": 6
+    },
+    {
+     "seder": "יג",
+     "paren": false,
+     "sub_book": null,
+     "perek": "כד",
+     "pasuk": "ז",
+     "perek_n": 24,
+     "pasuk_n": 7
+    },
+    {
+     "seder": "יד",
+     "paren": false,
+     "sub_book": null,
+     "perek": "כו",
+     "pasuk": "א",
+     "perek_n": 26,
+     "pasuk_n": 1
+    },
+    {
+     "seder": "טו",
+     "paren": false,
+     "sub_book": null,
+     "perek": "כז",
+     "pasuk": "ה",
+     "perek_n": 27,
+     "pasuk_n": 5
+    },
+    {
+     "seder": "טז",
+     "paren": false,
+     "sub_book": null,
+     "perek": "כט",
+     "pasuk": "ז",
+     "perek_n": 29,
+     "pasuk_n": 7
+    },
+    {
+     "seder": "יז",
+     "paren": false,
+     "sub_book": null,
+     "perek": "ל",
+     "pasuk": "ט",
+     "perek_n": 30,
+     "pasuk_n": 9
+    },
+    {
+     "seder": "יח",
+     "paren": false,
+     "sub_book": null,
+     "perek": "לא",
+     "pasuk": "לב",
+     "perek_n": 31,
+     "pasuk_n": 32
+    },
+    {
+     "seder": "יט",
+     "paren": false,
+     "sub_book": null,
+     "perek": "לב",
+     "pasuk": "כב",
+     "perek_n": 32,
+     "pasuk_n": 22
+    },
+    {
+     "seder": "כ",
+     "paren": false,
+     "sub_book": null,
+     "perek": "לג",
+     "pasuk": "טז",
+     "perek_n": 33,
+     "pasuk_n": 16
+    },
+    {
+     "seder": "כא",
+     "paren": false,
+     "sub_book": null,
+     "perek": "לה",
+     "pasuk": "י",
+     "perek_n": 35,
+     "pasuk_n": 10
+    },
+    {
+     "seder": "כב",
+     "paren": false,
+     "sub_book": null,
+     "perek": "לו",
+     "pasuk": "כו",
+     "perek_n": 36,
+     "pasuk_n": 26
+    },
+    {
+     "seder": "כג",
+     "paren": false,
+     "sub_book": null,
+     "perek": "לח",
+     "pasuk": "ח",
+     "perek_n": 38,
+     "pasuk_n": 8
+    },
+    {
+     "seder": "כד",
+     "paren": false,
+     "sub_book": null,
+     "perek": "לט",
+     "pasuk": "יח",
+     "perek_n": 39,
+     "pasuk_n": 18
+    },
+    {
+     "seder": "כה",
+     "paren": false,
+     "sub_book": null,
+     "perek": "מב",
+     "pasuk": "יב",
+     "perek_n": 42,
+     "pasuk_n": 12
+    },
+    {
+     "seder": "כו",
+     "paren": false,
+     "sub_book": null,
+     "perek": "מד",
+     "pasuk": "כ",
+     "perek_n": 44,
+     "pasuk_n": 20
+    },
+    {
+     "seder": "כז",
+     "paren": false,
+     "sub_book": null,
+     "perek": "מו",
+     "pasuk": "כז",
+     "perek_n": 46,
+     "pasuk_n": 27
+    },
+    {
+     "seder": "כח",
+     "paren": false,
+     "sub_book": null,
+     "perek": "מט",
+     "pasuk": "ב",
+     "perek_n": 49,
+     "pasuk_n": 2
+    },
+    {
+     "seder": "כט",
+     "paren": false,
+     "sub_book": null,
+     "perek": "נ",
+     "pasuk": "ה",
+     "perek_n": 50,
+     "pasuk_n": 5
+    },
+    {
+     "seder": "ל",
+     "paren": false,
+     "sub_book": null,
+     "perek": "נא",
+     "pasuk": "י",
+     "perek_n": 51,
+     "pasuk_n": 10
+    },
+    {
+     "seder": "לא",
+     "paren": false,
+     "sub_book": null,
+     "perek": "נא",
+     "pasuk": "נט",
+     "perek_n": 51,
+     "pasuk_n": 59
+    }
+   ]
+  },
+  {
+   "book": "יחזקאל",
+   "sedarim": [
+    {
+     "seder": "א",
+     "paren": false,
+     "sub_book": null,
+     "perek": "א",
+     "pasuk": "א",
+     "perek_n": 1,
+     "pasuk_n": 1
+    },
+    {
+     "seder": "ב",
+     "paren": false,
+     "sub_book": null,
+     "perek": "ג",
+     "pasuk": "יב",
+     "perek_n": 3,
+     "pasuk_n": 12
+    },
+    {
+     "seder": "ג",
+     "paren": false,
+     "sub_book": null,
+     "perek": "ו",
+     "pasuk": "א",
+     "perek_n": 6,
+     "pasuk_n": 1
+    },
+    {
+     "seder": "ד",
+     "paren": false,
+     "sub_book": null,
+     "perek": "ח",
+     "pasuk": "א",
+     "perek_n": 8,
+     "pasuk_n": 1
+    },
+    {
+     "seder": "ה",
+     "paren": false,
+     "sub_book": null,
+     "perek": "י",
+     "pasuk": "א",
+     "perek_n": 10,
+     "pasuk_n": 1
+    },
+    {
+     "seder": "ו",
+     "paren": false,
+     "sub_book": null,
+     "perek": "יא",
+     "pasuk": "כ",
+     "perek_n": 11,
+     "pasuk_n": 20
+    },
+    {
+     "seder": "ז",
+     "paren": false,
+     "sub_book": null,
+     "perek": "יד",
+     "pasuk": "א",
+     "perek_n": 14,
+     "pasuk_n": 1
+    },
+    {
+     "seder": "ח",
+     "paren": false,
+     "sub_book": null,
+     "perek": "טז",
+     "pasuk": "יד",
+     "perek_n": 16,
+     "pasuk_n": 14
+    },
+    {
+     "seder": "ט",
+     "paren": false,
+     "sub_book": null,
+     "perek": "טז",
+     "pasuk": "ס",
+     "perek_n": 16,
+     "pasuk_n": 60
+    },
+    {
+     "seder": "י",
+     "paren": false,
+     "sub_book": null,
+     "perek": "יח",
+     "pasuk": "ט",
+     "perek_n": 18,
+     "pasuk_n": 9
+    },
+    {
+     "seder": "יא",
+     "paren": false,
+     "sub_book": null,
+     "perek": "כ",
+     "pasuk": "א",
+     "perek_n": 20,
+     "pasuk_n": 1
+    },
+    {
+     "seder": "יב",
+     "paren": false,
+     "sub_book": null,
+     "perek": "כ",
+     "pasuk": "מא",
+     "perek_n": 20,
+     "pasuk_n": 41
+    },
+    {
+     "seder": "יג",
+     "paren": false,
+     "sub_book": null,
+     "perek": "כב",
+     "pasuk": "טז",
+     "perek_n": 22,
+     "pasuk_n": 16
+    },
+    {
+     "seder": "יד",
+     "paren": false,
+     "sub_book": null,
+     "perek": "כג",
+     "pasuk": "כז",
+     "perek_n": 23,
+     "pasuk_n": 27
+    },
+    {
+     "seder": "טו",
+     "paren": false,
+     "sub_book": null,
+     "perek": "כד",
+     "pasuk": "כד",
+     "perek_n": 24,
+     "pasuk_n": 24
+    },
+    {
+     "seder": "טז",
+     "paren": false,
+     "sub_book": null,
+     "perek": "כו",
+     "pasuk": "כ",
+     "perek_n": 26,
+     "pasuk_n": 20
+    },
+    {
+     "seder": "יז",
+     "paren": false,
+     "sub_book": null,
+     "perek": "כח",
+     "pasuk": "יג",
+     "perek_n": 28,
+     "pasuk_n": 13
+    },
+    {
+     "seder": "יח",
+     "paren": false,
+     "sub_book": null,
+     "perek": "כט",
+     "pasuk": "כא",
+     "perek_n": 29,
+     "pasuk_n": 21
+    },
+    {
+     "seder": "יט",
+     "paren": false,
+     "sub_book": null,
+     "perek": "לב",
+     "pasuk": "א",
+     "perek_n": 32,
+     "pasuk_n": 1
+    },
+    {
+     "seder": "כ",
+     "paren": false,
+     "sub_book": null,
+     "perek": "לג",
+     "pasuk": "טז",
+     "perek_n": 33,
+     "pasuk_n": 16
+    },
+    {
+     "seder": "כא",
+     "paren": false,
+     "sub_book": null,
+     "perek": "לד",
+     "pasuk": "כו",
+     "perek_n": 34,
+     "pasuk_n": 26
+    },
+    {
+     "seder": "כב",
+     "paren": false,
+     "sub_book": null,
+     "perek": "לו",
+     "pasuk": "כה",
+     "perek_n": 36,
+     "pasuk_n": 25
+    },
+    {
+     "seder": "כג",
+     "paren": false,
+     "sub_book": null,
+     "perek": "לז",
+     "pasuk": "כח",
+     "perek_n": 37,
+     "pasuk_n": 28
+    },
+    {
+     "seder": "כד",
+     "paren": false,
+     "sub_book": null,
+     "perek": "לט",
+     "pasuk": "כב",
+     "perek_n": 39,
+     "pasuk_n": 22
+    },
+    {
+     "seder": "כה",
+     "paren": false,
+     "sub_book": null,
+     "perek": "מ",
+     "pasuk": "מה",
+     "perek_n": 40,
+     "pasuk_n": 45
+    },
+    {
+     "seder": "כו",
+     "paren": false,
+     "sub_book": null,
+     "perek": "מב",
+     "pasuk": "יג",
+     "perek_n": 42,
+     "pasuk_n": 13
+    },
+    {
+     "seder": "כז",
+     "paren": false,
+     "sub_book": null,
+     "perek": "מג",
+     "pasuk": "כז",
+     "perek_n": 43,
+     "pasuk_n": 27
+    },
+    {
+     "seder": "כח",
+     "paren": false,
+     "sub_book": null,
+     "perek": "מה",
+     "pasuk": "טו",
+     "perek_n": 45,
+     "pasuk_n": 15
+    },
+    {
+     "seder": "כט",
+     "paren": false,
+     "sub_book": null,
+     "perek": "מז",
+     "pasuk": "יב",
+     "perek_n": 47,
+     "pasuk_n": 12
+    }
+   ]
+  },
+  {
+   "book": "תרי עשר",
+   "sedarim": [
+    {
+     "seder": "א",
+     "paren": false,
+     "sub_book": "הושע",
+     "perek": "א",
+     "pasuk": "א",
+     "perek_n": 1,
+     "pasuk_n": 1
+    },
+    {
+     "seder": "ב",
+     "paren": false,
+     "sub_book": "הושע",
+     "perek": "ו",
+     "pasuk": "ב",
+     "perek_n": 6,
+     "pasuk_n": 2
+    },
+    {
+     "seder": "ג",
+     "paren": false,
+     "sub_book": "הושע",
+     "perek": "י",
+     "pasuk": "יב",
+     "perek_n": 10,
+     "pasuk_n": 12
+    },
+    {
+     "seder": "ד",
+     "paren": false,
+     "sub_book": "הושע",
+     "perek": "יד",
+     "pasuk": "ו",
+     "perek_n": 14,
+     "pasuk_n": 6
+    },
+    {
+     "seder": "ה",
+     "paren": false,
+     "sub_book": "יואל",
+     "perek": "ב",
+     "pasuk": "כז",
+     "perek_n": 2,
+     "pasuk_n": 27
+    },
+    {
+     "seder": "ו",
+     "paren": false,
+     "sub_book": "עמוס",
+     "perek": "ב",
+     "pasuk": "י",
+     "perek_n": 2,
+     "pasuk_n": 10
+    },
+    {
+     "seder": "ז",
+     "paren": false,
+     "sub_book": "עמוס",
+     "perek": "ה",
+     "pasuk": "יד",
+     "perek_n": 5,
+     "pasuk_n": 14
+    },
+    {
+     "seder": "ח",
+     "paren": false,
+     "sub_book": "עמוס",
+     "perek": "ז",
+     "pasuk": "טו",
+     "perek_n": 7,
+     "pasuk_n": 15
+    },
+    {
+     "seder": "ט",
+     "paren": false,
+     "sub_book": "עובדיה",
+     "perek": "א",
+     "pasuk": "כא",
+     "perek_n": 1,
+     "pasuk_n": 21
+    },
+    {
+     "seder": "י",
+     "paren": false,
+     "sub_book": "מיכה",
+     "perek": "א",
+     "pasuk": "א",
+     "perek_n": 1,
+     "pasuk_n": 1
+    },
+    {
+     "seder": "יא",
+     "paren": false,
+     "sub_book": "מיכה",
+     "perek": "ד",
+     "pasuk": "ה",
+     "perek_n": 4,
+     "pasuk_n": 5
+    },
+    {
+     "seder": "יב",
+     "paren": false,
+     "sub_book": "מיכה",
+     "perek": "ז",
+     "pasuk": "כ",
+     "perek_n": 7,
+     "pasuk_n": 20
+    },
+    {
+     "seder": "יג",
+     "paren": false,
+     "sub_book": "חבקוק",
+     "perek": "א",
+     "pasuk": "א",
+     "perek_n": 1,
+     "pasuk_n": 1
+    },
+    {
+     "seder": "יד",
+     "paren": false,
+     "sub_book": "צפניה",
+     "perek": "א",
+     "pasuk": "א",
+     "perek_n": 1,
+     "pasuk_n": 1
+    },
+    {
+     "seder": "טו",
+     "paren": false,
+     "sub_book": "צפניה",
+     "perek": "ג",
+     "pasuk": "כ",
+     "perek_n": 3,
+     "pasuk_n": 20
+    },
+    {
+     "seder": "טז",
+     "paren": false,
+     "sub_book": "חגי",
+     "perek": "ב",
+     "pasuk": "כג",
+     "perek_n": 2,
+     "pasuk_n": 23
+    },
+    {
+     "seder": "יז",
+     "paren": false,
+     "sub_book": "זכריה",
+     "perek": "ד",
+     "pasuk": "ב",
+     "perek_n": 4,
+     "pasuk_n": 2
+    },
+    {
+     "seder": "יח",
+     "paren": false,
+     "sub_book": "זכריה",
+     "perek": "ו",
+     "pasuk": "יד",
+     "perek_n": 6,
+     "pasuk_n": 14
+    },
+    {
+     "seder": "יט",
+     "paren": false,
+     "sub_book": "זכריה",
+     "perek": "ח",
+     "pasuk": "כג",
+     "perek_n": 8,
+     "pasuk_n": 23
+    },
+    {
+     "seder": "כ",
+     "paren": false,
+     "sub_book": "זכריה",
+     "perek": "יב",
+     "pasuk": "א",
+     "perek_n": 12,
+     "pasuk_n": 1
+    },
+    {
+     "seder": "כא",
+     "paren": false,
+     "sub_book": "זכריה",
+     "perek": "יד",
+     "pasuk": "כא",
+     "perek_n": 14,
+     "pasuk_n": 21
+    }
+   ]
+  },
+  {
+   "book": "תהלים",
+   "sedarim": [
+    {
+     "seder": "א",
+     "paren": false,
+     "sub_book": null,
+     "perek": "א",
+     "pasuk": "א",
+     "perek_n": 1,
+     "pasuk_n": 1
+    },
+    {
+     "seder": "ב",
+     "paren": false,
+     "sub_book": null,
+     "perek": "יא",
+     "pasuk": "ז",
+     "perek_n": 11,
+     "pasuk_n": 7
+    },
+    {
+     "seder": "ג",
+     "paren": false,
+     "sub_book": null,
+     "perek": "כ",
+     "pasuk": "י",
+     "perek_n": 20,
+     "pasuk_n": 10
+    },
+    {
+     "seder": "ד",
+     "paren": false,
+     "sub_book": null,
+     "perek": "כט",
+     "pasuk": "יא",
+     "perek_n": 29,
+     "pasuk_n": 11
+    },
+    {
+     "seder": "ה",
+     "paren": false,
+     "sub_book": null,
+     "perek": "לה",
+     "pasuk": "כח",
+     "perek_n": 35,
+     "pasuk_n": 28
+    },
+    {
+     "seder": "ו",
+     "paren": false,
+     "sub_book": null,
+     "perek": "מא",
+     "pasuk": "יד",
+     "perek_n": 41,
+     "pasuk_n": 14
+    },
+    {
+     "seder": "ז",
+     "paren": false,
+     "sub_book": null,
+     "perek": "מט",
+     "pasuk": "יט",
+     "perek_n": 49,
+     "pasuk_n": 19
+    },
+    {
+     "seder": "ח",
+     "paren": false,
+     "sub_book": null,
+     "perek": "נז",
+     "pasuk": "יב",
+     "perek_n": 57,
+     "pasuk_n": 12
+    },
+    {
+     "seder": "ט",
+     "paren": false,
+     "sub_book": null,
+     "perek": "סז",
+     "pasuk": "ח",
+     "perek_n": 67,
+     "pasuk_n": 8
+    },
+    {
+     "seder": "י",
+     "paren": false,
+     "sub_book": null,
+     "perek": "עב",
+     "pasuk": "כ",
+     "perek_n": 72,
+     "pasuk_n": 20
+    },
+    {
+     "seder": "יא",
+     "paren": false,
+     "sub_book": null,
+     "perek": "עח",
+     "pasuk": "לח",
+     "perek_n": 78,
+     "pasuk_n": 38
+    },
+    {
+     "seder": "יב",
+     "paren": false,
+     "sub_book": null,
+     "perek": "פד",
+     "pasuk": "יג",
+     "perek_n": 84,
+     "pasuk_n": 13
+    },
+    {
+     "seder": "יג",
+     "paren": false,
+     "sub_book": null,
+     "perek": "צ",
+     "pasuk": "יז",
+     "perek_n": 90,
+     "pasuk_n": 17
+    },
+    {
+     "seder": "יד",
+     "paren": false,
+     "sub_book": null,
+     "perek": "קא",
+     "pasuk": "א",
+     "perek_n": 101,
+     "pasuk_n": 1
+    },
+    {
+     "seder": "טו",
+     "paren": false,
+     "sub_book": null,
+     "perek": "קה",
+     "pasuk": "מה",
+     "perek_n": 105,
+     "pasuk_n": 45
+    },
+    {
+     "seder": "טז",
+     "paren": false,
+     "sub_book": null,
+     "perek": "קיא",
+     "pasuk": "י",
+     "perek_n": 111,
+     "pasuk_n": 10
+    },
+    {
+     "seder": "יז",
+     "paren": false,
+     "sub_book": null,
+     "perek": "קיט",
+     "pasuk": "עב",
+     "perek_n": 119,
+     "pasuk_n": 72
+    },
+    {
+     "seder": "יח",
+     "paren": false,
+     "sub_book": null,
+     "perek": "קכח",
+     "pasuk": "ו",
+     "perek_n": 128,
+     "pasuk_n": 6
+    },
+    {
+     "seder": "יט",
+     "paren": false,
+     "sub_book": null,
+     "perek": "קמ",
+     "pasuk": "יד",
+     "perek_n": 140,
+     "pasuk_n": 14
+    }
+   ]
+  },
+  {
+   "book": "משלי",
+   "sedarim": [
+    {
+     "seder": "א",
+     "paren": false,
+     "sub_book": null,
+     "perek": "א",
+     "pasuk": "א",
+     "perek_n": 1,
+     "pasuk_n": 1
+    },
+    {
+     "seder": "ב",
+     "paren": false,
+     "sub_book": null,
+     "perek": "ה",
+     "pasuk": "יח",
+     "perek_n": 5,
+     "pasuk_n": 18
+    },
+    {
+     "seder": "ג",
+     "paren": false,
+     "sub_book": null,
+     "perek": "ט",
+     "pasuk": "יא",
+     "perek_n": 9,
+     "pasuk_n": 11
+    },
+    {
+     "seder": "ד",
+     "paren": false,
+     "sub_book": null,
+     "perek": "יד",
+     "pasuk": "ד",
+     "perek_n": 14,
+     "pasuk_n": 4
+    },
+    {
+     "seder": "ה",
+     "paren": false,
+     "sub_book": null,
+     "perek": "יח",
+     "pasuk": "י",
+     "perek_n": 18,
+     "pasuk_n": 10
+    },
+    {
+     "seder": "ו",
+     "paren": false,
+     "sub_book": null,
+     "perek": "כב",
+     "pasuk": "כא",
+     "perek_n": 22,
+     "pasuk_n": 21
+    },
+    {
+     "seder": "ז",
+     "paren": false,
+     "sub_book": null,
+     "perek": "כה",
+     "pasuk": "יג",
+     "perek_n": 25,
+     "pasuk_n": 13
+    },
+    {
+     "seder": "ח",
+     "paren": false,
+     "sub_book": null,
+     "perek": "כח",
+     "pasuk": "טז",
+     "perek_n": 28,
+     "pasuk_n": 16
+    }
+   ]
+  },
+  {
+   "book": "איוב",
+   "sedarim": [
+    {
+     "seder": "א",
+     "paren": false,
+     "sub_book": null,
+     "perek": "א",
+     "pasuk": "א",
+     "perek_n": 1,
+     "pasuk_n": 1
+    },
+    {
+     "seder": "ב",
+     "paren": false,
+     "sub_book": null,
+     "perek": "ה",
+     "pasuk": "כז",
+     "perek_n": 5,
+     "pasuk_n": 27
+    },
+    {
+     "seder": "ג",
+     "paren": false,
+     "sub_book": null,
+     "perek": "יא",
+     "pasuk": "יט",
+     "perek_n": 11,
+     "pasuk_n": 19
+    },
+    {
+     "seder": "ד",
+     "paren": false,
+     "sub_book": null,
+     "perek": "יז",
+     "pasuk": "ט",
+     "perek_n": 17,
+     "pasuk_n": 9
+    },
+    {
+     "seder": "ה",
+     "paren": false,
+     "sub_book": null,
+     "perek": "כב",
+     "pasuk": "ל",
+     "perek_n": 22,
+     "pasuk_n": 30
+    },
+    {
+     "seder": "ו",
+     "paren": false,
+     "sub_book": null,
+     "perek": "כט",
+     "pasuk": "יד",
+     "perek_n": 29,
+     "pasuk_n": 14
+    },
+    {
+     "seder": "ז",
+     "paren": false,
+     "sub_book": null,
+     "perek": "לג",
+     "pasuk": "לג",
+     "perek_n": 33,
+     "pasuk_n": 33
+    },
+    {
+     "seder": "ח",
+     "paren": false,
+     "sub_book": null,
+     "perek": "לח",
+     "pasuk": "לה",
+     "perek_n": 38,
+     "pasuk_n": 35
+    }
+   ]
+  },
+  {
+   "book": "שיר השירים",
+   "sedarim": [
+    {
+     "seder": "א",
+     "paren": false,
+     "sub_book": null,
+     "perek": "א",
+     "pasuk": "א",
+     "perek_n": 1,
+     "pasuk_n": 1
+    },
+    {
+     "seder": "ב",
+     "paren": true,
+     "sub_book": null,
+     "perek": "ה",
+     "pasuk": "ב",
+     "perek_n": 5,
+     "pasuk_n": 2
+    }
+   ]
+  },
+  {
+   "book": "רות",
+   "sedarim": [
+    {
+     "seder": "א",
+     "paren": false,
+     "sub_book": null,
+     "perek": "א",
+     "pasuk": "א",
+     "perek_n": 1,
+     "pasuk_n": 1
+    },
+    {
+     "seder": "ב",
+     "paren": true,
+     "sub_book": null,
+     "perek": "ב",
+     "pasuk": "יב",
+     "perek_n": 2,
+     "pasuk_n": 12
+    }
+   ]
+  },
+  {
+   "book": "איכה",
+   "sedarim": [
+    {
+     "seder": "א",
+     "paren": false,
+     "sub_book": null,
+     "perek": "א",
+     "pasuk": "א",
+     "perek_n": 1,
+     "pasuk_n": 1
+    }
+   ]
+  },
+  {
+   "book": "קהלת",
+   "sedarim": [
+    {
+     "seder": "א",
+     "paren": false,
+     "sub_book": null,
+     "perek": "א",
+     "pasuk": "א",
+     "perek_n": 1,
+     "pasuk_n": 1
+    },
+    {
+     "seder": "ב",
+     "paren": false,
+     "sub_book": null,
+     "perek": "ג",
+     "pasuk": "יג",
+     "perek_n": 3,
+     "pasuk_n": 13
+    },
+    {
+     "seder": "ג",
+     "paren": false,
+     "sub_book": null,
+     "perek": "ז",
+     "pasuk": "א",
+     "perek_n": 7,
+     "pasuk_n": 1
+    },
+    {
+     "seder": "ד",
+     "paren": false,
+     "sub_book": null,
+     "perek": "ט",
+     "pasuk": "ז",
+     "perek_n": 9,
+     "pasuk_n": 7
+    }
+   ]
+  },
+  {
+   "book": "אסתר",
+   "sedarim": [
+    {
+     "seder": "א",
+     "paren": false,
+     "sub_book": null,
+     "perek": "א",
+     "pasuk": "א",
+     "perek_n": 1,
+     "pasuk_n": 1
+    },
+    {
+     "seder": "ב",
+     "paren": false,
+     "sub_book": null,
+     "perek": "ב",
+     "pasuk": "ה",
+     "perek_n": 2,
+     "pasuk_n": 5
+    },
+    {
+     "seder": "ג",
+     "paren": false,
+     "sub_book": null,
+     "perek": "ג",
+     "pasuk": "ח",
+     "perek_n": 3,
+     "pasuk_n": 8
+    },
+    {
+     "seder": "ד",
+     "paren": false,
+     "sub_book": null,
+     "perek": "ו",
+     "pasuk": "יא",
+     "perek_n": 6,
+     "pasuk_n": 11
+    },
+    {
+     "seder": "ה",
+     "paren": false,
+     "sub_book": null,
+     "perek": "ח",
+     "pasuk": "טז",
+     "perek_n": 8,
+     "pasuk_n": 16
+    }
+   ]
+  },
+  {
+   "book": "דניאל",
+   "sedarim": [
+    {
+     "seder": "א",
+     "paren": false,
+     "sub_book": null,
+     "perek": "א",
+     "pasuk": "א",
+     "perek_n": 1,
+     "pasuk_n": 1
+    },
+    {
+     "seder": "ב",
+     "paren": false,
+     "sub_book": null,
+     "perek": "ב",
+     "pasuk": "לה",
+     "perek_n": 2,
+     "pasuk_n": 35
+    },
+    {
+     "seder": "ג",
+     "paren": false,
+     "sub_book": null,
+     "perek": "ג",
+     "pasuk": "ל",
+     "perek_n": 3,
+     "pasuk_n": 30
+    },
+    {
+     "seder": "ד",
+     "paren": false,
+     "sub_book": null,
+     "perek": "ה",
+     "pasuk": "יב",
+     "perek_n": 5,
+     "pasuk_n": 12
+    },
+    {
+     "seder": "ה",
+     "paren": false,
+     "sub_book": null,
+     "perek": "ו",
+     "pasuk": "יא",
+     "perek_n": 6,
+     "pasuk_n": 11
+    },
+    {
+     "seder": "ו",
+     "paren": false,
+     "sub_book": null,
+     "perek": "ט",
+     "pasuk": "ד",
+     "perek_n": 9,
+     "pasuk_n": 4
+    },
+    {
+     "seder": "ז",
+     "paren": false,
+     "sub_book": null,
+     "perek": "י",
+     "pasuk": "כא",
+     "perek_n": 10,
+     "pasuk_n": 21
+    }
+   ]
+  },
+  {
+   "book": "עזרא נחמיה",
+   "sedarim": [
+    {
+     "seder": "א",
+     "paren": false,
+     "sub_book": "עזרא",
+     "perek": "א",
+     "pasuk": "א",
+     "perek_n": 1,
+     "pasuk_n": 1
+    },
+    {
+     "seder": "ב",
+     "paren": false,
+     "sub_book": "עזרא",
+     "perek": "ג",
+     "pasuk": "יג",
+     "perek_n": 3,
+     "pasuk_n": 13
+    },
+    {
+     "seder": "ג",
+     "paren": false,
+     "sub_book": "עזרא",
+     "perek": "ו",
+     "pasuk": "יח",
+     "perek_n": 6,
+     "pasuk_n": 18
+    },
+    {
+     "seder": "ד",
+     "paren": false,
+     "sub_book": "עזרא",
+     "perek": "ח",
+     "pasuk": "לה",
+     "perek_n": 8,
+     "pasuk_n": 35
+    },
+    {
+     "seder": "ה",
+     "paren": false,
+     "sub_book": "נחמיה",
+     "perek": "א",
+     "pasuk": "יא",
+     "perek_n": 1,
+     "pasuk_n": 11
+    },
+    {
+     "seder": "ו",
+     "paren": false,
+     "sub_book": "נחמיה",
+     "perek": "ג",
+     "pasuk": "לח",
+     "perek_n": 3,
+     "pasuk_n": 38
+    },
+    {
+     "seder": "ז",
+     "paren": false,
+     "sub_book": "נחמיה",
+     "perek": "ו",
+     "pasuk": "טו",
+     "perek_n": 6,
+     "pasuk_n": 15
+    },
+    {
+     "seder": "ח",
+     "paren": false,
+     "sub_book": "נחמיה",
+     "perek": "ח",
+     "pasuk": "י",
+     "perek_n": 8,
+     "pasuk_n": 10
+    },
+    {
+     "seder": "ט",
+     "paren": false,
+     "sub_book": "נחמיה",
+     "perek": "י",
+     "pasuk": "א",
+     "perek_n": 10,
+     "pasuk_n": 1
+    },
+    {
+     "seder": "י",
+     "paren": false,
+     "sub_book": "נחמיה",
+     "perek": "יב",
+     "pasuk": "כז",
+     "perek_n": 12,
+     "pasuk_n": 27
+    }
+   ]
+  },
+  {
+   "book": "דברי הימים",
+   "sedarim": [
+    {
+     "seder": "א",
+     "paren": false,
+     "sub_book": "א",
+     "perek": "א",
+     "pasuk": "א",
+     "perek_n": 1,
+     "pasuk_n": 1
+    },
+    {
+     "seder": "ב",
+     "paren": false,
+     "sub_book": "א",
+     "perek": "ד",
+     "pasuk": "י",
+     "perek_n": 4,
+     "pasuk_n": 10
+    },
+    {
+     "seder": "ג",
+     "paren": false,
+     "sub_book": "א",
+     "perek": "ו",
+     "pasuk": "לד",
+     "perek_n": 6,
+     "pasuk_n": 34
+    },
+    {
+     "seder": "ד",
+     "paren": false,
+     "sub_book": "א",
+     "perek": "ח",
+     "pasuk": "מ",
+     "perek_n": 8,
+     "pasuk_n": 40
+    },
+    {
+     "seder": "ה",
+     "paren": false,
+     "sub_book": "א",
+     "perek": "יא",
+     "pasuk": "ט",
+     "perek_n": 11,
+     "pasuk_n": 9
+    },
+    {
+     "seder": "ו",
+     "paren": false,
+     "sub_book": "א",
+     "perek": "יב",
+     "pasuk": "מא",
+     "perek_n": 12,
+     "pasuk_n": 41
+    },
+    {
+     "seder": "ז",
+     "paren": false,
+     "sub_book": "א",
+     "perek": "טז",
+     "pasuk": "לו",
+     "perek_n": 16,
+     "pasuk_n": 36
+    },
+    {
+     "seder": "ח",
+     "paren": false,
+     "sub_book": "א",
+     "perek": "יט",
+     "pasuk": "יג",
+     "perek_n": 19,
+     "pasuk_n": 13
+    },
+    {
+     "seder": "ט",
+     "paren": false,
+     "sub_book": "א",
+     "perek": "כב",
+     "pasuk": "יט",
+     "perek_n": 22,
+     "pasuk_n": 19
+    },
+    {
+     "seder": "י",
+     "paren": false,
+     "sub_book": "א",
+     "perek": "כו",
+     "pasuk": "ה",
+     "perek_n": 26,
+     "pasuk_n": 5
+    },
+    {
+     "seder": "יא",
+     "paren": false,
+     "sub_book": "א",
+     "perek": "כח",
+     "pasuk": "י",
+     "perek_n": 28,
+     "pasuk_n": 10
+    },
+    {
+     "seder": "יב",
+     "paren": false,
+     "sub_book": "ב",
+     "perek": "ב",
+     "pasuk": "ג",
+     "perek_n": 2,
+     "pasuk_n": 3
+    },
+    {
+     "seder": "יג",
+     "paren": false,
+     "sub_book": "ב",
+     "perek": "ה",
+     "pasuk": "יד",
+     "perek_n": 5,
+     "pasuk_n": 14
+    },
+    {
+     "seder": "יד",
+     "paren": false,
+     "sub_book": "ב",
+     "perek": "ז",
+     "pasuk": "יא",
+     "perek_n": 7,
+     "pasuk_n": 11
+    },
+    {
+     "seder": "טו",
+     "paren": false,
+     "sub_book": "ב",
+     "perek": "ט",
+     "pasuk": "כד",
+     "perek_n": 9,
+     "pasuk_n": 24
+    },
+    {
+     "seder": "טז",
+     "paren": false,
+     "sub_book": "ב",
+     "perek": "יב",
+     "pasuk": "יב",
+     "perek_n": 12,
+     "pasuk_n": 12
+    },
+    {
+     "seder": "יז",
+     "paren": false,
+     "sub_book": "ב",
+     "perek": "טו",
+     "pasuk": "טו",
+     "perek_n": 15,
+     "pasuk_n": 15
+    },
+    {
+     "seder": "יח",
+     "paren": false,
+     "sub_book": "ב",
+     "perek": "יח",
+     "pasuk": "יח",
+     "perek_n": 18,
+     "pasuk_n": 18
+    },
+    {
+     "seder": "יט",
+     "paren": false,
+     "sub_book": "ב",
+     "perek": "כ",
+     "pasuk": "לא",
+     "perek_n": 20,
+     "pasuk_n": 31
+    },
+    {
+     "seder": "כ",
+     "paren": false,
+     "sub_book": "ב",
+     "perek": "כג",
+     "pasuk": "יא",
+     "perek_n": 23,
+     "pasuk_n": 11
+    },
+    {
+     "seder": "כא",
+     "paren": false,
+     "sub_book": "ב",
+     "perek": "כו",
+     "pasuk": "ב",
+     "perek_n": 26,
+     "pasuk_n": 2
+    },
+    {
+     "seder": "כב",
+     "paren": false,
+     "sub_book": "ב",
+     "perek": "כט",
+     "pasuk": "יא",
+     "perek_n": 29,
+     "pasuk_n": 11
+    },
+    {
+     "seder": "כג",
+     "paren": false,
+     "sub_book": "ב",
+     "perek": "לא",
+     "pasuk": "י",
+     "perek_n": 31,
+     "pasuk_n": 10
+    },
+    {
+     "seder": "כד",
+     "paren": false,
+     "sub_book": "ב",
+     "perek": "לד",
+     "pasuk": "ב",
+     "perek_n": 34,
+     "pasuk_n": 2
+    },
+    {
+     "seder": "כה",
+     "paren": false,
+     "sub_book": "ב",
+     "perek": "לה",
+     "pasuk": "ו",
+     "perek_n": 35,
+     "pasuk_n": 6
+    }
+   ]
+  }
+ ]
+}

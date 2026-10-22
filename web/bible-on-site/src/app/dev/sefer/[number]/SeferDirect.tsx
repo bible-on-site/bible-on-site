@@ -5,7 +5,7 @@ import type { PerekObj } from "@/data/perek-dto";
 import type { ArticleSummary } from "@/lib/articles";
 import type { PerushSummary } from "@/lib/perushim";
 
-const Sefer = dynamic(() => import("@/app/929/[number]/components/Sefer"), {
+const Sefer = dynamic(() => import("@/app/929/[number]/components/LoadedSefer"), {
 	ssr: false,
 });
 

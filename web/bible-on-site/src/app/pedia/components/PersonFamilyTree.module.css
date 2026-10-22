@@ -657,7 +657,9 @@
 .spouseTierFullWidth[data-spouse-layout="cards"] :is(.relationRibbon, .relationRibbonCitation, .spouseUnionTimelineRibbon) {
   position: relative;
   z-index: 2;
-  background: #f3f6fe;
+  /* transparent: the family-tree surface (and the center connector line)
+     shows through; a solid pill clashes with the section gradient */
+  background: transparent;
   border-radius: 6px;
 }
 
@@ -889,7 +891,7 @@
 .childTimelineCell .relationRibbon,
 .childTimelineCell .relationRibbonCitation,
 .childTimelineCell .relationRibbonCitationLine {
-  background: #f1f3fb;
+  background: transparent;
   border-radius: 6px;
   padding: 2px 4px;
 }
@@ -969,15 +971,18 @@
     right: var(--parent-line-inset-right, calc((100% - 12px) / 4));
   }
 
+  /* כרטיסי הורים מקבלים בפריסה האנכית את אותו רוחב תלוי-תוכן של כל כרטיס אדם
+     אחר בעץ (כמו במסך הרחב). רוחב מלא על התא היה מנפח כרטיס של הורה יחיד
+     (למשל תרח) הרבה מעבר לכרטיסים הרגילים. הכרטיס נשאר ממורכז בתא הגריד */
   .parentRow .personCardStack {
-    flex: 1 1 0;
     min-width: 0;
   }
 
   .parentRow .card {
     box-sizing: border-box;
-    width: 100%;
-    min-width: 0;
+    /* רצפת ה־min-width הרגילה של 140px כמו בכל כרטיס אחר, אבל לא יותר מתא
+       הגריד — כך שני הורים עדיין נכנסים בלי גלילה אופקית במסכים <300px */
+    min-width: min(140px, 100%);
     padding-inline: 8px;
   }
 
@@ -1014,7 +1019,7 @@
   .spouseOnlyMatrix .spouseUnionTimelineRibbon {
     position: relative;
     z-index: 2;
-    background: #f1f3fb;
+    background: transparent;
     border-radius: 6px;
   }
 }
@@ -1051,7 +1056,7 @@
 .spouseOnlyCollapsed .spouseUnionTimelineRibbon {
   position: relative;
   z-index: 2;
-  background: #f1f3fb;
+  background: transparent;
   border-radius: 6px;
 }
 
@@ -1127,8 +1132,9 @@
 .verticalSpouseStack .spouseUnionTimelineRibbon {
   position: relative;
   z-index: 2;
-  background: #f1f3fb;
-  border-radius: 6px;
+  /* transparent: no connector passes behind in the vertical stack, and a
+     solid pill clashes with the section gradient (issue #2101) */
+  background: transparent;
 }
 
 .verticalChildren {
@@ -1239,4 +1245,102 @@
   border-top: 1px solid #e2e8f0;
   width: 100%;
   max-width: 220px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .section {
+    background: linear-gradient(160deg, #161b2a 0%, #1a1f36 100%);
+    border-color: #3b4370;
+  }
+
+  .title {
+    color: #c7d2fe;
+  }
+
+  .familyTreeSectionLabel {
+    color: #a5b4fc;
+    background: linear-gradient(160deg, #1a2030 0%, #232a45 100%);
+    border-color: #3b4370;
+    box-shadow: 0 1px 4px rgba(99, 102, 241, 0.25);
+  }
+
+  .familyTreeSectionLabelAlt {
+    color: #c4b5fd;
+    border-color: #4c3d8f;
+  }
+
+  .card,
+  .cardFocal {
+    background: #1a1f2e;
+    border-color: #2d3548;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  }
+
+  .cardFocal {
+    border-color: #6366f1;
+    box-shadow: 0 4px 16px rgba(99, 102, 241, 0.35);
+  }
+
+  .cardCitation {
+    border-top-color: #2d3548;
+  }
+
+  .cardCitationLine,
+  .relationRibbon,
+  .relationRibbonMeta,
+  .marriageColumnLooseTitle {
+    color: #9aa0a6;
+  }
+
+  .sexMark {
+    color: #b8c2d9;
+    border-color: #3b4256;
+    background: #1a1f2e;
+  }
+
+  .sexMarkMale {
+    color: #93c5fd;
+    border-color: #1e40af;
+    background-image: repeating-linear-gradient(45deg, #16213d, #16213d 3px, #1a2748 3px, #1a2748 6px);
+  }
+
+  .sexMarkFemale {
+    color: #f9a8d4;
+    border-color: #9d174d;
+    background-image: repeating-linear-gradient(45deg, #31152b, #31152b 3px, #3a1a33 3px, #3a1a33 6px);
+  }
+
+  .personLink {
+    color: #a5b4fc;
+  }
+
+  .personUnlinked {
+    color: #e8eaed;
+  }
+
+  .relationRibbonMain,
+  .relationRibbonCitationLine {
+    color: #b8c2d9;
+  }
+
+  .relationRibbonSep {
+    color: #64748b;
+  }
+
+  .citationTanachLink {
+    color: #a5b4fc;
+  }
+
+  .citationTanachLink:hover {
+    color: #c7d2fe;
+  }
+
+  .spouseOpinionTitleInline {
+    color: #a5b4fc;
+  }
+
+  .marriageColumnSpousePlaceholder {
+    border-color: #3b4256;
+    background: #12151c;
+  }
 }

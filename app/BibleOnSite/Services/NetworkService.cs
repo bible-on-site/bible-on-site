@@ -1,3 +1,5 @@
+using BibleOnSite.Helpers;
+
 namespace BibleOnSite.Services;
 
 /// <summary>
@@ -43,7 +45,7 @@ public class NetworkService : IDisposable
         }
         _monitoring = true;
         _connectivity.ConnectivityChanged += OnConnectivityChanged;
-        Console.WriteLine($"[Network] Monitoring started. Online={_connectivity.NetworkAccess == NetworkAccess.Internet}");
+        DebugLog.Write($"[Network] Monitoring started. Online={_connectivity.NetworkAccess == NetworkAccess.Internet}");
     }
 
     /// <summary>
@@ -58,7 +60,7 @@ public class NetworkService : IDisposable
     private async void OnConnectivityChanged(object? sender, ConnectivityChangedEventArgs e)
     {
         var isNowOnline = e.NetworkAccess == NetworkAccess.Internet;
-        Console.WriteLine($"[Network] Connectivity changed: {e.NetworkAccess} (online={isNowOnline})");
+        DebugLog.Write($"[Network] Connectivity changed: {e.NetworkAccess} (online={isNowOnline})");
 
         var shouldRefresh = isNowOnline && _wasOffline;
         // Record the transition before awaiting; duplicate notifications during a
@@ -66,7 +68,7 @@ public class NetworkService : IDisposable
         _wasOffline = !isNowOnline;
         if (shouldRefresh)
         {
-            Console.WriteLine("[Network] Back online — refreshing starter data");
+            DebugLog.Write("[Network] Back online — refreshing starter data");
             // Refresh starter data in background so article counts etc. become available
             try
             {
@@ -81,7 +83,11 @@ public class NetworkService : IDisposable
 
     public void Dispose()
     {
-        if (_disposed) return;
+        if (_disposed)
+        {
+            return;
+        }
+
         _disposed = true;
         StopMonitoring();
     }

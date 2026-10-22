@@ -229,3 +229,26 @@
     font-size: 1rem;
   }
 }
+
+@media (prefers-color-scheme: dark) {
+  .pageTitle {
+    color: #a8b9ff;
+  }
+
+  .pageSubtitle {
+    color: #9aa0a6;
+  }
+
+  .masonryItem {
+    background: #1a1f2e;
+  }
+
+  .backLink {
+    background: #a8b9ff;
+    color: #16213d;
+  }
+
+  .backLink:hover {
+    background: #c7d2fe;
+  }
+}

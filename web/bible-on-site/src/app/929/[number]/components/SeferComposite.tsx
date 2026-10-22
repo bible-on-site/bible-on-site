@@ -8,7 +8,6 @@ import {
 	useRef,
 	useState,
 } from "react";
-
 import type { PerekObj } from "@/data/perek-dto";
 import { TABLET_MIN_WIDTH, useIsWideEnough } from "@/hooks/useIsWideEnough";
 import type { ArticleSummary } from "@/lib/articles";
@@ -22,14 +21,18 @@ import type { PerekIllustration } from "@/lib/seo/perek-illustrations";
 import type { PerekEntityReference } from "@/lib/tanahpedia/service";
 import ReadModeToggler from "./ReadModeToggler";
 import styles from "./sefer-composite.module.css";
-import { bookPageFromPath, bookPageFromQuery } from "./sefer-page-utils";
+import {
+	bookPageFromPath,
+	bookPageFromQuery,
+	seferBookExitPath,
+} from "./sefer-page-utils";
 
 // Lazy-load the heavy Sefer (FlipBook) component so its JS bundle is not
 // included in the initial page load.  When the user toggles book-view the
 // chunk is fetched asynchronously, which keeps the interaction-to-next-paint
 // well below 200 ms because the browser only needs to paint the light
 // overlay — not mount the entire FlipBook tree — in the same frame.
-const Sefer = dynamic(() => import("./Sefer"), {
+const Sefer = dynamic(() => import("./LoadedSefer"), {
 	ssr: false,
 	loading: () => (
 		<output className={styles.loadingContainer} aria-label="טוען תצוגת ספר...">
@@ -128,13 +131,23 @@ const ClientWrapper = (props: {
 		(wantBook: boolean) => {
 			handledUserToggle.current = true;
 			setStoredPerekViewMode(wantBook ? "book" : "seo");
-			const togglePath =
-				!wantBook && bookPageFromPath(pathname, props.perekObj.sefer)
-					? `/929/${props.perekObj.perekId}`
-					: pathname;
+			// While the book is open the flipbook owns the URL — on exit
+			// read the live location so flipping to another perek returns
+			// to that perek's flat page, and an open content selection
+			// keeps its flat-page meaning via the shared params.
+			const togglePath = wantBook
+				? pathname
+				: seferBookExitPath(
+						window.location.pathname,
+						props.perekObj.sefer,
+						props.perekObj.perekId,
+					);
+			const search = wantBook
+				? searchParams.toString()
+				: window.location.search;
 			const next = pathnameWithBookQuery(
 				togglePath,
-				searchParams.toString(),
+				search,
 				wantBook,
 			);
 			router.replace(next, { scroll: false });
@@ -163,7 +176,7 @@ const ClientWrapper = (props: {
 	// the SEO DOM from the rendering pipeline, eliminating the layout
 	// recalculation cost that was causing flip animation lag.
 	useEffect(() => {
-		if (currentlyToggled) {
+		if (currentlyToggled && isWideEnough === true) {
 			document.documentElement.dataset.bookView = "";
 		} else {
 			delete document.documentElement.dataset.bookView;
@@ -171,7 +184,7 @@ const ClientWrapper = (props: {
 		return () => {
 			delete document.documentElement.dataset.bookView;
 		};
-	}, [currentlyToggled]);
+	}, [currentlyToggled, isWideEnough]);
 
 	// Don't render anything on mobile - sefer view is tablet+ only
 	// Return null during SSR/initial render to avoid hydration mismatch,
@@ -204,6 +217,7 @@ const ClientWrapper = (props: {
 						imagesByPerek={props.imagesByPerek}
 						initialSlug={props.initialSlug}
 						initialBookPage={initialBookPage}
+						isVisible={currentlyToggled}
 					/>
 				) : currentlyToggled ? (
 					<SeferLoadingIndicator />

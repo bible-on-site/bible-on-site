@@ -172,6 +172,7 @@ Resources:
                   - logs:PutLogEvents
                 Resource: "*"
         # Permissions to read SSM parameters for database credentials
+        # and the shared website revalidation secret.
         - PolicyName: SSMParameterReadAccess
           PolicyDocument:
             Version: "2012-10-17"
@@ -180,7 +181,10 @@ Resources:
                 Action:
                   - ssm:GetParameters
                   - ssm:GetParameter
-                Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-tanah-db-*"
+                Resource:
+                  - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-tanah-db-*"
+                  - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-revalidate-secret"
+                  - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-indexnow-key"
       Tags:
         - Key: Project
           Value: bible-on-site
@@ -221,7 +225,7 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       RoleName: bible-on-site-admin-task-role
-      Description: Task role for admin container — allows S3 access for rabbis bucket
+      Description: Task role for admin container — allows S3 access and bulletin previews
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -243,6 +247,13 @@ Resources:
                 Resource:
                   - arn:aws:s3:::bible-on-site-assets
                   - arn:aws:s3:::bible-on-site-assets/*
+        - PolicyName: AdminBulletinPreview
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:bible-on-site-bulletin"
       Tags:
         - Key: Project
           Value: bible-on-site
@@ -267,18 +278,19 @@ Resources:
         - Name: website
           Image: !Ref WebsiteImageUri
           Essential: true
+          # 90 seconds for cached DNS requests, then 30 seconds for Next shutdown.
+          StopTimeout: 120
           PortMappings:
             - ContainerPort: 3000
               HostPort: 3000
               Protocol: tcp
-          # Container health check - warms the app before marking container as healthy
-          # This ensures the Node.js runtime and data modules are fully loaded
+          # Warm each critical route bundle before ECS replaces the old task.
+          # Keep these settings aligned with the website Dockerfile.
           HealthCheck:
             Command:
               - CMD-SHELL
-              # Use /api/health (lightweight liveness). Never curl the homepage.
-              # Use localhost (not 127.0.0.1) for clarity and consistency.
-              - curl -sf --max-time 5 http://localhost:3000/api/health > /dev/null || exit 1
+              # Three bounded requests fit within the ten-second check timeout.
+              - 'for route in api/health/ready api/recitation api/recitation/2; do curl -sf --max-time 3 "http://localhost:3000/$route" > /dev/null || exit 1; done'
             Interval: 30
             Timeout: 10
             Retries: 5
@@ -303,9 +315,21 @@ Resources:
               Value: bible-on-site-bulletin
           # Database credentials injected from SSM Parameter Store
           # Required for runtime database queries (dynamic pages, ISR, etc.)
+          # Each parameter must exist before the task starts — see the
+          # one-time prerequisites block at the bottom of this file.
           Secrets:
             - Name: DB_URL
               ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-tanah-db-url"
+            # Guards POST /api/revalidate; must match the admin task's
+            # REVALIDATE_SECRET (same SSM parameter).
+            - Name: REVALIDATE_SECRET
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-revalidate-secret"
+            # IndexNow ownership key: also served at /<key>.txt and used to
+            # sign URL submissions. A value that fails the protocol key
+            # format (8-128 [a-zA-Z0-9-]) disables the feature with a
+            # warning, so a placeholder can stand in until enrollment.
+            - Name: INDEXNOW_KEY
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-indexnow-key"
       Tags:
         - Key: Project
           Value: bible-on-site
@@ -323,7 +347,8 @@ Resources:
       ServiceName: bible-on-site-website
       Cluster: !Ref ECSCluster
       TaskDefinition: !Ref WebsiteTaskDefinition
-      # DesiredCount: 1 can cause ~1-3 min downtime during rolling deploy. Use 2+ for zero-downtime. See docs/aws/deployment-downtime-2026-02-10.md
+      # Readiness and MinimumHealthyPercent retain the old task during cold loading.
+      # DesiredCount: 1 still has no redundancy outside a rollout.
       DesiredCount: 1
       LaunchType: FARGATE
       PlatformVersion: LATEST
@@ -477,9 +502,18 @@ Resources:
               Value: il-central-1
             - Name: S3_BUCKET
               Value: bible-on-site-assets
+            # Admin reaches the website task over Cloud Map service discovery
+            # (MULTIVALUE A records) to expire its content caches post-commit.
+            - Name: VITE_WEBSITE_URL
+              Value: http://website.bible-on-site.local:3000
           Secrets:
             - Name: DB_URL
               ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-tanah-db-url"
+            # Shared with the website task's REVALIDATE_SECRET (same parameter).
+            # Server-side only — never VITE_*, which Vite would inline into
+            # the admin browser bundle and expose the secret.
+            - Name: REVALIDATE_SECRET
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-revalidate-secret"
       Tags:
         - Key: Project
           Value: bible-on-site
@@ -605,6 +639,38 @@ Outputs:
     Value: !GetAtt ECSTaskExecutionRole.Arn
     Export:
       Name: !Sub "${AWS::StackName}-TaskExecutionRoleArn"
+# =============================================================================
+# One-time prerequisites (SecureString SSM parameters)
+# =============================================================================
+#
+# ECS resolves every `Secrets:` ValueFrom at task start, so a missing
+# parameter prevents the task (website AND admin) from starting. Create
+# these parameters before deploying a stack that references them.
+# CloudFormation cannot create SecureString parameters — they are provisioned
+# once per account/region via CLI (same mechanism as the DB_URL parameter,
+# see rds-mysql.yaml):
+#
+#   # Shared admin <-> website revalidation credential
+#   aws ssm put-parameter --name bible-on-site-revalidate-secret \
+#     --type SecureString --value "$(openssl rand -hex 32)" \
+#     --region il-central-1
+#
+#   # IndexNow ownership key for the website's search-engine notifications.
+#   # Generate the value in Bing Webmaster Tools (or any 8-128 char
+#   # [a-zA-Z0-9-] string); a non-matching value disables the feature.
+#   aws ssm put-parameter --name bible-on-site-indexnow-key \
+#     --type SecureString --value "$(openssl rand -hex 16)" \
+#     --region il-central-1
+#
+#   # Database URL (mysql://admin:<password>@<host>:3306/tanah)
+#   aws ssm put-parameter --name bible-on-site-tanah-db-url \
+#     --type SecureString --value "<db-url>" \
+#     --region il-central-1
+#
+# Verify:
+#   aws ssm get-parameter --name bible-on-site-revalidate-secret \
+#     --region il-central-1 --query 'Parameter.Name' --output text
+#
 # =============================================================================
 # CLI Commands to Verify/Update
 # =============================================================================

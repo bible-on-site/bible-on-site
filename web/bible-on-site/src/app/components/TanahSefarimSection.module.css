@@ -15,12 +15,12 @@
   color: #333;
 }
 
-.header h1 {
+.header h2 {
   font-size: 1.6em;
   margin: 0.3em 0;
 }
 
-.header h2 {
+.header h3 {
   font-size: 1em;
   margin: 0.2em 0;
   color: #555;
@@ -101,5 +101,25 @@
 @media screen and (min-width: 2560px) {
   .bottomDivider {
     background-image: url(/root/sefarim-bottom-devider-xl.svg);
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .section {
+    background-color: #16283f;
+  }
+
+  .header,
+  .header h2 {
+    color: #e8eaed;
+  }
+
+  .header h3 {
+    color: #9aa0a6;
+  }
+
+  .spinner {
+    border-color: #2d3548;
+    border-top-color: #7eb0ff;
   }
 }

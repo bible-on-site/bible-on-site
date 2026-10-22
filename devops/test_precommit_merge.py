@@ -1,6 +1,5 @@
-"""Exercise the real commit hook against an in-progress branch merge."""
+"""Exercise the module hook runner against an in-progress branch merge."""
 
-import os
 import shutil
 import subprocess  # nosec B404: fixed test fixture commands, argument vectors, no shell.
 import tempfile
@@ -9,12 +8,12 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-GIT_BASH = Path("C:/Program Files/Git/bin/bash.exe")
-BASH = str(GIT_BASH) if GIT_BASH.exists() else shutil.which("bash")
 GIT = shutil.which("git")
+NODE = shutil.which("node")
+RUNNER = ROOT / "devops" / "precommit-run.mjs"
 
 
-@unittest.skipUnless(BASH and GIT, "Git and Bash are required")
+@unittest.skipUnless(NODE and GIT, "Node and Git are required")
 class PrecommitMergeTests(unittest.TestCase):
     def test_merge_checks_only_changes_to_the_target_branch(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -34,8 +33,6 @@ class PrecommitMergeTests(unittest.TestCase):
             git("init", "-b", "master")
             git("config", "user.name", "Hook Test")
             git("config", "user.email", "hook-test@example.invalid")
-            # Avoid invoking configured hooks while constructing the fixture.
-            git("config", "core.hooksPath", ".unused-hooks")
             write("app/example.txt", "base")
             write("web/admin/example.txt", "base")
             git("add", ".")
@@ -51,18 +48,30 @@ class PrecommitMergeTests(unittest.TestCase):
             git("checkout", "feature")
             git("merge", "--no-commit", "master")
 
-            write(".husky/pre-commit", (ROOT / ".husky/pre-commit").read_text(encoding="utf-8"))
-            write(".husky/shared-checks.sh", "#!/bin/bash\necho \"$1\" >> checked-modules\n")
-            # The old hook incorrectly enters the admin branch; keep its lint harmless.
-            write("bin/npm", "#!/bin/bash\nexit 0\n")
-            (repo / "bin/npm").chmod(0o755)
-            env = os.environ.copy()
-            env["PATH"] = str(repo / "bin") + os.pathsep + env["PATH"]
-            # Execute only the copied repository hook, with no user-supplied command.
-            subprocess.run(  # nosec B603: fixed fixture hook, no shell.  # nosemgrep
-                [BASH, ".husky/pre-commit"], cwd=repo, env=env, check=True
-            )
-            self.assertEqual(["app"], (repo / "checked-modules").read_text().splitlines())
+            # Execute the real runner with no user-supplied command. The probe
+            # prints a fixed marker to stdout only when the runner decides the
+            # module has changes relative to the merge target.
+            def run_hook(module):
+                return subprocess.run(  # nosec B603: fixed fixture argv, no shell.  # nosemgrep
+                    [
+                        NODE,
+                        str(RUNNER),
+                        module,
+                        "git",
+                        "rev-parse",
+                        "--is-inside-work-tree",
+                    ],
+                    cwd=repo,
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                )
+
+            # web/admin changes arrive via the merge (already published on the
+            # target) — the module hook must not run for them.
+            self.assertNotIn("true", run_hook("web/admin").stdout)
+            # app changes are ours — the module hook runs.
+            self.assertIn("true", run_hook("app").stdout)
 
 
 if __name__ == "__main__":

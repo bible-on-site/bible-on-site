@@ -177,3 +177,47 @@ button.heading {
 		transition: none;
 	}
 }
+
+@media (prefers-color-scheme: dark) {
+	.heading {
+		color: #9aa0a6;
+	}
+
+	.headerRow:has([data-chapter-play]:hover) [data-chapter-play],
+	.headerRow:has([data-chapter-play]:focus-visible) [data-chapter-play] {
+		background: #232a45;
+		color: #a8b9ff;
+	}
+
+	.controls {
+		color: #9aa0a6;
+	}
+
+	.notice {
+		border-color: #2d3548;
+		background: #1a1f2e;
+		color: #9aa0a6;
+	}
+
+	.toggle[aria-pressed="true"] {
+		color: #a8b9ff;
+		background: #232a45;
+	}
+
+	.toggle:hover:not(:disabled),
+	.action:hover:not(:disabled) {
+		background: #12151c;
+	}
+
+	.word[role="button"]:hover,
+	.word[data-recitation-active="true"],
+	.pasuk[role="button"]:hover {
+		color: #a8b9ff;
+		background: #232a45;
+	}
+
+	.verse:has(.pasuk[role="button"]:hover),
+	.verse:has(.pasuk:focus-visible) {
+		background: #232a45;
+	}
+}

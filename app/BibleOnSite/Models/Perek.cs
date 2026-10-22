@@ -87,6 +87,23 @@ public class Perek : INotifyPropertyChanged
     /// The pasukim (verses) within this perek.
     /// Setter raises PropertyChanged so the UI rebinds when pasukim are lazy-loaded.
     /// </summary>
+    private bool _isOffscreenCarouselPage = true;
+
+    /// <summary>
+    /// Neighbour carousel pages stay out of the accessibility tree: they are off
+    /// screen, and every XCTest snapshot would otherwise serialize them too.
+    /// </summary>
+    public bool IsOffscreenCarouselPage
+    {
+        get => _isOffscreenCarouselPage;
+        set
+        {
+            if (_isOffscreenCarouselPage == value) { return; }
+            _isOffscreenCarouselPage = value;
+            OnPropertyChanged(nameof(IsOffscreenCarouselPage));
+        }
+    }
+
     private List<Pasuk> _pasukim = new();
     public List<Pasuk> Pasukim
     {
@@ -97,4 +114,22 @@ public class Perek : INotifyPropertyChanged
             OnPropertyChanged(nameof(Pasukim));
         }
     }
+
+    /// <summary>Creates independent reading state for a page on the navigation stack.</summary>
+    public Perek CreateReaderCopy() => new()
+    {
+        PerekId = PerekId,
+        Additional = Additional,
+        Date = Date,
+        HasRecording = HasRecording,
+        Header = Header,
+        HebDate = HebDate,
+        HebDateNumeric = HebDateNumeric,
+        PerekNumber = PerekNumber,
+        SeferId = SeferId,
+        SeferName = SeferName,
+        SeferTanahUsName = SeferTanahUsName,
+        Tseit = Tseit,
+        ArticlesCount = ArticlesCount
+    };
 }

@@ -1,4 +1,5 @@
 import { expect, type Page } from "@playwright/test";
+import sharp from "sharp";
 import { SeferPage } from "../../../util/playwright/page-objects/sefer-page";
 import { test } from "../../../util/playwright/test-fixture";
 
@@ -15,15 +16,28 @@ import { test } from "../../../util/playwright/test-fixture";
  * Tests use the skipOnMobile fixture to automatically skip on mobile viewports.
  */
 
-function activePageAngle(page: Page) {
+/** Average width in pixels of the smaller visible surface of a held paper fold. */
+function activePageFoldWidth(page: Page) {
 	return page.evaluate(() => {
-		const turningPage = Array.from(
-			document.querySelectorAll<HTMLElement>(".he-book .page"),
-		).find((page) => page.style.willChange === "transform");
-		const angle = turningPage?.style.transform.match(
-			/rotateY\((-?[\d.]+)deg\)/,
-		);
-		return angle ? Math.abs(Number(angle[1])) : 0;
+		const surfaces = Array.from(
+			document.querySelectorAll<HTMLElement>(".he-book .page.page--folded"),
+		).filter((surface) => surface.style.willChange === "transform");
+		if (surfaces.length === 0) return 0;
+		const visibleWidths = surfaces.map((surface) => {
+			const points = Array.from(
+				surface.style.clipPath.matchAll(/(-?[\d.]+)px\s+(-?[\d.]+)px/g),
+				([, x, y]) => ({ x: Number(x), y: Number(y) }),
+			);
+			const height = Number.parseFloat(surface.style.height);
+			if (points.length < 3 || !height) return 0;
+			let doubledArea = 0;
+			for (let i = 0; i < points.length; i++) {
+				const next = points[(i + 1) % points.length];
+				doubledArea += points[i].x * next.y - next.x * points[i].y;
+			}
+			return Math.abs(doubledArea) / (2 * height);
+		});
+		return Math.min(...visibleWidths);
 	});
 }
 
@@ -40,22 +54,40 @@ async function fastMouseSwipe(page: Page, x: number, y: number, delta: number) {
 		buttons: 1,
 		clickCount: 1,
 	});
-	for (let step = 1; step <= 6; step++) {
-		await client.send("Input.dispatchMouseEvent", {
-			type: "mouseMoved",
-			x: x + (step * delta) / 6,
-			y,
-			buttons: 1,
-		});
-	}
+	// Hammer samples velocity over intervals longer than 25ms. Leave a short
+	// press, then confirm the first move so Chromium cannot coalesce the entire
+	// gesture into a panstart followed by a release, without any panmove.
+	await new Promise((resolve) => setTimeout(resolve, 30));
 	await client.send("Input.dispatchMouseEvent", {
-		type: "mouseReleased",
-		x: x + delta,
+		type: "mouseMoved",
+		x: x + delta / 6,
 		y,
-		button: "left",
-		buttons: 0,
-		clickCount: 1,
+		buttons: 1,
 	});
+	// Send the remaining motion together: awaiting every acknowledgement can
+	// turn a fast swipe into a slow drag under load or trace recording.
+	const inputs: Promise<unknown>[] = [];
+	for (let step = 2; step <= 6; step++) {
+		inputs.push(
+			client.send("Input.dispatchMouseEvent", {
+				type: "mouseMoved",
+				x: x + (step * delta) / 6,
+				y,
+				buttons: 1,
+			}),
+		);
+	}
+	inputs.push(
+		client.send("Input.dispatchMouseEvent", {
+			type: "mouseReleased",
+			x: x + delta,
+			y,
+			button: "left",
+			buttons: 0,
+			clickCount: 1,
+		}),
+	);
+	await Promise.all(inputs);
 	await client.detach();
 }
 
@@ -392,34 +424,71 @@ test.describe("Sefer view", () => {
 		).toBe(true);
 		const indicator = page.locator(".flipbook-toolbar-indicator");
 		await expect(indicator).toHaveValue("א / נ");
-		const turningAngle = () => activePageAngle(page);
+		const foldWidth = () => activePageFoldWidth(page);
+		// pageShadow is enabled (alpha.46): the book must not carry the
+		// flipbook--no-page-shadow opt-out class.
+		await expect(page.locator(".he-book")).not.toHaveClass(
+			/flipbook--no-page-shadow/,
+		);
 
 		await page.mouse.move(x, y);
 		await page.mouse.down();
 		await page.waitForTimeout(550);
 		await page.mouse.move(x + 80, y, { steps: 8 });
-		await expect.poll(turningAngle).toBeGreaterThan(2);
+		await expect.poll(foldWidth).toBeGreaterThan(2);
 		await page.mouse.move(x + 300, y, { steps: 6 });
-		await expect.poll(turningAngle).toBeGreaterThan(10);
-		const heldAt = await turningAngle();
+		await expect.poll(foldWidth).toBeGreaterThan(10);
+		// With pageShadow on, the library writes a crease gradient into
+		// --fold-shading on each folded face (skipped entirely when off);
+		// the flat face's --inner-shadow-* vars are driven the same way.
+		await expect
+			.poll(() =>
+				page
+					.locator(".he-book .page--folded")
+					.first()
+					.evaluate((el) => el.style.getPropertyValue("--fold-shading")),
+			)
+			.toContain("gradient");
+		// The shading overlays must actually paint: hiding them has to change
+		// the rendered fold (they were once stacked under the opaque page
+		// content sheet, which left the fold flat, #2331).
+		const book = page.locator(".he-book");
+		const shaded = await book.screenshot();
+		const hideOverlays = await page.addStyleTag({
+			content:
+				".he-book .page::before, .he-book .page::after { visibility: hidden !important; }",
+		});
+		const flat = await book.screenshot();
+		await hideOverlays.evaluate((el) => el.parentNode?.removeChild(el));
+		// Buried overlays still nudge a few anti-aliased glyph edges (~2k
+		// channel values); a painted crease darkens a whole band (~13k).
+		const [shadedPixels, flatPixels] = await Promise.all(
+			[shaded, flat].map((png) => sharp(png).raw().toBuffer()),
+		);
+		let shadedChannels = 0;
+		for (let i = 0; i < shadedPixels.length; i++) {
+			if (Math.abs(shadedPixels[i] - flatPixels[i]) > 40) shadedChannels++;
+		}
+		expect(shadedChannels).toBeGreaterThan(6000);
+		const heldAt = await foldWidth();
 		await page.waitForTimeout(250);
-		expect(await turningAngle()).toBeGreaterThan(10);
+		expect(await foldWidth()).toBeGreaterThan(10);
 		await page.mouse.move(x + 480, y, { steps: 4 });
 		await expect
-			.poll(async () => Math.abs((await turningAngle()) - heldAt))
+			.poll(async () => Math.abs((await foldWidth()) - heldAt))
 			.toBeGreaterThan(10);
-		const fartherAngle = await turningAngle();
+		const fartherFoldWidth = await foldWidth();
 		await page.waitForTimeout(250);
 		await page.mouse.move(x + 200, y, { steps: 8 });
 		await expect
-			.poll(async () => Math.abs((await turningAngle()) - fartherAngle))
+			.poll(async () => Math.abs((await foldWidth()) - fartherFoldWidth))
 			.toBeGreaterThan(10);
 		await expect(indicator).toHaveValue("א / נ");
 		await page.mouse.move(x + 600, y, { steps: 3 });
 		await page.waitForTimeout(250);
 		await page.mouse.up();
 		await expect(indicator).toHaveValue("א / נ");
-		await expect.poll(turningAngle).toBe(0);
+		await expect.poll(foldWidth).toBe(0);
 	});
 
 	test("Mouse selection mode can be toggled back to native page dragging", async ({
@@ -451,7 +520,7 @@ test.describe("Sefer view", () => {
 		await page.mouse.move(x, y);
 		await page.mouse.down();
 		await page.mouse.move(x + 300, y, { steps: 8 });
-		await expect.poll(() => activePageAngle(page)).toBeGreaterThan(10);
+		await expect.poll(() => activePageFoldWidth(page)).toBeGreaterThan(10);
 		await page.mouse.up();
 	});
 
@@ -482,20 +551,137 @@ test.describe("Sefer view", () => {
 		await expect(indicator).toHaveValue("א / נ");
 	});
 
+	test("locks outer page scrolling while open and restores it on close", async ({
+		page,
+	}) => {
+		const seferPage = new SeferPage(page);
+		await page.goto("/929/1");
+		// The flat reader scrolls inside its own container before the book opens.
+		const flatScrolls = await page.evaluate(() => {
+			const container = document.querySelector<HTMLElement>(
+				'[class*="perekContainer"]',
+			);
+			if (!container) return false;
+			container.scrollTop = 400;
+			return container.scrollTop > 0;
+		});
+		expect(flatScrolls).toBe(true);
+
+		await seferPage.openSeferView();
+		await expect(page.locator("html")).toHaveAttribute("data-sefer-view", "");
+		const lockedOverflow = await page.evaluate(
+			() => getComputedStyle(document.documentElement).overflowY,
+		);
+		expect(lockedOverflow).toBe("hidden");
+		// Real wheel input over the book must not move the outer document —
+		// programmatic scrollTo is not checked because overflow:hidden still
+		// allows it by design; the issue concerns user-driven scrolling.
+		await page.mouse.move(720, 450);
+		const yBefore = await page.evaluate(() => window.scrollY);
+		for (let i = 0; i < 8; i++) {
+			await page.mouse.wheel(0, 500);
+			await page.waitForTimeout(50);
+		}
+		expect(await page.evaluate(() => window.scrollY)).toBe(yBefore);
+
+		// The scripture pane inside the book still scrolls from real wheel input.
+		const paneBox = await page.evaluate(() => {
+			const pane = document.querySelector<HTMLElement>(
+				'.he-book .page.current-page [class*="perekTextScrollWrapper"]',
+			);
+			if (!pane) return null;
+			const r = pane.getBoundingClientRect();
+			return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+		});
+		expect(paneBox).not.toBeNull();
+		if (!paneBox) return;
+		await page.mouse.move(paneBox.x, paneBox.y);
+		for (let i = 0; i < 4; i++) {
+			await page.mouse.wheel(0, 400);
+			await page.waitForTimeout(50);
+		}
+		const paneTop = await page.evaluate(
+			() =>
+				document.querySelector<HTMLElement>(
+					'.he-book .page.current-page [class*="perekTextScrollWrapper"]',
+				)?.scrollTop ?? -1,
+		);
+		expect(paneTop).toBeGreaterThan(0);
+
+		// Closing the book unlocks the document and re-enables the flat reader.
+		const toggler = page.getByTestId("read-mode-toggler");
+		await toggler.click();
+		const overlay = page.locator('[class*="seferOverlay"]');
+		await expect(overlay).not.toBeVisible();
+		await expect(page.locator("html[data-sefer-view]")).toHaveCount(0);
+		const unlocked = await page.evaluate(() => {
+			const container = document.querySelector<HTMLElement>(
+				'[class*="perekContainer"]',
+			);
+			if (!container) return { overflow: "", scrolls: false };
+			container.scrollTop = 400;
+			return {
+				overflow: getComputedStyle(document.documentElement).overflowY,
+				scrolls: container.scrollTop > 0,
+			};
+		});
+		expect(unlocked.overflow).not.toBe("hidden");
+		expect(unlocked.scrolls).toBe(true);
+	});
+
+	test("synchronizes the tab title with the visible book page and history", async ({
+		page,
+	}) => {
+		test.setTimeout(90_000);
+		const seferPage = new SeferPage(page);
+		await seferPage.openSeferViewForPerek(1);
+		await expect(page).toHaveTitle('בראשית א | תנ"ך על הפרק');
+
+		await page.locator(".flipbook-toolbar-next").click();
+		await expect(page).toHaveURL(/\/929\/2\?book/);
+		await expect(page).toHaveTitle('בראשית ב | תנ"ך על הפרק');
+
+		await page.locator(".flipbook-toolbar-toc").click();
+		await expect
+			.poll(() => decodeURIComponent(new URL(page.url()).pathname))
+			.toBe("/929/בראשית/תוכן");
+		await expect(page).toHaveTitle('ספר בראשית - תוכן העניינים | תנ"ך על הפרק');
+
+		// Browser history restoration returns the matching title.
+		await page.goBack();
+		await expect(page).toHaveURL(/\/929\/2\?book/);
+		await expect(page).toHaveTitle('בראשית ב | תנ"ך על הפרק');
+
+		// Leaving Sefer view hands the title back to the flat perek page.
+		const toggler = page.getByTestId("read-mode-toggler");
+		await toggler.click();
+		await expect(page.locator('[class*="seferOverlay"]')).not.toBeVisible();
+		await expect(page).toHaveTitle('בראשית א | תנ"ך על הפרק');
+	});
+
 	test.describe("Touch swipe", () => {
 		test.use({ hasTouch: true });
 
 		test("Swiping verse text drags and turns the page", async ({ page }) => {
 			await page.setViewportSize({ width: 1440, height: 900 });
 			const seferPage = new SeferPage(page);
-			await seferPage.openSeferViewForPerek(1);
+			await seferPage.openSeferViewForPerek(2);
 			await seferPage.verifyPesukimAreVisible();
 			const rect = await page
-				.locator(".he-book article:visible")
+				.locator(".he-book .page.current-page article")
 				.first()
 				.boundingBox();
 			if (!rect) throw new Error("Verse text is not visible");
-			const x = Math.round(rect.x + 40);
+			const pageWidth = await page
+				.locator(".he-book .page.current-page article")
+				.first()
+				.evaluate(
+					(article) =>
+						article.closest<HTMLElement>(".page")?.getBoundingClientRect()
+							.width ?? 0,
+				);
+			expect(pageWidth).toBeGreaterThan(300);
+			const x = Math.round(rect.x + rect.width - 40);
 			const y = Math.round(rect.y + 45);
 			expect(
 				await page.evaluate(
@@ -505,29 +691,42 @@ test.describe("Sefer view", () => {
 				),
 			).toBe(true);
 			const indicator = page.locator(".flipbook-toolbar-indicator");
-			await expect(indicator).toHaveValue("א / נ");
-			const before = await indicator.inputValue();
+			await expect(indicator).toHaveValue("ב / נ");
 			const client = await page.context().newCDPSession(page);
 			await client.send("Input.dispatchTouchEvent", {
 				type: "touchStart",
 				touchPoints: [{ x, y }],
 			});
-			for (let step = 1; step <= 6; step++) {
+			// Start near the verse's right edge and drag left across the book's
+			// midpoint. Finish at 70% of the fold, using the actual page width,
+			// so it stays visibly held and release does not depend on velocity.
+			// Dragging all the way to the screen edge fully flattens the page.
+			for (const offset of [20, 40, 300, 500, Math.round(pageWidth * 1.4)]) {
 				await client.send("Input.dispatchTouchEvent", {
 					type: "touchMove",
-					touchPoints: [{ x: x + Math.round((step * 650) / 6), y }],
+					touchPoints: [{ x: x - offset, y }],
 				});
-				if (step === 3) {
-					await expect.poll(() => activePageAngle(page)).toBeGreaterThan(10);
+				if (offset === 300) {
+					await expect
+						.poll(() => activePageFoldWidth(page))
+						.toBeGreaterThan(10);
 					await page.waitForTimeout(150);
-					expect(await activePageAngle(page)).toBeGreaterThan(10);
+					expect(await activePageFoldWidth(page)).toBeGreaterThan(10);
 				}
 			}
+			// Confirm a real drag beyond halfway before releasing, so completion
+			// checks distance rather than a timing-sensitive flick. The folded
+			// surface must remain visible even after crossing the midpoint.
+			await expect.poll(() => activePageFoldWidth(page)).toBeGreaterThan(10);
+			await page.waitForTimeout(150);
+			expect(await activePageFoldWidth(page)).toBeGreaterThan(10);
+			await expect(indicator).toHaveValue("ב / נ");
 			await client.send("Input.dispatchTouchEvent", {
 				type: "touchEnd",
 				touchPoints: [],
 			});
-			await expect(indicator).not.toHaveValue(before);
+			await expect(indicator).toHaveValue("א / נ");
+			await client.detach();
 		});
 	});
 

@@ -23,6 +23,16 @@
 		<!-- Define MAUI symbol for conditional compilation -->
 		<DefineConstants>$(DefineConstants);MAUI</DefineConstants>
 
+		<!-- Analytics gating (#2120): Debug builds — local dev and every mobile-e2e
+		     build (CompileMobileE2E also passes -p:DisableAnalytics=true explicitly
+		     so the protection is build-flag driven, not just configuration-derived) —
+		     get DISABLE_ANALYTICS: AnalyticsService becomes a no-op, the iOS Firebase
+		     init is skipped entirely, and firebase_analytics_collection_deactivated
+		     is baked into the Android manifest. Release builds default to analytics
+		     on; pass -p:DisableAnalytics=false to force a Debug build back on. -->
+		<DisableAnalytics Condition="'$(DisableAnalytics)' == '' AND '$(Configuration)' == 'Debug'">true</DisableAnalytics>
+		<DefineConstants Condition="'$(DisableAnalytics)' == 'true'">$(DefineConstants);DISABLE_ANALYTICS</DefineConstants>
+
 		<!-- Treat C# compiler warnings as errors so iOS/Android-only issues are caught early -->
 		<TreatWarningsAsErrors>true</TreatWarningsAsErrors>
 		<!-- Suppress XamlC warnings: XC0022 bindings without x:DataType; XC0045 Path in MultiBinding with Source=page validated against template DataType (Article) -->
@@ -48,11 +58,11 @@
 		<ApplicationId>com.tanah.daily929</ApplicationId>
 
 		<!-- Versions -->
-		<ApplicationDisplayVersion>5.0.113</ApplicationDisplayVersion>
+		<ApplicationDisplayVersion>5.0.194</ApplicationDisplayVersion>
 		<!-- Windows MSIX requires each version component ≤65535, so we use a separate incrementing value -->
 		<!-- Android versionCode can be large, continuing from Play Store's 40000017 -->
-		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">50000113</ApplicationVersion>
-		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) != 'android'">113</ApplicationVersion>
+		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">50000194</ApplicationVersion>
+		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) != 'android'">194</ApplicationVersion>
 
 		<!-- To develop, package, and publish an app to the Microsoft Store, see: https://aka.ms/MauiTemplateUnpackaged -->
 		<!-- WindowsPackageType None = unpackaged (fixes "Class not registered" when running from CLI). MSIX for Store: /p:WindowsPackageType=MSIX -->
@@ -63,6 +73,37 @@
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">23.0</SupportedOSPlatformVersion>
 		<!-- For Release: embed assemblies in APK. For Debug: use Fast Deployment (much faster iteration) -->
 		<EmbedAssembliesIntoApk Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND '$(Configuration)' == 'Release'">true</EmbedAssembliesIntoApk>
+		<!-- Android Release: profiled AOT. The .NET 10 SDK (Microsoft.Android.Sdk 36.x)
+		     already defaults RunAOTCompilation + AndroidEnableProfiledAot to true for
+		     Release on the MonoVM runtime and feeds the bundled dotnet.aotprofile into
+		     the compiler — the pins below keep that behavior explicit and durable:
+		     the SDK default only applies while '$(_AndroidRuntime)' == 'MonoVM', so a
+		     future CoreCLR/PublishAot experiment or SDK default change would otherwise
+		     silently drop AOT back to JIT. The UseMonoRuntime guard keeps the pin
+		     inert if someone explicitly opts out of MonoVM on the command line.
+		     Full AOT (AndroidEnableProfiledAot=false) is not an option: the linker
+		     emits zero-RVA method stubs (e.g. System.Net.Requests.HttpWebRequest
+		     local functions) that abort mono-aot-cross with exit 1.
+		     AndroidStripILAfterAOT is deliberately NOT set: profiled AOT only
+		     precompiles profiled methods, so JIT fallback for everything else
+		     (including non-profiled generic instantiations) needs the IL kept
+		     in the embedded assemblies. -->
+		<RunAOTCompilation Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND '$(Configuration)' == 'Release' AND '$(UseMonoRuntime)' != 'false'">true</RunAOTCompilation>
+		<AndroidEnableProfiledAot Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND '$(Configuration)' == 'Release' AND '$(UseMonoRuntime)' != 'false'">true</AndroidEnableProfiledAot>
+		<!-- Android Release: R8 shrinks the Java/Kotlin DEX (AndroidX, Firebase, Media3,
+		     Glide, Play Asset Delivery bindings) instead of plain D8 dexing (#2355):
+		     uncompressed DEX 25.4 -> 14.0 MB, arm64 install download -3.8 MB, installed
+		     size -15 MB, with unchanged cold/warm startup and build time. The SDK's
+		     generated proguard_xamarin.cfg plus each AAR's consumer rules keep the JNI
+		     peers, so no project keep rules are needed. Obfuscation stays off (the SDK
+		     default), so Java stack traces remain readable; the SDK embeds mapping.txt as
+		     BUNDLE-METADATA/com.android.tools.build.obfuscation/proguard.map in the AAB,
+		     which Play ingests with that exact versionCode (#1161).
+		     Rollback: delete this line to return to D8. -->
+		<AndroidLinkTool Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND '$(Configuration)' == 'Release'">r8</AndroidLinkTool>
+		<!-- Debug APKs include the large commentary database. Store SQLite assets directly
+		     to avoid recompressing it on every local edit; Release packaging keeps compression. -->
+		<AndroidStoreUncompressedFileExtensions Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND '$(Configuration)' == 'Debug'">$(AndroidStoreUncompressedFileExtensions);.sqlite</AndroidStoreUncompressedFileExtensions>
 		<!-- .NET 10 MAUI on Linux CI: the SDK infers RuntimeIdentifier=linux-x64 for
 		     self-contained apps, appending it to RuntimeIdentifiers. The Android SDK then
 		     fails with XA0035. The Nuke build script pins RuntimeIdentifier=android-arm64
@@ -92,10 +133,12 @@
 
 		<!-- Images -->
 		<MauiImage Include="Resources\Images\*" />
+		<!-- Launcher icons are not runtime images on iOS; bundle the same artwork for the loading page. -->
+		<MauiImage Include="Resources\AppIcon\appicon.svg" Link="loading_logo.svg" BaseSize="150,150" />
 		<MauiImage Update="Resources\Images\dotnet_bot.png" Resize="True" BaseSize="300,185" />
 
 		<!-- Custom Fonts -->
-		<MauiFont Include="Resources\Fonts\*" />
+		<MauiFont Include="Resources\Fonts\*.ttf;Resources\Fonts\*.otf" />
 
 		<!-- Raw Assets (also remove the "Resources\Raw" prefix) -->
 		<MauiAsset Include="Resources\Raw\**" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
@@ -106,22 +149,58 @@
 		<GoogleServicesJson Include="Platforms\Android\google-services.json" />
 	</ItemGroup>
 
+	<!-- #2120: inject firebase_analytics_collection_deactivated into the merged
+	     manifest so test builds permanently deactivate collection at the SDK
+	     layer — setAnalyticsCollectionEnabled cannot re-enable it and nothing
+	     is emitted, persisted or flushed. DisableAnalytics builds resolve to
+	     true; everything else resolves to false so production analytics keep
+	     working. The fallback guarantees the placeholder is always defined. -->
+	<PropertyGroup>
+		<FirebaseAnalyticsCollectionDeactivated Condition="'$(DisableAnalytics)' == 'true'">true</FirebaseAnalyticsCollectionDeactivated>
+		<FirebaseAnalyticsCollectionDeactivated Condition="'$(FirebaseAnalyticsCollectionDeactivated)' == ''">false</FirebaseAnalyticsCollectionDeactivated>
+	</PropertyGroup>
+	<PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
+		<AndroidManifestPlaceholders>$(AndroidManifestPlaceholders);firebaseAnalyticsCollectionDeactivated=$(FirebaseAnalyticsCollectionDeactivated)</AndroidManifestPlaceholders>
+	</PropertyGroup>
+
 	<!-- Firebase: GoogleService-Info.plist for iOS (same Firebase project: tanah-al-haperek) -->
 	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">
-		<BundleResource Include="Platforms\iOS\GoogleService-Info.plist" />
+		<BundleResource Include="Platforms\iOS\GoogleService-Info.plist" LogicalName="GoogleService-Info.plist" />
 	</ItemGroup>
 	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">
-		<BundleResource Include="Platforms\iOS\GoogleService-Info.plist" />
+		<BundleResource Include="Platforms\iOS\GoogleService-Info.plist" LogicalName="GoogleService-Info.plist" />
 	</ItemGroup>
 
 	<!-- ============================================================
-	     Perushim Notes — on-demand delivery (Android PAD + iOS ODR)
+	     Perushim Notes — on-demand delivery (Android PAD + iOS managed asset packs)
 	     ============================================================ -->
+
+	<!-- Codesigning entitlements: the iOS/MacCatalyst app groups entry shares a
+	     container with the AssetPackDownloader extension (managed Background Assets).
+	     Two SDK conventions shaped this wiring:
+	     - MAUI's SingleProject targets auto-assign $(iOSProjectFolder)Entitlements.plist
+	       to CodesignEntitlements whenever that exact path exists — bypassing any
+	       per-RID condition — so the file is named Entitlements.App.plist.
+	     - A non-empty CodesignEntitlements makes DetectSigningIdentity require a
+	       provisioning profile + signing key, which unsigned iossimulator CI/e2e
+	       builds do not have. RuntimeIdentifier defaults are only resolved after
+	       csproj evaluation (a RID-less Debug build lands on iossimulator), so the
+	       assignment runs in a target where the SDK-computed _SdkIsSimulator flag —
+	       the same flag DetectSigningIdentity consumes — is already known. -->
+	<PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">
+		<CodesignEntitlements>Platforms\MacCatalyst\Entitlements.plist</CodesignEntitlements>
+	</PropertyGroup>
+	<Target Name="_SetIosCodesignEntitlements" BeforeTargets="_DetectSigningIdentity" Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' AND '$(_SdkIsSimulator)' != 'true' AND '$(EnableCodeSigning)' != 'false'">
+		<PropertyGroup>
+			<CodesignEntitlements>Platforms\iOS\Entitlements.App.plist</CodesignEntitlements>
+		</PropertyGroup>
+		<Message Importance="low" Text="=== iOS device/desktop build: CodesignEntitlements = $(CodesignEntitlements) ===" />
+	</Target>
 
 	<!-- Android: Play Asset Delivery SDK.
 	     XAAMM0000 manifest collisions with Plugin.Firebase are suppressed in NoWarn above. -->
 	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
-		<PackageReference Include="Xamarin.Google.Android.Play.Asset.Delivery" Version="2.3.0.7" />
+		<PackageReference Include="Xamarin.Google.Android.Play.Asset.Delivery" Version="2.3.0.8" />
 	</ItemGroup>
 
 	<!-- D8 duplicate-class workaround: PAD + Firebase transitively pull in AndroidX
@@ -131,7 +210,11 @@
 	     For packages with NuGet version conflicts (where ExcludeAssets triggers NU1107),
 	     a target strips the duplicate .aar from @(AndroidAarLibrary) before extraction. -->
 	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
-		<PackageReference Include="Xamarin.AndroidX.Compose.Runtime.Annotation.Jvm" Version="1.11.4" ExcludeAssets="all" />
+		<PackageReference Include="Xamarin.AndroidX.Compose.Runtime.Annotation.Jvm" Version="1.12.1" ExcludeAssets="all" />
+		<!-- Fragment 1.9 merges Kotlin extensions into the main artifact. Keep Ktx
+		     aligned so Firebase's older transitive Ktx does not duplicate those classes.
+		     https://developer.android.com/jetpack/androidx/releases/fragment#1.9.0-alpha01 -->
+		<PackageReference Include="Xamarin.AndroidX.Fragment.Ktx" Version="1.9.0" />
 	</ItemGroup>
 	<Target Name="_RemoveDuplicateAndroidXAars" BeforeTargets="_ResolveAars;_ExtractAar;_GetLibraryImports" Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
 		<ItemGroup>
@@ -142,79 +225,104 @@
 	<!-- Auto-decompress perushim notes .gz → .sqlite if needed (checked out from git as compressed).
 	     Calls the devops setup script which has the canonical decompress logic.
 	     WorkingDirectory must be devops/ so that tsx is resolvable from devops/node_modules. -->
-	<Target Name="DecompressPerushimNotes" BeforeTargets="Build" Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND&#xD;&#xA;			!Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite') AND&#xD;&#xA;			Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz')">
+	<Target Name="DecompressPerushimNotes" BeforeTargets="PrepareForBuild" Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND&#xD;&#xA;			((!Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite') AND&#xD;&#xA;			Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz')) OR&#xD;&#xA;			(!Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite') AND&#xD;&#xA;			Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite.gz')))">
 		<Exec Command="node --import tsx setup-dev-env.mts decompress-perushim-notes" WorkingDirectory="$(MSBuildProjectDirectory)/../../devops" />
 	</Target>
 
-	<!-- Android: PAD on-demand asset pack. Run perushim-view pipeline to generate. -->
-	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite')">
+	<!-- Android: PAD on-demand asset pack. Run perushim-view pipeline to generate.
+	     The prebuilt search index is required by prepare_perushim_assets.py
+	     for CI and release packs. Local legacy packs retain the recovery path. -->
+	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND (Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite') OR Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz'))">
 		<AndroidAsset Include="Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite" Link="sefaria-dump-5784-sivan-4.perushim_notes.sqlite" AssetPack="perushim_notes" DeliveryType="OnDemand" />
+		<AndroidAsset Include="Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite" Condition="Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite') OR Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite.gz')" Link="sefaria-dump-5784-sivan-4.hebrew_search.sqlite" AssetPack="perushim_notes" DeliveryType="OnDemand" />
 	</ItemGroup>
 
-	<!-- iOS: decompress .gz → .sqlite into the ODR dataset folder (macOS only; gunzip is always available).
-	     After decompression, explicitly add the .sqlite as an ImageAsset so actool compiles it
-	     into Assets.car. MSBuild globs evaluate at project load — before the file exists —
-	     so auto-discovery misses it. -->
-	<Target Name="DecompressPerushimNotesIos" BeforeTargets="Build;_CompileImageAssets" Condition="($([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst') AND&#xD;&#xA;			!Exists('Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_notes.dataset\sefaria-dump-5784-sivan-4.perushim_notes.sqlite') AND&#xD;&#xA;			Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz')">
-		<MakeDir Directories="Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_notes.dataset" />
-		<Exec Command="gunzip -c '$(MSBuildProjectDirectory)/Platforms/Android/AssetPacks/perushim_notes/sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz' &gt; '$(MSBuildProjectDirectory)/Platforms/iOS/Assets/PerushimNotes.xcassets/perushim_notes.dataset/sefaria-dump-5784-sivan-4.perushim_notes.sqlite'" />
+	<!-- iOS: decompress .gz → .sqlite payloads into the managed asset-pack folder (macOS only; gunzip is
+	     always available). The pack directory layout is produced by prepare_perushim_assets.py; payloads
+	     sit next to Manifest.json so `xcrun ba-package` can archive the pack for App Store Connect upload.
+	     The prebuilt search index rides in the same pack — the manifest selects it and the
+	     managed-delivery extraction requires it. -->
+	<Target Name="DecompressPerushimNotesIos" BeforeTargets="PrepareForBuild;Build" Condition="($([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst') AND&#xD;&#xA;			((!Exists('Platforms\iOS\AssetPacks\perushim-notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite') AND&#xD;&#xA;			Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz')) OR&#xD;&#xA;			(!Exists('Platforms\iOS\AssetPacks\perushim-notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite') AND&#xD;&#xA;			Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite.gz')))">
+		<MakeDir Directories="Platforms\iOS\AssetPacks\perushim-notes" />
+		<Exec Condition="!Exists('Platforms\iOS\AssetPacks\perushim-notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite') AND Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz')" Command="gunzip -c '$(MSBuildProjectDirectory)/Platforms/Android/AssetPacks/perushim_notes/sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz' &gt; '$(MSBuildProjectDirectory)/Platforms/iOS/AssetPacks/perushim-notes/sefaria-dump-5784-sivan-4.perushim_notes.sqlite'" />
+		<Exec Condition="!Exists('Platforms\iOS\AssetPacks\perushim-notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite') AND Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite.gz')" Command="gunzip -c '$(MSBuildProjectDirectory)/Platforms/Android/AssetPacks/perushim_notes/sefaria-dump-5784-sivan-4.hebrew_search.sqlite.gz' &gt; '$(MSBuildProjectDirectory)/Platforms/iOS/AssetPacks/perushim-notes/sefaria-dump-5784-sivan-4.hebrew_search.sqlite'" />
 	</Target>
 
-	<!-- Unconditionally ensure the .sqlite is in the ImageAsset list for actool.
-	     Runs before _CompileImageAssets regardless of whether decompression was needed this build.
-	     The Condition on the item (Exists) prevents errors if the file is absent (e.g. Windows dev). -->
-	<Target Name="_IncludePerushimNotesImageAsset" BeforeTargets="_CompileImageAssets" DependsOnTargets="DecompressPerushimNotesIos" Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">
-		<ItemGroup>
-			<ImageAsset Include="Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_notes.dataset\sefaria-dump-5784-sivan-4.perushim_notes.sqlite" Condition="Exists('Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_notes.dataset\sefaria-dump-5784-sivan-4.perushim_notes.sqlite')" Link="Assets\PerushimNotes.xcassets\perushim_notes.dataset\sefaria-dump-5784-sivan-4.perushim_notes.sqlite" />
-		</ItemGroup>
-		<Message Importance="high" Text="=== _IncludePerushimNotesImageAsset: added .sqlite to ImageAsset list ===" Condition="Exists('Platforms\iOS\Assets\PerushimNotes.xcassets\perushim_notes.dataset\sefaria-dump-5784-sivan-4.perushim_notes.sqlite')" />
-	</Target>
-
-	<!-- iOS ODR: perushim notes are delivered via On-Demand Resources.
-	     The xcassets/Contents.json has on-demand-resource-tags which actool reads to create
-	     an ODR asset pack. At runtime, NSBundleResourceRequest downloads the tag and
-	     the compiled data becomes accessible via NSDataAsset. -->
-
-	<!-- ODR build diagnostics (temporary): log what the SDK computed for ODR asset packs. -->
-	<Target Name="_LogOdrDiagnostics" AfterTargets="_ComputeBundleResourceOutputPaths" Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">
-		<Message Importance="high" Text="=== ODR Build Diagnostics ===" />
-		<Message Importance="high" Text="EnableOnDemandResources = $(EnableOnDemandResources)" />
-		<Message Importance="high" Text="_DistributionType = $(_DistributionType)" />
-		<Message Importance="high" Text="BuildIpa = $(BuildIpa)" />
-		<Message Importance="high" Text="_BundleResourceWithOutputPath ODR items:" />
-		<Message Importance="high" Text="  %(_BundleResourceWithOutputPath.Identity) → %(_BundleResourceWithOutputPath.OutputPath)" Condition="'%(_BundleResourceWithOutputPath.OutputPath)' != '' AND $([System.String]::new('%(_BundleResourceWithOutputPath.OutputPath)').Contains('OnDemandResources'))" />
-	</Target>
-
-	<!-- _DetectSigningIdentity overrides _DistributionType based on the provisioning
-	     profile. With automatic signing and an empty CodesignProvision, it sets "Any",
-	     which prevents _PackageOnDemandResources from running (it requires AppStore|AdHoc).
-	     Force AppStore after detection so the ODR asset packs are packaged into the IPA. -->
-	<Target Name="_ForceDistributionTypeForOdr" AfterTargets="_DetectSigningIdentity" Condition="('$(_DistributionType)' == '' OR '$(_DistributionType)' == 'Any') AND&#xD;&#xA;			'$(BuildIpa)' == 'true' AND '$(EnableOnDemandResources)' == 'true' AND&#xD;&#xA;			($([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst')">
-		<Message Importance="high" Text="=== _ForceDistributionTypeForOdr: overriding _DistributionType from '$(_DistributionType)' to 'AppStore' ===" />
+	<!-- Managed Background Assets need an ExtensionKit downloader extension embedded at
+	     <app>/Extensions — a binary .NET cannot produce (Swift-only entry point), so the
+	     packaging pipeline builds app/extensions/AssetPackDownloader via xcodebuild and
+	     passes the .appex path plus its provisioning profile. Distribution packaging
+	     requires both; unsigned development/simulator builds can omit the extension. -->
+	<Target Name="_RequireAssetPackDownloader" BeforeTargets="PrepareForBuild" Condition="($([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst')">
 		<PropertyGroup>
-			<_DistributionType>AppStore</_DistributionType>
+			<RequireAssetPackDownloader Condition="'$(RequireAssetPackDownloader)' == '' AND ('$(BuildIpa)' == 'true' OR '$(ArchiveOnBuild)' == 'true') AND '$(EnableCodeSigning)' != 'false'">true</RequireAssetPackDownloader>
 		</PropertyGroup>
+		<Error Condition="'$(RequireAssetPackDownloader)' == 'true' AND ('$(AssetPackDownloaderAppex)' == '' OR (!Exists('$(AssetPackDownloaderAppex)/Info.plist') AND !Exists('$(AssetPackDownloaderAppex)/Contents/Info.plist')))" Text="Signed distribution requires a built AssetPackDownloader.appex; set AssetPackDownloaderAppex to its device build directory." />
+		<Error Condition="'$(RequireAssetPackDownloader)' == 'true' AND ('$(AssetPackDownloaderProfile)' == '' OR !Exists('$(AssetPackDownloaderProfile)'))" Text="Signed distribution requires the downloader provisioning profile with App Groups; set AssetPackDownloaderProfile." />
+		<Error Condition="'$(AssetPackDownloaderAppex)' != '' AND !Exists('$(AssetPackDownloaderAppex)')" Text="AssetPackDownloaderAppex does not exist: $(AssetPackDownloaderAppex)" />
+	</Target>
+	<Target Name="_EmbedAssetPackDownloader" BeforeTargets="_CodesignAppBundle" Condition="'$(AssetPackDownloaderAppex)' != '' AND&#xD;&#xA;			Exists('$(AssetPackDownloaderAppex)') AND&#xD;&#xA;			($([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst')">
+		<PropertyGroup>
+			<_AssetPackExtensionDir Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">$(AppBundleDir)/Extensions</_AssetPackExtensionDir>
+			<_AssetPackExtensionDir Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">$(AppBundleDir)/Contents/Extensions</_AssetPackExtensionDir>
+			<_AssetPackExtensionProfile Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">embedded.mobileprovision</_AssetPackExtensionProfile>
+			<_AssetPackExtensionProfile Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">embedded.provisionprofile</_AssetPackExtensionProfile>
+			<_AssetPackSigningEntitlements>$(IntermediateOutputPath)asset-pack-downloader.entitlements</_AssetPackSigningEntitlements>
+			<_AssetPackProfileArguments Condition="'$(AssetPackDownloaderProfile)' != ''">--profile &quot;$(AssetPackDownloaderProfile)&quot; --entitlements &quot;$(MSBuildProjectDirectory)/../extensions/AssetPackDownloader/AssetPackDownloader/AssetPackDownloader.entitlements&quot; --output-entitlements &quot;$(_AssetPackSigningEntitlements)&quot;</_AssetPackProfileArguments>
+		</PropertyGroup>
+		<Error Condition="'$(EnableCodeSigning)' == 'true' AND ('$(AssetPackDownloaderProfile)' == '' OR !Exists('$(AssetPackDownloaderProfile)'))" Text="Signing the downloader requires its own provisioning profile with the shared App Group." />
+		<Error Condition="'$(EnableCodeSigning)' == 'true' AND '$(_CodeSigningKey)' == ''" Text="The app signing identity was not resolved before embedding the downloader." />
+		<MakeDir Directories="$(_AssetPackExtensionDir)" />
+		<Exec Command="ditto '$(AssetPackDownloaderAppex)' '$(_AssetPackExtensionDir)/AssetPackDownloader.appex'" />
+		<Exec Command="python3 &quot;$(MSBuildProjectDirectory)/../extensions/prepare_extension.py&quot; --extension &quot;$(_AssetPackExtensionDir)/AssetPackDownloader.appex&quot; --version &quot;$(ApplicationDisplayVersion)&quot; --build &quot;$(ApplicationVersion)&quot; $(_AssetPackProfileArguments)" />
+		<Exec Command="cp '$(AssetPackDownloaderProfile)' '$(_AssetPackExtensionDir)/AssetPackDownloader.appex/$(_AssetPackExtensionProfile)'" Condition="'$(AssetPackDownloaderProfile)' != '' AND Exists('$(AssetPackDownloaderProfile)')" />
+		<Exec Command="codesign --force --sign '$(_CodeSigningKey)' --entitlements '$(_AssetPackSigningEntitlements)' --timestamp=none '$(_AssetPackExtensionDir)/AssetPackDownloader.appex'" Condition="'$(EnableCodeSigning)' == 'true'" />
+		<Exec Command="codesign --verify --strict '$(_AssetPackExtensionDir)/AssetPackDownloader.appex'" Condition="'$(EnableCodeSigning)' == 'true'" />
+		<Message Importance="high" Text="=== Embedded AssetPackDownloader.appex into $(AppBundleDir) ===" />
 	</Target>
 
-	<Target Name="_LogOdrPackaging" AfterTargets="_PackageOnDemandResources" Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">
-		<Message Importance="high" Text="=== ODR Packaging: _PackageOnDemandResources executed ===" />
+	<!-- Generated book packs use the same delivery SDK, independently of perushim_notes. -->
+	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
+		<AndroidAsset Include="Platforms\Android\AssetPacks\recitation_*\*.zip" Link="%(Filename)%(Extension)" AssetPack="%(Filename)" DeliveryType="OnDemand" />
+		<MauiAsset Include="Platforms\Android\AssetPacks\recitation_*\*.zip" LogicalName="%(Filename)%(Extension)" Condition="'$(Configuration)' == 'Debug'" />
+	</ItemGroup>
+	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">
+		<MauiAsset Include="Platforms\Windows\Recitation\*.zip" LogicalName="%(Filename)%(Extension)" />
+	</ItemGroup>
+	<ItemGroup Condition="($([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst') AND '$(Configuration)' == 'Debug'">
+		<MauiAsset Include="Platforms\iOS\AssetPacks\recitation-*\*.zip" LogicalName="%(Filename)%(Extension)" />
+	</ItemGroup>
+	<Target Name="RequireRecitationExtensionAssets" BeforeTargets="Build" Condition="'$(RequireRecitationAssets)' == 'true'">
+		<Error Condition="!Exists('Resources/Raw/recitation-catalog.json')" Text="Generate the recitation catalog and book packs before packaging this release." />
 	</Target>
-
 	<!-- Android Debug fallback: bundle perushim notes in app package so they work without PAD (APK installs). -->
-	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND '$(Configuration)' == 'Debug' AND Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite')">
+	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND '$(Configuration)' == 'Debug' AND (Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite') OR Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz'))">
 		<MauiAsset Include="Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite" LogicalName="sefaria-dump-5784-sivan-4.perushim_notes.sqlite" />
+		<MauiAsset Include="Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite" Condition="Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite')" LogicalName="sefaria-dump-5784-sivan-4.hebrew_search.sqlite" />
+	</ItemGroup>
+
+	<!-- Simulator/local Debug installs cannot fetch a store-hosted asset pack (the
+	     downloader extension is only embedded for signed Release packaging). -->
+	<ItemGroup Condition="($([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst') AND '$(Configuration)' == 'Debug' AND Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz')">
+		<MauiAsset Include="Platforms\iOS\AssetPacks\perushim-notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite" LogicalName="sefaria-dump-5784-sivan-4.perushim_notes.sqlite" />
+		<MauiAsset Include="Platforms\iOS\AssetPacks\perushim-notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite" Condition="Exists('Platforms\iOS\AssetPacks\perushim-notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite')" LogicalName="sefaria-dump-5784-sivan-4.hebrew_search.sqlite" />
 	</ItemGroup>
 
 	<ItemGroup>
-		<PackageReference Include="CommunityToolkit.Maui" Version="15.0.0" />
+		<PackageReference Include="CommunityToolkit.Maui" Version="15.0.1" />
 		<PackageReference Include="CommunityToolkit.Maui.MediaElement" Version="10.0.0" />
 		<PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
 		<PackageReference Include="GraphQL.Client" Version="6.1.0" />
-		<PackageReference Include="GraphQL.Client.Serializer.Newtonsoft" Version="6.1.0" />
-		<PackageReference Include="HtmlAgilityPack" Version="1.12.4" />
-		<PackageReference Include="Microsoft.Maui.Controls" Version="10.0.110" />
-		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.10" />
+		<PackageReference Include="GraphQL.Client.Serializer.SystemTextJson" Version="6.1.0" />
+		<PackageReference Include="HtmlAgilityPack" Version="1.13.1" />
+		<PackageReference Include="Microsoft.Maui.Controls" Version="10.0.120" />
+		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.13" />
 		<PackageReference Include="sqlite-net-pcl" Version="1.11.285" />
+	</ItemGroup>
+
+	<!-- Desktop reliability fixes for navigation layout, focus and keyboard input. -->
+	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">
+		<PackageReference Include="Microsoft.WindowsAppSDK" Version="2.5.1" />
 	</ItemGroup>
 
 	<!-- Plugin.Firebase supports iOS and Android only (not MacCatalyst or Windows) -->
@@ -222,5 +330,72 @@
 		<PackageReference Include="Plugin.Firebase.Analytics" Version="4.0.0" />
 		<PackageReference Include="Plugin.Firebase.Core" Version="4.2.0" />
 	</ItemGroup>
+
+	<!-- ============================================================
+	     E2E app-process coverage (#1232)
+	     Activated only by -p:E2ECoverage=true on instrumented test builds
+	     (mobile E2E, Windows FlaUI). AltCover weaves sequence/branch visit
+	     calls into the compiled assembly; the BibleOnSite.E2eCoverage
+	     project provides the AltCover.Recorder.g substitute that collects
+	     the real hits and serves them to the E2E harness over a loopback
+	     endpoint. Store and production builds never set E2ECoverage.
+	     ============================================================ -->
+	<PropertyGroup>
+		<AltCoverVersion>9.0.145</AltCoverVersion>
+		<_E2EAltCoverTool Condition="'$(NuGetPackageRoot)' != ''">$(NuGetPackageRoot)altcover\$(AltCoverVersion)\tools\net8.0\AltCover.dll</_E2EAltCoverTool>
+		<_E2EAltCoverTool Condition="'$(_E2EAltCoverTool)' == '' AND '$(NUGET_PACKAGES)' != ''">$(NUGET_PACKAGES)\altcover\$(AltCoverVersion)\tools\net8.0\AltCover.dll</_E2EAltCoverTool>
+		<_E2EAltCoverTool Condition="'$(_E2EAltCoverTool)' == '' AND '$(USERPROFILE)' != ''">$(USERPROFILE)\.nuget\packages\altcover\$(AltCoverVersion)\tools\net8.0\AltCover.dll</_E2EAltCoverTool>
+		<_E2EAltCoverTool Condition="'$(_E2EAltCoverTool)' == '' AND '$(HOME)' != ''">$(HOME)/.nuget/packages/altcover/$(AltCoverVersion)/tools/net8.0/AltCover.dll</_E2EAltCoverTool>
+	</PropertyGroup>
+	<ItemGroup Condition="'$(E2ECoverage)' == 'true'">
+		<!-- The recorder is built as a standalone netstandard2.0 library by the
+		     devops target before the app build, then referenced by path. A
+		     ProjectReference would inherit the app build's global
+		     TargetFrameworks and restore for the app's TFM. -->
+		<Reference Include="AltCover.Recorder.g">
+			<HintPath>..\BibleOnSite.E2eCoverage\bin\$(Configuration)\AltCover.Recorder.g.dll</HintPath>
+		</Reference>
+		<PackageReference Include="altcover" Version="$(AltCoverVersion)" PrivateAssets="all" ExcludeAssets="all" />
+	</ItemGroup>
+
+	<!-- Weave coverage calls into the compiled assembly. Runs after XamlC so
+	     Debug (Runtime inflator / validate-only) and Release (IL rewrite)
+	     both instrument the final IL. The pristine assembly is preserved for
+	     restore on plain builds. -->
+	<Target Name="_E2ECoverageInstrument" AfterTargets="XamlC" Condition="'$(E2ECoverage)' == 'true'"
+			Inputs="$(IntermediateOutputPath)$(TargetFileName);$(IntermediateOutputPath)$(TargetName).pdb"
+			Outputs="$(IntermediateOutputPath)e2e-coverage.stamp">
+		<PropertyGroup>
+			<!-- Evaluated inside the target: at load time IntermediateOutputPath
+			     is still empty, which would leak artifacts to the project root. -->
+			<_E2EAltDir>$(IntermediateOutputPath)e2e-coverage\</_E2EAltDir>
+		</PropertyGroup>
+		<Error Condition="!Exists('$(_E2EAltCoverTool)')" Text="AltCover tool not found at $(_E2EAltCoverTool); restore the altcover package." />
+		<Copy SourceFiles="$(IntermediateOutputPath)$(TargetFileName)" DestinationFiles="$(IntermediateOutputPath)$(TargetName).uninstrumented.dll" />
+		<Copy SourceFiles="$(IntermediateOutputPath)$(TargetName).pdb" DestinationFiles="$(IntermediateOutputPath)$(TargetName).uninstrumented.pdb" Condition="Exists('$(IntermediateOutputPath)$(TargetName).pdb')" />
+		<MakeDir Directories="$(_E2EAltDir)stage;$(_E2EAltDir)instr" />
+		<Copy SourceFiles="$(IntermediateOutputPath)$(TargetFileName)" DestinationFolder="$(_E2EAltDir)stage" />
+		<Copy SourceFiles="$(IntermediateOutputPath)$(TargetName).pdb" DestinationFolder="$(_E2EAltDir)stage" Condition="Exists('$(IntermediateOutputPath)$(TargetName).pdb')" />
+		<Exec Command="dotnet &quot;$(_E2EAltCoverTool)&quot; -i &quot;$(_E2EAltDir)stage&quot; -o &quot;$(_E2EAltDir)instr&quot; --localSource --visibleBranches -r &quot;$(_E2EAltDir)template.opencover.xml&quot; -a ExcludeFromCodeCoverage -a GeneratedCodeAttribute -a CompilerGeneratedAttribute -a DebuggerNonUserCode -a Obsolete" />
+		<Copy SourceFiles="$(_E2EAltDir)instr\$(TargetFileName)" DestinationFiles="$(IntermediateOutputPath)$(TargetFileName)" />
+		<Copy SourceFiles="$(_E2EAltDir)instr\$(TargetName).pdb" DestinationFiles="$(IntermediateOutputPath)$(TargetName).pdb" Condition="Exists('$(_E2EAltDir)instr\$(TargetName).pdb')" />
+		<Touch Files="$(IntermediateOutputPath)e2e-coverage.stamp" AlwaysCreate="true" />
+		<Message Importance="high" Text="E2E coverage: instrumented $(TargetFileName); OpenCover template at $(_E2EAltDir)template.opencover.xml" />
+	</Target>
+
+	<!-- Plain builds after an instrumented one restore the untouched assembly
+	     so coverage instrumentation never leaks into non-test builds. -->
+	<Target Name="_E2ECoverageRestore" AfterTargets="XamlC" Condition="'$(E2ECoverage)' != 'true'">
+		<PropertyGroup>
+			<_E2EWasInstrumented Condition="Exists('$(IntermediateOutputPath)e2e-coverage.stamp')">true</_E2EWasInstrumented>
+		</PropertyGroup>
+		<Copy SourceFiles="$(IntermediateOutputPath)$(TargetName).uninstrumented.dll" DestinationFiles="$(IntermediateOutputPath)$(TargetFileName)"
+				Condition="'$(_E2EWasInstrumented)' == 'true' AND Exists('$(IntermediateOutputPath)$(TargetName).uninstrumented.dll')" />
+		<Copy SourceFiles="$(IntermediateOutputPath)$(TargetName).uninstrumented.pdb" DestinationFiles="$(IntermediateOutputPath)$(TargetName).pdb"
+				Condition="'$(_E2EWasInstrumented)' == 'true' AND Exists('$(IntermediateOutputPath)$(TargetName).uninstrumented.pdb')" />
+		<Delete Files="$(TargetDir)$(TargetFileName);$(TargetDir)$(TargetName).pdb;$(TargetDir)AltCover.Recorder.g.dll" Condition="'$(_E2EWasInstrumented)' == 'true'" />
+		<Delete Files="$(IntermediateOutputPath)e2e-coverage.stamp" Condition="'$(_E2EWasInstrumented)' == 'true'" />
+		<Message Importance="high" Text="E2E coverage: restored uninstrumented $(TargetFileName)" Condition="'$(_E2EWasInstrumented)' == 'true'" />
+	</Target>
 
 </Project>

@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { PerekObj } from "@/data/perek-dto";
 import { parseRecitation } from "./recitation";
+import { opusPlayback } from "./recitation-playback";
 
 function milliseconds(value: string): number {
 	if (
@@ -41,7 +42,12 @@ export function loadRecitation(
 	if (hash !== perek.recitation.textSha256)
 		throw new Error("Canonical text changed after alignment");
 	return parseRecitation(
-		{ ...perek.recitation, perekId: perek.perekId, words },
+		{
+			...perek.recitation,
+			perekId: perek.perekId,
+			words,
+			playback: opusPlayback(perek.perekId, perek.recitation.audioSha256),
+		},
 		perek.perekId,
 		perek.pesukim,
 	);

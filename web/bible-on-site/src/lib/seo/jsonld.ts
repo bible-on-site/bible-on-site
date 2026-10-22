@@ -131,9 +131,56 @@ function stripHtmlTags(html: string, replacement: string): string {
 	return stripped;
 }
 
+const NAMED_HTML_ENTITIES: Record<string, string> = {
+	"&amp;": "&",
+	"&lt;": "<",
+	"&gt;": ">",
+	"&quot;": '"',
+	"&apos;": "'",
+	"&nbsp;": "\u00a0",
+};
+
+/**
+ * Decode HTML entities to their literal characters so plain-text excerpts
+ * read naturally in `<meta>` descriptions and JSON-LD fields. Numeric
+ * (`&#39;`, `&#x27;`) entities decode via code point; the named set covers
+ * the entities that appear in stored content.
+ */
+function decodeHtmlEntities(text: string): string {
+	return text
+		.replace(/&#x([0-9a-fA-F]+);/g, (entity, hex: string) =>
+			decodeCodePoint(entity, hex, 16),
+		)
+		.replace(/&#(\d+);/g, (entity, dec: string) =>
+			decodeCodePoint(entity, dec, 10),
+		)
+		.replace(/&[a-zA-Z]+;/g, (entity) => NAMED_HTML_ENTITIES[entity] ?? entity);
+}
+
+/**
+ * Numeric entity → character, but only inside the Unicode range. A malformed
+ * entity like `&#x110000;` would otherwise make `String.fromCodePoint` throw
+ * and take the whole metadata generation down with it — leave it untouched.
+ */
+function decodeCodePoint(
+	entity: string,
+	digits: string,
+	radix: 10 | 16,
+): string {
+	const codePoint = Number.parseInt(digits, radix);
+	return codePoint >= 0 && codePoint <= 0x10ffff
+		? String.fromCodePoint(codePoint)
+		: entity;
+}
+
 /** Plain-text snippet from HTML, for a definition/description/abstract. */
 export function plainText(html: string, maxLen: number): string {
-	return stripHtmlTags(html, " ").replace(/\s+/g, " ").trim().slice(0, maxLen);
+	const stripped = stripHtmlTags(html, " ");
+	// Entities can hide markup (`&lt;b&gt;`), so strip again after decoding.
+	return stripHtmlTags(decodeHtmlEntities(stripped), " ")
+		.replace(/\s+/g, " ")
+		.trim()
+		.slice(0, maxLen);
 }
 
 /**

@@ -31,9 +31,13 @@ import { NavBar } from "@/app/components/NavBar";
 describe("NavBar", () => {
 	it("renders menu with main nav links", () => {
 		render(<NavBar />);
-		expect(screen.getByRole("link", { name: /על הפרק/ })).toHaveAttribute(
+		expect(screen.getByRole("link", { name: "על הפרק" })).toHaveAttribute(
 			"href",
 			"/929",
+		);
+		expect(screen.getByRole("link", { name: "מסורה על הפרק" })).toHaveAttribute(
+			"href",
+			"/מסורה",
 		);
 		expect(screen.getByRole("link", { name: /הרבנים/ })).toHaveAttribute(
 			"href",
@@ -74,6 +78,14 @@ describe("NavBar", () => {
 		expect(screen.getByRole("link", { name: /קבוצת ווטסאפ/ })).toHaveAttribute(
 			"href",
 			"/whatsappGroup",
+		);
+	});
+
+	it("renders the accessibility statement link", () => {
+		render(<NavBar />);
+		expect(screen.getByRole("link", { name: /הצהרת נגישות/ })).toHaveAttribute(
+			"href",
+			"/accessibility",
 		);
 	});
 

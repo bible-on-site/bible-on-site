@@ -1,0 +1,206 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:viewmodels="clr-namespace:BibleOnSite.ViewModels"
+             xmlns:controls="clr-namespace:BibleOnSite.Controls"
+             xmlns:fonts="clr-namespace:Fonts"
+             x:Class="BibleOnSite.Pages.PerekPreferencesPage"
+             x:DataType="viewmodels:PerekPreferencesViewModel"
+             Title="על הפרק"
+             FlowDirection="RightToLeft"
+             BackgroundColor="{AppThemeBinding Light={StaticResource Gray50}, Dark={StaticResource SurfaceDark}}">
+
+    <ScrollView Padding="16,12">
+        <VerticalStackLayout Spacing="24">
+
+            <!-- ═══ הפרק שיוצג בעת הפעלת היישומון ═══ -->
+            <VerticalStackLayout Spacing="8">
+                <Label Text="הפרק שיוצג בעת הפעלת היישומון"
+                       FontSize="14"
+                       FontAttributes="Bold"
+                       TextColor="{StaticResource Primary}"
+                       Padding="4,0,0,0"/>
+
+                <!-- Full-width stacked selection rows: each option is readable and
+                     tappable on any width, including with increased text size. -->
+                <VerticalStackLayout Spacing="10">
+
+                    <Border Padding="14,12"
+                            StrokeShape="RoundRectangle 10"
+                            Stroke="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}"
+                            StrokeThickness="1.5"
+                            BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Gray900}}"
+                            AutomationId="PerekTodaysOption"
+                            SemanticProperties.Description="הפרק של היום">
+                        <Border.Triggers>
+                            <DataTrigger TargetType="Border"
+                                         Binding="{Binding IsPerekToLoadTodays}"
+                                         Value="True">
+                                <Setter Property="Stroke" Value="{StaticResource Primary}"/>
+                                <Setter Property="BackgroundColor"
+                                        Value="{AppThemeBinding Light={StaticResource Secondary}, Dark={StaticResource Tertiary}}"/>
+                            </DataTrigger>
+                        </Border.Triggers>
+                        <Grid ColumnDefinitions="Auto,*">
+                            <Grid.GestureRecognizers>
+                                <TapGestureRecognizer Command="{Binding SelectTodaysPerekCommand}"/>
+                            </Grid.GestureRecognizers>
+                            <Label Text="{x:Static fonts:FluentUI.checkmark_circle_24_regular}"
+                                   FontFamily="FluentIcons"
+                                   FontSize="22"
+                                   TextColor="{StaticResource Primary}"
+                                   IsVisible="{Binding IsPerekToLoadTodays}"
+                                   VerticalOptions="Center"
+                                   Margin="0,0,10,0"/>
+                            <Label Text="{x:Static fonts:FluentUI.circle_24_regular}"
+                                   FontFamily="FluentIcons"
+                                   FontSize="22"
+                                   TextColor="{AppThemeBinding Light={StaticResource Gray400}, Dark={StaticResource Gray500}}"
+                                   IsVisible="{Binding IsPerekToLoadTodays, Converter={StaticResource InvertedBoolConverter}}"
+                                   VerticalOptions="Center"
+                                   Margin="0,0,10,0"/>
+                            <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                                <Label Text="הפרק של היום"
+                                       FontSize="16"
+                                       LineBreakMode="WordWrap"
+                                       TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
+                                <Label Text="הפרק המשויך לתאריך של היום"
+                                       FontSize="12"
+                                       LineBreakMode="WordWrap"
+                                       TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
+                            </VerticalStackLayout>
+                        </Grid>
+                    </Border>
+
+                    <Border Padding="14,12"
+                            StrokeShape="RoundRectangle 10"
+                            Stroke="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}"
+                            StrokeThickness="1.5"
+                            BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Gray900}}"
+                            AutomationId="PerekLastLearntOption"
+                            SemanticProperties.Description="האחרון שלמדתי">
+                        <Border.Triggers>
+                            <DataTrigger TargetType="Border"
+                                         Binding="{Binding IsPerekToLoadLastLearnt}"
+                                         Value="True">
+                                <Setter Property="Stroke" Value="{StaticResource Primary}"/>
+                                <Setter Property="BackgroundColor"
+                                        Value="{AppThemeBinding Light={StaticResource Secondary}, Dark={StaticResource Tertiary}}"/>
+                            </DataTrigger>
+                        </Border.Triggers>
+                        <Grid ColumnDefinitions="Auto,*">
+                            <Grid.GestureRecognizers>
+                                <TapGestureRecognizer Command="{Binding SelectLastLearntPerekCommand}"/>
+                            </Grid.GestureRecognizers>
+                            <Label Text="{x:Static fonts:FluentUI.checkmark_circle_24_regular}"
+                                   FontFamily="FluentIcons"
+                                   FontSize="22"
+                                   TextColor="{StaticResource Primary}"
+                                   IsVisible="{Binding IsPerekToLoadLastLearnt}"
+                                   VerticalOptions="Center"
+                                   Margin="0,0,10,0"/>
+                            <Label Text="{x:Static fonts:FluentUI.circle_24_regular}"
+                                   FontFamily="FluentIcons"
+                                   FontSize="22"
+                                   TextColor="{AppThemeBinding Light={StaticResource Gray400}, Dark={StaticResource Gray500}}"
+                                   IsVisible="{Binding IsPerekToLoadLastLearnt, Converter={StaticResource InvertedBoolConverter}}"
+                                   VerticalOptions="Center"
+                                   Margin="0,0,10,0"/>
+                            <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                                <Label Text="האחרון שלמדתי"
+                                       FontSize="16"
+                                       LineBreakMode="WordWrap"
+                                       TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
+                                <Label Text="ממשיכים מאיפה שעצרתם"
+                                       FontSize="12"
+                                       LineBreakMode="WordWrap"
+                                       TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
+                            </VerticalStackLayout>
+                        </Grid>
+                    </Border>
+                </VerticalStackLayout>
+            </VerticalStackLayout>
+
+            <!-- ═══ קריינות ═══ -->
+            <VerticalStackLayout Spacing="8">
+                <Label Text="קריינות"
+                       FontSize="14"
+                       FontAttributes="Bold"
+                       TextColor="{StaticResource Primary}"
+                       Padding="4,0,0,0"/>
+
+                <Border Padding="16"
+                        StrokeShape="RoundRectangle 12"
+                        Stroke="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray700}}"
+                        StrokeThickness="1"
+                        BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Gray900}}">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <VerticalStackLayout Spacing="2" VerticalOptions="Center">
+                            <Label Text="השמעת קריינות"
+                                   FontSize="15"
+                                   TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
+                            <Label Text="לחיצה על פסוק או על סמל האוזניות משמיעה את ההקלטה"
+                                   FontSize="12"
+                                   LineBreakMode="WordWrap"
+                                   TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
+                        </VerticalStackLayout>
+                        <Switch Grid.Column="1"
+                                IsToggled="{Binding QriynotEnabled}"
+                                AutomationId="QriynotEnabledSwitch"
+                                SemanticProperties.Description="השמעת קריינות"/>
+                    </Grid>
+                </Border>
+            </VerticalStackLayout>
+
+            <!-- ═══ מסורה על הפרק ═══ -->
+            <VerticalStackLayout Spacing="8">
+                <Label Text="מסורה על הפרק"
+                       FontSize="14"
+                       FontAttributes="Bold"
+                       TextColor="{StaticResource Primary}"
+                       Padding="4,0,0,0"/>
+
+                <Border Padding="16"
+                        StrokeShape="RoundRectangle 12"
+                        Stroke="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray700}}"
+                        StrokeThickness="1"
+                        BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Gray900}}">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <Label Text="הצגת מסורה על הפרק"
+                               FontSize="15"
+                               VerticalOptions="Center"
+                               TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
+                        <Switch Grid.Column="1"
+                                IsToggled="{Binding MasoraMenuEnabled}"
+                                AutomationId="MasoraMenuEnabledSwitch"/>
+                    </Grid>
+                </Border>
+            </VerticalStackLayout>
+            <!-- ═══ פירושים על הפרק ═══ -->
+            <VerticalStackLayout Spacing="8">
+                <Label Text="פירושים על הפרק"
+                       FontSize="14"
+                       FontAttributes="Bold"
+                       TextColor="{StaticResource Primary}"
+                       Padding="4,0,0,0"/>
+                <Border Padding="16"
+                        StrokeShape="RoundRectangle 12"
+                        Stroke="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray700}}"
+                        StrokeThickness="1"
+                        BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Gray900}}">
+                    <VerticalStackLayout Spacing="12">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <Label Text="מספר פירושים בו זמנית על הפרק" VerticalOptions="Center"/>
+                            <Label Grid.Column="1" Text="{Binding InlineCommentaryLimit}" FontAttributes="Bold" VerticalOptions="Center"/>
+                        </Grid>
+                        <controls:NumberPicker Minimum="1" Maximum="100" Increment="1" Value="{Binding InlineCommentaryLimit}"
+                                               AutomationId="InlineCommentaryLimitPicker" HorizontalOptions="Start"/>
+                        <Label Text="ברירת המחדל היא 5. הגדלת המספר עלולה להאט את הקריאה ולהגדיל את השימוש בזיכרון, במיוחד בפרקים ארוכים."
+                               FontSize="13" LineBreakMode="WordWrap"
+                               TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
+                    </VerticalStackLayout>
+                </Border>
+            </VerticalStackLayout>
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

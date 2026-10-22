@@ -22,10 +22,18 @@ public class LocalDatabaseService
     private readonly SemaphoreSlim _initializeLock = new(1, 1);
 
     private readonly IFileSystem _fileSystem;
+    private readonly IAppInfo? _appInfo;
 
     private LocalDatabaseService() : this(FileSystem.Current) { }
 
-    public LocalDatabaseService(IFileSystem fileSystem) { _fileSystem = fileSystem; }
+    public LocalDatabaseService(IFileSystem fileSystem) : this(fileSystem, null) { }
+
+    /// <param name="appInfo">App identity for the packaged-copy version marker; null resolves <see cref="AppInfo.Current"/>.</param>
+    public LocalDatabaseService(IFileSystem fileSystem, IAppInfo? appInfo)
+    {
+        _fileSystem = fileSystem;
+        _appInfo = appInfo;
+    }
 
     /// <summary>
     /// Gets the database connection, initializing it if necessary.
@@ -33,7 +41,9 @@ public class LocalDatabaseService
     public async Task<SQLiteAsyncConnection> GetDatabaseAsync()
     {
         if (_isInitialized && _database != null)
+        {
             return _database;
+        }
 
         await InitializeAsync();
         return _database!;
@@ -48,8 +58,11 @@ public class LocalDatabaseService
         try
         {
             if (_isInitialized)
+            {
                 return;
-            await PackagedDatabase.RefreshAsync(_fileSystem, DbName);
+            }
+
+            await PackagedDatabase.RefreshAsync(_fileSystem, DbName, _appInfo);
             var dbPath = Path.Combine(_fileSystem.AppDataDirectory, DbName);
             _database = new SQLiteAsyncConnection(dbPath, SQLiteOpenFlags.ReadOnly);
             _isInitialized = true;

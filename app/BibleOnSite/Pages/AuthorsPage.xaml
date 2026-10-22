@@ -3,22 +3,59 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:viewmodels="clr-namespace:BibleOnSite.ViewModels"
              xmlns:models="clr-namespace:BibleOnSite.Models"
+             xmlns:fonts="clr-namespace:Fonts"
+             xmlns:controls="clr-namespace:BibleOnSite.Controls"
              x:Class="BibleOnSite.Pages.AuthorsPage"
              x:DataType="viewmodels:AuthorsViewModel"
              Title="רבנים"
-             FlowDirection="RightToLeft">
+             BackgroundColor="{AppThemeBinding Light=#F2F7FE, Dark=#20304A}"
+             FlowDirection="RightToLeft"
+             Shell.NavBarIsVisible="False">
 
+       <!-- Regular page presentation: no popup chrome or on-screen Back
+            arrow. The page stays on the navigation stack, so the
+            device/system Back still returns to the previous page. -->
        <Grid RowDefinitions="Auto,*">
-              <!-- Search Bar -->
-              <SearchBar Grid.Row="0"
-                         Placeholder="חיפוש רבנים..."
-                         Text="{Binding SearchPhrase}"
-                         TextChanged="OnSearchTextChanged"
-                         BackgroundColor="{AppThemeBinding Light={StaticResource Gray100}, Dark={StaticResource Gray900}}"
-                         Margin="8,8,8,0"/>
+              <!-- The same shared top bar as the על הפרק reader: flyout
+                   hamburger, the pill-shaped control in the center slot and a
+                   clear action in the trailing slot. -->
+              <controls:SharedTopBar Grid.Row="0" NavigationAutomationId="AuthorsNavigationButton">
+                     <controls:SharedTopBar.CenterContent>
+                            <controls:ToolbarPill AutomationId="AuthorsSearchPill">
+                                   <controls:SearchEntry x:Name="AuthorsSearchInput"
+                                                         AutomationId="AuthorsSearchInput"
+                                                         Text="{Binding SearchPhrase, Mode=TwoWay}"
+                                                         Placeholder="חיפוש רבנים..."
+                                                         FontSize="17"
+                                                         VerticalOptions="Center"
+                                                         TextColor="{AppThemeBinding Light=#26384E, Dark=#E7EEF8}"
+                                                         PlaceholderColor="{AppThemeBinding Light=#52647C, Dark=#B2C2D8}"
+                                                         TextChanged="OnSearchTextChanged"/>
+                            </controls:ToolbarPill>
+                     </controls:SharedTopBar.CenterContent>
+                     <controls:SharedTopBar.TrailingContent>
+                            <Button x:Name="ClearSearchButton"
+                                    IsVisible="False"
+                                    Text="{x:Static fonts:FluentUI.dismiss_24_regular}"
+                                    FontFamily="FluentIcons"
+                                    FontSize="24"
+                                    WidthRequest="48"
+                                    HeightRequest="44"
+                                    Padding="0"
+                                    BorderWidth="0"
+                                    BackgroundColor="Transparent"
+                                    TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark=#AACBFF}"
+                                    VerticalOptions="Center"
+                                    SemanticProperties.Description="ניקוי החיפוש"
+                                    AutomationId="ClearAuthorsSearchButton"
+                                    Clicked="OnClearSearchClicked"/>
+                     </controls:SharedTopBar.TrailingContent>
+              </controls:SharedTopBar>
+
+              <Grid Grid.Row="1" BackgroundColor="{AppThemeBinding Light=White, Dark={StaticResource OffBlack}}">
 
               <!-- Authors Grid with CollectionView for virtualization/lazy loading -->
-              <CollectionView Grid.Row="1"
+              <CollectionView Grid.Row="0"
                               ItemsSource="{Binding FilteredAuthors}"
                               Margin="8,8,8,0"
                               ItemsLayout="VerticalGrid, 2"
@@ -89,7 +126,7 @@
               </CollectionView>
 
               <!-- Empty/Loading State Overlay -->
-              <VerticalStackLayout Grid.Row="1"
+              <VerticalStackLayout Grid.Row="0"
                                    VerticalOptions="Center"
                                    HorizontalOptions="Center"
                                    Padding="20"
@@ -109,5 +146,6 @@
                             HorizontalTextAlignment="Center"
                             IsVisible="{Binding IsLoading, Converter={StaticResource InvertedBoolConverter}}"/>
               </VerticalStackLayout>
+              </Grid>
        </Grid>
 </ContentPage>

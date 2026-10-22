@@ -84,6 +84,29 @@ export const NavBar = () => {
 							<span>על הפרק</span>
 						</Link>
 					</li>
+					<li className={`${styles.menuItem} ${styles.ribbonBuilding}`}>
+						<Image src="/icons/book.svg" alt="" width={16} height={16} />
+						<Link href="/מסורה">
+							<span>מסורה על הפרק</span>
+						</Link>
+					</li>
+					<li className={`${styles.menuItem} ${styles.ribbonBuilding}`}>
+						<Image src="/icons/book.svg" alt="" width={16} height={16} />
+						<Link href="/פרשה">
+							<span>פרשה על הפרק</span>
+						</Link>
+					</li>
+					<li className={styles.menuItem}>
+						<Image
+							src="/icons/calendar-today.svg"
+							alt=""
+							width={16}
+							height={16}
+						/>
+						<Link href="/לוח">
+							<span>לוח לימוד יומי</span>
+						</Link>
+					</li>
 					<li className={styles.menuItem}>
 						<Image src="/icons/rabbi.svg" alt="" width={16} height={16} />
 						<Link href="/929/authors">
@@ -124,6 +147,17 @@ export const NavBar = () => {
 						<Image src="/icons/handshake.svg" alt="" width={16} height={16} />
 						<Link href="/tos">
 							<span>תנאי שימוש</span>
+						</Link>
+					</li>
+					<li className={styles.menuItem}>
+						<Image
+							src="/icons/accessibility.svg"
+							alt=""
+							width={16}
+							height={16}
+						/>
+						<Link href="/accessibility">
+							<span>הצהרת נגישות</span>
 						</Link>
 					</li>
 					<li className={styles.menuItem}>

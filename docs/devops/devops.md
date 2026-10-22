@@ -35,18 +35,19 @@ This document describes the DevOps tools and practices used in the Bible on Site
 | [![MongoDB](https://img.shields.io/badge/MongoDB-%234ea94b.svg?logo=mongodb&logoColor=white&style=for-the-badge)](https://www.mongodb.com/) | Data pipeline | * |
 | [![Biome](https://img.shields.io/badge/Biome-60a5fa?style=for-the-badge&logo=biome&logoColor=white)](https://biomejs.dev/) | Linter & Formatter | website |
 | [![Clippy](https://img.shields.io/badge/Clippy-000?style=for-the-badge&logo=rust&logoColor=white)](https://doc.rust-lang.org/clippy/) | Linter & Formatter | api |
-| [![SonarQube](https://img.shields.io/badge/SonarQube-126ED3?logo=sonarqubecloud&logoColor=fff&style=for-the-badge)](https://www.sonarsource.com/products/sonarcloud/) | Linter | app |
-| [![Husky](https://custom-icon-badges.demolab.com/badge/Husky-000000.svg?logo=husky&style=for-the-badge)](https://typicode.github.io/husky/) | Git hooks for pre-commit checks | * |
+| [![SonarQube](https://img.shields.io/badge/SonarQube-126ED3?logo=sonarqubecloud&logoColor=fff&style=for-the-badge)](https://www.sonarsource.com/products/sonarqube/cloud/) | Linter | app |
+| [![pre-commit](https://img.shields.io/badge/pre--commit-fabf8c?logo=pre-commit&logoColor=black&style=for-the-badge)](https://pre-commit.com/) | Git hooks framework for pre-commit checks | * |
 
 ### 🔨 BUILD
 
 | Tool | Purpose | Module |
 |------|---------|--------|
-| [![npm](https://img.shields.io/badge/npm-CB3837?logo=npm&logoColor=fff&style=for-the-badge)](https://www.npmjs.com/) | Node.js package manager | website |
+| [![npm](https://img.shields.io/badge/npm-CB3837?logo=npm&logoColor=fff&style=for-the-badge)](https://www.npmjs.com/) | Node.js package manager | website, admin, mobile-e2e harness |
 | [![NuGet](https://img.shields.io/badge/NuGet-004880?logo=nuget&logoColor=fff&style=for-the-badge)](https://www.nuget.org/) | .NET package manager | app |
-| [![Cargo](https://img.shields.io/badge/Cargo-000?style=for-the-badge&logo=rust&logoColor=white)](https://doc.rust-lang.org/cargo/) | Rust package manager | api |
+| [![Cargo](https://img.shields.io/badge/Cargo-000?style=for-the-badge&logo=rust&logoColor=white)](https://doc.rust-lang.org/cargo/) | Rust package manager | api, bulletin, data |
 | [![Next.js](https://img.shields.io/badge/Next.js-black?style=for-the-badge&logo=next.js&logoColor=white)](https://nextjs.org/) | Production website build | website |
-| [![cargo-make](https://img.shields.io/badge/cargo--make-000?style=for-the-badge&logo=rust&logoColor=white)](https://github.com/sagiegurari/cargo-make) | Rust task automation | api |
+| [![cargo-make](https://img.shields.io/badge/cargo--make-000?style=for-the-badge&logo=rust&logoColor=white)](https://github.com/sagiegurari/cargo-make) | Rust task automation | api, data |
+| [![NUKE](https://img.shields.io/badge/NUKE-512BD4?style=for-the-badge&logo=dotnet&logoColor=white)](https://github.com/nuke-build/nuke) | .NET build automation (`app/devops` targets) | app |
 | [![GitHub Actions](https://img.shields.io/badge/GitHub%20Actions-2088FF?style=for-the-badge&logo=github-actions&logoColor=white)](https://github.com/features/actions) | CI/CD workflow automation | * |
 
 ### 🧪 TEST
@@ -54,8 +55,13 @@ This document describes the DevOps tools and practices used in the Bible on Site
 | Tool | Purpose | Module |
 |------|---------|--------|
 | [![Jest](https://img.shields.io/badge/Jest-C21325?style=for-the-badge&logo=jest&logoColor=white)](https://jestjs.io) | Unit testing | website |
-| [![Playwright](https://custom-icon-badges.demolab.com/badge/Playwright-2EAD33?logo=playwright&logoColor=fff&style=for-the-badge)](https://playwright.dev) | E2E and performance testing | website, api |
-| [![cargo-llvm-cov](https://img.shields.io/badge/cargo--llvm--cov-000?style=for-the-badge&logo=rust&logoColor=white)](https://github.com/taiki-e/cargo-llvm-cov) | Rust code coverage | api |
+| [![xUnit](https://img.shields.io/badge/xUnit-512BD4?style=for-the-badge&logo=dotnet&logoColor=white)](https://xunit.net/) | Unit/integration/E2E test framework | app |
+| [![FlaUI](https://img.shields.io/badge/FlaUI-512BD4?style=for-the-badge&logo=dotnet&logoColor=white)](https://github.com/FlaUI/FlaUI) | Windows UI automation | app |
+| [![Appium](https://img.shields.io/badge/Appium-662D91?style=for-the-badge&logo=appium&logoColor=white)](https://appium.io/) | Native mobile E2E driver (XCUITest/UiAutomator2) | app |
+| [![AltCover](https://img.shields.io/badge/AltCover-512BD4?style=for-the-badge&logo=dotnet&logoColor=white)](https://github.com/SteveGilham/altcover) | In-process IL coverage instrumentation for mobile E2E | app |
+| [![Playwright](https://custom-icon-badges.demolab.com/badge/Playwright-2EAD33?logo=playwright&logoColor=fff&style=for-the-badge)](https://playwright.dev) | E2E and performance testing | website, admin, api |
+| [![cargo-llvm-cov](https://img.shields.io/badge/cargo--llvm--cov-000?style=for-the-badge&logo=rust&logoColor=white)](https://github.com/taiki-e/cargo-llvm-cov) | Rust code coverage | api, bulletin, data |
+| [![nextest](https://img.shields.io/badge/nextest-000?style=for-the-badge&logo=rust&logoColor=white)](https://nexte.st/) | Rust test runner (JUnit reports) | api, bulletin, data |
 | [![lcov](https://img.shields.io/badge/lcov-000?style=for-the-badge&logo=linux&logoColor=white)](https://github.com/linux-test-project/lcov) | Coverage report merging | * |
 | [![monocart-coverage-reports](https://custom-icon-badges.demolab.com/badge/monocart--coverage--reports-000?logo=monocart-coverage-reports&style=for-the-badge)](https://github.com/cenfun/monocart-coverage-reports) | Typescript code coverage reporting | website |
 | [![web-vitals](https://img.shields.io/badge/web--vitals-4285F4?style=for-the-badge&logo=google&logoColor=white)](https://github.com/GoogleChrome/web-vitals) | performance measuring | website |
@@ -75,10 +81,13 @@ This document describes the DevOps tools and practices used in the Bible on Site
 
 | Tool | Purpose | Module |
 |------|---------|--------|
-| [![AWS ECR](https://custom-icon-badges.demolab.com/badge/AWS%20ECR-000000.svg?logo=ecr&style=for-the-badge)](https://aws.amazon.com/ecr/) | Container registry | website, api |
+| [![AWS ECR](https://custom-icon-badges.demolab.com/badge/AWS%20ECR-000000.svg?logo=ecr&style=for-the-badge)](https://aws.amazon.com/ecr/) | Container registry | website, api, admin |
 | [![EventBridge](https://custom-icon-badges.demolab.com/badge/EventBridge-000000.svg?logo=eventbridge&style=for-the-badge)](https://aws.amazon.com/eventbridge/) | Update ECS on ECR latest push | website, api |
+| [![AWS Lambda](https://custom-icon-badges.demolab.com/badge/AWS%20Lambda-000000.svg?logo=awslambda&style=for-the-badge)](https://aws.amazon.com/lambda/) | Bulletin deployment target | bulletin |
 | [![crane](https://custom-icon-badges.demolab.com/badge/crane-000000.svg?logo=crane&style=for-the-badge)](https://github.com/google/go-containerregistry/tree/main/cmd/crane) | deploy docker to ECR | website, api |
 | [![OIDC](https://img.shields.io/badge/OIDC-000?style=for-the-badge&logo=openid&logoColor=white)](https://openid.net/connect/) | Github-actions-to-AWS auth | website, api |
+| [![Fastlane](https://img.shields.io/badge/Fastlane-00B3E0?style=for-the-badge&logo=fastlane&logoColor=white)](https://fastlane.tools/) | TestFlight upload (`pilot`) | app |
+| [![Microsoft Store / Google Play / App Store](https://img.shields.io/badge/Stores-2088FF?style=for-the-badge&logo=appstore&logoColor=white)](#) | App release channels (Store, Play, TestFlight) | app |
 
 ### ⚙️ OPERATE
 
@@ -105,5 +114,8 @@ This document describes the DevOps tools and practices used in the Bible on Site
 ## Workflows
 - [Setup Development Environment](./setup-development-environment/setup-development-environment.md)
 - [Pre-commit Checks](./pre-commit.md)
-- [CI](../github/workflows/ci/ci.md)
-- [CD](../github/workflows/cd/cd.md)
+- [CI](../github/workflows/ci/ci.md) — pipeline stages, conditional jobs, caches
+- [CI performance measurements](../github/workflows/ci/performance.md)
+- [CD](../github/workflows/cd/cd.md) — release payload handoff, stores, rollback
+- [E2E test selection (coverage trees)](./e2e-test-selection.md) — deterministic selection design + current shadow/enforce status
+- [Version verification](../github/version-verification.md) — version bump and tag rules

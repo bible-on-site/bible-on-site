@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { sefarim } from "@/data/db/sefarim";
-import { getTodaysPerekId } from "@/data/perek-dto";
+import catalog from "@/data/db/client-catalog.generated.json";
+import { getTodaysPerekId } from "@/data/perek-calendar";
 import { isTreiAsar } from "@/data/sefer-colors";
 import styles from "./bookshelf.module.scss";
+
+const sefarim = catalog.books;
 
 // Constants for layout (in grid units)
 const BOOK_WIDTH = 2;

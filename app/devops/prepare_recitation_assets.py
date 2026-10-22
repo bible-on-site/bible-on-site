@@ -1,0 +1,243 @@
+"""Build release-coupled playback packs; original MP3 identities stay canonical."""
+
+import argparse
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import closing
+import errno
+import hashlib
+from http.client import HTTPException, IncompleteRead, RemoteDisconnected
+import json
+from pathlib import Path
+import shutil
+import sqlite3
+import ssl
+import sys
+import tempfile
+import time
+from urllib.error import HTTPError, URLError
+from urllib.parse import urlsplit
+from urllib.request import HTTPSHandler, HTTPDefaultErrorHandler, HTTPErrorProcessor, OpenerDirector
+import zipfile
+
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "data/recitation"))
+from audit import audit
+from audit_native import audit_native, NATIVE
+from publish import DATABASE, chapters_in, extract, publish
+from playback import load_playback
+
+CATALOG = "recitation-catalog.json"
+DOWNLOAD_ATTEMPTS = 4
+
+
+def open_https(url):
+    # Only HTTPS is installed: file://, plaintext HTTP and redirects have no handler.
+    opener = OpenerDirector()
+    opener.add_handler(HTTPSHandler(context=ssl.create_default_context()))
+    opener.add_handler(HTTPDefaultErrorHandler())
+    opener.add_handler(HTTPErrorProcessor())
+    return opener.open(url, timeout=120)
+
+
+def digest(path):
+    with path.open("rb") as source:
+        return hashlib.file_digest(source, "sha256").hexdigest()
+
+
+def transient_download_error(error):
+    if isinstance(error, HTTPError):
+        return error.code in (408, 429, 500, 502, 503, 504)
+    if isinstance(error, URLError):
+        error = error.reason
+    if isinstance(error, ssl.SSLCertVerificationError):
+        return False
+    return (isinstance(error, (TimeoutError, ConnectionError, IncompleteRead, RemoteDisconnected, ssl.SSLEOFError))
+            or (isinstance(error, OSError) and error.errno in (
+                errno.ECONNRESET, errno.ECONNABORTED, errno.ETIMEDOUT,
+                errno.ENETRESET, errno.EHOSTUNREACH, errno.ENETUNREACH, errno.EPIPE)))
+
+
+def download_original(url, temporary, perek_id):
+    """Restart an interrupted GET; never append partial bytes or retry bad content."""
+    for attempt in range(DOWNLOAD_ATTEMPTS):
+        try:
+            with open_https(url) as source, temporary.open("wb") as target:
+                if source.status != 200:
+                    raise ValueError(f'{perek_id}: recording download returned HTTP {source.status}')
+                shutil.copyfileobj(source, target)
+            return
+        except (OSError, HTTPException, URLError) as error:
+            temporary.unlink(missing_ok=True)
+            if not transient_download_error(error) or attempt + 1 == DOWNLOAD_ATTEMPTS:
+                raise
+            delay = 2 ** attempt
+            print(f'{perek_id}: transient recording download failure; retry {attempt + 2}/{DOWNLOAD_ATTEMPTS} in {delay}s',
+                  file=sys.stderr, flush=True)
+            time.sleep(delay)
+
+
+def recording(track, cache, recordings=None):
+    """Only the build fetches S3; immutable byte hashes are checked before packaging."""
+    destination = cache / (track["audioSha256"] + ".mp3")
+    if destination.is_file() and digest(destination) == track["audioSha256"]:
+        return destination
+    temporary = destination.with_suffix(".download")
+    try:
+        if recordings is not None:
+            shutil.copyfile(recordings / f'{track["perekId"]}_record.mp3', temporary)
+        else:
+            url = urlsplit(track["audioUrl"])
+            if (url.scheme != "https" or not url.hostname or url.username or url.password or url.query or url.fragment
+                    or url.path != f'/recordings/{track["perekId"]}_record.mp3'):
+                raise ValueError("Build recording URLs must be HTTPS chapter assets")
+            download_original(url.geturl(), temporary, track['perekId'])
+        if digest(temporary) != track["audioSha256"]:
+            raise ValueError(f'{track["perekId"]}: recording checksum mismatch')
+        temporary.replace(destination)
+        return destination
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def playback_recording(track, cache, recordings=None):
+    """Store playback comes from immutable derived S3 assets, never runtime HTTP."""
+    metadata = load_playback(track["perekId"], track["audioSha256"])
+    destination = cache / (metadata["sha256"] + ".ogg")
+    if not destination.exists() or digest(destination) != metadata["sha256"]:
+        temporary = destination.with_suffix(".download")
+        try:
+            local = recordings / destination.name if recordings is not None else None
+            if local is not None and local.exists():
+                shutil.copyfile(local, temporary)
+            else:
+                origin = urlsplit(track["audioUrl"])
+                if origin.scheme != "https" or origin.username or origin.password:
+                    raise ValueError("Build recording URLs must be HTTPS chapter assets")
+                download_original(f"{origin.scheme}://{origin.netloc}/{metadata['key']}", temporary, track["perekId"])
+            if temporary.stat().st_size != metadata["sizeBytes"] or digest(temporary) != metadata["sha256"]:
+                raise ValueError("Derived playback checksum mismatch")
+            temporary.replace(destination)
+        finally:
+            temporary.unlink(missing_ok=True)
+    select_playback(track, metadata)
+    return destination
+
+
+def select_playback(track, metadata):
+    track["playback"] = {"format": "ogg-opus", "sha256": metadata["sha256"],
+                         "sizeBytes": metadata["sizeBytes"], "bitrate": 24000,
+                         "sourceSha256": track["audioSha256"]}
+
+
+def audio_filename(track):
+    playback = track.get("playback")
+    return (playback["sha256"] + ".ogg") if playback else (track["audioSha256"] + ".mp3")
+
+
+def book_archive(destination, tracks, cache):
+    temporary = destination.with_suffix(".download")
+    try:
+        with zipfile.ZipFile(temporary, "w", compression=zipfile.ZIP_STORED) as archive:
+            for filename in sorted({audio_filename(track) for track in tracks}):
+                # Archives are reproducible; CI never re-encodes playback assets.
+                entry = zipfile.ZipInfo(filename, (1980, 1, 1, 0, 0, 0))
+                entry.external_attr = 0o100644 << 16
+                with archive.open(entry, "w") as target, (cache / filename).open("rb") as source:
+                    shutil.copyfileobj(source, target)
+        if temporary.stat().st_size > 512_000_000:
+            raise ValueError(f"{destination.name}: book exceeds the supported asset-pack size limit")
+        temporary.replace(destination)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def prepare_assets(app, platform, cache, recordings=None, intermediate=None, database=DATABASE, native=NATIVE,
+                   local_originals=False):
+    if local_originals and recordings is None:
+        raise ValueError("Local original playback requires a recordings directory")
+    cache.mkdir(parents=True, exist_ok=True)
+    # Never mutate the canonical file or a live GPU checkpoint to make app assets.
+    with tempfile.TemporaryDirectory() as temporary:
+        snapshot = Path(temporary) / "perakim.json"
+        shutil.copyfile(database, snapshot)
+        publish(intermediate or ROOT / "data/recitation/recitation.sqlite", snapshot)
+        audit(intermediate or ROOT / "data/recitation/recitation.sqlite", snapshot)
+        audit_native(snapshot, native)
+        chapters = chapters_in(json.loads(snapshot.read_text(encoding="utf-8")))
+        tracks = [extract(pid, chapter) for pid, chapter in sorted(chapters.items()) if "recitation" in chapter]
+    for track in tracks:
+        if track["alignmentStatus"] != "ready":
+            track["words"] = []  # Held candidates stay in the alignment work cache.
+    with closing(sqlite3.connect(native.resolve().as_uri() + "?mode=ro", uri=True)) as connection:
+        mapping = {pid: sid for sid, first, last in connection.execute("SELECT id,perek_id_from,perek_id_to FROM tanah_sefer")
+                   for pid in range(first, last + 1)}
+    if not tracks or any(t["perekId"] not in mapping for t in tracks):
+        raise ValueError("Recitation inventory does not match the native books")
+    use_opus = platform in ("Android", "iOS") and not local_originals
+    if use_opus:
+        for track in tracks:
+            select_playback(track, load_playback(track["perekId"], track["audioSha256"]))
+    # Duplicate audio identities share a cache file; never race its temporary
+    # write. Every chapter still carries its own source-bound descriptor.
+    recordings_by_name = {audio_filename(track): track for track in tracks}
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        try:
+            # Local development can use its original MP3 checkout entirely offline.
+            # Store mobile packages retain the immutable derived playback format.
+            fetch = playback_recording if use_opus else recording
+            list(pool.map(lambda track: fetch(track, cache, recordings), recordings_by_name.values()))
+        except BaseException:
+            pool.shutdown(wait=True, cancel_futures=True)
+            raise
+    if platform == "iOS":
+        # Regenerate cleanly: leftover recitation pack dirs (e.g. the legacy
+        # underscore IDs) carry manifests PackageIosAssetPacks would archive.
+        for stale in list((app / "Platforms/iOS/AssetPacks").glob("recitation*")):
+            if stale.is_dir():
+                shutil.rmtree(stale)
+    books = []
+    for sid in sorted({mapping[t["perekId"]] for t in tracks}):
+        selected = [t for t in tracks if mapping[t["perekId"]] == sid]
+        # App Store Connect accepts only alphanumerics and hyphens in asset-pack
+        # IDs; Play asset-pack names take underscores (hyphens are rejected).
+        pack = f"recitation-{sid}" if platform == "iOS" else f"recitation_{sid}"
+        path = cache / (pack + ".zip")
+        book_archive(path, selected, cache)
+        books.append({"seferId": sid, "sha256": digest(path), "sizeBytes": path.stat().st_size,
+                      "perekIds": [t["perekId"] for t in selected]})
+        if platform == "Android":
+            directory = app / "Platforms/Android/AssetPacks" / pack
+        elif platform == "iOS":
+            directory = app / "Platforms/iOS/AssetPacks" / pack
+        else:
+            directory = app / "Platforms/Windows/Recitation"
+        directory.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(path, directory / path.name)
+        if platform == "iOS":
+            # xcrun ba-package turns each folder + manifest into an Apple-hosted .aar.
+            manifest = {"assetPackID": pack, "downloadPolicy": {"onDemand": {}},
+                        "fileSelectors": [{"file": path.name}], "platforms": ["iOS", "macOS"]}
+            (directory / "Manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    raw = app / "Resources/Raw"
+    raw.mkdir(parents=True, exist_ok=True)
+    catalog = {"version": 1, "package": {"version": 1, "tracks": tracks}, "books": books}
+    (raw / CATALOG).write_text(json.dumps(catalog, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    print(f"Prepared {len(tracks)} playback recordings in {len(books)} {platform} book packs")
+    return catalog
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--app-directory", type=Path, default=ROOT / "app/BibleOnSite")
+    parser.add_argument("--platform", choices=["Android", "iOS", "Windows"], required=True)
+    parser.add_argument("--cache", type=Path, default=ROOT / ".cache/recitation-assets")
+    parser.add_argument("--recordings", type=Path)
+    parser.add_argument("--local-originals", action="store_true",
+                        help="Use verified original MP3s from --recordings for local development")
+    args = parser.parse_args()
+    prepare_assets(args.app_directory, args.platform, args.cache, args.recordings,
+                   local_originals=args.local_originals)
+
+
+if __name__ == "__main__":
+    main()

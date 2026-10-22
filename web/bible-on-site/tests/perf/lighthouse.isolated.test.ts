@@ -87,7 +87,9 @@ const test = base.extend<
 			await use(results);
 			results.clear();
 		},
-		{ scope: "worker" },
+		// Worker setup runs four complete audits. test.setTimeout below does
+		// not override the worker fixture's default one-minute setup limit.
+		{ scope: "worker", timeout: 180_000 },
 	],
 
 	// Test-scoped: accessor function for getting results

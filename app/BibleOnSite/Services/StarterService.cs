@@ -83,7 +83,9 @@ public class StarterService : BaseGraphQLService
     public async Task LoadAsync()
     {
         if (IsLoaded)
+        {
             return;
+        }
 
         await LoadFromApiAsync();
     }
@@ -94,7 +96,9 @@ public class StarterService : BaseGraphQLService
     public async Task LoadAsync(bool forceReload)
     {
         if (IsLoaded && !forceReload)
+        {
             return;
+        }
 
         await LoadFromApiAsync();
     }
@@ -110,7 +114,9 @@ public class StarterService : BaseGraphQLService
             "GetStarter");
 
         if (response?.Starter == null)
+        {
             return;
+        }
 
         ApplyResponse(response);
         IsFromCache = false;
@@ -187,6 +193,16 @@ public class StarterService : BaseGraphQLService
     }
 
     /// <summary>
+    /// Number of articles attached to a perek, read from the startup counters
+    /// (index = perekId - 1). Returns 0 when starter data is not loaded yet or
+    /// the id is out of range — callers treat that as "no badge".
+    /// </summary>
+    public int GetPerekArticlesCount(int perekId) =>
+        IsLoaded && perekId >= 1 && perekId <= PerekArticlesCounters.Count
+            ? PerekArticlesCounters[perekId - 1]
+            : 0;
+
+    /// <summary>
     /// Primary startup method.  Tries the API once, falls back to local cache,
     /// and if neither is available proceeds with empty data so the app can start.
     /// Never blocks indefinitely.
@@ -194,7 +210,9 @@ public class StarterService : BaseGraphQLService
     public async Task LoadWithRetryAsync()
     {
         if (IsLoaded)
+        {
             return;
+        }
 
         // 1. Try the API (single attempt with 5-second timeout)
         try
@@ -242,7 +260,9 @@ public class StarterService : BaseGraphQLService
             Console.WriteLine("Refreshing starter data from API...");
             await LoadFromApiAsync();
             if (IsLoaded)
+            {
                 Console.WriteLine($"Refreshed {Authors.Count} authors from API");
+            }
         }
         catch (Exception ex)
         {
@@ -271,12 +291,16 @@ public class StarterService : BaseGraphQLService
     private async Task<bool> LoadFromCacheAsync()
     {
         if (!File.Exists(CachePath))
+        {
             return false;
+        }
 
         var json = await File.ReadAllTextAsync(CachePath);
         var response = JsonSerializer.Deserialize(json, StarterJsonContext.Default.StarterResponse);
         if (response?.Starter == null)
+        {
             return false;
+        }
 
         ApplyResponse(response);
         IsFromCache = true;
@@ -289,8 +313,8 @@ public class StarterService : BaseGraphQLService
     #region DTOs for GraphQL response
 
     // Records used for both GraphQL deserialization and local JSON cache.
-    // The System.Text.Json source generator (StarterJsonContext) handles
-    // the local cache; Newtonsoft handles the GraphQL client.
+    // Source-generated System.Text.Json metadata handles both: StarterJsonContext
+    // for the local cache and GraphQLJsonContext for the GraphQL client.
     internal record StarterResponse(StarterData Starter);
 
     internal record StarterData(

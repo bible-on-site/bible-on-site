@@ -107,17 +107,14 @@ export class SeferPage {
 		expect(textContent!.length).toBeGreaterThan(50);
 	}
 
-	/**
-	 * Close the sefer view (if needed for future tests)
-	 */
+	/** Close the active reader through its read-mode control. */
 	async closeSeferView(): Promise<void> {
-		const closeButton = this.page.getByTestId("sefer-overlay-close");
-		if (await closeButton.isVisible()) {
-			await closeButton.click();
-			// Wait for overlay to become hidden instead of fixed timeout
-			const seferOverlay = this.page.locator('[class*="seferOverlay"]');
-			await expect(seferOverlay).toBeHidden({ timeout: 10_000 });
-		}
+		const toggler = this.page.getByTestId("read-mode-toggler");
+		await expect(toggler.locator("input")).toBeChecked();
+		await toggler.click();
+		await expect(this.page.locator('[class*="seferOverlay"]')).toBeHidden({
+			timeout: 10_000,
+		});
 	}
 
 	/**
