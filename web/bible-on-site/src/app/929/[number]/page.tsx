@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { unstable_cache } from "next/cache";
 import { Suspense } from "react";
 import { loadRecitation } from "@/lib/recitation-loader";
-import { getPerekByPerekId } from "../../../data/perek-dto";
+import { getAdjacentPereks, getPerekByPerekId } from "../../../data/perek-dto";
 import { getPerekIdsForSefer, getSeferByName } from "../../../data/sefer-dto";
 import { getArticleSummariesByPerekId } from "../../../lib/articles";
 import { getPerushimByPerekId } from "../../../lib/perushim";
@@ -16,6 +16,7 @@ import { ArticlesSection } from "./components/ArticlesSection";
 import Breadcrumb from "./components/Breadcrumb";
 import { PerekHeading } from "./components/PerekHeading";
 import { PerekIntro } from "./components/PerekIntro";
+import { PerekNav } from "./components/PerekNav";
 import { PerekText } from "./components/PerekText";
 import { PerushimSection } from "./components/PerushimSection";
 import SeferComposite from "./components/SeferComposite";
@@ -115,6 +116,7 @@ export default async function Perek({
 	const entityRefsByPerek = await fetchAllEntityRefs(perekIds);
 	const imagesByPerek = await getPerekImagesByChapter();
 	const seferImages = selectPerekImages(imagesByPerek, perekIds);
+	const { prev: prevPerek, next: nextPerek } = getAdjacentPereks(perekId);
 
 	return (
 		<>
@@ -143,6 +145,7 @@ export default async function Perek({
 					perekObj={perekObj}
 					entityRefs={entityRefsByPerek[perekId] ?? []}
 				/>
+				<PerekNav prev={prevPerek} next={nextPerek} />
 
 				{/* Perushim section - commentaries carousel */}
 				<PerushimSection
