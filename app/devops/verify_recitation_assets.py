@@ -76,7 +76,7 @@ def verify_apple(archive, catalog, names, asset_pack_dir, archive_dir, payload_d
         raise ValueError("IPA still contains an On-Demand Resources manifest")
     if any(".assetpack/" in n or n.startswith("Payload/OnDemandResources/") for n in names):
         raise ValueError("IPA still contains ODR asset packs")
-    if any(Path(n).name.startswith("recitation_") and n.endswith(".zip") for n in names):
+    if any(Path(n).name.startswith("recitation") and n.endswith(".zip") for n in names):
         raise ValueError("On-demand recordings were included in the iOS base installation")
     appex = [n for n in names if "/Extensions/AssetPackDownloader.appex/" in n
              and Path(n).name not in ("Info.plist",)]
@@ -86,7 +86,8 @@ def verify_apple(archive, catalog, names, asset_pack_dir, archive_dir, payload_d
         raise ValueError("iOS verification requires --asset-pack-dir, --archive-dir and --payload-dir")
     extract = extract or aa_payload
     for book in catalog["books"]:
-        pack = f'recitation_{book["seferId"]}'
+        # App Store Connect accepts only alphanumerics and hyphens in asset-pack IDs.
+        pack = f'recitation-{book["seferId"]}'
         archive_path = archive_dir / f"{pack}.aar"
         if not archive_path.is_file() or archive_path.stat().st_size == 0:
             raise ValueError(f"Missing asset-pack archive: {archive_path}")
@@ -115,6 +116,41 @@ def verify_apple(archive, catalog, names, asset_pack_dir, archive_dir, payload_d
         staged = payload_dir / payload_name
         if not staged.is_file() or digest(staged) != book["sha256"]:
             raise ValueError(f"Missing or mismatched release payload: {staged}")
+    verify_perushim_pack(asset_pack_dir, archive_dir, payload_dir, extract)
+
+
+def verify_perushim_pack(asset_pack_dir, archive_dir, payload_dir, extract):
+    """The notes pack carries both payloads the managed-delivery contract requires."""
+    pack = "perushim-notes"
+    manifest_path = asset_pack_dir / pack / "Manifest.json"
+    if not manifest_path.is_file():
+        raise ValueError(f"Missing asset-pack manifest: {manifest_path}")
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if manifest.get("assetPackID") != pack or "onDemand" not in manifest.get("downloadPolicy", {}):
+        raise ValueError(f"Malformed asset-pack manifest: {pack}")
+    if not {"iOS", "macOS"}.issubset(manifest.get("platforms", [])):
+        raise ValueError(f"Asset-pack manifest does not target iOS+macOS: {pack}")
+    # Selectors must name the root-level files SavePackFileAsync requests.
+    expected = {"sefaria-dump-5784-sivan-4.perushim_notes.sqlite",
+                "sefaria-dump-5784-sivan-4.hebrew_search.sqlite"}
+    selected = {selector.get("file") for selector in manifest.get("fileSelectors", [])}
+    if selected != expected:
+        raise ValueError(
+            f"Asset-pack manifest must select the notes and search-index payloads: {sorted(selected)}")
+    archive_path = archive_dir / f"{pack}.aar"
+    if not archive_path.is_file() or archive_path.stat().st_size == 0:
+        raise ValueError(f"Missing asset-pack archive: {archive_path}")
+    for name in sorted(expected):
+        source = manifest_path.parent / name
+        if not source.is_file():
+            raise ValueError(f"Missing asset-pack payload: {pack}/{name}")
+        staged = payload_dir / name
+        if not staged.is_file() or digest(staged) != digest(source):
+            raise ValueError(f"Missing or mismatched release payload: {staged}")
+        with tempfile.TemporaryDirectory() as work:
+            archived = extract(archive_path, name, Path(work))
+            if digest(archived) != digest(source):
+                raise ValueError(f"Missing or mismatched archived payload in {archive_path}")
 
 
 

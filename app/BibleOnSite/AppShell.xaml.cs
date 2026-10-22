@@ -224,7 +224,8 @@ public partial class AppShell : Shell
 			return true;
 		}
 
-		return BackExitPlan.Evaluate(_navigationInFlight, base.OnBackButtonPressed, FlyoutIsPresented) switch
+		return BackExitPlan.Evaluate(_navigationInFlight, base.OnBackButtonPressed, FlyoutIsPresented,
+			Navigation.NavigationStack.Count > 1) switch
 		{
 			BackExitAction.Consume => true,
 			BackExitAction.ConfirmExit => ExitConfirmation.Shared.Request(),
@@ -236,6 +237,11 @@ public partial class AppShell : Shell
 	{
 		ApplyBackChrome();
 		_navigationInFlight = false;
+#if IOS || MACCATALYST
+		GateIosInteractiveBack();
+		// The pushed page's native controller can lag the Navigated event.
+		Dispatcher.Dispatch(GateIosInteractiveBack);
+#endif
 		var analytics = Application.Current?.Handler?.MauiContext?.Services.GetService<IAnalyticsService>();
 		if (analytics == null)
 		{
@@ -251,6 +257,27 @@ public partial class AppShell : Shell
 			analytics.SetScreen(name, name);
 		}
 	}
+
+#if IOS || MACCATALYST
+	/// <summary>
+	/// UIKit keeps InteractivePopGestureRecognizer enabled at the navigation
+	/// root even though nothing can pop, and screen-edge recognizers claim
+	/// edge touches before the shared flyout pan — every root destination
+	/// (calendar, Masora, Tanahpedia, ...) would lose the right-edge drawer
+	/// swipe to a dead history gesture (#2432). Gate it on real history for
+	/// every Shell page; the reader additionally wires carousel priority in
+	/// ConfigureIosReaderHistory.
+	/// </summary>
+	private void GateIosInteractiveBack()
+	{
+		if (CurrentPage is { } page &&
+			(page.Handler as IPlatformViewHandler)?.ViewController?.NavigationController
+				?.InteractivePopGestureRecognizer is { } back)
+		{
+			back.Enabled = page.Navigation.NavigationStack.Count > 1;
+		}
+	}
+#endif
 
 	private async void OnAlHaperekTapped(object? sender, TappedEventArgs e)
 	{

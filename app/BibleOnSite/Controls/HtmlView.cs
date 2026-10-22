@@ -10,7 +10,12 @@ public class HtmlView : View
 {
     public static readonly BindableProperty ContentLoaderProperty = BindableProperty.Create(
         nameof(ContentLoader), typeof(Func<Task<List<string>>>), typeof(HtmlView), default(Func<Task<List<string>>>),
-        propertyChanged: (bindable, _, _) => { _ = ((HtmlView)bindable).LoadCellContentAsync(); });
+        propertyChanged: (bindable, _, _) =>
+        {
+            var view = (HtmlView)bindable;
+            view.OnPropertyChanged(nameof(IsContentReady));
+            _ = view.LoadCellContentAsync();
+        });
 
     /// <summary>A realized cell owns its plain text; the reader model owns only compressed data.</summary>
     public Func<Task<List<string>>>? ContentLoader
@@ -18,6 +23,18 @@ public class HtmlView : View
         get => (Func<Task<List<string>>>?)GetValue(ContentLoaderProperty);
         set => SetValue(ContentLoaderProperty, value);
     }
+
+    /// <summary>
+    /// True once this cell's presentable content is final: always when there
+    /// is no async loader, otherwise only after <see cref="ContentLoader"/>
+    /// published its first result (or its error text) through
+    /// <see cref="HtmlContent"/>. Perush rows gate their name label on this so
+    /// the name and contents surface as one update instead of a name-only
+    /// flash followed by a layout jump (#2451), and a recycled cell can never
+    /// pair a new perush name with the previous contents. A lazy display's
+    /// empty-string binding is not readiness — whitespace still waits (#2451).
+    /// </summary>
+    public bool IsContentReady => ContentLoader == null || !string.IsNullOrWhiteSpace(HtmlContent);
 
     private int _contentLoadSerial;
 
@@ -329,7 +346,11 @@ public class HtmlView : View
     /// </summary>
     public event EventHandler<LinkTappedEventArgs>? LinkTapped;
 
-    private void OnHtmlContentChanged() => HtmlContentChanged?.Invoke(this, EventArgs.Empty);
+    private void OnHtmlContentChanged()
+    {
+        OnPropertyChanged(nameof(IsContentReady));
+        HtmlContentChanged?.Invoke(this, EventArgs.Empty);
+    }
     private void OnStyleChanged() => StyleChanged?.Invoke(this, EventArgs.Empty);
 
     /// <summary>

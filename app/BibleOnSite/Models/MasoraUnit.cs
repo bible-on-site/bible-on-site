@@ -90,7 +90,7 @@ public class MasoraUnit : INotifyPropertyChanged
 /// (Masoretic breaks may sit mid-verse). Null segmentIndex means the
 /// whole-pasuk edge.
 /// </summary>
-public class MasoraUnitRange
+public class MasoraUnitRange : IScriptureRange
 {
     public int StartPerekId { get; set; }
     public int StartPasuk { get; set; }

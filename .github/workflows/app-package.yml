@@ -77,7 +77,7 @@ env:
   APP_DIRECTORY: app
   PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER: perushim-sqlite-v2-indexed.master
   PERUSHIM_NOTES_ANDROID_ASSET_RELDIR: Platforms/Android/AssetPacks/perushim_notes
-  PERUSHIM_NOTES_IOS_ASSETPACK_RELDIR: Platforms/iOS/AssetPacks/perushim_notes
+  PERUSHIM_NOTES_IOS_ASSETPACK_RELDIR: Platforms/iOS/AssetPacks/perushim-notes
 
 jobs:
   # When triggered via workflow_dispatch (no caller providing the artifact name),
@@ -703,8 +703,8 @@ jobs:
         with:
           name: ios-audio-archive-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
-            app/.artifacts/assetpacks/recitation_1.aar
-            app/BibleOnSite/Platforms/iOS/AssetPacks/recitation_1/Manifest.json
+            app/.artifacts/assetpacks/recitation-1.aar
+            app/BibleOnSite/Platforms/iOS/AssetPacks/recitation-1/Manifest.json
           retention-days: 7
           include-hidden-files: true
 

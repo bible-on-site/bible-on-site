@@ -172,16 +172,24 @@
                                                             <BindableLayout.ItemTemplate>
                                                                 <DataTemplate x:DataType="models:PerushNoteDisplay">
                                                                     <VerticalStackLayout Spacing="2">
-                                                                        <Label Text="{Binding PerushName}"
-                                                                               AutomationId="InlinePerushName"
-                                                                               FontSize="{DynamicResource PerushNameFontSize}"
-                                                                               FontAttributes="Bold"
-                                                                               TextColor="{StaticResource Primary}"/>
-                                                                        <controls:HtmlView ContentLoader="{Binding ContentLoader}" HtmlContent="{Binding DisplayContent}"
-                                                                                          FontSize="{DynamicResource PerushContentFontSize}"
-                                                                                          TextAlignment="Justify"
-                                                                                          TextDirection="Rtl"
-                                                                                          LineHeight="1.4"/>
+                                                                        <Grid HeightRequest="36"
+                                                                              IsVisible="{Binding IsContentReady, Source={x:Reference PerushContentView}, Converter={StaticResource InvertedBoolConverter}}">
+                                                                            <ActivityIndicator IsRunning="True" WidthRequest="20" HeightRequest="20"
+                                                                                               HorizontalOptions="Center" VerticalOptions="Center"/>
+                                                                        </Grid>
+                                                                        <VerticalStackLayout Spacing="2"
+                                                                                             IsVisible="{Binding IsContentReady, Source={x:Reference PerushContentView}}">
+                                                                            <Label Text="{Binding PerushName}"
+                                                                                   AutomationId="InlinePerushName"
+                                                                                   FontSize="{DynamicResource PerushNameFontSize}"
+                                                                                   FontAttributes="Bold"
+                                                                                   TextColor="{StaticResource Primary}"/>
+                                                                            <controls:HtmlView x:Name="PerushContentView" ContentLoader="{Binding ContentLoader}" HtmlContent="{Binding DisplayContent}"
+                                                                                              FontSize="{DynamicResource PerushContentFontSize}"
+                                                                                              TextAlignment="Justify"
+                                                                                              TextDirection="Rtl"
+                                                                                              LineHeight="1.4"/>
+                                                                        </VerticalStackLayout>
                                                                     </VerticalStackLayout>
                                                                 </DataTemplate>
                                                             </BindableLayout.ItemTemplate>
@@ -296,7 +304,7 @@
                            FontAttributes="Bold"
                            HorizontalTextAlignment="Center"
                            TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryLight}}"/>
-                    <SearchBar x:Name="PerushSearchBar" Placeholder="חיפוש פירוש" Text="{Binding PerushNameFilter}"
+                    <controls:RtlSearchBar x:Name="PerushSearchBar" Placeholder="חיפוש פירוש" Text="{Binding PerushNameFilter}"
                                AutomationId="PerushNameSearch" SearchButtonPressed="OnPerushSearchSubmitted"/>
                     <Label Text="{Binding InlineCommentaryLimitMessage}" FontSize="12" LineBreakMode="WordWrap"
                            HorizontalTextAlignment="Center" AutomationId="InlineCommentaryLimitMessage"/>

@@ -52,6 +52,9 @@ public static class AppRoutes
     /// <summary>The מסורה על הפרק reading instance — a flyout page like the other menu pages.</summary>
     public static string Masora => "MasoraPage";
 
+    /// <summary>The פרשה על הפרק reader instance — a reader page like PerekPage.</summary>
+    public static string Parasha => "ParashaPage";
+
     /// <summary>
     /// Flyout pages replace another menu page above the most recent reader.
     /// Preserve search-reader history so Back returns to the chapter being read.
@@ -62,7 +65,7 @@ public static class AppRoutes
     {
         var segments = (currentLocation ?? $"//{Perek}").Split('?', 2)[0]
             .Split('/', StringSplitOptions.RemoveEmptyEntries);
-        var reader = Array.FindLastIndex(segments, segment => segment == Perek || segment == SearchReader);
+        var reader = Array.FindLastIndex(segments, segment => segment == Perek || segment == SearchReader || segment == Parasha);
         var readerPath = reader < 0 ? $"//{Perek}" : "//" + string.Join('/', segments.Take(reader + 1));
         return route == Perek ? readerPath : $"{readerPath}/{route}";
     }

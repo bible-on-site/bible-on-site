@@ -1205,8 +1205,9 @@ public class SearchIndexServiceTests
         await using var storage = new TestStorage();
         var perakim = await SeedAsync(storage);
         var verseFingerprint = await VerseFingerprintAsync(perakim, storage);
-        await storage.CreateDatabaseAsync(NotesDb,
+        var notesDatabase = await storage.CreateDatabaseAsync(NotesDb,
             [.. NotesDbV2.Statements((7, 1, 1, 0, "בראשית")), "INSERT INTO _metadata VALUES ('build_timestamp','42')"]);
+        await notesDatabase.CloseAsync(); // Allow removal of the seeded file on Windows.
         var stagedPath = Path.Join(storage.Root, PerushimNotesService.SearchIndexDbName);
         var delivered = await storage.CreateDatabaseAsync(PerushimNotesService.SearchIndexDbName,
             [.. DeliveredIndexStatements($"v4:42:n{SearchText.NormalizationVersion}", "סימן מובהק"),

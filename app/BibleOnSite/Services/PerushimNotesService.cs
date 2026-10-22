@@ -17,12 +17,17 @@ namespace BibleOnSite.Services;
 public class PerushimNotesService
 {
     private const string NotesDbName = "sefaria-dump-5784-sivan-4.perushim_notes.sqlite";
+#if IOS || MACCATALYST
+    // App Store Connect accepts only alphanumerics and hyphens in asset-pack IDs.
+    private const string PerushimNotesPackName = "perushim-notes";
+#else
     private const string PerushimNotesPackName = "perushim_notes";
+#endif
     private const string RemovedMarkerName = NotesDbName + ".removed";
 
     /// <summary>
     /// Ready-to-query FTS5 search index generated with the notes content — the
-    /// second payload file of the perushim_notes pack. It is staged here before
+    /// second payload file of the notes asset pack. It is staged here before
     /// <see cref="SearchIndexService"/> adopts it into its cache.
     /// </summary>
     internal const string SearchIndexDbName = "sefaria-dump-5784-sivan-4.hebrew_search.sqlite";
@@ -163,6 +168,13 @@ public class PerushimNotesService
             task => Console.WriteLine($"Perushim notes init failed: {task.Exception}"),
             TaskContinuationOptions.OnlyOnFaulted);
     }
+
+    /// <summary>
+    /// True only after initialization determined the notes pack is actually
+    /// missing. An unchecked pack is assumed present so search availability
+    /// never hides commentary merely because nobody asked yet (#2454).
+    /// </summary>
+    internal bool IsDeterminedMissing => _initialized && !IsAvailable;
 
     internal async Task<SQLiteAsyncConnection?> GetSearchConnectionAsync()
     {
@@ -421,7 +433,7 @@ public class PerushimNotesService
             }
         }
 
-        Console.Error.WriteLine("Perushim notes not available via on-demand delivery. Ensure the perushim_notes on-demand pack (Android PAD / iOS asset pack) is included in the build.");
+        Console.Error.WriteLine($"Perushim notes not available via on-demand delivery. Ensure the {PerushimNotesPackName} on-demand pack (Android PAD / iOS asset pack) is included in the build.");
         return false;
     }
 

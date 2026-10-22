@@ -46,11 +46,12 @@ public partial class PerekPage
         return player;
     });
     /// <summary>
-    /// Whether the recitation catalog is available on this device. There is no
-    /// global on/off preference — the reader's play controls and the קריינות
-    /// menu mode start and stop playback directly.
+    /// Whether recitation playback is allowed on this device: the catalog is
+    /// installed AND the global קריינות preference (העדפות → על הפרק, default
+    /// on) is enabled. Off hides every headphones action and suppresses
+    /// tap/focus-triggered playback consistently (#2472).
     /// </summary>
-    private bool RecitationAvailable => RecitationService.Instance.IsInstalled;
+    private bool RecitationAvailable => RecitationService.Instance.IsInstalled && _viewModel.IsQriynotEnabled;
 
     private void SubscribeRecitation()
     {
@@ -357,6 +358,17 @@ public partial class PerekPage
         {
             focusedPlayer.Play();
         }
+        // The full pasuk source lives in the shared toolbar title, set by
+        // UpdateSelectionBar below (#2466).
+        // Opening the focused pasuk plays it (#2472). An in-flight clip for
+        // this same pasuk continues/resumes untouched — one deliberate open
+        // issues at most one playback request.
+        else if (RecitationAvailable &&
+            _recitationCursor.PlayingKey != $"pasuk:{_viewModel.PerekId}:{pasuk.PasukNum}" &&
+            CanPlayWholePasuk(pasuk))
+        {
+            _ = PlayPasukRecitationAsync(pasuk);
+        }
         FocusedSourceLabel.Text = $"{_viewModel.Source} {pasuk.PasukNumHeb}";
         FocusedPasukOverlay.IsVisible = true;
         PerekCarousel.InputTransparent = true;
@@ -376,14 +388,36 @@ public partial class PerekPage
         catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Focused commentaries: {ex.Message}"); }
     }
 
+    /// <summary>
+    /// The focused-view headphones action plays the whole pasuk — offered while
+    /// קריינות is enabled and this pasuk's timings are ready.
+    /// </summary>
+    private bool CanPlayWholePasuk(Pasuk pasuk) => RecitationAvailable &&
+        _viewModel.Perek is { } perek &&
+        RecitationService.Instance.GetTrack(perek.PerekId) is { AlignmentStatus: "ready" } track &&
+        track.Matches(perek.Pasukim) &&
+        track.Words.Any(w => w.Pasuk == pasuk.PasukNum && w.StartMs != null && w.EndMs != null);
+
+    private async void OnFocusedPlayClicked(object? sender, EventArgs e)
+    {
+        if (_focusedPasuk is { } pasuk)
+        {
+            await PlayPasukRecitationAsync(pasuk);
+        }
+    }
+
     private void RefreshFocusedRecitation()
     {
         _focusedWordSpans.Clear();
         if (_focusedPasuk is not { } pasuk || _viewModel.Perek is not { } perek)
         {
+            FocusedPlayButton.IsVisible = false;
             return;
         }
 
+        FocusedPlayButton.IsVisible = RecitationAvailable;
+        FocusedPlayButton.IsEnabled = CanPlayWholePasuk(pasuk);
+        FocusedPlayButton.Opacity = FocusedPlayButton.IsEnabled ? 1 : 0.4;
         var track = RecitationService.Instance.GetTrack(perek.PerekId);
         var canPlayWords = RecitationAvailable && RecitationService.Instance.HasAudio(perek.PerekId) &&
             track?.AlignmentStatus == "ready" && track.Matches(perek.Pasukim);
