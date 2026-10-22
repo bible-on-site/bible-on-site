@@ -145,11 +145,15 @@ Resources:
             Resource:
               - !Sub "arn:aws:s3:::bible-on-site-data-deploy/*"
 
-          # Lambda - invoke data deploy function
+          # Lambda - invoke data deploy function and refresh its DB_URL env var
+          # (the populator reads credentials from its environment, not SSM —
+          # see data-deploy/data-deploy.yaml)
           - Sid: LambdaInvoke
             Effect: Allow
             Action:
               - lambda:InvokeFunction
+              - lambda:GetFunction
+              - lambda:UpdateFunctionConfiguration
             Resource:
               - !Sub "arn:aws:lambda:*:${AWS::AccountId}:function:bible-on-site-db-populator"
 

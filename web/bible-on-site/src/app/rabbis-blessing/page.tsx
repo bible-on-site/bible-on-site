@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { assetsUrl } from "@/lib/assets-url";
 import { ImageLightbox } from "./ImageLightbox";
 import styles from "./page.module.css";
 
@@ -7,18 +8,6 @@ export const metadata: Metadata = {
 	title: 'רבנים מברכים | תנ"ך על הפרק',
 	description: 'ברכות רבנים לתנ"ך על הפרק',
 };
-
-function getS3BaseUrl(): string {
-	const S3_ENDPOINT = process.env.S3_ENDPOINT;
-	const S3_BUCKET = process.env.S3_BUCKET || "bible-on-site-assets";
-	const S3_REGION =
-		process.env.S3_REGION || process.env.AWS_REGION || "il-central-1";
-
-	if (S3_ENDPOINT) {
-		return `${S3_ENDPOINT}/${S3_BUCKET}`;
-	}
-	return `https://${S3_BUCKET}.s3.${S3_REGION}.amazonaws.com`;
-}
 
 const blessingVideos = [
 	{
@@ -42,9 +31,8 @@ const blessingVideos = [
 ];
 
 export default function RabbisBlessingPage() {
-	const baseUrl = getS3BaseUrl();
-	const videosBaseUrl = `${baseUrl}/articles/1`;
-	const posterUrl = `${baseUrl}/blessing/blessing-poster.webp`;
+	const videosBaseUrl = assetsUrl("articles/1");
+	const posterUrl = assetsUrl("blessing/blessing-poster.webp");
 
 	return (
 		<div className={styles.rabbisBlessingPage}>
