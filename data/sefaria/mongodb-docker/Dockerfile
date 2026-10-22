@@ -4,12 +4,16 @@
 # Build: docker build -t sefaria-mongo:latest .
 # Run: docker run -d -p 27017:27017 sefaria-mongo:latest
 #
-# CRITICAL: The mongo:7 image declares /data/db as a VOLUME, which means
+# CRITICAL: The mongo base image declares /data/db as a VOLUME, which means
 # any data written there during build is LOST when the container runs.
 # To work around this, we restore to /mongodb-data (not a volume) and
 # copy it to /data/db at container startup via a custom entrypoint.
 
-FROM mongo:9
+# Pin version+digest: the derived image is tagged by this directory's git tree
+# hash, so the FROM line is the only lever that forces a rebuild when the base
+# moves. 9.0.4 recognizes Ubuntu's backported kernel patch level
+# (SERVER-131779), which lets mongod start on ubuntu-26.04 runners (#2524).
+FROM mongo:9.0.4@sha256:dc28ed5a9d0fc616903c3f463bb1e53b92b49f441721b91926e87d90bf957ce8
 
 # Fail the build if any stage of a pipeline (e.g. find | head) exits nonzero.
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
