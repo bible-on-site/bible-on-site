@@ -58,6 +58,8 @@
 }
 
 .appLink img {
+  width: 24px;
+  height: auto;
   filter: brightness(0) invert(1);
 }
 
