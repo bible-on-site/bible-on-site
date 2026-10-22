@@ -1,3 +1,4 @@
+using System.Runtime.ExceptionServices;
 using BibleOnSite.Helpers;
 using BibleOnSite.Models;
 using BibleOnSite.Services;
@@ -84,7 +85,7 @@ public class PerekLoadingTests
             var cleanupFailure = await ObserveFaultAsync(Storage.DisposeAsync().AsTask());
             if (CombineTeardownFailures(initFailure, cleanupFailure) is { } failure)
             {
-                throw failure;
+                ExceptionDispatchInfo.Capture(failure).Throw();
             }
         }
     }

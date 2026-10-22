@@ -165,9 +165,16 @@ public class PackagedDatabaseTests
         await File.WriteAllBytesAsync(Destination(storage), payload, TestContext.Current.CancellationToken);
         await File.WriteAllTextAsync(Marker(storage), "unreadable",
             TestContext.Current.CancellationToken);
-        // Mode 000 makes the read throw on non-root runners; as root the file
+        // Windows denies reads with an exclusive handle. On Unix, mode 000
+        // makes the read throw on non-root runners; as root the file
         // still reads and merely fails parsing — the outcome is identical.
-        File.SetUnixFileMode(Marker(storage), UnixFileMode.None);
+        await using var markerLock = OperatingSystem.IsWindows()
+            ? new FileStream(Marker(storage), FileMode.Open, FileAccess.Read, FileShare.None)
+            : null;
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(Marker(storage), UnixFileMode.None);
+        }
 
         await PackagedDatabase.RefreshAsync(storage.FileSystem.Object, DbName, AppMock());
 
