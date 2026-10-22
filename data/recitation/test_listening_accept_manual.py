@@ -125,6 +125,7 @@ class ManualListeningAcceptanceTests(unittest.TestCase):
         with closing(sqlite3.connect(database)) as db:
             untouched = db.execute("SELECT * FROM recitation_track WHERE perek_id=2").fetchone()
             untouched_words = db.execute("SELECT * FROM recitation_word WHERE perek_id=2").fetchall()
+
         def stage():
             with patch("listening_round.load_queue", return_value=queue), patch("listening_accept.duration", return_value=2000):
                 return stage_reviews(self.root / "queue.json", reviews, canonical, output, database)

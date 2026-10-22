@@ -596,7 +596,10 @@ test("a deliberately typed problem draft identical to a saved note survives navi
 test("legacy stored prefills without user-typed provenance remain blank and only appear in collapsed history",async()=>{
   const base=await page();const key=base.run("stateKey(caseNow())");
   const old={verdict:"problem",note:"הערה ישנה שהועתקה בעבר"};
-  const storage=new Map([["listening-progress-v2",JSON.stringify({active:key,drafts:[[key,old.note]],evidence:[]})]]);
+  const legacyProgress={active:key,drafts:[[key,old.note]],evidence:[]};
+  const serializedProgress=JSON.stringify(legacyProgress);
+  const storage=new Map();
+  storage.set("listening-progress-v2",serializedProgress);
   const p=await page({[key]:old},{storage});
   assert.equal(p.elements.note.value,"");assert.equal(p.elements.note.hidden,true);
   assert.equal(p.elements["prior-history"].open,false);assert.equal(p.elements.prior.textContent,old.note);
