@@ -16,6 +16,7 @@ import { ArticlesSection } from "./components/ArticlesSection";
 import Breadcrumb from "./components/Breadcrumb";
 import { PerekHeading } from "./components/PerekHeading";
 import { PerekIntro } from "./components/PerekIntro";
+import { PerekNav } from "./components/PerekNav";
 import { PerekText } from "./components/PerekText";
 import { PerushimSection } from "./components/PerushimSection";
 import SeferComposite from "./components/SeferComposite";
@@ -115,6 +116,8 @@ export default async function Perek({
 	const entityRefsByPerek = await fetchAllEntityRefs(perekIds);
 	const imagesByPerek = await getPerekImagesByChapter();
 	const seferImages = selectPerekImages(imagesByPerek, perekIds);
+	const prevPerek = perekId > 1 ? getPerekByPerekId(perekId - 1) : null;
+	const nextPerek = perekId < 929 ? getPerekByPerekId(perekId + 1) : null;
 
 	return (
 		<>
@@ -143,6 +146,7 @@ export default async function Perek({
 					perekObj={perekObj}
 					entityRefs={entityRefsByPerek[perekId] ?? []}
 				/>
+				<PerekNav prev={prevPerek} next={nextPerek} />
 
 				{/* Perushim section - commentaries carousel */}
 				<PerushimSection
