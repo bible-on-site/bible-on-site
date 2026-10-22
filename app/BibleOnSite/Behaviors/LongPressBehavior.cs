@@ -181,6 +181,48 @@ public class LongPressBehavior : Behavior<View>
         }
     }
 
+    /// <summary>Same unreceived-Down arming for the parasha reader's unit-bound views.</summary>
+    public static void BeginUnreceivedPress(float rawX, float rawY, ParashaUnit? currentUnit)
+    {
+        if (currentUnit == null)
+        {
+            return;
+        }
+
+        lock (_lock)
+        {
+            foreach (var behavior in _activeBehaviors)
+            {
+                if (!PressArming.IsCandidate(behavior._associatedView?.BindingContext, currentUnit))
+                {
+                    continue;
+                }
+
+                if (behavior._androidView is not { IsShown: true } view)
+                {
+                    continue;
+                }
+
+                var visibleBounds = new Android.Graphics.Rect();
+                if (!view.GetGlobalVisibleRect(visibleBounds) ||
+                    !visibleBounds.Contains((int)rawX, (int)rawY))
+                {
+                    continue;
+                }
+
+                if (!behavior._press.IsPressed)
+                {
+                    var touchSlop = view.Context is { } context
+                        ? Android.Views.ViewConfiguration.Get(context)?.ScaledTouchSlop ?? 12
+                        : 12;
+                    behavior._press.Begin(rawX, rawY, touchSlop);
+                    behavior.StartLongPressTimer();
+                }
+                return;
+            }
+        }
+    }
+
     private void AttachNativeEvents()
     {
         if (_associatedView?.Handler?.PlatformView is Android.Views.View androidView)
