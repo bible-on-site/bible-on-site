@@ -152,6 +152,71 @@ test("failed queue refresh preserves active state",async()=>{
 });
 
 
+test("a successful unchanged poll clears its failure while preserving edited playback and drafts",async()=>{
+  let fail=false;
+  const p=await page({}, {reusableHeardSegments:[1,3],beforeQueueJson:()=>{if(fail)throw new Error("Failed to fetch");}});
+  p.run("setCutBoundary(2,'startMs',450);setCutBoundary(2,'endMs',650);document.activeElement=cutRows.get(2).endMs.number");
+  p.elements.note.value="טיוטה שנשמרת בזמן חידוש החיבור";p.elements.note.oninput();
+  const control=p.run("cutRows.get(2).endMs.number"),word=p.elements.words.children[1];
+  const playback=p.run("play('edits')");await p.flush();
+  const playingStatus=p.elements.status.textContent;
+  fail=true;await p.run("refreshQueue()");
+  assert.equal(p.elements["queue-updates"].textContent,"Failed to fetch");
+  fail=false;await p.run("refreshQueue()");
+  assert.equal(p.elements["queue-updates"].textContent,"");
+  assert.equal(p.run("caseNow().id"),"case");assert.equal(p.run("playbackActive"),true);
+  assert.equal(p.run("cutRows.get(2).endMs.number"),control);
+  assert.equal(p.run("document.activeElement"),control);assert.equal(p.elements.words.children[1],word);
+  assert.equal(p.run("workingWord(caseNow(),caseNow().words[1]).startMs"),450);
+  assert.equal(p.run("workingWord(caseNow(),caseNow().words[1]).endMs"),650);
+  assert.equal(p.elements.note.value,"טיוטה שנשמרת בזמן חידוש החיבור");
+  assert.equal(p.elements.status.textContent,playingStatus);
+  assert.equal(p.run("cutHeard(caseNow(),caseNow().words[1])"),false);
+  await p.finish();await playback;
+  assert.equal(p.run("cutHeard(caseNow(),caseNow().words[1])"),true);
+});
+
+test("poll recovery preserves a newer browser-storage warning",async()=>{
+  let fail=false;
+  const storage=new Map();
+  const p=await page({}, {storage,beforeQueueJson:()=>{if(fail)throw new Error("Failed to fetch");}});
+  fail=true;await p.run("refreshQueue()");
+  assert.equal(p.elements["queue-updates"].textContent,"Failed to fetch");
+  storage.set=()=>{throw new Error("fixture storage blocked");};
+  p.run("persistProgress()");
+  const warning=p.elements["queue-updates"].textContent;
+  assert.match(warning,/שמירת הטיוטה בדפדפן אינה זמינה/);
+  fail=false;await p.run("refreshQueue()");
+  assert.equal(p.elements["queue-updates"].textContent,warning);
+  assert.equal(p.run("caseNow().id"),"case");
+});
+
+test("poll recovery does not clear a real failed-save message",async()=>{
+  let fail=false;
+  const p=await page({}, {wordSaveFails:true,beforeQueueJson:()=>{if(fail)throw new Error("Failed to fetch");}});
+  await p.run("save('skip')");await p.flush();
+  const warning=p.elements.status.textContent;
+  assert.match(warning,/השמירה לא הצליחה/);
+  fail=true;await p.run("refreshQueue()");
+  fail=false;await p.run("refreshQueue()");
+  assert.equal(p.elements["queue-updates"].textContent,"");
+  assert.equal(p.elements.status.textContent,warning);
+  assert.equal(p.run("caseNow().id"),"case");
+});
+
+test("poll recovery does not clear a real audio-fetch failure",async()=>{
+  let fail=false;
+  const p=await page({}, {beforeQueueJson:()=>{if(fail)throw new Error("Failed to fetch");}});
+  p.run("const originalFetch=fetch;fetch=async(url,...args)=>{if(url.startsWith('/clips/'))throw new Error('fixture audio fetch failure');return originalFetch(url,...args);}");
+  await p.run("play('word',caseNow().words[1])");
+  assert.equal(p.elements.status.textContent,"fixture audio fetch failure");
+  fail=true;await p.run("refreshQueue()");
+  fail=false;await p.run("refreshQueue()");
+  assert.equal(p.elements["queue-updates"].textContent,"");
+  assert.equal(p.elements.status.textContent,"fixture audio fetch failure");
+  assert.equal(p.run("cutHeard(caseNow(),caseNow().words[1])"),false);
+});
+
 test("an old unsaved draft is visibly historical and can switch to new cuts without losing it",async()=>{
   const p=await page();p.elements.note.value="טיוטה פרטית לגרסה הישנה";p.elements.note.oninput();
   p.setQueue({cases:[{...p.item,candidateSha256:"revised",priorNote:"הערה קודמת לקריאה בלבד"}],retiredCases:[p.item],decisions:{},token:"fixture",persistentQueue:true});

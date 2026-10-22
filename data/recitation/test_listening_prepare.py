@@ -1,8 +1,9 @@
 """Local preparation is bounded, restartable and never a timing approval."""
 
-from contextlib import ExitStack, closing
+from contextlib import ExitStack, closing, redirect_stdout
 from copy import deepcopy
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from io import StringIO
 import json
 from pathlib import Path
 import sqlite3
@@ -13,7 +14,8 @@ from unittest.mock import patch
 import wave
 
 from alignment import load_chapters, text_hash, words_for
-from listening_prepare import COMPLETED_DIAGNOSTICS, PreparationWorker, WorkerLock
+from listening_files import open_state_text, read_state_json, write_state_json
+from listening_prepare import COMPLETED_DIAGNOSTICS, PreparationWorker, WorkerLock, main
 from listening_review import digest_file, read_json, write_json
 
 
@@ -456,6 +458,90 @@ class LocalPreparationTests(unittest.TestCase):
         saved = read_json(worker.state / "status.json")
         self.assertEqual((saved["automaticApprovals"], saved["newInferenceRuns"], saved["publicationWrites"]), (0, 0, 0))
         self.assertEqual(read_json(worker.ledger_path)["cases"]["1-2"]["state"], "prepared")
+
+    def test_waiting_heartbeats_do_not_rewrite_an_unchanged_ledger(self):
+        worker = self.worker()
+        first = "2026-10-22T18:00:00+00:00"
+        second = "2026-10-22T18:00:05+00:00"
+        with patch("listening_prepare.write_state_json", wraps=write_state_json) as writer, patch(
+                "listening_prepare.now", side_effect=[first, second]):
+            worker._save("waiting_for_review_capacity", visibleVerses=20)
+            ledger = worker.ledger_path.read_bytes()
+            worker._save("waiting_for_review_capacity", visibleVerses=20)
+        paths = [call.args[0] for call in writer.call_args_list]
+        self.assertEqual(paths.count(worker.ledger_path), 1)
+        self.assertEqual(paths.count(worker.state / "status.json"), 2)
+        self.assertEqual(worker.ledger_path.read_bytes(), ledger)
+        self.assertEqual(read_state_json(worker.state / "status.json")["updatedAt"], second)
+
+    def test_changed_ledger_is_persisted_and_loaded_with_replacement_safe_reading(self):
+        self.add_target(1)
+        worker = self.worker()
+        worker._save("preparing")
+        worker.ledger["cases"]["1-2"] = {"perekId": 1, "pasuk": 2,
+            "state": "held", "reason": "source_or_full_chapter_guard", "detail": "real unresolved source context"}
+        with patch("listening_prepare.write_state_json", wraps=write_state_json) as writer:
+            worker._save("prepared")
+        self.assertEqual([call.args[0] for call in writer.call_args_list].count(worker.ledger_path), 1)
+        with patch("listening_prepare.read_state_json", wraps=read_state_json) as reader:
+            resumed = PreparationWorker(self.config)
+        reader.assert_called_once_with(worker.ledger_path)
+        self.assertEqual(resumed.ledger, worker.ledger)
+        with patch("listening_prepare.write_state_json", wraps=write_state_json) as writer:
+            resumed._save("waiting_for_review_capacity")
+        self.assertEqual([call.args[0] for call in writer.call_args_list], [worker.state / "status.json"])
+
+    def test_progress_persists_while_monitors_hold_previous_state_generations(self):
+        self.add_target(1)
+        worker = self.worker()
+        worker._save("preparing")
+        status_path = worker.state / "status.json"
+        with open_state_text(worker.ledger_path) as old_ledger, open_state_text(status_path) as old_status:
+            previous_ledger, previous_status = json.load(old_ledger), json.load(old_status)
+            worker.ledger["cases"]["1-2"] = {"perekId": 1, "pasuk": 2,
+                "state": "held", "reason": "source_or_full_chapter_guard"}
+            worker._save("waiting_for_review_capacity", visibleVerses=18)
+            old_ledger.seek(0)
+            old_status.seek(0)
+            self.assertEqual(json.load(old_ledger), previous_ledger)
+            self.assertEqual(json.load(old_status), previous_status)
+        self.assertEqual(read_state_json(worker.ledger_path), worker.ledger)
+        current = read_state_json(status_path)
+        self.assertEqual((current["state"], current["visibleVerses"]), ("waiting_for_review_capacity", 18))
+        self.assertEqual(current["counts"], {"held": 1})
+
+    def test_status_only_prints_actual_fields_without_constructing_a_worker_or_taking_actions(self):
+        state = self.root / "read-only-state"
+        status_path = state / "status.json"
+        actual = {"state": "waiting_for_review_capacity", "pid": 123,
+                  "updatedAt": "2026-10-22T18:00:05+00:00", "counts": {"queued": 7, "prepared": 36},
+                  "futureField": {"keep": [False, "שלום"]}}
+        write_json(status_path, actual)
+        config_path = self.root / "status-only-config.json"
+        write_json(config_path, {"stateDirectory": str(state)})
+        before = status_path.read_bytes()
+        output = StringIO()
+        with ExitStack() as stack:
+            stack.enter_context(patch("sys.argv", ["listening_prepare.py", "--config", str(config_path), "--status-only"]))
+            for name in ("PreparationWorker", "WorkerLock", "ReviewDatabase", "build_machine_study", "make_clip"):
+                stack.enter_context(patch("listening_prepare." + name, side_effect=AssertionError("Status reading took action")))
+            reader = stack.enter_context(patch("listening_prepare.read_state_json", wraps=read_state_json))
+            stack.enter_context(redirect_stdout(output))
+            main()
+        self.assertEqual(json.loads(output.getvalue()), actual)
+        self.assertEqual([call.args[0] for call in reader.call_args_list], [config_path, status_path])
+        self.assertEqual(status_path.read_bytes(), before)
+        self.assertEqual(list(state.iterdir()), [status_path])
+
+    def test_missing_status_is_not_a_request_to_create_state_or_start_work(self):
+        state = self.root / "not-created"
+        config_path = self.root / "status-only-config.json"
+        write_json(config_path, {"stateDirectory": str(state)})
+        with patch("sys.argv", ["listening_prepare.py", "--config", str(config_path), "--status-only"]), patch(
+                "listening_prepare.PreparationWorker", side_effect=AssertionError("Status request started a worker")):
+            with self.assertRaises(FileNotFoundError):
+                main()
+        self.assertFalse(state.exists())
 
 
 if __name__ == "__main__":
