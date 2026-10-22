@@ -286,23 +286,24 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     /// </summary>
     private void SetupFontSizeResources()
     {
-        UpdateFontSizeResources(_viewModel.FontFactor);
-        _viewModel.PropertyChanged += (_, e) =>
-        {
-            if (e.PropertyName == nameof(PerekViewModel.FontFactor))
-            {
-                MainThread.BeginInvokeOnMainThread(() =>
-                    UpdateFontSizeResources(_viewModel.FontFactor));
-            }
-        };
+        var prefs = PreferencesService.Instance;
+        UpdateFontSizeResources(prefs);
+        prefs.PreferencesChanged += (_, _) =>
+            MainThread.BeginInvokeOnMainThread(() => UpdateFontSizeResources(prefs));
     }
 
-    private void UpdateFontSizeResources(double factor)
+    // Reading-text category inventory (#2461): פסוקים covers the pasuk body
+    // (base 18) and pasuk-number markers (base 16); פירושים covers perush
+    // content (base 18 so 100% matches the pasuk body) and perush names
+    // (base 14 heading hierarchy).
+    private void UpdateFontSizeResources(PreferencesService prefs)
     {
-        Resources["PasukFontSize"] = factor * 18;
-        Resources["PasukNumFontSize"] = factor * 16;
-        Resources["PerushNameFontSize"] = factor * 14;
-        Resources["PerushContentFontSize"] = factor * 16;
+        var pasukFactor = prefs.PasukFontFactor;
+        var perushFactor = prefs.PerushFontFactor;
+        Resources["PasukFontSize"] = pasukFactor * 18;
+        Resources["PasukNumFontSize"] = pasukFactor * 16;
+        Resources["PerushNameFontSize"] = perushFactor * 14;
+        Resources["PerushContentFontSize"] = perushFactor * 18;
     }
 
     private void ForwardSelectedArticleIdChanged()

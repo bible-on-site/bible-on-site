@@ -10,6 +10,7 @@ import sqlite3
 import threading
 from urllib.parse import parse_qs, urlsplit
 
+from listening_edits import validate_cut_edit, validate_word_review
 from listening_review import (ListeningHandler, digest_file, digest_json,
                               load_queue, read_json, session_token, validate_decision, write_json)
 
@@ -49,6 +50,11 @@ class ReviewDatabase:
                     path TEXT PRIMARY KEY, batch_seq INTEGER NOT NULL, prefix TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS entry (
                     digest TEXT PRIMARY KEY, body TEXT NOT NULL, saved_at TEXT NOT NULL);
+                CREATE TABLE IF NOT EXISTS cut_edit (
+                    proposal_sha TEXT PRIMARY KEY, body TEXT NOT NULL, saved_at TEXT NOT NULL);
+                CREATE TABLE IF NOT EXISTS word_review (
+                    submission_id TEXT PRIMARY KEY, request_sha TEXT NOT NULL,
+                    body TEXT NOT NULL, saved_at TEXT NOT NULL);
             """)
 
     @contextmanager
@@ -148,6 +154,9 @@ class ReviewDatabase:
                     db.execute("UPDATE candidate SET visible=0 WHERE key=?", (key,))
 
     def case(self, identifier, candidate, clip=None):
+        if (not isinstance(identifier, str) or not isinstance(candidate, str)
+                or (clip is not None and not isinstance(clip, str))):
+            raise ValueError("Exact listening candidate identities must be text")
         with closing(sqlite3.connect(self.path)) as db:
             rows = [json.loads(row[0]) for row in db.execute(
                 "SELECT body FROM candidate WHERE case_id=?", (identifier,))]
@@ -158,6 +167,8 @@ class ReviewDatabase:
         return matches[0]
 
     def save(self, case, payload):
+        if payload.get("timingEdits"):
+            raise ValueError("Edited word timings require a current whole-verse timing review; the draft was not approved")
         # Re-read the immutable stored version, not a browser-supplied candidate body.
         exact = self.case(case["id"], payload.get("candidateSha256"), payload.get("clipSha256"))
         row = validate_decision(exact, payload)
@@ -168,6 +179,81 @@ class ReviewDatabase:
         if self.on_saved:
             self.on_saved()
         return row
+
+    def save_cut_edits(self, payload):
+        """Append a held proposal for the current immutable candidate, never a verdict."""
+        with self._transaction() as db:
+            db.execute("BEGIN IMMEDIATE")
+            stored = db.execute("SELECT c.key,c.body,c.queue_sha FROM current_candidate current "
+                                "JOIN candidate c ON c.key=current.key WHERE current.case_id=?",
+                                (payload.get("caseId"),)).fetchone()
+            if stored is None:
+                raise ValueError("Unknown current listening candidate")
+            case = json.loads(stored[1])
+            if stored[0] != ":".join((str(payload.get("caseId")),
+                                      str(payload.get("candidateSha256")), str(payload.get("clipSha256")))):
+                raise ValueError("This listening candidate was replaced; open the current version before editing")
+            row = validate_cut_edit(case, payload)
+            row["queueSha256"] = stored[2]
+            proposal_sha = digest_json(row)
+            previous = db.execute("SELECT body FROM cut_edit WHERE proposal_sha=?", (proposal_sha,)).fetchone()
+            if previous:
+                return json.loads(previous[0])
+            row.update(proposalSha256=proposal_sha, savedAt=datetime.now(timezone.utc).isoformat())
+            db.execute("INSERT INTO cut_edit VALUES (?,?,?)",
+                       (proposal_sha, json.dumps(row, ensure_ascii=False), row["savedAt"]))
+        return row
+
+    def all_cut_edits(self):
+        with closing(sqlite3.connect(self.path)) as db:
+            return [json.loads(row[0]) for row in db.execute(
+                "SELECT body FROM cut_edit ORDER BY saved_at, proposal_sha")]
+
+    def save_word_review(self, payload):
+        """Atomically save one whole-verse verdict and finish its exact work item."""
+        # GOOD/SKIP cannot carry an obsolete problem note into the new real answer.
+        request = dict(payload)
+        if not isinstance(request.get("submissionId"), str):
+            raise ValueError("A unique review submission identity is required")
+        if any(not isinstance(request.get(key), str) for key in
+               ("caseId", "candidateSha256", "clipSha256")):
+            raise ValueError("Exact listening candidate identities must be text")
+        if request.get("verdict") in ("good", "skip"):
+            request["note"] = ""
+        request_sha = digest_json(request)
+        with self._transaction() as db:
+            db.execute("BEGIN IMMEDIATE")
+            previous = db.execute("SELECT request_sha,body FROM word_review WHERE submission_id=?",
+                                  (request.get("submissionId"),)).fetchone()
+            if previous:
+                if previous[0] != request_sha:
+                    raise ValueError("This submission identity already belongs to a different review")
+                return json.loads(previous[1])
+            stored = db.execute("SELECT c.key,c.body,c.queue_sha FROM current_candidate current "
+                                "JOIN candidate c ON c.key=current.key WHERE current.case_id=?",
+                                (request.get("caseId"),)).fetchone()
+            if stored is None:
+                raise ValueError("Unknown current listening candidate")
+            case = json.loads(stored[1])
+            if stored[0] != ":".join((str(request.get("caseId")),
+                                      str(request.get("candidateSha256")), str(request.get("clipSha256")))):
+                raise ValueError("This listening candidate was replaced; open the current version before reviewing")
+            row = validate_word_review(case, request)
+            row.update(queueSha256=stored[2], savedAt=datetime.now(timezone.utc).isoformat())
+            db.execute("INSERT INTO word_review VALUES (?,?,?,?)",
+                       (row["submissionId"], request_sha, json.dumps(row, ensure_ascii=False), row["savedAt"]))
+            db.execute("UPDATE candidate SET visible=0 WHERE key=?", (stored[0],))
+        if self.on_saved:
+            self.on_saved()
+        return row
+
+    def _word_reviews(self, db):
+        return [json.loads(row[0]) for row in db.execute(
+            "SELECT body FROM word_review ORDER BY saved_at, rowid")]
+
+    def all_word_reviews(self):
+        with closing(sqlite3.connect(self.path)) as db:
+            return self._word_reviews(db)
 
     def all_entries(self):
         with closing(sqlite3.connect(self.path)) as db:
@@ -190,10 +276,13 @@ class ReviewDatabase:
             retired = [json.loads(body) for key, body, visible, seq in rows
                        if visible and latest[json.loads(body)["id"]][0] != key]
             entries = self._entries(db)
-            revision = digest_json([current, [(key, seq) for key, body, visible, seq in rows],
-                                    [digest_json(row) for row in entries]])
+            word_reviews = self._word_reviews(db)
+            revision = digest_json([current, [(key, seq, visible) for key, body, visible, seq in rows],
+                                    [digest_json(row) for row in entries],
+                                    [digest_json(row) for row in word_reviews]])
         return {"cases": cases, "retiredCases": retired,
-                "decisions": {entry_key(row): row for row in entries}, "revision": revision}
+                "decisions": {entry_key(row): row for row in entries},
+                "wordReviewDecisions": {entry_key(row): row for row in word_reviews}, "revision": revision}
 
     def export(self, output):
         """Freeze a consistent snapshot for the unchanged guarded publication importer."""
@@ -204,6 +293,7 @@ class ReviewDatabase:
             db.execute("BEGIN")
             batches = db.execute("SELECT seq,path,file_sha,body FROM batch ORDER BY seq").fetchall()
             entries = self._entries(db)
+            word_reviews = self._word_reviews(db)
         if not batches:
             raise ValueError("No review batches")
         archives = []
@@ -222,7 +312,7 @@ class ReviewDatabase:
                  "canonicalPath": json.loads(batches[-1][3])["canonicalPath"],
                  "cases": [], "queueSha256": digest_json([]), "archivedQueues": archives}
         write_json(output / "queue.json", queue)
-        write_json(output / "reviews.json", {"version": 1, "entries": entries})
+        write_json(output / "reviews.json", {"version": 1, "entries": entries, "wordReviews": word_reviews})
         return output / "queue.json", output / "reviews.json", Path(queue["canonicalPath"])
 
 
@@ -252,16 +342,37 @@ class QueueHandler(ListeningHandler):
                 return self.send(200, raw, "audio/wav")
             except (ValueError, OSError):
                 return self.json_response(409, {"error": "Exact listening audio unavailable"})
+        if self.path == "/api/cut-edits":
+            return self.json_response(200, {"entries": self.server.review_store.all_cut_edits()})
+        if self.path == "/api/word-reviews":
+            return self.json_response(200, {"entries": self.server.review_store.all_word_reviews()})
         if self.path == "/api/export":
             return self.json_response(200, {"version": 1,
                 "entries": self.server.review_store.all_entries(),
+                "timingEdits": self.server.review_store.all_cut_edits(),
+                "wordReviews": self.server.review_store.all_word_reviews(),
                 "publicationStatus": "held"})
         if self.path == "/api/archive":
-            return self.json_response(200, [{"caseCount": len(self.server.review_store.all_entries()),
+            entries = sorted([*self.server.review_store.all_entries(),
+                              *self.server.review_store.all_word_reviews()], key=stamp)
+            return self.json_response(200, [{"caseCount": len(entries),
                                             "cases": [{"id": row["caseId"], "label": row["caseId"],
                                                        "decision": row}
-                                                      for row in self.server.review_store.all_entries()]}])
+                                                      for row in entries]}])
         return super().do_GET()
+
+    def do_POST(self):
+        if self.path not in ("/api/cut-edits", "/api/word-reviews") or not self.review_session_valid():
+            return super().do_POST()
+        try:
+            _case, payload = self.review_payload()
+            row = (self.server.review_store.save_word_review(payload) if self.path == "/api/word-reviews"
+                   else self.server.review_store.save_cut_edits(payload))
+            return self.json_response(200, row)
+        except (ValueError, KeyError, TypeError) as error:
+            return self.json_response(400, {"error": str(error)})
+        except (OSError, sqlite3.Error):
+            return self.json_response(500, {"error": "Could not save review; please retry"})
 
     def review_payload(self):
         size = int(self.headers.get("Content-Length", "0"))
