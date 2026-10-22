@@ -1,3 +1,4 @@
+import { assetsUrl } from "../assets-url";
 import { query } from "../api-client";
 import type { AuthorArticle, AuthorDetails } from "./types";
 import { normalizeAuthorName } from "./url-utils";
@@ -51,26 +52,13 @@ async function checkS3Availability(): Promise<void> {
 /**
  * Build the public URL for author images based on author ID.
  * Images are stored in S3 with naming convention: authors/high-res/{id}.jpg
- * Handles both RustFS (dev) and AWS S3 (prod) URLs.
+ * Handles CDN, RustFS (dev) and AWS S3 (prod) URLs.
  */
 export function getAuthorImageUrl(authorId: number): string {
-	const imagePath = `authors/high-res/${authorId}.jpg`;
-
-	// Build URL from S3 configuration
-	const S3_ENDPOINT = process.env.S3_ENDPOINT;
-	const S3_BUCKET = process.env.S3_BUCKET || "bible-on-site-assets";
-	const S3_REGION =
-		process.env.S3_REGION || process.env.AWS_REGION || "il-central-1";
-
 	// Check S3 availability asynchronously (fire-and-forget, logs warning if down)
 	checkS3Availability();
 
-	if (S3_ENDPOINT) {
-		// S3 path-style URL
-		return `${S3_ENDPOINT}/${S3_BUCKET}/${imagePath}`;
-	}
-	// Standard AWS S3 URL
-	return `https://${S3_BUCKET}.s3.${S3_REGION}.amazonaws.com/${imagePath}`;
+	return assetsUrl(`authors/high-res/${authorId}.jpg`);
 }
 
 /**

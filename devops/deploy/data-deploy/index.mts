@@ -27,8 +27,10 @@ import {
 	PutObjectCommand,
 	S3Client,
 } from "@aws-sdk/client-s3";
+import { SSMClient } from "@aws-sdk/client-ssm";
 import * as dotenv from "dotenv";
 import { DeployerBase } from "../deployer-base.mjs";
+import { ensureDbUrlEnvVar } from "./lambda-env.mjs";
 import { invokeWithRestorationRetry } from "./lambda-invocation.mjs";
 import sqlFiles from "./sql-files.json" with { type: "json" };
 
@@ -88,8 +90,15 @@ class DataDeployer extends DeployerBase {
 			region: this.region,
 			maxAttempts: 1,
 		});
+		const ssmClient = new SSMClient({ region: this.region });
 
 		try {
+			// Refresh the Lambda's DB_URL before invoking: keeps the function's
+			// environment in sync with SSM without a runtime SSM call in the VPC.
+			await ensureDbUrlEnvVar(lambdaClient, ssmClient, LAMBDA_FUNCTION_NAME, (m) =>
+				this.info(m),
+			);
+
 			// Upload SQL files to S3
 			await this.uploadSqlFiles(s3Client);
 

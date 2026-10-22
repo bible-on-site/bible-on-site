@@ -313,6 +313,12 @@ Resources:
             # Bulletin Lambda function name — used by AWS SDK to invoke directly
             - Name: BULLETIN_LAMBDA_NAME
               Value: bible-on-site-bulletin
+            # Public base URL for the shared assets bucket (recordings,
+            # illustrations, author portraits). Set to the CloudFront
+            # distribution once cloudfront-assets.yaml is applied; without it,
+            # direct S3 URLs are generated.
+            - Name: ASSETS_BASE_URL
+              Value: https://assets.xn--febl3a.co.il
           # Database credentials injected from SSM Parameter Store
           # Required for runtime database queries (dynamic pages, ISR, etc.)
           # Each parameter must exist before the task starts — see the
@@ -502,6 +508,10 @@ Resources:
               Value: il-central-1
             - Name: S3_BUCKET
               Value: bible-on-site-assets
+            # Same CDN base URL as the website task — admin derives author
+            # image public URLs from it (see WebsiteTaskDefinition).
+            - Name: ASSETS_BASE_URL
+              Value: https://assets.xn--febl3a.co.il
             # Admin reaches the website task over Cloud Map service discovery
             # (MULTIVALUE A records) to expire its content caches post-commit.
             - Name: VITE_WEBSITE_URL
@@ -568,7 +578,14 @@ Resources:
       Cluster: !Ref ECSCluster
       TaskDefinition: !Ref AdminTaskDefinition
       DesiredCount: 0 # Initially 0 until first deployment
-      LaunchType: FARGATE
+      # Admin is an internal tool — Fargate Spot (~70% cheaper) is acceptable.
+      # Spot tasks get a 2-minute termination notice; a rare interruption shows
+      # as a brief admin outage, and a deployment may wait for Spot capacity.
+      # Requires the cluster to offer FARGATE_SPOT (see put-cluster-capacity-providers
+      # in the CLI section at the bottom of this file).
+      CapacityProviderStrategy:
+        - CapacityProvider: FARGATE_SPOT
+          Weight: 1
       PlatformVersion: LATEST
       NetworkConfiguration:
         AwsvpcConfiguration:
@@ -689,6 +706,20 @@ Outputs:
 #
 # Update service (force new deployment):
 #   aws ecs update-service --cluster bible-on-site-cluster --service bible-on-site-website --force-new-deployment --region il-central-1
+#
+# Associate Fargate Spot with the cluster (required once before the admin
+# service can use the FARGATE_SPOT capacity provider):
+#   aws ecs put-cluster-capacity-providers \
+#     --cluster bible-on-site-cluster \
+#     --capacity-providers FARGATE FARGATE_SPOT \
+#     --default-capacity-provider-strategy capacityProvider=FARGATE,weight=1 \
+#     --region il-central-1
+#
+# Then switch the admin service to Spot (replaces its launch type):
+#   aws ecs update-service --cluster bible-on-site-cluster \
+#     --service bible-on-site-admin \
+#     --capacity-provider-strategy capacityProvider=FARGATE_SPOT,weight=1 \
+#     --force-new-deployment --region il-central-1
 #
 # List Cloud Map namespaces:
 #   aws servicediscovery list-namespaces --region il-central-1
