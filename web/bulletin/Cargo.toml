@@ -4,7 +4,7 @@ description = "Bible on Site PDF Bulletin Generator (AWS Lambda)"
 license-file = "../../license"
 repository = "https://github.com/bible-on-site/bible-on-site"
 publish = false
-version = "0.1.45"
+version = "0.1.47"
 edition = "2024"
 
 [lib]
@@ -52,7 +52,7 @@ base64 = "0.23.0"
 
 [dev-dependencies]
 sea-orm = { version = "2.0.4", default-features = false, features = ["mock"] }
-lopdf = "0.45"
+lopdf = "0.46"
 
 [workspace]
 members = ["."]

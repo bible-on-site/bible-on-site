@@ -298,6 +298,93 @@ public class HtmlViewTests
 
     #endregion
 
+    #region IsContentReady Tests (#2451)
+
+    [Fact]
+    public void IsContentReady_WithoutLoader_IsTrueImmediately()
+    {
+        // Bound content (NoteContents/DisplayContent) needs no async load.
+        new HtmlView().IsContentReady.Should().BeTrue();
+    }
+
+    [Fact]
+    public void IsContentReady_WithLoader_StaysFalseUntilContentPublished()
+    {
+        var htmlView = new HtmlView();
+        // A realized cell without a handler cannot run its loader — the gate
+        // must keep the name hidden instead of showing a name-only flash.
+        htmlView.ContentLoader = () => Task.FromResult(new List<string> { "<p>טקסט</p>" });
+
+        htmlView.IsContentReady.Should().BeFalse();
+
+        htmlView.HtmlContent = "<p>טקסט</p>";
+        htmlView.IsContentReady.Should().BeTrue();
+    }
+
+    [Fact]
+    public void IsContentReady_WhenLoaderReplaced_DropsReadinessWithClearedContent()
+    {
+        // Recycled cell: a new loader clears the stale content, so a new
+        // perush name can never appear beside the previous perush's text.
+        var htmlView = new HtmlView
+        {
+            ContentLoader = () => Task.FromResult(new List<string> { "a" }),
+            HtmlContent = "<p>ישן</p>"
+        };
+        htmlView.IsContentReady.Should().BeTrue();
+
+        htmlView.ContentLoader = () => Task.FromResult(new List<string> { "b" });
+        htmlView.HtmlContent = null; // LoadCellContentAsync clears before loading.
+
+        htmlView.IsContentReady.Should().BeFalse();
+    }
+
+    [Fact]
+    public void IsContentReady_RaisesPropertyChanged_WhenLoaderAssignedAndContentPublished()
+    {
+        var htmlView = new HtmlView();
+        var changes = new List<string?>();
+        htmlView.PropertyChanged += (_, e) => changes.Add(e.PropertyName);
+
+        htmlView.ContentLoader = () => Task.FromResult(new List<string> { "a" });
+        htmlView.HtmlContent = "<p>חדש</p>";
+
+        changes.Should().Contain(name => name == nameof(HtmlView.IsContentReady));
+        changes.Count(name => name == nameof(HtmlView.IsContentReady)).Should().BeGreaterThanOrEqualTo(2);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void IsContentReady_WithLoader_EmptyBindingIsNotReady(string bound)
+    {
+        // A lazy display's DisplayContent binds string.Empty before the
+        // loader publishes — the name must wait for real content (#2451).
+        var htmlView = new HtmlView
+        {
+            ContentLoader = () => Task.FromResult(new List<string> { "a" }),
+            HtmlContent = bound
+        };
+
+        htmlView.IsContentReady.Should().BeFalse();
+    }
+
+    [Fact]
+    public void IsContentReady_ErrorContentStillMarksReady()
+    {
+        // A failed load publishes the error string — the name surfaces once
+        // with the failure text rather than flashing alone first.
+        var htmlView = new HtmlView
+        {
+            ContentLoader = () => Task.FromResult(new List<string> { "a" })
+        };
+        htmlView.HtmlContent = "לא ניתן לטעון את הפירוש";
+
+        htmlView.IsContentReady.Should().BeTrue();
+    }
+
+    #endregion
+
     #region DynamicResource Propagation Tests
 
     // The reader binds HtmlView.FontSize with {DynamicResource PerushContentFontSize}

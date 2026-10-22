@@ -332,19 +332,25 @@ impl ArticleSearchIndex {
 
     /// Scores the phrase against the live snapshot and returns a paginated
     /// page plus the pre-pagination hit count. `limit`/`offset` are already
-    /// validated by the resolver. A stale-snapshot refresh failure degrades to
-    /// searching the warm snapshot rather than failing the query.
+    /// validated by the resolver. `author_ids` scopes hits to those article
+    /// ids BEFORE pagination so an author-scoped query still fills its page
+    /// with that author's matches. A stale-snapshot refresh failure degrades
+    /// to searching the warm snapshot rather than failing the query.
     pub async fn search(
         &self,
         phrase: &str,
         limit: usize,
         offset: usize,
+        author_ids: Option<&std::collections::HashSet<i32>>,
     ) -> Result<SearchPage, DbErr> {
         if let Err(err) = self.refresh_if_stale().await {
             warn!(error = %err, "article search refresh probe failed; serving warm snapshot");
         }
         let snapshot = self.inner.read().await;
-        let hits = snapshot.search(phrase);
+        let mut hits = snapshot.search(phrase);
+        if let Some(ids) = author_ids {
+            hits.retain(|hit| ids.contains(&hit.article_id));
+        }
         let total = hits.len();
         Ok(SearchPage {
             hits: hits.into_iter().skip(offset).take(limit).collect(),
@@ -950,7 +956,7 @@ mod tests {
         index.load().await.expect("load");
 
         assert_eq!(index.doc_count().await, 1);
-        let page = index.search("alpha", 10, 0).await.expect("search");
+        let page = index.search("alpha", 10, 0, None).await.expect("search");
         assert_eq!(page.total, 1);
         assert_eq!(page.hits[0].article_id, 22);
     }
@@ -1024,10 +1030,10 @@ mod tests {
         );
 
         // The failed refresh probe degrades to the warm snapshot.
-        let page = index.search("alpha", 10, 0).await.expect("warm search");
+        let page = index.search("alpha", 10, 0, None).await.expect("warm search");
         assert_eq!(page.total, 2);
 
-        let page = index.search("alpha", 1, 1).await.expect("paginated");
+        let page = index.search("alpha", 1, 1, None).await.expect("paginated");
         assert_eq!(page.hits.len(), 1);
         assert_eq!(page.hits[0].article_id, 9);
         assert_eq!(page.total, 2);

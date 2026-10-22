@@ -185,6 +185,7 @@ public class TanahpediaEntityTypeViewModelTests
         vm.IsEmpty.Should().BeFalse();
         vm.Entities.Should().ContainSingle()
             .Which.IsSingleLink.Should().BeTrue();
+        vm.EntityCountText.Should().Be("1 פריטים");
     }
 
     [Fact]
@@ -825,5 +826,206 @@ public class TanahpediaEntryViewModelTests
 
         vm.ShowEntry.Should().BeTrue();
         vm.ShowNoContentNotice.Should().BeTrue();
+    }
+
+    private void SetupPersonEntries(params string[] names)
+    {
+        foreach (var name in names)
+        {
+            _service.Setup(s => s.GetEntryDetailAsync(name, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new TanahpediaEntryDetail
+                {
+                    UniqueName = name,
+                    Title = name,
+                    Entities = [new TanahpediaLinkedEntity { EntityType = "PERSON", EntityName = name }],
+                });
+        }
+    }
+
+    [Fact]
+    public async Task OpenPersonEntry_SwitchesInPlaceWithoutNavigation()
+    {
+        SetupPersonEntries("שמשון", "דלילה");
+
+        var vm = Create();
+        vm.UniqueName = "שמשון";
+        await vm.LoadAsync();
+
+        await vm.OpenPersonEntryAsync("דלילה");
+
+        _navigator.Verify(n => n.GoToAsync(It.IsAny<string>()), Times.Never);
+        vm.UniqueName.Should().Be("דלילה");
+        vm.Title.Should().Be("דלילה");
+        vm.ShowEntry.Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("שמשון")]
+    public async Task OpenPersonEntry_IgnoresEmptyOrCurrentName(string? uniqueName)
+    {
+        SetupPersonEntries("שמשון");
+        var vm = Create();
+        vm.UniqueName = "שמשון";
+        await vm.LoadAsync();
+
+        await vm.OpenPersonEntryAsync(uniqueName);
+
+        vm.HasEntryHistory.Should().BeFalse();
+        _service.Verify(s => s.GetEntryDetailAsync("שמשון", It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task GoBack_PopsPersonHistoryThenNavigatesUp()
+    {
+        SetupPersonEntries("שמשון", "דלילה", "מנוח");
+
+        var vm = Create();
+        vm.UniqueName = "שמשון";
+        await vm.LoadAsync();
+        await vm.OpenPersonEntryAsync("דלילה");
+        await vm.OpenPersonEntryAsync("מנוח");
+
+        await vm.GoBackAsync();
+        _navigator.Verify(n => n.GoToAsync(It.IsAny<string>()), Times.Never);
+        vm.Title.Should().Be("דלילה");
+
+        await vm.GoBackAsync();
+        _navigator.Verify(n => n.GoToAsync(It.IsAny<string>()), Times.Never);
+        vm.Title.Should().Be("שמשון");
+
+        await vm.GoBackAsync();
+        _navigator.Verify(n => n.GoToAsync(".."), Times.Once);
+    }
+
+    [Fact]
+    public async Task OpenPersonEntry_StaleLoadDoesNotOverwriteLatest()
+    {
+        var staleGate = new TaskCompletionSource<TanahpediaEntryDetail?>();
+        _service.Setup(s => s.GetEntryDetailAsync("דלילה", It.IsAny<CancellationToken>()))
+            .Returns(staleGate.Task);
+        SetupPersonEntries("שמשון", "מנוח");
+
+        var vm = Create();
+        vm.UniqueName = "שמשון";
+        await vm.LoadAsync();
+
+        var stale = vm.OpenPersonEntryAsync("דלילה");
+        await vm.OpenPersonEntryAsync("מנוח");
+        vm.Title.Should().Be("מנוח");
+
+        // A late response from the superseded request must not clobber מנוח.
+        staleGate.SetResult(new TanahpediaEntryDetail { UniqueName = "דלילה", Title = "דלילה" });
+        await stale;
+        vm.Title.Should().Be("מנוח");
+        vm.UniqueName.Should().Be("מנוח");
+    }
+
+    [Fact]
+    public async Task OpenPersonEntry_StaleSynonymLookupDoesNotOverwriteLatest()
+    {
+        var targetsGate = new TaskCompletionSource<List<TanahpediaSynonymTarget>>();
+        _service.Setup(s => s.GetEntryDetailAsync("דלילה", It.IsAny<CancellationToken>()))
+            .ReturnsAsync((TanahpediaEntryDetail?)null);
+        _service.Setup(s => s.GetSynonymTargetsAsync("דלילה", It.IsAny<CancellationToken>()))
+            .Returns(targetsGate.Task);
+        SetupPersonEntries("שמשון", "מנוח");
+
+        var vm = Create();
+        vm.UniqueName = "שמשון";
+        await vm.LoadAsync();
+
+        var stale = vm.OpenPersonEntryAsync("דלילה");
+        await vm.OpenPersonEntryAsync("מנוח");
+
+        targetsGate.SetResult([new TanahpediaSynonymTarget { UniqueName = "דלילה", Title = "דלילה" }]);
+        await stale;
+
+        vm.Title.Should().Be("מנוח");
+        vm.IsDisambiguation.Should().BeFalse();
+        _service.Verify(s => s.GetEntryDetailAsync("מנוח", It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task OpenPersonEntry_StaleAliasLookupDoesNotOverwriteLatest()
+    {
+        var aliasGate = new TaskCompletionSource<TanahpediaEntryDetail?>();
+        _service.Setup(s => s.GetEntryDetailAsync("דתן", It.IsAny<CancellationToken>()))
+            .ReturnsAsync((TanahpediaEntryDetail?)null);
+        _service.Setup(s => s.GetSynonymTargetsAsync("דתן", It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new TanahpediaSynonymTarget { UniqueName = "דתן-ואבירם", Title = "דתן ואבירם" }]);
+        _service.Setup(s => s.GetEntryDetailAsync("דתן-ואבירם", It.IsAny<CancellationToken>()))
+            .Returns(aliasGate.Task);
+        SetupPersonEntries("שמשון", "מנוח");
+
+        var vm = Create();
+        vm.UniqueName = "שמשון";
+        await vm.LoadAsync();
+
+        var stale = vm.OpenPersonEntryAsync("דתן");
+        await vm.OpenPersonEntryAsync("מנוח");
+
+        aliasGate.SetResult(new TanahpediaEntryDetail { UniqueName = "דתן-ואבירם", Title = "דתן ואבירם" });
+        await stale;
+
+        vm.Title.Should().Be("מנוח");
+        _service.Verify(s => s.GetEntryDetailAsync("מנוח", It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task OpenPersonEntry_CancelledStaleLoadIsDiscarded()
+    {
+        _service.Setup(s => s.GetEntryDetailAsync("דלילה", It.IsAny<CancellationToken>()))
+            .Returns<string, CancellationToken>(async (_, ct) =>
+            {
+                await Task.Delay(Timeout.Infinite, ct);
+                return null;
+            });
+        SetupPersonEntries("שמשון", "מנוח");
+
+        var vm = Create();
+        vm.UniqueName = "שמשון";
+        await vm.LoadAsync();
+
+        var stale = vm.OpenPersonEntryAsync("דלילה");
+        await vm.OpenPersonEntryAsync("מנוח");
+        await stale;
+
+        vm.Title.Should().Be("מנוח");
+        vm.HasError.Should().BeFalse();
+        vm.IsLoading.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task OpenPersonEntry_ClearsPreviousFamilyTree()
+    {
+        SetupPersonEntries("שמשון", "דלילה");
+        _service.Setup(s => s.GetPersonFamilyAsync("person-1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TanahpediaPersonFamily
+            {
+                FocalDisplayName = "שמשון",
+                Parents = [new TanahpediaFamilyParentEdge
+                {
+                    Related = new TanahpediaFamilyPerson { DisplayName = "מנוח" },
+                    ParentRole = "FATHER",
+                }],
+            });
+        _service.Setup(s => s.GetEntryDetailAsync("שמשון", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TanahpediaEntryDetail
+            {
+                UniqueName = "שמשון",
+                Title = "שמשון",
+                Entities = [new TanahpediaLinkedEntity { EntityType = "PERSON", EntityName = "שמשון", EntityId = "person-1" }],
+            });
+
+        var vm = Create();
+        vm.UniqueName = "שמשון";
+        await vm.LoadAsync();
+        vm.HasFamily.Should().BeTrue();
+
+        await vm.OpenPersonEntryAsync("דלילה");
+
+        vm.HasFamily.Should().BeFalse();
     }
 }

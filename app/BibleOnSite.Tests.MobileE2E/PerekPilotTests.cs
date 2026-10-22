@@ -44,7 +44,7 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         SaveDiagnostics("SearchPageRecentSearches", "passed");
         Page.Tap("SearchKindsTab");
         Page.WaitFor("SearchKindPerek");
-        Platform.DismissSearchSheet(Driver);
+        Platform.DismissSearchSheet(Driver!);
         Page.WaitForHidden("SearchSheet");
         AssertBookGroupColumns();
         Platform.RevealTrailingSearchChips(Driver);
@@ -85,7 +85,7 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         {
             Page.Tap("SearchKindPerush");
         }
-        Page.Tap("SearchSheetApplyButton");
+        Platform.DismissSearchSheet(Driver!);
         Page.WaitForHidden("SearchSheet");
         SearchFor("בראשיט 1", "בראשית א");
         SaveDiagnostics("FloatingSearchChapterResults", "passed");
@@ -124,7 +124,7 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         {
             Page.Tap("SearchKindPerush");
         }
-        Page.Tap("SearchSheetApplyButton");
+        Platform.DismissSearchSheet(Driver!);
         Page.WaitForHidden("SearchSheet");
         SearchFor("בראשית ברא אלהים", "בראשית א א");
         // CI ships the generation-matched index; this must be an ordinary local query.
@@ -269,20 +269,20 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         Page.WaitFor("SearchBook2", element => Platform.IsChecked(element));
         Page.Tap("SearchGroup2");
         Page.Tap("SearchGroup3");
-        Page.Tap("SearchSheetApplyButton");
+        Platform.DismissSearchSheet(Driver!);
         Page.WaitForHidden("SearchSheet");
         // XCTest correctly marks background chips as covered by the sheet.
         // Assert each summary after applying the selection, as a user reads it.
         Page.WaitFor("SearchBooksSummary", element => element.Text == "תורה");
         Page.Tap("SearchBooksTab");
         Page.Tap("SearchBook1");
-        Page.Tap("SearchSheetApplyButton");
+        Platform.DismissSearchSheet(Driver!);
         Page.WaitForHidden("SearchSheet");
         Page.WaitFor("SearchBooksSummary", element => element.Text == "שמות +3");
         Page.Tap("SearchBooksTab");
         Page.Tap("SearchBook1");
         SaveDiagnostics("FloatingSearchBookColumns", "passed");
-        Page.Tap("SearchSheetApplyButton");
+        Platform.DismissSearchSheet(Driver!);
         Page.WaitForHidden("SearchSheet");
         Page.WaitFor("SearchBooksSummary", element => element.Text == "תורה");
     }

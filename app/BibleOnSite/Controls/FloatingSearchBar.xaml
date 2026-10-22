@@ -134,7 +134,7 @@
     <Grid BackgroundColor="#66000000"><Grid.GestureRecognizers><TapGestureRecognizer Tapped="OnSheetDismissed"/></Grid.GestureRecognizers></Grid>
     <Border x:Name="FilterSheet" AutomationId="SearchSheet" VerticalOptions="End" HeightRequest="420"
      StrokeShape="RoundRectangle 24,24,0,0" StrokeThickness="0" Padding="16,8,16,16" BackgroundColor="{AppThemeBinding Light=White, Dark=#1C2635}">
-     <Grid RowDefinitions="Auto,Auto,*,Auto" RowSpacing="8">
+     <Grid RowDefinitions="Auto,Auto,*" RowSpacing="8">
       <Grid HeightRequest="20">
        <Grid.GestureRecognizers><PanGestureRecognizer PanUpdated="OnSheetPanUpdated"/></Grid.GestureRecognizers>
        <BoxView WidthRequest="36" HeightRequest="4" CornerRadius="2" HorizontalOptions="Center" VerticalOptions="Center" Color="#D8E4F4"/>
@@ -146,7 +146,7 @@
       </Grid>
       <ScrollView Grid.Row="2"><Grid>
        <VerticalStackLayout x:Name="KindsFilters" IsVisible="False"/>
-       <Grid x:Name="BookFilters" IsVisible="False" ColumnDefinitions="*,*,*" ColumnSpacing="6"/>
+       <Grid x:Name="BookFilters" IsVisible="False" ColumnDefinitions="*,*,*" RowDefinitions="Auto,*" ColumnSpacing="6"/>
        <VerticalStackLayout x:Name="MoreFilters" IsVisible="False" Padding="8" Spacing="8">
         <Label Text="מספר תוצאות מרבי"/>
         <controls:NumberPicker x:Name="LimitPicker" AutomationId="SearchLimitPicker" Minimum="5" Maximum="50" Increment="5"
@@ -157,7 +157,6 @@
         <RadioButton Content="לפי סדר הדורות" GroupName="SearchSort" Value="Generation" AutomationId="SearchSortGeneration" CheckedChanged="OnSortChanged"/>
        </VerticalStackLayout>
       </Grid></ScrollView>
-      <Button Grid.Row="3" Text="הצגת תוצאות" AutomationId="SearchSheetApplyButton" Clicked="OnSheetDismissed"/>
      </Grid>
     </Border>
    </Grid>

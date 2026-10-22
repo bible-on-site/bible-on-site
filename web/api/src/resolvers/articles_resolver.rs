@@ -19,6 +19,7 @@ impl ArticlesQuery {
         phrase: String,
         limit: Option<i32>,
         offset: Option<i32>,
+        author_id: Option<i32>,
     ) -> Result<ArticleSearchResults> {
         articles_service::search_articles(
             ctx.data::<Database>()?,
@@ -26,6 +27,7 @@ impl ArticlesQuery {
             &phrase,
             limit,
             offset,
+            author_id,
         )
         .await
         .map_err(|e| e.extend())

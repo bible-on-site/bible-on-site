@@ -1,3 +1,4 @@
+using BibleOnSite.Helpers;
 using BibleOnSite.Services;
 using BibleOnSite.Tests.Support;
 using BibleOnSite.ViewModels;
@@ -553,6 +554,147 @@ public class PreferencesViewModelTests : IDisposable
 
     #endregion
 
+    #region In-app Back button preference (DisplayPreferencesViewModel)
+
+    [Fact]
+    public void InAppBackButton_SetSameValue_DoesNotNotify()
+    {
+        var display = new DisplayPreferencesViewModel(_service);
+        var changed = new List<string?>();
+        display.PropertyChanged += (_, args) => changed.Add(args.PropertyName);
+
+        display.InAppBackButton = InAppBackButtonPreference.PlatformDefault;
+
+        changed.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void InAppBackButton_SetNewValue_PersistsAndNotifies()
+    {
+        var display = new DisplayPreferencesViewModel(_service);
+        var changed = new List<string?>();
+        display.PropertyChanged += (_, args) => changed.Add(args.PropertyName);
+
+        display.InAppBackButton = InAppBackButtonPreference.Show;
+
+        display.InAppBackButton.Should().Be(InAppBackButtonPreference.Show);
+        _service.InAppBackButton.Should().Be(InAppBackButtonPreference.Show);
+        changed.Should().Contain(nameof(display.InAppBackButton));
+        changed.Should().Contain(nameof(display.IsBackButtonShow));
+    }
+
+    [Fact]
+    public void IsBackButtonSetters_ToggleTheStoredPreference()
+    {
+        var display = new DisplayPreferencesViewModel(_service);
+
+        display.IsBackButtonShow = true;
+        display.InAppBackButton.Should().Be(InAppBackButtonPreference.Show);
+
+        display.IsBackButtonHide = true;
+        display.InAppBackButton.Should().Be(InAppBackButtonPreference.Hide);
+        display.IsBackButtonShow.Should().BeFalse();
+
+        display.IsBackButtonPlatformDefault = true;
+        display.InAppBackButton.Should().Be(InAppBackButtonPreference.PlatformDefault);
+
+        display.IsBackButtonPlatformDefault.Should().BeTrue();
+        display.IsBackButtonHide.Should().BeFalse();
+    }
+
+    [Fact]
+    public void DivineNameMasking_ReadsThroughMaskingPreferences()
+    {
+        var display = new DisplayPreferencesViewModel(_service);
+        _service.DivineNameMaskingEnabled = false;
+
+        display.DivineNameMaskingEnabled.Should().BeFalse();
+
+        display.DivineNameMaskingEnabled = true;
+        _service.DivineNameMaskingEnabled.Should().BeTrue();
+    }
+
+    #endregion
+
+    #region InAppBackButton (DisplayPreferencesViewModel)
+
+    [Fact]
+    public void InAppBackButton_GetSet_MirrorsService_AndNotifiesRadioWrappers()
+    {
+        var display = new DisplayPreferencesViewModel(_service);
+        var notified = new List<string>();
+        display.PropertyChanged += (_, args) => notified.Add(args.PropertyName!);
+
+        display.InAppBackButton = InAppBackButtonPreference.Hide;
+
+        _service.InAppBackButton.Should().Be(InAppBackButtonPreference.Hide);
+        notified.Should().Contain([
+            nameof(DisplayPreferencesViewModel.InAppBackButton),
+            nameof(DisplayPreferencesViewModel.IsBackButtonPlatformDefault),
+            nameof(DisplayPreferencesViewModel.IsBackButtonShow),
+            nameof(DisplayPreferencesViewModel.IsBackButtonHide)]);
+    }
+
+    [Theory]
+    [InlineData(nameof(DisplayPreferencesViewModel.IsBackButtonPlatformDefault), InAppBackButtonPreference.PlatformDefault)]
+    [InlineData(nameof(DisplayPreferencesViewModel.IsBackButtonShow), InAppBackButtonPreference.Show)]
+    [InlineData(nameof(DisplayPreferencesViewModel.IsBackButtonHide), InAppBackButtonPreference.Hide)]
+    public void IsBackButton_SetTrue_SelectsThePreference(string property, InAppBackButtonPreference option)
+    {
+        var display = new DisplayPreferencesViewModel(_service);
+        var prop = typeof(DisplayPreferencesViewModel).GetProperty(property)!;
+
+        prop.SetValue(display, true);
+
+        display.InAppBackButton.Should().Be(option);
+        prop.GetValue(display).Should().Be(true);
+    }
+
+    [Fact]
+    public void IsBackButton_SetFalse_IsANoOpWriteBack()
+    {
+        _service.InAppBackButton = InAppBackButtonPreference.Show;
+        var display = new DisplayPreferencesViewModel(_service);
+
+        display.IsBackButtonHide = false;
+
+        display.InAppBackButton.Should().Be(InAppBackButtonPreference.Show);
+        display.IsBackButtonHide.Should().BeFalse();
+        display.IsBackButtonShow.Should().BeTrue();
+        display.IsBackButtonPlatformDefault.Should().BeFalse();
+    }
+
+    [Fact]
+    public void InAppBackButton_SameValue_SkipsNotification()
+    {
+        _service.InAppBackButton = InAppBackButtonPreference.Show;
+        var display = new DisplayPreferencesViewModel(_service);
+        var eventCount = 0;
+        display.PropertyChanged += (_, _) => eventCount++;
+
+        display.InAppBackButton = InAppBackButtonPreference.Show;
+
+        eventCount.Should().Be(0);
+    }
+
+    [Fact]
+    public void InAppBackButton_ServiceChange_RaisesAllBackButtonNotifications()
+    {
+        var display = new DisplayPreferencesViewModel(_service);
+        var notified = new List<string>();
+        display.PropertyChanged += (_, args) => notified.Add(args.PropertyName!);
+
+        _service.InAppBackButton = InAppBackButtonPreference.Hide;
+
+        notified.Should().Contain([
+            nameof(DisplayPreferencesViewModel.InAppBackButton),
+            nameof(DisplayPreferencesViewModel.IsBackButtonPlatformDefault),
+            nameof(DisplayPreferencesViewModel.IsBackButtonShow),
+            nameof(DisplayPreferencesViewModel.IsBackButtonHide)]);
+    }
+
+    #endregion
+
     #region Category navigation (settings overview)
 
     [Fact]
@@ -852,6 +994,31 @@ public class PreferencesViewModelTests : IDisposable
         }
 
         [Fact]
+        public void QriynotEnabled_MirrorsTheService_AndWritesBack()
+        {
+            _service.Load();
+            var viewModel = new PerekPreferencesViewModel(_service);
+
+            viewModel.QriynotEnabled.Should().BeTrue("the global קריינות switch defaults on");
+            viewModel.QriynotEnabled = false;
+            _service.QriynotEnabled.Should().BeFalse();
+        }
+
+        [Fact]
+        public void QriynotEnabled_SameValue_SkipsNotification()
+        {
+            _service.Load();
+            var viewModel = new PerekPreferencesViewModel(_service);
+            var eventCount = 0;
+            viewModel.PropertyChanged += (_, _) => eventCount++;
+
+            viewModel.QriynotEnabled = true;
+
+            eventCount.Should().Be(0);
+            viewModel.QriynotEnabled.Should().BeTrue();
+        }
+
+        [Fact]
         public void IsPerekToLoadLastLearnt_ReturnsTrue_WhenPerekToLoadIsLastLearnt()
         {
             _service.PerekToLoad = PerekToLoad.LastLearnt;
@@ -1042,5 +1209,60 @@ public class PreferencesViewModelTests : IDisposable
 
         public Task<List<string>> GetDeliveryDiagnosticsAsync(string packName) =>
             Task.FromResult(new List<string>());
+    }
+}
+
+/// <summary>
+/// The IsMask* convenience toggles on <see cref="DivineNamePreferencesViewModel"/>
+/// map true onto their option; exercised here via PreferencesViewModel.
+/// </summary>
+[Collection(PreferencesServiceCollection.Name)]
+public class DivineNameOptionToggleTests : IDisposable
+{
+    private readonly InMemoryPreferencesStorage _storage = new();
+    private readonly PreferencesService _service;
+    private readonly PreferencesViewModel _viewModel;
+
+    public DivineNameOptionToggleTests()
+    {
+        _service = PreferencesService.CreateForTesting(_storage);
+        _viewModel = new PreferencesViewModel(_service);
+    }
+
+    public void Dispose()
+    {
+        PreferencesService.ResetForTesting();
+        BibleOnSite.Helpers.DivineNameMasking.Apply(BibleOnSite.Helpers.DivineNameMaskingOptions.Disabled);
+    }
+
+    [Fact]
+    public void elohim_toggles_select_their_option()
+    {
+        _viewModel.IsMaskElohimElokim = true;
+        _service.DivineNameMaskElohim.Should().Be(DivineNameMaskOption.Elokim);
+        _viewModel.IsMaskElohimHyphen = true;
+        _service.DivineNameMaskElohim.Should().Be(DivineNameMaskOption.Hyphen);
+        _viewModel.IsMaskElohimCustom = true;
+        _service.DivineNameMaskElohim.Should().Be(DivineNameMaskOption.Custom);
+    }
+
+    [Fact]
+    public void yhwh_toggles_select_their_option()
+    {
+        _viewModel.IsMaskYhwhDalet = true;
+        _service.DivineNameMaskYhwh.Should().Be(DivineNameMaskOption.Dalet);
+        _viewModel.IsMaskYhwhCustom = true;
+        _service.DivineNameMaskYhwh.Should().Be(DivineNameMaskOption.Custom);
+    }
+
+    [Fact]
+    public void el_and_shaddai_toggles_select_their_option()
+    {
+        _viewModel.IsMaskElHyphen = true;
+        _service.DivineNameMaskEl.Should().Be(DivineNameMaskOption.Hyphen);
+        _viewModel.IsMaskShaddaiHyphen = true;
+        _service.DivineNameMaskShaddai.Should().Be(DivineNameMaskOption.Hyphen);
+        _viewModel.IsMaskShaddaiCustom = true;
+        _service.DivineNameMaskShaddai.Should().Be(DivineNameMaskOption.Custom);
     }
 }

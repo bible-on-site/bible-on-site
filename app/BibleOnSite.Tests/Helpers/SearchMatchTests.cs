@@ -446,4 +446,40 @@ public class SearchMatchTests
     }
 
     #endregion
+
+    #region ResolveArticleTarget
+
+    [Fact]
+    public void ResolveArticleTarget_maps_the_hit_to_its_segment_and_span()
+    {
+        var segments = new List<string> { "קטע ראשון", "טקסט עם בראשית בפנים" };
+
+        var target = SearchMatch.ResolveArticleTarget(segments, "בראשית", "בראשית");
+
+        target.Should().NotBeNull();
+        target!.Value.Segment.Should().Be(1);
+        target!.Value.Span.Length.Should().Be(6);
+    }
+
+    [Fact]
+    public void ResolveArticleTarget_clips_a_span_running_past_the_segment()
+    {
+        var segments = new List<string> { "בראשית ברא", "קטע שני" };
+
+        var target = SearchMatch.ResolveArticleTarget(segments, "בראשית ברא", "בראשית ברא");
+
+        target.Should().NotBeNull();
+        target!.Value.Segment.Should().Be(0);
+        target!.Value.Span.Length.Should().BeLessThanOrEqualTo(10);
+    }
+
+    [Fact]
+    public void ResolveArticleTarget_returns_null_when_nothing_matches()
+    {
+        var segments = new List<string> { "טקסט אחר" };
+
+        SearchMatch.ResolveArticleTarget(segments, "נדיר", "נדיר").Should().BeNull();
+    }
+
+    #endregion
 }

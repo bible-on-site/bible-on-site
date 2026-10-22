@@ -27,6 +27,12 @@ public partial class SearchViewModel : ObservableObject
 
     private readonly HashSet<SearchFilter> _enabledFilters;
     private readonly HashSet<int> _enabledSefarim;
+    // A scoped surface (e.g. the focused-pasuk reader) narrows "מה לחפש" to its
+    // own kind list. The reader's selection is parked in _readerKinds while the
+    // scope keeps its own selection in _scopedKinds across re-entries (#2466).
+    private HashSet<SearchFilter>? _allowedKinds;
+    private HashSet<SearchFilter>? _readerKinds;
+    private readonly HashSet<SearchFilter> _scopedKinds = new();
     private readonly List<Author> _authors = new();
     public SearchSort Sorting { get; set; } = SearchSort.Relevance;
 
@@ -79,10 +85,12 @@ public partial class SearchViewModel : ObservableObject
         _searchIndex = searchIndex;
         _articleService = articleService;
         _tanahpediaService = tanahpediaService;
-        // Local kinds are enabled by default. Remote kinds (Articles,
-        // Tanahpedia) stay opt-in: a network round-trip must never gate an
-        // otherwise-local search.
-        _enabledFilters = new HashSet<SearchFilter>(Enum.GetValues<SearchFilter>().Where(filter => !filter.RequiresNetwork()));
+        // Every kind starts selected (#2454). Kinds that cannot serve a search
+        // right now (a remote kind while offline, or commentary without its
+        // pack) stay selected in the sheet but are skipped by the
+        // availability gate in SearchAsync, so intent survives while the
+        // prerequisite is missing.
+        _enabledFilters = new HashSet<SearchFilter>(Enum.GetValues<SearchFilter>());
 
         // Initialize all sefarim (1-35) as enabled
         _enabledSefarim = new HashSet<int>(Enumerable.Range(1, 35));
@@ -123,6 +131,101 @@ public partial class SearchViewModel : ObservableObject
     #region Filter Management
 
     /// <summary>
+    /// Connectivity probe shared by the filter sheet and the search. Testable:
+    /// a host without MAUI Essentials cannot answer, so the probe assumes
+    /// online and lets the bounded remote request surface real failures.
+    /// </summary>
+    internal Func<bool> NetworkProbe { get; set; } = () =>
+    {
+        try
+        {
+            return NetworkService.IsOnline;
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            return true;
+        }
+    };
+
+    /// <summary>
+    /// Installed commentary-pack probe; same test-host fallback as
+    /// <see cref="NetworkProbe"/>. Only a determined-missing pack counts as
+    /// unavailable: an unchecked pack is assumed present.
+    /// </summary>
+    internal Func<bool> CommentaryPackProbe { get; set; } = () =>
+    {
+        try
+        {
+            return !PerushimNotesService.Instance.IsDeterminedMissing;
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            return true;
+        }
+    };
+
+    /// <summary>Whether the kind can currently serve a search.</summary>
+    public bool IsKindAvailable(SearchFilter filter) =>
+        filter.IsAvailable(NetworkProbe(), CommentaryPackProbe());
+
+    /// <summary>Why the kind is unavailable for the filter sheet, or null when it can serve searches.</summary>
+    public string? KindUnavailableReason(SearchFilter filter) =>
+        filter.UnavailableReason(NetworkProbe(), CommentaryPackProbe());
+
+    /// <summary>
+    /// Selected kinds the latest search skipped because their prerequisite
+    /// was missing. When one becomes available again the open search re-runs
+    /// so its results stop missing the regained kind (#2454).
+    /// </summary>
+    private HashSet<SearchFilter> SkippedUnavailableKinds { get; set; } = new();
+
+    /// <summary>True when a kind the last search skipped can serve a search now.</summary>
+    public bool HasRegainedAvailableKind()
+    {
+        if (SkippedUnavailableKinds.Count == 0)
+        {
+            return false;
+        }
+        var online = NetworkProbe();
+        var packAvailable = CommentaryPackProbe();
+        return SkippedUnavailableKinds.Any(filter => filter.IsAvailable(online, packAvailable));
+    }
+
+    /// <summary>
+    /// בחר הכל for the kinds sheet: toggles every currently-available kind and
+    /// leaves unavailable ones with their stored intent (#2454).
+    /// </summary>
+    public void SetAvailableFiltersEnabled(bool enabled)
+    {
+        foreach (var filter in Enum.GetValues<SearchFilter>().Where(IsKindAvailable))
+        {
+            SetFilterEnabled(filter, enabled);
+        }
+    }
+
+    /// <summary>בחר הכל for the books sheet: toggles every sefer across all groups.</summary>
+    public void SetAllSefarimEnabled(bool enabled)
+    {
+        foreach (var group in SefarimData.SefarimGroups.Values)
+        {
+            for (var seferId = group.From; seferId <= group.To; seferId++)
+            {
+                if (enabled)
+                {
+                    _enabledSefarim.Add(seferId);
+                }
+                else
+                {
+                    _enabledSefarim.Remove(seferId);
+                }
+            }
+        }
+
+        OnPropertyChanged(nameof(IsSeferGroupFilterEnabled));
+        OnPropertyChanged(nameof(IsSeferFilterEnabled));
+    }
+
+    /// <summary>
     /// Checks if a search filter is enabled.
     /// </summary>
     public bool IsFilterEnabled(SearchFilter filter)
@@ -131,12 +234,18 @@ public partial class SearchViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Enables or disables a search filter.
+    /// Enables or disables a search filter. A kind outside the active scope
+    /// can only be turned off — scoped surfaces must never reach a provider
+    /// they do not list.
     /// </summary>
     public void SetFilterEnabled(SearchFilter filter, bool enabled)
     {
         if (enabled)
         {
+            if (!IsKindAllowed(filter))
+            {
+                return;
+            }
             _enabledFilters.Add(filter);
         }
         else
@@ -144,6 +253,65 @@ public partial class SearchViewModel : ObservableObject
             _enabledFilters.Remove(filter);
         }
 
+        OnPropertyChanged(nameof(IsFilterEnabled));
+    }
+
+    /// <summary>Whether a kinds scope is currently narrowing the search.</summary>
+    public bool KindsScoped => _allowedKinds != null;
+
+    /// <summary>Whether this kind may appear and be selected right now.</summary>
+    public bool IsKindAllowed(SearchFilter filter) => _allowedKinds?.Contains(filter) ?? true;
+
+    /// <summary>The kinds the kinds sheet lists — the scope's list while scoped.</summary>
+    public IReadOnlyCollection<SearchFilter> KindOptions =>
+        _allowedKinds ?? (IReadOnlyCollection<SearchFilter>)Enum.GetValues<SearchFilter>();
+
+    /// <summary>
+    /// Narrows the search to a surface's own kind list, parking the caller's
+    /// selection. First entry defaults to every allowed kind on; later entries
+    /// restore the selection the surface had when it was left.
+    /// </summary>
+    public void EnterKindsScope(IReadOnlyCollection<SearchFilter> allowedKinds)
+    {
+        if (_allowedKinds != null)
+        {
+            return;
+        }
+        _allowedKinds = allowedKinds.ToHashSet();
+        _readerKinds = _enabledFilters.ToHashSet();
+        if (_scopedKinds.Count == 0)
+        {
+            _scopedKinds.UnionWith(allowedKinds.Where(filter => !filter.RequiresNetwork()));
+        }
+        _enabledFilters.Clear();
+        _enabledFilters.UnionWith(_scopedKinds);
+        OnPropertyChanged(nameof(IsFilterEnabled));
+    }
+
+    /// <summary>Leaves the kinds scope and restores the parked selection.</summary>
+    public void ExitKindsScope()
+    {
+        if (_allowedKinds == null)
+        {
+            return;
+        }
+        _scopedKinds.Clear();
+        _scopedKinds.UnionWith(_enabledFilters);
+        _enabledFilters.Clear();
+        _enabledFilters.UnionWith(_readerKinds!);
+        _readerKinds = null;
+        _allowedKinds = null;
+        OnPropertyChanged(nameof(IsFilterEnabled));
+    }
+
+    /// <summary>
+    /// Restores the default enabled kinds: every local kind, or every allowed
+    /// local kind while scoped. Remote kinds always stay opt-in.
+    /// </summary>
+    public void ResetFiltersToDefaults()
+    {
+        _enabledFilters.Clear();
+        _enabledFilters.UnionWith(KindOptions.Where(filter => !filter.RequiresNetwork()));
         OnPropertyChanged(nameof(IsFilterEnabled));
     }
 
@@ -282,7 +450,15 @@ public partial class SearchViewModel : ObservableObject
         }
         // Author titles are optional for names, but every word matters in content.
         var phrase = SearchText.Normalize(SearchPhrase);
-        var filters = _enabledFilters.ToHashSet();
+        // Effective kinds are the selected ones that can actually serve a
+        // search right now (#2454): a remote kind while offline or commentary
+        // without its pack is skipped without losing the user's selection.
+        var online = NetworkProbe();
+        var packAvailable = CommentaryPackProbe();
+        var filters = _enabledFilters.Where(filter => filter.IsAvailable(online, packAvailable)).ToHashSet();
+        // Remember which selected kinds this query skipped — when one becomes
+        // available again the caller re-runs so results stop missing it (#2454).
+        SkippedUnavailableKinds = _enabledFilters.Where(filter => !filter.IsAvailable(online, packAvailable)).ToHashSet();
         var books = _enabledSefarim.ToHashSet();
         var limit = Math.Clamp(ResultsLimit, 1, 50);
         var ordering = new SearchOrdering(Sorting, _perushim.ToDictionary(pair => pair.Key, pair => pair.Value.Priority));
@@ -291,6 +467,24 @@ public partial class SearchViewModel : ObservableObject
             IsLoading = true;
             var results = new List<SearchResult>(GetAuthorResults());
             var availability = new List<string>();
+            // Surface why a selected kind was skipped so the user knows its
+            // prerequisite is missing rather than its results empty (#2454).
+            foreach (var skipped in _enabledFilters.Where(filter => !filter.IsAvailable(online, packAvailable)))
+            {
+                if (skipped == SearchFilter.Perush)
+                {
+                    availability.Add("לחיפוש בפירושים, הורידו את הפירושים בהגדרות");
+                    ShowPerushimDownloadLink = true;
+                }
+                else
+                {
+                    availability.Add($"חיפוש {skipped.GetHebrewName()} זמין רק עם חיבור רשת");
+                }
+            }
+            if (availability.Count > 0)
+            {
+                AvailabilityMessage = string.Join('\n', availability);
+            }
             // Remote hits run beside the local pipeline: each request is
             // already in flight while the local indexes load, and a slow or
             // unreachable API can never hold back local results. The tasks
