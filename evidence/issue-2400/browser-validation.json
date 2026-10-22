@@ -1,0 +1,102 @@
+{
+  "verifiedAt": "2026-10-22T15:48:23.794Z",
+  "scenario": "Production configuration, first visit, analytics on without a prompt. Third-party requests intercepted to avoid recording test traffic.",
+  "results": [
+    {
+      "name": "desktop",
+      "viewport": {
+        "width": 1365,
+        "height": 900
+      },
+      "legacyDeniedStorageSeeded": false,
+      "firstVisitWithoutInteraction": true,
+      "errors": [],
+      "analyticsRequestsIntercepted": [
+        "https://analytics.ahrefs.com/analytics.js",
+        "https://www.googletagmanager.com/gtag/js?id=G-2CHER7MM85",
+        "https://openfpcdn.io/botd/v2"
+      ],
+      "proof": {
+        "dataLayer": [
+          [
+            "js",
+            "2026-10-22T15:48:21.035Z"
+          ],
+          [
+            "consent",
+            "default",
+            {
+              "ad_storage": "denied",
+              "ad_user_data": "denied",
+              "ad_personalization": "denied"
+            }
+          ],
+          [
+            "config",
+            "G-2CHER7MM85",
+            {
+              "allow_google_signals": false,
+              "allow_ad_personalization_signals": false
+            }
+          ]
+        ],
+        "monitoring": false,
+        "privacyHead": "/#privacyPolicy",
+        "privacyLinks": [
+          "/#privacyPolicy"
+        ],
+        "legalExcluded": true,
+        "consentUi": [],
+        "robotRules": []
+      }
+    },
+    {
+      "name": "mobile",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "legacyDeniedStorageSeeded": true,
+      "firstVisitWithoutInteraction": true,
+      "errors": [],
+      "analyticsRequestsIntercepted": [
+        "https://analytics.ahrefs.com/analytics.js",
+        "https://www.googletagmanager.com/gtag/js?id=G-2CHER7MM85",
+        "https://openfpcdn.io/botd/v2"
+      ],
+      "proof": {
+        "dataLayer": [
+          [
+            "js",
+            "2026-10-22T15:48:22.920Z"
+          ],
+          [
+            "consent",
+            "default",
+            {
+              "ad_storage": "denied",
+              "ad_user_data": "denied",
+              "ad_personalization": "denied"
+            }
+          ],
+          [
+            "config",
+            "G-2CHER7MM85",
+            {
+              "allow_google_signals": false,
+              "allow_ad_personalization_signals": false
+            }
+          ]
+        ],
+        "monitoring": false,
+        "privacyHead": "/#privacyPolicy",
+        "privacyLinks": [
+          "/#privacyPolicy"
+        ],
+        "legalExcluded": true,
+        "consentUi": [],
+        "robotRules": []
+      }
+    }
+  ]
+}

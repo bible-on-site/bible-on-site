@@ -1,7 +1,7 @@
 /**
  * @jest-environment jsdom
  */
-import { act, render } from "@testing-library/react";
+import { render } from "@testing-library/react";
 
 jest.mock("next/script", () => {
 	return function MockScript({
@@ -23,10 +23,6 @@ jest.mock("@/util/environment", () => ({
 	isProduction: jest.fn(),
 }));
 
-import {
-	ANALYTICS_CONSENT_KEY,
-	setAnalyticsConsent,
-} from "@/lib/analytics-consent";
 import { isProduction } from "@/util/environment";
 import { GoogleAnalytics } from "../../../src/app/components/GoogleAnalytics";
 
@@ -38,52 +34,13 @@ const mockIsProduction = isProduction as jest.MockedFunction<
 const BOT_UA_PATTERN =
 	/bot|crawl|spider|slurp|Bytespider|GPTBot|ClaudeBot|CCBot|Amazonbot|Diffbot|PetalBot|AhrefsBot|SemrushBot|DotBot|MJ12bot|BLEXBot|YandexBot|Sogou|Applebot|Googlebot|bingbot|PerplexityBot|FacebookBot|anthropic|TikTokSpider|Baiduspider|MegaIndex/i;
 
-const GA_DISABLE_FLAG = "ga-disable-G-2CHER7MM85";
-
 describe("GoogleAnalytics", () => {
 	beforeEach(() => {
-		localStorage.clear();
-		delete (window as unknown as Record<string, boolean>)[GA_DISABLE_FLAG];
 		mockIsProduction.mockReturnValue(true);
 	});
 
 	describe("when in production", () => {
-		describe("consent gating (#2400)", () => {
-			it("renders nothing before the user decides", () => {
-				const { container } = render(<GoogleAnalytics />);
-				expect(container.querySelectorAll("[data-script]")).toHaveLength(0);
-			});
-
-			it("renders nothing after the user denies analytics", () => {
-				localStorage.setItem(ANALYTICS_CONSENT_KEY, "denied");
-				const { container } = render(<GoogleAnalytics />);
-				expect(container.querySelectorAll("[data-script]")).toHaveLength(0);
-			});
-
-			it("mounts the scripts once consent is granted mid-session", () => {
-				const { container } = render(<GoogleAnalytics />);
-				expect(container.querySelectorAll("[data-script]")).toHaveLength(0);
-				act(() => setAnalyticsConsent("granted"));
-				expect(
-					container.querySelectorAll("[data-script]").length,
-				).toBeGreaterThan(0);
-			});
-
-			it("sets the ga-disable opt-out flag on mid-session denial", () => {
-				const win = window as unknown as Record<string, boolean>;
-				render(<GoogleAnalytics />);
-				act(() => setAnalyticsConsent("granted"));
-				expect(win[GA_DISABLE_FLAG]).toBe(false);
-				act(() => setAnalyticsConsent("denied"));
-				expect(win[GA_DISABLE_FLAG]).toBe(true);
-			});
-		});
-
-		describe("when analytics consent is granted", () => {
-			beforeEach(() => {
-				localStorage.setItem(ANALYTICS_CONSENT_KEY, "granted");
-			});
-
+		describe("when measurement is enabled", () => {
 			it("renders Google Analytics scripts for regular traffic", () => {
 				const { container } = render(<GoogleAnalytics />);
 				const scripts = container.querySelectorAll("[data-script]");
@@ -94,6 +51,20 @@ describe("GoogleAnalytics", () => {
 				const { getByTestId } = render(<GoogleAnalytics />);
 				const gaScript = getByTestId("google-analytics");
 				expect(gaScript.textContent).toContain("G-2CHER7MM85");
+			});
+
+			it("disables advertising and Google signals before the first measurement config", () => {
+				const { getByTestId } = render(<GoogleAnalytics />);
+				const script = getByTestId("google-analytics").textContent ?? "";
+				expect(script).toContain("allow_google_signals: false");
+				expect(script).toContain("allow_ad_personalization_signals: false");
+				expect(script).toContain("ad_storage: 'denied'");
+				expect(script).toContain("ad_user_data: 'denied'");
+				expect(script).toContain("ad_personalization: 'denied'");
+				expect(script.indexOf("gtag('consent', 'default'")).toBeLessThan(
+					script.indexOf("gtag('config'"),
+				);
+				expect(script).toContain("Botd.load({ monitoring: false })");
 			});
 
 			describe("client-side bot detection", () => {
@@ -170,10 +141,9 @@ describe("GoogleAnalytics", () => {
 	describe("when not in production", () => {
 		beforeEach(() => {
 			mockIsProduction.mockReturnValue(false);
-			localStorage.setItem(ANALYTICS_CONSENT_KEY, "granted");
 		});
 
-		it("renders nothing even with consent", () => {
+		it("renders nothing outside production", () => {
 			const { container } = render(<GoogleAnalytics />);
 			expect(container).toBeEmptyDOMElement();
 		});

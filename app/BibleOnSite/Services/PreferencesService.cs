@@ -364,37 +364,6 @@ public class PreferencesService
 
     #endregion
 
-    private string _analyticsConsent = "";
-
-    /// <summary>
-    /// Analytics collection opt-in (#2400, Amendment 13). Defaults off until
-    /// the user explicitly grants; readable pre-Load via
-    /// <see cref="AnalyticsConsent.IsGranted"/> for the platform launch paths
-    /// that run before preferences load.
-    /// </summary>
-    public bool AnalyticsConsentEnabled => _analyticsConsent == AnalyticsConsent.GrantedValue;
-
-    /// <summary>True once the user answered the consent prompt (either way).</summary>
-    public bool AnalyticsConsentAsked =>
-        _analyticsConsent is AnalyticsConsent.GrantedValue or AnalyticsConsent.DeniedValue;
-
-    /// <summary>
-    /// Records the consent answer and applies it to the Firebase collection
-    /// flag immediately, so a mid-session grant/revoke takes effect live.
-    /// </summary>
-    public void SetAnalyticsConsent(bool granted)
-    {
-        var next = granted ? AnalyticsConsent.GrantedValue : AnalyticsConsent.DeniedValue;
-        if (_analyticsConsent == next)
-        {
-            return;
-        }
-
-        _analyticsConsent = next;
-        AnalyticsConsent.Save(_storage, granted);
-        OnPreferencesChanged();
-    }
-
     private InAppBackButtonPreference _inAppBackButton = InAppBackButtonPreference.PlatformDefault;
 
     /// <summary>
@@ -597,11 +566,6 @@ public class PreferencesService
         _inAppBackButton = Enum.IsDefined((InAppBackButtonPreference)storedBackButton)
             ? (InAppBackButtonPreference)storedBackButton
             : InAppBackButtonPreference.PlatformDefault;
-        var storedConsent = _storage.Get(AnalyticsConsent.StorageKey, "");
-        // Garbage keeps the "never asked" state so the prompt can still run.
-        _analyticsConsent = storedConsent is AnalyticsConsent.GrantedValue or AnalyticsConsent.DeniedValue
-            ? storedConsent
-            : "";
         _recitationSpeed = Normalize(_storage.Get("recitationSpeed", 1.0), 1, 0.5, 2);
         _recitationVolume = Normalize(_storage.Get("recitationVolume", 1.0), 1, 0, 1);
         _lessonsVolume = Normalize(_storage.Get("lessonsVolume", 1.0), 1, 0, 1);

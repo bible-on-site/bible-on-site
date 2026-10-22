@@ -503,7 +503,8 @@ function getCanonicalBranchLine(value) {
 		return locLine;
 	}
 	const directLine = typeof value?.line === "number" ? value.line : 0;
-	return directLine > 0 ? directLine : 0;
+	// Malformed NaN source lines must fall back to zero, just like missing lines.
+	return Math.max(directLine || 0, 0);
 }
 
 function getBranchDeclaredLine(value) {
