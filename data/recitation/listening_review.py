@@ -93,10 +93,14 @@ def validate_case(case, canonical_words, manifest):
         raise ValueError("Unknown canonical verse")
     validate_timings(verse_words, case["words"], manifest["durationMs"], require_complete=True)
     start, end = case["clipStartMs"], case["clipEndMs"]
+    human_context = (case.get("preparationKind") == "human-selected-context-v1"
+                     and case.get("manualSourceInspection") is False
+                     and case.get("requiresFreshHumanCutReview") is True)
     if (not isinstance(start, int) or isinstance(start, bool) or
             not isinstance(end, int) or isinstance(end, bool) or
-            not 0 <= start < end <= manifest["durationMs"] or end - start > 45000):
-        raise ValueError("Context must be inside the original recording and at most 45 seconds")
+            not 0 <= start < end <= manifest["durationMs"]
+            or end - start > 45000 and not human_context):
+        raise ValueError("Context must be inside the original recording; automatic contexts allow at most 45 seconds")
     for word in case["words"]:
         if not start <= word["startMs"] < word["endMs"] <= end:
             raise ValueError("Candidate falls outside its diagnostic context")
@@ -194,14 +198,17 @@ def load_queue(path):
         raise ValueError("Unknown listening queue")
     if digest_json(queue["cases"]) != queue["queueSha256"]:
         raise ValueError("Queue changed after preparation")
-    chapters = load_chapters(Path(queue["canonicalPath"]))
+    canonical = Path(queue["canonicalPath"])
+    canonical_sha = queue.get("canonicalSha256") or digest_file(canonical)
+    from listening_machine import canonical_words
     sources = {}
     for case in queue["cases"]:
         if candidate_digest(case) != case["candidateSha256"]:
             raise ValueError("Candidate changed after diagnostic preparation")
         if digest_file(Path(case["diagnosticPath"])) != case["diagnosticSha256"]:
             raise ValueError("Diagnostic evidence changed")
-        validate_case(case, words_for(chapters[case["perekId"]]), read_json(Path(case["manifestPath"])))
+        validate_case(case, canonical_words(canonical, canonical_sha, case["perekId"]),
+                      read_json(Path(case["manifestPath"])))
         source = Path(case["audioPath"])
         if source not in sources:
             sources[source] = digest_file(source)

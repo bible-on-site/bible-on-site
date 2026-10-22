@@ -164,6 +164,45 @@ class CutEditTests(unittest.TestCase):
             self.db.save_cut_edits({**self.payload, "candidateSha256": bad_case["candidateSha256"]})
         self.assertEqual(self.db.all_cut_edits(), [])
 
+    def test_long_human_selected_context_requires_exact_pcm_and_actual_edited_hearing(self):
+        path = self.root / "genuine-long-verse.wav"
+        with wave.open(str(path), "wb") as audio:
+            audio.setparams((1, 2, 16000, 0, "NONE", "not compressed"))
+            audio.writeframes(b"\0\0" * (70000 * 16))
+        case = {**self.case, "candidateSha256": "long-human-selected-context", "clipPath": str(path),
+                "clipSha256": digest_file(path), "clipStartMs": 1000, "clipEndMs": 71000,
+                "preparationKind": "human-selected-context-v1", "manualSourceInspection": False,
+                "requiresFreshHumanCutReview": True}
+        self.append_batch(2, case)
+        payload = {**self.payload, "submissionId": "long-context-real-fixture-1", "verdict": "good",
+                   "candidateSha256": case["candidateSha256"], "clipSha256": case["clipSha256"]}
+        with self.assertRaisesRegex(ValueError, "every exact edited cut"):
+            self.db.save_word_review({**payload, "heardEditedSegments": []})
+        with self.assertRaisesRegex(ValueError, "every unchanged exact word cut"):
+            self.db.save_word_review({**payload, "heardSegments": [3]})
+        row = self.db.save_word_review(payload)
+        self.assertEqual(row["verdict"], "good")
+        self.assertEqual(row["clipEvidence"]["frameCount"], 70000 * 16)
+        self.assertEqual(row["changedSegments"], [3])
+        self.assertFalse(row["automaticApproval"])
+        verify_word_review(case, row, row["queueSha256"])
+        changed = deepcopy(row)
+        changed["listenEvidenceReportedByBrowser"]["heardEditedSegments"] = []
+        with self.assertRaises(ValueError):
+            verify_word_review(case, changed, row["queueSha256"])
+
+    def test_long_clip_does_not_relax_the_existing_automatic_context_policy(self):
+        path = self.root / "old-context-too-long.wav"
+        with wave.open(str(path), "wb") as audio:
+            audio.setparams((1, 2, 16000, 0, "NONE", "not compressed"))
+            audio.writeframes(b"\0\0" * (70000 * 16))
+        case = {**self.case, "candidateSha256": "old-automatic-context", "clipPath": str(path),
+                "clipSha256": digest_file(path), "clipStartMs": 1000, "clipEndMs": 71000}
+        self.append_batch(2, case)
+        with self.assertRaisesRegex(ValueError, "PCM frame bounds"):
+            self.db.save_cut_edits({**self.payload, "candidateSha256": case["candidateSha256"],
+                                     "clipSha256": case["clipSha256"]})
+
     def server(self):
         server = make_queue_server(self.db, 0, self.root / "session.json")
         thread = threading.Thread(target=server.serve_forever, daemon=True)

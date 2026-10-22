@@ -2,6 +2,8 @@
 
 from copy import deepcopy
 import hashlib
+import json
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -9,7 +11,8 @@ from unittest.mock import patch
 
 from alignment import load_chapters, text_hash, words_for
 from listening_accept import approve_chapter, verify_diagnostic
-from listening_machine import MACHINE_METHOD, build_machine_study, verify_machine_proposals
+from listening_machine import (MACHINE_METHOD, build_machine_study, canonical_words,
+                               verify_machine_proposals)
 from listening_review import digest_file, validate_decision, write_json
 from listening_tail import verify_corrections
 from model_versions import ALIGN_MODEL, ALIGN_REVISION, ASR_MODEL, ASR_REVISION
@@ -132,6 +135,33 @@ class MachineProposalTests(unittest.TestCase):
         self.assertEqual(self.raw_path.read_bytes(), before)
         verify_corrections(diagnostic)
         verify_diagnostic(self.case(study))
+
+    def test_canonical_words_parse_once_and_expose_only_frozen_word_tuples(self):
+        expected = digest_file(self.canonical)
+        original_loads = json.loads
+        with patch("listening_machine.json.loads", wraps=original_loads) as parse:
+            first = canonical_words(self.canonical, expected, 1)
+            second = canonical_words(self.canonical, expected, 1)
+        self.assertEqual(parse.call_count, 1)
+        self.assertIs(first, second)
+        self.assertIsInstance(first, tuple)
+        with self.assertRaises(AttributeError):
+            first.append(first[0])
+        with self.assertRaises(AttributeError):
+            first[0].segment = 999
+
+    def test_cached_canonical_checks_actual_bytes_even_with_same_size_and_mtime(self):
+        expected = digest_file(self.canonical)
+        canonical_words(self.canonical, expected, 1)
+        before = self.canonical.stat()
+        raw = self.canonical.read_bytes()
+        changed = raw.replace("ויאמר".encode(), "ויאכל".encode(), 1)
+        self.assertEqual(len(raw), len(changed))
+        self.canonical.write_bytes(changed)
+        os.utime(self.canonical, ns=(before.st_atime_ns, before.st_mtime_ns))
+        self.assertEqual(self.canonical.stat().st_mtime_ns, before.st_mtime_ns)
+        with self.assertRaisesRegex(ValueError, "Canonical source changed"):
+            canonical_words(self.canonical, expected, 1)
 
     def test_neither_machine_evidence_nor_partial_hearing_can_approve(self):
         case = self.case(self.build())

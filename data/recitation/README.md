@@ -210,7 +210,11 @@ Set `reviewUrl` to the existing loopback application, for example
 `http://127.0.0.1:8792/`. Optional positive integer limits are `targetVisible`
 (default 20 verses), `maxVisibleCuts` (default 150 cuts) and `pollSeconds`
 (default 5 seconds). `knownSourceHoldIds` defaults to `[28, 136, 231]`; retain
-explicit source holds when configuring a job.
+explicit source holds when configuring a job. To populate all supported targets
+before review starts, size both limits for the full prepared verse and cut
+inventory, including existing visible cases. These limits govern queue loading,
+not quality checks; unsupported targets remain visible only in the blocked
+inventory until their source and context checks pass.
 
 Run the copied permanent runtime, rather than a disposable checkout:
 
@@ -238,8 +242,62 @@ refilling. `--once` prepares and refills once, then returns instead of waiting f
 more capacity. A normal run exits when no prepared cases remain to be queued;
 this does not mean the queued cases are approved or published.
 
-Inspect counts and reasons through the existing app's
-`GET /api/preparation-status`, or read them without starting a worker:
+The review page also has a collapsible full inventory, separate from playable
+review cases. `GET /api/preparation-inventory` lists every classified target with
+its canonical label, preparation state and safe reason code. The page derives
+prepared, held and previously offered totals from those rows and filters all,
+blocked or prepared targets. Held rows describe work still needed; they do not
+create playable cuts, approvals or repeat review requests. Loading or refreshing
+this inventory preserves active playback, hearing and drafts. The inventory is
+loaded once and on explicit refresh, rather than on every status poll.
+
+The action workspace makes unresolved concerns actionable, including targets
+without valid word candidates. `GET /api/actions` returns immutable task identities
+and their current workflow states. A locate task starts with unset boundaries:
+the user plays the complete original-source audio, chooses the whole verse range,
+listens to that exact range, then requests local cut preparation. Source playback
+uses a verified original-bound 16 kHz mono WAV: its separate playback SHA-256 and
+the exact decoded frame count are checked before playback. Numeric seconds cover
+the original recording; the fine sliders stay within 150 ms of a selected value.
+
+`POST /api/action-responses` saves typed, session-authenticated range or source
+remediation evidence with exact task, original audio and canonical text bindings.
+A completed range playback is separate from word-cut hearing and never saves a
+GOOD verdict. Source problems require a real decision and nonempty note; the
+original recording is preserved and a corrected edition needs separate handling.
+Source remediation is available from every task type, including word review.
+The full original source can also be opened explicitly from a review task
+without changing its candidate or granting word hearing. If its existing context
+is wrong or clipped, the user can select and hear a new whole-verse source range
+and request new local preparation. That request does not approve the old word
+cuts. Ordinary completed GOODs remain protected; a genuine new chapter concern
+is a separate exception. A virtual preparation state with `cutReviewComplete`
+is labeled as waiting for chapter completion, not as active model computation.
+There is no unrestricted mark-resolved action. New locally prepared cuts still
+require genuine fresh word hearing and the unchanged complete-chapter acceptance
+checks. `GET /api/action-case/{taskId}` can explicitly reopen only a current
+unresolved candidate; approved or stale candidates are rejected. Its drafts and
+history remain separate and survive queue polling.
+
+A distinct chapter-concern task may reference a genuine failed full-chapter
+check after a previous GOOD. This exception is bound to the complete saved
+decision digest (including saved timestamp and queue binding, not its inner
+`reviewSha256` content hash), the immutable failed-validation digest and reported segment
+identities; ordinary GOOD protection remains unchanged. The editor restores the
+actual approved coordinates, reuses only recorded direct hearing for those exact
+coordinates, and highlights the newly reported chapter boundary. For a candidate
+without hearing reuse, saved `heardSegments` are direct listening evidence.
+When `listeningReuseSha256` is present, only saved `freshHeardSegments` identify
+direct original-cut listening; inherited hearing is never promoted. A changed reported boundary
+needs fresh playback, and resaving unchanged old coordinates is not presented as
+a correction. A genuinely newer GOOD closes the earlier concern editor.
+
+`GET /api/workflow-status` reports chapter progress separately from individual
+task completion. Saving an action or a word review does not itself mean that a
+chapter is validated, segmented or published.
+
+Inspect progress, counts and reasons through the existing app's `GET /api/preparation-status`, or
+read it without starting a worker:
 
 ```powershell
 C:/recitation-preparation/runtime/python.exe -X utf8 C:/recitation-preparation/runtime/listening_prepare.py --config C:/recitation-preparation/config.json --status-only
@@ -540,3 +598,45 @@ the existing guarded importer. Always copy CURRENT durable publication data to
 a separate preview first. The listening database is not the alignment worker
 checkpoint or the approved publication database. No append or review save publishes
 timings or changes the original alignment process.
+
+### Complete local concern workflow
+
+Run `python listening_workflow.py --config /absolute/workflow/config.json` for one
+local owner. `--once` performs a guarded pass without leaving a polling process.
+The configuration binds `planPath`/`planSha256`, `canonicalPath`, completed
+`jobRoot`, original `recordings`, `batchRoot`, `stateDirectory`, a separate
+`actionStore`, `reviewStore`, the existing loopback `reviewUrl`, and the CURRENT
+`publicationDatabase`/`publicationSha256`. `queueSnapshot` binds the immutable
+review chain; `preparedLedger` includes any later packets from the local preparer.
+`sourceFallback` contains the four earlier concerns' completed alignment, report
+and ASR artifacts. Every path is absolute; no source checkpoint is read.
+
+The node accounts for every recorded chapter. Ready chapters stay finished;
+pending chapters receive explicit cut-review, source-location or source-remediation
+actions. Individually supported verses can be reviewed before every sibling has
+a supported range, while the whole chapter remains held. A genuine saved range
+can also replace an unusable existing review context. Only that actual human
+response triggers pinned local full-FP32 diagnostics, with exact replay; new cuts
+still require fresh hearing. A newer source selection supersedes an in-flight
+one before append, and a genuinely newer GOOD always remains protected.
+
+Actual review saves feed the unchanged complete-chapter importer through CLOSED
+JSON evidence and a CURRENT private preview. Successful results live under
+`stateDirectory/results/recitation.sqlite`; authoritative publication and source
+files are untouched. A real failed chapter check creates another precise action,
+including a newly bound chapter-boundary concern when necessary. The local ready
+status requires complete canonical geometry, original source evidence and the
+unchanged automatic remainder. Normal publication and release checks remain
+separate. An actual recording defect requires a corrected source edition, not a
+timing approval.
+
+History files are verified before the short SQLite writer transaction. Unchanged
+polls perform no writes, and only genuine new history tails are imported. Source
+actions have a separate append-only response stream; neither source selection nor
+a source-problem report invents word hearing, GOOD, or completion.
+
+Actual app before and after the full inventory was populated:
+
+![Earlier limited listening window](docs/complete-concern-before.png)
+
+![All concern actions and chapter progress](docs/complete-concern-after.png)
