@@ -23,4 +23,12 @@ public static class PressArming
     public static bool IsCandidate(object? bindingContext, Perek currentPerek) =>
         ReferenceEquals(bindingContext, currentPerek) ||
         (bindingContext is Pasuk pasuk && currentPerek.Pasukim.Contains(pasuk));
+
+    /// <summary>
+    /// Same rule for the parasha reader: unit-bound views (the תיקון flow)
+    /// qualify; pasuk rows bind <see cref="ParashaDisplayItem"/>, never the
+    /// unit, so they cannot arm here and get Down through their own Touch.
+    /// </summary>
+    public static bool IsCandidate(object? bindingContext, ParashaUnit currentUnit) =>
+        ReferenceEquals(bindingContext, currentUnit);
 }
