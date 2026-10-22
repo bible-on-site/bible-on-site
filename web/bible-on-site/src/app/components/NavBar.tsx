@@ -150,17 +150,6 @@ export const NavBar = () => {
 						</Link>
 					</li>
 					<li className={styles.menuItem}>
-						<Image
-							src="/icons/accessibility.svg"
-							alt=""
-							width={16}
-							height={16}
-						/>
-						<Link href="/accessibility">
-							<span>הצהרת נגישות</span>
-						</Link>
-					</li>
-					<li className={styles.menuItem}>
 						<Image src="/icons/smartphone.svg" alt="" width={16} height={16} />
 						<Link href="/app">
 							<span>יישומון</span>
