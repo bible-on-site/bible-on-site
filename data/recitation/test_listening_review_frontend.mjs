@@ -602,7 +602,7 @@ test("legacy stored prefills without user-typed provenance remain blank and only
   storage.set("listening-progress-v2",serializedProgress);
   const p=await page({[key]:old},{storage});
   assert.equal(p.elements.note.value,"");assert.equal(p.elements.note.hidden,true);
-  assert.equal(p.elements["prior-history"].open,false);assert.equal(p.elements.prior.textContent,old.note);
+  assert.equal(p.run("document.getElementById('prior-history').open"),false);assert.equal(p.elements.prior.textContent,old.note);
   await p.elements.problem.onclick();assert.equal(p.elements.note.value,"");
 });
 
