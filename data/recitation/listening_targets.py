@@ -11,7 +11,7 @@ import wave
 
 from alignment import text_hash
 from listening_accept import verify_original_evidence
-from listening_audio import duration, hidden_audio_options
+from listening_audio import duration, hidden_audio_options, original_audio_errors
 from listening_files import read_state_json, write_state_json
 from listening_machine import build_machine_study, canonical_words, decode_source
 from listening_review import (candidate_digest, chapter_labels, digest_file, digest_json,
@@ -179,9 +179,110 @@ def _case_reference(case):
             "clipSha256": case["clipSha256"]}
 
 
+def _invalid_original_boundary(row):
+    start, end = row.get("startMs"), row.get("endMs")
+    numeric = (isinstance(start, int) and not isinstance(start, bool)
+               and isinstance(end, int) and not isinstance(end, bool))
+    return not numeric or not 40 <= end - start <= 3000
+
+
+def _selected_targets(pid, data, planned, cases):
+    selected = dict(planned)
+    for warning in data["report"]["review"]:
+        if warning["reason"] != SOFT_WARNING:
+            selected.setdefault(warning["pasuk"], {"perekId": pid, "pasuk": warning["pasuk"],
+                "reason": warning["reason"], "contextHoldReason": "No supported original candidate"})
+    for row in data["manifest"]["words"]:
+        if _invalid_original_boundary(row):
+            selected.setdefault(row["pasuk"], {"perekId": pid, "pasuk": row["pasuk"],
+                "reason": "Original word boundary is missing or outside the unchanged duration limits",
+                "contextHoldReason": "An explicit complete-source range is needed for this verse"})
+    for case in cases.values():
+        if case["perekId"] == pid:
+            selected.setdefault(case["pasuk"], {"perekId": pid, "pasuk": case["pasuk"],
+                "reason": "Existing source-bound review concern"})
+    if pid in PRIMARY_OLD_TARGETS:
+        verse = PRIMARY_OLD_TARGETS[pid]
+        selected.setdefault(verse, {"perekId": pid, "pasuk": verse, "reason": "Previously reported source concern"})
+    if not selected:
+        raise ValueError(f"Pending chapter {pid} has no explained actionable concern")
+    return selected
+
+
+def _target_candidate(config, target, evidence, words, audio, pcm, label,
+                      cases, offered_ids, issue_verses, fingerprint):
+    pid, verse = target["perekId"], target["pasuk"]
+    key = f"{pid}-{verse}"
+    case = cases.get(key)
+    kind, failure, packet = "locate-source-range", target.get("contextHoldReason"), None
+    if verse in issue_verses.get(pid, set()) or target.get("knownSourceDefectHold"):
+        kind = "source-remediation"
+    elif case is not None:
+        kind = "review-cuts"
+    elif key in offered_ids:
+        raise ValueError("A previously offered concern lacks its immutable current candidate: " + key)
+    elif target.get("rawDiagnostic") and not target.get("contextHoldReason"):
+        folder = Path(config["batchRoot"]) / "complete-concerns" / fingerprint / key
+        try:
+            case, packet = _candidate(config, target, evidence, words, audio, pcm, folder, label)
+            kind = "review-cuts"
+        except (ValueError, KeyError) as error:
+            failure = str(error)
+    return case, kind, failure, packet
+
+
+def _action_definition(target, evidence, words, audio, audio_sha, playback, label, case, kind, failure, issues):
+    pid, verse = target["perekId"], target["pasuk"]
+    selected_words = [{"pasuk": word.pasuk, "segment": word.segment, "text": word.text}
+                      for word in words if word.pasuk == verse]
+    if not selected_words:
+        raise ValueError("An original concern points outside its canonical chapter")
+    task = {"version": 1, "policy": POLICY, "taskId": f"concern-{pid}-{verse}",
+        "kind": kind, "perekId": pid, "pasuk": verse, "label": label,
+        "sourceAudioPath": str(audio.resolve()), "audioSha256": audio_sha,
+        "textSha256": text_hash(words), **deepcopy(playback),
+        "canonicalWords": selected_words, "sourceEvidence": deepcopy(evidence),
+        "originalConcern": deepcopy(target), "publicationStatus": "held", "automaticApproval": False}
+    if kind == "review-cuts":
+        task.update(caseRef=_case_reference(case), diagnosticSha256=case["diagnosticSha256"])
+    elif kind == "source-remediation" and pid in issues:
+        issue = issues[pid]
+        task["issueUrl"] = (str(issue) if str(issue).startswith("https://") else
+            f"https://github.com/bible-on-site/bible-on-site/issues/{issue}")
+    if failure:
+        task["preparationFailure"] = failure
+    task["taskSha256"] = digest_json(task)
+    return task
+
+
+def _target_groups(plan):
+    groups = defaultdict(dict)
+    for target in plan["targets"]:
+        key = target["pasuk"]
+        if key in groups[target["perekId"]]:
+            raise ValueError("Duplicate original concern target")
+        groups[target["perekId"]][key] = target
+    return groups
+
+
+def _verify_cached_targets(prior, binding, state, pid, audio_sha, decoder, audio):
+    if prior["sourceBindingSha256"] != binding:
+        raise ValueError("A completed concern chapter changed its original evidence")
+    _playback(state, pid, audio_sha, decoder, audio, prior["playback"])
+    for packet in prior["queues"]:
+        if digest_file(Path(packet["path"])) != packet["sha256"]:
+            raise ValueError("An immutable prepared concern queue changed")
+
+
 def prepare_concerns(config, ready_ids, offered_ids, current_cases, *, decoder=decode_source,
                      progress=None):
-    """Prepare all pending concerns once; callers own review-store short appends."""
+    """Prepare all pending concerns, translating only external decoder failures."""
+    with original_audio_errors("Original concern audio decoding or conversion failed"):
+        return _prepare_concerns(config, ready_ids, offered_ids, current_cases,
+                                 decoder=decoder, progress=progress)
+
+
+def _prepare_concerns(config, ready_ids, offered_ids, current_cases, *, decoder, progress):
     plan_path, canonical = Path(config["planPath"]), Path(config["canonicalPath"])
     plan = _checked(plan_path, config["planSha256"])
     canonical_sha = digest_file(canonical)
@@ -199,12 +300,7 @@ def prepare_concerns(config, ready_ids, offered_ids, current_cases, *, decoder=d
     if catalog.get("fingerprint") != fingerprint:
         raise ValueError("Use a distinct concern state for changed immutable inputs")
     cases = dict(current_cases) if isinstance(current_cases, dict) else {case["id"]: case for case in current_cases}
-    targets = defaultdict(dict)
-    for target in plan["targets"]:
-        key = target["pasuk"]
-        if key in targets[target["perekId"]]:
-            raise ValueError("Duplicate original concern target")
-        targets[target["perekId"]][key] = target
+    targets = _target_groups(plan)
     issues = {int(pid): issue for pid, issue in config.get("knownSourceIssues", {28: 2249, 136: 2223, 231: 2538}).items()}
     issue_verses = {int(pid): set(verses) for pid, verses in config.get(
         "knownSourceIssueVerses", {28: [9], 136: [10], 231: [40]}).items()}
@@ -218,79 +314,22 @@ def prepare_concerns(config, ready_ids, offered_ids, current_cases, *, decoder=d
         prior = catalog["chapters"].get(str(pid))
         binding = digest_json({"evidence": evidence, "audioSha256": audio_sha})
         if prior is not None:
-            if prior["sourceBindingSha256"] != binding:
-                raise ValueError("A completed concern chapter changed its original evidence")
-            _playback(state, pid, audio_sha, decoder, audio, prior["playback"])
-            for packet in prior["queues"]:
-                if digest_file(Path(packet["path"])) != packet["sha256"]:
-                    raise ValueError("An immutable prepared concern queue changed")
+            _verify_cached_targets(prior, binding, state, pid, audio_sha, decoder, audio)
             result["tasks"].extend(deepcopy(prior["tasks"]))
             result["queues"].extend(deepcopy(prior["queues"]))
             result["chapters"].append(deepcopy(prior["chapter"]))
             continue
-        selected = dict(targets[pid])
-        for warning in data["report"]["review"]:
-            if warning["reason"] != SOFT_WARNING:
-                selected.setdefault(warning["pasuk"], {"perekId": pid, "pasuk": warning["pasuk"],
-                    "reason": warning["reason"], "contextHoldReason": "No supported original candidate"})
-        for row in data["manifest"]["words"]:
-            start, end = row.get("startMs"), row.get("endMs")
-            numeric = (isinstance(start, int) and not isinstance(start, bool)
-                       and isinstance(end, int) and not isinstance(end, bool))
-            if not numeric or not 40 <= end - start <= 3000:
-                selected.setdefault(row["pasuk"], {"perekId": pid, "pasuk": row["pasuk"],
-                    "reason": "Original word boundary is missing or outside the unchanged duration limits",
-                    "contextHoldReason": "An explicit complete-source range is needed for this verse"})
-        for case in cases.values():
-            if case["perekId"] == pid:
-                selected.setdefault(case["pasuk"], {"perekId": pid, "pasuk": case["pasuk"],
-                    "reason": "Existing source-bound review concern"})
-        if pid in PRIMARY_OLD_TARGETS:
-            verse = PRIMARY_OLD_TARGETS[pid]
-            selected.setdefault(verse, {"perekId": pid, "pasuk": verse, "reason": "Previously reported source concern"})
-        if not selected:
-            raise ValueError(f"Pending chapter {pid} has no explained actionable concern")
+        selected = _selected_targets(pid, data, targets[pid], cases)
         playback, pcm = _playback(state, pid, audio_sha, decoder, audio)
         chapter_tasks, packets = [], []
         for verse, target in sorted(selected.items()):
-            key = f"{pid}-{verse}"
             label = labels[pid] + " " + hebrew_number(verse)
-            case = cases.get(key)
-            kind, failure = "locate-source-range", target.get("contextHoldReason")
-            if verse in issue_verses.get(pid, set()) or target.get("knownSourceDefectHold"):
-                kind = "source-remediation"
-            elif case is not None:
-                kind = "review-cuts"
-            elif key in offered_ids:
-                raise ValueError("A previously offered concern lacks its immutable current candidate: " + key)
-            elif target.get("rawDiagnostic") and not target.get("contextHoldReason"):
-                folder = Path(config["batchRoot"]) / "complete-concerns" / fingerprint / key
-                try:
-                    case, packet = _candidate(config, target, evidence, words, audio, pcm, folder, label)
-                    packets.append(packet)
-                    kind = "review-cuts"
-                except (ValueError, KeyError) as error:
-                    failure = str(error)
-            canonical_words_for_verse = [{"pasuk": word.pasuk, "segment": word.segment, "text": word.text}
-                                         for word in words if word.pasuk == verse]
-            if not canonical_words_for_verse:
-                raise ValueError("An original concern points outside its canonical chapter")
-            task = {"version": 1, "policy": POLICY, "taskId": f"concern-{pid}-{verse}",
-                "kind": kind, "perekId": pid, "pasuk": verse, "label": label,
-                "sourceAudioPath": str(audio.resolve()), "audioSha256": audio_sha,
-                "textSha256": text_hash(words), **deepcopy(playback),
-                "canonicalWords": canonical_words_for_verse, "sourceEvidence": deepcopy(evidence),
-                "originalConcern": deepcopy(target), "publicationStatus": "held", "automaticApproval": False}
-            if kind == "review-cuts":
-                task.update(caseRef=_case_reference(case), diagnosticSha256=case["diagnosticSha256"])
-            elif kind == "source-remediation" and pid in issues:
-                issue = issues[pid]
-                task["issueUrl"] = (str(issue) if str(issue).startswith("https://") else
-                    f"https://github.com/bible-on-site/bible-on-site/issues/{issue}")
-            if failure:
-                task["preparationFailure"] = failure
-            task["taskSha256"] = digest_json(task)
-            chapter_tasks.append(task)
+            case, kind, failure, packet = _target_candidate(config, target, evidence, words, audio, pcm,
+                label, cases, offered_ids, issue_verses, fingerprint)
+            if packet is not None:
+                packets.append(packet)
+            chapter_tasks.append(_action_definition(target, evidence, words, audio, audio_sha, playback,
+                label, case, kind, failure, issues))
         chapter = {"perekId": pid, "expectedTargets": len(chapter_tasks),
                    "taskIds": [task["taskId"] for task in chapter_tasks], "state": "awaiting_genuine_actions"}
         catalog["chapters"][str(pid)] = {"sourceBindingSha256": binding, "playback": playback,

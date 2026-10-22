@@ -36,8 +36,8 @@ def task_digest(task):
     return digest_json({key: value for key, value in task.items() if key != "taskSha256"})
 
 
-def validate_task(task):
-    """Reject unbound tasks instead of manufacturing missing word coordinates."""
+def _validate_task_identity(task):
+    """Check immutable action identity and its exact canonical verse label."""
     if not isinstance(task, dict):
         raise ValueError("Expected an immutable action definition")
     if (not isinstance(task.get("taskId"), str) or not re.fullmatch(IDENTIFIER, task["taskId"])
@@ -51,6 +51,11 @@ def validate_task(task):
     label = task.get("label")
     if not isinstance(label, str) or not re.fullmatch(r"[\u05d0-\u05ea0-9][\u05d0-\u05ea0-9 -]{0,159}", label):
         raise ValueError("Action requires a safe canonical display label")
+    return pid, verse
+
+
+def _validate_source_profile(task):
+    """Require the complete bound original source and optional derived playback."""
     if (not _sha(task.get("audioSha256")) or not _sha(task.get("textSha256"))
             or not _sha(task.get("sourcePcmSha256")) or task.get("sourceSampleRate") != 16000
             or not _integer(task.get("sourceFrames")) or task["sourceFrames"] < 16):
@@ -63,6 +68,10 @@ def validate_task(task):
         if (not isinstance(playback, str) or not Path(playback).is_absolute()
                 or Path(playback).suffix.lower() != ".wav" or not _sha(task.get("playbackSha256"))):
             raise ValueError("Action playback requires a bound derived WAV")
+
+
+def _validate_target_words(task, verse):
+    """Keep actual canonical segment identities, including gaps for unspoken notes."""
     words = task.get("canonicalWords")
     if not isinstance(words, list) or not words:
         raise ValueError("Action requires canonical target words")
@@ -74,6 +83,11 @@ def validate_task(task):
                 or not isinstance(word.get("text"), str) or not word["text"]):
             raise ValueError("Action canonical word identities are incomplete")
         previous_segment = word["segment"]
+    return words
+
+
+def _validate_chapter_concern(task, words):
+    """Bind a new chapter concern to an actual prior review and target segments."""
     if "chapterConcern" in task:
         concern = task["chapterConcern"]
         allowed_segments = {word["segment"] for word in words}
@@ -85,6 +99,10 @@ def validate_task(task):
                 or any(not _integer(segment) or segment not in allowed_segments for segment in concern["segments"])
                 or concern["segments"] != sorted(set(concern["segments"]))):
             raise ValueError("Chapter concern requires exact validated source-bound target segments")
+
+
+def _validate_neighbors(task, verse):
+    """Validate optional read-only adjacent canonical context without adding anchors."""
     if "neighborWords" in task:
         neighbors = task["neighborWords"]
         if (not isinstance(neighbors, list) or any(not isinstance(word, dict)
@@ -94,6 +112,10 @@ def validate_task(task):
                 or not isinstance(word.get("text"), str) or not word["text"] for word in neighbors)
                 or len({(word["pasuk"], word["segment"]) for word in neighbors}) != len(neighbors)):
             raise ValueError("Display neighbors require exact adjacent canonical identities")
+
+
+def _validate_task_references(task, pid, verse):
+    """Require private immutable evidence and repository-bound review references."""
     if not isinstance(task.get("sourceEvidence"), dict) or not task["sourceEvidence"]:
         raise ValueError("Action requires immutable source evidence bindings")
     if task["kind"] == "review-cuts":
@@ -104,8 +126,17 @@ def validate_task(task):
         if name in task and (not isinstance(task[name], str) or not re.fullmatch(
                 r"https://github\.com/bible-on-site/bible-on-site/issues/[1-9][0-9]*", task[name])):
             raise ValueError("Action issue must use the repository issue tracker")
-    return deepcopy(task)
 
+
+def validate_task(task):
+    """Reject unbound tasks instead of manufacturing missing word coordinates."""
+    pid, verse = _validate_task_identity(task)
+    _validate_source_profile(task)
+    words = _validate_target_words(task, verse)
+    _validate_chapter_concern(task, words)
+    _validate_neighbors(task, verse)
+    _validate_task_references(task, pid, verse)
+    return deepcopy(task)
 
 
 def _validate_case_ref(ref, pid=None, verse=None):
@@ -188,6 +219,7 @@ class ActionDatabase:
     """A distinct append-only store for action definitions, responses and worker outcomes."""
 
     def __init__(self, path):
+        """Open a distinct action store while rejecting review or publication databases."""
         path = Path(path)
         if not path.is_absolute() or path.name in {"recitation.sqlite", "recitation-working.sqlite", "reviews.sqlite"}:
             raise ValueError("Use a separate absolute action database path")
@@ -198,7 +230,10 @@ class ActionDatabase:
             if tables - {"action_definition", "action_response", "action_outcome", "sqlite_sequence"}:
                 raise ValueError("An action store cannot modify an existing review or publication database")
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        with closing(sqlite3.connect(self.path)) as db, db:
+        with (
+            closing(sqlite3.connect(self.path)) as db,
+            db,
+        ):
             db.executescript("""
                 CREATE TABLE IF NOT EXISTS action_definition (
                     task_id TEXT PRIMARY KEY, task_sha TEXT UNIQUE NOT NULL, body TEXT NOT NULL, created_at TEXT NOT NULL);
@@ -238,7 +273,10 @@ class ActionDatabase:
                     playback_bytes(task)
                     playbacks.add(key)
         inserted = 0
-        with closing(sqlite3.connect(self.path)) as db, db:
+        with (
+            closing(sqlite3.connect(self.path)) as db,
+            db,
+        ):
             db.execute("BEGIN IMMEDIATE")
             for task in checked:
                 previous = db.execute("SELECT body FROM action_definition WHERE task_id=?", (task["taskId"],)).fetchone()
@@ -278,7 +316,10 @@ class ActionDatabase:
                 or not re.fullmatch(IDENTIFIER, payload["taskId"])):
             raise ValueError("Exact action and submission identities are required")
         request_sha = digest_json(payload)
-        with closing(sqlite3.connect(self.path)) as db, db:
+        with (
+            closing(sqlite3.connect(self.path)) as db,
+            db,
+        ):
             db.execute("BEGIN IMMEDIATE")
             old = db.execute("SELECT request_sha,body FROM action_response WHERE submission_id=?",
                              (payload.get("submissionId"),)).fetchone()
@@ -331,7 +372,10 @@ class ActionDatabase:
         event = {"submissionId": submission_id, "taskId": task_id, "state": state,
                  "details": deepcopy(details), "actor": actor}
         sha = digest_json(event)
-        with closing(sqlite3.connect(self.path)) as db, db:
+        with (
+            closing(sqlite3.connect(self.path)) as db,
+            db,
+        ):
             db.execute("BEGIN IMMEDIATE")
             old = db.execute("SELECT body FROM action_outcome WHERE outcome_sha=?", (sha,)).fetchone()
             if old:

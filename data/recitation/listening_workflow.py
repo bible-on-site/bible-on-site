@@ -5,18 +5,18 @@ from contextlib import closing
 from copy import deepcopy
 from datetime import datetime, timezone
 import hashlib
+import http.client
 import json
 from pathlib import Path
 import re
 import shutil
 import sqlite3
-import subprocess
 import time
-import urllib.request
 from urllib.parse import urlsplit
 
 from listening_accept import current_review_decisions, stage_reviews
 from listening_actions import ActionDatabase
+from listening_audio import original_audio_errors
 from listening_files import read_state_json, write_state_json
 from listening_prepare import WorkerLock
 from listening_queue import ReviewDatabase
@@ -35,6 +35,7 @@ class ConcernWorkflow:
 
     def __init__(self, config, *, fetch=None, seeder=None, context_builder=None,
                  context_writer=None, importer=stage_reviews):
+        """Bind fixed original inputs, a loopback app and isolated durable result state."""
         self.config = deepcopy(config)
         if config.get("version") != 1:
             raise ValueError("Unknown concern workflow configuration")
@@ -50,8 +51,9 @@ class ConcernWorkflow:
         parsed = urlsplit(config["reviewUrl"])
         if (parsed.scheme != "http" or parsed.hostname != "127.0.0.1"
                 or parsed.username or parsed.password or parsed.path not in ("", "/")
-                or parsed.query or parsed.fragment):
+                or parsed.query or parsed.fragment or parsed.port == 0):
             raise ValueError("Use the existing loopback review app")
+        self.port = parsed.port or 80
         interval = config.get("pollSeconds", 5)
         if not isinstance(interval, int) or isinstance(interval, bool) or interval < 1:
             raise ValueError("The local workflow interval must be a positive integer")
@@ -94,8 +96,15 @@ class ConcernWorkflow:
                        "automaticApprovals": 0, "originalSourceWrites": 0}
 
     def _fetch(self, suffix):
-        with urllib.request.urlopen(self.config["reviewUrl"].rstrip("/") + suffix, timeout=30) as response:
-            return json.load(response)
+        """Read only the two fixed local JSON endpoints, without redirects or URL schemes."""
+        if suffix not in ("/api/export", "/api/preparation-workload"):
+            raise ValueError("Unknown local workflow endpoint")
+        with closing(http.client.HTTPConnection("127.0.0.1", self.port, timeout=30)) as connection:
+            connection.request("GET", suffix)
+            with closing(connection.getresponse()) as response:
+                if response.status != 200:
+                    raise OSError(f"Local review endpoint returned HTTP {response.status}")
+                return json.load(response)
 
     def _ready(self):
         with closing(sqlite3.connect(self.result.as_uri() + "?mode=ro", uri=True)) as database:
@@ -236,8 +245,9 @@ class ConcernWorkflow:
                 folder = self.paths["batchRoot"] / ("human-context-" + response["responseSha256"])
                 path = folder / "queue.json"
                 if not path.exists():
-                    study = self.context_builder(task, response)
-                    path = Path(self.context_writer(study, folder, task["label"]))
+                    with original_audio_errors("Selected original audio preparation failed"):
+                        study = self.context_builder(task, response)
+                        path = Path(self.context_writer(study, folder, task["label"]))
                 if {row["taskId"]: row for row in self.actions.responses()}.get(task_id, {}).get("responseSha256") != response["responseSha256"]:
                     self.actions.record_outcome(response["submissionId"], "pending", {"reasonCode": "superseded_source_selection"})
                     continue
@@ -257,7 +267,7 @@ class ConcernWorkflow:
                 case = read_json(path)["cases"][0]
                 self.actions.record_outcome(response["submissionId"], "review", {"caseRef": {
                     "caseId": case["id"], "candidateSha256": case["candidateSha256"], "clipSha256": case["clipSha256"]}})
-            except (ValueError, KeyError, TypeError, OSError, RuntimeError, subprocess.SubprocessError) as error:
+            except (ValueError, KeyError, TypeError, OSError, RuntimeError) as error:
                 approved = self._good_ref(task)
                 if approved is not None:
                     self.actions.record_outcome(response["submissionId"], "review", {
@@ -278,7 +288,7 @@ class ConcernWorkflow:
             if row["kind"] != "source-remediation" or holds.get(task_id) == row["responseSha256"]:
                 continue
             task = self.actions.task(task_id)
-            with closing(sqlite3.connect(self.result)) as database, database:
+            with (closing(sqlite3.connect(self.result)) as database, database):
                 found = database.execute("SELECT alignment_status FROM recitation_track WHERE perek_id=?",
                                          (task["perekId"],)).fetchone()
                 if found is None:
@@ -314,6 +324,56 @@ class ConcernWorkflow:
         write_state_json(folder / "reviews.json", feedback)
         return folder
 
+    @staticmethod
+    def _validation_focus(manifest, pid, held, cases, decisions):
+        """Locate actual overlaps after applying only the saved genuine GOOD coordinates."""
+        rows = {(row["pasuk"], row["segment"]): deepcopy(row) for row in manifest["words"]}
+        approved = [case for case in cases.values() if case["perekId"] == pid
+                    and decisions.get(case["id"], {}).get("verdict") == "good"]
+        for case in approved:
+            for row in decisions[case["id"]].get("candidateWords", case["words"]):
+                rows[(row["pasuk"], row["segment"])] = row
+        focus = defaultdict(set)
+        ordered = [rows[(row["pasuk"], row["segment"])] for row in manifest["words"]]
+        for left, right in zip(ordered, ordered[1:]):
+            if (isinstance(left.get("endMs"), int) and isinstance(right.get("startMs"), int)
+                    and left["endMs"] > right["startMs"]):
+                focus[left["pasuk"]].add(left["segment"])
+                focus[right["pasuk"]].add(right["segment"])
+        reason = "cross_verse_overlap" if focus else "chapter_validation_failure"
+        unreviewed = re.search(r"unreviewed pasuk ([0-9]+)", held["reason"])
+        if unreviewed:
+            focus[int(unreviewed[1])] = set()
+        if not focus:
+            case = approved[0]
+            focus[case["pasuk"]].update(row["segment"] for row in case["words"])
+        return focus, reason
+
+    @staticmethod
+    def _followup_definition(template, held, verse, segments, words, validation_sha,
+                             case, decision, reason):
+        """Bind each new chapter concern to its full failed check and exact earlier review."""
+        task = deepcopy(template)
+        for key in ("taskSha256", "caseRef", "chapterConcern", "issueUrl", "issueURL", "diagnosticSha256"):
+            task.pop(key, None)
+        pid = held["perekId"]
+        task.update(pasuk=verse,
+            label=template["label"].rsplit(" ", 1)[0] + " " + hebrew_number(verse),
+            canonicalWords=[{"pasuk": word.pasuk, "segment": word.segment, "text": word.text}
+                            for word in words if word.pasuk == verse],
+            originalConcern={"kind": "complete-chapter-validation", "validationSha256": validation_sha,
+                             "reason": held["reason"]})
+        if case and decision and decision.get("verdict") == "good":
+            previous_sha = digest_json(decision)
+            task.update(taskId=f"chapter-check-{pid}-{verse}-{validation_sha[:12]}-{previous_sha[:12]}",
+                kind="review-cuts", caseRef={"caseId": case["id"],
+                    "candidateSha256": case["candidateSha256"], "clipSha256": case["clipSha256"]},
+                chapterConcern={"validationSha256": validation_sha, "previousReviewSha256": previous_sha,
+                    "reasonCode": reason, "segments": sorted(segments or {row["segment"] for row in case["words"]})})
+        else:
+            task.update(taskId=f"chapter-location-{pid}-{verse}-{validation_sha[:12]}", kind="locate-source-range")
+        return task
+
     def _validation_followups(self, summary, pids, tasks, cases, decisions):
         """A real failed chapter check creates a new concern, never erases earlier GOODs."""
         from listening_machine import canonical_words
@@ -325,58 +385,17 @@ class ConcernWorkflow:
             if pid not in pids:
                 continue
             template = templates[pid]
-            raw = Path(template["sourceEvidence"]["manifestPath"]).read_bytes()
-            if hashlib.sha256(raw).hexdigest() != template["sourceEvidence"]["manifestSha256"]:
+            evidence = template["sourceEvidence"]
+            raw = Path(evidence["manifestPath"]).read_bytes()
+            if hashlib.sha256(raw).hexdigest() != evidence["manifestSha256"]:
                 raise ValueError("A chapter validation source changed before follow-up preparation")
-            manifest = json.loads(raw)
-            rows = {(row["pasuk"], row["segment"]): deepcopy(row) for row in manifest["words"]}
-            for case in cases.values():
-                if case["perekId"] != pid:
-                    continue
-                decision = decisions.get(case["id"])
-                if decision and decision.get("verdict") == "good":
-                    for row in decision.get("candidateWords", case["words"]):
-                        rows[(row["pasuk"], row["segment"])] = row
-            focus = defaultdict(set)
-            ordered = [rows[(row["pasuk"], row["segment"])] for row in manifest["words"]]
-            for left, right in zip(ordered, ordered[1:]):
-                if (isinstance(left.get("endMs"), int) and isinstance(right.get("startMs"), int)
-                        and left["endMs"] > right["startMs"]):
-                    focus[left["pasuk"]].add(left["segment"])
-                    focus[right["pasuk"]].add(right["segment"])
-            reason = "cross_verse_overlap" if focus else "chapter_validation_failure"
-            # A newly reported unreviewed verse is a genuine location action, not a repeat GOOD.
-            unreviewed = re.search(r"unreviewed pasuk ([0-9]+)", held["reason"])
-            if unreviewed:
-                focus[int(unreviewed[1])] = set()
-            if not focus:
-                case = next(case for case in cases.values() if case["perekId"] == pid
-                            and decisions.get(case["id"], {}).get("verdict") == "good")
-                focus[case["pasuk"]].update(row["segment"] for row in case["words"])
-            words = canonical_words(Path(template["sourceEvidence"]["canonicalPath"]),
-                                    template["sourceEvidence"]["canonicalSha256"], pid)
+            focus, reason = self._validation_focus(json.loads(raw), pid, held, cases, decisions)
+            words = canonical_words(Path(evidence["canonicalPath"]), evidence["canonicalSha256"], pid)
             for verse, segments in focus.items():
                 case = cases.get(f"{pid}-{verse}")
                 decision = decisions.get(case["id"]) if case else None
-                task = deepcopy(template)
-                for key in ("taskSha256", "caseRef", "chapterConcern", "issueUrl", "issueURL", "diagnosticSha256"):
-                    task.pop(key, None)
-                task.update(pasuk=verse,
-                    label=template["label"].rsplit(" ", 1)[0] + " " + hebrew_number(verse),
-                    canonicalWords=[{"pasuk": word.pasuk, "segment": word.segment, "text": word.text}
-                                    for word in words if word.pasuk == verse],
-                    originalConcern={"kind": "complete-chapter-validation", "validationSha256": validation_sha,
-                                     "reason": held["reason"]})
-                if case and decision and decision.get("verdict") == "good":
-                    previous_sha = digest_json(decision)
-                    task.update(taskId=f"chapter-check-{pid}-{verse}-{validation_sha[:12]}-{previous_sha[:12]}",
-                        kind="review-cuts", caseRef={"caseId": case["id"],
-                            "candidateSha256": case["candidateSha256"], "clipSha256": case["clipSha256"]},
-                        chapterConcern={"validationSha256": validation_sha, "previousReviewSha256": previous_sha,
-                            "reasonCode": reason, "segments": sorted(segments or {row["segment"] for row in case["words"]})})
-                else:
-                    task.update(taskId=f"chapter-location-{pid}-{verse}-{validation_sha[:12]}", kind="locate-source-range")
-                definitions.append(task)
+                definitions.append(self._followup_definition(template, held, verse, segments,
+                    words, validation_sha, case, decision, reason))
         if definitions:
             self.actions.seed(definitions)
         return len(definitions)
@@ -404,6 +423,92 @@ class ConcernWorkflow:
             changed = True
         return changed
 
+    def _remaining_task(self, task, public_task, cases, decisions):
+        """Count only an unresolved concern bound to the current exact verse candidate."""
+        current = cases.get(f"{task['perekId']}-{task['pasuk']}")
+        decision = decisions.get(current["id"]) if current else None
+        ref = public_task.get("caseRef")
+        linked = bool(current and ref and ref == {"caseId": current["id"],
+            "candidateSha256": current["candidateSha256"], "clipSha256": current["clipSha256"]})
+        source_pending = public_task["state"] == "needs_source"
+        good = bool(task["kind"] != "source-remediation" and not source_pending and linked and decision
+                    and decision.get("verdict") == "good"
+                    and digest_json(decision) != task.get("chapterConcern", {}).get("previousReviewSha256"))
+        if task["kind"] != "source-remediation" and not source_pending and linked and not good:
+            self._task_state(task["taskId"], "review", {"caseRef": ref,
+                "reasonCode": task.get("chapterConcern", {}).get("reasonCode") or (
+                    "review_reported_problem" if decision and decision.get("verdict") in ("problem", "skip")
+                    else "review_word_cuts")})
+        return 0 if good else 1
+
+    def _chapter_progress(self, recorded, ready, grouped, public_tasks, cases, decisions):
+        """Build truthful chapter totals independently of visible review-page capacity."""
+        complete, chapters = [], []
+        for pid in sorted(recorded):
+            remaining = sum(self._remaining_task(task, public_tasks[task["taskId"]], cases, decisions)
+                            for task in grouped[pid])
+            if pid not in ready and grouped[pid] and not remaining:
+                complete.append(pid)
+            fallback = grouped[pid][0]["label"].rsplit(" ", 1)[0] if grouped[pid] else str(pid)
+            chapters.append({"perekId": pid, "label": self.chapter_labels.get(pid) or fallback,
+                "state": "ready" if pid in ready else "validating" if pid in complete else "needs_actions",
+                "remainingActions": remaining if grouped[pid] else (0 if pid in ready else 1)})
+        return complete, chapters
+
+    def _import_preview(self, folder):
+        """Preserve failed previews and retry operational failures from the current durable mirror."""
+        preview = folder / "current-preview.sqlite"
+        shutil.copy2(self.result, preview)
+        self._save(state="validating_chapters")
+        try:
+            with original_audio_errors("Original audio verification failed"):
+                summary = self.importer(folder / "queue.json", folder / "reviews.json",
+                                        self.paths["canonicalPath"], folder / "accepted", preview)
+        except (ValueError, KeyError, TypeError, OSError, sqlite3.Error, RuntimeError):
+            failed = folder / ("failed-preview-" + digest_file(preview) + ".sqlite")
+            if not failed.exists():
+                shutil.copy2(preview, failed)
+            raise
+        if summary["accepted"] or summary["updatedReviews"] or summary["withdrawn"]:
+            temporary = self.result.with_suffix(".next.sqlite")
+            shutil.copy2(preview, temporary)
+            temporary.replace(self.result)
+            self.ledger["resultSha256"] = digest_file(self.result)
+        return summary
+
+    def _resolved_chapters(self, complete, after_ready, grouped, decisions, validation_sha):
+        """Mark concerns resolved only after genuine saved GOODs pass complete chapter validation."""
+        for pid in complete:
+            if pid not in after_ready:
+                continue
+            for task in grouped[pid]:
+                decision = decisions.get(f"{pid}-{task['pasuk']}")
+                if decision and decision.get("verdict") == "good":
+                    self._task_state(task["taskId"], "resolved", {
+                        "genuineGoodValidated": True, "chapterValidated": True,
+                        "reviewSha256": digest_json(decision), "chapterValidationSha256": validation_sha})
+
+    def _validate_chapters(self, feedback, complete, reconsider, tasks, grouped, cases,
+                           decisions, chapters, recorded):
+        """Commit only an isolated successful local result and retain all exact feedback evidence."""
+        fingerprint = digest_json(feedback)
+        folder = self._evidence(feedback)
+        summary = self._import_preview(folder)
+        self.ledger["feedbackAttemptSha256"] = fingerprint
+        validation_sha = digest_json(summary)
+        _recorded, after_ready = self._ready()
+        self._validation_followups(summary, set(complete) - after_ready, tasks, cases, decisions)
+        self._resolved_chapters(complete, after_ready, grouped, decisions, validation_sha)
+        self.ledger["validation"] = {"summary": summary, "sha256": validation_sha, "evidence": str(folder)}
+        self.ledger["feedbackSha256"] = fingerprint
+        for row in chapters:
+            if row["perekId"] in after_ready:
+                row.update(state="ready", remainingActions=0)
+            elif row["perekId"] in complete or row["perekId"] in reconsider:
+                row.update(state="needs_actions", remainingActions=max(1, row["remainingActions"]))
+        self._save(state="waiting_for_actions", readyRecordings=len(after_ready),
+                   pendingRecordings=len(recorded - after_ready), chapters=chapters)
+
     def refresh(self):
         """Keep reported problems actionable and validate only complete genuine GOOD chapters."""
         feedback = self.fetch("/api/export")
@@ -420,89 +525,24 @@ class ConcernWorkflow:
         grouped = defaultdict(list)
         for task in tasks:
             grouped[task["perekId"]].append(task)
-        complete = []
-        chapters = []
-        for pid in sorted(recorded):
-            remaining = 0
-            for task in grouped[pid]:
-                current = cases.get(f"{pid}-{task['pasuk']}")
-                decision = decisions.get(current["id"]) if current else None
-                ref = public_tasks[task["taskId"]].get("caseRef")
-                linked = bool(current and ref and ref == {"caseId": current["id"],
-                    "candidateSha256": current["candidateSha256"], "clipSha256": current["clipSha256"]})
-                source_pending = public_tasks[task["taskId"]]["state"] == "needs_source"
-                good = bool(task["kind"] != "source-remediation" and not source_pending and linked and decision
-                            and decision.get("verdict") == "good"
-                            and digest_json(decision) != task.get("chapterConcern", {}).get("previousReviewSha256"))
-                if not good:
-                    remaining += 1
-                if task["kind"] != "source-remediation" and not source_pending and linked and not good:
-                    self._task_state(task["taskId"], "review", {"caseRef": ref,
-                        "reasonCode": task.get("chapterConcern", {}).get("reasonCode") or (
-                            "review_reported_problem" if decision and decision.get("verdict") in ("problem", "skip")
-                            else "review_word_cuts")})
-            if pid not in ready and grouped[pid] and not remaining:
-                complete.append(pid)
-            label = self.chapter_labels.get(pid) or (grouped[pid][0]["label"].rsplit(" ", 1)[0] if grouped[pid] else str(pid))
-            chapters.append({"perekId": pid, "label": label,
-                "state": "ready" if pid in ready else "validating" if pid in complete else "needs_actions",
-                "remainingActions": remaining if grouped[pid] else (0 if pid in ready else 1)})
+        complete, chapters = self._chapter_progress(recorded, ready, grouped, public_tasks, cases, decisions)
         self._save(state="waiting_for_actions", totalRecordings=len(recorded), readyRecordings=len(ready),
                    pendingRecordings=len(recorded - ready), chapters=chapters)
-        fingerprint = digest_json(feedback)
         reconsider = [pid for pid in ready if any(
             decisions.get(f"{pid}-{task['pasuk']}", {}).get("verdict") in ("problem", "skip")
             for task in grouped[pid])]
+        fingerprint = digest_json(feedback)
         if ((complete or reconsider) and self.ledger.get("feedbackSha256") != fingerprint
                 and self.ledger.get("feedbackAttemptSha256") != fingerprint):
-            folder = self._evidence(feedback)
-            preview = folder / "current-preview.sqlite"
-            shutil.copy2(self.result, preview)
-            self._save(state="validating_chapters")
-            try:
-                summary = self.importer(folder / "queue.json", folder / "reviews.json",
-                                        self.paths["canonicalPath"], folder / "accepted", preview)
-            except (ValueError, KeyError, TypeError, OSError, sqlite3.Error, RuntimeError,
-                    subprocess.SubprocessError):
-                failed = folder / ("failed-preview-" + digest_file(preview) + ".sqlite")
-                if not failed.exists():
-                    shutil.copy2(preview, failed)
-                raise
-            self.ledger["feedbackAttemptSha256"] = fingerprint
-            validation_sha = digest_json(summary)
-            # A normal local result change is explicit and isolated from authoritative publication.
-            if summary["accepted"] or summary["updatedReviews"] or summary["withdrawn"]:
-                temporary = self.result.with_suffix(".next.sqlite")
-                shutil.copy2(preview, temporary)
-                temporary.replace(self.result)
-                self.ledger["resultSha256"] = digest_file(self.result)
-            _recorded, after_ready = self._ready()
-            self._validation_followups(summary, set(complete) - after_ready, tasks, cases, decisions)
-            for pid in complete:
-                if pid in after_ready:
-                    for task in grouped[pid]:
-                        decision = decisions.get(f"{pid}-{task['pasuk']}")
-                        if decision and decision.get("verdict") == "good":
-                            self._task_state(task["taskId"], "resolved", {
-                                "genuineGoodValidated": True, "chapterValidated": True,
-                                "reviewSha256": digest_json(decision), "chapterValidationSha256": validation_sha})
-            self.ledger["validation"] = {"summary": summary, "sha256": validation_sha, "evidence": str(folder)}
-            self.ledger["feedbackSha256"] = fingerprint
-            for row in chapters:
-                if row["perekId"] in after_ready:
-                    row.update(state="ready", remainingActions=0)
-                elif row["perekId"] in complete or row["perekId"] in reconsider:
-                    row.update(state="needs_actions", remainingActions=max(1, row["remainingActions"]))
-            self._save(state="waiting_for_actions", readyRecordings=len(after_ready),
-                       pendingRecordings=len(recorded - after_ready), chapters=chapters)
+            self._validate_chapters(feedback, complete, reconsider, tasks, grouped, cases,
+                                    decisions, chapters, recorded)
 
     def run(self, once=False):
         """Keep one local owner; a stopped assistant schedule is not needed for completion."""
         with WorkerLock(self.state / "worker.lock"):
             try:
                 self.seed()
-            except (ValueError, KeyError, TypeError, OSError, sqlite3.Error, RuntimeError,
-                    subprocess.SubprocessError) as error:
+            except (ValueError, KeyError, TypeError, OSError, sqlite3.Error, RuntimeError) as error:
                 write_state_json(self.state / "workflow-error.json", {"error": str(error), "recordedAt": now()})
                 self._save(state="workflow_error", reasonCode="action_preparation_requires_attention")
                 raise
@@ -510,8 +550,7 @@ class ConcernWorkflow:
                 try:
                     self._process_contexts()
                     self.refresh()
-                except (ValueError, KeyError, TypeError, OSError, sqlite3.Error, RuntimeError,
-                        subprocess.SubprocessError) as error:
+                except (ValueError, KeyError, TypeError, OSError, sqlite3.Error, RuntimeError) as error:
                     write_state_json(self.state / "workflow-error.json", {"error": str(error), "recordedAt": now()})
                     self._save(state="workflow_error", reasonCode="validation_requires_attention")
                 if once:

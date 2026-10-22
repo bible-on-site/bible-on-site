@@ -11,7 +11,7 @@ from pathlib import Path
 import numpy as np
 
 from alignment import text_hash
-from listening_audio import duration
+from listening_audio import duration, original_audio_errors
 from listening_machine import canonical_words, decode_source
 from listening_review import (candidate_digest, digest_file, digest_json, load_queue, make_clip,
                               read_json, validate_case, write_json)
@@ -104,6 +104,7 @@ class ContextEngine:
     threads = 2
 
     def __init__(self):
+        """Load the unchanged offline CUDA model only for an actual saved context."""
         os.environ.update(HF_HUB_OFFLINE="1", TRANSFORMERS_OFFLINE="1")
         import torch
         from acoustic import HebrewAligner
@@ -116,6 +117,7 @@ class ContextEngine:
             raise ValueError("Source-context inference requires actual CUDA full FP32")
 
     def run(self, signal, words, start_seconds):
+        """Return actual pinned letter and separator paths without boundary adjustments."""
         from listening_tail import separator_candidates
         return separator_candidates(self.aligner, signal, words, start_seconds)
 
@@ -197,6 +199,11 @@ def _diagnostic(task, response, originals, selected, signal, rows, paths):
 
 def build_context_study(task, response, *, engine=None, loader=None):
     """Infer only a genuine saved range; context hearing grants no word approval."""
+    with original_audio_errors("Original source audio decoding failed"):
+        return _build_context_study(task, response, engine=engine, loader=loader)
+
+
+def _build_context_study(task, response, *, engine=None, loader=None):
     definition, originals, words, selected, signal = _inputs(task, response, loader or decode_source)
     task = {**definition, "taskSha256": task["taskSha256"]}
     engine = engine or _engine()

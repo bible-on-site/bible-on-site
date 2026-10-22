@@ -508,13 +508,13 @@ class AccumulatedQueueTests(unittest.TestCase):
         self.assertIn("chapterConcern", actions.task(task["taskId"]))
 
     def test_workflow_status_returns_only_safe_fixed_file_chapter_counters(self):
-        task, actions = self.action_fixture()
+        _, actions = self.action_fixture()
         server = self.status_server(action_store=actions)
         status = {"state": "waiting_for_review", "totalRecordings": 496, "readyRecordings": 286,
                   "pendingRecordings": 210, "chapters": [{"perekId": 1, "label": "בראשית א",
                   "state": "review", "remainingActions": 2, "readyWords": 0, "reasonCode": "human_review_required"}],
                   "updatedAt": "2026-10-23T00:00:00Z"}
-        private = {**status, "token": "private-token", "error": "private-path",
+        private = {**status, "token": uuid.uuid4().hex, "error": "private-path",
                    "chapters": [{**status["chapters"][0], "manifestPath": "private-path"}]}
         write_json(actions.path.with_name("workflow-status.json"), private)
         self.assertEqual(self.get_status(server, "/api/workflow-status"), (200, status))
@@ -536,7 +536,7 @@ class AccumulatedQueueTests(unittest.TestCase):
             "1-2": {"perekId": 1, "pasuk": 2, "state": "prepared",
                     "reason": "awaiting_queue_capacity", "case": {"label": "בראשית א ב", "clipPath": "private"}},
             "1-1": {"perekId": 1, "pasuk": 1, "state": "queued",
-                    "reason": "awaiting_genuine_human_review", "token": "private-token"}}}
+                    "reason": "awaiting_genuine_human_review", "token": uuid.uuid4().hex}}}
 
     def test_preparation_inventory_is_optional_and_requires_loopback_host(self):
         server = self.status_server()
@@ -549,7 +549,7 @@ class AccumulatedQueueTests(unittest.TestCase):
         status = self.root / "configured-status.json"
         ledger = self.inventory_ledger()
         ledger["ledgerPath"] = "C:/private/other-ledger.json"
-        ledger["token"] = "never-public"
+        ledger["token"] = uuid.uuid4().hex
         write_json(self.root / "ledger.json", ledger)
         write_json(self.root / "inventory-labels.json", {"2-3": "בראשית ב ג", "4-1": "בראשית ד א"})
         server = self.status_server(status)
@@ -571,7 +571,7 @@ class AccumulatedQueueTests(unittest.TestCase):
                 {"id": "4-1", "perekId": 4, "pasuk": 1, "label": "בראשית ד א", "state": "excluded",
                  "reason": "previously_offered_chapter"}]})
         self.assertNotIn("private", json.dumps(inventory))
-        self.assertNotIn("never-public", json.dumps(inventory))
+        self.assertNotIn(ledger["token"], json.dumps(inventory))
         self.assertEqual(self.stored_state(), before)
 
     def test_preparation_inventory_without_labels_uses_only_candidate_label_or_identity(self):

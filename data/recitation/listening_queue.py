@@ -106,6 +106,32 @@ def preparation_inventory(path):
             "recordings": len({case["perekId"] for case in cases})}
 
 
+def _workflow_chapter(chapter, seen):
+    """Whitelist one canonical chapter classification and reject duplicate identities."""
+    if not isinstance(chapter, dict):
+        raise ValueError("Invalid workflow chapter")
+    pid = chapter.get("perekId")
+    label, state, remaining = chapter.get("label"), chapter.get("state"), chapter.get("remainingActions")
+    if (not isinstance(pid, int) or isinstance(pid, bool) or pid < 1 or pid in seen
+            or not isinstance(label, str) or not re.fullmatch(r"[א-ת0-9][א-ת0-9 -]{0,159}", label)
+            or not isinstance(state, str) or not re.fullmatch(r"[a-z][a-z0-9_]{0,79}", state)
+            or not isinstance(remaining, int) or isinstance(remaining, bool) or remaining < 0):
+        raise ValueError("Invalid workflow chapter identity")
+    seen.add(pid)
+    row = {"perekId": pid, "label": label, "state": state, "remainingActions": remaining}
+    if "readyWords" in chapter:
+        value = chapter["readyWords"]
+        if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+            raise ValueError("Invalid ready word count")
+        row["readyWords"] = value
+    if "reasonCode" in chapter:
+        value = chapter["reasonCode"]
+        if not isinstance(value, str) or not re.fullmatch(r"[a-z][a-z0-9_]{0,79}", value):
+            raise ValueError("Invalid chapter reason code")
+        row["reasonCode"] = value
+    return row
+
+
 def workflow_status(path):
     """Read only fixed workflow counters and canonical chapter classifications."""
     source = read_state_json(path)
@@ -129,31 +155,8 @@ def workflow_status(path):
     chapters = source.get("chapters")
     if not isinstance(chapters, list):
         raise ValueError("Invalid workflow chapters")
-    public["chapters"] = []
     seen = set()
-    for chapter in chapters:
-        if not isinstance(chapter, dict):
-            raise ValueError("Invalid workflow chapter")
-        pid = chapter.get("perekId")
-        label, state, remaining = chapter.get("label"), chapter.get("state"), chapter.get("remainingActions")
-        if (not isinstance(pid, int) or isinstance(pid, bool) or pid < 1 or pid in seen
-                or not isinstance(label, str) or not re.fullmatch(r"[א-ת0-9][א-ת0-9 -]{0,159}", label)
-                or not isinstance(state, str) or not re.fullmatch(r"[a-z][a-z0-9_]{0,79}", state)
-                or not isinstance(remaining, int) or isinstance(remaining, bool) or remaining < 0):
-            raise ValueError("Invalid workflow chapter identity")
-        seen.add(pid)
-        row = {"perekId": pid, "label": label, "state": state, "remainingActions": remaining}
-        if "readyWords" in chapter:
-            value = chapter["readyWords"]
-            if not isinstance(value, int) or isinstance(value, bool) or value < 0:
-                raise ValueError("Invalid ready word count")
-            row["readyWords"] = value
-        if "reasonCode" in chapter:
-            value = chapter["reasonCode"]
-            if not isinstance(value, str) or not re.fullmatch(r"[a-z][a-z0-9_]{0,79}", value):
-                raise ValueError("Invalid chapter reason code")
-            row["reasonCode"] = value
-        public["chapters"].append(row)
+    public["chapters"] = [_workflow_chapter(chapter, seen) for chapter in chapters]
     return public
 
 
@@ -203,6 +206,21 @@ class ReviewDatabase:
         return [json.loads(row[0]) for row in db.execute(
             "SELECT body FROM entry ORDER BY saved_at, digest")]
 
+    def _check_unapproved_append(self, db, cases, allowed_previous_good):
+        """Fence replacement against the actual current review inside the write transaction."""
+        entries, typed = self._entries(db), self._word_reviews(db)
+        for case in cases:
+            found = db.execute("SELECT c.body FROM current_candidate current "
+                               "JOIN candidate c ON c.key=current.key WHERE current.case_id=?",
+                               (case["id"],)).fetchone()
+            if found:
+                current = json.loads(found[0])
+                latest = current_bound_reviews([current], entries, typed).get(current["id"])
+                if (latest and latest["verdict"] == "good"
+                        and digest_json(latest) != allowed_previous_good.get(case["id"])):
+                    raise ValueError("A genuinely approved current candidate cannot be replaced: " + case["id"])
+        return entries
+
     def append(self, queue_path, reviews_path=None, *, only_unseen=False, only_unapproved=False, allowed_previous_good=None):
         """Validate a prepared batch, then atomically append without editing older queues."""
         if allowed_previous_good is not None and (not only_unapproved or not isinstance(allowed_previous_good, dict)
@@ -228,17 +246,7 @@ class ReviewDatabase:
             if old:
                 return old[0]
             if only_unapproved:
-                entries, typed = self._entries(db), self._word_reviews(db)
-                for case in queue["cases"]:
-                    found = db.execute("SELECT c.body FROM current_candidate current "
-                                       "JOIN candidate c ON c.key=current.key WHERE current.case_id=?",
-                                       (case["id"],)).fetchone()
-                    if found:
-                        current = json.loads(found[0])
-                        latest = current_bound_reviews([current], entries, typed).get(current["id"])
-                        if (latest and latest["verdict"] == "good"
-                                and digest_json(latest) != allowed_previous_good.get(case["id"])):
-                            raise ValueError("A genuinely approved current candidate cannot be replaced: " + case["id"])
+                entries = self._check_unapproved_append(db, queue["cases"], allowed_previous_good)
             if only_unseen:
                 for case in queue["cases"]:
                     if db.execute("SELECT 1 FROM candidate WHERE case_id=? LIMIT 1",

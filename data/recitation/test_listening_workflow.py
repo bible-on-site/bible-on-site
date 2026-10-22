@@ -2,6 +2,7 @@
 from contextlib import closing
 from copy import deepcopy
 from pathlib import Path
+import json
 import sqlite3
 import tempfile
 import unittest
@@ -9,6 +10,7 @@ from unittest.mock import Mock, patch
 import wave
 
 from alignment import Word
+import listening_audio as audio_transport
 from listening_actions import POLICY as ACTION_POLICY, task_digest
 from listening_edits import verify_word_review
 from listening_review import candidate_digest, digest_file, digest_json, read_json, write_json
@@ -28,7 +30,10 @@ class ConcernWorkflowTests(unittest.TestCase):
         write_json(self.plan, {"targets": []})
         self.audio.write_bytes(b"original immutable source fixture")
         self.publication = self.root / "publication.sqlite"
-        with closing(sqlite3.connect(self.publication)) as db, db:
+        with (
+            closing(sqlite3.connect(self.publication)) as db,
+            db,
+        ):
             db.execute("CREATE TABLE recitation_track (perek_id INTEGER, alignment_status TEXT)")
             db.executemany("INSERT INTO recitation_track VALUES (?,?)", [(1, "needs_review"), (2, "ready")])
         self.review = ReviewDatabase(self.root / "review.sqlite")
@@ -144,7 +149,10 @@ class ConcernWorkflowTests(unittest.TestCase):
             self.assertEqual(digest_file(Path(packet["path"])), packet["sha256"])
         latest = feedback["wordReviews"][-1]
         verdict = latest["verdict"]
-        with closing(sqlite3.connect(preview)) as db, db:
+        with (
+            closing(sqlite3.connect(preview)) as db,
+            db,
+        ):
             db.execute("UPDATE recitation_track SET alignment_status=? WHERE perek_id=1",
                        ("ready" if verdict == "good" else "needs_review",))
         return {"accepted": [1] if verdict == "good" else [], "updatedReviews": [],
@@ -338,6 +346,39 @@ class ConcernWorkflowTests(unittest.TestCase):
         workflow._process_contexts()
         self.assertEqual(self.builder.call_count, 1)
 
+    def test_clip_writer_transport_failure_stays_actionable_without_appending_or_approving(self):
+        case = self.case()
+        workflow = self.make_workflow([case], "locate-source-range")
+        response = self.locate(workflow.actions.tasks(private=True)[0])
+        publication_before = self.publication.read_bytes()
+        mirror_before = workflow.result.read_bytes()
+        self.writer.side_effect = audio_transport.subprocess.CalledProcessError(1, ["fixture-clip-writer"])
+
+        status = workflow.run(once=True)
+
+        self.assertEqual(status["state"], "waiting_for_actions")
+        self.assertEqual(workflow.actions.tasks()[0]["state"], "pending")
+        outcome = workflow.actions.outcome_for(response["taskId"])
+        self.assertEqual(outcome["submissionId"], response["submissionId"])
+        self.assertEqual(outcome["state"], "pending")
+        self.assertEqual(outcome["details"]["reasonCode"], "revise_source_selection")
+        failure_path = workflow.state / ("context-failure-" + response["submissionId"] + ".json")
+        self.assertEqual(read_json(failure_path)["error"], "Selected original audio preparation failed")
+        self.assertEqual(workflow.actions.responses(), [response])
+        self.assertEqual(self.review.preparation_workload()["offeredCaseIds"], [])
+        self.assertEqual(self.review.export_feedback()["wordReviews"], [])
+        self.assertEqual(workflow.ledger["packets"], [])
+        self.assertIsNone(workflow.ledger["validation"])
+        self.assertEqual(workflow._ready()[1], {2})
+        self.assertEqual(workflow.result.read_bytes(), mirror_before)
+        self.assertEqual(self.publication.read_bytes(), publication_before)
+        self.importer.assert_not_called()
+        self.builder.assert_called_once()
+        self.writer.assert_called_once()
+        self.assertEqual(workflow.run(once=True)["state"], "waiting_for_actions")
+        self.builder.assert_called_once()
+        self.writer.assert_called_once()
+
     def test_later_problem_withdraws_local_approval_and_reopens_review_action(self):
         case = self.case()
         workflow = self.make_workflow([case])
@@ -373,7 +414,10 @@ class ConcernWorkflowTests(unittest.TestCase):
         def import_with_transient_failure(*arguments):
             attempts.append(arguments)
             if len(attempts) == 1:
-                with closing(sqlite3.connect(arguments[-1])) as preview, preview:
+                with (
+                    closing(sqlite3.connect(arguments[-1])) as preview,
+                    preview,
+                ):
                     preview.execute("UPDATE recitation_track SET alignment_status='ready' WHERE perek_id=1")
                 raise OSError("transient local result copy failure")
             self.assertEqual(Path(arguments[-1]).read_bytes(), before)
@@ -538,6 +582,113 @@ class ConcernWorkflowTests(unittest.TestCase):
         self.answer(self.context_case, "problem", "later")
         workflow.refresh()
         self.assertEqual(workflow.actions.tasks()[0]["state"], "review")
+
+
+    def transport(self, status=200, body=None):
+        response = Mock()
+        response.status = status
+        response.read.return_value = json.dumps(body if body is not None else {}, ensure_ascii=False).encode("utf-8")
+        connection = Mock()
+        connection.getresponse.return_value = response
+        return connection, response
+
+    def test_fetch_uses_fixed_loopback_configured_port_and_preserves_all_json_fields(self):
+        self.config["reviewUrl"] = "http://127.0.0.1:43210/"
+        workflow = self.make_workflow([self.case()])
+        actual = {"version": 1, "entries": [{"note": "", "typedCustom": {"values": [1, 1, None], "label": "עברית"}}],
+                  "wordReviews": [], "timingEdits": [], "actionResponses": [], "unchangedUnknownField": False}
+        for suffix in ("/api/export", "/api/preparation-workload"):
+            with self.subTest(suffix=suffix):
+                connection, response = self.transport(body=actual)
+                with patch("listening_workflow.http.client.HTTPConnection", return_value=connection) as factory:
+                    received = workflow._fetch(suffix)
+                factory.assert_called_once_with("127.0.0.1", 43210, timeout=30)
+                connection.request.assert_called_once_with("GET", suffix)
+                connection.getresponse.assert_called_once_with()
+                self.assertEqual(received, actual)
+                self.assertEqual(list(received), list(actual))
+                response.close.assert_called_once_with()
+                connection.close.assert_called_once_with()
+
+    def test_fetch_honors_valid_http_default_port_without_changing_the_loopback_host(self):
+        self.config["reviewUrl"] = "http://127.0.0.1/"
+        workflow = self.make_workflow([self.case()])
+        connection, response = self.transport(body={"offeredCaseIds": [], "visibleCaseIds": []})
+        with patch("listening_workflow.http.client.HTTPConnection", return_value=connection) as factory:
+            result = workflow._fetch("/api/preparation-workload")
+        factory.assert_called_once_with("127.0.0.1", 80, timeout=30)
+        self.assertEqual(result, {"offeredCaseIds": [], "visibleCaseIds": []})
+        response.close.assert_called_once_with()
+        connection.close.assert_called_once_with()
+
+    def test_fetch_rejects_any_suffix_outside_its_two_fixed_get_routes_before_connecting(self):
+        workflow = self.make_workflow([self.case()])
+        rejected = ("/api/queue", "/api/export/", "/api/export?token=fixture", "/api/export#fragment",
+                    "//remote.invalid/api/export", "http://127.0.0.1:8792/api/export",
+                    "https://127.0.0.1/api/export", "/api/export\r\nX-Injected: value", None)
+        with patch("listening_workflow.http.client.HTTPConnection") as factory:
+            for suffix in rejected:
+                with self.subTest(suffix=suffix), self.assertRaises(ValueError):
+                    workflow._fetch(suffix)
+        factory.assert_not_called()
+
+    def test_fetch_rejects_non_200_status_and_does_not_follow_redirects(self):
+        workflow = self.make_workflow([self.case()])
+        for status in (301, 302, 303, 307, 308, 403, 404, 500):
+            with self.subTest(status=status):
+                connection, response = self.transport(status=status, body={"error": "not a successful export"})
+                response.getheader.return_value = "https://remote.invalid/not-a-local-review"
+                with patch("listening_workflow.http.client.HTTPConnection", return_value=connection) as factory:
+                    with self.assertRaises(OSError):
+                        workflow._fetch("/api/export")
+                factory.assert_called_once_with("127.0.0.1", 8792, timeout=30)
+                connection.request.assert_called_once_with("GET", "/api/export")
+                response.read.assert_not_called()
+                response.close.assert_called_once_with()
+                connection.close.assert_called_once_with()
+
+    def test_fetch_closes_connection_when_the_get_request_fails(self):
+        workflow = self.make_workflow([self.case()])
+        connection, response = self.transport()
+        connection.request.side_effect = OSError("fixture local transport failure")
+        with patch("listening_workflow.http.client.HTTPConnection", return_value=connection):
+            with self.assertRaisesRegex(OSError, "local transport failure"):
+                workflow._fetch("/api/export")
+        connection.close.assert_called_once_with()
+        connection.getresponse.assert_not_called()
+        response.close.assert_not_called()
+
+    def test_fetch_closes_connection_when_a_response_cannot_be_received(self):
+        workflow = self.make_workflow([self.case()])
+        connection, response = self.transport()
+        connection.getresponse.side_effect = OSError("fixture incomplete response")
+        with patch("listening_workflow.http.client.HTTPConnection", return_value=connection):
+            with self.assertRaisesRegex(OSError, "incomplete response"):
+                workflow._fetch("/api/export")
+        connection.close.assert_called_once_with()
+        response.close.assert_not_called()
+
+    def test_fetch_closes_response_and_connection_when_json_is_invalid(self):
+        workflow = self.make_workflow([self.case()])
+        connection, response = self.transport()
+        response.read.return_value = b"{not valid JSON"
+        with patch("listening_workflow.http.client.HTTPConnection", return_value=connection):
+            with self.assertRaises(json.JSONDecodeError):
+                workflow._fetch("/api/export")
+        response.close.assert_called_once_with()
+        connection.close.assert_called_once_with()
+
+    def test_fetch_configuration_rejects_non_http_remote_or_injected_review_urls(self):
+        rejected = ("https://127.0.0.1:8792/", "ftp://127.0.0.1:8792/", "file:///api/export",
+                    "http://localhost:8792/", "http://127.0.0.2:8792/", "http://127.0.0.1.remote.invalid:8792/",
+                    "http://user@127.0.0.1:8792/", "http://user:password@127.0.0.1:8792/",
+                    "http://127.0.0.1:8792/api/export", "http://127.0.0.1:8792/?route=export",
+                    "http://127.0.0.1:8792/#fragment", "http://127.0.0.1:65536/", "http://127.0.0.1:0/")
+        with patch("listening_workflow.http.client.HTTPConnection") as factory:
+            for url in rejected:
+                with self.subTest(url=url), self.assertRaises(ValueError):
+                    ConcernWorkflow({**self.config, "reviewUrl": url}, fetch=self.fetch, seeder=self.seeder)
+        factory.assert_not_called()
 
 
 if __name__ == "__main__":

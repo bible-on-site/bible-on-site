@@ -14,6 +14,7 @@ from listening_context import (CONTEXT_METHOD, TASK_FIELDS, build_context_study,
 from listening_review import digest_file, digest_json, validate_decision, write_json
 from model_versions import ALIGN_MODEL, ALIGN_REVISION, ASR_MODEL, ASR_REVISION
 from trusted import AUDIO_BASE, TRUSTED_PIPELINE
+import listening_audio as audio_transport
 
 
 class ContextTests(unittest.TestCase):
@@ -32,8 +33,12 @@ class ContextTests(unittest.TestCase):
         self.words = words_for(load_chapters(self.canonical)[1])
         self.audio = self.root / "1_record.mp3"
         self.audio.write_bytes(b"immutable original MP3")
+        public_pipeline = {"version": 3, "asrModel": ASR_MODEL, "asrRevision": ASR_REVISION,
+            "alignModel": ALIGN_MODEL, "alignRevision": ALIGN_REVISION,
+            "minTextScore": .6, "minAcousticScore": .5, "minCoverage": .85}
+        self.assertEqual(public_pipeline, TRUSTED_PIPELINE)
         self.manifest = {"version": 1, "perekId": 1, "alignmentStatus": "needs_review",
-            "pipeline": TRUSTED_PIPELINE, "durationMs": 2000,
+            "pipeline": public_pipeline, "durationMs": 2000,
             "audioUrl": f"{AUDIO_BASE}/1_record.mp3", "audioSha256": digest_file(self.audio),
             "textSha256": text_hash(self.words), "words": [
                 {"pasuk": word.pasuk, "segment": word.segment, "text": word.text,
@@ -193,6 +198,14 @@ class ContextTests(unittest.TestCase):
                 self.response = original
         self.engine.run.assert_not_called()
 
+    def test_decoder_transport_failure_is_an_audio_io_error_with_original_cause(self):
+        failure = audio_transport.subprocess.CalledProcessError(1, ["fixture-decoder"])
+        with self.assertRaises(OSError) as caught:
+            build_context_study(self.task, self.response, engine=self.engine,
+                                loader=Mock(side_effect=failure))
+        self.assertIs(caught.exception.__cause__, failure)
+        self.engine.run.assert_not_called()
+
     def test_source_task_canonical_pcm_and_immutable_files_cannot_drift(self):
         for mutate in (lambda: self.task.update(sourceFrames=31999),
                        lambda: self.task.update(sourcePcmSha256="wrong"),
@@ -266,6 +279,7 @@ class ContextTests(unittest.TestCase):
 
     def test_queue_packet_contains_original_pcm_clip_and_new_immutable_candidate(self):
         study = self.build()
+
         def clip(audio, target, start, end):
             self.assertEqual(audio, self.audio)
             self.assertEqual((start, end), (0, 2000))
