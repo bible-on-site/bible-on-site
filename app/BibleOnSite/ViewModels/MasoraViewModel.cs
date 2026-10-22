@@ -137,7 +137,7 @@ public partial class MasoraViewModel : ObservableObject //NOSONAR
         _articlesLoader = articlesLoader;
 
         // Sync FontFactor from preferences and listen for changes
-        _fontFactor = _preferencesService.FontFactor;
+        _fontFactor = _preferencesService.PasukFontFactor;
         WeakPreferencesSubscription.Subscribe(this, _preferencesService, static model => model.RefreshPreferences());
     }
 
@@ -489,9 +489,9 @@ public partial class MasoraViewModel : ObservableObject //NOSONAR
 
     private void RefreshPreferences()
     {
-        if (Math.Abs(_fontFactor - _preferencesService.FontFactor) > 0.001)
+        if (Math.Abs(_fontFactor - _preferencesService.PasukFontFactor) > 0.001)
         {
-            FontFactor = _preferencesService.FontFactor;
+            FontFactor = _preferencesService.PasukFontFactor;
         }
         OnPropertyChanged(nameof(InlineCommentaryLimitMessage));
         OnPropertyChanged(nameof(InlineCommentaryLimit));

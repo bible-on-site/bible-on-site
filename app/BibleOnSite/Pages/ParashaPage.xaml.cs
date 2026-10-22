@@ -284,23 +284,20 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
     /// </summary>
     private void SetupFontSizeResources()
     {
-        UpdateFontSizeResources(_viewModel.FontFactor);
-        _viewModel.PropertyChanged += (_, e) =>
-        {
-            if (e.PropertyName == nameof(ParashaViewModel.FontFactor))
-            {
-                MainThread.BeginInvokeOnMainThread(() =>
-                    UpdateFontSizeResources(_viewModel.FontFactor));
-            }
-        };
+        var prefs = PreferencesService.Instance;
+        UpdateFontSizeResources(prefs);
+        prefs.PreferencesChanged += (_, _) =>
+            MainThread.BeginInvokeOnMainThread(() => UpdateFontSizeResources(prefs));
     }
 
-    private void UpdateFontSizeResources(double factor)
+    private void UpdateFontSizeResources(PreferencesService prefs)
     {
-        Resources["PasukFontSize"] = factor * 18;
-        Resources["PasukNumFontSize"] = factor * 16;
-        Resources["PerushNameFontSize"] = factor * 14;
-        Resources["PerushContentFontSize"] = factor * 16;
+        var pasukFactor = prefs.PasukFontFactor;
+        var perushFactor = prefs.PerushFontFactor;
+        Resources["PasukFontSize"] = pasukFactor * 18;
+        Resources["PasukNumFontSize"] = pasukFactor * 16;
+        Resources["PerushNameFontSize"] = perushFactor * 14;
+        Resources["PerushContentFontSize"] = perushFactor * 18;
     }
 
     private void ForwardSelectedArticleIdChanged()

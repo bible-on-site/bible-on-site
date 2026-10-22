@@ -20,6 +20,9 @@ public class PreferencesServiceTests : IDisposable
     public void Dispose()
     {
         PreferencesService.ResetForTesting();
+        // Load() publishes ambient masking options; restore disabled so no
+        // state leaks into the ambient-sensitive suites in this collection.
+        BibleOnSite.Helpers.DivineNameMasking.Apply(BibleOnSite.Helpers.DivineNameMaskingOptions.Disabled);
     }
 
     [Fact]
@@ -139,6 +142,98 @@ public class PreferencesServiceTests : IDisposable
 
         restored.FontFactor.Should().Be(2.0);
     }
+
+    #region Font category percentages (#2461)
+
+    [Fact]
+    public void FontCategoryPercents_DefaultTo100_AndFollowMaster()
+    {
+        _service.Load();
+
+        _service.PasukFontPercent.Should().Be(100);
+        _service.PerushFontPercent.Should().Be(100);
+        _service.ArticleFontPercent.Should().Be(100);
+        _service.PasukFontFactor.Should().Be(_service.FontFactor);
+        _service.PerushFontFactor.Should().Be(_service.FontFactor);
+        _service.ArticleFontFactor.Should().Be(_service.FontFactor);
+    }
+
+    [Fact]
+    public void FontCategoryPercents_ApplyMasterTimesPercentOver100()
+    {
+        _service.FontFactor = 1.25;
+        _service.PasukFontPercent = 100;
+        _service.PerushFontPercent = 90;
+        _service.ArticleFontPercent = 120;
+
+        _service.PasukFontFactor.Should().BeApproximately(1.25, 1e-9);
+        _service.PerushFontFactor.Should().BeApproximately(1.125, 1e-9);
+        _service.ArticleFontFactor.Should().BeApproximately(1.5, 1e-9);
+    }
+
+    [Fact]
+    public void FontCategoryPercents_ChangingMasterPreservesRatios()
+    {
+        _service.PerushFontPercent = 90;
+        _service.FontFactor = 1.25;
+        var before = _service.PerushFontFactor;
+
+        _service.FontFactor = 1.5;
+
+        _service.PerushFontFactor.Should().BeApproximately(before * 1.5 / 1.25, 1e-9);
+        _service.PerushFontPercent.Should().Be(90);
+    }
+
+    [Fact]
+    public void FontCategoryPercents_AreIndependent()
+    {
+        _service.PasukFontPercent = 80;
+
+        _service.PerushFontPercent.Should().Be(100);
+        _service.ArticleFontPercent.Should().Be(100);
+    }
+
+    [Fact]
+    public void FontCategoryPercents_ClampInto50To200Range()
+    {
+        _service.PasukFontPercent = 10;
+        _service.PerushFontPercent = 500;
+        _service.ArticleFontPercent = double.NaN;
+
+        _service.PasukFontPercent.Should().Be(50);
+        _service.PerushFontPercent.Should().Be(200);
+        _service.ArticleFontPercent.Should().Be(100);
+    }
+
+    [Fact]
+    public void FontCategoryPercents_PersistAndReload()
+    {
+        _service.PasukFontPercent = 110;
+        _service.PerushFontPercent = 90;
+        _service.ArticleFontPercent = 130;
+
+        var restored = PreferencesService.CreateForTesting(_storage);
+        restored.Load();
+
+        restored.PasukFontPercent.Should().Be(110);
+        restored.PerushFontPercent.Should().Be(90);
+        restored.ArticleFontPercent.Should().Be(130);
+    }
+
+    [Fact]
+    public void FontCategoryPercent_WhenChanged_RaisesPreferencesChangedEvent()
+    {
+        _service.Load();
+        var eventCount = 0;
+        _service.PreferencesChanged += (_, _) => eventCount++;
+
+        _service.PerushFontPercent = 90;
+        _service.PerushFontPercent = 90;
+
+        eventCount.Should().Be(1);
+    }
+
+    #endregion
 
     [Fact]
     public void LastLearntPerek_WhenSet_PersistsToStorage()
