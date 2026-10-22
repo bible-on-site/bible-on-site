@@ -517,6 +517,24 @@ public class HebrewDateHelperTests
         tzId.Should().BeOneOf("Asia/Jerusalem", "Israel Standard Time");
     }
 
+    [Theory]
+    [InlineData(true, "Asia/Jerusalem")]
+    [InlineData(false, "Israel Standard Time")]
+    public void IsraelTimeZoneId_MapsProbeResult(bool hasJerusalemAlias, string expected)
+    {
+        HebrewDateHelper.IsraelTimeZoneId(hasJerusalemAlias).Should().Be(expected);
+    }
+
+    [Fact]
+    public void FormatTodayHebrewDate_ReturnsHebrewDateText()
+    {
+        // Shape: "<day letters> <month name> <year letters>" — same as
+        // FormatHebrewDate for today's tzeit-aware date number.
+        var expected = HebrewDateHelper.FormatHebrewDate(HebrewDateHelper.GetTodayDateNumber());
+
+        HebrewDateHelper.FormatTodayHebrewDate().Should().Be(expected);
+    }
+
     #endregion
 
     #region Polar-location tzeit Tests
@@ -674,4 +692,14 @@ public class HebrewDateHelperTests
     }
 
     #endregion
+
+[Fact]
+    public void GetTzeitTimeOfDay_PolarLatitudeWithoutDusk_ShouldReturnFallback()
+    {
+        // At 80°N near the solstice the sun never reaches the 96° zenith —
+        // cosHourAngle falls outside [-1,1] and the fixed Jerusalem fallback applies.
+        var tzeit = HebrewDateHelper.GetTzeitTimeOfDay(new DateTime(2026, 6, 21), 80.0, 35.0);
+
+        tzeit.Should().Be(new TimeSpan(19, 30, 0));
+    }
 }

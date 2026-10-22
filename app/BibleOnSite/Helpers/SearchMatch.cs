@@ -128,6 +128,25 @@ public static class SearchMatch
         return null;
     }
 
+    /// <summary>Decode only the targeted verse/source while preserving exact note identity.</summary>
+    public static async Task<(PerushNoteDisplay Display, SearchMatchSpan Span)?> ResolvePerushTargetAsync(
+        PerushSearchResult hit, IReadOnlyList<PerushNoteDisplay> displays)
+    {
+        foreach (var display in displays)
+        {
+            if (int.TryParse(hit.PerushId, NumberStyles.Integer, CultureInfo.InvariantCulture, out var id) && display.PerushId != id)
+            {
+                continue;
+            }
+            var contents = display.ContentLoader == null ? display.NoteContents : await display.ContentLoader();
+            if (LocateInJoinedNotes(contents, hit.NoteContent, hit.SearchPhrase) is { } span)
+            {
+                return (display, span);
+            }
+        }
+        return null;
+    }
+
     /// <summary>
     /// Resolves an article hit to the content segment owning its occurrence.
     /// Article pages split HTML around media elements into sibling
@@ -228,9 +247,14 @@ public static class SearchMatch
         while (i < raw.Length)
         {
             // Decompose per code point, not per UTF-16 unit — a lone surrogate
-            // half is not valid input to Normalize().
+            // half is not valid input to Normalize(). Most corpus chars never
+            // decompose, so the Substring+Normalize pair runs only for the
+            // rare code point whose canonical mapping differs from itself.
             var unitLength = char.IsSurrogatePair(raw, i) ? 2 : 1;
-            foreach (var c in raw.Substring(i, unitLength).Normalize(NormalizationForm.FormD))
+            var decomposed = unitLength == 1 && !Decomposes(raw[i])
+                ? raw.AsSpan(i, 1)
+                : raw.Substring(i, unitLength).Normalize(NormalizationForm.FormD).AsSpan();
+            foreach (var c in decomposed)
             {
                 if (IsCombiningMark(c) || IsQuoteLike(c))
                 {
@@ -324,6 +348,25 @@ public static class SearchMatch
             start = -1;
         }
         return null;
+    }
+
+    // Canonical decomposition is a fixed per-code-point mapping: 0 unknown,
+    // 1 identity, 2 decomposes — computed once per distinct char through the
+    // real Normalize, so verdicts stay exact for any future corpus content.
+    private static readonly byte[] _decomposes = new byte[1 << 16];
+
+    private static bool Decomposes(char c)
+    {
+        var flag = _decomposes[c];
+        if (flag != 0)
+        {
+            return flag == 2;
+        }
+        var unit = new string(c, 1);
+        flag = unit.Normalize(NormalizationForm.FormD).Equals(unit, StringComparison.Ordinal)
+            ? (byte)1 : (byte)2;
+        _decomposes[c] = flag;
+        return flag == 2;
     }
 
     private static bool IsCombiningMark(char c) =>

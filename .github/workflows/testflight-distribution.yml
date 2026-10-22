@@ -39,7 +39,7 @@ concurrency:
 jobs:
   distribute:
     name: Distribute the verified build to TestFlight testers
-    runs-on: macos-15
+    runs-on: ubuntu-latest
     env:
       MODULE_VERSION: "0.0.0"
       IOS_ARTIFACT_NAME: ${{ inputs.ios_artifact_name }}
@@ -124,7 +124,8 @@ jobs:
 
       - name: Install Fastlane
         if: ${{ steps.guard.outputs.deploy == 'true' }}
-        run: gem install fastlane -NV
+        # Runner images ship fastlane; install only when it is missing.
+        run: command -v fastlane >/dev/null 2>&1 || gem install fastlane -NV
 
       - name: Distribute the exact iOS build to the beta group
         if: ${{ steps.guard.outputs.deploy == 'true' }}
@@ -134,11 +135,19 @@ jobs:
           APP_VERSION: ${{ steps.build.outputs.app_version }}
           BUILD_NUMBER: ${{ steps.build.outputs.build_number }}
         run: |
+          # Listing copy is versioned in app/store-listing; refs that predate it
+          # fall back to the embedded text so old-release redistributions work.
+          BETA_DESC_FILE=app/store-listing/he/description.txt
+          if [ -f "$BETA_DESC_FILE" ]; then
+            BETA_DESC="$(cat "$BETA_DESC_FILE")"
+          else
+            BETA_DESC="לימוד תנ\"ך יומי בקצב פרק ליום - מפרשים, מאמרי רבנים, הקראה ותנך-פדיה. ללא פרסומות וללא תשלום. לימוד פורה, תנך.co.il"
+          fi
           fastlane pilot distribute --app_platform ios \
             --api_key_path "$API_KEY_PATH" \
             --app_identifier "$APP_IDENTIFIER" --app_version "$APP_VERSION" --build_number "$BUILD_NUMBER" \
             --distribute_external true --groups "$TESTFLIGHT_BETA_GROUP" \
-            --beta_app_description "בכ\"ט כסלו תשע\"ה(21 דצמ' 14) התחילה תכנית לימוד תנ\"ך יומי של משרד החינוך, פרק ליום. כחודש לאחר מכן עלה לרשת אתר לימוד תנך באותו פורמט אשר מתעדכן מיום ליום במאמרים של רבנים. כמו כן יש רעיונות נוספים שעתידים להתחדש, תעקבו אחרינו! לימוד פורה, תנך.co.il" \
+            --beta_app_description "$BETA_DESC" \
             --beta_app_feedback_email "tanah.site@gmail.com" \
             --beta_app_review_info '{"contact_email":"tanah.site@gmail.com","contact_first_name":"Dorad","contact_last_name":"Levinshtein","contact_phone":"+372 5707 8640"}' \
             --changelog "${{ steps.changelog.outputs.CHANGELOG }}"
@@ -156,8 +165,8 @@ jobs:
         run: rm -f "$API_KEY_PATH"
 
       - name: Distribution summary
-        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        if: ${{ always() && steps.guard.outputs.deploy == 'true' }}
         run: |
           echo "## TestFlight Distribution Summary" >> "$GITHUB_STEP_SUMMARY"
           echo "**Version:** $MODULE_VERSION" >> "$GITHUB_STEP_SUMMARY"
-          echo "**Status:** Submitted to the beta group ✅" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Status:** ${{ job.status == 'success' && 'Submitted to the beta group ✅' || 'Failed ❌ — see the failing step log for the actionable cause' }}" >> "$GITHUB_STEP_SUMMARY"

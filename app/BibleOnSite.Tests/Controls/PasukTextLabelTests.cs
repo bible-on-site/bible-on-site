@@ -49,4 +49,32 @@ public class PasukTextLabelTests
 
         reRendered.Should().BeFalse();
     }
+
+    // #2402: the reader's pasuk text is fully justified like the commentary
+    // below it. Platform handlers read this flag to apply their native
+    // justification (JustificationMode / NSParagraphStyle / TextAlignment).
+    [Fact]
+    public void justify_defaults_to_true()
+    {
+        new PasukTextLabel().Justify.Should().BeTrue();
+    }
+
+    [Fact]
+    public void a_justify_change_notifies_so_handlers_reapply_alignment()
+    {
+        var label = new PasukTextLabel();
+        var notified = false;
+        label.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(PasukTextLabel.Justify))
+            {
+                notified = true;
+            }
+        };
+
+        label.Justify = false;
+
+        notified.Should().BeTrue();
+        label.Justify.Should().BeFalse();
+    }
 }

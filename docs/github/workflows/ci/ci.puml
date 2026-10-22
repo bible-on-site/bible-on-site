@@ -7,9 +7,9 @@ skinparam ActivityFontColor #1565C0
 skinparam ArrowColor #1976D2
 skinparam ActivityBarColor #1976D2
 
-title Continuous Integration Workflow (ci.yml)
+title Continuous Integration Workflow (ci.yml)\nTriggers: push(master) / pull_request / merge_group / workflow_dispatch
 
-|#E8F4FD|Setup|
+|#E8F4FD|Setup & Detection|
 start
 
 fork
@@ -17,50 +17,103 @@ fork
 fork again
   :Determine Baseline Availability;
   note right
-    Check & download master
-    coverage artifacts (cross-wf)
-    Re-upload for current run
+    Download trusted master artifacts,
+    re-upload into this run:
+    module coverage, perushim data,
+    app E2E coverage (android/ios)
   end note
 fork again
-  :Build LCOV Docker Image;
+  :Determine Docker Image Availability;
+  note right
+    LCOV artifact + GHCR Sefaria
+    MongoDB (tree-hash tag),
+    can_publish flag for forks
+  end note
 end fork
 
-|#FFF8E1|Change Detection|
 :Determine Changes;
+note right
+  determine-changes.ts —
+  module_changed (release) vs
+  ci_changed (test/tooling only)
+  per module, per event base
+end note
+
+fork
+  :Build LCOV Docker Image;
+  note right: only on artifact miss
+fork again
+  :Build Sefaria MongoDB Image;
+  note right: only when GHCR tag missing
+fork again
+  :Perushim Data;
+  note right: regenerate SQL + SQLite artifacts
+end fork
 
 |#E8F5E9|Module CI (Conditional)|
 note
-  Each runs if:
-  module changed OR ci changed OR
-  baseline unavailable
+  Each runs if: module changed OR
+  ci changed OR baseline missing.
+  Differential E2E selection computes
+  manifests in SHADOW mode — suites
+  still run everything.
 end note
 
 fork
   :Website CI;
-  note right: Lint, Unit, E2E
+  note right: Lint, Unit, E2E (cov)
 fork again
   :Website Performance;
   note right: Lighthouse
 fork again
   :API CI;
-  note right: Lint, E2E
+  note right: Lint, Unit, E2E (llvm-cov)
+fork again
+  :Admin CI;
+  note right: Lint, Unit, E2E (cov)
 fork again
   :App CI;
   note right: Lint, Unit, Integration
 fork again
+  :App Mobile E2E;
+  note right
+    app-mobile-e2e.yml:
+    android leg + shared iOS build
+    + planned iOS shards -> merge_ios
+  end note
+fork again
+  :App iOS native audio CI;
+  note right: PR only — WebKit/Chromium
+fork again
+  :Bulletin CI;
+  note right: Lint, Fmt, Unit
+fork again
   :Data CI;
-  note right: Lint, Unit
+  note right: Lint, Unit, Integration
+fork again
+  :Recitation alignment & RustFS;
+  note right: invariants + storage tests
 end fork
 
 |#F3E5F5|Cross Module CI|
+:Check Prerequisites (required gate);
+note right
+  Detection jobs must succeed;
+  every triggered suite must report
+  success — skipped/failed blocks merge.
+  app_ios_ci skipped OK off-PR.
+end note
 :Restore Coverage Reports;
 note right
-  From module CI (wf artifact)
-  OR from baseline (master artifact)
+  From module CI (run artifact)
+  OR re-uploaded master baseline.
+  App = unit+integration+E2E(android+ios)
+  merged hits-only.
 end note
 :Publish to Codecov & Codacy;
+note right: + website JUnit test_results report
 
-|#FFEBEE|Package (Master Only)|
+|#FFEBEE|Package (Master push only)|
 fork
   :Package Website;
   note right: Docker image
@@ -68,37 +121,47 @@ fork again
   :Package API;
   note right: Docker image
 fork again
+  :Package Admin;
+  note right: Docker image
+fork again
+  :Package Bulletin;
+  note right: Lambda zip
+fork again
   :Package App (app-package.yml);
-  note right: MSIX + AAB parallel
+  note right: MSIX + AAB + IPA + asset packs
 end fork
 
-|#E3F2FD|Release (Master Only)|
+|#E3F2FD|Release (Master push only)|
 fork
-  :Release Website;
+  :Release Website / API / Admin;
   note right
-    Tag, GitHub Release
+    Tag + GitHub Release
     Trigger deploy-aws
   end note
 fork again
-  :Release API;
+  :Release Bulletin;
   note right
-    Tag, GitHub Release
-    Trigger deploy-aws
+    Tag + GitHub Release
+    Trigger deploy-bulletin
   end note
 fork again
   :Release App;
   note right
-    Tag, GitHub Release
+    Tag + GitHub Release
     Trigger deploy-app
+    (msix, aab, ipa, assetpacks, payloads)
   end note
 fork again
   :Release Data;
   note right
+    Pinned perushim SQL archive
     Trigger deploy-data
   end note
 end fork
 
+:Bump Versions;
+note right: master push, [skip ci]
+
 stop
 
 @enduml
-

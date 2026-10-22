@@ -1,0 +1,12 @@
+/* Set the nav background color for the learning calendar page — the same
+   shared top-nav treatment the other website routes opt into (issue #2272). */
+body:has(.calendar-layout) .top-nav {
+  background-color: #1552ac;
+}
+
+/* Full page width like the other layout wrappers */
+.calendar-layout {
+  overflow-x: hidden;
+  width: 100%;
+  max-width: 100%;
+}

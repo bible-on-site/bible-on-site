@@ -12,12 +12,14 @@ import {
 	getStoredParashaViewMode,
 	setStoredParashaViewMode,
 } from "@/lib/perek-view-preference";
+import type { ArticleSummary } from "@/lib/articles";
+import type { RangePerushSummary } from "@/lib/perushim";
 import type { PerekEntityReference } from "@/lib/tanahpedia/service";
-import divisionData from "@/data/parasha/parasha-division.json";
 import { TABLET_MIN_WIDTH, useIsWideEnough } from "@/hooks/useIsWideEnough";
 import ReadModeToggler from "@/app/929/[number]/components/ReadModeToggler";
 import seferStyles from "@/app/929/[number]/components/sefer-composite.module.css";
 import {
+	parashaBookExitPath,
 	parashaBookPageFromPath,
 	parashaBookPageFromQuery,
 	pathnameWithParashaBookQuery,
@@ -51,8 +53,9 @@ function SeferLoadingIndicator() {
 
 /**
  * Flat-view ↔ sefer-book toggler for the פרשה reader. The book shows the
- * parasha's sefer sliced by parashiot, each Torah page followed by its
- * Haftarah page — never a division toggle inside /929.
+ * parasha's sefer sliced by parashiot — each parasha contributes a
+ * Torah spread (text + commentary blank) followed by a Haftarah spread
+ * — never a division toggle inside /929.
  */
 export const ParashaSeferComposite = (props: {
 	units: ParashaBookUnit[];
@@ -60,6 +63,11 @@ export const ParashaSeferComposite = (props: {
 	currentUnitId: number;
 	entityRefsByPerek: Record<number, PerekEntityReference[]>;
 	perekSources: Record<number, string>;
+	/** Current unit's flat-page summaries, reused as its SSG carousel data. */
+	articles: ArticleSummary[];
+	perushim: RangePerushSummary[];
+	haftaraArticles: ArticleSummary[];
+	haftaraPerushim: RangePerushSummary[];
 }) => {
 	const isWideEnough = useIsWideEnough(TABLET_MIN_WIDTH);
 	const router = useRouter();
@@ -124,13 +132,22 @@ export const ParashaSeferComposite = (props: {
 		(wantBook: boolean) => {
 			handledUserToggle.current = true;
 			setStoredParashaViewMode(wantBook ? "book" : "seo");
-			const togglePath =
-				!wantBook && parashaBookPageFromPath(pathname)
-					? `${divisionData.rootPath}/${props.currentUnitId}`
-					: pathname;
+			// While the book is open the flipbook owns the URL — on exit
+			// read the live location so flipping to another unit returns
+			// to that unit's flat page, and an open content selection
+			// keeps its flat-page meaning via the shared params.
+			const togglePath = wantBook
+				? pathname
+				: parashaBookExitPath(
+						window.location.pathname,
+						props.currentUnitId,
+					);
+			const search = wantBook
+				? searchParams.toString()
+				: window.location.search;
 			const next = pathnameWithParashaBookQuery(
 				togglePath,
-				searchParams.toString(),
+				search,
 				wantBook,
 			);
 			router.replace(next, { scroll: false });
@@ -163,6 +180,31 @@ export const ParashaSeferComposite = (props: {
 		parashaBookPageFromPath(pathname) ??
 		parashaBookPageFromQuery(searchParams.get("bookPage")) ??
 		(searchParams.get("toc") != null ? "toc" : null);
+	// A content selection on the flat page keeps its meaning inside the
+	// book: `perush`/`article` open on the Torah blank, the haftara
+	// variants on the Haftarah blank (the same params the flat unit
+	// pages use).
+	const perush = searchParams.get("perush");
+	const article = searchParams.get("article");
+	const haftaraPerush = searchParams.get("haftaraPerush");
+	const haftaraArticle = searchParams.get("haftaraArticle");
+	const initialContent = haftaraPerush
+		? { scope: "haftara" as const, kind: "perush" as const, slug: haftaraPerush }
+		: haftaraArticle
+			? {
+					scope: "haftara" as const,
+					kind: "article" as const,
+					slug: haftaraArticle,
+				}
+			: perush
+				? { scope: "torah" as const, kind: "perush" as const, slug: perush }
+				: article
+					? {
+							scope: "torah" as const,
+							kind: "article" as const,
+							slug: article,
+						}
+					: null;
 
 	return (
 		<>
@@ -181,8 +223,14 @@ export const ParashaSeferComposite = (props: {
 						currentUnitId={props.currentUnitId}
 						entityRefsByPerek={props.entityRefsByPerek}
 						perekSources={props.perekSources}
+						articles={props.articles}
+						perushim={props.perushim}
+						haftaraArticles={props.haftaraArticles}
+						haftaraPerushim={props.haftaraPerushim}
 						initialBookPage={initialBookPage}
 						haftara={searchParams.get("haftara") != null}
+						initialContent={initialContent}
+						isVisible={currentlyToggled}
 					/>
 				) : currentlyToggled ? (
 					<SeferLoadingIndicator />

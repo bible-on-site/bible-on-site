@@ -22,9 +22,17 @@ const changed = (files: string[], ...keys: ModuleKey[]) =>
 	keys.map((key) => detectChanges(files)[key]);
 
 describe("detectChanges", () => {
+	test("playback derivatives release both website and native book packages", () => {
+		assert.deepEqual(changed(["web/bible-on-site/src/data/recitation/opus-playback.json"], "website", "app"), [
+			{ module_changed: true, ci_changed: false }, { module_changed: true, ci_changed: false },
+		]);
+	});
 	test("benchmark comparison changes check the website without releasing a module", () => {
 		const changes = detectChanges(["devops/github/ci/bencher-comparison.mjs"]);
-		assert.deepEqual(changes.website, { module_changed: false, ci_changed: true });
+		assert.deepEqual(changes.website, {
+			module_changed: false,
+			ci_changed: true,
+		});
 		for (const [key, flags] of Object.entries(changes)) {
 			if (key !== "website")
 				assert.deepEqual(flags, { module_changed: false, ci_changed: false });
@@ -37,15 +45,100 @@ describe("detectChanges", () => {
 		assert.equal(changes.website.ci_changed, false);
 	});
 
-	test("e2e-impact selector changes require app checks without a release", () => {
+	test("device runner workflow changes require app checks without a release", () => {
+		// #2373: the runner owns emulator/install logic and the Release startup
+		// smoke leg — a runner-only edit must not skip the checks it hosts.
+		const changes = detectChanges([".github/workflows/app-mobile-e2e-runner.yml"]);
+		assert.deepEqual(changes.app, { module_changed: false, ci_changed: true });
+		assert.equal(changes.website.ci_changed, false);
+	});
+
+	test("deployment workflow changes require website checks without a release", () => {
+		// cd-aws.yml owns the verifier's NODE_PATH contract (#2372).
+		const changes = detectChanges([".github/workflows/cd-aws.yml"]);
+		assert.deepEqual(changes.website, {
+			module_changed: false,
+			ci_changed: true,
+		});
+	});
+
+	test("nginx redirects select the deploy verifier guard without a website release", () => {
+		const changes = detectChanges([
+			"docs/aws/cloudformation/ec2-nginx/router/router.conf",
+		]);
+		assert.deepEqual(changes.website, {
+			module_changed: false,
+			ci_changed: true,
+		});
+	});
+
+	test("devops manifest changes select the deploy verifier guard", () => {
+		for (const file of ["devops/package.json", "devops/package-lock.json"]) {
+			assert.equal(
+				detectChanges([file]).admin.ci_changed,
+				true,
+				file,
+			);
+		}
+	});
+
+	test("packaging workflow changes require app signing checks without a release", () => {
+		const changes = detectChanges([".github/workflows/app-package.yml"]);
+		assert.deepEqual(changes.app, { module_changed: false, ci_changed: true });
+		for (const [key, flags] of Object.entries(changes)) {
+			if (key !== "app")
+				assert.deepEqual(flags, { module_changed: false, ci_changed: false });
+		}
+	});
+
+	test("downloader sources and signing declarations require native packaging", () => {
 		for (const file of [
-			"devops/github/ci/e2e-impact/select.ts",
-			"devops/github/ci/e2e-impact/e2e-impact.test.ts",
+			"app/extensions/AssetPackDownloader/AssetPackDownloader/DownloaderExtension.swift",
+			"app/extensions/AssetPackDownloader/AssetPackDownloader/Info.plist",
+			"app/extensions/AssetPackDownloader/AssetPackDownloader/AssetPackDownloader.entitlements",
+			"app/BibleOnSite/Platforms/iOS/Entitlements.App.plist",
+			"app/devops/verify_ios_signing.py",
+		]) {
+			assert.deepEqual(
+				detectChanges([file]).app,
+				{ module_changed: true, ci_changed: false },
+				file,
+			);
+		}
+	});
+
+	test("e2e-impact selector changes check every served suite without a release", () => {
+		// The devops selector drives Appium too; web/shared/tests-util feeds
+		// only the Playwright suites, so it does not mark the app.
+		for (const [file, marksApp] of [
+			["devops/github/ci/e2e-impact/select.ts", true],
+			["devops/github/ci/e2e-impact/e2e-impact.test.ts", true],
+			["web/shared/tests-util/e2e-impact.ts", false],
+		] as const) {
+			const changes = detectChanges([file]);
+			for (const key of ["website", "api", "admin"] as const) {
+				assert.deepEqual(
+					changes[key],
+					{ module_changed: false, ci_changed: true },
+					`${file} -> ${key}`,
+				);
+			}
+			assert.deepEqual(
+				changes.app,
+				{ module_changed: false, ci_changed: marksApp },
+				`${file} -> app`,
+			);
+		}
+		for (const file of [
 			"devops/e2e-coverage-trees/extract.ts",
 			"devops/e2e-coverage-trees/to-selector-tree.ts",
 		]) {
 			const changes = detectChanges([file]);
-			assert.deepEqual(changes.app, { module_changed: false, ci_changed: true }, file);
+			assert.deepEqual(
+				changes.app,
+				{ module_changed: false, ci_changed: true },
+				file,
+			);
 			assert.equal(changes.website.ci_changed, false, file);
 		}
 	});
@@ -55,22 +148,74 @@ describe("detectChanges", () => {
 		"web/bible-on-site/package-lock.json",
 		"web/bible-on-site/src/lib/recitation-audio.ts",
 	]) {
-		test(`${path} checks the decoder without releasing the app`, () => {
+		test(`${path} no longer selects native checks`, () => {
+			// The decoder manifest is app-owned (#2391): website manifests and the
+			// browser player must not fan out to the Android/iOS matrix.
 			assert.deepEqual(changed([path], "app"), [
-				{ module_changed: false, ci_changed: true },
+				{ module_changed: false, ci_changed: false },
 			]);
 		});
 	}
 
-	test("approved timings release the website without releasing the app", () => {
+	test("a website-only version bump runs no app check", () => {
+		const changes = detectChanges([
+			"web/bible-on-site/package.json",
+			"web/bible-on-site/package-lock.json",
+		]);
+		assert.deepEqual(changes.app, {
+			module_changed: false,
+			ci_changed: false,
+		});
+	});
+
+	for (const path of [
+		"app/devops/recitation-decoder/package.json",
+		"app/devops/recitation-decoder/package-lock.json",
+		"app/devops/recitation-decoder/build-native-recitation-decoder.mjs",
+		"app/devops/recitation-decoder/disabled-opus-ml.mjs",
+		"app/devops/recitation-decoder/check-decoder-pins.mjs",
+	]) {
+		test(`${path} releases the app with its regenerated decoder`, () => {
+			assert.deepEqual(changed([path], "app"), [
+				{ module_changed: true, ci_changed: false },
+			]);
+		});
+	}
+
+	test("approved timings release both website and native app without a version-file change", () => {
 		assert.deepEqual(
 			changed(["data/recitation/recitation.sqlite"], "website", "app", "data"),
 			[
 				{ module_changed: true, ci_changed: false },
-				{ module_changed: false, ci_changed: false },
+				{ module_changed: true, ci_changed: false },
 				{ module_changed: true, ci_changed: false },
 			],
 		);
+	});
+
+	test("held diagnostics and sibling names cannot release the native app", () => {
+		for (const file of [
+			"data/recitation/recitation.sqlite.bak",
+			"data/recitation/.outputs/held.json",
+		]) {
+			assert.equal(detectChanges([file]).app.module_changed, false, file);
+		}
+	});
+
+	test("native release notes include every external packaged input", () => {
+		const ci = readFileSync(
+			new URL("../../../.github/workflows/ci.yml", import.meta.url),
+			"utf8",
+		).replace(/\r/g, "");
+		const release = ci
+			.split("  release_app:\n")[1]
+			.split("\n  release_bulletin:")[0];
+		const match = release.match(/^      extra_module_paths: '([^']+)'$/m);
+		assert.ok(match, "Native packaged inputs must be passed to release notes");
+		assert.deepEqual(JSON.parse(match[1]), [
+			"data/recitation/recitation.sqlite",
+			"web/bible-on-site/src/data/recitation/opus-playback.json",
+		]);
 	});
 
 	test("a packaged decoder change releases the app", () => {
@@ -220,6 +365,31 @@ describe("detectChanges", () => {
 		}
 	});
 
+	test("release Docker build inputs validate the packaged Rust images without releasing", () => {
+		for (const [file, keys] of [
+			["web/.dockerignore", ["api", "bulletin", "admin"]],
+			[".github/workflows/shared-dockerize.yml", ["api"]],
+			["web/api/entities/src/lib.rs", ["bulletin"]],
+		] as const) {
+			const changes = detectChanges([file]);
+			for (const key of keys) {
+				assert.deepEqual(
+					changes[key],
+					{ module_changed: false, ci_changed: true },
+					`${file} -> ${key}`,
+				);
+			}
+		}
+		for (const key of ["api", "bulletin", "admin"] as const) {
+			const dockerfile = `web/${key}/Dockerfile`;
+			assert.equal(
+				detectChanges([dockerfile])[key].module_changed,
+				true,
+				dockerfile,
+			);
+		}
+	});
+
 	test("directory CI paths match nested files only", () => {
 		assert.equal(
 			detectChanges(["devops/rustfs/policy.json"]).admin.ci_changed,
@@ -239,6 +409,14 @@ describe("detectChanges", () => {
 		const changes = detectChanges(["web/api-docs/readme.md", "appendix.md"]);
 		assert.equal(changes.api.module_changed, false);
 		assert.equal(changes.app.module_changed, false);
+	});
+
+	test("bundled scripture changes regenerate the delivered search index", () => {
+		const changes = detectChanges([
+			"app/BibleOnSite/Resources/Raw/sefaria-dump-5784-sivan-4.tanah_view.sqlite",
+		]);
+		assert.equal(changes.perushim_pipeline.module_changed, true);
+		assert.equal(changes.app.module_changed, true);
 	});
 
 	test("the perushim pipeline is also part of the data module", () => {
@@ -318,6 +496,7 @@ describe("main", () => {
 	function run(
 		eventName: string,
 		event: (shas: { root: string; replaced: string; base: string }) => object,
+		changedPath = "web/bible-on-site/src/page.tsx",
 	) {
 		const directory = mkdtempSync(join(tmpdir(), "determine-changes-"));
 		try {
@@ -350,9 +529,10 @@ describe("main", () => {
 					"Tested PR merge",
 				);
 			} else {
-				commit(work, "web/bible-on-site/src/page.tsx");
+				commit(work, changedPath);
 			}
-			git(directory, "clone", "--quiet", "--bare", work, origin);
+			// Use the Git transport so background maintenance cannot race a loose-object copy.
+			git(directory, "clone", "--quiet", "--no-local", "--bare", work, origin);
 			// A force push leaves the replaced commit unreachable from any ref.
 			git(origin, "branch", "--quiet", "-D", "replaced");
 			// GitHub serves fetches of commits by SHA.
@@ -412,6 +592,22 @@ describe("main", () => {
 		assert.match(output, /^website_ci_changed=false$/m);
 		assert.match(output, /^admin_module_changed=false$/m);
 		assert.match(output, /^bulletin_module_changed=false$/m);
+	});
+
+	test("a timing-only master push schedules native packaging with unchanged app version", () => {
+		const { changes, output } = run(
+			"push",
+			({ base }) => ({ before: base }),
+			"data/recitation/recitation.sqlite",
+		);
+		assert.deepEqual(
+			Object.entries(changes)
+				.filter(([, flags]) => flags.module_changed)
+				.map(([key]) => key),
+			["website", "app", "data"],
+		);
+		assert.match(output, /^app_module_changed=true$/m);
+		assert.match(output, /^website_module_changed=true$/m);
 	});
 
 	test("push compares with the commit before the push", () => {

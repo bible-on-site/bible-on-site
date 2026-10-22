@@ -44,16 +44,30 @@ public sealed class ConfigurationTests
             Assert.Equal("/test/WebDriverAgentRunner-Runner.app", options["appium:prebuiltWDAPath"]);
             Assert.Equal(1, options["appium:wdaStartupRetries"]);
             Assert.Equal(240000, options["appium:wdaConnectionTimeout"]);
+            using var deadlines = System.Text.Json.JsonDocument.Parse((string)options["appium:commandTimeouts"]);
+            Assert.Equal(120000, deadlines.RootElement.GetProperty("default").GetInt32());
+            Assert.Equal(240000, deadlines.RootElement.GetProperty("createSession").GetInt32());
+            Assert.Equal(120000, deadlines.RootElement.GetProperty("execute").GetInt32());
+            Assert.Equal(15000, deadlines.RootElement.GetProperty("deleteSession").GetInt32());
             // Idle checks are disabled (0): a churning reader never reaches
             // XCTest's idle threshold, so every proxied WDA command stalled.
             Assert.Equal(0, options["appium:waitForIdleTimeout"]);
+            Assert.Equal(0.5, options["appium:animationCoolOffTimeout"]);
             Assert.Equal(true, options["appium:skipLogCapture"]);
+            Assert.Equal(false, options["appium:shouldTerminateApp"]);
+            var settings = Assert.IsType<Dictionary<string, object>>(options["appium:settings"]);
+            Assert.Equal("visible,accessible", settings["pageSourceExcludedAttributes"]);
+            Assert.Equal(false, settings["shouldUseCompactResponses"]);
+            Assert.Equal("rect,displayed,text,enabled,hittable", settings["elementResponseAttributes"]);
         }
         else
         {
             Assert.False(options.ContainsKey("appium:prebuiltWDAPath"));
             Assert.False(options.ContainsKey("appium:waitForIdleTimeout"));
             Assert.False(options.ContainsKey("appium:skipLogCapture"));
+            Assert.False(options.ContainsKey("appium:shouldTerminateApp"));
+            Assert.False(options.ContainsKey("appium:commandTimeouts"));
+            Assert.False(options.ContainsKey("appium:settings"));
         }
         Assert.False(options.ContainsKey($"appium:{otherPlatformKey}"));
     }

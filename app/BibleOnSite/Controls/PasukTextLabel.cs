@@ -14,6 +14,22 @@ namespace BibleOnSite.Controls;
 /// </summary>
 public class PasukTextLabel : Label
 {
+    /// <summary>
+    /// Fully justify the pasuk text to both edges like the inline commentary
+    /// below it (#2402). Platform handlers apply their native justification —
+    /// JustificationMode on Android, paragraph-style alignment on iOS/Mac and
+    /// TextAlignment.Justify on Windows — keeping the last/short line at its
+    /// natural edge.
+    /// </summary>
+    public static readonly BindableProperty JustifyProperty = BindableProperty.Create(
+        nameof(Justify), typeof(bool), typeof(PasukTextLabel), true);
+
+    public bool Justify
+    {
+        get => (bool)GetValue(JustifyProperty);
+        set => SetValue(JustifyProperty, value);
+    }
+
     protected override void OnPropertyChanged([CallerMemberName] string? propertyName = null)
     {
         base.OnPropertyChanged(propertyName);

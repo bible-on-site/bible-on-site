@@ -17,6 +17,9 @@ public partial class PerushNoteDisplay : ObservableObject
     /// </summary>
     public int PerushId { get; set; }
 
+    /// <summary>Loads only this source and verse when its native cell is realized.</summary>
+    public Func<Task<List<string>>>? ContentLoader { get; set; }
+
     /// <summary>List of note contents for this perush on this pasuk.</summary>
     public List<string> NoteContents { get; set; } = new();
 

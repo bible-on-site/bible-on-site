@@ -43,6 +43,10 @@ describe("ParashaSeferComposite", () => {
 		currentUnitId: 5,
 		entityRefsByPerek: {},
 		perekSources: {},
+		articles: [],
+		perushim: [],
+		haftaraArticles: [],
+		haftaraPerushim: [],
 	};
 
 	beforeEach(() => {

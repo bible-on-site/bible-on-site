@@ -193,6 +193,16 @@ public class StarterService : BaseGraphQLService
     }
 
     /// <summary>
+    /// Number of articles attached to a perek, read from the startup counters
+    /// (index = perekId - 1). Returns 0 when starter data is not loaded yet or
+    /// the id is out of range — callers treat that as "no badge".
+    /// </summary>
+    public int GetPerekArticlesCount(int perekId) =>
+        IsLoaded && perekId >= 1 && perekId <= PerekArticlesCounters.Count
+            ? PerekArticlesCounters[perekId - 1]
+            : 0;
+
+    /// <summary>
     /// Primary startup method.  Tries the API once, falls back to local cache,
     /// and if neither is available proceeds with empty data so the app can start.
     /// Never blocks indefinitely.
@@ -303,8 +313,8 @@ public class StarterService : BaseGraphQLService
     #region DTOs for GraphQL response
 
     // Records used for both GraphQL deserialization and local JSON cache.
-    // The System.Text.Json source generator (StarterJsonContext) handles
-    // the local cache; Newtonsoft handles the GraphQL client.
+    // Source-generated System.Text.Json metadata handles both: StarterJsonContext
+    // for the local cache and GraphQLJsonContext for the GraphQL client.
     internal record StarterResponse(StarterData Starter);
 
     internal record StarterData(

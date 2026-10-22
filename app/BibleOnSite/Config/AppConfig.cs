@@ -63,19 +63,52 @@ public sealed class AppConfig
             return _apiUrlOverride;
         }
 
-        try
-        {
-            using var stream = await _fileSystem.OpenAppPackageFileAsync("api-config.txt");
-            using var reader = new StreamReader(stream);
-            var content = await reader.ReadToEndAsync();
-            _apiUrlOverride = string.IsNullOrWhiteSpace(content) ? null : content.Trim();
-        }
-        catch
-        {
-            _apiUrlOverride = null;
-        }
+        _apiUrlOverride = await ReadPackagedValueAsync("api-config.txt");
         _apiUrlOverrideLoaded = true;
         return _apiUrlOverride;
+    }
+
+    // Cached Mapbox public token from build-time config
+    private string? _mapboxToken;
+    private bool _mapboxTokenLoaded;
+
+    /// <summary>
+    /// The Mapbox public token for the places map - packaged by CI as
+    /// mapbox-token.txt (the public key the website embeds in client bundles).
+    /// Null without a packaged/env token; callers then keep the no-key
+    /// OpenStreetMap fallback, same as the website.
+    /// </summary>
+    public async Task<string?> GetMapboxAccessTokenAsync()
+    {
+        var envToken = Environment.GetEnvironmentVariable("MAPBOX_ACCESS_TOKEN");
+        if (!string.IsNullOrEmpty(envToken))
+        {
+            return envToken;
+        }
+
+        if (!_mapboxTokenLoaded)
+        {
+            _mapboxToken = await ReadPackagedValueAsync("mapbox-token.txt");
+            _mapboxTokenLoaded = true;
+        }
+        return _mapboxToken;
+    }
+
+    /// <summary>Reads a trimmed packaged raw-asset value; null when missing/blank.</summary>
+    private async Task<string?> ReadPackagedValueAsync(string assetName)
+    {
+        try
+        {
+            using var stream = await _fileSystem.OpenAppPackageFileAsync(assetName);
+            using var reader = new StreamReader(stream);
+            var content = await reader.ReadToEndAsync();
+            return string.IsNullOrWhiteSpace(content) ? null : content.Trim();
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Packaged config '{assetName}' unreadable: {ex.Message}");
+            return null;
+        }
     }
 
     /// <summary>
@@ -125,6 +158,7 @@ public sealed class AppConfig
     public async Task InitializeAsync()
     {
         await GetApiUrlOverrideAsync();
+        await GetMapboxAccessTokenAsync();
     }
 
     /// <summary>
@@ -163,4 +197,10 @@ public sealed class AppConfig
     /// Gets the Terms of Service URL.
     /// </summary>
     public string TosUrl => $"{GetWebsiteUrl()}/tos";
+
+    /// <summary>
+    /// Gets the accessibility statement URL. The statement itself is
+    /// maintained on the website so app and site never drift apart.
+    /// </summary>
+    public string AccessibilityUrl => $"{GetWebsiteUrl()}/accessibility";
 }

@@ -19,8 +19,10 @@ import { cycles } from "./db/cycles";
  * days between one cycle's end and the next cycle's start.
  *
  * Review days are dates inside a cycle with no scheduled perek (weekend or
- * shifted study days in the schedule data). They review the most recently
- * scheduled perek of the same cycle — never a newly assigned chapter.
+ * shifted study days in the schedule data). They review all perakim studied
+ * in the same calendar week (Sunday through the review day) — never a newly
+ * assigned chapter. When a gap leaves a week without any study day, the
+ * review falls back to the most recently scheduled perek.
  *
  * Cycles beyond the confirmed data follow the established scheduling rules:
  * every cycle starts on Sunday exactly 1302 days after the previous one, with
@@ -55,8 +57,10 @@ export interface CalendarDay {
 	/** Day of week: 0=Sunday … 6=Saturday. */
 	dayOfWeek: number;
 	status: CalendarDayStatus;
-	/** Scheduled (or reviewed) perek, when status is study/review. */
+	/** Scheduled perek on study days; last perek of the review set on review days. */
 	perekId?: number;
+	/** Every perek the review covers — the week's studied perakim (#2365). */
+	reviewPerekIds?: number[];
 	/** Owning cycle number, when the date falls inside a cycle. */
 	cycle?: number;
 	/** True when the owning cycle is projected beyond confirmed data. */
@@ -139,7 +143,12 @@ export function getCycle(cycleNumber: number): StudyCycle {
 		start = start.add(CYCLE_SPAN_DAYS);
 		number += 1;
 	}
-	return { number: cycleNumber, start, end: start.add(CYCLE_DAYS - 1), projected: true };
+	return {
+		number: cycleNumber,
+		start,
+		end: start.add(CYCLE_DAYS - 1),
+		projected: true,
+	};
 }
 
 /**
@@ -177,6 +186,26 @@ export function getCycleForDate(date: HebrewDate): StudyCycle | null {
 			};
 		}
 	}
+}
+
+/**
+ * Completed Hebrew years since the program's first study day — the day perek 1
+ * of cycle 1 was scheduled (the canonical first entry in cycles.json, not a
+ * launch date or the current cycle's start). A year counts only once the
+ * Hebrew-calendar anniversary (same month code and day, evaluated inside that
+ * Hebrew year) has arrived, so the value turns over on the anniversary and is
+ * never rounded up (#2397).
+ */
+export function getProgrammeYearsElapsed(today: HebrewDate): number {
+	const start = getCycle(1).start;
+	const years = today.year - start.year;
+	if (years <= 0) return 0;
+	const anniversary = HebrewDate.fromHebrewComponents(
+		today.year,
+		start.monthCode,
+		start.day,
+	);
+	return today.deltaDays(anniversary) < 0 ? years - 1 : years;
 }
 
 /**
@@ -227,22 +256,63 @@ function resolveInCycle(
 	cycle: ConfirmedCycle,
 	cycleNumber: number,
 ): CalendarDay {
-	for (const entry of cycle.entries) {
-		if (entry.dateNumber === base.dateNumber) {
-			return { ...base, status: "study", perekId: entry.perekId, cycle: cycleNumber };
+	// Index of the first entry dated on/after the bound. Entries are sorted
+	// chronologically; the numeric date format is NOT chronological in leap
+	// years (Adar II's uniform month 14 sorts above Nisan 7), so bounds must be
+	// computed on the HebrewDate values, not the numbers.
+	const lowerBound = (bound: HebrewDate): number => {
+		let lo = 0;
+		let hi = cycle.entries.length;
+		while (lo < hi) {
+			const mid = (lo + hi) >> 1;
+			if (cycle.entries[mid].date.deltaDays(bound) < 0) {
+				lo = mid + 1;
+			} else {
+				hi = mid;
+			}
 		}
+		return lo;
+	};
+
+	const dayIndex = lowerBound(date);
+	const dayEntry = cycle.entries[dayIndex];
+	if (dayEntry?.dateNumber === base.dateNumber) {
+		return {
+			...base,
+			status: "study",
+			perekId: dayEntry.perekId,
+			cycle: cycleNumber,
+		};
 	}
-	// In-cycle day without its own chapter: review the previous scheduled one.
-	for (let i = cycle.entries.length - 1; i >= 0; i -= 1) {
-		const entry = cycle.entries[i];
-		if (date.deltaDays(entry.date) > 0) {
-			return {
-				...base,
-				status: "review",
-				perekId: entry.perekId,
-				cycle: cycleNumber,
-			};
-		}
+	// In-cycle day without its own chapter: review the whole studied week
+	// (Sunday of this week through yesterday), not just the last perek (#2365).
+	const weekStart = date.add(-base.dayOfWeek);
+	const weekStartIndex = lowerBound(weekStart);
+	const weekPerekIds = cycle.entries
+		.slice(weekStartIndex, dayIndex)
+		.map((entry) => entry.perekId);
+	/* istanbul ignore else: confirmed cycles never leave a study-less week */
+	if (weekPerekIds.length > 0) {
+		return {
+			...base,
+			status: "review",
+			perekId: weekPerekIds[weekPerekIds.length - 1],
+			reviewPerekIds: weekPerekIds,
+			cycle: cycleNumber,
+		};
+	}
+	// A gap that left no study day this week: fall back to the last perek.
+	/* istanbul ignore next: defensive fallback, unreachable in confirmed data */
+	const previousEntry = cycle.entries[dayIndex - 1];
+	/* istanbul ignore next: defensive fallback, unreachable in confirmed data */
+	if (previousEntry !== undefined) {
+		return {
+			...base,
+			status: "review",
+			perekId: previousEntry.perekId,
+			reviewPerekIds: [previousEntry.perekId],
+			cycle: cycleNumber,
+		};
 	}
 	/* istanbul ignore next: every cycle starts with perek 1 on day 0 */
 	return { ...base, status: "none" };
@@ -263,10 +333,22 @@ function resolveProjectedDay(
 	if (perekIndex >= PERAKIM_PER_CYCLE) {
 		return { ...base, status: "none", cycle: cycleNumber, projected: true };
 	}
+	const reviewPerekIds = isStudyDay
+		? undefined
+		: Array.from(
+				{
+					length: Math.min(
+						STUDY_DAYS_PER_WEEK,
+						PERAKIM_PER_CYCLE - week * STUDY_DAYS_PER_WEEK,
+					),
+				},
+				(_, i) => week * STUDY_DAYS_PER_WEEK + i + 1,
+			);
 	return {
 		...base,
 		status: isStudyDay ? "study" : "review",
 		perekId: perekIndex + 1,
+		reviewPerekIds,
 		cycle: cycleNumber,
 		projected: true,
 	};
@@ -326,8 +408,8 @@ export function prevMonth({ year, month }: MonthRef): MonthRef {
 	}
 	return index > 0
 		? { year, month: order[index - 1] }
-		// Every Hebrew year ends with Elul (uniform month 12).
-		: { year: year - 1, month: 12 };
+		: // Every Hebrew year ends with Elul (uniform month 12).
+			{ year: year - 1, month: 12 };
 }
 
 /**

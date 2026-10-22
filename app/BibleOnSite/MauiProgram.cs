@@ -5,8 +5,9 @@ using BibleOnSite.Services;
 using BibleOnSite.ViewModels;
 using BibleOnSite.Controls;
 using BibleOnSite.Handlers;
-#if IOS
+#if IOS && !DISABLE_ANALYTICS
 using Plugin.Firebase.Core.Platforms.iOS;
+using Plugin.Firebase.Analytics;
 #endif
 
 // Force rebuild for font resource loading
@@ -39,9 +40,15 @@ public static class MauiProgram
             .ConfigureMauiHandlers(handlers =>
             {
                 handlers.AddHandler<HtmlView, HtmlViewHandler>();
+                handlers.AddHandler<PasukTextLabel, PasukTextLabelHandler>();
 #if IOS || MACCATALYST
-				// Use optimized CollectionView handler for iOS/Mac (default in .NET 10)
-				handlers.AddHandler<CollectionView, Microsoft.Maui.Controls.Handlers.Items2.CollectionViewHandler2>();
+                handlers.AddHandler<ReaderCellBorder, ReaderCellBorderHandler>();
+				// Keep the Items2 handlers (.NET 10 default) but pin every native
+				// cell's managed peer: Items2 cells are only weakly anchored, and a
+				// covered page's retained cells crash the app with MissingCtor when
+				// a later layout pass marshals them back (#2433).
+				handlers.AddHandler<CollectionView, RetainedCellCollectionViewHandler>();
+				handlers.AddHandler<CarouselView, RetainedCellCarouselViewHandler>();
 #endif
             });
 
@@ -71,7 +78,7 @@ public static class MauiProgram
 		Microsoft.Maui.Controls.Handlers.Items2.CarouselViewHandler2.Mapper.AppendToMapping("SwipeSensitivity", (handler, _) =>
 		{
 			var collectionView = FindDescendant<UIKit.UICollectionView>(handler.PlatformView);
-			Console.WriteLine($"[EdgePan] carousel mapper platformView={handler.PlatformView?.GetType().Name ?? "null"} collectionView={collectionView?.GetType().Name ?? "null"}");
+			Helpers.DebugLog.Write($"[EdgePan] carousel mapper platformView={handler.PlatformView?.GetType().Name ?? "null"} collectionView={collectionView?.GetType().Name ?? "null"}");
 			if (collectionView is null)
 			{
 				return;
@@ -83,7 +90,7 @@ public static class MauiProgram
 			// Give the drawer gesture priority so a swipe starting at the
 			// right screen edge opens the drawer instead of switching perek.
 			collectionView.PanGestureRecognizer.RequireGestureRecognizerToFail(AppShell.SharedFlyoutEdgePan);
-			Console.WriteLine("[EdgePan] carousel pan wired");
+			Helpers.DebugLog.Write("[EdgePan] carousel pan wired");
 		});
 #endif
 
@@ -92,17 +99,40 @@ public static class MauiProgram
         // Without this, CrossFirebaseAnalytics.Current silently fails on iOS.
         // Note: Plugin.Firebase 4.0.0 does NOT support MacCatalyst — only iOS and Android.
         //
+        // #2120: DISABLE_ANALYTICS builds (Debug/e2e) skip Firebase entirely —
+        // with no init call the SDK never configures, so no automatic or manual
+        // event can be emitted, queued or flushed on iOS.
         // If initialization raises a managed exception, leave analytics disabled.
         // Native crashes require a device crash report and cannot be caught here.
         builder.ConfigureLifecycleEvents(events =>
         {
-#if IOS
+#if IOS || MACCATALYST
+            // Managed asset-pack downloads resume in the background; the download
+            // delegate must be installed before the system replays their callbacks.
+            events.AddiOS(iOS => iOS.WillFinishLaunching((_, __) =>
+            {
+                PadDeliveryService.ConfigureBackgroundAssets();
+                return true;
+            }));
+#endif
+#if IOS && !DISABLE_ANALYTICS
 			events.AddiOS(iOS => iOS.WillFinishLaunching((_, __) =>
 			{
 				try
 				{
 					CrossFirebase.Initialize();
 					IsFirebaseInitialized = true;
+					// Info.plist keeps collection off so nothing can emit before
+					// this point; collection then enables only for a stored
+					// user opt-in (#2400), never in e2e-marked processes so
+					// automatic and custom suite events never reach the
+					// production property, and the explicit value also
+					// overrides a flag a previous non-suite install persisted
+					// on this device.
+					var analyticsCollectionEnabled =
+						AnalyticsConsent.IsCollectionEnabled(new MauiPreferencesStorage());
+					CrossFirebaseAnalytics.Current.IsAnalyticsCollectionEnabled = analyticsCollectionEnabled;
+					Console.WriteLine($"[Analytics] collection enabled={analyticsCollectionEnabled}");
 				}
 				catch (Exception ex)
 				{

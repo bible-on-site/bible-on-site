@@ -275,6 +275,25 @@ This describes existing content; it does not promise rich results or rankings.
 Google's [AI features guidance](https://developers.google.com/search/docs/appearance/ai-features)
 states that no special AI schema is required.
 
+## Incremental timing delivery
+
+Keep eight-hour accumulation pushes in one rolling draft with automatic merge
+turned off. Validate locally and include `[skip ci]` in the final pushed commit
+message, including any interim merge commit. Do not dispatch or rerun cloud CI
+for these accumulation pushes.
+
+At the two-day delivery opportunity, gather all eligible results and preserve the
+complete task history under a pushed recovery tag. At the already included base,
+use normal hooks to create one clean release commit with the identical validated
+tree and no skip directives anywhere in its message or body. Protect any task
+branch history update with an exact remote lease and preserve human changes.
+An empty final commit does not remove historical skip directives: the merge
+queue can copy earlier commit messages into its generated master commit. Inspect
+that generated message before merge, and require fresh current-head checks,
+reviews, queue CI, release and website/native delivery verification. This history
+cleanup does not authorize a base sync; the repository's branch-sync rule still
+applies. Count the next two-day interval only after full production verification.
+
 ## RustFS and checks
 
 Start and initialize the repository's [RustFS mock](../../devops/rustfs/README.md).
@@ -348,10 +367,86 @@ withdraws only this policy's approval and clears that chapter's published word
 rows atomically. Independent manual and automatic approvals stay intact. A new
 GOOD answer can recover it again after the same complete-chapter checks.
 
+The page outlines every cut that still needs hearing, including unchanged words with no actual prior direct hearing. "חיתוכים שטרם נשמעו" plays only those cuts. GOOD remains disabled until every cut has genuine completed playback; navigation retains unsaved notes and hearing already completed in the open page. Frontend regressions run through the Python suite and require Node.js, as provided by recitation CI.
+
 Completed listening rounds can be copied with `listening_round.archive_round`. Add each returned immutable `path`/`sha256` descriptor to the next queue's `archivedQueues`. The active page shows only the new queue; `/archive` retains prior answers and notes. The importer validates archived sources and uses earlier good answers only for unchanged candidates. Changed cuts require fresh word listening and a new answer.
 
 Serve with `--recovery-database <separate-preview.sqlite> --recovery-output <preview-alignments>` to run the guarded importer after saved answers. Use a copy of the durable database, never the live worker checkpoint. The page reports completed local recoveries; normal canonical, native-package and delivery checks still precede publication.
 
 `listening_tail.py` prepares diagnostic-only trailing-vowel candidates from the pinned CTC character/separator path. It never changes the automatic worker, pads endpoints or approves a candidate. Every corrected boundary requires fresh human listening and the same complete-chapter geometry checks.
 
+The pinned CTC letter endpoints are raw diagnostic evidence, not proof that a
+spoken ending is complete. Before installing a new listening queue, inspect each
+candidate against the original decoded source, including trailing vowels,
+frication and consonant decay. Do not send a known clipped letter endpoint back
+to the listener unchanged. Do not extend every word to `followingWordStartMs` or
+apply one offset: either can include a gap or part of the next word.
+
+For a first candidate, `source-inspected-initial-candidate-v1` supports individually
+inspected boundaries without inventing an earlier problem answer. It binds the
+unchanged pinned CPU/full-FP32/two-thread raw diagnostic, original letter rows and
+scores, source spectrum hash, context and per-word observations. It preserves
+canonical identities and all original timing geometry. The candidate remains
+unapproved: every cut needs genuine fresh hearing and a current source-bound
+GOOD answer; inherited listening and stale answers cannot approve it. Automatic
+worker/model/ASR gates are unchanged. Reported-problem revisions continue using
+`source-inspected-word-boundaries-v1` and their actual saved feedback. Neither
+source inspection nor forced alignment approves or publishes an interval.
+
+Letter endpoints can also stop before a spoken vowel finishes. When a reported
+defect falls between the recorded CTC endpoints, inspect the original decoded
+source waveform and spectrogram for that word. `source-inspected-word-boundaries-v1`
+records a diagnostic proposal separately from the unchanged CTC letter score,
+with immutable inspection and actual problem-answer evidence. This is not an
+automatic alignment policy: it needs a new source-bound GOOD answer covering
+the exact proposed cuts, plus all existing complete-chapter checks. Do not apply
+one offset or endpoint rule to an entire review queue.
+
+Archive the previous queue before installing revised candidates and preserve the
+append-only answer history. Verify the complete archive chain in an isolated
+recovery preview so all earlier chapter approvals remain intact. Changed cuts
+require new candidate hashes and fresh listening; unchanged cases retain their
+actual answers. For a revised verse, `listeningReusePath` and
+`listeningReuseSha256` can reference an immutable prior queue and actual saved
+answer. Only byte-identical word rows from the same original source, canonical
+text and lossless clip retain their actual completed listening evidence. The
+human must freshly hear every changed cut and explicitly give the revised verse
+a new answer. Provenance distinguishes `freshHeardSegments` from
+`reusedHeardSegments`; a prior PROBLEM answer supplies listening evidence only,
+never approval. Verified source-bound CTC and lossless clip evidence may be
+reused, with no claim of fresh inference. The original-MP3 worker and approved
+intervals remain independent of this preparation.
+
 Reported clipped starts, clipped endings and overlong cuts can also be proposed with `propose_path_boundaries`. Each endpoint must be an actual recorded letter/separator boundary from the same pinned CTC path. The verifier rejects unrecorded offsets, changed canonical identities or acoustic scores, missing/duplicate proof, overlaps and invalid durations. These remain diagnostic candidates: every changed verse requires fresh completed word listening before the guarded importer can recover its chapter.
+
+A later review round can reuse a cut directly heard in a round that also reused other cuts. The importer revalidates that round and every original source/history binding, then uses only its saved `freshHeardSegments`. Inherited cuts never become fresh hearing. Changed cuts still require genuine listening and a new answer.
+
+Unchanged cuts directly heard in different completed rounds may share one `listeningReusePath` proof with a `sources` list. Each source retains its immutable queue/history hashes and exact saved answer. The verifier independently revalidates each source and pools only identical cuts listed in that round's actual direct hearing. Inherited hearing never becomes direct hearing, and every changed cut still requires fresh listening and a new answer.
+
+### One accumulated listening application
+
+Use one permanent review server and append prepared batches to its separate
+listening database. Do not start another app/port for each eight-hour batch.
+The browser polls the queue and adds new passages without reloading the document,
+interrupting playback, moving the current passage, or replacing an unsaved note.
+Drafts and completed listening are stored by exact candidate and clip hashes;
+changed cuts never inherit old hearing.
+
+Create the store once from the existing fixed queue/history bindings using
+`ReviewDatabase.seed(sources)`. Keep every older page and its drafts intact.
+The store imports later answers from those still-open pages; it never rewrites
+their queues or histories. Completed answers are not offered again during migration.
+
+```powershell
+python listening_queue.py --store R/review-app/reviews.sqlite serve --port 8792 --session-token-file R/review-app/session.json
+python listening_queue.py --store R/review-app/reviews.sqlite append --queue R/review-app/batches/NEW/queue.json
+python listening_queue.py --store R/review-app/reviews.sqlite snapshot --output E/actual-review-import --database E/current-durable-preview.sqlite
+```
+
+Each appended queue remains immutable source evidence. Use new candidate hashes
+for revised cuts and fresh human hearing as before. Snapshot output preserves
+all actual decision fields, repeated edits and original queue bindings, and feeds
+the existing guarded importer. Always copy CURRENT durable publication data to
+a separate preview first. The listening database is not the alignment worker
+checkpoint or the approved publication database. No append or review save publishes
+timings or changes the original alignment process.

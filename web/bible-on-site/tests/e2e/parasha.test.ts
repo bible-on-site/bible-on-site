@@ -1,4 +1,5 @@
 import { expect, test } from "../util/playwright/test-fixture";
+import { TOP_NAV_BLUE, topNavBackground } from "../util/playwright/top-nav";
 
 const PARASHA_ROOT = `/${encodeURIComponent("פרשה")}`;
 
@@ -53,6 +54,34 @@ test.describe("פרשה reading root", () => {
 		await expect(
 			page.getByRole("heading", { level: 1, name: /פרשת בראשית/ }),
 		).toBeVisible();
+	});
+
+	test("renders the shared blue top bar on direct load", async ({ page }) => {
+		await page.goto(PARASHA_ROOT);
+		await expect(
+			page.getByRole("heading", { name: "פרשה על הפרק" }),
+		).toBeVisible();
+
+		expect(await topNavBackground(page)).toBe(TOP_NAV_BLUE);
+	});
+
+	test("keeps the shared blue top bar when navigating from another page", async ({
+		page,
+	}) => {
+		await page.goto("/");
+		await page.getByRole("button", { name: "תפריט ראשי" }).click();
+		await page
+			.locator("#main-menu")
+			.getByRole("link", { name: "פרשה על הפרק", exact: true })
+			.click();
+		await page.waitForURL(
+			(url) => decodeURIComponent(url.pathname) === "/פרשה",
+		);
+		await expect(
+			page.getByRole("heading", { name: "פרשה על הפרק" }),
+		).toBeVisible();
+
+		expect(await topNavBackground(page)).toBe(TOP_NAV_BLUE);
 	});
 
 	test("unit page renders Torah text and labeled Haftarah variants", async ({

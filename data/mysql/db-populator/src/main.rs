@@ -276,6 +276,8 @@ async fn main() -> Result<()> {
 
         apply_article_covering_source_upgrade(&mut conn, base_path).await?;
 
+        apply_perek_pasuk_count_upgrade(&mut conn, base_path).await?;
+
         let perek_images_path = base_path.join("../tanah_perek_images_structure.sql");
         execute_script(&mut conn, &perek_images_path, "perek-images-structure").await?;
 
@@ -288,13 +290,19 @@ async fn main() -> Result<()> {
     }
 
     if !cli.skip_data {
+        let tanah_view_data_path = base_path.join(&cli.tanah_view_data_script);
+        execute_script(&mut conn, &tanah_view_data_path, "tanah-view-data").await?;
+
+        // tanah_perek rows now exist, so the canonical counts and any
+        // covering-source fixtures whose perek FK they back may load.
+        // The upgrade is re-applied here so `mysql-populate-data-only`
+        // upgrades databases whose structure predates the column.
+        apply_perek_pasuk_count_data(&mut conn, base_path).await?;
+
         if !cli.skip_tanah_test_data {
             let data_path = base_path.join(&cli.data_script);
             execute_script(&mut conn, &data_path, "data").await?;
         }
-
-        let tanah_view_data_path = base_path.join(&cli.tanah_view_data_script);
-        execute_script(&mut conn, &tanah_view_data_path, "tanah-view-data").await?;
 
         let perushim_data_path = base_path.join(&cli.perushim_data_script);
         if perushim_data_path.exists() {
@@ -500,6 +508,30 @@ async fn apply_article_covering_source_upgrade(
         conn,
         &base_path.join("../tanah_article_covering_source_upgrade.sql"),
         "article-covering-source-upgrade",
+    )
+    .await
+}
+
+async fn apply_perek_pasuk_count_upgrade(
+    conn: &mut MySqlConnection,
+    base_path: &Path,
+) -> Result<()> {
+    execute_script(
+        conn,
+        &base_path.join("../tanah_perek_pasuk_count_upgrade.sql"),
+        "perek-pasuk-count-upgrade",
+    )
+    .await
+}
+
+/// Re-applies the idempotent pasuk_count upgrade and loads the generated
+/// canonical counts; requires tanah_perek rows to already exist.
+async fn apply_perek_pasuk_count_data(conn: &mut MySqlConnection, base_path: &Path) -> Result<()> {
+    apply_perek_pasuk_count_upgrade(conn, base_path).await?;
+    execute_script(
+        conn,
+        &base_path.join("../tanah_perek_pasuk_count_data.sql"),
+        "perek-pasuk-count-data",
     )
     .await
 }
@@ -1109,6 +1141,15 @@ SELECT 1";
             apply_article_covering_source_upgrade(&mut conn, base_path).await?;
             assert_eq!(query_scalar::<MySql, i64>("SELECT COUNT(*) FROM tanah_article_covering_source WHERE article_id = 42 AND perek_id = 1 AND pasuk = 3").fetch_one(&mut conn).await?, 1);
             assert_eq!(query_scalar::<MySql, i64>("SELECT COUNT(*) FROM tanah_article WHERE id = 42 AND coverage_verified = TRUE").fetch_one(&mut conn).await?, 1);
+
+            // Simulate the pre-pasuk-count schema and upgrade it repeatedly;
+            // the generated data file then fills the canonical bound for the
+            // retained perek row (בראשית א has 31 pesukim).
+            raw_sql("ALTER TABLE tanah_perek DROP COLUMN pasuk_count;")
+                .execute(&mut conn).await?;
+            apply_perek_pasuk_count_data(&mut conn, base_path).await?;
+            apply_perek_pasuk_count_data(&mut conn, base_path).await?;
+            assert_eq!(query_scalar::<MySql, i64>("SELECT pasuk_count FROM tanah_perek WHERE id = 1").fetch_one(&mut conn).await?, 31);
             execute_script(
                 &mut conn,
                 &base_path.join(&cli.perushim_structure_script),

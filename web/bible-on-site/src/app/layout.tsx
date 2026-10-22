@@ -10,6 +10,8 @@ import {
 	SITE_ORIGIN,
 	websiteNode,
 } from "@/lib/seo/jsonld";
+import { AhrefsAnalytics } from "./components/AhrefsAnalytics";
+import { AnalyticsConsentBanner } from "./components/AnalyticsConsentBanner";
 import { GoogleAnalytics } from "./components/GoogleAnalytics";
 import { JsonLd } from "./components/JsonLd";
 import { NavBar } from "./components/NavBar";
@@ -59,6 +61,7 @@ export default function RootLayout({
 				{/* Run on the initial document so client-side chapter navigation
 				    inherits saved settings too, before the reader's first paint. */}
 				<script>{READER_SETTINGS_BOOTSTRAP}</script>
+				<AhrefsAnalytics />
 				<GoogleAnalytics />
 				<JsonLd data={siteJsonLd} />
 			</head>
@@ -67,6 +70,7 @@ export default function RootLayout({
 
 				<NavBar />
 				{children}
+				<AnalyticsConsentBanner />
 			</body>
 		</html>
 	);

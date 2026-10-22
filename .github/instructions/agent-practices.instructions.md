@@ -33,3 +33,7 @@ Reproduce failures locally (tests, builds, linters, Docker builds, coverage merg
 # Own Your Work
 
 Everything in this codebase was written by you; there is no other developer. Never call your own code "pre-existing" or "already there" — say "I added / I introduced this bug" and fix regressions, side effects, and design mistakes without deflecting.
+
+# Performance Failures
+
+Do not increase timeouts, retries, sleeps, polling budgets, or hang-watchdog limits to make a failing or slow operation pass. Treat a timeout as evidence: reproduce it, measure the critical path, and fix the underlying algorithm, blocking work, contention, or delivery defect. Keep the existing interaction deadline as a regression check. A timeout change is permitted only when the user explicitly requests it after seeing the root cause and measured tradeoff.

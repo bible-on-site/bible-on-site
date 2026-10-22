@@ -23,6 +23,15 @@ public class MasoraDataService
 
     private List<MasoraUnit>? _units;
     private Dictionary<int, MasoraUnit>? _unitById;
+    /// <summary>Unit id → position in <see cref="_units"/>, for O(1) adjacent lookups.</summary>
+    private Dictionary<int, int>? _unitIndexById;
+    /// <summary>
+    /// Perek id → the (unit, range) pairs whose range touches that perek,
+    /// appended in canonical unit order. Units are sparse over the 929
+    /// perakim, so containment resolves through this bucket instead of a
+    /// dense pasuk map.
+    /// </summary>
+    private Dictionary<int, List<(MasoraUnit Unit, MasoraUnitRange Range)>>? _rangesByPerekId;
     private bool _isLoaded;
     private bool _isAvailable;
     private readonly SemaphoreSlim _loadLock = new(1, 1);
@@ -93,6 +102,8 @@ public class MasoraDataService
             Console.Error.WriteLine($"[Masora] reading-unit tables unavailable: {ex.Message}");
             _units = new List<MasoraUnit>();
             _unitById = new Dictionary<int, MasoraUnit>();
+            _unitIndexById = new Dictionary<int, int>();
+            _rangesByPerekId = new Dictionary<int, List<(MasoraUnit Unit, MasoraUnitRange Range)>>();
             _isAvailable = false;
             return;
         }
@@ -127,8 +138,30 @@ public class MasoraDataService
             });
         }
 
+        var unitIndexById = new Dictionary<int, int>(units.Count);
+        var rangesByPerekId = new Dictionary<int, List<(MasoraUnit Unit, MasoraUnitRange Range)>>();
+        for (var index = 0; index < units.Count; index++)
+        {
+            var indexed = units[index];
+            unitIndexById.TryAdd(indexed.UnitId, index);
+            foreach (var range in indexed.Ranges)
+            {
+                for (var perekId = range.StartPerekId; perekId <= range.EndPerekId; perekId++)
+                {
+                    if (!rangesByPerekId.TryGetValue(perekId, out var entries))
+                    {
+                        entries = new List<(MasoraUnit Unit, MasoraUnitRange Range)>();
+                        rangesByPerekId[perekId] = entries;
+                    }
+                    entries.Add((indexed, range));
+                }
+            }
+        }
+
         _units = units;
         _unitById = unitById;
+        _unitIndexById = unitIndexById;
+        _rangesByPerekId = rangesByPerekId;
         _isAvailable = units.Count > 0;
     }
 
@@ -153,15 +186,15 @@ public class MasoraDataService
         return _units.Where(u => u.UnitOrder == 1).ToList();
     }
 
+    /// <summary>The unit's position in canonical order (-1 when missing).</summary>
+    public int GetUnitIndex(int unitId) =>
+        _unitIndexById != null && _unitIndexById.TryGetValue(unitId, out var index) ? index : -1;
+
     /// <summary>Adjacent units by canonical order, for prev/next navigation.</summary>
     public (MasoraUnit? Prev, MasoraUnit? Next) GetAdjacentUnits(int unitId)
     {
-        if (_units == null || _units.Count == 0)
-        {
-            return (null, null);
-        }
-        var index = _units.FindIndex(u => u.UnitId == unitId);
-        if (index < 0)
+        var index = GetUnitIndex(unitId);
+        if (_units == null || index < 0)
         {
             return (null, null);
         }
@@ -181,12 +214,22 @@ public class MasoraDataService
     /// </summary>
     public MasoraUnit? GetUnitContainingPasuk(int perekId, int pasuk)
     {
-        if (_units == null)
+        if (_rangesByPerekId == null
+            || !_rangesByPerekId.TryGetValue(perekId, out var candidates))
         {
             return null;
         }
-        return _units.FirstOrDefault(u =>
-            u.Ranges.Any(range => RangeContainsPasuk(range, perekId, pasuk)));
+        // Bucket entries were appended in canonical unit order, so the first
+        // containing range belongs to the first containing unit — identical
+        // to the previous linear scan over Units.
+        foreach (var (unit, range) in candidates)
+        {
+            if (RangeContainsPasuk(range, perekId, pasuk))
+            {
+                return unit;
+            }
+        }
+        return null;
     }
 
     /// <summary>

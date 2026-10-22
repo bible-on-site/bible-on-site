@@ -1,0 +1,44 @@
+{
+	"schemaVersion": 1,
+	"suite": "admin-e2e",
+	"collector": "playwright-istanbul",
+	"collectorVersion": "1.0.0",
+	"platforms": {
+		"web": "Shared"
+	},
+	"tests": {
+		"root": "web/admin/tests/e2e",
+		"glob": "**/*.test.ts",
+		"framework": "playwright"
+	},
+	"sources": {
+		"root": "web/admin",
+		"globs": ["src/**"]
+	},
+	"alwaysRun": [
+		"health.test.ts :: Admin App Health :: homepage loads"
+	],
+	"runAllOnChange": [
+		"web/admin/package.json",
+		"web/admin/package-lock.json",
+		"web/admin/vite.config.ts",
+		"web/admin/tsconfig.json",
+		"web/admin/playwright.config.ts",
+		"web/admin/e2e-impact.json",
+		"web/admin/tests/util/**",
+		"web/shared/**",
+		".github/**",
+		"devops/**",
+		"data/**"
+	],
+	"noImpact": [
+		"docs/**",
+		"**/*.md",
+		"web/admin/tests/unit/**",
+		"web/admin/vitest.config.ts",
+		"web/admin/.coverage/**",
+		"web/admin/coverage/**",
+		"web/admin/.playwright-*/**"
+	],
+	"scope": ["web/admin/**"]
+}

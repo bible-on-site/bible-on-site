@@ -22,14 +22,40 @@
                        FontSize="18"
                        FontAttributes="Bold"
                        TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
-                <Label Text="בעת שימוש באתר ו/או בישומון תנ&quot;ך על הפרק אתה מצהיר שהינך מאשר למערכת תנ&quot;ך על הפרק לאסוף נתונים שסופקו על ידיך באופן ידני או באמצעות המכשיר דרכו התחברת אף באופן נסתר, לרבות מזהה Android Advertising ID."
+                <Label Text="בעת שימוש באתר ו/או בישומון תנ&quot;ך על הפרק אנו עשויים לאסוף נתונים שסופקו על ידיכם באופן ידני (כגון פניות ששלחתם אלינו) ונתוני שימוש טכניים המתקבלים מהמכשיר דרכו התחברתם. הישומון אינו אוסף מזהי פרסום כגון Android Advertising ID."
                        FontSize="14"
                        LineHeight="1.4"
                        TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
-                <Label Text="צוות התכנית מתחייב להשתמש בנתונים הנ&quot;ל אך ורק לצרכי המערכת. הנתונים הנ&quot;ל לא יסופקו על ידינו לשום גורם צד ג'. כמו כן הנתונים נשמרים באופן מאובטח בשרתי תנ&quot;ך על הפרק."
+                <Label Text="לצורכי סטטיסטיקת שימוש ושיפור חוויית הלימוד היומי אנו משתמשים בשירותי אנליטיקה חיצוניים: Google Analytics באתר ו-Firebase Analytics בישומון (שניהם מסופקים על ידי Google), וכן Ahrefs באתר (מדידה ללא עוגיות). שירותים אלה עשויים לקבל מזהים טכניים ונתוני שימוש בהתאם למדיניות הפרטיות שלהם."
                        FontSize="14"
                        LineHeight="1.4"
                        TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                <Label Text="המדידה של Google Analytics ו-Firebase Analytics פועלת רק לאחר הסכמה מפורשת: באתר ניתן לאשר או לדחות בבאנר ההסכמה, ובישומון במסך ההסכמה שמופיע בהפעלה הראשונה או בהעדפות, וניתן לשנות את הבחירה בכל עת. בחירתכם נשמרת במכשיר ואינה נדרשת לשימוש באתר או בישומון. יתר הנתונים נשמרים באופן מאובטח בשרתי תנ&quot;ך על הפרק ואינם מועברים לגורמים נוספים."
+                       FontSize="14"
+                       LineHeight="1.4"
+                       TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+            </VerticalStackLayout>
+
+            <!-- Accessibility Statement Section -->
+            <VerticalStackLayout Spacing="8">
+                <Label Text="הצהרת נגישות"
+                       FontSize="18"
+                       FontAttributes="Bold"
+                       TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
+                <Label Text="הצהרת הנגישות של התכנית מתוחזקת באתר ומכסה את האתר ואת היישומון."
+                       FontSize="14"
+                       LineHeight="1.4"
+                       TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                <Label Text="לצפייה בהצהרת הנגישות"
+                       FontSize="14"
+                       TextColor="{StaticResource Primary}"
+                       TextDecorations="Underline"
+                       SemanticProperties.Description="פתיחת הצהרת הנגישות באתר התכנית"
+                       AutomationId="AccessibilityStatementLink">
+                    <Label.GestureRecognizers>
+                        <TapGestureRecognizer Tapped="OnAccessibilityStatementTapped"/>
+                    </Label.GestureRecognizers>
+                </Label>
             </VerticalStackLayout>
 
             <!-- Divider -->

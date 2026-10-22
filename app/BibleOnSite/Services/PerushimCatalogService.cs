@@ -22,12 +22,23 @@ public class PerushimCatalogService
     private bool _isInitialized;
     private bool _catalogMissing;
     private readonly SemaphoreSlim _initializeLock = new(1, 1);
+    private readonly object _catalogLoadLock = new();
+    private SQLiteAsyncConnection? _catalogConnection;
+    private Task<Catalog>? _catalogLoad;
 
     private readonly IFileSystem _fileSystem;
+    private readonly IAppInfo? _appInfo;
 
     private PerushimCatalogService() : this(FileSystem.Current) { }
 
-    public PerushimCatalogService(IFileSystem fileSystem) { _fileSystem = fileSystem; }
+    public PerushimCatalogService(IFileSystem fileSystem) : this(fileSystem, null) { }
+
+    /// <param name="appInfo">App identity for the packaged-copy version marker; null resolves <see cref="AppInfo.Current"/>.</param>
+    public PerushimCatalogService(IFileSystem fileSystem, IAppInfo? appInfo)
+    {
+        _fileSystem = fileSystem;
+        _appInfo = appInfo;
+    }
 
     /// <summary>Whether the catalog database is available.</summary>
     public bool IsAvailable => _isInitialized && !_catalogMissing && _connection != null;
@@ -68,7 +79,7 @@ public class PerushimCatalogService
             var dbPath = Path.Combine(_fileSystem.AppDataDirectory, CatalogDbName);
             try
             {
-                await PackagedDatabase.RefreshAsync(_fileSystem, CatalogDbName);
+                await PackagedDatabase.RefreshAsync(_fileSystem, CatalogDbName, _appInfo);
             }
             catch (FileNotFoundException)
             {
@@ -94,15 +105,12 @@ public class PerushimCatalogService
             return new List<Perush>();
         }
 
-        var rows = await conn.QueryAsync<PerushRow>(
-            "SELECT id, name, priority FROM perush ORDER BY priority ASC");
-
-        return rows.Select(r => new Perush { Id = r.Id, Name = r.Name ?? string.Empty, Priority = r.Priority })
-            .ToList();
+        return [.. (await GetCatalogAsync(conn)).ByPriority.Select(Copy)];
     }
 
     /// <summary>
     /// Gets perush by IDs. Used to resolve names for perushim that have notes in a perek.
+    /// Served from the in-memory catalog, which is read once per connection.
     /// </summary>
     public async Task<Dictionary<int, Perush>> GetPerushimByIdsAsync(IEnumerable<int> ids)
     {
@@ -112,17 +120,48 @@ public class PerushimCatalogService
             return new Dictionary<int, Perush>();
         }
 
-        var idList = string.Join(",", ids.Distinct());
-        if (string.IsNullOrEmpty(idList))
+        var idList = ids.Distinct().ToList();
+        if (idList.Count == 0)
         {
             return new Dictionary<int, Perush>();
         }
 
-        var rows = await conn.QueryAsync<PerushRow>(
-            $"SELECT id, name, priority FROM perush WHERE id IN ({idList})");
-
-        return rows.ToDictionary(r => r.Id, r => new Perush { Id = r.Id, Name = r.Name ?? string.Empty, Priority = r.Priority });
+        var byId = (await GetCatalogAsync(conn)).ById;
+        return idList.Where(byId.ContainsKey).ToDictionary(id => id, id => Copy(byId[id]));
     }
+
+    /// <summary>
+    /// The catalog is small and immutable for the lifetime of a connection, so concurrent
+    /// first callers share one load. Keyed on the connection: a re-opened DB is re-read.
+    /// A failed load is not cached, so the next call retries.
+    /// </summary>
+    private Task<Catalog> GetCatalogAsync(SQLiteAsyncConnection conn)
+    {
+        lock (_catalogLoadLock)
+        {
+            if (_catalogLoad == null || _catalogConnection != conn || _catalogLoad.IsFaulted || _catalogLoad.IsCanceled)
+            {
+                _catalogConnection = conn;
+                _catalogLoad = LoadCatalogAsync(conn);
+            }
+            return _catalogLoad;
+        }
+    }
+
+    private static async Task<Catalog> LoadCatalogAsync(SQLiteAsyncConnection conn)
+    {
+        var rows = await conn.QueryAsync<PerushRow>(
+            "SELECT id, name, priority FROM perush ORDER BY priority ASC");
+        var byPriority = rows
+            .Select(r => new Perush { Id = r.Id, Name = r.Name ?? string.Empty, Priority = r.Priority })
+            .ToList();
+        return new Catalog(byPriority, byPriority.ToDictionary(p => p.Id));
+    }
+
+    // Perush is mutable; hand out copies so callers cannot alter the shared catalog.
+    private static Perush Copy(Perush p) => new() { Id = p.Id, Name = p.Name, Priority = p.Priority };
+
+    private sealed record Catalog(List<Perush> ByPriority, Dictionary<int, Perush> ById);
 
     private class PerushRow
     {

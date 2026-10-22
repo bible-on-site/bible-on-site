@@ -12,13 +12,17 @@ namespace BibleOnSite.Pages;
 /// </summary>
 [QueryProperty(nameof(ArticleId), "articleId"), QueryProperty(nameof(PerekId), "perekId")]
 [QueryProperty(nameof(SearchExcerpt), "searchExcerpt"), QueryProperty(nameof(SearchPhrase), "searchPhrase")]
-public partial class ArticleDetailPage : ContentPage
+public partial class ArticleDetailPage : ContentPage, IAnalyticsScreenName
 {
     private readonly ArticleDetailViewModel _viewModel;
     private readonly List<MediaElement> _mediaElements = [];
 
     public int ArticleId { get; set; }
     public int PerekId { get; set; }
+
+    /// <summary>Logical screen identity with article context (#2119).</summary>
+    public string? AnalyticsScreenName =>
+        ArticleId > 0 ? $"Article/{ArticleId}" : nameof(ArticleDetailPage);
 
     /// <summary>
     /// Search-result excerpt anchoring the jump target — the query string keeps
@@ -44,7 +48,23 @@ public partial class ArticleDetailPage : ContentPage
         UpdateFontSizeResources(prefs.FontFactor);
         prefs.PreferencesChanged += (_, _) =>
             MainThread.BeginInvokeOnMainThread(() =>
-                UpdateFontSizeResources(prefs.FontFactor));
+            {
+                UpdateFontSizeResources(prefs.FontFactor);
+                ApplyLessonsVolume();
+            });
+    }
+
+    /// <summary>
+    /// Recorded-lesson playback (article audio/video) plays on the שיעורים מוקלטים
+    /// channel — every player takes LessonsVolume, applied live to in-flight media.
+    /// </summary>
+    private void ApplyLessonsVolume()
+    {
+        var volume = PreferencesService.Instance.LessonsVolume;
+        foreach (var mediaElement in _mediaElements)
+        {
+            mediaElement.Volume = volume;
+        }
     }
 
     private void UpdateFontSizeResources(double factor)
@@ -155,7 +175,8 @@ public partial class ArticleDetailPage : ContentPage
             Aspect = Aspect.AspectFit,
             HeightRequest = 220,
             HorizontalOptions = LayoutOptions.Fill,
-            BackgroundColor = Colors.Black
+            BackgroundColor = Colors.Black,
+            Volume = PreferencesService.Instance.LessonsVolume
         };
         _mediaElements.Add(mediaElement);
 
@@ -177,7 +198,8 @@ public partial class ArticleDetailPage : ContentPage
             ShouldAutoPlay = false,
             ShouldShowPlaybackControls = true,
             HeightRequest = 80,
-            HorizontalOptions = LayoutOptions.Fill
+            HorizontalOptions = LayoutOptions.Fill,
+            Volume = PreferencesService.Instance.LessonsVolume
         };
         _mediaElements.Add(mediaElement);
 

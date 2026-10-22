@@ -202,10 +202,11 @@ fn generate_perek_sql(sql: &mut String, sefarim: &[Sefer]) {
 
     for perek in &all_perakim {
         sql.push_str(&format!(
-            "INSERT INTO tanah_perek (id, perek, header) VALUES ({}, {}, {});\n",
+            "INSERT INTO tanah_perek (id, perek, header, pasuk_count) VALUES ({}, {}, {}, {});\n",
             perek.perek_id,
             perek.perek_id,
-            sql_string_literal(&perek.header)
+            sql_string_literal(&perek.header),
+            perek.pesukim.len()
         ));
     }
     sql.push('\n');
@@ -406,6 +407,9 @@ mod tests {
         assert!(sql.contains("INSERT INTO tanah_additional"));
         assert!(sql.contains("'A', 'BookB I', 2, 3"));
         assert!(sql.contains("Header\\nOne"));
+        // The perek INSERT carries the corpus pasuk count used by the
+        // covering-source write path to validate pasuk coordinates.
+        assert!(sql.contains("INSERT INTO tanah_perek (id, perek, header, pasuk_count) VALUES (1, 1, 'Header\\nOne', 1)"));
         assert!(sql.contains("'2014-03-28', '57750329', '05:30:00'"));
         assert!(sql.contains("'2024-01-28', '57000132', '06:07:08'"));
         assert!(sql.contains("SET FOREIGN_KEY_CHECKS = 1;"));

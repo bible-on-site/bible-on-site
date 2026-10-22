@@ -36,6 +36,7 @@ import {
 	isPartialClassOf,
 } from "./xunit-discovery.ts";
 import { SCHEMA_VERSION, type CoverageTree, type SuiteRules } from "./model.ts";
+import { caseDurations, evidenceDurations, mergeOverhead, mergeTiming, observedOverheadMs } from "./timings.ts";
 
 export interface EvidenceRecord {
 	test: string;
@@ -161,6 +162,19 @@ export interface CollectOptions {
 	 * evidence can widen but never replace the automation-id channel.
 	 */
 	execTree?: ExecCoverageTree;
+	/**
+	 * The published baseline this run descends from (#2263): per-case rolling
+	 * timing and pilot overhead carry forward and merge with this run's
+	 * observations. Missing or incompatible history is simply absent —
+	 * timing never blocks collection.
+	 */
+	history?: CoverageTree;
+	/**
+	 * Observed non-case pilot time in ms. When absent the collector derives
+	 * it from the artifacts' `pilot-timing.json` minus the measured case
+	 * durations; the merge step passes the explicit mean of its shards.
+	 */
+	overheadMs?: number;
 }
 
 const unionSorted = (a: string[], b: string[]): string[] =>
@@ -203,7 +217,7 @@ export function collectTree(options: CollectOptions): CoverageTree {
 		repoRoot,
 		rules.tests.root,
 		rules.tests.glob,
-		rules.tests.category,
+		rules.tests.category ?? "",
 	);
 	const fileByTest = new Map(discovered.map((test) => [test.id, test.file]));
 
@@ -212,7 +226,18 @@ export function collectTree(options: CollectOptions): CoverageTree {
 
 	const tests: CoverageTree["tests"] = {};
 	const unmatchedEvidence: string[] = [];
-	for (const record of loadEvidence(join(options.artifactsDir, "coverage-evidence"))) {
+	const records = loadEvidence(join(options.artifactsDir, "coverage-evidence"));
+	// Per-case durations for this run (#2263): the merger's sidecar on
+	// multi-shard runs, else the JUnit report, else evidence spans. A corrupt
+	// report degrades to evidence spans — timing is advisory, never fatal.
+	let durations: Map<string, number>;
+	try {
+		durations = caseDurations(options.artifactsDir, records);
+	} catch (error) {
+		console.warn(`[e2e-impact] case timings degraded to evidence spans: ${String(error)}`);
+		durations = evidenceDurations(records);
+	}
+	for (const record of records) {
 		const ids = [...new Set(record.automationIds ?? [])].sort();
 		const files = new Set<string>();
 		const unmapped: string[] = [];
@@ -239,6 +264,7 @@ export function collectTree(options: CollectOptions): CoverageTree {
 	// tree incomplete. Incompatible input is ignored — the CLI diagnoses
 	// the reason before ever passing it here.
 	let sharedFiles: string[] | undefined;
+	let memberGaps: Record<string, string[]> | undefined;
 	let complete = options.complete;
 	if (
 		options.execTree !== undefined &&
@@ -263,14 +289,41 @@ export function collectTree(options: CollectOptions): CoverageTree {
 				existing.files = unionSorted(existing.files, execTest.files);
 				existing.sessions = unionSorted(existing.sessions, execTest.sessions);
 				existing.outcome = mergeOutcome(existing.outcome, execTest.outcome);
+				// Member evidence unions per file (#2085 member granularity);
+				// a file absent from exec evidence keeps the test unqualified
+				// for member narrowing there — never silently narrowed away.
+				if (execTest.members !== undefined) {
+					const members: Record<string, string[]> = { ...(existing.members ?? {}) };
+					for (const [file, keys] of Object.entries(execTest.members)) {
+						members[file] = unionSorted(members[file] ?? [], keys);
+					}
+					existing.members = members;
+				}
 			}
 		}
 		for (const name of view.unmatchedEvidence) {
 			if (!unmatchedEvidence.includes(name)) unmatchedEvidence.push(name);
 		}
 		if (view.sharedFiles.length > 0) sharedFiles = view.sharedFiles;
+		if (Object.keys(view.memberGaps).length > 0) memberGaps = view.memberGaps;
 		complete = complete && options.execTree.complete;
 	}
+
+	// Runtime history (#2263): each executed case rolls its measured duration
+	// into the baseline's per-case mean; a case with no observation keeps its
+	// prior entry rather than degrading to unmeasured. Timing lives on the
+	// tree, so it rides the same trusted publish path as impact evidence —
+	// and an incomplete tree never reaches that path.
+	const now = new Date();
+	const history = options.history;
+	for (const [id, entry] of Object.entries(tests)) {
+		const timing = mergeTiming(history?.tests[id]?.timing, durations.get(id), now);
+		if (timing !== undefined) entry.timing = timing;
+	}
+	const overhead = mergeOverhead(
+		history?.overhead,
+		options.overheadMs ?? observedOverheadMs(options.artifactsDir, durations) ?? undefined,
+	);
 
 	return {
 		schemaVersion: SCHEMA_VERSION,
@@ -278,15 +331,17 @@ export function collectTree(options: CollectOptions): CoverageTree {
 		platform,
 		snapshotSha: options.snapshotSha,
 		collectorVersion: rules.collectorVersion,
-		collectedAtUtc: new Date().toISOString(),
+		collectedAtUtc: now.toISOString(),
 		complete,
 		sourceUnits,
 		sourceFiles,
 		sourceFingerprints,
 		...(sharedFiles !== undefined ? { sharedFiles } : {}),
+		...(memberGaps !== undefined ? { memberGaps } : {}),
 		tests: Object.fromEntries(
 			Object.entries(tests).sort(([a], [b]) => a.localeCompare(b)),
 		),
+		...(overhead !== undefined ? { overhead } : {}),
 		...(unmatchedEvidence.length > 0
 			? { unmatchedEvidence: unmatchedEvidence.sort() }
 			: {}),

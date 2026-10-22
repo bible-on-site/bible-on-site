@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { MODULES } from "../ci/determine-changes.ts";
 
 import {
 	MAX_COMMITS,
@@ -254,29 +255,24 @@ test("renderTestFlightNotes falls back and truncates", () => {
 	assert.ok(truncated.endsWith("…"));
 });
 
-test("changelog extra paths stay in sync with determine-changes", () => {
+test("each shared release passes its own external module paths to the changelog", () => {
 	const root = join(dirname(fileURLToPath(import.meta.url)), "../../..");
-	const determine = readFileSync(
-		join(root, "devops/github/ci/determine-changes.ts"),
-		"utf8",
-	);
 	const ci = readFileSync(join(root, ".github/workflows/ci.yml"), "utf8");
-	const extraBlocks = [
-		...determine.matchAll(/extraModulePaths:\s*\[([^\]]*)\]/g),
-	].flatMap((m) => [...m[1].matchAll(/"([^"]+)"/g)].map((p) => p[1]));
-	for (const path of extraBlocks) {
-		assert.ok(
-			ci.includes(`extra_module_paths`) && ci.includes(`"${path}"`),
-			`ci.yml release inputs must pass extra_module_paths containing ${path}`,
+	const jobs = ci.split(/(?=^  [A-Za-z0-9_]+:\s*$)/m);
+	const releaseModules = [];
+	for (const job of jobs.filter((block) => /uses: \.\/\.github\/workflows\/shared-release\.yml/.test(block))) {
+		const module = job.match(/^      module_name:\s*(\w+)\s*$/m)?.[1];
+		assert.ok(module && Object.hasOwn(MODULES, module), "shared release must identify a known module");
+		releaseModules.push(module);
+		const extras = job.match(/^      extra_module_paths:\s*'(\[[^\]]*\])'\s*$/m)?.[1];
+		assert.deepEqual(
+			(extras ? JSON.parse(extras) : []).sort(),
+			[...(MODULES[module].extraModulePaths ?? [])].sort(),
+			`${module} release changelog must match its own determine-changes paths`,
 		);
 	}
-	const ciExtras = [
-		...ci.matchAll(/extra_module_paths:\s*'(\[[^\]]*\])'/g),
-	].flatMap((m) => [...m[1].matchAll(/"([^"]+)"/g)].map((p) => p[1]));
-	for (const path of ciExtras) {
-		assert.ok(
-			determine.includes(`"${path}"`),
-			`determine-changes.ts must treat ${path} as a module path`,
-		);
-	}
+	assert.ok(releaseModules.includes("website") && releaseModules.includes("app"));
+	// perushim_pipeline regenerates the delivered index; it has no shared
+	// release/changelog job and must not be mistaken for a release module.
+	assert.ok(!releaseModules.includes("perushim_pipeline"));
 });

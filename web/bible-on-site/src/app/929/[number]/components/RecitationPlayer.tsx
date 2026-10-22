@@ -285,11 +285,12 @@ export default function RecitationPlayer({
 	const request = useRef(0);
 	const createAudio = useCallback((recitation: Recitation) => {
 		const player: RecitationAudio = new RecitationAudio(
-			recitation.audioUrl,
-			recitation.audioSha256,
+			recitation.playback?.audioUrl ?? recitation.audioUrl,
+			recitation.playback?.audioSha256 ?? recitation.audioSha256,
 			(percent) => {
 				if (precise.current === player) setDownloadProgress(percent);
 			},
+			recitation.playback?.format ?? "mp3",
 		);
 		return player;
 	}, []);
@@ -542,7 +543,7 @@ export default function RecitationPlayer({
 					aria-label="הגדרות קריינות"
 					aria-haspopup="dialog"
 					onClick={(event) =>
-						openReaderSettings("recitation", event.currentTarget)
+						openReaderSettings("recitation", event.currentTarget, true)
 					}
 				>
 					<SettingsIcon />

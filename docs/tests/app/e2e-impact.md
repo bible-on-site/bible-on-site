@@ -10,9 +10,14 @@ consumer; the same contract extends to the website, admin and API E2E suites.
 
 ```
  e2e-impact.json ──► discover ──► select ──► selection-manifest.json
-                      ▲              ▲              │
-                 test sources        │              ├─ enforce: MOBILE_E2E_SELECTION
-                                     │              └─ shadow: report only (default)
+                      ▲              ▲              │         │
+                 test sources        │              │         ▼
+                                     │              │       plan ──► ios-shard-plan.json
+                                     │              │        (#2263)    + shards/shard-N.json
+                                     │              │              ├─ every iOS leg: MOBILE_E2E_SELECTION
+                                     │              │              └─ shadow partitions the full suite
+                                     │              ├─ enforce (Android): MOBILE_E2E_SELECTION
+                                     │              └─ shadow (Android): report only (default)
         baseline tree ◄─── collect-appium ◄─── coverage-evidence/*.json
         (master artifact)                    (written by the C# harness)
 ```
@@ -55,7 +60,12 @@ it (`AutomationId="X"` in XAML, `AutomationId = "X"` / `$"Prefix{n}"` /
 - `sourceFingerprints` — a trivia-insensitive structural digest per scanned
   file plus its extracted declaration signatures (see below);
 - per test: declared file, reached files, automation ids, unmapped ids
-  (evidence gaps), sessions and last outcome.
+  (evidence gaps), sessions and last outcome;
+- per test `timing` (#2263) — the rolling per-case runtime (`samples`,
+  `meanMs`, `lastMs`, `updatedAtUtc`) used only for shard scheduling;
+- `overhead` (#2263) — the rolling mean of non-case pilot time (supervisor
+  elapsed minus measured case durations: Appium/WDA bring-up, fixtures,
+  teardown). Kept off the case records so setup is never charged to a test.
 
 Evidence is best-effort instrumentation, not an oracle: locators built
 outside `AutomationId` (raw XPath, native gestures) are unattributed, and a
@@ -118,35 +128,109 @@ missing, corrupt, incompatible (wrong platform/suite/schema) or non-ancestor
 baseline, an undeterminable diff and an empty selection all fall back to the
 full applicable suite — **a selector failure is never a green run of zero
 tests**. Identical inputs produce an identical manifest (sorted output,
-content fingerprint).
+content fingerprint). The iOS `plan_ios` job opts into `--allow-empty`: a
+clean zero-affected diff legitimately schedules no shards instead of
+selecting everything, while every uncertain path still selects the suite.
 
-## CI wiring (`app-mobile-e2e.yml`)
+## Runtime-balanced iOS sharding (#2263)
 
-1. **baseline-download** — fetches the newest
+`plan` turns the selection manifest into a bounded shard plan before the
+matrix expands:
+
+- **Run set** — `enforce` partitions the selected cases; `shadow` partitions
+  the full applicable suite (selection stays advisory). Timing history only
+  ever moves cases between shards — membership always comes from the
+  manifest, which must enumerate the suite discovered at the tested revision
+  or planning fails.
+- **Estimates** — each case weights its baseline `timing.meanMs`; unmeasured
+  or malformed entries take a fixed fallback (`--fallback-seconds`, default
+  120 s). An absent or unreadable history leaves every case unmeasured —
+  scheduling stays deterministic and cold-start history accrues from the
+  run's own measurements.
+- **Shard count** — `ceil(total estimated case ms / target)` clamped to
+  `[1, min(--max-shards = 4, case count)]`. A shard holding less than a
+  minute of work folds into its least-loaded peer: the job bring-up
+  (`DEFAULT_SETUP_MS` plus measured `overhead`) would dwarf it.
+- **Assignment** — longest-processing-time-first onto the least-loaded
+  shard; equal estimates break on sorted case id, equal loads on lower shard
+  index. Identical (run set, history, config) yields a byte-identical plan —
+  the emitted `fingerprint` proves it.
+- **Empty plans** — zero shards emits an empty matrix value; the job-level
+  `if` on the runner matrix skips before expansion, so no simulator starts
+  and the aggregate result stays green only because nothing was selected —
+  never because planning failed.
+
+Each iOS runner leg stages `shards/shard-N.json` as `case-manifest.json` in
+its artifacts and enforces it through `MOBILE_E2E_SELECTION` (the partition
+is an assignment in both modes — it does not wait for `enforce`). The merge
+job downloads every `ios-shard<N>` artifact and the plan, then:
+
+1. requires exactly one artifact per planned shard — no missing, no
+   duplicates;
+2. verifies each shard's `case-manifest.json` is exactly its assignment;
+3. requires a clean `pilot-timing.json` exit, only passing evidence, and a
+   disjoint union covering the planned run set exactly once;
+4. merges per-test evidence, exec trees, LCOV and `case-timings.json`, and
+   reports the mean per-shard overhead as `overhead-ms` for the collector;
+5. lets `collect-appium` roll those observations into `timing`/`overhead` —
+   the same trusted publish gate (`complete`, successful master push) then
+   refreshes history alongside the impact baseline, so provisional PR
+   evidence never writes scheduling state either.
+
+## CI wiring (`app-mobile-e2e-runner.yml` + `app-mobile-e2e.yml`)
+
+1. **plan_ios** (#2263) — a single predecessor job: `baseline-download` →
+   `select --allow-empty` → `plan` → `appium-matrix.mjs`, publishing the
+   `app-mobile-e2e-plan.<run>.ios` artifact (plan, selection manifest and
+   one `shards/shard-N.json` per shard) and the `ios-matrix` output the
+   runner matrix expands from. The Android leg is untouched — it still
+   resolves selection inside its own runner as a background step overlapped
+   with device/caches setup.
+2. **baseline-download** — fetches the newest
    `app-mobile-e2e-coverage.master.<platform>` artifact through the REST API
-   (`actions: read`). Absent baselines are reported, not fatal.
-2. **select** — writes `selection-manifest.json` plus a step summary of the
+   (`actions: read`). Absent baselines are reported, not fatal — the iOS
+   planner falls back to the full suite at the unmeasured weight, and the
+   Android leg resolves `selectAll`.
+3. **select** — writes `selection-manifest.json` plus a step summary of the
    selected/unselected tests and their reasons.
-3. **tests** — `MOBILE_E2E_SELECTION` receives the manifest only in `enforce`
-   mode; `TestMobileE2E` intersects its `FullyQualifiedName` list with the
-   existing category/platform filter. A non-`selectAll` manifest without a
-   filter fails rather than running zero tests.
-4. **collect-appium** — runs `always()`; failed runs still collect evidence
-   for their passed tests but mark the tree `complete: false`.
-5. **publish** — only a completed, successful `master` push uploads the
-   `.master` baseline (`overwrite`), so provisional PR/merge-queue evidence
-   can never poison the authoritative tree.
+4. **tests** — an iOS leg enforces its assigned `case-manifest.json` in both
+   modes (the partition is an assignment, not a selection mode); the Android
+   leg receives `MOBILE_E2E_SELECTION` only in `enforce` mode.
+   `TestMobileE2E` intersects the manifest's `FullyQualifiedName` list with
+   the existing category/platform filter and refuses a non-`selectAll`
+   manifest that selects nothing.
+5. **merge_ios** (#2263) — downloads the plan and every shard artifact,
+   requires compatible suite/platform/snapshot trees, validates the
+   complete disjoint run set (no drops, no overlap — each leg's report
+   still enumerates the suite's unassigned cases as skipped/not-executed
+   placeholders, which claim no execution and never count as overlap),
+   merges evidence/coverage/timing and re-downloads the baseline as
+   `collect-appium --history` input.
+6. **collect-appium** — runs `always()`: a failed run still collects
+   evidence for its passed tests but marks the tree `complete: false`, and
+   on iOS every shard's tree is additionally marked `--incomplete` by
+   construction. Only the merge's collected union tree can feed a baseline.
+7. **publish** — Android baselines publish inside the runner leg; the iOS
+   `*.master.ios` baselines publish only from `merge_ios` when the merged
+   evidence is `complete`, and only on a completed, successful `master`
+   push (`push` on `refs/heads/master` — a `workflow_dispatch` cannot
+   refresh them), so provisional PR/merge-queue evidence can never poison
+   the authoritative tree — or its timing history.
 
 Rollout modes are `workflow_dispatch`/`workflow_call` inputs:
 `e2e_selection_mode` (`shadow` default, `enforce`) and `force_full_suite`
 (bypasses selection entirely). Skipping stays disabled until shadow runs
 demonstrate the selection contract; enforcement is a one-input switch.
+Sharding is orthogonal: the iOS plan partitions the run set once, and each
+leg executes only its assigned `case-manifest.json`, so a run only ever
+schedules each scenario on exactly one runner.
 
 ## Remaining phases
 
 - Evidence-gated switch to `enforce` for the Appium suite.
-- Website/admin/API suites: per-test application-process collectors (the
-  website already records Istanbul coverage per Playwright test).
+- Website/admin/API suites run the same contract in shadow mode on `ci.yml`
+  (#2241): manifest computed per run, suites still execute everything, no
+  enforce runner exists for them yet.
 - Finer-grained structural mapping: the persisted declaration signatures
   currently serve provenance and file-level equivalence; mapping individual
   coverage entries to declarations would let a member-level edit select only

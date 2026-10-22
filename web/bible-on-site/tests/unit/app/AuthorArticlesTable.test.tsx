@@ -22,7 +22,10 @@ jest.mock("next/link", () => ({
 
 jest.mock(
 	"../../../src/app/929/authors/[authorParam]/author-articles-table.module.css",
-	() => new Proxy({}, { get: (_, key) => String(key) }),
+	() => ({
+		__esModule: true,
+		default: new Proxy({}, { get: (_, key) => String(key) }),
+	}),
 );
 
 import { fireEvent, render, screen, within } from "@testing-library/react";

@@ -54,14 +54,15 @@ for (const [status, bump, skip, releaseState, exit = 0] of [
 		t.after(() => rmSync(root, { recursive: true, force: true }));
 		const output = join(root, "output");
 		mkdirSync(join(root, "devops/github/release"), { recursive: true });
-		copyFileSync(
-			new URL("./release-assets.mjs", import.meta.url),
-			join(root, "devops/github/release/release-assets.mjs"),
-		);
-		copyFileSync(
-			new URL("./release-provenance.mjs", import.meta.url),
-			join(root, "devops/github/release/release-provenance.mjs"),
-		);
+		for (const file of [
+			"release-assets.mjs",
+			"release-provenance.mjs",
+			"gh-api.mjs",
+		])
+			copyFileSync(
+				new URL(`./${file}`, import.meta.url),
+				join(root, "devops/github/release", file),
+			);
 		const result = spawnSync(
 			shell,
 			[
@@ -97,8 +98,14 @@ for (const [status, bump, skip, releaseState, exit = 0] of [
 		assert.equal(result.status, exit, result.stderr);
 		if (exit) return;
 		const values = readFileSync(output, "utf8");
-		assert.ok(values.includes(`NEEDS_BUMP=${bump}`), `expected NEEDS_BUMP=${bump}`);
-		assert.ok(values.includes(`SKIP_RELEASE=${skip}`), `expected SKIP_RELEASE=${skip}`);
+		assert.ok(
+			values.includes(`NEEDS_BUMP=${bump}`),
+			`expected NEEDS_BUMP=${bump}`,
+		);
+		assert.ok(
+			values.includes(`SKIP_RELEASE=${skip}`),
+			`expected SKIP_RELEASE=${skip}`,
+		);
 		if (releaseState === "published-original") {
 			const payload = JSON.parse(
 				values
@@ -136,7 +143,11 @@ for (const state of ["complete", "truncated", "unavailable", "invalid-id"]) {
 		const root = mkdtempSync(join(tmpdir(), "release-publish-"));
 		t.after(() => rmSync(root, { recursive: true, force: true }));
 		mkdirSync(join(root, "devops/github/release"), { recursive: true });
-		for (const file of ["release-assets.mjs", "release-provenance.mjs"])
+		for (const file of [
+			"release-assets.mjs",
+			"release-provenance.mjs",
+			"gh-api.mjs",
+		])
 			copyFileSync(
 				new URL(`./${file}`, import.meta.url),
 				join(root, "devops/github/release", file),
@@ -194,5 +205,118 @@ for (const state of ["complete", "truncated", "unavailable", "invalid-id"]) {
 				/api --method PATCH repos\/test\/repo\/releases\/7 -F draft=false/,
 			);
 		else assert.doesNotMatch(requests, /PATCH/);
+	});
+}
+
+// One real Actions ZIP contains every iOS release output type. Re-extracting
+// it reproduces the production overwrite prompt without mocking unzip itself.
+const iosArtifactZip = Buffer.from(
+	"UEsDBBQAAAAAAASsVV2gsmEUEgAAABIAAAAPAAAAQmlibGVPblNpdGUuaXBhc2lnbmVkIGlwYSBmaXh0dXJlUEsDBBQAAAAAAASsVV1dhNurFQAAABUAAAAbAAAAYXNzZXRwYWNrcy9yZWNpdGF0aW9uLTEuYWFyYXBwbGUgYXJjaGl2ZSBmaXh0dXJlUEsDBBQAAAAAAASsVV0WPgX8FQAAABUAAAAZAAAAcGF5bG9hZHMvcmVjaXRhdGlvbi0xLnppcGF1ZGlvIHBheWxvYWQgZml4dHVyZVBLAQIUABQAAAAAAASsVV2gsmEUEgAAABIAAAAPAAAAAAAAAAAAAACAAQAAAABCaWJsZU9uU2l0ZS5pcGFQSwECFAAUAAAAAAAErFVdXYTbqxUAAAAVAAAAGwAAAAAAAAAAAAAAgAE/AAAAYXNzZXRwYWNrcy9yZWNpdGF0aW9uLTEuYWFyUEsBAhQAFAAAAAAABKxVXRY+BfwVAAAAFQAAABkAAAAAAAAAAAAAAIABjQAAAHBheWxvYWRzL3JlY2l0YXRpb24tMS56aXBQSwUGAAAAAAMAAwDNAAAA2QAAAAAA",
+	"base64",
+);
+for (const scenario of [
+	"repeated-ios",
+	"different-targets",
+	"stale-target",
+	"bad-digest",
+	"download-failed",
+]) {
+	test(`artifact extraction is complete and noninteractive: ${scenario}`, (t) => {
+		const root = mkdtempSync(join(tmpdir(), "release-download-"));
+		t.after(() => {
+			assert.ok(root.startsWith(join(tmpdir(), "release-download-")));
+			rmSync(root, { recursive: true, force: true });
+		});
+		const zip = join(root, "fixture.zip");
+		const metadata = join(root, "metadata.jsonl");
+		const calls = join(root, "downloads");
+		writeFileSync(zip, iosArtifactZip);
+		writeFileSync(
+			metadata,
+			JSON.stringify({
+				id: 7,
+				name: "app-ios-v1.0.0",
+				expired: false,
+				digest: `sha256:${scenario === "bad-digest" ? "0".repeat(64) : createHash("sha256").update(iosArtifactZip).digest("hex")}`,
+				workflow_run: { id: 9, head_sha: "a".repeat(40) },
+			}) + "\n",
+		);
+		let artifacts = [
+			{ name: "app-ios-v1.0.0", path: "stage/ios", glob: "*.ipa" },
+		];
+		if (scenario === "repeated-ios")
+			artifacts = [
+				...artifacts,
+				{ ...artifacts[0], glob: "**/*.aar" },
+				{ ...artifacts[0], glob: "payloads/*" },
+			];
+		if (scenario === "different-targets")
+			artifacts.push({ ...artifacts[0], path: "other/ios" });
+		if (scenario === "stale-target") {
+			mkdirSync(join(root, "stage/ios"), { recursive: true });
+			writeFileSync(join(root, "stage/ios/BibleOnSite.ipa"), "stale binary");
+		}
+		const download = stepScript("Download Artifacts")
+			.replace("${{ inputs.artifacts_json }}", JSON.stringify(artifacts))
+			.replace(
+				"${{ steps.check_tag.outputs.CD_PAYLOAD || steps.build_payload.outputs.CD_PAYLOAD }}",
+				JSON.stringify({ ci_run_id: "9", ci_run_attempt: 1 }),
+			);
+		const result = spawnSync(
+			shell,
+			[
+				"-e",
+				"-o",
+				"pipefail",
+				"-c",
+				`gh() {
+  if [[ "$2" == */actions/runs/9/artifacts ]]; then cat "$ARTIFACT_METADATA";
+  elif [[ "$2" == */actions/runs/9 ]]; then printf '1\\n';
+  elif [[ "$2" == */actions/artifacts/7/zip ]]; then
+    printf 'download\\n' >> "$DOWNLOAD_CALLS"
+    if [ "$DOWNLOAD_SCENARIO" = download-failed ]; then return 1; fi
+    cat "$ZIP_FIXTURE"
+  else echo "Unexpected artifact request" >&2; return 1; fi
+}\n${download}`,
+			],
+			{
+				cwd: root,
+				encoding: "utf8",
+				windowsHide: true,
+				timeout: 15000,
+				env: {
+					...process.env,
+					RUNNER_TEMP: root.replace(/\\/g, "/"),
+					ZIP_FIXTURE: zip.replace(/\\/g, "/"),
+					ARTIFACT_METADATA: metadata.replace(/\\/g, "/"),
+					DOWNLOAD_CALLS: calls.replace(/\\/g, "/"),
+					DOWNLOAD_SCENARIO: scenario,
+				},
+			},
+		);
+		if (scenario === "bad-digest" || scenario === "download-failed") {
+			assert.notEqual(result.status, 0);
+			assert.ok(!existsSync(join(root, "stage/ios/BibleOnSite.ipa")));
+			return;
+		}
+		assert.equal(result.status, 0, result.stderr || result.error?.message);
+		const downloads = readFileSync(calls, "utf8").trim().split("\n");
+		assert.equal(downloads.length, scenario === "different-targets" ? 2 : 1);
+		for (const target of scenario === "different-targets"
+			? ["stage/ios", "other/ios"]
+			: ["stage/ios"]) {
+			assert.equal(
+				readFileSync(join(root, target, "BibleOnSite.ipa"), "utf8"),
+				"signed ipa fixture",
+			);
+			assert.equal(
+				readFileSync(join(root, target, "assetpacks/recitation-1.aar"), "utf8"),
+				"apple archive fixture",
+			);
+			assert.equal(
+				readFileSync(join(root, target, "payloads/recitation-1.zip"), "utf8"),
+				"audio payload fixture",
+			);
+		}
 	});
 }

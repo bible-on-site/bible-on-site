@@ -27,7 +27,7 @@ services:
 
   rustfs:
     # Pin the multi-platform manifest so local development and CI use one build.
-    image: rustfs/rustfs:1.0.1@sha256:1803faef57627e2d9c2e7d89d655d712ddded5389040054987163043fecb6a3c
+    image: rustfs/rustfs:1.0.3@sha256:9ca9559533b537d10482fe923288b676ad08f92a7069d9a17327fbae3cab688b
     ports:
       - "127.0.0.1:4566:9000"
       - "127.0.0.1:9001:9001"

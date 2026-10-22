@@ -3,8 +3,8 @@ using BibleOnSite.Models;
 namespace BibleOnSite.Services;
 
 /// <summary>
-/// E2E-only data source. iOS simulator builds never receive the perushim_notes
-/// ODR pack, so the HtmlView commentary path (the NSHTMLReader crash surface of
+/// E2E-only data source. iOS simulator builds never receive the perushim-notes
+/// asset pack, so the HtmlView commentary path (the NSHTMLReader crash surface of
 /// TestFlight incidents F0AF3C74 and 351F87DB) cannot be exercised in CI.
 /// When the app launches with BIBLE_E2E_PERUSHIM=1 — set by the mobile e2e
 /// suite through Appium processArguments — this provider fabricates realistic
@@ -25,6 +25,9 @@ internal static class SyntheticPerushimProvider
         new() { Id = -1, Name = "מפרש א", Priority = 0 },
         new() { Id = -2, Name = "מפרש ב", Priority = 1 },
         new() { Id = -3, Name = "מפרש ג", Priority = 2 },
+        new() { Id = -4, Name = "מפרש ד", Priority = 3 },
+        new() { Id = -5, Name = "מפרש ה", Priority = 4 },
+        new() { Id = -6, Name = "מפרש ו", Priority = 5 },
     ];
 
     /// <summary>
@@ -49,7 +52,9 @@ internal static class SyntheticPerushimProvider
                     Pasuk = pasuk,
                     NoteIdx = index++,
                     NoteContent =
-                        $"<b>פסוק {pasuk}</b> פירוש {perush.Name} על המילים " +
+                        Environment.GetEnvironmentVariable("BIBLE_E2E_LONG_PERUSHIM") == "1" && perush.Id == -1 && pasuk == 1
+                            ? string.Concat(Enumerable.Repeat("<p><b>פירוש ארוך</b> דברי תורה ללימוד ועיון במקורות עם פירוש נוסף על הפסוק.</p>", 2200))
+                            : $"<b>פסוק {pasuk}</b> פירוש {perush.Name} על המילים " +
                         "כאן<i data-commentator=\"Synthetic\" data-order=\"1\"></i> " +
                         "ועיין <sup>במקור</sup> נוסף<br>שורה שנייה " +
                         "<small>בכתב קטן</small> עם &lt;סוגריים&gt; ועוד טקסט ארוך " +

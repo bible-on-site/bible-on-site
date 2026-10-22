@@ -19,6 +19,7 @@
             <converters:ZeroToTrueConverter x:Key="ZeroToTrueConverter"/>
             <converters:NotNullConverter x:Key="NotNullConverter"/>
             <converters:FontFactorToSizeConverter x:Key="FontFactorToSizeConverter"/>
+            <converters:TanahpediaCategoryLabelConverter x:Key="TanahpediaCategoryLabelConverter"/>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

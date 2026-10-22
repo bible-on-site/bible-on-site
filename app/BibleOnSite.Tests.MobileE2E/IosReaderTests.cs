@@ -11,8 +11,8 @@ namespace BibleOnSite.Tests.MobileE2E;
 [Collection("Mobile device")]
 [Trait("Category", "MobileE2E")]
 [Trait("Platform", "iOS")]
-public sealed class IosReaderTests(ITestOutputHelper output, MobileDeviceSessionFactory sessions)
-    : MobileDeviceTest(output, sessions)
+public sealed class IosReaderTests(ITestOutputHelper output, MobileDeviceSession session)
+    : MobileDeviceTest(output, session)
 {
     [Fact]
     public void RightEdgeSwipeOpensAndScrimTapClosesTheFlyout() => Scenario(() =>
@@ -51,6 +51,8 @@ public sealed class IosReaderTests(ITestOutputHelper output, MobileDeviceSession
         var deadline = DateTime.UtcNow.Add(timeout);
         while (DateTime.UtcNow < deadline)
         {
+            // Deliberately bypasses the DriverTelemetry window cache: this loop
+            // must observe the resize that setOrientation only starts.
             var size = Driver!.Manage().Window.Size;
             if (size.Width > size.Height)
             {

@@ -5,13 +5,17 @@ import {
 	test as testBase,
 } from "@playwright/test";
 import { addCoverageReport } from "monocart-reporter";
+import { dumpImpactCoverage } from "../../../../shared/tests-util/e2e-impact";
 import { shouldMeasureCov } from "../../../../shared/tests-util/environment.mjs";
 import { TABLET_MIN_WIDTH } from "../../../src/hooks/useIsWideEnough";
 import { sanitizeCoverage } from "../coverage/sanitize-coverage";
 
 declare global {
 	interface Window {
-		collectIstanbulCoverage: (coverage?: CoverageData) => void;
+		collectIstanbulCoverage: (
+			coverage?: CoverageData,
+			realm?: "browser" | "server",
+		) => void;
 	}
 }
 
@@ -68,11 +72,16 @@ async function handlePageCoverage(page: Page) {
 	await page.evaluate(async () => {
 		if (window.__coverage__) {
 			window.collectIstanbulCoverage(window.__coverage__);
-		} else {
-			// If __coverage__ is not available (possibly due to server-side route), fetch it via API.
-			const res = await fetch("/api/dev/coverage");
-			const coverage = await res.json();
-			window.collectIstanbulCoverage(coverage);
+		}
+		// The server realm drains independently of browser coverage: a page
+		// can hold client counters while its SSR route also executed
+		// server-only modules. Server-side counters accumulate on the shared
+		// dev-server process, so this drain is tagged "server" for the
+		// impact collector.
+		const res = await fetch("/api/dev/coverage");
+		const serverCoverage = await res.json();
+		if (serverCoverage && Object.keys(serverCoverage).length > 0) {
+			window.collectIstanbulCoverage(serverCoverage, "server");
 		}
 	});
 }
@@ -85,10 +94,13 @@ async function coverageSetup(context: BrowserContext) {
 	);
 	await context.exposeFunction(
 		"collectIstanbulCoverage",
-		(coverage?: CoverageData) => {
+		(coverage?: CoverageData, realm: "browser" | "server" = "browser") => {
 			if (coverage) {
 				sanitizeCoverage(coverage as never); // TODO: fix types / migrate sanitizeCoverage to TS
 				if (Object.keys(coverage).length > 0) {
+					// Per-test evidence for the deterministic e2e-impact selector
+					// (#2085): the map lands under .coverage/e2e-impact/coverage/.
+					dumpImpactCoverage(test.info(), realm, coverage);
 					addCoverageReport(coverage, test.info());
 				}
 			}

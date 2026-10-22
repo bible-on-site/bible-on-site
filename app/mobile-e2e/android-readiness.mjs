@@ -12,6 +12,14 @@ export async function waitForAndroidDevice({ adb, udid, timeout = 120000, stable
       const state = (await execute(adb, ["-s", udid, "get-state"], options)).stdout.trim();
       const boot = (await execute(adb, ["-s", udid, "shell", "getprop", "sys.boot_completed"], options)).stdout.trim();
       const packages = (await execute(adb, ["-s", udid, "shell", "pm", "path", "android"], options)).stdout.trim();
+      const lastAnr = boot === "1"
+        ? (await execute(adb, ["-s", udid, "shell", "dumpsys", "activity", "lastanr"], options)).stdout
+        : "";
+      const anr = lastAnr.match(/(?:^|\n)\s*ANR in [^\n]+/);
+      if (anr) {
+        throw Object.assign(new Error(`Android device ${udid} has an unresolved system/app ANR: ${anr[0].trim()}`),
+          { code: "ANDROID_ANR" });
+      }
       const ready = state === "device" && boot === "1" && packages.startsWith("package:");
       observe({ elapsedMs: now() - started, ready, state, boot, packages });
       if (ready) {
@@ -22,7 +30,7 @@ export async function waitForAndroidDevice({ adb, udid, timeout = 120000, stable
       }
     } catch (error) {
       observe({ elapsedMs: now() - started, ready: false, code: error.code, error: String(error) });
-      if (["ENOENT", "EACCES"].includes(error.code)) throw error;
+      if (["ENOENT", "EACCES", "ANDROID_ANR"].includes(error.code)) throw error;
       stableSince = undefined;
     }
     await sleep(interval);

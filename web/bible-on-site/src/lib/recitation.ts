@@ -40,6 +40,12 @@ export interface Recitation {
 	durationMs: number;
 	alignmentStatus: "pending" | "needs_review" | "ready";
 	words: AlignmentWord[];
+	playback?: {
+		format: "ogg-opus";
+		bitrate: number;
+		audioUrl: string;
+		audioSha256: string;
+	};
 }
 
 function validAudioUrl(value: string, perekId: number) {
@@ -67,6 +73,25 @@ export function parseRecitation(
 	pesukim: Pasuk[],
 ): Recitation {
 	const data = value as Recitation;
+	if (data?.playback) {
+		const playback = data.playback;
+		if (
+			playback.format !== "ogg-opus" ||
+			playback.bitrate !== 24000 ||
+			!/^[a-f0-9]{64}$/.test(playback.audioSha256) ||
+			!validAudioUrl(
+				playback.audioUrl.replace(
+					`/recordings/opus-24k/${playback.audioSha256}.ogg`,
+					`/recordings/${perekId}_record.mp3`,
+				),
+				perekId,
+			) ||
+			!playback.audioUrl.endsWith(
+				`/recordings/opus-24k/${playback.audioSha256}.ogg`,
+			)
+		)
+			throw new Error("Invalid derived playback metadata");
+	}
 	if (
 		data?.version !== 1 ||
 		typeof data.audioSha256 !== "string" ||
