@@ -118,6 +118,7 @@ const buffers = new Map(), evidence = new Map(), drafts = new Map(), pastCases =
 const typedProblemDraftKeys = new Set();
 let historicalCase = null, keepPreviousVersion = false, playbackActive = false;
 let saving = false, cancelPlayback, liveQueue = false, refreshing = false, restoredActive;
+let lastQueuePollingFailure = null;
 const progressStorageKey = "listening-progress-v2";
 const stateKey = item => item.id + ":" + item.candidateSha256 + ":" + item.clipSha256;
 const decisionFor = item => decisions[stateKey(item)] ?? (!liveQueue ? decisions[item.id] : undefined);
@@ -713,7 +714,14 @@ async function refreshQueue(initial = false) {
       (additions.length === 1 ? "נוסף פסוק לרשימה." : "נוספו " + additions.length + " פסוקים לרשימה.") +
       " אפשר להמשיך בבדיקה הנוכחית.";
     persistProgress();
-  } catch (error) { $("queue-updates").textContent = error.message; }
+    if (lastQueuePollingFailure !== null) {
+      if ($("queue-updates").textContent === lastQueuePollingFailure) $("queue-updates").textContent = "";
+      lastQueuePollingFailure = null;
+    }
+  } catch (error) {
+    lastQueuePollingFailure = error.message;
+    $("queue-updates").textContent = lastQueuePollingFailure;
+  }
   finally { refreshing = false; }
 }
 $("note").oninput = () => { if (caseNow()) typedProblemDraftKeys.add(stateKey(caseNow())); rememberDraft(); updateCutEditorStatus(); };
