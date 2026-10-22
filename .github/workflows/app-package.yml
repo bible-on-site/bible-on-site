@@ -517,7 +517,9 @@ jobs:
         run: |
           # Show .NET SDK info to debug
           dotnet --info
-          # Pin the iOS 27 workload set for Xcode 27; see https://github.com/bible-on-site/bible-on-site/issues/1871
+          # Pin the iOS 27.0 workload set for Xcode 27.0; see https://github.com/bible-on-site/bible-on-site/issues/1871
+          # 10.0.402.1 selects iOS 27.1 needing Xcode 27.1, which the xcode-27
+          # image lacks — deferred until the image ships it; see #2566.
           dotnet workload install maui-ios --version 10.0.401.1
           # Show installed workloads
           dotnet workload list
