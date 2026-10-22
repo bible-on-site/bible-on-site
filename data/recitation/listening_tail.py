@@ -3,6 +3,7 @@
 import numpy as np
 
 from acoustic import ctc_spans
+from listening_machine import MACHINE_METHOD
 
 METHOD = "ctc-following-separator-start-v1"
 END_METHOD = "ctc-following-separator-end-v1"
@@ -72,6 +73,10 @@ def correct_ends(rows, evidence, identities, boundary="start"):
 
 def verify_corrections(diagnostic):
     """Every changed end must be the recorded pinned-path separator, never a pad."""
+    if diagnostic.get("boundaryMethod") == MACHINE_METHOD:
+        from listening_machine import verify_machine_proposals
+        verify_machine_proposals(diagnostic)
+        return
     if diagnostic.get("boundaryMethod") == INITIAL_SOURCE_METHOD:
         from listening_signal import verify_initial_source_proposals
         verify_initial_source_proposals(diagnostic)
