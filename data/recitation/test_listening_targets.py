@@ -12,6 +12,7 @@ from alignment import load_chapters, text_hash, words_for
 from listening_review import digest_file, digest_json, read_json, write_json
 from listening_targets import _pcm_clip, prepare_concerns
 import test_listening_context as context_fixtures
+import listening_audio as audio_transport
 
 
 class ConcernTargetsTests(unittest.TestCase):
@@ -163,6 +164,17 @@ class ConcernTargetsTests(unittest.TestCase):
         self.assertIn("Word duration", task["preparationFailure"])
         self.assertNotIn("caseRef", task)
         self.assertEqual(result["queues"], [])
+
+    def test_converter_failure_remains_operational_and_preserves_its_original_cause(self):
+        self.plan["targets"][0].update(rawDiagnostic={"path": "bound-raw", "sha256": "bound-sha"},
+                                       contextHoldReason=None)
+        write_json(self.plan_path, self.plan)
+        self.config["planSha256"] = digest_file(self.plan_path)
+        failure = audio_transport.subprocess.CalledProcessError(1, ["fixture-pcm-converter"])
+        with patch("listening_targets._candidate", side_effect=failure), self.assertRaises(OSError) as caught:
+            self.prepare()
+        self.assertIs(caught.exception.__cause__, failure)
+        self.assertFalse((self.root / "state/targets/catalog.json").exists())
 
     def test_cached_catalog_rejects_source_playback_and_original_evidence_changes(self):
         first = self.prepare()
