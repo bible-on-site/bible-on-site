@@ -224,7 +224,7 @@ class AccumulatedQueueTests(unittest.TestCase):
         def sync():
             try:
                 self.db.sync_histories()
-            except BaseException as error:
+            except Exception as error:
                 failures.append(error)
 
         with patch("listening_queue.read_json", side_effect=paused_read):
