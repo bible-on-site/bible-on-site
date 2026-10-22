@@ -2589,7 +2589,7 @@ jobs:
               echo "MongoDB is ready with $count documents in sefaria.texts collection!"
               # Regression check: the running server must match the version pinned
               # in the Dockerfile, so a stale cached GHCR image cannot slip through.
-              expected=$(grep -oP 'FROM mongo:\K[0-9]+\.[0-9]+\.[0-9]+' "${{ env.SEFARIA_MONGO_DOCKER_DIRECTORY }}/Dockerfile")
+              expected=$(grep -oP 'FROM mongo:\K[0-9]+\.[0-9]+\.[0-9]+' "$GITHUB_WORKSPACE/${{ env.SEFARIA_MONGO_DOCKER_DIRECTORY }}/Dockerfile")
               actual=$(docker exec sefaria-mongo mongosh --quiet --eval "db.version()")
               echo "Image: $SEFARIA_MONGO_IMAGE | mongod: $actual | Dockerfile FROM: mongo:$expected"
               test "$actual" = "$expected"
@@ -2747,7 +2747,7 @@ jobs:
               echo "MongoDB is ready with $count documents in sefaria.texts collection!"
               # Regression check: the running server must match the version pinned
               # in the Dockerfile, so a stale cached GHCR image cannot slip through.
-              expected=$(grep -oP 'FROM mongo:\K[0-9]+\.[0-9]+\.[0-9]+' "${{ env.SEFARIA_MONGO_DOCKER_DIRECTORY }}/Dockerfile")
+              expected=$(grep -oP 'FROM mongo:\K[0-9]+\.[0-9]+\.[0-9]+' "$GITHUB_WORKSPACE/${{ env.SEFARIA_MONGO_DOCKER_DIRECTORY }}/Dockerfile")
               actual=$(docker exec sefaria-mongo mongosh --quiet --eval "db.version()")
               echo "Image: $SEFARIA_MONGO_IMAGE | mongod: $actual | Dockerfile FROM: mongo:$expected"
               test "$actual" = "$expected"
