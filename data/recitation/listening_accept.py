@@ -4,6 +4,7 @@ import argparse
 from collections import defaultdict
 from contextlib import closing
 from copy import deepcopy
+from datetime import datetime
 import json
 from pathlib import Path
 import sqlite3
@@ -12,6 +13,7 @@ import tempfile
 
 from alignment import load_chapters, reconcile, validate_timings, words_for
 from listening_audio import duration
+from listening_edits import verify_word_review
 from listening_review import (ReviewStore, digest_file, digest_json,
                               read_json, validate_case, validate_decision)
 from listening_round import load_review_evidence
@@ -22,6 +24,58 @@ from trusted import POLICY_VERSION, SOFT_WARNING, TRUSTED_PIPELINE, valid_score,
 
 POLICY = "targeted-human-listening-v1"
 RESOLVABLE = {"insufficient ASR agreement", "verse boundary words lack reliable ASR anchors", SOFT_WARNING}
+
+
+def review_instant(row):
+    """Compare separately stored actual answers without rewriting either history."""
+    try:
+        stamp = datetime.fromisoformat(row["savedAt"].replace("Z", "+00:00"))
+        if stamp.utcoffset() is None:
+            raise ValueError("Listening answer timestamp requires a timezone")
+        return stamp
+    except (AttributeError, KeyError, TypeError, ValueError) as error:
+        raise ValueError("Listening answer has an invalid saved timestamp") from error
+
+
+def current_review_decisions(queue, reviews_path):
+    """Keep typed manual coordinates separate, choosing the latest genuine answer."""
+    decisions = ReviewStore(reviews_path, queue).snapshot()
+    saved = read_json(reviews_path) if reviews_path.exists() else {}
+    typed = saved.get("wordReviews", [])
+    if not isinstance(typed, list) or any(not isinstance(row, dict) for row in typed):
+        raise ValueError("Manual word review history must contain saved review objects")
+    cases = {case["id"]: case for case in queue["cases"]}
+    latest = {}
+    for row in typed:
+        case = cases.get(row.get("caseId"))
+        # Historical manual coordinates belong only to their immutable parent.
+        if (case and row.get("candidateSha256") == case["candidateSha256"]
+                and row.get("clipSha256") == case["clipSha256"]):
+            latest[case["id"]] = row
+    for case_id, row in latest.items():
+        legacy = decisions.get(case_id)
+        # A legacy tab still plays the original proposal. Its later answer does
+        # not concern a separately edited coordinate version of those words.
+        # Compare ordering across stores only for byte-identical word rows.
+        same_coordinates = (legacy is not None
+            and legacy.get("candidateWords") == row.get("candidateWords")
+            and all(legacy.get(key) == row.get(key) for key in
+                    ("caseId", "perekId", "pasuk", "audioSha256", "textSha256",
+                     "candidateSha256", "clipSha256", "diagnosticSha256")))
+        if not same_coordinates or review_instant(row) >= review_instant(legacy):
+            decisions[case_id] = deepcopy(row)
+    return decisions
+
+
+def verify_manual_review(case, decision, queue_hash):
+    """A typed GOOD approves explicit human timings, never modified model evidence."""
+    allowed = queue_hash.get(case["id"], []) if isinstance(queue_hash, dict) else [queue_hash]
+    if decision.get("queueSha256") not in allowed:
+        raise ValueError("Manual word review is not bound to this queue")
+    verify_word_review(case, decision, decision["queueSha256"])
+    review_instant(decision)
+    if decision["verdict"] != "good":
+        raise ValueError(f"Human decision remains {decision['verdict']} for {case['id']}")
 
 
 def verify_review(case, decision, queue_hash):
@@ -91,10 +145,18 @@ def reviewed_replacements(manifest, report, words, cases, decisions, queue_hash)
         if decision is None:
             continue
         # A problem answer must never be ignored in favor of an earlier good answer.
-        verify_review(case, decision, queue_hash)
         validate_case(case, words, manifest)
+        # Acoustic evidence always validates the immutable original proposal.
+        # Human coordinates are separately typed evidence, not rewritten model rows.
         verify_diagnostic(case)
-        replacements[case["pasuk"]] = deepcopy(case["words"])
+        if decision.get("kind") == "manual-word-review":
+            verify_manual_review(case, decision, queue_hash)
+            reviewed = {**case, "words": deepcopy(decision["candidateWords"])}
+            validate_case(reviewed, words, manifest)
+            replacements[case["pasuk"]] = reviewed["words"]
+        else:
+            verify_review(case, decision, queue_hash)
+            replacements[case["pasuk"]] = deepcopy(case["words"])
         reviews.append(deepcopy(decision))
     if not replacements:
         raise ValueError("No current human approval for this chapter")
@@ -181,7 +243,7 @@ def overlay_reviews(staged, database, withdrawn):
 def stage_reviews(queue_path, reviews_path, text, output, database):
     """Overlay complete recoveries only, preserving already accepted tracks."""
     queue, bindings = load_review_evidence(queue_path)
-    decisions = ReviewStore(reviews_path, queue).snapshot()
+    decisions = current_review_decisions(queue, reviews_path)
     chapters = load_chapters(text)
     cases_by_chapter = defaultdict(list)
     for case in queue["cases"]:
