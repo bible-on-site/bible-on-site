@@ -12,6 +12,7 @@ import threading
 from urllib.parse import parse_qs, urlsplit
 
 from listening_edits import validate_cut_edit, validate_word_review
+from listening_files import read_state_json
 from listening_review import (ListeningHandler, digest_file, digest_json,
                               load_queue, read_json, session_token, validate_decision, write_json)
 
@@ -30,7 +31,7 @@ def stamp(row):
 
 def preparation_status(path):
     """Return only public counters and stable codes from the local job status file."""
-    status = read_json(path)
+    status = read_state_json(path)
     if not isinstance(status, dict) or not isinstance(status.get("state"), str):
         raise ValueError("Invalid preparation status")
     if not re.fullmatch(r"[a-z][a-z0-9_]{0,79}", status["state"]):
