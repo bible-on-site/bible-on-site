@@ -45,19 +45,16 @@ const RASHI_SLUG = encodeURIComponent('רש"י');
 
 const rashiPerush = {
 	id: 1,
-	perekId: 0,
 	name: 'רש"י',
 	parshanName: "רש\"י",
-	authorName: "רש\"י",
+	noteCount: 1,
 };
 
 beforeEach(() => {
 	jest.clearAllMocks();
 	// Every perek "has" רש"י for metadata purposes; notes are empty so the
 	// fallback description (the other string carrying the source) is exercised.
-	mockGetPerushimByPerekId.mockImplementation(async (perekId: number) => [
-		{ ...rashiPerush, perekId },
-	]);
+	mockGetPerushimByPerekId.mockResolvedValue([rashiPerush]);
 	mockGetPerushDetail.mockResolvedValue({ notes: [] } as never);
 });
 
