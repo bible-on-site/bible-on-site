@@ -42,8 +42,12 @@ def verify_clip(case):
     except (wave.Error, EOFError) as error:
         raise ValueError("Invalid lossless listening audio") from error
     start, end = case["clipStartMs"], case["clipEndMs"]
+    human_context = (case.get("preparationKind") == "human-selected-context-v1"
+                     and case.get("manualSourceInspection") is False
+                     and case.get("requiresFreshHumanCutReview") is True)
     if (not _integer(start) or not _integer(end) or not 0 <= start < end
-            or end - start > 45000 or frames * 1000 != (end - start) * rate):
+            or end - start > 45000 and not human_context
+            or frames * 1000 != (end - start) * rate):
         raise ValueError("Listening context differs from actual PCM frame bounds")
     return {"sampleRate": rate, "channels": channels, "frameCount": frames,
             "pcmSha256": hashlib.sha256(pcm).hexdigest()}
