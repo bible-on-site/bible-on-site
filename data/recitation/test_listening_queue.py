@@ -10,6 +10,7 @@ import tempfile
 import threading
 import unittest
 from unittest.mock import patch
+import uuid
 import wave
 
 from listening_accept import verify_review
@@ -61,9 +62,13 @@ class AccumulatedQueueTests(unittest.TestCase):
 
     def stored_state(self):
         with closing(sqlite3.connect(self.db.path)) as db:
-            return {name: db.execute("SELECT * FROM " + name + " ORDER BY rowid").fetchall()
-                    for name in ("batch", "candidate", "current_candidate", "history",
-                                 "entry", "cut_edit", "word_review")}
+            return {"batch": db.execute("SELECT * FROM batch ORDER BY rowid").fetchall(),
+                    "candidate": db.execute("SELECT * FROM candidate ORDER BY rowid").fetchall(),
+                    "current_candidate": db.execute("SELECT * FROM current_candidate ORDER BY rowid").fetchall(),
+                    "history": db.execute("SELECT * FROM history ORDER BY rowid").fetchall(),
+                    "entry": db.execute("SELECT * FROM entry ORDER BY rowid").fetchall(),
+                    "cut_edit": db.execute("SELECT * FROM cut_edit ORDER BY rowid").fetchall(),
+                    "word_review": db.execute("SELECT * FROM word_review ORDER BY rowid").fetchall()}
 
     def status_server(self, path=None):
         server = make_queue_server(self.db, 0, self.root / "session.json", preparation_status=path)
@@ -94,11 +99,15 @@ class AccumulatedQueueTests(unittest.TestCase):
                   "remainingToPrepare": 370, "machinePreparedVerses": 30,
                   "holdReasons": {"known_original_source_hold": 1, "source_or_full_chapter_guard": 176},
                   "visibleVerses": 11, "visibleWordCuts": 78, "updatedAt": "2026-10-22T12:00:00+00:00"}
-        write_json(status_path, {**public, "token": "not-for-export", "proofPath": str(self.root / "proof.json"),
+        private_values = [uuid.uuid4().hex, uuid.uuid4().hex]
+        write_json(status_path, {**public, "token": private_values[0], "proofPath": str(self.root / "proof.json"),
                                  "error": "private failure in " + str(status_path),
-                                 "unknown": {"token": "also-private"}})
+                                 "unknown": {"token": private_values[1]}})
         server = self.status_server(status_path)
-        self.assertEqual(self.get_status(server), (200, public))
+        code, response = self.get_status(server)
+        self.assertEqual((code, response), (200, public))
+        for value in private_values:
+            self.assertNotIn(value, json.dumps(response))
         self.assertEqual(self.get_status(server, headers={"Host": "localhost.invalid"})[0], 403)
         write_json(status_path, {"state": "complete", "updatedAt": "2026-10-22T12:05:00Z"})
         self.assertEqual(self.get_status(server), (200, {"state": "complete", "updatedAt": "2026-10-22T12:05:00Z"}))

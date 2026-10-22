@@ -1,9 +1,8 @@
-"""Source-bound machine proposals from completed diagnostics, never approvals.
+"""Prepare source-bound machine proposals without granting listening approval."""
 
-This method preserves the actual CUDA letter spans. It does not claim source
-inspection or corrected endpoints. Publication still needs genuine cut hearing
-and the existing whole-chapter acceptance gates.
-"""
+# Preserve actual CUDA letter spans, without claiming source inspection or
+# corrected endpoints. Publication requires genuine cut hearing and the existing
+# whole-chapter acceptance gates.
 
 from copy import deepcopy
 from functools import lru_cache

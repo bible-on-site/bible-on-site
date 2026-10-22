@@ -1,28 +1,22 @@
-"""Resume local diagnostic preparation and refill the existing listening queue.
-
-This node never loads an inference model or approves/publishes word timings.
-It consumes completed, source-bound local model outputs; every offered cut still
-needs a genuine human answer through the existing guarded review importer.
-"""
+"""Prepare local diagnostic candidates without inference, approval or publication."""
 import argparse
 from collections import Counter, defaultdict
 from contextlib import closing
 from copy import deepcopy
 from datetime import datetime, timezone
+from http.client import HTTPConnection
 import json
 import os
 from pathlib import Path
 import sqlite3
-import subprocess
-import sys
 import time
 from urllib.parse import urlsplit
-from urllib.request import urlopen
 import uuid
 
 from alignment import load_chapters, words_for
 from listening_accept import merged_words
 from listening_machine import build_machine_study
+from listening_queue import ReviewDatabase
 from listening_review import (candidate_digest, chapter_labels, digest_file, digest_json,
                               hebrew_number, load_queue, make_clip, read_json,
                               validate_case, write_json)
@@ -34,6 +28,7 @@ PATHS = ("planPath", "jobRoot", "canonicalPath", "recordings", "batchRoot",
 
 
 def now():
+    """Return one timezone-aware timestamp for durable preparation evidence."""
     return datetime.now(timezone.utc).isoformat()
 
 
@@ -41,10 +36,12 @@ class WorkerLock:
     """An OS-owned lock is released even after a process crash, without stale deletion."""
 
     def __init__(self, path):
+        """Bind a lock file without acquiring another worker's ownership."""
         self.path = Path(path)
         self.stream = None
 
     def __enter__(self):
+        """Acquire exclusive nonblocking ownership for this process lifetime."""
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.stream = self.path.open("a+b")
         self.stream.seek(0, os.SEEK_END)
@@ -66,6 +63,7 @@ class WorkerLock:
         return self
 
     def __exit__(self, *_args):
+        """Release ownership after either a normal exit or a worker failure."""
         if self.stream:
             if os.name == "nt":
                 import msvcrt
@@ -75,7 +73,10 @@ class WorkerLock:
 
 
 class PreparationWorker:
+    """Resume verified local candidates and replenish bounded human review work."""
+
     def __init__(self, config):
+        """Validate isolated paths, loopback transport and immutable job inputs."""
         self.config = deepcopy(config)
         if config.get("version") != 1:
             raise ValueError("Unknown local preparation configuration")
@@ -92,7 +93,9 @@ class PreparationWorker:
                 or parsed.username or parsed.password or parsed.path not in ("", "/")
                 or parsed.query or parsed.fragment):
             raise ValueError("Use the existing loopback review application")
-        self.url = config["reviewUrl"].rstrip("/")
+        self.port = parsed.port if parsed.port is not None else 80
+        if not 1 <= self.port <= 65535:
+            raise ValueError("The loopback review application requires a valid port")
         for key, default in (("targetVisible", 20), ("maxVisibleCuts", 150), ("pollSeconds", 5)):
             value = config.get(key, default)
             if not isinstance(value, int) or isinstance(value, bool) or value < 1:
@@ -130,6 +133,7 @@ class PreparationWorker:
                        "newInferenceRuns": 0, "publicationWrites": 0}
 
     def _save(self, state=None, **details):
+        """Atomically persist the resumable ledger and truthful workload counters."""
         if state:
             self.status["state"] = state
         self.status.update(details, updatedAt=now())
@@ -144,8 +148,18 @@ class PreparationWorker:
         write_json(self.state / "status.json", self.status)
 
     def _workload(self):
-        with urlopen(self.url + "/api/preparation-workload", timeout=20) as response:
-            value = json.load(response)
+        """Read one atomic workload from the fixed local review endpoint."""
+        connection = HTTPConnection("127.0.0.1", self.port, timeout=20)
+        try:
+            connection.request("GET", "/api/preparation-workload")
+            response = connection.getresponse()
+            if response.status != 200:
+                raise ValueError("The local review workload request failed: HTTP " + str(response.status))
+            value = json.loads(response.read())
+        finally:
+            connection.close()
+        if not isinstance(value, dict):
+            raise ValueError("The review app lacks a valid atomic preparation workload")
         offered, visible = value.get("offeredCaseIds"), value.get("visibleCaseIds")
         if (not isinstance(offered, list) or not isinstance(visible, list)
                 or any(not isinstance(key, str) or not key for key in offered + visible)
@@ -159,24 +173,28 @@ class PreparationWorker:
         return value
 
     def _check_inputs(self):
+        """Reject changed immutable inputs before any preparation or refill."""
         if digest_file(self.paths["planPath"]) != self.config["planSha256"]:
             raise ValueError("The immutable selective repair plan changed")
         if digest_file(self.paths["canonicalPath"]) != self.canonical_sha:
             raise ValueError("Canonical source changed during local preparation")
 
     def _ready(self):
+        """Read completed chapters through a short read-only publication connection."""
         path = self.paths["publicationDatabase"].resolve().as_uri() + "?mode=ro"
         with closing(sqlite3.connect(path, uri=True)) as database:
             return {row[0] for row in database.execute(
                 "SELECT perek_id FROM recitation_track WHERE alignment_status='ready'")}
 
     def _record(self, targets, state, reason, **extra):
+        """Keep an explicit per-target outcome without altering source evidence."""
         for target in targets:
             key = f"{target['perekId']}-{target['pasuk']}"
             self.ledger["cases"][key] = dict(state=state, reason=reason,
                 perekId=target["perekId"], pasuk=target["pasuk"], updatedAt=now(), **extra)
 
     def _prepare_group(self, pid, targets):
+        """Validate all chapter replacements before creating an immutable queue."""
         source = self.paths["jobRoot"] / "source"
         manifest_path = source / "alignments" / f"{pid}.json"
         manifest, report, asr = (read_json(manifest_path), read_json(source / f"{pid}.review.json"),
@@ -238,6 +256,7 @@ class PreparationWorker:
                 groupQueueSha256=digest_file(queue_path), case=case, updatedAt=now())
 
     def prepare_all(self, refill_each=False):
+        """Prepare only never-offered selective targets from a completed local job."""
         self._check_inputs()
         job_status = read_json(self.paths["jobRoot"] / "status.json")
         if job_status.get("state") != COMPLETED_DIAGNOSTICS:
@@ -277,15 +296,11 @@ class PreparationWorker:
         return self.status
 
     def _append(self, queue_path):
-        command = [sys.executable, "-X", "utf8", str(Path(__file__).with_name("listening_queue.py")),
-                   "--store", str(self.paths["reviewStore"]), "append", "--queue", str(queue_path), "--only-unseen"]
-        from listening_audio import hidden_audio_options
-        process = subprocess.run(command, capture_output=True, text=True, encoding="utf-8",
-                                 check=False, **hidden_audio_options())
-        if process.returncode:
-            raise ValueError("The short append writer rejected this batch: " + process.stderr[-2000:])
+        """Append through the original short transaction, never a persistent reader."""
+        ReviewDatabase(self.paths["reviewStore"]).append(queue_path, only_unseen=True)
 
     def refill(self):
+        """Add unseen candidates within both live verse and cut capacity limits."""
         self._check_inputs()
         workload, ready = self._workload(), self._ready()
         offered = set(workload["offeredCaseIds"])
@@ -343,6 +358,7 @@ class PreparationWorker:
         return len(selected)
 
     def run(self, once=False):
+        """Hold one worker lease while preparing and refilling the bounded backlog."""
         with WorkerLock(self.state / "worker.lock"):
             try:
                 self.prepare_all(refill_each=True)
@@ -362,6 +378,7 @@ class PreparationWorker:
 
 
 def main():
+    """Run the configured local preparation job and report its durable status."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--once", action="store_true")

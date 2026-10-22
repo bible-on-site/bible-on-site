@@ -2,11 +2,12 @@
 
 from contextlib import ExitStack, closing
 from copy import deepcopy
-from io import BytesIO
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 from pathlib import Path
 import sqlite3
 import tempfile
+import threading
 import unittest
 from unittest.mock import patch
 import wave
@@ -125,6 +126,36 @@ class LocalPreparationTests(unittest.TestCase):
         stack.enter_context(patch.object(worker, "_workload", side_effect=lambda: deepcopy(self.inventory)))
         stack.enter_context(patch.object(worker, "_append", side_effect=self.append))
         return stack
+
+    def http_fixture(self, value):
+        class WorkloadHandler(BaseHTTPRequestHandler):
+            """Serve only the isolated fixture's fixed workload response."""
+
+            def do_GET(self):
+                """Record the actual client route and return the fixture inventory."""
+                self.server.paths.append(self.path)
+                body = json.dumps(self.server.value).encode()
+                self.send_response(self.server.response_status)
+                if self.server.response_status == 302:
+                    self.send_header("Location", "http://example.invalid/must-not-be-followed")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *_args):
+                """Keep fixture request logs out of the unit-test output."""
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0), WorkloadHandler)
+        server.value, server.response_status, server.paths = value, 200, []
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+
+        def close():
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=5)
+        self.addCleanup(close)
+        return server
 
     def test_only_real_selective_targets_reach_preparation_and_all_other_reasons_stay_explicit(self):
         self.add_target(1)
@@ -356,6 +387,9 @@ class LocalPreparationTests(unittest.TestCase):
         for change in ({"reviewUrl": "http://example.com:8792"}, {"reviewUrl": "http://localhost:8792"},
                        {"reviewUrl": "http://127.0.0.1:8792/api/queue"},
                        {"reviewUrl": "http://user:secret@127.0.0.1:8792/"},
+                       {"reviewUrl": "http://127.0.0.1:0/"},
+                       {"reviewUrl": "http://127.0.0.1:65536/"},
+                       {"reviewUrl": "http://127.0.0.1:not-a-port/"},
                        {"publicationDatabase": str(self.root / "recitation-working.sqlite")},
                        {"reviewStore": str(self.database)}, {"stateDirectory": "relative-state"},
                        {"reviewStore": str(self.root / "alias" / ".." / self.database.name)},
@@ -364,21 +398,38 @@ class LocalPreparationTests(unittest.TestCase):
                 PreparationWorker({**self.config, **change})
 
     def test_workload_requires_one_consistent_inventory_without_secrets_or_completion_inference(self):
-        worker = self.worker()
         valid = {"offeredCaseIds": ["1-2", "old-good"], "visibleCaseIds": ["1-2"],
                  "visibleWordCuts": 2, "revision": "one-atomic-inventory"}
-        response = BytesIO(json.dumps(valid).encode())
-        with patch("listening_prepare.urlopen", return_value=response) as request:
-            self.assertEqual(worker._workload(), valid)
-        request.assert_called_once_with("http://127.0.0.1:8792/api/preparation-workload", timeout=20)
+        server = self.http_fixture(valid)
+        worker = self.worker(reviewUrl=f"http://127.0.0.1:{server.server_port}/")
+        self.assertEqual(worker._workload(), valid)
         for changes in ({"offeredCaseIds": "1-2"}, {"offeredCaseIds": ["1-2", "1-2"]},
                         {"visibleCaseIds": ["1-2", "1-2"]}, {"visibleCaseIds": ["unoffered"]},
                         {"offeredCaseIds": [True]}, {"visibleWordCuts": True},
                         {"visibleWordCuts": -1}, {"visibleWordCuts": 0}, {"revision": ""}):
-            response = BytesIO(json.dumps({**valid, **changes}).encode())
-            with self.subTest(changes=changes), patch("listening_prepare.urlopen", return_value=response):
+            server.value = {**valid, **changes}
+            with self.subTest(changes=changes):
                 with self.assertRaisesRegex(ValueError, "valid atomic preparation workload"):
                     worker._workload()
+        self.assertEqual(server.paths, ["/api/preparation-workload"] * 10)
+
+    def test_workload_rejects_redirect_or_error_instead_of_following_an_external_url(self):
+        server = self.http_fixture({"not": "a workload"})
+        worker = self.worker(reviewUrl=f"http://127.0.0.1:{server.server_port}/")
+        for status in (302, 403, 500):
+            server.response_status = status
+            with self.subTest(status=status), self.assertRaisesRegex(ValueError, "HTTP " + str(status)):
+                worker._workload()
+        self.assertEqual(server.paths, ["/api/preparation-workload"] * 3)
+
+    def test_append_uses_original_short_transaction_with_unseen_protection(self):
+        worker = self.worker()
+        queue_path = self.root / "immutable-batch/queue.json"
+        with patch("listening_prepare.ReviewDatabase") as writer:
+            worker._append(queue_path)
+        writer.assert_called_once_with(Path(self.config["reviewStore"]).resolve())
+        writer.return_value.append.assert_called_once_with(queue_path, only_unseen=True)
+        writer.return_value.snapshot.assert_not_called()
 
     def test_changed_canonical_requires_distinct_state_instead_of_reusing_prepared_candidates(self):
         self.add_target(1)
