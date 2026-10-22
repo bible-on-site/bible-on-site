@@ -96,4 +96,30 @@ public class PressArmingTests
 
         PressArming.IsCandidate(null, perek).Should().BeFalse();
     }
+
+    private static ParashaUnit CreateUnit(int unitId) => new()
+    {
+        UnitId = unitId,
+        Slug = unitId.ToString(),
+        SeferId = 1,
+        SeferName = "בראשית",
+        Order = unitId,
+        Heading = "בראשית",
+        TorahRange = new ScriptureRange()
+    };
+
+    [Fact]
+    public void IsCandidate_returns_true_only_for_the_current_parasha_unit()
+    {
+        // The פרשה reader's תיקון flow binds the carousel's ParashaUnit —
+        // arming matches the live unit by reference, never an equal id.
+        var current = CreateUnit(1);
+        var adjacent = CreateUnit(1);
+        var row = ParashaDisplayItem.SectionHeader("תורה");
+
+        PressArming.IsCandidate(current, current).Should().BeTrue();
+        PressArming.IsCandidate(adjacent, current).Should().BeFalse();
+        PressArming.IsCandidate(row, current).Should().BeFalse();
+        PressArming.IsCandidate(null, current).Should().BeFalse();
+    }
 }
