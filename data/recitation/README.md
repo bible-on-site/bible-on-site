@@ -173,6 +173,82 @@ Import rechecks the real MP3 hash, canonical text hash, every word identity,
 complete coverage, and nonoverlapping in-range timestamps. It cannot approve a
 partial word list or a review of different audio/text.
 
+### Local preparation and automatic queue refill
+
+`listening_prepare.py` connects a completed diagnostic job to the existing local
+listening application. It reads the selective repair plan, verifies the saved
+full-FP32 CUDA results, original MP3/report/ASR/canonical identities, actual decoded
+PCM context and full-chapter geometry, then creates immutable listening batches.
+It reuses the completed model output: **no new inference, model loading, GPU
+utilization probe, or hosted model call is needed for this node**. Decoding clips,
+checking hashes and managing the queue run locally on the CPU.
+
+A machine proposal is not a manually inspected or corrected cut. Its evidence
+method is `machine-diagnostic-initial-candidate-v1`; original model coordinates and
+scores remain exact, with `sourceInspectionPerformed: false` and
+`automaticApproval: false`. The editor lets the reviewer hear and adjust these
+proposals. Every offered cut requires genuine fresh hearing before a GOOD answer
+can be imported. `listening_accept.py` still checks the original source, exact
+saved answer, complete chapter and unchanged automatic remainder. Preparation
+never writes publication timings or turns diagnostic scores into approval.
+
+Supply a JSON configuration with `version: 1`, the exact immutable `planSha256`,
+and these **absolute** paths:
+
+| Field | Meaning |
+| --- | --- |
+| `planPath` | Selective repair plan containing target verses and raw diagnostic hashes. |
+| `jobRoot` | Completed diagnostic job with `status.json`, `source/` and raw diagnostics. |
+| `canonicalPath` | Canonical chapter JSON used for identities and display labels. |
+| `recordings` | Unchanged original MP3 directory. |
+| `batchRoot` | Permanent task-owned directory for immutable prepared groups and offered batches. |
+| `stateDirectory` | Permanent task-owned directory for `ledger.json`, `status.json` and `worker.lock`. |
+| `publicationDatabase` | Durable publication database, opened briefly read-only to exclude ready chapters. Never a worker checkpoint. |
+| `reviewStore` | Existing accumulated review database, used only by its short transactional append writer. |
+
+Set `reviewUrl` to the existing loopback application, for example
+`http://127.0.0.1:8792/`. Optional positive integer limits are `targetVisible`
+(default 20 verses), `maxVisibleCuts` (default 150 cuts) and `pollSeconds`
+(default 5 seconds). `knownSourceHoldIds` defaults to `[28, 136, 231]`; retain
+explicit source holds when configuring a job.
+
+Run the copied permanent runtime, rather than a disposable checkout:
+
+```powershell
+C:/recitation-preparation/runtime/python.exe -X utf8 C:/recitation-preparation/runtime/listening_prepare.py --config C:/recitation-preparation/config.json
+```
+
+The executable above represents the existing task-authorized Python runtime;
+use its real absolute path, not a new environment or model installation. Copy the
+matching preparation/review modules into the task-owned runtime before launching.
+A limited local Scheduler job can keep that runtime independent of the checkout;
+use a single instance (`IgnoreNew`). The worker also takes an OS-owned lock, which
+is released on exit or crash without deleting another process's lock file.
+Neither output directory may be inside the completed diagnostic job.
+
+The worker prepares complete source groups once, records progress after each
+chapter and fills available review capacity without exceeding either limit.
+`/api/preparation-workload` supplies one atomic inventory of all previously
+offered IDs and currently visible work. The append writer's `--only-unseen`
+transaction refuses to replace an existing candidate, including a typed GOOD or
+an active draft. Previously offered chapters and ready chapters are excluded;
+existing answers, hidden GOOD cuts, candidates and browser drafts are preserved.
+When capacity is full, preparation continues offline and the worker waits before
+refilling. `--once` prepares and refills once, then returns instead of waiting for
+more capacity. A normal run exits when no prepared cases remain to be queued;
+this does not mean the queued cases are approved or published.
+
+Inspect `stateDirectory/status.json` for counts and reasons, not GPU utilization.
+The ledger distinguishes `prepared`, `queued`, `excluded` and `held`. Explicit
+holds include `known_original_source_hold`, `chapter_requires_supported_context`,
+`source_or_full_chapter_guard` (with the actual guard detail) and
+`verse_exceeds_configured_review_window`. Score-only diagnostics are not blanket
+listening requests. Unsupported contexts, source defects and failed quality
+checks remain held; the node does not invent anchors or pad, clamp or rewrite
+boundaries to make them pass. Unexpected runtime failures set `state: failed`
+with the error. An unchanged configuration resumes from the ledger; changed plan,
+canonical source or preparation policy requires a distinct state directory.
+
 ## Pipeline boundary and storage
 
 `data/recitation/recitation.sqlite` is the versioned intermediate database owned

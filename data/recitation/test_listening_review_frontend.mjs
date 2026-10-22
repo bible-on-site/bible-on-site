@@ -23,6 +23,7 @@ async function page(saved = {}, options = {}) {
     clipSha256:createHash("sha256").update(clip).digest("hex"),changedSegments:[2],reusableHeardSegments:options.reusableHeardSegments??[1],
     freshListeningRequiredSegments:options.reusableHeardSegments?[2]:[2,3],words:[{segment:1,text:"ישן",startMs:100,endMs:300},
       {segment:2,text:"מתוקן",startMs:400,endMs:600},{segment:3,text:"אחרון",startMs:700,endMs:900}]};
+  if(options.machine) item.preparationKind="machine-suspect";
   const document = {getElementById:id=>elements[id],createElement:()=>new Element(),addEventListener(){},
     querySelector:selector=>elements.words.children.find(e=>String(e.dataset.segment)===selector.match(/"(\d+)"/)[1]),
     querySelectorAll:selector=>selector===".word.active"?elements.words.children.filter(e=>e.classes.has("active")):[]};
@@ -61,6 +62,7 @@ async function page(saved = {}, options = {}) {
         const body=JSON.parse(request.body);editPosts.push({body,headers:request.headers});if(editSaveGate)await editSaveGate;
         return editSaveFails?{error:"fixture save failure"}:{...body,listenEvidenceReportedByBrowser:{heardEditedSegments:body.heardEditedSegments}};}}
       :url==="/api/cut-edits"?{ok:true,json:async()=>({entries:options.cutProposals??[]})}
+      :url==="/api/preparation-status"?{ok:options.preparation!==undefined,json:async()=>options.preparation}
       :{json:async()=>({state:"complete",humanRecoveredChapters:0})}});
   vm.runInContext(script,context);await tick();
   return {elements,starts,playbackSlices,posts,wordPosts:posts,wordRequests,legacyPosts,editPosts,item,storage,releaseWordSave:()=>releaseWordSave?.(),setWordSaveFailure:value=>{wordSaveFails=value;},releaseEditSave:()=>releaseEditSave?.(),failEditSave:()=>{editSaveFails=true;},setQueue:value=>{queue=value;},failQueue:()=>{queueFails=true;},run:code=>vm.runInContext(code,context),async flush(){await tick();},async resumeGap(){assert.ok(gaps.length);gaps.shift()();await tick();},
@@ -625,4 +627,51 @@ test("a pending problem save freezes its textarea and re-enables the exact draft
   await p.run("save('problem')");await p.flush();assert.equal(p.wordPosts[1].note,"הערה שנערכה אחרי הכישלון");
   assert.equal(p.run("caseNow().id"),"other");assert.equal(p.elements.note.disabled,false);
   assert.equal(p.elements.note.hidden,true);assert.equal(p.elements.note.value,"");
+});
+
+test("older servers without preparation status keep the preparation panel hidden",async()=>{
+  const p=await page();await p.run("updatePreparation()");
+  assert.equal(p.elements["preparation-progress"].hidden,true);
+  assert.equal(p.run("cases.length"),2);
+});
+
+test("preparation progress shows the full backlog separately from the available passages",async()=>{
+  const p=await page({}, {preparation:{state:"preparing",targetVerses:579,remainingToPrepare:300,
+    machinePreparedVerses:80,counts:{held:199}}});
+  await p.run("updatePreparation()");
+  assert.equal(p.elements["preparation-progress"].hidden,false);
+  const text=p.elements["preparation-counts"].textContent;
+  for(const count of [579,300,80,199])assert.ok(text.includes(String(count)));
+  assert.equal(p.run("cases.length"),2);
+});
+
+test("machine proposals are explicitly unapproved and cannot be saved without fresh hearing",async()=>{
+  const p=await page({}, {machine:true});
+  assert.equal(p.elements["proposal-kind"].hidden,false);
+  assert.match(p.elements["proposal-kind"].textContent,/הצעה אוטומטית.*לא נבדקה/);
+  assert.equal(p.elements.good.disabled,true);
+  assert.equal(p.wordPosts.length,0);
+});
+
+test("preparation polling preserves the active edited draft and actual hearing",async()=>{
+  const p=await page({}, {preparation:{state:"waiting_for_review_capacity",targetVerses:579,
+    remainingToPrepare:0,machinePreparedVerses:80,counts:{held:499}}});
+  const playback=p.run("play('word',caseNow().words[1])");await p.flush();
+  p.elements.note.value="טיוטה שנשארת";p.elements.note.oninput();
+  const current=p.elements.words.children[1];
+  await p.run("updatePreparation()");
+  assert.equal(p.run("caseNow().id"),"case");assert.equal(p.elements.words.children[1],current);
+  assert.equal(p.elements.note.value,"טיוטה שנשארת");assert.ok(current.classList.contains("active"));
+  assert.equal(p.elements.good.disabled,true);
+  await p.finish();await playback;assert.match(p.elements.listening.textContent,/2\/3/);
+});
+
+test("a failed local preparation job is visible without disabling the existing reviews",async()=>{
+  const p=await page({}, {preparation:{state:"failed",targetVerses:579,remainingToPrepare:20,
+    machinePreparedVerses:80,counts:{held:479}}});
+  await p.run("updatePreparation()");
+  assert.equal(p.elements["preparation-progress"].hidden,false);
+  assert.match(p.elements["preparation-state"].textContent,/נעצר/);
+  assert.equal(p.elements.problem.disabled,false);assert.equal(p.elements.next.disabled,false);
+  assert.equal(p.elements.good.disabled,true);
 });

@@ -6,6 +6,7 @@ import hashlib
 from http.server import ThreadingHTTPServer
 import json
 from pathlib import Path
+import re
 import sqlite3
 import threading
 from urllib.parse import parse_qs, urlsplit
@@ -25,6 +26,39 @@ def entry_key(row):
 
 def stamp(row):
     return datetime.fromisoformat(row["savedAt"].replace("Z", "+00:00")).astimezone(timezone.utc).isoformat()
+
+
+def preparation_status(path):
+    """Return only public counters and stable codes from the local job status file."""
+    status = read_json(path)
+    if not isinstance(status, dict) or not isinstance(status.get("state"), str):
+        raise ValueError("Invalid preparation status")
+    if not re.fullmatch(r"[a-z][a-z0-9_]{0,79}", status["state"]):
+        raise ValueError("Invalid preparation state")
+    public = {"state": status["state"]}
+    for name in ("targetVerses", "recordings", "remainingToPrepare", "machinePreparedVerses",
+                 "visibleVerses", "visibleWordCuts"):
+        if name in status:
+            value = status[name]
+            if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+                raise ValueError("Invalid preparation count")
+            public[name] = value
+    for name in ("counts", "holdReasons"):
+        if name in status:
+            counts = status[name]
+            if (not isinstance(counts, dict)
+                    or any(not isinstance(key, str) or not re.fullmatch(r"[a-z][a-z0-9_]{0,79}", key)
+                           or not isinstance(value, int) or isinstance(value, bool) or value < 0
+                           for key, value in counts.items())):
+                raise ValueError("Invalid preparation count map")
+            public[name] = counts
+    if "updatedAt" in status:
+        value = status["updatedAt"]
+        if not isinstance(value, str) or len(value) > 64:
+            raise ValueError("Invalid preparation update time")
+        datetime.fromisoformat(value.replace("Z", "+00:00"))
+        public["updatedAt"] = value
+    return public
 
 
 class ReviewDatabase:
@@ -73,7 +107,7 @@ class ReviewDatabase:
         return [json.loads(row[0]) for row in db.execute(
             "SELECT body FROM entry ORDER BY saved_at, digest")]
 
-    def append(self, queue_path, reviews_path=None):
+    def append(self, queue_path, reviews_path=None, *, only_unseen=False):
         """Validate a prepared batch, then atomically append without editing older queues."""
         queue_path = Path(queue_path).resolve()
         queue = load_queue(queue_path)
@@ -92,6 +126,11 @@ class ReviewDatabase:
                 raise ValueError("An immutable batch was changed")
             if old:
                 return old[0]
+            if only_unseen:
+                for case in queue["cases"]:
+                    if db.execute("SELECT 1 FROM candidate WHERE case_id=? LIMIT 1",
+                                  (case["id"],)).fetchone():
+                        raise ValueError("Automatic refill cannot replace a previously offered verse: " + case["id"])
             self._insert_entries(db, entries)
             decisions = {entry_key(row): row for row in self._entries(db)}
             cursor = db.execute("INSERT INTO batch(path,file_sha,body) VALUES (?,?,?)",
@@ -204,10 +243,13 @@ class ReviewDatabase:
                        (proposal_sha, json.dumps(row, ensure_ascii=False), row["savedAt"]))
         return row
 
+    def _cut_edits(self, db):
+        return [json.loads(row[0]) for row in db.execute(
+            "SELECT body FROM cut_edit ORDER BY saved_at, proposal_sha")]
+
     def all_cut_edits(self):
         with closing(sqlite3.connect(self.path)) as db:
-            return [json.loads(row[0]) for row in db.execute(
-                "SELECT body FROM cut_edit ORDER BY saved_at, proposal_sha")]
+            return self._cut_edits(db)
 
     def save_word_review(self, payload):
         """Atomically save one whole-verse verdict and finish its exact work item."""
@@ -258,6 +300,25 @@ class ReviewDatabase:
     def all_entries(self):
         with closing(sqlite3.connect(self.path)) as db:
             return self._entries(db)
+
+    def export_feedback(self):
+        """Read every actual feedback stream in one short, consistent transaction."""
+        with closing(sqlite3.connect(self.path)) as db:
+            db.execute("BEGIN")
+            return {"entries": self._entries(db), "timingEdits": self._cut_edits(db),
+                    "wordReviews": self._word_reviews(db)}
+
+    def preparation_workload(self):
+        """Expose only the inventory needed by the local never-offered refill job."""
+        with closing(sqlite3.connect(self.path)) as db:
+            db.execute("BEGIN")
+            offered = [row[0] for row in db.execute("SELECT DISTINCT case_id FROM candidate ORDER BY case_id")]
+            visible = db.execute("SELECT c.case_id,c.key,c.body FROM candidate c "
+                                 "JOIN current_candidate current ON current.key=c.key "
+                                 "WHERE c.visible=1 ORDER BY c.batch_seq,c.rowid").fetchall()
+            return {"offeredCaseIds": offered, "visibleCaseIds": [row[0] for row in visible],
+                    "visibleWordCuts": sum(len(json.loads(row[2])["words"]) for row in visible),
+                    "revision": digest_json([offered, [row[1] for row in visible]])}
 
     def snapshot(self):
         with closing(sqlite3.connect(self.path)) as db:
@@ -321,6 +382,16 @@ class QueueHandler(ListeningHandler):
         if not self.valid_host():
             return self.json_response(403, {"error": "Loopback host required"})
         parts = urlsplit(self.path)
+        if self.path == "/api/preparation-status":
+            path = self.server.preparation_status
+            if path is None:
+                return self.json_response(404, {"error": "Preparation status not configured"})
+            try:
+                return self.json_response(200, preparation_status(path))
+            except (ValueError, TypeError, OSError):
+                return self.json_response(409, {"error": "Preparation status unavailable"})
+        if self.path == "/api/preparation-workload":
+            return self.json_response(200, self.server.review_store.preparation_workload())
         if self.path == "/api/queue":
             try:
                 self.server.review_store.sync_histories()
@@ -348,9 +419,7 @@ class QueueHandler(ListeningHandler):
             return self.json_response(200, {"entries": self.server.review_store.all_word_reviews()})
         if self.path == "/api/export":
             return self.json_response(200, {"version": 1,
-                "entries": self.server.review_store.all_entries(),
-                "timingEdits": self.server.review_store.all_cut_edits(),
-                "wordReviews": self.server.review_store.all_word_reviews(),
+                **self.server.review_store.export_feedback(),
                 "publicationStatus": "held"})
         if self.path == "/api/archive":
             entries = sorted([*self.server.review_store.all_entries(),
@@ -385,13 +454,19 @@ class QueueHandler(ListeningHandler):
                                              payload.get("clipSha256")), payload
 
 
-def make_queue_server(database, port, token_path=None):
+def make_queue_server(database, port, token_path=None, *, preparation_status=None):
+    if preparation_status is not None:
+        preparation_status = Path(preparation_status)
+        if not preparation_status.is_absolute():
+            raise ValueError("Preparation status file must use an absolute path")
+        preparation_status = preparation_status.resolve()
     server = ThreadingHTTPServer(("127.0.0.1", port), QueueHandler)
     server.review_store = database
     server.origin = f"http://127.0.0.1:{server.server_port}"
     server.token = session_token(token_path, "accumulated-listening-database-v1")
     server.template = Path(__file__).with_name("listening_review.html").read_bytes()
     server.recovery = None
+    server.preparation_status = preparation_status
     return server
 
 
@@ -402,16 +477,19 @@ def main():
     append = commands.add_parser("append")
     append.add_argument("--queue", type=Path, required=True)
     append.add_argument("--reviews", type=Path)
+    append.add_argument("--only-unseen", action="store_true",
+                        help="Reject the entire batch if any verse was previously offered")
     serve = commands.add_parser("serve")
     serve.add_argument("--port", type=int, default=8792)
     serve.add_argument("--session-token-file", type=Path)
+    serve.add_argument("--preparation-status-file", type=Path)
     snapshot = commands.add_parser("snapshot")
     snapshot.add_argument("--output", type=Path, required=True)
     snapshot.add_argument("--database", type=Path)
     args = parser.parse_args()
     store = ReviewDatabase(args.store)
     if args.command == "append":
-        print("Appended batch", store.append(args.queue, args.reviews), flush=True)
+        print("Appended batch", store.append(args.queue, args.reviews, only_unseen=args.only_unseen), flush=True)
     elif args.command == "snapshot":
         # Never use the live collection checkpoint or authoritative publication DB as a preview.
         if args.database and args.database.name in {"recitation.sqlite", "recitation-working.sqlite"}:
@@ -427,7 +505,8 @@ def main():
                     "allActualHistoriesPreserved": True, "noReviewInvented": True,
                     "summary": summary})
     else:
-        server = make_queue_server(store, args.port, args.session_token_file)
+        server = make_queue_server(store, args.port, args.session_token_file,
+                                   preparation_status=args.preparation_status_file)
         print(server.origin, flush=True)
         try:
             server.serve_forever()
