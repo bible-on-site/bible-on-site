@@ -513,6 +513,21 @@ jobs:
       platform: iOS
       perushim_notes_sqlite_artifact: ${{ needs.perushim_data.result != 'skipped' && format('perushim-sqlite-v2-indexed.{0}', github.run_id) || 'perushim-sqlite-v2-indexed.master' }}
 
+  # Windows-only source (#if WINDOWS) compiled nowhere before merge: package_app
+  # is master-only and App CI builds Android/iOS only — a Windows-only compile
+  # regression shipped in #2496 undetected (#2526). A compile-only Release build
+  # gates the real Windows target without signing secrets or store upload.
+  package_windows_pr:
+    name: Validate Windows Compile
+    needs: [setup_env, determine_changes]
+    if: ${{ always() && !cancelled() && !failure() && github.event_name != 'push' && (needs.determine_changes.outputs.app_module_changed == 'true' || needs.determine_changes.outputs.app_ci_changed == 'true') }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/app-package.yml
+    with:
+      platform: Windows
+      compile_only: true
+
   # Same release/pre-merge split as package_api (#2292).
   package_bulletin:
     name: Package Bulletin

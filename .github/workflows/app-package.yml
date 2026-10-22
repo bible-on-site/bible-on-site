@@ -29,6 +29,11 @@ on:
         required: false
         type: string
         default: ""
+      compile_only:
+        description: "Compile the Release target without recitation assets, signing or packaging (PR gate)"
+        required: false
+        type: boolean
+        default: false
     secrets:
       WINDOWS_SIGNING_CERT_BASE64:
         required: false
@@ -167,6 +172,7 @@ jobs:
         run: dotnet workload install maui-windows
 
       - name: Decode signing certificate
+        if: ${{ !inputs.compile_only }}
         run: |
           $certBytes = [Convert]::FromBase64String("${{ secrets.WINDOWS_SIGNING_CERT_BASE64 }}")
           [IO.File]::WriteAllBytes("${{ runner.temp }}\SigningCert.pfx", $certBytes)
@@ -181,11 +187,13 @@ jobs:
         run: dotnet tool restore
 
       - name: Setup Python for recitation extension packaging
+        if: ${{ !inputs.compile_only }}
         uses: actions/setup-python@v7
         with:
           python-version: "3.15"
 
       - name: Restore original recitation audio cache
+        if: ${{ !inputs.compile_only }}
         uses: actions/cache@v6
         with:
           path: .cache/recitation-assets
@@ -193,9 +201,18 @@ jobs:
           restore-keys: recitation-audio-v1-
 
       - name: Prepare lossless recitation book extension packages
+        if: ${{ !inputs.compile_only }}
         run: python app/devops/prepare_recitation_assets.py --platform Windows
 
+      # PR gate (#2526): compile the real Windows TFM in Release — including
+      # #if WINDOWS code and XamlC — without signing or packaging.
+      - name: Compile Windows Release
+        if: ${{ inputs.compile_only }}
+        working-directory: ${{ env.APP_DIRECTORY }}
+        run: dotnet build BibleOnSite/BibleOnSite.csproj -c Release -f net10.0-windows10.0.19041.0
+
       - name: Package MSIX
+        if: ${{ !inputs.compile_only }}
         working-directory: ${{ env.APP_DIRECTORY }}
         env:
           MAPBOX_PUBLIC_TOKEN: ${{ secrets.MAPBOX_PUBLIC_TOKEN }}
@@ -210,6 +227,7 @@ jobs:
           key: ${{ steps.nuget-cache.outputs.cache-primary-key }}
 
       - name: Find MSIX file
+        if: ${{ !inputs.compile_only }}
         id: find_msix
         run: |
           $msix = Get-ChildItem -Path "${{ env.APP_DIRECTORY }}/.artifacts" -Filter "*.msix" -Recurse | Select-Object -First 1
@@ -235,9 +253,11 @@ jobs:
         shell: bash
 
       - name: Verify all recitation Windows archives and hashes
+        if: ${{ !inputs.compile_only }}
         run: python app/devops/verify_recitation_assets.py --platform Windows --catalog app/BibleOnSite/Resources/Raw/recitation-catalog.json --package "${{ steps.find_msix.outputs.MSIX_PATH }}"
 
       - name: Upload MSIX artifact
+        if: ${{ !inputs.compile_only }}
         uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.set_artifact_name.outputs.artifact_name }}
@@ -247,7 +267,7 @@ jobs:
           include-hidden-files: true
 
       - name: Cleanup certificate
-        if: always()
+        if: ${{ always() && !inputs.compile_only }}
         run: |
           if (Test-Path "${{ runner.temp }}\SigningCert.pfx") {
             Remove-Item "${{ runner.temp }}\SigningCert.pfx" -Force
@@ -338,11 +358,13 @@ jobs:
         run: dotnet tool restore
 
       - name: Setup Python for recitation extension packaging
+        if: ${{ !inputs.compile_only }}
         uses: actions/setup-python@v7
         with:
           python-version: "3.15"
 
       - name: Restore original recitation audio cache
+        if: ${{ !inputs.compile_only }}
         uses: actions/cache@v6
         with:
           path: .cache/recitation-assets
