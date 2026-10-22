@@ -2097,7 +2097,6 @@ jobs:
 
       - name: Verify Android release package
         run: |
-          echo '{"sdk":{"version":"10.0.0","rollForward":"latestFeature"}}' > $GITHUB_WORKSPACE/global.json
           dotnet workload install maui-android
           dotnet restore BibleOnSite/BibleOnSite.csproj -p:TargetFramework=net10.0-android -p:RuntimeIdentifiers=android-arm64 -r android-arm64
           # Compile with the checked-in notes fixture; store packages use the paired release artifact.
@@ -2107,7 +2106,6 @@ jobs:
           fi
           # Exercise D8 and release linking before merging, without store signing keys.
           dotnet build BibleOnSite/BibleOnSite.csproj --no-restore -c Release -f net10.0-android -r android-arm64 -p:RuntimeIdentifiers=android-arm64 -p:AndroidPackageFormats=aab
-          rm -f $GITHUB_WORKSPACE/global.json
 
       - name: Verify native canonical recitation word identities
         run: python3 ../data/recitation/audit_native.py
