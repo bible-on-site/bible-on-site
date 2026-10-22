@@ -19,7 +19,7 @@ class Element {
 async function page(saved = {}, options = {}) {
   const elements = Object.fromEntries([...html.matchAll(/id="([^"]+)"/g)].map(m => [m[1], new Element()]));
   const clip = new Uint8Array([1, 2, 3]);
-  const item = {id:"case",candidateSha256:"candidate",label:"פסוק לבדיקה",clipStartMs:0,clipEndMs:2000,
+  const item = {id:"case",perekId:1,pasuk:1,candidateSha256:"candidate",label:"פסוק לבדיקה",clipStartMs:0,clipEndMs:2000,
     clipSha256:createHash("sha256").update(clip).digest("hex"),changedSegments:[2],reusableHeardSegments:options.reusableHeardSegments??[1],
     freshListeningRequiredSegments:options.reusableHeardSegments?[2]:[2,3],words:[{segment:1,text:"ישן",startMs:100,endMs:300},
       {segment:2,text:"מתוקן",startMs:400,endMs:600},{segment:3,text:"אחרון",startMs:700,endMs:900}]};
@@ -34,6 +34,8 @@ async function page(saved = {}, options = {}) {
   let wordSaveFails=options.wordSaveFails===true;
   let releaseEditSave;
   const editSaveGate=options.pauseEditSave?new Promise(resolve=>{releaseEditSave=resolve;}):null;
+  let inventory=options.inventory, inventoryFails=false, inventoryRequests=0;
+  let actionTasks=options.actions, actionSaveFails=options.actionSaveFails===true;const actionPosts=[],actionAudioRequests=[],offlineDecodes=[];
   let queue=options.queue, queueFails=false, editSaveFails=options.editSaveFails===true; const storage = options.storage ?? new Map();
   const localStorage = {getItem:key=>storage.get(key)??null,setItem:(key,value)=>storage.set(key,value),removeItem:key=>storage.delete(key)};
   class AudioContext {
@@ -44,7 +46,11 @@ async function page(saved = {}, options = {}) {
       starts.push(offset);playbackSlices.push({offset,duration});playing={source:this,duration};
     }};}
   }
-  const context=vm.createContext({document,window:{addEventListener(){}},AudioContext,crypto:{randomUUID,subtle:{digest:async()=>new Uint8Array(createHash("sha256").update(clip).digest()).buffer}},
+  class OfflineAudioContext {
+    constructor(channels,length,rate){offlineDecodes.push({channels,length,rate});}
+    decodeAudioData(){return Promise.resolve({duration:2,sampleRate:16000,numberOfChannels:1,length:options.actionFrames??32000});}
+  }
+  const context=vm.createContext({document,window:{addEventListener(){}},AudioContext,OfflineAudioContext,crypto:{randomUUID,subtle:{digest:async()=>new Uint8Array(createHash("sha256").update(clip).digest()).buffer}},
     localStorage,encodeURIComponent,
     setInterval(){},setTimeout:fn=>{if(options.pauseGaps) gaps.push(fn); else queueMicrotask(fn);},Map,Set,
     fetch:async(url,request)=>url==="/api/queue"?{ok:!queueFails,json:async()=>{await options.beforeQueueJson?.();return queue??({cases:[item,{...item,id:"other"}],decisions:saved,token:"fixture"});}}
@@ -62,10 +68,16 @@ async function page(saved = {}, options = {}) {
         const body=JSON.parse(request.body);editPosts.push({body,headers:request.headers});if(editSaveGate)await editSaveGate;
         return editSaveFails?{error:"fixture save failure"}:{...body,listenEvidenceReportedByBrowser:{heardEditedSegments:body.heardEditedSegments}};}}
       :url==="/api/cut-edits"?{ok:true,json:async()=>({entries:options.cutProposals??[]})}
+      :url==="/api/actions"?{ok:actionTasks!==undefined,status:actionTasks===undefined?404:200,json:async()=>({version:1,tasks:actionTasks??[]})}
+      :url.startsWith("/api/action-audio/")?{ok:true,arrayBuffer:async()=>{actionAudioRequests.push(url);return clip.buffer;}}
+      :url.startsWith("/api/action-case/")?{ok:!options.actionCaseFails,json:async()=>options.actionCase??{case:item}}
+      :url==="/api/action-responses"?{ok:!actionSaveFails,json:async()=>{const body=JSON.parse(request.body);actionPosts.push({body,headers:request.headers});return actionSaveFails?{error:"fixture action save failure"}:body;}}
+      :url==="/api/workflow-status"?{ok:options.workflow!==undefined,status:options.workflow===undefined?404:200,json:async()=>options.workflow}
       :url==="/api/preparation-status"?{ok:options.preparation!==undefined,json:async()=>options.preparation}
+      :url==="/api/preparation-inventory"?(()=>{inventoryRequests++;return {ok:inventory!==undefined&&!inventoryFails,status:inventory===undefined?404:409,json:async()=>inventory};})()
       :{json:async()=>({state:"complete",humanRecoveredChapters:0})}});
   vm.runInContext(script,context);await tick();
-  return {elements,starts,playbackSlices,posts,wordPosts:posts,wordRequests,legacyPosts,editPosts,item,storage,releaseWordSave:()=>releaseWordSave?.(),setWordSaveFailure:value=>{wordSaveFails=value;},releaseEditSave:()=>releaseEditSave?.(),failEditSave:()=>{editSaveFails=true;},setQueue:value=>{queue=value;},failQueue:()=>{queueFails=true;},run:code=>vm.runInContext(code,context),async flush(){await tick();},async resumeGap(){assert.ok(gaps.length);gaps.shift()();await tick();},
+  return {elements,starts,playbackSlices,posts,actionPosts,actionAudioRequests,offlineDecodes,setActions:value=>{actionTasks=value;},setActionSaveFailure:value=>{actionSaveFails=value;},wordPosts:posts,wordRequests,legacyPosts,editPosts,item,storage,releaseWordSave:()=>releaseWordSave?.(),setWordSaveFailure:value=>{wordSaveFails=value;},releaseEditSave:()=>releaseEditSave?.(),failEditSave:()=>{editSaveFails=true;},setInventory:value=>{inventory=value;},failInventory:()=>{inventoryFails=true;},inventoryRequests:()=>inventoryRequests,setQueue:value=>{queue=value;},failQueue:()=>{queueFails=true;},run:code=>vm.runInContext(code,context),async flush(){await tick();},async resumeGap(){assert.ok(gaps.length);gaps.shift()();await tick();},
     async finish(fraction=1){assert.ok(playing,"a real fixture slice must be playing");const current=playing;playing=null;
       clock.currentTime+=current.duration*fraction;current.source.onended?.();await tick();}};
 }
@@ -739,4 +751,526 @@ test("a failed local preparation job is visible without disabling the existing r
   assert.match(p.elements["preparation-state"].textContent,/נעצר/);
   assert.equal(p.elements.problem.disabled,false);assert.equal(p.elements.next.disabled,false);
   assert.equal(p.elements.good.disabled,true);
+});
+
+
+const inventoryFixture = () => ({version:1,targetVerses:5,cases:[
+  {id:"3-4",perekId:3,pasuk:4,label:"בראשית ג ד",state:"held",reason:"chapter_requires_supported_context"},
+  {id:"2-1",perekId:2,pasuk:1,label:"בראשית ב א",state:"prepared",reason:"awaiting_queue_capacity"},
+  {id:"2-2",perekId:2,pasuk:2,label:"בראשית ב ב",state:"queued",reason:"awaiting_genuine_human_review"},
+  {id:"4-1",perekId:4,pasuk:1,label:"בראשית ד א",state:"excluded",reason:"previously_offered_chapter"},
+  {id:"3-5",perekId:3,pasuk:5,label:"בראשית ג ה",state:"held",reason:"known_original_source_hold"}
+]});
+test("full preparation inventory includes held and previously offered items without adding review cuts",async()=>{
+  const p=await page({}, {inventory:inventoryFixture()});
+  assert.equal(p.elements["preparation-inventory"].hidden,false);
+  assert.equal(p.elements["inventory-summary"].textContent,"כל הפסוקים שסומנו (5)");
+  assert.match(p.elements["inventory-counts"].textContent,/חיתוכים שהוכנו: 2.*חסומים להכנה: 2.*הוצעו או הושלמו: 1/);
+  assert.equal(p.elements["inventory-list"].children.length,5);
+  assert.equal(p.elements["inventory-list"].children[0].children[0].children[0].textContent,"בראשית ב א");
+  assert.match(p.elements["inventory-list"].children[1].children[1].textContent,/עדיין נדרשות האזנה/);
+  const held=p.elements["inventory-list"].children[2];
+  assert.match(held.children[1].textContent,/הפרק ממתין להשלמת הקשר/);
+  assert.equal(p.run("cases.length"),2);
+  assert.equal(p.wordPosts.length,0);
+  assert.equal(p.legacyPosts.length,0);
+});
+test("inventory filters distinguish blocked from prepared cuts and do not reoffer approvals",async()=>{
+  const p=await page({}, {inventory:inventoryFixture()});
+  p.elements["inventory-filter"].value="held";
+  p.elements["inventory-filter"].onchange();
+  assert.equal(p.elements["inventory-list"].children.length,2);
+  assert.ok(p.elements["inventory-list"].children.every(row=>row.classList.contains("held")));
+  assert.match(p.elements["inventory-result-count"].textContent,/2 מתוך 5/);
+  p.elements["inventory-filter"].value="ready";
+  p.elements["inventory-filter"].onchange();
+  assert.equal(p.elements["inventory-list"].children.length,2);
+  assert.ok(p.elements["inventory-list"].children.every(row=>!row.classList.contains("held")&&!row.classList.contains("excluded")));
+  p.elements["inventory-filter"].value="all";
+  p.elements["inventory-filter"].onchange();
+  assert.equal(p.elements["inventory-list"].children.length,5);
+  assert.equal(p.run("caseNow().id"),"case");
+});
+test("inventory fetch and filtering preserve active edited playback, focus, drafts and hearing",async()=>{
+  const p=await page({}, {inventory:inventoryFixture(),reusableHeardSegments:[1,3]});
+  p.run("setCutBoundary(2,'endMs',650);document.activeElement=cutRows.get(2).endMs.number");
+  p.elements.note.value="טיוטה פרטית במהלך צפייה במאגר";p.elements.note.oninput();
+  const control=p.run("cutRows.get(2).endMs.number"),word=p.elements.words.children[1];
+  const playback=p.run("play('edits')");await p.flush();
+  await p.run("updateInventory()");
+  p.elements["inventory-filter"].value="held";p.elements["inventory-filter"].onchange();
+  assert.equal(p.run("playbackActive"),true);
+  assert.equal(p.run("document.activeElement"),control);
+  assert.equal(p.elements.words.children[1],word);
+  assert.equal(p.elements.note.value,"טיוטה פרטית במהלך צפייה במאגר");
+  assert.equal(p.run("workingWord(caseNow(),caseNow().words[1]).endMs"),650);
+  assert.equal(p.run("cutHeard(caseNow(),caseNow().words[1])"),false);
+  await p.finish();await playback;
+  assert.equal(p.run("cutHeard(caseNow(),caseNow().words[1])"),true);
+});
+test("inventory failure preserves the last complete list and active review",async()=>{
+  const p=await page({}, {inventory:inventoryFixture()});
+  const prior=p.elements["inventory-list"].children[0];
+  p.elements.note.value="לא למחוק את הטיוטה";p.elements.note.oninput();
+  p.failInventory();await p.run("updateInventory()");
+  assert.match(p.elements["inventory-message"].textContent,/לא ניתן לטעון/);
+  assert.equal(p.elements["inventory-list"].children[0],prior);
+  assert.equal(p.elements["inventory-list"].children.length,5);
+  assert.equal(p.elements.note.value,"לא למחוק את הטיוטה");
+  assert.equal(p.run("caseNow().id"),"case");
+  assert.equal(p.elements["inventory-refresh"].disabled,false);
+});
+test("malformed inventory preserves the last verified list and status polling does not refetch it",async()=>{
+  const p=await page({}, {inventory:inventoryFixture(),preparation:{state:"completed",targetVerses:5,
+    remainingToPrepare:0,machinePreparedVerses:2,counts:{held:2}}});
+  const prior=p.elements["inventory-list"].children[0],requests=p.inventoryRequests();
+  await p.run("updatePreparation()");await p.run("updatePreparation()");
+  assert.equal(p.inventoryRequests(),requests);
+  p.setInventory({cases:[inventoryFixture().cases[0],inventoryFixture().cases[0]]});
+  await p.run("updateInventory()");
+  assert.match(p.elements["inventory-message"].textContent,/לא זמין/);
+  assert.equal(p.elements["inventory-list"].children[0],prior);
+  assert.equal(p.run("cases.length"),2);
+});
+test("inventory labels are text and unknown reasons never become markup or backend details",async()=>{
+  const data=inventoryFixture();data.cases[0].label="<img src=x onerror=alert(1)>";
+  data.cases[0].reason="<script>private/path</script>";
+  const p=await page({}, {inventory:data});
+  const row=p.elements["inventory-list"].children[2];
+  assert.equal(row.children[0].children[0].textContent,"<img src=x onerror=alert(1)>");
+  assert.equal(row.children[0].children[0].children.length,0);
+  assert.match(row.children[1].textContent,/נדרש טיפול נוסף/);
+  assert.doesNotMatch(row.children[1].textContent,/private|script/);
+});
+test("older servers without an inventory endpoint keep the inventory section hidden",async()=>{
+  const p=await page();
+  assert.equal(p.elements["preparation-inventory"].hidden,true);
+  assert.equal(p.run("cases.length"),2);
+});
+
+const actionPlaybackSha=createHash("sha256").update(new Uint8Array([1,2,3])).digest("hex");
+const locateFixture=(overrides={})=>({id:"locate",taskId:"locate",perekId:1,pasuk:1,label:"בראשית א א",kind:"locate-source-range",
+  state:"pending",taskSha256:"exact-task",audioSha256:"immutable-original-source",textSha256:"canonical-text",
+  playbackSha256:actionPlaybackSha,sourceFrames:32000,sourceSampleRate:16000,sourceDurationMs:2000,
+  canonicalWords:[{pasuk:1,segment:1,text:"בראשית"},{pasuk:1,segment:2,text:"ברא"}],...overrides});
+function setLocatedRange(p,start="0.200",end="0.700") {
+  for(const [field,value]of [["start",start],["end",end]]) {
+    const input=p.elements["action-"+field+"-number"];input.value=value;
+    input.oninput({target:input});
+  }
+}
+test("action source ranges start unset and cannot produce GOOD or a preparation request",async()=>{
+  const p=await page({}, {actions:[locateFixture()]});
+  assert.equal(p.elements["action-workspace"].hidden,false);
+  assert.equal(p.elements["action-start-number"].value,"");assert.equal(p.elements["action-end-number"].value,"");
+  assert.equal(p.elements["action-save-range"].disabled,true);
+  assert.match(p.elements["action-range-status"].textContent,/קבעו תחילה וסיום/);
+  assert.equal(p.elements["action-verse"].textContent,"בראשית ברא");
+  await p.run("saveAction('locate-source-range')");
+  assert.equal(p.actionPosts.length,0);assert.equal(p.wordPosts.length,0);
+});
+test("actual selected source playback binds exact range evidence without granting word hearing",async()=>{
+  const p=await page({}, {actions:[locateFixture()]});setLocatedRange(p);
+  assert.equal(p.elements["action-save-range"].disabled,true);
+  const originalHeard=p.elements.listening.textContent;
+  const playback=p.run("playActionRange(true)");await p.flush();
+  assert.deepEqual(p.playbackSlices.at(-1),{offset:0.2,duration:0.5});
+  assert.deepEqual(p.offlineDecodes,[{channels:1,length:32000,rate:16000}]);
+  assert.equal(p.elements["action-save-range"].disabled,true);
+  await p.finish();await playback;
+  assert.equal(p.elements["action-save-range"].disabled,false);
+  assert.equal(p.elements.listening.textContent,originalHeard);
+  assert.equal(p.elements.good.disabled,true);
+  await p.run("saveAction('locate-source-range')");
+  assert.equal(p.actionPosts.length,1);
+  const row=p.actionPosts[0];
+  assert.equal(row.headers["X-Review-Token"],"fixture");
+  assert.deepEqual(row.body,{taskId:"locate",taskSha256:"exact-task",audioSha256:"immutable-original-source",
+    textSha256:"canonical-text",kind:"locate-source-range",startMs:200,endMs:700,
+    heardRange:{startMs:200,endMs:700,complete:true},submissionId:row.body.submissionId});
+  assert.match(row.body.submissionId,/^[a-f0-9-]{36}$/);
+  assert.equal(p.wordPosts.length,0);assert.equal(p.legacyPosts.length,0);assert.equal(p.editPosts.length,0);
+});
+test("source exploration, stopped playback and premature endings never become exact range hearing",async()=>{
+  const p=await page({}, {actions:[locateFixture()]});setLocatedRange(p);
+  let playback=p.run("playActionRange(false)");await p.flush();await p.finish();await playback;
+  assert.equal(p.elements["action-save-range"].disabled,true);
+  playback=p.run("playActionRange(true)");await p.flush();await p.finish(0.2);await playback;
+  assert.equal(p.elements["action-save-range"].disabled,true);
+  playback=p.run("playActionRange(true)");await p.flush();p.elements["action-stop"].onclick();await playback;
+  assert.equal(p.elements["action-save-range"].disabled,true);
+  await p.run("saveAction('locate-source-range')");assert.equal(p.actionPosts.length,0);
+});
+test("changing either located boundary requires new exact hearing and fine sliders remain local",async()=>{
+  const p=await page({}, {actions:[locateFixture()]});setLocatedRange(p);
+  assert.equal(p.elements["action-start"].min,"50");assert.equal(p.elements["action-start"].max,"350");
+  assert.equal(p.elements["action-end"].min,"550");assert.equal(p.elements["action-end"].max,"850");
+  const playback=p.run("playActionRange(true)");await p.flush();await p.finish();await playback;
+  const input=p.elements["action-end-number"];input.value="1.250";input.oninput({target:input});
+  assert.equal(p.run("actionDraft(actionNow()).endMs"),1250);
+  assert.equal(p.elements["action-save-range"].disabled,true);
+  input.value="3.000";input.oninput({target:input});
+  assert.equal(p.elements["action-play-range"].disabled,true);
+  assert.match(p.elements["action-range-status"].textContent,/בתוך הקלטת המקור/);
+  assert.equal(p.actionPosts.length,0);
+});
+test("source payload hash and exact decoded sample count fail closed before any playback",async()=>{
+  for(const options of [{actionFrames:31999},{actions:[locateFixture({playbackSha256:"wrong-payload"})]}]) {
+    const p=await page({}, {actions:[locateFixture()],...options});setLocatedRange(p);
+    await p.run("playActionRange(true)");
+    assert.equal(p.starts.length,0);assert.equal(p.elements["action-save-range"].disabled,true);
+    assert.match(p.elements["action-source-status"].textContent,/אינו תואם/);
+    assert.equal(p.actionPosts.length,0);
+  }
+});
+test("source remediation requires an explicit decision and nonempty note, never timing approval",async()=>{
+  const p=await page({}, {actions:[locateFixture({kind:"source-remediation",state:"needs_source",
+    issueURL:"https://github.com/bible-on-site/bible-on-site/issues/2223"})]});
+  assert.equal(p.elements["action-source-report"].open,true);
+  assert.equal(p.elements["action-issue"].href,"https://github.com/bible-on-site/bible-on-site/issues/2223");
+  await p.run("saveAction('source-remediation')");assert.equal(p.actionPosts.length,0);
+  p.elements["action-source-decision"].value="request_corrected_source";p.elements["action-source-decision"].onchange();
+  p.elements["action-source-note"].value="חסרה הקריאה המלאה במקור";p.elements["action-source-note"].oninput();
+  await p.run("saveAction('source-remediation')");
+  const body=p.actionPosts[0].body;
+  assert.equal(body.kind,"source-remediation");assert.equal(body.decision,"request_corrected_source");
+  assert.equal(body.note,"חסרה הקריאה המלאה במקור");assert.equal(body.audioSha256,"immutable-original-source");
+  assert.equal("verdict"in body,false);assert.equal("heardRange"in body,false);
+  assert.equal(p.wordPosts.length,0);assert.equal(p.elements.good.disabled,true);
+});
+test("failed context saves retry identical submission identity and preserve range and source note drafts",async()=>{
+  const p=await page({}, {actions:[locateFixture()],actionSaveFails:true});setLocatedRange(p);
+  const playback=p.run("playActionRange(true)");await p.flush();await p.finish();await playback;
+  await p.run("saveAction('locate-source-range')");
+  assert.match(p.elements["action-message"].textContent,/השמירה לא הצליחה/);
+  const id=p.actionPosts[0].body.submissionId;
+  assert.equal(p.run("actionDraft(actionNow()).startMs"),200);
+  assert.equal(p.elements["action-save-range"].disabled,false);
+  p.setActionSaveFailure(false);await p.run("saveAction('locate-source-range')");
+  assert.equal(p.actionPosts[1].body.submissionId,id);
+});
+test("action polling preserves active word playback, numeric draft focus and typed problem notes",async()=>{
+  const p=await page({}, {actions:[locateFixture()],reusableHeardSegments:[1,3]});
+  p.run("setCutBoundary(2,'endMs',650);document.activeElement=cutRows.get(2).endMs.number");
+  p.elements.note.value="עריכה קיימת שאסור להחליף";p.elements.note.oninput();
+  const control=p.run("cutRows.get(2).endMs.number"),word=p.elements.words.children[1];
+  const playback=p.run("play('edits')");await p.flush();
+  p.setActions([locateFixture({state:"preparing"})]);await p.run("updateActions()");
+  assert.equal(p.run("playbackActive"),true);assert.equal(p.elements.words.children[1],word);
+  assert.equal(p.run("document.activeElement"),control);assert.equal(p.elements.note.value,"עריכה קיימת שאסור להחליף");
+  assert.equal(p.run("workingWord(caseNow(),caseNow().words[1]).endMs"),650);
+  await p.finish();await playback;
+});
+test("only explicit unresolved action opens a hidden current word candidate and queue polling preserves it",async()=>{
+  const fixture=await page();
+  const hidden={...fixture.item,id:"hidden"};
+  const task=locateFixture({id:"review",taskId:"review",kind:"review-cuts",state:"review"});
+  const p=await page({}, {actions:[task],actionCase:{case:hidden,decision:{verdict:"problem",note:"בעיה קודמת"}}});
+  p.elements.note.value="טיוטה בפסוק הקיים";p.elements.note.oninput();
+  await p.run("openActionReview()");
+  assert.equal(p.run("caseNow().id"),"hidden");assert.equal(p.elements.note.value,"");
+  p.elements.note.value="טיוטה של תיקון";p.elements.note.oninput();
+  await p.run("refreshQueue()");
+  assert.equal(p.run("caseNow().id"),"hidden");assert.equal(p.elements.note.value,"טיוטה של תיקון");
+  p.elements.previous.onclick();
+  assert.equal(p.run("caseNow().id"),"other");
+  assert.equal(p.wordPosts.length,0);
+});
+test("GOOD or stale action review responses cannot reopen approved cuts",async()=>{
+  const fixture=await page();
+  const p=await page({}, {actions:[locateFixture({kind:"review-cuts",state:"review"})],
+    actionCase:{case:fixture.item,decision:{verdict:"good"}}});
+  await p.run("openActionReview()");
+  assert.match(p.elements["action-message"].textContent,/אין לפתוח שוב/);
+  assert.equal(p.run("cases.length"),2);assert.equal(p.wordPosts.length,0);
+});
+test("workflow shows chapter actions separately from verified timing and does not mark a context saved as complete",async()=>{
+  const p=await page({}, {actions:[locateFixture({state:"context_queued"})],workflow:{chapters:[
+    {perekId:1,label:"בראשית א",state:"pending",remainingActions:3,validatedVerses:0},
+    {perekId:2,label:"בראשית ב",state:"validated",remainingActions:0,validatedVerses:4}
+  ]}});
+  assert.equal(p.elements["workflow-chapters"].children.length,2);
+  assert.match(p.elements["workflow-chapters"].children[0].textContent,/3 פעולות נותרו/);
+  assert.match(p.elements["workflow-chapters"].children[1].textContent,/התזמונים אומתו/);
+  assert.match(p.elements["action-state"].textContent,/ממתין להכנת חיתוכים/);
+  assert.equal(p.elements.good.disabled,true);
+});
+test("older servers without action APIs leave the existing word review usable",async()=>{
+  const p=await page();
+  assert.equal(p.elements["action-workspace"].hidden,true);
+  assert.equal(p.run("cases.length"),2);assert.equal(p.elements.problem.disabled,false);
+});
+
+test("stopping original playback preserves the actual cursor for choosing a range boundary",async()=>{
+  const p=await page({}, {actions:[locateFixture()]});
+  const playback=p.run("playActionRange(false)");await p.flush();
+  p.run("audioContext.currentTime=0.425");p.elements["action-stop"].onclick();await playback;
+  assert.equal(p.elements["action-seek-number"].value,"0.425");
+  p.elements["action-mark-start"].onclick();
+  assert.equal(p.run("actionDraft(actionNow()).startMs"),425);
+  assert.equal(p.elements["action-save-range"].disabled,true);
+  assert.equal(p.actionPosts.length,0);
+});
+test("focused action numeric inputs keep partially typed text and accept values beyond the fine slider",async()=>{
+  const p=await page({}, {actions:[locateFixture()]});
+  const input=p.elements["action-start-number"];p.run("document.activeElement=$('action-start-number')");
+  input.value="0.";input.oninput({target:input});assert.equal(input.value,"0.");
+  input.value="0.425";input.oninput({target:input});assert.equal(input.value,"0.425");
+  assert.equal(p.run("actionDraft(actionNow()).startMs"),425);
+  assert.equal(p.elements["action-start"].min,"275");assert.equal(p.elements["action-start"].max,"575");
+});
+test("action drafts and genuinely completed range hearing survive restart only for exact source task identities",async()=>{
+  const p=await page({}, {actions:[locateFixture()]});setLocatedRange(p);
+  const playback=p.run("playActionRange(true)");await p.flush();await p.finish();await playback;
+  const resumed=await page({}, {actions:[locateFixture()],storage:p.storage});resumed.run("updateActionRange()");
+  assert.equal(resumed.elements["action-start-number"].value,"0.200");
+  assert.equal(resumed.elements["action-end-number"].value,"0.700");
+  assert.equal(resumed.elements["action-save-range"].disabled,false);
+  const changed=await page({}, {actions:[locateFixture({taskSha256:"new-exact-task"})],storage:p.storage});
+  assert.equal(changed.elements["action-start-number"].value,"");
+  assert.equal(changed.elements["action-save-range"].disabled,true);
+  assert.equal(changed.wordPosts.length,0);
+});
+test("unchanged action polling preserves focused task buttons and a located task can become a cut review",async()=>{
+  const task=locateFixture();const p=await page({}, {actions:[task]});
+  const button=p.elements["action-list"].children[0];p.run("document.activeElement=$('action-list').children[0]");
+  p.setActions([{...task,state:"review",caseRef:{caseId:"case",candidateSha256:"candidate"}}]);
+  await p.run("updateActions()");
+  assert.equal(p.elements["action-list"].children[0],button);
+  assert.equal(p.run("document.activeElement"),button);
+  assert.equal(p.elements["action-review"].hidden,false);
+  assert.equal(p.elements["action-original"].hidden,true);
+});
+test("a later matching GOOD closes an explicitly opened unresolved case without reoffering it",async()=>{
+  const fixture=await page();const hidden={...fixture.item,id:"hidden"};
+  const p=await page({}, {actions:[locateFixture({kind:"review-cuts",state:"review"})],
+    actionCase:{case:hidden,decision:{verdict:"problem"}}});
+  await p.run("openActionReview()");assert.equal(p.run("caseNow().id"),"hidden");
+  p.setQueue({cases:[p.item],decisions:{},wordReviewDecisions:{["hidden:"+hidden.candidateSha256+":"+hidden.clipSha256]:
+    {caseId:"hidden",candidateSha256:hidden.candidateSha256,clipSha256:hidden.clipSha256,verdict:"good"}},token:"fixture",persistentQueue:true});
+  await p.run("refreshQueue()");
+  assert.notEqual(p.run("caseNow()?.id"),"hidden");assert.equal(p.run("actionOpenReviews.size"),0);
+  assert.equal(p.wordPosts.length,0);
+});
+
+test("human located contexts may span long verses while retaining exact original source bounds",async()=>{
+  const p=await page({}, {actions:[locateFixture({sourceFrames:1920000,sourceDurationMs:120000})]});
+  setLocatedRange(p,"1.000","47.000");
+  assert.equal(p.elements["action-save-range"].disabled,true);assert.equal(p.elements["action-play-range"].disabled,false);
+  assert.match(p.elements["action-range-status"].textContent,/להאזין לטווח המדויק/);
+  assert.equal(p.run("actionDraft(actionNow()).endMs"),47000);
+  await p.run("saveAction('locate-source-range')");assert.equal(p.actionPosts.length,0);
+});
+
+test("source reports preserve the actual typed note including surrounding whitespace",async()=>{
+  const p=await page({}, {actions:[locateFixture({kind:"source-remediation",state:"needs_source"})]});
+  p.elements["action-source-decision"].value="source_problem";p.elements["action-source-decision"].onchange();
+  p.elements["action-source-note"].value="  פירוט מקורי\n";p.elements["action-source-note"].oninput();
+  await p.run("saveAction('source-remediation')");
+  assert.equal(p.actionPosts[0].body.note,"  פירוט מקורי\n");
+});
+test("an action review must match its current immutable case reference",async()=>{
+  const fixture=await page();
+  const p=await page({}, {actions:[locateFixture({kind:"review-cuts",state:"review",
+    caseRef:{caseId:"case",candidateSha256:"different-current-candidate",clipSha256:fixture.item.clipSha256}})],
+    actionCase:{case:fixture.item}});
+  await p.run("openActionReview()");
+  assert.match(p.elements["action-message"].textContent,/גרסה שאינה תואמת/);
+  assert.equal(p.run("actionOpenReviews.size"),0);assert.equal(p.wordPosts.length,0);
+});
+
+const chapterConcernFixture=()=>({validationSha256:"a".repeat(64),previousReviewSha256:"b".repeat(64),
+  reasonCode:"cross_verse_overlap",segments:[2]});
+function actualGoodFixture(item,originalDirect=[1,3]) {
+  return {kind:"manual-word-review",verdict:"good",submissionId:"previous-real-good-submission",
+    caseId:item.id,candidateSha256:item.candidateSha256,clipSha256:item.clipSha256,
+    savedAt:"2026-10-23T02:00:00Z",queueSha256:"saved-queue",reviewSha256:"d".repeat(64),
+    timingEdits:[{segment:2,startMs:450,endMs:650}],
+    candidateWords:item.words.map(word=>word.segment===2?{...word,startMs:450,endMs:650}:{...word}),
+    listenEvidenceReportedByBrowser:{heardSegments:[1,3],freshHeardSegments:originalDirect,
+      heardEditedSegments:[2],verseHeard:false}};
+}
+async function chapterConcernPage(options={}) {
+  const fixture=await page();const item={...fixture.item,...options.case},concern=chapterConcernFixture();
+  const decision=actualGoodFixture(item,options.originalDirect??[1,3]);
+  const task=locateFixture({kind:"review-cuts",state:"review",chapterConcern:concern,
+    caseRef:{caseId:item.id,candidateSha256:item.candidateSha256,clipSha256:item.clipSha256}});
+  const p=await page({}, {actions:[task],actionCase:{case:item,decision,chapterConcern:concern,
+    decisionSha256:concern.previousReviewSha256,chapterConcernConfirmed:true,...options.result},
+    ...options.page});
+  return {p,item,concern,decision,task};
+}
+test("a validated new chapter concern opens the actual prior GOOD coordinates without inventing fresh hearing",async()=>{
+  const {p,decision}=await chapterConcernPage();
+  await p.run("openActionReview()");
+  assert.match(p.elements["action-chapter-concern"].textContent,/בדיקת הפרק מצאה חפיפה/);
+  assert.equal(p.run("workingWord(caseNow(),caseNow().words[1]).startMs"),450);
+  assert.equal(p.run("workingWord(caseNow(),caseNow().words[1]).endMs"),650);
+  assert.deepEqual(JSON.parse(p.run("JSON.stringify([...heardNow().fresh])")),[1,3]);
+  assert.equal(p.run("cutHeard(caseNow(),caseNow().words[1])"),true);
+  assert.equal(p.elements.good.disabled,true);
+  assert.equal(p.run("activeCutSegment"),2);
+  assert.equal(p.elements["editor-rows"].children.length,1);
+  assert.equal(p.elements["editor-rows"].children[0].dataset.cutSegment,"2");
+  assert.ok(p.elements["editor-rows"].children[0].classList.contains("chapter-concern"));
+  assert.equal(p.run("decisions[stateKey(caseNow())].reviewSha256"),decision.reviewSha256);
+  assert.equal(p.wordPosts.length,0);assert.equal(p.actionPosts.length,0);
+});
+test("the chapter exception uses the validated complete decision digest rather than its different inner review hash",async()=>{
+  const {p,concern,decision}=await chapterConcernPage({result:{chapterConcernConfirmed:false}});
+  assert.notEqual(concern.previousReviewSha256,decision.reviewSha256);
+  await p.run("openActionReview()");
+  assert.equal(p.run("actionOpenConcerns.size"),1);
+  assert.equal(p.run("workingWord(caseNow(),caseNow().words[1]).endMs"),650);
+  assert.equal(p.wordPosts.length,0);
+});
+test("a chapter concern cannot promote inherited or merely reported original hearing into direct hearing",async()=>{
+  const {p}=await chapterConcernPage({originalDirect:[1],case:{listeningReuseSha256:"c".repeat(64)}});
+  await p.run("openActionReview()");
+  assert.deepEqual(JSON.parse(p.run("JSON.stringify([...heardNow().segments])")),[1]);
+  assert.deepEqual(JSON.parse(p.run("JSON.stringify([...heardNow().fresh])")),[1]);
+  assert.equal(p.run("cutHeard(caseNow(),caseNow().words[2])"),false);
+  assert.equal(p.elements.good.disabled,true);
+});
+test("a chapter repair requires a real changed reported boundary and fresh edited-cut playback",async()=>{
+  const {p}=await chapterConcernPage();
+  await p.run("openActionReview()");
+  await p.run("save('good')");
+  assert.equal(p.wordPosts.length,0);
+  assert.match(p.elements.status.textContent,/אישור זהה.*אינו תיקון/);
+  p.run("setCutBoundary(2,'endMs',680)");
+  assert.equal(p.run("cutHeard(caseNow(),caseNow().words[1])"),false);
+  assert.equal(p.elements.good.disabled,true);
+  const playback=p.run("play('word',caseNow().words[1])");await p.flush();
+  assert.deepEqual(p.playbackSlices.at(-1),{offset:0.45,duration:0.23});
+  await p.finish();await playback;
+  assert.equal(p.elements.good.disabled,false);
+  assert.deepEqual(JSON.parse(p.run("JSON.stringify([...heardNow().fresh])")),[1,3]);
+  await p.run("save('good')");
+  assert.equal(p.wordPosts.length,1);
+  assert.deepEqual(p.wordPosts[0].timingEdits,[{segment:2,startMs:450,endMs:680}]);
+  assert.deepEqual(p.wordPosts[0].heardEditedSegments,[2]);
+  assert.equal(p.run("actionOpenConcerns.size"),0);
+});
+test("ordinary GOOD protection remains in force for unconfirmed or mismatched chapter concern metadata",async()=>{
+  for(const result of [{chapterConcernConfirmed:false,decisionSha256:"c".repeat(64)},
+      {chapterConcern:{...chapterConcernFixture(),validationSha256:"e".repeat(64)}}]) {
+    const {p}=await chapterConcernPage({result});
+    await p.run("openActionReview()");
+    assert.equal(p.run("actionOpenConcerns.size"),0);
+    assert.equal(p.run("workingWord(caseNow(),caseNow().words[1]).endMs"),600);
+    assert.match(p.elements["action-message"].textContent,/אין לפתוח שוב/);
+    assert.equal(p.wordPosts.length,0);
+  }
+});
+test("the old GOOD predating a new chapter concern survives polling, while a genuinely newer GOOD closes it",async()=>{
+  const {p,item,decision}=await chapterConcernPage();
+  await p.run("openActionReview()");
+  const key="case:"+item.candidateSha256+":"+item.clipSha256;
+  p.setQueue({cases:[],decisions:{},wordReviewDecisions:{[key]:decision},token:"fixture",persistentQueue:true});
+  await p.run("refreshQueue()");
+  assert.equal(p.run("caseNow().id"),"case");assert.equal(p.run("actionOpenConcerns.size"),1);
+  const newer={...decision,submissionId:"new-real-good-submission",savedAt:"2026-10-23T02:10:00Z",reviewSha256:"e".repeat(64)};
+  p.setQueue({cases:[],decisions:{},wordReviewDecisions:{[key]:newer},token:"fixture",persistentQueue:true});
+  await p.run("refreshQueue()");
+  assert.equal(p.run("caseNow()"),undefined);assert.equal(p.run("actionOpenConcerns.size"),0);
+  assert.equal(p.wordPosts.length,0);
+});
+
+test("a newer GOOD learned while an older chapter action loads cannot be reopened by the old response",async()=>{
+  const {p,decision}=await chapterConcernPage();
+  const newer={...decision,submissionId:"newer-already-saved-good",savedAt:"2026-10-23T03:00:00Z",reviewSha256:"f".repeat(64)};
+  p.run("decisions[stateKey(caseNow())]="+JSON.stringify(newer));
+  await p.run("openActionReview()");
+  assert.equal(p.run("actionOpenConcerns.size"),0);
+  assert.match(p.elements["action-message"].textContent,/אישור חדש יותר/);
+  assert.equal(p.wordPosts.length,0);
+});
+
+test("a saved GOOD without hearing reuse truthfully reuses its direct heardSegments even without a separate fresh list",async()=>{
+  const fixture=await page();const item=fixture.item,concern=chapterConcernFixture(),decision=actualGoodFixture(item);
+  delete decision.listenEvidenceReportedByBrowser.freshHeardSegments;
+  const p=await page({}, {actions:[locateFixture({kind:"review-cuts",state:"review",chapterConcern:concern,
+    caseRef:{caseId:item.id,candidateSha256:item.candidateSha256,clipSha256:item.clipSha256}})],
+    actionCase:{case:item,decision,chapterConcern:concern,decisionSha256:concern.previousReviewSha256,chapterConcernConfirmed:true}});
+  await p.run("openActionReview()");
+  assert.deepEqual(JSON.parse(p.run("JSON.stringify([...heardNow().segments])")),[1,3]);
+  assert.equal(p.run("cutHeard(caseNow(),caseNow().words[0])"),true);
+  assert.equal(p.run("cutHeard(caseNow(),caseNow().words[1])"),true);
+  assert.equal(p.run("cutHeard(caseNow(),caseNow().words[2])"),true);
+  assert.equal(p.elements["editor-rows"].children.length,1);
+  assert.equal(p.elements.good.disabled,true);
+  assert.equal(p.wordPosts.length,0);
+});
+
+test("word-review tasks expose the separate source-remediation controls without saving fake GOOD",async()=>{
+  assert.match(html, /<\/div>\s*<details id="action-source-report">/, "source report is outside the conditionally hidden source player");
+  const p=await page({}, {actions:[locateFixture({kind:"review-cuts",state:"review"})]});
+  assert.equal(p.elements["action-review"].hidden,false);
+  assert.equal(p.elements["action-original"].hidden,true);
+  p.elements["action-source-decision"].value="source_problem";p.elements["action-source-decision"].onchange();
+  p.elements["action-source-note"].value="צריך לבדוק טעות שנשמעת בהקלטה";p.elements["action-source-note"].oninput();
+  await p.run("saveAction('source-remediation')");
+  assert.equal(p.actionPosts.length,1);assert.equal(p.actionPosts[0].body.kind,"source-remediation");
+  assert.equal(p.actionPosts[0].body.decision,"source_problem");
+  assert.equal("verdict"in p.actionPosts[0].body,false);
+  assert.equal(p.wordPosts.length,0);assert.equal(p.legacyPosts.length,0);
+});
+test("a review task can explicitly inspect the full original source and polling keeps it open",async()=>{
+  const p=await page({}, {actions:[locateFixture({kind:"review-cuts",state:"review"})]});
+  p.elements["action-open-source"].onclick();
+  assert.equal(p.elements["action-original"].hidden,false);
+  assert.equal(p.elements["action-range"].hidden,false);
+  await p.run("updateActions()");
+  assert.equal(p.elements["action-original"].hidden,false);
+  assert.equal(p.run("cases.length"),2);assert.equal(p.actionPosts.length,0);assert.equal(p.wordPosts.length,0);
+});
+test("actual workflow ready and needs_actions states show the validated recording counts truthfully",async()=>{
+  const p=await page({}, {actions:[locateFixture()],workflow:{totalRecordings:496,readyRecordings:286,pendingRecordings:210,chapters:[
+    {perekId:1,label:"בראשית א",state:"needs_actions",remainingActions:3},
+    {perekId:2,label:"בראשית ב",state:"ready",remainingActions:0,readyWords:500}
+  ]}});
+  assert.match(p.elements["workflow-summary"].textContent,/286 מתוך 496.*210.*אינו אישור לפרסום/);
+  assert.match(p.elements["workflow-chapters"].children[0].textContent,/ממתין להשלמת פעולות/);
+  assert.match(p.elements["workflow-chapters"].children[1].textContent,/הושלמו ואומתו מקומית.*500 מילים/);
+});
+
+test("a wrong or clipped review context can be replaced only through genuinely heard full-source location",async()=>{
+  const p=await page({}, {actions:[locateFixture({kind:"review-cuts",state:"review"})]});
+  p.elements["action-open-source"].onclick();
+  assert.equal(p.elements["action-original"].hidden,false);assert.equal(p.elements["action-range"].hidden,false);
+  assert.equal(p.elements["action-start-number"].value,"");assert.equal(p.elements["action-end-number"].value,"");
+  setLocatedRange(p);
+  await p.run("saveAction('locate-source-range')");assert.equal(p.actionPosts.length,0);
+  const playback=p.run("playActionRange(true)");await p.flush();
+  assert.deepEqual(p.playbackSlices.at(-1),{offset:0.2,duration:0.5});
+  await p.finish();await playback;
+  await p.run("saveAction('locate-source-range')");
+  assert.equal(p.actionPosts.length,1);assert.equal(p.actionPosts[0].body.kind,"locate-source-range");
+  assert.equal(p.actionPosts[0].body.taskId,"locate");
+  assert.deepEqual(p.actionPosts[0].body.heardRange,{startMs:200,endMs:700,complete:true});
+  assert.equal("verdict"in p.actionPosts[0].body,false);
+  assert.equal(p.wordPosts.length,0);assert.equal(p.editPosts.length,0);assert.equal(p.elements.good.disabled,true);
+});
+test("a checked word review waiting for its chapter is not labeled as active computation or offered a new context",async()=>{
+  const p=await page({}, {actions:[locateFixture({kind:"review-cuts",state:"preparing",cutReviewComplete:true})]});
+  assert.match(p.elements["action-state"].textContent,/נבדקו.*ממתין להשלמת הפרק/);
+  assert.match(p.elements["action-list"].children[0].textContent,/נבדקו.*ממתין להשלמת הפרק/);
+  assert.doesNotMatch(p.elements["action-state"].textContent,/המחשב מכין/);
+  p.elements["action-open-source"].onclick();assert.equal(p.elements["action-range"].hidden,true);
+  await p.run("saveAction('locate-source-range')");assert.equal(p.actionPosts.length,0);
+  const actual=await page({}, {actions:[locateFixture({state:"preparing"})]});
+  assert.match(actual.elements["action-state"].textContent,/המחשב מכין חיתוכים/);
+});
+
+test("rebinding a chapter concern to fresh context cuts removes the obsolete concern notice",async()=>{
+  const concern=chapterConcernFixture();
+  const task=locateFixture({kind:"review-cuts",state:"review",chapterConcern:concern});
+  const p=await page({}, {actions:[task]});
+  assert.equal(p.elements["action-chapter-concern"].hidden,false);
+  p.setActions([{...task,chapterConcern:undefined,caseRef:{caseId:"case",candidateSha256:"new-context",clipSha256:"new-clip"}}]);
+  await p.run("updateActions()");
+  assert.equal(p.elements["action-chapter-concern"].hidden,true);
+  assert.equal(p.elements["action-review"].hidden,false);
+  assert.equal(p.wordPosts.length,0);
 });
