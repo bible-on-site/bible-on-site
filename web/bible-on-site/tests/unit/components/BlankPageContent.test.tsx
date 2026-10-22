@@ -14,10 +14,15 @@ jest.mock("next/link", () => ({
 	default: ({
 		children,
 		href,
+		...props
 	}: {
 		children: React.ReactNode;
 		href: string;
-	}) => <a href={href}>{children}</a>,
+	}) => (
+		<a href={href} {...props}>
+			{children}
+		</a>
+	),
 }));
 
 jest.mock("@/lib/authors/url-utils", () => ({
@@ -62,6 +67,7 @@ import {
 	getPerushNotesForPage,
 } from "../../../src/app/929/[number]/actions";
 import { BlankPageContent } from "../../../src/app/929/[number]/components/BlankPageContent";
+import { getSeferOpenPerush } from "../../../src/app/929/[number]/components/sefer-pasuk-navigation";
 import type { Article } from "../../../src/lib/articles";
 
 const mockGetArticleForBook = getArticleForBook as jest.MockedFunction<
@@ -92,6 +98,7 @@ const mockArticles: Article[] = [
 describe("BlankPageContent", () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
+		sessionStorage.clear();
 	});
 
 	it("waits for summaries and responds to new article and perush routes without pushing history", async () => {
@@ -99,11 +106,21 @@ describe("BlankPageContent", () => {
 		mockGetPerushNotesForPage.mockResolvedValue([]);
 		const push = jest.spyOn(History.prototype, "pushState");
 		const props = { perekId: 1, hebrewDateStr: "date" };
-		const { rerender } = render(<BlankPageContent {...props} articles={[]} initialSlug="1" />);
+		const { rerender } = render(
+			<BlankPageContent {...props} articles={[]} initialSlug="1" />,
+		);
 		expect(mockGetArticleForBook).not.toHaveBeenCalled();
-		rerender(<BlankPageContent {...props} articles={mockArticles} initialSlug="1" />);
+		rerender(
+			<BlankPageContent {...props} articles={mockArticles} initialSlug="1" />,
+		);
 		await screen.findByText("חזרה למאמרים →");
-		rerender(<BlankPageContent {...props} perushim={mockPerushim} initialSlug={'רש"י'} />);
+		rerender(
+			<BlankPageContent
+				{...props}
+				perushim={mockPerushim}
+				initialSlug={'רש"י'}
+			/>,
+		);
 		await screen.findByText("→ חזרה לפרשנים");
 		rerender(<BlankPageContent {...props} perushim={mockPerushim} />);
 		await screen.findByText("פרשנים על הפרק");
@@ -114,10 +131,21 @@ describe("BlankPageContent", () => {
 
 	it("does not replace a newer perush with a late article response", async () => {
 		let resolveArticle: (article: Article) => void = () => {};
-		mockGetArticleForBook.mockReturnValue(new Promise((resolve) => { resolveArticle = resolve; }));
+		mockGetArticleForBook.mockReturnValue(
+			new Promise((resolve) => {
+				resolveArticle = resolve;
+			}),
+		);
 		mockGetPerushNotesForPage.mockResolvedValue([]);
-		const props = { perekId: 1, articles: mockArticles, perushim: mockPerushim, hebrewDateStr: "date" };
-		const { rerender } = render(<BlankPageContent {...props} initialSlug="1" />);
+		const props = {
+			perekId: 1,
+			articles: mockArticles,
+			perushim: mockPerushim,
+			hebrewDateStr: "date",
+		};
+		const { rerender } = render(
+			<BlankPageContent {...props} initialSlug="1" />,
+		);
 		rerender(<BlankPageContent {...props} initialSlug={'רש"י'} />);
 		await screen.findByText("→ חזרה לפרשנים");
 		await act(async () => resolveArticle(mockArticles[0]));
@@ -126,80 +154,142 @@ describe("BlankPageContent", () => {
 	});
 
 	it("ignores a late perush response after returning to the carousel", async () => {
-		let resolveNotes: (notes: Awaited<ReturnType<typeof getPerushNotesForPage>>) => void = () => {};
-		mockGetPerushNotesForPage.mockReturnValue(new Promise((resolve) => { resolveNotes = resolve; }));
+		let resolveNotes: (
+			notes: Awaited<ReturnType<typeof getPerushNotesForPage>>,
+		) => void = () => {};
+		mockGetPerushNotesForPage.mockReturnValue(
+			new Promise((resolve) => {
+				resolveNotes = resolve;
+			}),
+		);
 		const props = { perekId: 1, perushim: mockPerushim, hebrewDateStr: "date" };
-		const { rerender } = render(<BlankPageContent {...props} initialSlug={'רש"י'} />);
+		const { rerender } = render(
+			<BlankPageContent {...props} initialSlug={'רש"י'} />,
+		);
 		rerender(<BlankPageContent {...props} />);
 		await act(async () => resolveNotes([]));
 		expect(screen.queryByText("→ חזרה לפרשנים")).toBeNull();
 		expect(screen.getByText("פרשנים על הפרק")).toBeVisible();
 	});
 
-	it.each(["article", "perush"])("keeps the newer selection when an old %s request fails", async (kind) => {
-		let rejectRequest: (error: Error) => void = () => {};
-		mockGetArticleForBook.mockResolvedValue(mockArticles[0]);
-		mockGetPerushNotesForPage.mockResolvedValue([]);
-		if (kind === "article") {
-			mockGetArticleForBook.mockReturnValueOnce(new Promise((_, reject) => { rejectRequest = reject; }));
-		} else {
-			mockGetPerushNotesForPage.mockReturnValueOnce(new Promise((_, reject) => { rejectRequest = reject; }));
-		}
-		const error = jest.spyOn(console, "error").mockImplementation(() => {});
-		try {
-			const props = { perekId: 1, articles: mockArticles, perushim: mockPerushim, hebrewDateStr: "date" };
-			const oldSlug = kind === "article" ? "1" : 'רש"י';
-			const newSlug = kind === "article" ? 'רש"י' : "1";
-			const { rerender } = render(<BlankPageContent {...props} initialSlug={oldSlug} />);
-			rerender(<BlankPageContent {...props} initialSlug={newSlug} />);
-			const currentBack = kind === "article" ? "→ חזרה לפרשנים" : "חזרה למאמרים →";
-			await screen.findByText(currentBack);
-			const failure = new Error("old request failed after navigation");
-			await act(async () => rejectRequest(failure));
-			expect(screen.getByText(currentBack)).toBeVisible();
-			expect(screen.queryByText(kind === "article" ? "חזרה למאמרים →" : "→ חזרה לפרשנים")).toBeNull();
-			expect(error).toHaveBeenCalledWith(
-				kind === "article" ? "Failed to load book article" : "Failed to load book commentary",
-				expect.objectContaining({ perekId: 1, error: failure }),
-			);
-		} finally {
-			error.mockRestore();
-		}
-	});
+	it.each(["article", "perush"])(
+		"keeps the newer selection when an old %s request fails",
+		async (kind) => {
+			let rejectRequest: (error: Error) => void = () => {};
+			mockGetArticleForBook.mockResolvedValue(mockArticles[0]);
+			mockGetPerushNotesForPage.mockResolvedValue([]);
+			if (kind === "article") {
+				mockGetArticleForBook.mockReturnValueOnce(
+					new Promise((_, reject) => {
+						rejectRequest = reject;
+					}),
+				);
+			} else {
+				mockGetPerushNotesForPage.mockReturnValueOnce(
+					new Promise((_, reject) => {
+						rejectRequest = reject;
+					}),
+				);
+			}
+			const error = jest.spyOn(console, "error").mockImplementation(() => {});
+			try {
+				const props = {
+					perekId: 1,
+					articles: mockArticles,
+					perushim: mockPerushim,
+					hebrewDateStr: "date",
+				};
+				const oldSlug = kind === "article" ? "1" : 'רש"י';
+				const newSlug = kind === "article" ? 'רש"י' : "1";
+				const { rerender } = render(
+					<BlankPageContent {...props} initialSlug={oldSlug} />,
+				);
+				rerender(<BlankPageContent {...props} initialSlug={newSlug} />);
+				const currentBack =
+					kind === "article" ? "→ חזרה לפרשנים" : "חזרה למאמרים →";
+				await screen.findByText(currentBack);
+				const failure = new Error("old request failed after navigation");
+				await act(async () => rejectRequest(failure));
+				expect(screen.getByText(currentBack)).toBeVisible();
+				expect(
+					screen.queryByText(
+						kind === "article" ? "חזרה למאמרים →" : "→ חזרה לפרשנים",
+					),
+				).toBeNull();
+				expect(error).toHaveBeenCalledWith(
+					kind === "article"
+						? "Failed to load book article"
+						: "Failed to load book commentary",
+					expect.objectContaining({ perekId: 1, error: failure }),
+				);
+			} finally {
+				error.mockRestore();
+			}
+		},
+	);
 
 	it("delegates clicks to book navigation and logs article failures", async () => {
 		const onNavigate = jest.fn();
 		const error = jest.spyOn(console, "error").mockImplementation(() => {});
 		mockGetArticleForBook.mockRejectedValue(new Error("article unavailable"));
 		try {
-			render(<BlankPageContent perekId={1} articles={mockArticles} hebrewDateStr="date" onNavigate={onNavigate} />);
-			await act(async () => fireEvent.click(screen.getByRole("button")));
+			render(
+				<BlankPageContent
+					perekId={1}
+					articles={mockArticles}
+					hebrewDateStr="date"
+					onNavigate={onNavigate}
+				/>,
+			);
+			await act(async () => fireEvent.click(screen.getByRole("link")));
 			expect(onNavigate).toHaveBeenCalledWith("1");
-			expect(error).toHaveBeenCalledWith("Failed to load book article", expect.objectContaining({ perekId: 1, articleId: 1 }));
+			expect(error).toHaveBeenCalledWith(
+				"Failed to load book article",
+				expect.objectContaining({ perekId: 1, articleId: 1 }),
+			);
 			expect(screen.queryByText("חזרה למאמרים →")).toBeNull();
 		} finally {
 			error.mockRestore();
 		}
 	});
 
-	it.each(["article", "perush"])("allows retrying the same %s after a request failure", async (kind) => {
-		const error = jest.spyOn(console, "error").mockImplementation(() => {});
-		mockGetArticleForBook.mockResolvedValue(mockArticles[0]);
-		mockGetPerushNotesForPage.mockResolvedValue([]);
-		const request = kind === "article" ? mockGetArticleForBook : mockGetPerushNotesForPage;
-		request.mockRejectedValueOnce(new Error("temporary failure"));
-		try {
-			render(<BlankPageContent perekId={1} articles={mockArticles} perushim={mockPerushim} hebrewDateStr="date" />);
-			const name = kind === "article" ? /הרב ישראל/ : /רש"י/;
-			await act(async () => fireEvent.click(screen.getByRole("button", { name })));
-			expect(request).toHaveBeenCalledTimes(1);
-			await act(async () => fireEvent.click(screen.getByRole("button", { name })));
-			expect(request).toHaveBeenCalledTimes(2);
-			expect(screen.getByText(kind === "article" ? "חזרה למאמרים →" : "→ חזרה לפרשנים")).toBeVisible();
-		} finally {
-			error.mockRestore();
-		}
-	});
+	it.each(["article", "perush"])(
+		"allows retrying the same %s after a request failure",
+		async (kind) => {
+			const error = jest.spyOn(console, "error").mockImplementation(() => {});
+			mockGetArticleForBook.mockResolvedValue(mockArticles[0]);
+			mockGetPerushNotesForPage.mockResolvedValue([]);
+			const request =
+				kind === "article" ? mockGetArticleForBook : mockGetPerushNotesForPage;
+			request.mockRejectedValueOnce(new Error("temporary failure"));
+			try {
+				render(
+					<BlankPageContent
+						perekId={1}
+						articles={mockArticles}
+						perushim={mockPerushim}
+						hebrewDateStr="date"
+					/>,
+				);
+				const name = kind === "article" ? /הרב ישראל/ : /רש"י/;
+				await act(async () =>
+					fireEvent.click(screen.getByRole("link", { name })),
+				);
+				expect(request).toHaveBeenCalledTimes(1);
+				await act(async () =>
+					fireEvent.click(screen.getByRole("link", { name })),
+				);
+				expect(request).toHaveBeenCalledTimes(2);
+				expect(
+					screen.getByText(
+						kind === "article" ? "חזרה למאמרים →" : "→ חזרה לפרשנים",
+					),
+				).toBeVisible();
+			} finally {
+				error.mockRestore();
+			}
+		},
+	);
 
 	it("renders date string", () => {
 		render(
@@ -230,7 +320,7 @@ describe("BlankPageContent", () => {
 		);
 
 		// Click the carousel button (has the author name)
-		const articleButton = screen.getByRole("button");
+		const articleButton = screen.getByRole("link");
 		await act(async () => {
 			fireEvent.click(articleButton);
 		});
@@ -254,7 +344,7 @@ describe("BlankPageContent", () => {
 
 		// Click carousel item to open full view
 		await act(async () => {
-			fireEvent.click(screen.getByRole("button"));
+			fireEvent.click(screen.getByRole("link"));
 		});
 
 		await waitFor(() => {
@@ -287,7 +377,11 @@ describe("BlankPageContent", () => {
 			await screen.findByText("חזרה למאמרים →");
 			push.mockClear();
 			fireEvent.click(screen.getByText("חזרה למאמרים →"));
-			expect(push).toHaveBeenCalledWith(expect.objectContaining({ route: "/929/615?book" }), "", "/929/615?book");
+			expect(push).toHaveBeenCalledWith(
+				expect.objectContaining({ route: "/929/615?book" }),
+				"",
+				"/929/615?book",
+			);
 			expect(screen.getByText("הרב ישראל")).toBeVisible();
 		} finally {
 			push.mockRestore();
@@ -311,7 +405,7 @@ describe("BlankPageContent", () => {
 		);
 
 		await act(async () => {
-			fireEvent.click(screen.getByRole("button"));
+			fireEvent.click(screen.getByRole("link"));
 		});
 
 		await waitFor(() => {
@@ -341,12 +435,14 @@ describe("BlankPageContent", () => {
 		);
 
 		await act(async () => {
-			fireEvent.click(screen.getByRole("button", { name: /רש"י/ }));
+			fireEvent.click(screen.getByRole("link", { name: /רש"י/ }));
 		});
 
 		await waitFor(() => {
 			expect(pushSpy).toHaveBeenCalledWith(
-				expect.objectContaining({ route: "/929/615/%D7%A8%D7%A9%22%D7%99?book" }),
+				expect.objectContaining({
+					route: "/929/615/%D7%A8%D7%A9%22%D7%99?book",
+				}),
 				"",
 				"/929/615/%D7%A8%D7%A9%22%D7%99?book",
 			);
@@ -363,7 +459,7 @@ describe("BlankPageContent", () => {
 		);
 
 		await act(async () => {
-			fireEvent.click(screen.getByRole("button"));
+			fireEvent.click(screen.getByRole("link"));
 		});
 
 		// Should still show articles carousel (no full view since null returned)
@@ -386,7 +482,7 @@ describe("BlankPageContent", () => {
 			/>,
 		);
 
-		const perushButton = screen.getByRole("button", { name: /רש"י/ });
+		const perushButton = screen.getByRole("link", { name: /רש"י/ });
 		await act(async () => {
 			fireEvent.click(perushButton);
 		});
@@ -412,7 +508,7 @@ describe("BlankPageContent", () => {
 
 		// Click perush to open full view
 		await act(async () => {
-			fireEvent.click(screen.getByRole("button", { name: /רש"י/ }));
+			fireEvent.click(screen.getByRole("link", { name: /רש"י/ }));
 		});
 
 		await waitFor(() => {
@@ -429,6 +525,158 @@ describe("BlankPageContent", () => {
 		});
 	});
 
+	it("restores the perushim carousel position after a perush opens and closes", async () => {
+		mockGetPerushNotesForPage.mockResolvedValue([
+			{ pasuk: 1, noteIdx: 0, noteContent: "<p>content</p>" },
+		]);
+		const perushim = Array.from({ length: 5 }, (_, i) => ({
+			id: i + 1,
+			name: `פרשן ${i + 1}`,
+			parshanName: `בעל ${i + 1}`,
+			noteCount: 3,
+		}));
+
+		// Uniform card layout resolved through the prototypes so the carousel's
+		// remount-time restore already sees real card geometry.
+		const CARD = 100;
+		const VIEWPORT = 250;
+		const isScroller = (el: Element) =>
+			el.children.length > 1 && el.firstElementChild?.tagName === "A";
+		const realRect = HTMLElement.prototype.getBoundingClientRect;
+		const scrollWidth = Object.getOwnPropertyDescriptor(
+			HTMLElement.prototype,
+			"scrollWidth",
+		);
+		const clientWidth = Object.getOwnPropertyDescriptor(
+			HTMLElement.prototype,
+			"clientWidth",
+		);
+		HTMLElement.prototype.getBoundingClientRect = function (this: HTMLElement) {
+			if (isScroller(this)) {
+				return { left: 0, right: VIEWPORT, width: VIEWPORT } as DOMRect;
+			}
+			const parent = this.parentElement;
+			if (parent && isScroller(parent)) {
+				const i = Array.prototype.indexOf.call(parent.children, this);
+				const left = i * CARD - parent.scrollLeft;
+				return { left, right: left + CARD, width: CARD } as DOMRect;
+			}
+			return realRect.call(this);
+		};
+		Object.defineProperty(HTMLElement.prototype, "scrollWidth", {
+			configurable: true,
+			get(this: HTMLElement) {
+				return isScroller(this) ? this.children.length * CARD : 0;
+			},
+		});
+		Object.defineProperty(HTMLElement.prototype, "clientWidth", {
+			configurable: true,
+			get(this: HTMLElement) {
+				return isScroller(this) ? VIEWPORT : 0;
+			},
+		});
+		try {
+			render(
+				<BlankPageContent
+					articles={[]}
+					perushim={perushim}
+					perekId={7}
+					hebrewDateStr="date"
+				/>,
+			);
+			const scroller = screen.getByRole("link", { name: /פרשן 3/ })
+				.parentElement as HTMLElement;
+			await act(async () => {
+				scroller.scrollLeft = 3 * CARD;
+				fireEvent.scroll(scroller);
+			});
+
+			// Open a perush away from the carousel's start.
+			await act(async () =>
+				fireEvent.click(screen.getByRole("link", { name: /פרשן 4/ })),
+			);
+			await screen.findByText("→ חזרה לפרשנים");
+			expect(screen.queryByRole("link", { name: /פרשן 3/ })).toBeNull();
+
+			// Closing it brings the carousel back where the user left it.
+			await act(async () => fireEvent.click(screen.getByText(/חזרה לפרשנים/)));
+			const restored = screen.getByRole("link", { name: /פרשן 3/ })
+				.parentElement as HTMLElement;
+			expect(restored).not.toBe(scroller);
+			expect(restored.scrollLeft).toBe(3 * CARD);
+			expect(
+				JSON.parse(sessionStorage.getItem("perushim-book-7") ?? "null"),
+			).toEqual({ itemIndex: 3, itemGap: 0 });
+		} finally {
+			HTMLElement.prototype.getBoundingClientRect = realRect;
+			if (scrollWidth) {
+				Object.defineProperty(
+					HTMLElement.prototype,
+					"scrollWidth",
+					scrollWidth,
+				);
+			} else {
+				Reflect.deleteProperty(HTMLElement.prototype, "scrollWidth");
+			}
+			if (clientWidth) {
+				Object.defineProperty(
+					HTMLElement.prototype,
+					"clientWidth",
+					clientWidth,
+				);
+			} else {
+				Reflect.deleteProperty(HTMLElement.prototype, "clientWidth");
+			}
+		}
+	});
+
+	it("publishes the open perush for pasuk navigation until it closes", async () => {
+		mockGetPerushNotesForPage.mockResolvedValue([
+			{ pasuk: 1, noteIdx: 0, noteContent: "<p>content</p>" },
+		]);
+
+		render(
+			<BlankPageContent
+				articles={[]}
+				perushim={mockPerushim}
+				perekId={1}
+				hebrewDateStr="date"
+			/>,
+		);
+		expect(getSeferOpenPerush(1)).toBeNull();
+
+		await act(async () => {
+			fireEvent.click(screen.getByRole("link", { name: /רש"י/ }));
+		});
+		await screen.findByText("→ חזרה לפרשנים");
+		expect(getSeferOpenPerush(1)?.name).toBe('רש"י');
+		expect(getSeferOpenPerush(1)?.pesukim.has(1)).toBe(true);
+
+		await act(async () => {
+			fireEvent.click(screen.getByText("→ חזרה לפרשנים"));
+		});
+		expect(getSeferOpenPerush(1)).toBeNull();
+	});
+
+	it("clears the published perush when the blank page unmounts", async () => {
+		mockGetPerushNotesForPage.mockResolvedValue([
+			{ pasuk: 1, noteIdx: 0, noteContent: "<p>content</p>" },
+		]);
+		const { unmount } = render(
+			<BlankPageContent
+				articles={[]}
+				perushim={mockPerushim}
+				perekId={1}
+				hebrewDateStr="date"
+				initialSlug={'רש"י'}
+			/>,
+		);
+		await screen.findByText("→ חזרה לפרשנים");
+		expect(getSeferOpenPerush(1)?.name).toBe('רש"י');
+		unmount();
+		expect(getSeferOpenPerush(1)).toBeNull();
+	});
+
 	it("logs a perush failure and keeps the carousel available", async () => {
 		const error = jest.spyOn(console, "error").mockImplementation(() => {});
 		mockGetPerushNotesForPage.mockRejectedValue(new Error("fail"));
@@ -443,10 +691,13 @@ describe("BlankPageContent", () => {
 		);
 
 		await act(async () => {
-			fireEvent.click(screen.getByRole("button", { name: /רש"י/ }));
+			fireEvent.click(screen.getByRole("link", { name: /רש"י/ }));
 		});
 
-		expect(error).toHaveBeenCalledWith("Failed to load book commentary", expect.objectContaining({perekId: 1, perushId: 1}));
+		expect(error).toHaveBeenCalledWith(
+			"Failed to load book commentary",
+			expect.objectContaining({ perekId: 1, perushId: 1 }),
+		);
 		error.mockRestore();
 		// The failed request leaves the carousel visible.
 		await waitFor(() => {
@@ -587,6 +838,63 @@ describe("BlankPageContent", () => {
 
 			// Should not have been called again
 			expect(mockGetArticleForBook).toHaveBeenCalledTimes(1);
+		});
+	});
+
+	describe("onContentTitle (issue #2176)", () => {
+		it("reports the article page title while a full article is shown", async () => {
+			mockGetArticleForBook.mockResolvedValue(mockArticles[0]);
+			const onContentTitle = jest.fn();
+			render(
+				<BlankPageContent
+					articles={mockArticles}
+					hebrewDateStr="י׳ בשבט"
+					initialSlug="1"
+					onContentTitle={onContentTitle}
+				/>,
+			);
+			await screen.findByText("חזרה למאמרים →");
+			expect(onContentTitle).toHaveBeenLastCalledWith(
+				'מאמר ראשון | הרב ישראל | תנ"ך על הפרק',
+			);
+		});
+
+		it("reports the perush page title while a full perush is shown", async () => {
+			mockGetPerushNotesForPage.mockResolvedValue([]);
+			const onContentTitle = jest.fn();
+			render(
+				<BlankPageContent
+					perushim={mockPerushim}
+					perekId={1}
+					hebrewDateStr="י׳ בשבט"
+					initialSlug={'רש"י'}
+					perekTitleParts={{
+						source: "שמואל ב א",
+						seferName: "שמואל",
+						perekHeb: "א",
+					}}
+					onContentTitle={onContentTitle}
+				/>,
+			);
+			await screen.findByText("→ חזרה לפרשנים");
+			expect(onContentTitle).toHaveBeenLastCalledWith(
+				'רש"י על שמואל א | תנ"ך על הפרק',
+			);
+		});
+
+		it("reports null when the selection returns to the carousels", async () => {
+			mockGetArticleForBook.mockResolvedValue(mockArticles[0]);
+			const onContentTitle = jest.fn();
+			render(
+				<BlankPageContent
+					articles={mockArticles}
+					hebrewDateStr="י׳ בשבט"
+					initialSlug="1"
+					onContentTitle={onContentTitle}
+				/>,
+			);
+			fireEvent.click(await screen.findByText("חזרה למאמרים →"));
+			expect(onContentTitle).toHaveBeenLastCalledWith(null);
 		});
 	});
 });

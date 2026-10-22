@@ -1,5 +1,5 @@
-import { CATEGORY_LABELS, ENTITY_TYPE_LABELS } from "./labels";
 import type { CategoryKey, EntityType } from "./labels";
+import { CATEGORY_LABELS, ENTITY_TYPE_LABELS } from "./labels";
 
 export interface CategoryHierarchyItem {
 	type: EntityType;

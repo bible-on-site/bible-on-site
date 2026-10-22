@@ -64,3 +64,26 @@
     font-size: 1.35rem;
   }
 }
+
+@media (prefers-color-scheme: dark) {
+  .errorCode {
+    color: #7eb0ff;
+  }
+
+  .pasuk {
+    color: #a8b9ff;
+  }
+
+  .source {
+    color: #9aa0a6;
+  }
+
+  .backLink {
+    background: #a8b9ff;
+    color: #16213d;
+  }
+
+  .backLink:hover {
+    background: #c7d2fe;
+  }
+}

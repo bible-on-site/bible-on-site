@@ -1,4 +1,5 @@
-﻿using BibleOnSite.Services;
+﻿using BibleOnSite.Helpers;
+using BibleOnSite.Services;
 
 namespace BibleOnSite;
 
@@ -21,9 +22,13 @@ public partial class MainPage : ContentPage
 		count++;
 
 		if (count == 1)
+		{
 			CounterBtn.Text = $"Clicked {count} time";
+		}
 		else
+		{
 			CounterBtn.Text = $"Clicked {count} times";
+		}
 
 		SemanticScreenReader.Announce(CounterBtn.Text);
 
@@ -37,7 +42,7 @@ public partial class MainPage : ContentPage
 		{
 			await StarterService.Instance.LoadAsync();
 			var authorsCount = StarterService.Instance.Authors.Count;
-			Console.WriteLine($"Loaded {authorsCount} authors");
+			DebugLog.Write($"Loaded {authorsCount} authors");
 		}
 		catch (Exception ex)
 		{

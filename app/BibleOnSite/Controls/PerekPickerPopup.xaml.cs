@@ -16,10 +16,32 @@ public partial class PerekPickerPopup : ContentView
     private SeferItem? _selectedSefer;
     private PerekItem? _selectedPerek;
 
+    // Per-column scroll-arrow state: the last reported visible-item indices
+    // (-1 until the first Scrolled event) plus the arrow labels and the
+    // zero-opacity sizer whose arranged height equals one item's height
+    // (items are uniform via MeasureAllItems).
+    private sealed class ScrollColumn(CollectionView list, Label up, Label down, Label sizer)
+    {
+        public CollectionView List { get; } = list;
+        public Label Up { get; } = up;
+        public Label Down { get; } = down;
+        public Label Sizer { get; } = sizer;
+        public int FirstVisibleIndex { get; set; } = -1;
+        public int LastVisibleIndex { get; set; } = -1;
+    }
+
+    private readonly List<ScrollColumn> _scrollColumns;
+
+    // Arrow colors per the spec: black while more content exists in that
+    // direction, gray at the boundary. On dark theme white reads as "black".
+    private static readonly Color ArrowActiveLight = Colors.Black;
+    private static readonly Color ArrowActiveDark = Colors.White;
+    private static readonly Color ArrowInactive = Color.FromArgb("#919191"); // Gray400
+
     /// <summary>
     /// Event raised when a perek is selected and confirmed.
     /// </summary>
-    public event EventHandler<int>? PerekSelected;
+    public event Action<int>? PerekSelected;
 
     /// <summary>
     /// Event raised when the popup is dismissed.
@@ -29,21 +51,33 @@ public partial class PerekPickerPopup : ContentView
     public PerekPickerPopup()
     {
         InitializeComponent();
+        _scrollColumns =
+        [
+            new ScrollColumn(SeferGroupList, SeferGroupUpArrow, SeferGroupDownArrow, SeferGroupItemSizer),
+            new ScrollColumn(SeferList, SeferUpArrow, SeferDownArrow, SeferItemSizer),
+            new ScrollColumn(PerekList, PerekUpArrow, PerekDownArrow, PerekItemSizer),
+        ];
         LoadSeferGroups();
     }
 
     /// <summary>
     /// Shows the picker popup.
     /// </summary>
-    /// <param name="currentPerekId">Optional current perek ID to pre-select.</param>
-    public void Show(int? currentPerekId = null)
+    public void Show()
     {
         IsVisible = true;
+        RefreshAllArrowsDeferred();
+    }
 
-        if (currentPerekId.HasValue)
-        {
-            PreSelectPerek(currentPerekId.Value);
-        }
+    /// <summary>
+    /// Shows the picker popup with a perek pre-selected.
+    /// </summary>
+    /// <param name="currentPerekId">Current perek ID to pre-select.</param>
+    public void Show(int currentPerekId)
+    {
+        IsVisible = true;
+        PreSelectPerek(currentPerekId);
+        RefreshAllArrowsDeferred();
     }
 
     /// <summary>
@@ -65,12 +99,16 @@ public partial class PerekPickerPopup : ContentView
         };
 
         SeferGroupList.ItemsSource = groups;
+        RefreshArrowsDeferred(SeferGroupList);
     }
 
     private void PreSelectPerek(int perekId)
     {
         var perek = PerekDataService.Instance.GetPerek(perekId);
-        if (perek == null) return;
+        if (perek == null)
+        {
+            return;
+        }
 
         var seferGroup = SefarimData.GetSeferGroup(perek.SeferId);
 
@@ -119,17 +157,25 @@ public partial class PerekPickerPopup : ContentView
 
     private void OnSeferGroupSelected(object? sender, SelectionChangedEventArgs e)
     {
-        if (e.CurrentSelection.Count == 0) return;
+        if (e.CurrentSelection.Count == 0)
+        {
+            return;
+        }
 
         _selectedGroup = e.CurrentSelection[0] as SeferGroupItem;
         _selectedSefer = null;
         _selectedPerek = null;
 
-        if (_selectedGroup == null) return;
+        if (_selectedGroup == null)
+        {
+            return;
+        }
 
         // Load sefarim for this group
         LoadSefarimForGroup(_selectedGroup.Id);
         PerekList.ItemsSource = null;
+        RefreshArrowsDeferred(SeferList);
+        RefreshArrowsDeferred(PerekList);
 
         // Auto-select first sefer
         var sefarim = SeferList.ItemsSource as List<SeferItem>;
@@ -206,15 +252,22 @@ public partial class PerekPickerPopup : ContentView
         }
 
         SeferList.ItemsSource = sefarim;
+        RefreshArrowsDeferred(SeferList);
     }
 
     private static int GetTotalPerakimForSefer(int seferId)
     {
         var perakimData = PerakimData.PerakimOfBooks.GetValueOrDefault(seferId);
         if (perakimData is int count)
+        {
             return count;
+        }
+
         if (perakimData is Dictionary<int, int> additionalCounts)
+        {
             return additionalCounts.Values.Sum();
+        }
+
         return 0;
     }
 
@@ -231,12 +284,18 @@ public partial class PerekPickerPopup : ContentView
 
     private void OnSeferSelected(object? sender, SelectionChangedEventArgs e)
     {
-        if (e.CurrentSelection.Count == 0) return;
+        if (e.CurrentSelection.Count == 0)
+        {
+            return;
+        }
 
         _selectedSefer = e.CurrentSelection[0] as SeferItem;
         _selectedPerek = null;
 
-        if (_selectedSefer == null) return;
+        if (_selectedSefer == null)
+        {
+            return;
+        }
 
         // Load perakim for this sefer
         LoadPerakimForSefer(_selectedSefer);
@@ -298,20 +357,31 @@ public partial class PerekPickerPopup : ContentView
         }
 
         PerekList.ItemsSource = perakim;
+        RefreshArrowsDeferred(PerekList);
     }
 
     private static string GetAdditionalPrefix(int additional)
     {
         // For עזרא/נחמיה: 70=עזרא, 50=נחמיה
-        if (additional == 70) return "ע";
-        if (additional == 50) return "נ";
+        if (additional == 70)
+        {
+            return "ע";
+        }
+
+        if (additional == 50)
+        {
+            return "נ";
+        }
         // For שמואל, מלכים, דברי הימים: 1=א, 2=ב
         return GetAdditionalLetter(additional);
     }
 
     private void OnPerekSelected(object? sender, SelectionChangedEventArgs e)
     {
-        if (e.CurrentSelection.Count == 0) return;
+        if (e.CurrentSelection.Count == 0)
+        {
+            return;
+        }
 
         _selectedPerek = e.CurrentSelection[0] as PerekItem;
         UpdateConfirmButtonState();
@@ -321,6 +391,103 @@ public partial class PerekPickerPopup : ContentView
     {
         ConfirmButton.IsEnabled = _selectedPerek != null;
     }
+
+    #region Scroll edge arrows
+
+    private void OnColumnScrolled(object? sender, ItemsViewScrolledEventArgs e)
+    {
+        var column = ColumnFor(sender);
+        if (column == null)
+        {
+            return;
+        }
+
+        column.FirstVisibleIndex = e.FirstVisibleItemIndex;
+        column.LastVisibleIndex = e.LastVisibleItemIndex;
+        RefreshArrows(column);
+    }
+
+    private void OnColumnSizeChanged(object? sender, EventArgs e)
+    {
+        var column = ColumnFor(sender);
+        if (column == null)
+        {
+            return;
+        }
+
+        // Resizing can make all items visible without a scroll event; fall
+        // back to the size estimate until the next Scrolled event.
+        column.FirstVisibleIndex = -1;
+        column.LastVisibleIndex = -1;
+        RefreshArrows(column);
+    }
+
+    private ScrollColumn? ColumnFor(object? sender) =>
+        _scrollColumns.FirstOrDefault(c => ReferenceEquals(c.List, sender));
+
+    private void RefreshAllArrowsDeferred()
+    {
+        foreach (var column in _scrollColumns)
+        {
+            RefreshArrowsDeferred(column.List);
+        }
+    }
+
+    /// <summary>
+    /// Recomputes arrows after the next layout pass: item sources reset the
+    /// scroll position, and the sizer needs an arrange before its height is real.
+    /// </summary>
+    private void RefreshArrowsDeferred(CollectionView list)
+    {
+        var column = ColumnFor(list);
+        if (column == null)
+        {
+            return;
+        }
+
+        column.FirstVisibleIndex = -1;
+        column.LastVisibleIndex = -1;
+        Dispatcher.Dispatch(() => RefreshArrows(column));
+    }
+
+    private void RefreshArrows(ScrollColumn column)
+    {
+        var count = (column.List.ItemsSource as System.Collections.ICollection)?.Count ?? 0;
+
+        bool canUp, canDown;
+        if (column.LastVisibleIndex >= 0)
+        {
+            // Exact: a scroll event told us which items are visible.
+            canUp = ScrollEdges.HasAbove(column.FirstVisibleIndex);
+            canDown = ScrollEdges.HasBelow(column.LastVisibleIndex, count);
+        }
+        else
+        {
+            // No scroll event yet: the list sits at the top, so "more below"
+            // comes down to whether the items overflow the viewport.
+            canUp = false;
+            canDown = ScrollEdges.HasBelowEstimate(column.List.Height, count * column.Sizer.Height);
+        }
+
+        SetArrow(column.Up, canUp, "יש עוד פריטים למעלה", "תחילת הרשימה");
+        SetArrow(column.Down, canDown, "יש עוד פריטים למטה", "סוף הרשימה");
+    }
+
+    private static void SetArrow(Label arrow, bool canScroll, string availableText, string boundaryText)
+    {
+        if (canScroll)
+        {
+            arrow.SetAppThemeColor(Label.TextColorProperty, ArrowActiveLight, ArrowActiveDark);
+        }
+        else
+        {
+            arrow.SetAppThemeColor(Label.TextColorProperty, ArrowInactive, ArrowInactive);
+        }
+
+        SemanticProperties.SetDescription(arrow, canScroll ? availableText : boundaryText);
+    }
+
+    #endregion
 
     private void OnBackgroundTapped(object? sender, TappedEventArgs e)
     {
@@ -336,7 +503,7 @@ public partial class PerekPickerPopup : ContentView
     {
         if (_selectedPerek != null)
         {
-            PerekSelected?.Invoke(this, _selectedPerek.PerekId);
+            PerekSelected?.Invoke(_selectedPerek.PerekId);
             Hide();
         }
     }

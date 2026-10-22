@@ -17,6 +17,7 @@
               ColumnDefinitions="Auto,*,Auto"
               BackgroundColor="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}">
             <Button Grid.Column="0"
+                    x:Name="BackButton"
                     Text="→"
                     FontSize="24"
                     BackgroundColor="Transparent"
@@ -44,7 +45,8 @@
         </Grid>
 
         <!-- Content -->
-        <ScrollView Grid.Row="1"
+        <ScrollView x:Name="ArticleScroll"
+                    Grid.Row="1"
                     Padding="16,0">
             <VerticalStackLayout Spacing="16">
                 <!-- Author section -->

@@ -62,8 +62,14 @@
   display: flex;
   flex-direction: column;
   flex: 1;
+  /* The box is fixed to viewport height; items beyond it must scroll. */
+  min-height: 0;
+  overflow-y: auto;
   margin: 0;
-  padding: 0;
+  /* Left room for the ribbon ::after overhang (left: -10px plus its -18deg
+     rotation reach): inside the padding box it creates no horizontal
+     overflow, so no horizontal scrollbar and no clipped sticker. */
+  padding: 0 0 0 16px;
   list-style: none;
 }
 
@@ -231,4 +237,10 @@
   display: none !important;
   /* biome-ignore lint/complexity/noImportantStyles: TODO: find a way without !important */
   content: none !important;
+}
+
+@media (prefers-color-scheme: dark) {
+  .menuBox::before {
+    background: linear-gradient(to right, #000 -100%, #1a1f2e 100%);
+  }
 }

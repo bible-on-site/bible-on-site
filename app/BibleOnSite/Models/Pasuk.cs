@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using BibleOnSite.Helpers;
 using CommunityToolkit.Mvvm.ComponentModel;
 using System.Text;
@@ -19,6 +20,15 @@ public partial class Pasuk : ObservableObject
     /// </summary>
     [ObservableProperty]
     private bool _isSelected;
+
+    // Selection changes the recitation word's styling, so the cached
+    // FormattedString must rebuild on every toggle.
+    partial void OnIsSelectedChanged(bool value)
+    {
+        _ = value;
+        _formattedText = null;
+        OnPropertyChanged(nameof(FormattedText));
+    }
 
     private int? _recitingSegment;
 
@@ -54,6 +64,10 @@ public partial class Pasuk : ObservableObject
     /// </summary>
     private List<PasukSegment> _segments = new();
     private WeakReference<FormattedString>? _formattedText;
+    // The masking revision the cached FormattedString was built under — a
+    // הסתר שם השם settings change bumps DivineNameMasking.Revision, which
+    // invalidates the cache without touching the canonical segments.
+    private int _formattedRevision = -1;
 
     public List<PasukSegment> Segments
     {
@@ -72,6 +86,23 @@ public partial class Pasuk : ObservableObject
     [ObservableProperty]
     private List<PerushNoteDisplay> _perushNotes = new();
 
+    /// <summary>BindableLayout receives incremental changes, preserving already rendered cells.</summary>
+    public ObservableCollection<PerushNoteDisplay> VisiblePerushNotes { get; } = new();
+
+    partial void OnPerushNotesChanged(List<PerushNoteDisplay> value)
+    {
+        for (var i = VisiblePerushNotes.Count - 1; i >= 0; i--)
+        {
+            if (!value.Contains(VisiblePerushNotes[i])) { VisiblePerushNotes.RemoveAt(i); }
+        }
+        for (var i = 0; i < value.Count; i++)
+        {
+            var previous = VisiblePerushNotes.IndexOf(value[i]);
+            if (previous < 0) { VisiblePerushNotes.Insert(i, value[i]); }
+            else if (previous != i) { VisiblePerushNotes.Move(previous, i); }
+        }
+    }
+
     /// <summary>
     /// Gets the formatted text representation with qri/ktiv handling.
     /// Qri segments that differ from ktiv are displayed as "(קְרִי: value)" in a distinct color.
@@ -80,18 +111,28 @@ public partial class Pasuk : ObservableObject
     {
         get
         {
-            if (_formattedText?.TryGetTarget(out var formatted) == true)
+            if (_formattedText?.TryGetTarget(out var formatted) == true &&
+                _formattedRevision == DivineNameMasking.Revision)
             {
                 return formatted;
             }
 
             formatted = BuildFormattedText();
+            _formattedRevision = DivineNameMasking.Revision;
             // MAUI 10.0.90 Labels subscribe to a FormattedString. Retaining it
             // strongly in a buffered perek can also retain recycled Labels.
             _formattedText = new WeakReference<FormattedString>(formatted);
             return formatted;
         }
     }
+
+    private static readonly Color QriColor = Color.FromArgb("#637598");
+    private static readonly Color RecitingTextColor = Color.FromArgb("#1c427b");
+    private static readonly Color RecitingBackgroundColor = Color.FromArgb("#e9eff8");
+    // On a selected row the plain recitation tint drowns in the selection
+    // background, so the recited word gets a stronger tint and weight (#2473).
+    private static readonly Color RecitingSelectedBackgroundColor = Color.FromArgb("#a8cbf4");
+    private static readonly Color MasoraMarkColor = Color.FromArgb("#9a92d1");
 
     private FormattedString BuildFormattedText()
     {
@@ -116,34 +157,38 @@ public partial class Pasuk : ObservableObject
             switch (segment.Type)
             {
                 case SegmentType.Ktiv:
-                    // Ktiv: always show the written text
+                    // Ktiv: always show the written text (masked for display
+                    // only — segment.Value stays canonical)
                     if (!string.IsNullOrEmpty(segment.Value))
                     {
-                        plain.Append(segment.Value);
+                        plain.Append(DivineNameMasking.MaskText(segment.Value));
                     }
                     break;
 
                 case SegmentType.Qri:
                     if (segment.IsQriDifferentThanKtiv)
                     {
-                        // Qri differs from ktiv: show "(קְרִי: value)" with special styling
+                        // Qri differs from ktiv: show "(קְרִי: value)" with special styling.
+                        // MaskText (not MaskValue) — a bracketed qri can hold several words.
                         FlushPlain();
                         formatted.Spans.Add(new Span
                         {
                             Text = "(קְרִי: ",
-                            TextColor = Color.FromArgb("#637598"),
+                            TextColor = QriColor,
                             FontSize = 14
                         });
+                        var variantReciting = RecitingSegment == i + 1;
                         formatted.Spans.Add(new Span
                         {
-                            Text = segment.Value,
-                            TextColor = Color.FromArgb(RecitingSegment == i + 1 ? "#1c427b" : "#637598"),
-                            BackgroundColor = RecitingSegment == i + 1 ? Color.FromArgb("#e9eff8") : null
+                            Text = DivineNameMasking.MaskText(segment.Value),
+                            TextColor = variantReciting ? RecitingTextColor : QriColor,
+                            BackgroundColor = variantReciting ? RecitingBackground() : null,
+                            FontAttributes = variantReciting && IsSelected ? FontAttributes.Bold : FontAttributes.None
                         });
                         formatted.Spans.Add(new Span
                         {
                             Text = ")",
-                            TextColor = Color.FromArgb("#637598"),
+                            TextColor = QriColor,
                             FontSize = 14
                         });
                     }
@@ -157,14 +202,15 @@ public partial class Pasuk : ObservableObject
                                 FlushPlain();
                                 formatted.Spans.Add(new Span
                                 {
-                                    Text = segment.Value,
-                                    TextColor = Color.FromArgb("#1c427b"),
-                                    BackgroundColor = Color.FromArgb("#e9eff8")
+                                    Text = DivineNameMasking.MaskText(segment.Value),
+                                    TextColor = RecitingTextColor,
+                                    BackgroundColor = RecitingBackground(),
+                                    FontAttributes = IsSelected ? FontAttributes.Bold : FontAttributes.None
                                 });
                             }
                             else
                             {
-                                plain.Append(segment.Value);
+                                plain.Append(DivineNameMasking.MaskText(segment.Value));
                             }
                         }
                     }
@@ -175,7 +221,7 @@ public partial class Pasuk : ObservableObject
                     formatted.Spans.Add(new Span
                     {
                         Text = " {פ} ",
-                        TextColor = Color.FromArgb("#9a92d1"),
+                        TextColor = MasoraMarkColor,
                         FontAttributes = FontAttributes.Bold
                     });
                     break;
@@ -185,7 +231,7 @@ public partial class Pasuk : ObservableObject
                     formatted.Spans.Add(new Span
                     {
                         Text = " {ס} ",
-                        TextColor = Color.FromArgb("#9a92d1"),
+                        TextColor = MasoraMarkColor,
                         FontAttributes = FontAttributes.Bold
                     });
                     break;
@@ -212,6 +258,8 @@ public partial class Pasuk : ObservableObject
         FlushPlain();
         return formatted;
     }
+
+    private Color RecitingBackground() => IsSelected ? RecitingSelectedBackgroundColor : RecitingBackgroundColor;
 }
 
 /// <summary>

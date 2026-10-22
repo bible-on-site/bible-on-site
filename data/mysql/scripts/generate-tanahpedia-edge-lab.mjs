@@ -791,7 +791,7 @@ DELETE FROM tanahpedia_entity WHERE id IN (${allEntityIds.map((x) => q(x)).join(
 
 out.push(`
 INSERT INTO tanahpedia_entry (id, unique_name, title, content, created_at, updated_at) VALUES
-${entries.map((e) => `\t(${q(e.id)}, ${q(e.slug)}, ${q(e.title)}, '<p>דמו מעבדת מקרי קצה — לא לעריכה פומבית.</p>', NOW(), NOW())`).join(",\n")};
+${entries.map((e) => `\t(${q(e.id)}, ${q(e.slug)}, ${q(e.title)}, ${q("<p>דמו מעבדת מקרי קצה — לא לעריכה פומבית.</p>")}, NOW(), NOW())`).join(",\n")};
 `);
 
 out.push(`

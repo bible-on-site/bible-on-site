@@ -9,11 +9,19 @@ public class ZeroToTrueConverter : IValueConverter
     public object? Convert(object? value, Type targetType, object? parameter, System.Globalization.CultureInfo culture)
     {
         if (value is int intValue)
+        {
             return intValue == 0;
+        }
+
         if (value is long longValue)
+        {
             return longValue == 0;
+        }
+
         if (value is double doubleValue)
+        {
             return doubleValue == 0;
+        }
 
         return value == null;
     }

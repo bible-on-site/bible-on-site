@@ -23,8 +23,16 @@ public partial class AuthorsPage : ContentPage
         }
     }
 
+
+    private void OnClearSearchClicked(object sender, EventArgs e)
+    {
+        AuthorsSearchInput.Text = string.Empty;
+        AuthorsSearchInput.Focus();
+    }
+
     private void OnSearchTextChanged(object sender, TextChangedEventArgs e)
     {
+        ClearSearchButton.IsVisible = !string.IsNullOrEmpty(e.NewTextValue);
         // The binding handles the search phrase update
         // FilteredAuthors is automatically updated via NotifyPropertyChangedFor
         OnPropertyChanged(nameof(_viewModel.FilteredAuthors));

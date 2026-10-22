@@ -99,11 +99,19 @@ public partial class CircularMenu : ContentView
     public event EventHandler<bool>? ExpandedChanged;
 
     /// <summary>
+    /// Creates a new CircularMenu with the default bottom-arc angles
+    /// (~1.22π start, ~1.78π end).
+    /// </summary>
+    public CircularMenu() : this(3.8336, 5.5945)
+    {
+    }
+
+    /// <summary>
     /// Creates a new CircularMenu.
     /// </summary>
     /// <param name="startAngle">Start angle in radians (default: ~1.22π for bottom arc)</param>
     /// <param name="endAngle">End angle in radians (default: ~1.78π for bottom arc)</param>
-    public CircularMenu(double startAngle = 3.8336, double endAngle = 5.5945)
+    public CircularMenu(double startAngle, double endAngle)
     {
         _startAngle = startAngle;
         _endAngle = endAngle;
@@ -218,7 +226,10 @@ public partial class CircularMenu : ContentView
 
     private void PositionMenuItems(bool expanded)
     {
-        if (_menuItems.Count == 0) return;
+        if (_menuItems.Count == 0)
+        {
+            return;
+        }
 
         var itemCount = _menuItems.Count;
         var angleStep = (itemCount > 1) ? (_endAngle - _startAngle) / (itemCount - 1) : 0;

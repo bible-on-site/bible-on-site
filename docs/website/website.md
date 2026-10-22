@@ -57,6 +57,48 @@ The website communicates **directly** with the MySQL database rather than going 
 | Dedications | Direct MySQL query | Dynamic content, frequently updated |
 | PDF Bulletins | AWS Lambda (`bible-on-site-bulletin`) | On-demand generation, offloaded to Lambda for compute isolation |
 
+### Browser Data Boundary
+
+Keep the full canonical scripture JSON in server imports. The bookshelf, date
+lookup and citation parser use `client-catalog.generated.json`, a small projection
+of book ranges and learning dates. `scripts/generate-client-catalog.mjs` also writes
+individual reader books under `public/generated/sefarim/`, named by their content
+hash. Installation, builds and unit tests regenerate both outputs from the same
+canonical source; generated files are ignored. Do not edit them or maintain a
+second content source. After an intentional source change during development,
+rerun the generator or restart `npm run dev`.
+
+`LoadedSefer` fetches the selected book when the reader opens, with visible loading
+and retry feedback. Uninitialized reader pages stay unpainted until FlipBook
+has applied their dimensions, preserving geometry and preventing a layout flash.
+Network requests revalidate HTTP cache entries so an older
+server's cached 404 cannot prevent recovery during a rolling deployment. A missing
+asset offers a full page refresh, preserving the reader route and query while
+loading the current asset catalog. The browser cache retains at most four recent
+books. Avoid
+passing whole books through every static page: that repeats scripture in HTML/RSC
+and increases server memory and deployment size. Chapter navigation within the
+same book reuses its data; late requests cannot replace another selected book.
+Download helpers load only when requested, so metadata requests do not initialize
+the PDF generator's corpus.
+
+The source text, reading order and recitation fields remain unchanged, including
+canonical JSON precision handling in `next.config.mjs`. Tests compare every
+metadata row and generated book with the canonical source. Production performance
+tests reject browser scripts over 5 MiB and retain the existing memory/build limits.
+
+### Production validation on Windows
+
+Next.js 16.4.0-canary.61 cannot persist native Windows route-cache entries for
+commentary URLs containing an ASCII quote, such as `רש"י`. The framework appends
+the decoded pathname to a filesystem key; Windows rejects that filename. A
+successful page response does not prove that the cache write succeeded.
+
+Production and CI use Linux. Use Linux, Docker or WSL when validating production
+cache persistence. Keep the existing commentary URLs and cache behavior. The
+supported upstream fix and cross-platform checks are tracked in
+[the Windows route-cache issue](https://github.com/bible-on-site/bible-on-site/issues/1999).
+
 ### SSG Compatibility
 
 The website uses Next.js Static Site Generation (SSG) with the following patterns:
@@ -64,6 +106,73 @@ The website uses Next.js Static Site Generation (SSG) with the following pattern
 - **Static Pages**: All 929 perek pages are pre-rendered at build time
 - **Dynamic Data**: Articles are fetched at request time (ISR) with caching
 - **Graceful Degradation**: If database is unavailable during SSG build, pages render without articles
+
+## Content Freshness (On-Demand Revalidation)
+
+DB-backed reads are cached indefinitely (`unstable_cache` with
+`revalidate: false`) under the tags `articles`, `authors`, `perushim` and
+`tanahpedia-entity-refs`, and content pages are pre-rendered. A content
+change therefore becomes public only when the admin app calls
+`POST /api/revalidate` on the website after its DB commit:
+
+- `?tag=<tag>` expires a cache tag with `{ expire: 0 }` so the next request
+  re-renders instead of being served stale output.
+- `?path=<route>` invalidates a prerendered route; dynamic route patterns
+  (e.g. `/pedia/[slug]`) also take `&type=page`.
+- `&url=<path>` (repeatable) names a changed public URL
+  (e.g. `/929/5/12`, `/pedia/משה`) for the IndexNow notification described
+  below. A call carrying only `url` params performs no invalidation — that
+  is the operator path for bulk/data changes made outside the admin
+  mutations.
+- In production the call must carry the `x-revalidate-secret: <REVALIDATE_SECRET>`
+  header; `?secret=` is still accepted for operator calls. An unset
+  secret rejects every call.
+
+The admin side lives in `web/admin/src/server/website-revalidate.ts`
+(`VITE_WEBSITE_URL` + server-only `REVALIDATE_SECRET`; both unset = no-op for
+tests/tooling). Covered mutations: article and author CRUD, Tanahpedia
+entry CRUD and entity links, entry-revision approval/restore, and entity /
+person / place / family structural edits. Each mutation reports the exact
+public URLs it changed — including the old URL after a rename/move and the
+removed URL after a delete — so notification covers stale URLs too.
+
+**Limits**: invalidation is local to the website instance that receives the
+call — the service normally runs a single task (`DesiredCount: 1`), but
+during a rolling deploy a second task serves briefly and can hold stale
+content until the next invalidation or task replacement. A failed call never
+fails the save but is logged, recorded, and shown as a warning banner in the
+admin UI until a later invalidation succeeds; the stale entry persists until
+then or until an operator `POST`s `/api/revalidate` directly.
+
+## IndexNow (Search-Engine Notification)
+
+`src/lib/seo/indexnow.ts` notifies participating search engines (Bing & co)
+that public URLs changed, so they recrawl fresh content sooner. It is wired
+into the freshness lifecycle: `POST /api/revalidate` collects the reported
+`url` params (plus a literal `path`), and submits them to
+`https://api.indexnow.org/indexnow` inside the `after` hook — only after
+invalidation succeeded, and after the response has gone out, so delivery
+never delays or fails the admin request.
+
+- **Key**: `INDEXNOW_KEY` (server-only env, SSM `bible-on-site-indexnow-key`
+  on the website task). Unset or non-conforming (protocol requires 8–128
+  `[a-zA-Z0-9-]` chars) = the whole feature is a documented no-op. The
+  ownership proof `/<key>.txt` (body: the bare key) is served by
+  `src/proxy.ts` on whichever host the request arrives at.
+- **Canonical host**: submissions always use `SITE_ORIGIN`
+  (`xn--febl3a.co.il`). `.com` pages canonicalize to `.co.il`, so `.com`
+  URLs are never advertised as independently indexable copies.
+- **Collection**: query/fragment are stripped for clean URLs; dynamic
+  patterns like `/pedia/[slug]` are dropped (they cannot be enumerated).
+  Dependents are added: the perek page for an article URL, `/929/authors`
+  for an author, `/pedia` for an entry, and `/sitemap.xml` whenever any
+  content URL is submitted.
+- **Delivery**: at most 10,000 URLs per POST (protocol limit). A failed
+  POST is logged, never thrown; the undelivered URLs stay in a per-instance
+  pending set and are merged into the next submission, so delivery
+  recovers on the next publication event or an operator call.
+- **Verification**: submitting is not proof Bing received the URLs —
+  confirm receipt in Bing Webmaster Tools as an operational follow-up.
 
 ## Database Configuration
 

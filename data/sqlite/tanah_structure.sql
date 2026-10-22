@@ -125,3 +125,60 @@ CREATE TABLE tanah_pasuk_segment_recording_time_frame (
 );
 
 -- ptuha and stuma segments have no additional fields (just the segment_type in tanah_pasuk_segment)
+
+--
+-- Shared reading-unit contract (version 1) — see docs/data/reading-units.md
+--
+
+-- Reading divisions: each division slices the canonical pesukim corpus
+-- into ordered units behind its own route root and menu label.
+DROP TABLE IF EXISTS tanah_reading_division;
+CREATE TABLE tanah_reading_division (
+  id TEXT PRIMARY KEY,
+  contract_version INTEGER NOT NULL,
+  root_path TEXT NOT NULL,
+  menu_label TEXT NOT NULL
+);
+
+-- Reading units: the addressable entry inside a division. unit_id is a
+-- stable id contiguous within the division; unit_order is the 1-based
+-- order inside the parent sefer; closing_break records the Masoretic
+-- break that ends the unit (NULL when closed by the sefer end).
+DROP TABLE IF EXISTS tanah_reading_unit;
+CREATE TABLE tanah_reading_unit (
+  division_id TEXT NOT NULL,
+  unit_id INTEGER NOT NULL,
+  slug TEXT NOT NULL,
+  sefer_id INTEGER NOT NULL,
+  unit_order INTEGER NOT NULL,
+  heading TEXT NOT NULL,
+  closing_break TEXT CHECK (closing_break IS NULL OR closing_break IN ('ptuha', 'stuma')),
+  PRIMARY KEY (division_id, unit_id),
+  FOREIGN KEY (division_id) REFERENCES tanah_reading_division (id) ON DELETE CASCADE ON UPDATE CASCADE,
+  FOREIGN KEY (sefer_id) REFERENCES tanah_sefer (id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- Reading-unit ranges: inclusive canonical scripture bounds for each
+-- unit. Primary ranges have auxiliary_* NULL and range_index ordering
+-- the unit's range list; auxiliary readings (e.g. Haftarah) carry
+-- auxiliary_ordinal (order within the unit's auxiliary list),
+-- auxiliary_id and auxiliary_label, with range_index ordering that
+-- auxiliary's own range list. segment_index columns are 0-based segment
+-- bounds for intra-pasuk Masoretic breaks (NULL = whole-pasuk edge).
+DROP TABLE IF EXISTS tanah_reading_unit_range;
+CREATE TABLE tanah_reading_unit_range (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  division_id TEXT NOT NULL,
+  unit_id INTEGER NOT NULL,
+  range_index INTEGER NOT NULL,
+  auxiliary_ordinal INTEGER,
+  auxiliary_id TEXT,
+  auxiliary_label TEXT,
+  start_perek_id INTEGER NOT NULL,
+  start_pasuk INTEGER NOT NULL,
+  start_segment_index INTEGER,
+  end_perek_id INTEGER NOT NULL,
+  end_pasuk INTEGER NOT NULL,
+  end_segment_index INTEGER,
+  FOREIGN KEY (division_id, unit_id) REFERENCES tanah_reading_unit (division_id, unit_id) ON DELETE CASCADE ON UPDATE CASCADE
+);

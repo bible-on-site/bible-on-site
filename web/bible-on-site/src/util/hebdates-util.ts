@@ -11,7 +11,7 @@ const JERUSALEM_TIMEZONE = "Asia/Jerusalem";
  * Map from uniform month number (used in our date number format) to Temporal month code
  * Uniform months: 1=Tishrei, 2=Cheshvan, ..., 5=Shevat, 6=Adar, ..., 12=Elul, 13=Adar I, 14=Adar II
  */
-function uniformMonthToTemporalMonthCode(
+export function uniformMonthToTemporalMonthCode(
 	uniformMonth: number,
 	isLeapYear: boolean,
 ): string {
@@ -171,7 +171,8 @@ export class HebrewDate {
 		const thisIso = this.date.withCalendar("iso8601");
 		const otherIso = other.date.withCalendar("iso8601");
 		// Temporal.until returns (other - this), we want (this - other)
-		return -thisIso.until(otherIso, { largestUnit: "days" }).days;
+		const diff = thisIso.until(otherIso, { largestUnit: "days" }).days;
+		return diff === 0 ? 0 : -diff;
 	}
 
 	/**
@@ -217,6 +218,15 @@ export class HebrewDate {
 			day: "numeric",
 			month: "long",
 			year: "numeric",
+		});
+	}
+
+	/**
+	 * Hebrew month name for this date (he-IL locale, e.g. "חשוון", "אדר א׳").
+	 */
+	toMonthName(): string {
+		return this.date.toLocaleString("he-IL-u-ca-hebrew", {
+			month: "long",
 		});
 	}
 
@@ -320,7 +330,7 @@ export function parseNumericalDateToHebcalDate(
  * Check if a Hebrew year is a leap year
  * Hebrew leap years follow a 19-year Metonic cycle: years 3, 6, 8, 11, 14, 17, 19
  */
-function isHebrewLeapYear(year: number): boolean {
+export function isHebrewLeapYear(year: number): boolean {
 	const yearInCycle = ((year - 1) % 19) + 1;
 	return [3, 6, 8, 11, 14, 17, 19].includes(yearInCycle);
 }

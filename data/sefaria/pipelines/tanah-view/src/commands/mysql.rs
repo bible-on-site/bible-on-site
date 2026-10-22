@@ -80,6 +80,19 @@ fn escape_sql_string(s: &str) -> String {
         .replace('\t', "\\t")
 }
 
+/// Quote a value as a SQL string literal, emitting `N'...'` when the content is
+/// non-ASCII so MySQL stores it through the national charset (utf8). Keeps the
+/// generated file clean of Codacy's "unicode characters in a non unicode
+/// string" finding.
+fn sql_string_literal(s: &str) -> String {
+    let escaped = escape_sql_string(s);
+    if escaped.is_ascii() {
+        format!("'{escaped}'")
+    } else {
+        format!("N'{escaped}'")
+    }
+}
+
 fn generate_helek_sql(sql: &mut String, sefarim: &[Sefer]) {
     sql.push_str("-- tanah_helek\n");
 
@@ -110,8 +123,8 @@ fn generate_helek_sql(sql: &mut String, sefarim: &[Sefer]) {
     for (name, id) in &helek_map {
         if let Some((from, to)) = helek_ranges.get(id) {
             sql.push_str(&format!(
-                "INSERT INTO tanah_helek (id, name, sefer_id_from, sefer_id_to) VALUES ({}, '{}', {}, {});\n",
-                id, escape_sql_string(name), from, to
+                "INSERT INTO tanah_helek (id, name, sefer_id_from, sefer_id_to) VALUES ({}, {}, {}, {});\n",
+                id, sql_string_literal(name), from, to
             ));
         }
     }
@@ -126,13 +139,13 @@ fn generate_sefer_sql(sql: &mut String, sefarim: &[Sefer]) {
         let tanach_us_name = sefer
             .tanach_us_name
             .as_deref()
-            .map(|s| format!("'{}'", escape_sql_string(s)))
+            .map(sql_string_literal)
             .unwrap_or_else(|| "NULL".to_string());
 
         sql.push_str(&format!(
-            "INSERT INTO tanah_sefer (id, name, tanach_us_name, perek_id_from, perek_id_to) VALUES ({}, '{}', {}, {}, {});\n",
+            "INSERT INTO tanah_sefer (id, name, tanach_us_name, perek_id_from, perek_id_to) VALUES ({}, {}, {}, {}, {});\n",
             sefer_id,
-            escape_sql_string(&sefer.name),
+            sql_string_literal(&sefer.name),
             tanach_us_name,
             sefer.perek_from,
             sefer.perek_to
@@ -152,10 +165,10 @@ fn generate_additional_sql(sql: &mut String, sefarim: &[Sefer]) {
                 let tanach_us_name = additional.tanach_us_name.as_deref().unwrap_or("");
 
                 sql.push_str(&format!(
-                    "INSERT INTO tanah_additional (sefer_id, letter, tanach_us_name, perek_from, perek_to) VALUES ({}, '{}', '{}', {}, {});\n",
+                    "INSERT INTO tanah_additional (sefer_id, letter, tanach_us_name, perek_from, perek_to) VALUES ({}, {}, {}, {}, {});\n",
                     sefer_id,
-                    escape_sql_string(&additional.letter),
-                    escape_sql_string(tanach_us_name),
+                    sql_string_literal(&additional.letter),
+                    sql_string_literal(tanach_us_name),
                     additional.perek_from,
                     additional.perek_to
                 ));
@@ -189,10 +202,11 @@ fn generate_perek_sql(sql: &mut String, sefarim: &[Sefer]) {
 
     for perek in &all_perakim {
         sql.push_str(&format!(
-            "INSERT INTO tanah_perek (id, perek, header) VALUES ({}, {}, '{}');\n",
+            "INSERT INTO tanah_perek (id, perek, header, pasuk_count) VALUES ({}, {}, {}, {});\n",
             perek.perek_id,
             perek.perek_id,
-            escape_sql_string(&perek.header)
+            sql_string_literal(&perek.header),
+            perek.pesukim.len()
         ));
     }
     sql.push('\n');
@@ -350,6 +364,13 @@ mod tests {
     }
 
     #[test]
+    fn sql_string_literal_marks_non_ascii_with_national_charset_prefix() {
+        assert_eq!(sql_string_literal("plain"), "'plain'");
+        assert_eq!(sql_string_literal("תורה"), "N'תורה'");
+        assert_eq!(sql_string_literal("it's א"), "N'it\\'s א'");
+    }
+
+    #[test]
     fn hebdate_to_mysql_date_clamps_invalid_parts_and_falls_back_year() {
         assert_eq!(hebdate_to_mysql_date(57750329), "2014-03-28");
         assert_eq!(hebdate_to_mysql_date(57801332), "2019-12-28");
@@ -386,6 +407,9 @@ mod tests {
         assert!(sql.contains("INSERT INTO tanah_additional"));
         assert!(sql.contains("'A', 'BookB I', 2, 3"));
         assert!(sql.contains("Header\\nOne"));
+        // The perek INSERT carries the corpus pasuk count used by the
+        // covering-source write path to validate pasuk coordinates.
+        assert!(sql.contains("INSERT INTO tanah_perek (id, perek, header, pasuk_count) VALUES (1, 1, 'Header\\nOne', 1)"));
         assert!(sql.contains("'2014-03-28', '57750329', '05:30:00'"));
         assert!(sql.contains("'2024-01-28', '57000132', '06:07:08'"));
         assert!(sql.contains("SET FOREIGN_KEY_CHECKS = 1;"));

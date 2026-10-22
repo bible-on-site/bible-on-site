@@ -1,0 +1,113 @@
+.refSpan {
+	display: inline-block;
+	margin-inline-start: 12px;
+	padding: 2px 10px;
+	border-radius: 999px;
+	background: rgba(21, 82, 172, 0.08);
+	color: var(--pasuk-num-color, #1c2c5d);
+	font-size: 0.55em;
+	font-weight: 500;
+	vertical-align: middle;
+}
+
+.readingLabel {
+	max-width: 960px;
+	margin: 8px auto 0;
+	padding: 0 16px;
+	font-size: 0.95rem;
+	font-weight: 600;
+	color: var(--pasuk-num-color, #1c2c5d);
+	opacity: 0.8;
+}
+
+.haftaraSection {
+	max-width: 960px;
+	margin: 32px auto 0;
+	padding: 16px 16px 8px;
+	border-top: 2px solid rgba(21, 82, 172, 0.25);
+}
+
+.haftaraHeading {
+	font-size: 1.5rem;
+	font-weight: 700;
+	color: var(--pasuk-num-color, #1c2c5d);
+	margin-bottom: 8px;
+}
+
+.haftaraVariant {
+	margin-bottom: 28px;
+}
+
+.haftaraVariant:last-of-type {
+	margin-bottom: 8px;
+}
+
+.haftaraVariantHeading {
+	font-size: 1.05rem;
+	font-weight: 600;
+	color: var(--pasuk-num-color, #1c2c5d);
+	margin-bottom: 2px;
+}
+
+.haftaraRef {
+	font-size: 0.85rem;
+	color: var(--muted-text, #666);
+	margin: 0 0 10px;
+}
+
+.haftaraNote {
+	font-size: 0.85rem;
+	color: var(--muted-text, #777);
+	margin: 8px 0 0;
+	padding-inline-start: 10px;
+	border-inline-start: 3px solid rgba(21, 82, 172, 0.25);
+}
+
+.parashaNotes {
+	margin: 12px 0 0;
+	padding-inline-start: 20px;
+	color: var(--muted-text, #666);
+	font-size: 0.85rem;
+	line-height: 1.8;
+}
+
+.unitNav {
+	display: flex;
+	justify-content: space-between;
+	gap: 12px;
+	max-width: 960px;
+	margin: 24px auto;
+	padding: 0 16px;
+	font-family: inherit;
+}
+
+.unitNavLink {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 10px 16px;
+	border: 1px solid rgba(21, 82, 172, 0.25);
+	border-radius: 8px;
+	text-decoration: none;
+	color: var(--pasuk-num-color, #1c2c5d);
+	transition: background-color 0.2s ease;
+	max-width: 48%;
+}
+
+.unitNavLink:hover {
+	background-color: rgba(21, 82, 172, 0.06);
+}
+
+.unitNavNext {
+	text-align: left;
+	align-items: flex-start;
+}
+
+.unitNavDir {
+	font-size: 0.8rem;
+	color: var(--muted-text, #666);
+}
+
+.unitNavRef {
+	font-weight: 600;
+}

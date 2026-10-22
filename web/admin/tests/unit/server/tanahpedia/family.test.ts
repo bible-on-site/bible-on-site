@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { executeMock, queryMock, queryOneMock } = vi.hoisted(() => ({
 	executeMock: vi.fn(),
@@ -43,7 +43,7 @@ import {
 describe("tanahpedia family api", () => {
 	beforeEach(() => {
 		executeMock.mockReset();
-		queryMock.mockReset();
+		queryMock.mockReset().mockResolvedValue([]);
 		queryOneMock.mockReset();
 	});
 
@@ -1212,6 +1212,58 @@ describe("tanahpedia family api", () => {
 				updatePersonName({ data: { id: "missing", name: "Israel" } }),
 			).rejects.toThrow("Person name not found: missing");
 		});
+
+		it("rejects a nameType outside the family vocabulary", async () => {
+			await expect(
+				updatePersonName({
+					data: { id: "name-1", nameType: "MAIN" as "NICKNAME" },
+				}),
+			).rejects.toThrow("Invalid nameType");
+			expect(executeMock).not.toHaveBeenCalled();
+		});
+
+		it("throws when the requested name type has no lookup row", async () => {
+			queryOneMock.mockResolvedValueOnce(null);
+
+			await expect(
+				updatePersonName({ data: { id: "name-1", nameType: "NICKNAME" } }),
+			).rejects.toThrow("Missing tanahpedia_lookup_name_type row for NICKNAME");
+			expect(executeMock).not.toHaveBeenCalled();
+		});
+
+		it("throws when a giver-only update targets a missing name row", async () => {
+			queryOneMock.mockResolvedValueOnce(null);
+
+			await expect(
+				updatePersonName({ data: { id: "missing", giverPersonId: null } }),
+			).rejects.toThrow("Person name not found: missing");
+		});
+
+		it("clears the God-given flag without touching the human giver", async () => {
+			queryOneMock.mockResolvedValueOnce({ id: "name-1" });
+			executeMock.mockResolvedValue(undefined);
+
+			await updatePersonName({
+				data: { id: "name-1", isGodGiven: false },
+			});
+
+			expect(executeMock).toHaveBeenCalledTimes(1);
+			expect(executeMock).toHaveBeenCalledWith(
+				"DELETE FROM tanahpedia_person_name_giver_god WHERE person_name_id = ?",
+				["name-1"],
+			);
+		});
+
+		it("throws when the God singleton row is missing", async () => {
+			queryOneMock
+				.mockResolvedValueOnce({ id: "name-1" })
+				.mockResolvedValueOnce(null);
+			executeMock.mockResolvedValue(undefined);
+
+			await expect(
+				updatePersonName({ data: { id: "name-1", isGodGiven: true } }),
+			).rejects.toThrow("Missing tanahpedia_god singleton row");
+		});
 	});
 
 	describe("deletePersonName", () => {
@@ -1234,5 +1286,196 @@ describe("tanahpedia family api", () => {
 				deletePersonName({ data: { id: "missing" } }),
 			).rejects.toThrow("Person name not found: missing");
 		});
+	});
+});
+
+describe("family saves invalidate the website", () => {
+	const ENV_KEYS = ["VITE_WEBSITE_URL", "REVALIDATE_SECRET"] as const;
+	let savedEnv: Record<string, string | undefined>;
+	let fetchSpy: ReturnType<typeof vi.spyOn>;
+
+	beforeEach(() => {
+		executeMock.mockReset().mockResolvedValue(undefined);
+		queryMock.mockReset().mockResolvedValue([]);
+		queryOneMock.mockReset();
+		savedEnv = {};
+		for (const key of ENV_KEYS) savedEnv[key] = process.env[key];
+		process.env.VITE_WEBSITE_URL = "https://site.test";
+		process.env.REVALIDATE_SECRET = "s3cr3t";
+		fetchSpy = vi
+			.spyOn(globalThis, "fetch")
+			.mockResolvedValue(new Response("{}", { status: 200 }));
+	});
+
+	afterEach(() => {
+		for (const key of ENV_KEYS) {
+			if (savedEnv[key] === undefined) delete process.env[key];
+			else process.env[key] = savedEnv[key];
+		}
+		fetchSpy.mockRestore();
+	});
+
+	function revalidateCalls() {
+		return fetchSpy.mock.calls.map((call: unknown[]) => {
+			const url = new URL(String(call[0]));
+			return {
+				tag: url.searchParams.get("tag"),
+				path: url.searchParams.get("path"),
+			};
+		});
+	}
+
+	it("expires pedia surfaces after a parent-child link commit", async () => {
+		queryOneMock
+			.mockResolvedValueOnce({ id: "rel-bio" })
+			.mockResolvedValueOnce({ id: "role-father" });
+
+		await createParentChildLink({
+			data: {
+				parentPersonId: "parent-1",
+				childPersonId: "child-1",
+				relationshipType: "BIOLOGICAL",
+				parentRole: "FATHER",
+			},
+		});
+
+		expect(revalidateCalls()).toEqual([
+			{ tag: "tanahpedia-entity-refs", path: null },
+			{ tag: null, path: "/pedia/[slug]" },
+			{ tag: null, path: "/pedia" },
+		]);
+	});
+
+	it("expires pedia surfaces after a person name delete", async () => {
+		executeMock.mockResolvedValueOnce({ affectedRows: 1 });
+
+		await deletePersonName({ data: { id: "name-1" } });
+
+		expect(fetchSpy).toHaveBeenCalled();
+		expect(revalidateCalls()[0]?.tag).toBe("tanahpedia-entity-refs");
+	});
+
+	function notifiedUrls(): string[] {
+		// The urls ride on the third (/pedia index) invalidation call.
+		const url = new URL(String(fetchSpy.mock.calls[2][0]));
+		return url.searchParams.getAll("url");
+	}
+
+	it("reports the linked entry's url when a new person is linked to it", async () => {
+		queryOneMock.mockResolvedValue({ id: "type-1" });
+		queryMock.mockResolvedValue([{ unique_name: "משה" }]);
+
+		await createFamilyPersonNode({
+			data: { displayName: "דוד", linkToEntryId: "entry-1" },
+		});
+
+		expect(notifiedUrls()).toEqual(["/pedia/משה"]);
+	});
+
+	it("reports the linked persons' entry urls after a parent-child update", async () => {
+		executeMock.mockResolvedValue({ affectedRows: 1 });
+		queryOneMock.mockResolvedValue({
+			parent_id: "parent-1",
+			child_id: "child-1",
+		});
+		queryMock
+			.mockResolvedValueOnce([{ entity_id: "e1" }, { entity_id: "e2" }])
+			.mockResolvedValueOnce([{ unique_name: "אברהם" }]);
+
+		await updateParentChildLink({
+			data: { id: "link-1", sourceCitation: "מקור" },
+		});
+
+		expect(notifiedUrls()).toEqual(["/pedia/אברהם"]);
+	});
+
+	it("reports the linked persons' entry urls after a parent-child delete", async () => {
+		executeMock.mockResolvedValue({ affectedRows: 1 });
+		queryOneMock.mockResolvedValue({
+			parent_id: "parent-1",
+			child_id: "child-1",
+		});
+		queryMock
+			.mockResolvedValueOnce([{ entity_id: "e1" }])
+			.mockResolvedValueOnce([{ unique_name: "אברהם" }]);
+
+		await deleteParentChildLink({ data: { id: "link-1" } });
+
+		expect(notifiedUrls()).toEqual(["/pedia/אברהם"]);
+	});
+
+	it("reports the members' entry urls after a union update", async () => {
+		executeMock.mockResolvedValue({ affectedRows: 1 });
+		queryOneMock.mockResolvedValue({
+			person1_id: "p1",
+			person2_id: "p2",
+		});
+		queryMock
+			.mockResolvedValueOnce([{ entity_id: "e1" }])
+			.mockResolvedValueOnce([{ unique_name: "שרה" }]);
+
+		await updateUnionLink({ data: { id: "u1", unionOrder: 2 } });
+
+		expect(notifiedUrls()).toEqual(["/pedia/שרה"]);
+	});
+
+	it("reports the members' entry urls after a union delete", async () => {
+		executeMock.mockResolvedValue({ affectedRows: 1 });
+		queryOneMock.mockResolvedValue({
+			person1_id: "p1",
+			person2_id: "p2",
+		});
+		queryMock
+			.mockResolvedValueOnce([{ entity_id: "e1" }])
+			.mockResolvedValueOnce([{ unique_name: "שרה" }]);
+
+		await deleteUnionLink({ data: { id: "u1" } });
+
+		expect(notifiedUrls()).toEqual(["/pedia/שרה"]);
+	});
+
+	it("reports the named person's and giver's entry urls after a name create", async () => {
+		queryOneMock.mockResolvedValue({ id: "type-1" });
+		queryMock
+			.mockResolvedValueOnce([{ entity_id: "e1" }, { entity_id: "e2" }])
+			.mockResolvedValueOnce([
+				{ unique_name: "יעקב" },
+				{ unique_name: "ישמעאל" },
+			]);
+
+		await createPersonName({
+			data: {
+				personId: "p1",
+				name: "ישראל",
+				nameType: "ADDITIONAL",
+				giverPersonId: "p2",
+			},
+		});
+
+		expect(notifiedUrls()).toEqual(["/pedia/יעקב", "/pedia/ישמעאל"]);
+	});
+
+	it("reports the owning person's entry urls after a name update", async () => {
+		executeMock.mockResolvedValue({ affectedRows: 1 });
+		queryOneMock.mockResolvedValue({ person_id: "p1" });
+		queryMock
+			.mockResolvedValueOnce([{ entity_id: "e1" }])
+			.mockResolvedValueOnce([{ unique_name: "יעקב" }]);
+
+		await updatePersonName({ data: { id: "name-1", name: "ישראל" } });
+
+		expect(notifiedUrls()).toEqual(["/pedia/יעקב"]);
+	});
+
+	it("reports the owning person's entry urls after a name delete", async () => {
+		executeMock.mockResolvedValue({ affectedRows: 1 });
+		queryOneMock.mockResolvedValue({ person_id: "p1" });
+		queryMock
+			.mockResolvedValueOnce([{ entity_id: "e1" }])
+			.mockResolvedValueOnce([{ unique_name: "יעקב" }]);
+
+		await deletePersonName({ data: { id: "name-1" } });
+
+		expect(notifiedUrls()).toEqual(["/pedia/יעקב"]);
 	});
 });

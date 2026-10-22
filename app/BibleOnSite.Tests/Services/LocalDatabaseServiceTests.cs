@@ -21,7 +21,11 @@ public class LocalDatabaseServiceTests
         try
         {
             var projectRoot = GetProjectRoot();
-            if (projectRoot == null) return null;
+            if (projectRoot == null)
+            {
+                return null;
+            }
+
             return Path.Combine(projectRoot, "BibleOnSite", "Resources", "Raw");
         }
         catch
@@ -33,16 +37,20 @@ public class LocalDatabaseServiceTests
     private static bool DatabaseFileExists()
     {
         var rawPath = GetRawResourcesPath();
-        if (rawPath == null || !Directory.Exists(rawPath)) return false;
+        if (rawPath == null || !Directory.Exists(rawPath))
+        {
+            return false;
+        }
+
         var dbPath = Path.Combine(rawPath, ExpectedDbName);
         return File.Exists(dbPath);
     }
 
-    [SkippableFact]
+    [Fact]
     public void DbName_ShouldMatchExpectedFilename()
     {
         // Skip in CI - database file is not tracked in git
-        Skip.IfNot(DatabaseFileExists(), "Database file not present (expected in CI)");
+        Assert.SkipUnless(DatabaseFileExists(), "Database file not present (expected in CI)");
 
         // This test ensures the database filename constant is correct.
         // If you change the database file, update both:
@@ -64,11 +72,11 @@ public class LocalDatabaseServiceTests
             "If you renamed the database file, update LocalDatabaseService.DbName to match.");
     }
 
-    [SkippableFact]
+    [Fact]
     public void DatabaseResourceFile_ShouldNotBeEmpty()
     {
         // Skip in CI - database file is not tracked in git
-        Skip.IfNot(DatabaseFileExists(), "Database file not present (expected in CI)");
+        Assert.SkipUnless(DatabaseFileExists(), "Database file not present (expected in CI)");
 
         var resourcePath = Path.Combine(
             GetProjectRoot()!,
@@ -93,11 +101,11 @@ public class LocalDatabaseServiceTests
         "sefaria-dump-5784-sivan-4.perushim_catalog.sqlite",
     };
 
-    [SkippableFact]
+    [Fact]
     public void SqliteFiles_ShouldMatchExpectedSet()
     {
         // Skip in CI - database files may not be tracked in git
-        Skip.IfNot(DatabaseFileExists(), "Database file not present (expected in CI)");
+        Assert.SkipUnless(DatabaseFileExists(), "Database file not present (expected in CI)");
 
         // This test catches the case where someone adds/removes a database file
         // but forgets to update the expected set
@@ -107,8 +115,12 @@ public class LocalDatabaseServiceTests
             .OrderBy(f => f)
             .ToList();
 
-        sqliteFiles.Should().HaveCount(ExpectedSqliteFiles.Length,
-            "The set of SQLite files in Resources/Raw should match the expected databases.");
+        // Developer builds may stage the downloaded notes and prebuilt search index here.
+        // Require the bundled databases and reject unknown files while accepting those two known assets.
+        sqliteFiles.Should().BeSubsetOf(ExpectedSqliteFiles.Concat([
+            "sefaria-dump-5784-sivan-4.perushim_notes.sqlite",
+            "sefaria-dump-5784-sivan-4.hebrew_search.sqlite"]),
+            "Resources/Raw may contain the known generated commentary assets after a device build.");
 
         foreach (var expected in ExpectedSqliteFiles)
         {

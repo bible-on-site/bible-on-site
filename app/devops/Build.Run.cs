@@ -61,7 +61,9 @@ partial class Build
     bool IsApiRunning()
     {
         if (IsPortOpen("127.0.0.1", 3003))
+        {
             return true;
+        }
 
         try
         {
@@ -170,17 +172,23 @@ partial class Build
         try
         {
             if (!System.IO.File.Exists(AppEnvFile))
+            {
                 return;
+            }
 
             foreach (var rawLine in System.IO.File.ReadAllLines(AppEnvFile))
             {
                 var line = rawLine.Trim();
                 if (string.IsNullOrWhiteSpace(line) || line.StartsWith('#'))
+                {
                     continue;
+                }
 
                 var separatorIndex = line.IndexOf('=');
                 if (separatorIndex <= 0)
+                {
                     continue;
+                }
 
                 var key = line.Substring(0, separatorIndex).Trim();
                 var value = line.Substring(separatorIndex + 1).Trim();
@@ -248,7 +256,7 @@ partial class Build
     /// </summary>
     Target Dev => _ => _
         .Description("Start local development environment (API + Windows app)")
-        .DependsOn(CompileWindows)
+        .DependsOn(PrepareWindowsRecitation, CompileWindows)
         .Executes(() =>
         {
             EnsureMinioRunning();
@@ -264,7 +272,7 @@ partial class Build
 
     Target RunWindows => _ => _
         .Description("Run app on Windows. Use --api-env prod for production API")
-        .DependsOn(PrepareApiConfig, Compile)
+        .DependsOn(PrepareApiConfig, PrepareWindowsRecitation, Compile)
         .Executes(() =>
         {
             EnsureMinioRunning();
@@ -285,7 +293,7 @@ partial class Build
 
     Target RunAndroid => _ => _
         .Description("Run app on Android emulator. Options: --full-apk, --fast-deploy, --watch, --api-env prod")
-        .DependsOn(PrepareApiConfig)  // Skip CompileAndroid - we do inline build to avoid file locks
+        .DependsOn(PrepareApiConfig, PrepareAndroidRecitation)  // Inline build avoids file locks.
         .Executes(() =>
         {
             // Ensure emulator is running
@@ -886,7 +894,7 @@ partial class Build
 
     Target RunIos => _ => _
         .Description("Run app on iOS simulator (starts API if needed)")
-        .DependsOn(Compile)
+        .DependsOn(PrepareIosRecitation, Compile)
         .Executes(() =>
         {
             // iOS doesn't support dotnet run - use dotnet build -t:Run
@@ -908,7 +916,7 @@ partial class Build
 
     Target RunMac => _ => _
         .Description("Run app on Mac Catalyst (starts API if needed)")
-        .DependsOn(Compile)
+        .DependsOn(PrepareIosRecitation, Compile)
         .Executes(() =>
         {
             // Mac Catalyst doesn't support dotnet run - use dotnet build -t:Run

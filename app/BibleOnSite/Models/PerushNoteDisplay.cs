@@ -11,6 +11,15 @@ public partial class PerushNoteDisplay : ObservableObject
     /// <summary>Hebrew name of the commentary (e.g. רש"י).</summary>
     public required string PerushName { get; set; }
 
+    /// <summary>
+    /// Commentary id — kept on the display so a search hit can re-identify the
+    /// exact perush after notes were grouped and combined for rendering (#2078).
+    /// </summary>
+    public int PerushId { get; set; }
+
+    /// <summary>Loads only this source and verse when its native cell is realized.</summary>
+    public Func<Task<List<string>>>? ContentLoader { get; set; }
+
     /// <summary>List of note contents for this perush on this pasuk.</summary>
     public List<string> NoteContents { get; set; } = new();
 

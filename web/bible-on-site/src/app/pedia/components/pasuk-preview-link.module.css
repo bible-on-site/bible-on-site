@@ -45,3 +45,22 @@
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+
+@media (prefers-color-scheme: dark) {
+  .pasukTooltip {
+    background: #1a1f2e;
+    border-color: #3b4370;
+  }
+
+  .pasukTooltipReference {
+    color: #c7d2fe;
+  }
+
+  .pasukTooltipText {
+    color: #d7dae0;
+  }
+
+  .pasukTooltipNote {
+    color: #9aa0a6;
+  }
+}

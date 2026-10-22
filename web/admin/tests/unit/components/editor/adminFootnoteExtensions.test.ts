@@ -13,16 +13,20 @@ describe("adminFootnoteExtensions", () => {
 
 	it("renders an accessible Hebrew reference while preserving parser attributes", () => {
 		const renderHTML = AdminFootnoteReference.config.renderHTML;
-		if (!renderHTML) throw new Error("Expected the footnote reference renderer");
+		if (!renderHTML)
+			throw new Error("Expected the footnote reference renderer");
 
 		expect(
-			renderHTML.call({} as never, {
-				HTMLAttributes: {
-					class: "footnote-ref",
-					"data-id": "footnote-id",
-					referenceNumber: "15",
-				},
-			} as never),
+			renderHTML.call(
+				{} as never,
+				{
+					HTMLAttributes: {
+						class: "footnote-ref",
+						"data-id": "footnote-id",
+						referenceNumber: "15",
+					},
+				} as never,
+			),
 		).toEqual([
 			"sup",
 			{ id: "fnref:15" },

@@ -30,7 +30,9 @@ describe("EditorShortcutModal", () => {
 			/>,
 		);
 
-		expect(screen.getByRole("dialog", { name: "קיצורי מקלדת" })).toBeInTheDocument();
+		expect(
+			screen.getByRole("dialog", { name: "קיצורי מקלדת" }),
+		).toBeInTheDocument();
 		expect(screen.getByText("כותרות")).toBeInTheDocument();
 		expect(screen.getByText("קישורים וטקסט")).toBeInTheDocument();
 		expect(screen.getByText("רשימות")).toBeInTheDocument();
@@ -85,9 +87,13 @@ describe("EditorShortcutModal", () => {
 		fireEvent.change(textarea, {
 			target: { value: '{"Mod-Alt-2":"heading:2"}' },
 		});
-		fireEvent.click(screen.getByRole("button", { name: "שמור JSON והחל עורך" }));
+		fireEvent.click(
+			screen.getByRole("button", { name: "שמור JSON והחל עורך" }),
+		);
 
-		expect(onExtrasDraftChange).toHaveBeenCalledWith('{"Mod-Alt-2":"heading:2"}');
+		expect(onExtrasDraftChange).toHaveBeenCalledWith(
+			'{"Mod-Alt-2":"heading:2"}',
+		);
 		expect(onSaveExtras).toHaveBeenCalledTimes(1);
 	});
 });

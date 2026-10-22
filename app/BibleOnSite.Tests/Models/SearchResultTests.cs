@@ -225,3 +225,77 @@ public class PerushSearchResultTests
         result.HighlightedResult.Should().NotContain("<b>");
     }
 }
+
+public class SearchResultSharedTests
+{
+    private static Perek CreatePerek(int id = 1) => new()
+    {
+        PerekId = id,
+        Date = "2026-01-20",
+        HebDate = "טבת",
+        SeferName = "בראשית",
+        SeferTanahUsName = "Genesis",
+        Tseit = "17:30"
+    };
+
+    [Fact]
+    public void SourceOrder_ForPerekResult_UsesPerekIdScale()
+    {
+        var result = new PerekSearchResult(CreatePerek(7), "search");
+
+        result.SourceOrder.Should().Be(7000);
+    }
+
+    [Fact]
+    public void SourceOrder_ForPasukResult_CombinesPerekAndPasuk()
+    {
+        var pasuk = new Pasuk { PasukNum = 5, Text = "text" };
+        var result = new PasukSearchResult(pasuk, 7, "search");
+
+        result.SourceOrder.Should().Be(7005);
+    }
+
+    [Fact]
+    public void SourceOrder_ForPerushResult_CombinesPerekAndPasuk()
+    {
+        var result = new PerushSearchResult("id", "content", 7, 5, "search");
+
+        result.SourceOrder.Should().Be(7005);
+    }
+
+    [Fact]
+    public void SourceOrder_ForAuthorResult_SortsLast()
+    {
+        var author = new Author { Id = 1, Name = "Test", Details = "Test" };
+        var result = new AuthorSearchResult(author, "search");
+
+        result.SourceOrder.Should().Be(int.MaxValue);
+    }
+
+    [Fact]
+    public void Category_UsesResultTypeHebrewName()
+    {
+        var result = new PerekSearchResult(CreatePerek(), "search");
+
+        result.Category.Should().Be("פרק");
+    }
+
+    [Fact]
+    public void ThumbnailUrl_WithoutImage_IsNullAndHasNoThumbnail()
+    {
+        var result = new PerekSearchResult(CreatePerek(), "search");
+
+        result.ThumbnailUrl.Should().BeNull();
+        result.HasThumbnail.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ThumbnailUrl_WithAuthorImage_IsExposed()
+    {
+        var author = new Author { Id = 7, Name = "Test", Details = "Test" };
+        var result = new AuthorSearchResult(author, "search");
+
+        result.ThumbnailUrl.Should().Be(author.ImageUrl);
+        result.HasThumbnail.Should().BeTrue();
+    }
+}

@@ -1,7 +1,10 @@
-using System.Text;
+using System.Text.Encodings.Web;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Text.Unicode;
 using GraphQL;
 using GraphQL.Client.Http;
-using GraphQL.Client.Serializer.Newtonsoft;
+using GraphQL.Client.Serializer.SystemTextJson;
 using BibleOnSite.Config;
 
 namespace BibleOnSite.Services;
@@ -11,13 +14,28 @@ namespace BibleOnSite.Services;
 /// </summary>
 public abstract class BaseGraphQLService
 {
+    private static readonly SystemTextJsonSerializer SharedSerializer = CreateSerializer();
+
     private readonly Lazy<GraphQLHttpClient> _client;
 
     protected BaseGraphQLService()
     {
         _client = new Lazy<GraphQLHttpClient>(() =>
-            new GraphQLHttpClient(AppConfig.Instance.GetApiUrl(), new NewtonsoftJsonSerializer()));
+            new GraphQLHttpClient(AppConfig.Instance.GetApiUrl(), SharedSerializer));
     }
+
+    /// <summary>
+    /// Creates the GraphQL serializer. All request/response metadata comes from
+    /// <see cref="GraphQLJsonContext"/>, so no reflection runs on the startup path.
+    /// The serializer itself adds case-insensitive matching and its Map/ErrorPath converters.
+    /// </summary>
+    internal static SystemTextJsonSerializer CreateSerializer() => new(new JsonSerializerOptions
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        // Keep Hebrew variables readable in the request body (Newtonsoft never escaped them).
+        Encoder = JavaScriptEncoder.Create(UnicodeRanges.All),
+        TypeInfoResolverChain = { GraphQLJsonContext.Default }
+    });
 
     protected GraphQLHttpClient Client => _client.Value;
 
@@ -29,7 +47,7 @@ public abstract class BaseGraphQLService
     /// <summary>
     /// Executes a GraphQL query and returns the typed response.
     /// </summary>
-    protected async Task<T?> QueryAsync<T>(string query, string? operationName = null, object? variables = null, CancellationToken cancellationToken = default)
+    protected async Task<T?> QueryAsync<T>(string query, string? operationName, Dictionary<string, object?>? variables, CancellationToken cancellationToken)
     {
         var request = new GraphQLRequest
         {
@@ -61,7 +79,13 @@ public abstract class BaseGraphQLService
     /// <summary>
     /// Executes a GraphQL query with timeout support.
     /// </summary>
-    protected async Task<T?> QueryWithTimeoutAsync<T>(string query, TimeSpan timeout, string? operationName = null, object? variables = null)
+    protected async Task<T?> QueryWithTimeoutAsync<T>(string query, TimeSpan timeout, string? operationName) =>
+        await QueryWithTimeoutAsync<T>(query, timeout, operationName, null);
+
+    /// <summary>
+    /// Executes a GraphQL query with timeout support.
+    /// </summary>
+    protected async Task<T?> QueryWithTimeoutAsync<T>(string query, TimeSpan timeout, string? operationName, Dictionary<string, object?>? variables)
     {
         using var cts = new CancellationTokenSource(timeout);
         return await QueryAsync<T>(query, operationName, variables, cts.Token);
@@ -76,3 +100,31 @@ public class GraphQLException : Exception
     public GraphQLException(string message) : base(message) { }
     public GraphQLException(string message, Exception innerException) : base(message, innerException) { }
 }
+
+/// <summary>
+/// Source-generated metadata for every GraphQL request and response the app sends or receives.
+/// </summary>
+[JsonSerializable(typeof(GraphQLRequest))]
+[JsonSerializable(typeof(Dictionary<string, object>))]
+[JsonSerializable(typeof(string))]
+[JsonSerializable(typeof(string[]))]
+[JsonSerializable(typeof(int))]
+[JsonSerializable(typeof(GraphQLResponse<StarterService.StarterResponse>))]
+[JsonSerializable(typeof(GraphQLResponse<ArticleService.ArticlesByPerekIdResponse>))]
+[JsonSerializable(typeof(GraphQLResponse<ArticleService.ArticleByIdResponse>))]
+[JsonSerializable(typeof(GraphQLResponse<ArticleService.ArticlesByAuthorIdResponse>))]
+[JsonSerializable(typeof(GraphQLResponse<ArticleService.SearchArticlesResponse>))]
+[JsonSerializable(typeof(GraphQLResponse<TanahpediaService.EntriesResponse>))]
+[JsonSerializable(typeof(GraphQLResponse<TanahpediaService.RecentEntriesResponse>))]
+[JsonSerializable(typeof(GraphQLResponse<TanahpediaService.EntryDetailResponse>))]
+[JsonSerializable(typeof(GraphQLResponse<TanahpediaService.SearchHitsResponse>))]
+[JsonSerializable(typeof(GraphQLResponse<TanahpediaService.SynonymTargetsResponse>))]
+[JsonSerializable(typeof(GraphQLResponse<TanahpediaService.CategoryCountsResponse>))]
+[JsonSerializable(typeof(GraphQLResponse<TanahpediaService.EntitiesResponse>))]
+[JsonSerializable(typeof(GraphQLResponse<TanahpediaService.TodayEntitiesResponse>))]
+[JsonSerializable(typeof(GraphQLResponse<TanahpediaService.CategoryHomepageResponse>))]
+[JsonSerializable(typeof(GraphQLResponse<TanahpediaService.PersonFamilyResponse>))]
+[JsonSerializable(typeof(GraphQLResponse<TanahpediaService.PlaceMarkersResponse>))]
+#pragma warning disable S2333 // System.Text.Json source generation supplies this partial implementation.
+internal partial class GraphQLJsonContext : JsonSerializerContext;
+#pragma warning restore S2333

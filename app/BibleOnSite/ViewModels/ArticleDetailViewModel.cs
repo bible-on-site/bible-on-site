@@ -150,7 +150,9 @@ public partial class ArticleDetailViewModel : ObservableObject
     public async Task ShareAsync()
     {
         if (Article == null)
+        {
             return;
+        }
 
         await _share.RequestAsync(new ShareTextRequest
         {
@@ -176,7 +178,9 @@ public partial class ArticleDetailViewModel : ObservableObject
     public async Task GoToAuthorAsync()
     {
         if (Article?.Author == null)
+        {
             return;
+        }
 
         var authorId = Article.Author.Id;
         var authorName = Uri.EscapeDataString(Article.Author.Name);

@@ -1,0 +1,12 @@
+[
+	{
+		"relation": ["delegate_permission/common.handle_all_urls"],
+		"target": {
+			"namespace": "android_app",
+			"package_name": "com.tanah.daily929",
+			"sha256_cert_fingerprints": [
+				"CF:CA:77:54:B6:AF:4C:3E:DC:09:E9:73:C3:E1:95:D7:FC:FA:BB:60:08:6B:A5:94:4F:09:27:BE:51:A9:C8:DD"
+			]
+		}
+	}
+]

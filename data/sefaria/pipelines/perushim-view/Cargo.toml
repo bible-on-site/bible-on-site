@@ -7,7 +7,6 @@ authors.workspace = true
 
 [dependencies]
 tokio.workspace = true
-serde.workspace = true
 serde_json.workspace = true
 mongodb.workspace = true
 anyhow.workspace = true
@@ -16,7 +15,12 @@ dotenvy.workspace = true
 chrono.workspace = true
 rusqlite.workspace = true
 flate2.workspace = true
+unicode-normalization.workspace = true
+unicode_categories.workspace = true
 bson.workspace = true
+
+[dev-dependencies]
+tempfile = "3"
 
 [features]
 # Enable integration tests that require MongoDB with Sefaria dump

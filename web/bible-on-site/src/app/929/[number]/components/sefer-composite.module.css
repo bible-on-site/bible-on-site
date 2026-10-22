@@ -44,3 +44,9 @@
     transform: rotate(360deg);
   }
 }
+
+@media (prefers-color-scheme: dark) {
+  .seferOverlay {
+    background-color: #0f1219;
+  }
+}

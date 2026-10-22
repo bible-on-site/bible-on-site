@@ -3,7 +3,7 @@ import { headers } from "next/headers";
 import type { ArticlePerekPair } from "../lib/articles";
 import { getAllArticlePerekIdPairs } from "../lib/articles";
 import { getAllAuthorSlugs } from "../lib/authors";
-import { getPerushimByPerekId } from "../lib/perushim";
+import { getAllPerushPerekNamePairs } from "../lib/perushim";
 import type { PerekIllustration } from "../lib/seo/perek-illustrations";
 import { getPerekImagesByChapter } from "../lib/seo/perek-images-data";
 import { CATEGORY_SLUGS, categoryHref } from "../lib/tanahpedia/category-slug";
@@ -14,6 +14,7 @@ import type { CategoryKey } from "../lib/tanahpedia/types";
  * Static section paths for the sitemap
  */
 export const SITEMAP_SECTIONS = [
+	"לוח",
 	"dailyBulletin",
 	"whatsappGroup",
 	"tos",
@@ -80,6 +81,38 @@ export function generate929IndexEntry(
 		lastModified: config.lastModified,
 		changeFrequency: "daily",
 		priority: 0.9,
+	};
+}
+
+/**
+ * Generates the מסורה landing entry. Only the hub is listed: unit pages
+ * carry a deliberate non-indexing policy (see the מסורה unit page
+ * metadata), so they must not appear in the sitemap.
+ */
+export function generateMasoraIndexEntry(
+	config: SitemapConfig,
+): MetadataRoute.Sitemap[0] {
+	return {
+		url: `${config.baseUrl}/מסורה`,
+		lastModified: config.lastModified,
+		changeFrequency: "monthly",
+		priority: 0.7,
+	};
+}
+
+/**
+ * Generates the פרשה landing entry. Same policy as מסורה: only the hub
+ * is listed because unit pages carry a deliberate non-indexing policy
+ * (see the פרשה unit page metadata).
+ */
+export function generateParashaIndexEntry(
+	config: SitemapConfig,
+): MetadataRoute.Sitemap[0] {
+	return {
+		url: `${config.baseUrl}/פרשה`,
+		lastModified: config.lastModified,
+		changeFrequency: "monthly",
+		priority: 0.7,
 	};
 }
 
@@ -228,6 +261,8 @@ export function generateSitemapEntries(
 		generatePediaIndexEntry(config),
 		...generatePediaCategoryEntries(config),
 		...generatePediaEntries(config, pediaUniqueNames),
+		generateMasoraIndexEntry(config),
+		generateParashaIndexEntry(config),
 	];
 }
 
@@ -237,29 +272,21 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 	const host = headersList.get("host") ?? "xn--febl3a.co.il";
 	const baseUrl = `https://${host}`;
 
-	// Fetch dynamic data for sitemap entries in parallel
-	const [authorSlugs, articles, pediaUniqueNames, imagesByPerek] =
-		await Promise.all([
-			getAllAuthorSlugs(),
-			getAllArticlePerekIdPairs(),
-			getAllEntryUniqueNames(),
-			getPerekImagesByChapter(),
-		]);
-
-	// Fetch all perushim for all perakim
-	const perushimPromises = Array.from({ length: TOTAL_PERAKIM }, (_, i) =>
-		getPerushimByPerekId(i + 1),
-	);
-	const allPerushim = await Promise.all(perushimPromises);
-
-	// Flatten to perush-perek pairs
-	const perushPerekPairs: PerushPerekPair[] = allPerushim.flatMap(
-		(perushim, index) =>
-			perushim.map((perush) => ({
-				perekId: index + 1,
-				perushName: perush.name,
-			})),
-	);
+	// Fetch dynamic data for sitemap entries in parallel. Perushim load via a
+	// single bulk query rather than one lookup per perek.
+	const [
+		authorSlugs,
+		articles,
+		pediaUniqueNames,
+		imagesByPerek,
+		perushPerekPairs,
+	] = await Promise.all([
+		getAllAuthorSlugs(),
+		getAllArticlePerekIdPairs(),
+		getAllEntryUniqueNames(),
+		getPerekImagesByChapter(),
+		getAllPerushPerekNamePairs(),
+	]);
 
 	return generateSitemapEntries(
 		{

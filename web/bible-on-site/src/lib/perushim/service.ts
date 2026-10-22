@@ -1,3 +1,9 @@
+import type { ScriptureRange } from "../reading/contract";
+import {
+	noteSliceCondition,
+	slicePerekOrder,
+	slicesForRanges,
+} from "../reading/queries";
 import { query } from "../api-client";
 import type { PerushDetail, PerushNote, PerushSummary } from "./types";
 
@@ -84,6 +90,152 @@ interface NoteRow {
 	pasuk: number;
 	note_idx: number;
 	note_content: string;
+}
+
+interface RangedNoteRow extends NoteRow {
+	perek_id: number;
+}
+
+/**
+ * A commentary note anchored to a canonical (perek, pasuk) position —
+ * returned by range-based queries where one perush may span perakim.
+ */
+export interface RangedPerushNote extends PerushNote {
+	perekId: number;
+}
+
+interface RangePerushRow {
+	perush_id: number;
+	perush_name: string;
+	parshan_name: string;
+	perek_id: number;
+	note_count: number;
+	priority: number;
+}
+
+/**
+ * A perush summary returned by a range query. `perekId` is the first
+ * perek (in range order) carrying notes for this perush — the canonical
+ * /929 page to link for the full commentary.
+ */
+export interface RangePerushSummary extends PerushSummary {
+	perekId: number;
+}
+
+/**
+ * Fetch perushim whose verse-addressed notes fall inside the given
+ * canonical ranges — the shared unit->commentary path for reading
+ * divisions (מסורה units, פרשה ranges, Haftarot). One row arrives per
+ * (perush, perek); results are aggregated per perush, keeping the first
+ * perek in range order for its canonical link and summing note counts
+ * across overlapping perakim.
+ *
+ * `noteCount` counts DISTINCT covered pesukim — a pasuk carrying several
+ * notes counts once, so the displayed verse total never exceeds the
+ * unit's own pesukim (issue #2190).
+ */
+export async function getPerushimForRanges(
+	ranges: ScriptureRange[],
+): Promise<RangePerushSummary[]> {
+	const slices = slicesForRanges(ranges);
+	if (slices.length === 0) return [];
+	const { sql, params } = noteSliceCondition(slices);
+	try {
+		const rows = await query<RangePerushRow>(
+			`SELECT
+				n.perush_id AS perush_id,
+				p.name AS perush_name,
+				pa.name AS parshan_name,
+				n.perek_id AS perek_id,
+				COUNT(DISTINCT n.pasuk) AS note_count,
+				p.priority AS priority
+			 FROM note n
+			 JOIN perush p ON n.perush_id = p.id
+			 JOIN parshan pa ON p.parshan_id = pa.id
+			 WHERE ${sql}
+			 GROUP BY p.id, p.name, pa.name, p.priority, n.perek_id`,
+			params,
+		);
+
+		const perekOrder = slicePerekOrder(slices);
+		const byPerush = new Map<number, RangePerushSummary & { priority: number; firstPerekOrder: number }>();
+		for (const row of rows) {
+			const order = perekOrder.get(row.perek_id) ?? Number.MAX_SAFE_INTEGER;
+			const existing = byPerush.get(row.perush_id);
+			if (existing) {
+				existing.noteCount += Number(row.note_count);
+				if (order < existing.firstPerekOrder) {
+					existing.firstPerekOrder = order;
+					existing.perekId = row.perek_id;
+				}
+			} else {
+				byPerush.set(row.perush_id, {
+					id: row.perush_id,
+					name: row.perush_name,
+					parshanName: row.parshan_name,
+					noteCount: Number(row.note_count),
+					priority: row.priority,
+					perekId: row.perek_id,
+					firstPerekOrder: order,
+				});
+			}
+		}
+		return [...byPerush.values()]
+			.sort((a, b) => a.priority - b.priority || b.noteCount - a.noteCount)
+			.map(({ priority: _priority, firstPerekOrder: _order, ...summary }) => summary);
+	} catch (error) {
+		console.warn(
+			"Failed to fetch perushim for ranges:",
+			error instanceof Error ? error.message : error,
+		);
+		return [];
+	}
+}
+
+/**
+ * Fetch a perush's notes inside canonical ranges, preserving range
+ * order across perakim. Verse-addressed notes whose pasuk sits inside
+ * the bounds are returned; boundary pesukim shared by two units appear
+ * in both units' results.
+ */
+export async function getPerushNotesForRanges(
+	perushId: number,
+	ranges: ScriptureRange[],
+): Promise<RangedPerushNote[]> {
+	const slices = slicesForRanges(ranges);
+	if (slices.length === 0) return [];
+	const { sql, params } = noteSliceCondition(slices);
+	try {
+		const rows = await query<RangedNoteRow>(
+			`SELECT n.perek_id, n.pasuk, n.note_idx, n.note_content
+			 FROM note n
+			 WHERE n.perush_id = ? AND (${sql})
+			 ORDER BY n.perek_id ASC, n.pasuk ASC, n.note_idx ASC`,
+			[perushId, ...params],
+		);
+		const perekOrder = slicePerekOrder(slices);
+		return rows
+			.map((row) => ({
+				perekId: row.perek_id,
+				pasuk: row.pasuk,
+				noteIdx: row.note_idx,
+				noteContent: row.note_content,
+			}))
+			.sort((a, b) => {
+				const orderA = perekOrder.get(a.perekId) ?? Number.MAX_SAFE_INTEGER;
+				const orderB = perekOrder.get(b.perekId) ?? Number.MAX_SAFE_INTEGER;
+				return (
+					orderA - orderB || a.pasuk - b.pasuk || a.noteIdx - b.noteIdx
+				);
+			});
+	} catch (error) {
+		console.warn(
+			"Failed to fetch notes for perush %d over ranges:",
+			perushId,
+			error instanceof Error ? error.message : error,
+		);
+		return [];
+	}
 }
 
 /**

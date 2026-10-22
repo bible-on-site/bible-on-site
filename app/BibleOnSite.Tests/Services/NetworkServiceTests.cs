@@ -66,4 +66,22 @@ public class NetworkServiceTests
         Raise(connectivity, NetworkAccess.Internet);
         calls.Should().Be(2);
     }
+
+    [Fact]
+    public void Instance_OnUnitTestHost_ThrowsPlatformNotImplemented()
+    {
+        // The singleton binds Connectivity.Current, which has no implementation
+        // in the unit-test host.
+        var act = () => _ = NetworkService.Instance;
+
+        act.Should().Throw<NotImplementedException>();
+    }
+
+    [Fact]
+    public void IsOnline_OnUnitTestHost_ThrowsPlatformNotImplemented()
+    {
+        var act = () => _ = NetworkService.IsOnline;
+
+        act.Should().Throw<NotImplementedException>();
+    }
 }

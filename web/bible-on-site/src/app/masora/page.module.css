@@ -1,0 +1,67 @@
+.container {
+	max-width: 960px;
+	margin: 0 auto;
+	padding: 96px 16px 48px;
+	font-family: inherit;
+}
+
+.heading {
+	font-size: 1.8rem;
+	font-weight: 700;
+	color: var(--pasuk-num-color, #1c2c5d);
+	margin-bottom: 12px;
+}
+
+.intro {
+	color: var(--muted-text, #555);
+	line-height: 1.7;
+	margin-bottom: 32px;
+	max-width: 60ch;
+}
+
+.helekSection {
+	margin-bottom: 32px;
+}
+
+.helekHeading {
+	font-size: 1.25rem;
+	font-weight: 600;
+	color: var(--pasuk-num-color, #1c2c5d);
+	border-bottom: 1px solid rgba(21, 82, 172, 0.2);
+	padding-bottom: 6px;
+	margin-bottom: 12px;
+}
+
+.seferList {
+	list-style: none;
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+	gap: 8px;
+	padding: 0;
+	margin: 0;
+}
+
+.seferLink {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	padding: 10px 14px;
+	border: 1px solid rgba(21, 82, 172, 0.18);
+	border-radius: 8px;
+	text-decoration: none;
+	transition: background-color 0.2s ease;
+}
+
+.seferLink:hover {
+	background-color: rgba(21, 82, 172, 0.06);
+}
+
+.seferName {
+	font-weight: 600;
+	color: var(--pasuk-num-color, #1c2c5d);
+}
+
+.unitCount {
+	font-size: 0.8rem;
+	color: var(--muted-text, #666);
+}

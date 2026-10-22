@@ -2,9 +2,10 @@
 jest.mock("@/data/perek-dto", () => ({ getPerekByPerekId: jest.fn() }));
 
 import { createHash } from "node:crypto";
-import { GET } from "@/app/api/recitation/route";
-import { getPerekByPerekId } from "@/data/perek-dto";
 import packageJson from "../../../../package.json";
+
+let GET: typeof import("@/app/api/recitation/route").GET;
+let getPerekByPerekId: jest.Mock;
 
 const chapter = (id: number, status = "ready") => ({
 	perekId: id,
@@ -33,6 +34,9 @@ const chapter = (id: number, status = "ready") => ({
 });
 const environment = process.env;
 beforeEach(() => {
+	jest.resetModules();
+	GET = jest.requireActual("@/app/api/recitation/route").GET;
+	getPerekByPerekId = jest.requireMock("@/data/perek-dto").getPerekByPerekId;
 	process.env = { ...environment };
 	delete process.env.S3_ENDPOINT;
 	delete process.env.S3_BUCKET;
@@ -91,4 +95,46 @@ test("corrupt canonical text cannot publish a partial extension", async () => {
 	expect(
 		(await GET(new Request("http://localhost/api/recitation"))).status,
 	).toBe(500);
+});
+
+test("repeated requests and ETag checks reuse the fully validated immutable body", async () => {
+	const first = await GET(new Request("http://localhost/api/recitation"));
+	const body = await first.text();
+	const etag = first.headers.get("ETag") as string;
+	expect(getPerekByPerekId).toHaveBeenCalledTimes(929);
+	const repeated = await GET(new Request("http://localhost/api/recitation"));
+	expect(await repeated.text()).toBe(body);
+	expect(repeated.headers.get("ETag")).toBe(etag);
+	const unchanged = await GET(
+		new Request("http://localhost/api/recitation", {
+			headers: { "If-None-Match": etag },
+		}),
+	);
+	expect(unchanged.status).toBe(304);
+	expect(await unchanged.text()).toBe("");
+	expect(getPerekByPerekId).toHaveBeenCalledTimes(929);
+});
+
+test.each([
+	["S3_ENDPOINT", "http://localhost:4566", "http://localhost:4566/bible-on-site-assets/recordings/1_record.mp3"],
+	["S3_BUCKET", "changed-assets", "https://changed-assets.s3.il-central-1.amazonaws.com/recordings/1_record.mp3"],
+	["S3_REGION", "us-east-1", "https://bible-on-site-assets.s3.us-east-1.amazonaws.com/recordings/1_record.mp3"],
+])("a changed %s refreshes the cached URLs and ETag", async (variable, value, url) => {
+	const first = await GET(new Request("http://localhost/api/recitation"));
+	process.env[variable] = value;
+	const changed = await GET(new Request("http://localhost/api/recitation"));
+	expect(changed.headers.get("ETag")).not.toBe(first.headers.get("ETag"));
+	expect((await changed.json()).tracks[0].audioUrl).toBe(url);
+	expect(getPerekByPerekId).toHaveBeenCalledTimes(1858);
+});
+
+test("a failed validation leaves no partial cache and a later valid request can recover", async () => {
+	jest.spyOn(console, "error").mockImplementation(() => {});
+	getPerekByPerekId.mockImplementationOnce(() => {
+		throw new Error("Canonical data unavailable");
+	});
+	expect((await GET(new Request("http://localhost/api/recitation"))).status).toBe(500);
+	const recovered = await GET(new Request("http://localhost/api/recitation"));
+	expect(recovered.status).toBe(200);
+	expect((await recovered.json()).tracks).toHaveLength(2);
 });

@@ -61,6 +61,24 @@ describe("api-client with DB_URL", () => {
 		);
 	});
 
+	it("uses default config when DB_URL is unset", async () => {
+		delete process.env.DB_URL;
+
+		const mysql = require("mysql2/promise");
+		const { query } = require("../../../src/lib/api-client");
+		await query("SELECT 1");
+
+		expect(mysql.createPool).toHaveBeenCalledWith(
+			expect.objectContaining({
+				host: "127.0.0.1",
+				port: 3306,
+				user: "root",
+				password: "",
+				database: "tanah",
+			}),
+		);
+	});
+
 	it("reuses pool on subsequent calls", async () => {
 		process.env.DB_URL = "mysql://u:p@h:3306/d";
 

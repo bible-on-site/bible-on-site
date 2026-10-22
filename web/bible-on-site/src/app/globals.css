@@ -103,11 +103,44 @@ a {
 .top-nav {
   height: 72px;
   background-color: transparent;
-  text-align: center;
-  align-content: center;
-  display: grid;
-  justify-items: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1.25rem;
   width: 100%;
   position: absolute;
   z-index: 3;
+}
+
+/* Icon-only search button pinned to the physical left edge of the nav
+   bar with the same edge padding as the hamburger at the opposite/right
+   end (issue #2154). Absolute inside the bar keeps the logo centered. */
+.top-nav-search {
+  position: absolute;
+  left: 1.25rem;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  border-radius: 999px;
+  color: #fff;
+}
+
+.top-nav-search img {
+  filter: invert(1);
+}
+
+.top-nav-search:hover {
+  background-color: rgba(255, 255, 255, 0.16);
+  border-color: #fff;
+}
+
+.top-nav-search:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
 }

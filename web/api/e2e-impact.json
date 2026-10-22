@@ -1,0 +1,45 @@
+{
+	"schemaVersion": 1,
+	"suite": "api-e2e",
+	"collector": "api-operations",
+	"collectorVersion": "1.0.0",
+	"platforms": {
+		"api": "Shared"
+	},
+	"tests": {
+		"root": "web/api/tests/e2e",
+		"glob": "**/*.test.ts",
+		"framework": "playwright"
+	},
+	"sources": {
+		"root": "web/api",
+		"globs": ["src/**/*.rs", "entities/src/**/*.rs"]
+	},
+	"alwaysRun": [
+		"apis/health.test.ts :: Health endpoint :: GET /health returns status ok and a version string"
+	],
+	"runAllOnChange": [
+		"web/api/Cargo.toml",
+		"web/api/Cargo.lock",
+		"web/api/Makefile.toml",
+		"web/api/e2e-impact.json",
+		"web/api/tests/package.json",
+		"web/api/tests/package-lock.json",
+		"web/api/tests/playwright.config.ts",
+		"web/api/tests/playwright-global-*.mjs",
+		"web/api/tests/*.mts",
+		"web/shared/**",
+		".github/**",
+		"devops/**",
+		"data/**"
+	],
+	"noImpact": [
+		"docs/**",
+		"**/*.md",
+		"web/api/docs/**",
+		"web/api/.coverage/**",
+		"web/api/tests/.log/**",
+		"web/api/tests/unit/**"
+	],
+	"scope": ["web/api/**"]
+}

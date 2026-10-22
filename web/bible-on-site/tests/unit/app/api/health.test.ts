@@ -1,67 +1,67 @@
-/**
- * @jest-environment node
- */
+/** @jest-environment node */
 import { GET as healthGet } from "@/app/api/health/route";
 
-describe("GET /api/health", () => {
-	it("returns 200 with status ok", () => {
-		const response = healthGet();
-		expect(response.status).toBe(200);
-		expect(response).toBeInstanceOf(Response);
-	});
-
-	it("returns JSON body with status ok", async () => {
-		const response = healthGet();
-		const body = await response.json();
-		expect(body).toEqual({ status: "ok" });
-	});
+test("liveness returns immediately without depending on content", async () => {
+	const response = healthGet();
+	expect(response.status).toBe(200);
+	expect(await response.json()).toEqual({ status: "ok" });
 });
 
 describe("GET /api/health/ready", () => {
-	it("returns 200 with status ready and warmed", async () => {
-		const { GET: readyGet } = await import("@/app/api/health/ready/route");
-		const response = readyGet();
-		expect(response.status).toBe(200);
-		const body = await response.json();
-		expect(body.status).toBe("ready");
-		expect(body.warmed).toBe(true);
-	});
-
-	it("uses cached warmed state on subsequent calls", async () => {
-		const { GET: readyGet } = await import("@/app/api/health/ready/route");
-		readyGet();
-		const response = readyGet();
-		expect(response.status).toBe(200);
-		const body = await response.json();
-		expect(body.warmed).toBe(true);
-	});
-
-	it("returns 503 when warming throws an error", async () => {
+	let mockQuery: jest.Mock;
+	let mockPerek: jest.Mock;
+	beforeEach(() => {
 		jest.resetModules();
-		jest.doMock("@/data/perek-dto", () => ({
-			getPerekByPerekId: () => {
-				throw new Error("Simulated failure");
-			},
-		}));
-		const { GET: readyGet } = await import("@/app/api/health/ready/route");
-		const response = readyGet();
-		expect(response.status).toBe(503);
-		const body = await response.json();
-		expect(body.status).toBe("error");
-		expect(body.message).toBe("Simulated failure");
+		mockQuery = jest
+			.fn()
+			.mockResolvedValue([{ authorCount: 64, articleCount: 2681 }]);
+		mockPerek = jest.fn();
+		jest.doMock("@/lib/api-client", () => ({ query: mockQuery }));
+		jest.doMock("@/data/perek-dto", () => ({ getPerekByPerekId: mockPerek }));
+		jest.spyOn(console, "error").mockImplementation(() => {});
 	});
-
-	it("returns 503 with 'Unknown error' for non-Error throws", async () => {
-		jest.resetModules();
-		jest.doMock("@/data/perek-dto", () => ({
-			getPerekByPerekId: () => {
-				throw "string error";
-			},
-		}));
-		const { GET: readyGet } = await import("@/app/api/health/ready/route");
-		const response = readyGet();
-		expect(response.status).toBe(503);
-		const body = await response.json();
-		expect(body.message).toBe("Unknown error");
+	afterEach(() => jest.restoreAllMocks());
+	test("checks public content without requiring bulletin approval", async () => {
+		const { GET } = await import("@/app/api/health/ready/route");
+		const response = await GET();
+		expect(response.status).toBe(200);
+		expect(await response.json()).toEqual({
+			status: "ready",
+			warmed: true,
+			content: { authorCount: 64, articleCount: 2681 },
+		});
+		expect(mockQuery.mock.calls[0][0]).not.toContain("distributable");
 	});
+	test("rechecks the database even after canonical data has warmed", async () => {
+		const { GET } = await import("@/app/api/health/ready/route");
+		await GET();
+		mockQuery.mockRejectedValueOnce(new Error("Database unavailable"));
+		expect((await GET()).status).toBe(503);
+		expect(mockPerek).toHaveBeenCalledTimes(2);
+		expect(mockQuery).toHaveBeenCalledTimes(2);
+	});
+	test.each([
+		{ rows: [] },
+		{ rows: [{ authorCount: 0, articleCount: 0 }] },
+		{ rows: [{ authorCount: 0, articleCount: 10 }] },
+		{ rows: [{ authorCount: 2, articleCount: 0 }] },
+	])("rejects missing public content: %j", async ({ rows }) => {
+		mockQuery.mockResolvedValue(rows);
+		const { GET } = await import("@/app/api/health/ready/route");
+		expect((await GET()).status).toBe(503);
+	});
+	test.each([new Error("Canonical load failed"), "string error"])(
+		"rejects canonical loading failures: %j",
+		async (error) => {
+			mockPerek.mockImplementation(() => {
+				throw error;
+			});
+			const { GET } = await import("@/app/api/health/ready/route");
+			const response = await GET();
+			expect(response.status).toBe(503);
+			expect((await response.json()).message).toBe(
+				error instanceof Error ? error.message : "Unknown error",
+			);
+		},
+	);
 });

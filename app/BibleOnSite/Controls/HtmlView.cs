@@ -8,6 +8,78 @@ namespace BibleOnSite.Controls;
 /// </summary>
 public class HtmlView : View
 {
+    public static readonly BindableProperty ContentLoaderProperty = BindableProperty.Create(
+        nameof(ContentLoader), typeof(Func<Task<List<string>>>), typeof(HtmlView), default(Func<Task<List<string>>>),
+        propertyChanged: (bindable, _, _) =>
+        {
+            var view = (HtmlView)bindable;
+            view.OnPropertyChanged(nameof(IsContentReady));
+            _ = view.LoadCellContentAsync();
+        });
+
+    /// <summary>A realized cell owns its plain text; the reader model owns only compressed data.</summary>
+    public Func<Task<List<string>>>? ContentLoader
+    {
+        get => (Func<Task<List<string>>>?)GetValue(ContentLoaderProperty);
+        set => SetValue(ContentLoaderProperty, value);
+    }
+
+    /// <summary>
+    /// True once this cell's presentable content is final: always when there
+    /// is no async loader, otherwise only after <see cref="ContentLoader"/>
+    /// published its first result (or its error text) through
+    /// <see cref="HtmlContent"/>. Perush rows gate their name label on this so
+    /// the name and contents surface as one update instead of a name-only
+    /// flash followed by a layout jump (#2451), and a recycled cell can never
+    /// pair a new perush name with the previous contents. A lazy display's
+    /// empty-string binding is not readiness — whitespace still waits (#2451).
+    /// </summary>
+    public bool IsContentReady => ContentLoader == null || !string.IsNullOrWhiteSpace(HtmlContent);
+
+    private int _contentLoadSerial;
+
+    protected override void OnHandlerChanged()
+    {
+        base.OnHandlerChanged();
+        if (Handler == null)
+        {
+            Interlocked.Increment(ref _contentLoadSerial);
+            if (ContentLoader != null) { HtmlContent = null; }
+        }
+        else { _ = LoadCellContentAsync(); }
+    }
+
+    private async Task LoadCellContentAsync()
+    {
+        var serial = Interlocked.Increment(ref _contentLoadSerial);
+        var loader = ContentLoader;
+        if (loader == null || Handler == null) { return; }
+        HtmlContent = null;
+        try
+        {
+            var content = await Task.Run(async () =>
+                serial == Volatile.Read(ref _contentLoadSerial) ? string.Join(" ", await loader()) : null);
+            MainThread.BeginInvokeOnMainThread(() =>
+            {
+                if (serial == Volatile.Read(ref _contentLoadSerial) && Handler != null && ReferenceEquals(loader, ContentLoader))
+                {
+                    HtmlContent = content;
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Commentary cell loading failed: {ex}");
+            MainThread.BeginInvokeOnMainThread(() =>
+            {
+                if (serial == Volatile.Read(ref _contentLoadSerial) && Handler != null)
+                {
+                    HtmlContent = "לא ניתן לטעון את הפירוש";
+                }
+            });
+        }
+    }
+
     /// <summary>
     /// Bindable property for the HTML content to display.
     /// </summary>
@@ -99,6 +171,28 @@ public class HtmlView : View
         propertyChanged: OnStyleChanged);
 
     /// <summary>
+    /// Bindable property for the normalized-text offset of a search match to
+    /// highlight and measure. -1 (default) means no match.
+    /// </summary>
+    public static readonly BindableProperty SearchMatchStartProperty = BindableProperty.Create(
+        nameof(SearchMatchStart),
+        typeof(int),
+        typeof(HtmlView),
+        -1,
+        propertyChanged: (bindable, _, _) => ((HtmlView)bindable).OnSearchMatchChanged());
+
+    /// <summary>
+    /// Bindable property for the normalized-text length of a search match.
+    /// Length 0 anchors a scroll target without a highlight (position only).
+    /// </summary>
+    public static readonly BindableProperty SearchMatchLengthProperty = BindableProperty.Create(
+        nameof(SearchMatchLength),
+        typeof(int),
+        typeof(HtmlView),
+        0,
+        propertyChanged: (bindable, _, _) => ((HtmlView)bindable).OnSearchMatchChanged());
+
+    /// <summary>
     /// Gets or sets the HTML content to display.
     /// </summary>
     public string? HtmlContent
@@ -180,6 +274,38 @@ public class HtmlView : View
     }
 
     /// <summary>
+    /// Gets or sets the normalized-text offset of the search match — the span
+    /// space produced by <see cref="Helpers.SearchText.Normalize"/> over the
+    /// rendered text. -1 means no match.
+    /// </summary>
+    public int SearchMatchStart
+    {
+        get => (int)GetValue(SearchMatchStartProperty);
+        set => SetValue(SearchMatchStartProperty, value);
+    }
+
+    /// <summary>
+    /// Gets or sets the normalized-text length of the search match. 0 still
+    /// anchors a scroll target at <see cref="SearchMatchStart"/>.
+    /// </summary>
+    public int SearchMatchLength
+    {
+        get => (int)GetValue(SearchMatchLengthProperty);
+        set => SetValue(SearchMatchLengthProperty, value);
+    }
+
+    /// <summary>True when a search match location is set on this view.</summary>
+    public bool HasSearchMatch => SearchMatchStart >= 0;
+
+    /// <summary>True when the platform can report the match's rendered line position.</summary>
+    public static bool CanMeasureSearchMatch =>
+#if ANDROID || IOS || MACCATALYST
+        true;
+#else
+        false;
+#endif
+
+    /// <summary>
     /// Gets the effective font size (base font size × font factor).
     /// </summary>
     public double EffectiveFontSize => FontSize * FontFactor;
@@ -220,13 +346,50 @@ public class HtmlView : View
     /// </summary>
     public event EventHandler<LinkTappedEventArgs>? LinkTapped;
 
-    private void OnHtmlContentChanged() => HtmlContentChanged?.Invoke(this, EventArgs.Empty);
+    private void OnHtmlContentChanged()
+    {
+        OnPropertyChanged(nameof(IsContentReady));
+        HtmlContentChanged?.Invoke(this, EventArgs.Empty);
+    }
     private void OnStyleChanged() => StyleChanged?.Invoke(this, EventArgs.Empty);
+
+    /// <summary>
+    /// Raises the LinkTapped event and returns the event args so platform
+    /// handlers can honor <see cref="LinkTappedEventArgs.Handled"/> — falling
+    /// back to opening the browser when no subscriber handled the tap.
+    /// </summary>
+    public LinkTappedEventArgs DispatchLinkTapped(string url)
+    {
+        var args = new LinkTappedEventArgs(url);
+        LinkTapped?.Invoke(this, args);
+        return args;
+    }
+
+    /// <summary>
+    /// <see cref="HasSearchMatch"/> is derived, so it has no property-changed
+    /// hook of its own; platform handlers re-highlight through the
+    /// PropertyMapper entries for the two match properties.
+    /// </summary>
+    private void OnSearchMatchChanged() => OnPropertyChanged(nameof(HasSearchMatch));
+
+    /// <summary>
+    /// Returns the Y offset (density-independent units) of the search match's
+    /// line inside the rendered text, or null when the platform view has no
+    /// layout yet or the platform cannot measure text positions.
+    /// </summary>
+    public double? GetSearchMatchTop()
+    {
+#if ANDROID || IOS || MACCATALYST
+        return (Handler as Handlers.HtmlViewHandler)?.GetSearchMatchTopDips();
+#else
+        return null;
+#endif
+    }
 
     /// <summary>
     /// Raises the LinkTapped event. Called by platform handlers.
     /// </summary>
-    public void RaiseLinkTapped(string url) => LinkTapped?.Invoke(this, new LinkTappedEventArgs(url));
+    public void RaiseLinkTapped(string url) => DispatchLinkTapped(url);
 
     /// <summary>
     /// Gets the CSS text-align value for the current TextAlignment.

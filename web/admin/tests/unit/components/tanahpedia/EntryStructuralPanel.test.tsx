@@ -153,6 +153,17 @@ describe("EntryStructuralPanel", () => {
 
 			expect(await screen.findByText("duplicate entity")).toBeInTheDocument();
 		});
+
+		it("stringifies a non-Error rejection from entity creation", async () => {
+			createEntityMock.mockRejectedValue("raw create failure");
+			renderPanel();
+			const name = await screen.findByLabelText("שם ראשוני");
+
+			fireEvent.change(name, { target: { value: "ערך" } });
+			fireEvent.click(screen.getByRole("button", { name: "צור וקשר לערך" }));
+
+			expect(await screen.findByText("raw create failure")).toBeInTheDocument();
+		});
 	});
 
 	describe("linked entity cards", () => {
@@ -303,6 +314,95 @@ describe("EntryStructuralPanel", () => {
 			});
 		});
 
+		it("renders empty fields for a person and place row with null details", async () => {
+			getEntryStructuralContextMock.mockResolvedValue({
+				entryId: "entry-1",
+				linkedEntities: [
+					{
+						linkId: "person-link",
+						entityId: "person-entity",
+						entityType: "PERSON",
+						displayName: "אלמני",
+						person: {
+							personId: "person-id",
+							mainName: null,
+							mainNameRowId: null,
+							sex: null,
+							sexRowId: null,
+						},
+						place: null,
+					},
+					{
+						linkId: "place-link",
+						entityId: "place-entity",
+						entityType: "PLACE",
+						displayName: "מקום",
+						person: null,
+						place: {
+							placeId: "place-id",
+							identifications: [
+								{
+									id: "",
+									modern_name: null,
+									latitude: null,
+									longitude: null,
+								},
+							],
+						},
+					},
+				],
+			});
+			renderPanel();
+
+			const personId = await screen.findByText("person-entity");
+			const personCard = personId.closest("div.rounded-lg") as HTMLElement;
+			const personControls = within(personCard);
+			expect(personControls.getByLabelText(/person_name/)).toHaveValue("");
+			expect(personControls.getByLabelText(/person_sex/)).toHaveValue("");
+			expect(
+				personControls.getByRole("button", { name: "שמור מין" }),
+			).toBeDisabled();
+
+			const placeId = await screen.findByText("place-entity");
+			const placeCard = placeId.closest("div.rounded-lg") as HTMLElement;
+			const placeControls = within(placeCard);
+			expect(placeControls.getByPlaceholderText("שם מודרני")).toHaveValue("");
+			// number inputs report valueAsNumber: empty is null
+			expect(placeControls.getByPlaceholderText("latitude")).toHaveValue(null);
+			expect(placeControls.getByPlaceholderText("longitude")).toHaveValue(null);
+		});
+
+		it("removes an identification row before saving", async () => {
+			renderPanel();
+			const id = await screen.findByText("place-entity");
+			const card = id.closest("div.rounded-lg");
+			if (!card) throw new Error("Expected place card");
+			const controls = within(card as HTMLElement);
+
+			fireEvent.click(controls.getByRole("button", { name: "+ שורה" }));
+			expect(controls.getAllByPlaceholderText("שם מודרני")).toHaveLength(2);
+
+			fireEvent.click(controls.getAllByRole("button", { name: "מחק" })[1]);
+			expect(controls.getAllByPlaceholderText("שם מודרני")).toHaveLength(1);
+
+			fireEvent.click(controls.getByRole("button", { name: "שמור זיהויים" }));
+			await waitFor(() =>
+				expect(replacePlaceIdentificationsMock).toHaveBeenCalledWith({
+					data: {
+						placeId: "place-id",
+						rows: [
+							{
+								id: "identification-id",
+								modern_name: "Jerusalem",
+								latitude: 31.77,
+								longitude: 35.23,
+							},
+						],
+					},
+				}),
+			);
+		});
+
 		it("edits, removes, and unlinks a generic entity", async () => {
 			renderPanel();
 			const id = await screen.findByText("nation-entity");
@@ -322,6 +422,25 @@ describe("EntryStructuralPanel", () => {
 				});
 				expect(removeEntityMock).toHaveBeenCalledWith({ data: "nation-link" });
 			});
+		});
+
+		it("keeps the link when the unlink confirmation is cancelled", async () => {
+			vi.stubGlobal(
+				"confirm",
+				vi.fn(() => false),
+			);
+			renderPanel();
+			const id = await screen.findByText("person-entity");
+			const card = id.closest("div.rounded-lg");
+			if (!card) throw new Error("Expected person card");
+
+			fireEvent.click(
+				within(card as HTMLElement).getByRole("button", {
+					name: "הסר קישור",
+				}),
+			);
+
+			expect(removeEntityMock).not.toHaveBeenCalled();
 		});
 	});
 
@@ -407,6 +526,8 @@ describe("EntryStructuralPanel", () => {
 			"תאריך עברי לא תקין",
 		);
 		expect(input).toHaveValue("24480931");
-		expect(screen.getByRole("button", { name: "שמור תאריך אמרה" })).toBeEnabled();
+		expect(
+			screen.getByRole("button", { name: "שמור תאריך אמרה" }),
+		).toBeEnabled();
 	});
 });

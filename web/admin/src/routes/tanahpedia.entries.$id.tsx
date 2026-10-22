@@ -3,9 +3,15 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import { AutoSaveIndicator } from "~/components/AutoSaveIndicator";
 import { searchEntriesForLink } from "~/components/editor/entryLinkSearch";
+import { EntryHistoryPanel } from "~/components/tanahpedia/EntryHistoryPanel";
 import { EntryStructuralPanel } from "~/components/tanahpedia/EntryStructuralPanel";
 import { TanahpediaLlmAssistantPanel } from "~/components/tanahpedia/TanahpediaLlmAssistantPanel";
 import { WysiwygEditor } from "~/components/WysiwygEditor";
+import {
+	isRevisionConflictError,
+	REVISION_SOURCE_ADMIN,
+	REVISION_SOURCE_LLM,
+} from "~/lib/tanahpedia/revisions-shared";
 import {
 	createEntry,
 	deleteEntry,
@@ -38,7 +44,13 @@ function EntryEditPage() {
 	});
 	const [hasChanges, setHasChanges] = useState(false);
 	const [lastSaved, setLastSaved] = useState<Date | null>(null);
-	const [tab, setTab] = useState<"content" | "metadata">("content");
+	const [tab, setTab] = useState<"content" | "metadata" | "history">("content");
+	// The APPLIED head revision this editing session is based on; the server
+	// rejects saves whose base is stale (another session moved the head).
+	const [baseRevisionId, setBaseRevisionId] = useState<string | null>(null);
+	const [saveSource, setSaveSource] = useState<string>(REVISION_SOURCE_ADMIN);
+	const [pendingNotes, setPendingNotes] = useState<string | null>(null);
+	const [conflictError, setConflictError] = useState(false);
 
 	const { data: llmStatus } = useQuery({
 		queryKey: ["tanahpedia-llm-status"],
@@ -59,34 +71,60 @@ function EntryEditPage() {
 				title: entry.title,
 				content: entry.content ?? "",
 			});
+			setBaseRevisionId(entry.currentRevisionId ?? null);
+			setConflictError(false);
 		}
 	}, [entry]);
 
 	const saveMutation = useMutation({
-		mutationFn: async (data: EntryFormData) => {
+		mutationFn: async ({
+			form,
+			baseRevisionId,
+			source,
+			notes,
+		}: {
+			form: EntryFormData;
+			baseRevisionId: string | null;
+			source: string;
+			notes: string | null;
+		}) => {
 			if (isNew) {
 				return createEntry({
 					data: {
 						id: crypto.randomUUID(),
-						unique_name: data.unique_name,
-						title: data.title,
-						content: data.content,
+						unique_name: form.unique_name,
+						title: form.title,
+						content: form.content,
+						source,
+						notes,
 					},
 				});
 			}
 			return updateEntry({
 				data: {
 					id,
-					unique_name: data.unique_name,
-					title: data.title,
-					content: data.content,
+					unique_name: form.unique_name,
+					title: form.title,
+					content: form.content,
+					baseRevisionId,
+					source,
+					notes,
 				},
 			});
 		},
 		onSuccess: (savedEntry) => {
 			queryClient.invalidateQueries({ queryKey: ["tanahpedia-admin-entries"] });
+			void queryClient.invalidateQueries({
+				queryKey: ["tanahpedia-entry-revisions", savedEntry?.id ?? id],
+			});
 			setLastSaved(new Date());
 			setHasChanges(false);
+			setConflictError(false);
+			setSaveSource(REVISION_SOURCE_ADMIN);
+			setPendingNotes(null);
+			if (savedEntry?.headRevisionId !== undefined) {
+				setBaseRevisionId(savedEntry.headRevisionId);
+			}
 			if (isNew && savedEntry?.id) {
 				navigate({
 					to: "/tanahpedia/entries/$id",
@@ -94,6 +132,9 @@ function EntryEditPage() {
 					replace: true,
 				});
 			}
+		},
+		onError: (error) => {
+			if (isRevisionConflictError(error)) setConflictError(true);
 		},
 	});
 
@@ -109,6 +150,8 @@ function EntryEditPage() {
 		<K extends keyof EntryFormData>(field: K, value: EntryFormData[K]) => {
 			setFormData((prev) => ({ ...prev, [field]: value }));
 			setHasChanges(true);
+			setSaveSource(REVISION_SOURCE_ADMIN);
+			setPendingNotes(null);
 		},
 		[],
 	);
@@ -116,15 +159,32 @@ function EntryEditPage() {
 	const handleContentChange = useCallback((content: string) => {
 		setFormData((prev) => ({ ...prev, content }));
 		setHasChanges(true);
+		setSaveSource(REVISION_SOURCE_ADMIN);
+		setPendingNotes(null);
 	}, []);
 
 	useEffect(() => {
 		if (!hasChanges || saveMutation.isPending) return;
 		const timer = setTimeout(() => {
-			if (formData.title.trim()) saveMutation.mutate(formData);
+			if (formData.title.trim()) {
+				saveMutation.mutate({
+					form: formData,
+					baseRevisionId,
+					source: saveSource,
+					notes: pendingNotes,
+				});
+			}
 		}, 2000);
 		return () => clearTimeout(timer);
-	}, [formData, hasChanges, saveMutation.isPending, saveMutation]);
+	}, [
+		formData,
+		hasChanges,
+		saveMutation.isPending,
+		saveMutation,
+		baseRevisionId,
+		saveSource,
+		pendingNotes,
+	]);
 
 	if (isLoading) {
 		return (
@@ -170,12 +230,34 @@ function EntryEditPage() {
 				</div>
 			</div>
 
+			{conflictError && (
+				<div className="rounded-lg border border-red-300 bg-red-50 p-4 flex flex-wrap items-center justify-between gap-3">
+					<p className="text-sm text-red-800">
+						הערך נשמר על ידי סשן אחר מאז שהטענת אותו - השמירה נדחתה כדי לא לדרוס
+						שינויים. טען מחדש את הערך כדי לראות את הגרסה העדכנית (השינויים הלא
+						שמורים שלך ייאבדו).
+					</p>
+					<button
+						type="button"
+						onClick={() =>
+							void queryClient.invalidateQueries({
+								queryKey: ["tanahpedia-entry", id],
+							})
+						}
+						className="px-4 py-2 text-sm font-medium rounded-lg bg-red-600 text-white hover:bg-red-700"
+					>
+						טען מחדש
+					</button>
+				</div>
+			)}
+
 			<div className="flex gap-1 border-b border-gray-200" role="tablist">
 				{(
 					[
 						["content", "תוכן"],
 						["metadata", "מטא-דאטה"],
-					] as const
+						...(isNew ? [] : [["history", "היסטוריה"] as [typeof tab, string]]),
+					] as [typeof tab, string][]
 				).map(([key, label]) => (
 					<button
 						key={key}
@@ -200,9 +282,11 @@ function EntryEditPage() {
 						<TanahpediaLlmAssistantPanel
 							entryId={id}
 							formData={formData}
-							onApplyEntryFields={(patch) => {
+							onApplyEntryFields={(patch, meta) => {
 								setFormData((prev) => ({ ...prev, ...patch }));
 								setHasChanges(true);
+								setSaveSource(REVISION_SOURCE_LLM);
+								setPendingNotes(meta?.notesForEditor ?? null);
 							}}
 						/>
 					)}
@@ -215,6 +299,20 @@ function EntryEditPage() {
 						<EntryStructuralPanel entryId={id} />
 					)}
 				</>
+			)}
+
+			{tab === "history" && !isNew && (
+				<EntryHistoryPanel
+					entryId={id}
+					currentContent={entry?.content ?? formData.content}
+					baseRevisionId={baseRevisionId}
+					onEntryChanged={() => {
+						setHasChanges(false);
+						void queryClient.invalidateQueries({
+							queryKey: ["tanahpedia-entry", id],
+						});
+					}}
+				/>
 			)}
 
 			<form className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -283,7 +381,14 @@ function EntryEditPage() {
 					</Link>
 					<button
 						type="button"
-						onClick={() => saveMutation.mutate(formData)}
+						onClick={() =>
+							saveMutation.mutate({
+								form: formData,
+								baseRevisionId,
+								source: saveSource,
+								notes: pendingNotes,
+							})
+						}
 						disabled={saveMutation.isPending || !formData.title.trim()}
 						className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-medium shadow-sm hover:shadow-md"
 					>

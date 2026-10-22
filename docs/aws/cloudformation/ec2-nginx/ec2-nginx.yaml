@@ -35,7 +35,7 @@ Description: |
   │                                                                         │
   │  nginx config: /etc/nginx/conf.d/router.conf                            │
   │  SSL certs: /etc/letsencrypt/live/xn--febl3a.{co.il,com}/               │
-  │    (includes admin.xn--febl3a.co.il and admin.xn--febl3a.com)          │
+  │    (covers admin/api/www subdomains and both bare domains)            │
   │                                                                         │
   │  Uses VPC DNS (172.31.0.2) to resolve:                                  │
   │  - website.bible-on-site.local → ECS task IPs                           │
@@ -153,10 +153,11 @@ Metadata:
     ConfigPath: /etc/nginx/conf.d/router.conf
     ConfigSource: See appendix/ec2-nginx/router/router.conf
     DefaultSite: /etc/nginx/sites-available/default
-    DefaultSiteSource: Catch-all for unknown subdomains → redirects to root domain /404
+    DefaultSiteSource: Catch-all for unknown subdomains → redirects to root domain /404 (www is handled by explicit server blocks in router.conf, not the catch-all)
     Features:
       - SSL termination for תנך.co.il, תנך.com, and admin subdomains (punycode: xn--febl3a)
       - HTTP to HTTPS redirect
+      - www → canonical bare host redirect on HTTP and HTTPS (www.תנך.co.il → תנך.co.il, www.תנך.com → תנך.com), preserving path and query
       - Reverse proxy to ECS services via Cloud Map DNS
       - VPC DNS resolver (172.31.0.2) for service discovery
       - Static file serving from /var/www/html/

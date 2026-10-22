@@ -16,11 +16,11 @@ describe("AppSection", () => {
 	it("renders section heading and subheading", () => {
 		render(<AppSection />);
 		expect(
-			screen.getByRole("heading", { level: 1, name: /יישֹוּמוֹן תנ"ך על הפרק/ }),
+			screen.getByRole("heading", { level: 2, name: /יישֹוּמוֹן תנ"ך על הפרק/ }),
 		).toBeInTheDocument();
 		expect(
 			screen.getByRole("heading", {
-				level: 2,
+				level: 3,
 				name: /הורידו את האפליקציה/,
 			}),
 		).toBeInTheDocument();

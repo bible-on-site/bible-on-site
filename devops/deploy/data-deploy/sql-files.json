@@ -1,8 +1,12 @@
 [
 	"tanah_static_structure.sql",
 	"tanah_sefarim_and_perakim_data.sql",
+	"tanah_perek_pasuk_count_upgrade.sql",
+	"tanah_perek_pasuk_count_data.sql",
 	"perushim_structure.sql",
 	"perushim_data.sql",
+	"tanah_daily_bulletin_upgrade.sql",
+	"tanah_article_covering_source_upgrade.sql",
 	"tanahpedia_alter_source_citation.sql",
 	"tanahpedia_alter_person_source_citation.sql",
 	"tanahpedia_alter_child_birth_order.sql",

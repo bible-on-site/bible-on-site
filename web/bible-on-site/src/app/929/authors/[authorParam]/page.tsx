@@ -1,6 +1,5 @@
 import { unstable_cache } from "next/cache";
 import Image from "next/image";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getPerekByPerekId } from "../../../../data/perek-dto";
 import type { AuthorDetails } from "../../../../lib/authors";
@@ -13,6 +12,7 @@ import {
 } from "../../../../lib/authors";
 import { buildAuthorGraph } from "../../../../lib/seo/core-jsonld";
 import { JsonLd } from "../../../components/JsonLd";
+import { AuthorArticlesTable } from "./AuthorArticlesTable";
 import styles from "./page.module.css";
 
 /**
@@ -105,7 +105,17 @@ export default async function AuthorPage({
 		notFound();
 	}
 
-	const articles = await getCachedAuthorArticles(author.id);
+	// Edge rows may reference perakim outside the canon (e.g. non-distributable
+	// test data) — they cannot render a source link, so skip them instead of
+	// letting getPerekByPerekId fail the whole prerender.
+	const articles = (await getCachedAuthorArticles(author.id)).filter(
+		({ perekId }) =>
+			Number.isInteger(perekId) && perekId >= 1 && perekId <= 929,
+	);
+	const rows = articles.map((article) => {
+		const perek = getPerekByPerekId(article.perekId);
+		return { ...article, sefer: perek.sefer, source: perek.source };
+	});
 
 	return (
 		<div className={styles.authorPage}>
@@ -151,22 +161,7 @@ export default async function AuthorPage({
 						<h2 className={styles.sectionTitle}>מאמרים ({articles.length})</h2>
 					</header>
 
-					<div className={styles.articlesList}>
-						{articles.map((article) => (
-							<Link
-								key={article.id}
-								href={`/929/${article.perekId}/${article.id}`}
-								className={styles.articleCard}
-							>
-								<h3 className={styles.articleName}>{article.name}</h3>
-								<div className={styles.articleMeta}>
-									<span className={styles.perekLink}>
-										{getPerekByPerekId(article.perekId).source}
-									</span>
-								</div>
-							</Link>
-						))}
-					</div>
+					<AuthorArticlesTable rows={rows} />
 				</section>
 			)}
 

@@ -1,4 +1,5 @@
 import type { Editor } from "@tiptap/core";
+import { NodeSelection } from "@tiptap/pm/state";
 import { describe, expect, it, vi } from "vitest";
 import {
 	canRemoveFootnote,
@@ -100,6 +101,19 @@ describe("footnoteReferenceRange", () => {
 		const { editor } = fakeEditor({ nodeBefore: node("text") });
 		expect(footnoteReferenceRange(editor)).toBeNull();
 	});
+
+	it("uses the node selection's own range when a reference is selected", () => {
+		const { editor } = fakeEditor();
+		const selection = Object.create(NodeSelection.prototype);
+		Object.defineProperties(selection, {
+			node: { value: node("footnoteReference") },
+			from: { value: 3 },
+			to: { value: 4 },
+		});
+		(editor.state as { selection: unknown }).selection = selection;
+
+		expect(footnoteReferenceRange(editor)).toEqual({ from: 3, to: 4 });
+	});
 });
 
 describe("footnoteIdAtSelection", () => {
@@ -175,6 +189,24 @@ describe("removeFootnoteAtSelection", () => {
 		expect(chain.deleteRange).not.toHaveBeenCalled();
 	});
 
+	it("stops scanning the document once the reference range is found", () => {
+		const { editor, chain } = fakeEditor({
+			ancestors: ["footnotes", "footnote"],
+			docNodes: [
+				{ node: node("footnoteReference", { "data-id": "other" }), pos: 1 },
+				{ node: node("footnoteReference", { "data-id": "abc" }), pos: 12 },
+				{ node: node("paragraph"), pos: 20 },
+			],
+		});
+		editor.state.selection.$from.node = ((depth: number) =>
+			depth === 2
+				? node("footnote", { "data-id": "abc" })
+				: node("footnotes")) as never;
+
+		expect(removeFootnoteAtSelection(editor)).toBe(true);
+		expect(chain.deleteRange).toHaveBeenCalledWith({ from: 12, to: 13 });
+	});
+
 	it("refuses to act on an unfocused editor", () => {
 		const { editor, chain } = fakeEditor({
 			ancestors: ["footnotes", "footnote"],
@@ -199,6 +231,23 @@ describe("insertFootnoteAtSelection", () => {
 		});
 
 		expect(insertFootnoteAtSelection(editor)).toBe(true);
+		expect(commands.focusFootnote).toHaveBeenCalledWith("new");
+	});
+
+	it("ignores references that predate the insert when locating the new note", () => {
+		const created = node("footnoteReference", { "data-id": "new" });
+		const state: Array<{ node: FakeNode; pos: number }> = [
+			{ node: node("paragraph"), pos: 0 },
+			{ node: node("footnoteReference", { "data-id": "old" }), pos: 1 },
+		];
+		const { editor, chain, commands } = fakeEditor({ docNodes: state });
+		chain.run.mockImplementation(() => {
+			state.push({ node: created, pos: 3 });
+			return true;
+		});
+
+		expect(insertFootnoteAtSelection(editor)).toBe(true);
+		expect(commands.focusFootnote).toHaveBeenCalledTimes(1);
 		expect(commands.focusFootnote).toHaveBeenCalledWith("new");
 	});
 

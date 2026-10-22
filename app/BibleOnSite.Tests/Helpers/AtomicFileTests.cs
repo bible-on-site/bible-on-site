@@ -25,19 +25,47 @@ public class AtomicFileTests
         var destination = Path.Combine(storage.Root, "data.sqlite");
         if (exists)
         {
-            await File.WriteAllTextAsync(destination, "original");
+            await File.WriteAllTextAsync(destination, "original", TestContext.Current.CancellationToken);
         }
         await using var stream = new BrokenReadStream();
         await FluentActions.Awaiting(() => AtomicFile.CopyAsync(stream, destination))
             .Should().ThrowAsync<IOException>().WithMessage("interrupted transfer");
         if (exists)
         {
-            (await File.ReadAllTextAsync(destination)).Should().Be("original");
+            (await File.ReadAllTextAsync(destination, TestContext.Current.CancellationToken)).Should().Be("original");
         }
         else
         {
             File.Exists(destination).Should().BeFalse();
         }
+        Directory.GetFiles(storage.Root, "*.tmp").Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Move_PublishesTheCompletePayloadAndConsumesTheStagedFile()
+    {
+        await using var storage = new TestStorage();
+        var source = Path.Join(storage.Root, "delivered.sqlite");
+        var destination = Path.Join(storage.Root, "cache.sqlite");
+        await File.WriteAllTextAsync(source, "complete", TestContext.Current.CancellationToken);
+        await File.WriteAllTextAsync(destination, "obsolete", TestContext.Current.CancellationToken);
+        AtomicFile.Move(source, destination);
+        (await File.ReadAllTextAsync(destination, TestContext.Current.CancellationToken)).Should().Be("complete");
+        File.Exists(source).Should().BeFalse();
+        Directory.GetFiles(storage.Root, "*.tmp").Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Move_WhenPublicationFails_RestoresTheDeliveredPayload()
+    {
+        await using var storage = new TestStorage();
+        var source = Path.Join(storage.Root, "delivered.sqlite");
+        var destination = Path.Join(storage.Root, "occupied");
+        await File.WriteAllTextAsync(source, "complete", TestContext.Current.CancellationToken);
+        Directory.CreateDirectory(destination);
+        var error = Record.Exception(() => AtomicFile.Move(source, destination));
+        Assert.True(error is IOException or UnauthorizedAccessException);
+        (await File.ReadAllTextAsync(source, TestContext.Current.CancellationToken)).Should().Be("complete");
         Directory.GetFiles(storage.Root, "*.tmp").Should().BeEmpty();
     }
 

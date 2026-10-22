@@ -22,7 +22,7 @@
   width: 100%;
   z-index: 2;
 }
-.alHaperekHeadlines h1 {
+.alHaperekHeadlines h2 {
   display: grid;
   letter-spacing: 0.25em;
   justify-items: center;
@@ -32,6 +32,15 @@
   margin: 0.5em 0;
 }
 .page section > header > h2 {
+  font-size: 1.8em;
+  margin: 0.5em 0;
+}
+.page section > header > h3 {
+  font-size: 1.4em;
+  margin: 0.3em 0;
+}
+/* Hero subtitle stays an h2 (not demoted); keep its former size. */
+.page .sectionHeader > h2 {
   font-size: 1.4em;
   margin: 0.3em 0;
 }
@@ -142,13 +151,13 @@
   max-width: 1em;
 }
 
-.alHaperekHeadlines h1 a {
+.alHaperekHeadlines h2 a {
   color: white;
   display: contents;
   line-height: 1.875em;
   text-decoration: none;
 }
-.alHaperekHeadlines h1 i {
+.alHaperekHeadlines h2 i {
   font-size: 2em;
 }
 .alHaperekHeadlines p {
@@ -201,6 +210,8 @@
 .headlineTitle {
   font-size: 1.25rem;
   font-weight: bold;
+  /* match the UA margin the h1 had at this sectioning depth (article in nested sections) */
+  margin-block: 1.33em;
 }
 
 /* AlHaperek bottom divider */
@@ -244,5 +255,15 @@
 @media screen and (min-width: 2560px) {
   .alHaperekDivider {
     background-image: url(/root/al-haperek-devider-xl.svg);
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .page input + label {
+    color: #7eb0ff;
+  }
+
+  .page input + label::after {
+    background: #7eb0ff;
   }
 }

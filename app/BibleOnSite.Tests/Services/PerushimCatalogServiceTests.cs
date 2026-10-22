@@ -18,12 +18,16 @@ public sealed class PerushimCatalogServiceTests : IDisposable
     public void Dispose()
     {
         foreach (var connection in _connections)
+        {
             connection.CloseAsync().GetAwaiter().GetResult();
+        }
 
         try
         {
             if (Directory.Exists(_tempRoot))
+            {
                 Directory.Delete(_tempRoot, true);
+            }
         }
         catch (DirectoryNotFoundException)
         {
@@ -94,6 +98,123 @@ public sealed class PerushimCatalogServiceTests : IDisposable
         var perushim = await service.GetPerushimByIdsAsync([]);
 
         perushim.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetPerushimByIdsAsync_AcrossManyCalls_QueriesTheCatalogOnce()
+    {
+        var connection = await CreateCatalogConnectionAsync(
+            (1, "Targum", 10),
+            (2, "Rashi", 20));
+        var queries = TraceQueries(connection);
+        var service = CreateService(connection: connection);
+
+        for (var i = 0; i < 20; i++)
+        {
+            (await service.GetPerushimByIdsAsync([1, 2])).Keys.Should().BeEquivalentTo([1, 2]);
+        }
+        (await service.GetAllPerushimAsync()).Select(p => p.Id).Should().Equal(1, 2);
+
+        queries.Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task GetPerushimByIdsAsync_WithOnlyUnknownIds_ReturnsEmpty()
+    {
+        var connection = await CreateCatalogConnectionAsync((1, "Targum", 10));
+        var service = CreateService(connection: connection);
+
+        var perushim = await service.GetPerushimByIdsAsync([98, 99]);
+
+        perushim.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetPerushimByIdsAsync_WithNoIds_DoesNotLoadTheCatalog()
+    {
+        var connection = await CreateCatalogConnectionAsync((1, "Targum", 10));
+        var queries = TraceQueries(connection);
+        var service = CreateService(connection: connection);
+
+        (await service.GetPerushimByIdsAsync([])).Should().BeEmpty();
+
+        queries.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetPerushimByIdsAsync_AfterTheConnectionIsReopened_ReadsTheNewCatalog()
+    {
+        var first = await CreateCatalogConnectionAsync((1, "Targum", 10));
+        var second = await CreateCatalogConnectionAsync((1, "Onkelos", 5));
+        var service = CreateService(connection: first);
+        (await service.GetPerushimByIdsAsync([1]))[1].Name.Should().Be("Targum");
+
+        SetPrivateField(service, "_connection", second);
+
+        (await service.GetPerushimByIdsAsync([1]))[1].Name.Should().Be("Onkelos");
+        (await service.GetAllPerushimAsync()).Single().Priority.Should().Be(5);
+    }
+
+    [Fact]
+    public async Task GetPerushimByIdsAsync_ConcurrentFirstCalls_ShareOneLoad()
+    {
+        var connection = await CreateCatalogConnectionAsync(
+            (1, "Targum", 10),
+            (2, "Rashi", 20));
+        var queries = TraceQueries(connection);
+        var service = CreateService(connection: connection);
+
+        var results = await Task.WhenAll(Enumerable.Range(0, 16)
+            .Select(_ => Task.Run(() => service.GetPerushimByIdsAsync([2]), TestContext.Current.CancellationToken)));
+
+        results.Should().AllSatisfy(r => r[2].Name.Should().Be("Rashi"));
+        queries.Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task GetPerushimByIdsAsync_AfterAFailedLoad_RetriesOnTheNextCall()
+    {
+        var connection = await CreateCatalogConnectionAsync((1, "Targum", 10));
+        await connection.ExecuteAsync("ALTER TABLE perush RENAME TO perush_pending");
+        var service = CreateService(connection: connection);
+
+        var failed = () => service.GetPerushimByIdsAsync([1]);
+        await failed.Should().ThrowAsync<SQLiteException>();
+        await connection.ExecuteAsync("ALTER TABLE perush_pending RENAME TO perush");
+
+        (await service.GetPerushimByIdsAsync([1]))[1].Name.Should().Be("Targum");
+    }
+
+    [Fact]
+    public async Task GetPerushimByIdsAsync_WhenACallerEditsAResult_LaterReadsAreUnaffected()
+    {
+        var connection = await CreateCatalogConnectionAsync((1, "Targum", 10));
+        var service = CreateService(connection: connection);
+
+        (await service.GetPerushimByIdsAsync([1]))[1].Name = "Temporary";
+        (await service.GetAllPerushimAsync()).Single().Priority = 99;
+
+        var perush = (await service.GetPerushimByIdsAsync([1]))[1];
+        perush.Name.Should().Be("Targum");
+        perush.Priority.Should().Be(10);
+    }
+
+    private static List<string> TraceQueries(SQLiteAsyncConnection connection)
+    {
+        var queries = new List<string>();
+        var sqlite = connection.GetConnection();
+        sqlite.Tracer = line =>
+        {
+            if (line.Contains("FROM perush", StringComparison.Ordinal))
+            {
+                lock (queries)
+                {
+                    queries.Add(line);
+                }
+            }
+        };
+        sqlite.Trace = true;
+        return queries;
     }
 
     private async Task<SQLiteAsyncConnection> CreateCatalogConnectionAsync(

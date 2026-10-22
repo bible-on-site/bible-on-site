@@ -1,0 +1,13 @@
+/* Set the nav background color for the פרשה landing — the same
+   shared top-nav treatment the other website routes opt into (issue #2295).
+   Unit pages already opt in via .perek-layout (929/[number]/layout.css). */
+body:has(.parasha-layout) .top-nav {
+  background-color: #1552ac;
+}
+
+/* Full page width like the other layout wrappers */
+.parasha-layout {
+  overflow-x: hidden;
+  width: 100%;
+  max-width: 100%;
+}

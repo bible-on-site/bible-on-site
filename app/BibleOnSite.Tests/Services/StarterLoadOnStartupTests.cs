@@ -103,7 +103,9 @@ public class StarterLoadOnStartupTests
             null);
 
         if (constructor == null)
+        {
             throw new InvalidOperationException("Could not find private constructor for StarterService");
+        }
 
         return (StarterService)constructor.Invoke(null);
     }

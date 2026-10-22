@@ -9,7 +9,13 @@
  */
 
 import { execSync, spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+	createWriteStream,
+	existsSync,
+	mkdirSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -223,11 +229,25 @@ async function main() {
 	// on some routes; coverage also requires dev (instrumentation). No pre-build needed.
 	log(`[Server] Starting Next.js server: npx next dev -p 3001`);
 
+	// Tee the dev server's stdout/stderr into the artifact so CI failures keep
+	// the `⨯` lines Playwright's webServer pipe would otherwise discard (#2005).
+	const serverLogPath = path.resolve(logDir, "server.log");
+	const serverLog = createWriteStream(serverLogPath, { flags: "w" });
+
 	const server = spawn("npx", ["next", "dev", "-p", "3001"], {
 		cwd: __dirname,
-		stdio: "inherit",
+		stdio: ["inherit", "pipe", "pipe"],
 		shell: true,
 		env: process.env,
+	});
+
+	server.stdout?.on("data", (chunk: Buffer) => {
+		process.stdout.write(chunk);
+		serverLog.write(chunk);
+	});
+	server.stderr?.on("data", (chunk: Buffer) => {
+		process.stderr.write(chunk);
+		serverLog.write(chunk);
 	});
 
 	server.on("error", (err) => {
@@ -236,6 +256,7 @@ async function main() {
 	});
 
 	server.on("close", (code) => {
+		serverLog.end();
 		log(`[Server] Process exited with code ${code}`);
 		process.exit(code ?? 0);
 	});

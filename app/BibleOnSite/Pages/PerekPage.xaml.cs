@@ -5,6 +5,7 @@ using BibleOnSite.Helpers;
 using BibleOnSite.Models;
 using BibleOnSite.Services;
 using BibleOnSite.ViewModels;
+using Microsoft.Maui.Layouts;
 #if IOS
 using Microsoft.Maui.Controls.PlatformConfiguration.iOSSpecific;
 #endif
@@ -12,10 +13,23 @@ using Microsoft.Maui.Controls.PlatformConfiguration.iOSSpecific;
 /// <summary>
 /// Page for displaying a Perek (chapter) with its pasukim (verses).
 /// </summary>
-public partial class PerekPage : ContentPage
+public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScreenName
 {
     private readonly PerekViewModel _viewModel;
     private bool _isLoading;
+
+    // Resolved once for the fresh load; a retry must aim at the same perek
+    // even though GetInitialPerekId consumes its one-shot request sources.
+    // Cleared by ApplyQueryAttributes when a genuinely new navigation request
+    // arrives, so the new target supersedes a previously failed one.
+    private int? _initialPerekId;
+
+    // Generation counter: each app-link request supersedes any earlier one
+    // still waiting for the initial load.
+    private long _appLinkGeneration;
+
+    // Article from a cold-start app link, opened after the initial load.
+    private int? _pendingArticleId;
     private DateTime _lastLongPressTime = DateTime.MinValue;
     private int _pressedPasukNum = -1;
     private CancellationTokenSource? _longPressTokenSource;
@@ -37,9 +51,11 @@ public partial class PerekPage : ContentPage
     private static DateTime _lastScrollTime = DateTime.MinValue;
     private const int ScrollCooldownMs = 500; // Don't allow long-press within 500ms of scroll
 
-#if IOS
-    private CancellationTokenSource? _scrollRefreshCts;
-#endif
+    // Tracks the carousel width so rotation/resize can be detected in SizeChanged.
+    private double _carouselWidth = -1;
+
+    // A resize observed while the initial load was running; consumed when it ends.
+    private bool _pendingCarouselResnap;
 
     /// <summary>
     /// Returns true if the user is currently scrolling or just finished scrolling.
@@ -54,24 +70,76 @@ public partial class PerekPage : ContentPage
 
     public PerekPage()
     {
+        DebugLog.Write("[Startup] PerekPage InitializeComponent");
         InitializeComponent();
+#if IOS
+        ConfigureReaderSafeArea();
+#endif
+        DebugLog.Write("[Startup] PerekPage binding context");
         _viewModel = new PerekViewModel();
         BindingContext = _viewModel;
+        DebugLog.Write("[Startup] PerekPage resources and navigation");
         ForwardSelectedArticleIdChanged();
         SetupFontSizeResources();
         SetupCarouselNavigation();
+        SetupCircularMenuLayout();
         SetupExitButtonDragHandler();
+        SubscribeAppLinks();
+        SubscribePerushimSearch();
+        SubscribeNotesMaterialization();
+        DebugLog.Write("[Startup] PerekPage constructed");
     }
 
     public PerekPage(PerekViewModel viewModel)
     {
         InitializeComponent();
+#if IOS
+        ConfigureReaderSafeArea();
+#endif
         _viewModel = viewModel;
         BindingContext = _viewModel;
         ForwardSelectedArticleIdChanged();
         SetupFontSizeResources();
         SetupCarouselNavigation();
+        SetupCircularMenuLayout();
         SetupExitButtonDragHandler();
+        SubscribeAppLinks();
+        SubscribePerushimSearch();
+        SubscribeNotesMaterialization();
+        NormalNavigationBar.NavigationInterceptor = OnFocusedPasukNavigationIntercepted;
+    }
+
+    /// <summary>
+    /// A reader opened while the first-launch notes pack still materializes
+    /// skips awaiting it (#2430) — when the copy completes the service raises
+    /// OperationCompleted off the UI thread, so re-check availability here.
+    /// </summary>
+    private void SubscribeNotesMaterialization()
+    {
+        PerushimNotesService.Instance.OperationCompleted += OnNotesOperationCompleted;
+        Unloaded += (_, _) => PerushimNotesService.Instance.OperationCompleted -= OnNotesOperationCompleted;
+    }
+
+    private bool _notesRefreshQueued;
+
+    private void OnNotesOperationCompleted()
+    {
+        // InitializeAsync releases the operation lock, which re-fires this
+        // event — and the refresh calls InitializeAsync itself. Without this
+        // guard every refresh queues another dispatcher turn forever, the UI
+        // thread never idles, and accessibility queries starve (#2430).
+        if (_notesRefreshQueued ||
+            (PerushimNotesService.Instance.IsAvailable == _viewModel.PerushimNotesAvailable
+                && !_viewModel.PerushimNotesPending))
+        {
+            return;
+        }
+        _notesRefreshQueued = true;
+        _ = Dispatcher.DispatchAsync(async () =>
+        {
+            try { await RefreshPerushimIfAvailabilityChangedAsync(); }
+            finally { _notesRefreshQueued = false; }
+        });
     }
 
     /// <summary>
@@ -82,9 +150,34 @@ public partial class PerekPage : ContentPage
     /// </summary>
     private void SetupCarouselNavigation()
     {
+#if ANDROID || IOS
+        if (OperatingSystem.IsAndroid() || OperatingSystem.IsIOS())
+        {
+            var statusBar = new CommunityToolkit.Maui.Behaviors.StatusBarBehavior
+            {
+                ApplyOn = CommunityToolkit.Maui.Behaviors.StatusBarApplyOn.OnPageNavigatedTo
+            };
+            statusBar.SetBinding(CommunityToolkit.Maui.Behaviors.StatusBarBehavior.StatusBarColorProperty,
+                new Binding(nameof(BackgroundColor), source: ReaderToolbar));
+            statusBar.SetAppTheme(CommunityToolkit.Maui.Behaviors.StatusBarBehavior.StatusBarStyleProperty,
+                CommunityToolkit.Maui.Core.StatusBarStyle.DarkContent, CommunityToolkit.Maui.Core.StatusBarStyle.LightContent);
+            Behaviors.Add(statusBar);
+        }
+#endif
+        InitializeSearchHeader();
+        ChapterSearch.SearchOpenChanged += OnChapterSearchOpenChanged;
+        ChapterSearch.SetSource(_viewModel.Source);
+        _viewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(PerekViewModel.Source))
+            {
+                ChapterSearch.SetSource(_viewModel.Source);
+            }
+        };
+        PerekCarousel.SizeChanged += OnCarouselSizeChanged;
         _viewModel.NavigationRequested += (_, perekId) =>
         {
-            ResetRecitationContext();
+            ResetRecitationSession();
             var targetIndex = perekId - 1;
             // Guard: suppress OnCarouselItemChanged while we reposition
             _carouselInitializing = true;
@@ -100,13 +193,90 @@ public partial class PerekPage : ContentPage
                 RefreshNavButtonVisuals();
             }
 
-            _ = UpdateArticlesCountAsync();
+            UpdateArticlesCount();
             _ = _viewModel.PreloadAdjacentPasukimAsync(perekId);
-#if IOS
-            Dispatcher.Dispatch(() => RefreshDescendantViews(PerekCarousel));
-#endif
         };
     }
+
+    /// <summary>
+    /// Re-snaps the CarouselView when its width changes (device rotation, window
+    /// resize). The native carousel keeps the pre-rotation item size, so several
+    /// items stay visible side by side until the user swipes. Invalidating the
+    /// native layout and re-snapping to the current position restores a single
+    /// full-width item immediately.
+    /// </summary>
+    private void OnCarouselSizeChanged(object? sender, EventArgs e)
+    {
+        var width = PerekCarousel.Width;
+        if (width <= 0)
+        {
+            return;
+        }
+        if (Math.Abs(width - _carouselWidth) < 0.5)
+        {
+            return;
+        }
+        var isFirstMeasure = _carouselWidth <= 0;
+        _carouselWidth = width;
+        if (isFirstMeasure || _carouselInitializing)
+        {
+            return;
+        }
+        if (_isLoading)
+        {
+            // Rotation during the initial load: retry the re-snap once the
+            // load completes instead of leaving stale item widths behind.
+            _pendingCarouselResnap = true;
+            return;
+        }
+
+        Dispatcher.Dispatch(ResnapCarousel);
+    }
+
+    /// <summary>
+    /// Re-snaps the carousel to the current position after its width changed,
+    /// restoring a single full-width item.
+    /// </summary>
+    private void ResnapCarousel()
+    {
+#if IOS
+        var collectionView = PerekCarousel.Handler?.PlatformView switch
+        {
+            UIKit.UICollectionView cv => cv,
+            UIKit.UIView view => FindDescendantCollectionView(view),
+            _ => null,
+        };
+        collectionView?.CollectionViewLayout.InvalidateLayout();
+#elif ANDROID
+        if (PerekCarousel.Handler?.PlatformView is AndroidX.RecyclerView.Widget.RecyclerView recyclerView)
+        {
+            recyclerView.Post(recyclerView.RequestLayout);
+        }
+#endif
+        PerekCarousel.InvalidateMeasure();
+        _carouselInitializing = true;
+        PerekCarousel.ScrollTo(_viewModel.CarouselPosition, animate: false);
+        _carouselInitializing = false;
+    }
+
+#if IOS || MACCATALYST
+    private static UIKit.UICollectionView? FindDescendantCollectionView(UIKit.UIView view)
+    {
+        foreach (var subview in view.Subviews)
+        {
+            if (subview is UIKit.UICollectionView collectionView)
+            {
+                return collectionView;
+            }
+            var found = FindDescendantCollectionView(subview);
+            if (found != null)
+            {
+                return found;
+            }
+        }
+        return null;
+    }
+#endif
 
     /// <summary>
     /// Populates page-level DynamicResource entries for font sizes and keeps them
@@ -133,41 +303,7 @@ public partial class PerekPage : ContentPage
         Resources["PasukNumFontSize"] = factor * 16;
         Resources["PerushNameFontSize"] = factor * 14;
         Resources["PerushContentFontSize"] = factor * 16;
-#if IOS
-        RefreshDescendantViews(PerekCarousel);
-#endif
     }
-
-#if IOS
-    /// <summary>
-    /// Walks the visual tree and forces re-measurement. For HtmlView controls,
-    /// re-maps FontSize so the handler re-renders if the size changed
-    /// (DynamicResource in deeply nested templates can fail to propagate on iOS).
-    /// </summary>
-    private static void RefreshDescendantViews(IView root)
-    {
-        if (root is Controls.HtmlView htmlView)
-        {
-            htmlView.Handler?.UpdateValue(nameof(Controls.HtmlView.FontSize));
-        }
-        else if (root is Microsoft.Maui.Controls.VisualElement ve)
-        {
-            ve.InvalidateMeasure();
-        }
-
-        if (root is IVisualTreeElement treeElement)
-        {
-            // Snapshot: re-rendering HTML can spin the run loop and let bindings change the children.
-            foreach (var child in treeElement.GetVisualChildren().ToList())
-            {
-                if (child is IView view)
-                {
-                    RefreshDescendantViews(view);
-                }
-            }
-        }
-    }
-#endif
 
     private void ForwardSelectedArticleIdChanged()
     {
@@ -182,10 +318,10 @@ public partial class PerekPage : ContentPage
             {
                 MainThread.BeginInvokeOnMainThread(() =>
                 {
-                    _ = UpdateArticlesCountAsync();
+                    UpdateArticlesCount();
                     if (_isShowingArticles)
                     {
-                        _ = LoadArticlesAsync();
+                        LoadArticles();
                     }
                     // Force visual refresh of prev/next buttons (workaround for MAUI not updating disabled visual)
                     RefreshNavButtonVisuals();
@@ -223,7 +359,7 @@ public partial class PerekPage : ContentPage
     private void OnTouchStarted(object? sender, TouchPosition position)
     {
         _swipe.Cancel();
-        if (_carouselInitializing || CarouselLoadingOverlay.IsVisible || _isMenuOpen || _isShowingArticles || _focusedPasuk != null ||
+        if (_carouselInitializing || CarouselLoadingOverlay.IsVisible || _isMenuOpen || _isShowingArticles || _focusedPasuk != null || ChapterSearch.IsSearchOpen ||
             !ContainsTouch(PerekCarousel, position) || ContainsTouch(BottomBar, position) ||
             ContainsTouch(ExitFullScreenButton, position))
         {
@@ -234,7 +370,7 @@ public partial class PerekPage : ContentPage
 
     private void OnTouchDispatched(object? sender, TouchPosition position)
     {
-        if (_carouselInitializing || CarouselLoadingOverlay.IsVisible || _isMenuOpen || _isShowingArticles || _focusedPasuk != null ||
+        if (_carouselInitializing || CarouselLoadingOverlay.IsVisible || _isMenuOpen || _isShowingArticles || _focusedPasuk != null || ChapterSearch.IsSearchOpen ||
             !ContainsTouch(PerekCarousel, position) || ContainsTouch(BottomBar, position) ||
             ContainsTouch(ExitFullScreenButton, position) || ContainsTouch(CircularMenuButton, position) ||
             ContainsTouch(SelectionBar, position))
@@ -263,7 +399,21 @@ public partial class PerekPage : ContentPage
             position.Y >= location[1] && position.Y < location[1] + view.Height;
     }
 
-    private void OnTouchReleased(object? sender, TouchPosition position)
+    private void OnTouchMoved(object? sender, TouchPosition position)
+    {
+        var slop = PerekCarousel.Handler?.PlatformView is Android.Views.View view
+            ? Android.Views.ViewConfiguration.Get(view.Context!)?.ScaledTouchSlop ?? 12
+            : 12;
+        _swipe.Move(position, slop);
+    }
+
+    // Releases and native cancels/interruptions both arrive here: a cancel
+    // mid-swipe can strand the carousel mid-offset just like a release, so
+    // it settles the same way (#2469).
+    private void OnTouchReleased(object? sender, TouchPosition position) =>
+        SettleSwipe(_swipe.Last ?? position);
+
+    private void SettleSwipe(TouchPosition position)
     {
         if (PerekCarousel.Handler?.PlatformView is not Android.Views.View view)
         {
@@ -281,26 +431,36 @@ public partial class PerekPage : ContentPage
             PerekCarousel.ScrollTo(index, position: ScrollToPosition.Center, animate: true);
         }
     }
-
-    private void OnTouchCancelled(object? sender, EventArgs e) => _swipe.Cancel();
 #endif
 
     protected override void OnDisappearing()
     {
-        ResetRecitationContext();
+        FinishSearchIntroduction();
+#if ANDROID
+        UnregisterReaderBack();
+#endif
+#if WINDOWS
+        UnregisterReaderKeyboardBack();
+#endif
+        if (!_preserveSearchOnDisappear)
+        {
+            ChapterSearch.Close();
+        }
+        ResetRecitationSession();
         PreferencesService.Instance.PreferencesChanged -= OnRecitationPreferencesChanged;
         RecitationService.Instance.Changed -= OnRecitationPackageChanged;
         RecitationService.Instance.PlaybackStopRequested -= OnPlaybackStopRequested;
 #if ANDROID
         MainActivity.TouchStarted -= OnTouchStarted;
         MainActivity.UnsubscribeTouchDispatched(OnTouchDispatched);
+        MainActivity.TouchMoved -= OnTouchMoved;
         MainActivity.TouchReleased -= OnTouchReleased;
-        MainActivity.TouchCancelled -= OnTouchCancelled;
         _swipe.Cancel();
         LongPressBehavior.CancelAllPending();
 #endif
 #if IOS
-        _scrollRefreshCts?.Cancel();
+        // A page pushed above gets its native edge-back back (#2432).
+        RestoreIosInteractiveBack();
 #endif
         base.OnDisappearing();
     }
@@ -320,41 +480,30 @@ public partial class PerekPage : ContentPage
         // walking every verse behavior on every scroll frame causes jank.
         LongPressBehavior.CancelAllPending();
 #endif
-#if IOS
-        _scrollRefreshCts?.Cancel();
-        _scrollRefreshCts = new CancellationTokenSource();
-        var token = _scrollRefreshCts.Token;
-        _ = DeferredScrollRefreshAsync(token);
-#endif
     }
-
-#if IOS
-    private async Task DeferredScrollRefreshAsync(CancellationToken token)
-    {
-        try
-        {
-            await Task.Delay(200, token);
-            if (!token.IsCancellationRequested)
-            {
-                Dispatcher.Dispatch(() => RefreshDescendantViews(PerekCarousel));
-            }
-        }
-        catch (TaskCanceledException)
-        {
-        }
-    }
-#endif
 
     protected override async void OnAppearing()
     {
+        DebugLog.Write("[Startup] PerekPage appearing");
         base.OnAppearing();
+#if ANDROID
+        RegisterReaderBack();
+#endif
+#if WINDOWS
+        RegisterReaderKeyboardBack();
+#endif
         SubscribeRecitation();
+#if IOS
+        // Native history must be ready before asynchronous reader positioning.
+        ConfigureIosReaderHistory();
+#endif
         await InitializeRecitationAsync();
+        DebugLog.Write("[Startup] PerekPage recitation initialized");
 #if ANDROID
         MainActivity.TouchStarted += OnTouchStarted;
         MainActivity.SubscribeTouchDispatched(OnTouchDispatched);
+        MainActivity.TouchMoved += OnTouchMoved;
         MainActivity.TouchReleased += OnTouchReleased;
-        MainActivity.TouchCancelled += OnTouchCancelled;
 #endif
 #if IOS
         ApplyBottomBarSafeArea();
@@ -367,51 +516,190 @@ public partial class PerekPage : ContentPage
             _isLoading = true;
             try
             {
-                var perekId = GetInitialPerekId();
-
-                // Show loading overlay while the carousel initialises.
-                CarouselLoadingOverlay.IsVisible = true;
-
-                // Guard: ignore OnCarouselItemChanged during initial load.
-                // The CarouselView fires spurious CurrentItemChanged events when it
-                // first receives its ItemsSource, which would reset state.
-                _carouselInitializing = true;
-                await _viewModel.LoadByPerekIdAsync(perekId);
-
-                // CarouselView resets Position to 0 when ItemsSource changes.
-                // Force it to the correct position without animation.
-                var targetPos = _viewModel.PerekId - 1;
-                PerekCarousel.ScrollTo(targetPos, animate: false);
-
-                // Yield so the CarouselView processes the scroll + layout pass.
-                await Task.Delay(50);
-
-                // Sync the ViewModel position (two-way binding may lag)
-                _viewModel.CarouselPosition = targetPos;
-
-                _carouselInitializing = false;
-
-                // Hide loading overlay — carousel is ready
-                CarouselLoadingOverlay.IsVisible = false;
-
-                // Update articles count badge
-                await UpdateArticlesCountAsync();
+                await LoadInitialPerekAsync();
             }
-            catch (Exception ex)
+            catch (Exception ex) //NOSONAR — failure boundary: any load failure lands on the retryable error panel instead of crashing the reader.
             {
-                Console.Error.WriteLine($"Failed to load perek: {ex.Message}");
-                await DisplayAlertAsync("Error", $"Failed to load perek: {ex.Message}", "OK");
+                // A load that cannot complete surfaces a retryable error instead
+                // of leaving the spinner up forever (issue #2084) — unless a
+                // newer navigation already put a perek on screen, in which case
+                // this failure is stale and must not cover it.
+                Console.Error.WriteLine($"Failed to load perek: {ex}");
+                if (_viewModel.Perek == null)
+                {
+                    ShowPerekLoadError(ex);
+                }
+                else
+                {
+                    CarouselLoadingOverlay.IsVisible = false;
+                }
             }
             finally
             {
                 _isLoading = false;
+                if (_pendingCarouselResnap)
+                {
+                    _pendingCarouselResnap = false;
+                    Dispatcher.Dispatch(ResnapCarousel);
+                }
             }
         }
         else if (_viewModel.PerekId > 0 && !_isLoading)
         {
+            // An already-running reader may still get a ?perekId= query
+            // (e.g. a calendar day tap): honor it like a fresh load.
+            if (_pendingPerekId is int pendingPerek &&
+                pendingPerek != _viewModel.PerekId)
+            {
+                _pendingPerekId = null;
+                await _viewModel.NavigateToPerekAsync(pendingPerek);
+            }
+            else
+            {
+                _pendingPerekId = null;
+            }
             // Perushim may have been installed (downloaded in Preferences) or cleared by the OS
             // since this page last appeared. Re-check and reload so they show without an app restart.
             await RefreshPerushimIfAvailabilityChangedAsync();
+            StartSearchIntroduction();
+        }
+        // Cold-start main-thread work is done — release the deferred e2e
+        // search-index warmup so it cannot starve the accessibility snapshot.
+        Services.SearchIndexService.NotifyStartupSettled();
+#if IOS
+        Dispatcher.Dispatch(ConfigureIosReaderHistory);
+#endif
+    }
+
+    private void OnReaderListLoaded(object? sender, EventArgs e)
+    {
+#if IOS
+        // Newly realized verse lists must yield the edge gesture to history.
+        ConfigureIosReaderHistory();
+#endif
+    }
+
+    /// <summary>
+    /// Runs the full first-load sequence for this reader: resolve the perek to
+    /// open, wait out the bounded ViewModel load, snap the carousel, then apply
+    /// the search-reader landing. Throws whatever the load throws — the caller
+    /// turns that into the retryable error overlay.
+    /// </summary>
+    private async Task LoadInitialPerekAsync()
+    {
+        _initialPerekId ??= GetInitialPerekId();
+        var perekId = _initialPerekId.Value;
+        DebugLog.Write($"[PerekLoad] fresh load start perekId={perekId}");
+        ShowCarouselLoading();
+
+        // Guard: ignore OnCarouselItemChanged during initial load.
+        // The CarouselView fires spurious CurrentItemChanged events when it
+        // first receives its ItemsSource, which would reset state.
+        _carouselInitializing = true;
+        long? loadStamp;
+        try
+        {
+            loadStamp = await _viewModel.LoadByPerekIdAsync(perekId);
+            if (loadStamp is null)
+            {
+                // A newer load or navigation superseded this one mid-flight —
+                // it owns the reader now, so skip the scroll and landing below.
+                return;
+            }
+
+            // CarouselView resets Position to 0 when ItemsSource changes.
+            // Force it to the correct position without animation.
+            var targetPos = _viewModel.PerekId - 1;
+            PerekCarousel.ScrollTo(targetPos, animate: false);
+
+            // Yield so the CarouselView processes the scroll + layout pass.
+            await Task.Delay(50);
+
+            // A navigation during layout owns the reader now. Check before
+            // writing the carousel position as well as the search landing.
+            if (_viewModel.ReaderLoadStamp != loadStamp)
+            {
+                return;
+            }
+
+            // Sync the ViewModel position (two-way binding may lag)
+            _viewModel.CarouselPosition = targetPos;
+        }
+        finally
+        {
+            _carouselInitializing = false;
+        }
+
+        // Hide loading overlay — carousel is ready
+        CarouselLoadingOverlay.IsVisible = false;
+
+        await ApplySearchReaderLocationAsync();
+        _ = _viewModel.PreloadAdjacentPasukimAsync(_viewModel.PerekId);
+        StartSearchIntroduction();
+
+        // Update articles count badge
+        UpdateArticlesCount();
+
+        // A cold-start link may also carry an article to open.
+        if (_pendingArticleId is int pendingArticleId)
+        {
+            _pendingArticleId = null;
+            await Shell.Current.GoToAsync($"articleDetail?articleId={pendingArticleId}");
+        }
+    }
+
+    /// <summary>Swaps the loading overlay to its spinner state (initial load and retry).</summary>
+    private void ShowCarouselLoading()
+    {
+        CarouselLoadErrorPanel.IsVisible = false;
+        CarouselLoadingIndicator.IsVisible = true;
+        CarouselLoadingOverlay.IsVisible = true;
+    }
+
+    /// <summary>Swaps the loading overlay to its retryable error state.</summary>
+    private void ShowPerekLoadError(Exception ex)
+    {
+        CarouselLoadingIndicator.IsVisible = false;
+        CarouselLoadErrorDetail.Text = ex.Message;
+        CarouselLoadErrorPanel.IsVisible = true;
+        CarouselLoadingOverlay.IsVisible = true;
+    }
+
+    /// <summary>Retry button on the load-failure overlay — re-runs the full fresh load.</summary>
+    private async void OnPerekLoadRetryClicked(object? sender, EventArgs e)
+    {
+        if (_isLoading)
+        {
+            return;
+        }
+
+        _isLoading = true;
+        try
+        {
+            await LoadInitialPerekAsync();
+        }
+        catch (Exception ex) //NOSONAR — failure boundary: a failed retry must land back on the retryable error panel, not crash the reader.
+        {
+            Console.Error.WriteLine($"Perek load retry failed: {ex}");
+            // Same staleness rule as the initial load: a navigation that
+            // succeeded meanwhile owns the reader now.
+            if (_viewModel.Perek == null)
+            {
+                ShowPerekLoadError(ex);
+            }
+            else
+            {
+                CarouselLoadingOverlay.IsVisible = false;
+            }
+        }
+        finally
+        {
+            _isLoading = false;
+            if (_pendingCarouselResnap)
+            {
+                _pendingCarouselResnap = false;
+                Dispatcher.Dispatch(ResnapCarousel);
+            }
         }
     }
 
@@ -424,7 +712,8 @@ public partial class PerekPage : ContentPage
         try
         {
             await PerushimNotesService.Instance.InitializeAsync();
-            if (PerushimNotesService.Instance.IsAvailable != _viewModel.PerushimNotesAvailable)
+            if (PerushimNotesService.Instance.IsAvailable != _viewModel.PerushimNotesAvailable
+                || _viewModel.PerushimNotesPending)
             {
                 await _viewModel.LoadPerushimAsync(_viewModel.PerekId);
             }
@@ -435,8 +724,90 @@ public partial class PerekPage : ContentPage
         }
     }
 
-    private static int GetInitialPerekId()
+    /// <summary>
+    /// An app link that arrived while the reader was open (warm link), or while
+    /// a flyout page was on top. Pops back to the reader and jumps to the perek.
+    /// </summary>
+    /// <summary>
+    /// App-link subscription. The handler lives on a static event, so it must be
+    /// released when the page unloads — otherwise readers recreated by Shell
+    /// keep collecting handlers that navigate obsolete pages.
+    /// </summary>
+    private void SubscribeAppLinks()
     {
+        AppLinkHelper.TargetRequested += OnAppLinkRequested;
+        Unloaded += (_, _) => AppLinkHelper.TargetRequested -= OnAppLinkRequested;
+    }
+
+    private void OnAppLinkRequested(object? sender, AppLinkHelper.AppLinkTarget target)
+    {
+        // Only the original reader handles app links; search readers are pushed
+        // above it and must not compete to navigate a page that has been popped.
+        if (Shell.Current?.Navigation.NavigationStack.OfType<PerekPage>().FirstOrDefault() is { } rootReader && rootReader != this)
+        {
+            return;
+        }
+        if (Handler is null)
+        {
+            // Dead page left over from a Shell recreation; detach instead of
+            // navigating an obsolete reader.
+            AppLinkHelper.TargetRequested -= OnAppLinkRequested;
+            return;
+        }
+
+        // Last link wins: a newer request supersedes any earlier one still
+        // waiting out the initial load.
+        var generation = Interlocked.Increment(ref _appLinkGeneration);
+        _ = Dispatcher.DispatchAsync(async () =>
+        {
+            for (var i = 0; i < 100 && _isLoading && generation == _appLinkGeneration; i++)
+            {
+                await Task.Delay(100);
+            }
+            if (generation != _appLinkGeneration)
+            {
+                return;
+            }
+            AppLinkHelper.PendingTarget = null;
+            ChapterSearch.Close();
+            var shell = Shell.Current;
+            if (shell != null &&
+                !shell.CurrentState.Location.OriginalString.EndsWith(AppRoutes.Perek, StringComparison.Ordinal))
+            {
+                await shell.GoToAsync(AppRoutes.FlyoutPage(AppRoutes.Perek));
+            }
+            await _viewModel.NavigateToPerekAsync(target.PerekId);
+            // A link that landed while the load-failure panel was up replaces
+            // it with the freshly navigated perek.
+            CarouselLoadingOverlay.IsVisible = false;
+            if (target.ArticleId is int articleId && Shell.Current != null)
+            {
+                await Shell.Current.GoToAsync($"articleDetail?articleId={articleId}");
+            }
+        });
+    }
+
+    private int GetInitialPerekId()
+    {
+        // A perek explicitly requested by navigation (e.g. calendar day tap)
+        // wins over search-reader and preference defaults.
+        if (_pendingPerekId is int pendingPerek)
+        {
+            _pendingPerekId = null;
+            return pendingPerek;
+        }
+        if (_searchReaderResult is { } result)
+        {
+            return GetSearchPerekId(result);
+        }
+        // A link that opened the app (cold start) wins over preferences.
+        if (AppLinkHelper.PendingTarget is { } pendingTarget)
+        {
+            AppLinkHelper.PendingTarget = null;
+            _pendingArticleId = pendingTarget.ArticleId;
+            return pendingTarget.PerekId;
+        }
+
         var prefs = PreferencesService.Instance;
         if (prefs.PerekToLoad == PerekToLoad.Todays)
         {
@@ -452,14 +823,15 @@ public partial class PerekPage : ContentPage
     }
 
     /// <summary>
-    /// Updates the articles count badge for the current perek.
+    /// Updates the articles count badge for the current perek from the
+    /// StarterService startup counters — a swipe never issues a network request
+    /// just to redraw the badge.
     /// </summary>
-    private async Task UpdateArticlesCountAsync()
+    private void UpdateArticlesCount()
     {
         try
         {
-            var articles = await ArticleService.Instance.GetArticlesByPerekIdAsync(_viewModel.PerekId);
-            var count = articles.Count;
+            var count = StarterService.Instance.GetPerekArticlesCount(_viewModel.PerekId);
 
             // Update badge visibility and text
             ArticlesBadge.IsVisible = count > 0;
@@ -470,7 +842,7 @@ public partial class PerekPage : ContentPage
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"Error fetching articles count: {ex.Message}");
+            Console.Error.WriteLine($"Error updating articles count: {ex.Message}");
             ArticlesBadge.IsVisible = false;
         }
     }
@@ -482,59 +854,24 @@ public partial class PerekPage : ContentPage
     }
 
 #if IOS
+    /// <summary>
+    /// MAUI pads every Layout inside the device safe area by default
+    /// (SafeAreaEdges = Container), and each Layout pads independently —
+    /// clearing it only on MainGrid just moves the padding to ContentArea,
+    /// which is what produced the empty landscape side bands (#1308).
+    /// Keep the root's top inset so the reader toolbar stays below the status
+    /// bar and notch. Its bottom edge also respects the home indicator, with
+    /// ApplyBottomBarSafeArea managing the bottom bar itself. Leave the sides
+    /// and descendant layouts unpadded so landscape content spans the width.
+    /// Views inside scroll views (the carousel cells and pasukim lists) never
+    /// apply safe-area padding, so only the direct layout chain needs this.
+    /// </summary>
+    private void ConfigureReaderSafeArea()
+    {
+        ReaderSafeArea.Configure(MainGrid);
+    }
+
     private void OnPageSizeChanged(object? sender, EventArgs e) => ApplyBottomBarSafeArea();
-    private int _currentDebugFix = 4; // Default: TranslationY (confirmed best by tester)
-    private double _bottomInset;
-    private bool _debugDropdownOpen;
-
-    private static bool IsTestFlightBuild()
-    {
-        var receiptUrl = Foundation.NSBundle.MainBundle.AppStoreReceiptUrl;
-        return receiptUrl?.Path?.Contains("sandboxReceipt", StringComparison.OrdinalIgnoreCase) == true;
-    }
-
-    private void OnDebugToggleTapped(object? sender, TappedEventArgs e)
-    {
-        _debugDropdownOpen = !_debugDropdownOpen;
-        DebugDropdownPanel.IsVisible = _debugDropdownOpen;
-        DebugToggleIcon.Text = _debugDropdownOpen ? "✕" : "🔧";
-    }
-
-    private void OnDebugFixChanged(object? sender, CheckedChangedEventArgs e)
-    {
-        if (!e.Value || sender is not RadioButton rb)
-        {
-            return;
-        }
-
-        ResetBottomBarFixes();
-        _currentDebugFix = rb switch
-        {
-            _ when rb == DebugFix0 => 0,
-            _ when rb == DebugFix3 => 3,
-            _ when rb == DebugFix4 => 4,
-            _ when rb == DebugFix11 => 11,
-            _ when rb == DebugFix15 => 15,
-            _ when rb == DebugFix16 => 16,
-            _ when rb == DebugFix17 => 17,
-            _ => _currentDebugFix
-        };
-        ApplyBottomBarSafeArea();
-    }
-
-    private void ResetBottomBarFixes()
-    {
-        MainGrid.Margin = new Thickness(0);
-        this.Padding = new Thickness(0);
-        BottomBar.Margin = new Thickness(0);
-        BottomBar.TranslationY = 0;
-        BottomBar.Padding = new Thickness(0);
-        BottomBar.HeightRequest = 90;
-        FloatingMenuContainer.Padding = new Thickness(0);
-        FloatingMenuContainer.Margin = new Thickness(0);
-        FloatingMenuContainer.TranslationY = 0;
-        Resources["BottomBarTotalHeight"] = 90.0;
-    }
 
     private void ApplyBottomBarSafeArea()
     {
@@ -548,102 +885,30 @@ public partial class PerekPage : ContentPage
             bottom = window.SafeAreaInsets.Bottom;
         }
 
-        _bottomInset = bottom;
-
-        if (IsTestFlightBuild())
-        {
-            BottomBarDebugOverlay.IsVisible = true;
-            DebugFixInfo.Text = $"inset={bottom:F1}pt fix={_currentDebugFix}";
-        }
-
-        if (bottom <= 0)
-        {
-            return;
-        }
-
+        // Shift the bars down over the home-indicator inset and pull the page
+        // up underneath so no gap shows (tester-confirmed combination).
+        // With no inset (iPad, landscape) the same assignments restore the
+        // layout defaults, so an inset disappearing never leaves stale values.
         var totalHeight = 90 + bottom;
+        BottomBar.TranslationY = bottom;
+        BottomBar.Padding = new Thickness(0, 0, 0, bottom);
+        BottomBar.HeightRequest = totalHeight;
+        FloatingMenuContainer.TranslationY = bottom;
+        FloatingMenuContainer.Padding = new Thickness(0, 0, 0, bottom);
+        this.Padding = new Thickness(0, 0, 0, -bottom);
+        Resources["BottomBarTotalHeight"] = totalHeight;
 
-        switch (_currentDebugFix)
-        {
-            case 0: // No fix — baseline
-                break;
-
-            case 3: // BottomBar negative bottom margin
-            {
-                BottomBar.Margin = new Thickness(0, 0, 0, -bottom);
-                BottomBar.Padding = new Thickness(0, 0, 0, bottom);
-                BottomBar.HeightRequest = totalHeight;
-                FloatingMenuContainer.Margin = new Thickness(0, 0, 0, -bottom);
-                FloatingMenuContainer.Padding = new Thickness(0, 0, 0, bottom);
-                Resources["BottomBarTotalHeight"] = totalHeight;
-                break;
-            }
-
-            case 4: // TranslationY on BottomBar — visually shift down (BEST)
-            {
-                BottomBar.TranslationY = bottom;
-                BottomBar.Padding = new Thickness(0, 0, 0, bottom);
-                BottomBar.HeightRequest = totalHeight;
-                FloatingMenuContainer.TranslationY = bottom;
-                FloatingMenuContainer.Padding = new Thickness(0, 0, 0, bottom);
-                Resources["BottomBarTotalHeight"] = totalHeight;
-                break;
-            }
-
-            case 11: // ContentPage bottom padding = -bottom
-            {
-                this.Padding = new Thickness(0, 0, 0, -bottom);
-                BottomBar.Padding = new Thickness(0, 0, 0, bottom);
-                BottomBar.HeightRequest = totalHeight;
-                FloatingMenuContainer.Padding = new Thickness(0, 0, 0, bottom);
-                Resources["BottomBarTotalHeight"] = totalHeight;
-                break;
-            }
-
-            case 15: // TranslationY + bar negative margin combo
-            {
-                BottomBar.TranslationY = bottom;
-                BottomBar.Margin = new Thickness(0, 0, 0, -bottom);
-                BottomBar.Padding = new Thickness(0, 0, 0, bottom);
-                BottomBar.HeightRequest = totalHeight;
-                FloatingMenuContainer.TranslationY = bottom;
-                FloatingMenuContainer.Margin = new Thickness(0, 0, 0, -bottom);
-                FloatingMenuContainer.Padding = new Thickness(0, 0, 0, bottom);
-                Resources["BottomBarTotalHeight"] = totalHeight;
-                break;
-            }
-
-            case 16: // TranslationY + page padding combo
-            {
-                BottomBar.TranslationY = bottom;
-                BottomBar.Padding = new Thickness(0, 0, 0, bottom);
-                BottomBar.HeightRequest = totalHeight;
-                FloatingMenuContainer.TranslationY = bottom;
-                FloatingMenuContainer.Padding = new Thickness(0, 0, 0, bottom);
-                this.Padding = new Thickness(0, 0, 0, -bottom);
-                Resources["BottomBarTotalHeight"] = totalHeight;
-                break;
-            }
-
-            case 17: // TranslationY (half) + bar negative margin (half)
-            {
-                var half = bottom / 2;
-                BottomBar.TranslationY = half;
-                BottomBar.Margin = new Thickness(0, 0, 0, -half);
-                BottomBar.Padding = new Thickness(0, 0, 0, bottom);
-                BottomBar.HeightRequest = totalHeight;
-                FloatingMenuContainer.TranslationY = half;
-                FloatingMenuContainer.Margin = new Thickness(0, 0, 0, -half);
-                FloatingMenuContainer.Padding = new Thickness(0, 0, 0, bottom);
-                Resources["BottomBarTotalHeight"] = totalHeight;
-                break;
-            }
-        }
+        // Padding changes the arrange area without firing SizeChanged.
+        LayoutCircularMenu();
     }
-#else
-    private void OnDebugFixChanged(object? sender, CheckedChangedEventArgs e) { }
-    private void OnDebugToggleTapped(object? sender, TappedEventArgs e) { }
 #endif
+
+    /// <summary>
+    /// The reader reports its own logical screen (AlHaperek/{perekId}) from
+    /// page lifecycle and carousel swipes — transitions a Shell-level
+    /// screen_view would double-count — so the Shell report is suppressed.
+    /// </summary>
+    public string? AnalyticsScreenName => null;
 
     /// <summary>
     /// Logs current perek screen to analytics (legacy-style: AlHaperek/{perekId}).
@@ -659,6 +924,11 @@ public partial class PerekPage : ContentPage
     /// </summary>
     private async void OnPasukTapped(object? sender, TappedEventArgs e)
     {
+        if (ChapterSearch.IsSearchOpen)
+        {
+            ChapterSearch.Close();
+            return;
+        }
 #if ANDROID
         // On Android, taps are handled natively via LongPressBehavior.NativeTapped
         // because (a) MAUI's TapGestureRecognizer fails in nested CarouselView >
@@ -681,7 +951,7 @@ public partial class PerekPage : ContentPage
             // If in selection mode, tap toggles selection
             if (_viewModel.Perek?.Pasukim.FirstOrDefault(p => p.PasukNum == pasukNum) is { } pasuk)
             {
-                await HandlePasukTapAsync(pasuk, sender);
+                await HandlePasukTapAsync(pasuk);
             }
         }
 #endif
@@ -695,6 +965,11 @@ public partial class PerekPage : ContentPage
     /// </summary>
     private async void OnPasukNativeTapped(object? sender, EventArgs e)
     {
+        if (ChapterSearch.IsSearchOpen)
+        {
+            ChapterSearch.Close();
+            return;
+        }
         // Skip tap if long press just happened
         if ((DateTime.Now - _lastLongPressTime).TotalMilliseconds < 300)
         {
@@ -703,11 +978,22 @@ public partial class PerekPage : ContentPage
 
         // Get the Pasuk from the behavior's associated view (the Border)
         if (sender is LongPressBehavior behavior &&
-            behavior.AssociatedView?.BindingContext is Pasuk pasuk)
+            ResolvePasuk(behavior.AssociatedView?.BindingContext) is { } pasuk)
         {
-            await HandlePasukTapAsync(pasuk, behavior.AssociatedView);
+            await HandlePasukTapAsync(pasuk);
         }
     }
+
+    /// <summary>
+    /// Resolves the logical pasuk behind a row's BindingContext — rows bind to
+    /// <see cref="PasukDisplayItem"/> so שניים מקרא copies map to the same pasuk.
+    /// </summary>
+    private static Pasuk? ResolvePasuk(object? bindingContext) => bindingContext switch
+    {
+        PasukDisplayItem item => item.Pasuk,
+        Pasuk pasuk => pasuk,
+        _ => null
+    };
 
     /// <summary>
     /// Handles right-click on pasuk - enters selection mode (Windows only).
@@ -718,10 +1004,12 @@ public partial class PerekPage : ContentPage
         if (e.Parameter is int pasukNum)
         {
             // Don't set _lastLongPressTime - right-click doesn't need debounce
-            ResetRecitationContext();
+            // Entering selection must not kill in-flight playback or its moving
+            // word marker (#2473).
+            ResetRecitationContext(stopPlayback: false);
             var wasEmpty = _viewModel.SelectedPasukNums.Count == 0;
             _viewModel.ToggleSelectedPasuk(pasukNum);
-            UpdatePasukSelection(sender, pasukNum);
+            UpdatePasukSelection();
             // Vibrate when entering selection mode
             if (wasEmpty && _viewModel.SelectedPasukNums.Count > 0)
             {
@@ -751,7 +1039,7 @@ public partial class PerekPage : ContentPage
         _longPressTokenSource?.Cancel();
         _longPressTokenSource = new CancellationTokenSource();
 
-        if (sender is Border border && border.BindingContext is Pasuk pasuk)
+        if (sender is Border border && ResolvePasuk(border.BindingContext) is { } pasuk)
         {
             _pressedPasukNum = pasuk.PasukNum;
 
@@ -784,7 +1072,7 @@ public partial class PerekPage : ContentPage
             {
                 _lastLongPressTime = DateTime.Now;
 
-                ResetRecitationContext();
+                ResetRecitationContext(stopPlayback: false);
                 var wasEmpty = _viewModel.SelectedPasukNums.Count == 0;
                 _viewModel.ToggleSelectedPasuk(pasukNum);
 
@@ -816,9 +1104,9 @@ public partial class PerekPage : ContentPage
 
         // The sender is the LongPressBehavior - get the Pasuk from the associated view's BindingContext
         if (sender is LongPressBehavior behavior &&
-            behavior.AssociatedView?.BindingContext is Pasuk pasuk)
+            ResolvePasuk(behavior.AssociatedView?.BindingContext) is { } pasuk)
         {
-            ResetRecitationContext();
+            ResetRecitationContext(stopPlayback: false);
             var wasEmpty = _viewModel.SelectedPasukNums.Count == 0;
             _viewModel.ToggleSelectedPasuk(pasuk.PasukNum);
             UpdateSelectionBar();
@@ -835,7 +1123,7 @@ public partial class PerekPage : ContentPage
     /// Updates the selection bar after selection change.
     /// The visual state is handled by DataTrigger in XAML.
     /// </summary>
-    private void UpdatePasukSelection(object? sender, int pasukNum)
+    private void UpdatePasukSelection()
     {
         UpdateSelectionBar();
     }
@@ -850,43 +1138,82 @@ public partial class PerekPage : ContentPage
         }
 
         var count = _viewModel.SelectedPasukNums.Count;
-        var isSelectionMode = count > 0 || _chapterRecitationSelection || _focusedPasuk != null;
+        var focused = _focusedPasuk != null;
+        // The focused pasuk keeps the shared reader toolbar (full pasuk source,
+        // scoped search, #2466); the Back-only selection bar is for the other
+        // transient surfaces — a pesukim selection, the chapter recitation
+        // mode, or an in-flight clip with no focused pasuk (#2370).
+        var selectionBarMode = ReaderSurfaceState.ShowsSelectionBar(count, _chapterRecitationSelection,
+            focused, _recitationCursor.PlayingKey != null);
+        ChapterSearch.SetFocusedPasukScope(focused);
         var ordinarySelection = count > 0 && !_chapterRecitationSelection && _focusedPasuk == null;
         SelectionCountBadge.IsVisible = ordinarySelection;
         SelectionShareButton.IsVisible = ordinarySelection;
         SelectionCopyButton.IsVisible = ordinarySelection;
-        SelectionRecitationButton.IsVisible = RecitationEnabled;
+        SelectionRecitationButton.IsVisible = RecitationAvailable;
         var perek = _viewModel.Perek;
         var track = perek == null ? null : RecitationService.Instance.GetTrack(perek.PerekId);
+        // An active playback can always be paused — even for a perek whose word
+        // timings are still pending (chapter playback needs no alignment).
         SelectionRecitationButton.IsEnabled = !_recitationBusy && perek != null && RecitationService.Instance.HasAudio(perek.PerekId) &&
-            track != null && track.Matches(perek.Pasukim) && (_chapterRecitationSelection || track.AlignmentStatus == "ready");
+            track != null && (_recitationCursor.PlayingKey != null ||
+                (track.Matches(perek.Pasukim) && (_chapterRecitationSelection || track.AlignmentStatus == "ready")));
         SelectionRecitationButton.Opacity = SelectionRecitationButton.IsEnabled ? 1 : 0.4;
-        SelectionRecitationButton.Text = RecitationPlayer.CurrentState == CommunityToolkit.Maui.Core.MediaElementState.Playing
-            ? Fonts.FluentUI.pause_24_regular : RecitationPlayer.CurrentState == CommunityToolkit.Maui.Core.MediaElementState.Paused
-                ? Fonts.FluentUI.play_24_regular : Fonts.FluentUI.headphones_24_regular;
+        // The glyph must match what the button does: only bar-issued playback
+        // pauses, so a word preview still playing shows Play (it starts the
+        // chapter at the bookmark), like the website's preview state.
+        SelectionRecitationButton.Text =
+            RecitationPlayer?.CurrentState == CommunityToolkit.Maui.Core.MediaElementState.Playing && _recitationCursor.BarIssued
+                ? Fonts.FluentUI.pause_24_regular
+                : RecitationPlayer?.CurrentState is CommunityToolkit.Maui.Core.MediaElementState.Playing or CommunityToolkit.Maui.Core.MediaElementState.Paused
+                    ? Fonts.FluentUI.play_24_regular : Fonts.FluentUI.headphones_24_regular;
         var hint = _recitationBusy ? "טוען את הקלטת הפרק..." : track == null ? "אין הקלטה לפרק זה" :
             !RecitationService.Instance.HasAudio(track.PerekId) ? "הורידו את הקלטות הספר בהעדפות" :
-            !_chapterRecitationSelection && track.AlignmentStatus != "ready" ? "הקראת מילים ופסוקים עדיין בהכנה" :
+            !_chapterRecitationSelection && track.AlignmentStatus != "ready" && _recitationCursor.PlayingKey == null ? "הקראת מילים ופסוקים עדיין בהכנה" :
             SelectionRecitationButton.IsEnabled ? "הקראה" : "ההקלטה אינה תואמת לטקסט המותקן";
         ToolTipProperties.SetText(SelectionRecitationButton, hint);
         SemanticProperties.SetDescription(SelectionRecitationButton, hint);
 
-        Shell.SetNavBarIsVisible(this, true);
-        Shell.SetFlyoutBehavior(this, isSelectionMode ? FlyoutBehavior.Disabled : FlyoutBehavior.Flyout);
-        var shellBackground = isSelectionMode
+        var searching = ChapterSearch.IsSearchOpen;
+        Shell.SetNavBarIsVisible(this, false);
+        ReaderToolbar.IsVisible = !ExitFullScreenButton.IsVisible;
+        Shell.SetFlyoutBehavior(this, selectionBarMode || searching ? FlyoutBehavior.Disabled : FlyoutBehavior.Flyout);
+        Shell.SetBackButtonBehavior(this, new BackButtonBehavior { IsVisible = !searching });
+        var shellBackground = selectionBarMode
             ? (Color)Microsoft.Maui.Controls.Application.Current!.Resources["Primary"]
             : Microsoft.Maui.Controls.Application.Current!.RequestedTheme == AppTheme.Dark
-                ? (Color)Microsoft.Maui.Controls.Application.Current.Resources["OffBlack"]
-                : Colors.White;
+                ? Color.FromArgb("#20304A")
+                : Color.FromArgb("#F2F7FE");
         Shell.SetBackgroundColor(this, shellBackground);
-        NormalNavigationTitle.IsVisible = !isSelectionMode;
-        SelectionBar.IsVisible = isSelectionMode;
+        ReaderToolbar.BackgroundColor = shellBackground;
+        NormalNavigationBar.BarVisible = !selectionBarMode && !searching;
+        // The header names the focused pasuk — sefer, perek and pasuk together —
+        // instead of the plain perek source (#2466).
+        NormalNavigationTitle.Text = focused && _viewModel.Source != null
+            ? $"{_viewModel.Source} {_focusedPasuk!.PasukNumHeb}"
+            : _viewModel.Source;
+        // iOS has no system Back for the overlay, so the navigation slot turns
+        // into the close control there; platforms with system Back keep the
+        // shared hamburger (#2467).
+        var focusedNavIsBack = focused && (OperatingSystem.IsIOS() || OperatingSystem.IsMacCatalyst());
+        NormalNavigationBar.NavigationButton.Text = focusedNavIsBack
+            ? Fonts.FluentUI.arrow_right_24_regular
+            : Fonts.FluentUI.navigation_24_regular;
+        SemanticProperties.SetDescription(NormalNavigationBar.NavigationButton,
+            focusedNavIsBack ? "סגירת הפסוק הממוקד" : "פתיחת תפריט הניווט");
+        SearchTitleHost.IsVisible = searching;
+        SearchTitleHost.Content = searching ? _searchHeader : null;
+        ChapterSearch.IsVisible = searching;
+        ContentArea.IsVisible = !searching;
+        SelectionBar.IsVisible = selectionBarMode && !searching;
         SelectionCountLabel.Text = count.ToString();
     }
 
     private void ClearAllSelections()
     {
-        ResetRecitationContext();
+        // Closing the focused pasuk keeps playback going (the bar is still
+        // visible); leaving selection or chapter mode stops it.
+        ResetRecitationContext(stopPlayback: _focusedPasuk == null);
         _viewModel.ClearSelected();
         UpdateSelectionBar();
     }
@@ -965,11 +1292,58 @@ public partial class PerekPage : ContentPage
     #region Circular Menu Methods
 
     /// <summary>
+    /// Recomputes the floating menu's button positions whenever the container's
+    /// arrange area changes: device rotation, window resize, and (on iOS) the
+    /// safe-area padding applied by ApplyBottomBarSafeArea.
+    /// </summary>
+    private void SetupCircularMenuLayout()
+    {
+        FloatingMenuContainer.SizeChanged += (_, _) => LayoutCircularMenu();
+    }
+
+    /// <summary>
+    /// Positions the toggle and the four satellite buttons on the elliptical
+    /// fan computed by <see cref="FanMenuGeometry"/>. The container's padding is
+    /// the system safe-area inset, so positions are computed in the remaining
+    /// usable canvas and stay inside the safe area automatically.
+    /// </summary>
+    private void LayoutCircularMenu()
+    {
+        var width = FloatingMenuContainer.Width - FloatingMenuContainer.Padding.HorizontalThickness;
+        var height = FloatingMenuContainer.Height - FloatingMenuContainer.Padding.VerticalThickness;
+        if (width <= 0 || height <= 0)
+        {
+            return;
+        }
+
+        var satellites = new[] { PrevPerekButton, TodayButton, PerekPickerButton, NextPerekButton };
+        var layout = FanMenuGeometry.Compute(width, height, satellites.Length);
+        ApplyMenuBounds(CircularMenuButton, layout.Toggle);
+        for (var i = 0; i < satellites.Length && i < layout.Items.Count; i++)
+        {
+            ApplyMenuBounds(satellites[i], layout.Items[i]);
+        }
+    }
+
+    private static void ApplyMenuBounds(View view, Rect bounds)
+    {
+        AbsoluteLayout.SetLayoutFlags(view, AbsoluteLayoutFlags.None);
+        AbsoluteLayout.SetLayoutBounds(view, bounds);
+    }
+
+    private void OnCircularMenuPressed(object? sender, EventArgs e) =>
+        DebugLog.Write($"[CircularMenu] Pressed: open={_isMenuOpen}");
+
+    private void OnCircularMenuReleased(object? sender, EventArgs e) =>
+        DebugLog.Write($"[CircularMenu] Released: open={_isMenuOpen}");
+
+    /// <summary>
     /// Toggles the circular menu open/closed state with animation.
     /// </summary>
     private async void OnCircularMenuClicked(object? sender, EventArgs e)
     {
         _isMenuOpen = !_isMenuOpen;
+        DebugLog.Write($"[CircularMenu] Clicked: open={_isMenuOpen}");
 
         if (_isMenuOpen)
         {
@@ -999,14 +1373,17 @@ public partial class PerekPage : ContentPage
             button.Opacity = 0;
         }
 
+        CircularMenuScrim.IsVisible = true;
+
         // Change FAB icon to X
-        CircularMenuButton.Text = "✕";
+        CircularMenuButton.Text = Fonts.FluentUI.dismiss_24_regular;
         CircularMenuButton.BackgroundColor = Colors.Red;
 
         // Animate FAB rotation and fade in all buttons (disabled = 0.4, enabled = 1)
         var animations = new List<Task>
         {
-            CircularMenuButton.RotateToAsync(180, 250, Easing.SpringOut)
+            CircularMenuButton.RotateToAsync(180, 250, Easing.SpringOut),
+            CircularMenuScrim.FadeToAsync(1, 200)
         };
 
         foreach (var button in buttons)
@@ -1016,6 +1393,7 @@ public partial class PerekPage : ContentPage
         }
 
         await Task.WhenAll(animations);
+        DebugLog.Write($"[CircularMenu] Open animation complete: open={_isMenuOpen}");
     }
 
     /// <summary>
@@ -1026,13 +1404,14 @@ public partial class PerekPage : ContentPage
         var buttons = new[] { PrevPerekButton, TodayButton, PerekPickerButton, NextPerekButton };
 
         // Change back to hamburger
-        CircularMenuButton.Text = "☰";
+        CircularMenuButton.Text = Fonts.FluentUI.navigation_24_regular;
         CircularMenuButton.BackgroundColor = (Color)Microsoft.Maui.Controls.Application.Current!.Resources["Primary"];
 
         // Animate FAB rotation and fade out all buttons
         var animations = new List<Task>
         {
-            CircularMenuButton.RotateToAsync(0, 200, Easing.SpringOut)
+            CircularMenuButton.RotateToAsync(0, 200, Easing.SpringOut),
+            CircularMenuScrim.FadeToAsync(0, 150)
         };
 
         foreach (var button in buttons)
@@ -1042,11 +1421,20 @@ public partial class PerekPage : ContentPage
 
         await Task.WhenAll(animations);
 
+        // A reopen during the close animation wins — leave scrim and satellites alone
+        if (_isMenuOpen)
+        {
+            return;
+        }
+
+        CircularMenuScrim.IsVisible = false;
+
         // Disable clicks on hidden buttons
         foreach (var button in buttons)
         {
             button.InputTransparent = true;
         }
+        DebugLog.Write($"[CircularMenu] Close animation complete: open={_isMenuOpen}");
     }
 
     /// <summary>
@@ -1071,6 +1459,96 @@ public partial class PerekPage : ContentPage
     }
 
     /// <summary>
+    /// iOS has no system Back for the focused-pasuk overlay — the toolbar's
+    /// navigation slot acts as its close control there (#2466).
+    /// </summary>
+    private bool OnFocusedPasukNavigationIntercepted()
+    {
+        if (_focusedPasuk == null || !(OperatingSystem.IsIOS() || OperatingSystem.IsMacCatalyst()))
+        {
+            return false;
+        }
+        ClearAllSelections();
+        return true;
+    }
+
+    /// <summary>
+    /// Opens/closes the reader options menu (הקראות, שניים מקרא, תיקון קוראים).
+    /// </summary>
+    private void OnReaderMenuButtonClicked(object? sender, EventArgs e)
+    {
+        ReaderMenuOverlay.IsVisible = !ReaderMenuOverlay.IsVisible;
+    }
+
+    /// <summary>
+    /// Dismisses the reader menu when tapping outside the panel.
+    /// </summary>
+    private void OnReaderMenuDismissed(object? sender, TappedEventArgs e)
+    {
+        ReaderMenuOverlay.IsVisible = false;
+    }
+
+    /// <summary>
+    /// קריינות header play button - plays the whole perek's recording.
+    /// </summary>
+    private async void OnHeaderPlayClicked(object? sender, EventArgs e)
+    {
+        if (_viewModel.Perek is { } perek)
+        {
+            await PlayRecitationAsync($"chapter:{perek.PerekId}");
+        }
+    }
+
+    /// <summary>
+    /// שניים מקרא menu item - toggles double rendering of every pasuk.
+    /// </summary>
+    private void OnShnayimMikraTapped(object? sender, TappedEventArgs e)
+    {
+        _viewModel.IsShnayimMikraEnabled = !_viewModel.IsShnayimMikraEnabled;
+    }
+
+    /// <summary>
+    /// תיקון קוראים menu item - toggles the continuous reading flow.
+    /// </summary>
+    private void OnTikkunKorimTapped(object? sender, TappedEventArgs e)
+    {
+        _viewModel.IsTikkunKorimEnabled = !_viewModel.IsTikkunKorimEnabled;
+    }
+
+    /// <summary>
+    /// הסתר שם השם menu item - toggles divine-name display masking. The change
+    /// persists through PreferencesService and bumps DivineNameMasking.Revision,
+    /// which the pasukim MultiBinding and TikkunFlowView pick up to re-render.
+    /// </summary>
+    private void OnDivineNameMaskingTapped(object? sender, TappedEventArgs e)
+    {
+        _viewModel.DivineNameMaskingEnabled = !_viewModel.DivineNameMaskingEnabled;
+    }
+
+    /// <summary>
+    /// Tap on the תיקון קוראים text - toggles niqqud+taamim for the entire perek.
+    /// Runs on a dedicated view so it cannot trigger selection, playback or navigation.
+    /// </summary>
+    private void OnTikkunTextTapped(object? sender, TappedEventArgs e)
+    {
+#if ANDROID
+        // On Android, taps are handled natively via LongPressBehavior.NativeTapped —
+        // MAUI's TapGestureRecognizer fails inside nested CarouselView templates.
+        return;
+#else
+        _viewModel.TikkunMarksHidden = !_viewModel.TikkunMarksHidden;
+#endif
+    }
+
+    /// <summary>
+    /// Native tap on the תיקון קוראים flow — fires from LongPressBehavior on Android.
+    /// </summary>
+    private void OnTikkunNativeTapped(object? sender, EventArgs e)
+    {
+        _viewModel.TikkunMarksHidden = !_viewModel.TikkunMarksHidden;
+    }
+
+    /// <summary>
     /// Shows the perek picker popup.
     /// </summary>
     private void OnPerekPickerClicked(object? sender, EventArgs e)
@@ -1081,10 +1559,18 @@ public partial class PerekPage : ContentPage
     }
 
     /// <summary>
-    /// Handles perek selection from the picker popup.
+    /// Handles perek selection from the picker popup. A confirmed selection
+    /// completes the navigation: the picker closes itself and the radial menu
+    /// that opened it closes too, leaving the reader undimmed and interactive.
     /// </summary>
-    private async void OnPerekPickerSelected(object? sender, int perekId)
+    private async void OnPerekPickerSelected(int perekId)
     {
+        if (_isMenuOpen)
+        {
+            _isMenuOpen = false;
+            await CloseCircularMenuAsync();
+        }
+
         if (perekId >= 1 && perekId <= 929 && perekId != _viewModel.PerekId)
         {
             await _viewModel.NavigateToPerekAsync(perekId);
@@ -1112,11 +1598,11 @@ public partial class PerekPage : ContentPage
     /// <summary>
     /// Handles articles button click - shows articles view.
     /// </summary>
-    private async void OnArticlesButtonClicked(object? sender, EventArgs e)
+    private void OnArticlesButtonClicked(object? sender, EventArgs e)
     {
         try
         {
-            Console.WriteLine("[Articles] Button clicked, _isShowingArticles=" + _isShowingArticles);
+            DebugLog.Write("[Articles] Button clicked, _isShowingArticles=" + _isShowingArticles);
 
             if (_isShowingArticles)
             {
@@ -1124,7 +1610,7 @@ public partial class PerekPage : ContentPage
                 return;
             }
 
-            await ShowArticlesViewAsync();
+            ShowArticlesView();
         }
         catch (Exception ex)
         {
@@ -1135,34 +1621,34 @@ public partial class PerekPage : ContentPage
     /// <summary>
     /// Shows the articles view with flip animation.
     /// </summary>
-    private async Task ShowArticlesViewAsync()
+    private void ShowArticlesView()
     {
         try
         {
-            Console.WriteLine("[Articles] ShowArticlesViewAsync starting...");
+            DebugLog.Write("[Articles] ShowArticlesView starting...");
             _isShowingArticles = true;
 
             // Load articles for the current perek (header stays the same)
-            Console.WriteLine("[Articles] Loading articles...");
-            await LoadArticlesAsync();
-            Console.WriteLine("[Articles] Articles loaded");
+            DebugLog.Write("[Articles] Loading articles...");
+            LoadArticles();
+            DebugLog.Write("[Articles] Articles loaded");
 
             // Simple visibility swap instead of animation (animation may crash on Windows)
-            Console.WriteLine("[Articles] Switching visibility...");
+            DebugLog.Write("[Articles] Switching visibility...");
             PerekCarousel.IsVisible = false;
             ArticlesCollection.IsVisible = true;
-            Console.WriteLine("[Articles] Visibility switched");
+            DebugLog.Write("[Articles] Visibility switched");
 
             // Update button states - highlight articles button
-            Console.WriteLine("[Articles] Updating button color...");
+            DebugLog.Write("[Articles] Updating button color...");
             ArticlesButton.TextColor = Microsoft.Maui.Controls.Application.Current?.RequestedTheme == AppTheme.Dark
                 ? Color.FromArgb("#BB86FC")
                 : Color.FromArgb("#512BD4");
-            Console.WriteLine("[Articles] ShowArticlesViewAsync complete");
+            DebugLog.Write("[Articles] ShowArticlesView complete");
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"[Articles] Error in ShowArticlesViewAsync: {ex}");
+            Console.Error.WriteLine($"[Articles] Error in ShowArticlesView: {ex}");
         }
     }
 
@@ -1246,14 +1732,14 @@ public partial class PerekPage : ContentPage
     }
 
     /// <summary>
-    /// Loads articles for the current perek.
+    /// Loads articles for the current perek from the StarterService snapshot —
+    /// same Priority ordering and Author wiring the GraphQL query produced.
     /// </summary>
-    private async Task LoadArticlesAsync()
+    private void LoadArticles()
     {
         try
         {
-            var articles = await ArticleService.Instance.GetArticlesByPerekIdAsync(_viewModel.PerekId);
-            ArticlesCollection.ItemsSource = articles;
+            ArticlesCollection.ItemsSource = StarterService.Instance.GetArticlesByPerekId(_viewModel.PerekId);
         }
         catch (Exception ex)
         {
@@ -1300,10 +1786,12 @@ public partial class PerekPage : ContentPage
             return;
         }
 
+        PerushSearchBar.Unfocus();
         _isTogglingPerush = true;
         try
         {
             _viewModel.ToggleCheckedPerush(perush.Id);
+            checkBox.IsChecked = _viewModel.IsPerushChecked(perush.Id);
         }
         finally
         {
@@ -1311,11 +1799,47 @@ public partial class PerekPage : ContentPage
         }
     }
 
+    /// <summary>
+    /// Perushim search navigates instead of filtering — the full list stays
+    /// visible and each keystroke scrolls the first matching perush into view.
+    /// </summary>
+    private void SubscribePerushimSearch()
+    {
+        _viewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(PerekViewModel.PerushNameFilter) && _isPerushimOpen)
+            {
+                var match = _viewModel.FilteredPerushim.FirstOrDefault();
+                if (match != null)
+                {
+                    PerushimCollection.ScrollTo(match, position: ScrollToPosition.Start, animate: false);
+                }
+            }
+        };
+    }
+
+    private void OnPerushSearchSubmitted(object? sender, EventArgs e) => _ = HidePerushimKeyboardAsync();
+
+    /// <summary>Dismisses the soft keyboard — iOS leaves it over the list otherwise.</summary>
+    private async Task HidePerushimKeyboardAsync()
+    {
+        try
+        {
+            // Unfocus alone can leave the floating keyboard over the list.
+            await PerushSearchBar.HideSoftInputAsync(CancellationToken.None);
+        }
+        catch (Exception ex) //NOSONAR — failure boundary: keyboard dismissal is best-effort and must not crash the reader.
+        {
+            Console.Error.WriteLine($"Could not dismiss perushim search keyboard: {ex}");
+        }
+        PerushSearchBar.Unfocus();
+    }
+
     private async void OnGoToPerushimSettingsClicked(object? sender, EventArgs e)
     {
         try
         {
-            await Shell.Current.GoToAsync("PreferencesPage");
+            await Shell.Current.GoToAsync(AppRoutes.ExtensionPacks);
         }
         catch (Exception ex)
         {
@@ -1334,8 +1858,11 @@ public partial class PerekPage : ContentPage
         // Calculate panel heights
         var totalHeight = MainGrid.Height;
         _perushimPanelHeight = (totalHeight * 0.33) + 90; // Default: 33% + bottom bar
-        // TODO: Calculate expanded height based on inner perushim rows occupation
-        _perushimPanelExpandedHeight = totalHeight - 50; // Full screen minus top margin
+        // Cap the drag-up expansion so the sheet's top edge stays under the
+        // status bar/pill: content + toolbar rows already begin below it.
+        var toolbarHeight = ReaderToolbar.IsVisible ? ReaderToolbar.Height : 0;
+        _perushimPanelExpandedHeight = Math.Max(_perushimPanelHeight,
+            ContentArea.Height + toolbarHeight - 8);
 
         // Animate perushim panel slide up/down
         if (_isPerushimOpen)
@@ -1351,6 +1878,7 @@ public partial class PerekPage : ContentPage
         else
         {
             // Slide down then hide
+            PerushSearchBar.Unfocus();
             await PerushimPanel.TranslateToAsync(0, _perushimPanelHeight, 250, Easing.CubicIn);
             PerushimPanel.IsVisible = false;
         }
@@ -1455,6 +1983,7 @@ public partial class PerekPage : ContentPage
                         if (shouldDismiss)
                         {
                             // Dismiss: complete the slide down
+                            PerushSearchBar.Unfocus();
                             await PerushimPanel.TranslateToAsync(0, _perushimPanelHeight, 200, Easing.CubicIn);
                             PerushimPanel.IsVisible = false;
                             _isPerushimOpen = false;
@@ -1498,6 +2027,10 @@ public partial class PerekPage : ContentPage
                         animation.Commit(PerushimPanel, "SnapPerushim", length: 200, easing: Easing.CubicOut);
                     }
                 }
+                break;
+
+            default:
+                // Other gesture statuses need no panel handling.
                 break;
         }
     }
@@ -1581,24 +2114,24 @@ public partial class PerekPage : ContentPage
                 break;
 
             case Android.Views.MotionEventActions.Move:
-            {
-                var dx = motion.RawX - _exitButtonTouchStartRawX;
-                var dy = motion.RawY - _exitButtonTouchStartRawY;
-
-                if (!_exitButtonIsDragging &&
-                    (Math.Abs(dx) > _exitButtonTouchSlop || Math.Abs(dy) > _exitButtonTouchSlop))
                 {
-                    _exitButtonIsDragging = true;
-                }
+                    var dx = motion.RawX - _exitButtonTouchStartRawX;
+                    var dy = motion.RawY - _exitButtonTouchStartRawY;
 
-                if (_exitButtonIsDragging)
-                {
-                    ExitFullScreenButton.TranslationX = _exitButtonDragStartTx + dx / _exitButtonDensity;
-                    ExitFullScreenButton.TranslationY = _exitButtonDragStartTy + dy / _exitButtonDensity;
+                    if (!_exitButtonIsDragging &&
+                        (Math.Abs(dx) > _exitButtonTouchSlop || Math.Abs(dy) > _exitButtonTouchSlop))
+                    {
+                        _exitButtonIsDragging = true;
+                    }
+
+                    if (_exitButtonIsDragging)
+                    {
+                        ExitFullScreenButton.TranslationX = _exitButtonDragStartTx + dx / _exitButtonDensity;
+                        ExitFullScreenButton.TranslationY = _exitButtonDragStartTy + dy / _exitButtonDensity;
+                    }
+                    e.Handled = true;
+                    break;
                 }
-                e.Handled = true;
-                break;
-            }
 
             case Android.Views.MotionEventActions.Up:
                 if (!_exitButtonIsDragging)
@@ -1610,6 +2143,10 @@ public partial class PerekPage : ContentPage
 
             case Android.Views.MotionEventActions.Cancel:
                 e.Handled = true;
+                break;
+
+            default:
+                // Other motion actions do not affect the exit-button drag.
                 break;
         }
     }
@@ -1629,6 +2166,10 @@ public partial class PerekPage : ContentPage
                 ExitFullScreenButton.TranslationX = _exitButtonPanStartX + e.TotalX;
                 ExitFullScreenButton.TranslationY = _exitButtonPanStartY + e.TotalY;
                 break;
+
+            default:
+                // Completed/canceled gestures keep the button where the pan left it.
+                break;
         }
     }
 #endif
@@ -1645,7 +2186,7 @@ public partial class PerekPage : ContentPage
         // Ignore them — the ViewModel already holds the correct perek.
         if (_carouselInitializing)
         {
-            Console.WriteLine($"[Carousel] OnChanged IGNORED (initializing)");
+            DebugLog.Write($"[Carousel] OnChanged IGNORED (initializing)");
             return;
         }
 
@@ -1654,7 +2195,7 @@ public partial class PerekPage : ContentPage
 
         if (e.CurrentItem is not Perek perek || perek.PerekId <= 0 || perek.PerekId == _viewModel.PerekId)
         {
-            Console.WriteLine($"[Carousel] OnChanged SKIPPED incoming={incomingId} vmPerek={_viewModel.PerekId}");
+            DebugLog.Write($"[Carousel] OnChanged SKIPPED incoming={incomingId} vmPerek={_viewModel.PerekId}");
             return;
         }
 
@@ -1662,16 +2203,20 @@ public partial class PerekPage : ContentPage
         _longPressTokenSource?.Cancel();
         _pressedPasukNum = -1;
 
-        ResetRecitationContext();
+        ResetRecitationSession();
 
         var hasPasukim = perek.Pasukim != null && perek.Pasukim.Count > 0;
-        Console.WriteLine($"[Carousel] OnChanged PROCESS incoming={incomingId} prev={previousId} vmPerek={_viewModel.PerekId} pos={_viewModel.CarouselPosition} hasPasukim={hasPasukim}");
+        DebugLog.Write($"[Carousel] OnChanged PROCESS incoming={incomingId} prev={previousId} vmPerek={_viewModel.PerekId} pos={_viewModel.CarouselPosition} hasPasukim={hasPasukim}");
 
         // Lazy-load pasukim if not yet loaded (~5ms from SQLite, non-blocking)
         if (!hasPasukim)
         {
             await _viewModel.EnsurePasukimLoadedAsync(perek);
         }
+
+        // A timed-out fresh-load attempt may still be running detached — it is
+        // now obsolete and must not overwrite the perek this swipe landed on.
+        _viewModel.InvalidatePendingLoads();
 
         // Synchronous state update — fast, no guard needed.
         // The carousel collection is NEVER modified here, so no re-entrancy risk.
@@ -1689,20 +2234,15 @@ public partial class PerekPage : ContentPage
             RefreshNavButtonVisuals();
         }
 
-        Console.WriteLine($"[Carousel] OnChanged DONE vmPerek={_viewModel.PerekId} pos={_viewModel.CarouselPosition}");
+        DebugLog.Write($"[Carousel] OnChanged DONE vmPerek={_viewModel.PerekId} pos={_viewModel.CarouselPosition}");
 
         // Fire async tasks in the background — never block the next swipe
-        _ = UpdateArticlesCountAsync();
+        UpdateArticlesCount();
         _ = _viewModel.LoadPerushimAsync(perek.PerekId);
         _ = _viewModel.PreloadAdjacentPasukimAsync(perek.PerekId);
-#if IOS
-        // Newly created views in the carousel may not pick up DynamicResource values;
-        // defer the refresh so the visual tree is populated after the layout pass.
-        Dispatcher.Dispatch(() => RefreshDescendantViews(PerekCarousel));
-#endif
         if (_isShowingArticles)
         {
-            _ = LoadArticlesAsync();
+            LoadArticles();
         }
     }
 
@@ -1711,6 +2251,7 @@ public partial class PerekPage : ContentPage
     /// </summary>
     private void EnterFullScreen()
     {
+        ChapterSearch.Close();
         // Close circular menu if open
         if (_isMenuOpen)
         {
@@ -1721,13 +2262,16 @@ public partial class PerekPage : ContentPage
                 b.Opacity = 0;
                 b.InputTransparent = true;
             }
-            CircularMenuButton.Text = "☰";
+            CircularMenuButton.Text = Fonts.FluentUI.navigation_24_regular;
             CircularMenuButton.BackgroundColor = (Color)Microsoft.Maui.Controls.Application.Current!.Resources["Primary"];
             CircularMenuButton.Rotation = 0;
+            CircularMenuScrim.Opacity = 0;
+            CircularMenuScrim.IsVisible = false;
         }
 
         // Hide Shell navigation bar (no TabBar in this app - single page per FlyoutItem)
         Shell.SetNavBarIsVisible(this, false);
+        ReaderToolbar.IsVisible = false;
 
         // Hide bottom bar completely
         BottomBar.IsVisible = false;
@@ -1737,6 +2281,9 @@ public partial class PerekPage : ContentPage
         ExitFullScreenButton.TranslationX = 0;
         ExitFullScreenButton.TranslationY = 0;
         ExitFullScreenButton.IsVisible = true;
+#if ANDROID
+        UpdateReaderBack();
+#endif
     }
 
     /// <summary>
@@ -1747,12 +2294,16 @@ public partial class PerekPage : ContentPage
         // Hide floating exit button first
         ExitFullScreenButton.IsVisible = false;
 
-        // Show Shell navigation bar (no TabBar in this app - single page per FlyoutItem)
-        Shell.SetNavBarIsVisible(this, true);
+        // Restore the reader toolbar without introducing a native Back button.
+        Shell.SetNavBarIsVisible(this, false);
+        ReaderToolbar.IsVisible = true;
 
         // Show bottom bar
         BottomBar.IsVisible = true;
         FloatingMenuContainer.IsVisible = true;
+#if ANDROID
+        UpdateReaderBack();
+#endif
     }
 
     #endregion

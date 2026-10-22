@@ -42,10 +42,52 @@ public class RecitationTimelineTests
     }
 
     [Fact]
+    public void custom_verse_pause_has_no_highlight_and_preserves_original_word_intervals()
+    {
+        // At 2x, two source seconds of silence produce one real second of pause.
+        var timeline = new RecitationTimeline(Track(), [(1200, 2300), (5000, 5500)], 2000);
+        timeline.WordAt(700).Should().BeSameAs(Second);
+        timeline.WordAt(1100).Should().BeNull();
+        timeline.WordAt(3099.9).Should().BeNull();
+        timeline.WordAt(3100).Should().BeSameAs(Last);
+        timeline.WordAt(3600).Should().BeNull();
+        Last.StartMs.Should().Be(5000);
+    }
+
+    [Fact]
     public void a_word_clip_starts_at_zero_and_unapproved_chapters_never_highlight()
     {
         new RecitationTimeline(Track(), [(1900, 2300)]).WordAt(0).Should().BeSameAs(Second);
         new RecitationTimeline(Track("needs_review")).WordAt(1200).Should().BeNull();
         new RecitationTimeline(null).WordAt(1200).Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData(1200.0, 0.0)]     // pasuk 1 opens the clip
+    [InlineData(1900.0, 700.0)]   // tapped word mid-perek resumes inside the first pasuk range
+    [InlineData(2000.0, 800.0)]   // a position inside a word keeps its offset
+    [InlineData(5000.0, 1100.0)]  // pasuk 3's word resumes at its joined position
+    [InlineData(2400.0, null)]    // silence between words is not a resume point
+    [InlineData(5600.0, null)]    // past the last word
+    [InlineData(double.NaN, null)]
+    public void a_tapped_word_marks_the_clip_position_where_chapter_playback_resumes(double sourceMs, double? clipMs)
+    {
+        new RecitationTimeline(Track(), [(1200.0, 2300.0), (5000.0, 5500.0)]).PositionOf(sourceMs).Should().Be(clipMs);
+    }
+
+    [Fact]
+    public void a_custom_verse_pause_shifts_resume_past_the_generated_silence()
+    {
+        new RecitationTimeline(Track(), [(1200, 2300), (5000, 5500)], 2000).PositionOf(5000).Should().Be(3100);
+    }
+
+    [Fact]
+    public void the_whole_recording_resumes_at_the_words_own_timestamps()
+    {
+        var timeline = new RecitationTimeline(Track());
+        timeline.PositionOf(1900).Should().Be(1900);
+        timeline.PositionOf(5000).Should().Be(5000);
+        new RecitationTimeline(Track("needs_review")).PositionOf(1900).Should().BeNull();
+        new RecitationTimeline(null).PositionOf(1900).Should().BeNull();
     }
 }
