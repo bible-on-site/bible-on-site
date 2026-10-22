@@ -521,8 +521,13 @@ jobs:
     name: Validate Windows Compile
     needs: [setup_env, determine_changes]
     if: ${{ always() && !cancelled() && !failure() && github.event_name != 'push' && (needs.determine_changes.outputs.app_module_changed == 'true' || needs.determine_changes.outputs.app_ci_changed == 'true') }}
+    # The caller's permissions ceiling is validated at workflow-compile time
+    # (before `if:` evaluation): app-package.yml's resolve_perushim_artifact job
+    # declares `actions: read`, so the ceiling must cover it even though that job
+    # skips under compile_only — otherwise the whole run dies at startup_failure.
     permissions:
       contents: read
+      actions: read
     uses: ./.github/workflows/app-package.yml
     with:
       platform: Windows
