@@ -7,8 +7,22 @@ applyTo: ".github/workflows/**, docs/aws/**, devops/deploy/**, web/api/Dockerfil
 
 ## AWS
 
+### Explicit Approval
+
+- Never merge an AWS-related PR or enable auto-merge without Dorad's explicit
+  approval of that specific PR and its current AWS-impacting changes. Green CI,
+  a cost audit, or approval of another PR does not qualify. Material AWS changes
+  after approval need renewed approval. See the root `AGENTS.md` rule.
+- Production uptime and existing public/crawled URLs take priority over savings.
+  Verify account/region, live state, compatibility tests and rollback before any
+  authorized live write. Reference templates are not evidence of live state.
+- Preserve the public assets bucket's legacy S3 URLs. Keep the sole nginx router
+  running, the single admin task on-demand, and the private-DNS SSM endpoint
+  until its consumers have a verified replacement. The 2026-10-23 audit in
+  `docs/aws/cost-risk-audit-2026-10-23.md` supersedes #2563's unsafe rollout steps.
+
 - Connect: `aws sso login --profile AdministratorAccess-<AccountID>`.
-- Every accepted change must land in IaC under `infrastructure/`, but never run CloudFormation from those templates — they are reference-only. Update `docs/aws/` when the process changes.
+- Every accepted change must be reflected in the existing reference IaC under `docs/aws/cloudformation/`, but never run CloudFormation from those templates — they are reference-only. Update `docs/aws/` when the process changes.
 
 ### Authentication And Secrets
 
