@@ -76,8 +76,10 @@ public sealed partial class PadDeliveryService : IPadDeliveryService
                     new ScaledProgress(index, files.Count, progress),
                     cancellationToken);
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            #pragma warning disable S2221 // Deliberate failure boundary: optional-payload absence is diagnostic output, not fatal
+            catch (Exception ex) when (ex is not OperationCanceledException) //NOSONAR — optional-payload absence is diagnostic output, not fatal.
             {
+                #pragma warning restore S2221
                 if (index == 0)
                 {
                     return $"{ex.GetType().Name}: {ex.Message}";

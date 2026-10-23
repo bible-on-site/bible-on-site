@@ -85,7 +85,7 @@ These checks run on all staged files regardless of module:
 | `check-app-version` | Keeps app display version and platform build numbers aligned |
 | `hadolint` | Lints Dockerfiles ([hadolint-py](https://github.com/AleksaC/hadolint-py) ships the binary as a wheel — no Docker daemon or system install needed, so it also runs on pre-commit.ci) |
 | `md-dead-link-check` | Detects broken links in Markdown files |
-| `ruff-check` | Python lint scoped to Codacy-parity rules (`F` pyflakes + `D2` docstring structure) |
+| `ruff-check` | Python lint scoped to Codacy-parity rules (`F` pyflakes, `D2` docstring structure, `BLE001` blind except, `E722` bare except, `S110` try-except-pass, `RET502` mixed returns) |
 | `gitleaks` | Scans staged files for committed secrets/keys (automates the staged-PII review in git-practices) |
 
 The workflow linter uses a pinned [Astral actionlint revision](https://github.com/astral-sh/actionlint/commit/9e5dcb067e7cdcfe44d3f015ba9f2be4583466cb)
@@ -116,6 +116,7 @@ post-commit `flip-book-local-restore` never runs on pre-commit.ci by design.
 | `web-unit-tests` | `web/bible-on-site` | `npm run test:unit` | Website unit tests (Jest) |
 | `admin-unit-tests` | `web/admin` | `npm run test:unit` | Admin unit tests (vitest) |
 | `rust-checks` | `web/api`, `web/bulletin`, `data` | `cargo make lint` (+ `fmt-check` for bulletin and data) | Rust lint/format via [devops/precommit-rust.mjs](../../devops/precommit-rust.mjs) |
+| `dotnet-analyzers` | `app/**` `.cs`/`.csproj`, `.editorconfig`, `global.json`, `Directory.Build.props` | `dotnet build` per touched project | SonarAnalyzer severities fail locally instead of surfacing as post-push annotations ([devops/precommit-dotnet.mjs](../../devops/precommit-dotnet.mjs)); skips projects without a prior restore |
 | `codacy-gate` | `*.rs`, JS/TS files | `node devops/codacy-gate.mjs` | Codacy parity checks with no analyzer equivalent ([devops/codacy-gate.mjs](../../devops/codacy-gate.mjs)) |
 | `flip-book-local-restore` | post-commit | `npm run flip-book:local` | Restores local flip-book dep when the guard switched it |
 
@@ -134,6 +135,15 @@ the repo's toolchains can enforce it:
 | Switch without `default` (S131) | Same |
 | Public `const` fields (S3869 family) | Same (generated `FluentUI.cs` constants are excluded — regenerating that file would undo any manual conversion) |
 | Commented-out code (S125) | Same |
+| Generic `catch (Exception)` (S2221) | Same — `dotnet-analyzers` + `.editorconfig` severity `error`. Deliberate failure boundaries carry the dual convention: `//NOSONAR` with a reason for Codacy/Qodana **plus** `#pragma warning disable/restore S2221` for the Roslyn analyzer (which does not honor `//NOSONAR`). The rule does not fire inside test methods. |
+| Undisposed `IDisposable` locals (S2930) | Same analyzer set |
+| `readonly` candidate fields (S2933) | Same |
+| Explicit `GC.Collect()` (S1215) | Same — memory tests use `BibleOnSite.Tests.Support.GarbageCollection.CollectCycles()`, which carries the justification once |
+| Loop → LINQ `Where`/`Select` (S3267) | Same |
+| Unreachable conditional code / identical binary operands (S2583, S1764) | Same |
+| Instance member writing a `static` field (S2696) | Same |
+| Missed ternary / simple `using` (IDE0045, IDE0063) | Same (`dotnet_style`/`csharp_style` preferences set to `error`) |
+| Python blind/bare/silent excepts, mixed implicit returns | `ruff-check` (`BLE001`, `E722`, `S110`, `RET502`) |
 | `new RegExp(nonLiteral)` / ReDoS vector | `codacy-gate` — the constructor's first argument must be a literal |
 | `String.prototype.replaceAll` | `codacy-gate` — use `.replace(/pattern/g, ...)` (not transpiled for older browsers) |
 | `env::args`/`args_os` on security decisions | `codacy-gate` — call sites need an adjacent `nosemgrep` justification (same convention Semgrep honors on Codacy) |

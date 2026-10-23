@@ -48,7 +48,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     private bool _carouselInitializing;
 
     // Scroll state tracking - used to prevent long-press during scroll
-    private static DateTime _lastScrollTime = DateTime.MinValue;
+    private DateTime _lastScrollTime = DateTime.MinValue;
     private const int ScrollCooldownMs = 500; // Don't allow long-press within 500ms of scroll
 
     // Tracks the carousel width so rotation/resize can be detected in SizeChanged.
@@ -61,7 +61,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     /// Returns true if the user is currently scrolling or just finished scrolling.
     /// Used by LongPressBehavior to prevent false triggers during scroll.
     /// </summary>
-    public static bool IsScrolling => (DateTime.Now - _lastScrollTime).TotalMilliseconds < ScrollCooldownMs;
+    public bool IsScrolling => (DateTime.Now - _lastScrollTime).TotalMilliseconds < ScrollCooldownMs;
 
     /// <summary>
     /// Proxy for article selection highlight binding (avoids XC0045 when binding from Article template).
@@ -719,8 +719,10 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
                 await _viewModel.LoadPerushimAsync(_viewModel.PerekId);
             }
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: on-appearing refresh is best-effort
+        catch (Exception ex) //NOSONAR — on-appearing refresh is best-effort.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Refresh perushim on appearing failed: {ex}");
         }
     }
@@ -841,8 +843,10 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
                 badgeLabel.Text = count.ToString();
             }
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: articles-count badge degrades to hidden
+        catch (Exception ex) //NOSONAR — articles-count badge degrades to hidden.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Error updating articles count: {ex.Message}");
             ArticlesBadge.IsVisible = false;
         }
@@ -1038,6 +1042,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         }
 
         _longPressTokenSource?.Cancel();
+        _longPressTokenSource?.Dispose();
         _longPressTokenSource = new CancellationTokenSource();
 
         if (sender is Border border && ResolvePasuk(border.BindingContext) is { } pasuk)
@@ -1284,8 +1289,10 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
             HapticFeedback.Perform(HapticFeedbackType.LongPress);
 #endif
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: haptic feedback is best-effort
+        catch (Exception ex) //NOSONAR — haptic feedback is best-effort.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Haptic feedback failed: {ex.Message}");
         }
     }
@@ -1613,8 +1620,10 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
 
             ShowArticlesView();
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: articles-view transition must not crash the reader
+        catch (Exception ex) //NOSONAR — articles-view transition must not crash the reader.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"[Articles] Error in OnArticlesButtonClicked: {ex}");
         }
     }
@@ -1647,8 +1656,10 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
                 : Color.FromArgb("#512BD4");
             DebugLog.Write("[Articles] ShowArticlesView complete");
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: articles-view transition must not crash the reader
+        catch (Exception ex) //NOSONAR — articles-view transition must not crash the reader.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"[Articles] Error in ShowArticlesView: {ex}");
         }
     }
@@ -1700,8 +1711,10 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
             // Second half - rotate in
             await toView.ScaleXToAsync(1, duration, Easing.CubicOut);
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: flip animation falls back to a visibility swap
+        catch (Exception ex) //NOSONAR — flip animation falls back to a visibility swap.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"[Articles] Error in AnimateFlipAsync: {ex}");
             // Fallback: just swap visibility
             fromView.IsVisible = false;
@@ -1725,8 +1738,10 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
             {
                 await Shell.Current.GoToAsync($"articleDetail?articleId={article.Id}");
             }
-            catch (Exception ex)
+            #pragma warning disable S2221 // Deliberate failure boundary: articles list degrades to empty
+            catch (Exception ex) //NOSONAR — articles list degrades to empty.
             {
+                #pragma warning restore S2221
                 Console.Error.WriteLine($"Error navigating to article: {ex.Message}");
             }
         }
@@ -1742,8 +1757,10 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         {
             ArticlesCollection.ItemsSource = StarterService.Instance.GetArticlesByPerekId(_viewModel.PerekId);
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: articles list degrades to empty
+        catch (Exception ex) //NOSONAR — articles list degrades to empty.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Error loading articles: {ex.Message}");
             ArticlesCollection.ItemsSource = new List<Article>();
         }
@@ -1829,8 +1846,10 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
             // Unfocus alone can leave the floating keyboard over the list.
             await PerushSearchBar.HideSoftInputAsync(CancellationToken.None);
         }
+        #pragma warning disable S2221 // Deliberate failure boundary: see the //NOSONAR note
         catch (Exception ex) //NOSONAR — failure boundary: keyboard dismissal is best-effort and must not crash the reader.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Could not dismiss perushim search keyboard: {ex}");
         }
         PerushSearchBar.Unfocus();

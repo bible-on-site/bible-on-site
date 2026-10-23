@@ -499,11 +499,17 @@ public class AppFixture : IAsyncLifetime
     /// <summary>
     /// Waits for an element to appear in the UI.
     /// </summary>
+    public Task<AutomationElement?> WaitForElementAsync(
+        Func<Window, AutomationElement?> finder)
+        => WaitForElementAsync(finder, TimeSpan.FromSeconds(10));
+
+    /// <summary>
+    /// Waits for an element to appear in the UI.
+    /// </summary>
     public async Task<AutomationElement?> WaitForElementAsync(
         Func<Window, AutomationElement?> finder,
-        TimeSpan? timeout = null)
+        TimeSpan timeout)
     {
-        timeout ??= TimeSpan.FromSeconds(10);
         var sw = Stopwatch.StartNew();
 
         while (sw.Elapsed < timeout)

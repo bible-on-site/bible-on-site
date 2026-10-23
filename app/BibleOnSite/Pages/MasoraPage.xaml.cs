@@ -505,8 +505,10 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
             await _viewModel.LoadArticlesAsync(unit);
             ArticlesBadge.IsVisible = _viewModel.ArticlesCount > 0;
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: articles-count badge degrades to hidden
+        catch (Exception ex) //NOSONAR — articles-count badge degrades to hidden.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Error fetching articles count: {ex.Message}");
             ArticlesBadge.IsVisible = false;
         }

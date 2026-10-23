@@ -224,7 +224,7 @@ class AccumulatedQueueTests(unittest.TestCase):
         def sync():
             try:
                 self.db.sync_histories()
-            except Exception as error:
+            except Exception as error:  # noqa: BLE001 -- collect any background failure so the assertion below surfaces it
                 failures.append(error)
 
         with patch("listening_queue.read_json", side_effect=paused_read):

@@ -71,8 +71,10 @@ partial class Build
             var response = client.GetAsync("http://localhost:3003").Result;
             return response.IsSuccessStatusCode || response.StatusCode == System.Net.HttpStatusCode.BadRequest;
         }
-        catch
+        #pragma warning disable S2221 // Deliberate failure boundary: API probe: any failure counts as not-running
+        catch //NOSONAR — API probe: any failure counts as not-running.
         {
+            #pragma warning restore S2221
             return false;
         }
     }
@@ -85,8 +87,10 @@ partial class Build
             var connectTask = client.ConnectAsync(host, port);
             return connectTask.Wait(TimeSpan.FromSeconds(1)) && client.Connected;
         }
-        catch
+        #pragma warning disable S2221 // Deliberate failure boundary: TCP probe: any failure counts as closed
+        catch //NOSONAR — TCP probe: any failure counts as closed.
         {
+            #pragma warning restore S2221
             return false;
         }
     }
@@ -206,8 +210,10 @@ partial class Build
                 Environment.SetEnvironmentVariable("API_URL", ProdApiUrl);
             }
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: env-file load failure warns and continues with defaults
+        catch (Exception ex) //NOSONAR — env-file load failure warns and continues with defaults.
         {
+            #pragma warning restore S2221
             Serilog.Log.Warning($"Failed to load app env file {AppEnvFile}: {ex.Message}");
         }
     }
@@ -412,8 +418,10 @@ partial class Build
 
             return output.Contains("package:com.tanah.daily929");
         }
-        catch
+        #pragma warning disable S2221 // Deliberate failure boundary: adb package probe: any failure counts as not-installed
+        catch //NOSONAR — adb package probe: any failure counts as not-installed.
         {
+            #pragma warning restore S2221
             return false;
         }
     }
@@ -572,8 +580,10 @@ partial class Build
             var lines = output.Split('\n', StringSplitOptions.RemoveEmptyEntries);
             return lines.Length > 1 && lines.Any(l => l.Contains("device") && !l.StartsWith("List"));
         }
-        catch
+        #pragma warning disable S2221 // Deliberate failure boundary: adb device probe: any failure counts as no-device
+        catch //NOSONAR — adb device probe: any failure counts as no-device.
         {
+            #pragma warning restore S2221
             return false;
         }
     }
@@ -620,8 +630,10 @@ partial class Build
             }
             return null;
         }
-        catch
+        #pragma warning disable S2221 // Deliberate failure boundary: adb id probe: any failure counts as absent
+        catch //NOSONAR — adb id probe: any failure counts as absent.
         {
+            #pragma warning restore S2221
             return null;
         }
     }
@@ -671,8 +683,10 @@ partial class Build
             var avds = output.Split('\n', StringSplitOptions.RemoveEmptyEntries);
             return avds.FirstOrDefault()?.Trim();
         }
-        catch
+        #pragma warning disable S2221 // Deliberate failure boundary: avd probe: any failure counts as none
+        catch //NOSONAR — avd probe: any failure counts as none.
         {
+            #pragma warning restore S2221
             return null;
         }
     }
@@ -751,7 +765,9 @@ partial class Build
             process?.WaitForExit();
             return process?.ExitCode == 0;
         }
-        catch { return false; }
+        #pragma warning disable S2221 // Deliberate failure boundary: adb push probe: any failure counts as failed
+        catch { return false; } //NOSONAR — adb push probe: any failure counts as failed.
+        #pragma warning restore S2221
     }
 
     /// <summary>

@@ -29,7 +29,9 @@ public sealed class MpegRecitationAudioDecoder : IRecitationAudioDecoder
                 await view.EvaluateJavaScriptAsync("recitation.reset()");
             }
         }
-        catch (Exception) { _initialized = false; }
+        #pragma warning disable S2221 // Deliberate failure boundary: JS reset failure marks the decoder uninitialized so the next use retries
+        catch (Exception) { _initialized = false; } //NOSONAR — JS reset failure marks the decoder uninitialized so the next use retries.
+        #pragma warning restore S2221
         finally { _gate.Release(); }
     }
 

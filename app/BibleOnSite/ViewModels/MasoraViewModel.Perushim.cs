@@ -54,9 +54,9 @@ public partial class MasoraViewModel //NOSONAR
             var chapter = await _notesService.LoadChapterAsync(slice.PerekId);
             if (chapter == null) { continue; }
             chapters[slice.PerekId] = chapter;
-            foreach (var id in chapter.AvailablePerushIds(slice.StartPasuk, slice.EndPasuk))
+            foreach (var id in chapter.AvailablePerushIds(slice.StartPasuk, slice.EndPasuk).Where(seenIds.Add))
             {
-                if (seenIds.Add(id)) { allPerushIds.Add(id); }
+                allPerushIds.Add(id);
             }
         }
 
@@ -154,12 +154,9 @@ public partial class MasoraViewModel //NOSONAR
         var checkedSet = new HashSet<int>(CheckedPerushim);
         if (checkedSet.Count == 0)
         {
-            foreach (var row in unit.Rows)
+            foreach (var row in unit.Rows.Where(row => row.Pasuk.PerushNotes.Count > 0))
             {
-                if (row.Pasuk.PerushNotes.Count > 0)
-                {
-                    row.Pasuk.PerushNotes = new List<PerushNoteDisplay>();
-                }
+                row.Pasuk.PerushNotes = new List<PerushNoteDisplay>();
             }
             return;
         }

@@ -190,15 +190,19 @@ public class PerushimNotesService
     {
         var diagnosticErrors = new List<string>();
         try { await InitializeAsync(); }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: diagnostics collection: any failure becomes a report line
+        catch (Exception ex) //NOSONAR — diagnostics collection: any failure becomes a report line.
         {
+            #pragma warning restore S2221
             diagnosticErrors.Add($"Initialization error: {ex.GetType().Name}: {ex.Message}");
         }
         var dbPath = Path.Join(DataDirectory, NotesDbName);
         string? padPath = null;
         try { padPath = await _padService.TryGetAssetPathAsync(PerushimNotesPackName, CancellationToken.None); }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: diagnostics collection: any failure becomes a report line
+        catch (Exception ex) //NOSONAR — diagnostics collection: any failure becomes a report line.
         {
+            #pragma warning restore S2221
             diagnosticErrors.Add($"Delivery path error: {ex.GetType().Name}: {ex.Message}");
         }
         var appPackageHasFile = await AppPackageHasNotesAsync();
@@ -239,8 +243,10 @@ public class PerushimNotesService
             var deliveryDiag = await _padService.GetDeliveryDiagnosticsAsync(PerushimNotesPackName);
             lines.AddRange(deliveryDiag);
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: diagnostics collection: any failure becomes a report line
+        catch (Exception ex) //NOSONAR — diagnostics collection: any failure becomes a report line.
         {
+            #pragma warning restore S2221
             lines.Add($"Delivery diagnostics error: {ex.GetType().Name}: {ex.Message}");
         }
 
@@ -255,7 +261,7 @@ public class PerushimNotesService
             await using var s = await _fileSystem.OpenAppPackageFileAsync(NotesDbName);
             hasNotes = s != null;
         }
-        catch
+        catch (Exception ex) when (ex is FileNotFoundException or IOException or NotSupportedException)
         {
             return false;
         }
@@ -518,8 +524,10 @@ public class PerushimNotesService
                 return true;
             }
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: validation failure rejects the pack generation
+        catch (Exception ex) //NOSONAR — validation failure rejects the pack generation.
         {
+            #pragma warning restore S2221
             _notesValidationStatus = $"Validation error: {ex.GetType().Name}: {ex.Message}";
             Console.Error.WriteLine($"Could not verify perushim attribution: {ex.Message}");
             // A mid-validation error can come from a locally corrupted file —
@@ -802,8 +810,10 @@ public class PerushimNotesService
                 Console.WriteLine($"Perushim notes upgraded from PAD (local={localTs}, pad={padTs})");
             }
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: PAD check/upgrade is best-effort
+        catch (Exception ex) //NOSONAR — PAD check/upgrade is best-effort.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Failed to check/upgrade perushim notes from PAD: {ex.Message}");
         }
     }
@@ -830,7 +840,7 @@ public class PerushimNotesService
                 return ts;
             }
         }
-        catch { /* DB may not have _metadata table (legacy) */ }
+        catch (SQLiteException) { /* DB may not have _metadata table (legacy) */ }
         finally
         {
             if (conn != null)
@@ -877,8 +887,10 @@ public class PerushimNotesService
             await TryCopyPadIndexAsync(padAssetsPath);
             copied = true;
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: pack copy failure degrades to not-copied
+        catch (Exception ex) //NOSONAR — pack copy failure degrades to not-copied.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Failed to copy perushim notes from PAD: {ex.Message}");
         }
         return copied;
@@ -905,8 +917,10 @@ public class PerushimNotesService
             await using var source = File.OpenRead(srcPath);
             await AtomicFile.CopyAsync(source, Path.Join(DataDirectory, SearchIndexDbName));
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        #pragma warning disable S2221 // Deliberate failure boundary: package copy failure degrades to not-copied
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) //NOSONAR — package copy failure degrades to not-copied.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Failed to copy delivered search index from PAD: {ex.Message}");
         }
     }
@@ -930,8 +944,10 @@ public class PerushimNotesService
         {
             return false;
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: package copy failure degrades to not-copied
+        catch (Exception ex) //NOSONAR — package copy failure degrades to not-copied.
         {
+            #pragma warning restore S2221
             System.Diagnostics.Debug.WriteLine($"Perushim notes copy from app package failed: {ex.Message}");
             return false;
         }
