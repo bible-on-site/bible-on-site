@@ -1,5 +1,6 @@
 namespace BibleOnSite.Pages;
 
+using BibleOnSite.Helpers;
 using BibleOnSite.Models;
 using BibleOnSite.Services;
 using BibleOnSite.ViewModels;
@@ -54,6 +55,7 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
         SetupCircularMenuLayout();
         SetupUnitPickerEvents();
         SubscribePerushimSearch();
+        SubscribeNotesMaterialization();
     }
 
     public MasoraPage(MasoraViewModel viewModel)
@@ -67,6 +69,64 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
         SetupCircularMenuLayout();
         SetupUnitPickerEvents();
         SubscribePerushimSearch();
+        SubscribeNotesMaterialization();
+    }
+
+    /// <summary>
+    /// A reader opened while the first-launch notes pack still materializes
+    /// skips awaiting it (#2430) — when the copy completes the service raises
+    /// OperationCompleted off the UI thread, so re-check availability here.
+    /// </summary>
+    private void SubscribeNotesMaterialization()
+    {
+        PerushimNotesService.Instance.OperationCompleted += OnNotesOperationCompleted;
+        Unloaded += (_, _) => PerushimNotesService.Instance.OperationCompleted -= OnNotesOperationCompleted;
+    }
+
+    private bool _notesRefreshQueued;
+
+    private void OnNotesOperationCompleted()
+    {
+        // InitializeAsync releases the operation lock, which re-fires this
+        // event — and the refresh calls InitializeAsync itself. Without this
+        // guard every refresh queues another dispatcher turn forever, the UI
+        // thread never idles, and accessibility queries starve (#2430).
+        if (_notesRefreshQueued ||
+            (PerushimNotesService.Instance.IsAvailable == _viewModel.PerushimNotesAvailable
+                && !_viewModel.PerushimNotesPending))
+        {
+            return;
+        }
+        _notesRefreshQueued = true;
+        _ = Dispatcher.DispatchAsync(async () =>
+        {
+            try { await RefreshPerushimIfAvailabilityChangedAsync(); }
+            finally { _notesRefreshQueued = false; }
+        });
+    }
+
+    /// <summary>
+    /// Reloads perushim for the current unit when notes-availability changed
+    /// since the last load (e.g. the first-launch pack finished copying).
+    /// </summary>
+    private async Task RefreshPerushimIfAvailabilityChangedAsync()
+    {
+        try
+        {
+            await PerushimNotesService.Instance.InitializeAsync();
+            if ((PerushimNotesService.Instance.IsAvailable != _viewModel.PerushimNotesAvailable
+                    || _viewModel.PerushimNotesPending) &&
+                _viewModel.Unit is { } unit)
+            {
+                await _viewModel.LoadPerushimAsync(unit);
+            }
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: refresh is best-effort
+        catch (Exception ex) //NOSONAR — refresh is best-effort.
+        {
+            #pragma warning restore S2221
+            Console.Error.WriteLine($"Refresh perushim on materialization failed: {ex}");
+        }
     }
 
     /// <summary>
@@ -214,6 +274,12 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
     protected override async void OnAppearing()
     {
         base.OnAppearing();
+#if ANDROID
+        RegisterReaderBack();
+#endif
+#if WINDOWS
+        RegisterReaderKeyboardBack();
+#endif
 
         if (_viewModel.Unit == null && !_isLoading)
         {
@@ -269,6 +335,20 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
                 _isLoading = false;
             }
         }
+        // Cold-start main-thread work is done — release the deferred e2e
+        // search-index warmup so it cannot starve the accessibility snapshot.
+        Services.SearchIndexService.NotifyStartupSettled();
+    }
+
+    protected override void OnDisappearing()
+    {
+#if ANDROID
+        UnregisterReaderBack();
+#endif
+#if WINDOWS
+        UnregisterReaderKeyboardBack();
+#endif
+        base.OnDisappearing();
     }
 
     /// <summary>The unit's index inside the carousel collection (-1 when missing).</summary>
@@ -360,6 +440,12 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
         AbsoluteLayout.SetLayoutFlags(view, AbsoluteLayoutFlags.None);
         AbsoluteLayout.SetLayoutBounds(view, bounds);
     }
+
+    private void OnCircularMenuPressed(object? sender, EventArgs e) =>
+        DebugLog.Write($"[CircularMenu] Pressed: open={_isMenuOpen}");
+
+    private void OnCircularMenuReleased(object? sender, EventArgs e) =>
+        DebugLog.Write($"[CircularMenu] Released: open={_isMenuOpen}");
 
     /// <summary>Toggles the circular menu open/closed state with animation.</summary>
     private async void OnCircularMenuClicked(object? sender, EventArgs e)
@@ -480,9 +566,20 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
         MasoraUnitPickerPopup.Show(_viewModel.UnitId);
     }
 
-    /// <summary>Handles unit selection from the picker popup.</summary>
+    /// <summary>
+    /// Handles unit selection from the picker popup. A confirmed selection
+    /// completes the navigation: the picker closes itself and the radial menu
+    /// that opened it closes too, leaving the reader undimmed and interactive
+    /// (#2476).
+    /// </summary>
     private async Task OnUnitPickerSelectedAsync(int unitId)
     {
+        if (_isMenuOpen)
+        {
+            _isMenuOpen = false;
+            await CloseCircularMenuAsync();
+        }
+
         if (unitId > 0 && unitId != _viewModel.UnitId)
         {
             await _viewModel.NavigateToUnitAsync(unitId);
@@ -635,12 +732,26 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
     }
 
     /// <summary>Exits full screen mode - restores navigation and bottom bar.</summary>
-    private void OnExitFullScreenClicked(object? sender, TappedEventArgs e)
+    private void OnExitFullScreenClicked(object? sender, TappedEventArgs e) => ExitFullScreen();
+
+    private void ExitFullScreen()
     {
         ExitFullScreenButton.IsVisible = false;
         ReaderToolbar.IsVisible = true;
         BottomBar.IsVisible = true;
         FloatingMenuContainer.IsVisible = true;
+    }
+
+    protected override bool OnBackButtonPressed()
+    {
+        return TryHandleReaderBack() || base.OnBackButtonPressed();
+    }
+
+    private bool TryHandleReaderBack()
+    {
+        if (ExitFullScreenButton.IsVisible)
+        { ExitFullScreen(); return true; }
+        return false;
     }
 
     #endregion

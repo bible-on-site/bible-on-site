@@ -81,7 +81,9 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
         SetupExitButtonDragHandler();
         SetupUnitPickerEvents();
         SubscribePerushimSearch();
+        SubscribeNotesMaterialization();
         InitializeSearchHeader();
+        NormalNavigationBar.NavigationInterceptor = OnFocusedPasukNavigationIntercepted;
 #if ANDROID || IOS
         if (OperatingSystem.IsAndroid() || OperatingSystem.IsIOS())
         {
@@ -434,9 +436,45 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
             await RefreshPerushimIfAvailabilityChangedAsync();
             StartSearchIntroduction();
         }
+        // Cold-start main-thread work is done — release the deferred e2e
+        // search-index warmup so it cannot starve the accessibility snapshot.
+        Services.SearchIndexService.NotifyStartupSettled();
 #if IOS
         Dispatcher.Dispatch(ConfigureIosReaderHistory);
 #endif
+    }
+
+    /// <summary>
+    /// A reader opened while the first-launch notes pack still materializes
+    /// skips awaiting it (#2430) — when the copy completes the service raises
+    /// OperationCompleted off the UI thread, so re-check availability here.
+    /// </summary>
+    private void SubscribeNotesMaterialization()
+    {
+        PerushimNotesService.Instance.OperationCompleted += OnNotesOperationCompleted;
+        Unloaded += (_, _) => PerushimNotesService.Instance.OperationCompleted -= OnNotesOperationCompleted;
+    }
+
+    private bool _notesRefreshQueued;
+
+    private void OnNotesOperationCompleted()
+    {
+        // InitializeAsync releases the operation lock, which re-fires this
+        // event — and the refresh calls InitializeAsync itself. Without this
+        // guard every refresh queues another dispatcher turn forever, the UI
+        // thread never idles, and accessibility queries starve (#2430).
+        if (_notesRefreshQueued ||
+            (PerushimNotesService.Instance.IsAvailable == _viewModel.PerushimNotesAvailable
+                && !_viewModel.PerushimNotesPending))
+        {
+            return;
+        }
+        _notesRefreshQueued = true;
+        _ = Dispatcher.DispatchAsync(async () =>
+        {
+            try { await RefreshPerushimIfAvailabilityChangedAsync(); }
+            finally { _notesRefreshQueued = false; }
+        });
     }
 
     /// <summary>
@@ -448,7 +486,8 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
         try
         {
             await PerushimNotesService.Instance.InitializeAsync();
-            if (PerushimNotesService.Instance.IsAvailable != _viewModel.PerushimNotesAvailable &&
+            if ((PerushimNotesService.Instance.IsAvailable != _viewModel.PerushimNotesAvailable
+                    || _viewModel.PerushimNotesPending) &&
                 _viewModel.Unit is { } unit)
             {
                 await _viewModel.LoadPerushimAsync(unit);
@@ -494,6 +533,10 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
         MainActivity.TouchReleased -= OnTouchReleased;
         _swipe.Cancel();
         LongPressBehavior.CancelAllPending();
+#endif
+#if IOS
+        // A page pushed above gets its native edge-back back (#2432).
+        RestoreIosInteractiveBack();
 #endif
         base.OnDisappearing();
     }
@@ -698,10 +741,17 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
         AbsoluteLayout.SetLayoutBounds(view, bounds);
     }
 
+    private void OnCircularMenuPressed(object? sender, EventArgs e) =>
+        DebugLog.Write($"[CircularMenu] Pressed: open={_isMenuOpen}");
+
+    private void OnCircularMenuReleased(object? sender, EventArgs e) =>
+        DebugLog.Write($"[CircularMenu] Released: open={_isMenuOpen}");
+
     /// <summary>Toggles the circular menu open/closed state with animation.</summary>
     private async void OnCircularMenuClicked(object? sender, EventArgs e)
     {
         _isMenuOpen = !_isMenuOpen;
+        DebugLog.Write($"[CircularMenu] Clicked: open={_isMenuOpen}");
 
         if (_isMenuOpen)
         {
@@ -806,17 +856,41 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
 
     #region Navigation & Picker
 
-    private void OnReaderMenuClicked(object? sender, EventArgs e) =>
-        Shell.Current.FlyoutIsPresented = true;
+    /// <summary>
+    /// On iOS/Mac the focused-pasuk overlay has no system Back affordance, so
+    /// the shared top bar's navigation slot doubles as its close control — the
+    /// interceptor consumes the tap as "close" instead of opening the flyout
+    /// (#2467, same contract as the perek reader).
+    /// </summary>
+    private bool OnFocusedPasukNavigationIntercepted()
+    {
+        if (_focusedPasuk == null || !(OperatingSystem.IsIOS() || OperatingSystem.IsMacCatalyst()))
+        {
+            return false;
+        }
+        ClearAllSelections();
+        return true;
+    }
 
     private void OnUnitPickerClicked(object? sender, EventArgs e)
     {
         ParashaUnitPickerPopup.Show(_viewModel.UnitId);
     }
 
-    /// <summary>Handles unit selection from the picker popup.</summary>
+    /// <summary>
+    /// Handles unit selection from the picker popup. A confirmed selection
+    /// completes the navigation: the picker closes itself and the radial menu
+    /// that opened it closes too, leaving the reader undimmed and interactive
+    /// (#2476).
+    /// </summary>
     private async Task OnUnitPickerSelectedAsync(int unitId)
     {
+        if (_isMenuOpen)
+        {
+            _isMenuOpen = false;
+            await CloseCircularMenuAsync();
+        }
+
         if (unitId > 0 && unitId != _viewModel.UnitId)
         {
             await _viewModel.NavigateToUnitAsync(unitId);

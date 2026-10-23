@@ -23,6 +23,9 @@ public partial class MasoraViewModel : ObservableObject //NOSONAR
     private readonly PerekDataService _perekDataService;
     private readonly PerushimCatalogService _catalogService;
     private readonly PerushimNotesService _notesService;
+    private readonly IAppNavigator _navigator;
+    private readonly IFileSystem _fileSystem;
+    private readonly IShare _share;
     private readonly PreferencesService _preferencesService;
     private readonly Func<int, Task<List<Article>>>? _articlesLoader;
 
@@ -79,6 +82,10 @@ public partial class MasoraViewModel : ObservableObject //NOSONAR
     [ObservableProperty]
     private bool _perushimNotesAvailable;
 
+    /// <summary>Whether the first-launch notes pack is still materializing off the reader path (#2430).</summary>
+    [ObservableProperty]
+    private bool _perushimNotesPending;
+
     /// <summary>Whether the perushim catalog is available (bundled).</summary>
     [ObservableProperty]
     private bool _perushimCatalogAvailable;
@@ -100,11 +107,12 @@ public partial class MasoraViewModel : ObservableObject //NOSONAR
     public string PerushimEmptyMessage =>
         Perushim.Count > 0 && !string.IsNullOrWhiteSpace(PerushNameFilter) ? "לא נמצאו פירושים תואמים" :
         !PerushimCatalogAvailable ? "אין קטלוג פירושים" :
+        PerushimNotesPending ? "טוען פירושים..." :
         !PerushimNotesAvailable ? "להוריד פירושים" :
         "אין פרשנות לפרשה זו";
 
     /// <summary>Whether to show the download perushim button (notes not yet available).</summary>
-    public bool ShowDownloadPerushimButton => PerushimCatalogAvailable && !PerushimNotesAvailable;
+    public bool ShowDownloadPerushimButton => PerushimCatalogAvailable && !PerushimNotesAvailable && !PerushimNotesPending;
 
     /// <summary>
     /// The production articles loader — reads the StarterService startup
@@ -128,12 +136,24 @@ public partial class MasoraViewModel : ObservableObject //NOSONAR
     public MasoraViewModel(MasoraDataService masoraDataService, PerekDataService perekDataService,
         PreferencesService preferencesService, PerushimCatalogService? catalogService,
         PerushimNotesService? notesService, Func<int, Task<List<Article>>>? articlesLoader)
+        : this(masoraDataService, perekDataService, preferencesService, catalogService, notesService,
+            articlesLoader, null, null, null)
+    {
+    }
+
+    public MasoraViewModel(MasoraDataService masoraDataService, PerekDataService perekDataService,
+        PreferencesService preferencesService, PerushimCatalogService? catalogService,
+        PerushimNotesService? notesService, Func<int, Task<List<Article>>>? articlesLoader,
+        IAppNavigator? navigator, IFileSystem? fileSystem, IShare? share)
     {
         _masoraDataService = masoraDataService;
         _perekDataService = perekDataService;
         _preferencesService = preferencesService;
         _catalogService = catalogService ?? PerushimCatalogService.Instance;
         _notesService = notesService ?? PerushimNotesService.Instance;
+        _navigator = navigator ?? ShellAppNavigator.Instance;
+        _fileSystem = fileSystem ?? FileSystem.Current;
+        _share = share ?? Share.Default;
         _articlesLoader = articlesLoader;
 
         // Sync FontFactor from preferences and listen for changes

@@ -383,6 +383,12 @@
                                         Text="עבור להגדרות להורדת חבילת הפירושים"
                                         IsVisible="{Binding ShowDownloadPerushimButton}"
                                         Clicked="OnGoToPerushimSettingsClicked"/>
+                                <Button Text="ייצוא לוגים לתמיכה"
+                                        Command="{Binding ExportPerushimLogsCommand}"
+                                        AutomationId="ExportPerushimLogsButton"
+                                        IsVisible="{Binding ShowDownloadPerushimButton}"
+                                        BackgroundColor="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray700}}"
+                                        TextColor="{AppThemeBinding Light={StaticResource Gray800}, Dark={StaticResource Gray200}}"/>
                             </VerticalStackLayout>
                         </CollectionView.EmptyView>
                 </CollectionView>
@@ -493,6 +499,7 @@
               ZIndex="140"
               IsVisible="False"
               Opacity="0"
+              AutomationId="CircularMenuScrim"
               BackgroundColor="#66000000">
             <Grid.GestureRecognizers>
                 <TapGestureRecognizer Tapped="OnOverlayTapped"/>
@@ -568,6 +575,8 @@
                     CornerRadius="28"
                     BackgroundColor="{StaticResource Primary}"
                     TextColor="White"
+                    Pressed="OnCircularMenuPressed"
+                    Released="OnCircularMenuReleased"
                     Clicked="OnCircularMenuClicked">
                 <Button.Shadow>
                     <Shadow Brush="Black"

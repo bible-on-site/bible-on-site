@@ -106,8 +106,10 @@ public partial class ParashaPage //NOSONAR
         {
             await Shell.Current.GoToAsync(AppRoutes.ExtensionPacks);
         }
-        catch (Exception ex) //NOSONAR — failure boundary: settings navigation is best-effort and must not crash the reader.
+        #pragma warning disable S2221 // Deliberate failure boundary: settings navigation failure is log-only
+        catch (Exception ex) //NOSONAR — settings navigation failure is log-only.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Navigate to perushim settings failed: {ex}");
         }
     }

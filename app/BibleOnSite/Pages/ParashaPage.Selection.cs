@@ -228,13 +228,16 @@ public partial class ParashaPage
         }
 
         var count = _viewModel.SelectedPasukCount;
-        // The recitation bar is also the pause/resume control surface: it must
-        // stay reachable for the whole life of a playback — a pasuk tap, a word
-        // preview, or a unit started from the header all count (#2370). The
-        // same set owns the Android Back press (TryHandleReaderBack), so both
-        // read it from one place.
-        var isSelectionMode = ReaderSurfaceState.IsActive(count, _unitRecitationSelection,
-            _focusedPasuk != null, _recitationCursor.PlayingKey != null);
+        var focused = _focusedPasuk != null;
+        // The focused pasuk keeps the shared reader toolbar (full pasuk source,
+        // scoped search, #2466); the Back-only selection bar is for the other
+        // transient surfaces — a pesukim selection, the unit recitation mode,
+        // or an in-flight clip with no focused pasuk (#2370). The IsActive set
+        // still owns the Android Back press (TryHandleReaderBack) — both read
+        // their answer from ReaderSurfaceState.
+        var isSelectionMode = ReaderSurfaceState.ShowsSelectionBar(count, _unitRecitationSelection,
+            focused, _recitationCursor.PlayingKey != null);
+        ChapterSearch.SetFocusedPasukScope(focused);
         var ordinarySelection = count > 0 && !_unitRecitationSelection && _focusedPasuk == null;
         SelectionCountBadge.IsVisible = ordinarySelection;
         SelectionShareButton.IsVisible = ordinarySelection;
@@ -272,7 +275,21 @@ public partial class ParashaPage
                 : Color.FromArgb("#F2F7FE");
         Shell.SetBackgroundColor(this, shellBackground);
         ReaderToolbar.BackgroundColor = shellBackground;
-        NormalNavigationBar.IsVisible = !isSelectionMode && !searching;
+        NormalNavigationBar.BarVisible = !isSelectionMode && !searching;
+        // The header names the focused pasuk — its perek source and pasuk
+        // together — instead of the plain unit title (#2466).
+        NormalNavigationTitle.Text = focused && _focusedPerekId > 0
+            ? $"{PerekDataService.Instance.GetPerekSource(_focusedPerekId)} {_focusedPasuk!.PasukNumHeb}"
+            : _viewModel.Title;
+        // iOS has no system Back for the overlay, so the navigation slot turns
+        // into the close control there; platforms with system Back keep the
+        // shared hamburger (#2467).
+        var focusedNavIsBack = focused && (OperatingSystem.IsIOS() || OperatingSystem.IsMacCatalyst());
+        NormalNavigationBar.NavigationButton.Text = focusedNavIsBack
+            ? Fonts.FluentUI.arrow_right_24_regular
+            : Fonts.FluentUI.navigation_24_regular;
+        SemanticProperties.SetDescription(NormalNavigationBar.NavigationButton,
+            focusedNavIsBack ? "סגירת הפסוק הממוקד" : "פתיחת תפריט הניווט");
         SearchTitleHost.IsVisible = searching;
         SearchTitleHost.Content = searching ? _searchHeader : null;
         ChapterSearch.IsVisible = searching;
