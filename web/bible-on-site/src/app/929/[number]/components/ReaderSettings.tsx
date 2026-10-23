@@ -20,6 +20,7 @@ import {
 	PEREK_LINE_HEIGHTS,
 	PEREK_TANAKH_FONTS,
 	PEREK_WORD_SPACINGS,
+	READER_SETTINGS_EVENT,
 	READER_SETTINGS_STORAGE_KEY,
 	type ReaderSettings as ReaderState,
 	setStoredReaderSettings,
@@ -110,6 +111,10 @@ export default function ReaderSettings() {
 		setMasking(getDivineNameMaskingSettings());
 		const updated = (event: Event) =>
 			setRecitation((event as CustomEvent<RecitationSettings>).detail);
+		// Same-tab writes from the top-nav accessibility menu dispatch through
+		// READER_SETTINGS_EVENT; the panel mirrors them so both controls agree.
+		const displayUpdated = (event: Event) =>
+			setDisplay((event as CustomEvent<ReaderState>).detail);
 		const maskingUpdated = (event: Event) =>
 			setMasking((event as CustomEvent<DivineNameMaskingSettings>).detail);
 		// Cross-tab storage events fire for every key — only re-read the
@@ -135,11 +140,13 @@ export default function ReaderSettings() {
 		};
 		window.addEventListener(OPEN_READER_SETTINGS_EVENT, opened);
 		window.addEventListener(RECITATION_SETTINGS_EVENT, updated);
+		window.addEventListener(READER_SETTINGS_EVENT, displayUpdated);
 		window.addEventListener(DIVINE_NAME_MASKING_EVENT, maskingUpdated);
 		window.addEventListener("storage", stored);
 		return () => {
 			window.removeEventListener(OPEN_READER_SETTINGS_EVENT, opened);
 			window.removeEventListener(RECITATION_SETTINGS_EVENT, updated);
+			window.removeEventListener(READER_SETTINGS_EVENT, displayUpdated);
 			window.removeEventListener(DIVINE_NAME_MASKING_EVENT, maskingUpdated);
 			window.removeEventListener("storage", stored);
 		};
