@@ -189,8 +189,8 @@ export function authorInvalidation(...urls: string[]): RevalidateRequest[] {
 export function pediaInvalidation(...urls: string[]): RevalidateRequest[] {
 	return [
 		{ tag: "tanahpedia-entity-refs" },
-		{ tag: "tanahpedia-mention-refs" },
 		{ path: "/pedia/[slug]", type: "page" },
 		{ path: "/pedia", ...(urls.length ? { urls } : {}) },
+		{ tag: "tanahpedia-mention-refs" },
 	];
 }

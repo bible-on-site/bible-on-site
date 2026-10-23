@@ -18,6 +18,7 @@ import json
 from pathlib import Path
 import re
 import sys
+import urllib.parse
 import urllib.request
 
 PINNED_REVISION = "3d15126fb1ef74867fc1434be1942e837932691f"
@@ -83,6 +84,16 @@ def extract(xml_text, book_stem, verses):
             )
 
 
+def fetch_xml(filename):
+    """Download one pinned upstream XML over https (scheme-enforced)."""
+    url = f"{UPSTREAM_DIR}/{filename}"
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme != "https":
+        raise ValueError(f"refusing non-https upstream URL: {url}")
+    with urllib.request.urlopen(url) as response:  # nosec B310: https-scheme validated, host+path are compile-time constants pinned to the upstream revision.  # nosemgrep
+        return response.read().decode("utf-8")
+
+
 def build(cache_dir=None):
     verses = {}
     for stem in BOOK_FILES:
@@ -90,8 +101,7 @@ def build(cache_dir=None):
         if cache_dir is not None:
             xml_text = (cache_dir / filename).read_text(encoding="utf-8")
         else:
-            with urllib.request.urlopen(f"{UPSTREAM_DIR}/{filename}") as response:
-                xml_text = response.read().decode("utf-8")
+            xml_text = fetch_xml(filename)
         extract(xml_text, stem, verses)
     books = {}
     for (book_stem, chapter, verse), tokens in sorted(verses.items()):
