@@ -5,26 +5,31 @@
 # ============================================================================
 
 AWSTemplateFormatVersion: "2010-09-09"
-Description: |
-  Lambda function for deploying SQL data to RDS MySQL.
+Description: "Lambda function for deploying SQL data to RDS MySQL. Reference documentation only; not a deployed stack."
 
-  ⚠️ WARNING: This template is DOCUMENTATION ONLY and has never been deployed.
+Metadata:
+  Documentation: |
+    Lambda function for deploying SQL data to RDS MySQL.
 
-  This Lambda runs in the VPC and can access the RDS MySQL instance.
-  It is invoked by GitHub Actions CD workflow to populate the database.
+    ⚠️ WARNING: This template is DOCUMENTATION ONLY and has never been deployed.
 
-  Database credentials arrive in the invoke payload's `db_url` field: the
-  CD deployer (devops/deploy/data-deploy) reads SSM Parameter Store over the
-  public AWS API on every deployment and passes it through. The Lambda
-  itself never calls SSM, so no SSM interface VPC endpoint is required. A
-  DB_URL env var is still accepted for manual console invocations.
+    This Lambda runs in the VPC and can access the RDS MySQL instance.
+    It is invoked by GitHub Actions CD workflow to populate the database.
 
-  Lambda code: See data-deploy-lambda.py in this directory.
+    Transition status, verified 2026-10-23: #2579's deployer sends db_url in
+    the invoke payload, but the LIVE Lambda (last modified 2026-02-15) still
+    reads SSM at runtime. The checked-in handler accepts the payload/DB_URL;
+    it has NOT replaced that live code. Keep the SSM role grant, SSM_PREFIX
+    and interface endpoint until an approved, backward-compatible handler
+    rollout and VPC-wide consumer audit have both succeeded. Public IPs on
+    ECS tasks do not bypass an interface endpoint with private DNS enabled.
 
-  Sensitive Information Restoration:
-  | Placeholder | Description | Restoration Command |
-  |---|---|---|
-  | `<RDS_SECURITY_GROUP_ID>` | RDS MySQL security group | `aws ec2 describe-security-groups --filters "Name=group-name,Values=tanah-rds-sg" --query "SecurityGroups[0].GroupId" --output text --region il-central-1` |
+    Lambda code: See data-deploy-lambda.py in this directory.
+
+    Sensitive Information Restoration:
+    | Placeholder | Description | Restoration Command |
+    |---|---|---|
+    | `<RDS_SECURITY_GROUP_ID>` | RDS MySQL security group | `aws ec2 describe-security-groups --filters "Name=group-name,Values=tanah-rds-sg" --query "SecurityGroups[0].GroupId" --output text --region il-central-1` |
 
 Parameters:
   VpcId:
@@ -116,6 +121,14 @@ Resources:
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
+              # Keep this live runtime grant throughout the transition.
+              - Sid: SSMParameterStoreRead
+                Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                  - ssm:GetParameters
+                Resource:
+                  - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-tanah-db-*"
               # S3 - read SQL files
               - Sid: S3Read
                 Effect: Allow
@@ -151,9 +164,9 @@ Resources:
       Environment:
         Variables:
           S3_BUCKET: !Ref DataDeployBucket
-          # DB_URL (mysql://user:pass@host:3306/db) is optional — the deployer
-          # passes db_url in the invoke payload instead. Set it manually only
-          # if console-based test invokes are needed; never commit it here.
+          SSM_PREFIX: bible-on-site-tanah-db # Required by the live old handler
+          # The proposed handler accepts db_url in the invoke payload and an
+          # optional DB_URL env fallback. Never commit/deploy a secret here.
       Code:
         # Deploy using: See data-deploy-lambda.py docstring for instructions
         S3Bucket: bible-on-site-data-deploy
@@ -185,15 +198,12 @@ Resources:
   # Lambda runs in a private VPC with no NAT Gateway. The S3 gateway endpoint
   # (free, route-table based) lets the Lambda download the uploaded SQL files.
   #
-  # The SSM interface endpoint that previously existed only for the Lambda's
-  # runtime credential lookup was removed (~$7/month per endpoint ENI): the
-  # deployer now delivers the DB URL inside the invoke payload instead.
-  # One-time deletion of the legacy endpoint (deployed id vpce-0dd7903d30e03208c):
-  #   aws ec2 delete-vpc-endpoints --vpc-endpoint-ids vpce-0dd7903d30e03208c --region il-central-1
-  # Verify nothing else resolves ssm.il-central-1.amazonaws.com via this
-  # endpoint first (it had PrivateDnsEnabled). ECS tasks use public IPs and
-  # do not traverse it; a cross-check is still recommended before deleting:
-  #   aws ec2 describe-network-interfaces --filters "Name=vpc-endpoint-id,Values=vpce-0dd7903d30e03208c" --region il-central-1
+  # KEEP the SSM interface endpoint: vpce-0dd7903d30e03208c is available
+  # with PrivateDnsEnabled=true and allows HTTPS from the entire VPC.
+  # The live db-populator still uses it. ECS startup secret resolution and
+  # other VPC clients must also be inventoried; listing endpoint ENIs does
+  # not identify its consumers. Do not delete it based on #2579 alone.
+  # See ../../cost-risk-audit-2026-10-23.md for migration/rollback gates.
 
   # S3 Gateway Endpoint (free, uses route tables)
   S3GatewayEndpoint:
@@ -214,6 +224,31 @@ Resources:
               - s3:PutObject
             Resource:
               - !Sub "arn:aws:s3:::${DataDeployBucket}/*"
+
+  # Existing endpoint reference only; never create a duplicate from this file.
+  SSMInterfaceEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      VpcId: !Ref VpcId
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.ssm"
+      VpcEndpointType: Interface
+      SubnetIds: !Ref SubnetIds
+      SecurityGroupIds:
+        - !Ref LambdaSecurityGroup
+      PrivateDnsEnabled: true
+
+  # Matches the live endpoint's shared security group; preserve during audit.
+  LambdaSecurityGroupHTTPSIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref LambdaSecurityGroup
+      IpProtocol: tcp
+      FromPort: 443
+      ToPort: 443
+      CidrIp: 172.31.0.0/16
+      Description: HTTPS for VPC endpoint communication
 
 Outputs:
   LambdaFunctionArn:
@@ -287,8 +322,9 @@ Outputs:
 #
 # 8. Update GitHub Actions IAM role to allow:
 #    - s3:PutObject / s3:DeleteObject on the bucket
-#    - lambda:InvokeFunction, lambda:GetFunction, lambda:UpdateFunctionConfiguration
-#      on the Lambda (see github-oidc.yaml)
+#    - lambda:InvokeFunction on the Lambda (see github-oidc.yaml)
+#    - ssm:GetParameter on bible-on-site-tanah-db-url for #2579's deployer
+#      (already present live). No new Lambda configuration permissions needed.
 #
 # =============================================================================
 # DEPLOYED RESOURCES (as of January 2026)
@@ -297,7 +333,6 @@ Outputs:
 # - Lambda: bible-on-site-db-populator
 # - Lambda SG: sg-0cdca171d4f33dd34 (data-deploy-lambda-sg)
 # - S3 Gateway Endpoint: vpce-0388b3ea36b6a3214
-# - REMOVED: SSM Interface Endpoint vpce-0dd7903d30e03208c — no longer needed
-#   once the deployer delivers db_url in the invoke payload (see VPC Endpoint
-#   section above for the deletion command and pre-check).
+# - KEPT (verified 2026-10-23): SSM Interface Endpoint vpce-0dd7903d30e03208c
+#   Private DNS enabled; required by live Lambda and potentially ECS startup.
 # =============================================================================
