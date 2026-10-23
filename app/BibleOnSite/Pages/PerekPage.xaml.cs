@@ -1685,8 +1685,10 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
 
             await Task.CompletedTask; // Keep async signature
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: perek-view styling failure is log-only
+        catch (Exception ex) //NOSONAR — perek-view styling failure is log-only.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"[Articles] Error in ShowPerekView: {ex}");
         }
     }
@@ -1861,8 +1863,10 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         {
             await Shell.Current.GoToAsync(AppRoutes.ExtensionPacks);
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: settings navigation failure is log-only
+        catch (Exception ex) //NOSONAR — settings navigation failure is log-only.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Navigate to perushim settings failed: {ex}");
         }
     }

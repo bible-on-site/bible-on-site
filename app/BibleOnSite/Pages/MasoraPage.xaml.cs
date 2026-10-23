@@ -257,8 +257,10 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
                 // Preload rows for adjacent units so the next swipe is instant
                 _ = _viewModel.PreloadAdjacentRowsAsync(_viewModel.UnitId);
             }
-            catch (Exception ex)
+            #pragma warning disable S2221 // Deliberate failure boundary: unit load failure surfaces as a user alert
+            catch (Exception ex) //NOSONAR — unit load failure surfaces as a user alert.
             {
+                #pragma warning restore S2221
                 Console.Error.WriteLine($"Failed to load masora unit: {ex.Message}");
                 await DisplayAlertAsync("שגיאה", $"לא ניתן לטעון את פרשת המסורה: {ex.Message}", "אישור");
             }
@@ -534,8 +536,10 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
                 ? Color.FromArgb("#BB86FC")
                 : Color.FromArgb("#512BD4");
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: articles-button styling failure is log-only
+        catch (Exception ex) //NOSONAR — articles-button styling failure is log-only.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"[Articles] Error in OnArticlesButtonClicked: {ex}");
         }
     }
@@ -578,8 +582,10 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
             {
                 await Shell.Current.GoToAsync($"articleDetail?articleId={article.Id}");
             }
-            catch (Exception ex)
+            #pragma warning disable S2221 // Deliberate failure boundary: article navigation failure is log-only
+            catch (Exception ex) //NOSONAR — article navigation failure is log-only.
             {
+                #pragma warning restore S2221
                 Console.Error.WriteLine($"Error navigating to article: {ex.Message}");
             }
         }

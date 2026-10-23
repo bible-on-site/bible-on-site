@@ -922,8 +922,10 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
                 ? Color.FromArgb("#BB86FC")
                 : Color.FromArgb("#512BD4");
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: articles-button styling failure is log-only
+        catch (Exception ex) //NOSONAR — articles-button styling failure is log-only.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"[Articles] Error in OnArticlesButtonClicked: {ex}");
         }
     }
@@ -966,8 +968,10 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
             {
                 await Shell.Current.GoToAsync($"articleDetail?articleId={article.Id}");
             }
-            catch (Exception ex)
+            #pragma warning disable S2221 // Deliberate failure boundary: article navigation failure is log-only
+            catch (Exception ex) //NOSONAR — article navigation failure is log-only.
             {
+                #pragma warning restore S2221
                 Console.Error.WriteLine($"Error navigating to article: {ex.Message}");
             }
         }
