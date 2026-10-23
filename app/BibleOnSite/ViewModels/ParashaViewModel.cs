@@ -28,6 +28,7 @@ public partial class ParashaViewModel : ObservableObject //NOSONAR
     private readonly PreferencesService _preferencesService;
     private readonly Func<int, Task<List<Article>>>? _articlesLoader;
     private readonly Func<int, bool>? _hasPerekAudio;
+    private readonly Func<int> _hebrewDateProvider;
 
     // Using fields with [ObservableProperty] - the MVVMTK0045 warnings are acceptable
     // as we're not targeting AOT scenarios for WinRT marshalling.
@@ -208,6 +209,15 @@ public partial class ParashaViewModel : ObservableObject //NOSONAR
         PreferencesService preferencesService, PerushimCatalogService? catalogService,
         PerushimNotesService? notesService, Func<int, Task<List<Article>>>? articlesLoader,
         Func<int, bool>? hasPerekAudio)
+        : this(parashaService, perekService, preferencesService, catalogService, notesService,
+            articlesLoader, hasPerekAudio, null)
+    {
+    }
+
+    public ParashaViewModel(ParashaDataService parashaService, PerekDataService perekService,
+        PreferencesService preferencesService, PerushimCatalogService? catalogService,
+        PerushimNotesService? notesService, Func<int, Task<List<Article>>>? articlesLoader,
+        Func<int, bool>? hasPerekAudio, Func<int>? hebrewDateProvider)
     {
         _parashaService = parashaService;
         _perekService = perekService;
@@ -215,6 +225,7 @@ public partial class ParashaViewModel : ObservableObject //NOSONAR
         _catalogService = catalogService ?? PerushimCatalogService.Instance;
         _notesService = notesService ?? PerushimNotesService.Instance;
         _articlesLoader = articlesLoader;
+        _hebrewDateProvider = hebrewDateProvider ?? HebrewDateHelper.GetTodayDateNumber;
 #if MAUI
         _hasPerekAudio = hasPerekAudio ?? (perekId => RecitationService.Instance.HasAudio(perekId));
 #else
@@ -472,6 +483,76 @@ public partial class ParashaViewModel : ObservableObject //NOSONAR
         if (PreviousUnitId > 0 && PreviousUnitId != UnitId)
         {
             await NavigateToUnitAsync(PreviousUnitId);
+        }
+    }
+
+    /// <summary>
+    /// Optional confirmation hook for the holiday case: the page wires it
+    /// to a dialog so tapping פרשת השבוע on a festival Shabbat explains the
+    /// displaced reading and offers the next regular one. Null (or a true
+    /// result) navigates directly.
+    /// </summary>
+    public Func<WeeklyParashaTarget, Task<bool>>? ConfirmHolidayReading { get; set; }
+
+    /// <summary>
+    /// Resolves the weekly parasha for the current tzeit-aware Hebrew date
+    /// (Israel schedule — the product's Jerusalem policy) into reader
+    /// targets. On a festival Shabbat the target is the next regular
+    /// reading and <see cref="WeeklyParashaTarget.HolidayName"/> names the
+    /// displacing festival.
+    /// </summary>
+    public WeeklyParashaTarget? ResolveWeeklyParasha()
+    {
+        var today = _hebrewDateProvider();
+        var reading = SedraSchedule.GetWeeklyReading(today);
+        var target = reading.HasParasha ? reading : SedraSchedule.GetNextRegularReading(today);
+        var parashiot = _parashaService.Parashiot;
+        if (parashiot is null || target.ParashaIndexes.Count == 0)
+        {
+            return null;
+        }
+
+        var first = target.ParashaIndexes[0];
+        if (first >= parashiot.Count)
+        {
+            return null;
+        }
+
+        // A joined week keeps both portions: the title names the pair and
+        // the landing unit is its first constituent (the second stays one
+        // swipe away, matching the printed luach convention).
+        var headings = target.ParashaIndexes
+            .Where(index => index < parashiot.Count)
+            .Select(index => parashiot[index].Heading);
+        return new WeeklyParashaTarget(
+            parashiot[first].UnitId,
+            $"פרשת {string.Join("-", headings)}",
+            HebrewDateHelper.FormatHebrewDate(target.ShabbatDate),
+            reading.HolidayName,
+            reading.HasParasha ? null : HebrewDateHelper.FormatHebrewDate(reading.ShabbatDate));
+    }
+
+    /// <summary>Navigates to the current פרשת השבוע on the Israel schedule.</summary>
+    [RelayCommand]
+    public async Task LoadWeeklyParashaAsync()
+    {
+        if (!_parashaService.IsLoaded)
+        {
+            await _parashaService.LoadAsync();
+        }
+        var target = ResolveWeeklyParasha();
+        if (target is null)
+        {
+            return;
+        }
+        if (target.HolidayName is not null && ConfirmHolidayReading is { } confirm &&
+            !await confirm(target))
+        {
+            return;
+        }
+        if (target.UnitId != UnitId)
+        {
+            await NavigateToUnitAsync(target.UnitId);
         }
     }
 
@@ -739,3 +820,28 @@ public partial class ParashaViewModel : ObservableObject //NOSONAR
         }
     }
 }
+
+/// <summary>
+/// פרשת השבוע navigation target resolved by
+/// <see cref="ParashaViewModel.ResolveWeeklyParasha"/>: the first unit of
+/// the week's reading (a joined week keeps both headings in
+/// <see cref="ReadingTitle"/>) plus the strings the page needs to explain a
+/// festival Shabbat and offer the next regular reading.
+/// </summary>
+/// <param name="UnitId">Stable reading-unit id of the first parasha.</param>
+/// <param name="ReadingTitle">Display title, e.g. "פרשת מטות-מסעי".</param>
+/// <param name="ShabbatDateText">The target reading's Shabbat in Hebrew letters.</param>
+/// <param name="HolidayName">
+/// Set when this week's Shabbat is a festival with no ordinary parasha —
+/// the target then points at the next regular reading.
+/// </param>
+/// <param name="HolidayShabbatDateText">
+/// The displaced festival Shabbat's date in Hebrew letters (only when
+/// <paramref name="HolidayName"/> is set).
+/// </param>
+public sealed record WeeklyParashaTarget(
+    int UnitId,
+    string ReadingTitle,
+    string ShabbatDateText,
+    string? HolidayName,
+    string? HolidayShabbatDateText);
