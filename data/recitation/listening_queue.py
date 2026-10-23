@@ -631,7 +631,7 @@ class QueueHandler(ListeningHandler):
                     self.send_header("X-Original-Audio-SHA256", task["audioSha256"])
                     self.end_headers()
                     self.wfile.write(raw)
-                    return
+                    return None
                 task = next((task for task in store.public_view()["tasks"] if task["taskId"] == task_id), None)
                 if not task or task["state"] == "resolved" or "caseRef" not in task:
                     raise ValueError("No current cut review for this action")

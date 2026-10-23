@@ -131,8 +131,10 @@ public static class MauiProgram
 					CrossFirebaseAnalytics.Current.IsAnalyticsCollectionEnabled = analyticsCollectionEnabled;
 					Console.WriteLine($"[Analytics] collection enabled={analyticsCollectionEnabled}");
 				}
-				catch (Exception ex)
+				#pragma warning disable S2221 // Deliberate failure boundary: Firebase init failure disables analytics, not the app
+				catch (Exception ex) //NOSONAR — Firebase init failure disables analytics, not the app.
 				{
+				    #pragma warning restore S2221
 					System.Diagnostics.Debug.WriteLine($"[Firebase] Initialization failed (analytics disabled): {ex.Message}");
 					Console.Error.WriteLine($"[Firebase] Initialization failed (analytics disabled): {ex.Message}");
 				}

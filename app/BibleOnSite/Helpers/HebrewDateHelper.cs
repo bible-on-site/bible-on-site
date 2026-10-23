@@ -190,7 +190,7 @@ public static class HebrewDateHelper
                     calendar.GetDayOfMonth(gregDate)
                 );
             }
-            catch
+            catch (ArgumentException)
             {
                 // If conversion fails, return original
                 return hebrewDate;
@@ -315,7 +315,7 @@ public static class HebrewDateHelper
             var newDay = calendar.GetDayOfMonth(gregDate);
             return HebrewDateToNumber((newYear, newMonth, newDay));
         }
-        catch
+        catch (ArgumentException)
         {
             return dateNum + days;
         }

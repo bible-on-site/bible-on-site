@@ -164,8 +164,10 @@ public partial class LearningCalendarViewModel : ObservableObject
             SetMonth(year, month);
             ErrorMessage = string.Empty;
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: calendar load failure surfaces as ErrorMessage
+        catch (Exception ex) //NOSONAR — calendar load failure surfaces as ErrorMessage.
         {
+            #pragma warning restore S2221
             ErrorMessage = $"טעינת הלוח נכשלה: {ex.Message}";
         }
         finally

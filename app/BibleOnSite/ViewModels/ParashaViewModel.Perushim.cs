@@ -56,9 +56,9 @@ public partial class ParashaViewModel //NOSONAR
             var chapter = await _notesService.LoadChapterAsync(slice.PerekId);
             if (chapter == null) { continue; }
             chapters[slice.PerekId] = chapter;
-            foreach (var id in chapter.AvailablePerushIds(slice.StartPasuk, slice.EndPasuk))
+            foreach (var id in chapter.AvailablePerushIds(slice.StartPasuk, slice.EndPasuk).Where(seenIds.Add))
             {
-                if (seenIds.Add(id)) { allPerushIds.Add(id); }
+                allPerushIds.Add(id);
             }
         }
 

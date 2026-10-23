@@ -181,9 +181,13 @@ public partial class PreferencesViewModel : DivineNamePreferencesViewModel
     {
         Load();
         try { await _perushimNotesService.InitializeAsync(); }
+        #pragma warning disable S2221 // Deliberate failure boundary: see the //NOSONAR note
         catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Perushim init: {ex.Message}"); } //NOSONAR
+        #pragma warning restore S2221
         try { await _recitationService.InitializeAsync(); }
+        #pragma warning disable S2221 // Deliberate failure boundary: see the //NOSONAR note
         catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Recitation init: {ex.Message}"); } //NOSONAR
+        #pragma warning restore S2221
         NotifyPackStates();
     }
 

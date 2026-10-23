@@ -140,6 +140,7 @@ public partial class ParashaPage
         }
 
         _longPressTokenSource?.Cancel();
+        _longPressTokenSource?.Dispose();
         _longPressTokenSource = new CancellationTokenSource();
 
         if (sender is Border border && border.BindingContext is ParashaDisplayItem row && row.Display != null)
@@ -353,8 +354,10 @@ public partial class ParashaPage
             HapticFeedback.Perform(HapticFeedbackType.LongPress);
 #endif
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: haptic feedback is best-effort
+        catch (Exception ex) //NOSONAR — haptic feedback is best-effort.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Haptic feedback failed: {ex.Message}");
         }
     }

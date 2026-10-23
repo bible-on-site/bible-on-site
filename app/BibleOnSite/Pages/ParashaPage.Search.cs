@@ -283,8 +283,10 @@ public partial class ParashaPage
                 }
             }
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: search-result navigation failure alerts the user
+        catch (Exception ex) //NOSONAR — search-result navigation failure alerts the user.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Search navigation failed: {ex}");
             await DisplayAlertAsync("חיפוש", "לא ניתן לפתוח את תוצאת החיפוש. נסו שוב", "אישור");
         }

@@ -91,8 +91,10 @@ public partial class MasoraPage //NOSONAR
             // Unfocus alone can leave the floating keyboard over the list.
             await PerushSearchBar.HideSoftInputAsync(CancellationToken.None);
         }
+        #pragma warning disable S2221 // Deliberate failure boundary: see the //NOSONAR note
         catch (Exception ex) //NOSONAR — failure boundary: keyboard dismissal is best-effort and must not crash the reader.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Could not dismiss perushim search keyboard: {ex}");
         }
         PerushSearchBar.Unfocus();
@@ -104,8 +106,10 @@ public partial class MasoraPage //NOSONAR
         {
             await Shell.Current.GoToAsync(AppRoutes.ExtensionPacks);
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: settings navigation failure is log-only
+        catch (Exception ex) //NOSONAR — settings navigation failure is log-only.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Navigate to perushim settings failed: {ex}");
         }
     }

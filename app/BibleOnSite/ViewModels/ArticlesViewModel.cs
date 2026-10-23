@@ -240,8 +240,10 @@ public partial class ArticlesViewModel : ObservableObject
         {
             // A newer query or an author switch owns the list now.
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: author search failure surfaces as a user message
+        catch (Exception ex) //NOSONAR — author search failure surfaces as a user message.
         {
+            #pragma warning restore S2221
             if (!token.IsCancellationRequested)
             {
                 SearchMessage = "חיפוש תוכן מאמרים דורש חיבור רשת תקין";
@@ -326,8 +328,10 @@ public partial class ArticlesViewModel : ObservableObject
 
             SetArticles(articles);
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: articles load failure surfaces as a user message
+        catch (Exception ex) //NOSONAR — articles load failure surfaces as a user message.
         {
+            #pragma warning restore S2221
             ErrorMessage = $"שגיאה בטעינת המאמרים: {ex.Message}";
             Console.Error.WriteLine($"Error loading articles: {ex}");
         }

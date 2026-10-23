@@ -63,8 +63,10 @@ public sealed class ExitConfirmation
 				_exit();
 			}
 		}
-		catch (Exception ex)
+		#pragma warning disable S2221 // Deliberate failure boundary: exit-prompt failure falls through to normal exit
+		catch (Exception ex) //NOSONAR — exit-prompt failure falls through to normal exit.
 		{
+		    #pragma warning restore S2221
 			Console.Error.WriteLine($"[Exit] confirmation prompt failed: {ex}");
 		}
 		finally

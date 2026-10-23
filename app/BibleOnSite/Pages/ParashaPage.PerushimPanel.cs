@@ -91,8 +91,10 @@ public partial class ParashaPage //NOSONAR
             // Unfocus alone can leave the floating keyboard over the list.
             await PerushSearchBar.HideSoftInputAsync(CancellationToken.None);
         }
+        #pragma warning disable S2221 // Deliberate failure boundary: see the //NOSONAR note
         catch (Exception ex) //NOSONAR — failure boundary: keyboard dismissal is best-effort and must not crash the reader.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Could not dismiss perushim search keyboard: {ex}");
         }
         PerushSearchBar.Unfocus();

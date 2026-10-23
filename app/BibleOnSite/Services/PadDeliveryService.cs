@@ -76,8 +76,10 @@ public sealed partial class PadDeliveryService : IPadDeliveryService
                     new ScaledProgress(index, files.Count, progress),
                     cancellationToken);
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            #pragma warning disable S2221 // Deliberate failure boundary: optional-payload absence is diagnostic output, not fatal
+            catch (Exception ex) when (ex is not OperationCanceledException) //NOSONAR — optional-payload absence is diagnostic output, not fatal.
             {
+                #pragma warning restore S2221
                 if (index == 0)
                 {
                     return $"{ex.GetType().Name}: {ex.Message}";
@@ -248,8 +250,10 @@ partial class PadDeliveryService
             var location = manager.GetPackLocation(packName);
             return Task.FromResult(location?.AssetsPath());
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: pack-location probe: any failure counts as unavailable
+        catch (Exception ex) //NOSONAR — pack-location probe: any failure counts as unavailable.
         {
+            #pragma warning restore S2221
             System.Diagnostics.Debug.WriteLine($"PAD GetPackLocation failed: {ex.Message}");
             return Task.FromResult<string?>(null);
         }
@@ -350,8 +354,10 @@ partial class PadDeliveryService
             manager.Cancel(new[] { packName });
             throw;
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: pack fetch failure is surfaced via LastAndroidPadError and a false result
+        catch (Exception ex) //NOSONAR — pack fetch failure is surfaced via LastAndroidPadError and a false result.
         {
+            #pragma warning restore S2221
             LastAndroidPadError = $"{ex.GetType().Name}: {ex.Message}";
             System.Diagnostics.Debug.WriteLine($"PAD Fetch failed: {ex.Message}");
             return false;
@@ -388,8 +394,10 @@ partial class PadDeliveryService
                     "If (null) after install from Play: the AAB may have been built without the perushim_notes asset pack (missing .sqlite at CI package time), or the app was not installed from Play.");
             }
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: diagnostics collection: pack-location failure becomes a report line
+        catch (Exception ex) //NOSONAR — diagnostics collection: pack-location failure becomes a report line.
         {
+            #pragma warning restore S2221
             lines.Add($"GetPackLocation error: {ex.Message}");
         }
 
@@ -429,8 +437,10 @@ partial class PadDeliveryService
                 lines.Add($"Installer package: {legacy ?? "(null)"}");
             }
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: diagnostics collection: installer-source failure becomes a report line
+        catch (Exception ex) //NOSONAR — diagnostics collection: installer-source failure becomes a report line.
         {
+            #pragma warning restore S2221
             lines.Add($"Install source error: {ex.Message}");
         }
     }
@@ -540,8 +550,10 @@ partial class PadDeliveryService
             ct.ThrowIfCancellationRequested();
             return await SaveAssetPackPayloadAsync(cacheDir, packName);
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: asset-path lookup failure counts as unavailable
+        catch (Exception ex) //NOSONAR — asset-path lookup failure counts as unavailable.
         {
+            #pragma warning restore S2221
             ct.ThrowIfCancellationRequested();
             System.Diagnostics.Debug.WriteLine($"BA TryGetAssetPath failed: {ex.Message}");
             return null;
@@ -609,8 +621,10 @@ partial class PadDeliveryService
             System.Diagnostics.Debug.WriteLine($"BA: {LastIosDeliveryError}");
             return false;
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: delivery fetch failure is surfaced via LastIosDeliveryError and a false result
+        catch (Exception ex) //NOSONAR — delivery fetch failure is surfaced via LastIosDeliveryError and a false result.
         {
+            #pragma warning restore S2221
             ct.ThrowIfCancellationRequested();
             LastIosDeliveryError = $"{ex.GetType().Name}: {ex.Message}";
             System.Diagnostics.Debug.WriteLine($"BA Fetch failed: {ex.Message}");
@@ -800,8 +814,10 @@ partial class PadDeliveryService
             System.Diagnostics.Debug.WriteLine($"BA: saved to {destPath}");
             return true;
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: payload save failure returns a false result
+        catch (Exception ex) //NOSONAR — payload save failure returns a false result.
         {
+            #pragma warning restore S2221
             System.Diagnostics.Debug.WriteLine($"BA: save failed: {ex.Message}");
             return false;
         }
@@ -825,8 +841,10 @@ partial class PadDeliveryService
                     $"BA: cancel for '{pack.Identifier}' did not apply: {error?.LocalizedDescription ?? "not scheduled"}");
             }
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: download cancel is best-effort
+        catch (Exception ex) //NOSONAR — download cancel is best-effort.
         {
+            #pragma warning restore S2221
             System.Diagnostics.Debug.WriteLine($"BA: cancel failed: {ex.Message}");
         }
     }
@@ -846,8 +864,10 @@ partial class PadDeliveryService
                 var fi = new FileInfo(cachedFile);
                 lines.Add($"Cached file size: {fi.Length} bytes");
             }
-            catch (Exception ex)
+            #pragma warning disable S2221 // Deliberate failure boundary: diagnostics collection: cached-file info failure becomes a report line
+            catch (Exception ex) //NOSONAR — diagnostics collection: cached-file info failure becomes a report line.
             {
+                #pragma warning restore S2221
                 lines.Add($"Cached file info error: {ex.Message}");
             }
         }
@@ -862,8 +882,10 @@ partial class PadDeliveryService
             lines.Add($"BAUsesAppleHosting: {info.ObjectForInfoDictionary("BAUsesAppleHosting")?.ToString() ?? "(unset)"}");
             lines.Add($"BAAppGroupID: {info.ObjectForInfoDictionary("BAAppGroupID")?.ToString() ?? "(unset)"}");
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: diagnostics collection: Info.plist probe failure becomes a report line
+        catch (Exception ex) //NOSONAR — diagnostics collection: Info.plist probe failure becomes a report line.
         {
+            #pragma warning restore S2221
             lines.Add($"Info.plist probe error: {ex.Message}");
         }
 
@@ -875,8 +897,10 @@ partial class PadDeliveryService
                 : NSFileManager.DefaultManager.GetContainerUrl(groupId);
             lines.Add($"App-group container: {(container == null ? "inaccessible" : "accessible")}");
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: diagnostics collection: app-group probe failure becomes a report line
+        catch (Exception ex) //NOSONAR — diagnostics collection: app-group probe failure becomes a report line.
         {
+            #pragma warning restore S2221
             lines.Add($"App-group container probe error: {ex.Message}");
         }
 
@@ -912,8 +936,10 @@ partial class PadDeliveryService
                     var status = await BAAssetPackManager.SharedManager.GetLocalStatusAsync(packName).WaitAsync(TimeSpan.FromMinutes(2));
                     lines.Add($"Local status: {status}");
                 }
-                catch (Exception ex)
+                #pragma warning disable S2221 // Deliberate failure boundary: diagnostics collection: local-status probe failure becomes a report line
+                catch (Exception ex) //NOSONAR — diagnostics collection: local-status probe failure becomes a report line.
                 {
+                    #pragma warning restore S2221
                     lines.Add($"Local status error: {ex.GetType().Name}: {ex.Message}");
                 }
             }
@@ -922,8 +948,10 @@ partial class PadDeliveryService
                 lines.Add("Local status probe requires iOS 26.4 or later.");
             }
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: diagnostics collection: availability probe failure becomes a report line
+        catch (Exception ex) //NOSONAR — diagnostics collection: availability probe failure becomes a report line.
         {
+            #pragma warning restore S2221
             lines.Add($"Availability probe error: {ex.GetType().Name}: {ex.Message}");
         }
 
@@ -933,8 +961,10 @@ partial class PadDeliveryService
                 .Cast<BAAssetPack>().Select(p => p.Identifier).OrderBy(id => id).ToList();
             lines.Add($"Store packs ({packs.Count}): {string.Join(", ", packs)}");
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: diagnostics collection: store-pack list failure becomes a report line
+        catch (Exception ex) //NOSONAR — diagnostics collection: store-pack list failure becomes a report line.
         {
+            #pragma warning restore S2221
             lines.Add($"GetAllAssetPacks error: {ex.GetType().Name}: {ex.Message}");
         }
 
@@ -945,8 +975,10 @@ partial class PadDeliveryService
             var driveInfo = new DriveInfo(Path.GetPathRoot(cacheRoot) ?? "/");
             lines.Add($"Available disk space: {driveInfo.AvailableFreeSpace / (1024 * 1024)} MB");
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: diagnostics collection: disk-space probe failure becomes a report line
+        catch (Exception ex) //NOSONAR — diagnostics collection: disk-space probe failure becomes a report line.
         {
+            #pragma warning restore S2221
             lines.Add($"Disk space check error: {ex.Message}");
         }
 
