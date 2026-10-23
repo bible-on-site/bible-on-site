@@ -931,6 +931,51 @@ export async function getEntryOccurrences(
 	);
 }
 
+/**
+ * Mention decorations (annotation pipeline, #2516) resolved against the
+ * CURRENT entry table. Inference persists name-keyed rows; this cheap join
+ * is the only place they meet live entries — a mention resolves iff its
+ * normalized intended_name hits exactly one entry unique_name or synonym
+ * (ambiguous names stay unresolved). Callers treat unresolved rows as
+ * plain text: `buildEntityRefLookup` drops null `entryUniqueName`, so
+ * entry create/delete flips presentation without any re-inference.
+ */
+export async function getMentionReferencesForPerek(
+	perekId: number,
+): Promise<PerekEntityReference[]> {
+	try {
+		return await query<PerekEntityReference>(
+			`SELECT
+			   ent.id AS entityId,
+			   ent.title AS entityName,
+			   d.entity_type AS entityType,
+			   ANY_VALUE(ent.unique_name) AS entryUniqueName,
+			   d.pasuk_number AS pasukNumber,
+			   d.segment_start AS segmentStart,
+			   d.segment_end AS segmentEnd
+			 FROM tanahpedia_mention_decoration d
+			 LEFT JOIN (
+			   SELECT e.id AS entryId, e.unique_name AS resolvedName FROM tanahpedia_entry e
+			   UNION ALL
+			   SELECT s.entry_id AS entryId, s.name AS resolvedName FROM tanahpedia_entry_synonym s
+			 ) names ON REPLACE(names.resolvedName, '-', ' ') = d.intended_name
+			 LEFT JOIN tanahpedia_entry ent ON ent.id = names.entryId
+			 WHERE d.source_kind = 'pasuk' AND d.perek_id = ?
+			   AND d.acceptance IN ('auto', 'manual')
+			 GROUP BY d.id
+			 HAVING COUNT(DISTINCT names.entryId) <= 1
+			 ORDER BY pasukNumber, segmentStart`,
+			[String(perekId)],
+		);
+	} catch (error) {
+		console.error(
+			`Failed to fetch mention references for perek ${perekId}:`,
+			error instanceof Error ? error.message : error,
+		);
+		return [];
+	}
+}
+
 export async function getEntityReferencesForPerek(
 	perekId: number,
 ): Promise<PerekEntityReference[]> {

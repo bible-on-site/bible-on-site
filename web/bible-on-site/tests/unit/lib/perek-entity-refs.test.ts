@@ -10,6 +10,7 @@ jest.mock("next/cache", () => ({
 
 jest.mock("@/lib/tanahpedia/service", () => ({
 	getEntityReferencesForPerek: jest.fn(),
+	getMentionReferencesForPerek: jest.fn(async () => []),
 }));
 
 const loadRefs = jest.mocked(getEntityReferencesForPerek);
