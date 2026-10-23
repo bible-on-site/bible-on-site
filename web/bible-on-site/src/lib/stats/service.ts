@@ -20,6 +20,11 @@ import { query } from "../api-client";
  *   exists once an audio asset is actually published. Alignment approval
  *   (`alignmentStatus`) is unrelated to availability and never filters a
  *   playable recording out.
+ * - illustrations: distinct logical perek illustrations the public reader
+ *   can actually display — `is_active` images with at least one usable
+ *   display WebP variant, the same eligibility `imagesFromRows` applies.
+ *   AVIF/JPEG encodings, sizes, social crops and joined verse-range rows
+ *   never multiply the count.
  * - programmeYears: completed Hebrew years since the first study day of
  *   the first cycle (29 Kislev 5775, from the canonical cycle data), using
  *   the same Jerusalem-date + tzeit "today" the study schedule uses.
@@ -36,6 +41,7 @@ import { query } from "../api-client";
 export interface PerekStats {
 	articles: number;
 	pediaEntries: number;
+	illustrations: number;
 	recordedPerakim: number;
 	programmeYears: number;
 }
@@ -57,20 +63,37 @@ const MEANINGFUL_PEDIA_ENTRIES_SQL = `
 `;
 
 /**
+ * One row per distinct logical illustration the reader could display:
+ * an active image carrying a usable display WebP variant — the exact
+ * gate `imagesFromRows` applies before it emits a PerekIllustration.
+ * COUNT(DISTINCT i.id) keeps variant/format/size rows from multiplying
+ * the total.
+ */
+const DISPLAYABLE_ILLUSTRATIONS_SQL = `
+	SELECT COUNT(DISTINCT i.id) AS c
+	FROM tanah_perek_image i
+	JOIN tanah_perek_image_variant v
+		ON v.image_id = i.id AND v.role = 'display' AND v.format = 'webp'
+	WHERE i.is_active = 1
+`;
+
+/**
  * Fetch the totals with aggregate queries (no row loading).
  * Rejects on failure — a data failure must not surface as a zero count.
  */
 export async function getPerekStats(): Promise<PerekStats> {
 	try {
-		const [articles, pediaEntries] = await Promise.all([
+		const [articles, pediaEntries, illustrations] = await Promise.all([
 			query<{ c: number }>(
 				"SELECT COUNT(*) AS c FROM tanah_article WHERE perek_id BETWEEN 1 AND 929",
 			),
 			query<{ c: number }>(MEANINGFUL_PEDIA_ENTRIES_SQL),
+			query<{ c: number }>(DISPLAYABLE_ILLUSTRATIONS_SQL),
 		]);
 		return {
 			articles: Number(articles[0]?.c ?? 0),
 			pediaEntries: Number(pediaEntries[0]?.c ?? 0),
+			illustrations: Number(illustrations[0]?.c ?? 0),
 			recordedPerakim: countRecordedPerakim(),
 			programmeYears: getProgrammeYearsElapsed(
 				constructTsetAwareHDate(getCurrentDate()),
