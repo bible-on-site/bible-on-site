@@ -230,7 +230,9 @@ function addAlternative(boundary, alternative) {
 			refStr(a.end) === refStr(alternative.end),
 	);
 	if (existing) {
-		Object.assign(existing, alternative);
+		// Explicit field merge — no wholesale property copying.
+		existing.custom ??= alternative.custom;
+		existing.source = alternative.source;
 	} else {
 		list.push(alternative);
 	}
