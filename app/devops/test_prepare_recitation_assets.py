@@ -185,7 +185,7 @@ class RecitationAssetsTests(unittest.TestCase):
                 self.assertEqual(manifest["assetPackID"], "recitation-1")
                 self.assertEqual(manifest["downloadPolicy"], {"onDemand": {}})
                 self.assertEqual(manifest["fileSelectors"], [{"file": "recitation-1.zip"}])
-                self.assertEqual(manifest["platforms"], ["iOS", "macOS"])
+                self.assertEqual(manifest["platforms"], ["iOS"])
                 self.assertTrue((pack_dir / "recitation-1.zip").is_file())
         android = catalogs[0]["package"]["tracks"][0]
         self.assertEqual(android["audioSha256"], self.sha)
