@@ -21,13 +21,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import {
-	GetFunctionCommand,
-	InvokeCommand,
-	LambdaClient,
-	UpdateFunctionConfigurationCommand,
-	waitUntilFunctionUpdatedV2,
-} from "@aws-sdk/client-lambda";
+import { InvokeCommand, LambdaClient } from "@aws-sdk/client-lambda";
 import {
 	DeleteObjectsCommand,
 	PutObjectCommand,
@@ -36,7 +30,7 @@ import {
 import { GetParameterCommand, SSMClient } from "@aws-sdk/client-ssm";
 import * as dotenv from "dotenv";
 import { DeployerBase } from "../deployer-base.mjs";
-import { SSM_DB_URL_PARAM, updatedLambdaEnv } from "./lambda-env.mjs";
+import { buildDeployPayload } from "./deploy-payload.mjs";
 import { invokeWithRestorationRetry } from "./lambda-invocation.mjs";
 import sqlFiles from "./sql-files.json" with { type: "json" };
 
@@ -51,6 +45,7 @@ dotenv.config({
 // Configuration
 const S3_BUCKET = "bible-on-site-data-deploy";
 const LAMBDA_FUNCTION_NAME = "bible-on-site-db-populator";
+const SSM_DB_URL_PARAM = "bible-on-site-tanah-db-url";
 
 // Order matters: structure before data. Keep Tanahpedia entries strictly
 // non-destructive so API-created content survives repeated release deploys.
@@ -99,63 +94,15 @@ class DataDeployer extends DeployerBase {
 		const ssmClient = new SSMClient({ region: this.region });
 
 		try {
-			// Refresh the Lambda's DB_URL before invoking: keeps the function's
-			// environment in sync with SSM without a runtime SSM call in the VPC.
-			await this.ensureDbUrlEnvVar(lambdaClient, ssmClient);
-
 			// Upload SQL files to S3
 			await this.uploadSqlFiles(s3Client);
 
 			// Invoke Lambda to populate database
-			await this.invokeLambda(lambdaClient);
+			await this.invokeLambda(lambdaClient, ssmClient);
 		} finally {
 			// Cleanup S3 files
 			await this.cleanupS3Files(s3Client);
 		}
-	}
-
-	// Inject DB_URL at deploy time so the Lambda never calls SSM from inside
-	// the VPC — the SSM interface endpoint (hourly cost) can then be removed.
-	// Never log the URL itself.
-	private async ensureDbUrlEnvVar(
-		lambdaClient: LambdaClient,
-		ssmClient: SSMClient,
-	): Promise<void> {
-		const param = await ssmClient.send(
-			new GetParameterCommand({
-				Name: SSM_DB_URL_PARAM,
-				WithDecryption: true,
-			}),
-		);
-		const dbUrl = param.Parameter?.Value;
-		if (!dbUrl) {
-			throw new Error(`SSM parameter ${SSM_DB_URL_PARAM} is empty or missing`);
-		}
-
-		const fn = await lambdaClient.send(
-			new GetFunctionCommand({ FunctionName: LAMBDA_FUNCTION_NAME }),
-		);
-		const variables = fn.Configuration?.Environment?.Variables ?? {};
-		const updated = updatedLambdaEnv(variables, dbUrl);
-		if (!updated) {
-			this.info(`Lambda ${LAMBDA_FUNCTION_NAME} DB_URL is already up to date.`);
-			return;
-		}
-
-		this.info(
-			`Updating Lambda ${LAMBDA_FUNCTION_NAME} environment (DB_URL=***).`,
-		);
-		await lambdaClient.send(
-			new UpdateFunctionConfigurationCommand({
-				FunctionName: LAMBDA_FUNCTION_NAME,
-				Environment: { Variables: updated },
-			}),
-		);
-		await waitUntilFunctionUpdatedV2(
-			{ client: lambdaClient, maxWaitTime: 120 },
-			{ FunctionName: LAMBDA_FUNCTION_NAME },
-		);
-		this.info("Lambda environment updated.");
 	}
 
 	private async uploadSqlFiles(s3Client: S3Client): Promise<void> {
@@ -181,13 +128,28 @@ class DataDeployer extends DeployerBase {
 		}
 	}
 
-	private async invokeLambda(lambdaClient: LambdaClient): Promise<void> {
+	// The deployer reads the DB URL from SSM (public AWS API — no VPC endpoint
+	// needed) and delivers it inside the invoke payload, so the function never
+	// calls SSM from inside the VPC and the SSM interface endpoint (hourly
+	// cost) can be removed. Never log the payload or the URL.
+	private async invokeLambda(
+		lambdaClient: LambdaClient,
+		ssmClient: SSMClient,
+	): Promise<void> {
+		const param = await ssmClient.send(
+			new GetParameterCommand({
+				Name: SSM_DB_URL_PARAM,
+				WithDecryption: true,
+			}),
+		);
+		const dbUrl = param.Parameter?.Value;
+		if (!dbUrl) {
+			throw new Error(`SSM parameter ${SSM_DB_URL_PARAM} is empty or missing`);
+		}
+
 		this.info(`Invoking Lambda function: ${LAMBDA_FUNCTION_NAME}...`);
 
-		const payload = {
-			sql_files: this.sqlFiles,
-			s3_prefix: this.s3Prefix,
-		};
+		const payload = buildDeployPayload(this.sqlFiles, this.s3Prefix, dbUrl);
 
 		const response = await invokeWithRestorationRetry(
 			() =>
