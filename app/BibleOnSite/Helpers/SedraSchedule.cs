@@ -161,9 +161,9 @@ public static class SedraSchedule
         var nextRoshHashana = HebrewDateHelper.ToGregorianDate(hyear + 1, 1, 1);
 
         // Tail parashot read on the non-festival Shabbats between Rosh
-        // Hashana and שבת בראשית: when the year opens on Monday or Tuesday
-        // the previous year ended with נצבים alone, so וילך is still pending;
-        // Thursday/Saturday openings already read נצבים-וילך joined in Elul.
+        // Hashana and שבת בראשית. When the year opens on Monday or Tuesday
+        // the previous year ended with נצבים alone and וילך is still pending.
+        // Thursday/Saturday openings already read the pair joined in Elul.
         var rhDow = (int)HebrewDateHelper.ToGregorianDate(hyear, 1, 1).DayOfWeek;
         var next = rhDow is 1 or 2 ? Vayeilech : Haazinu;
         var tishreiTailCutoff = israel ? 22 : 23; // day after שמחת תורה

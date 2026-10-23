@@ -25,7 +25,6 @@ public class ParashaViewModelTests
         private readonly bool _includeCatalog;
         private readonly bool _includeNotes;
 
-        private readonly Func<int>? _hebrewDateProvider;
         private readonly bool _allUnits;
 
         public Fixture(List<Article>? articles = null, int? lastLearntPerek = null,
@@ -36,7 +35,6 @@ public class ParashaViewModelTests
         {
             _includeCatalog = includeCatalog;
             _includeNotes = includeNotes;
-            _hebrewDateProvider = hebrewDateProvider;
             _allUnits = allUnits;
             if (lastLearntPerek is int lastLearnt)
             {
@@ -60,7 +58,7 @@ public class ParashaViewModelTests
                 // Never touch RecitationService.Instance — its lazy filesystem
                 // singleton has no host in a unit-test process.
                 hasPerekAudio ?? (_ => false),
-                _hebrewDateProvider);
+                hebrewDateProvider);
         }
 
         /// <summary>
