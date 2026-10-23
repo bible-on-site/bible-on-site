@@ -536,9 +536,19 @@ public partial class ParashaViewModel : ObservableObject //NOSONAR
     [RelayCommand]
     public async Task LoadWeeklyParashaAsync()
     {
-        if (!_parashaService.IsLoaded)
+        try
         {
-            await _parashaService.LoadAsync();
+            if (!_parashaService.IsLoaded)
+            {
+                await _parashaService.LoadAsync();
+            }
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: see the //NOSONAR note
+        catch (Exception ex) //NOSONAR — an unavailable catalog (missing packaged DB) leaves the reader where it is; the next tap retries because the service never marks itself loaded.
+        {
+            #pragma warning restore S2221
+            Console.Error.WriteLine($"[Parasha] weekly-reading load failed: {ex.Message}");
+            return;
         }
         var target = ResolveWeeklyParasha();
         if (target is null)

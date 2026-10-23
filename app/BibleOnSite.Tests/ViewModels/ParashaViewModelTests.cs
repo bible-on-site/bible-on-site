@@ -26,16 +26,18 @@ public class ParashaViewModelTests
         private readonly bool _includeNotes;
 
         private readonly bool _allUnits;
+        private readonly bool _skipParashaSeed;
 
         public Fixture(List<Article>? articles = null, int? lastLearntPerek = null,
             bool includeCatalog = true, bool includeNotes = true, bool nullArticlesLoader = false,
             Func<int, Task<List<Article>>>? articlesLoader = null,
             Func<int, bool>? hasPerekAudio = null, Func<int>? hebrewDateProvider = null,
-            bool allUnits = false)
+            bool allUnits = false, bool skipParashaSeed = false)
         {
             _includeCatalog = includeCatalog;
             _includeNotes = includeNotes;
             _allUnits = allUnits;
+            _skipParashaSeed = skipParashaSeed;
             if (lastLearntPerek is int lastLearnt)
             {
                 // PreferencesService caches LastLearntPerek at construction — set first.
@@ -112,7 +114,12 @@ public class ParashaViewModelTests
 
         public async Task Initialize()
         {
-            if (_allUnits)
+            if (_skipParashaSeed)
+            {
+                // Leave the packaged tanah_view database absent so the
+                // service's first load fails exactly like a missing asset.
+            }
+            else if (_allUnits)
             {
                 await SeedFullDivisionAsync();
             }
@@ -987,5 +994,29 @@ public class ParashaViewModelTests
         fixture.Model.ResolveWeeklyParasha().Should().BeNull();
         await fixture.Model.LoadWeeklyParashaCommand.ExecuteAsync(null);
         fixture.Model.UnitId.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task LoadWeeklyParasha_LoadFailure_StaysPutThenRecovers()
+    {
+        // No packaged tanah database at all: the first tap fails inside
+        // LoadAsync — the command must not fault or move the reader, and the
+        // service must stay unloaded so the next tap retries.
+        await using var fixture = new Fixture(allUnits: true, skipParashaSeed: true,
+            hebrewDateProvider: () => 57850129);
+        await fixture.Initialize();
+
+        await fixture.Model.LoadWeeklyParashaCommand.ExecuteAsync(null);
+
+        fixture.Parasha.IsLoaded.Should().BeFalse();
+        fixture.Model.UnitId.Should().Be(0);
+
+        // Once the catalog arrives (a later refresh or install repair), the
+        // same tap resolves the weekly reading and navigates to it.
+        await fixture.SeedFullDivisionAsync();
+        await fixture.Model.LoadWeeklyParashaCommand.ExecuteAsync(null);
+
+        fixture.Model.UnitId.Should().Be(2);
+        fixture.Model.Title.Should().Be("פרשת נח");
     }
 }
