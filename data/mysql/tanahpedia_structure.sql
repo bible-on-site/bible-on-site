@@ -104,6 +104,57 @@ CREATE TABLE `tanahpedia_entity_tanah_source` (
     CONSTRAINT `fk_entity_tanah_source_perek` FOREIGN KEY (`perek_id`) REFERENCES `tanah_perek` (`id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 -- -------------------------------------------
+-- MENTION DECORATIONS (annotation pipeline, issue #2516)
+-- Name-keyed NLP decorations: intended_name resolves against the live
+-- entry table at presentation time, so a decoration persists even when
+-- no matching entry exists yet. Mirrored by
+-- tanahpedia_alter_mention_decoration.sql for existing deployments.
+-- -------------------------------------------
+DROP TABLE IF EXISTS `tanahpedia_mention_decoration`;
+CREATE TABLE `tanahpedia_mention_decoration` (
+    `id` char(36) NOT NULL,
+    `contract_version` smallint NOT NULL DEFAULT 1,
+    `source_kind` enum('pasuk', 'article') NOT NULL,
+    `perek_id` int DEFAULT NULL,
+    `pasuk_number` int DEFAULT NULL,
+    `segment_start` int DEFAULT NULL,
+    `segment_end` int DEFAULT NULL,
+    `article_id` mediumint DEFAULT NULL,
+    `content_hash` char(64) DEFAULT NULL,
+    `span_start` int DEFAULT NULL,
+    `span_end` int DEFAULT NULL,
+    `surface` varchar(255) NOT NULL,
+    `intended_name` varchar(255) NOT NULL,
+    `entity_type` enum(
+        'PERSON',
+        'PLACE',
+        'EVENT',
+        'WAR',
+        'ANIMAL',
+        'OBJECT',
+        'TEMPLE_TOOL',
+        'PLANT',
+        'ASTRONOMICAL_OBJECT',
+        'SAYING',
+        'SEFER',
+        'PROPHECY',
+        'NATION'
+    ) NOT NULL,
+    `disambiguation` varchar(255) DEFAULT NULL,
+    `confidence` decimal(4,3) DEFAULT NULL,
+    `acceptance` enum('auto', 'manual', 'held', 'rejected') NOT NULL DEFAULT 'auto',
+    `model_revision` varchar(255) NOT NULL,
+    `source_hash` char(64) NOT NULL,
+    `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    KEY `idx_decoration_pasuk` (`source_kind`, `perek_id`, `pasuk_number`),
+    KEY `idx_decoration_article` (`source_kind`, `article_id`),
+    KEY `idx_decoration_intended_name` (`intended_name`),
+    CONSTRAINT `fk_decoration_perek` FOREIGN KEY (`perek_id`) REFERENCES `tanah_perek` (`id`),
+    CONSTRAINT `fk_decoration_article` FOREIGN KEY (`article_id`) REFERENCES `tanah_article` (`id`) ON DELETE CASCADE
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+-- -------------------------------------------
 -- ENTRY SYSTEM
 -- -------------------------------------------
 DROP TABLE IF EXISTS `tanahpedia_entry`;

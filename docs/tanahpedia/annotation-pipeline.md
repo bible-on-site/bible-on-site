@@ -93,13 +93,17 @@ The existing link contract is `tanahpedia_entity_tanah_source`
 | ----- | ------- |
 | `source_kind` | `pasuk` \| `article` |
 | `perek_id`, `pasuk_number`, `segment_start`, `segment_end` | canonical coordinates for scripture mentions (same semantics as the existing table) |
-| `article_id`, `content_revision`, `span_start`, `span_end` | article mentions, keyed to a content hash so edits invalidate only affected spans |
+| `article_id`, `content_hash`, `span_start`, `span_end` | article mentions: character offsets into `tanah_article.content` at `content_hash` — the hash is the staleness key since the article row carries no revision column |
 | `surface` | exact original mention text (no normalization of stored data) |
-| `intended_name` | the entry's intended `unique_name`/resolution key |
-| `entity_type` | one of the 14 `tanahpedia_entity_type_enum` values |
+| `intended_name` | the entry's intended `unique_name`/resolution key — indexed, deliberately not an FK |
+| `entity_type` | one of the 13 `entity_type` enum values in `tanahpedia_entity` |
 | `disambiguation` | optional context key matching the synonym-disambiguation model |
-| `confidence` / `acceptance` | measured score or manual-override marker |
+| `confidence` / `acceptance` | measured score; `acceptance` ∈ `auto` \| `manual` \| `held` \| `rejected` |
 | `model_revision`, `source_hash`, `contract_version` | provenance |
+
+Landed as `tanahpedia_mention_decoration` — see
+`data/mysql/tanahpedia_structure.sql` (fresh schema) and
+`data/mysql/tanahpedia_alter_mention_decoration.sql` (idempotent upgrade).
 
 Deliberately **no `entity_id`/`entry_id` FK** — the decoration must
 survive the target not existing (the issue's core requirement). The live
