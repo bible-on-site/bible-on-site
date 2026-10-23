@@ -36,7 +36,11 @@ import {
 import { GetParameterCommand, SSMClient } from "@aws-sdk/client-ssm";
 import * as dotenv from "dotenv";
 import { DeployerBase } from "../deployer-base.mjs";
-import { SSM_DB_URL_PARAM, updatedLambdaEnv } from "./lambda-env.mjs";
+import {
+	isAccessDenied,
+	SSM_DB_URL_PARAM,
+	updatedLambdaEnv,
+} from "./lambda-env.mjs";
 import { invokeWithRestorationRetry } from "./lambda-invocation.mjs";
 import sqlFiles from "./sql-files.json" with { type: "json" };
 
@@ -101,7 +105,18 @@ class DataDeployer extends DeployerBase {
 		try {
 			// Refresh the Lambda's DB_URL before invoking: keeps the function's
 			// environment in sync with SSM without a runtime SSM call in the VPC.
-			await this.ensureDbUrlEnvVar(lambdaClient, ssmClient);
+			// Best-effort until the OIDC role gains lambda:GetFunction/
+			// UpdateFunctionConfiguration (github-oidc.yaml) — the deployed
+			// Lambda still reads credentials from SSM at runtime.
+			try {
+				await this.ensureDbUrlEnvVar(lambdaClient, ssmClient);
+			} catch (err) {
+				if (!isAccessDenied(err)) throw err;
+				this.warn(
+					`Skipping DB_URL injection — apply the github-oidc.yaml ` +
+						`lambda statement for ${LAMBDA_FUNCTION_NAME}: ${err}`,
+				);
+			}
 
 			// Upload SQL files to S3
 			await this.uploadSqlFiles(s3Client);

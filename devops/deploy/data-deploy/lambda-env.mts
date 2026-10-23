@@ -15,3 +15,11 @@ export function updatedLambdaEnv(
 	if (existing.DB_URL === dbUrl) return undefined;
 	return { ...existing, DB_URL: dbUrl };
 }
+
+// The OIDC role gains lambda:GetFunction/UpdateFunctionConfiguration on the
+// populator only after github-oidc.yaml is applied. Until then injection is
+// best-effort: the deployed Lambda still reads credentials from SSM at
+// runtime, so a denied call must not abort the deploy.
+export function isAccessDenied(err: unknown): boolean {
+	return (err as { name?: string } | null)?.name === "AccessDeniedException";
+}
