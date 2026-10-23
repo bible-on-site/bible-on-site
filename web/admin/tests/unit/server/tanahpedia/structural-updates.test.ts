@@ -326,6 +326,7 @@ describe("structural saves invalidate the website", () => {
 			{ tag: "tanahpedia-entity-refs", path: null },
 			{ tag: null, path: "/pedia/[slug]" },
 			{ tag: null, path: "/pedia" },
+			{ tag: "tanahpedia-mention-refs", path: null },
 		]);
 	});
 
@@ -370,7 +371,7 @@ describe("structural saves invalidate the website", () => {
 			data: { sayingId: "s1", sayingDate: 1200 },
 		});
 
-		expect(revalidateCalls()).toHaveLength(3);
+		expect(revalidateCalls()).toHaveLength(4);
 		expect(notifiedUrls()).toEqual([]);
 	});
 
@@ -392,7 +393,7 @@ describe("structural saves invalidate the website", () => {
 			data: { placeId: "p1", rows: [] },
 		});
 
-		expect(revalidateCalls()).toHaveLength(3);
+		expect(revalidateCalls()).toHaveLength(4);
 		expect(notifiedUrls()).toEqual([]);
 	});
 });
