@@ -23,17 +23,20 @@ import boto3
 import pymysql
 
 
-def db_credentials():
-    """Parse host/port/user/password/database from the DB_URL env var.
+def db_credentials(event):
+    """Parse host/port/user/password/database from the DB URL.
 
-    DB_URL (mysql://user:pass@host:port/db) is injected into the Lambda
-    environment by the data deploy CD step, so the function never calls
-    SSM from inside the VPC.
+    The CD deployer reads the URL from SSM Parameter Store and delivers it
+    inside the invoke payload as ``db_url``, so the function never calls
+    SSM from inside the VPC. A ``DB_URL`` env var is accepted as a
+    fallback for manual invocations.
     """
-    db_url = os.environ.get("DB_URL", "")
+    db_url = event.get("db_url") or os.environ.get("DB_URL", "")
     parts = urlparse(db_url)
     if parts.scheme != "mysql" or not parts.hostname or not parts.username:
-        raise ValueError("DB_URL must be a mysql://user:pass@host:port/db URL")
+        raise ValueError(
+            "db_url event field (or DB_URL env var) must be a mysql://user:pass@host:port/db URL"
+        )
     return {
         "host": parts.hostname,
         "port": parts.port or 3306,
@@ -49,11 +52,13 @@ def handler(event, context):
     Expected event format:
     {
         "sql_files": ["file1.sql", "file2.sql"],
-        "s3_prefix": "sql/2024-01-01-120000/"
+        "s3_prefix": "sql/2024-01-01-120000/",
+        "db_url": "mysql://user:pass@host:3306/db"
     }
 
     The handler:
-    1. Reads DB credentials from the DB_URL environment variable
+    1. Reads DB credentials from the event's db_url field (DB_URL env var
+       as fallback for manual invocations)
     2. Downloads SQL files from S3
     3. Preprocesses SQL to add DROP TABLE/VIEW IF EXISTS
     4. Filters out MySQL dump artifacts
@@ -62,7 +67,7 @@ def handler(event, context):
     s3 = boto3.client("s3")
 
     bucket = os.environ.get("S3_BUCKET", "bible-on-site-data-deploy")
-    credentials = db_credentials()
+    credentials = db_credentials(event)
 
     # Connect to database
     connection = pymysql.connect(
