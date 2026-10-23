@@ -1,5 +1,6 @@
 import { toLetters, toNumber } from "gematry";
 import type { HistoryMapper, PageSemantics } from "html-flip-book-react";
+import type { UnitBoundaryMarker } from "@/app/components/reading/UnitTextBody";
 import bookPageSlugs from "@/data/book-page-slugs.json";
 import divisionData from "@/data/parasha/parasha-division.json";
 import type { AuxiliaryReading, ScriptureRange } from "@/lib/reading/contract";
@@ -264,6 +265,19 @@ export function parashaBookExitPath(
 /** Title of a flat parasha unit page, matching generateMetadata. */
 export function parashaUnitDocumentTitle(name: string): string {
 	return `פרשת ${name} | ${PARASHA_MENU_LABEL} | ${SITE_NAME}`;
+}
+
+/**
+ * Rebuild the renderer's coord→markers map from a book unit's
+ * serialized standalone-Shabbat marker layer (issue #2519); undefined
+ * when the unit carries no markers.
+ */
+export function unitBoundaryMarkers(
+	unit: ParashaBookUnit,
+): ReadonlyMap<string, readonly UnitBoundaryMarker[]> | undefined {
+	return unit.aliyahMarkers
+		? new Map(Object.entries(unit.aliyahMarkers))
+		: undefined;
 }
 
 /** Title of a parasha's Haftarah spread inside the book. */

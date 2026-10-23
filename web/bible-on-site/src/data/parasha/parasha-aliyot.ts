@@ -143,6 +143,7 @@ function resolveRange(
 ): ScriptureRange {
 	const start = resolveVerse(reading.sefer, range.start, reading.id, schemeId);
 	const end = resolveVerse(reading.sefer, range.end, reading.id, schemeId);
+	/* istanbul ignore if -- load-time validation: only fires on corrupt vendored data (drift-checked) */
 	if (compareCoordinates(start, end, "end") > 0) {
 		throw new Error(
 			`aliyah data: backwards range in ${reading.id}/${schemeId} ` +
@@ -162,10 +163,12 @@ function resolveVerse(
 	const sefer = seferPerekSpan(seferName);
 	const perekId = sefer.perekFrom + ref.perek - 1;
 	const display = `${seferName} ${ref.perek}:${ref.pasuk} (${readingId}/${schemeId})`;
+	/* istanbul ignore if -- load-time validation: only fires on corrupt vendored data (drift-checked) */
 	if (perekId > sefer.perekTo || perekId < sefer.perekFrom) {
 		throw new Error(`aliyah data: ${display} exceeds ${seferName}'s perakim`);
 	}
 	const pasukCount = canonicalPasukCountFor(perekId);
+	/* istanbul ignore if -- load-time validation: only fires on corrupt vendored data (drift-checked) */
 	if (ref.pasuk < 1 || ref.pasuk > pasukCount) {
 		throw new Error(
 			`aliyah data: ${display} is outside the canonical ${pasukCount} pesukim`,
@@ -222,6 +225,7 @@ function unitIdForName(name: string, readingId: string): number {
 		);
 	}
 	const unitId = unitIdByName.get(name);
+	/* istanbul ignore if -- load-time validation: only fires on corrupt vendored data (drift-checked) */
 	if (!unitId) {
 		throw new Error(
 			`aliyah data: ${readingId} references unknown parasha "${name}"`,
@@ -237,6 +241,7 @@ function validateScheme(
 ): void {
 	const first = boundaries[0];
 	const last = boundaries[boundaries.length - 1];
+	/* istanbul ignore if -- load-time validation: only fires on corrupt vendored data (drift-checked) */
 	if (!first || !last) {
 		throw new Error(`aliyah data: ${reading.id}/${schemeId} is empty`);
 	}
@@ -244,6 +249,7 @@ function validateScheme(
 	for (let i = 1; i < regular.length; i++) {
 		const prev = regular[i - 1];
 		const curr = regular[i];
+		/* istanbul ignore if -- load-time validation: only fires on corrupt vendored data (drift-checked) */
 		if (curr.ordinal !== prev.ordinal + 1) {
 			throw new Error(
 				`aliyah data: ${reading.id}/${schemeId} ordinals gap at ${prev.ordinal}→${curr.ordinal}`,
@@ -262,6 +268,7 @@ function validateScheme(
 			(currStart.perekId === prevEnd.perekId + 1 &&
 				currStart.pasuk === 1 &&
 				prevEnd.pasuk === canonicalPasukCountFor(prevEnd.perekId));
+		/* istanbul ignore if -- load-time validation: only fires on corrupt vendored data (drift-checked) */
 		if (!contiguous) {
 			throw new Error(
 				`aliyah data: ${reading.id}/${schemeId} gap or overlap between aliyot ${prev.ordinal} and ${curr.ordinal}`,
@@ -327,11 +334,6 @@ function resolved(): ResolvedAliyot {
 	}
 	resolvedAliyot = { readings, byId, byUnitId };
 	return resolvedAliyot;
-}
-
-/** All available boundary schemes with their display labels. */
-export function getAliyahSchemes(): AliyahScheme[] {
-	return ALIYAH_SCHEMES;
 }
 
 /** The standalone reading context for a parasha unit. */

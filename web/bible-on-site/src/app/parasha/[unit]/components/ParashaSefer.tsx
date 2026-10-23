@@ -44,6 +44,7 @@ import {
 	parashaBookPageRoute,
 	parashaPerushDocumentTitle,
 	parashaUnitDocumentTitle,
+	unitBoundaryMarkers,
 } from "./parasha-book-utils";
 
 /**
@@ -259,11 +260,7 @@ const ParashaSefer = (props: {
 								 * never duplicate the flat page's canonical
 								 * pasuk-{perek}-{pasuk} ids. */
 								anchorScope={`book-${unit.unitId}`}
-								boundaryMarkers={
-									unit.aliyahMarkers
-										? new Map(Object.entries(unit.aliyahMarkers))
-										: undefined
-								}
+								boundaryMarkers={unitBoundaryMarkers(unit)}
 								defaultMarkerKey={unit.aliyahMarkerKey}
 								modestPerekLabels
 							/>

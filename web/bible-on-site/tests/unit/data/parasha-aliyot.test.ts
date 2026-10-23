@@ -73,6 +73,10 @@ describe("aliyah source and provenance", () => {
 });
 
 describe("standalone readings", () => {
+	it("throws for a unit id that has no reading", () => {
+		expect(() => getStandaloneReading(99999)).toThrow(/aliyah data/);
+	});
+
 	it("resolves one per parasha unit, preserving unit identity", () => {
 		for (const unit of units) {
 			const reading = getStandaloneReading(unit.unitId);
