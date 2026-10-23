@@ -22,6 +22,29 @@ LEXICON = Path(__file__).with_name("morphhb-proper-nouns.json.gz")
 MODEL_REVISION = "morphhb-lexical-baseline@3d15126f+contract1"
 
 DIACRITICS = re.compile("[\u0591-\u05bd\u05bf-\u05c7]")
+
+# morphhb book file -> (canonical sefer index, additionals index).
+# The canonical dump folds the split books into one sefer each:
+# שמואל→additionals(1Sam,2Sam), מלכים→(1Kgs,2Kgs), עזרא→(Ezra,Neh),
+# דברי הימים→(1Chr,2Chr).
+BOOK_TO_CANONICAL = {
+    "Gen": (0, None), "Exod": (1, None), "Lev": (2, None), "Num": (3, None),
+    "Deut": (4, None), "Josh": (5, None), "Judg": (6, None),
+    "1Sam": (7, 0), "2Sam": (7, 1), "1Kgs": (8, 0), "2Kgs": (8, 1),
+    "Isa": (9, None), "Jer": (10, None), "Ezek": (11, None),
+    "Hos": (12, None), "Joel": (13, None), "Amos": (14, None),
+    "Obad": (15, None), "Jonah": (16, None), "Mic": (17, None),
+    "Nah": (18, None), "Hab": (19, None), "Zeph": (20, None),
+    "Hag": (21, None), "Zech": (22, None), "Mal": (23, None),
+    "Ps": (24, None), "Prov": (25, None), "Job": (26, None),
+    "Song": (27, None), "Ruth": (28, None), "Lam": (29, None),
+    "Eccl": (30, None), "Esth": (31, None), "Dan": (32, None),
+    "Ezra": (33, 0), "Neh": (33, 1), "1Chr": (34, 0), "2Chr": (34, 1),
+}
+SEFER_BOOKS = {}
+for _stem, (_sefer, _add) in BOOK_TO_CANONICAL.items():
+    SEFER_BOOKS.setdefault(_sefer, []).append(_stem)
+
 # Head nouns whose following proper name is a place/person by convention.
 PLACE_HEADS = {
     "הר",
@@ -110,14 +133,15 @@ def classify(group, pasuk_texts, word_to_seg):
     return "PERSON"
 
 
-def decorations_for_perek(sefer_index, perek_index, perakim, lexicon):
-    """Emit decoration rows for one canonical perek."""
-    perek = perakim[perek_index]
-    book = lexicon["sefarim"].get(str(sefer_index), {})
-    chapter = book.get(str(perek_index + 1), {})
+def decorations_for_perek(perek, chapter_tokens, lexicon):
+    """Emit decoration rows for one canonical perek.
+
+    `chapter_tokens` is the lexicon's verse map for the matching book chapter
+    (1-based within that book file — additionals keep their own numbering).
+    """
     rows = []
     for pasuk_number, pasuk in enumerate(perek["pesukim"], start=1):
-        tokens = chapter.get(str(pasuk_number), [])
+        tokens = chapter_tokens.get(str(pasuk_number), [])
         if not tokens:
             continue
         seg_index = text_segments(pasuk)
@@ -163,14 +187,29 @@ def load_canonical(path=CANONICAL):
     return json.loads(Path(path).read_text(encoding="utf-8"))
 
 
+def iter_perek_sources(sefer_index, sefarim):
+    """Yield (perek_object, book_stem, chapter_number) for a canonical sefer.
+
+    Plain sefarim map to their single book file; `additionals` split into
+    one morphhb book each (שמואל א→1Sam, שמואל ב→2Sam, ...), with chapter
+    numbering 1-based inside that book.
+    """
+    sefer = sefarim[sefer_index]
+    stems = SEFER_BOOKS[sefer_index]
+    if "perakim" in sefer:
+        for i, perek in enumerate(sefer["perakim"]):
+            yield perek, stems[0], i + 1
+    else:
+        for add_index, additional in enumerate(sefer["additionals"]):
+            for i, perek in enumerate(additional["perakim"]):
+                yield perek, stems[add_index], i + 1
+
+
 def decorations_for_sefer(sefer_index, sefarim, lexicon):
     rows = []
-    for perek_index in range(len(sefarim[sefer_index]["perakim"])):
-        rows.extend(
-            decorations_for_perek(
-                sefer_index, perek_index, sefarim[sefer_index]["perakim"], lexicon
-            )
-        )
+    for perek, stem, chapter in iter_perek_sources(sefer_index, sefarim):
+        chapter_tokens = lexicon["books"].get(stem, {}).get(str(chapter), {})
+        rows.extend(decorations_for_perek(perek, chapter_tokens, lexicon))
     return rows
 
 
@@ -179,7 +218,7 @@ def main():
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("sefer", type=int, nargs="?", default=0, help="sefer index")
-    parser.add_argument("perek", type=int, nargs="?", help="0-based perek index (omit for whole sefer)")
+    parser.add_argument("perek", type=int, nargs="?", help="0-based perek index within the sefer (omit for whole sefer)")
     parser.add_argument("--out", type=Path, help="write decoration rows to a JSON file")
     args = parser.parse_args()
 
@@ -188,9 +227,10 @@ def main():
     if args.perek is None:
         rows = decorations_for_sefer(args.sefer, sefarim, lexicon)
     else:
-        rows = decorations_for_perek(
-            args.sefer, args.perek, sefarim[args.sefer]["perakim"], lexicon
-        )
+        sources = list(iter_perek_sources(args.sefer, sefarim))
+        perek, stem, chapter = sources[args.perek]
+        chapter_tokens = lexicon["books"].get(stem, {}).get(str(chapter), {})
+        rows = decorations_for_perek(perek, chapter_tokens, lexicon)
     payload = json.dumps(rows, ensure_ascii=False, indent=1)
     if args.out:
         args.out.write_text(payload, encoding="utf-8")

@@ -26,49 +26,16 @@ UPSTREAM_DIR = (
 )
 OUTPUT = Path(__file__).with_name("morphhb-proper-nouns.json.gz")
 
-# OSIS book file -> canonical Tanakh book order (index into the tanah-view
-# sefarim array). Order matches the printed Tanakh; additionals merge
-# (1Sam+2Sam, 1Kgs+2Kgs, 1Chr+2Chr share one sefer each).
+# OSIS book files in canonical Tanakh order. The artifact keys by file stem
+# (not sefer index) — the canonical dump folds 1Sam/2Sam, 1Kgs/2Kgs,
+# Ezra/Neh and 1Chr/2Chr into single sefarim with `additionals`, so a sefer
+# index would collide the two files' chapter keys.
 BOOK_FILES = [
-    ("Gen.xml", 0),
-    ("Exod.xml", 1),
-    ("Lev.xml", 2),
-    ("Num.xml", 3),
-    ("Deut.xml", 4),
-    ("Josh.xml", 5),
-    ("Judg.xml", 6),
-    ("1Sam.xml", 7),
-    ("2Sam.xml", 7),
-    ("1Kgs.xml", 8),
-    ("2Kgs.xml", 8),
-    ("Isa.xml", 9),
-    ("Jer.xml", 10),
-    ("Ezek.xml", 11),
-    ("Hos.xml", 12),
-    ("Joel.xml", 13),
-    ("Amos.xml", 14),
-    ("Obad.xml", 15),
-    ("Jonah.xml", 16),
-    ("Mic.xml", 17),
-    ("Nah.xml", 18),
-    ("Hab.xml", 19),
-    ("Zeph.xml", 20),
-    ("Hag.xml", 21),
-    ("Zech.xml", 22),
-    ("Mal.xml", 23),
-    ("Ps.xml", 24),
-    ("Prov.xml", 25),
-    ("Job.xml", 26),
-    ("Song.xml", 27),
-    ("Ruth.xml", 28),
-    ("Lam.xml", 29),
-    ("Eccl.xml", 30),
-    ("Esth.xml", 31),
-    ("Dan.xml", 32),
-    ("Ezra.xml", 33),
-    ("Neh.xml", 34),
-    ("1Chr.xml", 35),
-    ("2Chr.xml", 35),
+    "Gen", "Exod", "Lev", "Num", "Deut", "Josh", "Judg", "1Sam", "2Sam",
+    "1Kgs", "2Kgs", "Isa", "Jer", "Ezek", "Hos", "Joel", "Amos", "Obad",
+    "Jonah", "Mic", "Nah", "Hab", "Zeph", "Hag", "Zech", "Mal", "Ps",
+    "Prov", "Job", "Song", "Ruth", "Lam", "Eccl", "Esth", "Dan", "Ezra",
+    "Neh", "1Chr", "2Chr",
 ]
 
 WORD_RE = re.compile(r"<w\b[^>]*>([^<]*)</w>")
@@ -94,13 +61,7 @@ def token_kind(morph):
     return kind
 
 
-def extract(xml_text, sefer_index, verses):
-    book = None
-    for match in VERSE_RE.finditer(xml_text):
-        book = match.group(1)
-        break
-    if book is None:
-        return
+def extract(xml_text, book_stem, verses):
     for verse_match in VERSE_RE.finditer(xml_text):
         chapter, verse = int(verse_match.group(2)), int(verse_match.group(3))
         end = xml_text.find("</verse>", verse_match.end())
@@ -117,23 +78,24 @@ def extract(xml_text, sefer_index, verses):
                 continue
             # Compact record: word index, lemma (keeps the `+` name-chain
             # marker), surface (slash-split prefix/noun/suffix parts), kind.
-            verses.setdefault((sefer_index, chapter, verse), []).append(
+            verses.setdefault((book_stem, chapter, verse), []).append(
                 [word_index, lemma, surface, "p" if kind == "proper" else "g"]
             )
 
 
 def build(cache_dir=None):
     verses = {}
-    for filename, sefer_index in BOOK_FILES:
+    for stem in BOOK_FILES:
+        filename = f"{stem}.xml"
         if cache_dir is not None:
             xml_text = (cache_dir / filename).read_text(encoding="utf-8")
         else:
             with urllib.request.urlopen(f"{UPSTREAM_DIR}/{filename}") as response:
                 xml_text = response.read().decode("utf-8")
-        extract(xml_text, sefer_index, verses)
+        extract(xml_text, stem, verses)
     books = {}
-    for (sefer_index, chapter, verse), tokens in sorted(verses.items()):
-        book = books.setdefault(str(sefer_index), {})
+    for (book_stem, chapter, verse), tokens in sorted(verses.items()):
+        book = books.setdefault(book_stem, {})
         book.setdefault(str(chapter), {})[str(verse)] = tokens
     return {
         "provenance": {
@@ -142,12 +104,12 @@ def build(cache_dir=None):
             "license": "CC BY 4.0 (lemma+morphology); WLC text public domain",
             "derivedBy": "extract_morphhb.py — tokens tagged Np/Ng/Ag",
         },
-        "sefarim": books,
+        "books": books,
     }
 
 
 def digest(document):
-    canonical = json.dumps(document["sefarim"], ensure_ascii=False, sort_keys=True)
+    canonical = json.dumps(document["books"], ensure_ascii=False, sort_keys=True)
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
@@ -176,7 +138,7 @@ def main():
                 "morphhb-derived artifact drifted from the pinned upstream; run --refresh"
             )
         print(
-            f"morphhb artifact verified at {PINNED_REVISION[:10]} ({len(existing['sefarim'])} sefarim)"
+            f"morphhb artifact verified at {PINNED_REVISION[:10]} ({len(existing['books'])} books)"
         )
         return
     if not args.refresh:
@@ -193,7 +155,7 @@ def main():
     )
     tokens = sum(
         len(v)
-        for book in document["sefarim"].values()
+        for book in document["books"].values()
         for chapter in book.values()
         for v in chapter.values()
     )

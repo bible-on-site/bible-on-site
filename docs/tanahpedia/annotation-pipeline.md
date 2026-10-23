@@ -135,9 +135,20 @@ then derives the link target.
 - **Lifecycle regression (mandatory)**: infer+publish mention → absent
   entry → plain render → create entry → dashed link appears → unpublish →
   plain again. Model invocation count constant throughout.
-- **Storage estimate** (to be measured during implementation): pesukim
-  ≈ 23k, typical candidate mentions per pasuk, bytes per decoration row —
-  the format decision follows the measured numbers, per the issue.
+- **Storage measured on the lexical baseline** (full corpus, pasuk
+  domain): 35,176 decorations across 929 perakim, 3,155 distinct
+  `intended_name`s, ≈ 400 B/row as JSON → ≈ 14 MB payload, ≈ 7 MB
+  estimated as normalized table rows. At this scale per-perek
+  `IN (...)` resolution stays trivially indexed; no storage-driven
+  format compromise is needed.
+- **Baseline runtime**: 2.4 s for the entire corpus on a workstation —
+  the lexical tier is effectively free; it costs zero model calls.
+- **Measured baseline limitation**: 94 % of decorations classify
+  `PERSON` (33,045 / 35,176; `NATION` 1,802, `PLACE` 329) — place names
+  like מצרים and ירושלם default to `PERSON`, and genuine
+  person/nation ambiguities (ישראל, יהודה) collapse onto one type.
+  This is the quantified gap the encoder/LLM tier must beat on the
+  golden set; do not ship the lexical tier's type accuracy as-is.
 
 ## Open decisions recorded for implementation
 
@@ -153,7 +164,23 @@ then derives the link target.
 
 ## Status
 
-Design + source evaluation complete (this document). Implementation
-sequence: decoration contract → lexical baseline → golden-set harness →
-encoder classifier comparison → resolver + render integration → publish
-path with lifecycle regression.
+Shipped increments on `feat/2516-tanahpedia-annotation`:
+
+- Decoration contract: `tanahpedia_mention_decoration` (migration +
+  canonical structure SQL).
+- Pinned morphhb extractor (`extract_morphhb.py`) + compact gzipped
+  derived artifact (`morphhb-proper-nouns.json.gz`, 35,898 tagged
+  tokens, digest-pinned `--check`/`--refresh`).
+- Deterministic lexical baseline (`baseline.py`) emitting contract
+  decoration rows — full-corpus numbers above.
+- Idempotent importer (`devops/src/import-mention-decorations.mts`)
+  keyed on `dedupe_key` — re-runs never duplicate or clobber manual
+  decisions.
+- Live resolver (`getMentionReferencesForPerek` in the Tanahpedia
+  service) + merged refs + `tanahpedia-mention-refs` cache tag wired
+  into entry-lifecycle invalidation; unit-tested including the
+  create-entry-makes-link-appear lifecycle regression.
+
+Remaining sequence: golden-set harness → encoder classifier
+comparison (BEREL license check first) → article-domain spans →
+production import of the published baseline rows.
