@@ -10,7 +10,7 @@
 			"Full-kriyah Shabbat boundaries and weekday splits for all 54 parashiot and 7 joined pairs.",
 			"Cross-validated against Sefaria /api/sheets/{parasha}/get_aliyot: identical on every parasha Sefaria serves (its endpoint lacks Achrei Mot-Kedoshim, Nitzavim-Vayeilech and several standalone parashot).",
 			"Maftir is the plain repeated-tail reading; seasonal maftir overrides (e.g. HaChodesh) are a calendar concern, not stored here.",
-			"Inline 'some sources use' variants are preserved verbatim as aliyah notes."
+			"Alternative divisions are structured per-aliyah `alternatives` ranges: hebcal's inline 'some sources use' notes plus the per-minhag <day custom=…> and weekday <aliyah> divisions of OpenTorah (Apache-2.0, commit 7308989643)."
 		]
 	},
 	"schemes": [
@@ -98,7 +98,19 @@
 							"perek": 4,
 							"pasuk": 22
 						},
-						"note": "חלוקה חלופית: 4:19-26"
+						"alternatives": [
+							{
+								"start": {
+									"perek": 4,
+									"pasuk": 19
+								},
+								"end": {
+									"perek": 4,
+									"pasuk": 26
+								},
+								"source": "hebcal"
+							}
+						]
 					},
 					{
 						"ordinal": 6,
@@ -112,7 +124,19 @@
 							"perek": 5,
 							"pasuk": 24
 						},
-						"note": "חלוקה חלופית: 5:1-24"
+						"alternatives": [
+							{
+								"start": {
+									"perek": 5,
+									"pasuk": 1
+								},
+								"end": {
+									"perek": 5,
+									"pasuk": 24
+								},
+								"source": "hebcal"
+							}
+						]
 					},
 					{
 						"ordinal": 7,
@@ -478,7 +502,20 @@
 						"end": {
 							"perek": 12,
 							"pasuk": 9
-						}
+						},
+						"alternatives": [
+							{
+								"start": {
+									"perek": 12,
+									"pasuk": 4
+								},
+								"end": {
+									"perek": 12,
+									"pasuk": 6
+								},
+								"source": "opentorah"
+							}
+						]
 					},
 					{
 						"ordinal": 3,
@@ -491,7 +528,20 @@
 						"end": {
 							"perek": 12,
 							"pasuk": 13
-						}
+						},
+						"alternatives": [
+							{
+								"start": {
+									"perek": 12,
+									"pasuk": 7
+								},
+								"end": {
+									"perek": 12,
+									"pasuk": 13
+								},
+								"source": "opentorah"
+							}
+						]
 					}
 				]
 			}
@@ -1633,7 +1683,21 @@
 						"end": {
 							"perek": 45,
 							"pasuk": 18
-						}
+						},
+						"alternatives": [
+							{
+								"start": {
+									"perek": 45,
+									"pasuk": 8
+								},
+								"end": {
+									"perek": 45,
+									"pasuk": 27
+								},
+								"source": "opentorah",
+								"custom": "חב\"ד"
+							}
+						]
 					},
 					{
 						"ordinal": 4,
@@ -1646,7 +1710,21 @@
 						"end": {
 							"perek": 45,
 							"pasuk": 27
-						}
+						},
+						"alternatives": [
+							{
+								"start": {
+									"perek": 45,
+									"pasuk": 28
+								},
+								"end": {
+									"perek": 46,
+									"pasuk": 7
+								},
+								"source": "opentorah",
+								"custom": "חב\"ד"
+							}
+						]
 					},
 					{
 						"ordinal": 5,
@@ -1659,7 +1737,21 @@
 						"end": {
 							"perek": 46,
 							"pasuk": 27
-						}
+						},
+						"alternatives": [
+							{
+								"start": {
+									"perek": 46,
+									"pasuk": 8
+								},
+								"end": {
+									"perek": 46,
+									"pasuk": 27
+								},
+								"source": "opentorah",
+								"custom": "חב\"ד"
+							}
+						]
 					},
 					{
 						"ordinal": 6,
@@ -2869,7 +2961,20 @@
 							"perek": 25,
 							"pasuk": 40
 						},
-						"note": "חלוקה חלופית: 25:17-30"
+						"alternatives": [
+							{
+								"start": {
+									"perek": 25,
+									"pasuk": 17
+								},
+								"end": {
+									"perek": 25,
+									"pasuk": 30
+								},
+								"source": "opentorah",
+								"custom": "עדות המזרח"
+							}
+						]
 					},
 					{
 						"ordinal": 3,
@@ -2883,7 +2988,20 @@
 							"perek": 26,
 							"pasuk": 14
 						},
-						"note": "חלוקה חלופית: 25:31-26:14"
+						"alternatives": [
+							{
+								"start": {
+									"perek": 25,
+									"pasuk": 31
+								},
+								"end": {
+									"perek": 26,
+									"pasuk": 14
+								},
+								"source": "opentorah",
+								"custom": "עדות המזרח"
+							}
+						]
 					},
 					{
 						"ordinal": 4,
@@ -4055,7 +4173,20 @@
 						"end": {
 							"perek": 9,
 							"pasuk": 6
-						}
+						},
+						"alternatives": [
+							{
+								"start": {
+									"perek": 9,
+									"pasuk": 1
+								},
+								"end": {
+									"perek": 9,
+									"pasuk": 5
+								},
+								"source": "opentorah"
+							}
+						]
 					},
 					{
 						"ordinal": 2,
@@ -4068,7 +4199,20 @@
 						"end": {
 							"perek": 9,
 							"pasuk": 10
-						}
+						},
+						"alternatives": [
+							{
+								"start": {
+									"perek": 9,
+									"pasuk": 6
+								},
+								"end": {
+									"perek": 9,
+									"pasuk": 10
+								},
+								"source": "opentorah"
+							}
+						]
 					},
 					{
 						"ordinal": 3,
@@ -5418,7 +5562,21 @@
 						"end": {
 							"perek": 7,
 							"pasuk": 71
-						}
+						},
+						"alternatives": [
+							{
+								"start": {
+									"perek": 7,
+									"pasuk": 42
+								},
+								"end": {
+									"perek": 7,
+									"pasuk": 83
+								},
+								"source": "opentorah",
+								"custom": "חב\"ד"
+							}
+						]
 					},
 					{
 						"ordinal": 7,
@@ -5431,7 +5589,21 @@
 						"end": {
 							"perek": 7,
 							"pasuk": 89
-						}
+						},
+						"alternatives": [
+							{
+								"start": {
+									"perek": 7,
+									"pasuk": 84
+								},
+								"end": {
+									"perek": 7,
+									"pasuk": 89
+								},
+								"source": "opentorah",
+								"custom": "חב\"ד"
+							}
+						]
 					},
 					{
 						"ordinal": 8,
@@ -5485,7 +5657,20 @@
 						"end": {
 							"perek": 4,
 							"pasuk": 33
-						}
+						},
+						"alternatives": [
+							{
+								"start": {
+									"perek": 4,
+									"pasuk": 29
+								},
+								"end": {
+									"perek": 4,
+									"pasuk": 37
+								},
+								"source": "opentorah"
+							}
+						]
 					}
 				]
 			}
@@ -6601,7 +6786,21 @@
 						"end": {
 							"perek": 33,
 							"pasuk": 10
-						}
+						},
+						"alternatives": [
+							{
+								"start": {
+									"perek": 33,
+									"pasuk": 1
+								},
+								"end": {
+									"perek": 33,
+									"pasuk": 49
+								},
+								"source": "opentorah",
+								"custom": "עדות המזרח"
+							}
+						]
 					},
 					{
 						"ordinal": 2,
@@ -6614,7 +6813,21 @@
 						"end": {
 							"perek": 33,
 							"pasuk": 49
-						}
+						},
+						"alternatives": [
+							{
+								"start": {
+									"perek": 33,
+									"pasuk": 50
+								},
+								"end": {
+									"perek": 33,
+									"pasuk": 53
+								},
+								"source": "opentorah",
+								"custom": "עדות המזרח"
+							}
+						]
 					},
 					{
 						"ordinal": 3,
@@ -6627,7 +6840,21 @@
 						"end": {
 							"perek": 34,
 							"pasuk": 15
-						}
+						},
+						"alternatives": [
+							{
+								"start": {
+									"perek": 33,
+									"pasuk": 54
+								},
+								"end": {
+									"perek": 34,
+									"pasuk": 15
+								},
+								"source": "opentorah",
+								"custom": "עדות המזרח"
+							}
+						]
 					},
 					{
 						"ordinal": 4,
@@ -6720,7 +6947,20 @@
 						"end": {
 							"perek": 33,
 							"pasuk": 6
-						}
+						},
+						"alternatives": [
+							{
+								"start": {
+									"perek": 33,
+									"pasuk": 4
+								},
+								"end": {
+									"perek": 33,
+									"pasuk": 49
+								},
+								"source": "opentorah"
+							}
+						]
 					},
 					{
 						"ordinal": 3,
@@ -6733,7 +6973,20 @@
 						"end": {
 							"perek": 33,
 							"pasuk": 10
-						}
+						},
+						"alternatives": [
+							{
+								"start": {
+									"perek": 33,
+									"pasuk": 50
+								},
+								"end": {
+									"perek": 33,
+									"pasuk": 53
+								},
+								"source": "opentorah"
+							}
+						]
 					}
 				]
 			}
@@ -6757,7 +7010,21 @@
 						"end": {
 							"perek": 1,
 							"pasuk": 10
-						}
+						},
+						"alternatives": [
+							{
+								"start": {
+									"perek": 1,
+									"pasuk": 1
+								},
+								"end": {
+									"perek": 1,
+									"pasuk": 11
+								},
+								"source": "opentorah",
+								"custom": "חב\"ד"
+							}
+						]
 					},
 					{
 						"ordinal": 2,
@@ -6770,7 +7037,21 @@
 						"end": {
 							"perek": 1,
 							"pasuk": 21
-						}
+						},
+						"alternatives": [
+							{
+								"start": {
+									"perek": 1,
+									"pasuk": 12
+								},
+								"end": {
+									"perek": 1,
+									"pasuk": 21
+								},
+								"source": "opentorah",
+								"custom": "חב\"ד"
+							}
+						]
 					},
 					{
 						"ordinal": 3,
@@ -6889,7 +7170,20 @@
 						"end": {
 							"perek": 1,
 							"pasuk": 11
-						}
+						},
+						"alternatives": [
+							{
+								"start": {
+									"perek": 1,
+									"pasuk": 8
+								},
+								"end": {
+									"perek": 1,
+									"pasuk": 10
+								},
+								"source": "opentorah"
+							}
+						]
 					}
 				]
 			}
@@ -9020,7 +9314,7 @@
 					}
 				]
 			},
-			"applicability": "חוץ לארץ בלבד"
+			"applicability": "חוץ לארץ ומנהג תימן הבלדי"
 		},
 		{
 			"id": "Matot-Masei",
@@ -9081,7 +9375,21 @@
 						"end": {
 							"perek": 33,
 							"pasuk": 49
-						}
+						},
+						"alternatives": [
+							{
+								"start": {
+									"perek": 32,
+									"pasuk": 20
+								},
+								"end": {
+									"perek": 33,
+									"pasuk": 10
+								},
+								"source": "opentorah",
+								"custom": "אשכנז"
+							}
+						]
 					},
 					{
 						"ordinal": 5,
@@ -9094,7 +9402,21 @@
 						"end": {
 							"perek": 34,
 							"pasuk": 15
-						}
+						},
+						"alternatives": [
+							{
+								"start": {
+									"perek": 33,
+									"pasuk": 11
+								},
+								"end": {
+									"perek": 34,
+									"pasuk": 15
+								},
+								"source": "opentorah",
+								"custom": "אשכנז"
+							}
+						]
 					},
 					{
 						"ordinal": 6,
@@ -9136,7 +9458,8 @@
 						}
 					}
 				]
-			}
+			},
+			"applicability": "למעט מנהג תימן הבלדי"
 		},
 		{
 			"id": "Nitzavim-Vayeilech",

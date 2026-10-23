@@ -22,7 +22,9 @@ import { getAllParashaUnits, getParashaUnitById } from "./parasha-units";
  *
  * The source table (parasha-aliyot.json) is curated data imported by
  * `devops/import-parasha-aliyot.mjs` from hebcal-leyning's verified
- * boundary list (BSD-2-Clause; provenance + cross-source audit in
+ * boundary list (BSD-2-Clause), enriched with documented minhag
+ * alternatives derived from OpenTorah's custom-marked day table
+ * (Apache-2.0; provenance + cross-source audit in
  * docs/data/aliyah-sources.md). Like the parasha division itself,
  * references resolve to canonical perekId/pasuk coordinates and are
  * validated against the corpus at module load — impossible endpoints
@@ -30,6 +32,19 @@ import { getAllParashaUnits, getParashaUnitById } from "./parasha-units";
  */
 
 export type AliyahRole = "aliyah" | "maftir";
+
+/**
+ * A documented alternative division of one aliyah — a different
+ * minhag's boundary for the same stretch (e.g. חב"ד's ויגש, עדות
+ * המזרח's מסעי). `custom` names the tradition when the source
+ * attributes one; an absent custom is an unattributed recorded split.
+ */
+export interface AliyahAlternative {
+	range: ScriptureRange;
+	custom?: string;
+	/** Which curated source records this division (hebcal / opentorah). */
+	source?: string;
+}
 
 /** A single aliyah boundary resolved to canonical coordinates. */
 export interface AliyahBoundary {
@@ -39,8 +54,8 @@ export interface AliyahBoundary {
 	/** Hebrew label — ראשון…שביעי, מפטיר. */
 	label: string;
 	range: ScriptureRange;
-	/** Documented alternative split for this aliyah, when the source notes one. */
-	note?: string;
+	/** Documented alternative divisions of this aliyah, when any. */
+	alternatives?: AliyahAlternative[];
 }
 
 /** A named boundary scheme/custom (e.g. Shabbat vs weekday splits). */
@@ -81,7 +96,12 @@ interface SourceAliyah {
 	label: string;
 	start: SourceVerse;
 	end: SourceVerse;
-	note?: string;
+	alternatives?: {
+		start: SourceVerse;
+		end: SourceVerse;
+		custom?: string;
+		source?: string;
+	}[];
 }
 
 interface SourceReading {
@@ -132,7 +152,15 @@ function resolveReadingAliyah(
 		role: aliyah.role,
 		label: aliyah.label,
 		range,
-		...(aliyah.note ? { note: aliyah.note } : {}),
+		...(aliyah.alternatives
+			? {
+					alternatives: aliyah.alternatives.map((alternative) => ({
+						range: resolveRange(alternative, reading, schemeId),
+						...(alternative.custom ? { custom: alternative.custom } : {}),
+						...(alternative.source ? { source: alternative.source } : {}),
+					})),
+				}
+			: {}),
 	};
 }
 

@@ -450,7 +450,7 @@ pub struct ParashaSourceUnit {
     pub haftarot: Vec<SourceHaftara>,
 }
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Deserialize)]
 pub struct SourceVerse {
     pub perek: i32,
     pub pasuk: i32,
@@ -774,7 +774,18 @@ pub struct AliyahBoundarySource {
     pub label: String,
     pub start: SourceVerse,
     pub end: SourceVerse,
-    pub note: Option<String>,
+    /// Documented alternative divisions of this aliyah (different
+    /// minhag boundaries for the same stretch); each carries the
+    /// alternative's own start/end plus optional custom and source.
+    pub alternatives: Option<Vec<AliyahAlternativeSource>>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct AliyahAlternativeSource {
+    pub start: SourceVerse,
+    pub end: SourceVerse,
+    pub custom: Option<String>,
+    pub source: Option<String>,
 }
 
 /// Path of the shared aliyah source table the website also consumes.
@@ -908,8 +919,8 @@ pub fn insert_parasha_aliyot(tx: &Transaction, sefarim: &[Sefer]) -> Result<()> 
                 tx.execute(
                     "INSERT INTO tanah_parasha_aliyah
                        (reading_id, scheme_id, ordinal, role, label,
-                        start_perek_id, start_pasuk, end_perek_id, end_pasuk, note)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                        start_perek_id, start_pasuk, end_perek_id, end_pasuk)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
                     (
                         &reading.id,
                         scheme_id,
@@ -920,9 +931,53 @@ pub fn insert_parasha_aliyot(tx: &Transaction, sefarim: &[Sefer]) -> Result<()> 
                         range.start.pasuk,
                         range.end.perek_id,
                         range.end.pasuk,
-                        &boundary.note,
                     ),
                 )?;
+                for (alternative_index, alternative) in boundary
+                    .alternatives
+                    .as_deref()
+                    .unwrap_or_default()
+                    .iter()
+                    .enumerate()
+                {
+                    let alternative_range = resolve_parasha_range(
+                        sefarim,
+                        &SourceRange {
+                            sefer: reading.sefer.clone(),
+                            additional: None,
+                            start: alternative.start.clone(),
+                            end: alternative.end.clone(),
+                        },
+                    )
+                    .with_context(|| {
+                        format!(
+                            "aliyah data: {}/{} boundary {} alternative {}",
+                            reading.id,
+                            scheme_id,
+                            boundary.ordinal,
+                            alternative_index + 1
+                        )
+                    })?;
+                    tx.execute(
+                        "INSERT INTO tanah_parasha_aliyah_alternative
+                           (reading_id, scheme_id, ordinal, alternative,
+                            start_perek_id, start_pasuk, end_perek_id, end_pasuk,
+                            custom, source)
+                         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                        (
+                            &reading.id,
+                            scheme_id,
+                            boundary.ordinal,
+                            alternative_index as i32 + 1,
+                            alternative_range.start.perek_id,
+                            alternative_range.start.pasuk,
+                            alternative_range.end.perek_id,
+                            alternative_range.end.pasuk,
+                            &alternative.custom,
+                            &alternative.source,
+                        ),
+                    )?;
+                }
             }
         }
     }
@@ -2031,8 +2086,20 @@ mod tests {
                 start_pasuk INTEGER NOT NULL,
                 end_perek_id INTEGER NOT NULL,
                 end_pasuk INTEGER NOT NULL,
-                note TEXT,
                 PRIMARY KEY (reading_id, scheme_id, ordinal)
+            );
+            CREATE TABLE tanah_parasha_aliyah_alternative (
+                reading_id TEXT NOT NULL,
+                scheme_id TEXT NOT NULL,
+                ordinal INTEGER NOT NULL,
+                alternative INTEGER NOT NULL,
+                start_perek_id INTEGER NOT NULL,
+                start_pasuk INTEGER NOT NULL,
+                end_perek_id INTEGER NOT NULL,
+                end_pasuk INTEGER NOT NULL,
+                custom TEXT,
+                source TEXT,
+                PRIMARY KEY (reading_id, scheme_id, ordinal, alternative)
             );
             CREATE TABLE tanah_parasha_aliyah_source (
                 id INTEGER PRIMARY KEY,
@@ -2157,17 +2224,33 @@ mod tests {
             .unwrap();
         assert_eq!(vezot_rows, 7 + 3); // 7 shabbat + 3 weekday, no maftir
 
-        // Documented variant notes survive the export verbatim.
-        let noted: i64 = conn
+        // Documented alternative divisions export as child rows with
+        // their own resolved ranges: 16 Shabbat variants (בראשית ×2
+        // unattributed, תרומה/מסעי ×2+×3 עדות המזרח, ויגש/נשא/דברים
+        // חב"ד, מטות-מסעי ×2 אשכנז) and 8 weekday variants.
+        let alternatives: i64 = conn
             .query_row(
-                "SELECT COUNT(*) FROM tanah_parasha_aliyah WHERE note IS NOT NULL",
+                "SELECT COUNT(*) FROM tanah_parasha_aliyah_alternative",
                 [],
                 |row| row.get(0),
             )
             .unwrap();
-        assert_eq!(noted, 4); // Bereshit ×2, Terumah ×2
+        assert_eq!(alternatives, 24);
+        let (with_custom, with_source): (i64, i64) = conn
+            .query_row(
+                "SELECT
+                   COALESCE(SUM(custom IS NOT NULL), 0),
+                   COALESCE(SUM(source IS NOT NULL), 0)
+                 FROM tanah_parasha_aliyah_alternative",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!((with_custom, with_source), (14, 24));
 
-        // חוקת-בלק is the only restricted-applicability context.
+        // חוקת-בלק and מטות-מסעי are the only restricted contexts —
+        // both carve out מנהג תימן הבלדי, which joins the first pair
+        // and never the second.
         let restricted: i64 = conn
             .query_row(
                 "SELECT COUNT(*) FROM tanah_parasha_reading
@@ -2176,7 +2259,7 @@ mod tests {
                 |row| row.get(0),
             )
             .unwrap();
-        assert_eq!(restricted, 1);
+        assert_eq!(restricted, 2);
         let chukat_applicability: String = conn
             .query_row(
                 "SELECT applicability FROM tanah_parasha_reading
@@ -2185,7 +2268,16 @@ mod tests {
                 |row| row.get(0),
             )
             .unwrap();
-        assert_eq!(chukat_applicability, "חוץ לארץ בלבד");
+        assert_eq!(chukat_applicability, "חוץ לארץ ומנהג תימן הבלדי");
+        let matot_applicability: String = conn
+            .query_row(
+                "SELECT applicability FROM tanah_parasha_reading
+                 WHERE id = 'Matot-Masei'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(matot_applicability, "למעט מנהג תימן הבלדי");
 
         // Provenance lands verbatim as the single source row.
         let provenance: (String, String) = conn

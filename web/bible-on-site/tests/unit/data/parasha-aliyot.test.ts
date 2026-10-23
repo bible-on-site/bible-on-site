@@ -190,19 +190,24 @@ describe("joined readings", () => {
 		});
 	});
 
-	it("marks חוקת-בלק as the only חוץ לארץ-restricted context", () => {
+	it("restricts חוקת-בלק to חוץ לארץ and מנהג תימן הבלדי", () => {
 		const chukat = must(getParashaReadingById("Chukat-Balak"));
-		expect(chukat.applicability).toBe("חוץ לארץ בלבד");
+		expect(chukat.applicability).toBe("חוץ לארץ ומנהג תימן הבלדי");
 		const balak = unitByName("בלק");
 		const layer = getUnitAliyahMarkers(balak.unitId);
 		const joinedCtx = must(layer.contexts.find((c) => c.kind === "joined"));
 		expect(joinedCtx.contextId).toBe("Chukat-Balak");
-		expect(joinedCtx.applicability).toBe("חוץ לארץ בלבד");
-		expect(joinedCtx.label).toContain("חוץ לארץ");
+		expect(joinedCtx.applicability).toBe("חוץ לארץ ומנהג תימן הבלדי");
+		expect(joinedCtx.label).toContain("תימן הבלדי");
+	});
+
+	it("excludes מנהג תימן הבלדי from מטות-מסעי — בלדים never join it", () => {
+		const matot = must(getParashaReadingById("Matot-Masei"));
+		expect(matot.applicability).toBe("למעט מנהג תימן הבלדי");
 		// Every other context is unrestricted.
 		for (const unit of units) {
 			for (const ctx of getUnitAliyahMarkers(unit.unitId).contexts) {
-				if (ctx.contextId !== "Chukat-Balak") {
+				if (!["Chukat-Balak", "Matot-Masei"].includes(ctx.contextId)) {
 					expect(ctx.applicability).toBeUndefined();
 				}
 			}
@@ -224,23 +229,214 @@ describe("joined readings", () => {
 });
 
 describe("documented alternative splits", () => {
-	it("carries the source's variant notes on בראשית aliyot 5 and 6", () => {
-		const boundaries = must(
-			getAliyot(getStandaloneReading(unitByName("בראשית").unitId)),
-		);
-		const withNotes = boundaries.filter((b) => b.note);
-		expect(withNotes.map((b) => b.ordinal)).toEqual([5, 6]);
-		expect(withNotes[0].note).toContain("4:19");
-		expect(withNotes[1].note).toContain("5:1");
+	// The full curated alternative inventory — every (reading, scheme,
+	// ordinal) that carries a documented variant, its exact range and
+	// its attributed minhag. Coordinates are sefer-relative perek:pasuk
+	// (resolved to perekIds through perekIdOf at assertion time).
+	const EXPECTED: Record<
+		string,
+		Record<
+			string,
+			{
+				sefer: string;
+				ordinal: number;
+				start: [number, number];
+				end: [number, number];
+				custom?: string;
+			}[]
+		>
+	> = {
+		בראשית: {
+			shabbat: [
+				{ sefer: "בראשית", ordinal: 5, start: [4, 19], end: [4, 26] },
+				{ sefer: "בראשית", ordinal: 6, start: [5, 1], end: [5, 24] },
+			],
+		},
+		"לך לך": {
+			weekday: [
+				{ sefer: "בראשית", ordinal: 2, start: [12, 4], end: [12, 6] },
+				{ sefer: "בראשית", ordinal: 3, start: [12, 7], end: [12, 13] },
+			],
+		},
+		ויגש: {
+			shabbat: [
+				{
+					sefer: "בראשית",
+					ordinal: 3,
+					start: [45, 8],
+					end: [45, 27],
+					custom: 'חב"ד',
+				},
+				{
+					sefer: "בראשית",
+					ordinal: 4,
+					start: [45, 28],
+					end: [46, 7],
+					custom: 'חב"ד',
+				},
+				{
+					sefer: "בראשית",
+					ordinal: 5,
+					start: [46, 8],
+					end: [46, 27],
+					custom: 'חב"ד',
+				},
+			],
+		},
+		תרומה: {
+			shabbat: [
+				{
+					sefer: "שמות",
+					ordinal: 2,
+					start: [25, 17],
+					end: [25, 30],
+					custom: "עדות המזרח",
+				},
+				{
+					sefer: "שמות",
+					ordinal: 3,
+					start: [25, 31],
+					end: [26, 14],
+					custom: "עדות המזרח",
+				},
+			],
+		},
+		שמיני: {
+			weekday: [
+				{ sefer: "ויקרא", ordinal: 1, start: [9, 1], end: [9, 5] },
+				{ sefer: "ויקרא", ordinal: 2, start: [9, 6], end: [9, 10] },
+			],
+		},
+		נשא: {
+			shabbat: [
+				{
+					sefer: "במדבר",
+					ordinal: 6,
+					start: [7, 42],
+					end: [7, 83],
+					custom: 'חב"ד',
+				},
+				{
+					sefer: "במדבר",
+					ordinal: 7,
+					start: [7, 84],
+					end: [7, 89],
+					custom: 'חב"ד',
+				},
+			],
+			weekday: [{ sefer: "במדבר", ordinal: 3, start: [4, 29], end: [4, 37] }],
+		},
+		מסעי: {
+			shabbat: [
+				{
+					sefer: "במדבר",
+					ordinal: 1,
+					start: [33, 1],
+					end: [33, 49],
+					custom: "עדות המזרח",
+				},
+				{
+					sefer: "במדבר",
+					ordinal: 2,
+					start: [33, 50],
+					end: [33, 53],
+					custom: "עדות המזרח",
+				},
+				{
+					sefer: "במדבר",
+					ordinal: 3,
+					start: [33, 54],
+					end: [34, 15],
+					custom: "עדות המזרח",
+				},
+			],
+			weekday: [
+				{ sefer: "במדבר", ordinal: 2, start: [33, 4], end: [33, 49] },
+				{ sefer: "במדבר", ordinal: 3, start: [33, 50], end: [33, 53] },
+			],
+		},
+		דברים: {
+			shabbat: [
+				{
+					sefer: "דברים",
+					ordinal: 1,
+					start: [1, 1],
+					end: [1, 11],
+					custom: 'חב"ד',
+				},
+				{
+					sefer: "דברים",
+					ordinal: 2,
+					start: [1, 12],
+					end: [1, 21],
+					custom: 'חב"ד',
+				},
+			],
+			weekday: [{ sefer: "דברים", ordinal: 3, start: [1, 8], end: [1, 10] }],
+		},
+	};
+
+	it("resolves every curated alternative to canonical coordinates", () => {
+		for (const [unitName, schemes] of Object.entries(EXPECTED)) {
+			const reading = getStandaloneReading(unitByName(unitName).unitId);
+			for (const [schemeId, alts] of Object.entries(schemes)) {
+				const boundaries = must(getAliyot(reading, schemeId));
+				for (const expected of alts) {
+					const boundary = must(
+						boundaries.find((b) => b.ordinal === expected.ordinal),
+					);
+					const alternative = must(boundary.alternatives)[0];
+					expect(alternative.range).toEqual({
+						start: {
+							perekId: perekIdOf(expected.sefer, expected.start[0]),
+							pasuk: expected.start[1],
+						},
+						end: {
+							perekId: perekIdOf(expected.sefer, expected.end[0]),
+							pasuk: expected.end[1],
+						},
+					});
+					expect(alternative.custom).toBe(expected.custom);
+					expect(alternative.range).not.toEqual(boundary.range);
+				}
+			}
+		}
 	});
 
-	it("carries the variant notes on תרומה aliyot 2 and 3", () => {
-		const boundaries = must(
-			getAliyot(getStandaloneReading(unitByName("תרומה").unitId)),
-		);
-		expect(boundaries.filter((b) => b.note).map((b) => b.ordinal)).toEqual([
-			2, 3,
-		]);
+	it("carries no alternatives outside the curated inventory", () => {
+		for (const unit of units) {
+			const reading = getStandaloneReading(unit.unitId);
+			for (const [schemeId, boundaries] of Object.entries(reading.schemes)) {
+				for (const boundary of boundaries) {
+					if (!boundary.alternatives) continue;
+					const expected = EXPECTED[unit.heading]?.[schemeId];
+					expect(expected?.some((e) => e.ordinal === boundary.ordinal)).toBe(
+						true,
+					);
+				}
+			}
+		}
+	});
+
+	it("splits the joined מטות-מסעי אשכנז variant at the standalone boundary", () => {
+		const joined = must(getParashaReadingById("Matot-Masei"));
+		const shabbat = must(getAliyot(joined, "shabbat"));
+		const a4 = must(shabbat.find((b) => b.ordinal === 4));
+		const a5 = must(shabbat.find((b) => b.ordinal === 5));
+		expect(a4.alternatives?.[0]).toMatchObject({
+			custom: "אשכנז",
+			range: {
+				start: { perekId: perekIdOf("במדבר", 32), pasuk: 20 },
+				end: { perekId: perekIdOf("במדבר", 33), pasuk: 10 },
+			},
+		});
+		expect(a5.alternatives?.[0]).toMatchObject({
+			custom: "אשכנז",
+			range: {
+				start: { perekId: perekIdOf("במדבר", 33), pasuk: 11 },
+				end: { perekId: perekIdOf("במדבר", 34), pasuk: 15 },
+			},
+		});
 	});
 });
 

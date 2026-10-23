@@ -224,10 +224,9 @@ CREATE TABLE tanah_parasha_reading_unit (
 
 -- Aliyah boundaries: inclusive canonical start/end coordinates for each
 -- aliyah of a (reading, scheme) pair. role distinguishes the repeated
--- maftir reading from the seven regular aliyot; note preserves
--- documented alternative splits the source flags inline. A single
--- aliyah may cross a perek boundary; coincident chapter/aliyah edges
--- are render-time concerns, not stored deduplication.
+-- maftir reading from the seven regular aliyot. A single aliyah may
+-- cross a perek boundary; coincident chapter/aliyah edges are
+-- render-time concerns, not stored deduplication.
 DROP TABLE IF EXISTS tanah_parasha_aliyah;
 CREATE TABLE tanah_parasha_aliyah (
   reading_id TEXT NOT NULL,
@@ -239,10 +238,32 @@ CREATE TABLE tanah_parasha_aliyah (
   start_pasuk INTEGER NOT NULL,
   end_perek_id INTEGER NOT NULL,
   end_pasuk INTEGER NOT NULL,
-  note TEXT,
   PRIMARY KEY (reading_id, scheme_id, ordinal),
   FOREIGN KEY (reading_id) REFERENCES tanah_parasha_reading (id) ON DELETE CASCADE ON UPDATE CASCADE,
   FOREIGN KEY (scheme_id) REFERENCES tanah_parasha_aliyah_scheme (id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- Alternative divisions of a single aliyah — a different minhag's
+-- boundary for the same stretch (e.g. חב"ד's ויגש, עדות המזרח's מסעי).
+-- custom names the tradition when the source attributes one (NULL =
+-- unattributed recorded split); source records which curated upstream
+-- carries the division.
+DROP TABLE IF EXISTS tanah_parasha_aliyah_alternative;
+CREATE TABLE tanah_parasha_aliyah_alternative (
+  reading_id TEXT NOT NULL,
+  scheme_id TEXT NOT NULL,
+  ordinal INTEGER NOT NULL,
+  alternative INTEGER NOT NULL,
+  start_perek_id INTEGER NOT NULL,
+  start_pasuk INTEGER NOT NULL,
+  end_perek_id INTEGER NOT NULL,
+  end_pasuk INTEGER NOT NULL,
+  custom TEXT,
+  source TEXT,
+  PRIMARY KEY (reading_id, scheme_id, ordinal, alternative),
+  FOREIGN KEY (reading_id, scheme_id, ordinal)
+    REFERENCES tanah_parasha_aliyah (reading_id, scheme_id, ordinal)
+    ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 -- Provenance of the imported aliyah dataset: where the boundaries came
