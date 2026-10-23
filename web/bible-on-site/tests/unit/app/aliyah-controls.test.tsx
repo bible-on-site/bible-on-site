@@ -151,4 +151,48 @@ describe("AliyahControls", () => {
 		utils.applyNavigation();
 		expect(visibleKeys()).toEqual(["matot-masei:shabbat"]);
 	});
+
+	it("falls back to the first context when defaultKey is stale", () => {
+		currentParams = new URLSearchParams();
+		const utils = render(
+			<AliyahControls contexts={CONTEXTS} defaultKey="gone:shabbat" />,
+		);
+
+		// contexts[0] is the standalone — its default layer shows.
+		expect(pressed(utils, "פרשת מטות").getAttribute("aria-pressed")).toBe(
+			"true",
+		);
+	});
+
+	it("falls back to the first scheme when defaultKey's scheme is stale", () => {
+		currentParams = new URLSearchParams();
+		const utils = render(
+			<AliyahControls contexts={CONTEXTS} defaultKey="matot:bogus" />,
+		);
+
+		expect(pressed(utils, "שבת").getAttribute("aria-pressed")).toBe("true");
+	});
+
+	it("falls back to the new context's first scheme when it lacks both the current scheme and shabbat", () => {
+		const customOnly: UnitAliyahContextOption = {
+			contextId: "matot-special",
+			label: "מטות מיוחד",
+			kind: "joined",
+			schemes: [{ schemeId: "mincha", label: "מנחה" }],
+		};
+		currentParams = new URLSearchParams("reading=matot&scheme=weekday");
+		const utils = render(
+			<AliyahControls
+				contexts={[...CONTEXTS, customOnly]}
+				defaultKey={DEFAULT_KEY}
+			/>,
+		);
+
+		fireEvent.click(pressed(utils, "מטות מיוחד"));
+
+		expect(mockReplace).toHaveBeenCalledWith(
+			"/פרשה/42?reading=matot-special&scheme=mincha",
+			{ scroll: false },
+		);
+	});
 });

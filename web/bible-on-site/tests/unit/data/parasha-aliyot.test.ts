@@ -358,4 +358,20 @@ describe("boundary helpers", () => {
 		});
 		expect(tail?.ordinal).toBe(7);
 	});
+
+	it("aliyahContaining returns null outside every boundary", () => {
+		const boundaries = must(
+			getAliyot(getStandaloneReading(unitByName("בראשית").unitId)),
+		);
+		const outside = aliyahContaining(boundaries, {
+			perekId: perekIdOf("שמות", 1),
+			pasuk: 1,
+		});
+		expect(outside).toBeNull();
+	});
+
+	it("returns empty/null lookups for unknown ids", () => {
+		expect(getJoinedReadingsForUnit(99999)).toEqual([]);
+		expect(getParashaReadingById("Not-A-Reading")).toBeNull();
+	});
 });
