@@ -65,11 +65,16 @@ repos:
   # imports), D2 = docstring structure (D205/D212/D213 layout findings). The
   # select is explicit so the gate doesn't drift with ruff version defaults;
   # broader docstring coverage (D1xx undocumented-*) stays out of scope.
+  # #2114 second wave adds the findings github-code-quality accepted on Python
+  # files: BLE001 (blind except — covers "Empty except" and "Except block
+  # handles 'BaseException'"), E722 (bare except:), S110 (try-except-pass with
+  # no explanatory comment), RET502 (implicit-None returns mixed with returns —
+  # the "Explicit returns mixed with implicit returns" finding).
   - repo: "https://github.com/astral-sh/ruff-pre-commit"
     rev: v0.17.1
     hooks:
       - id: ruff-check
-        args: [--select, "F,D2"]
+        args: [--select, "F,D2,BLE001,E722,S110,RET502"]
         priority: 10
   # Local gate for the staged-file secret/PII review required by
   # git-practices — catches keys/tokens before they reach the commit.
@@ -133,6 +138,18 @@ repos:
         language: node
         additional_dependencies: ["@types/node@26.6.5"]
         files: ^web/admin/
+        pass_filenames: false
+        priority: 10
+      # C# analyzer gate (#2114): builds each touched app/ project so the
+      # SonarAnalyzer.CSharp severities in .editorconfig fail locally instead
+      # of first surfacing as post-push Codacy/Qodana annotations. Skips
+      # projects without a prior restore (fresh clones, pre-commit.ci).
+      - id: dotnet-analyzers
+        name: dotnet analyzers (per-project build)
+        entry: node devops/precommit-dotnet.mjs
+        language: node
+        additional_dependencies: ["@types/node@26.6.5"]
+        files: ^(app/.*\.(cs|csproj)|\.editorconfig|global\.json|app/Directory\.Build\.props)$
         pass_filenames: false
         priority: 10
       # One hook covers all Rust modules: precommit-rust.mjs buckets staged

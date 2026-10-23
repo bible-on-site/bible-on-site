@@ -94,8 +94,10 @@ public partial class TanahpediaViewModel : ObservableObject
                 TanahpediaTaxonomy.Hierarchy.Select(cat => TanahpediaCategoryGroup.Create(cat, counts)));
             IsLoaded = true;
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: landing load failure surfaces as ErrorMessage
+        catch (Exception ex) //NOSONAR — landing load failure surfaces as ErrorMessage.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Tanahpedia landing load failed: {ex}");
             ErrorMessage = "התוכן אינו זמין כרגע";
         }

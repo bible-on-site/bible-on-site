@@ -225,8 +225,10 @@ public class StarterService : BaseGraphQLService
                 return;
             }
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: starter API failure falls back to local cache
+        catch (Exception ex) //NOSONAR — starter API failure falls back to local cache.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"API unavailable: {ex.Message}");
         }
 
@@ -240,8 +242,10 @@ public class StarterService : BaseGraphQLService
                 return;
             }
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: cache load failure proceeds offline without articles
+        catch (Exception ex) //NOSONAR — cache load failure proceeds offline without articles.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Cache load failed: {ex.Message}");
         }
 
@@ -264,8 +268,10 @@ public class StarterService : BaseGraphQLService
                 Console.WriteLine($"Refreshed {Authors.Count} authors from API");
             }
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: background refresh failure is log-only
+        catch (Exception ex) //NOSONAR — background refresh failure is log-only.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Refresh failed: {ex.Message}");
         }
     }
@@ -282,8 +288,10 @@ public class StarterService : BaseGraphQLService
             var json = JsonSerializer.Serialize(response, StarterJsonContext.Default.StarterResponse);
             await AtomicFile.WriteAllTextAsync(CachePath, json);
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: cache save is best-effort
+        catch (Exception ex) //NOSONAR — cache save is best-effort.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Failed to save starter cache: {ex.Message}");
         }
     }

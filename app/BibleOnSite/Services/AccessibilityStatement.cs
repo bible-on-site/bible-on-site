@@ -15,8 +15,10 @@ public static class AccessibilityStatement
         {
             await launcher.OpenAsync(new Uri(AppConfig.Instance.AccessibilityUrl));
         }
+        #pragma warning disable S2221 // Deliberate failure boundary: see the //NOSONAR note
         catch (Exception ex) //NOSONAR — launcher failures are platform-specific; the user gets an alert.
         {
+            #pragma warning restore S2221
             System.Diagnostics.Debug.WriteLine($"Open accessibility statement failed: {ex.Message}");
             await navigator.DisplayAlertAsync("שגיאה", "לא ניתן לפתוח את הצהרת הנגישות", "אישור");
         }

@@ -454,8 +454,10 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
                 await _viewModel.LoadPerushimAsync(unit);
             }
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: on-appearing refresh is best-effort
+        catch (Exception ex) //NOSONAR — on-appearing refresh is best-effort.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Refresh perushim on appearing failed: {ex}");
         }
     }
@@ -891,8 +893,10 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
             await _viewModel.LoadArticlesAsync(unit);
             ArticlesBadge.IsVisible = _viewModel.ArticlesCount > 0;
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: articles-count badge degrades to hidden
+        catch (Exception ex) //NOSONAR — articles-count badge degrades to hidden.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Error fetching articles count: {ex.Message}");
             ArticlesBadge.IsVisible = false;
         }
@@ -918,8 +922,10 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
                 ? Color.FromArgb("#BB86FC")
                 : Color.FromArgb("#512BD4");
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: articles-button styling failure is log-only
+        catch (Exception ex) //NOSONAR — articles-button styling failure is log-only.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"[Articles] Error in OnArticlesButtonClicked: {ex}");
         }
     }
@@ -962,8 +968,10 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
             {
                 await Shell.Current.GoToAsync($"articleDetail?articleId={article.Id}");
             }
-            catch (Exception ex)
+            #pragma warning disable S2221 // Deliberate failure boundary: article navigation failure is log-only
+            catch (Exception ex) //NOSONAR — article navigation failure is log-only.
             {
+                #pragma warning restore S2221
                 Console.Error.WriteLine($"Error navigating to article: {ex.Message}");
             }
         }

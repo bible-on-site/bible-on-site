@@ -13,8 +13,10 @@ public partial class ContactPage : ContentPage
         {
             await Launcher.OpenAsync(new Uri("https://wa.me/37257078640"));
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: external launcher failure is log-only
+        catch (Exception ex) //NOSONAR — external launcher failure is log-only.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Error opening WhatsApp: {ex.Message}");
         }
     }
@@ -25,8 +27,10 @@ public partial class ContactPage : ContentPage
         {
             await Launcher.OpenAsync(new Uri("https://t.me/BibleOnSite"));
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: external launcher failure is log-only
+        catch (Exception ex) //NOSONAR — external launcher failure is log-only.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Error opening Telegram: {ex.Message}");
         }
     }
@@ -38,8 +42,10 @@ public partial class ContactPage : ContentPage
             var emailUri = new Uri("mailto:tanah.site@gmail.com?subject=" + Uri.EscapeDataString("פניה מלומד"));
             await Launcher.OpenAsync(emailUri);
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: external launcher failure is log-only
+        catch (Exception ex) //NOSONAR — external launcher failure is log-only.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Error opening email: {ex.Message}");
         }
     }

@@ -399,14 +399,11 @@ public sealed class RecitationService
             var cache = Path.Combine(_files.CacheDirectory, "recitation");
             Directory.CreateDirectory(cache);
             var chapter = Path.Combine(cache, "chapter-" + track.PlaybackSha256 + ".wav");
-            foreach (var old in Directory.EnumerateFiles(cache, "*.wav"))
+            // A decoded chapter survives for instant replay; native players may
+            // still finish releasing a previous file asynchronously.
+            foreach (var old in Directory.EnumerateFiles(cache, "*.wav").Where(old => old != chapter))
             {
-                // A decoded chapter survives for instant replay; native players may
-                // still finish releasing a previous file asynchronously.
-                if (old != chapter)
-                {
-                    try { File.Delete(old); File.Delete(old + ".sha256"); } catch (IOException) { /* The native player can retain its last file until asynchronous release. */ }
-                }
+                try { File.Delete(old); File.Delete(old + ".sha256"); } catch (IOException) { /* The native player can retain its last file until asynchronous release. */ }
             }
             cancellationToken.ThrowIfCancellationRequested();
             if (intervals == null)

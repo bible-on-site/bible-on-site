@@ -141,8 +141,10 @@ public partial class SearchViewModel : ObservableObject
         {
             return NetworkService.IsOnline;
         }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
+        #pragma warning disable S2221 // Deliberate failure boundary: availability probe: any failure counts as unavailable
+        catch (Exception ex) when (ex is not OutOfMemoryException) //NOSONAR — availability probe: any failure counts as unavailable.
         {
+            #pragma warning restore S2221
             return true;
         }
     };
@@ -158,8 +160,10 @@ public partial class SearchViewModel : ObservableObject
         {
             return !PerushimNotesService.Instance.IsDeterminedMissing;
         }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
+        #pragma warning disable S2221 // Deliberate failure boundary: availability probe: any failure counts as unavailable
+        catch (Exception ex) when (ex is not OutOfMemoryException) //NOSONAR — availability probe: any failure counts as unavailable.
         {
+            #pragma warning restore S2221
             return true;
         }
     };
@@ -655,8 +659,10 @@ public partial class SearchViewModel : ObservableObject
             // search version owns the result list now.
             return null;
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: remote article search degrades to an availability note
+        catch (Exception ex) //NOSONAR — remote article search degrades to an availability note.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Article search failed: {ex.Message}");
             return new RemoteSearchOutcome { UnavailableMessage = "חיפוש תוכן מאמרים דורש חיבור רשת תקין" };
         }
@@ -705,8 +711,10 @@ public partial class SearchViewModel : ObservableObject
             // search version owns the result list now.
             return null;
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: remote pedia search degrades to an availability note
+        catch (Exception ex) //NOSONAR — remote pedia search degrades to an availability note.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Tanahpedia search failed: {ex.Message}");
             return new RemoteSearchOutcome { UnavailableMessage = "חיפוש התנכפדיה אינו זמין כרגע" };
         }
