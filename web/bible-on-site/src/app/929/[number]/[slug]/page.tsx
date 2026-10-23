@@ -384,6 +384,7 @@ export default async function ArticlePage({
 								data-perush-pasuk={note.pasuk}
 								data-perush-note={note.noteIdx}
 							>
+								<span id={`note-${toLetters(note.pasuk)}-${note.noteIdx + 1}`} />
 								<span className={styles.notePasuk}>
 									פסוק {toLetters(note.pasuk)}:
 								</span>

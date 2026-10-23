@@ -19,6 +19,7 @@ import { PerekIntro } from "./components/PerekIntro";
 import { PerekNav } from "./components/PerekNav";
 import { PerekText } from "./components/PerekText";
 import { PerushimSection } from "./components/PerushimSection";
+import { QaWidget } from "./components/QaWidget";
 import SeferComposite from "./components/SeferComposite";
 import styles from "./page.module.css";
 // perakim are a closed list — no fallback rendering for unknown IDs.
@@ -160,6 +161,10 @@ export default async function Perek({
 					scrollStorageKey={`articles-perek-${perekId}`}
 				/>
 			</div>
+
+			{/* QaWidget must be outside perekContainer (z-index:6 stacking context)
+			    so its fixed-position elements can layer above the navbar (z-index:10000). */}
+			<QaWidget perekId={perekId} seferPerekIds={perekIds} />
 		</>
 	);
 }
