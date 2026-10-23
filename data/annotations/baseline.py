@@ -163,17 +163,40 @@ def load_canonical(path=CANONICAL):
     return json.loads(Path(path).read_text(encoding="utf-8"))
 
 
-def main():
-    import sys
+def decorations_for_sefer(sefer_index, sefarim, lexicon):
+    rows = []
+    for perek_index in range(len(sefarim[sefer_index]["perakim"])):
+        rows.extend(
+            decorations_for_perek(
+                sefer_index, perek_index, sefarim[sefer_index]["perakim"], lexicon
+            )
+        )
+    return rows
 
-    sefer_index = int(sys.argv[1]) if len(sys.argv) > 1 else 0
-    perek_index = int(sys.argv[2]) if len(sys.argv) > 2 else 0
+
+def main():
+    import argparse
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("sefer", type=int, nargs="?", default=0, help="sefer index")
+    parser.add_argument("perek", type=int, nargs="?", help="0-based perek index (omit for whole sefer)")
+    parser.add_argument("--out", type=Path, help="write decoration rows to a JSON file")
+    args = parser.parse_args()
+
     sefarim = load_canonical()
     lexicon = load_lexicon()
-    rows = decorations_for_perek(
-        sefer_index, perek_index, sefarim[sefer_index]["perakim"], lexicon
-    )
-    print(json.dumps(rows, ensure_ascii=False, indent=1))
+    if args.perek is None:
+        rows = decorations_for_sefer(args.sefer, sefarim, lexicon)
+    else:
+        rows = decorations_for_perek(
+            args.sefer, args.perek, sefarim[args.sefer]["perakim"], lexicon
+        )
+    payload = json.dumps(rows, ensure_ascii=False, indent=1)
+    if args.out:
+        args.out.write_text(payload, encoding="utf-8")
+        print(f"wrote {len(rows)} decorations to {args.out}")
+    else:
+        print(payload)
 
 
 if __name__ == "__main__":

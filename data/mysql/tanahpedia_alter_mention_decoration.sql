@@ -23,6 +23,10 @@ CREATE TABLE IF NOT EXISTS `tanahpedia_mention_decoration` (
     -- Exact original mention text — matching view only, never normalized
     -- stored scripture/article content.
     `surface` varchar(255) NOT NULL,
+    -- Natural dedupe key (md5 over source_kind + coordinates + model_revision):
+    -- lets repeat imports upsert idempotently even though the pasuk/article
+    -- coordinate halves are mutually NULL.
+    `dedupe_key` char(32) NOT NULL,
     -- Intended entry resolution key (tanahpedia_entry.unique_name) — by
     -- design NOT a foreign key: the entry may not exist yet and creating
     -- it later must activate this decoration without re-inference.
@@ -52,6 +56,7 @@ CREATE TABLE IF NOT EXISTS `tanahpedia_mention_decoration` (
     `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_decoration_dedupe` (`dedupe_key`),
     KEY `idx_decoration_pasuk` (`source_kind`, `perek_id`, `pasuk_number`),
     KEY `idx_decoration_article` (`source_kind`, `article_id`),
     KEY `idx_decoration_intended_name` (`intended_name`),

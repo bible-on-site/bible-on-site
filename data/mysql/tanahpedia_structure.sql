@@ -124,6 +124,10 @@ CREATE TABLE `tanahpedia_mention_decoration` (
     `span_start` int DEFAULT NULL,
     `span_end` int DEFAULT NULL,
     `surface` varchar(255) NOT NULL,
+    -- Natural dedupe key (md5 over source_kind + coordinates + model_revision):
+    -- lets repeat imports upsert idempotently even though the pasuk/article
+    -- coordinate halves are mutually NULL.
+    `dedupe_key` char(32) NOT NULL,
     `intended_name` varchar(255) NOT NULL,
     `entity_type` enum(
         'PERSON',
@@ -148,6 +152,7 @@ CREATE TABLE `tanahpedia_mention_decoration` (
     `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_decoration_dedupe` (`dedupe_key`),
     KEY `idx_decoration_pasuk` (`source_kind`, `perek_id`, `pasuk_number`),
     KEY `idx_decoration_article` (`source_kind`, `article_id`),
     KEY `idx_decoration_intended_name` (`intended_name`),
