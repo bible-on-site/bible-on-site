@@ -1343,6 +1343,7 @@ describe("family saves invalidate the website", () => {
 			{ tag: "tanahpedia-entity-refs", path: null },
 			{ tag: null, path: "/pedia/[slug]" },
 			{ tag: null, path: "/pedia" },
+			{ tag: "tanahpedia-mention-refs", path: null },
 		]);
 	});
 

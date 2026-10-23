@@ -101,6 +101,7 @@ describe("pedia path resolution", () => {
 				{ tag: "tanahpedia-entity-refs" },
 				{ path: "/pedia/[slug]", type: "page" },
 				{ path: "/pedia", urls: ["/pedia/משה"] },
+				{ tag: "tanahpedia-mention-refs" },
 			]);
 		});
 
@@ -111,6 +112,7 @@ describe("pedia path resolution", () => {
 				{ tag: "tanahpedia-entity-refs" },
 				{ path: "/pedia/[slug]", type: "page" },
 				{ path: "/pedia" },
+				{ tag: "tanahpedia-mention-refs" },
 			]);
 		});
 

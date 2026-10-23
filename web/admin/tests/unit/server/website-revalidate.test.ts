@@ -183,9 +183,9 @@ describe("revalidateWebsite", () => {
 		await revalidateWebsite(pediaInvalidation("/pedia/משה"));
 
 		const urls = calledUrls();
-		expect(urls.map((u) => u.searchParams.get("tag"))).toContain(
-			"tanahpedia-entity-refs",
-		);
+		const tags = urls.map((u) => u.searchParams.get("tag"));
+		expect(tags).toContain("tanahpedia-entity-refs");
+		expect(tags).toContain("tanahpedia-mention-refs");
 		const paths = urls.map(
 			(u) =>
 				`${u.searchParams.get("path")}:${u.searchParams.get("type") ?? ""}`,
