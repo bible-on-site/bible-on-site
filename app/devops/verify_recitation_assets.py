@@ -97,8 +97,8 @@ def verify_apple(archive, catalog, names, asset_pack_dir, archive_dir, payload_d
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         if manifest.get("assetPackID") != pack or "onDemand" not in manifest.get("downloadPolicy", {}):
             raise ValueError(f"Malformed asset-pack manifest: {pack}")
-        if not {"iOS", "macOS"}.issubset(manifest.get("platforms", [])):
-            raise ValueError(f"Asset-pack manifest does not target iOS+macOS: {pack}")
+        if manifest.get("platforms") != ["iOS"]:
+            raise ValueError(f"Asset-pack manifest must target exactly iOS (ITMS-91139): {pack}")
         selectors = manifest.get("fileSelectors", [])
         if len(selectors) != 1 or "file" not in selectors[0]:
             raise ValueError(f"Asset-pack manifest selects no payload file: {pack}")
@@ -128,8 +128,8 @@ def verify_perushim_pack(asset_pack_dir, archive_dir, payload_dir, extract):
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     if manifest.get("assetPackID") != pack or "onDemand" not in manifest.get("downloadPolicy", {}):
         raise ValueError(f"Malformed asset-pack manifest: {pack}")
-    if not {"iOS", "macOS"}.issubset(manifest.get("platforms", [])):
-        raise ValueError(f"Asset-pack manifest does not target iOS+macOS: {pack}")
+    if manifest.get("platforms") != ["iOS"]:
+        raise ValueError(f"Asset-pack manifest must target exactly iOS (ITMS-91139): {pack}")
     # Selectors must name the root-level files SavePackFileAsync requests.
     expected = {"sefaria-dump-5784-sivan-4.perushim_notes.sqlite",
                 "sefaria-dump-5784-sivan-4.hebrew_search.sqlite"}
