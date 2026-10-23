@@ -1,6 +1,7 @@
 namespace BibleOnSite.Pages;
 
 using BibleOnSite.Behaviors;
+using BibleOnSite.Controls;
 using BibleOnSite.Helpers;
 using BibleOnSite.Models;
 using BibleOnSite.Services;
@@ -239,29 +240,25 @@ public partial class ParashaPage
             focused, _recitationCursor.PlayingKey != null);
         ChapterSearch.SetFocusedPasukScope(focused);
         var ordinarySelection = count > 0 && !_unitRecitationSelection && _focusedPasuk == null;
-        SelectionCountBadge.IsVisible = ordinarySelection;
-        SelectionShareButton.IsVisible = ordinarySelection;
-        SelectionCopyButton.IsVisible = ordinarySelection;
-        SelectionRecitationButton.IsVisible = RecitationAvailable;
+        SelectionBar.SetSelectionActionsVisible(ordinarySelection);
+        SelectionBar.SetRecitationVisible(RecitationAvailable);
         // An active playback can always be paused — even while more of the
         // unit's tracks are still pending alignment.
-        SelectionRecitationButton.IsEnabled = !_recitationBusy && _viewModel.Unit != null &&
+        var recitationEnabled = !_recitationBusy && _viewModel.Unit != null &&
             (_recitationCursor.PlayingKey != null || _unitRecitationSelection || CanPlayFocusedPasuk ||
                 CanPlaySelectedPasukim());
-        SelectionRecitationButton.Opacity = SelectionRecitationButton.IsEnabled ? 1 : 0.4;
         // The glyph must match what the button does: only bar-issued playback
         // pauses, so a word preview still playing shows Play (it starts the
         // unit at the bookmark), like the website's preview state.
-        SelectionRecitationButton.Text =
+        var recitationVisual =
             RecitationPlayer?.CurrentState == CommunityToolkit.Maui.Core.MediaElementState.Playing && _recitationCursor.BarIssued
-                ? Fonts.FluentUI.pause_24_regular
+                ? ReaderSelectionBar.RecitationVisual.Pause
                 : RecitationPlayer?.CurrentState is CommunityToolkit.Maui.Core.MediaElementState.Playing or CommunityToolkit.Maui.Core.MediaElementState.Paused
-                    ? Fonts.FluentUI.play_24_regular : Fonts.FluentUI.headphones_24_regular;
+                    ? ReaderSelectionBar.RecitationVisual.Resume : ReaderSelectionBar.RecitationVisual.Play;
         var hint = _recitationBusy ? "טוען את הקלטת הפרשה..." :
             !_viewModel.HasCurrentUnitRecitation ? "אין הקלטה לפרשה זו — הורידו את הקלטות הספר בהעדפות" :
-            SelectionRecitationButton.IsEnabled ? "הקראה" : "הקראת מילים ופסוקים עדיין בהכנה";
-        ToolTipProperties.SetText(SelectionRecitationButton, hint);
-        SemanticProperties.SetDescription(SelectionRecitationButton, hint);
+            recitationEnabled ? "הקראה" : "הקראת מילים ופסוקים עדיין בהכנה";
+        SelectionBar.SetRecitationState(recitationEnabled, recitationVisual, hint);
 
         var searching = ChapterSearch.IsSearchOpen;
         Shell.SetNavBarIsVisible(this, false);
@@ -295,7 +292,7 @@ public partial class ParashaPage
         ChapterSearch.IsVisible = searching;
         ContentArea.IsVisible = !searching;
         SelectionBar.IsVisible = isSelectionMode && !searching;
-        SelectionCountLabel.Text = count.ToString();
+        SelectionBar.SetCount(count);
     }
 
     private void ClearAllSelections()
@@ -331,10 +328,8 @@ public partial class ParashaPage
 
         await Clipboard.SetTextAsync(text);
         TriggerHapticFeedback();
-        // Inline feedback: show clipboard-checkmark icon for 1.5s then restore copy icon
-        SelectionCopyButton.Text = "\ue34c"; // clipboard_checkmark_24_regular
-        await Task.Delay(1500);
-        SelectionCopyButton.Text = "\uf32b"; // copy_24_regular
+        // Inline feedback: the bar flashes the clipboard-checkmark glyph.
+        await SelectionBar.FlashCopiedAsync();
     }
 
     private string GetSelectedPesukimText()
