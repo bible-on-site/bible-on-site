@@ -68,6 +68,19 @@ describe("getMentionReferencesForPerek", () => {
 		await expect(getMentionReferencesForPerek(12)).resolves.toEqual([]);
 		consoleError.mockRestore();
 	});
+
+	it("logs non-Error rejections verbatim", async () => {
+		const consoleError = jest
+			.spyOn(console, "error")
+			.mockImplementation(() => {});
+		mockQuery.mockRejectedValueOnce("db gone");
+		await expect(getMentionReferencesForPerek(12)).resolves.toEqual([]);
+		expect(consoleError).toHaveBeenCalledWith(
+			expect.stringContaining("perek 12"),
+			"db gone",
+		);
+		consoleError.mockRestore();
+	});
 });
 
 describe("mention lifecycle without re-inference", () => {
