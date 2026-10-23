@@ -70,8 +70,9 @@ public class PerushimPanelShadowTests
             "the strip renders just under the sheet and above the content");
 
         var translation = strip.Element(p + "BoxView.TranslationY")
-            ?.Element(p + "MultiBinding");
-        Assert.NotNull(translation); // the strip must follow the sheet's slide/drag transforms
+            ?.Element(p + "MultiBinding")
+            ?? throw new Xunit.Sdk.XunitException(
+                "the strip must follow the sheet's slide/drag transforms");
 
         var paths = translation.Elements(p + "Binding")
             .Select(b => (string?)b.Attribute("Path"))
