@@ -4,12 +4,12 @@ using FluentAssertions;
 namespace BibleOnSite.Tests.Pages;
 
 /// <summary>
-/// #2574: the perushim sheet must not paint an extra opaque rectangle above its
-/// rounded top edge. Border.Shadow on Android routes the panel through
-/// PlatformWrapperView, which renders the shadow via a pooled bitmap whose uncleared
-/// padding band surfaces as a stale white rectangle. The sheet keeps its rounded
-/// fill + stroke on the Border and gets its top-edge shadow from a bound
-/// PerushimPanelShadow strip instead.
+/// #2574: the perushim sheet must not paint an extra opaque rectangle around its
+/// edges — most visibly the band it lays over the bottom toolbar. Border.Shadow on
+/// Android routes the panel through PlatformWrapperView, which renders the shadow
+/// via a pooled bitmap whose uncleared padding ring surfaces as a stale white
+/// rectangle. The sheet keeps its rounded fill + stroke on the Border and gets its
+/// top-edge shadow from a bound PerushimPanelShadow strip instead.
 /// </summary>
 public class PerushimPanelShadowTests
 {
@@ -71,9 +71,9 @@ public class PerushimPanelShadowTests
 
         var translation = strip.Element(p + "BoxView.TranslationY")
             ?.Element(p + "MultiBinding");
-        translation.Should().NotBeNull("the strip must follow the sheet's slide/drag transforms");
+        Assert.NotNull(translation); // the strip must follow the sheet's slide/drag transforms
 
-        var paths = translation!.Elements(p + "Binding")
+        var paths = translation.Elements(p + "Binding")
             .Select(b => (string?)b.Attribute("Path"))
             .ToArray();
         paths.Should().BeEquivalentTo(["TranslationY", "HeightRequest"],

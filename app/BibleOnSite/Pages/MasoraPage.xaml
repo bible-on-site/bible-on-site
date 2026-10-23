@@ -388,10 +388,11 @@
         <!-- Soft top-edge shadow strip riding above the sheet. Replaces Border.Shadow:
              on Android that property routes the view through PlatformWrapperView, which
              renders the shadow via a pooled bitmap that is never cleared, painting a
-             stale opaque rectangle above the sheet's rounded top edge. -->
+             stale opaque rectangle ring around the sheet — most visibly the band
+             it lays over the bottom toolbar. -->
         <BoxView x:Name="PerushimPanelShadow" Grid.Row="1"
                  HeightRequest="18" VerticalOptions="End" Margin="16,0"
-                 ZIndex="49" InputTransparent="True"
+                 ZIndex="49" InputTransparent="True" Color="Transparent"
                  IsVisible="{Binding Path=IsVisible, Source={x:Reference PerushimPanel}}">
             <BoxView.Background>
                 <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
