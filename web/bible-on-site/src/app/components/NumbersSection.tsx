@@ -11,12 +11,25 @@ import { type StatItem, StatsCounters } from "./StatsCounters";
  */
 export async function NumbersSection() {
 	const stats = await getPerekStats();
+	/* Counter links only where a real public destination exists (#2397):
+	   מאמרים have no collection route (articles live per-perek and an
+	   empty /search page is not a destination), and איורים/פרקים מוקלטים
+	   have no gallery/recording browse view — those stay plain text. */
 	const items: StatItem[] = [
-		{ label: "רבנים כותבים על הפרק", text: "עשרות" },
+		{ label: "רבנים כותבים על הפרק", text: "עשרות", href: "/929/authors" },
 		{ label: "מאמרים על הפרק", value: stats.articles },
-		{ label: "ערכים על הפרק בתנכפדיה", value: stats.pediaEntries },
+		{
+			label: "ערכים על הפרק בתנכפדיה",
+			value: stats.pediaEntries,
+			href: "/pedia",
+		},
+		{ label: "איורים על הפרק", value: stats.illustrations },
 		{ label: "פרקים מוקלטים", value: stats.recordedPerakim },
-		{ label: "שנים שהתוכנית רצה", value: stats.programmeYears },
+		{
+			label: "שנים שהתוכנית רצה",
+			value: stats.programmeYears,
+			href: "/calendar",
+		},
 	];
 	return (
 		<section id="numbers" className={styles.section}>
@@ -24,6 +37,7 @@ export async function NumbersSection() {
 				<h2>מספרים על הפרק</h2>
 			</header>
 			<StatsCounters stats={items} />
+			<div className={styles.bottomDivider} />
 		</section>
 	);
 }
