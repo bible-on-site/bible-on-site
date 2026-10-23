@@ -3,10 +3,10 @@
 	text-align: center;
 	width: 100%;
 	z-index: 2;
-	/* White like AppSection: the ספרי התנך wave divider above this section is
-	   drawn in white, and the TOS top divider below AppSection rises out of
-	   white — a colored band here would break both boundaries (#2397). */
-	background-color: var(--surface-elevated, #fff);
+	/* Muted surface keeps מספרים על הפרק a visually distinct section
+	   between the white download band below and the blue bookshelf above;
+	   the wave dividers on both edges carry the actual boundaries (#2397). */
+	background-color: var(--surface-muted, #f8fafc);
 	padding: 2em 1em;
 	scroll-margin-top: 1em;
 }
@@ -39,6 +39,32 @@
 	align-items: center;
 	gap: 0.4em;
 	min-width: 8em;
+	position: relative;
+}
+
+/* Linked counter: the anchor spans the whole tile through ::after so the
+   label+value act as one target; hover/focus get a visible affordance. */
+.statLink {
+	color: inherit;
+	text-decoration: none;
+	display: inline-block;
+	border-radius: 4px;
+}
+
+.statLink::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+}
+
+.statLink:hover {
+	text-decoration: underline;
+	text-decoration-color: var(--link-accent, #1552ac);
+}
+
+.statLink:focus-visible {
+	outline: 2px solid var(--link-accent, #1552ac);
+	outline-offset: 2px;
 }
 
 .label {
@@ -88,4 +114,49 @@
 	overflow: hidden;
 	clip-path: inset(50%);
 	white-space: nowrap;
+}
+
+/* Bottom divider — white wave transitioning into the white app-download
+   section below, same shape/size matrix as the bookshelf divider. */
+.bottomDivider {
+	background-repeat: no-repeat;
+	background-size: 100% 100%;
+	right: 0;
+	height: 3em;
+	pointer-events: none;
+	position: absolute;
+	width: 100%;
+	z-index: 3;
+	background-position: bottom;
+	bottom: 0;
+}
+
+@media screen and (max-width: 899px) {
+	.bottomDivider {
+		background-image: url(/root/numbers-bottom-devider-xs.svg);
+	}
+}
+
+@media screen and (min-width: 960px) and (max-width: 1280px) {
+	.bottomDivider {
+		background-image: url(/root/numbers-bottom-devider-s.svg);
+	}
+}
+
+@media screen and (min-width: 1280px) and (max-width: 1920px) {
+	.bottomDivider {
+		background-image: url(/root/numbers-bottom-devider-m.svg);
+	}
+}
+
+@media screen and (min-width: 1920px) and (max-width: 2560px) {
+	.bottomDivider {
+		background-image: url(/root/numbers-bottom-devider-l.svg);
+	}
+}
+
+@media screen and (min-width: 2560px) {
+	.bottomDivider {
+		background-image: url(/root/numbers-bottom-devider-xl.svg);
+	}
 }
