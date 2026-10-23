@@ -32,6 +32,15 @@ export interface ParashaBookUnit {
 	/** Scripture reference span of the primary range, formatted server-side. */
 	refSpan: string;
 	ranges: ScriptureRange[];
+	/** Aliyah boundary markers for the unit's standalone Shabbat scheme
+	 * (issue #2519): `"{perekId}:{pasuk}"` → marker specs, serialized
+	 * server-side and rebuilt into the renderer's map client-side. */
+	aliyahMarkers?: Record<
+		string,
+		readonly { key: string; label: string; role?: "aliyah" | "maftir" }[]
+	>;
+	/** The single marker key this unit's book spread shows. */
+	aliyahMarkerKey?: string;
 	haftarot: ParashaBookHaftara[];
 	notes: string[];
 }
@@ -142,8 +151,7 @@ export function buildParashaHistoryMapper(
 	units: ParashaBookUnit[],
 	seferName: string,
 ): HistoryMapper {
-	const backCoverIndex =
-		PARASHA_CONTENT_OFFSET + units.length * PAGES_PER_UNIT;
+	const backCoverIndex = PARASHA_CONTENT_OFFSET + units.length * PAGES_PER_UNIT;
 	return {
 		pageToRoute: (pageIndex) => {
 			if (!units.length) return null;
@@ -247,9 +255,7 @@ export function parashaBookExitPath(
 	if (parashaBookPageFromPath(pathname)) {
 		return `${PARASHA_ROOT}/${fallbackUnitId}`;
 	}
-	const match = decodeURIComponent(pathname).match(
-		/\/(?:פרשה|parasha)\/(\d+)/,
-	);
+	const match = decodeURIComponent(pathname).match(/\/(?:פרשה|parasha)\/(\d+)/);
 	return match
 		? `${PARASHA_ROOT}/${match[1]}`
 		: `${PARASHA_ROOT}/${fallbackUnitId}`;
@@ -271,9 +277,7 @@ export function parashaPerushDocumentTitle(
 	unitName: string,
 	haftara: boolean,
 ): string {
-	const reading = haftara
-		? `הפטרת ${unitName}`
-		: `פרשת ${unitName}`;
+	const reading = haftara ? `הפטרת ${unitName}` : `פרשת ${unitName}`;
 	return `${perushName} על ${reading} | ${PARASHA_MENU_LABEL} | ${SITE_NAME}`;
 }
 

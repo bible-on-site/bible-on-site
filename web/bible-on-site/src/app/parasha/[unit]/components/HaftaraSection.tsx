@@ -64,6 +64,7 @@ export function HaftaraSection({
 							pasukCount={canonicalPasukCount}
 							scrollScope={aux.id}
 							anchorScope={aux.id}
+							modestPerekLabels
 						/>
 						{source?.note && (
 							<p className={styles.haftaraNote}>{source.note}</p>

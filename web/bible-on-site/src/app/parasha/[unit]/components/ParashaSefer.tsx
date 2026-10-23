@@ -3,13 +3,13 @@
 import { toLetters } from "gematry";
 import type { PageSemantics } from "html-flip-book-react";
 import React, { useEffect, useMemo, useState } from "react";
-import type { Perek } from "@/data/db/tanah-view-types";
-import type { ArticleSummary } from "@/lib/articles";
-import type { RangePerushSummary } from "@/lib/perushim";
-import type { PerekEntityReference } from "@/lib/tanahpedia/service";
-import { constructTsetAwareHDate } from "@/util/hebdates-util";
-import { UnitSeferBook } from "@/app/components/reading/UnitSeferBook";
+import seferStyles from "@/app/929/[number]/components/sefer.module.css";
+import {
+	releaseSeferDocumentTitle,
+	setSeferDocumentTitle,
+} from "@/app/929/[number]/components/sefer-document-title";
 import { UnitBlankPageContent } from "@/app/components/reading/UnitBlankPageContent";
+import { UnitSeferBook } from "@/app/components/reading/UnitSeferBook";
 import { UnitTextBody } from "@/app/components/reading/UnitTextBody";
 import {
 	getUnitScopeSummariesBatch,
@@ -25,11 +25,11 @@ import {
 	unitBookKey,
 } from "@/app/components/reading/unit-book-navigation";
 import { useUnitBookContentNavigation } from "@/app/components/reading/useUnitBookContentNavigation";
-import {
-	releaseSeferDocumentTitle,
-	setSeferDocumentTitle,
-} from "@/app/929/[number]/components/sefer-document-title";
-import seferStyles from "@/app/929/[number]/components/sefer.module.css";
+import type { Perek } from "@/data/db/tanah-view-types";
+import type { ArticleSummary } from "@/lib/articles";
+import type { RangePerushSummary } from "@/lib/perushim";
+import type { PerekEntityReference } from "@/lib/tanahpedia/service";
+import { constructTsetAwareHDate } from "@/util/hebdates-util";
 import unitPageStyles from "../page.module.css";
 import {
 	type BookPage,
@@ -40,8 +40,8 @@ import {
 	PARASHA_CONTENT_OFFSET,
 	PARASHA_ROOT,
 	PARASHA_ROOT_ALIASES,
-	parashaBookPageRoute,
 	type ParashaBookUnit,
+	parashaBookPageRoute,
 	parashaPerushDocumentTitle,
 	parashaUnitDocumentTitle,
 } from "./parasha-book-utils";
@@ -163,17 +163,13 @@ const ParashaSefer = (props: {
 	const backCoverPageIndex = PARASHA_CONTENT_OFFSET + units.length * 4;
 	const documentTitleResolver = useMemo(
 		() =>
-			buildParashaDocumentTitleResolver(
-				seferName,
-				units,
-				backCoverPageIndex,
-			),
+			buildParashaDocumentTitleResolver(seferName, units, backCoverPageIndex),
 		[seferName, units, backCoverPageIndex],
 	);
 	const [bookPageTitle, setBookPageTitle] = useState<string | null>(null);
-	const [inBookContentTitle, setInBookContentTitle] = useState<
-		string | null
-	>(null);
+	const [inBookContentTitle, setInBookContentTitle] = useState<string | null>(
+		null,
+	);
 	const flatPageTitle = parashaUnitDocumentTitle(
 		units.find((unit) => unit.unitId === currentUnitId)?.name ?? "",
 	);
@@ -234,9 +230,7 @@ const ParashaSefer = (props: {
 				>
 					<div className={seferStyles.pageHeaderRight}>
 						<div className={seferStyles.pageHeaderRow}>
-							<span className={seferStyles.pageHeaderSefer}>
-								{seferName}
-							</span>
+							<span className={seferStyles.pageHeaderSefer}>{seferName}</span>
 							<span className={seferStyles.pageHeaderPerek}>
 								{toLetters(unit.order)}
 							</span>
@@ -265,6 +259,13 @@ const ParashaSefer = (props: {
 								 * never duplicate the flat page's canonical
 								 * pasuk-{perek}-{pasuk} ids. */
 								anchorScope={`book-${unit.unitId}`}
+								boundaryMarkers={
+									unit.aliyahMarkers
+										? new Map(Object.entries(unit.aliyahMarkers))
+										: undefined
+								}
+								defaultMarkerKey={unit.aliyahMarkerKey}
+								modestPerekLabels
 							/>
 						</article>
 					</div>
@@ -286,12 +287,7 @@ const ParashaSefer = (props: {
 						"torah",
 					)}
 					onNavigate={(kind, slug) =>
-						contentNavigation.navigate(
-							unit.unitId,
-							"torah",
-							kind,
-							slug,
-						)
+						contentNavigation.navigate(unit.unitId, "torah", kind, slug)
 					}
 					fallbackPerekId={unit.ranges[0]?.start.perekId ?? 0}
 					titles={{
@@ -314,9 +310,7 @@ const ParashaSefer = (props: {
 				>
 					<div className={seferStyles.pageHeaderRight}>
 						<div className={seferStyles.pageHeaderRow}>
-							<span className={seferStyles.pageHeaderSefer}>
-								{seferName}
-							</span>
+							<span className={seferStyles.pageHeaderSefer}>{seferName}</span>
 							<span className={seferStyles.pageHeaderPerek}>
 								{toLetters(unit.order)}
 							</span>
@@ -355,6 +349,7 @@ const ParashaSefer = (props: {
 										 * neither collides with the flat page's
 										 * {auxId}-suffixed anchors. */
 										anchorScope={`book-${unit.unitId}-${haftaraReading.id}`}
+										modestPerekLabels
 									/>
 								</article>
 								{haftaraReading.note && (
@@ -390,12 +385,7 @@ const ParashaSefer = (props: {
 						"haftara",
 					)}
 					onNavigate={(kind, slug) =>
-						contentNavigation.navigate(
-							unit.unitId,
-							"haftara",
-							kind,
-							slug,
-						)
+						contentNavigation.navigate(unit.unitId, "haftara", kind, slug)
 					}
 					fallbackPerekId={
 						unit.haftarot[0]?.ranges[0]?.start.perekId ??

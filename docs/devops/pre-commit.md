@@ -117,6 +117,7 @@ post-commit `flip-book-local-restore` never runs on pre-commit.ci by design.
 | `admin-unit-tests` | `web/admin` | `npm run test:unit` | Admin unit tests (vitest) |
 | `rust-checks` | `web/api`, `web/bulletin`, `data` | `cargo make lint` (+ `fmt-check` for bulletin and data) | Rust lint/format via [devops/precommit-rust.mjs](../../devops/precommit-rust.mjs) |
 | `codacy-gate` | `*.rs`, JS/TS files | `node devops/codacy-gate.mjs` | Codacy parity checks with no analyzer equivalent ([devops/codacy-gate.mjs](../../devops/codacy-gate.mjs)) |
+| `parasha-aliyot-drift` | aliyah importer / vendored source / generated JSON | `node devops/import-parasha-aliyot.mjs --check` | Fails when the generated `parasha-aliyot.json` drifts from the vendored hebcal source or importer ([devops/import-parasha-aliyot.mjs](../../devops/import-parasha-aliyot.mjs)) |
 | `flip-book-local-restore` | post-commit | `npm run flip-book:local` | Restores local flip-book dep when the guard switched it |
 
 ## Codacy Parity
