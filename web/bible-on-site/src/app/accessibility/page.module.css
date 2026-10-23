@@ -20,10 +20,14 @@
 	text-align: center;
 }
 
+/* The statement is long-form text, so it consumes the same reader display
+   variables as the perek text — the top-nav accessibility menu's adjustments
+   visibly apply to this page too (#2396). */
 .body {
 	text-align: right;
-	font-size: 1rem;
-	line-height: 1.7;
+	font-size: calc(1rem * var(--perek-font-scale, 1));
+	line-height: var(--perek-line-height, 1.7);
+	word-spacing: var(--perek-word-spacing, normal);
 }
 
 .body h2 {
