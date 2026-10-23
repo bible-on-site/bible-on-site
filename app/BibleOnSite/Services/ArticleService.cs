@@ -80,8 +80,10 @@ public class ArticleService : BaseGraphQLService
                 };
             }).OrderBy(a => a.Priority).ToList();
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: remote article fetch degrades to an empty list
+        catch (Exception ex) //NOSONAR — remote article fetch degrades to an empty list.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Error fetching articles for perek {perekId}: {ex.Message}");
             return new List<Article>();
         }
@@ -140,8 +142,10 @@ public class ArticleService : BaseGraphQLService
                 Author = author
             };
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: remote article fetch degrades to null
+        catch (Exception ex) //NOSONAR — remote article fetch degrades to null.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Error fetching article {articleId}: {ex.Message}");
             return null;
         }
@@ -196,8 +200,10 @@ public class ArticleService : BaseGraphQLService
                 };
             }).OrderBy(a => a.Priority).ToList();
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: remote author fetch degrades to an empty list
+        catch (Exception ex) //NOSONAR — remote author fetch degrades to an empty list.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Error fetching articles for author {authorId}: {ex.Message}");
             return new List<Article>();
         }

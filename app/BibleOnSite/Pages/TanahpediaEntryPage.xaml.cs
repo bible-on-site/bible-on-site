@@ -121,8 +121,10 @@ public partial class TanahpediaEntryPage : ContentPage
                 ["searchResult"] = result
             });
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: occurrence navigation failure alerts the user
+        catch (Exception ex) //NOSONAR — occurrence navigation failure alerts the user.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Tanahpedia occurrence navigation failed: {ex}");
             await DisplayAlertAsync("תנכפדיה", "לא ניתן לפתוח את המקור. נסו שוב", "אישור");
         }

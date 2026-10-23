@@ -505,8 +505,10 @@ public partial class PerekViewModel : ObservableObject
             await stale;
             DebugLog.Write($"[PerekLoad] stale attempt {attempt} eventually completed (perekId={perekId})");
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: a superseded load attempt's late failure is log-only
+        catch (Exception ex) //NOSONAR — a superseded load attempt's late failure is log-only.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"[PerekLoad] stale attempt {attempt} failed late (perekId={perekId}): {ex.Message}");
         }
     }
@@ -1139,8 +1141,10 @@ public partial class PerekViewModel : ObservableObject
                     _perushimPreloadCache[id] = new PreloadedPerushimData(perushIds, perushById, chapter);
                 }
             }
-            catch (Exception ex)
+            #pragma warning disable S2221 // Deliberate failure boundary: carousel preload is best-effort
+            catch (Exception ex) //NOSONAR — carousel preload is best-effort.
             {
+                #pragma warning restore S2221
                 Console.Error.WriteLine($"[Carousel] PreloadPerushim perekId={id} failed: {ex.Message}");
             }
         }
@@ -1188,8 +1192,10 @@ public partial class PerekViewModel : ObservableObject
             var encodedTitle = Uri.EscapeDataString(Source);
             await _navigator.GoToAsync($"ArticlesPage?perekId={PerekId}&perekTitle={encodedTitle}");
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: navigation failure alerts the user
+        catch (Exception ex) //NOSONAR — navigation failure alerts the user.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Navigation to ArticlesPage failed: {ex}");
             await _navigator.DisplayAlertAsync("שגיאה", $"לא ניתן לטעון מאמרים: {ex.Message}", "אישור");
         }
@@ -1205,8 +1211,10 @@ public partial class PerekViewModel : ObservableObject
         {
             await _navigator.GoToAsync("AuthorsPage");
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: navigation failure alerts the user
+        catch (Exception ex) //NOSONAR — navigation failure alerts the user.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Navigation to AuthorsPage failed: {ex}");
             await _navigator.DisplayAlertAsync("שגיאה", $"לא ניתן לטעון רבנים: {ex.Message}", "אישור");
         }
@@ -1230,8 +1238,10 @@ public partial class PerekViewModel : ObservableObject
                 File = new ShareFile(path),
             });
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: log export failure alerts the user
+        catch (Exception ex) //NOSONAR — log export failure alerts the user.
         {
+            #pragma warning restore S2221
             System.Diagnostics.Debug.WriteLine($"Export perushim logs failed: {ex.Message}");
             await _navigator.DisplayAlertAsync("שגיאה", $"לא ניתן לייצא לוגים: {ex.Message}", "אישור");
         }

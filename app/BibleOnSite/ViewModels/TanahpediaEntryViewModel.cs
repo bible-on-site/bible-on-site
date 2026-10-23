@@ -4,6 +4,7 @@ using BibleOnSite.Models;
 using BibleOnSite.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using SQLite;
 
 namespace BibleOnSite.ViewModels;
 
@@ -196,8 +197,10 @@ public partial class TanahpediaEntryViewModel : ObservableObject
         {
             // Superseded by a newer in-place switch - the newer load owns state.
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: entry load failure surfaces as ErrorMessage
+        catch (Exception ex) //NOSONAR — entry load failure surfaces as ErrorMessage.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Tanahpedia entry load failed for {UniqueName}: {ex}");
             ErrorMessage = "התוכן אינו זמין כרגע";
         }
@@ -219,6 +222,7 @@ public partial class TanahpediaEntryViewModel : ObservableObject
     private async Task SwitchToCurrentEntryAsync()
     {
         _loadCts?.Cancel();
+        _loadCts?.Dispose();
         var cts = _loadCts = new CancellationTokenSource();
         await LoadCoreAsync(cts.Token);
     }
@@ -281,8 +285,10 @@ public partial class TanahpediaEntryViewModel : ObservableObject
                 FamilyTree = TanahpediaFamily.BuildTree(family);
             }
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: family-section load is best-effort
+        catch (Exception ex) //NOSONAR — family-section load is best-effort.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Tanahpedia family load failed for {entityId}: {ex}");
         }
     }
@@ -293,8 +299,10 @@ public partial class TanahpediaEntryViewModel : ObservableObject
         {
             PlaceMarkers = await _service.GetPlaceMarkersAsync(entryId, CancellationToken.None) ?? [];
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: place-marker load is best-effort
+        catch (Exception ex) //NOSONAR — place-marker load is best-effort.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Tanahpedia place markers load failed for {entryId}: {ex}");
         }
     }
@@ -326,7 +334,7 @@ public partial class TanahpediaEntryViewModel : ObservableObject
                 {
                     pasukim = await _perekData.LoadPasukimAsync(group.Key);
                 }
-                catch
+                catch (Exception ex) when (ex is SQLiteException or IOException)
                 {
                     pasukim = [];
                 }
@@ -352,8 +360,10 @@ public partial class TanahpediaEntryViewModel : ObservableObject
             Occurrences = new ObservableCollection<TanahpediaOccurrenceItem>(items);
             OnPropertyChanged(nameof(HasOccurrences));
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: occurrences mapping failure drops the table, not the page
+        catch (Exception ex) //NOSONAR — occurrences mapping failure drops the table, not the page.
         {
+            #pragma warning restore S2221
             // Occurrences are secondary - an empty table beats a failed page.
             Console.Error.WriteLine($"Tanahpedia occurrences mapping failed: {ex}");
         }
