@@ -23,7 +23,8 @@ and timeout failures fail the run. `MOBILE_KEEP_APP=1` retains the review app.
 The existing 15-second session-delete and 15-minute pilot limits remain intact.
 
 CI runs the iOS suite across a dynamically planned set of independent
-`xcode-27` runners, each with one simulator and one shared Appium session
+`namespace-profile-mac-os` runners (the shared build stays on `xcode-27`),
+each with one simulator and one shared Appium session
 (#2263). Before the matrix expands, the `plan_ios` job discovers the suite
 statically, resolves the diff against the published coverage baseline, and
 partitions the selected cases with a deterministic longest-processing-time
