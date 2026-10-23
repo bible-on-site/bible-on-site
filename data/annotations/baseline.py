@@ -1,0 +1,180 @@
+"""Deterministic lexical baseline for the annotation pipeline (issue #2516).
+
+Stage A+B for scripture: map the pinned morphhb proper-noun/gentilic token
+stream onto canonical pasuk segments, assemble multi-token names (lemma `+`
+chains), assign a coarse intended entity type by construct-context rules,
+and emit mention-decoration rows matching `tanahpedia_mention_decoration`.
+
+No entry lookups anywhere — the candidate universe is the tagged token
+stream itself, per the issue's non-gating requirement.
+"""
+
+import hashlib
+import json
+from pathlib import Path
+import re
+
+ROOT = Path(__file__).resolve().parents[2]
+CANONICAL = (
+    ROOT / "web/bible-on-site/src/data/db/sefaria-dump-5784-sivan-4.tanah_view.json"
+)
+LEXICON = Path(__file__).with_name("morphhb-proper-nouns.json.gz")
+MODEL_REVISION = "morphhb-lexical-baseline@3d15126f+contract1"
+
+DIACRITICS = re.compile("[\u0591-\u05bd\u05bf-\u05c7]")
+# Head nouns whose following proper name is a place/person by convention.
+PLACE_HEADS = {
+    "הר",
+    "עיר",
+    "נהר",
+    "ים",
+    "ארץ",
+    "מדבר",
+    "עמק",
+    "באר",
+    "גיא",
+    "מעין",
+    "קבר",
+    "שער",
+}
+PERSON_HEADS = {"בן", "בת", "אבי", "אחי", "בעל"}
+
+
+def strip_diacritics(text):
+    return DIACRITICS.sub("", text).replace("־", " ").replace("\u05be", " ")
+
+
+def normalize_name(text):
+    """Surface -> normalized intended name: no vowels/taamim, maqaf as space."""
+    return " ".join(strip_diacritics(text).split())
+
+
+def text_segments(pasuk):
+    """Canonical text-bearing segment indices (qri + ktiv)."""
+    return [i for i, s in enumerate(pasuk["segments"]) if s["type"] in ("qri", "ktiv")]
+
+
+# Inseparable-prefix letters, stripped for intended-name normalization.
+PREFIX_LETTERS = {"ו", "ב", "כ", "ל", "מ", "ה", "ש", "וה", "כה", "לה", "מה", "בה"}
+
+
+def strip_prefix_parts(surface):
+    """Return the noun part of a slash-joined morphhb surface."""
+    parts = surface.split("/")
+    while len(parts) > 1 and strip_diacritics(parts[0]) in PREFIX_LETTERS:
+        parts.pop(0)
+    return "/".join(parts)
+
+
+def base_lemma(lemma):
+    return lemma.split("/")[-1].rstrip("+")
+
+
+def assemble(tokens):
+    """Group tokens into mentions: lemma `+` chains merge with following tokens."""
+    mentions, i = [], 0
+    while i < len(tokens):
+        token = tokens[i]
+        group = [token]
+        while (
+            token[1].endswith("+")
+            and i + 1 < len(tokens)
+            and tokens[i + 1][0] == token[0] + 1
+        ):
+            i += 1
+            token = tokens[i]
+            group.append(token)
+        mentions.append(group)
+        i += 1
+    return mentions
+
+
+def classify(group, pasuk_texts, word_to_seg):
+    """Coarse deterministic entity type from the morph + construct context."""
+    head = group[0]
+    if head[3] == "g":
+        return "NATION"
+    lemma = base_lemma(head[1])
+    if lemma == "3068":  # the Tetragrammaton
+        return "PERSON"
+    # Construct-context rule: a plain noun head before this mention.
+    first_seg = word_to_seg.get(head[0])
+    if first_seg is not None and first_seg > 0:
+        prev = normalize_name(pasuk_texts.get(first_seg - 1, ""))
+        if prev in PLACE_HEADS:
+            return "PLACE"
+        if prev in PERSON_HEADS:
+            return "PERSON"
+    # Morph state hint: gentilic adjectives already handled; Np defaults to
+    # PERSON (biblical proper nouns skew personal); place-only heads refine it.
+    return "PERSON"
+
+
+def decorations_for_perek(sefer_index, perek_index, perakim, lexicon):
+    """Emit decoration rows for one canonical perek."""
+    perek = perakim[perek_index]
+    book = lexicon["sefarim"].get(str(sefer_index), {})
+    chapter = book.get(str(perek_index + 1), {})
+    rows = []
+    for pasuk_number, pasuk in enumerate(perek["pesukim"], start=1):
+        tokens = chapter.get(str(pasuk_number), [])
+        if not tokens:
+            continue
+        seg_index = text_segments(pasuk)
+        word_to_seg = {w: seg_index[w] for w in range(len(seg_index))}
+        pasuk_texts = {i: s.get("value", "") for i, s in enumerate(pasuk["segments"])}
+        source_hash = hashlib.sha256(
+            json.dumps(pasuk["segments"], ensure_ascii=False).encode("utf-8")
+        ).hexdigest()
+        for group in assemble(tokens):
+            segs = [word_to_seg[t[0]] for t in group if t[0] in word_to_seg]
+            if not segs:
+                continue
+            surface = " ".join(strip_prefix_parts(t[2]) for t in group)
+            rows.append(
+                {
+                    "source_kind": "pasuk",
+                    "perek_id": perek["perekId"],
+                    "pasuk_number": pasuk_number,
+                    "segment_start": min(segs),
+                    "segment_end": max(segs),
+                    "surface": surface,
+                    "intended_name": normalize_name(
+                        " ".join(strip_prefix_parts(t[2]) for t in group)
+                    ),
+                    "entity_type": classify(group, pasuk_texts, word_to_seg),
+                    "disambiguation": None,
+                    "confidence": None,
+                    "acceptance": "auto",
+                    "model_revision": MODEL_REVISION,
+                    "source_hash": source_hash,
+                }
+            )
+    return rows
+
+
+def load_lexicon(path=LEXICON):
+    import gzip
+
+    return json.loads(gzip.decompress(Path(path).read_bytes()).decode("utf-8"))
+
+
+def load_canonical(path=CANONICAL):
+    return json.loads(Path(path).read_text(encoding="utf-8"))
+
+
+def main():
+    import sys
+
+    sefer_index = int(sys.argv[1]) if len(sys.argv) > 1 else 0
+    perek_index = int(sys.argv[2]) if len(sys.argv) > 2 else 0
+    sefarim = load_canonical()
+    lexicon = load_lexicon()
+    rows = decorations_for_perek(
+        sefer_index, perek_index, sefarim[sefer_index]["perakim"], lexicon
+    )
+    print(json.dumps(rows, ensure_ascii=False, indent=1))
+
+
+if __name__ == "__main__":
+    main()
