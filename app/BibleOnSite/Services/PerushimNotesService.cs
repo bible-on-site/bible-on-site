@@ -261,8 +261,10 @@ public class PerushimNotesService
             await using var s = await _fileSystem.OpenAppPackageFileAsync(NotesDbName);
             hasNotes = s != null;
         }
-        catch (Exception ex) when (ex is FileNotFoundException or IOException or NotSupportedException)
+        #pragma warning disable S2221 // Deliberate failure boundary: any package-probe failure means "no notes" — callers degrade, never abort
+        catch (Exception) //NOSONAR — any package-probe failure means "no notes"; callers degrade, never abort.
         {
+            #pragma warning restore S2221
             return false;
         }
         return hasNotes;

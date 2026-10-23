@@ -25,7 +25,11 @@ const args = Object.fromEntries(
 		.filter(Boolean),
 );
 const since = `${args.since}T00:00:00Z`;
-const until = `${args.until}T23:59:59Z`;
+// Exclusive upper bound: timestamps carry fractional seconds, so the
+// window ends at the following midnight rather than 23:59:59Z.
+const untilDate = new Date(`${args.until}T00:00:00Z`);
+untilDate.setUTCDate(untilDate.getUTCDate() + 1);
+const until = untilDate.toISOString();
 const out = args.out;
 if (!args.since || !args.until || !out) {
 	console.error("usage: collect-review-findings.mjs --since YYYY-MM-DD --until YYYY-MM-DD --out file.json");
@@ -107,6 +111,7 @@ query($pr: Int!, $cursor: String!) {
         nodes {
           id
           isResolved isOutdated isCollapsed path line
+          resolvedBy { login }
           comments(first: 100) {
             pageInfo { hasNextPage endCursor }
             nodes {
@@ -174,11 +179,17 @@ for (const pr of prs) {
 	const threads = pr.reviewThreads.nodes
 		.map((t) => ({
 			...t,
-			comments: t.comments.nodes.filter((c) => c.createdAt >= since && c.createdAt <= until),
+			// In-window replies to a pre-window finding would otherwise
+			// lose the finding they discuss — keep the thread's root
+			// comment alongside the filtered set.
+			originalComment: t.comments.nodes[0] ?? null,
+			comments: t.comments.nodes.filter(
+				(c) => c.createdAt >= since && c.createdAt < until,
+			),
 		}))
 		.filter((t) => t.comments.length > 0);
 	const reviews = (pr.reviews?.nodes || []).filter(
-		(r) => r.createdAt >= since && r.createdAt <= until && r.body?.trim(),
+		(r) => r.createdAt >= since && r.createdAt < until && r.body?.trim(),
 	);
 	if (threads.length === 0 && reviews.length === 0) continue;
 	inventory.push({

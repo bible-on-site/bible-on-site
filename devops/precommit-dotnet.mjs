@@ -52,15 +52,16 @@ for (const [dir, args] of Object.entries(PROJECTS)) {
 	const touched =
 		buildAll || stagedFiles.some((file) => file.startsWith(`${dir}/`));
 	if (!touched) continue;
-	// Without a prior build, restore would need a network fetch — not possible
-	// in sandboxed runs (pre-commit.ci) and slow on fresh clones.
-	if (!hasDotnet || !existsSync(join(dir, "obj"))) {
+	// Without prior restored assets a build would need a package-feed fetch —
+	// not possible in sandboxed runs (pre-commit.ci) and slow on fresh clones.
+	// --no-restore keeps the gate offline-safe once assets exist.
+	if (!hasDotnet || !existsSync(join(dir, "obj", "project.assets.json"))) {
 		if (hasDotnet)
 			console.info(`Skipping ${dir} — project not restored/built yet.`);
 		continue;
 	}
 	console.info(`Detected changes in ${dir} — running: dotnet build ${args.join(" ")}`);
-	if (runIn(".", ["dotnet", "build", ...args, "--nologo", "-v", "q"]) !== 0)
+	if (runIn(".", ["dotnet", "build", ...args, "--no-restore", "--nologo", "-v", "q"]) !== 0)
 		failed = true;
 }
 
