@@ -50,8 +50,10 @@ public partial class LoadingPage : ContentPage, IAnalyticsScreenName
             // of the local catalog — wait for both before opening the reader.
             await Task.WhenAll(perekLoad, LoadStarterDataAsync());
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: parallel-load fault observation is deliberate, then rethrown
+        catch (Exception ex) //NOSONAR — parallel-load fault observation is deliberate, then rethrown.
         {
+            #pragma warning restore S2221
             // The catalog load ran in parallel and may still be in flight here
             // (e.g. AppConfig threw before WhenAll was awaited). Observe its
             // fault — already faulted or faulting later — so it is never left

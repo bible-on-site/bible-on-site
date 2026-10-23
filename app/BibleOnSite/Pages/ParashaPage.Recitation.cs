@@ -79,7 +79,9 @@ public partial class ParashaPage
     private async Task InitializeRecitationAsync()
     {
         try { await RecitationService.Instance.InitializeAsync(); _viewModel.RefreshRecitationAvailability(); UpdateSelectionBar(); _ = RecitationService.Instance.RefreshIfStaleAsync(); }
-        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Recitation extension: {ex.Message}"); }
+        #pragma warning disable S2221 // Deliberate failure boundary: recitation-pack init is best-effort; availability simply stays off
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Recitation extension: {ex.Message}"); } //NOSONAR — recitation-pack init is best-effort; availability simply stays off.
+        #pragma warning restore S2221
     }
 
     private void OnRecitationPreferencesChanged(object? sender, EventArgs e)
@@ -415,7 +417,9 @@ public partial class ParashaPage
                 FocusedPerushim.ItemsSource = _viewModel.GetPerushimForRow(row.PerekId, pasuk.PasukNum);
             }
         }
-        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Focused commentaries: {ex.Message}"); }
+        #pragma warning disable S2221 // Deliberate failure boundary: focused-commentary refresh is best-effort
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Focused commentaries: {ex.Message}"); } //NOSONAR — focused-commentary refresh is best-effort.
+        #pragma warning restore S2221
     }
 
     private void RefreshFocusedRecitation()
@@ -730,8 +734,10 @@ public partial class ParashaPage
             player.Source = MediaSource.FromFile(path);
         }
         catch (OperationCanceledException) { /* Navigation or another selection cancels the old request. */ }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: playback failure shows the user alert unless the request was canceled
+        catch (Exception ex) //NOSONAR — playback failure shows the user alert unless the request was canceled.
         {
+            #pragma warning restore S2221
             System.Diagnostics.Debug.WriteLine($"Recitation playback: {ex}");
             if (!request.IsCancellationRequested)
             {

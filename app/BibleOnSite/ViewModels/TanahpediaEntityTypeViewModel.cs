@@ -115,8 +115,10 @@ public partial class TanahpediaEntityTypeViewModel : ObservableObject
             {
                 homepage = await homepageTask;
             }
-            catch (Exception ex)
+            #pragma warning disable S2221 // Deliberate failure boundary: homepage load degrades; entities still render
+            catch (Exception ex) //NOSONAR — homepage load degrades; entities still render.
             {
+                #pragma warning restore S2221
                 Console.Error.WriteLine($"Tanahpedia homepage load failed for {EntityType}: {ex}");
             }
 
@@ -130,8 +132,10 @@ public partial class TanahpediaEntityTypeViewModel : ObservableObject
                 {
                     PlaceMarkers = await _service.GetPlaceMarkersAsync(null, CancellationToken.None) ?? [];
                 }
-                catch (Exception ex)
+                #pragma warning disable S2221 // Deliberate failure boundary: place-marker load drops the map, not the page
+                catch (Exception ex) //NOSONAR — place-marker load drops the map, not the page.
                 {
+                    #pragma warning restore S2221
                     Console.Error.WriteLine($"Tanahpedia place markers load failed: {ex}");
                 }
             }
@@ -142,8 +146,10 @@ public partial class TanahpediaEntityTypeViewModel : ObservableObject
                 entities.Select(TanahpediaEntityItem.ForListing));
             IsLoaded = true;
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: category load failure surfaces as ErrorMessage
+        catch (Exception ex) //NOSONAR — category load failure surfaces as ErrorMessage.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Tanahpedia category load failed for {EntityType}/{Sub}: {ex}");
             ErrorMessage = "התוכן אינו זמין כרגע";
         }

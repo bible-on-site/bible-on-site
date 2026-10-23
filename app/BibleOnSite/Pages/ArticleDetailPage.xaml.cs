@@ -105,8 +105,10 @@ public partial class ArticleDetailPage : ContentPage, IAnalyticsScreenName
                 _viewModel.ErrorMessage = "לא נמצא מאמר";
             }
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: article load failure surfaces as ErrorMessage
+        catch (Exception ex) //NOSONAR — article load failure surfaces as ErrorMessage.
         {
+            #pragma warning restore S2221
             _viewModel.ErrorMessage = $"שגיאה בטעינת המאמר: {ex.Message}";
         }
     }
