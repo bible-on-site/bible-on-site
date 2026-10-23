@@ -13,10 +13,11 @@ Description: |
   This Lambda runs in the VPC and can access the RDS MySQL instance.
   It is invoked by GitHub Actions CD workflow to populate the database.
 
-  Database credentials arrive via the DB_URL environment variable, which the
-  CD deployer (devops/deploy/data-deploy) refreshes from SSM Parameter Store
-  on every deployment. The Lambda itself never calls SSM, so no SSM
-  interface VPC endpoint is required.
+  Database credentials arrive in the invoke payload's `db_url` field: the
+  CD deployer (devops/deploy/data-deploy) reads SSM Parameter Store over the
+  public AWS API on every deployment and passes it through. The Lambda
+  itself never calls SSM, so no SSM interface VPC endpoint is required. A
+  DB_URL env var is still accepted for manual console invocations.
 
   Lambda code: See data-deploy-lambda.py in this directory.
 
@@ -150,9 +151,9 @@ Resources:
       Environment:
         Variables:
           S3_BUCKET: !Ref DataDeployBucket
-          # DB_URL (mysql://user:pass@host:3306/db) is injected/rotated by the
-          # data-deploy CD step — it is NOT created by this stack and must not
-          # be written here. See devops/deploy/data-deploy/lambda-env.mts.
+          # DB_URL (mysql://user:pass@host:3306/db) is optional — the deployer
+          # passes db_url in the invoke payload instead. Set it manually only
+          # if console-based test invokes are needed; never commit it here.
       Code:
         # Deploy using: See data-deploy-lambda.py docstring for instructions
         S3Bucket: bible-on-site-data-deploy
@@ -186,7 +187,7 @@ Resources:
   #
   # The SSM interface endpoint that previously existed only for the Lambda's
   # runtime credential lookup was removed (~$7/month per endpoint ENI): the
-  # deployer now injects DB_URL into the function environment at deploy time.
+  # deployer now delivers the DB URL inside the invoke payload instead.
   # One-time deletion of the legacy endpoint (deployed id vpce-0dd7903d30e03208c):
   #   aws ec2 delete-vpc-endpoints --vpc-endpoint-ids vpce-0dd7903d30e03208c --region il-central-1
   # Verify nothing else resolves ssm.il-central-1.amazonaws.com via this
@@ -297,6 +298,6 @@ Outputs:
 # - Lambda SG: sg-0cdca171d4f33dd34 (data-deploy-lambda-sg)
 # - S3 Gateway Endpoint: vpce-0388b3ea36b6a3214
 # - REMOVED: SSM Interface Endpoint vpce-0dd7903d30e03208c — no longer needed
-#   once DB_URL is injected via the function environment (see VPC Endpoint
+#   once the deployer delivers db_url in the invoke payload (see VPC Endpoint
 #   section above for the deletion command and pre-check).
 # =============================================================================
