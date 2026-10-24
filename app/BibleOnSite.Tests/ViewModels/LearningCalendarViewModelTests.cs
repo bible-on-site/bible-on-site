@@ -435,6 +435,30 @@ public class LearningCalendarViewModelTests
     }
 
     [Fact]
+    public async Task GroupedView_WeeksAssignRealWeekdayColumns()
+    {
+        // The grouped-view week rows bind Grid.Column to the cell's Column: a
+        // wrong index collapses or misaligns every mini-month on the page.
+        await using var fixture = await CreateFixtureAsync(CyclesOneToFour);
+        var vm = fixture.ViewModel;
+        await vm.InitializeAsync();
+
+        vm.SetViewModeCommand.Execute(CalendarViewMode.Year);
+
+        foreach (var group in vm.MonthGroups)
+        {
+            foreach (var week in group.Weeks)
+            {
+                week.Cells.Select(cell => cell.Column)
+                    .Should().Equal(Enumerable.Range(0, week.Cells.Count));
+            }
+            var firstDay = group.Cells.First(cell => !cell.IsBlank);
+            var (year, month, day) = HebrewDateHelper.NumberToHebrewDate(firstDay.DateNumber);
+            firstDay.Column.Should().Be(HebrewDateHelper.GetDayOfWeek(year, month, day));
+        }
+    }
+
+    [Fact]
     public async Task CycleView_GroupsTheWholeCycle_AndDimsOutsideDays()
     {
         await using var fixture = await CreateFixtureAsync(CyclesOneToFour);

@@ -298,20 +298,21 @@
                         <!-- Week rows of plain layout cells: a nested CollectionView per
                              mini-month spun up a whole adapter/recycler per section and
                              was the dominant grouped-view realization cost (#2455).
-                             HorizontalStackLayout honors the RTL flow direction like the
-                             CollectionView did, and FillAndExpand keeps 7 equal columns. -->
+                             A 7-star Grid keeps the columns equal; HorizontalStackLayout
+                             ignores FillAndExpand in MAUI and shrank the rows to content
+                             width on iOS. -->
                         <VerticalStackLayout Spacing="0"
                                              BindableLayout.ItemsSource="{Binding Weeks}">
                             <BindableLayout.ItemTemplate>
                                 <DataTemplate x:DataType="viewmodels:MiniMonthWeekViewModel">
-                                    <HorizontalStackLayout Spacing="0"
-                                                          BindableLayout.ItemsSource="{Binding Cells}">
+                                    <Grid ColumnDefinitions="*,*,*,*,*,*,*"
+                                          BindableLayout.ItemsSource="{Binding Cells}">
                                         <BindableLayout.ItemTemplate>
                                             <DataTemplate x:DataType="viewmodels:CalendarCellViewModel">
                                             <Border Margin="1"
                                                     Padding="0"
                                                     HeightRequest="24"
-                                                    HorizontalOptions="FillAndExpand"
+                                                    Grid.Column="{Binding Column}"
                                                     StrokeShape="RoundRectangle 4"
                                                     Stroke="Transparent"
                                                     StrokeThickness="1"
@@ -359,7 +360,7 @@
                                             </Border>
                                             </DataTemplate>
                                         </BindableLayout.ItemTemplate>
-                                    </HorizontalStackLayout>
+                                    </Grid>
                                 </DataTemplate>
                             </BindableLayout.ItemTemplate>
                         </VerticalStackLayout>
