@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Grid xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+      xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+      x:Class="BibleOnSite.Controls.ReaderLoadingOverlay"
+      IsVisible="True"
+      BackgroundColor="{AppThemeBinding Light=White, Dark=#1C1C1E}">
+    <!-- Uses a native ActivityIndicator which animates on the GPU even when the
+         main thread is blocked by the CarouselView layout pass. -->
+    <VerticalStackLayout x:Name="LoadingIndicator"
+                         VerticalOptions="Center" HorizontalOptions="Center" Spacing="12">
+        <ActivityIndicator IsRunning="True"
+                           Color="{StaticResource Primary}"
+                           HeightRequest="48"
+                           WidthRequest="48"/>
+        <Label x:Name="LoadingLabel"
+               FontSize="18"
+               HorizontalTextAlignment="Center"
+               TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray200}}"/>
+    </VerticalStackLayout>
+    <!-- Load failure: the bounded load surfaces here with a retry instead of
+         leaving the spinner up forever (#2084). -->
+    <VerticalStackLayout x:Name="ErrorPanel"
+                         IsVisible="False"
+                         Padding="24"
+                         Spacing="12"
+                         VerticalOptions="Center" HorizontalOptions="Center">
+        <Label x:Name="ErrorTitleLabel"
+               FontSize="18"
+               HorizontalTextAlignment="Center"
+               TextColor="{AppThemeBinding Light={StaticResource Error}, Dark={StaticResource ErrorDark}}"/>
+        <Label x:Name="ErrorDetailLabel"
+               FontSize="13"
+               LineBreakMode="WordWrap"
+               HorizontalTextAlignment="Center"
+               TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray200}}"/>
+        <Button x:Name="RetryButton"
+                Text="נסו שוב"
+                BackgroundColor="{StaticResource Primary}"
+                TextColor="White"
+                CornerRadius="8"
+                Padding="32,10"
+                Clicked="OnRetryClicked"/>
+    </VerticalStackLayout>
+</Grid>
