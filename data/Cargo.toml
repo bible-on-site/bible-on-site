@@ -27,7 +27,7 @@ chrono = "0.4"
 chrono-tz = "0.10"
 icu_calendar = "2.3"
 dotenvy = "0.15"
-rusqlite = { version = "0.40", features = ["bundled"] }
+rusqlite = { version = "0.41", features = ["bundled"] }
 flate2 = "1"
 unicode-normalization = "0.1"
 unicode_categories = "0.1"
