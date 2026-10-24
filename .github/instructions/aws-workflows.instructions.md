@@ -17,9 +17,14 @@ applyTo: ".github/workflows/**, docs/aws/**, devops/deploy/**, web/api/Dockerfil
   Verify account/region, live state, compatibility tests and rollback before any
   authorized live write. Reference templates are not evidence of live state.
 - Preserve the public assets bucket's legacy S3 URLs. Keep the sole nginx router
-  running, the single admin task on-demand, and the private-DNS SSM endpoint
-  until its consumers have a verified replacement. The 2026-10-23 audit in
-  `docs/aws/cost-risk-audit-2026-10-23.md` supersedes #2563's unsafe rollout steps.
+  running and the private-DNS SSM endpoint until its consumers have a verified
+  replacement. The 2026-10-23 audit in `docs/aws/cost-risk-audit-2026-10-23.md`
+  supersedes #2563's unsafe rollout steps.
+- Dorad permits admin-only interruptions for cost savings (one current admin
+  user). Admin may use Fargate Spot after interruption-safe saves are deployed
+  and the rollout checks in `docs/aws/admin-spot-rollout.md` pass. Keep public
+  website/API capacity and routing unchanged. Spot has no automatic on-demand
+  fallback: preserve a tested recovery path. No shutdown schedule is implied.
 
 - Connect: `aws sso login --profile AdministratorAccess-<AccountID>`.
 - Every accepted change must be reflected in the existing reference IaC under `docs/aws/cloudformation/`, but never run CloudFormation from those templates — they are reference-only. Update `docs/aws/` when the process changes.
