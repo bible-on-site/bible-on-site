@@ -614,11 +614,13 @@ public class PreferencesService
                 var bookmarks = System.Text.Json.JsonSerializer.Deserialize(bookmarksJson, AppJsonContext.Default.BookmarkedPerakim);
                 _bookmarkedPerakim = bookmarks != null ? new HashSet<int>(bookmarks) : new HashSet<int>();
             }
-            #pragma warning disable S2221 // Deliberate failure boundary: corrupt bookmarks JSON resets to an empty set
-            catch (Exception) //NOSONAR — corrupt bookmarks JSON resets to an empty set.
+            catch (System.Text.Json.JsonException ex)
             {
-                #pragma warning restore S2221
-                // Invalid JSON in bookmarks storage - silently reset to empty set
+                // A corrupt stored value cannot be partially salvaged — reset
+                // to empty, but never silently: invisible data loss must leave
+                // a diagnostic trace.
+                Console.Error.WriteLine(
+                    $"Stored perakim bookmarks reset — corrupt JSON ignored ({ex.Message})");
                 _bookmarkedPerakim = new HashSet<int>();
             }
         }

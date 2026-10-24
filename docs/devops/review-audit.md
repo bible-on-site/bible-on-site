@@ -30,7 +30,7 @@ Top accepted finding classes and their local gate:
 |------------------|-------|------------|
 | Missed `readonly` | 122 | `S2933` = error (`.editorconfig`) |
 | `Path.Combine` may drop earlier args | 122 | **gap — no Roslyn/Codacy-gate equivalent** |
-| Generic catch clause | 97 | `S2221` = error — 89 app + 8 devops sites triaged (6 narrowed to real types, 87 annotated boundaries) |
+| Generic catch clause | 97 | `S2221` = error — 89 app + 8 devops **threads** triaged (6 narrowed to real types, 87 annotated boundaries; the PR summary's "91" is 97 − 6 thread arithmetic). The actual source surface is **140 unfiltered sites** (132 app + 8 devops) plus 24 already-filtered catches — the thread count under-reports because the scanner groups several sites into one finding. Per-site ledger and #2572 remediation: [catch-ledger.md](catch-ledger.md) |
 | Missing `Dispose` on local `IDisposable` | 27 | `S2930` = error — 3 sites fixed (cancel→dispose→replace) |
 | `GC.Collect()` | 24 | `S1215` = error — 9 test sites consolidated into `Support/GarbageCollection.cs` |
 | Superfluous trailing args (Python) | 22 | **gap — no local equivalent** |
