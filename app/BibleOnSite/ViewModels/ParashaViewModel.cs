@@ -507,7 +507,7 @@ public partial class ParashaViewModel : ObservableObject //NOSONAR
         var reading = SedraSchedule.GetWeeklyReading(today);
         var target = reading.HasParasha ? reading : SedraSchedule.GetNextRegularReading(today);
         var parashiot = _parashaService.Parashiot;
-        if (parashiot is null || target.ParashaIndexes.Count == 0)
+        if (parashiot is null)
         {
             return null;
         }

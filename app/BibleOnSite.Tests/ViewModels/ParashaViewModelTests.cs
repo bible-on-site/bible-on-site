@@ -997,6 +997,18 @@ public class ParashaViewModelTests
     }
 
     [Fact]
+    public async Task ResolveWeeklyParasha_UnloadedCatalog_ReturnsNull()
+    {
+        // A direct call ahead of the service warm-up has no catalog to map
+        // parasha indexes onto — resolution no-ops instead of navigating.
+        await using var fixture = new Fixture(hebrewDateProvider: () => 57850129);
+        await fixture.Initialize();
+
+        fixture.Parasha.IsLoaded.Should().BeFalse();
+        fixture.Model.ResolveWeeklyParasha().Should().BeNull();
+    }
+
+    [Fact]
     public async Task LoadWeeklyParasha_LoadFailure_StaysPutThenRecovers()
     {
         // No packaged tanah database at all: the first tap fails inside

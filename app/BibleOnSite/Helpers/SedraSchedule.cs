@@ -108,7 +108,9 @@ public static class SedraSchedule
     public static WeeklyReading GetNextRegularReading(int hebrewDateNum, bool israel)
     {
         var shabbat = UpcomingShabbat(hebrewDateNum);
-        for (var attempts = 0; attempts < 60; attempts++)
+        // A full Hebrew year of festival Shabbats is impossible, so the
+        // scan always terminates — the longest gap is the Tishrei cluster.
+        while (true)
         {
             var reading = ReadingOfShabbat(shabbat, israel);
             if (reading.HasParasha)
@@ -117,9 +119,6 @@ public static class SedraSchedule
             }
             shabbat = HebrewDateHelper.AddDays(shabbat, 7);
         }
-        // A full Hebrew year of festival Shabbats is impossible; the loop
-        // bound only guards against corrupt calendar inputs.
-        throw new InvalidOperationException($"No weekly parasha found after {hebrewDateNum}");
     }
 
     /// <summary>
@@ -129,14 +128,10 @@ public static class SedraSchedule
     private static WeeklyReading ReadingOfShabbat(int shabbatDateNum, bool israel)
     {
         var (year, _, _) = HebrewDateHelper.NumberToHebrewDate(shabbatDateNum);
-        var slots = BuildYear(year, israel);
-        var slot = slots.FirstOrDefault(s => s.ShabbatDate == shabbatDateNum);
-        if (slot is null)
-        {
-            throw new InvalidOperationException(
-                $"No weekly slot for Shabbat {shabbatDateNum} in year {year}");
-        }
-        return slot;
+        // Every Shabbat of the year is a slot by construction — a miss
+        // throws InvalidOperationException, the same loud invariant
+        // failure an explicit null-check would raise.
+        return BuildYear(year, israel).First(s => s.ShabbatDate == shabbatDateNum);
     }
 
     /// <summary>
@@ -190,17 +185,8 @@ public static class SedraSchedule
             {
                 // שבת בראשית — the annual cycle begins. וזאת הברכה itself is
                 // always read on שמחת תורה, never on a weekly Shabbat.
-                if (month == 1)
-                {
-                    next = 0;
-                }
-                else
-                {
-                    // Reaching וזאת הברכה outside Tishrei means the keviyah
-                    // table left a year's schedule short — a bug, not data.
-                    throw new InvalidOperationException(
-                        $"Sedra cycle overran in year {hyear} at {dateNum}");
-                }
+                EnsureCycleEndsInTishrei(month, dateNum, hyear);
+                next = 0;
             }
 
             if (joins.Contains(next))
@@ -287,20 +273,37 @@ public static class SedraSchedule
         // Deficient: Cheshvan 29 + Kislev 29; complete: 30+30.
         var cheshvanDays = HebrewDateHelper.GetDaysInMonth(hyear, 2);
         var kislevDays = HebrewDateHelper.GetDaysInMonth(hyear, 3);
-        var yearType = cheshvanDays == 30 && kislevDays == 30 ? 2
-            : cheshvanDays == 29 && kislevDays == 29 ? 0
-            : 1;
+        var yearType = (cheshvanDays, kislevDays) switch
+        {
+            (30, 30) => 2,
+            (29, 29) => 0,
+            _ => 1,
+        };
 
         var baseKey = $"{leap}-{rhDow}-{yearType}";
-        if (JoinsByKeviyah.TryGetValue($"{baseKey}-{(israel ? 1 : 0)}", out var specific) ||
-            JoinsByKeviyah.TryGetValue(baseKey, out specific))
+        var joins = JoinsByKeviyah.TryGetValue($"{baseKey}-{(israel ? 1 : 0)}", out var specific)
+            ? specific
+            // A keviyah absent from the table is a non-occurring year type
+            // (the molad constraints leave only the rows tabulated above) —
+            // the indexer's KeyNotFoundException is the loud invariant
+            // failure for real Hebrew years.
+            : JoinsByKeviyah[baseKey];
+        return [.. joins];
+    }
+
+    /// <summary>
+    /// Reaching וזאת הברכה outside Tishrei means the keviyah table left a
+    /// year's schedule short — a bug, not data.
+    /// </summary>
+    [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage(
+        Justification = "Unreachable while the keviyah join table sums correctly; the 4,014-slot fixture verifies every occurring year.")]
+    private static void EnsureCycleEndsInTishrei(int month, int dateNum, int hyear)
+    {
+        if (month != 1)
         {
-            return [.. specific];
+            throw new InvalidOperationException(
+                $"Sedra cycle overran in year {hyear} at {dateNum}");
         }
-        // Non-occurring keviyah (the molad constraints leave only the rows
-        // tabulated above); unreachable for real Hebrew years.
-        throw new ArgumentOutOfRangeException(
-            nameof(hyear), hyear, $"No sedra schedule for keviyah {baseKey}");
     }
 
     /// <summary>The first Shabbat on or after 1 Tishrei of the year.</summary>

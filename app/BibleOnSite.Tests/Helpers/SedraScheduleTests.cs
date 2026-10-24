@@ -214,6 +214,62 @@ public class SedraScheduleTests
     }
 
     [Fact]
+    public void GetCurrentReading_MatchesExplicitTodayResolution()
+    {
+        var expected = SedraSchedule.GetWeeklyReading(
+            HebrewDateHelper.GetTodayDateNumber(), israel: true);
+        var current = SedraSchedule.GetCurrentReading();
+        current.ShabbatDate.Should().Be(expected.ShabbatDate);
+        current.ParashaIndexes.Should().Equal(expected.ParashaIndexes);
+        current.HolidayName.Should().Be(expected.HolidayName);
+    }
+
+    /// <summary>
+    /// The festival table as a data contract — dates like 21 Tishrei or
+    /// 6 Sivan can never fall on Shabbat, so <see cref="SedraSchedule.BuildYear"/>
+    /// never reaches those switch arms; they are still part of the
+    /// month/day → festival mapping and get verified directly.
+    /// </summary>
+    [Theory]
+    [InlineData(1, 1, true, "ראש השנה")]
+    [InlineData(1, 1, false, "ראש השנה")]
+    [InlineData(1, 2, true, "ראש השנה")]
+    [InlineData(1, 10, false, "יום כיפור")]
+    [InlineData(1, 15, true, "סוכות")]
+    [InlineData(1, 17, false, "סוכות")]
+    [InlineData(1, 20, true, "סוכות")]
+    [InlineData(1, 21, true, "הושענא רבה")]
+    [InlineData(1, 21, false, "הושענא רבה")]
+    [InlineData(1, 22, true, "שמחת תורה")]
+    [InlineData(1, 22, false, "שמיני עצרת")]
+    [InlineData(1, 23, false, "שמחת תורה")]
+    [InlineData(7, 15, true, "פסח")]
+    [InlineData(7, 20, false, "פסח")]
+    [InlineData(7, 21, true, "שביעי של פסח")]
+    [InlineData(7, 21, false, "שביעי של פסח")]
+    [InlineData(7, 22, false, "אחרון של פסח")]
+    [InlineData(9, 6, true, "שבועות")]
+    [InlineData(9, 6, false, "שבועות")]
+    [InlineData(9, 7, false, "שבועות")]
+    public void FestivalName_FestivalDate_ReturnsName(int month, int day, bool israel, string expected)
+    {
+        SedraSchedule.FestivalName(month, day, israel).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(1, 3, true)]   // weekday of Tishrei, no festival
+    [InlineData(1, 23, true)]  // second שמחת תורה exists only in Diaspora
+    [InlineData(7, 22, true)]  // אחרון של פסח exists only in Diaspora
+    [InlineData(9, 7, true)]   // שבועות ב' exists only in Diaspora
+    [InlineData(7, 14, false)]
+    [InlineData(2, 15, false)]
+    [InlineData(13, 14, true)]
+    public void FestivalName_NonFestivalDate_ReturnsNull(int month, int day, bool israel)
+    {
+        SedraSchedule.FestivalName(month, day, israel).Should().BeNull();
+    }
+
+    [Fact]
     public void BuildYear_SpansExactlyTheYearShabbats()
     {
         // 5785 IL (ראש השנה Thursday): slot dates run from the first Shabbat
