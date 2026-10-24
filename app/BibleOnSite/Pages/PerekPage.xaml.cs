@@ -993,8 +993,57 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
                 $"af={af} avf={avf} " +
                 $"modal={KvoBool(v, "accessibilityViewIsModal")} elemHidden={KvoBool(v, "accessibilityElementsHidden")} " +
                 $"hidden={v.Hidden} alpha={v.Alpha:0.##} isAE={KvoBool(v, "isAccessibilityElement")} " +
-                $"clip={v.ClipsToBounds} uie={v.UserInteractionEnabled} id={v.AccessibilityIdentifier ?? "-"}");
+                $"clip={v.ClipsToBounds} uie={v.UserInteractionEnabled} id={v.AccessibilityIdentifier ?? "-"}" +
+                $" pc={KvoObjStr(v, "_accessibilityContainer")} ct={KvoObjStr(v, "accessibilityContainerType")}" +
+                $" sgac={KvoBool(v, "shouldGroupAccessibilityChildren")} navStyle={KvoObjStr(v, "accessibilityNavigationStyle")}" +
+                $" ae={AccElemSummary(v)}");
         }
+    }
+
+    private static string AccElemSummary(UIKit.UIView view)
+    {
+        try
+        {
+            if (view.ValueForKey(new Foundation.NSString("accessibilityElements")) is not Foundation.NSArray elems)
+            {
+                return "nil";
+            }
+            var sb = new System.Text.StringBuilder($"{elems.Count}[");
+            for (nuint i = 0; i < elems.Count && i < 4; i++)
+            {
+                if (elems.GetItem<Foundation.NSObject>(i) is not { } obj) { continue; }
+                sb.Append($"{obj.GetType().Name}@{KvoObjRect(obj, "accessibilityFrame")}" +
+                    $" id={KvoObjStr(obj, "accessibilityIdentifier")} c={KvoObjStr(obj, "accessibilityContainer")};");
+            }
+            return sb.Append(']').ToString();
+        }
+#pragma warning disable S2221 // TEMP-DIAG: KVC probe must never throw.
+        catch (Exception ex) { return $"err:{ex.Message[..Math.Min(40, ex.Message.Length)]}"; } //NOSONAR
+#pragma warning restore S2221
+    }
+
+    private static string KvoObjRect(Foundation.NSObject obj, string key)
+    {
+        try
+        {
+            return obj.ValueForKey(new Foundation.NSString(key)) is Foundation.NSValue v
+                ? $"{v.CGRectValue.X:0},{v.CGRectValue.Y:0},{v.CGRectValue.Width:0}x{v.CGRectValue.Height:0}"
+                : "-";
+        }
+#pragma warning disable S2221 // TEMP-DIAG: KVC probe must never throw.
+        catch { return "?"; } //NOSONAR
+#pragma warning restore S2221
+    }
+
+    private static string KvoObjStr(Foundation.NSObject obj, string key)
+    {
+        try
+        {
+            return obj.ValueForKey(new Foundation.NSString(key))?.ToString() ?? "-";
+        }
+#pragma warning disable S2221 // TEMP-DIAG: KVC probe must never throw.
+        catch { return "?"; } //NOSONAR
+#pragma warning restore S2221
     }
 
     private static string KvoRect(UIKit.UIView view, string key)
