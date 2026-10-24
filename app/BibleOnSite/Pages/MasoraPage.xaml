@@ -318,6 +318,13 @@
                             </DataTrigger>
                         </Label.Triggers>
                     </Label>
+                    <!-- Empty-state actions live in the header row, not EmptyView: the list
+                         row is bounded above BottomBar and a taller empty view painted under
+                         the bar's opaque shape, covering these buttons (#2574). -->
+                    <Button x:Name="GoToPerushimSettingsButton"
+                            Text="עבור להגדרות להורדת חבילת הפירושים"
+                            IsVisible="{Binding ShowDownloadPerushimButton}"
+                            Clicked="OnGoToPerushimSettingsClicked"/>
                     <BoxView HeightRequest="1"
                              BackgroundColor="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray600}}"
                              Margin="0,4,0,0"/>
@@ -365,22 +372,23 @@
                             </DataTemplate>
                         </CollectionView.ItemTemplate>
                         <CollectionView.EmptyView>
-                            <VerticalStackLayout VerticalOptions="Center"
-                                                 HorizontalOptions="Center"
-                                                 Spacing="8"
-                                                 Padding="0,16,0,0">
-                                <Label Text="📚"
-                                       FontSize="32"
-                                       HorizontalTextAlignment="Center"/>
-                                <Label Text="{Binding PerushimEmptyMessage}"
-                                       FontSize="14"
-                                       HorizontalTextAlignment="Center"
-                                       TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray400}}"/>
-                                <Button x:Name="GoToPerushimSettingsButton"
-                                        Text="עבור להגדרות להורדת חבילת הפירושים"
-                                        IsVisible="{Binding ShowDownloadPerushimButton}"
-                                        Clicked="OnGoToPerushimSettingsClicked"/>
-                            </VerticalStackLayout>
+                            <!-- ScrollView bounds the empty state to the list row: anything
+                                 taller clipped inside instead of painting under BottomBar's
+                                 opaque shape — the white layer over these buttons (#2574). -->
+                            <ScrollView>
+                                <VerticalStackLayout VerticalOptions="Start"
+                                                     HorizontalOptions="Center"
+                                                     Spacing="8"
+                                                     Padding="0,16,0,0">
+                                    <Label Text="📚"
+                                           FontSize="32"
+                                           HorizontalTextAlignment="Center"/>
+                                    <Label Text="{Binding PerushimEmptyMessage}"
+                                           FontSize="14"
+                                           HorizontalTextAlignment="Center"
+                                           TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray400}}"/>
+                                </VerticalStackLayout>
+                            </ScrollView>
                         </CollectionView.EmptyView>
                 </CollectionView>
             </Grid>

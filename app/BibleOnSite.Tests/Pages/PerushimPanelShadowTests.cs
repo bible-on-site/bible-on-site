@@ -56,6 +56,36 @@ public class PerushimPanelShadowTests
 
     [Theory]
     [MemberData(nameof(Pages))]
+    public void PerushimPanel_empty_state_actions_live_in_the_header_not_the_list(string pageFile)
+    {
+        XNamespace p = "http://schemas.microsoft.com/dotnet/2021/maui";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2009/xaml";
+        var doc = XDocument.Load(Path.Join(AppRoot, "Pages", pageFile));
+
+        var panel = doc.Descendants(p + "Border")
+            .First(e => (string?)e.Attribute(x + "Name") == "PerushimPanel");
+
+        var emptyView = panel.Descendants(p + "CollectionView.EmptyView").First();
+        var header = panel.Descendants(p + "VerticalStackLayout")
+            .First(e => (string?)e.Attribute(x + "Name") == "PerushimDragHandle");
+
+        // The sheet's list row is bounded above BottomBar; a taller EmptyView
+        // painted past its bounds into the bar's opaque zone — the white
+        // rectangle that covered the download/export buttons. Action buttons
+        // belong in the always-visible header row, and the empty view keeps a
+        // scroll-bounded emoji + message that can never overflow under the bar.
+        emptyView.Elements().First().Name.LocalName.Should().Be("ScrollView",
+            "the empty state must be clipped to the list bounds so it never paints under the nav bar");
+        emptyView.Descendants(p + "Button").Should().BeEmpty(
+            "action buttons inside EmptyView paint under the bottom nav bar on short detents");
+        header.Descendants(p + "Button")
+            .Select(b => (string?)b.Attribute(x + "Name"))
+            .Should().Contain("GoToPerushimSettingsButton",
+                "the download action must stay visible regardless of sheet height");
+    }
+
+    [Theory]
+    [MemberData(nameof(Pages))]
     public void PerushimPanelShadow_strip_tracks_the_sheet_transforms(string pageFile)
     {
         XNamespace p = "http://schemas.microsoft.com/dotnet/2021/maui";
