@@ -888,6 +888,14 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
                 .FirstOrDefault()?.Windows.FirstOrDefault(w => w.IsKeyWindow);
             if (window is null) { DebugLog.Write($"[A11yDump {tag}] no window"); return; }
 
+            foreach (var w in UIKit.UIApplication.SharedApplication?.Windows ?? System.Linq.Enumerable.Empty<UIKit.UIWindow>())
+            {
+                var wf = w.Frame;
+                DebugLog.Write($"[A11yDump {tag}] win {w.GetType().Name} f={wf.X:0},{wf.Y:0},{wf.Width:0}x{wf.Height:0} " +
+                    $"hidden={w.Hidden} alpha={w.Alpha:0.##} lvl={w.WindowLevel} key={w.IsKeyWindow} " +
+                    $"eh={KvoBool(w, "accessibilityElementsHidden")} modal={KvoBool(w, "accessibilityViewIsModal")}");
+            }
+
             var carView = PerekCarousel.Handler?.PlatformView as UIKit.UIView;
             var bbView = BottomBar.Handler?.PlatformView as UIKit.UIView;
             DebugLog.Write($"[A11yDump {tag}] PerekId={_viewModel.PerekId} pos={_viewModel.CarouselPosition} " +
@@ -907,6 +915,11 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
             var found = DumpViewFlags(window, 0, tag);
             DebugLog.Write($"[A11yDump {tag}] flagged={found}");
 
+            // TEMP-DIAG: force the AX server to recompute visibility — if WDA's
+            // displayed flips after this pass the server cache was stale.
+            UIKit.UIAccessibility.PostNotification(UIKit.UIAccessibilityPostNotification.ScreenChanged, (Foundation.NSObject?)null);
+            DebugLog.Write($"[A11yDump {tag}] posted ScreenChanged notification");
+
             foreach (var id in new[] { "PasukText", "PasukimCollection", "PerekHeader", "PerushimChevronButton", "TextButton", "CircularMenuButton", "PerekSource" })
             {
                 var target = FindVisibleViewById(window, id);
@@ -916,6 +929,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
                     continue;
                 }
                 DumpAncestorChain(target, tag, id);
+                ProbeAxHitTest(window, target, tag, id);
             }
         }
 #pragma warning disable S2221 // TEMP-DIAG: investigation boundary, any failure is logged not thrown.
@@ -989,16 +1003,68 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
             var f = v.Frame;
             var af = KvoRect(v, "accessibilityFrame");
             var avf = KvoRect(v, "accessibilityVisibleFrame");
+            var fics = KvoRect(v, "accessibilityFrameInContainerSpace");
             DebugLog.Write($"[A11yChain {tag}] {id} d{d} {v.GetType().Name} f={f.X:0},{f.Y:0},{f.Width:0}x{f.Height:0} " +
-                $"af={af} avf={avf} " +
+                $"af={af} avf={avf} fics={fics} " +
                 $"modal={KvoBool(v, "accessibilityViewIsModal")} elemHidden={KvoBool(v, "accessibilityElementsHidden")} " +
                 $"hidden={v.Hidden} alpha={v.Alpha:0.##} isAE={KvoBool(v, "isAccessibilityElement")} " +
                 $"clip={v.ClipsToBounds} uie={v.UserInteractionEnabled} id={v.AccessibilityIdentifier ?? "-"}" +
-                $" pc={KvoObjStr(v, "_accessibilityContainer")} ct={KvoObjStr(v, "accessibilityContainerType")}" +
+                $" pc={KvoObjStr(v, "accessibilityContainer")} ct={KvoObjStr(v, "accessibilityContainerType")}" +
                 $" sgac={KvoBool(v, "shouldGroupAccessibilityChildren")} navStyle={KvoObjStr(v, "accessibilityNavigationStyle")}" +
-                $" ae={AccElemSummary(v)}");
+                $" axp={AxParentStr(v)} aec={KvoObjStr(v, "accessibilityElementCount")}" +
+                $" opaq={KvoObjStr(v, "_accessibilityIsOpaqueElementProvider")} ae={AccElemSummary(v)}");
         }
     }
+
+    private static void ProbeAxHitTest(UIKit.UIView window, UIKit.UIView target, string tag, string id)
+    {
+        try
+        {
+            var f = target.ConvertRectToView(target.Bounds, window);
+            var mid = new CoreGraphics.CGPoint(f.X + f.Width / 2, f.Y + f.Height / 2);
+            var selPub = new ObjCRuntime.Selector("accessibilityHitTest:withEvent:");
+            var selPriv = new ObjCRuntime.Selector("_accessibilityHitTest:withEvent:");
+            if (window.RespondsToSelector(selPub))
+            {
+                DumpHitObj("pub", ObjcMsgSendPointObj(window.Handle, selPub.Handle, mid, IntPtr.Zero), mid, tag, id);
+            }
+            else
+            {
+                DebugLog.Write($"[AXHit {tag}] {id} pub unresponded");
+            }
+            if (window.RespondsToSelector(selPriv))
+            {
+                DumpHitObj("priv", ObjcMsgSendPointObj(window.Handle, selPriv.Handle, mid, IntPtr.Zero), mid, tag, id);
+            }
+            else
+            {
+                DebugLog.Write($"[AXHit {tag}] {id} priv unresponded");
+            }
+        }
+#pragma warning disable S2221 // TEMP-DIAG: KVC probe must never throw.
+        catch (Exception ex) { DebugLog.Write($"[AXHit {tag}] {id} err {ex.Message[..Math.Min(80, ex.Message.Length)]}"); } //NOSONAR
+#pragma warning restore S2221
+    }
+
+    private static string AxParentStr(UIKit.UIView view)
+    {
+        var p = KvoObjStr(view, "_AXParent");
+        if (p is "?" or "-") { p = KvoObjStr(view, "accessibilityParent"); }
+        return p;
+    }
+
+    private static void DumpHitObj(string kind, IntPtr hitPtr, CoreGraphics.CGPoint mid, string tag, string id)
+    {
+        var hitObj = hitPtr == IntPtr.Zero ? null : ObjCRuntime.Runtime.GetNSObject(hitPtr);
+        var hitId = hitObj is null ? "-" : KvoObjStr(hitObj, "accessibilityIdentifier");
+        var hitAf = hitObj is null ? "-" : KvoObjRect(hitObj, "accessibilityFrame");
+        var hitDesc = hitObj?.ToString() ?? "nil";
+        if (hitDesc.Length > 120) { hitDesc = hitDesc[..120]; }
+        DebugLog.Write($"[AXHit {tag}] {id} {kind} mid={mid.X:0},{mid.Y:0} -> id={hitId} af={hitAf} {hitDesc}");
+    }
+
+    [System.Runtime.InteropServices.DllImport("/usr/lib/libobjc.A.dylib", EntryPoint = "objc_msgSend")]
+    private static extern IntPtr ObjcMsgSendPointObj(IntPtr receiver, IntPtr selector, CoreGraphics.CGPoint point, IntPtr arg);
 
     private static string AccElemSummary(UIKit.UIView view)
     {
