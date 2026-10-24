@@ -36,7 +36,7 @@ public partial class ParashaPage
         {
             if (Shell.Current.CurrentPage == this && !ChapterSearch.IsSearchOpen)
             {
-                ReaderNavigationButton.Focus();
+                NormalNavigationBar.NavigationButton.Focus();
             }
         });
     }

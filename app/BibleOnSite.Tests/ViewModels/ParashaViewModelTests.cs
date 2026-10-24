@@ -21,6 +21,7 @@ public class ParashaViewModelTests
         public PreferencesService Preferences { get; }
         public ParashaViewModel Model { get; }
         public ParashaDataService Parasha { get; }
+        public PerushimNotesService Notes { get; }
         private readonly bool _includeCatalog;
         private readonly bool _includeNotes;
 
@@ -38,6 +39,7 @@ public class ParashaViewModelTests
             }
             var catalog = new PerushimCatalogService(Storage.FileSystem.Object);
             var notes = new PerushimNotesService(NotesDeliveryTests.Pad().Object, Storage.FileSystem.Object);
+            Notes = notes;
             Preferences = PreferencesService.CreateForTesting(Prefs);
             Preferences.Load();
             var localDb = new LocalDatabaseService(Storage.FileSystem.Object);
@@ -406,6 +408,27 @@ public class ParashaViewModelTests
     }
 
     [Fact]
+    public async Task PerushimSelectionStatus_ReflectsCheckedCountOutOfConfiguredLimit()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize();
+        await fixture.Model.LoadByUnitIdAsync(1);
+
+        fixture.Model.PerushimSelectionStatus.Should().Be("נבחרו 0 מתוך 5");
+        fixture.Model.PerushimLimitReached.Should().BeFalse();
+
+        fixture.Model.ToggleCheckedPerush(1);
+        fixture.Model.ToggleCheckedPerush(2);
+
+        fixture.Model.PerushimSelectionStatus.Should().Be("נבחרו 2 מתוך 5");
+        fixture.Model.PerushimLimitReached.Should().BeFalse();
+
+        fixture.Preferences.InlineCommentaryLimit = 2;
+
+        fixture.Model.PerushimLimitReached.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task LoadPerushim_UnitWithoutNotes_EmptiesTheCatalog()
     {
         await using var fixture = new Fixture();
@@ -461,6 +484,11 @@ public class ParashaViewModelTests
         await noNotes.Initialize();
         await noNotes.Model.LoadByUnitIdAsync(1);
 
+        // First-launch notes materialization is kicked, not awaited — see #2430.
+        // The page reloads perushim once the operation settles; emulate that here.
+        await noNotes.Notes.InitializeAsync();
+        await noNotes.Model.LoadPerushimAsync(noNotes.Model.Unit!);
+
         noNotes.Model.PerushimCatalogAvailable.Should().BeTrue();
         noNotes.Model.PerushimNotesAvailable.Should().BeFalse();
         noNotes.Model.ShowDownloadPerushimButton.Should().BeTrue();
@@ -469,6 +497,9 @@ public class ParashaViewModelTests
         await using var noCatalog = new Fixture(includeCatalog: false, includeNotes: false);
         await noCatalog.Initialize();
         await noCatalog.Model.LoadByUnitIdAsync(1);
+
+        await noCatalog.Notes.InitializeAsync();
+        await noCatalog.Model.LoadPerushimAsync(noCatalog.Model.Unit!);
 
         noCatalog.Model.PerushimCatalogAvailable.Should().BeFalse();
         noCatalog.Model.ShowDownloadPerushimButton.Should().BeFalse();
@@ -535,10 +566,12 @@ public class ParashaViewModelTests
         await fixture.Model.LoadByUnitIdAsync(1);
 
         fixture.Model.HasCurrentUnitRecitation.Should().BeTrue();
-        // Audio exists but the button stays hidden until קריינות is checked.
-        fixture.Model.ShowHeaderPlayButton.Should().BeFalse();
-        fixture.Model.IsQriynotEnabled = true;
+        // קריינות ships on globally (#2472), so downloaded audio surfaces the
+        // header button immediately; turning the preference off hides it.
+        fixture.Model.IsQriynotEnabled.Should().BeTrue();
         fixture.Model.ShowHeaderPlayButton.Should().BeTrue();
+        fixture.Model.IsQriynotEnabled = false;
+        fixture.Model.ShowHeaderPlayButton.Should().BeFalse();
 
         await fixture.Model.NavigateToUnitAsync(2);
         fixture.Model.HasCurrentUnitRecitation.Should().BeTrue(); // unit 2's ספרדים covers perek 4
@@ -614,17 +647,25 @@ public class ParashaViewModelTests
     }
 
     [Fact]
-    public async Task CurrentCarouselUnit_SwapsTheOffscreenAccessibilityFlag()
+    public async Task Unit_ExposesOnlyTheDisplayedPageToAccessibility()
     {
         await using var fixture = new Fixture();
         await fixture.Initialize();
         await fixture.Model.LoadByUnitIdAsync(1);
 
-        var other = fixture.Model.CarouselUnits[1];
-        fixture.Model.CurrentCarouselUnit = other;
+        var first = fixture.Model.Unit!;
+        first.IsOffscreenCarouselPage.Should().BeFalse();
 
-        fixture.Model.Unit!.IsOffscreenCarouselPage.Should().BeTrue();
-        other.IsOffscreenCarouselPage.Should().BeFalse();
+        await fixture.Model.LoadByUnitIdAsync(2);
+        first.IsOffscreenCarouselPage.Should().BeTrue();
+        fixture.Model.Unit!.IsOffscreenCarouselPage.Should().BeFalse();
+
+        // A stale CurrentItem pushback must not re-hide the displayed page
+        // (the carousel does not push CurrentItem on programmatic ScrollTo).
+        var stale = fixture.Model.CarouselUnits[0];
+        fixture.Model.CurrentCarouselUnit = stale;
+        fixture.Model.Unit!.IsOffscreenCarouselPage.Should().BeFalse();
+        stale.IsOffscreenCarouselPage.Should().BeTrue();
     }
 
     [Fact]

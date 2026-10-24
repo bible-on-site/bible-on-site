@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Border xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+        xmlns:controls="clr-namespace:BibleOnSite.Controls"
+        xmlns:models="clr-namespace:BibleOnSite.Models"
+        xmlns:converters="clr-namespace:BibleOnSite.Converters"
+        x:Class="BibleOnSite.Controls.PerushimSheet"
+        x:Name="SheetRoot"
+        BackgroundColor="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}"
+        StrokeShape="RoundRectangle 16,16,0,0"
+        Stroke="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray600}}"
+        StrokeThickness="1"
+        VerticalOptions="End"
+        IsVisible="False">
+    <Border.Resources>
+        <converters:PerushCheckedConverter x:Key="PerushCheckedConverter"/>
+        <converters:PerushEnabledConverter x:Key="PerushEnabledConverter"/>
+    </Border.Resources>
+    <Border.Shadow>
+        <Shadow Brush="Black" Offset="0,-3" Radius="8" Opacity="0.2"/>
+    </Border.Shadow>
+    <Grid RowDefinitions="Auto,*" Padding="16,12,16,0">
+        <!-- Header with drag handle - draggable to dismiss or expand -->
+        <VerticalStackLayout Grid.Row="0" Spacing="4">
+            <VerticalStackLayout.GestureRecognizers>
+                <PanGestureRecognizer PanUpdated="OnPanelPan"/>
+            </VerticalStackLayout.GestureRecognizers>
+            <!-- Drag handle indicator -->
+            <BoxView WidthRequest="40"
+                     HeightRequest="4"
+                     CornerRadius="2"
+                     BackgroundColor="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray500}}"
+                     HorizontalOptions="Center"
+                     Margin="0,0,0,4"/>
+            <!-- Title -->
+            <Label Text="פירושים"
+                   FontSize="18"
+                   FontAttributes="Bold"
+                   HorizontalTextAlignment="Center"
+                   TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryLight}}"/>
+            <!-- Divider -->
+            <controls:RtlSearchBar x:Name="SearchBar" Placeholder="חיפוש פירוש" Text="{Binding PerushNameFilter}"
+                       AutomationId="PerushNameSearch" SearchButtonPressed="OnSearchSubmitted"/>
+            <Label Text="{Binding InlineCommentaryLimitMessage}" FontSize="12" LineBreakMode="WordWrap"
+                   HorizontalTextAlignment="Center" AutomationId="InlineCommentaryLimitMessage"/>
+            <!-- Live selected count; turns Primary and bold at the configured limit (#2471) -->
+            <Label Text="{Binding PerushimSelectionStatus}"
+                   SemanticProperties.Description="{Binding PerushimSelectionStatus}"
+                   FontSize="13" FontAttributes="Bold"
+                   HorizontalTextAlignment="Center"
+                   AutomationId="PerushimSelectionStatus"
+                   TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray400}}">
+                <Label.Triggers>
+                    <DataTrigger TargetType="Label" Binding="{Binding PerushimLimitReached}" Value="True">
+                        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryLight}}"/>
+                    </DataTrigger>
+                </Label.Triggers>
+            </Label>
+            <BoxView HeightRequest="1"
+                     BackgroundColor="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray600}}"
+                     Margin="0,4,0,0"/>
+        </VerticalStackLayout>
+        <!-- Scrollable content area for perushim list -->
+        <CollectionView x:Name="PerushimCollection" Grid.Row="1" Margin="0,8,0,90"
+                        ItemsSource="{Binding Perushim}"
+                        SelectionMode="None"
+                        VerticalOptions="Start">
+                <CollectionView.ItemTemplate>
+                    <DataTemplate x:DataType="models:Perush">
+                        <Grid Padding="4,2" ColumnDefinitions="Auto,*" x:Name="PerushRow">
+                            <Grid.IsEnabled>
+                                <MultiBinding Converter="{StaticResource PerushEnabledConverter}" Mode="OneWay">
+                                    <Binding Path="Id"/>
+                                    <Binding Path="BindingContext.CheckedPerushim" Source="{x:Reference SheetRoot}"/>
+                                    <Binding Path="BindingContext.InlineCommentaryLimit" Source="{x:Reference SheetRoot}"/>
+                                </MultiBinding>
+                            </Grid.IsEnabled>
+                            <CheckBox Grid.Column="0"
+                                      AutomationId="PerushCheckBox"
+                                      VerticalOptions="Center"
+                                      Margin="0,0,8,0"
+                                      CheckedChanged="OnPerushCheckboxChanged">
+                                <CheckBox.IsChecked>
+                                    <MultiBinding Converter="{StaticResource PerushCheckedConverter}" Mode="OneWay">
+                                        <Binding Path="Id"/>
+                                        <Binding Path="BindingContext.CheckedPerushim" Source="{x:Reference SheetRoot}"/>
+                                    </MultiBinding>
+                                </CheckBox.IsChecked>
+                            </CheckBox>
+                            <Label Grid.Column="1"
+                                   Text="{Binding Name}"
+                                   FontSize="16"
+                                   FlowDirection="RightToLeft"
+                                   VerticalOptions="Center">
+                                <Label.Triggers>
+                                    <DataTrigger TargetType="Label"
+                                                 Binding="{Binding IsEnabled, Source={x:Reference PerushRow}}"
+                                                 Value="False">
+                                        <Setter Property="Opacity" Value="0.4"/>
+                                    </DataTrigger>
+                                </Label.Triggers>
+                            </Label>
+                        </Grid>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+                <CollectionView.EmptyView>
+                    <VerticalStackLayout VerticalOptions="Center"
+                                         HorizontalOptions="Center"
+                                         Spacing="8"
+                                         Padding="0,16,0,0">
+                        <Label Text="📚"
+                               FontSize="32"
+                               HorizontalTextAlignment="Center"/>
+                        <Label Text="{Binding PerushimEmptyMessage}"
+                               FontSize="14"
+                               HorizontalTextAlignment="Center"
+                               TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray400}}"/>
+                        <Button Text="עבור להגדרות להורדת חבילת הפירושים"
+                                IsVisible="{Binding ShowDownloadPerushimButton}"
+                                Clicked="OnGoToPerushimSettingsClicked"/>
+                        <Button Text="ייצוא לוגים לתמיכה"
+                                Command="{Binding ExportPerushimLogsCommand}"
+                                AutomationId="ExportPerushimLogsButton"
+                                IsVisible="{Binding ShowDownloadPerushimButton}"
+                                BackgroundColor="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray700}}"
+                                TextColor="{AppThemeBinding Light={StaticResource Gray800}, Dark={StaticResource Gray200}}"/>
+                    </VerticalStackLayout>
+                </CollectionView.EmptyView>
+        </CollectionView>
+    </Grid>
+</Border>

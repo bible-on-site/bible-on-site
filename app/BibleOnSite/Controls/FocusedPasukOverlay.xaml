@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Grid xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+      xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+      xmlns:controls="clr-namespace:BibleOnSite.Controls"
+      xmlns:models="clr-namespace:BibleOnSite.Models"
+      xmlns:fonts="clr-namespace:Fonts"
+      x:Class="BibleOnSite.Controls.FocusedPasukOverlay"
+      AutomationId="FocusedPasukOverlay"
+      IsVisible="False"
+      BackgroundColor="{AppThemeBinding Light=White, Dark=#1C1C1E}">
+    <!-- Scrollbar gutter: keep the indicator near the edge (margin 6)
+         while the text keeps its 20 inset via content padding (#2474) -->
+    <CollectionView x:Name="PerushimList" SelectionMode="None" Margin="6,16"
+                    AutomationId="FocusedPerushimCollection">
+        <CollectionView.Header>
+            <VerticalStackLayout Spacing="16" Padding="14,0">
+                <Grid ColumnDefinitions="*,Auto">
+                    <Label x:Name="SourceLabel" FontSize="18" FontAttributes="Bold"
+                           TextColor="{StaticResource Primary}" VerticalOptions="Center"/>
+                    <!-- קריינות: plays the whole focused pasuk (#2472) -->
+                    <Button Grid.Column="1"
+                            x:Name="PlayButton"
+                            AutomationId="FocusedPlayButton"
+                            Text="{x:Static fonts:FluentUI.headphones_24_regular}"
+                            FontFamily="FluentIcons"
+                            FontSize="20"
+                            WidthRequest="40"
+                            HeightRequest="40"
+                            Padding="0"
+                            BackgroundColor="Transparent"
+                            TextColor="{StaticResource Primary}"
+                            SemanticProperties.Description="השמעת הפסוק"
+                            ToolTipProperties.Text="השמעת הפסוק"
+                            IsVisible="False"
+                            Clicked="OnPlayClicked"/>
+                </Grid>
+                <Label x:Name="PasukTextLabel" AutomationId="FocusedPasukText"
+                       FontSize="{DynamicResource PasukFontSize}" FlowDirection="RightToLeft" LineHeight="1.4"/>
+                <Label x:Name="RecitationHintLabel" AutomationId="FocusedRecitationHint"
+                       FontSize="14" TextColor="{StaticResource Gray500}"/>
+            </VerticalStackLayout>
+        </CollectionView.Header>
+        <CollectionView.ItemTemplate>
+            <DataTemplate x:DataType="models:PerushNoteDisplay">
+                <VerticalStackLayout Spacing="4" Padding="14,8">
+                    <Grid HeightRequest="36"
+                          IsVisible="{Binding IsContentReady, Source={x:Reference PerushContentView}, Converter={StaticResource InvertedBoolConverter}}">
+                        <ActivityIndicator IsRunning="True" WidthRequest="20" HeightRequest="20"
+                                           HorizontalOptions="Center" VerticalOptions="Center"/>
+                    </Grid>
+                    <VerticalStackLayout Spacing="4"
+                                         IsVisible="{Binding IsContentReady, Source={x:Reference PerushContentView}}">
+                        <Label Text="{Binding PerushName}" FontSize="{DynamicResource PerushNameFontSize}"
+                               FontAttributes="Bold" TextColor="{StaticResource Primary}" AutomationId="FocusedPerushName"/>
+                        <controls:HtmlView x:Name="PerushContentView" ContentLoader="{Binding ContentLoader}" HtmlContent="{Binding DisplayContent}"
+                                           FontSize="{DynamicResource PerushContentFontSize}"
+                                           TextAlignment="Justify" TextDirection="Rtl" LineHeight="1.4"/>
+                    </VerticalStackLayout>
+                </VerticalStackLayout>
+            </DataTemplate>
+        </CollectionView.ItemTemplate>
+    </CollectionView>
+</Grid>

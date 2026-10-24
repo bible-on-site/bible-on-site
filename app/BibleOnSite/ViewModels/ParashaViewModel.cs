@@ -18,13 +18,16 @@ namespace BibleOnSite.ViewModels;
 // Codacy: S2333 false positive — partial is required by the MVVM source
 // generators ([ObservableProperty]/[RelayCommand]) and the Perushim part.
 #pragma warning disable S2333
-public partial class ParashaViewModel : ObservableObject //NOSONAR
+public partial class ParashaViewModel : ObservableObject, IPerushimSheetViewModel //NOSONAR
 #pragma warning restore S2333
 {
     private readonly ParashaDataService _parashaService;
     private readonly PerekDataService _perekService;
     private readonly PerushimCatalogService _catalogService;
     private readonly PerushimNotesService _notesService;
+    private readonly IAppNavigator _navigator;
+    private readonly IFileSystem _fileSystem;
+    private readonly IShare _share;
     private readonly PreferencesService _preferencesService;
     private readonly Func<int, Task<List<Article>>>? _articlesLoader;
     private readonly Func<int, bool>? _hasPerekAudio;
@@ -73,11 +76,17 @@ public partial class ParashaViewModel : ObservableObject //NOSONAR
 
     /// <summary>Perush IDs that are currently checked (shown inline with text).</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PerushimSelectionStatus))]
+    [NotifyPropertyChangedFor(nameof(PerushimLimitReached))]
     private List<int> _checkedPerushim = new();
 
     /// <summary>Whether the perushim notes database is available (PAD or HTTP downloaded).</summary>
     [ObservableProperty]
     private bool _perushimNotesAvailable;
+
+    /// <summary>Whether the first-launch notes pack is still materializing off the reader path (#2430).</summary>
+    [ObservableProperty]
+    private bool _perushimNotesPending;
 
     /// <summary>Whether the perushim catalog is available (bundled).</summary>
     [ObservableProperty]
@@ -103,10 +112,27 @@ public partial class ParashaViewModel : ObservableObject //NOSONAR
     [ObservableProperty]
     private bool _isTikkunKorimEnabled;
 
-    /// <summary>קריינות reading mode — header play button plus single-tap pasuk playback.</summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ShowHeaderPlayButton))]
-    private bool _isQriynotEnabled;
+    /// <summary>
+    /// קריינות — mirrors the global preference (העדפות → על הפרק, default on).
+    /// Setting it writes through to <see cref="PreferencesService.QriynotEnabled"/>.
+    /// </summary>
+    public bool IsQriynotEnabled
+    {
+        get => _preferencesService.QriynotEnabled;
+        set
+        {
+            if (_preferencesService.QriynotEnabled == value)
+            {
+                return;
+            }
+
+            _preferencesService.QriynotEnabled = value;
+            // The PreferencesChanged subscriber raises the property-changed
+            // notifications; raise them here too for the unsaved toggle path.
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(ShowHeaderPlayButton));
+        }
+    }
 
     /// <summary>Whether a recitation is downloaded for at least one perek of the displayed unit.</summary>
     [ObservableProperty]
@@ -141,12 +167,15 @@ public partial class ParashaViewModel : ObservableObject //NOSONAR
         }
     }
 
-    partial void OnUnitChanged(ParashaUnit? value) => RefreshRecitationAvailability(value);
-
-    partial void OnCurrentCarouselUnitChanged(ParashaUnit? oldValue, ParashaUnit? newValue)
+    partial void OnUnitChanged(ParashaUnit? oldValue, ParashaUnit? newValue)
     {
+        // Only the displayed carousel page belongs in the accessibility tree.
+        // Unit always tracks the displayed page — unlike the carousel's
+        // CurrentItem, which does not update on programmatic ScrollTo and can
+        // leave the exclusion flag on a page that is actually on screen.
         if (oldValue is not null) { oldValue.IsOffscreenCarouselPage = true; }
         if (newValue is not null) { newValue.IsOffscreenCarouselPage = false; }
+        RefreshRecitationAvailability(newValue);
     }
 
     /// <summary>
@@ -173,11 +202,12 @@ public partial class ParashaViewModel : ObservableObject //NOSONAR
     public string PerushimEmptyMessage =>
         Perushim.Count > 0 && !string.IsNullOrWhiteSpace(PerushNameFilter) ? "לא נמצאו פירושים תואמים" :
         !PerushimCatalogAvailable ? "אין קטלוג פירושים" :
+        PerushimNotesPending ? "טוען פירושים..." :
         !PerushimNotesAvailable ? "להוריד פירושים" :
         "אין פרשנות לפרשה זו";
 
     /// <summary>Whether to show the download perushim button (notes not yet available).</summary>
-    public bool ShowDownloadPerushimButton => PerushimCatalogAvailable && !PerushimNotesAvailable;
+    public bool ShowDownloadPerushimButton => PerushimCatalogAvailable && !PerushimNotesAvailable && !PerushimNotesPending;
 
     /// <summary>
     /// The production articles loader — reads the StarterService startup
@@ -208,12 +238,25 @@ public partial class ParashaViewModel : ObservableObject //NOSONAR
         PreferencesService preferencesService, PerushimCatalogService? catalogService,
         PerushimNotesService? notesService, Func<int, Task<List<Article>>>? articlesLoader,
         Func<int, bool>? hasPerekAudio)
+        : this(parashaService, perekService, preferencesService, catalogService, notesService,
+            articlesLoader, hasPerekAudio, null, null, null)
+    {
+    }
+
+    public ParashaViewModel(ParashaDataService parashaService, PerekDataService perekService,
+        PreferencesService preferencesService, PerushimCatalogService? catalogService,
+        PerushimNotesService? notesService, Func<int, Task<List<Article>>>? articlesLoader,
+        Func<int, bool>? hasPerekAudio, IAppNavigator? navigator,
+        IFileSystem? fileSystem, IShare? share)
     {
         _parashaService = parashaService;
         _perekService = perekService;
         _preferencesService = preferencesService;
         _catalogService = catalogService ?? PerushimCatalogService.Instance;
         _notesService = notesService ?? PerushimNotesService.Instance;
+        _navigator = navigator ?? ShellAppNavigator.Instance;
+        _fileSystem = fileSystem ?? FileSystem.Current;
+        _share = share ?? Share.Default;
         _articlesLoader = articlesLoader;
 #if MAUI
         _hasPerekAudio = hasPerekAudio ?? (perekId => RecitationService.Instance.HasAudio(perekId));
@@ -724,8 +767,12 @@ public partial class ParashaViewModel : ObservableObject //NOSONAR
             rebuild = true;
         }
         OnPropertyChanged(nameof(DivineNameMaskingEnabled));
+        OnPropertyChanged(nameof(IsQriynotEnabled));
+        OnPropertyChanged(nameof(ShowHeaderPlayButton));
         OnPropertyChanged(nameof(InlineCommentaryLimitMessage));
         OnPropertyChanged(nameof(InlineCommentaryLimit));
+        OnPropertyChanged(nameof(PerushimSelectionStatus));
+        OnPropertyChanged(nameof(PerushimLimitReached));
         if (CheckedPerushim.Count > _preferencesService.InlineCommentaryLimit)
         {
             CheckedPerushim = CheckedPerushim.Take(_preferencesService.InlineCommentaryLimit).ToList();

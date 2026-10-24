@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Grid xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+      xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+      x:Class="BibleOnSite.Controls.ReaderMenuPanel"
+      AutomationId="ReaderMenuOverlay"
+      IsVisible="False"
+      BackgroundColor="Transparent">
+    <Grid.GestureRecognizers>
+        <TapGestureRecognizer Tapped="OnDismissed"/>
+    </Grid.GestureRecognizers>
+    <Border HorizontalOptions="End"
+            VerticalOptions="Start"
+            Margin="8,4"
+            Padding="6,4"
+            MinimumWidthRequest="190"
+            StrokeShape="RoundRectangle 12"
+            Stroke="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray600}}"
+            StrokeThickness="1"
+            BackgroundColor="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}">
+        <Border.Shadow>
+            <Shadow Brush="Black"
+                    Offset="0,3"
+                    Radius="8"
+                    Opacity="0.25"/>
+        </Border.Shadow>
+        <VerticalStackLayout Spacing="0">
+            <!-- קריינות is a global setting under העדפות → על הפרק (#2472),
+                 not a per-page menu mode. -->
+            <!-- שניים מקרא - checkbox toggle -->
+            <Grid Padding="10,6">
+                <Grid.GestureRecognizers>
+                    <TapGestureRecognizer Tapped="OnShnayimMikraTapped"/>
+                </Grid.GestureRecognizers>
+                <Grid ColumnDefinitions="Auto,*">
+                    <CheckBox AutomationId="ShnayimMikraCheckBox"
+                              IsChecked="{Binding IsShnayimMikraEnabled}"
+                              InputTransparent="True"
+                              VerticalOptions="Center"/>
+                    <Label Grid.Column="1"
+                           Text="שניים מקרא"
+                           FontSize="16"
+                           VerticalOptions="Center"
+                           Margin="10,0,0,0"/>
+                </Grid>
+            </Grid>
+            <!-- תיקון קוראים - checkbox toggle -->
+            <Grid Padding="10,6">
+                <Grid.GestureRecognizers>
+                    <TapGestureRecognizer Tapped="OnTikkunKorimTapped"/>
+                </Grid.GestureRecognizers>
+                <Grid ColumnDefinitions="Auto,*">
+                    <CheckBox AutomationId="TikkunKorimCheckBox"
+                              IsChecked="{Binding IsTikkunKorimEnabled}"
+                              InputTransparent="True"
+                              VerticalOptions="Center"/>
+                    <Label Grid.Column="1"
+                           Text="תיקון קוראים"
+                           FontSize="16"
+                           VerticalOptions="Center"
+                           Margin="10,0,0,0"/>
+                </Grid>
+            </Grid>
+            <!-- הסתר שם השם - checkbox toggle; replacement options live
+                 under Preferences → הסתרת שם השם -->
+            <Grid Padding="10,6">
+                <Grid.GestureRecognizers>
+                    <TapGestureRecognizer Tapped="OnDivineNameMaskingTapped"/>
+                </Grid.GestureRecognizers>
+                <Grid ColumnDefinitions="Auto,*">
+                    <CheckBox AutomationId="DivineNameMaskingCheckBox"
+                              IsChecked="{Binding DivineNameMaskingEnabled}"
+                              InputTransparent="True"
+                              VerticalOptions="Center"/>
+                    <Label Grid.Column="1"
+                           Text="הסתר שם השם"
+                           FontSize="16"
+                           VerticalOptions="Center"
+                           Margin="10,0,0,0"/>
+                </Grid>
+            </Grid>
+        </VerticalStackLayout>
+    </Border>
+</Grid>
