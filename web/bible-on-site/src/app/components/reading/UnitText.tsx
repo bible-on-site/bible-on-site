@@ -4,7 +4,7 @@ import { getPerekByPerekId } from "@/data/perek-dto";
 import type { ScriptureRange } from "@/lib/reading/contract";
 import type { PerekEntityReference } from "@/lib/tanahpedia/service";
 import { ScrollToUnitPasuk } from "./ScrollToUnitPasuk";
-import { UnitTextBody } from "./UnitTextBody";
+import { type UnitBoundaryMarker, UnitTextBody } from "./UnitTextBody";
 
 /**
  * Renders an ordered range list's scripture text — the shared range
@@ -24,6 +24,9 @@ export function SharedUnitText({
 	scrollScope = "",
 	anchorScope,
 	unitPositionMarkers,
+	boundaryMarkers,
+	defaultMarkerKey,
+	modestPerekLabels,
 }: {
 	ranges: ScriptureRange[];
 	entityRefsByPerek: Record<number, PerekEntityReference[]>;
@@ -37,6 +40,13 @@ export function SharedUnitText({
 	 * chrome, for division readers that hide conventional chapter
 	 * apparatus. */
 	unitPositionMarkers?: boolean;
+	/** Forwarded to UnitTextBody — aliyah boundary markers (issue
+	 * #2519); when present, perek breaks render modestly. */
+	boundaryMarkers?: ReadonlyMap<string, readonly UnitBoundaryMarker[]>;
+	defaultMarkerKey?: string;
+	/** Forwarded to UnitTextBody — modest perek labels without markers
+	 * (parasha-reader chrome, issue #2519). */
+	modestPerekLabels?: boolean;
 }) {
 	return (
 		<article className={perekStyles.perekText} data-unit-text={scrollScope}>
@@ -49,6 +59,9 @@ export function SharedUnitText({
 				pasukCount={pasukCount}
 				anchorScope={anchorScope}
 				unitPositionMarkers={unitPositionMarkers}
+				boundaryMarkers={boundaryMarkers}
+				defaultMarkerKey={defaultMarkerKey}
+				modestPerekLabels={modestPerekLabels}
 				resolvePerek={(perekId) => {
 					const perek = getPerekByPerekId(perekId);
 					return perek
