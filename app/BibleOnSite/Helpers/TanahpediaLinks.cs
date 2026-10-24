@@ -4,7 +4,8 @@ namespace BibleOnSite.Helpers;
 /// Resolves links found inside Tanahpedia entry content. Entry HTML is
 /// admin-authored against the website, so internal references point at
 /// <c>/pedia/{uniqueName}</c> — the same canonical slug the app's entry route
-/// uses. Links that do not match are external and open in the browser.
+/// uses — or at bare slugs the website resolves relative to <c>/pedia/</c>.
+/// Links that do not match are external and open in the browser.
 /// </summary>
 public static class TanahpediaLinks
 {
@@ -37,6 +38,15 @@ public static class TanahpediaLinks
         else if (trimmed.StartsWith("pedia/", StringComparison.OrdinalIgnoreCase))
         {
             slug = trimmed["pedia/".Length..];
+        }
+        else if (!trimmed.Contains('/') && !trimmed.Contains(':'))
+        {
+            // Bare relative href — entry content is authored against the
+            // website's /pedia/ path, so a plain token resolves to an entry
+            // slug there (anchors and schemes are excluded below anyway:
+            // '#note-1' and '?x' strip to an empty slug, 'https:' etc. carry
+            // ':').
+            slug = trimmed;
         }
         else
         {
