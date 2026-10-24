@@ -34,6 +34,26 @@
         <DataTemplate>
             <ScrollView>
                 <VerticalStackLayout Spacing="0" BackgroundColor="White">
+                    <!-- iOS/MacCatalyst lay the flyout content under FlyoutHeader (the
+                         header height is applied as a scroll inset that races header
+                         measurement and can leave the first rows permanently hidden
+                         under the opaque header) — the logo is rendered in-content
+                         there instead; see AppShell.xaml.cs. -->
+                    <Grid HeightRequest="180"
+                          BackgroundColor="White"
+                          Padding="0">
+                        <Grid.IsVisible>
+                            <OnPlatform x:TypeArguments="x:Boolean" Default="False">
+                                <On Platform="iOS,MacCatalyst" Value="true"/>
+                            </OnPlatform>
+                        </Grid.IsVisible>
+                        <Image Source="logo_header.jpg"
+                               Aspect="AspectFit"
+                               VerticalOptions="Center"
+                               HorizontalOptions="Center"
+                               Margin="20"/>
+                    </Grid>
+
                     <!-- על הפרק -->
                     <Grid Padding="16,12" ColumnDefinitions="Auto,*,Auto">
                         <Grid.GestureRecognizers>
