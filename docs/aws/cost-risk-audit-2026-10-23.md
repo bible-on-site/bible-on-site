@@ -90,6 +90,13 @@ EIP may interrupt connections; it is not a zero-downtime guarantee.
 
 ### Single admin task on Spot (#2576)
 
+**Superseded for admin on 2026-10-24:** Dorad clarified that one current admin
+user can tolerate some outages for savings, then explicitly requested the
+admin optimization. The original decision below is retained as audit history.
+The admin-only plan and data-safety prerequisite are in
+[the rollout record](admin-spot-rollout.md). Public availability, links and
+AWS PR approval requirements remain unchanged.
+
 Restore LaunchType FARGATE and remove the Spot switch recipe. The sole task
 has no health check, and interruption can lose in-flight edits.
 [AWS documents](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/fargate-capacity-providers.html)

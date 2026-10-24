@@ -79,6 +79,14 @@ Parameters:
     Default: bible-on-site-admin
     Description: Name of the admin ECS service
 
+  AdminCapacityProvider:
+    Type: String
+    Default: FARGATE_SPOT
+    AllowedValues:
+      - FARGATE
+      - FARGATE_SPOT
+    Description: Admin-only cost option; use FARGATE for on-demand recovery
+
   WebsiteImageUri:
     Type: String
     Default: <AWS_ACCOUNT_ID>.dkr.ecr.il-central-1.amazonaws.com/bible-on-site:latest
@@ -94,6 +102,12 @@ Resources:
     Type: AWS::ECS::Cluster
     Properties:
       ClusterName: bible-on-site-cluster
+      # Association only; do not change shared defaults to Spot. Existing
+      # launch-type website/API services remain on-demand.
+      CapacityProviders:
+        - FARGATE
+        - FARGATE_SPOT
+      DefaultCapacityProviderStrategy: []
       ClusterSettings:
         - Name: containerInsights
           Value: enabled # Required for deployment/health CloudWatch alarms (see cloudwatch.yaml)
@@ -575,10 +589,13 @@ Resources:
       ServiceName: bible-on-site-admin
       Cluster: !Ref ECSCluster
       TaskDefinition: !Ref AdminTaskDefinition
-      DesiredCount: 0 # Initially 0 until first deployment
-      # A sole admin task must remain on-demand. Spot interruptions can lose
-      # in-flight edits and Spot has no automatic on-demand fallback.
-      LaunchType: FARGATE
+      DesiredCount: 1
+      # Dorad accepts admin-only outages for savings. Apply only after the
+      # atomic family-save fix is deployed and rollout/recovery checks pass.
+      # Keep the shared cluster default and website/API launch types unchanged.
+      CapacityProviderStrategy:
+        - CapacityProvider: !Ref AdminCapacityProvider
+          Weight: 1
       PlatformVersion: LATEST
       NetworkConfiguration:
         AwsvpcConfiguration:
@@ -700,9 +717,10 @@ Outputs:
 # Update service (force new deployment):
 #   aws ecs update-service --cluster bible-on-site-cluster --service bible-on-site-website --force-new-deployment --region il-central-1
 #
-# Do not switch the single admin task to Spot or scheduled scale-to-zero.
-# Any future capacity change needs an explicit availability decision, tested
-# minimum on-demand capacity, session/edit recovery, and an approved rollback.
+# Admin-only Spot: see ../admin-spot-rollout.md for prerequisites, exact
+# provider-association semantics, migration, health checks and on-demand
+# recovery. Do not run this reference template as a stack. No scheduled
+# scale-to-zero is authorized; public website/API capacity remains unchanged.
 #
 # List Cloud Map namespaces:
 #   aws servicediscovery list-namespaces --region il-central-1

@@ -1,3 +1,4 @@
+import type { PoolConnection } from "mysql2/promise";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { executeMock, queryMock, queryOneMock } = vi.hoisted(() => ({
@@ -22,6 +23,12 @@ vi.mock("~/server/db", () => ({
 	execute: executeMock,
 	query: queryMock,
 	queryOne: queryOneMock,
+	transaction: <T>(fn: (conn: PoolConnection) => Promise<T>) =>
+		fn({} as PoolConnection),
+	txExecute: (_conn: PoolConnection, ...args: unknown[]) =>
+		executeMock(...args),
+	txQueryOne: (_conn: PoolConnection, ...args: unknown[]) =>
+		queryOneMock(...args),
 }));
 
 import {
