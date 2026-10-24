@@ -100,17 +100,25 @@ function initialTables(): Tables {
 	};
 }
 
+function splitOnce(value: string, separator: string): [string, string] {
+	const index = value.indexOf(separator);
+	if (index === -1) throw new Error(`Missing test SQL separator: ${separator}`);
+	return [value.slice(0, index), value.slice(index + separator.length)];
+}
+
 /** Evaluate the equality predicates used by these parameterized mutations. */
 function predicate(where: string | undefined, params: unknown[]) {
 	if (!where) return () => true;
 	let index = 0;
 	const alternatives = where.split(" OR ").map((alternative) =>
 		alternative.split(" AND ").map((part) => {
-			const match = /^(\w+) = (\?|'[^']*')$/.exec(part);
-			if (!match) throw new Error(`Unsupported test predicate: ${part}`);
+			const [key, token] = splitOnce(part, " = ");
+			if (token !== "?" && !(token.startsWith("'") && token.endsWith("'"))) {
+				throw new Error(`Unsupported test predicate: ${part}`);
+			}
 			return {
-				key: match[1],
-				value: match[2] === "?" ? params[index++] : match[2].slice(1, -1),
+				key,
+				value: token === "?" ? params[index++] : token.slice(1, -1),
 			};
 		}),
 	);
@@ -124,20 +132,32 @@ function predicate(where: string | undefined, params: unknown[]) {
 async function connectionExecute(rawSql: string, params: unknown[]) {
 	const tables = driver.pending;
 	if (!tables) throw new Error("SQL escaped its transaction");
-	const sql = rawSql
-		.replace(/\s+/g, " ")
-		.trim()
-		.replace(/ LIMIT 1$/, "");
-	const read = /^SELECT .+? FROM (\w+)(?: WHERE (.+))?$/.exec(sql);
-	if (read) return [tables[read[1]].filter(predicate(read[2], params)), []];
+	const normalizedSql = rawSql.replace(/\s+/g, " ").trim();
+	const sql = normalizedSql.endsWith(" LIMIT 1")
+		? normalizedSql.slice(0, -" LIMIT 1".length)
+		: normalizedSql;
+	if (sql.startsWith("SELECT ")) {
+		const [, source] = splitOnce(sql, " FROM ");
+		const whereIndex = source.indexOf(" WHERE ");
+		const table = whereIndex === -1 ? source : source.slice(0, whereIndex);
+		const where =
+			whereIndex === -1
+				? undefined
+				: source.slice(whereIndex + " WHERE ".length);
+		return [tables[table].filter(predicate(where, params)), []];
+	}
 
 	driver.writeCount++;
 	if (driver.writeCount === driver.failAtWrite)
 		throw new Error("Interrupted write");
-	const insert = /^INSERT INTO (\w+) \((.+)\) VALUES \((.+)\)$/.exec(sql);
-	if (insert) {
+	if (sql.startsWith("INSERT INTO ")) {
+		const [table, rest] = splitOnce(sql.slice("INSERT INTO ".length), " (");
+		const [columns, valuesPart] = splitOnce(rest, ") VALUES (");
+		if (!valuesPart.endsWith(")"))
+			throw new Error("Unclosed test INSERT values");
 		let index = 0;
-		const values = insert[3]
+		const values = valuesPart
+			.slice(0, -1)
 			.split(", ")
 			.map((token) =>
 				token === "?"
@@ -146,18 +166,17 @@ async function connectionExecute(rawSql: string, params: unknown[]) {
 						? null
 						: token.slice(1, -1),
 			);
-		tables[insert[1]].push(
-			Object.fromEntries(
-				insert[2].split(", ").map((key, i) => [key, values[i]]),
-			),
+		tables[table].push(
+			Object.fromEntries(columns.split(", ").map((key, i) => [key, values[i]])),
 		);
 		return [{ affectedRows: 1 }, []];
 	}
-	const update = /^UPDATE (\w+) SET (.+) WHERE (.+)$/.exec(sql);
-	if (update) {
-		const keys = update[2].split(", ").map((set) => set.split(" = ")[0]);
-		const rows = tables[update[1]].filter(
-			predicate(update[3], params.slice(keys.length)),
+	if (sql.startsWith("UPDATE ")) {
+		const [table, rest] = splitOnce(sql.slice("UPDATE ".length), " SET ");
+		const [assignments, where] = splitOnce(rest, " WHERE ");
+		const keys = assignments.split(", ").map((set) => splitOnce(set, " = ")[0]);
+		const rows = tables[table].filter(
+			predicate(where, params.slice(keys.length)),
 		);
 		for (const row of rows)
 			keys.forEach((key, i) => {
@@ -165,13 +184,14 @@ async function connectionExecute(rawSql: string, params: unknown[]) {
 			});
 		return [{ affectedRows: rows.length }, []];
 	}
-	const deletion = /^DELETE FROM (\w+) WHERE (.+)$/.exec(sql);
-	if (deletion) {
-		const before = tables[deletion[1]];
-		tables[deletion[1]] = before.filter(
-			(row) => !predicate(deletion[2], params)(row),
+	if (sql.startsWith("DELETE FROM ")) {
+		const [table, where] = splitOnce(
+			sql.slice("DELETE FROM ".length),
+			" WHERE ",
 		);
-		return [{ affectedRows: before.length - tables[deletion[1]].length }, []];
+		const before = tables[table];
+		tables[table] = before.filter((row) => !predicate(where, params)(row));
+		return [{ affectedRows: before.length - tables[table].length }, []];
 	}
 	throw new Error(`Unsupported test SQL: ${sql}`);
 }
