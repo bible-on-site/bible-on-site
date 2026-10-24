@@ -112,7 +112,8 @@
                     </Grid>
 
                     <!-- לוח לימוד יומי -->
-                    <Grid Padding="16,12" ColumnDefinitions="Auto,*,Auto">
+                    <Grid Padding="16,12" ColumnDefinitions="Auto,*,Auto"
+                          AutomationId="FlyoutLearningCalendar">
                         <Grid.GestureRecognizers>
                             <TapGestureRecognizer Tapped="OnLearningCalendarTapped"/>
                         </Grid.GestureRecognizers>
