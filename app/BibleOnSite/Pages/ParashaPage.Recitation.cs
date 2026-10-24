@@ -211,7 +211,7 @@ public partial class ParashaPage
         _focusedPerekId = 0;
         _focusedWordSpans.Clear();
         FocusedPasukOverlay.IsVisible = false;
-        FocusedPerushim.ItemsSource = null;
+        FocusedPasukOverlay.PerushimSource = null;
         ParashaCarousel.InputTransparent = false;
         AutomationProperties.SetExcludedWithChildren(ParashaCarousel, false);
         if (_audioDecoder != null)
@@ -404,12 +404,12 @@ public partial class ParashaPage
         {
             _ = PlayPasukRecitationAsync(row.PerekId, pasuk);
         }
-        FocusedSourceLabel.Text = $"{PerekDataService.Instance.GetPerekSource(row.PerekId) ?? string.Empty} {pasuk.PasukNumHeb}";
+        FocusedPasukOverlay.SourceText = $"{PerekDataService.Instance.GetPerekSource(row.PerekId) ?? string.Empty} {pasuk.PasukNumHeb}";
         FocusedPasukOverlay.IsVisible = true;
         ParashaCarousel.InputTransparent = true;
         AutomationProperties.SetExcludedWithChildren(ParashaCarousel, true);
         RefreshFocusedRecitation();
-        FocusedPerushim.ItemsSource = _viewModel.GetPerushimForRow(row.PerekId, pasuk.PasukNum);
+        FocusedPasukOverlay.PerushimSource = _viewModel.GetPerushimForRow(row.PerekId, pasuk.PasukNum);
         UpdateSelectionBar();
         try
         {
@@ -420,7 +420,7 @@ public partial class ParashaPage
             }
             if (_focusedPasuk == pasuk && _focusedPerekId == row.PerekId)
             {
-                FocusedPerushim.ItemsSource = _viewModel.GetPerushimForRow(row.PerekId, pasuk.PasukNum);
+                FocusedPasukOverlay.PerushimSource = _viewModel.GetPerushimForRow(row.PerekId, pasuk.PasukNum);
             }
         }
         #pragma warning disable S2221 // Deliberate failure boundary: focused-commentary refresh is best-effort
@@ -433,22 +433,20 @@ public partial class ParashaPage
         _focusedWordSpans.Clear();
         if (_focusedPasuk is not { } pasuk || _viewModel.Unit == null || _focusedPerekId <= 0)
         {
-            FocusedPlayButton.IsVisible = false;
+            FocusedPasukOverlay.PlayButtonVisible = false;
             return;
         }
 
-        FocusedPlayButton.IsVisible = RecitationAvailable;
-        FocusedPlayButton.IsEnabled = CanPlayFocusedPasuk;
-        FocusedPlayButton.Opacity = FocusedPlayButton.IsEnabled ? 1 : 0.4;
+        FocusedPasukOverlay.PlayButtonVisible = RecitationAvailable;
+        FocusedPasukOverlay.PlayButtonEnabled = CanPlayFocusedPasuk;
         var perekPasukim = PerekDataService.Instance.GetPerek(_focusedPerekId)?.Pasukim;
         var track = RecitationService.Instance.GetTrack(_focusedPerekId);
         var canPlayWords = RecitationAvailable && RecitationService.Instance.HasAudio(_focusedPerekId) &&
             track?.AlignmentStatus == "ready" && perekPasukim != null && track.Matches(perekPasukim);
-        FocusedRecitationHint.Text = canPlayWords ? "הקישו על מילה כדי לשמוע אותה." :
+        FocusedPasukOverlay.HintText = canPlayWords ? "הקישו על מילה כדי לשמוע אותה." :
             RecitationAvailable && track != null && track.AlignmentStatus != "ready"
                 ? "הקראת מילים ופסוקים לפרק זה עדיין בהכנה. ההקלטה המלאה זמינה בלחיצה ארוכה על כותרת הפרשה." : "";
-        FocusedRecitationHint.IsVisible = FocusedRecitationHint.Text.Length > 0;
-        if (!canPlayWords) { FocusedPasukText.FormattedText = pasuk.FormattedText; return; }
+        if (!canPlayWords) { FocusedPasukOverlay.PasukText.FormattedText = pasuk.FormattedText; return; }
         var formatted = new FormattedString();
         for (var i = 0; i < pasuk.Segments.Count; i++)
         {
@@ -494,7 +492,7 @@ public partial class ParashaPage
                 formatted.Spans.Add(new Span { Text = " " });
             }
         }
-        FocusedPasukText.FormattedText = formatted;
+        FocusedPasukOverlay.PasukText.FormattedText = formatted;
     }
 
     /// <summary>
@@ -858,8 +856,8 @@ public partial class ParashaPage
     {
         if (ExitFullScreenButton.IsVisible)
         { ExitFullScreen(); return true; }
-        if (ReaderMenuOverlay.IsVisible)
-        { ReaderMenuOverlay.IsVisible = false; return true; }
+        if (ReaderMenuOverlay.IsOpen)
+        { ReaderMenuOverlay.Close(); return true; }
         if (ChapterSearch.IsSearchOpen) { ChapterSearch.HandleBack(); return true; }
         // Whatever keeps the selection bar up also owns Back — including a clip
         // playing with nothing selected, which stops instead of navigating.

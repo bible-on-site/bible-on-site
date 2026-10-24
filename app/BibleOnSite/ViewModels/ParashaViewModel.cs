@@ -18,7 +18,7 @@ namespace BibleOnSite.ViewModels;
 // Codacy: S2333 false positive — partial is required by the MVVM source
 // generators ([ObservableProperty]/[RelayCommand]) and the Perushim part.
 #pragma warning disable S2333
-public partial class ParashaViewModel : ObservableObject //NOSONAR
+public partial class ParashaViewModel : ObservableObject, IPerushimSheetViewModel //NOSONAR
 #pragma warning restore S2333
 {
     private readonly ParashaDataService _parashaService;

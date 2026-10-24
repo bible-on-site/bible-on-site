@@ -34,7 +34,7 @@ public partial class ParashaPage
 
     private async void OnParashaSourceClicked(object? sender, EventArgs e)
     {
-        ReaderMenuOverlay.IsVisible = false;
+        ReaderMenuOverlay.Close();
         var sourceBounds = SearchIntroduction.IsVisible ? SearchIntroduction.Bounds : NormalNavigationTitle.Bounds;
         FinishSearchIntroduction();
         var opening = ChapterSearch.OpenAsync();

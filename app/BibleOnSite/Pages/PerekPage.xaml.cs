@@ -1,11 +1,11 @@
 namespace BibleOnSite.Pages;
 
 using BibleOnSite.Behaviors;
+using BibleOnSite.Controls;
 using BibleOnSite.Helpers;
 using BibleOnSite.Models;
 using BibleOnSite.Services;
 using BibleOnSite.ViewModels;
-using Microsoft.Maui.Layouts;
 #if IOS
 using Microsoft.Maui.Controls.PlatformConfiguration.iOSSpecific;
 #endif
@@ -35,10 +35,6 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     private CancellationTokenSource? _longPressTokenSource;
     private const int LongPressDurationMs = 600;
 
-    // Circular menu state
-    private bool _isMenuOpen;
-    private const int AnimationDurationMs = 300;
-
     // Articles view state
     private bool _isShowingArticles;
 
@@ -63,11 +59,6 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     /// </summary>
     public bool IsScrolling => (DateTime.Now - _lastScrollTime).TotalMilliseconds < ScrollCooldownMs;
 
-    /// <summary>
-    /// Proxy for article selection highlight binding (avoids XC0045 when binding from Article template).
-    /// </summary>
-    public int? SelectedArticleId => _viewModel.SelectedArticleId;
-
     public PerekPage()
     {
         DebugLog.Write("[Startup] PerekPage InitializeComponent");
@@ -79,13 +70,10 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         _viewModel = new PerekViewModel();
         BindingContext = _viewModel;
         DebugLog.Write("[Startup] PerekPage resources and navigation");
-        ForwardSelectedArticleIdChanged();
+        SubscribeViewModelChanges();
         SetupFontSizeResources();
         SetupCarouselNavigation();
-        SetupCircularMenuLayout();
-        SetupExitButtonDragHandler();
         SubscribeAppLinks();
-        SubscribePerushimSearch();
         SubscribeNotesMaterialization();
         DebugLog.Write("[Startup] PerekPage constructed");
     }
@@ -98,13 +86,10 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
 #endif
         _viewModel = viewModel;
         BindingContext = _viewModel;
-        ForwardSelectedArticleIdChanged();
+        SubscribeViewModelChanges();
         SetupFontSizeResources();
         SetupCarouselNavigation();
-        SetupCircularMenuLayout();
-        SetupExitButtonDragHandler();
         SubscribeAppLinks();
-        SubscribePerushimSearch();
         SubscribeNotesMaterialization();
         NormalNavigationBar.NavigationInterceptor = OnFocusedPasukNavigationIntercepted;
     }
@@ -188,7 +173,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
             // NavigateToPerekAsync before this event fires, including perushim)
             UpdateSelectionBar();
             SetAnalyticsScreenForPerek();
-            if (_isMenuOpen)
+            if (FanMenu.IsOpen)
             {
                 RefreshNavButtonVisuals();
             }
@@ -306,14 +291,10 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         Resources["PerushContentFontSize"] = perushFactor * 18;
     }
 
-    private void ForwardSelectedArticleIdChanged()
+    private void SubscribeViewModelChanges()
     {
         _viewModel.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(PerekViewModel.SelectedArticleId))
-            {
-                OnPropertyChanged(nameof(SelectedArticleId));
-            }
             // When perek changes via prev/next, refresh articles, badge, and nav button visuals
             if (e.PropertyName == nameof(PerekViewModel.Perek) || e.PropertyName == "Perek")
             {
@@ -339,7 +320,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     private void RefreshNavButtonVisuals()
     {
         // Only update if menu is open (buttons visible)
-        if (!_isMenuOpen)
+        if (!FanMenu.IsOpen)
         {
             return;
         }
@@ -360,7 +341,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     private void OnTouchStarted(object? sender, TouchPosition position)
     {
         _swipe.Cancel();
-        if (_carouselInitializing || CarouselLoadingOverlay.IsVisible || _isMenuOpen || _isShowingArticles || _focusedPasuk != null || ChapterSearch.IsSearchOpen ||
+        if (_carouselInitializing || CarouselLoadingOverlay.IsVisible || FanMenu.IsOpen || _isShowingArticles || _focusedPasuk != null || ChapterSearch.IsSearchOpen ||
             !ContainsTouch(PerekCarousel, position) || ContainsTouch(BottomBar, position) ||
             ContainsTouch(ExitFullScreenButton, position))
         {
@@ -371,9 +352,9 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
 
     private void OnTouchDispatched(object? sender, TouchPosition position)
     {
-        if (_carouselInitializing || CarouselLoadingOverlay.IsVisible || _isMenuOpen || _isShowingArticles || _focusedPasuk != null || ChapterSearch.IsSearchOpen ||
+        if (_carouselInitializing || CarouselLoadingOverlay.IsVisible || FanMenu.IsOpen || _isShowingArticles || _focusedPasuk != null || ChapterSearch.IsSearchOpen ||
             !ContainsTouch(PerekCarousel, position) || ContainsTouch(BottomBar, position) ||
-            ContainsTouch(ExitFullScreenButton, position) || ContainsTouch(CircularMenuButton, position) ||
+            ContainsTouch(ExitFullScreenButton, position) || ContainsTouch(FanMenu.ToggleButton, position) ||
             ContainsTouch(SelectionBar, position))
         {
             return;
@@ -528,11 +509,11 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
                 Console.Error.WriteLine($"Failed to load perek: {ex}");
                 if (_viewModel.Perek == null)
                 {
-                    ShowPerekLoadError(ex);
+                    CarouselLoadingOverlay.ShowError(ex);
                 }
                 else
                 {
-                    CarouselLoadingOverlay.IsVisible = false;
+                    CarouselLoadingOverlay.Hide();
                 }
             }
             finally
@@ -591,7 +572,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         _initialPerekId ??= GetInitialPerekId();
         var perekId = _initialPerekId.Value;
         DebugLog.Write($"[PerekLoad] fresh load start perekId={perekId}");
-        ShowCarouselLoading();
+        CarouselLoadingOverlay.ShowLoading();
 
         // Guard: ignore OnCarouselItemChanged during initial load.
         // The CarouselView fires spurious CurrentItemChanged events when it
@@ -632,7 +613,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         }
 
         // Hide loading overlay — carousel is ready
-        CarouselLoadingOverlay.IsVisible = false;
+        CarouselLoadingOverlay.Hide();
 
         await ApplySearchReaderLocationAsync();
         _ = _viewModel.PreloadAdjacentPasukimAsync(_viewModel.PerekId);
@@ -649,21 +630,25 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         }
     }
 
-    /// <summary>Swaps the loading overlay to its spinner state (initial load and retry).</summary>
-    private void ShowCarouselLoading()
+    /// <summary>
+    /// Updates the articles count badge for the current perek from the
+    /// StarterService startup counters — a swipe never issues a network request
+    /// just to redraw the badge.
+    /// </summary>
+    private void UpdateArticlesCount()
     {
-        CarouselLoadErrorPanel.IsVisible = false;
-        CarouselLoadingIndicator.IsVisible = true;
-        CarouselLoadingOverlay.IsVisible = true;
-    }
-
-    /// <summary>Swaps the loading overlay to its retryable error state.</summary>
-    private void ShowPerekLoadError(Exception ex)
-    {
-        CarouselLoadingIndicator.IsVisible = false;
-        CarouselLoadErrorDetail.Text = ex.Message;
-        CarouselLoadErrorPanel.IsVisible = true;
-        CarouselLoadingOverlay.IsVisible = true;
+        try
+        {
+            BottomBar.ArticlesBadgeCount =
+                StarterService.Instance.GetPerekArticlesCount(_viewModel.PerekId);
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: articles-count badge degrades to hidden
+        catch (Exception ex) //NOSONAR — articles-count badge degrades to hidden.
+        {
+            #pragma warning restore S2221
+            Console.Error.WriteLine($"Error updating articles count: {ex.Message}");
+            BottomBar.ArticlesBadgeCount = 0;
+        }
     }
 
     /// <summary>Retry button on the load-failure overlay — re-runs the full fresh load.</summary>
@@ -686,11 +671,11 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
             // succeeded meanwhile owns the reader now.
             if (_viewModel.Perek == null)
             {
-                ShowPerekLoadError(ex);
+                CarouselLoadingOverlay.ShowError(ex);
             }
             else
             {
-                CarouselLoadingOverlay.IsVisible = false;
+                CarouselLoadingOverlay.Hide();
             }
         }
         finally
@@ -782,7 +767,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
             await _viewModel.NavigateToPerekAsync(target.PerekId);
             // A link that landed while the load-failure panel was up replaces
             // it with the freshly navigated perek.
-            CarouselLoadingOverlay.IsVisible = false;
+            CarouselLoadingOverlay.Hide();
             if (target.ArticleId is int articleId && Shell.Current != null)
             {
                 await Shell.Current.GoToAsync($"articleDetail?articleId={articleId}");
@@ -823,33 +808,6 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         }
         var last = prefs.LastLearntPerek;
         return last is > 0 and <= 929 ? last.Value : 1;
-    }
-
-    /// <summary>
-    /// Updates the articles count badge for the current perek from the
-    /// StarterService startup counters — a swipe never issues a network request
-    /// just to redraw the badge.
-    /// </summary>
-    private void UpdateArticlesCount()
-    {
-        try
-        {
-            var count = StarterService.Instance.GetPerekArticlesCount(_viewModel.PerekId);
-
-            // Update badge visibility and text
-            ArticlesBadge.IsVisible = count > 0;
-            if (count > 0 && ArticlesBadge.Content is Label badgeLabel)
-            {
-                badgeLabel.Text = count.ToString();
-            }
-        }
-        #pragma warning disable S2221 // Deliberate failure boundary: articles-count badge degrades to hidden
-        catch (Exception ex) //NOSONAR — articles-count badge degrades to hidden.
-        {
-            #pragma warning restore S2221
-            Console.Error.WriteLine($"Error updating articles count: {ex.Message}");
-            ArticlesBadge.IsVisible = false;
-        }
     }
 
     protected override void OnNavigatedTo(NavigatedToEventArgs args)
@@ -898,13 +856,103 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         BottomBar.TranslationY = bottom;
         BottomBar.Padding = new Thickness(0, 0, 0, bottom);
         BottomBar.HeightRequest = totalHeight;
-        FloatingMenuContainer.TranslationY = bottom;
-        FloatingMenuContainer.Padding = new Thickness(0, 0, 0, bottom);
+        FanMenu.SetBottomInset(bottom);
         this.Padding = new Thickness(0, 0, 0, -bottom);
         Resources["BottomBarTotalHeight"] = totalHeight;
 
-        // Padding changes the arrange area without firing SizeChanged.
-        LayoutCircularMenu();
+        _ = ScheduleA11yDump();
+    }
+
+    // TEMP-DIAG: dump the native a11y flags hiding row-1 elements from XCTest.
+    private int _a11yDumpCount;
+    private async Task ScheduleA11yDump()
+    {
+        if (_a11yDumpCount >= 3) { return; }
+        _a11yDumpCount++;
+        await Task.Delay(2500);
+        MainThread.BeginInvokeOnMainThread(() => DumpA11yTree($"pass{_a11yDumpCount}"));
+    }
+
+    private void DumpA11yTree(string tag)
+    {
+        try
+        {
+            var window = UIKit.UIApplication.SharedApplication?.ConnectedScenes
+                .OfType<UIKit.UIWindowScene>()
+                .FirstOrDefault()?.Windows.FirstOrDefault(w => w.IsKeyWindow);
+            if (window is null) { DebugLog.Write($"[A11yDump {tag}] no window"); return; }
+            var found = DumpViewFlags(window, 0, tag);
+            var target = FindViewById(window, "PasukimCollection") ?? FindViewById(window, "CircularMenuButton");
+            if (target != null)
+            {
+                DumpAncestorChain(target, tag);
+            }
+            else
+            {
+                DebugLog.Write($"[A11yDump {tag}] PasukimCollection view not found");
+            }
+            DebugLog.Write($"[A11yDump {tag}] flagged={found}");
+        }
+        catch (Exception ex) { DebugLog.Write($"[A11yDump {tag}] failed: {ex}"); }
+    }
+
+    private static UIKit.UIView? FindViewById(UIKit.UIView view, string id)
+    {
+        if (view.AccessibilityIdentifier == id) { return view; }
+        foreach (var sub in view.Subviews)
+        {
+            var hit = FindViewById(sub, id);
+            if (hit != null) { return hit; }
+        }
+        return null;
+    }
+
+    // Walks up from a hidden reader element and dumps every ancestor's AX
+    // flags so the exact hiding layer is identified by class name.
+    private static void DumpAncestorChain(UIKit.UIView view, string tag)
+    {
+        var d = 0;
+        for (var v = view; v != null && d < 40; v = v.Superview, d++)
+        {
+            var f = v.Frame;
+            DebugLog.Write($"[A11yChain {tag}] d{d} {v.GetType().Name} f={f.X:0},{f.Y:0},{f.Width:0}x{f.Height:0} " +
+                $"modal={KvoBool(v, "accessibilityViewIsModal")} elemHidden={KvoBool(v, "accessibilityElementsHidden")} " +
+                $"hidden={v.Hidden} alpha={v.Alpha:0.##} isAE={KvoBool(v, "isAccessibilityElement")} " +
+                $"clip={v.ClipsToBounds} uie={v.UserInteractionEnabled} id={v.AccessibilityIdentifier ?? "-"}");
+        }
+    }
+
+    private static bool KvoBool(UIKit.UIView view, string key)
+    {
+        try
+        {
+            return view.ValueForKey(new Foundation.NSString(key)) is Foundation.NSNumber n && n.BoolValue;
+        }
+        catch { return false; }
+    }
+
+    private static int DumpViewFlags(UIKit.UIView view, int depth, string tag)
+    {
+        if (depth > 40) { return 0; }
+        var count = 0;
+        var modal = KvoBool(view, "accessibilityViewIsModal");
+        var elemHidden = KvoBool(view, "accessibilityElementsHidden");
+        var hidden = view.Hidden || view.Alpha < 0.01f;
+        var isAE = KvoBool(view, "isAccessibilityElement");
+        var full = view.Frame.Width >= 400 && view.Frame.Height >= 800;
+        if (modal || elemHidden || (hidden && full) || view is UIKit.UIToolbar || (isAE && full))
+        {
+            count++;
+            var f = view.Frame;
+            DebugLog.Write($"[A11yDump {tag}] d{depth} {view.GetType().Name} f={f.X:0},{f.Y:0},{f.Width:0}x{f.Height:0} " +
+                $"modal={modal} elemHidden={elemHidden} hidden={view.Hidden} alpha={view.Alpha:0.##} isAE={isAE} " +
+                $"uie={view.UserInteractionEnabled} id={view.AccessibilityIdentifier ?? "-"}");
+        }
+        foreach (var sub in view.Subviews)
+        {
+            count += DumpViewFlags(sub, depth + 1, tag);
+        }
+        return count;
     }
 #endif
 
@@ -1153,32 +1201,28 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
             focused, _recitationCursor.PlayingKey != null);
         ChapterSearch.SetFocusedPasukScope(focused);
         var ordinarySelection = count > 0 && !_chapterRecitationSelection && _focusedPasuk == null;
-        SelectionCountBadge.IsVisible = ordinarySelection;
-        SelectionShareButton.IsVisible = ordinarySelection;
-        SelectionCopyButton.IsVisible = ordinarySelection;
-        SelectionRecitationButton.IsVisible = RecitationAvailable;
+        SelectionBar.SetSelectionActionsVisible(ordinarySelection);
+        SelectionBar.SetRecitationVisible(RecitationAvailable);
         var perek = _viewModel.Perek;
         var track = perek == null ? null : RecitationService.Instance.GetTrack(perek.PerekId);
         // An active playback can always be paused — even for a perek whose word
         // timings are still pending (chapter playback needs no alignment).
-        SelectionRecitationButton.IsEnabled = !_recitationBusy && perek != null && RecitationService.Instance.HasAudio(perek.PerekId) &&
+        var recitationEnabled = !_recitationBusy && perek != null && RecitationService.Instance.HasAudio(perek.PerekId) &&
             track != null && (_recitationCursor.PlayingKey != null ||
                 (track.Matches(perek.Pasukim) && (_chapterRecitationSelection || track.AlignmentStatus == "ready")));
-        SelectionRecitationButton.Opacity = SelectionRecitationButton.IsEnabled ? 1 : 0.4;
         // The glyph must match what the button does: only bar-issued playback
         // pauses, so a word preview still playing shows Play (it starts the
         // chapter at the bookmark), like the website's preview state.
-        SelectionRecitationButton.Text =
+        var recitationVisual =
             RecitationPlayer?.CurrentState == CommunityToolkit.Maui.Core.MediaElementState.Playing && _recitationCursor.BarIssued
-                ? Fonts.FluentUI.pause_24_regular
+                ? ReaderSelectionBar.RecitationVisual.Pause
                 : RecitationPlayer?.CurrentState is CommunityToolkit.Maui.Core.MediaElementState.Playing or CommunityToolkit.Maui.Core.MediaElementState.Paused
-                    ? Fonts.FluentUI.play_24_regular : Fonts.FluentUI.headphones_24_regular;
+                    ? ReaderSelectionBar.RecitationVisual.Resume : ReaderSelectionBar.RecitationVisual.Play;
         var hint = _recitationBusy ? "טוען את הקלטת הפרק..." : track == null ? "אין הקלטה לפרק זה" :
             !RecitationService.Instance.HasAudio(track.PerekId) ? "הורידו את הקלטות הספר בהעדפות" :
             !_chapterRecitationSelection && track.AlignmentStatus != "ready" && _recitationCursor.PlayingKey == null ? "הקראת מילים ופסוקים עדיין בהכנה" :
-            SelectionRecitationButton.IsEnabled ? "הקראה" : "ההקלטה אינה תואמת לטקסט המותקן";
-        ToolTipProperties.SetText(SelectionRecitationButton, hint);
-        SemanticProperties.SetDescription(SelectionRecitationButton, hint);
+            recitationEnabled ? "הקראה" : "ההקלטה אינה תואמת לטקסט המותקן";
+        SelectionBar.SetRecitationState(recitationEnabled, recitationVisual, hint);
 
         var searching = ChapterSearch.IsSearchOpen;
         Shell.SetNavBarIsVisible(this, false);
@@ -1212,7 +1256,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         ChapterSearch.IsVisible = searching;
         ContentArea.IsVisible = !searching;
         SelectionBar.IsVisible = selectionBarMode && !searching;
-        SelectionCountLabel.Text = count.ToString();
+        SelectionBar.SetCount(count);
     }
 
     private void ClearAllSelections()
@@ -1248,10 +1292,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
 
         await Clipboard.SetTextAsync(text);
         TriggerHapticFeedback();
-        // Inline feedback: show clipboard-checkmark icon for 1.5s then restore copy icon
-        SelectionCopyButton.Text = "\ue34c"; // clipboard_checkmark_24_regular
-        await Task.Delay(1500);
-        SelectionCopyButton.Text = "\uf32b"; // copy_24_regular
+        await SelectionBar.FlashCopiedAsync();
     }
 
     private string GetSelectedPesukimText()
@@ -1300,161 +1341,13 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     #region Circular Menu Methods
 
     /// <summary>
-    /// Recomputes the floating menu's button positions whenever the container's
-    /// arrange area changes: device rotation, window resize, and (on iOS) the
-    /// safe-area padding applied by ApplyBottomBarSafeArea.
+    /// The fan refreshes each satellite's enabled state as it opens, so
+    /// prev/next fade in dimmed at the perek edges.
     /// </summary>
-    private void SetupCircularMenuLayout()
+    private void OnFanMenuOpening(object? sender, EventArgs e)
     {
-        FloatingMenuContainer.SizeChanged += (_, _) => LayoutCircularMenu();
-    }
-
-    /// <summary>
-    /// Positions the toggle and the four satellite buttons on the elliptical
-    /// fan computed by <see cref="FanMenuGeometry"/>. The container's padding is
-    /// the system safe-area inset, so positions are computed in the remaining
-    /// usable canvas and stay inside the safe area automatically.
-    /// </summary>
-    private void LayoutCircularMenu()
-    {
-        var width = FloatingMenuContainer.Width - FloatingMenuContainer.Padding.HorizontalThickness;
-        var height = FloatingMenuContainer.Height - FloatingMenuContainer.Padding.VerticalThickness;
-        if (width <= 0 || height <= 0)
-        {
-            return;
-        }
-
-        var satellites = new[] { PrevPerekButton, TodayButton, PerekPickerButton, NextPerekButton };
-        var layout = FanMenuGeometry.Compute(width, height, satellites.Length);
-        ApplyMenuBounds(CircularMenuButton, layout.Toggle);
-        for (var i = 0; i < satellites.Length && i < layout.Items.Count; i++)
-        {
-            ApplyMenuBounds(satellites[i], layout.Items[i]);
-        }
-    }
-
-    private static void ApplyMenuBounds(View view, Rect bounds)
-    {
-        AbsoluteLayout.SetLayoutFlags(view, AbsoluteLayoutFlags.None);
-        AbsoluteLayout.SetLayoutBounds(view, bounds);
-    }
-
-    private void OnCircularMenuPressed(object? sender, EventArgs e) =>
-        DebugLog.Write($"[CircularMenu] Pressed: open={_isMenuOpen}");
-
-    private void OnCircularMenuReleased(object? sender, EventArgs e) =>
-        DebugLog.Write($"[CircularMenu] Released: open={_isMenuOpen}");
-
-    /// <summary>
-    /// Toggles the circular menu open/closed state with animation.
-    /// </summary>
-    private async void OnCircularMenuClicked(object? sender, EventArgs e)
-    {
-        _isMenuOpen = !_isMenuOpen;
-        DebugLog.Write($"[CircularMenu] Clicked: open={_isMenuOpen}");
-
-        if (_isMenuOpen)
-        {
-            await OpenCircularMenuAsync();
-        }
-        else
-        {
-            await CloseCircularMenuAsync();
-        }
-    }
-
-    /// <summary>
-    /// Opens the circular menu with animated expansion.
-    /// </summary>
-    private async Task OpenCircularMenuAsync()
-    {
-        var buttons = new[] { PrevPerekButton, TodayButton, PerekPickerButton, NextPerekButton };
-
-        // Set prev/next enabled state before animating
         PrevPerekButton.IsEnabled = _viewModel.CanGoToPreviousPerek;
         NextPerekButton.IsEnabled = _viewModel.CanGoToNextPerek;
-
-        // Enable clicks and set initial opacity (buttons at final positions via AbsoluteLayout)
-        foreach (var button in buttons)
-        {
-            button.InputTransparent = false;
-            button.Opacity = 0;
-        }
-
-        CircularMenuScrim.IsVisible = true;
-
-        // Change FAB icon to X
-        CircularMenuButton.Text = Fonts.FluentUI.dismiss_24_regular;
-        CircularMenuButton.BackgroundColor = Colors.Red;
-
-        // Animate FAB rotation and fade in all buttons (disabled = 0.4, enabled = 1)
-        var animations = new List<Task>
-        {
-            CircularMenuButton.RotateToAsync(180, 250, Easing.SpringOut),
-            CircularMenuScrim.FadeToAsync(1, 200)
-        };
-
-        foreach (var button in buttons)
-        {
-            var targetOpacity = button.IsEnabled ? 1.0 : 0.4;
-            animations.Add(button.FadeToAsync(targetOpacity, 200));
-        }
-
-        await Task.WhenAll(animations);
-        DebugLog.Write($"[CircularMenu] Open animation complete: open={_isMenuOpen}");
-    }
-
-    /// <summary>
-    /// Closes the circular menu with animated contraction.
-    /// </summary>
-    private async Task CloseCircularMenuAsync()
-    {
-        var buttons = new[] { PrevPerekButton, TodayButton, PerekPickerButton, NextPerekButton };
-
-        // Change back to hamburger
-        CircularMenuButton.Text = Fonts.FluentUI.navigation_24_regular;
-        CircularMenuButton.BackgroundColor = (Color)Microsoft.Maui.Controls.Application.Current!.Resources["Primary"];
-
-        // Animate FAB rotation and fade out all buttons
-        var animations = new List<Task>
-        {
-            CircularMenuButton.RotateToAsync(0, 200, Easing.SpringOut),
-            CircularMenuScrim.FadeToAsync(0, 150)
-        };
-
-        foreach (var button in buttons)
-        {
-            animations.Add(button.FadeToAsync(0, 150));
-        }
-
-        await Task.WhenAll(animations);
-
-        // A reopen during the close animation wins — leave scrim and satellites alone
-        if (_isMenuOpen)
-        {
-            return;
-        }
-
-        CircularMenuScrim.IsVisible = false;
-
-        // Disable clicks on hidden buttons
-        foreach (var button in buttons)
-        {
-            button.InputTransparent = true;
-        }
-        DebugLog.Write($"[CircularMenu] Close animation complete: open={_isMenuOpen}");
-    }
-
-    /// <summary>
-    /// Handles tap on overlay background - closes the menu.
-    /// </summary>
-    private async void OnOverlayTapped(object? sender, TappedEventArgs e)
-    {
-        if (_isMenuOpen)
-        {
-            _isMenuOpen = false;
-            await CloseCircularMenuAsync();
-        }
     }
 
     /// <summary>
@@ -1483,18 +1376,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     /// <summary>
     /// Opens/closes the reader options menu (הקראות, שניים מקרא, תיקון קוראים).
     /// </summary>
-    private void OnReaderMenuButtonClicked(object? sender, EventArgs e)
-    {
-        ReaderMenuOverlay.IsVisible = !ReaderMenuOverlay.IsVisible;
-    }
-
-    /// <summary>
-    /// Dismisses the reader menu when tapping outside the panel.
-    /// </summary>
-    private void OnReaderMenuDismissed(object? sender, TappedEventArgs e)
-    {
-        ReaderMenuOverlay.IsVisible = false;
-    }
+    private void OnReaderMenuButtonClicked(object? sender, EventArgs e) => ReaderMenuOverlay.Toggle();
 
     /// <summary>
     /// קריינות header play button - plays the whole perek's recording.
@@ -1510,7 +1392,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     /// <summary>
     /// שניים מקרא menu item - toggles double rendering of every pasuk.
     /// </summary>
-    private void OnShnayimMikraTapped(object? sender, TappedEventArgs e)
+    private void OnShnayimMikraTapped(object? sender, EventArgs e)
     {
         _viewModel.IsShnayimMikraEnabled = !_viewModel.IsShnayimMikraEnabled;
     }
@@ -1518,7 +1400,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     /// <summary>
     /// תיקון קוראים menu item - toggles the continuous reading flow.
     /// </summary>
-    private void OnTikkunKorimTapped(object? sender, TappedEventArgs e)
+    private void OnTikkunKorimTapped(object? sender, EventArgs e)
     {
         _viewModel.IsTikkunKorimEnabled = !_viewModel.IsTikkunKorimEnabled;
     }
@@ -1528,7 +1410,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     /// persists through PreferencesService and bumps DivineNameMasking.Revision,
     /// which the pasukim MultiBinding and TikkunFlowView pick up to re-render.
     /// </summary>
-    private void OnDivineNameMaskingTapped(object? sender, TappedEventArgs e)
+    private void OnDivineNameMaskingTapped(object? sender, EventArgs e)
     {
         _viewModel.DivineNameMaskingEnabled = !_viewModel.DivineNameMaskingEnabled;
     }
@@ -1573,11 +1455,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     /// </summary>
     private async void OnPerekPickerSelected(int perekId)
     {
-        if (_isMenuOpen)
-        {
-            _isMenuOpen = false;
-            await CloseCircularMenuAsync();
-        }
+        await FanMenu.CloseAsync();
 
         if (perekId >= 1 && perekId <= 929 && perekId != _viewModel.PerekId)
         {
@@ -1651,9 +1529,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
 
             // Update button states - highlight articles button
             DebugLog.Write("[Articles] Updating button color...");
-            ArticlesButton.TextColor = Microsoft.Maui.Controls.Application.Current?.RequestedTheme == AppTheme.Dark
-                ? Color.FromArgb("#BB86FC")
-                : Color.FromArgb("#512BD4");
+            BottomBar.IsArticlesActive = true;
             DebugLog.Write("[Articles] ShowArticlesView complete");
         }
         #pragma warning disable S2221 // Deliberate failure boundary: articles-view transition must not crash the reader
@@ -1679,9 +1555,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
             PerekCarousel.IsVisible = true;
 
             // Reset button color
-            ArticlesButton.TextColor = Microsoft.Maui.Controls.Application.Current?.RequestedTheme == AppTheme.Dark
-                ? Color.FromArgb("#9CA3AF")
-                : Color.FromArgb("#6B7280");
+            BottomBar.IsArticlesActive = false;
 
             await Task.CompletedTask; // Keep async signature
         }
@@ -1694,58 +1568,24 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     }
 
     /// <summary>
-    /// Performs a flip animation between two views.
-    /// </summary>
-    private async Task AnimateFlipAsync(View fromView, View toView)
-    {
-        try
-        {
-            const uint duration = 200;
-
-            // First half - rotate out (scale X to simulate flip)
-            await fromView.ScaleXToAsync(0, duration, Easing.CubicIn);
-
-            // Switch visibility at midpoint
-            fromView.IsVisible = false;
-            toView.IsVisible = true;
-            toView.ScaleX = 0;
-
-            // Second half - rotate in
-            await toView.ScaleXToAsync(1, duration, Easing.CubicOut);
-        }
-        #pragma warning disable S2221 // Deliberate failure boundary: flip animation falls back to a visibility swap
-        catch (Exception ex) //NOSONAR — flip animation falls back to a visibility swap.
-        {
-            #pragma warning restore S2221
-            Console.Error.WriteLine($"[Articles] Error in AnimateFlipAsync: {ex}");
-            // Fallback: just swap visibility
-            fromView.IsVisible = false;
-            toView.IsVisible = true;
-        }
-    }
-
-    /// <summary>
     /// Handles article selection - navigates to article detail.
     /// </summary>
-    private async void OnArticleSelected(object? sender, SelectionChangedEventArgs e)
+#pragma warning disable S1172 // The XAML event delegate requires the sender parameter.
+    private async void OnArticleSelected(object? sender, Article article)
+#pragma warning restore S1172
     {
-        if (e.CurrentSelection.FirstOrDefault() is Article article)
-        {
-            _viewModel.SelectedArticleId = article.Id;
-            // Clear selection (highlight remains via SelectedArticleId until navigation)
-            ArticlesCollection.SelectedItem = null;
+        _viewModel.SelectedArticleId = article.Id;
 
-            // Navigate to article detail page
-            try
-            {
-                await Shell.Current.GoToAsync($"articleDetail?articleId={article.Id}");
-            }
-            #pragma warning disable S2221 // Deliberate failure boundary: articles list degrades to empty
-            catch (Exception ex) //NOSONAR — articles list degrades to empty.
-            {
-                #pragma warning restore S2221
-                Console.Error.WriteLine($"Error navigating to article: {ex.Message}");
-            }
+        // Navigate to article detail page
+        try
+        {
+            await Shell.Current.GoToAsync($"articleDetail?articleId={article.Id}");
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: articles list degrades to empty
+        catch (Exception ex) //NOSONAR — articles list degrades to empty.
+        {
+            #pragma warning restore S2221
+            Console.Error.WriteLine($"Error navigating to article: {ex.Message}");
         }
     }
 
@@ -1771,293 +1611,19 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     /// <summary>
     /// Handles perushim chevron button click - toggles the perushim sliding panel.
     /// </summary>
-    private bool _isPerushimOpen;
-    private bool _isPerushimExpanded;
-    private double _perushimPanelHeight;
-    private double _perushimPanelExpandedHeight;
-    private double _perushimPanStartY;
-    private double _perushimPanStartHeight;
-    private double _perushimLastPanY;
-    private DateTime _perushimLastPanTime;
-
-    private bool _isTogglingPerush;
-
-    private void OnPerushCheckboxChanged(object? sender, CheckedChangedEventArgs e)
-    {
-        if (_isTogglingPerush)
-        {
-            return;
-        }
-        if (sender is not CheckBox checkBox)
-        {
-            return;
-        }
-        var grid = checkBox.Parent as Grid;
-        var perush = grid?.BindingContext as Perush;
-        if (perush == null)
-        {
-            return;
-        }
-
-        bool wantChecked = e.Value;
-        bool alreadyChecked = _viewModel.IsPerushChecked(perush.Id);
-        if (wantChecked == alreadyChecked)
-        {
-            return;
-        }
-
-        PerushSearchBar.Unfocus();
-        _isTogglingPerush = true;
-        try
-        {
-            _viewModel.ToggleCheckedPerush(perush.Id);
-            checkBox.IsChecked = _viewModel.IsPerushChecked(perush.Id);
-        }
-        finally
-        {
-            _isTogglingPerush = false;
-        }
-    }
-
-    /// <summary>
-    /// Perushim search navigates instead of filtering — the full list stays
-    /// visible and each keystroke scrolls the first matching perush into view.
-    /// </summary>
-    private void SubscribePerushimSearch()
-    {
-        _viewModel.PropertyChanged += (_, e) =>
-        {
-            if (e.PropertyName == nameof(PerekViewModel.PerushNameFilter) && _isPerushimOpen)
-            {
-                var match = _viewModel.FilteredPerushim.FirstOrDefault();
-                if (match != null)
-                {
-                    PerushimCollection.ScrollTo(match, position: ScrollToPosition.Start, animate: false);
-                }
-            }
-        };
-    }
-
-    private void OnPerushSearchSubmitted(object? sender, EventArgs e) => _ = HidePerushimKeyboardAsync();
-
-    /// <summary>Dismisses the soft keyboard — iOS leaves it over the list otherwise.</summary>
-    private async Task HidePerushimKeyboardAsync()
-    {
-        try
-        {
-            // Unfocus alone can leave the floating keyboard over the list.
-            await PerushSearchBar.HideSoftInputAsync(CancellationToken.None);
-        }
-        #pragma warning disable S2221 // Deliberate failure boundary: see the //NOSONAR note
-        catch (Exception ex) //NOSONAR — failure boundary: keyboard dismissal is best-effort and must not crash the reader.
-        {
-            #pragma warning restore S2221
-            Console.Error.WriteLine($"Could not dismiss perushim search keyboard: {ex}");
-        }
-        PerushSearchBar.Unfocus();
-    }
-
-    private async void OnGoToPerushimSettingsClicked(object? sender, EventArgs e)
-    {
-        try
-        {
-            await Shell.Current.GoToAsync(AppRoutes.ExtensionPacks);
-        }
-        #pragma warning disable S2221 // Deliberate failure boundary: settings navigation failure is log-only
-        catch (Exception ex) //NOSONAR — settings navigation failure is log-only.
-        {
-            #pragma warning restore S2221
-            Console.Error.WriteLine($"Navigate to perushim settings failed: {ex}");
-        }
-    }
-
     private async void OnPerushimChevronClicked(object? sender, EventArgs e)
     {
-        _isPerushimOpen = !_isPerushimOpen;
-        _isPerushimExpanded = false;
-
-        // Toggle chevron icon: up (\uf2b7) vs down (\uf2a4)
-        PerushimChevronButton.Text = _isPerushimOpen ? "\uf2a4" : "\uf2b7";
-
-        // Calculate panel heights
-        var totalHeight = MainGrid.Height;
-        _perushimPanelHeight = (totalHeight * 0.33) + 90; // Default: 33% + bottom bar
         // Cap the drag-up expansion so the sheet's top edge stays under the
         // status bar/pill: content + toolbar rows already begin below it.
         var toolbarHeight = ReaderToolbar.IsVisible ? ReaderToolbar.Height : 0;
-        _perushimPanelExpandedHeight = Math.Max(_perushimPanelHeight,
-            ContentArea.Height + toolbarHeight - 8);
-
-        // Animate perushim panel slide up/down
-        if (_isPerushimOpen)
-        {
-            // Set height and make visible, start below
-            PerushimPanel.HeightRequest = _perushimPanelHeight;
-            PerushimPanel.TranslationY = _perushimPanelHeight;
-            PerushimPanel.IsVisible = true;
-
-            // Slide up
-            await PerushimPanel.TranslateToAsync(0, 0, 250, Easing.CubicOut);
-        }
-        else
-        {
-            // Slide down then hide
-            PerushSearchBar.Unfocus();
-            await PerushimPanel.TranslateToAsync(0, _perushimPanelHeight, 250, Easing.CubicIn);
-            PerushimPanel.IsVisible = false;
-        }
+        await PerushimPanel.ToggleAsync(MainGrid.Height, ContentArea.Height + toolbarHeight - 8);
     }
 
-    /// <summary>
-    /// Handles pan gesture on the perushim panel header for drag-to-dismiss or expand.
-    /// Supports velocity-based gestures and bi-directional dragging.
-    /// When expanded, dragging down first collapses to middle size before dismissing.
-    /// </summary>
-    private async void OnPerushimPanelPan(object? sender, PanUpdatedEventArgs e)
-    {
-        if (!_isPerushimOpen)
-        {
-            return;
-        }
-
-        const double dismissThreshold = 0.3; // Position threshold: 30% of panel height
-        const double velocityThreshold = 800; // Velocity threshold: pixels per second
-
-        switch (e.StatusType)
-        {
-            case GestureStatus.Started:
-                _perushimPanStartY = PerushimPanel.TranslationY;
-                _perushimPanStartHeight = PerushimPanel.HeightRequest;
-                _perushimLastPanY = 0;
-                _perushimLastPanTime = DateTime.Now;
-                // Cancel any ongoing animations
-                PerushimPanel.CancelAnimations();
-                break;
-
-            case GestureStatus.Running:
-                // Track velocity
-                _perushimLastPanY = e.TotalY;
-                _perushimLastPanTime = DateTime.Now;
-
-                if (e.TotalY > 0)
-                {
-                    if (_isPerushimExpanded)
-                    {
-                        // When expanded, dragging down shrinks height first
-                        var newHeight = Math.Max(_perushimPanelHeight,
-                            _perushimPanStartHeight - e.TotalY);
-                        PerushimPanel.HeightRequest = newHeight;
-                    }
-                    else
-                    {
-                        // When at default size, dragging down translates (toward dismiss)
-                        PerushimPanel.TranslationY = e.TotalY;
-                    }
-                }
-                else
-                {
-                    // Dragging up: expand panel height (toward full screen)
-                    var newHeight = Math.Min(_perushimPanelExpandedHeight,
-                        _perushimPanStartHeight - e.TotalY);
-                    PerushimPanel.HeightRequest = newHeight;
-                }
-                break;
-
-            case GestureStatus.Completed:
-            case GestureStatus.Canceled:
-                // Calculate velocity (approximate using last movement)
-                var elapsedMs = (DateTime.Now - _perushimLastPanTime).TotalMilliseconds;
-                var velocity = elapsedMs > 0 ? Math.Abs(_perushimLastPanY) / (elapsedMs / 1000.0) : 0;
-
-                var dragY = PerushimPanel.TranslationY;
-                var currentHeight = PerushimPanel.HeightRequest;
-
-                // Check if dragging down
-                if (_perushimLastPanY > 0)
-                {
-                    if (_isPerushimExpanded)
-                    {
-                        // When expanded and dragging down: collapse to middle size first
-                        var collapseThreshold = (_perushimPanelExpandedHeight - _perushimPanelHeight) * dismissThreshold;
-                        var heightDecrease = _perushimPanStartHeight - currentHeight;
-                        var shouldCollapse = heightDecrease > collapseThreshold || velocity > velocityThreshold;
-
-                        if (shouldCollapse)
-                        {
-                            // Collapse to middle/default size
-                            _isPerushimExpanded = false;
-                            var animation = new Animation(v => PerushimPanel.HeightRequest = v,
-                                currentHeight, _perushimPanelHeight);
-                            animation.Commit(PerushimPanel, "CollapsePerushim", length: 200, easing: Easing.CubicOut);
-                        }
-                        else
-                        {
-                            // Snap back to expanded
-                            var animation = new Animation(v => PerushimPanel.HeightRequest = v,
-                                currentHeight, _perushimPanelExpandedHeight);
-                            animation.Commit(PerushimPanel, "SnapExpandedPerushim", length: 200, easing: Easing.CubicOut);
-                        }
-                    }
-                    else
-                    {
-                        // When at default size and dragging down: dismiss
-                        var positionThreshold = _perushimPanelHeight * dismissThreshold;
-                        var shouldDismiss = dragY > positionThreshold || velocity > velocityThreshold;
-
-                        if (shouldDismiss)
-                        {
-                            // Dismiss: complete the slide down
-                            PerushSearchBar.Unfocus();
-                            await PerushimPanel.TranslateToAsync(0, _perushimPanelHeight, 200, Easing.CubicIn);
-                            PerushimPanel.IsVisible = false;
-                            _isPerushimOpen = false;
-                            _isPerushimExpanded = false;
-                            PerushimChevronButton.Text = "\uf2b7"; // chevron_up
-                        }
-                        else
-                        {
-                            // Snap back to open position
-                            await PerushimPanel.TranslateToAsync(0, 0, 200, Easing.CubicOut);
-                        }
-                    }
-                }
-                else
-                {
-                    // Dragging up (expand direction)
-                    var expandThreshold = (_perushimPanelExpandedHeight - _perushimPanelHeight) * 0.3;
-                    var heightIncrease = currentHeight - _perushimPanelHeight;
-                    var shouldExpand = heightIncrease > expandThreshold || velocity > velocityThreshold;
-
-                    if (shouldExpand && !_isPerushimExpanded)
-                    {
-                        // Expand to full screen
-                        _isPerushimExpanded = true;
-                        var animation = new Animation(v => PerushimPanel.HeightRequest = v,
-                            currentHeight, _perushimPanelExpandedHeight);
-                        animation.Commit(PerushimPanel, "ExpandPerushim", length: 200, easing: Easing.CubicOut);
-                    }
-                    else if (!shouldExpand && _isPerushimExpanded)
-                    {
-                        // Snap back to expanded
-                        var animation = new Animation(v => PerushimPanel.HeightRequest = v,
-                            currentHeight, _perushimPanelExpandedHeight);
-                        animation.Commit(PerushimPanel, "SnapExpandedPerushim", length: 200, easing: Easing.CubicOut);
-                    }
-                    else if (!shouldExpand)
-                    {
-                        // Snap back to default size
-                        var animation = new Animation(v => PerushimPanel.HeightRequest = v,
-                            currentHeight, _perushimPanelHeight);
-                        animation.Commit(PerushimPanel, "SnapPerushim", length: 200, easing: Easing.CubicOut);
-                    }
-                }
-                break;
-
-            default:
-                // Other gesture statuses need no panel handling.
-                break;
-        }
-    }
+    /// <summary>Mirrors the sheet's open state onto the chevron glyph.</summary>
+#pragma warning disable S1172 // The XAML event delegate requires the sender parameter.
+    private void OnPerushimSheetOpenChanged(object? sender, bool isOpen) =>
+#pragma warning restore S1172
+        BottomBar.IsPerushimOpen = isOpen;
 
     /// <summary>
     /// Handles full screen button click - hides top and bottom bars, shows exit button.
@@ -2074,129 +1640,6 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     {
         ExitFullScreen();
     }
-
-    /// <summary>
-    /// Sets up drag handling for the exit fullscreen button.
-    /// On Android: uses native touch with raw screen coordinates for pixel-perfect tracking.
-    /// On other platforms: uses MAUI gesture recognizers.
-    /// </summary>
-    private void SetupExitButtonDragHandler()
-    {
-#if ANDROID
-        ExitFullScreenButton.HandlerChanged += (_, _) =>
-        {
-            if (ExitFullScreenButton.Handler?.PlatformView is Android.Views.View nativeView)
-            {
-                _exitButtonTouchSlop = (nativeView.Context is { } ctx
-                    ? Android.Views.ViewConfiguration.Get(ctx)?.ScaledTouchSlop
-                    : null) ?? 24;
-                _exitButtonDensity = (float)DeviceDisplay.MainDisplayInfo.Density;
-                nativeView.Touch += OnExitButtonNativeTouch;
-            }
-        };
-#else
-        var tap = new TapGestureRecognizer();
-        tap.Tapped += OnExitFullScreenClicked;
-        ExitFullScreenButton.GestureRecognizers.Add(tap);
-
-        var pan = new PanGestureRecognizer();
-        pan.PanUpdated += OnExitFullScreenButtonPan;
-        ExitFullScreenButton.GestureRecognizers.Add(pan);
-#endif
-    }
-
-#if ANDROID
-    private float _exitButtonTouchStartRawX;
-    private float _exitButtonTouchStartRawY;
-    private double _exitButtonDragStartTx;
-    private double _exitButtonDragStartTy;
-    private bool _exitButtonIsDragging;
-    private int _exitButtonTouchSlop;
-    private float _exitButtonDensity;
-
-    /// <summary>
-    /// Native Android touch handler for exit fullscreen button.
-    /// Uses getRawX/getRawY (screen coordinates) which are never affected by
-    /// view translation, RTL layout, or MAUI coordinate transforms.
-    /// </summary>
-    private void OnExitButtonNativeTouch(object? sender, Android.Views.View.TouchEventArgs e)
-    {
-        if (e.Event is not { } motion)
-        {
-            return;
-        }
-
-        switch (motion.ActionMasked)
-        {
-            case Android.Views.MotionEventActions.Down:
-                _exitButtonTouchStartRawX = motion.RawX;
-                _exitButtonTouchStartRawY = motion.RawY;
-                _exitButtonDragStartTx = ExitFullScreenButton.TranslationX;
-                _exitButtonDragStartTy = ExitFullScreenButton.TranslationY;
-                _exitButtonIsDragging = false;
-                e.Handled = true;
-                break;
-
-            case Android.Views.MotionEventActions.Move:
-                {
-                    var dx = motion.RawX - _exitButtonTouchStartRawX;
-                    var dy = motion.RawY - _exitButtonTouchStartRawY;
-
-                    if (!_exitButtonIsDragging &&
-                        (Math.Abs(dx) > _exitButtonTouchSlop || Math.Abs(dy) > _exitButtonTouchSlop))
-                    {
-                        _exitButtonIsDragging = true;
-                    }
-
-                    if (_exitButtonIsDragging)
-                    {
-                        ExitFullScreenButton.TranslationX = _exitButtonDragStartTx + dx / _exitButtonDensity;
-                        ExitFullScreenButton.TranslationY = _exitButtonDragStartTy + dy / _exitButtonDensity;
-                    }
-                    e.Handled = true;
-                    break;
-                }
-
-            case Android.Views.MotionEventActions.Up:
-                if (!_exitButtonIsDragging)
-                {
-                    ExitFullScreen();
-                }
-                e.Handled = true;
-                break;
-
-            case Android.Views.MotionEventActions.Cancel:
-                e.Handled = true;
-                break;
-
-            default:
-                // Other motion actions do not affect the exit-button drag.
-                break;
-        }
-    }
-#else
-    private double _exitButtonPanStartX;
-    private double _exitButtonPanStartY;
-
-    private void OnExitFullScreenButtonPan(object? sender, PanUpdatedEventArgs e)
-    {
-        switch (e.StatusType)
-        {
-            case GestureStatus.Started:
-                _exitButtonPanStartX = ExitFullScreenButton.TranslationX;
-                _exitButtonPanStartY = ExitFullScreenButton.TranslationY;
-                break;
-            case GestureStatus.Running:
-                ExitFullScreenButton.TranslationX = _exitButtonPanStartX + e.TotalX;
-                ExitFullScreenButton.TranslationY = _exitButtonPanStartY + e.TotalY;
-                break;
-
-            default:
-                // Completed/canceled gestures keep the button where the pan left it.
-                break;
-        }
-    }
-#endif
 
     /// <summary>
     /// Handles carousel item changed after a swipe.
@@ -2253,7 +1696,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         _viewModel.SaveLastLearntPerek();
 
         // Refresh nav button visuals if menu is open (synchronous)
-        if (_isMenuOpen)
+        if (FanMenu.IsOpen)
         {
             RefreshNavButtonVisuals();
         }
@@ -2276,22 +1719,8 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     private void EnterFullScreen()
     {
         ChapterSearch.Close();
-        // Close circular menu if open
-        if (_isMenuOpen)
-        {
-            _isMenuOpen = false;
-            var buttons = new[] { PrevPerekButton, TodayButton, PerekPickerButton, NextPerekButton };
-            foreach (var b in buttons)
-            {
-                b.Opacity = 0;
-                b.InputTransparent = true;
-            }
-            CircularMenuButton.Text = Fonts.FluentUI.navigation_24_regular;
-            CircularMenuButton.BackgroundColor = (Color)Microsoft.Maui.Controls.Application.Current!.Resources["Primary"];
-            CircularMenuButton.Rotation = 0;
-            CircularMenuScrim.Opacity = 0;
-            CircularMenuScrim.IsVisible = false;
-        }
+        // Snap the fan closed without animation so nothing stays dimmed
+        FanMenu.ResetToClosed();
 
         // Hide Shell navigation bar (no TabBar in this app - single page per FlyoutItem)
         Shell.SetNavBarIsVisible(this, false);
@@ -2299,11 +1728,10 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
 
         // Hide bottom bar completely
         BottomBar.IsVisible = false;
-        FloatingMenuContainer.IsVisible = false;
+        FanMenu.IsVisible = false;
 
         // Show floating exit button (reset position first)
-        ExitFullScreenButton.TranslationX = 0;
-        ExitFullScreenButton.TranslationY = 0;
+        ExitFullScreenButton.ResetPosition();
         ExitFullScreenButton.IsVisible = true;
 #if ANDROID
         UpdateReaderBack();
@@ -2324,7 +1752,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
 
         // Show bottom bar
         BottomBar.IsVisible = true;
-        FloatingMenuContainer.IsVisible = true;
+        FanMenu.IsVisible = true;
 #if ANDROID
         UpdateReaderBack();
 #endif
