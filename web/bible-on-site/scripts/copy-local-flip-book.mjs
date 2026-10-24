@@ -86,11 +86,6 @@ function run() {
 		"html-flip-book-vanilla",
 	);
 
-	function rmSyncRecursive(dir) {
-		if (!fs.existsSync(dir)) return;
-		fs.rmSync(dir, { recursive: true, force: true });
-	}
-
 	function copyDir(src, dest) {
 		fs.mkdirSync(dest, { recursive: true });
 		for (const name of fs.readdirSync(src)) {
@@ -104,13 +99,17 @@ function run() {
 		}
 	}
 
-	rmSyncRecursive(targetReact);
-	fs.mkdirSync(
-		path.join(targetReact, "node_modules", "html-flip-book-vanilla"),
-		{
-			recursive: true,
-		},
-	);
+	// A file: dependency leaves a symlink; remove the link itself without
+	// following it (rming `dist` through it would empty the source repo's dist).
+	// A real directory keeps its node_modules so the nested install below runs
+	// once per checkout instead of on every refresh.
+	try {
+		if (fs.lstatSync(targetReact).isSymbolicLink()) fs.unlinkSync(targetReact);
+	} catch {
+		// doesn't exist — fine
+	}
+	fs.rmSync(path.join(targetReact, "dist"), { recursive: true, force: true });
+	fs.mkdirSync(targetVanilla, { recursive: true });
 
 	fs.copyFileSync(
 		path.join(reactSrc, "package.json"),
@@ -118,6 +117,10 @@ function run() {
 	);
 	copyDir(path.join(reactSrc, "dist"), path.join(targetReact, "dist"));
 
+	fs.rmSync(path.join(targetVanilla, "dist"), {
+		recursive: true,
+		force: true,
+	});
 	fs.copyFileSync(
 		path.join(baseSrc, "package.json"),
 		path.join(targetVanilla, "package.json"),
@@ -125,10 +128,12 @@ function run() {
 	copyDir(path.join(baseSrc, "dist"), path.join(targetVanilla, "dist"));
 
 	// Install vanilla's dependencies (hammerjs, throttle-debounce, etc.) so the bundler can resolve them
-	execSync("npm install --omit=dev", {
-		cwd: targetVanilla,
-		stdio: "inherit",
-	});
+	if (!fs.existsSync(path.join(targetVanilla, "node_modules"))) {
+		execSync("npm install --omit=dev", {
+			cwd: targetVanilla,
+			stdio: "inherit",
+		});
+	}
 
 	console.log(
 		"copy-local-flip-book: copied local html-flip-book-react into node_modules",
