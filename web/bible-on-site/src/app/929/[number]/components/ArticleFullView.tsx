@@ -90,6 +90,7 @@ export function ArticleFullView({
 				<div className={fullPage ? styles.articleBodyWrapper : undefined}>
 					<div
 						className={articleStyles.articleBody}
+						// nosemgrep -- DOMPurify-sanitized article HTML
 						// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify
 						dangerouslySetInnerHTML={{
 							__html: DOMPurify.sanitize(demoteHeadings(article.content)),

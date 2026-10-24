@@ -305,6 +305,7 @@
 	flex: 1;
 	min-height: 0;
 	overflow-y: auto;
+	scrollbar-gutter: stable;
 	padding: 8px 12px 12px;
 	scrollbar-width: thin;
 	scrollbar-color: #c4b896 transparent;
@@ -432,6 +433,7 @@
 	flex: 1;
 	min-height: 0;
 	overflow-y: auto;
+	scrollbar-gutter: stable;
 	padding: 10px 12px 12px;
 	scrollbar-width: thin;
 	scrollbar-color: #c4b896 transparent;
@@ -524,6 +526,7 @@
 	flex: 1;
 	min-height: 0;
 	overflow-y: auto;
+	scrollbar-gutter: stable;
 	padding: 16px max(16px, 10vw);
 	scrollbar-width: thin;
 	scrollbar-color: #c4b896 transparent;

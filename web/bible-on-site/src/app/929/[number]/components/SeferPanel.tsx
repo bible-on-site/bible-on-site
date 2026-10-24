@@ -617,6 +617,7 @@ export function SeferPanel({
 												<div
 													key={`${note.pasuk}-${note.noteIdx}`}
 													className={styles.noteContent}
+													// nosemgrep -- DOMPurify-sanitized note HTML
 													// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify
 													dangerouslySetInnerHTML={{
 														__html: DOMPurify.sanitize(
@@ -704,6 +705,7 @@ export function SeferPanel({
 										{article.abstract && (
 											<div
 												className={styles.articleCardAbstract}
+												// nosemgrep -- DOMPurify-sanitized abstract
 												// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify
 												dangerouslySetInnerHTML={{
 													__html: DOMPurify.sanitize(
