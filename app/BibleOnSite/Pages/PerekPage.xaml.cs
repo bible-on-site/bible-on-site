@@ -859,6 +859,139 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         FanMenu.SetBottomInset(bottom);
         this.Padding = new Thickness(0, 0, 0, -bottom);
         Resources["BottomBarTotalHeight"] = totalHeight;
+
+        _ = ScheduleA11yDump();
+    }
+
+    // TEMP-DIAG: dump the native a11y flags hiding row-1 elements from XCTest.
+    private int _a11yDumpCount;
+    private async Task ScheduleA11yDump()
+    {
+        if (_a11yDumpCount > 0) { return; }
+        var delays = new[] { 3000, 12000, 40000 };
+        while (_a11yDumpCount < delays.Length)
+        {
+            var delay = delays[_a11yDumpCount];
+            _a11yDumpCount++;
+            await Task.Delay(delay);
+            var n = _a11yDumpCount;
+            MainThread.BeginInvokeOnMainThread(() => DumpA11yTree($"pass{n}"));
+        }
+    }
+
+    private void DumpA11yTree(string tag)
+    {
+        try
+        {
+            var window = UIKit.UIApplication.SharedApplication?.ConnectedScenes
+                .OfType<UIKit.UIWindowScene>()
+                .FirstOrDefault()?.Windows.FirstOrDefault(w => w.IsKeyWindow);
+            if (window is null) { DebugLog.Write($"[A11yDump {tag}] no window"); return; }
+
+            var carView = PerekCarousel.Handler?.PlatformView as UIKit.UIView;
+            var bbView = BottomBar.Handler?.PlatformView as UIKit.UIView;
+            DebugLog.Write($"[A11yDump {tag}] PerekId={_viewModel.PerekId} pos={_viewModel.CarouselPosition} " +
+                $"perek.Flag={_viewModel.Perek?.IsOffscreenCarouselPage} cur.Flag={_viewModel.CurrentCarouselPerek?.IsOffscreenCarouselPage} " +
+                $"cur.Id={_viewModel.CurrentCarouselPerek?.PerekId} carExcluded={AutomationProperties.GetExcludedWithChildren(PerekCarousel)} " +
+                $"carEH={(carView is null ? "-" : KvoBool(carView, "accessibilityElementsHidden").ToString())} " +
+                $"bbEH={(bbView is null ? "-" : KvoBool(bbView, "accessibilityElementsHidden").ToString())}");
+            if (_viewModel.Perek is { } p && _viewModel.CarouselPerakim is { } list)
+            {
+                var idx = list.IndexOf(p);
+                DebugLog.Write($"[A11yDump {tag}] perekInList idx={idx} n={list.Count} " +
+                    $"f299={(list.Count > 299 ? list[299].IsOffscreenCarouselPage.ToString() : "-")} " +
+                    $"f300={(list.Count > 300 ? list[300].IsOffscreenCarouselPage.ToString() : "-")} " +
+                    $"f301={(list.Count > 301 ? list[301].IsOffscreenCarouselPage.ToString() : "-")}");
+            }
+
+            var found = DumpViewFlags(window, 0, tag);
+            DebugLog.Write($"[A11yDump {tag}] flagged={found}");
+
+            foreach (var id in new[] { "PasukText", "PasukimCollection", "PerekHeader", "PerushimChevronButton", "TextButton", "CircularMenuButton", "PerekSource" })
+            {
+                var target = FindVisibleViewById(window, id);
+                if (target is null)
+                {
+                    DebugLog.Write($"[A11yDump {tag}] no on-screen view for {id}");
+                    continue;
+                }
+                DumpAncestorChain(target, tag, id);
+            }
+        }
+#pragma warning disable S2221 // TEMP-DIAG: investigation boundary, any failure is logged not thrown.
+        catch (Exception ex) { DebugLog.Write($"[A11yDump {tag}] failed: {ex}"); } //NOSONAR
+#pragma warning restore S2221
+    }
+
+    private static bool KvoBool(UIKit.UIView view, string key)
+    {
+        try
+        {
+            return view.ValueForKey(new Foundation.NSString(key)) is Foundation.NSNumber n && n.BoolValue;
+        }
+#pragma warning disable S2221 // TEMP-DIAG: KVC probe must never throw.
+        catch { return false; } //NOSONAR
+#pragma warning restore S2221
+    }
+
+    private static int DumpViewFlags(UIKit.UIView view, int depth, string tag)
+    {
+        if (depth > 40) { return 0; }
+        var count = 0;
+        var modal = KvoBool(view, "accessibilityViewIsModal");
+        var elemHidden = KvoBool(view, "accessibilityElementsHidden");
+        var hidden = view.Hidden || view.Alpha < 0.01f;
+        var isAE = KvoBool(view, "isAccessibilityElement");
+        var full = view.Frame.Width >= 400 && view.Frame.Height >= 800;
+        if (modal || elemHidden || (hidden && full) || view is UIKit.UIToolbar || (isAE && full))
+        {
+            count++;
+            var f = view.Frame;
+            DebugLog.Write($"[A11yDump {tag}] d{depth} {view.GetType().Name} f={f.X:0},{f.Y:0},{f.Width:0}x{f.Height:0} " +
+                $"modal={modal} elemHidden={elemHidden} hidden={view.Hidden} alpha={view.Alpha:0.##} isAE={isAE} " +
+                $"uie={view.UserInteractionEnabled} id={view.AccessibilityIdentifier ?? "-"}");
+        }
+        foreach (var sub in view.Subviews)
+        {
+            count += DumpViewFlags(sub, depth + 1, tag);
+        }
+        return count;
+    }
+
+    private static UIKit.UIView? FindVisibleViewById(UIKit.UIView root, string id)
+    {
+        UIKit.UIView? onScreen = null;
+        CollectVisibleById(root, id, root, ref onScreen);
+        return onScreen;
+    }
+
+    private static void CollectVisibleById(UIKit.UIView view, string id, UIKit.UIView root, ref UIKit.UIView? onScreen)
+    {
+        if (onScreen is null && view.AccessibilityIdentifier == id)
+        {
+            var f = view.ConvertRectToView(view.Bounds, root);
+            if (!view.Hidden && f.IntersectsWith(root.Bounds) && f.Width > 1 && f.Height > 1)
+            {
+                onScreen = view;
+            }
+        }
+        foreach (var sub in view.Subviews)
+        {
+            CollectVisibleById(sub, id, root, ref onScreen);
+        }
+    }
+
+    private static void DumpAncestorChain(UIKit.UIView view, string tag, string id)
+    {
+        var d = 0;
+        for (var v = (UIKit.UIView?)view; v is not null && d < 40; v = v.Superview, d++)
+        {
+            var f = v.Frame;
+            DebugLog.Write($"[A11yChain {tag}] {id} d{d} {v.GetType().Name} f={f.X:0},{f.Y:0},{f.Width:0}x{f.Height:0} " +
+                $"modal={KvoBool(v, "accessibilityViewIsModal")} elemHidden={KvoBool(v, "accessibilityElementsHidden")} " +
+                $"hidden={v.Hidden} alpha={v.Alpha:0.##} isAE={KvoBool(v, "isAccessibilityElement")} " +
+                $"clip={v.ClipsToBounds} uie={v.UserInteractionEnabled} id={v.AccessibilityIdentifier ?? "-"}");
+        }
     }
 #endif
 
