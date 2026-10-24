@@ -34,6 +34,9 @@ public class CalendarCellViewModel
 
     /// <summary>Out-of-range day in a grouped view (e.g. another cycle's days).</summary>
     public bool IsDimmed { get; init; }
+
+    /// <summary>Weekday column (0-6, Sunday first) inside a grouped-view week row.</summary>
+    public int Column { get; init; }
 }
 
 /// <summary>One 7-column week row inside a <see cref="MiniMonthViewModel"/> (#2455).</summary>
@@ -284,7 +287,7 @@ public partial class LearningCalendarViewModel : ObservableObject
     {
         var cells = _schedule.BuildMonth(_year, _month);
         Cells = new ObservableCollection<CalendarCellViewModel>(
-            cells.Select(cell => ToCellViewModel(cell)));
+            cells.Select((cell, index) => ToCellViewModel(cell, column: index % 7)));
     }
 
     private void RebuildGroups()
@@ -334,7 +337,9 @@ public partial class LearningCalendarViewModel : ObservableObject
 
         MonthGroups = new ObservableCollection<MiniMonthViewModel>(groups.Select(group =>
         {
-            var cells = group.Cells.Select(cell => ToCellViewModel(cell, dimmed)).ToList();
+            var cells = group.Cells
+                .Select((cell, index) => ToCellViewModel(cell, dimmed, index % 7))
+                .ToList();
             return new MiniMonthViewModel
             {
                 Title = group.Title,
@@ -349,11 +354,12 @@ public partial class LearningCalendarViewModel : ObservableObject
 
     private CalendarCellViewModel ToCellViewModel(
         PerekScheduleService.MonthCell cell,
-        Func<PerekScheduleService.CalendarDay, bool>? dimmed = null)
+        Func<PerekScheduleService.CalendarDay, bool>? dimmed = null,
+        int column = 0)
     {
         if (cell.Day is null)
         {
-            return new CalendarCellViewModel { IsBlank = true };
+            return new CalendarCellViewModel { IsBlank = true, Column = column };
         }
 
         var day = cell.Day;
@@ -383,6 +389,7 @@ public partial class LearningCalendarViewModel : ObservableObject
             IsToday = day.DateNumber == _todayDateNumber,
             AccessibilityText = accessibility,
             IsDimmed = dimmed?.Invoke(day) == true,
+            Column = column,
         };
     }
 
