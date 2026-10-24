@@ -987,11 +987,27 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         for (var v = (UIKit.UIView?)view; v is not null && d < 40; v = v.Superview, d++)
         {
             var f = v.Frame;
+            var af = KvoRect(v, "accessibilityFrame");
+            var avf = KvoRect(v, "accessibilityVisibleFrame");
             DebugLog.Write($"[A11yChain {tag}] {id} d{d} {v.GetType().Name} f={f.X:0},{f.Y:0},{f.Width:0}x{f.Height:0} " +
+                $"af={af} avf={avf} " +
                 $"modal={KvoBool(v, "accessibilityViewIsModal")} elemHidden={KvoBool(v, "accessibilityElementsHidden")} " +
                 $"hidden={v.Hidden} alpha={v.Alpha:0.##} isAE={KvoBool(v, "isAccessibilityElement")} " +
                 $"clip={v.ClipsToBounds} uie={v.UserInteractionEnabled} id={v.AccessibilityIdentifier ?? "-"}");
         }
+    }
+
+    private static string KvoRect(UIKit.UIView view, string key)
+    {
+        try
+        {
+            return view.ValueForKey(new Foundation.NSString(key)) is Foundation.NSValue n
+                ? $"{n.CGRectValue.X:0},{n.CGRectValue.Y:0},{n.CGRectValue.Width:0}x{n.CGRectValue.Height:0}"
+                : "-";
+        }
+#pragma warning disable S2221 // TEMP-DIAG: KVC probe must never throw.
+        catch { return "?"; } //NOSONAR
+#pragma warning restore S2221
     }
 #endif
 
