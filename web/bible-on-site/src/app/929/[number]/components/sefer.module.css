@@ -367,6 +367,46 @@
 	font-weight: 700;
 	text-decoration: underline;
 }
+/* Pasuk-selection mode (#2544 item 3): picked letters invert, matching the
+   verse-highlight accent so the two states stay visually distinct. */
+.pasukNum[data-pasuk-selected] {
+	background: #1c2c5d;
+	border-radius: 3px;
+	box-shadow: 0 0 0 2px rgba(28, 44, 93, 0.3);
+	color: #fff;
+	padding: 0 2px;
+}
+.pasukSelectionBar {
+	align-items: center;
+	background: rgba(255, 255, 255, 0.94);
+	border: 1px solid #d4d7e3;
+	border-radius: 8px;
+	bottom: 10px;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+	display: flex;
+	font-size: 0.85em;
+	gap: 8px;
+	inset-inline: 12%;
+	justify-content: center;
+	padding: 4px 10px;
+	position: absolute;
+	z-index: 5;
+}
+.pasukSelectionStatus {
+	font-weight: 600;
+}
+.pasukSelectionButton {
+	background: none;
+	border: 1px solid #1c2c5d;
+	border-radius: 6px;
+	color: #1c2c5d;
+	cursor: pointer;
+	font: inherit;
+	padding: 2px 8px;
+}
+.pasukSelectionButton:hover {
+	background: rgba(28, 44, 93, 0.08);
+}
 /* Destination verse after perush→perek pasuk navigation (same look as the
    reader's hash-selected verse). Division book pages anchor pesukim by id
    (`pasuk-{perekId}-{pasuk}`) instead of data-sefer-pasuk. */
@@ -423,6 +463,27 @@
 	.pageHeaderRow,
 	.pasukNum {
 		color: #a8b9ff;
+	}
+
+	.pasukNum[data-pasuk-selected] {
+		background: #a8b9ff;
+		box-shadow: 0 0 0 2px rgba(168, 185, 255, 0.35);
+		color: #1a1f2e;
+	}
+
+	.pasukSelectionBar {
+		background: rgba(26, 31, 46, 0.94);
+		border-color: #4a5578;
+		color: #e8eaf2;
+	}
+
+	.pasukSelectionButton {
+		border-color: #a8b9ff;
+		color: #a8b9ff;
+	}
+
+	.pasukSelectionButton:hover {
+		background: rgba(168, 185, 255, 0.12);
 	}
 
 	.perekText [data-sefer-pasuk][data-pasuk-highlight],
