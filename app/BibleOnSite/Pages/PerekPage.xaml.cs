@@ -893,7 +893,9 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
             }
             DebugLog.Write($"[A11yDump {tag}] flagged={found}");
         }
-        catch (Exception ex) { DebugLog.Write($"[A11yDump {tag}] failed: {ex}"); }
+        #pragma warning disable S2221 // Deliberate failure boundary: a11y dump is best-effort diagnostics
+        catch (Exception ex) { DebugLog.Write($"[A11yDump {tag}] failed: {ex}"); } //NOSONAR — a11y dump is best-effort diagnostics.
+        #pragma warning restore S2221
     }
 
     private static UIKit.UIView? FindViewById(UIKit.UIView view, string id)
@@ -928,7 +930,9 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         {
             return view.ValueForKey(new Foundation.NSString(key)) is Foundation.NSNumber n && n.BoolValue;
         }
-        catch { return false; }
+        #pragma warning disable S2221 // Deliberate failure boundary: KVC probe: any failure counts as absent
+        catch { return false; } //NOSONAR — KVC probe: any failure counts as absent.
+#pragma warning restore S2221
     }
 
     private static int DumpViewFlags(UIKit.UIView view, int depth, string tag)
