@@ -39,12 +39,16 @@ public class ArticleResponseTests
     }
 
     [Fact]
-    public async Task Requests_WithTransportFailure_ReturnEmptyResults()
+    public async Task Requests_WithTransportFailure_PropagateSoCallersCanSurfaceTheError()
     {
         using var http = new GraphQLTransport();
         http.Respond = _ => throw new HttpRequestException("offline");
         var service = new ArticleService(http.Client);
-        (await service.GetArticlesByAuthorIdAsync(1)).Should().BeEmpty();
-        (await service.GetArticleByIdAsync(1)).Should().BeNull();
+        await FluentActions.Awaiting(() => service.GetArticlesByPerekIdAsync(1))
+            .Should().ThrowAsync<HttpRequestException>();
+        await FluentActions.Awaiting(() => service.GetArticlesByAuthorIdAsync(1))
+            .Should().ThrowAsync<HttpRequestException>();
+        await FluentActions.Awaiting(() => service.GetArticleByIdAsync(1))
+            .Should().ThrowAsync<HttpRequestException>();
     }
 }
