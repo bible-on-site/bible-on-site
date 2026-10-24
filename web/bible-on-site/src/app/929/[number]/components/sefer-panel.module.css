@@ -515,7 +515,11 @@
 .articleFullscreen {
 	position: fixed;
 	inset: 0;
-	z-index: 200;
+	/* Above the flipbook composite (9999), top nav (10000) and the
+	   tanahpedia tooltip (10001) — a fullscreen dialog is the topmost
+	   layer; at 200 the in-panel article overlay painted over it and
+	   intercepted its clicks. */
+	z-index: 10002;
 	background: #fffdf5;
 	display: flex;
 	flex-direction: column;

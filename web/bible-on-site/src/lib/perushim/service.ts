@@ -291,24 +291,37 @@ export async function getPerushNotesBatch(
 		(id) => Number.isInteger(id) && id > 0,
 	);
 	if (ids.length === 0) return {};
-	const rows = await query<NoteRow & { perush_id: number }>(
-		`SELECT perush_id, pasuk, note_idx, note_content
-		 FROM note
-		 WHERE perek_id = ? AND perush_id IN (?)
-		 ORDER BY perush_id ASC, pasuk ASC, note_idx ASC`,
-		[perekId, ids],
-	);
-	const byPerush: Record<number, PerushNote[]> = {};
-	for (const row of rows) {
-		const notes = byPerush[row.perush_id] ?? [];
-		notes.push({
-			pasuk: row.pasuk,
-			noteIdx: row.note_idx,
-			noteContent: row.note_content,
-		});
-		byPerush[row.perush_id] = notes;
+	try {
+		// One placeholder per id: `execute` binds each `?` to a scalar, so a
+		// single `IN (?)` would receive the array as one JSON-encoded value
+		// and match nothing.
+		const placeholders = ids.map(() => "?").join(",");
+		const rows = await query<NoteRow & { perush_id: number }>(
+			`SELECT perush_id, pasuk, note_idx, note_content
+			 FROM note
+			 WHERE perek_id = ? AND perush_id IN (${placeholders})
+			 ORDER BY perush_id ASC, pasuk ASC, note_idx ASC`,
+			[perekId, ...ids],
+		);
+		const byPerush: Record<number, PerushNote[]> = {};
+		for (const row of rows) {
+			const notes = byPerush[row.perush_id] ?? [];
+			notes.push({
+				pasuk: row.pasuk,
+				noteIdx: row.note_idx,
+				noteContent: row.note_content,
+			});
+			byPerush[row.perush_id] = notes;
+		}
+		return byPerush;
+	} catch (error) {
+		console.warn(
+			"Failed to fetch notes batch for perek %d:",
+			perekId,
+			error instanceof Error ? error.message : error,
+		);
+		return {};
 	}
-	return byPerush;
 }
 
 /**
