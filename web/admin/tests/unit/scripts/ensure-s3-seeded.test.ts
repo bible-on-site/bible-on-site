@@ -26,8 +26,8 @@ const script = join(process.cwd(), "scripts", "ensure-s3-seeded.mjs");
 function listXml(keys: string[]): string {
 	const contents = keys
 		.map(
-			// nosemgrep -- XML fixture for the stub S3 endpoint
 			(key) =>
+				// nosemgrep -- XML fixture for the stub S3 endpoint
 				`<Contents><Key>${key}</Key><LastModified>2024-01-01T00:00:00.000Z</LastModified><Size>1</Size></Contents>`,
 		)
 		.join("");
@@ -117,15 +117,11 @@ describe("ensure-s3-seeded", () => {
 		});
 	}
 
-	it(
-		"skips the populator when the dev bucket already holds objects",
-		async () => {
-			const { stdout } = await run();
-			expect(stdout).toContain("already holds objects");
-			expect(populated()).toBe(false);
-		},
-		30_000,
-	);
+	it("skips the populator when the dev bucket already holds objects", async () => {
+		const { stdout } = await run();
+		expect(stdout).toContain("already holds objects");
+		expect(populated()).toBe(false);
+	}, 30_000);
 
 	it("runs the populator when the dev bucket is empty", async () => {
 		mode = "empty";
@@ -139,12 +135,8 @@ describe("ensure-s3-seeded", () => {
 		expect(populated()).toBe(true);
 	}, 30_000);
 
-	it(
-		"runs the populator when the endpoint is unreachable",
-		async () => {
-			await run({ S3_ENDPOINT: "http://127.0.0.1:1" });
-			expect(populated()).toBe(true);
-		},
-		30_000,
-	);
+	it("runs the populator when the endpoint is unreachable", async () => {
+		await run({ S3_ENDPOINT: "http://127.0.0.1:1" });
+		expect(populated()).toBe(true);
+	}, 30_000);
 });

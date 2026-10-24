@@ -15,6 +15,7 @@ function run() {
 	const __dirname = path.dirname(fileURLToPath(import.meta.url));
 	const projectRoot = path.resolve(__dirname, "..");
 	const pkgPath = path.join(projectRoot, "package.json");
+	// nosemgrep -- pkgPath = projectRoot/package.json, fixed path
 	const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
 	const dep = pkg.dependencies?.["html-flip-book-react"];
 
@@ -67,6 +68,7 @@ function run() {
 		return;
 	}
 
+	// nosemgrep -- reactSrc resolved from fixed sibling-repo candidate list
 	if (!fs.existsSync(path.join(reactSrc, "dist", "flip-book.js"))) {
 		console.warn(
 			"copy-local-flip-book: react dist not found; run npm run build in html-flip-book first.",
@@ -86,14 +88,19 @@ function run() {
 		"html-flip-book-vanilla",
 	);
 
+	// nosemgrep -- src/dest always derive from the fixed roots below
 	function copyDir(src, dest) {
+		// nosemgrep -- fixed local roots, no user input
 		fs.mkdirSync(dest, { recursive: true });
+		// nosemgrep -- fixed local roots, no user input
 		for (const name of fs.readdirSync(src)) {
 			const s = path.join(src, name);
 			const d = path.join(dest, name);
+			// nosemgrep -- fixed local roots, no user input
 			if (fs.statSync(s).isDirectory()) {
 				copyDir(s, d);
 			} else {
+				// nosemgrep -- fixed local roots, no user input
 				fs.copyFileSync(s, d);
 			}
 		}
@@ -111,18 +118,22 @@ function run() {
 	}
 	// nosemgrep -- target under this checkout's node_modules, fixed path
 	fs.rmSync(path.join(targetReact, "dist"), { recursive: true, force: true });
+	// nosemgrep -- target under this checkout's node_modules, fixed path
 	fs.mkdirSync(targetVanilla, { recursive: true });
 
+	// nosemgrep -- reactSrc resolved from fixed sibling-repo candidate list
 	fs.copyFileSync(
 		path.join(reactSrc, "package.json"),
 		path.join(targetReact, "package.json"),
 	);
 	copyDir(path.join(reactSrc, "dist"), path.join(targetReact, "dist"));
 
+	// nosemgrep -- target under this checkout's node_modules, fixed path
 	fs.rmSync(path.join(targetVanilla, "dist"), {
 		recursive: true,
 		force: true,
 	});
+	// nosemgrep -- baseSrc resolved from fixed sibling-repo candidate list
 	fs.copyFileSync(
 		path.join(baseSrc, "package.json"),
 		path.join(targetVanilla, "package.json"),
