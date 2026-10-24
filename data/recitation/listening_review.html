@@ -75,7 +75,7 @@ footer {font-size:13px;color:#6f7b8c;margin-top:20px;line-height:1.7}
 .editor-heading h3 {margin:0;font-size:19px}
 #editor-count,.editor-help {font-size:13px;color:#607086}
 .editor-help {line-height:1.6;margin:8px 0 16px}
-#editor-rows {display:grid;gap:12px;margin:16px 0;max-height:600px;overflow:auto;padding:3px}
+#editor-rows {display:grid;gap:12px;margin:16px 0;padding:3px}
 .cut-row {border:1px solid #dae2ec;border-radius:12px;padding:16px;background:#fafbfd}
 .cut-row.edited {border-color:#6c9acd;background:#f3f8ff}
 .cut-row.invalid {border-color:#c45c43}
@@ -281,11 +281,20 @@ function setCutBoundary(segment, field, value) {
   persistCutProgress();
 }
 function resetCut(segment) {
-  if (saving || savingCuts || historicalCase) return;
+  if (!caseNow() || saving || savingCuts || historicalCase) return;
+  const item = caseNow(), original = item.words.find(word => word.segment === segment);
+  if (!original) return;
   stop();
-  const drafts = {...cutEditsFor(caseNow())}; delete drafts[segment];
-  cutDrafts.set(stateKey(caseNow()), drafts);
-  renderCutEditor(); updateEvidence(); persistCutProgress();
+  const drafts = {...cutEditsFor(item)}; delete drafts[segment];
+  cutDrafts.set(stateKey(item), drafts);
+  const refs = cutRows.get(segment);
+  if (refs) for (const field of ["startMs", "endMs"]) {
+    refs[field].range.min = String(Math.max(item.clipStartMs, original[field] - 150));
+    refs[field].range.max = String(Math.min(item.clipEndMs, original[field] + 150));
+    refs[field].range.value = String(original[field]);
+    refs[field].number.value = (original[field] / 1000).toFixed(3);
+  }
+  updateEvidence(); persistCutProgress();
 }
 function updateCutRow(original) {
   const refs = cutRows.get(original.segment);
