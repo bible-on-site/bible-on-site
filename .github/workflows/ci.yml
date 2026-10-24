@@ -156,6 +156,9 @@ env:
   PERUSHIM_NOTES_ANDROID_ASSET_RELDIR: Platforms/Android/AssetPacks/perushim_notes
   PERUSHIM_NOTES_IOS_ASSETPACK_RELDIR: Platforms/iOS/AssetPacks/perushim-notes
   PERUSHIM_PIPELINE_DIRECTORY: data/sefaria/pipelines/perushim-view
+  # sccache wraps every rustc call in jobs that install it; per-object cache
+  # complements rust-cache's whole-target-dir reuse when a key misses.
+  RUSTC_WRAPPER: sccache
   LCOV_DOCKER_IMAGE_ARTIFACT_NAME: lcov-docker-image
   SEFARIA_MONGO_IMAGE_ARTIFACT_NAME: sefaria-mongo-image
   SEFARIA_MONGO_IMAGE_REPOSITORY: ghcr.io/${{ github.repository_owner }}/sefaria-mongo
@@ -883,6 +886,9 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/master' }}
           workspaces: ${{ env.DATA_DIRECTORY }}
 
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.11
+
       - name: Populate MySQL for build
         if: ${{ needs.perushim_data.result == 'success' || needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
         working-directory: ${{ env.DATA_DIRECTORY }}
@@ -1094,6 +1100,9 @@ jobs:
           # Release-profile cache shared with admin_ci; data_ci keeps its own
           # key because its coverage builds produce debug-profile artifacts.
           shared-key: "e2e-release-crates"
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.11
 
       # Build only the seeders used by the E2E launchers, not every data
       # pipeline. Both shared-key consumers must build the same crate set:
@@ -1472,6 +1481,9 @@ jobs:
           # Same release-profile populator cache as website_ci.
           shared-key: "e2e-release-crates"
 
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.11
+
       # Build only the two seeders used by the E2E launcher.
       # This prevents timeout when the E2E launcher runs cargo make mysql-populate and s3-populate-test.
       # The build runs in the background across the JS track; `wait` before the
@@ -1751,6 +1763,9 @@ jobs:
           workspaces: |
             ${{ env.API_DIRECTORY }}
             ${{ env.DATA_DIRECTORY }}
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.11
 
       - name: Lint
         id: lint
@@ -2192,6 +2207,9 @@ jobs:
             ${{ env.API_DIRECTORY }}
             ${{ env.DATA_DIRECTORY }}
 
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.11
+
       - name: Publish App Unit Report To Codecov
         if: ${{ !cancelled() }}
         uses: codecov/codecov-action@v7
@@ -2359,6 +2377,9 @@ jobs:
           cache-on-failure: true
           shared-key: "bulletin-rust"
 
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.11
+
       - name: Lint
         id: lint
         run: cargo make lint
@@ -2522,6 +2543,9 @@ jobs:
           workspaces: ${{ env.DATA_DIRECTORY }}
           cache-on-failure: true
           shared-key: "data-ci-rust"
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.11
 
       # Overlap the image pull with lint/unit coverage; integration tests wait below.
       - name: Pull Sefaria MongoDB Docker Image
@@ -2748,6 +2772,9 @@ jobs:
           workspaces: ${{ env.DATA_DIRECTORY }}
           cache-on-failure: true
           shared-key: "perushim-data-rust"
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.11
 
       - name: Wait for Sefaria MongoDB Docker Image
         wait: pull-sefaria-mongo
