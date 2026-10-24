@@ -48,9 +48,8 @@ public class ReaderFanMenu : Grid
     public ReaderFanMenu()
     {
         // The control fills the page grid row but must not hit-test outside its
-        // buttons (the original AbsoluteLayout had InputTransparent + no cascade);
-        // otherwise on iOS it swallows every hit-test and WDA reports all covered
-        // elements as not displayed.
+        // buttons — on iOS it would swallow every hit-test and WDA would report
+        // all covered elements as not displayed. Children opt back in per-view.
         InputTransparent = true;
         CascadeInputTransparent = false;
 
