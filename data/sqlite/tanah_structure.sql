@@ -182,3 +182,99 @@ CREATE TABLE tanah_reading_unit_range (
   end_segment_index INTEGER,
   FOREIGN KEY (division_id, unit_id) REFERENCES tanah_reading_unit (division_id, unit_id) ON DELETE CASCADE ON UPDATE CASCADE
 );
+
+-- Aliyah boundary schemes: a named split/custom that can be applied to
+-- a reading context (e.g. Shabbat seven-aliyah + maftir, weekday
+-- three-aliyah). Named so additional customs/variants can coexist
+-- instead of one hardcoded split.
+DROP TABLE IF EXISTS tanah_parasha_aliyah_scheme;
+CREATE TABLE tanah_parasha_aliyah_scheme (
+  id TEXT PRIMARY KEY,
+  label TEXT NOT NULL,
+  description TEXT NOT NULL,
+  scheme_order INTEGER NOT NULL
+);
+
+-- Parasha reading contexts: the stable identity a boundary set belongs
+-- to. 'standalone' contexts compose one parasha unit; 'joined' contexts
+-- compose two in reading order without merging unit identities.
+-- applicability records where the context applies (NULL = everywhere);
+-- חוקת-בלק joins only in חוץ לארץ, so its row names the restriction.
+DROP TABLE IF EXISTS tanah_parasha_reading;
+CREATE TABLE tanah_parasha_reading (
+  id TEXT PRIMARY KEY,
+  kind TEXT NOT NULL CHECK (kind IN ('standalone', 'joined')),
+  sefer_id INTEGER NOT NULL,
+  applicability TEXT,
+  FOREIGN KEY (sefer_id) REFERENCES tanah_sefer (id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- Constituent units of a reading context, in reading order.
+DROP TABLE IF EXISTS tanah_parasha_reading_unit;
+CREATE TABLE tanah_parasha_reading_unit (
+  reading_id TEXT NOT NULL,
+  unit_position INTEGER NOT NULL,
+  division_id TEXT NOT NULL,
+  unit_id INTEGER NOT NULL,
+  PRIMARY KEY (reading_id, unit_position),
+  UNIQUE (reading_id, unit_id),
+  FOREIGN KEY (reading_id) REFERENCES tanah_parasha_reading (id) ON DELETE CASCADE ON UPDATE CASCADE,
+  FOREIGN KEY (division_id, unit_id) REFERENCES tanah_reading_unit (division_id, unit_id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- Aliyah boundaries: inclusive canonical start/end coordinates for each
+-- aliyah of a (reading, scheme) pair. role distinguishes the repeated
+-- maftir reading from the seven regular aliyot. A single aliyah may
+-- cross a perek boundary; coincident chapter/aliyah edges are
+-- render-time concerns, not stored deduplication.
+DROP TABLE IF EXISTS tanah_parasha_aliyah;
+CREATE TABLE tanah_parasha_aliyah (
+  reading_id TEXT NOT NULL,
+  scheme_id TEXT NOT NULL,
+  ordinal INTEGER NOT NULL,
+  role TEXT NOT NULL CHECK (role IN ('aliyah', 'maftir')),
+  label TEXT NOT NULL,
+  start_perek_id INTEGER NOT NULL,
+  start_pasuk INTEGER NOT NULL,
+  end_perek_id INTEGER NOT NULL,
+  end_pasuk INTEGER NOT NULL,
+  PRIMARY KEY (reading_id, scheme_id, ordinal),
+  FOREIGN KEY (reading_id) REFERENCES tanah_parasha_reading (id) ON DELETE CASCADE ON UPDATE CASCADE,
+  FOREIGN KEY (scheme_id) REFERENCES tanah_parasha_aliyah_scheme (id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- Alternative divisions of a single aliyah — a different minhag's
+-- boundary for the same stretch (e.g. חב"ד's ויגש, עדות המזרח's מסעי).
+-- custom names the tradition when the source attributes one (NULL =
+-- unattributed recorded split); source records which curated upstream
+-- carries the division.
+DROP TABLE IF EXISTS tanah_parasha_aliyah_alternative;
+CREATE TABLE tanah_parasha_aliyah_alternative (
+  reading_id TEXT NOT NULL,
+  scheme_id TEXT NOT NULL,
+  ordinal INTEGER NOT NULL,
+  alternative INTEGER NOT NULL,
+  start_perek_id INTEGER NOT NULL,
+  start_pasuk INTEGER NOT NULL,
+  end_perek_id INTEGER NOT NULL,
+  end_pasuk INTEGER NOT NULL,
+  custom TEXT,
+  source TEXT,
+  PRIMARY KEY (reading_id, scheme_id, ordinal, alternative),
+  FOREIGN KEY (reading_id, scheme_id, ordinal)
+    REFERENCES tanah_parasha_aliyah (reading_id, scheme_id, ordinal)
+    ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- Provenance of the imported aliyah dataset: where the boundaries came
+-- from, under which license, pinned to which upstream revision, and
+-- when it was taken — a single row per imported source.
+DROP TABLE IF EXISTS tanah_parasha_aliyah_source;
+CREATE TABLE tanah_parasha_aliyah_source (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  name TEXT NOT NULL,
+  repository TEXT NOT NULL,
+  license TEXT NOT NULL,
+  upstream_commit TEXT NOT NULL,
+  retrieved TEXT NOT NULL
+);
