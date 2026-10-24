@@ -167,12 +167,15 @@ public partial class ParashaViewModel : ObservableObject, IPerushimSheetViewMode
         }
     }
 
-    partial void OnUnitChanged(ParashaUnit? value) => RefreshRecitationAvailability(value);
-
-    partial void OnCurrentCarouselUnitChanged(ParashaUnit? oldValue, ParashaUnit? newValue)
+    partial void OnUnitChanged(ParashaUnit? oldValue, ParashaUnit? newValue)
     {
+        // Only the displayed carousel page belongs in the accessibility tree.
+        // Unit always tracks the displayed page — unlike the carousel's
+        // CurrentItem, which does not update on programmatic ScrollTo and can
+        // leave the exclusion flag on a page that is actually on screen.
         if (oldValue is not null) { oldValue.IsOffscreenCarouselPage = true; }
         if (newValue is not null) { newValue.IsOffscreenCarouselPage = false; }
+        RefreshRecitationAvailability(newValue);
     }
 
     /// <summary>

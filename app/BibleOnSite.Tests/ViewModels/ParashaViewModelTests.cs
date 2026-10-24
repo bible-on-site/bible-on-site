@@ -647,17 +647,25 @@ public class ParashaViewModelTests
     }
 
     [Fact]
-    public async Task CurrentCarouselUnit_SwapsTheOffscreenAccessibilityFlag()
+    public async Task Unit_ExposesOnlyTheDisplayedPageToAccessibility()
     {
         await using var fixture = new Fixture();
         await fixture.Initialize();
         await fixture.Model.LoadByUnitIdAsync(1);
 
-        var other = fixture.Model.CarouselUnits[1];
-        fixture.Model.CurrentCarouselUnit = other;
+        var first = fixture.Model.Unit!;
+        first.IsOffscreenCarouselPage.Should().BeFalse();
 
-        fixture.Model.Unit!.IsOffscreenCarouselPage.Should().BeTrue();
-        other.IsOffscreenCarouselPage.Should().BeFalse();
+        await fixture.Model.LoadByUnitIdAsync(2);
+        first.IsOffscreenCarouselPage.Should().BeTrue();
+        fixture.Model.Unit!.IsOffscreenCarouselPage.Should().BeFalse();
+
+        // A stale CurrentItem pushback must not re-hide the displayed page
+        // (the carousel does not push CurrentItem on programmatic ScrollTo).
+        var stale = fixture.Model.CarouselUnits[0];
+        fixture.Model.CurrentCarouselUnit = stale;
+        fixture.Model.Unit!.IsOffscreenCarouselPage.Should().BeFalse();
+        stale.IsOffscreenCarouselPage.Should().BeTrue();
     }
 
     [Fact]
