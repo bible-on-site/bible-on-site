@@ -859,6 +859,65 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         FanMenu.SetBottomInset(bottom);
         this.Padding = new Thickness(0, 0, 0, -bottom);
         Resources["BottomBarTotalHeight"] = totalHeight;
+
+        _ = ScheduleA11yDump();
+    }
+
+    // TEMP-DIAG: dump the native a11y flags hiding row-1 elements from XCTest.
+    private int _a11yDumpCount;
+    private async Task ScheduleA11yDump()
+    {
+        if (_a11yDumpCount >= 3) { return; }
+        _a11yDumpCount++;
+        await Task.Delay(2500);
+        MainThread.BeginInvokeOnMainThread(() => DumpA11yTree($"pass{_a11yDumpCount}"));
+    }
+
+    private void DumpA11yTree(string tag)
+    {
+        try
+        {
+            var window = UIKit.UIApplication.SharedApplication?.ConnectedScenes
+                .OfType<UIKit.UIWindowScene>()
+                .FirstOrDefault()?.Windows.FirstOrDefault(w => w.IsKeyWindow);
+            if (window is null) { DebugLog.Write($"[A11yDump {tag}] no window"); return; }
+            var found = DumpViewFlags(window, 0, tag);
+            DebugLog.Write($"[A11yDump {tag}] flagged={found}");
+        }
+        catch (Exception ex) { DebugLog.Write($"[A11yDump {tag}] failed: {ex}"); }
+    }
+
+    private static bool KvoBool(UIKit.UIView view, string key)
+    {
+        try
+        {
+            return view.ValueForKey(new Foundation.NSString(key)) is Foundation.NSNumber n && n.BoolValue;
+        }
+        catch { return false; }
+    }
+
+    private static int DumpViewFlags(UIKit.UIView view, int depth, string tag)
+    {
+        if (depth > 40) { return 0; }
+        var count = 0;
+        var modal = KvoBool(view, "accessibilityViewIsModal");
+        var elemHidden = KvoBool(view, "accessibilityElementsHidden");
+        var hidden = view.Hidden || view.Alpha < 0.01f;
+        var isAE = KvoBool(view, "isAccessibilityElement");
+        var full = view.Frame.Width >= 400 && view.Frame.Height >= 800;
+        if (modal || elemHidden || (hidden && full) || view is UIKit.UIToolbar || (isAE && full))
+        {
+            count++;
+            var f = view.Frame;
+            DebugLog.Write($"[A11yDump {tag}] d{depth} {view.GetType().Name} f={f.X:0},{f.Y:0},{f.Width:0}x{f.Height:0} " +
+                $"modal={modal} elemHidden={elemHidden} hidden={view.Hidden} alpha={view.Alpha:0.##} isAE={isAE} " +
+                $"uie={view.UserInteractionEnabled} id={view.AccessibilityIdentifier ?? "-"}");
+        }
+        foreach (var sub in view.Subviews)
+        {
+            count += DumpViewFlags(sub, depth + 1, tag);
+        }
+        return count;
     }
 #endif
 
