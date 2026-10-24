@@ -1,12 +1,15 @@
 import { randomUUID } from "node:crypto";
 import { createServerFn } from "@tanstack/react-start";
-import { execute, query, queryOne } from "../db";
-import { revalidateWebsite } from "../website-revalidate";
+import type { PoolConnection } from "mysql2/promise";
 import {
-	pediaInvalidationForEntities,
-	pediaInvalidationForEntryIds,
-	pediaInvalidationForPersons,
-} from "./paths";
+	execute,
+	query,
+	queryOne,
+	transaction,
+	txExecute,
+	txQueryOne,
+} from "../db";
+import { revalidateWebsite } from "../website-revalidate";
 import {
 	type CreateFamilyPersonInput,
 	type CreateParentChildLinkInput,
@@ -26,6 +29,11 @@ import {
 	type UpdatePersonNameInput,
 	type UpdateUnionLinkInput,
 } from "./family-api-spec";
+import {
+	pediaInvalidationForEntities,
+	pediaInvalidationForEntryIds,
+	pediaInvalidationForPersons,
+} from "./paths";
 
 function requiredNonEmpty(v: string, field: string): string {
 	const s = v.trim();
@@ -40,8 +48,9 @@ function isOneOf<T extends readonly string[]>(
 	return (allowed as readonly string[]).includes(value);
 }
 
-async function getMainNameTypeId(): Promise<string> {
-	const row = await queryOne<{ id: string }>(
+async function getMainNameTypeId(conn: PoolConnection): Promise<string> {
+	const row = await txQueryOne<{ id: string }>(
+		conn,
 		"SELECT id FROM tanahpedia_lookup_name_type WHERE name = 'MAIN' LIMIT 1",
 	);
 	if (!row) {
@@ -50,8 +59,12 @@ async function getMainNameTypeId(): Promise<string> {
 	return row.id;
 }
 
-async function getNameTypeIdByName(name: string): Promise<string> {
-	const row = await queryOne<{ id: string }>(
+async function getNameTypeIdByName(
+	conn: PoolConnection,
+	name: string,
+): Promise<string> {
+	const row = await txQueryOne<{ id: string }>(
+		conn,
 		"SELECT id FROM tanahpedia_lookup_name_type WHERE name = ? LIMIT 1",
 		[name],
 	);
@@ -61,8 +74,9 @@ async function getNameTypeIdByName(name: string): Promise<string> {
 	return row.id;
 }
 
-async function getGodId(): Promise<string> {
-	const row = await queryOne<{ id: string }>(
+async function getGodId(conn: PoolConnection): Promise<string> {
+	const row = await txQueryOne<{ id: string }>(
+		conn,
 		"SELECT id FROM tanahpedia_god LIMIT 1",
 	);
 	if (!row) throw new Error("Missing tanahpedia_god singleton row");
@@ -74,32 +88,40 @@ async function getGodId(): Promise<string> {
  * (birth_date, death_date, death_cause, birth_place). Passing `null`
  * deletes the existing row (if any); passing a value inserts or updates it.
  */
-async function upsertPersonSingleton(params: {
-	table:
-		| "tanahpedia_person_birth_date"
-		| "tanahpedia_person_death_date"
-		| "tanahpedia_person_death_cause"
-		| "tanahpedia_person_birth_place";
-	valueColumn: "birth_date" | "death_date" | "death_cause" | "place_id";
-	personId: string;
-	value: string | number | null;
-}): Promise<void> {
+async function upsertPersonSingleton(
+	conn: PoolConnection,
+	params: {
+		table:
+			| "tanahpedia_person_birth_date"
+			| "tanahpedia_person_death_date"
+			| "tanahpedia_person_death_cause"
+			| "tanahpedia_person_birth_place";
+		valueColumn: "birth_date" | "death_date" | "death_cause" | "place_id";
+		personId: string;
+		value: string | number | null;
+	},
+): Promise<void> {
 	const { table, valueColumn, personId, value } = params;
 	if (value === null) {
-		await execute(`DELETE FROM ${table} WHERE person_id = ?`, [personId]);
+		await txExecute(conn, `DELETE FROM ${table} WHERE person_id = ?`, [
+			personId,
+		]);
 		return;
 	}
-	const existing = await queryOne<{ id: string }>(
+	const existing = await txQueryOne<{ id: string }>(
+		conn,
 		`SELECT id FROM ${table} WHERE person_id = ? LIMIT 1`,
 		[personId],
 	);
 	if (existing) {
-		await execute(`UPDATE ${table} SET ${valueColumn} = ? WHERE id = ?`, [
-			value,
-			existing.id,
-		]);
+		await txExecute(
+			conn,
+			`UPDATE ${table} SET ${valueColumn} = ? WHERE id = ?`,
+			[value, existing.id],
+		);
 	} else {
-		await execute(
+		await txExecute(
+			conn,
 			`INSERT INTO ${table} (id, person_id, ${valueColumn}, alt_group_id) VALUES (?, ?, ?, NULL)`,
 			[randomUUID(), personId, value],
 		);
@@ -107,25 +129,32 @@ async function upsertPersonSingleton(params: {
 }
 
 /** Enables/disables a non-exclusive person role (prophet, king). */
-async function setPersonRole(params: {
-	table: "tanahpedia_person_role_prophet" | "tanahpedia_person_role_king";
-	personId: string;
-	enabled: boolean;
-}): Promise<void> {
+async function setPersonRole(
+	conn: PoolConnection,
+	params: {
+		table: "tanahpedia_person_role_prophet" | "tanahpedia_person_role_king";
+		personId: string;
+		enabled: boolean;
+	},
+): Promise<void> {
 	const { table, personId, enabled } = params;
 	if (!enabled) {
-		await execute(`DELETE FROM ${table} WHERE person_id = ?`, [personId]);
+		await txExecute(conn, `DELETE FROM ${table} WHERE person_id = ?`, [
+			personId,
+		]);
 		return;
 	}
-	const existing = await queryOne<{ id: string }>(
+	const existing = await txQueryOne<{ id: string }>(
+		conn,
 		`SELECT id FROM ${table} WHERE person_id = ? LIMIT 1`,
 		[personId],
 	);
 	if (!existing) {
-		await execute(`INSERT INTO ${table} (id, person_id) VALUES (?, ?)`, [
-			randomUUID(),
-			personId,
-		]);
+		await txExecute(
+			conn,
+			`INSERT INTO ${table} (id, person_id) VALUES (?, ?)`,
+			[randomUUID(), personId],
+		);
 	}
 }
 
@@ -172,83 +201,91 @@ export const createFamilyPersonNode = createServerFn({ method: "POST" })
 
 		const entityId = randomUUID();
 		const personId = randomUUID();
-		const mainNameTypeId = await getMainNameTypeId();
+		const linkId = await transaction(async (conn) => {
+			const mainNameTypeId = await getMainNameTypeId(conn);
 
-		await execute(
-			`INSERT INTO tanahpedia_entity (id, entity_type, name) VALUES (?, 'PERSON', ?)`,
-			[entityId, name],
-		);
-		await execute(
-			`INSERT INTO tanahpedia_person (id, entity_id) VALUES (?, ?)`,
-			[personId, entityId],
-		);
-		await execute(
-			`INSERT INTO tanahpedia_person_name (id, person_id, name, name_type_id, alt_group_id)
-			 VALUES (?, ?, ?, ?, NULL)`,
-			[randomUUID(), personId, name, mainNameTypeId],
-		);
-		if (sex) {
-			await execute(
-				`INSERT INTO tanahpedia_person_sex (id, person_id, sex, alt_group_id)
-				 VALUES (?, ?, ?, NULL)`,
-				[randomUUID(), personId, sex],
+			await txExecute(
+				conn,
+				`INSERT INTO tanahpedia_entity (id, entity_type, name) VALUES (?, 'PERSON', ?)`,
+				[entityId, name],
 			);
-		}
-		if (data.birthDate != null) {
-			await upsertPersonSingleton({
-				table: "tanahpedia_person_birth_date",
-				valueColumn: "birth_date",
-				personId,
-				value: data.birthDate,
-			});
-		}
-		if (data.deathDate != null) {
-			await upsertPersonSingleton({
-				table: "tanahpedia_person_death_date",
-				valueColumn: "death_date",
-				personId,
-				value: data.deathDate,
-			});
-		}
-		if (data.deathCause != null) {
-			await upsertPersonSingleton({
-				table: "tanahpedia_person_death_cause",
-				valueColumn: "death_cause",
-				personId,
-				value: requiredNonEmpty(data.deathCause, "deathCause"),
-			});
-		}
-		if (data.birthPlaceId != null) {
-			await upsertPersonSingleton({
-				table: "tanahpedia_person_birth_place",
-				valueColumn: "place_id",
-				personId,
-				value: requiredNonEmpty(data.birthPlaceId, "birthPlaceId"),
-			});
-		}
-		if (data.isProphet) {
-			await setPersonRole({
-				table: "tanahpedia_person_role_prophet",
-				personId,
-				enabled: true,
-			});
-		}
-		if (data.isKing) {
-			await setPersonRole({
-				table: "tanahpedia_person_role_king",
-				personId,
-				enabled: true,
-			});
-		}
+			await txExecute(
+				conn,
+				`INSERT INTO tanahpedia_person (id, entity_id) VALUES (?, ?)`,
+				[personId, entityId],
+			);
+			await txExecute(
+				conn,
+				`INSERT INTO tanahpedia_person_name (id, person_id, name, name_type_id, alt_group_id)
+				 VALUES (?, ?, ?, ?, NULL)`,
+				[randomUUID(), personId, name, mainNameTypeId],
+			);
+			if (sex) {
+				await txExecute(
+					conn,
+					`INSERT INTO tanahpedia_person_sex (id, person_id, sex, alt_group_id)
+					 VALUES (?, ?, ?, NULL)`,
+					[randomUUID(), personId, sex],
+				);
+			}
+			if (data.birthDate != null) {
+				await upsertPersonSingleton(conn, {
+					table: "tanahpedia_person_birth_date",
+					valueColumn: "birth_date",
+					personId,
+					value: data.birthDate,
+				});
+			}
+			if (data.deathDate != null) {
+				await upsertPersonSingleton(conn, {
+					table: "tanahpedia_person_death_date",
+					valueColumn: "death_date",
+					personId,
+					value: data.deathDate,
+				});
+			}
+			if (data.deathCause != null) {
+				await upsertPersonSingleton(conn, {
+					table: "tanahpedia_person_death_cause",
+					valueColumn: "death_cause",
+					personId,
+					value: requiredNonEmpty(data.deathCause, "deathCause"),
+				});
+			}
+			if (data.birthPlaceId != null) {
+				await upsertPersonSingleton(conn, {
+					table: "tanahpedia_person_birth_place",
+					valueColumn: "place_id",
+					personId,
+					value: requiredNonEmpty(data.birthPlaceId, "birthPlaceId"),
+				});
+			}
+			if (data.isProphet) {
+				await setPersonRole(conn, {
+					table: "tanahpedia_person_role_prophet",
+					personId,
+					enabled: true,
+				});
+			}
+			if (data.isKing) {
+				await setPersonRole(conn, {
+					table: "tanahpedia_person_role_king",
+					personId,
+					enabled: true,
+				});
+			}
 
-		let linkId: string | null = null;
-		if (data.linkToEntryId?.trim()) {
-			linkId = randomUUID();
-			await execute(
-				`INSERT INTO tanahpedia_entry_entity (id, entry_id, entity_id) VALUES (?, ?, ?)`,
-				[linkId, data.linkToEntryId.trim(), entityId],
-			);
-		}
+			let linkId: string | null = null;
+			if (data.linkToEntryId?.trim()) {
+				linkId = randomUUID();
+				await txExecute(
+					conn,
+					`INSERT INTO tanahpedia_entry_entity (id, entry_id, entity_id) VALUES (?, ?, ?)`,
+					[linkId, data.linkToEntryId.trim(), entityId],
+				);
+			}
+			return linkId;
+		});
 
 		await revalidateWebsite(
 			await pediaInvalidationForEntryIds(
@@ -275,126 +312,140 @@ export const updateFamilyPersonNode = createServerFn({ method: "POST" })
 			throw new Error("At least one field must be provided to update");
 		}
 
-		if (data.displayName !== undefined) {
-			const name = requiredNonEmpty(data.displayName, "displayName");
-			const result = await execute(
-				`UPDATE tanahpedia_entity SET name = ? WHERE id = ?`,
-				[name, entityId],
-			);
-			assertAffected(result, `Person entity not found: ${entityId}`);
-
-			const person = await queryOne<{ id: string }>(
-				`SELECT id FROM tanahpedia_person WHERE entity_id = ? LIMIT 1`,
-				[entityId],
-			);
-			if (person) {
-				const mainNameTypeId = await getMainNameTypeId();
-				await execute(
-					`UPDATE tanahpedia_person_name SET name = ? WHERE person_id = ? AND name_type_id = ?`,
-					[name, person.id, mainNameTypeId],
+		await transaction(async (conn) => {
+			if (data.displayName !== undefined) {
+				const name = requiredNonEmpty(data.displayName, "displayName");
+				const result = await txExecute(
+					conn,
+					`UPDATE tanahpedia_entity SET name = ? WHERE id = ?`,
+					[name, entityId],
 				);
-			}
-		}
+				assertAffected(result, `Person entity not found: ${entityId}`);
 
-		if (data.sex !== undefined) {
-			const sex = validateSex(data.sex);
-			const person = await queryOne<{ id: string }>(
-				`SELECT id FROM tanahpedia_person WHERE entity_id = ? LIMIT 1`,
-				[entityId],
-			);
-			if (!person) throw new Error(`Person not found for entity: ${entityId}`);
-
-			if (sex === null) {
-				await execute(`DELETE FROM tanahpedia_person_sex WHERE person_id = ?`, [
-					person.id,
-				]);
-			} else {
-				const existing = await queryOne<{ id: string }>(
-					`SELECT id FROM tanahpedia_person_sex WHERE person_id = ? LIMIT 1`,
-					[person.id],
+				const person = await txQueryOne<{ id: string }>(
+					conn,
+					`SELECT id FROM tanahpedia_person WHERE entity_id = ? LIMIT 1`,
+					[entityId],
 				);
-				if (existing) {
-					await execute(
-						`UPDATE tanahpedia_person_sex SET sex = ? WHERE id = ?`,
-						[sex, existing.id],
-					);
-				} else {
-					await execute(
-						`INSERT INTO tanahpedia_person_sex (id, person_id, sex, alt_group_id)
-						 VALUES (?, ?, ?, NULL)`,
-						[randomUUID(), person.id, sex],
+				if (person) {
+					const mainNameTypeId = await getMainNameTypeId(conn);
+					await txExecute(
+						conn,
+						`UPDATE tanahpedia_person_name SET name = ? WHERE person_id = ? AND name_type_id = ?`,
+						[name, person.id, mainNameTypeId],
 					);
 				}
 			}
-		}
 
-		if (
-			data.birthDate !== undefined ||
-			data.deathDate !== undefined ||
-			data.deathCause !== undefined ||
-			data.birthPlaceId !== undefined ||
-			data.isProphet !== undefined ||
-			data.isKing !== undefined
-		) {
-			const person = await queryOne<{ id: string }>(
-				`SELECT id FROM tanahpedia_person WHERE entity_id = ? LIMIT 1`,
-				[entityId],
-			);
-			if (!person) throw new Error(`Person not found for entity: ${entityId}`);
+			if (data.sex !== undefined) {
+				const sex = validateSex(data.sex);
+				const person = await txQueryOne<{ id: string }>(
+					conn,
+					`SELECT id FROM tanahpedia_person WHERE entity_id = ? LIMIT 1`,
+					[entityId],
+				);
+				if (!person)
+					throw new Error(`Person not found for entity: ${entityId}`);
 
-			if (data.birthDate !== undefined) {
-				await upsertPersonSingleton({
-					table: "tanahpedia_person_birth_date",
-					valueColumn: "birth_date",
-					personId: person.id,
-					value: data.birthDate,
-				});
+				if (sex === null) {
+					await txExecute(
+						conn,
+						`DELETE FROM tanahpedia_person_sex WHERE person_id = ?`,
+						[person.id],
+					);
+				} else {
+					const existing = await txQueryOne<{ id: string }>(
+						conn,
+						`SELECT id FROM tanahpedia_person_sex WHERE person_id = ? LIMIT 1`,
+						[person.id],
+					);
+					if (existing) {
+						await txExecute(
+							conn,
+							`UPDATE tanahpedia_person_sex SET sex = ? WHERE id = ?`,
+							[sex, existing.id],
+						);
+					} else {
+						await txExecute(
+							conn,
+							`INSERT INTO tanahpedia_person_sex (id, person_id, sex, alt_group_id)
+							 VALUES (?, ?, ?, NULL)`,
+							[randomUUID(), person.id, sex],
+						);
+					}
+				}
 			}
-			if (data.deathDate !== undefined) {
-				await upsertPersonSingleton({
-					table: "tanahpedia_person_death_date",
-					valueColumn: "death_date",
-					personId: person.id,
-					value: data.deathDate,
-				});
+
+			if (
+				data.birthDate !== undefined ||
+				data.deathDate !== undefined ||
+				data.deathCause !== undefined ||
+				data.birthPlaceId !== undefined ||
+				data.isProphet !== undefined ||
+				data.isKing !== undefined
+			) {
+				const person = await txQueryOne<{ id: string }>(
+					conn,
+					`SELECT id FROM tanahpedia_person WHERE entity_id = ? LIMIT 1`,
+					[entityId],
+				);
+				if (!person)
+					throw new Error(`Person not found for entity: ${entityId}`);
+
+				if (data.birthDate !== undefined) {
+					await upsertPersonSingleton(conn, {
+						table: "tanahpedia_person_birth_date",
+						valueColumn: "birth_date",
+						personId: person.id,
+						value: data.birthDate,
+					});
+				}
+				if (data.deathDate !== undefined) {
+					await upsertPersonSingleton(conn, {
+						table: "tanahpedia_person_death_date",
+						valueColumn: "death_date",
+						personId: person.id,
+						value: data.deathDate,
+					});
+				}
+				if (data.deathCause !== undefined) {
+					await upsertPersonSingleton(conn, {
+						table: "tanahpedia_person_death_cause",
+						valueColumn: "death_cause",
+						personId: person.id,
+						value:
+							data.deathCause !== null
+								? requiredNonEmpty(data.deathCause, "deathCause")
+								: null,
+					});
+				}
+				if (data.birthPlaceId !== undefined) {
+					await upsertPersonSingleton(conn, {
+						table: "tanahpedia_person_birth_place",
+						valueColumn: "place_id",
+						personId: person.id,
+						value:
+							data.birthPlaceId !== null
+								? requiredNonEmpty(data.birthPlaceId, "birthPlaceId")
+								: null,
+					});
+				}
+				if (data.isProphet !== undefined) {
+					await setPersonRole(conn, {
+						table: "tanahpedia_person_role_prophet",
+						personId: person.id,
+						enabled: data.isProphet,
+					});
+				}
+				if (data.isKing !== undefined) {
+					await setPersonRole(conn, {
+						table: "tanahpedia_person_role_king",
+						personId: person.id,
+						enabled: data.isKing,
+					});
+				}
 			}
-			if (data.deathCause !== undefined) {
-				await upsertPersonSingleton({
-					table: "tanahpedia_person_death_cause",
-					valueColumn: "death_cause",
-					personId: person.id,
-					value:
-						data.deathCause !== null
-							? requiredNonEmpty(data.deathCause, "deathCause")
-							: null,
-				});
-			}
-			if (data.birthPlaceId !== undefined) {
-				await upsertPersonSingleton({
-					table: "tanahpedia_person_birth_place",
-					valueColumn: "place_id",
-					personId: person.id,
-					value:
-						data.birthPlaceId !== null
-							? requiredNonEmpty(data.birthPlaceId, "birthPlaceId")
-							: null,
-				});
-			}
-			if (data.isProphet !== undefined) {
-				await setPersonRole({
-					table: "tanahpedia_person_role_prophet",
-					personId: person.id,
-					enabled: data.isProphet,
-				});
-			}
-			if (data.isKing !== undefined) {
-				await setPersonRole({
-					table: "tanahpedia_person_role_king",
-					personId: person.id,
-					enabled: data.isKing,
-				});
-			}
-		}
+		});
 
 		await revalidateWebsite(await pediaInvalidationForEntities([entityId]));
 		return { entityId };
@@ -404,37 +455,51 @@ export const deleteFamilyPersonNode = createServerFn({ method: "POST" })
 	.validator((data: DeleteFamilyPersonInput) => data)
 	.handler(async ({ data }) => {
 		const entityId = requiredNonEmpty(data.entityId, "entityId");
-		const person = await queryOne<{ id: string }>(
-			`SELECT id FROM tanahpedia_person WHERE entity_id = ? LIMIT 1`,
-			[entityId],
-		);
-		if (!person) throw new Error(`Person not found for entity: ${entityId}`);
-
-		// Resolve affected entry pages before the entity and its entry links
-		// are deleted.
+		// Resolve affected entry pages before their links are deleted.
 		const invalidation = await pediaInvalidationForEntities([entityId]);
-		await execute(
-			`DELETE FROM tanahpedia_person_union WHERE person1_id = ? OR person2_id = ?`,
-			[person.id, person.id],
-		);
-		await execute(
-			`DELETE FROM tanahpedia_person_parent_child WHERE parent_id = ? OR child_id = ?`,
-			[person.id, person.id],
-		);
-		await execute(`DELETE FROM tanahpedia_person_name WHERE person_id = ?`, [
-			person.id,
-		]);
-		await execute(`DELETE FROM tanahpedia_person_sex WHERE person_id = ?`, [
-			person.id,
-		]);
-		await execute(`DELETE FROM tanahpedia_entry_entity WHERE entity_id = ?`, [
-			entityId,
-		]);
-		await execute(`DELETE FROM tanahpedia_person WHERE id = ?`, [person.id]);
-		const result = await execute(`DELETE FROM tanahpedia_entity WHERE id = ?`, [
-			entityId,
-		]);
-		assertAffected(result, `Person entity not found: ${entityId}`);
+		await transaction(async (conn) => {
+			const person = await txQueryOne<{ id: string }>(
+				conn,
+				`SELECT id FROM tanahpedia_person WHERE entity_id = ? LIMIT 1`,
+				[entityId],
+			);
+			if (!person) throw new Error(`Person not found for entity: ${entityId}`);
+
+			await txExecute(
+				conn,
+				`DELETE FROM tanahpedia_person_union WHERE person1_id = ? OR person2_id = ?`,
+				[person.id, person.id],
+			);
+			await txExecute(
+				conn,
+				`DELETE FROM tanahpedia_person_parent_child WHERE parent_id = ? OR child_id = ?`,
+				[person.id, person.id],
+			);
+			await txExecute(
+				conn,
+				`DELETE FROM tanahpedia_person_name WHERE person_id = ?`,
+				[person.id],
+			);
+			await txExecute(
+				conn,
+				`DELETE FROM tanahpedia_person_sex WHERE person_id = ?`,
+				[person.id],
+			);
+			await txExecute(
+				conn,
+				`DELETE FROM tanahpedia_entry_entity WHERE entity_id = ?`,
+				[entityId],
+			);
+			await txExecute(conn, `DELETE FROM tanahpedia_person WHERE id = ?`, [
+				person.id,
+			]);
+			const result = await txExecute(
+				conn,
+				`DELETE FROM tanahpedia_entity WHERE id = ?`,
+				[entityId],
+			);
+			assertAffected(result, `Person entity not found: ${entityId}`);
+		});
 
 		await revalidateWebsite(invalidation);
 		return { entityId };
@@ -762,29 +827,34 @@ export const createPersonName = createServerFn({ method: "POST" })
 			throw new Error("giverPersonId and isGodGiven are mutually exclusive");
 		}
 
-		const nameTypeId = await getNameTypeIdByName(nameType);
 		const id = randomUUID();
-		await execute(
-			`INSERT INTO tanahpedia_person_name (id, person_id, name, name_type_id, alt_group_id)
-			 VALUES (?, ?, ?, ?, ?)`,
-			[id, personId, name, nameTypeId, data.altGroupId ?? null],
-		);
+		await transaction(async (conn) => {
+			const nameTypeId = await getNameTypeIdByName(conn, nameType);
+			await txExecute(
+				conn,
+				`INSERT INTO tanahpedia_person_name (id, person_id, name, name_type_id, alt_group_id)
+				 VALUES (?, ?, ?, ?, ?)`,
+				[id, personId, name, nameTypeId, data.altGroupId ?? null],
+			);
 
-		if (giverPersonId) {
-			await execute(
-				`INSERT INTO tanahpedia_person_name_giver_person (id, person_name_id, giver_person_id, alt_group_id)
-				 VALUES (?, ?, ?, NULL)`,
-				[randomUUID(), id, giverPersonId],
-			);
-		}
-		if (data.isGodGiven) {
-			const godId = await getGodId();
-			await execute(
-				`INSERT INTO tanahpedia_person_name_giver_god (id, person_name_id, god_id, alt_group_id)
-				 VALUES (?, ?, ?, NULL)`,
-				[randomUUID(), id, godId],
-			);
-		}
+			if (giverPersonId) {
+				await txExecute(
+					conn,
+					`INSERT INTO tanahpedia_person_name_giver_person (id, person_name_id, giver_person_id, alt_group_id)
+					 VALUES (?, ?, ?, NULL)`,
+					[randomUUID(), id, giverPersonId],
+				);
+			}
+			if (data.isGodGiven) {
+				const godId = await getGodId(conn);
+				await txExecute(
+					conn,
+					`INSERT INTO tanahpedia_person_name_giver_god (id, person_name_id, god_id, alt_group_id)
+					 VALUES (?, ?, ?, NULL)`,
+					[randomUUID(), id, godId],
+				);
+			}
+		});
 
 		// Both the named person's and giver's entry pages may render the name.
 		await revalidateWebsite(
@@ -800,115 +870,127 @@ export const updatePersonName = createServerFn({ method: "POST" })
 	.handler(async ({ data }) => {
 		const id = requiredNonEmpty(data.id, "id");
 
-		const sets: string[] = [];
-		const params: unknown[] = [];
+		const name = await transaction(async (conn) => {
+			const sets: string[] = [];
+			const params: unknown[] = [];
 
-		if (data.name !== undefined) {
-			sets.push("name = ?");
-			params.push(requiredNonEmpty(data.name, "name"));
-		}
-
-		if (data.nameType !== undefined) {
-			if (typeof data.nameType !== "string" || !data.nameType.trim()) {
-				throw new Error("nameType is required");
+			if (data.name !== undefined) {
+				sets.push("name = ?");
+				params.push(requiredNonEmpty(data.name, "name"));
 			}
-			const nameType = data.nameType.trim().toUpperCase();
-			if (!isOneOf(nameType, FAMILY_NAME_TYPES)) {
-				throw new Error("Invalid nameType");
+
+			if (data.nameType !== undefined) {
+				if (typeof data.nameType !== "string" || !data.nameType.trim()) {
+					throw new Error("nameType is required");
+				}
+				const nameType = data.nameType.trim().toUpperCase();
+				if (!isOneOf(nameType, FAMILY_NAME_TYPES)) {
+					throw new Error("Invalid nameType");
+				}
+				const nameTypeId = await getNameTypeIdByName(conn, nameType);
+				sets.push("name_type_id = ?");
+				params.push(nameTypeId);
 			}
-			const nameTypeId = await getNameTypeIdByName(nameType);
-			sets.push("name_type_id = ?");
-			params.push(nameTypeId);
-		}
 
-		if (data.altGroupId !== undefined) {
-			sets.push("alt_group_id = ?");
-			params.push(data.altGroupId);
-		}
+			if (data.altGroupId !== undefined) {
+				sets.push("alt_group_id = ?");
+				params.push(data.altGroupId);
+			}
 
-		if (
-			sets.length === 0 &&
-			data.giverPersonId === undefined &&
-			data.isGodGiven === undefined
-		) {
-			throw new Error("At least one field must be provided to update");
-		}
+			if (
+				sets.length === 0 &&
+				data.giverPersonId === undefined &&
+				data.isGodGiven === undefined
+			) {
+				throw new Error("At least one field must be provided to update");
+			}
 
-		// Normalize once so an empty/whitespace-only value fails fast with a
-		// clear error instead of a downstream FK constraint failure, and so the
-		// mutual-exclusivity check below and the insert use the same value.
-		const normalizedGiverPersonId =
-			data.giverPersonId !== undefined && data.giverPersonId !== null
-				? requiredNonEmpty(data.giverPersonId, "giverPersonId")
-				: data.giverPersonId;
-		if (normalizedGiverPersonId && data.isGodGiven) {
-			throw new Error("giverPersonId and isGodGiven are mutually exclusive");
-		}
+			// Normalize once so an empty/whitespace-only value fails fast with a
+			// clear error instead of a downstream FK constraint failure, and so the
+			// mutual-exclusivity check below and the insert use the same value.
+			const normalizedGiverPersonId =
+				data.giverPersonId !== undefined && data.giverPersonId !== null
+					? requiredNonEmpty(data.giverPersonId, "giverPersonId")
+					: data.giverPersonId;
+			if (normalizedGiverPersonId && data.isGodGiven) {
+				throw new Error("giverPersonId and isGodGiven are mutually exclusive");
+			}
 
-		if (sets.length > 0) {
-			params.push(id);
-			const result = await execute(
-				`UPDATE tanahpedia_person_name SET ${sets.join(", ")} WHERE id = ?`,
-				params,
-			);
-			assertAffected(result, `Person name not found: ${id}`);
-		} else {
-			const existing = await queryOne<{ id: string }>(
-				`SELECT id FROM tanahpedia_person_name WHERE id = ? LIMIT 1`,
-				[id],
-			);
-			if (!existing) throw new Error(`Person name not found: ${id}`);
-		}
-
-		if (data.giverPersonId !== undefined) {
-			await execute(
-				`DELETE FROM tanahpedia_person_name_giver_person WHERE person_name_id = ?`,
-				[id],
-			);
-			if (normalizedGiverPersonId) {
-				// Setting a human giver must not leave a stale God-giver row from
-				// an earlier state, to preserve mutual exclusivity between the two
-				// giver tables.
-				await execute(
-					`DELETE FROM tanahpedia_person_name_giver_god WHERE person_name_id = ?`,
+			if (sets.length > 0) {
+				params.push(id);
+				const result = await txExecute(
+					conn,
+					`UPDATE tanahpedia_person_name SET ${sets.join(", ")} WHERE id = ?`,
+					params,
+				);
+				assertAffected(result, `Person name not found: ${id}`);
+			} else {
+				const existing = await txQueryOne<{ id: string }>(
+					conn,
+					`SELECT id FROM tanahpedia_person_name WHERE id = ? LIMIT 1`,
 					[id],
 				);
-				await execute(
-					`INSERT INTO tanahpedia_person_name_giver_person (id, person_name_id, giver_person_id, alt_group_id)
-					 VALUES (?, ?, ?, NULL)`,
-					[randomUUID(), id, normalizedGiverPersonId],
-				);
+				if (!existing) throw new Error(`Person name not found: ${id}`);
 			}
-		}
 
-		if (data.isGodGiven !== undefined) {
-			await execute(
-				`DELETE FROM tanahpedia_person_name_giver_god WHERE person_name_id = ?`,
-				[id],
-			);
-			if (data.isGodGiven) {
-				// Setting the God-given flag must not leave a stale human-giver row
-				// from an earlier state, to preserve mutual exclusivity between the
-				// two giver tables.
-				await execute(
+			if (data.giverPersonId !== undefined) {
+				await txExecute(
+					conn,
 					`DELETE FROM tanahpedia_person_name_giver_person WHERE person_name_id = ?`,
 					[id],
 				);
-				const godId = await getGodId();
-				await execute(
-					`INSERT INTO tanahpedia_person_name_giver_god (id, person_name_id, god_id, alt_group_id)
-					 VALUES (?, ?, ?, NULL)`,
-					[randomUUID(), id, godId],
-				);
+				if (normalizedGiverPersonId) {
+					// Setting a human giver must not leave a stale God-giver row from
+					// an earlier state, to preserve mutual exclusivity between the two
+					// giver tables.
+					await txExecute(
+						conn,
+						`DELETE FROM tanahpedia_person_name_giver_god WHERE person_name_id = ?`,
+						[id],
+					);
+					await txExecute(
+						conn,
+						`INSERT INTO tanahpedia_person_name_giver_person (id, person_name_id, giver_person_id, alt_group_id)
+						 VALUES (?, ?, ?, NULL)`,
+						[randomUUID(), id, normalizedGiverPersonId],
+					);
+				}
 			}
-		}
 
-		// The name's owning person cannot change on update — resolve the
-		// affected entry pages post-write.
-		const name = await queryOne<{ person_id: string }>(
-			`SELECT person_id FROM tanahpedia_person_name WHERE id = ?`,
-			[id],
-		);
+			if (data.isGodGiven !== undefined) {
+				await txExecute(
+					conn,
+					`DELETE FROM tanahpedia_person_name_giver_god WHERE person_name_id = ?`,
+					[id],
+				);
+				if (data.isGodGiven) {
+					// Setting the God-given flag must not leave a stale human-giver row
+					// from an earlier state, to preserve mutual exclusivity between the
+					// two giver tables.
+					await txExecute(
+						conn,
+						`DELETE FROM tanahpedia_person_name_giver_person WHERE person_name_id = ?`,
+						[id],
+					);
+					const godId = await getGodId(conn);
+					await txExecute(
+						conn,
+						`INSERT INTO tanahpedia_person_name_giver_god (id, person_name_id, god_id, alt_group_id)
+						 VALUES (?, ?, ?, NULL)`,
+						[randomUUID(), id, godId],
+					);
+				}
+			}
+
+			// The name's owning person cannot change on update — resolve the
+			// affected entry pages post-write.
+			return await txQueryOne<{ person_id: string }>(
+				conn,
+				`SELECT person_id FROM tanahpedia_person_name WHERE id = ?`,
+				[id],
+			);
+		});
+
 		const invalidation = await pediaInvalidationForPersons(
 			name ? [name.person_id] : [],
 		);
