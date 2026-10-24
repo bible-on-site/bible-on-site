@@ -96,15 +96,23 @@ public partial class TanahpediaEntityTypePage : ContentPage
     private async void OnIntroLinkTapped(object? sender, Controls.LinkTappedEventArgs e)
     {
         e.Handled = true;
-        if (TanahpediaLinks.TryGetEntryUniqueName(e.Url, out var uniqueName))
+        try
         {
-            await _viewModel.OpenEntryCommand.ExecuteAsync(uniqueName);
-            return;
-        }
+            if (TanahpediaLinks.TryGetEntryUniqueName(e.Url, out var uniqueName))
+            {
+                await _viewModel.OpenEntryCommand.ExecuteAsync(uniqueName);
+                return;
+            }
 
-        if (Uri.TryCreate(e.Url, UriKind.Absolute, out var uri))
+            if (Uri.TryCreate(e.Url, UriKind.Absolute, out var uri))
+            {
+                await Launcher.OpenAsync(uri);
+            }
+        }
+        catch (Exception ex)
         {
-            await Launcher.OpenAsync(uri);
+            // async void - an unhandled navigation/launcher exception is a crash.
+            Console.Error.WriteLine($"Tanahpedia link navigation failed for {e.Url}: {ex}");
         }
     }
 }
