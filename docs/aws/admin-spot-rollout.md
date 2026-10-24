@@ -1,8 +1,10 @@
 # Admin-only Fargate Spot rollout
 
-Status: prepared on 2026-10-24; **not applied yet**. Deploy the atomic family-save
-fix first, then perform and record the live verification below. This reference
-record must not be treated as evidence that AWS has already changed.
+Preparation checkpoint: 2026-10-24, before live capacity changes. Deploy the
+atomic family-save fix first. The current live outcome and rollback evidence
+are recorded in [the implementation issue #2576](https://github.com/bible-on-site/bible-on-site/issues/2576)
+and its linked rollout updates. This reference configuration is not evidence
+that AWS has changed; consult the latest explicit verification record.
 
 Dorad explicitly requested login and admin optimization after clarifying that
 admin currently has one user and some downtime is acceptable for cost savings.
@@ -144,6 +146,10 @@ operator recovery action, not an automatic availability guarantee.
 
 ## Live verification record
 
-Pending application safety release and admin-only capacity migration. Record
-actual outcome and checks here after completion; do not mark pending steps as
-successful merely because the reference template validates.
+At the preparation checkpoint, the application safety release and admin-only
+capacity migration had not run. Append the actual release provenance, provider
+and image verification, HTTP results, public-service comparison and rollback
+outcome to [issue #2576](https://github.com/bible-on-site/bible-on-site/issues/2576)
+and [PR #2603](https://github.com/bible-on-site/bible-on-site/pull/2603) after
+execution. These linked live records distinguish a completed rollout from this
+reference configuration. Template validation alone is not execution evidence.
