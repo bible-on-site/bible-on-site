@@ -47,6 +47,13 @@ public class ReaderFanMenu : Grid
 
     public ReaderFanMenu()
     {
+        // The control fills the page grid row but must not hit-test outside its
+        // buttons (the original AbsoluteLayout had InputTransparent + no cascade);
+        // otherwise on iOS it swallows every hit-test and WDA reports all covered
+        // elements as not displayed.
+        InputTransparent = true;
+        CascadeInputTransparent = false;
+
         // Scrim: dims the page (verses included) while the fan is open.
         // A tap anywhere dismisses the menu instead of hitting what is behind it.
         _scrim = new Grid
