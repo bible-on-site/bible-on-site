@@ -79,7 +79,7 @@
 		"ogg-opus-decoder": "1.7.5"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "2.6.2",
+		"@biomejs/biome": "2.6.3",
 		"@playwright/test": "1.64.1",
 		"@swc/core": "1.16.20",
 		"@swc/jest": "0.2.39",
