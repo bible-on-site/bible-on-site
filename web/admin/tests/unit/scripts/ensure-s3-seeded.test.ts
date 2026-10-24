@@ -1,31 +1,37 @@
-import { execFile } from "node:child_process";
-import {
-	chmodSync,
-	existsSync,
-	mkdtempSync,
-	rmSync,
-	writeFileSync,
-} from "node:fs";
+import { execFile, spawnSync } from "node:child_process";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { promisify } from "node:util";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import {
+	afterAll,
+	afterEach,
+	beforeAll,
+	beforeEach,
+	describe,
+	expect,
+	it,
+} from "vitest";
 
 const execFileAsync = promisify(execFile);
 const script = join(process.cwd(), "scripts", "ensure-s3-seeded.mjs");
 
-// The script decides by shelling out to `cargo make s3-populate-dev`; a shim on
-// PATH records whether it ran, and a stub HTTP server answers ListObjectsV2 so
-// the whole matrix is exercised without Docker or a real release build.
+// The script decides by shelling out to `cargo make s3-populate-dev` without a
+// shell, so the PATH stub must be a real executable: a ~20-line Rust binary
+// (compiled once per run) that drops a marker instead of building. A stub HTTP
+// server answers ListObjectsV2 so the whole matrix is exercised without Docker
+// or a real release build.
 
 function listXml(keys: string[]): string {
 	const contents = keys
 		.map(
+			// nosemgrep -- XML fixture for the stub S3 endpoint
 			(key) =>
 				`<Contents><Key>${key}</Key><LastModified>2024-01-01T00:00:00.000Z</LastModified><Size>1</Size></Contents>`,
 		)
 		.join("");
+	// nosemgrep -- XML fixture for the stub S3 endpoint
 	return `<?xml version="1.0" encoding="UTF-8"?><ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><KeyCount>${keys.length}</KeyCount><MaxKeys>1</MaxKeys><IsTruncated>false</IsTruncated>${contents}</ListBucketResult>`;
 }
 
@@ -35,22 +41,36 @@ describe("ensure-s3-seeded", () => {
 	let endpoint: string;
 	let populated: () => boolean;
 	let mode: "objects" | "empty" | "missing";
+	let stubDir: string;
+
+	beforeAll(() => {
+		stubDir = mkdtempSync(join(tmpdir(), "s3-seeded-cargo-"));
+		writeFileSync(
+			join(stubDir, "cargo_stub.rs"),
+			`fn main() {
+	let m = std::env::var("POPULATE_MARKER").expect("POPULATE_MARKER");
+	std::fs::write(m, "ok").expect("marker");
+}
+`,
+		);
+		const out = join(
+			stubDir,
+			process.platform === "win32" ? "cargo.exe" : "cargo",
+		);
+		const build = spawnSync(
+			"rustc",
+			[join(stubDir, "cargo_stub.rs"), "-o", out],
+			{ encoding: "utf-8" },
+		);
+		if (build.status !== 0)
+			throw new Error(`cargo stub build failed: ${build.stderr}`);
+	}, 60_000);
 
 	beforeEach(async () => {
 		dir = mkdtempSync(join(tmpdir(), "s3-seeded-"));
 		mode = "objects";
-
-		// PATH shim: cargo(.cmd) that drops a marker instead of building.
 		const marker = join(dir, "populated.marker");
-		writeFileSync(
-			join(dir, "cargo.cmd"),
-			`@echo off\r\nbreak>"${marker}"\r\nexit /b 0\r\n`,
-		);
-		writeFileSync(
-			join(dir, "cargo"),
-			`#!/bin/sh\ntouch "${marker}"\n`,
-		);
-		chmodSync(join(dir, "cargo"), 0o755);
+		process.env.POPULATE_MARKER = marker;
 		populated = () => existsSync(marker);
 
 		server = createServer((_req, res) => {
@@ -78,11 +98,15 @@ describe("ensure-s3-seeded", () => {
 		rmSync(dir, { recursive: true, force: true });
 	});
 
+	afterAll(() => {
+		rmSync(stubDir, { recursive: true, force: true });
+	});
+
 	function run(extraEnv: Record<string, string> = {}) {
 		return execFileAsync(process.execPath, [script], {
 			env: {
 				...process.env,
-				PATH: `${dir}${delimiter}${process.env.PATH}`,
+				PATH: `${stubDir}${delimiter}${process.env.PATH}`,
 				S3_ENDPOINT: endpoint,
 				S3_BUCKET: "bible-on-site-assets-dev",
 				S3_REGION: "us-east-1",

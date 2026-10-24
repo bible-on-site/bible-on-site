@@ -8,12 +8,12 @@
  * Behavior:
  * - Reads DB_URL from the environment or the module's env file (--env-file).
  * - If none of the --tables has rows → runs `cargo make mysql-populate-dev`.
- * - With --sync-from-prod, first tries `npm run setup_dev_env -- sync-from-prod`
- *   (a failed download leaves local data untouched); populate is the fallback.
- *   A sync that succeeded within DEV_DB_SYNC_MAX_AGE_HOURS (default 24) is
- *   skipped — dumping and restoring the whole prod database on every `npm run
- *   dev` is the dominant local CPU/IO cost. Set it to 0 to always sync, or run
- *   `npm run setup_dev_env -- sync-from-prod` directly to bypass the throttle.
+ * - With --sync-from-prod, first probes `npm run setup_dev_env --
+ *   check-dev-db-freshness` — a cheap prod watermark read (per-table
+ *   information_schema UPDATE_TIME) compared to the checkpoint recorded in the
+ *   dev DB by the last sync. Fresh → skip; stale/unknown → run the full
+ *   sync-from-prod (a failed download leaves local data untouched); populate
+ *   is the fallback. `npm run setup_dev_env -- sync-from-prod` always syncs.
  * - Removes bundled demo authors/articles unless KEEP_BUNDLED_TEST_ARTICLES=1.
  *
  * Usage:
@@ -21,10 +21,9 @@
  *     [--env-file .dev.env] [--tables tanah_sefer,tanahpedia_entry] [--sync-from-prod]
  */
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { homedir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 interface CliFlags {
@@ -206,49 +205,6 @@ async function removeBundledTestArticleSeed(dbUrl: string): Promise<void> {
 	}
 }
 
-// The stamp lives outside the worktrees (the dev MySQL server and this file are
-// shared by every checkout), so a fresh worktree doesn't trigger a fresh sync.
-const SYNC_STAMP_DIR = join(homedir(), ".cache", "bible-on-site");
-
-function syncStampPath(dbUrl: string): string {
-	const database = parseDbUrl(dbUrl).database.replace(/[^\w.-]/g, "_");
-	return join(SYNC_STAMP_DIR, `dev-db-sync-${database}.stamp`);
-}
-
-function syncMaxAgeMs(): number {
-	const raw = process.env.DEV_DB_SYNC_MAX_AGE_HOURS;
-	const hours = raw === undefined ? 24 : Number(raw);
-	// 0 means "always sync"; anything unparseable falls back to the default.
-	const safeHours = Number.isFinite(hours) && hours >= 0 ? hours : 24;
-	return safeHours * 3_600_000;
-}
-
-export function isStampFresh(
-	stamp: string,
-	maxAgeMs: number,
-	now: number,
-): boolean {
-	const ageMs = now - Date.parse(stamp.trim());
-	return Number.isFinite(ageMs) && ageMs >= 0 && ageMs < maxAgeMs;
-}
-
-function readSyncStamp(dbUrl: string): string | null {
-	try {
-		return readFileSync(syncStampPath(dbUrl), "utf8");
-	} catch {
-		return null;
-	}
-}
-
-function writeSyncStamp(dbUrl: string): void {
-	try {
-		mkdirSync(SYNC_STAMP_DIR, { recursive: true });
-		writeFileSync(syncStampPath(dbUrl), new Date().toISOString());
-	} catch (err) {
-		console.warn(`  ensure-dev-db: could not write sync stamp — ${err}`);
-	}
-}
-
 function runMysqlPopulate(): boolean {
 	console.info(
 		"Populating tanah-dev (structure + sefarim/perushim; no bundled demo articles)…",
@@ -256,8 +212,26 @@ function runMysqlPopulate(): boolean {
 	const result = spawnSync("cargo", ["make", "mysql-populate-dev"], {
 		cwd: dataDir,
 		stdio: "inherit",
-		shell: true,
 	});
+	return result.status === 0;
+}
+
+/**
+ * The prod freshness probe (setup_dev_env check-dev-db-freshness) exits 0 only
+ * when the dev DB provably matches the recorded prod watermark; any other
+ * outcome (stale data, missing checkpoint, probe error) attempts the sync.
+ */
+function checkProdFreshness(): boolean {
+	const result = spawnSync(
+		process.execPath,
+		[
+			"--import",
+			"tsx",
+			resolve(devopsDir, "setup-dev-env.mts"),
+			"check-dev-db-freshness",
+		],
+		{ cwd: devopsDir, stdio: "inherit" },
+	);
 	return result.status === 0;
 }
 
@@ -266,9 +240,14 @@ function runSyncFromProd(): boolean {
 	// The sync dumps to a file first and only restores after a successful dump,
 	// so a failed download leaves the existing local data intact.
 	const result = spawnSync(
-		"npm",
-		["run", "setup_dev_env", "--", "sync-from-prod"],
-		{ cwd: devopsDir, stdio: "inherit", shell: true },
+		process.execPath,
+		[
+			"--import",
+			"tsx",
+			resolve(devopsDir, "setup-dev-env.mts"),
+			"sync-from-prod",
+		],
+		{ cwd: devopsDir, stdio: "inherit" },
 	);
 	return result.status === 0;
 }
@@ -295,17 +274,14 @@ async function main(): Promise<void> {
 
 	if (syncFromProd) {
 		const syncDisabled = process.env.DEV_DB_SYNC_FROM_PROD === "0";
-		const stamp =
-			bootstrapped && !syncDisabled ? readSyncStamp(dbUrl) : null;
-		if (stamp !== null && isStampFresh(stamp, syncMaxAgeMs(), Date.now())) {
+		const fresh = bootstrapped && !syncDisabled ? checkProdFreshness() : false;
+		if (fresh) {
 			console.info(
-				`  ensure-dev-db (${label}): prod sync is fresh (${stamp.trim()}) — skipping; set DEV_DB_SYNC_MAX_AGE_HOURS=0 to force`,
+				`  ensure-dev-db (${label}): dev DB matches the prod checkpoint — skipping sync`,
 			);
 		} else {
 			const synced = syncDisabled ? false : runSyncFromProd();
-			if (synced) {
-				writeSyncStamp(dbUrl);
-			} else {
+			if (!synced) {
 				if (!syncDisabled) {
 					console.warn(
 						`  ensure-dev-db (${label}): production not available — keeping the existing local tanah-dev data`,

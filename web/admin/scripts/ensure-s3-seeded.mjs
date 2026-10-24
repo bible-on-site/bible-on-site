@@ -71,6 +71,5 @@ try {
 const result = spawnSync("cargo", ["make", "s3-populate-dev"], {
 	cwd: dataDir,
 	stdio: "inherit",
-	shell: process.platform === "win32",
 });
 process.exit(result.status ?? 1);

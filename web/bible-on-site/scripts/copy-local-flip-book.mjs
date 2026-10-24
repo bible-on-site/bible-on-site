@@ -104,10 +104,12 @@ function run() {
 	// A real directory keeps its node_modules so the nested install below runs
 	// once per checkout instead of on every refresh.
 	try {
+		// nosemgrep -- target under this checkout's node_modules, fixed path
 		if (fs.lstatSync(targetReact).isSymbolicLink()) fs.unlinkSync(targetReact);
 	} catch {
 		// doesn't exist — fine
 	}
+	// nosemgrep -- target under this checkout's node_modules, fixed path
 	fs.rmSync(path.join(targetReact, "dist"), { recursive: true, force: true });
 	fs.mkdirSync(targetVanilla, { recursive: true });
 
@@ -128,6 +130,7 @@ function run() {
 	copyDir(path.join(baseSrc, "dist"), path.join(targetVanilla, "dist"));
 
 	// Install vanilla's dependencies (hammerjs, throttle-debounce, etc.) so the bundler can resolve them
+	// nosemgrep -- target under this checkout's node_modules, fixed path
 	if (!fs.existsSync(path.join(targetVanilla, "node_modules"))) {
 		execSync("npm install --omit=dev", {
 			cwd: targetVanilla,

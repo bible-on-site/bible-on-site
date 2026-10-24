@@ -1,37 +1,81 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { isStampFresh } from "./ensure-dev-db.mts";
+import {
+	isCheckpointCurrent,
+	parseTableTimes,
+} from "./dev-db-checkpoint.mts";
 
-const HOUR = 3_600_000;
-const NOW = Date.parse("2026-10-24T12:00:00Z");
+const T = "2026-10-24 10:00:00";
+const T2 = "2026-10-24 11:00:00";
 
-test("isStampFresh", async (t) => {
-	await t.test("returns true for a stamp within the window", () => {
+test("isCheckpointCurrent", async (t) => {
+	await t.test("returns true when prod matches the recorded checkpoint", () => {
+		const stored = new Map([
+			["a", T],
+			["b", null],
+		]);
+		assert.equal(isCheckpointCurrent(stored, new Map(stored)), true);
+	});
+
+	await t.test("returns false when a prod table advanced", () => {
+		const stored = new Map([
+			["a", T],
+			["b", null],
+		]);
+		const prod = new Map([
+			["a", T2],
+			["b", null],
+		]);
+		assert.equal(isCheckpointCurrent(stored, prod), false);
+	});
+
+	await t.test("returns false when prod gained or lost a table", () => {
+		const stored = new Map([["a", T]]);
 		assert.equal(
-			isStampFresh("2026-10-24T10:00:00Z", 24 * HOUR, NOW),
-			true,
+			isCheckpointCurrent(
+				stored,
+				new Map([
+					["a", T],
+					["b", null],
+				]),
+			),
+			false,
+		);
+		assert.equal(isCheckpointCurrent(stored, new Map()), false);
+	});
+
+	await t.test("returns false when never synced", () => {
+		assert.equal(isCheckpointCurrent(new Map(), new Map([["a", T]])), false);
+	});
+
+	await t.test("returns false when prod cannot report watermarks", () => {
+		// An engine that never sets UPDATE_TIME can't prove freshness —
+		// syncing is the safe answer.
+		const stored = new Map([
+			["a", null],
+			["b", null],
+		]);
+		assert.equal(isCheckpointCurrent(stored, new Map(stored)), false);
+	});
+});
+
+test("parseTableTimes", async (t) => {
+	await t.test("parses tab-separated rows with NULL as null", () => {
+		assert.deepEqual(
+			parseTableTimes(`a\t${T}\nb\tNULL\nc\t${T2}\n`),
+			new Map([
+				["a", T],
+				["b", null],
+				["c", T2],
+			]),
 		);
 	});
 
-	await t.test("returns false for a stamp older than the window", () => {
-		assert.equal(
-			isStampFresh("2026-10-23T11:00:00Z", 24 * HOUR, NOW),
-			false,
-		);
-	});
-
-	await t.test("returns false for a zero window so sync is forced", () => {
-		assert.equal(isStampFresh(new Date(NOW).toISOString(), 0, NOW), false);
-	});
-
-	await t.test("returns false for a corrupt stamp", () => {
-		assert.equal(isStampFresh("not-a-date", 24 * HOUR, NOW), false);
-	});
-
-	await t.test("returns false for a stamp in the future", () => {
-		assert.equal(
-			isStampFresh("2026-10-24T13:00:00Z", 24 * HOUR, NOW),
-			false,
+	await t.test("skips blank lines and nameless rows", () => {
+		// "\tt" has no table name → skipped; "a" has no UPDATE_TIME → null.
+		assert.deepEqual(
+			parseTableTimes(`\n\tt\na\n\n`),
+			new Map([["a", null]]),
 		);
 	});
 });
