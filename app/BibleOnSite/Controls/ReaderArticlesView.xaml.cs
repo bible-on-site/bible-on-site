@@ -9,10 +9,14 @@ namespace BibleOnSite.Controls;
 /// Selection clears itself and raises <see cref="ArticleSelected"/> — the page
 /// owns navigation and view-model bookkeeping.
 /// </summary>
+#pragma warning disable S2333 // MAUI XAML generates the other partial declaration.
 public partial class ReaderArticlesView : CollectionView
+#pragma warning restore S2333
 {
     /// <summary>Raised when an article card is tapped (selection self-clears).</summary>
+#pragma warning disable S3264 // Subscribed by the reader pages' code-behind; Codacy's per-file analysis misses them.
     public event EventHandler<Article>? ArticleSelected;
+#pragma warning restore S3264
 
     public static readonly BindableProperty SelectedArticleIdProperty =
         BindableProperty.Create(nameof(SelectedArticleId), typeof(int?), typeof(ReaderArticlesView), null);

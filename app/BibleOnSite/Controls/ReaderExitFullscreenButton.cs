@@ -12,7 +12,9 @@ namespace BibleOnSite.Controls;
 public class ReaderExitFullscreenButton : Border
 {
     /// <summary>Raised on a tap that was not a drag — the page exits fullscreen.</summary>
+#pragma warning disable S3264 // Subscribed by the reader pages' code-behind; Codacy's per-file analysis misses them.
     public event EventHandler? ExitRequested;
+#pragma warning restore S3264
 
     public ReaderExitFullscreenButton()
     {

@@ -5,11 +5,14 @@ namespace BibleOnSite.Controls;
 /// (with count badge) and fullscreen buttons — shared by the perek, parasha
 /// and masora readers so the layer cannot drift.
 /// </summary>
+#pragma warning disable S2333 // MAUI XAML generates the other partial declaration.
 public partial class ReaderBottomBar : Grid
+#pragma warning restore S2333
 {
     /// <summary>Height of the bar before the safe-area inset is added.</summary>
     public static double TotalHeight => 90;
 
+#pragma warning disable S3264 // Subscribed by the reader pages' code-behind; Codacy's per-file analysis misses them.
     /// <summary>Perushim chevron tapped — the page toggles the perushim sheet.</summary>
     public event EventHandler? PerushimToggleRequested;
 
@@ -21,6 +24,7 @@ public partial class ReaderBottomBar : Grid
 
     /// <summary>Fullscreen button tapped — the page enters fullscreen.</summary>
     public event EventHandler? FullScreenRequested;
+#pragma warning restore S3264
 
     public static readonly BindableProperty ArticlesBadgeCountProperty =
         BindableProperty.Create(nameof(ArticlesBadgeCount), typeof(int), typeof(ReaderBottomBar), 0,

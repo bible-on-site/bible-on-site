@@ -9,10 +9,14 @@ namespace BibleOnSite.Controls;
 /// it sets the pasuk text (including word-tap spans on <see cref="PasukText"/>)
 /// and the perushim items, and answers <see cref="PlayRequested"/>.
 /// </summary>
+#pragma warning disable S2333 // MAUI XAML generates the other partial declaration.
 public partial class FocusedPasukOverlay : Grid
+#pragma warning restore S2333
 {
     /// <summary>קריינות play button tapped — the page starts pasuk playback.</summary>
+#pragma warning disable S3264 // Subscribed by the reader pages' code-behind; Codacy's per-file analysis misses them.
     public event EventHandler? PlayRequested;
+#pragma warning restore S3264
 
     /// <summary>
     /// The pasuk text label — the page sets FormattedText with per-word

@@ -6,8 +6,11 @@ namespace BibleOnSite.Controls;
 /// its event and closes the panel; tapping the dimmed page around it just
 /// dismisses it.
 /// </summary>
+#pragma warning disable S2333 // MAUI XAML generates the other partial declaration.
 public partial class ReaderMenuPanel : Grid
+#pragma warning restore S2333
 {
+#pragma warning disable S3264 // Subscribed by the reader pages' code-behind; Codacy's per-file analysis misses them.
     /// <summary>שניים מקרא row tapped — the page flips the view-model flag.</summary>
     public event EventHandler? ShnayimMikraToggled;
 
@@ -16,6 +19,7 @@ public partial class ReaderMenuPanel : Grid
 
     /// <summary>הסתר שם השם row tapped — the page flips the view-model flag.</summary>
     public event EventHandler? DivineNameMaskingToggled;
+#pragma warning restore S3264
 
     public ReaderMenuPanel()
     {

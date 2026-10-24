@@ -5,10 +5,14 @@ namespace BibleOnSite.Controls;
 /// masora readers: a spinner state while the carousel initialises, and a
 /// retryable error state when a bounded load fails (#2084).
 /// </summary>
+#pragma warning disable S2333 // MAUI XAML generates the other partial declaration.
 public partial class ReaderLoadingOverlay : Grid
+#pragma warning restore S2333
 {
     /// <summary>Raised when the retry button on the error panel is tapped.</summary>
+#pragma warning disable S3264 // Subscribed by the reader pages' code-behind; Codacy's per-file analysis misses them.
     public event EventHandler? RetryRequested;
+#pragma warning restore S3264
 
     public static readonly BindableProperty LoadingTextProperty =
         BindableProperty.Create(nameof(LoadingText), typeof(string), typeof(ReaderLoadingOverlay), string.Empty,

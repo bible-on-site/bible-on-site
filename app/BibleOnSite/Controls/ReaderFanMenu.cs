@@ -41,12 +41,14 @@ public class ReaderFanMenu : Grid
     /// refreshes per-satellite enabled state there (e.g. prev/next CanExecute),
     /// so disabled buttons fade in at their dimmed opacity.
     /// </summary>
+#pragma warning disable S3264 // Subscribed by the reader pages' code-behind; Codacy's per-file analysis misses them.
     public event EventHandler? Opening;
+#pragma warning restore S3264
 
     public ReaderFanMenu()
     {
-        // Scrim: dims the page (verses included) while the fan is open;
-        // a tap anywhere dismisses the menu instead of hitting what is behind it.
+        // Scrim: dims the page (verses included) while the fan is open.
+        // A tap anywhere dismisses the menu instead of hitting what is behind it.
         _scrim = new Grid
         {
             AutomationId = "CircularMenuScrim",
@@ -155,16 +157,15 @@ public class ReaderFanMenu : Grid
 
     private async void OnToggleClicked(object? sender, EventArgs e)
     {
-        _isOpen = !_isOpen;
-        DebugLog.Write($"[CircularMenu] Clicked: open={_isOpen}");
+        DebugLog.Write($"[CircularMenu] Clicked: open={!_isOpen}");
 
         if (_isOpen)
         {
-            await OpenAsync();
+            await CloseAsync();
         }
         else
         {
-            await CloseAsync();
+            await OpenAsync();
         }
     }
 

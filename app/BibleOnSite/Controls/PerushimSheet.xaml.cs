@@ -12,7 +12,9 @@ namespace BibleOnSite.Controls;
 /// for checked-state and the filtered list; everything else binds through the
 /// ambient BindingContext (Perushim, CheckedPerushim, PerushimSelectionStatus…).
 /// </summary>
+#pragma warning disable S2333 // MAUI XAML generates the other partial declaration.
 public partial class PerushimSheet : Border
+#pragma warning restore S2333
 {
     private bool _isExpanded;
     private double _panelHeight;
@@ -27,7 +29,9 @@ public partial class PerushimSheet : Border
     public bool IsOpen { get; private set; }
 
     /// <summary>Raised whenever <see cref="IsOpen"/> changes (toggle, pan-dismiss).</summary>
+#pragma warning disable S3264 // Subscribed by the reader pages' code-behind; Codacy's per-file analysis misses them.
     public event EventHandler<bool>? IsOpenChanged;
+#pragma warning restore S3264
 
     private IPerushimSheetViewModel? ViewModel => BindingContext as IPerushimSheetViewModel;
 

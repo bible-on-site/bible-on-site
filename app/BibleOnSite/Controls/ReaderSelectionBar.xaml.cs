@@ -7,8 +7,11 @@ namespace BibleOnSite.Controls;
 /// the control owns the row layout, the copied-glyph feedback flash, and the
 /// recitation button's play/pause/headphones glyph states.
 /// </summary>
+#pragma warning disable S2333 // MAUI XAML generates the other partial declaration.
 public partial class ReaderSelectionBar : Grid
+#pragma warning restore S2333
 {
+#pragma warning disable S3264 // Subscribed by the reader pages' code-behind; Codacy's per-file analysis misses them.
     /// <summary>Back (right-arrow) button tapped — the page clears selection.</summary>
     public event EventHandler? BackRequested;
 
@@ -20,6 +23,7 @@ public partial class ReaderSelectionBar : Grid
 
     /// <summary>Copy button tapped.</summary>
     public event EventHandler? CopyRequested;
+#pragma warning restore S3264
 
     /// <summary>Recitation button state mirrored by the page each update.</summary>
     public enum RecitationVisual
