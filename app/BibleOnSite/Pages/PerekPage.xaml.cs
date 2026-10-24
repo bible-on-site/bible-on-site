@@ -882,9 +882,44 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
                 .FirstOrDefault()?.Windows.FirstOrDefault(w => w.IsKeyWindow);
             if (window is null) { DebugLog.Write($"[A11yDump {tag}] no window"); return; }
             var found = DumpViewFlags(window, 0, tag);
+            var target = FindViewById(window, "PasukimCollection") ?? FindViewById(window, "CircularMenuButton");
+            if (target != null)
+            {
+                DumpAncestorChain(target, tag);
+            }
+            else
+            {
+                DebugLog.Write($"[A11yDump {tag}] PasukimCollection view not found");
+            }
             DebugLog.Write($"[A11yDump {tag}] flagged={found}");
         }
         catch (Exception ex) { DebugLog.Write($"[A11yDump {tag}] failed: {ex}"); }
+    }
+
+    private static UIKit.UIView? FindViewById(UIKit.UIView view, string id)
+    {
+        if (view.AccessibilityIdentifier == id) { return view; }
+        foreach (var sub in view.Subviews)
+        {
+            var hit = FindViewById(sub, id);
+            if (hit != null) { return hit; }
+        }
+        return null;
+    }
+
+    // Walks up from a hidden reader element and dumps every ancestor's AX
+    // flags so the exact hiding layer is identified by class name.
+    private static void DumpAncestorChain(UIKit.UIView view, string tag)
+    {
+        var d = 0;
+        for (var v = view; v != null && d < 40; v = v.Superview, d++)
+        {
+            var f = v.Frame;
+            DebugLog.Write($"[A11yChain {tag}] d{d} {v.GetType().Name} f={f.X:0},{f.Y:0},{f.Width:0}x{f.Height:0} " +
+                $"modal={KvoBool(v, "accessibilityViewIsModal")} elemHidden={KvoBool(v, "accessibilityElementsHidden")} " +
+                $"hidden={v.Hidden} alpha={v.Alpha:0.##} isAE={KvoBool(v, "isAccessibilityElement")} " +
+                $"clip={v.ClipsToBounds} uie={v.UserInteractionEnabled} id={v.AccessibilityIdentifier ?? "-"}");
+        }
     }
 
     private static bool KvoBool(UIKit.UIView view, string key)
