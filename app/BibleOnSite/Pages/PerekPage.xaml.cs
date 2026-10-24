@@ -873,6 +873,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         MainThread.BeginInvokeOnMainThread(() => DumpA11yTree($"pass{_a11yDumpCount}"));
     }
 
+#pragma warning disable S2221 // Deliberate failure boundary: the diagnostic dump must never crash the reader.
     private void DumpA11yTree(string tag)
     {
         try
@@ -954,6 +955,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         }
         return count;
     }
+#pragma warning restore S2221
 #endif
 
     /// <summary>
