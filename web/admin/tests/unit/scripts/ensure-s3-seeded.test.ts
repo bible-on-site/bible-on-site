@@ -27,12 +27,19 @@ function listXml(keys: string[]): string {
 	const contents = keys
 		.map(
 			(key) =>
-				// nosemgrep -- XML fixture for the stub S3 endpoint
-				`<Contents><Key>${key}</Key><LastModified>2024-01-01T00:00:00.000Z</LastModified><Size>1</Size></Contents>`,
+				"<Contents><Key>" +
+				key +
+				"</Key><LastModified>2024-01-01T00:00:00.000Z</LastModified><Size>1</Size></Contents>",
 		)
 		.join("");
-	// nosemgrep -- XML fixture for the stub S3 endpoint
-	return `<?xml version="1.0" encoding="UTF-8"?><ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><KeyCount>${keys.length}</KeyCount><MaxKeys>1</MaxKeys><IsTruncated>false</IsTruncated>${contents}</ListBucketResult>`;
+	return [
+		'<?xml version="1.0" encoding="UTF-8"?><ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">',
+		"<KeyCount>",
+		String(keys.length),
+		"</KeyCount><MaxKeys>1</MaxKeys><IsTruncated>false</IsTruncated>",
+		contents,
+		"</ListBucketResult>",
+	].join("");
 }
 
 describe("ensure-s3-seeded", () => {

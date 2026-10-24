@@ -15,7 +15,6 @@ function run() {
 	const __dirname = path.dirname(fileURLToPath(import.meta.url));
 	const projectRoot = path.resolve(__dirname, "..");
 	const pkgPath = path.join(projectRoot, "package.json");
-	// nosemgrep -- pkgPath = projectRoot/package.json, fixed path
 	const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
 	const dep = pkg.dependencies?.["html-flip-book-react"];
 
@@ -28,7 +27,6 @@ function run() {
 	function siblingBaseDir(reactDir) {
 		for (const name of ["base", "html-flip-book-base", "vanilla"]) {
 			const candidate = path.resolve(reactDir, "..", name);
-			// nosemgrep -- fixed local directory list, no user input
 			if (fs.existsSync(path.join(candidate, "package.json"))) {
 				return candidate;
 			}
@@ -51,10 +49,7 @@ function run() {
 		);
 		reactSrc = ["react", "html-flip-book-react"]
 			.map((name) => path.join(repoDir, name))
-			.find((candidate) =>
-				// nosemgrep -- fixed local directory list, no user input
-				fs.existsSync(path.join(candidate, "package.json")),
-			);
+			.find((candidate) => fs.existsSync(path.join(candidate, "package.json")));
 		if (!reactSrc) {
 			console.warn(
 				`copy-local-flip-book: no react package found under ${repoDir}`,
@@ -67,8 +62,6 @@ function run() {
 		process.exit(0);
 		return;
 	}
-
-	// nosemgrep -- reactSrc resolved from fixed sibling-repo candidate list
 	if (!fs.existsSync(path.join(reactSrc, "dist", "flip-book.js"))) {
 		console.warn(
 			"copy-local-flip-book: react dist not found; run npm run build in html-flip-book first.",
@@ -87,20 +80,14 @@ function run() {
 		"node_modules",
 		"html-flip-book-vanilla",
 	);
-
-	// nosemgrep -- src/dest always derive from the fixed roots below
 	function copyDir(src, dest) {
-		// nosemgrep -- fixed local roots, no user input
 		fs.mkdirSync(dest, { recursive: true });
-		// nosemgrep -- fixed local roots, no user input
 		for (const name of fs.readdirSync(src)) {
 			const s = path.join(src, name);
 			const d = path.join(dest, name);
-			// nosemgrep -- fixed local roots, no user input
 			if (fs.statSync(s).isDirectory()) {
 				copyDir(s, d);
 			} else {
-				// nosemgrep -- fixed local roots, no user input
 				fs.copyFileSync(s, d);
 			}
 		}
@@ -111,29 +98,21 @@ function run() {
 	// A real directory keeps its node_modules so the nested install below runs
 	// once per checkout instead of on every refresh.
 	try {
-		// nosemgrep -- target under this checkout's node_modules, fixed path
 		if (fs.lstatSync(targetReact).isSymbolicLink()) fs.unlinkSync(targetReact);
 	} catch {
 		// doesn't exist — fine
 	}
-	// nosemgrep -- target under this checkout's node_modules, fixed path
 	fs.rmSync(path.join(targetReact, "dist"), { recursive: true, force: true });
-	// nosemgrep -- target under this checkout's node_modules, fixed path
 	fs.mkdirSync(targetVanilla, { recursive: true });
-
-	// nosemgrep -- reactSrc resolved from fixed sibling-repo candidate list
 	fs.copyFileSync(
 		path.join(reactSrc, "package.json"),
 		path.join(targetReact, "package.json"),
 	);
 	copyDir(path.join(reactSrc, "dist"), path.join(targetReact, "dist"));
-
-	// nosemgrep -- target under this checkout's node_modules, fixed path
 	fs.rmSync(path.join(targetVanilla, "dist"), {
 		recursive: true,
 		force: true,
 	});
-	// nosemgrep -- baseSrc resolved from fixed sibling-repo candidate list
 	fs.copyFileSync(
 		path.join(baseSrc, "package.json"),
 		path.join(targetVanilla, "package.json"),
@@ -141,7 +120,6 @@ function run() {
 	copyDir(path.join(baseSrc, "dist"), path.join(targetVanilla, "dist"));
 
 	// Install vanilla's dependencies (hammerjs, throttle-debounce, etc.) so the bundler can resolve them
-	// nosemgrep -- target under this checkout's node_modules, fixed path
 	if (!fs.existsSync(path.join(targetVanilla, "node_modules"))) {
 		execSync("npm install --omit=dev", {
 			cwd: targetVanilla,
