@@ -281,11 +281,20 @@ function setCutBoundary(segment, field, value) {
   persistCutProgress();
 }
 function resetCut(segment) {
-  if (saving || savingCuts || historicalCase) return;
+  if (!caseNow() || saving || savingCuts || historicalCase) return;
+  const item = caseNow(), original = item.words.find(word => word.segment === segment);
+  if (!original) return;
   stop();
-  const drafts = {...cutEditsFor(caseNow())}; delete drafts[segment];
-  cutDrafts.set(stateKey(caseNow()), drafts);
-  renderCutEditor(); updateEvidence(); persistCutProgress();
+  const drafts = {...cutEditsFor(item)}; delete drafts[segment];
+  cutDrafts.set(stateKey(item), drafts);
+  const refs = cutRows.get(segment);
+  if (refs) for (const field of ["startMs", "endMs"]) {
+    refs[field].range.min = String(Math.max(item.clipStartMs, original[field] - 150));
+    refs[field].range.max = String(Math.min(item.clipEndMs, original[field] + 150));
+    refs[field].range.value = String(original[field]);
+    refs[field].number.value = (original[field] / 1000).toFixed(3);
+  }
+  updateEvidence(); persistCutProgress();
 }
 function updateCutRow(original) {
   const refs = cutRows.get(original.segment);
