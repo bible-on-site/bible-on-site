@@ -36,8 +36,8 @@ carry `when` filters and are already narrow (spot-checked per batch).
 | app/BibleOnSite\App.xaml.cs:35 | `CreateWindow` | window-creation failure is logged then rethrown. | retained — same contract for CreateWindow |
 | app/BibleOnSite\Config\AppConfig.cs:109 | `ReadPackagedValueAsync` | packaged-config probe degrades to a null fallback. | retain + dedupe pragma pair (tool stamped it twice) |
 | app/BibleOnSite\MainPage.xaml.cs:48 | `LoadStarterDataAsync` | starter-data load failure proceeds offline. | try scope narrowed to LoadAsync + log full exception |
-| app/BibleOnSite\MauiProgram.cs:135 | `CreateMauiApp` | Firebase init failure disables analytics, not the app. | pending |
-| app/BibleOnSite\Pages\ArticleDetailPage.xaml.cs:109 | `LoadArticleAsync` | article load failure surfaces as ErrorMessage. | pending |
+| app/BibleOnSite\MauiProgram.cs:135 | `CreateMauiApp` | Firebase init failure disables analytics, not the app. | retained — Firebase init failure disables analytics, app continues; dual logged |
+| app/BibleOnSite\Pages\ArticleDetailPage.xaml.cs:109 | `LoadArticleAsync` | article load failure surfaces as ErrorMessage. | retained — true boundary (surfaces `שגיאה בטעינת המאמר`); service swallows removed so transport errors now reach it |
 | app/BibleOnSite\Platforms\Windows\Handlers\HtmlViewHandler.cs:115 | `UpdateContent` | HTML render failure falls back to plain text. | pending |
 | app/BibleOnSite\Controls\FloatingSearchBar.xaml.cs:176 | `OpenSearchAsync` | search-init failure surfaces as a user-facing error message. | pending |
 | app/BibleOnSite\Controls\FloatingSearchBar.xaml.cs:261 | `RunSearchAsync` | user-triggered search failure is logged; status refresh continues. | pending |
@@ -46,20 +46,20 @@ carry `when` filters and are already narrow (spot-checked per batch).
 | app/BibleOnSite\Controls\FloatingSearchBar.xaml.cs:654 | `RefreshRecentHistory` | recent-searches load degrades to an empty list. | pending |
 | app/BibleOnSite\Controls\FloatingSearchBar.xaml.cs:669 | `RememberSearch` | recent-search persistence is best-effort. | pending |
 | app/BibleOnSite\Controls\HtmlView.cs:71 | `LoadCellContentAsync` | commentary-cell load failure swaps in fallback text. | pending |
-| app/BibleOnSite\ViewModels\TanahpediaViewModel.cs:98 | `LoadAsync` | landing load failure surfaces as ErrorMessage. | pending |
+| app/BibleOnSite\ViewModels\TanahpediaViewModel.cs:98 | `LoadAsync` | landing load failure surfaces as ErrorMessage. | retained — landing load is required content → `ErrorMessage`; `IsLoading` reset in finally |
 | app/BibleOnSite\Helpers\ExitConfirmation.cs:67 | `PromptAsync` | exit-prompt failure falls through to normal exit. | retained (injected delegate; recovery test exists) + corrected false reason |
-| app/BibleOnSite\ViewModels\TanahpediaSearchViewModel.cs:232 | `SearchAsync` | failure boundary: a failed search must land on the availability note, not crash the panel. | pending |
-| app/BibleOnSite\ViewModels\TanahpediaEntryViewModel.cs:201 | `LoadCoreAsync` | entry load failure surfaces as ErrorMessage. | pending |
-| app/BibleOnSite\ViewModels\TanahpediaEntryViewModel.cs:289 | `LoadFamilyAsync` | family-section load is best-effort. | pending |
-| app/BibleOnSite\ViewModels\TanahpediaEntryViewModel.cs:303 | `LoadMarkersAsync` | place-marker load is best-effort. | pending |
-| app/BibleOnSite\ViewModels\TanahpediaEntryViewModel.cs:364 | `LoadOccurrencesAsync` | occurrences mapping failure drops the table, not the page. | pending |
+| app/BibleOnSite\ViewModels\TanahpediaSearchViewModel.cs:232 | `SearchAsync` | failure boundary: a failed search must land on the availability note, not crash the panel. | retained — failed search → availability note, version-guarded; OCE filtered |
+| app/BibleOnSite\ViewModels\TanahpediaEntryViewModel.cs:201 | `LoadCoreAsync` | entry load failure surfaces as ErrorMessage. | retained — entry load → `ErrorMessage`; OCE filtered separately; version guard blocks superseded writes |
+| app/BibleOnSite\ViewModels\TanahpediaEntryViewModel.cs:289 | `LoadFamilyAsync` | family-section load is best-effort. | retained — family tree is deferred secondary content; designed drop (doc :253) |
+| app/BibleOnSite\ViewModels\TanahpediaEntryViewModel.cs:303 | `LoadMarkersAsync` | place-marker load is best-effort. | retained — place markers same deferred-secondary contract |
+| app/BibleOnSite\ViewModels\TanahpediaEntryViewModel.cs:364 | `LoadOccurrencesAsync` | occurrences mapping failure drops the table, not the page. | retained — occurrences table secondary; inner filtered SQLite/IO catch already narrow |
 | app/BibleOnSite\Helpers\HtmlAttributedStringFactory.cs:77 | `Append` | attributed-string parse failure falls back to plain text. | pending |
-| app/BibleOnSite\ViewModels\TanahpediaEntityTypeViewModel.cs:119 | `LoadAsync` | homepage load degrades; entities still render. | pending |
-| app/BibleOnSite\ViewModels\TanahpediaEntityTypeViewModel.cs:136 | `LoadAsync` | place-marker load drops the map, not the page. | pending |
-| app/BibleOnSite\ViewModels\TanahpediaEntityTypeViewModel.cs:150 | `LoadAsync` | category load failure surfaces as ErrorMessage. | pending |
+| app/BibleOnSite\ViewModels\TanahpediaEntityTypeViewModel.cs:119 | `LoadAsync` | homepage load degrades; entities still render. | retained — layered contract: homepage intro secondary; failure drops intro, listing renders |
+| app/BibleOnSite\ViewModels\TanahpediaEntityTypeViewModel.cs:136 | `LoadAsync` | place-marker load drops the map, not the page. | retained — PLACE map markers secondary; failure drops map only |
+| app/BibleOnSite\ViewModels\TanahpediaEntityTypeViewModel.cs:150 | `LoadAsync` | category load failure surfaces as ErrorMessage. | retained — required listing failure → `ErrorMessage`; correct outer boundary |
 | app/BibleOnSite\ViewModels\SupportPreferencesViewModel.cs:54 | `ExportLogsAsync` | export spans IO/share platform errors; failure is reported to the user. | pending |
 | app/BibleOnSite\ViewModels\SearchViewModel.cs:595 | `PasukSearchResult` | — | pending |
-| app/BibleOnSite\ViewModels\SearchViewModel.cs:663 | `Add` | remote article search degrades to an availability note. | pending |
+| app/BibleOnSite\ViewModels\SearchViewModel.cs:663 | `Add` | remote article search degrades to an availability note. | retained — merge boundary appends honest availability note (preferred degradation shape) |
 | app/BibleOnSite\ViewModels\SearchViewModel.cs:715 | `Add` | remote pedia search degrades to an availability note. | pending |
 | app/BibleOnSite\ViewModels\RecitationPacksViewModel.cs:158 | `LoadAsync` | the install surface spans IO/network; a failed load shows the retry hint. | pending |
 | app/BibleOnSite\ViewModels\RecitationPacksViewModel.cs:216 | `RemoveAllAsync` | removal spans IO/platform errors; failure is reported and the list refreshed. | pending |
@@ -121,22 +121,22 @@ carry `when` filters and are already narrow (spot-checked per batch).
 | app/BibleOnSite\Pages\PerekPage.xaml.cs:1867 | `OnGoToPerushimSettingsClicked` | settings navigation failure is log-only. | pending |
 | app/BibleOnSite\Pages\PerekPage.WindowsBack.cs:96 | `OnReaderKeyboardBackInvoked` | reader Back navigation failure is log-only. | retained — async-void boundary; press already consumed; Windows-only |
 | app/BibleOnSite\Pages\TanahpediaEntryPage.xaml.cs:125 | `OnOccurrenceTapped` | occurrence navigation failure alerts the user. | pending |
-| app/BibleOnSite\Services\ArticleService.cs:84 | `GetArticlesByPerekIdAsync` | remote article fetch degrades to an empty list. | pending |
-| app/BibleOnSite\Services\ArticleService.cs:146 | `GetArticleByIdAsync` | remote article fetch degrades to null. | pending |
-| app/BibleOnSite\Services\ArticleService.cs:204 | `GetArticlesByAuthorIdAsync` | remote author fetch degrades to an empty list. | pending |
+| app/BibleOnSite\Services\ArticleService.cs:84 | `GetArticlesByPerekIdAsync` | remote article fetch degrades to an empty list. | repaired — transport failures propagate; GraphQL errors/absent data still return empty. `ArticleResponseTests` asserts `HttpRequestException` propagates |
+| app/BibleOnSite\Services\ArticleService.cs:146 | `GetArticleByIdAsync` | remote article fetch degrades to null. | repaired — single-article transport failure no longer falsified to null (real not-found still null) |
+| app/BibleOnSite\Services\ArticleService.cs:204 | `GetArticlesByAuthorIdAsync` | remote author fetch degrades to an empty list. | repaired — author-list transport failure no longer falsified to empty |
 | app/BibleOnSite\Services\AccessibilityStatement.cs:19 | `OpenAsync` | launcher failures are platform-specific; the user gets an alert. | pending |
 | app/BibleOnSite\Pages\PerekPage.Search.cs:306 | `OnSearchResultSelected` | search-result navigation failure alerts the user. | pending |
-| app/BibleOnSite\Services\AnalyticsService.cs:51 | `SetScreen` | analytics event failure must never crash the reader. | pending |
-| app/BibleOnSite\Services\AnalyticsService.cs:75 | `LogSearch` | analytics event failure must never crash the reader. | pending |
-| app/BibleOnSite\Services\MpegRecitationAudioDecoder.cs:33 | `ReleaseAsync` | JS reset failure marks the decoder uninitialized so the next use retries. | pending |
-| app/BibleOnSite\Services\NetworkService.cs:78 | `OnConnectivityChanged` | connectivity-refresh failure is log-only. | pending |
+| app/BibleOnSite\Services\AnalyticsService.cs:51 | `SetScreen` | analytics event failure must never crash the reader. | retained — telemetry must never crash the reader |
+| app/BibleOnSite\Services\AnalyticsService.cs:75 | `LogSearch` | analytics event failure must never crash the reader. | retained — same telemetry boundary |
+| app/BibleOnSite\Services\MpegRecitationAudioDecoder.cs:33 | `ReleaseAsync` | JS reset failure marks the decoder uninitialized so the next use retries. | retained — catch performs recovery (`_initialized=false` → next use retries) |
+| app/BibleOnSite\Services\NetworkService.cs:78 | `OnConnectivityChanged` | connectivity-refresh failure is log-only. | retained — connectivity-refresh is background log-only; no state written on failure |
 | app/BibleOnSite\Services\PadDeliveryService.cs:254 | `TryGetAssetPathAndroidAsync` | pack-location probe: any failure counts as unavailable. | pending |
 | app/BibleOnSite\Services\PadDeliveryService.cs:358 | `FetchAndroidAsync` | pack fetch failure is surfaced via LastAndroidPadError and a false result. | pending |
 | app/BibleOnSite\Services\PadDeliveryService.cs:398 | `GetDeliveryDiagnosticsAndroidAsync` | diagnostics collection: pack-location failure becomes a report line. | pending |
 | app/BibleOnSite\Services\PadDeliveryService.cs:441 | `AppendInstallSourceLines` | diagnostics collection: installer-source failure becomes a report line. | pending |
 | app/BibleOnSite\Services\PadDeliveryService.cs:554 | `TryGetAssetPathIosAsync` | asset-path lookup failure counts as unavailable. | pending |
 | app/BibleOnSite\Services\PadDeliveryService.cs:625 | `FetchIosAsync` | delivery fetch failure is surfaced via LastIosDeliveryError and a false result. | pending |
-| app/BibleOnSite\Services\PadDeliveryService.cs:818 | `SavePackFileAsync` | payload save failure returns a false result. | pending |
+| app/BibleOnSite\Services\PadDeliveryService.cs:818 | `SavePackFileAsync` | payload save failure returns a false result. | retained — save failure → truthful false result; caller treats as failed download |
 | app/BibleOnSite\Services\PadDeliveryService.cs:845 | `CancelAssetPackDownload` | download cancel is best-effort. | pending |
 | app/BibleOnSite\Services\PadDeliveryService.cs:868 | `GetDeliveryDiagnosticsIosAsync` | diagnostics collection: cached-file info failure becomes a report line. | pending |
 | app/BibleOnSite\Services\PadDeliveryService.cs:886 | `GetDeliveryDiagnosticsIosAsync` | diagnostics collection: Info.plist probe failure becomes a report line. | pending |
@@ -156,7 +156,7 @@ carry `when` filters and are already narrow (spot-checked per batch).
 | app/BibleOnSite\Services\PerushimNotesService.cs:203 | `GetDiagnosticsAsync` | diagnostics collection: any failure becomes a report line. | pending |
 | app/BibleOnSite\Services\PerushimNotesService.cs:247 | `GetDiagnosticsAsync` | diagnostics collection: any failure becomes a report line. | pending |
 | app/BibleOnSite\Services\PerushimNotesService.cs:265 | `AppPackageHasNotesAsync` | any package-probe failure means "no notes"; callers degrade, never abort. | pending |
-| app/BibleOnSite\Services\PerushimNotesService.cs:530 | `ValidateLocalNotesCoreAsync` | validation failure rejects the pack generation. | pending |
+| app/BibleOnSite\Services\PerushimNotesService.cs:530 | `ValidateLocalNotesCoreAsync` | validation failure rejects the pack generation. | retained — ambiguous failure rejects pack but not generation (equal-build replacement stays allowed) |
 | app/BibleOnSite\Services\PerushimNotesService.cs:816 | `TryUpgradeFromPadAsync` | PAD check/upgrade is best-effort. | pending |
 | app/BibleOnSite\Services\PerushimNotesService.cs:893 | `TryCopyFromPadAsync` | pack copy failure degrades to not-copied. | pending |
 | app/BibleOnSite\Services\PerushimNotesService.cs:950 | `TryCopyFromAppPackageAsync` | package copy failure degrades to not-copied. | pending |
