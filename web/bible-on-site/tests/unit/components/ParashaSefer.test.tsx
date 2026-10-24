@@ -28,8 +28,7 @@ jest.mock("next/dynamic", () => {
 	const { forwardRef, useImperativeHandle } =
 		require("react") as typeof import("react");
 	return (loader: () => Promise<unknown>) => {
-		(globalThis as Record<string, unknown>).__parashaDynamicLoader =
-			loader;
+		(globalThis as Record<string, unknown>).__parashaDynamicLoader = loader;
 		return forwardRef(function MockFlipBook(
 			props: Record<string, unknown>,
 			ref,
@@ -183,6 +182,10 @@ const units: ParashaBookUnit[] = [
 		order: 1,
 		refSpan: "בראשית א א - ו ח",
 		ranges: [range(1, 1, 6, 8)],
+		aliyahMarkers: {
+			"1:12": [{ key: "bereshit:shabbat", label: "שני", role: "aliyah" }],
+		},
+		aliyahMarkerKey: "bereshit:shabbat",
 		haftarot: [
 			{
 				id: "haftara-ashkenazi",
@@ -276,9 +279,7 @@ describe("ParashaSefer", () => {
 		mockGetCurrentPageIndex.mockReset().mockReturnValue(0);
 		// Never resolve by default — tests that don't await the batch
 		// would otherwise hit act() warnings on the summary setState.
-		mockSummariesBatch.mockReset().mockReturnValue(
-			new Promise(() => {}),
-		);
+		mockSummariesBatch.mockReset().mockReturnValue(new Promise(() => {}));
 		mockSetSeferDocumentTitle.mockClear();
 		mockReleaseSeferDocumentTitle.mockClear();
 		history.replaceState(null, "", "/פרשה/1?book");
@@ -317,23 +318,34 @@ describe("ParashaSefer", () => {
 		// they never duplicate the flat page's canonical pasuk ids.
 		expect(mockUnitTextBodies).toHaveLength(3);
 		expect(mockUnitTextBodies[0].anchorScope).toBe("book-1");
-		expect(mockUnitTextBodies[1].anchorScope).toBe(
-			"book-1-haftara-ashkenazi",
-		);
+		expect(mockUnitTextBodies[1].anchorScope).toBe("book-1-haftara-ashkenazi");
 		expect(mockUnitTextBodies[2].anchorScope).toBe("book-2");
+		// The Torah spread carries the unit's standalone-Shabbat marker
+		// layer rebuilt into the renderer's map (issue #2519); the
+		// Haftarah body and markerless units get none.
+		const torahMarkers = mockUnitTextBodies[0].boundaryMarkers;
+		expect(torahMarkers).toBeInstanceOf(Map);
+		expect((torahMarkers as Map<string, unknown>).get("1:12")).toEqual([
+			{ key: "bereshit:shabbat", label: "שני", role: "aliyah" },
+		]);
+		expect(mockUnitTextBodies[0].defaultMarkerKey).toBe("bereshit:shabbat");
+		expect(mockUnitTextBodies[0].modestPerekLabels).toBe(true);
+		expect(mockUnitTextBodies[1].boundaryMarkers).toBeUndefined();
+		expect(mockUnitTextBodies[2].boundaryMarkers).toBeUndefined();
 	});
 
 	it("gives every unit a Torah blank and a Haftarah blank", () => {
 		render(<ParashaSefer {...baseProps()} />);
 		// 2 units × 2 blank pages (torah + haftara scopes).
 		expect(mockBlankPages.size).toBe(4);
+		expect([...mockBlankPages.values()].map((page) => page.scope)).toEqual([
+			"torah",
+			"haftara",
+			"torah",
+			"haftara",
+		]);
 		expect(
-			[...mockBlankPages.values()].map((page) => page.scope),
-		).toEqual(["torah", "haftara", "torah", "haftara"]);
-		expect(
-			[...mockBlankPages.values()].every(
-				(page) => page.division === "parasha",
-			),
+			[...mockBlankPages.values()].every((page) => page.division === "parasha"),
 		).toBe(true);
 	});
 
@@ -343,12 +355,8 @@ describe("ParashaSefer", () => {
 		const haftaraBlank = mockBlankPages.get("1:haftara");
 		expect(torahBlank?.articles).toBe(currentUnitSummaries.articles);
 		expect(torahBlank?.perushim).toBe(currentUnitSummaries.perushim);
-		expect(haftaraBlank?.articles).toBe(
-			currentUnitSummaries.haftaraArticles,
-		);
-		expect(haftaraBlank?.perushim).toBe(
-			currentUnitSummaries.haftaraPerushim,
-		);
+		expect(haftaraBlank?.articles).toBe(currentUnitSummaries.haftaraArticles);
+		expect(haftaraBlank?.perushim).toBe(currentUnitSummaries.haftaraPerushim);
 	});
 
 	it("batch-loads commentary summaries for the other units' blanks", async () => {
@@ -357,17 +365,18 @@ describe("ParashaSefer", () => {
 				Promise.resolve(
 					scope === "torah"
 						? { "2": { articles: [], perushim: currentUnitSummaries.perushim } }
-						: { "2": { articles: currentUnitSummaries.haftaraArticles, perushim: [] } },
+						: {
+								"2": {
+									articles: currentUnitSummaries.haftaraArticles,
+									perushim: [],
+								},
+							},
 				),
 		);
 		render(<ParashaSefer {...baseProps()} />);
 		// Both scopes batch over the units except the current one.
 		expect(mockSummariesBatch).toHaveBeenCalledWith("parasha", [2], "torah");
-		expect(mockSummariesBatch).toHaveBeenCalledWith(
-			"parasha",
-			[2],
-			"haftara",
-		);
+		expect(mockSummariesBatch).toHaveBeenCalledWith("parasha", [2], "haftara");
 		await act(async () => {});
 		expect(mockBlankPages.get("2:torah")?.perushim).toBe(
 			currentUnitSummaries.perushim,
@@ -387,13 +396,10 @@ describe("ParashaSefer", () => {
 		["front", []],
 		["toc", [0]],
 		["back", [0, 1, 2, 3, 4, 5]],
-	] as const)(
-		"opens the book chrome %s page at its leaf",
-		(page, expected) => {
-			render(<ParashaSefer {...baseProps()} initialBookPage={page} />);
-			expect(capturedFlipBookProps.initialTurnedLeaves).toEqual(expected);
-		},
-	);
+	] as const)("opens the book chrome %s page at its leaf", (page, expected) => {
+		render(<ParashaSefer {...baseProps()} initialBookPage={page} />);
+		expect(capturedFlipBookProps.initialTurnedLeaves).toEqual(expected);
+	});
 
 	it("restores the requested page when it differs from the current page", () => {
 		render(<ParashaSefer {...baseProps()} currentUnitId={2} />);
@@ -433,9 +439,7 @@ describe("ParashaSefer", () => {
 		act(() => {
 			onNavigate("perush", 'רש"י');
 		});
-		expect(decodeURIComponent(window.location.search)).toContain(
-			'perush=רש"י',
-		);
+		expect(decodeURIComponent(window.location.search)).toContain('perush=רש"י');
 		expect(window.location.search).toContain("book=");
 		// The selection publishes back into the blank's restore slug.
 		expect(mockBlankPages.get("1:torah")?.initialSlug).toBe('רש"י');
@@ -507,15 +511,15 @@ describe("ParashaSefer", () => {
 		).toBe("/פרשה/1?book");
 		// The blank shares the Torah spread's route; the Haftarah spread
 		// rides on &haftara.
-		expect(
-			getHref({ pageIndex: 4, semanticName: "", title: "" }),
-		).toBe("/פרשה/1?book");
+		expect(getHref({ pageIndex: 4, semanticName: "", title: "" })).toBe(
+			"/פרשה/1?book",
+		);
 		expect(
 			getHref({ pageIndex: 5, semanticName: "", title: "הפטרת בראשית" }),
 		).toBe("/פרשה/1?book&haftara");
-		expect(
-			getHref({ pageIndex: 7, semanticName: "ב", title: "פרשת נח" }),
-		).toBe("/פרשה/2?book");
+		expect(getHref({ pageIndex: 7, semanticName: "ב", title: "פרשת נח" })).toBe(
+			"/פרשה/2?book",
+		);
 		expect(getHref({ pageIndex: 11, semanticName: "", title: "" })).toBe(
 			"/פרשה/בראשית/גב?book",
 		);
@@ -532,9 +536,11 @@ describe("ParashaSefer", () => {
 	it("lazy-loads the real FlipBook through the dynamic loader", async () => {
 		render(<ParashaSefer {...baseProps()} />);
 		const loader = (globalThis as Record<string, unknown>)
-			.__parashaDynamicLoader as (() => Promise<{
-			FlipBook?: unknown;
-		}>) | null;
+			.__parashaDynamicLoader as
+			| (() => Promise<{
+					FlipBook?: unknown;
+			  }>)
+			| null;
 		expect(loader).not.toBeNull();
 		if (!loader) {
 			throw new Error("dynamic loader was not captured");
@@ -555,9 +561,7 @@ describe("ParashaSefer", () => {
 
 	it("logs and survives a failed summary batch", async () => {
 		mockSummariesBatch.mockRejectedValue(new Error("offline"));
-		const errorSpy = jest
-			.spyOn(console, "error")
-			.mockImplementation(() => {});
+		const errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
 		try {
 			render(<ParashaSefer {...baseProps()} />);
 			await act(async () => {});
@@ -607,8 +611,9 @@ describe("ParashaSefer", () => {
 		const torahTitle = mockBlankPages.get("1:torah")?.perushTitle as (
 			n: string,
 		) => string;
-		const haftaraTitle = mockBlankPages.get("1:haftara")
-			?.perushTitle as (n: string) => string;
+		const haftaraTitle = mockBlankPages.get("1:haftara")?.perushTitle as (
+			n: string,
+		) => string;
 		expect(torahTitle('רש"י')).toBe(
 			'רש"י על פרשת בראשית | פרשה על הפרק | תנ"ך על הפרק',
 		);
@@ -635,8 +640,9 @@ describe("ParashaSefer", () => {
 		);
 
 		// An open perush/article on a blank page wins over the page title.
-		const onContentTitle = mockBlankPages.get("1:haftara")
-			?.onContentTitle as (t: string | null) => void;
+		const onContentTitle = mockBlankPages.get("1:haftara")?.onContentTitle as (
+			t: string | null,
+		) => void;
 		act(() => onContentTitle('רד"ק על ההפטרה'));
 		expect(mockSetSeferDocumentTitle).toHaveBeenLastCalledWith(
 			'רד"ק על ההפטרה',
@@ -664,9 +670,7 @@ describe("ParashaSefer", () => {
 		) as HTMLElement;
 		// The delegated onClick lives on the scroll wrapper inside the
 		// pane; the numeral must sit inside it to reach the handler.
-		(
-			haftaraPane.querySelector("article") as HTMLElement
-		).insertAdjacentHTML(
+		(haftaraPane.querySelector("article") as HTMLElement).insertAdjacentHTML(
 			"beforeend",
 			`<span id="pasuk-335-5-book-1-haftara-ashkenazi"><b data-pasuk-num>ה</b></span>`,
 		);
@@ -693,9 +697,7 @@ describe("ParashaSefer", () => {
 			const torahPane = document.querySelector(
 				'[data-sefer-unit-text="1:torah"]',
 			) as HTMLElement;
-			(
-				torahPane.querySelector("article") as HTMLElement
-			).insertAdjacentHTML(
+			(torahPane.querySelector("article") as HTMLElement).insertAdjacentHTML(
 				"beforeend",
 				`<span id="pasuk-335-5-book-1"><b data-pasuk-num>ה</b></span>`,
 			);
@@ -705,9 +707,7 @@ describe("ParashaSefer", () => {
 			expect(scrollIntoView).not.toHaveBeenCalled();
 		} finally {
 			setUnitOpenPerush("1:haftara", null);
-			document
-				.querySelector('[data-sefer-unit-perush="1:haftara"]')
-				?.remove();
+			document.querySelector('[data-sefer-unit-perush="1:haftara"]')?.remove();
 		}
 	});
 
@@ -719,9 +719,7 @@ describe("ParashaSefer", () => {
 		) => void;
 		act(() => onNavigate("article", "some-article"));
 		expect(window.location.search).toContain("article=some-article");
-		expect(mockBlankPages.get("2:torah")?.initialSlug).toBe(
-			"some-article",
-		);
+		expect(mockBlankPages.get("2:torah")?.initialSlug).toBe("some-article");
 	});
 
 	it("routes Haftarah blank navigation to the haftara params", () => {

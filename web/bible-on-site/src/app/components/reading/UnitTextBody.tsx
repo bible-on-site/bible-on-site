@@ -23,6 +23,19 @@ export type UnitTextPerekResolver = (
 ) => UnitTextPerek | undefined;
 
 /**
+ * A boundary marker rendered inline before a pasuk — e.g. an aliyah
+ * start (issue #2519). `key` identifies which reading/scheme layer
+ * owns the marker: callers may embed several layers in one text and
+ * reveal exactly one at a time, so scheme/context switching never
+ * remounts scripture.
+ */
+export interface UnitBoundaryMarker {
+	key: string;
+	label: string;
+	role?: "aliyah" | "maftir";
+}
+
+/**
  * Resolver-injected scripture renderer for ordered ranges — the part of
  * the shared range text that stays client-safe: no canonical-corpus
  * import, so the פרשה sefer book can render ranges over lazily loaded
@@ -38,6 +51,9 @@ export function UnitTextBody({
 	resolvePerek,
 	anchorScope,
 	unitPositionMarkers,
+	boundaryMarkers,
+	defaultMarkerKey,
+	modestPerekLabels,
 }: {
 	ranges: ScriptureRange[];
 	entityRefsByPerek: Record<number, PerekEntityReference[]>;
@@ -53,6 +69,18 @@ export function UnitTextBody({
 	 * conventional chapter apparatus stays hidden. Boundary-clipped
 	 * pesukim still count a position and carry a התחלה/סיום/קטע suffix. */
 	unitPositionMarkers?: boolean;
+	/** Boundary markers keyed `"{perekId}:{pasuk}"` — each coordinate may
+	 * hold several (one per reading context/scheme layer); only markers
+	 * matching `defaultMarkerKey` render visible. When provided, perek
+	 * breaks demote to the modest pasuk-like label so the boundary
+	 * markers own the prominent separator treatment. */
+	boundaryMarkers?: ReadonlyMap<string, readonly UnitBoundaryMarker[]>;
+	defaultMarkerKey?: string;
+	/** Demotes perek-break labels to the modest pasuk-like style even
+	 * where no boundary markers exist — e.g. the parasha reader's
+	 * Haftarah text, which shares the page with an annotated Torah
+	 * reading (issue #2519). */
+	modestPerekLabels?: boolean;
 }) {
 	const slices = rangesPerekSlices(ranges, pasukCount);
 	const multiPerek = new Set(slices.map((slice) => slice.perekId)).size > 1;
@@ -86,6 +114,9 @@ export function UnitTextBody({
 					entityRefs={entityRefsByPerek[slice.perekId] ?? []}
 					resolvePerek={resolvePerek}
 					showPerekLabel={multiPerek && !unitPositionMarkers}
+					modestPerekLabel={modestPerekLabels || boundaryMarkers != null}
+					boundaryMarkers={boundaryMarkers}
+					defaultMarkerKey={defaultMarkerKey}
 					firstPosition={
 						unitPositionMarkers ? firstPositions[sliceIndex] : undefined
 					}
@@ -103,6 +134,9 @@ function UnitPerekSlice({
 	entityRefs,
 	resolvePerek,
 	showPerekLabel,
+	modestPerekLabel,
+	boundaryMarkers,
+	defaultMarkerKey,
 	firstPosition,
 }: {
 	slice: PerekSlice;
@@ -112,6 +146,9 @@ function UnitPerekSlice({
 	entityRefs: PerekEntityReference[];
 	resolvePerek: UnitTextPerekResolver;
 	showPerekLabel: boolean;
+	modestPerekLabel?: boolean;
+	boundaryMarkers?: ReadonlyMap<string, readonly UnitBoundaryMarker[]>;
+	defaultMarkerKey?: string;
 	firstPosition?: number;
 }) {
 	const perek = resolvePerek(slice.perekId);
@@ -120,7 +157,15 @@ function UnitPerekSlice({
 	return (
 		<>
 			{showPerekLabel && (
-				<span className={styles.perekBreakLabel}>{perek.source}</span>
+				<span
+					className={
+						modestPerekLabel
+							? styles.perekBreakLabelModest
+							: styles.perekBreakLabel
+					}
+				>
+					{perek.source}
+				</span>
 			)}
 			{perek.pesukim
 				.slice(slice.startPasuk - 1, slice.endPasuk)
@@ -159,6 +204,8 @@ function UnitPerekSlice({
 					const emitsAnchor =
 						firstSliceByCoord.get(`${slice.perekId}-${pasukNumber}`) ===
 						sliceIndex;
+					const boundary =
+						boundaryMarkers?.get(`${slice.perekId}:${pasukNumber}`) ?? [];
 					return (
 						<span
 							key={pasukNumber}
@@ -168,6 +215,18 @@ function UnitPerekSlice({
 									: undefined
 							}
 						>
+							{boundary.map((mark) => (
+								<span
+									key={mark.key}
+									className={styles.aliyahBreakLabel}
+									data-aliyah-marker=""
+									data-aliyah-key={mark.key}
+									data-aliyah-role={mark.role}
+									hidden={mark.key !== defaultMarkerKey}
+								>
+									{mark.label}
+								</span>
+							))}
 							<span className={perekStyles.pasukNum} data-pasuk-num>
 								{marker}
 							</span>{" "}
