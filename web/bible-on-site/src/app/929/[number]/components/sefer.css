@@ -40,8 +40,12 @@ html[data-sefer-view] {
      leaf would bleed through mirrored via the 3D transform. */
   background: #fff;
   /* Performance: isolate each page so the browser can skip re-layout/repaint
-     of page internals during 3D flip transforms. */
-  contain: layout style paint;
+     of page internals during 3D flip transforms. `size` keeps a page 0x0
+     until the library writes its inline width/height — without it a heavy
+     page (e.g. the commentary panel) briefly paints at natural width before
+     the first spread layout, which the web-vitals CLS probe counts as a
+     shift. */
+  contain: size layout style paint;
   --inner-shadow-shadow: 0;
   --inner-shadow-highlight: 0;
   --inner-shadow-edge: right;

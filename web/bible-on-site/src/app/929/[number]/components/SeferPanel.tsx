@@ -494,6 +494,10 @@ export function SeferPanel({
 										</button>
 										<Link
 											href={`/929/${perekId}/${encodeURIComponent(perush.name)}`}
+											/* In-book links intercept clicks for in-panel deep views;
+											 * prefetching every tag on every buffered page floods the
+											 * server with RSC requests and never reaches networkidle. */
+											prefetch={false}
 											className={styles.perushTag}
 											title={perush.parshanName}
 											onClick={(event) => {
@@ -676,6 +680,7 @@ export function SeferPanel({
 										key={article.id}
 										id={`article-${article.id}`}
 										href={`/929/${article.perekId}/${article.id}`}
+										prefetch={false}
 										className={styles.articleCard}
 										onClick={(event) => {
 											if (
