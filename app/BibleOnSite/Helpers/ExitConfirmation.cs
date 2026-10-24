@@ -63,8 +63,8 @@ public sealed class ExitConfirmation
 				_exit();
 			}
 		}
-		#pragma warning disable S2221 // Deliberate failure boundary: exit-prompt failure falls through to normal exit
-		catch (Exception ex) //NOSONAR — exit-prompt failure falls through to normal exit.
+		#pragma warning disable S2221 // Deliberate failure boundary: the prompt is an injected delegate + platform dialog — no narrower type enumerates its failures; a failed prompt keeps the app open (the press was already consumed) and finally re-arms for the next press
+		catch (Exception ex) //NOSONAR — a failed exit prompt keeps the app open and re-arms; the press was already consumed.
 		{
 		    #pragma warning restore S2221
 			Console.Error.WriteLine($"[Exit] confirmation prompt failed: {ex}");

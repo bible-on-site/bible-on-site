@@ -229,7 +229,7 @@ public class StarterService : BaseGraphQLService
         catch (Exception ex) //NOSONAR — starter API failure falls back to local cache.
         {
             #pragma warning restore S2221
-            Console.Error.WriteLine($"API unavailable: {ex.Message}");
+            Console.Error.WriteLine($"API unavailable: {ex}");
         }
 
         // 2. Fall back to local cache
@@ -246,7 +246,7 @@ public class StarterService : BaseGraphQLService
         catch (Exception ex) //NOSONAR — cache load failure proceeds offline without articles.
         {
             #pragma warning restore S2221
-            Console.Error.WriteLine($"Cache load failed: {ex.Message}");
+            Console.Error.WriteLine($"Cache load failed: {ex}");
         }
 
         // 3. No data — proceed empty; articles/authors just won't be shown
@@ -272,7 +272,7 @@ public class StarterService : BaseGraphQLService
         catch (Exception ex) //NOSONAR — background refresh failure is log-only.
         {
             #pragma warning restore S2221
-            Console.Error.WriteLine($"Refresh failed: {ex.Message}");
+            Console.Error.WriteLine($"Refresh failed: {ex}");
         }
     }
 
@@ -292,7 +292,7 @@ public class StarterService : BaseGraphQLService
         catch (Exception ex) //NOSONAR — cache save is best-effort.
         {
             #pragma warning restore S2221
-            Console.Error.WriteLine($"Failed to save starter cache: {ex.Message}");
+            Console.Error.WriteLine($"Failed to save starter cache: {ex}");
         }
     }
 
