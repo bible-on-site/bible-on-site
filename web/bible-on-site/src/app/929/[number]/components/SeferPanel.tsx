@@ -613,6 +613,10 @@ export function SeferPanel({
 													{perush.name}
 												</div>
 											)}
+											{/* Codacy anchors the XSS finding at this map
+											 * expression, so the nosemgrep suppression must
+											 * sit here rather than beside the attribute. */}
+											{/* nosemgrep -- DOMPurify-sanitized note HTML */}
 											{notes.map((note) => (
 												<div
 													key={`${note.pasuk}-${note.noteIdx}`}
@@ -702,6 +706,11 @@ export function SeferPanel({
 										<div className={styles.articleCardTitle}>
 											{article.name}
 										</div>
+										{/* Codacy anchors the XSS finding at this
+										 * conditional expression, so the nosemgrep
+										 * suppression must sit here rather than beside
+										 * the attribute. */}
+										{/* nosemgrep -- DOMPurify-sanitized abstract */}
 										{article.abstract && (
 											<div
 												className={styles.articleCardAbstract}
