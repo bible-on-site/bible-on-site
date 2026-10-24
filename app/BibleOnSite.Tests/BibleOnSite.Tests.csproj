@@ -95,4 +95,8 @@
     <Compile Include="..\BibleOnSite\ViewModels\TanahpediaEntryViewModel.cs" Link="ViewModels\TanahpediaEntryViewModel.cs" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="Fixtures\sedra-schedule.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

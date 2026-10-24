@@ -833,7 +833,7 @@
                         CascadeInputTransparent="False"
                         BackgroundColor="Transparent">
 
-            <!-- 3 satellite buttons + toggle — positions are computed in code-behind
+            <!-- 4 satellite buttons + toggle — positions are computed in code-behind
                  by FanMenuGeometry (elliptical arc, compact in every orientation) -->
 
             <!-- Previous parasha (bottom-left satellite) -->
@@ -848,6 +848,23 @@
                     BackgroundColor="{StaticResource PrimaryDark}"
                     TextColor="White"
                     Command="{Binding LoadPreviousCommand}"
+                    Clicked="OnMenuItemClicked"
+                    Opacity="0"
+                    InputTransparent="True"/>
+
+            <!-- פרשת השבוע — calendar-correct weekly reading (inner-left satellite) -->
+            <Button x:Name="WeeklyParashaButton"
+                    AutomationId="WeeklyParashaButton"
+                    SemanticProperties.Description="פרשת השבוע"
+                    Text="{x:Static fonts:FluentUI.calendar_week_numbers_24_regular}"
+                    FontFamily="FluentIcons"
+                    FontSize="22"
+                    WidthRequest="48"
+                    HeightRequest="48"
+                    CornerRadius="24"
+                    BackgroundColor="{StaticResource PrimaryDark}"
+                    TextColor="White"
+                    Command="{Binding LoadWeeklyParashaCommand}"
                     Clicked="OnMenuItemClicked"
                     Opacity="0"
                     InputTransparent="True"/>
