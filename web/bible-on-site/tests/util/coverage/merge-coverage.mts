@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import {
 	copyFileSync,
 	existsSync,
@@ -43,12 +43,29 @@ function mergeCoverage(): void {
 	// during normalization — see fixInconsistentBranches() in normalize-coverage.mts.
 	// Docker must create the report as the caller on Linux so the Node path
 	// normalization below can write it. Docker Desktop maps Windows bind mounts.
-	const dockerUser = process.getuid && process.getgid
-		? `--user ${process.getuid()}:${process.getgid()}`
-		: "";
-	const cmd = `docker run --rm -t ${dockerUser} -v "${COVERAGE_DIR}:/.coverage" lcov-cli:0.0.2 --rc branch_coverage=1 -a /.coverage/unit/lcov.normalized.info -a /.coverage/e2e/lcov.normalized.info -o /.coverage/merged/lcov.info`;
-
-	const out = runCommand(cmd);
+	// execFile keeps the computed COVERAGE_DIR out of shell interpolation.
+	const dockerUser =
+		process.getuid && process.getgid
+			? ["--user", `${process.getuid()}:${process.getgid()}`]
+			: [];
+	const out = runCommand([
+		"docker",
+		"run",
+		"--rm",
+		"-t",
+		...dockerUser,
+		"-v",
+		`${COVERAGE_DIR}:/.coverage`,
+		"lcov-cli:0.0.2",
+		"--rc",
+		"branch_coverage=1",
+		"-a",
+		"/.coverage/unit/lcov.normalized.info",
+		"-a",
+		"/.coverage/e2e/lcov.normalized.info",
+		"-o",
+		"/.coverage/merged/lcov.info",
+	]);
 	if (out) console.log(formatOutput(out));
 }
 
@@ -129,11 +146,11 @@ function copyCoverageFile(source: string, destination: string): void {
 	console.log(`Copied coverage file to ${destination}`);
 }
 
-function runCommand(cmd: string): Buffer | undefined {
+function runCommand(args: string[]): Buffer | undefined {
 	try {
-		return execSync(cmd);
+		return execFileSync(args[0], args.slice(1));
 	} catch (e: unknown) {
-		printExecError(cmd, e);
+		printExecError(args.join(" "), e);
 		process.exit(1);
 	}
 }
@@ -214,7 +231,7 @@ function fixLcovPathsForCodecov(): void {
 /** Derive the package directory relative to the git repo root (e.g. `web/bible-on-site/`). */
 function getMonorepoPrefix(): string | null {
 	try {
-		const gitRoot = execSync("git rev-parse --show-toplevel", {
+		const gitRoot = execFileSync("git", ["rev-parse", "--show-toplevel"], {
 			encoding: "utf8",
 		}).trim();
 		const packageDir = PACKAGE_DIR;
