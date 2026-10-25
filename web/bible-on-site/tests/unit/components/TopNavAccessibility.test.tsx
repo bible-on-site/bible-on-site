@@ -175,7 +175,13 @@ describe("TopNavAccessibility", () => {
 	});
 
 	it("docks next to the reader preferences gear on reader routes", () => {
-		for (const pathname of ["/929/11", "/מסורה/1"]) {
+		for (const pathname of [
+			"/929/11",
+			"/מסורה/1",
+			"/masora/1",
+			"/פרשה/2",
+			"/parasha/2",
+		]) {
 			mockPathname = pathname;
 			const { unmount } = render(<TopNavAccessibility />);
 			expect(trigger()).toHaveClass("top-nav-accessibility--after-prefs");
@@ -184,5 +190,19 @@ describe("TopNavAccessibility", () => {
 		mockPathname = "/search";
 		render(<TopNavAccessibility />);
 		expect(trigger()).not.toHaveClass("top-nav-accessibility--after-prefs");
+		expect(trigger()).not.toHaveClass("top-nav-accessibility--edge");
+	});
+
+	it("docks at the left-edge slot where reader routes mount no gear", () => {
+		// /929/authors suppresses the search button like the rest of the
+		// reader section, but its layout mounts no preferences gear —
+		// docking at the gear offset would leave an unexplained void.
+		for (const pathname of ["/929/authors", "/929/authors/1", "/929"]) {
+			mockPathname = pathname;
+			const { unmount } = render(<TopNavAccessibility />);
+			expect(trigger()).toHaveClass("top-nav-accessibility--edge");
+			expect(trigger()).not.toHaveClass("top-nav-accessibility--after-prefs");
+			unmount();
+		}
 	});
 });

@@ -26,6 +26,26 @@ export function isReaderPathname(pathname: string): boolean {
 }
 
 /**
+ * Routes whose layout actually mounts the reader preferences gear in the
+ * top-left corner — a narrower set than isReaderPathname: the search button
+ * is suppressed across the whole reader section, but the gear itself only
+ * exists on unit pages (929/[number], masora/[unit], parasha/[unit]
+ * layouts). Non-unit reader routes such as /929/authors hide the search
+ * button yet mount no gear, so the accessibility trigger must not dock at
+ * the gear-adjacent offset there (#2396).
+ */
+export function hasReaderSettingsGear(pathname: string): boolean {
+	const decoded = decodeURIComponent(pathname);
+	const authorsRoot = `${PEREK_READER_ROOT}/authors`;
+	const isAuthorsRoute =
+		decoded === authorsRoot || decoded.startsWith(`${authorsRoot}/`);
+	return (
+		(decoded.startsWith(`${PEREK_READER_ROOT}/`) && !isAuthorsRoute) ||
+		UNIT_READER_ROOTS.some((root) => decoded.startsWith(`${root}/`))
+	);
+}
+
+/**
  * Icon-only search button pinned to the physical left edge of the top nav.
  * Omitted entirely on reader pages — their settings button occupies that
  * corner, so no clickable or focusable remnant may stay (#2274).
