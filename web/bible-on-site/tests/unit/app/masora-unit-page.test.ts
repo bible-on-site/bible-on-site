@@ -12,14 +12,20 @@ import {
 	generateMetadata,
 	generateStaticParams,
 } from "@/app/masora/[unit]/page";
+import { metadata as sectionMetadata } from "@/app/masora/layout";
 import { generateMetadata as generateLandingMetadata } from "@/app/masora/page";
 import { getMasoraUnitCount } from "@/data/masora/masora-units";
 
 describe("מסורה landing metadata", () => {
+	it("excludes the entire section from search while allowing crawling", () => {
+		expect(sectionMetadata.robots).toEqual({ index: false, follow: true });
+	});
+
 	it("canonicalizes to the Hebrew root", async () => {
 		const metadata = await generateLandingMetadata();
 		expect(metadata.alternates?.canonical).toBe("/מסורה");
 		expect(metadata.title).toContain("מסורה על הפרק");
+		expect(metadata.robots).toBeUndefined();
 	});
 });
 
@@ -31,20 +37,18 @@ describe("מסורה unit metadata", () => {
 		});
 		expect(metadata.alternates?.canonical).toBe("/929/153");
 		expect(metadata.title).toContain("במדבר פרשה קס");
-		// Consolidated units stay indexable through their canonical.
+		// The section's noindex policy also applies to whole-perek equivalents.
 		expect(metadata.robots).toBeUndefined();
 	});
 
-	it("keeps a non-equivalent unit self-canonical and noindex", async () => {
+	it("keeps a non-equivalent unit self-canonical without overriding section robots", async () => {
 		// Unit 1 (בראשית א א-ה) is not a whole perek.
 		const metadata = await generateMetadata({
 			params: Promise.resolve({ unit: "1" }),
 		});
 		expect(metadata.alternates?.canonical).toBe("/מסורה/1");
 		expect(metadata.title).toContain("בראשית פרשה א");
-		expect(metadata.robots).toEqual(
-			expect.objectContaining({ index: false, follow: true }),
-		);
+		expect(metadata.robots).toBeUndefined();
 	});
 
 	it.each(["0", "-1", "99999", "abc"])(

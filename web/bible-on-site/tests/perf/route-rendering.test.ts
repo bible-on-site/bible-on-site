@@ -108,7 +108,52 @@ test.describe("Route Rendering Modes", () => {
 		manifest = loadPrerenderManifest();
 	});
 
+	test("production Parasha variant headers do not contaminate cached base readings", async ({
+		request,
+	}) => {
+		for (const suffix of ["", "?perush=Rashi", ""]) {
+			const response = await request.get(
+				`/${encodeURIComponent("פרשה")}/1${suffix}`,
+			);
+			expect(response.status()).toBe(200);
+			expect(response.headers()["x-robots-tag"]).toBe(
+				suffix ? "noindex, follow" : undefined,
+			);
+			const html = await response.text();
+			expect(html).not.toMatch(/<meta name="robots" content="[^"]*noindex/);
+		}
+	});
+
+	test("production Masora HTML excludes even whole-chapter equivalents", async ({
+		request,
+	}) => {
+		const response = await request.get(`/${encodeURIComponent("מסורה")}/523`, {
+			headers: { "user-agent": "Googlebot/2.1" },
+		});
+		expect(response.status()).toBe(200);
+		const html = await response.text();
+		expect(html).toMatch(/<meta name="robots" content="[^"]*noindex/);
+		expect(html).toMatch(/<link rel="canonical" href="[^"]*\/929\/153"/);
+	});
+
 	test.describe("SSG routes are prerendered", () => {
+		test("the Parasha hub and all 54 base readings remain prerendered", () => {
+			// Public /פרשה URLs rewrite to these internal static route outputs.
+			const routes = [
+				"/parasha",
+				...Array.from({ length: 54 }, (_, index) => `/parasha/${index + 1}`),
+			];
+			for (const route of routes) {
+				expect(manifest.routes[route], `${route} must stay SSG`).toBeDefined();
+				expect(manifest.routes[route].initialRevalidateSeconds).toBe(false);
+			}
+			expect(
+				Object.keys(manifest.routes).filter((route) =>
+					/^\/parasha\/\d+$/.test(route),
+				),
+			).toHaveLength(54);
+		});
+
 		test("all expected static routes exist in prerender manifest", () => {
 			const expectedSSG = getExpectedSSGRoutes();
 			const missingRoutes: string[] = [];
@@ -160,8 +205,8 @@ test.describe("Route Rendering Modes", () => {
 		});
 
 		test("commentary pages (slug routes) are prerendered at build (SSG)", () => {
-			const commentaryRoutes = Object.keys(manifest.routes).filter(
-				(route) => /^\/929\/\d+\/[^/]+$/.test(route),
+			const commentaryRoutes = Object.keys(manifest.routes).filter((route) =>
+				/^\/929\/\d+\/[^/]+$/.test(route),
 			);
 
 			expect(
