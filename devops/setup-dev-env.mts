@@ -1026,7 +1026,7 @@ function bunInstall(dir: string) {
 	});
 	if (result.error) {
 		console.error(
-			`Error installing npm packages in ${dir}:`,
+			`Error installing packages in ${dir}:`,
 			result.error.message,
 		);
 		return false;

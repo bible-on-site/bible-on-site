@@ -26,7 +26,7 @@ const IS_WINDOWS = process.platform === "win32";
 interface DevModule {
 	readonly name: string;
 	readonly dir: string;
-	/** Full shell command; spawned with `shell: true` so npm/cargo resolve on every OS. */
+	/** Full shell command; spawned with `shell: true` so bun/cargo resolve on every OS. */
 	readonly command: string;
 	readonly port: number;
 	readonly color: string;
@@ -105,7 +105,7 @@ function pipeOutput(mod: DevModule, child: ChildProcess): void {
 	}
 }
 
-/** Windows needs an explicit tree kill; npm/cargo spawn grandchildren that outlive the parent. */
+/** Windows needs an explicit tree kill; bun/cargo spawn grandchildren that outlive the parent. */
 function killTree(child: ChildProcess): void {
 	if (child.pid === undefined || child.exitCode !== null) return;
 	if (IS_WINDOWS) {
