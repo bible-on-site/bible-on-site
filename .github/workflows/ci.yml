@@ -156,9 +156,6 @@ env:
   PERUSHIM_NOTES_ANDROID_ASSET_RELDIR: Platforms/Android/AssetPacks/perushim_notes
   PERUSHIM_NOTES_IOS_ASSETPACK_RELDIR: Platforms/iOS/AssetPacks/perushim-notes
   PERUSHIM_PIPELINE_DIRECTORY: data/sefaria/pipelines/perushim-view
-  # sccache wraps every rustc call in jobs that install it; per-object cache
-  # complements rust-cache's whole-target-dir reuse when a key misses.
-  RUSTC_WRAPPER: sccache
   LCOV_DOCKER_IMAGE_ARTIFACT_NAME: lcov-docker-image
   SEFARIA_MONGO_IMAGE_ARTIFACT_NAME: sefaria-mongo-image
   SEFARIA_MONGO_IMAGE_REPOSITORY: ghcr.io/${{ github.repository_owner }}/sefaria-mongo
@@ -774,6 +771,12 @@ jobs:
       checks: write # Required by Bencher to create GitHub Check on push to master
       pull-requests: write # Required by Bencher to add comment on PRs
 
+    # sccache wraps every rustc call in jobs that install it; per-object cache
+    # complements rust-cache's whole-target-dir reuse when a key misses. Set
+    # per-job: version-only jobs (package_*, shared-dockerize) run cargo on the
+    # runner without sccache on PATH, so a global wrapper breaks them.
+    env:
+      RUSTC_WRAPPER: sccache
     steps:
       - name: Checkout
         id: checkout
@@ -1008,6 +1011,8 @@ jobs:
       # Reads the master coverage-tree baseline artifacts through the REST API.
       actions: read
 
+    env:
+      RUSTC_WRAPPER: sccache
     steps:
       - name: Checkout
         id: checkout
@@ -1399,6 +1404,8 @@ jobs:
       # Reads the master coverage-tree baseline artifacts through the REST API.
       actions: read
 
+    env:
+      RUSTC_WRAPPER: sccache
     steps:
       - name: Checkout
         id: checkout
@@ -1740,6 +1747,8 @@ jobs:
       # Reads the master coverage-tree baseline artifacts through the REST API.
       actions: read
 
+    env:
+      RUSTC_WRAPPER: sccache
     steps:
       - name: Checkout
         id: checkout
@@ -2081,6 +2090,8 @@ jobs:
     permissions:
       contents: read
 
+    env:
+      RUSTC_WRAPPER: sccache
     steps:
       - name: Checkout
         id: checkout
@@ -2353,6 +2364,8 @@ jobs:
     permissions:
       contents: read
 
+    env:
+      RUSTC_WRAPPER: sccache
     steps:
       - name: Checkout
         id: checkout
@@ -2519,6 +2532,8 @@ jobs:
       contents: read
       packages: read
 
+    env:
+      RUSTC_WRAPPER: sccache
     steps:
       - name: Checkout
         id: checkout
@@ -2736,6 +2751,8 @@ jobs:
       contents: read
       packages: read
 
+    env:
+      RUSTC_WRAPPER: sccache
     steps:
       - name: Checkout
         uses: actions/checkout@v7
