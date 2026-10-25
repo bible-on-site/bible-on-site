@@ -258,7 +258,7 @@ partial class Build
 
     /// <summary>
     /// Dev target - one command to start everything for local development.
-    /// Similar to "npm run dev" or "next dev".
+    /// Similar to "bun run dev" or "next dev".
     /// </summary>
     Target Dev => _ => _
         .Description("Start local development environment (API + Windows app)")

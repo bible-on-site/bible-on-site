@@ -42,7 +42,7 @@ This document describes the DevOps tools and practices used in the Bible on Site
 
 | Tool | Purpose | Module |
 |------|---------|--------|
-| [![npm](https://img.shields.io/badge/npm-CB3837?logo=npm&logoColor=fff&style=for-the-badge)](https://www.npmjs.com/) | Node.js package manager | website, admin, mobile-e2e harness |
+| [![bun](https://img.shields.io/badge/bun-000?logo=bun&logoColor=fff&style=for-the-badge)](https://bun.sh/) | JavaScript runtime & package manager | website, admin, mobile-e2e harness |
 | [![NuGet](https://img.shields.io/badge/NuGet-004880?logo=nuget&logoColor=fff&style=for-the-badge)](https://www.nuget.org/) | .NET package manager | app |
 | [![Cargo](https://img.shields.io/badge/Cargo-000?style=for-the-badge&logo=rust&logoColor=white)](https://doc.rust-lang.org/cargo/) | Rust package manager | api, bulletin, data |
 | [![Next.js](https://img.shields.io/badge/Next.js-black?style=for-the-badge&logo=next.js&logoColor=white)](https://nextjs.org/) | Production website build | website |

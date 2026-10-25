@@ -162,7 +162,7 @@ test("logs the original development failure and offers diagnostic details", asyn
 		failure,
 	);
 	expect(screen.getByRole("alert")).toHaveTextContent(failure.message);
-	expect(screen.getByRole("alert")).toHaveTextContent("npm run dev");
+	expect(screen.getByRole("alert")).toHaveTextContent("bun run dev");
 });
 
 test.each([
