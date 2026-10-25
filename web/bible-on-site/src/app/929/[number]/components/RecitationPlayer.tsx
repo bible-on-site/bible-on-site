@@ -139,7 +139,7 @@ export function RecitationPasukControl({
 }
 
 /** Native buttons form atomic text boxes and change Hebrew spacing and wrapping. */
-function InlineRecitationControl({
+export function InlineRecitationControl({
 	children,
 	className,
 	label,

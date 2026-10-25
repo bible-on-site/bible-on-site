@@ -170,11 +170,20 @@ describe("open perush registry", () => {
 		expect(getSeferOpenPerush(2)).toBeNull();
 	});
 
-	it("keeps the stored entry when the same perush is republished", () => {
+	it("keeps the stored entry when the same coverage is republished", () => {
 		const published = { name: 'רש"י', pesukim: new Set([1]) };
 		setSeferOpenPerush(1, published);
-		setSeferOpenPerush(1, { name: 'רש"י', pesukim: new Set([9]) });
+		// Same name and same pesukim set: nothing actually changed.
+		setSeferOpenPerush(1, { name: 'רש"י', pesukim: new Set([1]) });
 		expect(getSeferOpenPerush(1)).toBe(published);
+	});
+
+	it("republishes when the coverage set changes under the same name (#2544)", () => {
+		const published = { name: 'רש"י', pesukim: new Set([1]) };
+		setSeferOpenPerush(1, published);
+		const next = { name: 'רש"י', pesukim: new Set([9]) };
+		setSeferOpenPerush(1, next);
+		expect(getSeferOpenPerush(1)).toBe(next);
 	});
 
 	it("keeps perakim independent", () => {
