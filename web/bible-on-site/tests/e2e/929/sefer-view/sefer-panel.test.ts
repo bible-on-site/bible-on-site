@@ -88,12 +88,13 @@ test.describe("Sefer left-page panel", () => {
 			}),
 		).toBeVisible();
 
-		// Deselecting keeps the other perush rendered.
+		// Deselecting keeps the other perush rendered; a single perush can
+		// carry several note segments on one pasuk (אבן עזרא has five here).
 		await rashiToggle.click();
 		await expect(rashiToggle).toHaveAttribute("aria-pressed", "false");
-		await expect(groupOne.locator('[class*="noteContent"]')).toContainText(
-			"בראשית",
-		);
+		await expect(
+			groupOne.locator('[class*="noteContent"]').first(),
+		).toContainText("בראשית");
 
 		// The persisted selection survives a reload as the Tanach-wide default.
 		await page.reload();
@@ -139,12 +140,15 @@ test.describe("Sefer left-page panel", () => {
 			.toBe(1);
 		await expect(blank.locator('[data-perush-pasuk="1"]')).toBeVisible();
 
-		// Clearing restores the full chapter's commentary.
+		// Clearing the filter restores the full chapter's commentary while the
+		// pasuk-marking mode stays active until it is ended explicitly.
 		await blank.getByRole("button", { name: "ניקוי בחירה" }).click();
-		await expect(blank).toContainText("כל פסוקי הפרק");
+		await expect(blank).toContainText("סמנו פסוקים על גבי הפרק");
 		await expect
 			.poll(async () => blank.locator("[data-perush-pasuk]").count())
 			.toBe(groupCount);
+		await blank.getByRole("button", { name: "סיום בחירה" }).click();
+		await expect(blank).toContainText("כל פסוקי הפרק");
 	});
 
 	test("opens an article from the masonry grid and toggles article-only fullscreen", async ({
