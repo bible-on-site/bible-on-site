@@ -3,9 +3,6 @@
 skip_core_tasks = true
 default_to_workspace = false
 
-[env]
-NPM_BIN = { source = "${CARGO_MAKE_RUST_TARGET_OS}", default_value = "npm", mapping = { "windows" = "C:\\Program Files\\nodejs\\npm.cmd" } }
-
 [tasks.lint]
 command = "cargo"
 args = ["clippy", "--", "-D", "warnings"]
@@ -49,5 +46,5 @@ command = "echo"
 args = ["${CARGO_MAKE_CRATE_VERSION}"]
 
 [tasks.bump-version]
-command = "${NPM_BIN}"
-args = ["run", "--prefix", "../../devops", "bump:cargo", "--", "--module", "bulletin"]
+command = "bun"
+args = ["run", "--cwd", "../../devops", "bump:cargo", "--module", "bulletin"]

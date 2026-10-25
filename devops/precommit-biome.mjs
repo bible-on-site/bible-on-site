@@ -12,7 +12,8 @@
  * Windows support.
  *
  * Each run prefers the module's own locally-installed Biome (the version that
- * module pins). When the module isn't npm-installed — e.g. pre-commit.ci — it
+ * module pins). When the module's dependencies aren't installed — e.g.
+ * pre-commit.ci — it
  * falls back to the Biome that the hook's `additional_dependencies` install
  * into the hook environment (synced by sync-pre-commit-deps).
  */

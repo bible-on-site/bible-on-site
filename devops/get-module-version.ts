@@ -167,7 +167,7 @@ function tryNativeCommand(module: ModuleConfig): string | null {
 			}
 		}
 
-		// Otherwise return the last non-empty line (typical for npm/cargo)
+		// Otherwise return the last non-empty line (typical for bun/cargo)
 		return lines[lines.length - 1] ?? null;
 	} catch {
 		return null;
