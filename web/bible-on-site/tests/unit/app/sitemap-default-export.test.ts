@@ -1,197 +1,115 @@
-/**
- * Tests for the default sitemap() export.
- * Isolated in a separate file because it requires mocking next/headers
- * and service modules — keeping mocks away from the pure-function tests.
- */
-
-// Mock next/headers for the default sitemap() export
+/** Build-time sitemap generation, with all database families controlled. */
 jest.mock("next/headers", () => ({
-	headers: jest.fn(),
+	headers: jest.fn(() => {
+		throw new Error("Sitemap generation must not read request headers");
+	}),
 }));
-
+jest.mock("@/lib/seo/jsonld", () => ({
+	SITE_ORIGIN: "https://canonical.example",
+}));
 jest.mock("@/lib/articles", () => ({
 	getAllArticlePerekIdPairs: jest.fn(),
 }));
-
-jest.mock("@/lib/authors", () => ({
-	getAllAuthorSlugs: jest.fn(),
-}));
-
+jest.mock("@/lib/authors", () => ({ getAllAuthorSlugs: jest.fn() }));
 jest.mock("@/lib/perushim", () => ({
 	getAllPerushPerekNamePairs: jest.fn(),
 }));
-
 jest.mock("@/lib/tanahpedia/service", () => ({
 	getAllEntryUniqueNames: jest.fn(),
 }));
-
 jest.mock("@/lib/seo/perek-images-data", () => ({
-	getPerekImagesByChapter: jest.fn(async () => ({})),
+	getPerekImagesByChapter: jest.fn(),
 }));
 
 import { headers } from "next/headers";
-import sitemapFn, { SITEMAP_SECTIONS, TOTAL_PERAKIM } from "@/app/sitemap";
+import sitemap, { SITEMAP_SECTIONS, TOTAL_PERAKIM } from "@/app/sitemap";
 import { getAllArticlePerekIdPairs } from "@/lib/articles";
 import { getAllAuthorSlugs } from "@/lib/authors";
 import { getAllPerushPerekNamePairs } from "@/lib/perushim";
+import { SITE_ORIGIN } from "@/lib/seo/jsonld";
+import { getPerekImagesByChapter } from "@/lib/seo/perek-images-data";
 import { CATEGORY_SLUGS } from "@/lib/tanahpedia/category-slug";
 import { getAllEntryUniqueNames } from "@/lib/tanahpedia/service";
 
-/** `/pedia` landing entry plus one entry per Hebrew category slug. */
-const PEDIA_STATIC_COUNT = 1 + Object.keys(CATEGORY_SLUGS).length;
-const PARASHA_STATIC_COUNT = 55;
+const BUILD_LOADERS = [
+	["authors", getAllAuthorSlugs],
+	["articles", getAllArticlePerekIdPairs],
+	["commentaries", getAllPerushPerekNamePairs],
+	["Tanahpedia entries", getAllEntryUniqueNames],
+	["chapter images", getPerekImagesByChapter],
+] as const;
 
-describe("sitemap default export", () => {
+// Root, sections, 929 index/chapters, author index, pedia index/categories,
+// and the Parasha hub with all 54 portions. No Masora URLs.
+const STATIC_COUNT =
+	1 +
+	SITEMAP_SECTIONS.length +
+	1 +
+	TOTAL_PERAKIM +
+	1 +
+	1 +
+	Object.keys(CATEGORY_SLUGS).length +
+	55;
+
+describe("sitemap build-time snapshot", () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
-	});
-
-	it("builds sitemap using host header and fetched dynamic data", async () => {
-		(headers as jest.Mock).mockResolvedValue({
-			get: (name: string) => (name === "host" ? "example.com" : null),
-		});
 		(getAllAuthorSlugs as jest.Mock).mockResolvedValue(["הרב א", "הרב ב"]);
 		(getAllArticlePerekIdPairs as jest.Mock).mockResolvedValue([
 			{ articleId: 10, perekId: 1 },
 		]);
-		(getAllPerushPerekNamePairs as jest.Mock).mockResolvedValue([]);
+		(getAllPerushPerekNamePairs as jest.Mock).mockResolvedValue([
+			{ perekId: 1, perushName: 'רש"י' },
+		]);
 		(getAllEntryUniqueNames as jest.Mock).mockResolvedValue(["יעקב"]);
+		(getPerekImagesByChapter as jest.Mock).mockResolvedValue({});
+	});
 
-		const result = await sitemapFn();
-
-		const urls = result.map((e) => e.url);
-		// Root, sections, chapters, article, authors, pedia and 55 Parasha URLs.
-		const expectedLength =
-			1 +
-			SITEMAP_SECTIONS.length +
-			1 +
-			TOTAL_PERAKIM +
-			1 +
-			1 +
-			2 +
-			PEDIA_STATIC_COUNT +
-			1 +
-			PARASHA_STATIC_COUNT;
-		expect(result).toHaveLength(expectedLength);
-
-		expect(urls[0]).toBe("https://example.com");
+	it("includes every fixture family using the configured canonical origin", async () => {
+		const result = await sitemap();
+		const urls = result.map((entry) => entry.url);
+		expect(result).toHaveLength(STATIC_COUNT + 5);
+		expect(urls).toEqual(
+			expect.arrayContaining([
+				SITE_ORIGIN,
+				`${SITE_ORIGIN}/929/1`,
+				`${SITE_ORIGIN}/929/929`,
+				`${SITE_ORIGIN}/929/1/10`,
+				`${SITE_ORIGIN}/929/1/${encodeURIComponent('רש"י')}`,
+				`${SITE_ORIGIN}/929/authors/${encodeURIComponent("הרב א")}`,
+				`${SITE_ORIGIN}/929/authors/${encodeURIComponent("הרב ב")}`,
+				`${SITE_ORIGIN}/pedia/${encodeURIComponent("יעקב")}`,
+				`${SITE_ORIGIN}/פרשה/54`,
+			]),
+		);
+		expect(urls.every((url) => new URL(url).origin === SITE_ORIGIN)).toBe(true);
+		expect(urls.filter((url) => url.includes("/פרשה"))).toHaveLength(55);
 		expect(
 			urls.some((url) =>
 				/\/(?:מסורה|masora)(?:\/|$)/.test(decodeURIComponent(url)),
 			),
 		).toBe(false);
-		expect(urls.filter((url) => url.includes("/פרשה"))).toHaveLength(
-			PARASHA_STATIC_COUNT,
-		);
 		expect(result.every((entry) => entry.lastModified === undefined)).toBe(
 			true,
 		);
-		expect(urls).toContain("https://example.com/929/1/10");
-		expect(urls).toContain("https://example.com/929/authors");
-		expect(urls).toContain(
-			`https://example.com/929/authors/${encodeURIComponent("הרב א")}`,
-		);
-		expect(urls).toContain(
-			`https://example.com/929/authors/${encodeURIComponent("הרב ב")}`,
-		);
-		expect(urls).toContain(
-			`https://example.com/pedia/${encodeURIComponent("יעקב")}`,
-		);
+		expect(headers).not.toHaveBeenCalled();
+		for (const [, loader] of BUILD_LOADERS)
+			expect(loader).toHaveBeenCalledTimes(1);
 	});
 
-	it("falls back to xn--febl3a.co.il when host header is absent", async () => {
-		(headers as jest.Mock).mockResolvedValue({
-			get: () => null,
-		});
-		(getAllAuthorSlugs as jest.Mock).mockResolvedValue([]);
-		(getAllArticlePerekIdPairs as jest.Mock).mockResolvedValue([]);
-		(getAllPerushPerekNamePairs as jest.Mock).mockResolvedValue([]);
-		(getAllEntryUniqueNames as jest.Mock).mockResolvedValue([]);
-
-		const result = await sitemapFn();
-
-		expect(result[0].url).toBe("https://xn--febl3a.co.il");
+	it("accepts successfully empty database families", async () => {
+		for (const [, loader] of BUILD_LOADERS)
+			(loader as jest.Mock).mockResolvedValue([]);
+		(getPerekImagesByChapter as jest.Mock).mockResolvedValue({});
+		await expect(sitemap()).resolves.toHaveLength(STATIC_COUNT);
 	});
 
-	it("fetches authors and articles in parallel", async () => {
-		(headers as jest.Mock).mockResolvedValue({
-			get: (name: string) => (name === "host" ? "test.com" : null),
-		});
-		(getAllAuthorSlugs as jest.Mock).mockResolvedValue([]);
-		(getAllArticlePerekIdPairs as jest.Mock).mockResolvedValue([]);
-		(getAllPerushPerekNamePairs as jest.Mock).mockResolvedValue([]);
-		(getAllEntryUniqueNames as jest.Mock).mockResolvedValue([]);
-
-		await sitemapFn();
-
-		expect(getAllAuthorSlugs).toHaveBeenCalledTimes(1);
-		expect(getAllArticlePerekIdPairs).toHaveBeenCalledTimes(1);
-		expect(getAllEntryUniqueNames).toHaveBeenCalledTimes(1);
-	});
-
-	it("includes perushim URLs in sitemap", async () => {
-		(headers as jest.Mock).mockResolvedValue({
-			get: (name: string) => (name === "host" ? "example.com" : null),
-		});
-		(getAllAuthorSlugs as jest.Mock).mockResolvedValue([]);
-		(getAllArticlePerekIdPairs as jest.Mock).mockResolvedValue([]);
-		(getAllEntryUniqueNames as jest.Mock).mockResolvedValue([]);
-		(getAllPerushPerekNamePairs as jest.Mock).mockResolvedValue([
-			{ perekId: 1, perushName: 'רש"י' },
-		]);
-
-		const result = await sitemapFn();
-
-		const urls = result.map((e) => e.url);
-		expect(urls).toContain(
-			`https://example.com/929/1/${encodeURIComponent('רש"י')}`,
-		);
-		// Root, sections, chapters, commentary, authors, pedia and 55 Parasha URLs.
-		const expectedLength =
-			1 +
-			SITEMAP_SECTIONS.length +
-			1 +
-			TOTAL_PERAKIM +
-			0 +
-			1 +
-			1 +
-			PEDIA_STATIC_COUNT +
-			0 +
-			PARASHA_STATIC_COUNT;
-		expect(result).toHaveLength(expectedLength);
-	});
-
-	it("includes pedia entry URLs in sitemap", async () => {
-		(headers as jest.Mock).mockResolvedValue({
-			get: (name: string) => (name === "host" ? "example.com" : null),
-		});
-		(getAllAuthorSlugs as jest.Mock).mockResolvedValue([]);
-		(getAllArticlePerekIdPairs as jest.Mock).mockResolvedValue([]);
-		(getAllPerushPerekNamePairs as jest.Mock).mockResolvedValue([]);
-		(getAllEntryUniqueNames as jest.Mock).mockResolvedValue(["יעקב", "שמשון"]);
-
-		const result = await sitemapFn();
-
-		const urls = result.map((e) => e.url);
-		expect(urls).toContain(
-			`https://example.com/pedia/${encodeURIComponent("יעקב")}`,
-		);
-		expect(urls).toContain(
-			`https://example.com/pedia/${encodeURIComponent("שמשון")}`,
-		);
-		// Root, sections, chapters, authors, pedia and 55 Parasha URLs.
-		const expectedLength =
-			1 +
-			SITEMAP_SECTIONS.length +
-			1 +
-			TOTAL_PERAKIM +
-			0 +
-			0 +
-			1 +
-			PEDIA_STATIC_COUNT +
-			0 +
-			2 +
-			PARASHA_STATIC_COUNT;
-		expect(result).toHaveLength(expectedLength);
-	});
+	it.each(BUILD_LOADERS)(
+		"rejects a failed %s lookup instead of producing partial XML",
+		async (_name, loader) => {
+			const failure = new Error("Build data unavailable");
+			(loader as jest.Mock).mockRejectedValueOnce(failure);
+			await expect(sitemap()).rejects.toBe(failure);
+		},
+	);
 });
