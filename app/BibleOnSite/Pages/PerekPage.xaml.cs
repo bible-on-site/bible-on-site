@@ -917,8 +917,11 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
 
             // TEMP-DIAG: force the AX server to recompute visibility — if WDA's
             // displayed flips after this pass the server cache was stale.
+            // LayoutChanged (unlike ScreenChanged) invalidates AXElement caches —
+            // cachedVisibleFrame/cachedRemoteParent — for the whole subtree.
+            UIKit.UIAccessibility.PostNotification(UIKit.UIAccessibilityPostNotification.LayoutChanged, window);
             UIKit.UIAccessibility.PostNotification(UIKit.UIAccessibilityPostNotification.ScreenChanged, (Foundation.NSObject?)null);
-            DebugLog.Write($"[A11yDump {tag}] posted ScreenChanged notification");
+            DebugLog.Write($"[A11yDump {tag}] posted LayoutChanged+ScreenChanged notifications");
 
             foreach (var id in new[] { "PasukText", "PasukimCollection", "PerekHeader", "PerushimChevronButton", "TextButton", "CircularMenuButton", "PerekSource" })
             {
