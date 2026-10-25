@@ -6,35 +6,35 @@
                xmlns:helpers="clr-namespace:BibleOnSite.Helpers"
                x:Class="BibleOnSite.Controls.ExitConfirmationPopup"
                x:TypeArguments="system:Boolean"
-               Padding="0">
-    <Border BackgroundColor="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}"
+               Padding="0" Margin="24" HorizontalOptions="Center">
+    <Border AutomationId="ExitConfirmationCard" BackgroundColor="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}"
             Stroke="Transparent"
             StrokeShape="RoundRectangle 12"
             Padding="24">
-        <VerticalStackLayout Spacing="16" WidthRequest="300" FlowDirection="RightToLeft">
-            <Label Text="{x:Static helpers:ExitConfirmation.Title}"
+        <VerticalStackLayout Spacing="16" FlowDirection="RightToLeft">
+            <Label AutomationId="ExitConfirmationTitle" Text="{x:Static helpers:ExitConfirmation.Title}"
                    FontSize="20"
                    FontAttributes="Bold"
                    TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource White}}"/>
-            <Label Text="{x:Static helpers:ExitConfirmation.Message}"
+            <Label AutomationId="ExitConfirmationMessage" Text="{x:Static helpers:ExitConfirmation.Message}"
                    FontSize="16"
                    TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
-            <HorizontalStackLayout FlowDirection="LeftToRight"
-                                   HorizontalOptions="End"
-                                   Spacing="8">
+            <Grid FlowDirection="LeftToRight" ColumnDefinitions="*,*"
+                  HorizontalOptions="Fill"
+                  ColumnSpacing="8">
                 <Button Text="{x:Static helpers:ExitConfirmation.StayLabel}"
-                        AutomationId="ExitConfirmationStay"
+                        AutomationId="ExitConfirmationStay" Grid.Column="0" LineBreakMode="WordWrap" Padding="0,10"
                         SemanticProperties.Description="{x:Static helpers:ExitConfirmation.StayLabel}"
                         TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryLight}}"
                         BackgroundColor="Transparent"
                         Clicked="OnStayClicked"/>
                 <Button Text="{x:Static helpers:ExitConfirmation.ExitLabel}"
-                        AutomationId="ExitConfirmationExit"
+                        AutomationId="ExitConfirmationExit" Grid.Column="1" LineBreakMode="WordWrap" Padding="0,10"
                         SemanticProperties.Description="{x:Static helpers:ExitConfirmation.ExitLabel}"
                         TextColor="{AppThemeBinding Light={StaticResource Error}, Dark={StaticResource ErrorDark}}"
                         BackgroundColor="Transparent"
                         Clicked="OnExitClicked"/>
-            </HorizontalStackLayout>
+            </Grid>
         </VerticalStackLayout>
     </Border>
 </toolkit:Popup>

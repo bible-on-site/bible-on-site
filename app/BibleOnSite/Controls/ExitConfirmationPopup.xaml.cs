@@ -33,7 +33,7 @@ public partial class ExitConfirmationPopup : Popup<bool>
 			return false;
 		}
 		var result = await shell.ShowPopupAsync<bool>(
-			new ExitConfirmationPopup(),
+			new ExitConfirmationPopup { WidthRequest = Math.Min(360, Math.Max(0, shell.CurrentPage.Width - 48)) },
 			new PopupOptions { CanBeDismissedByTappingOutsideOfPopup = true },
 			CancellationToken.None);
 		return result is { WasDismissedByTappingOutsideOfPopup: false, Result: true };

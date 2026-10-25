@@ -1,3 +1,4 @@
+using BibleOnSite.Controls;
 using BibleOnSite.ViewModels;
 
 namespace BibleOnSite.Pages;
@@ -8,7 +9,7 @@ namespace BibleOnSite.Pages;
 /// </summary>
 #pragma warning disable S2333 // MAUI XAML supplies the other partial declaration.
 [QueryProperty(nameof(FocusChannel), "focus")]
-public partial class SoundPreferencesPage : ContentPage
+public partial class SoundPreferencesPage : PreferencesPageBase
 #pragma warning restore S2333
 {
     public SoundPreferencesPage()

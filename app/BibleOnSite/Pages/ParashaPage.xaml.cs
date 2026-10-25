@@ -836,6 +836,7 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
                 return;
             }
 
+            PerushimPanel.CloseImmediate();
             _isShowingArticles = true;
             await ShowUnitArticlesAsync();
 
@@ -948,7 +949,7 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
     {
         _swipe.Cancel();
         if (_carouselInitializing || CarouselLoadingOverlay.IsVisible || FanMenu.IsOpen || _isShowingArticles || _focusedPasuk != null || ChapterSearch.IsSearchOpen ||
-            !ContainsTouch(ParashaCarousel, position) || ContainsTouch(BottomBar, position) ||
+            !ContainsTouch(ParashaCarousel, position) || ContainsTouch(BottomBar, position) || ContainsTouch(PerushimPanel, position) ||
             ContainsTouch(ExitFullScreenButton, position))
         {
             return;
@@ -959,7 +960,7 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
     private void OnTouchDispatched(object? sender, TouchPosition position)
     {
         if (_carouselInitializing || CarouselLoadingOverlay.IsVisible || FanMenu.IsOpen || _isShowingArticles || _focusedPasuk != null || ChapterSearch.IsSearchOpen ||
-            !ContainsTouch(ParashaCarousel, position) || ContainsTouch(BottomBar, position) ||
+            !ContainsTouch(ParashaCarousel, position) || ContainsTouch(BottomBar, position) || ContainsTouch(PerushimPanel, position) ||
             ContainsTouch(ExitFullScreenButton, position) || ContainsTouch(FanMenu.ToggleButton, position) ||
             ContainsTouch(SelectionBar, position))
         {

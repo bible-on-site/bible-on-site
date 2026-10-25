@@ -82,6 +82,8 @@ public partial class ReaderBottomBar : Grid
 
     private void ApplyArticlesState(bool isActive)
     {
+        PerushimChevronButton.IsEnabled = !isActive;
+        PerushimChevronButton.Opacity = isActive ? 0.4 : 1;
         var dark = Microsoft.Maui.Controls.Application.Current?.RequestedTheme == AppTheme.Dark;
         ArticlesButton.TextColor = isActive
             ? (dark ? Color.FromArgb("#BB86FC") : Color.FromArgb("#512BD4"))
