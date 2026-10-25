@@ -74,7 +74,7 @@ def _should_execute(stmt):
 
 def preprocess_sql(sql_content):
     result = "SET FOREIGN_KEY_CHECKS = 0;\n"
-    table_pattern = r'CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?[`"]?(\w+)[`"]?'
+    table_pattern = r'CREATE\s+TABLE\s+(?!IF\s+NOT\s+EXISTS\b)[`"]?(\w+)[`"]?'
     for match in re.finditer(table_pattern, sql_content, re.IGNORECASE):
         table_name = match.group(1)
         sql_content = sql_content.replace(

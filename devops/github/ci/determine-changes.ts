@@ -1,7 +1,8 @@
 /**
  * Determines, in one job, which CI modules changed between the event's base
  * revision and HEAD. Writes `<module>_module_changed` and `<module>_ci_changed`
- * to GITHUB_OUTPUT for every module in MODULES.
+ * to GITHUB_OUTPUT for every module in MODULES, plus the manual schema-only
+ * data deployment routing decision.
  *
  * Works on a shallow checkout. PRs compare the tested merge commit with its
  * first parent; the event payload's base can lag behind that tested base.
@@ -134,8 +135,8 @@ export const MODULES = {
 	},
 	data: {
 		directory: "data",
-		// Data-deploy tooling changes (e.g. its SQL_FILES manifest) must re-run
-		// the data CD and re-populate the production database.
+		// Data-deploy tooling changes require checks and normally re-run data CD.
+		// Schema-only changes use a separate manual-deployment routing gate.
 		ciPaths: [...SHARED_CI_PATHS, "devops/deploy/data-deploy"],
 	},
 	perushim_pipeline: {
@@ -156,6 +157,24 @@ export type ModuleChanges = Record<
 
 const isAt = (file: string, path: string) =>
 	file === path || file.startsWith(`${path}/`);
+
+/**
+ * Route schema-only data changes to the explicitly approved manual migration path.
+ * This path check does not certify SQL safety or existence: deleted migrations
+ * also stay manual rather than triggering a full production bootstrap.
+ */
+export function isSchemaOnlyDataChange(changedFiles: string[]): boolean {
+	const dataFiles = changedFiles.filter((file) => isAt(file, "data"));
+	return (
+		dataFiles.length > 0 &&
+		!changedFiles.some((file) =>
+			MODULES.perushim_pipeline.extraModulePaths.includes(file),
+		) &&
+		dataFiles.every((file) =>
+			/^data\/mysql\/tanahpedia_alter_[^/]+\.sql$/.test(file),
+		)
+	);
+}
 
 export function detectChanges(changedFiles: string[]): ModuleChanges {
 	const rules: Record<ModuleKey, ModuleRule> = MODULES;
@@ -262,6 +281,7 @@ export function main(env = process.env, cwd?: string): ModuleChanges {
 		`${key}_module_changed=${flags.module_changed}`,
 		`${key}_ci_changed=${flags.ci_changed}`,
 	]);
+	lines.push(`data_schema_only_changed=${isSchemaOnlyDataChange(files)}`);
 	console.log(lines.join("\n"));
 	appendFileSync(GITHUB_OUTPUT, `${lines.join("\n")}\n`);
 	return changes;
