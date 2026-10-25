@@ -3,18 +3,18 @@
 -- Idempotent: safe on a database that already carries the table.
 CREATE TABLE IF NOT EXISTS `tanahpedia_mention_decoration` (
     `id` char(36) NOT NULL,
-    -- Decoration contract version; bump on breaking shape changes.
+    -- Decoration contract version, bumped on breaking shape changes.
     `contract_version` smallint NOT NULL DEFAULT 1,
     `source_kind` enum('pasuk', 'article') NOT NULL,
-    -- Scripture coordinates (source_kind='pasuk'; same semantics as
+    -- Scripture coordinates for pasuk sources (same semantics as
     -- tanahpedia_entity_tanah_source: 0-based inclusive segment range,
     -- NULL bounds = whole pasuk).
     `perek_id` int DEFAULT NULL,
     `pasuk_number` int DEFAULT NULL,
     `segment_start` int DEFAULT NULL,
     `segment_end` int DEFAULT NULL,
-    -- Article coordinates (source_kind='article'): character offsets into
-    -- tanah_article.content at content_hash; the hash is the staleness key
+    -- Article coordinates for article sources: character offsets into
+    -- tanah_article.content at content_hash, the staleness key
     -- since the article row carries no revision column.
     `article_id` mediumint DEFAULT NULL,
     `content_hash` char(64) DEFAULT NULL,

@@ -25,8 +25,8 @@ npm run deploy:ecr -- --module-name api
 
 Populates the production database with SQL files from the `data/mysql/` directory.
 
-- **SSM Parameter Store** provides: username, password, database name
-- **RDS Describe** provides: host, port (from endpoint)
+- **SSM Parameter Store** supplies the database URL as a SecureString. The deployer
+  passes it privately to the Lambda invocation and never logs the payload.
 
 **Commands:**
 ```bash
@@ -50,14 +50,35 @@ invocation errors and function execution failures still fail the deployment.
 See [AWS Lambda function states](https://docs.aws.amazon.com/lambda/latest/dg/functions-states.html).
 Run `npm run test:deploy-data` from `devops/` to validate recovery without AWS access
 or database changes.
+Run `python -m unittest discover -s devops/deploy/data-deploy -p "test_*.py"`
+from the repository root to verify that additive migrations preserve existing rows.
+
+#### Mention-decoration schema recovery
+
+The schema migration `data/mysql/tanahpedia_alter_mention_decoration.sql` creates
+the missing table without replacing existing rows. It does not import annotations
+or change scripture, articles, or public URLs.
+
+After explicit approval of the AWS changes, deploy the updated populator Lambda
+parser first. Older versions inject a table drop even before `CREATE TABLE IF NOT
+EXISTS`, so they must not execute this migration. Then upload only this migration
+and invoke the existing Lambda contract with `sql_files` set to
+`["tanahpedia_alter_mention_decoration.sql"]`, the upload's `s3_prefix`, and the
+database URL resolved securely by the deployment caller. `buildDeployPayload`
+supports this single-file selection. Do not run the full `npm run deploy:data`
+payload for this recovery: it also replaces bootstrap tables and commentary data.
+
+Verify the table and reader query, then invalidate `tanahpedia-mention-refs` to
+clear empty results cached before the schema existed. Repeating the migration
+must preserve existing annotations. If application rollback is needed, leave the
+additive table and any rows in place; do not restore the old destructive parser
+while this migration remains in the deployment manifest.
 
 **Required Environment Variables (set via OIDC in CI):**
 - `AWS_REGION` - AWS region (e.g., `il-central-1`)
 
 **SSM Parameters used:**
-- `bible-on-site-tanah-db-username`
-- `bible-on-site-tanah-db-password` (SecureString)
-- `bible-on-site-tanah-db-name`
+- `bible-on-site-tanah-db-url` (SecureString)
 
 ## Directory Structure
 
