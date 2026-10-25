@@ -22,15 +22,16 @@ const countOccurrences = (haystack, needle) => haystack.split(needle).length - 1
 
 export function findTrxFiles(dir, list = []) {
   if (!existsSync(dir)) return list;
-  for (const entry of readdirSync(dir, { withFileTypes: true })) { // nosemgrep -- CI artifacts dir fixed by the workflow, no user input
-    const path = join(dir, entry.name); // nosemgrep -- entry names are dirents under that dir
+  // CI artifacts dir is fixed by the workflow; entry names are dirents under it.
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const path = join(dir, entry.name);
     if (entry.isDirectory()) findTrxFiles(path, list);
     else if (entry.name.endsWith(".trx")) list.push(path);
   }
   return list;
 }
 
-export function scanTrxFiles(files, read = (path) => readFileSync(path, "utf8")) { // nosemgrep -- paths come from findTrxFiles above, not user input
+export function scanTrxFiles(files, read = (path) => readFileSync(path, "utf8")) {
   const findings = new Map();
   const seen = new Set();
   let tests = 0;

@@ -58,3 +58,15 @@ exclude_paths:
   # Android SDK manifest parser test fixtures embed Google's repository XML;
   # markup rules flag the fixture strings as interpolated HTML/XSS.
   - "devops/github/ci/android-sdk-manifest.test.mjs"
+  # Local-dev/test helpers whose fs paths are legitimately dynamic — a
+  # developer-chosen recordings dir, fixed node_modules/sibling-repo roots,
+  # or fixture-owned temp dirs. non-literal-fs-filename is a systemic false
+  # positive here; these are still linted by the repo's own biome/precommit.
+  - "web/bible-on-site/scripts/copy-local-flip-book.mjs"
+  - "devops/local-recitation.mjs"
+  - "devops/local-recitation.test.mjs"
+  - "app/mobile-e2e/silent-failures.mjs"
+  # Same class as the Android manifest fixtures: e2e test files embedding
+  # JUnit/uiautomator XML stubs that markup rules flag as interpolated HTML.
+  - "app/mobile-e2e/release-smoke.test.mjs"
+  - "app/mobile-e2e/merge-runner-shards.test.mjs"
