@@ -146,6 +146,17 @@ jobs:
         with:
           driver: docker
 
+      # The docker driver cannot export type=gha layer cache; the non-npm (api)
+      # build below needs a docker-container builder. npm builds keep --builder default.
+      - name: Set up Docker Buildx (GHA cache exporter)
+        if: ${{ env.IS_NPM != 'true' }}
+        id: buildx_gha
+        uses: docker/setup-buildx-action@v4
+        with:
+          driver-opts: |
+            network=host
+            image=moby/buildkit:v0.22.0
+
       # --- RDS Access for SSG Build (Website only) ---
       # Fetches DB_URL from SSM Parameter Store and dynamically whitelists runner IP
       - name: Configure AWS Credentials for RDS Access
@@ -226,11 +237,14 @@ jobs:
           MAPBOX_PUBLIC_TOKEN: ${{ secrets.MAPBOX_PUBLIC_TOKEN }}
         run: |
           CACHE_ARGS=()
-          BUILD_COMMAND=(env DOCKER_BUILDKIT=0 docker build)
           if [ "$IS_NPM" = true ]; then
             # The deps image retains bun install --frozen-lockfile; the standalone runner image does not.
             CACHE_ARGS+=(--no-cache-filter builder)
             BUILD_COMMAND=(docker buildx build --builder default --load --progress=plain)
+          else
+            # type=gha cache needs the docker-container builder (docker driver cannot export it).
+            CACHE_ARGS+=(--cache-from "type=gha,scope=${MODULE_NAME}" --cache-to "type=gha,mode=max,scope=${MODULE_NAME}")
+            BUILD_COMMAND=(docker buildx build --builder "${{ steps.buildx_gha.outputs.name }}" --load --progress=plain)
           fi
           "${BUILD_COMMAND[@]}" \
             --network=host \
