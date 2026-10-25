@@ -6,9 +6,10 @@
 	},
 	"scripts": {
 		"backend": "node devops/local-backend.mjs",
-		"dev": "npm run dev --prefix devops --",
+		"dev": "bun run --cwd devops dev --",
 		"images:prepare": "node devops/perek-images/prepare.mjs",
 		"prepare": "node devops/install-git-hooks.mjs",
 		"version": "cross-env-shell echo ${npm_package_version}"
-	}
+	},
+	"packageManager": "bun@1.4.4"
 }
