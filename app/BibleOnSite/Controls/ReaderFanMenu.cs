@@ -120,7 +120,7 @@ public class ReaderFanMenu : Grid
     /// </summary>
     public void SetBottomInset(double bottom)
     {
-        _container.TranslationY = bottom;
+        TranslationY = bottom;
         _container.Padding = new Thickness(0, 0, 0, bottom);
         LayoutFan();
     }
