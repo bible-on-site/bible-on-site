@@ -30,7 +30,7 @@ public partial class PerekPage
 
     private async void OnPerekSourceClicked(object? sender, EventArgs e)
     {
-        ReaderMenuOverlay.IsVisible = false;
+        ReaderMenuOverlay.Close();
         var sourceBounds = SearchIntroduction.IsVisible ? SearchIntroduction.Bounds : NormalNavigationTitle.Bounds;
         FinishSearchIntroduction();
         var opening = ChapterSearch.OpenAsync();

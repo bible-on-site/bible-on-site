@@ -13,7 +13,7 @@ namespace BibleOnSite.Tests.ViewModels;
 public class DiagnosticsExportTests
 {
     [Fact]
-    public async Task Export_WritesDiagnosticFile_AndSharesItFromBothViewModels()
+    public async Task Export_WritesDiagnosticFile_AndSharesItFromEveryReaderViewModel()
     {
         await using var storage = new TestStorage();
         var device = new Mock<IDeviceInfo>();
@@ -29,7 +29,13 @@ public class DiagnosticsExportTests
         await support.ExportLogsCommand.ExecuteAsync(null);
         var chapter = new PerekViewModel(preferences, null, null, null, notes, null, storage.FileSystem.Object, share.Object);
         await chapter.ExportPerushimLogsCommand.ExecuteAsync(null);
-        files.Should().HaveCount(2);
+        var parasha = new ParashaViewModel(null!, null!, preferences, null, notes, null, null, null, null,
+            storage.FileSystem.Object, share.Object);
+        await parasha.ExportPerushimLogsCommand.ExecuteAsync(null);
+        var masora = new MasoraViewModel(null!, null!, preferences, null, notes, null, null,
+            storage.FileSystem.Object, share.Object);
+        await masora.ExportPerushimLogsCommand.ExecuteAsync(null);
+        files.Should().HaveCount(4);
         foreach (var path in files)
         {
             Path.GetDirectoryName(path).Should().Be(storage.Root);
@@ -39,7 +45,7 @@ public class DiagnosticsExportTests
     }
 
     [Fact]
-    public async Task Export_WhenShareFails_ShowsErrorFromBothViewModels()
+    public async Task Export_WhenShareFails_ShowsErrorFromEveryReaderViewModel()
     {
         await using var storage = new TestStorage();
         var notes = new PerushimNotesService(NotesDeliveryTests.Pad().Object, storage.FileSystem.Object,
@@ -53,7 +59,13 @@ public class DiagnosticsExportTests
         var chapter = new PerekViewModel(preferences, null, null, null, notes, navigator.Object,
             storage.FileSystem.Object, share.Object);
         await chapter.ExportPerushimLogsAsync();
-        navigator.Verify(n => n.DisplayAlertAsync("שגיאה", It.Is<string>(m => m.Contains("share unavailable")), "אישור"), Times.Exactly(2));
+        var parasha = new ParashaViewModel(null!, null!, preferences, null, notes, null, null, null,
+            navigator.Object, storage.FileSystem.Object, share.Object);
+        await parasha.ExportPerushimLogsAsync();
+        var masora = new MasoraViewModel(null!, null!, preferences, null, notes, null,
+            navigator.Object, storage.FileSystem.Object, share.Object);
+        await masora.ExportPerushimLogsAsync();
+        navigator.Verify(n => n.DisplayAlertAsync("שגיאה", It.Is<string>(m => m.Contains("share unavailable")), "אישור"), Times.Exactly(4));
     }
 
     [Fact]
