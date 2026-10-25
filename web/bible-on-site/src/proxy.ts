@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
+import bookPageSlugs from "@/data/book-page-slugs.json";
 import { indexNowKey } from "@/lib/seo/indexnow";
 import {
 	pediaPathFromLegacy,
@@ -9,6 +10,20 @@ const BLOCKED_BOTS =
 	/Bytespider|MJ12bot|AhrefsBot|SemrushBot|DotBot|PetalBot|BLEXBot|MegaIndex|Sogou|DataForSeoBot/i;
 
 const BOT_BLOCKING_ENABLED = process.env.BOT_BLOCKING_ENABLED !== "false";
+
+// Response-only handling preserves the statically rendered base readings.
+const PARASHA_VIEW_PARAMS = [
+	"perush",
+	"article",
+	"haftaraPerush",
+	"haftaraArticle",
+	"book",
+	"bookPage",
+	"toc",
+	"haftara",
+	"reading",
+	"scheme",
+] as const;
 
 /**
  * Canonical Tanahpedia URL for a request, or `null` when it is already canonical.
@@ -78,6 +93,29 @@ export async function proxy(
 			new URL(canonicalTarget, request.nextUrl),
 			308,
 		);
+	}
+
+	let segments: string[];
+	try {
+		segments = decodeURIComponent(pathname).split("/").filter(Boolean);
+	} catch {
+		return undefined;
+	}
+	const isParasha = segments[0] === "פרשה" || segments[0] === "parasha";
+	const isBookChrome =
+		segments.length === 3 &&
+		["בראשית", "שמות", "ויקרא", "במדבר", "דברים"].includes(segments[1]) &&
+		Object.values(bookPageSlugs).includes(segments[2]);
+	if (
+		isParasha &&
+		(isBookChrome ||
+			PARASHA_VIEW_PARAMS.some((param) =>
+				request.nextUrl.searchParams.has(param),
+			))
+	) {
+		const response = NextResponse.next();
+		response.headers.set("X-Robots-Tag", "noindex, follow");
+		return response;
 	}
 
 	return undefined;
