@@ -257,7 +257,7 @@ public partial class ParashaPage
                     ? ReaderSelectionBar.RecitationVisual.Resume : ReaderSelectionBar.RecitationVisual.Play;
         var hint = _recitationBusy ? "טוען את הקלטת הפרשה..." :
             !_viewModel.HasCurrentUnitRecitation ? "אין הקלטה לפרשה זו — הורידו את הקלטות הספר בהעדפות" :
-            recitationEnabled ? "הקראה" : "הקראת מילים ופסוקים עדיין בהכנה";
+            recitationEnabled ? "הקראה" : "הקראת מילים ופסוקים אינה זמינה";
         SelectionBar.SetRecitationState(recitationEnabled, recitationVisual, hint);
 
         var searching = ChapterSearch.IsSearchOpen;

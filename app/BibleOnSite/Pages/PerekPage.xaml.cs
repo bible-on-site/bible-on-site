@@ -1127,7 +1127,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
                     ? ReaderSelectionBar.RecitationVisual.Resume : ReaderSelectionBar.RecitationVisual.Play;
         var hint = _recitationBusy ? "טוען את הקלטת הפרק..." : track == null ? "אין הקלטה לפרק זה" :
             !RecitationService.Instance.HasAudio(track.PerekId) ? "הורידו את הקלטות הספר בהעדפות" :
-            !_chapterRecitationSelection && track.AlignmentStatus != "ready" && _recitationCursor.PlayingKey == null ? "הקראת מילים ופסוקים עדיין בהכנה" :
+            !_chapterRecitationSelection && track.AlignmentStatus != "ready" && _recitationCursor.PlayingKey == null ? "הקראת מילים ופסוקים אינה זמינה" :
             recitationEnabled ? "הקראה" : "ההקלטה אינה תואמת לטקסט המותקן";
         SelectionBar.SetRecitationState(recitationEnabled, recitationVisual, hint);
 
