@@ -29,6 +29,7 @@ const UNIT_LCOV = `${COVERAGE_DIR}/unit/lcov.info`;
 const E2E_LCOV = `${COVERAGE_DIR}/e2e/lcov.info`;
 const NORMALIZED_UNIT_LCOV = `${COVERAGE_DIR}/unit/lcov.normalized.info`;
 const NORMALIZED_E2E_LCOV = `${COVERAGE_DIR}/e2e/lcov.normalized.info`;
+const MERGE_LCOV_SCRIPT = `${PACKAGE_DIR}/../../devops/merge-lcov.mts`;
 
 mkdirSync(`${COVERAGE_DIR}/merged`, { recursive: true });
 dumpTargetCoverage();
@@ -41,30 +42,20 @@ function mergeCoverage(): void {
 	// Both unit and e2e tests now use swc-plugin-coverage-instrument for consistent branch line mappings.
 	// Inconsistent branch data (e.g. single-branch blocks from SWC ternary instrumentation) is fixed
 	// during normalization — see fixInconsistentBranches() in normalize-coverage.mts.
-	// Docker must create the report as the caller on Linux so the Node path
-	// normalization below can write it. Docker Desktop maps Windows bind mounts.
-	// execFile keeps the computed COVERAGE_DIR out of shell interpolation.
-	const dockerUser =
-		process.getuid && process.getgid
-			? ["--user", `${process.getuid()}:${process.getgid()}`]
-			: [];
+	// merge-lcov.mts is the repo's pure-Node merger; --require keeps lcov -a's
+	// fail-on-missing-input behavior. execFile keeps the computed COVERAGE_DIR
+	// out of shell interpolation; cwd pins tsx resolution to this package.
 	const out = runCommand([
-		"docker",
-		"run",
-		"--rm",
-		"-t",
-		...dockerUser,
-		"-v",
-		`${COVERAGE_DIR}:/.coverage`,
-		"lcov-cli:0.0.2",
-		"--rc",
-		"branch_coverage=1",
-		"-a",
-		"/.coverage/unit/lcov.normalized.info",
-		"-a",
-		"/.coverage/e2e/lcov.normalized.info",
-		"-o",
-		"/.coverage/merged/lcov.info",
+		process.execPath,
+		"--import",
+		"tsx",
+		MERGE_LCOV_SCRIPT,
+		"--out",
+		`${COVERAGE_DIR}/merged/lcov.info`,
+		"--require",
+		NORMALIZED_UNIT_LCOV,
+		"--require",
+		NORMALIZED_E2E_LCOV,
 	]);
 	if (out) console.log(formatOutput(out));
 }
@@ -148,7 +139,7 @@ function copyCoverageFile(source: string, destination: string): void {
 
 function runCommand(args: string[]): Buffer | undefined {
 	try {
-		return execFileSync(args[0], args.slice(1));
+		return execFileSync(args[0], args.slice(1), { cwd: PACKAGE_DIR });
 	} catch (e: unknown) {
 		printExecError(args.join(" "), e);
 		process.exit(1);

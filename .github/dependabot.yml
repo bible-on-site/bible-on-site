@@ -66,7 +66,6 @@ updates:
   - package-ecosystem: "docker"
     directories:
       - "/data/sefaria/mongodb-docker"
-      - "/devops/coverage/lcov-docker"
       - "/devops/rustfs"
       - "/web/admin"
       - "/web/api"

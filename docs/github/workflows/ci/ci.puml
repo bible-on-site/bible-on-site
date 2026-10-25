@@ -25,8 +25,8 @@ fork again
 fork again
   :Determine Docker Image Availability;
   note right
-    LCOV artifact + GHCR Sefaria
-    MongoDB (tree-hash tag),
+    GHCR Sefaria MongoDB
+    (tree-hash tag),
     can_publish flag for forks
   end note
 end fork
@@ -40,9 +40,6 @@ note right
 end note
 
 fork
-  :Build LCOV Docker Image;
-  note right: only on artifact miss
-fork again
   :Build Sefaria MongoDB Image;
   note right: only when GHCR tag missing
 fork again
