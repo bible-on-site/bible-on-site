@@ -496,6 +496,230 @@ describe("EntryEditPage", () => {
 		});
 	});
 
+	// Issue #2611 regression: a persistent non-conflict save failure used to
+	// be swallowed silently while autosave retried every ~2s forever, with no
+	// UI indication and no recovery path.
+	describe("save failure handling (#2611)", () => {
+		it("surfaces a generic save failure with a retry action", async () => {
+			updateEntryMock.mockRejectedValue(new Error("db down"));
+			renderPage();
+			await screen.findByTestId("wysiwyg-editor");
+			await waitFor(() =>
+				expect(
+					screen.getByRole("button", { name: "שמור עכשיו" }),
+				).toBeEnabled(),
+			);
+
+			fireEvent.click(screen.getByRole("button", { name: "שמור עכשיו" }));
+
+			expect(
+				await screen.findByRole("button", { name: "נסה שוב" }),
+			).toBeInTheDocument();
+			expect(await screen.findByText("השמירה נכשלה")).toBeInTheDocument();
+			// The unsaved edits stay dirty — nothing pretends the save worked.
+			expect(screen.queryByText(/נשמר ב-/)).not.toBeInTheDocument();
+		});
+
+		it("stops the autosave loop after a failure until explicit retry", async () => {
+			updateEntryMock.mockRejectedValue(new Error("db down"));
+			renderPage();
+			await screen.findByTestId("wysiwyg-editor");
+			await waitFor(() =>
+				expect(
+					screen.getByRole("button", { name: "שמור עכשיו" }),
+				).toBeEnabled(),
+			);
+			fireEvent.click(screen.getByRole("button", { name: "שמור עכשיו" }));
+			await screen.findByRole("button", { name: "נסה שוב" });
+			expect(updateEntryMock).toHaveBeenCalledTimes(1);
+
+			vi.useFakeTimers({ toFake: ["setTimeout"] });
+			try {
+				await act(async () => {
+					await vi.advanceTimersByTimeAsync(10_000);
+				});
+				expect(updateEntryMock).toHaveBeenCalledTimes(1);
+			} finally {
+				vi.useRealTimers();
+			}
+		});
+
+		it("retries with the current editor snapshot and clears on success", async () => {
+			updateEntryMock
+				.mockRejectedValueOnce(new Error("db down"))
+				.mockResolvedValueOnce({ id: "entry-1", headRevisionId: "rev-2" });
+			renderPage();
+			await screen.findByTestId("wysiwyg-editor");
+			await waitFor(() =>
+				expect(
+					screen.getByRole("button", { name: "שמור עכשיו" }),
+				).toBeEnabled(),
+			);
+			fireEvent.click(screen.getByRole("button", { name: "שמור עכשיו" }));
+
+			fireEvent.click(await screen.findByRole("button", { name: "נסה שוב" }));
+
+			await waitFor(() => expect(updateEntryMock).toHaveBeenCalledTimes(2));
+			expect(
+				await screen.findByText(/נשמר ב-/, {}, { timeout: 3000 }),
+			).toBeInTheDocument();
+			expect(
+				screen.queryByRole("button", { name: "נסה שוב" }),
+			).not.toBeInTheDocument();
+		});
+
+		it("treats an expired session as a login action and stashes a local draft", async () => {
+			updateEntryMock.mockRejectedValue(
+				new Error("SESSION_EXPIRED: admin session expired"),
+			);
+			renderPage();
+			await screen.findByTestId("wysiwyg-editor");
+			await waitFor(() =>
+				expect(
+					screen.getByRole("button", { name: "שמור עכשיו" }),
+				).toBeEnabled(),
+			);
+
+			fireEvent.click(screen.getByRole("button", { name: "שמור עכשיו" }));
+
+			expect(
+				await screen.findByRole("button", { name: "התחבר מחדש" }),
+			).toBeInTheDocument();
+			expect(
+				screen.queryByRole("button", { name: "נסה שוב" }),
+			).not.toBeInTheDocument();
+			// The in-flight work is preserved for the post-login reload.
+			const draft = localStorage.getItem("tanahpedia-draft:entry-1");
+			expect(draft).toBeTruthy();
+			expect(JSON.parse(draft as string).form.title).toBe("משה רבנו");
+		});
+
+		it("keeps edits made during an in-flight save dirty after it resolves", async () => {
+			let resolveSave: (value: unknown) => void = () => undefined;
+			updateEntryMock.mockImplementation(
+				() =>
+					new Promise((resolve) => {
+						resolveSave = resolve;
+					}),
+			);
+			renderPage();
+			await screen.findByTestId("wysiwyg-editor");
+			await waitFor(() =>
+				expect(
+					screen.getByRole("button", { name: "שמור עכשיו" }),
+				).toBeEnabled(),
+			);
+
+			fireEvent.click(screen.getByRole("button", { name: "שמור עכשיו" }));
+			// mutationFn runs a tick after mutate() — wait for the real call so
+			// the resolver is captured before resolving below.
+			await waitFor(() => expect(updateEntryMock).toHaveBeenCalledTimes(1));
+			// The user keeps editing while the request is in flight.
+			fireEvent.click(screen.getByTestId("wysiwyg-editor"));
+
+			await act(async () => {
+				resolveSave({ id: "entry-1", headRevisionId: "rev-2" });
+			});
+
+			// The acked snapshot predates the edit — the dirty flag must stay.
+			expect(
+				await screen.findByText("יש שינויים שלא נשמרו"),
+			).toBeInTheDocument();
+		});
+
+		it("serializes an autosave arriving while a save is in flight", async () => {
+			const resolvers: Array<(value: unknown) => void> = [];
+			updateEntryMock.mockImplementation(
+				() =>
+					new Promise((resolve) => {
+						resolvers.push(resolve);
+					}),
+			);
+			renderPage();
+			await screen.findByTestId("wysiwyg-editor");
+			await waitFor(() =>
+				expect(
+					screen.getByRole("button", { name: "שמור עכשיו" }),
+				).toBeEnabled(),
+			);
+			fireEvent.click(screen.getByRole("button", { name: "שמור עכשיו" }));
+			// mutationFn runs a tick after mutate() — the first request must be
+			// actually in flight before the autosave queues behind it.
+			await waitFor(() => expect(updateEntryMock).toHaveBeenCalledTimes(1));
+
+			vi.useFakeTimers({ toFake: ["setTimeout"] });
+			try {
+				// The user edits while the manual save is in flight → autosave
+				// schedules (under fake timers) and must queue, not race.
+				fireEvent.click(screen.getByTestId("wysiwyg-editor"));
+				await act(async () => {
+					await vi.advanceTimersByTimeAsync(2500);
+				});
+				expect(updateEntryMock).toHaveBeenCalledTimes(1);
+
+				await act(async () => {
+					resolvers[0]?.({ id: "entry-1", headRevisionId: "rev-2" });
+				});
+				// The queued autosave runs only after the first request settles —
+				// and carries the head that request just committed.
+				expect(updateEntryMock).toHaveBeenCalledTimes(2);
+				expect(updateEntryMock.mock.calls[1]?.[0]).toEqual({
+					data: expect.objectContaining({ baseRevisionId: "rev-2" }),
+				});
+			} finally {
+				vi.useRealTimers();
+			}
+		});
+
+		it("does not let a background refetch clobber dirty edits", async () => {
+			const client = renderPage();
+			await screen.findByTestId("wysiwyg-editor");
+			fireEvent.click(await screen.findByRole("tab", { name: "מטא-דאטה" }));
+			fireEvent.change(screen.getByLabelText(/כותרת/), {
+				target: { value: "כותרת שלא נשמרה" },
+			});
+
+			getEntryMock.mockResolvedValue({
+				...existingEntry,
+				title: "כותרת ישנה מהשרת",
+			});
+			await act(async () => {
+				await client.invalidateQueries({
+					queryKey: ["tanahpedia-entry", "entry-1"],
+				});
+			});
+
+			expect(screen.getByLabelText(/כותרת/)).toHaveValue("כותרת שלא נשמרה");
+			expect(screen.getByText("יש שינויים שלא נשמרו")).toBeInTheDocument();
+		});
+
+		it("stops retrying after a real revision conflict until reload", async () => {
+			updateEntryMock.mockRejectedValue(
+				new RevisionConflictError("stale base"),
+			);
+			renderPage();
+			await screen.findByTestId("wysiwyg-editor");
+			await waitFor(() =>
+				expect(
+					screen.getByRole("button", { name: "שמור עכשיו" }),
+				).toBeEnabled(),
+			);
+			fireEvent.click(screen.getByRole("button", { name: "שמור עכשיו" }));
+			await screen.findByRole("button", { name: "טען מחדש" });
+			expect(updateEntryMock).toHaveBeenCalledTimes(1);
+
+			vi.useFakeTimers({ toFake: ["setTimeout"] });
+			try {
+				await act(async () => {
+					await vi.advanceTimersByTimeAsync(10_000);
+				});
+				expect(updateEntryMock).toHaveBeenCalledTimes(1);
+			} finally {
+				vi.useRealTimers();
+			}
+		});
+	});
+
 	describe("deleting", () => {
 		it("deletes the entry after confirmation and goes back to the list", async () => {
 			const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);

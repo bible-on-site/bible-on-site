@@ -19,9 +19,13 @@ import {
 	pediaInvalidation,
 	revalidateWebsite,
 } from "../website-revalidate";
-import { pediaInvalidationForEntryIds } from "./paths";
 import { loadTanahpediaEntryById } from "./entry-loader.server";
-import { saveEntryRevisioned } from "./revisions";
+import { pediaInvalidationForEntryIds } from "./paths";
+import {
+	assertEntryFieldsValid,
+	saveEntryRevisioned,
+	translateEntryWriteError,
+} from "./revisions";
 
 const ANIMAL_KIND_KEYS = ["BEHEMA", "CHAYA", "OF", "SHERETZ"] as const;
 const ANIMAL_PURITY_KEYS = ["TAHOR", "TAMEH"] as const;
@@ -254,29 +258,34 @@ export const createEntry = createServerFn({ method: "POST" })
 		}) => data,
 	)
 	.handler(async ({ data }) => {
+		assertEntryFieldsValid(data);
 		const created = await transaction(async (conn) => {
-			await txExecute(
-				conn,
-				"INSERT INTO tanahpedia_entry (id, unique_name, title, content) VALUES (?, ?, ?, ?)",
-				[data.id, data.unique_name, data.title, data.content || null],
-			);
 			const headId = crypto.randomUUID();
-			await txExecute(
-				conn,
-				`INSERT INTO tanahpedia_entry_revision
-				 (id, entry_id, proposed_unique_name, proposed_title, proposed_content,
-				  source, notes, status, base_revision_id)
-				 VALUES (?, ?, ?, ?, ?, ?, ?, 'APPLIED', NULL)`,
-				[
-					headId,
-					data.id,
-					data.unique_name,
-					data.title,
-					data.content || null,
-					data.source?.trim() || "admin",
-					data.notes?.trim() || null,
-				],
-			);
+			try {
+				await txExecute(
+					conn,
+					"INSERT INTO tanahpedia_entry (id, unique_name, title, content) VALUES (?, ?, ?, ?)",
+					[data.id, data.unique_name, data.title, data.content || null],
+				);
+				await txExecute(
+					conn,
+					`INSERT INTO tanahpedia_entry_revision
+					 (id, entry_id, proposed_unique_name, proposed_title, proposed_content,
+					  source, notes, status, base_revision_id)
+					 VALUES (?, ?, ?, ?, ?, ?, ?, 'APPLIED', NULL)`,
+					[
+						headId,
+						data.id,
+						data.unique_name,
+						data.title,
+						data.content || null,
+						data.source?.trim() || "admin",
+						data.notes?.trim() || null,
+					],
+				);
+			} catch (err) {
+				throw translateEntryWriteError(err);
+			}
 			const entry = await txQueryOne<TanahpediaEntry>(
 				conn,
 				"SELECT id, unique_name, title, content, created_at, updated_at FROM tanahpedia_entry WHERE id = ?",
@@ -304,13 +313,10 @@ export const updateEntry = createServerFn({ method: "POST" })
 		}) => data,
 	)
 	.handler(async ({ data }) => {
+		assertEntryFieldsValid(data);
 		const updated = await transaction(async (conn) => {
-			const {
-				entry,
-				headRevisionId,
-				unchanged,
-				previousUniqueName,
-			} = await saveEntryRevisioned(conn, data);
+			const { entry, headRevisionId, unchanged, previousUniqueName } =
+				await saveEntryRevisioned(conn, data);
 			return { ...entry, headRevisionId, unchanged, previousUniqueName };
 		});
 		// A no-op save changes no public content, so nothing expires.
@@ -382,9 +388,7 @@ export const removeEntity = createServerFn({ method: "POST" })
 		);
 		await execute("DELETE FROM tanahpedia_entry_entity WHERE id = ?", [id]);
 		await revalidateWebsite(
-			await pediaInvalidationForEntryIds(
-				link ? [link.entry_id] : [],
-			),
+			await pediaInvalidationForEntryIds(link ? [link.entry_id] : []),
 		);
 		return { success: true };
 	});

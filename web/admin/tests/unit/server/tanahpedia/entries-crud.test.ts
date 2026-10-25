@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => {
 });
 
 vi.mock("@tanstack/react-start", () => ({
+	createServerOnlyFn: (fn: unknown) => fn,
 	createServerFn: () => ({
 		validator: (validate: (data: unknown) => unknown) => ({
 			handler:
@@ -40,9 +41,14 @@ vi.mock("~/server/tanahpedia/entry-loader.server", () => ({
 	loadTanahpediaEntryById: mocks.loadEntryMock,
 }));
 
-vi.mock("~/server/tanahpedia/revisions", () => ({
-	saveEntryRevisioned: mocks.saveRevisionedMock,
-}));
+vi.mock("~/server/tanahpedia/revisions", async (importOriginal) => {
+	const actual =
+		await importOriginal<typeof import("~/server/tanahpedia/revisions")>();
+	return {
+		...actual,
+		saveEntryRevisioned: mocks.saveRevisionedMock,
+	};
+});
 
 import {
 	assignEntity,
@@ -375,10 +381,7 @@ describe("tanahpedia entry server functions", () => {
 	});
 
 	describe("website cache invalidation", () => {
-		const ENV_KEYS = [
-			"VITE_WEBSITE_URL",
-			"REVALIDATE_SECRET",
-		] as const;
+		const ENV_KEYS = ["VITE_WEBSITE_URL", "REVALIDATE_SECRET"] as const;
 		let savedEnv: Record<string, string | undefined>;
 		let fetchSpy: ReturnType<typeof vi.spyOn>;
 

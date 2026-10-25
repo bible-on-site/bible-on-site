@@ -1,12 +1,21 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AutoSaveIndicator } from "~/components/AutoSaveIndicator";
 import { searchEntriesForLink } from "~/components/editor/entryLinkSearch";
 import { EntryHistoryPanel } from "~/components/tanahpedia/EntryHistoryPanel";
 import { EntryStructuralPanel } from "~/components/tanahpedia/EntryStructuralPanel";
 import { TanahpediaLlmAssistantPanel } from "~/components/tanahpedia/TanahpediaLlmAssistantPanel";
 import { WysiwygEditor } from "~/components/WysiwygEditor";
+import {
+	type ClassifiedSaveError,
+	classifySaveError,
+} from "~/lib/server-fn-errors";
+import {
+	clearEntryDraft,
+	readEntryDraft,
+	stashEntryDraft,
+} from "~/lib/tanahpedia/local-draft";
 import {
 	isRevisionConflictError,
 	REVISION_SOURCE_ADMIN,
@@ -25,6 +34,18 @@ interface EntryFormData {
 	title: string;
 	content: string;
 }
+
+/** A single save request — snapshot of the editor state it commits. */
+interface SaveJob {
+	form: EntryFormData;
+	source: string;
+	notes: string | null;
+	/** Editor edit-generation when the job was submitted; see editCounterRef. */
+	editCount: number;
+}
+
+/** The job plus the optimistic-concurrency base, resolved at dequeue time. */
+type DispatchedSaveJob = SaveJob & { baseRevisionId: string | null };
 
 export const Route = createFileRoute("/tanahpedia/entries/$id")({
 	component: EntryEditPage,
@@ -51,6 +72,24 @@ function EntryEditPage() {
 	const [saveSource, setSaveSource] = useState<string>(REVISION_SOURCE_ADMIN);
 	const [pendingNotes, setPendingNotes] = useState<string | null>(null);
 	const [conflictError, setConflictError] = useState(false);
+	// The visible non-conflict save failure; sticky until explicit retry so a
+	// persistent failure surfaces once instead of looping silently.
+	const [saveError, setSaveError] = useState<ClassifiedSaveError | null>(null);
+
+	// Edit-generation counters (read synchronously — immune to render timing):
+	// every user edit bumps editCounterRef; cleanCounterRef records the counter
+	// at the last committed baseline. Dirty iff they differ.
+	const editCounterRef = useRef(0);
+	const cleanCounterRef = useRef(0);
+	const formDataRef = useRef<EntryFormData>(formData);
+	formDataRef.current = formData;
+	const baseRevisionIdRef = useRef<string | null>(null);
+	baseRevisionIdRef.current = baseRevisionId;
+	// Serialized save queue: one request in flight; a later request waits and
+	// only the newest queued snapshot runs next.
+	const inFlightRef = useRef(false);
+	const queuedJobRef = useRef<SaveJob | null>(null);
+	const flushRef = useRef<() => void>(() => {});
 
 	const { data: llmStatus } = useQuery({
 		queryKey: ["tanahpedia-llm-status"],
@@ -65,29 +104,33 @@ function EntryEditPage() {
 	});
 
 	useEffect(() => {
-		if (entry) {
+		// Skip while dirty — a background refetch must not clobber unsaved
+		// edits or regress the revision base they build on.
+		if (!entry || editCounterRef.current !== cleanCounterRef.current) return;
+
+		// A stashed local draft (written when a save died, e.g. an expired
+		// session that forces a login round-trip) restores over the fresh head
+		// and stays dirty so the autosave can still commit it.
+		const draft = readEntryDraft(id);
+		if (draft) {
+			setFormData(draft.form);
+			editCounterRef.current += 1;
+			setHasChanges(true);
+		} else {
 			setFormData({
 				unique_name: entry.unique_name,
 				title: entry.title,
 				content: entry.content ?? "",
 			});
-			setBaseRevisionId(entry.currentRevisionId ?? null);
-			setConflictError(false);
 		}
-	}, [entry]);
+		baseRevisionIdRef.current = entry.currentRevisionId ?? null;
+		setBaseRevisionId(entry.currentRevisionId ?? null);
+		setConflictError(false);
+	}, [entry, id]);
 
 	const saveMutation = useMutation({
-		mutationFn: async ({
-			form,
-			baseRevisionId,
-			source,
-			notes,
-		}: {
-			form: EntryFormData;
-			baseRevisionId: string | null;
-			source: string;
-			notes: string | null;
-		}) => {
+		mutationFn: async (job: DispatchedSaveJob) => {
+			const { form, baseRevisionId, source, notes } = job;
 			if (isNew) {
 				return createEntry({
 					data: {
@@ -112,18 +155,30 @@ function EntryEditPage() {
 				},
 			});
 		},
-		onSuccess: (savedEntry) => {
+		onSuccess: (savedEntry, job) => {
 			queryClient.invalidateQueries({ queryKey: ["tanahpedia-admin-entries"] });
 			void queryClient.invalidateQueries({
 				queryKey: ["tanahpedia-entry-revisions", savedEntry?.id ?? id],
 			});
 			setLastSaved(new Date());
-			setHasChanges(false);
 			setConflictError(false);
+			setSaveError(null);
 			setSaveSource(REVISION_SOURCE_ADMIN);
 			setPendingNotes(null);
+			// The acknowledged head is always adoptable — the next save proposes
+			// on top of whatever snapshot this request committed. The ref update
+			// must be synchronous: onSettled flushes the queue before the render
+			// that carries the new state value.
 			if (savedEntry?.headRevisionId !== undefined) {
+				baseRevisionIdRef.current = savedEntry.headRevisionId;
 				setBaseRevisionId(savedEntry.headRevisionId);
+			}
+			// Only clear dirty when the acked snapshot is still the editor's
+			// latest — edits typed after this request began are still pending.
+			if (job.editCount === editCounterRef.current) {
+				cleanCounterRef.current = editCounterRef.current;
+				setHasChanges(false);
+				clearEntryDraft(id);
 			}
 			if (isNew && savedEntry?.id) {
 				navigate({
@@ -134,9 +189,42 @@ function EntryEditPage() {
 			}
 		},
 		onError: (error) => {
-			if (isRevisionConflictError(error)) setConflictError(true);
+			if (isRevisionConflictError(error)) {
+				setConflictError(true);
+				return;
+			}
+			setSaveError(classifySaveError(error));
+			// Stash the newest editor state so a login round-trip or reload does
+			// not lose unsaved work.
+			stashEntryDraft(id, formDataRef.current);
+		},
+		onSettled: () => {
+			inFlightRef.current = false;
+			flushRef.current();
 		},
 	});
+
+	// Queue a save; the newest snapshot wins and runs as soon as the previous
+	// request settles — autosave, manual saves, and double-clicks can never
+	// race each other.
+	const requestSave = useCallback((job: SaveJob) => {
+		queuedJobRef.current = job;
+		flushRef.current();
+	}, []);
+
+	flushRef.current = () => {
+		const job = queuedJobRef.current;
+		if (!job || inFlightRef.current) return;
+		queuedJobRef.current = null;
+		inFlightRef.current = true;
+		// The base is read at dequeue time, not enqueue: a request that just
+		// settled may have legitimately moved the head (our own commit), and
+		// only the latest known base avoids a self-inflicted conflict.
+		saveMutation.mutate({
+			...job,
+			baseRevisionId: baseRevisionIdRef.current,
+		});
+	};
 
 	const deleteMutation = useMutation({
 		mutationFn: () => deleteEntry({ data: id }),
@@ -149,6 +237,7 @@ function EntryEditPage() {
 	const handleFieldChange = useCallback(
 		<K extends keyof EntryFormData>(field: K, value: EntryFormData[K]) => {
 			setFormData((prev) => ({ ...prev, [field]: value }));
+			editCounterRef.current += 1;
 			setHasChanges(true);
 			setSaveSource(REVISION_SOURCE_ADMIN);
 			setPendingNotes(null);
@@ -158,32 +247,35 @@ function EntryEditPage() {
 
 	const handleContentChange = useCallback((content: string) => {
 		setFormData((prev) => ({ ...prev, content }));
+		editCounterRef.current += 1;
 		setHasChanges(true);
 		setSaveSource(REVISION_SOURCE_ADMIN);
 		setPendingNotes(null);
 	}, []);
 
 	useEffect(() => {
-		if (!hasChanges || saveMutation.isPending) return;
+		// saveError and conflictError are sticky — after a failure the autosave
+		// waits for the explicit retry/reload instead of re-firing every
+		// debounce forever.
+		if (!hasChanges || saveError || conflictError || !formData.title.trim())
+			return;
 		const timer = setTimeout(() => {
-			if (formData.title.trim()) {
-				saveMutation.mutate({
-					form: formData,
-					baseRevisionId,
-					source: saveSource,
-					notes: pendingNotes,
-				});
-			}
+			requestSave({
+				form: formData,
+				source: saveSource,
+				notes: pendingNotes,
+				editCount: editCounterRef.current,
+			});
 		}, 2000);
 		return () => clearTimeout(timer);
 	}, [
 		formData,
 		hasChanges,
-		saveMutation.isPending,
-		saveMutation,
-		baseRevisionId,
+		saveError,
+		conflictError,
 		saveSource,
 		pendingNotes,
+		requestSave,
 	]);
 
 	if (isLoading) {
@@ -214,6 +306,7 @@ function EntryEditPage() {
 						isSaving={saveMutation.isPending}
 						lastSaved={lastSaved}
 						hasChanges={hasChanges}
+						saveFailed={saveError !== null}
 					/>
 					{!isNew && (
 						<button
@@ -230,6 +323,45 @@ function EntryEditPage() {
 				</div>
 			</div>
 
+			{saveError && (
+				<div className="rounded-lg border border-red-300 bg-red-50 p-4 flex flex-wrap items-center justify-between gap-3">
+					<div className="text-sm text-red-800">
+						<p className="font-medium">{saveError.message}</p>
+						<p className="mt-1">
+							השינויים שלך נשמרו מקומית ולא אבדו —{" "}
+							{saveError.kind === "session"
+								? "התחבר מחדש והשמירה תושלם אוטומטית."
+								: "אפשר לנסות שוב עכשיו."}
+						</p>
+					</div>
+					{saveError.kind === "session" ? (
+						<button
+							type="button"
+							onClick={() => window.location.reload()}
+							className="px-4 py-2 text-sm font-medium rounded-lg bg-red-600 text-white hover:bg-red-700"
+						>
+							התחבר מחדש
+						</button>
+					) : (
+						<button
+							type="button"
+							onClick={() => {
+								setSaveError(null);
+								requestSave({
+									form: formData,
+									source: saveSource,
+									notes: pendingNotes,
+									editCount: editCounterRef.current,
+								});
+							}}
+							className="px-4 py-2 text-sm font-medium rounded-lg bg-red-600 text-white hover:bg-red-700"
+						>
+							נסה שוב
+						</button>
+					)}
+				</div>
+			)}
+
 			{conflictError && (
 				<div className="rounded-lg border border-red-300 bg-red-50 p-4 flex flex-wrap items-center justify-between gap-3">
 					<p className="text-sm text-red-800">
@@ -239,11 +371,15 @@ function EntryEditPage() {
 					</p>
 					<button
 						type="button"
-						onClick={() =>
+						onClick={() => {
+							// Reloading discards the local edits — mark clean so the
+							// refetched entry actually lands in the form.
+							cleanCounterRef.current = editCounterRef.current;
+							setHasChanges(false);
 							void queryClient.invalidateQueries({
 								queryKey: ["tanahpedia-entry", id],
-							})
-						}
+							});
+						}}
 						className="px-4 py-2 text-sm font-medium rounded-lg bg-red-600 text-white hover:bg-red-700"
 					>
 						טען מחדש
@@ -284,6 +420,7 @@ function EntryEditPage() {
 							formData={formData}
 							onApplyEntryFields={(patch, meta) => {
 								setFormData((prev) => ({ ...prev, ...patch }));
+								editCounterRef.current += 1;
 								setHasChanges(true);
 								setSaveSource(REVISION_SOURCE_LLM);
 								setPendingNotes(meta?.notesForEditor ?? null);
@@ -307,6 +444,7 @@ function EntryEditPage() {
 					currentContent={entry?.content ?? formData.content}
 					baseRevisionId={baseRevisionId}
 					onEntryChanged={() => {
+						cleanCounterRef.current = editCounterRef.current;
 						setHasChanges(false);
 						void queryClient.invalidateQueries({
 							queryKey: ["tanahpedia-entry", id],
@@ -379,16 +517,22 @@ function EntryEditPage() {
 					>
 						ביטול
 					</Link>
+					{hasChanges && !formData.title.trim() && (
+						<span className="self-center text-sm text-red-600">
+							כותרת הערך נדרשת לשמירה
+						</span>
+					)}
 					<button
 						type="button"
-						onClick={() =>
-							saveMutation.mutate({
+						onClick={() => {
+							setSaveError(null);
+							requestSave({
 								form: formData,
-								baseRevisionId,
 								source: saveSource,
 								notes: pendingNotes,
-							})
-						}
+								editCount: editCounterRef.current,
+							});
+						}}
 						disabled={saveMutation.isPending || !formData.title.trim()}
 						className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-medium shadow-sm hover:shadow-md"
 					>
