@@ -81,13 +81,20 @@ test.describe("Production metadata snapshots", () => {
 		expect(xml).not.toContain("<lastmod>");
 		const locations = sitemapLocations();
 		expect(locations).toContain(SITE_ORIGIN);
-		const paths = locations.map((location) => {
-			const url = new URL(location);
-			expect(url.origin).toBe(new URL(SITE_ORIGIN).origin);
-			expect(url.search).toBe("");
-			expect(url.hash).toBe("");
-			return decodeURIComponent(url.pathname);
-		});
+		const configuredOrigin = new URL(SITE_ORIGIN).origin;
+		const urls = locations.map((location) => new URL(location));
+		expect(
+			urls
+				.filter(
+					(url) =>
+						url.origin !== configuredOrigin ||
+						url.search !== "" ||
+						url.hash !== "",
+				)
+				.map((url) => url.href),
+			"Every sitemap URL must use the configured origin without queries or fragments",
+		).toEqual([]);
+		const paths = urls.map((url) => decodeURIComponent(url.pathname));
 		expect(paths.filter((path) => /^\/929\/\d+$/.test(path)).sort()).toEqual(
 			Array.from({ length: 929 }, (_, index) => `/929/${index + 1}`).sort(),
 		);
