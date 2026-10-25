@@ -1,0 +1,37 @@
+Running tests from C:\Users\Dorad\.codex\worktrees\pr-2584-simulator\bible-on-site-clone-1\app\BibleOnSite.Tests\bin\Debug\net10.0\BibleOnSite.Tests.dll (net10.0|x64)
+failed BibleOnSite.Tests.Pages.PerushimPanelShadowTests.Drag_handle_includes_the_sheet_top_padding (47ms)
+  from C:\Users\Dorad\.codex\worktrees\pr-2584-simulator\bible-on-site-clone-1\app\BibleOnSite.Tests\bin\Debug\net10.0\BibleOnSite.Tests.dll (net10.0|x64)
+  Expected ((string?)viewport.Attribute("Padding")) to be <null> because padding outside the gesture owner passes top-edge drags to the reader, but found "16,12,16,0".
+    at FluentAssertions.Primitives.ReferenceTypeAssertions`2.BeNull(String because, Object[] becauseArgs)
+    at BibleOnSite.Tests.Pages.PerushimPanelShadowTests.Drag_handle_includes_the_sheet_top_padding() in C:\Users\Dorad\.codex\worktrees\pr-2584-simulator\bible-on-site-clone-1\app\BibleOnSite.Tests\Pages\PerushimPanelShadowTests.cs:74
+    at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+    at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+failed BibleOnSite.Tests.Pages.PerushimPanelShadowTests.Perush_row_supports_tapping_the_name_and_remaining_row_area (1ms)
+  from C:\Users\Dorad\.codex\worktrees\pr-2584-simulator\bible-on-site-clone-1\app\BibleOnSite.Tests\bin\Debug\net10.0\BibleOnSite.Tests.dll (net10.0|x64)
+  Expected gestures not to be <null> because the complete perush row must toggle selection.
+    at FluentAssertions.Primitives.ReferenceTypeAssertions`2.NotBeNull(String because, Object[] becauseArgs)
+    at BibleOnSite.Tests.Pages.PerushimPanelShadowTests.Perush_row_supports_tapping_the_name_and_remaining_row_area() in C:\Users\Dorad\.codex\worktrees\pr-2584-simulator\bible-on-site-clone-1\app\BibleOnSite.Tests\Pages\PerushimPanelShadowTests.cs:86
+    at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+    at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+C:\Users\Dorad\.codex\worktrees\pr-2584-simulator\bible-on-site-clone-1\app\BibleOnSite.Tests\bin\Debug\net10.0\BibleOnSite.Tests.dll (net10.0|x64) failed with 2 error(s) (1s 185ms)
+Exit code: 2
+  Standard output:      Warning:
+       The component "Fluent Assertions" is governed by the rules defined in the Xceed License Agreement and
+       the Xceed Fluent Assertions Community License. You may use Fluent Assertions free of charge for
+       non-commercial use only. An active subscription is required to use Fluent Assertions for commercial use.
+
+       Please contact Xceed Sales mailto:sales@xceed.com to acquire a subscription at a very low cost.
+
+       A paid commercial license supports the development and continued increasing support of
+       Fluent Assertions users under both commercial and community licenses. Help us
+       keep Fluent Assertions at the forefront of unit testing.
+
+       For more information, visit https://xceed.com/products/unit-testing/fluent-assertions/
+
+Test run summary: Failed!
+  total: 10
+  failed: 2
+  succeeded: 8
+  skipped: 0
+  duration: 1s 888ms
+Test run completed with non-success exit code: 2 (see: https://aka.ms/testingplatform/exitcodes)

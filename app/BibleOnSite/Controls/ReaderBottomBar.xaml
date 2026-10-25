@@ -26,12 +26,21 @@
                 TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"
                 Clicked="OnPerushimChevronClicked"
                 AbsoluteLayout.LayoutBounds="0.08,0.55"
-                AbsoluteLayout.LayoutFlags="PositionProportional"/>
+                AbsoluteLayout.LayoutFlags="PositionProportional">
+            <VisualStateManager.VisualStateGroups>
+                <VisualStateGroup x:Name="CommonStates">
+                    <VisualState x:Name="Normal"/>
+                    <VisualState x:Name="Disabled"/>
+                </VisualStateGroup>
+            </VisualStateManager.VisualStateGroups>
+        </Button>
 
         <!-- Text Button at 28% - vertical א ב ג -->
         <Button x:Name="TextButton"
                 AutomationId="TextButton"
                 Text="א&#x0a;ב&#x0a;ג"
+                FontAutoScalingEnabled="False"
+                SemanticProperties.Description="הצגת הטקסט"
                 FontSize="10"
                 FontAttributes="Bold"
                 WidthRequest="44"
@@ -49,7 +58,7 @@
               HeightRequest="44"
               AbsoluteLayout.LayoutBounds="0.72,0.55"
               AbsoluteLayout.LayoutFlags="PositionProportional">
-            <Button x:Name="ArticlesButton"
+            <Button x:Name="ArticlesButton" AutomationId="ArticlesButton"
                     Text="{x:Static fonts:FluentUI.document_24_regular}"
                     FontFamily="FluentIcons"
                     FontSize="20"

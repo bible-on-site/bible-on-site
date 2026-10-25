@@ -511,6 +511,7 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
                 return;
             }
 
+            PerushimPanel.CloseImmediate();
             _isShowingArticles = true;
             await ShowUnitArticlesAsync();
 
