@@ -18,9 +18,9 @@ MySQL must be running locally (Windows service, port 3306). The launcher (`launc
 
 | Command | Server mode | Notes |
 |---|---|---|
-| `npm run test:e2e` | standalone server (production) | Requires `npm run build` first |
-| `npm run coverage:e2e` | `next dev` (dev + SWC instrumentation) | No build needed |
-| `npm run coverage:all` | unit + e2e + merge | Runs `coverage:unit`, then `coverage:e2e`, then merges LCOV |
+| `bun run test:e2e` | standalone server (production) | Requires `bun run build` first |
+| `bun run coverage:e2e` | `next dev` (dev + SWC instrumentation) | No build needed |
+| `bun run coverage:all` | unit + e2e + merge | Runs `coverage:unit`, then `coverage:e2e`, then merges LCOV |
 
 ## Coverage mode
 
