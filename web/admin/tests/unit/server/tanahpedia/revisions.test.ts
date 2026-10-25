@@ -65,7 +65,6 @@ const HEAD = {
 	base_revision_id: null,
 	created_at: "2024-01-01",
 	updated_at: "2024-01-01",
-	age_seconds: 7200,
 };
 
 const fakeConn = {} as never;
@@ -155,8 +154,11 @@ describe("saveEntryRevisioned", () => {
 		expect(result.headRevisionId).toEqual(expect.any(String));
 	});
 
-	it("squashes a same-source save inside the window into the head revision", async () => {
-		mockSaveQueries({ ...HEAD, source: "admin", age_seconds: 30 });
+	it("appends a new revision for a same-source save seconds after the head", async () => {
+		// Explicit commits never rewrite committed history: even a save made
+		// moments after the previous one (the old autosave squash window)
+		// produces its own immutable APPLIED revision.
+		mockSaveQueries({ ...HEAD, source: "admin" });
 		const result = await saveEntryRevisioned(fakeConn, {
 			id: "entry-1",
 			unique_name: "yaakov",
@@ -164,22 +166,21 @@ describe("saveEntryRevisioned", () => {
 			content: "<p>new</p>",
 			baseRevisionId: "rev-head",
 		});
-		const update = txExecuteMock.mock.calls.find(([, sql]) =>
-			(sql as string).includes("UPDATE tanahpedia_entry_revision"),
+		const insert = txExecuteMock.mock.calls.find(([, sql]) =>
+			(sql as string).includes("INSERT INTO tanahpedia_entry_revision"),
 		);
-		expect(update).toBeTruthy();
-		// WHERE id = ? is the last param
-		expect(update?.[2]?.[4]).toBe("rev-head");
+		expect(insert).toBeTruthy();
 		expect(
 			txExecuteMock.mock.calls.some(([, sql]) =>
-				(sql as string).includes("INSERT INTO tanahpedia_entry_revision"),
+				(sql as string).includes("UPDATE tanahpedia_entry_revision"),
 			),
 		).toBe(false);
-		expect(result.headRevisionId).toBe("rev-head");
+		expect(result.headRevisionId).toEqual(expect.any(String));
+		expect(result.headRevisionId).not.toBe("rev-head");
 	});
 
-	it("opens a new revision when the source differs despite a fresh head", async () => {
-		mockSaveQueries({ ...HEAD, source: "admin", age_seconds: 30 });
+	it("opens a new revision when the source differs from the head", async () => {
+		mockSaveQueries({ ...HEAD, source: "admin" });
 		await saveEntryRevisioned(fakeConn, {
 			id: "entry-1",
 			unique_name: "yaakov",
@@ -188,26 +189,6 @@ describe("saveEntryRevisioned", () => {
 			baseRevisionId: "rev-head",
 			source: "llm-assistant",
 		});
-		expect(
-			txExecuteMock.mock.calls.some(([, sql]) =>
-				(sql as string).includes("INSERT INTO tanahpedia_entry_revision"),
-			),
-		).toBe(true);
-	});
-
-	it("skips squashing when options.squash is false", async () => {
-		mockSaveQueries({ ...HEAD, source: "admin", age_seconds: 30 });
-		await saveEntryRevisioned(
-			fakeConn,
-			{
-				id: "entry-1",
-				unique_name: "yaakov",
-				title: "יעקב",
-				content: "<p>new</p>",
-				baseRevisionId: "rev-head",
-			},
-			{ squash: false },
-		);
 		expect(
 			txExecuteMock.mock.calls.some(([, sql]) =>
 				(sql as string).includes("INSERT INTO tanahpedia_entry_revision"),
@@ -520,7 +501,9 @@ describe("website cache invalidation", () => {
 	});
 
 	function calledUrls(): URL[] {
-		return fetchSpy.mock.calls.map((call: unknown[]) => new URL(String(call[0])));
+		return fetchSpy.mock.calls.map(
+			(call: unknown[]) => new URL(String(call[0])),
+		);
 	}
 
 	it("expires pedia surfaces when a proposal goes live", async () => {

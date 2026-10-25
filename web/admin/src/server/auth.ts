@@ -72,16 +72,26 @@ export async function exchangeCodeForTokens(
 	return response.json();
 }
 
-export async function verifyIdToken(token: string): Promise<boolean> {
+/**
+ * Verifies the admin session id_token and returns its claims — the `sub`
+ * uniquely scopes each editor's browser-local drafts to their account.
+ */
+export async function verifyIdTokenClaims(
+	token: string,
+): Promise<{ sub?: string } | null> {
 	try {
-		await jwtVerify(token, jwks, {
+		const { payload } = await jwtVerify(token, jwks, {
 			issuer: ISSUER,
 			audience: COGNITO_CLIENT_ID,
 		});
-		return true;
+		return payload;
 	} catch {
-		return false;
+		return null;
 	}
+}
+
+export async function verifyIdToken(token: string): Promise<boolean> {
+	return (await verifyIdTokenClaims(token)) !== null;
 }
 
 /**
