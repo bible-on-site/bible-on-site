@@ -16,10 +16,11 @@ public class ParashaMenuWeeklyActionTests
     [Fact]
     public void WeeklyParashaButton_IsAWiredAccessibleSatellite()
     {
-        XNamespace p = "http://schemas.microsoft.com/dotnet/2021/maui";
         var doc = XDocument.Load(Path.Join(AppRoot, "Pages", "ParashaPage.xaml"));
 
-        var button = doc.Descendants(p + "Button")
+        // The fan satellites are shared ReaderFanMenuSatellite controls (a
+        // Button subclass), so match the AutomationId on any element type.
+        var button = doc.Descendants()
             .FirstOrDefault(e => (string?)e.Attribute("AutomationId") == "WeeklyParashaButton");
         button.Should().NotBeNull("the menu must expose the פרשת השבוע action");
 

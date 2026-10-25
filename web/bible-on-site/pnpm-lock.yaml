@@ -183,8 +183,8 @@ importers:
         specifier: 1.0.2
         version: 1.0.2
       html-flip-book-react:
-        specifier: 0.0.0-alpha.48
-        version: 0.0.0-alpha.48(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+        specifier: 0.0.0-alpha.49
+        version: 0.0.0-alpha.49(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       isomorphic-dompurify:
         specifier: 4.6.0
         version: 4.6.0
@@ -198,8 +198,8 @@ importers:
         specifier: 0.6.5
         version: 0.6.5
       monocart-coverage-reports:
-        specifier: 3.0.0
-        version: 3.0.0
+        specifier: 3.1.0
+        version: 3.1.0
       mpg123-decoder:
         specifier: 1.0.3
         version: 1.0.3
@@ -332,8 +332,8 @@ importers:
         specifier: 2.2.0
         version: 2.2.0
       '@napi-rs/wasm-runtime':
-        specifier: 1.2.5
-        version: 1.2.5(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)
+        specifier: 1.2.6
+        version: 1.2.6(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)
       '@tybys/wasm-util':
         specifier: 0.10.4
         version: 0.10.4
@@ -1247,6 +1247,13 @@ packages:
     peerDependencies:
       '@emnapi/core': ^1.7.1 || ^2.0.0-alpha.4
       '@emnapi/runtime': ^1.7.1 || ^2.0.0-alpha.4
+
+  '@napi-rs/wasm-runtime@1.2.6':
+    resolution: {integrity: sha512-mRyDmEw9/fCDXCGfL1sbgIw/GUK0PVxRW4YwgPN61F3LQ+fSyoBFarJVzgGyhF6kRzEQZ0FejDqm4WLXSeqQmw==}
+    engines: {node: ^20.19.0 || ^22.13.0 || >=23.5.0}
+    peerDependencies:
+      '@emnapi/core': ^1.7.1 || 2.0.0-beta.2
+      '@emnapi/runtime': ^1.7.1 || 2.0.0-beta.2
 
   '@next/env@16.4.3':
     resolution: {integrity: sha512-a7tz1QCcWWkwC/rPJcPMJk/UNRu9CFhDd3OHYE5hddbJrs8BqRTalxI6GlKCWEGzRLHN+S/B7a4PAHCtm25aBQ==}
@@ -2441,8 +2448,8 @@ packages:
     resolution: {integrity: sha512-MMdARuVEQziNTeJD8DgMqmhwR11BRQ/cBP+pLtYdSTnf3MIO8fFeiINEbX36ZdNlfU/7A9f3gUw49B3oQsvwBA==}
     engines: {node: '>=4.0'}
 
-  execa@10.2.0:
-    resolution: {integrity: sha512-j1pFOVxaybMVCTNHSBuISL2KQcDS3KIE1wBmUp4n2X+1FgaQI2ZDJVy9TYxDyMCzYojRIMh9O8X/UoWZtxTJdw==}
+  execa@10.2.1:
+    resolution: {integrity: sha512-/Bofl3ZBh2Q4/PG0W63qFzP5vDAypi8Zc90UWTBzaDNIYiX7apPOd0N6L8hG8CojUdq4V51adu8BObP+iVsSTw==}
     engines: {node: '>=22'}
 
   execa@5.1.1:
@@ -2569,14 +2576,14 @@ packages:
   html-escaper@2.0.2:
     resolution: {integrity: sha512-H2iMtd0I4Mt5eYiapRdIDjp+XzelXQ0tFE4JS7YFwFevXXMmOp9myNrUvCg0D6ws8iqkRPBfKHgbwig1SmlLfg==}
 
-  html-flip-book-react@0.0.0-alpha.48:
-    resolution: {integrity: sha512-zGBF/9iLnbOkLlXKwhSjXE1BhTzdPl0mafYicPiwS1O4QNletGjHi9BpFwQ2yTyHvv0PyHHKRlEokw/t6h4Ikw==}
+  html-flip-book-react@0.0.0-alpha.49:
+    resolution: {integrity: sha512-0mmacEv652xOWxIkFiTd0UISDVOKuuVPqBSwJhg1gSjhXI4cWj5z9dpY9lvX9JGcFWuTqWXqS5O0cMKeH158FA==}
     peerDependencies:
       react: ^18.0.0
       react-dom: ^18.0.0
 
-  html-flip-book-vanilla@0.0.0-alpha.48:
-    resolution: {integrity: sha512-qiqx7fu2KxAR4II3dVOZAz7M5VcKjXg7kN5cCvRoDpK+IpqGzgm6uMDHy6kiZK/2NMzYI15/jngRNY62Aj/UZg==}
+  html-flip-book-vanilla@0.0.0-alpha.49:
+    resolution: {integrity: sha512-AyYZ1Ul48PbZaNY8hAjc93XsPYwG5hSMxza+CMZsLcJ5klEDogCdcFuBLyWHr27uVrBkgAtv91owRyBS75s/WA==}
 
   http-assert@1.5.0:
     resolution: {integrity: sha512-uPpH7OKX4H25hBmU6G1jWNaqJGpTXxey+YOUizJUAgu0AjLUeC8D73hTrhvDS5D+GJN1DN1+hhc/eF/wpxtp0w==}
@@ -3079,8 +3086,8 @@ packages:
   moment@2.31.0:
     resolution: {integrity: sha512-0acOTfMiWOheYS4eoWb80yYMb/JLvVv9SHbs2PehaDzfUG0Bw855SKyk0IKTnPGa5+U2bmi3W68l1+sGLX/pvw==}
 
-  monocart-coverage-reports@3.0.0:
-    resolution: {integrity: sha512-e/1sowGv8sCDD/QV/6SPsaJz5i2VuPaY7hPlzAPiisgYaJHvuKOgDk78ixSFBGMgHjFcw7p/GDL1m1LcvfB3Dw==}
+  monocart-coverage-reports@3.1.0:
+    resolution: {integrity: sha512-FsS3MNxmrOzPaNu5HoXA6Yk5d8Cn6PiAKmiZmFRwguYKNZiMrrtp09vAFXvgTjE1SEfTI9N1APUzhwwclQSkeg==}
     engines: {node: '>=22.15.0'}
     hasBin: true
 
@@ -4865,7 +4872,7 @@ snapshots:
       '@tybys/wasm-util': 0.10.4
     optional: true
 
-  '@napi-rs/wasm-runtime@1.2.5(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)':
+  '@napi-rs/wasm-runtime@1.2.6(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)':
     dependencies:
       '@emnapi/core': 1.11.3
       '@emnapi/runtime': 1.11.3
@@ -5866,7 +5873,7 @@ snapshots:
 
   estraverse@5.3.0: {}
 
-  execa@10.2.0:
+  execa@10.2.1:
     dependencies:
       '@sindresorhus/merge-streams': 4.0.0
       figures: 6.1.0
@@ -6002,13 +6009,13 @@ snapshots:
 
   html-escaper@2.0.2: {}
 
-  html-flip-book-react@0.0.0-alpha.48(react-dom@19.3.1(react@19.3.1))(react@19.3.1):
+  html-flip-book-react@0.0.0-alpha.49(react-dom@19.3.1(react@19.3.1))(react@19.3.1):
     dependencies:
-      html-flip-book-vanilla: 0.0.0-alpha.48
+      html-flip-book-vanilla: 0.0.0-alpha.49
       react: 19.3.1
       react-dom: 19.3.1(react@19.3.1)
 
-  html-flip-book-vanilla@0.0.0-alpha.48:
+  html-flip-book-vanilla@0.0.0-alpha.49:
     dependencies:
       hammerjs: 2.0.8
       throttle-debounce: 5.0.2
@@ -6743,7 +6750,7 @@ snapshots:
 
   moment@2.31.0: {}
 
-  monocart-coverage-reports@3.0.0:
+  monocart-coverage-reports@3.1.0:
     dependencies:
       '@jridgewell/sourcemap-codec': 1.6.0
       acorn: 8.19.0
@@ -6753,7 +6760,7 @@ snapshots:
       console-grid: 2.2.4
       convert-source-map: 2.0.0
       eight-colors: 1.3.3
-      execa: 10.2.0
+      execa: 10.2.1
       istanbul-lib-coverage: 3.2.2
       istanbul-lib-report: 3.0.1
       istanbul-reports: 3.2.0
@@ -6775,7 +6782,7 @@ snapshots:
       koa: 3.2.1
       koa-static-resolver: 1.0.7
       lz-utils: 2.1.1
-      monocart-coverage-reports: 3.0.0
+      monocart-coverage-reports: 3.1.0
       monocart-locator: 1.0.6
     transitivePeerDependencies:
       - bufferutil

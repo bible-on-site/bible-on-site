@@ -1,6 +1,6 @@
 {
 	"name": "bible-on-site",
-	"version": "0.2.550",
+	"version": "0.2.557",
 	"private": true,
 	"license": "MIT",
 	"browserslist": [
@@ -51,13 +51,13 @@
 		"@aws-sdk/client-lambda": "3.1156.0",
 		"@pdf-lib/fontkit": "1.1.1",
 		"gematry": "1.0.2",
-		"html-flip-book-react": "0.0.0-alpha.48",
+		"html-flip-book-react": "0.0.0-alpha.49",
 		"isomorphic-dompurify": "4.6.0",
 		"leaflet": "1.9.4",
 		"mapbox-gl": "3.33.0",
 		"moment-timezone": "0.6.5",
 		"mpg123-decoder": "1.0.3",
-		"monocart-coverage-reports": "3.0.0",
+		"monocart-coverage-reports": "3.1.0",
 		"mysql2": "3.24.6",
 		"next": "16.4.3",
 		"pdf-lib": "1.17.1",
@@ -104,7 +104,7 @@
 		"@emnapi/core": "1.11.3",
 		"@emnapi/runtime": "1.11.3",
 		"@emnapi/wasi-threads": "2.2.0",
-		"@napi-rs/wasm-runtime": "1.2.5",
+		"@napi-rs/wasm-runtime": "1.2.6",
 		"@tybys/wasm-util": "0.10.4"
 	},
 	"packageManager": "pnpm@12.9.1"
