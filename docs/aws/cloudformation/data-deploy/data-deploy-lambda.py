@@ -197,9 +197,9 @@ def execute_sql_streaming(body, connection):
                 if not _should_execute(stmt):
                     continue
 
-                # Handle CREATE TABLE → add DROP TABLE IF EXISTS
+                # Replace bootstrap tables, preserving explicit additive migrations.
                 table_match = re.match(
-                    r'CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?[`"]?(\w+)[`"]?',
+                    r'CREATE\s+TABLE\s+(?!IF\s+NOT\s+EXISTS\b)[`"]?(\w+)[`"]?',
                     stmt,
                     re.IGNORECASE,
                 )
@@ -274,15 +274,15 @@ def _should_execute(stmt):
 
 
 def preprocess_sql(sql_content):
-    """Add DROP statements before CREATE TABLE/VIEW.
+    """Add DROP statements before replaceable CREATE TABLE/VIEW statements.
 
-    This ensures idempotent deployments - the same SQL can be
-    run multiple times without "already exists" errors.
+    Explicit CREATE TABLE IF NOT EXISTS migrations preserve existing rows.
+    Bootstrap definitions without that clause retain their replacement behavior.
     """
     result = "SET FOREIGN_KEY_CHECKS = 0;\n"
 
-    # Handle CREATE TABLE - add DROP TABLE IF EXISTS before each
-    table_pattern = r'CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?[`"]?(\w+)[`"]?'
+    # Do not turn additive, idempotent migrations into destructive replacements.
+    table_pattern = r'CREATE\s+TABLE\s+(?!IF\s+NOT\s+EXISTS\b)[`"]?(\w+)[`"]?'
     for match in re.finditer(table_pattern, sql_content, re.IGNORECASE):
         table_name = match.group(1)
         sql_content = sql_content.replace(
