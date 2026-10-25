@@ -1,5 +1,4 @@
 "use client";
-import { toLetters } from "gematry";
 import type {
 	CoverConfig,
 	FlipBookHandle,
@@ -52,7 +51,6 @@ import type { PerekIllustration } from "@/lib/seo/perek-illustrations";
 import { buildEntityRefLookup } from "@/lib/tanahpedia/entity-ref-lookup";
 import type { PerekEntityReference } from "@/lib/tanahpedia/service";
 import { constructTsetAwareHDate } from "@/util/hebdates-util";
-import { BlankPageContent } from "./BlankPageContent";
 import { DownloadMaskingHint } from "./DownloadMaskingHint";
 import { ImageCaption } from "./ImageCaption";
 import { Ptuah } from "./Ptuha";
@@ -60,11 +58,13 @@ import { renderPasukWithEntityRefs } from "./pasuk-renderer";
 import RecitationPlayer, {
 	RecitationHeader,
 	RecitationLink,
-	RecitationPasukControl,
 	RecitationVerse,
 	RecitationWordControl,
 	stopRecitation,
 } from "./RecitationPlayer";
+import { SeferPanel } from "./SeferPanel";
+import { SeferPasukNumber } from "./SeferPasukNumber";
+import { SeferPasukSelectionBar } from "./SeferPasukSelectionBar";
 import { Stuma } from "./Stuma";
 import styles from "./sefer.module.css";
 import {
@@ -86,10 +86,6 @@ import {
 	runDownload,
 	toHebrewChapterNumber,
 } from "./sefer-page-utils";
-import {
-	scrollToPerushPasuk,
-	useSeferOpenPerush,
-} from "./sefer-pasuk-navigation";
 import { TanahpediaLink } from "./TanahpediaLink";
 import { useSeferContentNavigation } from "./useSeferContentNavigation";
 import "html-flip-book-react/styles.css";
@@ -125,31 +121,9 @@ type FlipBookProps = {
 };
 
 /**
- * Pasuk number in a book content page. While a perush is open on the facing
- * blank page and annotates this pasuk, activating the number jumps to that
- * pasuk's commentary group; otherwise it keeps its recitation behaviour.
+ * Pasuk number in a book content page — see ./SeferPasukNumber (recitation,
+ * perush navigation, or a pasuk-selection toggle during selection mode).
  */
-function SeferPasukNumber({
-	perekId,
-	pasuk,
-}: {
-	perekId: number;
-	pasuk: number;
-}) {
-	const openPerush = useSeferOpenPerush(perekId);
-	return (
-		<RecitationPasukControl
-			pasuk={pasuk}
-			onNavigate={
-				openPerush?.pesukim.has(pasuk)
-					? () => scrollToPerushPasuk(perekId, pasuk)
-					: undefined
-			}
-		>
-			<span className={styles.pasukNum}>{toLetters(pasuk)}</span>
-		</RecitationPasukControl>
-	);
-}
 
 /** Dynamic FlipBook with ref forwarded (library uses forwardRef) */
 const FlipBook = dynamic<
@@ -508,11 +482,12 @@ const Sefer = (props: {
 								})}
 							</article>
 						</div>
+						<SeferPasukSelectionBar perekId={pagePerekId ?? 0} />
 					</section>
 				</RecitationPlayer>
 			</React.Fragment>,
 			<React.Fragment key={blankKey}>
-				<BlankPageContent
+				<SeferPanel
 					articles={
 						perekIdx === currentPerekIdx
 							? articles
@@ -524,6 +499,7 @@ const Sefer = (props: {
 							: batchSummaries[String(perekIds?.[perekIdx] ?? 0)]?.perushim
 					}
 					perekId={perekIds?.[perekIdx] ?? 0}
+					seferName={perekObj.sefer}
 					hebrewDateStr={hebrewDateStr}
 					initialSlug={
 						contentNavigation.content &&
