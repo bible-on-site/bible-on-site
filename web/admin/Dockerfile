@@ -1,5 +1,7 @@
 FROM node:26.12.1-alpine AS base
-RUN corepack enable pnpm
+# Node 26 no longer bundles corepack; install it from npm to activate the
+# pinned pnpm from packageManager.
+RUN npm install -g corepack@0.36.0 && corepack enable pnpm
 
 FROM base AS deps
 WORKDIR /app

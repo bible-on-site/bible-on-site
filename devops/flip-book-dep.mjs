@@ -40,7 +40,15 @@ if (process.argv[2] === "post") {
 }
 
 rmSync(markerFile, { force: true });
-if (npmRun("flip-book:check", ["ignore", "inherit", "ignore"]).status !== 0) {
+// The check only reads package.json — spawn it directly so it works where
+// pnpm/node_modules are absent (e.g. pre-commit.ci clones); a `pnpm run`
+// failure there would otherwise masquerade as a local dependency.
+const check = spawnSync(
+	process.execPath,
+	["scripts/toggle-flip-book-dep.mjs", "check"],
+	{ cwd: websiteDir, stdio: ["ignore", "inherit", "ignore"] },
+);
+if (check.status !== 0) {
 	console.info(
 		"Auto-fixing: switching html-flip-book-react from local to npm...",
 	);

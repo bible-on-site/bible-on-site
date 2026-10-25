@@ -1071,7 +1071,8 @@ jobs:
         # here with the exact same image on every run.
         # Mount read-only and copy inside so the install writes nothing to the
         # checkout; corepack activates the pinned pnpm from packageManager.
-        run: docker run --rm -v "$PWD":/src:ro node:26.12.1-alpine sh -c "mkdir /app && cp /src/package.json /src/pnpm-lock.yaml /src/pnpm-workspace.yaml /app/ && cd /app && corepack enable pnpm && pnpm install --frozen-lockfile --ignore-scripts"
+        # Node 26 no longer bundles corepack, so install it from npm first.
+        run: docker run --rm -v "$PWD":/src:ro node:26.12.1-alpine sh -c "mkdir /app && cp /src/package.json /src/pnpm-lock.yaml /src/pnpm-workspace.yaml /app/ && cd /app && npm install -g corepack@0.36.0 && corepack enable pnpm && pnpm install --frozen-lockfile --ignore-scripts"
 
       # The browser install only needs node_modules; it runs in the background
       # across lint/unit/MySQL/Rust and is gated before E2E. On a binary-cache
@@ -1460,7 +1461,8 @@ jobs:
         # here with the exact same image on every run.
         # Mount read-only and copy inside so the install writes nothing to the
         # checkout; corepack activates the pinned pnpm from packageManager.
-        run: docker run --rm -v "$PWD":/src:ro node:26.12.1-alpine sh -c "mkdir /app && cp /src/package.json /src/pnpm-lock.yaml /src/pnpm-workspace.yaml /app/ && cd /app && corepack enable pnpm && pnpm install --frozen-lockfile --ignore-scripts"
+        # Node 26 no longer bundles corepack, so install it from npm first.
+        run: docker run --rm -v "$PWD":/src:ro node:26.12.1-alpine sh -c "mkdir /app && cp /src/package.json /src/pnpm-lock.yaml /src/pnpm-workspace.yaml /app/ && cd /app && npm install -g corepack@0.36.0 && corepack enable pnpm && pnpm install --frozen-lockfile --ignore-scripts"
 
       # The browser install only needs node_modules; it runs in the background
       # across lint/typecheck/unit/build and is gated before E2E.

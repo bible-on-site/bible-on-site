@@ -1,5 +1,7 @@
 FROM node:26.12.1-alpine AS base
-RUN corepack enable pnpm
+# Node 26 no longer bundles corepack; install it from npm to activate the
+# pinned pnpm from packageManager.
+RUN npm install -g corepack@0.36.0 && corepack enable pnpm
 
 # Version-only releases must not invalidate the dependency layer.
 # pnpm-lock.yaml does not embed the manifest version, so only package.json needs
