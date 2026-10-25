@@ -13,6 +13,7 @@ import {
 	getRecitationSettings,
 	openReaderSettings,
 } from "@/lib/recitation-settings";
+import { getSeferBookmarkSettings } from "@/lib/sefer-bookmark-settings";
 
 beforeAll(() => {
 	HTMLDialogElement.prototype.showModal = function () {
@@ -336,4 +337,44 @@ test("הסתר שם השם is one group whose sub-options are disabled while it 
 			yhwh: "dalet",
 		}),
 	);
+});
+test("סימניות controls persist chapter-tab preferences and gate option edits on the toggle (#2543)", () => {
+	render(<ReaderSettings />);
+	fireEvent.click(screen.getByRole("button", { name: "הגדרות קריאה" }));
+	const group = screen.getByRole("group", { name: "סימניות פרקים" });
+	const toggle = within(group).getByRole("checkbox", {
+		name: "סימניות פרקים",
+	});
+	const placement = within(group).getByRole("combobox", {
+		name: "מיקום סימניות",
+	});
+	expect(toggle).toBeChecked();
+	expect(placement).toHaveValue("sides");
+
+	fireEvent.change(placement, { target: { value: "top" } });
+	fireEvent.change(
+		within(group).getByRole("combobox", { name: "סדר סימניות" }),
+		{ target: { value: "title" } },
+	);
+	fireEvent.click(
+		within(group).getByRole("checkbox", { name: "הצג רק פרקים הבאים" }),
+	);
+	expect(getSeferBookmarkSettings()).toEqual(
+		expect.objectContaining({
+			enabled: true,
+			placement: "top",
+			order: "title",
+			upcomingOnly: true,
+		}),
+	);
+
+	fireEvent.click(toggle);
+	expect(getSeferBookmarkSettings().enabled).toBe(false);
+	expect(placement).toBeDisabled();
+	// A disabled fieldset also guards the write path — matching the masking
+	// group convention, programmatic edits while hidden must not persist.
+	fireEvent.change(placement, { target: { value: "left" } });
+	expect(getSeferBookmarkSettings().placement).toBe("top");
+	fireEvent.click(toggle);
+	expect(placement).toBeEnabled();
 });
