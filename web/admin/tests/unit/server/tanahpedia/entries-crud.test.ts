@@ -234,6 +234,20 @@ describe("tanahpedia entry server functions", () => {
 			});
 		});
 
+		it("resolves the head topologically via base_revision_id, not timestamps", async () => {
+			mocks.loadEntryMock.mockResolvedValue({ id: "entry-1" });
+			mocks.queryOne.mockResolvedValue({ id: "rev-head" });
+
+			await getEntry({ data: "entry-1" });
+
+			// Same-second commits cannot be ordered by created_at + UUID —
+			// the head is the APPLIED row no APPLIED child is based on.
+			const headQuery = mocks.queryOne.mock.calls[0];
+			expect(headQuery?.[0]).toContain("NOT EXISTS");
+			expect(headQuery?.[0]).toContain("base_revision_id");
+			expect(headQuery?.[1]).toEqual(["entry-1", "entry-1"]);
+		});
+
 		it("reports a missing head revision as null", async () => {
 			mocks.loadEntryMock.mockResolvedValue({ id: "entry-1" });
 			mocks.queryOne.mockResolvedValue(null);
