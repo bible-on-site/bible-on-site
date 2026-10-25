@@ -1,0 +1,693 @@
+/* Sefer blank-page panel (#2544): פרשנים/מאמרים tabs flanking the date,
+   a diagonal overlap transition between the two panels, the wrapping
+   perush tag list, pasuk-grouped commentary, and the articles masonry. */
+
+/* The component replaces BlankPageContent's .pageBlank section: a flex
+   column filling the book page. */
+.panelRoot {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	min-height: 0;
+}
+
+/* Header: tab - date - tab; the date stays centered and visible. */
+.panelHeader {
+	display: flex;
+	align-items: stretch;
+	justify-content: space-between;
+	gap: 8px;
+	flex-shrink: 0;
+	padding-top: 6px;
+}
+
+.panelTab {
+	appearance: none;
+	font: inherit;
+	flex: 1 1 0;
+	min-width: 0;
+	border: 1px solid #d4c9a8;
+	border-bottom: none;
+	border-radius: 8px 8px 0 0;
+	background: #f0ead8;
+	color: #5a4a2e;
+	font-size: 0.9rem;
+	font-weight: 600;
+	padding: 6px 8px;
+	cursor: pointer;
+	transition:
+		background 0.15s,
+		color 0.15s,
+		border-color 0.15s;
+}
+
+.panelTab:hover {
+	background: #e8e0cc;
+}
+
+.panelTab:focus-visible {
+	outline: 2px solid #1a73e8;
+	outline-offset: 2px;
+}
+
+.panelTab[aria-selected="true"] {
+	background: #fffdf5;
+	border-color: #8b7355;
+	color: #3d3220;
+	box-shadow: inset 0 3px 0 #8b7355;
+}
+
+.panelDate {
+	flex: 0 1 auto;
+	align-self: center;
+	font-size: 0.95rem;
+	color: #637598;
+	text-align: center;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	direction: rtl;
+	padding: 0 4px;
+}
+
+/* Panels share one grid cell: both stay mounted (state and scroll positions
+   survive the switch) and the inactive one slides out diagonally. */
+.panelStage {
+	flex: 1;
+	min-height: 0;
+	margin-top: 0;
+	display: grid;
+	border: 1px solid #d4c9a8;
+	border-radius: 0 0 8px 8px;
+	background: #fffdf5;
+	overflow: hidden;
+}
+
+.panel {
+	grid-area: 1 / 1;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+	background: #fffdf5;
+	position: relative;
+	transition:
+		transform 0.35s ease,
+		opacity 0.35s ease,
+		visibility 0.35s;
+}
+
+/* An opened article covers the masonry (same cell) so the grid keeps its
+   scroll position and DOM order while it is away (#2544 item 6). */
+.panelArticleOverlay {
+	position: absolute;
+	inset: 0;
+	z-index: 2;
+	background: #fffdf5;
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+}
+
+.panel[data-active="true"] {
+	transform: none;
+	opacity: 1;
+	visibility: visible;
+	z-index: 1;
+}
+
+/* פרשנים sits on the right (RTL start): it exits down-right and re-enters
+   from there; מאמרים exits up-left — the two slide through each other on
+   the diagonal in both directions. */
+.panel[data-tab="perushim"][data-active="false"] {
+	transform: translate(45%, 45%);
+	opacity: 0;
+	visibility: hidden;
+}
+
+.panel[data-tab="articles"][data-active="false"] {
+	transform: translate(-45%, -45%);
+	opacity: 0;
+	visibility: hidden;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.panel {
+		transition: none;
+	}
+	.panel[data-active="false"] {
+		transform: none;
+	}
+}
+
+/* ─── פרשנים panel ─────────────────────────────────── */
+
+.tagArea {
+	flex-shrink: 0;
+	padding: 10px 12px 6px;
+	border-bottom: 1px dashed #e0d8c0;
+}
+
+.tagList {
+	list-style: none;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin: 0;
+	padding: 0;
+}
+
+.perushTagItem {
+	display: inline-flex;
+	align-items: center;
+}
+
+.perushTag {
+	border: 1px solid #d4c9a8;
+	border-radius: 999px;
+	border-start-start-radius: 0;
+	border-end-start-radius: 0;
+	background: #fffdf5;
+	color: #5a4a2e;
+	font-size: 0.85rem;
+	padding: 3px 12px 3px 8px;
+	cursor: pointer;
+	text-decoration: none;
+	transition:
+		background 0.15s,
+		border-color 0.15s,
+		color 0.15s;
+}
+
+.perushTagCheck {
+	appearance: none;
+	font: inherit;
+	width: 1.35rem;
+	height: 1.35rem;
+	margin-inline-end: -1px;
+	border: 1px solid #d4c9a8;
+	border-radius: 999px 0 0 999px;
+	background: #fffdf5;
+	color: transparent;
+	font-size: 0.7rem;
+	line-height: 1;
+	padding: 0;
+	cursor: pointer;
+	transition:
+		background 0.15s,
+		border-color 0.15s,
+		color 0.15s;
+	z-index: 1;
+}
+
+.perushTagItem[data-selected] .perushTagCheck,
+.perushTagItem[data-selected] .perushTag {
+	background: #5a4a2e;
+	border-color: #5a4a2e;
+	color: #fffdf5;
+}
+
+.perushTag:hover {
+	border-color: #8b7355;
+}
+
+.perushTagCheck:hover {
+	border-color: #8b7355;
+}
+
+.perushTag:focus-visible,
+.perushTagCheck:focus-visible {
+	outline: 2px solid #1a73e8;
+	outline-offset: 2px;
+}
+
+/* Scope control: selection follows the reader across the Tanach unless a
+   sefer carries its own list. */
+.scopeRow {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-top: 8px;
+	font-size: 0.78rem;
+	color: #6b5835;
+}
+
+.scopeToggle {
+	appearance: none;
+	font: inherit;
+	font-size: 0.78rem;
+	border: 1px solid #d4c9a8;
+	border-radius: 999px;
+	background: #f0ead8;
+	color: #5a4a2e;
+	padding: 1px 10px;
+	cursor: pointer;
+}
+
+.scopeToggle:hover {
+	background: #e8e0cc;
+}
+
+.scopeToggle:focus-visible {
+	outline: 2px solid #1a73e8;
+	outline-offset: 2px;
+}
+
+/* Deep-linked single perush: compact header replacing the tag list. */
+.deepHeader {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-shrink: 0;
+	padding: 8px 12px;
+	border-bottom: 1px dashed #e0d8c0;
+}
+
+.deepTitle {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+.deepName {
+	font-size: 0.95rem;
+	font-weight: 700;
+	color: #5a4a2e;
+	margin: 0;
+}
+
+.deepParshan {
+	font-size: 0.75rem;
+	color: #6b5835;
+}
+
+.deepBack {
+	appearance: none;
+	font: inherit;
+	font-size: 0.8rem;
+	border: 1px solid #d4c9a8;
+	border-radius: 6px;
+	background: none;
+	color: #5a4a2e;
+	padding: 3px 10px;
+	cursor: pointer;
+	white-space: nowrap;
+}
+
+.deepBack:hover {
+	background: #f0ead8;
+}
+
+/* Grouped commentary: pasuk groups in canonical order; inside each, the
+   selected perushim's notes under their names. */
+.commentaryScroll {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	scrollbar-gutter: stable;
+	padding: 8px 12px 12px;
+	scrollbar-width: thin;
+	scrollbar-color: #c4b896 transparent;
+}
+
+.commentaryGroup {
+	border-right: 3px solid #d4c9a8;
+	padding-right: 12px;
+	margin-bottom: 14px;
+	scroll-margin-block-start: 8px;
+}
+
+.commentaryGroup[data-pasuk-highlight] {
+	background: rgba(254, 243, 199, 0.95);
+	border-right-color: #f59e0b;
+	box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.35);
+	border-radius: 3px;
+}
+
+.commentaryPasuk {
+	appearance: none;
+	font: inherit;
+	background: none;
+	border: none;
+	padding: 0;
+	cursor: pointer;
+	display: inline-block;
+	font-size: 0.85rem;
+	font-weight: 700;
+	color: #6b5835;
+	margin-bottom: 6px;
+}
+
+.commentaryPasuk:hover {
+	color: #5a4a2e;
+	text-decoration: underline;
+}
+
+.commentaryPasuk:focus-visible {
+	outline: 2px solid #1a73e8;
+	outline-offset: 2px;
+}
+
+.commentaryPerush {
+	margin-bottom: 10px;
+}
+
+.commentaryPerush + .commentaryPerush {
+	border-top: 1px dashed #e0d8c0;
+	padding-top: 8px;
+}
+
+.commentaryPerushName {
+	font-size: 0.8rem;
+	font-weight: 700;
+	color: #8b7355;
+	margin-bottom: 4px;
+}
+
+.noteContent {
+	font-size: 0.95rem;
+	line-height: 1.7;
+	color: #333;
+	direction: rtl;
+	text-align: justify;
+	text-align-last: right;
+}
+
+.noteContent h2 {
+	font-size: 2em;
+	margin-block: 0.67em;
+}
+.noteContent h3 {
+	font-size: 1.5em;
+	margin-block: 0.83em;
+}
+.noteContent h4 {
+	font-size: 1.17em;
+	margin-block: 1em;
+}
+.noteContent h5 {
+	font-size: 1em;
+	margin-block: 1.33em;
+}
+.noteContent h6 {
+	font-size: 0.83em;
+	margin-block: 1.67em;
+}
+
+.noteContent + .noteContent {
+	margin-top: 8px;
+	padding-top: 8px;
+	border-top: 1px dashed #e0d8c0;
+}
+
+.noteError {
+	font-size: 0.85rem;
+	color: #8a2b2b;
+}
+
+.noteRetry {
+	appearance: none;
+	font: inherit;
+	font-size: 0.8rem;
+	border: 1px solid #d4c9a8;
+	border-radius: 6px;
+	background: none;
+	color: #5a4a2e;
+	padding: 2px 10px;
+	cursor: pointer;
+	margin-inline-start: 8px;
+}
+
+.emptyState {
+	margin: 0;
+	padding: 16px;
+	color: #6b5835;
+	font-size: 0.9rem;
+	text-align: center;
+}
+
+/* ─── מאמרים panel: vertical masonry ───────────────── */
+
+.articlesScroll {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	scrollbar-gutter: stable;
+	padding: 10px 12px 12px;
+	scrollbar-width: thin;
+	scrollbar-color: #c4b896 transparent;
+}
+
+.articlesMasonry {
+	column-width: 170px;
+	column-gap: 10px;
+}
+
+.articleCard {
+	display: inline-block;
+	width: 100%;
+	break-inside: avoid;
+	margin: 0 0 10px;
+	background: #fffdf5;
+	border: 1px solid #d4c9a8;
+	border-radius: 8px;
+	padding: 10px;
+	text-decoration: none;
+	color: inherit;
+	transition:
+		border-color 0.15s,
+		box-shadow 0.15s;
+}
+
+.articleCard:hover {
+	border-color: #8b7355;
+	box-shadow: 0 2px 8px rgba(90, 74, 46, 0.15);
+}
+
+.articleCard:focus-visible {
+	outline: 2px solid #1a73e8;
+	outline-offset: 2px;
+}
+
+.articleCardAuthor {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin-bottom: 6px;
+}
+
+.articleCardImg {
+	border-radius: 50%;
+	object-fit: cover;
+}
+
+.articleCardAuthorName {
+	font-size: 0.75rem;
+	color: #6b5835;
+}
+
+.articleCardTitle {
+	font-size: 0.95rem;
+	font-weight: 700;
+	color: #5a4a2e;
+	line-height: 1.3;
+	margin-bottom: 4px;
+}
+
+.articleCardAbstract {
+	font-size: 0.8rem;
+	line-height: 1.55;
+	color: #555;
+	display: -webkit-box;
+	-webkit-line-clamp: 4;
+	line-clamp: 4;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+}
+
+.articleCardAbstract p {
+	margin: 0;
+}
+
+/* ─── Article fullscreen (item 7) ───────────────────── */
+
+.articleFullscreen {
+	position: fixed;
+	inset: 0;
+	/* Above the flipbook composite (9999), top nav (10000) and the
+	   tanahpedia tooltip (10001) — a fullscreen dialog is the topmost
+	   layer; at 200 the in-panel article overlay painted over it and
+	   intercepted its clicks. */
+	z-index: 10002;
+	background: #fffdf5;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+}
+
+.articleFullscreenBody {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	scrollbar-gutter: stable;
+	padding: 16px max(16px, 10vw);
+	scrollbar-width: thin;
+	scrollbar-color: #c4b896 transparent;
+}
+
+.fullscreenToggle {
+	appearance: none;
+	font: inherit;
+	font-size: 0.8rem;
+	border: 1px solid #d4c9a8;
+	border-radius: 6px;
+	background: #f0ead8;
+	color: #5a4a2e;
+	padding: 3px 10px;
+	cursor: pointer;
+	white-space: nowrap;
+}
+
+.fullscreenToggle:hover {
+	background: #e8e0cc;
+}
+
+.fullscreenToggle:focus-visible {
+	outline: 2px solid #1a73e8;
+	outline-offset: 2px;
+}
+
+@media (prefers-color-scheme: dark) {
+	.panelTab {
+		background: #2a241a;
+		border-color: #4a4030;
+		color: #cbb98c;
+	}
+
+	.panelTab:hover {
+		background: #342c1e;
+	}
+
+	.panelTab[aria-selected="true"] {
+		background: #1f1a12;
+		border-color: #8b7355;
+		color: #e0d0a8;
+		box-shadow: inset 0 3px 0 #8b7355;
+	}
+
+	.panelDate {
+		color: #9aa0a6;
+	}
+
+	.panelStage {
+		border-color: #4a4030;
+		background: #1f1a12;
+	}
+
+	.panel {
+		background: #1f1a12;
+	}
+
+	.tagArea,
+	.deepHeader {
+		border-color: #3a3226;
+	}
+
+	.noteContent {
+		color: #e8eaed;
+	}
+
+	.commentaryPerush + .commentaryPerush,
+	.noteContent + .noteContent {
+		border-color: #3a3226;
+	}
+
+	.perushTagCheck,
+	.perushTag {
+		background: #1f1a12;
+		border-color: #4a4030;
+		color: #cbb98c;
+	}
+
+	.perushTagCheck {
+		color: transparent;
+	}
+
+	.perushTag:hover,
+	.perushTagCheck:hover {
+		border-color: #8b7355;
+	}
+
+	.perushTagItem[data-selected] .perushTagCheck,
+	.perushTagItem[data-selected] .perushTag {
+		background: #cbb98c;
+		border-color: #cbb98c;
+		color: #1f1a12;
+	}
+
+	.scopeRow,
+	.commentaryPerushName,
+	.deepParshan,
+	.articleCardAuthorName,
+	.articleCardAbstract,
+	.emptyState {
+		color: #b8a578;
+	}
+
+	.scopeToggle,
+	.deepBack,
+	.noteRetry,
+	.fullscreenToggle {
+		border-color: #4a4030;
+		background: #2a241a;
+		color: #cbb98c;
+	}
+
+	.scopeToggle:hover,
+	.deepBack:hover,
+	.noteRetry:hover,
+	.fullscreenToggle:hover {
+		background: #342c1e;
+	}
+
+	.deepName,
+	.articleCardTitle {
+		color: #cbb98c;
+	}
+
+	.commentaryGroup {
+		border-right-color: #4a4030;
+	}
+
+	.commentaryGroup[data-pasuk-highlight] {
+		background: rgba(58, 47, 16, 0.95);
+		border-right-color: #92600b;
+		box-shadow: 0 0 0 2px rgba(146, 96, 11, 0.45);
+	}
+
+	.commentaryPasuk {
+		color: #b8a578;
+	}
+
+	.commentaryPasuk:hover {
+		color: #cbb98c;
+	}
+
+	.articleCard {
+		background: #1f1a12;
+		border-color: #4a4030;
+	}
+
+	.articleCard:hover {
+		border-color: #8b7355;
+	}
+
+	.panelArticleOverlay {
+		background: #1f1a12;
+	}
+
+	.articleFullscreen {
+		background: #1f1a12;
+	}
+}

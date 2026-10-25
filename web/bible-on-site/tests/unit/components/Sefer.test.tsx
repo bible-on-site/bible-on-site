@@ -165,8 +165,8 @@ jest.mock("@/util/hebdates-util", () => ({
 	}),
 }));
 
-jest.mock("@/app/929/[number]/components/BlankPageContent", () => ({
-	BlankPageContent: () => <div data-testid="blank-page" />,
+jest.mock("@/app/929/[number]/components/SeferPanel", () => ({
+	SeferPanel: () => <div data-testid="blank-page" />,
 }));
 
 jest.mock("@/app/929/[number]/components/Ptuha", () => ({
