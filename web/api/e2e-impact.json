@@ -24,7 +24,7 @@
 		"web/api/Makefile.toml",
 		"web/api/e2e-impact.json",
 		"web/api/tests/package.json",
-		"web/api/tests/package-lock.json",
+		"web/api/tests/bun.lock",
 		"web/api/tests/playwright.config.ts",
 		"web/api/tests/playwright-global-*.mjs",
 		"web/api/tests/*.mts",

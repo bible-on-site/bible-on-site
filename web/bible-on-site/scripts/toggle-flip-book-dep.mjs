@@ -50,7 +50,7 @@ const isLocal = current?.startsWith("file:");
 if (mode === "check") {
 	if (isLocal) {
 		console.error(
-			"❌ html-flip-book-react is set to local. Run: npm run flip-book:npm",
+			"❌ html-flip-book-react is set to local. Run: bun run flip-book:npm",
 		);
 		process.exit(1);
 	}
@@ -83,31 +83,12 @@ if (mode === "npm") {
 		// doesn't exist — fine
 	}
 
-	const lockPath = path.resolve(__dirname, "..", "package-lock.json");
-	try {
-		const lock = JSON.parse(fs.readFileSync(lockPath, "utf8"));
-		const packages = lock.packages ?? {};
-		let cleaned = false;
-		for (const key of Object.keys(packages)) {
-			if (
-				key.includes("html-flip-book") &&
-				(packages[key].link || key.startsWith("../"))
-			) {
-				delete packages[key];
-				cleaned = true;
-			}
-		}
-		if (cleaned) {
-			fs.writeFileSync(lockPath, `${JSON.stringify(lock, null, "\t")}\n`);
-			console.log("Cleaned stale file: link entries from package-lock.json");
-		}
-	} catch {
-		// lock file missing or invalid — npm install will regenerate it
-	}
+	// bun install reconciles the lockfile's importer entries from
+	// package.json, so the stale file: link is dropped automatically.
 }
 
 console.log(`html-flip-book-react switched to ${mode}: ${target}`);
 
 if (mode === "local") {
-	console.log("Run: npm install");
+	console.log("Run: bun install");
 }

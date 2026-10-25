@@ -6,7 +6,7 @@
  * captured on prod at sync time and stored in the dev DB's
  * dev_sync_checkpoint table. A probe compares current prod values against
  * that snapshot: any table that gained a write, appeared, or disappeared
- * marks the dev copy stale, so `npm run dev` only pays the full
+ * marks the dev copy stale, so `bun run dev` only pays the full
  * dump+restore when production actually changed.
  */
 

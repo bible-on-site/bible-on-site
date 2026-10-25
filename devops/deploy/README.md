@@ -17,8 +17,8 @@ aws sso login --profile bible-on-site-deployer
 
 # Then deploy
 cd devops
-npm run deploy:ecr -- --module-name website
-npm run deploy:ecr -- --module-name api
+bun run deploy:ecr -- --module-name website
+bun run deploy:ecr -- --module-name api
 ```
 
 ### 2. Data Deployment (Database Population)
@@ -34,7 +34,7 @@ Populates the production database with SQL files from the `data/mysql/` director
 python devops/deploy/data-deploy/validate_lambda_parser.py --parse-only
 
 cd devops
-npm run deploy:data
+bun run deploy:data
 ```
 
 The validator and deployer share `data-deploy/sql-files.json`. The validator resolves
@@ -48,7 +48,7 @@ rejection, allowing 30 waits of 10 seconds before failing. SQL uploads stay in S
 throughout recovery and are cleaned up after invocation completes or fails. Other
 invocation errors and function execution failures still fail the deployment.
 See [AWS Lambda function states](https://docs.aws.amazon.com/lambda/latest/dg/functions-states.html).
-Run `npm run test:deploy-data` from `devops/` to validate recovery without AWS access
+Run `bun run test:deploy-data` from `devops/` to validate recovery without AWS access
 or database changes.
 Run `python -m unittest discover -s devops/deploy/data-deploy -p "test_*.py"`
 from the repository root to verify that additive migrations preserve existing rows.

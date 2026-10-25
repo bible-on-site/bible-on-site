@@ -3,9 +3,9 @@
  *
  * The RustFS volume and bucket are shared across worktrees, and `predev`
  * otherwise paid a release-mode cargo build plus a full bucket clear/re-upload
- * on every `npm run dev` — which also destroyed assets mirrored by
+ * on every `bun run dev` — which also destroyed assets mirrored by
  * sync-from-prod. When the bucket already holds anything, seeding is skipped;
- * `npm run s3:populate:dev` remains the explicit force-reseed.
+ * `bun run s3:populate:dev` remains the explicit force-reseed.
  */
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
@@ -33,7 +33,7 @@ const bucket = process.env.S3_BUCKET ?? "bible-on-site-assets-dev";
 const endpoint = process.env.S3_ENDPOINT;
 if (!endpoint) {
 	console.log(
-		"ensure-s3-seeded: S3_ENDPOINT unset — no local seed check; run npm run s3:populate:dev to seed manually",
+		"ensure-s3-seeded: S3_ENDPOINT unset — no local seed check; run bun run s3:populate:dev to seed manually",
 	);
 	process.exit(0);
 }
@@ -54,7 +54,7 @@ try {
 	);
 	if ((res.Contents?.length ?? 0) > 0) {
 		console.log(
-			`ensure-s3-seeded: bucket '${bucket}' already holds objects — skipping seed (npm run s3:populate:dev forces a reseed)`,
+			`ensure-s3-seeded: bucket '${bucket}' already holds objects — skipping seed (bun run s3:populate:dev forces a reseed)`,
 		);
 		process.exit(0);
 	}

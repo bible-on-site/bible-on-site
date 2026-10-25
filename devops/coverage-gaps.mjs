@@ -1,7 +1,7 @@
 /**
  * Prints per-file uncovered line/branch numbers from an lcov report.
  *
- * Usage: npm run coverage:gaps --prefix devops -- [--module <name>] [-- <path-substring> ...]
+ * Usage: bun run --cwd devops coverage:gaps -- [--module <name>] [-- <path-substring> ...]
  *
  * `--module` selects a fixed, known report location (default: data), so the
  * script never touches user-supplied paths:
@@ -27,7 +27,7 @@ const MODULE_REPORTS = {
 	},
 };
 
-/* npm run passes user args after a bare `--`; without npm, argv holds them directly. */
+/* bun run passes user args after a bare `--`; without npm, argv holds them directly. */
 const separatorAt = process.argv.indexOf("--");
 const argv =
 	separatorAt !== -1

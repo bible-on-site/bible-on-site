@@ -192,7 +192,7 @@ API coverage is merged with website coverage at the repository root:
 
 ```bash
 cd devops
-npm run coverage:merge
+bun run coverage:merge
 ```
 
 This produces a combined LCOV file at `.coverage/lcov.info` that includes both Rust and TypeScript coverage, which is then uploaded to Codacy.

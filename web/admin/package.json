@@ -4,20 +4,20 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"predev": "npm run docker:up && node --import tsx ../../devops/ensure-dev-db.mts && node scripts/ensure-s3-seeded.mjs",
-		"dev": "dotenv -e .dev.env -- npm run dev:app",
+		"predev": "bun run docker:up && node --import tsx ../../devops/ensure-dev-db.mts && node scripts/ensure-s3-seeded.mjs",
+		"dev": "dotenv -e .dev.env -- bun run dev:app",
 		"dev:app": "vite --port 3101 --strictPort",
 		"build": "vite build",
 		"start": "node .output/server/index.mjs",
 		"lint": "biome lint",
 		"format": "biome format --write",
 		"check": "biome check --write",
-		"test": "dotenv -e .test.env -- npm run test:all",
-		"test:all": "npm run test:unit && npm run test:e2e",
+		"test": "dotenv -e .test.env -- bun run test:all",
+		"test:all": "bun run test:unit && bun run test:e2e",
 		"test:unit": "vitest run",
 		"test:e2e": "dotenv -e .test.env -- playwright test",
 		"test:s3": "node scripts/check-local-s3.mjs",
-		"coverage:all": "npm run coverage:unit && npm run coverage:e2e && npm run coverage:merge",
+		"coverage:all": "bun run coverage:unit && bun run coverage:e2e && bun run coverage:merge",
 		"coverage:unit": "vitest run --coverage",
 		"coverage:e2e": "dotenv -e .test.env -- cross-env MEASURE_COV=1 playwright test",
 		"coverage:merge": "node --import tsx ../../devops/merge-lcov.mts --out .coverage/merged/lcov.info --prefix web/admin/ --optional .coverage/unit/lcov.info --optional .coverage/e2e/lcov.info",
@@ -32,12 +32,6 @@
 	"engines": {
 		"node": ">=26.10.0 <27"
 	},
-	"overrides": {
-		"deepmerge-ts": "8.0.2",
-		"@istanbuljs/load-nyc-config": {
-			"js-yaml": "^5.4.3"
-		}
-	},
 	"dependencies": {
 		"@aws-sdk/client-lambda": "3.1156.0",
 		"@aws-sdk/client-s3": "3.1156.0",
@@ -46,6 +40,7 @@
 		"@tanstack/react-router": "1.170.46",
 		"@tanstack/react-router-devtools": "1.167.2",
 		"@tanstack/react-start": "1.169.4",
+		"@tiptap/core": "3.32.0",
 		"@tiptap/extension-bullet-list": "3.32.0",
 		"@tiptap/extension-document": "3.32.0",
 		"@tiptap/extension-image": "3.32.0",
@@ -73,6 +68,7 @@
 		"@testing-library/dom": "10.4.2",
 		"@testing-library/jest-dom": "7.0.1",
 		"@testing-library/react": "16.3.3",
+		"@types/istanbul-lib-coverage": "2.0.6",
 		"@types/istanbul-lib-instrument": "1.7.8",
 		"@types/istanbul-lib-source-maps": "4.0.4",
 		"@types/node": "26.6.5",
@@ -101,5 +97,15 @@
 		"@emnapi/wasi-threads": "2.2.0",
 		"@napi-rs/wasm-runtime": "1.2.6",
 		"@tybys/wasm-util": "0.10.4"
-	}
+	},
+	"packageManager": "bun@1.4.4",
+	"overrides": {
+		"deepmerge-ts": "8.0.2",
+		"@istanbuljs/load-nyc-config": {
+			"js-yaml": "^5.4.3"
+		}
+	},
+	"trustedDependencies": [
+		"esbuild"
+	]
 }

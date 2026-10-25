@@ -74,7 +74,7 @@ describe("detectChanges", () => {
 	});
 
 	test("devops manifest changes select the deploy verifier guard", () => {
-		for (const file of ["devops/package.json", "devops/package-lock.json"]) {
+		for (const file of ["devops/package.json", "devops/bun.lock"]) {
 			assert.equal(
 				detectChanges([file]).admin.ci_changed,
 				true,
@@ -146,7 +146,7 @@ describe("detectChanges", () => {
 
 	for (const path of [
 		"web/bible-on-site/package.json",
-		"web/bible-on-site/package-lock.json",
+		"web/bible-on-site/bun.lock",
 		"web/bible-on-site/src/lib/recitation-audio.ts",
 	]) {
 		test(`${path} no longer selects native checks`, () => {
@@ -161,7 +161,7 @@ describe("detectChanges", () => {
 	test("a website-only version bump runs no app check", () => {
 		const changes = detectChanges([
 			"web/bible-on-site/package.json",
-			"web/bible-on-site/package-lock.json",
+			"web/bible-on-site/bun.lock",
 		]);
 		assert.deepEqual(changes.app, {
 			module_changed: false,
@@ -171,7 +171,7 @@ describe("detectChanges", () => {
 
 	for (const path of [
 		"app/devops/recitation-decoder/package.json",
-		"app/devops/recitation-decoder/package-lock.json",
+		"app/devops/recitation-decoder/bun.lock",
 		"app/devops/recitation-decoder/build-native-recitation-decoder.mjs",
 		"app/devops/recitation-decoder/disabled-opus-ml.mjs",
 		"app/devops/recitation-decoder/check-decoder-pins.mjs",
@@ -311,7 +311,7 @@ describe("detectChanges", () => {
 
 	for (const path of [
 		"web/bible-on-site/package.json",
-		"web/bible-on-site/package-lock.json",
+		"web/bible-on-site/bun.lock",
 		"web/bible-on-site/next.config.mjs",
 		"web/bible-on-site/tsconfig.json",
 		"web/bible-on-site/biome.json",

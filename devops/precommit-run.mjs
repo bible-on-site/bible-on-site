@@ -20,7 +20,7 @@ const prefix = `${dir.replace(/\\/g, "/").replace(/\/+$/, "")}/`;
 if (!getStagedChanges().some((file) => file.startsWith(prefix)))
 	process.exit(0);
 
-// npm modules can't run their scripts without installed dependencies — e.g.
+// JS modules can't run their scripts without installed dependencies — e.g.
 // pre-commit.ci clones have no node_modules (and module CI is the
 // authoritative gate there anyway).
 if (

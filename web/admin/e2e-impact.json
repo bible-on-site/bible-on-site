@@ -20,7 +20,7 @@
 	],
 	"runAllOnChange": [
 		"web/admin/package.json",
-		"web/admin/package-lock.json",
+		"web/admin/bun.lock",
 		"web/admin/vite.config.ts",
 		"web/admin/tsconfig.json",
 		"web/admin/playwright.config.ts",

@@ -121,7 +121,7 @@ export const MODULES = {
 			"devops/rustfs",
 			"devops/docker-compose.yml",
 			"devops/package.json",
-			"devops/package-lock.json",
+			"devops/bun.lock",
 		],
 	},
 	bulletin: {
