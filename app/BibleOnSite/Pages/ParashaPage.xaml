@@ -376,6 +376,14 @@
                         Command="{Binding LoadPreviousCommand}"
                         Clicked="OnMenuItemClicked"/>
 
+                <!-- פרשת השבוע — calendar-correct weekly reading (inner-left satellite) -->
+                <controls:ReaderFanMenuSatellite x:Name="WeeklyParashaButton"
+                        AutomationId="WeeklyParashaButton"
+                        SemanticProperties.Description="פרשת השבוע"
+                        Text="{x:Static fonts:FluentUI.calendar_week_numbers_24_regular}"
+                        Command="{Binding LoadWeeklyParashaCommand}"
+                        Clicked="OnMenuItemClicked"/>
+
                 <!-- Parasha picker (top satellite) -->
                 <controls:ReaderFanMenuSatellite x:Name="UnitPickerButton"
                         AutomationId="UnitPickerButton"

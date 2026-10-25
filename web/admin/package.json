@@ -1,6 +1,6 @@
 {
 	"name": "admin",
-	"version": "0.1.135",
+	"version": "0.1.138",
 	"private": true,
 	"type": "module",
 	"scripts": {
@@ -67,7 +67,7 @@
 		"tiptap-footnotes": "3.0.1"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "2.6.2",
+		"@biomejs/biome": "2.6.3",
 		"@playwright/test": "1.64.1",
 		"@tailwindcss/vite": "4.3.3",
 		"@testing-library/dom": "10.4.2",

@@ -417,6 +417,7 @@ describe("tanahpedia entry server functions", () => {
 			{ tag: "tanahpedia-entity-refs", path: null, type: null },
 			{ tag: null, path: "/pedia/[slug]", type: "page" },
 			{ tag: null, path: "/pedia", type: null },
+			{ tag: "tanahpedia-mention-refs", path: null, type: null },
 		];
 
 		it("expires pedia surfaces after an entry create", async () => {

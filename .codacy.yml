@@ -7,6 +7,14 @@
 engines:
   metric:
     enabled: false
+  # Prospector enforces D213 (summary on line two) while the repo's ruff
+  # config enforces the contradictory D212 (summary on line one). The repo
+  # gate wins; prospector is excluded on these files only — Bandit and the
+  # rest of the Python suite still scan them.
+  prospector:
+    exclude_paths:
+      - "data/annotations/extract_morphhb.py"
+      - "data/annotations/baseline.py"
 
 # Exclude MySQL/SQLite schema files: SQL analyzer uses T-SQL dialect and flags
 # valid MySQL backticks and SQLite PRAGMA/AUTOINCREMENT as syntax errors
@@ -41,6 +49,7 @@ exclude_paths:
   - "data/mysql/tanahpedia_legacy_migration.sql"
   - "data/mysql/tanahpedia_place_eretz_yisrael_data.sql"
   - "data/mysql/tanahpedia_structure.sql"
+  - "data/mysql/tanahpedia_alter_mention_decoration.sql"
   - "data/sqlite/perushim_catalog_structure.sql"
   - "data/sqlite/perushim_notes_structure.sql"
   # CloudFormation Lambda scripts are infra reference code, not application code.

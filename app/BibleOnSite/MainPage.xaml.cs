@@ -41,15 +41,16 @@ public partial class MainPage : ContentPage
 		try
 		{
 			await StarterService.Instance.LoadAsync();
-			var authorsCount = StarterService.Instance.Authors.Count;
-			DebugLog.Write($"Loaded {authorsCount} authors");
 		}
 		#pragma warning disable S2221 // Deliberate failure boundary: starter-data load failure proceeds offline
 		catch (Exception ex) //NOSONAR — starter-data load failure proceeds offline.
 		{
 		    #pragma warning restore S2221
-			Console.Error.WriteLine($"Failed to load starter data: {ex.Message}");
+			Console.Error.WriteLine($"Failed to load starter data: {ex}");
+			return;
 		}
+		var authorsCount = StarterService.Instance.Authors.Count;
+		DebugLog.Write($"Loaded {authorsCount} authors");
 	}
 }
 

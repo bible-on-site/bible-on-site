@@ -1,0 +1,9581 @@
+{
+	"version": 1,
+	"provenance": {
+		"name": "@hebcal/leyning — src/aliyot.json",
+		"repository": "https://github.com/hebcal/hebcal-leyning",
+		"license": "BSD-2-Clause",
+		"commit": "ec5c7642e3",
+		"retrieved": "2026-10-23",
+		"notes": [
+			"Full-kriyah Shabbat boundaries and weekday splits for all 54 parashiot and 7 joined pairs.",
+			"Cross-validated against Sefaria /api/sheets/{parasha}/get_aliyot: identical on every parasha Sefaria serves (its endpoint lacks Achrei Mot-Kedoshim, Nitzavim-Vayeilech and several standalone parashot).",
+			"Maftir is the plain repeated-tail reading; seasonal maftir overrides (e.g. HaChodesh) are a calendar concern, not stored here.",
+			"Alternative divisions are structured per-aliyah `alternatives` ranges: hebcal's inline 'some sources use' notes plus the per-minhag <day custom=…> and weekday <aliyah> divisions of OpenTorah (Apache-2.0, commit 7308989643)."
+		]
+	},
+	"schemes": [
+		{
+			"id": "shabbat",
+			"label": "שבת",
+			"description": "מניין שבעה עולים ומפטיר"
+		},
+		{
+			"id": "weekday",
+			"label": "חול",
+			"description": "מניין שלושה עולים בקריאת הציבור בחול"
+		}
+	],
+	"readings": [
+		{
+			"id": "Bereshit",
+			"units": [
+				"בראשית"
+			],
+			"sefer": "בראשית",
+			"schemes": {
+				"shabbat": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 1,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 2,
+							"pasuk": 3
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 2,
+							"pasuk": 4
+						},
+						"end": {
+							"perek": 2,
+							"pasuk": 19
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 2,
+							"pasuk": 20
+						},
+						"end": {
+							"perek": 3,
+							"pasuk": 21
+						}
+					},
+					{
+						"ordinal": 4,
+						"role": "aliyah",
+						"label": "רביעי",
+						"start": {
+							"perek": 3,
+							"pasuk": 22
+						},
+						"end": {
+							"perek": 4,
+							"pasuk": 18
+						}
+					},
+					{
+						"ordinal": 5,
+						"role": "aliyah",
+						"label": "חמישי",
+						"start": {
+							"perek": 4,
+							"pasuk": 19
+						},
+						"end": {
+							"perek": 4,
+							"pasuk": 22
+						},
+						"alternatives": [
+							{
+								"start": {
+									"perek": 4,
+									"pasuk": 19
+								},
+								"end": {
+									"perek": 4,
+									"pasuk": 26
+								},
+								"source": "hebcal"
+							}
+						]
+					},
+					{
+						"ordinal": 6,
+						"role": "aliyah",
+						"label": "שישי",
+						"start": {
+							"perek": 4,
+							"pasuk": 23
+						},
+						"end": {
+							"perek": 5,
+							"pasuk": 24
+						},
+						"alternatives": [
+							{
+								"start": {
+									"perek": 5,
+									"pasuk": 1
+								},
+								"end": {
+									"perek": 5,
+									"pasuk": 24
+								},
+								"source": "hebcal"
+							}
+						]
+					},
+					{
+						"ordinal": 7,
+						"role": "aliyah",
+						"label": "שביעי",
+						"start": {
+							"perek": 5,
+							"pasuk": 25
+						},
+						"end": {
+							"perek": 6,
+							"pasuk": 8
+						}
+					},
+					{
+						"ordinal": 8,
+						"role": "maftir",
+						"label": "מפטיר",
+						"start": {
+							"perek": 6,
+							"pasuk": 5
+						},
+						"end": {
+							"perek": 6,
+							"pasuk": 8
+						}
+					}
+				],
+				"weekday": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 1,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 1,
+							"pasuk": 5
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 1,
+							"pasuk": 6
+						},
+						"end": {
+							"perek": 1,
+							"pasuk": 8
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 1,
+							"pasuk": 9
+						},
+						"end": {
+							"perek": 1,
+							"pasuk": 13
+						}
+					}
+				]
+			}
+		},
+		{
+			"id": "Noach",
+			"units": [
+				"נח"
+			],
+			"sefer": "בראשית",
+			"schemes": {
+				"shabbat": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 6,
+							"pasuk": 9
+						},
+						"end": {
+							"perek": 6,
+							"pasuk": 22
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 7,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 7,
+							"pasuk": 16
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 7,
+							"pasuk": 17
+						},
+						"end": {
+							"perek": 8,
+							"pasuk": 14
+						}
+					},
+					{
+						"ordinal": 4,
+						"role": "aliyah",
+						"label": "רביעי",
+						"start": {
+							"perek": 8,
+							"pasuk": 15
+						},
+						"end": {
+							"perek": 9,
+							"pasuk": 7
+						}
+					},
+					{
+						"ordinal": 5,
+						"role": "aliyah",
+						"label": "חמישי",
+						"start": {
+							"perek": 9,
+							"pasuk": 8
+						},
+						"end": {
+							"perek": 9,
+							"pasuk": 17
+						}
+					},
+					{
+						"ordinal": 6,
+						"role": "aliyah",
+						"label": "שישי",
+						"start": {
+							"perek": 9,
+							"pasuk": 18
+						},
+						"end": {
+							"perek": 10,
+							"pasuk": 32
+						}
+					},
+					{
+						"ordinal": 7,
+						"role": "aliyah",
+						"label": "שביעי",
+						"start": {
+							"perek": 11,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 11,
+							"pasuk": 32
+						}
+					},
+					{
+						"ordinal": 8,
+						"role": "maftir",
+						"label": "מפטיר",
+						"start": {
+							"perek": 11,
+							"pasuk": 29
+						},
+						"end": {
+							"perek": 11,
+							"pasuk": 32
+						}
+					}
+				],
+				"weekday": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 6,
+							"pasuk": 9
+						},
+						"end": {
+							"perek": 6,
+							"pasuk": 16
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 6,
+							"pasuk": 17
+						},
+						"end": {
+							"perek": 6,
+							"pasuk": 19
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 6,
+							"pasuk": 20
+						},
+						"end": {
+							"perek": 6,
+							"pasuk": 22
+						}
+					}
+				]
+			}
+		},
+		{
+			"id": "Lech-Lecha",
+			"units": [
+				"לך לך"
+			],
+			"sefer": "בראשית",
+			"schemes": {
+				"shabbat": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 12,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 12,
+							"pasuk": 13
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 12,
+							"pasuk": 14
+						},
+						"end": {
+							"perek": 13,
+							"pasuk": 4
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 13,
+							"pasuk": 5
+						},
+						"end": {
+							"perek": 13,
+							"pasuk": 18
+						}
+					},
+					{
+						"ordinal": 4,
+						"role": "aliyah",
+						"label": "רביעי",
+						"start": {
+							"perek": 14,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 14,
+							"pasuk": 20
+						}
+					},
+					{
+						"ordinal": 5,
+						"role": "aliyah",
+						"label": "חמישי",
+						"start": {
+							"perek": 14,
+							"pasuk": 21
+						},
+						"end": {
+							"perek": 15,
+							"pasuk": 6
+						}
+					},
+					{
+						"ordinal": 6,
+						"role": "aliyah",
+						"label": "שישי",
+						"start": {
+							"perek": 15,
+							"pasuk": 7
+						},
+						"end": {
+							"perek": 17,
+							"pasuk": 6
+						}
+					},
+					{
+						"ordinal": 7,
+						"role": "aliyah",
+						"label": "שביעי",
+						"start": {
+							"perek": 17,
+							"pasuk": 7
+						},
+						"end": {
+							"perek": 17,
+							"pasuk": 27
+						}
+					},
+					{
+						"ordinal": 8,
+						"role": "maftir",
+						"label": "מפטיר",
+						"start": {
+							"perek": 17,
+							"pasuk": 24
+						},
+						"end": {
+							"perek": 17,
+							"pasuk": 27
+						}
+					}
+				],
+				"weekday": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 12,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 12,
+							"pasuk": 3
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 12,
+							"pasuk": 4
+						},
+						"end": {
+							"perek": 12,
+							"pasuk": 9
+						},
+						"alternatives": [
+							{
+								"start": {
+									"perek": 12,
+									"pasuk": 4
+								},
+								"end": {
+									"perek": 12,
+									"pasuk": 6
+								},
+								"source": "opentorah"
+							}
+						]
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 12,
+							"pasuk": 10
+						},
+						"end": {
+							"perek": 12,
+							"pasuk": 13
+						},
+						"alternatives": [
+							{
+								"start": {
+									"perek": 12,
+									"pasuk": 7
+								},
+								"end": {
+									"perek": 12,
+									"pasuk": 13
+								},
+								"source": "opentorah"
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"id": "Vayera",
+			"units": [
+				"וירא"
+			],
+			"sefer": "בראשית",
+			"schemes": {
+				"shabbat": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 18,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 18,
+							"pasuk": 14
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 18,
+							"pasuk": 15
+						},
+						"end": {
+							"perek": 18,
+							"pasuk": 33
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 19,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 19,
+							"pasuk": 20
+						}
+					},
+					{
+						"ordinal": 4,
+						"role": "aliyah",
+						"label": "רביעי",
+						"start": {
+							"perek": 19,
+							"pasuk": 21
+						},
+						"end": {
+							"perek": 21,
+							"pasuk": 4
+						}
+					},
+					{
+						"ordinal": 5,
+						"role": "aliyah",
+						"label": "חמישי",
+						"start": {
+							"perek": 21,
+							"pasuk": 5
+						},
+						"end": {
+							"perek": 21,
+							"pasuk": 21
+						}
+					},
+					{
+						"ordinal": 6,
+						"role": "aliyah",
+						"label": "שישי",
+						"start": {
+							"perek": 21,
+							"pasuk": 22
+						},
+						"end": {
+							"perek": 21,
+							"pasuk": 34
+						}
+					},
+					{
+						"ordinal": 7,
+						"role": "aliyah",
+						"label": "שביעי",
+						"start": {
+							"perek": 22,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 22,
+							"pasuk": 24
+						}
+					},
+					{
+						"ordinal": 8,
+						"role": "maftir",
+						"label": "מפטיר",
+						"start": {
+							"perek": 22,
+							"pasuk": 20
+						},
+						"end": {
+							"perek": 22,
+							"pasuk": 24
+						}
+					}
+				],
+				"weekday": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 18,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 18,
+							"pasuk": 5
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 18,
+							"pasuk": 6
+						},
+						"end": {
+							"perek": 18,
+							"pasuk": 8
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 18,
+							"pasuk": 9
+						},
+						"end": {
+							"perek": 18,
+							"pasuk": 14
+						}
+					}
+				]
+			}
+		},
+		{
+			"id": "Chayei Sara",
+			"units": [
+				"חיי שרה"
+			],
+			"sefer": "בראשית",
+			"schemes": {
+				"shabbat": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 23,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 23,
+							"pasuk": 16
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 23,
+							"pasuk": 17
+						},
+						"end": {
+							"perek": 24,
+							"pasuk": 9
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 24,
+							"pasuk": 10
+						},
+						"end": {
+							"perek": 24,
+							"pasuk": 26
+						}
+					},
+					{
+						"ordinal": 4,
+						"role": "aliyah",
+						"label": "רביעי",
+						"start": {
+							"perek": 24,
+							"pasuk": 27
+						},
+						"end": {
+							"perek": 24,
+							"pasuk": 52
+						}
+					},
+					{
+						"ordinal": 5,
+						"role": "aliyah",
+						"label": "חמישי",
+						"start": {
+							"perek": 24,
+							"pasuk": 53
+						},
+						"end": {
+							"perek": 24,
+							"pasuk": 67
+						}
+					},
+					{
+						"ordinal": 6,
+						"role": "aliyah",
+						"label": "שישי",
+						"start": {
+							"perek": 25,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 25,
+							"pasuk": 11
+						}
+					},
+					{
+						"ordinal": 7,
+						"role": "aliyah",
+						"label": "שביעי",
+						"start": {
+							"perek": 25,
+							"pasuk": 12
+						},
+						"end": {
+							"perek": 25,
+							"pasuk": 18
+						}
+					},
+					{
+						"ordinal": 8,
+						"role": "maftir",
+						"label": "מפטיר",
+						"start": {
+							"perek": 25,
+							"pasuk": 16
+						},
+						"end": {
+							"perek": 25,
+							"pasuk": 18
+						}
+					}
+				],
+				"weekday": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 23,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 23,
+							"pasuk": 7
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 23,
+							"pasuk": 8
+						},
+						"end": {
+							"perek": 23,
+							"pasuk": 12
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 23,
+							"pasuk": 13
+						},
+						"end": {
+							"perek": 23,
+							"pasuk": 16
+						}
+					}
+				]
+			}
+		},
+		{
+			"id": "Toldot",
+			"units": [
+				"תולדות"
+			],
+			"sefer": "בראשית",
+			"schemes": {
+				"shabbat": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 25,
+							"pasuk": 19
+						},
+						"end": {
+							"perek": 26,
+							"pasuk": 5
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 26,
+							"pasuk": 6
+						},
+						"end": {
+							"perek": 26,
+							"pasuk": 12
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 26,
+							"pasuk": 13
+						},
+						"end": {
+							"perek": 26,
+							"pasuk": 22
+						}
+					},
+					{
+						"ordinal": 4,
+						"role": "aliyah",
+						"label": "רביעי",
+						"start": {
+							"perek": 26,
+							"pasuk": 23
+						},
+						"end": {
+							"perek": 26,
+							"pasuk": 29
+						}
+					},
+					{
+						"ordinal": 5,
+						"role": "aliyah",
+						"label": "חמישי",
+						"start": {
+							"perek": 26,
+							"pasuk": 30
+						},
+						"end": {
+							"perek": 27,
+							"pasuk": 27
+						}
+					},
+					{
+						"ordinal": 6,
+						"role": "aliyah",
+						"label": "שישי",
+						"start": {
+							"perek": 27,
+							"pasuk": 28
+						},
+						"end": {
+							"perek": 28,
+							"pasuk": 4
+						}
+					},
+					{
+						"ordinal": 7,
+						"role": "aliyah",
+						"label": "שביעי",
+						"start": {
+							"perek": 28,
+							"pasuk": 5
+						},
+						"end": {
+							"perek": 28,
+							"pasuk": 9
+						}
+					},
+					{
+						"ordinal": 8,
+						"role": "maftir",
+						"label": "מפטיר",
+						"start": {
+							"perek": 28,
+							"pasuk": 7
+						},
+						"end": {
+							"perek": 28,
+							"pasuk": 9
+						}
+					}
+				],
+				"weekday": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 25,
+							"pasuk": 19
+						},
+						"end": {
+							"perek": 25,
+							"pasuk": 22
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 25,
+							"pasuk": 23
+						},
+						"end": {
+							"perek": 25,
+							"pasuk": 26
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 25,
+							"pasuk": 27
+						},
+						"end": {
+							"perek": 26,
+							"pasuk": 5
+						}
+					}
+				]
+			}
+		},
+		{
+			"id": "Vayetzei",
+			"units": [
+				"ויצא"
+			],
+			"sefer": "בראשית",
+			"schemes": {
+				"shabbat": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 28,
+							"pasuk": 10
+						},
+						"end": {
+							"perek": 28,
+							"pasuk": 22
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 29,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 29,
+							"pasuk": 17
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 29,
+							"pasuk": 18
+						},
+						"end": {
+							"perek": 30,
+							"pasuk": 13
+						}
+					},
+					{
+						"ordinal": 4,
+						"role": "aliyah",
+						"label": "רביעי",
+						"start": {
+							"perek": 30,
+							"pasuk": 14
+						},
+						"end": {
+							"perek": 30,
+							"pasuk": 27
+						}
+					},
+					{
+						"ordinal": 5,
+						"role": "aliyah",
+						"label": "חמישי",
+						"start": {
+							"perek": 30,
+							"pasuk": 28
+						},
+						"end": {
+							"perek": 31,
+							"pasuk": 16
+						}
+					},
+					{
+						"ordinal": 6,
+						"role": "aliyah",
+						"label": "שישי",
+						"start": {
+							"perek": 31,
+							"pasuk": 17
+						},
+						"end": {
+							"perek": 31,
+							"pasuk": 42
+						}
+					},
+					{
+						"ordinal": 7,
+						"role": "aliyah",
+						"label": "שביעי",
+						"start": {
+							"perek": 31,
+							"pasuk": 43
+						},
+						"end": {
+							"perek": 32,
+							"pasuk": 3
+						}
+					},
+					{
+						"ordinal": 8,
+						"role": "maftir",
+						"label": "מפטיר",
+						"start": {
+							"perek": 32,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 32,
+							"pasuk": 3
+						}
+					}
+				],
+				"weekday": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 28,
+							"pasuk": 10
+						},
+						"end": {
+							"perek": 28,
+							"pasuk": 12
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 28,
+							"pasuk": 13
+						},
+						"end": {
+							"perek": 28,
+							"pasuk": 17
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 28,
+							"pasuk": 18
+						},
+						"end": {
+							"perek": 28,
+							"pasuk": 22
+						}
+					}
+				]
+			}
+		},
+		{
+			"id": "Vayishlach",
+			"units": [
+				"וישלח"
+			],
+			"sefer": "בראשית",
+			"schemes": {
+				"shabbat": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 32,
+							"pasuk": 4
+						},
+						"end": {
+							"perek": 32,
+							"pasuk": 13
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 32,
+							"pasuk": 14
+						},
+						"end": {
+							"perek": 32,
+							"pasuk": 30
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 32,
+							"pasuk": 31
+						},
+						"end": {
+							"perek": 33,
+							"pasuk": 5
+						}
+					},
+					{
+						"ordinal": 4,
+						"role": "aliyah",
+						"label": "רביעי",
+						"start": {
+							"perek": 33,
+							"pasuk": 6
+						},
+						"end": {
+							"perek": 33,
+							"pasuk": 20
+						}
+					},
+					{
+						"ordinal": 5,
+						"role": "aliyah",
+						"label": "חמישי",
+						"start": {
+							"perek": 34,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 35,
+							"pasuk": 11
+						}
+					},
+					{
+						"ordinal": 6,
+						"role": "aliyah",
+						"label": "שישי",
+						"start": {
+							"perek": 35,
+							"pasuk": 12
+						},
+						"end": {
+							"perek": 36,
+							"pasuk": 19
+						}
+					},
+					{
+						"ordinal": 7,
+						"role": "aliyah",
+						"label": "שביעי",
+						"start": {
+							"perek": 36,
+							"pasuk": 20
+						},
+						"end": {
+							"perek": 36,
+							"pasuk": 43
+						}
+					},
+					{
+						"ordinal": 8,
+						"role": "maftir",
+						"label": "מפטיר",
+						"start": {
+							"perek": 36,
+							"pasuk": 40
+						},
+						"end": {
+							"perek": 36,
+							"pasuk": 43
+						}
+					}
+				],
+				"weekday": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 32,
+							"pasuk": 4
+						},
+						"end": {
+							"perek": 32,
+							"pasuk": 6
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 32,
+							"pasuk": 7
+						},
+						"end": {
+							"perek": 32,
+							"pasuk": 9
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 32,
+							"pasuk": 10
+						},
+						"end": {
+							"perek": 32,
+							"pasuk": 13
+						}
+					}
+				]
+			}
+		},
+		{
+			"id": "Vayeshev",
+			"units": [
+				"וישב"
+			],
+			"sefer": "בראשית",
+			"schemes": {
+				"shabbat": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 37,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 37,
+							"pasuk": 11
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 37,
+							"pasuk": 12
+						},
+						"end": {
+							"perek": 37,
+							"pasuk": 22
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 37,
+							"pasuk": 23
+						},
+						"end": {
+							"perek": 37,
+							"pasuk": 36
+						}
+					},
+					{
+						"ordinal": 4,
+						"role": "aliyah",
+						"label": "רביעי",
+						"start": {
+							"perek": 38,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 38,
+							"pasuk": 30
+						}
+					},
+					{
+						"ordinal": 5,
+						"role": "aliyah",
+						"label": "חמישי",
+						"start": {
+							"perek": 39,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 39,
+							"pasuk": 6
+						}
+					},
+					{
+						"ordinal": 6,
+						"role": "aliyah",
+						"label": "שישי",
+						"start": {
+							"perek": 39,
+							"pasuk": 7
+						},
+						"end": {
+							"perek": 39,
+							"pasuk": 23
+						}
+					},
+					{
+						"ordinal": 7,
+						"role": "aliyah",
+						"label": "שביעי",
+						"start": {
+							"perek": 40,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 40,
+							"pasuk": 23
+						}
+					},
+					{
+						"ordinal": 8,
+						"role": "maftir",
+						"label": "מפטיר",
+						"start": {
+							"perek": 40,
+							"pasuk": 20
+						},
+						"end": {
+							"perek": 40,
+							"pasuk": 23
+						}
+					}
+				],
+				"weekday": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 37,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 37,
+							"pasuk": 3
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 37,
+							"pasuk": 4
+						},
+						"end": {
+							"perek": 37,
+							"pasuk": 7
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 37,
+							"pasuk": 8
+						},
+						"end": {
+							"perek": 37,
+							"pasuk": 11
+						}
+					}
+				]
+			}
+		},
+		{
+			"id": "Miketz",
+			"units": [
+				"מקץ"
+			],
+			"sefer": "בראשית",
+			"schemes": {
+				"shabbat": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 41,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 41,
+							"pasuk": 14
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 41,
+							"pasuk": 15
+						},
+						"end": {
+							"perek": 41,
+							"pasuk": 38
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 41,
+							"pasuk": 39
+						},
+						"end": {
+							"perek": 41,
+							"pasuk": 52
+						}
+					},
+					{
+						"ordinal": 4,
+						"role": "aliyah",
+						"label": "רביעי",
+						"start": {
+							"perek": 41,
+							"pasuk": 53
+						},
+						"end": {
+							"perek": 42,
+							"pasuk": 18
+						}
+					},
+					{
+						"ordinal": 5,
+						"role": "aliyah",
+						"label": "חמישי",
+						"start": {
+							"perek": 42,
+							"pasuk": 19
+						},
+						"end": {
+							"perek": 43,
+							"pasuk": 15
+						}
+					},
+					{
+						"ordinal": 6,
+						"role": "aliyah",
+						"label": "שישי",
+						"start": {
+							"perek": 43,
+							"pasuk": 16
+						},
+						"end": {
+							"perek": 43,
+							"pasuk": 29
+						}
+					},
+					{
+						"ordinal": 7,
+						"role": "aliyah",
+						"label": "שביעי",
+						"start": {
+							"perek": 43,
+							"pasuk": 30
+						},
+						"end": {
+							"perek": 44,
+							"pasuk": 17
+						}
+					},
+					{
+						"ordinal": 8,
+						"role": "maftir",
+						"label": "מפטיר",
+						"start": {
+							"perek": 44,
+							"pasuk": 14
+						},
+						"end": {
+							"perek": 44,
+							"pasuk": 17
+						}
+					}
+				],
+				"weekday": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 41,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 41,
+							"pasuk": 4
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 41,
+							"pasuk": 5
+						},
+						"end": {
+							"perek": 41,
+							"pasuk": 7
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 41,
+							"pasuk": 8
+						},
+						"end": {
+							"perek": 41,
+							"pasuk": 14
+						}
+					}
+				]
+			}
+		},
+		{
+			"id": "Vayigash",
+			"units": [
+				"ויגש"
+			],
+			"sefer": "בראשית",
+			"schemes": {
+				"shabbat": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 44,
+							"pasuk": 18
+						},
+						"end": {
+							"perek": 44,
+							"pasuk": 30
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 44,
+							"pasuk": 31
+						},
+						"end": {
+							"perek": 45,
+							"pasuk": 7
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 45,
+							"pasuk": 8
+						},
+						"end": {
+							"perek": 45,
+							"pasuk": 18
+						},
+						"alternatives": [
+							{
+								"start": {
+									"perek": 45,
+									"pasuk": 8
+								},
+								"end": {
+									"perek": 45,
+									"pasuk": 27
+								},
+								"source": "opentorah",
+								"custom": "חב\"ד"
+							}
+						]
+					},
+					{
+						"ordinal": 4,
+						"role": "aliyah",
+						"label": "רביעי",
+						"start": {
+							"perek": 45,
+							"pasuk": 19
+						},
+						"end": {
+							"perek": 45,
+							"pasuk": 27
+						},
+						"alternatives": [
+							{
+								"start": {
+									"perek": 45,
+									"pasuk": 28
+								},
+								"end": {
+									"perek": 46,
+									"pasuk": 7
+								},
+								"source": "opentorah",
+								"custom": "חב\"ד"
+							}
+						]
+					},
+					{
+						"ordinal": 5,
+						"role": "aliyah",
+						"label": "חמישי",
+						"start": {
+							"perek": 45,
+							"pasuk": 28
+						},
+						"end": {
+							"perek": 46,
+							"pasuk": 27
+						},
+						"alternatives": [
+							{
+								"start": {
+									"perek": 46,
+									"pasuk": 8
+								},
+								"end": {
+									"perek": 46,
+									"pasuk": 27
+								},
+								"source": "opentorah",
+								"custom": "חב\"ד"
+							}
+						]
+					},
+					{
+						"ordinal": 6,
+						"role": "aliyah",
+						"label": "שישי",
+						"start": {
+							"perek": 46,
+							"pasuk": 28
+						},
+						"end": {
+							"perek": 47,
+							"pasuk": 10
+						}
+					},
+					{
+						"ordinal": 7,
+						"role": "aliyah",
+						"label": "שביעי",
+						"start": {
+							"perek": 47,
+							"pasuk": 11
+						},
+						"end": {
+							"perek": 47,
+							"pasuk": 27
+						}
+					},
+					{
+						"ordinal": 8,
+						"role": "maftir",
+						"label": "מפטיר",
+						"start": {
+							"perek": 47,
+							"pasuk": 25
+						},
+						"end": {
+							"perek": 47,
+							"pasuk": 27
+						}
+					}
+				],
+				"weekday": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 44,
+							"pasuk": 18
+						},
+						"end": {
+							"perek": 44,
+							"pasuk": 20
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 44,
+							"pasuk": 21
+						},
+						"end": {
+							"perek": 44,
+							"pasuk": 24
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 44,
+							"pasuk": 25
+						},
+						"end": {
+							"perek": 44,
+							"pasuk": 30
+						}
+					}
+				]
+			}
+		},
+		{
+			"id": "Vayechi",
+			"units": [
+				"ויחי"
+			],
+			"sefer": "בראשית",
+			"schemes": {
+				"shabbat": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 47,
+							"pasuk": 28
+						},
+						"end": {
+							"perek": 48,
+							"pasuk": 9
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 48,
+							"pasuk": 10
+						},
+						"end": {
+							"perek": 48,
+							"pasuk": 16
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 48,
+							"pasuk": 17
+						},
+						"end": {
+							"perek": 48,
+							"pasuk": 22
+						}
+					},
+					{
+						"ordinal": 4,
+						"role": "aliyah",
+						"label": "רביעי",
+						"start": {
+							"perek": 49,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 49,
+							"pasuk": 18
+						}
+					},
+					{
+						"ordinal": 5,
+						"role": "aliyah",
+						"label": "חמישי",
+						"start": {
+							"perek": 49,
+							"pasuk": 19
+						},
+						"end": {
+							"perek": 49,
+							"pasuk": 26
+						}
+					},
+					{
+						"ordinal": 6,
+						"role": "aliyah",
+						"label": "שישי",
+						"start": {
+							"perek": 49,
+							"pasuk": 27
+						},
+						"end": {
+							"perek": 50,
+							"pasuk": 20
+						}
+					},
+					{
+						"ordinal": 7,
+						"role": "aliyah",
+						"label": "שביעי",
+						"start": {
+							"perek": 50,
+							"pasuk": 21
+						},
+						"end": {
+							"perek": 50,
+							"pasuk": 26
+						}
+					},
+					{
+						"ordinal": 8,
+						"role": "maftir",
+						"label": "מפטיר",
+						"start": {
+							"perek": 50,
+							"pasuk": 23
+						},
+						"end": {
+							"perek": 50,
+							"pasuk": 26
+						}
+					}
+				],
+				"weekday": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 47,
+							"pasuk": 28
+						},
+						"end": {
+							"perek": 47,
+							"pasuk": 31
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 48,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 48,
+							"pasuk": 3
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 48,
+							"pasuk": 4
+						},
+						"end": {
+							"perek": 48,
+							"pasuk": 9
+						}
+					}
+				]
+			}
+		},
+		{
+			"id": "Shemot",
+			"units": [
+				"שמות"
+			],
+			"sefer": "שמות",
+			"schemes": {
+				"shabbat": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 1,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 1,
+							"pasuk": 17
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 1,
+							"pasuk": 18
+						},
+						"end": {
+							"perek": 2,
+							"pasuk": 10
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 2,
+							"pasuk": 11
+						},
+						"end": {
+							"perek": 2,
+							"pasuk": 25
+						}
+					},
+					{
+						"ordinal": 4,
+						"role": "aliyah",
+						"label": "רביעי",
+						"start": {
+							"perek": 3,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 3,
+							"pasuk": 15
+						}
+					},
+					{
+						"ordinal": 5,
+						"role": "aliyah",
+						"label": "חמישי",
+						"start": {
+							"perek": 3,
+							"pasuk": 16
+						},
+						"end": {
+							"perek": 4,
+							"pasuk": 17
+						}
+					},
+					{
+						"ordinal": 6,
+						"role": "aliyah",
+						"label": "שישי",
+						"start": {
+							"perek": 4,
+							"pasuk": 18
+						},
+						"end": {
+							"perek": 4,
+							"pasuk": 31
+						}
+					},
+					{
+						"ordinal": 7,
+						"role": "aliyah",
+						"label": "שביעי",
+						"start": {
+							"perek": 5,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 6,
+							"pasuk": 1
+						}
+					},
+					{
+						"ordinal": 8,
+						"role": "maftir",
+						"label": "מפטיר",
+						"start": {
+							"perek": 5,
+							"pasuk": 22
+						},
+						"end": {
+							"perek": 6,
+							"pasuk": 1
+						}
+					}
+				],
+				"weekday": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 1,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 1,
+							"pasuk": 7
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 1,
+							"pasuk": 8
+						},
+						"end": {
+							"perek": 1,
+							"pasuk": 12
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 1,
+							"pasuk": 13
+						},
+						"end": {
+							"perek": 1,
+							"pasuk": 17
+						}
+					}
+				]
+			}
+		},
+		{
+			"id": "Vaera",
+			"units": [
+				"וארא"
+			],
+			"sefer": "שמות",
+			"schemes": {
+				"shabbat": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 6,
+							"pasuk": 2
+						},
+						"end": {
+							"perek": 6,
+							"pasuk": 13
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 6,
+							"pasuk": 14
+						},
+						"end": {
+							"perek": 6,
+							"pasuk": 28
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 6,
+							"pasuk": 29
+						},
+						"end": {
+							"perek": 7,
+							"pasuk": 7
+						}
+					},
+					{
+						"ordinal": 4,
+						"role": "aliyah",
+						"label": "רביעי",
+						"start": {
+							"perek": 7,
+							"pasuk": 8
+						},
+						"end": {
+							"perek": 8,
+							"pasuk": 6
+						}
+					},
+					{
+						"ordinal": 5,
+						"role": "aliyah",
+						"label": "חמישי",
+						"start": {
+							"perek": 8,
+							"pasuk": 7
+						},
+						"end": {
+							"perek": 8,
+							"pasuk": 18
+						}
+					},
+					{
+						"ordinal": 6,
+						"role": "aliyah",
+						"label": "שישי",
+						"start": {
+							"perek": 8,
+							"pasuk": 19
+						},
+						"end": {
+							"perek": 9,
+							"pasuk": 16
+						}
+					},
+					{
+						"ordinal": 7,
+						"role": "aliyah",
+						"label": "שביעי",
+						"start": {
+							"perek": 9,
+							"pasuk": 17
+						},
+						"end": {
+							"perek": 9,
+							"pasuk": 35
+						}
+					},
+					{
+						"ordinal": 8,
+						"role": "maftir",
+						"label": "מפטיר",
+						"start": {
+							"perek": 9,
+							"pasuk": 33
+						},
+						"end": {
+							"perek": 9,
+							"pasuk": 35
+						}
+					}
+				],
+				"weekday": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 6,
+							"pasuk": 2
+						},
+						"end": {
+							"perek": 6,
+							"pasuk": 5
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 6,
+							"pasuk": 6
+						},
+						"end": {
+							"perek": 6,
+							"pasuk": 9
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 6,
+							"pasuk": 10
+						},
+						"end": {
+							"perek": 6,
+							"pasuk": 13
+						}
+					}
+				]
+			}
+		},
+		{
+			"id": "Bo",
+			"units": [
+				"בא"
+			],
+			"sefer": "שמות",
+			"schemes": {
+				"shabbat": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 10,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 10,
+							"pasuk": 11
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 10,
+							"pasuk": 12
+						},
+						"end": {
+							"perek": 10,
+							"pasuk": 23
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 10,
+							"pasuk": 24
+						},
+						"end": {
+							"perek": 11,
+							"pasuk": 3
+						}
+					},
+					{
+						"ordinal": 4,
+						"role": "aliyah",
+						"label": "רביעי",
+						"start": {
+							"perek": 11,
+							"pasuk": 4
+						},
+						"end": {
+							"perek": 12,
+							"pasuk": 20
+						}
+					},
+					{
+						"ordinal": 5,
+						"role": "aliyah",
+						"label": "חמישי",
+						"start": {
+							"perek": 12,
+							"pasuk": 21
+						},
+						"end": {
+							"perek": 12,
+							"pasuk": 28
+						}
+					},
+					{
+						"ordinal": 6,
+						"role": "aliyah",
+						"label": "שישי",
+						"start": {
+							"perek": 12,
+							"pasuk": 29
+						},
+						"end": {
+							"perek": 12,
+							"pasuk": 51
+						}
+					},
+					{
+						"ordinal": 7,
+						"role": "aliyah",
+						"label": "שביעי",
+						"start": {
+							"perek": 13,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 13,
+							"pasuk": 16
+						}
+					},
+					{
+						"ordinal": 8,
+						"role": "maftir",
+						"label": "מפטיר",
+						"start": {
+							"perek": 13,
+							"pasuk": 14
+						},
+						"end": {
+							"perek": 13,
+							"pasuk": 16
+						}
+					}
+				],
+				"weekday": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 10,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 10,
+							"pasuk": 3
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 10,
+							"pasuk": 4
+						},
+						"end": {
+							"perek": 10,
+							"pasuk": 6
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 10,
+							"pasuk": 7
+						},
+						"end": {
+							"perek": 10,
+							"pasuk": 11
+						}
+					}
+				]
+			}
+		},
+		{
+			"id": "Beshalach",
+			"units": [
+				"בשלח"
+			],
+			"sefer": "שמות",
+			"schemes": {
+				"shabbat": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 13,
+							"pasuk": 17
+						},
+						"end": {
+							"perek": 14,
+							"pasuk": 8
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 14,
+							"pasuk": 9
+						},
+						"end": {
+							"perek": 14,
+							"pasuk": 14
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 14,
+							"pasuk": 15
+						},
+						"end": {
+							"perek": 14,
+							"pasuk": 25
+						}
+					},
+					{
+						"ordinal": 4,
+						"role": "aliyah",
+						"label": "רביעי",
+						"start": {
+							"perek": 14,
+							"pasuk": 26
+						},
+						"end": {
+							"perek": 15,
+							"pasuk": 26
+						}
+					},
+					{
+						"ordinal": 5,
+						"role": "aliyah",
+						"label": "חמישי",
+						"start": {
+							"perek": 15,
+							"pasuk": 27
+						},
+						"end": {
+							"perek": 16,
+							"pasuk": 10
+						}
+					},
+					{
+						"ordinal": 6,
+						"role": "aliyah",
+						"label": "שישי",
+						"start": {
+							"perek": 16,
+							"pasuk": 11
+						},
+						"end": {
+							"perek": 16,
+							"pasuk": 36
+						}
+					},
+					{
+						"ordinal": 7,
+						"role": "aliyah",
+						"label": "שביעי",
+						"start": {
+							"perek": 17,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 17,
+							"pasuk": 16
+						}
+					},
+					{
+						"ordinal": 8,
+						"role": "maftir",
+						"label": "מפטיר",
+						"start": {
+							"perek": 17,
+							"pasuk": 14
+						},
+						"end": {
+							"perek": 17,
+							"pasuk": 16
+						}
+					}
+				],
+				"weekday": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 13,
+							"pasuk": 17
+						},
+						"end": {
+							"perek": 13,
+							"pasuk": 22
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 14,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 14,
+							"pasuk": 4
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 14,
+							"pasuk": 5
+						},
+						"end": {
+							"perek": 14,
+							"pasuk": 8
+						}
+					}
+				]
+			}
+		},
+		{
+			"id": "Yitro",
+			"units": [
+				"יתרו"
+			],
+			"sefer": "שמות",
+			"schemes": {
+				"shabbat": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 18,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 18,
+							"pasuk": 12
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 18,
+							"pasuk": 13
+						},
+						"end": {
+							"perek": 18,
+							"pasuk": 23
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 18,
+							"pasuk": 24
+						},
+						"end": {
+							"perek": 18,
+							"pasuk": 27
+						}
+					},
+					{
+						"ordinal": 4,
+						"role": "aliyah",
+						"label": "רביעי",
+						"start": {
+							"perek": 19,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 19,
+							"pasuk": 6
+						}
+					},
+					{
+						"ordinal": 5,
+						"role": "aliyah",
+						"label": "חמישי",
+						"start": {
+							"perek": 19,
+							"pasuk": 7
+						},
+						"end": {
+							"perek": 19,
+							"pasuk": 19
+						}
+					},
+					{
+						"ordinal": 6,
+						"role": "aliyah",
+						"label": "שישי",
+						"start": {
+							"perek": 19,
+							"pasuk": 20
+						},
+						"end": {
+							"perek": 20,
+							"pasuk": 14
+						}
+					},
+					{
+						"ordinal": 7,
+						"role": "aliyah",
+						"label": "שביעי",
+						"start": {
+							"perek": 20,
+							"pasuk": 15
+						},
+						"end": {
+							"perek": 20,
+							"pasuk": 23
+						}
+					},
+					{
+						"ordinal": 8,
+						"role": "maftir",
+						"label": "מפטיר",
+						"start": {
+							"perek": 20,
+							"pasuk": 19
+						},
+						"end": {
+							"perek": 20,
+							"pasuk": 23
+						}
+					}
+				],
+				"weekday": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 18,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 18,
+							"pasuk": 4
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 18,
+							"pasuk": 5
+						},
+						"end": {
+							"perek": 18,
+							"pasuk": 8
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 18,
+							"pasuk": 9
+						},
+						"end": {
+							"perek": 18,
+							"pasuk": 12
+						}
+					}
+				]
+			}
+		},
+		{
+			"id": "Mishpatim",
+			"units": [
+				"משפטים"
+			],
+			"sefer": "שמות",
+			"schemes": {
+				"shabbat": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 21,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 21,
+							"pasuk": 19
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 21,
+							"pasuk": 20
+						},
+						"end": {
+							"perek": 22,
+							"pasuk": 3
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 22,
+							"pasuk": 4
+						},
+						"end": {
+							"perek": 22,
+							"pasuk": 26
+						}
+					},
+					{
+						"ordinal": 4,
+						"role": "aliyah",
+						"label": "רביעי",
+						"start": {
+							"perek": 22,
+							"pasuk": 27
+						},
+						"end": {
+							"perek": 23,
+							"pasuk": 5
+						}
+					},
+					{
+						"ordinal": 5,
+						"role": "aliyah",
+						"label": "חמישי",
+						"start": {
+							"perek": 23,
+							"pasuk": 6
+						},
+						"end": {
+							"perek": 23,
+							"pasuk": 19
+						}
+					},
+					{
+						"ordinal": 6,
+						"role": "aliyah",
+						"label": "שישי",
+						"start": {
+							"perek": 23,
+							"pasuk": 20
+						},
+						"end": {
+							"perek": 23,
+							"pasuk": 25
+						}
+					},
+					{
+						"ordinal": 7,
+						"role": "aliyah",
+						"label": "שביעי",
+						"start": {
+							"perek": 23,
+							"pasuk": 26
+						},
+						"end": {
+							"perek": 24,
+							"pasuk": 18
+						}
+					},
+					{
+						"ordinal": 8,
+						"role": "maftir",
+						"label": "מפטיר",
+						"start": {
+							"perek": 24,
+							"pasuk": 15
+						},
+						"end": {
+							"perek": 24,
+							"pasuk": 18
+						}
+					}
+				],
+				"weekday": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 21,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 21,
+							"pasuk": 6
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 21,
+							"pasuk": 7
+						},
+						"end": {
+							"perek": 21,
+							"pasuk": 11
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 21,
+							"pasuk": 12
+						},
+						"end": {
+							"perek": 21,
+							"pasuk": 19
+						}
+					}
+				]
+			}
+		},
+		{
+			"id": "Terumah",
+			"units": [
+				"תרומה"
+			],
+			"sefer": "שמות",
+			"schemes": {
+				"shabbat": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 25,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 25,
+							"pasuk": 16
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 25,
+							"pasuk": 17
+						},
+						"end": {
+							"perek": 25,
+							"pasuk": 40
+						},
+						"alternatives": [
+							{
+								"start": {
+									"perek": 25,
+									"pasuk": 17
+								},
+								"end": {
+									"perek": 25,
+									"pasuk": 30
+								},
+								"source": "opentorah",
+								"custom": "עדות המזרח"
+							}
+						]
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 26,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 26,
+							"pasuk": 14
+						},
+						"alternatives": [
+							{
+								"start": {
+									"perek": 25,
+									"pasuk": 31
+								},
+								"end": {
+									"perek": 26,
+									"pasuk": 14
+								},
+								"source": "opentorah",
+								"custom": "עדות המזרח"
+							}
+						]
+					},
+					{
+						"ordinal": 4,
+						"role": "aliyah",
+						"label": "רביעי",
+						"start": {
+							"perek": 26,
+							"pasuk": 15
+						},
+						"end": {
+							"perek": 26,
+							"pasuk": 30
+						}
+					},
+					{
+						"ordinal": 5,
+						"role": "aliyah",
+						"label": "חמישי",
+						"start": {
+							"perek": 26,
+							"pasuk": 31
+						},
+						"end": {
+							"perek": 26,
+							"pasuk": 37
+						}
+					},
+					{
+						"ordinal": 6,
+						"role": "aliyah",
+						"label": "שישי",
+						"start": {
+							"perek": 27,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 27,
+							"pasuk": 8
+						}
+					},
+					{
+						"ordinal": 7,
+						"role": "aliyah",
+						"label": "שביעי",
+						"start": {
+							"perek": 27,
+							"pasuk": 9
+						},
+						"end": {
+							"perek": 27,
+							"pasuk": 19
+						}
+					},
+					{
+						"ordinal": 8,
+						"role": "maftir",
+						"label": "מפטיר",
+						"start": {
+							"perek": 27,
+							"pasuk": 17
+						},
+						"end": {
+							"perek": 27,
+							"pasuk": 19
+						}
+					}
+				],
+				"weekday": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 25,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 25,
+							"pasuk": 5
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 25,
+							"pasuk": 6
+						},
+						"end": {
+							"perek": 25,
+							"pasuk": 9
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 25,
+							"pasuk": 10
+						},
+						"end": {
+							"perek": 25,
+							"pasuk": 16
+						}
+					}
+				]
+			}
+		},
+		{
+			"id": "Tetzaveh",
+			"units": [
+				"תצוה"
+			],
+			"sefer": "שמות",
+			"schemes": {
+				"shabbat": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 27,
+							"pasuk": 20
+						},
+						"end": {
+							"perek": 28,
+							"pasuk": 12
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 28,
+							"pasuk": 13
+						},
+						"end": {
+							"perek": 28,
+							"pasuk": 30
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 28,
+							"pasuk": 31
+						},
+						"end": {
+							"perek": 28,
+							"pasuk": 43
+						}
+					},
+					{
+						"ordinal": 4,
+						"role": "aliyah",
+						"label": "רביעי",
+						"start": {
+							"perek": 29,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 29,
+							"pasuk": 18
+						}
+					},
+					{
+						"ordinal": 5,
+						"role": "aliyah",
+						"label": "חמישי",
+						"start": {
+							"perek": 29,
+							"pasuk": 19
+						},
+						"end": {
+							"perek": 29,
+							"pasuk": 37
+						}
+					},
+					{
+						"ordinal": 6,
+						"role": "aliyah",
+						"label": "שישי",
+						"start": {
+							"perek": 29,
+							"pasuk": 38
+						},
+						"end": {
+							"perek": 29,
+							"pasuk": 46
+						}
+					},
+					{
+						"ordinal": 7,
+						"role": "aliyah",
+						"label": "שביעי",
+						"start": {
+							"perek": 30,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 30,
+							"pasuk": 10
+						}
+					},
+					{
+						"ordinal": 8,
+						"role": "maftir",
+						"label": "מפטיר",
+						"start": {
+							"perek": 30,
+							"pasuk": 8
+						},
+						"end": {
+							"perek": 30,
+							"pasuk": 10
+						}
+					}
+				],
+				"weekday": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 27,
+							"pasuk": 20
+						},
+						"end": {
+							"perek": 28,
+							"pasuk": 5
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 28,
+							"pasuk": 6
+						},
+						"end": {
+							"perek": 28,
+							"pasuk": 9
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 28,
+							"pasuk": 10
+						},
+						"end": {
+							"perek": 28,
+							"pasuk": 12
+						}
+					}
+				]
+			}
+		},
+		{
+			"id": "Ki Tisa",
+			"units": [
+				"כי תשא"
+			],
+			"sefer": "שמות",
+			"schemes": {
+				"shabbat": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 30,
+							"pasuk": 11
+						},
+						"end": {
+							"perek": 31,
+							"pasuk": 17
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 31,
+							"pasuk": 18
+						},
+						"end": {
+							"perek": 33,
+							"pasuk": 11
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 33,
+							"pasuk": 12
+						},
+						"end": {
+							"perek": 33,
+							"pasuk": 16
+						}
+					},
+					{
+						"ordinal": 4,
+						"role": "aliyah",
+						"label": "רביעי",
+						"start": {
+							"perek": 33,
+							"pasuk": 17
+						},
+						"end": {
+							"perek": 33,
+							"pasuk": 23
+						}
+					},
+					{
+						"ordinal": 5,
+						"role": "aliyah",
+						"label": "חמישי",
+						"start": {
+							"perek": 34,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 34,
+							"pasuk": 9
+						}
+					},
+					{
+						"ordinal": 6,
+						"role": "aliyah",
+						"label": "שישי",
+						"start": {
+							"perek": 34,
+							"pasuk": 10
+						},
+						"end": {
+							"perek": 34,
+							"pasuk": 26
+						}
+					},
+					{
+						"ordinal": 7,
+						"role": "aliyah",
+						"label": "שביעי",
+						"start": {
+							"perek": 34,
+							"pasuk": 27
+						},
+						"end": {
+							"perek": 34,
+							"pasuk": 35
+						}
+					},
+					{
+						"ordinal": 8,
+						"role": "maftir",
+						"label": "מפטיר",
+						"start": {
+							"perek": 34,
+							"pasuk": 33
+						},
+						"end": {
+							"perek": 34,
+							"pasuk": 35
+						}
+					}
+				],
+				"weekday": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 30,
+							"pasuk": 11
+						},
+						"end": {
+							"perek": 30,
+							"pasuk": 13
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 30,
+							"pasuk": 14
+						},
+						"end": {
+							"perek": 30,
+							"pasuk": 16
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 30,
+							"pasuk": 17
+						},
+						"end": {
+							"perek": 30,
+							"pasuk": 21
+						}
+					}
+				]
+			}
+		},
+		{
+			"id": "Vayakhel",
+			"units": [
+				"ויקהל"
+			],
+			"sefer": "שמות",
+			"schemes": {
+				"shabbat": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 35,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 35,
+							"pasuk": 20
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 35,
+							"pasuk": 21
+						},
+						"end": {
+							"perek": 35,
+							"pasuk": 29
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 35,
+							"pasuk": 30
+						},
+						"end": {
+							"perek": 36,
+							"pasuk": 7
+						}
+					},
+					{
+						"ordinal": 4,
+						"role": "aliyah",
+						"label": "רביעי",
+						"start": {
+							"perek": 36,
+							"pasuk": 8
+						},
+						"end": {
+							"perek": 36,
+							"pasuk": 19
+						}
+					},
+					{
+						"ordinal": 5,
+						"role": "aliyah",
+						"label": "חמישי",
+						"start": {
+							"perek": 36,
+							"pasuk": 20
+						},
+						"end": {
+							"perek": 37,
+							"pasuk": 16
+						}
+					},
+					{
+						"ordinal": 6,
+						"role": "aliyah",
+						"label": "שישי",
+						"start": {
+							"perek": 37,
+							"pasuk": 17
+						},
+						"end": {
+							"perek": 37,
+							"pasuk": 29
+						}
+					},
+					{
+						"ordinal": 7,
+						"role": "aliyah",
+						"label": "שביעי",
+						"start": {
+							"perek": 38,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 38,
+							"pasuk": 20
+						}
+					},
+					{
+						"ordinal": 8,
+						"role": "maftir",
+						"label": "מפטיר",
+						"start": {
+							"perek": 38,
+							"pasuk": 18
+						},
+						"end": {
+							"perek": 38,
+							"pasuk": 20
+						}
+					}
+				],
+				"weekday": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 35,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 35,
+							"pasuk": 3
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 35,
+							"pasuk": 4
+						},
+						"end": {
+							"perek": 35,
+							"pasuk": 10
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 35,
+							"pasuk": 11
+						},
+						"end": {
+							"perek": 35,
+							"pasuk": 20
+						}
+					}
+				]
+			}
+		},
+		{
+			"id": "Pekudei",
+			"units": [
+				"פקודי"
+			],
+			"sefer": "שמות",
+			"schemes": {
+				"shabbat": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 38,
+							"pasuk": 21
+						},
+						"end": {
+							"perek": 39,
+							"pasuk": 1
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 39,
+							"pasuk": 2
+						},
+						"end": {
+							"perek": 39,
+							"pasuk": 21
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 39,
+							"pasuk": 22
+						},
+						"end": {
+							"perek": 39,
+							"pasuk": 32
+						}
+					},
+					{
+						"ordinal": 4,
+						"role": "aliyah",
+						"label": "רביעי",
+						"start": {
+							"perek": 39,
+							"pasuk": 33
+						},
+						"end": {
+							"perek": 39,
+							"pasuk": 43
+						}
+					},
+					{
+						"ordinal": 5,
+						"role": "aliyah",
+						"label": "חמישי",
+						"start": {
+							"perek": 40,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 40,
+							"pasuk": 16
+						}
+					},
+					{
+						"ordinal": 6,
+						"role": "aliyah",
+						"label": "שישי",
+						"start": {
+							"perek": 40,
+							"pasuk": 17
+						},
+						"end": {
+							"perek": 40,
+							"pasuk": 27
+						}
+					},
+					{
+						"ordinal": 7,
+						"role": "aliyah",
+						"label": "שביעי",
+						"start": {
+							"perek": 40,
+							"pasuk": 28
+						},
+						"end": {
+							"perek": 40,
+							"pasuk": 38
+						}
+					},
+					{
+						"ordinal": 8,
+						"role": "maftir",
+						"label": "מפטיר",
+						"start": {
+							"perek": 40,
+							"pasuk": 34
+						},
+						"end": {
+							"perek": 40,
+							"pasuk": 38
+						}
+					}
+				],
+				"weekday": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 38,
+							"pasuk": 21
+						},
+						"end": {
+							"perek": 38,
+							"pasuk": 23
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 38,
+							"pasuk": 24
+						},
+						"end": {
+							"perek": 38,
+							"pasuk": 27
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 38,
+							"pasuk": 28
+						},
+						"end": {
+							"perek": 39,
+							"pasuk": 1
+						}
+					}
+				]
+			}
+		},
+		{
+			"id": "Vayikra",
+			"units": [
+				"ויקרא"
+			],
+			"sefer": "ויקרא",
+			"schemes": {
+				"shabbat": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 1,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 1,
+							"pasuk": 13
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 1,
+							"pasuk": 14
+						},
+						"end": {
+							"perek": 2,
+							"pasuk": 6
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 2,
+							"pasuk": 7
+						},
+						"end": {
+							"perek": 2,
+							"pasuk": 16
+						}
+					},
+					{
+						"ordinal": 4,
+						"role": "aliyah",
+						"label": "רביעי",
+						"start": {
+							"perek": 3,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 3,
+							"pasuk": 17
+						}
+					},
+					{
+						"ordinal": 5,
+						"role": "aliyah",
+						"label": "חמישי",
+						"start": {
+							"perek": 4,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 4,
+							"pasuk": 26
+						}
+					},
+					{
+						"ordinal": 6,
+						"role": "aliyah",
+						"label": "שישי",
+						"start": {
+							"perek": 4,
+							"pasuk": 27
+						},
+						"end": {
+							"perek": 5,
+							"pasuk": 10
+						}
+					},
+					{
+						"ordinal": 7,
+						"role": "aliyah",
+						"label": "שביעי",
+						"start": {
+							"perek": 5,
+							"pasuk": 11
+						},
+						"end": {
+							"perek": 5,
+							"pasuk": 26
+						}
+					},
+					{
+						"ordinal": 8,
+						"role": "maftir",
+						"label": "מפטיר",
+						"start": {
+							"perek": 5,
+							"pasuk": 24
+						},
+						"end": {
+							"perek": 5,
+							"pasuk": 26
+						}
+					}
+				],
+				"weekday": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 1,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 1,
+							"pasuk": 4
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 1,
+							"pasuk": 5
+						},
+						"end": {
+							"perek": 1,
+							"pasuk": 9
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 1,
+							"pasuk": 10
+						},
+						"end": {
+							"perek": 1,
+							"pasuk": 13
+						}
+					}
+				]
+			}
+		},
+		{
+			"id": "Tzav",
+			"units": [
+				"צו"
+			],
+			"sefer": "ויקרא",
+			"schemes": {
+				"shabbat": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 6,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 6,
+							"pasuk": 11
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 6,
+							"pasuk": 12
+						},
+						"end": {
+							"perek": 7,
+							"pasuk": 10
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 7,
+							"pasuk": 11
+						},
+						"end": {
+							"perek": 7,
+							"pasuk": 38
+						}
+					},
+					{
+						"ordinal": 4,
+						"role": "aliyah",
+						"label": "רביעי",
+						"start": {
+							"perek": 8,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 8,
+							"pasuk": 13
+						}
+					},
+					{
+						"ordinal": 5,
+						"role": "aliyah",
+						"label": "חמישי",
+						"start": {
+							"perek": 8,
+							"pasuk": 14
+						},
+						"end": {
+							"perek": 8,
+							"pasuk": 21
+						}
+					},
+					{
+						"ordinal": 6,
+						"role": "aliyah",
+						"label": "שישי",
+						"start": {
+							"perek": 8,
+							"pasuk": 22
+						},
+						"end": {
+							"perek": 8,
+							"pasuk": 29
+						}
+					},
+					{
+						"ordinal": 7,
+						"role": "aliyah",
+						"label": "שביעי",
+						"start": {
+							"perek": 8,
+							"pasuk": 30
+						},
+						"end": {
+							"perek": 8,
+							"pasuk": 36
+						}
+					},
+					{
+						"ordinal": 8,
+						"role": "maftir",
+						"label": "מפטיר",
+						"start": {
+							"perek": 8,
+							"pasuk": 33
+						},
+						"end": {
+							"perek": 8,
+							"pasuk": 36
+						}
+					}
+				],
+				"weekday": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 6,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 6,
+							"pasuk": 3
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 6,
+							"pasuk": 4
+						},
+						"end": {
+							"perek": 6,
+							"pasuk": 6
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 6,
+							"pasuk": 7
+						},
+						"end": {
+							"perek": 6,
+							"pasuk": 11
+						}
+					}
+				]
+			}
+		},
+		{
+			"id": "Shmini",
+			"units": [
+				"שמיני"
+			],
+			"sefer": "ויקרא",
+			"schemes": {
+				"shabbat": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 9,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 9,
+							"pasuk": 16
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 9,
+							"pasuk": 17
+						},
+						"end": {
+							"perek": 9,
+							"pasuk": 23
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 9,
+							"pasuk": 24
+						},
+						"end": {
+							"perek": 10,
+							"pasuk": 11
+						}
+					},
+					{
+						"ordinal": 4,
+						"role": "aliyah",
+						"label": "רביעי",
+						"start": {
+							"perek": 10,
+							"pasuk": 12
+						},
+						"end": {
+							"perek": 10,
+							"pasuk": 15
+						}
+					},
+					{
+						"ordinal": 5,
+						"role": "aliyah",
+						"label": "חמישי",
+						"start": {
+							"perek": 10,
+							"pasuk": 16
+						},
+						"end": {
+							"perek": 10,
+							"pasuk": 20
+						}
+					},
+					{
+						"ordinal": 6,
+						"role": "aliyah",
+						"label": "שישי",
+						"start": {
+							"perek": 11,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 11,
+							"pasuk": 32
+						}
+					},
+					{
+						"ordinal": 7,
+						"role": "aliyah",
+						"label": "שביעי",
+						"start": {
+							"perek": 11,
+							"pasuk": 33
+						},
+						"end": {
+							"perek": 11,
+							"pasuk": 47
+						}
+					},
+					{
+						"ordinal": 8,
+						"role": "maftir",
+						"label": "מפטיר",
+						"start": {
+							"perek": 11,
+							"pasuk": 45
+						},
+						"end": {
+							"perek": 11,
+							"pasuk": 47
+						}
+					}
+				],
+				"weekday": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 9,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 9,
+							"pasuk": 6
+						},
+						"alternatives": [
+							{
+								"start": {
+									"perek": 9,
+									"pasuk": 1
+								},
+								"end": {
+									"perek": 9,
+									"pasuk": 5
+								},
+								"source": "opentorah"
+							}
+						]
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 9,
+							"pasuk": 7
+						},
+						"end": {
+							"perek": 9,
+							"pasuk": 10
+						},
+						"alternatives": [
+							{
+								"start": {
+									"perek": 9,
+									"pasuk": 6
+								},
+								"end": {
+									"perek": 9,
+									"pasuk": 10
+								},
+								"source": "opentorah"
+							}
+						]
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 9,
+							"pasuk": 11
+						},
+						"end": {
+							"perek": 9,
+							"pasuk": 16
+						}
+					}
+				]
+			}
+		},
+		{
+			"id": "Tazria",
+			"units": [
+				"תזריע"
+			],
+			"sefer": "ויקרא",
+			"schemes": {
+				"shabbat": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 12,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 13,
+							"pasuk": 5
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 13,
+							"pasuk": 6
+						},
+						"end": {
+							"perek": 13,
+							"pasuk": 17
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 13,
+							"pasuk": 18
+						},
+						"end": {
+							"perek": 13,
+							"pasuk": 23
+						}
+					},
+					{
+						"ordinal": 4,
+						"role": "aliyah",
+						"label": "רביעי",
+						"start": {
+							"perek": 13,
+							"pasuk": 24
+						},
+						"end": {
+							"perek": 13,
+							"pasuk": 28
+						}
+					},
+					{
+						"ordinal": 5,
+						"role": "aliyah",
+						"label": "חמישי",
+						"start": {
+							"perek": 13,
+							"pasuk": 29
+						},
+						"end": {
+							"perek": 13,
+							"pasuk": 39
+						}
+					},
+					{
+						"ordinal": 6,
+						"role": "aliyah",
+						"label": "שישי",
+						"start": {
+							"perek": 13,
+							"pasuk": 40
+						},
+						"end": {
+							"perek": 13,
+							"pasuk": 54
+						}
+					},
+					{
+						"ordinal": 7,
+						"role": "aliyah",
+						"label": "שביעי",
+						"start": {
+							"perek": 13,
+							"pasuk": 55
+						},
+						"end": {
+							"perek": 13,
+							"pasuk": 59
+						}
+					},
+					{
+						"ordinal": 8,
+						"role": "maftir",
+						"label": "מפטיר",
+						"start": {
+							"perek": 13,
+							"pasuk": 57
+						},
+						"end": {
+							"perek": 13,
+							"pasuk": 59
+						}
+					}
+				],
+				"weekday": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 12,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 12,
+							"pasuk": 4
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 12,
+							"pasuk": 5
+						},
+						"end": {
+							"perek": 12,
+							"pasuk": 8
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 13,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 13,
+							"pasuk": 5
+						}
+					}
+				]
+			}
+		},
+		{
+			"id": "Metzora",
+			"units": [
+				"מצורע"
+			],
+			"sefer": "ויקרא",
+			"schemes": {
+				"shabbat": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 14,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 14,
+							"pasuk": 12
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 14,
+							"pasuk": 13
+						},
+						"end": {
+							"perek": 14,
+							"pasuk": 20
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 14,
+							"pasuk": 21
+						},
+						"end": {
+							"perek": 14,
+							"pasuk": 32
+						}
+					},
+					{
+						"ordinal": 4,
+						"role": "aliyah",
+						"label": "רביעי",
+						"start": {
+							"perek": 14,
+							"pasuk": 33
+						},
+						"end": {
+							"perek": 14,
+							"pasuk": 53
+						}
+					},
+					{
+						"ordinal": 5,
+						"role": "aliyah",
+						"label": "חמישי",
+						"start": {
+							"perek": 14,
+							"pasuk": 54
+						},
+						"end": {
+							"perek": 15,
+							"pasuk": 15
+						}
+					},
+					{
+						"ordinal": 6,
+						"role": "aliyah",
+						"label": "שישי",
+						"start": {
+							"perek": 15,
+							"pasuk": 16
+						},
+						"end": {
+							"perek": 15,
+							"pasuk": 28
+						}
+					},
+					{
+						"ordinal": 7,
+						"role": "aliyah",
+						"label": "שביעי",
+						"start": {
+							"perek": 15,
+							"pasuk": 29
+						},
+						"end": {
+							"perek": 15,
+							"pasuk": 33
+						}
+					},
+					{
+						"ordinal": 8,
+						"role": "maftir",
+						"label": "מפטיר",
+						"start": {
+							"perek": 15,
+							"pasuk": 31
+						},
+						"end": {
+							"perek": 15,
+							"pasuk": 33
+						}
+					}
+				],
+				"weekday": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 14,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 14,
+							"pasuk": 5
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 14,
+							"pasuk": 6
+						},
+						"end": {
+							"perek": 14,
+							"pasuk": 9
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 14,
+							"pasuk": 10
+						},
+						"end": {
+							"perek": 14,
+							"pasuk": 12
+						}
+					}
+				]
+			}
+		},
+		{
+			"id": "Achrei Mot",
+			"units": [
+				"אחרי מות"
+			],
+			"sefer": "ויקרא",
+			"schemes": {
+				"shabbat": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 16,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 16,
+							"pasuk": 17
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 16,
+							"pasuk": 18
+						},
+						"end": {
+							"perek": 16,
+							"pasuk": 24
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 16,
+							"pasuk": 25
+						},
+						"end": {
+							"perek": 16,
+							"pasuk": 34
+						}
+					},
+					{
+						"ordinal": 4,
+						"role": "aliyah",
+						"label": "רביעי",
+						"start": {
+							"perek": 17,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 17,
+							"pasuk": 7
+						}
+					},
+					{
+						"ordinal": 5,
+						"role": "aliyah",
+						"label": "חמישי",
+						"start": {
+							"perek": 17,
+							"pasuk": 8
+						},
+						"end": {
+							"perek": 18,
+							"pasuk": 5
+						}
+					},
+					{
+						"ordinal": 6,
+						"role": "aliyah",
+						"label": "שישי",
+						"start": {
+							"perek": 18,
+							"pasuk": 6
+						},
+						"end": {
+							"perek": 18,
+							"pasuk": 21
+						}
+					},
+					{
+						"ordinal": 7,
+						"role": "aliyah",
+						"label": "שביעי",
+						"start": {
+							"perek": 18,
+							"pasuk": 22
+						},
+						"end": {
+							"perek": 18,
+							"pasuk": 30
+						}
+					},
+					{
+						"ordinal": 8,
+						"role": "maftir",
+						"label": "מפטיר",
+						"start": {
+							"perek": 18,
+							"pasuk": 28
+						},
+						"end": {
+							"perek": 18,
+							"pasuk": 30
+						}
+					}
+				],
+				"weekday": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 16,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 16,
+							"pasuk": 6
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 16,
+							"pasuk": 7
+						},
+						"end": {
+							"perek": 16,
+							"pasuk": 11
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 16,
+							"pasuk": 12
+						},
+						"end": {
+							"perek": 16,
+							"pasuk": 17
+						}
+					}
+				]
+			}
+		},
+		{
+			"id": "Kedoshim",
+			"units": [
+				"קדושים"
+			],
+			"sefer": "ויקרא",
+			"schemes": {
+				"shabbat": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 19,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 19,
+							"pasuk": 14
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 19,
+							"pasuk": 15
+						},
+						"end": {
+							"perek": 19,
+							"pasuk": 22
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 19,
+							"pasuk": 23
+						},
+						"end": {
+							"perek": 19,
+							"pasuk": 32
+						}
+					},
+					{
+						"ordinal": 4,
+						"role": "aliyah",
+						"label": "רביעי",
+						"start": {
+							"perek": 19,
+							"pasuk": 33
+						},
+						"end": {
+							"perek": 19,
+							"pasuk": 37
+						}
+					},
+					{
+						"ordinal": 5,
+						"role": "aliyah",
+						"label": "חמישי",
+						"start": {
+							"perek": 20,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 20,
+							"pasuk": 7
+						}
+					},
+					{
+						"ordinal": 6,
+						"role": "aliyah",
+						"label": "שישי",
+						"start": {
+							"perek": 20,
+							"pasuk": 8
+						},
+						"end": {
+							"perek": 20,
+							"pasuk": 22
+						}
+					},
+					{
+						"ordinal": 7,
+						"role": "aliyah",
+						"label": "שביעי",
+						"start": {
+							"perek": 20,
+							"pasuk": 23
+						},
+						"end": {
+							"perek": 20,
+							"pasuk": 27
+						}
+					},
+					{
+						"ordinal": 8,
+						"role": "maftir",
+						"label": "מפטיר",
+						"start": {
+							"perek": 20,
+							"pasuk": 25
+						},
+						"end": {
+							"perek": 20,
+							"pasuk": 27
+						}
+					}
+				],
+				"weekday": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 19,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 19,
+							"pasuk": 4
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 19,
+							"pasuk": 5
+						},
+						"end": {
+							"perek": 19,
+							"pasuk": 10
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 19,
+							"pasuk": 11
+						},
+						"end": {
+							"perek": 19,
+							"pasuk": 14
+						}
+					}
+				]
+			}
+		},
+		{
+			"id": "Emor",
+			"units": [
+				"אמור"
+			],
+			"sefer": "ויקרא",
+			"schemes": {
+				"shabbat": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 21,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 21,
+							"pasuk": 15
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 21,
+							"pasuk": 16
+						},
+						"end": {
+							"perek": 22,
+							"pasuk": 16
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 22,
+							"pasuk": 17
+						},
+						"end": {
+							"perek": 22,
+							"pasuk": 33
+						}
+					},
+					{
+						"ordinal": 4,
+						"role": "aliyah",
+						"label": "רביעי",
+						"start": {
+							"perek": 23,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 23,
+							"pasuk": 22
+						}
+					},
+					{
+						"ordinal": 5,
+						"role": "aliyah",
+						"label": "חמישי",
+						"start": {
+							"perek": 23,
+							"pasuk": 23
+						},
+						"end": {
+							"perek": 23,
+							"pasuk": 32
+						}
+					},
+					{
+						"ordinal": 6,
+						"role": "aliyah",
+						"label": "שישי",
+						"start": {
+							"perek": 23,
+							"pasuk": 33
+						},
+						"end": {
+							"perek": 23,
+							"pasuk": 44
+						}
+					},
+					{
+						"ordinal": 7,
+						"role": "aliyah",
+						"label": "שביעי",
+						"start": {
+							"perek": 24,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 24,
+							"pasuk": 23
+						}
+					},
+					{
+						"ordinal": 8,
+						"role": "maftir",
+						"label": "מפטיר",
+						"start": {
+							"perek": 24,
+							"pasuk": 21
+						},
+						"end": {
+							"perek": 24,
+							"pasuk": 23
+						}
+					}
+				],
+				"weekday": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 21,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 21,
+							"pasuk": 6
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 21,
+							"pasuk": 7
+						},
+						"end": {
+							"perek": 21,
+							"pasuk": 12
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 21,
+							"pasuk": 13
+						},
+						"end": {
+							"perek": 21,
+							"pasuk": 15
+						}
+					}
+				]
+			}
+		},
+		{
+			"id": "Behar",
+			"units": [
+				"בהר"
+			],
+			"sefer": "ויקרא",
+			"schemes": {
+				"shabbat": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 25,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 25,
+							"pasuk": 13
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 25,
+							"pasuk": 14
+						},
+						"end": {
+							"perek": 25,
+							"pasuk": 18
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 25,
+							"pasuk": 19
+						},
+						"end": {
+							"perek": 25,
+							"pasuk": 24
+						}
+					},
+					{
+						"ordinal": 4,
+						"role": "aliyah",
+						"label": "רביעי",
+						"start": {
+							"perek": 25,
+							"pasuk": 25
+						},
+						"end": {
+							"perek": 25,
+							"pasuk": 28
+						}
+					},
+					{
+						"ordinal": 5,
+						"role": "aliyah",
+						"label": "חמישי",
+						"start": {
+							"perek": 25,
+							"pasuk": 29
+						},
+						"end": {
+							"perek": 25,
+							"pasuk": 38
+						}
+					},
+					{
+						"ordinal": 6,
+						"role": "aliyah",
+						"label": "שישי",
+						"start": {
+							"perek": 25,
+							"pasuk": 39
+						},
+						"end": {
+							"perek": 25,
+							"pasuk": 46
+						}
+					},
+					{
+						"ordinal": 7,
+						"role": "aliyah",
+						"label": "שביעי",
+						"start": {
+							"perek": 25,
+							"pasuk": 47
+						},
+						"end": {
+							"perek": 26,
+							"pasuk": 2
+						}
+					},
+					{
+						"ordinal": 8,
+						"role": "maftir",
+						"label": "מפטיר",
+						"start": {
+							"perek": 25,
+							"pasuk": 55
+						},
+						"end": {
+							"perek": 26,
+							"pasuk": 2
+						}
+					}
+				],
+				"weekday": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 25,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 25,
+							"pasuk": 3
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 25,
+							"pasuk": 4
+						},
+						"end": {
+							"perek": 25,
+							"pasuk": 7
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 25,
+							"pasuk": 8
+						},
+						"end": {
+							"perek": 25,
+							"pasuk": 13
+						}
+					}
+				]
+			}
+		},
+		{
+			"id": "Bechukotai",
+			"units": [
+				"בחוקותי"
+			],
+			"sefer": "ויקרא",
+			"schemes": {
+				"shabbat": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 26,
+							"pasuk": 3
+						},
+						"end": {
+							"perek": 26,
+							"pasuk": 5
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 26,
+							"pasuk": 6
+						},
+						"end": {
+							"perek": 26,
+							"pasuk": 9
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 26,
+							"pasuk": 10
+						},
+						"end": {
+							"perek": 26,
+							"pasuk": 46
+						}
+					},
+					{
+						"ordinal": 4,
+						"role": "aliyah",
+						"label": "רביעי",
+						"start": {
+							"perek": 27,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 27,
+							"pasuk": 15
+						}
+					},
+					{
+						"ordinal": 5,
+						"role": "aliyah",
+						"label": "חמישי",
+						"start": {
+							"perek": 27,
+							"pasuk": 16
+						},
+						"end": {
+							"perek": 27,
+							"pasuk": 21
+						}
+					},
+					{
+						"ordinal": 6,
+						"role": "aliyah",
+						"label": "שישי",
+						"start": {
+							"perek": 27,
+							"pasuk": 22
+						},
+						"end": {
+							"perek": 27,
+							"pasuk": 28
+						}
+					},
+					{
+						"ordinal": 7,
+						"role": "aliyah",
+						"label": "שביעי",
+						"start": {
+							"perek": 27,
+							"pasuk": 29
+						},
+						"end": {
+							"perek": 27,
+							"pasuk": 34
+						}
+					},
+					{
+						"ordinal": 8,
+						"role": "maftir",
+						"label": "מפטיר",
+						"start": {
+							"perek": 27,
+							"pasuk": 32
+						},
+						"end": {
+							"perek": 27,
+							"pasuk": 34
+						}
+					}
+				],
+				"weekday": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 26,
+							"pasuk": 3
+						},
+						"end": {
+							"perek": 26,
+							"pasuk": 5
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 26,
+							"pasuk": 6
+						},
+						"end": {
+							"perek": 26,
+							"pasuk": 9
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 26,
+							"pasuk": 10
+						},
+						"end": {
+							"perek": 26,
+							"pasuk": 13
+						}
+					}
+				]
+			}
+		},
+		{
+			"id": "Bamidbar",
+			"units": [
+				"במדבר"
+			],
+			"sefer": "במדבר",
+			"schemes": {
+				"shabbat": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 1,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 1,
+							"pasuk": 19
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 1,
+							"pasuk": 20
+						},
+						"end": {
+							"perek": 1,
+							"pasuk": 54
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 2,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 2,
+							"pasuk": 34
+						}
+					},
+					{
+						"ordinal": 4,
+						"role": "aliyah",
+						"label": "רביעי",
+						"start": {
+							"perek": 3,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 3,
+							"pasuk": 13
+						}
+					},
+					{
+						"ordinal": 5,
+						"role": "aliyah",
+						"label": "חמישי",
+						"start": {
+							"perek": 3,
+							"pasuk": 14
+						},
+						"end": {
+							"perek": 3,
+							"pasuk": 39
+						}
+					},
+					{
+						"ordinal": 6,
+						"role": "aliyah",
+						"label": "שישי",
+						"start": {
+							"perek": 3,
+							"pasuk": 40
+						},
+						"end": {
+							"perek": 3,
+							"pasuk": 51
+						}
+					},
+					{
+						"ordinal": 7,
+						"role": "aliyah",
+						"label": "שביעי",
+						"start": {
+							"perek": 4,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 4,
+							"pasuk": 20
+						}
+					},
+					{
+						"ordinal": 8,
+						"role": "maftir",
+						"label": "מפטיר",
+						"start": {
+							"perek": 4,
+							"pasuk": 17
+						},
+						"end": {
+							"perek": 4,
+							"pasuk": 20
+						}
+					}
+				],
+				"weekday": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 1,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 1,
+							"pasuk": 4
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 1,
+							"pasuk": 5
+						},
+						"end": {
+							"perek": 1,
+							"pasuk": 16
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 1,
+							"pasuk": 17
+						},
+						"end": {
+							"perek": 1,
+							"pasuk": 19
+						}
+					}
+				]
+			}
+		},
+		{
+			"id": "Nasso",
+			"units": [
+				"נשא"
+			],
+			"sefer": "במדבר",
+			"schemes": {
+				"shabbat": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 4,
+							"pasuk": 21
+						},
+						"end": {
+							"perek": 4,
+							"pasuk": 37
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 4,
+							"pasuk": 38
+						},
+						"end": {
+							"perek": 4,
+							"pasuk": 49
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 5,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 5,
+							"pasuk": 10
+						}
+					},
+					{
+						"ordinal": 4,
+						"role": "aliyah",
+						"label": "רביעי",
+						"start": {
+							"perek": 5,
+							"pasuk": 11
+						},
+						"end": {
+							"perek": 6,
+							"pasuk": 27
+						}
+					},
+					{
+						"ordinal": 5,
+						"role": "aliyah",
+						"label": "חמישי",
+						"start": {
+							"perek": 7,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 7,
+							"pasuk": 41
+						}
+					},
+					{
+						"ordinal": 6,
+						"role": "aliyah",
+						"label": "שישי",
+						"start": {
+							"perek": 7,
+							"pasuk": 42
+						},
+						"end": {
+							"perek": 7,
+							"pasuk": 71
+						},
+						"alternatives": [
+							{
+								"start": {
+									"perek": 7,
+									"pasuk": 42
+								},
+								"end": {
+									"perek": 7,
+									"pasuk": 83
+								},
+								"source": "opentorah",
+								"custom": "חב\"ד"
+							}
+						]
+					},
+					{
+						"ordinal": 7,
+						"role": "aliyah",
+						"label": "שביעי",
+						"start": {
+							"perek": 7,
+							"pasuk": 72
+						},
+						"end": {
+							"perek": 7,
+							"pasuk": 89
+						},
+						"alternatives": [
+							{
+								"start": {
+									"perek": 7,
+									"pasuk": 84
+								},
+								"end": {
+									"perek": 7,
+									"pasuk": 89
+								},
+								"source": "opentorah",
+								"custom": "חב\"ד"
+							}
+						]
+					},
+					{
+						"ordinal": 8,
+						"role": "maftir",
+						"label": "מפטיר",
+						"start": {
+							"perek": 7,
+							"pasuk": 87
+						},
+						"end": {
+							"perek": 7,
+							"pasuk": 89
+						}
+					}
+				],
+				"weekday": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 4,
+							"pasuk": 21
+						},
+						"end": {
+							"perek": 4,
+							"pasuk": 24
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 4,
+							"pasuk": 25
+						},
+						"end": {
+							"perek": 4,
+							"pasuk": 28
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 4,
+							"pasuk": 29
+						},
+						"end": {
+							"perek": 4,
+							"pasuk": 33
+						},
+						"alternatives": [
+							{
+								"start": {
+									"perek": 4,
+									"pasuk": 29
+								},
+								"end": {
+									"perek": 4,
+									"pasuk": 37
+								},
+								"source": "opentorah"
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"id": "Beha'alotcha",
+			"units": [
+				"בהעלותך"
+			],
+			"sefer": "במדבר",
+			"schemes": {
+				"shabbat": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 8,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 8,
+							"pasuk": 14
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 8,
+							"pasuk": 15
+						},
+						"end": {
+							"perek": 8,
+							"pasuk": 26
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 9,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 9,
+							"pasuk": 14
+						}
+					},
+					{
+						"ordinal": 4,
+						"role": "aliyah",
+						"label": "רביעי",
+						"start": {
+							"perek": 9,
+							"pasuk": 15
+						},
+						"end": {
+							"perek": 10,
+							"pasuk": 10
+						}
+					},
+					{
+						"ordinal": 5,
+						"role": "aliyah",
+						"label": "חמישי",
+						"start": {
+							"perek": 10,
+							"pasuk": 11
+						},
+						"end": {
+							"perek": 10,
+							"pasuk": 34
+						}
+					},
+					{
+						"ordinal": 6,
+						"role": "aliyah",
+						"label": "שישי",
+						"start": {
+							"perek": 10,
+							"pasuk": 35
+						},
+						"end": {
+							"perek": 11,
+							"pasuk": 29
+						}
+					},
+					{
+						"ordinal": 7,
+						"role": "aliyah",
+						"label": "שביעי",
+						"start": {
+							"perek": 11,
+							"pasuk": 30
+						},
+						"end": {
+							"perek": 12,
+							"pasuk": 16
+						}
+					},
+					{
+						"ordinal": 8,
+						"role": "maftir",
+						"label": "מפטיר",
+						"start": {
+							"perek": 12,
+							"pasuk": 14
+						},
+						"end": {
+							"perek": 12,
+							"pasuk": 16
+						}
+					}
+				],
+				"weekday": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 8,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 8,
+							"pasuk": 4
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 8,
+							"pasuk": 5
+						},
+						"end": {
+							"perek": 8,
+							"pasuk": 9
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 8,
+							"pasuk": 10
+						},
+						"end": {
+							"perek": 8,
+							"pasuk": 14
+						}
+					}
+				]
+			}
+		},
+		{
+			"id": "Sh'lach",
+			"units": [
+				"שלח"
+			],
+			"sefer": "במדבר",
+			"schemes": {
+				"shabbat": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 13,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 13,
+							"pasuk": 20
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 13,
+							"pasuk": 21
+						},
+						"end": {
+							"perek": 14,
+							"pasuk": 7
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 14,
+							"pasuk": 8
+						},
+						"end": {
+							"perek": 14,
+							"pasuk": 25
+						}
+					},
+					{
+						"ordinal": 4,
+						"role": "aliyah",
+						"label": "רביעי",
+						"start": {
+							"perek": 14,
+							"pasuk": 26
+						},
+						"end": {
+							"perek": 15,
+							"pasuk": 7
+						}
+					},
+					{
+						"ordinal": 5,
+						"role": "aliyah",
+						"label": "חמישי",
+						"start": {
+							"perek": 15,
+							"pasuk": 8
+						},
+						"end": {
+							"perek": 15,
+							"pasuk": 16
+						}
+					},
+					{
+						"ordinal": 6,
+						"role": "aliyah",
+						"label": "שישי",
+						"start": {
+							"perek": 15,
+							"pasuk": 17
+						},
+						"end": {
+							"perek": 15,
+							"pasuk": 26
+						}
+					},
+					{
+						"ordinal": 7,
+						"role": "aliyah",
+						"label": "שביעי",
+						"start": {
+							"perek": 15,
+							"pasuk": 27
+						},
+						"end": {
+							"perek": 15,
+							"pasuk": 41
+						}
+					},
+					{
+						"ordinal": 8,
+						"role": "maftir",
+						"label": "מפטיר",
+						"start": {
+							"perek": 15,
+							"pasuk": 37
+						},
+						"end": {
+							"perek": 15,
+							"pasuk": 41
+						}
+					}
+				],
+				"weekday": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 13,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 13,
+							"pasuk": 3
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 13,
+							"pasuk": 4
+						},
+						"end": {
+							"perek": 13,
+							"pasuk": 16
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 13,
+							"pasuk": 17
+						},
+						"end": {
+							"perek": 13,
+							"pasuk": 20
+						}
+					}
+				]
+			}
+		},
+		{
+			"id": "Korach",
+			"units": [
+				"קרח"
+			],
+			"sefer": "במדבר",
+			"schemes": {
+				"shabbat": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 16,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 16,
+							"pasuk": 13
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 16,
+							"pasuk": 14
+						},
+						"end": {
+							"perek": 16,
+							"pasuk": 19
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 16,
+							"pasuk": 20
+						},
+						"end": {
+							"perek": 17,
+							"pasuk": 8
+						}
+					},
+					{
+						"ordinal": 4,
+						"role": "aliyah",
+						"label": "רביעי",
+						"start": {
+							"perek": 17,
+							"pasuk": 9
+						},
+						"end": {
+							"perek": 17,
+							"pasuk": 15
+						}
+					},
+					{
+						"ordinal": 5,
+						"role": "aliyah",
+						"label": "חמישי",
+						"start": {
+							"perek": 17,
+							"pasuk": 16
+						},
+						"end": {
+							"perek": 17,
+							"pasuk": 24
+						}
+					},
+					{
+						"ordinal": 6,
+						"role": "aliyah",
+						"label": "שישי",
+						"start": {
+							"perek": 17,
+							"pasuk": 25
+						},
+						"end": {
+							"perek": 18,
+							"pasuk": 20
+						}
+					},
+					{
+						"ordinal": 7,
+						"role": "aliyah",
+						"label": "שביעי",
+						"start": {
+							"perek": 18,
+							"pasuk": 21
+						},
+						"end": {
+							"perek": 18,
+							"pasuk": 32
+						}
+					},
+					{
+						"ordinal": 8,
+						"role": "maftir",
+						"label": "מפטיר",
+						"start": {
+							"perek": 18,
+							"pasuk": 30
+						},
+						"end": {
+							"perek": 18,
+							"pasuk": 32
+						}
+					}
+				],
+				"weekday": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 16,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 16,
+							"pasuk": 3
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 16,
+							"pasuk": 4
+						},
+						"end": {
+							"perek": 16,
+							"pasuk": 7
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 16,
+							"pasuk": 8
+						},
+						"end": {
+							"perek": 16,
+							"pasuk": 13
+						}
+					}
+				]
+			}
+		},
+		{
+			"id": "Chukat",
+			"units": [
+				"חוקת"
+			],
+			"sefer": "במדבר",
+			"schemes": {
+				"shabbat": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 19,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 19,
+							"pasuk": 17
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 19,
+							"pasuk": 18
+						},
+						"end": {
+							"perek": 20,
+							"pasuk": 6
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 20,
+							"pasuk": 7
+						},
+						"end": {
+							"perek": 20,
+							"pasuk": 13
+						}
+					},
+					{
+						"ordinal": 4,
+						"role": "aliyah",
+						"label": "רביעי",
+						"start": {
+							"perek": 20,
+							"pasuk": 14
+						},
+						"end": {
+							"perek": 20,
+							"pasuk": 21
+						}
+					},
+					{
+						"ordinal": 5,
+						"role": "aliyah",
+						"label": "חמישי",
+						"start": {
+							"perek": 20,
+							"pasuk": 22
+						},
+						"end": {
+							"perek": 21,
+							"pasuk": 9
+						}
+					},
+					{
+						"ordinal": 6,
+						"role": "aliyah",
+						"label": "שישי",
+						"start": {
+							"perek": 21,
+							"pasuk": 10
+						},
+						"end": {
+							"perek": 21,
+							"pasuk": 20
+						}
+					},
+					{
+						"ordinal": 7,
+						"role": "aliyah",
+						"label": "שביעי",
+						"start": {
+							"perek": 21,
+							"pasuk": 21
+						},
+						"end": {
+							"perek": 22,
+							"pasuk": 1
+						}
+					},
+					{
+						"ordinal": 8,
+						"role": "maftir",
+						"label": "מפטיר",
+						"start": {
+							"perek": 21,
+							"pasuk": 34
+						},
+						"end": {
+							"perek": 22,
+							"pasuk": 1
+						}
+					}
+				],
+				"weekday": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 19,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 19,
+							"pasuk": 6
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 19,
+							"pasuk": 7
+						},
+						"end": {
+							"perek": 19,
+							"pasuk": 9
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 19,
+							"pasuk": 10
+						},
+						"end": {
+							"perek": 19,
+							"pasuk": 17
+						}
+					}
+				]
+			}
+		},
+		{
+			"id": "Balak",
+			"units": [
+				"בלק"
+			],
+			"sefer": "במדבר",
+			"schemes": {
+				"shabbat": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 22,
+							"pasuk": 2
+						},
+						"end": {
+							"perek": 22,
+							"pasuk": 12
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 22,
+							"pasuk": 13
+						},
+						"end": {
+							"perek": 22,
+							"pasuk": 20
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 22,
+							"pasuk": 21
+						},
+						"end": {
+							"perek": 22,
+							"pasuk": 38
+						}
+					},
+					{
+						"ordinal": 4,
+						"role": "aliyah",
+						"label": "רביעי",
+						"start": {
+							"perek": 22,
+							"pasuk": 39
+						},
+						"end": {
+							"perek": 23,
+							"pasuk": 12
+						}
+					},
+					{
+						"ordinal": 5,
+						"role": "aliyah",
+						"label": "חמישי",
+						"start": {
+							"perek": 23,
+							"pasuk": 13
+						},
+						"end": {
+							"perek": 23,
+							"pasuk": 26
+						}
+					},
+					{
+						"ordinal": 6,
+						"role": "aliyah",
+						"label": "שישי",
+						"start": {
+							"perek": 23,
+							"pasuk": 27
+						},
+						"end": {
+							"perek": 24,
+							"pasuk": 13
+						}
+					},
+					{
+						"ordinal": 7,
+						"role": "aliyah",
+						"label": "שביעי",
+						"start": {
+							"perek": 24,
+							"pasuk": 14
+						},
+						"end": {
+							"perek": 25,
+							"pasuk": 9
+						}
+					},
+					{
+						"ordinal": 8,
+						"role": "maftir",
+						"label": "מפטיר",
+						"start": {
+							"perek": 25,
+							"pasuk": 7
+						},
+						"end": {
+							"perek": 25,
+							"pasuk": 9
+						}
+					}
+				],
+				"weekday": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 22,
+							"pasuk": 2
+						},
+						"end": {
+							"perek": 22,
+							"pasuk": 4
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 22,
+							"pasuk": 5
+						},
+						"end": {
+							"perek": 22,
+							"pasuk": 7
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 22,
+							"pasuk": 8
+						},
+						"end": {
+							"perek": 22,
+							"pasuk": 12
+						}
+					}
+				]
+			}
+		},
+		{
+			"id": "Pinchas",
+			"units": [
+				"פינחס"
+			],
+			"sefer": "במדבר",
+			"schemes": {
+				"shabbat": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 25,
+							"pasuk": 10
+						},
+						"end": {
+							"perek": 26,
+							"pasuk": 4
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 26,
+							"pasuk": 5
+						},
+						"end": {
+							"perek": 26,
+							"pasuk": 51
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 26,
+							"pasuk": 52
+						},
+						"end": {
+							"perek": 27,
+							"pasuk": 5
+						}
+					},
+					{
+						"ordinal": 4,
+						"role": "aliyah",
+						"label": "רביעי",
+						"start": {
+							"perek": 27,
+							"pasuk": 6
+						},
+						"end": {
+							"perek": 27,
+							"pasuk": 23
+						}
+					},
+					{
+						"ordinal": 5,
+						"role": "aliyah",
+						"label": "חמישי",
+						"start": {
+							"perek": 28,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 28,
+							"pasuk": 15
+						}
+					},
+					{
+						"ordinal": 6,
+						"role": "aliyah",
+						"label": "שישי",
+						"start": {
+							"perek": 28,
+							"pasuk": 16
+						},
+						"end": {
+							"perek": 29,
+							"pasuk": 11
+						}
+					},
+					{
+						"ordinal": 7,
+						"role": "aliyah",
+						"label": "שביעי",
+						"start": {
+							"perek": 29,
+							"pasuk": 12
+						},
+						"end": {
+							"perek": 30,
+							"pasuk": 1
+						}
+					},
+					{
+						"ordinal": 8,
+						"role": "maftir",
+						"label": "מפטיר",
+						"start": {
+							"perek": 29,
+							"pasuk": 35
+						},
+						"end": {
+							"perek": 30,
+							"pasuk": 1
+						}
+					}
+				],
+				"weekday": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 25,
+							"pasuk": 10
+						},
+						"end": {
+							"perek": 25,
+							"pasuk": 12
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 25,
+							"pasuk": 13
+						},
+						"end": {
+							"perek": 25,
+							"pasuk": 15
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 25,
+							"pasuk": 16
+						},
+						"end": {
+							"perek": 26,
+							"pasuk": 4
+						}
+					}
+				]
+			}
+		},
+		{
+			"id": "Matot",
+			"units": [
+				"מטות"
+			],
+			"sefer": "במדבר",
+			"schemes": {
+				"shabbat": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 30,
+							"pasuk": 2
+						},
+						"end": {
+							"perek": 30,
+							"pasuk": 17
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 31,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 31,
+							"pasuk": 12
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 31,
+							"pasuk": 13
+						},
+						"end": {
+							"perek": 31,
+							"pasuk": 24
+						}
+					},
+					{
+						"ordinal": 4,
+						"role": "aliyah",
+						"label": "רביעי",
+						"start": {
+							"perek": 31,
+							"pasuk": 25
+						},
+						"end": {
+							"perek": 31,
+							"pasuk": 41
+						}
+					},
+					{
+						"ordinal": 5,
+						"role": "aliyah",
+						"label": "חמישי",
+						"start": {
+							"perek": 31,
+							"pasuk": 42
+						},
+						"end": {
+							"perek": 31,
+							"pasuk": 54
+						}
+					},
+					{
+						"ordinal": 6,
+						"role": "aliyah",
+						"label": "שישי",
+						"start": {
+							"perek": 32,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 32,
+							"pasuk": 19
+						}
+					},
+					{
+						"ordinal": 7,
+						"role": "aliyah",
+						"label": "שביעי",
+						"start": {
+							"perek": 32,
+							"pasuk": 20
+						},
+						"end": {
+							"perek": 32,
+							"pasuk": 42
+						}
+					},
+					{
+						"ordinal": 8,
+						"role": "maftir",
+						"label": "מפטיר",
+						"start": {
+							"perek": 32,
+							"pasuk": 39
+						},
+						"end": {
+							"perek": 32,
+							"pasuk": 42
+						}
+					}
+				],
+				"weekday": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 30,
+							"pasuk": 2
+						},
+						"end": {
+							"perek": 30,
+							"pasuk": 9
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 30,
+							"pasuk": 10
+						},
+						"end": {
+							"perek": 30,
+							"pasuk": 13
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 30,
+							"pasuk": 14
+						},
+						"end": {
+							"perek": 30,
+							"pasuk": 17
+						}
+					}
+				]
+			}
+		},
+		{
+			"id": "Masei",
+			"units": [
+				"מסעי"
+			],
+			"sefer": "במדבר",
+			"schemes": {
+				"shabbat": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 33,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 33,
+							"pasuk": 10
+						},
+						"alternatives": [
+							{
+								"start": {
+									"perek": 33,
+									"pasuk": 1
+								},
+								"end": {
+									"perek": 33,
+									"pasuk": 49
+								},
+								"source": "opentorah",
+								"custom": "עדות המזרח"
+							}
+						]
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 33,
+							"pasuk": 11
+						},
+						"end": {
+							"perek": 33,
+							"pasuk": 49
+						},
+						"alternatives": [
+							{
+								"start": {
+									"perek": 33,
+									"pasuk": 50
+								},
+								"end": {
+									"perek": 33,
+									"pasuk": 53
+								},
+								"source": "opentorah",
+								"custom": "עדות המזרח"
+							}
+						]
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 33,
+							"pasuk": 50
+						},
+						"end": {
+							"perek": 34,
+							"pasuk": 15
+						},
+						"alternatives": [
+							{
+								"start": {
+									"perek": 33,
+									"pasuk": 54
+								},
+								"end": {
+									"perek": 34,
+									"pasuk": 15
+								},
+								"source": "opentorah",
+								"custom": "עדות המזרח"
+							}
+						]
+					},
+					{
+						"ordinal": 4,
+						"role": "aliyah",
+						"label": "רביעי",
+						"start": {
+							"perek": 34,
+							"pasuk": 16
+						},
+						"end": {
+							"perek": 34,
+							"pasuk": 29
+						}
+					},
+					{
+						"ordinal": 5,
+						"role": "aliyah",
+						"label": "חמישי",
+						"start": {
+							"perek": 35,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 35,
+							"pasuk": 8
+						}
+					},
+					{
+						"ordinal": 6,
+						"role": "aliyah",
+						"label": "שישי",
+						"start": {
+							"perek": 35,
+							"pasuk": 9
+						},
+						"end": {
+							"perek": 35,
+							"pasuk": 34
+						}
+					},
+					{
+						"ordinal": 7,
+						"role": "aliyah",
+						"label": "שביעי",
+						"start": {
+							"perek": 36,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 36,
+							"pasuk": 13
+						}
+					},
+					{
+						"ordinal": 8,
+						"role": "maftir",
+						"label": "מפטיר",
+						"start": {
+							"perek": 36,
+							"pasuk": 11
+						},
+						"end": {
+							"perek": 36,
+							"pasuk": 13
+						}
+					}
+				],
+				"weekday": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 33,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 33,
+							"pasuk": 3
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 33,
+							"pasuk": 4
+						},
+						"end": {
+							"perek": 33,
+							"pasuk": 6
+						},
+						"alternatives": [
+							{
+								"start": {
+									"perek": 33,
+									"pasuk": 4
+								},
+								"end": {
+									"perek": 33,
+									"pasuk": 49
+								},
+								"source": "opentorah"
+							}
+						]
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 33,
+							"pasuk": 7
+						},
+						"end": {
+							"perek": 33,
+							"pasuk": 10
+						},
+						"alternatives": [
+							{
+								"start": {
+									"perek": 33,
+									"pasuk": 50
+								},
+								"end": {
+									"perek": 33,
+									"pasuk": 53
+								},
+								"source": "opentorah"
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"id": "Devarim",
+			"units": [
+				"דברים"
+			],
+			"sefer": "דברים",
+			"schemes": {
+				"shabbat": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 1,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 1,
+							"pasuk": 10
+						},
+						"alternatives": [
+							{
+								"start": {
+									"perek": 1,
+									"pasuk": 1
+								},
+								"end": {
+									"perek": 1,
+									"pasuk": 11
+								},
+								"source": "opentorah",
+								"custom": "חב\"ד"
+							}
+						]
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 1,
+							"pasuk": 11
+						},
+						"end": {
+							"perek": 1,
+							"pasuk": 21
+						},
+						"alternatives": [
+							{
+								"start": {
+									"perek": 1,
+									"pasuk": 12
+								},
+								"end": {
+									"perek": 1,
+									"pasuk": 21
+								},
+								"source": "opentorah",
+								"custom": "חב\"ד"
+							}
+						]
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 1,
+							"pasuk": 22
+						},
+						"end": {
+							"perek": 1,
+							"pasuk": 38
+						}
+					},
+					{
+						"ordinal": 4,
+						"role": "aliyah",
+						"label": "רביעי",
+						"start": {
+							"perek": 1,
+							"pasuk": 39
+						},
+						"end": {
+							"perek": 2,
+							"pasuk": 1
+						}
+					},
+					{
+						"ordinal": 5,
+						"role": "aliyah",
+						"label": "חמישי",
+						"start": {
+							"perek": 2,
+							"pasuk": 2
+						},
+						"end": {
+							"perek": 2,
+							"pasuk": 30
+						}
+					},
+					{
+						"ordinal": 6,
+						"role": "aliyah",
+						"label": "שישי",
+						"start": {
+							"perek": 2,
+							"pasuk": 31
+						},
+						"end": {
+							"perek": 3,
+							"pasuk": 14
+						}
+					},
+					{
+						"ordinal": 7,
+						"role": "aliyah",
+						"label": "שביעי",
+						"start": {
+							"perek": 3,
+							"pasuk": 15
+						},
+						"end": {
+							"perek": 3,
+							"pasuk": 22
+						}
+					},
+					{
+						"ordinal": 8,
+						"role": "maftir",
+						"label": "מפטיר",
+						"start": {
+							"perek": 3,
+							"pasuk": 20
+						},
+						"end": {
+							"perek": 3,
+							"pasuk": 22
+						}
+					}
+				],
+				"weekday": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 1,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 1,
+							"pasuk": 3
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 1,
+							"pasuk": 4
+						},
+						"end": {
+							"perek": 1,
+							"pasuk": 7
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 1,
+							"pasuk": 8
+						},
+						"end": {
+							"perek": 1,
+							"pasuk": 11
+						},
+						"alternatives": [
+							{
+								"start": {
+									"perek": 1,
+									"pasuk": 8
+								},
+								"end": {
+									"perek": 1,
+									"pasuk": 10
+								},
+								"source": "opentorah"
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"id": "Vaetchanan",
+			"units": [
+				"ואתחנן"
+			],
+			"sefer": "דברים",
+			"schemes": {
+				"shabbat": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 3,
+							"pasuk": 23
+						},
+						"end": {
+							"perek": 4,
+							"pasuk": 4
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 4,
+							"pasuk": 5
+						},
+						"end": {
+							"perek": 4,
+							"pasuk": 40
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 4,
+							"pasuk": 41
+						},
+						"end": {
+							"perek": 4,
+							"pasuk": 49
+						}
+					},
+					{
+						"ordinal": 4,
+						"role": "aliyah",
+						"label": "רביעי",
+						"start": {
+							"perek": 5,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 5,
+							"pasuk": 18
+						}
+					},
+					{
+						"ordinal": 5,
+						"role": "aliyah",
+						"label": "חמישי",
+						"start": {
+							"perek": 5,
+							"pasuk": 19
+						},
+						"end": {
+							"perek": 6,
+							"pasuk": 3
+						}
+					},
+					{
+						"ordinal": 6,
+						"role": "aliyah",
+						"label": "שישי",
+						"start": {
+							"perek": 6,
+							"pasuk": 4
+						},
+						"end": {
+							"perek": 6,
+							"pasuk": 25
+						}
+					},
+					{
+						"ordinal": 7,
+						"role": "aliyah",
+						"label": "שביעי",
+						"start": {
+							"perek": 7,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 7,
+							"pasuk": 11
+						}
+					},
+					{
+						"ordinal": 8,
+						"role": "maftir",
+						"label": "מפטיר",
+						"start": {
+							"perek": 7,
+							"pasuk": 9
+						},
+						"end": {
+							"perek": 7,
+							"pasuk": 11
+						}
+					}
+				],
+				"weekday": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 3,
+							"pasuk": 23
+						},
+						"end": {
+							"perek": 3,
+							"pasuk": 25
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 3,
+							"pasuk": 26
+						},
+						"end": {
+							"perek": 4,
+							"pasuk": 4
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 4,
+							"pasuk": 5
+						},
+						"end": {
+							"perek": 4,
+							"pasuk": 8
+						}
+					}
+				]
+			}
+		},
+		{
+			"id": "Eikev",
+			"units": [
+				"עקב"
+			],
+			"sefer": "דברים",
+			"schemes": {
+				"shabbat": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 7,
+							"pasuk": 12
+						},
+						"end": {
+							"perek": 8,
+							"pasuk": 10
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 8,
+							"pasuk": 11
+						},
+						"end": {
+							"perek": 9,
+							"pasuk": 3
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 9,
+							"pasuk": 4
+						},
+						"end": {
+							"perek": 9,
+							"pasuk": 29
+						}
+					},
+					{
+						"ordinal": 4,
+						"role": "aliyah",
+						"label": "רביעי",
+						"start": {
+							"perek": 10,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 10,
+							"pasuk": 11
+						}
+					},
+					{
+						"ordinal": 5,
+						"role": "aliyah",
+						"label": "חמישי",
+						"start": {
+							"perek": 10,
+							"pasuk": 12
+						},
+						"end": {
+							"perek": 11,
+							"pasuk": 9
+						}
+					},
+					{
+						"ordinal": 6,
+						"role": "aliyah",
+						"label": "שישי",
+						"start": {
+							"perek": 11,
+							"pasuk": 10
+						},
+						"end": {
+							"perek": 11,
+							"pasuk": 21
+						}
+					},
+					{
+						"ordinal": 7,
+						"role": "aliyah",
+						"label": "שביעי",
+						"start": {
+							"perek": 11,
+							"pasuk": 22
+						},
+						"end": {
+							"perek": 11,
+							"pasuk": 25
+						}
+					},
+					{
+						"ordinal": 8,
+						"role": "maftir",
+						"label": "מפטיר",
+						"start": {
+							"perek": 11,
+							"pasuk": 22
+						},
+						"end": {
+							"perek": 11,
+							"pasuk": 25
+						}
+					}
+				],
+				"weekday": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 7,
+							"pasuk": 12
+						},
+						"end": {
+							"perek": 7,
+							"pasuk": 21
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 7,
+							"pasuk": 22
+						},
+						"end": {
+							"perek": 8,
+							"pasuk": 3
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 8,
+							"pasuk": 4
+						},
+						"end": {
+							"perek": 8,
+							"pasuk": 10
+						}
+					}
+				]
+			}
+		},
+		{
+			"id": "Re'eh",
+			"units": [
+				"ראה"
+			],
+			"sefer": "דברים",
+			"schemes": {
+				"shabbat": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 11,
+							"pasuk": 26
+						},
+						"end": {
+							"perek": 12,
+							"pasuk": 10
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 12,
+							"pasuk": 11
+						},
+						"end": {
+							"perek": 12,
+							"pasuk": 28
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 12,
+							"pasuk": 29
+						},
+						"end": {
+							"perek": 13,
+							"pasuk": 19
+						}
+					},
+					{
+						"ordinal": 4,
+						"role": "aliyah",
+						"label": "רביעי",
+						"start": {
+							"perek": 14,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 14,
+							"pasuk": 21
+						}
+					},
+					{
+						"ordinal": 5,
+						"role": "aliyah",
+						"label": "חמישי",
+						"start": {
+							"perek": 14,
+							"pasuk": 22
+						},
+						"end": {
+							"perek": 14,
+							"pasuk": 29
+						}
+					},
+					{
+						"ordinal": 6,
+						"role": "aliyah",
+						"label": "שישי",
+						"start": {
+							"perek": 15,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 15,
+							"pasuk": 18
+						}
+					},
+					{
+						"ordinal": 7,
+						"role": "aliyah",
+						"label": "שביעי",
+						"start": {
+							"perek": 15,
+							"pasuk": 19
+						},
+						"end": {
+							"perek": 16,
+							"pasuk": 17
+						}
+					},
+					{
+						"ordinal": 8,
+						"role": "maftir",
+						"label": "מפטיר",
+						"start": {
+							"perek": 16,
+							"pasuk": 13
+						},
+						"end": {
+							"perek": 16,
+							"pasuk": 17
+						}
+					}
+				],
+				"weekday": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 11,
+							"pasuk": 26
+						},
+						"end": {
+							"perek": 11,
+							"pasuk": 31
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 11,
+							"pasuk": 32
+						},
+						"end": {
+							"perek": 12,
+							"pasuk": 5
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 12,
+							"pasuk": 6
+						},
+						"end": {
+							"perek": 12,
+							"pasuk": 10
+						}
+					}
+				]
+			}
+		},
+		{
+			"id": "Shoftim",
+			"units": [
+				"שופטים"
+			],
+			"sefer": "דברים",
+			"schemes": {
+				"shabbat": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 16,
+							"pasuk": 18
+						},
+						"end": {
+							"perek": 17,
+							"pasuk": 13
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 17,
+							"pasuk": 14
+						},
+						"end": {
+							"perek": 17,
+							"pasuk": 20
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 18,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 18,
+							"pasuk": 5
+						}
+					},
+					{
+						"ordinal": 4,
+						"role": "aliyah",
+						"label": "רביעי",
+						"start": {
+							"perek": 18,
+							"pasuk": 6
+						},
+						"end": {
+							"perek": 18,
+							"pasuk": 13
+						}
+					},
+					{
+						"ordinal": 5,
+						"role": "aliyah",
+						"label": "חמישי",
+						"start": {
+							"perek": 18,
+							"pasuk": 14
+						},
+						"end": {
+							"perek": 19,
+							"pasuk": 13
+						}
+					},
+					{
+						"ordinal": 6,
+						"role": "aliyah",
+						"label": "שישי",
+						"start": {
+							"perek": 19,
+							"pasuk": 14
+						},
+						"end": {
+							"perek": 20,
+							"pasuk": 9
+						}
+					},
+					{
+						"ordinal": 7,
+						"role": "aliyah",
+						"label": "שביעי",
+						"start": {
+							"perek": 20,
+							"pasuk": 10
+						},
+						"end": {
+							"perek": 21,
+							"pasuk": 9
+						}
+					},
+					{
+						"ordinal": 8,
+						"role": "maftir",
+						"label": "מפטיר",
+						"start": {
+							"perek": 21,
+							"pasuk": 7
+						},
+						"end": {
+							"perek": 21,
+							"pasuk": 9
+						}
+					}
+				],
+				"weekday": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 16,
+							"pasuk": 18
+						},
+						"end": {
+							"perek": 16,
+							"pasuk": 20
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 16,
+							"pasuk": 21
+						},
+						"end": {
+							"perek": 17,
+							"pasuk": 10
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 17,
+							"pasuk": 11
+						},
+						"end": {
+							"perek": 17,
+							"pasuk": 13
+						}
+					}
+				]
+			}
+		},
+		{
+			"id": "Ki Teitzei",
+			"units": [
+				"כי תצא"
+			],
+			"sefer": "דברים",
+			"schemes": {
+				"shabbat": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 21,
+							"pasuk": 10
+						},
+						"end": {
+							"perek": 21,
+							"pasuk": 21
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 21,
+							"pasuk": 22
+						},
+						"end": {
+							"perek": 22,
+							"pasuk": 7
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 22,
+							"pasuk": 8
+						},
+						"end": {
+							"perek": 23,
+							"pasuk": 7
+						}
+					},
+					{
+						"ordinal": 4,
+						"role": "aliyah",
+						"label": "רביעי",
+						"start": {
+							"perek": 23,
+							"pasuk": 8
+						},
+						"end": {
+							"perek": 23,
+							"pasuk": 24
+						}
+					},
+					{
+						"ordinal": 5,
+						"role": "aliyah",
+						"label": "חמישי",
+						"start": {
+							"perek": 23,
+							"pasuk": 25
+						},
+						"end": {
+							"perek": 24,
+							"pasuk": 4
+						}
+					},
+					{
+						"ordinal": 6,
+						"role": "aliyah",
+						"label": "שישי",
+						"start": {
+							"perek": 24,
+							"pasuk": 5
+						},
+						"end": {
+							"perek": 24,
+							"pasuk": 13
+						}
+					},
+					{
+						"ordinal": 7,
+						"role": "aliyah",
+						"label": "שביעי",
+						"start": {
+							"perek": 24,
+							"pasuk": 14
+						},
+						"end": {
+							"perek": 25,
+							"pasuk": 19
+						}
+					},
+					{
+						"ordinal": 8,
+						"role": "maftir",
+						"label": "מפטיר",
+						"start": {
+							"perek": 25,
+							"pasuk": 17
+						},
+						"end": {
+							"perek": 25,
+							"pasuk": 19
+						}
+					}
+				],
+				"weekday": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 21,
+							"pasuk": 10
+						},
+						"end": {
+							"perek": 21,
+							"pasuk": 14
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 21,
+							"pasuk": 15
+						},
+						"end": {
+							"perek": 21,
+							"pasuk": 17
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 21,
+							"pasuk": 18
+						},
+						"end": {
+							"perek": 21,
+							"pasuk": 21
+						}
+					}
+				]
+			}
+		},
+		{
+			"id": "Ki Tavo",
+			"units": [
+				"כי תבוא"
+			],
+			"sefer": "דברים",
+			"schemes": {
+				"shabbat": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 26,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 26,
+							"pasuk": 11
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 26,
+							"pasuk": 12
+						},
+						"end": {
+							"perek": 26,
+							"pasuk": 15
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 26,
+							"pasuk": 16
+						},
+						"end": {
+							"perek": 26,
+							"pasuk": 19
+						}
+					},
+					{
+						"ordinal": 4,
+						"role": "aliyah",
+						"label": "רביעי",
+						"start": {
+							"perek": 27,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 27,
+							"pasuk": 10
+						}
+					},
+					{
+						"ordinal": 5,
+						"role": "aliyah",
+						"label": "חמישי",
+						"start": {
+							"perek": 27,
+							"pasuk": 11
+						},
+						"end": {
+							"perek": 28,
+							"pasuk": 6
+						}
+					},
+					{
+						"ordinal": 6,
+						"role": "aliyah",
+						"label": "שישי",
+						"start": {
+							"perek": 28,
+							"pasuk": 7
+						},
+						"end": {
+							"perek": 28,
+							"pasuk": 69
+						}
+					},
+					{
+						"ordinal": 7,
+						"role": "aliyah",
+						"label": "שביעי",
+						"start": {
+							"perek": 29,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 29,
+							"pasuk": 8
+						}
+					},
+					{
+						"ordinal": 8,
+						"role": "maftir",
+						"label": "מפטיר",
+						"start": {
+							"perek": 29,
+							"pasuk": 6
+						},
+						"end": {
+							"perek": 29,
+							"pasuk": 8
+						}
+					}
+				],
+				"weekday": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 26,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 26,
+							"pasuk": 3
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 26,
+							"pasuk": 4
+						},
+						"end": {
+							"perek": 26,
+							"pasuk": 11
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 26,
+							"pasuk": 12
+						},
+						"end": {
+							"perek": 26,
+							"pasuk": 15
+						}
+					}
+				]
+			}
+		},
+		{
+			"id": "Nitzavim",
+			"units": [
+				"נצבים"
+			],
+			"sefer": "דברים",
+			"schemes": {
+				"shabbat": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 29,
+							"pasuk": 9
+						},
+						"end": {
+							"perek": 29,
+							"pasuk": 11
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 29,
+							"pasuk": 12
+						},
+						"end": {
+							"perek": 29,
+							"pasuk": 14
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 29,
+							"pasuk": 15
+						},
+						"end": {
+							"perek": 29,
+							"pasuk": 28
+						}
+					},
+					{
+						"ordinal": 4,
+						"role": "aliyah",
+						"label": "רביעי",
+						"start": {
+							"perek": 30,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 30,
+							"pasuk": 6
+						}
+					},
+					{
+						"ordinal": 5,
+						"role": "aliyah",
+						"label": "חמישי",
+						"start": {
+							"perek": 30,
+							"pasuk": 7
+						},
+						"end": {
+							"perek": 30,
+							"pasuk": 10
+						}
+					},
+					{
+						"ordinal": 6,
+						"role": "aliyah",
+						"label": "שישי",
+						"start": {
+							"perek": 30,
+							"pasuk": 11
+						},
+						"end": {
+							"perek": 30,
+							"pasuk": 14
+						}
+					},
+					{
+						"ordinal": 7,
+						"role": "aliyah",
+						"label": "שביעי",
+						"start": {
+							"perek": 30,
+							"pasuk": 15
+						},
+						"end": {
+							"perek": 30,
+							"pasuk": 20
+						}
+					},
+					{
+						"ordinal": 8,
+						"role": "maftir",
+						"label": "מפטיר",
+						"start": {
+							"perek": 30,
+							"pasuk": 15
+						},
+						"end": {
+							"perek": 30,
+							"pasuk": 20
+						}
+					}
+				],
+				"weekday": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 29,
+							"pasuk": 9
+						},
+						"end": {
+							"perek": 29,
+							"pasuk": 11
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 29,
+							"pasuk": 12
+						},
+						"end": {
+							"perek": 29,
+							"pasuk": 14
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 29,
+							"pasuk": 15
+						},
+						"end": {
+							"perek": 29,
+							"pasuk": 28
+						}
+					}
+				]
+			}
+		},
+		{
+			"id": "Vayeilech",
+			"units": [
+				"וילך"
+			],
+			"sefer": "דברים",
+			"schemes": {
+				"shabbat": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 31,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 31,
+							"pasuk": 3
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 31,
+							"pasuk": 4
+						},
+						"end": {
+							"perek": 31,
+							"pasuk": 6
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 31,
+							"pasuk": 7
+						},
+						"end": {
+							"perek": 31,
+							"pasuk": 9
+						}
+					},
+					{
+						"ordinal": 4,
+						"role": "aliyah",
+						"label": "רביעי",
+						"start": {
+							"perek": 31,
+							"pasuk": 10
+						},
+						"end": {
+							"perek": 31,
+							"pasuk": 13
+						}
+					},
+					{
+						"ordinal": 5,
+						"role": "aliyah",
+						"label": "חמישי",
+						"start": {
+							"perek": 31,
+							"pasuk": 14
+						},
+						"end": {
+							"perek": 31,
+							"pasuk": 19
+						}
+					},
+					{
+						"ordinal": 6,
+						"role": "aliyah",
+						"label": "שישי",
+						"start": {
+							"perek": 31,
+							"pasuk": 20
+						},
+						"end": {
+							"perek": 31,
+							"pasuk": 24
+						}
+					},
+					{
+						"ordinal": 7,
+						"role": "aliyah",
+						"label": "שביעי",
+						"start": {
+							"perek": 31,
+							"pasuk": 25
+						},
+						"end": {
+							"perek": 31,
+							"pasuk": 30
+						}
+					},
+					{
+						"ordinal": 8,
+						"role": "maftir",
+						"label": "מפטיר",
+						"start": {
+							"perek": 31,
+							"pasuk": 28
+						},
+						"end": {
+							"perek": 31,
+							"pasuk": 30
+						}
+					}
+				],
+				"weekday": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 31,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 31,
+							"pasuk": 3
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 31,
+							"pasuk": 4
+						},
+						"end": {
+							"perek": 31,
+							"pasuk": 6
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 31,
+							"pasuk": 7
+						},
+						"end": {
+							"perek": 31,
+							"pasuk": 13
+						}
+					}
+				]
+			}
+		},
+		{
+			"id": "Ha'azinu",
+			"units": [
+				"האזינו"
+			],
+			"sefer": "דברים",
+			"schemes": {
+				"shabbat": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 32,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 32,
+							"pasuk": 6
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 32,
+							"pasuk": 7
+						},
+						"end": {
+							"perek": 32,
+							"pasuk": 12
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 32,
+							"pasuk": 13
+						},
+						"end": {
+							"perek": 32,
+							"pasuk": 18
+						}
+					},
+					{
+						"ordinal": 4,
+						"role": "aliyah",
+						"label": "רביעי",
+						"start": {
+							"perek": 32,
+							"pasuk": 19
+						},
+						"end": {
+							"perek": 32,
+							"pasuk": 28
+						}
+					},
+					{
+						"ordinal": 5,
+						"role": "aliyah",
+						"label": "חמישי",
+						"start": {
+							"perek": 32,
+							"pasuk": 29
+						},
+						"end": {
+							"perek": 32,
+							"pasuk": 39
+						}
+					},
+					{
+						"ordinal": 6,
+						"role": "aliyah",
+						"label": "שישי",
+						"start": {
+							"perek": 32,
+							"pasuk": 40
+						},
+						"end": {
+							"perek": 32,
+							"pasuk": 43
+						}
+					},
+					{
+						"ordinal": 7,
+						"role": "aliyah",
+						"label": "שביעי",
+						"start": {
+							"perek": 32,
+							"pasuk": 44
+						},
+						"end": {
+							"perek": 32,
+							"pasuk": 52
+						}
+					},
+					{
+						"ordinal": 8,
+						"role": "maftir",
+						"label": "מפטיר",
+						"start": {
+							"perek": 32,
+							"pasuk": 48
+						},
+						"end": {
+							"perek": 32,
+							"pasuk": 52
+						}
+					}
+				],
+				"weekday": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 32,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 32,
+							"pasuk": 3
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 32,
+							"pasuk": 4
+						},
+						"end": {
+							"perek": 32,
+							"pasuk": 6
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 32,
+							"pasuk": 7
+						},
+						"end": {
+							"perek": 32,
+							"pasuk": 12
+						}
+					}
+				]
+			}
+		},
+		{
+			"id": "Vezot Haberakhah",
+			"units": [
+				"וזאת הברכה"
+			],
+			"sefer": "דברים",
+			"schemes": {
+				"shabbat": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 33,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 33,
+							"pasuk": 7
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 33,
+							"pasuk": 8
+						},
+						"end": {
+							"perek": 33,
+							"pasuk": 12
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 33,
+							"pasuk": 13
+						},
+						"end": {
+							"perek": 33,
+							"pasuk": 17
+						}
+					},
+					{
+						"ordinal": 4,
+						"role": "aliyah",
+						"label": "רביעי",
+						"start": {
+							"perek": 33,
+							"pasuk": 18
+						},
+						"end": {
+							"perek": 33,
+							"pasuk": 21
+						}
+					},
+					{
+						"ordinal": 5,
+						"role": "aliyah",
+						"label": "חמישי",
+						"start": {
+							"perek": 33,
+							"pasuk": 22
+						},
+						"end": {
+							"perek": 33,
+							"pasuk": 26
+						}
+					},
+					{
+						"ordinal": 6,
+						"role": "aliyah",
+						"label": "שישי",
+						"start": {
+							"perek": 33,
+							"pasuk": 27
+						},
+						"end": {
+							"perek": 33,
+							"pasuk": 29
+						}
+					},
+					{
+						"ordinal": 7,
+						"role": "aliyah",
+						"label": "שביעי",
+						"start": {
+							"perek": 34,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 34,
+							"pasuk": 12
+						}
+					}
+				],
+				"weekday": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 33,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 33,
+							"pasuk": 7
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 33,
+							"pasuk": 8
+						},
+						"end": {
+							"perek": 33,
+							"pasuk": 12
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 33,
+							"pasuk": 13
+						},
+						"end": {
+							"perek": 33,
+							"pasuk": 17
+						}
+					}
+				]
+			}
+		},
+		{
+			"id": "Vayakhel-Pekudei",
+			"units": [
+				"ויקהל",
+				"פקודי"
+			],
+			"sefer": "שמות",
+			"schemes": {
+				"shabbat": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 35,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 35,
+							"pasuk": 29
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 35,
+							"pasuk": 30
+						},
+						"end": {
+							"perek": 37,
+							"pasuk": 16
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 37,
+							"pasuk": 17
+						},
+						"end": {
+							"perek": 37,
+							"pasuk": 29
+						}
+					},
+					{
+						"ordinal": 4,
+						"role": "aliyah",
+						"label": "רביעי",
+						"start": {
+							"perek": 38,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 39,
+							"pasuk": 1
+						}
+					},
+					{
+						"ordinal": 5,
+						"role": "aliyah",
+						"label": "חמישי",
+						"start": {
+							"perek": 39,
+							"pasuk": 2
+						},
+						"end": {
+							"perek": 39,
+							"pasuk": 21
+						}
+					},
+					{
+						"ordinal": 6,
+						"role": "aliyah",
+						"label": "שישי",
+						"start": {
+							"perek": 39,
+							"pasuk": 22
+						},
+						"end": {
+							"perek": 39,
+							"pasuk": 43
+						}
+					},
+					{
+						"ordinal": 7,
+						"role": "aliyah",
+						"label": "שביעי",
+						"start": {
+							"perek": 40,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 40,
+							"pasuk": 38
+						}
+					},
+					{
+						"ordinal": 8,
+						"role": "maftir",
+						"label": "מפטיר",
+						"start": {
+							"perek": 40,
+							"pasuk": 34
+						},
+						"end": {
+							"perek": 40,
+							"pasuk": 38
+						}
+					}
+				]
+			}
+		},
+		{
+			"id": "Tazria-Metzora",
+			"units": [
+				"תזריע",
+				"מצורע"
+			],
+			"sefer": "ויקרא",
+			"schemes": {
+				"shabbat": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 12,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 13,
+							"pasuk": 23
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 13,
+							"pasuk": 24
+						},
+						"end": {
+							"perek": 13,
+							"pasuk": 39
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 13,
+							"pasuk": 40
+						},
+						"end": {
+							"perek": 13,
+							"pasuk": 54
+						}
+					},
+					{
+						"ordinal": 4,
+						"role": "aliyah",
+						"label": "רביעי",
+						"start": {
+							"perek": 13,
+							"pasuk": 55
+						},
+						"end": {
+							"perek": 14,
+							"pasuk": 20
+						}
+					},
+					{
+						"ordinal": 5,
+						"role": "aliyah",
+						"label": "חמישי",
+						"start": {
+							"perek": 14,
+							"pasuk": 21
+						},
+						"end": {
+							"perek": 14,
+							"pasuk": 32
+						}
+					},
+					{
+						"ordinal": 6,
+						"role": "aliyah",
+						"label": "שישי",
+						"start": {
+							"perek": 14,
+							"pasuk": 33
+						},
+						"end": {
+							"perek": 15,
+							"pasuk": 15
+						}
+					},
+					{
+						"ordinal": 7,
+						"role": "aliyah",
+						"label": "שביעי",
+						"start": {
+							"perek": 15,
+							"pasuk": 16
+						},
+						"end": {
+							"perek": 15,
+							"pasuk": 33
+						}
+					},
+					{
+						"ordinal": 8,
+						"role": "maftir",
+						"label": "מפטיר",
+						"start": {
+							"perek": 15,
+							"pasuk": 31
+						},
+						"end": {
+							"perek": 15,
+							"pasuk": 33
+						}
+					}
+				]
+			}
+		},
+		{
+			"id": "Achrei Mot-Kedoshim",
+			"units": [
+				"אחרי מות",
+				"קדושים"
+			],
+			"sefer": "ויקרא",
+			"schemes": {
+				"shabbat": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 16,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 16,
+							"pasuk": 24
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 16,
+							"pasuk": 25
+						},
+						"end": {
+							"perek": 17,
+							"pasuk": 7
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 17,
+							"pasuk": 8
+						},
+						"end": {
+							"perek": 18,
+							"pasuk": 21
+						}
+					},
+					{
+						"ordinal": 4,
+						"role": "aliyah",
+						"label": "רביעי",
+						"start": {
+							"perek": 18,
+							"pasuk": 22
+						},
+						"end": {
+							"perek": 19,
+							"pasuk": 14
+						}
+					},
+					{
+						"ordinal": 5,
+						"role": "aliyah",
+						"label": "חמישי",
+						"start": {
+							"perek": 19,
+							"pasuk": 15
+						},
+						"end": {
+							"perek": 19,
+							"pasuk": 32
+						}
+					},
+					{
+						"ordinal": 6,
+						"role": "aliyah",
+						"label": "שישי",
+						"start": {
+							"perek": 19,
+							"pasuk": 33
+						},
+						"end": {
+							"perek": 20,
+							"pasuk": 7
+						}
+					},
+					{
+						"ordinal": 7,
+						"role": "aliyah",
+						"label": "שביעי",
+						"start": {
+							"perek": 20,
+							"pasuk": 8
+						},
+						"end": {
+							"perek": 20,
+							"pasuk": 27
+						}
+					},
+					{
+						"ordinal": 8,
+						"role": "maftir",
+						"label": "מפטיר",
+						"start": {
+							"perek": 20,
+							"pasuk": 25
+						},
+						"end": {
+							"perek": 20,
+							"pasuk": 27
+						}
+					}
+				]
+			}
+		},
+		{
+			"id": "Behar-Bechukotai",
+			"units": [
+				"בהר",
+				"בחוקותי"
+			],
+			"sefer": "ויקרא",
+			"schemes": {
+				"shabbat": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 25,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 25,
+							"pasuk": 18
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 25,
+							"pasuk": 19
+						},
+						"end": {
+							"perek": 25,
+							"pasuk": 28
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 25,
+							"pasuk": 29
+						},
+						"end": {
+							"perek": 25,
+							"pasuk": 38
+						}
+					},
+					{
+						"ordinal": 4,
+						"role": "aliyah",
+						"label": "רביעי",
+						"start": {
+							"perek": 25,
+							"pasuk": 39
+						},
+						"end": {
+							"perek": 26,
+							"pasuk": 9
+						}
+					},
+					{
+						"ordinal": 5,
+						"role": "aliyah",
+						"label": "חמישי",
+						"start": {
+							"perek": 26,
+							"pasuk": 10
+						},
+						"end": {
+							"perek": 26,
+							"pasuk": 46
+						}
+					},
+					{
+						"ordinal": 6,
+						"role": "aliyah",
+						"label": "שישי",
+						"start": {
+							"perek": 27,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 27,
+							"pasuk": 15
+						}
+					},
+					{
+						"ordinal": 7,
+						"role": "aliyah",
+						"label": "שביעי",
+						"start": {
+							"perek": 27,
+							"pasuk": 16
+						},
+						"end": {
+							"perek": 27,
+							"pasuk": 34
+						}
+					},
+					{
+						"ordinal": 8,
+						"role": "maftir",
+						"label": "מפטיר",
+						"start": {
+							"perek": 27,
+							"pasuk": 32
+						},
+						"end": {
+							"perek": 27,
+							"pasuk": 34
+						}
+					}
+				]
+			}
+		},
+		{
+			"id": "Chukat-Balak",
+			"units": [
+				"חוקת",
+				"בלק"
+			],
+			"sefer": "במדבר",
+			"schemes": {
+				"shabbat": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 19,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 20,
+							"pasuk": 6
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 20,
+							"pasuk": 7
+						},
+						"end": {
+							"perek": 20,
+							"pasuk": 21
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 20,
+							"pasuk": 22
+						},
+						"end": {
+							"perek": 21,
+							"pasuk": 20
+						}
+					},
+					{
+						"ordinal": 4,
+						"role": "aliyah",
+						"label": "רביעי",
+						"start": {
+							"perek": 21,
+							"pasuk": 21
+						},
+						"end": {
+							"perek": 22,
+							"pasuk": 12
+						}
+					},
+					{
+						"ordinal": 5,
+						"role": "aliyah",
+						"label": "חמישי",
+						"start": {
+							"perek": 22,
+							"pasuk": 13
+						},
+						"end": {
+							"perek": 22,
+							"pasuk": 38
+						}
+					},
+					{
+						"ordinal": 6,
+						"role": "aliyah",
+						"label": "שישי",
+						"start": {
+							"perek": 22,
+							"pasuk": 39
+						},
+						"end": {
+							"perek": 23,
+							"pasuk": 26
+						}
+					},
+					{
+						"ordinal": 7,
+						"role": "aliyah",
+						"label": "שביעי",
+						"start": {
+							"perek": 23,
+							"pasuk": 27
+						},
+						"end": {
+							"perek": 25,
+							"pasuk": 9
+						}
+					},
+					{
+						"ordinal": 8,
+						"role": "maftir",
+						"label": "מפטיר",
+						"start": {
+							"perek": 25,
+							"pasuk": 7
+						},
+						"end": {
+							"perek": 25,
+							"pasuk": 9
+						}
+					}
+				]
+			},
+			"applicability": "חוץ לארץ ומנהג תימן הבלדי"
+		},
+		{
+			"id": "Matot-Masei",
+			"units": [
+				"מטות",
+				"מסעי"
+			],
+			"sefer": "במדבר",
+			"schemes": {
+				"shabbat": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 30,
+							"pasuk": 2
+						},
+						"end": {
+							"perek": 31,
+							"pasuk": 12
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 31,
+							"pasuk": 13
+						},
+						"end": {
+							"perek": 31,
+							"pasuk": 54
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 32,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 32,
+							"pasuk": 19
+						}
+					},
+					{
+						"ordinal": 4,
+						"role": "aliyah",
+						"label": "רביעי",
+						"start": {
+							"perek": 32,
+							"pasuk": 20
+						},
+						"end": {
+							"perek": 33,
+							"pasuk": 49
+						},
+						"alternatives": [
+							{
+								"start": {
+									"perek": 32,
+									"pasuk": 20
+								},
+								"end": {
+									"perek": 33,
+									"pasuk": 10
+								},
+								"source": "opentorah",
+								"custom": "אשכנז"
+							}
+						]
+					},
+					{
+						"ordinal": 5,
+						"role": "aliyah",
+						"label": "חמישי",
+						"start": {
+							"perek": 33,
+							"pasuk": 50
+						},
+						"end": {
+							"perek": 34,
+							"pasuk": 15
+						},
+						"alternatives": [
+							{
+								"start": {
+									"perek": 33,
+									"pasuk": 11
+								},
+								"end": {
+									"perek": 34,
+									"pasuk": 15
+								},
+								"source": "opentorah",
+								"custom": "אשכנז"
+							}
+						]
+					},
+					{
+						"ordinal": 6,
+						"role": "aliyah",
+						"label": "שישי",
+						"start": {
+							"perek": 34,
+							"pasuk": 16
+						},
+						"end": {
+							"perek": 35,
+							"pasuk": 8
+						}
+					},
+					{
+						"ordinal": 7,
+						"role": "aliyah",
+						"label": "שביעי",
+						"start": {
+							"perek": 35,
+							"pasuk": 9
+						},
+						"end": {
+							"perek": 36,
+							"pasuk": 13
+						}
+					},
+					{
+						"ordinal": 8,
+						"role": "maftir",
+						"label": "מפטיר",
+						"start": {
+							"perek": 36,
+							"pasuk": 11
+						},
+						"end": {
+							"perek": 36,
+							"pasuk": 13
+						}
+					}
+				]
+			},
+			"applicability": "למעט מנהג תימן הבלדי"
+		},
+		{
+			"id": "Nitzavim-Vayeilech",
+			"units": [
+				"נצבים",
+				"וילך"
+			],
+			"sefer": "דברים",
+			"schemes": {
+				"shabbat": [
+					{
+						"ordinal": 1,
+						"role": "aliyah",
+						"label": "ראשון",
+						"start": {
+							"perek": 29,
+							"pasuk": 9
+						},
+						"end": {
+							"perek": 29,
+							"pasuk": 28
+						}
+					},
+					{
+						"ordinal": 2,
+						"role": "aliyah",
+						"label": "שני",
+						"start": {
+							"perek": 30,
+							"pasuk": 1
+						},
+						"end": {
+							"perek": 30,
+							"pasuk": 6
+						}
+					},
+					{
+						"ordinal": 3,
+						"role": "aliyah",
+						"label": "שלישי",
+						"start": {
+							"perek": 30,
+							"pasuk": 7
+						},
+						"end": {
+							"perek": 30,
+							"pasuk": 14
+						}
+					},
+					{
+						"ordinal": 4,
+						"role": "aliyah",
+						"label": "רביעי",
+						"start": {
+							"perek": 30,
+							"pasuk": 15
+						},
+						"end": {
+							"perek": 31,
+							"pasuk": 6
+						}
+					},
+					{
+						"ordinal": 5,
+						"role": "aliyah",
+						"label": "חמישי",
+						"start": {
+							"perek": 31,
+							"pasuk": 7
+						},
+						"end": {
+							"perek": 31,
+							"pasuk": 13
+						}
+					},
+					{
+						"ordinal": 6,
+						"role": "aliyah",
+						"label": "שישי",
+						"start": {
+							"perek": 31,
+							"pasuk": 14
+						},
+						"end": {
+							"perek": 31,
+							"pasuk": 19
+						}
+					},
+					{
+						"ordinal": 7,
+						"role": "aliyah",
+						"label": "שביעי",
+						"start": {
+							"perek": 31,
+							"pasuk": 20
+						},
+						"end": {
+							"perek": 31,
+							"pasuk": 30
+						}
+					},
+					{
+						"ordinal": 8,
+						"role": "maftir",
+						"label": "מפטיר",
+						"start": {
+							"perek": 31,
+							"pasuk": 28
+						},
+						"end": {
+							"perek": 31,
+							"pasuk": 30
+						}
+					}
+				]
+			}
+		}
+	]
+}

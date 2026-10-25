@@ -45,3 +45,11 @@ Do not increase timeouts, retries, sleeps, polling budgets, or hang-watchdog lim
 # Visual Change Evidence
 
 When a change affects user-visible UI, show before/after evidence in the pull request description and when reporting the result to the user: screenshots, screen recordings, or captured device/emulator frames. Prefer real captures from the app's own e2e artifacts over mockups.
+
+# AWS Change Approval
+
+Never merge an AWS-related pull request without Dorad's explicit approval of that specific pull request and its current AWS-impacting changes. This includes infrastructure/IaC, IAM and networking, DNS/CDN/cache behavior, S3 access and public asset URLs, deployment workflows, production resource settings, and cost optimizations.
+
+An investigation/optimization request, approval of another change, green CI, a bot recommendation, or auto-merge is not merge approval. Prepare, validate and push the change, present its production and backward-compatibility impact with rollback, and wait for explicit approval. Do not enable auto-merge or bypass this requirement. Material AWS-impacting changes after approval require renewed approval.
+
+Production stability and backward compatibility of existing public and crawled URLs take priority over cost savings. Apply live AWS changes only within the user's explicit authorization, after verifying the target account, current state, validation and rollback.

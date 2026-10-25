@@ -1,6 +1,6 @@
 {
 	"name": "bible-on-site",
-	"version": "0.2.543",
+	"version": "0.2.549",
 	"private": true,
 	"license": "MIT",
 	"browserslist": [
@@ -68,7 +68,7 @@
 		"mpg123-decoder": "1.0.3",
 		"monocart-coverage-reports": "3.0.0",
 		"mysql2": "3.24.6",
-		"next": "16.4.2",
+		"next": "16.4.3",
 		"pdf-lib": "1.17.1",
 		"react": "19.3.1",
 		"react-dom": "19.3.1",
@@ -79,7 +79,7 @@
 		"ogg-opus-decoder": "1.7.5"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "2.6.2",
+		"@biomejs/biome": "2.6.3",
 		"@playwright/test": "1.64.1",
 		"@swc/core": "1.16.20",
 		"@swc/jest": "0.2.39",
