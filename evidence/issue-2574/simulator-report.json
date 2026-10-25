@@ -1,0 +1,125 @@
+{
+  "default": {
+    "booksPixels": 2846,
+    "viewport": [
+      3,
+      1269,
+      1077,
+      2055
+    ],
+    "PerushimEmptyIcon": [
+      51,
+      1504,
+      1029,
+      1635
+    ],
+    "GoToPerushimSettingsButton": [
+      51,
+      1760,
+      1029,
+      1897
+    ],
+    "ExportPerushimLogsButton": [
+      51,
+      1921,
+      1029,
+      2055
+    ]
+  },
+  "drag-1": {
+    "booksPixels": 2846
+  },
+  "drag-2": {
+    "booksPixels": 2846
+  },
+  "drag-3": {
+    "booksPixels": 2846
+  },
+  "expanded": {
+    "booksPixels": 2846,
+    "viewport": [
+      3,
+      163,
+      1077,
+      2055
+    ],
+    "PerushimEmptyIcon": [
+      51,
+      398,
+      1029,
+      529
+    ],
+    "GoToPerushimSettingsButton": [
+      51,
+      654,
+      1029,
+      791
+    ],
+    "ExportPerushimLogsButton": [
+      51,
+      815,
+      1029,
+      952
+    ]
+  },
+  "export-chooser": {
+    "booksPixels": 3549
+  },
+  "download-settings": {
+    "booksPixels": 0
+  },
+  "returned": {
+    "booksPixels": 2846,
+    "viewport": [
+      3,
+      163,
+      1077,
+      2055
+    ],
+    "PerushimEmptyIcon": [
+      51,
+      398,
+      1029,
+      529
+    ],
+    "GoToPerushimSettingsButton": [
+      51,
+      654,
+      1029,
+      791
+    ],
+    "ExportPerushimLogsButton": [
+      51,
+      815,
+      1029,
+      952
+    ]
+  },
+  "collapsed": {
+    "booksPixels": 2846,
+    "viewport": [
+      3,
+      1269,
+      1077,
+      2055
+    ],
+    "PerushimEmptyIcon": [
+      51,
+      1504,
+      1029,
+      1635
+    ],
+    "GoToPerushimSettingsButton": [
+      51,
+      1760,
+      1029,
+      1897
+    ],
+    "ExportPerushimLogsButton": [
+      51,
+      1921,
+      1029,
+      2055
+    ]
+  }
+}

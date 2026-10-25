@@ -439,6 +439,7 @@ jobs:
       bulletin_ci_changed: ${{ steps.determine.outputs.bulletin_ci_changed }}
       data_module_changed: ${{ steps.determine.outputs.data_module_changed }}
       data_ci_changed: ${{ steps.determine.outputs.data_ci_changed }}
+      data_schema_only_changed: ${{ steps.determine.outputs.data_schema_only_changed }}
       perushim_pipeline_module_changed: ${{ steps.determine.outputs.perushim_pipeline_module_changed }}
       perushim_pipeline_ci_changed: ${{ steps.determine.outputs.perushim_pipeline_ci_changed }}
     steps:
@@ -3574,7 +3575,9 @@ jobs:
     # Note: Using always() as a workaround for reusable workflow result evaluation issues (see #1065)
     # Perushim generation is intentionally skipped for Tanahpedia/schema-only changes;
     # Data CD falls back to the always-present master artifact in that case.
-    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.data_ci.result == 'success' && (needs.perushim_data.result == 'success' || needs.perushim_data.result == 'skipped') && (needs.determine_changes.outputs.data_module_changed == 'true' || needs.determine_changes.outputs.data_ci_changed == 'true') && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    # Schema-only changes require a separately approved, selective migration.
+    # Skip this entire job: success would supersede older queued data deployments.
+    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.data_ci.result == 'success' && (needs.perushim_data.result == 'success' || needs.perushim_data.result == 'skipped') && (needs.determine_changes.outputs.data_module_changed == 'true' || needs.determine_changes.outputs.data_ci_changed == 'true') && needs.determine_changes.outputs.data_schema_only_changed == 'false' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: read
       actions: read

@@ -1,4 +1,5 @@
 import handler, { createServerEntry } from "@tanstack/react-start/server-entry";
+import { SESSION_EXPIRED_PREFIX } from "./lib/server-fn-errors";
 import {
 	buildClearSessionCookie,
 	buildSessionCookie,
@@ -90,6 +91,14 @@ export default createServerEntry({
 		const sessionToken = parseCookie(cookieHeader, "admin_session");
 
 		if (!sessionToken || !(await verifyIdToken(sessionToken))) {
+			// Server-fn calls cannot follow the Cognito redirect (cross-origin
+			// fetch rejects); a plain 401 gives them a throwable response.
+			if (request.headers.get("x-tsr-serverFn") === "true") {
+				return new Response(
+					`${SESSION_EXPIRED_PREFIX}: admin session expired`,
+					{ status: 401 },
+				);
+			}
 			return Response.redirect(getLoginUrl(origin), 302);
 		}
 

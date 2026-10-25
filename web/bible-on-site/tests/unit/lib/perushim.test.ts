@@ -315,27 +315,32 @@ describe("perushim service", () => {
 			);
 		});
 
-		it("returns empty array on Error instance", async () => {
-			mockQuery.mockRejectedValue(new Error("DB error"));
+		it("returns an empty array when the successful query has no pairs", async () => {
+			mockQuery.mockResolvedValue([]);
 
-			const result = await getAllPerushPerekNamePairs();
+			await expect(getAllPerushPerekNamePairs()).resolves.toEqual([]);
+			expect(console.warn).not.toHaveBeenCalled();
+		});
 
-			expect(result).toEqual([]);
+		it("propagates the original Error so a build cannot silently omit commentaries", async () => {
+			const failure = new Error("DB error");
+			mockQuery.mockRejectedValue(failure);
+
+			await expect(getAllPerushPerekNamePairs()).rejects.toBe(failure);
 			expect(console.warn).toHaveBeenCalledWith(
 				"Failed to fetch perush-perek name pairs:",
 				"DB error",
 			);
 		});
 
-		it("returns empty array on non-Error rejection", async () => {
-			mockQuery.mockRejectedValue("raw error");
+		it("propagates the original non-Error rejection", async () => {
+			const failure = { code: "ECONN" };
+			mockQuery.mockRejectedValue(failure);
 
-			const result = await getAllPerushPerekNamePairs();
-
-			expect(result).toEqual([]);
+			await expect(getAllPerushPerekNamePairs()).rejects.toBe(failure);
 			expect(console.warn).toHaveBeenCalledWith(
 				"Failed to fetch perush-perek name pairs:",
-				"raw error",
+				failure,
 			);
 		});
 	});
