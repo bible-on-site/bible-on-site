@@ -70,15 +70,24 @@ describe("nextReleaseVersion", () => {
 });
 
 describe("rewritePackageVersions", () => {
-	it("updates the package version and the lockfile root versions", () => {
+	it("bumps the manifest version and leaves the bun lockfile untouched", () => {
 		const packageText = '{"name":"package","version":"0.1.25"}';
 		const lockText =
-			'{"name":"package","version":"0.1.25","packages":{"":{"version":"0.1.25"},"node_modules/other":{"version":"0.1.25"}}}';
+			'{\n  "lockfileVersion": 3,\n  "configVersion": 1,\n  "workspaces": {}\n}\n';
 		const updated = rewritePackageVersions(packageText, lockText, "0.1.26");
 		assert.equal(updated.packageText, '{"name":"package","version":"0.1.26"}');
-		assert.equal(
-			updated.lockText,
-			'{"name":"package","version":"0.1.26","packages":{"":{"version":"0.1.26"},"node_modules/other":{"version":"0.1.25"}}}',
+		assert.equal(updated.lockText, lockText);
+	});
+
+	it("rejects an npm-format lockfile", () => {
+		assert.throws(
+			() =>
+				rewritePackageVersions(
+					'{"name":"package","version":"0.1.25"}',
+					'{"name":"package","version":"0.1.25","packages":{"":{"version":"0.1.25"}}}',
+					"0.1.26",
+				),
+			/Expected bun\.lock content/,
 		);
 	});
 });

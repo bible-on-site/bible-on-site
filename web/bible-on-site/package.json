@@ -12,27 +12,27 @@
 		"not dead"
 	],
 	"scripts": {
-		"update": "npx npm-check-updates --peer --deep -u && npm install && npm install && npm run update:playwright",
-		"update:playwright": "npx playwright install",
+		"update": "bun x npm-check-updates --peer --deep -u && bun install && bun install && bun run update:playwright",
+		"update:playwright": "bun x playwright install",
 		"predev": "node scripts/kill-port.mjs 3001 && node scripts/ensure-docker-desktop.mjs && node --import tsx ../../devops/ensure-dev-db.mts --sync-from-prod --tables tanah_sefer,tanahpedia_entry && docker compose -f ../../devops/docker-compose.yml up -d --wait rustfs && docker compose -f ../../devops/docker-compose.yml run --build --rm rustfs-init && node scripts/predev-deps.mjs",
 		"dev": "dotenv -e .dev.env -- next dev -p 3001",
 		"dev-webpack": "dotenv -e .dev.env -- next dev --webpack -p 3001",
 		"prebuild": "node scripts/generate-client-catalog.mjs && node --test scripts/verify-public-content.test.mjs",
 		"build": "next build",
 		"postinstall": "node scripts/generate-client-catalog.mjs && node scripts/copy-local-flip-book.mjs",
-		"flip-book:local": "node scripts/toggle-flip-book-dep.mjs local && npm install",
-		"flip-book:npm": "node scripts/toggle-flip-book-dep.mjs npm && npm install",
+		"flip-book:local": "node scripts/toggle-flip-book-dep.mjs local && bun install",
+		"flip-book:npm": "node scripts/toggle-flip-book-dep.mjs npm && bun install",
 		"flip-book:check": "node scripts/toggle-flip-book-dep.mjs check",
 		"postbuild": "node scripts/copy-standalone-assets.mjs",
 		"start": "cross-env PORT=3001 HOSTNAME=127.0.0.1 node .next/standalone/server.js",
 		"lint": "biome lint",
-		"test:all": "npm run test:unit && npm run test:e2e && npm run test:perf",
+		"test:all": "bun run test:unit && bun run test:e2e && bun run test:perf",
 		"pretest:unit": "node scripts/generate-client-catalog.mjs",
 		"test:unit": "node --no-deprecation --trace-deprecation --import tsx ./node_modules/jest/bin/jest.js",
 		"test:e2e": "dotenv -e .test.env -- playwright test --config=playwright.e2e.config.ts --project=Desktop",
 		"test:e2e:all": "dotenv -e .test.env -- playwright test --config=playwright.e2e.config.ts",
-		"test:perf": "echo 'NOTE: Perf tests require npm run build first (uses production server)' && dotenv -e .test.env -- playwright test --config=playwright.perf.config.ts",
-		"coverage:all": "npm run coverage:unit && npm run coverage:e2e && npm run coverage:merge",
+		"test:perf": "echo 'NOTE: Perf tests require bun run build first (uses production server)' && dotenv -e .test.env -- playwright test --config=playwright.perf.config.ts",
+		"coverage:all": "bun run coverage:unit && bun run coverage:e2e && bun run coverage:merge",
 		"precoverage:unit": "node scripts/generate-client-catalog.mjs",
 		"coverage:unit": "cross-env MEASURE_COV=1 node --no-deprecation --import tsx ./node_modules/jest/bin/jest.js",
 		"coverage:gaps": "node scripts/coverage-gaps.mjs",
@@ -46,15 +46,6 @@
 	},
 	"engines": {
 		"node": ">=26.10.0 <27"
-	},
-	"overrides": {
-		"brace-expansion": "5.0.12",
-		"deepmerge-ts": "8.0.2",
-		"postcss": "8.5.31",
-		"sharp": "0.35.5",
-		"@istanbuljs/load-nyc-config": {
-			"js-yaml": "^5.4.3"
-		}
 	},
 	"dependencies": {
 		"@aws-sdk/client-lambda": "3.1156.0",
@@ -116,10 +107,20 @@
 		"@napi-rs/wasm-runtime": "1.2.6",
 		"@tybys/wasm-util": "0.10.4"
 	},
-	"allowScripts": {
-		"@parcel/watcher@2.6.0": true,
-		"unrs-resolver@1.12.2": true,
-		"@swc/core@1.16.20": true,
-		"esbuild@0.28.2": true
-	}
+	"packageManager": "bun@1.4.4",
+	"overrides": {
+		"brace-expansion": "5.0.12",
+		"deepmerge-ts": "8.0.2",
+		"postcss": "8.5.31",
+		"sharp": "0.35.5",
+		"@istanbuljs/load-nyc-config": {
+			"js-yaml": "^5.4.3"
+		}
+	},
+	"trustedDependencies": [
+		"@parcel/watcher",
+		"@swc/core",
+		"esbuild",
+		"unrs-resolver"
+	]
 }

@@ -66,7 +66,7 @@ individual reader books under `public/generated/sefarim/`, named by their conten
 hash. Installation, builds and unit tests regenerate both outputs from the same
 canonical source; generated files are ignored. Do not edit them or maintain a
 second content source. After an intentional source change during development,
-rerun the generator or restart `npm run dev`.
+rerun the generator or restart `bun run dev`.
 
 `LoadedSefer` fetches the selected book when the reader opens, with visible loading
 and retry feedback. Uninitialized reader pages stay unpainted until FlipBook

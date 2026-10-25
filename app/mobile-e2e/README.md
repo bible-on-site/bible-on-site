@@ -63,7 +63,7 @@ each shard is its own matrix job, so ports, devices and artifact roots are
 isolated by the runner itself rather than by env offsets.
 Before iOS tests, Appium downloads the official simulator WebDriverAgent matching
 the locked driver dependency and launches it directly. This keeps cold Xcode
-compilation outside session startup; `npm test` also prepares the agent locally.
+compilation outside session startup; `bun run test` also prepares the agent locally.
 See the [Appium prebuilt-agent guide](https://appium.github.io/appium-xcuitest-driver/latest/guides/run-prebuilt-wda/).
 
 The pilot covers packaged scripture and bottom navigation, adjacent perek
@@ -90,10 +90,10 @@ The Appium legs build Debug, which defines `DISABLE_ANALYTICS` — so the suite
 can never execute the `MainActivity.OnCreate` analytics initialization whose
 missing `FirebaseAnalyticsImplementation.Initialize` crashed every #2247
 store launch while all tests stayed green. The `android_release_smoke` leg
-closes that gap: `npm run build:release-smoke` builds the **Release** pipeline
+closes that gap: `bun run build:release-smoke` builds the **Release** pipeline
 (profiled AOT, R8, embedded assemblies, merged manifest, analytics branch
 compiled in) as an x86_64 APK — the ABI the CI emulator can run — and
-`npm run release-smoke` installs and launches it on the same cached AVD.
+`bun run release-smoke` installs and launches it on the same cached AVD.
 
 Each launch must reach a genuinely usable reader (the same `PerekSource`
 readiness the Appium `WaitForStartup` uses), keep the process and foreground
@@ -118,8 +118,8 @@ coverage remains open in #2371.
 Run it locally against a booted emulator with `MOBILE_UDID=emulator-5554`:
 
 ```bash
-npm run build:release-smoke --prefix app/mobile-e2e
-MOBILE_RELEASE_APK=<staged-apk> npm run release-smoke --prefix app/mobile-e2e
+bun run --cwd app/mobile-e2e build:release-smoke
+MOBILE_RELEASE_APK=<staged-apk> bun run --cwd app/mobile-e2e release-smoke
 ```
 
 ## Adding scenarios and platform differences
@@ -250,23 +250,23 @@ change.
 ## Running locally
 
 Install the platform's .NET MAUI workload, Android SDK/JDK or compatible Xcode,
-then run `npm ci` in this directory. Set `MOBILE_PLATFORM` to `Android` or `iOS`
-and run `npm run build:app`. The build embeds assemblies in the Android x64
+then run `bun install --frozen-lockfile` in this directory. Set `MOBILE_PLATFORM` to `Android` or `iOS`
+and run `bun run build:app`. The build embeds assemblies in the Android x64
 APK and completes the iOS arm64 simulator `.app` build.
 
-Set `MOBILE_UDID` to a running device's identifier, then run `npm test` here.
-On macOS, `npm run ios:boot` selects an available iPhone runtime no newer than
+Set `MOBILE_UDID` to a running device's identifier, then run `bun run test` here.
+On macOS, `bun run ios:boot` selects an available iPhone runtime no newer than
 the selected Xcode SDK, boots it, and prints the identifier and `MOBILE_OS_VERSION`.
 Set both for local iOS runs; CI exports them automatically. In CI,
 `ios:boot:start` kicks the asynchronous boot right after Xcode selection —
-it touches no `node_modules`, so it can run before `npm ci` — and
+it touches no `node_modules`, so it can run before `bun install --frozen-lockfile` — and
 `ios:boot:wait` then runs as a `background: true` step once dependencies are
 installed, overlapping the readiness monitor and Appium bridge preflight with
 the MAUI workload install and the app build. A `wait` step before the tests is
 the gate that surfaces the finished boot and the exported variables. The
 coverage-tree baseline download and test selection also run as one background
 step — the baseline REST fetch sees 1s–2m20s transfer variance, so it never
-stalls `npm ci`, the boot or the build; each pilot waits on the manifest
+stalls `bun install --frozen-lockfile`, the boot or the build; each pilot waits on the manifest
 through `wait`/`wait-all`.
 `MOBILE_APP_PATH` can select another compatible build. Each local
 run owns an Appium server on `127.0.0.1:4723` (override with
@@ -282,7 +282,7 @@ Android system Back and the iOS edge-back gesture restore the original query,
 filters, results, and list position. Verse results remain usable while the first
 commentary index continues preparing.
 
-`npm run test:unit` checks simulator selection and the locked driver module's
+`bun run test:unit` checks simulator selection and the locked driver module's
 ESM loading without a device.
 From `app/`, `dotnet run --project devops -- TestMobileE2EUnit` checks platform
 configuration and device capabilities without a device or mobile workload.

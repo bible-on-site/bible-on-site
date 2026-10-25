@@ -2,10 +2,10 @@
  * Launch every local dev server (website, API, admin) from one place.
  *
  * Usage:
- *   npm run dev --prefix devops                  # everything that is down
- *   npm run dev --prefix devops -- --only api    # a subset
- *   npm run dev --prefix devops -- --skip admin  # everything but one
- *   npm run dev --prefix devops -- --restart     # restart even if already up
+ *   bun run --cwd devops dev                  # everything that is down
+ *   bun run --cwd devops dev -- --only api    # a subset
+ *   bun run --cwd devops dev -- --skip admin  # everything but one
+ *   bun run --cwd devops dev -- --restart     # restart even if already up
  *
  * Modules already listening are left alone, so this is safe to re-run.
  */
@@ -40,7 +40,7 @@ const MODULES: readonly DevModule[] = [
 	{
 		name: "website",
 		dir: "web/bible-on-site",
-		command: "npm run dev",
+		command: "bun run dev",
 		port: 3001,
 		color: "\x1b[36m",
 		readyTimeoutMs: 300_000,
@@ -56,7 +56,7 @@ const MODULES: readonly DevModule[] = [
 	{
 		name: "admin",
 		dir: "web/admin",
-		command: "npm run dev",
+		command: "bun run dev",
 		port: 3101,
 		color: "\x1b[33m",
 		readyTimeoutMs: 300_000,

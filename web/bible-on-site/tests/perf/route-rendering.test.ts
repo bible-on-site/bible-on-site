@@ -32,7 +32,7 @@ interface PrerenderManifest {
 function loadPrerenderManifest(): PrerenderManifest {
 	expect(
 		existsSync(PRERENDER_MANIFEST_PATH),
-		`prerender-manifest.json should exist at ${PRERENDER_MANIFEST_PATH}. Run 'npm run build' first.`,
+		`prerender-manifest.json should exist at ${PRERENDER_MANIFEST_PATH}. Run 'bun run build' first.`,
 	).toBe(true);
 
 	return JSON.parse(readFileSync(PRERENDER_MANIFEST_PATH, "utf8"));
