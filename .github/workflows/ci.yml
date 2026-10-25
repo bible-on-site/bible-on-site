@@ -69,7 +69,7 @@ env:
   API_E2E_JUNIT_REPORT_ARTIFACT_NAME: api-e2e-junit-report-${{ github.run_id }}
   API_MERGED_COVERAGE_DIRECTORY: web/api/.coverage/merged
   API_TESTS_DIRECTORY: web/api/tests
-  API_TESTS_NODE_CACHE_PATH: web/api/tests/package-lock.json
+  API_TESTS_NODE_CACHE_PATH: web/api/tests/pnpm-lock.yaml
   API_TESTS_NODE_VERSION_FILE: web/api/tests/package.json
   API_UNIT_JUNIT_REPORT_ARTIFACT_NAME: api-unit-junit-report-${{ github.run_id }}
   # Deterministic e2e-impact coverage-tree baselines (#2085): published only
@@ -100,7 +100,7 @@ env:
   DATA_DIRECTORY: data
   DATA_MERGED_COVERAGE_DIRECTORY: data/.coverage/merged
   DEVOPS_DIRECTORY: devops
-  DEVOPS_NODE_CACHE_PATH: devops/package-lock.json
+  DEVOPS_NODE_CACHE_PATH: devops/pnpm-lock.yaml
   DEVOPS_NODE_VERSION_FILE: devops/package.json
   # e2e-impact (#2085): the dispatch input or the E2E_SELECTION_MODE repo
   # variable opt the Playwright suites into running the selected subset;
@@ -116,7 +116,7 @@ env:
   WEBSITE_E2E_JUNIT_REPORT_ARTIFACT_NAME: website-e2e-junit-report-${{ github.run_id }}
   WEBSITE_MERGED_COVERAGE_DIRECTORY: web/bible-on-site/.coverage/merged
   WEBSITE_MERGED_COVERAGE_REPORT: web/bible-on-site/.coverage/merged/lcov.info
-  WEBSITE_NODE_CACHE_PATH: web/bible-on-site/package-lock.json
+  WEBSITE_NODE_CACHE_PATH: web/bible-on-site/pnpm-lock.yaml
   WEBSITE_NODE_VERSION_FILE: web/bible-on-site/package.json
   WEBSITE_PERF_JUNIT_REPORT_ARTIFACT_NAME: website-perf-junit-report-${{ github.run_id }}
   WEBSITE_UNIT_JUNIT_REPORT_ARTIFACT_NAME: website-unit-junit-report-${{ github.run_id }}
@@ -125,7 +125,7 @@ env:
   ADMIN_DIRECTORY: web/admin
   ADMIN_DOCKER_ARTIFACT_NAME: bible-on-site-admin-docker-${{ github.run_id }}
   ADMIN_DOCKER_IMAGE_NAME: bible-on-site-admin
-  ADMIN_NODE_CACHE_PATH: web/admin/package-lock.json
+  ADMIN_NODE_CACHE_PATH: web/admin/pnpm-lock.yaml
   ADMIN_NODE_VERSION_FILE: web/admin/package.json
   ADMIN_UNIT_JUNIT_REPORT_ARTIFACT_NAME: admin-unit-junit-report-${{ github.run_id }}
   ADMIN_E2E_JUNIT_REPORT_ARTIFACT_NAME: admin-e2e-junit-report-${{ github.run_id }}
@@ -784,17 +784,20 @@ jobs:
           python ../../data/recitation/publish.py
           python ../../data/recitation/audit.py
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
       - name: Setup Node.js
         id: setup-node
         uses: actions/setup-node@v7
         with:
           node-version-file: ${{ env.WEBSITE_NODE_VERSION_FILE }}
 
-      - name: Restore npm cache
+      - name: Restore pnpm store cache
         id: npm-cache
         uses: actions/cache/restore@v6
         with:
-          path: ~/.npm
+          path: ~/.local/share/pnpm/store
           key: ${{ runner.os }}-npm-website-${{ hashFiles(env.WEBSITE_NODE_CACHE_PATH) }}
           restore-keys: ${{ runner.os }}-npm-website-
 
@@ -806,19 +809,19 @@ jobs:
             ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-${{ needs.setup_env.outputs.website_playwright_version }}
 
-      - name: Install npm Dependencies
+      - name: Install dependencies
         id: npm_ci
         run: |
-          npm ci --no-audit
+          pnpm install --frozen-lockfile
 
-      # npm ci is done here, so ~/.npm is frozen — the tar+upload can run in
+      # pnpm install --frozen-lockfile is done here, so ~/.local/share/pnpm/store is frozen — the tar+upload can run in
       # the background; the implicit wait-all before job cleanup completes it.
-      - name: Save npm cache
+      - name: Save pnpm store cache
         if: ${{ github.ref == 'refs/heads/master' && steps.npm-cache.outputs.cache-hit != 'true' }}
         background: true
         uses: actions/cache/save@v6
         with:
-          path: ~/.npm
+          path: ~/.local/share/pnpm/store
           key: ${{ steps.npm-cache.outputs.cache-primary-key }}
 
       # The browser install only needs node_modules; it runs in the background
@@ -829,9 +832,9 @@ jobs:
         background: true
         run: |
           if [ "${{ steps.playwright-cache.outputs.cache-hit }}" = "true" ]; then
-            npx playwright install-deps chromium
+            pnpm exec playwright install-deps chromium
           else
-            npx playwright install --with-deps chromium
+            pnpm exec playwright install --with-deps chromium
           fi
 
       - name: Restore Next.js build cache
@@ -839,10 +842,10 @@ jobs:
         uses: actions/cache/restore@v6
         with:
           path: ${{ env.WEBSITE_DIRECTORY }}/.next/cache
-          key: ${{ runner.os }}-nextjs-${{ hashFiles(format('{0}/package-lock.json', env.WEBSITE_DIRECTORY)) }}-${{ hashFiles(format('{0}/**/*.js', env.WEBSITE_DIRECTORY), format('{0}/**/*.jsx', env.WEBSITE_DIRECTORY), format('{0}/**/*.ts', env.WEBSITE_DIRECTORY), format('{0}/**/*.tsx', env.WEBSITE_DIRECTORY)) }}
+          key: ${{ runner.os }}-nextjs-${{ hashFiles(format('{0}/pnpm-lock.yaml', env.WEBSITE_DIRECTORY)) }}-${{ hashFiles(format('{0}/**/*.js', env.WEBSITE_DIRECTORY), format('{0}/**/*.jsx', env.WEBSITE_DIRECTORY), format('{0}/**/*.ts', env.WEBSITE_DIRECTORY), format('{0}/**/*.tsx', env.WEBSITE_DIRECTORY)) }}
           # If source files changed but packages didn't, rebuild from a prior cache.
           restore-keys: |
-            ${{ runner.os }}-nextjs-${{ hashFiles(format('{0}/package-lock.json', env.WEBSITE_DIRECTORY)) }}-
+            ${{ runner.os }}-nextjs-${{ hashFiles(format('{0}/pnpm-lock.yaml', env.WEBSITE_DIRECTORY)) }}-
 
       # ============ MySQL + Perushim Setup for SSG ============
       # Populate MySQL with perushim data so `next build` can statically
@@ -896,7 +899,7 @@ jobs:
         id: npm-build
         env:
           DB_URL: ${{ (needs.perushim_data.result == 'success' || needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true') && 'mysql://root:test_123@127.0.0.1:3306/tanah_test' || '' }}
-        run: npm run build
+        run: pnpm run build
 
       - name: Save Next.js build cache
         if: ${{ github.ref == 'refs/heads/master' && steps.nextjs-cache.outputs.cache-hit != 'true' }}
@@ -924,7 +927,7 @@ jobs:
 
       - name: Perf Test
         id: npm-perf-test
-        run: npm run test:perf
+        run: pnpm run test:perf
 
       - name: Install Bencher CLI
         uses: bencherdev/bencher@main
@@ -1014,17 +1017,20 @@ jobs:
           python ../../data/recitation/publish.py
           python ../../data/recitation/audit.py
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
       - name: Setup Node.js
         id: setup-node
         uses: actions/setup-node@v7
         with:
           node-version-file: ${{ env.WEBSITE_NODE_VERSION_FILE }}
 
-      - name: Restore npm cache
+      - name: Restore pnpm store cache
         id: npm-cache
         uses: actions/cache/restore@v6
         with:
-          path: ~/.npm
+          path: ~/.local/share/pnpm/store
           key: ${{ runner.os }}-npm-website-${{ hashFiles(env.WEBSITE_NODE_CACHE_PATH) }}
           restore-keys: ${{ runner.os }}-npm-website-
 
@@ -1036,34 +1042,36 @@ jobs:
             ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-${{ needs.setup_env.outputs.website_playwright_version }}
 
-      - name: Install npm Dependencies
+      - name: Install dependencies
         id: npm_ci
         run: |
-          node --version && npm --version
-          npm ci --no-audit
+          node --version && pnpm --version
+          pnpm install --frozen-lockfile
           # Unit tests verify the shipped native decoder through its app-owned
           # generator (scripts/check-opus-decoder.mjs), which resolves esbuild
           # and the decoder packages from this manifest (#2391).
-          npm ci --no-audit --prefix ../../app/devops/recitation-decoder
+          pnpm -C ../../app/devops/recitation-decoder install --frozen-lockfile
 
-      # npm ci is done here, so ~/.npm is frozen — the tar+upload can run in
+      # pnpm install --frozen-lockfile is done here, so ~/.local/share/pnpm/store is frozen — the tar+upload can run in
       # the background; the implicit wait-all before job cleanup completes it.
-      - name: Save npm cache
+      - name: Save pnpm store cache
         if: ${{ github.ref == 'refs/heads/master' && steps.npm-cache.outputs.cache-hit != 'true' }}
         background: true
         uses: actions/cache/save@v6
         with:
-          path: ~/.npm
+          path: ~/.local/share/pnpm/store
           key: ${{ steps.npm-cache.outputs.cache-primary-key }}
 
       - name: Verify Lockfile Sync With Packaging npm
         id: npm_lockfile_packaging_check
-        # The Package Website Docker build runs `npm ci` inside node:26.10.0-alpine,
-        # whose bundled npm is newer/stricter than the engines-pinned npm used
-        # above. A lockfile desync the pinned npm tolerates would otherwise only
+        # The Package Website Docker build runs `pnpm install --frozen-lockfile` inside node:26.12.1-alpine,
+        # whose corepack-pinned pnpm differs from the runner's. A lockfile desync
+        # the runner pnpm tolerates would otherwise only
         # explode after merge (the packaging jobs are master-only), so validate
         # here with the exact same image on every run.
-        run: docker run --rm -v "$PWD":/app -w /app node:26.10.0-alpine npm ci --dry-run --ignore-scripts --no-audit --no-fund
+        # Mount read-only and copy inside so the install writes nothing to the
+        # checkout; corepack activates the pinned pnpm from packageManager.
+        run: docker run --rm -v "$PWD":/src:ro node:26.12.1-alpine sh -c "mkdir /app && cp /src/package.json /src/pnpm-lock.yaml /src/pnpm-workspace.yaml /app/ && cd /app && corepack enable pnpm && pnpm install --frozen-lockfile --ignore-scripts"
 
       # The browser install only needs node_modules; it runs in the background
       # across lint/unit/MySQL/Rust and is gated before E2E. On a binary-cache
@@ -1073,9 +1081,9 @@ jobs:
         background: true
         run: |
           if [ "${{ steps.playwright-cache.outputs.cache-hit }}" = "true" ]; then
-            npx playwright install-deps chromium
+            pnpm exec playwright install-deps chromium
           else
-            npx playwright install --with-deps chromium
+            pnpm exec playwright install --with-deps chromium
           fi
 
       - name: Setup Rust
@@ -1109,11 +1117,11 @@ jobs:
 
       - name: Lint
         id: npm-lint
-        run: npm run lint
+        run: pnpm run lint
 
       - name: Unit Test
         id: npm-unit-test
-        run: npm run coverage:unit
+        run: pnpm run coverage:unit
 
       - name: Store Website Unit JUnit Report
         uses: actions/upload-artifact@v7
@@ -1214,7 +1222,7 @@ jobs:
           DISCOVERED_ARGS=()
           DYNAMIC=$(node -e "console.log(JSON.parse(require('node:fs').readFileSync('$GITHUB_WORKSPACE/web/bible-on-site/.coverage/e2e-impact/selection-manifest.json','utf8')).dynamicTestFiles.length)")
           if [ "$DYNAMIC" != "0" ]; then
-            (cd web/bible-on-site && npm run coverage:e2e -- --list)
+            (cd web/bible-on-site && pnpm run coverage:e2e -- --list)
             DISCOVERED_ARGS=(--discovered "$GITHUB_WORKSPACE/web/bible-on-site/.coverage/e2e-impact/discovered.json")
           fi
           node devops/github/ci/e2e-impact/e2e-impact.ts playwright-args \
@@ -1233,12 +1241,12 @@ jobs:
             FILES=$(node -e "console.log(JSON.parse(require('node:fs').readFileSync('.coverage/e2e-impact/playwright-args.json','utf8')).files.join(' '))")
             GREP=$(node -e "console.log(JSON.parse(require('node:fs').readFileSync('.coverage/e2e-impact/playwright-args.json','utf8')).grep ?? '')")
             if [ -n "$GREP" ]; then
-              npm run coverage:e2e -- $FILES --grep "$GREP"
+              pnpm run coverage:e2e -- $FILES --grep "$GREP"
             else
-              npm run coverage:e2e -- $FILES
+              pnpm run coverage:e2e -- $FILES
             fi
           else
-            npm run coverage:e2e
+            pnpm run coverage:e2e
           fi
 
       # Evidence is collected even after a failed run — passed tests keep
@@ -1347,7 +1355,7 @@ jobs:
         run: docker load --input /tmp/lcov-docker-image.tar
 
       - name: Merge Test Coverage (Unit + E2E)
-        run: npm run coverage:merge
+        run: pnpm run coverage:merge
 
       - name: Store Coverage Debug Snippets
         if: always()
@@ -1412,49 +1420,54 @@ jobs:
           fi
           docker compose -f devops/docker-compose.yml run --build --rm --no-deps rustfs-init
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
       - name: Setup Node.js
         id: setup-node
         uses: actions/setup-node@v7
         with:
           node-version-file: ${{ env.ADMIN_NODE_VERSION_FILE }}
 
-      - name: Restore npm cache
+      - name: Restore pnpm store cache
         id: npm-cache
         uses: actions/cache/restore@v6
         with:
-          path: ~/.npm
+          path: ~/.local/share/pnpm/store
           key: ${{ runner.os }}-npm-admin-${{ hashFiles(env.ADMIN_NODE_CACHE_PATH) }}
           restore-keys: ${{ runner.os }}-npm-admin-
 
-      - name: Install npm Dependencies
+      - name: Install dependencies
         id: npm_ci
-        run: npm ci --no-audit
+        run: pnpm install --frozen-lockfile
 
-      # npm ci is done here, so ~/.npm is frozen — the tar+upload can run in
+      # pnpm install --frozen-lockfile is done here, so ~/.local/share/pnpm/store is frozen — the tar+upload can run in
       # the background; the implicit wait-all before job cleanup completes it.
-      - name: Save npm cache
+      - name: Save pnpm store cache
         if: ${{ github.ref == 'refs/heads/master' && steps.npm-cache.outputs.cache-hit != 'true' }}
         background: true
         uses: actions/cache/save@v6
         with:
-          path: ~/.npm
+          path: ~/.local/share/pnpm/store
           key: ${{ steps.npm-cache.outputs.cache-primary-key }}
 
       - name: Verify Lockfile Sync With Packaging npm
         id: npm_lockfile_packaging_check
-        # The Package Admin Docker build runs `npm ci` inside node:26.10.0-alpine,
-        # whose bundled npm is newer/stricter than the engines-pinned npm used
-        # above. A lockfile desync the pinned npm tolerates would otherwise only
+        # The Package Admin Docker build runs `pnpm install --frozen-lockfile` inside node:26.12.1-alpine,
+        # whose corepack-pinned pnpm differs from the runner's. A lockfile desync
+        # the runner pnpm tolerates would otherwise only
         # explode after merge (the packaging jobs are master-only), so validate
         # here with the exact same image on every run.
-        run: docker run --rm -v "$PWD":/app -w /app node:26.10.0-alpine npm ci --dry-run --ignore-scripts --no-audit --no-fund
+        # Mount read-only and copy inside so the install writes nothing to the
+        # checkout; corepack activates the pinned pnpm from packageManager.
+        run: docker run --rm -v "$PWD":/src:ro node:26.12.1-alpine sh -c "mkdir /app && cp /src/package.json /src/pnpm-lock.yaml /src/pnpm-workspace.yaml /app/ && cd /app && corepack enable pnpm && pnpm install --frozen-lockfile --ignore-scripts"
 
       # The browser install only needs node_modules; it runs in the background
       # across lint/typecheck/unit/build and is gated before E2E.
       - name: Install Playwright Browsers
         id: playwright-install
         background: true
-        run: npx playwright install --with-deps chromium
+        run: pnpm exec playwright install --with-deps chromium
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -1484,19 +1497,19 @@ jobs:
 
       - name: Lint
         id: npm-lint
-        run: npm run lint
+        run: pnpm run lint
 
       - name: Type Check
         id: npm-typecheck
-        run: npx tsc --noEmit
+        run: pnpm exec tsc --noEmit
 
       - name: Unit Test with Coverage
         id: npm-unit-test
-        run: npm run coverage:unit
+        run: pnpm run coverage:unit
 
       - name: Build
         id: npm-build
-        run: npm run build
+        run: pnpm run build
 
       - name: Store Admin Unit JUnit Report
         uses: actions/upload-artifact@v7
@@ -1524,7 +1537,7 @@ jobs:
         working-directory: ${{ env.ADMIN_DIRECTORY }}
         env:
           S3_ENDPOINT: http://localhost:4566
-        run: npm run test:s3
+        run: pnpm run test:s3
 
       - name: Wait for Playwright install
         wait: playwright-install
@@ -1576,7 +1589,7 @@ jobs:
           DISCOVERED_ARGS=()
           DYNAMIC=$(node -e "console.log(JSON.parse(require('node:fs').readFileSync('$GITHUB_WORKSPACE/web/admin/.coverage/e2e-impact/selection-manifest.json','utf8')).dynamicTestFiles.length)")
           if [ "$DYNAMIC" != "0" ]; then
-            (cd web/admin && npm run coverage:e2e -- --list)
+            (cd web/admin && pnpm run coverage:e2e -- --list)
             DISCOVERED_ARGS=(--discovered "$GITHUB_WORKSPACE/web/admin/.coverage/e2e-impact/discovered.json")
           fi
           node devops/github/ci/e2e-impact/e2e-impact.ts playwright-args \
@@ -1600,12 +1613,12 @@ jobs:
             FILES=$(node -e "console.log(JSON.parse(require('node:fs').readFileSync('.coverage/e2e-impact/playwright-args.json','utf8')).files.join(' '))")
             GREP=$(node -e "console.log(JSON.parse(require('node:fs').readFileSync('.coverage/e2e-impact/playwright-args.json','utf8')).grep ?? '')")
             if [ -n "$GREP" ]; then
-              npm run coverage:e2e -- $FILES --grep "$GREP"
+              pnpm run coverage:e2e -- $FILES --grep "$GREP"
             else
-              npm run coverage:e2e -- $FILES
+              pnpm run coverage:e2e -- $FILES
             fi
           else
-            npm run coverage:e2e
+            pnpm run coverage:e2e
           fi
 
       # Evidence is collected even after a failed run — passed tests keep
@@ -1674,7 +1687,7 @@ jobs:
           overwrite: true
 
       - name: Merge test coverage (unit; E2E lcov when enabled)
-        run: npm run coverage:merge
+        run: pnpm run coverage:merge
 
       - name: Store Admin Coverage Report (wf)
         uses: actions/upload-artifact@v7
@@ -1762,17 +1775,20 @@ jobs:
         working-directory: ${{ env.API_DIRECTORY }}
         run: cargo make coverage-unit
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
       - name: Setup DevOps Node.js
         id: setup-devops-node
         uses: actions/setup-node@v7
         with:
           node-version-file: ${{ env.DEVOPS_NODE_VERSION_FILE }}
 
-      - name: Restore npm cache
+      - name: Restore pnpm store cache
         id: devops-npm-cache
         uses: actions/cache/restore@v6
         with:
-          path: ~/.npm
+          path: ~/.local/share/pnpm/store
           key: ${{ runner.os }}-npm-devops-${{ hashFiles(env.DEVOPS_NODE_CACHE_PATH) }}
           restore-keys: ${{ runner.os }}-npm-devops-
 
@@ -1780,13 +1796,13 @@ jobs:
         id: devops_npm_ci
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         run: |
-          npm ci --no-audit
+          pnpm install --frozen-lockfile
 
-      - name: Save npm cache
+      - name: Save pnpm store cache
         if: ${{ github.ref == 'refs/heads/master' && steps.devops-npm-cache.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@v6
         with:
-          path: ~/.npm
+          path: ~/.local/share/pnpm/store
           key: ${{ steps.devops-npm-cache.outputs.cache-primary-key }}
 
       - name: Install and start MySQL
@@ -1798,17 +1814,20 @@ jobs:
           distribution: "mysql"
           auto-start: true
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
       - name: Setup Tests Node.js
         id: setup-tests-node
         uses: actions/setup-node@v7
         with:
           node-version-file: ${{ env.API_TESTS_NODE_VERSION_FILE }}
 
-      - name: Restore npm cache
+      - name: Restore pnpm store cache
         id: tests-npm-cache
         uses: actions/cache/restore@v6
         with:
-          path: ~/.npm
+          path: ~/.local/share/pnpm/store
           key: ${{ runner.os }}-npm-api-tests-${{ hashFiles(env.API_TESTS_NODE_CACHE_PATH) }}
           restore-keys: ${{ runner.os }}-npm-api-tests-
 
@@ -1816,16 +1835,16 @@ jobs:
         id: tests_npm_ci
         working-directory: ${{ env.API_TESTS_DIRECTORY }}
         run: |
-          npm ci --no-audit
+          pnpm install --frozen-lockfile
 
-      # Both npm ci runs are done here, so ~/.npm is frozen — the tar+upload
+      # Both pnpm install --frozen-lockfile runs are done here, so ~/.local/share/pnpm/store is frozen — the tar+upload
       # can run in the background; implicit wait-all completes it at job end.
-      - name: Save npm cache
+      - name: Save pnpm store cache
         if: ${{ github.ref == 'refs/heads/master' && steps.tests-npm-cache.outputs.cache-hit != 'true' }}
         background: true
         uses: actions/cache/save@v6
         with:
-          path: ~/.npm
+          path: ~/.local/share/pnpm/store
           key: ${{ steps.tests-npm-cache.outputs.cache-primary-key }}
 
       # The e2e-impact coverage tree is published only by successful master
@@ -1870,7 +1889,7 @@ jobs:
           DISCOVERED_ARGS=()
           DYNAMIC=$(node -e "console.log(JSON.parse(require('node:fs').readFileSync('$GITHUB_WORKSPACE/web/api/.coverage/e2e-impact/selection-manifest.json','utf8')).dynamicTestFiles.length)")
           if [ "$DYNAMIC" != "0" ]; then
-            (cd web/api && npm run --prefix tests coverage:e2e -- --list)
+            (cd web/api && pnpm -C tests run coverage:e2e -- --list)
             DISCOVERED_ARGS=(--discovered "$GITHUB_WORKSPACE/web/api/.coverage/e2e-impact/discovered.json")
           fi
           node devops/github/ci/e2e-impact/e2e-impact.ts playwright-args \
@@ -1894,9 +1913,9 @@ jobs:
             FILES=$(node -e "console.log(JSON.parse(require('node:fs').readFileSync('.coverage/e2e-impact/playwright-args.json','utf8')).files.join(' '))")
             GREP=$(node -e "console.log(JSON.parse(require('node:fs').readFileSync('.coverage/e2e-impact/playwright-args.json','utf8')).grep ?? '')")
             if [ -n "$GREP" ]; then
-              npm run --prefix tests coverage:e2e -- $FILES --grep "$GREP"
+              pnpm -C tests run coverage:e2e -- $FILES --grep "$GREP"
             else
-              npm run --prefix tests coverage:e2e -- $FILES
+              pnpm -C tests run coverage:e2e -- $FILES
             fi
           else
             cargo make coverage-e2e
@@ -2288,6 +2307,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
       - name: Setup Node for native audio precision checks
         uses: actions/setup-node@v7
         with:
@@ -2306,16 +2328,16 @@ jobs:
       - name: Verify native audio time origin on Chromium and Apple WebKit
         working-directory: web/bible-on-site
         run: |
-          npm ci --ignore-scripts --no-audit
+          pnpm install --frozen-lockfile --ignore-scripts
           # The native decoder check rebuilds the shipped asset through the
           # app-owned manifest's esbuild (#2391).
-          npm ci --no-audit --prefix ../../app/devops/recitation-decoder
+          pnpm -C ../../app/devops/recitation-decoder install --frozen-lockfile
           if [ "${{ steps.playwright-cache.outputs.cache-hit }}" = "true" ]; then
-            npx playwright install-deps chromium webkit
+            pnpm exec playwright install-deps chromium webkit
           else
-            npx playwright install --with-deps chromium webkit
+            pnpm exec playwright install --with-deps chromium webkit
           fi
-          npx playwright test --config playwright.recitation.config.ts
+          pnpm exec playwright test --config playwright.recitation.config.ts
 
       - name: Save playwright binaries
         if: ${{ steps.playwright-cache.outputs.cache-hit != 'true' }}
@@ -2416,6 +2438,9 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v7
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
       - uses: actions/setup-node@v7
         with:
           node-version: "26.12.1"
@@ -2433,7 +2458,7 @@ jobs:
       - name: Verify module release and shared decoder check routing
         run: node --test devops/github/ci/determine-changes.test.ts devops/github/ci/auto-create-pr.test.mjs devops/github/ci/nuget-cache-key.test.mjs
       - name: Install storage test dependencies
-        run: npm ci --prefix devops
+        run: pnpm -C devops install --frozen-lockfile
       - name: Verify repeatable deployment recovery
         working-directory: devops
         run: node --import tsx --test deploy/ecr-deploy/resume-image.test.mts
@@ -2455,13 +2480,16 @@ jobs:
     if: ${{ always() && !cancelled() && needs.setup_env.result == 'success' && needs.determine_changes.result == 'success' && (needs.determine_changes.outputs.website_module_changed == 'true' || needs.determine_changes.outputs.website_ci_changed == 'true' || needs.determine_changes.outputs.admin_ci_changed == 'true') }}
     steps:
       - uses: actions/checkout@v7
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
       - uses: actions/setup-node@v7
         with:
           node-version-file: devops/package.json
       # Same install layout as the deploy job: only devops deps, no website
       # node_modules — resolution can only succeed through NODE_PATH.
       - name: Install deployment dependencies
-        run: npm ci --prefix devops --no-audit
+        run: pnpm -C devops install --frozen-lockfile
       # The nginx guard reads docs/ outside the website's Docker build context.
       - name: Verify canonical hosts and nginx configuration
         run: node --test web/bible-on-site/scripts/verify-canonical-hosts.test.mjs
@@ -3182,17 +3210,20 @@ jobs:
       - name: Load lcov Docker image
         run: docker load --input /tmp/lcov-docker-image.tar
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
       - name: Setup DevOps Node.js
         id: setup-devops-node
         uses: actions/setup-node@v7
         with:
           node-version-file: ${{ env.DEVOPS_NODE_VERSION_FILE }}
 
-      - name: Restore npm cache
+      - name: Restore pnpm store cache
         id: devops-npm-cache
         uses: actions/cache/restore@v6
         with:
-          path: ~/.npm
+          path: ~/.local/share/pnpm/store
           key: ${{ runner.os }}-npm-devops-${{ hashFiles(env.DEVOPS_NODE_CACHE_PATH) }}
           restore-keys: ${{ runner.os }}-npm-devops-
 
@@ -3200,22 +3231,22 @@ jobs:
         id: devops_npm_ci
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         run: |
-          npm ci --no-audit
+          pnpm install --frozen-lockfile
 
-      # npm ci is done here, so ~/.npm is frozen — the tar+upload can run in
+      # pnpm install --frozen-lockfile is done here, so ~/.local/share/pnpm/store is frozen — the tar+upload can run in
       # the background; the implicit wait-all before job cleanup completes it.
-      - name: Save npm cache
+      - name: Save pnpm store cache
         if: ${{ github.ref == 'refs/heads/master' && steps.devops-npm-cache.outputs.cache-hit != 'true' }}
         background: true
         uses: actions/cache/save@v6
         with:
-          path: ~/.npm
+          path: ~/.local/share/pnpm/store
           key: ${{ steps.devops-npm-cache.outputs.cache-primary-key }}
 
       - name: Test release, deployment, and CI reporting guards
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         run: |
-          npm run test:version
+          pnpm run test:version
           node --test github/ci/codecov-report-state.test.mjs github/ci/bencher-comparison.test.mjs github/ci/e2e-impact/e2e-impact.test.ts github/ci/e2e-impact/playwright-impact.test.ts github/ci/e2e-impact/shard-plan.test.ts github/ci/e2e-impact/timings.test.ts github/ci/e2e-impact/verify.test.ts e2e-coverage-trees/e2e-coverage-trees.test.ts
 
       # Real app-process coverage from the instrumented mobile E2E legs
@@ -3315,7 +3346,7 @@ jobs:
           fail_ci_if_error: false
 
       - name: Merge Test Coverage (Website + API)
-        run: npm run coverage:merge
+        run: pnpm run coverage:merge
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
 
       - name: Publish Cross Module Coverage To Codacy
@@ -3560,20 +3591,23 @@ jobs:
           git config --global user.email "actions@github.com"
           git config --global user.name "GitHub Actions"
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
           node-version-file: ${{ env.DEVOPS_NODE_VERSION_FILE }}
           cache-dependency-path: ${{ env.DEVOPS_NODE_CACHE_PATH }}
-          cache: npm
+          cache: pnpm
 
       - name: Install devops dependencies
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
-        run: npm ci --no-audit --no-fund
+        run: pnpm install --frozen-lockfile
 
       - name: Publish release and collision version bumps together
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         env:
           NEEDS_JSON: ${{ toJSON(needs) }}
-        run: npm run bump:module-versions -- --mode all --publish
+        run: pnpm run bump:module-versions -- --mode all --publish
 

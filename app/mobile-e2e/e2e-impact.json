@@ -43,7 +43,7 @@
 		".github/**",
 		"devops/**",
 		"web/bible-on-site/package.json",
-		"web/bible-on-site/package-lock.json",
+		"web/bible-on-site/pnpm-lock.yaml",
 		"web/bible-on-site/src/lib/recitation-audio.ts",
 		"data/recitation/**"
 	],

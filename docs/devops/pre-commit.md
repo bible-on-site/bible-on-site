@@ -21,7 +21,7 @@ prek owns the git hooks directly — there is no Husky/npm layer:
 
 The hooks are installed automatically by:
 
-- `npm install` / `npm ci` at the repo root — the `prepare` script runs `devops/install-git-hooks.mjs`.
+- `pnpm install` / `pnpm install --frozen-lockfile` at the repo root — the `prepare` script runs `devops/install-git-hooks.mjs`.
 - `devops/setup-dev-env.mts` — calls the same script after creating `devops/.venv`.
 
 The installer prefers the `devops/.venv` prek so the hooks keep working
@@ -36,7 +36,7 @@ Hooks carry an optional `priority` field (prek-only): hooks sharing a
 priority run concurrently, lower priorities run first. The config uses three
 tiers — mutating fixers first (`sync-pre-commit-deps` 0, `trailing-whitespace`
 1, `mixed-line-ending` 2), then `flip-book-npm-dep` alone (5, it rewrites and
-stages `package.json`/`package-lock`), then every read-only check in parallel
+stages `package.json`/`pnpm-lock.yaml`), then every read-only check in parallel
 (10). pre-commit parses but ignores the field, so pre-commit.ci keeps its
 sequential order.
 
@@ -112,14 +112,14 @@ post-commit `flip-book-local-restore` never runs on pre-commit.ci by design.
 | Hook | Trigger | Command | Description |
 |------|---------|---------|-------------|
 | `biome-lint` | `web/bible-on-site`, `web/admin` code files | per-module `biome lint` on staged files | Lint via [devops/precommit-biome.mjs](../../devops/precommit-biome.mjs) |
-| `flip-book-npm-dep` | `web/bible-on-site` | `npm run flip-book:check` → `flip-book:npm` + stage | Keeps `html-flip-book-react` on the npm version in commits ([devops/flip-book-dep.mjs](../../devops/flip-book-dep.mjs)) |
-| `web-unit-tests` | `web/bible-on-site` | `npm run test:unit` | Website unit tests (Jest) |
-| `admin-unit-tests` | `web/admin` | `npm run test:unit` | Admin unit tests (vitest) |
+| `flip-book-npm-dep` | `web/bible-on-site` | `pnpm run flip-book:check` → `flip-book:npm` + stage | Keeps `html-flip-book-react` on the npm version in commits ([devops/flip-book-dep.mjs](../../devops/flip-book-dep.mjs)) |
+| `web-unit-tests` | `web/bible-on-site` | `pnpm run test:unit` | Website unit tests (Jest) |
+| `admin-unit-tests` | `web/admin` | `pnpm run test:unit` | Admin unit tests (vitest) |
 | `rust-checks` | `web/api`, `web/bulletin`, `data` | `cargo make lint` (+ `fmt-check` for bulletin and data) | Rust lint/format via [devops/precommit-rust.mjs](../../devops/precommit-rust.mjs) |
 | `dotnet-analyzers` | `app/**` `.cs`/`.csproj`, `.editorconfig`, `global.json`, `Directory.Build.props` | `dotnet build` per touched project | SonarAnalyzer severities fail locally instead of surfacing as post-push annotations ([devops/precommit-dotnet.mjs](../../devops/precommit-dotnet.mjs)); skips projects without a prior restore |
 | `codacy-gate` | `*.rs`, JS/TS files | `node devops/codacy-gate.mjs` | Codacy parity checks with no analyzer equivalent ([devops/codacy-gate.mjs](../../devops/codacy-gate.mjs)) |
 | `parasha-aliyot-drift` | aliyah importer / vendored source / generated JSON | `node devops/import-parasha-aliyot.mjs --check` | Fails when the generated `parasha-aliyot.json` drifts from the vendored hebcal source or importer ([devops/import-parasha-aliyot.mjs](../../devops/import-parasha-aliyot.mjs)) |
-| `flip-book-local-restore` | post-commit | `npm run flip-book:local` | Restores local flip-book dep when the guard switched it |
+| `flip-book-local-restore` | post-commit | `pnpm run flip-book:local` | Restores local flip-book dep when the guard switched it |
 
 ## Codacy Parity
 

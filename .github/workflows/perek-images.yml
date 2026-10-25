@@ -26,21 +26,24 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
       - uses: actions/setup-node@v7
         with:
           node-version-file: devops/perek-images/package.json
-      - name: Restore npm cache
+      - name: Restore pnpm store cache
         id: npm-cache
         uses: actions/cache/restore@v6
         with:
-          path: ~/.npm
-          key: ${{ runner.os }}-npm-perek-images-${{ hashFiles('devops/perek-images/package-lock.json') }}
+          path: ~/.local/share/pnpm/store
+          key: ${{ runner.os }}-npm-perek-images-${{ hashFiles('devops/perek-images/pnpm-lock.yaml') }}
           restore-keys: ${{ runner.os }}-npm-perek-images-
-      - run: npm ci --prefix devops/perek-images --no-audit
-      - name: Save npm cache
+      - run: pnpm -C devops/perek-images install --frozen-lockfile
+      - name: Save pnpm store cache
         if: ${{ github.ref == 'refs/heads/master' && steps.npm-cache.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@v6
         with:
-          path: ~/.npm
+          path: ~/.local/share/pnpm/store
           key: ${{ steps.npm-cache.outputs.cache-primary-key }}
-      - run: npm test --prefix devops/perek-images
+      - run: pnpm -C devops/perek-images test

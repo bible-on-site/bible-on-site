@@ -11,7 +11,7 @@ export default defineConfig({
 	...baseConfig,
 	webServer: {
 		...(baseConfig.webServer as TestConfigWebServer),
-		command: "npm run start",
+		command: "pnpm run start",
 	},
 	fullyParallel: false,
 	retries: process.env.CI ? 4 : 0,

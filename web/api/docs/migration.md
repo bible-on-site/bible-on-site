@@ -68,7 +68,7 @@ web/api/
 5. **Update Test Data**:
    - Add table structure to `devops/tanah_test_structure.sql`
    - Add test data to `devops/tanah_test_data.sql`
-   - Repopulate with: `DB_URL="mysql://root:test_123@localhost:3306/tanah_test" npx tsx devops/populate-test-db.mts`
+   - Repopulate with: `DB_URL="mysql://root:test_123@localhost:3306/tanah_test" pnpm exec tsx devops/populate-test-db.mts`
 
 6. **Write E2E Tests** (`tests/e2e/{entity}-service.test.ts`):
    - Test happy path queries

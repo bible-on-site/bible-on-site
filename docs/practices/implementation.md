@@ -64,7 +64,7 @@ The following are currently expected and can be ignored:
 
 **Development:**
 
-- Use Playwright at http://localhost:3001 (`npm run dev` might be required if not already running)
+- Use Playwright at http://localhost:3001 (`pnpm run dev` might be required if not already running)
 - **Prefer server components for content.** The rule of thumb:
   - **Content-rich components** (text, articles, sections) → **SSG/SSR only** for best SEO and AIO (AI Optimization)
   - **Interactive/glue components** (navigation, animation, scroll-to-section, menu close) → **Client components OK**
@@ -78,10 +78,10 @@ The following are currently expected and can be ignored:
 
 | Task | Command |
 | ---- | ------- |
-| Unit Tests | `npm run test:unit` |
-| E2E Tests | `npm run test:e2e` |
-| Unit Coverage | `npm run coverage:unit` |
-| E2E Coverage | `npm run coverage:e2e` |
+| Unit Tests | `pnpm run test:unit` |
+| E2E Tests | `pnpm run test:e2e` |
+| Unit Coverage | `pnpm run coverage:unit` |
+| E2E Coverage | `pnpm run coverage:e2e` |
 
 **Implementation Notes:**
 

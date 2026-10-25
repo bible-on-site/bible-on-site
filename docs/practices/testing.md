@@ -102,13 +102,13 @@ Performance tests measure application behavior under load and track metrics over
 
 | Task | Command |
 | ---- | ------- |
-| Unit Tests | `npm run test:unit` |
-| E2E Tests (Desktop only, faster) | `npm run test:e2e` |
-| E2E Tests (Desktop + Mobile) | `npm run test:e2e:all` |
-| Performance Tests | `npm run test:perf` |
-| Unit Coverage | `npm run coverage:unit` |
-| E2E Coverage | `npm run coverage:e2e` |
-| Merge Coverage | `npm run coverage:merge` |
+| Unit Tests | `pnpm run test:unit` |
+| E2E Tests (Desktop only, faster) | `pnpm run test:e2e` |
+| E2E Tests (Desktop + Mobile) | `pnpm run test:e2e:all` |
+| Performance Tests | `pnpm run test:perf` |
+| Unit Coverage | `pnpm run coverage:unit` |
+| E2E Coverage | `pnpm run coverage:e2e` |
+| Merge Coverage | `pnpm run coverage:merge` |
 
 ### API (web/api)
 
@@ -126,7 +126,7 @@ Performance tests measure application behavior under load and track metrics over
 | Integration Tests | `dotnet run --project devops -- TestIntegration` |
 | E2E Tests (Windows) | `dotnet run --project devops -- TestE2E` |
 | Mobile E2E (build) | `MOBILE_PLATFORM=Android MOBILE_E2E_COVERAGE=1 dotnet run --project devops -- CompileMobileE2E` |
-| Mobile E2E (run) | `npm test --prefix mobile-e2e` |
+| Mobile E2E (run) | `pnpm -C mobile-e2e test` |
 | Mobile E2E Coverage | `MOBILE_PLATFORM=Android dotnet run --project devops -- CoverageMobileE2E` |
 | Unit Coverage | `dotnet run --project devops -- CoverageUnit` |
 | Integration Coverage | `dotnet run --project devops -- CoverageIntegration` |

@@ -1,9 +1,10 @@
 FROM node:26.12.1-alpine AS base
+RUN corepack enable pnpm
 
 FROM base AS deps
 WORKDIR /app
-COPY admin/package.json admin/package-lock.json ./
-RUN npm ci --prefer-offline --ignore-scripts
+COPY admin/package.json admin/pnpm-lock.yaml admin/pnpm-workspace.yaml ./
+RUN pnpm install --frozen-lockfile --prefer-offline --ignore-scripts
 
 FROM base AS builder
 WORKDIR /app/admin
@@ -11,7 +12,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY admin/ ./
 
 ENV NODE_ENV=production
-RUN npm run build
+RUN pnpm run build
 
 FROM base AS runner
 WORKDIR /app

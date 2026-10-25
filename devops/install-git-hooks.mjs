@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 /**
  * Installs the repository's git hooks (pre-commit + post-commit stages). Runs
- * from the root package.json `prepare` script — which fires on `npm install`/
- * `npm ci` — and from devops/setup-dev-env.mts.
+ * from the root package.json `prepare` script — which fires on `pnpm install`/
+ * `pnpm install --frozen-lockfile` — and from devops/setup-dev-env.mts.
  *
  * Prefers prek (the repo's hook runner — parallel execution, Rust fast paths)
  * from the devops venv so the installed hook keeps working without activating
  * the venv; falls back to prek on PATH, then to pre-commit for clones that
  * have not re-run setup yet. Exits 0 with a notice when either git or a hook
- * runner is unavailable (e.g. npm ci in a Docker layer): hook installation is
+ * runner is unavailable (e.g. pnpm install --frozen-lockfile in a Docker layer): hook installation is
  * a local-dev convenience, never a build blocker.
  */
 import { spawnSync } from "node:child_process";
@@ -66,7 +66,7 @@ const runner = candidates.find((candidate) =>
 if (!runner) {
 	console.info(
 		"[install-git-hooks] neither prek nor pre-commit found — skipping " +
-			"(run `npm run setup_dev_env --prefix devops` to enable git hooks).",
+			"(run `pnpm -C devops run setup_dev_env` to enable git hooks).",
 	);
 	process.exit(0);
 }

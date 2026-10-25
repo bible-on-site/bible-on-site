@@ -172,7 +172,7 @@ App coverage is merged with website and API coverage at the repository root:
 
 ```bash
 cd devops
-npm run coverage:merge
+pnpm run coverage:merge
 ```
 
 This produces a combined LCOV file at `.coverage/lcov.info` that includes TypeScript (website), Rust (API), and C# (app) coverage, which is then uploaded to Codacy.
@@ -226,7 +226,7 @@ rather than misapplied — then ReportGenerator converts it to `lcov.info`:
 ```bash
 cd app
 MOBILE_PLATFORM=Android MOBILE_E2E_COVERAGE=1 dotnet run --project devops -- CompileMobileE2E
-npm test --prefix mobile-e2e          # runs the suite, collecting dumps
+pnpm -C mobile-e2e test          # runs the suite, collecting dumps
 MOBILE_PLATFORM=Android dotnet run --project devops -- CoverageMobileE2E
 # → .artifacts/mobile-e2e/android/coverage-app/lcov.info
 ```

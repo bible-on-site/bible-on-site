@@ -8,7 +8,7 @@
  * Behavior:
  * - Reads DB_URL from the environment or the module's env file (--env-file).
  * - If none of the --tables has rows → runs `cargo make mysql-populate-dev`.
- * - With --sync-from-prod, first tries `npm run setup_dev_env -- sync-from-prod`
+ * - With --sync-from-prod, first tries `pnpm run setup_dev_env -- sync-from-prod`
  *   (a failed download leaves local data untouched); populate is the fallback.
  * - Removes bundled demo authors/articles unless KEEP_BUNDLED_TEST_ARTICLES=1.
  *
@@ -202,7 +202,7 @@ function runSyncFromProd(): boolean {
 	// The sync dumps to a file first and only restores after a successful dump,
 	// so a failed download leaves the existing local data intact.
 	const result = spawnSync(
-		"npm",
+		"pnpm",
 		["run", "setup_dev_env", "--", "sync-from-prod"],
 		{ cwd: devopsDir, stdio: "inherit", shell: true },
 	);

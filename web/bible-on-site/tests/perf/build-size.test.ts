@@ -88,7 +88,7 @@ test.describe("Build Size Benchmarks", () => {
 		test("Remains below 12000MB", () => {
 			expect(
 				existsSync(STANDALONE_DIR),
-				`Standalone directory should exist at ${STANDALONE_DIR}. Run 'npm run build' first.`,
+				`Standalone directory should exist at ${STANDALONE_DIR}. Run 'pnpm run build' first.`,
 			).toBe(true);
 
 			const sizeBytes = getDirectorySizeBytes(STANDALONE_DIR);
@@ -114,7 +114,7 @@ test.describe("Build Size Benchmarks", () => {
 		test("Remains below 24000MB", () => {
 			expect(
 				existsSync(NEXT_BUILD_DIR),
-				`Build directory should exist at ${NEXT_BUILD_DIR}. Run 'npm run build' first.`,
+				`Build directory should exist at ${NEXT_BUILD_DIR}. Run 'pnpm run build' first.`,
 			).toBe(true);
 
 			const sizeBytes = getDirectorySizeBytes(NEXT_BUILD_DIR);

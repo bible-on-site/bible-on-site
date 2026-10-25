@@ -4,7 +4,7 @@
  * while letting developers use their local checkout during development.
  *
  *  - `pre`:  if the dependency resolves to the local file: build, switch it to
- *    the npm version, stage package.json + package-lock.json, and leave a
+ *    the npm version, stage package.json + pnpm-lock.yaml, and leave a
  *    marker file.
  *  - `post`: if the marker exists, restore the local dependency.
  *
@@ -23,9 +23,9 @@ const websiteDir = resolve("web/bible-on-site");
 const markerFile = resolve(websiteDir, ".flip-book-was-local");
 
 function npmRun(script, stdio = "inherit") {
-	// shell is required only on Windows to spawn npm's .cmd shim;
+	// shell is required only on Windows to spawn pnpm's .cmd shim;
 	// argv is fully static — no user input is shelled.
-	return spawnSync("npm", ["run", script], { // nosemgrep
+	return spawnSync("pnpm", ["run", script], { // nosemgrep
 		cwd: websiteDir,
 		shell: isWin,
 		stdio,
@@ -46,7 +46,7 @@ if (npmRun("flip-book:check", ["ignore", "inherit", "ignore"]).status !== 0) {
 	);
 	writeFileSync(markerFile, "");
 	if (npmRun("flip-book:npm").status !== 0) process.exit(1);
-	const add = spawnSync("git", ["add", "package.json", "package-lock.json"], {
+	const add = spawnSync("git", ["add", "package.json", "pnpm-lock.yaml"], {
 		cwd: websiteDir,
 		stdio: "inherit",
 	});

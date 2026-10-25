@@ -227,7 +227,7 @@ async function main() {
 	// flip-book to local and runs docker compose — both break in CI)
 	// Always use `next dev` for e2e so tests pass: standalone can throw NoFallbackError
 	// on some routes; coverage also requires dev (instrumentation). No pre-build needed.
-	log(`[Server] Starting Next.js server: npx next dev -p 3001`);
+	log(`[Server] Starting Next.js server: pnpm exec next dev -p 3001`);
 
 	// Tee the dev server's stdout/stderr into the artifact so CI failures keep
 	// the `⨯` lines Playwright's webServer pipe would otherwise discard (#2005).

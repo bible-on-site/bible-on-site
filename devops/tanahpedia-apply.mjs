@@ -4,7 +4,7 @@
  * the same JSON file is applied locally, reviewed, then replayed on prod.
  *
  * Usage:
- *   TANAHPEDIA_REVISION_API_KEY=... npm run tanahpedia:apply -- <ops.json> [--endpoint <url>]
+ *   TANAHPEDIA_REVISION_API_KEY=... pnpm run tanahpedia:apply -- <ops.json> [--endpoint <url>]
  *
  * File shape:
  * {

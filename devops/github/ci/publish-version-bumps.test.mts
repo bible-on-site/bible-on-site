@@ -43,8 +43,8 @@ function fixture(t: { after: (fn: () => void) => void }) {
 			JSON.stringify({ name: "website", version }),
 		);
 		writeFileSync(
-			join(cwd, "web/bible-on-site/package-lock.json"),
-			JSON.stringify({ version, packages: { "": { version } } }),
+			join(cwd, "web/bible-on-site/pnpm-lock.yaml"),
+			"lockfileVersion: '9.0'\n\nimporters:\n  .:\n",
 		);
 	};
 	setVersion(a, "1.0.0");
@@ -168,8 +168,8 @@ test("one publication combines normal releases and collision retries", (t) => {
 		JSON.stringify({ name: "admin", version }),
 	);
 	writeFileSync(
-		join(a, "web/admin/package-lock.json"),
-		JSON.stringify({ version, packages: { "": { version } } }),
+		join(a, "web/admin/pnpm-lock.yaml"),
+		"lockfileVersion: '9.0'\n\nimporters:\n  .:\n",
 	);
 	git(a, "add", ".");
 	git(a, "commit", "-m", "admin feature");
@@ -234,8 +234,8 @@ test("an older master bump workflow uses one safe publication and skips its obso
 		JSON.stringify({ name: "admin", version }),
 	);
 	writeFileSync(
-		join(a, "web/admin/package-lock.json"),
-		JSON.stringify({ version, packages: { "": { version } } }),
+		join(a, "web/admin/pnpm-lock.yaml"),
+		"lockfileVersion: '9.0'\n\nimporters:\n  .:\n",
 	);
 	git(a, "add", ".");
 	git(a, "commit", "-m", "feature after website release");

@@ -23,7 +23,7 @@ packaging invokes this preparation before evaluating the app project.
 
 ## Local development
 
-Run `npm run setup_dev_env --prefix devops` from the repository root. During app
+Run `pnpm -C devops run setup_dev_env` from the repository root. During app
 setup it prompts for the recordings directory, defaulting to
 `~/git/tanah-s3/recordings` under the current user's home directory. Press Enter to
 accept, or enter a directory containing the original `<perekId>_record.mp3` files.

@@ -32,7 +32,7 @@ interface PrerenderManifest {
 function loadPrerenderManifest(): PrerenderManifest {
 	expect(
 		existsSync(PRERENDER_MANIFEST_PATH),
-		`prerender-manifest.json should exist at ${PRERENDER_MANIFEST_PATH}. Run 'npm run build' first.`,
+		`prerender-manifest.json should exist at ${PRERENDER_MANIFEST_PATH}. Run 'pnpm run build' first.`,
 	).toBe(true);
 
 	return JSON.parse(readFileSync(PRERENDER_MANIFEST_PATH, "utf8"));
@@ -160,8 +160,8 @@ test.describe("Route Rendering Modes", () => {
 		});
 
 		test("commentary pages (slug routes) are prerendered at build (SSG)", () => {
-			const commentaryRoutes = Object.keys(manifest.routes).filter(
-				(route) => /^\/929\/\d+\/[^/]+$/.test(route),
+			const commentaryRoutes = Object.keys(manifest.routes).filter((route) =>
+				/^\/929\/\d+\/[^/]+$/.test(route),
 			);
 
 			expect(

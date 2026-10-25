@@ -12,17 +12,17 @@ When asked to **inspire from legacy website** or reference the old website imple
 
 ## Development
 
-- Use Playwright at http://localhost:3001 (`npm run dev` if needed).
+- Use Playwright at http://localhost:3001 (`pnpm run dev` if needed).
 - **Prefer server components for content**: content-rich (text, articles, sections) → SSG/SSR only for SEO and AIO. Use client components only for interactive/glue (navigation, animation, scroll, menu). Keep client components minimal and isolated; content should remain server-rendered.
 
 ## Commands
 
 | Task | Command |
 | ---- | ------- |
-| Unit Tests | `npm run test:unit` |
-| E2E Tests | `npm run test:e2e` |
-| Unit Coverage | `npm run coverage:unit` |
-| E2E Coverage | `npm run coverage:e2e` |
+| Unit Tests | `pnpm run test:unit` |
+| E2E Tests | `pnpm run test:e2e` |
+| Unit Coverage | `pnpm run coverage:unit` |
+| E2E Coverage | `pnpm run coverage:e2e` |
 
 ## Implementation Notes
 

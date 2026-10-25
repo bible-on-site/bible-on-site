@@ -60,9 +60,9 @@ try {
  * which delegates to the matching `cargo make` task in data/.
  */
 function runPopulate(script: string, label: string, fatal: boolean): void {
-	log(`[${label} Setup] Running: npm run ${script}`);
+	log(`[${label} Setup] Running: pnpm run ${script}`);
 	try {
-		execSync(`npm run ${script}`, {
+		execSync(`pnpm run ${script}`, {
 			cwd: projectRoot,
 			stdio: "inherit",
 			env: process.env,
@@ -98,8 +98,8 @@ async function main(): Promise<void> {
 	}
 
 	// Inherits env so MEASURE_COV reaches vite.config.ts (istanbul instrumentation).
-	log("[Server] Starting Vite dev server: npm run dev:app");
-	const server = spawn("npm", ["run", "dev:app"], {
+	log("[Server] Starting Vite dev server: pnpm run dev:app");
+	const server = spawn("pnpm", ["run", "dev:app"], {
 		cwd: projectRoot,
 		stdio: "inherit",
 		env: process.env,

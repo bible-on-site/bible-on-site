@@ -10,9 +10,9 @@ When a project has a task runner (npm scripts, cargo-make, Nuke, etc.), **always
 ## Rules
 
 - Before running any command, check `package.json` scripts (or equivalent) for a matching task.
-- Use `npm run dev` instead of `npx next dev -p 3001`.
-- Use `npm test` instead of `npx jest` / `npx vitest`.
-- Use `npm run build` instead of `npx next build`.
+- Use `pnpm run dev` instead of `pnpm exec next dev -p 3001`.
+- Use `pnpm test` instead of `pnpm exec jest` / `pnpm exec vitest`.
+- Use `pnpm run build` instead of `pnpm exec next build`.
 - Same principle applies to `cargo make`, `dotnet nuke`, or any other task runner found in the repo.
 
 ## Why

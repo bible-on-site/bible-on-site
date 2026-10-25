@@ -1,10 +1,13 @@
 FROM node:26.12.1-alpine AS base
+RUN corepack enable pnpm
 
 # Version-only releases must not invalidate the dependency layer.
+# pnpm-lock.yaml does not embed the manifest version, so only package.json needs
+# the strip.
 FROM base AS manifests
 WORKDIR /app
-COPY bible-on-site/package.json bible-on-site/package-lock.json ./
-RUN node -e 'const fs = require("node:fs"); for (const file of ["package.json", "package-lock.json"]) { const json = JSON.parse(fs.readFileSync(file)); delete json.version; if (json.packages) delete json.packages[""].version; fs.writeFileSync(file, JSON.stringify(json)); }'
+COPY bible-on-site/package.json ./
+RUN node -e 'const fs = require("node:fs"); const json = JSON.parse(fs.readFileSync("package.json")); delete json.version; fs.writeFileSync("package.json", JSON.stringify(json));'
 
 # Install dependencies only when needed
 FROM base AS deps
@@ -14,13 +17,13 @@ WORKDIR /app
 
 # Install dependencies based on the preferred package manager
 # Build context is web/, so bible-on-site is a subdirectory
-COPY --from=manifests /app/package.json /app/package-lock.json ./
-COPY bible-on-site/.npmrc* ./
+COPY --from=manifests /app/package.json ./
+COPY bible-on-site/pnpm-lock.yaml bible-on-site/pnpm-workspace.yaml ./
 # Install ALL dependencies (including dev like sass) needed for the build step.
 # The final runner stage uses Next.js standalone output, so dev deps don't end up in production.
 # Source-dependent postinstall helpers run outside this dependency-only stage.
 # prebuild derives the browser catalog after the full source is copied.
-RUN npm ci --prefer-offline --ignore-scripts
+RUN pnpm install --frozen-lockfile --prefer-offline --ignore-scripts
 
 # Rebuild the source code only when needed
 FROM base AS builder
@@ -55,7 +58,7 @@ ARG MAPBOX_PUBLIC_KEY
 # hadolint ignore=DL3064
 ENV NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN=$MAPBOX_PUBLIC_KEY
 
-RUN npm run build
+RUN pnpm run build
 
 # Production image, copy all the files and run next
 FROM base AS runner

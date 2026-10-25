@@ -7,7 +7,7 @@ applyTo: "**"
 
 Execution ownership is defined in [user-does-not-execute.instructions.md](user-does-not-execute.instructions.md): you run every command and finish every ask in the same turn. This file adds the repo-specific gates.
 
-- Flip book: build in `html-flip-book`, then run `USE_LOCAL_FLIP_BOOK=1 npm run postinstall` in the website. CI/production use the published npm package, not the `file:` dependency.
+- Flip book: build in `html-flip-book`, then run `USE_LOCAL_FLIP_BOOK=1 pnpm run postinstall` in the website. CI/production use the published npm package, not the `file:` dependency.
 
 # Workdir Cleanliness Gate
 

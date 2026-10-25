@@ -830,7 +830,7 @@ function setupPythonVenv(dir: string, name = ".", fullSetup = true) {
 }
 // Installs the pre-commit framework's git hooks (pre-commit + post-commit
 // stages); the logic lives in install-git-hooks.mjs so the root package.json
-// `prepare` script runs the same code on `npm install`/`npm ci`.
+// `prepare` script runs the same code on `pnpm install`/`pnpm install --frozen-lockfile`.
 function installGitHooks(): void {
 	const result = spawnSync(
 		"node",
@@ -849,7 +849,7 @@ function getActivationCommand(dir: string) {
 }
 
 function npmInstall(dir: string) {
-	const result = spawnSync("npm", ["install"], {
+	const result = spawnSync("pnpm", ["install"], {
 		cwd: dir,
 		shell: isWin,
 		stdio: "inherit",

@@ -20,7 +20,7 @@ upstream non-root user (UID 10001); a separate non-root Node.js container create
 `bible-on-site-assets-dev` and `bible-on-site-assets-test`, enabling anonymous
 downloads only. Bucket CORS permits reads and signed uploads from the local Admin
 origins on port 3101. The initialization command must succeed before starting the app.
-`npm run docker:up` runs both commands and stops on failure. Readiness checks wait for
+`pnpm run docker:up` runs both commands and stops on failure. Readiness checks wait for
 storage and IAM, not just the process.
 
 ## Existing MinIO installations
@@ -30,7 +30,7 @@ untouched; do not delete it or attach it to RustFS. Stop the old services with
 `docker compose -f devops/docker-compose.yml down` **before switching from the old
 checkout**, without `--volumes`. Then start the new configuration above.
 
-Reseed generated assets with `npm run s3:populate:dev` from `web/admin`, or use
+Reseed generated assets with `pnpm run s3:populate:dev` from `web/admin`, or use
 the existing development setup's sync-from-production workflow. Export any
 locally created assets through S3 while the old server is still available, then
 import them into RustFS. Keep the old volume until the imported data is verified.
@@ -41,7 +41,7 @@ With Admin dependencies installed and RustFS running:
 
 ```bash
 cd web/admin
-S3_ENDPOINT=http://localhost:4566 npm run test:s3
+S3_ENDPOINT=http://localhost:4566 pnpm run test:s3
 ```
 
 The smoke test uses a temporary bucket and checks authenticated upload/download,

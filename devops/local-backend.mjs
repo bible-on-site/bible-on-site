@@ -10,7 +10,7 @@ const apiDirectory = resolve(directory, "../web/api");
 const args = process.argv.slice(2);
 if (args.includes("--help")) {
 	console.log(
-		"npm run backend [-- --native]\nStarts the local API on port 3003. Docker uses the existing development MySQL database; --native uses Cargo directly. Existing healthy servers are reused.",
+		"pnpm run backend [-- --native]\nStarts the local API on port 3003. Docker uses the existing development MySQL database; --native uses Cargo directly. Existing healthy servers are reused.",
 	);
 	process.exit(0);
 }
@@ -122,7 +122,7 @@ if (await healthy()) {
 		while (!ready() && Date.now() < deadline) await delay(2000);
 		if (!ready())
 			throw new Error(
-				"Docker Engine is unavailable. Inspect the Docker Desktop error, or use npm run backend -- --native with the installed MySQL service. No Docker data has been reset.",
+				"Docker Engine is unavailable. Inspect the Docker Desktop error, or use pnpm run backend -- --native with the installed MySQL service. No Docker data has been reset.",
 			);
 	}
 	const local = {

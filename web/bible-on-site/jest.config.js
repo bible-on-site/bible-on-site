@@ -99,8 +99,11 @@ async function nextJestConfigPromise() {
 	const nextJestConfig = await createNextJestConfig(config)();
 	// This cannot be set directly in the jest config because it is overridden by next/jest.
 	nextJestConfig.transformIgnorePatterns = [
-		// ESM modules that need to be transformed for Jest's CommonJS runtime
-		"/node_modules/(?!(gematry|temporal-polyfill|temporal-utils|sunrise-sunset-js)/)",
+		// ESM modules that need to be transformed for Jest's CommonJS runtime.
+		// Jest resolves pnpm symlinks to their real .pnpm/<name>@<ver>/node_modules/<name>
+		// path, so the whitelist must see through the .pnpm indirection as well as
+		// the plain npm layout.
+		"/node_modules/(?!(?:\\.pnpm/[^/]+/node_modules/)?(?:gematry|temporal-polyfill|temporal-utils|sunrise-sunset-js)/)",
 	];
 
 	return nextJestConfig;

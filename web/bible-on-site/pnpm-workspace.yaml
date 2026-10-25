@@ -1,0 +1,26 @@
+packages:
+  - .
+saveExact: true
+allowBuilds:
+  "@parcel/watcher": true
+  "@swc/core": true
+  esbuild: true
+  unrs-resolver: true
+overrides:
+  brace-expansion: 5.0.12
+  deepmerge-ts: 8.0.2
+  postcss: 8.5.31
+  sharp: 0.35.5
+  "@istanbuljs/load-nyc-config>js-yaml": ^5.4.3
+minimumReleaseAgeExclude:
+  - "@biomejs/biome@2.6.3"
+  - "@biomejs/cli-android-arm64@2.6.3"
+  - "@biomejs/cli-android-x64@2.6.3"
+  - "@biomejs/cli-darwin-arm64@2.6.3"
+  - "@biomejs/cli-darwin-x64@2.6.3"
+  - "@biomejs/cli-linux-arm64-musl@2.6.3"
+  - "@biomejs/cli-linux-arm64@2.6.3"
+  - "@biomejs/cli-linux-x64-musl@2.6.3"
+  - "@biomejs/cli-linux-x64@2.6.3"
+  - "@biomejs/cli-win32-arm64@2.6.3"
+  - "@biomejs/cli-win32-x64@2.6.3"
