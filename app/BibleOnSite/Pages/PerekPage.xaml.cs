@@ -1195,9 +1195,17 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         NormalNavigationBar.BarVisible = !selectionBarMode && !searching;
         // The header names the focused pasuk — sefer, perek and pasuk together —
         // instead of the plain perek source (#2466).
-        NormalNavigationTitle.Text = focused && _viewModel.Source != null
-            ? $"{_viewModel.Source} {_focusedPasuk!.PasukNumHeb}"
-            : _viewModel.Source;
+        if (focused)
+        {
+            NormalNavigationTitle.Text = $"{_viewModel.Source} {_focusedPasuk!.PasukNumHeb}";
+        }
+        else
+        {
+            // Selection updates also run before the first chapter finishes loading.
+            // Keep the source binding alive so that a null startup value cannot
+            // leave the chapter title blank, and later swipes update it as well.
+            NormalNavigationTitle.SetBinding(Button.TextProperty, nameof(PerekViewModel.Source));
+        }
         // iOS has no system Back for the overlay, so the navigation slot turns
         // into the close control there; platforms with system Back keep the
         // shared hamburger (#2467).
