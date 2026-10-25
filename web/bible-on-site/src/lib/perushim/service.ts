@@ -65,6 +65,7 @@ interface PerushPerekNamePair {
 	perushName: string;
 }
 
+/** Build enumeration must fail on database errors rather than publish missing routes. */
 export async function getAllPerushPerekNamePairs(): Promise<
 	PerushPerekNamePair[]
 > {
@@ -84,7 +85,7 @@ export async function getAllPerushPerekNamePairs(): Promise<
 			"Failed to fetch perush-perek name pairs:",
 			error instanceof Error ? error.message : error,
 		);
-		return [];
+		throw error;
 	}
 }
 
