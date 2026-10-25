@@ -1012,7 +1012,10 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
                 $" pc={KvoObjStr(v, "accessibilityContainer")} ct={KvoObjStr(v, "accessibilityContainerType")}" +
                 $" sgac={KvoBool(v, "shouldGroupAccessibilityChildren")} navStyle={KvoObjStr(v, "accessibilityNavigationStyle")}" +
                 $" axp={AxParentStr(v)} aec={KvoObjStr(v, "accessibilityElementCount")}" +
-                $" opaq={KvoObjStr(v, "_accessibilityIsOpaqueElementProvider")} ae={AccElemSummary(v)}");
+                $" opaq={KvoObjStr(v, "_accessibilityIsOpaqueElementProvider")} ae={AccElemSummary(v)}" +
+                $" isVis={AxSendInt(v, "_accessibilityIsVisible")} viewVis={AxSendInt(v, "_accessibilityViewIsVisible")}" +
+                $" uvf={AxSendRect(v, "_accessibilityVisibleFrame")} uvp={AxSendPoint(v, "_accessibilityVisiblePoint")}" +
+                $" uva={AxUva(v)}");
         }
     }
 
@@ -1065,6 +1068,76 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
 
     [System.Runtime.InteropServices.DllImport("/usr/lib/libobjc.A.dylib", EntryPoint = "objc_msgSend")]
     private static extern IntPtr ObjcMsgSendPointObj(IntPtr receiver, IntPtr selector, CoreGraphics.CGPoint point, IntPtr arg);
+
+    [System.Runtime.InteropServices.DllImport("/usr/lib/libobjc.A.dylib", EntryPoint = "objc_msgSend")]
+    private static extern IntPtr MsgSendObj(IntPtr receiver, IntPtr selector);
+
+    [System.Runtime.InteropServices.DllImport("/usr/lib/libobjc.A.dylib", EntryPoint = "objc_msgSend")]
+    private static extern int MsgSendInt(IntPtr receiver, IntPtr selector);
+
+    [System.Runtime.InteropServices.DllImport("/usr/lib/libobjc.A.dylib", EntryPoint = "objc_msgSend")]
+    private static extern CoreGraphics.CGRect MsgSendCGRect(IntPtr receiver, IntPtr selector);
+
+    [System.Runtime.InteropServices.DllImport("/usr/lib/libobjc.A.dylib", EntryPoint = "objc_msgSend")]
+    private static extern CoreGraphics.CGPoint MsgSendCGPoint(IntPtr receiver, IntPtr selector);
+
+    private static string AxSendInt(Foundation.NSObject obj, string sel)
+    {
+        try
+        {
+            var s = new ObjCRuntime.Selector(sel);
+            return obj.RespondsToSelector(s) ? MsgSendInt(obj.Handle, s.Handle).ToString() : "?";
+        }
+#pragma warning disable S2221 // TEMP-DIAG: msgSend probe must never throw.
+        catch { return "err"; } //NOSONAR
+#pragma warning restore S2221
+    }
+
+    private static string AxSendRect(Foundation.NSObject obj, string sel)
+    {
+        try
+        {
+            var s = new ObjCRuntime.Selector(sel);
+            if (!obj.RespondsToSelector(s)) { return "?"; }
+            var r = MsgSendCGRect(obj.Handle, s.Handle);
+            return $"{r.X:0},{r.Y:0},{r.Width:0}x{r.Height:0}";
+        }
+#pragma warning disable S2221 // TEMP-DIAG: msgSend probe must never throw.
+        catch { return "err"; } //NOSONAR
+#pragma warning restore S2221
+    }
+
+    private static string AxSendPoint(Foundation.NSObject obj, string sel)
+    {
+        try
+        {
+            var s = new ObjCRuntime.Selector(sel);
+            if (!obj.RespondsToSelector(s)) { return "?"; }
+            var p = MsgSendCGPoint(obj.Handle, s.Handle);
+            return $"{p.X:0},{p.Y:0}";
+        }
+#pragma warning disable S2221 // TEMP-DIAG: msgSend probe must never throw.
+        catch { return "err"; } //NOSONAR
+#pragma warning restore S2221
+    }
+
+    private static string AxUva(Foundation.NSObject obj)
+    {
+        try
+        {
+            var s = new ObjCRuntime.Selector("_accessibilityUserTestingVisibleAncestor");
+            if (!obj.RespondsToSelector(s)) { return "?"; }
+            var p = MsgSendObj(obj.Handle, s.Handle);
+            if (p == IntPtr.Zero) { return "nil"; }
+            if (ObjCRuntime.Runtime.GetNSObject(p) is not { } o) { return "?"; }
+            var desc = o.ToString() ?? "-";
+            if (desc.Length > 60) { desc = desc[..60]; }
+            return $"{o.GetType().Name}@{KvoObjRect(o, "accessibilityFrame")} id={KvoObjStr(o, "accessibilityIdentifier")} {desc}";
+        }
+#pragma warning disable S2221 // TEMP-DIAG: msgSend probe must never throw.
+        catch { return "err"; } //NOSONAR
+#pragma warning restore S2221
+    }
 
     private static string AccElemSummary(UIKit.UIView view)
     {
