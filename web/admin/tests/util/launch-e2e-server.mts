@@ -1,7 +1,7 @@
 /**
  * E2E Test Server Launcher for Admin App
  *
- * Environment comes from the npm script wrapper
+ * Environment comes from the package.json script wrapper
  * (`dotenv -e .test.env -- playwright test`) or from CI env vars directly.
  *
  * This script:
@@ -56,7 +56,7 @@ try {
 }
 
 /**
- * Runs a population npm script (`db:populate:test` / `s3:populate:test`),
+ * Runs a population script (`db:populate:test` / `s3:populate:test`),
  * which delegates to the matching `cargo make` task in data/.
  */
 function runPopulate(script: string, label: string, fatal: boolean): void {

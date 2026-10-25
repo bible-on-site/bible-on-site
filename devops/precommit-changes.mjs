@@ -32,8 +32,8 @@ export function getStagedChanges() {
 /** Run argv command inside dir, inheriting stdio. @returns {number} exit code */
 export function runIn(dir, argv) {
 	return (
-		// shell is required only on Windows to spawn .cmd shims (npm);
-		// argv is fully static — no user input is shelled.
+		// shell stays enabled on Windows in case an entry ever resolves to a
+		// .cmd shim; argv is fully static — no user input is shelled.
 		spawnSync(argv[0], argv.slice(1), { // nosemgrep
 			cwd: dir,
 			shell: process.platform === "win32",
