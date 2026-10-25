@@ -1,5 +1,6 @@
 import { createServerFn, createServerOnlyFn } from "@tanstack/react-start";
 import type mysql from "mysql2/promise";
+import { VALIDATION_PREFIX } from "~/lib/server-fn-errors";
 import {
 	type EntryRevisionRow,
 	normalizeRevisionSource,
@@ -68,6 +69,39 @@ function assertFreshBase(
 	}
 }
 
+/** Hebrew-facing input checks shared by the create/update save paths. */
+export function assertEntryFieldsValid(input: {
+	unique_name?: string | null;
+	title?: string | null;
+}): void {
+	if (!input.unique_name?.trim()) {
+		throw new Error(`${VALIDATION_PREFIX}: שם ייחודי חייב להיות מלא`);
+	}
+	if (!input.title?.trim()) {
+		throw new Error(`${VALIDATION_PREFIX}: כותרת הערך חייבת להיות מלאה`);
+	}
+}
+
+/**
+ * Maps MySQL write failures the user can fix to VALIDATION errors.
+ * utf8mb4_unicode_ci makes unique_name nikud- and space-insensitive, so a
+ * collision turns every save into the same dup-key error; column limits do
+ * the same for oversized fields. Both deserve a readable failure instead of
+ * a generic 500.
+ */
+export function translateEntryWriteError(err: unknown): unknown {
+	const { code, errno } = err as { code?: unknown; errno?: unknown };
+	if (code === "ER_DUP_ENTRY" || errno === 1062) {
+		return new Error(
+			`${VALIDATION_PREFIX}: השם הייחודי כבר תפוס על ידי ערך אחר`,
+		);
+	}
+	if (code === "ER_DATA_TOO_LONG" || errno === 1406) {
+		return new Error(`${VALIDATION_PREFIX}: אחד השדות ארוך מדי לשמירה`);
+	}
+	return err;
+}
+
 export interface SaveEntryRevisionedInput {
 	id: string;
 	unique_name: string;
@@ -103,6 +137,7 @@ export const saveEntryRevisioned = createServerOnlyFn(
 		input: SaveEntryRevisionedInput,
 		options: { squash?: boolean } = {},
 	): Promise<SavedEntryRevisionResult> {
+		assertEntryFieldsValid(input);
 		const entry = await lockEntry(conn, input.id);
 		if (!entry) throw new Error("Entry not found");
 
@@ -124,55 +159,59 @@ export const saveEntryRevisioned = createServerOnlyFn(
 		const notes = input.notes?.trim() || null;
 		let headId = head?.id ?? null;
 
-		if (
-			options.squash !== false &&
-			shouldSquashIntoHead(
-				head
-					? { source: head.source, ageSeconds: Number(head.age_seconds) }
-					: null,
-				source,
-			)
-		) {
-			await txExecute(
-				conn,
-				`UPDATE tanahpedia_entry_revision
-			 SET proposed_unique_name = ?, proposed_title = ?, proposed_content = ?,
-			     notes = COALESCE(?, notes), updated_at = NOW()
-			 WHERE id = ?`,
-				[
-					input.unique_name,
-					input.title,
-					nextContent,
-					notes,
-					head?.id as string,
-				],
-			);
-		} else {
-			headId = crypto.randomUUID();
-			await txExecute(
-				conn,
-				`INSERT INTO tanahpedia_entry_revision
-			 (id, entry_id, proposed_unique_name, proposed_title, proposed_content,
-			  source, notes, status, base_revision_id)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, 'APPLIED', ?)`,
-				[
-					headId,
-					input.id,
-					input.unique_name,
-					input.title,
-					nextContent,
+		try {
+			if (
+				options.squash !== false &&
+				shouldSquashIntoHead(
+					head
+						? { source: head.source, ageSeconds: Number(head.age_seconds) }
+						: null,
 					source,
-					notes,
-					head?.id ?? null,
-				],
-			);
-		}
+				)
+			) {
+				await txExecute(
+					conn,
+					`UPDATE tanahpedia_entry_revision
+				 SET proposed_unique_name = ?, proposed_title = ?, proposed_content = ?,
+				     notes = COALESCE(?, notes), updated_at = NOW()
+				 WHERE id = ?`,
+					[
+						input.unique_name,
+						input.title,
+						nextContent,
+						notes,
+						head?.id as string,
+					],
+				);
+			} else {
+				headId = crypto.randomUUID();
+				await txExecute(
+					conn,
+					`INSERT INTO tanahpedia_entry_revision
+				 (id, entry_id, proposed_unique_name, proposed_title, proposed_content,
+				  source, notes, status, base_revision_id)
+				 VALUES (?, ?, ?, ?, ?, ?, ?, 'APPLIED', ?)`,
+					[
+						headId,
+						input.id,
+						input.unique_name,
+						input.title,
+						nextContent,
+						source,
+						notes,
+						head?.id ?? null,
+					],
+				);
+			}
 
-		await txExecute(
-			conn,
-			"UPDATE tanahpedia_entry SET unique_name = ?, title = ?, content = ? WHERE id = ?",
-			[input.unique_name, input.title, nextContent, input.id],
-		);
+			await txExecute(
+				conn,
+				"UPDATE tanahpedia_entry SET unique_name = ?, title = ?, content = ? WHERE id = ?",
+				[input.unique_name, input.title, nextContent, input.id],
+			);
+		} catch (err) {
+			throw translateEntryWriteError(err);
+		}
 
 		const saved = await txQueryOne<EntryRow>(
 			conn,
@@ -282,8 +321,7 @@ export const approveEntryRevision = createServerFn({ method: "POST" })
 				revisionId: revision.id,
 				entryId: targetEntryId,
 				headRevisionId: revision.id,
-				uniqueName:
-					revision.proposed_unique_name ?? previousUniqueName,
+				uniqueName: revision.proposed_unique_name ?? previousUniqueName,
 				previousUniqueName,
 			};
 		});
