@@ -11,9 +11,14 @@
 }
 
 /* Keep React's unfinished page slots unpainted until FlipBook has applied
-   dimensions. Visibility preserves the geometry needed for initialization. */
+   dimensions. display:none (not visibility:hidden) removes the page boxes
+   entirely: hidden elements keep layout geometry and Chrome still counts
+   their unsized→sized transition as a layout shift. The library adds
+   .flipbook in the same synchronous pass that runs recalculateSizes(), so
+   the first painted frame already has final geometry — and nothing that
+   a layout-shift observer can attribute. */
 .bookArea > :global(.he-book:not(.flipbook)) {
-	visibility: hidden;
+	display: none;
 }
 
 .page {
