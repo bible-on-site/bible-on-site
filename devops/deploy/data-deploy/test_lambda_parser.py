@@ -37,6 +37,7 @@ VALIDATOR = load_helpers(
 
 class ChunkedBody:
     def __init__(self, sql):
+        """Encode the SQL as the bytes returned by an S3 response body."""
         self.content = sql.encode("utf-8")
 
     def iter_chunks(self, chunk_size):
@@ -49,15 +50,18 @@ class LocalConnection:
     """SQLite executes the common table DDL; MySQL session settings are ignored."""
 
     def __init__(self):
+        """Create an isolated in-memory database for each parser case."""
         self.database = sqlite3.connect(":memory:")
 
     def cursor(self):
         return self
 
     def __enter__(self):
+        """Expose this adapter through the MySQL cursor context interface."""
         return self
 
     def __exit__(self, *_args):
+        """Allow execution failures to propagate to the test runner."""
         return False
 
     def execute(self, statement):
