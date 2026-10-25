@@ -95,6 +95,13 @@ public partial class PerushimSheet : Border
         IsOpenChanged?.Invoke(this, value);
     }
 
+    private void OnPerushRowTapped(object? sender, TappedEventArgs e)
+    {
+        if (sender is BindableObject { BindingContext: Perush perush })
+        {
+            ViewModel?.ToggleCheckedPerush(perush.Id);
+        }
+    }
     private void OnPerushCheckboxChanged(object? sender, CheckedChangedEventArgs e)
     {
         if (_isTogglingPerush)

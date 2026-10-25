@@ -1,11 +1,16 @@
 {
   "default": {
     "booksPixels": 2846,
+    "backgroundRgb": [
+      255,
+      255,
+      255
+    ],
     "viewport": [
       3,
       1269,
       1077,
-      2055
+      2325
     ],
     "PerushimEmptyIcon": [
       51,
@@ -23,25 +28,45 @@
       51,
       1921,
       1029,
-      2055
+      2058
     ]
   },
   "drag-1": {
-    "booksPixels": 2846
+    "booksPixels": 2846,
+    "backgroundRgb": [
+      255,
+      255,
+      255
+    ]
   },
   "drag-2": {
-    "booksPixels": 2846
+    "booksPixels": 2846,
+    "backgroundRgb": [
+      255,
+      255,
+      255
+    ]
   },
   "drag-3": {
-    "booksPixels": 2846
+    "booksPixels": 2846,
+    "backgroundRgb": [
+      255,
+      255,
+      255
+    ]
   },
   "expanded": {
     "booksPixels": 2846,
+    "backgroundRgb": [
+      255,
+      255,
+      255
+    ],
     "viewport": [
       3,
       163,
       1077,
-      2055
+      2325
     ],
     "PerushimEmptyIcon": [
       51,
@@ -62,14 +87,37 @@
       952
     ]
   },
+  "top-edge-drag": {
+    "sheetTop": 1269,
+    "start": [
+      540,
+      1275
+    ],
+    "expanded": true
+  },
   "export-chooser": {
-    "booksPixels": 2697
+    "booksPixels": 2737,
+    "backgroundRgb": [
+      238,
+      237,
+      244
+    ]
   },
   "download-settings": {
-    "booksPixels": 0
+    "booksPixels": 0,
+    "backgroundRgb": [
+      255,
+      255,
+      255
+    ]
   },
   "download-complete": {
-    "booksPixels": 3219
+    "booksPixels": 3219,
+    "backgroundRgb": [
+      255,
+      255,
+      255
+    ]
   },
   "download-flow": {
     "entry": "perushim-dialog",
@@ -82,14 +130,117 @@
   },
   "returned": {
     "booksPixels": 0,
+    "backgroundRgb": [
+      255,
+      255,
+      255
+    ],
     "viewport": [
       3,
       163,
       1077,
-      2055
+      2325
+    ]
+  },
+  "populated-notch": {
+    "viewportBottom": 2325,
+    "centralButtonBottom": 2226
+  },
+  "row-selection": {
+    "perush": "תרגום יונתן",
+    "nameTapTogglesOnce": true,
+    "checkboxTapTogglesOnce": true
+  },
+  "populated-drag-1": {
+    "backgroundRgb": [
+      255,
+      255,
+      255
+    ]
+  },
+  "populated-drag-2": {
+    "backgroundRgb": [
+      255,
+      255,
+      255
+    ]
+  },
+  "populated-drag-3": {
+    "backgroundRgb": [
+      255,
+      255,
+      255
     ]
   },
   "collapsed": {
-    "booksPixels": 0
+    "booksPixels": 0,
+    "backgroundRgb": [
+      255,
+      255,
+      255
+    ]
+  },
+  "articles-mode": {
+    "sheetClosed": true,
+    "chevronDisabled": true,
+    "restoredOnTextView": true
+  },
+  "exit-confirmation": {
+    "booksPixels": 619,
+    "backgroundRgb": [
+      179,
+      179,
+      179
+    ]
+  },
+  "exit-action": {
+    "stayTextLines": 1
+  },
+  "exit-dismissed": {
+    "booksPixels": 0,
+    "backgroundRgb": [
+      255,
+      255,
+      255
+    ]
+  },
+  "exit-prompt": {
+    "card": [
+      78,
+      909,
+      1014,
+      1555
+    ],
+    "screen": [
+      1080,
+      2400
+    ],
+    "allControlsWithinCard": true,
+    "dismissClearedOverlay": true
+  },
+  "populated-notch-proof": {
+    "booksPixels": 0,
+    "backgroundRgb": [
+      255,
+      255,
+      255
+    ]
+  },
+  "populated-notch-pixels": {
+    "perush": "מראות הצובאות",
+    "textBounds": [
+      63,
+      2053,
+      861,
+      2136
+    ],
+    "formerClipLine": 2055,
+    "notchGap": [
+      630,
+      2073,
+      654,
+      2103
+    ],
+    "blackTextPixels": 154
   }
 }

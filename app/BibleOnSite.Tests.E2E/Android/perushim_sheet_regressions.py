@@ -1,5 +1,6 @@
 """Verify commentary visibility and the native download-and-return flow."""
 import argparse
+from collections import Counter
 import io
 import json
 import os
@@ -72,6 +73,10 @@ def wait_for(name):
     raise AssertionError(f"Native control did not become visible: {name}")
 
 
+def dominant_color(png):
+    return Counter(Image.open(io.BytesIO(png)).convert("RGB").get_flattened_data()).most_common(1)[0][0]
+
+
 def rendered_books_pixels(png):
     # Only the books glyph has red/green pixels in the middle fifth of this reader.
     # This catches a painted cover even when accessibility bounds still look correct.
@@ -87,7 +92,7 @@ def capture(name, verify=True):
     png = adb("exec-out", "screencap", "-p")
     (args.artifacts / (name + ".png")).write_bytes(png)
     (args.artifacts / (name + ".xml")).write_bytes(raw)
-    data = {"booksPixels": rendered_books_pixels(png)}
+    data = {"booksPixels": rendered_books_pixels(png), "backgroundRgb": dominant_color(png)}
     if verify:
         viewport_node = find(nodes, "PerushimContentViewport")
         check.assertTrue(viewport_node is not None, "Sheet content viewport is missing")
@@ -114,7 +119,7 @@ native_interval.wait(timeout=0.4)
 nodes, initial = capture("default")
 view_top = initial["viewport"][1]
 x = sum(initial["viewport"][::2]) // 2
-start_y = view_top + 80
+start_y = view_top + 6
 gesture_argv = base + ["shell", "input", "swipe", str(x), str(start_y),
                        str(x), str(max(180, start_y - 700)), "6000"]
 process = subprocess.Popen(gesture_argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE)  # nosec B603: validated SDK argv, no shell.  # nosemgrep
@@ -125,13 +130,15 @@ try:
         name = f"drag-{index + 1}"
         (args.artifacts / (name + ".png")).write_bytes(png)
         count = rendered_books_pixels(png)
-        report[name] = {"booksPixels": count}
+        report[name] = {"booksPixels": count, "backgroundRgb": dominant_color(png)}
+        check.assertEqual(report[name]["backgroundRgb"], initial["backgroundRgb"], "Dragging left a gray overlay")
         check.assertTrue(count >= initial["booksPixels"] * 0.9, f"White cover obscured books during drag: {count}")
 finally:
     process.communicate(timeout=15)
 native_interval.wait(timeout=0.5)
 nodes, expanded = capture("expanded")
-check.assertTrue(expanded["viewport"][1] < view_top - 100, "Upward drag did not expand the sheet")
+check.assertTrue(expanded["viewport"][1] < view_top - 100, "Top-edge drag did not expand the sheet")
+report["top-edge-drag"] = {"sheetTop": view_top, "start": [x, start_y], "expanded": True}
 check.assertTrue(expanded["booksPixels"] >= initial["booksPixels"] * 0.9, "Rendered books changed after expansion")
 
 # Both actions must receive real native taps, not just have accessible bounds.
@@ -176,8 +183,125 @@ report["download-flow"] = {"entry": "perushim-dialog", "preferencesSection": "pa
 
 nodes, expanded = capture("returned", verify=False)
 expanded["viewport"] = bounds(find(nodes, "PerushimContentViewport"))
-adb("shell", "input", "swipe", x, expanded["viewport"][1] + 80, x, start_y, "800")
+menu_bounds = bounds(find(nodes, "CircularMenuButton"))
+check.assertGreaterEqual(expanded["viewport"][3], menu_bounds[3],
+                         "A rectangular viewport clip must not cover text through the transparent bar notch")
+report["populated-notch"] = {"viewportBottom": expanded["viewport"][3], "centralButtonBottom": menu_bounds[3]}
+# A name tap and a checkbox tap each toggle exactly once, then restore state.
+checkboxes = [n for n in nodes if n.get("class") == "android.widget.CheckBox" and n.get("enabled") == "true"]
+check.assertTrue(checkboxes, "No enabled commentary checkbox is available")
+checkbox = checkboxes[0]
+checkbox_index = [n for n in nodes if n.get("class") == "android.widget.CheckBox"].index(checkbox)
+initial_checked = checkbox.get("checked") == "true"
+checkbox_rect = bounds(checkbox)
+name_node = next(n for n in nodes if n.get("class") == "android.widget.TextView" and n.get("text")
+                 and abs(sum(bounds(n)[1::2]) - sum(checkbox_rect[1::2])) <= 24)
+perush_name = name_node.get("text")
+for target, expected in ((name_node, not initial_checked), (name_node, initial_checked),
+                         (checkbox, not initial_checked), (checkbox, initial_checked)):
+    tap(target)
+    nodes, _ = snapshot()
+    current_boxes = [n for n in nodes if n.get("class") == "android.widget.CheckBox"]
+    check.assertEqual(current_boxes[checkbox_index].get("checked") == "true", expected,
+                      "Perush name and checkbox taps must each toggle once")
+report["row-selection"] = {"perush": perush_name, "nameTapTogglesOnce": True, "checkboxTapTogglesOnce": True}
+# Sample populated rows crossing the notch during the same sheet drag.
+process = subprocess.Popen(base + ["shell", "input", "swipe", str(x), str(expanded["viewport"][1] + 80),  # nosec B603: validated SDK argv, no shell.  # nosemgrep
+                                  str(x), str(start_y), "6000"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+try:
+    for index in range(3):
+        native_interval.wait(timeout=1.1)
+        png = adb("exec-out", "screencap", "-p")
+        name = f"populated-drag-{index + 1}"
+        (args.artifacts / (name + ".png")).write_bytes(png)
+        report[name] = {"backgroundRgb": dominant_color(png)}
+        check.assertEqual(report[name]["backgroundRgb"], expanded["backgroundRgb"], "Populated sheet drag left a gray overlay")
+finally:
+    process.communicate(timeout=15)
 native_interval.wait(timeout=0.7)
-capture("collapsed", verify=False)
+_, collapsed = capture("collapsed", verify=False)
+check.assertEqual(collapsed["backgroundRgb"], initial["backgroundRgb"], "Sheet collapse left a gray overlay")
+
+# Articles closes the sheet and disables its launcher; text mode restores it.
+nodes, _ = snapshot()
+tap(find(nodes, "ArticlesButton"))
+nodes, _ = wait_for("PerushimChevronButton")
+check.assertIsNone(find(nodes, "PerushimContentViewport"), "Articles must close the commentary sheet")
+check.assertEqual(find(nodes, "PerushimChevronButton").get("enabled"), "false", "Articles must disable the commentary launcher")
+tap(find(nodes, "PerushimChevronButton"))
+nodes, _ = snapshot()
+check.assertIsNone(find(nodes, "PerushimContentViewport"), "Disabled chevron must not reopen the sheet")
+capture("articles-mode", verify=False)
+tap(find(nodes, "TextButton"))
+nodes, _ = wait_for("PerushimChevronButton")
+check.assertEqual(find(nodes, "PerushimChevronButton").get("enabled"), "true", "Text mode must restore the commentary launcher")
+tap(find(nodes, "PerushimChevronButton"))
+nodes, _ = wait_for("PerushimContentViewport")
+tap(find(nodes, "PerushimChevronButton"))
+report["articles-mode"] = {"sheetClosed": True, "chevronDisabled": True, "restoredOnTextView": True}
+# Root Back opens the real exit popup. Its entire card and actions must fit.
+if args.back_source == "emulator":
+    with grpc.insecure_channel(f"127.0.0.1:{args.emulator_grpc_port}") as channel:
+        channel.unary_unary("/android.emulation.control.EmulatorController/sendKey")(
+            bytes([8, 1, 16, 2, 24, 158, 1]), timeout=5)
+else:
+    adb("shell", "input", "keyevent", "4")
+nodes, _ = wait_for("ExitConfirmationStay")
+capture("exit-confirmation", verify=False)
+card = bounds(find(nodes, "ExitConfirmationCard"))
+screen = Image.open(io.BytesIO(adb("exec-out", "screencap", "-p"))).size
+check.assertTrue(24 <= card[0] < card[2] <= screen[0] - 24, "Exit card extends beyond the screen margin")
+for control in ("ExitConfirmationTitle", "ExitConfirmationMessage", "ExitConfirmationStay", "ExitConfirmationExit"):
+    rect = bounds(find(nodes, control))
+    check.assertTrue(card[0] <= rect[0] < rect[2] <= card[2] and card[1] <= rect[1] < rect[3] <= card[3],
+                     f"Exit prompt content is clipped: {control}")
+stay_rect = bounds(find(nodes, "ExitConfirmationStay"))
+stay_image = Image.open(io.BytesIO(adb("exec-out", "screencap", "-p"))).convert("RGB").crop(stay_rect)
+ink_rows = [y for y in range(stay_image.height)
+            if sum(b > 80 and b > r * 1.5 and b > g * 1.1
+                   for r, g, b in (stay_image.getpixel((x, y)) for x in range(stay_image.width))) > 2]
+ink_bands = sum(index == 0 or y - ink_rows[index - 1] > 4 for index, y in enumerate(ink_rows))
+check.assertEqual(ink_bands, 1, "The Stay action must fit on one text line at the reproduction's font scale")
+report["exit-action"] = {"stayTextLines": ink_bands}
+tap(find(nodes, "ExitConfirmationStay"))
+wait_for("PerushimChevronButton")
+_, dismissed = capture("exit-dismissed", verify=False)
+check.assertEqual(dismissed["backgroundRgb"], initial["backgroundRgb"], "Dismissing exit left a gray overlay")
+report["exit-prompt"] = {"card": card, "screen": screen, "allControlsWithinCard": True, "dismissClearedOverlay": True}
+
+# The reported long name must paint through the notch, beyond the old clip line.
+nodes, _ = wait_for("PerushimChevronButton")
+tap(find(nodes, "PerushimChevronButton"))
+nodes, _ = wait_for("PerushimContentViewport")
+menu_rect = bounds(find(nodes, "CircularMenuButton"))
+scale = (menu_rect[2] - menu_rect[0]) / 56
+old_clip_line = menu_rect[1] - round(scale)
+touch_slop = 0
+for attempt in range(10):
+    name_node = next((n for n in nodes if n.get("text") == "מראות הצובאות"), None)
+    before_top = bounds(name_node)[1] if name_node is not None else None
+    if before_top is not None and abs(before_top - old_clip_line) <= 4:
+        break
+    delta = before_top - old_clip_line if before_top is not None else 50 * scale
+    distance = min(50 * scale, abs(delta) + touch_slop) * (1 if delta > 0 else -1)
+    start = menu_rect[1] - round(9 * scale)
+    adb("shell", "input", "swipe", round(screen[0] * 0.7), start,
+        round(screen[0] * 0.7), round(start - distance), "1000")
+    nodes, _ = snapshot()
+    after_name = next((n for n in nodes if n.get("text") == "מראות הצובאות"), None)
+    if before_top is not None and after_name is not None:
+        moved = abs(bounds(after_name)[1] - before_top)
+        if 0 < moved < abs(distance):
+            touch_slop = abs(distance) - moved
+else:
+    raise AssertionError("Reported commentary row could not reach the transparent notch")
+capture("populated-notch-proof", verify=False)
+notch_gap = (menu_rect[2] + round(2 * scale), menu_rect[1] + round(5 * scale),
+             menu_rect[2] + round(10 * scale), menu_rect[1] + round(15 * scale))
+notch_image = Image.open(io.BytesIO(adb("exec-out", "screencap", "-p"))).convert("RGB").crop(notch_gap)
+ink_pixels = sum(r < 80 and g < 80 and b < 80 for r, g, b in notch_image.get_flattened_data())
+check.assertGreater(ink_pixels, 20, "White cover hides commentary ink through the transparent notch")
+report["populated-notch-pixels"] = {"perush": name_node.get("text"), "textBounds": bounds(name_node),
+                                     "formerClipLine": old_clip_line, "notchGap": notch_gap, "blackTextPixels": ink_pixels}
 (args.artifacts / "report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
-print("PASS: books stay rendered during upward drag; both actions work; pack installs and one Back returns to the populated reader", flush=True)
+print("PASS: commentary ink stays visible; top-edge dragging, row taps, download/Back, Articles and exit prompt checks pass", flush=True)

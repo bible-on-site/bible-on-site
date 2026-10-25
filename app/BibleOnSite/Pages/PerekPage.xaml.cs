@@ -342,7 +342,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     {
         _swipe.Cancel();
         if (_carouselInitializing || CarouselLoadingOverlay.IsVisible || FanMenu.IsOpen || _isShowingArticles || _focusedPasuk != null || ChapterSearch.IsSearchOpen ||
-            !ContainsTouch(PerekCarousel, position) || ContainsTouch(BottomBar, position) ||
+            !ContainsTouch(PerekCarousel, position) || ContainsTouch(BottomBar, position) || ContainsTouch(PerushimPanel, position) ||
             ContainsTouch(ExitFullScreenButton, position))
         {
             return;
@@ -353,7 +353,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     private void OnTouchDispatched(object? sender, TouchPosition position)
     {
         if (_carouselInitializing || CarouselLoadingOverlay.IsVisible || FanMenu.IsOpen || _isShowingArticles || _focusedPasuk != null || ChapterSearch.IsSearchOpen ||
-            !ContainsTouch(PerekCarousel, position) || ContainsTouch(BottomBar, position) ||
+            !ContainsTouch(PerekCarousel, position) || ContainsTouch(BottomBar, position) || ContainsTouch(PerushimPanel, position) ||
             ContainsTouch(ExitFullScreenButton, position) || ContainsTouch(FanMenu.ToggleButton, position) ||
             ContainsTouch(SelectionBar, position))
         {
@@ -1429,6 +1429,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         try
         {
             DebugLog.Write("[Articles] ShowArticlesView starting...");
+            PerushimPanel.CloseImmediate();
             _isShowingArticles = true;
 
             // Load articles for the current perek (header stays the same)

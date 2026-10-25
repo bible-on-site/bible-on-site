@@ -17,10 +17,10 @@
         <converters:PerushEnabledConverter x:Key="PerushEnabledConverter"/>
     </Border.Resources>
     <Grid x:Name="PerushimContentViewport" AutomationId="PerushimContentViewport"
-          RowDefinitions="Auto,*" Padding="16,12,16,0" Margin="0,0,0,90"
+          RowDefinitions="Auto,*"
           IsClippedToBounds="True">
         <!-- Header with drag handle - draggable to dismiss -->
-        <VerticalStackLayout x:Name="PerushimDragHandle" Grid.Row="0" Spacing="4">
+        <VerticalStackLayout x:Name="PerushimDragHandle" AutomationId="PerushimDragHandle" Grid.Row="0" Spacing="4" Padding="16,12,16,0">
             <VerticalStackLayout.GestureRecognizers>
                 <PanGestureRecognizer PanUpdated="OnPanelPan"/>
             </VerticalStackLayout.GestureRecognizers>
@@ -67,8 +67,9 @@
                      Margin="0,4,0,0"/>
         </VerticalStackLayout>
         <!-- Scrollable content area for perushim list -->
-        <CollectionView x:Name="PerushimCollection" Grid.Row="1" Margin="0,8,0,0"
+        <CollectionView x:Name="PerushimCollection" Grid.Row="1" Margin="16,8,16,0"
                         ItemsSource="{Binding Perushim}"
+                        VerticalScrollBarVisibility="Never"
                         SelectionMode="None"
                         VerticalOptions="Fill">
                 <CollectionView.Triggers>
@@ -79,6 +80,9 @@
             <CollectionView.ItemTemplate>
                 <DataTemplate x:DataType="models:Perush">
                     <Grid Padding="4,2" ColumnDefinitions="Auto,*" x:Name="PerushRow">
+                        <Grid.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OnPerushRowTapped"/>
+                        </Grid.GestureRecognizers>
                         <Grid.IsEnabled>
                             <MultiBinding Converter="{StaticResource PerushEnabledConverter}" Mode="OneWay">
                                 <Binding Path="Id"/>
@@ -114,14 +118,19 @@
                     </Grid>
                 </DataTemplate>
             </CollectionView.ItemTemplate>
+            <CollectionView.Footer>
+                <!-- Scrolling clearance keeps the final row reachable while the
+                     viewport still paints through the bottom bar's curved notch. -->
+                <BoxView HeightRequest="90" BackgroundColor="Transparent"/>
+            </CollectionView.Footer>
         </CollectionView>
         <!-- A separate, bounded scroll view avoids CollectionView.EmptyView's
              native measurement/overflow and its nested scroll indicator. -->
         <ScrollView x:Name="PerushimEmptyState" AutomationId="PerushimEmptyState"
-                    Grid.Row="1" Margin="0,8,0,0"
+                    Grid.Row="1" Margin="16,8,16,0"
                     IsVisible="{Binding Perushim.Count, Converter={StaticResource ZeroToTrueConverter}}"
                     VerticalScrollBarVisibility="Never">
-            <VerticalStackLayout Spacing="8" Padding="0,8,0,12">
+            <VerticalStackLayout Spacing="8" Padding="0,8,0,102">
                 <Label Text="📚" FontSize="32" HorizontalTextAlignment="Center"
                        AutomationId="PerushimEmptyIcon"/>
                 <Label Text="{Binding PerushimEmptyMessage}" FontSize="14"

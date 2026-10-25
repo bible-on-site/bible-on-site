@@ -1,0 +1,46 @@
+Running tests from C:\Users\Dorad\.codex\worktrees\pr-2584-simulator\bible-on-site-clone-1\app\BibleOnSite.Tests\bin\Debug\net10.0\BibleOnSite.Tests.dll (net10.0|x64)
+failed BibleOnSite.Tests.Pages.PerushimPanelShadowTests.Scrollable_content_can_clear_the_bottom_bar_without_clipping_its_viewport (112ms)
+  from C:\Users\Dorad\.codex\worktrees\pr-2584-simulator\bible-on-site-clone-1\app\BibleOnSite.Tests\bin\Debug\net10.0\BibleOnSite.Tests.dll (net10.0|x64)
+  Xunit.MicrosoftTestingPlatform.XunitException: System.InvalidOperationException : Sequence contains no elements
+    at System.Linq.ThrowHelper.ThrowNoElementsException()
+    at System.Linq.Enumerable.Single[TSource](IEnumerable`1 source)
+    at BibleOnSite.Tests.Pages.PerushimPanelShadowTests.Scrollable_content_can_clear_the_bottom_bar_without_clipping_its_viewport() in C:\Users\Dorad\.codex\worktrees\pr-2584-simulator\bible-on-site-clone-1\app\BibleOnSite.Tests\Pages\PerushimPanelShadowTests.cs:54
+    at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+    at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+failed BibleOnSite.Tests.Pages.PerushimPanelShadowTests.Content_extends_behind_the_transparent_bottom_bar_notch (36ms)
+  from C:\Users\Dorad\.codex\worktrees\pr-2584-simulator\bible-on-site-clone-1\app\BibleOnSite.Tests\bin\Debug\net10.0\BibleOnSite.Tests.dll (net10.0|x64)
+  Expected ((string?)viewport.Attribute("Margin")) to be <null> because a rectangular bottom inset hides content through the bar notch, but found "0,0,0,90".
+    at FluentAssertions.Primitives.ReferenceTypeAssertions`2.BeNull(String because, Object[] becauseArgs)
+    at BibleOnSite.Tests.Pages.PerushimPanelShadowTests.Content_extends_behind_the_transparent_bottom_bar_notch() in C:\Users\Dorad\.codex\worktrees\pr-2584-simulator\bible-on-site-clone-1\app\BibleOnSite.Tests\Pages\PerushimPanelShadowTests.cs:36
+    at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+    at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+failed BibleOnSite.Tests.Pages.PerushimPanelShadowTests.Exit_prompt_content_can_shrink_within_the_available_screen_width (10ms)
+  from C:\Users\Dorad\.codex\worktrees\pr-2584-simulator\bible-on-site-clone-1\app\BibleOnSite.Tests\bin\Debug\net10.0\BibleOnSite.Tests.dll (net10.0|x64)
+  Expected popup.Descendants(Maui + "VerticalStackLayout").Attributes("WidthRequest") to be empty because a fixed content width plus popup padding and margins overflows a small screen, but found at least these items {WidthRequest="300"}.
+    at FluentAssertions.Collections.GenericCollectionAssertions`3.<>c__DisplayClass11_0.<BeEmpty>b__0(AssertionChain chain)
+    at FluentAssertions.Collections.GenericCollectionAssertions`3.BeEmpty(String because, Object[] becauseArgs)
+    at BibleOnSite.Tests.Pages.PerushimPanelShadowTests.Exit_prompt_content_can_shrink_within_the_available_screen_width() in C:\Users\Dorad\.codex\worktrees\pr-2584-simulator\bible-on-site-clone-1\app\BibleOnSite.Tests\Pages\PerushimPanelShadowTests.cs:65
+    at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+    at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+C:\Users\Dorad\.codex\worktrees\pr-2584-simulator\bible-on-site-clone-1\app\BibleOnSite.Tests\bin\Debug\net10.0\BibleOnSite.Tests.dll (net10.0|x64) failed with 3 error(s) (1s 356ms)
+Exit code: 2
+  Standard output:      Warning:
+       The component "Fluent Assertions" is governed by the rules defined in the Xceed License Agreement and
+       the Xceed Fluent Assertions Community License. You may use Fluent Assertions free of charge for
+       non-commercial use only. An active subscription is required to use Fluent Assertions for commercial use.
+
+       Please contact Xceed Sales mailto:sales@xceed.com to acquire a subscription at a very low cost.
+
+       A paid commercial license supports the development and continued increasing support of
+       Fluent Assertions users under both commercial and community licenses. Help us
+       keep Fluent Assertions at the forefront of unit testing.
+
+       For more information, visit https://xceed.com/products/unit-testing/fluent-assertions/
+
+Test run summary: Failed!
+  total: 8
+  failed: 3
+  succeeded: 5
+  skipped: 0
+  duration: 1s 957ms
+Test run completed with non-success exit code: 2 (see: https://aka.ms/testingplatform/exitcodes)
