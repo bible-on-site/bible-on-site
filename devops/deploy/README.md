@@ -59,20 +59,64 @@ The schema migration `data/mysql/tanahpedia_alter_mention_decoration.sql` create
 the missing table without replacing existing rows. It does not import annotations
 or change scripture, articles, or public URLs.
 
-After explicit approval of the AWS changes, deploy the updated populator Lambda
-parser first. Older versions inject a table drop even before `CREATE TABLE IF NOT
-EXISTS`, so they must not execute this migration. Then upload only this migration
-and invoke the existing Lambda contract with `sql_files` set to
-`["tanahpedia_alter_mention_decoration.sql"]`, the upload's `s3_prefix`, and the
-database URL resolved securely by the deployment caller. `buildDeployPayload`
-supports this single-file selection. Do not run the full `npm run deploy:data`
-payload for this recovery: it also replaces bootstrap tables and commentary data.
+After explicit approval of the AWS changes, use this bounded recovery procedure:
+
+1. Verify account `250598594267` and region `il-central-1`. Download the currently
+   deployed `bible-on-site-db-populator` ZIP, verify its `CodeSha256`, and keep the
+   original ZIP as the rollback artifact. Record its current `RevisionId`.
+2. Patch only the two table-matching regexes in the downloaded `index.py`, in
+   `preprocess_sql` and `execute_sql_streaming`. Replace this exact pattern:
+
+   ```python
+   r'CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?[`"]?(\w+)[`"]?'
+   ```
+
+   with:
+
+   ```python
+   r'CREATE\s+TABLE\s+(?!IF\s+NOT\s+EXISTS\b)[`"]?(\w+)[`"]?'
+   ```
+
+   Refuse to package if there are not exactly two expected matches. Preserve
+   every other source byte, the existing SSM credential/invocation handler, and
+   every bundled dependency. Check that only `index.py` changed in the ZIP and
+   run the parser-preservation tests against that actual prepared handler.
+3. Update only the Lambda code, using the recorded `RevisionId` as a concurrency
+   guard. Wait for a successful update and verify the deployed `CodeSha256`
+   matches the prepared archive. Older parsers inject a table drop even before
+   `CREATE TABLE IF NOT EXISTS`, so they must not execute this migration.
+4. Upload only `tanahpedia_alter_mention_decoration.sql` to
+   `bible-on-site-data-deploy`, under a unique prefix such as
+   `sql/schema-recovery/<reviewed-commit>/<execution-id>/`. Invoke the preserved
+   live handler with exactly this legacy payload shape:
+
+   ```json
+   {
+     "sql_files": ["tanahpedia_alter_mention_decoration.sql"],
+     "s3_prefix": "sql/schema-recovery/<reviewed-commit>/<execution-id>/"
+   }
+   ```
+
+   The unchanged live handler retrieves its credentials from SSM. Do not add
+   `db_url` or log credential values. Do not run the full `npm run deploy:data`
+   payload for this recovery: it also replaces bootstrap tables and commentary
+   data. Remove the temporary SQL object after verifying the invocation result.
+
+Do not replace the live handler wholesale with the repository handler for this
+repair. The repository's general deployer passes a private `db_url` payload,
+which is a separate credential-contract change requiring separate approval.
 
 Verify the table and reader query, then invalidate `tanahpedia-mention-refs` to
-clear empty results cached before the schema existed. Repeating the migration
-must preserve existing annotations. If application rollback is needed, leave the
-additive table and any rows in place; do not restore the old destructive parser
-while this migration remains in the deployment manifest.
+clear empty results cached before the schema existed. Use the existing website
+`POST /api/revalidate?tag=tanahpedia-mention-refs` contract, with the credential in
+the `x-revalidate-secret` header, never in the URL or logs. Verify every active
+website instance was invalidated, then check a fresh chapter render and logs.
+Repeating the migration must preserve existing annotations.
+
+If application rollback is needed, leave the additive table and any rows in
+place. Keep the original Lambda ZIP available, but do not restore its destructive
+parser while this migration remains in the deployment manifest. A parser
+rollback must first exclude the migration from subsequent data deployments.
 
 **Required Environment Variables (set via OIDC in CI):**
 - `AWS_REGION` - AWS region (e.g., `il-central-1`)
