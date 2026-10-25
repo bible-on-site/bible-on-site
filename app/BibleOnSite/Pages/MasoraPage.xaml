@@ -16,9 +16,6 @@
 
     <ContentPage.Resources>
         <ResourceDictionary>
-            <converters:IntEqualityConverter x:Key="IntEqualityConverter"/>
-            <converters:PerushCheckedConverter x:Key="PerushCheckedConverter"/>
-            <converters:PerushEnabledConverter x:Key="PerushEnabledConverter"/>
             <x:Double x:Key="BottomBarTotalHeight">90</x:Double>
         </ResourceDictionary>
     </ContentPage.Resources>
@@ -47,35 +44,11 @@
             </controls:SharedTopBar>
         </Grid>
 
-        <!-- Exit Full Screen Button (floating, hidden by default) -->
-        <Border x:Name="ExitFullScreenButton" Grid.Row="1"
-                WidthRequest="48"
-                HeightRequest="48"
-                StrokeShape="RoundRectangle 24"
-                BackgroundColor="{StaticResource Primary}"
-                HorizontalOptions="End"
-                VerticalOptions="End"
+        <!-- Exit Full Screen Button (floating, draggable, hidden by default) -->
+        <controls:ReaderExitFullscreenButton x:Name="ExitFullScreenButton" Grid.Row="1"
                 Margin="16,16,16,100"
-                IsVisible="False"
-                ZIndex="100">
-            <Border.Shadow>
-                <Shadow Brush="Black"
-                        Offset="0,3"
-                        Radius="6"
-                        Opacity="0.3"/>
-            </Border.Shadow>
-            <Border.GestureRecognizers>
-                <TapGestureRecognizer Tapped="OnExitFullScreenClicked"/>
-            </Border.GestureRecognizers>
-            <Label Text="{x:Static fonts:FluentUI.full_screen_minimize_24_regular}"
-                   FontFamily="FluentIcons"
-                   FontSize="24"
-                   TextColor="White"
-                   HorizontalOptions="Center"
-                   VerticalOptions="Center"
-                   HorizontalTextAlignment="Center"
-                   VerticalTextAlignment="Center"/>
-        </Border>
+                ZIndex="100"
+                ExitRequested="OnExitFullScreenClicked"/>
 
         <!-- Main Content Area - fills entire viewport -->
         <Grid x:Name="ContentArea" Grid.Row="1" BackgroundColor="{AppThemeBinding Light=White, Dark={StaticResource OffBlack}}"
@@ -83,22 +56,13 @@
               RowDefinitions="Auto,Auto,*">
 
             <!-- Loading overlay — shown while CarouselView initialises its adapter. -->
-            <Grid x:Name="CarouselLoadingOverlay"
+            <controls:ReaderLoadingOverlay x:Name="CarouselLoadingOverlay"
                   Grid.Row="1" Grid.RowSpan="2"
-                  IsVisible="True"
                   ZIndex="10"
-                  BackgroundColor="{AppThemeBinding Light=White, Dark=#1C1C1E}">
-                <VerticalStackLayout VerticalOptions="Center" HorizontalOptions="Center" Spacing="12">
-                    <ActivityIndicator IsRunning="True"
-                                       Color="{StaticResource Primary}"
-                                       HeightRequest="48"
-                                       WidthRequest="48"/>
-                    <Label Text="מתחבר למסורה..."
-                           FontSize="18"
-                           HorizontalTextAlignment="Center"
-                           TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray200}}"/>
-                </VerticalStackLayout>
-            </Grid>
+                  LoadingText="מתחבר למסורה..."
+                  ErrorTitle="שגיאה בטעינת המסורה"
+                  AutomationIdPrefix="MasoraLoad"
+                  RetryRequested="OnUnitLoadRetryClicked"/>
 
             <!-- CarouselView for unit-based swipe navigation (Row 1 + Row 2) -->
             <CarouselView Grid.Row="1"
@@ -223,360 +187,52 @@
             </CarouselView>
 
             <!-- Articles View (hidden by default, shown when articles button clicked) -->
-            <CollectionView Grid.Row="2"
+            <controls:ReaderArticlesView Grid.Row="2"
                             x:Name="ArticlesCollection"
-                            IsVisible="False"
-                            SelectionMode="Single"
-                            SelectionChanged="OnArticleSelected"
-                            Margin="8,8,8,0">
-                <CollectionView.Footer>
-                    <ContentView x:Name="ArticlesFooterSpacer" HeightRequest="{DynamicResource BottomBarTotalHeight}" BackgroundColor="Transparent"/>
-                </CollectionView.Footer>
-                <CollectionView.ItemsLayout>
-                    <GridItemsLayout Orientation="Vertical"
-                                     Span="2"
-                                     HorizontalItemSpacing="8"
-                                     VerticalItemSpacing="8"/>
-                </CollectionView.ItemsLayout>
-                <CollectionView.ItemTemplate>
-                    <DataTemplate x:DataType="models:Article">
-                        <Border Padding="0"
-                                StrokeShape="RoundRectangle 12"
-                                Stroke="Transparent"
-                                StrokeThickness="2.5"
-                                BackgroundColor="Transparent">
-                            <Border.Triggers>
-                                <DataTrigger TargetType="Border" Value="True">
-                                    <DataTrigger.Binding>
-                                        <MultiBinding Converter="{StaticResource IntEqualityConverter}">
-                                            <Binding Path="Id"/>
-                                            <Binding Source="{x:Reference MasoraPageRoot}" Path="SelectedArticleId"/>
-                                        </MultiBinding>
-                                    </DataTrigger.Binding>
-                                    <Setter Property="Stroke"
-                                            Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryLight}}"/>
-                                </DataTrigger>
-                            </Border.Triggers>
-                            <controls:ArticleCard Article="{Binding .}"/>
-                        </Border>
-                    </DataTemplate>
-                </CollectionView.ItemTemplate>
-
-                <CollectionView.EmptyView>
-                    <VerticalStackLayout VerticalOptions="Center"
-                                         HorizontalOptions="Center"
-                                         Padding="20">
-                        <Label Text="אין מאמרים לפרשה זו"
-                               FontSize="18"
-                               HorizontalTextAlignment="Center"
-                               TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray400}}"/>
-                    </VerticalStackLayout>
-                </CollectionView.EmptyView>
-            </CollectionView>
+                            EmptyText="אין מאמרים ליחידה זו"
+                            SelectedArticleId="{Binding SelectedArticleId}"
+                            ArticleSelected="OnArticleSelected"/>
         </Grid>
 
         <!-- Perushim Panel (slides up from bottom, above content but behind bottom bar) -->
-        <Border x:Name="PerushimPanel" Grid.Row="1"
-                BackgroundColor="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}"
-                StrokeShape="RoundRectangle 16,16,0,0"
-                Stroke="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray600}}"
-                StrokeThickness="1"
-                VerticalOptions="End"
-                ZIndex="50"
-                IsVisible="False">
-            <Border.Shadow>
-                <Shadow Brush="Black" Offset="0,-3" Radius="8" Opacity="0.2"/>
-            </Border.Shadow>
-            <Grid RowDefinitions="Auto,*" Padding="16,12,16,0">
-                <!-- Header with drag handle - draggable to dismiss -->
-                <VerticalStackLayout x:Name="PerushimDragHandle" Grid.Row="0" Spacing="4">
-                    <VerticalStackLayout.GestureRecognizers>
-                        <PanGestureRecognizer PanUpdated="OnPerushimPanelPan"/>
-                    </VerticalStackLayout.GestureRecognizers>
-                    <BoxView WidthRequest="40"
-                             HeightRequest="4"
-                             CornerRadius="2"
-                             BackgroundColor="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray500}}"
-                             HorizontalOptions="Center"
-                             Margin="0,0,0,4"/>
-                    <Label Text="פירושים"
-                           FontSize="18"
-                           FontAttributes="Bold"
-                           HorizontalTextAlignment="Center"
-                           TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryLight}}"/>
-                    <controls:RtlSearchBar x:Name="PerushSearchBar" Placeholder="חיפוש פירוש" Text="{Binding PerushNameFilter}"
-                               AutomationId="PerushNameSearch" SearchButtonPressed="OnPerushSearchSubmitted"/>
-                    <Label Text="{Binding InlineCommentaryLimitMessage}" FontSize="12" LineBreakMode="WordWrap"
-                           HorizontalTextAlignment="Center" AutomationId="InlineCommentaryLimitMessage"/>
-                    <!-- Live selected count; turns Primary and bold at the configured limit (#2471) -->
-                    <Label Text="{Binding PerushimSelectionStatus}"
-                           SemanticProperties.Description="{Binding PerushimSelectionStatus}"
-                           FontSize="13" FontAttributes="Bold"
-                           HorizontalTextAlignment="Center"
-                           AutomationId="PerushimSelectionStatus"
-                           TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray400}}">
-                        <Label.Triggers>
-                            <DataTrigger TargetType="Label" Binding="{Binding PerushimLimitReached}" Value="True">
-                                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryLight}}"/>
-                            </DataTrigger>
-                        </Label.Triggers>
-                    </Label>
-                    <BoxView HeightRequest="1"
-                             BackgroundColor="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray600}}"
-                             Margin="0,4,0,0"/>
-                </VerticalStackLayout>
-                <CollectionView x:Name="PerushimCollection" Grid.Row="1" Margin="0,8,0,90"
-                                ItemsSource="{Binding Perushim}"
-                                SelectionMode="None"
-                                VerticalOptions="Start">
-                        <CollectionView.ItemTemplate>
-                            <DataTemplate x:DataType="models:Perush">
-                                <Grid Padding="4,2" ColumnDefinitions="Auto,*" x:Name="PerushRow">
-                                    <Grid.IsEnabled>
-                                        <MultiBinding Converter="{StaticResource PerushEnabledConverter}" Mode="OneWay">
-                                            <Binding Path="Id"/>
-                                            <Binding Path="BindingContext.CheckedPerushim" Source="{x:Reference MasoraPageRoot}"/>
-                                            <Binding Path="BindingContext.InlineCommentaryLimit" Source="{x:Reference MasoraPageRoot}"/>
-                                        </MultiBinding>
-                                    </Grid.IsEnabled>
-                                    <CheckBox Grid.Column="0"
-                                              AutomationId="PerushCheckBox"
-                                              VerticalOptions="Center"
-                                              Margin="0,0,8,0"
-                                              CheckedChanged="OnPerushCheckboxChanged">
-                                        <CheckBox.IsChecked>
-                                            <MultiBinding Converter="{StaticResource PerushCheckedConverter}" Mode="OneWay">
-                                                <Binding Path="Id"/>
-                                                <Binding Path="BindingContext.CheckedPerushim" Source="{x:Reference MasoraPageRoot}"/>
-                                            </MultiBinding>
-                                        </CheckBox.IsChecked>
-                                    </CheckBox>
-                                    <Label Grid.Column="1"
-                                           Text="{Binding Name}"
-                                           FontSize="16"
-                                           FlowDirection="RightToLeft"
-                                           VerticalOptions="Center">
-                                        <Label.Triggers>
-                                            <DataTrigger TargetType="Label"
-                                                         Binding="{Binding IsEnabled, Source={x:Reference PerushRow}}"
-                                                         Value="False">
-                                                <Setter Property="Opacity" Value="0.4"/>
-                                            </DataTrigger>
-                                        </Label.Triggers>
-                                    </Label>
-                                </Grid>
-                            </DataTemplate>
-                        </CollectionView.ItemTemplate>
-                        <CollectionView.EmptyView>
-                            <VerticalStackLayout VerticalOptions="Center"
-                                                 HorizontalOptions="Center"
-                                                 Spacing="8"
-                                                 Padding="0,16,0,0">
-                                <Label Text="📚"
-                                       FontSize="32"
-                                       HorizontalTextAlignment="Center"/>
-                                <Label Text="{Binding PerushimEmptyMessage}"
-                                       FontSize="14"
-                                       HorizontalTextAlignment="Center"
-                                       TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray400}}"/>
-                                <Button x:Name="GoToPerushimSettingsButton"
-                                        Text="עבור להגדרות להורדת חבילת הפירושים"
-                                        IsVisible="{Binding ShowDownloadPerushimButton}"
-                                        Clicked="OnGoToPerushimSettingsClicked"/>
-                            </VerticalStackLayout>
-                        </CollectionView.EmptyView>
-                </CollectionView>
-            </Grid>
-        </Border>
+        <controls:PerushimSheet x:Name="PerushimPanel" Grid.Row="1" ZIndex="50"
+                                IsOpenChanged="OnPerushimSheetOpenChanged"/>
 
         <!-- Bottom Navigation Bar with Circular Menu - OVERLAY floating at bottom -->
-        <Grid x:Name="BottomBar" Grid.Row="1"
-              HeightRequest="90"
-              VerticalOptions="End"
+        <controls:ReaderBottomBar x:Name="BottomBar" Grid.Row="1"
               ZIndex="100"
-              BackgroundColor="Transparent">
-            <AbsoluteLayout BackgroundColor="Transparent">
-                <GraphicsView x:Name="BottomBarBackground"
-                              AbsoluteLayout.LayoutBounds="0,0,1,1"
-                              AbsoluteLayout.LayoutFlags="All"
-                              BackgroundColor="Transparent"
-                              Drawable="{StaticResource BottomBarDrawable}"/>
+              ArticlesBadgeCount="{Binding ArticlesCount}"
+              PerushimToggleRequested="OnPerushimChevronClicked"
+              TextModeRequested="OnTextButtonClicked"
+              ArticlesRequested="OnArticlesButtonClicked"
+              FullScreenRequested="OnFullScreenClicked"/>
 
-                <!-- Perushim Chevron Button at 8% -->
-                <Button x:Name="PerushimChevronButton"
-                        AutomationId="PerushimChevronButton"
-                        Text="{x:Static fonts:FluentUI.chevron_up_24_regular}"
-                        FontFamily="FluentIcons"
-                        FontSize="20"
-                        WidthRequest="44"
-                        HeightRequest="44"
-                        Padding="0"
-                        BackgroundColor="Transparent"
-                        TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"
-                        Clicked="OnPerushimChevronClicked"
-                        AbsoluteLayout.LayoutBounds="0.08,0.55"
-                        AbsoluteLayout.LayoutFlags="PositionProportional"/>
+        <!-- Circular navigation fan - shared layer (scrim + satellites + FAB) -->
+        <controls:ReaderFanMenu x:Name="FanMenu" Grid.Row="1" ZIndex="150"
+                                Opening="OnFanMenuOpening">
+            <controls:ReaderFanMenu.Satellites>
+                <!-- Previous unit (bottom-left satellite). Disabled at the first unit via Command.CanExecute. -->
+                <controls:ReaderFanMenuSatellite x:Name="PrevUnitButton"
+                        AutomationId="PrevUnitButton"
+                        Text="{x:Static fonts:FluentUI.document_arrow_right_24_regular}"
+                        Command="{Binding LoadPreviousCommand}"
+                        Clicked="OnMenuItemClicked"/>
 
-                <!-- Text Button at 28% - vertical א ב ג -->
-                <Button x:Name="TextButton"
-                        AutomationId="TextButton"
-                        Text="א&#x0a;ב&#x0a;ג"
-                        FontSize="10"
-                        FontAttributes="Bold"
-                        WidthRequest="44"
-                        HeightRequest="44"
-                        Padding="0"
-                        LineBreakMode="WordWrap"
-                        BackgroundColor="Transparent"
-                        TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"
-                        Clicked="OnTextButtonClicked"
-                        AbsoluteLayout.LayoutBounds="0.28,0.55"
-                        AbsoluteLayout.LayoutFlags="PositionProportional"/>
+                <!-- Unit picker (top satellite) -->
+                <controls:ReaderFanMenuSatellite x:Name="UnitPickerButton"
+                        AutomationId="UnitPickerButton"
+                        Text="{x:Static fonts:FluentUI.library_24_regular}"
+                        Clicked="OnUnitPickerClicked"/>
 
-                <!-- Articles Button with Badge at 72% -->
-                <Grid WidthRequest="50"
-                      HeightRequest="44"
-                      AbsoluteLayout.LayoutBounds="0.72,0.55"
-                      AbsoluteLayout.LayoutFlags="PositionProportional">
-                    <Button x:Name="ArticlesButton"
-                            Text="{x:Static fonts:FluentUI.document_24_regular}"
-                            FontFamily="FluentIcons"
-                            FontSize="20"
-                            WidthRequest="44"
-                            HeightRequest="44"
-                            Padding="0"
-                            BackgroundColor="Transparent"
-                            TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"
-                            Clicked="OnArticlesButtonClicked"
-                            HorizontalOptions="Center"/>
-                    <Border x:Name="ArticlesBadge"
-                            BackgroundColor="#E53935"
-                            StrokeShape="RoundRectangle 10"
-                            Stroke="Transparent"
-                            Padding="4,1"
-                            MinimumWidthRequest="16"
-                            HorizontalOptions="Center"
-                            VerticalOptions="Start"
-                            Margin="8,-2,0,0"
-                            IsVisible="False">
-                        <Label Text="{Binding ArticlesCount}"
-                               FontSize="11"
-                               FontAttributes="Bold"
-                               TextColor="White"
-                               HorizontalTextAlignment="Center"
-                               VerticalTextAlignment="Center"/>
-                    </Border>
-                </Grid>
-
-                <!-- Full Screen Button at 92% -->
-                <Button x:Name="FullScreenButton"
-                        AutomationId="FullScreenButton"
-                        Text="{x:Static fonts:FluentUI.full_screen_maximize_24_regular}"
-                        FontFamily="FluentIcons"
-                        FontSize="22"
-                        WidthRequest="44"
-                        HeightRequest="44"
-                        Padding="0"
-                        BackgroundColor="Transparent"
-                        TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"
-                        Clicked="OnFullScreenClicked"
-                        AbsoluteLayout.LayoutBounds="0.92,0.55"
-                        AbsoluteLayout.LayoutFlags="PositionProportional"/>
-
-            </AbsoluteLayout>
-        </Grid>
-
-        <!-- Scrim: dims the page while the circular menu is open;
-             a tap anywhere dismisses the menu instead of hitting what is behind it -->
-        <Grid x:Name="CircularMenuScrim"
-              Grid.Row="1"
-              ZIndex="140"
-              IsVisible="False"
-              Opacity="0"
-              BackgroundColor="#66000000">
-            <Grid.GestureRecognizers>
-                <TapGestureRecognizer Tapped="OnOverlayTapped"/>
-            </Grid.GestureRecognizers>
-        </Grid>
-
-        <!-- Satellite buttons overlay - uses AbsoluteLayout for precise positioning -->
-        <AbsoluteLayout x:Name="FloatingMenuContainer" Grid.Row="1"
-                        ZIndex="150"
-                        InputTransparent="True"
-                        CascadeInputTransparent="False"
-                        BackgroundColor="Transparent">
-
-            <!-- 3 satellite buttons + toggle — positions are computed in code-behind
-                 by FanMenuGeometry (elliptical arc, compact in every orientation) -->
-
-            <!-- Previous unit (bottom-left satellite). Disabled at the first unit via Command.CanExecute. -->
-            <Button x:Name="PrevUnitButton"
-                    AutomationId="PrevUnitButton"
-                    Text="{x:Static fonts:FluentUI.document_arrow_right_24_regular}"
-                    FontFamily="FluentIcons"
-                    FontSize="22"
-                    WidthRequest="48"
-                    HeightRequest="48"
-                    CornerRadius="24"
-                    BackgroundColor="{StaticResource PrimaryDark}"
-                    TextColor="White"
-                    Command="{Binding LoadPreviousCommand}"
-                    Clicked="OnMenuItemClicked"
-                    Opacity="0"
-                    InputTransparent="True"/>
-
-            <!-- Unit picker (top satellite) -->
-            <Button x:Name="UnitPickerButton"
-                    AutomationId="UnitPickerButton"
-                    Text="{x:Static fonts:FluentUI.library_24_regular}"
-                    FontFamily="FluentIcons"
-                    FontSize="22"
-                    WidthRequest="48"
-                    HeightRequest="48"
-                    CornerRadius="24"
-                    BackgroundColor="{StaticResource PrimaryDark}"
-                    TextColor="White"
-                    Clicked="OnUnitPickerClicked"
-                    Opacity="0"
-                    InputTransparent="True"/>
-
-            <!-- Next unit (bottom-right satellite). Disabled at the last unit via Command.CanExecute. -->
-            <Button x:Name="NextUnitButton"
-                    AutomationId="NextUnitButton"
-                    Text="{x:Static fonts:FluentUI.document_arrow_right_24_regular}"
-                    FontFamily="FluentIcons"
-                    FontSize="22"
-                    ScaleX="-1"
-                    WidthRequest="48"
-                    HeightRequest="48"
-                    CornerRadius="24"
-                    BackgroundColor="{StaticResource PrimaryDark}"
-                    TextColor="White"
-                    Command="{Binding LoadNextCommand}"
-                    Clicked="OnMenuItemClicked"
-                    Opacity="0"
-                    InputTransparent="True"/>
-
-            <!-- Center Circular FAB - placed last to be on top, sits in notch -->
-            <Button x:Name="CircularMenuButton"
-                    AutomationId="CircularMenuButton"
-                    Text="{x:Static fonts:FluentUI.navigation_24_regular}"
-                    FontFamily="FluentIcons"
-                    FontSize="22"
-                    WidthRequest="56"
-                    HeightRequest="56"
-                    CornerRadius="28"
-                    BackgroundColor="{StaticResource Primary}"
-                    TextColor="White"
-                    Clicked="OnCircularMenuClicked">
-                <Button.Shadow>
-                    <Shadow Brush="Black"
-                            Offset="0,3"
-                            Radius="6"
-                            Opacity="0.3"/>
-                </Button.Shadow>
-            </Button>
-        </AbsoluteLayout>
+                <!-- Next unit (bottom-right satellite). Disabled at the last unit via Command.CanExecute. -->
+                <controls:ReaderFanMenuSatellite x:Name="NextUnitButton"
+                        AutomationId="NextUnitButton"
+                        Text="{x:Static fonts:FluentUI.document_arrow_right_24_regular}"
+                        ScaleX="-1"
+                        Command="{Binding LoadNextCommand}"
+                        Clicked="OnMenuItemClicked"/>
+            </controls:ReaderFanMenu.Satellites>
+        </controls:ReaderFanMenu>
 
         <controls:MasoraUnitPickerPopup x:Name="MasoraUnitPickerPopup" Grid.Row="1"
                                         ZIndex="200"/>
