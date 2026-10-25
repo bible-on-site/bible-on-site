@@ -6,7 +6,6 @@ import {
 	normalizeRevisionSource,
 	REVISION_SOURCE_ADMIN,
 	RevisionConflictError,
-	shouldSquashIntoHead,
 } from "~/lib/tanahpedia/revisions-shared";
 import { execute, query, transaction, txExecute, txQueryOne } from "../db";
 import {
@@ -18,10 +17,6 @@ import {
 const REVISION_COLUMNS =
 	"id, entry_id, proposed_unique_name, proposed_title, proposed_content, source, notes, status, base_revision_id, created_at, updated_at";
 
-interface HeadRevisionRow extends EntryRevisionRow {
-	age_seconds: number;
-}
-
 interface EntryRow {
 	id: string;
 	unique_name: string;
@@ -31,19 +26,30 @@ interface EntryRow {
 	updated_at: string;
 }
 
-/** The entry's latest APPLIED revision — the row that produced its content. */
+/**
+ * The entry's latest APPLIED revision — the row that produced its content.
+ * Resolved topologically, not by timestamp: every APPLIED row records the
+ * head it displaced in base_revision_id, so the head is the one no APPLIED
+ * child points at. `created_at` has second resolution — ordering by it (and
+ * a random UUID) could pick the wrong tip when two commits share a second.
+ */
 async function headRevision(
 	conn: mysql.PoolConnection,
 	entryId: string,
-): Promise<HeadRevisionRow | null> {
-	return txQueryOne<HeadRevisionRow>(
+): Promise<EntryRevisionRow | null> {
+	return txQueryOne<EntryRevisionRow>(
 		conn,
-		`SELECT ${REVISION_COLUMNS}, TIMESTAMPDIFF(SECOND, created_at, NOW()) AS age_seconds
+		`SELECT ${REVISION_COLUMNS}
 		 FROM tanahpedia_entry_revision
 		 WHERE entry_id = ? AND status = 'APPLIED'
+		 AND NOT EXISTS (
+			 SELECT 1 FROM tanahpedia_entry_revision c
+			 WHERE c.entry_id = ? AND c.status = 'APPLIED'
+			   AND c.base_revision_id = tanahpedia_entry_revision.id
+		 )
 		 ORDER BY created_at DESC, id DESC
 		 LIMIT 1`,
-		[entryId],
+		[entryId, entryId],
 	);
 }
 
@@ -127,15 +133,13 @@ export interface SavedEntryRevisionResult {
  * `baseRevisionId` must equal the APPLIED head seen by the editor, otherwise a
  * `REVISION_CONFLICT` error is thrown instead of silently overwriting.
  *
- * Consecutive saves from the same source inside the squash window update the
- * head revision rather than appending a row per autosave. Pass `squash: false`
- * (e.g. restores) to always open a new revision.
+ * Every changed save appends a new APPLIED revision — committed history is
+ * never rewritten, so each explicit commit is a durable, auditable version.
  */
 export const saveEntryRevisioned = createServerOnlyFn(
 	async function saveEntryRevisioned(
 		conn: mysql.PoolConnection,
 		input: SaveEntryRevisionedInput,
-		options: { squash?: boolean } = {},
 	): Promise<SavedEntryRevisionResult> {
 		assertEntryFieldsValid(input);
 		const entry = await lockEntry(conn, input.id);
@@ -157,52 +161,26 @@ export const saveEntryRevisioned = createServerOnlyFn(
 
 		const source = normalizeRevisionSource(input.source);
 		const notes = input.notes?.trim() || null;
-		let headId = head?.id ?? null;
+		const headId = crypto.randomUUID();
 
 		try {
-			if (
-				options.squash !== false &&
-				shouldSquashIntoHead(
-					head
-						? { source: head.source, ageSeconds: Number(head.age_seconds) }
-						: null,
-					source,
-				)
-			) {
-				await txExecute(
-					conn,
-					`UPDATE tanahpedia_entry_revision
-				 SET proposed_unique_name = ?, proposed_title = ?, proposed_content = ?,
-				     notes = COALESCE(?, notes), updated_at = NOW()
-				 WHERE id = ?`,
-					[
-						input.unique_name,
-						input.title,
-						nextContent,
-						notes,
-						head?.id as string,
-					],
-				);
-			} else {
-				headId = crypto.randomUUID();
-				await txExecute(
-					conn,
-					`INSERT INTO tanahpedia_entry_revision
+			await txExecute(
+				conn,
+				`INSERT INTO tanahpedia_entry_revision
 				 (id, entry_id, proposed_unique_name, proposed_title, proposed_content,
 				  source, notes, status, base_revision_id)
 				 VALUES (?, ?, ?, ?, ?, ?, ?, 'APPLIED', ?)`,
-					[
-						headId,
-						input.id,
-						input.unique_name,
-						input.title,
-						nextContent,
-						source,
-						notes,
-						head?.id ?? null,
-					],
-				);
-			}
+				[
+					headId,
+					input.id,
+					input.unique_name,
+					input.title,
+					nextContent,
+					source,
+					notes,
+					head?.id ?? null,
+				],
+			);
 
 			await txExecute(
 				conn,
