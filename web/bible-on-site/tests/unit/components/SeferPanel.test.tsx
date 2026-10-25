@@ -45,6 +45,7 @@ import {
 	render,
 	screen,
 	waitFor,
+	within,
 } from "@testing-library/react";
 import {
 	getArticleForBook,
@@ -162,9 +163,7 @@ describe("perush tag selection and persistence", () => {
 		await renderPanel(<SeferPanel {...PROPS} />);
 		expect(screen.getByRole("link", { name: 'רש"י' })).toBeTruthy();
 		expect(screen.getByRole("link", { name: "אבן עזרא" })).toBeTruthy();
-		expect(
-			screen.getByRole("button", { name: 'בחירת רש"י' }),
-		).toBeTruthy();
+		expect(screen.getByRole("button", { name: 'בחירת רש"י' })).toBeTruthy();
 		// The old tags carried numeric pesukim counters; the panel row's own
 		// בחירת פסוקים control is not a counter.
 		expect(screen.queryByText(/\d+ פסוקים/)).toBeNull();
@@ -184,9 +183,7 @@ describe("perush tag selection and persistence", () => {
 	it("scopes edits to the sefer once an override exists and clears back", async () => {
 		await renderPanel(<SeferPanel {...PROPS} />);
 		fireEvent.click(screen.getByRole("button", { name: "התאמה לספר זה" }));
-		fireEvent.click(
-			screen.getByRole("button", { name: "בחירת אבן עזרא" }),
-		);
+		fireEvent.click(screen.getByRole("button", { name: "בחירת אבן עזרא" }));
 		await flushAsync();
 		let stored = JSON.parse(
 			localStorage.getItem(SEFER_PERUSH_SELECTION_STORAGE_KEY) ?? "{}",
@@ -333,9 +330,7 @@ describe("deep links", () => {
 		await renderPanel(<SeferPanel {...PROPS} />);
 		fireEvent.click(screen.getByRole("link", { name: 'רש"י' }));
 		await screen.findByText("→ חזרה לפרשנים");
-		expect(
-			screen.getByRole("heading", { name: 'רש"י' }),
-		).toBeTruthy();
+		expect(screen.getByRole("heading", { name: 'רש"י' })).toBeTruthy();
 		await screen.findByText("פסוק א");
 	});
 
@@ -401,5 +396,185 @@ describe("article fullscreen", () => {
 		expect(dialog).toBeTruthy();
 		fireEvent.keyDown(document, { key: "Escape" });
 		await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+	});
+
+	it("ignores non-Escape keys and closes on the overlay's own control", async () => {
+		mockGetArticleForBook.mockResolvedValue(mockArticles[0]);
+		await renderPanel(<SeferPanel {...PROPS} initialSlug="7" />);
+		fireEvent.click(await screen.findByRole("button", { name: "מסך מלא" }));
+		await screen.findByRole("dialog");
+		fireEvent.keyDown(document, { key: "x" });
+		const dialog = screen.getByRole("dialog");
+		expect(dialog).toBeTruthy();
+		fireEvent.click(within(dialog).getByRole("button", { name: "צמצם" }));
+		await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+	});
+});
+
+describe("tab keyboard navigation", () => {
+	it("supports Home, ignores other keys, and skips no-op moves", async () => {
+		await renderPanel(<SeferPanel {...PROPS} />);
+		const list = screen.getByRole("tablist");
+		fireEvent.keyDown(list, { key: "ArrowLeft" });
+		expect(
+			screen.getByRole("tab", { name: "מאמרים" }).getAttribute("aria-selected"),
+		).toBe("true");
+		fireEvent.keyDown(list, { key: "Home" });
+		expect(
+			screen.getByRole("tab", { name: "פרשנים" }).getAttribute("aria-selected"),
+		).toBe("true");
+		// A non-navigation key resolves to nothing; ArrowRight on the visually
+		// rightmost tab (perushim, index 0) resolves back to the same index.
+		fireEvent.keyDown(list, { key: "x" });
+		fireEvent.keyDown(list, { key: "ArrowRight" });
+		expect(
+			screen.getByRole("tab", { name: "פרשנים" }).getAttribute("aria-selected"),
+		).toBe("true");
+	});
+});
+
+describe("stored tab fallback", () => {
+	it("falls back to the default tab when sessionStorage throws", async () => {
+		const getItem = jest
+			.spyOn(Storage.prototype, "getItem")
+			.mockImplementation(() => {
+				throw new Error("denied");
+			});
+		try {
+			await renderPanel(<SeferPanel {...PROPS} />);
+			expect(
+				screen
+					.getByRole("tab", { name: "פרשנים" })
+					.getAttribute("aria-selected"),
+			).toBe("true");
+		} finally {
+			getItem.mockRestore();
+		}
+	});
+});
+
+describe("deep article load failures", () => {
+	it("reports the failure and falls back to the article list", async () => {
+		const error = jest.spyOn(console, "error").mockImplementation(() => {});
+		try {
+			mockGetArticleForBook.mockRejectedValue(new Error("boom"));
+			await renderPanel(<SeferPanel {...PROPS} initialSlug="7" />);
+			await screen.findByRole("link", { name: /מאמר ראשון/ });
+			expect(error).toHaveBeenCalledWith(
+				"Failed to load book article",
+				expect.objectContaining({ perekId: 1, articleId: 7 }),
+			);
+		} finally {
+			error.mockRestore();
+		}
+	});
+
+	it("clears the deep link when the article no longer exists", async () => {
+		mockGetArticleForBook.mockResolvedValue(null);
+		await renderPanel(<SeferPanel {...PROPS} initialSlug="7" />);
+		await screen.findByRole("link", { name: /מאמר ראשון/ });
+		expect(screen.queryByText("חזרה למאמרים →")).toBeNull();
+	});
+});
+
+describe("modifier clicks", () => {
+	it("leaves perush tag clicks with modifiers to the real anchor", async () => {
+		const push = jest.spyOn(History.prototype, "pushState");
+		try {
+			await renderPanel(<SeferPanel {...PROPS} />);
+			push.mockClear();
+			const tag = screen.getByRole("link", { name: 'רש"י' });
+			for (const modifier of [
+				"metaKey",
+				"ctrlKey",
+				"shiftKey",
+				"altKey",
+			] as const) {
+				fireEvent.click(tag, { [modifier]: true });
+			}
+			expect(screen.queryByText("→ חזרה לפרשנים")).toBeNull();
+			expect(push).not.toHaveBeenCalled();
+		} finally {
+			push.mockRestore();
+		}
+	});
+
+	it("leaves article card clicks with modifiers to the real anchor", async () => {
+		const push = jest.spyOn(History.prototype, "pushState");
+		try {
+			await renderPanel(<SeferPanel {...PROPS} />);
+			fireEvent.click(screen.getByRole("tab", { name: "מאמרים" }));
+			push.mockClear();
+			const card = document.getElementById("article-7");
+			expect(card).toBeTruthy();
+			for (const modifier of [
+				"metaKey",
+				"ctrlKey",
+				"shiftKey",
+				"altKey",
+			] as const) {
+				fireEvent.click(card as HTMLElement, { [modifier]: true });
+			}
+			expect(screen.queryByText("חזרה למאמרים →")).toBeNull();
+			expect(push).not.toHaveBeenCalled();
+		} finally {
+			push.mockRestore();
+		}
+	});
+});
+
+describe("commentary empty states", () => {
+	it("reports a selection-filtered empty commentary", async () => {
+		setSeferPerushSelection("בראשית", [1]);
+		mockGetPerushNotesBatch.mockResolvedValue({
+			1: [{ pasuk: 1, noteIdx: 0, noteContent: "<p>רשי א</p>" }],
+		});
+		await renderPanel(<SeferPanel {...PROPS} selectedPesukim={new Set([5])} />);
+		await screen.findByText("אין פרשנות מן הפרשנים שנבחרו לפסוקים שנבחרו");
+	});
+});
+
+describe("panel without a perek", () => {
+	it("renders pasuk group headers as plain text and navigates without history", async () => {
+		const push = jest.spyOn(History.prototype, "pushState");
+		try {
+			setSeferPerushSelection("בראשית", [1]);
+			mockGetPerushNotesBatch.mockResolvedValue({
+				1: [{ pasuk: 1, noteIdx: 0, noteContent: "<p>x</p>" }],
+			});
+			await renderPanel(<SeferPanel {...PROPS} perekId={0} />);
+			await screen.findByText("פסוק א");
+			expect(screen.queryByRole("button", { name: /מעבר לפסוק/ })).toBeNull();
+
+			fireEvent.click(screen.getByRole("link", { name: 'רש"י' }));
+			await screen.findByText("→ חזרה לפרשנים");
+			expect(push).not.toHaveBeenCalled();
+		} finally {
+			push.mockRestore();
+		}
+	});
+});
+
+describe("commentary batch lifecycle", () => {
+	it("ignores a batch rejection that lands after unmount", async () => {
+		setSeferPerushSelection("בראשית", [1]);
+		let rejectBatch: (error: unknown) => void = () => {};
+		mockGetPerushNotesBatch.mockImplementation(
+			() =>
+				new Promise((_, reject) => {
+					rejectBatch = reject;
+				}),
+		);
+		const error = jest.spyOn(console, "error").mockImplementation(() => {});
+		try {
+			const view = await renderPanel(<SeferPanel {...PROPS} />);
+			view.unmount();
+			await act(async () => {
+				rejectBatch(new Error("late"));
+			});
+			expect(screen.queryByText(/נכשלה/)).toBeNull();
+		} finally {
+			error.mockRestore();
+		}
 	});
 });

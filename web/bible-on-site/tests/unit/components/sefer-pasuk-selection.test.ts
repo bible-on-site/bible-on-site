@@ -1,3 +1,5 @@
+import { createElement } from "react";
+import { renderToString } from "react-dom/server";
 import {
 	clearSeferPasukSelection,
 	getSeferPasukSelection,
@@ -5,6 +7,8 @@ import {
 	resetSeferPasukSelectionState,
 	setSeferPasukSelectionMode,
 	toggleSeferPasuk,
+	useSeferPasukSelection,
+	useSeferPasukSelectionMode,
 } from "../../../src/app/929/[number]/components/sefer-pasuk-selection";
 
 beforeEach(() => {
@@ -55,5 +59,19 @@ describe("sefer-pasuk-selection store", () => {
 		const before = getSeferPasukSelection(1);
 		toggleSeferPasuk(9, 1);
 		expect(getSeferPasukSelection(1)).toBe(before);
+	});
+
+	it("clearing a perek with no selection is a no-op", () => {
+		clearSeferPasukSelection(999);
+		expect(getSeferPasukSelection(999).size).toBe(0);
+	});
+});
+
+const Probe = () =>
+	`${useSeferPasukSelection(1).size}:${useSeferPasukSelectionMode(1)}`;
+
+describe("server rendering", () => {
+	it("serves the empty defaults from getServerSnapshot", () => {
+		expect(renderToString(createElement(Probe))).toContain("0:false");
 	});
 });

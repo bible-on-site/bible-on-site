@@ -280,6 +280,19 @@ describe("perushim service", () => {
 				"connection lost",
 			);
 		});
+
+		it("returns empty record on non-Error rejection", async () => {
+			mockQuery.mockRejectedValue("raw failure");
+
+			const result = await getPerushNotesBatch(1, [1]);
+
+			expect(result).toEqual({});
+			expect(console.warn).toHaveBeenCalledWith(
+				"Failed to fetch notes batch for perek %d:",
+				1,
+				"raw failure",
+			);
+		});
 	});
 
 	describe("getAllPerushPerekNamePairs", () => {
