@@ -336,4 +336,28 @@ describe("getAdjacentPereks", () => {
 		expect(prev?.source).toBe("עזרא ע י");
 		expect(next?.source).toBe("עזרא נ ב");
 	});
+
+	it("crosses the בראשית/שמות sefer boundary by canonical id", () => {
+		const { prev, next } = getAdjacentPereks(51);
+		expect(prev?.perekId).toBe(50);
+		expect(prev?.source).toBe("בראשית נ");
+		expect(next?.perekId).toBe(52);
+		expect(next?.source).toBe("שמות ב");
+	});
+
+	it("crosses the שמואל א/שמואל ב additional boundary by canonical id", () => {
+		const { prev, next } = getAdjacentPereks(264);
+		expect(prev?.perekId).toBe(263);
+		expect(prev?.source).toBe("שמואל א לא");
+		expect(next?.perekId).toBe(265);
+		expect(next?.source).toBe("שמואל ב ב");
+	});
+
+	it("crosses the מלכים א/מלכים ב additional boundary by canonical id", () => {
+		const { prev, next } = getAdjacentPereks(309);
+		expect(prev?.perekId).toBe(308);
+		expect(prev?.source).toBe("מלכים א כא");
+		expect(next?.perekId).toBe(310);
+		expect(next?.source).toBe("מלכים ב א");
+	});
 });
