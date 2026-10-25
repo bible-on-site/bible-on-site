@@ -57,5 +57,16 @@ public class BackChromeTests : IDisposable
         BackChrome.Apply(page);
 
         backButton.IsVisible.Should().BeTrue();
+
+    }
+    [Fact]
+    public void Apply_UpdatesTheSharedPreferencesTemplateBackState()
+    {
+        var page = new BibleOnSite.Controls.PreferencesPageBase();
+        page.ShowBack.Should().BeFalse();
+
+        BackChrome.Apply(page);
+
+        page.ShowBack.Should().BeTrue("non-Android preferences keep their in-app Back control");
     }
 }

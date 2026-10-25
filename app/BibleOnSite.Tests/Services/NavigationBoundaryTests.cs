@@ -2,6 +2,7 @@ using BibleOnSite.Services;
 using Microsoft.Maui;
 using Microsoft.Maui.Controls;
 using Microsoft.Maui.Controls.Internals;
+using Microsoft.Maui.Dispatching;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace BibleOnSite.Tests.Services;
@@ -161,6 +162,94 @@ public class NavigationBoundaryTests
         }
         finally
         {
+            Application.Current = previous;
+        }
+    }
+    public sealed class ContextualPreferencesPage : ContentPage, IQueryAttributable
+    {
+        public string? Section { get; private set; }
+        public void ApplyQueryAttributes(IDictionary<string, object> query) =>
+            Section = query.TryGetValue("section", out var section) ? section as string : null;
+    }
+
+    [Theory]
+    [InlineData("reader")]
+    [InlineData("searchReader")]
+    [InlineData("ParashaPage")]
+    [InlineData("MasoraPage")]
+    public async Task PerushimPreferences_SystemBackWithHiddenInAppButton_ReturnsToTheSameReader(string readerRoute)
+    {
+        var previous = Application.Current;
+        var dispatcher = new Mock<IDispatcher>();
+        dispatcher.SetupGet(d => d.IsDispatchRequired).Returns(false);
+        dispatcher.Setup(d => d.Dispatch(It.IsAny<Action>())).Returns((Action action) => { action(); return true; });
+        var provider = new Mock<IDispatcherProvider>();
+        provider.Setup(p => p.GetForCurrentThread()).Returns(dispatcher.Object);
+        DispatcherProvider.SetCurrent(provider.Object);
+        Routing.RegisterRoute("PreferencesPage", typeof(ContextualPreferencesPage));
+        try
+        {
+            var reader = new ContentPage();
+            var shell = new Shell();
+            shell.Items.Add(new ShellContent { Route = readerRoute, Content = reader });
+            var application = new TestApplication(shell);
+            Application.Current = application;
+            var window = ((IApplication)application).CreateWindow(null!);
+            await shell.GoToAsync($"//{readerRoute}");
+
+            await PreferencesNavigation.OpenPerushimDownloadAsync(ShellAppNavigator.Instance);
+
+            var preferences = shell.CurrentPage.Should().BeOfType<ContextualPreferencesPage>().Subject;
+            preferences.Section.Should().Be("packs");
+            shell.Navigation.NavigationStack.Should().HaveCount(2,
+                "the contextual shortcut adds one preferences entry above its caller");
+            Shell.SetBackButtonBehavior(preferences, new BackButtonBehavior { IsVisible = false });
+
+            ((IWindow)window).BackButtonClicked().Should().BeTrue();
+            await Task.Yield();
+
+            shell.CurrentPage.Should().BeSameAs(reader);
+            shell.Navigation.NavigationStack.Should().ContainSingle();
+        }
+        finally
+        {
+            Routing.UnRegisterRoute("PreferencesPage");
+            DispatcherProvider.SetCurrent(null);
+            Application.Current = previous;
+        }
+    }
+
+    [Fact]
+    public async Task PreferencesChromeBackCommand_PopsItsSingleHistoryEntry()
+    {
+        var previous = Application.Current;
+        var dispatcher = new Mock<IDispatcher>();
+        dispatcher.SetupGet(d => d.IsDispatchRequired).Returns(false);
+        dispatcher.Setup(d => d.Dispatch(It.IsAny<Action>())).Returns((Action action) => { action(); return true; });
+        var provider = new Mock<IDispatcherProvider>();
+        provider.Setup(p => p.GetForCurrentThread()).Returns(dispatcher.Object);
+        DispatcherProvider.SetCurrent(provider.Object);
+        Routing.RegisterRoute("PreferencesPage", typeof(ContextualPreferencesPage));
+        try
+        {
+            var reader = new ContentPage();
+            var shell = new Shell();
+            shell.Items.Add(new ShellContent { Route = "reader", Content = reader });
+            var application = new TestApplication(shell);
+            Application.Current = application;
+            ((IApplication)application).CreateWindow(null!);
+            await shell.GoToAsync("//reader");
+            await PreferencesNavigation.OpenPerushimDownloadAsync(ShellAppNavigator.Instance);
+
+            PreferencesNavigation.BackCommand.Execute(null);
+            await Task.Yield();
+
+            shell.CurrentPage.Should().BeSameAs(reader);
+        }
+        finally
+        {
+            Routing.UnRegisterRoute("PreferencesPage");
+            DispatcherProvider.SetCurrent(null);
             Application.Current = previous;
         }
     }

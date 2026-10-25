@@ -95,6 +95,13 @@ public partial class PerushimSheet : Border
         IsOpenChanged?.Invoke(this, value);
     }
 
+    private void OnPerushRowTapped(object? sender, TappedEventArgs e)
+    {
+        if (sender is BindableObject { BindingContext: Perush perush })
+        {
+            ViewModel?.ToggleCheckedPerush(perush.Id);
+        }
+    }
     private void OnPerushCheckboxChanged(object? sender, CheckedChangedEventArgs e)
     {
         if (_isTogglingPerush)
@@ -191,7 +198,7 @@ public partial class PerushimSheet : Border
     {
         try
         {
-            await Shell.Current.GoToAsync(AppRoutes.ExtensionPacks);
+            await PreferencesNavigation.OpenPerushimDownloadAsync(ShellAppNavigator.Instance);
         }
         #pragma warning disable S2221 // Deliberate failure boundary: settings navigation failure is log-only
         catch (Exception ex) //NOSONAR — settings navigation failure is log-only.
