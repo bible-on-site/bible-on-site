@@ -143,7 +143,7 @@ Selection **enforcement is opt-in**: only the mobile workflow exposes
 `package_api`, `package_bulletin` and `package_admin` also run on PR, merge-queue and dispatch
 events whenever their module's `module_changed` or `ci_changed` fires. Those
 runs execute the exact release Docker build (same Dockerfile, `web` context,
-`DOCKER_BUILDKIT=0`) but skip every artifact upload, so nothing is released
+BuildKit with `type=gha` layer cache) but skip every artifact upload, so nothing is released
 or deployed; `cross_module_ci` gates them under the same triggers. Any
 Dockerfile under a module dir counts as `module_changed`; the shared
 `web/.dockerignore` context, `shared-dockerize.yml` (API) and

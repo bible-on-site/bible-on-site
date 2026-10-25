@@ -1,5 +1,5 @@
-# Note: Using classic docker build (DOCKER_BUILDKIT=0) for network:host support
-# Do not add BuildKit-specific syntax directives (e.g. --mount)
+# Built with BuildKit in shared-dockerize.yml: docker buildx build --network=host
+# on a docker-container builder with type=gha layer cache.
 
 ARG APP_NAME=api
 
