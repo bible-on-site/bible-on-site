@@ -301,6 +301,37 @@ describe("tanahpedia entry server functions", () => {
 				}),
 			).rejects.toThrow("Entry not found");
 		});
+
+		it("translates a duplicate unique_name into a validation error", async () => {
+			mocks.txExecute.mockRejectedValue({ code: "ER_DUP_ENTRY" });
+
+			await expect(
+				createEntry({
+					data: {
+						id: "entry-new",
+						unique_name: "שם-תפוס",
+						title: "כותרת",
+						content: "",
+					},
+				}),
+			).rejects.toThrow("VALIDATION: השם הייחודי כבר תפוס על ידי ערך אחר");
+		});
+
+		it("rethrows a non-mysql failure unchanged", async () => {
+			const boom = new Error("connection lost");
+			mocks.txExecute.mockRejectedValue(boom);
+
+			await expect(
+				createEntry({
+					data: {
+						id: "entry-new",
+						unique_name: "שם",
+						title: "כותרת",
+						content: "",
+					},
+				}),
+			).rejects.toBe(boom);
+		});
 	});
 
 	describe("updateEntry", () => {

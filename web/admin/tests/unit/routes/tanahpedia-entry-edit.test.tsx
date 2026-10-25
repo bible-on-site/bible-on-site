@@ -126,6 +126,7 @@ const existingEntry = {
 
 describe("EntryEditPage", () => {
 	beforeEach(() => {
+		localStorage.clear();
 		paramsMock.mockReset().mockReturnValue({ id: "entry-1" });
 		navigateMock.mockReset();
 		getEntryMock.mockReset().mockResolvedValue(existingEntry);
@@ -592,6 +593,95 @@ describe("EntryEditPage", () => {
 			const draft = localStorage.getItem("tanahpedia-draft:entry-1");
 			expect(draft).toBeTruthy();
 			expect(JSON.parse(draft as string).form.title).toBe("משה רבנו");
+		});
+
+		it("invokes the reconnect action on the session banner", async () => {
+			updateEntryMock.mockRejectedValue(
+				new Error("SESSION_EXPIRED: admin session expired"),
+			);
+			renderPage();
+			await screen.findByTestId("wysiwyg-editor");
+			await waitFor(() =>
+				expect(
+					screen.getByRole("button", { name: "שמור עכשיו" }),
+				).toBeEnabled(),
+			);
+			fireEvent.click(screen.getByRole("button", { name: "שמור עכשיו" }));
+
+			// jsdom no-ops the navigation behind window.location.reload().
+			fireEvent.click(
+				await screen.findByRole("button", { name: "התחבר מחדש" }),
+			);
+		});
+
+		it("restores a stashed draft on the /new route at mount", async () => {
+			paramsMock.mockReturnValue({ id: "new" });
+			localStorage.setItem(
+				"tanahpedia-draft:new",
+				JSON.stringify({
+					form: {
+						unique_name: "שם-טיוטה",
+						title: "כותרת טיוטה",
+						content: "<p>טיוטה</p>",
+					},
+					baseRevisionId: null,
+					savedAt: new Date().toISOString(),
+				}),
+			);
+			renderPage();
+
+			fireEvent.click(await screen.findByRole("tab", { name: "מטא-דאטה" }));
+			expect(screen.getByPlaceholderText("כותרת הערך")).toHaveValue(
+				"כותרת טיוטה",
+			);
+			expect(screen.getByText("יש שינויים שלא נשמרו")).toBeInTheDocument();
+		});
+
+		it("forgets a created-entry id when the route param changes", async () => {
+			paramsMock.mockReturnValue({ id: "new" });
+			createEntryMock.mockResolvedValue({
+				id: "created-1",
+				headRevisionId: "rev-new",
+			});
+			const client = new QueryClient({
+				defaultOptions: { queries: { retry: false } },
+			});
+			const { component: Page } = Route as unknown as {
+				component: () => React.ReactElement;
+			};
+			const utils = render(
+				<QueryClientProvider client={client}>
+					<Page />
+				</QueryClientProvider>,
+			);
+			const rerender = () =>
+				utils.rerender(
+					<QueryClientProvider client={client}>
+						<Page />
+					</QueryClientProvider>,
+				);
+
+			fireEvent.click(await screen.findByRole("tab", { name: "מטא-דאטה" }));
+			fireEvent.change(screen.getByPlaceholderText("כותרת הערך"), {
+				target: { value: "ערך ראשון" },
+			});
+			fireEvent.click(screen.getByRole("button", { name: "שמור עכשיו" }));
+			await waitFor(() => expect(createEntryMock).toHaveBeenCalledTimes(1));
+
+			// The router reuses this component across param changes — landing
+			// on a second /new must not update the previously created entry.
+			paramsMock.mockReturnValue({ id: "created-1" });
+			rerender();
+			paramsMock.mockReturnValue({ id: "new" });
+			rerender();
+
+			fireEvent.click(await screen.findByRole("tab", { name: "מטא-דאטה" }));
+			fireEvent.change(screen.getByPlaceholderText("כותרת הערך"), {
+				target: { value: "ערך שני" },
+			});
+			fireEvent.click(screen.getByRole("button", { name: "שמור עכשיו" }));
+			await waitFor(() => expect(createEntryMock).toHaveBeenCalledTimes(2));
+			expect(updateEntryMock).not.toHaveBeenCalled();
 		});
 
 		it("keeps the stashed draft current as the user edits past a failure", async () => {

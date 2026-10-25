@@ -45,4 +45,16 @@ describe("classifySaveError", () => {
 		const raw = new Error("raw boom");
 		expect(classifySaveError(raw).detail).toBe("raw boom");
 	});
+
+	it("classifies non-Error thrown values through String()", () => {
+		const result = classifySaveError("raw string failure");
+		expect(result.kind).toBe("server");
+		expect(result.detail).toBe("raw string failure");
+	});
+
+	it("keeps the whole detail when a validation error has no suffix", () => {
+		const result = classifySaveError(new Error("VALIDATION"));
+		expect(result.kind).toBe("validation");
+		expect(result.message).toContain("VALIDATION");
+	});
 });
