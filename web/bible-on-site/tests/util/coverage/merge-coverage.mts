@@ -6,10 +6,17 @@ import {
 	readFileSync,
 	writeFileSync,
 } from "node:fs";
-import { relative, resolve } from "node:path";
+import { dirname, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { normalizeLcovFile } from "./normalize-coverage.mjs";
 
-const COVERAGE_DIR = `${process.env.npm_config_local_prefix}/.coverage`;
+// `npm_config_local_prefix` is only set by npm, not pnpm — derive the package
+// root from this script's own location instead (tests/util/coverage/ -> ../..).
+const PACKAGE_DIR = resolve(
+	dirname(fileURLToPath(import.meta.url)),
+	"../../..",
+);
+const COVERAGE_DIR = `${PACKAGE_DIR}/.coverage`;
 
 const DEBUG_TARGET_FILE = "SeferComposite.tsx";
 const DEBUG_DIR = `${COVERAGE_DIR}/debug`;
@@ -210,8 +217,7 @@ function getMonorepoPrefix(): string | null {
 		const gitRoot = execSync("git rev-parse --show-toplevel", {
 			encoding: "utf8",
 		}).trim();
-		const packageDir =
-			process.env.npm_config_local_prefix ?? process.cwd();
+		const packageDir = PACKAGE_DIR;
 		const rel = relative(resolve(gitRoot), resolve(packageDir)).replace(
 			/\\/g,
 			"/",
