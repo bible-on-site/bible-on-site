@@ -59,12 +59,17 @@ def tap(node):
     adb("shell", "input", "tap", (x1 + x2) // 2, (y1 + y2) // 2)
 
 
-def wait_for(name):
+def wait_for(name, stable_bounds=False):
     deadline = time.monotonic() + 45
+    previous_bounds = None
     while time.monotonic() < deadline:
         nodes, raw = snapshot()
-        if find(nodes, name) is not None:
-            return nodes, raw
+        node = find(nodes, name)
+        if node is not None:
+            current_bounds = bounds(node)
+            if not stable_bounds or current_bounds == previous_bounds:
+                return nodes, raw
+            previous_bounds = current_bounds
         native_interval.wait(timeout=0.3)
     (args.artifacts / "failure.png").write_bytes(adb("exec-out", "screencap", "-p"))
     (args.artifacts / "failure.xml").write_bytes(raw)
@@ -114,8 +119,8 @@ def capture(name, verify=True):
 nodes, _ = wait_for("PerushimChevronButton")
 if find(nodes, "PerushimEmptyIcon") is None:
     tap(find(nodes, "PerushimChevronButton"))
-wait_for("PerushimEmptyIcon")
-native_interval.wait(timeout=0.4)
+# Measure the drag origin after the opening layout settles, within the same deadline.
+wait_for("PerushimEmptyIcon", stable_bounds=True)
 nodes, initial = capture("default")
 view_top = initial["viewport"][1]
 x = sum(initial["viewport"][::2]) // 2
@@ -143,7 +148,7 @@ check.assertTrue(expanded["booksPixels"] >= initial["booksPixels"] * 0.9, "Rende
 
 # Both actions must receive real native taps, not just have accessible bounds.
 tap(find(nodes, "ExportPerushimLogsButton"))
-for attempt in range(12):
+for _ in range(12):
     activity = adb("shell", "dumpsys", "activity", "activities").decode("utf-8", "replace")
     if "ChooserActivity" in activity:
         break
@@ -206,8 +211,9 @@ for target, expected in ((name_node, not initial_checked), (name_node, initial_c
                       "Perush name and checkbox taps must each toggle once")
 report["row-selection"] = {"perush": perush_name, "nameTapTogglesOnce": True, "checkboxTapTogglesOnce": True}
 # Sample populated rows crossing the notch during the same sheet drag.
-process = subprocess.Popen(base + ["shell", "input", "swipe", str(x), str(expanded["viewport"][1] + 80),  # nosec B603: validated SDK argv, no shell.  # nosemgrep
-                                  str(x), str(start_y), "6000"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+gesture_argv = base + ["shell", "input", "swipe", str(x), str(expanded["viewport"][1] + 80),
+                       str(x), str(start_y), "6000"]
+process = subprocess.Popen(gesture_argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE)  # nosec B603: validated SDK argv, no shell.  # nosemgrep
 try:
     for index in range(3):
         native_interval.wait(timeout=1.1)
@@ -277,7 +283,7 @@ menu_rect = bounds(find(nodes, "CircularMenuButton"))
 scale = (menu_rect[2] - menu_rect[0]) / 56
 old_clip_line = menu_rect[1] - round(scale)
 touch_slop = 0
-for attempt in range(10):
+for _ in range(10):
     name_node = next((n for n in nodes if n.get("text") == "מראות הצובאות"), None)
     before_top = bounds(name_node)[1] if name_node is not None else None
     if before_top is not None and abs(before_top - old_clip_line) <= 4:
