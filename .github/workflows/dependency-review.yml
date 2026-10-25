@@ -51,15 +51,15 @@ jobs:
     steps:
       - name: 'Checkout repository'
         uses: actions/checkout@v7
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+      - name: Setup bun
+        uses: oven-sh/setup-bun@v2
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
           node-version-file: devops/package.json
       - name: Test dependency snapshot verification
-        run: pnpm -C devops run test:dependency-snapshots
+        run: bun run --cwd devops test:dependency-snapshots
       - name: 'Dependency Review'
         uses: actions/dependency-review-action@v5
         # Commonly enabled options, see https://github.com/actions/dependency-review-action#configuration-options for all available options.
@@ -87,4 +87,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           DEPENDENCY_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           DEPENDENCY_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: pnpm -C devops run verify:dependency-snapshots
+        run: bun run --cwd devops verify:dependency-snapshots

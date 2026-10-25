@@ -8,12 +8,12 @@
  * Behavior:
  * - Reads DB_URL from the environment or the module's env file (--env-file).
  * - If none of the --tables has rows → runs `cargo make mysql-populate-dev`.
- * - With --sync-from-prod, first probes `pnpm run setup_dev_env --
+ * - With --sync-from-prod, first probes `bun run setup_dev_env --
  *   check-dev-db-freshness` — a cheap prod watermark read (per-table
  *   information_schema UPDATE_TIME) compared to the checkpoint recorded in the
  *   dev DB by the last sync. Fresh → skip; stale/unknown → run the full
  *   sync-from-prod (a failed download leaves local data untouched); populate
- *   is the fallback. `pnpm run setup_dev_env -- sync-from-prod` always syncs.
+ *   is the fallback. `bun run setup_dev_env -- sync-from-prod` always syncs.
  * - Removes bundled demo authors/articles unless KEEP_BUNDLED_TEST_ARTICLES=1.
  *
  * Usage:

@@ -128,7 +128,7 @@ Selection **enforcement is opt-in**: only the mobile workflow exposes
   a successful `app_mobile_e2e` must contribute both platform reports.
   The combined report is stored as `app-coverage.<run>` and, on master,
   replaces `app-coverage.master`.
-- Runs the devops test suites (`pnpm run test:version`, `determine-changes`,
+- Runs the devops test suites (`bun run test:version`, `determine-changes`,
   `e2e-impact`, `e2e-coverage-trees`, `codecov-report-state`,
   `bencher-comparison` tests).
 - Publishes per-flag coverage to Codecov (`website`, `api`, `app`, `bulletin`,
@@ -246,7 +246,7 @@ save can only rewrite the state that same key already describes.
 | Cache | Key content | Notes |
 |-------|-------------|-------|
 | NuGet | `nuget-key-mac` recipe (maui package families + versions) | Restored on every leg |
-| `app/mobile-e2e/node_modules` | `node-modules-<node>-<pnpm-lock sha>` | Exact hit skips `pnpm install --frozen-lockfile` |
+| `app/mobile-e2e/node_modules` | `node-modules-<node>-<bun-lock sha>` | Exact hit skips `bun install --frozen-lockfile` |
 | MAUI workloads | workload recipe + `WorkloadMauiInfo` stamp | Version probe skipped on `hit=exact` (was ~6-7min); cached `<sdk>.<band>-workloads.json` is sanity-checked against the actual installed set |
 | `BibleOnSite` obj + NuGet intermediates | `obj-<deps>-<stamp>` recipe | `app/BibleOnSite/obj` itself is excluded — stale signed intermediates break codesign |
 | iOS simulator state | toolchain id + device recipe + `tests.sqlite` signature | `Finish ... simulator setup` replays ownership/battery flags, `simctl bootstatus`, validates the clone |
@@ -339,7 +339,7 @@ the original payload and lets the normal CD guards and queued master version
 publisher finish recovery.
 
 See [GitHub's release API](https://docs.github.com/en/rest/releases/releases) and
-validate changes with `pnpm run test:version` in `devops`.
+validate changes with `bun run test:version` in `devops`.
 
 TestFlight delivery reads the app identity, marketing version, and build number
 from the published IPA and checks that exact iOS build through Apple's API.

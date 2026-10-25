@@ -17,5 +17,8 @@
 		"cross-env": "10.1.0",
 		"tsx": "4.23.15"
 	},
-	"packageManager": "pnpm@12.9.1"
+	"packageManager": "bun@1.4.4",
+	"trustedDependencies": [
+		"esbuild"
+	]
 }

@@ -19,8 +19,8 @@ Use `/* istanbul ignore next */` with a short reason for defensive/unreachable c
 
 To find gaps — never hand-parse lcov or write ad-hoc scripts:
 
-1. `pnpm run coverage:unit` (writes `.coverage/unit/lcov.info`).
-2. `pnpm run coverage:gaps -- <path-substring> ...` prints missed lines/branches (no args = every file with gaps).
+1. `bun run coverage:unit` (writes `.coverage/unit/lcov.info`).
+2. `bun run coverage:gaps -- <path-substring> ...` prints missed lines/branches (no args = every file with gaps).
 3. Read each missed region and write a targeted test per real path. lcov line numbers can be off by one or duplicated (SWC sourcemap artifacts) — verify against the source before chasing a "missed" line existing tests clearly cover.
 4. Every gap in a file you touched is yours to close; there is no "pre-existing" exclusion. Truly dead defensive branches get an ignore comment with a reason instead of a contrived test.
 
@@ -35,7 +35,7 @@ Same gap workflow, module-specific commands:
 
 | Module  | Unit                                      | E2E                                      | Coverage                                                                              |
 | ------- | ----------------------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------- |
-| Website | `pnpm run test:unit`                       | `pnpm run test:e2e`                       | `pnpm run coverage:unit` / `coverage:e2e`                                              |
+| Website | `bun run test:unit`                       | `bun run test:e2e`                       | `bun run coverage:unit` / `coverage:e2e`                                              |
 | API     | (cargo)                                   | `cargo make test-e2e`                    | `cargo make coverage-e2e`                                                             |
 | App     | `dotnet run --project devops -- TestUnit` | `dotnet run --project devops -- TestE2E` | `dotnet run --project devops -- CoverageUnit`                                         |
 | Data    | `cargo make test-unit` (in `data/`)       | `cargo make test-integration`            | `cargo make coverage-unit` / `coverage-integration` + `node devops/coverage-gaps.mjs` |

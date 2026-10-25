@@ -4,20 +4,20 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"predev": "pnpm run docker:up && node --import tsx ../../devops/ensure-dev-db.mts && node scripts/ensure-s3-seeded.mjs",
-		"dev": "dotenv -e .dev.env -- pnpm run dev:app",
+		"predev": "bun run docker:up && node --import tsx ../../devops/ensure-dev-db.mts && node scripts/ensure-s3-seeded.mjs",
+		"dev": "dotenv -e .dev.env -- bun run dev:app",
 		"dev:app": "vite --port 3101 --strictPort",
 		"build": "vite build",
 		"start": "node .output/server/index.mjs",
 		"lint": "biome lint",
 		"format": "biome format --write",
 		"check": "biome check --write",
-		"test": "dotenv -e .test.env -- pnpm run test:all",
-		"test:all": "pnpm run test:unit && pnpm run test:e2e",
+		"test": "dotenv -e .test.env -- bun run test:all",
+		"test:all": "bun run test:unit && bun run test:e2e",
 		"test:unit": "vitest run",
 		"test:e2e": "dotenv -e .test.env -- playwright test",
 		"test:s3": "node scripts/check-local-s3.mjs",
-		"coverage:all": "pnpm run coverage:unit && pnpm run coverage:e2e && pnpm run coverage:merge",
+		"coverage:all": "bun run coverage:unit && bun run coverage:e2e && bun run coverage:merge",
 		"coverage:unit": "vitest run --coverage",
 		"coverage:e2e": "dotenv -e .test.env -- cross-env MEASURE_COV=1 playwright test",
 		"coverage:merge": "node --import tsx ../../devops/merge-lcov.mts --out .coverage/merged/lcov.info --prefix web/admin/ --optional .coverage/unit/lcov.info --optional .coverage/e2e/lcov.info",
@@ -98,5 +98,14 @@
 		"@napi-rs/wasm-runtime": "1.2.6",
 		"@tybys/wasm-util": "0.10.4"
 	},
-	"packageManager": "pnpm@12.9.1"
+	"packageManager": "bun@1.4.4",
+	"overrides": {
+		"deepmerge-ts": "8.0.2",
+		"@istanbuljs/load-nyc-config": {
+			"js-yaml": "^5.4.3"
+		}
+	},
+	"trustedDependencies": [
+		"esbuild"
+	]
 }

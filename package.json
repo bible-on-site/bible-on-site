@@ -6,10 +6,10 @@
 	},
 	"scripts": {
 		"backend": "node devops/local-backend.mjs",
-		"dev": "pnpm -C devops run dev --",
+		"dev": "bun run --cwd devops dev --",
 		"images:prepare": "node devops/perek-images/prepare.mjs",
 		"prepare": "node devops/install-git-hooks.mjs",
 		"version": "cross-env-shell echo ${npm_package_version}"
 	},
-	"packageManager": "pnpm@12.9.1"
+	"packageManager": "bun@1.4.4"
 }

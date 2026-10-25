@@ -68,23 +68,23 @@ jobs:
           docker-images: true
           swap-storage: true
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+      - name: Setup bun
+        uses: oven-sh/setup-bun@v2
 
       - name: Setup Node.js
         if: ${{ env.IS_NPM == 'true' }}
         uses: actions/setup-node@v7
         with:
           node-version-file: ${{ env.MODULE_DIRECTORY }}/package.json
-          cache-dependency-path: ${{ env.MODULE_DIRECTORY }}/pnpm-lock.yaml
-          cache: pnpm
+          cache-dependency-path: ${{ env.MODULE_DIRECTORY }}/bun.lock
+          cache: bun
 
       - name: Install dev dependencies
         if: ${{ env.IS_NPM == 'true' }}
         working-directory: ${{ env.MODULE_DIRECTORY }}
-        id: npm_ci
+        id: bun_ci
         run: |
-          pnpm install --frozen-lockfile
+          bun install --frozen-lockfile
 
       - name: Setup Rust
         if: ${{ env.IS_CARGO == 'true' }}
@@ -100,7 +100,7 @@ jobs:
         working-directory: ${{ env.MODULE_DIRECTORY }}
         run: |
           if [ "${{ env.MODULE_NAME }}" = "website" ]; then
-            MODULE_VERSION=$(pnpm run version | tail -1)
+            MODULE_VERSION=$(bun run version | tail -1)
           elif [ "${{ env.MODULE_NAME }}" = "api" ]; then
             MODULE_VERSION=$(cargo make version | grep -v 'INFO')
           fi
@@ -214,7 +214,7 @@ jobs:
           CACHE_ARGS=()
           BUILD_COMMAND=(env DOCKER_BUILDKIT=0 docker build)
           if [ "$IS_NPM" = true ]; then
-            # The deps image retains pnpm install --frozen-lockfile; the standalone runner image does not.
+            # The deps image retains bun install --frozen-lockfile; the standalone runner image does not.
             CACHE_ARGS+=(--no-cache-filter builder)
             BUILD_COMMAND=(docker buildx build --builder default --load --progress=plain)
           fi

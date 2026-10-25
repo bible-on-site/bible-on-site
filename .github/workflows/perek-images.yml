@@ -26,24 +26,24 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+      - name: Setup bun
+        uses: oven-sh/setup-bun@v2
 
       - uses: actions/setup-node@v7
         with:
           node-version-file: devops/perek-images/package.json
-      - name: Restore pnpm store cache
-        id: npm-cache
+      - name: Restore bun store cache
+        id: bun-cache
         uses: actions/cache/restore@v6
         with:
-          path: ~/.local/share/pnpm/store
-          key: ${{ runner.os }}-npm-perek-images-${{ hashFiles('devops/perek-images/pnpm-lock.yaml') }}
-          restore-keys: ${{ runner.os }}-npm-perek-images-
-      - run: pnpm -C devops/perek-images install --frozen-lockfile
-      - name: Save pnpm store cache
-        if: ${{ github.ref == 'refs/heads/master' && steps.npm-cache.outputs.cache-hit != 'true' }}
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-perek-images-${{ hashFiles('devops/perek-images/bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-perek-images-
+      - run: bun install --cwd devops/perek-images --frozen-lockfile
+      - name: Save bun store cache
+        if: ${{ github.ref == 'refs/heads/master' && steps.bun-cache.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@v6
         with:
-          path: ~/.local/share/pnpm/store
-          key: ${{ steps.npm-cache.outputs.cache-primary-key }}
-      - run: pnpm -C devops/perek-images test
+          path: ~/.bun/install/cache
+          key: ${{ steps.bun-cache.outputs.cache-primary-key }}
+      - run: bun run --cwd devops/perek-images test

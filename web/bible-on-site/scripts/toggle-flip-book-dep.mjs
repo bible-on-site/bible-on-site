@@ -50,7 +50,7 @@ const isLocal = current?.startsWith("file:");
 if (mode === "check") {
 	if (isLocal) {
 		console.error(
-			"❌ html-flip-book-react is set to local. Run: pnpm run flip-book:npm",
+			"❌ html-flip-book-react is set to local. Run: bun run flip-book:npm",
 		);
 		process.exit(1);
 	}
@@ -83,12 +83,12 @@ if (mode === "npm") {
 		// doesn't exist — fine
 	}
 
-	// pnpm install reconciles the lockfile's importer entries from
+	// bun install reconciles the lockfile's importer entries from
 	// package.json, so the stale file: link is dropped automatically.
 }
 
 console.log(`html-flip-book-react switched to ${mode}: ${target}`);
 
 if (mode === "local") {
-	console.log("Run: pnpm install");
+	console.log("Run: bun install");
 }

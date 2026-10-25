@@ -75,12 +75,12 @@ async function main() {
 		);
 		switch (moduleName) {
 			case "website":
-				if (!npmInstall(websiteDir))
-					throw new Error("Failed to install npm packages for website module");
+				if (!bunInstall(websiteDir))
+					throw new Error("Failed to install packages for website module");
 				break;
 			case "api":
-				if (!npmInstall(path.resolve(dir, "tests")))
-					throw new Error("Failed to install npm packages for API tests");
+				if (!bunInstall(path.resolve(dir, "tests")))
+					throw new Error("Failed to install packages for API tests");
 				break;
 			case "app": {
 				decompressPerushimNotes();
@@ -1000,7 +1000,7 @@ function setupPythonVenv(dir: string, name = ".", fullSetup = true) {
 }
 // Installs the pre-commit framework's git hooks (pre-commit + post-commit
 // stages); the logic lives in install-git-hooks.mjs so the root package.json
-// `prepare` script runs the same code on `pnpm install`/`pnpm install --frozen-lockfile`.
+// `prepare` script runs the same code on `bun install`/`bun install --frozen-lockfile`.
 function installGitHooks(): void {
 	const result = spawnSync(
 		"node",
@@ -1018,8 +1018,8 @@ function getActivationCommand(dir: string) {
 		: `source ${path.join(dir, ".venv", "bin", "activate")}`;
 }
 
-function npmInstall(dir: string) {
-	const result = spawnSync("pnpm", ["install"], {
+function bunInstall(dir: string) {
+	const result = spawnSync("bun", ["install"], {
 		cwd: dir,
 		shell: isWin,
 		stdio: "inherit",

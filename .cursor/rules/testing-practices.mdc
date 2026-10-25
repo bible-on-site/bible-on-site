@@ -23,7 +23,7 @@ Use `/* istanbul ignore next */` for defensive/unreachable code; add a short rea
 
 | Module | Unit | E2E | Coverage |
 | ------ | -----|-----|----------|
-| Website | `pnpm run test:unit` | `pnpm run test:e2e` | `pnpm run coverage:unit` / `coverage:e2e` |
+| Website | `bun run test:unit` | `bun run test:e2e` | `bun run coverage:unit` / `coverage:e2e` |
 | API | (cargo) | `cargo make test-e2e` | `cargo make coverage-e2e` |
 | App | `dotnet run --project devops -- TestUnit` | `dotnet run --project devops -- TestE2E` | `dotnet run --project devops -- CoverageUnit` |
 

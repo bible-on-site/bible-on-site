@@ -4,7 +4,7 @@
  * (or postinstall) to overwrite node_modules with the local build.
  * When dependency was file:, this script copied from that path; now it only
  * runs when USE_LOCAL_FLIP_BOOK=1 and the default local path exists.
- * In CI (npm version), any error is ignored so postinstall never breaks pnpm install --frozen-lockfile.
+ * In CI (npm version), any error is ignored so postinstall never breaks bun install --frozen-lockfile.
  */
 import { execSync } from "node:child_process";
 import fs from "node:fs";
@@ -64,7 +64,7 @@ function run() {
 	}
 	if (!fs.existsSync(path.join(reactSrc, "dist", "flip-book.js"))) {
 		console.warn(
-			"copy-local-flip-book: react dist not found; run pnpm run build in html-flip-book first.",
+			"copy-local-flip-book: react dist not found; run bun run build in html-flip-book first.",
 		);
 		process.exit(0);
 		return;
@@ -121,7 +121,7 @@ function run() {
 
 	// Install vanilla's dependencies (hammerjs, throttle-debounce, etc.) so the bundler can resolve them
 	if (!fs.existsSync(path.join(targetVanilla, "node_modules"))) {
-		execSync("pnpm install --prod", {
+		execSync("bun install --production", {
 			cwd: targetVanilla,
 			stdio: "inherit",
 		});
@@ -135,7 +135,7 @@ function run() {
 try {
 	run();
 } catch (err) {
-	// In CI (npm version) or when local path is missing, do not fail pnpm install
+	// In CI (npm version) or when local path is missing, do not fail bun install
 	console.warn("copy-local-flip-book:", err?.message ?? err);
 	process.exit(0);
 }

@@ -1,12 +1,12 @@
 FROM node:26.12.1-alpine AS base
-# Node 26 no longer bundles corepack; install it from npm to activate the
-# pinned pnpm from packageManager.
-RUN npm install -g corepack@0.36.0 && corepack enable pnpm
+# Bun ships as a standalone binary — copy the pinned release matching
+# packageManager (bun@1.4.4) rather than installing a package manager.
+COPY --from=oven/bun:1.4.4-alpine@sha256:4cf82f5686b196504fe119db3fcd9185b191f82ece82c40680e597228ec6070a /usr/local/bin/bun /usr/local/bin/bun
 
 FROM base AS deps
 WORKDIR /app
-COPY admin/package.json admin/pnpm-lock.yaml admin/pnpm-workspace.yaml ./
-RUN pnpm install --frozen-lockfile --prefer-offline --ignore-scripts
+COPY admin/package.json admin/bun.lock admin/bunfig.toml ./
+RUN bun install --frozen-lockfile --prefer-offline --ignore-scripts
 
 FROM base AS builder
 WORKDIR /app/admin
@@ -14,7 +14,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY admin/ ./
 
 ENV NODE_ENV=production
-RUN pnpm run build
+RUN bun run build
 
 FROM base AS runner
 WORKDIR /app

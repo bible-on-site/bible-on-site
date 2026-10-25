@@ -14,7 +14,7 @@ for (const relative of ["public", ".next/static"]) {
 }
 
 // sharp's native @img/* binaries sit beside the resolved sharp package —
-// top-level node_modules under npm, inside .pnpm under pnpm.
+// top-level node_modules under npm and bun's hoisted linker alike.
 const sharpDir = path.dirname(
 	path.dirname(require.resolve("sharp", { paths: [root] })),
 );

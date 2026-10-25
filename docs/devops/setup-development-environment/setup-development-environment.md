@@ -40,26 +40,26 @@ For App development, you'll also need:
 For website E2E/performance tests and API testing, you'll also need:
 
 - [Playwright](https://playwright.dev/)
-  - `pnpm exec playwright install`
+  - `bun x playwright install`
 
 ## Setting Up the Development Environment
 
 1. Fork the repository (if you want to send PRs)
 2. Clone the repository
-3. From the project's root, execute `pnpm install`
-4. From `./devops`, execute `pnpm install`
-5. From `./devops`, execute `pnpm run setup_dev_env`
+3. From the project's root, execute `bun install`
+4. From `./devops`, execute `bun install`
+5. From `./devops`, execute `bun run setup_dev_env`
 
 ### Local backend and emulator
 
-From the repository root, run `pnpm run backend`. It reuses a healthy API already
+From the repository root, run `bun run backend`. It reuses a healthy API already
 on port 3003, or starts Docker Desktop and builds the API and RustFS with Compose.
 The API uses the existing MySQL development database from `web/api/.dev.env`;
 MySQL must accept connections from Docker's host gateway. Set `DB_URL` to choose
 another existing database. Populate local application content with `sync-from-prod`
 as described below.
 
-If Docker Desktop cannot start, `pnpm run backend -- --native` runs the same API
+If Docker Desktop cannot start, `bun run backend -- --native` runs the same API
 with Cargo and the installed MySQL service. Leave that terminal running; Ctrl+C
 stops the API process tree. No database population or Docker reset occurs during
 startup. Docker services can be stopped with
@@ -79,13 +79,13 @@ cd data && cargo make mysql-populate-dev
 
 For bundled demo articles only (optional): `cargo make mysql-populate-dev-with-test-articles`.
 
-The **admin** app (`web/admin`) uses **`tanah-dev`** when `DB_URL` is unset and `NODE_ENV` is not `production` (`src/server/db-config.ts`). Use `.dev.env` from `pnpm run dev` so `DB_URL` points at `tanah-dev`; avoid pointing dev admin at **`tanah`** unless you intend to edit the non-dev database.
+The **admin** app (`web/admin`) uses **`tanah-dev`** when `DB_URL` is unset and `NODE_ENV` is not `production` (`src/server/db-config.ts`). Use `.dev.env` from `bun run dev` so `DB_URL` points at `tanah-dev`; avoid pointing dev admin at **`tanah`** unless you intend to edit the non-dev database.
 
 For production-like data on demand:
 
 ```bash
 AWS_PROFILE=AdministratorAccess-250598594267 aws sso login
-AWS_PROFILE=AdministratorAccess-250598594267 pnpm exec tsx devops/setup-dev-env.mts sync-from-prod
+AWS_PROFILE=AdministratorAccess-250598594267 bun x tsx devops/setup-dev-env.mts sync-from-prod
 ```
 
 This auto-fetches prod DB credentials from SSM and temporarily opens RDS access for your IP. See [Sync from production](../../../data/README.md#sync-from-production-optional) in `data/README.md` for details.

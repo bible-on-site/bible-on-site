@@ -47,7 +47,7 @@ member-granularity narrowing it adds.
 
 ## Where the evidence lands today
 
-`run.mjs` (app/mobile-e2e) sets `MOBILE_E2E_ARTIFACTS` and `pnpm test` runs the
+`run.mjs` (app/mobile-e2e) sets `MOBILE_E2E_ARTIFACTS` and `bun run test` runs the
 xUnit suite through `dotnet run --project devops -- TestMobileE2E`
 (`app/devops/Build.Test.cs`). Per platform, the artifacts directory
 `app/.artifacts/mobile-e2e/<platform>/` contains:

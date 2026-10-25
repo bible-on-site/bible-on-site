@@ -1,10 +1,10 @@
 {
 	"setup-worktree": [
-		"pnpm install",
-		"pnpm -C devops install",
-		"pnpm -C web/bible-on-site install",
-		"pnpm -C web/admin install",
-		"pnpm -C web/api/tests install",
+		"bun install",
+		"bun install --cwd devops",
+		"bun install --cwd web/bible-on-site",
+		"bun install --cwd web/admin",
+		"bun install --cwd web/api/tests",
 		"cargo build --manifest-path data/Cargo.toml",
 		"cargo build --manifest-path web/api/Cargo.toml",
 		"dotnet restore bible-on-site.sln"

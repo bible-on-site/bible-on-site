@@ -52,16 +52,16 @@ invent an undeployed API field or database column.
 | Local GraphQL | `http://127.0.0.1:3003/`                                                            |
 | Prod GraphQL  | `https://api.xn--febl3a.com/`                                                       |
 | Start API     | `cd web/api && cargo make run-api-dev` (export `TANAHPEDIA_REVISION_API_KEY` first) |
-| Website dev   | `cd web/bible-on-site && pnpm run dev` → port 3001                                   |
+| Website dev   | `cd web/bible-on-site && bun run dev` → port 3001                                   |
 | Dev DB        | `mysql://root:test_123@localhost:3306/tanah-dev`                                    |
-| Apply task    | `cd devops && pnpm run tanahpedia:apply -- <ops.json> [--endpoint <url>]`            |
+| Apply task    | `cd devops && bun run tanahpedia:apply -- <ops.json> [--endpoint <url>]`            |
 
 Auth fails closed: every write needs `Authorization: Bearer $TANAHPEDIA_REVISION_API_KEY`, and the
 server must have been started with the same value.
 
 ## Local data = production copy
 
-`pnpm exec tsx devops/setup-dev-env.mts sync-from-prod` (AWS SSO first) restores prod into `tanah-dev`.
+`bun x tsx devops/setup-dev-env.mts sync-from-prod` (AWS SSO first) restores prod into `tanah-dev`.
 The website `predev` now attempts this automatically and keeps existing local data when prod is
 unreachable. Never hand-repair local content to match production — re-sync instead.
 

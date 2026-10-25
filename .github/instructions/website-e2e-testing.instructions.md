@@ -16,9 +16,9 @@ MySQL must run locally (Windows service, port 3306); `launch-e2e-server.mts` pop
 
 | Command | Server | Notes |
 |---|---|---|
-| `pnpm run test:e2e` | `next dev` | no build needed |
-| `pnpm run coverage:e2e` | `next dev` + SWC instrumentation | no build needed |
-| `pnpm run coverage:all` | unit + e2e + merge | merges LCOV |
+| `bun run test:e2e` | `next dev` | no build needed |
+| `bun run coverage:e2e` | `next dev` + SWC instrumentation | no build needed |
+| `bun run coverage:all` | unit + e2e + merge | merges LCOV |
 
 ## Coverage
 

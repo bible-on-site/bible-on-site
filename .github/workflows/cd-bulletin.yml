@@ -21,7 +21,7 @@ jobs:
 
     env:
       DEVOPS_DIRECTORY: devops
-      DEVOPS_NODE_CACHE_PATH: devops/pnpm-lock.yaml
+      DEVOPS_NODE_CACHE_PATH: devops/bun.lock
       DEVOPS_NODE_VERSION_FILE: devops/package.json
       MODULE_NAME: ${{ github.event.client_payload.module_name }}
       MODULE_DIRECTORY: ${{ github.event.client_payload.module_directory }}
@@ -51,9 +51,9 @@ jobs:
         with:
           ref: ${{ steps.guard.outputs.ref }}
 
-      - name: Setup pnpm
+      - name: Setup bun
         if: ${{ steps.guard.outputs.deploy == 'true' }}
-        uses: pnpm/action-setup@v4
+        uses: oven-sh/setup-bun@v2
 
       - name: Setup Node.js
         if: ${{ steps.guard.outputs.deploy == 'true' }}
@@ -62,14 +62,14 @@ jobs:
         with:
           node-version-file: ${{ env.DEVOPS_NODE_VERSION_FILE }}
           cache-dependency-path: ${{ env.DEVOPS_NODE_CACHE_PATH }}
-          cache: pnpm
+          cache: bun
 
       - name: Install dependencies
         if: ${{ steps.guard.outputs.deploy == 'true' }}
-        id: npm_ci
+        id: bun_ci
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         run: |
-          pnpm install --frozen-lockfile
+          bun install --frozen-lockfile
 
       - name: Configure AWS Credentials (OIDC)
         if: ${{ steps.guard.outputs.deploy == 'true' }}
@@ -103,7 +103,7 @@ jobs:
         id: deploy
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         run: |
-          pnpm run deploy:bulletin -- \
+          bun run deploy:bulletin -- \
             --module-version "${{ env.MODULE_VERSION }}" \
             --lambda-zip "${{ github.workspace }}/${{ steps.find_zip.outputs.LAMBDA_ZIP }}"
 

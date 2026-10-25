@@ -21,7 +21,7 @@ declare global {
 }
 
 /**
- * E2E test entry point. When MEASURE_COV=1 (pnpm run coverage:e2e), drains
+ * E2E test entry point. When MEASURE_COV=1 (bun run coverage:e2e), drains
  * istanbul `__coverage__` from both realms per test: instrumented client code
  * writes `window.__coverage__`, while instrumented Nitro SSR modules write to
  * the dev server's globalThis — exposed via /api/dev/coverage. SSR entries are

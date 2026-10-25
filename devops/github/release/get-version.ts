@@ -1,8 +1,8 @@
-#!/usr/bin/env pnpm exec tsx
+#!/usr/bin/env -S bun x tsx
 /**
  * Get the latest released version of a module from git tags.
  *
- * Usage: pnpm exec tsx get-version.ts --module <app|web/api|web/bible-on-site>
+ * Usage: bun x tsx get-version.ts --module <app|web/api|web/bible-on-site>
  *        Also accepts short names: app, api, website
  */
 

@@ -24,11 +24,11 @@ Never rediscover the write path from the UI or database schema: the canonical co
 - Person nodes and family structure use authenticated, idempotent puts — `putTanahpediaPersonNode`, `putTanahpediaEntryEntityLink`, `putTanahpediaParentChildLink`, `putTanahpediaPersonUnion` — direct structural writes, not revision rows; cleanup uses the matching narrow deletes.
 - Never substitute Admin server functions, direct SQL, seed scripts, or database clients for content writes.
 - Generate caller-supplied UUIDs once and keep the exact payload, so replays update the same logical rows instead of duplicating them.
-- Save the operation set as JSON and run `pnpm run tanahpedia:apply -- <ops.json> [--endpoint <url>]` from `devops/` rather than ad-hoc scripts — the same file applies locally and replays on production after sign-off.
+- Save the operation set as JSON and run `bun run tanahpedia:apply -- <ops.json> [--endpoint <url>]` from `devops/` rather than ad-hoc scripts — the same file applies locally and replays on production after sign-off.
 
 ### Local seed = copy of production
 
-- The canonical local dataset is a **prod copy**: `pnpm exec tsx devops/setup-dev-env.mts sync-from-prod` (AWS SSO first) restores production into `tanah-dev` and applies the safe structure/baseline upgrade. Refresh by re-syncing — never hand-repair local content.
+- The canonical local dataset is a **prod copy**: `bun x tsx devops/setup-dev-env.mts sync-from-prod` (AWS SSO first) restores production into `tanah-dev` and applies the safe structure/baseline upgrade. Refresh by re-syncing — never hand-repair local content.
 - The demo family SQL scripts (`tanahpedia_family_*.sql`, `cargo make mysql-apply-tanahpedia-families`) are CI/edge-lab fixtures only — never the local seed, and never re-run over a prod-synced database: their fixed-UUID delete/re-insert overwrites API-authored rows.
 
 ### Required data-change sequence

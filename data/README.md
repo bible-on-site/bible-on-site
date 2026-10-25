@@ -184,13 +184,13 @@ Pull production data (database + optional S3) into your local `tanah-dev` enviro
 AWS_PROFILE=AdministratorAccess-250598594267 aws sso login
 
 # Sync production DB to local tanah-dev
-AWS_PROFILE=AdministratorAccess-250598594267 pnpm exec tsx devops/setup-dev-env.mts sync-from-prod
+AWS_PROFILE=AdministratorAccess-250598594267 bun x tsx devops/setup-dev-env.mts sync-from-prod
 ```
 
 Preview without making changes:
 
 ```bash
-AWS_PROFILE=AdministratorAccess-250598594267 pnpm exec tsx devops/setup-dev-env.mts sync-from-prod --dry-run
+AWS_PROFILE=AdministratorAccess-250598594267 bun x tsx devops/setup-dev-env.mts sync-from-prod --dry-run
 ```
 
 **What it does:**

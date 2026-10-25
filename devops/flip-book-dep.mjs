@@ -4,7 +4,7 @@
  * while letting developers use their local checkout during development.
  *
  *  - `pre`:  if the dependency resolves to the local file: build, switch it to
- *    the npm version, stage package.json + pnpm-lock.yaml, and leave a
+ *    the npm version, stage package.json + bun.lock, and leave a
  *    marker file.
  *  - `post`: if the marker exists, restore the local dependency.
  *
@@ -22,10 +22,10 @@ const isWin = process.platform === "win32";
 const websiteDir = resolve("web/bible-on-site");
 const markerFile = resolve(websiteDir, ".flip-book-was-local");
 
-function npmRun(script, stdio = "inherit") {
-	// shell is required only on Windows to spawn pnpm's .cmd shim;
+function bunRun(script, stdio = "inherit") {
+	// shell is required only on Windows to spawn bun's .cmd shim;
 	// argv is fully static — no user input is shelled.
-	return spawnSync("pnpm", ["run", script], { // nosemgrep
+	return spawnSync("bun", ["run", script], { // nosemgrep
 		cwd: websiteDir,
 		shell: isWin,
 		stdio,
@@ -41,7 +41,7 @@ if (process.argv[2] === "post") {
 
 rmSync(markerFile, { force: true });
 // The check only reads package.json — spawn it directly so it works where
-// pnpm/node_modules are absent (e.g. pre-commit.ci clones); a `pnpm run`
+// bun/node_modules are absent (e.g. pre-commit.ci clones); a `bun run`
 // failure there would otherwise masquerade as a local dependency.
 const check = spawnSync(
 	process.execPath,
@@ -54,7 +54,7 @@ if (check.status !== 0) {
 	);
 	writeFileSync(markerFile, "");
 	if (npmRun("flip-book:npm").status !== 0) process.exit(1);
-	const add = spawnSync("git", ["add", "package.json", "pnpm-lock.yaml"], {
+	const add = spawnSync("git", ["add", "package.json", "bun.lock"], {
 		cwd: websiteDir,
 		stdio: "inherit",
 	});

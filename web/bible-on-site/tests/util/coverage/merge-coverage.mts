@@ -10,7 +10,7 @@ import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { normalizeLcovFile } from "./normalize-coverage.mjs";
 
-// `npm_config_local_prefix` is only set by npm, not pnpm — derive the package
+// `npm_config_local_prefix` is only set by npm, not bun — derive the package
 // root from this script's own location instead (tests/util/coverage/ -> ../..).
 const PACKAGE_DIR = resolve(
 	dirname(fileURLToPath(import.meta.url)),

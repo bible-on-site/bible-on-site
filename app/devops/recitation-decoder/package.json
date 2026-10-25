@@ -7,5 +7,8 @@
 		"mpg123-decoder": "1.0.3",
 		"ogg-opus-decoder": "1.7.5"
 	},
-	"packageManager": "pnpm@12.9.1"
+	"packageManager": "bun@1.4.4",
+	"trustedDependencies": [
+		"esbuild"
+	]
 }

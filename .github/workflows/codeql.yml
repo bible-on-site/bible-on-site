@@ -9,7 +9,7 @@
 #
 # NOTE: We deliberately do NOT add a `paths-ignore` guard for version/lockfile paths.
 # Skipping post-release bumps already avoids scanning their files, and a version bump
-# also rewrites lockfiles (e.g. pnpm-lock.yaml). Ignoring lockfile paths would be
+# also rewrites lockfiles (e.g. bun.lock). Ignoring lockfile paths would be
 # unsafe — a dependency-only push (e.g. from Renovate) must still be scanned for newly
 # introduced vulnerabilities.
 #

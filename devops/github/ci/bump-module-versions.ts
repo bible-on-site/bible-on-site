@@ -1,4 +1,4 @@
-#!/usr/bin/env pnpm exec tsx
+#!/usr/bin/env -S bun x tsx
 
 import { execFileSync, spawnSync } from "node:child_process";
 import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
@@ -74,11 +74,11 @@ export function rewritePackageVersions(
 	if (!packageData.version) {
 		throw new Error("Missing package version field");
 	}
-	// pnpm-lock.yaml does not record the importer's own version, so there is
-	// nothing to keep in sync — but requiring the pnpm lockfile format stops a
+	// bun.lock does not record the importer's own version, so there is
+	// nothing to keep in sync — but requiring the bun lockfile format stops a
 	// stale package-lock.json from silently passing the version bump.
-	if (!/^lockfileVersion:\s/m.test(lockText)) {
-		throw new Error("Expected pnpm-lock.yaml content");
+	if (!/"lockfileVersion":\s*\d/.test(lockText.slice(0, 200))) {
+		throw new Error("Expected bun.lock content");
 	}
 
 	const versionField = /("version"\s*:\s*")([^"]+)(")/g;
@@ -173,7 +173,7 @@ function writeVersion(
 	cwd: string,
 ): void {
 	function writePackage(): void {
-		const lockFile = `${module.path}/pnpm-lock.yaml`;
+		const lockFile = `${module.path}/bun.lock`;
 		const updated = rewritePackageVersions(
 			read(module.versionFile, cwd),
 			read(lockFile, cwd),

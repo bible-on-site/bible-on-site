@@ -70,9 +70,10 @@ describe("nextReleaseVersion", () => {
 });
 
 describe("rewritePackageVersions", () => {
-	it("bumps the manifest version and leaves the pnpm lockfile untouched", () => {
+	it("bumps the manifest version and leaves the bun lockfile untouched", () => {
 		const packageText = '{"name":"package","version":"0.1.25"}';
-		const lockText = 'lockfileVersion: \'9.0\'\n\nimporters:\n  .:\n';
+		const lockText =
+			'{\n  "lockfileVersion": 3,\n  "configVersion": 1,\n  "workspaces": {}\n}\n';
 		const updated = rewritePackageVersions(packageText, lockText, "0.1.26");
 		assert.equal(updated.packageText, '{"name":"package","version":"0.1.26"}');
 		assert.equal(updated.lockText, lockText);
@@ -86,7 +87,7 @@ describe("rewritePackageVersions", () => {
 					'{"name":"package","version":"0.1.25","packages":{"":{"version":"0.1.25"}}}',
 					"0.1.26",
 				),
-			/Expected pnpm-lock\.yaml content/,
+			/Expected bun\.lock content/,
 		);
 	});
 });

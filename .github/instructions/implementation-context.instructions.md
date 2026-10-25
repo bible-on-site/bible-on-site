@@ -22,6 +22,6 @@ Sefer "additionals" (e.g. שמואל א/ב): Hebrew names in code, "Additional" 
 
 ## Code Quality
 
-**Never ignore a compiler or linter error/warning** (TypeScript, Clippy, .NET, Biome, ESLint): keep 0 errors and 0 warnings. After every fix, run the build/lint for the changed area (`dotnet build`, `pnpm run build`/`pnpm run lint`) and clear what it reports.
+**Never ignore a compiler or linter error/warning** (TypeScript, Clippy, .NET, Biome, ESLint): keep 0 errors and 0 warnings. After every fix, run the build/lint for the changed area (`dotnet build`, `bun run build`/`bun run lint`) and clear what it reports.
 
 **Only known exceptions**, both in `.github/workflows/ci.yml`: "Context access might be invalid: module_changed" and "Unable to find reusable workflow".

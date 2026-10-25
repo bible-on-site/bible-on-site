@@ -19,7 +19,7 @@ repos:
       # and pre-commit users on sequential order.
       - id: check-yaml
         priority: 10
-        exclude: ^docs/aws/cloudformation/|pnpm-lock\.yaml$
+        exclude: ^docs/aws/cloudformation/
       - id: check-toml
         priority: 10
       - id: check-json
@@ -121,12 +121,12 @@ repos:
         additional_dependencies: ["@types/node@26.6.5"]
         files: ^web/bible-on-site/
         pass_filenames: false
-        # Mutates package.json/pnpm-lock and stages them — runs alone
+        # Mutates package.json/bun.lock and stages them — runs alone
         # before the parallel read-only batch so tests see stable files.
         priority: 5
       - id: web-unit-tests
         name: web/bible-on-site unit tests
-        entry: node devops/precommit-run.mjs web/bible-on-site pnpm run test:unit
+        entry: node devops/precommit-run.mjs web/bible-on-site bun run test:unit
         language: node
         additional_dependencies: ["@types/node@26.6.5"]
         files: ^web/bible-on-site/
@@ -134,7 +134,7 @@ repos:
         priority: 10
       - id: admin-unit-tests
         name: web/admin unit tests
-        entry: node devops/precommit-run.mjs web/admin pnpm run test:unit
+        entry: node devops/precommit-run.mjs web/admin bun run test:unit
         language: node
         additional_dependencies: ["@types/node@26.6.5"]
         files: ^web/admin/

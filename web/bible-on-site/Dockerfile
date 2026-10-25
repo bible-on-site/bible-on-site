@@ -1,10 +1,10 @@
 FROM node:26.12.1-alpine AS base
-# Node 26 no longer bundles corepack; install it from npm to activate the
-# pinned pnpm from packageManager.
-RUN npm install -g corepack@0.36.0 && corepack enable pnpm
+# Bun ships as a standalone binary — copy the pinned release matching
+# packageManager (bun@1.4.4) rather than installing a package manager.
+COPY --from=oven/bun:1.4.4-alpine@sha256:4cf82f5686b196504fe119db3fcd9185b191f82ece82c40680e597228ec6070a /usr/local/bin/bun /usr/local/bin/bun
 
 # Version-only releases must not invalidate the dependency layer.
-# pnpm-lock.yaml does not embed the manifest version, so only package.json needs
+# bun.lock does not embed the manifest version, so only package.json needs
 # the strip.
 FROM base AS manifests
 WORKDIR /app
@@ -20,12 +20,12 @@ WORKDIR /app
 # Install dependencies based on the preferred package manager
 # Build context is web/, so bible-on-site is a subdirectory
 COPY --from=manifests /app/package.json ./
-COPY bible-on-site/pnpm-lock.yaml bible-on-site/pnpm-workspace.yaml ./
+COPY bible-on-site/bun.lock bible-on-site/bunfig.toml ./
 # Install ALL dependencies (including dev like sass) needed for the build step.
 # The final runner stage uses Next.js standalone output, so dev deps don't end up in production.
 # Source-dependent postinstall helpers run outside this dependency-only stage.
 # prebuild derives the browser catalog after the full source is copied.
-RUN pnpm install --frozen-lockfile --prefer-offline --ignore-scripts
+RUN bun install --frozen-lockfile --prefer-offline --ignore-scripts
 
 # Rebuild the source code only when needed
 FROM base AS builder
@@ -60,7 +60,7 @@ ARG MAPBOX_PUBLIC_KEY
 # hadolint ignore=DL3064
 ENV NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN=$MAPBOX_PUBLIC_KEY
 
-RUN pnpm run build
+RUN bun run build
 
 # Production image, copy all the files and run next
 FROM base AS runner

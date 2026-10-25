@@ -143,7 +143,7 @@ async function main() {
     throw new Error(`Release smoke APK must be an .apk file: ${apk}`);
   }
   if (!existsSync(apk)) {
-    throw new Error(`Release smoke APK missing — run 'pnpm run build:release-smoke' first: ${apk}`);
+    throw new Error(`Release smoke APK missing — run 'bun run build:release-smoke' first: ${apk}`);
   }
   const execute = promisify(execFile);
   const shell = async (...args) =>
