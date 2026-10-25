@@ -1,6 +1,6 @@
 {
 	"name": "bible-on-site",
-	"version": "0.2.545",
+	"version": "0.2.557",
 	"private": true,
 	"license": "MIT",
 	"browserslist": [
@@ -14,7 +14,7 @@
 	"scripts": {
 		"update": "npx npm-check-updates --peer --deep -u && npm install && npm install && npm run update:playwright",
 		"update:playwright": "npx playwright install",
-		"predev": "node scripts/kill-port.mjs 3001 && node scripts/ensure-docker-desktop.mjs && node --import tsx ../../devops/ensure-dev-db.mts --sync-from-prod --tables tanah_sefer,tanahpedia_entry && docker compose -f ../../devops/docker-compose.yml up -d --wait rustfs && docker compose -f ../../devops/docker-compose.yml run --build --rm rustfs-init && node scripts/toggle-flip-book-dep.mjs local && npm install --prefer-offline",
+		"predev": "node scripts/kill-port.mjs 3001 && node scripts/ensure-docker-desktop.mjs && node --import tsx ../../devops/ensure-dev-db.mts --sync-from-prod --tables tanah_sefer,tanahpedia_entry && docker compose -f ../../devops/docker-compose.yml up -d --wait rustfs && docker compose -f ../../devops/docker-compose.yml run --build --rm rustfs-init && node scripts/predev-deps.mjs",
 		"dev": "dotenv -e .dev.env -- next dev -p 3001",
 		"dev-webpack": "dotenv -e .dev.env -- next dev --webpack -p 3001",
 		"prebuild": "node scripts/generate-client-catalog.mjs && node --test scripts/verify-public-content.test.mjs",
@@ -60,13 +60,13 @@
 		"@aws-sdk/client-lambda": "3.1156.0",
 		"@pdf-lib/fontkit": "1.1.1",
 		"gematry": "1.0.2",
-		"html-flip-book-react": "0.0.0-alpha.48",
+		"html-flip-book-react": "0.0.0-alpha.49",
 		"isomorphic-dompurify": "4.6.0",
 		"leaflet": "1.9.4",
 		"mapbox-gl": "3.33.0",
 		"moment-timezone": "0.6.5",
 		"mpg123-decoder": "1.0.3",
-		"monocart-coverage-reports": "3.0.0",
+		"monocart-coverage-reports": "3.1.0",
 		"mysql2": "3.24.6",
 		"next": "16.4.3",
 		"pdf-lib": "1.17.1",
@@ -113,7 +113,7 @@
 		"@emnapi/core": "1.11.3",
 		"@emnapi/runtime": "1.11.3",
 		"@emnapi/wasi-threads": "2.2.0",
-		"@napi-rs/wasm-runtime": "1.2.5",
+		"@napi-rs/wasm-runtime": "1.2.6",
 		"@tybys/wasm-util": "0.10.4"
 	},
 	"allowScripts": {

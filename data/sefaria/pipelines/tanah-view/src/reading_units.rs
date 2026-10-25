@@ -450,7 +450,7 @@ pub struct ParashaSourceUnit {
     pub haftarot: Vec<SourceHaftara>,
 }
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Deserialize)]
 pub struct SourceVerse {
     pub perek: i32,
     pub pasuk: i32,
@@ -722,6 +722,266 @@ pub fn insert_parasha_reading_units(tx: &Transaction, sefarim: &[Sefer]) -> Resu
 
     let units = derive_parasha_units(&source, sefarim)?;
     insert_units(tx, PARASHA_DIVISION_ID, &units)
+}
+
+// --------------------------------------------------------------------
+// Aliyah boundaries (#2519) — reading contexts, named schemes, and the
+// per-(reading, scheme) boundary rows. The curated table is
+// web/bible-on-site/src/data/parasha/parasha-aliyot.json, imported from
+// hebcal-leyning by devops/import-parasha-aliyot.mjs — same shared-source
+// shape as parasha-division.json so all consumers resolve identical data.
+// --------------------------------------------------------------------
+
+/// Source-table mirror of parasha-aliyot.json (fields the export needs).
+#[derive(Debug, serde::Deserialize)]
+pub struct ParashaAliyotSource {
+    pub provenance: AliyahProvenanceSource,
+    pub schemes: Vec<AliyahSchemeSource>,
+    pub readings: Vec<AliyahReadingSource>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct AliyahProvenanceSource {
+    pub name: String,
+    pub repository: String,
+    pub license: String,
+    pub commit: String,
+    pub retrieved: String,
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct AliyahSchemeSource {
+    pub id: String,
+    pub label: String,
+    pub description: String,
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct AliyahReadingSource {
+    pub id: String,
+    /// Constituent parasha names in reading order (1 standalone, 2 joined).
+    pub units: Vec<String>,
+    pub sefer: String,
+    /// Where the context applies (e.g. חוץ לארץ-only joins); absent = everywhere.
+    pub applicability: Option<String>,
+    pub schemes: HashMap<String, Vec<AliyahBoundarySource>>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct AliyahBoundarySource {
+    pub ordinal: i32,
+    pub role: String,
+    pub label: String,
+    pub start: SourceVerse,
+    pub end: SourceVerse,
+    /// Documented alternative divisions of this aliyah (different
+    /// minhag boundaries for the same stretch); each carries the
+    /// alternative's own start/end plus optional custom and source.
+    pub alternatives: Option<Vec<AliyahAlternativeSource>>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct AliyahAlternativeSource {
+    pub start: SourceVerse,
+    pub end: SourceVerse,
+    pub custom: Option<String>,
+    pub source: Option<String>,
+}
+
+/// Path of the shared aliyah source table the website also consumes.
+pub fn parasha_aliyot_path() -> std::path::PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../../../web/bible-on-site/src/data/parasha/parasha-aliyot.json")
+}
+
+/// Load and parse the shared aliyah source table.
+pub fn load_parasha_aliyot() -> Result<ParashaAliyotSource> {
+    let path = parasha_aliyot_path();
+    let json = std::fs::read_to_string(&path)
+        .with_context(|| format!("Failed to read parasha aliyot {}", path.display()))?;
+    serde_json::from_str(&json)
+        .with_context(|| format!("Failed to parse parasha aliyot {}", path.display()))
+}
+
+/// Insert aliyah schemes, reading contexts, their ordered constituent
+/// units, and every resolved boundary row. Skips silently when the
+/// corpus carries no parasha units (fixture/partial exports) — the same
+/// degradation rule as insert_parasha_reading_units — but any present
+/// Torah sefer resolves strictly.
+pub fn insert_parasha_aliyot(tx: &Transaction, sefarim: &[Sefer]) -> Result<()> {
+    let source = load_parasha_aliyot()?;
+    if source.readings.is_empty() {
+        return Ok(());
+    }
+    let division = load_parasha_division()?;
+    if !division
+        .units
+        .iter()
+        .any(|unit| sefarim.iter().any(|sefer| sefer.name == unit.sefer))
+    {
+        return Ok(());
+    }
+
+    tx.execute(
+        "INSERT INTO tanah_parasha_aliyah_source
+           (id, name, repository, license, upstream_commit, retrieved)
+         VALUES (1, ?1, ?2, ?3, ?4, ?5)",
+        (
+            &source.provenance.name,
+            &source.provenance.repository,
+            &source.provenance.license,
+            &source.provenance.commit,
+            &source.provenance.retrieved,
+        ),
+    )?;
+
+    for (index, scheme) in source.schemes.iter().enumerate() {
+        tx.execute(
+            "INSERT INTO tanah_parasha_aliyah_scheme (id, label, description, scheme_order)
+             VALUES (?1, ?2, ?3, ?4)",
+            (
+                &scheme.id,
+                &scheme.label,
+                &scheme.description,
+                index as i32 + 1,
+            ),
+        )?;
+    }
+
+    // unit_id (positional, 1-based) by parasha name — the join key into
+    // tanah_reading_unit rows just emitted.
+    let unit_id_by_name: HashMap<&str, i32> = division
+        .units
+        .iter()
+        .enumerate()
+        .map(|(index, unit)| (unit.name.as_str(), index as i32 + 1))
+        .collect();
+
+    for reading in &source.readings {
+        let sefer_id = sefarim
+            .iter()
+            .position(|s| s.name == reading.sefer)
+            .ok_or_else(|| anyhow::anyhow!("aliyah data: unknown sefer \"{}\"", reading.sefer))?
+            as i32
+            + 1;
+        let kind = if reading.units.len() > 1 {
+            "joined"
+        } else {
+            "standalone"
+        };
+        tx.execute(
+            "INSERT INTO tanah_parasha_reading (id, kind, sefer_id, applicability)
+             VALUES (?1, ?2, ?3, ?4)",
+            (&reading.id, kind, sefer_id, &reading.applicability),
+        )?;
+        for (position, name) in reading.units.iter().enumerate() {
+            let unit_id = unit_id_by_name.get(name.as_str()).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "aliyah data: {} references unknown parasha \"{name}\"",
+                    reading.id
+                )
+            })?;
+            tx.execute(
+                "INSERT INTO tanah_parasha_reading_unit
+                   (reading_id, unit_position, division_id, unit_id)
+                 VALUES (?1, ?2, ?3, ?4)",
+                (
+                    &reading.id,
+                    position as i32 + 1,
+                    PARASHA_DIVISION_ID,
+                    unit_id,
+                ),
+            )?;
+        }
+        for (scheme_id, boundaries) in &reading.schemes {
+            for boundary in boundaries {
+                let range = resolve_parasha_range(
+                    sefarim,
+                    &SourceRange {
+                        sefer: reading.sefer.clone(),
+                        additional: None,
+                        start: SourceVerse {
+                            perek: boundary.start.perek,
+                            pasuk: boundary.start.pasuk,
+                        },
+                        end: SourceVerse {
+                            perek: boundary.end.perek,
+                            pasuk: boundary.end.pasuk,
+                        },
+                    },
+                )
+                .with_context(|| {
+                    format!(
+                        "aliyah data: {}/{} boundary {}",
+                        reading.id, scheme_id, boundary.ordinal
+                    )
+                })?;
+                tx.execute(
+                    "INSERT INTO tanah_parasha_aliyah
+                       (reading_id, scheme_id, ordinal, role, label,
+                        start_perek_id, start_pasuk, end_perek_id, end_pasuk)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                    (
+                        &reading.id,
+                        scheme_id,
+                        boundary.ordinal,
+                        &boundary.role,
+                        &boundary.label,
+                        range.start.perek_id,
+                        range.start.pasuk,
+                        range.end.perek_id,
+                        range.end.pasuk,
+                    ),
+                )?;
+                for (alternative_index, alternative) in boundary
+                    .alternatives
+                    .as_deref()
+                    .unwrap_or_default()
+                    .iter()
+                    .enumerate()
+                {
+                    let alternative_range = resolve_parasha_range(
+                        sefarim,
+                        &SourceRange {
+                            sefer: reading.sefer.clone(),
+                            additional: None,
+                            start: alternative.start.clone(),
+                            end: alternative.end.clone(),
+                        },
+                    )
+                    .with_context(|| {
+                        format!(
+                            "aliyah data: {}/{} boundary {} alternative {}",
+                            reading.id,
+                            scheme_id,
+                            boundary.ordinal,
+                            alternative_index + 1
+                        )
+                    })?;
+                    tx.execute(
+                        "INSERT INTO tanah_parasha_aliyah_alternative
+                           (reading_id, scheme_id, ordinal, alternative,
+                            start_perek_id, start_pasuk, end_perek_id, end_pasuk,
+                            custom, source)
+                         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                        (
+                            &reading.id,
+                            scheme_id,
+                            boundary.ordinal,
+                            alternative_index as i32 + 1,
+                            alternative_range.start.perek_id,
+                            alternative_range.start.pasuk,
+                            alternative_range.end.perek_id,
+                            alternative_range.end.pasuk,
+                            &alternative.custom,
+                            &alternative.source,
+                        ),
+                    )?;
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -1757,5 +2017,300 @@ mod tests {
                 "haftara-temani".to_string(),
             ]
         );
+    }
+
+    /// The aliyah export writes schemes, standalone and joined reading
+    /// contexts, ordered constituent units, and resolved boundary rows —
+    /// parity-checked against the checked-in corpus + curated table.
+    #[test]
+    fn insert_parasha_aliyot_writes_schemes_readings_and_boundaries() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE tanah_reading_division (
+                id TEXT PRIMARY KEY,
+                contract_version INTEGER NOT NULL,
+                root_path TEXT NOT NULL,
+                menu_label TEXT NOT NULL
+            );
+            CREATE TABLE tanah_reading_unit (
+                division_id TEXT NOT NULL,
+                unit_id INTEGER NOT NULL,
+                slug TEXT NOT NULL,
+                sefer_id INTEGER NOT NULL,
+                unit_order INTEGER NOT NULL,
+                heading TEXT NOT NULL,
+                closing_break TEXT,
+                PRIMARY KEY (division_id, unit_id)
+            );
+            CREATE TABLE tanah_reading_unit_range (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                division_id TEXT NOT NULL,
+                unit_id INTEGER NOT NULL,
+                range_index INTEGER NOT NULL,
+                auxiliary_ordinal INTEGER,
+                auxiliary_id TEXT,
+                auxiliary_label TEXT,
+                start_perek_id INTEGER NOT NULL,
+                start_pasuk INTEGER NOT NULL,
+                start_segment_index INTEGER,
+                end_perek_id INTEGER NOT NULL,
+                end_pasuk INTEGER NOT NULL,
+                end_segment_index INTEGER
+            );
+            CREATE TABLE tanah_parasha_aliyah_scheme (
+                id TEXT PRIMARY KEY,
+                label TEXT NOT NULL,
+                description TEXT NOT NULL,
+                scheme_order INTEGER NOT NULL
+            );
+            CREATE TABLE tanah_parasha_reading (
+                id TEXT PRIMARY KEY,
+                kind TEXT NOT NULL,
+                sefer_id INTEGER NOT NULL,
+                applicability TEXT
+            );
+            CREATE TABLE tanah_parasha_reading_unit (
+                reading_id TEXT NOT NULL,
+                unit_position INTEGER NOT NULL,
+                division_id TEXT NOT NULL,
+                unit_id INTEGER NOT NULL,
+                PRIMARY KEY (reading_id, unit_position)
+            );
+            CREATE TABLE tanah_parasha_aliyah (
+                reading_id TEXT NOT NULL,
+                scheme_id TEXT NOT NULL,
+                ordinal INTEGER NOT NULL,
+                role TEXT NOT NULL,
+                label TEXT NOT NULL,
+                start_perek_id INTEGER NOT NULL,
+                start_pasuk INTEGER NOT NULL,
+                end_perek_id INTEGER NOT NULL,
+                end_pasuk INTEGER NOT NULL,
+                PRIMARY KEY (reading_id, scheme_id, ordinal)
+            );
+            CREATE TABLE tanah_parasha_aliyah_alternative (
+                reading_id TEXT NOT NULL,
+                scheme_id TEXT NOT NULL,
+                ordinal INTEGER NOT NULL,
+                alternative INTEGER NOT NULL,
+                start_perek_id INTEGER NOT NULL,
+                start_pasuk INTEGER NOT NULL,
+                end_perek_id INTEGER NOT NULL,
+                end_pasuk INTEGER NOT NULL,
+                custom TEXT,
+                source TEXT,
+                PRIMARY KEY (reading_id, scheme_id, ordinal, alternative)
+            );
+            CREATE TABLE tanah_parasha_aliyah_source (
+                id INTEGER PRIMARY KEY,
+                name TEXT NOT NULL,
+                repository TEXT NOT NULL,
+                license TEXT NOT NULL,
+                upstream_commit TEXT NOT NULL,
+                retrieved TEXT NOT NULL
+            );",
+        )
+        .unwrap();
+
+        let sefarim = corpus_sefarim();
+        let tx = conn.transaction().unwrap();
+        insert_parasha_reading_units(&tx, &sefarim).unwrap();
+        insert_parasha_aliyot(&tx, &sefarim).unwrap();
+        tx.commit().unwrap();
+
+        let scheme_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM tanah_parasha_aliyah_scheme",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(scheme_count, 2);
+
+        let (standalone, joined): (i64, i64) = conn
+            .query_row(
+                "SELECT
+                   COALESCE(SUM(kind = 'standalone'), 0),
+                   COALESCE(SUM(kind = 'joined'), 0)
+                 FROM tanah_parasha_reading",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!((standalone, joined), (54, 7));
+
+        // Constituent links: 54 solo + 7 pairs, in reading order.
+        let constituent_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM tanah_parasha_reading_unit",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(constituent_count, 54 + 14);
+        let joined_units: Vec<i64> = {
+            let mut stmt = conn
+                .prepare(
+                    "SELECT unit_id FROM tanah_parasha_reading_unit
+                     WHERE reading_id = 'Nitzavim-Vayeilech' ORDER BY unit_position",
+                )
+                .unwrap();
+            stmt.query_map([], |row| row.get(0))
+                .unwrap()
+                .collect::<rusqlite::Result<Vec<_>>>()
+                .unwrap()
+        };
+        assert_eq!(joined_units.len(), 2);
+        assert!(joined_units[0] < joined_units[1]);
+
+        // Shabbat boundaries: 53 parashiot × (7+maftir), וזאת הברכה
+        // carries no maftir, plus 7 joins × 8. Weekday: 54 × 3.
+        let (shabbat, weekday): (i64, i64) = conn
+            .query_row(
+                "SELECT
+                   COALESCE(SUM(scheme_id = 'shabbat'), 0),
+                   COALESCE(SUM(scheme_id = 'weekday'), 0)
+                 FROM tanah_parasha_aliyah",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!((shabbat, weekday), (53 * 8 + 7 + 7 * 8, 54 * 3));
+
+        // Bereshit aliyah 1 resolves to canonical perekIds 1→2.
+        let bereshit: (i64, i64, i64, i64) = conn
+            .query_row(
+                "SELECT start_perek_id, start_pasuk, end_perek_id, end_pasuk
+                 FROM tanah_parasha_aliyah
+                 WHERE reading_id = 'Bereshit' AND scheme_id = 'shabbat' AND ordinal = 1",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            )
+            .unwrap();
+        assert_eq!(bereshit, (1, 1, 2, 3));
+
+        // A joined aliyah may cross a perek (Nitzavim-Vayeilech #4
+        // spans Devarim 30:15-31:6) — end perekId stays strictly ahead.
+        let crossing: (i64, i64, i64, i64) = conn
+            .query_row(
+                "SELECT start_perek_id, start_pasuk, end_perek_id, end_pasuk
+                 FROM tanah_parasha_aliyah
+                 WHERE reading_id = 'Nitzavim-Vayeilech' AND scheme_id = 'shabbat' AND ordinal = 4",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            )
+            .unwrap();
+        assert!(
+            crossing.0 < crossing.2,
+            "aliyah 4 crosses a perek: {crossing:?}"
+        );
+        assert_eq!((crossing.1, crossing.3), (15, 6));
+
+        // Maftir is a distinct role; וזאת הברכה legitimately lacks one.
+        let maftir_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM tanah_parasha_aliyah WHERE role = 'maftir'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(maftir_count, 53 + 7);
+        let vezot_rows: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM tanah_parasha_aliyah WHERE reading_id = 'Vezot Haberakhah'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(vezot_rows, 7 + 3); // 7 shabbat + 3 weekday, no maftir
+
+        // Documented alternative divisions export as child rows with
+        // their own resolved ranges: 16 Shabbat variants (בראשית ×2
+        // unattributed, תרומה/מסעי ×2+×3 עדות המזרח, ויגש/נשא/דברים
+        // חב"ד, מטות-מסעי ×2 אשכנז) and 8 weekday variants.
+        let alternatives: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM tanah_parasha_aliyah_alternative",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(alternatives, 24);
+        let (with_custom, with_source): (i64, i64) = conn
+            .query_row(
+                "SELECT
+                   COALESCE(SUM(custom IS NOT NULL), 0),
+                   COALESCE(SUM(source IS NOT NULL), 0)
+                 FROM tanah_parasha_aliyah_alternative",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!((with_custom, with_source), (14, 24));
+
+        // חוקת-בלק and מטות-מסעי are the only restricted contexts —
+        // both carve out מנהג תימן הבלדי, which joins the first pair
+        // and never the second.
+        let restricted: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM tanah_parasha_reading
+                 WHERE applicability IS NOT NULL",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(restricted, 2);
+        let chukat_applicability: String = conn
+            .query_row(
+                "SELECT applicability FROM tanah_parasha_reading
+                 WHERE id = 'Chukat-Balak'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(chukat_applicability, "חוץ לארץ ומנהג תימן הבלדי");
+        let matot_applicability: String = conn
+            .query_row(
+                "SELECT applicability FROM tanah_parasha_reading
+                 WHERE id = 'Matot-Masei'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(matot_applicability, "למעט מנהג תימן הבלדי");
+
+        // Provenance lands verbatim as the single source row.
+        let provenance: (String, String) = conn
+            .query_row(
+                "SELECT name, upstream_commit FROM tanah_parasha_aliyah_source WHERE id = 1",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert!(provenance.0.contains("hebcal"));
+        assert_eq!(provenance.1, "ec5c7642e3");
+    }
+
+    /// Corpus without Torah sefarim degrades to a no-op (the parasha
+    /// units path already guards partial exports the same way).
+    #[test]
+    fn insert_parasha_aliyot_noops_without_torah_sefarim() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE tanah_parasha_aliyah_scheme (id TEXT PRIMARY KEY, label TEXT NOT NULL, description TEXT NOT NULL, scheme_order INTEGER NOT NULL);
+             CREATE TABLE tanah_parasha_reading (id TEXT PRIMARY KEY, kind TEXT NOT NULL, sefer_id INTEGER NOT NULL, applicability TEXT);",
+        )
+        .unwrap();
+        // An empty corpus carries no parasha-unit-bearing sefer, so the
+        // guard fires before any resolution is attempted.
+        let tx = conn.transaction().unwrap();
+        insert_parasha_aliyot(&tx, &[]).unwrap();
+        tx.commit().unwrap();
+        let rows: i64 = conn
+            .query_row("SELECT COUNT(*) FROM tanah_parasha_reading", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(rows, 0);
     }
 }

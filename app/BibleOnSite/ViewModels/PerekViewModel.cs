@@ -11,7 +11,7 @@ namespace BibleOnSite.ViewModels;
 /// ViewModel for perek display and navigation.
 /// Uses CommunityToolkit.Mvvm for observable properties and commands.
 /// </summary>
-public partial class PerekViewModel : ObservableObject
+public partial class PerekViewModel : ObservableObject, IPerushimSheetViewModel
 {
     private readonly PreferencesService _preferencesService;
     private readonly Func<int, Perek?> _perekLoader;
@@ -178,12 +178,15 @@ public partial class PerekViewModel : ObservableObject
         }
     }
 
-    partial void OnPerekChanged(Perek? value) => RefreshRecitationAvailability(value);
-
-    partial void OnCurrentCarouselPerekChanged(Perek? oldValue, Perek? newValue)
+    partial void OnPerekChanged(Perek? oldValue, Perek? newValue)
     {
+        // Only the displayed carousel page belongs in the accessibility tree.
+        // Perek always tracks the displayed page — unlike the carousel's
+        // CurrentItem, which does not update on programmatic ScrollTo and can
+        // leave the exclusion flag on a page that is actually on screen.
         if (oldValue is not null) { oldValue.IsOffscreenCarouselPage = true; }
         if (newValue is not null) { newValue.IsOffscreenCarouselPage = false; }
+        RefreshRecitationAvailability(newValue);
     }
 
     /// <summary>

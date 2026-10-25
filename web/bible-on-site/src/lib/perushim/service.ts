@@ -1,10 +1,10 @@
+import { query } from "../api-client";
 import type { ScriptureRange } from "../reading/contract";
 import {
 	noteSliceCondition,
 	slicePerekOrder,
 	slicesForRanges,
 } from "../reading/queries";
-import { query } from "../api-client";
 import type { PerushDetail, PerushNote, PerushSummary } from "./types";
 
 interface PerushSummaryRow {
@@ -65,7 +65,10 @@ interface PerushPerekNamePair {
 	perushName: string;
 }
 
-export async function getAllPerushPerekNamePairs(): Promise<PerushPerekNamePair[]> {
+/** Build enumeration must fail on database errors rather than publish missing routes. */
+export async function getAllPerushPerekNamePairs(): Promise<
+	PerushPerekNamePair[]
+> {
 	try {
 		const rows = await query<{ perek_id: number; perush_name: string }>(
 			`SELECT DISTINCT n.perek_id, p.name AS perush_name
@@ -82,7 +85,7 @@ export async function getAllPerushPerekNamePairs(): Promise<PerushPerekNamePair[
 			"Failed to fetch perush-perek name pairs:",
 			error instanceof Error ? error.message : error,
 		);
-		return [];
+		throw error;
 	}
 }
 
@@ -158,7 +161,10 @@ export async function getPerushimForRanges(
 		);
 
 		const perekOrder = slicePerekOrder(slices);
-		const byPerush = new Map<number, RangePerushSummary & { priority: number; firstPerekOrder: number }>();
+		const byPerush = new Map<
+			number,
+			RangePerushSummary & { priority: number; firstPerekOrder: number }
+		>();
 		for (const row of rows) {
 			const order = perekOrder.get(row.perek_id) ?? Number.MAX_SAFE_INTEGER;
 			const existing = byPerush.get(row.perush_id);
@@ -182,7 +188,10 @@ export async function getPerushimForRanges(
 		}
 		return [...byPerush.values()]
 			.sort((a, b) => a.priority - b.priority || b.noteCount - a.noteCount)
-			.map(({ priority: _priority, firstPerekOrder: _order, ...summary }) => summary);
+			.map(
+				({ priority: _priority, firstPerekOrder: _order, ...summary }) =>
+					summary,
+			);
 	} catch (error) {
 		console.warn(
 			"Failed to fetch perushim for ranges:",
@@ -224,9 +233,7 @@ export async function getPerushNotesForRanges(
 			.sort((a, b) => {
 				const orderA = perekOrder.get(a.perekId) ?? Number.MAX_SAFE_INTEGER;
 				const orderB = perekOrder.get(b.perekId) ?? Number.MAX_SAFE_INTEGER;
-				return (
-					orderA - orderB || a.pasuk - b.pasuk || a.noteIdx - b.noteIdx
-				);
+				return orderA - orderB || a.pasuk - b.pasuk || a.noteIdx - b.noteIdx;
 			});
 	} catch (error) {
 		console.warn(
@@ -268,6 +275,53 @@ export async function getPerushNotes(
 			error instanceof Error ? error.message : error,
 		);
 		return [];
+	}
+}
+
+/**
+ * Fetch notes for several perushim on one perek in a single query — the
+ * Sefer commentary panel renders every selected perush at once, so one
+ * round trip beats one request per perush. Keys are perush ids; a perush
+ * with no notes on the perek simply has no key.
+ */
+export async function getPerushNotesBatch(
+	perekId: number,
+	perushIds: number[],
+): Promise<Record<number, PerushNote[]>> {
+	const ids = [...new Set(perushIds)].filter(
+		(id) => Number.isInteger(id) && id > 0,
+	);
+	if (ids.length === 0) return {};
+	try {
+		// One placeholder per id: `execute` binds each `?` to a scalar, so a
+		// single `IN (?)` would receive the array as one JSON-encoded value
+		// and match nothing.
+		const placeholders = ids.map(() => "?").join(",");
+		const rows = await query<NoteRow & { perush_id: number }>(
+			`SELECT perush_id, pasuk, note_idx, note_content
+			 FROM note
+			 WHERE perek_id = ? AND perush_id IN (${placeholders})
+			 ORDER BY perush_id ASC, pasuk ASC, note_idx ASC`,
+			[perekId, ...ids],
+		);
+		const byPerush: Record<number, PerushNote[]> = {};
+		for (const row of rows) {
+			const notes = byPerush[row.perush_id] ?? [];
+			notes.push({
+				pasuk: row.pasuk,
+				noteIdx: row.note_idx,
+				noteContent: row.note_content,
+			});
+			byPerush[row.perush_id] = notes;
+		}
+		return byPerush;
+	} catch (error) {
+		console.warn(
+			"Failed to fetch notes batch for perek %d:",
+			perekId,
+			error instanceof Error ? error.message : error,
+		);
+		return {};
 	}
 }
 

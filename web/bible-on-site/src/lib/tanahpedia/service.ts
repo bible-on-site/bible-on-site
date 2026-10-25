@@ -946,8 +946,8 @@ export async function getMentionReferencesForPerek(
 	try {
 		return await query<PerekEntityReference>(
 			`SELECT
-			   ent.id AS entityId,
-			   ent.title AS entityName,
+			   ANY_VALUE(ent.id) AS entityId,
+			   ANY_VALUE(ent.title) AS entityName,
 			   d.entity_type AS entityType,
 			   ANY_VALUE(ent.unique_name) AS entryUniqueName,
 			   d.pasuk_number AS pasukNumber,

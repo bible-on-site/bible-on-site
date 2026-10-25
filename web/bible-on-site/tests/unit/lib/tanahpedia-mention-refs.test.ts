@@ -46,6 +46,19 @@ describe("getMentionReferencesForPerek", () => {
 		expect(sql).toContain("HAVING COUNT(DISTINCT names.entryId) <= 1");
 	});
 
+	it("wraps non-grouped entry columns so the query is only_full_group_by safe", async () => {
+		mockQuery.mockResolvedValueOnce([]);
+		await getMentionReferencesForPerek(9);
+		const [sql] = mockQuery.mock.calls[0];
+		// GROUP BY d.id cannot prove functional dependence for ent.* (the join
+		// goes through the derived names table); MySQL's default sql_mode
+		// rejects bare ent columns. ANY_VALUE is deterministic here: kept
+		// groups have at most one distinct entryId.
+		expect(sql).toContain("ANY_VALUE(ent.id) AS entityId");
+		expect(sql).toContain("ANY_VALUE(ent.title) AS entityName");
+		expect(sql).not.toMatch(/SELECT\s+ent\.id/);
+	});
+
 	it("returns decorations in the shared PerekEntityReference shape", async () => {
 		const row: PerekEntityReference = {
 			entityId: "entry-1",

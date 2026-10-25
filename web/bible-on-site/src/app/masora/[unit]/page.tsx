@@ -79,12 +79,10 @@ function seferUnitsPerekIds(seferName: string): number[] {
  * same canonical corpus as /929, so they must not compete with the
  * canonical perek pages in the index.
  *
- * - A unit spanning exactly one whole perek (e.g. marker-free single-
- *   perek sefarim) consolidates: canonical points at the /929 perek.
- * - Every other unit is a deliberate alternate slicing — `noindex` with
- *   `follow`, so crawlers still discover links but the pages stay out of
- *   the index. The canonical stays self-referential rather than pointing
- *   at an unrelated span.
+ * The section layout applies noindex,follow to every unit, including exact
+ * whole-perek equivalents. Preserve the /929 canonical for an equivalent
+ * span; other units stay self-canonical rather than pointing at unrelated
+ * scripture.
  */
 export async function generateMetadata({
 	params,
@@ -100,18 +98,15 @@ export async function generateMetadata({
 	const equivalentPerekId = unitEquivalentPerekId(unit, masoraPasukCount);
 	const title = `${unit.heading} | ${MASORA_DIVISION.menuLabel} | ${SITE_NAME}`;
 	const description = `קריאת ${unit.heading} לפי חלוקת המסורה (פתוחה/סתומה) בתנ"ך, עם פירושים ומאמרים.`;
-	if (equivalentPerekId !== null) {
-		return {
-			title,
-			description,
-			alternates: { canonical: `/929/${equivalentPerekId}` },
-		};
-	}
 	return {
 		title,
 		description,
-		alternates: { canonical: `${MASORA_DIVISION.rootPath}/${unitId}` },
-		robots: { index: false, follow: true },
+		alternates: {
+			canonical:
+				equivalentPerekId !== null
+					? `/929/${equivalentPerekId}`
+					: `${MASORA_DIVISION.rootPath}/${unitId}`,
+		},
 	};
 }
 

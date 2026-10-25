@@ -24,7 +24,7 @@ test.describe("Sefer commentary navigation", () => {
 				await page.evaluate(() => document.fonts.ready);
 				const { x, y } = await page
 					.locator('.he-book .page[data-page-index="6"]')
-					.getByRole("region", { name: "עמוד ריק (פירושים ומאמרים)" })
+					.getByRole("region", { name: "פירושים ומאמרים" })
 					.evaluate((contentPage) => {
 						const rect = contentPage.getBoundingClientRect();
 						// Carousels may fill the page in the full dataset. Start in its
@@ -89,6 +89,9 @@ test.describe("Sefer commentary navigation", () => {
 					"א / נ",
 				);
 				const blank = page.locator('.he-book .page[data-page-index="4"]');
+				if (kind === "article") {
+					await blank.getByRole("tab", { name: "מאמרים" }).tap();
+				}
 				const item =
 					kind === "article"
 						? blank.locator("a#article-1")
@@ -125,6 +128,9 @@ test.describe("Sefer commentary navigation", () => {
 					book.setAttribute("data-navigation-marker", "same-book");
 				});
 				const blank = page.locator('.he-book .page[data-page-index="4"]');
+				if (kind === "article") {
+					await blank.getByRole("tab", { name: "מאמרים" }).click();
+				}
 				const item =
 					kind === "article"
 						? blank.locator("a#article-1")
@@ -157,44 +163,45 @@ test.describe("Sefer commentary navigation", () => {
 		}
 	}
 
-	test("keeps the perushim carousel position across open, back, and browser Back", async ({
+	test("keeps the articles masonry scroll across open, back, and browser Back", async ({
 		page,
 	}) => {
 		test.setTimeout(90_000);
 		const seferPage = new SeferPage(page);
 		await seferPage.openSeferViewForPerek(1);
 		const blank = page.locator('.he-book .page[data-page-index="4"]');
-		const perushLink = blank.getByRole("link", { name: /אבן עזרא/ });
-		const scroller = perushLink.locator("..");
-		const back = blank.getByRole("button", { name: "→ חזרה לפרשנים" });
+		await blank.getByRole("tab", { name: "מאמרים" }).click();
+		const scroller = blank.locator('[class*="articlesScroll"]');
+		const back = blank.getByRole("button", { name: "חזרה למאמרים →" });
 
-		// Scroll the carousel off its start edge (RTL scrollLeft is negative).
+		// Scroll the masonry off its top edge.
 		const position = await scroller.evaluate((el) => {
-			el.scrollLeft = -Math.min(
-				300,
-				Math.max(0, el.scrollWidth - el.clientWidth),
-			);
-			return el.scrollLeft;
+			el.scrollTop = Math.min(300, el.scrollHeight - el.clientHeight);
+			return el.scrollTop;
 		});
-		expect(position).toBeLessThan(0);
+		test.skip(position <= 0, "the masonry fits without scrolling");
 
-		// DOM click() never scrolls the link into view, so the carousel stays
-		// put until the open perush replaces it.
-		await perushLink.evaluate((el: HTMLElement) => el.click());
+		// DOM click() never scrolls the card into view, so the grid stays
+		// put while the article opens over it.
+		await blank
+			.locator("a#article-1")
+			.evaluate((el: HTMLElement) => el.click());
 		await expect(back).toBeVisible({ timeout: 30_000 });
 		await back.click();
-		await expect(perushLink).toBeVisible();
+		await expect(blank.locator("a#article-1")).toBeVisible();
 		await expect
-			.poll(() => scroller.evaluate((el) => el.scrollLeft))
+			.poll(() => scroller.evaluate((el) => el.scrollTop))
 			.toBe(position);
 
 		// The same position must survive leaving through the browser Back.
-		await perushLink.evaluate((el: HTMLElement) => el.click());
+		await blank
+			.locator("a#article-1")
+			.evaluate((el: HTMLElement) => el.click());
 		await expect(back).toBeVisible({ timeout: 30_000 });
 		await page.goBack();
-		await expect(perushLink).toBeVisible();
+		await expect(blank.locator("a#article-1")).toBeVisible();
 		await expect
-			.poll(() => scroller.evaluate((el) => el.scrollLeft))
+			.poll(() => scroller.evaluate((el) => el.scrollTop))
 			.toBe(position);
 	});
 
@@ -220,13 +227,13 @@ test.describe("Sefer commentary navigation", () => {
 			});
 
 		const noteAlignment = await alignmentOf(
-			blank
-				.locator('[data-sefer-perush] [class*="noteContent"]')
-				.first(),
+			blank.locator('[data-sefer-perush] [class*="noteContent"]').first(),
 		);
 		const perekAlignment = await alignmentOf(
 			page
-				.locator('.he-book .page[data-page-index="3"] article[class*="perekText"]')
+				.locator(
+					'.he-book .page[data-page-index="3"] article[class*="perekText"]',
+				)
 				.first(),
 		);
 		await test.info().attach("commentary-justified-like-pesukim", {
@@ -429,6 +436,9 @@ test.describe("Sefer commentary navigation", () => {
 			await expect(chapter).toBeVisible({ timeout: 60_000 });
 			await chapter.click();
 			const blank = page.locator('.he-book .page[data-page-index="4"]');
+			if (kind === "article") {
+				await blank.getByRole("tab", { name: "מאמרים" }).click();
+			}
 			await (kind === "article"
 				? blank.locator("a#article-1")
 				: blank.getByRole("link", { name: /רש"י/ })
@@ -463,6 +473,9 @@ test.describe("Sefer commentary navigation", () => {
 			await page.reload();
 			await expect(back).toBeVisible({ timeout: 60_000 });
 			await back.click();
+			// The article deep view keeps the מאמרים tab active on back; the
+			// perush tags live on the פרשנים side.
+			await blank.getByRole("tab", { name: "פרשנים" }).click();
 			await expect(blank.getByRole("link", { name: /אבן עזרא/ })).toBeVisible();
 			await blank.getByRole("link", { name: /אבן עזרא/ }).click();
 			await expect(

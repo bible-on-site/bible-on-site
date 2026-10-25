@@ -14,6 +14,7 @@ import {
 	getPerushimByPerekId,
 	getPerushimForRanges,
 	getPerushNotes,
+	getPerushNotesBatch,
 	getPerushNotesForRanges,
 } from "../../../src/lib/perushim";
 
@@ -223,6 +224,77 @@ describe("perushim service", () => {
 		});
 	});
 
+	describe("getPerushNotesBatch", () => {
+		it("binds one placeholder per perush id", async () => {
+			mockQuery.mockResolvedValue([
+				{
+					perush_id: 2,
+					pasuk: 1,
+					note_idx: 0,
+					note_content: "<p>B</p>",
+				},
+				{
+					perush_id: 1,
+					pasuk: 1,
+					note_idx: 0,
+					note_content: "<p>A</p>",
+				},
+			]);
+
+			const result = await getPerushNotesBatch(1, [1, 2]);
+
+			expect(mockQuery).toHaveBeenCalledWith(
+				expect.stringContaining("perush_id IN (?,?)"),
+				[1, 1, 2],
+			);
+			expect(result).toEqual({
+				2: [{ pasuk: 1, noteIdx: 0, noteContent: "<p>B</p>" }],
+				1: [{ pasuk: 1, noteIdx: 0, noteContent: "<p>A</p>" }],
+			});
+		});
+
+		it("deduplicates ids and drops non-positive ones", async () => {
+			mockQuery.mockResolvedValue([]);
+
+			await getPerushNotesBatch(1, [3, 3, 0, -1, 5]);
+
+			expect(mockQuery).toHaveBeenCalledWith(expect.any(String), [1, 3, 5]);
+		});
+
+		it("returns empty without querying when no valid ids remain", async () => {
+			const result = await getPerushNotesBatch(1, [0, -2]);
+
+			expect(result).toEqual({});
+			expect(mockQuery).not.toHaveBeenCalled();
+		});
+
+		it("returns empty record when the query rejects", async () => {
+			mockQuery.mockRejectedValue(new Error("connection lost"));
+
+			const result = await getPerushNotesBatch(1, [1]);
+
+			expect(result).toEqual({});
+			expect(console.warn).toHaveBeenCalledWith(
+				"Failed to fetch notes batch for perek %d:",
+				1,
+				"connection lost",
+			);
+		});
+
+		it("returns empty record on non-Error rejection", async () => {
+			mockQuery.mockRejectedValue("raw failure");
+
+			const result = await getPerushNotesBatch(1, [1]);
+
+			expect(result).toEqual({});
+			expect(console.warn).toHaveBeenCalledWith(
+				"Failed to fetch notes batch for perek %d:",
+				1,
+				"raw failure",
+			);
+		});
+	});
+
 	describe("getAllPerushPerekNamePairs", () => {
 		it("returns mapped pairs from query results", async () => {
 			mockQuery.mockResolvedValue([
@@ -243,27 +315,32 @@ describe("perushim service", () => {
 			);
 		});
 
-		it("returns empty array on Error instance", async () => {
-			mockQuery.mockRejectedValue(new Error("DB error"));
+		it("returns an empty array when the successful query has no pairs", async () => {
+			mockQuery.mockResolvedValue([]);
 
-			const result = await getAllPerushPerekNamePairs();
+			await expect(getAllPerushPerekNamePairs()).resolves.toEqual([]);
+			expect(console.warn).not.toHaveBeenCalled();
+		});
 
-			expect(result).toEqual([]);
+		it("propagates the original Error so a build cannot silently omit commentaries", async () => {
+			const failure = new Error("DB error");
+			mockQuery.mockRejectedValue(failure);
+
+			await expect(getAllPerushPerekNamePairs()).rejects.toBe(failure);
 			expect(console.warn).toHaveBeenCalledWith(
 				"Failed to fetch perush-perek name pairs:",
 				"DB error",
 			);
 		});
 
-		it("returns empty array on non-Error rejection", async () => {
-			mockQuery.mockRejectedValue("raw error");
+		it("propagates the original non-Error rejection", async () => {
+			const failure = { code: "ECONN" };
+			mockQuery.mockRejectedValue(failure);
 
-			const result = await getAllPerushPerekNamePairs();
-
-			expect(result).toEqual([]);
+			await expect(getAllPerushPerekNamePairs()).rejects.toBe(failure);
 			expect(console.warn).toHaveBeenCalledWith(
 				"Failed to fetch perush-perek name pairs:",
-				"raw error",
+				failure,
 			);
 		});
 	});

@@ -63,11 +63,12 @@ public partial class ParashaPage
         return player;
     });
     /// <summary>
-    /// Whether the recitation catalog is available on this device. There is no
-    /// global on/off preference — the reader's play controls and the קריינות
-    /// menu mode start and stop playback directly.
+    /// Whether recitation playback is allowed on this device: the catalog is
+    /// installed AND the global קריינות preference (העדפות → על הפרק, default
+    /// on) is enabled. Off hides every headphones action and suppresses
+    /// tap/focus-triggered playback consistently (#2472).
     /// </summary>
-    private bool RecitationAvailable => RecitationService.Instance.IsInstalled;
+    private bool RecitationAvailable => RecitationService.Instance.IsInstalled && _viewModel.IsQriynotEnabled;
 
     private void SubscribeRecitation()
     {
@@ -210,7 +211,7 @@ public partial class ParashaPage
         _focusedPerekId = 0;
         _focusedWordSpans.Clear();
         FocusedPasukOverlay.IsVisible = false;
-        FocusedPerushim.ItemsSource = null;
+        FocusedPasukOverlay.PerushimSource = null;
         ParashaCarousel.InputTransparent = false;
         AutomationProperties.SetExcludedWithChildren(ParashaCarousel, false);
         if (_audioDecoder != null)
@@ -227,13 +228,6 @@ public partial class ParashaPage
     {
         ResetRecitationContext();
         _recitationCursor.Reset();
-    }
-
-    private async void OnQriynotTapped(object? sender, TappedEventArgs e)
-    {
-        _viewModel.IsQriynotEnabled = !_viewModel.IsQriynotEnabled;
-        ReaderMenuOverlay.IsVisible = false;
-        await Task.CompletedTask;
     }
 
     /// <summary>Header play button — קריינות mode plays the whole unit.</summary>
@@ -296,7 +290,8 @@ public partial class ParashaPage
     {
         if (_viewModel.SelectedPasukCount > 0)
         {
-            StopRecitation();
+            // Toggling a pasuk in selection mode must not stop playback or the
+            // moving word marker (#2473); the selection bar stays the pause surface.
             _doubleTap.Reset();
             _viewModel.ToggleSelectedPasuk(row.PerekId, row.PasukNum);
             UpdatePasukSelection();
@@ -398,12 +393,23 @@ public partial class ParashaPage
         {
             focusedPlayer.Play();
         }
-        FocusedSourceLabel.Text = $"{PerekDataService.Instance.GetPerekSource(row.PerekId) ?? string.Empty} {pasuk.PasukNumHeb}";
+        // The full pasuk source lives in the shared toolbar title, set by
+        // UpdateSelectionBar below (#2466).
+        // Opening the focused pasuk plays it (#2472). An in-flight clip for
+        // this same pasuk continues/resumes untouched — one deliberate open
+        // issues at most one playback request.
+        else if (RecitationAvailable &&
+            _recitationCursor.PlayingKey != $"pasuk:{row.PerekId}:{pasuk.PasukNum}" &&
+            CanPlayFocusedPasuk)
+        {
+            _ = PlayPasukRecitationAsync(row.PerekId, pasuk);
+        }
+        FocusedPasukOverlay.SourceText = $"{PerekDataService.Instance.GetPerekSource(row.PerekId) ?? string.Empty} {pasuk.PasukNumHeb}";
         FocusedPasukOverlay.IsVisible = true;
         ParashaCarousel.InputTransparent = true;
         AutomationProperties.SetExcludedWithChildren(ParashaCarousel, true);
         RefreshFocusedRecitation();
-        FocusedPerushim.ItemsSource = _viewModel.GetPerushimForRow(row.PerekId, pasuk.PasukNum);
+        FocusedPasukOverlay.PerushimSource = _viewModel.GetPerushimForRow(row.PerekId, pasuk.PasukNum);
         UpdateSelectionBar();
         try
         {
@@ -414,7 +420,7 @@ public partial class ParashaPage
             }
             if (_focusedPasuk == pasuk && _focusedPerekId == row.PerekId)
             {
-                FocusedPerushim.ItemsSource = _viewModel.GetPerushimForRow(row.PerekId, pasuk.PasukNum);
+                FocusedPasukOverlay.PerushimSource = _viewModel.GetPerushimForRow(row.PerekId, pasuk.PasukNum);
             }
         }
         #pragma warning disable S2221 // Deliberate failure boundary: focused-commentary refresh is best-effort
@@ -427,18 +433,20 @@ public partial class ParashaPage
         _focusedWordSpans.Clear();
         if (_focusedPasuk is not { } pasuk || _viewModel.Unit == null || _focusedPerekId <= 0)
         {
+            FocusedPasukOverlay.PlayButtonVisible = false;
             return;
         }
 
+        FocusedPasukOverlay.PlayButtonVisible = RecitationAvailable;
+        FocusedPasukOverlay.PlayButtonEnabled = CanPlayFocusedPasuk;
         var perekPasukim = PerekDataService.Instance.GetPerek(_focusedPerekId)?.Pasukim;
         var track = RecitationService.Instance.GetTrack(_focusedPerekId);
         var canPlayWords = RecitationAvailable && RecitationService.Instance.HasAudio(_focusedPerekId) &&
             track?.AlignmentStatus == "ready" && perekPasukim != null && track.Matches(perekPasukim);
-        FocusedRecitationHint.Text = canPlayWords ? "הקישו על מילה כדי לשמוע אותה." :
+        FocusedPasukOverlay.HintText = canPlayWords ? "הקישו על מילה כדי לשמוע אותה." :
             RecitationAvailable && track != null && track.AlignmentStatus != "ready"
                 ? "הקראת מילים ופסוקים לפרק זה עדיין בהכנה. ההקלטה המלאה זמינה בלחיצה ארוכה על כותרת הפרשה." : "";
-        FocusedRecitationHint.IsVisible = FocusedRecitationHint.Text.Length > 0;
-        if (!canPlayWords) { FocusedPasukText.FormattedText = pasuk.FormattedText; return; }
+        if (!canPlayWords) { FocusedPasukOverlay.PasukText.FormattedText = pasuk.FormattedText; return; }
         var formatted = new FormattedString();
         for (var i = 0; i < pasuk.Segments.Count; i++)
         {
@@ -484,14 +492,27 @@ public partial class ParashaPage
                 formatted.Spans.Add(new Span { Text = " " });
             }
         }
-        FocusedPasukText.FormattedText = formatted;
+        FocusedPasukOverlay.PasukText.FormattedText = formatted;
     }
 
-    /// <summary>Whether the focused pasuk's own perek track can bound a pasuk clip.</summary>
+    /// <summary>
+    /// The focused-view headphones action plays the whole pasuk — offered while
+    /// the pasuk's own perek track can bound a pasuk clip (timings ready).
+    /// </summary>
     private bool CanPlayFocusedPasuk => _focusedPasuk != null && _focusedPerekId > 0 &&
+        RecitationAvailable &&
         RecitationService.Instance.GetTrack(_focusedPerekId) is { AlignmentStatus: "ready" } focusedTrack &&
         PerekDataService.Instance.GetPerek(_focusedPerekId)?.Pasukim is { } focusedPasukim &&
-        focusedTrack.Matches(focusedPasukim);
+        focusedTrack.Matches(focusedPasukim) &&
+        focusedTrack.Words.Any(w => w.Pasuk == _focusedPasuk.PasukNum && w.StartMs != null && w.EndMs != null);
+
+    private async void OnFocusedPlayClicked(object? sender, EventArgs e)
+    {
+        if (_focusedPasuk is { } pasuk && _focusedPerekId > 0)
+        {
+            await PlayPasukRecitationAsync(_focusedPerekId, pasuk);
+        }
+    }
 
     /// <summary>Whether every selected pesukim's perek track can bound a verses clip.</summary>
     private bool CanPlaySelectedPasukim()
@@ -835,8 +856,8 @@ public partial class ParashaPage
     {
         if (ExitFullScreenButton.IsVisible)
         { ExitFullScreen(); return true; }
-        if (ReaderMenuOverlay.IsVisible)
-        { ReaderMenuOverlay.IsVisible = false; return true; }
+        if (ReaderMenuOverlay.IsOpen)
+        { ReaderMenuOverlay.Close(); return true; }
         if (ChapterSearch.IsSearchOpen) { ChapterSearch.HandleBack(); return true; }
         // Whatever keeps the selection bar up also owns Back — including a clip
         // playing with nothing selected, which stops instead of navigating.

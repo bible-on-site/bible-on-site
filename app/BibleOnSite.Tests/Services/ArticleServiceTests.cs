@@ -120,13 +120,13 @@ public class ArticleServiceTests
     }
 
     [Fact]
-    public async Task GetArticlesByPerekIdAsync_returns_empty_when_http_request_fails()
+    public async Task GetArticlesByPerekIdAsync_throws_when_http_request_fails()
     {
         var service = CreateService($"http://127.0.0.1:{GetUnusedPort()}/graphql");
 
-        var articles = await service.GetArticlesByPerekIdAsync(9);
+        var act = () => service.GetArticlesByPerekIdAsync(9);
 
-        articles.Should().BeEmpty();
+        await act.Should().ThrowAsync<HttpRequestException>();
     }
 
     [Fact]

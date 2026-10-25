@@ -1,5 +1,6 @@
 namespace BibleOnSite.Pages;
 
+using BibleOnSite.Helpers;
 using BibleOnSite.Models;
 using BibleOnSite.Services;
 using BibleOnSite.ViewModels;
@@ -13,16 +14,13 @@ using Microsoft.Maui.Layouts;
 /// inclusive ranges — never a copied scripture corpus.
 /// </summary>
 // Codacy: S2333 false positive — partial is required by the XAML code
-// generator and by the PerushimPanel partial part.
+// generator and by the back-handling partial parts.
 #pragma warning disable S2333
 public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
 #pragma warning restore S2333
 {
     private readonly MasoraViewModel _viewModel;
     private bool _isLoading;
-
-    // Circular menu state
-    private bool _isMenuOpen;
 
     // Articles view state
     private bool _isShowingArticles;
@@ -38,22 +36,16 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
     // only after the masora service loads.
     private int? _pendingPerekId;
 
-    /// <summary>
-    /// Proxy for article selection highlight binding (avoids XC0045 when binding from Article template).
-    /// </summary>
-    public int? SelectedArticleId => _viewModel.SelectedArticleId;
-
     public MasoraPage()
     {
         InitializeComponent();
         _viewModel = new MasoraViewModel();
         BindingContext = _viewModel;
-        ForwardSelectedArticleIdChanged();
+        SubscribeViewModelChanges();
         SetupFontSizeResources();
         SetupCarouselNavigation();
-        SetupCircularMenuLayout();
         SetupUnitPickerEvents();
-        SubscribePerushimSearch();
+        SubscribeNotesMaterialization();
     }
 
     public MasoraPage(MasoraViewModel viewModel)
@@ -61,12 +53,68 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
         InitializeComponent();
         _viewModel = viewModel;
         BindingContext = _viewModel;
-        ForwardSelectedArticleIdChanged();
+        SubscribeViewModelChanges();
         SetupFontSizeResources();
         SetupCarouselNavigation();
-        SetupCircularMenuLayout();
         SetupUnitPickerEvents();
-        SubscribePerushimSearch();
+        SubscribeNotesMaterialization();
+    }
+
+    /// <summary>
+    /// A reader opened while the first-launch notes pack still materializes
+    /// skips awaiting it (#2430) — when the copy completes the service raises
+    /// OperationCompleted off the UI thread, so re-check availability here.
+    /// </summary>
+    private void SubscribeNotesMaterialization()
+    {
+        PerushimNotesService.Instance.OperationCompleted += OnNotesOperationCompleted;
+        Unloaded += (_, _) => PerushimNotesService.Instance.OperationCompleted -= OnNotesOperationCompleted;
+    }
+
+    private bool _notesRefreshQueued;
+
+    private void OnNotesOperationCompleted()
+    {
+        // InitializeAsync releases the operation lock, which re-fires this
+        // event — and the refresh calls InitializeAsync itself. Without this
+        // guard every refresh queues another dispatcher turn forever, the UI
+        // thread never idles, and accessibility queries starve (#2430).
+        if (_notesRefreshQueued ||
+            (PerushimNotesService.Instance.IsAvailable == _viewModel.PerushimNotesAvailable
+                && !_viewModel.PerushimNotesPending))
+        {
+            return;
+        }
+        _notesRefreshQueued = true;
+        _ = Dispatcher.DispatchAsync(async () =>
+        {
+            try { await RefreshPerushimIfAvailabilityChangedAsync(); }
+            finally { _notesRefreshQueued = false; }
+        });
+    }
+
+    /// <summary>
+    /// Reloads perushim for the current unit when notes-availability changed
+    /// since the last load (e.g. the first-launch pack finished copying).
+    /// </summary>
+    private async Task RefreshPerushimIfAvailabilityChangedAsync()
+    {
+        try
+        {
+            await PerushimNotesService.Instance.InitializeAsync();
+            if ((PerushimNotesService.Instance.IsAvailable != _viewModel.PerushimNotesAvailable
+                    || _viewModel.PerushimNotesPending) &&
+                _viewModel.Unit is { } unit)
+            {
+                await _viewModel.LoadPerushimAsync(unit);
+            }
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: refresh is best-effort
+        catch (Exception ex) //NOSONAR — refresh is best-effort.
+        {
+            #pragma warning restore S2221
+            Console.Error.WriteLine($"Refresh perushim on materialization failed: {ex}");
+        }
     }
 
     /// <summary>
@@ -125,7 +173,7 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
         // overshoot the target and land on the following unit.
         _carouselInitializing = false;
 
-        if (_isMenuOpen)
+        if (FanMenu.IsOpen)
         {
             RefreshNavButtonVisuals();
         }
@@ -161,14 +209,10 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
         Resources["PerushContentFontSize"] = perushFactor * 18;
     }
 
-    private void ForwardSelectedArticleIdChanged()
+    private void SubscribeViewModelChanges()
     {
         _viewModel.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(MasoraViewModel.SelectedArticleId))
-            {
-                OnPropertyChanged(nameof(SelectedArticleId));
-            }
             // When the unit changes via prev/next, refresh articles and nav buttons
             if (e.PropertyName == nameof(MasoraViewModel.Unit) || e.PropertyName == "Unit")
             {
@@ -196,7 +240,7 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
     private void RefreshNavButtonVisuals()
     {
         // Only update if menu is open (buttons visible)
-        if (!_isMenuOpen)
+        if (!FanMenu.IsOpen)
         {
             return;
         }
@@ -214,61 +258,98 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
     protected override async void OnAppearing()
     {
         base.OnAppearing();
+#if ANDROID
+        RegisterReaderBack();
+#endif
+#if WINDOWS
+        RegisterReaderKeyboardBack();
+#endif
 
         if (_viewModel.Unit == null && !_isLoading)
         {
             _isLoading = true;
-            try
-            {
-                // Show loading overlay while the carousel initialises.
-                CarouselLoadingOverlay.IsVisible = true;
-
-                var unitId = _pendingUnitId;
-                if (unitId == null && _pendingPerekId is int perekId)
-                {
-                    unitId = await _viewModel.GetUnitIdForPerekAsync(perekId);
-                }
-                _pendingUnitId = null;
-                _pendingPerekId = null;
-
-                unitId ??= await _viewModel.GetInitialUnitIdAsync();
-
-                // Guard: ignore OnCarouselItemChanged during initial load.
-                _carouselInitializing = true;
-                await _viewModel.LoadByUnitIdAsync(unitId.Value);
-
-                // CarouselView resets Position to 0 when ItemsSource changes.
-                // Force it to the correct position without animation.
-                var targetPos = UnitIndexOf(_viewModel.UnitId);
-                if (targetPos >= 0)
-                {
-                    MasoraCarousel.ScrollTo(targetPos, animate: false);
-                    _viewModel.CarouselPosition = targetPos;
-                }
-
-                _carouselInitializing = false;
-
-                // Hide loading overlay — carousel is ready
-                CarouselLoadingOverlay.IsVisible = false;
-
-                // Update articles count badge
-                await UpdateArticlesCountAsync();
-
-                // Preload rows for adjacent units so the next swipe is instant
-                _ = _viewModel.PreloadAdjacentRowsAsync(_viewModel.UnitId);
-            }
-            #pragma warning disable S2221 // Deliberate failure boundary: unit load failure surfaces as a user alert
-            catch (Exception ex) //NOSONAR — unit load failure surfaces as a user alert.
-            {
-                #pragma warning restore S2221
-                Console.Error.WriteLine($"Failed to load masora unit: {ex.Message}");
-                await DisplayAlertAsync("שגיאה", $"לא ניתן לטעון את פרשת המסורה: {ex.Message}", "אישור");
-            }
-            finally
-            {
-                _isLoading = false;
-            }
+            await LoadInitialUnitAsync();
         }
+        // Cold-start main-thread work is done — release the deferred e2e
+        // search-index warmup so it cannot starve the accessibility snapshot.
+        Services.SearchIndexService.NotifyStartupSettled();
+    }
+
+    /// <summary>Loads the initial unit and snaps the carousel to it.</summary>
+    private async Task LoadInitialUnitAsync()
+    {
+        try
+        {
+            // Show loading overlay while the carousel initialises.
+            CarouselLoadingOverlay.ShowLoading();
+
+            var unitId = _pendingUnitId;
+            if (unitId == null && _pendingPerekId is int perekId)
+            {
+                unitId = await _viewModel.GetUnitIdForPerekAsync(perekId);
+            }
+            _pendingUnitId = null;
+            _pendingPerekId = null;
+
+            unitId ??= await _viewModel.GetInitialUnitIdAsync();
+
+            // Guard: ignore OnCarouselItemChanged during initial load.
+            _carouselInitializing = true;
+            await _viewModel.LoadByUnitIdAsync(unitId.Value);
+
+            // CarouselView resets Position to 0 when ItemsSource changes.
+            // Force it to the correct position without animation.
+            var targetPos = UnitIndexOf(_viewModel.UnitId);
+            if (targetPos >= 0)
+            {
+                MasoraCarousel.ScrollTo(targetPos, animate: false);
+                _viewModel.CarouselPosition = targetPos;
+            }
+
+            _carouselInitializing = false;
+
+            // Hide loading overlay — carousel is ready
+            CarouselLoadingOverlay.Hide();
+
+            // Update articles count badge
+            await UpdateArticlesCountAsync();
+
+            // Preload rows for adjacent units so the next swipe is instant
+            _ = _viewModel.PreloadAdjacentRowsAsync(_viewModel.UnitId);
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: unit load failure surfaces on the retryable overlay (#2084)
+        catch (Exception ex) //NOSONAR — unit load failure surfaces on the retryable overlay (#2084).
+        {
+            #pragma warning restore S2221
+            Console.Error.WriteLine($"Failed to load masora unit: {ex.Message}");
+            CarouselLoadingOverlay.ShowError(ex);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    /// <summary>Retry button on the load-failure overlay — re-runs the full fresh load.</summary>
+    private async void OnUnitLoadRetryClicked(object? sender, EventArgs e)
+    {
+        if (_isLoading)
+        {
+            return;
+        }
+        _isLoading = true;
+        await LoadInitialUnitAsync();
+    }
+
+    protected override void OnDisappearing()
+    {
+#if ANDROID
+        UnregisterReaderBack();
+#endif
+#if WINDOWS
+        UnregisterReaderKeyboardBack();
+#endif
+        base.OnDisappearing();
     }
 
     /// <summary>The unit's index inside the carousel collection (-1 when missing).</summary>
@@ -311,7 +392,7 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
         _viewModel.Unit = unit;
 
         // Refresh nav button visuals if menu is open (synchronous)
-        if (_isMenuOpen)
+        if (FanMenu.IsOpen)
         {
             RefreshNavButtonVisuals();
         }
@@ -328,141 +409,38 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
 
     #region Circular Menu
 
-    private void SetupCircularMenuLayout()
-    {
-        FloatingMenuContainer.SizeChanged += (_, _) => LayoutCircularMenu();
-    }
-
     /// <summary>
-    /// Positions the toggle and the three satellite buttons on the elliptical
-    /// fan computed by <see cref="BibleOnSite.Helpers.FanMenuGeometry"/>.
+    /// Fan open — refresh prev/next enabled state before the satellites fade
+    /// in, so a disabled edge button animates to its dimmed opacity.
     /// </summary>
-    private void LayoutCircularMenu()
+    private void OnFanMenuOpening(object? sender, EventArgs e)
     {
-        var width = FloatingMenuContainer.Width - FloatingMenuContainer.Padding.HorizontalThickness;
-        var height = FloatingMenuContainer.Height - FloatingMenuContainer.Padding.VerticalThickness;
-        if (width <= 0 || height <= 0)
-        {
-            return;
-        }
-
-        var satellites = new[] { PrevUnitButton, UnitPickerButton, NextUnitButton };
-        var layout = Helpers.FanMenuGeometry.Compute(width, height, satellites.Length);
-        ApplyMenuBounds(CircularMenuButton, layout.Toggle);
-        for (var i = 0; i < satellites.Length && i < layout.Items.Count; i++)
-        {
-            ApplyMenuBounds(satellites[i], layout.Items[i]);
-        }
-    }
-
-    private static void ApplyMenuBounds(View view, Rect bounds)
-    {
-        AbsoluteLayout.SetLayoutFlags(view, AbsoluteLayoutFlags.None);
-        AbsoluteLayout.SetLayoutBounds(view, bounds);
-    }
-
-    /// <summary>Toggles the circular menu open/closed state with animation.</summary>
-    private async void OnCircularMenuClicked(object? sender, EventArgs e)
-    {
-        _isMenuOpen = !_isMenuOpen;
-
-        if (_isMenuOpen)
-        {
-            await OpenCircularMenuAsync();
-        }
-        else
-        {
-            await CloseCircularMenuAsync();
-        }
-    }
-
-    /// <summary>Opens the circular menu with animated expansion.</summary>
-    private async Task OpenCircularMenuAsync()
-    {
-        var buttons = new[] { PrevUnitButton, UnitPickerButton, NextUnitButton };
-
-        // Set prev/next enabled state before animating
         PrevUnitButton.IsEnabled = _viewModel.CanGoToPreviousUnit;
         NextUnitButton.IsEnabled = _viewModel.CanGoToNextUnit;
-
-        foreach (var button in buttons)
-        {
-            button.InputTransparent = false;
-            button.Opacity = 0;
-        }
-
-        CircularMenuScrim.IsVisible = true;
-
-        // Change FAB icon to X
-        CircularMenuButton.Text = Fonts.FluentUI.dismiss_24_regular;
-        CircularMenuButton.BackgroundColor = Colors.Red;
-
-        var animations = new List<Task>
-        {
-            CircularMenuButton.RotateToAsync(180, 250, Easing.SpringOut),
-            CircularMenuScrim.FadeToAsync(1, 200)
-        };
-
-        foreach (var button in buttons)
-        {
-            var targetOpacity = button.IsEnabled ? 1.0 : 0.4;
-            animations.Add(button.FadeToAsync(targetOpacity, 200));
-        }
-
-        await Task.WhenAll(animations);
-    }
-
-    /// <summary>Closes the circular menu with animated contraction.</summary>
-    private async Task CloseCircularMenuAsync()
-    {
-        var buttons = new[] { PrevUnitButton, UnitPickerButton, NextUnitButton };
-
-        CircularMenuButton.Text = Fonts.FluentUI.navigation_24_regular;
-        CircularMenuButton.BackgroundColor = (Color)Microsoft.Maui.Controls.Application.Current!.Resources["Primary"];
-
-        var animations = new List<Task>
-        {
-            CircularMenuButton.RotateToAsync(0, 200, Easing.SpringOut),
-            CircularMenuScrim.FadeToAsync(0, 150)
-        };
-
-        foreach (var button in buttons)
-        {
-            animations.Add(button.FadeToAsync(0, 150));
-        }
-
-        await Task.WhenAll(animations);
-
-        // A reopen during the close animation wins — leave scrim and satellites alone
-        if (_isMenuOpen)
-        {
-            return;
-        }
-
-        CircularMenuScrim.IsVisible = false;
-
-        foreach (var button in buttons)
-        {
-            button.InputTransparent = true;
-        }
-    }
-
-    /// <summary>Handles tap on the scrim — dismisses the open menu.</summary>
-    private async void OnOverlayTapped(object? sender, TappedEventArgs e)
-    {
-        if (_isMenuOpen)
-        {
-            _isMenuOpen = false;
-            await CloseCircularMenuAsync();
-        }
     }
 
     /// <summary>Handles tap on a satellite menu item — the menu closes.</summary>
     private async void OnMenuItemClicked(object? sender, EventArgs e)
     {
         // Command-based buttons already fired their command; just close.
-        _isMenuOpen = false;
-        await CloseCircularMenuAsync();
+        await FanMenu.CloseAsync();
+    }
+
+    /// <summary>Syncs the chevron glyph with the perushim sheet's open state.</summary>
+#pragma warning disable S1172 // The XAML event delegate requires the sender parameter.
+    private void OnPerushimSheetOpenChanged(object? sender, bool isOpen)
+#pragma warning restore S1172
+    {
+        BottomBar.IsPerushimOpen = isOpen;
+    }
+
+    /// <summary>Bottom-bar chevron — toggles the perushim sheet.</summary>
+    private async void OnPerushimChevronClicked(object? sender, EventArgs e)
+    {
+        // Cap the drag-up expansion so the sheet's top edge stays under the
+        // status bar/pill: content + toolbar rows already begin below it.
+        var toolbarHeight = ReaderToolbar.IsVisible ? ReaderToolbar.Height : 0;
+        await PerushimPanel.ToggleAsync(MainGrid.Height, ContentArea.Height + toolbarHeight - 8);
     }
 
     #endregion
@@ -480,9 +458,19 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
         MasoraUnitPickerPopup.Show(_viewModel.UnitId);
     }
 
-    /// <summary>Handles unit selection from the picker popup.</summary>
+    /// <summary>
+    /// Handles unit selection from the picker popup. A confirmed selection
+    /// completes the navigation: the picker closes itself and the radial menu
+    /// that opened it closes too, leaving the reader undimmed and interactive
+    /// (#2476).
+    /// </summary>
     private async Task OnUnitPickerSelectedAsync(int unitId)
     {
+        if (FanMenu.IsOpen)
+        {
+            await FanMenu.CloseAsync();
+        }
+
         if (unitId > 0 && unitId != _viewModel.UnitId)
         {
             await _viewModel.NavigateToUnitAsync(unitId);
@@ -501,18 +489,15 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
             var unit = _viewModel.Unit;
             if (unit == null)
             {
-                ArticlesBadge.IsVisible = false;
                 return;
             }
             await _viewModel.LoadArticlesAsync(unit);
-            ArticlesBadge.IsVisible = _viewModel.ArticlesCount > 0;
         }
         #pragma warning disable S2221 // Deliberate failure boundary: articles-count badge degrades to hidden
         catch (Exception ex) //NOSONAR — articles-count badge degrades to hidden.
         {
             #pragma warning restore S2221
             Console.Error.WriteLine($"Error fetching articles count: {ex.Message}");
-            ArticlesBadge.IsVisible = false;
         }
     }
 
@@ -526,15 +511,14 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
                 return;
             }
 
+            PerushimPanel.CloseImmediate();
             _isShowingArticles = true;
             await ShowUnitArticlesAsync();
 
             MasoraCarousel.IsVisible = false;
             ArticlesCollection.IsVisible = true;
 
-            ArticlesButton.TextColor = Microsoft.Maui.Controls.Application.Current?.RequestedTheme == AppTheme.Dark
-                ? Color.FromArgb("#BB86FC")
-                : Color.FromArgb("#512BD4");
+            BottomBar.IsArticlesActive = true;
         }
         #pragma warning disable S2221 // Deliberate failure boundary: articles-button styling failure is log-only
         catch (Exception ex) //NOSONAR — articles-button styling failure is log-only.
@@ -553,9 +537,7 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
         ArticlesCollection.IsVisible = false;
         MasoraCarousel.IsVisible = true;
 
-        ArticlesButton.TextColor = Microsoft.Maui.Controls.Application.Current?.RequestedTheme == AppTheme.Dark
-            ? Color.FromArgb("#9CA3AF")
-            : Color.FromArgb("#6B7280");
+        BottomBar.IsArticlesActive = false;
     }
 
     /// <summary>Pushes the unit's loaded articles into the articles grid.</summary>
@@ -571,23 +553,20 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
     }
 
     /// <summary>Handles article selection - navigates to article detail.</summary>
-    private async void OnArticleSelected(object? sender, SelectionChangedEventArgs e)
+#pragma warning disable S1172 // The XAML event delegate requires the sender parameter.
+    private async void OnArticleSelected(object? sender, Article article)
+#pragma warning restore S1172
     {
-        if (e.CurrentSelection.FirstOrDefault() is Article article)
+        _viewModel.SelectedArticleId = article.Id;
+        try
         {
-            _viewModel.SelectedArticleId = article.Id;
-            ArticlesCollection.SelectedItem = null;
-
-            try
-            {
-                await Shell.Current.GoToAsync($"articleDetail?articleId={article.Id}");
-            }
-            #pragma warning disable S2221 // Deliberate failure boundary: article navigation failure is log-only
-            catch (Exception ex) //NOSONAR — article navigation failure is log-only.
-            {
-                #pragma warning restore S2221
-                Console.Error.WriteLine($"Error navigating to article: {ex.Message}");
-            }
+            await Shell.Current.GoToAsync($"articleDetail?articleId={article.Id}");
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: article navigation failure is log-only
+        catch (Exception ex) //NOSONAR — article navigation failure is log-only.
+        {
+            #pragma warning restore S2221
+            Console.Error.WriteLine($"Error navigating to article: {ex.Message}");
         }
     }
 
@@ -611,36 +590,38 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
     /// <summary>Enters full screen mode - hides top and bottom bars, shows exit button.</summary>
     private void OnFullScreenClicked(object? sender, EventArgs e)
     {
-        // Close circular menu if open
-        if (_isMenuOpen)
-        {
-            _isMenuOpen = false;
-            var buttons = new[] { PrevUnitButton, UnitPickerButton, NextUnitButton };
-            foreach (var b in buttons)
-            {
-                b.Opacity = 0;
-                b.InputTransparent = true;
-            }
-            CircularMenuButton.Text = Fonts.FluentUI.navigation_24_regular;
-            CircularMenuButton.BackgroundColor = (Color)Microsoft.Maui.Controls.Application.Current!.Resources["Primary"];
-            CircularMenuButton.Rotation = 0;
-            CircularMenuScrim.Opacity = 0;
-            CircularMenuScrim.IsVisible = false;
-        }
+        // Close circular menu if open — snaps to the closed state with no
+        // animation so the scrim cannot linger over the fullscreen reader.
+        FanMenu.ResetToClosed();
 
         ReaderToolbar.IsVisible = false;
         BottomBar.IsVisible = false;
-        FloatingMenuContainer.IsVisible = false;
+        FanMenu.IsVisible = false;
+        ExitFullScreenButton.ResetPosition();
         ExitFullScreenButton.IsVisible = true;
     }
 
     /// <summary>Exits full screen mode - restores navigation and bottom bar.</summary>
-    private void OnExitFullScreenClicked(object? sender, TappedEventArgs e)
+    private void OnExitFullScreenClicked(object? sender, EventArgs e) => ExitFullScreen();
+
+    private void ExitFullScreen()
     {
         ExitFullScreenButton.IsVisible = false;
         ReaderToolbar.IsVisible = true;
         BottomBar.IsVisible = true;
-        FloatingMenuContainer.IsVisible = true;
+        FanMenu.IsVisible = true;
+    }
+
+    protected override bool OnBackButtonPressed()
+    {
+        return TryHandleReaderBack() || base.OnBackButtonPressed();
+    }
+
+    private bool TryHandleReaderBack()
+    {
+        if (ExitFullScreenButton.IsVisible)
+        { ExitFullScreen(); return true; }
+        return false;
     }
 
     #endregion
