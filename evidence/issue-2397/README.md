@@ -16,14 +16,14 @@ captures the issue requires.
 ## How to regenerate
 
 `capture-evidence.mjs` shoots the deployed site (or a local/dev base URL)
-with Playwright — after the count-up animation settles:
+with Playwright — after the count-up animation settles. The script pulls
+`@playwright/test` from `web/bible-on-site` itself, so it runs from any
+directory and writes next to itself:
 
 ```bash
-cd web/bible-on-site
-EVIDENCE_OUT="$(cd ../../evidence/issue-2397 && pwd -W)" \
-  node ../../evidence/issue-2397/capture-evidence.mjs
+node evidence/issue-2397/capture-evidence.mjs
 # or against another environment:
-EVIDENCE_BASE_URL=http://localhost:3001 node ../../evidence/issue-2397/capture-evidence.mjs
+EVIDENCE_BASE_URL=http://localhost:3001 node evidence/issue-2397/capture-evidence.mjs
 ```
 
 Captures above were taken against `https://xn--febl3a.co.il` after the

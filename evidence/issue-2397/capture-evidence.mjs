@@ -1,7 +1,7 @@
 /**
  * Acceptance-evidence capture for #2397 (homepage counters section).
  *
- * Shoots the live production site after the fix (PR #2565) and produces:
+ * Shoots the deployed site (or any EVIDENCE_BASE_URL) and produces:
  *  - after-{desktop,mobile}-sequence.png: the full ספרי התנ"ך -> מספרים על
  *    הפרק -> יישומון -> תנאי שימוש section chain in ONE capture, so every
  *    section boundary (including counters -> app) is visible together.
@@ -9,17 +9,24 @@
  *    app wave boundary.
  *  - after-{desktop,mobile}-counters.png: the six counters themselves.
  *
- * Run from web/bible-on-site (playwright resolves there):
- *   node ../../evidence/issue-2397/capture-evidence.mjs
+ * Playwright resolves through the website package — no install needed in
+ * this directory:
+ *   node evidence/issue-2397/capture-evidence.mjs
  * Output lands next to this script.
  */
-import { chromium } from "playwright";
+import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const OUT =
-	process.env.EVIDENCE_OUT ?? dirname(fileURLToPath(import.meta.url));
+const OUT = dirname(fileURLToPath(import.meta.url));
 const BASE_URL = process.env.EVIDENCE_BASE_URL ?? "https://xn--febl3a.co.il";
+
+// Bare imports resolve from this file's ancestors, which never reach the
+// website's node_modules — root the resolution at its package.json.
+const websiteRequire = createRequire(
+	new URL("../../web/bible-on-site/package.json", import.meta.url),
+);
+const { chromium } = websiteRequire("@playwright/test");
 
 // Section chain the issue requires in one capture.
 const CHAIN = ["#tanah-sefarim", "#numbers", "#app", "#tos"];
@@ -39,17 +46,20 @@ async function captureViewport(browser, name, contextOptions) {
 	await page.locator("#numbers").scrollIntoViewIfNeeded();
 	await page.waitForTimeout(ANIMATION_SETTLE_MS);
 
-	const rectOf = async (selector) => {
-		const box = await page.locator(selector).boundingBox();
-		if (!box) throw new Error(`No bounding box for ${selector}`);
-		return box;
-	};
-	const clipTo = (box) => ({
-		x: Math.max(0, box.x),
-		y: Math.max(0, box.y),
-		width: box.width,
-		height: box.height,
-	});
+	// Document coordinates: boundingBox() is viewport-relative, while a
+	// fullPage clip is document-relative — mixing them displaces every
+	// crop by the scroll offset. getBoundingClientRect + scroll offset is
+	// document space no matter where the page is scrolled.
+	const rectOf = (selector) =>
+		page.locator(selector).evaluate((el) => {
+			const r = el.getBoundingClientRect();
+			return {
+				x: r.left + window.scrollX,
+				y: r.top + window.scrollY,
+				width: r.width,
+				height: r.height,
+			};
+		});
 
 	// 1. Full sequence: top of the bookshelf section through the bottom of
 	//    the terms section — every boundary in a single frame.
@@ -61,9 +71,6 @@ async function captureViewport(browser, name, contextOptions) {
 		width: page.viewportSize().width,
 		height: last.y + last.height - Math.max(0, first.y),
 	};
-	// fullPage + clip: the chain spans several viewport heights, and a
-	// viewport-only screenshot silently clamps the clip to what is
-	// currently scrolled into view.
 	await page.screenshot({
 		path: join(OUT, `after-${name}-sequence.png`),
 		clip: sequence,
@@ -86,11 +93,10 @@ async function captureViewport(browser, name, contextOptions) {
 		fullPage: true,
 	});
 
-	// 3. The six counters alone (links included).
-	await page.screenshot({
+	// 3. The six counters alone (links included). An element screenshot
+	//    scrolls and frames itself — no coordinate math to get wrong.
+	await page.locator("#numbers").screenshot({
 		path: join(OUT, `after-${name}-counters.png`),
-		clip: clipTo(numbers),
-		fullPage: true,
 	});
 
 	await context.close();
