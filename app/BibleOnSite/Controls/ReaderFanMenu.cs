@@ -47,9 +47,9 @@ public class ReaderFanMenu : Grid
 
     public ReaderFanMenu()
     {
-        // The control covers the whole reader but must not swallow touches —
-        // only the scrim, toggle and satellites take input (pre-refactor
-        // FloatingMenuContainer had the same InputTransparent contract).
+        // The control fills the page grid row but must not hit-test outside its
+        // buttons — on iOS it would swallow every hit-test and WDA would report
+        // all covered elements as not displayed. Children opt back in per-view.
         InputTransparent = true;
         CascadeInputTransparent = false;
 
@@ -107,13 +107,19 @@ public class ReaderFanMenu : Grid
 
         _satellites.CollectionChanged += (_, e) =>
         {
-            if (e.NewItems == null)
+            if (e.OldItems != null)
             {
-                return;
+                foreach (View item in e.OldItems)
+                {
+                    _container.Children.Remove(item);
+                }
             }
-            foreach (View item in e.NewItems)
+            if (e.NewItems != null)
             {
-                _container.Children.Insert(0, item); // satellites sit under the toggle
+                foreach (View item in e.NewItems)
+                {
+                    _container.Children.Insert(0, item); // satellites sit under the toggle
+                }
             }
             LayoutFan();
         };
@@ -126,7 +132,7 @@ public class ReaderFanMenu : Grid
     /// </summary>
     public void SetBottomInset(double bottom)
     {
-        TranslationY = bottom;
+        _container.TranslationY = bottom;
         _container.Padding = new Thickness(0, 0, 0, bottom);
         LayoutFan();
     }

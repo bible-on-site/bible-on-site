@@ -247,8 +247,17 @@ public partial class ParashaViewModel : ObservableObject, IPerushimSheetViewMode
     public ParashaViewModel(ParashaDataService parashaService, PerekDataService perekService,
         PreferencesService preferencesService, PerushimCatalogService? catalogService,
         PerushimNotesService? notesService, Func<int, Task<List<Article>>>? articlesLoader,
-        Func<int, bool>? hasPerekAudio, IAppNavigator? navigator,
-        IFileSystem? fileSystem, IShare? share, Func<int>? hebrewDateProvider)
+        Func<int, bool>? hasPerekAudio, Func<int>? hebrewDateProvider)
+        : this(parashaService, perekService, preferencesService, catalogService, notesService,
+            articlesLoader, hasPerekAudio, hebrewDateProvider, null, null, null)
+    {
+    }
+
+    public ParashaViewModel(ParashaDataService parashaService, PerekDataService perekService,
+        PreferencesService preferencesService, PerushimCatalogService? catalogService,
+        PerushimNotesService? notesService, Func<int, Task<List<Article>>>? articlesLoader,
+        Func<int, bool>? hasPerekAudio, Func<int>? hebrewDateProvider,
+        IAppNavigator? navigator, IFileSystem? fileSystem, IShare? share)
     {
         _parashaService = parashaService;
         _perekService = perekService;

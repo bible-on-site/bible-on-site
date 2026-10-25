@@ -18,6 +18,8 @@ public class ParashaMenuWeeklyActionTests
     {
         var doc = XDocument.Load(Path.Join(AppRoot, "Pages", "ParashaPage.xaml"));
 
+        // The fan satellites are shared ReaderFanMenuSatellite controls (a
+        // Button subclass), so match the AutomationId on any element type.
         var button = doc.Descendants()
             .FirstOrDefault(e => (string?)e.Attribute("AutomationId") == "WeeklyParashaButton");
         button.Should().NotBeNull("the menu must expose the פרשת השבוע action");

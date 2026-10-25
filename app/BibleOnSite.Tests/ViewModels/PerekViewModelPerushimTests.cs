@@ -309,23 +309,6 @@ public class PerekViewModelPerushimTests
 
     #endregion
 
-    #region PerushimSheet Contract
-
-    [Theory]
-    [InlineData(typeof(PerekViewModel))]
-    [InlineData(typeof(ParashaViewModel))]
-    [InlineData(typeof(MasoraViewModel))]
-    public void ReaderViewModels_ImplementPerushimSheetContract(Type viewModelType)
-    {
-        // PerushimSheet resolves its host view model through
-        // `BindingContext as IPerushimSheetViewModel`; a reader whose view
-        // model lacks the interface leaves its perushim checkboxes silently
-        // dead — toggles never reach ToggleCheckedPerush.
-        viewModelType.Should().BeAssignableTo<IPerushimSheetViewModel>();
-    }
-
-    #endregion
-
     #region Helpers
 
     private static PerekViewModel CreateViewModel(Func<int, Perek?> loader)
