@@ -5,40 +5,8 @@ import {
 	REVISION_CONFLICT_PREFIX,
 	REVISION_SOURCE_ADMIN,
 	REVISION_SOURCE_LLM,
-	REVISION_SQUASH_WINDOW_SECONDS,
 	RevisionConflictError,
-	shouldSquashIntoHead,
 } from "~/lib/tanahpedia/revisions-shared";
-
-describe("shouldSquashIntoHead", () => {
-	it("returns true when the head is fresh and from the same source", () => {
-		expect(
-			shouldSquashIntoHead({ source: "admin", ageSeconds: 30 }, "admin"),
-		).toBe(true);
-	});
-
-	it("returns false when the head is from a different source", () => {
-		expect(
-			shouldSquashIntoHead(
-				{ source: "llm-assistant", ageSeconds: 30 },
-				"admin",
-			),
-		).toBe(false);
-	});
-
-	it("returns false when the head is older than the window", () => {
-		expect(
-			shouldSquashIntoHead(
-				{ source: "admin", ageSeconds: REVISION_SQUASH_WINDOW_SECONDS + 1 },
-				"admin",
-			),
-		).toBe(false);
-	});
-
-	it("returns false when there is no head", () => {
-		expect(shouldSquashIntoHead(null, "admin")).toBe(false);
-	});
-});
 
 describe("normalizeRevisionSource", () => {
 	it("defaults to admin for missing or blank sources", () => {
