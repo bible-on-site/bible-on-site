@@ -123,6 +123,18 @@ describe("persistence and change notifications", () => {
 		localStorage.setItem(SEFER_BOOKMARKS_KEY, "{oops");
 		expect(getSeferBookmarkSettings()).toEqual(DEFAULT_SEFER_BOOKMARK_SETTINGS);
 	});
+	it("still updates the snapshot when storage is unavailable", () => {
+		// Private-mode storage: the write throws, but the in-memory snapshot
+		// and the change event must still fire for the open reader.
+		const spy = jest
+			.spyOn(Storage.prototype, "setItem")
+			.mockImplementation(() => {
+				throw new DOMException("QuotaExceededError");
+			});
+		saveSeferBookmarkSettings({ placement: "top" });
+		expect(getSeferBookmarkSnapshot().placement).toBe("top");
+		spy.mockRestore();
+	});
 	it("dispatches a change event whose detail carries the settings", () => {
 		const seen: string[] = [];
 		const unsubscribe = subscribeSeferBookmarks(() =>
