@@ -36,7 +36,7 @@ if (process.argv[2] === "post") {
 	// Restore local flip-book only if the pre-commit hook switched it to npm.
 	if (!existsSync(markerFile)) process.exit(0);
 	rmSync(markerFile);
-	process.exit(npmRun("flip-book:local").status ?? 1);
+	process.exit(bunRun("flip-book:local").status ?? 1);
 }
 
 rmSync(markerFile, { force: true });
@@ -53,7 +53,7 @@ if (check.status !== 0) {
 		"Auto-fixing: switching html-flip-book-react from local to npm...",
 	);
 	writeFileSync(markerFile, "");
-	if (npmRun("flip-book:npm").status !== 0) process.exit(1);
+	if (bunRun("flip-book:npm").status !== 0) process.exit(1);
 	const add = spawnSync("git", ["add", "package.json", "bun.lock"], {
 		cwd: websiteDir,
 		stdio: "inherit",
