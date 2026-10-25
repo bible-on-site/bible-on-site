@@ -79,7 +79,7 @@ test.describe("sitemap.xml", () => {
 		const parashaUrls = body.match(/<loc>[^<]*\/פרשה(?:\/\d+)?<\/loc>/g) ?? [];
 		expect(parashaUrls).toHaveLength(55);
 		for (let unit = 1; unit <= 54; unit++) {
-			expect(body).toContain(`/פרשה/${unit}</loc>`);
+			expect(body).toContain(["/פרשה/", unit, "</loc>"].join(""));
 		}
 	});
 
