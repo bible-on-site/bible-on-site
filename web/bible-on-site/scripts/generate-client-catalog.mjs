@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import {
+	existsSync,
 	mkdirSync,
 	readdirSync,
 	readFileSync,
@@ -48,12 +49,20 @@ if (
 
 mkdirSync(booksDirectory, { recursive: true });
 const files = new Set();
+// Rewriting identical bytes still bumps mtimes and re-triggers dev-server
+// recompiles, so only write files whose content actually changed.
+function writeIfChanged(filePath, payload) {
+	if (existsSync(filePath) && readFileSync(filePath, "utf8") === payload)
+		return;
+	writeFileSync(filePath, payload);
+}
+
 const books = sefarim.map((sefer) => {
 	const payload = `${JSON.stringify(sefer)}\n`;
 	const digest = createHash("sha256").update(payload).digest("hex");
 	const filename = `${sefer.perekFrom}.${digest}.json`;
 	files.add(filename);
-	writeFileSync(join(booksDirectory, filename), payload);
+	writeIfChanged(join(booksDirectory, filename), payload);
 	const { name, helek, perekFrom, perekTo } = sefer;
 	return {
 		name,
@@ -68,7 +77,7 @@ for (const filename of readdirSync(booksDirectory)) {
 	if (/^\d+\.[a-f0-9]{64}\.json$/.test(filename) && !files.has(filename))
 		unlinkSync(join(booksDirectory, filename));
 }
-writeFileSync(output, `${JSON.stringify({ books, volumes, schedule })}\n`);
+writeIfChanged(output, `${JSON.stringify({ books, volumes, schedule })}\n`);
 console.log(
 	`Generated browser catalog and reader assets: ${books.length} books, ${schedule.length} chapters`,
 );
