@@ -45,7 +45,7 @@ public class NavigationTests
     }
 
     [Fact]
-    public void PerekViewModel_CurrentCarouselPerek_ExposesOnlyTheCurrentPageToAccessibility()
+    public void PerekViewModel_Perek_ExposesOnlyTheDisplayedPageToAccessibility()
     {
         static Perek Page(int id) => new()
         {
@@ -57,15 +57,39 @@ public class NavigationTests
         var viewModel = new PerekViewModel(PreferencesService.CreateForTesting(new InMemoryPreferencesStorage()), _ => first);
         first.IsOffscreenCarouselPage.Should().BeTrue();
 
-        viewModel.CurrentCarouselPerek = first;
+        viewModel.Perek = first;
         first.IsOffscreenCarouselPage.Should().BeFalse();
 
-        viewModel.CurrentCarouselPerek = second;
+        viewModel.Perek = second;
         first.IsOffscreenCarouselPage.Should().BeTrue();
         second.IsOffscreenCarouselPage.Should().BeFalse();
 
-        viewModel.CurrentCarouselPerek = null;
+        viewModel.Perek = null;
         second.IsOffscreenCarouselPage.Should().BeTrue();
+    }
+
+    [Fact]
+    public void PerekViewModel_StaleCarouselCurrentItemPushback_KeepsDisplayedPageExposed()
+    {
+        static Perek Page(int id) => new()
+        {
+            PerekId = id, Date = "2026-01-20", HebDate = "תשרי",
+            SeferName = "בראשית", SeferTanahUsName = "Genesis", Tseit = "18:00"
+        };
+        var displayed = Page(300);
+        var itemsSourceReset = Page(1);
+        var viewModel = new PerekViewModel(PreferencesService.CreateForTesting(new InMemoryPreferencesStorage()), _ => displayed);
+
+        // The displayed page is set before the carousel's ItemsSource reset
+        // pushes its own CurrentItem through the two-way binding.
+        viewModel.Perek = displayed;
+        displayed.IsOffscreenCarouselPage.Should().BeFalse();
+
+        // A stale CurrentItem pushback must not re-hide the displayed page
+        // (the carousel does not push CurrentItem on programmatic ScrollTo).
+        viewModel.CurrentCarouselPerek = itemsSourceReset;
+        displayed.IsOffscreenCarouselPage.Should().BeFalse();
+        itemsSourceReset.IsOffscreenCarouselPage.Should().BeTrue();
     }
 
     #endregion
