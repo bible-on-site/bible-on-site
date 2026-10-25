@@ -1007,7 +1007,10 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
             var af = KvoRect(v, "accessibilityFrame");
             var avf = KvoRect(v, "accessibilityVisibleFrame");
             var fics = KvoRect(v, "accessibilityFrameInContainerSpace");
+            var zOrder = v.Superview is null ? -1 : Array.IndexOf(v.Superview.Subviews, v);
+            var sibCount = v.Superview?.Subviews.Length ?? -1;
             DebugLog.Write($"[A11yChain {tag}] {id} d{d} {v.GetType().Name} f={f.X:0},{f.Y:0},{f.Width:0}x{f.Height:0} " +
+                $"z={zOrder}/{sibCount} " +
                 $"af={af} avf={avf} fics={fics} " +
                 $"modal={KvoBool(v, "accessibilityViewIsModal")} elemHidden={KvoBool(v, "accessibilityElementsHidden")} " +
                 $"hidden={v.Hidden} alpha={v.Alpha:0.##} isAE={KvoBool(v, "isAccessibilityElement")} " +
