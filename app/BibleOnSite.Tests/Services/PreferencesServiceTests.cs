@@ -296,6 +296,23 @@ public class PreferencesServiceTests : IDisposable
     }
 
     [Fact]
+    public void Bookmarks_WithCorruptStoredJson_ResetToEmpty_AndNextWriteRecovers()
+    {
+        _storage.Set("bookmarkedPerakim", "{{{not-json");
+
+        var load = () => _service.Load();
+        load.Should().NotThrow("a corrupt stored value must not break startup");
+        _service.BookmarkedPerakim.Should().BeEmpty();
+
+        // Recovery: the next write persists a clean set over the corrupt value
+        // and a reloaded service reads it back intact.
+        _service.AddBookmark(5);
+        var reloaded = PreferencesService.CreateForTesting(_storage);
+        reloaded.Load();
+        reloaded.BookmarkedPerakim.Should().Equal(5);
+    }
+
+    [Fact]
     public void AddBookmark_WhenAlreadyBookmarked_DoesNotRaiseEvent()
     {
         // Arrange

@@ -52,41 +52,34 @@ public class ArticleService : BaseGraphQLService
             Variables = new Dictionary<string, object?> { ["perekId"] = perekId }
         };
 
-        try
+        // Transport failures propagate — swallowing them turned a network
+        // error into a false "no articles" result. GraphQL errors and absent
+        // data below are genuine empty results.
+        var response = await Client.SendQueryAsync<ArticlesByPerekIdResponse>(query);
+
+        if (response.Errors != null && response.Errors.Length > 0)
         {
-            var response = await Client.SendQueryAsync<ArticlesByPerekIdResponse>(query);
-
-            if (response.Errors != null && response.Errors.Length > 0)
-            {
-                Console.Error.WriteLine($"GraphQL errors fetching articles for perek {perekId}: {string.Join(", ", response.Errors.Select(e => e.Message))}");
-                return new List<Article>();
-            }
-
-            var articles = response.Data?.ArticlesByPerekId ?? new List<ArticleDto>();
-
-            // Use StarterService authors if available (may be empty offline — that's ok)
-            return articles.Select(dto =>
-            {
-                var author = StarterService.Instance.Authors.FirstOrDefault(a => a.Id == dto.AuthorId);
-                return new Article
-                {
-                    Id = dto.Id,
-                    PerekId = dto.PerekId,
-                    AuthorId = dto.AuthorId,
-                    Abstract = dto.Abstract ?? string.Empty,
-                    Name = dto.Name ?? string.Empty,
-                    Priority = dto.Priority,
-                    Author = author
-                };
-            }).OrderBy(a => a.Priority).ToList();
-        }
-        #pragma warning disable S2221 // Deliberate failure boundary: remote article fetch degrades to an empty list
-        catch (Exception ex) //NOSONAR — remote article fetch degrades to an empty list.
-        {
-            #pragma warning restore S2221
-            Console.Error.WriteLine($"Error fetching articles for perek {perekId}: {ex.Message}");
+            Console.Error.WriteLine($"GraphQL errors fetching articles for perek {perekId}: {string.Join(", ", response.Errors.Select(e => e.Message))}");
             return new List<Article>();
         }
+
+        var articles = response.Data?.ArticlesByPerekId ?? new List<ArticleDto>();
+
+        // Use StarterService authors if available (may be empty offline — that's ok)
+        return articles.Select(dto =>
+        {
+            var author = StarterService.Instance.Authors.FirstOrDefault(a => a.Id == dto.AuthorId);
+            return new Article
+            {
+                Id = dto.Id,
+                PerekId = dto.PerekId,
+                AuthorId = dto.AuthorId,
+                Abstract = dto.Abstract ?? string.Empty,
+                Name = dto.Name ?? string.Empty,
+                Priority = dto.Priority,
+                Author = author
+            };
+        }).OrderBy(a => a.Priority).ToList();
     }
 
     /// <summary>
@@ -111,44 +104,36 @@ public class ArticleService : BaseGraphQLService
             Variables = new Dictionary<string, object?> { ["id"] = articleId }
         };
 
-        try
+        // Transport failures propagate to the caller's error surface — a
+        // swallowed fetch reported "לא נמצא מאמר" for a network error.
+        var response = await Client.SendQueryAsync<ArticleByIdResponse>(query);
+
+        if (response.Errors != null && response.Errors.Length > 0)
         {
-            var response = await Client.SendQueryAsync<ArticleByIdResponse>(query);
-
-            if (response.Errors != null && response.Errors.Length > 0)
-            {
-                Console.Error.WriteLine($"GraphQL errors fetching article {articleId}: {string.Join(", ", response.Errors.Select(e => e.Message))}");
-                return null;
-            }
-
-            var dto = response.Data?.ArticleById;
-            if (dto == null)
-            {
-                return null;
-            }
-
-            // Use StarterService authors if available (may be empty offline — that's ok)
-            var author = StarterService.Instance.Authors.FirstOrDefault(a => a.Id == dto.AuthorId);
-
-            return new Article
-            {
-                Id = dto.Id,
-                PerekId = dto.PerekId,
-                AuthorId = dto.AuthorId,
-                Abstract = dto.Abstract ?? string.Empty,
-                ArticleContent = dto.ArticleContent,
-                Name = dto.Name ?? string.Empty,
-                Priority = dto.Priority,
-                Author = author
-            };
-        }
-        #pragma warning disable S2221 // Deliberate failure boundary: remote article fetch degrades to null
-        catch (Exception ex) //NOSONAR — remote article fetch degrades to null.
-        {
-            #pragma warning restore S2221
-            Console.Error.WriteLine($"Error fetching article {articleId}: {ex.Message}");
+            Console.Error.WriteLine($"GraphQL errors fetching article {articleId}: {string.Join(", ", response.Errors.Select(e => e.Message))}");
             return null;
         }
+
+        var dto = response.Data?.ArticleById;
+        if (dto == null)
+        {
+            return null;
+        }
+
+        // Use StarterService authors if available (may be empty offline — that's ok)
+        var author = StarterService.Instance.Authors.FirstOrDefault(a => a.Id == dto.AuthorId);
+
+        return new Article
+        {
+            Id = dto.Id,
+            PerekId = dto.PerekId,
+            AuthorId = dto.AuthorId,
+            Abstract = dto.Abstract ?? string.Empty,
+            ArticleContent = dto.ArticleContent,
+            Name = dto.Name ?? string.Empty,
+            Priority = dto.Priority,
+            Author = author
+        };
     }
 
     /// <summary>
@@ -172,41 +157,32 @@ public class ArticleService : BaseGraphQLService
             Variables = new Dictionary<string, object?> { ["authorId"] = authorId }
         };
 
-        try
+        // Transport failures propagate — a network error is not "no articles."
+        var response = await Client.SendQueryAsync<ArticlesByAuthorIdResponse>(query);
+
+        if (response.Errors != null && response.Errors.Length > 0)
         {
-            var response = await Client.SendQueryAsync<ArticlesByAuthorIdResponse>(query);
-
-            if (response.Errors != null && response.Errors.Length > 0)
-            {
-                Console.Error.WriteLine($"GraphQL errors fetching articles for author {authorId}: {string.Join(", ", response.Errors.Select(e => e.Message))}");
-                return new List<Article>();
-            }
-
-            var articles = response.Data?.ArticlesByAuthorId ?? new List<ArticleDto>();
-
-            // Use StarterService authors if available (may be empty offline — that's ok)
-            return articles.Select(dto =>
-            {
-                var author = StarterService.Instance.Authors.FirstOrDefault(a => a.Id == dto.AuthorId);
-                return new Article
-                {
-                    Id = dto.Id,
-                    PerekId = dto.PerekId,
-                    AuthorId = dto.AuthorId,
-                    Abstract = dto.Abstract ?? string.Empty,
-                    Name = dto.Name ?? string.Empty,
-                    Priority = dto.Priority,
-                    Author = author
-                };
-            }).OrderBy(a => a.Priority).ToList();
-        }
-        #pragma warning disable S2221 // Deliberate failure boundary: remote author fetch degrades to an empty list
-        catch (Exception ex) //NOSONAR — remote author fetch degrades to an empty list.
-        {
-            #pragma warning restore S2221
-            Console.Error.WriteLine($"Error fetching articles for author {authorId}: {ex.Message}");
+            Console.Error.WriteLine($"GraphQL errors fetching articles for author {authorId}: {string.Join(", ", response.Errors.Select(e => e.Message))}");
             return new List<Article>();
         }
+
+        var articles = response.Data?.ArticlesByAuthorId ?? new List<ArticleDto>();
+
+        // Use StarterService authors if available (may be empty offline — that's ok)
+        return articles.Select(dto =>
+        {
+            var author = StarterService.Instance.Authors.FirstOrDefault(a => a.Id == dto.AuthorId);
+            return new Article
+            {
+                Id = dto.Id,
+                PerekId = dto.PerekId,
+                AuthorId = dto.AuthorId,
+                Abstract = dto.Abstract ?? string.Empty,
+                Name = dto.Name ?? string.Empty,
+                Priority = dto.Priority,
+                Author = author
+            };
+        }).OrderBy(a => a.Priority).ToList();
     }
 
     /// <summary>

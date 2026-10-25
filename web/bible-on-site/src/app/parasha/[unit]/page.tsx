@@ -9,6 +9,12 @@ import { UnitPerushimSection } from "@/app/components/reading/UnitPerushimSectio
 import { SharedUnitText } from "@/app/components/reading/UnitText";
 import { unitPerushHref } from "@/app/components/reading/unit-perush";
 import {
+	DEFAULT_ALIYAH_SCHEME,
+	getStandaloneReading,
+	getUnitAliyahMarkers,
+	getUnitShabbatAliyahMarkers,
+} from "@/data/parasha/parasha-aliyot";
+import {
 	getAdjacentParashaUnits,
 	getParashaEntry,
 	getParashaUnitById,
@@ -26,6 +32,7 @@ import { canonicalPasukCount, rangePerekSources } from "@/lib/reading/queries";
 import { unitEquivalentPerekId, unitPerekIds } from "@/lib/reading/ranges";
 import { SITE_NAME } from "@/lib/seo/jsonld";
 import { fetchAllEntityRefs } from "@/lib/tanahpedia/perek-entity-refs";
+import { AliyahControls } from "./components/AliyahControls";
 import { HaftaraSection } from "./components/HaftaraSection";
 import { ParashaSeferComposite } from "./components/ParashaSeferComposite";
 import { UnitBreadcrumb } from "./components/UnitBreadcrumb";
@@ -149,6 +156,11 @@ export default async function ParashaUnitPage({
 		fetchAllEntityRefs(seferUnitsPerekIds(unit.seferName)),
 	]);
 	const { prev, next } = getAdjacentParashaUnits(unitId);
+	// Aliyah boundary layer (issue #2519): every context/scheme marker
+	// embeds in the text; AliyahControls swaps the visible key without
+	// remounting scripture. The book spreads get the fixed standalone
+	// Shabbat layer per unit.
+	const aliyahLayer = getUnitAliyahMarkers(unitId);
 	const bookUnits = getParashaUnitsForSefer(unit.seferName).map((bookUnit) => {
 		const bookEntry = getParashaEntry(bookUnit.unitId);
 		return {
@@ -157,6 +169,8 @@ export default async function ParashaUnitPage({
 			order: bookUnit.order,
 			refSpan: parashaRefSpan(bookUnit),
 			ranges: bookUnit.ranges,
+			aliyahMarkers: getUnitShabbatAliyahMarkers(bookUnit.unitId),
+			aliyahMarkerKey: `${getStandaloneReading(bookUnit.unitId).id}:${DEFAULT_ALIYAH_SCHEME}`,
 			haftarot: bookEntry.haftarot.map((haftara) => ({
 				...haftara,
 				refSpan: rangesRefSpans(haftara.ranges).join(", "),
@@ -198,11 +212,19 @@ export default async function ParashaUnitPage({
 					<span className={styles.refSpan}>{parashaRefSpan(unit)}</span>
 				</h1>
 				<h2 className={styles.readingLabel}>קריאת התורה</h2>
+				<Suspense>
+					<AliyahControls
+						contexts={aliyahLayer.contexts}
+						defaultKey={aliyahLayer.defaultKey}
+					/>
+				</Suspense>
 				<SharedUnitText
 					ranges={unit.ranges}
 					entityRefsByPerek={entityRefsByPerek}
 					pasukCount={canonicalPasukCount}
 					scrollScope="torah"
+					boundaryMarkers={new Map(Object.entries(aliyahLayer.markers))}
+					defaultMarkerKey={aliyahLayer.defaultKey}
 				/>
 				<HaftaraSection unit={unit} entityRefsByPerek={entityRefsByPerek} />
 				<UnitNav prev={prev} next={next} />

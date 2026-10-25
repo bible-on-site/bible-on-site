@@ -30,7 +30,7 @@ public class DiagnosticsExportTests
         var chapter = new PerekViewModel(preferences, null, null, null, notes, null, storage.FileSystem.Object, share.Object);
         await chapter.ExportPerushimLogsCommand.ExecuteAsync(null);
         var parasha = new ParashaViewModel(null!, null!, preferences, null, notes, null, null, null,
-            storage.FileSystem.Object, share.Object);
+            storage.FileSystem.Object, share.Object, null);
         await parasha.ExportPerushimLogsCommand.ExecuteAsync(null);
         var masora = new MasoraViewModel(null!, null!, preferences, null, notes, null, null,
             storage.FileSystem.Object, share.Object);
@@ -60,7 +60,7 @@ public class DiagnosticsExportTests
             storage.FileSystem.Object, share.Object);
         await chapter.ExportPerushimLogsAsync();
         var parasha = new ParashaViewModel(null!, null!, preferences, null, notes, null, null,
-            navigator.Object, storage.FileSystem.Object, share.Object);
+            navigator.Object, storage.FileSystem.Object, share.Object, null);
         await parasha.ExportPerushimLogsAsync();
         var masora = new MasoraViewModel(null!, null!, preferences, null, notes, null,
             navigator.Object, storage.FileSystem.Object, share.Object);
