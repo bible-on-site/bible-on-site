@@ -594,6 +594,200 @@ describe("EntryEditPage", () => {
 			expect(JSON.parse(draft as string).form.title).toBe("משה רבנו");
 		});
 
+		it("keeps the stashed draft current as the user edits past a failure", async () => {
+			updateEntryMock.mockRejectedValue(new Error("db down"));
+			renderPage();
+			await screen.findByTestId("wysiwyg-editor");
+			await waitFor(() =>
+				expect(
+					screen.getByRole("button", { name: "שמור עכשיו" }),
+				).toBeEnabled(),
+			);
+			fireEvent.click(screen.getByRole("button", { name: "שמור עכשיו" }));
+			await screen.findByRole("button", { name: "נסה שוב" });
+
+			// Editing after the failure must reach the stash — a reconnect
+			// reload restores it, so a stale snapshot would silently lose work.
+			fireEvent.click(screen.getByTestId("wysiwyg-editor"));
+			await waitFor(() => {
+				const draft = JSON.parse(
+					localStorage.getItem("tanahpedia-draft:entry-1") ?? "{}",
+				);
+				expect(draft.form.content).toBe("<p>תוכן חדש</p>");
+			});
+		});
+
+		it("restores a stashed draft whose base still matches the head", async () => {
+			localStorage.setItem(
+				"tanahpedia-draft:entry-1",
+				JSON.stringify({
+					form: {
+						unique_name: "טיוטה",
+						title: "טיוטה מקומית",
+						content: "<p>טיוטה</p>",
+					},
+					baseRevisionId: "rev-1",
+					savedAt: new Date().toISOString(),
+				}),
+			);
+			renderPage();
+			await screen.findByTestId("wysiwyg-editor");
+			await fireEvent.click(
+				await screen.findByRole("tab", { name: "מטא-דאטה" }),
+			);
+			expect(screen.getByLabelText(/כותרת/)).toHaveValue("טיוטה מקומית");
+			// Same base → a plain dirty restore, no conflict.
+			expect(
+				screen.queryByRole("button", { name: "טען מחדש" }),
+			).not.toBeInTheDocument();
+		});
+
+		it("flags a stashed draft from an older head as a conflict instead of silently committing it", async () => {
+			localStorage.setItem(
+				"tanahpedia-draft:entry-1",
+				JSON.stringify({
+					form: {
+						unique_name: "טיוטה",
+						title: "טיוטה מקומית",
+						content: "<p>טיוטה</p>",
+					},
+					baseRevisionId: "rev-old",
+					savedAt: new Date().toISOString(),
+				}),
+			);
+			renderPage();
+			await screen.findByTestId("wysiwyg-editor");
+			// The draft is visible (not lost) but blocked from autosaving —
+			// the head moved since it was written.
+			expect(
+				await screen.findByRole("button", { name: "טען מחדש" }),
+			).toBeInTheDocument();
+			await act(async () => {
+				await new Promise((r) => setTimeout(r, 2600));
+			});
+			expect(updateEntryMock).not.toHaveBeenCalled();
+		});
+
+		it("drops the rejected draft when the conflict banner reloads the entry", async () => {
+			localStorage.setItem(
+				"tanahpedia-draft:entry-1",
+				JSON.stringify({
+					form: {
+						unique_name: "טיוטה",
+						title: "טיוטה מקומית",
+						content: "<p>טיוטה</p>",
+					},
+					baseRevisionId: "rev-1",
+					savedAt: new Date().toISOString(),
+				}),
+			);
+			updateEntryMock.mockRejectedValue(
+				new RevisionConflictError("stale base"),
+			);
+			renderPage();
+			await screen.findByTestId("wysiwyg-editor");
+			await waitFor(() =>
+				expect(
+					screen.getByRole("button", { name: "שמור עכשיו" }),
+				).toBeEnabled(),
+			);
+			fireEvent.click(screen.getByRole("button", { name: "שמור עכשיו" }));
+
+			fireEvent.click(await screen.findByRole("button", { name: "טען מחדש" }));
+			expect(localStorage.getItem("tanahpedia-draft:entry-1")).toBeNull();
+		});
+
+		it("keeps an LLM edit's attribution when it lands during an in-flight save", async () => {
+			getLlmAssistantStatusMock.mockResolvedValue({ enabled: true });
+			const resolvers: Array<(value: unknown) => void> = [];
+			updateEntryMock.mockImplementation(
+				() =>
+					new Promise((resolve) => {
+						resolvers.push(resolve);
+					}),
+			);
+			renderPage();
+			await screen.findByTestId("wysiwyg-editor");
+			await waitFor(() =>
+				expect(
+					screen.getByRole("button", { name: "שמור עכשיו" }),
+				).toBeEnabled(),
+			);
+			fireEvent.click(screen.getByRole("button", { name: "שמור עכשיו" }));
+			await waitFor(() => expect(updateEntryMock).toHaveBeenCalledTimes(1));
+
+			const metadataTab = await screen.findByRole("tab", {
+				name: "מטא-דאטה",
+			});
+			vi.useFakeTimers({ toFake: ["setTimeout"] });
+			try {
+				// The LLM apply lands while the first save is in flight and arms
+				// the autosave debounce under fake time.
+				fireEvent.click(metadataTab);
+				fireEvent.click(screen.getByRole("button", { name: "החל הצעה" }));
+				await act(async () => {
+					resolvers[0]?.({ id: "entry-1", headRevisionId: "rev-2" });
+				});
+				// The first ack is older than the LLM apply — its success must
+				// not reset the attribution the queued autosave will carry.
+				await act(async () => {
+					await vi.advanceTimersByTimeAsync(2500);
+				});
+				expect(updateEntryMock).toHaveBeenCalledTimes(2);
+				expect(updateEntryMock.mock.calls[1]?.[0]).toEqual({
+					data: expect.objectContaining({ source: "llm-assistant" }),
+				});
+			} finally {
+				vi.useRealTimers();
+			}
+		});
+
+		it("turns a queued second save on /new into an update of the created entry", async () => {
+			paramsMock.mockReturnValue({ id: "new" });
+			let resolveCreate: (value: unknown) => void = () => undefined;
+			createEntryMock.mockImplementation(
+				() =>
+					new Promise((resolve) => {
+						resolveCreate = resolve;
+					}),
+			);
+			updateEntryMock.mockResolvedValue({
+				id: "created-1",
+				headRevisionId: "rev-c2",
+			});
+			renderPage();
+			fireEvent.click(await screen.findByRole("tab", { name: "מטא-דאטה" }));
+			fireEvent.change(screen.getByLabelText(/כותרת/), {
+				target: { value: "ערך חדש" },
+			});
+			fireEvent.click(screen.getByRole("button", { name: "שמור עכשיו" }));
+			await waitFor(() => expect(createEntryMock).toHaveBeenCalledTimes(1));
+
+			vi.useFakeTimers({ toFake: ["setTimeout"] });
+			try {
+				// The edit made while the create is in flight queues an autosave
+				// behind it — after the create lands it must update the created
+				// entry (the route still reads "new"), not re-insert.
+				fireEvent.change(screen.getByLabelText(/כותרת/), {
+					target: { value: "ערך חדש 2" },
+				});
+				await act(async () => {
+					await vi.advanceTimersByTimeAsync(2500);
+				});
+				expect(updateEntryMock).not.toHaveBeenCalled();
+				await act(async () => {
+					resolveCreate({ id: "created-1", headRevisionId: "rev-c1" });
+				});
+				expect(updateEntryMock).toHaveBeenCalledTimes(1);
+				expect(updateEntryMock.mock.calls[0]?.[0]).toEqual({
+					data: expect.objectContaining({ id: "created-1" }),
+				});
+				expect(createEntryMock).toHaveBeenCalledTimes(1);
+			} finally {
+				vi.useRealTimers();
+			}
+		});
+
 		it("keeps edits made during an in-flight save dirty after it resolves", async () => {
 			let resolveSave: (value: unknown) => void = () => undefined;
 			updateEntryMock.mockImplementation(

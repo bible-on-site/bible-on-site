@@ -17,6 +17,9 @@ export interface EntryDraftSnapshot {
 
 interface StoredDraft {
 	form: EntryDraftSnapshot;
+	/** Head revision the stashed form was based on — a mismatch with the
+	 * freshly-loaded head means the draft conflicts with a newer save. */
+	baseRevisionId: string | null;
 	savedAt: string;
 }
 
@@ -25,11 +28,16 @@ const draftKey = (entryId: string) => `tanahpedia-draft:${entryId}`;
 export function stashEntryDraft(
 	entryId: string,
 	form: EntryDraftSnapshot,
+	baseRevisionId: string | null,
 ): void {
 	try {
 		localStorage.setItem(
 			draftKey(entryId),
-			JSON.stringify({ form, savedAt: new Date().toISOString() }),
+			JSON.stringify({
+				form,
+				baseRevisionId,
+				savedAt: new Date().toISOString(),
+			}),
 		);
 	} catch {
 		// Storage can be unavailable (private mode/quota) — losing the stash
@@ -43,6 +51,8 @@ export function readEntryDraft(entryId: string): StoredDraft | null {
 		if (!raw) return null;
 		const parsed = JSON.parse(raw) as StoredDraft;
 		if (!parsed?.form || typeof parsed.form.title !== "string") return null;
+		// Drafts written before the base was recorded count as stale.
+		if (parsed.baseRevisionId === undefined) parsed.baseRevisionId = null;
 		return parsed;
 	} catch {
 		return null;

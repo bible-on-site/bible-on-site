@@ -81,8 +81,6 @@ function EntryEditPage() {
 	// at the last committed baseline. Dirty iff they differ.
 	const editCounterRef = useRef(0);
 	const cleanCounterRef = useRef(0);
-	const formDataRef = useRef<EntryFormData>(formData);
-	formDataRef.current = formData;
 	const baseRevisionIdRef = useRef<string | null>(null);
 	baseRevisionIdRef.current = baseRevisionId;
 	// Serialized save queue: one request in flight; a later request waits and
@@ -90,6 +88,16 @@ function EntryEditPage() {
 	const inFlightRef = useRef(false);
 	const queuedJobRef = useRef<SaveJob | null>(null);
 	const flushRef = useRef<() => void>(() => {});
+	// Once a create succeeds, later queued saves on the /new route must update
+	// the created entry — the route param still reads "new" until navigation.
+	// Reset on param change: the component isn't remounted when moving between
+	// entries, so a stale id must not redirect saves to the previous entry.
+	const createdIdRef = useRef<string | null>(null);
+	const routeIdRef = useRef(id);
+	if (routeIdRef.current !== id) {
+		routeIdRef.current = id;
+		createdIdRef.current = null;
+	}
 
 	const { data: llmStatus } = useQuery({
 		queryKey: ["tanahpedia-llm-status"],
@@ -112,6 +120,11 @@ function EntryEditPage() {
 		// session that forces a login round-trip) restores over the fresh head
 		// and stays dirty so the autosave can still commit it.
 		const draft = readEntryDraft(id);
+		// A draft stashed against an older head means someone else saved in
+		// the meantime — committing it blindly would replace their changes, so
+		// it lands on the same visible conflict path as a rejected save.
+		const draftStale =
+			!!draft && draft.baseRevisionId !== (entry.currentRevisionId ?? null);
 		if (draft) {
 			setFormData(draft.form);
 			editCounterRef.current += 1;
@@ -125,13 +138,24 @@ function EntryEditPage() {
 		}
 		baseRevisionIdRef.current = entry.currentRevisionId ?? null;
 		setBaseRevisionId(entry.currentRevisionId ?? null);
-		setConflictError(false);
+		setConflictError(draftStale);
 	}, [entry, id]);
+
+	// The /new route has no server entry, so its stash (a failed first save)
+	// restores on mount instead of through the entry-sync effect.
+	useEffect(() => {
+		if (!isNew) return;
+		const draft = readEntryDraft(id);
+		if (!draft) return;
+		setFormData(draft.form);
+		editCounterRef.current += 1;
+		setHasChanges(true);
+	}, [isNew, id]);
 
 	const saveMutation = useMutation({
 		mutationFn: async (job: DispatchedSaveJob) => {
 			const { form, baseRevisionId, source, notes } = job;
-			if (isNew) {
+			if (isNew && !createdIdRef.current) {
 				return createEntry({
 					data: {
 						id: crypto.randomUUID(),
@@ -145,7 +169,7 @@ function EntryEditPage() {
 			}
 			return updateEntry({
 				data: {
-					id,
+					id: createdIdRef.current ?? id,
 					unique_name: form.unique_name,
 					title: form.title,
 					content: form.content,
@@ -163,8 +187,6 @@ function EntryEditPage() {
 			setLastSaved(new Date());
 			setConflictError(false);
 			setSaveError(null);
-			setSaveSource(REVISION_SOURCE_ADMIN);
-			setPendingNotes(null);
 			// The acknowledged head is always adoptable — the next save proposes
 			// on top of whatever snapshot this request committed. The ref update
 			// must be synchronous: onSettled flushes the queue before the render
@@ -174,13 +196,18 @@ function EntryEditPage() {
 				setBaseRevisionId(savedEntry.headRevisionId);
 			}
 			// Only clear dirty when the acked snapshot is still the editor's
-			// latest — edits typed after this request began are still pending.
+			// latest — edits typed after this request began are still pending,
+			// and so is their source/notes attribution (e.g. an LLM apply that
+			// landed mid-flight belongs to the next save, not this one).
 			if (job.editCount === editCounterRef.current) {
 				cleanCounterRef.current = editCounterRef.current;
 				setHasChanges(false);
 				clearEntryDraft(id);
+				setSaveSource(REVISION_SOURCE_ADMIN);
+				setPendingNotes(null);
 			}
 			if (isNew && savedEntry?.id) {
+				createdIdRef.current = savedEntry.id;
 				navigate({
 					to: "/tanahpedia/entries/$id",
 					params: { id: savedEntry.id },
@@ -194,9 +221,6 @@ function EntryEditPage() {
 				return;
 			}
 			setSaveError(classifySaveError(error));
-			// Stash the newest editor state so a login round-trip or reload does
-			// not lose unsaved work.
-			stashEntryDraft(id, formDataRef.current);
 		},
 		onSettled: () => {
 			inFlightRef.current = false;
@@ -233,6 +257,15 @@ function EntryEditPage() {
 			navigate({ to: "/tanahpedia" });
 		},
 	});
+
+	// While a save failure is unresolved, keep the local draft mirroring the
+	// editor — a reload or reconnect must recover edits made after the failure,
+	// not just the snapshot that failed.
+	useEffect(() => {
+		if (saveError) {
+			stashEntryDraft(id, formData, baseRevisionId);
+		}
+	}, [saveError, formData, id, baseRevisionId]);
 
 	const handleFieldChange = useCallback(
 		<K extends keyof EntryFormData>(field: K, value: EntryFormData[K]) => {
@@ -373,9 +406,11 @@ function EntryEditPage() {
 						type="button"
 						onClick={() => {
 							// Reloading discards the local edits — mark clean so the
-							// refetched entry actually lands in the form.
+							// refetched entry actually lands in the form, and drop the
+							// stashed draft or it would restore right back on top.
 							cleanCounterRef.current = editCounterRef.current;
 							setHasChanges(false);
+							clearEntryDraft(id);
 							void queryClient.invalidateQueries({
 								queryKey: ["tanahpedia-entry", id],
 							});
@@ -446,6 +481,7 @@ function EntryEditPage() {
 					onEntryChanged={() => {
 						cleanCounterRef.current = editCounterRef.current;
 						setHasChanges(false);
+						clearEntryDraft(id);
 						void queryClient.invalidateQueries({
 							queryKey: ["tanahpedia-entry", id],
 						});
