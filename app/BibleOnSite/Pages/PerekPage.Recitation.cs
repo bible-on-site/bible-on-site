@@ -304,19 +304,23 @@ public partial class PerekPage
         var track = RecitationService.Instance.GetTrack(perek.PerekId);
         if (track?.AlignmentStatus != "ready")
         {
-            // The reader asked for one pasuk — say why it cannot play instead of
-            // ignoring the tap: either nothing was recorded or word timings are
-            // still being validated (the full recording stays on the header).
-            await DisplayAlertAsync("הקראה", track == null
-                ? "אין הקלטה לפרק זה"
-                : "הקראת מילים ופסוקים לפרק זה עדיין בהכנה. ההקלטה המלאה זמינה בלחיצה ארוכה על כותרת הפרק.", "אישור");
+            // Without aligned word timings a pasuk has no playback boundary —
+            // the controls already show word/verse recitation unavailable, so
+            // the tap does nothing. A missing track is real missing audio and
+            // still reports.
+            if (track == null)
+            {
+                await DisplayAlertAsync("הקראה", "אין הקלטה לפרק זה", "אישור");
+            }
             return;
         }
 
         var words = track.Words.Where(w => w.Pasuk == pasuk.PasukNum).ToList();
         if (words.Count == 0 || words[0].StartMs == null || words[^1].EndMs == null)
         {
-            await DisplayAlertAsync("הקראה", "הקראת מילים ופסוקים לפרק זה עדיין בהכנה.", "אישור");
+            // A "ready" track missing this pasuk's timings is corrupt pack
+            // data — a real failure, reported like other playback failures.
+            await DisplayAlertAsync("הקראה", "לא ניתן להשמיע את ההקלטה. בדקו את חבילת ההקראה בהעדפות.", "אישור");
             return;
         }
 
@@ -424,9 +428,7 @@ public partial class PerekPage
         var track = RecitationService.Instance.GetTrack(perek.PerekId);
         var canPlayWords = RecitationAvailable && RecitationService.Instance.HasAudio(perek.PerekId) &&
             track?.AlignmentStatus == "ready" && track.Matches(perek.Pasukim);
-        FocusedPasukOverlay.HintText = canPlayWords ? "הקישו על מילה כדי לשמוע אותה." :
-            RecitationAvailable && track != null && track.AlignmentStatus != "ready"
-                ? "הקראת מילים ופסוקים לפרק זה עדיין בהכנה. ההקלטה המלאה זמינה בלחיצה ארוכה על כותרת הפרק." : "";
+        FocusedPasukOverlay.HintText = canPlayWords ? "הקישו על מילה כדי לשמוע אותה." : "";
         if (!canPlayWords) { FocusedPasukOverlay.PasukText.FormattedText = pasuk.FormattedText; return; }
         var formatted = new FormattedString();
         for (var i = 0; i < pasuk.Segments.Count; i++)
